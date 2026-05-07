@@ -1,4 +1,13 @@
--- See docs/trackerManager.md for the model and API reference.
+-- See docs/trackerManager.md for the model.
+
+--@map:invariant tm exposes intent frame; mm holds realisation frame; um works in realisation and shifts to intent at rebuild's tail (tidyCol)
+--@map:invariant detune is intent (per-note); pb is realisation (channel-wide stream); only lane-1 notes drive detune realisation
+--@map:invariant pb.val is cents inside um; raw conversion happens only on load (rawToCents) and at flush (centsToRaw); cents window is cm:get('pbRange') * 100 per side
+--@map:invariant fake pbs are absorbers seated at lane-1 note onsets to absorb detune jumps; pb.fake is the sole marker (persisted as cc metadata via mm sidecar)
+--@map:invariant pa events store pitch-aftertouch value in mm cc.val but are projected to col.events as { type='pa', vel } with val stripped via util.REMOVE
+--@map:invariant loc values are valid only within a single rebuild-to-flush window; um's notesByLoc/ccsByLoc are rebuilt fresh each rebuild
+--@map:invariant column events are sorted by intent ppq; endppq is intent at every layer (delay shifts only the note-on)
+--@map:invariant 16 channels always present; channels[i] non-nil for i in 1..16 after rebuild
 
 loadModule('util')
 loadModule('midiManager')
@@ -8,10 +17,7 @@ local function print(...)
   return util.print(...)
 end
 
--- Groups note records by realised ppq, leftmost lane wins.
--- records: list of { ppq, lane, sample, key } (key is opaque — caller
--- uses it to identify shadowed records).
--- Returns (pcs, shadowed): pcs sorted by ppq; shadowed keyed by record.key.
+--@map:contract pure; no mm/cm reads; emitted PCs carry fake=true so flush/rebuild can distinguish synthesised from user-authored
 local function synthesisePCs(chan, records)
   local winners, order, shadowed = {}, {}, {}
   for _, r in ipairs(records) do
@@ -35,11 +41,7 @@ local function synthesisePCs(chan, records)
   return pcs, shadowed
 end
 
--- Synthesise + diff against the existing PC list for one channel. Carries
--- locs through unchanged where (ppq, val, fake) matches, so steady state
--- produces empty toRemove/toAdd. Pure — callers route the resulting writes
--- through whatever path their context demands (mm:modify in rebuild, the
--- um's flush queue at runtime).
+--@map:contract returns (desired, shadowed, toRemove, toAdd); desired carries .loc on entries that survived the diff
 local function reconcilePCsForChan(chan, records, existing)
   local desired, shadowed = synthesisePCs(chan, records)
   local byPpq = {}
@@ -61,6 +63,12 @@ local function reconcilePCsForChan(chan, records, existing)
   return desired, shadowed, toRemove, toAdd
 end
 
+--@map:shape channel = { chan=1..16, columns = { notes=[col,...], ccs={[ccNum]=col,...}, pc=col|nil, pb=col|nil, at=col|nil } }
+--@map:shape column = { events=[evt,...], [cc=ccNum] }  -- events sorted by intent ppq
+--@map:shape noteEvent = { ppq, endppq, pitch, vel, lane, detune, delay, [muted], [sample], [sampleShadowed], loc, [<metadata...>] }
+--@map:shape pbEventCol = { ppq, val=cents-minus-detune, detune, hidden, [delay], [shape], [tension], loc, ... }  -- column projection; um cache holds raw cents in val
+--@map:shape paEventCol = { type='pa', ppq, pitch, vel, loc, ... }  -- mixed into note column events
+--@map:shape extraColumns[chan] = { notes=count, [pc=true], [pb=true], [at=true], [ccs={[ccNum]=true}] }
 function newTrackerManager(mm, cm)
 
   ---------- PRIVATE
@@ -110,8 +118,7 @@ function newTrackerManager(mm, cm)
     local deletes = {}
     local chans = {}
     local notesByLoc = {}
-    local dirtyPcChans = {}   -- { [chan] = true } — set on any note mutation
-                              -- whose effect on the PC stream is non-local.
+    local dirtyPcChans = {}
     local ccsByLoc = {}
 
     ----- Accessors
@@ -145,6 +152,7 @@ function newTrackerManager(mm, cm)
       return pb and pb.ppq == P and pb or nil
     end
 
+    --@map:contract logical = raw − detune; this is the "user heard pitch" frame, decoupled from the absorber bookkeeping
     local function logicalAt(chan, P)
       return rawAt(chan, P) - detuneAt(chan, P)
     end
@@ -180,6 +188,7 @@ function newTrackerManager(mm, cm)
 
     ----- Low-level mutation
 
+    --@map:contract only lane==1 notes index into chans[chan].notes; higher-lane notes get queued for mm but don't feed detune/realisation reads
     local function addLowlevel(evtType, evt)
       if evtType == 'note' then
         local col1 = evt.lane == 1
@@ -199,23 +208,17 @@ function newTrackerManager(mm, cm)
       util.add(adds, { type = evtType, evt = evt })
     end
 
+    --@map:contract dedupes by (loc, evtType) so multiple in-flight assigns to the same event collapse into one mm write; util.REMOVE markers must survive merging
     local function assignLowlevel(evtType, evt, update)
       util.assign(evt, update)
-      -- Note ppq mutates in place here; resort the channel index so
-      -- subsequent util.seek calls (detuneAt / pbAt / nextNotePPQ /
-      -- logicalBefore — all key off chans[chan].notes sorted by ppq)
-      -- stay correct even when callers like reswing process notes in
-      -- non-monotone order.
+      -- ppq mutates in place; resort so subsequent util.seek calls keyed off chans[chan].notes stay correct under non-monotone callers (reswing).
       if evtType == 'note' and update.ppq ~= nil and evt.lane == 1 then
         sortByPPQ(chans[evt.chan].notes)
       end
       if not evt.loc then return end
       for _, e in ipairs(assigns) do
         if e.loc == evt.loc and e.type == evtType then
-          -- Plain copy, not util.assign: this is an instruction stream,
-          -- so a util.REMOVE marker must survive into the queued update
-          -- (where it tells mm to drop the field). util.assign would
-          -- collapse REMOVE to nil-the-key, silently losing the delete.
+          -- Plain copy, not util.assign: util.assign collapses util.REMOVE → nil-the-key.
           for k, v in pairs(update) do e.update[k] = v end
           return
         end
@@ -258,6 +261,7 @@ function newTrackerManager(mm, cm)
       end
     end
 
+    --@map:contract shifts every pb's raw val by delta over [P1, P2); preserves logical stream above by definition since detune absorbs delta
     local function retuneLowlevel(chan, P1, P2, delta)
       if delta == 0 then return end
       for _, pb in ipairs(chans[chan].pbs) do
@@ -267,6 +271,7 @@ function newTrackerManager(mm, cm)
       end
     end
 
+    --@map:contract no-op (returns false) if a pb already sits at P; otherwise seats one at the carrier value (rawAt) so logical stream is preserved
     local function forcePb(chan, P, extras)
       if pbAt(chan, P) then return false end
       addLowlevel('pb', util.assign({ ppq = P, chan = chan, val = rawAt(chan, P) }, extras))
@@ -284,13 +289,7 @@ function newTrackerManager(mm, cm)
       assignLowlevel('pb', pb, { fake = util.REMOVE })
     end
 
-    -- Restore the fake-pb invariant at note seat P after a detune
-    -- change has shifted the carry across it: if the note's detune
-    -- jumps over the carry, a fake pb must absorb the jump; if not,
-    -- any redundant fake pb is just noise. Callers invoke this in
-    -- the post-mutation frame (note edits committed) so detuneAt/
-    -- Before see live values. Real (user-authored) pbs are left
-    -- alone — only fake absorbers are managed.
+    -- Callers invoke post-mutation (note edits committed) so detuneAt/Before see live values.
     local function reconcileBoundary(chan, P)
       if P >= math.huge then return end
       local D, C = detuneAt(chan, P), detuneBefore(chan, P)
@@ -309,12 +308,11 @@ function newTrackerManager(mm, cm)
 
     ----- High-level ops
 
+    --@map:contract authoring frame is logical (pb.val is logical cents); seats/updates the carrier and retunes forward to next real pb so logical above is preserved
     local function addPb(pb)
       local chan, P, L = pb.chan, pb.ppq, pb.val or 0
       local delta  = L - logicalAt(chan, P)
-      -- Carry every non-structural field of pb forward — shape, tension,
-      -- ppqL, frame, uuid, custom metadata. chan/ppq/val belong to forcePb's
-      -- structural set; msgType is stamped by addLowlevel.
+      -- chan/ppq/val belong to forcePb's structural set; msgType is stamped by addLowlevel.
       local extras = util.clone(pb,
         { chan = true, ppq = true, val = true, msgType = true })
       if not next(extras) then extras = nil end
@@ -325,6 +323,7 @@ function newTrackerManager(mm, cm)
       retuneLowlevel(chan, P, nextRealChange(chan, P), delta)
     end
 
+    --@map:contract retunes forward to undo pb's logical contribution; collapses to a real delete only if the seat would also be redundant as a fake (detuneAt == detuneBefore)
     local function deletePb(pb)
       local chan, P = pb.chan, pb.ppq
       retuneLowlevel(chan, P, nextRealChange(chan, P), logicalBefore(chan, P) - logicalAt(chan, P))
@@ -386,12 +385,9 @@ function newTrackerManager(mm, cm)
       if next(rest) then assignLowlevel('pb', pb, rest) end
     end
 
-    -- Any add/delete/sample-or-realised-onset change affects the channel's
-    -- PC synthesis (which note wins each realised group, and what its
-    -- sample is). Coarser than fake-pb's per-boundary reconciliation
-    -- because PC group membership isn't local to a single boundary.
     local function dirtyPc(chan) dirtyPcChans[chan] = true end
 
+    --@map:contract lane-1 path: seat fake-pb if detune jumps the carry, retune forward to next note, then reconcile the next-note boundary; lane>1 just queues with no realisation work
     local function addNote(n)
       dirtyPc(n.chan)
       local D = n.detune
@@ -408,6 +404,7 @@ function newTrackerManager(mm, cm)
       end
     end
 
+    --@map:contract attached PAs are deleted with the host unless keepPAs; lane-1 path drops any fake seat at n.ppq and retunes back to the prior detune over [n.ppq, nextNote)
     local function deleteNote(n, keepPAs)
       dirtyPc(n.chan)
       if not keepPAs then forEachAttachedPA(n, function(evt) deleteLowlevel('pa', evt) end) end
@@ -480,6 +477,7 @@ function newTrackerManager(mm, cm)
       reconcileBoundary(n.chan, NP2)
     end
 
+    --@map:contract chan/lane updates are rejected with a warning; ppq/endppq route through resizeNote; detune updates retune forward and reconcile both endpoint boundaries
     local function assignNote(n, update)
       if update.chan then print('um: not allowed to change channel of notes'); return end
       if update.lane then print('um: not allowed to change lane of notes'); return end
@@ -513,15 +511,6 @@ function newTrackerManager(mm, cm)
       if next(update) then assignLowlevel('note', n, update) end
     end
 
-    -- Same-(chan, pitch) overlap reconciliation in REALISED space. MIDI
-    -- gives one voice per (chan, pitch); a sibling whose realised onset
-    -- collides with ours must truncate or shorten regardless of intent
-    -- geometry, so onsets are compared in n.ppq (realised). The truncate
-    -- target lands in `endppq` — endppq stays intent in the sense that
-    -- it's "the moment we intend to end" — but that intended end is now
-    -- forced by the voice collision, hence a realised value. vm-side
-    -- `delayRange` is the user-facing gate that prevents legitimate edits
-    -- from creating these collisions in the first place.
     local function clearSameKeyRange(chan, pitch, P, Pend, selfEvt)
       local clampEnd = Pend
       local toDelete, toTruncate = {}, {}
@@ -542,11 +531,6 @@ function newTrackerManager(mm, cm)
 
     ----- PC reconciliation (trackerMode mutation hook)
 
-    -- Per-chan synthesis at flush time. notesByLoc reflects assigns and
-    -- deletes; pending note adds live in `adds` until mm sees them — both
-    -- are needed for a complete view. Shadow flags must land on the lane
-    -- events (rendered objects), which are distinct from notesByLoc —
-    -- cross-walk by loc once and use the lane event as the record key.
     local function reconcilePcs(chan)
       local c = channels[chan].columns
       local laneByLoc = {}
@@ -598,9 +582,6 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- Delay shifts only the note-on; endppq is intent and never carries
-    -- the delay offset. A delay change with no ppq update pins intent
-    -- and shifts realised onset by the delta.
     local function realiseNoteUpdate(evt, update)
       local dOld = delayToPPQ(evt.delay)
       local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
@@ -611,11 +592,6 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- opts.trustGeometry: caller asserts the batch is internally
-    -- consistent (no new same-key overlaps introduced). Skips the
-    -- per-write clamp; rebuild's group-by-pitch normalisation is the
-    -- backstop. Used by reswing, whose monotone reparameterisation
-    -- can't create overlaps that didn't exist in the source frame.
     function um:assignEvent(evtType, evtOrLoc, update, opts)
       local loc = type(evtOrLoc) == 'table' and evtOrLoc.loc or evtOrLoc
       if not loc then return end
@@ -641,13 +617,12 @@ function newTrackerManager(mm, cm)
       end
     end
 
+    --@map:contract notes default detune=0, delay=0, lane=1; ppq is shifted into realised here (delay added) so CSK can compare in realised space; endppq stays intent
     function um:addEvent(evtType, evt)
       if evtType == 'note' then
         evt.detune = evt.detune or 0
         evt.delay  = evt.delay  or 0
         evt.lane   = evt.lane   or 1
-        -- ppq shifts into realised so CSK can compare in realised space;
-        -- endppq stays intent (delay is a realisation-level shift only).
         evt.ppq = evt.ppq + delayToPPQ(evt.delay)
         evt.endppq = clearSameKeyRange(evt.chan, evt.pitch, evt.ppq, evt.endppq, evt)
         addNote(evt)
@@ -662,6 +637,8 @@ function newTrackerManager(mm, cm)
 
     local flushing = false
 
+    --@map:contract no-op if nothing staged; otherwise commits in fixed order (assigns, deletes desc by loc, adds) under a single mm:modify; pb cents→raw conversion happens here
+    --@map:contract snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
     function um:flush()
       if cm:get('trackerMode') and next(dirtyPcChans) then
         for chan in pairs(dirtyPcChans) do reconcilePcs(chan) end
@@ -669,8 +646,6 @@ function newTrackerManager(mm, cm)
       end
       if #adds == 0 and #assigns == 0 and #deletes == 0 then return end
 
-      -- Snapshot+clear before mm:modify: its callbacks can re-enter this
-      -- um (rebuild → setMutedChannels → flush) and we mustn't re-emit.
       local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
       adds, assigns, deletes = {}, {}, {}
 
@@ -741,13 +716,6 @@ function newTrackerManager(mm, cm)
     return util.add(notes, { events = {} }), #notes
   end
 
-  -- Overlap is judged in intent space: delay is a realisation-level
-  -- shift and shouldn't affect which notes can share a column. endppq
-  -- is already intent in storage, so only the note-on inverts delay.
-  -- Same-pitch comparisons get a hard zero threshold — MIDI allows
-  -- only one voice per (chan, pitch). Cross-column same-pitch
-  -- non-overlap is held by the truncation pass and clearSameKeyRange;
-  -- the per-pair threshold here is defence in depth.
   local function noteColumnAccepts(col, note)
     local lenient = cm:get('overlapOffset') * mm:resolution()
     local noteppqI    = note.ppq - delayToPPQ(note.delay or 0)
@@ -774,11 +742,9 @@ function newTrackerManager(mm, cm)
         return col, note.lane
       end
       if not col then
-        -- Preferred lane doesn't exist yet — grow until it does.
         while #notes < note.lane do pushNoteCol(channel) end
         return notes[note.lane], note.lane
       end
-      -- Exists but won't fit; fall through to first-fit / spill.
     end
     for i, col in ipairs(notes) do
       if noteColumnAccepts(col, note) then return col, i end
@@ -802,13 +768,6 @@ function newTrackerManager(mm, cm)
     end
   end
 
-  -- Project a raw mm-level cc record into a typed col.events entry.
-  -- Routing fields the destination col owns (chan, msgType, cc) are
-  -- stripped; everything else — including future metadata fields not
-  -- known here — rides through verbatim. `overlay` carries the
-  -- per-msgType derived fields (and may use util.REMOVE to drop a
-  -- source field the projection deliberately replaces, e.g. pa
-  -- replaces `val` with `vel`).
   local CC_PROJECT_STRIP = { chan = true, msgType = true, cc = true }
 
   local function projectCC(cc, loc, overlay)
@@ -827,6 +786,7 @@ function newTrackerManager(mm, cm)
 
   local rebuilding = false
 
+  --@map:contract reentrancy-guarded; rebuilds channels[] from mm, recreates um, fires 'rebuild'; takeChanged forwarded to subscribers via the captured pendingTakeSwap
   function tm:rebuild(takeChanged)
     if rebuilding then return end
     rebuilding = true
@@ -837,12 +797,7 @@ function newTrackerManager(mm, cm)
       channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
     end
 
-    -- 1) Seed detune/delay/sample defaults (metadata-only write bypasses
-    --    the lock) and truncate same-key overlaps so later passes see
-    --    clean intervals. Under trackerMode, missing `sample` derives
-    --    from the prevailing PC at the note's realised onset — this is
-    --    the on-toggle reverse-derive path and the steady-state default
-    --    in one rule.
+    -- 1) Seed defaults and truncate same-key overlaps.
     do
       local trackerMode = cm:get('trackerMode')
       local pcByChan
@@ -899,17 +854,13 @@ function newTrackerManager(mm, cm)
       util.add(col.events, note)
     end
 
-    -- 3) Single CC walk: pb, pa, cc, at, pc distribution. Pb accumulates
-    --    per channel so column install can be gated on anyVisible.
+    -- 3) Single CC walk.
     do
       local pbByChan = {}
       for loc, cc in mm:ccs() do
         local channel = channels[cc.chan]
 
         if cc.msgType == 'pb' then
-          -- Prevailing col-1 note at-or-before cc.ppq supplies detune
-          -- context; if it sits exactly at cc.ppq and cc.fake is set, it
-          -- is also the host that lends its delay.
           local col1       = channel.columns.notes[1]
           local prevailing = col1 and util.seek(col1.events, 'at-or-before', cc.ppq) or nil
           local detune     = (prevailing and prevailing.detune) or 0
@@ -919,7 +870,6 @@ function newTrackerManager(mm, cm)
           local pb = pbByChan[cc.chan] or { events = {}, anyVisible = false }
           pbByChan[cc.chan] = pb
           pb.anyVisible = pb.anyVisible or not hidden
-          -- fake pbs inherit host delay so tidyCol shifts both into intent together
           util.add(pb.events, projectCC(cc, loc, {
             val    = util.round(rawToCents(cc.val) - detune),
             detune = detune,
@@ -955,8 +905,7 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- 4) Reconcile with user-opened extras (high-water lane count, padding,
-    --    empty materialisation).
+    -- 4) Reconcile extras.
     do
       local extras = cm:get('extraColumns')
       local grew   = false
@@ -980,12 +929,7 @@ function newTrackerManager(mm, cm)
       if grew then cm:set('take', 'extraColumns', extras) end
     end
 
-    -- 4.5) PC synthesis (trackerMode only). Lane events are still in
-    --      realised frame here, so realised(n) = n.ppq directly. The
-    --      synthesised PCs land at realised ppq with delay=0; tidyCol
-    --      below leaves them alone (delay=0 → no shift). The reconcile
-    --      helper carries locs forward where val matches, so steady
-    --      state produces no mm writes.
+    -- 4.5) PC synthesis (trackerMode only).
     if cm:get('trackerMode') then
       local toDelete, toAdd = {}, {}
       for chan = 1, 16 do
@@ -1012,10 +956,6 @@ function newTrackerManager(mm, cm)
           for _, loc in ipairs(toDelete) do mm:deleteCC(loc) end
           for _, pc  in ipairs(toAdd)    do mm:addCC(pc) end
         end)
-        -- mm:modify reindexes ccs by (ppq, chan, ...), so locs captured
-        -- during add are pre-sort and unreliable. Refresh c.pc.events
-        -- against the post-modify state so flush-time reconciles can
-        -- delete by loc safely. Walks all ccs once; PCs are sparse.
         for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
         for loc, cc in mm:ccs() do
           if cc.msgType == 'pc' then
@@ -1025,9 +965,7 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- 5) Shift into intent frame and sort by intent ppq. Endppq is
-    -- intent in storage too — only the note-on (or fake-pb anchor)
-    -- carries the delay offset.
+    -- 5) Shift into intent.
     local function tidyCol(col)
       for _, evt in ipairs(col.events) do
         local d = delayToPPQ(evt.delay)
@@ -1047,6 +985,7 @@ function newTrackerManager(mm, cm)
     um = createUpdateManager()
     rebuilding = false
 
+    --@map:emits rebuild  -- nil; fires once at the end of every rebuild after um is recreated
     fire('rebuild', nil)
   end
 
@@ -1084,11 +1023,7 @@ function newTrackerManager(mm, cm)
   function tm:name()        return mm and mm:name() end
   function tm:setName(name) if mm then mm:setName(name) end end
 
-  -- Walk every event in the take, calling fn(type, evt, chan, isNote) once
-  -- per event. Notes/pa visit via the per-lane note columns; pb/at/pc/cc
-  -- via the lane-less columns. Operates on the column-projected event view,
-  -- so fields the projection drops (cc number, fake flag) are not visible
-  -- — callers that need raw MIDI fidelity should walk mm directly.
+  -- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly.
   local function forEachEvent(fn)
     for _, channel in tm:channels() do
       local chan, cols = channel.chan, channel.columns
@@ -1109,16 +1044,10 @@ function newTrackerManager(mm, cm)
     end
   end
 
-  -- Apply a piecewise-linear time map τ to every event in the take. τ
-  -- acts on logical positions (ppqL / endppqL); intent ppqs are
-  -- rederived through the current swing snapshot. Events without a
-  -- ppqL stamp fall back to applying τ to raw ppq — under identity
-  -- swing the two paths coincide. slopeAt(ppqL) is τ's local stretch:
-  -- note delays scale by it so the realised stretch is locally
-  -- proportional to the logical one.
-  --
-  -- Two passes (gather, then mutate) so all reads are stable. Used by
-  -- rescaleLength and (future) region-rescale variants.
+  -- τ acts on logical positions; intent ppqs rederive through the current swing snapshot.
+  -- Events without ppqL fall back to τ on raw ppq (identical under identity swing).
+  -- slopeAt scales note delays so realised stretch tracks logical stretch locally.
+  -- Two passes (gather, then mutate) so all reads are stable.
   local function applyTimeMap(tau, slopeAt)
     local snap  = tm:swingSnapshot()
     local plans = {}
@@ -1155,9 +1084,7 @@ function newTrackerManager(mm, cm)
     um:flush()
   end
 
-  -- Resize the take to `newPpq`. On shrink, events at-or-past the boundary
-  -- are deleted; notes that span the boundary keep their onset and have
-  -- endppq clamped.
+  -- On shrink, notes spanning the boundary keep their onset and have endppq clamped.
   function tm:setLength(newPpq)
     if not mm then return end
     local oldPpq = mm:length() or 0
@@ -1267,6 +1194,7 @@ function newTrackerManager(mm, cm)
   end
 
   -- E_c: column is inner, global is outer (see docs/timing.md).
+  --@map:contract returns frozen factor arrays + closures; safe to retain across edits since closures capture the resolved factors, not cm reads
   function tm:swingSnapshot(override)
     local global, column = nil, {}
     if mm then
@@ -1320,6 +1248,7 @@ function newTrackerManager(mm, cm)
 
   ----- Mute
 
+  --@map:contract idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes
   function tm:setMutedChannels(set)
     lastMuteSet = util.clone(set or {})
     if not um then return end
@@ -1340,9 +1269,6 @@ function newTrackerManager(mm, cm)
 
   local vmOnlyKeys = { mutedChannels = true, soloedChannels = true }
 
-  -- Forward reconciliation signals so subscribers above tm needn't reach into mm.
-  -- takeSwapped is also captured into a transient flag and consumed by the next
-  -- reload; mm guarantees the takeSwapped→reload firing order.
   local pendingTakeSwap = false
   tm:forward('notesDeduped',    mm)
   tm:forward('uuidsReassigned', mm)

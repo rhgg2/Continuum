@@ -1,0 +1,177 @@
+@module editCursor  src=editCursor.lua  loc=967  sha=eb14c68
+@deps util
+
+# Invariants & contracts (module)
+  @map:invariant  cursor lives at (row, col, stop) — stop is a char-offset index into col.stopPos, not a part index
+  @map:invariant  cursorRow is 0-indexed; cursorCol/cursorStop are 1-indexed (Lua-array)
+  @map:invariant  ec owns no MIDI/take state — pure caret + selection over grid.cols; mutations go via tm/cm
+  @map:invariant  selection is anchor + cursor; selAnchor is the fixed end, cursor is the moving end; sel is the resolved rect
+  @map:invariant  sel == nil iff no selection; hasSelection() / region() degenerate-to-cursor is a callsite policy, not stored
+  @map:invariant  sticky scopes are orthogonal: hBlockScope ∈ {0=free,1=col,2=channel,3=all-cols}, vBlockScope ∈ {0=free,1=beat,2=bar,3=all-rows}
+  @map:invariant  sticky == any nonzero scope; cursor moves while sticky update sel rather than clearing it
+  @map:invariant  HBlock=2/3 use sentinel part1=part2='*' that no real part name matches — selectionStopSpan falls through to whole-col
+  @map:invariant  within a single col, parts order via col.partStart (lower partStart = earlier part); not stop index, since parts may be multi-stop
+  @map:invariant  moveHook fires after every position-changing operation (clampPos+moveHook are paired)
+
+# Shapes
+  @shape  selection = { row1, row2, col1, col2, part1, part2 }   -- inclusive on both axes; part1/part2 are part names or '*' sentinel
+  @shape  selAnchor = { row, col, stop }                          -- fixed end of an active selection
+  @shape  clip.single = { mode='single', type='note'|'7bit'|'pb', numRows, events=[clipEvent,...] }
+  @shape  clip.multi  = { mode='multi', numRows, startType, cols=[clipColEntry,...] }
+  @shape  clipColEntry = { type, chanDelta, key, events=[clipEvent,...] }   -- key: note=lane-pos, cc=cc#, singleton=nil
+  @shape  clipEvent = source-event minus CLIP_RESERVED, plus { row, [endRow] }   -- row is 0-relative to clip top
+
+# Module-level constants
+  @const CLIP_RESERVED = {
+  @const CLIP_ARTIFACTS = { row = true, endRow = true }
+
+# Module-level functions (private)
+  @fn print(...)
+
+@factory newEditCursor(deps)
+
+  # Private state
+    @state grid = deps.grid
+    @state cm = deps.cm
+    @state getRPBar = deps.rowPerBar
+    @state moveHook = deps.moveHook or function () end
+    @state ec = {}
+
+  # Private functions
+    @fn clampPos()
+        @map:contract  clamps to grid extents; idempotent; stop clamped against current col's stopPos length so col-changes must precede stop reads
+    @fn partAt(col, stop)
+    @fn cursorPart()
+    @fn firstStopForPart(col, part)
+        @map:contract  returns first stop whose partAt name matches; used by selection-set and regionStart to land the caret on the part's leading char
+    @fn isSticky()
+    @fn selStart()
+        @map:contract  pins anchor at current cursor and produces a 1x1 sel; precondition for any selUpdate that follows
+    @fn selUpdate()
+        @map:contract  recomputes sel from anchor + cursor + scopes; rows snap to beat/bar under vBlock=1/2; cols expand to channel/all under hBlock=2/3; no-op when selAnchor is nil
+    @fn selClear()
+        @map:contract  drops sel + anchor + both sticky scopes; the only path that turns sticky off without explicit unstick()
+    @fn cycleHBlock()
+        @map:contract  first call seeds anchor and sets scope=1 (col); subsequent cycles 1->2->3->1 (col->channel->all-cols)
+    @fn cycleVBlock()
+        @map:contract  first call seeds anchor and sets scope=1 (beat); subsequent cycles 1->2->3->1 (beat->bar->all-rows); no-op on empty grid
+    @fn swapEnds()
+        @map:contract  swaps anchor<->cursor on whichever axes aren't scope-locked (vBlock<1 swaps row, hBlock<2 swaps col+stop); no-op without an active selection
+    @fn moveRow(n, selecting)
+        @map:contract  selecting=true (or sticky) extends sel; otherwise clears sel before moving; clamps at top/bottom edges (no wrap)
+    @fn moveStop(n, selecting)
+        @map:contract  walks stops within col, crossing into adjacent col at the boundary; stops at first/last col (no wrap); under hBlock>=2 collapses scope to 1 and re-anchors at current cursor first
+    @fn moveUnit(n, toFirstStop, toLastStop)
+    @fn moveCol(n)
+        @map:contract  jumps one col per step, landing on first/last stop of the destination col; under sticky, extends/contracts selection one col per step
+    @fn moveChannel(n)
+        @map:contract  jumps one channel per step; non-sticky lands on the first note col of the destination channel (skipping pc/pb sentinels); sticky preserves the raw chan-edge land
+    @fn chanRange()
+    @fn selectSpan(scope, col, stop1, stop2)
+    @fn partsFor(type, showDelay, trackerMode)   -- One char of separator between adjacent parts in the rendered cell.
+
+  # Public API
+    -- Position
+    -- Parts
+    -- Selection
+    -- Movement
+    -- Position
+    @api ec:row()
+    @api ec:col()
+    @api ec:pos()
+    @api ec:setPos(row, col, stop)
+        @map:contract  any nil arg leaves that axis untouched; clamps and fires moveHook unconditionally
+    @api ec:clampPos()
+    @api ec:rescaleRow(oldRPB, newRPB)
+        @map:contract  scales cursorRow by newRPB/oldRPB; called by vm when rowPerBeat changes mid-session so caret stays at the same musical time
+    @api ec:reset()
+    -- Part & Region
+    @api ec:cursorPart()
+    @api ec:hasSelection()
+    @api ec:isSticky()
+    @api ec:region()
+    @api ec:regionStart()
+        -- Pair so callers can splat: `ec:setPos(row, ec:regionStart())`.
+    @api ec:eachSelectedCol()
+    @api ec:setSelection(r)
+        @map:contract  installs a selection from a part-typed record; clears sticky scopes; anchor lands at top-left part-start so subsequent extends behave like a fresh drag
+    @api ec:selectionStopSpan(col)
+    @api ec:selClear()
+    @api ec:unstick()
+    @api ec:extendTo(row, col, stop)
+        -- Mouse shift-click and drag both speak this verb.
+    @api ec:shiftSelection(rowDelta)
+        @map:contract  shifts both selection rows + anchor + cursor by rowDelta; clamps each independently (selection can compress against the edge while cursor doesn't)
+    -- Motion
+    @api ec:advance()
+        @map:contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
+    @api ec:selectChannel(chan)
+    @api ec:selectColumn(col)
+    -- Commands
+    @api ec:registerCommands(scope)
+    -- Decoration
+    @api ec:decorateCol(col)
+        @map:contract  stamps col.parts/stopPos/partAt/partStart/width derived from col.type + showDelay + trackerMode; ec is the sole writer of these fields, addGridCol never names them
+@factory newClipboard(deps)
+  @map:invariant  clipboard persists via REAPER ExtState under ('rdm','clipboard'), serialised by util.serialise
+  @map:invariant  clip rows are 0-relative to the clip's top (row=0 is first row of selection); paste re-bases against current cursor row
+  @map:invariant  single vs multi mode is decided by selected-col count: c1==c2 -> single, otherwise multi
+  @map:invariant  single.type ∈ { 'note', '7bit', 'pb' } — note/vel split decided at copy by region's part1
+  @map:invariant  multi.cols carry chanDelta from leftmost source channel; cursor's channel becomes the leftmost destination
+  @map:invariant  CLIP_RESERVED keys are stripped at copy; CLIP_ARTIFACTS (row/endRow) are stripped at paste; everything else (including custom metadata) round-trips
+  @map:invariant  velEvent is the only collector that synthesises a clip event rather than cloning the source — vel-mode pastes must not carry note metadata onto cc destinations
+
+  # Private state
+    @state ec = deps.ec
+    @state grid = deps.grid
+    @state tm = deps.tm
+    @state cm = deps.cm
+    @state currentFrame = deps.currentFrame
+    @state assignTail = deps.assignTail
+    @state paFrame = deps.paFrame
+    @state getCtx = deps.getCtx
+    @state getLength = deps.getLength
+    @state clipboard = {}
+
+  # Private functions
+    @fn save(clip)
+    @fn load()
+    @fn collect()
+        @map:contract  returns nil if the resolved selection is empty (no events); single-col emits {mode='single',type,...}, multi-col emits {mode='multi',cols=[...]}
+    @fn rowOf(p, pL, chan)   -- ppqL is the exact authoring-frame coordinate; dividing it skips the ppqToRow round-trip's 
+    @fn noteEvent(evt, chan, endppq)   -- endRow set only when the note ends inside the selection; spanning notes get their tail cla
+    @fn scalarEvent(evt, chan)
+    @fn velEvent(evt, chan)   -- Scalar abstraction over a note: only `val` carries. A clone would land the source note's p
+    @fn pasteVelocities(events, dstCol, startppq, endppq)
+        @map:contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
+    @fn pasteSingle(clip)
+        @map:contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op
+    @fn pasteMulti(clip)
+        @map:contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col
+    @fn infoFor(chan)
+    @fn resolve(clipCol)
+    @fn pasteClip(clip)
+    @fn trimTop(clip, trim)   -- A note whose start row falls within the trimmed band is dropped entirely.
+        @map:contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
+    @fn filter(events)
+
+  # Public API
+    -- Position
+    -- Parts
+    -- Selection
+    -- Movement
+    -- Position
+    -- Part & Region
+    -- Motion
+    -- Commands
+    -- Decoration
+    -- CLIPBOARD
+    @api clipboard:collect()
+    @api clipboard:copy()
+    @api clipboard:pasteClip(clip)
+    @api clipboard:trimTop(clip, trim)
+    @api clipboard:registerCommands(scope)
+
+  # REAPER API surface
+    @reaper SetExtState
+    @reaper GetExtState

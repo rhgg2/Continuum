@@ -1,0 +1,58 @@
+@module timing  src=timing.lua  loc=269  sha=f73f8a8
+
+# Invariants & contracts (module)
+  @map:invariant  pure module — no module-level state; all functions take operands explicitly
+  @map:invariant  frames stack: ppqL --[swing]--> ppqI --[+delayToPPQ]--> ppqR
+  @map:invariant  swing shapes are PWL homeomorphisms of [0,1] fixing endpoints, strictly monotone
+  @map:invariant  tile period unit is QN (quarter notes); period may be scalar or {num,den}
+  @map:invariant  factor order is inner-to-outer: applyFactors walks forward, unapplyFactors walks backward
+
+# Shapes
+  @shape  Shape = { {0,0}, {x1,y1}, ..., {1,1} }  -- sorted, strictly increasing x and y
+  @shape  Factor = { atom = string, shift = number_qn, period = number|{num,den} }  -- user-facing composite entry
+  @shape  ResolvedFactor = { S = Shape, T = number_ppq }  -- consumed by applyFactors/unapplyFactors
+  @shape  AtomMeta = { range = number, pulsesPerCycle = 1|2 }  -- range = max |a| keeping shape monotonic
+
+# Module-level constants
+  @const M = timing
+  @const EPS = 1e-12
+  @const SAMPLES = 240
+
+# Module-level functions (private)
+  @fn sampled(f)
+  @fn lerp(x0, y0, x1, y1, x)
+  @fn findSegment(S, target, axis)   -- axis = 1 for x (eval), 2 for y (invert).
+
+# Public API (timing.*)
+  @api timing.atomTilePeriod(factor)
+      @map:contract  returns QN, not PPQ; multiply by resolution at the swing-resolution boundary
+  @api timing.findShape(name, userLib)
+      @map:contract  sole resolution path; tm/vm never read presets. nil result means identity to callers
+  @api timing.isIdentity(composite)
+  @api timing.periodQN(period)
+      -- Bad shape is a caller bug; fail loudly rather than guessing.
+  @api timing.compositePeriodQN(composite)
+      -- Uses internal tile periods (period × pulsesPerCycle), so the result is the realised repeat rate, not the user-period.
+  @api timing.eval(S, x)
+      @map:contract  O(log n) binary search; assumes endpoints are pinned exactly to {0,0}/{1,1}
+  @api timing.invert(S, y)
+  @api timing.inverse(S)
+      -- Swap (x,y) per control point; monotonicity and endpoints preserved,
+      -- so no re-sort.
+  @api timing.compose(S, T)
+      -- Breakpoints of S∘T are T's x-points ∪ T⁻¹(S's x-points): both drive
+      -- slope changes of the composite.
+  @api timing.tile(S, T, p)
+      -- T <= 0 degrades to identity so callers can drive off empty composites.
+      @map:contract  every multiple of T is a fixed point; T in PPQ, p in PPQ
+  @api timing.tileInverse(S, T, p)
+  @api timing.applyFactors(factors, ppq)
+      @map:contract  ppqL -> ppqI; identity-safe on empty factors
+  @api timing.unapplyFactors(factors, ppq)
+      @map:contract  ppqI -> ppqL; reverses factor order to invert composition
+  @api timing.logPerRow(rpb, denom, resolution)
+      @map:contract  callers must store result as float; vm relies on unrounded rowPPQs for swing-inversion exactness
+  @api timing.delayToPPQ(d, res)
+      @map:contract  d in signed milli-QN, res in PPQ/QN; nil d treated as 0
+  @api timing.ppqToDelay(p, res)
+

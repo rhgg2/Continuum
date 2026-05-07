@@ -386,20 +386,3 @@ are derived on the first frame and held.
   dragWinY)` so ImGui doesn't reposition mid-drag.
 - **Dots are `inactive` at the character level**, no matter what
   colour the renderer asked for on the rest of the cell.
-
----
-
-## API reference
-
-### Construction & lifecycle
-
-```
-newTrackerPage(vm, cm, cmgr)
-rm:init()    -- create ImGui context + font; call once
-rm:loop()   -> false when the user closes the window; true otherwise
-```
-
-`rm:loop` pushes styles, draws toolbar / tracker / status bar / modal
-/ swing editor, calls `vm:tick`, and returns `open && !quit`. There is
-no public surface beyond these two methods — everything else is
-internal to the closure.

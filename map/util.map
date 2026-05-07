@@ -1,0 +1,44 @@
+@module util  src=util.lua  loc=361  sha=0efe8ed
+
+# Invariants & contracts (module)
+  @map:invariant  stateless module: pure helpers, no module-level mutable state beyond the REMOVE sentinel
+  @map:invariant  util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
+
+# Module-level functions (private)
+  @fn print(...)
+  @fn escape_string(s)
+
+# Public API (util.*)
+  @api util.print(...)
+  @api util.print_r(root)
+  @api util.assign(t1,t2)
+      @map:contract  values equal to util.REMOVE clear the key from t1 instead of being assigned
+  @api util.add(tbl, val)
+  @api util.pick(src, keys, adds)
+  @api util.bucket(buckets, key, val)
+  @api util.seek(items, mode, key, filter, keyFn)
+      @map:contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
+  @api util.clone(src, exclude, deep)
+      @map:contract  exclude applies only to the outermost table; deep recursion drops the exclude set
+  @api util.deepClone(src)
+  @api util.installHooks(owner)
+      @map:contract  listeners filter by signal name at registration; forward requires source itself ran installHooks
+  @api util.isNote(e)
+  @api util.between(events, lo, hi, filter)
+      @map:contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap
+  @api util.clamp(val,min,max)
+  @api util.setDigit(val, d, pos, base, half)
+  @api util.snapTo(v, dir, interval)
+      @map:contract  advances at least one full interval; values already on a boundary do not no-op
+  @api util.nudgedScalar(v, lo, hi, dir, interval)
+  @api util.oneOf(choices, txt)
+  @api util.round(n, to)
+  @api util.gcd(a, b)
+  @api util.lcm(a, b)
+  @api util.dotimes(n, v)
+      @map:contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v
+  @api util.serialise(value, exclude, seen)
+      @map:contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
+  @api util.unserialise(input)
+      @map:contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
+

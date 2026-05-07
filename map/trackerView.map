@@ -1,0 +1,248 @@
+@module trackerView  src=trackerView.lua  loc=2155  sha=eb14c68
+@deps util, midiManager, trackerManager, tuning, commandManager, editCursor
+
+# Invariants & contracts (module)
+  @map:invariant  rows 0-indexed, cols 1-indexed, channels 1..16, stops 1-indexed
+  @map:invariant  vm.grid is a live handle — rm reads it each frame; mutated in place on rebuild, never reassigned
+  @map:invariant  rm is pull-only — vm fires no render callbacks; rm queries vm.grid / vm:ec() / vm:rowPerBar() each frame
+  @map:invariant  all writes funnel through tm (addEvent/assignEvent/deleteEvent/flush); vm never touches mm
+  @map:invariant  vm sits on the swing boundary; intent only — never reads/writes realisation pb directly (see docs/tuning.md)
+  @map:invariant  every authoring call site stamps evt.frame = currentFrame(chan) and evt.ppqL = row · logPerRow before tm:addEvent (PAs use host.frame for swing/colSwing, current rpb)
+  @map:invariant  off-grid edits snap intent ppq + ppqL to the cursor row; delay survives, frame restamps to current
+  @map:invariant  clipboard rows encode in source col's swing frame; paste decodes into destination col's frame — round-trip is symmetric on (row, chan), not absolute ppq
+
+# Module-level functions (private)
+  @fn print(...)
+
+@factory newViewContext(args)
+  @map:contract  pure throwaway snapshot built once per vm:rebuild; no callbacks, no mutation, no migration — discard and rebuild on every change
+
+  # Private state
+    @state swing = args.swing
+    @state rowPPQs = args.rowPPQs
+    @state length = args.length
+    @state numRows = args.numRows
+    @state rowPerBeat = args.rowPerBeat
+    @state ppqPerRow = args.ppqPerRow
+    @state timeSigs = args.timeSigs
+    @state temper = args.temper
+    @state ctx = {}
+
+  # Private functions
+    @fn timeSigAt(ppq)
+    @fn tsRow(ts)
+
+  # Public API
+    -- Temperament
+    @api ctx:activeTemper()
+    @api ctx:noteProjection(evt)
+    -- Timing
+    @api ctx:ppqToRow(ppqI, chan)
+        @map:contract  per-chan binary search of rowPPQs after swing.toLogical(chan, ppqI); inverse of rowToPPQ
+    @api ctx:rowToPPQ(row, chan)
+        @map:contract  floor + swing.fromLogical, rounded to integer ppq; on-grid iff ctx:rowToPPQ(round(ppqToRow(p)), chan) == p
+    @api ctx:snapRow(ppqI, chan)
+    @api ctx:ppqPerRow()
+    @api ctx:rowBeatInfo(row)
+    @api ctx:barBeatSub(row)
+@factory newTrackerView(tm, cm, cmgr)
+  @map:contract  whenever a note's tail moves: rebases evt.frame to current alongside the new (endppq, endppqL) — writing endppqL alone would leave it incoherent with frame
+  @map:contract  non-transient writes to FRAME_KEYS while a transient override is active short-circuit into releaseTransientFrame, whose recursive cm:assign fires the rebuild — so we return early to avoid double rebuild
+
+  # Shapes
+    @shape  grid = { cols = {<col>...}, chanFirstCol = {[chan]=i}, chanLastCol = {[chan]=i}, lane1Col = {[chan]=<col>}, numRows = int }
+    @shape  gridCol = { type, midiChan, lane?, cc?, label, events, width, parts, stopPos, partAt, partStart, showDelay, cells={[y]=evt}, overflow={[y]=true}, offGrid={[y]=true}, ghosts={[y]={val,fromEvt,toEvt}}, tails? }
+    @shape  selection = { row1, row2, col1, col2, part1, part2 }  -- part names: 'pitch'|'vel'|'delay' on note, 'pb' on pb, 'val' on scalar
+    @shape  plan = { col, e, [newppq], [newEndppq], [newPpqL], [newEndppqL], [newFrame], [newDelay] }  -- consumed by writePlans / conformOverlaps
+    @shape  frame = { swing = name|composite, colSwing = name|composite, rpb = int }  -- FRAME_KEYS unit; stamped onto evt.frame at authoring time
+
+  # Private state
+    @state resolution = 240
+    @state rowPerBar = 16
+    @state rowPPQs = {}
+    @state length = 0
+    @state timeSigs = {}
+    @state scrollCol = 1
+    @state scrollRow = 0
+    @state gridWidth = 0
+    @state gridHeight = 0
+    @state grid = {
+    @state vm = {}
+
+  # Private functions
+    @fn neighbourEvents(cols, ppq, pred)   -- prev maximises endppq; nxt minimises ppq.
+    @fn notePreds(excludeEvt)
+    @fn overlapBounds(col, ppq, excludeEvt, allowOverlap)   -- Diff-pitch col-local with `overlapOffset` leniency (matches column allocator). Same-pitch 
+    @fn rowBounds(col, ppq, excludeEvt, allowOverlap)   -- Row-space sibling of overlapBounds. Reads ppqL/endppqL when present — editor-authored note
+    @fn startL(e, slack)   -- slack > 0 ⇒ go through swing (leniency is an intent-ppq quantity). slack == 0 ⇒ prefer ppq
+    @fn endL(e, slack)
+    @fn conformOverlaps(plans)
+        @map:contract  resolves overlap excess in a per-column plan list; mutates plan entries in place. Tail-overlap clips predecessor's tail (legato — onset stays); same-onset shifts the later-source-ppqL one by 1 ppq. Non-note plans/cols skipped; unplanned col-mates treated as fixed
+    @fn writePlans(plans)
+    @fn delayRange(col, n)   -- Two bounds: same-pitch chan-wide (MIDI one-voice-per-pair) at intent end, and same-column 
+    @fn eventsByCol()
+    @fn logPerRowFor(rpb)
+    @fn logicalOf(e)
+    @fn endLogicalOf(e)
+    @fn isFrameChange(change)
+        @map:contract  a write to a FRAME_KEYS member at any tier other than 'transient' counts as a real frame change — fires releaseTransientFrame from configCallback
+    @fn currentFrame(chan)
+    @fn releaseTransientFrame()   -- Returns true iff a transient override was released.
+    @fn frameAndLogPerRow(chan)
+    @fn assignStamp(type, evt, chan, rowS, rowE)   -- Pass rowE for span events (notes).
+    @fn paFrame(hostFrame, chan)   -- Frame to stamp on a PA being attached to a host note. Inherits host's swing slot + colSwin
+    @fn assignTail(evt, chan, endppq, endppqL)   -- Head's ppqL stays in absolute logical-ppq units; reads off-grid in the new frame's row map
+    @fn matchGridToCursor()
+    @fn writeShared(key, value)   -- Slot selections (temper, swing) are views over the data, not data themselves. Mirroring at
+    @fn toggleChannelFlag(key, chan)
+    @fn pushMute()
+        @map:contract  effective mute = persistent-mute ∪ solo-implied mute; when any channel soloed, non-soloed forced muted and soloed forced audible (DAW solo-wins). Both sets persist in cm so reload's tm:lastMuteSet matches the wire
+    @fn killAudition()
+    @fn audition(pitch, vel, chan)
+    @fn lastVisibleFrom(startCol)
+    @fn followViewport()
+    @fn placeNewNote(col, update)   -- Caller has already pinned (ppq, ppqL, frame) onto `update`.
+    @fn notePAEvents(col, pitch, startppq, endppq)
+    @fn commit(auditionPitch, auditionVel)
+    @fn snap(update)
+    @fn newVel(old)
+    @fn visibleAt(col, i)   -- Skips hidden absorbers; returns nil if i out of range.
+    @fn nextShape(s)
+    @fn cycleShape(col, A)
+    @fn interpolate()
+    @fn interpolateValues(col)   -- Returns nil for non-interpolable cols so callers can assign unconditionally.
+    @fn cursorNoteBefore()
+    @fn applyNoteOff(col, last, targetppq, undo)
+    @fn noteOff()
+    @fn adjustDurationCore(col, note, rowDelta)   -- Read the current end row exactly off `endppqL` (authored row * logPerRow) so `curRow + row
+    @fn adjustDuration(rowDelta)
+    @fn adjustPositionMulti(rowDelta)
+    @fn adjustPosition(rowDelta)   -- Off-grid neighbours pull integer row inward via ceil/floor (item-start guard: ceil(0) = 0 
+    @fn allGroups()   -- Every column, every event, as a groups list (for *-all variants).
+    @fn reswingCore(groups, opts)
+        @map:contract  events without evt.frame are skipped — there is no after-the-fact frame inference. Two passes (plan, then mutate) so frame reads stay stable across the batch. Plan ppq is clamped to take length to prevent REAPER auto-extending the source on MIDI_Sort
+    @fn reswingScope(groups)
+    @fn reswingPresetChange(name)
+    @fn quantizeScope(groups)   -- Plan-then-write so conformOverlaps can clip plan geometry against col-mates before the wri
+    @fn quantizeKeepRealisedScope(groups)   -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
+        @map:contract  intent ppq snaps to nearest row; delay absorbs the inverse so realised onset is preserved. Endppq stays put. Required delay clamped at delayRange — realised still preserved, intent partially off-grid; popup reports the clamp count
+    @fn notFake(e)   -- Fake pbs are tm-managed absorbers tied to note seats — row ops shift only real events and 
+    @fn shiftPlan(col, e, dLogical, swing, f)   -- ppq re-realises from the new ppqL via swing; a constant ±dppq is only right under identity
+    @fn insertRowCore(col, topRow, numRows)
+    @fn deleteRowCore(col, topRow, numRows)
+    @fn forEachRowOp(core, preSel, noSelCols)   -- `noSelCols` picks the column set when no selection is active.
+    @fn allCols()
+    @fn curCol()
+    @fn insertRow()
+    @fn deleteRow()
+    @fn insertRowCol()
+    @fn deleteRowCol()
+    @fn pitchStep(coarse)
+    @fn valueInterval(col)   -- Coarse snap interval per column type. nil = no coarse (pc).
+    @fn valueBounds(col)
+    @fn nudgePitch(col, note, dir, coarse, audible)
+    @fn nudgeVel(note, dir, coarse)
+    @fn nudgeDelay(col, note, dir, coarse)
+    @fn nudgeValue(col, evt, dir, coarse)
+    @fn applyNudge(col, evt, part, dir, coarse, audible)
+    @fn cursorRowEvent(col)   -- PAs skipped on note cols.
+    @fn nudge(dir, coarse)   -- Column-typed nudge. Selection rule: if any note event is selected, transpose / velocity- /
+    @fn queueDeleteNotes(col, locs)   -- Delete notes; extend each predecessor that ended at-or-past a deleted run into the next su
+    @fn queueResetDelays(col, locs)
+    @fn queueResetVelocities(col, locs)   -- Reset selected note vels to the prior event's vel (notes or PAs carry forward); delete sel
+    @fn queueDeleteCCs(col, locs)
+    @fn deleteEvent()
+    @fn deleteSelection()
+    @fn deleteOrBackspace()
+    @fn stepSample(dir)   -- Step currentSample by ±1 across the full 0..127 range. Empty slots are reachable — the use
+    @fn duplicate(dir)
+        @map:contract  upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard (uses clipboard:collect + pasteClip directly)
+    @fn addGridCol(chan, type, key, events)
+
+  # Public API
+    -- Temperament
+    -- Timing
+    -- SHARED HELPERS
+    -- Note geometry (used by editing, adjust*, nudge, quantizeKeepRealised)
+    -- Show events by column, used by lots of selection ops
+    -- Frames & timing
+    @api vm:setRowPerBeat(n)
+    @api vm:applyTakeProperties(props)
+        -- props = { name, rows, mode = 'resize'|'rescale'|'tile' }; mode defaults to 'resize'.
+    @api vm:setSwingSlot(name)
+    @api vm:setTemperSlot(name)
+    @api vm:setColSwingSlot(chan, name)
+        -- colSwing is a per-channel map; cross-track bleed via project would
+        -- mean track A's per-channel pattern surfaces on a fresh track B until
+        -- B overrides every entry. Keep it track-scoped.
+    @api vm:setSwingComposite(name, composite)
+    @api vm:setTemper(name, temper)
+    -- Mute / solo
+    @api vm:isChannelMuted(chan)
+    @api vm:isChannelSoloed(chan)
+    @api vm:isChannelEffectivelyMuted(chan)
+    @api vm:toggleChannelMute(chan)
+    @api vm:toggleChannelSolo(chan)
+    -- Audition
+    @api vm:tick()
+    -- Viewport
+    @api vm:scroll()
+    -- Editing
+    @api vm:editEvent(col, evt, stop, char, half)
+        @map:contract  single typed-input entry point; dispatches on (col.type, stop, evt-kind). Off-grid edits run through `snap` to repin intent + ppqL to cursor row and restamp frame; commit flushes, advances by advanceBy, and may audition
+    -- Lane-strip edits (drag, add, delete, shape, tension)
+    @api vm:moveLaneEvent(col, i, toRow, toVal)
+        @map:contract  clamps newppq strictly inside (prev.ppq, next.ppq) by ±1 — necessary-and-sufficient invariant for identity-by-visible-index to survive the post-flush rebuild
+    @api vm:addLaneEvent(col, colIdx, ppq, val)
+        -- Inherits prev visible's envelope shape so prev→next curve survives the new midpoint.
+        -- Returns the new event's visible index post-flush for drag-seed.
+    @api vm:deleteLaneEvent(col, i)
+    @api vm:setLaneTension(col, i, tension)
+        -- Set bezier tension on the i-th visible event. Forces shape to bezier
+        -- so the tension is honoured (REAPER ignores tension on other shapes).
+    -- Interpolation
+    @api vm:cycleLaneShape(col, i)
+        -- Cycle the segment-owner's shape on the i-th visible event in a
+        -- cc/pb/at column. Segment-owner = left endpoint (REAPER convention:
+        -- A.shape governs the curve from A to next).
+    -- Duration & position
+    -- Reswing / quantize
+    @api vm:reswingSelection()
+    @api vm:reswingAll()
+    @api vm:quantizeSelection()
+    @api vm:quantizeAll()
+    @api vm:quantizeKeepRealisedSelection()
+    @api vm:quantizeKeepRealisedAll()
+    @api vm:reswingPreset(name)
+    -- Nudge
+    -- Deletion
+    -- Duplicate
+    @api vm:ec()
+    @api vm:clipboard()
+    -- Accessors for trackerPage
+    @api vm:rowPerBar()
+    @api vm:takeName()
+    @api vm:activeTemper()
+    @api vm:noteProjection(evt)
+    @api vm:rowBeatInfo(row)
+    @api vm:barBeatSub(row)
+    @api vm:ppqToRow(ppq, chan)
+    @api vm:rowToPPQ(row, chan)
+    @api vm:sampleCurve(A, B, ppq)
+    @api vm:timeSig()
+    -- Non-command callbacks from trackerPage
+    @api vm:setGridSize(w, h)
+    -- Columns
+    @api vm:addExtraCol(type, cc)
+    @api vm:hideExtraCol()
+    @api vm:showDelay()
+    -- Command table
+    -- Rebuild
+    @api vm:rebuild(takeChanged)
+        @map:contract  reentrancy-guarded by `rebuilding`; takeChanged=true resets ec and re-reads resolution/length/timeSigs from tm; grid cols / rowPPQs / viewContext / cell-overflow-offGrid maps / ghost maps rebuild unconditionally; pushMute at the end
+
+  # REAPER API surface
+    @reaper Undo_BeginBlock, Undo_EndBlock
+    @reaper time_precise
+    @reaper StuffMIDIMessage
+    @reaper ShowMessageBox

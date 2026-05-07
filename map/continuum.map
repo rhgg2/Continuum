@@ -1,0 +1,41 @@
+@module continuum  src=continuum.lua  loc=635  sha=eb14c68
+@deps util, configManager, midiManager, trackerManager, commandManager, editCursor, trackerView, sampleManager, sampleView, swingEditor, curveEditor, trackerPage, samplePage
+
+# Invariants & contracts (module)
+  @map:invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer
+  @map:invariant  module load order is bottom-up: util first (everyone calls util.installHooks), commandManager before view layers (which self-register commands), pages last
+  @map:invariant  one MIDI item per session — Main binds to the take at startup; selection changes mid-session require re-invoking the action
+  @map:invariant  no teardown path — coord:quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload
+  @map:invariant  errors inside the defer loop surface through the same xpcall frame because each iteration reschedules itself
+
+# Shapes
+  @shape  fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }
+  @shape  chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), makeToolbar()->fn(segments), drawPicker(d), pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+  @shape  pickerSpec = { kind: string, heading: string, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
+  @shape  toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
+  @shape  dispatchResult = { consumed: bool, commandHeld: bool }
+  @shape  page = { renderToolbarBits(ctx), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind(), [renderFloating(ctx)] }
+
+# Module-level constants
+  @const ImGui = require 'imgui' '0.10'
+  @const fileOps = {
+
+# Module-level functions (private)
+  @fn print(...)
+  @fn err_handler(err)
+  @fn run(fn)
+  @fn copyFileBytes(src, dst)   -- 64KB chunks so big samples don't allocate a Lua string the size of the file.
+  @fn createImGui()
+  @fn newChrome(cm, ctx)
+      @map:contract  one chrome instance per coordinator; threaded into every page
+      @map:invariant  colour cache lives on the chrome instance and is invalidated on cm:configChanged
+  @fn dispatchKeys(state, cmgr, ctx)
+      @map:contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
+      @map:contract  first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
+  @fn newCoordinator(cm, cmgr, sm, take, ctx, font, uiFont)
+      @map:contract  pages must be registered via coord:register(name,page); first registered becomes active
+      @map:contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→take, sample→track)
+      @map:contract  tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
+  @fn Main()
+      @map:contract  Main bails with a console message if no MIDI item is selected; otherwise builds the manager stack bottom-up, then enters the defer loop via coord:run()
+

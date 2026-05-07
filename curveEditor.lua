@@ -1,11 +1,11 @@
--- Generic curve editor: a horizontal strip of (t, val) anchors with
--- per-segment shape/tension. Owns hover/insert/move/tension/delete/cycle
--- gestures and all transient drag state. Domain-agnostic — the host
--- supplies projections, value range, curve evaluation, and write-back
--- callbacks.
---
--- Hard invariant: anchors never cross. Every move clamps t strictly
--- between immediate neighbours before firing onMove / onMoveFree.
+-- See docs/curveEditor.md for the model.
+-- @noindex
+
+--@map:invariant anchors never cross; t is clamped strictly between immediate neighbours before any onMove/onMoveFree fire
+--@map:invariant editor owns no domain data; events/projections/eval/callbacks all supplied by host per frame
+--@map:invariant transient state (hover, segHover, segPin, preview, previewSuppress, drag) lives in factory closure; segPin and drag straddle frames and are invalidated when host's dragId changes
+--@map:invariant snapped move (no shift) constrains t to integer ticks; shift-held free move uses FREE_EPS_T margin against neighbours
+--@map:invariant exactly one of {move-drag, hover, insert-preview, segHover} is active per frame; later branches are gated on earlier ones being absent
 
 loadModule('util')
 
@@ -22,30 +22,19 @@ local R_ACTIVE   = 4.5
 local R_PREVIEW  = 3.5
 local FREE_EPS_T = 1e-3   -- strict-between-neighbours margin in free (shift) mode
 
+--@map:shape drag = { kind='move'|'tension'|'inert', id=dragId, idx=number, startMx, startMy, moved=bool, [startMouseT], [startTension, ax, ay, bx, by] }
+--@map:shape segPin = { id=dragId, segI=number, mx=number, my=number }
+--@map:shape preview = { t=number, val=number }
+--@map:shape previewSuppress = { x=number, y=number }
 function newCurveEditor(ctx)
   local hover, segHover, segPin, preview, previewSuppress, drag
 
   local self = {}
 
-  -- Per-frame call. args:
-  --   drawList,                       -- already-pushed window's draw list
-  --   rect = { x0, yTop, w, h },      -- inner band; host paints bg/border
-  --   vMin, vMax, tMin, tMax,
-  --   events, tOf(evt) -> t,
-  --   evalCurve(A, B, fracT) -> val,  -- shape/tension semantics
-  --   snap = function(t) -> snappedT  -- nil = no snap; editor decides "near"
-  --   hovered = bool,                 -- caller's IsWindowHovered gate
-  --   dragId,                         -- opaque; drag/segPin invalidated on change
-  --   colours = { axis, envelope, anchor, anchorActive },
-  --   callbacks = {
-  --     onMove(idx, newT, newVal),       -- snapped (integer-snap) move
-  --     onMoveFree(idx, newT, newVal),   -- shift-held continuous move
-  --     onInsert(t, val) -> newIdx,
-  --     onDelete(idx),
-  --     onTension(idx, tau),
-  --     onCycleShape(idx),
-  --   },
-  -- Returns: consumed (bool).
+  --@map:shape FrameArgs = { drawList, rect={x0,yTop,w,h}, vMin, vMax, tMin, tMax, events, tOf=(evt)->t, evalCurve=(A,B,fracT)->val, snap=(t)->snappedT|nil, hovered=bool, dragId, colours={axis,envelope,anchor,anchorActive}, callbacks={onMove(idx,t,val), onMoveFree(idx,t,val), onInsert(t,val)->newIdx, onDelete(idx), onTension(idx,tau), onCycleShape(idx)} }
+  --@map:contract returns true iff the editor consumed the mouse this frame (host should suppress its own click handling)
+  --@map:contract callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame
+  --@map:contract host must call frame() inside a window whose drawList is a.drawList and gate a.hovered on its own IsWindowHovered
   function self:frame(a)
     local rect      = a.rect
     local x0, yTop  = rect.x0, rect.yTop
@@ -68,13 +57,10 @@ function newCurveEditor(ctx)
       return yBot - f * valSpan
     end
 
-    -- Reset transient publish state. segPin / drag / previewSuppress
-    -- straddle frames; drop them when the host's dragId moves on.
     hover, segHover, preview = nil, nil, nil
     if segPin and segPin.id ~= a.dragId then segPin = nil end
     if drag   and drag.id   ~= a.dragId then drag   = nil end
 
-    -- Axis at val=0 only when 0 falls inside the value window.
     if vMin <= 0 and 0 <= vMax then
       local ay = valToY(0)
       ImGui.DrawList_AddLine(dl, x0, ay, x0 + w, ay, cols.axis, 1)
@@ -85,9 +71,8 @@ function newCurveEditor(ctx)
     local tArr = {}
     for i = 1, n do tArr[i] = tOf(events[i]) end
 
-    -- Bidirectional segIdx ratchet: polyline walks forward, segHighlight
-    -- and insert-preview lookup may jump backward. Reusing one closure.
     local segIdx = 1
+    --@map:contract evalAtT mutates the enclosing segIdx; safe across forward and backward t sequences but not concurrent with itself
     local function evalAtT(t)
       if n == 0 then return 0 end
       while segIdx < n and tArr[segIdx + 1] <= t do segIdx = segIdx + 1 end
@@ -137,11 +122,6 @@ function newCurveEditor(ctx)
       end
     end
 
-    -- Curve-region affordances. Three exclusive states when neither anchor
-    -- nor drag is active and the host's window is hovered:
-    --   * near a snap line at the curve y → insert preview
-    --   * near the curve mid-segment      → segment hover
-    --   * neither                          → nothing
     if not drag and not hover and a.hovered then
       local mx, my = ImGui.GetMousePos(ctx)
       local suppressed = previewSuppress
@@ -194,7 +174,6 @@ function newCurveEditor(ctx)
       end
     end
 
-    -- Segment highlight: tension drag wins over geometric/pinned hover.
     local activeSeg = (drag and drag.kind == 'tension' and drag.idx) or segHover
     if activeSeg and activeSeg < n then
       local pxA = math.floor(tToX(tArr[activeSeg]))
@@ -260,8 +239,6 @@ function newCurveEditor(ctx)
       if newIdx then seedMove(newIdx); return true end
     end
 
-    -- Bezier seg → tension drag. Other shapes → inert drag (no edits, but
-    -- pins the window so dragging off doesn't trigger ImGui's empty-area-move).
     if not drag and clicked and segHover and a.hovered then
       local A = events[segHover]
       local B = events[segHover + 1]
@@ -277,6 +254,7 @@ function newCurveEditor(ctx)
     end
 
     if not (drag and held) then return false end
+    --@map:contract inert drag consumes input but never invokes callbacks; pure ImGui empty-area-move suppression
     if drag.kind == 'inert' then return true end
 
     local mx, my = ImGui.GetMousePos(ctx)
@@ -307,7 +285,6 @@ function newCurveEditor(ctx)
       return true
     end
 
-    -- Move drag.
     local i = drag.idx
     local A = events[i]
     if not A then drag = nil; return true end

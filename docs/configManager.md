@@ -24,6 +24,22 @@ Colour keys are flat and dotted (`colour.bg`, `colour.rowBeat`, …) rather
 than nested. This preserves per-colour override semantics across levels —
 a track setting `colour.cursor` doesn't wipe the project's other colours.
 
+The colour keyspace is split by purpose. **Atoms** under `palette.*`
+(parchment, used by the tracker grid) and `chrome.*` (neutral, used by
+toolbar/popups/modals) are the only place RGB values live. **Roles**
+under `colour.*` name the *function* a colour plays and resolve to an
+atom — or to another role — by full cm key. One-off colours that earn
+no good function name live inline at the role.
+
+A role entry takes one of three forms (resolved by trackerPage's
+`resolveColour`):
+
+| Form              | Meaning                                       |
+|-------------------|-----------------------------------------------|
+| `{r,g,b,a}`       | atom — terminal RGBA                          |
+| `'fullKey'`       | pure alias — recursive `cm:get`, alpha inherited |
+| `{'fullKey', a}`  | alias with alpha override (outermost wins)   |
+
 ## Ownership
 
 cm owns its cache tables. Every read deep-clones on the way out; every
@@ -101,45 +117,3 @@ cm fires one signal, `'configChanged'`. Payload shape varies by call site:
   they're pruned.
 - **Caches are lazy.** First read through any getter triggers a full
   refresh; `setContext` refreshes eagerly.
-
----
-
-## API reference
-
-### Construction & context
-
-```
-newConfigManager()              -- no take context; global/project only
-cm:setContext(take)             -- take may be nil to clear; fires callback
-cm:clearTake()                  -- drops take half; track/global/project kept
-cm:setTrack(track)              -- rebinds track independent of take
-```
-
-### Callbacks
-
-```
-cm:subscribe('configChanged', fn)      -- fn(data); see "Signals" above
-cm:unsubscribe('configChanged', fn)
-```
-
-### Reading
-
-```
-cm:get(key)            -> merged value (deep copy)
-cm:getAt(level, key)   -> value at that level only (deep copy), or nil
-cm:getAt(level)        -> full cache table at that level (deep copy)
-cm:getLevel(key)       -> level name currently defining key, or nil
-```
-
-`level` ∈ `{ 'global', 'project', 'track', 'take', 'transient' }`.
-
-### Writing
-
-```
-cm:set(level, key, value)       -- fires 'configChanged' { key, level }
-cm:remove(level, key)           -- fires 'configChanged' { key, level } if present
-cm:assign(level, updates)       -- fires 'configChanged' { level } (keyless)
-```
-
-`updates` is a `{ key = value }` table; a value of `util.REMOVE` deletes
-that key. Any unknown key in `updates` raises before any write happens.

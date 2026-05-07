@@ -1,0 +1,26 @@
+@module fs  src=fs.lua  loc=88  sha=eb14c68
+
+# Invariants & contracts (module)
+  @map:invariant  sole module touching reaper.Enumerate* and filesystem IO; UI/view layers route through here
+  @map:invariant  listDirs and listAudioFiles return case-insensitively sorted output (Finder/Explorer parity)
+
+# Module-level constants
+  @const AUDIO_EXTS = {
+
+# Module-level functions (private)
+  @fn ciLess(a, b)
+
+# Public API (fs.*)
+  @api fs.isAudio(name)
+  @api fs.basename(path)
+  @api fs.parent(path)
+      @map:contract  returns '' if path has no separator; trailing separators on input are not stripped (caller passes canonical paths)
+  @api fs.join(a, b)
+      @map:contract  inserts '/' between a and b unless a already ends in '/' or '\\'; no path normalisation
+  @api fs.listDirs(path)
+      @map:contract  hides dotfile-prefixed entries (.git, .DS_Store, etc.)
+  @api fs.exists(path)
+  @api fs.hashFile(path)
+      @map:contract  FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md
+  @api fs.listAudioFiles(path)
+

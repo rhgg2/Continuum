@@ -1,4 +1,10 @@
--- See docs/trackerPage.md for the model and API reference.
+-- See docs/trackerPage.md for the model.
+
+--@map:invariant page is render + input only; tracker state lives in vm/ec/tm — never cached here
+--@map:invariant cm/vm read fresh each frame; only ephemeral UI state persists across frames (gridX/Y, dragging, modalState, picker*, laneConsumed)
+--@map:invariant col.x == nil is the visibility predicate; every per-column draw must gate on it
+--@map:invariant cell coordinates are 0-indexed; header rows at -HEADER, row-number gutter at -GUTTER
+--@map:invariant writes go through vm or cmgr commands — page never reaches into tm
 
 loadModule('util')
 loadModule('timing')
@@ -27,12 +33,9 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
   local gridWidth   = 0
   local gridHeight  = 0
 
-  -- Per-frame layout, populated by computeLayout() before any draw routine
-  -- that needs it. drawLaneStrip and drawTracker both consume these.
   local chanX, chanW, chanOrder, totalWidth = {}, {}, {}, 0
 
-  -- Pack columns left-to-right starting at scrollCol, fitting as many as
-  -- gridWidth allows; sets col.x on visible cols, clears on the rest.
+  --@map:contract clears col.x on every col before assigning; off-screen cols end the frame with col.x == nil
   local function layoutColumns(cols, scrollCol)
     for _, col in ipairs(cols) do col.x = nil end
     local cX, cW, cOrder = {}, {}, {}
@@ -53,19 +56,11 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
   end
 
   local ctx         = ctxArg
-  local font        = fontArg     -- monospace, used inside the tracker grid
-  local uiFont      = uiFontArg   -- system sans-serif, used for chrome (toolbar, status, modals, swing editor)
+  local font        = fontArg     -- monospace, grid
+  local uiFont      = uiFontArg   -- sans, chrome
   local dragging    = false   -- tracker-grid selection drag: click → held → release
-  local modalState = nil   -- nil = closed, else { title, prompt, callback, buf, kind? }
+  local modalState = nil
   local swingEditor = newSwingEditor(vm, cm, chrome, ctxArg)
-  local pickerOpenRequest = nil -- 'temper' | 'swing' | nil; consumed next frame by drawSlotPicker
-  local pickerFilter = {}       -- kind -> typeahead buffer; reset on each open
-  local pickerCursor = {}       -- kind -> 1-based highlight index into filtered matches
-  local pickerActive  = false   -- a picker popup owned input this frame; handleKeys must skip
-
-  -- Lane strip delegates all envelope drawing and mouse handling to a
-  -- generic curve editor. drawLaneStrip publishes laneConsumed each frame;
-  -- handleMouse short-circuits when it's set.
   local curveEd      = newCurveEditor(ctxArg)
   local laneConsumed = false
   local toolbar                              -- lazy: chrome may be nil at construction in tests
@@ -204,136 +199,13 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     return pt
   end
 
-  -- Effective lane-strip row count: 0 when hidden, else the configured size.
-  -- Single point of truth for both layout and rendering.
+  --@map:contract returns 0 when laneStrip.visible is false — both layout and draw branch on this
   local function laneStripRows()
     if not cm:get('laneStrip.visible') then return 0 end
     return cm:get('laneStrip.rows') or 0
   end
 
-  -- One picker = a "<heading>:" label followed by a button "<preview> ▾"
-  -- that opens a popup containing Off, current library entries, and any
-  -- unseeded presets (prefixed '+ '). `onPick(name)` receives nil for Off,
-  -- a lib name for a normal entry, or a preset name for an unseeded preset —
-  -- the callback is responsible for seeding the lib in that case.
-  --
-  -- The popup carries a typeahead filter (autofocused on open). Enter
-  -- picks the first surviving match; group separators show only when
-  -- the filter is empty (groups become incoherent under filtering).
-  -- Generic searchable picker: heading + button + popup with InputText
-  -- filter, arrow-key nav, group separators, and click-or-Enter commit.
-  -- Domain-agnostic — caller supplies the flat item list and the button
-  -- label. Each item: { label, key, group=1, current=bool }.
-  --
-  -- width / minWidth / maxWidth on d control the button width; width=n
-  -- pins both bounds. Without any, the button sits at intrinsic width.
-  local function drawSlotPicker(d)
-    local popupId = '##picker_' .. d.kind
-
-    -- Heading inherits the toolbar's outer Col_Text push (chrome.shade);
-    -- no inner push needed.
-    ImGui.AlignTextToFramePadding(ctx)
-    ImGui.Text(ctx, d.heading .. ':  ')
-    ImGui.SameLine(ctx)
-
-    -- ##d.kind disambiguates the ImGui ID — different pickers may all show
-    -- the same buttonLabel once the heading is no longer part of the ID.
-    local btnTxt = d.buttonLabel .. ' \xe2\x96\xbe##' .. d.kind
-    local minW, maxW = d.minWidth, d.maxWidth
-    if d.width then minW, maxW = d.width, d.width end
-    local btnW
-    if minW or maxW then
-      local tw  = ImGui.CalcTextSize(ctx, btnTxt)
-      local fpx = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
-      btnW = tw + fpx * 2
-      if minW and btnW < minW then btnW = minW end
-      if maxW and btnW > maxW then btnW = maxW end
-    end
-    local opening
-    if btnW then opening = ImGui.Button(ctx, btnTxt, btnW, 0)
-    else         opening = ImGui.Button(ctx, btnTxt) end
-    -- Anchor popup to the button rect; otherwise OpenPopup uses the mouse
-    -- position at call time, which puts a keyboard-triggered popup at the
-    -- text cursor instead of under the toolbar.
-    local btnX = ImGui.GetItemRectMin(ctx)
-    local _, btnY = ImGui.GetItemRectMax(ctx)
-    if pickerOpenRequest == d.kind then
-      pickerOpenRequest = nil
-      opening = true
-    end
-    if opening then
-      pickerFilter[d.kind] = ''
-      ImGui.OpenPopup(ctx, popupId)
-    end
-
-    ImGui.SetNextWindowPos(ctx, btnX, btnY, ImGui.Cond_Appearing)
-    -- NoNav: kill ImGui's built-in keyboard nav highlight on the popup —
-    -- otherwise it draws a second cursor that fights ours and steals
-    -- arrow keys / character input from the filter InputText.
-    if not ImGui.BeginPopup(ctx, popupId, ImGui.WindowFlags_NoNav) then return end
-    pickerActive = true  -- block handleKeys this frame so Enter doesn't leak through
-
-    if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
-    ImGui.SetNextItemWidth(ctx, 180)
-    local prevFilter = pickerFilter[d.kind] or ''
-    -- Plain InputText (no EnterReturnsTrue): with that flag, ReaImGui only
-    -- commits the buffer back on Enter, so the live filter would never
-    -- update during typing. We watch Enter ourselves below.
-    local _, filter = ImGui.InputText(ctx, '##filter_' .. d.kind, prevFilter)
-    pickerFilter[d.kind] = filter
-    local entered = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                 or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
-    ImGui.Separator(ctx)
-
-    local lf = filter:lower()
-    local matches, currentMatch = {}, nil
-    for _, it in ipairs(d.items) do
-      if filter == '' or it.label:lower():find(lf, 1, true) then
-        matches[#matches + 1] = it
-        if it.current then currentMatch = #matches end
-      end
-    end
-
-    -- Initial highlight: on open or on filter change, jump to the current
-    -- pick if it survived; otherwise top of list. Arrow keys then walk
-    -- the filtered list with wrap; Enter picks the highlighted match.
-    if ImGui.IsWindowAppearing(ctx) or filter ~= prevFilter then
-      pickerCursor[d.kind] = currentMatch or 1
-    end
-    local cursor = pickerCursor[d.kind] or 1
-    local n = #matches
-    if n > 0 then
-      if ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow) then
-        cursor = cursor % n + 1
-      elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow) then
-        cursor = (cursor - 2) % n + 1
-      end
-    end
-    cursor = math.min(math.max(cursor, 1), math.max(n, 1))
-    pickerCursor[d.kind] = cursor
-
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-      ImGui.CloseCurrentPopup(ctx)
-    elseif entered then
-      if matches[cursor] then d.onPick(matches[cursor].key) end
-      ImGui.CloseCurrentPopup(ctx)
-    else
-      local lastGroup
-      for i, it in ipairs(matches) do
-        if filter == '' and lastGroup and lastGroup ~= (it.group or 1) then
-          ImGui.Separator(ctx)
-        end
-        if ImGui.Selectable(ctx, it.label, i == cursor) then d.onPick(it.key) end
-        lastGroup = it.group or 1
-      end
-    end
-
-    ImGui.EndPopup(ctx)
-  end
-
-  -- Item builder for the lib+presets+Off picker shape (tempers, swings,
-  -- colSwing). Off is group 1; saved lib slots are group 2; preset names
-  -- not yet saved get a "+" prefix in group 3.
+  -- Off=group 1, saved lib=group 2, unseeded preset (+ prefix)=group 3.
   local function libPickerItems(current, lib, presets, excludePresets)
     local items = { { label = 'Off', key = nil, group = 1, current = current == nil } }
     local libNames = {}
@@ -355,8 +227,7 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     return items
   end
 
-  -- Seed-and-select wrappers: the picker hands us a name and we ensure
-  -- the lib has it before committing to the slot.
+  -- Seed lib if absent before committing to slot.
   local function pickTemper(name)
     if name and not cm:get('tempers')[name] then
       vm:setTemper(name, tuning.presets[name])
@@ -382,28 +253,27 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
   -- the UI as "Off" rather than as a pickable preset row.
   local SWING_PRESET_EXCLUDE = { id = true }
 
-  -- Sample slot picker for tracker mode. Lists only loaded slots
-  -- (those that published a name via gmem); selecting one writes
-  -- currentSample. The button label shows the current slot's hex
-  -- index even when unloaded so users can see what `<` / `>` will
-  -- step away from. No "Off" row — every slot is real, not absent.
+  -- Hex stays visible when unassigned so `<`/`>` advertise their step.
+  -- No "Off" row — every slot is real.
   local function drawSampleDropdown()
     local cur     = cm:get('currentSample')
-    local names   = cm:get('samplerNames') or {}
-    local curName = names[cur]
+    local entries = cm:get('slotEntries') or {}
+    local curName = entries[cur] and entries[cur].name
     local indices = {}
-    for idx in pairs(names) do indices[#indices + 1] = idx end
+    for idx, e in pairs(entries) do
+      if e.path then indices[#indices + 1] = idx end
+    end
     table.sort(indices)
     local items = {}
     for _, idx in ipairs(indices) do
       items[#items + 1] = {
-        label   = string.format('%02X  %s', idx, names[idx]),
+        label   = string.format('%02X  %s', idx, entries[idx].name or ''),
         key     = idx,
         group   = 1,
         current = idx == cur,
       }
     end
-    drawSlotPicker {
+    chrome.drawPicker {
       kind        = 'sample',
       heading     = 'Sample',
       buttonLabel = string.format('%02X', cur) .. (curName and (' ' .. curName) or ''),
@@ -413,11 +283,8 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     }
   end
 
-  -- Toolbar segments. Order is declaration order; chrome.makeToolbar
-  -- emits separators between adjacent segments and wraps a segment to
-  -- the next row when it would overflow available width (one-frame slop
-  -- on cached width). Each render closure reads cm/vm fresh at call
-  -- time, so segments can be declared once and reused per frame.
+  -- Each render closure reads cm/vm fresh; segments declared once, reused per frame.
+  --@map:shape ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
   local toolbarSegments = {
     {
       id = 'rowsPerBeat',
@@ -448,7 +315,7 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
       id = 'tuning',
       render = function()
         local cur = cm:get('temper')
-        drawSlotPicker {
+        chrome.drawPicker {
           kind        = 'temper', heading = 'Tuning',
           buttonLabel = cur or 'Off',
           items       = libPickerItems(cur, cm:get('tempers'), tuning.presets),
@@ -461,7 +328,7 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
       render = function()
         do
           local cur = cm:get('swing')
-          drawSlotPicker {
+          chrome.drawPicker {
             kind        = 'swing', heading = 'Swing',
             buttonLabel = cur or 'Off',
             items       = libPickerItems(cur, cm:get('swings'),
@@ -469,15 +336,13 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
             onPick      = pickSwing,
           }
         end
-        -- Per-column swing rides inside the same segment with a tighter
-        -- 8 px gap; channel comes from the cursor's column. Disabled
-        -- path triggers if a column ever drops its midiChan.
+        -- Per-column swing in the same segment; channel from cursor's column.
         local cursorCol = vm.grid.cols[vm:ec():col()]
         local chan      = cursorCol and cursorCol.midiChan
         ImGui.SameLine(ctx, 0, 8)
         chrome.disabledIf(not chan, function()
           local cur = chan and cm:get('colSwing')[chan] or nil
-          drawSlotPicker {
+          chrome.drawPicker {
             kind        = 'colSwing', heading = 'Ch swing',
             buttonLabel = cur or 'Off',
             items       = libPickerItems(cur, cm:get('swings'),
@@ -499,11 +364,8 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     toolbar(toolbarSegments)
   end
 
-  -- Establish per-frame layout: char metrics, column packing, and the
-  -- integer-row grid height that fits within `budgetH` pixels (the space
-  -- the loop has reserved between toolbar and statusBar). Width comes
-  -- from the current GetContentRegionAvail; height is explicit so the
-  -- caller can carve out a fixed footer first.
+  --@map:contract must run before any draw routine that reads chanX/chanW/chanOrder/totalWidth/gridHeight
+  --@map:contract calls vm:setGridSize(gridWidth, gridHeight) so vm scroll math sees the live viewport
   local function computeLayout(budgetW, budgetH)
     local grid = vm.grid
     local _, scrollCol = vm:scroll()
@@ -515,7 +377,6 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     end
 
     gridWidth  = math.max(1, math.floor(budgetW / gridX) - GUTTER)
-    -- Lane strip eats a fixed number of rows above the tracker header.
     local laneRows = laneStripRows()
     gridHeight = math.max(1, math.floor(budgetH / gridY) - HEADER - 1 - laneRows)
     vm:setGridSize(gridWidth, gridHeight)
@@ -525,18 +386,13 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
 
   ----- Lane strip
 
-  -- Single horizontal envelope above the grid, mirroring the tracker's
-  -- horizontal extent. Renders the column the cursor is currently on if
-  -- it's a cc/pb/at; blank background otherwise. Time on x, value on y;
-  -- shape (step/linear/curve) honoured between consecutive events.
+  --@map:invariant lane strip renders only cc/pb/at columns; other types show as tinted background
   local laneRenderable = { cc = true, pb = true, at = true }
 
-  -- Min/max are in *configured* rows. The strip pads a half-row top and
-  -- bottom, so visible inner-band height = (rows - 1) gridY. A min of 3
-  -- gives the requested 2-row visible floor.
   local LANE_ROW_MIN = 3
   local LANE_ROW_MAX = 32
 
+  --@map:contract publishes laneConsumed=true if the curve editor claimed input this frame; handleMouse short-circuits on it
   local function drawLaneStrip()
 
     local laneRows = laneStripRows()
@@ -550,13 +406,10 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     local drawList  = ImGui.GetWindowDrawList(ctx)
     local scrollRow = select(1, vm:scroll())
     local numRows   = vm.grid.numRows or 0
-    -- Strip's horizontal extent maps to the rows actually rendered: min of
-    -- viewport height and remaining data, matching the grid below.
+    -- rowSpan = rows actually rendered (matches grid below).
     local rowSpan   = math.max(1, math.min(gridHeight, numRows - scrollRow))
     local function rowToX(row) return x0 + (row - scrollRow) / rowSpan * w end
 
-    -- Half-row padding top and bottom so anchor dots at the value extremes
-    -- have breathing room.
     local pad  = gridY / 2
     local yTop = y0 + pad
     local yBot = y0 + h - pad
@@ -641,7 +494,6 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
 
     ImGui.Dummy(ctx, (totalWidth + GUTTER) * gridX, h)
 
-    -- Height nudges in the gutter, top-aligned with the strip's visible box.
     local cx, cy = ImGui.GetCursorScreenPos(ctx)
     local rows = cm:get('laneStrip.rows') or 0
     ImGui.SetCursorScreenPos(ctx, px - 2, yTop)
@@ -655,6 +507,7 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     ImGui.SetCursorScreenPos(ctx, cx, cy)
   end
 
+  --@map:contract assumes computeLayout ran this frame; reads chanX/chanW/chanOrder/totalWidth and gridOriginX/Y
   local function drawTracker()
     local grid = vm.grid
     local ec = vm:ec()
@@ -679,7 +532,6 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
                          -HEADER, 'Ch ' .. chan, key)
       end
     end
-    -- laneByChan: per-channel counter so note columns show their lane number.
     local laneByChan = {}
     for _, col in ipairs(grid.cols) do
       local sub
@@ -745,8 +597,6 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
       end
     end
 
-    -- Cells. Dots (·) are always 'inactive' even when the rest of the
-    -- cell is active, so split runs on dot boundaries.
     for y = 0, gridHeight - 1 do
       local row = scrollRow + y
       if row >= numRows then break end
@@ -780,8 +630,6 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
       end
     end
 
-    -- Off-grid bars: projection gap between note intent and displayed step.
-    -- Drawn only under an active temperament, only for notes with a non-zero gap.
     if vm:activeTemper() then
       local barCol = chrome.colour('accent')
       for _, col in ipairs(grid.cols) do
@@ -847,8 +695,9 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     local advanceBy     = cm:get('advanceBy')
     local sampleSuffix = ''
     if cm:get('trackerMode') then
-      local slot = cm:get('currentSample')
-      local name = (cm:get('samplerNames') or {})[slot]
+      local slot  = cm:get('currentSample')
+      local entry = (cm:get('slotEntries') or {})[slot]
+      local name  = entry and entry.name
       sampleSuffix = string.format(' | Sample: %02X', slot)
                   .. (name and (' ' .. name) or '')
     end
@@ -934,6 +783,7 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     cmgr:scope('tracker'):bind('advBy' .. i, { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} })
   end
 
+  --@map:contract returns (col, stop, fracX) or (nil, nil, fracX); fracX kept separate so callers distinguish "past last col" from "inside col N"
   local function nearestStop(mouseX, mouseY)
     local grid = vm.grid
     local fracX = (mouseX - gridOriginX) / gridX
@@ -952,6 +802,8 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
   end
 
 
+  --@map:contract returns immediately if laneConsumed is set; lane strip wins gestures over the tracker grid
+  --@map:contract right-click on channel-label row toggles mute; click on label rows selects channel/column; body click moves cursor and arms drag
   local function handleMouse()
     if laneConsumed then return end
 
@@ -1056,13 +908,12 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     end
   end
 
-  -- Char queue + shift-digit are page-internal raw input, not bound
-  -- commands. The coordinator's dispatcher has already walked the keymap
-  -- by the time we run, and `kr.commandHeld` tells us whether a held
-  -- command key would otherwise leak in (IsKeyPressed and the char queue
-  -- don't share auto-repeat timing).
+  -- Page-internal raw input. commandHeld gates a held command key from
+  -- leaking into the char queue (different auto-repeat timing).
+  --@map:contract no-op when modalState or chrome.pickerIsActive() is set, or when any ImGui item is active (focused InputText etc.)
+  --@map:contract drains the entire input-queue per frame; reads ec/grid fresh each iteration since editEvent may rebuild
   local function handleKeys(kr)
-    if modalState or pickerActive then return end
+    if modalState or chrome.pickerIsActive() then return end
     if ImGui.IsAnyItemActive(ctx) then return end
 
     local grid = vm.grid
@@ -1091,8 +942,6 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
         end
       end
 
-    -- Shift-digit: half-step entry at MSB stops (vel, delay, cc/at/pc).
-    -- Overwrites the value with digit in MSB, half-value (8 hex / 5 dec) in LSB.
     if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_Shift and not ec:isSticky() then
       local col = grid.cols[cursorCol]
       if col then
@@ -1107,6 +956,8 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     end
   end
 
+  --@map:shape modalState = { title, prompt, callback, buf, kind?='confirm'|'takeProps', nameBuf?, rowsBuf?, rowsGen?, mode?, refocusRows? }
+  --@map:contract callback runs under pcall; an exception is logged to the REAPER console and does not abort the frame
   local function drawModal()
     if not modalState then return end
     -- Self-heal: if modalState was set from inside a callback (e.g. takeProps OK
@@ -1237,8 +1088,8 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     ImGui.OpenPopup(ctx, title)
   end
 
-  -- Selection → vm:<base>Selection();  no selection → confirm → vm:<base>All().
-  -- The naming convention is the contract — keeps the registration tight.
+  -- Naming convention <base>Selection / <base>All is the contract.
+  --@map:contract requires vm to expose both `<base>Selection` and `<base>All` methods
   local function scopedAction(title, base)
     return function()
       if vm:ec():hasSelection() then vm[base..'Selection'](vm)
@@ -1303,8 +1154,8 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
 
     openSwingEditor = function() swingEditor:open() end,
 
-    openTemperPicker = function() pickerOpenRequest = 'temper' end,
-    openSwingPicker  = function() pickerOpenRequest = 'swing'  end,
+    openTemperPicker = function() chrome.requestPickerOpen('temper') end,
+    openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
   }
 
   tracker:doAfter({ 'reswing', 'quantize', 'quantizeKeepRealised' },
@@ -1315,10 +1166,11 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
   local tp = {}
 
   function tp:renderToolbarBits(_)
-    pickerActive = false
+    chrome.resetPickerActive()
     drawTrackerToolbarBits()
   end
 
+  --@map:contract calls computeLayout twice — lane-strip drag callbacks may flush vm.grid.cols and clear col.x; second pass repopulates layout for drawTracker
   function tp:renderBody(_, w, h, dispatch)
     if #vm.grid.cols == 0 then
       ImGui.Text(ctx, 'Select a MIDI item to begin.')
@@ -1327,9 +1179,7 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     ImGui.PushFont(ctx, font, 15)
     computeLayout(w, h)
     drawLaneStrip()
-    -- Lane-strip drag callbacks flush the tracker, replacing vm.grid.cols
-    -- with fresh tables that carry no col.x. Re-layout so drawTracker
-    -- sees a populated layout on the live cols.
+    -- Lane-drag callbacks may rebuild grid.cols; re-layout for drawTracker.
     computeLayout(w, h)
     drawTracker()
     ImGui.PopFont(ctx)
@@ -1365,9 +1215,10 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
   --   transiently, but bound commands should still fire. Anything that
   --   genuinely needs the keys (a focused InputText, an active slider,
   --   a held button) shows up as IsAnyItemActive.
+  --@map:shape focusState = { suppressKbd:bool, acceptCmds:bool }
   function tp:focusState()
     if not ctx then return { suppressKbd = false, acceptCmds = false } end
-    local suppress = modalState ~= nil or pickerActive
+    local suppress = modalState ~= nil or chrome.pickerIsActive()
     return {
       suppressKbd = suppress,
       acceptCmds  = (not suppress) and not ImGui.IsAnyItemActive(ctx),

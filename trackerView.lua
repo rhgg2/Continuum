@@ -1,4 +1,13 @@
--- See docs/trackerView.md for the model and API reference.
+-- See docs/trackerView.md for the model.
+
+--@map:invariant rows 0-indexed, cols 1-indexed, channels 1..16, stops 1-indexed
+--@map:invariant vm.grid is a live handle — rm reads it each frame; mutated in place on rebuild, never reassigned
+--@map:invariant rm is pull-only — vm fires no render callbacks; rm queries vm.grid / vm:ec() / vm:rowPerBar() each frame
+--@map:invariant all writes funnel through tm (addEvent/assignEvent/deleteEvent/flush); vm never touches mm
+--@map:invariant vm sits on the swing boundary; intent only — never reads/writes realisation pb directly (see docs/tuning.md)
+--@map:invariant every authoring call site stamps evt.frame = currentFrame(chan) and evt.ppqL = row · logPerRow before tm:addEvent (PAs use host.frame for swing/colSwing, current rpb)
+--@map:invariant off-grid edits snap intent ppq + ppqL to the cursor row; delay survives, frame restamps to current
+--@map:invariant clipboard rows encode in source col's swing frame; paste decodes into destination col's frame — round-trip is symmetric on (row, chan), not absolute ppq
 
 loadModule('util')
 loadModule('midiManager')
@@ -11,6 +20,7 @@ local function print(...)
   return util.print(...)
 end
 
+--@map:contract pure throwaway snapshot built once per vm:rebuild; no callbacks, no mutation, no migration — discard and rebuild on every change
 function newViewContext(args)
   local swing      = args.swing
   local rowPPQs    = args.rowPPQs
@@ -44,6 +54,7 @@ function newViewContext(args)
 
   ----- Timing
 
+  --@map:contract per-chan binary search of rowPPQs after swing.toLogical(chan, ppqI); inverse of rowToPPQ
   function ctx:ppqToRow(ppqI, chan)
     local ppqL = swing.toLogical(chan, ppqI)
     if ppqL <= 0 then return 0 end
@@ -58,6 +69,7 @@ function newViewContext(args)
     return lo + (rowEnd > rowStart and (ppqL - rowStart) / (rowEnd - rowStart) or 0)
   end
 
+  --@map:contract floor + swing.fromLogical, rounded to integer ppq; on-grid iff ctx:rowToPPQ(round(ppqToRow(p)), chan) == p
   function ctx:rowToPPQ(row, chan)
     if row <= 0 then return 0 end
     if row >= numRows then return length end
@@ -72,7 +84,6 @@ function newViewContext(args)
 
   function ctx:snapRow(ppqI, chan) return util.round(self:ppqToRow(ppqI, chan)) end
 
-  -- Logical ppq width of one row in this rebuild's frame.
   function ctx:ppqPerRow() return ppqPerRow end
 
   do -- exports ctx:rowBeatInfo, ctx:barBeatSub
@@ -116,6 +127,11 @@ function newViewContext(args)
   return ctx
 end
 
+--@map:shape grid = { cols = {<col>...}, chanFirstCol = {[chan]=i}, chanLastCol = {[chan]=i}, lane1Col = {[chan]=<col>}, numRows = int }
+--@map:shape gridCol = { type, midiChan, lane?, cc?, label, events, width, parts, stopPos, partAt, partStart, showDelay, cells={[y]=evt}, overflow={[y]=true}, offGrid={[y]=true}, ghosts={[y]={val,fromEvt,toEvt}}, tails? }
+--@map:shape selection = { row1, row2, col1, col2, part1, part2 }  -- part names: 'pitch'|'vel'|'delay' on note, 'pb' on pb, 'val' on scalar
+--@map:shape plan = { col, e, [newppq], [newEndppq], [newPpqL], [newEndppqL], [newFrame], [newDelay] }  -- consumed by writePlans / conformOverlaps
+--@map:shape frame = { swing = name|composite, colSwing = name|composite, rpb = int }  -- FRAME_KEYS unit; stamped onto evt.frame at authoring time
 function newTrackerView(tm, cm, cmgr)
 
   ---------- PRIVATE
@@ -147,9 +163,7 @@ function newTrackerView(tm, cm, cmgr)
 
   ----- Note geometry (used by editing, adjust*, nudge, quantizeKeepRealised)
 
-  -- Closest matching events on each side of `ppq`, across `cols.events`.
-  -- prev maximises endppq; nxt minimises ppq. Returns the events themselves
-  -- so callers can read whichever frame (intent ppq or logical ppqL) suits.
+  -- prev maximises endppq; nxt minimises ppq.
   local function neighbourEvents(cols, ppq, pred)
     local prev, nxt
     for _, c in ipairs(cols) do
@@ -167,11 +181,8 @@ function newTrackerView(tm, cm, cmgr)
            function(e) return util.isNote(e) and e ~= excludeEvt and e.pitch == pitch end
   end
 
-  -- Bounds on placing/extending a note. Different-pitch neighbours
-  -- bind col-locally in intent space, with `overlapOffset` leniency —
-  -- column allocation judges intent-space overlap with the same
-  -- threshold. Same-pitch neighbours bind channel-wide with no
-  -- leniency: MIDI permits only one voice per (chan, pitch).
+  -- Diff-pitch col-local with `overlapOffset` leniency (matches column allocator).
+  -- Same-pitch chan-wide with no leniency: MIDI permits one voice per (chan, pitch).
   local function overlapBounds(col, ppq, excludeEvt, allowOverlap)
     local lenient = allowOverlap and cm:get('overlapOffset') * resolution or 0
     local diff, same = notePreds(excludeEvt)
@@ -184,17 +195,12 @@ function newTrackerView(tm, cm, cmgr)
     return minStart, maxEnd
   end
 
-  -- Row-space sibling of overlapBounds for row-aligned moves. Reads
-  -- ppqL/endppqL when present — exact for editor-authored notes, since
-  -- they're written as row*logPerRow. Going via ppqToRow(.ppq) loses a
-  -- fractional row to the fromLogical→round→toLogical round-trip and
-  -- can refuse a slot the neighbour's row already permits (e.g. row 2
-  -- under c58 reads back as 1.997, collapsing the upper bound to row
-  -- 1). Same lenient-diff / strict-same model as overlapBounds;
-  -- leniency lives in intent ppq, so the lenient diff edges go through
-  -- ppqToRow (lenient pushes us off-row anyway) while the strict edges
-  -- prefer the exact ppqL. Off-grid neighbours still pull the integer
-  -- row inward via ceil/floor.
+  -- Row-space sibling of overlapBounds. Reads ppqL/endppqL when present —
+  -- editor-authored notes are written as row*logPerRow, exact; going via
+  -- ppqToRow(.ppq) loses a fractional row to the round-trip (e.g. row 2
+  -- under c58 reads back as 1.997, refusing a slot the neighbour's row
+  -- already permits). Lenient diff edges go through ppqToRow (leniency
+  -- lives in intent ppq); strict same edges prefer exact ppqL.
   local function rowBounds(col, ppq, excludeEvt, allowOverlap)
     local chan, logPerRow = col.midiChan, ctx:ppqPerRow()
     local lenient = allowOverlap and cm:get('overlapOffset') * resolution or 0
@@ -220,24 +226,7 @@ function newTrackerView(tm, cm, cmgr)
     return math.ceil(prevEndL / logPerRow), math.floor(nextStartL / logPerRow)
   end
 
-  -- Resolve overlap excess in a per-column plan list. After path-side
-  -- rounding (reswing/quantize/insertRow), two col-mates can land past
-  -- noteColumnAccepts' threshold (0 same-pitch, lenient diff-pitch) or
-  -- onto identical ppqs. We fix it in-plan, never in the allocator:
-  --
-  --   * tail-overlap: predecessor's tail is the preferred clip target
-  --     (legato — onset stays put, duration shrinks); when the
-  --     predecessor is unplanned/fixed, successor's onset clips up
-  --     instead (its newEndppq stays put, so duration shrinks the same
-  --     direction).
-  --   * same-onset collision: shift the later-source-`ppqL` one by 1
-  --     ppq. All four callers are monotone, so reordering is impossible
-  --     — only collapse, which 1 ppq separates.
-  --
-  -- Each plan entry: `{ col, e, newppq, [newEndppq] }`. Mutates
-  -- `newppq` / `newEndppq` on plan entries in place. Non-note plans
-  -- and non-note cols are skipped. Unplanned col-mates are read from
-  -- `col.events` and treated as fixed.
+  --@map:contract resolves overlap excess in a per-column plan list; mutates plan entries in place. Tail-overlap clips predecessor's tail (legato — onset stays); same-onset shifts the later-source-ppqL one by 1 ppq. Non-note plans/cols skipped; unplanned col-mates treated as fixed
   local function conformOverlaps(plans)
     local lenient = cm:get('overlapOffset') * resolution
     local plansByCol = {}
@@ -301,10 +290,6 @@ function newTrackerView(tm, cm, cmgr)
     end
   end
 
-  -- Write a plan list through `tm:assignEvent`. Each plan: any subset
-  -- of `newppq, newEndppq, newPpqL, newEndppqL, newFrame, newDelay`.
-  -- The corresponding update keys are emitted only for fields present
-  -- on the plan; endppq/endppqL only for notes.
   local function writePlans(plans)
     for _, p in ipairs(plans) do
       local kind = util.isNote(p.e) and 'note' or p.col.type
@@ -321,17 +306,10 @@ function newTrackerView(tm, cm, cmgr)
     end
   end
 
-  -- Bounds on a note's `delay` field. Two constraints, both natural
-  -- to "performance delay":
-  --   * same-pitch (channel-wide): MIDI permits one voice per
-  --     (chan, pitch), so a same-pitch prev binds at its intent end.
-  --   * same-column (any pitch): a delay that reorders onsets within
-  --     its own column isn't a performance delay any more — bound at
-  --     the prev/next column-neighbour's realised onset. This keeps
-  --     "realised order = intent order" within every column, which
-  --     the pb model leans on (detune is keyed by note onset).
-  -- Floor at 0 (no negative ppq); ceiling at n.endppq − 1 so realised
-  -- duration stays ≥ 1 ppq.
+  -- Two bounds: same-pitch chan-wide (MIDI one-voice-per-pair) at intent end,
+  -- and same-column any-pitch at neighbour's realised onset (so realised order
+  -- = intent order within every column — the pb model leans on this).
+  -- Floor at 0; ceiling at n.endppq − 1 so realised duration ≥ 1 ppq.
   local function delayRange(col, n)
     local sameP = function(e) return util.isNote(e) and e ~= n and e.pitch == n.pitch end
     local prevSame    = neighbourEvents(tm:getChannel(col.midiChan).columns.notes, n.ppq, sameP)
@@ -378,23 +356,18 @@ function newTrackerView(tm, cm, cmgr)
 
   ----- Frames & timing
 
-  -- Logical ppq width of one row at the given rpb. Take-wide
-  -- denom comes off timeSigs[1]; resolution is constant per take.
   local function logPerRowFor(rpb)
     local denom = (timeSigs[1] and timeSigs[1].denom) or 4
     return timing.logPerRow(rpb, denom, resolution)
   end
 
-  -- Read logical ppq off an event, falling back to ppq for events
-  -- with no authored frame (legacy / raw-imported MIDI).
   local function logicalOf(e)    return e.ppqL    or e.ppq    end
   local function endLogicalOf(e) return e.endppqL or e.endppq end
 
-  -- An authoring frame comprises swing slot, per-column swing map,
-  -- and rowPerBeat.
   local isFrameChange, currentFrame, releaseTransientFrame do
     local FRAME_KEYS = { swing = true, colSwing = true, rowPerBeat = true }
 
+    --@map:contract a write to a FRAME_KEYS member at any tier other than 'transient' counts as a real frame change — fires releaseTransientFrame from configCallback
     function isFrameChange(change)
       return FRAME_KEYS[change.key] and change.level ~= 'transient'
     end
@@ -407,8 +380,7 @@ function newTrackerView(tm, cm, cmgr)
       }
     end
 
-    -- Drop the transient frame override (if any). Returns true if a
-    -- frame was released, false otherwise.
+    -- Returns true iff a transient override was released.
     function releaseTransientFrame()
       local releasing = false
       for k in pairs(FRAME_KEYS) do
@@ -431,15 +403,12 @@ function newTrackerView(tm, cm, cmgr)
     end
   end
 
-  -- Frame + its row scale for the current channel.
   local function frameAndLogPerRow(chan)
     local f = currentFrame(chan)
     return f, logPerRowFor(f.rpb)
   end
 
-  -- Row-aligned authoring stamp + assign. Writes the canonical
-  -- (ppq, [endppq,] ppqL, [endppqL,] frame) payload to `evt`. Pass
-  -- rowE for span events (notes).
+  -- Pass rowE for span events (notes).
   local function assignStamp(type, evt, chan, rowS, rowE)
     local f, logPerRow = frameAndLogPerRow(chan)
     local s = { ppq   = ctx:rowToPPQ(rowS, chan),
@@ -463,15 +432,10 @@ function newTrackerView(tm, cm, cmgr)
              rpb      = currentFrame(chan).rpb }
   end
 
-  -- Coherent tail-only assign. Use whenever a note's tail moves:
-  -- writing endppqL alone leaves it incoherent with `frame`. Rebases
-  -- `frame` to current alongside the new (endppq, endppqL). The
-  -- head's ppqL stays in absolute logical-ppq units — still correct
-  -- as time; may read off-grid in the new frame's row map only when
-  -- the user coarsens rpb, which is a real semantic, not a bug.
-  --
-  -- Pass `endppqL` when known (row-aligned, or partner already in
-  -- current frame); omit otherwise — derived via current row map.
+  --@map:contract whenever a note's tail moves: rebases evt.frame to current alongside the new (endppq, endppqL) — writing endppqL alone would leave it incoherent with frame
+  -- Head's ppqL stays in absolute logical-ppq units; reads off-grid in the new
+  -- frame's row map iff the user coarsens rpb — a real semantic, not a bug.
+  -- Pass endppqL when row-aligned or partner is already in current frame; else derived.
   local function assignTail(evt, chan, endppq, endppqL)
     local f, logPerRow = frameAndLogPerRow(chan)
     tm:assignEvent('note', evt, {
@@ -481,7 +445,6 @@ function newTrackerView(tm, cm, cmgr)
     })
   end
 
-  -- Set grid to the cursor's frame, or release if already overriding.
   local function matchGridToCursor()
     if releaseTransientFrame() then return end
 
@@ -513,8 +476,6 @@ function newTrackerView(tm, cm, cmgr)
     cm:set('track', 'rowPerBeat', n)
   end
 
-  -- Apply a take-properties dialog submission. Rows are a trackerView concept;
-  -- convert here, then hand the structural change to tm.
   -- props = { name, rows, mode = 'resize'|'rescale'|'tile' }; mode defaults to 'resize'.
   function vm:applyTakeProperties(props)
     if reaper.Undo_BeginBlock then reaper.Undo_BeginBlock() end
@@ -573,7 +534,7 @@ function newTrackerView(tm, cm, cmgr)
   ----- Mute / solo
 
   local pushMute do
-    local effectiveMuted = {}  -- cached for cheap per-cell render queries
+    local effectiveMuted = {}
 
     local function toggleChannelFlag(key, chan)
       local s = cm:get(key)
@@ -581,6 +542,7 @@ function newTrackerView(tm, cm, cmgr)
       cm:set('take', key, s)
     end
 
+    --@map:contract effective mute = persistent-mute ∪ solo-implied mute; when any channel soloed, non-soloed forced muted and soloed forced audible (DAW solo-wins). Both sets persist in cm so reload's tm:lastMuteSet matches the wire
     function pushMute()
       local m = cm:get('mutedChannels')
       local s = cm:get('soloedChannels')
@@ -616,7 +578,7 @@ function newTrackerView(tm, cm, cmgr)
 
     function audition(pitch, vel, chan)
       killAudition()
-      local midiChan = (chan or 1) - 1  -- internal 1-indexed → MIDI 0-indexed
+      local midiChan = (chan or 1) - 1
       reaper.StuffMIDIMessage(0, 0x90 | midiChan, pitch, vel or 100)
       auditionNote = { chan = midiChan, pitch = pitch }
       auditionTime = reaper.time_precise()
@@ -683,9 +645,6 @@ function newTrackerView(tm, cm, cmgr)
     end
 
     -- Caller has already pinned (ppq, ppqL, frame) onto `update`.
-    -- Endppq stretches to the next note start (or take length); the
-    -- logical end derives from that intent ppq via the row map under
-    -- the new note's own frame.
     local function placeNewNote(col, update)
       local last = util.seek(col.events, 'before', update.ppq, util.isNote)
       local next = util.seek(col.events, 'after',  update.ppq, util.isNote)
@@ -712,6 +671,7 @@ function newTrackerView(tm, cm, cmgr)
       return pas
     end
 
+    --@map:contract single typed-input entry point; dispatches on (col.type, stop, evt-kind). Off-grid edits run through `snap` to repin intent + ppqL to cursor row and restamp frame; commit flushes, advances by advanceBy, and may audition
     function vm:editEvent(col, evt, stop, char, half)
       if not col then return end
       local type      = col.type
@@ -727,10 +687,6 @@ function newTrackerView(tm, cm, cmgr)
         if auditionPitch then audition(auditionPitch, auditionVel or 100, col.midiChan) end
       end
 
-      -- Off-grid write snaps intent to the cursor row, restamps the
-      -- frame, and preserves logical duration. Endppq derives from
-      -- the new logical end via the row map so the realised tail
-      -- lines up with the displayed one.
       local function snap(update)
         if not evt or evt.ppq == cursorppq then return update end
         update.ppq         = cursorppq
@@ -758,8 +714,6 @@ function newTrackerView(tm, cm, cmgr)
           local temper = ctx:activeTemper()
           if temper then pitch, detune = tuning.snap(temper, pitch, 0) end
 
-          -- Existing note → repitch, snapping intent time to the cursor row.
-          -- tm clears same-(chan, pitch) overlaps at the write boundary.
           if util.isNote(evt) then
             local upd = { pitch = pitch, detune = detune }
             if cm:get('trackerMode') then upd.sample = cm:get('currentSample') end
@@ -800,8 +754,7 @@ function newTrackerView(tm, cm, cmgr)
           tm:assignEvent('note', evt, { pitch = pitch })
           return commit(pitch, evt.vel)
 
-        -- sample: 2 hex nibbles, 0..127. Authored on every note in
-        -- tracker mode; tm decides which one wins each realised onset.
+        -- sample: 2 hex nibbles, 0..127.
         elseif part == 'sample' then
           if not util.isNote(evt) then return end
           local d = hexDigit[char]; if not d then return end
@@ -908,8 +861,7 @@ function newTrackerView(tm, cm, cmgr)
 
   ----- Lane-strip edits (drag, add, delete, shape, tension)
 
-  -- The i-th visible event in a cc/pb/at column (skips hidden absorbers),
-  -- or nil. Used by methods that target a single event by lane-strip index.
+  -- Skips hidden absorbers; returns nil if i out of range.
   local function visibleAt(col, i)
     if not col or not col.events then return end
     local k = 0
@@ -921,14 +873,7 @@ function newTrackerView(tm, cm, cmgr)
     end
   end
 
-  -- Move event i in a cc/pb/at column to (toRow, toVal). `i` indexes
-  -- the *visible* event sequence (events with `hidden` skipped), matching
-  -- what the lane strip hovers and anchors over; hidden absorber pbs
-  -- don't constrain horizontal motion. Caller passes toRow as either an
-  -- integer (snap-to-row) or a fractional row (shift-drag, off-grid).
-  -- Identity-by-visible-index survives the post-flush rebuild because
-  -- the ppq is clamped strictly inside the visible neighbours' ppqs and
-  -- the visible sequence's order is preserved across flush.
+  --@map:contract clamps newppq strictly inside (prev.ppq, next.ppq) by ±1 — necessary-and-sufficient invariant for identity-by-visible-index to survive the post-flush rebuild
   function vm:moveLaneEvent(col, i, toRow, toVal)
     if not col or not col.events then return end
     if not util.oneOf('cc pb at', col.type) then return end
@@ -964,11 +909,8 @@ function newTrackerView(tm, cm, cmgr)
     tm:flush()
   end
 
-  -- Insert a new cc/pb/at event at `ppq` with value `val`, inheriting the
-  -- envelope shape of the previous *visible* event (so the existing curve
-  -- shape from prev→next is preserved across the new midpoint). Returns
-  -- the visible index of the new event after flush, for the lane-strip
-  -- to seed a drag on.
+  -- Inherits prev visible's envelope shape so prev→next curve survives the new midpoint.
+  -- Returns the new event's visible index post-flush for drag-seed.
   function vm:addLaneEvent(col, colIdx, ppq, val)
     if not col or not util.oneOf('cc pb at', col.type) then return end
     local chan = col.midiChan
@@ -999,7 +941,6 @@ function newTrackerView(tm, cm, cmgr)
     end
   end
 
-  -- Delete the i-th *visible* event in a cc/pb/at column.
   function vm:deleteLaneEvent(col, i)
     if not col or not util.oneOf('cc pb at', col.type) then return end
     local evt = visibleAt(col, i)
@@ -1074,7 +1015,6 @@ function newTrackerView(tm, cm, cmgr)
       if A then cycleShape(col, A); tm:flush() end
     end
 
-    -- Sample shape-cycled value events at every empty row between each pair.
     -- Returns nil for non-interpolable cols so callers can assign unconditionally.
     function interpolateValues(col)
       if not interpolable[col.type] then return end
@@ -1233,19 +1173,10 @@ function newTrackerView(tm, cm, cmgr)
       ec:shiftSelection(rowDelta)
     end
 
-    -- All-or-nothing rigid translation by rowDelta. Preserves note length
-    -- (no shrinking when bounded) and stays grid-aligned. Bounds come
-    -- from rowBounds with the same lenient diff-pitch threshold growNote
-    -- uses — so a note grown into the lenient overlap zone can also be
-    -- nudged back into it, matching the column allocator's acceptance
-    -- criterion. Off-grid neighbours pull the integer row inward via
-    -- ceil/floor (item-start guard: ceil(0) = 0 catches newStart = -1);
-    -- on-grid neighbours under non-trivial swing read out of ppqL
-    -- exactly so the round-trip noise can't refuse the slot. On success
-    -- the cursor follows by rowDelta so repeated nudges keep targeting
-    -- the same note — unless that row already holds a different note,
-    -- in which case the cursor stays put rather than jumping onto the
-    -- neighbour.
+    -- Off-grid neighbours pull integer row inward via ceil/floor (item-start
+    -- guard: ceil(0) = 0 catches newStart = -1); on-grid under non-trivial
+    -- swing reads ppqL exactly so round-trip noise can't refuse the slot.
+    -- Cursor follows by rowDelta unless that row already holds another note.
     function adjustPosition(rowDelta)
       if ec:hasSelection() then return adjustPositionMulti(rowDelta) end
 
@@ -1288,13 +1219,7 @@ function newTrackerView(tm, cm, cmgr)
       return groups
     end
 
-    -- opts: { include?, target, restamp? }. Each event carries its own
-    -- .frame and .ppqL (stamped at authoring time); events
-    -- without a frame are skipped — there's no inferring a frame after
-    -- the fact. Two passes — gather plans, then mutate — to keep frame
-    -- reads stable across the batch. Writes past `length` make REAPER
-    -- auto-extend the source on MIDI_Sort (numRows leaks into the next
-    -- rebuild), so clamp on the way out.
+    --@map:contract events without evt.frame are skipped — there is no after-the-fact frame inference. Two passes (plan, then mutate) so frame reads stay stable across the batch. Plan ppq is clamped to take length to prevent REAPER auto-extending the source on MIDI_Sort
     local function reswingCore(groups, opts)
       local plans = {}
       local notePlansByChan = {}
@@ -1362,11 +1287,6 @@ function newTrackerView(tm, cm, cmgr)
       -- rejects the persisted lane and the successor drifts.
       conformOverlaps(plans)
 
-      -- Monotone reparameterisation + the clamps above: the end-state
-      -- can't introduce new same-(chan, pitch) overlaps, so opt out of
-      -- tm's per-write clamp. Without this, the first-processed of
-      -- two legato siblings would see its endppq clipped against the
-      -- second's still-old ppq.
       local trust = { trustGeometry = true }
       for _, p in ipairs(plans) do
         local e, u = p.e, {}
@@ -1395,9 +1315,6 @@ function newTrackerView(tm, cm, cmgr)
       })
     end
 
-    -- Name unchanged (only the composite behind it moved), so no
-    -- restamp. The new composite is already in the lib by the time
-    -- we run, so the snapshot resolves it via cm.
     function reswingPresetChange(name)
       local cache = {}
       reswingCore(allGroups(), {
@@ -1450,12 +1367,8 @@ function newTrackerView(tm, cm, cmgr)
       tm:flush()
     end
 
-    -- Shift intent onset onto grid; delay absorbs the inverse so
-    -- realised onset is preserved. Endppq is intent (= realised end)
-    -- and stays put — only the note-on moves. Plan-then-write so
-    -- conformOverlaps can adjust newppq for L2; delay is then re-derived
-    -- against the conformed newppq so realised onset is preserved up
-    -- to the delayRange clamp.
+    -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
+    --@map:contract intent ppq snaps to nearest row; delay absorbs the inverse so realised onset is preserved. Endppq stays put. Required delay clamped at delayRange — realised still preserved, intent partially off-grid; popup reports the clamp count
     local function quantizeKeepRealisedScope(groups)
       local plans, clamped = {}, 0
       for _, g in ipairs(groups) do
@@ -1517,11 +1430,8 @@ function newTrackerView(tm, cm, cmgr)
     -- shift only real events and leave fake pbs to tm's reconcile.
     local function notFake(e) return not e.fake end
 
-    -- Build a shift plan for one event by `dLogical` rows under `swing`
-    -- and `f`. ppq is re-realised from the new ppqL via swing — a
-    -- constant ±dppq would only be right under identity, since under
-    -- non-trivial swing rowToPPQ is non-linear and per-event ppqs round
-    -- independently. The plan list is then conformed and written.
+    -- ppq re-realises from the new ppqL via swing; a constant ±dppq is
+    -- only right under identity (rowToPPQ is non-linear under swing).
     local function shiftPlan(col, e, dLogical, swing, f)
       local chan    = col.midiChan
       local newppqL = logicalOf(e) + dLogical
@@ -1600,9 +1510,7 @@ function newTrackerView(tm, cm, cmgr)
       writePlans(plans)
     end
 
-    -- `noSelCols` picks which columns the op spans when no selection is
-    -- active: every column for the broad variants, the cursor column for
-    -- the narrow ones. Selection-aware behaviour is shared.
+    -- `noSelCols` picks the column set when no selection is active.
     local function forEachRowOp(core, preSel, noSelCols)
       if ec:hasSelection() then
         if preSel then preSel() end
@@ -1686,8 +1594,7 @@ function newTrackerView(tm, cm, cmgr)
       elseif part == 'pitch' then nudgePitch(col, evt, dir, coarse, audible) end
     end
 
-    -- First event in col that starts anywhere in the cursor row. For note
-    -- columns, PAs are skipped.
+    -- PAs skipped on note cols.
     local function cursorRowEvent(col)
       if not col then return end
       local r = ec:row()
@@ -1775,7 +1682,6 @@ function newTrackerView(tm, cm, cmgr)
       end
     end
 
-    -- Zero `delay` on each selected note. PAs have no delay.
     ---@diagnostic disable-next-line: unused-local
     local function queueResetDelays(col, locs)
       for _, evt in pairs(locs) do
@@ -1857,10 +1763,7 @@ function newTrackerView(tm, cm, cmgr)
 
   ----- Duplicate
 
-  -- Stamp the current selection (or cursor row) onto the adjacent block in
-  -- the given direction (dir=1 below, dir=-1 above), overwriting what's there.
-  -- Going up past row 0 trims the top of the clip — the start is cut off,
-  -- not the end — so repeated upward stamps stay anchored at the cursor.
+  --@map:contract upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard (uses clipboard:collect + pasteClip directly)
   local function duplicate(dir)
     local clip = clipboard:collect()
     if not clip then return end
@@ -1916,8 +1819,6 @@ function newTrackerView(tm, cm, cmgr)
 
   ----- Columns
 
-  -- Applies to every unique channel covered by ec:eachSelectedCol
-  -- (selection's channels, or the cursor's channel as 1×1 fallback).
   function vm:addExtraCol(type, cc)
     local extras = cm:get('extraColumns')
     local seen = {}
@@ -1998,8 +1899,6 @@ function newTrackerView(tm, cm, cmgr)
     vm:rebuild()
   end
 
-  -- Enables delay sub-col on every note col covered by
-  -- ec:eachSelectedCol (selection's note cols, or cursor's col as fallback).
   function vm:showDelay()
     local nd = cm:get('noteDelay')
     local changed = false
@@ -2064,6 +1963,7 @@ function newTrackerView(tm, cm, cmgr)
 
   local rebuilding = false
 
+  --@map:contract reentrancy-guarded by `rebuilding`; takeChanged=true resets ec and re-reads resolution/length/timeSigs from tm; grid cols / rowPPQs / viewContext / cell-overflow-offGrid maps / ghost maps rebuild unconditionally; pushMute at the end
   function vm:rebuild(takeChanged)
     if not tm or rebuilding then return end
     rebuilding = true
@@ -2098,8 +1998,6 @@ function newTrackerView(tm, cm, cmgr)
       local noteDelayCfg = cm:get('noteDelay')
       local trackerMode  = cm:get('trackerMode')
 
-      -- `key` is the lane number for note columns, the cc number for cc
-      -- columns, and nil for singletons (pb/at/pc).
       local function addGridCol(chan, type, key, events)
         local showDelay = type == 'note' and (noteDelayCfg[chan] or {})[key] or false
 
@@ -2133,11 +2031,8 @@ function newTrackerView(tm, cm, cmgr)
         for _, n in ipairs(ccNums) do addGridCol(chan, 'cc', n, c.ccs[n].events) end
       end
 
-      -- Stored as floats: under non-divisor rpb (e.g. 7) the rounded
-      -- form would alternate row widths and seed ε that compounds
-      -- through unapply. With floats, rowToPPQ/ppqToRow are mutually
-      -- exact (single round only at realisation) and on-grid tests
-      -- collapse to a clean integer compare against evt.ppq.
+      -- Stored as floats so rowToPPQ/ppqToRow are mutually exact (single round
+      -- only at realisation) and on-grid tests collapse to integer compare.
       rowPPQs = {}
       local r = 0
       while true do
@@ -2150,9 +2045,6 @@ function newTrackerView(tm, cm, cmgr)
       local numRows = r
       grid.numRows = numRows
 
-      -- Swing snapshot for this rebuild — resolved slots, T baked in.
-      -- tm has already stripped delay from col.events, so evt.ppq is
-      -- intent; swing.toLogical(chan, ppqI) → ppqL.
       ctx = newViewContext{
         swing      = tm:swingSnapshot(),
         rowPPQs    = rowPPQs,
@@ -2164,11 +2056,6 @@ function newTrackerView(tm, cm, cmgr)
         temper     = tuning.findTemper(cm:get('temper'), cm:get('tempers')),
       }
 
-      -- Per docs/timing.md: displayRow(e) = round(ppqToRow_c(e.ppq))
-      -- under *current* swing. tm has stripped delay, so e.ppq is
-      -- intent. On-grid iff rowToPPQ_c reproduces e.ppq exactly — with
-      -- float rowPPQs the round-trip is bit-exact, so a swing change
-      -- correctly surfaces previously-on-grid events as off-grid.
       for _, gridCol in ipairs(grid.cols) do
         gridCol.overflow = {}
         gridCol.offGrid  = {}
@@ -2211,17 +2098,14 @@ function newTrackerView(tm, cm, cmgr)
     -- Mute/solo changes don't affect grid shape, so skip rebuild.
     local muteKeys = { mutedChannels = true, soloedChannels = true }
 
-    -- Mirror tm's takeSwapped→rebuild dance: the flag is captured here and
-    -- consumed by the next rebuild fire. tm guarantees the firing order.
     local pendingTakeSwap = false
     tm:subscribe('takeSwapped', function() pendingTakeSwap = true end)
     tm:subscribe('rebuild', function()
       vm:rebuild(pendingTakeSwap)
       pendingTakeSwap = false
     end)
+    --@map:contract non-transient writes to FRAME_KEYS while a transient override is active short-circuit into releaseTransientFrame, whose recursive cm:assign fires the rebuild — so we return early to avoid double rebuild
     cm:subscribe('configChanged', function(change)
-      -- The callback fired by releaseTransientFrame handles rebuild,
-      -- so we return early to prevent double-dipping.
       if isFrameChange(change) and releaseTransientFrame() then return end
       if muteKeys[change.key] then pushMute(); return end
       vm:rebuild(false)
@@ -2249,8 +2133,6 @@ function newTrackerView(tm, cm, cmgr)
   ec:registerCommands(tracker)
   clipboard:registerCommands(tracker)
 
-  -- Drop sticky selection after edits so the region stays visible but
-  -- doesn't extend on the next cursor move.
   tracker:doAfter({
     'nudgeCoarseUp', 'nudgeCoarseDown', 'nudgeFineUp', 'nudgeFineDown',
     'nudgeBack', 'nudgeForward', 'growNote', 'shrinkNote',

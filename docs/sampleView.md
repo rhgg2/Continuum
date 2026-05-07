@@ -52,21 +52,3 @@ Three side-by-side `BeginChild` panes inside the body region:
 The `##` label suffixes on `SmallButton` give every play icon a unique
 ImGui ID (full path for files, slot index for slots) so identical
 filenames in different folders don't collide.
-
-## API
-
-```
-sv:setTrack(track)        → ()        -- rebinds cm to track; clears transient
-sv:getTrack()             → track | nil
-sv:listTracks()           → { { track, name }, ... }   -- candidate sampler tracks
-sv:setSelectedFile(path)  → ()        -- mainly for tests
-sv:getSelectedFile()      → path | nil
-sv:loadSelectedIntoCurrent() → bool   -- false if no file selected
-sv:auditionPath(path)     → bool      -- false if path is nil
-sv:auditionSlot(idx)      → ()        -- always with bounds=1
-sv:draw(ctx)              → ()        -- entry point from trackerPage
-```
-
-`auditionPath` and `auditionSlot` are thin enough that their bodies are
-small, but they exist as named methods so the icon click path is
-testable without ImGui.

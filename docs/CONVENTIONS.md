@@ -1,48 +1,49 @@
 # Documentation conventions
 
-One Markdown doc per source file, living under `docs/<file>.md`. The doc
-owns the prose; the source file carries only what the code itself can't
-say.
+Three layers carry information about a module:
+
+1. **Source code** — the `.lua` file. Names and structure say WHAT.
+2. **`--@map:` annotations** — single-line invariants and contracts
+   embedded in source, surfacing the WHATs the code can't say plainly.
+3. **`.map` files** — derived semantic outline produced by
+   `tools/map_extract.py`. One per `.lua`. Read first; the source second.
+4. **`docs/<file>.md`** — prose. WHY only: the model behind the design,
+   incidents the shape encodes, cross-cutting invariants worth a
+   paragraph rather than a single line.
+
+The doc layer never repeats the API surface. Signatures, contracts,
+shapes, and signals belong in source + `.map`.
 
 ## Audience
 
-The reader can read Lua and understand local code. They do **not** need to
-be told what a function does if its name says it; they do need to know the
-WHYs that aren't visible from any single call site — invariants across
-files, REAPER/engine quirks, ordering constraints, lifecycle rules.
+Reads Lua and understands local code. Doesn't need to be told what a
+function does if its name says it. Does need the WHYs that aren't visible
+from any single call site — model, history, and cross-file constraints.
 
 ## Shape of a file doc
 
-Thematic prose first, API reference second.
+Thematic prose, nothing else. Include only what applies:
 
-**Thematic sections** (include only those that apply):
-- purpose / one-line summary at the top
-- identity & persistence model (if the file owns persistent state)
-- mutation / locking contract (if there is one)
-- callbacks / lifecycle / reload semantics
-- conventions — units, indexing offsets, sentinel values, muted/optional
-  field conventions, anything that's true across the whole module
-- wire-format / external-API quirks (e.g. REAPER packs X into Y)
-- cross-cut invariants that hold between functions
-- any non-obvious global discipline (LUTs derived to stay in sync,
-  two-pass loads and why)
+- one-line purpose at the top
+- the model — identity, persistence, lifecycle, ownership
+- mutation/locking contract, if there is one
+- the *why* behind any invariant complex enough that the one-line
+  `--@map:invariant` leaves a question — incidents that motivated it,
+  alternatives considered, how it interacts with other modules
+- cross-cut concerns that span files (the `time` and `pitch` model in
+  `docs/timing.md` and `docs/tuning.md` are the templates)
+- wire-format / external-API quirks worth a paragraph
 
-**API reference** — compact signatures grouped by theme. Include:
-- the signature in a code block
-- arg fields with required/optional marking and legal ranges
-- return shape when non-trivial
-- short prose only where the signature leaves something load-bearing
-  unsaid (e.g. `util.REMOVE` semantics, metadata-only carve-outs,
-  side-effects on adjacent state)
-
-Do **not** repeat in prose what the signature already says. If the only
-thing you can write about a function is "returns a copy of X, or nil",
-the signature alone is enough.
+If the only thing a section can say is what a `--@map:` annotation
+already says, drop the section. The `.map` is the API reference.
 
 ## Shape of the source file
 
-- **Header:** single line, `-- See docs/<file>.md for the model and API reference.`
+- **Header:** single line, `-- See docs/<file>.md for the model.`
   No docstring essay. No per-function preambles.
+- **`--@map:` annotations:** attach to the construct they describe.
+  See `tools/map_extract.py` for the recognised kinds (`:invariant`,
+  `:contract`, `:shape`, `:emits`; `?:` variant for inferred).
 - **Inline comments:** only where they encode a non-obvious WHY.
   Good: "notation event encodes (chan, pitch) at ppq, so keep it in sync",
   "rescan: step 3 inserted notation events, so uuidIdx values are stale",
@@ -57,29 +58,27 @@ the signature alone is enough.
   - `----- Name` — 5 dashes, Title Case. Subsections within a partition
     (e.g. `Swing`, `Update manager`, `Rebuild`, `Transport`, `Mutation`,
     `Lifecycle`).
-  Labels are one line, no trailing punctuation, no prose. Keep subsection
-  names aligned with the thematic sections in the doc where they overlap.
+  Labels are one line, no trailing punctuation, no prose.
 - Single-word comments restating the next line's effect are always out.
 
 ## Workflow
 
-1. Draft `docs/<file>.md` **before** touching the source. Review the
-   draft for shape and coverage before any strip.
-2. Once the doc is agreed, do the source strip in one pass: replace the
-   header, trim inline filler, keep the WHY comments.
-3. Sanity-check (syntax, tests) before moving on.
+1. Source change first. Update or add `--@map:` annotations alongside.
+2. The `.map` file regenerates via the post-edit hook.
+3. If the change touches anything `docs/<file>.md` describes, update the
+   doc in the same pass.
 
 ## Keeping docs in sync
 
-**Any change to a documented file must update its doc if the change
-touches anything the doc describes.** The doc is the source of truth for
-cross-file semantics; letting it drift is worse than having no doc.
-Things that require a doc update:
-- new/removed/renamed public method → API reference
-- change to mutation/lock/callback contract → thematic section
-- change to encoding, offsets, sentinel values, conventions → conventions
-- new cross-cut invariant that a reader couldn't reconstruct from one
-  function
+Doc updates are required when:
 
-Pure internal refactors that preserve every documented property need no
-doc change.
+- a cross-cut invariant that a reader couldn't reconstruct from one
+  function changes — update the prose
+- the *model* shifts (a new tier, a new lifecycle stage, a renamed
+  concept) — update the prose
+
+Doc updates are **not** required when:
+
+- a public method is added, removed, or renamed — `.map` carries it
+- a `--@map:contract` body changes — `.map` carries it
+- pure internal refactors that preserve every documented property

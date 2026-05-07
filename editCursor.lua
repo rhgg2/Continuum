@@ -1,4 +1,22 @@
--- See docs/trackerView.md for the model and API reference.
+-- See docs/editCursor.md for the model.
+
+--@map:invariant cursor lives at (row, col, stop) — stop is a char-offset index into col.stopPos, not a part index
+--@map:invariant cursorRow is 0-indexed; cursorCol/cursorStop are 1-indexed (Lua-array)
+--@map:invariant ec owns no MIDI/take state — pure caret + selection over grid.cols; mutations go via tm/cm
+--@map:invariant selection is anchor + cursor; selAnchor is the fixed end, cursor is the moving end; sel is the resolved rect
+--@map:invariant sel == nil iff no selection; hasSelection() / region() degenerate-to-cursor is a callsite policy, not stored
+--@map:invariant sticky scopes are orthogonal: hBlockScope ∈ {0=free,1=col,2=channel,3=all-cols}, vBlockScope ∈ {0=free,1=beat,2=bar,3=all-rows}
+--@map:invariant sticky == any nonzero scope; cursor moves while sticky update sel rather than clearing it
+--@map:invariant HBlock=2/3 use sentinel part1=part2='*' that no real part name matches — selectionStopSpan falls through to whole-col
+--@map:invariant within a single col, parts order via col.partStart (lower partStart = earlier part); not stop index, since parts may be multi-stop
+--@map:invariant moveHook fires after every position-changing operation (clampPos+moveHook are paired)
+
+--@map:shape selection = { row1, row2, col1, col2, part1, part2 }   -- inclusive on both axes; part1/part2 are part names or '*' sentinel
+--@map:shape selAnchor = { row, col, stop }                          -- fixed end of an active selection
+--@map:shape clip.single = { mode='single', type='note'|'7bit'|'pb', numRows, events=[clipEvent,...] }
+--@map:shape clip.multi  = { mode='multi', numRows, startType, cols=[clipColEntry,...] }
+--@map:shape clipColEntry = { type, chanDelta, key, events=[clipEvent,...] }   -- key: note=lane-pos, cc=cc#, singleton=nil
+--@map:shape clipEvent = source-event minus CLIP_RESERVED, plus { row, [endRow] }   -- row is 0-relative to clip top
 
 loadModule('util')
 
@@ -21,6 +39,7 @@ function newEditCursor(deps)
 
   ----- Position
 
+  --@map:contract clamps to grid extents; idempotent; stop clamped against current col's stopPos length so col-changes must precede stop reads
   local function clampPos()
     local maxRow = math.max(0, (grid.numRows or 1) - 1)
     cursorRow = util.clamp(cursorRow, 0, maxRow)
@@ -30,12 +49,6 @@ function newEditCursor(deps)
 
   ----- Parts
 
-  -- A part is the editable axis at a stop: 'pitch' | 'vel' | 'delay' on
-  -- note cols, 'pb' on pb cols, 'val' on scalar cols (cc/at/pc/pa).
-  -- Decoration stamps col.partAt[stop] (name) and col.partStart[stop]
-  -- (stop index where this stop's part begins) — partStart doubles as the
-  -- ordering primitive when normalising selections within a column.
-
   local function partAt(col, stop)
     local c = grid.cols[col]
     return c and c.partAt and c.partAt[stop] or 'val'
@@ -43,6 +56,7 @@ function newEditCursor(deps)
 
   local function cursorPart() return partAt(cursorCol, cursorStop) end
 
+  --@map:contract returns first stop whose partAt name matches; used by selection-set and regionStart to land the caret on the part's leading char
   local function firstStopForPart(col, part)
     local c = grid.cols[col]
     if not c then return 1 end
@@ -56,12 +70,14 @@ function newEditCursor(deps)
 
   local function isSticky() return hBlockScope > 0 or vBlockScope > 0 end
 
+  --@map:contract pins anchor at current cursor and produces a 1x1 sel; precondition for any selUpdate that follows
   local function selStart()
     selAnchor = { row = cursorRow, col = cursorCol, stop = cursorStop }
     local p = cursorPart()
     sel = { row1 = cursorRow, row2 = cursorRow, col1 = cursorCol, col2 = cursorCol, part1 = p, part2 = p }
   end
 
+  --@map:contract recomputes sel from anchor + cursor + scopes; rows snap to beat/bar under vBlock=1/2; cols expand to channel/all under hBlock=2/3; no-op when selAnchor is nil
   local function selUpdate()
     local a = selAnchor
     if not a then return end
@@ -79,9 +95,6 @@ function newEditCursor(deps)
       if r1 > r2 then r1, r2 = r2, r1 end
     end
 
-    -- The HBlock=2/3 cases need an end-part name that means "everything in
-    -- the col"; selectionStopSpan reads it via name equality, so any name
-    -- that doesn't match a real part falls through to s1=1 / s2=#stopPos.
     local c1, c2, p1, p2
     if hBlockScope == 2 then
       local chan = grid.cols[cursorCol].midiChan
@@ -95,8 +108,7 @@ function newEditCursor(deps)
       p1, p2 = partAt(a.col, a.stop), cursorPart()
       if c1 > c2 then c1, c2, p1, p2 = c2, c1, p2, p1
       elseif c1 == c2 then
-        -- normalise so p1 is at-or-before p2 in this col's parts list,
-        -- via partStart values (lower partStart = earlier part)
+        -- normalise so p1 is at-or-before p2 (lower partStart = earlier part)
         local col = grid.cols[c1]
         if col and col.partStart[a.stop] > col.partStart[cursorStop] then
           p1, p2 = p2, p1
@@ -106,11 +118,13 @@ function newEditCursor(deps)
     sel = { row1 = r1, row2 = r2, col1 = c1, col2 = c2, part1 = p1, part2 = p2 }
   end
 
+  --@map:contract drops sel + anchor + both sticky scopes; the only path that turns sticky off without explicit unstick()
   local function selClear()
     sel = nil; selAnchor = nil
     hBlockScope = 0; vBlockScope = 0
   end
 
+  --@map:contract first call seeds anchor and sets scope=1 (col); subsequent cycles 1->2->3->1 (col->channel->all-cols)
   local function cycleHBlock()
     if not isSticky() then
       selAnchor   = { row = cursorRow, col = cursorCol, stop = cursorStop }
@@ -121,6 +135,7 @@ function newEditCursor(deps)
     selUpdate()
   end
 
+  --@map:contract first call seeds anchor and sets scope=1 (beat); subsequent cycles 1->2->3->1 (beat->bar->all-rows); no-op on empty grid
   local function cycleVBlock()
     if (grid.numRows or 0) == 0 then return end
     if not isSticky() then
@@ -132,6 +147,7 @@ function newEditCursor(deps)
     selUpdate()
   end
 
+  --@map:contract swaps anchor<->cursor on whichever axes aren't scope-locked (vBlock<1 swaps row, hBlock<2 swaps col+stop); no-op without an active selection
   local function swapEnds()
     if not (sel and selAnchor) then return end
     if vBlockScope < 1 then
@@ -147,6 +163,7 @@ function newEditCursor(deps)
 
   ----- Movement
 
+  --@map:contract selecting=true (or sticky) extends sel; otherwise clears sel before moving; clamps at top/bottom edges (no wrap)
   local function moveRow(n, selecting)
     if selecting or isSticky() then
       if not sel then selStart() end
@@ -156,6 +173,7 @@ function newEditCursor(deps)
     if selecting or isSticky() then selUpdate() end
   end
 
+  --@map:contract walks stops within col, crossing into adjacent col at the boundary; stops at first/last col (no wrap); under hBlock>=2 collapses scope to 1 and re-anchors at current cursor first
   local function moveStop(n, selecting)
     if selecting or isSticky() then
       if not sel then selStart() end
@@ -207,6 +225,7 @@ function newEditCursor(deps)
       if isSticky() then selUpdate() end
     end
 
+    --@map:contract jumps one col per step, landing on first/last stop of the destination col; under sticky, extends/contracts selection one col per step
     function moveCol(n)
       moveUnit(n,
         function()
@@ -225,6 +244,7 @@ function newEditCursor(deps)
       end)
     end
 
+    --@map:contract jumps one channel per step; non-sticky lands on the first note col of the destination channel (skipping pc/pb sentinels); sticky preserves the raw chan-edge land
     function moveChannel(n)
       local function chanRange()
         local chan = grid.cols[cursorCol].midiChan
@@ -264,6 +284,7 @@ function newEditCursor(deps)
   function ec:col()           return cursorCol  end
   function ec:pos()           return cursorRow, cursorCol, cursorStop end
 
+  --@map:contract any nil arg leaves that axis untouched; clamps and fires moveHook unconditionally
   function ec:setPos(row, col, stop)
     if row  then cursorRow  = row  end
     if col  then cursorCol  = col  end
@@ -273,6 +294,7 @@ function newEditCursor(deps)
 
   function ec:clampPos()      clampPos() end
 
+  --@map:contract scales cursorRow by newRPB/oldRPB; called by vm when rowPerBeat changes mid-session so caret stays at the same musical time
   function ec:rescaleRow(oldRPB, newRPB)
     cursorRow = math.floor(cursorRow * newRPB / oldRPB)
   end
@@ -288,8 +310,6 @@ function newEditCursor(deps)
   function ec:hasSelection()  return sel ~= nil end
   function ec:isSticky()      return isSticky() end
 
-  -- The rect to operate on, part-typed. Degenerates to 1x1 at cursor when
-  -- no selection — `hasSelection()` is the bit when that distinction matters.
   function ec:region()
     if sel then
       return sel.row1, sel.row2, sel.col1, sel.col2, sel.part1, sel.part2
@@ -298,18 +318,12 @@ function newEditCursor(deps)
     return cursorRow, cursorRow, cursorCol, cursorCol, p, p
   end
 
-  -- (col, stop) of the region's top-left corner. Returns a pair so callers
-  -- can splat directly into setPos: `ec:setPos(row, ec:regionStart())`.
-  -- Degenerates to the cursor's col/stop when no selection.
+  -- Pair so callers can splat: `ec:setPos(row, ec:regionStart())`.
   function ec:regionStart()
     if not sel then return cursorCol, cursorStop end
     return sel.col1, firstStopForPart(sel.col1, sel.part1)
   end
 
-  -- Iterator over the cols an op should target: the selection's cols if
-  -- a selection is active, otherwise just the cursor's col (or nothing if
-  -- it's nil). Skips nil cols. Callers that need to distinguish a real
-  -- selection from the cursor-fallback case still have ec:hasSelection().
   function ec:eachSelectedCol()
     if not sel then
       local col, ci = grid.cols[cursorCol], cursorCol
@@ -331,6 +345,7 @@ function newEditCursor(deps)
     end
   end
 
+  --@map:contract installs a selection from a part-typed record; clears sticky scopes; anchor lands at top-left part-start so subsequent extends behave like a fresh drag
   function ec:setSelection(r)
     sel = { row1 = r.row1, row2 = r.row2, col1 = r.col1, col2 = r.col2,
             part1 = r.part1, part2 = r.part2 }
@@ -338,10 +353,6 @@ function newEditCursor(deps)
     hBlockScope, vBlockScope = 0, 0
   end
 
-  -- Stop range in `col` covered by the current selection. On boundary cols
-  -- we narrow to the boundary part by name; on interior cols (or HBlock=2/3
-  -- whole-channel/whole-row scopes whose part1/part2 don't match any real
-  -- part), the whole col falls through.
   function ec:selectionStopSpan(col)
     if not sel then return nil end
     local c = grid.cols[col]
@@ -363,8 +374,6 @@ function newEditCursor(deps)
   function ec:selClear()  selClear()  end
   function ec:unstick()   hBlockScope, vBlockScope = 0, 0 end
 
-  -- Extend the selection to land on (row, col, stop), creating a fresh
-  -- 1x1 sel anchored at the current cursor first if none was active.
   -- Mouse shift-click and drag both speak this verb.
   function ec:extendTo(row, col, stop)
     if not sel then selStart() end
@@ -372,6 +381,7 @@ function newEditCursor(deps)
     selUpdate()
   end
 
+  --@map:contract shifts both selection rows + anchor + cursor by rowDelta; clamps each independently (selection can compress against the edge while cursor doesn't)
   function ec:shiftSelection(rowDelta)
     local maxRow = grid.numRows - 1
     sel.row1      = util.clamp(sel.row1      + rowDelta, 0, maxRow)
@@ -383,6 +393,7 @@ function newEditCursor(deps)
 
   ----- Motion
 
+  --@map:contract advances by cm.advanceBy rows; the per-keystroke auto-step after a write
   function ec:advance() moveRow(cm:get('advanceBy')) end
 
   do
@@ -435,9 +446,6 @@ function newEditCursor(deps)
 
   ----- Decoration
 
-  -- Stamp shape fields onto a half-built grid column. ec owns the part
-  -- registry, the parts list per col type, and the derived layout
-  -- (stopPos / partAt / partStart / width); addGridCol never names them.
   do
     -- Part primitives: char `width` and `stops` (cursor offsets within the
     -- part). pitch's middle char ('-' between letter and octave) is
@@ -451,9 +459,7 @@ function newEditCursor(deps)
       val    = { width = 2, stops = {0, 1}    },
     }
 
-    -- Parts list per col type. One char of separator sits between adjacent
-    -- parts in the rendered cell. `trackerMode` inserts a `sample` part
-    -- between pitch and vel for note cells.
+    -- One char of separator between adjacent parts in the rendered cell.
     local function partsFor(type, showDelay, trackerMode)
       if type == 'note' then
         local p = {'pitch'}
@@ -468,6 +474,7 @@ function newEditCursor(deps)
       end
     end
 
+    --@map:contract stamps col.parts/stopPos/partAt/partStart/width derived from col.type + showDelay + trackerMode; ec is the sole writer of these fields, addGridCol never names them
     function ec:decorateCol(col)
       local parts = partsFor(col.type, col.showDelay, col.trackerMode)
       col.parts = parts
@@ -495,6 +502,14 @@ function newEditCursor(deps)
 end
 
 ---------- CLIPBOARD
+
+--@map:invariant clipboard persists via REAPER ExtState under ('rdm','clipboard'), serialised by util.serialise
+--@map:invariant clip rows are 0-relative to the clip's top (row=0 is first row of selection); paste re-bases against current cursor row
+--@map:invariant single vs multi mode is decided by selected-col count: c1==c2 -> single, otherwise multi
+--@map:invariant single.type ∈ { 'note', '7bit', 'pb' } — note/vel split decided at copy by region's part1
+--@map:invariant multi.cols carry chanDelta from leftmost source channel; cursor's channel becomes the leftmost destination
+--@map:invariant CLIP_RESERVED keys are stripped at copy; CLIP_ARTIFACTS (row/endRow) are stripped at paste; everything else (including custom metadata) round-trips
+--@map:invariant velEvent is the only collector that synthesises a clip event rather than cloning the source — vel-mode pastes must not carry note metadata onto cc destinations
 
 -- Reserved keys never carried verbatim through copy/paste: position is
 -- rebuilt from `row` at paste, identity is decided by the destination
@@ -539,6 +554,7 @@ function newClipboard(deps)
     return util.unserialise(raw)
   end
 
+  --@map:contract returns nil if the resolved selection is empty (no events); single-col emits {mode='single',type,...}, multi-col emits {mode='multi',cols=[...]}
   local function collect()
     local ctx = getCtx()
     local r1, r2, c1, c2, part1 = ec:region()
@@ -552,9 +568,7 @@ function newClipboard(deps)
       return (pL and pL / logPerRow or ctx:ppqToRow(p, chan)) - r1
     end
 
-    -- Note clip event: the whole source note minus reserved keys, plus
-    -- a row-relative position. endRow is set only when the note ends
-    -- inside the selection; spanning notes get their tail clamped at paste.
+    -- endRow set only when the note ends inside the selection; spanning notes get their tail clamped at paste.
     local function noteEvent(evt, chan, endppq)
       local ce = util.clone(evt, CLIP_RESERVED)
       ce.row = rowOf(evt.ppq, evt.ppqL, chan)
@@ -564,20 +578,14 @@ function newClipboard(deps)
       return ce
     end
 
-    -- Scalar (pb/cc/at/pc) clip event: the whole source minus reserved
-    -- keys. `val` rides through verbatim (it's not reserved); custom
-    -- metadata like `fake` or user-added fields rides through too.
     local function scalarEvent(evt, chan)
       local ce = util.clone(evt, CLIP_RESERVED)
       ce.row = rowOf(evt.ppq, evt.ppqL, chan)
       return ce
     end
 
-    -- Vel-mode clip event: a deliberate scalar abstraction over a note.
-    -- Only `val` (= source vel) is meaningful — pasting a vel clip onto a
-    -- note column writes vel via pasteVelocities; pasting onto a CC column
-    -- writes the value as a CC. Carrying the source note's pitch/detune/etc.
-    -- would land them on a CC event as bogus metadata.
+    -- Scalar abstraction over a note: only `val` carries. A clone would
+    -- land the source note's pitch/detune onto a CC paste as bogus metadata.
     local function velEvent(evt, chan)
       return { row = rowOf(evt.ppq, evt.ppqL, chan), val = evt.vel }
     end
@@ -608,10 +616,6 @@ function newClipboard(deps)
       return { mode = 'single', type = clipType, numRows = numRows, events = events }
     end
 
-    -- Multi-column mode. Each col carries (type, chanDelta, key, events):
-    --   note: key = 0-indexed positional note-col index within its source channel
-    --   cc:   key = cc number (keyed paste)
-    --   pb/pc/at: key = nil (channel singletons)
     local cols = {}
     local leftChan
     local notePosByChan = {}
@@ -647,6 +651,7 @@ function newClipboard(deps)
     return { mode = 'multi', numRows = numRows, startType = cols[1].type, cols = cols }
   end
 
+  --@map:contract carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
   local function pasteVelocities(events, dstCol, startppq, endppq)
     local last = util.seek(dstCol.events, 'before', startppq)
     local currentVel = last and last.vel or cm:get('defaultVelocity')
@@ -689,6 +694,7 @@ function newClipboard(deps)
     tm:flush()
   end
 
+  --@map:contract dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op
   local function pasteSingle(clip)
     local ctx = getCtx()
     local dstCol = grid.cols[ec:col()]
@@ -701,11 +707,7 @@ function newClipboard(deps)
     local logPerRow = ctx:ppqPerRow()
     local capRow = r + clip.numRows  -- logical row of endppq
 
-    -- Resolve clipboard events to target PPQs, truncating past end.
-    -- ppqL rides alongside ppq so the destination keeps its
-    -- authoring-row identity in the current take frame. The clone
-    -- carries every preserved field (pitch/vel/detune/fake/custom/...);
-    -- the destination identity (chan/lane/cc/frame) is overlaid below.
+    -- ppqL rides alongside ppq for authoring-row identity; clone carries payload, identity overlaid below.
     local events = {}
     for _, ce in ipairs(clip.events) do
       local ppq = ctx:rowToPPQ(r + ce.row, chan)
@@ -788,6 +790,7 @@ function newClipboard(deps)
     end
   end
 
+  --@map:contract resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col
   local function pasteMulti(clip)
     local ctx = getCtx()
     local cursor = grid.cols[ec:col()]
@@ -796,9 +799,7 @@ function newClipboard(deps)
     -- channel as the anchor.
     if clip.startType == 'note' and cursor.type ~= 'note' then return end
 
-    -- Per-channel lookup for destination columns, built lazily. Note
-    -- columns are indexed by lane (1..N, dense); cc columns by number;
-    -- singletons by type.
+    -- Lazy per-chan lookup: notes by lane (dense), cc by number, singletons by type.
     local chanInfo = {}
     local function infoFor(chan)
       local info = chanInfo[chan]
@@ -823,10 +824,6 @@ function newClipboard(deps)
 
     local cursorNotePos = cursor.lane or 0
 
-    -- Resolve a clip col to a dst target, or nil if out of 1..16.
-    --   note: { type='note', chan, lane, col }  (col may be nil => will create)
-    --   cc:   { type='cc',   chan, ccNum, col }  (col may be nil => will create)
-    --   pb/pc/at: { type, chan, col }
     local function resolve(clipCol)
       local chan = cursor.midiChan + clipCol.chanDelta
       if chan < 1 or chan > 16 then return end
@@ -853,9 +850,7 @@ function newClipboard(deps)
       local startppq = ctx:rowToPPQ(cRow, r.chan)
       local endppq   = ctx:rowToPPQ(capRow, r.chan)
 
-      -- Materialise clip events to target PPQs, sorted. Same shape as
-      -- pasteSingle: clone preserves payload + custom metadata, then
-      -- the destination identity is overlaid in the write loop below.
+      -- Materialise as in pasteSingle; identity overlaid in the write loop below.
       local events = {}
       for _, ce in ipairs(clipCol.events) do
         local ppq = ctx:rowToPPQ(cRow + ce.row, r.chan)
@@ -904,8 +899,7 @@ function newClipboard(deps)
         end
       end
 
-      -- Write clip events. The clone in materialise carries the payload
-      -- and any custom metadata; here we overlay only destination identity.
+      -- Overlay destination identity onto the materialised clones.
       local frame = currentFrame(r.chan)
       for _, e in ipairs(events) do
         e.chan, e.frame = r.chan, frame
@@ -927,7 +921,7 @@ function newClipboard(deps)
     if clip.mode == 'single' then pasteSingle(clip) else pasteMulti(clip) end
   end
 
-  -- Drop the top `trim` rows of a clip in place, re-indexing surviving events.
+  --@map:contract mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
   -- A note whose start row falls within the trimmed band is dropped entirely.
   local function trimTop(clip, trim)
     local function filter(events)

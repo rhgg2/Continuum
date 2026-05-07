@@ -1,4 +1,16 @@
--- See docs/commandManager.md for the model and API reference.
+-- See docs/commandManager.md for the model.
+
+--@map:invariant commands and keymap are orthogonal name-keyed tables; a name may live in either alone
+--@map:invariant root scope is global; named scopes are pages; at most one scope is active at a time
+--@map:invariant active-scope entries shadow root entries during invoke and keychain lookups (first hit wins)
+--@map:invariant command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)
+--@map:invariant a keymap entry is an array of keyspecs — multiple bindings dispatch to the same command
+--@map:invariant layouts row 1 = base octave (15 semitones, C..D+1oct); row 2 = +1 octave (17 semitones, C..F+1oct)
+--@map:invariant chars is folded from layouts at load time so the LUT can't drift from the declaration
+
+--@map:shape keyspec = keyConstant | { keyConstant, mod1, mod2, ... }   -- mods OR'd into a single mask
+--@map:shape keymapEntry = { keyspec, ... }                              -- array; each keyspec triggers the same command
+--@map:shape noteChar = { semi = 0..16, octOff = 0..1 }
 
 local layouts = {
   qwerty = {
@@ -19,8 +31,6 @@ local layouts = {
   },
 }
 
--- Fold layouts into a flat per-layout LUT so it stays in sync with the
--- declaration above. noteChars looks up by character code.
 local chars = {}
 for name, layout in pairs(layouts) do
   local t = {}
@@ -35,10 +45,9 @@ end
 
 ----- Scope
 
--- A scope owns a `commands` table, a `keymap` table, and the registration
--- surface. The root scope is global; named scopes are pages. The shared
--- methods guarantee scope-local doBefore/doAfter never leak across
--- scopes, since wrap rewrites the scope's own commands table.
+--@map:contract wrap is a no-op if name has no registered command; wrappers stack (compose outward)
+--@map:contract doBefore/doAfter accept either a single name or an array of names
+--@map:contract doAfter preserves the original command's return values (it's the dispatch signal)
 local function attachScope(scope)
   function scope:register(name, fn) self.commands[name] = fn end
 
@@ -87,6 +96,8 @@ local function newScope()
   return attachScope({ commands = {}, keymap = {} })
 end
 
+--@map:contract mgr.commands / mgr.keymap alias the root scope's tables; rm reads them directly in dispatch
+--@map:contract mgr-level register/bind/wrap/doBefore/doAfter operate on the root scope only
 function newCommandManager(cm)
   local root   = newScope()
   local scopes = {}
@@ -100,7 +111,6 @@ function newCommandManager(cm)
     activeScope = nil,
   }
 
-  -- Scope methods on mgr operate on the root (global) scope.
   function mgr:register(name, fn)     root:register(name, fn) end
   function mgr:registerAll(tbl)       root:registerAll(tbl) end
   function mgr:bind(name, keys)       root:bind(name, keys) end
@@ -111,6 +121,7 @@ function newCommandManager(cm)
 
   ----- Scopes
 
+  --@map:contract creates the scope on first request; idempotent thereafter
   function mgr:scope(name)
     local s = scopes[name]
     if not s then
@@ -120,40 +131,33 @@ function newCommandManager(cm)
     return s
   end
 
+  --@map:contract pass nil to clear active scope (drop back to root-only resolution)
   function mgr:setActive(name) self.activeScope = name end
 
   function mgr:dropScope(name) scopes[name] = nil end
 
   ----- Lookup
 
-  -- Walks active scope, then root. A page can shadow a root binding
-  -- when the local meaning is stronger.
+  --@map:contract no-op (returns nil) if no scope resolves the name; never raises on unknown
   function mgr:invoke(name, ...)
     local s  = self.activeScope and scopes[self.activeScope]
     local fn = (s and s.commands[name]) or root.commands[name]
     if fn then return fn(...) end
   end
 
-  -- Active-then-root keymap chain. Callers iterate in order; first hit
-  -- wins, so an active-scope binding hard-shadows the root.
   function mgr:keychain()
     local s = self.activeScope and scopes[self.activeScope]
     if s then return { s.keymap, root.keymap } end
     return { root.keymap }
   end
 
-  -- Look up a name's keys via the chain. Used by page code that wants
-  -- to recognise a specific binding (e.g. a chord inside a modal) without
-  -- caring which scope owns it.
   function mgr:keysFor(name)
     for _, km in ipairs(self:keychain()) do
       if km[name] then return km[name] end
     end
   end
 
-  -- A keymap entry is either a bare key constant or a {key, mod, mod...}
-  -- chord. Returns (keyCode, modMask). ImGui passed in so cmgr stays
-  -- free of REAPER-side imports at module load.
+  -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
   function mgr:keySpec(spec, ImGui)
     if type(spec) ~= 'table' then return spec, ImGui.Mod_None end
     local mods = ImGui.Mod_None

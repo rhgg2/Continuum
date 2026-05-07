@@ -1,35 +1,44 @@
--- Wire-protocol bridge to the Continuum Sampler JSFX. Owns the gmem
--- mailbox layout (load, preview, prefix, trim, names slab, trims slab)
--- and the instance-id multiplex. Each sampler-bearing track carries a
--- P_EXT 'samplerInstanceId' (0..127); Continuum tags every mailbox write
--- with target_id, JSFX consumes only when slider2==target_id. Names and
--- trims slabs stride per-instance. Single point of truth for the
--- JSFX-side contract.
+-- See docs/sampleManager.md for the model.
+-- @noindex
+
+--@map:invariant cm is the sole authority for slot state ({path, start, end, name}); JSFX is a pure consumer
+--@map:invariant cm holds project-relative paths; sm composes absolute via currentPrefix at every push so JSFX needs no prefix
+--@map:invariant gmem layout mirrors Continuum_Sampler.jsfx; SLOT_BASE/BOOT_BASE constants must stay in lockstep with the JSFX side
+--@map:invariant per-instance bundled mailbox at SLOT_BASE+id*SLOT_STRIDE; preview retains its own legacy magic-gated mailbox at PREVIEW_BASE
+--@map:invariant at most one slot drained per track per tick — keeps last-write-wins consolidation simple
+--@map:invariant instance ids are persisted via track P_EXT (PEXT_KEY) and mirrored into JSFX slider2 every getInstanceId call
+--@map:invariant boot-token watcher (BOOT_BASE+id) detects fresh JSFX mem[] (project reload, recompile) and triggers full rehydrate
+--@map:invariant JSFX user-string slot cap is 1023; PATH_MAX (1019) + SLOT_STRIDE bookkeeping must not push slot string writes past that ceiling
 
 loadModule('util')
 loadModule('fs')
+
+--@map:shape slotEntry      = { path=string?, name=string?, start=number, ['end']=number }   -- cm-stored, path is project-relative
+--@map:shape pendingEntry   = { slot=number, op=0|1, path=string?, name=string?, start=number?, ['end']=number? }  -- mailbox queue entry; op=1 is clear
+--@map:shape trackState     = { fxGuid=string?, instanceId=number?, lastBootToken=number, slotSeq=number, pending={byOrder={int,...}, bySlot={[slot]=pendingEntry}} }
+--@map:shape mailboxHeader  = [seq, seq_ack, slot, op, start, end, pathLen, nameLen, <pathBytes...>, <nameBytes...>]   -- gmem words at SLOT_BASE+id*SLOT_STRIDE
 
 local SAMPLER_FX            = 'Continuum Sampler'
 local GMEM_NS               = 'Continuum_sampler'
 local MAGIC                 = 1717658484   -- 'CTML' as 32-bit ASCII
 local MAX_INSTANCES         = 128
 local N_SAMPLES             = 64
-local NAME_STRIDE           = 64
-local TRIMS_STRIDE          = 4
-local INSTANCE_NAMES_STRIDE = N_SAMPLES * NAME_STRIDE             -- 4096
-local INSTANCE_TRIMS_STRIDE = N_SAMPLES * TRIMS_STRIDE            -- 256
 
-local LOAD_BASE             = 0
+local PATH_MAX              = 1019
+local NAME_MAX              = 64
+local SLOT_STRIDE           = 8 + PATH_MAX + NAME_MAX                    -- 1091
+
 local PREVIEW_BASE          = 1024
-local PREFIX_BASE           = 2048
-local TRIM_BASE             = 3072
-local NAMES_BASE            = 4096
-local TRIMS_BASE            = NAMES_BASE + MAX_INSTANCES * INSTANCE_NAMES_STRIDE  -- 528384
+-- Numbers mirror Continuum_Sampler.jsfx; intermediate strides are no
+-- longer derivable Lua-side.
+local SLOT_BASE             = 561152
+local BOOT_BASE             = SLOT_BASE + MAX_INSTANCES * SLOT_STRIDE    -- 700800
 
 local PREVIEW_SLOT_IDX      = N_SAMPLES
 local SLIDER_INSTANCE_ID    = 1            -- slider2 in JSFX = param index 1 (0-based)
 local PEXT_KEY              = 'P_EXT:samplerInstanceId'
 
+--@map:contract writePath emits NUL-terminated bytes; caller must ensure base+#path is within the addressable string region
 local function writePath(base, path)
   for i = 1, #path do reaper.gmem_write(base + i - 1, path:byte(i)) end
   reaper.gmem_write(base + #path, 0)
@@ -43,6 +52,7 @@ local function findSamplerFx(track)
   return nil
 end
 
+--@map:contract readInstanceId validates the P_EXT value into [0, MAX_INSTANCES); returns nil for missing/out-of-range/non-numeric
 local function readInstanceId(track)
   local _, val = reaper.GetSetMediaTrackInfo_String(track, PEXT_KEY, '', false)
   local id = tonumber(val)
@@ -50,6 +60,7 @@ local function readInstanceId(track)
   return nil
 end
 
+--@map:contract gatherTakenIds skips skipTrack so a re-assignment of the same track doesn't see its own id as taken
 local function gatherTakenIds(skipTrack)
   local taken = {}
   for i = 0, reaper.CountTracks(0) - 1 do
@@ -71,25 +82,32 @@ end
 
 function newSampleManager(fileOps)
   local sm = {}
-  local trimSeq = 0
 
-  -- Continuum/<stem>-<8 hex>[.ext]. Hex tail is a content fingerprint
-  -- (fs.hashFile), so re-loading the same audio resolves to the same
-  -- destination filename and the copy can be skipped.
+  local trackStates = {}
+  local currentPrefix = nil
+
+  local function absFor(rel)
+    if not rel or rel == '' then return rel end
+    if not currentPrefix or currentPrefix == '' then return rel end
+    return currentPrefix .. '/' .. rel
+  end
+  local function ensureTrackState(track)
+    local s = trackStates[track]
+    if not s then
+      s = { fxGuid = nil, instanceId = nil, lastBootToken = 0,
+            slotSeq = 0,
+            pending = { byOrder = {}, bySlot = {} } }
+      trackStates[track] = s
+    end
+    return s
+  end
+
   local function relForSrc(srcBase, hash)
     local stem, ext = srcBase:match('^(.*)%.([^.]+)$')
     stem = stem or srcBase
     return ext
       and 'Continuum/' .. stem .. '-' .. hash .. '.' .. ext
       or  'Continuum/' .. stem .. '-' .. hash
-  end
-
-  -- Strip the 8-hex suffix that relForSrc adds, before either the
-  -- extension or end-of-string. Applied at the point of publishing into
-  -- cm so every consumer sees the clean name.
-  local function stripHash(name)
-    local s = (name:gsub('%-(%x%x%x%x%x%x%x%x)(%.[^.]+)$', '%2'))
-    return (s:gsub('%-(%x%x%x%x%x%x%x%x)$', ''))
   end
 
   local function setEntry(cm, idx, fields)
@@ -99,10 +117,75 @@ function newSampleManager(fileOps)
     cm:set('track', 'slotEntries', entries)
   end
 
-  -- Resolve track → instance id, assigning + persisting on first sight.
-  -- Always pushes the value back into JSFX slider2 so a drifted slider
-  -- (manual reset, fresh FX before @serialize) can never silently swallow
-  -- our writes. Returns nil if the track lacks the sampler FX entirely.
+  local function clearEntry(cm, idx)
+    local entries = cm:get('slotEntries')
+    entries[idx] = nil
+    cm:set('track', 'slotEntries', entries)
+  end
+
+  --@map:contract pushSlot merges into the existing pendingEntry for slot; op=1 (clear) wipes path/name/start/end; op=0 only overrides explicitly-passed fields
+  --@map:contract byOrder records first-seen slot only (no duplicate enqueue); merges into the existing bySlot entry to preserve drain ordering
+  local function pushSlot(state, slot, opts)
+    local entry = state.pending.bySlot[slot]
+    if not entry then
+      entry = { slot = slot, op = 0 }
+      state.pending.bySlot[slot] = entry
+      state.pending.byOrder[#state.pending.byOrder + 1] = slot
+    end
+    if opts.op == 1 then
+      entry.op     = 1
+      entry.path   = nil
+      entry.name   = nil
+      entry.start  = 0
+      entry['end'] = 0
+    else
+      entry.op = 0
+      if opts.path   ~= nil then entry.path   = opts.path  end
+      if opts.name   ~= nil then entry.name   = opts.name  end
+      if opts.start  ~= nil then entry.start  = opts.start end
+      if opts['end'] ~= nil then entry['end'] = opts['end'] end
+    end
+  end
+
+  --@map:contract drain writes header words in order [slot, op, start, end, pathLen, nameLen, body...] then bumps seq last so JSFX only fires once the body is in
+  --@map:contract drain gates on seq == seq_ack at addr/addr+1 — JSFX must have consumed the prior write before the next one can land
+  --@map:contract drain is no-op while instanceId is nil (track lacks the FX) or queue is empty
+  local function drain(state)
+    local order = state.pending.byOrder
+    if #order == 0 or not state.instanceId then return end
+    local addr = SLOT_BASE + state.instanceId * SLOT_STRIDE
+    if reaper.gmem_read(addr) ~= reaper.gmem_read(addr + 1) then return end
+
+    local slot  = table.remove(order, 1)
+    local entry = state.pending.bySlot[slot]
+    state.pending.bySlot[slot] = nil
+
+    local pathBytes = entry.path
+    local nameBytes = entry.name
+    local pathLen   = pathBytes and #pathBytes or 0
+    local nameLen   = nameBytes and #nameBytes or 0
+
+    reaper.gmem_write(addr + 2, slot)
+    reaper.gmem_write(addr + 3, entry.op)
+    reaper.gmem_write(addr + 4, entry.start  or 0)
+    reaper.gmem_write(addr + 5, entry['end'] or 0)
+    reaper.gmem_write(addr + 6, pathLen)
+    reaper.gmem_write(addr + 7, nameLen)
+    for i = 1, pathLen do
+      reaper.gmem_write(addr + 7 + i, pathBytes:byte(i))
+    end
+    for i = 1, nameLen do
+      reaper.gmem_write(addr + 7 + pathLen + i, nameBytes:byte(i))
+    end
+
+    state.slotSeq = state.slotSeq + 1
+    reaper.gmem_write(addr, state.slotSeq)
+  end
+
+  function sm:isLive(track)
+    return findSamplerFx(track) ~= nil
+  end
+
   function sm:getInstanceId(track)
     local fxIdx = findSamplerFx(track)
     if not fxIdx then return nil end
@@ -116,54 +199,144 @@ function newSampleManager(fileOps)
     return id
   end
 
-  -- JSFX-only unload (path=0 sentinel). cm-side bookkeeping lives in
-  -- clearSlot; preview-in-place uses unloadSlot directly to revert without
-  -- touching the persistent slot list.
-  function sm:unloadSlot(track, slot)
-    local id = self:getInstanceId(track); if not id then return false end
+  function sm:rehydrateTrack(track, cm)
+    local state   = ensureTrackState(track)
+    local entries = cm:readTrackKey(track, 'slotEntries') or {}
+    for slot = 0, N_SAMPLES - 1 do
+      local e = entries[slot]
+      if e and e.path then
+        pushSlot(state, slot, {
+          path  = absFor(e.path),
+          name  = e.name,
+          start = e.start  or 0,
+          ['end'] = e['end'] or 0,
+        })
+      end
+    end
+  end
+
+  function sm:syncSlot(track, slot, cm)
+    local state = ensureTrackState(track)
+    local e     = (cm:get('slotEntries') or {})[slot]
+    if not e or not e.path then
+      pushSlot(state, slot, { op = 1 })
+    else
+      pushSlot(state, slot, {
+        path  = absFor(e.path),
+        name  = e.name,
+        start = e.start  or 0,
+        ['end'] = e['end'] or 0,
+      })
+    end
+  end
+
+  --@map:contract tick is the only caller of gmem_attach for the bundled mailbox path; coordinator must invoke per frame
+  --@map:contract tick reaps trackStates entries for tracks whose sampler FX has been removed (else closed-over state leaks)
+  --@map:contract first-sight FX-GUID binding does NOT reset state (lastBootToken=0 still triggers rehydrate via the boot-token branch)
+  function sm:tick(cm)
     reaper.gmem_attach(GMEM_NS)
-    if reaper.gmem_read(LOAD_BASE) ~= 0 then return false end
-    reaper.gmem_write(LOAD_BASE + 3, 0)
-    reaper.gmem_write(LOAD_BASE + 2, slot)
-    reaper.gmem_write(LOAD_BASE + 1, id)
-    reaper.gmem_write(LOAD_BASE, MAGIC)
+    for i = 0, reaper.CountTracks(0) - 1 do
+      local track = reaper.GetTrack(0, i)
+      local fxIdx = findSamplerFx(track)
+      if fxIdx then
+        local state = ensureTrackState(track)
+        local guid  = reaper.TrackFX_GetFXGUID(track, fxIdx)
+        if state.fxGuid == nil then
+          state.fxGuid = guid     -- first sight: bind, don't reset
+        elseif state.fxGuid ~= guid then
+          state.fxGuid        = guid
+          state.lastBootToken = 0
+          state.slotSeq       = 0
+          state.pending       = { byOrder = {}, bySlot = {} }
+        end
+        state.instanceId = self:getInstanceId(track)
+        if state.instanceId then
+          local token = reaper.gmem_read(BOOT_BASE + state.instanceId)
+          if token ~= 0 and token ~= state.lastBootToken then
+            state.lastBootToken = token
+            self:rehydrateTrack(track, cm)
+          end
+          drain(state)
+        end
+      else
+        trackStates[track] = nil
+      end
+    end
+  end
+
+  ----- cm-authoritative slot operations
+
+  --@map:contract assign hashes srcPath, copies into projectPath/Continuum/<stem>-<hash>.<ext> if missing, writes cm rel path, queues mailbox push; returns false if hash or copy fails
+  function sm:assign(track, idx, srcPath, projectPath, cm)
+    local hash = fileOps.hash(srcPath)
+    if not hash then return false end
+    local rel  = relForSrc(fs.basename(srcPath), hash)
+    local abs  = projectPath .. '/' .. rel
+    fileOps.mkdir(projectPath .. '/Continuum')
+    if not fileOps.exists(abs) and not fileOps.copy(srcPath, abs) then return false end
+    local name    = fs.basename(srcPath)
+    -- A fresh sample replaces the slot's source — trim from the previous
+    -- sample no longer applies. Clear start/end (other fields, e.g.
+    -- shStart, are unrelated and survive).
+    local entries = cm:get('slotEntries')
+    entries[idx] = entries[idx] or {}
+    entries[idx].path,  entries[idx].name   = rel, name
+    entries[idx].start, entries[idx]['end'] = nil, nil
+    cm:set('track', 'slotEntries', entries)
+    pushSlot(ensureTrackState(track), idx, {
+      path = absFor(rel), name = name, start = 0, ['end'] = 0,
+    })
+    return true
+  end
+
+  function sm:loadSlot(track, slot, relPath)
+    pushSlot(ensureTrackState(track), slot, {
+      path = absFor(relPath), start = 0, ['end'] = 0,
+    })
     return true
   end
 
   function sm:clearSlot(track, slot, cm)
-    local entries = cm:get('slotEntries')
-    entries[slot] = nil
-    cm:set('track', 'slotEntries', entries)
-    local names = cm:get('samplerNames')
-    if names[slot] then
-      names[slot] = nil
-      cm:set('transient', 'samplerNames', names)
-    end
-    return self:unloadSlot(track, slot)
-  end
-
-  function sm:loadSlot(track, slot, relPath)
-    local id = self:getInstanceId(track); if not id then return false end
-    reaper.gmem_attach(GMEM_NS)
-    if reaper.gmem_read(LOAD_BASE) ~= 0 then return false end
-    writePath(LOAD_BASE + 3, relPath)
-    reaper.gmem_write(LOAD_BASE + 2, slot)
-    reaper.gmem_write(LOAD_BASE + 1, id)
-    reaper.gmem_write(LOAD_BASE, MAGIC)
+    clearEntry(cm, slot)
+    pushSlot(ensureTrackState(track), slot, { op = 1 })
     return true
   end
 
-  -- Push the project root to all sampler instances so they can compose
-  -- abs paths from rel-path loads and persist the prefix in @serialize.
-  -- Project-wide; not instance-tagged.
+  --@map:contract setTrim sends start/end without path/name; pathLen=0/nameLen=0 in the wire payload means "leave alone" on the JSFX side
+  function sm:setTrim(track, slot, startFrames, endFrames, cm)
+    setEntry(cm, slot, { start = startFrames, ['end'] = endFrames })
+    pushSlot(ensureTrackState(track), slot, {
+      start = startFrames, ['end'] = endFrames,
+    })
+    return true
+  end
+
+  function sm:setName(track, slot, name, cm)
+    setEntry(cm, slot, { name = name })
+    pushSlot(ensureTrackState(track), slot, { name = name })
+    return true
+  end
+
+  function sm:stageInto(track, idx, srcPath, projectPath)
+    local hash = fileOps.hash(srcPath)
+    if not hash then return nil end
+    local rel = relForSrc(fs.basename(srcPath), hash)
+    local abs = projectPath .. '/' .. rel
+    fileOps.mkdir(projectPath .. '/Continuum')
+    if not fileOps.exists(abs) and not fileOps.copy(srcPath, abs) then return nil end
+    self:loadSlot(track, idx, rel)
+    return rel
+  end
+
+  ----- Preview + prefix
+
   function sm:setPrefix(prefix)
-    reaper.gmem_attach(GMEM_NS)
-    if reaper.gmem_read(PREFIX_BASE) ~= 0 then return false end
-    writePath(PREFIX_BASE + 1, prefix)
-    reaper.gmem_write(PREFIX_BASE, MAGIC)
+    currentPrefix = prefix
     return true
   end
 
+  --@map:contract preview writes are silently dropped if the magic word at PREVIEW_BASE is non-zero (JSFX hasn't consumed the prior preview command)
+  --@map:contract preview header order: payload words first, magic last — JSFX dispatches on the MAGIC write
   function sm:previewSlot(track, slot, bounds)
     local id = self:getInstanceId(track); if not id then return false end
     reaper.gmem_attach(GMEM_NS)
@@ -175,16 +348,18 @@ function newSampleManager(fileOps)
     return true
   end
 
+  --@map:contract stopPreview encodes "stop" as slot=-1 in the same preview mailbox; same magic-gate as previewSlot
   function sm:stopPreview(track)
     local id = self:getInstanceId(track); if not id then return false end
     reaper.gmem_attach(GMEM_NS)
     if reaper.gmem_read(PREVIEW_BASE) ~= 0 then return false end
-    reaper.gmem_write(PREVIEW_BASE + 2, -1)   -- sentinel: release all preview voices
+    reaper.gmem_write(PREVIEW_BASE + 2, -1)
     reaper.gmem_write(PREVIEW_BASE + 1, id)
     reaper.gmem_write(PREVIEW_BASE, MAGIC)
     return true
   end
 
+  --@map:contract previewPath uses the dedicated PREVIEW_SLOT_IDX (=N_SAMPLES) so the JSFX side knows to load from the inline path bytes rather than a slot
   function sm:previewPath(track, path)
     local id = self:getInstanceId(track); if not id then return false end
     reaper.gmem_attach(GMEM_NS)
@@ -197,82 +372,8 @@ function newSampleManager(fileOps)
     return true
   end
 
-  -- Seq-gated (no magic): a slider drag at frame rate must not drop
-  -- writes behind a still-pending clear. JSFX caches last-seen seq and
-  -- applies on change. end==0 routes through the JSFX default
-  -- (frames-2); pass -1 to mean "leave untouched" by re-reading current.
-  function sm:setTrim(track, slot, startFrames, endFrames)
-    local id = self:getInstanceId(track); if not id then return false end
-    reaper.gmem_attach(GMEM_NS)
-    trimSeq = trimSeq + 1
-    reaper.gmem_write(TRIM_BASE + 1, id)
-    reaper.gmem_write(TRIM_BASE + 2, slot)
-    reaper.gmem_write(TRIM_BASE + 3, startFrames)
-    reaper.gmem_write(TRIM_BASE + 4, endFrames)
-    reaper.gmem_write(TRIM_BASE,     trimSeq)
-    return true
-  end
+  ----- Track surface
 
-  -- Pulls the per-slot publish slab for the given track's instance.
-  -- Returns a fresh table keyed by 0-indexed slot, only entries with
-  -- fs > 0 (loaded). Caller passes its cached table; an all-empty read
-  -- on a previously populated cache is treated as a transient gap and
-  -- the cache is returned untouched, mirroring readNames.
-  function sm:readTrims(track, prev)
-    local id = self:getInstanceId(track); if not id then return prev or {} end
-    reaper.gmem_attach(GMEM_NS)
-    local instBase = TRIMS_BASE + id * INSTANCE_TRIMS_STRIDE
-    local out = {}
-    for idx = 0, N_SAMPLES - 1 do
-      local base = instBase + idx * TRIMS_STRIDE
-      local fs = reaper.gmem_read(base)
-      if fs and fs > 0 then
-        out[idx] = {
-          fs     = fs,
-          frames = reaper.gmem_read(base + 1),
-          start  = reaper.gmem_read(base + 2),
-          ['end']= reaper.gmem_read(base + 3),
-        }
-      end
-    end
-    if next(out) == nil and prev and next(prev) ~= nil then return prev end
-    return out
-  end
-
-  -- Pull sample names from the gmem names slab for the given track's
-  -- instance; only write back to cm when they actually change so
-  -- configChanged doesn't fire every frame.
-  function sm:readNames(track, cm)
-    local id = self:getInstanceId(track); if not id then return end
-    reaper.gmem_attach(GMEM_NS)
-    local instBase = NAMES_BASE + id * INSTANCE_NAMES_STRIDE
-    local fresh = {}
-    for idx = 0, N_SAMPLES - 1 do
-      local base, chars = instBase + idx * NAME_STRIDE, {}
-      for j = 0, NAME_STRIDE - 1 do
-        local b = reaper.gmem_read(base + j)
-        if not b or b == 0 then break end
-        chars[#chars + 1] = string.char(math.floor(b))
-      end
-      if #chars > 0 then fresh[idx] = stripHash(table.concat(chars)) end
-    end
-    local cur = cm:get('samplerNames')
-    -- Empty fresh on a tick where JSFX briefly hasn't republished
-    -- (transport gating, race with @serialize) would otherwise blank
-    -- cur and the slot list flickers '(empty)'. JSFX wiping all 64
-    -- names in one go isn't a real workflow — prefer stickiness.
-    if next(fresh) == nil and next(cur) ~= nil then return end
-    for k, v in pairs(fresh) do
-      if cur[k] ~= v then cm:set('transient', 'samplerNames', fresh); return end
-    end
-    for k, v in pairs(cur) do
-      if fresh[k] ~= v then cm:set('transient', 'samplerNames', fresh); return end
-    end
-  end
-
-  -- Walks all tracks and returns those carrying the Continuum Sampler FX.
-  -- Returned shape: { { track, name, instanceId }, ... } — instance ids
-  -- are assigned + persisted in the same pass.
   function sm:listTracks()
     local out = {}
     for i = 0, reaper.CountTracks(0) - 1 do
@@ -287,11 +388,8 @@ function newSampleManager(fileOps)
     return out
   end
 
-  -- Detect whether the take's track carries the sampler; mirror the
-  -- result into cm:trackerMode and ensure the instance id is assigned.
-  -- Anticipative FX puts the sampler to sleep when idle and preview
-  -- wake-up takes 200–500 ms; I_PERFFLAGS bit 2 disables it on this
-  -- track only. Persistent (saved with the project), set once.
+  --@map:contract probeMode flips cm.trackerMode (transient tier) based on whether the take's track has the sampler FX
+  --@map:contract probeMode forces I_PERFFLAGS bit 1 (anticipative FX off) on sampler tracks for tighter timing
   function sm:probeMode(take, cm)
     local track = reaper.GetMediaItemTake_Track(take)
     local detected = findSamplerFx(track) ~= nil
@@ -307,41 +405,8 @@ function newSampleManager(fileOps)
     end
   end
 
-  ----- Slot persistence
-
-  -- Copy src into the project's Continuum/ folder (skipped if the
-  -- hashed name already exists) and push the rel path into JSFX.
-  -- Returns the rel path on success, nil on failure. Does not touch
-  -- cm — caller decides whether the load is persistent (assign) or
-  -- transient (preview-in-place).
-  function sm:stageInto(track, idx, srcPath, projectPath)
-    local hash = fileOps.hash(srcPath)
-    if not hash then return nil end
-    local rel = relForSrc(fs.basename(srcPath), hash)
-    local abs = projectPath .. '/' .. rel
-    fileOps.mkdir(projectPath .. '/Continuum')
-    if not fileOps.exists(abs) and not fileOps.copy(srcPath, abs) then return nil end
-    self:loadSlot(track, idx, rel)
-    return rel
-  end
-
-  function sm:assign(track, idx, srcPath, projectPath, cm)
-    local rel = self:stageInto(track, idx, srcPath, projectPath)
-    if not rel then return false end
-    setEntry(cm, idx, { path = rel })
-    return true
-  end
-
-  function sm:sweep(track, cm)
-    local entries = cm:get('slotEntries')
-    for idx, e in pairs(entries) do
-      if e.path then sm:loadSlot(track, idx, e.path) end
-    end
-  end
-
-  -- Move slot files when the project's media folder changes (typically
-  -- the empty→saved transition). cm paths are relative so they survive
-  -- the move untouched; only the bytes need to follow.
+  --@map:contract migrate moves files when the project root changes; cm rel paths are preserved so no cm rewrite is needed
+  --@map:contract migrate is a no-op if oldProjectPath is missing or unchanged
   function sm:migrate(projectPath, oldProjectPath, cm)
     if not oldProjectPath or oldProjectPath == projectPath then return false end
     local entries = cm:get('slotEntries')

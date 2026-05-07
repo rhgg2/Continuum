@@ -22,8 +22,7 @@ continuum.lua              -- entry point, wires everything
     │              └─ midiManager -- read/write raw MIDI events
     └─ samplePage          -- renders file tree and slot grid
          └─ sampleView     -- browser state (track, folder, selection)
-              └─ sampleManager   -- Continuum Sampler JSFX interface via gmem
-slotStore                  -- sample slot persistence and file copy/move
+              └─ sampleManager   -- Continuum Sampler JSFX bridge: cm-authoritative slot state, gmem mailboxes, audio bytes
 commandManager             -- key binding + command dispatch (root + per-page scopes)
 configManager              -- 5-tier config (global → project → track → take → transient)
 util                       -- pure: shared utilities (serialisation, base36, assign)
@@ -44,23 +43,60 @@ Two critical concepts in the tracker stack:
 Layers in the tracker stack expose a signal-keyed callback protocol
 via `util.installHooks`.
 
+## Documentation layers
+
+Four places carry information about a module. Each holds what the
+others can't.
+
+1. **Source** (`<file>.lua`) — names and structure say WHAT.
+2. **`--@map:` annotations** embedded in source — single-line
+   invariants, contracts, shapes, emitted signals. Recognised kinds
+   and attachment rules in `tools/map_extract.py`. Use `?:` variant
+   for inferred-rather-than-doc-grounded.
+3. **`.map` file** (`map/<file>.map`) — derived semantic outline,
+   one per `.lua`. Lists factories, state, private fns, public API,
+   signals, REAPER surface, plus the surfaced annotations. Read this
+   first — it answers "where does X live" in one screen.
+4. **`docs/<file>.md`** — prose. WHY only: the model, history,
+   incidents that motivated a shape, cross-cut concerns that span
+   files. Never repeats API surface; never restates what a `--@map:`
+   annotation already says.
+
+**Doc shape contract:** `docs/CONVENTIONS.md`. Read it before
+authoring or editing a doc.
+
+**Model docs to imitate:** `docs/timing.md`, `docs/tuning.md`,
+`docs/configManager.md`. They show the right density and the right
+register — model exposition without API repetition.
+
+**When to update what:**
+
+| Change | Update |
+|---|---|
+| Public method added/removed/renamed | `--@map:` (if needed); `.map` regenerates |
+| Contract/shape/invariant body changes | `--@map:` annotation |
+| Cross-cut invariant or model shifts | `docs/<file>.md` prose |
+| New module without a doc | Stub `docs/<file>.md` (WHY only); add `--@map:` annotations |
+| Pure refactor preserving documented properties | Nothing |
+
+**Tool-generated:** `.map` files regenerate via the post-edit hook.
+Never hand-edit them.
+
 ## How to work
 
-- For design, `docs/<module>.md` carries the *why*. Use for planning new features and major refactors.
+- Reading order on an unfamiliar module: `map/<file>.map`, then source.
+  Open `docs/<file>.md` when you need the WHY.
 
-- For coding, `cm/` carries the *what*. `cm/<module>.cm` maps factory, state, private functions, public API, and `--@cm:` module-local contracts. Read first — it answers "where does X live" in one screen.
-  
-- Framework docs: `docs/reaper_imgui_doc.html` (ReaImGui), `docs/REAPER API functions.html` (ReaScript). Grep to verify API names and signatures.
+- Framework docs: `docs/reaper_imgui_doc.html` (ReaImGui),
+  `docs/REAPER API functions.html` (ReaScript). Grep to verify API
+  names and signatures.
 
-- When changing source: if it touches `docs/<file>.md`, update that section. If it changes a contract, update `--@cm:`. The cm files are tool-generated; don't hand-edit.
-  
-- When writing new docs for an undocumented file: follow
-  `docs/CONVENTIONS.md`, but keep the file WHY-only — leave WHAT to
-  annotations + `.cm`.
+- All code changes run the pure-Lua test harness
+  (`lua tests/run.lua`). All bugfixes add red-first regression tests.
+  All refactors add tests pinning the invariant.
 
-- All code changes run the pure-Lua test harness (`lua tests/run.lua`). All bugfixes add red-first regression tests. All refactors add tests pinning the invariant.
-  
-- Spec files live in `tests/specs/`, registered in `tests/run.lua`. Read only specs adjacent to your changes.
+- Spec files live in `tests/specs/`, registered in `tests/run.lua`.
+  Read only specs adjacent to your changes.
 
 ## Coding style
 

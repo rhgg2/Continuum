@@ -1,6 +1,15 @@
--- Floating swing-composite editor: name + snapshot, factor rows, live
--- preview grid. Owned by trackerPage; opened by the openSwingEditor
--- command, drawn each frame by tp:renderFloating.
+-- See docs/swingEditor.md for the model.
+-- @noindex
+
+--@map:invariant editor owns no swing data; composite lives in cm:get('swings')[name] and is read fresh each frame via swingRead
+--@map:invariant all writes route through swingWrite, which short-circuits on equality and then fires vm:setSwingComposite + vm:reswingPreset
+--@map:invariant state == nil iff editor is closed; open() is a no-op when already open; Esc / Begin-close clears state
+--@map:invariant snapshot is captured at open() and never mutated; Reset writes a deepClone of it
+--@map:invariant shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
+--@map:invariant soft cap = min(SWING_SOFT_QN, hard); Wild unlocks hard = T_tile · atomMeta.range; cap == 0 freezes the slider
+--@map:invariant atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
+--@map:shape state = { name, snapshot, createBuf, createError, rpb, wild, lastCount, lastW }  -- composite is NOT cached here
+--@map:shape PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
 
 loadModule('util')
 loadModule('timing')
@@ -30,23 +39,18 @@ local PERIOD_PRESETS = {
 
 local SWING_ERR     = 0xff6060ff
 local SWING_MARK    = 0x000000b0
--- Soft cap on |shift| in QN: musically usable ceiling regardless of
--- atom or period. Wild mode unlocks the per-atom mathematical max.
 local SWING_SOFT_QN = 0.15
 
 function newSwingEditor(vm, cm, chrome, ctx)
-  local state = nil   -- nil = closed, else { name, snapshot, createBuf, createError, rpb, wild, lastCount, lastW }
+  local state = nil
 
-  -- qn-per-beat (denom-derived) and qn-per-bar (num × beat).
   local function meterQN()
     local num, denom = vm:timeSig()
     local beat = 4 / denom
     return beat, num * beat
   end
 
-  -- Combo speaks tile-qn (= user-period × pulsesPerCycle), so atoms with
-  -- ppC > 1 surface their actual repeat directly in the dropdown. Storage
-  -- stays as user-period; setPeriodFromTileQN divides on write.
+  --@map:contract returns 0 (not nil) when tileQN matches no preset; callers append a synthetic label in that case
   local function periodPresetIndex(tileQN)
     for i, p in ipairs(PERIOD_PRESETS) do
       if math.abs(tileQN - timing.periodQN(p.period)) < 1e-9 then return i end
@@ -68,13 +72,12 @@ function newSwingEditor(vm, cm, chrome, ctx)
     return { period, ppC }
   end
 
-  -- Hard = T_tile · atomMeta.range (the monotonicity edge in QN).
-  -- Soft = min(SWING_SOFT_QN, hard); Wild bypasses the soft step.
   local function shiftCap(factor, wild)
     local hard = timing.atomTilePeriod(factor) * timing.atomMeta[factor.atom].range
     return wild and hard or math.min(SWING_SOFT_QN, hard)
   end
 
+  --@map:contract Factor[] -> ResolvedFactor[] in QN units (T = atomTilePeriod, not PPQ); local to the editor's QN-space preview
   local function materialise(composite)
     local out = {}
     for i, f in ipairs(composite) do
@@ -84,12 +87,6 @@ function newSwingEditor(vm, cm, chrome, ctx)
     return out
   end
 
-  -- Horizontal strip showing one period: cells are unswung subdivisions
-  -- (rpb per qn), Xs land at the swung position of each subdivision.
-  -- shadeMeter draws beat/bar cell backgrounds (used on the composite
-  -- preview, where the period is rounded up to a whole number of bars
-  -- so the meter actually means something); per-factor previews leave
-  -- it off because their period rarely aligns to bars.
   local function drawSwingGrid(composite, periodQN, rpb, w, h, shadeMeter)
     local x0, y0    = ImGui.GetCursorScreenPos(ctx)
     local dl        = ImGui.GetWindowDrawList(ctx)
@@ -159,14 +156,11 @@ function newSwingEditor(vm, cm, chrome, ctx)
     ImGui.Dummy(ctx, w, h)
   end
 
-  -- Each primitive produces a fresh composite and routes through the
-  -- single vm write; the snapshot remains untouched so Reset always
-  -- has the on-open state.
-
   local function swingRead()
     return cm:get('swings')[state.name]
   end
 
+  --@map:contract compares period via periodQN, so {1,2} and {2,4} count as equal — equality is on the QN value, not the literal table
   local function compositesEqual(a, b)
     a, b = a or {}, b or {}
     if #a ~= #b then return false end
@@ -180,6 +174,7 @@ function newSwingEditor(vm, cm, chrome, ctx)
     return true
   end
 
+  --@map:contract sole write path; idempotent on equal composites; reswing is paired with the composite write so old→new delta is consistent
   local function swingWrite(composite)
     if compositesEqual(swingRead() or {}, composite) then return end
     vm:setSwingComposite(state.name, composite)
@@ -193,6 +188,7 @@ function newSwingEditor(vm, cm, chrome, ctx)
     swingWrite(new)
   end
 
+  --@map:contract default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited
   local function addFactor()
     local new = util.deepClone(swingRead()) or {}
     new[#new+1] = { atom = 'id', shift = 0, period = 1 }
@@ -226,8 +222,6 @@ function newSwingEditor(vm, cm, chrome, ctx)
     ImGui.SetNextItemWidth(ctx, 90)
     local rv, newIdx = ImGui.Combo(ctx, '##atom', atomIdx, SWING_ATOMS_Z)
     if rv then
-      -- Drop-in atom swap: shift is in QN and atom-independent, so we
-      -- preserve it across the swap and only clamp to the new atom's cap.
       local newAtom = SWING_ATOMS[newIdx + 1]
       local cap     = shiftCap({ atom = newAtom, period = f.period }, state.wild)
       local shift   = f.shift or 0
@@ -377,8 +371,8 @@ function newSwingEditor(vm, cm, chrome, ctx)
         ImGui.AlignTextToFramePadding(ctx)
         ImGui.Text(ctx, 'Rows/qn:')
         ImGui.SameLine(ctx, 0, 6)
-        -- Button + popup, mirroring drawSlotPicker's chrome (manual ▾
-        -- glyph at font size, smaller than ImGui.Combo's frame-tall arrow).
+        -- Button + popup, mirroring chrome.drawPicker (manual ▾ glyph at
+        -- font size, smaller than ImGui.Combo's frame-tall arrow).
         local rpbBtn = tostring(state.rpb) .. ' \xe2\x96\xbe##rpb'
         if ImGui.Button(ctx, rpbBtn) then ImGui.OpenPopup(ctx, '##rpb_popup') end
         local btnX = ImGui.GetItemRectMin(ctx)
@@ -425,6 +419,7 @@ function newSwingEditor(vm, cm, chrome, ctx)
 
   local self = {}
 
+  --@map:contract no-op when already open; snapshot is current cm composite at open time, used for Reset and dirty-check
   function self:open()
     if state then return end
     local name = cm:get('swing')

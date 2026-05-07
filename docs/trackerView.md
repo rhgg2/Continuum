@@ -371,9 +371,13 @@ lives in rm, which dispatches to one or the other.
   current frame; notes preserve logical length in rows.
 - **`quantizeKeepRealisedScope`** — move the intent onto the grid
   **without changing realised time**: intent shifts, delay absorbs
-  the inverse. If the required delay exceeds `delayRange` (same-pitch
-  channel-wide bound + duration self-cap), clamp — realised still
-  preserved, intent remains partially off-grid. Popup reports the
+  the inverse. If the required delay exceeds `delayRange`, clamp —
+  realised still preserved, intent remains partially off-grid.
+  `delayRange` enforces three bounds: same-pitch chan-wide at intent
+  end (MIDI one-voice-per-pair), same-column any-pitch at
+  neighbour's realised onset (so realised order matches intent order
+  within every column — the pb model leans on this), and the
+  duration self-cap (realised duration ≥ 1 ppq). Popup reports the
   clamp count.
 
 ## Extra columns & delay sub-column
@@ -470,100 +474,3 @@ vm then applies three families of `cmgr:wrap`:
   symmetric, not absolute-ppq.
 - **Off-grid writes snap intent + ppqL** to the cursor row;
   delay survives, frame restamps to current.
-
----
-
-## API reference
-
-### Construction & lifecycle
-
-```
-newTrackerView(tm, cm, cmgr)   -- wires callbacks on tm/cm and rebuilds
-vm:rebuild(changed)            -- manual rebuild; defaults to { take=false, data=true }
-vm:tick()                      -- called each frame by rm; kills stale audition
-```
-
-### Grid readout (for rm)
-
-```
-vm.grid                         -- see "Grid shape"; live handle
-vm:ec()                        -> editCursor (rm uses ec:pos, ec:hasSelection, ec:region, ec:selectionStopSpan)
-vm:rowPerBar()                 -> rows per bar (rowPerBeat × first ts num)
-vm:timeSig()                   -> num, denom  (first ts of the take)
-vm:markMode()                  -> bool  (inside a sticky block)
-vm:lastVisibleFrom(startCol)   -> last grid col that fits in gridWidth from startCol
-```
-
-### Projection / temperament
-
-```
-vm:ppqToRow(ppq, chan)         -- fractional row
-vm:activeTemper()              -- bound temperament object or nil
-vm:noteProjection(evt)         -> label, gap, halfGap  (or nil if no temper)
-vm:rowBeatInfo(row)            -> isBarStart, isBeatStart
-vm:barBeatSub(row)             -> bar, beat, sub, ts
-```
-
-### Cursor / selection / scroll
-
-vm itself owns viewport sizing and rpb; the cursor and selection live
-on ec (reach via `vm:ec()`).
-
-```
-vm:setGridSize(w, h)           -- visible viewport in chars / rows
-vm:setRowPerBeat(n)            -- clamped 1..32; cursor row rescales
-vm:applyTakeProperties{        -- take-properties dialog commit;
-  name, rows,                  --   rows × ctx:ppqPerRow() → newPpq;
-  mode='resize'|'rescale'|'tile' --   dispatch on mode (default resize)
-}                              --   rescale/tile: see docs/trackerManager.md
-```
-
-### Channel mute / solo
-
-```
-vm:isChannelMuted(chan)            -> bool
-vm:isChannelSoloed(chan)           -> bool
-vm:isChannelEffectivelyMuted(chan) -> bool
-vm:toggleChannelMute(chan)
-vm:toggleChannelSolo(chan)
-```
-
-### Extra columns
-
-```
-vm:addExtraCol(type, key)          -- type ∈ {note, cc, pb, at, pc}
-                                   -- key = cc number (cc only); ignored otherwise
-                                   -- applies to selection, else cursor col's channel
-vm:hideExtraCol()                  -- current cursor col; refuses populated / sole note col
-vm:showDelay()                     -- applies to selection, else cursor col; non-note skipped
-```
-
-### Editing
-
-```
-vm:editEvent(col, evt, stop, char, half)
-vm:moveLaneEvent(col, i, toRow, toVal)
-```
-
-`editEvent`: `col` is a grid column table, `evt` the currently-resident
-event or nil, `stop` the 1-indexed caret stop, `char` the typed
-character code, `half` the sub-nibble index for multi-digit fields.
-Routes through tm; commits and advances on success.
-
-`moveLaneEvent`: row-typed write surface for the lane-strip drag in
-rm. `i` is an index into `col.events`; `toRow` is integer (snap to
-row) or fractional (off-grid, shift-drag); `toVal` is the new value.
-Only `cc`/`pb`/`at` columns are eligible — other types silently
-no-op. The newPPQ is clamped strictly inside `(prev.ppq, next.ppq)`
-by ±1 ppq, which is the necessary-and-sufficient invariant for
-identity-by-index to survive the post-flush rebuild (tm sorts
-`col.events` by ppq each rebuild, so a strictly-bounded ppq lands
-back at the same index). `ppqL` is derived from the actual
-post-clamp row so reswing remembers the authored fractional position
-under shift-drag.
-
-### Commands exposed to cmgr
-
-Full set registered via `cmgr:registerAll`; see the *Commands &
-wrappers* section for the category breakdown, and `docs/commandManager.md`
-for dispatch and the return-code protocol.

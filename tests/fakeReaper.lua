@@ -75,6 +75,13 @@ function M.new()
     return state.fxParams[tostring(track) .. '/' .. fxIdx .. '/' .. paramIdx] or 0
   end
 
+  -- FX GUID — sm:tick uses change of GUID to detect FX-removed-and-re-added
+  -- so per-instance state can be reset. Tests can re-seat via setFxGuid.
+  state.fxGuids = {}
+  function r.TrackFX_GetFXGUID(track, _fxIdx)
+    return state.fxGuids[track] or ('{guid:' .. tostring(track) .. '}')
+  end
+
   -- Project track list (used by listSamplerTracks in continuum.lua).
   -- Tests register tracks via setProjectTracks(names) — order matters
   -- because GetTrack(_, i) is index-based.
@@ -284,6 +291,9 @@ function M.new()
   end
   function r:setTrackFX(track, names)
     state.fxByTrack[track] = names
+  end
+  function r:setFxGuid(track, guid)
+    state.fxGuids[track] = guid
   end
   function r:setProjectTracks(tracks)
     state.projectTracks = tracks

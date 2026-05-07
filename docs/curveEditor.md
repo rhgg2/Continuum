@@ -1,0 +1,38 @@
+# curveEditor
+
+A generic editor for piecewise (t, val) curves: hover, insert, move,
+tension, delete, cycle. Domain-agnostic — events, projections, curve
+evaluation, and write-back are all injected by the host per frame.
+
+## Host-driven invalidation
+
+Transient editor state (`drag`, `segPin`, `previewSuppress`)
+straddles frames. The host knows when the editor's identity changes
+(track switch, take switch, page switch); the editor does not. The
+host passes a `dragId` each frame, and the editor drops cross-frame
+state when it changes. The editor never asks "am I the same editor I
+was last frame?" — the host answers.
+
+## Sticky segment hover
+
+Double-click on a segment cycles its shape. The shape change moves
+the curve under the mouse, so the geometric hover test no longer
+finds the segment the user just clicked, and a second double-click
+would land somewhere else. `segPin` holds the target until the mouse
+actually moves.
+
+## Inert drag
+
+Click-and-drag on a non-bezier segment must still consume the
+input — otherwise ImGui's empty-area-window-move takes over and
+drags the host window. The `inert` drag kind pins the gesture
+without firing callbacks: pure suppression.
+
+## Snap vs. free move
+
+Two move modes, two callbacks. Snapped (`onMove`) constrains t to
+integer ticks strictly between neighbours; free (`onMoveFree`,
+shift-held) is continuous with a `FREE_EPS_T` margin so the
+strict-between-neighbours invariant holds at the floating-point
+level. They are separate so hosts can treat them differently —
+typically snapped writes commit and free moves preview.

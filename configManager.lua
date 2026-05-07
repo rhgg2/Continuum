@@ -1,4 +1,15 @@
--- See docs/configManager.md for the model and API reference.
+-- See docs/configManager.md for the model.
+
+--@map:invariant cm is the sole source of truth for valid keys; in-code reads/writes raise on unknown keys, persistence-loaded unknowns are silently pruned
+--@map:invariant cm owns its cache tables: every read deep-clones on the way out, every write deep-clones on the way in (callers never alias cm state)
+--@map:invariant 5-tier merge order: global → project → track → take → transient; most-specific cache holding the key wins, falling through to schema defaults
+--@map:invariant transient tier never persists (saver is a no-op) and resets to {} on every refreshCache
+--@map:invariant declarations is an ordered array-of-pairs so declared-but-nil keys (e.g. temper, swing) coexist with non-nil defaults without ambiguity
+--@map:invariant track and take tiers require the corresponding REAPER context; without it their loaders return {} and savers print an error
+
+--@map:shape configChangedPayload.targeted = { key = string, level = string }   -- set / remove
+--@map:shape configChangedPayload.bulk     = { level = string }                  -- assign (keyless)
+--@map:shape configChangedPayload.reload   = {}                                  -- setContext / clearTake / setTrack
 
 loadModule('util')
 
@@ -6,9 +17,6 @@ local function print(...)
   return util.print(...)
 end
 
--- hex('#RRGGBB', alpha?) → {r,g,b,a} with components in [0,1].
--- Leading '#' optional; alpha defaults to 1. Used by the colour-atom
--- declarations below.
 local function hex(s, alpha)
   s = s:gsub('^#', '')
   local r = tonumber(s:sub(1,2), 16) / 255
@@ -17,8 +25,6 @@ local function hex(s, alpha)
   return {r, g, b, alpha or 1}
 end
 
--- Array-of-pairs lets nil defaults (declared-but-null) coexist with
--- non-nil ones: pair[1] presence = declared; pair[2] = default.
 local declarations = {
   -- numeric
   { 'pbRange',         2     },
@@ -51,21 +57,7 @@ local declarations = {
   { 'soloedChannels',  {}    },
   { 'extraColumns',    {}    },
   { 'noteDelay',       {}    },
-  { 'samplerNames',    {}    },
   { 'slotEntries',     {}    },
-
-  -- Colour table: a flat keyspace whose entries take three forms.
-  -- Atoms live under `palette.*` (parchment, used by the tracker grid)
-  -- and `chrome.*` (neutral, used by toolbar/popups/modals); they're the
-  -- only place RGB values live. Roles live under `colour.*` and name the
-  -- *function* a colour plays — they alias an atom (or another role) by
-  -- its full cm key, optionally overriding alpha. One-off colours that
-  -- earn no good function name live inline at the role.
-  --
-  -- Entry forms (resolved by trackerPage's resolveColour):
-  --   {r,g,b,a}     atom — terminal RGBA
-  --   'fullKey'     pure alias — recursive cm:get, alpha inherited
-  --   {'fullKey',a} alias with alpha override (outermost wins)
 
   -- Atoms — parchment palette
   { 'palette.bg',        hex('#dad6c9') },  -- cream paper
@@ -131,10 +123,7 @@ local declarations = {
   { 'colour.toolbar.popupBg',      'palette.pale'                  },
   { 'colour.statusBar.bg',         'chrome.bg'                    },
   { 'colour.statusBar.text',       'chrome.highlight'             },
-  -- Floating editor windows (e.g. swing editor) want the *rendered*
-  -- toolbar tone — opaque, matching what `{'palette.pale', 0.5}` looks
-  -- like when blended over palette.bg. Pure palette.pale is too cool.
-  -- Pre-computed blend: 0.5*pale + 0.5*bg ≈ #e9e7df.
+  -- Pre-blended `0.5*pale + 0.5*bg`; a literal alias would render translucent over a different parent.
   { 'colour.editor.bg',            hex('#e9e7df')                 },
   { 'laneStrip.rows',      4    },
   { 'laneStrip.visible',   true },
@@ -151,6 +140,8 @@ local function copy(v)
   return v
 end
 
+--@map:contract caches are lazy: first getter call triggers refreshCache; setContext/setTrack refresh eagerly
+--@map:contract no take context means track context is also dropped (track derived from take in setContext)
 function newConfigManager()
 
   ---------- PRIVATE DATA
@@ -171,8 +162,6 @@ function newConfigManager()
     transient = nil,
   }
 
-  -- transient sits above take: most-specific, never persisted. Used for
-  -- view-layer overrides that should auto-vanish when the script reloads.
   local levels = { 'global', 'project', 'track', 'take', 'transient' }
 
   local levelSet = {}
@@ -188,6 +177,7 @@ function newConfigManager()
     return tbl
   end
 
+  --@map:contract parse failures (bad text or non-table result) fall through to {}; never raises
   local function parse(text)
     if not text or text == '' then return {} end
     local ok, result = pcall(util.unserialise, text)
@@ -280,6 +270,7 @@ function newConfigManager()
     if not cache.global then refreshCache() end
   end
 
+  --@map:contract starts from schema defaults, then overlays each level's cache in `levels` order so later (more-specific) tiers win
   local function mergedTable()
     ensureCache()
     local merged = {}
@@ -309,6 +300,8 @@ function newConfigManager()
   local cm = {}
   fire = util.installHooks(cm)
 
+  --@map:contract setContext(nil) clears both take and track; setContext(take) derives track via GetMediaItemTrack
+  --@map:contract refreshes all four persisted caches (transient resets to {}) and fires configChanged with empty payload
   function cm:setContext(newTake)
     take = newTake
     track = nil
@@ -321,35 +314,33 @@ function newConfigManager()
     end
 
     refreshCache()
+    --@map:emits configChanged -- configChangedPayload.reload
     fire('configChanged', {})
   end
 
-  -- Drops the take half of the context, leaving track/global/project
-  -- unchanged. Used by sample view, which is take-independent: it keys
-  -- track-tier reads against an explicitly chosen track (see setTrack)
-  -- and has no business reading take-tier values.
   function cm:clearTake()
     take = nil
     cache.take = {}
+    --@map:emits configChanged -- configChangedPayload.reload
     fire('configChanged', {})
   end
 
-  -- Sets the track context independently of any take. Reloads the track
-  -- cache so subsequent reads resolve against the new track's P_EXT.
-  -- setContext continues to derive track from take for tracker view.
   function cm:setTrack(newTrack)
     track = newTrack
     cache.track = loaders.track()
+    --@map:emits configChanged -- configChangedPayload.reload
     fire('configChanged', {})
   end
 
   ----- Reading
 
+  --@map:contract returns deep copy of merged value (defaults overlaid by all five tiers); raises on unknown key
   function cm:get(key)
     checkKey(key)
     return copy(mergedTable()[key])
   end
 
+  --@map:contract reads single tier only (no merge, no defaults); key omitted returns whole-cache deep clone; raises on unknown level/key
   function cm:getAt(level, key)
     checkLevel(level)
     ensureCache()
@@ -361,6 +352,18 @@ function newConfigManager()
     return util.deepClone(tbl)
   end
 
+  --@map:contract bypasses cache and active context; reads otherTrack's P_EXT directly without firing configChanged or disturbing the bound track's cache
+  function cm:readTrackKey(otherTrack, key)
+    checkKey(key)
+    if not otherTrack then return nil end
+    local ok, val = reaper.GetSetMediaTrackInfo_String(
+      otherTrack, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
+    if not ok or not val or val == '' then return nil end
+    local parsed = parse(val)
+    return copy(parsed[key])
+  end
+
+  --@map:contract walks tiers most-specific to least, returning the first level whose cache defines the key (matches merge resolution); nil if no tier sets it
   function cm:getLevel(key)
     checkKey(key)
     ensureCache()
@@ -375,6 +378,7 @@ function newConfigManager()
 
   ----- Writing
 
+  --@map:contract deep-copies value into the target tier's cache, persists that tier, fires targeted configChanged
   function cm:set(level, key, value)
     checkLevel(level)
     checkKey(key)
@@ -383,9 +387,11 @@ function newConfigManager()
     cache[level] = cache[level] or {}
     cache[level][key] = copy(value)
     savers[level](cache[level])
+    --@map:emits configChanged -- configChangedPayload.targeted
     fire('configChanged', { key = key, level = level })
   end
 
+  --@map:contract removes key from the named tier only; no-op (and no signal) if that tier's cache is unloaded
   function cm:remove(level, key)
     checkLevel(level)
     checkKey(key)
@@ -394,10 +400,12 @@ function newConfigManager()
     if cache[level] then
       cache[level][key] = nil
       savers[level](cache[level])
+      --@map:emits configChanged -- configChangedPayload.targeted
       fire('configChanged', { key = key, level = level })
     end
   end
 
+  --@map:contract validates every key in updates before any write (all-or-nothing); util.REMOVE sentinel deletes that key; fires keyless configChanged
   function cm:assign(level, updates)
     if type(updates) ~= 'table' then return end
     checkLevel(level)
@@ -410,6 +418,7 @@ function newConfigManager()
       else                     cache[level][k] = copy(v) end
     end
     savers[level](cache[level])
+    --@map:emits configChanged -- configChangedPayload.bulk
     fire('configChanged', { level = level })
   end
 

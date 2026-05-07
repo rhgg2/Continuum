@@ -220,10 +220,7 @@ return {
   {
     name = 'inputSampleUp increments by 1 even into empty slots',
     run = function(harness)
-      local h = harness.mk{ config = {
-        take      = { currentSample = 5 },
-        transient = { samplerNames = { [3] = 'a', [10] = 'b' } },
-      } }
+      local h = harness.mk{ config = { take = { currentSample = 5 } } }
       h.cmgr:invoke('inputSampleUp')
       t.eq(h.cm:get('currentSample'), 6, 'stepped to empty slot 6')
     end,

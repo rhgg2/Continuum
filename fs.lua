@@ -1,7 +1,7 @@
--- Pure filesystem helpers used by sampleView's browser. Keeps path
--- string-mangling and reaper.Enumerate* iteration in one place so the UI
--- never speaks to the reaper API directly. `listDirs`/`listAudioFiles`
--- sort case-insensitively to match user expectations from Finder/Explorer.
+-- See docs/fs.md for the model.
+
+--@map:invariant sole module touching reaper.Enumerate* and filesystem IO; UI/view layers route through here
+--@map:invariant listDirs and listAudioFiles return case-insensitively sorted output (Finder/Explorer parity)
 
 fs = {}
 
@@ -20,13 +20,12 @@ function fs.basename(path)
   return path:match('([^/\\]+)$') or path
 end
 
--- Returns the parent directory, or '' for a path with no separator.
--- Trailing separators on the input are not stripped — caller is
--- expected to pass canonical paths.
+--@map:contract returns '' if path has no separator; trailing separators on input are not stripped (caller passes canonical paths)
 function fs.parent(path)
   return path:match('^(.+)[/\\][^/\\]+$') or ''
 end
 
+--@map:contract inserts '/' between a and b unless a already ends in '/' or '\\'; no path normalisation
 function fs.join(a, b)
   local last = a:sub(-1)
   if last == '/' or last == '\\' then return a .. b end
@@ -35,6 +34,7 @@ end
 
 local function ciLess(a, b) return a:lower() < b:lower() end
 
+--@map:contract hides dotfile-prefixed entries (.git, .DS_Store, etc.)
 function fs.listDirs(path)
   local out, i = {}, 0
   while true do
@@ -53,11 +53,7 @@ function fs.exists(path)
   return false
 end
 
--- Non-cryptographic content fingerprint as 8-char hex. Reads only
--- size + first/last 4KB so a 30MB sample hashes in microseconds. Two
--- distinct audio files colliding in size *and* both endpoints is
--- vanishingly unlikely; sufficient for "is this the same file?" dedup,
--- not for security.
+--@map:contract FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md
 function fs.hashFile(path)
   local f = io.open(path, 'rb')
   if not f then return nil end

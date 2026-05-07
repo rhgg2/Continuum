@@ -1,7 +1,7 @@
 # continuum
 
-Entry point. Loads every module, wires the managers together in the
-layered order, and drives the render loop via `reaper.defer`.
+Entry point. Loads every module, wires the layered manager stack,
+and drives the render loop via `reaper.defer`.
 
 ## Module loading
 
@@ -11,18 +11,42 @@ script loads the same way regardless of REAPER's current working
 directory. Each module registers a global on load (`util`,
 `newMidiManager`, etc.) — there are no return values to capture.
 
-Load order is bottom-up through the manager stack:
+Load order is bottom-up through the layered stack:
 
 ```
 util → configManager → midiManager → trackerManager
-     → commandManager → viewManager → renderManager
+     → commandManager
+     → editCursor → trackerView
+     → sampleManager → sampleView
+     → swingEditor → curveEditor
+     → trackerPage → samplePage
 ```
 
 `util` comes first because everything else calls `util.installHooks`
-during construction. `commandManager` loads before `viewManager`
-because vm, ec and clipboard populate the command registry at
-construction time. `editCursor` loads before `viewManager` because vm
-constructs ec / clipboard from `newEditCursor` / `newClipboard`.
+during construction. `commandManager` loads before any view layer
+because views and pages self-register commands at construction time.
+`editCursor` loads before `trackerView` because tv constructs ec
+from `newEditCursor`. The two floating editors (`swingEditor`,
+`curveEditor`) load before `trackerPage` because tp owns them.
+Pages load last; they wire everything beneath them into the
+coordinator.
+
+## Two stacks, one coordinator
+
+The script has two parallel page stacks — tracker and sample — each
+with its own manager column (mm/tm/tv vs sm/sv) and its own command
+scope. They share a single ImGui window, a single toolbar/status
+band, and a single keychain.
+
+The coordinator owns the shared frame. Pages register with it;
+`coord:setActive(name)` swaps the cmgr scope and rebinds the
+incoming page (`tracker` to the take, `sample` to the take's
+track). Each frame draws the toolbar, delegates the body region to
+the active page, draws the status band, then dispatches any
+floating overlay the page provides (`page:renderFloating`).
+
+Chrome lives on the coordinator and is threaded into every page;
+one chrome instance per coordinator.
 
 ## Wiring
 
@@ -31,60 +55,63 @@ constructs ec / clipboard from `newEditCursor` / `newClipboard`.
 1. Look up the selected media item; bail with a console message if none.
 2. Take the item's active take.
 3. Build managers bottom-up:
-   - `mm = newMidiManager(take)` — initial load is eager.
-   - `cm = newConfigManager(); cm:setContext(take)` — context is set
-     after construction so the four-tier cache refreshes against this
-     take.
-   - `tm = newTrackerManager(mm, cm)` — registers callbacks with both.
-   - `cmgr = newCommandManager(cm)` — empty command/keymap tables.
-   - `vm = newViewManager(tm, cm, cmgr)` — registers vm's editing
-     commands, constructs ec and clipboard (which self-register their
-     own navigation / clipboard commands via `:registerCommands(cmgr)`),
-     then applies cross-cutting wrappers.
-   - `renderer = newRenderManager(vm, cm, cmgr)` — registers rm's UX
-     commands (modals, confirms, swing editor, quit), installs the
-     default keymap, and creates the ImGui context.
-4. `probeTrackerMode(mm, cm)` (defined in `continuum.lua`) writes
-   `transient.trackerMode` from the track's FX list before the first
-   rebuild reads it — `true` iff the take's track has an FX whose name
-   contains `'Continuum Sampler'`. Writes only on change so
-   `configChanged` doesn't fire every tick.
-5. `renderer:init()` opens the window.
-6. A defer loop drives each frame: the probe runs again at the top of
-   each tick (cheap; gated on change so it only fires
-   `configChanged` when the FX list actually flips), then
-   `renderer:loop()` returns `true` while the script should keep
-   running; `false` / `nil` ends the loop.
+   - `mm`, `cm`, `tm`, `cmgr` — straightforward chain. `cm:setContext`
+     runs after construction so the four-tier cache refreshes
+     against the current take.
+   - `tv = newTrackerView(tm, cm, cmgr)` — registers tv's editing
+     commands; constructs `ec` and `clipboard`, which then
+     self-register their own navigation / clipboard commands via
+     `:registerCommands(cmgr)`.
+   - `sm = newSampleManager(fileOps)` — sampler-JSFX bridge. Pure
+     file ops (`copy`, `move`, `mkdir`, `exists`, `hash`) are
+     injected from continuum so the manager stays REAPER-agnostic
+     above the fs boundary.
+   - `sv = newSampleView(cm, …)` — browser state. Slot operations
+     forward to sm through closures that pass `sv:getTrack()` at
+     call time, so sv never holds an sm reference.
+4. Construct ImGui, then the coordinator
+   (`newCoordinator(cm, cmgr, sm, take, ctx, font, uiFont)`).
+5. Register global commands on cmgr root: transport
+   (`play` / `playPause` / `stop`), page switching (`switchPage`,
+   `togglePage`), `quit`. Living on root means every page inherits
+   them unchanged.
+6. Register `trackerPage` and `samplePage` with the coordinator.
+   First registered becomes the initial active page.
+7. `coord:run()` enters the defer loop.
+
+## Per-frame tick
+
+Before each page draws, the coordinator runs `tick()`:
+
+- `sm:probeMode(take, cm)` writes `transient.trackerMode` from the
+  track's FX list — true iff an FX name contains `'Continuum
+  Sampler'`. The probe writes only on change so `configChanged`
+  doesn't fire every frame.
+- The project path is sampled. On change, `sm:setPrefix`
+  republishes the prefix mailbox and `sm:migrate` runs against the
+  previous path; both are no-ops on the first frame.
+- `sm:tick(cm)` drains the gmem mailboxes.
+
+The order is fixed: probe → setPrefix/migrate → tick. `setPrefix`
+must precede `tick` because tick assumes the prefix is current.
 
 ## Error handling
 
 `run(fn)` clears the REAPER console, then `xpcall`s its argument
-through `err_handler`. On error: the error message and traceback are
-written to the console, and an empty `reaper.defer` is queued to keep
-the script alive long enough for the user to read the console before
-REAPER unloads it.
+through `err_handler`. On error: the message and traceback are
+written to the console, and an empty `reaper.defer` is queued to
+keep the script alive long enough for the user to read the console
+before REAPER unloads it.
 
-Errors inside the defer loop surface the same way — `renderer:loop`
-runs under the same `xpcall` frame because each iteration schedules
-itself via `reaper.defer(loop)`.
+Errors inside the defer loop surface the same way — the
+coordinator's frame runs under the same outer `xpcall`, because
+each iteration schedules itself via `reaper.defer(frame)`.
 
 ## Conventions
 
 - **One MIDI item per session.** The script binds to the take at
   startup; changing REAPER's selection mid-session does not re-bind.
   Re-invoke the action to pick up a new item.
-- **No teardown.** There is no explicit quit path — a command handler
-  returning `'quit'` surfaces as `renderer:loop()` returning falsy,
-  which simply stops scheduling further defers.
-
----
-
-## API reference
-
-```
-loadModule(name)                 -- relative require, used by continuum.lua itself
-Main()                           -- bound to the ReaScript action
-```
-
-No public Lua API — downstream code talks to the managers, not to
-continuum itself.
+- **No teardown.** `coord:quit()` sets a flag that the defer loop
+  reads at end of frame and uses to stop scheduling further frames.
+  REAPER reclaims state on script unload.

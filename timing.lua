@@ -1,5 +1,15 @@
--- See docs/timing.md for the model and API reference.
+-- See docs/timing.md for the model.
 -- @noindex
+
+--@map:invariant pure module — no module-level state; all functions take operands explicitly
+--@map:invariant frames stack: ppqL --[swing]--> ppqI --[+delayToPPQ]--> ppqR
+--@map:invariant swing shapes are PWL homeomorphisms of [0,1] fixing endpoints, strictly monotone
+--@map:invariant tile period unit is QN (quarter notes); period may be scalar or {num,den}
+--@map:invariant factor order is inner-to-outer: applyFactors walks forward, unapplyFactors walks backward
+--@map:shape Shape = { {0,0}, {x1,y1}, ..., {1,1} }  -- sorted, strictly increasing x and y
+--@map:shape Factor = { atom = string, shift = number_qn, period = number|{num,den} }  -- user-facing composite entry
+--@map:shape ResolvedFactor = { S = Shape, T = number_ppq }  -- consumed by applyFactors/unapplyFactors
+--@map:shape AtomMeta = { range = number, pulsesPerCycle = 1|2 }  -- range = max |a| keeping shape monotonic
 
 timing = {}
 local M = timing
@@ -8,16 +18,7 @@ local EPS = 1e-12
 
 ----- Atoms
 
--- Atoms are unit-square shape generators; the editor calls them via
--- atom(shift / atomTilePeriod) so the user-visible knob is QN-of-shift,
--- atom-independent (see docs/timing.md "Composite model").
-
--- Smooth atoms sample to dense PWL — eval/invert/tile and the preview
--- renderer all consume the canonical {{x,y},...} form, so smooth becomes
--- a property of how the shape is generated, not of the runtime. SAMPLES
--- is a multiple of 12 so principal-pulse breakpoints (x = 1/4, 1/3,
--- 1/2, 2/3, 3/4) all land on exact sample points — the cross-atom
--- drop-in invariant stays algebraic.
+-- 240 = 12·20: principal-pulse breakpoints (1/4, 1/3, 1/2, 2/3, 3/4) land on exact sample points.
 local SAMPLES = 240
 
 local function sampled(f)
@@ -42,9 +43,7 @@ M.atoms = {
   --   return { {0, 0}, {0.5, 0.5 + a}, {1, 1} }
   -- end,
 
-  -- arc: smooth, single sin bump. y = x + a·sin(πx). Peak +a at x=0.5;
-  -- slope 1 ± aπ at the endpoints. Smooth analogue of classic.
-  -- Adopting its name for now -- don't delete the original though!
+  -- y = x + a·sin(πx); peak +a at x=0.5; slope 1 ± aπ at endpoints. Smooth analogue of the PWL classic.
   classic = function(a)
     if not a or a == 0 then return { {0, 0}, {1, 1} } end
     return sampled(function(x) return x + a * math.sin(math.pi * x) end)
@@ -93,10 +92,6 @@ M.atoms = {
   end,
 }
 
--- Per-atom metadata. range = max |a| keeping the shape monotonic
--- (callers clamp). pulsesPerCycle = how many user-pulses fit inside
--- one atom cycle; only lilt has two principal pulses per cycle, so
--- its tile period is doubled.
 M.atomMeta = {
   id      = { range = 0,                           pulsesPerCycle = 1 },
 --  classic = { range = 0.5,                         pulsesPerCycle = 1 },
@@ -107,15 +102,13 @@ M.atomMeta = {
   tilt    = { range = 4/27,                        pulsesPerCycle = 1 },
 }
 
--- The actual repeat period of a factor in QN: user period × pulsesPerCycle.
+--@map:contract returns QN, not PPQ; multiply by resolution at the swing-resolution boundary
 function M.atomTilePeriod(factor)
   return M.periodQN(factor.period) * M.atomMeta[factor.atom].pulsesPerCycle
 end
 
 ----- Composite registry
 
--- Seed data only — the project library (cfg.swings) is the source of
--- truth at slot-resolution time. classic-NN reads as "NN% swing".
 M.presets = {
   ['id']         = {},
   ['classic-55'] = { {atom = 'classic', shift = 0.05, period = 1} },
@@ -124,6 +117,7 @@ M.presets = {
   ['classic-67'] = { {atom = 'classic', shift = 0.17, period = 1} },
 }
 
+--@map:contract sole resolution path; tm/vm never read presets. nil result means identity to callers
 function M.findShape(name, userLib)
   if not name or not userLib then return nil end
   return userLib[name]
@@ -143,11 +137,7 @@ function M.periodQN(period)
   error('timing: bad period ' .. tostring(period))
 end
 
--- Smallest T at which every factor's tile completes — i.e. the period
--- of the composite as a repeating function. For rationals nᵢ/dᵢ that's
--- lcm(nᵢ)/gcd(dᵢ). Empty composite ⇒ 1 qn (one beat). Tile periods
--- here are the *internal* ones (period × pulsesPerCycle), so the result
--- reflects the actual repeat rate of the transform, not the user-period.
+-- Uses internal tile periods (period × pulsesPerCycle), so the result is the realised repeat rate, not the user-period.
 function M.compositePeriodQN(composite)
   if not composite or #composite == 0 then return 1 end
   local nL, dG
@@ -182,6 +172,7 @@ local function findSegment(S, target, axis)
   return lo
 end
 
+--@map:contract O(log n) binary search; assumes endpoints are pinned exactly to {0,0}/{1,1}
 function M.eval(S, x)
   local i = findSegment(S, x, 1)
   return lerp(S[i][1], S[i][2], S[i+1][1], S[i+1][2], x)
@@ -227,6 +218,7 @@ end
 ----- Tiled extension
 
 -- T <= 0 degrades to identity so callers can drive off empty composites.
+--@map:contract every multiple of T is a fixed point; T in PPQ, p in PPQ
 function M.tile(S, T, p)
   if T <= 0 then return p end
   local t = p / T
@@ -241,11 +233,13 @@ function M.tileInverse(S, T, p)
   return T * (n + M.invert(S, t - n))
 end
 
+--@map:contract ppqL -> ppqI; identity-safe on empty factors
 function M.applyFactors(factors, ppq)
   for _, f in ipairs(factors) do ppq = M.tile(f.S, f.T, ppq) end
   return ppq
 end
 
+--@map:contract ppqI -> ppqL; reverses factor order to invert composition
 function M.unapplyFactors(factors, ppq)
   for i = #factors, 1, -1 do
     local f = factors[i]
@@ -256,17 +250,14 @@ end
 
 ----- Logical grid
 
--- ppq width of one logical row at the given (rpb, denom). Pure;
--- callers pass `resolution` (PPQ per QN). May be fractional under odd
--- (rpb, denom) combinations.
+--@map:contract callers must store result as float; vm relies on unrounded rowPPQs for swing-inversion exactness
 function M.logPerRow(rpb, denom, resolution)
   return resolution * 4 / (denom * rpb)
 end
 
 ----- Delay <-> PPQ
 
--- Round at source so the map is an integer bijection on ℤ; every
--- intent ± delayToPPQ(d) stays in ℤ and round-trips are algebraic.
+--@map:contract d in signed milli-QN, res in PPQ/QN; nil d treated as 0
 function M.delayToPPQ(d, res)
   return util.round(res * (d or 0) / 1000)
 end

@@ -1,4 +1,10 @@
--- See docs/continuum.md for the model and API reference.
+-- See docs/continuum.md for the model.
+
+--@map:invariant entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer
+--@map:invariant module load order is bottom-up: util first (everyone calls util.installHooks), commandManager before view layers (which self-register commands), pages last
+--@map:invariant one MIDI item per session — Main binds to the take at startup; selection changes mid-session require re-invoking the action
+--@map:invariant no teardown path — coord:quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload
+--@map:invariant errors inside the defer loop surface through the same xpcall frame because each iteration reschedules itself
 
 function loadModule(module)
   local info = debug.getinfo(1,'S')
@@ -39,9 +45,9 @@ local function run(fn)
   xpcall(fn, err_handler)
 end
 
--- Filesystem ops for slotStore. Stream-copy in 64KB chunks so big samples
--- don't allocate a single Lua string the size of the file. os.rename
--- fails across filesystems, so move falls back to copy+delete.
+--@map:shape fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }
+
+-- 64KB chunks so big samples don't allocate a Lua string the size of the file.
 local function copyFileBytes(src, dst)
   local fin = io.open(src, 'rb');  if not fin  then return false end
   local fout = io.open(dst, 'wb'); if not fout then fin:close(); return false end
@@ -56,6 +62,7 @@ end
 
 local fileOps = {
   copy  = copyFileBytes,
+  -- os.rename fails across filesystems; fall back to copy+delete.
   move  = function(src, dst)
     if os.rename(src, dst) then return true end
     if copyFileBytes(src, dst) then os.remove(src); return true end
@@ -86,17 +93,15 @@ end
 
 ----- Chrome
 
--- Builds a `chrome` table threaded into every page. Owns the colour
--- cache (one per coordinator, invalidated on cm:configChanged), the
--- chrome push/pop pairs that paint the toolbar palette, and the
--- vertical separator helper. Closes over cm and ctx.
+--@map:shape chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), makeToolbar()->fn(segments), drawPicker(d), pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+--@map:shape pickerSpec = { kind: string, heading: string, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
+--@map:contract one chrome instance per coordinator; threaded into every page
+--@map:invariant colour cache lives on the chrome instance and is invalidated on cm:configChanged
 local function newChrome(cm, ctx)
   local cache = {}
   cm:subscribe('configChanged', function() cache = {} end)
 
-  -- Walk the colour table from a starting cm key to a terminal atom.
-  -- Entries: {r,g,b,a} atom | 'fullKey' alias | {'fullKey', a} alias-with-
-  -- alpha-override. Outermost override wins; cycles raise with the chain.
+  --@map:contract walks colour aliases (see docs/configManager.md) to a terminal atom; outermost alpha override wins; cycles raise with the resolved chain
   local function resolve(key)
     local seen, override = {}, nil
     while true do
@@ -146,12 +151,7 @@ local function newChrome(cm, ctx)
     ImGui.PopStyleVar(ctx, 1)
   end
 
-  -- Window-shell additions on top of pushChromeStyles. Used by floating
-  -- chrome surfaces (swing editor, modals): hairline window border,
-  -- opaque parchment fill on window/title/popup backgrounds, and a
-  -- separator that matches the chrome border. Surfaces use editor.bg
-  -- (opaque pale); toolbar.bg is authored at 0.5 alpha and would bleed
-  -- the grid through.
+  -- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed the grid through.
   local function pushChromeWindow()
     pushChromeStyles()
     ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowBorderSize, 1)
@@ -206,16 +206,10 @@ local function newChrome(cm, ctx)
     return pressed
   end
 
-  -- Toolbar layout closure: caches each segment's last-frame width keyed
-  -- by id, then before drawing segment N it peeks whether
-  --   (previous right edge) + separator + cached(N) fits the row;
-  -- if not, the leading SameLine is skipped and ImGui places N on a new
-  -- row at the row's left margin. One-frame slop on size changes —
-  -- acceptable for a toolbar.
-  --
-  -- Each segment: { id, render, visible? }. Segments wrap BeginGroup /
-  -- EndGroup so GetItemRectMin/Max measures the whole segment, not just
-  -- the trailing widget.
+  --@map:shape toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
+  -- Wraps each segment in BeginGroup/EndGroup so GetItemRectMin/Max measures the whole
+  -- segment. Caches last-frame width per id; if (lastEnd + sep + cached) overflows the
+  -- row, the leading SameLine is skipped and ImGui wraps. One-frame slop on size change.
   local function makeToolbar()
     local widths = {}
     return function(segments)
@@ -246,30 +240,145 @@ local function newChrome(cm, ctx)
     end
   end
 
+  ----- Picker (typeahead popup, shared across pages)
+
+  -- Per-kind state; popups close on focus loss so a missing entry just
+  -- means "default empty filter / cursor at top".
+  local pickerFilter, pickerCursor = {}, {}
+  local pickerOpenReq = nil   -- kind name; consumed by next drawPicker(kind)
+  local pickerActive  = false -- frame-scoped: any picker popup live this frame
+
+  local function requestPickerOpen(kind) pickerOpenReq = kind end
+  local function pickerIsActive()        return pickerActive end
+  local function resetPickerActive()     pickerActive = false end
+
+  -- Generic typeahead picker. Enter picks the highlighted match; group
+  -- separators show only when filter is empty.
+  local function drawPicker(d)
+    local popupId = '##picker_' .. d.kind
+
+    -- Heading inherits the toolbar's outer Col_Text push; no inner push.
+    ImGui.AlignTextToFramePadding(ctx)
+    ImGui.Text(ctx, d.heading .. ':  ')
+    ImGui.SameLine(ctx)
+
+    -- ##d.kind disambiguates the ImGui ID — different pickers may all
+    -- show the same buttonLabel once the heading is no longer in the ID.
+    local btnTxt = d.buttonLabel .. ' \xe2\x96\xbe##' .. d.kind
+    local minW, maxW = d.minWidth, d.maxWidth
+    if d.width then minW, maxW = d.width, d.width end
+    local btnW
+    if minW or maxW then
+      local tw  = ImGui.CalcTextSize(ctx, btnTxt)
+      local fpx = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+      btnW = tw + fpx * 2
+      if minW and btnW < minW then btnW = minW end
+      if maxW and btnW > maxW then btnW = maxW end
+    end
+    ImGui.PushStyleVar(ctx, ImGui.StyleVar_ButtonTextAlign, 0, 0.5)
+    local opening
+    if btnW then opening = ImGui.Button(ctx, btnTxt, btnW, 0)
+    else         opening = ImGui.Button(ctx, btnTxt) end
+    ImGui.PopStyleVar(ctx, 1)
+    -- Anchor popup to the button rect; OpenPopup otherwise uses mouse
+    -- position, putting a keyboard-triggered popup at the text cursor.
+    local btnX = ImGui.GetItemRectMin(ctx)
+    local _, btnY = ImGui.GetItemRectMax(ctx)
+    if pickerOpenReq == d.kind then
+      pickerOpenReq = nil
+      opening = true
+    end
+    if opening then
+      pickerFilter[d.kind] = ''
+      ImGui.OpenPopup(ctx, popupId)
+    end
+
+    ImGui.SetNextWindowPos(ctx, btnX, btnY, ImGui.Cond_Appearing)
+    -- NoNav: kill ImGui's built-in keyboard nav highlight on the popup —
+    -- otherwise it draws a second cursor that fights ours and steals
+    -- arrow keys / character input from the filter InputText.
+    if not ImGui.BeginPopup(ctx, popupId, ImGui.WindowFlags_NoNav) then return end
+    pickerActive = true   -- block page key dispatch this frame so Enter doesn't leak
+
+    if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
+    ImGui.SetNextItemWidth(ctx, 180)
+    local prevFilter = pickerFilter[d.kind] or ''
+    -- Plain InputText (no EnterReturnsTrue): with that flag, ReaImGui
+    -- only commits the buffer on Enter, so the live filter would never
+    -- update during typing. We watch Enter ourselves below.
+    local _, filter = ImGui.InputText(ctx, '##filter_' .. d.kind, prevFilter)
+    pickerFilter[d.kind] = filter
+    local entered = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+                 or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
+    ImGui.Separator(ctx)
+
+    local lf = filter:lower()
+    local matches, currentMatch = {}, nil
+    for _, it in ipairs(d.items) do
+      if filter == '' or it.label:lower():find(lf, 1, true) then
+        matches[#matches + 1] = it
+        if it.current then currentMatch = #matches end
+      end
+    end
+
+    -- On open or filter-change, highlight the current pick if it survived; else top.
+    if ImGui.IsWindowAppearing(ctx) or filter ~= prevFilter then
+      pickerCursor[d.kind] = currentMatch or 1
+    end
+    local cursor = pickerCursor[d.kind] or 1
+    local n = #matches
+    if n > 0 then
+      if ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow) then
+        cursor = cursor % n + 1
+      elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow) then
+        cursor = (cursor - 2) % n + 1
+      end
+    end
+    cursor = math.min(math.max(cursor, 1), math.max(n, 1))
+    pickerCursor[d.kind] = cursor
+
+    if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+      ImGui.CloseCurrentPopup(ctx)
+    elseif entered then
+      if matches[cursor] then d.onPick(matches[cursor].key) end
+      ImGui.CloseCurrentPopup(ctx)
+    else
+      local lastGroup
+      for i, it in ipairs(matches) do
+        if filter == '' and lastGroup and lastGroup ~= (it.group or 1) then
+          ImGui.Separator(ctx)
+        end
+        if ImGui.Selectable(ctx, it.label, i == cursor) then d.onPick(it.key) end
+        lastGroup = it.group or 1
+      end
+    end
+
+    ImGui.EndPopup(ctx)
+  end
+
   return {
-    colour            = colour,
-    pushChromeStyles  = pushChromeStyles,
-    popChromeStyles   = popChromeStyles,
-    pushChromeWindow  = pushChromeWindow,
-    popChromeWindow   = popChromeWindow,
-    verticalSeparator = verticalSeparator,
-    disabledIf        = disabledIf,
-    checkbox          = checkbox,
-    radio             = radio,
-    makeToolbar       = makeToolbar,
+    colour             = colour,
+    pushChromeStyles   = pushChromeStyles,
+    popChromeStyles    = popChromeStyles,
+    pushChromeWindow   = pushChromeWindow,
+    popChromeWindow    = popChromeWindow,
+    verticalSeparator  = verticalSeparator,
+    disabledIf         = disabledIf,
+    checkbox           = checkbox,
+    radio              = radio,
+    makeToolbar        = makeToolbar,
+    drawPicker         = drawPicker,
+    pickerIsActive     = pickerIsActive,
+    resetPickerActive  = resetPickerActive,
+    requestPickerOpen  = requestPickerOpen,
   }
 end
 
 ----- Keyboard router
 
--- Walk the cmgr keymap chain, fire the first binding pressed this frame,
--- and report whether any bound key is held with no modifier (so the page
--- can gate its raw character queue against held command keys with
--- different repeat timing).
---
--- A binding fires via cmgr:invoke; first-hit wins, hard-shadowing root.
--- A command may decline (return false) to release the key to the page;
--- we clear commandHeld in that case so the char queue sees it.
+--@map:shape dispatchResult = { consumed: bool, commandHeld: bool }
+--@map:contract returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
+--@map:contract first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
 local function dispatchKeys(state, cmgr, ctx)
   if state.suppressKbd or not state.acceptCmds then
     return { consumed = false, commandHeld = false }
@@ -299,34 +408,24 @@ end
 
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 
--- Owns ImGui Begin/End, the toolbar/statusBar bands, the mode switcher,
--- per-frame keyboard dispatch, and sampler upkeep. Pages contribute the
--- toolbar bits after the switcher, the body, and the status content.
--- sweptForTracker re-arms when trackerMode goes false: a fresh FX needs
--- a fresh push of every slot since @serialize starts empty.
+--@map:shape page = { renderToolbarBits(ctx), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind(), [renderFloating(ctx)] }
+--@map:contract pages must be registered via coord:register(name,page); first registered becomes active
+--@map:contract setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→take, sample→track)
+--@map:contract tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
 local function newCoordinator(cm, cmgr, sm, take, ctx, font, uiFont)
   local pages, active = {}, nil
   local quitting = false
-  local sweptForTracker, lastProjectPath = false, nil
+  local lastProjectPath = nil
   local chrome = newChrome(cm, ctx)
 
   local function tick()
     sm:probeMode(take, cm)
     local pp = reaper.GetProjectPath(0)
-    if cm:get('trackerMode') then
-      local track = reaper.GetMediaItemTake_Track(take)
-      if lastProjectPath and lastProjectPath ~= pp then
-        sm:migrate(pp, lastProjectPath, cm)
-      end
-      if not sweptForTracker then
-        sm:setPrefix(pp)
-        sm:sweep(track, cm)
-        sweptForTracker = true
-      end
-      sm:readNames(track, cm)
-    else
-      sweptForTracker = false
+    if lastProjectPath ~= pp then
+      sm:setPrefix(pp)
+      if lastProjectPath then sm:migrate(pp, lastProjectPath, cm) end
     end
+    sm:tick(cm)
     lastProjectPath = pp
   end
 
@@ -373,7 +472,7 @@ local function newCoordinator(cm, cmgr, sm, take, ctx, font, uiFont)
     if visible then ImGui.SetScrollY(ctx, 0); ImGui.SetScrollX(ctx, 0) end
 
     if visible and page then
-      -- Toolbar band: switcher (coordinator) + page bits.
+      -- Toolbar band
       ImGui.PushStyleColor(ctx, ImGui.Col_ChildBg, chrome.colour('toolbar.bg'))
       ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, CHROME_PAD_X, CHROME_PAD_Y)
       if ImGui.BeginChild(ctx, '##toolbar', 0, 0,
@@ -471,6 +570,7 @@ local function newCoordinator(cm, cmgr, sm, take, ctx, font, uiFont)
   return self
 end
 
+--@map:contract Main bails with a console message if no MIDI item is selected; otherwise builds the manager stack bottom-up, then enters the defer loop via coord:run()
 local function Main()
   local item = reaper.GetSelectedMediaItem(0, 0)
   if not item then

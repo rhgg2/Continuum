@@ -1,13 +1,19 @@
--- See docs/tuning.md for the model and API reference.
+-- See docs/tuning.md for the model.
 -- @noindex
+
+--@map:invariant pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
+--@map:invariant intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain
+--@map:invariant detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
+--@map:invariant first step of every temper is C; octaveStep derivation depends on this
+--@map:invariant octave parameters are MIDI-relative (C4 → 4), not period-index
+
+--@map:shape Temper = {name=string, period=cents, cents=number[ascending], stepNames=string[], octaveStep=int}
 
 tuning = {}
 local M = tuning
 
 ----- Temperament presets
 
--- Scan from the end: every trailing C-variant step (e.g. C↓ in 31EDO)
--- is enharmonically the next C and belongs to the octave above.
 local function computeOctaveStep(stepNames)
   for i = #stepNames, 1, -1 do
     if stepNames[i]:sub(1, 1) ~= 'C' then return i + 1 end
@@ -27,8 +33,6 @@ local function edo(n, names)
   }
 end
 
--- Seed only — never consulted at slot-resolution time. Populates the
--- "copy into library" UI menu, mirroring `timing.presets`.
 M.presets = {
   ['12EDO'] = edo(12, {
     'C-','C#','D-','D#','E-','F-','F#','G-','G#','A-','A#','B-'
@@ -51,8 +55,7 @@ M.presets = {
   }),
 }
 
--- Resolve a temperament slot name within the project library. Mirrors
--- `timing.findShape`: presets are seed-only, never consulted here.
+--@map:contract returns nil if either name or userLib is missing; callers treat nil as "no temperament"
 function M.findTemper(name, userLib)
   if not (name and userLib) then return nil end
   return userLib[name]
@@ -60,6 +63,8 @@ end
 
 ----- Coordinate conversions
 
+--@map:contract detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
+--@map:contract returned octave is MIDI-relative (C-1 → -1)
 function M.midiToStep(temper, midi, detune)
   detune = detune or 0
   local cents  = midi * 100 + detune
@@ -81,6 +86,7 @@ function M.midiToStep(temper, midi, detune)
   return best, octave - 1
 end
 
+--@map:contract wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
 function M.stepToMidi(temper, step, octave)
   local steps, n = temper.cents, #temper.cents
   while step < 1 do step = step + n; octave = octave - 1 end
@@ -103,6 +109,7 @@ function M.snap(temper, midi, detune)
   return M.stepToMidi(temper, M.midiToStep(temper, midi, detune))
 end
 
+--@map:contract moves by n scale steps under temper, carrying the octave; n may be negative
 function M.transposeStep(temper, midi, detune, n)
   local step, oct = M.midiToStep(temper, midi, detune)
   return M.stepToMidi(temper, step + n, oct)
@@ -115,6 +122,7 @@ local function octaveLabel(o)
   return o == -1 and 'M' or tostring(o)
 end
 
+--@map:contract bumps displayed octave by 1 when step >= temper.octaveStep (C-variant tail belongs to next octave by label convention)
 function M.stepToText(temper, step, octave)
   if step >= temper.octaveStep then octave = octave + 1 end
   return temper.stepNames[step] .. octaveLabel(octave)

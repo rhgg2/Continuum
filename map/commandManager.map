@@ -1,0 +1,62 @@
+@module commandManager  src=commandManager.lua  loc=177  sha=eb14c68
+
+# Invariants & contracts (module)
+  @map:invariant  commands and keymap are orthogonal name-keyed tables; a name may live in either alone
+  @map:invariant  root scope is global; named scopes are pages; at most one scope is active at a time
+  @map:invariant  active-scope entries shadow root entries during invoke and keychain lookups (first hit wins)
+  @map:invariant  command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)
+  @map:invariant  a keymap entry is an array of keyspecs — multiple bindings dispatch to the same command
+  @map:invariant  layouts row 1 = base octave (15 semitones, C..D+1oct); row 2 = +1 octave (17 semitones, C..F+1oct)
+  @map:invariant  chars is folded from layouts at load time so the LUT can't drift from the declaration
+
+# Shapes
+  @shape  keyspec = keyConstant | { keyConstant, mod1, mod2, ... }   -- mods OR'd into a single mask
+  @shape  keymapEntry = { keyspec, ... }                              -- array; each keyspec triggers the same command
+  @shape  noteChar = { semi = 0..16, octOff = 0..1 }
+
+# Module-level constants
+  @const layouts = {
+  @const chars = {}
+
+# Module-level functions (private)
+  @fn attachScope(scope)
+      @map:contract  wrap is a no-op if name has no registered command; wrappers stack (compose outward)
+      @map:contract  doBefore/doAfter accept either a single name or an array of names
+      @map:contract  doAfter preserves the original command's return values (it's the dispatch signal)
+  @fn newScope()
+
+@factory newCommandManager(cm)
+  @map:contract  mgr.commands / mgr.keymap alias the root scope's tables; rm reads them directly in dispatch
+  @map:contract  mgr-level register/bind/wrap/doBefore/doAfter operate on the root scope only
+
+  # Private state
+    @state root = newScope()
+    @state scopes = {}
+    @state mgr = {
+
+  # Public API
+    -- Scope
+    @api mgr:register(name, fn)
+    @api mgr:registerAll(tbl)
+    @api mgr:bind(name, keys)
+    @api mgr:bindAll(tbl)
+    @api mgr:wrap(name, wrapper)
+    @api mgr:doBefore(name, before)
+    @api mgr:doAfter(name, after)
+    -- Scopes
+    @api mgr:scope(name)
+        @map:contract  creates the scope on first request; idempotent thereafter
+    @api mgr:setActive(name)
+        @map:contract  pass nil to clear active scope (drop back to root-only resolution)
+    @api mgr:dropScope(name)
+    -- Lookup
+    @api mgr:invoke(name, ...)
+        @map:contract  no-op (returns nil) if no scope resolves the name; never raises on unknown
+    @api mgr:keychain()
+    @api mgr:keysFor(name)
+    @api mgr:keySpec(spec, ImGui)
+        -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
+    -- Note layout
+    @api mgr:noteChars(char)
+        -- Re-read noteLayout on each call so a config change takes effect
+        -- without rebuilding vm.

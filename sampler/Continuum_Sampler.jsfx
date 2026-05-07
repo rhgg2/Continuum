@@ -45,33 +45,18 @@ SINC_RESERVE     = 300000;
 
 PARAMS_STRIDE    = 128;            // per-sample params (filter, env, lfo, …)
 // JSFX caps user string slots at 1023. Reserved low slots:
-//   13 CTM_GMEM_PATH_STR   - rel-path scratch for Continuum→sampler load mailbox
-//   14 DROP_PATH_STR       - drag-drop scratch (defined in @gfx)
-//   15 RENAME_BACKUP_STR   - pre-edit name for revert-on-Esc
-//   16 SER_PREFIX_STR      - project root prefix (persisted in @serialize)
-//   17 SCRATCH_ABS_STR     - assembled absolute path for file_open
-//   18..31                 - free scratch
+//   13 CTM_GMEM_PATH_STR   - abs-path scratch for bundled-mailbox loads
+//   14..31                 - free scratch
 //   32..(32+N_SAMPLES-1)   - NAME_BASE: per-slot display names
-//   96..(96+N_SAMPLES-1)   - SLOT_REL_BASE: per-slot rel paths (persisted)
 NAME_BASE         = 32;
-SLOT_REL_BASE     = 96;            // rel path per slot; non-empty ⇒ persistable
-RENAME_BACKUP_STR = 15;
 CTM_GMEM_PATH_STR = 13;
-SER_PREFIX_STR    = 16;
-SCRATCH_ABS_STR   = 17;
 THUMB_W           = 100;           // waveform thumbnail width (px columns), min/max packed
 
 // gmem[Continuum_sampler] layout — shared across all sampler instances.
 // MAX_INSTANCES = 128. Each instance carries an instance_id (slider2),
-// pushed by Continuum from a P_EXT key. Mailboxes carry target_id at [+1]
-// so an instance consumes only when it matches; per-instance slabs stride
-// by instance_id. PREFIX is project-wide (every instance reads it).
+// pushed by Continuum from a P_EXT key. cm is the sole authority for
+// per-slot state; JSFX is a pure consumer.
 //
-//   gmem[LOAD_BASE..LOAD_BASE+1023]     : Continuum→sampler load mailbox
-//     [0]   magic   (0=empty, MAGIC=pending; written last)
-//     [1]   target_id
-//     [2]   slot index
-//     [3..] rel-path bytes, 0-terminated (composed against SER_PREFIX_STR)
 //   gmem[PREVIEW_BASE..PREVIEW_BASE+1023] : Continuum→sampler preview mailbox
 //     [0]   magic
 //     [1]   target_id
@@ -79,30 +64,37 @@ THUMB_W           = 100;           // waveform thumbnail width (px columns), min
 //                       PREVIEW_SLOT_IDX path-load first; <0 stop all)
 //     [3]   bounds flag (0 full file, 1 honour SH_START/SH_END)
 //     [4..] absolute path bytes, 0-terminated (only read at PREVIEW_SLOT_IDX)
-//   gmem[PREFIX_BASE..PREFIX_BASE+1023] : Continuum→sampler project prefix
-//     [0]   magic, [1..] absolute project root bytes, 0-terminated.
-//   gmem[TRIM_BASE..TRIM_BASE+1023]     : Continuum→sampler trim-write mailbox
-//     [0] seq    — monotonic, JSFX caches last-seen, applies on change.
-//     [1] target_id, [2] slot, [3] start (frames), [4] end (frames; 0 ⇒ default)
-//   gmem[NAMES_BASE..]  : per-instance names slabs, stride INSTANCE_NAMES_STRIDE
-//     instance i lives at NAMES_BASE + i * INSTANCE_NAMES_STRIDE.
-//   gmem[TRIMS_BASE..]  : per-instance trim slabs, stride INSTANCE_TRIMS_STRIDE
-//     instance i lives at TRIMS_BASE + i * INSTANCE_TRIMS_STRIDE.
-// Continuum mirrors these constants — keep in sync.
+//   gmem[SLOT_BASE..]   : Continuum→sampler bundled per-slot mailbox, one
+//     in-flight write per instance (stride SLOT_STRIDE). cm is sole authority
+//     for {path, start, end, name}; JSFX consumes only. Paths are absolute —
+//     Continuum composes against its project path so JSFX needs no prefix.
+//       [0] seq      — Continuum bumps; JSFX echoes consumed value into [1]
+//       [1] seq_ack  — JSFX writes after consume; Continuum reads for confirm
+//       [2] slot     (0..N_SAMPLES-1)
+//       [3] op       (0 = set/update, 1 = clear)
+//       [4] start frames; [5] end frames (0 ⇒ default tail)
+//       [6] pathLen  (0 ⇒ leave path alone)
+//       [7] nameLen  (0 ⇒ leave name alone — basename if path loaded)
+//       [8..8+pathLen-1]                  path bytes
+//       [8+pathLen..8+pathLen+nameLen-1]  name bytes
+//   gmem[BOOT_BASE..]   : per-instance fresh-mem marker. JSFX writes a
+//     nonzero token on first @init (boot_done gate); refires from
+//     transport-play write the same token (mem[] preserved). Continuum
+//     watches gmem[BOOT_BASE + instance_id] per tick; any change (incl.
+//     0→nonzero) means mem[] was lost and the slab needs rehydration.
+// Continuum mirrors these constants — keep in sync. Addresses below
+// preserve the historical layout (LOAD/TRIM/NAMES/TRIMS slabs are no
+// longer read or written but the address space stays so future changes
+// don't shift the live offsets).
 CTM_GMEM_MAGIC                  = 1717658484;    // 'CTML' as 32-bit ASCII
 CTM_GMEM_MAX_INSTANCES          = 128;
 CTM_GMEM_PATH_MAX               = 1019;          // smallest header (preview's [4..]) leaves 1019 bytes + terminator
-CTM_GMEM_LOAD_BASE              = 0;
 CTM_GMEM_PREVIEW_BASE           = 1024;
-CTM_GMEM_PREFIX_BASE            = 2048;
-CTM_GMEM_TRIM_BASE              = 3072;
-CTM_GMEM_NAME_STRIDE            = 64;
-CTM_GMEM_TRIMS_STRIDE           = 4;
-CTM_GMEM_INSTANCE_NAMES_STRIDE  = N_SAMPLES * CTM_GMEM_NAME_STRIDE;   // 4096
-CTM_GMEM_INSTANCE_TRIMS_STRIDE  = N_SAMPLES * CTM_GMEM_TRIMS_STRIDE;  // 256
-CTM_GMEM_NAMES_BASE             = 4096;
-CTM_GMEM_TRIMS_BASE             = CTM_GMEM_NAMES_BASE
-                                + CTM_GMEM_MAX_INSTANCES * CTM_GMEM_INSTANCE_NAMES_STRIDE;  // 528384
+CTM_GMEM_NAME_MAX               = 64;
+CTM_GMEM_SLOT_STRIDE            = 8 + CTM_GMEM_PATH_MAX + CTM_GMEM_NAME_MAX;                // 1091
+CTM_GMEM_SLOT_BASE              = 561152;        // historical: 4096 (NAMES_BASE) + 128*4096 + 128*256
+CTM_GMEM_BOOT_BASE              = CTM_GMEM_SLOT_BASE
+                                + CTM_GMEM_MAX_INSTANCES * CTM_GMEM_SLOT_STRIDE;            // 700800
 
 // Sample header field offsets
 SH_LENGTH     = 0;   SH_FS         = 1;   SH_BASENOTE = 2;
@@ -197,6 +189,16 @@ loop(N_SAMPLES + 1,
   samplelocs[ifix] >= heap_top ?
     heap_top = samplelocs[ifix] + SAMPLE_SLOT_SIZE;
   ifix += 1;
+);
+
+// Boot token: nonzero per-fresh-instance marker. boot_done gates so
+// transport-play refires of @init (mem[] preserved) keep the same token;
+// fresh mem[] starts at zero, generates a new one. Written to gmem
+// every @init so Continuum, watching the cell, sees the value land
+// even on a refire.
+boot_done == 0 ? (
+  boot_token = rand(1073741823) + 1;   // 1..2^30
+  boot_done  = 1;
 );
 
 dc_coeff    = exp(-2 * $pi * 10 / srate);   // 10 Hz steady-state DC / infrasonic HPF
@@ -620,23 +622,6 @@ function load_sample_from_file(idx, path_str)
   );
 );
 
-// Project-relative load. Composes abs = SER_PREFIX_STR + "/" + rel_str into
-// SCRATCH_ABS_STR, calls the abs loader, then on success records the rel in
-// SLOT_REL_BASE+idx so @serialize can write it. Empty prefix ⇒ skip the slash
-// (rel_str interpreted as-is, useful for absolute rels in edge cases).
-function load_sample_from_rel(idx, rel_str)
-  global(samplelocs, SH_LENGTH, SER_PREFIX_STR, SCRATCH_ABS_STR, SLOT_REL_BASE)
-(
-  strlen(SER_PREFIX_STR) > 0 ? (
-    strcpy(SCRATCH_ABS_STR, SER_PREFIX_STR);
-    strcat(SCRATCH_ABS_STR, "/");
-    strcat(SCRATCH_ABS_STR, rel_str);
-  ) : strcpy(SCRATCH_ABS_STR, rel_str);
-  load_sample_from_file(idx, SCRATCH_ABS_STR);
-  samplelocs[idx] && samplelocs[idx][SH_LENGTH] > 0 ?
-    strcpy(SLOT_REL_BASE + idx, rel_str);
-);
-
 // ============================================================
 // Waveform thumbnails
 // ============================================================
@@ -710,23 +695,17 @@ function pal_amber(a)  ( gfx_set(220/255, 180/255,  50/255, a); );
 function pal_steel(a)  ( gfx_set(100/255, 130/255, 160/255, a); );
 
 // One row at (rx, ry, rw, rh): index | name | waveform | frame count.
-// Drawing only — caller handles thumb_build throttling and hit-testing.
+// Drawing only — UI is observation; cm/Continuum drives all state.
 function row_draw(idx, rx, ry, rw, rh)
   local(sl, len, has, fs, name_x, thumb_x, frames_x, baseline)
-  global(samplelocs, NAME_BASE, SH_LENGTH, SH_FS, THUMB_W, gfx_x, gfx_y, srate,
-         sel_idx, rename_idx)
+  global(samplelocs, NAME_BASE, SH_LENGTH, SH_FS, THUMB_W, gfx_x, gfx_y, srate)
 (
   sl  = samplelocs[idx];
   len = sl ? sl[SH_LENGTH] : 0;
   has = len > 0;
 
-  // Background — rename > selection > zebra.
-  idx == rename_idx ? (
-    pal_amber(0.35); gfx_rect(rx, ry, rw, rh);
-  ) : idx == sel_idx ? (
-    pal_steel(0.35); gfx_rect(rx, ry, rw, rh);
-  ) : (idx & 1) ? (
-    pal_mid(0.12);   gfx_rect(rx, ry, rw, rh);
+  (idx & 1) ? (
+    pal_mid(0.12); gfx_rect(rx, ry, rw, rh);
   );
 
   name_x   = rx + 32;
@@ -742,7 +721,6 @@ function row_draw(idx, rx, ry, rw, rh)
   has ? pal_shade(1) : pal_inact(0.7);
   strlen(NAME_BASE + idx) > 0 ? gfx_drawstr(NAME_BASE + idx)
                               : gfx_drawstr("(empty)");
-  idx == rename_idx ? ( pal_amber(1); gfx_drawstr("|"); );
 
   has ? (
     pal_pos(0.9);
@@ -801,8 +779,8 @@ function handle_cc(channel, cc, val)
 midi_pass = 1;
 
 // ============================================================
-// UI preview — @gfx posts a single-shot request, @block consumes it.
-// Cleared by the consumer; -1 means no pending request.
+// Preview — @block PREVIEW mailbox posts a single-shot request, this
+// consumes it. Cleared on consume; -1 means no pending request.
 // ============================================================
 function preview_consume()
   local(psl, pbase, pidx)
@@ -824,14 +802,11 @@ function preview_consume()
 );
 
 // ============================================================
-// UI state (driven by @gfx)
+// State
 // ============================================================
-sel_idx                = 0;     // selected sample (row highlight)
-rename_idx             = -1;    // -1 = not renaming; else idx of name being edited
-mouse_prev             = 0;     // prev mouse_cap & 1, for edge detection
-preview_request_slot   = -1;    // -1 none, else sample idx to preview at next @block
-preview_request_bounds = 0;     // 0 = play full file, 1 = honour SH_START/SH_END
-last_trim_seq          = 0;     // last consumed seq in CTM_GMEM_TRIM_BASE
+preview_request_slot   = -1;    // -1 none, else sample idx; @block PREVIEW
+preview_request_bounds = 0;     //   mailbox sets these, preview_consume reads
+last_slot_seq          = 0;     // last consumed seq in CTM_GMEM_SLOT_BASE
 
 @slider
 interpolation > 1 ? (pdc_delay = 24; pdc_bot_ch = 0; pdc_top_ch = 2;);
@@ -840,94 +815,18 @@ interpolation > 1 ? (pdc_delay = 24; pdc_bot_ch = 0; pdc_top_ch = 2;);
 build_all_sinc_tables(sinc_tables_mem);
 
 @serialize
-// Path-only persistence: project root + per-slot rel paths. Audio is reloaded
-// from disk on @serialize-read (keeps .RPP lean). User-mutable header fields
-// (basenote/loop/start/end) ride alongside the rel path so edits survive.
-// has_data flips on a slot only when SLOT_REL_BASE is non-empty: drag-drop
-// loads (which never went through Continuum) have no rel and silently elide.
-// Continuum's sweep on next attach re-pushes everything cm has, fixing drift.
-writing = file_avail(0) < 0;
+// cm is the source of truth for slot state. Per-slot path/start/end/name,
+// params, mute/solo flags ride in cm and arrive on the next tick after
+// Continuum sees the boot-token change. Continuum composes absolute paths,
+// so JSFX has no project-prefix state to persist.
 file_var(0, version);
-file_string(0, SER_PREFIX_STR);
-ser_i = 0;
-loop(N_SAMPLES,
-  writing ? has_data = samplelocs[ser_i] && samplelocs[ser_i][SH_LENGTH] > 0
-            && strlen(SLOT_REL_BASE + ser_i) > 0;
-  file_var(0, has_data);
-  has_data ? (
-    file_string(0, SLOT_REL_BASE + ser_i);
-    writing ? (
-      // Snapshot user-mutable header fields into ser_* before file_var writes.
-      ser_basenote   = samplelocs[ser_i][SH_BASENOTE];
-      ser_loop_start = samplelocs[ser_i][SH_LOOP_START];
-      ser_loop_stop  = samplelocs[ser_i][SH_LOOP_STOP];
-      ser_loop_type  = samplelocs[ser_i][SH_LOOP_TYPE];
-      ser_start      = samplelocs[ser_i][SH_START];
-      ser_end        = samplelocs[ser_i][SH_END];
-    ) : (
-      // Read path: load from disk first. Success ⇒ sample header has loader
-      // defaults (basenote=60, loops/start/end=0); the file_var reads below
-      // pull the saved values, applied after. Failure ⇒ slot stays empty and
-      // the 6 floats still get consumed so subsequent slots stay aligned.
-      // Continuum's sweep on next attach retries with current prefix.
-      load_sample_from_rel(ser_i, SLOT_REL_BASE + ser_i);
-    );
-    file_var(0, ser_basenote);
-    file_var(0, ser_loop_start);
-    file_var(0, ser_loop_stop);
-    file_var(0, ser_loop_type);
-    file_var(0, ser_start);
-    file_var(0, ser_end);
-    !writing && samplelocs[ser_i] && samplelocs[ser_i][SH_LENGTH] > 0 ? (
-      samplelocs[ser_i][SH_BASENOTE]   = ser_basenote;
-      samplelocs[ser_i][SH_LOOP_START] = ser_loop_start;
-      samplelocs[ser_i][SH_LOOP_STOP]  = ser_loop_stop;
-      samplelocs[ser_i][SH_LOOP_TYPE]  = ser_loop_type;
-      samplelocs[ser_i][SH_START]      = ser_start;
-      samplelocs[ser_i][SH_END]        = ser_end;
-      thumb_dirty[ser_i] = 1;
-    );
-  );
-  file_string(0, NAME_BASE + ser_i);
-  file_mem(0, params_base + ser_i * PARAMS_STRIDE, PARAMS_STRIDE);
-  ser_i += 1;
-);
-file_mem(0, mute_flags, N_SAMPLES);
-file_mem(0, solo_flags, N_SAMPLES);
 
 @block
-// Continuum → sampler project-prefix update. Continuum publishes its current
-// GetProjectPath() here whenever it (re)attaches; JSFX caches in SER_PREFIX_STR
-// so subsequent rel-path loads can compose absolutes. Persisted via @serialize.
-gmem[CTM_GMEM_PREFIX_BASE] == CTM_GMEM_MAGIC ? (
-  strcpy(SER_PREFIX_STR, "");
-  pf_i = 0;
-  pf_done = 0;
-  while (pf_i < CTM_GMEM_PATH_MAX && !pf_done) (
-    pf_ch = gmem[CTM_GMEM_PREFIX_BASE + 1 + pf_i];
-    pf_ch == 0 ? pf_done = 1
-    : ( str_setchar(SER_PREFIX_STR, pf_i, pf_ch); pf_i += 1; );
-  );
-  gmem[CTM_GMEM_PREFIX_BASE] = 0;
-);
-
-// Continuum → sampler load request. Magic-gated; only consumed when
-// target_id (gmem[+1]) matches our slider2. Continuum writes magic last.
-gmem[CTM_GMEM_LOAD_BASE] == CTM_GMEM_MAGIC
-    && gmem[CTM_GMEM_LOAD_BASE + 1] == instance_id ? (
-  ctm_slot = gmem[CTM_GMEM_LOAD_BASE + 2];
-  strcpy(CTM_GMEM_PATH_STR, "");
-  ctm_i = 0;
-  ctm_done = 0;
-  while (ctm_i < CTM_GMEM_PATH_MAX && !ctm_done) (
-    ctm_ch = gmem[CTM_GMEM_LOAD_BASE + 3 + ctm_i];
-    ctm_ch == 0 ? ctm_done = 1
-    : ( str_setchar(CTM_GMEM_PATH_STR, ctm_i, ctm_ch); ctm_i += 1; );
-  );
-  ctm_slot >= 0 && ctm_slot < N_SAMPLES ?
-    load_sample_from_rel(ctm_slot, CTM_GMEM_PATH_STR);
-  gmem[CTM_GMEM_LOAD_BASE] = 0;
-);
+// Per-instance boot-token publish. Idempotent: same value every @block
+// for the life of the JSFX mem[]. Continuum watches BOOT_BASE for
+// changes; a fresh mem[] (project reload, JSFX reinstantiation) generates
+// a new token at @init and the next @block lands it, triggering rehydrate.
+gmem[CTM_GMEM_BOOT_BASE + instance_id] = boot_token;
 
 // Continuum → sampler preview request. slot field discriminates: < N_SAMPLES
 // previews an existing slot; == PREVIEW_SLOT_IDX path-loads into the hidden
@@ -964,66 +863,62 @@ gmem[CTM_GMEM_PREVIEW_BASE] == CTM_GMEM_MAGIC
   gmem[CTM_GMEM_PREVIEW_BASE] = 0;
 );
 
-// Publish sample names to gmem so Continuum can show them. Always re-emit
-// into our per-instance slab; cost is bounded per-instance (other instances
-// write their own slabs). Each slot is ASCII bytes then a 0-terminator.
-ctm_inst_names_base = CTM_GMEM_NAMES_BASE
-                    + instance_id * CTM_GMEM_INSTANCE_NAMES_STRIDE;
-ctm_pub_idx = 0;
-loop(N_SAMPLES,
-  ctm_name_ptr = NAME_BASE + ctm_pub_idx;
-  ctm_name_len = min(strlen(ctm_name_ptr), CTM_GMEM_NAME_STRIDE - 1);
-  ctm_name_base = ctm_inst_names_base + ctm_pub_idx * CTM_GMEM_NAME_STRIDE;
-  ctm_pub_j = 0;
-  while (ctm_pub_j < ctm_name_len) (
-    gmem[ctm_name_base + ctm_pub_j] = str_getchar(ctm_name_ptr, ctm_pub_j);
-    ctm_pub_j += 1;
-  );
-  gmem[ctm_name_base + ctm_name_len] = 0;
-  ctm_pub_idx += 1;
-);
+// Continuum → sampler bundled per-slot mailbox. cm-authoritative: holds the
+// canonical {path, start, end, name} and pushes the whole record on any
+// change. Two-way seq: Continuum bumps [0]; we consume on inequality, then
+// echo into [1] as ack so the writer can confirm landing and detect
+// liveness in one. pathLen=0 leaves the path alone (trim-only edits and
+// drag rebumps stay cheap); nameLen=0 leaves the name alone (or, when a
+// path was just loaded, falls back to the basename written by
+// load_sample_from_file). op=1 clears the slot.
+mb_addr = CTM_GMEM_SLOT_BASE + instance_id * CTM_GMEM_SLOT_STRIDE;
+mb_seq  = gmem[mb_addr];
+mb_seq != last_slot_seq ? (
+  mb_slot     = gmem[mb_addr + 2];
+  mb_op       = gmem[mb_addr + 3];
+  mb_start    = gmem[mb_addr + 4];
+  mb_end      = gmem[mb_addr + 5];
+  mb_path_len = gmem[mb_addr + 6];
+  mb_name_len = gmem[mb_addr + 7];
 
-// Continuum → sampler trim write. Seq-gated, not magic-gated, so a 60 fps
-// slider drag never queues behind a still-pending clear. Target_id at [+1]
-// gates per-instance; non-matching writes leave last_trim_seq advanced
-// (this is fine — the next write to *us* increments seq again).
-ctm_trim_seq = gmem[CTM_GMEM_TRIM_BASE];
-ctm_trim_seq != last_trim_seq
-    && gmem[CTM_GMEM_TRIM_BASE + 1] == instance_id ? (
-  ctm_trim_slot  = gmem[CTM_GMEM_TRIM_BASE + 2];
-  ctm_trim_start = gmem[CTM_GMEM_TRIM_BASE + 3];
-  ctm_trim_end   = gmem[CTM_GMEM_TRIM_BASE + 4];
-  (ctm_trim_slot >= 0 && ctm_trim_slot < N_SAMPLES
-       && samplelocs[ctm_trim_slot]
-       && samplelocs[ctm_trim_slot][SH_LENGTH] > 0) ? (
-    samplelocs[ctm_trim_slot][SH_START] = ctm_trim_start;
-    samplelocs[ctm_trim_slot][SH_END]   = ctm_trim_end;
+  mb_slot >= 0 && mb_slot < N_SAMPLES ? (
+    mb_op == 1 ? (
+      // Clear: blank name + audio. samplelocs pointer kept (slot reuses
+      // its buffer on next load); SH_LENGTH=0 makes voice_start a no-op
+      // until then.
+      samplelocs[mb_slot] ? memset(samplelocs[mb_slot], 0, SAMPLE_SLOT_SIZE);
+      strcpy(NAME_BASE + mb_slot, "");
+      thumb_dirty[mb_slot] = 1;
+    ) : (
+      mb_path_len > 0 ? (
+        strcpy(CTM_GMEM_PATH_STR, "");
+        mb_i = 0;
+        while (mb_i < mb_path_len && mb_i < CTM_GMEM_PATH_MAX) (
+          str_setchar(CTM_GMEM_PATH_STR, mb_i, gmem[mb_addr + 8 + mb_i]);
+          mb_i += 1;
+        );
+        load_sample_from_file(mb_slot, CTM_GMEM_PATH_STR);
+      );
+      // Trim is always applied. cm sends current values on every set, so
+      // we don't need a "leave trim alone" sentinel. SH_END==0 ⇒ default
+      // tail (voice_start interprets as len/2-2).
+      samplelocs[mb_slot] && samplelocs[mb_slot][SH_LENGTH] > 0 ? (
+        samplelocs[mb_slot][SH_START] = mb_start;
+        samplelocs[mb_slot][SH_END]   = mb_end;
+      );
+      mb_name_len > 0 ? (
+        strcpy(NAME_BASE + mb_slot, "");
+        mb_i = 0;
+        while (mb_i < mb_name_len && mb_i < CTM_GMEM_NAME_MAX - 1) (
+          str_setchar(NAME_BASE + mb_slot, mb_i,
+                      gmem[mb_addr + 8 + mb_path_len + mb_i]);
+          mb_i += 1;
+        );
+      );
+    );
   );
-  last_trim_seq = ctm_trim_seq;
-);
-
-// Publish per-slot trim slab into our per-instance slab. fs==0 marks
-// unloaded. end_eff resolves SH_END==0 to frames-2 (matches voice_start).
-ctm_inst_trims_base = CTM_GMEM_TRIMS_BASE
-                    + instance_id * CTM_GMEM_INSTANCE_TRIMS_STRIDE;
-ctm_pub_idx = 0;
-loop(N_SAMPLES,
-  ctm_trim_sl   = samplelocs[ctm_pub_idx];
-  ctm_trim_base = ctm_inst_trims_base + ctm_pub_idx * CTM_GMEM_TRIMS_STRIDE;
-  (ctm_trim_sl && ctm_trim_sl[SH_LENGTH] > 0) ? (
-    ctm_trim_frames = ctm_trim_sl[SH_LENGTH] / 2;
-    gmem[ctm_trim_base    ] = ctm_trim_sl[SH_FS];
-    gmem[ctm_trim_base + 1] = ctm_trim_frames;
-    gmem[ctm_trim_base + 2] = ctm_trim_sl[SH_START];
-    gmem[ctm_trim_base + 3] = ctm_trim_sl[SH_END] > 0 ? ctm_trim_sl[SH_END]
-                                                      : ctm_trim_frames - 2;
-  ) : (
-    gmem[ctm_trim_base    ] = 0;
-    gmem[ctm_trim_base + 1] = 0;
-    gmem[ctm_trim_base + 2] = 0;
-    gmem[ctm_trim_base + 3] = 0;
-  );
-  ctm_pub_idx += 1;
+  gmem[mb_addr + 1] = mb_seq;
+  last_slot_seq = mb_seq;
 );
 
 note_ptr = midimem;
@@ -1116,16 +1011,15 @@ spl1 = ssr;
 
 @gfx 760 752
 // ------------------------------------------------------------
-// UI: 2-column slot grid + click-to-rename name field. Drag-drop landing
-// pad. Wave preview, start/end editing, and any large-format inspection
-// live in Continuum — this surface is intentionally minimal.
+// UI: 2-column slot grid, click-thumbnail to preview. cm owns
+// renaming, trim, drag-drop, and the rest of the editor surface;
+// this UI is read-only status with one preview affordance.
 // ------------------------------------------------------------
 UI_ROWS_TOP    = 28;
 UI_COL_PAD     = 6;
 ui_row_h       = 22;
 N_COLS         = 2;
 N_ROWS_PER_COL = N_SAMPLES / N_COLS;
-DROP_PATH_STR  = 14;
 
 ui_col_w  = (gfx_w - UI_COL_PAD * (N_COLS + 1)) / N_COLS;
 grid_bot  = UI_ROWS_TOP + N_ROWS_PER_COL * ui_row_h;
@@ -1136,75 +1030,6 @@ gfx_setfont(1, "Arial", 13);
 gfx_y = 6; gfx_x = 8;
 pal_shade(1);
 gfx_drawstr("Continuum Sampler");
-
-// ---------- Mouse edge detect ----------
-mouse_dn   = (mouse_cap & 1) && !mouse_prev;
-mouse_prev = mouse_cap & 1;
-
-// ---------- Keyboard (drain even when not renaming so keys don't queue) ----------
-while ((rk = gfx_getchar()) > 0) (
-  rename_idx >= 0 ? (
-    rk == 27 ? (                                              // Esc — revert
-      strcpy(NAME_BASE + rename_idx, RENAME_BACKUP_STR);
-      rename_idx = -1;
-    ) : rk == 13 ? rename_idx = -1                            // Enter — commit
-    : rk == 8 ? str_setlen(NAME_BASE + rename_idx,            // Backspace
-                           max(0, strlen(NAME_BASE + rename_idx) - 1))
-    : (rk >= 32 && rk <= 126) ? str_setchar(NAME_BASE + rename_idx,
-                                            strlen(NAME_BASE + rename_idx), rk);
-  );
-);
-
-// ---------- File drag-drop (consume before clicks so the drop gesture
-// doesn't double as a row-click) ----------
-file_dropped = gfx_getdropfile(0, DROP_PATH_STR);
-file_dropped ? (
-  hit_col = mouse_x < gfx_w * 0.5 ? 0 : 1;
-  hit_row = floor((mouse_y - UI_ROWS_TOP) / ui_row_h);
-  (hit_row >= 0 && hit_row < N_ROWS_PER_COL) ? (
-    drop_row = hit_col * N_ROWS_PER_COL + hit_row;
-  ) : (
-    drop_row = 0;
-    while (drop_row < N_SAMPLES &&
-           samplelocs[drop_row] && samplelocs[drop_row][SH_LENGTH] > 0) (
-      drop_row += 1;
-    );
-  );
-  drop_file = 0;
-  while (drop_row < N_SAMPLES && gfx_getdropfile(drop_file, DROP_PATH_STR) > 0) (
-    load_sample_from_file(drop_row, DROP_PATH_STR);
-    drop_file += 1;
-    drop_row  += 1;
-  );
-  gfx_getdropfile(-1);
-);
-
-// ---------- Click routing ----------
-(mouse_dn && !file_dropped) ? (
-  rename_idx = -1;                                            // any click commits
-  hit_col = mouse_x < gfx_w * 0.5 ? 0 : 1;
-  hit_row = floor((mouse_y - UI_ROWS_TOP) / ui_row_h);
-  rx_hit  = UI_COL_PAD + hit_col * (ui_col_w + UI_COL_PAD);
-  in_grid = hit_row >= 0 && hit_row < N_ROWS_PER_COL
-         && mouse_x >= rx_hit && mouse_x <= rx_hit + ui_col_w;
-  in_grid ? (
-    hit_idx = hit_col * N_ROWS_PER_COL + hit_row;
-    sel_idx = hit_idx;
-    // Name + thumbnail regions match row_draw layout exactly.
-    name_lo  = rx_hit + 32;
-    thumb_lo = rx_hit + ui_col_w - 64 - THUMB_W;
-    thumb_hi = rx_hit + ui_col_w - 64;
-    (samplelocs[hit_idx] && samplelocs[hit_idx][SH_LENGTH] > 0) ? (
-      mouse_x >= thumb_lo && mouse_x <= thumb_hi ? (
-        preview_request_slot   = hit_idx;
-        preview_request_bounds = 0;
-      ) : mouse_x >= name_lo && mouse_x < thumb_lo ? (
-        strcpy(RENAME_BACKUP_STR, NAME_BASE + hit_idx);
-        rename_idx = hit_idx;
-      );
-    );
-  );
-);
 
 // ---------- Grid ----------
 built_this_tick = 0;

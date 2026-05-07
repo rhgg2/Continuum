@@ -1,0 +1,65 @@
+@module swingEditor  src=swingEditor.lua  loc=440  sha=eb14c68
+@deps util, timing
+
+# Invariants & contracts (module)
+  @map:invariant  editor owns no swing data; composite lives in cm:get('swings')[name] and is read fresh each frame via swingRead
+  @map:invariant  all writes route through swingWrite, which short-circuits on equality and then fires vm:setSwingComposite + vm:reswingPreset
+  @map:invariant  state == nil iff editor is closed; open() is a no-op when already open; Esc / Begin-close clears state
+  @map:invariant  snapshot is captured at open() and never mutated; Reset writes a deepClone of it
+  @map:invariant  shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
+  @map:invariant  soft cap = min(SWING_SOFT_QN, hard); Wild unlocks hard = T_tile · atomMeta.range; cap == 0 freezes the slider
+  @map:invariant  atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
+
+# Shapes
+  @shape  state = { name, snapshot, createBuf, createError, rpb, wild, lastCount, lastW }  -- composite is NOT cached here
+  @shape  PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
+
+# Module-level constants
+  @const ImGui = require 'imgui' '0.10'
+  @const SWING_ATOMS = { 'id',
+  @const SWING_ATOMS_Z = table.concat(SWING_ATOMS, '\0') .. '\0\0'
+  @const RPB_CHOICES = { 1, 2, 3, 4, 6, 8, 12, 16 }
+  @const PERIOD_PRESETS = {
+  @const SWING_ERR = 0xff6060ff
+  @const SWING_MARK = 0x000000b0
+  @const SWING_SOFT_QN = 0.15
+
+@factory newSwingEditor(vm, cm, chrome, ctx)
+
+  # Private state
+    @state state = nil
+    @state self = {}
+
+  # Private functions
+    @fn meterQN()
+    @fn periodPresetIndex(tileQN)
+        @map:contract  returns 0 (not nil) when tileQN matches no preset; callers append a synthetic label in that case
+    @fn periodLabel(tileQN)
+    @fn periodOverPPC(period, ppC)   -- Preset .period is already a tidy rational; halving it for ppC=2 keeps it tidy ({n,d} → {n,
+    @fn shiftCap(factor, wild)
+    @fn materialise(composite)
+        @map:contract  Factor[] -> ResolvedFactor[] in QN units (T = atomTilePeriod, not PPQ); local to the editor's QN-space preview
+    @fn drawSwingGrid(composite, periodQN, rpb, w, h, shadeMeter)
+    @fn isInt(x)   -- Classify a tick at qn position p into 'bar' (downbeat), 'midBar' (the bar's midpoint when 
+    @fn classify(p)
+    @fn swingRead()
+    @fn compositesEqual(a, b)
+        @map:contract  compares period via periodQN, so {1,2} and {2,4} count as equal — equality is on the QN value, not the literal table
+    @fn swingWrite(composite)
+        @map:contract  sole write path; idempotent on equal composites; reswing is paired with the composite write so old→new delta is consistent
+    @fn patchFactor(i, patch)
+    @fn addFactor()
+        @map:contract  default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited
+    @fn removeFactor(i)
+    @fn moveFactor(i, dir)
+    @fn drawFactorRow(i, f, availW)
+    @fn idealSwingHeight(nFactors)   -- Generous estimate — better to show a few px of empty space than to clip the add-factor but
+    @fn idealSwingWidth()
+    @fn draw()
+
+  # Public API
+    -- Public
+    @api self:open()
+        @map:contract  no-op when already open; snapshot is current cm composite at open time, used for Reset and dirty-check
+    @api self:render()
+    @api self:isOpen()
