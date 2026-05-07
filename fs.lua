@@ -40,11 +40,43 @@ function fs.listDirs(path)
   while true do
     local sub = reaper.EnumerateSubdirectories(path, i)
     if not sub then break end
-    out[#out + 1] = sub
+    if sub:sub(1, 1) ~= '.' then out[#out + 1] = sub end
     i = i + 1
   end
   table.sort(out, ciLess)
   return out
+end
+
+function fs.exists(path)
+  local f = io.open(path, 'rb')
+  if f then f:close(); return true end
+  return false
+end
+
+-- Non-cryptographic content fingerprint as 8-char hex. Reads only
+-- size + first/last 4KB so a 30MB sample hashes in microseconds. Two
+-- distinct audio files colliding in size *and* both endpoints is
+-- vanishingly unlikely; sufficient for "is this the same file?" dedup,
+-- not for security.
+function fs.hashFile(path)
+  local f = io.open(path, 'rb')
+  if not f then return nil end
+  f:seek('end')
+  local size = f:seek()
+  f:seek('set', 0)
+  local head = f:read(4096) or ''
+  local tail = ''
+  if size > 8192 then
+    f:seek('set', size - 4096)
+    tail = f:read(4096) or ''
+  end
+  f:close()
+  local data = string.format('%d\0', size) .. head .. tail
+  local h = 2166136261
+  for i = 1, #data do
+    h = ((h ~ data:byte(i)) * 16777619) & 0xFFFFFFFF
+  end
+  return string.format('%08x', h)
 end
 
 function fs.listAudioFiles(path)

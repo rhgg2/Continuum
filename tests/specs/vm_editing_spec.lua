@@ -28,7 +28,7 @@ return {
       -- Col 1 is chan-1 lane-1 note col with delay enabled (7 stops,
       -- partAt = {pitch×2, vel×2, delay×3}). Stop 5 → first delay stop.
       h.ec:setPos(1, 1, 5)
-      h.cmgr.commands.delete()
+      h.cmgr:invoke('delete')
 
       local note = h.fm:dump().notes[1]
       t.eq(note.delay, 0, 'delay metadata zeroed')
@@ -152,7 +152,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(2, 1, 1) -- row 2 = ppq 120 (B), pitch stop
-      h.cmgr.commands.delete()
+      h.cmgr:invoke('delete')
 
       local notes = h.fm:dump().notes
       t.eq(#notes, 2, 'B deleted')
@@ -184,7 +184,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(4, 1, 3) -- row 4 = ppq 240 (note B), vel stop
-      h.cmgr.commands.delete()
+      h.cmgr:invoke('delete')
 
       local note
       for _, n in ipairs(h.fm:dump().notes) do
@@ -212,7 +212,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(2, 1, 1) -- row 2 = ppq 120 (PA cell), pitch stop
-      h.cmgr.commands.delete()
+      h.cmgr:invoke('delete')
 
       local dump = h.fm:dump()
       t.eq(#dump.notes, 1, 'note untouched')
@@ -248,7 +248,7 @@ return {
       -- and includes the PA (row 2).
       h.ec:setSelection{ row1=1, row2=3, col1=1, col2=1, part1='pitch', part2='pitch' }
 
-      h.cmgr.commands.deleteSel()
+      h.cmgr:invoke('deleteSel')
 
       local dump = h.fm:dump()
       t.eq(#dump.notes, 1, 'host note untouched (outside selection)')
@@ -279,7 +279,7 @@ return {
       -- Rows 1..3 covers the PA cell (row 2) but not the host note (row 0).
       h.ec:setSelection{ row1=1, row2=3, col1=1, col2=1, part1='vel', part2='vel' }
 
-      h.cmgr.commands.deleteSel()
+      h.cmgr:invoke('deleteSel')
 
       local dump = h.fm:dump()
       t.eq(#dump.notes, 1, 'host note survives')
@@ -369,7 +369,7 @@ return {
 
       -- Delete row 2 PA.
       h.ec:setPos(2, 1, 3)
-      h.cmgr.commands.delete()
+      h.cmgr:invoke('delete')
 
       local survivors = {}
       for _, c in ipairs(h.fm:dump().ccs) do
@@ -379,7 +379,7 @@ return {
 
       -- Delete row 1 PA.
       h.ec:setPos(1, 1, 3)
-      h.cmgr.commands.delete()
+      h.cmgr:invoke('delete')
       survivors = {}
       for _, c in ipairs(h.fm:dump().ccs) do
         if c.msgType == 'pa' then survivors[#survivors+1] = c end
@@ -402,7 +402,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(1, 1, 5)
-      h.cmgr.commands.delete()
+      h.cmgr:invoke('delete')
 
       local note = h.fm:dump().notes[1]
       t.eq(note.delay, 0)

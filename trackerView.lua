@@ -761,7 +761,9 @@ function newTrackerView(tm, cm, cmgr)
           -- Existing note → repitch, snapping intent time to the cursor row.
           -- tm clears same-(chan, pitch) overlaps at the write boundary.
           if util.isNote(evt) then
-            tm:assignEvent('note', evt, snap({ pitch = pitch, detune = detune }))
+            local upd = { pitch = pitch, detune = detune }
+            if cm:get('trackerMode') then upd.sample = cm:get('currentSample') end
+            tm:assignEvent('note', evt, snap(upd))
             return commit(pitch, evt.vel)
           end
 
@@ -1510,7 +1512,11 @@ function newTrackerView(tm, cm, cmgr)
     reswingPresetChange(name)
   end
 
-  local insertRow, deleteRow do
+  local insertRow, deleteRow, insertRowCol, deleteRowCol do
+    -- Fake pbs are tm-managed absorbers tied to note seats — row ops
+    -- shift only real events and leave fake pbs to tm's reconcile.
+    local function notFake(e) return not e.fake end
+
     -- Build a shift plan for one event by `dLogical` rows under `swing`
     -- and `f`. ppq is re-realised from the new ppqL via swing — a
     -- constant ±dppq would only be right under identity, since under
@@ -1538,7 +1544,7 @@ function newTrackerView(tm, cm, cmgr)
       local dLogical = numRows * logPerRow
 
       local plans, deletes = {}, {}
-      for e in util.between(col.events, C, length) do
+      for e in util.between(col.events, C, length, notFake) do
         local p = shiftPlan(col, e, dLogical, swing, f)
         if p.newppq >= length then util.add(deletes, { col = col, evt = e })
         else                       util.add(plans, p) end
@@ -1584,7 +1590,7 @@ function newTrackerView(tm, cm, cmgr)
       end
 
       local plans, deletes = {}, {}
-      for e in util.between(col.events, C, length) do
+      for e in util.between(col.events, C, length, notFake) do
         if e.ppq < D then util.add(deletes, { col = col, evt = e })
         else              util.add(plans, shiftPlan(col, e, -dLogical, swing, f)) end
       end
@@ -1594,19 +1600,30 @@ function newTrackerView(tm, cm, cmgr)
       writePlans(plans)
     end
 
-    local function forEachRowOp(core, preSel)
+    -- `noSelCols` picks which columns the op spans when no selection is
+    -- active: every column for the broad variants, the cursor column for
+    -- the narrow ones. Selection-aware behaviour is shared.
+    local function forEachRowOp(core, preSel, noSelCols)
       if ec:hasSelection() then
         if preSel then preSel() end
         local r1, r2 = ec:region()
         for col in ec:eachSelectedCol() do core(col, r1, r2 - r1 + 1) end
       else
-        for _, col in ipairs(grid.cols) do core(col, ec:row(), 1) end
+        for _, col in ipairs(noSelCols()) do core(col, ec:row(), 1) end
       end
       tm:flush()
     end
 
-    function insertRow() forEachRowOp(insertRowCore) end
-    function deleteRow() forEachRowOp(deleteRowCore, function() clipboard:copy() end) end
+    local function allCols() return grid.cols end
+    local function curCol()
+      local c = grid.cols[ec:col()]
+      return c and { c } or {}
+    end
+
+    function insertRow()    forEachRowOp(insertRowCore, nil, allCols) end
+    function deleteRow()    forEachRowOp(deleteRowCore, function() clipboard:copy() end, allCols) end
+    function insertRowCol() forEachRowOp(insertRowCore, nil, curCol) end
+    function deleteRowCol() forEachRowOp(deleteRowCore, function() clipboard:copy() end, curCol) end
   end
 
   ----- Nudge
@@ -2001,7 +2018,9 @@ function newTrackerView(tm, cm, cmgr)
 
   ----- Command table
 
-  cmgr:registerAll{
+  local tracker = cmgr:scope('tracker')
+
+  tracker:registerAll{
     cut                     = function() clipboard:copy(); deleteSelection() end,
     delete                  = deleteOrBackspace,
     interpolate             = function() interpolate() end,
@@ -2019,18 +2038,17 @@ function newTrackerView(tm, cm, cmgr)
     nudgeForward            = function() adjustPosition(1) end,
     insertRow               = function() insertRow() end,
     deleteRow               = function() deleteRow() end,
+    insertRowCol            = function() insertRowCol() end,
+    deleteRowCol            = function() deleteRowCol() end,
     nudgeCoarseUp           = function() nudge( 1, true)  end,
     nudgeCoarseDown         = function() nudge(-1, true)  end,
     nudgeFineUp             = function() nudge( 1, false) end,
     nudgeFineDown           = function() nudge(-1, false) end,
-    play                    = function() tm:play() end,
-    playPause               = function() tm:playPause() end,
     playFromTop             = function() tm:playFrom(0) end,
     playFromCursor          = function()
       local col = grid.cols[ec:col()]
       tm:playFrom(ctx:rowToPPQ(ec:row(), col and col.midiChan))
     end,
-    stop                    = function() tm:stop() end,
     addNoteCol              = function() vm:addExtraCol('note') end,
     hideExtraCol            = function() vm:hideExtraCol() end,
     doubleRPB               = function() vm:setRowPerBeat(cm:get('rowPerBeat') * 2) end,
@@ -2039,7 +2057,7 @@ function newTrackerView(tm, cm, cmgr)
   }
 
   for i = 0, 9 do
-    cmgr:register('advBy' .. i, function() cm:set('take', 'advanceBy', i) end)
+    tracker:register('advBy' .. i, function() cm:set('take', 'advanceBy', i) end)
   end
 
   ----- Rebuild
@@ -2228,21 +2246,21 @@ function newTrackerView(tm, cm, cmgr)
     getLength    = function() return length end,
   }
 
-  ec:registerCommands(cmgr)
-  clipboard:registerCommands(cmgr)
+  ec:registerCommands(tracker)
+  clipboard:registerCommands(tracker)
 
   -- Drop sticky selection after edits so the region stays visible but
   -- doesn't extend on the next cursor move.
-  cmgr:doAfter({
+  tracker:doAfter({
     'nudgeCoarseUp', 'nudgeCoarseDown', 'nudgeFineUp', 'nudgeFineDown',
     'nudgeBack', 'nudgeForward', 'growNote', 'shrinkNote',
     'duplicateDown', 'duplicateUp', 'interpolate', 'insertRow',
-    'deleteRow', 'noteOff',
+    'deleteRow', 'insertRowCol', 'deleteRowCol', 'noteOff',
   }, function() ec:unstick() end)
 
-  cmgr:doAfter({ 'delete', 'deleteSel', 'cut' }, function() ec:selClear() end)
+  tracker:doAfter({ 'delete', 'deleteSel', 'cut' }, function() ec:selClear() end)
 
-  cmgr:doBefore({
+  tracker:doBefore({
     'cursorDown', 'cursorUp', 'pageDown', 'pageUp',
     'goTop', 'goBottom', 'goLeft', 'goRight',
     'cursorRight', 'cursorLeft', 'selectDown', 'selectUp',

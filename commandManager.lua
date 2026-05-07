@@ -33,142 +33,140 @@ for name, layout in pairs(layouts) do
   chars[name] = t
 end
 
-function newCommandManager(cm)
-  local mgr = {
-    commands = {},
-    keymap   = {},
-    layouts  = layouts,
-  }
+----- Scope
 
-  function mgr:register(name, fn)
-    self.commands[name] = fn
-  end
+-- A scope owns a `commands` table, a `keymap` table, and the registration
+-- surface. The root scope is global; named scopes are pages. The shared
+-- methods guarantee scope-local doBefore/doAfter never leak across
+-- scopes, since wrap rewrites the scope's own commands table.
+local function attachScope(scope)
+  function scope:register(name, fn) self.commands[name] = fn end
 
-  function mgr:registerAll(tbl)
+  function scope:registerAll(tbl)
     for name, fn in pairs(tbl) do self.commands[name] = fn end
   end
 
-  function mgr:wrap(name, wrapper)
+  function scope:bind(name, keys) self.keymap[name] = keys end
+
+  function scope:bindAll(tbl)
+    for name, keys in pairs(tbl) do self.keymap[name] = keys end
+  end
+
+  function scope:wrap(name, wrapper)
     local orig = self.commands[name]
     if not orig then return end
     self.commands[name] = wrapper(orig)
   end
 
-  function mgr:doBefore(name, before)
+  function scope:doBefore(name, before)
     if type(name) == 'table' then
       for _, n in ipairs(name) do self:doBefore(n, before) end
       return
     end
     self:wrap(name, function(orig)
-      return function ()
-        before()
-        return orig()
-      end
+      return function () before(); return orig() end
     end)
   end
 
-  function mgr:doAfter(name, after)
+  function scope:doAfter(name, after)
     if type(name) == 'table' then
       for _, n in ipairs(name) do self:doAfter(n, after) end
       return
     end
     self:wrap(name, function(orig)
       return function ()
-        local r, s = orig()
-        after()
-        return r, s
+        local r, s = orig(); after(); return r, s
       end
     end)
   end
 
-  function mgr:bind(name, keys)
-    self.keymap[name] = keys
+  return scope
+end
+
+local function newScope()
+  return attachScope({ commands = {}, keymap = {} })
+end
+
+function newCommandManager(cm)
+  local root   = newScope()
+  local scopes = {}
+
+  local mgr = {
+    commands    = root.commands,    -- alias: tests and dispatch read here
+    keymap      = root.keymap,
+    layouts     = layouts,
+    root        = root,
+    scopes      = scopes,
+    activeScope = nil,
+  }
+
+  -- Scope methods on mgr operate on the root (global) scope.
+  function mgr:register(name, fn)     root:register(name, fn) end
+  function mgr:registerAll(tbl)       root:registerAll(tbl) end
+  function mgr:bind(name, keys)       root:bind(name, keys) end
+  function mgr:bindAll(tbl)           root:bindAll(tbl) end
+  function mgr:wrap(name, wrapper)    root:wrap(name, wrapper) end
+  function mgr:doBefore(name, before) root:doBefore(name, before) end
+  function mgr:doAfter(name, after)   root:doAfter(name, after) end
+
+  ----- Scopes
+
+  function mgr:scope(name)
+    local s = scopes[name]
+    if not s then
+      s = newScope()
+      scopes[name] = s
+    end
+    return s
   end
 
-  function mgr:bindAll(tbl)
-    for name, keys in pairs(tbl) do self.keymap[name] = keys end
-  end
+  function mgr:setActive(name) self.activeScope = name end
 
+  function mgr:dropScope(name) scopes[name] = nil end
+
+  ----- Lookup
+
+  -- Walks active scope, then root. A page can shadow a root binding
+  -- when the local meaning is stronger.
   function mgr:invoke(name, ...)
-    local fn = self.commands[name]
+    local s  = self.activeScope and scopes[self.activeScope]
+    local fn = (s and s.commands[name]) or root.commands[name]
     if fn then return fn(...) end
   end
+
+  -- Active-then-root keymap chain. Callers iterate in order; first hit
+  -- wins, so an active-scope binding hard-shadows the root.
+  function mgr:keychain()
+    local s = self.activeScope and scopes[self.activeScope]
+    if s then return { s.keymap, root.keymap } end
+    return { root.keymap }
+  end
+
+  -- Look up a name's keys via the chain. Used by page code that wants
+  -- to recognise a specific binding (e.g. a chord inside a modal) without
+  -- caring which scope owns it.
+  function mgr:keysFor(name)
+    for _, km in ipairs(self:keychain()) do
+      if km[name] then return km[name] end
+    end
+  end
+
+  -- A keymap entry is either a bare key constant or a {key, mod, mod...}
+  -- chord. Returns (keyCode, modMask). ImGui passed in so cmgr stays
+  -- free of REAPER-side imports at module load.
+  function mgr:keySpec(spec, ImGui)
+    if type(spec) ~= 'table' then return spec, ImGui.Mod_None end
+    local mods = ImGui.Mod_None
+    for i = 2, #spec do mods = mods | spec[i] end
+    return spec[1], mods
+  end
+
+  ----- Note layout
 
   -- Re-read noteLayout on each call so a config change takes effect
   -- without rebuilding vm.
   function mgr:noteChars(char)
     return chars[cm:get('noteLayout')][char]
-  end
-
-  function mgr:installDefaultKeymap(ImGui)
-    self:bindAll{
-      cursorUp       = { ImGui.Key_UpArrow,    {ImGui.Key_P, ImGui.Mod_Super} },
-      cursorDown     = { ImGui.Key_DownArrow,  {ImGui.Key_N, ImGui.Mod_Super} },
-      cursorLeft     = { ImGui.Key_LeftArrow,  {ImGui.Key_B, ImGui.Mod_Super} },
-      cursorRight    = { ImGui.Key_RightArrow, {ImGui.Key_F, ImGui.Mod_Super} },
-      goTop          = { ImGui.Key_Home,       {ImGui.Key_Comma, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-      goBottom       = { ImGui.Key_End,        {ImGui.Key_Period, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-      pageUp         = { ImGui.Key_PageUp },
-      pageDown       = { ImGui.Key_PageDown },
-      colLeft        = { {ImGui.Key_B, ImGui.Mod_Ctrl} },
-      colRight       = { {ImGui.Key_F, ImGui.Mod_Ctrl} },
-      channelLeft    = { {ImGui.Key_Tab, ImGui.Mod_Shift} },
-      channelRight   = { ImGui.Key_Tab },
-      noteOff        = { ImGui.Key_1 },
-      shrinkNote     = { {ImGui.Key_LeftBracket, ImGui.Mod_Shift} },
-      growNote       = { {ImGui.Key_RightBracket, ImGui.Mod_Shift} },
-      nudgeBack      = { ImGui.Key_LeftBracket },
-      nudgeForward   = { ImGui.Key_RightBracket },
-      insertRow      = { {ImGui.Key_DownArrow, ImGui.Mod_Ctrl} },
-      deleteRow      = { {ImGui.Key_UpArrow, ImGui.Mod_Ctrl} },
-      delete         = { ImGui.Key_Period },
-      interpolate    = { {ImGui.Key_I, ImGui.Mod_Ctrl} },
-      selectUp       = { {ImGui.Key_UpArrow, ImGui.Mod_Shift} },
-      selectDown     = { {ImGui.Key_DownArrow, ImGui.Mod_Shift} },
-      selectLeft     = { {ImGui.Key_LeftArrow, ImGui.Mod_Shift} },
-      selectRight    = { {ImGui.Key_RightArrow, ImGui.Mod_Shift} },
-      cycleBlock     = { {ImGui.Key_Space, ImGui.Mod_Super} },
-      cycleVBlock    = { {ImGui.Key_O, ImGui.Mod_Super} },
-      swapBlockEnds  = { {ImGui.Key_GraveAccent, ImGui.Mod_Ctrl} },
-      selectClear    = { {ImGui.Key_G, ImGui.Mod_Super} },
-      cut            = { {ImGui.Key_W, ImGui.Mod_Super}, {ImGui.Key_X, ImGui.Mod_Ctrl} },
-      copy           = { {ImGui.Key_W, ImGui.Mod_Ctrl}, {ImGui.Key_C, ImGui.Mod_Ctrl} },
-      paste          = { {ImGui.Key_Y, ImGui.Mod_Super}, {ImGui.Key_V, ImGui.Mod_Ctrl} },
-      duplicateDown  = { {ImGui.Key_D, ImGui.Mod_Ctrl} },
-      duplicateUp    = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-      deleteSel      = { ImGui.Key_Delete },
-      nudgeCoarseUp  = { {ImGui.Key_Equal, ImGui.Mod_Ctrl} },
-      nudgeCoarseDown = { {ImGui.Key_Minus, ImGui.Mod_Ctrl} },
-      nudgeFineUp    = { {ImGui.Key_Equal, ImGui.Mod_Shift} },
-      nudgeFineDown  = { {ImGui.Key_Minus, ImGui.Mod_Shift} },
-      addNoteCol     = { {ImGui.Key_N, ImGui.Mod_Ctrl} },
-      addTypedCol    = { {ImGui.Key_T, ImGui.Mod_Ctrl} },
-      doubleRPB      = { {ImGui.Key_Equal, ImGui.Mod_Super} },
-      halveRPB       = { {ImGui.Key_Minus, ImGui.Mod_Super} },
-      setRPB         = { {ImGui.Key_Z, ImGui.Mod_Super} },
-      takeProperties = { {ImGui.Key_Backspace, ImGui.Mod_Ctrl} },
-      matchGridToCursor = { {ImGui.Key_M, ImGui.Mod_Super} },
-      hideExtraCol   = { {ImGui.Key_H, ImGui.Mod_Ctrl} },
-      inputOctaveUp   = { {ImGui.Key_8, ImGui.Mod_Shift} },
-      inputOctaveDown = { ImGui.Key_Slash },
-      inputSampleUp   = { {ImGui.Key_Period, ImGui.Mod_Shift} },  -- '>'
-      inputSampleDown = { {ImGui.Key_Comma,  ImGui.Mod_Shift} },  -- '<'
-      loadSampleAtCurrentSlot = { {ImGui.Key_L, ImGui.Mod_Super} },
-      playPause      = { ImGui.Key_Space },
-      playFromTop    = { ImGui.Key_F6 },
-      playFromCursor = { ImGui.Key_F7 },
-      stop           = { ImGui.Key_F8 },
-      quit           = { ImGui.Key_Enter },
-      openTemperPicker = { {ImGui.Key_T, ImGui.Mod_Super} },
-      openSwingPicker  = { {ImGui.Key_S, ImGui.Mod_Super} },
-      openSwingEditor = { {ImGui.Key_E, ImGui.Mod_Super} },
-      reswing                = { {ImGui.Key_R, ImGui.Mod_Ctrl} },
-      quantize               = { {ImGui.Key_Q, ImGui.Mod_Ctrl} },
-      quantizeKeepRealised   = { {ImGui.Key_Q, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-    }
-    for i = 0, 9 do
-      self:bind('advBy' .. i, { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} })
-    end
   end
 
   return mgr

@@ -1,22 +1,18 @@
-@module continuum  src=continuum.lua  loc=288  sha=d35b052
-@deps util, configManager, midiManager, trackerManager, commandManager, editCursor, trackerView, slotStore, sampleView, trackerPage
+@module continuum  src=continuum.lua  loc=455  sha=c0fd219
+@deps util, configManager, midiManager, trackerManager, commandManager, editCursor, trackerView, slotStore, sampleManager, sampleView, trackerPage, samplePage
 
 # Module-level constants
-  @const SAMPLER_FX = 'Continuum Sampler'
-  @const CTM_GMEM_NS = 'Continuum_sampler'
-  @const CTM_GMEM_MAGIC = 1717658484
-  @const CTM_GMEM_NAMES_BASE = 1024
-  @const CTM_GMEM_NAME_STRIDE = 64
-  @const CTM_N_SAMPLES = 64
-  @const CTM_GMEM_PREVIEW_BASE = 5120
-  @const CTM_GMEM_PREFIX_BASE = 6144
-  @const CTM_PREVIEW_SLOT_IDX = CTM_N_SAMPLES
+  @const ImGui = require 'imgui' '0.10'
   @const fileOps = {
 
 # Module-level functions (private)
   @fn print(...)
   @fn err_handler(err)
   @fn run(fn)
-  @fn writeGmemPath(base, path)
   @fn copyFileBytes(src, dst)   -- Filesystem ops for slotStore. Stream-copy in 64KB chunks so big samples don't al
+  @fn createImGui()
+  @fn newChrome(cm, ctx)   -- Builds a `chrome` table threaded into every page. Owns the colour cache (one per
+  @fn dispatchKeys(state, cmgr, ctx)   -- A binding fires via cmgr:invoke; first-hit wins, hard-shadowing root. A command 
+  @fn newCoordinator(cm, cmgr, sm, slotStore, take, ctx, font, uiFont)   -- Owns ImGui Begin/End, the toolbar/statusBar bands, the mode switcher, per-frame 
+  @fn Main()
 

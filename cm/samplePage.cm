@@ -1,0 +1,52 @@
+@module samplePage  src=samplePage.lua  loc=466  sha=untracked
+@deps fs
+
+# Module-level constants
+  @const ImGui = require 'imgui' '0.10'
+  @const N_SLOTS = 64
+  @const UP = '__up__'
+
+@factory newSamplePage(sv, sm, cm, cmgr, chrome, ctxArg)
+
+  # Private state
+    @state ctx = ctxArg
+    @state pickerActive = false   -- a popup owned input this frame
+    @state trims = {}
+    @state peakCache = {}   -- absPath → { mins, maxs, cols, fs, frames, lenSec } or false
+    @state durCache = {}   -- absPath → seconds or false
+    @state drag = { handle = nil, slot = nil, startF = nil, endF = nil }
+    @state sp = {}
+
+  # Private functions
+    @fn durFor(abs)
+    @fn peakFor(abs, cols)
+    @fn drawTree(path)   -- Left pane: directory tree. Single-click sets currentFolder; double-click re-roots the tree
+    @fn goUp()
+    @fn drawFiles(folder, root)   -- Middle pane: unified keyboard-navigable list of '..', folders, and files. Arrow keys (no m
+    @fn drawSlots()
+    @fn drawStrip(stripW, stripH)   -- Bottom strip: native waveform + draggable start/end + numeric inputs + preview. Drag overr
+    @fn frameToX(fr)
+
+  # Public API
+    @api sp:renderToolbarBits(_)
+        -- Track picker — lists tracks carrying the Continuum Sampler FX.
+        -- Selecting one rekeys cm (via sv:setTrack) so the slot list reflects
+        -- that track's stored entries.
+    @api sp:renderBody(_, w, h, dispatch)
+    @api sp:renderStatusBar(_)
+    @api sp:bind(track)
+    @api sp:unbind()
+    @api sp:focusState()
+        -- A popup owns input this frame → suppress global shortcuts.
+    @api sp:handleInput()
+    @api sp:save()
+    @api sp:load()
+
+  # REAPER API surface
+    @reaper ImGui_GetBuiltinPath
+    @reaper MB
+    @reaper PCM_Source_CreateFromFile, PCM_Source_Destroy, PCM_Source_GetPeaks
+    @reaper GetMediaSourceLength
+    @reaper GetMediaSourceSampleRate
+    @reaper new_array
+    @reaper GetProjectPath

@@ -38,7 +38,6 @@ local specs = {
   'view_context_spec',
   'parts_spec',
   'vm_tracker_mode_spec',
-  'view_mode_spec',
   'sample_view_spec',
   'slot_store_spec',
   'fs_spec',
@@ -57,6 +56,7 @@ local specs = {
   'vm_insert_delete_row_lane_spec',
   'vm_take_properties_spec',
   'tracker_page_spec',
+  'sample_page_spec',
 }
 
 local pass, fail, failures = 0, 0, {}

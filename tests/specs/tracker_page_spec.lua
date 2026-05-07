@@ -16,6 +16,8 @@ package.preload['imgui'] = function()
   return function(_) return fakeImGui end
 end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
+require('swingEditor')
+require('curveEditor')
 require('trackerPage')
 
 return {
@@ -23,7 +25,7 @@ return {
     name = "bind(take) forwards take to cm:setContext",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.vm, h.cm, h.cmgr, nil)
+      local tp = newTrackerPage(h.vm, h.cm, h.cmgr, nil, nil)
       local got = {}
       h.cm.setContext = function(_, take) got[#got+1] = take end
       tp:bind('take99')
@@ -35,7 +37,7 @@ return {
     name = "unbind() calls cm:setContext(nil)",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.vm, h.cm, h.cmgr, nil)
+      local tp = newTrackerPage(h.vm, h.cm, h.cmgr, nil, nil)
       local called, arg = false, 'unset'
       h.cm.setContext = function(_, take) called = true; arg = take end
       tp:unbind()
@@ -44,12 +46,13 @@ return {
     end,
   },
   {
-    name = "focusState suppressKbd is false with no modal or picker",
+    name = "focusState before any render returns both bits false",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.vm, h.cm, h.cmgr, nil)
+      local tp = newTrackerPage(h.vm, h.cm, h.cmgr, nil, nil)
       local fs = tp:focusState()
-      t.eq(fs.suppressKbd, false, "no suppression at construction")
+      t.eq(fs.suppressKbd, false, "no suppression without a context")
+      t.eq(fs.acceptCmds,  false, "no acceptance without a context")
     end,
   },
 }

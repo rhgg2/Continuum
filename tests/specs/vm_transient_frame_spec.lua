@@ -26,7 +26,7 @@ return {
       -- Place cursor on the note (chan 1, lane 1, row 0, stop 1).
       h.ec:setPos(0, 1, 1)
 
-      h.cmgr.commands.matchGridToCursor()
+      h.cmgr:invoke('matchGridToCursor')
 
       t.eq(h.cm:getAt('transient', 'swing'),      'c58', 'swing pushed to transient')
       t.eq(h.cm:getAt('transient', 'rowPerBeat'), 8,     'rowPerBeat pushed to transient')
@@ -52,10 +52,10 @@ return {
       h.vm:setGridSize(80, 40)
       h.ec:setPos(0, 1, 1)
 
-      h.cmgr.commands.matchGridToCursor()
+      h.cmgr:invoke('matchGridToCursor')
       t.eq(h.cm:getAt('transient', 'rowPerBeat'), 8, 'override active')
 
-      h.cmgr.commands.matchGridToCursor()
+      h.cmgr:invoke('matchGridToCursor')
       t.eq(h.cm:getAt('transient', 'swing'),      nil, 'swing cleared')
       t.eq(h.cm:getAt('transient', 'colSwing'),   nil, 'colSwing cleared')
       t.eq(h.cm:getAt('transient', 'rowPerBeat'), nil, 'rowPerBeat cleared')

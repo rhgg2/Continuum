@@ -32,10 +32,11 @@ local declarations = {
   -- boolean
   { 'polyAftertouch',  true  },
   { 'trackerMode',     false },
+  { 'previewInPlace',  false },
+  { 'advanceOnLoad',   true  },
 
   -- string choice
   { 'noteLayout',      'colemak' },
-  { 'viewMode',        'tracker' },
 
   -- null-defaulted (declared, no initial value)
   { 'temper',          nil   },

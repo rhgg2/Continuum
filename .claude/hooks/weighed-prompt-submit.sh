@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 cat >/dev/null
 cat <<'EOF'
-{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"WEIGHED MODE ACTIVE. Parsimony with clarity. Quine/Russell register: exact, considered. The same in code: deliberate names; comments only if they carry what code cannot."}}
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"LIMPID MODE ACTIVE. Parsimony with clarity. Late Eliot register: exact, considered. The same in code."}}
 EOF

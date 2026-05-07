@@ -1,9 +1,4 @@
-@module sampleView  src=sampleView.lua  loc=147  sha=f86ae56
-@deps fs
-
-# Module-level constants
-  @const N_SLOTS = 64
-  @const PLAY = '\xe2\x96\xb6'
+@module sampleView  src=sampleView.lua  loc=58  sha=d35b052
 
 @factory newSampleView(cm, assignSlot, previewSlot, previewPath, listSamplerTracks)
 
@@ -13,12 +8,6 @@
     @state currentFolder = nil   -- folder whose files fill the middle pane
     @state selectedFile = nil   -- full path of the file selected in the middle pane
 
-  # Private functions
-    @fn browseRoot()
-    @fn drawTree(ctx, path)
-    @fn drawFiles(ctx, path)
-    @fn drawSlots(ctx)
-
   # Public API
     @api sv:setTrack(t)
         -- Switching tracks rekeys cm to the new track and clears any
@@ -27,9 +16,11 @@
         -- and exercise just the local field.
     @api sv:getTrack()
     @api sv:listTracks()
+    @api sv:browseRoot()
+    @api sv:getCurrentFolder()
+    @api sv:setCurrentFolder(p)
     @api sv:setSelectedFile(p)
     @api sv:getSelectedFile()
     @api sv:loadSelectedIntoCurrent()
     @api sv:auditionPath(path)
     @api sv:auditionSlot(idx)
-    @api sv:draw(ctx)

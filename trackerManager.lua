@@ -312,7 +312,11 @@ function newTrackerManager(mm, cm)
     local function addPb(pb)
       local chan, P, L = pb.chan, pb.ppq, pb.val or 0
       local delta  = L - logicalAt(chan, P)
-      local extras = util.pick(pb, 'ppqL frame')
+      -- Carry every non-structural field of pb forward — shape, tension,
+      -- ppqL, frame, uuid, custom metadata. chan/ppq/val belong to forcePb's
+      -- structural set; msgType is stamped by addLowlevel.
+      local extras = util.clone(pb,
+        { chan = true, ppq = true, val = true, msgType = true })
       if not next(extras) then extras = nil end
       if not forcePb(chan, P, extras) then
         if extras then assignLowlevel('pb', pbAt(chan, P), extras) end
@@ -333,15 +337,43 @@ function newTrackerManager(mm, cm)
 
     local function assignPb(pb, update)
       if update.ppq and update.ppq ~= pb.ppq then
-        local chan   = pb.chan
-        local newVal = update.val or logicalAt(chan, pb.ppq)
-        -- delete-and-readd is identity-preserving for the pb's stamp;
-        -- carry the existing pb's extras forward, with `update`
-        -- overriding any overlapping fields.
-        local extras = util.assign(util.pick(pb,     'ppqL frame'),
-                                   util.pick(update, 'ppqL frame'))
-        deletePb(pb)
-        addPb(util.assign({ chan = chan, ppq = update.ppq, val = newVal }, extras))
+        local chan, oldP, newP = pb.chan, pb.ppq, update.ppq
+        local oldL = logicalAt(chan, oldP)
+        local newL = update.val ~= nil and update.val or oldL
+
+        -- Two cases need a true destroy/create on the mm stream and fall
+        -- through to deletePb+addPb: a non-self pb already sits at newP
+        -- (typically a fake absorber to be merged in), or oldP needs a
+        -- fresh fake born to absorb a detune jump after we leave.
+        local existing      = pbAt(chan, newP)
+        local needFakeAtOld = (detuneAt(chan, oldP) ~= detuneBefore(chan, oldP))
+                              and owner(chan, oldP)
+        if (existing and existing ~= pb) or needFakeAtOld then
+          local extras = util.clone(pb, { loc = true, fake = true,
+                                           chan = true, ppq = true, val = true,
+                                           msgType = true })
+          util.assign(extras, util.clone(update, { ppq = true, val = true }))
+          deletePb(pb)
+          addPb(util.assign({ chan = chan, ppq = newP, val = newL }, extras))
+          return
+        end
+
+        -- In-place move. Mirror deletePb's retune over [oldP, nextRealOld)
+        -- to revert the pb's old contribution (this also bumps pb itself
+        -- to a passthrough val); then mutate ppq+val+metadata in one
+        -- assignLowlevel; then mirror addPb's retune over [newP, nextRealNew)
+        -- to lift pb to its new logical value. mm-side identity (uuid,
+        -- sidecar, idx) survives the move.
+        retuneLowlevel(chan, oldP, nextRealChange(chan, oldP),
+                       logicalBefore(chan, oldP) - oldL)
+        local carrierAtNew = rawAt(chan, newP)
+        local moveUpdate   = util.clone(update)
+        moveUpdate.ppq = newP
+        moveUpdate.val = carrierAtNew
+        assignLowlevel('pb', pb, moveUpdate)
+        sortByPPQ(chans[chan].pbs)
+        retuneLowlevel(chan, newP, nextRealChange(chan, newP),
+                       newL - logicalAt(chan, newP))
         return
       end
       if update.val then

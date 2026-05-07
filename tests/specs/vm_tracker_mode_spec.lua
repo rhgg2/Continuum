@@ -224,7 +224,7 @@ return {
         take      = { currentSample = 5 },
         transient = { samplerNames = { [3] = 'a', [10] = 'b' } },
       } }
-      h.cmgr.commands.inputSampleUp()
+      h.cmgr:invoke('inputSampleUp')
       t.eq(h.cm:get('currentSample'), 6, 'stepped to empty slot 6')
     end,
   },
@@ -233,7 +233,7 @@ return {
     name = 'inputSampleDown decrements by 1 even into empty slots',
     run = function(harness)
       local h = harness.mk{ config = { take = { currentSample = 5 } } }
-      h.cmgr.commands.inputSampleDown()
+      h.cmgr:invoke('inputSampleDown')
       t.eq(h.cm:get('currentSample'), 4)
     end,
   },
@@ -242,7 +242,7 @@ return {
     name = 'inputSampleUp clamps at 127',
     run = function(harness)
       local h = harness.mk{ config = { take = { currentSample = 127 } } }
-      h.cmgr.commands.inputSampleUp()
+      h.cmgr:invoke('inputSampleUp')
       t.eq(h.cm:get('currentSample'), 127)
     end,
   },
@@ -251,7 +251,7 @@ return {
     name = 'inputSampleDown clamps at 0',
     run = function(harness)
       local h = harness.mk{ config = { take = { currentSample = 0 } } }
-      h.cmgr.commands.inputSampleDown()
+      h.cmgr:invoke('inputSampleDown')
       t.eq(h.cm:get('currentSample'), 0)
     end,
   },
@@ -346,7 +346,7 @@ return {
         if evt.type == 'pa' then paRow = r end
       end
       h.ec:setPos(paRow, 1, 3)
-      h.cmgr.commands.delete()    -- must not crash and must not delete the PA
+      h.cmgr:invoke('delete')    -- must not crash and must not delete the PA
       local stillPA = false
       for _, c in ipairs(h.fm:dump().ccs) do
         if c.msgType == 'pa' and c.ppq == 240 then stillPA = true end

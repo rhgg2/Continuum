@@ -49,12 +49,12 @@ return {
       end
 
       local h1 = mk()
-      h1.cmgr.commands.delete()
+      h1.cmgr:invoke('delete')
       local after1 = h1.fm:dump().notes[1]
 
       local h2 = mk()
       degenerateSel(h2)
-      h2.cmgr.commands.deleteSel()
+      h2.cmgr:invoke('deleteSel')
       local after2 = h2.fm:dump().notes[1]
 
       t.eq(after1.delay,  0, 'cursor-delete zeros delay')
@@ -82,12 +82,12 @@ return {
       end
 
       local h1 = mk()
-      h1.cmgr.commands.delete()
+      h1.cmgr:invoke('delete')
       local a = h1.fm:dump().notes[1]
 
       local h2 = mk()
       degenerateSel(h2)
-      h2.cmgr.commands.deleteSel()
+      h2.cmgr:invoke('deleteSel')
       local b = h2.fm:dump().notes[1]
 
       t.eq(a.vel,    b.vel,    'vel matches between the two paths')
@@ -111,9 +111,9 @@ return {
     run = function(harness)
       local h = mkNoteHarness(harness, { endppq = 300 })
       h.ec:setPos(4, 1, 1)  -- pitch stop, on note
-      h.cmgr.commands.copy()
+      h.cmgr:invoke('copy')
       h.ec:setPos(8, 1, 1)  -- ppq 480, empty
-      h.cmgr.commands.paste()
+      h.cmgr:invoke('paste')
 
       local notes = h.fm:dump().notes
       local orig, pasted
@@ -142,9 +142,9 @@ return {
       -- only its start; endRow is dropped.
       local h = mkNoteHarness(harness)
       h.ec:setPos(4, 1, 1)
-      h.cmgr.commands.copy()
+      h.cmgr:invoke('copy')
       h.ec:setPos(8, 1, 1)
-      h.cmgr.commands.paste()
+      h.cmgr:invoke('paste')
 
       local pasted
       for _, n in ipairs(h.fm:dump().notes) do
@@ -165,13 +165,13 @@ return {
       local h = mkNoteHarness(harness)
       -- First, copy the note at row 4.
       h.ec:setPos(4, 1, 1)
-      h.cmgr.commands.copy()
+      h.cmgr:invoke('copy')
       -- Now move to an empty row and copy — should be a no-op.
       h.ec:setPos(12, 1, 1)
-      h.cmgr.commands.copy()
+      h.cmgr:invoke('copy')
       -- Paste somewhere else. Should paste the row-4 note, not nothing.
       h.ec:setPos(16, 1, 1)  -- ppq 960
-      h.cmgr.commands.paste()
+      h.cmgr:invoke('paste')
 
       local notes = h.fm:dump().notes
       local pasted
@@ -212,7 +212,7 @@ return {
       -- No-sel: cursor on row 0 col 1. insertRow shifts every col.
       local h1 = mkScenario()
       h1.ec:setPos(0, 1, 1)
-      h1.cmgr.commands.insertRow()
+      h1.cmgr:invoke('insertRow')
       local d1 = h1.fm:dump()
       t.eq(noteAtChan(d1, 1).ppq, 300, 'no-sel insertRow shifts chan-1 note')
       t.eq(noteAtChan(d1, 2).ppq, 300, 'no-sel insertRow shifts chan-2 note (every col)')
@@ -221,7 +221,7 @@ return {
       local h2 = mkScenario()
       h2.ec:setPos(0, 1, 1)
       degenerateSel(h2)
-      h2.cmgr.commands.insertRow()
+      h2.cmgr:invoke('insertRow')
       local d2 = h2.fm:dump()
       t.eq(noteAtChan(d2, 1).ppq, 300, '1×1-sel insertRow shifts sel col')
       t.eq(noteAtChan(d2, 2).ppq, 240, '1×1-sel insertRow leaves non-sel col untouched')
@@ -236,7 +236,7 @@ return {
     run = function(harness)
       local h = mkNoteHarness(harness)
       h.ec:setPos(4, 1, 1)  -- pitch stop
-      h.cmgr.commands.duplicateDown()
+      h.cmgr:invoke('duplicateDown')
 
       local notes = h.fm:dump().notes
       t.eq(#notes, 2, 'one new note created')
@@ -264,7 +264,7 @@ return {
       local h = mkNoteHarness(harness)
       h.ec:setPos(4, 1, 1)  -- pitch stop
       degenerateSel(h)
-      h.cmgr.commands.duplicateDown()
+      h.cmgr:invoke('duplicateDown')
 
       local notes = h.fm:dump().notes
       t.eq(#notes, 2, 'one new note created')
@@ -303,7 +303,7 @@ return {
       h.vm:setGridSize(80, 40)
       h.ec:setPos(4, 1, 3)  -- vel stop on the row-4 note
       degenerateSel(h)
-      h.cmgr.commands.duplicateDown()
+      h.cmgr:invoke('duplicateDown')
 
       -- Target is row 5 (ppq=300) — the second note. Its vel should
       -- now carry the source vel (77), not its own (100).
@@ -330,7 +330,7 @@ return {
     run = function(harness)
       local h = mkNoteHarness(harness)  -- note at ppq 240..360 (rows 4..6)
       h.ec:setPos(4, 1, 1)
-      h.cmgr.commands.nudgeForward()
+      h.cmgr:invoke('nudgeForward')
 
       local n = h.fm:dump().notes[1]
       t.eq(n.ppq,    300, 'note.ppq advanced by 1 row (60 ppq)')
@@ -352,7 +352,7 @@ return {
       } } }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(2, 1, 1)  -- on note B's onset row
-      h.cmgr.commands.nudgeBack()
+      h.cmgr:invoke('nudgeBack')
 
       local notes = h.fm:dump().notes
       local b
@@ -379,7 +379,7 @@ return {
       } } }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(1, 1, 1)  -- on note B's onset row
-      h.cmgr.commands.nudgeBack()
+      h.cmgr:invoke('nudgeBack')
 
       local b
       for _, n in ipairs(h.fm:dump().notes) do if n.pitch == 62 then b = n end end
@@ -402,7 +402,7 @@ return {
       } } }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(0, 1, 1)
-      h.cmgr.commands.nudgeBack()
+      h.cmgr:invoke('nudgeBack')
 
       local n = h.fm:dump().notes[1]
       t.eq(n.ppq,    0,   'ppq stays at 0')
@@ -423,7 +423,7 @@ return {
       } } }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(2, 1, 1)  -- on A's endRow; cursorNoteBefore picks A
-      h.cmgr.commands.nudgeForward()
+      h.cmgr:invoke('nudgeForward')
 
       local a, b
       for _, n in ipairs(h.fm:dump().notes) do
@@ -464,7 +464,7 @@ return {
       t.eq(#ch.columns.notes[1].events, 2, 'both notes in lane 1')
 
       h.ec:setPos(0, 1, 1)  -- cursorNoteBefore at row 0 picks A
-      h.cmgr.commands.growNote()
+      h.cmgr:invoke('growNote')
 
       local a
       for _, n in ipairs(h.fm:dump().notes) do
@@ -511,7 +511,7 @@ return {
       t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (intents touch at logical 60)')
 
       h.ec:setPos(0, 1, 1)  -- cursorNoteBefore picks A
-      h.cmgr.commands.growNote()
+      h.cmgr:invoke('growNote')
 
       local a
       for _, n in ipairs(h.fm:dump().notes) do
@@ -545,7 +545,7 @@ return {
       t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (intents touch)')
 
       h.ec:setPos(0, 1, 1)  -- cursorNoteBefore at row 0 picks A
-      h.cmgr.commands.growNote()
+      h.cmgr:invoke('growNote')
 
       local a
       for _, n in ipairs(h.fm:dump().notes) do
@@ -589,7 +589,7 @@ return {
       t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (different pitch, no overlap)')
 
       h.ec:setPos(0, 1, 1)  -- cursorNoteBefore picks A
-      h.cmgr.commands.nudgeForward()
+      h.cmgr:invoke('nudgeForward')
 
       local a
       for _, n in ipairs(h.fm:dump().notes) do
@@ -622,7 +622,7 @@ return {
       t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (overlap within lenient threshold)')
 
       h.ec:setPos(3, 1, 1)  -- on B's onset row
-      h.cmgr.commands.nudgeBack()
+      h.cmgr:invoke('nudgeBack')
 
       local b
       for _, n in ipairs(h.fm:dump().notes) do if n.pitch == 62 then b = n end end
@@ -639,7 +639,7 @@ return {
     run = function(harness)
       local h = mkNoteHarness(harness)  -- pitch = 60
       h.ec:setPos(4, 1, 1)
-      h.cmgr.commands.nudgeFineUp()
+      h.cmgr:invoke('nudgeFineUp')
 
       local n = h.fm:dump().notes[1]
       t.eq(n.pitch, 61, 'pitch raised by 1')
@@ -654,7 +654,7 @@ return {
     run = function(harness)
       local h = mkNoteHarness(harness)  -- note ppq 240..360
       h.ec:setPos(5, 1, 1)  -- inside note span, pitch stop
-      h.cmgr.commands.noteOff()
+      h.cmgr:invoke('noteOff')
 
       local n = h.fm:dump().notes[1]
       t.eq(n.ppq,    240, 'ppq unchanged')

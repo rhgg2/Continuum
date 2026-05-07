@@ -151,9 +151,9 @@ return {
       h.vm:setGridSize(80, 40)
 
       h.ec:setPos(10, 1, 1)             -- on the source note
-      h.cmgr.commands.copy()
+      h.cmgr:invoke('copy')
       h.ec:setPos(4, 1, 1)              -- inside long note's tail
-      h.cmgr.commands.paste()
+      h.cmgr:invoke('paste')
 
       local long = noteByPitch(h.fm:dump(), 60)
       t.truthy(long, 'long note survived')
@@ -186,9 +186,9 @@ return {
       -- Multi-col copy: row 10, cols 1..2 pitch part.
       h.ec:setSelection{ row1=10, row2=10, col1=1, col2=2,
                           part1='pitch', part2='pitch' }
-      h.cmgr.commands.copy()
+      h.cmgr:invoke('copy')
       h.ec:setPos(4, 1, 1)
-      h.cmgr.commands.paste()
+      h.cmgr:invoke('paste')
 
       local long1 = noteByPitch(h.fm:dump(), 60)
       local long2 = noteByPitch(h.fm:dump(), 64)
@@ -225,7 +225,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(2, 1, 1)
-      h.cmgr.commands.noteOff()
+      h.cmgr:invoke('noteOff')
 
       local n = noteByPitch(h.fm:dump(), 60)
       t.eq(n.endppq,    120, 'tail clipped to cursor ppq')
@@ -251,7 +251,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(2, 1, 1)        -- inside the note's tail
-      h.cmgr.commands.insertRow()  -- pushes the spanning tail down by 1 row
+      h.cmgr:invoke('insertRow')  -- pushes the spanning tail down by 1 row
 
       local n = noteByPitch(h.fm:dump(), 60)
       t.eq(n.endppq,    300, 'spanning tail extended by 1 row (60 ppq)')

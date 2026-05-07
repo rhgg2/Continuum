@@ -98,6 +98,7 @@ return {
       local pathCalls = {}
       local sv = newSampleView(h.cm, function() end, function() end,
         function(p) pathCalls[#pathCalls+1] = p end)
+      sv:setTrack('t1')
       t.eq(sv:auditionPath('/kick.wav'), true, "returns true")
       t.eq(#pathCalls, 1, "previewPath called once")
       t.eq(pathCalls[1], '/kick.wav', "path forwarded")
@@ -148,6 +149,31 @@ return {
     end,
   },
   {
+    name = "loadSelectedIntoCurrent advances to next free slot when advanceOnLoad is true",
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('global', 'advanceOnLoad', true)
+      h.cm:set('transient', 'currentSample', 5)
+      h.cm:set('track', 'slotEntries', { [6] = { path = 'x' } })
+      local sv = newSampleView(h.cm, function() return true end)
+      sv:setSelectedFile('/y.wav')
+      sv:loadSelectedIntoCurrent()
+      t.eq(h.cm:get('currentSample'), 7, 'skipped occupied slot 6, advanced to 7')
+    end,
+  },
+  {
+    name = "loadSelectedIntoCurrent leaves currentSample alone when advanceOnLoad is false",
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('global', 'advanceOnLoad', false)
+      h.cm:set('transient', 'currentSample', 5)
+      local sv = newSampleView(h.cm, function() return true end)
+      sv:setSelectedFile('/y.wav')
+      sv:loadSelectedIntoCurrent()
+      t.eq(h.cm:get('currentSample'), 5, 'stayed on the slot we loaded into')
+    end,
+  },
+  {
     name = "auditionSlot(idx) calls previewSlot(idx, 1)",
     run = function(harness)
       local h = harness.mk()
@@ -155,6 +181,7 @@ return {
       local sv = newSampleView(h.cm, function() end,
         function(slot, bounds) slotCalls[#slotCalls+1] = { slot, bounds } end,
         function() end)
+      sv:setTrack('t1')
       sv:auditionSlot(7)
       t.eq(#slotCalls, 1, "previewSlot called once")
       t.eq(slotCalls[1][1], 7, "slot forwarded")

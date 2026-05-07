@@ -22,6 +22,7 @@ out_pin:left output
 out_pin:right output
 
 slider1:interpolation=2<0,2,1{Low,Medium,High}>Resampling quality
+slider2:instance_id=0<0,127,1>-Instance ID
 
 import rs_resampler.jsfx-inc
 
@@ -60,31 +61,48 @@ SER_PREFIX_STR    = 16;
 SCRATCH_ABS_STR   = 17;
 THUMB_W           = 100;           // waveform thumbnail width (px columns), min/max packed
 
-// gmem[Continuum_sampler] layout:
-//   gmem[0..1023]                     : Continuum→sampler load mailbox
-//     [0]   magic (0=empty, MAGIC=pending; written last)
-//     [1]   slot index
-//     [2..] rel-path bytes, 0-terminated (project-relative; prefix from PREFIX mailbox)
-//   gmem[NAMES_BASE..NAMES_BASE+N_SAMPLES*NAME_STRIDE-1] : names slab (sampler→Continuum)
-//     one slot per sample: ASCII bytes then 0-terminator
+// gmem[Continuum_sampler] layout — shared across all sampler instances.
+// MAX_INSTANCES = 128. Each instance carries an instance_id (slider2),
+// pushed by Continuum from a P_EXT key. Mailboxes carry target_id at [+1]
+// so an instance consumes only when it matches; per-instance slabs stride
+// by instance_id. PREFIX is project-wide (every instance reads it).
+//
+//   gmem[LOAD_BASE..LOAD_BASE+1023]     : Continuum→sampler load mailbox
+//     [0]   magic   (0=empty, MAGIC=pending; written last)
+//     [1]   target_id
+//     [2]   slot index
+//     [3..] rel-path bytes, 0-terminated (composed against SER_PREFIX_STR)
 //   gmem[PREVIEW_BASE..PREVIEW_BASE+1023] : Continuum→sampler preview mailbox
-//     [0]   magic (0=empty, MAGIC=pending; written last)
-//     [1]   slot index (0..N_SAMPLES-1 = preview existing slot;
-//                       PREVIEW_SLOT_IDX = load path bytes into hidden slot first)
-//     [2]   bounds flag (0 full file, 1 honour SH_START/SH_END)
-//     [3..] absolute path bytes, 0-terminated (only read when slot == PREVIEW_SLOT_IDX;
-//           preview is project-agnostic so abs not rel)
-//   gmem[PREFIX_BASE..PREFIX_BASE+1023] : Continuum→sampler project prefix mailbox
-//     [0]   magic (0=empty, MAGIC=pending; written last)
-//     [1..] absolute project root bytes, 0-terminated. JSFX caches in SER_PREFIX_STR
-//           and uses it to compose abs paths from rel-path loads & on @serialize-read.
+//     [0]   magic
+//     [1]   target_id
+//     [2]   slot index (0..N_SAMPLES-1 existing slot;
+//                       PREVIEW_SLOT_IDX path-load first; <0 stop all)
+//     [3]   bounds flag (0 full file, 1 honour SH_START/SH_END)
+//     [4..] absolute path bytes, 0-terminated (only read at PREVIEW_SLOT_IDX)
+//   gmem[PREFIX_BASE..PREFIX_BASE+1023] : Continuum→sampler project prefix
+//     [0]   magic, [1..] absolute project root bytes, 0-terminated.
+//   gmem[TRIM_BASE..TRIM_BASE+1023]     : Continuum→sampler trim-write mailbox
+//     [0] seq    — monotonic, JSFX caches last-seen, applies on change.
+//     [1] target_id, [2] slot, [3] start (frames), [4] end (frames; 0 ⇒ default)
+//   gmem[NAMES_BASE..]  : per-instance names slabs, stride INSTANCE_NAMES_STRIDE
+//     instance i lives at NAMES_BASE + i * INSTANCE_NAMES_STRIDE.
+//   gmem[TRIMS_BASE..]  : per-instance trim slabs, stride INSTANCE_TRIMS_STRIDE
+//     instance i lives at TRIMS_BASE + i * INSTANCE_TRIMS_STRIDE.
 // Continuum mirrors these constants — keep in sync.
-CTM_GMEM_MAGIC         = 1717658484;    // 'CTML' as 32-bit ASCII
-CTM_GMEM_PATH_MAX      = 1022;          // load / preview / prefix slabs fit in 1024 floats
-CTM_GMEM_NAMES_BASE    = 1024;
-CTM_GMEM_NAME_STRIDE   = 64;            // chars per name including 0-terminator
-CTM_GMEM_PREVIEW_BASE  = 5120;          // = NAMES_BASE + N_SAMPLES * NAME_STRIDE
-CTM_GMEM_PREFIX_BASE   = 6144;          // = PREVIEW_BASE + 1024
+CTM_GMEM_MAGIC                  = 1717658484;    // 'CTML' as 32-bit ASCII
+CTM_GMEM_MAX_INSTANCES          = 128;
+CTM_GMEM_PATH_MAX               = 1019;          // smallest header (preview's [4..]) leaves 1019 bytes + terminator
+CTM_GMEM_LOAD_BASE              = 0;
+CTM_GMEM_PREVIEW_BASE           = 1024;
+CTM_GMEM_PREFIX_BASE            = 2048;
+CTM_GMEM_TRIM_BASE              = 3072;
+CTM_GMEM_NAME_STRIDE            = 64;
+CTM_GMEM_TRIMS_STRIDE           = 4;
+CTM_GMEM_INSTANCE_NAMES_STRIDE  = N_SAMPLES * CTM_GMEM_NAME_STRIDE;   // 4096
+CTM_GMEM_INSTANCE_TRIMS_STRIDE  = N_SAMPLES * CTM_GMEM_TRIMS_STRIDE;  // 256
+CTM_GMEM_NAMES_BASE             = 4096;
+CTM_GMEM_TRIMS_BASE             = CTM_GMEM_NAMES_BASE
+                                + CTM_GMEM_MAX_INSTANCES * CTM_GMEM_INSTANCE_NAMES_STRIDE;  // 528384
 
 // Sample header field offsets
 SH_LENGTH     = 0;   SH_FS         = 1;   SH_BASENOTE = 2;
@@ -691,15 +709,6 @@ function pal_pos(a)    ( gfx_set( 86/255, 138/255,  64/255, a); );
 function pal_amber(a)  ( gfx_set(220/255, 180/255,  50/255, a); );
 function pal_steel(a)  ( gfx_set(100/255, 130/255, 160/255, a); );
 
-// Marker line plus top/bottom grab tabs. Caller sets the colour first.
-function draw_handle(x)
-  global(wave_y, wave_h, HANDLE_TAB_W, HANDLE_TAB_H)
-( gfx_line(x, wave_y, x, wave_y + wave_h);
-  gfx_rect(x - HANDLE_TAB_W * 0.5, wave_y, HANDLE_TAB_W, HANDLE_TAB_H);
-  gfx_rect(x - HANDLE_TAB_W * 0.5, wave_y + wave_h - HANDLE_TAB_H,
-           HANDLE_TAB_W, HANDLE_TAB_H);
-);
-
 // One row at (rx, ry, rw, rh): index | name | waveform | frame count.
 // Drawing only — caller handles thumb_build throttling and hit-testing.
 function row_draw(idx, rx, ry, rw, rh)
@@ -817,12 +826,12 @@ function preview_consume()
 // ============================================================
 // UI state (driven by @gfx)
 // ============================================================
-sel_idx                = 0;     // selected sample — drives bottom strip
+sel_idx                = 0;     // selected sample (row highlight)
 rename_idx             = -1;    // -1 = not renaming; else idx of name being edited
 mouse_prev             = 0;     // prev mouse_cap & 1, for edge detection
-drag_handle            = 0;     // 0 none, 1 SH_START handle, 2 SH_END handle
 preview_request_slot   = -1;    // -1 none, else sample idx to preview at next @block
 preview_request_bounds = 0;     // 0 = play full file, 1 = honour SH_START/SH_END
+last_trim_seq          = 0;     // last consumed seq in CTM_GMEM_TRIM_BASE
 
 @slider
 interpolation > 1 ? (pdc_delay = 24; pdc_bot_ch = 0; pdc_top_ch = 2;);
@@ -902,37 +911,39 @@ gmem[CTM_GMEM_PREFIX_BASE] == CTM_GMEM_MAGIC ? (
   gmem[CTM_GMEM_PREFIX_BASE] = 0;
 );
 
-// Continuum → sampler load request. gmem[0]==CTM_GMEM_MAGIC marks a pending
-// record (Continuum writes magic last). Path bytes are project-relative;
-// load_sample_from_rel composes the absolute against SER_PREFIX_STR.
-gmem[0] == CTM_GMEM_MAGIC ? (
-  ctm_slot = gmem[1];
+// Continuum → sampler load request. Magic-gated; only consumed when
+// target_id (gmem[+1]) matches our slider2. Continuum writes magic last.
+gmem[CTM_GMEM_LOAD_BASE] == CTM_GMEM_MAGIC
+    && gmem[CTM_GMEM_LOAD_BASE + 1] == instance_id ? (
+  ctm_slot = gmem[CTM_GMEM_LOAD_BASE + 2];
   strcpy(CTM_GMEM_PATH_STR, "");
   ctm_i = 0;
   ctm_done = 0;
   while (ctm_i < CTM_GMEM_PATH_MAX && !ctm_done) (
-    ctm_ch = gmem[2 + ctm_i];
+    ctm_ch = gmem[CTM_GMEM_LOAD_BASE + 3 + ctm_i];
     ctm_ch == 0 ? ctm_done = 1
     : ( str_setchar(CTM_GMEM_PATH_STR, ctm_i, ctm_ch); ctm_i += 1; );
   );
   ctm_slot >= 0 && ctm_slot < N_SAMPLES ?
     load_sample_from_rel(ctm_slot, CTM_GMEM_PATH_STR);
-  gmem[0] = 0;
+  gmem[CTM_GMEM_LOAD_BASE] = 0;
 );
 
 // Continuum → sampler preview request. slot field discriminates: < N_SAMPLES
 // previews an existing slot; == PREVIEW_SLOT_IDX path-loads into the hidden
-// slot first, then previews. preview_consume() (driven from @block tail) does
-// the voice work. Bounds=1 honours SH_START/SH_END, 0 plays the full file.
-gmem[CTM_GMEM_PREVIEW_BASE] == CTM_GMEM_MAGIC ? (
-  pv_slot   = gmem[CTM_GMEM_PREVIEW_BASE + 1];
-  pv_bounds = gmem[CTM_GMEM_PREVIEW_BASE + 2];
+// slot first, then previews; == -1 stops all preview voices immediately.
+// preview_consume() (driven from @block tail) does the voice work.
+// Bounds=1 honours SH_START/SH_END, 0 plays the full file.
+gmem[CTM_GMEM_PREVIEW_BASE] == CTM_GMEM_MAGIC
+    && gmem[CTM_GMEM_PREVIEW_BASE + 1] == instance_id ? (
+  pv_slot   = gmem[CTM_GMEM_PREVIEW_BASE + 2];
+  pv_bounds = gmem[CTM_GMEM_PREVIEW_BASE + 3];
   pv_slot == PREVIEW_SLOT_IDX ? (
     strcpy(CTM_GMEM_PATH_STR, "");
     pv_i = 0;
     pv_done = 0;
     while (pv_i < CTM_GMEM_PATH_MAX && !pv_done) (
-      pv_ch = gmem[CTM_GMEM_PREVIEW_BASE + 3 + pv_i];
+      pv_ch = gmem[CTM_GMEM_PREVIEW_BASE + 4 + pv_i];
       pv_ch == 0 ? pv_done = 1
       : ( str_setchar(CTM_GMEM_PATH_STR, pv_i, pv_ch); pv_i += 1; );
     );
@@ -941,24 +952,77 @@ gmem[CTM_GMEM_PREVIEW_BASE] == CTM_GMEM_MAGIC ? (
   pv_slot >= 0 && pv_slot <= PREVIEW_SLOT_IDX ? (
     preview_request_slot   = pv_slot;
     preview_request_bounds = pv_bounds;
+  ) : pv_slot < 0 ? (
+    pv_idx = play_head;
+    while (pv_idx >= 0) (
+      pv_vb   = voice_pool_base + pv_idx * VOICE_FIELDS;
+      pv_next = pv_vb[V_NEXT];
+      pv_vb[V_CHANNEL] == PREVIEW_CHAN ? voice_release(pv_idx);
+      pv_idx  = pv_next;
+    );
   );
   gmem[CTM_GMEM_PREVIEW_BASE] = 0;
 );
 
-// Publish sample names to gmem so Continuum can show them. Always re-emit;
-// names rarely change but the cost (~64 names * ~10 chars * 100 blocks/sec)
-// is trivial. Each slot is ASCII bytes then a 0-terminator.
+// Publish sample names to gmem so Continuum can show them. Always re-emit
+// into our per-instance slab; cost is bounded per-instance (other instances
+// write their own slabs). Each slot is ASCII bytes then a 0-terminator.
+ctm_inst_names_base = CTM_GMEM_NAMES_BASE
+                    + instance_id * CTM_GMEM_INSTANCE_NAMES_STRIDE;
 ctm_pub_idx = 0;
 loop(N_SAMPLES,
   ctm_name_ptr = NAME_BASE + ctm_pub_idx;
   ctm_name_len = min(strlen(ctm_name_ptr), CTM_GMEM_NAME_STRIDE - 1);
-  ctm_name_base = CTM_GMEM_NAMES_BASE + ctm_pub_idx * CTM_GMEM_NAME_STRIDE;
+  ctm_name_base = ctm_inst_names_base + ctm_pub_idx * CTM_GMEM_NAME_STRIDE;
   ctm_pub_j = 0;
   while (ctm_pub_j < ctm_name_len) (
     gmem[ctm_name_base + ctm_pub_j] = str_getchar(ctm_name_ptr, ctm_pub_j);
     ctm_pub_j += 1;
   );
   gmem[ctm_name_base + ctm_name_len] = 0;
+  ctm_pub_idx += 1;
+);
+
+// Continuum → sampler trim write. Seq-gated, not magic-gated, so a 60 fps
+// slider drag never queues behind a still-pending clear. Target_id at [+1]
+// gates per-instance; non-matching writes leave last_trim_seq advanced
+// (this is fine — the next write to *us* increments seq again).
+ctm_trim_seq = gmem[CTM_GMEM_TRIM_BASE];
+ctm_trim_seq != last_trim_seq
+    && gmem[CTM_GMEM_TRIM_BASE + 1] == instance_id ? (
+  ctm_trim_slot  = gmem[CTM_GMEM_TRIM_BASE + 2];
+  ctm_trim_start = gmem[CTM_GMEM_TRIM_BASE + 3];
+  ctm_trim_end   = gmem[CTM_GMEM_TRIM_BASE + 4];
+  (ctm_trim_slot >= 0 && ctm_trim_slot < N_SAMPLES
+       && samplelocs[ctm_trim_slot]
+       && samplelocs[ctm_trim_slot][SH_LENGTH] > 0) ? (
+    samplelocs[ctm_trim_slot][SH_START] = ctm_trim_start;
+    samplelocs[ctm_trim_slot][SH_END]   = ctm_trim_end;
+  );
+  last_trim_seq = ctm_trim_seq;
+);
+
+// Publish per-slot trim slab into our per-instance slab. fs==0 marks
+// unloaded. end_eff resolves SH_END==0 to frames-2 (matches voice_start).
+ctm_inst_trims_base = CTM_GMEM_TRIMS_BASE
+                    + instance_id * CTM_GMEM_INSTANCE_TRIMS_STRIDE;
+ctm_pub_idx = 0;
+loop(N_SAMPLES,
+  ctm_trim_sl   = samplelocs[ctm_pub_idx];
+  ctm_trim_base = ctm_inst_trims_base + ctm_pub_idx * CTM_GMEM_TRIMS_STRIDE;
+  (ctm_trim_sl && ctm_trim_sl[SH_LENGTH] > 0) ? (
+    ctm_trim_frames = ctm_trim_sl[SH_LENGTH] / 2;
+    gmem[ctm_trim_base    ] = ctm_trim_sl[SH_FS];
+    gmem[ctm_trim_base + 1] = ctm_trim_frames;
+    gmem[ctm_trim_base + 2] = ctm_trim_sl[SH_START];
+    gmem[ctm_trim_base + 3] = ctm_trim_sl[SH_END] > 0 ? ctm_trim_sl[SH_END]
+                                                      : ctm_trim_frames - 2;
+  ) : (
+    gmem[ctm_trim_base    ] = 0;
+    gmem[ctm_trim_base + 1] = 0;
+    gmem[ctm_trim_base + 2] = 0;
+    gmem[ctm_trim_base + 3] = 0;
+  );
   ctm_pub_idx += 1;
 );
 
@@ -1050,36 +1114,21 @@ dc_xR = dc_tmp;
 spl0 = ssl;
 spl1 = ssr;
 
-@gfx 760 880
+@gfx 760 752
 // ------------------------------------------------------------
-// UI: 2-column slot grid + bottom strip with draggable start/end markers
-// + click-to-rename name field. Layout, input, and rendering live here.
+// UI: 2-column slot grid + click-to-rename name field. Drag-drop landing
+// pad. Wave preview, start/end editing, and any large-format inspection
+// live in Continuum — this surface is intentionally minimal.
 // ------------------------------------------------------------
 UI_ROWS_TOP    = 28;
 UI_COL_PAD     = 6;
 ui_row_h       = 22;
 N_COLS         = 2;
 N_ROWS_PER_COL = N_SAMPLES / N_COLS;
-STRIP_TOP_PAD  = 8;
-STRIP_BOT_PAD  = 8;
-STRIP_LABEL_H  = 14;
-WAVE_INSET     = 16;       // horizontal padding inside the strip — keeps handles
-                           // off the window edge and gives them grab room.
-MARKER_GRAB_PX = 10;       // ± hit radius around each marker line
-HANDLE_TAB_W   = 10;
-HANDLE_TAB_H   = 6;
 DROP_PATH_STR  = 14;
 
 ui_col_w  = (gfx_w - UI_COL_PAD * (N_COLS + 1)) / N_COLS;
 grid_bot  = UI_ROWS_TOP + N_ROWS_PER_COL * ui_row_h;
-strip_top = grid_bot + STRIP_TOP_PAD;
-strip_h   = gfx_h - strip_top - STRIP_BOT_PAD;
-strip_x   = 8;
-strip_w   = gfx_w - 16;
-wave_x    = strip_x + WAVE_INSET;
-wave_w    = strip_w - 2 * WAVE_INSET;
-wave_y    = strip_top + STRIP_LABEL_H;
-wave_h    = strip_h - STRIP_LABEL_H;
 
 pal_bg(1); gfx_rect(0, 0, gfx_w, gfx_h);
 gfx_setfont(1, "Arial", 13);
@@ -1090,8 +1139,6 @@ gfx_drawstr("Continuum Sampler");
 
 // ---------- Mouse edge detect ----------
 mouse_dn   = (mouse_cap & 1) && !mouse_prev;
-mouse_held = mouse_cap & 1;
-mouse_up   = !(mouse_cap & 1) && mouse_prev;
 mouse_prev = mouse_cap & 1;
 
 // ---------- Keyboard (drain even when not renaming so keys don't queue) ----------
@@ -1133,68 +1180,31 @@ file_dropped ? (
 );
 
 // ---------- Click routing ----------
-sl_sel = samplelocs[sel_idx];
-sel_has = sl_sel && sl_sel[SH_LENGTH] > 0;
-in_strip = sel_has
-  && mouse_y >= strip_top && mouse_y <= strip_top + strip_h
-  && mouse_x >= strip_x   && mouse_x <= strip_x + strip_w;
-
 (mouse_dn && !file_dropped) ? (
-  rename_idx  = -1;                                           // any click commits
-  drag_handle = 0;
-  in_strip ? (
-    frames_s  = sl_sel[SH_LENGTH] / 2;
-    end_eff   = sl_sel[SH_END] > 0 ? sl_sel[SH_END] : frames_s - 2;
-    sx_marker = wave_x + sl_sel[SH_START] / frames_s * wave_w;
-    ex_marker = wave_x + end_eff          / frames_s * wave_w;
-    abs(mouse_x - sx_marker) <= MARKER_GRAB_PX ? drag_handle = 1
-    : abs(mouse_x - ex_marker) <= MARKER_GRAB_PX ? drag_handle = 2
-    : ( preview_request_slot = sel_idx; preview_request_bounds = 1; );
-  ) : (
-    hit_col = mouse_x < gfx_w * 0.5 ? 0 : 1;
-    hit_row = floor((mouse_y - UI_ROWS_TOP) / ui_row_h);
-    rx_hit  = UI_COL_PAD + hit_col * (ui_col_w + UI_COL_PAD);
-    in_grid = hit_row >= 0 && hit_row < N_ROWS_PER_COL
-           && mouse_x >= rx_hit && mouse_x <= rx_hit + ui_col_w;
-    in_grid ? (
-      hit_idx = hit_col * N_ROWS_PER_COL + hit_row;
-      sel_idx = hit_idx;
-      // Name + thumbnail regions match row_draw layout exactly.
-      name_lo  = rx_hit + 32;
-      thumb_lo = rx_hit + ui_col_w - 64 - THUMB_W;
-      thumb_hi = rx_hit + ui_col_w - 64;
-      (samplelocs[hit_idx] && samplelocs[hit_idx][SH_LENGTH] > 0) ? (
-        mouse_x >= thumb_lo && mouse_x <= thumb_hi ? (
-          preview_request_slot   = hit_idx;
-          preview_request_bounds = 0;
-        ) : mouse_x >= name_lo && mouse_x < thumb_lo ? (
-          strcpy(RENAME_BACKUP_STR, NAME_BASE + hit_idx);
-          rename_idx = hit_idx;
-        );
+  rename_idx = -1;                                            // any click commits
+  hit_col = mouse_x < gfx_w * 0.5 ? 0 : 1;
+  hit_row = floor((mouse_y - UI_ROWS_TOP) / ui_row_h);
+  rx_hit  = UI_COL_PAD + hit_col * (ui_col_w + UI_COL_PAD);
+  in_grid = hit_row >= 0 && hit_row < N_ROWS_PER_COL
+         && mouse_x >= rx_hit && mouse_x <= rx_hit + ui_col_w;
+  in_grid ? (
+    hit_idx = hit_col * N_ROWS_PER_COL + hit_row;
+    sel_idx = hit_idx;
+    // Name + thumbnail regions match row_draw layout exactly.
+    name_lo  = rx_hit + 32;
+    thumb_lo = rx_hit + ui_col_w - 64 - THUMB_W;
+    thumb_hi = rx_hit + ui_col_w - 64;
+    (samplelocs[hit_idx] && samplelocs[hit_idx][SH_LENGTH] > 0) ? (
+      mouse_x >= thumb_lo && mouse_x <= thumb_hi ? (
+        preview_request_slot   = hit_idx;
+        preview_request_bounds = 0;
+      ) : mouse_x >= name_lo && mouse_x < thumb_lo ? (
+        strcpy(RENAME_BACKUP_STR, NAME_BASE + hit_idx);
+        rename_idx = hit_idx;
       );
     );
   );
 );
-
-// ---------- Active marker drag ----------
-(mouse_held && drag_handle > 0 && sel_has) ? (
-  frames_d = sl_sel[SH_LENGTH] / 2;
-  rel_x    = (mouse_x - wave_x) / wave_w;
-  rel_x < 0 ? rel_x = 0;
-  rel_x > 1 ? rel_x = 1;
-  drag_pos = floor(rel_x * frames_d);
-  drag_handle == 1 ? (
-    end_eff_d = sl_sel[SH_END] > 0 ? sl_sel[SH_END] : frames_d - 2;
-    drag_pos < 0              ? drag_pos = 0;
-    drag_pos > end_eff_d - 1  ? drag_pos = end_eff_d - 1;
-    sl_sel[SH_START] = drag_pos;
-  ) : (
-    drag_pos < sl_sel[SH_START] + 1 ? drag_pos = sl_sel[SH_START] + 1;
-    drag_pos > frames_d - 2         ? drag_pos = frames_d - 2;
-    sl_sel[SH_END] = drag_pos;
-  );
-);
-mouse_up ? drag_handle = 0;
 
 // ---------- Grid ----------
 built_this_tick = 0;
@@ -1216,49 +1226,3 @@ while (ui_col < N_COLS) (
   ui_col += 1;
 );
 
-// ---------- Bottom strip ----------
-pal_mid(0.18);
-gfx_rect(strip_x, strip_top, strip_w, strip_h);
-
-sel_has ? (
-  frames_v = sl_sel[SH_LENGTH] / 2;
-  audio_v  = sl_sel + SAMPLE_HEADER_SIZE;
-
-  gfx_x = strip_x + 4; gfx_y = strip_top + 1;
-  pal_shade(0.85);
-  gfx_drawstr("#"); gfx_drawnumber(sel_idx, 0); gfx_x += 8;
-  strlen(NAME_BASE + sel_idx) > 0 ? gfx_drawstr(NAME_BASE + sel_idx)
-                                  : gfx_drawstr("(unnamed)");
-
-  pal_pos(0.9);
-  mid_v  = wave_y + wave_h * 0.5;
-  half_v = wave_h * 0.45;
-  vx = 0;
-  while (vx < wave_w) (
-    span_lo = floor(vx       * frames_v / wave_w);
-    span_hi = floor((vx + 1) * frames_v / wave_w);
-    span_hi <= span_lo ? span_hi = span_lo + 1;
-    span_hi > frames_v ? span_hi = frames_v;
-    mn_v = 1; mx_v = -1;
-    lr_v = span_lo;
-    while (lr_v < span_hi) (
-      v_v = (audio_v[lr_v * 2] + audio_v[lr_v * 2 + 1]) * 0.5;
-      v_v < mn_v ? mn_v = v_v;
-      v_v > mx_v ? mx_v = v_v;
-      lr_v += 1;
-    );
-    gfx_line(wave_x + vx, mid_v - mx_v * half_v,
-             wave_x + vx, mid_v - mn_v * half_v);
-    vx += 1;
-  );
-
-  end_eff_v = sl_sel[SH_END] > 0 ? sl_sel[SH_END] : frames_v - 2;
-  start_x_v = wave_x + sl_sel[SH_START] / frames_v * wave_w;
-  end_x_v   = wave_x + end_eff_v          / frames_v * wave_w;
-  pal_danger(drag_handle == 1 ? 1 : 0.75); draw_handle(start_x_v);
-  pal_steel (drag_handle == 2 ? 1 : 0.75); draw_handle(end_x_v);
-) : (
-  gfx_x = strip_x + 8; gfx_y = strip_top + strip_h * 0.5 - 6;
-  pal_inact(1);
-  gfx_drawstr("(no sample selected — click a row)");
-);

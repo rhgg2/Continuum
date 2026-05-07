@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=973  sha=4f21dd7
+@module editCursor  src=editCursor.lua  loc=973  sha=c0fd219
 @deps util
 
 # Module-level functions (private)
@@ -94,7 +94,7 @@
     @api ec:selectChannel(chan)
     @api ec:selectColumn(col)
     -- Commands
-    @api ec:registerCommands(cmgr)
+    @api ec:registerCommands(scope)
     -- Decoration
     @api ec:decorateCol(col)
     -- CLIPBOARD
@@ -102,7 +102,7 @@
     @api clipboard:copy()
     @api clipboard:pasteClip(clip)
     @api clipboard:trimTop(clip, trim)
-    @api clipboard:registerCommands(cmgr)
+    @api clipboard:registerCommands(scope)
 
   # REAPER API surface
     @reaper SetExtState
@@ -197,7 +197,7 @@
     @api ec:selectChannel(chan)
     @api ec:selectColumn(col)
     -- Commands
-    @api ec:registerCommands(cmgr)
+    @api ec:registerCommands(scope)
     -- Decoration
     @api ec:decorateCol(col)
     -- CLIPBOARD
@@ -205,7 +205,7 @@
     @api clipboard:copy()
     @api clipboard:pasteClip(clip)
     @api clipboard:trimTop(clip, trim)
-    @api clipboard:registerCommands(cmgr)
+    @api clipboard:registerCommands(scope)
 
   # REAPER API surface
     @reaper SetExtState

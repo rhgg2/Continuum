@@ -58,6 +58,7 @@ function harness.mk(opts)
   local tm = newTrackerManager(mm, cm)
   local cmgr = newCommandManager(cm)
   local vm = newTrackerView(tm, cm, cmgr)
+  cmgr:setActive('tracker')
 
   return { fm = mm, cm = cm, tm = tm, vm = vm, ec = vm:ec(),
            clipboard = vm:clipboard(), cmgr = cmgr, reaper = fakeReaper }

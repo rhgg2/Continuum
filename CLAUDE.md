@@ -1,79 +1,69 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when
-working with code in this repository.
-
-## What This Is
-
-Continuum is a REAPER (DAW) script written in Lua 5.4 that provides a
-tracker-style MIDI editor. It runs inside REAPER with no build system
-or linter, but there is a test harness under tests/. 
-
-## Coding style
-
-IMPORTANT! Aim for limpid elegance, and use whatever paradigm is most
-expressive and direct. Be compact, but clear.
-
-Always check the functions in util.lua and use them where possible.
-
-**`ppq` is always lowercase**, even when it starts a new word in a
-camelCase identifier: `newppq`, `endppq`, `topppqL`, `cursorppq`. The
-`L` suffix on logical-frame variants (`ppqL`, `endppqL`) is the only
-capital allowed in these names.
+Continuum is a Lua 5.4 tracker-style MIDI editor for REAPER.
 
 ## Architecture
 
-The codebase uses a **layered manager pattern** where each layer
-transforms data from the layer below and propagates changes upward via
-callbacks.
+**Layered manager pattern.** Each layer transforms data from the layer
+below and propagates changes upward via callbacks. Never reach through
+a layer to manipulate data belonging to another — use the public API
+of the adjacent layer instead.
+
+Two parallel stacks — tracker and sampler — share a coordinator that
+owns the UI frame and switches between pages.
 
 ```
-continuum.lua          -- entry point, wires everything together
-  └─ midiManager     -- abstraction over REAPER's MIDI take API
-       └─ trackerManager  -- parses MIDI into tracker channels/columns
-            └─ trackerView    -- builds a renderable grid, editing, clipboard
-                 └─ trackerPage   -- ImGui rendering and input handling
-configManager        -- 5-tier config (global → project → track → take → transient)
-util                 -- shared utilities (serialisation, base36, assign)
-timing               -- pure module: swing transforms + delay-PPQ helpers
-tuning               -- pure module: temperament + (pitch, detune) ↔ (step, octave)
+continuum.lua              -- entry point, wires everything
+  coordinator              -- UI frame, toolbar/status bars, key handling, page switching
+    ├─ trackerPage         -- renders tracker grid, extra key/mouse handling
+    │    │  editCursor     -- cursor position, selection, movement, clipboard
+    │    └─ trackerView    -- maps events onto a row/col grid, editing
+    │         └─ trackerManager   -- parses MIDI into channels/columns
+    │              └─ midiManager -- read/write raw MIDI events
+    └─ samplePage          -- renders file tree and slot grid
+         └─ sampleView     -- browser state (track, folder, selection)
+              └─ sampleManager   -- Continuum Sampler JSFX interface via gmem
+slotStore                  -- sample slot persistence and file copy/move
+commandManager             -- key binding + command dispatch (root + per-page scopes)
+configManager              -- 5-tier config (global → project → track → take → transient)
+util                       -- pure: shared utilities (serialisation, base36, assign)
+timing                     -- pure: swing transforms + delay-PPQ helpers
+tuning                     -- pure: temperament + (pitch, detune) ↔ (step, octave)
+fs                         -- pure: filesystem utilities (path ops, audio-file detection)
 ```
 
-**Cross-cutting models.** Two concepts span every layer and have
-dedicated docs:
+Two critical concepts in the tracker stack:
 
-- **Time** — three frames (logical / intent / realisation), connected by swing (logical↔intent) and delay (intent↔realisation). See `docs/timing.md`.
-- **Pitch** — detune is intent (per-note metadata); pb is realisation (channel-wide stream). The view layer above the realisation line never touches pb directly. See `docs/tuning.md`.
+- **Time** — three frames (logical / intent / realisation), connected
+  by swing (logical↔intent) and delay (intent↔realisation). See
+  `docs/timing.md`.
+- **Pitch** — detune is intent (per-note metadata); pb is realisation
+  (channel-wide stream). The view layer above the realisation line
+  never touches pb directly. See `docs/tuning.md`.
 
-When working anywhere near time or pitch, read these first — they're
-the canonical source for the frame distinctions and invariants.
+Layers in the tracker stack expose a signal-keyed callback protocol
+via `util.installHooks`.
 
-**Data flow:** midiManager reads raw REAPER MIDI events →
-trackerManager organises them into channels with typed columns (note,
-cc, pb, etc.) → trackerView maps events onto a row/column grid and
-handles editing/clipboard → trackerPage draws the grid via ImGui and
-routes input back to trackerView commands.
+## How to work
 
-**Change propagation:** Each manager exposes a signal-keyed callback
-protocol via `util.installHooks`. See each manager's docs for the
-signals it emits.
+- For design, `docs/<module>.md` carries the *why*. Use for planning new features and major refactors.
 
-**Factory/closure pattern:** All managers use `newXxxManager()`
-factory functions that return a table of methods closing over private
-local state. There are no metatables or class hierarchies.
+- For coding, `cm/` carries the *what*. `cm/<module>.cm` maps factory, state, private functions, public API, and `--@cm:` module-local contracts. Read first — it answers "where does X live" in one screen.
+  
+- Framework docs: `docs/reaper_imgui_doc.html` (ReaImGui), `docs/REAPER API functions.html` (ReaScript). Grep to verify API names and signatures.
 
-**Respect the layers:** Each manager should only talk to its immediate
-neighbours. Never reach through a layer to manipulate data that
-belongs to a lower or higher manager — prefer issuing commands through
-the public interface of the adjacent layer. If a higher layer needs
-something done, it should call a method on the layer below, not poke
-at that layer's internal structures or bypass it to reach further
-down.
+- When changing source: if it touches `docs/<file>.md`, update that section. If it changes a contract, update `--@cm:`. The cm files are tool-generated; don't hand-edit.
+  
+- When writing new docs for an undocumented file: follow
+  `docs/CONVENTIONS.md`, but keep the file WHY-only — leave WHAT to
+  annotations + `.cm`.
 
-## Key Conventions
+- All code changes run the pure-Lua test harness (`lua tests/run.lua`). All bugfixes add red-first regression tests. All refactors add tests pinning the invariant.
+  
+- Spec files live in `tests/specs/`, registered in `tests/run.lua`. Read only specs adjacent to your changes.
 
-- **Module loading:** `loadModule('name')` in `continuum.lua` uses `require` with a path derived from `debug.getinfo`. Modules register globals (e.g., `newMidiManager`, `util`).
-- **`util.REMOVE` sentinel:** Passing `util.REMOVE` as a value in an assign call deletes that key.
-- **Serialisation format:** Custom escaped format using `{}=,` delimiters (not JSON or Lua table syntax). Used for both note metadata and config persistence.
-- **Timing & tuning models live in the repo:** `docs/timing.md` for the three-frame model (logical / intent / realisation, swing, delay) and `docs/tuning.md` for the pitch model (detune as intent, pb as realisation, fake-pb absorber, orthogonality). These are canonical — don't duplicate in memory.
-- **Module-local rules live in source `--@cm:` annotations.** Read `cm/<file>.cm` for orientation; the annotations surface there. Module-local invariants and contracts (channel/location indexing, lock discipline, signal payloads, …) are no longer reproduced here.
+## Coding style
+
+- Use closures extensively.
+- Scope tightly: wrap private helpers in `local fn do ... end`; readers then see which belong to which function.
+- Section banners: `----- Name`.

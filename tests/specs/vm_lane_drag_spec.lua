@@ -271,6 +271,48 @@ return {
     end,
   },
 
+  -- A pb drag must preserve the pb's curve shape (and bezier tension)
+  -- across the move. Earlier the ppq-changing branch decomposed the move
+  -- as deletePb+addPb and carried only ppqL/frame forward, so any
+  -- non-default shape was reset to step on every drag.
+  {
+    name = 'pb drag preserves shape and tension',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          ccs = {
+            { ppq = 60,  chan = 1, msgType = 'pb', val = 8192,
+              shape = 'bezier', tension = 0.5 },
+            { ppq = 600, chan = 1, msgType = 'pb', val = 8192 },
+          },
+        },
+        config = { take = { rowPerBeat = 4 } },
+      }
+      h.vm:setGridSize(80, 40)
+
+      local function pbCol()
+        for _, col in ipairs(h.vm.grid.cols) do
+          if col.type == 'pb' and col.midiChan == 1 then return col end
+        end
+      end
+      local function visible(col)
+        local out = {}
+        for _, e in ipairs(col.events) do
+          if not e.hidden then out[#out + 1] = e end
+        end
+        return out
+      end
+
+      -- Move pb@60 to ppq=180 (row 3). Expected: shape and tension stick.
+      h.vm:moveLaneEvent(pbCol(), 1, 3, 0)
+
+      local vis = visible(pbCol())
+      t.eq(vis[1].ppq,     180,      'pb landed at new ppq')
+      t.eq(vis[1].shape,   'bezier', 'shape preserved across drag')
+      t.eq(vis[1].tension, 0.5,      'tension preserved across drag')
+    end,
+  },
+
   -- vm:addLaneEvent — inserts a new cc/pb/at event at (ppq, val), inheriting
   -- envelope shape from the previous *visible* event (so the existing curve
   -- shape from prev→next is preserved across the new midpoint). Returns

@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=416  sha=f86ae56
+@module configManager  src=configManager.lua  loc=415  sha=c0fd219
 @deps util
 
 # Module-level constants

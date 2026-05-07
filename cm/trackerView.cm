@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2255  sha=1a802ec
+@module trackerView  src=trackerView.lua  loc=2254  sha=c0fd219
 @deps util, midiManager, trackerManager, tuning, commandManager, editCursor
 
 # Module-level functions (private)

@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=2397  sha=c0fd219
+@module trackerPage  src=trackerPage.lua  loc=2158  sha=5f3fdd8
 @deps util, timing
 
 # Module-level constants
@@ -7,7 +7,7 @@
 # Module-level functions (private)
   @fn print(...)
 
-@factory newTrackerPage(vm, cm, cmgr, sv)
+@factory newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
 
   # Private state
     @state GUTTER = 4   -- in grid chars
@@ -18,13 +18,12 @@
     @state gridOriginY = 0
     @state gridWidth = 0
     @state gridHeight = 0
-    @state ctx = nil
-    @state font = nil   -- monospace, used inside the tracker grid
-    @state uiFont = nil   -- system sans-serif, used for chrome (toolbar, status, modals, swing editor)
-    @state dragging = false
+    @state ctx = ctxArg
+    @state font = fontArg   -- monospace, used inside the tracker grid
+    @state uiFont = uiFontArg   -- system sans-serif, used for chrome (toolbar, status, modals, swing editor)
+    @state dragging = false   -- tracker-grid selection drag: click → held → release
     @state modalState = nil   -- nil = closed, else { title, prompt, callback, buf, kind? }
     @state swingEditor = nil   -- nil = closed, else { name, snapshot, createBuf, createError }
-    @state quitting = false   -- set by the quit command, observed by rm:loop
     @state pickerOpenRequest = nil   -- 'temper' | 'swing' | nil; consumed next frame by drawSlotPicker
     @state pickerFilter = {}   -- kind -> typeahead buffer; reset on each open
     @state pickerCursor = {}   -- kind -> 1-based highlight index into filtered matches
@@ -37,7 +36,6 @@
     @state laneDrag = nil   -- { kind='move'|'tension', colIdx, idx, startMx, startMy, moved, ... }
     @state lanePreviewSuppress = nil   -- { x, y } or nil
     @state renderFns = {
-    @state colourCache = {}
 
   # Private functions
     @fn layoutColumns(cols, scrollCol)   -- Pack columns left-to-right starting at scrollCol, fitting as many as gridWidth allows; set
@@ -46,28 +44,15 @@
     @fn renderPB(evt)
     @fn renderCC(evt)
     @fn renderCell(evt, col, row)
-    @fn resolveColour(key)   -- Walk the colour table from a starting cm key to a terminal atom. Entries: {r,g,b,a} atom |
-    @fn colour(name)   -- Roles live under `colour.*`; callers pass the bare role name and we prepend the namespace 
-    @fn pushStyles()
-    @fn push(enum, col)
     @fn printer(ctx, gX, gY, x0, y0)
     @fn drawTextAt(xpos, ypos, txt, c)
     @fn laneStripRows()   -- Effective lane-strip row count: 0 when hidden, else the configured size. Single point of t
-    @fn verticalSeparator()   -- reaper-imgui has no Separator(Vertical); draw a 1px vertical line via the window draw list
     @fn drawSlotPicker(d)   -- The popup carries a typeahead filter (autofocused on open). Enter picks the first survivin
     @fn pickTemper(name)   -- Seed-and-select wrappers: the picker hands us a name and we ensure the lib has it before c
     @fn pickSwing(name)
     @fn pickColSwing(chan, name)
-    @fn pushChromeStyles()   -- Chrome styling shared by the toolbar and the swing editor: hairline frame border + the too
-    @fn popChromeStyles()
-    @fn pushChromeWindow()   -- Surfaces use editor.bg (opaque pale) — toolbar.bg is authored at 0.5 alpha and would bleed
-    @fn popChromeWindow()
     @fn drawSampleDropdown()   -- Sample slot picker for tracker mode. Lists only loaded slots (those that published a name 
-    @fn drawModeSwitcher()   -- The mode switcher is the only toolbar element common to all view modes; the bits to its ri
-    @fn modeButton(label, value)
-    @fn drawSampleToolbarBits()
     @fn drawTrackerToolbarBits()
-    @fn drawToolbar()
     @fn computeLayout(budgetW, budgetH)   -- Establish per-frame layout: char metrics, column packing, and the integer-row grid height 
     @fn drawLaneStrip()
     @fn rowToX(row)
@@ -83,8 +68,7 @@
     @fn seedMoveDrag(colIdx, idx)
     @fn seedTensionDrag(colIdx, segI, A, B)   -- Tension drag: capture chord endpoints in screen space at click time. The drag axis is the 
     @fn handleMouse()
-    @fn keySpec(spec)   -- A keymap entry is either a bare key constant or a {key, mod, mod...} chord. Returns (keyCo
-    @fn handleKeys()
+    @fn handleKeys(kr)   -- Char queue + shift-digit are page-internal raw input, not bound commands. The coordinator'
     @fn drawModal()
     @fn close(invoke, ...)
     @fn scaleBy(factor)   -- Mutating rowsBuf externally is invisible to an active InputText, which caches its own buff
@@ -115,7 +99,6 @@
 
   # Public API
     -- Cell renderers
-    -- Colour
     -- Drawing
     @api pt:text(x, y, txt, c, font)
     @api pt:textCentred(x1, x2, y, txt, c)
@@ -127,19 +110,26 @@
     -- Input
     -- Modal-driven commands
     -- Swing editor
-    @api rm:init()
-    @api rm:loop()
-    @api rm:bind(take)
-    @api rm:unbind()
-    @api rm:focusState()
-    @api rm:render()
-    @api rm:handleInput()
-    @api rm:save()
-    @api rm:load()
+    @api tp:renderToolbarBits(_)
+    @api tp:renderBody(_, w, h, dispatch)
+    @api tp:renderStatusBar(_)
+    @api tp:renderFloating(_)
+    @api tp:bind(take)
+    @api tp:unbind()
+    @api tp:focusState()
+        -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
+        -- acceptCmds:  the page is visible and nothing inside it is currently
+        --   consuming a keystroke. We deliberately don't gate on which child
+        --   window holds focus: a toolbar click leaves the chrome focused
+        --   transiently, but bound commands should still fire. Anything that
+        --   genuinely needs the keys (a focused InputText, an active slider,
+        --   a held button) shows up as IsAnyItemActive.
+    @api tp:handleInput()
+    @api tp:save()
+    @api tp:load()
 
   # REAPER API surface
     @reaper ImGui_GetBuiltinPath
     @reaper MB
     @reaper new_array
     @reaper ShowConsoleMsg
-    @reaper GetOS

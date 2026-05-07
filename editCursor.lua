@@ -406,8 +406,8 @@ function newEditCursor(deps)
 
   ----- Commands
 
-  function ec:registerCommands(cmgr)
-    cmgr:registerAll{
+  function ec:registerCommands(scope)
+    scope:registerAll{
       cursorDown    = function() moveRow(1) end,
       cursorUp      = function() moveRow(-1) end,
       pageDown      = function() moveRow(getRPBar()) end,
@@ -958,8 +958,8 @@ function newClipboard(deps)
   function clipboard:pasteClip(clip)     pasteClip(clip) end
   function clipboard:trimTop(clip, trim) trimTop(clip, trim) end
 
-  function clipboard:registerCommands(cmgr)
-    cmgr:registerAll{
+  function clipboard:registerCommands(scope)
+    scope:registerAll{
       copy  = function() local c = collect(); if c then save(c) end; ec:selClear() end,
       paste = function()
         if ec:isSticky() then ec:selClear()

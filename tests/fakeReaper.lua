@@ -20,6 +20,7 @@ function M.new()
     calls        = {},
     console      = {},
     messages     = {},
+    gmem         = {},
   }
   r._state = state
 
@@ -61,6 +62,17 @@ function M.new()
   function r.TrackFX_GetFXName(track, idx)
     local names = state.fxByTrack[track] or {}
     return names[idx + 1] ~= nil, names[idx + 1] or ''
+  end
+  state.fxParams = {}
+  function r.TrackFX_SetParam(track, fxIdx, paramIdx, value)
+    local k = tostring(track) .. '/' .. fxIdx .. '/' .. paramIdx
+    state.fxParams[k] = value
+    state.calls[#state.calls + 1] = { fn = 'TrackFX_SetParam',
+      track = track, fxIdx = fxIdx, paramIdx = paramIdx, value = value }
+    return true
+  end
+  function r.TrackFX_GetParam(track, fxIdx, paramIdx)
+    return state.fxParams[tostring(track) .. '/' .. fxIdx .. '/' .. paramIdx] or 0
   end
 
   -- Project track list (used by listSamplerTracks in continuum.lua).
@@ -279,8 +291,27 @@ function M.new()
   function r:setTrackName(track, name)
     state.trackNames[track] = name
   end
+  -- gmem
+  function r.gmem_attach(_ns) end
+  function r.gmem_write(addr, val) state.gmem[addr] = val end
+  function r.gmem_read(addr)  return state.gmem[addr] or 0 end
+
   function r:clearCalls()   state.calls = {} end
   function r:clearConsole() state.console = {} end
+  function r:clearGmem()    state.gmem  = {} end
+
+  -- Read a null-terminated string from the gmem flat array starting at base.
+  function r:gmemString(base)
+    local chars = {}
+    local i = base
+    while true do
+      local b = state.gmem[i] or 0
+      if b == 0 then break end
+      chars[#chars + 1] = string.char(math.floor(b))
+      i = i + 1
+    end
+    return table.concat(chars)
+  end
 
   -- Bulk-seed a take's MIDI store. Mirrors the field shape REAPER returns.
   -- notes : { { ppq, endppq, chan, pitch, vel, [muted] }, ... }
