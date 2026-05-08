@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1286  sha=eb14c68
+@module trackerManager  src=trackerManager.lua  loc=1319  sha=2973124
 @deps util, midiManager, timing
 
 # Invariants & contracts (module)
@@ -27,6 +27,7 @@
       @map:contract  returns (desired, shadowed, toRemove, toAdd); desired carries .loc on entries that survived the diff
 
 @factory newTrackerManager(mm, cm)
+  @map:invariant  usedSwings is an output of rebuild (computed from event frames), not an input; suppressed here to prevent the cm:set call inside rebuild from firing a redundant follow-up rebuild
 
   # Private state
     @state channels = {}
@@ -39,7 +40,6 @@
     @fn centsToRaw(cents)
     @fn rawToCents(raw)
     @fn delayToPPQ(d)
-    @fn resolveSlot(name)
     @fn createUpdateManager()
     @fn owner(chan, P)
     @fn detuneAt(chan, P)
@@ -88,14 +88,14 @@
     @fn allocateNoteColumn(channel, note)
     @fn findNoteColumnForPitch(channel, pitch, ppq_pos)
     @fn projectCC(cc, loc, overlay)
+    @fn forEachEvent(fn)   -- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly. Def
     @fn tidyCol(col)   -- 5) Shift into intent.
-    @fn forEachEvent(fn)   -- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly.
     @fn applyTimeMap(tau, slopeAt)   -- τ acts on logical positions; intent ppqs rederive through the current swing snapshot. Even
     @fn snapshot(iter)
     @fn shift(c, delta, isNote)
+    @fn resolve(name)
 
   # Public API
-    -- Swing
     -- Update manager
     -- Accessors
     -- Low-level mutation
@@ -141,7 +141,7 @@
     @api tm:interpolate(A, B, ppq)
     @api tm:swingSnapshot(override)
         -- E_c: column is inner, global is outer (see docs/timing.md).
-        @map:contract  returns frozen factor arrays + closures; safe to retain across edits since closures capture the resolved factors, not cm reads
+        @map:contract  returns clipped per-layer Shapes + closures; safe to retain across edits since closures capture the Shapes, not cm reads
     -- Transport
     @api tm:playFrom(ppq)
     @api tm:play()
@@ -155,6 +155,11 @@
     -- Mute
     @api tm:setMutedChannels(set)
         @map:contract  idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes
+    -- Lifecycle
+    @api tm:bindTake(take)
+        @map:contract  atomic take swap: cm:setContext runs silently (its broadcast is suppressed for both tm's own subscriber and — transitively, since vm rebuilds only via tm's 'rebuild' signal — for vm). mm:load then fires the single coherent rebuild downstream.
+        @map:contract  bindTake(nil) is the mirror seam used when the tracker stack goes dormant (e.g. switching to the sample page). cm clears under the same suppression; mm:load(nil) is a no-op, so no rebuild fires. tm/vm retain their last frame harmlessly until the next bindTake re-arms them.
+    @api tm:currentTake()
 
   # Signals emitted (via util.installHooks)
     @emits rebuild   -- nil; fires once at the end of every rebuild after um is recreated

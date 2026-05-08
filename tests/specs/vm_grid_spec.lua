@@ -258,15 +258,11 @@ return {
     -- lands on its row with no off-grid flag.
     name = 'extreme swing: a note authored under the current swing lands on its row, no off-grid flag',
     run = function(harness)
-      local extreme = {
+      local extreme = { factors = {
         { atom = 'classic', shift = 0.3, period = 1 },
         { atom = 'shuffle', shift = 0.2, period = 1 },
-      }
-      local factors = {}
-      for i, f in ipairs(extreme) do
-        local Tqn = timing.atomTilePeriod(f)
-        factors[i] = { S = timing.atoms[f.atom](f.shift / Tqn), T = Tqn * 240 }
-      end
+      } }
+      local factors = timing.resolveFactors(extreme, 240)
       local rowPPQ   = 5 * 60   -- ppqPerRow=60 at rpb=4
       local realised = util.round(timing.applyFactors(factors, rowPPQ))
       t.truthy(realised ~= rowPPQ,
@@ -299,7 +295,7 @@ return {
       -- Seed each note as the user would have authored it with swing off:
       -- frame.swing = nil, ppqL pins the row. Under c58 the realised
       -- ppq remains at the unswung position, no longer on the swung grid.
-      local c58 = { { atom = 'classic', shift = 0.08, period = 1 } }
+      local c58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
       local nilFrame = { swing = nil, colSwing = nil, rpb = 4 }
       local h = harness.mk{
         seed = {
@@ -339,7 +335,7 @@ return {
     -- land on-grid. Regression guard for addPb dropping ppqL/frame.
     name = 'fresh PB authored under swing lands on-grid (no off-grid flag, regardless of period position)',
     run = function(harness)
-      local c58 = { { atom = 'classic', shift = 0.08, period = 1 } }
+      local c58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
       local h = harness.mk{
         seed = {
           ccs = { { ppq = 0, chan = 1, msgType = 'pb', val = 0 } },
@@ -372,7 +368,7 @@ return {
     -- and frame through addPb, otherwise reswing has nothing to invert.
     name = 'fresh PB carries ppqL + frame after authoring',
     run = function(harness)
-      local c58 = { { atom = 'classic', shift = 0.08, period = 1 } }
+      local c58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
       local h = harness.mk{
         seed = {
           ccs = { { ppq = 0, chan = 1, msgType = 'pb', val = 0 } },

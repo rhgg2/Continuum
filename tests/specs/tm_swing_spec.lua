@@ -5,8 +5,8 @@
 
 local t = require('support')
 
-local classic58 = { { atom = 'classic', shift = 0.08, period = 1 } }
-local classic67 = { { atom = 'classic', shift = 0.17, period = 1 } }
+local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
+local classic67 = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } }
 
 return {
   {
@@ -89,16 +89,9 @@ return {
 
       -- Compose by hand using the same factor build tm uses, so the
       -- ordering pin doesn't depend on the closed form of the active atom.
-      local function factors(comp)
-        local f = {}
-        for i, x in ipairs(comp) do
-          local T = timing.atomTilePeriod(x)
-          f[i] = { S = timing.atoms[x.atom](x.shift / T),
-                   T = T * h.tm:resolution() }
-        end
-        return f
-      end
-      local fc58, fc67 = factors(classic58), factors(classic67)
+      local res = h.tm:resolution()
+      local fc58 = timing.resolveFactors(classic58, res)
+      local fc67 = timing.resolveFactors(classic67, res)
       local colInner = timing.applyFactors(fc58, timing.applyFactors(fc67, 120))
       local colOuter = timing.applyFactors(fc67, timing.applyFactors(fc58, 120))
 

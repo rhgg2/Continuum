@@ -94,22 +94,6 @@ function newTrackerManager(mm, cm)
 
   local function delayToPPQ(d) return timing.delayToPPQ(d, mm:resolution()) end
 
-  ----- Swing
-
-  local function resolveSlot(name)
-    local composite = timing.findShape(name, cm:get('swings'))
-    if timing.isIdentity(composite) then return nil end
-    local ppqPerQN = mm:resolution()
-    local factors = {}
-    for i, f in ipairs(composite) do
-      local atom = timing.atoms[f.atom]
-      if not atom then error('timing: unknown atom ' .. tostring(f.atom)) end
-      local tileQN = timing.atomTilePeriod(f)
-      factors[i] = { S = atom(f.shift / tileQN), T = ppqPerQN * tileQN }
-    end
-    return factors
-  end
-
   ----- Update manager
 
   local function createUpdateManager()
@@ -782,6 +766,29 @@ function newTrackerManager(mm, cm)
   local tm = {}
   fire = util.installHooks(tm)
 
+  -- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly.
+  -- Defined here (above rebuild) so rebuild's tail-end usedSwings projection can
+  -- share this iteration with applyTimeMap and the time-snap pass below.
+  local function forEachEvent(fn)
+    for _, channel in tm:channels() do
+      local chan, cols = channel.chan, channel.columns
+      for _, col in ipairs(cols.notes) do
+        for _, evt in ipairs(col.events) do
+          local isNote = evt.type ~= 'pa'
+          fn(isNote and 'note' or 'pa', evt, chan, isNote)
+        end
+      end
+      for _, t in ipairs{'pb', 'at', 'pc'} do
+        if cols[t] then
+          for _, evt in ipairs(cols[t].events) do fn(t, evt, chan, false) end
+        end
+      end
+      for _, col in pairs(cols.ccs) do
+        for _, evt in ipairs(col.events) do fn('cc', evt, chan, false) end
+      end
+    end
+  end
+
   ----- Rebuild
 
   local rebuilding = false
@@ -982,6 +989,27 @@ function newTrackerManager(mm, cm)
       for _, col in pairs(c.ccs) do tidyCol(col) end
     end
 
+    -- Project the set of authoring swing names referenced by any event in
+    -- this take into take-tier cm. sequenceManager reads these via
+    -- cm:readTakeKey to drive cross-take reswing on swing-library edits.
+    -- Only string references count: anonymous composites are frozen at
+    -- authoring and can't go stale.
+    do
+      local used = {}
+      forEachEvent(function(_, evt)
+        local f = evt.frame
+        if f then
+          if type(f.swing)    == 'string' then used[f.swing]    = true end
+          if type(f.colSwing) == 'string' then used[f.colSwing] = true end
+        end
+      end)
+      local prev = cm:get('usedSwings') or {}
+      local same = true
+      for k in pairs(used) do if not prev[k] then same = false; break end end
+      if same then for k in pairs(prev) do if not used[k] then same = false; break end end end
+      if not same then cm:set('take', 'usedSwings', used) end
+    end
+
     um = createUpdateManager()
     rebuilding = false
 
@@ -1022,27 +1050,6 @@ function newTrackerManager(mm, cm)
 
   function tm:name()        return mm and mm:name() end
   function tm:setName(name) if mm then mm:setName(name) end end
-
-  -- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly.
-  local function forEachEvent(fn)
-    for _, channel in tm:channels() do
-      local chan, cols = channel.chan, channel.columns
-      for _, col in ipairs(cols.notes) do
-        for _, evt in ipairs(col.events) do
-          local isNote = evt.type ~= 'pa'
-          fn(isNote and 'note' or 'pa', evt, chan, isNote)
-        end
-      end
-      for _, t in ipairs{'pb', 'at', 'pc'} do
-        if cols[t] then
-          for _, evt in ipairs(cols[t].events) do fn(t, evt, chan, false) end
-        end
-      end
-      for _, col in pairs(cols.ccs) do
-        for _, evt in ipairs(col.events) do fn('cc', evt, chan, false) end
-      end
-    end
-  end
 
   -- τ acts on logical positions; intent ppqs rederive through the current swing snapshot.
   -- Events without ppqL fall back to τ on raw ppq (identical under identity swing).
@@ -1194,7 +1201,7 @@ function newTrackerManager(mm, cm)
   end
 
   -- E_c: column is inner, global is outer (see docs/timing.md).
-  --@map:contract returns frozen factor arrays + closures; safe to retain across edits since closures capture the resolved factors, not cm reads
+  --@map:contract returns clipped per-layer Shapes + closures; safe to retain across edits since closures capture the Shapes, not cm reads
   function tm:swingSnapshot(override)
     local global, column = nil, {}
     if mm then
@@ -1202,9 +1209,16 @@ function newTrackerManager(mm, cm)
       if override then gSrc, cSrc = override.swing, override.colSwing
       else             gSrc, cSrc = cm:get('swing'), cm:get('colSwing')
       end
-      global = resolveSlot(gSrc)
+      local length   = mm:length() or 0
+      local ppqPerQN = mm:resolution()
+      local function resolve(name)
+        local composite = timing.findShape(name, cm:get('swings'))
+        if timing.isIdentity(composite) or length <= 0 then return nil end
+        return timing.resolveComposite(composite, length, ppqPerQN)
+      end
+      global = resolve(gSrc)
       if cSrc then
-        for chan, name in pairs(cSrc) do column[chan] = resolveSlot(name) end
+        for chan, name in pairs(cSrc) do column[chan] = resolve(name) end
       end
     end
     return {
@@ -1213,15 +1227,15 @@ function newTrackerManager(mm, cm)
       fromLogical = function(chan, ppqL)
         local ppqI = ppqL
         local c = column[chan]
-        if c      then ppqI = timing.applyFactors(c, ppqI) end
-        if global then ppqI = timing.applyFactors(global, ppqI) end
+        if c      then ppqI = timing.eval(c, ppqI) end
+        if global then ppqI = timing.eval(global, ppqI) end
         return ppqI
       end,
       toLogical = function(chan, ppqI)
         local ppqL = ppqI
-        if global then ppqL = timing.unapplyFactors(global, ppqL) end
+        if global then ppqL = timing.invert(global, ppqL) end
         local c = column[chan]
-        if c      then ppqL = timing.unapplyFactors(c, ppqL) end
+        if c      then ppqL = timing.invert(c, ppqL) end
         return ppqL
       end,
     }
@@ -1267,7 +1281,13 @@ function newTrackerManager(mm, cm)
 
   ----- Lifecycle
 
-  local vmOnlyKeys = { mutedChannels = true, soloedChannels = true }
+  --@map:invariant usedSwings is an output of rebuild (computed from event frames), not an input; suppressed here to prevent the cm:set call inside rebuild from firing a redundant follow-up rebuild
+  local vmOnlyKeys = { mutedChannels = true, soloedChannels = true, usedSwings = true }
+
+  -- True only inside tm:bindTake, between cm:setContext and mm:load.
+  -- Suppresses the configChanged-driven rebuild so the swap reads from a
+  -- coherent (cm, mm) pair: mm:load fires the single rebuild downstream.
+  local bindingTake = false
 
   local pendingTakeSwap = false
   tm:forward('notesDeduped',    mm)
@@ -1279,8 +1299,21 @@ function newTrackerManager(mm, cm)
     pendingTakeSwap = false
   end)
   cm:subscribe('configChanged', function(change)
+    if bindingTake then return end
     if not vmOnlyKeys[change.key] then tm:rebuild(false) end
   end)
+
+  --@map:contract atomic take swap: cm:setContext runs silently (its broadcast is suppressed for both tm's own subscriber and — transitively, since vm rebuilds only via tm's 'rebuild' signal — for vm). mm:load then fires the single coherent rebuild downstream.
+  --@map:contract bindTake(nil) is the mirror seam used when the tracker stack goes dormant (e.g. switching to the sample page). cm clears under the same suppression; mm:load(nil) is a no-op, so no rebuild fires. tm/vm retain their last frame harmlessly until the next bindTake re-arms them.
+  function tm:bindTake(take)
+    bindingTake = true
+    cm:setContext(take)
+    bindingTake = false
+    mm:load(take)
+  end
+
+  function tm:currentTake() return mm and mm:take() end
+
   tm:rebuild(true)
   return tm
 end

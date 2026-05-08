@@ -1,0 +1,27 @@
+@module sequenceManager  src=sequenceManager.lua  loc=45  sha=untracked
+@deps util
+
+# Invariants & contracts (module)
+  @map:invariant  project-wide singleton; pure orchestration over tm/vm/cm — owns no take state of its own
+  @map:invariant  discovery (takesUsing) reads each take's usedSwings via cm:readTakeKey, never disturbing the active mm/cm; reswing (reswingAll) routes through tm:bindTake so each visited take swaps mm and cm atomically
+  @map:invariant  takes that have never been bound by continuum (no ctm_config ext data yet) are absent from discovery — accepted bootstrap caveat; the projection populates lazily as users open takes
+
+@factory newSequenceManager(tm, vm, cm)
+
+  # Private state
+    @state self = {}
+
+  # Private functions
+    @fn projectTakes()   -- Active take of every MIDI item in the project, in REAPER order.
+
+  # Public API
+    @api self:takesUsing(name)
+        @map:contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
+    @api self:reswingAll(name)
+        @map:contract  iterates affected takes via tm:bindTake; vm:reswingPreset runs in each take's context; restores the original take at the end
+
+  # REAPER API surface
+    @reaper CountMediaItems
+    @reaper GetMediaItem
+    @reaper GetActiveTake
+    @reaper TakeIsMIDI

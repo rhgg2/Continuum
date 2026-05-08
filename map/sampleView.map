@@ -1,4 +1,4 @@
-@module sampleView  src=sampleView.lua  loc=119  sha=eb14c68
+@module sampleView  src=sampleView.lua  loc=118  sha=2973124
 
 # Invariants & contracts (module)
   @map:invariant  sv keys against a REAPER track (not a take); cm is rebound only via sv:setTrack
@@ -26,7 +26,7 @@
 
   # Public API
     @api sv:setTrack(t)
-        @map:contract  no-op when t == current track; otherwise idempotent rebind
+        @map:contract  idempotent rebind: always re-primes cm.track tier so cache survives a prior cm:setContext(nil) (e.g. tm:bindTake(nil) on page switch)
     @api sv:getTrack()
     @api sv:listTracks()
     @api sv:browseRoot()

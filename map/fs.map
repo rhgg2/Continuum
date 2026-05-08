@@ -1,14 +1,18 @@
-@module fs  src=fs.lua  loc=88  sha=eb14c68
+@module fs  src=fs.lua  loc=115  sha=2973124
 
 # Invariants & contracts (module)
   @map:invariant  sole module touching reaper.Enumerate* and filesystem IO; UI/view layers route through here
   @map:invariant  listDirs and listAudioFiles return case-insensitively sorted output (Finder/Explorer parity)
+
+# Shapes
+  @shape  fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }
 
 # Module-level constants
   @const AUDIO_EXTS = {
 
 # Module-level functions (private)
   @fn ciLess(a, b)
+  @fn copyFile(src, dst)   -- 64KB chunks so big samples don't allocate a Lua string the size of the file.
 
 # Public API (fs.*)
   @api fs.isAudio(name)

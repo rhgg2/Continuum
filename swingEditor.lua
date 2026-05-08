@@ -6,7 +6,8 @@
 --@map:invariant state == nil iff editor is closed; open() is a no-op when already open; Esc / Begin-close clears state
 --@map:invariant snapshot is captured at open() and never mutated; Reset writes a deepClone of it
 --@map:invariant shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
---@map:invariant soft cap = min(SWING_SOFT_QN, hard); Wild unlocks hard = T_tile · atomMeta.range; cap == 0 freezes the slider
+--@map:invariant on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
+--@map:invariant slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider
 --@map:invariant atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
 --@map:shape state = { name, snapshot, createBuf, createError, rpb, wild, lastCount, lastW }  -- composite is NOT cached here
 --@map:shape PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
@@ -41,8 +42,16 @@ local SWING_ERR     = 0xff6060ff
 local SWING_MARK    = 0x000000b0
 local SWING_SOFT_QN = 0.15
 
-function newSwingEditor(vm, cm, chrome, ctx)
+function newSwingEditor(vm, cm, chrome, ctx, seqMgr)
   local state = nil
+
+  -- Cross-take reswing fires on widget release (IsItemDeactivatedAfterEdit
+  -- for sliders and combos; explicit on Reset). Continuous drags keep the
+  -- active take in sync via swingWrite → vm:reswingPreset; the project-wide
+  -- pass runs once per gesture rather than once per frame.
+  local function commit()
+    if state and state.name then seqMgr:reswingAll(state.name) end
+  end
 
   local function meterQN()
     local num, denom = vm:timeSig()
@@ -72,20 +81,26 @@ function newSwingEditor(vm, cm, chrome, ctx)
     return { period, ppC }
   end
 
+  -- id has range = ∞ (slope is always 1; the K-bound never bites). Cap at
+  -- one tile per side so Wild gives a finite slider; the boundary clip
+  -- absorbs any overhang at the take edges. shuffle and tilt are
+  -- asymmetric (positive and negative shifts hit different K-bound walls).
   local function shiftCap(factor, wild)
-    local hard = timing.atomTilePeriod(factor) * timing.atomMeta[factor.atom].range
-    return wild and hard or math.min(SWING_SOFT_QN, hard)
+    local tile = timing.atomTilePeriod(factor)
+    local hardLo, hardHi
+    if factor.atom == 'id' then
+      hardLo, hardHi = -tile, tile
+    else
+      local meta = timing.atomMeta[factor.atom]
+      hardLo, hardHi = -tile * meta.negRange, tile * meta.posRange
+    end
+    if wild then return hardLo, hardHi end
+    return math.max(-SWING_SOFT_QN, hardLo), math.min(SWING_SOFT_QN, hardHi)
   end
 
-  --@map:contract Factor[] -> ResolvedFactor[] in QN units (T = atomTilePeriod, not PPQ); local to the editor's QN-space preview
-  local function materialise(composite)
-    local out = {}
-    for i, f in ipairs(composite) do
-      local T = timing.atomTilePeriod(f)
-      out[i] = { S = timing.atoms[f.atom](f.shift / T), T = T }
-    end
-    return out
-  end
+  -- QN-space preview uses ppqPerQN=1 so the editor draws against
+  -- normalised QN units rather than the take's PPQ resolution.
+  local function materialise(composite) return timing.resolveFactors(composite, 1) end
 
   local function drawSwingGrid(composite, periodQN, rpb, w, h, shadeMeter)
     local x0, y0    = ImGui.GetCursorScreenPos(ctx)
@@ -160,14 +175,26 @@ function newSwingEditor(vm, cm, chrome, ctx)
     return cm:get('swings')[state.name]
   end
 
-  --@map:contract compares period via periodQN, so {1,2} and {2,4} count as equal — equality is on the QN value, not the literal table
+  -- Tolerant accessor: bare {} and {factors={}} both mean identity. Read-only;
+  -- write paths deepClone, then mutate factors[].
+  local function readFactors(composite)
+    return (composite or {}).factors or {}
+  end
+
+  -- QN value of an optional period-shaped slot (scalar, {n,d}, or nil).
+  local function phaseQN(p) return p and timing.periodQN(p) or 0 end
+
+  --@map:contract compares composite phase, per-factor phase, period, atom and shift — phase fields normalise to QN before comparing, so {1,2} and {2,4} count equal
   local function compositesEqual(a, b)
     a, b = a or {}, b or {}
-    if #a ~= #b then return false end
-    for i, fa in ipairs(a) do
-      local fb = b[i]
-      if fa.atom ~= fb.atom or fa.shift ~= fb.shift
-         or math.abs(timing.periodQN(fa.period) - timing.periodQN(fb.period)) > 1e-12 then
+    if math.abs(phaseQN(a.phase) - phaseQN(b.phase)) > 1e-12 then return false end
+    local fa, fb = readFactors(a), readFactors(b)
+    if #fa ~= #fb then return false end
+    for i, x in ipairs(fa) do
+      local y = fb[i]
+      if x.atom ~= y.atom or x.shift ~= y.shift
+         or math.abs(timing.periodQN(x.period) - timing.periodQN(y.period)) > 1e-12
+         or math.abs(phaseQN(x.phase) - phaseQN(y.phase)) > 1e-12 then
         return false
       end
     end
@@ -181,33 +208,42 @@ function newSwingEditor(vm, cm, chrome, ctx)
     vm:reswingPreset(state.name)
   end
 
+  -- Editable clone with a guaranteed factors[] array, so write paths can
+  -- index it without re-checking. Phase is preserved as-is.
+  local function cloneForEdit()
+    local c = util.deepClone(swingRead()) or {}
+    c.factors = c.factors or {}
+    return c
+  end
+
   local function patchFactor(i, patch)
-    local new = util.deepClone(swingRead()) or {}
-    if not new[i] then return end
-    util.assign(new[i], patch)
-    swingWrite(new)
+    local c = cloneForEdit()
+    if not c.factors[i] then return end
+    util.assign(c.factors[i], patch)
+    swingWrite(c)
   end
 
   --@map:contract default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited
   local function addFactor()
-    local new = util.deepClone(swingRead()) or {}
-    new[#new+1] = { atom = 'id', shift = 0, period = 1 }
-    swingWrite(new)
+    local c = cloneForEdit()
+    c.factors[#c.factors + 1] = { atom = 'id', shift = 0, period = 1 }
+    swingWrite(c)
   end
 
   local function removeFactor(i)
-    local new = util.deepClone(swingRead()) or {}
-    table.remove(new, i)
-    swingWrite(new)
+    local c = cloneForEdit()
+    table.remove(c.factors, i)
+    swingWrite(c)
   end
 
   local function moveFactor(i, dir)
     local src = swingRead() or {}
-    local j = i + dir
-    if j < 1 or j > #src then return end
-    local new = util.deepClone(src)
-    new[i], new[j] = new[j], new[i]
-    swingWrite(new)
+    local fs  = readFactors(src)
+    local j   = i + dir
+    if j < 1 or j > #fs then return end
+    local c = cloneForEdit()
+    c.factors[i], c.factors[j] = c.factors[j], c.factors[i]
+    swingWrite(c)
   end
 
   local function drawFactorRow(i, f, availW)
@@ -222,27 +258,30 @@ function newSwingEditor(vm, cm, chrome, ctx)
     ImGui.SetNextItemWidth(ctx, 90)
     local rv, newIdx = ImGui.Combo(ctx, '##atom', atomIdx, SWING_ATOMS_Z)
     if rv then
-      local newAtom = SWING_ATOMS[newIdx + 1]
-      local cap     = shiftCap({ atom = newAtom, period = f.period }, state.wild)
-      local shift   = f.shift or 0
-      if math.abs(shift) > cap then shift = (shift < 0 and -1 or 1) * cap * 0.999 end
+      local newAtom  = SWING_ATOMS[newIdx + 1]
+      local lo, hi   = shiftCap({ atom = newAtom, period = f.period }, state.wild)
+      local shift    = f.shift or 0
+      if     shift < lo then shift = lo * 0.999
+      elseif shift > hi then shift = hi * 0.999 end
       patchFactor(i, { atom = newAtom, shift = shift })
     end
+    if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
 
     ImGui.SameLine(ctx)
-    local cap    = shiftCap(f, state.wild)
-    local frozen = cap == 0
+    local lo, hi = shiftCap(f, state.wild)
+    local frozen = hi <= 0
     chrome.disabledIf(frozen, function()
       ImGui.SetNextItemWidth(ctx, 150)
-      local lo, hi = -cap * 0.999, cap * 0.999
-      local rvA, newShift = ImGui.SliderDouble(ctx, '##shift', f.shift or 0, lo, hi, '%.3f qn')
+      local sliderLo, sliderHi = lo * 0.999, hi * 0.999
+      local rvA, newShift = ImGui.SliderDouble(ctx, '##shift', f.shift or 0, sliderLo, sliderHi, '%.3f qn')
       -- Continuous reswing: swingWrite reads the stored composite as the
       -- "old" side of the delta, so per-frame calls chain into the right
       -- old→now transformation as the slider drags.
       if rvA then
-        local new = util.deepClone(swingRead()) or {}
-        if new[i] then new[i].shift = newShift; swingWrite(new) end
+        local c = cloneForEdit()
+        if c.factors[i] then c.factors[i].shift = newShift; swingWrite(c) end
       end
+      if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
     end)
 
     ImGui.SameLine(ctx)
@@ -260,8 +299,38 @@ function newSwingEditor(vm, cm, chrome, ctx)
     local curIdx = pIdx > 0 and (pIdx - 1) or #PERIOD_PRESETS
     local rvP, newPIdx = ImGui.Combo(ctx, '##per', curIdx, itemsZ)
     if rvP and newPIdx + 1 <= #PERIOD_PRESETS then
-      patchFactor(i, { period = periodOverPPC(PERIOD_PRESETS[newPIdx + 1].period, ppC) })
+      -- Scale shift in QN by the period ratio so the resolved s = shift/tileQN
+      -- is invariant — slope and feel survive the period change.
+      local newPeriod = periodOverPPC(PERIOD_PRESETS[newPIdx + 1].period, ppC)
+      local scale     = timing.periodQN(newPeriod) / timing.periodQN(f.period)
+      local shift     = (f.shift or 0) * scale
+      local lo, hi    = shiftCap({ atom = f.atom, period = newPeriod }, state.wild)
+      if     shift < lo then shift = lo * 0.999
+      elseif shift > hi then shift = hi * 0.999 end
+      patchFactor(i, { period = newPeriod, shift = shift })
     end
+    if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
+
+    -- Per-factor phase: slides this factor's fixed-point lattice. Range is
+    -- [0, T); writes wrap on overflow so dragging never lands outside the
+    -- canonical interval.
+    ImGui.SameLine(ctx)
+    ImGui.AlignTextToFramePadding(ctx)
+    ImGui.Text(ctx, '\xcf\x86')                       -- φ
+    ImGui.SameLine(ctx)
+    ImGui.SetNextItemWidth(ctx, 100)
+    local pHi    = tileQN
+    local pCur   = (f.phase and timing.periodQN(f.phase) or 0) % pHi
+    local rvPh, newPh = ImGui.SliderDouble(ctx, '##phase', pCur, 0, pHi, '%.3f qn')
+    if rvPh then
+      local wrapped = newPh % pHi
+      local c = cloneForEdit()
+      if c.factors[i] then
+        c.factors[i].phase = (wrapped == 0) and nil or wrapped
+        swingWrite(c)
+      end
+    end
+    if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
 
     ImGui.SameLine(ctx)
     if ImGui.ArrowButton(ctx, '##up', ImGui.Dir_Up)   then moveFactor(i, -1) end
@@ -272,7 +341,7 @@ function newSwingEditor(vm, cm, chrome, ctx)
 
     local _, qpb  = meterQN()
     local nBars   = math.max(1, math.ceil(timing.atomTilePeriod(f) / qpb - 1e-9))
-    drawSwingGrid({ f }, nBars * qpb, state.rpb, availW, 28, true)
+    drawSwingGrid({ factors = { f } }, nBars * qpb, state.rpb, availW, 28, true)
 
     ImGui.PopID(ctx)
   end
@@ -290,7 +359,7 @@ function newSwingEditor(vm, cm, chrome, ctx)
     if not state then return end
 
     local composite = (state.name and swingRead()) or {}
-    local n = #composite
+    local n = #readFactors(composite)
 
     -- First-time default; then max height = viewport so auto-grow
     -- stays on-screen. Width is user-resizable thereafter.
@@ -361,7 +430,10 @@ function newSwingEditor(vm, cm, chrome, ctx)
         ImGui.SameLine(ctx, 0, 12)
         local dirty = not compositesEqual(composite, state.snapshot)
         chrome.disabledIf(not dirty, function()
-          if ImGui.Button(ctx, 'Reset') then swingWrite(util.deepClone(state.snapshot) or {}) end
+          if ImGui.Button(ctx, 'Reset') then
+            swingWrite(util.deepClone(state.snapshot) or {})
+            commit()
+          end
         end)
 
         ImGui.SameLine(ctx, 0, 12)
@@ -394,6 +466,28 @@ function newSwingEditor(vm, cm, chrome, ctx)
         local rvW, newWild = chrome.checkbox('  Wild', state.wild or false)
         if rvW then state.wild = newWild end
 
+        -- Composite phase: bounded by the LCM tile of all factors. Greyed
+        -- when there are no factors (no lattice to slide).
+        ImGui.SameLine(ctx, 0, 12)
+        chrome.verticalSeparator()
+        ImGui.SameLine(ctx, 0, 12)
+        ImGui.AlignTextToFramePadding(ctx)
+        ImGui.Text(ctx, 'Phase \xcf\x86:')
+        ImGui.SameLine(ctx, 0, 6)
+        chrome.disabledIf(n == 0, function()
+          local lcmQN  = timing.compositePeriodQN(composite)
+          local pCur   = (composite.phase and timing.periodQN(composite.phase) or 0) % lcmQN
+          ImGui.SetNextItemWidth(ctx, 140)
+          local rvCp, newCp = ImGui.SliderDouble(ctx, '##cphase', pCur, 0, lcmQN, '%.3f qn')
+          if rvCp then
+            local wrapped = newCp % lcmQN
+            local c = cloneForEdit()
+            c.phase = (wrapped == 0) and nil or wrapped
+            swingWrite(c)
+          end
+          if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
+        end)
+
         ImGui.PopStyleVar(ctx, 1)
         ImGui.Separator(ctx)
         local availW       = ImGui.GetContentRegionAvail(ctx)
@@ -404,7 +498,7 @@ function newSwingEditor(vm, cm, chrome, ctx)
                       state.rpb, availW, 32, true)
         ImGui.Separator(ctx)
 
-        for i, f in ipairs(composite) do
+        for i, f in ipairs(readFactors(composite)) do
           drawFactorRow(i, f, availW)
         end
 

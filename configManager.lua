@@ -52,6 +52,7 @@ local declarations = {
   -- table-valued
   { 'colSwing',        {}    },
   { 'swings',          {}    },
+  { 'usedSwings',      {}    },
   { 'tempers',         {}    },
   { 'mutedChannels',   {}    },
   { 'soloedChannels',  {}    },
@@ -358,6 +359,17 @@ function newConfigManager()
     if not otherTrack then return nil end
     local ok, val = reaper.GetSetMediaTrackInfo_String(
       otherTrack, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
+    if not ok or not val or val == '' then return nil end
+    local parsed = parse(val)
+    return copy(parsed[key])
+  end
+
+  --@map:contract bypasses cache and active context; reads otherTake's P_EXT directly without firing configChanged or disturbing the bound take's cache
+  function cm:readTakeKey(otherTake, key)
+    checkKey(key)
+    if not otherTake then return nil end
+    local ok, val = reaper.GetSetMediaItemTakeInfo_String(
+      otherTake, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
     if not ok or not val or val == '' then return nil end
     local parsed = parse(val)
     return copy(parsed[key])

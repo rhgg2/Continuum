@@ -14,48 +14,38 @@ package.preload['imgui'] = function()
   return function(_) return fakeImGui end
 end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
+require('sampleManager')
 require('sampleView')
 require('samplePage')
 
-local function newSv(h)
-  return newSampleView(h.cm, function() end, function() end, function() end,
-                       function() return {} end)
-end
-
 return {
   {
-    name = "bind(track) clears the take and forwards the track to sv",
+    name = "bind(track) re-keys cm to that track via the page's own sv",
     run = function(harness)
-      local h    = harness.mk()
-      local sv   = newSv(h)
-      local sp   = newSamplePage(sv, {}, h.cm, h.cmgr, nil, nil)
-      local cleared = false
-      h.cm.clearTake = function() cleared = true end
+      local h  = harness.mk()
+      local sp = newSamplePage(h.cm, h.cmgr, nil, {}, nil)
+      local got = 'sentinel'
+      h.cm.setTrack = function(_, t) got = t end
       sp:bind('trackZ')
-      t.eq(cleared,        true,     "clearTake fired")
-      t.eq(sv:getTrack(),  'trackZ', "sv received the track")
+      t.eq(got, 'trackZ', "page forwards the track to cm via sv:setTrack")
     end,
   },
   {
-    name = "bind(nil) still clears the take but leaves sv's track unchanged",
+    name = "bind(nil) does not re-key cm",
     run = function(harness)
       local h  = harness.mk()
-      local sv = newSv(h)
-      sv:setTrack('keep')
-      local sp = newSamplePage(sv, {}, h.cm, h.cmgr, nil, nil)
-      local cleared = false
-      h.cm.clearTake = function() cleared = true end
+      local sp = newSamplePage(h.cm, h.cmgr, nil, {}, nil)
+      local calls = 0
+      h.cm.setTrack = function() calls = calls + 1 end
       sp:bind(nil)
-      t.eq(cleared,       true,    "clearTake fired")
-      t.eq(sv:getTrack(), 'keep',  "sv's track untouched on nil")
+      t.eq(calls, 0, "nil bind never reaches cm:setTrack")
     end,
   },
   {
     name = "focusState before any render returns both bits false",
     run = function(harness)
       local h  = harness.mk()
-      local sv = newSv(h)
-      local sp = newSamplePage(sv, {}, h.cm, h.cmgr, nil, nil)
+      local sp = newSamplePage(h.cm, h.cmgr, nil, {}, nil)
       local fs = sp:focusState()
       t.eq(fs.suppressKbd, false, "no suppression without a context")
       t.eq(fs.acceptCmds,  false, "no acceptance without a context")

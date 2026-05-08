@@ -1,0 +1,38 @@
+@module chrome  src=chrome.lua  loc=285  sha=untracked
+
+# Shapes
+  @shape  chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), makeToolbar()->fn(segments), drawPicker(d), pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+  @shape  pickerSpec = { kind: string, heading: string, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
+
+# Module-level constants
+  @const ImGui = require 'imgui' '0.10'
+      @map:contract  one chrome instance per coordinator; threaded into every page
+      @map:invariant  colour cache lives on the chrome instance and is invalidated on cm:configChanged
+
+@factory newChrome(cm, ctx)
+
+  # Shapes
+    @shape  toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
+
+  # Private state
+    @state cache = {}
+    @state pickerOpenReq = nil   -- kind name; consumed by next drawPicker(kind)
+    @state pickerActive = false   -- frame-scoped: any picker popup live this frame
+
+  # Private functions
+    @fn resolve(key)
+        @map:contract  walks colour aliases (see docs/configManager.md) to a terminal atom; outermost alpha override wins; cycles raise with the resolved chain
+    @fn colour(name)
+    @fn pushChromeStyles()
+    @fn popChromeStyles()
+    @fn pushChromeWindow()   -- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed th
+    @fn popChromeWindow()
+    @fn verticalSeparator()   -- reaper-imgui has no Separator(Vertical); draw a 1px vertical line via the window draw list
+    @fn disabledIf(cond, fn)   -- RAII wrapper for ImGui.BeginDisabled / EndDisabled: dropping the bracket-match removes a c
+    @fn checkbox(label, value)   -- Compact checkbox / radio for toolbar contexts: zero FramePadding shrinks the box to its gl
+    @fn radio(label, active)
+    @fn makeToolbar()   -- Wraps each segment in BeginGroup/EndGroup so GetItemRectMin/Max measures the whole segment
+    @fn requestPickerOpen(kind)
+    @fn pickerIsActive()
+    @fn resetPickerActive()
+    @fn drawPicker(d)   -- Generic typeahead picker. Enter picks the highlighted match; group separators show only wh

@@ -122,15 +122,15 @@ return {
     end,
   },
   {
-    name = "setTrack with cm and same track is a no-op (no transient clear)",
+    name = "setTrack with cm and same track still rehydrates cm and clears transient",
     run = function(harness)
       local h = harness.mk()
       local sv = newSampleView(h.cm, function() end, function() end, function() end)
       sv:setTrack('trackA')
       h.cm:set('transient', 'currentSample', 7)
       sv:setTrack('trackA')
-      t.eq(h.cm:getAt('transient', 'currentSample'), 7,
-           'no-op setTrack leaves transient alone')
+      t.eq(h.cm:getAt('transient', 'currentSample'), nil,
+           'same-track setTrack still re-primes cm (covers cm:setContext(nil) seam)')
     end,
   },
   {

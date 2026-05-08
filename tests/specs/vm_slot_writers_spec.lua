@@ -8,8 +8,8 @@
 
 local t = require('support')
 
-local classic58 = { { atom = 'classic', shift = 0.08, period = 1 } }
-local classic67 = { { atom = 'classic', shift = 0.17, period = 1 } }
+local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
+local classic67 = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } }
 
 return {
   ----------------------------------------------------------------

@@ -66,15 +66,24 @@ A *swing* is a piecewise-linear orientation-preserving homeomorphism
 of `[0,1]` fixing the endpoints, tiled periodically along a QN axis.
 Identity swing means logical equals intent.
 
+Consumers go through `resolveComposite`, which produces a single
+clipped Shape over `[0, length]`:
+
 ```
-ppqI = timing.applyFactors(factors, ppqL)
-ppqL = timing.unapplyFactors(factors, ppqI)
+shape = timing.resolveComposite(composite, length_ppq, ppqPerQN)
+ppqI  = timing.eval  (shape, ppqL)
+ppqL  = timing.invert(shape, ppqI)
 ```
 
-`factors` is the resolved form of a composite (an array of `{S, T}`
-with `T` in PPQ). Two layers of swing compose per channel — a
-take-wide *global* and an optional *per-column* layer — with column
-inside global:
+The Shape captures the entire factor stack as one PWL with slopes
+∈ `[1/K, K]`; the boundary clip absorbs overhang from id-shift,
+phase, and negative-shift atoms (see Boundary clip below).
+`applyFactors` / `unapplyFactors` remain as the unclipped primitives
+on a resolved factor array, used by the editor's QN-space preview;
+take-level callers should not use them directly.
+
+Two layers of swing compose per channel — a take-wide *global* and an
+optional *per-column* layer — with column inside global:
 
 ```
 E_c = global ∘ column
@@ -115,7 +124,11 @@ how the shape is generated, not of the runtime. The sample count is a
 multiple of 12 so principal-pulse breakpoints (x = 1/4, 1/3, 1/2,
 2/3, 3/4) all land on exact sample points — the cross-atom drop-in
 invariant stays algebraic. `id` is the only atom that returns a
-sparse 2-point shape.
+sparse 2-point shape, and the only atom whose endpoints are not
+pinned: `id(a) = {(0, a), (1, 1+a)}`. Plugged into `tile`, the result
+is a constant output translation `p → p + T·a` — the substrate for
+delay. The endpoint convention is relaxed because `resolveComposite`
+absorbs the resulting overhang at the take edges (see Boundary clip).
 
 ### Tiled extension
 
@@ -137,10 +150,16 @@ raise.
 
 ### Composite model
 
-A user-facing swing is an ordered array of factors:
+A user-facing swing has the shape:
 
 ```
-composite = { {atom = 'classic', shift = 0.12, period = 1}, ... }
+composite = {
+  phase   = 0,         -- optional, QN; reserved for composite-level offset
+  factors = {
+    { atom = 'classic', shift = 0.12, period = 1, phase = 0 },
+    ...
+  },
+}
 ```
 
 `atom` names an entry in `timing.atoms`, `period` is the *user pulse*
@@ -148,8 +167,12 @@ in QN, and `shift` is the QN-displacement of the atom's principal —
 the principal lands at `principal_qn + shift` after the factor
 applies, regardless of atom or period. The realised view transform is
 the composition of the factors' tiled extensions — earlier factors
-are inner, later are outer (`applyFactors`). An empty array is
-identity.
+are inner, later are outer (`applyFactors`). A bare `{}` and `{factors
+= {}}` both denote identity.
+
+The composite-level `phase` field is reserved as a global QN offset
+applied across the whole take. It is shape-only at present; consumers
+treat its absence as `0`.
 
 `shift` is **atom-independent in QN**: switching `atom` preserves the
 QN-amount of `shift`. The principal it shifts is atom-specific — its
@@ -170,6 +193,60 @@ picks. The unit-square parameter consumed by the atom shape is
 `a = shift / T_tile`. `compositePeriodQN` and the editor's
 per-factor preview both use `atomTilePeriod` so the displayed repeat
 matches the realised one.
+
+#### Per-factor phase
+
+A factor may carry an optional `phase` (QN; scalar or `{num,den}`)
+that rotates its fixed-point lattice. With `phase = φ`, the points
+that pass through unchanged shift from `{kT}` to `{φ + kT}`:
+
+```
+tile(S, T, p, φ) = φ + tile(S, T, p − φ)
+```
+
+Phase is *not* output translation. At a fixed point the function
+returns its input; at any other point the swing still acts. The
+visible effect is that the atom's principal — and the entire
+breakpoint pattern — slides by `φ` along the tile axis, while the
+tile's own period and shape stay fixed.
+
+Resolution: at the tm boundary the user-facing QN value becomes
+PPQ (`ppqPerQN · periodQN(phase)`) and rides into the resolved factor
+as `{S, T, phase}`. Absent or zero phase is a no-op — `apply`
+collapses to the original `tile`.
+
+#### Boundary clip
+
+Tiled factors don't naturally align with the take's `[0, length]`.
+With identity-shift, or with phase, or with negative-shift atoms, the
+apply at `x = 0` lands above or below `0`, and similarly at the
+trailing edge. `resolveComposite(composite, length, ppqPerQN)`
+materialises the apply across the take and clips:
+
+1. Generate breakpoints over `[−margin, length + margin]` (margin =
+   max factor `T`) — every factor's intrinsic kinks pulled back
+   through the prefix factors.
+2. Drop breakpoints with `x ≤ 0` or `x ≥ length`.
+3. Walk corners from each end, deleting until the gradient from
+   `(0,0)` to the first survivor (and from the last survivor to
+   `(length, length)`) lies in `[1/K, K]`.
+4. Pin `(0,0)` and `(length, length)`; return the resulting Shape.
+
+Consumers eval/invert this Shape rather than calling `applyFactors`
+directly. `tm:swingSnapshot()` carries one Shape per layer (`global`
++ per-channel `column`), recomputed each rebuild; vm routes
+`ppqToRow` / `rowToPPQ` through them.
+
+The clip is **load-bearing, not edge-case correction.** Without it,
+identity-with-shift and phase break injectivity at the take edges.
+With it, the entire factor stack collapses to a single PWL with
+slopes ∈ `[1/K, K]` — `unapply` is just `invert`, and the apply path
+costs one binary search per layer instead of one tile per factor.
+
+Tradeoff: events authored in the leading or trailing partial tile
+get the corner ramp, not the swing transform. Bounded by tile width
+on each edge; documented and accepted. Identity composite or
+`length ≤ 0` returns a 2-point identity over `[0, length]`.
 
 The runtime library lives in `cfg.swings` at project scope; slots in
 `cfg` reference composites **by name only**. Name lookup goes through
@@ -223,10 +300,12 @@ so realise/strip round-trips are algebraic rather than approximate.
 
 ## Conventions for `timing.lua`
 
-- **Endpoints are pinned.** `compose` re-writes the first and last
-  control points to exactly `{0,0}` / `{1,1}` after computation to
-  absorb floating-point drift — downstream binary search depends on
-  this.
+- **Endpoints are pinned.** Atom shapes pin `{0,0}` and `{1,1}`; `id`-
+  with-shift is the lone exception, and `resolveComposite`'s boundary
+  clip absorbs its overhang. Resolved take-level Shapes pin `(0,0)`
+  and `(length, length)`. `compose` re-writes its endpoints after
+  computation to absorb floating-point drift — downstream binary
+  search depends on these exact pins.
 - **Composite names resolve within the project library.** tm/vm never
   look into `presets`; resolution goes through `findShape`, nil is
   identity.

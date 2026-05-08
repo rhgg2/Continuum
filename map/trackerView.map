@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2155  sha=eb14c68
+@module trackerView  src=trackerView.lua  loc=2156  sha=2973124
 @deps util, midiManager, trackerManager, tuning, commandManager, editCursor
 
 # Invariants & contracts (module)
@@ -47,7 +47,8 @@
     @api ctx:barBeatSub(row)
 @factory newTrackerView(tm, cm, cmgr)
   @map:contract  whenever a note's tail moves: rebases evt.frame to current alongside the new (endppq, endppqL) — writing endppqL alone would leave it incoherent with frame
-  @map:contract  non-transient writes to FRAME_KEYS while a transient override is active short-circuit into releaseTransientFrame, whose recursive cm:assign fires the rebuild — so we return early to avoid double rebuild
+  @map:contract  vm only listens to configChanged for vm-internal side effects (transient-frame release, mute pulse). Rebuilds are driven exclusively by tm's 'rebuild' signal, which tm fires after IT has rebuilt — so vm always reads coherent tm state and the (cm, tm) double-fire race is closed.
+  @map:contract  non-transient writes to FRAME_KEYS while a transient override is active short-circuit into releaseTransientFrame, whose recursive cm:assign fires a fresh configChanged → tm:rebuild → vm:rebuild chain
 
   # Shapes
     @shape  grid = { cols = {<col>...}, chanFirstCol = {[chan]=i}, chanLastCol = {[chan]=i}, lane1Col = {[chan]=<col>}, numRows = int }
@@ -239,7 +240,7 @@
     -- Command table
     -- Rebuild
     @api vm:rebuild(takeChanged)
-        @map:contract  reentrancy-guarded by `rebuilding`; takeChanged=true resets ec and re-reads resolution/length/timeSigs from tm; grid cols / rowPPQs / viewContext / cell-overflow-offGrid maps / ghost maps rebuild unconditionally; pushMute at the end
+        @map:contract  reentrancy-guarded by `rebuilding`; early-returns when tm has no take (grid stays empty so the page shows its placeholder); takeChanged=true resets ec and re-reads resolution/length/timeSigs from tm; grid cols / rowPPQs / viewContext / cell-overflow-offGrid maps / ghost maps rebuild unconditionally; pushMute at the end
 
   # REAPER API surface
     @reaper Undo_BeginBlock, Undo_EndBlock

@@ -19,7 +19,12 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
-function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
+--@map:contract owns and constructs the tracker substack (mm/tm/vm/seqMgr) — coord hands it primitives, never the substack; the take arrives later via tp:bind from the coordinator's poll loop
+function newTrackerPage(cm, cmgr, chrome, gui)
+  local mm     = newMidiManager(nil)
+  local tm     = newTrackerManager(mm, cm)
+  local vm     = newTrackerView(tm, cm, cmgr)
+  local seqMgr = newSequenceManager(tm, vm, cm)
 
   ---------- PRIVATE
 
@@ -55,13 +60,11 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     return cX, cW, cOrder, math.max(0, cx - 1)
   end
 
-  local ctx         = ctxArg
-  local font        = fontArg     -- monospace, grid
-  local uiFont      = uiFontArg   -- sans, chrome
+  local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
   local dragging    = false   -- tracker-grid selection drag: click → held → release
   local modalState = nil
-  local swingEditor = newSwingEditor(vm, cm, chrome, ctxArg)
-  local curveEd      = newCurveEditor(ctxArg)
+  local swingEditor = newSwingEditor(vm, cm, chrome, ctx, seqMgr)
+  local curveEd      = newCurveEditor(ctx)
   local laneConsumed = false
   local toolbar                              -- lazy: chrome may be nil at construction in tests
 
@@ -1200,13 +1203,9 @@ function newTrackerPage(vm, cm, cmgr, chrome, ctxArg, fontArg, uiFontArg)
     swingEditor:render()
   end
 
-  function tp:bind(take)
-    cm:setContext(take)
-  end
-
-  function tp:unbind()
-    cm:setContext(nil)
-  end
+  --@map:contract bind/unbind drive tm:bindTake — the page owns the cm/mm context swap for its own stack
+  function tp:bind(t)  tm:bindTake(t)   end
+  function tp:unbind() tm:bindTake(nil) end
 
   -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
   -- acceptCmds:  the page is visible and nothing inside it is currently

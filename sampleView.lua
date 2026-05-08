@@ -23,9 +23,8 @@ function newSampleView(cm, assignSlot, previewSlot, previewPath, listSamplerTrac
 
   listSamplerTracks = listSamplerTracks or function() return {} end
 
-  --@map:contract no-op when t == current track; otherwise idempotent rebind
+  --@map:contract idempotent rebind: always re-primes cm.track tier so cache survives a prior cm:setContext(nil) (e.g. tm:bindTake(nil) on page switch)
   function sv:setTrack(t)
-    if t == track then return end
     track = t
     if cm then
       cm:setTrack(t)

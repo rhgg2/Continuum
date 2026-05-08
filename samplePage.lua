@@ -21,9 +21,24 @@ local N_SLOTS = 64
 
 local UP = '__up__'   -- sentinel path for the '..' navigation entry
 
-function newSamplePage(sv, sm, cm, cmgr, chrome, ctxArg)
-  local ctx    = ctxArg
+--@map:contract owns the sample substack: builds sm and sv internally; coord supplies only primitives + the take (per-frame, via tick) and a slot index (on demand, via loadSampleIntoSlot)
+--@map:contract track-picker is a proxy — onPick routes through onPickTrack so coord owns the active sampler track; the page never picks its own track
+function newSamplePage(cm, cmgr, chrome, gui, onPickTrack)
+  local ctx    = gui.ctx
   local rename = nil
+  local sm     = newSampleManager(fs.fileOps)
+  local lastProjectPath = nil
+
+  local sv
+  sv = newSampleView(cm,
+    function(slot, srcPath)
+      return sm:assign(sv:getTrack(), slot, srcPath, reaper.GetProjectPath(0), cm)
+    end,
+    function(slot, bounds) return sm:previewSlot(sv:getTrack(), slot, bounds) end,
+    function(path)         return sm:previewPath(sv:getTrack(), path)         end,
+    function()             return sm:listTracks()                             end,
+    function(slot)         return sm:clearSlot(sv:getTrack(), slot, cm)       end,
+    function()             return sm:stopPreview(sv:getTrack())               end)
 
   --@map:shape peakCacheEntry = { src?=PCM_Source, cols=int, fs=number, nch=int, frames=int, lenSec=number, building=bool, amps?={number,...} } | false
   --@map:shape durCacheEntry  = number | false
@@ -398,7 +413,7 @@ function newSamplePage(sv, sm, cm, cmgr, chrome, ctxArg)
           buttonLabel = label,
           width       = 240,
           items       = items,
-          onPick      = function(t) sv:setTrack(t) end,
+          onPick      = function(t) onPickTrack(t) end,
         }
       end,
     },
@@ -544,14 +559,37 @@ function newSamplePage(sv, sm, cm, cmgr, chrome, ctxArg)
       name, slot, slotName and (' ' .. slotName) or ''))
   end
 
-  --@map:contract bind always drops take context (sample mode is take-independent); track defaults are arranged by continuum.lua before bind is called
+  --@map:contract bind forwards the track to sv (which re-keys cm via cm:setTrack); never touches cm:setContext — the tracker take stays bound for sm:probeMode
   function sp:bind(track)
-    cm:clearTake()
     if track then sv:setTrack(track) end
   end
 
+  --@map:contract listTracks proxies sm:listTracks via sv — coord queries this to seed its active sampler track on first activation
+  function sp:listTracks() return sv:listTracks() end
+
   --@map:contract unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
   function sp:unbind() revertPreviewInPlace() end
+
+  --@map:contract tick runs every frame regardless of active page — sm needs the tracker take to maintain isTrackerMode and the gmem mailbox; project-path migration runs only on actual change
+  function sp:tick(take)
+    sm:probeMode(take, cm)
+    local pp = reaper.GetProjectPath(0)
+    if lastProjectPath ~= pp then
+      sm:setPrefix(pp)
+      if lastProjectPath then sm:migrate(pp, lastProjectPath, cm) end
+    end
+    sm:tick(cm)
+    lastProjectPath = pp
+  end
+
+  --@map:contract opens a file dialog and assigns the chosen path to (take's track, slot); silent no-op on cancel; called by coord's tracker-scope command, not by sample-page UI
+  function sp:loadSampleIntoSlot(take, slot)
+    local rv, path = reaper.GetUserFileNameForRead('', 'Load sample into current slot', '')
+    if rv and path ~= '' then
+      sm:assign(reaper.GetMediaItemTake_Track(take), slot, path,
+                reaper.GetProjectPath(0), cm)
+    end
+  end
 
   --@map:contract acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
   function sp:focusState()

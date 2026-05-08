@@ -33,6 +33,7 @@ local specs = {
   'tm_pc_synthesis_spec',
   'timing_period_spec',
   'timing_atoms_spec',
+  'timing_composite_spec',
   'vm_grid_spec',
   'vm_editing_spec',
   'view_context_spec',

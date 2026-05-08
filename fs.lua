@@ -86,3 +86,30 @@ function fs.listAudioFiles(path)
   table.sort(out, ciLess)
   return out
 end
+
+-- 64KB chunks so big samples don't allocate a Lua string the size of the file.
+local function copyFile(src, dst)
+  local fin = io.open(src, 'rb');  if not fin  then return false end
+  local fout = io.open(dst, 'wb'); if not fout then fin:close(); return false end
+  while true do
+    local chunk = fin:read(64 * 1024)
+    if not chunk then break end
+    fout:write(chunk)
+  end
+  fin:close(); fout:close()
+  return true
+end
+
+--@map:shape fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }
+fs.fileOps = {
+  copy  = copyFile,
+  -- os.rename fails across filesystems; fall back to copy+delete.
+  move  = function(src, dst)
+    if os.rename(src, dst) then return true end
+    if copyFile(src, dst) then os.remove(src); return true end
+    return false
+  end,
+  mkdir  = function(dir) reaper.RecursiveCreateDirectory(dir, 0) end,
+  exists = fs.exists,
+  hash   = fs.hashFile,
+}

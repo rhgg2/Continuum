@@ -18,38 +18,38 @@ end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 require('swingEditor')
 require('curveEditor')
+require('sequenceManager')
 require('trackerPage')
 
 return {
   {
-    name = "bind(take) forwards take to cm:setContext",
+    name = "bind(take) drives cm:setContext via the page's own tm:bindTake",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.vm, h.cm, h.cmgr, nil, nil)
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {}, 'take0')
       local got = {}
       h.cm.setContext = function(_, take) got[#got+1] = take end
       tp:bind('take99')
-      t.eq(#got, 1,        "setContext called once")
-      t.eq(got[1], 'take99', "called with the supplied take")
+      t.eq(got[#got], 'take99', "page now owns cm context for its stack")
     end,
   },
   {
-    name = "unbind() calls cm:setContext(nil)",
+    name = "unbind() drives cm:setContext(nil) via the page's own tm:bindTake",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.vm, h.cm, h.cmgr, nil, nil)
-      local called, arg = false, 'unset'
-      h.cm.setContext = function(_, take) called = true; arg = take end
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {}, 'take0')
+      local calls, lastTake = 0, 'sentinel'
+      h.cm.setContext = function(_, take) calls = calls + 1; lastTake = take end
       tp:unbind()
-      t.eq(called, true, "setContext was called")
-      t.eq(arg,    nil,  "called with nil")
+      t.eq(calls, 1, "unbind invoked setContext exactly once")
+      t.eq(lastTake, nil, "with nil")
     end,
   },
   {
     name = "focusState before any render returns both bits false",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.vm, h.cm, h.cmgr, nil, nil)
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {}, 'take0')
       local fs = tp:focusState()
       t.eq(fs.suppressKbd, false, "no suppression without a context")
       t.eq(fs.acceptCmds,  false, "no acceptance without a context")

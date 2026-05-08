@@ -10,7 +10,7 @@
 
 local t = require('support')
 
-local classic58 = { { atom = 'classic', shift = 0.08, period = 1 } }
+local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 
 local function noteByPitch(dump, pitch)
   for _, n in ipairs(dump.notes) do if n.pitch == pitch then return n end end

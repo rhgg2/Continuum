@@ -1,4 +1,4 @@
-@module samplePage  src=samplePage.lua  loc=613  sha=eb14c68
+@module samplePage  src=samplePage.lua  loc=651  sha=2973124
 @deps fs
 
 # Invariants & contracts (module)
@@ -15,7 +15,9 @@
   @const N_SLOTS = 64
   @const UP = '__up__'
 
-@factory newSamplePage(sv, sm, cm, cmgr, chrome, ctxArg)
+@factory newSamplePage(cm, cmgr, chrome, ctxArg, onPickTrack)
+  @map:contract  owns the sample substack: builds sm and sv internally; coord supplies only primitives + the take (per-frame, via tick) and a slot index (on demand, via loadSampleIntoSlot)
+  @map:contract  track-picker is a proxy — onPick routes through onPickTrack so coord owns the active sampler track; the page never picks its own track
   @map:invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])
 
   # Shapes
@@ -28,6 +30,9 @@
   # Private state
     @state ctx = ctxArg
     @state rename = nil
+    @state sm = newSampleManager(fs.fileOps)
+    @state lastProjectPath = nil
+    @state sv
     @state peakCache = {}
     @state durCache = {}
     @state drag = { handle = nil, slot = nil, startF = nil, endF = nil }
@@ -67,9 +72,15 @@
         @map:contract  pip auto-revert is checked at end of body: justTriggered=true edge consumes the trigger frame, after which any browser/slot-focus change or stray mouse click reverts
     @api sp:renderStatusBar(_)
     @api sp:bind(track)
-        @map:contract  bind always drops take context (sample mode is take-independent); track defaults are arranged by continuum.lua before bind is called
+        @map:contract  bind forwards the track to sv (which re-keys cm via cm:setTrack); never touches cm:setContext — the tracker take stays bound for sm:probeMode
+    @api sp:listTracks()
+        @map:contract  listTracks proxies sm:listTracks via sv — coord queries this to seed its active sampler track on first activation
     @api sp:unbind()
         @map:contract  unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
+    @api sp:tick(take)
+        @map:contract  tick runs every frame regardless of active page — sm needs the tracker take to maintain isTrackerMode and the gmem mailbox; project-path migration runs only on actual change
+    @api sp:loadSampleIntoSlot(take, slot)
+        @map:contract  opens a file dialog and assigns the chosen path to (take's track, slot); silent no-op on cancel; called by coord's tracker-scope command, not by sample-page UI
     @api sp:focusState()
         @map:contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
     @api sp:handleInput()
@@ -83,3 +94,5 @@
     @reaper GetMediaSourceSampleRate
     @reaper GetMediaSourceNumChannels
     @reaper new_array
+    @reaper GetUserFileNameForRead
+    @reaper GetMediaItemTake_Track

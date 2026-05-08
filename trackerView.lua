@@ -1963,9 +1963,10 @@ function newTrackerView(tm, cm, cmgr)
 
   local rebuilding = false
 
-  --@map:contract reentrancy-guarded by `rebuilding`; takeChanged=true resets ec and re-reads resolution/length/timeSigs from tm; grid cols / rowPPQs / viewContext / cell-overflow-offGrid maps / ghost maps rebuild unconditionally; pushMute at the end
+  --@map:contract reentrancy-guarded by `rebuilding`; early-returns when tm has no take (grid stays empty so the page shows its placeholder); takeChanged=true resets ec and re-reads resolution/length/timeSigs from tm; grid cols / rowPPQs / viewContext / cell-overflow-offGrid maps / ghost maps rebuild unconditionally; pushMute at the end
   function vm:rebuild(takeChanged)
     if not tm or rebuilding then return end
+    if not tm:currentTake() then return end
     rebuilding = true
     takeChanged = takeChanged or false
 
@@ -2104,11 +2105,11 @@ function newTrackerView(tm, cm, cmgr)
       vm:rebuild(pendingTakeSwap)
       pendingTakeSwap = false
     end)
-    --@map:contract non-transient writes to FRAME_KEYS while a transient override is active short-circuit into releaseTransientFrame, whose recursive cm:assign fires the rebuild — so we return early to avoid double rebuild
+    --@map:contract vm only listens to configChanged for vm-internal side effects (transient-frame release, mute pulse). Rebuilds are driven exclusively by tm's 'rebuild' signal, which tm fires after IT has rebuilt — so vm always reads coherent tm state and the (cm, tm) double-fire race is closed.
+    --@map:contract non-transient writes to FRAME_KEYS while a transient override is active short-circuit into releaseTransientFrame, whose recursive cm:assign fires a fresh configChanged → tm:rebuild → vm:rebuild chain
     cm:subscribe('configChanged', function(change)
       if isFrameChange(change) and releaseTransientFrame() then return end
       if muteKeys[change.key] then pushMute(); return end
-      vm:rebuild(false)
     end)
   end
 

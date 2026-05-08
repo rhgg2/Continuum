@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=440  sha=eb14c68
+@module swingEditor  src=swingEditor.lua  loc=534  sha=2973124
 @deps util, timing
 
 # Invariants & contracts (module)
@@ -7,7 +7,8 @@
   @map:invariant  state == nil iff editor is closed; open() is a no-op when already open; Esc / Begin-close clears state
   @map:invariant  snapshot is captured at open() and never mutated; Reset writes a deepClone of it
   @map:invariant  shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
-  @map:invariant  soft cap = min(SWING_SOFT_QN, hard); Wild unlocks hard = T_tile · atomMeta.range; cap == 0 freezes the slider
+  @map:invariant  on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
+  @map:invariant  slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider
   @map:invariant  atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
 
 # Shapes
@@ -24,29 +25,32 @@
   @const SWING_MARK = 0x000000b0
   @const SWING_SOFT_QN = 0.15
 
-@factory newSwingEditor(vm, cm, chrome, ctx)
+@factory newSwingEditor(vm, cm, chrome, ctx, seqMgr)
 
   # Private state
     @state state = nil
     @state self = {}
 
   # Private functions
+    @fn commit()   -- Cross-take reswing fires on widget release (IsItemDeactivatedAfterEdit for sliders and com
     @fn meterQN()
     @fn periodPresetIndex(tileQN)
         @map:contract  returns 0 (not nil) when tileQN matches no preset; callers append a synthetic label in that case
     @fn periodLabel(tileQN)
     @fn periodOverPPC(period, ppC)   -- Preset .period is already a tidy rational; halving it for ppC=2 keeps it tidy ({n,d} → {n,
-    @fn shiftCap(factor, wild)
-    @fn materialise(composite)
-        @map:contract  Factor[] -> ResolvedFactor[] in QN units (T = atomTilePeriod, not PPQ); local to the editor's QN-space preview
+    @fn shiftCap(factor, wild)   -- id has range = ∞ (slope is always 1; the K-bound never bites). Cap at one tile per side so
+    @fn materialise(composite)   -- QN-space preview uses ppqPerQN=1 so the editor draws against normalised QN units rather th
     @fn drawSwingGrid(composite, periodQN, rpb, w, h, shadeMeter)
     @fn isInt(x)   -- Classify a tick at qn position p into 'bar' (downbeat), 'midBar' (the bar's midpoint when 
     @fn classify(p)
     @fn swingRead()
+    @fn readFactors(composite)   -- Tolerant accessor: bare {} and {factors={}} both mean identity. Read-only; write paths dee
+    @fn phaseQN(p)   -- QN value of an optional period-shaped slot (scalar, {n,d}, or nil).
     @fn compositesEqual(a, b)
-        @map:contract  compares period via periodQN, so {1,2} and {2,4} count as equal — equality is on the QN value, not the literal table
+        @map:contract  compares composite phase, per-factor phase, period, atom and shift — phase fields normalise to QN before comparing, so {1,2} and {2,4} count equal
     @fn swingWrite(composite)
         @map:contract  sole write path; idempotent on equal composites; reswing is paired with the composite write so old→new delta is consistent
+    @fn cloneForEdit()   -- Editable clone with a guaranteed factors[] array, so write paths can index it without re-c
     @fn patchFactor(i, patch)
     @fn addFactor()
         @map:contract  default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited

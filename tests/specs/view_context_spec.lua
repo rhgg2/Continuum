@@ -73,7 +73,7 @@ local function swungSnapshot(harness, composite, slot)
   return h.tm:swingSnapshot()
 end
 
-local classic58 = { { atom = 'classic', shift = 0.08, period = 1 } }
+local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 
 return {
   ---------- PPQ ↔ ROW
