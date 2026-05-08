@@ -1,0 +1,61 @@
+@module aliases  src=aliases.lua  loc=220  sha=untracked
+
+# Invariants & contracts (module)
+  @map:invariant  pure module — no module-level mutable state
+  @map:invariant  per-field op lists; ops applied left-to-right
+  @map:invariant  fail-closed: fields outside the event type's vocabulary are skipped
+  @map:invariant  coalescence is trailing-op only and requires same opcode AND all-literal args
+
+# Shapes
+  @shape  Op = { opcode, arg1[, arg2, ...] }   -- numeric arg is a literal; table arg is a producing-op sub-expression
+  @shape  Xform = { [field] = { Op, ... }, ... }
+  @shape  SpecNode = { id, xform, children }   -- id is base36 string; children is list
+
+# Module-level constants
+  @const M = aliases
+  @const NOTE_FIELDS = {
+  @const CC_FIELDS = {
+  @const APPLIED = { add = true, mul = true }
+  @const PRODUCING = { rand = true }
+
+# Module-level functions (private)
+  @fn applyOne(running, op, rng)
+  @fn allLiteralArgs(op)
+  @fn combine(a, b)
+  @fn splitPath(specPath)
+  @fn findInList(list, id)
+
+# Public API (aliases.*)
+  @api aliases.validFields(evtType)
+  @api aliases.isAppliedOp(opcode)
+  @api aliases.isProducingOp(opcode)
+  @api aliases.isLiteral(arg)
+  @api aliases.evalArg(arg, rng)
+      -- Evaluate an arg into a number. A literal passes through; a table is a
+      -- producing-op sub-expression evaluated through `rng`.
+  @api aliases.applyXform(resolved, xform, evtType, rng)
+      -- Apply `xform` to `resolved`, returning a NEW table. Inputs unchanged.
+      -- Fields outside the event type's vocabulary are skipped silently.
+      -- Fields in the xform whose resolved value is missing raise.
+  @api aliases.coalescable(a, b)
+      -- Two ops coalesce iff: same applied opcode AND both have all-literal args.
+  @api aliases.appendOp(xform, field, op)
+      -- Append `op` to `xform[field]`. Returns a NEW xform; input untouched.
+      -- If the trailing op coalesces with `op`, merges in place of appending.
+  @api aliases.find(root, specPath)
+      -- Walk the spec tree at `root.aliases`. specPath is dotted base36 ('1.2.1').
+  @api aliases.parentOf(root, specPath)
+      -- Returns (parent_children_list, last_id) or nil if any intermediate is
+      -- missing. Top-level paths return (root.aliases, id).
+  @api aliases.pluckSubtree(root, specPath)
+      -- Mutates `root`: removes the subtree at specPath from its parent's
+      -- children list. Returns the plucked node, or nil if not found.
+  @api aliases.allocId(root)
+  @api aliases.emptyXform()
+  @api aliases.normaliseIds(root)
+      -- util.serialise decodes numeric-looking scalars back as numbers, so ids
+      -- like '1' / '10' round-trip as numbers. Callers must run this on a
+      -- deserialised tree to restore base36-string ids before calling find /
+      -- parentOf / pluckSubtree (those split paths textually).
+      @map:contract  idempotent; mutates `root` in place
+

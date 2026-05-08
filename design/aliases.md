@@ -21,26 +21,34 @@ on the materialised children.
 
 ```lua
 note.aliases  = {                                  -- ordered, creation-time
-  { id='1', xform={'dppq=120', 'dpitch=7'},
+  { id='1', xform={ ppq={{'add',120}}, pitch={{'add',7}} },
     children = {
-      { id='1.1', xform={'dppq=240'}, children={} },
+      { id='1.1', xform={ ppq={{'add',240}} }, children={} },
     },
   },
-  { id='2', xform={'dppqL=480'}, children={} },
+  { id='2', xform={ ppqL={{'add',480}} }, children={} },
+  -- humanise: per-emit random vel offset; no other transform
+  { id='3', xform={ vel={{'add',{'rand',-3,5}}} }, children={} },
 }
-note.aliasCtr = 3                                  -- next id allocator
+note.aliasCtr = 4                                  -- next id allocator
 ```
 
 - `id` — base-36 monotonic, allocated per-root from `aliasCtr`. Stable
   across rebuilds and save/load. Spec-paths are root-relative, so global
   uniqueness isn't needed.
-- `xform` — ordered list of op strings (see **Op vocabulary**). Empty
-  list = identity. List concatenation = morphism composition.
+- `xform` — `{ <field> = { <op-entry>, ... }, ... }`. Each field maps
+  to an ordered list of op entries; each entry is
+  `{<opcode>, <arg>, ...}`. Args may be literals or sub-expression
+  tables (e.g. `{'rand', lo, hi}`). Empty / absent field lists are
+  identity. Composition across the spec tree is **per-field
+  concatenation**: child's op list for field `f` is appended to
+  parent's, and the whole list is applied left-to-right.
 - `children` — ordered list of nested specs, same shape recursively.
 
-`aliases` and `aliasCtr` go on the metadata field whitelist for both
-notes and ccs (the cc sidecar carrier already supports arbitrary
-metadata).
+`aliases` and `aliasCtr` ride the existing metadata pass-through:
+mm declares structural fields (`noteEventFields`, `ccEventFields`) and
+serialises everything else to take extension data via `saveMetadatum`.
+No whitelist edits are required for either notes or ccs.
 
 ### Materialised events
 
@@ -56,6 +64,13 @@ is **ephemeral** — regenerated on every rebuild (sidecar/notation
 events come and go with it). The persistent identity of an aliased
 event is `(parentUuid, specPath)`, not its MIDI UUID.
 
+Ephemerality is enforced by tm, not mm. mm continues to mint permanent
+UUIDs for every event it sees; the rebuild sweep (see **Resolution**)
+deletes all events carrying `parentUuid` metadata before re-emitting,
+so each materialisation cycle produces a new MIDI event with a new
+UUID. The contract for callers: never key persistent state on a
+materialised event's UUID — use `(parentUuid, specPath)`.
+
 Per-child user metadata (anything the user wants a specific child to
 "carry") goes in the spec node, not on the materialised event — because
 the event is ephemeral.
@@ -64,45 +79,72 @@ the event is ephemeral.
 
 ## Op vocabulary
 
+A node's `xform` is per-field. Each field's value is an ordered list
+of **op entries** applied left-to-right to the field's running value
+(starting from the parent's resolved value).
+
+```lua
+xform = {
+  ppq = { {'add', 4}, {'mul', 0.5}, {'add', {'rand', -3, 4}} },
+  vel = { {'add', {'rand', -3, 5}} },
+}
 ```
-time      : dppq, dppqL, ppqscale, ppqLscale
-duration  : ddur, ddurL, durscale
-pitch     : dpitch, ddetune
-value     : dvel, dval, valscale
-channel   : dchan
-delay     : ddelay
-```
 
-Each op is **single-parameter**, encoded as `'<opkind>=<value>'`.
+### Op entries
 
-- `d*` ops add: `state.f ← state.f + value`.
-- `*scale` ops multiply around 0: `state.f ← state.f * value`.
+An op entry is `{<opcode>, <arg1>, <arg2>, ...}`. An argument is
+either a number literal or a value-producing sub-expression table.
 
-"Scale around anchor `a`" is built from composition:
-`['dppq=-a', 'ppqscale=k', 'dppq=+a']`. Coalescence merges the trailing
-`dppq` with later nudges. The op vocabulary stays unparameterised by
-context.
+**Phase 1 opcodes:**
 
-### Composition and coalescence
+| opcode | arity | role | semantics |
+|---|---|---|---|
+| `add` | 1 | applied | running += arg |
+| `mul` | 1 | applied | running *= arg |
+| `rand` | 2 | value-producing | returns `uniform(arg1, arg2)`; only valid as an argument to `add`/`mul` |
 
-A transform list is applied left-to-right over the parent's resolved
-state. Composition of transforms is concatenation. Two children of the
-same parent have independent transforms; a child of a child composes.
+Reserved (not implemented Phase 1): `snap`, `mod`, `clamp`, `sin`, …
 
-**Coalescence:** when an edit appends a new op, if the trailing op in
-the existing list is the same kind, merge by op-specific arithmetic
-(`d*` adds, `*scale` multiplies). Only adjacent same-kind ops merge —
-intervening different-kind ops block coalescence (since ops don't
-commute in general).
+`rand` draws fresh per emit. The xform spec is deterministic data; the
+*resolved value* of a field is stochastic at materialisation time iff
+its op list contains a `rand` argument anywhere.
 
-### Per-event-type validity
+### Allowed fields, per event type
 
-Not every op makes sense on every event type. `dpitch` is meaningless
-on a cc; `dval` is meaningless on a note (vel uses `dvel`). At
-alias-creation time the parent's type is known, so only valid ops are
-offered. A transform can always be carried forward across rebuilds even
-if it contains no-op-on-this-type ops — they fail closed (skip, no
-mutation). The validity table lives in `aliases.lua`.
+- **note** — `ppq`, `ppqL`, `dur`, `durL`, `pitch`, `detune`, `vel`,
+  `chan`, `delay`
+- **cc** — `ppq`, `ppqL`, `val`, `chan`, `delay`
+
+A transform carried across rebuilds may contain field entries
+meaningless to the current event type; they fail closed (field
+skipped, no mutation). Validity table lives in `aliases.lua`.
+
+### Composition
+
+Across the spec tree, composition is **per-field concatenation**: for
+each field, the child's op list is appended to the parent's, and the
+combined list is applied left-to-right to the field's starting value
+(typically the root's actual field value).
+
+Siblings are independent (each sees the parent's op list, not each
+other's). A node with no entry for field `f` is identity on `f`.
+
+### Coalescence
+
+When an edit appends an op to a field's list, if the trailing op has
+the same opcode AND both ops have all-literal args, merge:
+
+- `{'add', a}` + `{'add', b}` → `{'add', a + b}`
+- `{'mul', a}` + `{'mul', b}` → `{'mul', a * b}`
+
+Otherwise append. A literal-arg `add` followed by a `rand`-arg `add`
+does *not* coalesce (the second has a non-literal arg). Different
+opcodes never coalesce.
+
+This is the only coalescence rule. It is local (trailing op only) and
+contained (literal args only). "Scale by `k` around anchor `a`" is
+two ops: `{'mul', k}` then `{'add', a*(1-k)}`; subsequent nudges
+coalesce into the trailing `add`.
 
 ---
 
@@ -116,7 +158,7 @@ On every `'reload'` from mm, tm:
    **stale materialisation** and queues it for deletion.
 2. Builds a `uuid → root_event` index from non-materialised events.
 3. For each root, BFS its spec tree. At each node:
-   - Resolve fields = `applyOps(parent_resolved_fields, spec.xform)`.
+   - Resolve fields = `applyXform(parent_resolved_fields, spec.xform, evtType)`.
    - Check the **claims** map (see **Precedence**). If claimed, skip
      emission of this node. Continue walking children with the
      would-be-resolved fields as their parent state — children resolve
@@ -169,24 +211,28 @@ what `route` does.
 
 ### Relative — composes into transform
 
-If `evt.parentUuid` is set, walk to the spec node, append the op,
-coalesce. Otherwise mutate the event directly.
+If `evt.parentUuid` is set, walk to the spec node and append (with
+coalescence — see §Op vocabulary/Coalescence) to the relevant field's
+op list. Otherwise mutate the event directly.
 
-| command | op |
-|---|---|
-| `nudgeBack/Forward` (`adjustPosition`) | `dppq` |
-| `growNote`/`shrinkNote` (`adjustDuration`) | `ddur` |
-| `nudgeCoarse/Fine Up/Down`, pitch | `dpitch` |
-| `nudgeCoarse/Fine Up/Down`, vel | `dvel` |
-| `nudgeCoarse/Fine Up/Down`, val | `dval` |
-| `nudgeCoarse/Fine Up/Down`, delay | `ddelay` |
-| `insertRow`, `deleteRow` | `dppq` per affected event |
-| (new) `shift` | dispatch by cursor kind |
-| (new) `scale` | dispatch by cursor kind |
+| command | field | op appended |
+|---|---|---|
+| `nudgeBack/Forward` (`adjustPosition`) | `ppq`  | `{'add', δ}` |
+| `growNote`/`shrinkNote` (`adjustDuration`) | `dur` | `{'add', δ}` |
+| `nudgeCoarse/Fine Up/Down`, pitch | `pitch` | `{'add', δ}` |
+| `nudgeCoarse/Fine Up/Down`, vel | `vel` | `{'add', δ}` |
+| `nudgeCoarse/Fine Up/Down`, val | `val` | `{'add', δ}` |
+| `nudgeCoarse/Fine Up/Down`, delay | `delay` | `{'add', δ}` |
+| `insertRow`, `deleteRow` | `ppqL` | `{'add', δ}` per affected event |
+| (new) `shift` | `<f>` (cursor) | `{'add', δ}` |
+| (new) `scale` | `<f>` (cursor) | `{'mul', k}` then `{'add', a*(1-k)}` for anchor `a` |
+| (new) `humanise` | `<f>` (cursor) | `{'add', {'rand', lo, hi}}` |
 
-`insertRow`/`deleteRow` compose `dppq` into aliased children even when
-their parent lies outside the shifted region. The alias drifts from its
-parent — accepted.
+`insertRow`/`deleteRow` append `{'add', δ}` to `ppqL` (logical, not
+realised — the existing `shiftPlan` re-derives `ppq` from `ppqL`
+through swing) on aliased children even when their parent lies
+outside the shifted region. The alias drifts from its parent —
+accepted.
 
 ### Absolute — severs
 
@@ -280,10 +326,12 @@ an explicit alternative.
 - `` ` `` toggles **alias mode** (`vm.aliasMode`). Renderer shows a
   small indicator when on.
 - In alias mode, `copy`/`paste` and `duplicateDown/Up` create aliased
-  copies linked to their sources:
-  - `dppq` derived from destination row offset relative to source.
-  - `dpitch` derived from pitch offset (note column).
-  - `dchan` derived from channel offset.
+  copies linked to their sources, with each field's op list seeded
+  from the geometric offset:
+  - `ppq` (or `ppqL`, depending on cursor frame): `{'add', dRow}` from
+    destination row offset relative to source.
+  - `pitch`: `{'add', dPitch}` from pitch offset (note column).
+  - `chan`: `{'add', dChan}` from channel offset.
 - Out of alias mode, these commands behave as today.
 - `Ctrl+.` is `sever`.
 
@@ -324,10 +372,10 @@ re-parent. So the spec tree is a tree by construction.
 | 1 | schema, spec_id allocation, `aliases.lua` pure helpers, serialise round-trip |
 | 2 | tm rebuild walker (full rebuild every reload, no touched-set yet) |
 | 2.5 | touched-set optimisation: mm tracks mutations, `'reload'` carries `data.touched`, tm rebuild reads it |
-| 3 | edit routing (`route()`), relative-command dispatch, coalescence on real takes |
+| 3 | edit routing (`route()`), relative-command dispatch with append+coalesce into per-field op lists |
 | 4 | alias mode, creation hooks on copy/paste/duplicate |
 | 5 | severance command + structural-command handling |
-| 6 | new commands: `scale`, `shift` |
+| 6 | new commands: `scale`, `shift`, `humanise` (rand-arg helper) |
 | 7 | renderer markers and alias-mode indicator |
 
 Each phase has a regression-test surface; see `Test surface` below.
@@ -340,11 +388,28 @@ Tests live under `tests/specs/aliases_*.lua` plus pure-helper specs in
 `tests/specs/aliases_helpers_spec.lua`.
 
 **Phase 1** — pure helpers
-- `applyOps` correctness for each op kind on each event type.
-- Coalescence merges adjacent same-kind, leaves non-adjacent or
-  different-kind alone.
+- `applyXform` correctness for each allowed field, each opcode
+  (`add`, `mul`), each event type. Empty op list is identity.
+- Left-to-right ordering: `{{'mul',k},{'add',δ}}` resolves
+  `f ↦ k*f + δ`; reversed list resolves `f ↦ k*(f + δ)`.
+- `rand` is value-producing only (used as arg to `add`/`mul`); the
+  resolver is the call site, not the arg-evaluator. Test with an
+  injectable RNG seeded for determinism: a `{'rand', -3, 5}` arg
+  yields a value in `[-3, 5]`; sampling distribution is uniform
+  within tolerance over N draws.
+- Cross-type fail-closed: a `pitch` field on a cc xform is skipped
+  with no error.
+- Cross-node composition (per-field concatenation): parent
+  ppq=`{{'add',a1},{'mul',k1}}` then child
+  ppq=`{{'mul',k2},{'add',a2}}` resolves to
+  `k2*(k1*(x+a1)) + a2`.
+- `appendOp` coalesces literal-arg `add`+`add` (sum), literal-arg
+  `mul`+`mul` (product); refuses to coalesce across different
+  opcodes; refuses to coalesce when either op has a non-literal arg
+  (e.g. a `{'rand',...}` argument).
 - `find` / `pluckSubtree` on deep trees with non-trivial spec_paths.
-- `util.serialise` round-trip on nested spec trees.
+- `util.serialise` round-trip on nested spec trees with the
+  per-field op-list shape.
 
 **Phase 2** — rebuild walker
 - Single-level alias materialises with correct resolved fields.
@@ -355,13 +420,17 @@ Tests live under `tests/specs/aliases_*.lua` plus pure-helper specs in
   descendants still resolve from would-be state.
 
 **Phase 3** — edit routing
-- Relative edit on aliased child: transform updates, parent unchanged.
+- Relative edit on aliased child: the field's op list grows (or its
+  trailing op coalesces); parent unchanged.
 - Relative edit on plain event: behaves identically to today.
-- Two same-kind nudges produce one coalesced op.
+- Two same-direction nudges land as a single coalesced trailing
+  `{'add', δ}` in the field's op list.
+- A nudge after a `{'add', {'rand', ...}}` appends a fresh
+  `{'add', δ}` rather than mutating the rand entry.
 
 **Phase 4** — creation
-- Alias-paste at row+4 produces spec under source with `dppq` matching
-  4 rows.
+- Alias-paste at row+4 produces spec under source with `add.ppq` (or
+  `add.ppqL`) matching 4 rows.
 - Duplicate down on existing alias creates a sibling (not nested) spec
   under the same root.
 
@@ -374,8 +443,11 @@ Tests live under `tests/specs/aliases_*.lua` plus pure-helper specs in
 
 **Phase 6** — new commands
 - `scale 0.5` on a 4-event aliased group produces correctly-spaced
-  resolved positions.
-- `shift` composes into a single coalesced `dppq`.
+  resolved positions (anchor → trailing `{'add', a*(1-k)}` after the
+  `{'mul', k}`).
+- `shift` appends `{'add', δ}` into the cursor field's op list.
+- `humanise ±5` on vel appends `{'add', {'rand', -5, 5}}`. Successive
+  invocations append fresh entries (no coalescence — non-literal args).
 
 ---
 

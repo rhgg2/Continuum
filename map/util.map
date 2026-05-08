@@ -1,8 +1,11 @@
-@module util  src=util.lua  loc=361  sha=0efe8ed
+@module util  src=util.lua  loc=378  sha=2973124
 
 # Invariants & contracts (module)
   @map:invariant  stateless module: pure helpers, no module-level mutable state beyond the REMOVE sentinel
   @map:invariant  util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
+
+# Module-level constants
+  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 # Module-level functions (private)
   @fn print(...)
@@ -35,6 +38,8 @@
   @api util.round(n, to)
   @api util.gcd(a, b)
   @api util.lcm(a, b)
+  @api util.toBase36(n)
+  @api util.fromBase36(txt)
   @api util.dotimes(n, v)
       @map:contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v
   @api util.serialise(value, exclude, seen)

@@ -51,13 +51,11 @@ end
 local function createImGui()
   local ctx   = ImGui.CreateContext('Continuum Tracker')
   ImGui.SetConfigVar(ctx, ImGui.ConfigVar_ViewportsNoDecoration, 0)
-  -- Body drags must not move the window — only title-bar drags do.
-  -- Lane-strip and grid drags otherwise propagate as a window move.
+  -- Window drags from title bar, not body.
   ImGui.SetConfigVar(ctx, ImGui.ConfigVar_WindowsMoveFromTitleBarOnly, 1)
-  -- macOS' system font is private (dot-prefixed) and not reachable by
-  -- family name, so load SFNS.ttf directly. Other platforms resolve by name.
   local osName = reaper.GetOS()
   local font   = ImGui.CreateFont('Source Code Pro')
+  -- macOS' system font is not in the Font Book, so load directly.
   local uiFont = (osName:find('OSX') or osName:find('mac'))
                and ImGui.CreateFontFromFile('/System/Library/Fonts/SFNS.ttf')
                or  ImGui.CreateFont(osName:find('Win') and 'Segoe UI' or 'sans-serif')

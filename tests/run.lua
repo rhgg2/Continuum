@@ -20,6 +20,7 @@ local specs = {
   'util_edit_primitives_spec',
   'util_bucket_spec',
   'util_install_hooks_spec',
+  'aliases_helpers_spec',
   'mm_signal_flow_spec',
   'mm_cc_metadata_spec',
   'mm_cc_reconcile_spec',

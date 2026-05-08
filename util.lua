@@ -207,6 +207,23 @@ end
 
 function util.lcm(a, b) return a // util.gcd(a, b) * b end
 
+local BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+function util.toBase36(n)
+  if n == 0 then return '0' end
+  local s = ''
+  while n > 0 do
+    local r = n % 36
+    s = string.sub(BASE36, r + 1, r + 1) .. s
+    n = n // 36
+  end
+  return s
+end
+
+function util.fromBase36(txt)
+  return tonumber(txt, 36)
+end
+
 --@map:contract overloaded on type of v: function => call n times for side effect; else build n-array filled with v
 function util.dotimes(n, v)
   if type(v) == 'function' then

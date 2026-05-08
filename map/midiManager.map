@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1079  sha=c0fd219
+@module midiManager  src=midiManager.lua  loc=1060  sha=2973124
 @deps util
 
 # Invariants & contracts (module)
@@ -13,12 +13,9 @@
   @const chanMsgLUT = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }
       @map:invariant  chanMsgTypes is derived from chanMsgLUT so the two directions can't drift
   @const chanMsgTypes   -- inverse of chanMsgLUT
-  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 # Module-level functions (private)
   @fn print(...)
-  @fn toBase36(num)
-  @fn fromBase36(txt)
 
 @factory newMidiManager(take)
   @map:contract  stage-3 consensus threshold: winning offset must have ≥ max(2, ceil(0.5 × bucketSize)) votes and be unique (no tie)

@@ -17,25 +17,6 @@ local chanMsgLUT = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }
 local chanMsgTypes = {}
 for k, v in pairs(chanMsgLUT) do chanMsgTypes[v] = k end
 
-local BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-
-local function toBase36(num)
-  if num == 0 then return '0' end
-  local result = ''
-  while num > 0 do
-    local r = num % 36
-    result = string.sub(BASE36, r + 1, r + 1) .. result
-    num = math.floor(num / 36)
-  end
-  return result
-end
-
-local function fromBase36(txt)
-  local n = tonumber(txt, 36)
-  if not n then print('Error! ' .. txt .. ' is not a valid base36 string') end
-  return n
-end
-
 function newMidiManager(take)
 
   ---------- PRIVATE
@@ -120,13 +101,13 @@ function newMidiManager(take)
     local function idOf(cc) return cc.cc or cc.pitch or 0 end
 
     function noteSidecarEncode(note)
-      return string.format('NOTE %d %d custom ctm_%s', note.chan-1, note.pitch, toBase36(note.uuid))
+      return string.format('NOTE %d %d custom ctm_%s', note.chan-1, note.pitch, util.toBase36(note.uuid))
     end
 
     function noteSidecarDecode(msg)
       local chan, pitch, uuidTxt = msg:match('^NOTE%s+(%d+)%s+(%d+)%s+custom%s+ctm_(.+)$')
       if uuidTxt then
-        return { chan = chan + 1, pitch = pitch, uuid = fromBase36(uuidTxt) }
+        return { chan = chan + 1, pitch = pitch, uuid = util.fromBase36(uuidTxt) }
       end
     end
 
@@ -149,7 +130,7 @@ function newMidiManager(take)
         .. string.char(idOf(cc))
         .. string.char(lo)
         .. string.char(hi)
-        .. toBase36(cc.uuid)
+        .. util.toBase36(cc.uuid)
     end
 
     function ccSidecarDecode(body)
@@ -177,7 +158,7 @@ function newMidiManager(take)
     if not (ok and keysText and keysText ~= '') then return {} end
     local tbl = {}
     for uuidTxt in keysText:gmatch('[^,]+') do
-      local uuid = fromBase36(uuidTxt)
+      local uuid = util.fromBase36(uuidTxt)
       tbl[uuid] = { }
 
       local entryOk, fields = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_' .. uuidTxt, '', false)
@@ -201,7 +182,7 @@ function newMidiManager(take)
   local function saveMetadatum(uuid)
     if not take then return end
 
-    local uuidTxt = toBase36(uuid)
+    local uuidTxt = util.toBase36(uuid)
     local evt   = eventsByUuid[uuid]
 
     if not evt then
@@ -225,7 +206,7 @@ function newMidiManager(take)
 
     local newKeys, keyList = {}, {}
     for uuid in pairs(eventsByUuid) do
-      local uuidTxt = toBase36(uuid)
+      local uuidTxt = util.toBase36(uuid)
       newKeys[uuidTxt] = true
       util.add(keyList, uuidTxt)
       saveMetadatum(uuid)
