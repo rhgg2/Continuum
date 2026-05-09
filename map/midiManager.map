@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1060  sha=2973124
+@module midiManager  src=midiManager.lua  loc=1074  sha=48d980b
 @deps util
 
 # Invariants & contracts (module)
@@ -93,7 +93,8 @@
         · Sidecar reconcile (ccs ↔ ccSidecars)
         · Single bracketed flush: sets first (idx-stable), deletes descending,
         · inserts last (their idxs aren't tracked — final read will pick them up).
-        · Compact in-memory tables to dense.
+        · Compact in-memory tables to dense; loc is the lua position
+        · (1-based), valid until next rebuild — see byUuid contract.
         · Final read pass: refresh idx / uuidIdx from current REAPER state.
         · Persist + signals
     @api mm:reload()
@@ -117,6 +118,8 @@
         @map:contract  first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
     @api mm:addCC(t)
         @map:contract  addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
+    @api mm:byUuid(uuid)
+        @map:contract  returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. loc is the lua position stamped at compact / addNote / addCC and is excluded from sidecar persistence.
     -- Take data
     @api mm:take()
     @api mm:interpolate(A, B, ppq)

@@ -129,17 +129,16 @@ return {
     end,
   },
 
-  -- 2a'. Subtle pin: when a 1-row copy spans only the start of a longer
-  -- note, the note's endRow is dropped in collectSelection (endppq
-  -- exceeds the region's endppq). On paste, addNoteEvent sees
-  -- `ce.endppq or nextNotePPQ` and stretches the pasted note to the
-  -- next note (or take length). This is existing behaviour — pinning
-  -- so Stage 2 can't drift it.
+  -- 2a'. Source duration is structural: a 1-row copy of a longer note
+  -- still carries the note's true endppq through the clip. Paste at an
+  -- empty cursor preserves source duration; the next-same-column event
+  -- (or take length) only enters as a clip ceiling.
   {
-    name = 'copy of 1-row slice of a longer note pastes as open-ended',
+    name = 'copy of 1-row slice of a longer note pastes at source duration',
     run = function(harness)
-      -- Note spans ppq 240..360 (2 rows). 1-row copy at row 4 captures
-      -- only its start; endRow is dropped.
+      -- Note spans ppq 240..360 (2 rows, source duration 120). 1-row copy
+      -- at row 4 captures the note; endRow follows source endppq, not
+      -- selection.
       local h = mkNoteHarness(harness)
       h.ec:setPos(4, 1, 1)
       h.cmgr:invoke('copy')
@@ -151,8 +150,7 @@ return {
         if n.ppq == 480 then pasted = n end
       end
       t.truthy(pasted)
-      -- No nextNote after ppq=480 → stretches to take length (3840).
-      t.eq(pasted.endppq, 3840, 'open-ended paste stretches to length')
+      t.eq(pasted.endppq, 600, 'paste preserves source duration (480 + 120)')
     end,
   },
 

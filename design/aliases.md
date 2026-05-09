@@ -324,14 +324,24 @@ an explicit alternative.
 ## Creation UX
 
 - `` ` `` toggles **alias mode** (`vm.aliasMode`). Renderer shows a
-  small indicator when on.
+  small indicator when on (Phase 7).
 - In alias mode, `copy`/`paste` and `duplicateDown/Up` create aliased
-  copies linked to their sources, with each field's op list seeded
-  from the geometric offset:
-  - `ppq` (or `ppqL`, depending on cursor frame): `{'add', dRow}` from
-    destination row offset relative to source.
-  - `pitch`: `{'add', dPitch}` from pitch offset (note column).
-  - `chan`: `{'add', dChan}` from channel offset.
+  copies linked to their sources. The clip captures `aliasSrc =
+  { uuid, specPath, ppqL }` per event (uuid is `parentUuid` if the
+  source is itself aliased, else its own uuid). At paste, each event
+  becomes a new spec node:
+  - source plain (`specPath` nil): node lands at top of `root.aliases`.
+  - source aliased (`specPath` set): node lands as a **child** of that
+    spec node (so the new node's resolved fields compose onto its
+    source's resolved fields). Always child, never sibling.
+- Phase 4 seeds only `ppqL` from row delta (`{'add', newPpqL - srcPpqL}`).
+  `pitch`/`chan` deltas defer to Phase 6's `shift`; alias-paste leaves
+  those fields inherited.
+- `duplicate` is `copy + paste` with a one-shot cache (`vm.dupeClip`):
+  the first duplicate of a run collects and pastes; subsequent
+  immediate duplicates re-paste the cached clip so successive offsets
+  anchor to the original source's `ppqL`. Any non-duplicate command
+  clears the cache.
 - Out of alias mode, these commands behave as today.
 - `Ctrl+.` is `sever`.
 
@@ -429,10 +439,16 @@ Tests live under `tests/specs/aliases_*.lua` plus pure-helper specs in
   `{'add', δ}` rather than mutating the rand entry.
 
 **Phase 4** — creation
-- Alias-paste at row+4 produces spec under source with `add.ppq` (or
-  `add.ppqL`) matching 4 rows.
-- Duplicate down on existing alias creates a sibling (not nested) spec
-  under the same root.
+- Alias-paste at row+4 of a plain source produces a top-level spec
+  under `root.aliases` with `add.ppqL` matching 4 rows.
+- Duplicate down on an already-aliased event creates a **child** of
+  the source spec node (not a sibling, not nested under the
+  duplicated event's existing tree).
+- Successive immediate duplicates re-paste the cached clip; from a
+  plain source they produce top-level siblings with progressive `ppqL`
+  offsets relative to the source's original ppqL.
+- Any non-duplicate command between duplicates clears the cache, so
+  the next duplicate re-collects from the current selection.
 
 **Phase 5** — severance
 - Sever preserves resolved field state at the moment of severance.

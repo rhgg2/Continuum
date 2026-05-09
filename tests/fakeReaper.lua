@@ -48,6 +48,8 @@ function M.new()
     return true, state.takeExt[k] or ''
   end
 
+  function r.GetTakeGUID(take) return '{take:' .. tostring(take) .. '}' end
+
   function r.GetMediaItemTake_Item(take) return state.itemForTake[take] end
   function r.GetMediaItemTrack(item)     return state.trackForItem[item] end
   function r.GetMediaItemTake_Track(take)

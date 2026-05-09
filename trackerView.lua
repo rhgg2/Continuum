@@ -156,6 +156,7 @@ function newTrackerView(tm, cm, cmgr)
 
   local vm = {}
   vm.grid = grid  -- live handle for rm; mutated in place on rebuild
+  vm.aliasMode = false  -- toggled by `toggleAliasMode`; gates alias-creation in copy/duplicate
 
   local ec, clipboard, ctx
 
@@ -1112,6 +1113,12 @@ function newTrackerView(tm, cm, cmgr)
       local _, maxPPQ = overlapBounds(col, note.ppq, note, true)
       local rawPPQ    = ctx:rowToPPQ(newRow, chan)
       local newppq    = util.clamp(rawPPQ, minPPQ, maxPPQ)
+      if newppq == note.endppq then return end
+      if note.parentUuid then
+        local oldEndL = note.endppqL or ctx:ppqToRow(note.endppq, chan) * logPerRow
+        local newEndL = newRow * logPerRow
+        if tm:routeRelative(note, { durL = { 'add', newEndL - oldEndL } }) then return end
+      end
       local endppqL   = newppq == rawPPQ and newRow * logPerRow or nil
       assignTail(note, chan, newppq, endppqL)
     end
@@ -1198,7 +1205,13 @@ function newTrackerView(tm, cm, cmgr)
         end
       end
 
-      assignStamp('note', note, chan, newStart, newEnd)
+      local _, logPerRow = frameAndLogPerRow(chan)
+      local oldPpqL = note.ppqL or ctx:ppqToRow(note.ppq, chan) * logPerRow
+      local newPpqL = newStart * logPerRow
+      if not (note.parentUuid
+              and tm:routeRelative(note, { ppqL = { 'add', newPpqL - oldPpqL } })) then
+        assignStamp('note', note, chan, newStart, newEnd)
+      end
       tm:flush()
       if not cursorBlocked then ec:setPos(newCursorRow) end
     end
@@ -1565,26 +1578,41 @@ function newTrackerView(tm, cm, cmgr)
         pitch, detune = util.clamp(note.pitch + delta, 0, 127), note.detune
       end
       if pitch == note.pitch and detune == note.detune then return end
+      if note.parentUuid then
+        local ops = {}
+        if pitch  ~= note.pitch  then ops.pitch  = { 'add', pitch  - note.pitch  } end
+        if detune ~= note.detune then ops.detune = { 'add', detune - note.detune } end
+        if tm:routeRelative(note, ops) then return end
+      end
       tm:assignEvent('note', note, { pitch = pitch, detune = detune })
       if audible then audition(pitch, note.vel, col.midiChan) end
     end
 
     local function nudgeVel(note, dir, coarse)
       local newVel = util.nudgedScalar(note.vel, 1, 127, dir, coarse and 8 or nil)
-      if newVel ~= note.vel then tm:assignEvent('note', note, { vel = newVel }) end
+      if newVel == note.vel then return end
+      if note.parentUuid
+         and tm:routeRelative(note, { vel = { 'add', newVel - note.vel } }) then return end
+      tm:assignEvent('note', note, { vel = newVel })
     end
 
     local function nudgeDelay(col, note, dir, coarse)
       local minD, maxD = delayRange(col, note)
       local old = note.delay
       local new = util.nudgedScalar(old, math.ceil(minD), math.floor(maxD), dir, coarse and 10 or nil)
-      if new ~= old then tm:assignEvent('note', note, { delay = new }) end
+      if new == old then return end
+      if note.parentUuid
+         and tm:routeRelative(note, { delay = { 'add', new - old } }) then return end
+      tm:assignEvent('note', note, { delay = new })
     end
 
     local function nudgeValue(col, evt, dir, coarse)
       local lo, hi   = valueBounds(col)
       local newVal   = util.nudgedScalar(evt.val, lo, hi, dir, coarse and valueInterval(col) or nil)
-      if newVal ~= evt.val then tm:assignEvent(col.type, evt, { val = newVal }) end
+      if newVal == evt.val then return end
+      if evt.parentUuid
+         and tm:routeRelative(evt, { val = { 'add', newVal - evt.val } }) then return end
+      tm:assignEvent(col.type, evt, { val = newVal })
     end
 
     local function applyNudge(col, evt, part, dir, coarse, audible)
@@ -1763,9 +1791,15 @@ function newTrackerView(tm, cm, cmgr)
 
   ----- Duplicate
 
-  --@map:contract upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard (uses clipboard:collect + pasteClip directly)
+  -- Cache of the clip captured on the first duplicate of a run. Subsequent
+  -- immediate duplicates re-paste this clip rather than re-collecting, so the
+  -- alias-mode `aliasSrc` (uuid, specPath, ppqL) stays anchored to the
+  -- original source. Cleared by `doBefore` on every other tracker command.
+  local dupeClip = nil
+
+  --@map:contract upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard. First call collects; subsequent immediate calls re-paste the cached clip so successive duplicates anchor to the original source row (matters for alias mode).
   local function duplicate(dir)
-    local clip = clipboard:collect()
+    local clip = dupeClip or clipboard:collect()
     if not clip then return end
     local r1, r2, c1, c2, part1, part2 = ec:region()
     local numRows   = r2 - r1 + 1
@@ -1788,6 +1822,7 @@ function newTrackerView(tm, cm, cmgr)
       ec:setSelection{ row1 = targetRow, row2 = targetRow + effRows - 1,
                        col1 = c1, col2 = c2, part1 = part1, part2 = part2 }
     end
+    dupeClip = clip
   end
 
   ---------- PUBLIC
@@ -1926,6 +1961,7 @@ function newTrackerView(tm, cm, cmgr)
     deleteSel               = function() deleteSelection() end,
     duplicateDown           = function() duplicate( 1) end,
     duplicateUp             = function() duplicate(-1) end,
+    toggleAliasMode         = function() vm.aliasMode = not vm.aliasMode end,
     inputOctaveUp           = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')+1, -1, 9)) end,
     inputOctaveDown         = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')-1, -1, 9)) end,
     inputSampleUp           = function() stepSample( 1) end,
@@ -2129,6 +2165,7 @@ function newTrackerView(tm, cm, cmgr)
     paFrame      = paFrame,
     getCtx       = function() return ctx end,
     getLength    = function() return length end,
+    getAliasMode = function() return vm.aliasMode end,
   }
 
   ec:registerCommands(tracker)
@@ -2150,6 +2187,16 @@ function newTrackerView(tm, cm, cmgr)
     'selectRight', 'selectLeft', 'selectClear', 'colRight',
     'colLeft', 'channelRight', 'channelLeft', 'delete',
   }, killAudition)
+
+  -- Any non-duplicate command breaks the duplicate run.
+  do
+    local keep = { duplicateDown = true, duplicateUp = true }
+    local clearOn = {}
+    for name in pairs(tracker.commands) do
+      if not keep[name] then clearOn[#clearOn + 1] = name end
+    end
+    tracker:doBefore(clearOn, function() dupeClip = nil end)
+  end
 
   vm:rebuild(true)
   return vm

@@ -38,4 +38,48 @@ return {
       t.eq(n.endppq, 200, 'endppq unchanged — F3 (was 320 pre-fix)')
     end,
   },
+
+  -- clearSameKey must keep endppqL coherent with endppq. Pre-fix the
+  -- helper stamped only endppq; the canonical logical end either
+  -- resurfaced on rebuild (alias roots) or made the view show an
+  -- unclamped tail (endLogicalOf prefers endppqL when present).
+  {
+    name = 'clearSameKey truncates peer: endppqL matches selfPpqL',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = { { ppq = 0, endppq = 480, ppqL = 0, endppqL = 480,
+                             chan = 1, pitch = 60, vel = 100, uuid = 1, lane = 1 } } },
+      }
+      h.tm:addEvent('note', { ppq = 240, endppq = 480, ppqL = 240, endppqL = 480,
+                              chan = 1, pitch = 60, vel = 100, lane = 1 })
+      h.tm:flush()
+
+      local notes = h.fm:dump().notes
+      local first
+      for _, n in ipairs(notes) do if n.ppq == 0 then first = n end end
+      t.truthy(first, 'first note survived')
+      t.eq(first.endppq,  240, 'first note truncated to peer onset')
+      t.eq(first.endppqL, 240, 'endppqL stamped to peer ppqL')
+    end,
+  },
+
+  {
+    name = 'clearSameKey clamps self: endppqL matches next peer ppqL',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = { { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
+                             chan = 1, pitch = 60, vel = 100, uuid = 1, lane = 1 } } },
+      }
+      h.tm:addEvent('note', { ppq = 0, endppq = 720, ppqL = 0, endppqL = 720,
+                              chan = 1, pitch = 60, vel = 100, lane = 1 })
+      h.tm:flush()
+
+      local notes = h.fm:dump().notes
+      local self_
+      for _, n in ipairs(notes) do if n.ppq == 0 then self_ = n end end
+      t.truthy(self_, 'self note added')
+      t.eq(self_.endppq,  480, 'self clamped to next peer onset')
+      t.eq(self_.endppqL, 480, 'endppqL clamped to next peer ppqL')
+    end,
+  },
 }

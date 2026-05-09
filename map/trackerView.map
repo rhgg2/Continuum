@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2156  sha=2973124
+@module trackerView  src=trackerView.lua  loc=2203  sha=ee85a77
 @deps util, midiManager, trackerManager, tuning, commandManager, editCursor
 
 # Invariants & contracts (module)
@@ -157,7 +157,7 @@
     @fn deleteOrBackspace()
     @fn stepSample(dir)   -- Step currentSample by ±1 across the full 0..127 range. Empty slots are reachable — the use
     @fn duplicate(dir)
-        @map:contract  upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard (uses clipboard:collect + pasteClip directly)
+        @map:contract  upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard. First call collects; subsequent immediate calls re-paste the cached clip so successive duplicates anchor to the original source row (matters for alias mode).
     @fn addGridCol(chan, type, key, events)
 
   # Public API

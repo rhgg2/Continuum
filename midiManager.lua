@@ -170,11 +170,11 @@ function newMidiManager(take)
   end
 
   local noteEventFields = {
-    idx = true, ppq = true, endppq = true, chan = true,
+    idx = true, loc = true, ppq = true, endppq = true, chan = true,
     pitch = true, vel = true, muted = true, uuid = true, uuidIdx = true,
   }
   local ccEventFields = {
-    idx = true, uuidIdx = true, ppq = true, msgType = true, chan = true,
+    idx = true, loc = true, uuidIdx = true, ppq = true, msgType = true, chan = true,
     cc = true, pitch = true, val = true,
     muted = true, shape = true, tension = true, uuid = true,
   }
@@ -566,10 +566,13 @@ function newMidiManager(take)
       reaper.MIDI_Sort(take)
     end
 
-    ----- Compact in-memory tables to dense.
+    ----- Compact in-memory tables to dense; loc is the lua position
+    ----- (1-based), valid until next rebuild — see byUuid contract.
     notes      = compact(notes,      noteCount)
     ccs        = compact(ccs,        ccCount)
     ccSidecars = compact(ccSidecars, sidecarCount)
+    for i, n in ipairs(notes) do n.loc = i end
+    for i, c in ipairs(ccs)   do c.loc = i end
 
     ----- Final read pass: refresh idx / uuidIdx from current REAPER state.
     notesKeyed = {}
@@ -760,12 +763,14 @@ function newMidiManager(take)
     local note = util.clone(t)
     if not note.muted then note.muted = nil end
     assignNewUUID(note)
+    t.uuid = note.uuid
     reaper.MIDI_InsertTextSysexEvt(take, false, false, t.ppq, 15, noteSidecarEncode(note))
 
     local _, noteCount, _, sysexCount = reaper.MIDI_CountEvts(take)
     note.uuidIdx = sysexCount - 1
     note.idx = noteCount - 1
     util.add(notes, note)
+    note.loc = #notes
 
     saveMetadatum(note.uuid)
 
@@ -924,6 +929,7 @@ function newMidiManager(take)
     if msg.shape ~= 'bezier' then msg.tension = nil end
 
     util.add(ccs, msg)
+    msg.loc = #ccs
 
     local hasMetadata = false
     for k in pairs(t) do
@@ -931,6 +937,7 @@ function newMidiManager(take)
     end
     if hasMetadata then
       assignNewUUID(msg)
+      t.uuid = msg.uuid
       reaper.MIDI_InsertTextSysexEvt(take, false, false, msg.ppq, -1, ccSidecarEncode(msg))
       local _, _, _, sysexCount = reaper.MIDI_CountEvts(take)
       msg.uuidIdx = sysexCount - 1
@@ -940,6 +947,13 @@ function newMidiManager(take)
     return #ccs
   end
 
+
+  --@map:contract returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. loc is the lua position stamped at compact / addNote / addCC and is excluded from sidecar persistence.
+  function mm:byUuid(uuid)
+    local evt = eventsByUuid[uuid]
+    if not evt then return nil end
+    return evt.loc, util.clone(evt, INTERNALS), evt.msgType and 'cc' or 'note'
+  end
 
   ----- Take data
 

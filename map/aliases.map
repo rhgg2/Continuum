@@ -1,4 +1,4 @@
-@module aliases  src=aliases.lua  loc=220  sha=untracked
+@module aliases  src=aliases.lua  loc=231  sha=48d980b
 
 # Invariants & contracts (module)
   @map:invariant  pure module — no module-level mutable state
@@ -33,6 +33,8 @@
   @api aliases.evalArg(arg, rng)
       -- Evaluate an arg into a number. A literal passes through; a table is a
       -- producing-op sub-expression evaluated through `rng`.
+  @api aliases.makeRng(seed)
+      -- LCG factory. Returns a closure (lo, hi) → number in [lo, hi).
   @api aliases.applyXform(resolved, xform, evtType, rng)
       -- Apply `xform` to `resolved`, returning a NEW table. Inputs unchanged.
       -- Fields outside the event type's vocabulary are skipped silently.
@@ -50,12 +52,11 @@
   @api aliases.pluckSubtree(root, specPath)
       -- Mutates `root`: removes the subtree at specPath from its parent's
       -- children list. Returns the plucked node, or nil if not found.
+  @api aliases.route(root, evt, field, op)
+      -- Append `op` to the spec node at `evt.specPath` under `root`. Mutates
+      -- the node's xform in place (within `root.aliases`) and returns the
+      -- updated `root.aliases`. Returns nil if the spec path doesn't resolve
+      -- — caller should fall back to direct mutation.
   @api aliases.allocId(root)
   @api aliases.emptyXform()
-  @api aliases.normaliseIds(root)
-      -- util.serialise decodes numeric-looking scalars back as numbers, so ids
-      -- like '1' / '10' round-trip as numbers. Callers must run this on a
-      -- deserialised tree to restore base36-string ids before calling find /
-      -- parentOf / pluckSubtree (those split paths textually).
-      @map:contract  idempotent; mutates `root` in place
 

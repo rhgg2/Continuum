@@ -1,4 +1,4 @@
-@module util  src=util.lua  loc=378  sha=2973124
+@module util  src=util.lua  loc=397  sha=48d980b
 
 # Invariants & contracts (module)
   @map:invariant  stateless module: pure helpers, no module-level mutable state beyond the REMOVE sentinel
@@ -24,6 +24,7 @@
   @api util.clone(src, exclude, deep)
       @map:contract  exclude applies only to the outermost table; deep recursion drops the exclude set
   @api util.deepClone(src)
+  @api util.deepEq(a, b)
   @api util.installHooks(owner)
       @map:contract  listeners filter by signal name at registration; forward requires source itself ran installHooks
   @api util.isNote(e)

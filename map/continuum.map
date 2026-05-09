@@ -1,5 +1,5 @@
-@module continuum  src=continuum.lua  loc=326  sha=2973124
-@deps util, fs, configManager, midiManager, trackerManager, commandManager, editCursor, trackerView, sampleManager, sampleView, swingEditor, sequenceManager, curveEditor, chrome, trackerPage, samplePage
+@module continuum  src=continuum.lua  loc=324  sha=48d980b
+@deps util, fs, configManager, midiManager, aliases, trackerManager, commandManager, editCursor, trackerView, sampleManager, sampleView, swingEditor, sequenceManager, curveEditor, chrome, trackerPage, samplePage
 
 # Invariants & contracts (module)
   @map:invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer

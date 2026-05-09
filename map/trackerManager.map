@@ -1,5 +1,5 @@
-@module trackerManager  src=trackerManager.lua  loc=1319  sha=2973124
-@deps util, midiManager, timing
+@module trackerManager  src=trackerManager.lua  loc=1675  sha=ee85a77
+@deps util, midiManager, timing, aliases
 
 # Invariants & contracts (module)
   @map:invariant  tm exposes intent frame; mm holds realisation frame; um works in realisation and shifts to intent at rebuild's tail (tidyCol)
@@ -19,12 +19,19 @@
   @shape  paEventCol = { type='pa', ppq, pitch, vel, loc, ... }  -- mixed into note column events
   @shape  extraColumns[chan] = { notes=count, [pc=true], [pb=true], [at=true], [ccs={[ccNum]=true}] }
 
+# Module-level constants
+  @const SEED_EXCLUDE = {
+
 # Module-level functions (private)
   @fn print(...)
   @fn synthesisePCs(chan, records)
       @map:contract  pure; no mm/cm reads; emitted PCs carry fake=true so flush/rebuild can distinguish synthesised from user-authored
   @fn reconcilePCsForChan(chan, records, existing)
       @map:contract  returns (desired, shadowed, toRemove, toAdd); desired carries .loc on entries that survived the diff
+  @fn evtTypeOf(evt)
+  @fn slotKey(evt)
+  @fn seedFields(root)
+  @fn seedFromTake(take)
 
 @factory newTrackerManager(mm, cm)
   @map:invariant  usedSwings is an output of rebuild (computed from event frames), not an input; suppressed here to prevent the cm:set call inside rebuild from firing a redundant follow-up rebuild
@@ -34,6 +41,8 @@
     @state fire   -- installed below, once tm exists
     @state um   -- update manager; set by tm:rebuild
     @state lastMuteSet = {}   -- { [chan] = true }, pushed by vm via tm:setMutedChannels
+    @state pendingFlushUuids
+        @map:invariant  pendingFlushUuids is a uuid-set of notes touched by the in-flight um:flush; populated before mm:modify (assigns) and grown inside it (adds), read by allocateNoteColumn during the rebuild that fires from mm's reload, cleared at the tail of tm:rebuild — nil outside a flush-driven rebuild
 
   # Private functions
     @fn sortByPPQ(tbl)
@@ -79,23 +88,29 @@
     @fn resizeNote(n, P1, P2)
     @fn assignNote(n, update)
         @map:contract  chan/lane updates are rejected with a warning; ppq/endppq route through resizeNote; detune updates retune forward and reconcile both endpoint boundaries
-    @fn clearSameKeyRange(chan, pitch, P, Pend, selfEvt)
+    @fn clearSameKeyRange(chan, pitch, P, Pend, selfPpqL, selfEvt)   -- Returns (clampEnd, clampEndL): the realised intent end and its logical counterpart. Trunca
     @fn reconcilePcs(chan)
     @fn realiseNoteUpdate(evt, update)
     @fn init()
     @fn pushNoteCol(channel)
     @fn noteColumnAccepts(col, note)
+        @map:contract  returns (true) on accept; (false, conflictEvt) when the refusal is the bump-prone overlap case (threshold exceeded, or coincident onset); (false) on the dominated-by-two refusal, which is structural rather than bug-attributable
+    @fn warnLaneOverlap(note, conflict)
     @fn allocateNoteColumn(channel, note)
+        @map:contract  requested-lane refusals attributable to the in-flight flush (incoming or conflicting note's uuid in pendingFlushUuids) keep the overlap and log a warning, surfacing the bug rather than silently bumping; refusals not attributable, and lane-less adds, fall through to sibling-search bumping unchanged
     @fn findNoteColumnForPitch(channel, pitch, ppq_pos)
     @fn projectCC(cc, loc, overlay)
     @fn forEachEvent(fn)   -- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly. Def
+    @fn colKey(chan, lane)
     @fn tidyCol(col)   -- 5) Shift into intent.
     @fn applyTimeMap(tau, slopeAt)   -- τ acts on logical positions; intent ppqs rederive through the current swing snapshot. Even
     @fn snapshot(iter)
     @fn shift(c, delta, isNote)
     @fn resolve(name)
+    @fn parts(p)
 
   # Public API
+    -- Aliases walker helpers
     -- Update manager
     -- Accessors
     -- Low-level mutation
@@ -152,6 +167,16 @@
     @api tm:addEvent(type, evt)
     @api tm:assignEvent(type, evt, update, opts)
     @api tm:flush()
+    @api tm:routeRelative(evt, opsByField)
+        @map:contract  evt is a materialised alias child (carries parentUuid + specPath); appends each (field, op) entry of `opsByField` to the spec node and queues an aliases-only metadata write on the root. Multi-field is one call so coupled fields (e.g. pitch+detune under a temper) land on a single root snapshot. Returns false when evt is not aliased or the root/spec lookup fails — caller should fall through to direct mutation.
+    @api tm:aliasSrcSnapshot(rootUuid, specPath)
+        @map:contract  for a materialised child source at (rootUuid, specPath), returns { children = deep clone of the leaf spec node's children, chain = [{id, xform-clone}, ...] one entry per ANCESTOR segment (the leaf itself is excluded). Returns nil if the root is missing or any path segment fails to resolve. The chain is the copy-time fingerprint of *ancestor* xforms only — the leaf is the source, so editing or moving it stays compatible with paste; only ancestor edits count as tree-mutation drift.
+    @api tm:resolveAliasSrc(rootUuid, specPath, chain, evtType)
+        @map:contract  resolves the source side of an alias-paste against the live spec tree. Returns nil if root or any path segment missing (→ silent demote, the (A) case); { mismatch = true } if a captured ANCESTOR's xform disagrees with the live one, or any path xform contains a producing-op we cannot re-roll (→ loud demote, "spec tree edited"); { resolved = field-table } otherwise. The leaf node's xform is free to drift — corrective deltas in aliasWriter compensate. Resolved starts at root's fields (with durL = endppqL − ppqL for notes) and composes each path segment's xform via aliases.applyXform.
+    @api tm:pathXform(rootUuid, fromSpecPath, toSpecPath)
+        @map:contract  walks the live spec tree from fromSpecPath (exclusive) to toSpecPath (inclusive) and concatenates per-field xform op-lists in order. Used at copy time by family-paste to snapshot the structural xforms between a clip's family-parent and its descendant; preserves producing-ops (rand) verbatim. fromSpecPath nil → walk from root. Returns nil if any path segment is missing or toSpecPath is not a strict descendant of fromSpecPath. Ops are deep-cloned.
+    @api tm:createAlias(rootUuid, srcSpecPath, xform, children, fit)
+        @map:contract  creates a new alias spec node under the event identified by `rootUuid`. srcSpecPath nil → top of root.aliases; non-nil → child of the spec node at that path (so descendants of that spec compose this xform). `children`, when given, is taken verbatim as the new node's children (typically a deep clone of the source's subtree, captured at copy time so paste brings the source's alias-children along under the new node). `fit` (truthy) marks the new node as visually fit: at rebuild, its materialised endppq is clipped to the next event on the same column, so the alias never causes a new lane to be allocated for its successor. Returns the new node's full specPath, or nil if the root/spec lookup fails.
     -- Mute
     @api tm:setMutedChannels(set)
         @map:contract  idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes

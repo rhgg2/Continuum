@@ -15,14 +15,18 @@ local M = aliases
 
 ----- Vocabulary
 
+-- Logical-frame canonical: ppq / endppq are derived in tm's walker via
+-- the root's authoring-frame swing snapshot. delay is its own field
+-- (absolute realised offset, e.g. flam / phasing); the walker folds it
+-- into ppq after deriving from ppqL.
 local NOTE_FIELDS = {
-  ppq = true, ppqL = true, dur = true, durL = true,
+  ppqL = true, durL = true,
   pitch = true, detune = true, vel = true,
-  chan = true, delay = true,
+  chan = true, lane = true, delay = true,
 }
 
 local CC_FIELDS = {
-  ppq = true, ppqL = true, val = true,
+  ppqL = true, val = true,
   chan = true, delay = true,
 }
 
@@ -58,6 +62,17 @@ function M.evalArg(arg, rng)
     error('aliases.evalArg: unknown producing opcode ' .. tostring(opcode))
   end
   error('aliases.evalArg: invalid arg ' .. tostring(arg))
+end
+
+----- RNG
+
+-- LCG factory. Returns a closure (lo, hi) → number in [lo, hi).
+function M.makeRng(seed)
+  local s = seed
+  return function(lo, hi)
+    s = (s * 1103515245 + 12345) % 2147483648
+    return lo + (s / 2147483648) * (hi - lo)
+  end
 end
 
 ----- Apply
@@ -191,6 +206,20 @@ function M.pluckSubtree(root, specPath)
   return nil
 end
 
+----- Routing
+
+-- Append `op` to the spec node at `evt.specPath` under `root`. Mutates
+-- the node's xform in place (within `root.aliases`) and returns the
+-- updated `root.aliases`. Returns nil if the spec path doesn't resolve
+-- — caller should fall back to direct mutation.
+function M.route(root, evt, field, op)
+  if not (root and root.aliases and evt and evt.specPath) then return nil end
+  local node = M.find(root, evt.specPath)
+  if not node then return nil end
+  node.xform = M.appendOp(node.xform, field, op)
+  return root.aliases
+end
+
 ----- Construction
 
 function M.allocId(root)
@@ -200,21 +229,3 @@ function M.allocId(root)
 end
 
 function M.emptyXform() return {} end
-
------ Persistence
-
--- util.serialise decodes numeric-looking scalars back as numbers, so ids
--- like '1' / '10' round-trip as numbers. Callers must run this on a
--- deserialised tree to restore base36-string ids before calling find /
--- parentOf / pluckSubtree (those split paths textually).
---@map:contract idempotent; mutates `root` in place
-function M.normaliseIds(root)
-  local function walk(list)
-    if not list then return end
-    for _, node in ipairs(list) do
-      node.id = tostring(node.id)
-      walk(node.children)
-    end
-  end
-  walk(root.aliases)
-end

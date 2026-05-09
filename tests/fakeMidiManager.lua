@@ -64,8 +64,8 @@ function newMidiManager(opts)
     table.sort(noteList, noteCmp)
     table.sort(ccList,   ccCmp)
     noteByLoc, ccByLoc = {}, {}
-    for i, n in ipairs(noteList) do noteByLoc[i] = n; n.idx = i - 1 end
-    for i, c in ipairs(ccList)   do ccByLoc[i]   = c; c.idx = i - 1 end
+    for i, n in ipairs(noteList) do noteByLoc[i] = n; n.idx = i - 1; n.loc = i end
+    for i, c in ipairs(ccList)   do ccByLoc[i]   = c; c.idx = i - 1; c.loc = i end
   end
 
   -- LIFECYCLE
@@ -142,6 +142,8 @@ function newMidiManager(opts)
       'Error! Underspecified new note')
     local n = util.clone(t)
     if not n.muted then n.muted = nil end
+    if not n.uuid then maxUuid = maxUuid + 1; n.uuid = maxUuid end
+    t.uuid = n.uuid
     noteList[#noteList + 1] = n
     return #noteList  -- imprecise until reindex; tm discards it
   end
@@ -200,6 +202,7 @@ function newMidiManager(opts)
     if hasMetadata then
       maxUuid = maxUuid + 1
       c.uuid  = maxUuid
+      t.uuid  = c.uuid
     end
     return #ccList
   end
@@ -244,6 +247,16 @@ function newMidiManager(opts)
     if hasMetadata and not c.uuid then
       maxUuid = maxUuid + 1
       c.uuid  = maxUuid
+    end
+  end
+
+  function mm:byUuid(uuid)
+    if not uuid then return nil end
+    for i, n in ipairs(noteList) do
+      if n.uuid == uuid then return i, cloneShallow(n, INTERNALS), 'note' end
+    end
+    for i, c in ipairs(ccList) do
+      if c.uuid == uuid then return i, cloneShallow(c, INTERNALS), 'cc' end
     end
   end
 

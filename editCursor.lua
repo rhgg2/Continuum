@@ -19,6 +19,7 @@
 --@map:shape clipEvent = source-event minus CLIP_RESERVED, plus { row, [endRow] }   -- row is 0-relative to clip top
 
 loadModule('util')
+loadModule('aliases')
 
 local function print(...)
   return util.print(...)
@@ -526,8 +527,19 @@ local CLIP_RESERVED = {
   loc = true, idx = true, uuid = true, uuidIdx = true,
   -- envelope-level
   type = true, msgType = true,
+  -- alias materialisation metadata: a fresh paste gets fresh parentUuid +
+  -- specPath from the rebuild walker if it's aliased, or none if it isn't.
+  -- aliasSrc carries the source identity through the clip when alias mode is on.
+  parentUuid = true, specPath = true,
+  -- root-only spec-tree state. A pasted event is never a continuation of the
+  -- source root; aliased-mode propagation is handled explicitly via aliasSrc
+  -- and the family-paste machinery.
+  aliases = true, aliasCtr = true,
 }
 -- Clip-only fields stripped before a paste materialises into a write event.
+-- aliasSrc rides through to the per-event write site (it carries the source
+-- identity needed to encode an alias xform). The plain writer strips it
+-- before tm:addEvent; the alias writer consumes it.
 local CLIP_ARTIFACTS = { row = true, endRow = true }
 
 function newClipboard(deps)
@@ -543,6 +555,7 @@ function newClipboard(deps)
   local paFrame      = deps.paFrame
   local getCtx       = deps.getCtx
   local getLength    = deps.getLength
+  local getAliasMode = deps.getAliasMode or function() return false end
 
   local function save(clip)
     reaper.SetExtState('rdm', 'clipboard', util.serialise(clip), false)
@@ -554,12 +567,56 @@ function newClipboard(deps)
     return util.unserialise(raw)
   end
 
-  --@map:contract returns nil if the resolved selection is empty (no events); single-col emits {mode='single',type,...}, multi-col emits {mode='multi',cols=[...]}
+  --@map:contract '' as the empty / root prefix; nil parent is also an ancestor of any non-nil child specPath.
+  local function isStrictAncestor(parentPath, childPath)
+    if childPath == nil then return false end
+    if parentPath == nil then return true end
+    if parentPath == childPath then return false end
+    return childPath:sub(1, #parentPath + 1) == parentPath .. '.'
+  end
+
+  --@map:contract walks every aliased clip event (single mode: clip.events; multi: clip.cols[i].events) and stamps `aliasSrc.clipId` (1-based, dense across the whole clip). For each aliased event, finds the closest in-clip ancestor (same root uuid, longest specPath that's a strict prefix) and records `aliasSrc.parentClipId`. Then snapshots the structural xform list from family-parent's specPath down to and including this event's specPath via tm:pathXform, stored as `aliasSrc.pathXform`. This is the data paste-time aliasWriter consumes to attach a child under its in-clip parent's freshly-pasted spec node — robust against later spec-tree edits because xforms are captured at copy.
+  local function resolveAliasFamily(clip)
+    if not clip.aliased then return end
+    local all = {}
+    if clip.mode == 'single' then
+      for _, e in ipairs(clip.events) do all[#all+1] = e end
+    else
+      for _, c in ipairs(clip.cols) do
+        for _, e in ipairs(c.events) do all[#all+1] = e end
+      end
+    end
+    local n = 0
+    for _, e in ipairs(all) do
+      if e.aliasSrc then n = n + 1; e.aliasSrc.clipId = n end
+    end
+    for _, e in ipairs(all) do
+      local s = e.aliasSrc
+      if s then
+        local bestSrc, bestLen = nil, -1
+        for _, other in ipairs(all) do
+          local o = other.aliasSrc
+          if o and other ~= e and o.uuid == s.uuid
+             and isStrictAncestor(o.specPath, s.specPath) then
+            local len = o.specPath and #o.specPath or 0
+            if len > bestLen then bestSrc, bestLen = o, len end
+          end
+        end
+        if bestSrc then
+          s.parentClipId = bestSrc.clipId
+          s.pathXform    = tm:pathXform(s.uuid, bestSrc.specPath, s.specPath) or {}
+        end
+      end
+    end
+  end
+
+  --@map:contract returns nil if the resolved selection is empty (no events); single-col emits {mode='single',type,...}, multi-col emits {mode='multi',cols=[...]}; clip.aliased=true when alias mode is on at copy. cut produces an alias clip too — the deletion-fallback path in aliasWriter demotes it to a plain write at paste time once byUuid fails.
   local function collect()
     local ctx = getCtx()
     local r1, r2, c1, c2, part1 = ec:region()
     local numRows  = r2 - r1 + 1
     local logPerRow = ctx:ppqPerRow()
+    local aliased   = getAliasMode() and true or nil
 
     -- ppqL is the exact authoring-frame coordinate; dividing it skips the
     -- ppqToRow round-trip's float drift. Fall back to ctx:ppqToRow under the
@@ -568,19 +625,51 @@ function newClipboard(deps)
       return (pL and pL / logPerRow or ctx:ppqToRow(p, chan)) - r1
     end
 
-    -- endRow set only when the note ends inside the selection; spanning notes get their tail clamped at paste.
-    local function noteEvent(evt, chan, endppq)
+    -- aliasSrc identifies the spec-tree anchor for an alias-mode paste,
+    -- and carries the source fields whose paste-time values can differ:
+    -- ppqL, endppqL (encoded as a durL delta), chan, lane. chan and lane
+    -- come from the source column, not the event — the projection in
+    -- trackerManager strips both off surfaced events because the column
+    -- denotes them.
+    local function aliasSrcOf(evt, chan, lane)
+      if not aliased then return nil end
+      -- For materialised children, snapshot the chain of *ancestor*
+      -- xforms — fingerprint against which paste-time resolveAliasSrc
+      -- detects spec-tree edits. Subtree paste is deliberately not
+      -- supported; copying a family is the way to clone descendants.
+      local chain
+      if evt.parentUuid and evt.specPath then
+        local snap = tm:aliasSrcSnapshot(evt.parentUuid, evt.specPath)
+        if snap then chain = snap.chain end
+      end
+      return {
+        uuid     = evt.parentUuid or evt.uuid,
+        specPath = evt.specPath,
+        ppqL     = evt.ppqL,
+        endppqL  = evt.endppqL,
+        chan     = chan,
+        lane     = lane,
+        chain    = chain,
+      }
+    end
+
+    -- Source duration is structural: endRow always reflects evt.endppq,
+    -- regardless of where selection bounds fall. The paste site clips
+    -- the materialised note against the next same-column event.
+    local function noteEvent(evt, chan, lane)
       local ce = util.clone(evt, CLIP_RESERVED)
       ce.row = rowOf(evt.ppq, evt.ppqL, chan)
-      if util.isNote(evt) and evt.endppq <= endppq then
+      if util.isNote(evt) then
         ce.endRow = rowOf(evt.endppq, evt.endppqL, chan)
       end
+      ce.aliasSrc = aliasSrcOf(evt, chan, lane)
       return ce
     end
 
     local function scalarEvent(evt, chan)
       local ce = util.clone(evt, CLIP_RESERVED)
       ce.row = rowOf(evt.ppq, evt.ppqL, chan)
+      ce.aliasSrc = aliasSrcOf(evt, chan, nil)
       return ce
     end
 
@@ -598,9 +687,9 @@ function newClipboard(deps)
 
       local clipType, events = nil, {}
       local emit
-      local chan = col.midiChan
+      local chan, lane = col.midiChan, col.lane
       if col.type == 'note' and part1 == 'pitch' then
-        clipType, emit = 'note', function(e) return noteEvent(e, chan, endppq) end
+        clipType, emit = 'note', function(e) return noteEvent(e, chan, lane) end
       elseif col.type == 'note' and part1 == 'vel' then
         clipType, emit = '7bit', function(e) return velEvent(e, chan) end
       elseif col.type == 'pb' then
@@ -613,7 +702,10 @@ function newClipboard(deps)
       end
 
       if #events == 0 then return end
-      return { mode = 'single', type = clipType, numRows = numRows, events = events }
+      local clip = { mode = 'single', type = clipType, numRows = numRows,
+                     events = events, aliased = aliased }
+      resolveAliasFamily(clip)
+      return clip
     end
 
     local cols = {}
@@ -635,11 +727,11 @@ function newClipboard(deps)
         entry.key = col.cc
       end
 
-      local chan = col.midiChan
+      local chan, lane = col.midiChan, col.lane
       local startppq, endppq = ctx:rowToPPQ(r1, chan), ctx:rowToPPQ(r2 + 1, chan)
       for evt in util.between(col.events, startppq, endppq) do
         if col.type == 'note' then
-          util.add(entry.events, noteEvent(evt, chan, endppq))
+          util.add(entry.events, noteEvent(evt, chan, lane))
         else
           util.add(entry.events, scalarEvent(evt, chan))
         end
@@ -648,7 +740,10 @@ function newClipboard(deps)
     end
 
     if #cols == 0 then return end
-    return { mode = 'multi', numRows = numRows, startType = cols[1].type, cols = cols }
+    local clip = { mode = 'multi', numRows = numRows, startType = cols[1].type,
+                   cols = cols, aliased = aliased }
+    resolveAliasFamily(clip)
+    return clip
   end
 
   --@map:contract carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
@@ -694,8 +789,100 @@ function newClipboard(deps)
     tm:flush()
   end
 
-  --@map:contract dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op
-  local function pasteSingle(clip)
+  -- Writers wrap the per-event write call so paste pipelines stay shape-
+  -- identical between plain and alias modes (cap, region clear, tail clamp
+  -- all live in the pipeline). Plain writer strips aliasSrc and calls
+  -- tm:addEvent. Alias writer routes through writeAsRoot or writeAsFamilyChild
+  -- depending on whether the event has an in-clip family parent, deferring
+  -- via `pending` when the parent's outcome isn't yet known. demotedCount
+  -- tracks alias→plain fallbacks caused by spec-tree mutation between copy
+  -- and paste — the surprising case that warrants a warning. (A)-class
+  -- fallbacks (root or spec node simply gone) demote silently. pasteClip
+  -- resets, runs paste, drains pending, and reads the count.
+  local demotedCount = 0
+  local outcomes      -- clipId -> { kind='alias', uuid, specPath, evt } or { kind='plain', evt }
+  local pending       -- list of { evtType, e } awaiting their family parent
+
+  local function plainWriter(evtType, e)
+    e.aliasSrc = nil
+    tm:addEvent(evtType, e)
+  end
+
+  -- Family root or no family relation: today's resolve-and-corrective-delta
+  -- logic. Returns the outcome so a child in the clip can attach to it.
+  local function writeAsRoot(evtType, e)
+    local src = e.aliasSrc
+    e.aliasSrc = nil
+    if not (src and src.uuid) then
+      tm:addEvent(evtType, e); return { kind='plain', evt=e }
+    end
+    local r = tm:resolveAliasSrc(src.uuid, src.specPath, src.chain, evtType)
+    if not r then
+      tm:addEvent(evtType, e); return { kind='plain', evt=e }
+    end
+    if r.mismatch then
+      demotedCount = demotedCount + 1
+      tm:addEvent(evtType, e); return { kind='plain', evt=e }
+    end
+    local liveSrc = r.resolved
+    local dst = util.clone(e)
+    if evtType == 'note' and e.endppqL and e.ppqL then
+      dst.durL = e.endppqL - e.ppqL
+    end
+    -- durL is omitted from the corrective-delta vocabulary: alias
+    -- duration is structural (it follows the parent), and fit-clipping
+    -- at rebuild handles the visual fit at the paste site.
+    local xform = {}
+    for f in pairs(aliases.validFields(evtType)) do
+      if f ~= 'durL' then
+        local d, b = dst[f], liveSrc[f]
+        if d ~= nil and b ~= nil and d ~= b then
+          xform[f] = {{'add', d - b}}
+        end
+      end
+    end
+    local newPath = tm:createAlias(src.uuid, src.specPath, xform, nil, true)
+    if newPath then
+      return { kind='alias', uuid=src.uuid, specPath=newPath, evt=e }
+    end
+    tm:addEvent(evtType, e)
+    return { kind='plain', evt=e }
+  end
+
+  --@map:contract dispatches by family-relation. Events with no parentClipId go through writeAsRoot (today's resolve-and-corrective-delta path). Children with a captured parentClipId attach via tm:createAlias against the parent's recorded outcome (alias parent → under parent's new specPath; plain parent → top-level on the parent's mm uuid, set post-flush via the addNote uuid writeback). If the parent hasn't fired yet, its plain mm uuid isn't yet realised, or createAlias fails (most commonly because the parent's spec mutation hasn't been flushed and the parent's specPath isn't yet visible to mm), the event is deferred to `pending` for the next drain wave. Outcomes are recorded under aliasSrc.clipId for downstream children to pick up.
+  local function aliasWriter(evtType, e)
+    local src = e.aliasSrc
+    local pid = src and src.parentClipId
+    if pid then
+      local parentRes = outcomes[pid]
+      if not parentRes
+         or (parentRes.kind == 'plain' and not parentRes.evt.uuid) then
+        pending[#pending + 1] = { evtType = evtType, e = e }
+        return
+      end
+      local rootUuid, underPath
+      if parentRes.kind == 'alias' then
+        rootUuid, underPath = parentRes.uuid, parentRes.specPath
+      else
+        rootUuid, underPath = parentRes.evt.uuid, nil
+      end
+      local newPath = tm:createAlias(rootUuid, underPath, src.pathXform or {}, nil, true)
+      if newPath then
+        e.aliasSrc = nil
+        if src.clipId then
+          outcomes[src.clipId] = { kind='alias', uuid=rootUuid, specPath=newPath, evt=e }
+        end
+        return
+      end
+      pending[#pending + 1] = { evtType = evtType, e = e }
+      return
+    end
+    local res = writeAsRoot(evtType, e)
+    if src and src.clipId then outcomes[src.clipId] = res end
+  end
+
+  --@map:contract dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op. writer is plainWriter or aliasWriter — every paste mode uses the same pipeline (cap, clear, tail clamp); only the per-event write differs.
+  local function pasteSingle(clip, writer)
     local ctx = getCtx()
     local dstCol = grid.cols[ec:col()]
     if not dstCol then return end
@@ -715,9 +902,8 @@ function newClipboard(deps)
       local e = util.clone(ce, CLIP_ARTIFACTS)
       e.ppq, e.ppqL = ppq, (r + ce.row) * logPerRow
       if ce.endRow then
-        local eRow = math.min(r + ce.endRow, capRow)
-        e.endppq  = math.min(ctx:rowToPPQ(r + ce.endRow, chan), endppq)
-        e.endppqL = eRow * logPerRow
+        e.endppq  = ctx:rowToPPQ(r + ce.endRow, chan)
+        e.endppqL = (r + ce.endRow) * logPerRow
       end
       util.add(events, e)
       ::nextCe::
@@ -759,10 +945,10 @@ function newClipboard(deps)
           currentVel = util.clamp(velList[vi].val, 1, 127)
           vi = vi + 1
         end
-        e.endppq  = e.endppq  or nextNotePpq
-        e.endppqL = e.endppqL or nextNotePpqL
+        e.endppq  = math.min(e.endppq,  nextNotePpq)
+        e.endppqL = math.min(e.endppqL, nextNotePpqL)
         e.chan, e.vel, e.lane, e.frame = dstCol.midiChan, currentVel, lane, frame
-        tm:addEvent('note', e)
+        writer('note', e)
       end
       tm:flush()
       return
@@ -783,15 +969,15 @@ function newClipboard(deps)
       for _, e in ipairs(events) do
         e.chan, e.frame = dstCol.midiChan, frame
         if dstCol.type == 'cc' then e.cc = dstCol.cc end
-        tm:addEvent(dstCol.type, e)
+        writer(dstCol.type, e)
       end
       tm:flush()
       return
     end
   end
 
-  --@map:contract resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col
-  local function pasteMulti(clip)
+  --@map:contract resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col. writer is plainWriter or aliasWriter (see pasteSingle).
+  local function pasteMulti(clip, writer)
     local ctx = getCtx()
     local cursor = grid.cols[ec:col()]
     if not cursor then return end
@@ -858,9 +1044,8 @@ function newClipboard(deps)
           local e = util.clone(ce, CLIP_ARTIFACTS)
           e.ppq, e.ppqL = ppq, (cRow + ce.row) * logPerRow
           if ce.endRow then
-            local eRow = math.min(cRow + ce.endRow, capRow)
-            e.endppq  = math.min(ctx:rowToPPQ(cRow + ce.endRow, r.chan), endppq)
-            e.endppqL = eRow * logPerRow
+            e.endppq  = ctx:rowToPPQ(cRow + ce.endRow, r.chan)
+            e.endppqL = (cRow + ce.endRow) * logPerRow
           end
           util.add(events, e)
         end
@@ -888,14 +1073,17 @@ function newClipboard(deps)
         end
       end
 
-      -- End cap for pasted notes that lack an explicit endppq.
-      local capPPQ  = endppq
-      local capppqL = capRow * logPerRow
+      -- Fit-clip pasted notes against the next same-column event in the
+      -- destination. Source duration is preserved unless something stands
+      -- in the way; nothing → take length is the upper bound.
+      local capPPQ, capppqL
       if r.type == 'note' and dst then
         local nn = util.seek(dst.events, 'at-or-after', endppq, util.isNote)
         if nn then
-          capPPQ  = math.min(capPPQ, nn.ppq)
-          capppqL = math.min(capppqL, nn.ppqL or ctx:ppqToRow(nn.ppq, r.chan) * logPerRow)
+          capPPQ  = nn.ppq
+          capppqL = nn.ppqL or ctx:ppqToRow(nn.ppq, r.chan) * logPerRow
+        else
+          capPPQ, capppqL = getLength(), getLength()
         end
       end
 
@@ -904,13 +1092,13 @@ function newClipboard(deps)
       for _, e in ipairs(events) do
         e.chan, e.frame = r.chan, frame
         if r.type == 'note' then
-          e.endppq  = e.endppq  or capPPQ
-          e.endppqL = e.endppqL or capppqL
+          e.endppq  = math.min(e.endppq,  capPPQ)
+          e.endppqL = math.min(e.endppqL, capppqL)
           e.lane    = r.lane
         elseif r.type == 'cc' then
           e.cc = r.ccNum
         end
-        tm:addEvent(r.type, e)
+        writer(r.type, e)
       end
       ::nextCol::
     end
@@ -918,7 +1106,28 @@ function newClipboard(deps)
   end
 
   local function pasteClip(clip)
-    if clip.mode == 'single' then pasteSingle(clip) else pasteMulti(clip) end
+    demotedCount = 0
+    outcomes, pending = {}, {}
+    local writer = clip.aliased and aliasWriter or plainWriter
+    if clip.mode == 'single' then pasteSingle(clip, writer)
+    else                          pasteMulti(clip, writer) end
+    -- Drain deferred family children. pasteSingle/pasteMulti has flushed,
+    -- so any plain demotes have realised mm uuids and any queued spec-tree
+    -- mutations from previous-wave parents are visible. Each subsequent
+    -- wave starts with a flush so deeper chains (grandchildren whose
+    -- parents fired this wave) see the parent's spec node in mm.
+    while #pending > 0 do
+      local todo = pending; pending = {}
+      for _, p in ipairs(todo) do aliasWriter(p.evtType, p.e) end
+      if #pending == #todo then break end
+      if #pending > 0 then tm:flush() end
+    end
+    tm:flush()
+    if demotedCount > 0 then
+      reaper.ShowMessageBox(string.format(
+        '%d event(s) pasted as plain — the alias spec tree was edited between copy and paste.',
+        demotedCount), 'paste', 0)
+    end
   end
 
   --@map:contract mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative

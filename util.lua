@@ -115,10 +115,26 @@ end
 
 function util.deepClone(src) return util.clone(src, nil, true) end
 
+function util.deepEq(a, b)
+  if a == b then return true end
+  if type(a) ~= 'table' or type(b) ~= 'table' then return false end
+  for k, v in pairs(a) do if not util.deepEq(v, b[k]) then return false end end
+  for k in pairs(b) do if a[k] == nil then return false end end
+  return true
+end
+
 local function escape_string(s)
-  return (s:gsub('[\\{},=]', function(c)
+  local out = (s:gsub('[\\{},=]', function(c)
     return '\\' .. c
   end))
+  -- Disambiguate from numbers/booleans: prepend `\e` (empty marker, decodes
+  -- to nothing) when the encoded form would otherwise round-trip as a
+  -- non-string scalar. The decoder uses the presence of any escape as a
+  -- signal to skip number/boolean coercion.
+  if tonumber(out) or out == 'true' or out == 'false' then
+    out = '\\e' .. out
+  end
+  return out
 end
 
 --@map:contract listeners filter by signal name at registration; forward requires source itself ran installHooks
@@ -287,6 +303,7 @@ function util.unserialise(input)
 
   local function parseStringToken()
     local buf = {}
+    local hadEscape = false
 
     while pos <= len do
       local c = nextChar()
@@ -296,6 +313,10 @@ function util.unserialise(input)
 
         if n == '{' or n == '}' or n == ',' or n == '=' or n == '\\' then
           buf[#buf+1] = n
+          hadEscape = true
+        elseif n == 'e' then
+          -- empty marker: forces string interpretation downstream
+          hadEscape = true
         else
           error('invalid escape: \\' .. tostring(n))
         end
@@ -311,14 +332,12 @@ function util.unserialise(input)
 
     local s = table.concat(buf)
 
-    -- number detection
+    if hadEscape then return s end
+
     local n = tonumber(s)
     if n then return n end
-
-    -- boolean
     if s == 'true' then return true end
     if s == 'false' then return false end
-
     return s
   end
 
