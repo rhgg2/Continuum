@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1675  sha=ee85a77
+@module trackerManager  src=trackerManager.lua  loc=1677  sha=d4f20ff
 @deps util, midiManager, timing, aliases
 
 # Invariants & contracts (module)
@@ -26,6 +26,7 @@
   @fn print(...)
   @fn synthesisePCs(chan, records)
       @map:contract  pure; no mm/cm reads; emitted PCs carry fake=true so flush/rebuild can distinguish synthesised from user-authored
+      @map:contract  emitted PCs inherit ppqL from the winning host-note record so the synthesised stream carries logical truth alongside raw ppq
   @fn reconcilePCsForChan(chan, records, existing)
       @map:contract  returns (desired, shadowed, toRemove, toAdd); desired carries .loc on entries that survived the diff
   @fn evtTypeOf(evt)

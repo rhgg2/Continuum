@@ -19,6 +19,7 @@ local function print(...)
 end
 
 --@map:contract pure; no mm/cm reads; emitted PCs carry fake=true so flush/rebuild can distinguish synthesised from user-authored
+--@map:contract emitted PCs inherit ppqL from the winning host-note record so the synthesised stream carries logical truth alongside raw ppq
 local function synthesisePCs(chan, records)
   local winners, order, shadowed = {}, {}, {}
   for _, r in ipairs(records) do
@@ -36,7 +37,8 @@ local function synthesisePCs(chan, records)
   table.sort(order)
   local pcs = {}
   for _, ppq in ipairs(order) do
-    util.add(pcs, { ppq = ppq, val = winners[ppq].sample,
+    local w = winners[ppq]
+    util.add(pcs, { ppq = ppq, ppqL = w.ppqL, val = w.sample,
                     msgType = 'pc', chan = chan, fake = true })
   end
   return pcs, shadowed
@@ -566,14 +568,14 @@ function newTrackerManager(mm, cm)
       local records = {}
       for _, n in pairs(notesByLoc) do
         if n.chan == chan then
-          util.add(records, { ppq = n.ppq, lane = n.lane,
+          util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
                               sample = n.sample or 0, key = laneByLoc[n.loc] or n })
         end
       end
       for _, a in ipairs(adds) do
         if a.type == 'note' and a.evt.chan == chan then
           local n = a.evt
-          util.add(records, { ppq = n.ppq, lane = n.lane,
+          util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
                               sample = n.sample or 0, key = n })
         end
       end
@@ -1161,7 +1163,7 @@ function newTrackerManager(mm, cm)
         for L, lane in ipairs(c.notes) do
           for _, n in ipairs(lane.events) do
             n.sampleShadowed = nil
-            util.add(records, { ppq = n.ppq, lane = L,
+            util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = L,
                                 sample = n.sample or 0, key = n })
           end
         end
