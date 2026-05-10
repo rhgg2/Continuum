@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1906  sha=1e008cc
+@module trackerManager  src=trackerManager.lua  loc=1966  sha=1e008cc
 @deps util, midiManager, timing, aliases
 
 # Invariants & contracts (module)
@@ -36,7 +36,7 @@
 
 @factory newTrackerManager(mm, cm)  @ 105
   @map:invariant  usedSwings is an output of rebuild (computed from event frames), not an input; suppressed here to prevent the cm:set call inside rebuild from firing a redundant follow-up rebuild
-  @map:invariant  swingKeys are the cm keys whose change alters the swing a channel resolves to: 'swing' (global), 'colSwing' (per-channel), 'swings' (library bodies). Any change to one of these flips staleSwing for all 16 channels before the rebuild that follows; channels under unaffected swings reseat to identical raw and produce no mm write.
+  @map:invariant  configChanged routes 'swing' to all 16 channels, 'colSwing' to channels whose entry differs vs prevColSwing, 'swings' to channels resolving to a name whose body differs vs prevSwings. The diff caches refresh after each handled event and on bindTake (which silently swaps cm's tier stack).
 
   # Private state
     @state channels = {}  @ 109
@@ -115,6 +115,10 @@
     @fn shift(c, delta, isNote)  @ 1602
     @fn resolve(name)  @ 1657
     @fn parts(p)  @ 1788
+    @fn snapshotSwingState()  @ 1874
+    @fn colSwingDiffChannels(prev, cur)  @ 1880   -- Channels (1..16) whose colSwing[chan] differs between prev and cur.
+    @fn changedSwingNames(prev, cur)  @ 1890   -- Names whose library body differs (added, removed, or edited).
+    @fn channelsResolvingTo(names)  @ 1905   -- Channels whose resolved swing references any of `names`. Global swing shadows colSwing for
 
   # Public API
     -- Aliases walker helpers
@@ -190,10 +194,10 @@
     @api tm:setMutedChannels(set)  @ 1849
         @map:contract  idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes
     -- Lifecycle
-    @api tm:bindTake(take)  @ 1895
+    @api tm:bindTake(take)  @ 1954
         @map:contract  atomic take swap: cm:setContext runs silently (its broadcast is suppressed for both tm's own subscriber and — transitively, since vm rebuilds only via tm's 'rebuild' signal — for vm). mm:load then fires the single coherent rebuild downstream.
         @map:contract  bindTake(nil) is the mirror seam used when the tracker stack goes dormant (e.g. switching to the sample page). cm clears under the same suppression; mm:load(nil) is a no-op, so no rebuild fires. tm/vm retain their last frame harmlessly until the next bindTake re-arms them.
-    @api tm:currentTake()  @ 1902
+    @api tm:currentTake()  @ 1962
 
   # Signals emitted (via util.installHooks)
     @emits rebuild   -- nil; fires once at the end of every rebuild after um is recreated

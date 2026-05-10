@@ -423,6 +423,12 @@ re-routes through it: per affected take, bind → mark stale channels
 immediately); no persistent stale flag needed because the visit is
 already there.
 
+The `trustGeometry` flag on `um:assignEvent` retires alongside
+`reswingPreset`. Today it lets `reswingCore` ship raw + ppqL together
+after `conformOverlaps` has nudged raw mid-plan; once frame is gone
+and reswing is solely the rule, no caller needs to bypass the
+logical→raw translation.
+
 #### Granularity of stale marking
 
 `tm:markSwingStale(nil)` walks all 16 channels and rebuilds raw for

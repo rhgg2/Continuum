@@ -324,6 +324,129 @@ return {
     end,
   },
 
+  ----- 7a granularity: subscriber routes only the affected channels into
+  -- markSwingStale. Witnessed by spying on tm:markSwingStale itself — the
+  -- raw outcome under all-16 vs granular is identical for round-trip-
+  -- consistent (raw, ppqL) pairs, so the call set is the observable.
+
+  {
+    name = 'colSwing change marks only altered channels',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = {
+          { ppq = 139, endppq = 240, chan = 1, pitch = 60, vel = 100, ppqL = 120, endppqL = 240 },
+          { ppq = 139, endppq = 240, chan = 2, pitch = 64, vel = 100, ppqL = 120, endppqL = 240 },
+        }},
+        config = {
+          project = { swings = { ['c58'] = classic58, ['c67'] = classic67 } },
+          take    = { colSwing = { [1] = 'c58', [2] = 'c58' } },
+        },
+      }
+      local marked = {}
+      local orig = h.tm.markSwingStale
+      h.tm.markSwingStale = function(self, chan)
+        marked[chan or 'all'] = (marked[chan or 'all'] or 0) + 1
+        return orig(self, chan)
+      end
+      h.cm:set('take', 'colSwing', { [1] = 'c67', [2] = 'c58' })
+      t.eq(marked[1],     1,   'chan 1 marked (its colSwing changed)')
+      t.eq(marked[2],     nil, 'chan 2 NOT marked (its colSwing unchanged)')
+      t.eq(marked['all'], nil, 'no global mark')
+    end,
+  },
+
+  {
+    name = 'swings library edit marks only channels using changed names',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = {
+          { ppq = 139, endppq = 240, chan = 1, pitch = 60, vel = 100, ppqL = 120, endppqL = 240 },
+          { ppq = 120, endppq = 240, chan = 2, pitch = 64, vel = 100, ppqL = 120, endppqL = 240 },
+        }},
+        config = {
+          project = { swings = { ['a'] = classic58, ['b'] = classic67 } },
+          take    = { colSwing = { [1] = 'a' } },
+        },
+      }
+      local marked = {}
+      local orig = h.tm.markSwingStale
+      h.tm.markSwingStale = function(self, chan)
+        marked[chan or 'all'] = (marked[chan or 'all'] or 0) + 1
+        return orig(self, chan)
+      end
+      -- Edit body of 'a' only; 'b' unchanged.
+      h.cm:set('project', 'swings', { ['a'] = classic67, ['b'] = classic67 })
+      t.eq(marked[1],     1,   'chan 1 (resolves to "a") marked')
+      t.eq(marked[2],     nil, 'chan 2 (no colSwing entry) NOT marked')
+      t.eq(marked['all'], nil, 'no global mark')
+    end,
+  },
+
+  {
+    name = 'swings library edit of the global-swing name marks all 16',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {},
+        config = {
+          project = { swings = { ['g'] = classic58 } },
+          take    = { swing = 'g' },
+        },
+      }
+      local marked = {}
+      local orig = h.tm.markSwingStale
+      h.tm.markSwingStale = function(self, chan)
+        marked[chan or 'all'] = (marked[chan or 'all'] or 0) + 1
+        return orig(self, chan)
+      end
+      -- Edit 'g' — every channel resolves through the global slot, so all 16.
+      h.cm:set('project', 'swings', { ['g'] = classic67 })
+      for chan = 1, 16 do
+        t.eq(marked[chan], 1, 'chan ' .. chan .. ' marked via global shadow')
+      end
+    end,
+  },
+
+  {
+    name = 'global swing change emits a single nil mark (covers all 16)',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {},
+        config = { project = { swings = { ['c58'] = classic58 } } },
+      }
+      local count, sawNil = 0, false
+      local orig = h.tm.markSwingStale
+      h.tm.markSwingStale = function(self, chan)
+        count = count + 1
+        if chan == nil then sawNil = true end
+        return orig(self, chan)
+      end
+      h.cm:set('take', 'swing', 'c58')
+      t.eq(count, 1, 'exactly one mark call')
+      t.truthy(sawNil, 'mark called with nil (all-16)')
+    end,
+  },
+
+  {
+    name = 'colSwing set to identical value emits no marks',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {},
+        config = {
+          project = { swings = { ['c58'] = classic58 } },
+          take    = { colSwing = { [1] = 'c58' } },
+        },
+      }
+      local count = 0
+      local orig = h.tm.markSwingStale
+      h.tm.markSwingStale = function(self, chan)
+        count = count + 1
+        return orig(self, chan)
+      end
+      h.cm:set('take', 'colSwing', { [1] = 'c58' })
+      t.eq(count, 0, 'no-diff write fires no marks')
+    end,
+  },
+
   {
     name = 'non-swing config change does not flip stale (preserves externally-edited raw)',
     run = function(harness)

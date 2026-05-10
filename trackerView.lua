@@ -1233,6 +1233,11 @@ function newTrackerView(tm, cm, cmgr)
       -- Always emit u.ppq when computed: post-Phase-6 col-event ppq is the
       -- logical position, while p.newppq is raw under the target swing,
       -- so the diff check would skip every identity-target reswing.
+      -- trustGeometry is reswing's transient seam: conformOverlaps nudges
+      -- raw mid-plan, and reswingPresetChange's per-frame target is not the
+      -- take's snap, so um cannot derive raw from u.ppqL alone. Phase 7
+      -- retires the frame, collapses reswingPresetChange into step 4.7's
+      -- mark-stale-and-rebuild, and the trust flag retires with it.
       local trust = { trustGeometry = true }
       for _, p in ipairs(plans) do
         local e, u = p.e, {}

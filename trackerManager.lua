@@ -1867,8 +1867,54 @@ function newTrackerManager(mm, cm)
   --@map:invariant usedSwings is an output of rebuild (computed from event frames), not an input; suppressed here to prevent the cm:set call inside rebuild from firing a redundant follow-up rebuild
   local vmOnlyKeys = { mutedChannels = true, soloedChannels = true, usedSwings = true }
 
-  --@map:invariant swingKeys are the cm keys whose change alters the swing a channel resolves to: 'swing' (global), 'colSwing' (per-channel), 'swings' (library bodies). Any change to one of these flips staleSwing for all 16 channels before the rebuild that follows; channels under unaffected swings reseat to identical raw and produce no mm write.
-  local swingKeys = { swing = true, colSwing = true, swings = true }
+  --@map:invariant configChanged routes 'swing' to all 16 channels, 'colSwing' to channels whose entry differs vs prevColSwing, 'swings' to channels resolving to a name whose body differs vs prevSwings. The diff caches refresh after each handled event and on bindTake (which silently swaps cm's tier stack).
+  local prevSwings   = util.deepClone(cm:get('swings')   or {})
+  local prevColSwing = util.deepClone(cm:get('colSwing') or {})
+
+  local function snapshotSwingState()
+    prevSwings   = util.deepClone(cm:get('swings')   or {})
+    prevColSwing = util.deepClone(cm:get('colSwing') or {})
+  end
+
+  -- Channels (1..16) whose colSwing[chan] differs between prev and cur.
+  local function colSwingDiffChannels(prev, cur)
+    prev, cur = prev or {}, cur or {}
+    local affected = {}
+    for chan = 1, 16 do
+      if prev[chan] ~= cur[chan] then affected[chan] = true end
+    end
+    return affected
+  end
+
+  -- Names whose library body differs (added, removed, or edited).
+  local function changedSwingNames(prev, cur)
+    prev, cur = prev or {}, cur or {}
+    local names = {}
+    for name, body in pairs(prev) do
+      if not util.deepEq(body, cur[name]) then names[name] = true end
+    end
+    for name in pairs(cur) do
+      if prev[name] == nil then names[name] = true end
+    end
+    return names
+  end
+
+  -- Channels whose resolved swing references any of `names`. Global swing
+  -- shadows colSwing for the channels it covers — if the global swing's
+  -- name is in the set, every channel is affected.
+  local function channelsResolvingTo(names)
+    local affected = {}
+    if not next(names) then return affected end
+    if names[cm:get('swing')] then
+      for chan = 1, 16 do affected[chan] = true end
+      return affected
+    end
+    local cs = cm:get('colSwing') or {}
+    for chan = 1, 16 do
+      if names[cs[chan]] then affected[chan] = true end
+    end
+    return affected
+  end
 
   -- True only inside tm:bindTake, between cm:setContext and mm:load.
   -- Suppresses the configChanged-driven rebuild so the swap reads from a
@@ -1886,8 +1932,21 @@ function newTrackerManager(mm, cm)
   end)
   cm:subscribe('configChanged', function(change)
     if bindingTake then return end
-    if swingKeys[change.key] then tm:markSwingStale(nil) end
-    if not vmOnlyKeys[change.key] then tm:rebuild(false) end
+    local key = change.key
+    if key == 'swing' then
+      tm:markSwingStale(nil)
+    elseif key == 'colSwing' then
+      for chan in pairs(colSwingDiffChannels(prevColSwing, cm:get('colSwing'))) do
+        tm:markSwingStale(chan)
+      end
+      prevColSwing = util.deepClone(cm:get('colSwing') or {})
+    elseif key == 'swings' then
+      for chan in pairs(channelsResolvingTo(changedSwingNames(prevSwings, cm:get('swings')))) do
+        tm:markSwingStale(chan)
+      end
+      prevSwings = util.deepClone(cm:get('swings') or {})
+    end
+    if not vmOnlyKeys[key] then tm:rebuild(false) end
   end)
 
   --@map:contract atomic take swap: cm:setContext runs silently (its broadcast is suppressed for both tm's own subscriber and — transitively, since vm rebuilds only via tm's 'rebuild' signal — for vm). mm:load then fires the single coherent rebuild downstream.
@@ -1897,6 +1956,7 @@ function newTrackerManager(mm, cm)
     cm:setContext(take)
     bindingTake = false
     mm:load(take)
+    snapshotSwingState()
   end
 
   function tm:currentTake() return mm and mm:take() end
