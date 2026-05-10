@@ -411,11 +411,11 @@ function newTrackerView(tm, cm, cmgr)
   -- Pass rowE for span events (notes).
   local function assignStamp(type, evt, chan, rowS, rowE)
     local f, logPerRow = frameAndLogPerRow(chan)
-    local s = { ppq   = ctx:rowToPPQ(rowS, chan),
+    local s = { ppq   = rowS * logPerRow,
                 ppqL  = rowS * logPerRow,
                 frame = f }
     if rowE then
-      s.endppq, s.endppqL = ctx:rowToPPQ(rowE, chan), rowE * logPerRow
+      s.endppq, s.endppqL = rowE * logPerRow, rowE * logPerRow
     end
     tm:assignEvent(type, evt, s)
   end
@@ -653,8 +653,7 @@ function newTrackerView(tm, cm, cmgr)
       end
       update.vel             = last and last.vel or cm:get('defaultVelocity')
       update.endppq          = next and next.ppq or length
-      update.endppqL  = ctx:ppqToRow(update.endppq, update.chan)
-                               * logPerRowFor(update.frame.rpb)
+      update.endppqL         = update.endppq
       update.lane            = col.lane
       if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
       tm:addEvent('note', update)
@@ -677,8 +676,8 @@ function newTrackerView(tm, cm, cmgr)
       local type      = col.type
       local frameNow  = currentFrame(col.midiChan)
       local logPerRowNow   = logPerRowFor(frameNow.rpb)
-      local cursorppq = ctx:rowToPPQ(ec:row(), col.midiChan)
-      local cursorppqL = ec:row() * logPerRowNow
+      local cursorppq  = ec:row() * logPerRowNow
+      local cursorppqL = cursorppq
 
       local function commit(auditionPitch, auditionVel)
         tm:flush()
@@ -694,7 +693,7 @@ function newTrackerView(tm, cm, cmgr)
         update.frame       = frameNow
         if evt.endppq then
           update.endppqL = cursorppqL + (endLogicalOf(evt) - logicalOf(evt))
-          update.endppq         = ctx:rowToPPQ(update.endppqL / logPerRowNow, col.midiChan)
+          update.endppq  = update.endppqL
         end
         return update
       end
