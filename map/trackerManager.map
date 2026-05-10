@@ -1,8 +1,8 @@
-@module trackerManager  src=trackerManager.lua  loc=1977  sha=cbe9ac3
+@module trackerManager  src=trackerManager.lua  loc=1977  sha=65dde99
 @deps util, midiManager, timing, aliases
 
 # Invariants & contracts (module)
-  @map:invariant  tm exposes intent frame; mm holds realisation frame; um works in realisation and shifts to intent at rebuild's tail (tidyCol)
+  @map:invariant  tm holds the (logical, raw) pair on every event; mm holds raw only; column events expose evt.ppq as logical (column-projection step at rebuild's tail). The rebuild rule reconciles raw ↔ ppqL each pass against cm's swing snapshot.
   @map:invariant  detune is intent (per-note); pb is realisation (channel-wide stream); only lane-1 notes drive detune realisation
   @map:invariant  pb.val is cents inside um; raw conversion happens only on load (rawToCents) and at flush (centsToRaw); cents window is cm:get('pbRange') * 100 per side
   @map:invariant  fake pbs are absorbers seated at lane-1 note onsets to absorb detune jumps; pb.fake is the sole marker (persisted as cc metadata via mm sidecar)
