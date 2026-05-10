@@ -315,22 +315,35 @@ Goal: cm.swing change → stale flag → rebuild produces new raw.
 Lands green: column-swing edits now move notes — the UX fix is live.
 Intent frame still exists internally.
 
-### Phase 4 — Collapse intent inside tm
+### Phase 4 — Collapse intent at the authoring seam
 
-Goal: tm no longer reconstructs an intent frame; raw is derived only
-forward from `(ppqL, delay)`.
+Goal: every authoring path inside tm derives raw forward from
+`(ppqL, delay)` rather than trusting a caller-supplied intent ppq.
 
-- Remove `tidyCol`'s strip-delay step. The rebuild rule already
-  computes raw forward; the strip path is dead.
-- `um:addEvent` / `um:assignEvent` write raw as
-  `swing.fromLogical(ppqL) + delayToPPQ(delay)` directly. No
-  intent-frame intermediate.
-- Internal "intent" references in tm get renamed or removed.
-- Tests: existing tm specs adapted to the new internal contract; no
-  regression in the consumer surface to vm.
+Narrow cut: tidyCol stays. Removing it would leak raw onto vm's
+~70 `evt.ppq` read sites, regressing render until Phase 6 routes
+those sites onto ppqL. Phase 4 is contained to the authoring seam
+so it lands green without vm touches.
 
-Lands green: tm's internals speak two frames; the intent name is
-gone from tm.
+- `um:addEvent` (note path): when `evt.ppqL` is present, write
+  `evt.ppq = round(swing.fromLogical(ppqL)) + delayToPPQ(delay)`.
+  Legacy callers without ppqL fall back to caller's ppq + delay.
+- `realiseNoteUpdate`: derive `update.ppq` forward from
+  `update.ppqL` (logical move); from `evt.ppqL` (delay-only edit);
+  fall back to caller's ppq when neither is provided (legacy).
+- `conformOverlaps` (vm): the same-onset 1-ppq tie-break and the
+  tail-clip lift mirror their raw nudge into newPpqL, so tm's
+  forward formula reproduces the nudge. Under identity swing the
+  deltas are equal; under swing they differ by the local slope, an
+  acceptable approximation for a tie-break.
+- tidyCol's strip-delay and the "intent" name in tm survive Phase 4
+  and retire in Phase 6 alongside the vm rename.
+
+Tests: `tm_authoring_forward_spec` pins the new arithmetic under
+c58 swing — caller's ppq is ignored when ppqL is supplied.
+
+Lands green: tm's authoring seam speaks ppqL forward; tidyCol still
+bridges raw → intent for vm consumers.
 
 ### Phase 5 — Simplify absorbers
 
@@ -367,7 +380,7 @@ Goal: above tm, only one frame exists, and it's called `ppq`.
 Lands green: vm sees one frame; the largest mechanical change in the
 refactor lands behind a clean tm boundary.
 
-### Phase 7 — Docs
+### Phase 7 — Docs and frame retirement
 
 - Rewrite `docs/timing.md` for two frames. Most existing content on
   swing math (Shape, tile, composite, boundary clip) survives; the
@@ -377,5 +390,49 @@ refactor lands behind a clean tm boundary.
 - Move `design/timing_two_frames.md` to `design/archive/`.
 - Update `docs/trackerManager.md` and any other module docs that
   reference the intent frame.
+
+#### Cross-take reswing after frame retirement
+
+Pre-Phase-7, `swingEditor.commit` → `seqMgr:reswingAll(name)` →
+`vm:reswingPreset(name)` per take handles cross-take reswing. That
+path keys off `e.frame.swing` / `e.frame.colSwing` and writes new raw
+from `e.ppqL` directly via `tm:assignEvent`. Step 4.7's rule exempts
+frame-bearing events, so the two paths partition: rule processes
+non-frame events (currently empty), `reswingPreset` processes
+frame-bearing events.
+
+Once frame retires, `reswingPreset`'s include filter has nothing to
+match. The rule becomes the sole reswing mechanism. `seqMgr:reswingAll`
+re-routes through it: per affected take, bind → mark stale channels
+→ rebuild. Eager (so playback hears the change project-wide
+immediately); no persistent stale flag needed because the visit is
+already there.
+
+#### Granularity of stale marking
+
+`tm:markSwingStale(nil)` walks all 16 channels and rebuilds raw for
+every event in the take. Acceptable today (frame-exempt events skip
+the rule, so the walk is O(events) returns-early). Wrong cut once the
+rule is the sole path — most events in a take are unaffected by any
+single library edit.
+
+Refine the call sites against the trigger surface:
+
+- **library entry edited (`swings` key)** — swingEditor knows the
+  edited name. Per take, compute the set of channels whose resolved
+  swing is that name: `chan` where `cm:get('swing') == name` or
+  `cm:get('colSwing')[chan] == name`. Mark only those.
+- **global swing change (`swing` key)** — all 16 channels (global
+  applies everywhere). `markSwingStale(nil)` stays correct.
+- **per-column swing change (`colSwing` key)** — only channels whose
+  entry changed. The subscriber needs the previous `colSwing` table
+  to diff against the new one; cache it inside tm and update on each
+  configChanged for the key.
+- **slot reassignment** — collapses to `swing` or `colSwing` change
+  by name, handled above.
+
+Phase 3 wiring leaves `markSwingStale(nil)` everywhere as a placeholder
+that's correct under frame-exempt rules. Tighten in Phase 7 once the
+rule processes all events.
 
 Lands green: docs match code.

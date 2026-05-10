@@ -33,6 +33,8 @@ local specs = {
   'mm_deletecc_sidecar_spec',
   'sidecar_reconcile_spec',
   'tm_rebuild_spec',
+  'tm_rebuild_rule_spec',
+  'tm_authoring_forward_spec',
   'tm_tuning_spec',
   'tm_swing_spec',
   'tm_clear_same_key_spec',

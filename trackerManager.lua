@@ -107,11 +107,14 @@ function newTrackerManager(mm, cm)
   ---------- PRIVATE
 
   local channels = {}
+  local tm    -- forward-declared so um's closures (built in createUpdateManager, defined above tm's body) capture it as upvalue; assigned below
   local fire  -- installed below, once tm exists
   local um    -- update manager; set by tm:rebuild
   local lastMuteSet = {}  -- { [chan] = true }, pushed by vm via tm:setMutedChannels
   --@map:invariant pendingFlushUuids is a uuid-set of notes touched by the in-flight um:flush; populated before mm:modify (assigns) and grown inside it (adds), read by allocateNoteColumn during the rebuild that fires from mm's reload, cleared at the tail of tm:rebuild — nil outside a flush-driven rebuild
   local pendingFlushUuids
+  --@map:invariant staleSwing[chan] = true marks a channel whose resolved swing has changed since last rebuild; consumed and cleared by the rebuild rule (step 4.7) which then rederives raw ppq/endppq from each event's ppqL/endppqL
+  local staleSwing = {}
 
   local function sortByPPQ(tbl)
     table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
@@ -606,12 +609,25 @@ function newTrackerManager(mm, cm)
       end
     end
 
+    -- Raw is derived forward from (ppqL, delay) when the caller speaks
+    -- logical (update.ppqL present, the production path under vm's
+    -- Phase 1 invariant). When the caller speaks realised (update.ppq
+    -- alone), we trust raw and let the rebuild rule's disagreement
+    -- branch resync ppqL on next rebuild — the legacy path. Delay-only
+    -- edits forward from evt.ppqL when stamped.
     local function realiseNoteUpdate(evt, update)
       local dOld = delayToPPQ(evt.delay)
       local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
-      if update.ppq ~= nil then
+      if update.ppq == nil and dNew == dOld and update.ppqL == nil then return end
+      if update.ppqL ~= nil then
+        local snap = tm:swingSnapshot()
+        update.ppq = util.round(snap.fromLogical(evt.chan, update.ppqL)) + dNew
+      elseif update.ppq ~= nil then
         update.ppq = update.ppq + dNew
-      elseif dNew ~= dOld then
+      elseif evt.ppqL ~= nil then
+        local snap = tm:swingSnapshot()
+        update.ppq = util.round(snap.fromLogical(evt.chan, evt.ppqL)) + dNew
+      else
         update.ppq = evt.ppq + (dNew - dOld)
       end
     end
@@ -645,13 +661,18 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    --@map:contract notes default detune=0, delay=0, lane=1; ppq is shifted into realised here (delay added) so CSK can compare in realised space; endppq stays intent
+    --@map:contract notes default detune=0, delay=0, lane=1; raw ppq is computed forward as fromLogical(ppqL) + delay (ppqL is the source of truth, caller's ppq is ignored when ppqL is present); pre-Phase-1 callers without ppqL fall back to caller's ppq + delay; endppq stays intent (caller-provided)
     function um:addEvent(evtType, evt)
       if evtType == 'note' then
         evt.detune = evt.detune or 0
         evt.delay  = evt.delay  or 0
         evt.lane   = evt.lane   or 1
-        evt.ppq = evt.ppq + delayToPPQ(evt.delay)
+        if evt.ppqL ~= nil then
+          local snap = tm:swingSnapshot()
+          evt.ppq = util.round(snap.fromLogical(evt.chan, evt.ppqL)) + delayToPPQ(evt.delay)
+        else
+          evt.ppq = evt.ppq + delayToPPQ(evt.delay)
+        end
         local clamped, clampedL =
           clearSameKeyRange(evt.chan, evt.pitch, evt.ppq, evt.endppq, evt.ppqL, evt)
         evt.endppq = clamped
@@ -846,7 +867,7 @@ function newTrackerManager(mm, cm)
 
   ---------- PUBLIC
 
-  local tm = {}
+  tm = {}
   fire = util.installHooks(tm)
 
   -- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly.
@@ -1189,6 +1210,71 @@ function newTrackerManager(mm, cm)
         end
       end
     end
+    -- 4.7) Two-frame rebuild rule. For each non-derived event in raw frame:
+    --   stale=true & ppqL present  → raw is rebuilt from ppqL (+ delay).
+    --   else, raw matches predicted → no-op (steady state).
+    --   else                        → ppqL is rederived from raw (sole
+    --                                  swing.toLogical call site). Covers
+    --                                  legacy-take load and externally-edited
+    --                                  events under the same branch.
+    -- Exempt:
+    --   evt.fake — absorber pbs and synthesised PCs are derived.
+    --   evt.frame — pre-Phase-7, frame-bearing events have their own reswing
+    --     pathway via vm:reswingAll, which reads the authoring frame; the
+    --     two-frame rule applies only to events without authoring metadata.
+    do
+      local snap     = tm:swingSnapshot()
+      local EPS      = 1   -- ppq; tolerates rounding slop in fromLogical
+      local toAssign = {}  -- { { isNote, loc, update } }
+      forEachEvent(function(evtType, evt, chan, isNote)
+        if evt.fake or evt.frame then return end
+        local stale = staleSwing[chan]
+        local d     = isNote and delayToPPQ(evt.delay or 0) or 0
+        local update
+        if stale and evt.ppqL ~= nil then
+          local newPpq = util.round(snap.fromLogical(chan, evt.ppqL)) + d
+          if newPpq ~= evt.ppq then
+            evt.ppq = newPpq
+            update = { ppq = newPpq }
+          end
+          if isNote and evt.endppqL ~= nil then
+            local newEndppq = util.round(snap.fromLogical(chan, evt.endppqL))
+            if newEndppq ~= evt.endppq then
+              evt.endppq = newEndppq
+              update = update or {}
+              update.endppq = newEndppq
+            end
+          end
+        else
+          local predicted = evt.ppqL ~= nil
+            and (util.round(snap.fromLogical(chan, evt.ppqL)) + d) or nil
+          if not predicted or math.abs(evt.ppq - predicted) > EPS then
+            local newPpqL = snap.toLogical(chan, evt.ppq - d)
+            evt.ppqL = newPpqL
+            update = { ppqL = newPpqL }
+            if isNote then
+              local newEndppqL = snap.toLogical(chan, evt.endppq)
+              evt.endppqL = newEndppqL
+              update.endppqL = newEndppqL
+            end
+          end
+        end
+        if update then
+          util.add(toAssign, { isNote = isNote, loc = evt.loc, update = update })
+        end
+      end)
+      if #toAssign > 0 then
+        mm:modify(function()
+          for _, a in ipairs(toAssign) do
+            if a.isNote then mm:assignNote(a.loc, a.update)
+            else             mm:assignCC(a.loc,   a.update)
+            end
+          end
+        end)
+      end
+      staleSwing = {}
+    end
+
     -- 5) Shift into intent.
     local function tidyCol(col)
       for _, evt in ipairs(col.events) do
@@ -1420,6 +1506,15 @@ function newTrackerManager(mm, cm)
 
   -- E_c: column is inner, global is outer (see docs/timing.md).
   --@map:contract returns clipped per-layer Shapes + closures; safe to retain across edits since closures capture the Shapes, not cm reads
+  --@map:contract chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
+  function tm:markSwingStale(chan)
+    if chan == nil then
+      for i = 1, 16 do staleSwing[i] = true end
+    else
+      staleSwing[chan] = true
+    end
+  end
+
   function tm:swingSnapshot(override)
     local global, column = nil, {}
     if mm then
@@ -1642,6 +1737,9 @@ function newTrackerManager(mm, cm)
   --@map:invariant usedSwings is an output of rebuild (computed from event frames), not an input; suppressed here to prevent the cm:set call inside rebuild from firing a redundant follow-up rebuild
   local vmOnlyKeys = { mutedChannels = true, soloedChannels = true, usedSwings = true }
 
+  --@map:invariant swingKeys are the cm keys whose change alters the swing a channel resolves to: 'swing' (global), 'colSwing' (per-channel), 'swings' (library bodies). Any change to one of these flips staleSwing for all 16 channels before the rebuild that follows; channels under unaffected swings reseat to identical raw and produce no mm write.
+  local swingKeys = { swing = true, colSwing = true, swings = true }
+
   -- True only inside tm:bindTake, between cm:setContext and mm:load.
   -- Suppresses the configChanged-driven rebuild so the swap reads from a
   -- coherent (cm, mm) pair: mm:load fires the single rebuild downstream.
@@ -1658,6 +1756,7 @@ function newTrackerManager(mm, cm)
   end)
   cm:subscribe('configChanged', function(change)
     if bindingTake then return end
+    if swingKeys[change.key] then tm:markSwingStale(nil) end
     if not vmOnlyKeys[change.key] then tm:rebuild(false) end
   end)
 

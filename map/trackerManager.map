@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1677  sha=d4f20ff
+@module trackerManager  src=trackerManager.lua  loc=1776  sha=f2ec61c
 @deps util, midiManager, timing, aliases
 
 # Invariants & contracts (module)
@@ -36,14 +36,18 @@
 
 @factory newTrackerManager(mm, cm)
   @map:invariant  usedSwings is an output of rebuild (computed from event frames), not an input; suppressed here to prevent the cm:set call inside rebuild from firing a redundant follow-up rebuild
+  @map:invariant  swingKeys are the cm keys whose change alters the swing a channel resolves to: 'swing' (global), 'colSwing' (per-channel), 'swings' (library bodies). Any change to one of these flips staleSwing for all 16 channels before the rebuild that follows; channels under unaffected swings reseat to identical raw and produce no mm write.
 
   # Private state
     @state channels = {}
+    @state tm   -- forward-declared so um's closures (built in createUpdateManager, defined above tm's body) capture it as upvalue; assigned below
     @state fire   -- installed below, once tm exists
     @state um   -- update manager; set by tm:rebuild
     @state lastMuteSet = {}   -- { [chan] = true }, pushed by vm via tm:setMutedChannels
     @state pendingFlushUuids
         @map:invariant  pendingFlushUuids is a uuid-set of notes touched by the in-flight um:flush; populated before mm:modify (assigns) and grown inside it (adds), read by allocateNoteColumn during the rebuild that fires from mm's reload, cleared at the tail of tm:rebuild — nil outside a flush-driven rebuild
+    @state staleSwing = {}
+        @map:invariant  staleSwing[chan] = true marks a channel whose resolved swing has changed since last rebuild; consumed and cleared by the rebuild rule (step 4.7) which then rederives raw ppq/endppq from each event's ppqL/endppqL
 
   # Private functions
     @fn sortByPPQ(tbl)
@@ -91,7 +95,7 @@
         @map:contract  chan/lane updates are rejected with a warning; ppq/endppq route through resizeNote; detune updates retune forward and reconcile both endpoint boundaries
     @fn clearSameKeyRange(chan, pitch, P, Pend, selfPpqL, selfEvt)   -- Returns (clampEnd, clampEndL): the realised intent end and its logical counterpart. Trunca
     @fn reconcilePcs(chan)
-    @fn realiseNoteUpdate(evt, update)
+    @fn realiseNoteUpdate(evt, update)   -- Raw is derived forward from (ppqL, delay) when the caller speaks logical (update.ppqL pres
     @fn init()
     @fn pushNoteCol(channel)
     @fn noteColumnAccepts(col, note)
@@ -121,7 +125,7 @@
     @api um:deleteEvent(evtType, evtOrLoc)
     @api um:assignEvent(evtType, evtOrLoc, update, opts)
     @api um:addEvent(evtType, evt)
-        @map:contract  notes default detune=0, delay=0, lane=1; ppq is shifted into realised here (delay added) so CSK can compare in realised space; endppq stays intent
+        @map:contract  notes default detune=0, delay=0, lane=1; raw ppq is computed forward as fromLogical(ppqL) + delay (ppqL is the source of truth, caller's ppq is ignored when ppqL is present); pre-Phase-1 callers without ppqL fall back to caller's ppq + delay; endppq stays intent (caller-provided)
     -- Flush: commit accumulated ops to mm.
     @api um:flush()
         @map:contract  no-op if nothing staged; otherwise commits in fixed order (assigns, deletes desc by loc, adds) under a single mm:modify; pb cents→raw conversion happens here
@@ -155,9 +159,11 @@
         -- frames; one delta serves both ppq and ppqL paths.
     @api tm:timeSigs()
     @api tm:interpolate(A, B, ppq)
-    @api tm:swingSnapshot(override)
+    @api tm:markSwingStale(chan)
         -- E_c: column is inner, global is outer (see docs/timing.md).
         @map:contract  returns clipped per-layer Shapes + closures; safe to retain across edits since closures capture the Shapes, not cm reads
+        @map:contract  chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
+    @api tm:swingSnapshot(override)
     -- Transport
     @api tm:playFrom(ppq)
     @api tm:play()

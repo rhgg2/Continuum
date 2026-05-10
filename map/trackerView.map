@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2203  sha=ee85a77
+@module trackerView  src=trackerView.lua  loc=2211  sha=d4f20ff
 @deps util, midiManager, trackerManager, tuning, commandManager, editCursor
 
 # Invariants & contracts (module)
@@ -79,6 +79,7 @@
     @fn endL(e, slack)
     @fn conformOverlaps(plans)
         @map:contract  resolves overlap excess in a per-column plan list; mutates plan entries in place. Tail-overlap clips predecessor's tail (legato — onset stays); same-onset shifts the later-source-ppqL one by 1 ppq. Non-note plans/cols skipped; unplanned col-mates treated as fixed
+    @fn nudgePpq(plan, e, delta)   -- Mirror raw-frame onset nudges into ppqL so tm's forward formula (raw = fromLogical(ppqL) +
     @fn writePlans(plans)
     @fn delayRange(col, n)   -- Two bounds: same-pitch chan-wide (MIDI one-voice-per-pair) at intent end, and same-column 
     @fn eventsByCol()

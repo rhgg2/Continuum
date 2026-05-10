@@ -255,6 +255,14 @@ function newTrackerView(tm, cm, cmgr)
         return (a.e.ppqL or 0) < (b.e.ppqL or 0)
       end)
 
+      -- Mirror raw-frame onset nudges into ppqL so tm's forward formula
+      -- (raw = fromLogical(ppqL) + delay) reproduces the nudge. Under
+      -- identity swing the deltas are equal; under swing they differ by
+      -- the local slope, which is acceptable for a tie-break shift.
+      local function nudgePpq(plan, e, delta)
+        plan.newppq  = (plan.newppq  or e.ppq)  + delta
+        plan.newPpqL = (plan.newPpqL or e.ppqL) + delta
+      end
       for i = 2, #timeline do
         local prev, curr = timeline[i - 1], timeline[i]
         -- Same-onset shift first. The later-source-ppqL one (curr by
@@ -263,11 +271,11 @@ function newTrackerView(tm, cm, cmgr)
         -- round onto an unplanned col-mate's ppq.
         if prev.ppq == curr.ppq then
           if curr.plan then
-            curr.plan.newppq = curr.ppq + 1
-            curr.ppq         = curr.ppq + 1
+            nudgePpq(curr.plan, curr.e, 1)
+            curr.ppq = curr.ppq + 1
           elseif prev.plan then
-            prev.plan.newppq = prev.ppq - 1
-            prev.ppq         = prev.ppq - 1
+            nudgePpq(prev.plan, prev.e, -1)
+            prev.ppq = prev.ppq - 1
           end
         end
         -- Tail-overlap clip on the post-shift state. Predecessor's
@@ -283,8 +291,8 @@ function newTrackerView(tm, cm, cmgr)
             prev.endppq         = clipped
           elseif curr.plan then
             local lifted = math.min(curr.endppq - 1, curr.ppq + excess)
-            curr.plan.newppq = lifted
-            curr.ppq         = lifted
+            nudgePpq(curr.plan, curr.e, lifted - curr.ppq)
+            curr.ppq = lifted
           end
         end
       end
