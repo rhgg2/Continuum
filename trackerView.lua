@@ -5,8 +5,8 @@
 --@map:invariant rm is pull-only — vm fires no render callbacks; rm queries vm.grid / vm:ec() / vm:rowPerBar() each frame
 --@map:invariant all writes funnel through tm (addEvent/assignEvent/deleteEvent/flush); vm never touches mm
 --@map:invariant vm sits on the swing boundary; intent only — never reads/writes realisation pb directly (see docs/tuning.md)
---@map:invariant every authoring call site stamps evt.frame = currentFrame(chan) and evt.ppqL = row · logPerRow before tm:addEvent (PAs use host.frame for swing/colSwing, current rpb)
---@map:invariant off-grid edits snap intent ppq + ppqL to the cursor row; delay survives, frame restamps to current
+--@map:invariant every authoring call site stamps evt.frame = currentFrame(chan) and evt.ppq = row · logPerRow (logical) before tm:addEvent (PAs use host.frame for swing/colSwing, current rpb)
+--@map:invariant off-grid edits snap evt.ppq to the cursor row; delay survives, frame restamps to current
 --@map:invariant clipboard rows encode in source col's swing frame; paste decodes into destination col's frame — round-trip is symmetric on (row, chan), not absolute ppq
 
 loadModule('util')
@@ -116,7 +116,7 @@ end
 --@map:shape grid = { cols = {<col>...}, chanFirstCol = {[chan]=i}, chanLastCol = {[chan]=i}, lane1Col = {[chan]=<col>}, numRows = int }
 --@map:shape gridCol = { type, midiChan, lane?, cc?, label, events, width, parts, stopPos, partAt, partStart, showDelay, cells={[y]=evt}, overflow={[y]=true}, offGrid={[y]=true}, ghosts={[y]={val,fromEvt,toEvt}}, tails? }
 --@map:shape selection = { row1, row2, col1, col2, part1, part2 }  -- part names: 'pitch'|'vel'|'delay' on note, 'pb' on pb, 'val' on scalar
---@map:shape plan = { col, e, [newppq], [newEndppq], [newPpqL], [newEndppqL], [newFrame], [newDelay] }  -- consumed by writePlans / conformOverlaps
+--@map:shape plan = { col, e, [newppq], [newEndppq], [newFrame], [newDelay] }  -- consumed by writePlans / conformOverlaps
 --@map:shape frame = { swing = name|composite, colSwing = name|composite, rpb = int }  -- FRAME_KEYS unit; stamped onto evt.frame at authoring time
 function newTrackerView(tm, cm, cmgr)
 
@@ -182,12 +182,8 @@ function newTrackerView(tm, cm, cmgr)
     return minStart, maxEnd
   end
 
-  -- Row-space sibling of overlapBounds. Reads ppqL/endppqL when present —
-  -- editor-authored notes are written as row*logPerRow, exact; going via
-  -- ppqToRow(.ppq) loses a fractional row to the round-trip (e.g. row 2
-  -- under c58 reads back as 1.997, refusing a slot the neighbour's row
-  -- already permits). Lenient diff edges go through ppqToRow (leniency
-  -- lives in intent ppq); strict same edges prefer exact ppqL.
+  -- Row-space sibling of overlapBounds. e.ppq is exact logical-ppq
+  -- post-projection; lenient diff edges add slack in the same frame.
   local function rowBounds(col, ppq, excludeEvt, allowOverlap)
     local chan, logPerRow = col.midiChan, ctx:ppqPerRow()
     local lenient = allowOverlap and cm:get('overlapOffset') * resolution or 0
@@ -196,16 +192,8 @@ function newTrackerView(tm, cm, cmgr)
     local prevD, nextD = neighbourEvents({col}, ppq, diff)
     local prevS, nextS = neighbourEvents(tm:getChannel(chan).columns.notes, ppq, same)
 
-    -- slack > 0 ⇒ go through swing (leniency is an intent-ppq quantity).
-    -- slack == 0 ⇒ prefer ppqL/endppqL; fall back to ppq via swing.
-    local function startL(e, slack)
-      if slack ~= 0 then return ctx:ppqToRow(e.ppq + slack, chan) * logPerRow end
-      return e.ppqL or ctx:ppqToRow(e.ppq, chan) * logPerRow
-    end
-    local function endL(e, slack)
-      if slack ~= 0 then return ctx:ppqToRow(e.endppq + slack, chan) * logPerRow end
-      return e.endppqL or ctx:ppqToRow(e.endppq, chan) * logPerRow
-    end
+    local function startL(e, slack) return e.ppq    + slack end
+    local function endL  (e, slack) return e.endppq + slack end
 
     local fullL = grid.numRows * logPerRow
     local prevEndL   = math.max(prevD and endL  (prevD, -lenient) or 0,     prevS and endL  (prevS, 0) or 0)
@@ -213,7 +201,7 @@ function newTrackerView(tm, cm, cmgr)
     return math.ceil(prevEndL / logPerRow), math.floor(nextStartL / logPerRow)
   end
 
-  --@map:contract resolves overlap excess in a per-column plan list; mutates plan entries in place. Tail-overlap clips predecessor's tail (legato — onset stays); same-onset shifts the later-source-ppqL one by 1 ppq. Non-note plans/cols skipped; unplanned col-mates treated as fixed
+  --@map:contract resolves overlap excess in a per-column plan list; mutates plan entries in place. Tail-overlap clips predecessor's tail (legato — onset stays); same-onset shifts the later-source-ppq one by 1 ppq. Non-note plans/cols skipped; unplanned col-mates treated as fixed
   local function conformOverlaps(plans)
     local lenient = cm:get('overlapOffset') * resolution
     local plansByCol = {}
@@ -238,16 +226,11 @@ function newTrackerView(tm, cm, cmgr)
       end
       table.sort(timeline, function(a, b)
         if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-        return (a.e.ppqL or 0) < (b.e.ppqL or 0)
+        return a.e.ppq < b.e.ppq
       end)
 
-      -- Mirror raw-frame onset nudges into ppqL so tm's forward formula
-      -- (raw = fromLogical(ppqL) + delay) reproduces the nudge. Under
-      -- identity swing the deltas are equal; under swing they differ by
-      -- the local slope, which is acceptable for a tie-break shift.
       local function nudgePpq(plan, e, delta)
-        plan.newppq  = (plan.newppq  or e.ppq)  + delta
-        plan.newPpqL = (plan.newPpqL or e.ppqL) + delta
+        plan.newppq = (plan.newppq or e.ppq) + delta
       end
       for i = 2, #timeline do
         local prev, curr = timeline[i - 1], timeline[i]
@@ -273,13 +256,8 @@ function newTrackerView(tm, cm, cmgr)
           if prev.plan then
             local clipped = math.max(prev.ppq + 1,
                                      (prev.plan.newEndppq or prev.e.endppq) - excess)
-            prev.plan.newEndppq  = clipped
-            -- Mirror the clip into the logical frame: under Phase 6 the
-            -- two are identical at the column-event layer, and um's
-            -- ppqL→ppq derivation would otherwise reinstate the unclipped
-            -- endppq from a stale endppqL.
-            prev.plan.newEndppqL = clipped
-            prev.endppq          = clipped
+            prev.plan.newEndppq = clipped
+            prev.endppq         = clipped
           elseif curr.plan then
             local lifted = math.min(curr.endppq - 1, curr.ppq + excess)
             nudgePpq(curr.plan, curr.e, lifted - curr.ppq)
@@ -295,13 +273,9 @@ function newTrackerView(tm, cm, cmgr)
       local kind = util.isNote(p.e) and 'note' or p.col.type
       local u    = {}
       if p.newppq    ~= nil then u.ppq    = p.newppq    end
-      if p.newPpqL   ~= nil then u.ppqL   = p.newPpqL   end
       if p.newFrame  ~= nil then u.frame  = p.newFrame  end
       if p.newDelay  ~= nil then u.delay  = p.newDelay  end
-      if util.isNote(p.e) then
-        if p.newEndppq  ~= nil then u.endppq  = p.newEndppq  end
-        if p.newEndppqL ~= nil then u.endppqL = p.newEndppqL end
-      end
+      if util.isNote(p.e) and p.newEndppq ~= nil then u.endppq = p.newEndppq end
       tm:assignEvent(kind, p.e, u)
     end
   end
@@ -361,9 +335,6 @@ function newTrackerView(tm, cm, cmgr)
     return timing.logPerRow(rpb, denom, resolution)
   end
 
-  local function logicalOf(e)    return e.ppqL    or e.ppq    end
-  local function endLogicalOf(e) return e.endppqL or e.endppq end
-
   local isFrameChange, currentFrame, releaseTransientFrame do
     local FRAME_KEYS = { swing = true, colSwing = true, rowPerBeat = true }
 
@@ -411,12 +382,8 @@ function newTrackerView(tm, cm, cmgr)
   -- Pass rowE for span events (notes).
   local function assignStamp(type, evt, chan, rowS, rowE)
     local f, logPerRow = frameAndLogPerRow(chan)
-    local s = { ppq   = rowS * logPerRow,
-                ppqL  = rowS * logPerRow,
-                frame = f }
-    if rowE then
-      s.endppq, s.endppqL = rowE * logPerRow, rowE * logPerRow
-    end
+    local s = { ppq = rowS * logPerRow, frame = f }
+    if rowE then s.endppq = rowE * logPerRow end
     tm:assignEvent(type, evt, s)
   end
 
@@ -432,17 +399,10 @@ function newTrackerView(tm, cm, cmgr)
              rpb      = currentFrame(chan).rpb }
   end
 
-  --@map:contract whenever a note's tail moves: rebases evt.frame to current alongside the new (endppq, endppqL) — writing endppqL alone would leave it incoherent with frame
-  -- Head's ppqL stays in absolute logical-ppq units; reads off-grid in the new
-  -- frame's row map iff the user coarsens rpb — a real semantic, not a bug.
-  -- Pass endppqL when row-aligned or partner is already in current frame; else derived.
-  local function assignTail(evt, chan, endppq, endppqL)
-    local f, logPerRow = frameAndLogPerRow(chan)
-    tm:assignEvent('note', evt, {
-      endppq  = endppq,
-      endppqL = endppqL or ctx:ppqToRow(endppq, chan) * logPerRow,
-      frame   = f,
-    })
+  --@map:contract whenever a note's tail moves: rebases evt.frame to current alongside the new endppq
+  local function assignTail(evt, chan, endppq)
+    local f = frameAndLogPerRow(chan)
+    tm:assignEvent('note', evt, { endppq = endppq, frame = f })
   end
 
   local function matchGridToCursor()
@@ -649,11 +609,10 @@ function newTrackerView(tm, cm, cmgr)
       local last = util.seek(col.events, 'before', update.ppq, util.isNote)
       local next = util.seek(col.events, 'after',  update.ppq, util.isNote)
       if last and last.endppq >= update.ppq then
-        assignTail(last, col.midiChan, update.ppq, update.ppqL)
+        assignTail(last, col.midiChan, update.ppq)
       end
       update.vel             = last and last.vel or cm:get('defaultVelocity')
       update.endppq          = next and next.ppq or length
-      update.endppqL         = update.endppq
       update.lane            = col.lane
       if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
       tm:addEvent('note', update)
@@ -670,14 +629,13 @@ function newTrackerView(tm, cm, cmgr)
       return pas
     end
 
-    --@map:contract single typed-input entry point; dispatches on (col.type, stop, evt-kind). Off-grid edits run through `snap` to repin intent + ppqL to cursor row and restamp frame; commit flushes, advances by advanceBy, and may audition
+    --@map:contract single typed-input entry point; dispatches on (col.type, stop, evt-kind). Off-grid edits run through `snap` to repin evt.ppq to cursor row and restamp frame; commit flushes, advances by advanceBy, and may audition
     function vm:editEvent(col, evt, stop, char, half)
       if not col then return end
       local type      = col.type
       local frameNow  = currentFrame(col.midiChan)
       local logPerRowNow   = logPerRowFor(frameNow.rpb)
-      local cursorppq  = ec:row() * logPerRowNow
-      local cursorppqL = cursorppq
+      local cursorppq      = ec:row() * logPerRowNow
 
       local function commit(auditionPitch, auditionVel)
         tm:flush()
@@ -688,12 +646,10 @@ function newTrackerView(tm, cm, cmgr)
 
       local function snap(update)
         if not evt or evt.ppq == cursorppq then return update end
-        update.ppq         = cursorppq
-        update.ppqL = cursorppqL
-        update.frame       = frameNow
+        update.ppq   = cursorppq
+        update.frame = frameNow
         if evt.endppq then
-          update.endppqL = cursorppqL + (endLogicalOf(evt) - logicalOf(evt))
-          update.endppq  = update.endppqL
+          update.endppq = cursorppq + (evt.endppq - evt.ppq)
         end
         return update
       end
@@ -734,7 +690,7 @@ function newTrackerView(tm, cm, cmgr)
 
           local new = {
             pitch = pitch, detune = detune,
-            ppq = cursorppq, ppqL = cursorppqL,
+            ppq = cursorppq,
             chan = col.midiChan, frame = frameNow,
           }
           placeNewNote(col, new)
@@ -812,7 +768,7 @@ function newTrackerView(tm, cm, cmgr)
             local note = util.seek(col.events, 'before', cursorppq, util.isNote)
             if note and note.endppq > cursorppq then
               tm:addEvent('pa', {
-                ppq = cursorppq, ppqL = cursorppqL,
+                ppq = cursorppq,
                 chan = col.midiChan,
                 pitch = note.pitch, val = newVel(0),
                 frame = paFrame(note.frame, col.midiChan),
@@ -849,7 +805,7 @@ function newTrackerView(tm, cm, cmgr)
       else
         if type == 'cc' then util.assign(update, { cc = col.cc }) end
         util.assign(update, {
-          ppq = cursorppq, ppqL = cursorppqL,
+          ppq = cursorppq,
           chan = col.midiChan, frame = frameNow,
         })
         tm:addEvent(type, update)
@@ -887,24 +843,12 @@ function newTrackerView(tm, cm, cmgr)
     local chan       = col.midiChan
     local prev, next = visible[i-1], visible[i+1]
     local newppq     = ctx:rowToPPQ(toRow, chan)
-    local newRow     = toRow
-    if prev and newppq <= prev.ppq then
-      newppq = prev.ppq + 1
-      newRow = ctx:ppqToRow(newppq, chan)
-    end
-    if next and newppq >= next.ppq then
-      newppq = next.ppq - 1
-      newRow = ctx:ppqToRow(newppq, chan)
-    end
+    if prev and newppq <= prev.ppq then newppq = prev.ppq + 1 end
+    if next and newppq >= next.ppq then newppq = next.ppq - 1 end
     if prev and newppq <= prev.ppq then return end  -- gap < 2 ppq, nowhere to go
 
-    local f, logPerRow = frameAndLogPerRow(chan)
-    tm:assignEvent(col.type, evt, {
-      val         = toVal,
-      ppq         = newppq,
-      ppqL = newRow * logPerRow,
-      frame       = f,
-    })
+    local f = frameAndLogPerRow(chan)
+    tm:assignEvent(col.type, evt, { val = toVal, ppq = newppq, frame = f })
     tm:flush()
   end
 
@@ -915,12 +859,10 @@ function newTrackerView(tm, cm, cmgr)
     local chan = col.midiChan
     local prev = util.seek(col.events, 'before', ppq,
                            function(e) return not e.hidden end)
-    local f, logPerRow = frameAndLogPerRow(chan)
-    local row = ctx:ppqToRow(ppq, chan)
+    local f = frameAndLogPerRow(chan)
     local update = {
       val   = val,
       ppq   = ppq,
-      ppqL  = row * logPerRow,
       chan  = chan,
       frame = f,
       shape = prev and prev.shape or nil,
@@ -1050,7 +992,7 @@ function newTrackerView(tm, cm, cmgr)
       if undo then
         local next = util.seek(col.events, 'at-or-after', targetppq, util.isNote)
         local newEnd = next and next.ppq or length
-        assignTail(last, col.midiChan, newEnd, next and next.ppqL)
+        assignTail(last, col.midiChan, newEnd)
       elseif last.ppq >= targetppq then
         tm:deleteEvent('note', last)
       else
@@ -1097,28 +1039,20 @@ function newTrackerView(tm, cm, cmgr)
       tm:flush()
     end
 
-    -- Read the current end row exactly off `endppqL` (authored
-    -- row * logPerRow) so `curRow + rowDelta` stays integer; otherwise the
-    -- ppq round-trip drifts and the first press into a neighbour can
-    -- fail to reach the `nextD + lenient` overlap bound.
     local function adjustDurationCore(col, note, rowDelta)
       local chan      = col.midiChan
       local logPerRow = ctx:ppqPerRow()
-      local curRow    = note.endppqL and note.endppqL / logPerRow
-                        or ctx:ppqToRow(note.endppq, chan)
+      local curRow    = note.endppq / logPerRow
       local newRow    = util.clamp(util.round(curRow + rowDelta), 0, grid.numRows)
       local minPPQ    = math.min(note.endppq, ctx:rowToPPQ(ctx:snapRow(note.ppq, chan) + 1, chan))
       local _, maxPPQ = overlapBounds(col, note.ppq, note, true)
-      local rawPPQ    = ctx:rowToPPQ(newRow, chan)
-      local newppq    = util.clamp(rawPPQ, minPPQ, maxPPQ)
+      local newppq    = util.clamp(ctx:rowToPPQ(newRow, chan), minPPQ, maxPPQ)
       if newppq == note.endppq then return end
-      if note.parentUuid then
-        local oldEndL = note.endppqL or ctx:ppqToRow(note.endppq, chan) * logPerRow
-        local newEndL = newRow * logPerRow
-        if tm:routeRelative(note, { durL = { 'add', newEndL - oldEndL } }) then return end
+      if note.parentUuid
+         and tm:routeRelative(note, { durL = { 'add', newRow * logPerRow - note.endppq } }) then
+        return
       end
-      local endppqL   = newppq == rawPPQ and newRow * logPerRow or nil
-      assignTail(note, chan, newppq, endppqL)
+      assignTail(note, chan, newppq)
     end
 
     function adjustDuration(rowDelta)
@@ -1149,10 +1083,10 @@ function newTrackerView(tm, cm, cmgr)
             table.sort(ns, function(a, b) return a.ppq < b.ppq end)
             if rowDelta > 0 then
               local _, maxRow = rowBounds(g.col, ns[#ns].ppq, ns[#ns], true)
-              if maxRow - ns[#ns].endppqL / logPerRow < rowDelta then return end
+              if maxRow - ns[#ns].endppq / logPerRow < rowDelta then return end
             else
               local minRow = rowBounds(g.col, ns[1].ppq, ns[1], true)
-              if minRow - ns[1].ppqL / logPerRow > rowDelta then return end
+              if minRow - ns[1].ppq / logPerRow > rowDelta then return end
             end
             util.add(runs, { col = g.col, notes = ns })
           end
@@ -1204,10 +1138,8 @@ function newTrackerView(tm, cm, cmgr)
       end
 
       local _, logPerRow = frameAndLogPerRow(chan)
-      local oldPpqL = note.ppqL or ctx:ppqToRow(note.ppq, chan) * logPerRow
-      local newPpqL = newStart * logPerRow
       if not (note.parentUuid
-              and tm:routeRelative(note, { ppqL = { 'add', newPpqL - oldPpqL } })) then
+              and tm:routeRelative(note, { ppqL = { 'add', newStart * logPerRow - note.ppq } })) then
         assignStamp('note', note, chan, newStart, newEnd)
       end
       tm:flush()
@@ -1365,13 +1297,10 @@ function newTrackerView(tm, cm, cmgr)
             local newEndppq = ctx:rowToPPQ(newEndRow, chan)
             if newppq ~= e.ppq or newEndppq ~= e.endppq then
               util.add(plans, { col = col, e = e, newFrame = f,
-                newppq    = newppq,    newEndppq  = newEndppq,
-                newPpqL   = newRow * logPerRow,
-                newEndppqL = newEndRow * logPerRow })
+                newppq = newppq, newEndppq = newEndppq })
             end
           elseif newppq ~= e.ppq then
-            util.add(plans, { col = col, e = e, newFrame = f,
-              newppq = newppq, newPpqL = newRow * logPerRow })
+            util.add(plans, { col = col, e = e, newFrame = f, newppq = newppq })
           end
         end
       end
@@ -1392,14 +1321,7 @@ function newTrackerView(tm, cm, cmgr)
           local newRow = ctx:snapRow(e.ppq, chan)
           local newppq = ctx:rowToPPQ(newRow, chan)
           if newppq ~= e.ppq then
-            local entry = { col = col, e = e, newFrame = f,
-              newppq = newppq, newPpqL = newRow * logPerRow }
-            if util.isNote(e) then
-              -- endppq stays (intent), but endppqL must be re-expressed
-              -- in the new frame's logPerRow for coherence with the head.
-              entry.newEndppqL = ctx:ppqToRow(e.endppq, chan) * logPerRow
-            end
-            util.add(plans, entry)
+            util.add(plans, { col = col, e = e, newFrame = f, newppq = newppq })
           end
         end
       end
@@ -1444,18 +1366,11 @@ function newTrackerView(tm, cm, cmgr)
     -- shift only real events and leave fake pbs to tm's reconcile.
     local function notFake(e) return not e.fake end
 
-    -- ppq re-realises from the new ppqL via swing; a constant ±dppq is
-    -- only right under identity (rowToPPQ is non-linear under swing).
-    local function shiftPlan(col, e, dLogical, swing, f)
-      local chan    = col.midiChan
-      local newppqL = logicalOf(e) + dLogical
-      local entry   = { col = col, e = e, newFrame = f,
-        newppq = util.round(swing.fromLogical(chan, newppqL)),
-        newPpqL = newppqL,
-      }
+    local function shiftPlan(col, e, dLogical, f)
+      local entry = { col = col, e = e, newFrame = f,
+                      newppq = e.ppq + dLogical }
       if util.isNote(e) then
-        entry.newEndppqL = endLogicalOf(e) + dLogical
-        entry.newEndppq  = math.min(util.round(swing.fromLogical(chan, entry.newEndppqL)), length)
+        entry.newEndppq = math.min(e.endppq + dLogical, length)
       end
       return entry
     end
@@ -1463,13 +1378,12 @@ function newTrackerView(tm, cm, cmgr)
     local function insertRowCore(col, topRow, numRows)
       local chan = col.midiChan
       local f, logPerRow = frameAndLogPerRow(chan)
-      local swing    = tm:swingSnapshot()
       local C        = ctx:rowToPPQ(topRow, chan)
       local dLogical = numRows * logPerRow
 
       local plans, deletes = {}, {}
       for e in util.between(col.events, C, length, notFake) do
-        local p = shiftPlan(col, e, dLogical, swing, f)
+        local p = shiftPlan(col, e, dLogical, f)
         if p.newppq >= length then util.add(deletes, { col = col, evt = e })
         else                       util.add(plans, p) end
       end
@@ -1481,9 +1395,7 @@ function newTrackerView(tm, cm, cmgr)
       if col.type == 'note' then
         local spanning = util.seek(col.events, 'before', C, util.isNote)
         if spanning and spanning.endppq > C then
-          local newendppqL = endLogicalOf(spanning) + dLogical
-          local newendppq  = math.min(util.round(swing.fromLogical(chan, newendppqL)), length)
-          assignTail(spanning, chan, newendppq, newendppqL)
+          assignTail(spanning, chan, math.min(spanning.endppq + dLogical, length))
         end
       end
     end
@@ -1491,24 +1403,17 @@ function newTrackerView(tm, cm, cmgr)
     local function deleteRowCore(col, topRow, numRows)
       local chan = col.midiChan
       local f, logPerRow = frameAndLogPerRow(chan)
-      local swing    = tm:swingSnapshot()
       local C        = ctx:rowToPPQ(topRow, chan)
       local D        = ctx:rowToPPQ(topRow + numRows, chan)
       local dLogical = numRows * logPerRow
-      local topppqL  = topRow * logPerRow
 
       if col.type == 'note' then
         local spanning = util.seek(col.events, 'before', C, util.isNote)
         if spanning and spanning.endppq > C then
           if spanning.endppq > D then
-            local newendppqL = endLogicalOf(spanning) - dLogical
-            local newendppq  = util.round(swing.fromLogical(chan, newendppqL))
-            assignTail(spanning, chan, newendppq, newendppqL)
+            assignTail(spanning, chan, spanning.endppq - dLogical)
           else
-            -- Note tail falls inside the deleted region — clip to topRow.
-            -- endppqL must be the logical position of C (topRow * logPerRow),
-            -- not the note's onset, or a later reswing would collapse the note.
-            assignTail(spanning, chan, C, topppqL)
+            assignTail(spanning, chan, C)
           end
         end
       end
@@ -1516,7 +1421,7 @@ function newTrackerView(tm, cm, cmgr)
       local plans, deletes = {}, {}
       for e in util.between(col.events, C, length, notFake) do
         if e.ppq < D then util.add(deletes, { col = col, evt = e })
-        else              util.add(plans, shiftPlan(col, e, -dLogical, swing, f)) end
+        else              util.add(plans, shiftPlan(col, e, -dLogical, f)) end
       end
 
       conformOverlaps(plans)
@@ -1692,7 +1597,7 @@ function newTrackerView(tm, cm, cmgr)
             end
           else
             if pendingFixup then
-              util.add(fixups, { evt = lastSurvivor, endppq = evt.ppq, endppqL = evt.ppqL })
+              util.add(fixups, { evt = lastSurvivor, endppq = evt.ppq })
             end
             pendingFixup = false
             lastSurvivor = evt
@@ -1707,7 +1612,7 @@ function newTrackerView(tm, cm, cmgr)
         if evt.type ~= 'pa' then tm:deleteEvent('note', evt) end
       end
       for _, f in ipairs(fixups) do
-        assignTail(f.evt, chan, f.endppq, f.endppqL)
+        assignTail(f.evt, chan, f.endppq)
       end
     end
 

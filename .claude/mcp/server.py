@@ -291,22 +291,23 @@ def _parse_failures(stdout: str) -> list[dict]:
 @mcp.tool(structured_output=False)
 def lua_test_run(
     filter: Optional[str] = None,
-    context: int = 6,
+    context: int = 0,
     show_passing: bool = False,
     timeout: int = 60,
 ) -> str:
     """Run the Lua test suite (`lua tests/run.lua`) and return a focused report.
 
-    Default output is failures-only with the offending spec line + a small
-    source window — much smaller than the raw runner stdout (which prints
-    one line per ~570 tests).
+    Default output is failures-only with `path:line` of each failing
+    assertion plus the condensed traceback — no source window. Pass
+    `context=N` to opt in to ±N lines of source around each failure.
 
     Args:
       filter: optional literal substring matched against `<spec> :: <test>`.
               Examples: "tm_rebuild_spec" runs only tests in tm_rebuild_spec;
               "absorber" matches any spec or test name containing "absorber".
               The runner uses literal `string.find`, not regex.
-      context: lines of source around each failing line (default 6).
+      context: lines of source around each failing line (default 0 — omit
+               the source window entirely; jump via path:line if needed).
       show_passing: include the names of passing tests (default false).
       timeout: kill the run after this many seconds (default 60).
 

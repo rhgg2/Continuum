@@ -609,20 +609,17 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- update.ppq and update.ppqL both speak the logical frame above
-    -- tm; raw is derived inside as fromLogical(chan, ppq) + delay.
-    -- ppqL is preserved as the dual-stamp transitional field; once
-    -- it is gone, update.ppq carries logical truth alone. Delay-only
-    -- edits forward from evt.ppqL when stamped.
+    -- update.ppq and update.endppq speak the logical frame above tm;
+    -- raw is derived as fromLogical(chan, ppq) + delay. We stamp
+    -- update.ppqL/endppqL with the logical truth and overwrite
+    -- update.ppq/endppq with raw, so mm receives both frames.
     --
-    -- trustGeometry callers have already computed raw under the target
-    -- snapshot — update.ppq is intent raw, not logical. We absorb the
-    -- delay shift but skip translation.
+    -- trustGeometry callers (reswing) already speak raw and opt out
+    -- of translation; they continue to provide ppqL/endppqL alongside.
     local function realiseNoteUpdate(evt, update, opts)
       local dOld = delayToPPQ(evt.delay)
       local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
-      if update.ppq == nil and dNew == dOld
-         and update.ppqL == nil and update.endppqL == nil then return end
+      if update.ppq == nil and update.endppq == nil and dNew == dOld then return end
       if opts and opts.trustGeometry then
         if update.ppq ~= nil then
           update.ppq = update.ppq + dNew
@@ -635,31 +632,27 @@ function newTrackerManager(mm, cm)
       local function getSnap()
         snap = snap or tm:swingSnapshot(); return snap
       end
-      local ppqL = update.ppqL or update.ppq
-      if ppqL ~= nil then
-        update.ppq = util.round(getSnap().fromLogical(evt.chan, ppqL)) + dNew
+      if update.ppq ~= nil then
+        update.ppqL = update.ppq
+        update.ppq  = util.round(getSnap().fromLogical(evt.chan, update.ppqL)) + dNew
       elseif evt.ppqL ~= nil then
         update.ppq = util.round(getSnap().fromLogical(evt.chan, evt.ppqL)) + dNew
       else
         update.ppq = evt.ppq + (dNew - dOld)
       end
-      if update.endppqL ~= nil then
-        update.endppq = util.round(getSnap().fromLogical(evt.chan, update.endppqL))
+      if update.endppq ~= nil then
+        update.endppqL = update.endppq
+        update.endppq  = util.round(getSnap().fromLogical(evt.chan, update.endppqL))
       end
     end
 
-    -- Non-note CC/PB writes arrive in the logical frame: update.ppq
-    -- (and update.ppqL when dual-stamped) carry the logical position.
-    -- Translate to raw before assignPb/assignLowlevel, which speak
-    -- mm-side raw. trustGeometry skips translation — those callers
-    -- already speak raw and opt into bypassing the boundary.
+    -- Non-note writes: update.ppq is logical; stamp ppqL alongside
+    -- and overwrite ppq with raw before mm sees it.
     local function realiseNonNoteUpdate(chan, update, opts)
       if opts and opts.trustGeometry then return end
-      if not chan then return end
-      local ppqL = update.ppqL or update.ppq
-      if ppqL ~= nil then
-        update.ppq = util.round(tm:swingSnapshot().fromLogical(chan, ppqL))
-      end
+      if not chan or update.ppq == nil then return end
+      update.ppqL = update.ppq
+      update.ppq  = util.round(tm:swingSnapshot().fromLogical(chan, update.ppqL))
     end
 
     function um:assignEvent(evtType, evtOrLoc, update, opts)
@@ -695,16 +688,20 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    --@map:contract notes default detune=0, delay=0, lane=1; evt.ppq (and evt.ppqL when dual-stamped) speak the logical frame; raw is derived as fromLogical(chan, ppq) + delay; endppq stays intent (caller-provided)
+    --@map:contract notes default detune=0, delay=0, lane=1; evt.ppq and evt.endppq arrive in the logical frame; um stamps ppqL/endppqL with the logical truth and rewrites ppq/endppq to raw (fromLogical + delay) before mm sees the record
     function um:addEvent(evtType, evt)
       if evtType == 'note' then
         evt.detune = evt.detune or 0
         evt.delay  = evt.delay  or 0
         evt.lane   = evt.lane   or 1
-        local ppqL = evt.ppqL or evt.ppq
-        if ppqL ~= nil and evt.chan then
+        if evt.ppq ~= nil and evt.chan then
           local snap = tm:swingSnapshot()
-          evt.ppq = util.round(snap.fromLogical(evt.chan, ppqL)) + delayToPPQ(evt.delay)
+          evt.ppqL = evt.ppq
+          evt.ppq  = util.round(snap.fromLogical(evt.chan, evt.ppqL)) + delayToPPQ(evt.delay)
+          if evt.endppq ~= nil then
+            evt.endppqL = evt.endppq
+            evt.endppq  = util.round(snap.fromLogical(evt.chan, evt.endppqL))
+          end
         end
         local clamped, clampedL =
           clearSameKeyRange(evt.chan, evt.pitch, evt.ppq, evt.endppq, evt.ppqL, evt)
@@ -712,15 +709,15 @@ function newTrackerManager(mm, cm)
         if clampedL then evt.endppqL = clampedL end
         addNote(evt)
       elseif evtType == 'pb' then
-        local ppqL = evt.ppqL or evt.ppq
-        if ppqL ~= nil and evt.chan then
-          evt.ppq = util.round(tm:swingSnapshot().fromLogical(evt.chan, ppqL))
+        if evt.ppq ~= nil and evt.chan then
+          evt.ppqL = evt.ppq
+          evt.ppq  = util.round(tm:swingSnapshot().fromLogical(evt.chan, evt.ppqL))
         end
         addPb(evt)
       else
-        local ppqL = evt.ppqL or evt.ppq
-        if ppqL ~= nil and evt.chan then
-          evt.ppq = util.round(tm:swingSnapshot().fromLogical(evt.chan, ppqL))
+        if evt.ppq ~= nil and evt.chan then
+          evt.ppqL = evt.ppq
+          evt.ppq  = util.round(tm:swingSnapshot().fromLogical(evt.chan, evt.ppqL))
         end
         addLowlevel(evtType, evt)
       end

@@ -34,6 +34,16 @@
             "statusMessage": "Regenerating .map file..."
           }
         ]
+      },
+      {
+        "matcher": "mcp__apply_patches__apply_patches",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/apply-patches-map-regen.sh\"",
+            "statusMessage": "Regenerating .map files..."
+          }
+        ]
       }
     ]
   }
