@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2026  sha=b430243
+@module trackerView  src=trackerView.lua  loc=2031  sha=cbe9ac3
 @deps util, midiManager, trackerManager, tuning, commandManager, editCursor
 
 # Invariants & contracts (module)
@@ -118,42 +118,42 @@
     @fn allGroups()  @ 1113   -- Every column, every event, as a groups list (for *-all variants).
     @fn reswingCore(groups, opts)  @ 1124
         @map:contract  events without evt.rpb are skipped — they're authoring-stamped Continuum-side, not externally edited. Two passes (plan, then mutate) so reads stay stable across the batch. Plan ppq is clamped to take length to prevent REAPER auto-extending the source on MIDI_Sort. Reswing leaves rpb untouched: ppqL is the truth, raw is reproduced under the target swing.
-    @fn reswingScope(groups)  @ 1202
-    @fn quantizeScope(groups)  @ 1212   -- Plan-then-write so conformOverlaps can clip plan geometry against col-mates before the wri
-    @fn quantizeKeepRealisedScope(groups)  @ 1240   -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
+    @fn reswingScope(groups)  @ 1207
+    @fn quantizeScope(groups)  @ 1217   -- Plan-then-write so conformOverlaps can clip plan geometry against col-mates before the wri
+    @fn quantizeKeepRealisedScope(groups)  @ 1245   -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
         @map:contract  intent ppq snaps to nearest row; delay absorbs the inverse so realised onset is preserved. Endppq stays put. Required delay clamped at delayRange — realised still preserved, intent partially off-grid; popup reports the clamp count
-    @fn notFake(e)  @ 1286   -- Fake pbs are tm-managed absorbers tied to note seats — row ops shift only real events and 
-    @fn shiftPlan(col, e, dLogical)  @ 1288
-    @fn insertRowCore(col, topRow, numRows)  @ 1296
-    @fn deleteRowCore(col, topRow, numRows)  @ 1321
-    @fn forEachRowOp(core, preSel, noSelCols)  @ 1351   -- `noSelCols` picks the column set when no selection is active.
-    @fn allCols()  @ 1362
-    @fn curCol()  @ 1363
-    @fn insertRow()  @ 1368
-    @fn deleteRow()  @ 1369
-    @fn insertRowCol()  @ 1370
-    @fn deleteRowCol()  @ 1371
-    @fn pitchStep(coarse)  @ 1377
-    @fn valueInterval(col)  @ 1384   -- Coarse snap interval per column type. nil = no coarse (pc).
-    @fn valueBounds(col)  @ 1390
-    @fn nudgePitch(col, note, dir, coarse, audible)  @ 1395
-    @fn nudgeVel(note, dir, coarse)  @ 1415
-    @fn nudgeDelay(col, note, dir, coarse)  @ 1423
-    @fn nudgeValue(col, evt, dir, coarse)  @ 1433
-    @fn applyNudge(col, evt, part, dir, coarse, audible)  @ 1442
-    @fn cursorRowEvent(col)  @ 1450   -- PAs skipped on note cols.
-    @fn nudge(dir, coarse)  @ 1463   -- Column-typed nudge. Selection rule: if any note event is selected, transpose / velocity- /
-    @fn queueDeleteNotes(col, locs)  @ 1506   -- Delete notes; extend each predecessor that ended at-or-past a deleted run into the next su
-    @fn queueResetDelays(col, locs)  @ 1538
-    @fn queueResetVelocities(col, locs)  @ 1548   -- Reset selected note vels to the prior event's vel (notes or PAs carry forward); delete sel
-    @fn queueDeleteCCs(col, locs)  @ 1563
-    @fn deleteEvent()  @ 1575
-    @fn deleteSelection()  @ 1594
-    @fn deleteOrBackspace()  @ 1603
-    @fn stepSample(dir)  @ 1611   -- Step currentSample by ±1 across the full 0..127 range. Empty slots are reachable — the use
-    @fn duplicate(dir)  @ 1625
+    @fn notFake(e)  @ 1291   -- Fake pbs are tm-managed absorbers tied to note seats — row ops shift only real events and 
+    @fn shiftPlan(col, e, dLogical)  @ 1293
+    @fn insertRowCore(col, topRow, numRows)  @ 1301
+    @fn deleteRowCore(col, topRow, numRows)  @ 1326
+    @fn forEachRowOp(core, preSel, noSelCols)  @ 1356   -- `noSelCols` picks the column set when no selection is active.
+    @fn allCols()  @ 1367
+    @fn curCol()  @ 1368
+    @fn insertRow()  @ 1373
+    @fn deleteRow()  @ 1374
+    @fn insertRowCol()  @ 1375
+    @fn deleteRowCol()  @ 1376
+    @fn pitchStep(coarse)  @ 1382
+    @fn valueInterval(col)  @ 1389   -- Coarse snap interval per column type. nil = no coarse (pc).
+    @fn valueBounds(col)  @ 1395
+    @fn nudgePitch(col, note, dir, coarse, audible)  @ 1400
+    @fn nudgeVel(note, dir, coarse)  @ 1420
+    @fn nudgeDelay(col, note, dir, coarse)  @ 1428
+    @fn nudgeValue(col, evt, dir, coarse)  @ 1438
+    @fn applyNudge(col, evt, part, dir, coarse, audible)  @ 1447
+    @fn cursorRowEvent(col)  @ 1455   -- PAs skipped on note cols.
+    @fn nudge(dir, coarse)  @ 1468   -- Column-typed nudge. Selection rule: if any note event is selected, transpose / velocity- /
+    @fn queueDeleteNotes(col, locs)  @ 1511   -- Delete notes; extend each predecessor that ended at-or-past a deleted run into the next su
+    @fn queueResetDelays(col, locs)  @ 1543
+    @fn queueResetVelocities(col, locs)  @ 1553   -- Reset selected note vels to the prior event's vel (notes or PAs carry forward); delete sel
+    @fn queueDeleteCCs(col, locs)  @ 1568
+    @fn deleteEvent()  @ 1580
+    @fn deleteSelection()  @ 1599
+    @fn deleteOrBackspace()  @ 1608
+    @fn stepSample(dir)  @ 1616   -- Step currentSample by ±1 across the full 0..127 range. Empty slots are reachable — the use
+    @fn duplicate(dir)  @ 1630
         @map:contract  upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard. First call collects; subsequent immediate calls re-paste the cached clip so successive duplicates anchor to the original source row (matters for alias mode).
-    @fn addGridCol(chan, type, key, events)  @ 1862
+    @fn addGridCol(chan, type, key, events)  @ 1867
 
   # Public API
     -- Temperament
@@ -203,37 +203,37 @@
         -- A.shape governs the curve from A to next).
     -- Duration & position
     -- Reswing / quantize
-    @api vm:reswingSelection()  @ 1275
-    @api vm:reswingAll()  @ 1276
-    @api vm:quantizeSelection()  @ 1277
-    @api vm:quantizeAll()  @ 1278
-    @api vm:quantizeKeepRealisedSelection()  @ 1279
-    @api vm:quantizeKeepRealisedAll()  @ 1280
+    @api vm:reswingSelection()  @ 1280
+    @api vm:reswingAll()  @ 1281
+    @api vm:quantizeSelection()  @ 1282
+    @api vm:quantizeAll()  @ 1283
+    @api vm:quantizeKeepRealisedSelection()  @ 1284
+    @api vm:quantizeKeepRealisedAll()  @ 1285
     -- Nudge
     -- Deletion
     -- Duplicate
-    @api vm:ec()  @ 1654
-    @api vm:clipboard()  @ 1655
+    @api vm:ec()  @ 1659
+    @api vm:clipboard()  @ 1660
     -- Accessors for trackerPage
-    @api vm:rowPerBar()  @ 1659
-    @api vm:takeName()  @ 1660
-    @api vm:activeTemper()  @ 1661
-    @api vm:noteProjection(evt)  @ 1662
-    @api vm:rowBeatInfo(row)  @ 1663
-    @api vm:barBeatSub(row)  @ 1664
-    @api vm:ppqToRow(ppq, chan)  @ 1665
-    @api vm:rowToPPQ(row, chan)  @ 1666
-    @api vm:sampleCurve(A, B, ppq)  @ 1667
-    @api vm:timeSig()  @ 1668
+    @api vm:rowPerBar()  @ 1664
+    @api vm:takeName()  @ 1665
+    @api vm:activeTemper()  @ 1666
+    @api vm:noteProjection(evt)  @ 1667
+    @api vm:rowBeatInfo(row)  @ 1668
+    @api vm:barBeatSub(row)  @ 1669
+    @api vm:ppqToRow(ppq, chan)  @ 1670
+    @api vm:rowToPPQ(row, chan)  @ 1671
+    @api vm:sampleCurve(A, B, ppq)  @ 1672
+    @api vm:timeSig()  @ 1673
     -- Non-command callbacks from trackerPage
-    @api vm:setGridSize(w, h)  @ 1675
+    @api vm:setGridSize(w, h)  @ 1680
     -- Columns
-    @api vm:addExtraCol(type, cc)  @ 1681
-    @api vm:hideExtraCol()  @ 1706
-    @api vm:showDelay()  @ 1761
+    @api vm:addExtraCol(type, cc)  @ 1686
+    @api vm:hideExtraCol()  @ 1711
+    @api vm:showDelay()  @ 1766
     -- Command table
     -- Rebuild
-    @api vm:rebuild(takeChanged)  @ 1827
+    @api vm:rebuild(takeChanged)  @ 1832
         @map:contract  reentrancy-guarded by `rebuilding`; early-returns when tm has no take (grid stays empty so the page shows its placeholder); takeChanged=true resets ec and re-reads resolution/length/timeSigs from tm; grid cols / rowPPQs / viewContext / cell-overflow-offGrid maps / ghost maps rebuild unconditionally; pushMute at the end
 
   # REAPER API surface

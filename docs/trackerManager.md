@@ -158,7 +158,7 @@ ends there.
 
 ```
 tm:addEvent(type, evt)               -- local apply + stage add
-tm:assignEvent(type, evt, upd, opts) -- local apply + stage assign
+tm:assignEvent(type, evt, upd)       -- local apply + stage assign
 tm:deleteEvent(type, evt)            -- local apply + stage delete
 tm:flush()                           -- commit staged ops in one mm:modify
 ```
@@ -179,10 +179,12 @@ Semantics:
   legitimate edits from creating these collisions in the first place;
   rebuild's group-by-pitch pass is the backstop for foreign MIDI.
   A caller staging a coherent monotone batch (where the end-state has
-  no new same-key overlaps) can pass `opts.trustGeometry` on
-  `assignEvent` to skip the per-write clamp. Reswing uses this —
-  without it, the first-processed of two legato siblings sees its
-  endppq clipped against the second's still-old ppq.
+  no new same-key overlaps) signals raw intent by shipping
+  `update.ppqL` / `update.endppqL` alongside `update.ppq` /
+  `update.endppq`; tm then skips the per-write clamp and the
+  logical→raw translation. Reswing uses this — without it, the
+  first-processed of two legato siblings sees its endppq clipped
+  against the second's still-old ppq.
 - **Detune changes (col-1 notes).** `assignNote` seats a pb at the
   boundary if needed, retunes the raw stream forward to the next note,
   then drops the boundary if it became redundant.

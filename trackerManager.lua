@@ -609,18 +609,19 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- update.ppq and update.endppq speak the logical frame above tm;
-    -- raw is derived as fromLogical(chan, ppq) + delay. We stamp
-    -- update.ppqL/endppqL with the logical truth and overwrite
-    -- update.ppq/endppq with raw, so mm receives both frames.
+    -- Default contract: update.ppq/endppq are logical; tm stamps
+    -- ppqL/endppqL with that logical truth, then overwrites ppq/endppq
+    -- with raw (fromLogical + delay) before mm sees them.
     --
-    -- trustGeometry callers (reswing) already speak raw and opt out
-    -- of translation; they continue to provide ppqL/endppqL alongside.
-    local function realiseNoteUpdate(evt, update, opts)
+    -- Raw-speaking callers (reswing post-conformOverlaps) ship u.ppqL
+    -- and/or u.endppqL alongside u.ppq/u.endppq. Their presence is the
+    -- "skip translation" signal: u.ppq/u.endppq are taken as raw intent
+    -- under the target swing, with delay added on top.
+    local function realiseNoteUpdate(evt, update)
       local dOld = delayToPPQ(evt.delay)
       local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
       if update.ppq == nil and update.endppq == nil and dNew == dOld then return end
-      if opts and opts.trustGeometry then
+      if update.ppqL ~= nil or update.endppqL ~= nil then
         if update.ppq ~= nil then
           update.ppq = update.ppq + dNew
         elseif dNew ~= dOld then
@@ -647,23 +648,25 @@ function newTrackerManager(mm, cm)
     end
 
     -- Non-note writes: update.ppq is logical; stamp ppqL alongside
-    -- and overwrite ppq with raw before mm sees it.
-    local function realiseNonNoteUpdate(chan, update, opts)
-      if opts and opts.trustGeometry then return end
+    -- and overwrite ppq with raw. Raw-speaking callers signal the
+    -- skip by sending update.ppqL.
+    local function realiseNonNoteUpdate(chan, update)
+      if update.ppqL ~= nil then return end
       if not chan or update.ppq == nil then return end
       update.ppqL = update.ppq
       update.ppq  = util.round(tm:swingSnapshot().fromLogical(chan, update.ppqL))
     end
 
-    function um:assignEvent(evtType, evtOrLoc, update, opts)
+    function um:assignEvent(evtType, evtOrLoc, update)
       local loc = type(evtOrLoc) == 'table' and evtOrLoc.loc or evtOrLoc
       if not loc then return end
       local evt = evtType == 'note' and notesByLoc[loc] or ccsByLoc[loc]
 
       if evtType == 'note' then
         if evt then
-          realiseNoteUpdate(evt, update, opts)
-          if not (opts and opts.trustGeometry)
+          local rawCaller = update.ppqL ~= nil or update.endppqL ~= nil
+          realiseNoteUpdate(evt, update)
+          if not rawCaller
              and (update.pitch ~= nil or update.ppq ~= nil or update.endppq ~= nil) then
             local P      = update.ppq    or evt.ppq
             local Pend   = update.endppq or evt.endppq
@@ -679,11 +682,11 @@ function newTrackerManager(mm, cm)
         end
       elseif evtType == 'pb' then
         if evt then
-          realiseNonNoteUpdate(evt.chan, update, opts)
+          realiseNonNoteUpdate(evt.chan, update)
           assignPb(evt, update)
         end
       else
-        realiseNonNoteUpdate(evt and evt.chan, update, opts)
+        realiseNonNoteUpdate(evt and evt.chan, update)
         assignLowlevel(evtType, evt or { loc = loc }, update)
       end
     end
@@ -1258,18 +1261,22 @@ function newTrackerManager(mm, cm)
     --   else, raw matches predicted → no-op (steady state).
     --   else                        → ppqL is rederived from raw (sole
     --                                  swing.toLogical call site). Covers
-    --                                  legacy-take load and externally-edited
-    --                                  events under the same branch.
+    --                                  foreign-MIDI cold load and
+    --                                  external (REAPER piano-roll) edits
+    --                                  to imported events.
     -- Exempt:
     --   evt.fake — absorber pbs and synthesised PCs are derived.
     --   evt.rpb (only when not stale) — rpb-stamped events are
     --     Continuum-authored: ppqL is the truth, raw is its realisation
-    --     under cm's current swing. The rule must not rederive ppqL from
-    --     raw on cold load. Once a stale flag arrives — set by the
-    --     configChanged subscriber for active-take edits or by
-    --     bindTake(opts.markSwingStale=true) for cross-take reswing —
-    --     the stale-branch rebuilds raw from ppqL under cm's current
-    --     snap, which is exactly what reswing wants.
+    --     under cm's current swing. The rule must not rederive ppqL
+    --     from raw on cold load. Foreign-imported events have no rpb,
+    --     so their ppqL stays provisional and the predicted-check arm
+    --     keeps it in sync with raw across external edits. When a stale
+    --     flag arrives — set by the configChanged subscriber for
+    --     active-take edits or by bindTake(opts.markSwingStale=true)
+    --     for cross-take reswing — the stale-branch rebuilds raw from
+    --     ppqL under cm's current snap, which is exactly what reswing
+    --     wants.
     --
     -- Snapshot lane-1 note ppqs before the rule runs so step 4.8 can
     -- reseat absorbers whose host moved.
@@ -1404,10 +1411,10 @@ function newTrackerManager(mm, cm)
     end
 
     -- 5) Project to logical: column events expose the logical position as
-    -- evt.ppq. After step 4.7 every non-fake non-frame event has a ppqL;
-    -- step 4.8 has stamped fakes; alias emits carry their own ppqL. Frame-
-    -- bearing events authored without a stamp keep raw — harmless, off-grid
-    -- under non-identity swing until they're touched.
+    -- evt.ppq. After step 4.7 every non-fake non-rpb-exempt event has a
+    -- ppqL; step 4.8 has stamped fakes; alias emits carry their own
+    -- ppqL. Rpb-stamped events authored without an early-stamp keep
+    -- raw — harmless, off-grid under non-identity swing until touched.
     -- Round to int when projecting: mm-side ppq is integer, and the offGrid
     -- check in vm:rebuild compares against rowToPPQ's integer-rounded result.
     -- ppqL stays float on the column event so swing-inverse round-trips remain
@@ -1701,7 +1708,7 @@ function newTrackerManager(mm, cm)
 
   function tm:deleteEvent(type, evt) um:deleteEvent(type, evt) end
   function tm:addEvent(type, evt) um:addEvent(type, evt) end
-  function tm:assignEvent(type, evt, update, opts) um:assignEvent(type, evt, update, opts) end
+  function tm:assignEvent(type, evt, update) um:assignEvent(type, evt, update) end
   function tm:flush() um:flush() end
 
   --@map:contract evt is a materialised alias child (carries parentUuid + specPath); appends each (field, op) entry of `opsByField` to the spec node and queues an aliases-only metadata write on the root. Multi-field is one call so coupled fields (e.g. pitch+detune under a temper) land on a single root snapshot. Returns false when evt is not aliased or the root/spec lookup fails — caller should fall through to direct mutation.

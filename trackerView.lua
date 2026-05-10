@@ -1177,18 +1177,23 @@ function newTrackerView(tm, cm, cmgr)
       -- rejects the persisted lane and the successor drifts.
       conformOverlaps(plans)
 
-      -- Always emit u.ppq when computed: post-Phase-6 col-event ppq is the
-      -- logical position, while p.newppq is raw under the target swing,
-      -- so the diff check would skip every identity-target reswing.
-      -- trustGeometry is reswing's transient seam: conformOverlaps nudges
-      -- raw mid-plan, so um cannot derive raw from u.ppqL alone.
-      local trust = { trustGeometry = true }
+      -- Reswing speaks raw: u.ppq/u.endppq are intent under the target
+      -- swing (post-conformOverlaps); u.ppqL/u.endppqL ride alongside,
+      -- unchanged, as the signal "skip the logical→raw translation".
+      -- conformOverlaps nudges raw mid-plan, so um cannot derive raw
+      -- from u.ppqL alone — both frames must arrive together.
       for _, p in ipairs(plans) do
         local e, u = p.e, {}
-        if p.newppq                                 then u.ppq     = p.newppq    end
-        if p.newEndppq   ~= nil and util.isNote(e)  then u.endppq  = p.newEndppq end
-        if p.newDelay    ~= nil                     then u.delay   = p.newDelay  end
-        if next(u) then tm:assignEvent(util.isNote(e) and 'note' or p.col.type, e, u, trust) end
+        if p.newppq then
+          u.ppq  = p.newppq
+          u.ppqL = e.ppqL
+        end
+        if p.newEndppq ~= nil and util.isNote(e) then
+          u.endppq  = p.newEndppq
+          u.endppqL = e.endppqL
+        end
+        if p.newDelay ~= nil then u.delay = p.newDelay end
+        if next(u) then tm:assignEvent(util.isNote(e) and 'note' or p.col.type, e, u) end
       end
       tm:flush()
 
