@@ -522,7 +522,7 @@ local CLIP_RESERVED = {
   -- position (rebuilt from row + cursor)
   ppq = true, endppq = true, ppqL = true, endppqL = true,
   -- destination identity
-  chan = true, frame = true, lane = true, cc = true,
+  chan = true, rpb = true, lane = true, cc = true,
   -- mm/REAPER bookkeeping
   loc = true, idx = true, uuid = true, uuidIdx = true,
   -- envelope-level
@@ -550,9 +550,8 @@ function newClipboard(deps)
   local grid         = deps.grid
   local tm           = deps.tm
   local cm           = deps.cm
-  local currentFrame = deps.currentFrame
+  local currentRpb   = deps.currentRpb
   local assignTail   = deps.assignTail
-  local paFrame      = deps.paFrame
   local getCtx       = deps.getCtx
   local getLength    = deps.getLength
   local getAliasMode = deps.getAliasMode or function() return false end
@@ -766,7 +765,7 @@ function newClipboard(deps)
             ppq = ce.ppq,
             chan = dstCol.midiChan,
             pitch = note.pitch, val = util.clamp(ce.val, 1, 127),
-            frame = paFrame(note.frame, dstCol.midiChan),
+            rpb = currentRpb(),
           })
         end
       end
@@ -923,7 +922,7 @@ function newClipboard(deps)
         tm:deleteEvent(evt.type == 'pa' and 'pa' or 'note', evt)
       end
 
-      local frame = currentFrame(dstCol.midiChan)
+      local rpb = currentRpb()
       local vi = 1
       for _, e in ipairs(events) do
         while vi <= #velList and velList[vi].ppq <= e.ppq do
@@ -931,7 +930,7 @@ function newClipboard(deps)
           vi = vi + 1
         end
         e.endppq = math.min(e.endppq, nextNotePpq)
-        e.chan, e.vel, e.lane, e.frame = dstCol.midiChan, currentVel, lane, frame
+        e.chan, e.vel, e.lane, e.rpb = dstCol.midiChan, currentVel, lane, rpb
         writer('note', e)
       end
       tm:flush()
@@ -949,9 +948,9 @@ function newClipboard(deps)
         tm:deleteEvent(dstCol.type, evt)
       end
 
-      local frame = currentFrame(dstCol.midiChan)
+      local rpb = currentRpb()
       for _, e in ipairs(events) do
-        e.chan, e.frame = dstCol.midiChan, frame
+        e.chan, e.rpb = dstCol.midiChan, rpb
         if dstCol.type == 'cc' then e.cc = dstCol.cc end
         writer(dstCol.type, e)
       end
@@ -1066,9 +1065,9 @@ function newClipboard(deps)
       end
 
       -- Overlay destination identity onto the materialised clones.
-      local frame = currentFrame(r.chan)
+      local rpb = currentRpb()
       for _, e in ipairs(events) do
-        e.chan, e.frame = r.chan, frame
+        e.chan, e.rpb = r.chan, rpb
         if r.type == 'note' then
           e.endppq = math.min(e.endppq, capPPQ)
           e.lane   = r.lane

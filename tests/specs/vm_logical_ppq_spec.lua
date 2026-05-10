@@ -1,12 +1,13 @@
 -- Pins the ppqL invariant across vm's authoring + editing paths.
 --
--- Storage model: every event stamped under a frame carries ppqL
--- (and endppqL for notes), the canonical authoring-grid position
--- pre-swing, pre-delay. Mutation rules:
---   - snap-to-row             writes ppqL = row * sppr_currentFrame
---   - shift-by-row             ppqL += rowDelta * sppr_currentFrame
---   - delay nudge              ppqL unchanged, frame unchanged
---   - reswing                  ppqL unchanged, realised re-applied
+-- Storage model: every event Continuum stamps carries ppqL (and
+-- endppqL for notes), the canonical authoring-grid position
+-- pre-swing, pre-delay; evt.rpb marks it as authored.
+-- Mutation rules:
+--   - snap-to-row              writes ppqL = row * logPerRow
+--   - shift-by-row              ppqL += rowDelta * logPerRow
+--   - delay nudge               ppqL unchanged, rpb unchanged
+--   - reswing                   ppqL unchanged, raw re-applied, rpb unchanged
 
 local t = require('support')
 
@@ -38,7 +39,7 @@ return {
       t.truthy(n, 'note authored')
       t.eq(n.ppq,         120, 'realised ppq at row 2')
       t.eq(n.ppqL, 120, 'logical ppq pins authoring row')
-      t.eq(n.frame.rpb,   4,   'frame.rpb stamped from take')
+      t.eq(n.rpb,         4,   'rpb stamped from take')
     end,
   },
 
@@ -61,7 +62,7 @@ return {
       t.eq(n.ppqL, 120,   'logical pins row 2 (60 * 2)')
       t.truthy(math.abs(n.ppq - 139) <= 1,
         'realised lands at swung position, got ' .. n.ppq)
-      t.eq(n.frame.swing, 'c58', 'frame.swing stamped from take')
+      t.eq(n.rpb, 4, 'rpb stamped from take')
     end,
   },
 
@@ -106,7 +107,7 @@ return {
           notes = {
             { ppq = 120, endppq = 360, chan = 1, pitch = 60, vel = 100,
               ppqL = 120, endppqL = 360,
-              frame = { swing = nil, colSwing = nil, rpb = 4 } },
+              rpb = 4 },
           },
         },
         config = { take = { rowPerBeat = 4, noteDelay = { [1] = { [1] = true } } } },
@@ -219,7 +220,7 @@ return {
         seed = { notes = {
           { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
             ppqL = 0, endppqL = 240,
-            frame = { swing = nil, colSwing = nil, rpb = 8 } },
+            rpb = 8 },
         }},
         config = { take = { rowPerBeat = 4 } },
       }
@@ -230,7 +231,7 @@ return {
       local n = noteByPitch(h.fm:dump(), 60)
       t.eq(n.endppq,    120, 'tail clipped to cursor ppq')
       t.eq(n.endppqL,   120, 'endppqL = row 2 * logPerRow_new (60)')
-      t.eq(n.frame.rpb, 4,   'frame restamped to current')
+      t.eq(n.rpb,       4,   'rpb restamped to current')
     end,
   },
 
@@ -245,7 +246,7 @@ return {
           -- Frame.rpb=8 (cross-rpb).
           { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
             ppqL = 0, endppqL = 240,
-            frame = { swing = nil, colSwing = nil, rpb = 8 } },
+            rpb = 8 },
         }},
         config = { take = { rowPerBeat = 4 } },
       }
@@ -255,8 +256,8 @@ return {
 
       local n = noteByPitch(h.fm:dump(), 60)
       t.eq(n.endppq,    300, 'spanning tail extended by 1 row (60 ppq)')
-      t.eq(n.endppqL,   300, 'endppqL coherent with new frame')
-      t.eq(n.frame.rpb, 4,   'spanning note frame restamped')
+      t.eq(n.endppqL,   300, 'endppqL coherent with new rpb')
+      t.eq(n.rpb,       4,   'spanning note rpb restamped via assignTail')
     end,
   },
 
@@ -291,26 +292,17 @@ return {
     end,
   },
 
-  -- reswingCore restamp path: when frame is restamped to current,
-  -- ppqL/endppqL must be rebased by the logPerRow ratio so the note
-  -- keeps the same authoring row in the new rpb's units.
+  -- Reswing operates in absolute logical-ppq: ppqL is the truth, raw
+  -- is reproduced. It never changes rpb (rpb is a view concern, not a
+  -- swing-target) and never rebases ppqL — events stay where authored.
   {
-    name = 'reswing restamp under cross-rpb rebases ppqL/endppqL by logPerRow ratio',
+    name = 'reswing leaves ppqL and rpb untouched on cross-rpb event',
     run = function(harness)
-      -- Note at rpb=8 with ppqL=60 (row 2 in rpb=8: 2*30). Same time
-      -- position in rpb=4 is row 1 (1*60=60). Same absolute logical-ppq
-      -- value, but the rebase formula multiplies by logPerRow ratio
-      -- (60/30=2): newPpqL = 60 * 2 = 120. Wait — that's wrong direction.
-      -- Re-derive: row in old frame = ppqL/logPerRow_old = 60/30 = 2.
-      -- New ppqL = oldRow * logPerRow_new = 2 * 60 = 120.
-      -- So after reswing-all (which restamps), ppqL should be 120 (row 2
-      -- in current rpb=4 → ppq=120). The authoring row identity is
-      -- preserved as row index, not as time position.
       local h = harness.mk{
         seed = { notes = {
           { ppq = 60, endppq = 120, chan = 1, pitch = 60, vel = 100,
             ppqL = 60, endppqL = 120,
-            frame = { swing = nil, colSwing = nil, rpb = 8 } },
+            rpb = 8 },
         }},
         config = { take = { rowPerBeat = 4 } },
       }
@@ -318,30 +310,27 @@ return {
       h.vm:reswingAll()
 
       local n = noteByPitch(h.fm:dump(), 60)
-      t.eq(n.ppqL,      120, 'ppqL = oldRow(2) * logPerRow_new(60)')
-      t.eq(n.endppqL,   240, 'endppqL = oldEndRow(4) * logPerRow_new(60)')
-      t.eq(n.frame.rpb, 4,   'frame restamped to current')
+      t.eq(n.ppqL,    60,  'ppqL preserved across reswing')
+      t.eq(n.endppqL, 120, 'endppqL preserved across reswing')
+      t.eq(n.rpb,     8,   'rpb preserved (reswing does not restamp)')
     end,
   },
 
-  ---------- PA FRAME  (F1 / Class C)
+  ---------- PA STAMPING
   --
-  -- A PA's frame is hybrid: swing/colSwing follow the host note (so
-  -- a reswing of the host carries the PA along — without that link
-  -- a reswing would orphan it), but rpb takes the current take's
-  -- value (so the PA's ppqL, written in current row units, stays
-  -- coherent with the rpb its frame names).
+  -- PA stamps the take's current rpb (same as any authored event).
+  -- Swing is take-global, no longer per-event, so PAs carry no
+  -- per-event swing context — cm's current swing handles realisation.
 
   {
-    name = 'PA emitted on a sustain row inherits host swing but takes current rpb',
+    name = "PA emitted on a sustain row stamps the take's current rpb",
     run = function(harness)
       local h = harness.mk{
         seed = { notes = {
-          -- Host: c58 swing, rpb=8 (cross-rpb vs. take); covers rows 0..4.
+          -- Host: cross-rpb vs. take; covers rows 0..4.
           { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
             ppqL = 0, endppqL = 240,
-            delay = 0, detune = 0,
-            frame = { swing = 'c58', colSwing = nil, rpb = 8 } },
+            delay = 0, detune = 0, rpb = 8 },
         }},
         config = {
           project = { swings = { c58 = classic58 } },
@@ -358,8 +347,7 @@ return {
         if c.msgType == 'pa' then pa = c end
       end
       t.truthy(pa, 'PA emitted on sustain-row vel edit')
-      t.eq(pa.frame.swing, 'c58', 'PA inherits host swing')
-      t.eq(pa.frame.rpb,   4,     'PA takes rpb from current take')
+      t.eq(pa.rpb, 4, 'PA stamps current rpb')
     end,
   },
 

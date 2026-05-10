@@ -5,9 +5,9 @@
 --@map:invariant rm is pull-only — vm fires no render callbacks; rm queries vm.grid / vm:ec() / vm:rowPerBar() each frame
 --@map:invariant all writes funnel through tm (addEvent/assignEvent/deleteEvent/flush); vm never touches mm
 --@map:invariant vm sits on the swing boundary; intent only — never reads/writes realisation pb directly (see docs/tuning.md)
---@map:invariant every authoring call site stamps evt.frame = currentFrame(chan) and evt.ppq = row · logPerRow (logical) before tm:addEvent (PAs use host.frame for swing/colSwing, current rpb)
---@map:invariant off-grid edits snap evt.ppq to the cursor row; delay survives, frame restamps to current
---@map:invariant clipboard rows encode in source col's swing frame; paste decodes into destination col's frame — round-trip is symmetric on (row, chan), not absolute ppq
+--@map:invariant every authoring call site stamps evt.rpb = currentRpb() and evt.ppq = row · logPerRow (logical) before tm:addEvent
+--@map:invariant off-grid edits snap evt.ppq to the cursor row; delay survives, rpb restamps to current
+--@map:invariant clipboard rows encode in source col's logical frame; paste decodes against destination's current rpb — round-trip is symmetric on (row, chan), not absolute ppq
 
 loadModule('util')
 loadModule('midiManager')
@@ -116,8 +116,7 @@ end
 --@map:shape grid = { cols = {<col>...}, chanFirstCol = {[chan]=i}, chanLastCol = {[chan]=i}, lane1Col = {[chan]=<col>}, numRows = int }
 --@map:shape gridCol = { type, midiChan, lane?, cc?, label, events, width, parts, stopPos, partAt, partStart, showDelay, cells={[y]=evt}, overflow={[y]=true}, offGrid={[y]=true}, ghosts={[y]={val,fromEvt,toEvt}}, tails? }
 --@map:shape selection = { row1, row2, col1, col2, part1, part2 }  -- part names: 'pitch'|'vel'|'delay' on note, 'pb' on pb, 'val' on scalar
---@map:shape plan = { col, e, [newppq], [newEndppq], [newFrame], [newDelay] }  -- consumed by writePlans / conformOverlaps
---@map:shape frame = { swing = name|composite, colSwing = name|composite, rpb = int }  -- FRAME_KEYS unit; stamped onto evt.frame at authoring time
+--@map:shape plan = { col, e, [newppq], [newEndppq], [newDelay] }  -- consumed by writePlans / conformOverlaps
 function newTrackerView(tm, cm, cmgr)
 
   ---------- PRIVATE
@@ -273,7 +272,6 @@ function newTrackerView(tm, cm, cmgr)
       local kind = util.isNote(p.e) and 'note' or p.col.type
       local u    = {}
       if p.newppq    ~= nil then u.ppq    = p.newppq    end
-      if p.newFrame  ~= nil then u.frame  = p.newFrame  end
       if p.newDelay  ~= nil then u.delay  = p.newDelay  end
       if util.isNote(p.e) and p.newEndppq ~= nil then u.endppq = p.newEndppq end
       tm:assignEvent(kind, p.e, u)
@@ -335,36 +333,21 @@ function newTrackerView(tm, cm, cmgr)
     return timing.logPerRow(rpb, denom, resolution)
   end
 
-  local isFrameChange, currentFrame, releaseTransientFrame do
-    local FRAME_KEYS = { swing = true, colSwing = true, rowPerBeat = true }
+  local isFrameChange, currentRpb, releaseTransientFrame do
+    local FRAME_KEYS = { rowPerBeat = true }
 
     --@map:contract a write to a FRAME_KEYS member at any tier other than 'transient' counts as a real frame change — fires releaseTransientFrame from configCallback
     function isFrameChange(change)
       return FRAME_KEYS[change.key] and change.level ~= 'transient'
     end
 
-    function currentFrame(chan)
-      return {
-        swing    = cm:get('swing'),
-        colSwing = cm:get('colSwing')[chan],
-        rpb      = cm:get('rowPerBeat'),
-      }
-    end
+    function currentRpb() return cm:get('rowPerBeat') end
 
     -- Returns true iff a transient override was released.
     function releaseTransientFrame()
-      local releasing = false
-      for k in pairs(FRAME_KEYS) do
-        if cm:getAt('transient', k) ~= nil then releasing = true; break end
-      end
-      if not releasing then return false end
-
+      if cm:getAt('transient', 'rowPerBeat') == nil then return false end
       local oldRPB = cm:get('rowPerBeat')
-      cm:assign('transient', {
-                  swing      = util.REMOVE,
-                  colSwing   = util.REMOVE,
-                  rowPerBeat = util.REMOVE,
-      })
+      cm:assign('transient', { rowPerBeat = util.REMOVE })
       local newRPB = cm:get('rowPerBeat')
       if newRPB ~= oldRPB then
         ec:rescaleRow(oldRPB, newRPB)
@@ -374,35 +357,18 @@ function newTrackerView(tm, cm, cmgr)
     end
   end
 
-  local function frameAndLogPerRow(chan)
-    local f = currentFrame(chan)
-    return f, logPerRowFor(f.rpb)
-  end
-
   -- Pass rowE for span events (notes).
   local function assignStamp(type, evt, chan, rowS, rowE)
-    local f, logPerRow = frameAndLogPerRow(chan)
-    local s = { ppq = rowS * logPerRow, frame = f }
+    local rpb       = currentRpb()
+    local logPerRow = logPerRowFor(rpb)
+    local s = { ppq = rowS * logPerRow, rpb = rpb }
     if rowE then s.endppq = rowE * logPerRow end
     tm:assignEvent(type, evt, s)
   end
 
-  -- Frame to stamp on a PA being attached to a host note. Inherits
-  -- host's swing slot + colSwing (so a later reswing of the host
-  -- carries the PA along — without that link, PAs would orphan), but
-  -- takes rpb from the current take frame so the PA's ppqL — written
-  -- as cursor's logical row × current logPerRow — is coherent with
-  -- the rpb its frame names.
-  local function paFrame(hostFrame, chan)
-    return { swing    = hostFrame.swing,
-             colSwing = hostFrame.colSwing,
-             rpb      = currentFrame(chan).rpb }
-  end
-
-  --@map:contract whenever a note's tail moves: rebases evt.frame to current alongside the new endppq
+  --@map:contract whenever a note's tail moves: rebases evt.rpb to current alongside the new endppq
   local function assignTail(evt, chan, endppq)
-    local f = frameAndLogPerRow(chan)
-    tm:assignEvent('note', evt, { endppq = endppq, frame = f })
+    tm:assignEvent('note', evt, { endppq = endppq, rpb = currentRpb() })
   end
 
   local function matchGridToCursor()
@@ -410,18 +376,12 @@ function newTrackerView(tm, cm, cmgr)
 
     local col = grid.cols[ec:col()]
     local evt = col and col.type == 'note' and col.cells and col.cells[ec:row()]
-    if not (evt and evt.frame) then return end
+    if not (evt and evt.rpb) then return end
     -- Rescale ec before the cm:assign so the rebuild it fires sees ec
     -- already aligned to the new rpb.
     local oldRPB = cm:get('rowPerBeat')
-    if evt.frame.rpb ~= oldRPB then ec:rescaleRow(oldRPB, evt.frame.rpb) end
-    local cs = cm:get('colSwing')
-    cs[col.midiChan] = evt.frame.colSwing
-    cm:assign('transient', {
-      swing      = evt.frame.swing,
-      colSwing   = cs,
-      rowPerBeat = evt.frame.rpb,
-    })
+    if evt.rpb ~= oldRPB then ec:rescaleRow(oldRPB, evt.rpb) end
+    cm:assign('transient', { rowPerBeat = evt.rpb })
   end
 
   function vm:setRowPerBeat(n)
@@ -604,7 +564,7 @@ function newTrackerView(tm, cm, cmgr)
       hexDigit[string.byte('A') + i] = 10 + i
     end
 
-    -- Caller has already pinned (ppq, ppqL, frame) onto `update`.
+    -- Caller has already pinned (ppq, ppqL, rpb) onto `update`.
     local function placeNewNote(col, update)
       local last = util.seek(col.events, 'before', update.ppq, util.isNote)
       local next = util.seek(col.events, 'after',  update.ppq, util.isNote)
@@ -633,8 +593,8 @@ function newTrackerView(tm, cm, cmgr)
     function vm:editEvent(col, evt, stop, char, half)
       if not col then return end
       local type      = col.type
-      local frameNow  = currentFrame(col.midiChan)
-      local logPerRowNow   = logPerRowFor(frameNow.rpb)
+      local rpbNow         = currentRpb()
+      local logPerRowNow   = logPerRowFor(rpbNow)
       local cursorppq      = ec:row() * logPerRowNow
 
       local function commit(auditionPitch, auditionVel)
@@ -646,8 +606,8 @@ function newTrackerView(tm, cm, cmgr)
 
       local function snap(update)
         if not evt or evt.ppq == cursorppq then return update end
-        update.ppq   = cursorppq
-        update.frame = frameNow
+        update.ppq = cursorppq
+        update.rpb = rpbNow
         if evt.endppq then
           update.endppq = cursorppq + (evt.endppq - evt.ppq)
         end
@@ -691,7 +651,7 @@ function newTrackerView(tm, cm, cmgr)
           local new = {
             pitch = pitch, detune = detune,
             ppq = cursorppq,
-            chan = col.midiChan, frame = frameNow,
+            chan = col.midiChan, rpb = rpbNow,
           }
           placeNewNote(col, new)
           return commit(pitch, new.vel)
@@ -771,7 +731,7 @@ function newTrackerView(tm, cm, cmgr)
                 ppq = cursorppq,
                 chan = col.midiChan,
                 pitch = note.pitch, val = newVel(0),
-                frame = paFrame(note.frame, col.midiChan),
+                rpb = currentRpb(),
               })
               return commit()
             end
@@ -806,7 +766,7 @@ function newTrackerView(tm, cm, cmgr)
         if type == 'cc' then util.assign(update, { cc = col.cc }) end
         util.assign(update, {
           ppq = cursorppq,
-          chan = col.midiChan, frame = frameNow,
+          chan = col.midiChan, rpb = rpbNow,
         })
         tm:addEvent(type, update)
       end
@@ -847,8 +807,7 @@ function newTrackerView(tm, cm, cmgr)
     if next and newppq >= next.ppq then newppq = next.ppq - 1 end
     if prev and newppq <= prev.ppq then return end  -- gap < 2 ppq, nowhere to go
 
-    local f = frameAndLogPerRow(chan)
-    tm:assignEvent(col.type, evt, { val = toVal, ppq = newppq, frame = f })
+    tm:assignEvent(col.type, evt, { val = toVal, ppq = newppq, rpb = currentRpb() })
     tm:flush()
   end
 
@@ -859,12 +818,11 @@ function newTrackerView(tm, cm, cmgr)
     local chan = col.midiChan
     local prev = util.seek(col.events, 'before', ppq,
                            function(e) return not e.hidden end)
-    local f = frameAndLogPerRow(chan)
     local update = {
       val   = val,
       ppq   = ppq,
       chan  = chan,
-      frame = f,
+      rpb   = currentRpb(),
       shape = prev and prev.shape or nil,
     }
     if col.type == 'cc' then update.cc = col.cc end
@@ -1137,7 +1095,7 @@ function newTrackerView(tm, cm, cmgr)
         end
       end
 
-      local _, logPerRow = frameAndLogPerRow(chan)
+      local logPerRow = logPerRowFor(currentRpb())
       if not (note.parentUuid
               and tm:routeRelative(note, { ppqL = { 'add', newStart * logPerRow - note.ppq } })) then
         assignStamp('note', note, chan, newStart, newEnd)
@@ -1162,32 +1120,21 @@ function newTrackerView(tm, cm, cmgr)
       return groups
     end
 
-    --@map:contract events without evt.frame are skipped — there is no after-the-fact frame inference. Two passes (plan, then mutate) so frame reads stay stable across the batch. Plan ppq is clamped to take length to prevent REAPER auto-extending the source on MIDI_Sort
+    --@map:contract events without evt.rpb are skipped — they're authoring-stamped Continuum-side, not externally edited. Two passes (plan, then mutate) so reads stay stable across the batch. Plan ppq is clamped to take length to prevent REAPER auto-extending the source on MIDI_Sort. Reswing leaves rpb untouched: ppqL is the truth, raw is reproduced under the target swing.
     local function reswingCore(groups, opts)
       local plans = {}
       local notePlansByChan = {}
       for _, g in ipairs(groups) do
         local col, chan = g.col, g.col.midiChan
         for _, e in pairs(g.locs) do
-          if e.frame and (not opts.include or opts.include(e, chan)) then
-            local tgt   = opts.target(e.frame, chan)
+          if e.rpb and (not opts.include or opts.include(e, chan)) then
+            local tgt   = opts.target(chan)
             local entry = { col = col, e = e,
               newppq = math.min(length, util.round(tgt.fromLogical(chan, e.ppqL))) }
             if util.isNote(e) then
               entry.newEndppq = math.min(length, util.round(tgt.fromLogical(chan, e.endppqL)))
               notePlansByChan[chan] = notePlansByChan[chan] or {}
               util.add(notePlansByChan[chan], entry)
-            end
-            if opts.restamp then
-              entry.newFrame = opts.restamp(chan)
-              -- Frame change must drag ppqL/endppqL into the new rpb's
-              -- units (same authoring row, new logPerRow). No-op when rpbs
-              -- match — the common case.
-              local ratio = logPerRowFor(entry.newFrame.rpb) / logPerRowFor(e.frame.rpb)
-              if ratio ~= 1 then
-                entry.newPpqL = e.ppqL * ratio
-                if util.isNote(e) then entry.newEndppqL = e.endppqL * ratio end
-              end
             end
             util.add(plans, entry)
           end
@@ -1234,19 +1181,13 @@ function newTrackerView(tm, cm, cmgr)
       -- logical position, while p.newppq is raw under the target swing,
       -- so the diff check would skip every identity-target reswing.
       -- trustGeometry is reswing's transient seam: conformOverlaps nudges
-      -- raw mid-plan, and reswingPresetChange's per-frame target is not the
-      -- take's snap, so um cannot derive raw from u.ppqL alone. Phase 7
-      -- retires the frame, collapses reswingPresetChange into step 4.7's
-      -- mark-stale-and-rebuild, and the trust flag retires with it.
+      -- raw mid-plan, so um cannot derive raw from u.ppqL alone.
       local trust = { trustGeometry = true }
       for _, p in ipairs(plans) do
         local e, u = p.e, {}
         if p.newppq                                 then u.ppq     = p.newppq    end
         if p.newEndppq   ~= nil and util.isNote(e)  then u.endppq  = p.newEndppq end
         if p.newDelay    ~= nil                     then u.delay   = p.newDelay  end
-        if p.newFrame    ~= nil                     then u.frame   = p.newFrame  end
-        if p.newPpqL     ~= nil                     then u.ppqL    = p.newPpqL    end
-        if p.newEndppqL  ~= nil                     then u.endppqL = p.newEndppqL end
         if next(u) then tm:assignEvent(util.isNote(e) and 'note' or p.col.type, e, u, trust) end
       end
       tm:flush()
@@ -1260,10 +1201,7 @@ function newTrackerView(tm, cm, cmgr)
 
     local function reswingScope(groups)
       local curSnap = tm:swingSnapshot()
-      reswingCore(groups, {
-        target  = function() return curSnap end,
-        restamp = function(chan) return currentFrame(chan) end,
-      })
+      reswingCore(groups, { target = function() return curSnap end })
     end
 
     -- Plan-then-write so conformOverlaps can clip plan geometry against
@@ -1275,7 +1213,6 @@ function newTrackerView(tm, cm, cmgr)
       local plans = {}
       for _, g in ipairs(groups) do
         local col, chan = g.col, g.col.midiChan
-        local f, logPerRow = frameAndLogPerRow(chan)
         for _, e in pairs(g.locs) do
           local sRow   = ctx:ppqToRow(e.ppq, chan)
           local newRow = util.round(sRow)
@@ -1284,11 +1221,11 @@ function newTrackerView(tm, cm, cmgr)
             local newEndRow = newRow + util.round(ctx:ppqToRow(e.endppq, chan) - sRow)
             local newEndppq = ctx:rowToPPQ(newEndRow, chan)
             if newppq ~= e.ppq or newEndppq ~= e.endppq then
-              util.add(plans, { col = col, e = e, newFrame = f,
+              util.add(plans, { col = col, e = e,
                 newppq = newppq, newEndppq = newEndppq })
             end
           elseif newppq ~= e.ppq then
-            util.add(plans, { col = col, e = e, newFrame = f, newppq = newppq })
+            util.add(plans, { col = col, e = e, newppq = newppq })
           end
         end
       end
@@ -1304,12 +1241,11 @@ function newTrackerView(tm, cm, cmgr)
       local plans, clamped = {}, 0
       for _, g in ipairs(groups) do
         local col, chan = g.col, g.col.midiChan
-        local f, logPerRow = frameAndLogPerRow(chan)
         for _, e in pairs(g.locs) do
           local newRow = ctx:snapRow(e.ppq, chan)
           local newppq = ctx:rowToPPQ(newRow, chan)
           if newppq ~= e.ppq then
-            util.add(plans, { col = col, e = e, newFrame = f, newppq = newppq })
+            util.add(plans, { col = col, e = e, newppq = newppq })
           end
         end
       end
@@ -1349,9 +1285,8 @@ function newTrackerView(tm, cm, cmgr)
     -- shift only real events and leave fake pbs to tm's reconcile.
     local function notFake(e) return not e.fake end
 
-    local function shiftPlan(col, e, dLogical, f)
-      local entry = { col = col, e = e, newFrame = f,
-                      newppq = e.ppq + dLogical }
+    local function shiftPlan(col, e, dLogical)
+      local entry = { col = col, e = e, newppq = e.ppq + dLogical }
       if util.isNote(e) then
         entry.newEndppq = math.min(e.endppq + dLogical, length)
       end
@@ -1360,13 +1295,13 @@ function newTrackerView(tm, cm, cmgr)
 
     local function insertRowCore(col, topRow, numRows)
       local chan = col.midiChan
-      local f, logPerRow = frameAndLogPerRow(chan)
+      local logPerRow = logPerRowFor(currentRpb())
       local C        = ctx:rowToPPQ(topRow, chan)
       local dLogical = numRows * logPerRow
 
       local plans, deletes = {}, {}
       for e in util.between(col.events, C, length, notFake) do
-        local p = shiftPlan(col, e, dLogical, f)
+        local p = shiftPlan(col, e, dLogical)
         if p.newppq >= length then util.add(deletes, { col = col, evt = e })
         else                       util.add(plans, p) end
       end
@@ -1385,7 +1320,7 @@ function newTrackerView(tm, cm, cmgr)
 
     local function deleteRowCore(col, topRow, numRows)
       local chan = col.midiChan
-      local f, logPerRow = frameAndLogPerRow(chan)
+      local logPerRow = logPerRowFor(currentRpb())
       local C        = ctx:rowToPPQ(topRow, chan)
       local D        = ctx:rowToPPQ(topRow + numRows, chan)
       local dLogical = numRows * logPerRow
@@ -1404,7 +1339,7 @@ function newTrackerView(tm, cm, cmgr)
       local plans, deletes = {}, {}
       for e in util.between(col.events, C, length, notFake) do
         if e.ppq < D then util.add(deletes, { col = col, evt = e })
-        else              util.add(plans, shiftPlan(col, e, -dLogical, f)) end
+        else              util.add(plans, shiftPlan(col, e, -dLogical)) end
       end
 
       conformOverlaps(plans)
@@ -2049,9 +1984,8 @@ function newTrackerView(tm, cm, cmgr)
 
   clipboard = newClipboard {
     ec = ec, grid = grid, tm = tm, cm = cm,
-    currentFrame = currentFrame,
+    currentRpb   = currentRpb,
     assignTail   = assignTail,
-    paFrame      = paFrame,
     getCtx       = function() return ctx end,
     getLength    = function() return length end,
     getAliasMode = function() return vm.aliasMode end,

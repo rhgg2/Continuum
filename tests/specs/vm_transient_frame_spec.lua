@@ -1,6 +1,8 @@
--- Exercises the transient-tier frame override: matchGridToCursor toggles
--- swing/colSwing/rowPerBeat at cm's transient level; a real edit on any
--- of those keys at a persisted level releases the override.
+-- Exercises the transient-tier rpb override: matchGridToCursor toggles
+-- rowPerBeat at cm's transient level; a real edit on rowPerBeat at a
+-- persisted level releases the override. Post-7c, rpb is the sole
+-- FRAME_KEY — swing/colSwing are not per-event authoring stamps and
+-- so do not participate in the transient mechanism.
 
 local t = require('support')
 
@@ -8,13 +10,13 @@ local classic = { { atom = 'classic', shift = 0.08, period = 1 } }
 
 return {
   {
-    name = 'matchGridToCursor writes the cursor-note frame to the transient tier',
+    name = 'matchGridToCursor writes the cursor-note rpb to the transient tier',
     run = function(harness)
       local h = harness.mk{
         seed = {
           notes = {
             { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
-              frame = { swing = 'c58', colSwing = nil, rpb = 8 } },
+              rpb = 8 },
           },
         },
         config = {
@@ -28,20 +30,19 @@ return {
 
       h.cmgr:invoke('matchGridToCursor')
 
-      t.eq(h.cm:getAt('transient', 'swing'),      'c58', 'swing pushed to transient')
       t.eq(h.cm:getAt('transient', 'rowPerBeat'), 8,     'rowPerBeat pushed to transient')
       t.eq(h.cm:get('rowPerBeat'),                8,     'merged read sees transient rpb')
     end,
   },
 
   {
-    name = 'matchGridToCursor toggle-off clears the transient frame keys',
+    name = 'matchGridToCursor toggle-off clears the transient rpb',
     run = function(harness)
       local h = harness.mk{
         seed = {
           notes = {
             { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
-              frame = { swing = 'c58', colSwing = nil, rpb = 8 } },
+              rpb = 8 },
           },
         },
         config = {
@@ -56,15 +57,13 @@ return {
       t.eq(h.cm:getAt('transient', 'rowPerBeat'), 8, 'override active')
 
       h.cmgr:invoke('matchGridToCursor')
-      t.eq(h.cm:getAt('transient', 'swing'),      nil, 'swing cleared')
-      t.eq(h.cm:getAt('transient', 'colSwing'),   nil, 'colSwing cleared')
       t.eq(h.cm:getAt('transient', 'rowPerBeat'), nil, 'rowPerBeat cleared')
       t.eq(h.cm:get('rowPerBeat'),                4,   'merged read falls back to take')
     end,
   },
 
   {
-    name = 'a real edit on a frame key while transient is active releases it',
+    name = 'a real edit on rowPerBeat while transient is active releases it',
     run = function(harness)
       local h = harness.mk{
         config = {
@@ -72,15 +71,12 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      -- Pretend matchGridToCursor stamped this; we only care about the
-      -- callback contract, not the toggle path.
-      h.cm:assign('transient', { swing = 'c58', rowPerBeat = 8 })
+      h.cm:assign('transient', { rowPerBeat = 8 })
       t.eq(h.cm:get('rowPerBeat'), 8, 'transient is in effect')
 
       -- A user-side rpb change (vm:setRowPerBeat writes to 'track').
       h.cm:set('track', 'rowPerBeat', 16)
 
-      t.eq(h.cm:getAt('transient', 'swing'),      nil, 'transient swing dropped')
       t.eq(h.cm:getAt('transient', 'rowPerBeat'), nil, 'transient rpb dropped')
       t.eq(h.cm:get('rowPerBeat'),                16,  'user value visible')
     end,
@@ -99,7 +95,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.cm:assign('transient', { swing = 'c58', rowPerBeat = 8 })
+      h.cm:assign('transient', { rowPerBeat = 8 })
       -- Place cursor at row 4 (in rpb=8). Halving expected to land row 2.
       h.ec:setPos(4, 1, 1)
       t.eq(h.ec:row(), 4, 'cursor at row 4 under rpb=8')
@@ -120,12 +116,11 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.cm:assign('transient', { swing = 'c58', rowPerBeat = 8 })
+      h.cm:assign('transient', { rowPerBeat = 8 })
       -- A subsequent transient-level write must survive — only non-transient
       -- writes should release the override.
       h.cm:set('transient', 'rowPerBeat', 16)
       t.eq(h.cm:getAt('transient', 'rowPerBeat'), 16, 'transient write preserved')
-      t.eq(h.cm:getAt('transient', 'swing'),      'c58', 'transient swing preserved')
     end,
   },
 }

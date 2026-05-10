@@ -32,11 +32,11 @@ return {
             { ppq = 100, endppq = 300, ppqL = 100, endppqL = 300,
               chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0,
               lane = 1,
-              frame = { swing = nil, colSwing = nil, rpb = 4 } },
+              rpb = 4 },
             { ppq = 285, endppq = 500, ppqL = 285, endppqL = 500,
               chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0,
               lane = 1,
-              frame = { swing = nil, colSwing = nil, rpb = 4 } },
+              rpb = 4 },
           },
         },
         config = {

@@ -980,7 +980,7 @@ function newTrackerManager(mm, cm)
             seed.endppqL = seed.endppqL or seed.endppq
             seed.durL    = (seed.endppqL or 0) - (seed.ppqL or 0)
           end
-          local snap = tm:swingSnapshot(root.frame)
+          local snap = tm:swingSnapshot()
           local q    = {}
           for _, c in ipairs(root.aliases) do
             util.add(q, { spec = c, parent = seed, path = { c.id } })
@@ -1262,11 +1262,11 @@ function newTrackerManager(mm, cm)
     --                                  events under the same branch.
     -- Exempt:
     --   evt.fake — absorber pbs and synthesised PCs are derived.
-    --   evt.frame (only when not stale) — frame-bearing events are
-    --     authoring-truth-stamped: ppqL is the truth, raw is its
-    --     realisation under e.frame.swing. The rule should not rederive
-    --     ppqL from raw on cold load. Once a stale flag arrives — set by
-    --     the configChanged subscriber for active-take edits or by
+    --   evt.rpb (only when not stale) — rpb-stamped events are
+    --     Continuum-authored: ppqL is the truth, raw is its realisation
+    --     under cm's current swing. The rule must not rederive ppqL from
+    --     raw on cold load. Once a stale flag arrives — set by the
+    --     configChanged subscriber for active-take edits or by
     --     bindTake(opts.markSwingStale=true) for cross-take reswing —
     --     the stale-branch rebuilds raw from ppqL under cm's current
     --     snap, which is exactly what reswing wants.
@@ -1291,7 +1291,7 @@ function newTrackerManager(mm, cm)
       forEachEvent(function(evtType, evt, chan, isNote)
         if evt.fake then return end
         local stale = staleSwing[chan]
-        if evt.frame and not stale then return end
+        if evt.rpb and not stale then return end
         local d     = isNote and delayToPPQ(evt.delay or 0) or 0
         local update
         if stale and evt.ppqL ~= nil then
@@ -1428,20 +1428,18 @@ function newTrackerManager(mm, cm)
       for _, col in pairs(c.ccs) do projectToLogical(col) end
     end
 
-    -- Project the set of authoring swing names referenced by any event in
-    -- this take into take-tier cm. sequenceManager reads these via
-    -- cm:readTakeKey to drive cross-take reswing on swing-library edits.
-    -- Only string references count: anonymous composites are frozen at
-    -- authoring and can't go stale.
+    -- Project the set of swing-library names this take resolves to into
+    -- take-tier cm. sequenceManager reads these via cm:readTakeKey to drive
+    -- cross-take reswing on swing-library edits. Sourced from cm.swing +
+    -- cm.colSwing — string entries only; anonymous composites are frozen
+    -- at authoring and can't go stale.
     do
       local used = {}
-      forEachEvent(function(_, evt)
-        local f = evt.frame
-        if f then
-          if type(f.swing)    == 'string' then used[f.swing]    = true end
-          if type(f.colSwing) == 'string' then used[f.colSwing] = true end
-        end
-      end)
+      local g = cm:get('swing')
+      if type(g) == 'string' then used[g] = true end
+      for _, v in pairs(cm:get('colSwing') or {}) do
+        if type(v) == 'string' then used[v] = true end
+      end
       local prev = cm:get('usedSwings') or {}
       local same = true
       for k in pairs(used) do if not prev[k] then same = false; break end end
@@ -1651,13 +1649,10 @@ function newTrackerManager(mm, cm)
     end
   end
 
-  function tm:swingSnapshot(override)
+  function tm:swingSnapshot()
     local global, column = nil, {}
     if mm then
-      local gSrc, cSrc
-      if override then gSrc, cSrc = override.swing, override.colSwing
-      else             gSrc, cSrc = cm:get('swing'), cm:get('colSwing')
-      end
+      local gSrc, cSrc = cm:get('swing'), cm:get('colSwing')
       local length   = mm:length() or 0
       local ppqPerQN = mm:resolution()
       local function resolve(name)
@@ -1870,7 +1865,7 @@ function newTrackerManager(mm, cm)
 
   ----- Lifecycle
 
-  --@map:invariant usedSwings is an output of rebuild (computed from event frames), not an input; suppressed here to prevent the cm:set call inside rebuild from firing a redundant follow-up rebuild
+  --@map:invariant usedSwings is an output of rebuild (computed from cm.swing/cm.colSwing), not an input; suppressed here to prevent the cm:set call inside rebuild from firing a redundant follow-up rebuild
   local vmOnlyKeys = { mutedChannels = true, soloedChannels = true, usedSwings = true }
 
   --@map:invariant configChanged routes 'swing' to all 16 channels, 'colSwing' to channels whose entry differs vs prevColSwing, 'swings' to channels resolving to a name whose body differs vs prevSwings. The diff caches refresh after each handled event and on bindTake (which silently swaps cm's tier stack).

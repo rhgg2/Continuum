@@ -493,10 +493,10 @@ return {
         seed = { notes = {
           { ppq = 0,  endppq = 74,  chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0,
             ppqL = 0,  endppqL = 60,
-            frame = { swing = 'c58', colSwing = nil, rpb = 4 } },
+            rpb = 4 },
           { ppq = 74, endppq = 139, chan = 1, pitch = 64, vel = 80,  detune = 0, delay = 0,
             ppqL = 60, endppqL = 120,
-            frame = { swing = 'c58', colSwing = nil, rpb = 4 } },
+            rpb = 4 },
         } },
         config = {
           project = { swings = { c58 = classic58 } },
@@ -575,10 +575,10 @@ return {
         seed = { notes = {
           { ppq = 0,   endppq = 74,  chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0,
             ppqL = 0,   endppqL = 60,
-            frame = { swing = 'c58', colSwing = nil, rpb = 4 } },
+            rpb = 4 },
           { ppq = 139, endppq = 194, chan = 1, pitch = 62, vel = 80,  detune = 0, delay = 0,
             ppqL = 120, endppqL = 180,
-            frame = { swing = 'c58', colSwing = nil, rpb = 4 } },
+            rpb = 4 },
         } },
         config = {
           project = { swings = { c58 = classic58 } },

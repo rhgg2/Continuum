@@ -196,26 +196,25 @@ return {
     end,
   },
 
-  ----- Exempt events (frame-bearing without stale, fake)
+  ----- Exempt events (rpb-stamped without stale, fake)
 
   {
-    name = 'frame-bearing event without stale is exempt from the rule',
+    name = 'rpb-stamped event without stale is exempt from the rule',
     run = function(harness)
-      -- Frame is the authoring-truth marker: ppqL/endppqL are the truth,
-      -- raw is realisation under e.frame.swing. The rule must not
+      -- evt.rpb is the authoring-truth marker: ppqL/endppqL are the truth,
+      -- raw is realisation under cm's current swing. The rule must not
       -- rederive ppqL from raw on cold load — only the stale-branch
       -- (driven by configChanged or bindTake's markSwingStale) touches
-      -- frame-bearing events.
+      -- rpb-stamped events.
       local h = harness.mk{
         seed = { notes = {
           { ppq = 200, endppq = 320, chan = 1, pitch = 60, vel = 100,
-            ppqL = 999, endppqL = 1119,
-            frame = { swing = nil, colSwing = nil, rpb = 4 } },
+            ppqL = 999, endppqL = 1119, rpb = 4 },
         }},
       }
       local n = noteByPitch(h.fm:dump(), 60)
-      t.eq(n.ppqL,    999,  'ppqL untouched on frame-bearing event')
-      t.eq(n.endppqL, 1119, 'endppqL untouched on frame-bearing event')
+      t.eq(n.ppqL,    999,  'ppqL untouched on rpb-stamped event')
+      t.eq(n.endppqL, 1119, 'endppqL untouched on rpb-stamped event')
     end,
   },
 

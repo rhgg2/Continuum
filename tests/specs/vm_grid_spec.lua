@@ -295,18 +295,17 @@ return {
     name = 'Phase 6: ppqL-stamped notes are on-grid regardless of swing config',
     run = function(harness)
       local c58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
-      local nilFrame = { swing = nil, colSwing = nil, rpb = 4 }
       local h = harness.mk{
         seed = {
           notes = {
             { ppq = 0,   endppq = 60,  ppqL = 0,   endppqL = 60,
-              chan = 1, pitch = 60, vel = 100, frame = nilFrame },
+              chan = 1, pitch = 60, vel = 100, rpb = 4 },
             { ppq = 60,  endppq = 120, ppqL = 60,  endppqL = 120,
-              chan = 1, pitch = 62, vel = 100, frame = nilFrame },
+              chan = 1, pitch = 62, vel = 100, rpb = 4 },
             { ppq = 120, endppq = 180, ppqL = 120, endppqL = 180,
-              chan = 1, pitch = 64, vel = 100, frame = nilFrame },
+              chan = 1, pitch = 64, vel = 100, rpb = 4 },
             { ppq = 240, endppq = 300, ppqL = 240, endppqL = 300,
-              chan = 1, pitch = 67, vel = 100, frame = nilFrame },
+              chan = 1, pitch = 67, vel = 100, rpb = 4 },
           },
         },
         config = {
@@ -384,9 +383,7 @@ return {
         if c.msgType == 'pb' and c.ppq ~= 0 then fresh = c end
       end
       t.truthy(fresh,                'fresh pb landed in mm dump')
-      t.truthy(fresh.frame,          'fresh pb carries frame')
-      t.eq(fresh.frame.swing, 'c58', 'frame.swing matches cm')
-      t.eq(fresh.frame.rpb,   4,     'frame.rpb matches cm')
+      t.eq(fresh.rpb,         4,     'fresh pb carries rpb stamp')
       t.eq(fresh.ppqL, 120,   'ppqL pins authoring row 2 (60·2)')
     end,
   },

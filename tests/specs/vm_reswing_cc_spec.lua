@@ -1,6 +1,6 @@
--- Reswing under per-event frame metadata. Each CC/PB/AT/PC/PA carries
--- the frame it was authored in; reswing reads that frame directly,
--- rather than borrowing one from a lane-1 note nearby.
+-- Reswing under cm's current swing. Each CC/PB/AT/PC/PA carries an
+-- evt.rpb authoring marker; ppqL is the truth, raw is reproduced
+-- under cm.swing — no per-event swing stamp, no host-frame borrowing.
 
 local t = require('support')
 
@@ -24,7 +24,7 @@ return {
           ccs = {
             { ppq = 139, ppqL = 120,
               chan = 2, msgType = 'cc', cc = 1, val = 64,
-              frame = { swing = 'c58', colSwing = nil, rpb = 4 } },
+              rpb = 4 },
           },
         },
         config = {
@@ -42,9 +42,9 @@ return {
   },
 
   {
-    name = 'CC without a frame is skipped by reswing',
+    name = 'CC without an rpb stamp is skipped by reswing',
     run = function(harness)
-      -- No frame metadata → reswing has no auth to invert; leaves it alone.
+      -- No rpb stamp → reswing has no auth marker; leaves it alone.
       local h = harness.mk{
         seed = {
           ccs = {
@@ -65,14 +65,14 @@ return {
   },
 
   {
-    name = 'reswing restamps cc.frame to the current frame',
+    name = 'reswing leaves cc.rpb untouched and reseats raw under cm.swing',
     run = function(harness)
       local h = harness.mk{
         seed = {
           ccs = {
             { ppq = 139, ppqL = 120,
               chan = 2, msgType = 'cc', cc = 1, val = 64,
-              frame = { swing = 'c58', colSwing = nil, rpb = 4 } },
+              rpb = 4 },
           },
         },
         config = {
@@ -84,13 +84,12 @@ return {
       h.vm:reswingAll()
 
       local cc = findCC(h.fm:dump(), 'cc', 2)
-      t.eq(cc.frame.swing, 'c67', 'frame restamped to current swing')
-      t.eq(cc.frame.rpb,   4,     'frame restamped rpb')
+      t.eq(cc.rpb, 4, 'rpb preserved (reswing does not restamp)')
     end,
   },
 
   {
-    name = 'tm:addEvent does NOT auto-stamp frame (vm/ec own that responsibility)',
+    name = 'tm:addEvent does NOT auto-stamp rpb (vm/ec own that responsibility)',
     run = function(harness)
       local h = harness.mk{
         config = {
@@ -102,12 +101,12 @@ return {
       h.tm:flush()
       local cc = findCC(h.fm:dump(), 'cc', 3)
       t.truthy(cc, 'cc landed')
-      t.eq(cc.frame, nil, 'tm did not stamp frame — caller must do it')
+      t.eq(cc.rpb, nil, 'tm did not stamp rpb — caller must do it')
     end,
   },
 
   {
-    name = 'vm:editEvent on a cc column stamps the current frame',
+    name = 'vm:editEvent on a cc column stamps the current rpb',
     run = function(harness)
       local h = harness.mk{
         seed = {
@@ -141,24 +140,23 @@ return {
       for _, c in ipairs(h.fm:dump().ccs) do
         if c.msgType == 'cc' and c.cc == 11 and c.ppq ~= 0 then fresh = c end
       end
-      t.truthy(fresh and fresh.frame, 'authored cc carries a frame')
-      t.eq(fresh.frame.swing, 'c58', 'frame.swing matches cm')
-      t.eq(fresh.frame.rpb,   8,     'frame.rpb matches cm')
+      t.truthy(fresh, 'authored cc landed')
+      t.eq(fresh.rpb, 8, 'rpb stamped from take')
     end,
   },
 
   {
-    name = 'PB reswung twice: ppqL + frame survive the first pass',
+    name = 'PB reswung twice: ppqL + rpb survive the first pass',
     run = function(harness)
       -- assignPb's ppq-change path delete-and-re-adds the pb. If the new
-      -- pb doesn't inherit ppqL/frame, the *next* reswing reads
+      -- pb doesn't inherit ppqL/rpb, the *next* reswing reads
       -- ppqL=nil and tile() / round() blow up.
       local h = harness.mk{
         seed = {
           ccs = {
             { ppq = 139, ppqL = 120,
               chan = 2, msgType = 'pb', val = 0,
-              frame = { swing = 'c58', colSwing = nil, rpb = 4 } },
+              rpb = 4 },
           },
         },
         config = {
@@ -172,9 +170,9 @@ return {
 
       local pb = findCC(h.fm:dump(), 'pb', 2)
       t.truthy(pb, 'pb survives both reswings')
-      t.eq(pb.ppq, 120, 'pb at identity-frame intent ppq=120')
+      t.eq(pb.ppq, 120, 'pb at identity-target intent ppq=120')
       t.eq(pb.ppqL, 120, 'ppqL preserved across reswing')
-      t.truthy(pb.frame, 'frame preserved across reswing')
+      t.eq(pb.rpb, 4, 'rpb preserved across reswing')
     end,
   },
 
@@ -203,10 +201,10 @@ return {
           notes = {
             { ppq = 120, endppq = 150, ppqL = 120, endppqL = 150,
               chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0,
-              frame = { swing = nil, colSwing = nil, rpb = 4 } },
+              rpb = 4 },
             { ppq = 122, endppq = 240, ppqL = 180, endppqL = 240,
               chan = 1, pitch = 64, vel = 100, detune = 0, delay = -240,
-              frame = { swing = nil, colSwing = nil, rpb = 4 } },
+              rpb = 4 },
           },
         },
         config = {
@@ -229,13 +227,13 @@ return {
   },
 
   {
-    name = 'CC frame metadata surfaces on tm column events after rebuild',
+    name = 'CC rpb metadata surfaces on tm column events after rebuild',
     run = function(harness)
       local h = harness.mk{
         seed = {
           ccs = {
             { ppq = 60, chan = 1, msgType = 'cc', cc = 11, val = 50,
-              frame = { swing = 'c58', colSwing = nil, rpb = 4 } },
+              rpb = 4 },
           },
         },
         config = {
@@ -246,8 +244,8 @@ return {
       local ch  = h.tm:getChannel(1)
       local col = ch.columns.ccs[11]
       t.truthy(col and col.events[1], 'cc column event present')
-      t.eq(col.events[1].frame.swing, 'c58',
-           'cc.frame propagated from mm onto tm column event')
+      t.eq(col.events[1].rpb, 4,
+           'cc.rpb propagated from mm onto tm column event')
     end,
   },
 }
