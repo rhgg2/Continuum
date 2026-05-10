@@ -379,7 +379,8 @@ def lua_test_run(
             spec_path = PROJECT_ROOT / frame.group(1)
             line_no = int(frame.group(2))
             block.append(f"{frame.group(1)}:{line_no}")
-            block.append(_read_window(spec_path, line_no, context))
+            if context > 0:
+                block.append(_read_window(spec_path, line_no, context))
         # Condense: keep the err message and just the spec/support frames in the trace
         body_lines = f["body"].splitlines()
         kept: list[str] = []

@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1906  sha=0b072af
+@module trackerManager  src=trackerManager.lua  loc=1906  sha=1e008cc
 @deps util, midiManager, timing, aliases
 
 # Invariants & contracts (module)

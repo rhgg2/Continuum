@@ -618,25 +618,17 @@ function newClipboard(deps)
     local logPerRow = ctx:ppqPerRow()
     local aliased   = getAliasMode() and true or nil
 
-    -- ppqL is the exact authoring-frame coordinate; dividing it skips the
-    -- ppqToRow round-trip's float drift. Fall back to ctx:ppqToRow under the
-    -- swing inverse for events that lack a stamp (raw mm reads, pre-authoring).
-    local function rowOf(p, pL, chan)
-      return (pL and pL / logPerRow or ctx:ppqToRow(p, chan)) - r1
+    -- vm-surfaced ppq is logical above tm; row falls out by division.
+    local function rowOf(p)
+      return p / logPerRow - r1
     end
 
-    -- aliasSrc identifies the spec-tree anchor for an alias-mode paste,
-    -- and carries the source fields whose paste-time values can differ:
-    -- ppqL, endppqL (encoded as a durL delta), chan, lane. chan and lane
-    -- come from the source column, not the event — the projection in
-    -- trackerManager strips both off surfaced events because the column
-    -- denotes them.
-    local function aliasSrcOf(evt, chan, lane)
+    -- aliasSrc identifies the spec-tree anchor for an alias-mode paste.
+    -- Position is reconstructed at paste from row + cursor; chan and lane
+    -- come from the destination column. Only the spec identity and the
+    -- ancestor xform chain need to ride through.
+    local function aliasSrcOf(evt)
       if not aliased then return nil end
-      -- For materialised children, snapshot the chain of *ancestor*
-      -- xforms — fingerprint against which paste-time resolveAliasSrc
-      -- detects spec-tree edits. Subtree paste is deliberately not
-      -- supported; copying a family is the way to clone descendants.
       local chain
       if evt.parentUuid and evt.specPath then
         local snap = tm:aliasSrcSnapshot(evt.parentUuid, evt.specPath)
@@ -645,10 +637,6 @@ function newClipboard(deps)
       return {
         uuid     = evt.parentUuid or evt.uuid,
         specPath = evt.specPath,
-        ppqL     = evt.ppqL,
-        endppqL  = evt.endppqL,
-        chan     = chan,
-        lane     = lane,
         chain    = chain,
       }
     end
@@ -656,27 +644,27 @@ function newClipboard(deps)
     -- Source duration is structural: endRow always reflects evt.endppq,
     -- regardless of where selection bounds fall. The paste site clips
     -- the materialised note against the next same-column event.
-    local function noteEvent(evt, chan, lane)
+    local function noteEvent(evt)
       local ce = util.clone(evt, CLIP_RESERVED)
-      ce.row = rowOf(evt.ppq, evt.ppqL, chan)
+      ce.row = rowOf(evt.ppq)
       if util.isNote(evt) then
-        ce.endRow = rowOf(evt.endppq, evt.endppqL, chan)
+        ce.endRow = rowOf(evt.endppq)
       end
-      ce.aliasSrc = aliasSrcOf(evt, chan, lane)
+      ce.aliasSrc = aliasSrcOf(evt)
       return ce
     end
 
-    local function scalarEvent(evt, chan)
+    local function scalarEvent(evt)
       local ce = util.clone(evt, CLIP_RESERVED)
-      ce.row = rowOf(evt.ppq, evt.ppqL, chan)
-      ce.aliasSrc = aliasSrcOf(evt, chan, nil)
+      ce.row = rowOf(evt.ppq)
+      ce.aliasSrc = aliasSrcOf(evt)
       return ce
     end
 
     -- Scalar abstraction over a note: only `val` carries. A clone would
     -- land the source note's pitch/detune onto a CC paste as bogus metadata.
-    local function velEvent(evt, chan)
-      return { row = rowOf(evt.ppq, evt.ppqL, chan), val = evt.vel }
+    local function velEvent(evt)
+      return { row = rowOf(evt.ppq), val = evt.vel }
     end
 
     -- Single-column mode
@@ -687,15 +675,14 @@ function newClipboard(deps)
 
       local clipType, events = nil, {}
       local emit
-      local chan, lane = col.midiChan, col.lane
       if col.type == 'note' and part1 == 'pitch' then
-        clipType, emit = 'note', function(e) return noteEvent(e, chan, lane) end
+        clipType, emit = 'note', noteEvent
       elseif col.type == 'note' and part1 == 'vel' then
-        clipType, emit = '7bit', function(e) return velEvent(e, chan) end
+        clipType, emit = '7bit', velEvent
       elseif col.type == 'pb' then
-        clipType, emit = 'pb',   function(e) return scalarEvent(e, chan) end
+        clipType, emit = 'pb',   scalarEvent
       else
-        clipType, emit = '7bit', function(e) return scalarEvent(e, chan) end
+        clipType, emit = '7bit', scalarEvent
       end
       for evt in util.between(col.events, startppq, endppq) do
         util.add(events, emit(evt))
@@ -727,13 +714,12 @@ function newClipboard(deps)
         entry.key = col.cc
       end
 
-      local chan, lane = col.midiChan, col.lane
-      local startppq, endppq = ctx:rowToPPQ(r1, chan), ctx:rowToPPQ(r2 + 1, chan)
+      local startppq, endppq = ctx:rowToPPQ(r1, col.midiChan), ctx:rowToPPQ(r2 + 1, col.midiChan)
       for evt in util.between(col.events, startppq, endppq) do
         if col.type == 'note' then
-          util.add(entry.events, noteEvent(evt, chan, lane))
+          util.add(entry.events, noteEvent(evt))
         else
-          util.add(entry.events, scalarEvent(evt, chan))
+          util.add(entry.events, scalarEvent(evt))
         end
       end
       util.add(cols, entry)
@@ -777,7 +763,7 @@ function newClipboard(deps)
         if note and note.endppq > ce.ppq
           and note.ppq ~= ce.ppq then
           tm:addEvent('pa', {
-            ppq = ce.ppq, ppqL = ce.ppqL,
+            ppq = ce.ppq,
             chan = dstCol.midiChan,
             pitch = note.pitch, val = util.clamp(ce.val, 1, 127),
             frame = paFrame(note.frame, dstCol.midiChan),
@@ -825,9 +811,12 @@ function newClipboard(deps)
       tm:addEvent(evtType, e); return { kind='plain', evt=e }
     end
     local liveSrc = r.resolved
+    -- alias xform vocabulary is tm-internal (ppqL/durL); translate from
+    -- the logical-frame surface here at the boundary.
     local dst = util.clone(e)
-    if evtType == 'note' and e.endppqL and e.ppqL then
-      dst.durL = e.endppqL - e.ppqL
+    dst.ppqL = e.ppq
+    if evtType == 'note' then
+      dst.durL = e.endppq - e.ppq
     end
     -- durL is omitted from the corrective-delta vocabulary: alias
     -- duration is structural (it follows the parent), and fit-clipping
@@ -894,16 +883,15 @@ function newClipboard(deps)
     local logPerRow = ctx:ppqPerRow()
     local capRow = r + clip.numRows  -- logical row of endppq
 
-    -- ppqL rides alongside ppq for authoring-row identity; clone carries payload, identity overlaid below.
+    -- vm/ec author in the logical frame; um stamps ppqL on the way to mm.
     local events = {}
     for _, ce in ipairs(clip.events) do
-      local ppq = ctx:rowToPPQ(r + ce.row, chan)
-      if ppq >= endppq then goto nextCe end
+      local ppq = (r + ce.row) * logPerRow
+      if ctx:rowToPPQ(r + ce.row, chan) >= endppq then goto nextCe end
       local e = util.clone(ce, CLIP_ARTIFACTS)
-      e.ppq, e.ppqL = ppq, (r + ce.row) * logPerRow
+      e.ppq = ppq
       if ce.endRow then
-        e.endppq  = ctx:rowToPPQ(r + ce.endRow, chan)
-        e.endppqL = (r + ce.endRow) * logPerRow
+        e.endppq = (r + ce.endRow) * logPerRow
       end
       util.add(events, e)
       ::nextCe::
@@ -922,17 +910,14 @@ function newClipboard(deps)
 
       local lastNote = util.seek(dstCol.events, 'before', startppq, util.isNote)
       local nextNote = util.seek(dstCol.events, 'at-or-after', endppq, util.isNote)
-      local nextNotePpq  = nextNote and nextNote.ppq or getLength()
-      local nextNotePpqL = nextNote
-        and (nextNote.ppqL or ctx:ppqToRow(nextNote.ppq, chan) * logPerRow)
-        or getLength()
+      local nextNotePpq = nextNote and nextNote.ppq or getLength()
       local lane = dstCol.lane
 
       -- Delete in-region events directly: queueDeleteNotes' survivor-extension
       -- fixup is for leaving a hole, but we're filling it. An extended lastNote
       -- would overlap the new notes and force the allocator to spill on rebuild.
       if lastNote and events[1] and lastNote.endppq > events[1].ppq then
-        assignTail(lastNote, dstCol.midiChan, events[1].ppq, events[1].ppqL)
+        assignTail(lastNote, dstCol.midiChan, events[1].ppq)
       end
       for evt in util.between(dstCol.events, startppq, endppq) do
         tm:deleteEvent(evt.type == 'pa' and 'pa' or 'note', evt)
@@ -945,8 +930,7 @@ function newClipboard(deps)
           currentVel = util.clamp(velList[vi].val, 1, 127)
           vi = vi + 1
         end
-        e.endppq  = math.min(e.endppq,  nextNotePpq)
-        e.endppqL = math.min(e.endppqL, nextNotePpqL)
+        e.endppq = math.min(e.endppq, nextNotePpq)
         e.chan, e.vel, e.lane, e.frame = dstCol.midiChan, currentVel, lane, frame
         writer('note', e)
       end
@@ -1039,13 +1023,12 @@ function newClipboard(deps)
       -- Materialise as in pasteSingle; identity overlaid in the write loop below.
       local events = {}
       for _, ce in ipairs(clipCol.events) do
-        local ppq = ctx:rowToPPQ(cRow + ce.row, r.chan)
-        if ppq < endppq then
+        local ppq = (cRow + ce.row) * logPerRow
+        if ctx:rowToPPQ(cRow + ce.row, r.chan) < endppq then
           local e = util.clone(ce, CLIP_ARTIFACTS)
-          e.ppq, e.ppqL = ppq, (cRow + ce.row) * logPerRow
+          e.ppq = ppq
           if ce.endRow then
-            e.endppq  = ctx:rowToPPQ(cRow + ce.endRow, r.chan)
-            e.endppqL = (cRow + ce.endRow) * logPerRow
+            e.endppq = (cRow + ce.endRow) * logPerRow
           end
           util.add(events, e)
         end
@@ -1061,7 +1044,7 @@ function newClipboard(deps)
         if r.type == 'note' then
           local last = util.seek(dst.events, 'before', startppq, util.isNote)
           if last and events[1] and last.endppq > events[1].ppq then
-            assignTail(last, r.chan, events[1].ppq, events[1].ppqL)
+            assignTail(last, r.chan, events[1].ppq)
           end
           for evt in util.between(dst.events, startppq, endppq, util.isNote) do
             tm:deleteEvent('note', evt)
@@ -1076,15 +1059,10 @@ function newClipboard(deps)
       -- Fit-clip pasted notes against the next same-column event in the
       -- destination. Source duration is preserved unless something stands
       -- in the way; nothing → take length is the upper bound.
-      local capPPQ, capppqL
+      local capPPQ
       if r.type == 'note' and dst then
         local nn = util.seek(dst.events, 'at-or-after', endppq, util.isNote)
-        if nn then
-          capPPQ  = nn.ppq
-          capppqL = nn.ppqL or ctx:ppqToRow(nn.ppq, r.chan) * logPerRow
-        else
-          capPPQ, capppqL = getLength(), getLength()
-        end
+        capPPQ = nn and nn.ppq or getLength()
       end
 
       -- Overlay destination identity onto the materialised clones.
@@ -1092,9 +1070,8 @@ function newClipboard(deps)
       for _, e in ipairs(events) do
         e.chan, e.frame = r.chan, frame
         if r.type == 'note' then
-          e.endppq  = math.min(e.endppq,  capPPQ)
-          e.endppqL = math.min(e.endppqL, capppqL)
-          e.lane    = r.lane
+          e.endppq = math.min(e.endppq, capPPQ)
+          e.lane   = r.lane
         elseif r.type == 'cc' then
           e.cc = r.ccNum
         end
