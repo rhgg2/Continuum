@@ -1,4 +1,4 @@
-@module sampleManager  src=sampleManager.lua  loc=428  sha=eb14c68
+@module sampleManager  src=sampleManager.lua  loc=428  sha=2973124
 @deps util, fs
 
 # Invariants & contracts (module)
@@ -18,85 +18,85 @@
   @shape  mailboxHeader  = [seq, seq_ack, slot, op, start, end, pathLen, nameLen, <pathBytes...>, <nameBytes...>]   -- gmem words at SLOT_BASE+id*SLOT_STRIDE
 
 # Module-level constants
-  @const SAMPLER_FX = 'Continuum Sampler'
-  @const GMEM_NS = 'Continuum_sampler'
-  @const MAGIC = 1717658484
-  @const MAX_INSTANCES = 128
-  @const N_SAMPLES = 64
-  @const PATH_MAX = 1019
-  @const NAME_MAX = 64
-  @const SLOT_STRIDE = 8 + PATH_MAX + NAME_MAX
-  @const PREVIEW_BASE = 1024
-  @const SLOT_BASE = 561152
-  @const BOOT_BASE = SLOT_BASE + MAX_INSTANCES * SLOT_STRIDE
-  @const PREVIEW_SLOT_IDX = N_SAMPLES
-  @const SLIDER_INSTANCE_ID = 1
-  @const PEXT_KEY = 'P_EXT:samplerInstanceId'
+  @const SAMPLER_FX = 'Continuum Sampler'  @ 21
+  @const GMEM_NS = 'Continuum_sampler'  @ 22
+  @const MAGIC = 1717658484  @ 23
+  @const MAX_INSTANCES = 128  @ 24
+  @const N_SAMPLES = 64  @ 25
+  @const PATH_MAX = 1019  @ 27
+  @const NAME_MAX = 64  @ 28
+  @const SLOT_STRIDE = 8 + PATH_MAX + NAME_MAX  @ 29
+  @const PREVIEW_BASE = 1024  @ 31
+  @const SLOT_BASE = 561152  @ 34
+  @const BOOT_BASE = SLOT_BASE + MAX_INSTANCES * SLOT_STRIDE  @ 35
+  @const PREVIEW_SLOT_IDX = N_SAMPLES  @ 37
+  @const SLIDER_INSTANCE_ID = 1  @ 38
+  @const PEXT_KEY = 'P_EXT:samplerInstanceId'  @ 39
 
 # Module-level functions (private)
-  @fn writePath(base, path)
+  @fn writePath(base, path)  @ 42
       @map:contract  writePath emits NUL-terminated bytes; caller must ensure base+#path is within the addressable string region
-  @fn findSamplerFx(track)
-  @fn readInstanceId(track)
+  @fn findSamplerFx(track)  @ 47
+  @fn readInstanceId(track)  @ 56
       @map:contract  readInstanceId validates the P_EXT value into [0, MAX_INSTANCES); returns nil for missing/out-of-range/non-numeric
-  @fn gatherTakenIds(skipTrack)
+  @fn gatherTakenIds(skipTrack)  @ 64
       @map:contract  gatherTakenIds skips skipTrack so a re-assignment of the same track doesn't see its own id as taken
-  @fn nextFreeId(taken)
+  @fn nextFreeId(taken)  @ 76
 
-@factory newSampleManager(fileOps)
+@factory newSampleManager(fileOps)  @ 83
 
   # Private state
-    @state sm = {}
-    @state trackStates = {}
-    @state currentPrefix = nil
+    @state sm = {}  @ 84
+    @state trackStates = {}  @ 86
+    @state currentPrefix = nil  @ 87
 
   # Private functions
-    @fn absFor(rel)
-    @fn ensureTrackState(track)
-    @fn relForSrc(srcBase, hash)
-    @fn setEntry(cm, idx, fields)
-    @fn clearEntry(cm, idx)
-    @fn pushSlot(state, slot, opts)
+    @fn absFor(rel)  @ 89
+    @fn ensureTrackState(track)  @ 94
+    @fn relForSrc(srcBase, hash)  @ 105
+    @fn setEntry(cm, idx, fields)  @ 113
+    @fn clearEntry(cm, idx)  @ 120
+    @fn pushSlot(state, slot, opts)  @ 128
         @map:contract  pushSlot merges into the existing pendingEntry for slot; op=1 (clear) wipes path/name/start/end; op=0 only overrides explicitly-passed fields
         @map:contract  byOrder records first-seen slot only (no duplicate enqueue); merges into the existing bySlot entry to preserve drain ordering
-    @fn drain(state)
+    @fn drain(state)  @ 153
         @map:contract  drain writes header words in order [slot, op, start, end, pathLen, nameLen, body...] then bumps seq last so JSFX only fires once the body is in
         @map:contract  drain gates on seq == seq_ack at addr/addr+1 — JSFX must have consumed the prior write before the next one can land
         @map:contract  drain is no-op while instanceId is nil (track lacks the FX) or queue is empty
 
   # Public API
-    @api sm:isLive(track)
-    @api sm:getInstanceId(track)
-    @api sm:rehydrateTrack(track, cm)
-    @api sm:syncSlot(track, slot, cm)
-    @api sm:tick(cm)
+    @api sm:isLive(track)  @ 185
+    @api sm:getInstanceId(track)  @ 189
+    @api sm:rehydrateTrack(track, cm)  @ 202
+    @api sm:syncSlot(track, slot, cm)  @ 218
+    @api sm:tick(cm)  @ 236
         @map:contract  tick is the only caller of gmem_attach for the bundled mailbox path; coordinator must invoke per frame
         @map:contract  tick reaps trackStates entries for tracks whose sampler FX has been removed (else closed-over state leaks)
         @map:contract  first-sight FX-GUID binding does NOT reset state (lastBootToken=0 still triggers rehydrate via the boot-token branch)
     -- cm-authoritative slot operations
-    @api sm:assign(track, idx, srcPath, projectPath, cm)
+    @api sm:assign(track, idx, srcPath, projectPath, cm)  @ 270
         @map:contract  assign hashes srcPath, copies into projectPath/Continuum/<stem>-<hash>.<ext> if missing, writes cm rel path, queues mailbox push; returns false if hash or copy fails
-    @api sm:loadSlot(track, slot, relPath)
-    @api sm:clearSlot(track, slot, cm)
-    @api sm:setTrim(track, slot, startFrames, endFrames, cm)
+    @api sm:loadSlot(track, slot, relPath)  @ 292
+    @api sm:clearSlot(track, slot, cm)  @ 299
+    @api sm:setTrim(track, slot, startFrames, endFrames, cm)  @ 306
         @map:contract  setTrim sends start/end without path/name; pathLen=0/nameLen=0 in the wire payload means "leave alone" on the JSFX side
-    @api sm:setName(track, slot, name, cm)
-    @api sm:stageInto(track, idx, srcPath, projectPath)
+    @api sm:setName(track, slot, name, cm)  @ 314
+    @api sm:stageInto(track, idx, srcPath, projectPath)  @ 320
     -- Preview + prefix
-    @api sm:setPrefix(prefix)
-    @api sm:previewSlot(track, slot, bounds)
+    @api sm:setPrefix(prefix)  @ 333
+    @api sm:previewSlot(track, slot, bounds)  @ 340
         @map:contract  preview writes are silently dropped if the magic word at PREVIEW_BASE is non-zero (JSFX hasn't consumed the prior preview command)
         @map:contract  preview header order: payload words first, magic last — JSFX dispatches on the MAGIC write
-    @api sm:stopPreview(track)
+    @api sm:stopPreview(track)  @ 352
         @map:contract  stopPreview encodes "stop" as slot=-1 in the same preview mailbox; same magic-gate as previewSlot
-    @api sm:previewPath(track, path)
+    @api sm:previewPath(track, path)  @ 363
         @map:contract  previewPath uses the dedicated PREVIEW_SLOT_IDX (=N_SAMPLES) so the JSFX side knows to load from the inline path bytes rather than a slot
     -- Track surface
-    @api sm:listTracks()
-    @api sm:probeMode(take, cm)
+    @api sm:listTracks()  @ 377
+    @api sm:probeMode(take, cm)  @ 393
         @map:contract  probeMode flips cm.trackerMode (transient tier) based on whether the take's track has the sampler FX
         @map:contract  probeMode forces I_PERFFLAGS bit 1 (anticipative FX off) on sampler tracks for tighter timing
-    @api sm:migrate(projectPath, oldProjectPath, cm)
+    @api sm:migrate(projectPath, oldProjectPath, cm)  @ 410
         @map:contract  migrate moves files when the project root changes; cm rel paths are preserved so no cm rewrite is needed
         @map:contract  migrate is a no-op if oldProjectPath is missing or unchanged
 

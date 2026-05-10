@@ -287,20 +287,18 @@ return {
   },
 
   {
-    -- Bug 1: notes added with swing off then swing-on must surface as
-    -- off-grid — their realised ppq sits at the logical-grid position,
-    -- which under the new swing no longer lands on rowToPPQ_c(N).
-    name = 'swing change: notes authored under swing-off are off-grid under a non-trivial swing',
+    -- Phase 6: column-event ppq is the logical position, so any note with
+    -- a ppqL stamp is on-grid by construction — swing config no longer
+    -- shifts the displayed grid. Off-grid surfaces only when ppqL is
+    -- absent and raw fails to round-trip exactly through the rule's
+    -- swing-inverse (e.g. legacy takes mid-import).
+    name = 'Phase 6: ppqL-stamped notes are on-grid regardless of swing config',
     run = function(harness)
-      -- Seed each note as the user would have authored it with swing off:
-      -- frame.swing = nil, ppqL pins the row. Under c58 the realised
-      -- ppq remains at the unswung position, no longer on the swung grid.
       local c58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
       local nilFrame = { swing = nil, colSwing = nil, rpb = 4 }
       local h = harness.mk{
         seed = {
           notes = {
-            -- ppqPerRow = 60 at rpb=4. Rows 0, 1, 2, 4 placed with no swing.
             { ppq = 0,   endppq = 60,  ppqL = 0,   endppqL = 60,
               chan = 1, pitch = 60, vel = 100, frame = nilFrame },
             { ppq = 60,  endppq = 120, ppqL = 60,  endppqL = 120,
@@ -317,16 +315,10 @@ return {
         },
       }
       local col = h.vm.grid.cols[1]
-      -- Period boundaries (rows 0, 4) are fixed points of c58 → on-grid.
-      t.truthy(col.cells[0], 'row 0 cell present')
-      t.eq(col.offGrid[0], nil, 'row 0 (period boundary) on-grid')
-      t.truthy(col.cells[4], 'row 4 cell present')
-      t.eq(col.offGrid[4], nil, 'row 4 (period boundary) on-grid')
-      -- Off-fixed-point rows: realised ppq doesn't sit on the new grid.
-      t.truthy(col.cells[1], 'row 1 cell present')
-      t.truthy(col.offGrid[1], 'row 1 flagged off-grid under c58')
-      t.truthy(col.cells[2], 'row 2 cell present')
-      t.truthy(col.offGrid[2], 'row 2 flagged off-grid under c58')
+      for _, r in ipairs{ 0, 1, 2, 4 } do
+        t.truthy(col.cells[r],     'row ' .. r .. ' cell present')
+        t.eq(col.offGrid[r], nil,  'row ' .. r .. ' on-grid (logical projection)')
+      end
     end,
   },
 

@@ -428,16 +428,16 @@ def emit(cm: MapFile) -> str:
         add("# Module-level constants")
         for d in cm.module_consts:
             if d.init.startswith('--'):
-                add(f"  @const {d.name}   {d.init}")
+                add(f"  @const {d.name}  @ {d.line}   {d.init}")
             else:
-                add(f"  @const {d.name} = {d.init}")
+                add(f"  @const {d.name} = {d.init}  @ {d.line}")
             emit_annotations(out, d.annotations, '      ')
         add('')
 
     if cm.module_fns:
         add("# Module-level functions (private)")
         for f in cm.module_fns:
-            line = f"  @fn {f.name}{fmt_args(f.args)}"
+            line = f"  @fn {f.name}{fmt_args(f.args)}  @ {f.line}"
             if f.doc:
                 line += f"   -- {' '.join(f.doc)[:80]}"
             add(line)
@@ -457,7 +457,7 @@ def emit(cm: MapFile) -> str:
         add(f"# Public API ({owner_label}.*)")
         for f in cm.module_api:
             owner = alias_target if (f.owner == 'M' and alias_target) else f.owner
-            line = f"  @api {owner}.{f.name}{fmt_args(f.args)}"
+            line = f"  @api {owner}.{f.name}{fmt_args(f.args)}  @ {f.line}"
             add(line)
             if f.doc:
                 for d in f.doc:
@@ -478,7 +478,7 @@ def emit(cm: MapFile) -> str:
         fac_reaper  = [n for n in cm.reaper_calls
                        if any(in_fac(L) for L in cm.reaper_lines.get(n, []))]
 
-        add(f"@factory {fac.name}{fmt_args(fac.args)}")
+        add(f"@factory {fac.name}{fmt_args(fac.args)}  @ {fac.line}")
         if fac.doc:
             for d in fac.doc:
                 add(f"  -- {d}")
@@ -499,6 +499,7 @@ def emit(cm: MapFile) -> str:
                 head = f"    @state {d.name}"
                 if d.init:
                     head += f" = {d.init}"
+                head += f"  @ {d.line}"
                 if d.inline_doc:
                     head += f"   -- {d.inline_doc}"
                 add(head)
@@ -508,7 +509,7 @@ def emit(cm: MapFile) -> str:
             add("")
             add("  # Private functions")
             for f in fac_pfns:
-                line = f"    @fn {f.name}{fmt_args(f.args)}"
+                line = f"    @fn {f.name}{fmt_args(f.args)}  @ {f.line}"
                 if f.doc:
                     line += f"   -- {' '.join(f.doc)[:90]}"
                 add(line)
@@ -544,7 +545,7 @@ def emit(cm: MapFile) -> str:
                 for sec in pre:
                     if sec[2] not in ('PRIVATE', 'PUBLIC', 'Utils'):
                         add(f"    -- {sec[2]}")
-                add(f"    @api {m.owner}:{m.name}{fmt_args(m.args)}")
+                add(f"    @api {m.owner}:{m.name}{fmt_args(m.args)}  @ {m.line}")
                 if m.doc:
                     for d in m.doc:
                         add(f"        -- {d}")

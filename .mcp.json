@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "readium": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--quiet",
+        "--script",
+        ".claude/mcp/server.py"
+      ]
+    }
+  }
+}

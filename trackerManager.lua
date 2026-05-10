@@ -618,17 +618,35 @@ function newTrackerManager(mm, cm)
     local function realiseNoteUpdate(evt, update)
       local dOld = delayToPPQ(evt.delay)
       local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
-      if update.ppq == nil and dNew == dOld and update.ppqL == nil then return end
+      if update.ppq == nil and dNew == dOld
+         and update.ppqL == nil and update.endppqL == nil then return end
+      local snap
+      local function getSnap()
+        snap = snap or tm:swingSnapshot(); return snap
+      end
       if update.ppqL ~= nil then
-        local snap = tm:swingSnapshot()
-        update.ppq = util.round(snap.fromLogical(evt.chan, update.ppqL)) + dNew
+        update.ppq = util.round(getSnap().fromLogical(evt.chan, update.ppqL)) + dNew
       elseif update.ppq ~= nil then
         update.ppq = update.ppq + dNew
       elseif evt.ppqL ~= nil then
-        local snap = tm:swingSnapshot()
-        update.ppq = util.round(snap.fromLogical(evt.chan, evt.ppqL)) + dNew
+        update.ppq = util.round(getSnap().fromLogical(evt.chan, evt.ppqL)) + dNew
       else
         update.ppq = evt.ppq + (dNew - dOld)
+      end
+      if update.endppqL ~= nil then
+        update.endppq = util.round(getSnap().fromLogical(evt.chan, update.endppqL))
+      end
+    end
+
+    -- Non-note CC/PB writes arrive in logical units (update.ppq is the
+    -- logical position, mirroring update.ppqL). Translate to raw before
+    -- handing off to assignPb/assignLowlevel, which speak mm-side raw.
+    -- trustGeometry skips translation — those callers already speak raw
+    -- and explicitly opt into bypassing the boundary.
+    local function realiseNonNoteUpdate(chan, update, opts)
+      if opts and opts.trustGeometry then return end
+      if update.ppqL ~= nil and chan then
+        update.ppq = util.round(tm:swingSnapshot().fromLogical(chan, update.ppqL))
       end
     end
 
@@ -655,8 +673,12 @@ function newTrackerManager(mm, cm)
           assignNote(evt, update)
         end
       elseif evtType == 'pb' then
-        if evt then assignPb(evt, update) end
+        if evt then
+          realiseNonNoteUpdate(evt.chan, update, opts)
+          assignPb(evt, update)
+        end
       else
+        realiseNonNoteUpdate(evt and evt.chan, update, opts)
         assignLowlevel(evtType, evt or { loc = loc }, update)
       end
     end
@@ -679,8 +701,14 @@ function newTrackerManager(mm, cm)
         if clampedL then evt.endppqL = clampedL end
         addNote(evt)
       elseif evtType == 'pb' then
+        if evt.ppqL ~= nil and evt.chan then
+          evt.ppq = util.round(tm:swingSnapshot().fromLogical(evt.chan, evt.ppqL))
+        end
         addPb(evt)
       else
+        if evt.ppqL ~= nil and evt.chan then
+          evt.ppq = util.round(tm:swingSnapshot().fromLogical(evt.chan, evt.ppqL))
+        end
         addLowlevel(evtType, evt)
       end
     end
@@ -1089,15 +1117,18 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- 2) Allocate note columns.
+    -- 2) Allocate note columns. Clones rather than aliasing the mm-note
+    -- table: column events diverge from mm in the projection step (5),
+    -- which writes the logical position into evt.ppq while mm keeps raw.
     for loc, note in mm:notes() do
       local channel = channels[note.chan]
       local col, lane = allocateNoteColumn(channel, note)
       if note.lane ~= lane then
         mm:assignNote(loc, { lane = lane })
       end
-      util.assign(note, { loc = loc, chan = util.REMOVE, lane = util.REMOVE })
-      util.add(col.events, note)
+      local ce = util.clone(note, { chan = true, lane = true })
+      ce.loc = loc
+      util.add(col.events, ce)
     end
 
     -- 3) Single CC walk.
@@ -1110,17 +1141,19 @@ function newTrackerManager(mm, cm)
           local col1       = channel.columns.notes[1]
           local prevailing = col1 and util.seek(col1.events, 'at-or-before', cc.ppq) or nil
           local detune     = (prevailing and prevailing.detune) or 0
-          local hostNote   = (cc.fake and prevailing and prevailing.ppq == cc.ppq) and prevailing or nil
           local hidden     = cc.fake and (cc.shape == nil or cc.shape == 'step')
 
           local pb = pbByChan[cc.chan] or { events = {}, anyVisible = false }
           pbByChan[cc.chan] = pb
           pb.anyVisible = pb.anyVisible or not hidden
+          -- Absorbers (cc.fake) carry no delay: they sit at host's raw in
+          -- mm and don't traverse the intent frame. The pb column then
+          -- holds them at host raw while non-fake pbs project at intent
+          -- after tidyCol — Phase 6 collapses the difference.
           util.add(pb.events, projectCC(cc, loc, {
             val    = util.round(rawToCents(cc.val) - detune),
             detune = detune,
             hidden = hidden,
-            delay  = hostNote and hostNote.delay or nil,
           }))
 
         elseif cc.msgType == 'pa' then
@@ -1222,6 +1255,20 @@ function newTrackerManager(mm, cm)
     --   evt.frame — pre-Phase-7, frame-bearing events have their own reswing
     --     pathway via vm:reswingAll, which reads the authoring frame; the
     --     two-frame rule applies only to events without authoring metadata.
+    --
+    -- Snapshot lane-1 note ppqs before the rule runs so step 4.8 can
+    -- reseat absorbers whose host moved.
+    local laneOnePreRule = {}
+    for chan = 1, 16 do
+      local col1 = channels[chan].columns.notes[1]
+      if col1 then
+        local list = {}
+        for _, n in ipairs(col1.events) do
+          util.add(list, { oldPpq = n.ppq, evt = n })
+        end
+        if #list > 0 then laneOnePreRule[chan] = list end
+      end
+    end
     do
       local snap     = tm:swingSnapshot()
       local EPS      = 1   -- ppq; tolerates rounding slop in fromLogical
@@ -1257,6 +1304,17 @@ function newTrackerManager(mm, cm)
               evt.endppqL = newEndppqL
               update.endppqL = newEndppqL
             end
+          elseif isNote then
+            -- ppq agrees with ppqL; endppq may still disagree with endppqL
+            -- (stale tail). Rederive endppqL from endppq when so.
+            local predictedEnd = evt.endppqL ~= nil
+              and util.round(snap.fromLogical(chan, evt.endppqL)) or nil
+            if not predictedEnd or math.abs(evt.endppq - predictedEnd) > EPS then
+              local newEndppqL = snap.toLogical(chan, evt.endppq)
+              evt.endppqL = newEndppqL
+              update = update or {}
+              update.endppqL = newEndppqL
+            end
           end
         end
         if update then
@@ -1275,21 +1333,83 @@ function newTrackerManager(mm, cm)
       staleSwing = {}
     end
 
-    -- 5) Shift into intent.
-    local function tidyCol(col)
+    -- 4.8) Reseat absorbers: ensure each fake pb sits at its host's seat
+    -- in both raw and logical frames. The rule may have moved the host
+    -- during the pass; the fake follows. Idempotent — fakes already
+    -- aligned to their host (ppq and ppqL) produce no write.
+    do
+      local fakesByPos
+      local toReseat = {}  -- { { loc, update } }
+      for chan, list in pairs(laneOnePreRule) do
+        for _, entry in ipairs(list) do
+          if not fakesByPos then
+            fakesByPos = {}
+            for loc, cc in mm:ccs() do
+              if cc.msgType == 'pb' and cc.fake then
+                local m = fakesByPos[cc.chan] or {}; fakesByPos[cc.chan] = m
+                m[cc.ppq] = { loc = loc, ppqL = cc.ppqL }
+              end
+            end
+          end
+          local m = fakesByPos[chan]; if not m then goto cont end
+          local n   = entry.evt
+          local hit = m[entry.oldPpq] or m[n.ppq]
+          if hit then
+            local update = {}
+            if m[entry.oldPpq] and entry.oldPpq ~= n.ppq then update.ppq = n.ppq end
+            if hit.ppqL ~= n.ppqL then update.ppqL = n.ppqL end
+            if next(update) then util.add(toReseat, { loc = hit.loc, update = update }) end
+          end
+          ::cont::
+        end
+      end
+      if #toReseat > 0 then
+        mm:modify(function()
+          for _, r in ipairs(toReseat) do mm:assignCC(r.loc, r.update) end
+        end)
+        local locToUpdate = {}
+        for _, r in ipairs(toReseat) do locToUpdate[r.loc] = r.update end
+        for chan = 1, 16 do
+          local pbCol = channels[chan].columns.pb
+          if pbCol then
+            local touched
+            for _, evt in ipairs(pbCol.events) do
+              local u = locToUpdate[evt.loc]
+              if u then
+                if u.ppq  then evt.ppq  = u.ppq  end
+                if u.ppqL then evt.ppqL = u.ppqL end
+                touched = true
+              end
+            end
+            if touched then sortByPPQ(pbCol.events) end
+          end
+        end
+      end
+    end
+
+    -- 5) Project to logical: column events expose the logical position as
+    -- evt.ppq. After step 4.7 every non-fake non-frame event has a ppqL;
+    -- step 4.8 has stamped fakes; alias emits carry their own ppqL. Frame-
+    -- bearing events authored without a stamp keep raw — harmless, off-grid
+    -- under non-identity swing until they're touched.
+    -- Round to int when projecting: mm-side ppq is integer, and the offGrid
+    -- check in vm:rebuild compares against rowToPPQ's integer-rounded result.
+    -- ppqL stays float on the column event so swing-inverse round-trips remain
+    -- exact for tooling that reads it.
+    local function projectToLogical(col)
       for _, evt in ipairs(col.events) do
-        local d = delayToPPQ(evt.delay)
-        if d ~= 0 then evt.ppq = evt.ppq - d end
+        if evt.ppqL    ~= nil then evt.ppq    = util.round(evt.ppqL)    end
+        if evt.endppqL ~= nil then evt.endppq = util.round(evt.endppqL) end
       end
       sortByPPQ(col.events)
     end
     for _, chan in ipairs(channels) do
       local c = chan.columns
-      if c.pc then tidyCol(c.pc) end
-      if c.pb then tidyCol(c.pb) end
-      for _, col in ipairs(c.notes) do tidyCol(col) end
-      if c.at then tidyCol(c.at) end
-      for _, col in pairs(c.ccs) do tidyCol(col) end
+      if c.pc then projectToLogical(c.pc) end
+      if c.pb then projectToLogical(c.pb) end
+      for _, col in ipairs(c.notes) do projectToLogical(col) end
+      if c.at then projectToLogical(c.at) end
+      for _, col in pairs(c.ccs) do projectToLogical(col) end
     end
 
     -- Project the set of authoring swing names referenced by any event in

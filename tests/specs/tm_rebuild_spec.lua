@@ -123,17 +123,19 @@ return {
   },
 
   {
-    name = 'fake pb inherits delay from its host note (travels into intent frame)',
+    name = 'fake pb sits at host logical (Phase 6 col-event projection)',
     run = function(harness)
-      -- Host note: intent ppq=0, delay=500 → at resolution 240 the realised
-      -- shift is 120 PPQ, so mm stores the note and its absorber at ppq=120.
-      -- After rebuild, both must surface at intent ppq=0.
+      -- Host note: intent ppq=0, delay=500 → 120 ppq nudge at res=240,
+      -- so mm stores both the note and its absorber at ppq=120. The
+      -- column event projects to the logical frame: host surfaces at
+      -- ppqL=0 and the absorber follows, stamped with host's ppqL by
+      -- step 4.8.
       local rawFor50 = 2048
       local h = harness.mk{
         seed = {
           notes = {
             { ppq = 120, endppq = 360, chan = 1, pitch = 60, vel = 100,
-              detune = 50, delay = 500 },
+              detune = 50, delay = 500, ppqL = 0, endppqL = 240 },
           },
           ccs = {
             { ppq = 120, chan = 1, msgType = 'pb', val = rawFor50, fake = true },
@@ -144,7 +146,7 @@ return {
       }
       local ch = h.tm:getChannel(1)
       t.eq(ch.columns.notes[1].events[1].ppq, 0,
-        'note sits at intent ppq=0 after delay strip')
+        'note surfaces at logical ppq=0')
 
       t.truthy(ch.columns.pb, 'pb column surfaces (visible pb present)')
       local fakeDisp
@@ -152,8 +154,8 @@ return {
         if e.hidden then fakeDisp = e end
       end
       t.truthy(fakeDisp, 'fake pb display event present in column')
-      t.eq(fakeDisp.ppq, 0,
-        'fake pb display event co-located with its host note')
+      t.eq(fakeDisp.ppq,   0,   'absorber tracks host logical')
+      t.eq(fakeDisp.delay, nil, 'no delay field on absorber column event')
     end,
   },
 

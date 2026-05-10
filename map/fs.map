@@ -1,4 +1,4 @@
-@module fs  src=fs.lua  loc=115  sha=2973124
+@module fs  src=fs.lua  loc=115  sha=ee85a77
 
 # Invariants & contracts (module)
   @map:invariant  sole module touching reaper.Enumerate* and filesystem IO; UI/view layers route through here
@@ -8,23 +8,23 @@
   @shape  fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }
 
 # Module-level constants
-  @const AUDIO_EXTS = {
+  @const AUDIO_EXTS = {  @ 8
 
 # Module-level functions (private)
-  @fn ciLess(a, b)
-  @fn copyFile(src, dst)   -- 64KB chunks so big samples don't allocate a Lua string the size of the file.
+  @fn ciLess(a, b)  @ 35
+  @fn copyFile(src, dst)  @ 91   -- 64KB chunks so big samples don't allocate a Lua string the size of the file.
 
 # Public API (fs.*)
-  @api fs.isAudio(name)
-  @api fs.basename(path)
-  @api fs.parent(path)
+  @api fs.isAudio(name)  @ 13
+  @api fs.basename(path)  @ 19
+  @api fs.parent(path)  @ 24
       @map:contract  returns '' if path has no separator; trailing separators on input are not stripped (caller passes canonical paths)
-  @api fs.join(a, b)
+  @api fs.join(a, b)  @ 29
       @map:contract  inserts '/' between a and b unless a already ends in '/' or '\\'; no path normalisation
-  @api fs.listDirs(path)
+  @api fs.listDirs(path)  @ 38
       @map:contract  hides dotfile-prefixed entries (.git, .DS_Store, etc.)
-  @api fs.exists(path)
-  @api fs.hashFile(path)
+  @api fs.exists(path)  @ 50
+  @api fs.hashFile(path)  @ 57
       @map:contract  FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md
-  @api fs.listAudioFiles(path)
+  @api fs.listAudioFiles(path)  @ 78
 

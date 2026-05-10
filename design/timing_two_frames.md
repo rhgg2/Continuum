@@ -345,21 +345,36 @@ c58 swing — caller's ppq is ignored when ppqL is supplied.
 Lands green: tm's authoring seam speaks ppqL forward; tidyCol still
 bridges raw → intent for vm consumers.
 
-### Phase 5 — Simplify absorbers
+### Phase 5 — Simplify absorbers ✅
 
-Goal: absorbers stop carrying their own `delay`.
+Done. Absorbers no longer carry a `delay` field. Their mm-side raw is
+host's raw, set by `reconcileBoundary` on edit paths and reseated on
+rebuild when the rule moves the host.
 
-- Drop the absorber `delay` field (and any code that reads or writes
-  it on absorbers).
-- `reconcileBoundary` positions absorbers from host:
-  `raw_absorber = swing.fromLogical(host.ppqL) + delayToPPQ(host.delay)`.
-- Tests:
-  - delayed lane-1 note with detune jump → absorber at host raw;
-  - swing change moves both together;
-  - delay change on the host moves the absorber;
-  - removing a detune jump removes the absorber (I2 second clause).
+What landed:
 
-Lands green: absorber arithmetic is one line; I1-I5 still hold.
+- Column projection (rebuild step 3): the `delay = hostNote.delay`
+  inheritance is gone. `tidyCol`'s strip is a no-op for absorbers —
+  they surface at host raw, while non-fake events surface at intent.
+  The pb-column divergence is invisible because absorbers are hidden
+  and vm filters them; Phase 6 collapses it entirely.
+- New rebuild step 4.8 (between the rule and `tidyCol`): snapshot
+  lane-1 note ppqs before step 4.7, walk for movers post-rule, look
+  up the fake pb at each old seat, and shift it to the host's new
+  raw via a single `mm:modify`. Surfaced pb-column projections get
+  the new ppq mirrored in.
+- Edit paths unchanged: `assignNote`'s delay-route through
+  `realiseNoteUpdate`+`resizeNote` already drops/recreates the
+  absorber at the new seat. `reconcileBoundary` still owns the
+  drop-on-no-jump and seat-on-new-jump duties on edit paths.
+
+Tests (`tm_absorber_reseat_spec`): delayed host with detune jump →
+absorber at host raw; swing change moves both together; host delay
+change moves the absorber; detune-jump removed → absorber dropped
+(I2 second clause). The legacy `tm_rebuild_spec` "fake pb inherits
+delay" test was flipped to assert absorber-at-host-raw.
+
+Lands green: I1-I5 hold; 4 new tests, 1 flipped, suite at 577 / 0.
 
 ### Phase 6 — vm rename and swing-strip
 

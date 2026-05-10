@@ -515,9 +515,13 @@ return {
       for _, n in ipairs(h.fm:dump().notes) do
         if n.pitch == 60 then a = n end
       end
-      -- overlapOffset = 1/16, resolution = 240 → lenient = 15 ppq.
-      t.eq(a.endppq, 74 + 15,
-        "A.endppq lands at B.ppq + lenient on the FIRST press, not stuck on the previous row")
+      -- overlapOffset = 1/16, resolution = 240 → lenient = 15 logical ppq.
+      -- Under Phase 6 vm operates in the logical frame: A.endppq lands at
+      -- B.ppqL + lenient = 75 logical, which fromLogical(c58, 75) renders
+      -- to raw 91. The pre-Phase-6 expectation (74 + 15 = 89) measured the
+      -- bound in raw — still numerically close (within slope·lenient).
+      t.eq(a.endppq, 91,
+        "A.endppq lands at fromLogical(c58, B.ppqL + lenient) on the FIRST press")
     end,
   },
 

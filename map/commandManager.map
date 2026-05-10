@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=177  sha=eb14c68
+@module commandManager  src=commandManager.lua  loc=177  sha=2973124
 
 # Invariants & contracts (module)
   @map:invariant  commands and keymap are orthogonal name-keyed tables; a name may live in either alone
@@ -15,48 +15,48 @@
   @shape  noteChar = { semi = 0..16, octOff = 0..1 }
 
 # Module-level constants
-  @const layouts = {
-  @const chars = {}
+  @const layouts = {  @ 15
+  @const chars = {}  @ 34
 
 # Module-level functions (private)
-  @fn attachScope(scope)
+  @fn attachScope(scope)  @ 51
       @map:contract  wrap is a no-op if name has no registered command; wrappers stack (compose outward)
       @map:contract  doBefore/doAfter accept either a single name or an array of names
       @map:contract  doAfter preserves the original command's return values (it's the dispatch signal)
-  @fn newScope()
+  @fn newScope()  @ 95
 
-@factory newCommandManager(cm)
+@factory newCommandManager(cm)  @ 101
   @map:contract  mgr.commands / mgr.keymap alias the root scope's tables; rm reads them directly in dispatch
   @map:contract  mgr-level register/bind/wrap/doBefore/doAfter operate on the root scope only
 
   # Private state
-    @state root = newScope()
-    @state scopes = {}
-    @state mgr = {
+    @state root = newScope()  @ 102
+    @state scopes = {}  @ 103
+    @state mgr = {  @ 105
 
   # Public API
     -- Scope
-    @api mgr:register(name, fn)
-    @api mgr:registerAll(tbl)
-    @api mgr:bind(name, keys)
-    @api mgr:bindAll(tbl)
-    @api mgr:wrap(name, wrapper)
-    @api mgr:doBefore(name, before)
-    @api mgr:doAfter(name, after)
+    @api mgr:register(name, fn)  @ 114
+    @api mgr:registerAll(tbl)  @ 115
+    @api mgr:bind(name, keys)  @ 116
+    @api mgr:bindAll(tbl)  @ 117
+    @api mgr:wrap(name, wrapper)  @ 118
+    @api mgr:doBefore(name, before)  @ 119
+    @api mgr:doAfter(name, after)  @ 120
     -- Scopes
-    @api mgr:scope(name)
+    @api mgr:scope(name)  @ 125
         @map:contract  creates the scope on first request; idempotent thereafter
-    @api mgr:setActive(name)
+    @api mgr:setActive(name)  @ 135
         @map:contract  pass nil to clear active scope (drop back to root-only resolution)
-    @api mgr:dropScope(name)
+    @api mgr:dropScope(name)  @ 137
     -- Lookup
-    @api mgr:invoke(name, ...)
+    @api mgr:invoke(name, ...)  @ 142
         @map:contract  no-op (returns nil) if no scope resolves the name; never raises on unknown
-    @api mgr:keychain()
-    @api mgr:keysFor(name)
-    @api mgr:keySpec(spec, ImGui)
+    @api mgr:keychain()  @ 148
+    @api mgr:keysFor(name)  @ 154
+    @api mgr:keySpec(spec, ImGui)  @ 161
         -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
     -- Note layout
-    @api mgr:noteChars(char)
+    @api mgr:noteChars(char)  @ 172
         -- Re-read noteLayout on each call so a config change takes effect
         -- without rebuilding vm.

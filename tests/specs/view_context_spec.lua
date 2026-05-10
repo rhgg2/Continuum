@@ -140,14 +140,15 @@ return {
   },
 
   {
-    name = 'swung snapshot: rowToPPQ deflects mid-period rows away from logical ppq',
+    name = 'Phase 6: rowToPPQ is identity ratio regardless of swing snapshot',
     run = function(harness)
+      -- Phase 6 collapses ctx to a pure row↔logical-ppq map; the swing
+      -- snapshot is no longer consulted at this layer. Mid-period rows
+      -- land on their logical position whether the take swings or not.
       local ctx = mkCtx{ swing = swungSnapshot(harness, classic58) }
-      -- Row 2 = midpoint of beat 1 = midpoint of swing period.
-      -- Logical ppq would be 120; classic-58 maps 0.5 ↦ 0.58 ⇒ ppq ≈ 139.
-      local ppq = ctx:rowToPPQ(2, 1)
-      t.truthy(ppq ~= 120, 'row 2 should not land on logical 120 under swing, got ' .. ppq)
-      t.truthy(math.abs(ppq - 139) <= 1, 'row 2 should land near 139, got ' .. ppq)
+      t.eq(ctx:rowToPPQ(2, 1), 120, 'row 2 lands on logical 120 (identity ratio)')
+      local plain = mkCtx{}
+      t.eq(plain:rowToPPQ(2, 1), 120, 'identity snapshot agrees')
     end,
   },
 

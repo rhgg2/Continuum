@@ -54,32 +54,18 @@ function newViewContext(args)
 
   ----- Timing
 
-  --@map:contract per-chan binary search of rowPPQs after swing.toLogical(chan, ppqI); inverse of rowToPPQ
+  --@map:contract identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Inverse of rowToPPQ. The chan argument is unused at this layer (kept for the call-site signature).
   function ctx:ppqToRow(ppqI, chan)
-    local ppqL = swing.toLogical(chan, ppqI)
-    if ppqL <= 0 then return 0 end
-    if ppqL >= length then return numRows end
-    local lo, hi = 0, numRows - 1
-    while lo < hi do
-      local mid = (lo + hi + 1) // 2
-      if rowPPQs[mid] <= ppqL then lo = mid else hi = mid - 1 end
-    end
-    local rowStart = rowPPQs[lo]
-    local rowEnd   = rowPPQs[lo + 1] or length
-    return lo + (rowEnd > rowStart and (ppqL - rowStart) / (rowEnd - rowStart) or 0)
+    if ppqI <= 0 then return 0 end
+    if ppqI >= length then return numRows end
+    return ppqI / ppqPerRow
   end
 
-  --@map:contract floor + swing.fromLogical, rounded to integer ppq; on-grid iff ctx:rowToPPQ(round(ppqToRow(p)), chan) == p
+  --@map:contract identity row math: row × ppqPerRow, integer-rounded, clamped at length. On-grid iff ctx:rowToPPQ(round(ppqToRow(p)), chan) == p.
   function ctx:rowToPPQ(row, chan)
     if row <= 0 then return 0 end
     if row >= numRows then return length end
-    local r        = math.floor(row)
-    local frac     = row - r
-    local rowStart = rowPPQs[r]
-    local rowEnd   = rowPPQs[r + 1] or length
-    local ppqL     = rowStart + frac * (rowEnd - rowStart)
-    local ppqI     = swing.fromLogical(chan, ppqL)
-    return math.floor(ppqI + 0.5)
+    return math.floor(row * ppqPerRow + 0.5)
   end
 
   function ctx:snapRow(ppqI, chan) return util.round(self:ppqToRow(ppqI, chan)) end
@@ -287,8 +273,13 @@ function newTrackerView(tm, cm, cmgr)
           if prev.plan then
             local clipped = math.max(prev.ppq + 1,
                                      (prev.plan.newEndppq or prev.e.endppq) - excess)
-            prev.plan.newEndppq = clipped
-            prev.endppq         = clipped
+            prev.plan.newEndppq  = clipped
+            -- Mirror the clip into the logical frame: under Phase 6 the
+            -- two are identical at the column-event layer, and um's
+            -- ppqL→ppq derivation would otherwise reinstate the unclipped
+            -- endppq from a stale endppqL.
+            prev.plan.newEndppqL = clipped
+            prev.endppq          = clipped
           elseif curr.plan then
             local lifted = math.min(curr.endppq - 1, curr.ppq + excess)
             nudgePpq(curr.plan, curr.e, lifted - curr.ppq)
@@ -1308,15 +1299,18 @@ function newTrackerView(tm, cm, cmgr)
       -- rejects the persisted lane and the successor drifts.
       conformOverlaps(plans)
 
+      -- Always emit u.ppq when computed: post-Phase-6 col-event ppq is the
+      -- logical position, while p.newppq is raw under the target swing,
+      -- so the diff check would skip every identity-target reswing.
       local trust = { trustGeometry = true }
       for _, p in ipairs(plans) do
         local e, u = p.e, {}
-        if p.newppq      ~= e.ppq    then u.ppq    = p.newppq    end
-        if p.newEndppq   ~= e.endppq and util.isNote(e) then u.endppq = p.newEndppq end
-        if p.newDelay    ~= nil      then u.delay    = p.newDelay  end
-        if p.newFrame    ~= nil      then u.frame    = p.newFrame  end
-        if p.newPpqL     ~= nil      then u.ppqL     = p.newPpqL     end
-        if p.newEndppqL  ~= nil      then u.endppqL  = p.newEndppqL  end
+        if p.newppq                                 then u.ppq     = p.newppq    end
+        if p.newEndppq   ~= nil and util.isNote(e)  then u.endppq  = p.newEndppq end
+        if p.newDelay    ~= nil                     then u.delay   = p.newDelay  end
+        if p.newFrame    ~= nil                     then u.frame   = p.newFrame  end
+        if p.newPpqL     ~= nil                     then u.ppqL    = p.newPpqL    end
+        if p.newEndppqL  ~= nil                     then u.endppqL = p.newEndppqL end
         if next(u) then tm:assignEvent(util.isNote(e) and 'note' or p.col.type, e, u, trust) end
       end
       tm:flush()

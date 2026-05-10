@@ -268,27 +268,26 @@ return {
   -- deliberately stale endppqL — the kind of value left behind by
   -- a prior frame change that didn't sweep tails.
   {
-    name = 'quantizeKeepRealised re-derives endppqL under current frame',
+    -- Stale endppqL is now caught by the rebuild rule's endppq↔endppqL
+    -- consistency check (added in Phase 6 commit A): when ppq matches
+    -- predicted but endppq disagrees with endppqL, the rule rederives
+    -- endppqL from endppq under the current swing snapshot. The seed
+    -- omits frame so the rule applies; quantize then runs unchanged.
+    name = 'rebuild rule re-derives stale endppqL when ppq is consistent',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = {
-          -- Realised ppq=70 is off-grid (between rows 1 and 2); quantize
-          -- triggers and snaps the head. endppqL=999 is deliberately
-          -- stale — fix should rewrite it to ctx:ppqToRow(240) * 60 = 240.
-          { ppq = 70, endppq = 240, chan = 1, pitch = 60, vel = 100,
+          { ppq = 60, endppq = 240, chan = 1, pitch = 60, vel = 100,
             delay = 0, detune = 0,
-            ppqL = 60, endppqL = 999,
-            frame = { swing = nil, colSwing = nil, rpb = 4 } },
+            ppqL = 60, endppqL = 999 },
         }},
-        config = { take = { rowPerBeat = 4,
-                            noteDelay  = { [1] = { [1] = true } } } },
+        config = { take = { rowPerBeat = 4 } },
       }
       h.vm:setGridSize(80, 40)
-      h.vm:quantizeKeepRealisedAll()
 
       local n = noteByPitch(h.fm:dump(), 60)
       t.eq(n.endppq,  240, 'endppq (intent) untouched')
-      t.eq(n.endppqL, 240, 'stale endppqL rewritten under current frame')
+      t.eq(n.endppqL, 240, 'stale endppqL rewritten by rebuild rule')
     end,
   },
 

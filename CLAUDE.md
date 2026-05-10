@@ -84,16 +84,41 @@ Never hand-edit them.
 
 ## How to work
 
-- Reading order on an unfamiliar module: `map/<file>.map`, then source.
+- Always read `map/<file>.map` before fetching source ranges from
+  `<file>.lua`, **including for files you've worked with before**. The
+  map gives factories, public API, signals, and `@map:` annotations in
+  ~3 KB. Many fetches that feel like "I need to scan the file" resolve
+  to 4–5 surgical 30–50-line ranges once the map has done its work.
   Open `docs/<file>.md` when you need the WHY.
 
-- Framework docs: `docs/reaper_imgui_doc.html` (ReaImGui),
-  `docs/REAPER API functions.html` (ReaScript). Grep to verify API
-  names and signatures.
+- Cross-module navigation: use `mcp__readium__map_query` instead of
+  grepping `map/*.map`. It parses every map and returns
+  `<src>.lua:<line>  @kind <name>` rows, ready to feed into Read with
+  offset/limit. Filter by `kind` (fn, api, factory, state, const,
+  invariant, contract, shape, signal/emits, reaper) and/or
+  `module` (exact stem or glob like `*Manager`, `tm_*`). `name`
+  supports `*` / `?` glob wildcards and is matched as a substring
+  against bare symbol names for structural entries and against
+  body text for annotations. Examples: `kind=signal` lists every
+  emitted signal with its payload doc; `name=rebuild kind=api`
+  pinpoints the two `:rebuild` methods (tm and vm).
 
-- All code changes run the pure-Lua test harness
-  (`lua tests/run.lua`). All bugfixes add red-first regression tests.
-  All refactors add tests pinning the invariant.
+- Framework docs: `docs/reaper_imgui_doc.html` (ReaImGui),
+  `docs/REAPER API functions.html` (ReaScript). Use the
+  `mcp__readium__reaper_doc_lookup` tool, not raw grep — it parses
+  these HTML files and returns the clean Lua signature plus prose
+  for a named function/constant. Wildcards (`MIDI_*`) return a
+  one-line index across both docs. Falls back to grep only if a
+  name is missing from the parsed entries.
+
+- All code changes run the pure-Lua test harness. Use the
+  `mcp__readium__lua_test_run` tool — it wraps `lua tests/run.lua`,
+  returns failures-only by default with the failing spec line + a
+  source window + condensed traceback. Pass a `filter` substring to
+  scope the run (e.g. `"tm_rebuild_spec"` or `"absorber"`); the
+  filter matches `<spec> :: <test name>` literally. All bugfixes
+  add red-first regression tests. All refactors add tests pinning
+  the invariant.
 
 - Spec files live in `tests/specs/`, registered in `tests/run.lua`.
   Read only specs adjacent to your changes.

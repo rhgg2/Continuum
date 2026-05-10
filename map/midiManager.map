@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1074  sha=48d980b
+@module midiManager  src=midiManager.lua  loc=1074  sha=d4f20ff
 @deps util
 
 # Invariants & contracts (module)
@@ -10,14 +10,14 @@
   @map:invariant  per-event metadata (fields beyond the structural set) is persisted to take extension data via util:serialise; loaded back via util:unserialise on take read
 
 # Module-level constants
-  @const chanMsgLUT = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }
+  @const chanMsgLUT = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }  @ 16
       @map:invariant  chanMsgTypes is derived from chanMsgLUT so the two directions can't drift
-  @const chanMsgTypes   -- inverse of chanMsgLUT
+  @const chanMsgTypes  @ 17   -- inverse of chanMsgLUT
 
 # Module-level functions (private)
-  @fn print(...)
+  @fn print(...)  @ 11
 
-@factory newMidiManager(take)
+@factory newMidiManager(take)  @ 20
   @map:contract  stage-3 consensus threshold: winning offset must have ≥ max(2, ceil(0.5 × bucketSize)) votes and be unique (no tie)
   @map:contract  signal order per load: takeSwapped → notesDeduped → uuidsReassigned → ccsDeduped → ccsReconciled → reload
   @map:contract  dedup/reconcile signals fire only when at least one event of that kind is present
@@ -37,53 +37,53 @@
     @shape  reconcileEvent.orphaned        = { kind, uuid, chan, msgType, [cc], [pitch], lastppq }
 
   # Private state
-    @state notes = {}
-    @state ccs = {}
-    @state eventsByUuid = {}
-    @state maxUUID = 0
-    @state lock = false
-    @state pendingSysexDeletes   -- list of uuids; non-nil only inside a modify()
-    @state INTERNALS = { idx = true, uuidIdx = true }
+    @state notes = {}  @ 24
+    @state ccs = {}  @ 25
+    @state eventsByUuid = {}  @ 26
+    @state maxUUID = 0  @ 27
+    @state lock = false  @ 28
+    @state pendingSysexDeletes  @ 29   -- list of uuids; non-nil only inside a modify()
+    @state INTERNALS = { idx = true, uuidIdx = true }  @ 32
         @map:contract  INTERNALS fields (idx, uuidIdx) are stripped from all shallow clones returned to callers
-    @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...
+    @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 35
         @map:invariant  shapeNames is derived from shapeLUT so the two directions can't drift
-    @state shapeNames = -- inverse of shapeLUT
-    @state noteEventFields = {
-    @state ccEventFields = {
-    @state mm = {}
-    @state fire = util.installHooks(mm)
+    @state shapeNames = -- inverse of shapeLUT  @ 36
+    @state noteEventFields = {  @ 172
+    @state ccEventFields = {  @ 176
+    @state mm = {}  @ 257
+    @state fire = util.installHooks(mm)  @ 258
 
   # Private functions
-    @fn bezierSample(tau, t)
-    @fn curveSample(shape, tension, t)
-    @fn idOf(cc)
-    @fn noteSidecarEncode(note)
-    @fn noteSidecarDecode(msg)
-    @fn ccSidecarEncode(cc)
-    @fn ccSidecarDecode(body)
-    @fn loadMetadata()
-    @fn saveMetadatum(uuid)
-    @fn saveMetadata()
-    @fn compact(t, n)   -- Sparse → dense; n is the pre-sparse length.
-    @fn assignNewUUID(evt)
-    @fn noteKey(n)
-    @fn idOf(cc)
-    @fn ccIdKey(e)
-    @fn ccPPQKey(e)
-    @fn ccFullKey(e)
-    @fn bucketBy(keyFn)
-    @fn bind(s, c, kind, extras)
-    @fn removeFirst(t, e)
-    @fn checkLock()
+    @fn bezierSample(tau, t)  @ 54
+    @fn curveSample(shape, tension, t)  @ 80
+    @fn idOf(cc)  @ 101
+    @fn noteSidecarEncode(note)  @ 103
+    @fn noteSidecarDecode(msg)  @ 107
+    @fn ccSidecarEncode(cc)  @ 114
+    @fn ccSidecarDecode(body)  @ 136
+    @fn loadMetadata()  @ 154
+    @fn saveMetadatum(uuid)  @ 182
+    @fn saveMetadata()  @ 204
+    @fn compact(t, n)  @ 231   -- Sparse → dense; n is the pre-sparse length.
+    @fn assignNewUUID(evt)  @ 237
+    @fn noteKey(n)  @ 277
+    @fn idOf(cc)  @ 278
+    @fn ccIdKey(e)  @ 279
+    @fn ccPPQKey(e)  @ 280
+    @fn ccFullKey(e)  @ 281
+    @fn bucketBy(keyFn)  @ 435
+    @fn bind(s, c, kind, extras)  @ 441
+    @fn removeFirst(t, e)  @ 442
+    @fn checkLock()  @ 649
         @map:contract  all write paths (add*, delete*, assign* structural) must run inside mm:modify(fn)
         @map:contract  modify disables MIDI sort, runs fn under lock, flushes pending sidecar deletes, re-sorts, then reloads (fires callbacks)
-    @fn flushPendingSysexDeletes()
-    @fn reconstruct(tbl)
-    @fn retractEot(buf, targetPpq)   -- Assumes events past targetPpq are already deleted upstream (tm:setLength does this).
+    @fn flushPendingSysexDeletes()  @ 654
+    @fn reconstruct(tbl)  @ 812
+    @fn retractEot(buf, targetPpq)  @ 998   -- Assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 
   # Public API
     -- Load
-    @api mm:load(newTake)
+    @api mm:load(newTake)  @ 262
         · Helper functions
         · Read notes
         · Note dedup
@@ -97,42 +97,42 @@
         · (1-based), valid until next rebuild — see byUuid contract.
         · Final read pass: refresh idx / uuidIdx from current REAPER state.
         · Persist + signals
-    @api mm:reload()
+    @api mm:reload()  @ 639
     -- Locking
-    @api mm:modify(fn)
+    @api mm:modify(fn)  @ 673
     -- Notes
-    @api mm:getNote(loc)
-    @api mm:notes()
-    @api mm:deleteNote(loc)
+    @api mm:getNote(loc)  @ 690
+    @api mm:notes()  @ 695
+    @api mm:deleteNote(loc)  @ 707
         @map:contract  deleteNote relies on REAPER to cascade-delete the associated notation event; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
-    @api mm:assignNote(loc, t)
+    @api mm:assignNote(loc, t)  @ 719
         @map:contract  assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
-    @api mm:addNote(t)
+    @api mm:addNote(t)  @ 753
         @map:contract  addNote always allocates a uuid and inserts a notation event (unconditional, unlike addCC)
     -- CCs
-    @api mm:getCC(loc)
-    @api mm:ccs()
-    @api mm:deleteCC(loc)
-    @api mm:assignCC(loc, t)
+    @api mm:getCC(loc)  @ 782
+    @api mm:ccs()  @ 787
+    @api mm:deleteCC(loc)  @ 798
+    @api mm:assignCC(loc, t)  @ 836
         @map:contract  assignCC metadata-only carve-out: if t touches none of the structural CC fields AND the cc already has a uuid, skips the lock
         @map:contract  first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
-    @api mm:addCC(t)
+    @api mm:addCC(t)  @ 901
         @map:contract  addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
-    @api mm:byUuid(uuid)
+    @api mm:byUuid(uuid)  @ 952
         @map:contract  returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. loc is the lua position stamped at compact / addNote / addCC and is excluded from sidecar persistence.
     -- Take data
-    @api mm:take()
-    @api mm:interpolate(A, B, ppq)
+    @api mm:take()  @ 960
+    @api mm:interpolate(A, B, ppq)  @ 965
         -- REAPER convention: shape on A governs the curve from A to next.
-    @api mm:resolution()
-    @api mm:length()
+    @api mm:resolution()  @ 973
+    @api mm:length()  @ 979
         -- Source length. setLength truncates the source's EOT explicitly to keep this in sync after a shrink.
-    @api mm:name()
-    @api mm:setName(name)
-    @api mm:setLength(qn)
+    @api mm:name()  @ 986
+    @api mm:setName(name)  @ 992
+    @api mm:setLength(qn)  @ 1018
         -- MIDI_SetItemExtents leaves the source's EOT stale on contract; retract it explicitly so the source actually shrinks.
         -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-    @api mm:timeSigs()
+    @api mm:timeSigs()  @ 1032
 
   # Signals emitted (via util.installHooks)
     @emits takeSwapped   -- nil; only when load received a different take
