@@ -1,6 +1,6 @@
 -- See docs/trackerManager.md for the model.
 
---@map:invariant tm holds the (logical, raw) pair on every event; mm holds raw only; column events expose evt.ppq as logical (column-projection step at rebuild's tail). The rebuild rule reconciles raw ↔ ppqL each pass against cm's swing snapshot.
+--@map:invariant tm holds (ppqL, raw) per event; mm holds raw; column events expose evt.ppq as logical. Rebuild reconciles raw ↔ ppqL each pass; see docs/timing.md
 --@map:invariant detune is intent (per-note); pb is realisation (channel-wide stream); only lane-1 notes drive detune realisation
 --@map:invariant pb.val is cents inside um; raw conversion happens only on load (rawToCents) and at flush (centsToRaw); cents window is cm:get('pbRange') * 100 per side
 --@map:invariant fake pbs are absorbers seated at lane-1 note onsets to absorb detune jumps; pb.fake is the sole marker (persisted as cc metadata via mm sidecar)
@@ -107,13 +107,13 @@ function newTrackerManager(mm, cm)
   ---------- PRIVATE
 
   local channels = {}
-  local tm    -- forward-declared so um's closures (built in createUpdateManager, defined above tm's body) capture it as upvalue; assigned below
+  local tm    -- forward-declared so um's closures capture it as upvalue
   local fire  -- installed below, once tm exists
   local um    -- update manager; set by tm:rebuild
   local lastMuteSet = {}  -- { [chan] = true }, pushed by vm via tm:setMutedChannels
-  --@map:invariant pendingFlushUuids is a uuid-set of notes touched by the in-flight um:flush; populated before mm:modify (assigns) and grown inside it (adds), read by allocateNoteColumn during the rebuild that fires from mm's reload, cleared at the tail of tm:rebuild — nil outside a flush-driven rebuild
+  --@map:invariant pendingFlushUuids: uuid-set of notes touched by the in-flight um:flush; read by allocateNoteColumn to attribute lane overlaps; nil outside a flush-driven rebuild
   local pendingFlushUuids
-  --@map:invariant staleSwing[chan] = true marks a channel whose resolved swing has changed since last rebuild; consumed and cleared by the rebuild rule (step 4.7) which then rederives raw ppq/endppq from each event's ppqL/endppqL
+  --@map:invariant staleSwing[chan]=true: this channel's resolved swing changed; rebuild rule rederives raw from ppqL and clears
   local staleSwing = {}
 
   local function sortByPPQ(tbl)
@@ -609,14 +609,7 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- Default contract: update.ppq/endppq are logical; tm stamps
-    -- ppqL/endppqL with that logical truth, then overwrites ppq/endppq
-    -- with raw (fromLogical + delay) before mm sees them.
-    --
-    -- Raw-speaking callers (reswing post-conformOverlaps) ship u.ppqL
-    -- and/or u.endppqL alongside u.ppq/u.endppq. Their presence is the
-    -- "skip translation" signal: u.ppq/u.endppq are taken as raw intent
-    -- under the target swing, with delay added on top.
+    --@map:contract update.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw. Caller-supplied update.ppqL/endppqL signals "raw already computed" — translation is skipped, only delay-delta applies. See docs/timing.md.
     local function realiseNoteUpdate(evt, update)
       local dOld = delayToPPQ(evt.delay)
       local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
@@ -647,9 +640,6 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- Non-note writes: update.ppq is logical; stamp ppqL alongside
-    -- and overwrite ppq with raw. Raw-speaking callers signal the
-    -- skip by sending update.ppqL.
     local function realiseNonNoteUpdate(chan, update)
       if update.ppqL ~= nil then return end
       if not chan or update.ppq == nil then return end
@@ -691,7 +681,7 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    --@map:contract notes default detune=0, delay=0, lane=1; evt.ppq and evt.endppq arrive in the logical frame; um stamps ppqL/endppqL with the logical truth and rewrites ppq/endppq to raw (fromLogical + delay) before mm sees the record
+    --@map:contract notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm
     function um:addEvent(evtType, evt)
       if evtType == 'note' then
         evt.detune = evt.detune or 0
@@ -1130,9 +1120,8 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- 2) Allocate note columns. Clones rather than aliasing the mm-note
-    -- table: column events diverge from mm in the projection step (5),
-    -- which writes the logical position into evt.ppq while mm keeps raw.
+    -- 2) Allocate note columns. Clone rather than alias: step 5 overwrites
+    -- column evt.ppq with logical while mm retains raw.
     for loc, note in mm:notes() do
       local channel = channels[note.chan]
       local col, lane = allocateNoteColumn(channel, note)
@@ -1159,10 +1148,6 @@ function newTrackerManager(mm, cm)
           local pb = pbByChan[cc.chan] or { events = {}, anyVisible = false }
           pbByChan[cc.chan] = pb
           pb.anyVisible = pb.anyVisible or not hidden
-          -- Absorbers (cc.fake) carry no delay: they sit at host's raw in
-          -- mm and don't traverse the intent frame. The pb column then
-          -- holds them at host raw while non-fake pbs project at intent
-          -- after tidyCol — Phase 6 collapses the difference.
           util.add(pb.events, projectCC(cc, loc, {
             val    = util.round(rawToCents(cc.val) - detune),
             detune = detune,
@@ -1256,30 +1241,9 @@ function newTrackerManager(mm, cm)
         end
       end
     end
-    -- 4.7) Two-frame rebuild rule. For each non-derived event in raw frame:
-    --   stale=true & ppqL present  → raw is rebuilt from ppqL (+ delay).
-    --   else, raw matches predicted → no-op (steady state).
-    --   else                        → ppqL is rederived from raw (sole
-    --                                  swing.toLogical call site). Covers
-    --                                  foreign-MIDI cold load and
-    --                                  external (REAPER piano-roll) edits
-    --                                  to imported events.
-    -- Exempt:
-    --   evt.fake — absorber pbs and synthesised PCs are derived.
-    --   evt.rpb (only when not stale) — rpb-stamped events are
-    --     Continuum-authored: ppqL is the truth, raw is its realisation
-    --     under cm's current swing. The rule must not rederive ppqL
-    --     from raw on cold load. Foreign-imported events have no rpb,
-    --     so their ppqL stays provisional and the predicted-check arm
-    --     keeps it in sync with raw across external edits. When a stale
-    --     flag arrives — set by the configChanged subscriber for
-    --     active-take edits or by bindTake(opts.markSwingStale=true)
-    --     for cross-take reswing — the stale-branch rebuilds raw from
-    --     ppqL under cm's current snap, which is exactly what reswing
-    --     wants.
-    --
-    -- Snapshot lane-1 note ppqs before the rule runs so step 4.8 can
-    -- reseat absorbers whose host moved.
+    -- 4.7) Two-frame rebuild rule. See docs/timing.md §"Rebuild rule".
+    -- Snapshot lane-1 note ppqs first so step 4.8 can reseat absorbers
+    -- whose host moved.
     local laneOnePreRule = {}
     for chan = 1, 16 do
       local col1 = channels[chan].columns.notes[1]
@@ -1328,8 +1292,7 @@ function newTrackerManager(mm, cm)
               update.endppqL = newEndppqL
             end
           elseif isNote then
-            -- ppq agrees with ppqL; endppq may still disagree with endppqL
-            -- (stale tail). Rederive endppqL from endppq when so.
+            -- Tail may be stale even when onset agrees: rederive endppqL.
             local predictedEnd = evt.endppqL ~= nil
               and util.round(snap.fromLogical(chan, evt.endppqL)) or nil
             if not predictedEnd or math.abs(evt.endppq - predictedEnd) > EPS then
@@ -1356,13 +1319,10 @@ function newTrackerManager(mm, cm)
       staleSwing = {}
     end
 
-    -- 4.8) Reseat absorbers: ensure each fake pb sits at its host's seat
-    -- in both raw and logical frames. The rule may have moved the host
-    -- during the pass; the fake follows. Idempotent — fakes already
-    -- aligned to their host (ppq and ppqL) produce no write.
+    -- 4.8) Reseat fake pbs onto their host's seat (raw + logical).
     do
       local fakesByPos
-      local toReseat = {}  -- { { loc, update } }
+      local toReseat = {}
       for chan, list in pairs(laneOnePreRule) do
         for _, entry in ipairs(list) do
           if not fakesByPos then
@@ -1410,15 +1370,8 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- 5) Project to logical: column events expose the logical position as
-    -- evt.ppq. After step 4.7 every non-fake non-rpb-exempt event has a
-    -- ppqL; step 4.8 has stamped fakes; alias emits carry their own
-    -- ppqL. Rpb-stamped events authored without an early-stamp keep
-    -- raw — harmless, off-grid under non-identity swing until touched.
-    -- Round to int when projecting: mm-side ppq is integer, and the offGrid
-    -- check in vm:rebuild compares against rowToPPQ's integer-rounded result.
-    -- ppqL stays float on the column event so swing-inverse round-trips remain
-    -- exact for tooling that reads it.
+    -- 5) Project to logical. evt.ppq integer-rounded for the offGrid compare
+    -- in vm:rebuild; evt.ppqL stays float so swing inverse round-trips stay exact.
     local function projectToLogical(col)
       for _, evt in ipairs(col.events) do
         if evt.ppqL    ~= nil then evt.ppq    = util.round(evt.ppqL)    end
@@ -1435,11 +1388,9 @@ function newTrackerManager(mm, cm)
       for _, col in pairs(c.ccs) do projectToLogical(col) end
     end
 
-    -- Project the set of swing-library names this take resolves to into
-    -- take-tier cm. sequenceManager reads these via cm:readTakeKey to drive
-    -- cross-take reswing on swing-library edits. Sourced from cm.swing +
-    -- cm.colSwing — string entries only; anonymous composites are frozen
-    -- at authoring and can't go stale.
+    -- Project the take's used swing names into take-tier cm so seqMgr can
+    -- discover affected takes via cm:readTakeKey. String entries only —
+    -- anonymous composites are frozen at authoring.
     do
       local used = {}
       local g = cm:get('swing')
@@ -1872,10 +1823,10 @@ function newTrackerManager(mm, cm)
 
   ----- Lifecycle
 
-  --@map:invariant usedSwings is an output of rebuild (computed from cm.swing/cm.colSwing), not an input; suppressed here to prevent the cm:set call inside rebuild from firing a redundant follow-up rebuild
+  --@map:invariant usedSwings is rebuild output, not input — suppressed to prevent rebuild's cm:set from firing a redundant follow-up rebuild
   local vmOnlyKeys = { mutedChannels = true, soloedChannels = true, usedSwings = true }
 
-  --@map:invariant configChanged routes 'swing' to all 16 channels, 'colSwing' to channels whose entry differs vs prevColSwing, 'swings' to channels resolving to a name whose body differs vs prevSwings. The diff caches refresh after each handled event and on bindTake (which silently swaps cm's tier stack).
+  --@map:invariant configChanged routes: 'swing' → all 16; 'colSwing' → channels with diff vs prevColSwing; 'swings' → channels resolving to names with diff body vs prevSwings. Caches refresh after each event and on bindTake.
   local prevSwings   = util.deepClone(cm:get('swings')   or {})
   local prevColSwing = util.deepClone(cm:get('colSwing') or {})
 
@@ -1884,7 +1835,6 @@ function newTrackerManager(mm, cm)
     prevColSwing = util.deepClone(cm:get('colSwing') or {})
   end
 
-  -- Channels (1..16) whose colSwing[chan] differs between prev and cur.
   local function colSwingDiffChannels(prev, cur)
     prev, cur = prev or {}, cur or {}
     local affected = {}
@@ -1894,7 +1844,6 @@ function newTrackerManager(mm, cm)
     return affected
   end
 
-  -- Names whose library body differs (added, removed, or edited).
   local function changedSwingNames(prev, cur)
     prev, cur = prev or {}, cur or {}
     local names = {}
@@ -1907,9 +1856,7 @@ function newTrackerManager(mm, cm)
     return names
   end
 
-  -- Channels whose resolved swing references any of `names`. Global swing
-  -- shadows colSwing for the channels it covers — if the global swing's
-  -- name is in the set, every channel is affected.
+  -- Global swing shadows colSwing: a hit on the global name affects all 16.
   local function channelsResolvingTo(names)
     local affected = {}
     if not next(names) then return affected end
@@ -1924,9 +1871,8 @@ function newTrackerManager(mm, cm)
     return affected
   end
 
-  -- True only inside tm:bindTake, between cm:setContext and mm:load.
-  -- Suppresses the configChanged-driven rebuild so the swap reads from a
-  -- coherent (cm, mm) pair: mm:load fires the single rebuild downstream.
+  -- True between cm:setContext and mm:load in bindTake; suppresses the
+  -- configChanged rebuild so mm:load fires the single coherent one.
   local bindingTake = false
 
   local pendingTakeSwap = false
@@ -1957,8 +1903,8 @@ function newTrackerManager(mm, cm)
     if not vmOnlyKeys[key] then tm:rebuild(false) end
   end)
 
-  --@map:contract atomic take swap: cm:setContext runs silently (its broadcast is suppressed for both tm's own subscriber and — transitively, since vm rebuilds only via tm's 'rebuild' signal — for vm). mm:load then fires the single coherent rebuild downstream. opts.markSwingStale=true marks all 16 channels stale across the swap so step 4.7 rebuilds raw from ppqL under the new (cm, mm) pair — used by seqMgr:reswingAll for cross-take preset propagation.
-  --@map:contract bindTake(nil) is the mirror seam used when the tracker stack goes dormant (e.g. switching to the sample page). cm clears under the same suppression; mm:load(nil) is a no-op, so no rebuild fires. tm/vm retain their last frame harmlessly until the next bindTake re-arms them.
+  --@map:contract atomic take swap: cm:setContext runs silently; mm:load fires the single coherent rebuild. opts.markSwingStale=true rebuilds raw from ppqL under the new (cm, mm) pair (used by seqMgr:reswingAll).
+  --@map:contract bindTake(nil) is the dormant seam (e.g. samplePage); cm clears under suppression, mm:load(nil) is a no-op, tm/vm retain last frame.
   function tm:bindTake(take, opts)
     bindingTake = true
     cm:setContext(take)

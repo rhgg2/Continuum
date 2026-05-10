@@ -617,15 +617,12 @@ function newClipboard(deps)
     local logPerRow = ctx:ppqPerRow()
     local aliased   = getAliasMode() and true or nil
 
-    -- vm-surfaced ppq is logical above tm; row falls out by division.
     local function rowOf(p)
       return p / logPerRow - r1
     end
 
-    -- aliasSrc identifies the spec-tree anchor for an alias-mode paste.
-    -- Position is reconstructed at paste from row + cursor; chan and lane
-    -- come from the destination column. Only the spec identity and the
-    -- ancestor xform chain need to ride through.
+    -- aliasSrc anchors the source in the spec tree; position/chan/lane are
+    -- reconstructed at paste from row + destination column.
     local function aliasSrcOf(evt)
       if not aliased then return nil end
       local chain
@@ -810,8 +807,7 @@ function newClipboard(deps)
       tm:addEvent(evtType, e); return { kind='plain', evt=e }
     end
     local liveSrc = r.resolved
-    -- alias xform vocabulary is tm-internal (ppqL/durL); translate from
-    -- the logical-frame surface here at the boundary.
+    -- alias xform speaks ppqL/durL; translate at the boundary.
     local dst = util.clone(e)
     dst.ppqL = e.ppq
     if evtType == 'note' then
@@ -882,7 +878,6 @@ function newClipboard(deps)
     local logPerRow = ctx:ppqPerRow()
     local capRow = r + clip.numRows  -- logical row of endppq
 
-    -- vm/ec author in the logical frame; um stamps ppqL on the way to mm.
     local events = {}
     for _, ce in ipairs(clip.events) do
       local ppq = (r + ce.row) * logPerRow

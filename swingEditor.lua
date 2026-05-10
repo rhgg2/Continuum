@@ -2,7 +2,7 @@
 -- @noindex
 
 --@map:invariant editor owns no swing data; composite lives in cm:get('swings')[name] and is read fresh each frame via swingRead
---@map:invariant all writes route through swingWrite, which short-circuits on equality and then fires vm:setSwingComposite — the configChanged subscriber refreshes the active take, and commit() routes the project-wide pass through seqMgr:reswingAll on widget release
+--@map:invariant all writes route through swingWrite (idempotent → vm:setSwingComposite); commit() drives cross-take reswing on widget release
 --@map:invariant state == nil iff editor is closed; open() is a no-op when already open; Esc / Begin-close clears state
 --@map:invariant snapshot is captured at open() and never mutated; Reset writes a deepClone of it
 --@map:invariant shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
@@ -45,11 +45,7 @@ local SWING_SOFT_QN = 0.15
 function newSwingEditor(vm, cm, chrome, ctx, seqMgr)
   local state = nil
 
-  -- Cross-take reswing fires on widget release (IsItemDeactivatedAfterEdit
-  -- for sliders and combos; explicit on Reset). Continuous drags keep the
-  -- active take in sync via swingWrite → vm:setSwingComposite → configChanged
-  -- → tm:rebuild; the project-wide pass runs once per gesture rather than
-  -- once per frame.
+  -- Fired on widget release so the project-wide pass runs once per gesture, not per frame.
   local function commit()
     if state and state.name then seqMgr:reswingAll(state.name) end
   end

@@ -1,9 +1,9 @@
-@module swingEditor  src=swingEditor.lua  loc=534  sha=ee85a77
+@module swingEditor  src=swingEditor.lua  loc=530  sha=b430243
 @deps util, timing
 
 # Invariants & contracts (module)
   @map:invariant  editor owns no swing data; composite lives in cm:get('swings')[name] and is read fresh each frame via swingRead
-  @map:invariant  all writes route through swingWrite, which short-circuits on equality and then fires vm:setSwingComposite — the configChanged subscriber refreshes the active take, and commit() routes the project-wide pass through seqMgr:reswingAll on widget release
+  @map:invariant  all writes route through swingWrite (idempotent → vm:setSwingComposite); commit() drives cross-take reswing on widget release
   @map:invariant  state == nil iff editor is closed; open() is a no-op when already open; Esc / Begin-close clears state
   @map:invariant  snapshot is captured at open() and never mutated; Reset writes a deepClone of it
   @map:invariant  shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
@@ -29,41 +29,41 @@
 
   # Private state
     @state state = nil  @ 46
-    @state self = {}  @ 514
+    @state self = {}  @ 510
 
   # Private functions
-    @fn commit()  @ 53   -- Cross-take reswing fires on widget release (IsItemDeactivatedAfterEdit for sliders and com
-    @fn meterQN()  @ 57
-    @fn periodPresetIndex(tileQN)  @ 64
+    @fn commit()  @ 49   -- Fired on widget release so the project-wide pass runs once per gesture, not per frame.
+    @fn meterQN()  @ 53
+    @fn periodPresetIndex(tileQN)  @ 60
         @map:contract  returns 0 (not nil) when tileQN matches no preset; callers append a synthetic label in that case
-    @fn periodLabel(tileQN)  @ 71
-    @fn periodOverPPC(period, ppC)  @ 79   -- Preset .period is already a tidy rational; halving it for ppC=2 keeps it tidy ({n,d} → {n,
-    @fn shiftCap(factor, wild)  @ 89   -- id has range = ∞ (slope is always 1; the K-bound never bites). Cap at one tile per side so
-    @fn materialise(composite)  @ 104   -- QN-space preview uses ppqPerQN=1 so the editor draws against normalised QN units rather th
-    @fn drawSwingGrid(composite, periodQN, rpb, w, h, shadeMeter)  @ 106
-    @fn isInt(x)  @ 125   -- Classify a tick at qn position p into 'bar' (downbeat), 'midBar' (the bar's midpoint when 
-    @fn classify(p)  @ 127
-    @fn swingRead()  @ 175
-    @fn readFactors(composite)  @ 181   -- Tolerant accessor: bare {} and {factors={}} both mean identity. Read-only; write paths dee
-    @fn phaseQN(p)  @ 186   -- QN value of an optional period-shaped slot (scalar, {n,d}, or nil).
-    @fn compositesEqual(a, b)  @ 189
+    @fn periodLabel(tileQN)  @ 67
+    @fn periodOverPPC(period, ppC)  @ 75   -- Preset .period is already a tidy rational; halving it for ppC=2 keeps it tidy ({n,d} → {n,
+    @fn shiftCap(factor, wild)  @ 85   -- id has range = ∞ (slope is always 1; the K-bound never bites). Cap at one tile per side so
+    @fn materialise(composite)  @ 100   -- QN-space preview uses ppqPerQN=1 so the editor draws against normalised QN units rather th
+    @fn drawSwingGrid(composite, periodQN, rpb, w, h, shadeMeter)  @ 102
+    @fn isInt(x)  @ 121   -- Classify a tick at qn position p into 'bar' (downbeat), 'midBar' (the bar's midpoint when 
+    @fn classify(p)  @ 123
+    @fn swingRead()  @ 171
+    @fn readFactors(composite)  @ 177   -- Tolerant accessor: bare {} and {factors={}} both mean identity. Read-only; write paths dee
+    @fn phaseQN(p)  @ 182   -- QN value of an optional period-shaped slot (scalar, {n,d}, or nil).
+    @fn compositesEqual(a, b)  @ 185
         @map:contract  compares composite phase, per-factor phase, period, atom and shift — phase fields normalise to QN before comparing, so {1,2} and {2,4} count equal
-    @fn swingWrite(composite)  @ 206
+    @fn swingWrite(composite)  @ 202
         @map:contract  sole write path; idempotent on equal composites; the active-take refresh happens via vm:setSwingComposite's configChanged broadcast (granular per-channel stale-mark + tm:rebuild)
-    @fn cloneForEdit()  @ 213   -- Editable clone with a guaranteed factors[] array, so write paths can index it without re-c
-    @fn patchFactor(i, patch)  @ 219
-    @fn addFactor()  @ 227
+    @fn cloneForEdit()  @ 209   -- Editable clone with a guaranteed factors[] array, so write paths can index it without re-c
+    @fn patchFactor(i, patch)  @ 215
+    @fn addFactor()  @ 223
         @map:contract  default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited
-    @fn removeFactor(i)  @ 233
-    @fn moveFactor(i, dir)  @ 239
-    @fn drawFactorRow(i, f, availW)  @ 249
-    @fn idealSwingHeight(nFactors)  @ 351   -- Generous estimate — better to show a few px of empty space than to clip the add-factor but
-    @fn idealSwingWidth()  @ 356
-    @fn draw()  @ 358
+    @fn removeFactor(i)  @ 229
+    @fn moveFactor(i, dir)  @ 235
+    @fn drawFactorRow(i, f, availW)  @ 245
+    @fn idealSwingHeight(nFactors)  @ 347   -- Generous estimate — better to show a few px of empty space than to clip the add-factor but
+    @fn idealSwingWidth()  @ 352
+    @fn draw()  @ 354
 
   # Public API
     -- Public
-    @api self:open()  @ 517
+    @api self:open()  @ 513
         @map:contract  no-op when already open; snapshot is current cm composite at open time, used for Reset and dirty-check
-    @api self:render()  @ 529
-    @api self:isOpen()  @ 531
+    @api self:render()  @ 525
+    @api self:isOpen()  @ 527

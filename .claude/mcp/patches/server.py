@@ -351,13 +351,18 @@ def apply_patches(
       On reject: `REJECTED by user` (with comment appended if given).
       On validation/policy failure: `ABORT` header followed by errors.
     """
+    t0 = time.perf_counter()
+    _perf_log(
+        f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] received "
+        f"edits={len(edits or [])} creates={len(creates or [])} deletes={len(deletes or [])}"
+    )
+
     edits = edits or []
     creates = creates or []
     deletes = deletes or []
     if not (edits or creates or deletes):
         return "(no operations requested)"
 
-    t0 = time.perf_counter()
     perf: dict[str, float] = {}
 
     base = Path(cwd) if cwd else Path.cwd()

@@ -5,9 +5,9 @@
 --@map:invariant rm is pull-only — vm fires no render callbacks; rm queries vm.grid / vm:ec() / vm:rowPerBar() each frame
 --@map:invariant all writes funnel through tm (addEvent/assignEvent/deleteEvent/flush); vm never touches mm
 --@map:invariant vm sits on the swing boundary; intent only — never reads/writes realisation pb directly (see docs/tuning.md)
---@map:invariant every authoring call site stamps evt.rpb = currentRpb() and evt.ppq = row · logPerRow (logical) before tm:addEvent
---@map:invariant off-grid edits snap evt.ppq to the cursor row; delay survives, rpb restamps to current
---@map:invariant clipboard rows encode in source col's logical frame; paste decodes against destination's current rpb — round-trip is symmetric on (row, chan), not absolute ppq
+--@map:invariant authoring stamps evt.rpb = currentRpb() and evt.ppq = row · logPerRow before tm:addEvent
+--@map:invariant off-grid edits snap evt.ppq to cursor row; delay survives, rpb restamps to current
+--@map:invariant clipboard encodes rows in source's logical frame; paste decodes against dest's rpb — symmetric on (row, chan), not absolute ppq
 
 loadModule('util')
 loadModule('midiManager')
@@ -1120,7 +1120,7 @@ function newTrackerView(tm, cm, cmgr)
       return groups
     end
 
-    --@map:contract events without evt.rpb are skipped — they're authoring-stamped Continuum-side, not externally edited. Two passes (plan, then mutate) so reads stay stable across the batch. Plan ppq is clamped to take length to prevent REAPER auto-extending the source on MIDI_Sort. Reswing leaves rpb untouched: ppqL is the truth, raw is reproduced under the target swing.
+    --@map:contract skips events without evt.rpb (foreign-imported); plan→mutate so reads stay stable; clamps plan ppq to take length to stop MIDI_Sort auto-extending the source; rpb left untouched (ppqL is truth)
     local function reswingCore(groups, opts)
       local plans = {}
       local notePlansByChan = {}
@@ -1177,11 +1177,8 @@ function newTrackerView(tm, cm, cmgr)
       -- rejects the persisted lane and the successor drifts.
       conformOverlaps(plans)
 
-      -- Reswing speaks raw: u.ppq/u.endppq are intent under the target
-      -- swing (post-conformOverlaps); u.ppqL/u.endppqL ride alongside,
-      -- unchanged, as the signal "skip the logical→raw translation".
-      -- conformOverlaps nudges raw mid-plan, so um cannot derive raw
-      -- from u.ppqL alone — both frames must arrive together.
+      -- conformOverlaps nudges raw mid-plan, so reswing must ship raw and
+      -- ppqL together — see "Caller speaks raw" in docs/timing.md.
       for _, p in ipairs(plans) do
         local e, u = p.e, {}
         if p.newppq then
@@ -1241,7 +1238,7 @@ function newTrackerView(tm, cm, cmgr)
     end
 
     -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
-    --@map:contract intent ppq snaps to nearest row; delay absorbs the inverse so realised onset is preserved. Endppq stays put. Required delay clamped at delayRange — realised still preserved, intent partially off-grid; popup reports the clamp count
+    --@map:contract intent ppq snaps to nearest row; delay absorbs the inverse to preserve realised onset; endppq held; delay clamped at delayRange; popup reports clamps
     local function quantizeKeepRealisedScope(groups)
       local plans, clamped = {}, 0
       for _, g in ipairs(groups) do
@@ -1828,7 +1825,7 @@ function newTrackerView(tm, cm, cmgr)
 
   local rebuilding = false
 
-  --@map:contract reentrancy-guarded by `rebuilding`; early-returns when tm has no take (grid stays empty so the page shows its placeholder); takeChanged=true resets ec and re-reads resolution/length/timeSigs from tm; grid cols / rowPPQs / viewContext / cell-overflow-offGrid maps / ghost maps rebuild unconditionally; pushMute at the end
+  --@map:contract reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/rowPPQs/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
   function vm:rebuild(takeChanged)
     if not tm or rebuilding then return end
     if not tm:currentTake() then return end
@@ -1970,7 +1967,7 @@ function newTrackerView(tm, cm, cmgr)
       vm:rebuild(pendingTakeSwap)
       pendingTakeSwap = false
     end)
-    --@map:contract vm only listens to configChanged for vm-internal side effects (transient-frame release, mute pulse). Rebuilds are driven exclusively by tm's 'rebuild' signal, which tm fires after IT has rebuilt — so vm always reads coherent tm state and the (cm, tm) double-fire race is closed.
+    --@map:contract vm consumes configChanged only for transient-frame release and mute pulse; rebuild is driven by tm's 'rebuild' signal — closes the (cm, tm) double-fire race
     --@map:contract non-transient writes to FRAME_KEYS while a transient override is active short-circuit into releaseTransientFrame, whose recursive cm:assign fires a fresh configChanged → tm:rebuild → vm:rebuild chain
     cm:subscribe('configChanged', function(change)
       if isFrameChange(change) and releaseTransientFrame() then return end

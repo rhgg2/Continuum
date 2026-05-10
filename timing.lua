@@ -2,7 +2,7 @@
 -- @noindex
 
 --@map:invariant pure module — no module-level state; all functions take operands explicitly
---@map:invariant two frames: ppqL (logical, authoring) and raw ppq (realisation, REAPER); single forward transform ppq = swing.fromLogical(ppqL) + delayToPPQ(delay) on note-on, endppq = swing.fromLogical(endppqL) (no delay). swing.toLogical has one call site: tm's rebuild rule predicted-check arm.
+--@map:invariant two frames: ppqL (logical) and raw ppq (realisation); forward only — ppq = fromLogical(ppqL) + delayToPPQ(delay), endppq = fromLogical(endppqL); see docs/timing.md
 --@map:invariant atoms are pure (u, shift) functions on the unit interval; inverse via Newton (closed form for id)
 --@map:invariant tile period unit is QN (quarter notes); period may be scalar or {num,den}
 --@map:invariant factor order is inner-to-outer: applyFactors walks forward, unapplyFactors walks backward
