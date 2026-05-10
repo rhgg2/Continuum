@@ -1,4 +1,4 @@
-@module sequenceManager  src=sequenceManager.lua  loc=45  sha=ee85a77
+@module sequenceManager  src=sequenceManager.lua  loc=44  sha=ee85a77
 @deps util
 
 # Invariants & contracts (module)
@@ -18,7 +18,7 @@
     @api self:takesUsing(name)  @ 25
         @map:contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
     @api self:reswingAll(name)  @ 35
-        @map:contract  iterates affected takes via tm:bindTake; vm:reswingPreset runs in each take's context; restores the original take at the end
+        @map:contract  iterates affected takes via tm:bindTake with opts.markSwingStale=true; that flag drives the post-load rebuild's stale-branch, which rebuilds raw from each event's ppqL under the take's current swing. Restores the original take at the end (no stale-mark — the active take's events are unchanged by the visit).
 
   # REAPER API surface
     @reaper CountMediaItems

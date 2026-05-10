@@ -1262,9 +1262,14 @@ function newTrackerManager(mm, cm)
     --                                  events under the same branch.
     -- Exempt:
     --   evt.fake — absorber pbs and synthesised PCs are derived.
-    --   evt.frame — pre-Phase-7, frame-bearing events have their own reswing
-    --     pathway via vm:reswingAll, which reads the authoring frame; the
-    --     two-frame rule applies only to events without authoring metadata.
+    --   evt.frame (only when not stale) — frame-bearing events are
+    --     authoring-truth-stamped: ppqL is the truth, raw is its
+    --     realisation under e.frame.swing. The rule should not rederive
+    --     ppqL from raw on cold load. Once a stale flag arrives — set by
+    --     the configChanged subscriber for active-take edits or by
+    --     bindTake(opts.markSwingStale=true) for cross-take reswing —
+    --     the stale-branch rebuilds raw from ppqL under cm's current
+    --     snap, which is exactly what reswing wants.
     --
     -- Snapshot lane-1 note ppqs before the rule runs so step 4.8 can
     -- reseat absorbers whose host moved.
@@ -1284,8 +1289,9 @@ function newTrackerManager(mm, cm)
       local EPS      = 1   -- ppq; tolerates rounding slop in fromLogical
       local toAssign = {}  -- { { isNote, loc, update } }
       forEachEvent(function(evtType, evt, chan, isNote)
-        if evt.fake or evt.frame then return end
+        if evt.fake then return end
         local stale = staleSwing[chan]
+        if evt.frame and not stale then return end
         local d     = isNote and delayToPPQ(evt.delay or 0) or 0
         local update
         if stale and evt.ppqL ~= nil then
@@ -1949,12 +1955,15 @@ function newTrackerManager(mm, cm)
     if not vmOnlyKeys[key] then tm:rebuild(false) end
   end)
 
-  --@map:contract atomic take swap: cm:setContext runs silently (its broadcast is suppressed for both tm's own subscriber and — transitively, since vm rebuilds only via tm's 'rebuild' signal — for vm). mm:load then fires the single coherent rebuild downstream.
+  --@map:contract atomic take swap: cm:setContext runs silently (its broadcast is suppressed for both tm's own subscriber and — transitively, since vm rebuilds only via tm's 'rebuild' signal — for vm). mm:load then fires the single coherent rebuild downstream. opts.markSwingStale=true marks all 16 channels stale across the swap so step 4.7 rebuilds raw from ppqL under the new (cm, mm) pair — used by seqMgr:reswingAll for cross-take preset propagation.
   --@map:contract bindTake(nil) is the mirror seam used when the tracker stack goes dormant (e.g. switching to the sample page). cm clears under the same suppression; mm:load(nil) is a no-op, so no rebuild fires. tm/vm retain their last frame harmlessly until the next bindTake re-arms them.
-  function tm:bindTake(take)
+  function tm:bindTake(take, opts)
     bindingTake = true
     cm:setContext(take)
     bindingTake = false
+    if opts and opts.markSwingStale then
+      for i = 1, 16 do staleSwing[i] = true end
+    end
     mm:load(take)
     snapshotSwingState()
   end

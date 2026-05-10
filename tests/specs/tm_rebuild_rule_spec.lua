@@ -196,14 +196,16 @@ return {
     end,
   },
 
-  ----- Exempt events (frame-bearing, fake)
+  ----- Exempt events (frame-bearing without stale, fake)
 
   {
-    name = 'frame-bearing event is exempt from the rule (legacy reswing pathway owns it)',
+    name = 'frame-bearing event without stale is exempt from the rule',
     run = function(harness)
-      -- An event with a frame stamp and a deliberately stale ppqL: rule
-      -- must NOT touch ppqL, because vm:reswingAll uses frame metadata
-      -- to drive reswing in the pre-Phase-7 world.
+      -- Frame is the authoring-truth marker: ppqL/endppqL are the truth,
+      -- raw is realisation under e.frame.swing. The rule must not
+      -- rederive ppqL from raw on cold load — only the stale-branch
+      -- (driven by configChanged or bindTake's markSwingStale) touches
+      -- frame-bearing events.
       local h = harness.mk{
         seed = { notes = {
           { ppq = 200, endppq = 320, chan = 1, pitch = 60, vel = 100,

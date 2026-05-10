@@ -91,7 +91,7 @@ Never hand-edit them.
   to 4–5 surgical 30–50-line ranges once the map has done its work.
   Open `docs/<file>.md` when you need the WHY.
 
-- Cross-module navigation: use `mcp__readium__map_query` instead of
+- Cross-module navigation: use `mcp__readium_docs__map_query` instead of
   grepping `map/*.map`. It parses every map and returns
   `<src>.lua:<line>  @kind <name>` rows, ready to feed into Read with
   offset/limit. Filter by `kind` (fn, api, factory, state, const,
@@ -105,14 +105,14 @@ Never hand-edit them.
 
 - Framework docs: `docs/reaper_imgui_doc.html` (ReaImGui),
   `docs/REAPER API functions.html` (ReaScript). Use the
-  `mcp__readium__reaper_doc_lookup` tool, not raw grep — it parses
+  `mcp__readium_docs__reaper_doc_lookup` tool, not raw grep — it parses
   these HTML files and returns the clean Lua signature plus prose
   for a named function/constant. Wildcards (`MIDI_*`) return a
   one-line index across both docs. Falls back to grep only if a
   name is missing from the parsed entries.
 
 - All code changes run the pure-Lua test harness. Use the
-  `mcp__readium__lua_test_run` tool — it wraps `lua tests/run.lua`,
+  `mcp__readium_tests__lua_test_run` tool — it wraps `lua tests/run.lua`,
   returns failures-only by default with the failing spec line + a
   source window + condensed traceback. Pass a `filter` substring to
   scope the run (e.g. `"tm_rebuild_spec"` or `"absorber"`); the

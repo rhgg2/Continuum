@@ -1149,7 +1149,7 @@ function newTrackerView(tm, cm, cmgr)
 
   ----- Reswing / quantize
 
-  local reswingPresetChange do
+  do
 
     -- Every column, every event, as a groups list (for *-all variants).
     local function allGroups()
@@ -1266,23 +1266,6 @@ function newTrackerView(tm, cm, cmgr)
       })
     end
 
-    function reswingPresetChange(name)
-      local cache = {}
-      reswingCore(allGroups(), {
-        include = function(e) return e.frame.swing == name or e.frame.colSwing == name end,
-        target  = function(frame, chan)
-          local hit = cache[frame]
-          if hit then return hit end
-          hit = tm:swingSnapshot({
-            swing    = frame.swing,
-            colSwing = { [chan] = frame.colSwing },
-          })
-          cache[frame] = hit
-          return hit
-        end,
-      })
-    end
-
     -- Plan-then-write so conformOverlaps can clip plan geometry against
     -- col-mates before the writes commit. Two off-grid col-mates can
     -- otherwise quantize-collapse onto the same ppq (or onto adjacent
@@ -1359,11 +1342,6 @@ function newTrackerView(tm, cm, cmgr)
     function vm:quantizeAll()                   quantizeScope(allGroups())                end
     function vm:quantizeKeepRealisedSelection() quantizeKeepRealisedScope(eventsByCol())  end
     function vm:quantizeKeepRealisedAll()       quantizeKeepRealisedScope(allGroups())    end
-  end
-
-  function vm:reswingPreset(name)
-    if not name or name == '' then return end
-    reswingPresetChange(name)
   end
 
   local insertRow, deleteRow, insertRowCol, deleteRowCol do

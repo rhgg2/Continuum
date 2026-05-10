@@ -31,12 +31,11 @@ function newSequenceManager(tm, vm, cm)
     return hits
   end
 
-  --@map:contract iterates affected takes via tm:bindTake; vm:reswingPreset runs in each take's context; restores the original take at the end
+  --@map:contract iterates affected takes via tm:bindTake with opts.markSwingStale=true; that flag drives the post-load rebuild's stale-branch, which rebuilds raw from each event's ppqL under the take's current swing. Restores the original take at the end (no stale-mark — the active take's events are unchanged by the visit).
   function self:reswingAll(name)
     local origTake = tm:currentTake()
     for _, take in ipairs(self:takesUsing(name)) do
-      if take ~= origTake then tm:bindTake(take) end
-      vm:reswingPreset(name)
+      if take ~= origTake then tm:bindTake(take, {markSwingStale=true}) end
     end
     if tm:currentTake() ~= origTake then tm:bindTake(origTake) end
   end

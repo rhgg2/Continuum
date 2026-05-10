@@ -1,12 +1,30 @@
 {
   "mcpServers": {
-    "readium": {
+    "readium_docs": {
       "command": "uv",
       "args": [
         "run",
         "--quiet",
         "--script",
-        ".claude/mcp/server.py"
+        ".claude/mcp/docs/server.py"
+      ]
+    },
+    "readium_tests": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--quiet",
+        "--script",
+        ".claude/mcp/test_runner/server.py"
+      ]
+    },
+    "readium_patches": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--quiet",
+        "--script",
+        ".claude/mcp/patches/server.py"
       ]
     }
   }
