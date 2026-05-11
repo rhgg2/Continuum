@@ -139,6 +139,9 @@ function newTrackerView(tm, cm, cmgr)
     chanLastCol  = {},
   }
 
+  --@map:invariant aliasIdx: spec-tree dependency index. byUuid: { [uuid] = {col, row, evt, chan, ppq, treeParent?} } over every event with a uuid whose start row falls in the grid. byChildren: { [parentUuid] = [record, ...] sorted (ppq, chan) } where parentUuid is the SPEC-TREE parent's uuid (the root for top-level aliases; an intermediate alias for nested ones). treeParent is derived from specPath, NOT evt.parentUuid (which is always the root because the walker emits flat). Consumers: alias-tree nav, transient focus highlight.
+  local aliasIdx = { byUuid = {}, byChildren = {} }
+
   local vm = {}
   vm.grid = grid  -- live handle for rm; mutated in place on rebuild
   vm.aliasMode = false  -- toggled by `toggleAliasMode`; sampled at paste/duplicate time to choose aliased vs plain writer (the clip itself always carries aliasSrc)
@@ -1042,8 +1045,13 @@ function newTrackerView(tm, cm, cmgr)
         return
       end
 
-      local col = grid.cols[ec:col()]
-      if not (col and col.type == 'note' and ec:cursorPart() == 'pitch') then return false end
+      local _, ccol, cstop = ec:pos()
+      local col = grid.cols[ccol]
+      if not (col and col.type == 'note'
+              and ec:cursorPart() == 'pitch'
+              and cstop == col.partStart[cstop]) then
+        return false
+      end
       local r = ec:row()
       local cursorppq     = ctx:rowToPPQ(r,     col.midiChan)
       local nextCursorPPQ = ctx:rowToPPQ(r + 1, col.midiChan)
@@ -1071,6 +1079,7 @@ function newTrackerView(tm, cm, cmgr)
     end
 
     function adjustDuration(rowDelta)
+      rowDelta = rowDelta * (cmgr:consumePrefix() or 1)
       if ec:hasSelection() then
         for _, group in ipairs(eventsByCol()) do
           if group.col.type == 'note' then
@@ -1132,6 +1141,7 @@ function newTrackerView(tm, cm, cmgr)
     -- swing reads ppqL exactly so round-trip noise can't refuse the slot.
     -- Cursor follows by rowDelta unless that row already holds another note.
     function adjustPosition(rowDelta)
+      rowDelta = rowDelta * (cmgr:consumePrefix() or 1)
       if ec:hasSelection() then return adjustPositionMulti(rowDelta) end
 
       local col, note = cursorNoteBefore()
@@ -1263,27 +1273,14 @@ function newTrackerView(tm, cm, cmgr)
       reswingCore(groups, { target = function() return curSnap end })
     end
 
-    -- Sever aliased children that have plans, before the writes commit.
-    -- Sever preserves each event's mm-uuid and loc, so the plan list keyed
-    -- on `e` references stays valid; the metadata-clear assigns merge
-    -- by-loc with the ppq/endppq writes that follow inside the same flush.
-    -- Only planned events are severed — on-grid aliased col-mates in scope
-    -- stay attached to the spec. Aliasing roots, planned or not, are left
-    -- intact: root ppq moves, descendants compose against it on rebuild.
-    local function severAliasedPlans(plans)
-      local hits = {}
-      for _, p in ipairs(plans) do
-        if p.e.parentUuid then util.add(hits, p.e) end
-      end
-      if #hits > 0 then tm:severBatch(hits) end
-    end
-
     -- Plan-then-write so conformOverlaps can clip plan geometry against
     -- col-mates before the writes commit. Two off-grid col-mates can
     -- otherwise quantize-collapse onto the same ppq (or onto adjacent
     -- rows whose post-snap distance crosses the lenient threshold),
     -- and the allocator would reject the persisted lane on rebuild.
+    --@map:contract aliased events route a relative `{'snap', step}` op onto the spec node's ppqL (and durL for notes) so the child stays attached; the snap step is logPerRowFor(currentRpb()), baked as a literal so the alias keeps that grid even if rowPerBeat later changes. Root events go through the plan-and-write path as before.
     local function quantizeScope(groups)
+      local step  = logPerRowFor(currentRpb())
       local plans = {}
       for _, g in ipairs(groups) do
         local col, chan = g.col, g.col.midiChan
@@ -1291,27 +1288,34 @@ function newTrackerView(tm, cm, cmgr)
           local sRow   = ctx:ppqToRow(e.ppq, chan)
           local newRow = util.round(sRow)
           local newppq = ctx:rowToPPQ(newRow, chan)
+          local newEndppq
           if util.isNote(e) then
             local newEndRow = newRow + util.round(ctx:ppqToRow(e.endppq, chan) - sRow)
-            local newEndppq = ctx:rowToPPQ(newEndRow, chan)
-            if newppq ~= e.ppq or newEndppq ~= e.endppq then
-              util.add(plans, { col = col, e = e,
-                newppq = newppq, newEndppq = newEndppq })
+            newEndppq = ctx:rowToPPQ(newEndRow, chan)
+          end
+          local changed = newppq ~= e.ppq
+                          or (util.isNote(e) and newEndppq ~= e.endppq)
+          if changed then
+            if e.parentUuid then
+              local ops = { ppqL = { 'snap', step } }
+              if util.isNote(e) then ops.durL = { 'snap', step } end
+              tm:routeRelative(e, ops)
+            else
+              local entry = { col = col, e = e, newppq = newppq }
+              if util.isNote(e) then entry.newEndppq = newEndppq end
+              util.add(plans, entry)
             end
-          elseif newppq ~= e.ppq then
-            util.add(plans, { col = col, e = e, newppq = newppq })
           end
         end
       end
 
       conformOverlaps(plans)
-      severAliasedPlans(plans)
       writePlans(plans)
       tm:flush()
     end
 
     -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
-    --@map:contract intent ppq snaps to nearest row; delay absorbs the inverse to preserve realised onset; endppq held; delay clamped at delayRange; popup reports clamps
+    --@map:contract intent ppq snaps to nearest row; delay absorbs the inverse to preserve realised onset; endppq held; delay clamped at delayRange; popup reports clamps. Aliased planned events are severed before writing — preserving realised onset writes per-emit delay, which an alias cannot carry; only events that actually have a plan sever, so on-grid aliased col-mates stay attached.
     local function quantizeKeepRealisedScope(groups)
       local plans, clamped = {}, 0
       for _, g in ipairs(groups) do
@@ -1337,7 +1341,12 @@ function newTrackerView(tm, cm, cmgr)
         end
       end
 
-      severAliasedPlans(plans)
+      local hits = {}
+      for _, p in ipairs(plans) do
+        if p.e.parentUuid then util.add(hits, p.e) end
+      end
+      if #hits > 0 then tm:severBatch(hits) end
+
       writePlans(plans)
       tm:flush()
 
@@ -1354,6 +1363,105 @@ function newTrackerView(tm, cm, cmgr)
     function vm:quantizeAll()                   quantizeScope(allGroups())                end
     function vm:quantizeKeepRealisedSelection() quantizeKeepRealisedScope(eventsByCol())  end
     function vm:quantizeKeepRealisedAll()       quantizeKeepRealisedScope(allGroups())    end
+
+    -- Cap on rpb refinement — matches vm:setRowPerBeat's clamp, so an
+    -- attempted refinement that exceeds it is silently refused rather
+    -- than silently clamped (clamping would land us at the wrong grid).
+    local SCALE_RPB_MAX = 32
+
+    --@map:contract scale positions and (note) durations around the selection-anchor row's logical ppq. Aliased events route { ppqL = [mul k, add a*(1-k)], durL = [mul k] } — durL has no translation because durations are intervals. Anchor falls back to cursor row when no selection (single-event scale is identity). Roots use the plan-then-write path so conformOverlaps clips overlaps before commit. Filters through aliases.localRoots so a descendant whose parent is also in the selection is skipped — the parent's mutation re-derives it through the spec tree. After writes flush, if a selection is active and the caller passed integers (kNum, kDen): reshape the selection in row-terms; if span*k is a non-integer rational, multiply rpb by the reduced denominator (capped at SCALE_RPB_MAX) so the new geometry lands on integer rows.
+    local function scaleScope(groups, kNum, kDen)
+      kDen = kDen or 1
+      if kDen == 0 then return end
+      local k = kNum / kDen
+      if not k or k == 1 then return end
+      local logPerRow = ctx:ppqPerRow()
+      local aRow      = ec:anchorRow() or ec:row()
+      local aLogical  = aRow * logPerRow
+
+      local flat = {}
+      for _, g in ipairs(groups) do
+        for _, e in pairs(g.locs) do flat[#flat + 1] = e end
+      end
+      local keep = {}
+      for _, e in ipairs(aliases.localRoots(flat)) do keep[e] = true end
+
+      local plans = {}
+      for _, g in ipairs(groups) do
+        local col, chan = g.col, g.col.midiChan
+        local aPpq = ctx:rowToPPQ(aRow, chan)
+        for _, e in pairs(g.locs) do
+          if keep[e] then
+            if e.parentUuid then
+              local addTerm = aLogical * (1 - k)
+              local ppqLOps = addTerm ~= 0
+                and { { 'mul', k }, { 'add', addTerm } }
+                or  { 'mul', k }
+              local ops = { ppqL = ppqLOps }
+              if util.isNote(e) then ops.durL = { 'mul', k } end
+              tm:routeRelative(e, ops)
+            else
+              local newppq = util.round(aPpq + k * (e.ppq - aPpq))
+              local entry  = { col = col, e = e, newppq = newppq }
+              if util.isNote(e) then
+                entry.newEndppq = newppq + util.round(k * (e.endppq - e.ppq))
+              end
+              util.add(plans, entry)
+            end
+          end
+        end
+      end
+      conformOverlaps(plans)
+      writePlans(plans)
+      tm:flush()
+
+      -- Selection follow-up. Only when there's a live selection AND the
+      -- caller passed an integer rational — float-k callers stay in the
+      -- old shape (no reshape, no rpb refinement).
+      if not (ec:hasSelection()
+              and type(kNum) == 'number' and kNum == math.floor(kNum)
+              and type(kDen) == 'number' and kDen == math.floor(kDen)) then
+        return
+      end
+      local r1, r2, c1, c2, part1, part2 = ec:region()
+      local aRowSel = ec:anchorRow() or r1
+      local cRowSel = (aRowSel == r1) and r2 or r1
+      local span    = cRowSel - aRowSel
+      if span == 0 then return end   -- one-row selection: identity
+
+      local g    = util.gcd(kNum, kDen)
+      local p, q = kNum // g, kDen // g
+
+      local function reshape(newA, newC)
+        local nr1 = math.min(newA, newC)
+        local nr2 = math.max(newA, newC)
+        ec:setSelection{ row1 = nr1, row2 = nr2, col1 = c1, col2 = c2,
+                         part1 = part1, part2 = part2 }
+      end
+
+      if span % q == 0 then
+        reshape(aRowSel, aRowSel + (p * span) // q)
+      else
+        local oldRpb = currentRpb()
+        local newRpb = oldRpb * q
+        if newRpb <= SCALE_RPB_MAX then
+          local newA = aRowSel * q
+          local newC = newA + p * span
+          -- Write rpb at 'take' (more specific than 'track', which
+          -- vm:setRowPerBeat uses) so the refinement survives even when
+          -- the take already has its own rpb override. Mirror the
+          -- transient-release + ec:rescaleRow that setRowPerBeat does.
+          releaseTransientFrame()
+          ec:rescaleRow(oldRpb, newRpb)
+          cm:set('take', 'rowPerBeat', newRpb)
+          reshape(newA, newC)
+        end
+        -- else: silent refusal — selection stays at current rpb, geometry slipped.
+      end
+    end
+
+    function vm:scaleSelection(kNum, kDen) scaleScope(eventsByCol(), kNum, kDen) end
+    function vm:scaleAll(kNum, kDen)       scaleScope(allGroups(),   kNum, kDen) end
   end
 
   local insertRow, deleteRow, insertRowCol, deleteRowCol do
@@ -1468,12 +1576,22 @@ function newTrackerView(tm, cm, cmgr)
       return 0, 127
     end
 
-    local function nudgePitch(col, note, dir, coarse, audible)
+    -- p scales the step magnitude (universal-argument prefix; defaults
+    -- to 1 from the call site). Coarse scales the interval; fine scales
+    -- the direction unit.
+    local function scaledScalar(v, lo, hi, dir, baseInterval, p)
+      if baseInterval then
+        return util.nudgedScalar(v, lo, hi, dir, baseInterval * p)
+      end
+      return util.nudgedScalar(v, lo, hi, dir * p, nil)
+    end
+
+    local function nudgePitch(col, note, dir, coarse, audible, p)
       if note.parentUuid then
         local field = coarse and 'octave' or 'pitch'
-        if tm:routeRelative(note, { [field] = { 'add', dir } }) then return end
+        if tm:routeRelative(note, { [field] = { 'add', dir * p } }) then return end
       end
-      local delta  = dir * pitchStep(coarse)
+      local delta  = dir * pitchStep(coarse) * p
       local temper = ctx:activeTemper()
       local pitch, detune
       if temper then
@@ -1486,38 +1604,38 @@ function newTrackerView(tm, cm, cmgr)
       if audible then audition(pitch, note.vel, col.midiChan) end
     end
 
-    local function nudgeVel(note, dir, coarse)
-      local newVel = util.nudgedScalar(note.vel, 1, 127, dir, coarse and 8 or nil)
+    local function nudgeVel(note, dir, coarse, p)
+      local newVel = scaledScalar(note.vel, 1, 127, dir, coarse and 8 or nil, p)
       if newVel == note.vel then return end
       if note.parentUuid
          and tm:routeRelative(note, { vel = { 'add', newVel - note.vel } }) then return end
       tm:assignEvent('note', note, { vel = newVel })
     end
 
-    local function nudgeDelay(col, note, dir, coarse)
+    local function nudgeDelay(col, note, dir, coarse, p)
       local minD, maxD = delayRange(col, note)
       local old = note.delay
-      local new = util.nudgedScalar(old, math.ceil(minD), math.floor(maxD), dir, coarse and 10 or nil)
+      local new = scaledScalar(old, math.ceil(minD), math.floor(maxD), dir, coarse and 10 or nil, p)
       if new == old then return end
       if note.parentUuid
          and tm:routeRelative(note, { delay = { 'add', new - old } }) then return end
       tm:assignEvent('note', note, { delay = new })
     end
 
-    local function nudgeValue(col, evt, dir, coarse)
+    local function nudgeValue(col, evt, dir, coarse, p)
       local lo, hi   = valueBounds(col)
-      local newVal   = util.nudgedScalar(evt.val, lo, hi, dir, coarse and valueInterval(col) or nil)
+      local newVal   = scaledScalar(evt.val, lo, hi, dir, coarse and valueInterval(col) or nil, p)
       if newVal == evt.val then return end
       if evt.parentUuid
          and tm:routeRelative(evt, { val = { 'add', newVal - evt.val } }) then return end
       tm:assignEvent(col.type, evt, { val = newVal })
     end
 
-    local function applyNudge(col, evt, part, dir, coarse, audible)
-      if     part == 'val'   then nudgeValue(col, evt, dir, coarse)
-      elseif part == 'vel'   then nudgeVel(evt, dir, coarse)
-      elseif part == 'delay' then nudgeDelay(col, evt, dir, coarse)
-      elseif part == 'pitch' then nudgePitch(col, evt, dir, coarse, audible) end
+    local function applyNudge(col, evt, part, dir, coarse, audible, p)
+      if     part == 'val'   then nudgeValue(col, evt, dir, coarse, p)
+      elseif part == 'vel'   then nudgeVel(evt, dir, coarse, p)
+      elseif part == 'delay' then nudgeDelay(col, evt, dir, coarse, p)
+      elseif part == 'pitch' then nudgePitch(col, evt, dir, coarse, audible, p) end
     end
 
     -- PAs skipped on note cols.
@@ -1535,6 +1653,7 @@ function newTrackerView(tm, cm, cmgr)
     -- alone; otherwise nudge val on every value event. Solo cursor: first
     -- event in the cursor row, column- and part-typed.
     function nudge(dir, coarse)
+      local p = cmgr:consumePrefix() or 1
       if ec:hasSelection() then
         local groups = eventsByCol()
 
@@ -1548,12 +1667,23 @@ function newTrackerView(tm, cm, cmgr)
           end
         end
 
+        -- Filter to local roots: a child whose parent is also in the
+        -- selection drops out, otherwise the parent's direct mutation
+        -- plus the child's spec-append would compose into a double-delta
+        -- on rebuild.
+        local flat = {}
+        for _, g in ipairs(groups) do
+          for _, e in pairs(g.locs) do flat[#flat + 1] = e end
+        end
+        local keep = {}
+        for _, e in ipairs(aliases.localRoots(flat)) do keep[e] = true end
+
         for _, g in ipairs(groups) do
           local skip = g.part == 'val' and anyNote
           if not skip then
             for _, e in pairs(g.locs) do
-              if g.part == 'val' or util.isNote(e) then
-                applyNudge(g.col, e, g.part, dir, coarse, false)
+              if keep[e] and (g.part == 'val' or util.isNote(e)) then
+                applyNudge(g.col, e, g.part, dir, coarse, false, p)
               end
             end
           end
@@ -1565,7 +1695,7 @@ function newTrackerView(tm, cm, cmgr)
       local col = grid.cols[ec:col()]
       local evt = cursorRowEvent(col)
       if not evt then return end
-      applyNudge(col, evt, ec:cursorPart(), dir, coarse, true)
+      applyNudge(col, evt, ec:cursorPart(), dir, coarse, true, p)
       tm:flush()
     end
   end
@@ -1779,6 +1909,8 @@ function newTrackerView(tm, cm, cmgr)
   function vm:ppqToRow(ppq, chan) return ctx:ppqToRow(ppq, chan) end
   function vm:rowToPPQ(row, chan) return ctx:rowToPPQ(row, chan) end
   function vm:sampleCurve(A, B, ppq) return tm:interpolate(A, B, ppq) end
+  function vm:getAliasMode() return self.aliasMode end
+  function vm:aliasIndex()   return aliasIdx end
   function vm:timeSig()
     local ts = timeSigs[1] or { num = 4, denom = 4 }
     return ts.num, ts.denom
@@ -1888,6 +2020,86 @@ function newTrackerView(tm, cm, cmgr)
     if changed then cm:set('take', 'noteDelay', nd) end
   end
 
+  ----- Alias-tree navigation
+
+  -- Reverse lookup: grid col + row hosting `evt`. Restricted to chan so
+  -- the scan stays bounded by the (few) cols of one channel.
+  local function locateEvent(evt, chan)
+    if not (evt and chan) then return end
+    local first, last = grid.chanFirstCol[chan], grid.chanLastCol[chan]
+    if not first then return end
+    for ci = first, last do
+      local cells = grid.cols[ci].cells
+      if cells then
+        for r, e in pairs(cells) do
+          if e == evt then return ci, r end
+        end
+      end
+    end
+  end
+
+  -- dir ∈ 'up' | 'down' | 'left' | 'right'. Resolves the event under the
+  -- cursor, consults tm:aliasIndex, moves ec onto the target's cell. Each
+  -- direction no-ops at its boundary: up from a root, down from a leaf,
+  -- left/right at the sibling-list ends. No wrap.
+  local function aliasNav(dir)
+    local col = grid.cols[ec:col()]
+    local evt = col and col.cells and col.cells[ec:row()]
+    if not evt then return end
+    local idx = tm:aliasIndex()
+    local target
+    if dir == 'up' then
+      target = evt.parentUuid and idx.byUuid[evt.parentUuid]
+    elseif dir == 'down' then
+      local list = evt.uuid and idx.byParent[evt.uuid]
+      target = list and list[1]
+    else
+      if not evt.parentUuid then return end
+      local list = idx.byParent[evt.parentUuid]
+      if not list then return end
+      local step = dir == 'right' and 1 or -1
+      for i, rec in ipairs(list) do
+        if rec.evt == evt then target = list[i + step]; break end
+      end
+    end
+    if not target then return end
+    local tcol = locateEvent(target.evt, target.chan)
+    if not tcol then return end
+    ec:setPos(util.round(ctx:ppqToRow(target.evt.ppq, target.chan)), tcol, 1)
+  end
+
+  ----- Alias-tree navigation
+
+  -- dir ∈ 'up' | 'down' | 'left' | 'right'. Resolves the event under the
+  -- cursor, walks aliasIdx, moves ec onto the target's cell. Each
+  -- direction no-ops at its boundary: up from a root, down from a leaf,
+  -- left/right at the sibling-list ends. No wrap. "Parent" here is the
+  -- spec-tree parent (one level up the alias hierarchy), not the flat
+  -- materialisation root that evt.parentUuid points at.
+  local function aliasNav(dir)
+    local col = grid.cols[ec:col()]
+    local evt = col and col.cells and col.cells[ec:row()]
+    if not evt or not evt.uuid then return end
+    local rec = aliasIdx.byUuid[evt.uuid]
+    if not rec then return end
+    local target
+    if dir == 'up' then
+      target = rec.treeParent and aliasIdx.byUuid[rec.treeParent]
+    elseif dir == 'down' then
+      local list = aliasIdx.byChildren[evt.uuid]
+      target = list and list[1]
+    else
+      if not rec.treeParent then return end
+      local list = aliasIdx.byChildren[rec.treeParent]
+      if not list then return end
+      local step = dir == 'right' and 1 or -1
+      for i, sib in ipairs(list) do
+        if sib == rec then target = list[i + step]; break end
+      end
+    end
+    if target then ec:setPos(target.row, target.col, 1) end
+  end
+
   ----- Command table
 
   local tracker = cmgr:scope('tracker')
@@ -1900,6 +2112,14 @@ function newTrackerView(tm, cm, cmgr)
     duplicateDown           = function() duplicate( 1) end,
     duplicateUp             = function() duplicate(-1) end,
     toggleAliasMode         = function() vm.aliasMode = not vm.aliasMode end,
+    aliasUp                 = function() aliasNav('up')    end,
+    aliasDown               = function() aliasNav('down')  end,
+    aliasLeft               = function() aliasNav('left')  end,
+    aliasRight              = function() aliasNav('right') end,
+    aliasUp                 = function() aliasNav('up')    end,
+    aliasDown               = function() aliasNav('down')  end,
+    aliasLeft               = function() aliasNav('left')  end,
+    aliasRight              = function() aliasNav('right') end,
     sever                   = severCmd,
     inputOctaveUp           = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')+1, -1, 9)) end,
     inputOctaveDown         = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')-1, -1, 9)) end,
@@ -1910,6 +2130,20 @@ function newTrackerView(tm, cm, cmgr)
     shrinkNote              = function() adjustDuration(-1) end,
     nudgeBack               = function() adjustPosition(-1) end,
     nudgeForward            = function() adjustPosition(1) end,
+    -- '(' halves: with prefix p = pn/pd, k = pd/pn (reciprocal). Default 1/2.
+    scaleHalf               = function()
+      if not ec:hasSelection() then return end
+      local pn, pd = cmgr:consumePrefixRational()
+      if pn then vm:scaleSelection(pd, pn)
+      else       vm:scaleSelection(1, 2) end
+    end,
+    -- ')' doubles: with prefix p = pn/pd, k = pn/pd. Default 2/1.
+    scaleDouble             = function()
+      if not ec:hasSelection() then return end
+      local pn, pd = cmgr:consumePrefixRational()
+      if pn then vm:scaleSelection(pn, pd)
+      else       vm:scaleSelection(2, 1) end
+    end,
     insertRow               = function() insertRow() end,
     deleteRow               = function() deleteRow() end,
     insertRowCol            = function() insertRowCol() end,
@@ -2032,7 +2266,9 @@ function newTrackerView(tm, cm, cmgr)
         temper     = tuning.findTemper(cm:get('temper'), cm:get('tempers')),
       }
 
-      for _, gridCol in ipairs(grid.cols) do
+      aliasIdx = { byUuid = {}, byChildren = {} }
+      local bySpecPath = {}  -- bySpecPath[rootUuid][specPath] = rec; pass-1 scaffold for treeParent derivation
+      for ci, gridCol in ipairs(grid.cols) do
         gridCol.overflow = {}
         gridCol.offGrid  = {}
         if gridCol.type == 'note' then gridCol.tails = {} end
@@ -2047,6 +2283,15 @@ function newTrackerView(tm, cm, cmgr)
               gridCol.cells[y] = evt
               if ctx:rowToPPQ(y, chan) ~= evt.ppq then gridCol.offGrid[y] = true end
             end
+            if evt.uuid then
+              local rec = { col = ci, row = y, evt = evt, chan = chan, ppq = evt.ppq }
+              aliasIdx.byUuid[evt.uuid] = rec
+              if evt.parentUuid and evt.specPath then
+                local m = bySpecPath[evt.parentUuid] or {}
+                bySpecPath[evt.parentUuid] = m
+                m[evt.specPath] = rec
+              end
+            end
           end
           if evt.endppq then
             util.add(gridCol.tails, {
@@ -2055,6 +2300,32 @@ function newTrackerView(tm, cm, cmgr)
             })
           end
         end
+      end
+
+      -- Pass 2: tree links. Strip last spec-path segment to find the
+      -- intermediate parent; absent that, the spec-tree parent is the
+      -- materialisation root (evt.parentUuid).
+      for _, rec in pairs(aliasIdx.byUuid) do
+        local evt = rec.evt
+        if evt.parentUuid and evt.specPath then
+          local dot     = evt.specPath:find('%.[^.]+$')
+          local tParent = evt.parentUuid
+          if dot then
+            local parentPath = evt.specPath:sub(1, dot - 1)
+            local pRec = bySpecPath[evt.parentUuid] and bySpecPath[evt.parentUuid][parentPath]
+            if pRec then tParent = pRec.evt.uuid end
+          end
+          rec.treeParent = tParent
+          local list = aliasIdx.byChildren[tParent] or {}
+          aliasIdx.byChildren[tParent] = list
+          util.add(list, rec)
+        end
+      end
+      for _, list in pairs(aliasIdx.byChildren) do
+        table.sort(list, function(a, b)
+          if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+          return a.chan < b.chan
+        end)
       end
 
       for _, gridCol in ipairs(grid.cols) do

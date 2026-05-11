@@ -67,12 +67,40 @@ end
 
 ----- Keyboard router
 
+-- Capture digits and '/' into the prefix buffer; Esc cancels. Returns
+-- 'consumed' if a prefix-accumulating key fired this frame; 'fall' to
+-- finishPrefix and let the normal keychain walk handle this key; nil if
+-- prefix mode is inactive.
+local function handlePrefixCapture(cmgr, ctx)
+  if not cmgr:isPrefixActive() then return nil end
+  for d = 0, 9 do
+    if ImGui.IsKeyPressed(ctx, ImGui.Key_0 + d) and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
+      cmgr:appendPrefix(tostring(d)); return 'consumed'
+    end
+  end
+  if ImGui.IsKeyPressed(ctx, ImGui.Key_Slash) and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
+    cmgr:appendPrefix('/'); return 'consumed'
+  end
+  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+    cmgr:cancelPrefix(); return 'consumed'
+  end
+  -- Any non-accumulating press freezes the buffer so the dispatched
+  -- command can consumePrefix() on this same frame.
+  cmgr:finishPrefix()
+  return 'fall'
+end
+
 --@map:shape dispatchResult = { consumed: bool, commandHeld: bool }
 --@map:contract returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
 --@map:contract first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
+--@map:contract while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
 local function dispatchKeys(state, cmgr, ctx)
   if state.suppressKbd or not state.acceptCmds then
     return { consumed = false, commandHeld = false }
+  end
+  local cap = handlePrefixCapture(cmgr, ctx)
+  if cap == 'consumed' then
+    return { consumed = true, commandHeld = false }
   end
   local commandHeld = false
   for _, keymap in ipairs(cmgr:keychain()) do
@@ -302,18 +330,20 @@ local function Main()
   -- Globals: transport wrappers, page switching, quit. Bound on root
   -- so any page picks them up unchanged.
   cmgr:registerAll{
-    play       = function() reaper.Main_OnCommand(1007,  0) end,
-    playPause  = function() reaper.Main_OnCommand(40073, 0) end,
-    stop       = function() reaper.Main_OnCommand(1016,  0) end,
-    switchPage = function(name) coord:setActive(name)      end,
-    togglePage = function()     coord:togglePage()         end,
-    quit       = function()     coord:quit()               end,
+    play        = function() reaper.Main_OnCommand(1007,  0) end,
+    playPause   = function() reaper.Main_OnCommand(40073, 0) end,
+    stop        = function() reaper.Main_OnCommand(1016,  0) end,
+    switchPage  = function(name) coord:setActive(name)      end,
+    togglePage  = function()     coord:togglePage()         end,
+    quit        = function()     coord:quit()               end,
+    beginPrefix = function()     cmgr:beginPrefix()         end,
   }
   cmgr:bindAll{
-    playPause  = { ImGui.Key_Space },
-    stop       = { ImGui.Key_F8    },
-    togglePage = { {ImGui.Key_Tab, ImGui.Mod_Super} },
-    quit       = { ImGui.Key_Enter },
+    playPause   = { ImGui.Key_Space },
+    stop        = { ImGui.Key_F8    },
+    togglePage  = { {ImGui.Key_Tab, ImGui.Mod_Super} },
+    quit        = { ImGui.Key_Enter },
+    beginPrefix = { {ImGui.Key_U, ImGui.Mod_Super} },
   }
 
   coord:register('tracker', newTrackerPage(cm, cmgr, coord:chrome(), gui))

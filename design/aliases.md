@@ -101,9 +101,14 @@ either a number literal or a value-producing sub-expression table.
 |---|---|---|---|
 | `add` | 1 | applied | running += arg |
 | `mul` | 1 | applied | running *= arg |
+| `snap` | 1 | applied | running = round(running / arg) * arg |
 | `rand` | 2 | value-producing | returns `uniform(arg1, arg2)`; only valid as an argument to `add`/`mul` |
 
-Reserved (not implemented Phase 1): `snap`, `mod`, `clamp`, `sin`, …
+`snap` is a stateless rounding to a step. Idempotent. Applied to
+`pitch` it is currently a literal numeric snap (no scale awareness);
+scale/temperament-aware pitch snap is reserved for a later phase.
+
+Reserved (not implemented): `mod`, `clamp`, `sin`, …
 
 `rand` draws fresh per emit. The xform spec is deterministic data; the
 *resolved value* of a field is stochastic at materialisation time iff
@@ -136,6 +141,11 @@ the same opcode AND both ops have all-literal args, merge:
 
 - `{'add', a}` + `{'add', b}` → `{'add', a + b}`
 - `{'mul', a}` + `{'mul', b}` → `{'mul', a * b}`
+- `{'snap', a}` + `{'snap', b}` → `{'snap', max(a, b)}` *iff* `a` and
+  `b` are commensurate (one divides the other). Non-commensurate
+  snap pairs do not coalesce — they're kept as two ops applied in
+  order, because sequential application of incommensurate snaps is
+  not equivalent to any single snap.
 
 Otherwise append. A literal-arg `add` followed by a `rand`-arg `add`
 does *not* coalesce (the second has a non-literal arg). Different
@@ -144,7 +154,9 @@ opcodes never coalesce.
 This is the only coalescence rule. It is local (trailing op only) and
 contained (literal args only). "Scale by `k` around anchor `a`" is
 two ops: `{'mul', k}` then `{'add', a*(1-k)}`; subsequent nudges
-coalesce into the trailing `add`.
+coalesce into the trailing `add`. Repeated quantize against the same
+grid coalesces snap-into-snap; against a coarser grid the coarser
+step wins.
 
 ---
 
@@ -224,15 +236,58 @@ op list. Otherwise mutate the event directly.
 | `nudgeCoarse/Fine Up/Down`, val | `val` | `{'add', δ}` |
 | `nudgeCoarse/Fine Up/Down`, delay | `delay` | `{'add', δ}` |
 | `insertRow`, `deleteRow` | `ppqL` | `{'add', δ}` per affected event |
-| (new) `shift` | `<f>` (cursor) | `{'add', δ}` |
-| (new) `scale` | `<f>` (cursor) | `{'mul', k}` then `{'add', a*(1-k)}` for anchor `a` |
+| `nudge*` with universal-prefix (shift-by-N) | `<f>` (cursor) | `{'add', δ × prefix}` |
+| `scale` (`(` = ×0.5, `)` = ×2) | `ppqL`, `durL` | see below |
 | (new) `humanise` | `<f>` (cursor) | `{'add', {'rand', lo, hi}}` |
+| `quantize` | `ppqL` (and `durL` for notes) | `{'snap', step}` where `step = logPerRowFor(currentRpb())` |
+
+**`scale`** appends *two* ops to `ppqL` (`[mul k, add a*(1-k)]` for anchor
+`a` in logical ppq) and *one* to `durL` on notes (`[mul k]`). Durations
+are intervals — translation-invariant — so the add term is omitted.
+The anchor is the selection-anchor row's logical ppq (`ec:anchorRow()`),
+falling back to the cursor row when no selection is active; at
+`a = 0` the add term collapses and only the mul is appended. Bindings:
+`(` and `)` for halve / double. Arbitrary scalars ride the
+universal-prefix mechanism (e.g. `Cmd-U 3 (` = ×1/3, `Cmd-U 4/3 )` =
+×4/3); the prefix is parsed by `commandManager` as an Emacs-style
+integral-or-rational number with no negative form. Scale call sites
+read the rational form via `cmgr:consumePrefixRational()` so the
+denominator survives for the rpb refinement below.
+
+**Selection follow-up.** When a selection is active and `k = p/q` in
+lowest terms, scale reshapes the selection around the anchor row:
+
+- If `span * k` is an integer (equivalently, `q | span`), the selection's
+  loose end moves to `anchor + p*span/q`. rpb is unchanged.
+- Otherwise, rpb is multiplied by `q` (capped at 32, matching
+  `vm:setRowPerBeat`'s clamp; refusal is silent if the cap would be
+  exceeded) and the selection is reshaped at the new rpb: anchor lands
+  at `oldAnchor*q`, loose end at `oldAnchor*q + p*span`. The rpb write
+  goes at `take` level so it survives a take-level pre-existing rpb
+  override.
+
+**Local-roots filtering** — selection-shaped mutators (currently `scale`;
+see §Audit below) pass their event list through `aliases.localRoots`,
+which drops any event whose `parentUuid` is also present in the same
+selection. The retained parent's mutation re-derives the dropped
+descendant through the spec tree; touching both would double-mutate.
+Plain (non-aliased) events always survive. Descendants whose parents
+are *not* in the selection survive too — they route through their own
+spec node as the only mutation target in scope.
 
 `insertRow`/`deleteRow` append `{'add', δ}` to `ppqL` (logical, not
 realised — the existing `shiftPlan` re-derives `ppq` from `ppqL`
 through swing) on aliased children even when their parent lies
 outside the shifted region. The alias drifts from its parent —
 accepted.
+
+`quantize` is a floating quantiser: the snap step is baked as a
+literal so the alias keeps that grid even if `rowPerBeat` later
+changes; descendants compose against the snapped intermediate (which
+may itself drift off a finer grid as the user re-snaps an ancestor).
+If the user wants snap-as-freeze (intent locked to a fixed realised
+position, decoupled from any future ancestor drift), they sever
+first and then quantize — the two primitives compose.
 
 ### Absolute — severs
 
@@ -242,7 +297,7 @@ directly.
 
 | command | why |
 |---|---|
-| `quantize`, `quantizeKeepRealised` | snaps logical ppq to grid; the snap is a property of realised position, not a delta worth carrying as the parent moves |
+| `quantizeKeepRealised` | snaps logical ppq to grid and absorbs the inverse into per-emit `delay` to preserve realised onset; `delay` is per-emit, not in the spec vocabulary, so the realised-preservation promise cannot be expressed as an xform — severance is the honest path |
 
 ### Re-relativised — absolute target, relative composition
 

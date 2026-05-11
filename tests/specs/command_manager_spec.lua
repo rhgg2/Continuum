@@ -158,6 +158,131 @@ return {
   },
 
   {
+    name = 'prefix: inactive by default; consume returns nil',
+    run = function()
+      local mgr = newCommandManager(nil)
+      t.eq(mgr:isPrefixActive(), false)
+      t.eq(mgr:consumePrefix(), nil)
+    end,
+  },
+
+  {
+    name = 'prefix: begin → digits → finish parses integer',
+    run = function()
+      local mgr = newCommandManager(nil)
+      mgr:beginPrefix()
+      t.eq(mgr:isPrefixActive(), true)
+      mgr:appendPrefix('1'); mgr:appendPrefix('2'); mgr:appendPrefix('0')
+      mgr:finishPrefix()
+      t.eq(mgr:isPrefixActive(), false)
+      t.eq(mgr:consumePrefix(), 120)
+      t.eq(mgr:consumePrefix(), nil, 'consume clears')
+    end,
+  },
+
+  {
+    name = 'prefix: fraction a/b parses to a number',
+    run = function()
+      local mgr = newCommandManager(nil)
+      mgr:beginPrefix()
+      mgr:appendPrefix('4'); mgr:appendPrefix('/'); mgr:appendPrefix('3')
+      mgr:finishPrefix()
+      local v = mgr:consumePrefix()
+      t.truthy(v); t.truthy(math.abs(v - 4/3) < 1e-12)
+    end,
+  },
+
+  {
+    name = 'prefix: empty buffer at finish yields nil',
+    run = function()
+      local mgr = newCommandManager(nil)
+      mgr:beginPrefix()
+      mgr:finishPrefix()
+      t.eq(mgr:consumePrefix(), nil)
+    end,
+  },
+
+  {
+    name = 'prefix: cancel discards buffer and any pending',
+    run = function()
+      local mgr = newCommandManager(nil)
+      mgr:beginPrefix(); mgr:appendPrefix('7')
+      mgr:cancelPrefix()
+      t.eq(mgr:isPrefixActive(), false)
+      t.eq(mgr:consumePrefix(), nil)
+    end,
+  },
+
+  {
+    name = 'prefix: only one slash accepted',
+    run = function()
+      local mgr = newCommandManager(nil)
+      mgr:beginPrefix()
+      mgr:appendPrefix('1'); mgr:appendPrefix('/')
+      mgr:appendPrefix('2'); mgr:appendPrefix('/')   -- second / dropped
+      mgr:appendPrefix('3')
+      mgr:finishPrefix()
+      local v = mgr:consumePrefix()
+      t.truthy(v); t.truthy(math.abs(v - 1/23) < 1e-12)
+    end,
+  },
+
+  {
+    name = 'prefix: malformed buffer (e.g. lone slash) finishes to nil',
+    run = function()
+      local mgr = newCommandManager(nil)
+      mgr:beginPrefix(); mgr:appendPrefix('/')
+      mgr:finishPrefix()
+      t.eq(mgr:consumePrefix(), nil)
+    end,
+  },
+
+  {
+    name = 'prefix: consumePrefixRational returns (n, d) for an integer',
+    run = function()
+      local mgr = newCommandManager(nil)
+      mgr:beginPrefix(); mgr:appendPrefix('5')
+      mgr:finishPrefix()
+      local n, d = mgr:consumePrefixRational()
+      t.eq(n, 5); t.eq(d, 1)
+    end,
+  },
+
+  {
+    name = 'prefix: consumePrefixRational returns (n, d) for a fraction; consume clears',
+    run = function()
+      local mgr = newCommandManager(nil)
+      mgr:beginPrefix(); mgr:appendPrefix('4'); mgr:appendPrefix('/'); mgr:appendPrefix('3')
+      mgr:finishPrefix()
+      local n, d = mgr:consumePrefixRational()
+      t.eq(n, 4); t.eq(d, 3)
+      local n2, d2 = mgr:consumePrefixRational()
+      t.eq(n2, nil); t.eq(d2, nil)
+    end,
+  },
+
+  {
+    name = 'prefix: consumePrefix and consumePrefixRational both clear all state',
+    run = function()
+      local mgr = newCommandManager(nil)
+      mgr:beginPrefix(); mgr:appendPrefix('7')
+      mgr:finishPrefix()
+      t.eq(mgr:consumePrefix(), 7)
+      local n, d = mgr:consumePrefixRational()
+      t.eq(n, nil); t.eq(d, nil)
+    end,
+  },
+
+  {
+    name = 'prefix: consumePrefixRational on empty buffer yields (nil, nil)',
+    run = function()
+      local mgr = newCommandManager(nil)
+      local n, d = mgr:consumePrefixRational()
+      t.eq(n, nil); t.eq(d, nil)
+    end,
+  },
+
+  {
     name = 'keySpec decodes bare key and chord',
     run = function()
       local mgr = newCommandManager(nil)

@@ -94,6 +94,42 @@ return {
   },
 
   --------------------------------------------------------------------
+  -- Selection contains a root AND its aliased child: localRoots
+  -- filters the child out so we don't double-add the delta (root
+  -- direct-bumped, child's spec append would compound on rebuild).
+  -- Only the root's pitch moves; spec stays untouched.
+  --------------------------------------------------------------------
+  {
+    name = 'nudge selection root+child: child filtered, spec.pitch untouched, only root pitch moves',
+    run = function(harness)
+      local h = harness.mk{
+        config = { track = { rowPerBeat = 1 } },
+        seed = { notes = { rootNote{
+          aliasCtr = 2,
+          aliases  = {
+            { id = '1', xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
+              children = {} },
+          },
+        } } },
+      }
+      h.vm:setGridSize(80, 40)
+
+      local noteCol
+      for ci, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'note' and c.midiChan == 1 then noteCol = ci; break end
+      end
+      h.ec:setSelection{ row1 = 0, row2 = 1, col1 = noteCol, col2 = noteCol,
+                         part1 = 'pitch', part2 = 'pitch' }
+      h.cmgr:invoke('nudgeFineUp')
+
+      local root = rootByUuid(h.fm:dump().notes, 1)
+      t.eq(root.pitch, 61, 'root bumped once by direct assign')
+      t.deepEq(root.aliases[1].xform.pitch, {{'add', 1}},
+        'spec pitch unchanged — child filtered, no second [add 1] appended')
+    end,
+  },
+
+  --------------------------------------------------------------------
   -- A nudge after a `{add, {rand,...}}` appends fresh; rand entry intact
   --------------------------------------------------------------------
   {

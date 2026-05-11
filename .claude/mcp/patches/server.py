@@ -361,12 +361,6 @@ def _gate_with_browser(diffs_html: str, summary: str, n_files: int) -> tuple[boo
         subprocess.Popen(["open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         pass
-    try:
-        with open("/dev/tty", "w") as tty:
-            tty.write(f"\napply_patches: review at {url}\n")
-            tty.flush()
-    except OSError:
-        pass
 
     _ApprovalState.event.wait()
     server.shutdown()
@@ -463,13 +457,6 @@ def _gate_with_emacs(edit_recs: list[dict], create_recs: list[dict],
             try: os.unlink(p)
             except OSError: pass
         return None
-
-    try:
-        with open("/dev/tty", "w") as tty:
-            tty.write("\napply_patches: review in Emacs (*continuum-review*)\n")
-            tty.flush()
-    except OSError:
-        pass
 
     deadline = time.time() + 3600.0
     while time.time() < deadline:

@@ -102,6 +102,9 @@ function newCommandManager(cm)
   local root   = newScope()
   local scopes = {}
 
+  local prefixBuf, pendingPrefix = nil, nil
+  local pendingPrefixNum, pendingPrefixDen = nil, nil
+
   local mgr = {
     commands    = root.commands,    -- alias: tests and dispatch read here
     keymap      = root.keymap,
@@ -118,6 +121,65 @@ function newCommandManager(cm)
   function mgr:wrap(name, wrapper)    root:wrap(name, wrapper) end
   function mgr:doBefore(name, before) root:doBefore(name, before) end
   function mgr:doAfter(name, after)   root:doAfter(name, after) end
+
+  ----- Universal-argument prefix
+  --
+  -- Emacs-style numeric prefix. `beginPrefix` opens accumulation; the
+  -- dispatcher feeds digit and `/` characters via `appendPrefix`. The
+  -- next non-accumulating key calls `finishPrefix` to parse the buffer
+  -- and stash a pending value, then falls through to the normal
+  -- keychain walk. Commands that want the value call `consumePrefix`.
+  -- No negatives — direction is the bound command's job.
+
+  --@map:contract buffer accepts only '0'..'9' and '/'; cancel/finish/consume each leave the state inactive
+  function mgr:beginPrefix()   prefixBuf = '' end
+  function mgr:isPrefixActive() return prefixBuf ~= nil end
+
+  function mgr:appendPrefix(ch)
+    if not prefixBuf then return end
+    if ch == '/' and prefixBuf:find('/', 1, true) then return end
+    prefixBuf = prefixBuf .. ch
+  end
+
+  function mgr:cancelPrefix()
+    prefixBuf, pendingPrefix = nil, nil
+    pendingPrefixNum, pendingPrefixDen = nil, nil
+  end
+
+  --@map:contract empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
+  function mgr:finishPrefix()
+    local buf = prefixBuf
+    prefixBuf = nil
+    pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
+    if not buf or buf == '' then return nil end
+    local num, den = buf:match('^(%d+)/(%d+)$')
+    if num then
+      local n, d = tonumber(num), tonumber(den)
+      if d ~= 0 then
+        pendingPrefix    = n / d
+        pendingPrefixNum, pendingPrefixDen = n, d
+      end
+    elseif buf:match('^%d+$') then
+      local n = tonumber(buf)
+      pendingPrefix    = n
+      pendingPrefixNum, pendingPrefixDen = n, 1
+    end
+    return pendingPrefix
+  end
+
+  --@map:contract returns pending value (number or nil) and clears all prefix state; idempotent thereafter until next finishPrefix
+  function mgr:consumePrefix()
+    local p = pendingPrefix
+    pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
+    return p
+  end
+
+  --@map:contract returns (num, den) of the pending prefix as parsed integers, or (nil, nil) when no prefix is pending; clears all prefix state; consumers that need rationality (e.g. scale's rpb refinement) read this instead of consumePrefix
+  function mgr:consumePrefixRational()
+    local n, d = pendingPrefixNum, pendingPrefixDen
+    pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
+    return n, d
+  end
 
   ----- Scopes
 

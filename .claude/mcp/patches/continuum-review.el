@@ -28,6 +28,8 @@
 (defvar-local continuum-review--response-file nil)
 (defvar-local continuum-review--submitted nil
   "Non-nil once submit/abort has written the response file.")
+(defvar-local continuum-review--frame nil
+  "The dedicated frame created for this review, if any.")
 (defvar-local continuum-review--edit-context nil
   "In an edit buffer: plist (:review-buffer :header-pos :old-block
 :original-new :at-header) linking it back to its review block.")
@@ -37,7 +39,15 @@
   (when (and continuum-review--response-file
              (not continuum-review--submitted))
     (ignore-errors
-      (continuum-review--write-response t "(buffer killed)" nil))))
+      (continuum-review--write-response t "(buffer killed)" nil)))
+  (continuum-review--dispose-frame))
+
+(defun continuum-review--dispose-frame ()
+  "Delete the review's dedicated frame, if it is still live."
+  (when (and continuum-review--frame
+             (frame-live-p continuum-review--frame))
+    (ignore-errors (delete-frame continuum-review--frame)))
+  (setq continuum-review--frame nil))
 
 ;; Header: kind, index, path, then zero or more `[tag]' markers.
 (defconst continuum-review--header-re
@@ -99,10 +109,35 @@
         (define-key map (kbd "C-c C-k") #'continuum-review-abort)
         map))
 
+(defun continuum-review--magit-face-remap ()
+  "Repaint diff-mode faces in magit's palette, theme-aware."
+  (let* ((dark (eq (frame-parameter nil 'background-mode) 'dark))
+         (added-bg     (if dark "#335533" "#ddffdd"))
+         (added-hi-bg  (if dark "#336633" "#cceecc"))
+         (removed-bg   (if dark "#553333" "#ffdddd"))
+         (removed-hi-bg(if dark "#663333" "#eecccc"))
+         (hunk-bg      (if dark "#404040" "#dddddd"))
+         (hunk-fg      (if dark "#cccccc" "#000000"))
+         (file-bg      (if dark "#1c1c1c" "#eeeeee"))
+         (file-fg      (if dark "#ffffff" "#000000")))
+    (setq-local face-remapping-alist
+                `((diff-added              (:background ,added-bg    :extend t))
+                  (diff-indicator-added    (:background ,added-bg    :foreground ,(if dark "#a0e0a0" "#005500")))
+                  (diff-refine-added       (:background ,added-hi-bg :extend t))
+                  (diff-removed            (:background ,removed-bg  :extend t))
+                  (diff-indicator-removed  (:background ,removed-bg  :foreground ,(if dark "#e0a0a0" "#550000")))
+                  (diff-refine-removed     (:background ,removed-hi-bg :extend t))
+                  (diff-context            (:foreground ,(if dark "#a0a0a0" "#555555")))
+                  (diff-hunk-header        (:background ,hunk-bg :foreground ,hunk-fg :weight bold :extend t))
+                  (diff-file-header        (:background ,file-bg :foreground ,file-fg :weight bold :extend t))
+                  (diff-header             (:background ,file-bg :foreground ,file-fg :extend t))
+                  (diff-function           (:foreground ,(if dark "#87afd7" "#005f87")))))))
+
 (define-derived-mode continuum-review-mode diff-mode "Review"
   "Major mode for reviewing apply_patches batches."
   (setq buffer-read-only t)
   (setq-local truncate-lines nil)
+  (continuum-review--magit-face-remap)
   (add-hook 'kill-buffer-hook #'continuum-review--maybe-abort-on-kill nil t))
 
 ;;; ----- navigation -----
@@ -452,24 +487,41 @@ Each carries :edited and :rejected flags derived from header tags."
 
 ;;;###autoload
 (defun continuum-review-start (request-file response-file)
-  "Read REQUEST-FILE, present review buffer, write RESPONSE-FILE on submit."
+  "Read REQUEST-FILE, present review buffer in a new frame, write
+RESPONSE-FILE on submit."
   (let* ((req (with-temp-buffer
                 (insert-file-contents request-file)
                 (let ((json-object-type 'alist)
                       (json-array-type 'list))
                   (json-read))))
          (body (cdr (assoc 'buffer req)))
-         (buf  (get-buffer-create "*continuum-review*")))
+         (buf  (get-buffer-create "*continuum-review*"))
+         (frame (and (display-graphic-p)
+                     (make-frame
+                      '((name . "continuum-review")
+                        (width . 120) (height . 40)
+                        (left . 80) (top . 80)
+                        (z-group . above))))))
     (with-current-buffer buf
       (let ((inhibit-read-only t))
         (erase-buffer)
         (insert body))
       (continuum-review-mode)
-      (setq continuum-review--response-file response-file)
+      (setq continuum-review--response-file response-file
+            continuum-review--frame frame)
       (goto-char (point-min))
       (when (re-search-forward continuum-review--header-re nil t)
         (beginning-of-line)))
-    (pop-to-buffer buf)
+    (if frame
+        (progn
+          (select-frame-set-input-focus frame)
+          (set-window-buffer (frame-selected-window frame) buf)
+          ;; macOS: pull Emacs.app to the foreground.
+          (when (eq window-system 'ns)
+            (ignore-errors
+              (ns-do-applescript
+               "tell application \"Emacs\" to activate"))))
+      (pop-to-buffer buf))
     t))
 
 (provide 'continuum-review)

@@ -310,6 +310,7 @@ function newEditCursor(deps)
   function ec:cursorPart()    return cursorPart() end
   function ec:hasSelection()  return sel ~= nil end
   function ec:isSticky()      return isSticky() end
+  function ec:anchorRow()     return selAnchor and selAnchor.row end
 
   function ec:region()
     if sel then

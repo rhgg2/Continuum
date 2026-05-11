@@ -1,4 +1,4 @@
-@module continuum  src=continuum.lua  loc=324  sha=d4f20ff
+@module continuum  src=continuum.lua  loc=354  sha=d4f20ff
 @deps util, fs, configManager, midiManager, aliases, trackerManager, commandManager, editCursor, trackerView, sampleManager, sampleView, swingEditor, sequenceManager, curveEditor, chrome, trackerPage, samplePage
 
 # Invariants & contracts (module)
@@ -23,13 +23,15 @@
   @fn err_handler(err)  @ 41
   @fn run(fn)  @ 47
   @fn createImGui()  @ 52
-  @fn dispatchKeys(state, cmgr, ctx)  @ 73
+  @fn handlePrefixCapture(cmgr, ctx)  @ 74   -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns 'consumed' i
+  @fn dispatchKeys(state, cmgr, ctx)  @ 97
       @map:contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
       @map:contract  first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
-  @fn newCoordinator(cm, cmgr, gui)  @ 109
+      @map:contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
+  @fn newCoordinator(cm, cmgr, gui)  @ 137
       @map:contract  owns the cross-cutting tracker-scope command (loadSampleAtCurrentSlot) but dispatches into samplePage which owns sm; coord never speaks sm directly
       @map:contract  owns the active sampler track — the picker on samplePage delegates here, and first sample-page activation seeds the default from pages.sample:listTracks()
       @map:contract  owns currentTake — refreshTakeFromReaper polls GetSelectedMediaItem→GetActiveTake→TakeIsMIDI, mutates currentTake only on a real MIDI take that differs (sticky on nothing-selected or non-MIDI), and returns true so the caller can rebind
-  @fn Main()  @ 296
+  @fn Main()  @ 324
       @map:contract  Main builds the manager stack bottom-up with no take, then enters the defer loop via coord:run(); the coordinator picks up the user's MIDI selection on its first tracker-page tick
 

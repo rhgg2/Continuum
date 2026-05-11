@@ -235,6 +235,81 @@ return {
   },
 
   --------------------------------------------------------------------
+  -- snap opcode
+  --------------------------------------------------------------------
+  {
+    name = 'applyOp: snap rounds running value to nearest multiple of step',
+    run = function()
+      t.eq(aliases.applyOp(250, {'snap', 60}), 240)   -- 250/60 = 4.16 → 4
+      t.eq(aliases.applyOp(290, {'snap', 60}), 300)   -- 290/60 = 4.83 → 5
+      t.eq(aliases.applyOp(240, {'snap', 60}), 240)
+    end,
+  },
+  {
+    name = 'applyOp: snap is idempotent at the grid step',
+    run = function()
+      local once  = aliases.applyOp(250, {'snap', 60})
+      local twice = aliases.applyOp(once, {'snap', 60})
+      t.eq(once, twice)
+    end,
+  },
+  {
+    name = 'applyXform: snap composes through ppqL on a note',
+    run = function()
+      local out = aliases.applyXform(
+        { ppqL = 0 },
+        { ppqL = {{'add', 250}, {'snap', 60}} },
+        'note')
+      t.eq(out.ppqL, 240)
+    end,
+  },
+  {
+    name = 'appendOp: two commensurate snaps coalesce to the coarser step',
+    run = function()
+      local x = aliases.appendOp({}, 'ppqL', {'snap', 60})
+      x = aliases.appendOp(x, 'ppqL', {'snap', 120})
+      t.deepEq(x.ppqL, {{'snap', 120}})
+    end,
+  },
+  {
+    name = 'appendOp: snaps merge regardless of which is appended first',
+    run = function()
+      local x = aliases.appendOp({}, 'ppqL', {'snap', 120})
+      x = aliases.appendOp(x, 'ppqL', {'snap', 60})
+      t.deepEq(x.ppqL, {{'snap', 120}}, 'coarser still wins')
+    end,
+  },
+  {
+    name = 'appendOp: non-commensurate snaps stay as two ops',
+    run = function()
+      -- Snap-7 then snap-5 is not equivalent to any single snap; keep both.
+      local x = aliases.appendOp({}, 'ppqL', {'snap', 7})
+      x = aliases.appendOp(x, 'ppqL', {'snap', 5})
+      t.deepEq(x.ppqL, {{'snap', 7}, {'snap', 5}})
+    end,
+  },
+  {
+    name = 'appendOp: snap then add does not coalesce',
+    run = function()
+      local x = aliases.appendOp({}, 'ppqL', {'snap', 60})
+      x = aliases.appendOp(x, 'ppqL', {'add', 4})
+      t.deepEq(x.ppqL, {{'snap', 60}, {'add', 4}})
+    end,
+  },
+  {
+    name = 'applyXform: sequential non-commensurate snaps apply in order',
+    run = function()
+      -- 7 → snap(7) → 7 → snap(5) → 5. (LCM-of-steps interpretation
+      -- would say snap-to-35 of 7 = 0; sequential application differs.)
+      local out = aliases.applyXform(
+        { ppqL = 7 },
+        { ppqL = {{'snap', 7}, {'snap', 5}} },
+        'note')
+      t.eq(out.ppqL, 5)
+    end,
+  },
+
+  --------------------------------------------------------------------
   -- Spec-tree navigation
   --------------------------------------------------------------------
   {
@@ -329,6 +404,52 @@ return {
       local root = { aliasCtr = 35 }
       t.eq(aliases.allocId(root), 'Z')
       t.eq(aliases.allocId(root), '10')   -- 36 in base36
+    end,
+  },
+
+  --------------------------------------------------------------------
+  -- localRoots: filter a selection to its local roots
+  --------------------------------------------------------------------
+  {
+    name = 'localRoots: plain events all survive',
+    run = function()
+      local a, b = { uuid = 1 }, { uuid = 2 }
+      t.deepEq(aliases.localRoots{ a, b }, { a, b })
+    end,
+  },
+  {
+    name = 'localRoots: child whose parent is in the set is filtered',
+    run = function()
+      local root = { uuid = 1 }
+      local kid  = { uuid = 2, parentUuid = 1 }
+      t.deepEq(aliases.localRoots{ root, kid }, { root })
+    end,
+  },
+  {
+    name = 'localRoots: child whose parent is absent survives',
+    run = function()
+      local kid = { uuid = 2, parentUuid = 99 }
+      t.deepEq(aliases.localRoots{ kid }, { kid })
+    end,
+  },
+  {
+    name = 'localRoots: mixed siblings — keep root and orphan kid, drop in-set kid',
+    run = function()
+      local root  = { uuid = 1 }
+      local kid1  = { uuid = 2, parentUuid = 1 }   -- drop: parent in set
+      local kid2  = { uuid = 3, parentUuid = 99 }  -- keep: parent absent
+      local plain = { uuid = 4 }
+      t.deepEq(aliases.localRoots{ root, kid1, kid2, plain },
+               { root, kid2, plain })
+    end,
+  },
+  {
+    name = 'localRoots: preserves input order',
+    run = function()
+      local a = { uuid = 10 }
+      local b = { uuid = 11, parentUuid = 10 }
+      local c = { uuid = 12 }
+      t.deepEq(aliases.localRoots{ c, a, b }, { c, a })
     end,
   },
 

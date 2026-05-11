@@ -105,6 +105,8 @@ local declarations = {
   { 'colour.tailBord',         hex('#8caac8')                     },  -- one-off lighter steel
   { 'colour.ghost',            {'palette.steel',      0.9 }       },
   { 'colour.ghostNegative',    hex('#da8278', 0.9)                },  -- one-off faded red
+  { 'colour.alias',            {'palette.steel',      0.22}       },  -- materialised-alias cell tint
+  { 'colour.aliasFocus',       {'palette.steel',      0.40}       },  -- transient family-highlight tint (alias-nav cursor)
   -- Lane strip (CC/PB/AT envelope visualiser above the tracker grid).
   { 'colour.laneAxis',         {'palette.inactive',   0.6 }       },
   { 'colour.laneRowDivider',   {'palette.inactive',   0.15}       },

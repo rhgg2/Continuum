@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=2083  sha=59dfc00
+@module trackerManager  src=trackerManager.lua  loc=2107  sha=952e5a2
 @deps util, midiManager, timing, aliases
 
 # Invariants & contracts (module)
@@ -20,7 +20,7 @@
   @shape  extraColumns[chan] = { notes=count, [pc=true], [pb=true], [at=true], [ccs={[ccNum]=true}] }
 
 # Module-level constants
-  @const SEED_EXCLUDE = {  @ 81
+  @const SEED_EXCLUDE = {  @ 78
 
 # Module-level functions (private)
   @fn print(...)  @ 17
@@ -31,98 +31,99 @@
       @map:contract  returns (desired, shadowed, toRemove, toAdd); desired carries .loc on entries that survived the diff
   @fn evtTypeOf(evt)  @ 71
   @fn slotKey(evt)  @ 73
-  @fn seedFields(root)  @ 87
-  @fn seedFromTake(take)  @ 89
+  @fn seedFields(root)  @ 84
+  @fn seedFromTake(take)  @ 86
 
-@factory newTrackerManager(mm, cm)  @ 105
+@factory newTrackerManager(mm, cm)  @ 102
   @map:invariant  usedSwings is rebuild output, not input — suppressed to prevent rebuild's cm:set from firing a redundant follow-up rebuild
   @map:invariant  configChanged routes: 'swing' → all 16; 'colSwing' → channels with diff vs prevColSwing; 'swings' → channels resolving to names with diff body vs prevSwings. Caches refresh after each event and on bindTake.
 
   # Private state
-    @state channels = {}  @ 109
-    @state tm  @ 110   -- forward-declared so um's closures capture it as upvalue
-    @state fire  @ 111   -- installed below, once tm exists
-    @state um  @ 112   -- update manager; set by tm:rebuild
-    @state lastMuteSet = {}  @ 113   -- { [chan] = true }, pushed by vm via tm:setMutedChannels
-    @state pendingFlushUuids  @ 115
+    @state channels = {}  @ 106
+    @state tm  @ 107   -- forward-declared so um's closures capture it as upvalue
+    @state fire  @ 108   -- installed below, once tm exists
+    @state um  @ 109   -- update manager; set by tm:rebuild
+    @state lastMuteSet = {}  @ 110   -- { [chan] = true }, pushed by vm via tm:setMutedChannels
+    @state pendingFlushUuids  @ 112
         @map:invariant  pendingFlushUuids: uuid-set of notes touched by the in-flight um:flush; read by allocateNoteColumn to attribute lane overlaps; nil outside a flush-driven rebuild
-    @state staleSwing = {}  @ 117
+    @state aliasIndex = { byUuid = {}, byParent = {} }  @ 114
+        @map:invariant  aliasIndex: { byUuid = { [uuid] = {evt, chan} }, byParent = { [parentUuid] = [{evt, chan}, ...] sorted (ppq, chan) } }; rebuilt at the tail of tm:rebuild from column-projected events; empty tables when no aliases exist
+    @state staleSwing = {}  @ 116
         @map:invariant  staleSwing[chan]=true: this channel's resolved swing changed; rebuild rule rederives raw from ppqL and clears
 
   # Private functions
-    @fn sortByPPQ(tbl)  @ 119
-    @fn centsToRaw(cents)  @ 123
-    @fn rawToCents(raw)  @ 128
-    @fn delayToPPQ(d)  @ 133
-    @fn createUpdateManager()  @ 137
-    @fn owner(chan, P)  @ 148
-    @fn detuneAt(chan, P)  @ 152
-    @fn detuneBefore(chan, P)  @ 157
-    @fn rawAt(chan, P)  @ 162
-    @fn rawBefore(chan, P)  @ 167
-    @fn pbAt(chan, P)  @ 172
-    @fn logicalAt(chan, P)  @ 178
+    @fn sortByPPQ(tbl)  @ 118
+    @fn centsToRaw(cents)  @ 122
+    @fn rawToCents(raw)  @ 127
+    @fn delayToPPQ(d)  @ 132
+    @fn createUpdateManager()  @ 136
+    @fn owner(chan, P)  @ 147
+    @fn detuneAt(chan, P)  @ 151
+    @fn detuneBefore(chan, P)  @ 156
+    @fn rawAt(chan, P)  @ 161
+    @fn rawBefore(chan, P)  @ 166
+    @fn pbAt(chan, P)  @ 171
+    @fn logicalAt(chan, P)  @ 177
         @map:contract  logical = raw − detune; this is the "user heard pitch" frame, decoupled from the absorber bookkeeping
-    @fn logicalBefore(chan, P)  @ 182
-    @fn nextLogicalChange(chan, P)  @ 186
-    @fn nextRealChange(chan, P)  @ 192
-    @fn nextNotePPQ(chan, P)  @ 197
-    @fn forEachAttachedPA(host, fn)  @ 202
-    @fn addLowlevel(evtType, evt)  @ 214
+    @fn logicalBefore(chan, P)  @ 181
+    @fn nextRealChange(chan, P)  @ 185
+    @fn nextNotePPQ(chan, P)  @ 190
+    @fn forEachAttachedPA(host, fn)  @ 195
+    @fn addLowlevel(evtType, evt)  @ 207
         @map:contract  only lane==1 notes index into chans[chan].notes; higher-lane notes get queued for mm but don't feed detune/realisation reads
-    @fn assignLowlevel(evtType, evt, update)  @ 234
+    @fn assignLowlevel(evtType, evt, update)  @ 227
         @map:contract  dedupes by (loc, evtType) so multiple in-flight assigns to the same event collapse into one mm write; util.REMOVE markers must survive merging
-    @fn deleteLowlevel(evtType, evt)  @ 251
-    @fn retuneLowlevel(chan, P1, P2, delta)  @ 287
+    @fn deleteLowlevel(evtType, evt)  @ 244
+    @fn retuneLowlevel(chan, P1, P2, delta)  @ 280
         @map:contract  shifts every pb's raw val by delta over [P1, P2); preserves logical stream above by definition since detune absorbs delta
-    @fn forcePb(chan, P, extras)  @ 297
+    @fn forcePb(chan, P, extras)  @ 290
         @map:contract  no-op (returns false) if a pb already sits at P; otherwise seats one at the carrier value (rawAt) so logical stream is preserved
-    @fn markFake(chan, P)  @ 303
-    @fn unmarkFake(chan, P)  @ 308
-    @fn reconcileBoundary(chan, P)  @ 315   -- Callers invoke post-mutation (note edits committed) so detuneAt/Before see live values.
-    @fn addPb(pb)  @ 334
+    @fn markFake(chan, P)  @ 296
+    @fn unmarkFake(chan, P)  @ 301
+    @fn reconcileBoundary(chan, P)  @ 308   -- Callers invoke post-mutation (note edits committed) so detuneAt/Before see live values.
+    @fn addPb(pb)  @ 327
         @map:contract  authoring frame is logical (pb.val is logical cents); seats/updates the carrier and retunes forward to next real pb so logical above is preserved
-    @fn deletePb(pb)  @ 349
+    @fn deletePb(pb)  @ 342
         @map:contract  retunes forward to undo pb's logical contribution; collapses to a real delete only if the seat would also be redundant as a fake (detuneAt == detuneBefore)
-    @fn assignPb(pb, update)  @ 359
-    @fn dirtyPc(chan)  @ 410
-    @fn addNote(n)  @ 413
+    @fn assignPb(pb, update)  @ 352
+    @fn dirtyPc(chan)  @ 403
+    @fn addNote(n)  @ 406
         @map:contract  lane-1 path: seat fake-pb if detune jumps the carry, retune forward to next note, then reconcile the next-note boundary; lane>1 just queues with no realisation work
-    @fn deleteNote(n, keepPAs)  @ 430
+    @fn deleteNote(n, keepPAs)  @ 423
         @map:contract  attached PAs are deleted with the host unless keepPAs; lane-1 path drops any fake seat at n.ppq and retunes back to the prior detune over [n.ppq, nextNote)
-    @fn resizeNote(n, P1, P2)  @ 443
-    @fn assignNote(n, update)  @ 503
+    @fn resizeNote(n, P1, P2)  @ 436
+    @fn assignNote(n, update)  @ 496
         @map:contract  chan/lane updates are rejected with a warning; ppq/endppq route through resizeNote; detune updates retune forward and reconcile both endpoint boundaries
-    @fn clearSameKeyRange(chan, pitch, P, Pend, selfPpqL, selfEvt)  @ 539   -- Returns (clampEnd, clampEndL): the realised intent end and its logical counterpart. Trunca
-    @fn reconcilePcs(chan)  @ 561
-    @fn realiseNoteUpdate(evt, update)  @ 613
+    @fn clearSameKeyRange(chan, pitch, P, Pend, selfPpqL, selfEvt)  @ 532   -- Returns (clampEnd, clampEndL): the realised intent end and its logical counterpart. Trunca
+    @fn reconcilePcs(chan)  @ 554
+    @fn realiseNoteUpdate(evt, update)  @ 606
         @map:contract  update.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw. Caller-supplied update.ppqL/endppqL signals "raw already computed" — translation is skipped, only delay-delta applies. See docs/timing.md.
-    @fn getSnap()  @ 626
-    @fn realiseNonNoteUpdate(chan, update)  @ 643
-    @fn init()  @ 779
-    @fn pushNoteCol(channel)  @ 810
-    @fn noteColumnAccepts(col, note)  @ 816
+    @fn getSnap()  @ 619
+    @fn realiseNonNoteUpdate(chan, update)  @ 636
+    @fn init()  @ 772
+    @fn pushNoteCol(channel)  @ 803
+    @fn noteColumnAccepts(col, note)  @ 809
         @map:contract  returns (true) on accept; (false, conflictEvt) when the refusal is the bump-prone overlap case (threshold exceeded, or coincident onset); (false) on the dominated-by-two refusal, which is structural rather than bug-attributable
-    @fn warnLaneOverlap(note, conflict)  @ 835
-    @fn allocateNoteColumn(channel, note)  @ 851
+    @fn warnLaneOverlap(note, conflict)  @ 828
+    @fn allocateNoteColumn(channel, note)  @ 844
         @map:contract  requested-lane refusals attributable to the in-flight flush (incoming or conflicting note's uuid in pendingFlushUuids) keep the overlap and log a warning, surfacing the bug rather than silently bumping; refusals not attributable, and lane-less adds, fall through to sibling-search bumping unchanged
-    @fn findNoteColumnForPitch(channel, pitch, ppq_pos)  @ 875
-    @fn projectCC(cc, loc, overlay)  @ 893
-    @fn forEachEvent(fn)  @ 908   -- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly. Def
-    @fn colKey(chan, lane)  @ 1059
-    @fn projectToLogical(col)  @ 1403   -- 5) Project to logical. evt.ppq integer-rounded for the offGrid compare in vm:rebuild; evt.
-    @fn applyTimeMap(tau, slopeAt)  @ 1482   -- τ acts on logical positions; intent ppqs rederive through the current swing snapshot. Even
-    @fn snapshot(iter)  @ 1577
-    @fn shift(c, delta, isNote)  @ 1592
-    @fn resolve(name)  @ 1644
-    @fn maxAliasId(list, seed)  @ 1709   -- Highest base36 id appearing anywhere in `list` (recursing through .children). Returns `see
-    @fn depth(p)  @ 1732   -- Depth = dot-count + 1, not string length: '1.2.3' (depth 3) must sever before '10.20' (dep
-    @fn scan(iter)  @ 1795
-    @fn parts(p)  @ 1907
-    @fn snapshotSwingState()  @ 1993
-    @fn colSwingDiffChannels(prev, cur)  @ 1998
-    @fn changedSwingNames(prev, cur)  @ 2007
-    @fn channelsResolvingTo(names)  @ 2020   -- Global swing shadows colSwing: a hit on the global name affects all 16.
+    @fn findNoteColumnForPitch(channel, pitch, ppq_pos)  @ 868
+    @fn projectCC(cc, loc, overlay)  @ 886
+    @fn forEachEvent(fn)  @ 901   -- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly. Def
+    @fn colKey(chan, lane)  @ 1052
+    @fn projectToLogical(col)  @ 1396   -- 5) Project to logical. evt.ppq integer-rounded for the offGrid compare in vm:rebuild; evt.
+    @fn applyTimeMap(tau, slopeAt)  @ 1500   -- τ acts on logical positions; intent ppqs rederive through the current swing snapshot. Even
+    @fn snapshot(iter)  @ 1595
+    @fn shift(c, delta, isNote)  @ 1610
+    @fn resolve(name)  @ 1662
+    @fn maxAliasId(list, seed)  @ 1733   -- Highest base36 id appearing anywhere in `list` (recursing through .children). Returns `see
+    @fn depth(p)  @ 1756   -- Depth = dot-count + 1, not string length: '1.2.3' (depth 3) must sever before '10.20' (dep
+    @fn scan(iter)  @ 1819
+    @fn parts(p)  @ 1931
+    @fn snapshotSwingState()  @ 2017
+    @fn colSwingDiffChannels(prev, cur)  @ 2022
+    @fn changedSwingNames(prev, cur)  @ 2031
+    @fn channelsResolvingTo(names)  @ 2044   -- Global swing shadows colSwing: a hit on the global name affects all 16.
 
   # Public API
     -- Aliases walker helpers
@@ -132,30 +133,31 @@
     -- High-level ops
     -- PC reconciliation (trackerMode mutation hook)
     -- Public interface
-    @api um:deleteEvent(evtType, evtOrLoc)  @ 598
-    @api um:assignEvent(evtType, evtOrLoc, update)  @ 650
-    @api um:addEvent(evtType, evt)  @ 685
+    @api um:deleteEvent(evtType, evtOrLoc)  @ 591
+    @api um:assignEvent(evtType, evtOrLoc, update)  @ 643
+    @api um:addEvent(evtType, evt)  @ 678
         @map:contract  notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm. Caller-supplied evt.ppqL signals "raw already computed" — translation is skipped (mirrors um:assignEvent).
     -- Flush: commit accumulated ops to mm.
-    @api um:flush()  @ 726
+    @api um:flush()  @ 719
         @map:contract  no-op if nothing staged; otherwise commits in fixed order (assigns, deletes desc by loc, adds) under a single mm:modify; pb cents→raw conversion happens here
         @map:contract  snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
     -- Init: load local cache from mm.
     -- Column allocation
     -- Rebuild
-    @api tm:rebuild(takeChanged)  @ 933
+    @api tm:rebuild(takeChanged)  @ 926
         @map:contract  reentrancy-guarded; rebuilds channels[] from mm, recreates um, fires 'rebuild'; takeChanged forwarded to subscribers via the captured pendingTakeSwap
+    @api tm:aliasIndex()  @ 1460
     -- Accessors
-    @api tm:getChannel(chan)  @ 1446
-    @api tm:channels()  @ 1450
-    @api tm:editCursor()  @ 1461
-    @api tm:length()  @ 1467
-    @api tm:resolution()  @ 1471
-    @api tm:name()  @ 1475
-    @api tm:setName(name)  @ 1476
-    @api tm:setLength(newPpq)  @ 1519
+    @api tm:getChannel(chan)  @ 1464
+    @api tm:channels()  @ 1468
+    @api tm:editCursor()  @ 1479
+    @api tm:length()  @ 1485
+    @api tm:resolution()  @ 1489
+    @api tm:name()  @ 1493
+    @api tm:setName(name)  @ 1494
+    @api tm:setLength(newPpq)  @ 1537
         -- On shrink, notes spanning the boundary keep their onset and have endppq clamped.
-    @api tm:rescaleLength(newPpq)  @ 1545
+    @api tm:rescaleLength(newPpq)  @ 1563
         -- Stretch the take to `newPpq` by linearly remapping the logical
         -- frame: each event on logical row r ends up on row f·r where
         -- f = newPpq/oldPpq. ppqL stamps scale by f; intent ppqs are
@@ -163,51 +165,51 @@
         -- ppqs are not linearly scaled (rows are preserved instead, which
         -- keeps reswing well-defined). Note delays scale by f. Frame stamps
         -- (rpb, swing slot names) are untouched. No events are deleted.
-    @api tm:tileLength(newPpq)  @ 1572
+    @api tm:tileLength(newPpq)  @ 1590
         -- Because oldPpq sits on a swing-period boundary (take length aligns
         -- to QN), shifting by k·oldPpq is identical in logical and realised
         -- frames; one delta serves both ppq and ppqL paths.
-    @api tm:timeSigs()  @ 1619
-    @api tm:interpolate(A, B, ppq)  @ 1623
-    @api tm:markSwingStale(chan)  @ 1630
+    @api tm:timeSigs()  @ 1637
+    @api tm:interpolate(A, B, ppq)  @ 1641
+    @api tm:markSwingStale(chan)  @ 1648
         -- E_c: column is inner, global is outer (see docs/timing.md).
         @map:contract  returns clipped per-layer Shapes + closures; safe to retain across edits since closures capture the Shapes, not cm reads
         @map:contract  chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
-    @api tm:swingSnapshot()  @ 1638
+    @api tm:swingSnapshot()  @ 1656
     -- Transport
-    @api tm:playFrom(ppq)  @ 1676
-    @api tm:play()  @ 1682
-    @api tm:stop()  @ 1683
-    @api tm:playPause()  @ 1684
+    @api tm:playFrom(ppq)  @ 1694
+    @api tm:play()  @ 1700
+    @api tm:stop()  @ 1701
+    @api tm:playPause()  @ 1702
     -- Mutation
-    @api tm:deleteEvent(type, evt)  @ 1688
-    @api tm:addEvent(type, evt)  @ 1689
-    @api tm:assignEvent(type, evt, update)  @ 1690
-    @api tm:flush()  @ 1691
-    @api tm:routeRelative(evt, opsByField)  @ 1694
-        @map:contract  evt is a materialised alias child (carries parentUuid + specPath); appends each (field, op) entry of `opsByField` to the spec node and queues an aliases-only metadata write on the root. Multi-field is one call so coupled fields (e.g. pitch+detune under a temper) land on a single root snapshot. Returns false when evt is not aliased or the root/spec lookup fails — caller should fall through to direct mutation.
-    @api tm:severBatch(events)  @ 1720
+    @api tm:deleteEvent(type, evt)  @ 1706
+    @api tm:addEvent(type, evt)  @ 1707
+    @api tm:assignEvent(type, evt, update)  @ 1708
+    @api tm:flush()  @ 1709
+    @api tm:routeRelative(evt, opsByField)  @ 1712
+        @map:contract  evt is a materialised alias child (carries parentUuid + specPath); appends each (field, op) entry of `opsByField` to the spec node and queues an aliases-only metadata write on the root. Multi-field is one call so coupled fields (e.g. pitch+detune under a temper) land on a single root snapshot. Per-field value is either a single op (opcode-string at [1]) or a list of ops (table at [1]); list form lands as successive appendOps, with coalescence applied at each step. Returns false when evt is not aliased or the root/spec lookup fails — caller should fall through to direct mutation.
+    @api tm:severBatch(events)  @ 1744
         @map:contract  group `events` by parentUuid and sever each in one snapshot per root: pluck every requested subtree from a single mm:byUuid clone before issuing the per-event metadata-clear assigns and one root-aliases assign. Deepest-first within each group so a parent's pluck never invalidates a sibling-grandchild's path. Events without parentUuid+specPath are skipped silently. Does not flush — caller drives a single flush across the batch.
-    @api tm:sever(evt)  @ 1760
+    @api tm:sever(evt)  @ 1784
         @map:contract  evt is a materialised alias child (carries parentUuid + specPath); plucks evt's spec subtree from the old root, transplants its children onto evt as a new top-level root, and clears evt's materialisation metadata. The mm-uuid evt already carries — minted by the walker on the previous rebuild — becomes the new root's permanent identity (the rebuild sweep only deletes events still carrying parentUuid, so a stripped event stays put). aliasCtr is set past the highest id anywhere in the plucked subtree so subsequent allocations don't collide with surviving descendant ids. Returns true on success; false when evt is unaliased or root/spec lookup fails (no-op caller-side). Does not flush — the caller drives a single flush across a batch.
-    @api tm:deleteAliased(evt)  @ 1769
+    @api tm:deleteAliased(evt)  @ 1793
         @map:contract  structural delete that promotes the spec subtree's children to new roots before the spec node is removed. Two modes by evt shape: aliased child (parentUuid + specPath set) — removes evt's spec node from its root; each direct child's materialised event is promoted in place (sever-style); evt itself disappears via the rebuild sweep (still parentUuid-tagged, no surviving spec node to re-emit). Root with non-empty aliases — each top-level child's materialised event is promoted; the root event is then deleted outright. Suppressed branches (spec child with no live materialisation, e.g. slot collision) are dropped. Returns false for plain unaliased events so callers can fall back to tm:deleteEvent. Does not flush — caller drives a single flush across a batch.
-    @api tm:aliasSrcSnapshot(rootUuid, specPath)  @ 1840
+    @api tm:aliasSrcSnapshot(rootUuid, specPath)  @ 1864
         @map:contract  for a materialised child source at (rootUuid, specPath), returns { children = deep clone of the leaf spec node's children, chain = [{id, xform-clone}, ...] one entry per ANCESTOR segment (the leaf itself is excluded). Returns nil if the root is missing or any path segment fails to resolve. The chain is the copy-time fingerprint of *ancestor* xforms only — the leaf is the source, so editing or moving it stays compatible with paste; only ancestor edits count as tree-mutation drift.
-    @api tm:resolveAliasSrc(rootUuid, specPath, chain, evtType)  @ 1861
+    @api tm:resolveAliasSrc(rootUuid, specPath, chain, evtType)  @ 1885
         @map:contract  resolves the source side of an alias-paste against the live spec tree. Returns nil if root or any path segment missing (→ silent demote, the (A) case); { mismatch = true } if a captured ANCESTOR's xform disagrees with the live one, or any path xform contains a producing-op we cannot re-roll (→ loud demote, "spec tree edited"); { resolved = field-table } otherwise. The leaf node's xform is free to drift — corrective deltas in aliasWriter compensate. Resolved starts at root's fields (with durL = endppqL − ppqL for notes) and composes each path segment's xform via aliases.applyXform.
-    @api tm:pathXform(rootUuid, fromSpecPath, toSpecPath)  @ 1903
+    @api tm:pathXform(rootUuid, fromSpecPath, toSpecPath)  @ 1927
         @map:contract  walks the live spec tree from fromSpecPath (exclusive) to toSpecPath (inclusive) and concatenates per-field xform op-lists in order. Used at copy time by family-paste to snapshot the structural xforms between a clip's family-parent and its descendant; preserves producing-ops (rand) verbatim. fromSpecPath nil → walk from root. Returns nil if any path segment is missing or toSpecPath is not a strict descendant of fromSpecPath. Ops are deep-cloned.
-    @api tm:createAlias(rootUuid, srcSpecPath, xform, children, fit)  @ 1943
+    @api tm:createAlias(rootUuid, srcSpecPath, xform, children, fit)  @ 1967
         @map:contract  creates a new alias spec node under the event identified by `rootUuid`. srcSpecPath nil → top of root.aliases; non-nil → child of the spec node at that path (so descendants of that spec compose this xform). `children`, when given, is taken verbatim as the new node's children (typically a deep clone of the source's subtree, captured at copy time so paste brings the source's alias-children along under the new node). `fit` (truthy) marks the new node as visually fit: at rebuild, its materialised endppq is clipped to the next event on the same column, so the alias never causes a new lane to be allocated for its successor. Returns the new node's full specPath, or nil if the root/spec lookup fails.
     -- Mute
-    @api tm:setMutedChannels(set)  @ 1968
+    @api tm:setMutedChannels(set)  @ 1992
         @map:contract  idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes
     -- Lifecycle
-    @api tm:bindTake(take, opts)  @ 2068
+    @api tm:bindTake(take, opts)  @ 2092
         @map:contract  atomic take swap: cm:setContext runs silently; mm:load fires the single coherent rebuild. opts.markSwingStale=true rebuilds raw from ppqL under the new (cm, mm) pair (used by seqMgr:reswingAll).
         @map:contract  bindTake(nil) is the dormant seam (e.g. samplePage); cm clears under suppression, mm:load(nil) is a no-op, tm/vm retain last frame.
-    @api tm:currentTake()  @ 2079
+    @api tm:currentTake()  @ 2103
 
   # Signals emitted (via util.installHooks)
     @emits rebuild   -- nil; fires once at the end of every rebuild after um is recreated

@@ -38,7 +38,7 @@ local CC_FIELDS = {
 
 -- Applied opcodes consume one numeric value and produce a new running value.
 -- Producing opcodes emit a value; valid only as args to applied opcodes.
-local APPLIED   = { add = true, mul = true }
+local APPLIED   = { add = true, mul = true, snap = true }
 local PRODUCING = { rand = true }
 
 function M.validFields(evtType)
@@ -86,8 +86,9 @@ end
 local function applyOne(running, op, rng)
   local opcode = op[1]
   local v      = M.evalArg(op[2], rng)
-  if opcode == 'add' then return running + v end
-  if opcode == 'mul' then return running * v end
+  if opcode == 'add'  then return running + v end
+  if opcode == 'mul'  then return running * v end
+  if opcode == 'snap' then return util.round(running / v) * v end
   error('aliases.applyOne: not an applied opcode: ' .. tostring(opcode))
 end
 
@@ -121,18 +122,26 @@ local function allLiteralArgs(op)
   return true
 end
 
--- Two ops coalesce iff: same applied opcode AND both have all-literal args.
+-- Two ops coalesce iff: same applied opcode AND both have all-literal
+-- args. Snap pairs additionally require commensurate steps (one divides
+-- the other) — non-commensurate snaps don't reduce to any single op, so
+-- they're kept separate and applied sequentially.
 function M.coalescable(a, b)
   if a[1] ~= b[1] then return false end
   if not APPLIED[a[1]] then return false end
-  return allLiteralArgs(a) and allLiteralArgs(b)
+  if not (allLiteralArgs(a) and allLiteralArgs(b)) then return false end
+  if a[1] == 'snap' then
+    return a[2] % b[2] == 0 or b[2] % a[2] == 0
+  end
+  return true
 end
 
 local function combine(a, b)
   -- Both are same-opcode, all-literal. Phase 1 ops are 1-arg.
   local opcode = a[1]
-  if opcode == 'add' then return { 'add', a[2] + b[2] } end
-  if opcode == 'mul' then return { 'mul', a[2] * b[2] } end
+  if opcode == 'add'  then return { 'add',  a[2] + b[2] } end
+  if opcode == 'mul'  then return { 'mul',  a[2] * b[2] } end
+  if opcode == 'snap' then return { 'snap', math.max(a[2], b[2]) } end
   error('aliases.combine: not coalescable: ' .. tostring(opcode))
 end
 
@@ -210,6 +219,25 @@ function M.pluckSubtree(root, specPath)
     end
   end
   return nil
+end
+
+----- Selection-shape helpers
+
+-- Filter `events` to its *local roots*: events whose parentUuid is
+-- absent OR refers to a uuid not present in the same input. A child
+-- whose parent is in the set drops out — the parent's mutation will
+-- re-derive the child through the spec tree, so touching both would
+-- double-mutate. Plain events (no parentUuid) always survive.
+function M.localRoots(events)
+  local present = {}
+  for _, e in ipairs(events) do present[e.uuid] = true end
+  local out = {}
+  for _, e in ipairs(events) do
+    if not (e.parentUuid and present[e.parentUuid]) then
+      out[#out + 1] = e
+    end
+  end
+  return out
 end
 
 ----- Routing

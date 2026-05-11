@@ -1,18 +1,12 @@
--- Phase 5.3: quantize severs aliased children before writing through.
--- See design/aliases.md. The materialised event's mm-uuid is preserved by
--- sever, so the quantize plan keyed on the same `e` reference still hits
--- the right loc; the metadata-clear assign and the ppq/endppq writes
--- merge by-loc inside one flush. Aliasing roots are NOT severed —
--- a root that quantizes carries its descendants along via the next
--- rebuild's spec walk against the new root ppq.
+-- Phase 7: quantize routes a relative {'snap', step} op onto an aliased
+-- child's spec node so the child stays attached; quantizeKeepRealised
+-- still severs (delay-absorption is per-emit, not in the spec). See
+-- design/aliases.md §Mutation.
 --
--- Note on test setup. Two same-pitch aliased children in one column
--- run through conformOverlaps' tail-clip path; uuid_2.endppqL is not
--- clamped by the walker's clearSameKeyRange (only endppq is), so uuid_3
--- gets pushed forward by the residual logical overlap. Avoid the
--- artefact by giving children distinct pitches via a `pitch` xform —
--- the lane allocator splits them into separate columns and the plans
--- don't interact.
+-- Setup: rowPerBeat=4, resolution=240 → logPerRow=60. shortNote keeps
+-- successive children's tails out of each other's onsets so the lane
+-- allocator doesn't drag a planned successor forward via conformOverlaps'
+-- residual logical overlap (see prior incident note in git history).
 
 local t = require('support')
 
@@ -28,23 +22,6 @@ local function byParent(list, uuid)
   return out
 end
 
-local function freeRoots(list)
-  local out = {}
-  for _, e in ipairs(list) do
-    if not e.parentUuid then out[#out + 1] = e end
-  end
-  return out
-end
-
--- ppqPerRow=60 (resolution=240, rowPerBeat=4): row 4=240, row 5=300.
--- 250 → row 4.16 → snap row 4 → 240.
--- 290 → row 4.83 → snap row 5 → 300.
---
--- Multi-child setups use shortNote (durL=60 = one row) to keep children's
--- tails from overlapping the next child's onset — conformOverlaps would
--- otherwise pull a planned successor forward by the residual logical
--- overlap (the lane allocator sticks emits in lane 1 once they were
--- emitted there, so distinct pitches alone don't separate them).
 local function rootNote(extras)
   local n = { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
               chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0,
@@ -65,11 +42,12 @@ local CFG = { config = { take = { rowPerBeat = 4 } } }
 
 return {
   --------------------------------------------------------------------
-  -- Aliased child off-grid: quantize severs it; promoted root sits
-  -- at the snapped ppq; spec node gone from the original root.
+  -- Aliased child off-grid: quantize appends {'snap', 60} to ppqL
+  -- (and durL on a note) and the child stays attached. Spec keeps the
+  -- node; resolved ppq lands on the snapped grid.
   --------------------------------------------------------------------
   {
-    name = 'quantize on an off-grid aliased child severs and snaps it',
+    name = 'quantize on an off-grid aliased child appends snap and keeps it attached',
     run = function(harness)
       local h = harness.mk(util.assign({
         seed = { notes = { rootNote{
@@ -88,112 +66,93 @@ return {
 
       h.vm:quantizeAll()
 
-      local notes = h.fm:dump().notes
+      local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.deepEq(oldRoot.aliases, {}, 'spec node plucked from old root')
+      t.eq(#oldRoot.aliases, 1, 'spec node stays in tree')
+      local spec = oldRoot.aliases[1]
+      t.deepEq(spec.xform.ppqL, {{'add', 250}, {'snap', 60}})
+      t.deepEq(spec.xform.durL, {{'snap', 60}})
 
-      local promoted
-      for _, n in ipairs(notes) do
-        if not n.parentUuid and n.uuid ~= 1 then promoted = n end
-      end
-      t.truthy(promoted, 'promoted root present')
-      t.eq(promoted.ppq,   240, 'snapped to row 4')
-      t.eq(promoted.pitch,  61, 'pitch preserved')
-      t.eq(promoted.parentUuid, nil)
-      t.eq(promoted.specPath,   nil)
+      local kid2 = byParent(notes, 1)[1]
+      t.truthy(kid2, 'child still aliased')
+      t.eq(kid2.ppq,    240, 'resolves to snapped row 4')
+      t.eq(kid2.pitch,   61, 'pitch preserved')
+      t.eq(kid2.specPath, '1')
     end,
   },
 
   --------------------------------------------------------------------
-  -- Two aliased children of the same root in one quantize: batched
-  -- sever — the bug a per-event tm:sever loop would hit (the second
-  -- assign of root.aliases would clobber the first's pluck).
+  -- Two aliased children of one root: both append snap, both stay
+  -- attached, both resolve to their snapped grid positions.
   --------------------------------------------------------------------
   {
-    name = 'quantize on two aliased children of one root: both severed in one batch',
+    name = 'quantize on two aliased children: both append snap, both stay attached',
     run = function(harness)
       local h = harness.mk(util.assign({
         seed = { notes = { shortNote{
           aliasCtr = 3,
           aliases  = {
-            { id = '1',
-              xform = { ppqL = {{'add', 250}}, pitch = {{'add', 1}} },
-              children = {} },
-            { id = '2',
-              xform = { ppqL = {{'add', 290}}, pitch = {{'add', 2}} },
-              children = {} },
+            { id = '1', xform = { ppqL = {{'add', 250}}, pitch = {{'add', 1}} }, children = {} },
+            { id = '2', xform = { ppqL = {{'add', 290}}, pitch = {{'add', 2}} }, children = {} },
           },
         } } },
       }, CFG))
       h.vm:setGridSize(80, 40)
-
-      t.eq(#byParent(h.fm:dump().notes, 1), 2, 'both children materialised')
+      t.eq(#byParent(h.fm:dump().notes, 1), 2)
 
       h.vm:quantizeAll()
 
       local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.deepEq(oldRoot.aliases, {},
-        'both spec nodes plucked — not just one (batched sever)')
-
-      local promoted = {}
-      for _, n in ipairs(notes) do
-        if not n.parentUuid and n.uuid ~= 1 then promoted[n.pitch] = n end
-      end
-      t.truthy(promoted[61], 'first child promoted (pitch 61)')
-      t.truthy(promoted[62], 'second child promoted (pitch 62)')
-      t.eq(promoted[61].ppq, 240, 'first snapped to row 4')
-      t.eq(promoted[62].ppq, 300, 'second snapped to row 5')
-    end,
-  },
-
-  --------------------------------------------------------------------
-  -- On-grid aliased child stays attached: severing only fires for
-  -- events that actually have a quantize plan.
-  --------------------------------------------------------------------
-  {
-    name = 'on-grid aliased child stays attached when sibling quantizes',
-    run = function(harness)
-      local h = harness.mk(util.assign({
-        seed = { notes = { shortNote{
-          aliasCtr = 3,
-          aliases  = {
-            { id = '1',
-              xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
-              children = {} },  -- on-grid (240=row 4)
-            { id = '2',
-              xform = { ppqL = {{'add', 290}}, pitch = {{'add', 2}} },
-              children = {} },  -- off-grid (290 → row 4.83 → 300)
-          },
-        } } },
-      }, CFG))
-      h.vm:setGridSize(80, 40)
-      h.vm:quantizeAll()
-
-      local notes   = h.fm:dump().notes
-      local oldRoot = rootByUuid(notes, 1)
-      t.eq(#oldRoot.aliases, 1, 'on-grid sibling stays in spec tree')
-      t.eq(oldRoot.aliases[1].id, '1', 'the on-grid one (id=1) survives')
+      t.eq(#oldRoot.aliases, 2, 'both spec nodes still present')
+      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 250}, {'snap', 60}})
+      t.deepEq(oldRoot.aliases[2].xform.ppqL, {{'add', 290}, {'snap', 60}})
 
       local kids = byParent(notes, 1)
-      t.eq(#kids, 1)
-      t.eq(kids[1].pitch, 61)
-      t.eq(kids[1].specPath, '1')
-
-      -- The off-grid one is now a free promoted root.
-      local promoted
-      for _, n in ipairs(notes) do
-        if not n.parentUuid and n.uuid ~= 1 then promoted = n end
-      end
-      t.truthy(promoted)
-      t.eq(promoted.ppq,   300)
-      t.eq(promoted.pitch, 62)
+      table.sort(kids, function(a, b) return a.ppq < b.ppq end)
+      t.eq(#kids, 2)
+      t.eq(kids[1].ppq, 240); t.eq(kids[1].pitch, 61)
+      t.eq(kids[2].ppq, 300); t.eq(kids[2].pitch, 62)
     end,
   },
 
   --------------------------------------------------------------------
-  -- Aliasing root with nothing to quantize: root keeps its `aliases`
-  -- list; not severed. Proves the pre-pass filters by parentUuid.
+  -- On-grid aliased child gets no snap appended (no plan); off-grid
+  -- sibling does. Proves the "changed" gate on plan emission.
+  --------------------------------------------------------------------
+  {
+    name = 'on-grid aliased child: no snap appended; off-grid sibling: snap appended',
+    run = function(harness)
+      local h = harness.mk(util.assign({
+        seed = { notes = { shortNote{
+          aliasCtr = 3,
+          aliases  = {
+            { id = '1', xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} }, children = {} },
+            { id = '2', xform = { ppqL = {{'add', 290}}, pitch = {{'add', 2}} }, children = {} },
+          },
+        } } },
+      }, CFG))
+      h.vm:setGridSize(80, 40)
+      h.vm:quantizeAll()
+
+      local notes   = h.fm:dump().notes
+      local oldRoot = rootByUuid(notes, 1)
+      t.eq(#oldRoot.aliases, 2, 'both still in tree')
+      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 240}},
+        'on-grid id=1 untouched')
+      t.deepEq(oldRoot.aliases[2].xform.ppqL, {{'add', 290}, {'snap', 60}},
+        'off-grid id=2 snap appended')
+
+      local kids = byParent(notes, 1)
+      table.sort(kids, function(a, b) return a.ppq < b.ppq end)
+      t.eq(kids[1].ppq, 240); t.eq(kids[1].pitch, 61)
+      t.eq(kids[2].ppq, 300); t.eq(kids[2].pitch, 62)
+    end,
+  },
+
+  --------------------------------------------------------------------
+  -- Aliasing root with on-grid child: no plans anywhere; root and
+  -- spec preserved intact.
   --------------------------------------------------------------------
   {
     name = 'aliasing root with on-grid child: no plans, root preserved intact',
@@ -213,31 +172,29 @@ return {
 
       local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.truthy(oldRoot, 'root not severed away')
-      t.eq(#oldRoot.aliases, 1, 'spec tree preserved when nothing planned')
-      t.eq(oldRoot.aliases[1].id, '1')
+      t.truthy(oldRoot)
+      t.eq(#oldRoot.aliases, 1)
+      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 240}},
+        'no snap appended — was already on-grid')
 
       local kids = byParent(notes, 1)
-      t.eq(#kids, 1, 'child still materialised under the root')
-      t.eq(kids[1].specPath, '1', 'still aliased — not promoted')
+      t.eq(#kids, 1); t.eq(kids[1].specPath, '1', 'still aliased')
     end,
   },
 
   --------------------------------------------------------------------
-  -- Aliased child with a grandchild spec: after sever the grandchild
-  -- re-emits relative to the promoted (now quantized) root position.
-  -- Grandchild is on-grid relative to the post-quantize mid, so it is
-  -- not itself planned — it stays attached and follows.
+  -- Aliased mid stays attached; its grandchild is on-grid pre-quantize
+  -- (no plan, no snap appended) but after the mid's snap it composes
+  -- against the snapped mid position. Demonstrates accepted alias
+  -- drift: grandchild moves off-grid as the mid moves on-grid.
   --------------------------------------------------------------------
   {
-    name = 'severed child carries its subtree; grandchild composes against new root',
+    name = 'aliased mid: snap appended; grandchild composes against the snapped mid',
     run = function(harness)
-      -- Mid at +250 (off-grid; plans → severed). Grandchild at +50 from
-      -- mid + pitch +1 (= 62 distinct from mid's 61). Pre-quantize
-      -- grandchild ppq = 250 + 50 = 300 (on-grid → not planned, stays
-      -- attached). Post-rebuild the walker re-emits grandchild against
-      -- the promoted mid's new ppqL=240 → 240+50=290 — descendants
-      -- follow the quantized root.
+      -- Mid resolved ppq = 250 (off-grid → planned, snap appended).
+      -- Grandchild resolved ppq = 250 + 50 = 300 (on-grid → no plan).
+      -- Post-quantize: mid xform = {add 250, snap 60} → resolved 240.
+      -- Grandchild composes: 240 + 50 = 290 (alias drift, accepted).
       local h = harness.mk(util.assign({
         seed = { notes = { shortNote{
           aliasCtr = 2,
@@ -256,28 +213,36 @@ return {
       h.vm:setGridSize(80, 40)
       h.vm:quantizeAll()
 
-      local notes = h.fm:dump().notes
-      local promoted
-      for _, n in ipairs(notes) do
-        if not n.parentUuid and n.uuid ~= 1 then promoted = n end
-      end
-      t.truthy(promoted)
-      t.eq(promoted.ppq,   240, 'mid raw ppq snapped to row 4')
-      t.eq(promoted.pitch,  61)
-      t.eq(#promoted.aliases, 1, 'grandchild spec carried over')
+      local notes   = h.fm:dump().notes
+      local oldRoot = rootByUuid(notes, 1)
+      t.eq(#oldRoot.aliases, 1, 'mid spec stays in tree')
+      local mid = oldRoot.aliases[1]
+      t.deepEq(mid.xform.ppqL, {{'add', 250}, {'snap', 60}})
+      t.eq(#mid.children, 1, 'grandchild spec preserved')
 
-      local gks = byParent(notes, promoted.uuid)
-      t.eq(#gks, 1)
-      t.eq(gks[1].ppq,   290, 'grandchild follows promoted root: 240 + 50')
-      t.eq(gks[1].pitch,  62, 'pitch composes (61 + 1)')
-      t.eq(gks[1].vel,   105)
-      t.eq(gks[1].specPath, '1', 'specPath now relative to promoted root')
+      local kids = byParent(notes, 1)
+      local emitMid, emitGrand
+      for _, e in ipairs(kids) do
+        if     e.specPath == '1'   then emitMid = e
+        elseif e.specPath == '1.1' then emitGrand = e end
+      end
+
+      t.truthy(emitMid)
+      t.eq(emitMid.ppq, 240, 'mid resolves to snapped row 4')
+      t.eq(emitMid.pitch, 61)
+
+      t.truthy(emitGrand)
+      t.eq(emitGrand.ppq,   290, 'grandchild = snapped-mid(240) + 50')
+      t.eq(emitGrand.pitch, 62)
+      t.eq(emitGrand.vel,   105)
     end,
   },
 
   --------------------------------------------------------------------
-  -- quantizeKeepRealised: aliased child severs; intent ppq snaps to
-  -- row; delay absorbs the inverse to preserve realised onset.
+  -- quantizeKeepRealised on aliased child: severs and absorbs into
+  -- delay. This path does NOT route relative — delay is per-emit,
+  -- not in the spec — so the keepRealised promise (preserve realised
+  -- onset) requires severance.
   --------------------------------------------------------------------
   {
     name = 'quantizeKeepRealised on aliased child: severs; delay preserves realised onset',
@@ -308,9 +273,7 @@ return {
       end
       t.truthy(promoted)
       t.eq(promoted.ppqL, 240, 'intent ppq snapped to row 4')
-      -- Realised = ppqL + delayToPPQ(delay). assignNote stores ppq as
-      -- realised raw onset (= ppqL + delay-PPQ); preserved at 250.
-      t.eq(promoted.ppq, 250, 'realised onset preserved')
+      t.eq(promoted.ppq,  250, 'realised onset preserved (delay absorbed +10)')
     end,
   },
 }

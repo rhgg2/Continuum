@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=1162  sha=a100405
+@module editCursor  src=editCursor.lua  loc=1163  sha=59dfc00
 @deps util, aliases
 
 # Invariants & contracts (module)
@@ -22,8 +22,8 @@
   @shape  clipEvent = source-event minus CLIP_RESERVED, plus { row, [endRow] }   -- row is 0-relative to clip top
 
 # Module-level constants
-  @const CLIP_RESERVED = {  @ 521
-  @const CLIP_ARTIFACTS = { row = true, endRow = true }  @ 544
+  @const CLIP_RESERVED = {  @ 522
+  @const CLIP_ARTIFACTS = { row = true, endRow = true }  @ 545
 
 # Module-level functions (private)
   @fn print(...)  @ 24
@@ -67,8 +67,8 @@
     @fn moveChannel(n)  @ 249
         @map:contract  jumps one channel per step; non-sticky lands on the first note col of the destination channel (skipping pc/pb sentinels); sticky preserves the raw chan-edge land
     @fn chanRange()  @ 250
-    @fn selectSpan(scope, col, stop1, stop2)  @ 401
-    @fn partsFor(type, showDelay, trackerMode)  @ 464   -- One char of separator between adjacent parts in the rendered cell.
+    @fn selectSpan(scope, col, stop1, stop2)  @ 402
+    @fn partsFor(type, showDelay, trackerMode)  @ 465   -- One char of separator between adjacent parts in the rendered cell.
 
   # Public API
     -- Position
@@ -89,30 +89,31 @@
     @api ec:cursorPart()  @ 310
     @api ec:hasSelection()  @ 311
     @api ec:isSticky()  @ 312
-    @api ec:region()  @ 314
-    @api ec:regionStart()  @ 323
+    @api ec:anchorRow()  @ 313
+    @api ec:region()  @ 315
+    @api ec:regionStart()  @ 324
         -- Pair so callers can splat: `ec:setPos(row, ec:regionStart())`.
-    @api ec:eachSelectedCol()  @ 328
-    @api ec:setSelection(r)  @ 350
+    @api ec:eachSelectedCol()  @ 329
+    @api ec:setSelection(r)  @ 351
         @map:contract  installs a selection from a part-typed record; clears sticky scopes; anchor lands at top-left part-start so subsequent extends behave like a fresh drag
-    @api ec:selectionStopSpan(col)  @ 357
-    @api ec:selClear()  @ 375
-    @api ec:unstick()  @ 376
-    @api ec:extendTo(row, col, stop)  @ 379
+    @api ec:selectionStopSpan(col)  @ 358
+    @api ec:selClear()  @ 376
+    @api ec:unstick()  @ 377
+    @api ec:extendTo(row, col, stop)  @ 380
         -- Mouse shift-click and drag both speak this verb.
-    @api ec:shiftSelection(rowDelta)  @ 386
+    @api ec:shiftSelection(rowDelta)  @ 387
         @map:contract  shifts both selection rows + anchor + cursor by rowDelta; clamps each independently (selection can compress against the edge while cursor doesn't)
     -- Motion
-    @api ec:advance()  @ 398
+    @api ec:advance()  @ 399
         @map:contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
-    @api ec:selectChannel(chan)  @ 408
-    @api ec:selectColumn(col)  @ 413
+    @api ec:selectChannel(chan)  @ 409
+    @api ec:selectColumn(col)  @ 414
     -- Commands
-    @api ec:registerCommands(scope)  @ 421
+    @api ec:registerCommands(scope)  @ 422
     -- Decoration
-    @api ec:decorateCol(col)  @ 479
+    @api ec:decorateCol(col)  @ 480
         @map:contract  stamps col.parts/stopPos/partAt/partStart/width derived from col.type + showDelay + trackerMode; ec is the sole writer of these fields, addGridCol never names them
-@factory newClipboard(deps)  @ 546
+@factory newClipboard(deps)  @ 547
   @map:invariant  clipboard persists via REAPER ExtState under ('rdm','clipboard'), serialised by util.serialise
   @map:invariant  clip rows are 0-relative to the clip's top (row=0 is first row of selection); paste re-bases against current cursor row
   @map:invariant  single vs multi mode is decided by selected-col count: c1==c2 -> single, otherwise multi
@@ -122,50 +123,50 @@
   @map:invariant  velEvent is the only collector that synthesises a clip event rather than cloning the source — vel-mode pastes must not carry note metadata onto cc destinations
 
   # Private state
-    @state ec = deps.ec  @ 550
-    @state grid = deps.grid  @ 551
-    @state tm = deps.tm  @ 552
-    @state cm = deps.cm  @ 553
-    @state currentRpb = deps.currentRpb  @ 554
-    @state assignTail = deps.assignTail  @ 555
-    @state getCtx = deps.getCtx  @ 556
-    @state getLength = deps.getLength  @ 557
-    @state getAliasMode = deps.getAliasMode or function() return false end  @ 558
-    @state demotedCount = 0  @ 782
-    @state outcomes  @ 783   -- clipId -> { kind='alias', uuid, specPath, evt } or { kind='plain', evt }
-    @state pending  @ 784   -- list of { evtType, e } awaiting their family parent
-    @state clipboard = {}  @ 1144
+    @state ec = deps.ec  @ 551
+    @state grid = deps.grid  @ 552
+    @state tm = deps.tm  @ 553
+    @state cm = deps.cm  @ 554
+    @state currentRpb = deps.currentRpb  @ 555
+    @state assignTail = deps.assignTail  @ 556
+    @state getCtx = deps.getCtx  @ 557
+    @state getLength = deps.getLength  @ 558
+    @state getAliasMode = deps.getAliasMode or function() return false end  @ 559
+    @state demotedCount = 0  @ 783
+    @state outcomes  @ 784   -- clipId -> { kind='alias', uuid, specPath, evt } or { kind='plain', evt }
+    @state pending  @ 785   -- list of { evtType, e } awaiting their family parent
+    @state clipboard = {}  @ 1145
 
   # Private functions
-    @fn save(clip)  @ 560
-    @fn load()  @ 564
-    @fn isStrictAncestor(parentPath, childPath)  @ 571
+    @fn save(clip)  @ 561
+    @fn load()  @ 565
+    @fn isStrictAncestor(parentPath, childPath)  @ 572
         @map:contract  '' as the empty / root prefix; nil parent is also an ancestor of any non-nil child specPath.
-    @fn resolveAliasFamily(clip)  @ 579
+    @fn resolveAliasFamily(clip)  @ 580
         @map:contract  walks every clip event (single mode: clip.events; multi: clip.cols[i].events) and stamps `aliasSrc.clipId` (1-based, dense across the whole clip). For each aliased event, finds the closest in-clip ancestor (same root uuid, longest specPath that's a strict prefix) and records `aliasSrc.parentClipId`. Then snapshots the structural xform list from family-parent's specPath down to and including this event's specPath via tm:pathXform, stored as `aliasSrc.pathXform`. This is the data paste-time aliasWriter consumes to attach a child under its in-clip parent's freshly-pasted spec node — robust against later spec-tree edits because xforms are captured at copy. Always runs: aliasSrc is captured unconditionally so the paste-time mode can choose freely.
-    @fn collect()  @ 613
+    @fn collect()  @ 614
         @map:contract  returns nil if the resolved selection is empty (no events); single-col emits {mode='single',type,...}, multi-col emits {mode='multi',cols=[...]}; aliasSrc is always captured per event — the paste-time mode (getAliasMode) selects writer. cut behaves the same way as copy here: the deletion-fallback path in aliasWriter demotes it to a plain write at paste time once byUuid fails.
-    @fn rowOf(p)  @ 619
-    @fn aliasSrcOf(evt)  @ 625   -- aliasSrc anchors the source in the spec tree; position/chan/lane are reconstructed at past
-    @fn noteEvent(evt)  @ 641   -- Source duration is structural: endRow always reflects evt.endppq, regardless of where sele
-    @fn scalarEvent(evt)  @ 651
-    @fn velEvent(evt)  @ 660   -- Scalar abstraction over a note: only `val` carries. A clone would land the source note's p
-    @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 730
+    @fn rowOf(p)  @ 620
+    @fn aliasSrcOf(evt)  @ 626   -- aliasSrc anchors the source in the spec tree; position/chan/lane are reconstructed at past
+    @fn noteEvent(evt)  @ 642   -- Source duration is structural: endRow always reflects evt.endppq, regardless of where sele
+    @fn scalarEvent(evt)  @ 652
+    @fn velEvent(evt)  @ 661   -- Scalar abstraction over a note: only `val` carries. A clone would land the source note's p
+    @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 731
         @map:contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
-    @fn plainWriter(evtType, e)  @ 786
-    @fn writeAsRoot(evtType, e)  @ 793   -- Family root or no family relation: today's resolve-and-corrective-delta logic. Returns the
-    @fn aliasWriter(evtType, e)  @ 850
+    @fn plainWriter(evtType, e)  @ 787
+    @fn writeAsRoot(evtType, e)  @ 794   -- Family root or no family relation: today's resolve-and-corrective-delta logic. Returns the
+    @fn aliasWriter(evtType, e)  @ 851
         @map:contract  dispatches by family-relation. Events with no parentClipId go through writeAsRoot (today's resolve-and-corrective-delta path). Children with a captured parentClipId attach via tm:createAlias against the parent's recorded outcome (alias parent → under parent's new specPath; plain parent → top-level on the parent's mm uuid, set post-flush via the addNote uuid writeback). If the parent hasn't fired yet, its plain mm uuid isn't yet realised, or createAlias fails (most commonly because the parent's spec mutation hasn't been flushed and the parent's specPath isn't yet visible to mm), the event is deferred to `pending` for the next drain wave. Outcomes are recorded under aliasSrc.clipId for downstream children to pick up.
-    @fn pasteSingle(clip, writer)  @ 882
+    @fn pasteSingle(clip, writer)  @ 883
         @map:contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op. writer is plainWriter or aliasWriter — every paste mode uses the same pipeline (cap, clear, tail clamp); only the per-event write differs.
-    @fn pasteMulti(clip, writer)  @ 971
+    @fn pasteMulti(clip, writer)  @ 972
         @map:contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col. writer is plainWriter or aliasWriter (see pasteSingle).
-    @fn infoFor(chan)  @ 981
-    @fn resolve(clipCol)  @ 1004
-    @fn pasteClip(clip)  @ 1092
-    @fn trimTop(clip, trim)  @ 1121   -- A note whose start row falls within the trimmed band is dropped entirely.
+    @fn infoFor(chan)  @ 982
+    @fn resolve(clipCol)  @ 1005
+    @fn pasteClip(clip)  @ 1093
+    @fn trimTop(clip, trim)  @ 1122   -- A note whose start row falls within the trimmed band is dropped entirely.
         @map:contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
-    @fn filter(events)  @ 1122
+    @fn filter(events)  @ 1123
 
   # Public API
     -- Position
@@ -178,11 +179,11 @@
     -- Commands
     -- Decoration
     -- CLIPBOARD
-    @api clipboard:collect()  @ 1145
-    @api clipboard:copy()  @ 1146
-    @api clipboard:pasteClip(clip)  @ 1147
-    @api clipboard:trimTop(clip, trim)  @ 1148
-    @api clipboard:registerCommands(scope)  @ 1150
+    @api clipboard:collect()  @ 1146
+    @api clipboard:copy()  @ 1147
+    @api clipboard:pasteClip(clip)  @ 1148
+    @api clipboard:trimTop(clip, trim)  @ 1149
+    @api clipboard:registerCommands(scope)  @ 1151
 
   # REAPER API surface
     @reaper SetExtState

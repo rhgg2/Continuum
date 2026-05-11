@@ -315,6 +315,13 @@ function newTrackerPage(cm, cmgr, chrome, gui)
       end,
     },
     {
+      id = 'aliasMode',
+      render = function()
+        local cv = chrome.checkbox('  Alias', vm:getAliasMode())
+        if cv then cmgr:invoke('toggleAliasMode') end
+      end,
+    },
+    {
       id = 'tuning',
       render = function()
         local cur = cm:get('temper')
@@ -517,6 +524,23 @@ function newTrackerPage(cm, cmgr, chrome, gui)
     local cursorRow, cursorCol, cursorStop = ec:pos()
     local scrollRow, scrollCol, lastVisCol = vm:scroll()
 
+    -- Transient alias-family focus: the cursor event plus its spec-tree
+    -- parent and immediate children (one level each side). aliasFocus
+    -- supersedes the default alias tint inside this set; non-family
+    -- aliased cells keep the dimmer phase-7 tint.
+    local focus, focusCol = {}, grid.cols[cursorCol]
+    local cursorEvt = focusCol and focusCol.cells and focusCol.cells[cursorRow]
+    if cursorEvt and cursorEvt.uuid then
+      local idx = vm:aliasIndex()
+      local rec = idx.byUuid[cursorEvt.uuid]
+      -- The cursor cell already carries the selection/caret marker; the
+      -- transient family tint highlights only relatives.
+      if rec and rec.treeParent then focus[rec.treeParent] = true end
+      for _, child in ipairs(idx.byChildren[cursorEvt.uuid] or {}) do
+        focus[child.evt.uuid] = true
+      end
+    end
+
     local px, py = ImGui.GetCursorScreenPos(ctx)
     gridOriginX  = px + GUTTER * gridX
     gridOriginY  = py + HEADER * gridY
@@ -620,7 +644,15 @@ function newTrackerPage(cm, cmgr, chrome, gui)
               textCol = 'offGrid'
             end
           end
-          if vm:isChannelEffectivelyMuted(col.midiChan) then textCol, overrides = 'inactive', nil end
+          local muted = vm:isChannelEffectivelyMuted(col.midiChan)
+          if muted then textCol, overrides = 'inactive', nil end
+          if evt and not muted then
+            if evt.uuid and focus[evt.uuid] then
+              draw:box(col.x, col.x + col.width - 1, y, y, 'aliasFocus')
+            elseif evt.parentUuid then
+              draw:box(col.x, col.x + col.width - 1, y, y, 'alias')
+            end
+          end
           if not text then text = '' end
           local cx, i = col.x, 0
           for ch in text:gmatch(utf8.charpattern) do
@@ -750,6 +782,10 @@ function newTrackerPage(cm, cmgr, chrome, gui)
     cycleVBlock    = { {ImGui.Key_O,           ImGui.Mod_Super} },
     swapBlockEnds  = { {ImGui.Key_GraveAccent, ImGui.Mod_Ctrl} },
     toggleAliasMode = { ImGui.Key_GraveAccent },
+    aliasUp         = { {ImGui.Key_UpArrow,    ImGui.Mod_Super} },
+    aliasDown       = { {ImGui.Key_DownArrow,  ImGui.Mod_Super} },
+    aliasLeft       = { {ImGui.Key_LeftArrow,  ImGui.Mod_Super} },
+    aliasRight      = { {ImGui.Key_RightArrow, ImGui.Mod_Super} },
     sever           = { {ImGui.Key_Period, ImGui.Mod_Super} },
     selectClear    = { {ImGui.Key_G, ImGui.Mod_Super} },
     cut            = { {ImGui.Key_W, ImGui.Mod_Super}, {ImGui.Key_X, ImGui.Mod_Ctrl} },
@@ -926,7 +962,8 @@ function newTrackerPage(cm, cmgr, chrome, gui)
     local cursorRow, cursorCol, cursorStop = ec:pos()
     local commandHeld = kr.commandHeld
 
-    if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
+    if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_None
+       and not cmgr:isPrefixActive() then
         -- Drain the queue: ImGui buffers all chars typed within a frame, so
         -- reading only index 0 drops the rest under fast typing / rollover.
         -- Re-fetch grid + cursor each step: editEvent flushes and may rebuild.
@@ -947,7 +984,8 @@ function newTrackerPage(cm, cmgr, chrome, gui)
         end
       end
 
-    if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_Shift and not ec:isSticky() then
+    if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_Shift and not ec:isSticky()
+       and not cmgr:isPrefixActive() then
       local col = grid.cols[cursorCol]
       if col then
         for d = 0, 9 do

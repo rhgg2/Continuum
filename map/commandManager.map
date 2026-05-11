@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=177  sha=2973124
+@module commandManager  src=commandManager.lua  loc=239  sha=2973124
 
 # Invariants & contracts (module)
   @map:invariant  commands and keymap are orthogonal name-keyed tables; a name may live in either alone
@@ -32,31 +32,43 @@
   # Private state
     @state root = newScope()  @ 102
     @state scopes = {}  @ 103
-    @state mgr = {  @ 105
+    @state mgr = {  @ 108
 
   # Public API
     -- Scope
-    @api mgr:register(name, fn)  @ 114
-    @api mgr:registerAll(tbl)  @ 115
-    @api mgr:bind(name, keys)  @ 116
-    @api mgr:bindAll(tbl)  @ 117
-    @api mgr:wrap(name, wrapper)  @ 118
-    @api mgr:doBefore(name, before)  @ 119
-    @api mgr:doAfter(name, after)  @ 120
+    @api mgr:register(name, fn)  @ 117
+    @api mgr:registerAll(tbl)  @ 118
+    @api mgr:bind(name, keys)  @ 119
+    @api mgr:bindAll(tbl)  @ 120
+    @api mgr:wrap(name, wrapper)  @ 121
+    @api mgr:doBefore(name, before)  @ 122
+    @api mgr:doAfter(name, after)  @ 123
+    -- Universal-argument prefix
+    @api mgr:beginPrefix()  @ 135
+        @map:contract  buffer accepts only '0'..'9' and '/'; cancel/finish/consume each leave the state inactive
+    @api mgr:isPrefixActive()  @ 136
+    @api mgr:appendPrefix(ch)  @ 138
+    @api mgr:cancelPrefix()  @ 144
+    @api mgr:finishPrefix()  @ 150
+        @map:contract  empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
+    @api mgr:consumePrefix()  @ 171
+        @map:contract  returns pending value (number or nil) and clears all prefix state; idempotent thereafter until next finishPrefix
+    @api mgr:consumePrefixRational()  @ 178
+        @map:contract  returns (num, den) of the pending prefix as parsed integers, or (nil, nil) when no prefix is pending; clears all prefix state; consumers that need rationality (e.g. scale's rpb refinement) read this instead of consumePrefix
     -- Scopes
-    @api mgr:scope(name)  @ 125
+    @api mgr:scope(name)  @ 187
         @map:contract  creates the scope on first request; idempotent thereafter
-    @api mgr:setActive(name)  @ 135
+    @api mgr:setActive(name)  @ 197
         @map:contract  pass nil to clear active scope (drop back to root-only resolution)
-    @api mgr:dropScope(name)  @ 137
+    @api mgr:dropScope(name)  @ 199
     -- Lookup
-    @api mgr:invoke(name, ...)  @ 142
+    @api mgr:invoke(name, ...)  @ 204
         @map:contract  no-op (returns nil) if no scope resolves the name; never raises on unknown
-    @api mgr:keychain()  @ 148
-    @api mgr:keysFor(name)  @ 154
-    @api mgr:keySpec(spec, ImGui)  @ 161
+    @api mgr:keychain()  @ 210
+    @api mgr:keysFor(name)  @ 216
+    @api mgr:keySpec(spec, ImGui)  @ 223
         -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
     -- Note layout
-    @api mgr:noteChars(char)  @ 172
+    @api mgr:noteChars(char)  @ 234
         -- Re-read noteLayout on each call so a config change takes effect
         -- without rebuilding vm.

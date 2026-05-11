@@ -71,10 +71,7 @@ end
 local function evtTypeOf(evt) return evt.msgType and 'cc' or 'note' end
 
 local function slotKey(evt)
-  if evt.msgType then
-    return 'cc|c=' .. evt.chan .. '|m=' .. evt.msgType
-        .. '|i=' .. (evt.cc or evt.pitch or '') .. '|t=' .. evt.ppq
-  end
+  if evt.msgType then return 'cc|c=' .. evt.chan .. '|m=' .. evt.msgType .. '|i=' .. (evt.cc or evt.pitch or '') .. '|t=' .. evt.ppq end
   return 'note|c=' .. evt.chan .. '|p=' .. evt.pitch .. '|t=' .. evt.ppq
 end
 
@@ -113,6 +110,8 @@ function newTrackerManager(mm, cm)
   local lastMuteSet = {}  -- { [chan] = true }, pushed by vm via tm:setMutedChannels
   --@map:invariant pendingFlushUuids: uuid-set of notes touched by the in-flight um:flush; read by allocateNoteColumn to attribute lane overlaps; nil outside a flush-driven rebuild
   local pendingFlushUuids
+  --@map:invariant aliasIndex: { byUuid = { [uuid] = {evt, chan} }, byParent = { [parentUuid] = [{evt, chan}, ...] sorted (ppq, chan) } }; rebuilt at the tail of tm:rebuild from column-projected events; empty tables when no aliases exist
+  local aliasIndex = { byUuid = {}, byParent = {} }
   --@map:invariant staleSwing[chan]=true: this channel's resolved swing changed; rebuild rule rederives raw from ppqL and clears
   local staleSwing = {}
 
@@ -181,12 +180,6 @@ function newTrackerManager(mm, cm)
 
     local function logicalBefore(chan, P)
       return rawBefore(chan, P) - detuneBefore(chan, P)
-    end
-
-    local function nextLogicalChange(chan, P)
-      local currentLogical = logicalAt(chan, P)
-      local pb = util.seek(chans[chan].pbs, 'after', P, function(e) return logicalAt(chan, e.ppq) ~= currentLogical end)
-      return (pb and pb.ppq) or math.huge
     end
 
     local function nextRealChange(chan, P)
@@ -1433,6 +1426,29 @@ function newTrackerManager(mm, cm)
       if not same then cm:set('take', 'usedSwings', used) end
     end
 
+    -- 6) Alias dependency index. byUuid maps every event's uuid to its
+    --    column-projected event + channel; byParent groups materialised
+    --    children under their root, sorted into grid scan order (ppq,
+    --    then chan). Consumers: vm:aliasIndex (nav, focus highlight).
+    do
+      local byUuid, byParent = {}, {}
+      forEachEvent(function(_, evt, chan)
+        if evt.uuid then byUuid[evt.uuid] = { evt = evt, chan = chan } end
+        if evt.parentUuid then
+          local list = byParent[evt.parentUuid] or {}
+          byParent[evt.parentUuid] = list
+          util.add(list, { evt = evt, chan = chan })
+        end
+      end)
+      for _, list in pairs(byParent) do
+        table.sort(list, function(a, b)
+          if a.evt.ppq ~= b.evt.ppq then return a.evt.ppq < b.evt.ppq end
+          return a.chan < b.chan
+        end)
+      end
+      aliasIndex = { byUuid = byUuid, byParent = byParent }
+    end
+
     um = createUpdateManager()
     rebuilding = false
     pendingFlushUuids = nil
@@ -1440,6 +1456,8 @@ function newTrackerManager(mm, cm)
     --@map:emits rebuild  -- nil; fires once at the end of every rebuild after um is recreated
     fire('rebuild', nil)
   end
+
+  function tm:aliasIndex() return aliasIndex end
 
   ----- Accessors
 
@@ -1690,7 +1708,7 @@ function newTrackerManager(mm, cm)
   function tm:assignEvent(type, evt, update) um:assignEvent(type, evt, update) end
   function tm:flush() um:flush() end
 
-  --@map:contract evt is a materialised alias child (carries parentUuid + specPath); appends each (field, op) entry of `opsByField` to the spec node and queues an aliases-only metadata write on the root. Multi-field is one call so coupled fields (e.g. pitch+detune under a temper) land on a single root snapshot. Returns false when evt is not aliased or the root/spec lookup fails — caller should fall through to direct mutation.
+  --@map:contract evt is a materialised alias child (carries parentUuid + specPath); appends each (field, op) entry of `opsByField` to the spec node and queues an aliases-only metadata write on the root. Multi-field is one call so coupled fields (e.g. pitch+detune under a temper) land on a single root snapshot. Per-field value is either a single op (opcode-string at [1]) or a list of ops (table at [1]); list form lands as successive appendOps, with coalescence applied at each step. Returns false when evt is not aliased or the root/spec lookup fails — caller should fall through to direct mutation.
   function tm:routeRelative(evt, opsByField)
     if not (evt and evt.parentUuid) then return false end
     local rootLoc, root, kind = mm:byUuid(evt.parentUuid)
@@ -1698,7 +1716,13 @@ function newTrackerManager(mm, cm)
     local node = aliases.find(root, evt.specPath)
     if not node then return false end
     for field, op in pairs(opsByField) do
-      node.xform = aliases.appendOp(node.xform, field, op)
+      if type(op[1]) == 'table' then
+        for _, o in ipairs(op) do
+          node.xform = aliases.appendOp(node.xform, field, o)
+        end
+      else
+        node.xform = aliases.appendOp(node.xform, field, op)
+      end
     end
     um:assignEvent(kind, { loc = rootLoc }, { aliases = root.aliases })
     return true

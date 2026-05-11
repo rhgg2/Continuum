@@ -123,6 +123,15 @@ Never hand-edit them.
 - Spec files live in `tests/specs/`, registered in `tests/run.lua`.
   Read only specs adjacent to your changes.
 
+- Before changing a setter or extending a method on the
+  `trackerManager` / `trackerView` / `midiManager` stack, read the
+  test fixture you'll target *first* — its CFG seeds (which
+  `configManager` tier the test writes to) and its fake-mm surface
+  (methods that exist on the fake but not in production). Tier
+  shadowing and fake-only methods are the dominant failure modes in
+  this stack; reading the fixture before the code costs less than
+  reverse-engineering a red test.
+
 - Batched writes: use `mcp__readium_patches__apply_patches` whenever
   you'd otherwise issue ≥2 Edits — same search/replace semantics as
   the built-in `Edit` tool, but atomic across many paths. Single
@@ -134,6 +143,9 @@ Never hand-edit them.
   single-file work where the in-chat per-file diff prompt is enough.
 
 ## Coding style
+
+Aim for limpid elegance. Use whatever paradigm is most expressive and
+direct. Compact, but clear.
 
 - Use closures extensively.
 - Scope tightly: wrap private helpers in `local fn do ... end`; readers then see which belong to which function.
