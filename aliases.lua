@@ -19,9 +19,15 @@ local M = aliases
 -- the root's authoring-frame swing snapshot. delay is its own field
 -- (absolute realised offset, e.g. flam / phasing); the walker folds it
 -- into ppq after deriving from ppqL.
+--
+-- pitch and octave are tuning-step deltas (NOT MIDI semitones). The
+-- realiser resolves them to (midi, detune) at emit via
+-- tuning.transposeStep. detune itself is not in the alias vocabulary:
+-- alias children inherit the root's detune; tonal transposition lives
+-- in pitch/octave under the active temper.
 local NOTE_FIELDS = {
   ppqL = true, durL = true,
-  pitch = true, detune = true, vel = true,
+  pitch = true, octave = true, vel = true,
   chan = true, lane = true, delay = true,
 }
 

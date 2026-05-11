@@ -529,7 +529,8 @@ local CLIP_RESERVED = {
   type = true, msgType = true,
   -- alias materialisation metadata: a fresh paste gets fresh parentUuid +
   -- specPath from the rebuild walker if it's aliased, or none if it isn't.
-  -- aliasSrc carries the source identity through the clip when alias mode is on.
+  -- aliasSrc carries the source identity through the clip; the writer at
+  -- paste time decides whether to honour or strip it (alias vs plain mode).
   parentUuid = true, specPath = true,
   -- root-only spec-tree state. A pasted event is never a continuation of the
   -- source root; aliased-mode propagation is handled explicitly via aliasSrc
@@ -574,9 +575,8 @@ function newClipboard(deps)
     return childPath:sub(1, #parentPath + 1) == parentPath .. '.'
   end
 
-  --@map:contract walks every aliased clip event (single mode: clip.events; multi: clip.cols[i].events) and stamps `aliasSrc.clipId` (1-based, dense across the whole clip). For each aliased event, finds the closest in-clip ancestor (same root uuid, longest specPath that's a strict prefix) and records `aliasSrc.parentClipId`. Then snapshots the structural xform list from family-parent's specPath down to and including this event's specPath via tm:pathXform, stored as `aliasSrc.pathXform`. This is the data paste-time aliasWriter consumes to attach a child under its in-clip parent's freshly-pasted spec node — robust against later spec-tree edits because xforms are captured at copy.
+  --@map:contract walks every clip event (single mode: clip.events; multi: clip.cols[i].events) and stamps `aliasSrc.clipId` (1-based, dense across the whole clip). For each aliased event, finds the closest in-clip ancestor (same root uuid, longest specPath that's a strict prefix) and records `aliasSrc.parentClipId`. Then snapshots the structural xform list from family-parent's specPath down to and including this event's specPath via tm:pathXform, stored as `aliasSrc.pathXform`. This is the data paste-time aliasWriter consumes to attach a child under its in-clip parent's freshly-pasted spec node — robust against later spec-tree edits because xforms are captured at copy. Always runs: aliasSrc is captured unconditionally so the paste-time mode can choose freely.
   local function resolveAliasFamily(clip)
-    if not clip.aliased then return end
     local all = {}
     if clip.mode == 'single' then
       for _, e in ipairs(clip.events) do all[#all+1] = e end
@@ -609,13 +609,12 @@ function newClipboard(deps)
     end
   end
 
-  --@map:contract returns nil if the resolved selection is empty (no events); single-col emits {mode='single',type,...}, multi-col emits {mode='multi',cols=[...]}; clip.aliased=true when alias mode is on at copy. cut produces an alias clip too — the deletion-fallback path in aliasWriter demotes it to a plain write at paste time once byUuid fails.
+  --@map:contract returns nil if the resolved selection is empty (no events); single-col emits {mode='single',type,...}, multi-col emits {mode='multi',cols=[...]}; aliasSrc is always captured per event — the paste-time mode (getAliasMode) selects writer. cut behaves the same way as copy here: the deletion-fallback path in aliasWriter demotes it to a plain write at paste time once byUuid fails.
   local function collect()
     local ctx = getCtx()
     local r1, r2, c1, c2, part1 = ec:region()
     local numRows  = r2 - r1 + 1
     local logPerRow = ctx:ppqPerRow()
-    local aliased   = getAliasMode() and true or nil
 
     local function rowOf(p)
       return p / logPerRow - r1
@@ -624,7 +623,6 @@ function newClipboard(deps)
     -- aliasSrc anchors the source in the spec tree; position/chan/lane are
     -- reconstructed at paste from row + destination column.
     local function aliasSrcOf(evt)
-      if not aliased then return nil end
       local chain
       if evt.parentUuid and evt.specPath then
         local snap = tm:aliasSrcSnapshot(evt.parentUuid, evt.specPath)
@@ -686,7 +684,7 @@ function newClipboard(deps)
 
       if #events == 0 then return end
       local clip = { mode = 'single', type = clipType, numRows = numRows,
-                     events = events, aliased = aliased }
+                     events = events }
       resolveAliasFamily(clip)
       return clip
     end
@@ -723,7 +721,7 @@ function newClipboard(deps)
 
     if #cols == 0 then return end
     local clip = { mode = 'multi', numRows = numRows, startType = cols[1].type,
-                   cols = cols, aliased = aliased }
+                   cols = cols }
     resolveAliasFamily(clip)
     return clip
   end
@@ -816,13 +814,28 @@ function newClipboard(deps)
     -- durL is omitted from the corrective-delta vocabulary: alias
     -- duration is structural (it follows the parent), and fit-clipping
     -- at rebuild handles the visual fit at the paste site.
+    -- pitch is special: under a temper, the alias op is a step delta
+    -- that absorbs any (pitch, detune) shift; under no temper it is a
+    -- MIDI semitone delta. octave is folded into the same step delta.
     local xform = {}
     for f in pairs(aliases.validFields(evtType)) do
-      if f ~= 'durL' then
+      if f ~= 'durL' and f ~= 'pitch' and f ~= 'octave' then
         local d, b = dst[f], liveSrc[f]
         if d ~= nil and b ~= nil and d ~= b then
           xform[f] = {{'add', d - b}}
         end
+      end
+    end
+    if evtType == 'note' then
+      local temper = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
+      if temper then
+        local sD, oD = tuning.midiToStep(temper, dst.pitch,     dst.detune     or 0)
+        local sL, oL = tuning.midiToStep(temper, liveSrc.pitch, liveSrc.detune or 0)
+        local delta  = (sD + oD * temper.octaveStep)
+                     - (sL + oL * temper.octaveStep)
+        if delta ~= 0 then xform.pitch = {{'add', delta}} end
+      elseif dst.pitch ~= liveSrc.pitch then
+        xform.pitch = {{'add', dst.pitch - liveSrc.pitch}}
       end
     end
     local newPath = tm:createAlias(src.uuid, src.specPath, xform, nil, true)
@@ -1079,7 +1092,9 @@ function newClipboard(deps)
   local function pasteClip(clip)
     demotedCount = 0
     outcomes, pending = {}, {}
-    local writer = clip.aliased and aliasWriter or plainWriter
+    -- Mode is sampled at paste, not capture: a single clip can paste either
+    -- aliased or plain depending on the current vm.aliasMode.
+    local writer = getAliasMode() and aliasWriter or plainWriter
     if clip.mode == 'single' then pasteSingle(clip, writer)
     else                          pasteMulti(clip, writer) end
     -- Drain deferred family children. pasteSingle/pasteMulti has flushed,

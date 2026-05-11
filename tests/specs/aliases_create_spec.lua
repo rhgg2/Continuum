@@ -423,8 +423,10 @@ return {
       t.eq(root.pitch, 64, 'root keeps its mutated pitch')
       t.eq(#root.aliases, 1, 'spec written')
       t.deepEq(root.aliases[1].xform.ppqL,  {{'add', 4 * lpr}}, 'row delta')
-      t.deepEq(root.aliases[1].xform.pitch, {{'add', -4}},
-               'corrective: 60 (captured) − 64 (live) = −4')
+      -- Corrective xform.pitch is a step delta under the active temper:
+      -- (60 captured, 64 live) → step(60) − step(64) under 19EDO = −6.
+      t.deepEq(root.aliases[1].xform.pitch, {{'add', -6}},
+               'corrective: step(60) − step(64) under 19EDO = −6')
       t.eq(#h.reaper._state.messages, 0, 'silent — root drift is corrected')
     end,
   },

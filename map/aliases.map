@@ -1,4 +1,4 @@
-@module aliases  src=aliases.lua  loc=231  sha=d4f20ff
+@module aliases  src=aliases.lua  loc=237  sha=d4f20ff
 
 # Invariants & contracts (module)
   @map:invariant  pure module — no module-level mutable state
@@ -13,50 +13,50 @@
 
 # Module-level constants
   @const M = aliases  @ 14
-  @const NOTE_FIELDS = {  @ 22
-  @const CC_FIELDS = {  @ 28
-  @const APPLIED = { add = true, mul = true }  @ 35
-  @const PRODUCING = { rand = true }  @ 36
+  @const NOTE_FIELDS = {  @ 28
+  @const CC_FIELDS = {  @ 34
+  @const APPLIED = { add = true, mul = true }  @ 41
+  @const PRODUCING = { rand = true }  @ 42
 
 # Module-level functions (private)
-  @fn applyOne(running, op, rng)  @ 80
-  @fn allLiteralArgs(op)  @ 111
-  @fn combine(a, b)  @ 125
-  @fn splitPath(specPath)  @ 155
-  @fn findInList(list, id)  @ 161
+  @fn applyOne(running, op, rng)  @ 86
+  @fn allLiteralArgs(op)  @ 117
+  @fn combine(a, b)  @ 131
+  @fn splitPath(specPath)  @ 161
+  @fn findInList(list, id)  @ 167
 
 # Public API (aliases.*)
-  @api aliases.validFields(evtType)  @ 38
-  @api aliases.isAppliedOp(opcode)  @ 44
-  @api aliases.isProducingOp(opcode)  @ 45
-  @api aliases.isLiteral(arg)  @ 49
-  @api aliases.evalArg(arg, rng)  @ 53
+  @api aliases.validFields(evtType)  @ 44
+  @api aliases.isAppliedOp(opcode)  @ 50
+  @api aliases.isProducingOp(opcode)  @ 51
+  @api aliases.isLiteral(arg)  @ 55
+  @api aliases.evalArg(arg, rng)  @ 59
       -- Evaluate an arg into a number. A literal passes through; a table is a
       -- producing-op sub-expression evaluated through `rng`.
-  @api aliases.makeRng(seed)  @ 70
+  @api aliases.makeRng(seed)  @ 76
       -- LCG factory. Returns a closure (lo, hi) → number in [lo, hi).
-  @api aliases.applyXform(resolved, xform, evtType, rng)  @ 93
+  @api aliases.applyXform(resolved, xform, evtType, rng)  @ 99
       -- Apply `xform` to `resolved`, returning a NEW table. Inputs unchanged.
       -- Fields outside the event type's vocabulary are skipped silently.
       -- Fields in the xform whose resolved value is missing raise.
-  @api aliases.coalescable(a, b)  @ 119
+  @api aliases.coalescable(a, b)  @ 125
       -- Two ops coalesce iff: same applied opcode AND both have all-literal args.
-  @api aliases.appendOp(xform, field, op)  @ 135
+  @api aliases.appendOp(xform, field, op)  @ 141
       -- Append `op` to `xform[field]`. Returns a NEW xform; input untouched.
       -- If the trailing op coalesces with `op`, merges in place of appending.
-  @api aliases.find(root, specPath)  @ 168
+  @api aliases.find(root, specPath)  @ 174
       -- Walk the spec tree at `root.aliases`. specPath is dotted base36 ('1.2.1').
-  @api aliases.parentOf(root, specPath)  @ 182
+  @api aliases.parentOf(root, specPath)  @ 188
       -- Returns (parent_children_list, last_id) or nil if any intermediate is
       -- missing. Top-level paths return (root.aliases, id).
-  @api aliases.pluckSubtree(root, specPath)  @ 197
+  @api aliases.pluckSubtree(root, specPath)  @ 203
       -- Mutates `root`: removes the subtree at specPath from its parent's
       -- children list. Returns the plucked node, or nil if not found.
-  @api aliases.route(root, evt, field, op)  @ 215
+  @api aliases.route(root, evt, field, op)  @ 221
       -- Append `op` to the spec node at `evt.specPath` under `root`. Mutates
       -- the node's xform in place (within `root.aliases`) and returns the
       -- updated `root.aliases`. Returns nil if the spec path doesn't resolve
       -- — caller should fall back to direct mutation.
-  @api aliases.allocId(root)  @ 225
-  @api aliases.emptyXform()  @ 231
+  @api aliases.allocId(root)  @ 231
+  @api aliases.emptyXform()  @ 237
 

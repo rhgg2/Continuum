@@ -681,13 +681,14 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    --@map:contract notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm
+    --@map:contract notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm. Caller-supplied evt.ppqL signals "raw already computed" — translation is skipped (mirrors um:assignEvent).
     function um:addEvent(evtType, evt)
+      local rawCaller = evt.ppqL ~= nil
       if evtType == 'note' then
         evt.detune = evt.detune or 0
         evt.delay  = evt.delay  or 0
         evt.lane   = evt.lane   or 1
-        if evt.ppq ~= nil and evt.chan then
+        if not rawCaller and evt.ppq ~= nil and evt.chan then
           local snap = tm:swingSnapshot()
           evt.ppqL = evt.ppq
           evt.ppq  = util.round(snap.fromLogical(evt.chan, evt.ppqL)) + delayToPPQ(evt.delay)
@@ -702,13 +703,13 @@ function newTrackerManager(mm, cm)
         if clampedL then evt.endppqL = clampedL end
         addNote(evt)
       elseif evtType == 'pb' then
-        if evt.ppq ~= nil and evt.chan then
+        if not rawCaller and evt.ppq ~= nil and evt.chan then
           evt.ppqL = evt.ppq
           evt.ppq  = util.round(tm:swingSnapshot().fromLogical(evt.chan, evt.ppqL))
         end
         addPb(evt)
       else
-        if evt.ppq ~= nil and evt.chan then
+        if not rawCaller and evt.ppq ~= nil and evt.chan then
           evt.ppqL = evt.ppq
           evt.ppq  = util.round(tm:swingSnapshot().fromLogical(evt.chan, evt.ppqL))
         end
@@ -945,11 +946,16 @@ function newTrackerManager(mm, cm)
         elseif n.aliases and #n.aliases > 0 then util.add(roots, n) end
       end
       for loc, c in mm:ccs() do
-        if c.parentUuid then util.add(ccsToDel, loc)
+        if c.parentUuid then util.add(ccsToDel, { c.msgType, loc })
         elseif c.aliases and #c.aliases > 0 then util.add(roots, c) end
       end
 
       if #roots > 0 or #notesToDel > 0 or #ccsToDel > 0 then
+        -- Route alias-child writes through um so lane-1 onsets seat
+        -- fake-pb absorbers when their detune differs from the carry,
+        -- same as user-authored notes. Recreate um first so its chans
+        -- cache reflects current mm.
+        um = createUpdateManager()
         local claims = {}
         for _, n in mm:notes() do
           if not n.parentUuid then claims[slotKey(n)] = true end
@@ -962,6 +968,8 @@ function newTrackerManager(mm, cm)
         local lenPpq = mm:length() or 0
         local notesToAdd, ccsToAdd = {}, {}
         local fitEmits = {}  -- { emit, snap, rChan } for note-aliases marked fit
+        local temper     = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
+        local octaveStep = temper and temper.octaveStep or 12
 
         for _, root in ipairs(roots) do
           local et   = evtTypeOf(root)
@@ -969,9 +977,14 @@ function newTrackerManager(mm, cm)
           -- Logical canonical: spec ops act on ppqL/durL; ppq/endppq are
           -- derived per-emit through the root's authoring-frame swing.
           seed.ppqL = seed.ppqL or seed.ppq
+          local rootPitch, rootDetune
           if et == 'note' then
             seed.endppqL = seed.endppqL or seed.endppq
             seed.durL    = (seed.endppqL or 0) - (seed.ppqL or 0)
+            -- pitch/octave are tuning-step accumulators through the spec
+            -- walk; the root's MIDI pitch+detune feed transposeStep at emit.
+            rootPitch, rootDetune = seed.pitch, seed.detune or 0
+            seed.pitch, seed.octave = 0, 0
           end
           local snap = tm:swingSnapshot()
           local q    = {}
@@ -994,10 +1007,26 @@ function newTrackerManager(mm, cm)
                 resolved.endppqL = snap.toLogical(rChan, lenPpq)
               end
             end
-            local key = slotKey(resolved)
+            local emit = util.clone(resolved, { octave = true })
+            if et == 'note' then
+              -- rand-arg ops may yield fractional accumulators; pitch/octave
+              -- are integer step counts. zero delta skips transposeStep so
+              -- an off-scale root detune doesn't snap to the nearest step.
+              local steps = math.floor(
+                resolved.pitch + resolved.octave * octaveStep + 0.5)
+              if steps == 0 then
+                emit.pitch, emit.detune = rootPitch, rootDetune
+              elseif temper then
+                emit.pitch, emit.detune =
+                  tuning.transposeStep(temper, rootPitch, rootDetune, steps)
+              else
+                emit.pitch, emit.detune =
+                  util.clamp(rootPitch + steps, 0, 127), rootDetune
+              end
+            end
+            local key = slotKey(emit)
             if not claims[key] then
               claims[key] = true
-              local emit = util.clone(resolved)
               emit.parentUuid = root.uuid
               emit.specPath   = table.concat(e.path, '.')
               emit.aliases    = nil
@@ -1059,13 +1088,12 @@ function newTrackerManager(mm, cm)
         end
 
         table.sort(notesToDel, function(a, b) return a > b end)
-        table.sort(ccsToDel,   function(a, b) return a > b end)
-        mm:modify(function()
-          for _, loc in ipairs(notesToDel) do mm:deleteNote(loc) end
-          for _, loc in ipairs(ccsToDel)   do mm:deleteCC(loc)   end
-          for _, n   in ipairs(notesToAdd) do mm:addNote(n)      end
-          for _, c   in ipairs(ccsToAdd)   do mm:addCC(c)        end
-        end)
+        table.sort(ccsToDel,   function(a, b) return a[2] > b[2] end)
+        for _, loc in ipairs(notesToDel) do um:deleteEvent('note', loc) end
+        for _, e   in ipairs(ccsToDel)   do um:deleteEvent(e[1],  e[2]) end
+        for _, n   in ipairs(notesToAdd) do um:addEvent('note', n)      end
+        for _, c   in ipairs(ccsToAdd)   do um:addEvent(c.msgType, c)   end
+        um:flush()
       end
     end
 

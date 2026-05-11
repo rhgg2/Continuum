@@ -25,6 +25,7 @@ local specs = {
   'aliases_route_spec',
   'aliases_create_spec',
   'aliases_lane_clip_spec',
+  'aliases_step_pitch_spec',
   'mm_signal_flow_spec',
   'mm_cc_metadata_spec',
   'mm_ppql_roundtrip_spec',

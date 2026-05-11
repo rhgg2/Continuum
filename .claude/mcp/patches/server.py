@@ -5,15 +5,20 @@
 # ///
 """Readium apply_patches MCP server.
 
-Atomic batch of search/replace edits, file creates, and deletes across
-many paths. Either every operation validates and is flushed, or nothing
-is written.
+A batch of search/replace edits, file creates, and deletes across many
+paths, gated by interactive review.
 
-**Workflow:** every call opens a browser at a loopback HTTP server with
-a unified diff and Approve/Reject buttons (plus an optional comment
-field). The tool blocks until the user clicks. No dry_run flag — single
-round-trip per batch, no token doubling. The user's decision (and any
-comment) comes back to Claude as the tool result.
+**Two review transports.** Default is a loopback HTTP server with a
+unified diff and Approve/Reject buttons — coarse, all-or-nothing.
+
+Set `CONTINUUM_REVIEW_EMACS=1` (with a live `emacsclient` server) for
+hunk-level review via `continuum-review.el`. Each input edit/create/
+delete becomes a separately-tagged block; the user navigates by hunk,
+rejects (`k`), folds (`s`), edits narrowed (`e`), comments (`c`), and
+submits (`C-c C-c`) with optional further instructions. The response
+distinguishes accepted / rejected / edited per index, returns per-hunk
+comments and residual diffs for edited hunks, and reports dependency
+conflicts when a rejected edit invalidates a later edit's `old`.
 
 Sister servers: readium_docs, readium_tests.
 """
@@ -25,7 +30,9 @@ import html
 import http.server
 import json
 import os
+import shutil
 import subprocess
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -37,6 +44,7 @@ mcp = FastMCP("readium_patches")
 
 PERF_LOG = "/tmp/apply_patches_perf.log"
 MAX_BYTES_PER_FILE = 4_000_000
+ELISP_PATH = str(Path(__file__).parent / "continuum-review.el")
 
 
 def _perf_log(line: str) -> None:
@@ -73,7 +81,81 @@ def _read(path: str) -> tuple[Optional[str], Optional[str]]:
         return None, "not utf-8 (binary?)"
 
 
-# ----- HTML rendering -------------------------------------------------------
+# ----- Diff helpers ---------------------------------------------------------
+
+def _unified_diff(old: str, new: str, path: str, n: int) -> list[str]:
+    return list(difflib.unified_diff(
+        old.splitlines(),
+        new.splitlines(),
+        fromfile=f"a/{path}",
+        tofile=f"b/{path}",
+        n=n,
+        lineterm="",
+    ))
+
+
+def _hunk_n0(old: str, new: str) -> str:
+    """Unified diff with no context, header lines stripped. Used in the
+    emacs review buffer: only `@@`, `+`, `-` lines remain, so extracting
+    the user's new-side after an edit is unambiguous."""
+    lines = _unified_diff(old, new, "x", n=0)
+    return "\n".join(ln for ln in lines
+                     if not (ln.startswith("--- ") or ln.startswith("+++ ")))
+
+
+def _extract_new_from_hunk(hunk: str) -> str:
+    """Recover the new-side text from a (possibly user-edited) n=0 hunk.
+
+    Tolerates the user stripping `+` prefixes while editing. Only the
+    first `@@` block is read. Used for creates (whole file is `+` lines).
+    """
+    out: list[str] = []
+    seen_at = False
+    for ln in hunk.splitlines():
+        if ln.startswith("@@"):
+            if seen_at:
+                break
+            seen_at = True
+            continue
+        if ln.startswith("-"):
+            continue
+        if ln.startswith("+"):
+            out.append(ln[1:])
+        else:
+            out.append(ln)
+    return "\n".join(out)
+
+
+def _extract_hunk_pair(hunk: str) -> tuple[str, str]:
+    """Return (old_block, new_block) as line-joined strings from the
+    first `@@` block. Used to apply edited edits as line-block
+    substitution — sidesteps the substring-replace pitfall where line
+    indentation lives outside `old`/`new` but inside the hunk display.
+
+    Unprefixed lines (user stripped the `+` while editing) are treated
+    as new-side content.
+    """
+    olds: list[str] = []
+    news: list[str] = []
+    seen_at = False
+    for ln in hunk.splitlines():
+        if ln.startswith("@@"):
+            if seen_at:
+                break
+            seen_at = True
+            continue
+        if not seen_at:
+            continue
+        if ln.startswith("-"):
+            olds.append(ln[1:])
+        elif ln.startswith("+"):
+            news.append(ln[1:])
+        else:
+            news.append(ln)
+    return "\n".join(olds), "\n".join(news)
+
+
+# ----- Browser rendering (fallback transport) -------------------------------
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -103,8 +185,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .badge.create { background: #1f6feb; color: white; }
   .badge.delete { background: #da3633; color: white; }
   pre { margin: 0; font-family: ui-monospace, SFMono-Regular, monospace;
-        font-size: 12px; line-height: 1.5; overflow-x: auto; }
-  .line { display: block; padding: 0 12px; white-space: pre; min-height: 1.5em; }
+        font-size: 14px; line-height: 1.2; overflow-x: auto; }
+  .line { display: block; padding: 0 12px; white-space: pre-wrap;
+          overflow-wrap: anywhere; }
   .line.add { background: rgba(46, 160, 67, 0.15); color: #aff5b4; }
   .line.del { background: rgba(248, 81, 73, 0.15); color: #ffdcd7; }
   .line.hunk { color: #79c0ff; padding-top: 4px; padding-bottom: 4px;
@@ -169,12 +252,8 @@ async function decide(action) {
     return;
   }
   status.textContent = 'Done. You can close this tab.';
-  // Best-effort auto-close. Browsers usually only allow window.close()
-  // for tabs JS opened, so this often fails silently — the message above
-  // is the fallback.
   setTimeout(() => { try { window.close(); } catch (e) {} }, 200);
 }
-// Cmd+Enter to approve
 document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
     e.preventDefault();
@@ -188,15 +267,7 @@ document.addEventListener('keydown', (e) => {
 
 
 def _diff_html(old: str, new: str, path: str, kind: str = "edit") -> tuple[str, int]:
-    """Return (html, n_hunks). Empty html if no textual change."""
-    lines = list(difflib.unified_diff(
-        old.splitlines(),
-        new.splitlines(),
-        fromfile=f"a/{path}",
-        tofile=f"b/{path}",
-        n=3,
-        lineterm="",
-    ))
+    lines = _unified_diff(old, new, path, n=3)
     if not lines:
         return "", 0
     n_hunks = 0
@@ -207,7 +278,6 @@ def _diff_html(old: str, new: str, path: str, kind: str = "edit") -> tuple[str, 
         parts.append(' <span class="badge delete">delete</span>')
     parts.append('</h2><pre>')
     for line in lines:
-        # Skip the file-header lines — the h2 already shows the path.
         if line.startswith("--- ") or line.startswith("+++ "):
             continue
         if line.startswith("@@"):
@@ -224,11 +294,7 @@ def _diff_html(old: str, new: str, path: str, kind: str = "edit") -> tuple[str, 
     return "".join(parts), n_hunks
 
 
-# ----- Browser-gated approval -----------------------------------------------
-
-
 class _ApprovalState:
-    """Shared state between the HTTP handler and the main thread."""
     page_html: str = ""
     decision: Optional[tuple[bool, str]] = None
     event: Optional[threading.Event] = None
@@ -236,7 +302,7 @@ class _ApprovalState:
 
 class _ApprovalHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args, **kwargs):
-        pass  # Don't pollute stderr with request logs.
+        pass
 
     def do_GET(self):
         if self.path == "/":
@@ -274,8 +340,6 @@ class _ApprovalHandler(http.server.BaseHTTPRequestHandler):
 
 
 def _gate_with_browser(diffs_html: str, summary: str, n_files: int) -> tuple[bool, str]:
-    """Open a browser, block until user clicks Approve or Reject. Returns
-    (approved, comment)."""
     page = (
         _HTML_TEMPLATE
         .replace("{n_files}", str(n_files))
@@ -293,8 +357,6 @@ def _gate_with_browser(diffs_html: str, summary: str, n_files: int) -> tuple[boo
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
-    # Best-effort browser launch. If `open` fails, the URL is still printed
-    # to the controlling TTY so the user can paste it manually.
     try:
         subprocess.Popen(["open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
@@ -313,6 +375,289 @@ def _gate_with_browser(diffs_html: str, summary: str, n_files: int) -> tuple[boo
     return _ApprovalState.decision or (False, "(no decision)")
 
 
+# ----- Emacs transport ------------------------------------------------------
+
+def _emacs_cmd_prefix() -> list[str]:
+    prefix = ["emacsclient"]
+    sock = os.environ.get("EMACS_SOCKET_NAME")
+    if sock:
+        prefix += ["-s", sock]
+    return prefix
+
+
+def _emacs_available() -> bool:
+    if os.environ.get("CONTINUUM_REVIEW_EMACS") != "1":
+        return False
+    if not shutil.which("emacsclient"):
+        return False
+    try:
+        r = subprocess.run(_emacs_cmd_prefix() + ["-e", "t"],
+                           capture_output=True, timeout=3, text=True)
+        return r.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def _emacs_ensure_loaded() -> bool:
+    form = (f'(unless (fboundp \'continuum-review-start) '
+            f'(load "{ELISP_PATH}" nil t))')
+    try:
+        r = subprocess.run(_emacs_cmd_prefix() + ["-e", form],
+                           capture_output=True, timeout=10, text=True)
+        return r.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def _build_review_buffer(edit_recs: list[dict], create_recs: list[dict],
+                         delete_recs: list[dict]) -> str:
+    parts = [
+        f"# apply_patches — {len(edit_recs)} edit(s), "
+        f"{len(create_recs)} create(s), {len(delete_recs)} delete(s)\n"
+        "#\n"
+        "# Keys: n/p navigate · k reject · s fold · e edit · c comment\n"
+        "#       C-c C-c submit · C-c C-k abort\n"
+        "# " + "-" * 68 + "\n\n",
+    ]
+    for r in edit_recs:
+        parts.append(f"### edit {r['idx']} · {r['path']}\n{r['hunk']}\n\n")
+    for r in create_recs:
+        parts.append(f"### create {r['idx']} · {r['path']}\n{r['hunk']}\n\n")
+    for r in delete_recs:
+        parts.append(f"### delete {r['idx']} · {r['path']}\n{r['hunk']}\n\n")
+    return "".join(parts)
+
+
+def _gate_with_emacs(edit_recs: list[dict], create_recs: list[dict],
+                     delete_recs: list[dict]
+                     ) -> Optional[tuple[bool, str, list[dict]]]:
+    """Open the review buffer in Emacs; block on response.
+
+    Returns (aborted, instructions, blocks) or None if emacs is
+    unavailable or the call failed (caller falls back to browser)."""
+    if not _emacs_available() or not _emacs_ensure_loaded():
+        return None
+
+    req_fd, req_path = tempfile.mkstemp(prefix="continuum_review_req_", suffix=".json")
+    resp_fd, resp_path = tempfile.mkstemp(prefix="continuum_review_resp_", suffix=".json")
+    os.close(req_fd)
+    os.close(resp_fd)
+    try:
+        os.unlink(resp_path)
+    except OSError:
+        pass
+
+    buffer_text = _build_review_buffer(edit_recs, create_recs, delete_recs)
+    with open(req_path, "w", encoding="utf-8") as f:
+        json.dump({"buffer": buffer_text}, f)
+
+    def _q(s: str) -> str:
+        return s.replace("\\", "\\\\").replace('"', '\\"')
+
+    form = f'(continuum-review-start "{_q(req_path)}" "{_q(resp_path)}")'
+    try:
+        subprocess.run(_emacs_cmd_prefix() + ["--no-wait", "-e", form],
+                       capture_output=True, timeout=5, check=True)
+    except (OSError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        for p in (req_path,):
+            try: os.unlink(p)
+            except OSError: pass
+        return None
+
+    try:
+        with open("/dev/tty", "w") as tty:
+            tty.write("\napply_patches: review in Emacs (*continuum-review*)\n")
+            tty.flush()
+    except OSError:
+        pass
+
+    deadline = time.time() + 3600.0
+    while time.time() < deadline:
+        if os.path.exists(resp_path):
+            try:
+                with open(resp_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                time.sleep(0.1)
+                continue
+            for p in (req_path, resp_path):
+                try: os.unlink(p)
+                except OSError: pass
+            return (
+                bool(data.get("aborted")),
+                str(data.get("instructions", "")),
+                list(data.get("blocks", [])),
+            )
+        time.sleep(0.2)
+
+    for p in (req_path,):
+        try: os.unlink(p)
+        except OSError: pass
+    return None
+
+
+# ----- Per-edit decision application ----------------------------------------
+
+def _apply_decisions(edit_recs: list[dict], create_recs: list[dict],
+                     delete_recs: list[dict], blocks: list[dict]
+                     ) -> tuple[dict, dict, dict, list[str]]:
+    """Walk records against the elisp response.
+
+    Returns:
+      decisions: {(kind, idx) -> {action, comment, user_new?, staged_new?}}
+        action ∈ {accept, edit, reject}
+      file_content: {path -> final content for paths with edits applied}
+      create_content: {path -> final content for accepted creates}
+      delete_paths: [path, ...] for accepted deletes
+    """
+    by_key = {(b.get("kind"), int(b.get("index", -1))): b for b in blocks}
+    decisions: dict[tuple[str, int], dict] = {}
+    file_content: dict[str, str] = {}
+
+    for r in edit_recs:
+        key = ("edit", r["idx"])
+        block = by_key.get(key)
+        comment = (block or {}).get("comment", "") or ""
+        if block is None or bool(block.get("rejected")):
+            decisions[key] = {"action": "reject", "comment": comment}
+            continue
+        edited = bool(block.get("edited"))
+        cur = file_content.get(r["path"], r["before"])
+        if edited:
+            # Line-block substitution: replace the hunk's `-` block with
+            # the (possibly edited) `+` block. Avoids the substring-
+            # replace pitfall where line indentation sits outside
+            # `old`/`new` but inside the hunk display.
+            old_block, new_block = _extract_hunk_pair(block.get("hunk", ""))
+            if old_block not in cur:
+                decisions[key] = {
+                    "action": "reject", "comment": comment,
+                    "conflict": "edited hunk's `-` block not found in current file",
+                }
+                continue
+            cur = (cur.replace(old_block, new_block)
+                   if r["replace_all"]
+                   else cur.replace(old_block, new_block, 1))
+            file_content[r["path"]] = cur
+            decisions[key] = {
+                "action": "edit",
+                "comment": comment,
+                "user_new": new_block,
+                "staged_new": r["new"],
+            }
+        else:
+            if r["old"] not in cur:
+                decisions[key] = {
+                    "action": "reject", "comment": comment,
+                    "conflict": "old not found — likely depends on a rejected earlier edit",
+                }
+                continue
+            cur = (cur.replace(r["old"], r["new"])
+                   if r["replace_all"]
+                   else cur.replace(r["old"], r["new"], 1))
+            file_content[r["path"]] = cur
+            decisions[key] = {
+                "action": "accept",
+                "comment": comment,
+                "user_new": None,
+                "staged_new": r["new"],
+            }
+
+    create_content: dict[str, str] = {}
+    for r in create_recs:
+        key = ("create", r["idx"])
+        block = by_key.get(key)
+        comment = (block or {}).get("comment", "") or ""
+        if block is None or bool(block.get("rejected")):
+            decisions[key] = {"action": "reject", "comment": comment}
+            continue
+        edited = bool(block.get("edited"))
+        content = (_extract_new_from_hunk(block.get("hunk", ""))
+                   if edited else r["content"])
+        create_content[r["path"]] = content
+        decisions[key] = {
+            "action": "edit" if edited else "accept",
+            "comment": comment,
+            "user_new": content if edited else None,
+            "staged_new": r["content"],
+        }
+
+    delete_paths: list[str] = []
+    for r in delete_recs:
+        key = ("delete", r["idx"])
+        block = by_key.get(key)
+        comment = (block or {}).get("comment", "") or ""
+        if block is None or bool(block.get("rejected")):
+            decisions[key] = {"action": "reject", "comment": comment}
+            continue
+        if bool(block.get("edited")):
+            decisions[key] = {
+                "action": "reject", "comment": comment,
+                "conflict": "delete cannot be edited; treated as rejected",
+            }
+            continue
+        delete_paths.append(r["path"])
+        decisions[key] = {"action": "accept", "comment": comment}
+
+    return decisions, file_content, create_content, delete_paths
+
+
+def _format_review_result(decisions: dict, instructions: str) -> str:
+    """Render the per-edit verdict back to Claude."""
+    accepted: list[tuple[str, int]] = []
+    rejected: list[tuple[str, int, dict]] = []
+    edited:   list[tuple[str, int, dict]] = []
+    conflicts: list[tuple[str, int, dict]] = []
+    for key, d in decisions.items():
+        kind, idx = key
+        if d.get("conflict"):
+            conflicts.append((kind, idx, d))
+            continue
+        a = d["action"]
+        if a == "accept":
+            accepted.append((kind, idx))
+        elif a == "reject":
+            rejected.append((kind, idx, d))
+        elif a == "edit":
+            edited.append((kind, idx, d))
+
+    out: list[str] = ["review:"]
+    if accepted:
+        keys = ", ".join(f"{k}{i}" for k, i in accepted)
+        out.append(f"  accepted ({len(accepted)}): {keys}")
+    if rejected:
+        out.append(f"  rejected ({len(rejected)}):")
+        for kind, idx, d in rejected:
+            tag = f"{kind}{idx}"
+            c = d.get("comment", "").strip()
+            out.append(f"    {tag}: {c!r}" if c else f"    {tag}")
+    if edited:
+        out.append(f"  edited ({len(edited)}):")
+        for kind, idx, d in edited:
+            tag = f"{kind}{idx}"
+            residual = "\n".join(_unified_diff(
+                d.get("staged_new") or "",
+                d.get("user_new") or "",
+                f"{tag} (claude → user)",
+                n=3,
+            ))
+            out.append(f"    {tag}:")
+            for ln in residual.splitlines():
+                out.append(f"      {ln}")
+            c = d.get("comment", "").strip()
+            if c:
+                out.append(f"      comment: {c!r}")
+    if conflicts:
+        out.append(f"  conflicts ({len(conflicts)}):")
+        for kind, idx, d in conflicts:
+            out.append(f"    {kind}{idx}: {d.get('conflict','')}")
+    if instructions.strip():
+        out.append("instructions: |")
+        for ln in instructions.splitlines():
+            out.append(f"  {ln}")
+    return "\n".join(out)
+
+
 # ----- Main tool ------------------------------------------------------------
 
 
@@ -323,33 +668,27 @@ def apply_patches(
     deletes: Optional[list[str]] = None,
     cwd: Optional[str] = None,
 ) -> str:
-    """Apply a batch of edits, file creations, and deletions atomically,
-    gated by browser approval.
+    """Apply a batch of edits, file creations, and deletions, gated by
+    interactive review.
 
-    **Workflow:** the call validates everything, then opens a browser tab
-    showing a unified diff with Approve/Reject buttons and an optional
-    comment field. The tool blocks until you click. On Approve, the
-    filesystem is written; on Reject, nothing is written. Either way the
-    user's comment (if any) comes back to Claude in the result string.
+    Two transports are supported. Default: browser tab with Approve/
+    Reject. With `CONTINUUM_REVIEW_EMACS=1` and a live emacsclient
+    server: hunk-level review in Emacs via `continuum-review.el`. In
+    that mode the user can reject, edit, or comment on each input
+    edit/create/delete individually, and the response reports per-index
+    verdicts plus residual diffs for edited hunks.
 
     Same search/replace semantics as the built-in Edit tool: each edit's
     `old` must appear in the (current, post-prior-edits) file content
-    exactly once unless `replace_all` is true. All operations are validated
-    and staged in memory first; if anything fails the call ABORTs and the
-    filesystem is untouched.
+    exactly once unless `replace_all` is true. All operations are
+    validated and staged in memory first; if anything fails the call
+    ABORTs and the filesystem is untouched.
 
     Args:
-      edits: list of {path: str, old: str, new: str, replace_all?: bool}.
-             Multiple edits to the same path are applied in given order.
-      creates: list of {path: str, content: str, overwrite?: bool}. Errors
-               if path exists unless overwrite=true. Parent dirs auto-mkdir.
-      deletes: list of paths to delete. Errors if path missing.
-      cwd: working directory for relative paths (default: process CWD).
-
-    Returns:
-      On approve: `applied: <summary>` (with comment appended if given).
-      On reject: `REJECTED by user` (with comment appended if given).
-      On validation/policy failure: `ABORT` header followed by errors.
+      edits: list of {path, old, new, replace_all?}.
+      creates: list of {path, content, overwrite?}.
+      deletes: list of paths.
+      cwd: working directory for relative paths.
     """
     t0 = time.perf_counter()
     _perf_log(
@@ -363,13 +702,13 @@ def apply_patches(
     if not (edits or creates or deletes):
         return "(no operations requested)"
 
-    perf: dict[str, float] = {}
-
     base = Path(cwd) if cwd else Path.cwd()
     errors: list[str] = []
 
-    edit_paths = {_resolve(e["path"], base) for e in edits if isinstance(e, dict) and "path" in e}
-    create_paths = {_resolve(c["path"], base) for c in creates if isinstance(c, dict) and "path" in c}
+    edit_paths = {_resolve(e["path"], base) for e in edits
+                  if isinstance(e, dict) and "path" in e}
+    create_paths = {_resolve(c["path"], base) for c in creates
+                    if isinstance(c, dict) and "path" in c}
     delete_paths = {_resolve(p, base) for p in deletes if isinstance(p, str)}
 
     for p in edit_paths & create_paths:
@@ -378,63 +717,59 @@ def apply_patches(
         errors.append(f"collision: {p} appears in both edits and deletes")
     for p in create_paths & delete_paths:
         errors.append(f"collision: {p} appears in both creates and deletes")
-
     if errors:
         return "ABORT — filesystem untouched\n" + "\n".join(f"  • {e}" for e in errors)
 
-    # ---- Stage edits ----
-    by_path: dict[str, list[dict]] = {}
+    # ---- Stage edits: per-edit records, tracking running per-path content ----
+    _t = time.perf_counter()
+    edit_recs: list[dict] = []
+    file_originals: dict[str, str] = {}
+    file_running: dict[str, str] = {}
+
     for i, e in enumerate(edits):
         if not isinstance(e, dict) or not all(k in e for k in ("path", "old", "new")):
             errors.append(f"edits[{i}]: missing path/old/new")
             continue
-        by_path.setdefault(_resolve(e["path"], base), []).append(e)
-
-    staged_edits: dict[str, str] = {}
-    edit_originals: dict[str, str] = {}
-    edit_summaries: list[str] = []
-    _t = time.perf_counter()
-    for path, group in by_path.items():
-        content, err = _read(path)
-        if err:
-            errors.append(f"{path}: {err}")
-            continue
-        edit_originals[path] = content
-        cur = content
-        ops_done: list[str] = []
-        for j, e in enumerate(group):
-            old = e["old"]
-            new = e["new"]
-            replace_all = bool(e.get("replace_all", False))
-            if old == new:
-                errors.append(f"{path}: edit #{j+1} old == new (no-op)")
+        path = _resolve(e["path"], base)
+        if path not in file_originals:
+            content, err = _read(path)
+            if err:
+                errors.append(f"{path}: {err}")
+                file_originals[path] = ""
+                file_running[path] = ""
                 continue
-            if replace_all:
-                if old not in cur:
-                    errors.append(f"{path}: edit #{j+1} old not found")
-                    continue
-                count = cur.count(old)
-                cur = cur.replace(old, new)
-                ops_done.append(f"replaced {count}× edit#{j+1}")
-            else:
-                count = cur.count(old)
-                if count == 0:
-                    errors.append(f"{path}: edit #{j+1} old not found")
-                    continue
-                if count > 1:
-                    errors.append(f"{path}: edit #{j+1} old not unique ({count} occurrences) — use replace_all or expand context")
-                    continue
-                cur = cur.replace(old, new, 1)
-                ops_done.append(f"edit#{j+1}")
-        staged_edits[path] = cur
-        if ops_done:
-            edit_summaries.append(f"  {path}: {', '.join(ops_done)}")
-
-    perf["stage_edits"] = time.perf_counter() - _t
+            file_originals[path] = content
+            file_running[path] = content
+        old, new = e["old"], e["new"]
+        replace_all = bool(e.get("replace_all", False))
+        if old == new:
+            errors.append(f"edits[{i}]: edit old == new (no-op)")
+            continue
+        cur = file_running[path]
+        count = cur.count(old)
+        if count == 0:
+            errors.append(f"edits[{i}] {path}: old not found")
+            continue
+        if count > 1 and not replace_all:
+            errors.append(f"edits[{i}] {path}: old not unique ({count}) — use replace_all or expand context")
+            continue
+        before = cur
+        after = (cur.replace(old, new) if replace_all
+                 else cur.replace(old, new, 1))
+        edit_recs.append({
+            "idx": i + 1,
+            "path": path,
+            "old": old,
+            "new": new,
+            "replace_all": replace_all,
+            "before": before,
+            "after": after,
+            "hunk": _hunk_n0(before, after),
+        })
+        file_running[path] = after
 
     # ---- Stage creates ----
-    staged_creates: dict[str, str] = {}
-    create_summaries: list[str] = []
+    create_recs: list[dict] = []
     for i, c in enumerate(creates):
         if not isinstance(c, dict) or "path" not in c or "content" not in c:
             errors.append(f"creates[{i}]: missing path/content")
@@ -444,16 +779,23 @@ def apply_patches(
         if os.path.exists(path) and not overwrite:
             errors.append(f"{path}: already exists (set overwrite=true to replace)")
             continue
-        staged_creates[path] = c["content"]
-        create_summaries.append(f"  {path}: create ({len(c['content'])} bytes)")
+        existing = ""
+        if os.path.exists(path):
+            existing, _ = _read(path)
+            existing = existing or ""
+        create_recs.append({
+            "idx": i + 1,
+            "path": path,
+            "content": c["content"],
+            "overwrite": overwrite,
+            "hunk": _hunk_n0(existing, c["content"]),
+        })
 
     # ---- Validate deletes ----
-    valid_deletes: list[str] = []
-    delete_originals: dict[str, str] = {}
-    delete_summaries: list[str] = []
-    for p in deletes:
+    delete_recs: list[dict] = []
+    for i, p in enumerate(deletes):
         if not isinstance(p, str):
-            errors.append(f"deletes: non-string entry {p!r}")
+            errors.append(f"deletes[{i}]: non-string entry {p!r}")
             continue
         path = _resolve(p, base)
         if not os.path.exists(path):
@@ -462,101 +804,134 @@ def apply_patches(
         if not os.path.isfile(path):
             errors.append(f"{path}: cannot delete, not a regular file")
             continue
-        valid_deletes.append(path)
         body, _err = _read(path)
-        delete_originals[path] = body or ""
-        delete_summaries.append(f"  {path}: delete")
+        delete_recs.append({
+            "idx": i + 1,
+            "path": path,
+            "content": body or "",
+            "hunk": _hunk_n0(body or "", ""),
+        })
 
     if errors:
         return "ABORT — filesystem untouched\n" + "\n".join(f"  • {e}" for e in errors)
 
-    # ---- Build summary + diff HTML ----
+    perf = {"stage": time.perf_counter() - _t}
+
+    # ---- Summary line ----
     summary_lines: list[str] = []
-    if edit_summaries:
-        summary_lines.append(f"edits ({len(by_path)} file(s)):")
-        summary_lines.extend(edit_summaries)
-    if create_summaries:
-        summary_lines.append(f"creates ({len(staged_creates)}):")
-        summary_lines.extend(create_summaries)
-    if delete_summaries:
-        summary_lines.append(f"deletes ({len(valid_deletes)}):")
-        summary_lines.extend(delete_summaries)
+    if edit_recs:
+        summary_lines.append(f"edits: {len(edit_recs)} on {len(set(r['path'] for r in edit_recs))} file(s)")
+    if create_recs:
+        summary_lines.append(f"creates: {len(create_recs)}")
+    if delete_recs:
+        summary_lines.append(f"deletes: {len(delete_recs)}")
     summary = "\n".join(summary_lines) if summary_lines else "(no-op)"
 
+    # ---- Try Emacs transport first ----
+    _t = time.perf_counter()
+    emacs_result = _gate_with_emacs(edit_recs, create_recs, delete_recs)
+    perf["gate"] = time.perf_counter() - _t
+
+    if emacs_result is not None:
+        aborted, instructions, blocks = emacs_result
+        if aborted:
+            _perf_log(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] emacs aborted "
+                      f"total={time.perf_counter()-t0:.3f}s")
+            msg = "ABORTED by user"
+            if instructions.strip():
+                msg += f"\nreason: {instructions.strip()}"
+            msg += "\n(no files written)"
+            return msg
+        decisions, file_content, create_content, accept_deletes = \
+            _apply_decisions(edit_recs, create_recs, delete_recs, blocks)
+        _t = time.perf_counter()
+        written: list[str] = []
+        try:
+            for path, content in file_content.items():
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                written.append(path)
+            for path, content in create_content.items():
+                os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                written.append(path)
+            for path in accept_deletes:
+                os.remove(path)
+        except OSError as e:
+            return (f"PARTIAL FAILURE during flush: {e}\n"
+                    f"wrote {len(written)} file(s) before failure:\n"
+                    + "\n".join(f"  • {p}" for p in written))
+        perf["flush"] = time.perf_counter() - _t
+        perf["total"] = time.perf_counter() - t0
+        _perf_log(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] emacs applied "
+                  f"e={len(edit_recs)} c={len(create_recs)} d={len(delete_recs)} "
+                  f"stage={perf['stage']:.3f}s gate={perf['gate']:.3f}s "
+                  f"flush={perf['flush']:.3f}s total={perf['total']:.3f}s")
+        return _format_review_result(decisions, instructions)
+
+    # ---- Browser fallback (coarse all-or-nothing) ----
     _t = time.perf_counter()
     diff_chunks: list[str] = []
     n_hunks = 0
-    for path, new_content in staged_edits.items():
-        d, h = _diff_html(edit_originals[path], new_content, path, kind="edit")
+    seen_paths: set[str] = set()
+    for path in [r["path"] for r in edit_recs]:
+        if path in seen_paths: continue
+        seen_paths.add(path)
+        d, h = _diff_html(file_originals[path], file_running[path], path, kind="edit")
         if d:
-            diff_chunks.append(d)
-            n_hunks += h
-    for path, content in staged_creates.items():
-        d, h = _diff_html("", content, path, kind="create")
+            diff_chunks.append(d); n_hunks += h
+    for r in create_recs:
+        d, h = _diff_html("", r["content"], r["path"], kind="create")
         if d:
-            diff_chunks.append(d)
-            n_hunks += h
-    for path in valid_deletes:
-        d, h = _diff_html(delete_originals.get(path, ""), "", path, kind="delete")
+            diff_chunks.append(d); n_hunks += h
+    for r in delete_recs:
+        d, h = _diff_html(r["content"], "", r["path"], kind="delete")
         if d:
-            diff_chunks.append(d)
-            n_hunks += h
+            diff_chunks.append(d); n_hunks += h
+    n_files = len(seen_paths) + len(create_recs) + len(delete_recs)
+    perf["diff_html"] = time.perf_counter() - _t
 
-    n_files = len(staged_edits) + len(staged_creates) + len(valid_deletes)
-    perf["diff"] = time.perf_counter() - _t
-
-    # ---- Open browser, block on user decision ----
     _t = time.perf_counter()
     approved, comment = _gate_with_browser("".join(diff_chunks), summary, n_files)
     perf["wait"] = time.perf_counter() - _t
 
     if not approved:
         perf["total"] = time.perf_counter() - t0
-        _perf_log(
-            f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] rejected "
-            f"files={n_files} hunks={n_hunks} "
-            f"stage_edits={perf['stage_edits']:.3f}s "
-            f"diff={perf['diff']:.3f}s wait={perf['wait']:.3f}s "
-            f"total={perf['total']:.3f}s"
-        )
+        _perf_log(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] browser rejected "
+                  f"files={n_files} hunks={n_hunks} total={perf['total']:.3f}s")
         msg = "REJECTED by user"
         if comment.strip():
             msg += f"\nuser comment: {comment.strip()}"
         msg += "\n(no files written)"
         return msg
 
-    # ---- Approved — flush ----
     _t = time.perf_counter()
     written: list[str] = []
     try:
-        for path, content in staged_edits.items():
+        for path in seen_paths:
             with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
+                f.write(file_running[path])
             written.append(path)
-        for path, content in staged_creates.items():
-            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
-            written.append(path)
-        for path in valid_deletes:
-            os.remove(path)
+        for r in create_recs:
+            os.makedirs(os.path.dirname(r["path"]) or ".", exist_ok=True)
+            with open(r["path"], "w", encoding="utf-8") as f:
+                f.write(r["content"])
+            written.append(r["path"])
+        for r in delete_recs:
+            os.remove(r["path"])
     except OSError as e:
-        return (
-            f"PARTIAL FAILURE during flush: {e}\n"
-            f"wrote {len(written)} file(s) before failure:\n"
-            + "\n".join(f"  • {p}" for p in written)
-            + "\nfilesystem is in an intermediate state — inspect manually."
-        )
+        return (f"PARTIAL FAILURE during flush: {e}\n"
+                f"wrote {len(written)} file(s) before failure:\n"
+                + "\n".join(f"  • {p}" for p in written))
 
     perf["flush"] = time.perf_counter() - _t
     perf["total"] = time.perf_counter() - t0
-    _perf_log(
-        f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] applied "
-        f"files={n_files} hunks={n_hunks} "
-        f"stage_edits={perf['stage_edits']:.3f}s "
-        f"diff={perf['diff']:.3f}s wait={perf['wait']:.3f}s "
-        f"flush={perf['flush']:.3f}s total={perf['total']:.3f}s"
-    )
+    _perf_log(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] browser applied "
+              f"files={n_files} hunks={n_hunks} "
+              f"stage={perf['stage']:.3f}s diff_html={perf['diff_html']:.3f}s "
+              f"wait={perf['wait']:.3f}s flush={perf['flush']:.3f}s "
+              f"total={perf['total']:.3f}s")
 
     msg = f"applied:\n{summary}"
     if comment.strip():

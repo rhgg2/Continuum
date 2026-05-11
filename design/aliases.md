@@ -325,11 +325,13 @@ an explicit alternative.
 
 - `` ` `` toggles **alias mode** (`vm.aliasMode`). Renderer shows a
   small indicator when on (Phase 7).
-- In alias mode, `copy`/`paste` and `duplicateDown/Up` create aliased
-  copies linked to their sources. The clip captures `aliasSrc =
-  { uuid, specPath, ppqL }` per event (uuid is `parentUuid` if the
-  source is itself aliased, else its own uuid). At paste, each event
-  becomes a new spec node:
+- `copy`/`cut` always capture `aliasSrc = { uuid, specPath, ppqL }` per
+  event (uuid is `parentUuid` if the source is itself aliased, else its
+  own uuid). The mode is sampled at **paste/duplicate time**: in alias
+  mode each event becomes a new spec node; out of alias mode the writer
+  strips `aliasSrc` and writes plain events. This means a single clip
+  can paste either way — toggle the mode between pastes without
+  re-copying. In alias mode each event becomes a new spec node:
   - source plain (`specPath` nil): node lands at top of `root.aliases`.
   - source aliased (`specPath` set): node lands as a **child** of that
     spec node (so the new node's resolved fields compose onto its

@@ -141,7 +141,7 @@ function newTrackerView(tm, cm, cmgr)
 
   local vm = {}
   vm.grid = grid  -- live handle for rm; mutated in place on rebuild
-  vm.aliasMode = false  -- toggled by `toggleAliasMode`; gates alias-creation in copy/duplicate
+  vm.aliasMode = false  -- toggled by `toggleAliasMode`; sampled at paste/duplicate time to choose aliased vs plain writer (the clip itself always carries aliasSrc)
 
   local ec, clipboard, ctx
 
@@ -1395,7 +1395,11 @@ function newTrackerView(tm, cm, cmgr)
     end
 
     local function nudgePitch(col, note, dir, coarse, audible)
-      local delta = dir * pitchStep(coarse)
+      if note.parentUuid then
+        local field = coarse and 'octave' or 'pitch'
+        if tm:routeRelative(note, { [field] = { 'add', dir } }) then return end
+      end
+      local delta  = dir * pitchStep(coarse)
       local temper = ctx:activeTemper()
       local pitch, detune
       if temper then
@@ -1404,12 +1408,6 @@ function newTrackerView(tm, cm, cmgr)
         pitch, detune = util.clamp(note.pitch + delta, 0, 127), note.detune
       end
       if pitch == note.pitch and detune == note.detune then return end
-      if note.parentUuid then
-        local ops = {}
-        if pitch  ~= note.pitch  then ops.pitch  = { 'add', pitch  - note.pitch  } end
-        if detune ~= note.detune then ops.detune = { 'add', detune - note.detune } end
-        if tm:routeRelative(note, ops) then return end
-      end
       tm:assignEvent('note', note, { pitch = pitch, detune = detune })
       if audible then audition(pitch, note.vel, col.midiChan) end
     end
