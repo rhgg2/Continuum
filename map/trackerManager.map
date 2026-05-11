@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1951  sha=a100405
+@module trackerManager  src=trackerManager.lua  loc=2083  sha=59dfc00
 @deps util, midiManager, timing, aliases
 
 # Invariants & contracts (module)
@@ -115,11 +115,14 @@
     @fn snapshot(iter)  @ 1577
     @fn shift(c, delta, isNote)  @ 1592
     @fn resolve(name)  @ 1644
-    @fn parts(p)  @ 1775
-    @fn snapshotSwingState()  @ 1861
-    @fn colSwingDiffChannels(prev, cur)  @ 1866
-    @fn changedSwingNames(prev, cur)  @ 1875
-    @fn channelsResolvingTo(names)  @ 1888   -- Global swing shadows colSwing: a hit on the global name affects all 16.
+    @fn maxAliasId(list, seed)  @ 1709   -- Highest base36 id appearing anywhere in `list` (recursing through .children). Returns `see
+    @fn depth(p)  @ 1732   -- Depth = dot-count + 1, not string length: '1.2.3' (depth 3) must sever before '10.20' (dep
+    @fn scan(iter)  @ 1795
+    @fn parts(p)  @ 1907
+    @fn snapshotSwingState()  @ 1993
+    @fn colSwingDiffChannels(prev, cur)  @ 1998
+    @fn changedSwingNames(prev, cur)  @ 2007
+    @fn channelsResolvingTo(names)  @ 2020   -- Global swing shadows colSwing: a hit on the global name affects all 16.
 
   # Public API
     -- Aliases walker helpers
@@ -183,22 +186,28 @@
     @api tm:flush()  @ 1691
     @api tm:routeRelative(evt, opsByField)  @ 1694
         @map:contract  evt is a materialised alias child (carries parentUuid + specPath); appends each (field, op) entry of `opsByField` to the spec node and queues an aliases-only metadata write on the root. Multi-field is one call so coupled fields (e.g. pitch+detune under a temper) land on a single root snapshot. Returns false when evt is not aliased or the root/spec lookup fails — caller should fall through to direct mutation.
-    @api tm:aliasSrcSnapshot(rootUuid, specPath)  @ 1708
+    @api tm:severBatch(events)  @ 1720
+        @map:contract  group `events` by parentUuid and sever each in one snapshot per root: pluck every requested subtree from a single mm:byUuid clone before issuing the per-event metadata-clear assigns and one root-aliases assign. Deepest-first within each group so a parent's pluck never invalidates a sibling-grandchild's path. Events without parentUuid+specPath are skipped silently. Does not flush — caller drives a single flush across the batch.
+    @api tm:sever(evt)  @ 1760
+        @map:contract  evt is a materialised alias child (carries parentUuid + specPath); plucks evt's spec subtree from the old root, transplants its children onto evt as a new top-level root, and clears evt's materialisation metadata. The mm-uuid evt already carries — minted by the walker on the previous rebuild — becomes the new root's permanent identity (the rebuild sweep only deletes events still carrying parentUuid, so a stripped event stays put). aliasCtr is set past the highest id anywhere in the plucked subtree so subsequent allocations don't collide with surviving descendant ids. Returns true on success; false when evt is unaliased or root/spec lookup fails (no-op caller-side). Does not flush — the caller drives a single flush across a batch.
+    @api tm:deleteAliased(evt)  @ 1769
+        @map:contract  structural delete that promotes the spec subtree's children to new roots before the spec node is removed. Two modes by evt shape: aliased child (parentUuid + specPath set) — removes evt's spec node from its root; each direct child's materialised event is promoted in place (sever-style); evt itself disappears via the rebuild sweep (still parentUuid-tagged, no surviving spec node to re-emit). Root with non-empty aliases — each top-level child's materialised event is promoted; the root event is then deleted outright. Suppressed branches (spec child with no live materialisation, e.g. slot collision) are dropped. Returns false for plain unaliased events so callers can fall back to tm:deleteEvent. Does not flush — caller drives a single flush across a batch.
+    @api tm:aliasSrcSnapshot(rootUuid, specPath)  @ 1840
         @map:contract  for a materialised child source at (rootUuid, specPath), returns { children = deep clone of the leaf spec node's children, chain = [{id, xform-clone}, ...] one entry per ANCESTOR segment (the leaf itself is excluded). Returns nil if the root is missing or any path segment fails to resolve. The chain is the copy-time fingerprint of *ancestor* xforms only — the leaf is the source, so editing or moving it stays compatible with paste; only ancestor edits count as tree-mutation drift.
-    @api tm:resolveAliasSrc(rootUuid, specPath, chain, evtType)  @ 1729
+    @api tm:resolveAliasSrc(rootUuid, specPath, chain, evtType)  @ 1861
         @map:contract  resolves the source side of an alias-paste against the live spec tree. Returns nil if root or any path segment missing (→ silent demote, the (A) case); { mismatch = true } if a captured ANCESTOR's xform disagrees with the live one, or any path xform contains a producing-op we cannot re-roll (→ loud demote, "spec tree edited"); { resolved = field-table } otherwise. The leaf node's xform is free to drift — corrective deltas in aliasWriter compensate. Resolved starts at root's fields (with durL = endppqL − ppqL for notes) and composes each path segment's xform via aliases.applyXform.
-    @api tm:pathXform(rootUuid, fromSpecPath, toSpecPath)  @ 1771
+    @api tm:pathXform(rootUuid, fromSpecPath, toSpecPath)  @ 1903
         @map:contract  walks the live spec tree from fromSpecPath (exclusive) to toSpecPath (inclusive) and concatenates per-field xform op-lists in order. Used at copy time by family-paste to snapshot the structural xforms between a clip's family-parent and its descendant; preserves producing-ops (rand) verbatim. fromSpecPath nil → walk from root. Returns nil if any path segment is missing or toSpecPath is not a strict descendant of fromSpecPath. Ops are deep-cloned.
-    @api tm:createAlias(rootUuid, srcSpecPath, xform, children, fit)  @ 1811
+    @api tm:createAlias(rootUuid, srcSpecPath, xform, children, fit)  @ 1943
         @map:contract  creates a new alias spec node under the event identified by `rootUuid`. srcSpecPath nil → top of root.aliases; non-nil → child of the spec node at that path (so descendants of that spec compose this xform). `children`, when given, is taken verbatim as the new node's children (typically a deep clone of the source's subtree, captured at copy time so paste brings the source's alias-children along under the new node). `fit` (truthy) marks the new node as visually fit: at rebuild, its materialised endppq is clipped to the next event on the same column, so the alias never causes a new lane to be allocated for its successor. Returns the new node's full specPath, or nil if the root/spec lookup fails.
     -- Mute
-    @api tm:setMutedChannels(set)  @ 1836
+    @api tm:setMutedChannels(set)  @ 1968
         @map:contract  idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes
     -- Lifecycle
-    @api tm:bindTake(take, opts)  @ 1936
+    @api tm:bindTake(take, opts)  @ 2068
         @map:contract  atomic take swap: cm:setContext runs silently; mm:load fires the single coherent rebuild. opts.markSwingStale=true rebuilds raw from ppqL under the new (cm, mm) pair (used by seqMgr:reswingAll).
         @map:contract  bindTake(nil) is the dormant seam (e.g. samplePage); cm clears under suppression, mm:load(nil) is a no-op, tm/vm retain last frame.
-    @api tm:currentTake()  @ 1947
+    @api tm:currentTake()  @ 2079
 
   # Signals emitted (via util.installHooks)
     @emits rebuild   -- nil; fires once at the end of every rebuild after um is recreated

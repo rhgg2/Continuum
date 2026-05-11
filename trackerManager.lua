@@ -1704,6 +1704,138 @@ function newTrackerManager(mm, cm)
     return true
   end
 
+  -- Highest base36 id appearing anywhere in `list` (recursing through
+  -- .children). Returns `seed` if the tree is empty.
+  local function maxAliasId(list, seed)
+    local m = seed or 0
+    for _, c in ipairs(list or {}) do
+      local n = util.fromBase36(c.id) or 0
+      if n > m then m = n end
+      if c.children then m = maxAliasId(c.children, m) end
+    end
+    return m
+  end
+
+  --@map:contract group `events` by parentUuid and sever each in one snapshot per root: pluck every requested subtree from a single mm:byUuid clone before issuing the per-event metadata-clear assigns and one root-aliases assign. Deepest-first within each group so a parent's pluck never invalidates a sibling-grandchild's path. Events without parentUuid+specPath are skipped silently. Does not flush — caller drives a single flush across the batch.
+  function tm:severBatch(events)
+    local byParent = {}
+    for _, e in ipairs(events) do
+      if e and e.parentUuid and e.specPath then
+        byParent[e.parentUuid] = byParent[e.parentUuid] or {}
+        util.add(byParent[e.parentUuid], e)
+      end
+    end
+    -- Depth = dot-count + 1, not string length: '1.2.3' (depth 3) must
+    -- sever before '10.20' (depth 2) so an ancestor's pluck never voids
+    -- a descendant's path. Multi-char base36 ids (>35 children) make
+    -- length-as-depth wrong.
+    local function depth(p)
+      local n = 1
+      for _ in p:gmatch('%.') do n = n + 1 end
+      return n
+    end
+    for parentUuid, list in pairs(byParent) do
+      table.sort(list, function(a, b) return depth(a.specPath) > depth(b.specPath) end)
+      local rootLoc, root, rootKind = mm:byUuid(parentUuid)
+      if root and rootLoc then
+        for _, e in ipairs(list) do
+          local plucked = aliases.pluckSubtree(root, e.specPath)
+          if plucked then
+            local children = plucked.children or {}
+            local evtKind  = e.msgType and 'cc' or 'note'
+            um:assignEvent(evtKind, e, {
+              parentUuid = util.REMOVE,
+              specPath   = util.REMOVE,
+              aliases    = children,
+              aliasCtr   = maxAliasId(children) + 1,
+            })
+          end
+        end
+        um:assignEvent(rootKind, { loc = rootLoc }, { aliases = root.aliases })
+      end
+    end
+  end
+
+  --@map:contract evt is a materialised alias child (carries parentUuid + specPath); plucks evt's spec subtree from the old root, transplants its children onto evt as a new top-level root, and clears evt's materialisation metadata. The mm-uuid evt already carries — minted by the walker on the previous rebuild — becomes the new root's permanent identity (the rebuild sweep only deletes events still carrying parentUuid, so a stripped event stays put). aliasCtr is set past the highest id anywhere in the plucked subtree so subsequent allocations don't collide with surviving descendant ids. Returns true on success; false when evt is unaliased or root/spec lookup fails (no-op caller-side). Does not flush — the caller drives a single flush across a batch.
+  function tm:sever(evt)
+    if not (evt and evt.parentUuid and evt.specPath) then return false end
+    local _, root = mm:byUuid(evt.parentUuid)
+    if not (root and aliases.find(root, evt.specPath)) then return false end
+    self:severBatch{ evt }
+    return true
+  end
+
+  --@map:contract structural delete that promotes the spec subtree's children to new roots before the spec node is removed. Two modes by evt shape: aliased child (parentUuid + specPath set) — removes evt's spec node from its root; each direct child's materialised event is promoted in place (sever-style); evt itself disappears via the rebuild sweep (still parentUuid-tagged, no surviving spec node to re-emit). Root with non-empty aliases — each top-level child's materialised event is promoted; the root event is then deleted outright. Suppressed branches (spec child with no live materialisation, e.g. slot collision) are dropped. Returns false for plain unaliased events so callers can fall back to tm:deleteEvent. Does not flush — caller drives a single flush across a batch.
+  function tm:deleteAliased(evt)
+    if not evt then return false end
+
+    local rootLoc, root, rootKind, isRoot
+    if evt.parentUuid then
+      rootLoc, root, rootKind = mm:byUuid(evt.parentUuid)
+      if not (root and rootLoc) then return false end
+      isRoot = false
+    elseif evt.aliases and #evt.aliases > 0 then
+      rootLoc, root, rootKind = evt.loc, evt, evt.msgType and 'cc' or 'note'
+      isRoot = true
+    else
+      return false
+    end
+
+    local childSpecs
+    if isRoot then
+      childSpecs = root.aliases or {}
+    else
+      local S = aliases.find(root, evt.specPath)
+      childSpecs = (S and S.children) or {}
+    end
+
+    local matsById = {}
+    if #childSpecs > 0 then
+      local prefix = isRoot and '' or (evt.specPath .. '.')
+      local function scan(iter)
+        for _, e in iter do
+          if e.parentUuid == root.uuid and e.specPath
+             and e.specPath:sub(1, #prefix) == prefix then
+            local seg = e.specPath:sub(#prefix + 1)
+            if seg ~= '' and not seg:find('.', 1, true) then
+              matsById[seg] = e
+            end
+          end
+        end
+      end
+      scan(mm:notes()); scan(mm:ccs())
+    end
+
+    -- Snapshot child ids before mutating: pluckSubtree alters the same
+    -- Lua list childSpecs aliases (S.children or root.aliases), so iterating
+    -- it directly via ipairs would skip alternate entries.
+    local childIds = {}
+    for _, c in ipairs(childSpecs) do childIds[#childIds + 1] = c.id end
+    for _, id in ipairs(childIds) do
+      local fullPath = isRoot and id or (evt.specPath .. '.' .. id)
+      local plucked  = aliases.pluckSubtree(root, fullPath)
+      local mat      = matsById[id]
+      if mat and plucked then
+        local kids    = plucked.children or {}
+        local matKind = mat.msgType and 'cc' or 'note'
+        um:assignEvent(matKind, mat, {
+          parentUuid = util.REMOVE,
+          specPath   = util.REMOVE,
+          aliases    = kids,
+          aliasCtr   = maxAliasId(kids) + 1,
+        })
+      end
+    end
+
+    if isRoot then
+      um:deleteEvent(rootKind, { loc = rootLoc })
+    else
+      aliases.pluckSubtree(root, evt.specPath)
+      um:assignEvent(rootKind, { loc = rootLoc }, { aliases = root.aliases })
+    end
+    return true
+  end
+
   --@map:contract for a materialised child source at (rootUuid, specPath), returns { children = deep clone of the leaf spec node's children, chain = [{id, xform-clone}, ...] one entry per ANCESTOR segment (the leaf itself is excluded). Returns nil if the root is missing or any path segment fails to resolve. The chain is the copy-time fingerprint of *ancestor* xforms only — the leaf is the source, so editing or moving it stays compatible with paste; only ancestor edits count as tree-mutation drift.
   function tm:aliasSrcSnapshot(rootUuid, specPath)
     if not (rootUuid and specPath) then return nil end

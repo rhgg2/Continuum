@@ -614,6 +614,19 @@ function newTrackerView(tm, cm, cmgr)
         return update
       end
 
+      -- Step delta for re-relativising typed pitch on an aliased child.
+      -- Under temper, midi+detune fold to a step index (step + oct *
+      -- octaveStep); the delta is the integer step difference. Without
+      -- temper, the scalar MIDI delta is the step delta.
+      local function pitchStepDelta(fromMidi, fromDetune, toMidi, toDetune)
+        local temper = ctx:activeTemper()
+        if not temper then return toMidi - fromMidi end
+        local fs, fo = tuning.midiToStep(temper, fromMidi, fromDetune)
+        local ts, to = tuning.midiToStep(temper, toMidi,   toDetune)
+        local osStep = temper.octaveStep
+        return (ts + to * osStep) - (fs + fo * osStep)
+      end
+
       -- Within a part the cursor walks left-to-right (digit 0 = MS char,
       -- digit (width-1) = LS char). setDigit speaks position-from-LS, so
       -- the part's char-position is `(width - 1) - digit`.
@@ -630,6 +643,13 @@ function newTrackerView(tm, cm, cmgr)
           if temper then pitch, detune = tuning.snap(temper, pitch, 0) end
 
           if util.isNote(evt) then
+            if evt.parentUuid then
+              local d = pitchStepDelta(evt.pitch, evt.detune, pitch, detune)
+              if d == 0 then return commit(pitch, evt.vel) end
+              if tm:routeRelative(evt, { pitch = { 'add', d } }) then
+                return commit(pitch, evt.vel)
+              end
+            end
             local upd = { pitch = pitch, detune = detune }
             if cm:get('trackerMode') then upd.sample = cm:get('currentSample') end
             tm:assignEvent('note', evt, snap(upd))
@@ -666,6 +686,13 @@ function newTrackerView(tm, cm, cmgr)
             oct = d
           end
           local pitch = util.clamp((oct + 1) * 12 + evt.pitch % 12, 0, 127)
+          if evt.parentUuid then
+            local d = pitchStepDelta(evt.pitch, evt.detune, pitch, evt.detune)
+            if d == 0 then return commit(pitch, evt.vel) end
+            if tm:routeRelative(evt, { pitch = { 'add', d } }) then
+              return commit(pitch, evt.vel)
+            end
+          end
           tm:assignEvent('note', evt, { pitch = pitch })
           return commit(pitch, evt.vel)
 
@@ -887,18 +914,34 @@ function newTrackerView(tm, cm, cmgr)
       tm:flush()
     end
 
+    -- Refused-on-aliased: interpolate writes computed absolute values
+    -- (cycleShape → assignEvent on shape). On an aliased child this would
+    -- sever and lose the spec relationship; partially skipping aliased
+    -- events would produce a misleading curve. Whole command no-ops.
+    local function refuseAliased()
+      reaper.ShowMessageBox(
+        'interpolate: aliased event(s) in scope. Sever (Ctrl+.) first.',
+        'interpolate refused', 0)
+    end
+
     function interpolate()
       if ec:hasSelection() then
         local r1, r2 = ec:region()
+        local plans = {}
         for col in ec:eachSelectedCol() do
           if interpolable[col.type] then
-            local startppq, endppq = ctx:rowToPPQ(r1, col.midiChan), ctx:rowToPPQ(r2 + 1, col.midiChan)
-            local prev
+            local startppq = ctx:rowToPPQ(r1,     col.midiChan)
+            local endppq   = ctx:rowToPPQ(r2 + 1, col.midiChan)
+            local evts = {}
             for evt in util.between(col.events, startppq, endppq) do
-              if prev then cycleShape(col, prev) end
-              prev = evt
+              if evt.parentUuid then refuseAliased(); return end
+              evts[#evts + 1] = evt
             end
+            plans[#plans + 1] = { col = col, evts = evts }
           end
+        end
+        for _, p in ipairs(plans) do
+          for i = 1, #p.evts - 1 do cycleShape(p.col, p.evts[i]) end
         end
         tm:flush()
         return
@@ -911,7 +954,9 @@ function newTrackerView(tm, cm, cmgr)
       local A = ghost and ghost.fromEvt
         or (col.cells and col.cells[r])
         or util.seek(col.events, 'before', ctx:rowToPPQ(r + 1, col.midiChan))
-      if A then cycleShape(col, A); tm:flush() end
+      if not A then return end
+      if A.parentUuid then refuseAliased(); return end
+      cycleShape(col, A); tm:flush()
     end
 
     -- Returns nil for non-interpolable cols so callers can assign unconditionally.
@@ -946,16 +991,28 @@ function newTrackerView(tm, cm, cmgr)
       return col, util.seek(col.events, 'at-or-before', cursorppq, util.isNote)
     end
 
+    -- Aliased: tail moves route durL relative; the zero/negative-duration
+    -- branch routes through deleteAliased so spec-tree descendants promote
+    -- in place rather than vanishing with the swept materialisation.
     local function applyNoteOff(col, last, targetppq, undo)
       if undo then
         local next = util.seek(col.events, 'at-or-after', targetppq, util.isNote)
         local newEnd = next and next.ppq or length
+        if last.parentUuid
+           and tm:routeRelative(last, { durL = { 'add', newEnd - last.endppq } }) then
+          return
+        end
         assignTail(last, col.midiChan, newEnd)
       elseif last.ppq >= targetppq then
+        if last.parentUuid and tm:deleteAliased(last) then return end
         tm:deleteEvent('note', last)
       else
         local _, maxEnd = overlapBounds(col, last.ppq, last, true)
         local newEnd    = util.clamp(targetppq, last.ppq + 1, maxEnd)
+        if last.parentUuid
+           and tm:routeRelative(last, { durL = { 'add', newEnd - last.endppq } }) then
+          return
+        end
         assignTail(last, col.midiChan, newEnd)
       end
     end
@@ -1206,6 +1263,21 @@ function newTrackerView(tm, cm, cmgr)
       reswingCore(groups, { target = function() return curSnap end })
     end
 
+    -- Sever aliased children that have plans, before the writes commit.
+    -- Sever preserves each event's mm-uuid and loc, so the plan list keyed
+    -- on `e` references stays valid; the metadata-clear assigns merge
+    -- by-loc with the ppq/endppq writes that follow inside the same flush.
+    -- Only planned events are severed — on-grid aliased col-mates in scope
+    -- stay attached to the spec. Aliasing roots, planned or not, are left
+    -- intact: root ppq moves, descendants compose against it on rebuild.
+    local function severAliasedPlans(plans)
+      local hits = {}
+      for _, p in ipairs(plans) do
+        if p.e.parentUuid then util.add(hits, p.e) end
+      end
+      if #hits > 0 then tm:severBatch(hits) end
+    end
+
     -- Plan-then-write so conformOverlaps can clip plan geometry against
     -- col-mates before the writes commit. Two off-grid col-mates can
     -- otherwise quantize-collapse onto the same ppq (or onto adjacent
@@ -1233,6 +1305,7 @@ function newTrackerView(tm, cm, cmgr)
       end
 
       conformOverlaps(plans)
+      severAliasedPlans(plans)
       writePlans(plans)
       tm:flush()
     end
@@ -1264,6 +1337,7 @@ function newTrackerView(tm, cm, cmgr)
         end
       end
 
+      severAliasedPlans(plans)
       writePlans(plans)
       tm:flush()
 
@@ -1572,6 +1646,11 @@ function newTrackerView(tm, cm, cmgr)
       sample = function() end,
     }
 
+    -- Pitch-column delete on an aliased event (or on a root with descendants)
+    -- is structural: route through tm:deleteAliased, which removes the spec
+    -- node and promotes its children to new roots. Tail-fixup logic doesn't
+    -- apply — the materialised event vanishes via the rebuild sweep, with
+    -- no cross-event extension across structural deletes.
     function deleteEvent()
       local col = grid.cols[ec:col()]
       if not col then return end
@@ -1587,13 +1666,25 @@ function newTrackerView(tm, cm, cmgr)
         return
       end
       local part = col.type == 'note' and ec:cursorPart() or 'val'
+      if part == 'pitch' and tm:deleteAliased(evt) then
+        tm:flush()
+        return
+      end
       DELETE_BY_PART[part](col, { [evt] = evt })
       tm:flush()
     end
 
     function deleteSelection()
       for _, g in ipairs(eventsByCol()) do
-        DELETE_BY_PART[g.part](g.col, g.locs)
+        if g.part == 'pitch' then
+          local rest = {}
+          for k, evt in pairs(g.locs) do
+            if not tm:deleteAliased(evt) then rest[k] = evt end
+          end
+          if next(rest) then DELETE_BY_PART[g.part](g.col, rest) end
+        else
+          DELETE_BY_PART[g.part](g.col, g.locs)
+        end
       end
       tm:flush()
       ec:selClear()
@@ -1603,6 +1694,29 @@ function newTrackerView(tm, cm, cmgr)
   local function deleteOrBackspace()
     if ec:isSticky() then deleteSelection()
     else ec:selClear(); deleteEvent(); ec:advance() end
+  end
+
+  --@map:contract sever the aliased event(s) under attention: selection if
+  -- present, else the cursor event. Plain (non-aliased) events are ignored.
+  -- Each aliased hit is plucked from its root's spec tree and promoted into
+  -- a new root (see tm:sever); the next rebuild re-emits its descendants
+  -- under the new root.
+  local function severCmd()
+    local hits = {}
+    if ec:hasSelection() then
+      for _, g in ipairs(eventsByCol()) do
+        for _, e in pairs(g.locs) do
+          if e.parentUuid then util.add(hits, e) end
+        end
+      end
+    else
+      local col = grid.cols[ec:col()]
+      local evt = col and col.cells and col.cells[ec:row()]
+      if evt and evt.parentUuid then util.add(hits, evt) end
+    end
+    if #hits == 0 then return end
+    tm:severBatch(hits)
+    tm:flush()
   end
 
   -- Step currentSample by ±1 across the full 0..127 range. Empty slots
@@ -1786,6 +1900,7 @@ function newTrackerView(tm, cm, cmgr)
     duplicateDown           = function() duplicate( 1) end,
     duplicateUp             = function() duplicate(-1) end,
     toggleAliasMode         = function() vm.aliasMode = not vm.aliasMode end,
+    sever                   = severCmd,
     inputOctaveUp           = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')+1, -1, 9)) end,
     inputOctaveDown         = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')-1, -1, 9)) end,
     inputSampleUp           = function() stepSample( 1) end,

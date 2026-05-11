@@ -402,8 +402,12 @@ return {
   {
     name = 'alias paste after root pitch drift: corrective xform lands the captured pitch',
     run = function(harness)
+      local TEMPER_19 = tuning.presets['19EDO']
       local h = harness.mk{
-        config = { track = { rowPerBeat = 1 } },
+        config = {
+          track   = { rowPerBeat = 1, temper = '19EDO' },
+          project = { tempers = { ['19EDO'] = TEMPER_19 } },
+        },
         seed   = { notes = { rootNote{ pitch = 60 } } },
       }
       h.vm:setGridSize(80, 40)

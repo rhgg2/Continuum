@@ -750,6 +750,7 @@ function newTrackerPage(cm, cmgr, chrome, gui)
     cycleVBlock    = { {ImGui.Key_O,           ImGui.Mod_Super} },
     swapBlockEnds  = { {ImGui.Key_GraveAccent, ImGui.Mod_Ctrl} },
     toggleAliasMode = { ImGui.Key_GraveAccent },
+    sever           = { {ImGui.Key_Period, ImGui.Mod_Super} },
     selectClear    = { {ImGui.Key_G, ImGui.Mod_Super} },
     cut            = { {ImGui.Key_W, ImGui.Mod_Super}, {ImGui.Key_X, ImGui.Mod_Ctrl} },
     copy           = { {ImGui.Key_W, ImGui.Mod_Ctrl},  {ImGui.Key_C, ImGui.Mod_Ctrl} },

@@ -242,10 +242,25 @@ directly.
 
 | command | why |
 |---|---|
-| typed pitch input (qwerty row), repitching | sets pitch absolutely |
-| `noteOff` | inserts a note-off boundary |
-| `interpolate` | writes computed absolute values |
-| `quantize`, `quantizeKeepRealised` | snaps logical ppq to grid |
+| `quantize`, `quantizeKeepRealised` | snaps logical ppq to grid; the snap is a property of realised position, not a delta worth carrying as the parent moves |
+
+### Re-relativised — absolute target, relative composition
+
+Some commands present as absolute to the user but compose cleanly when
+expressed as a delta against the resolved value. On an aliased event,
+compute `δ = target - resolved.<field>` and append the relative op;
+otherwise mutate directly.
+
+| command | field | δ source |
+|---|---|---|
+| typed pitch input (qwerty row), repitching | `pitch` | typed − resolved.pitch |
+| `noteOff` | `dur`   | newDur − resolved.dur |
+
+### Refused on aliased — whole command no-ops with a UI warning
+
+| command | why |
+|---|---|
+| `interpolate` | writes computed absolute values across a span; if any selected event is aliased, the whole command is refused (a partial interpolation that silently skipped the aliased events would produce a misleading curve) and a status warning is surfaced |
 
 ### Structural — alters the spec tree
 
@@ -295,17 +310,22 @@ To sever a spec node `S` from its parent:
 
 1. Locate `S` by `(parentUuid, specPath)` in the root's spec tree.
 2. Pluck the subtree rooted at `S` from its parent's `children` list.
-3. Materialise `S` as a new top-level event:
-   - Use `S`'s currently-resolved fields, computed from the now-vanished
-     parent state. (This is what the materialised MIDI event already
-     holds, so no recomputation needed if we route through the live
-     event.)
-   - Drop `parentUuid` and `specPath`; keep the rest of `S`'s metadata.
-   - Allocate a fresh permanent UUID for the new root.
-4. The subtree under `S` follows: each descendant's `xform` was relative
-   to `S`'s resolved state, which is now `S`'s baked-in field state, so
-   the resolution math is unchanged. The `parentUuid`s in the descendants'
-   metadata get updated to point at the new root.
+3. Promote the live materialised MIDI event in place into the new root:
+   - Its currently-resolved fields are already what we want — the walker
+     just emitted them.
+   - Strip `parentUuid` and `specPath` from its metadata.
+   - Stamp the plucked subtree's `children` as the new root's `aliases`,
+     and set `aliasCtr` past the highest id in that subtree.
+   - The mm-uuid the walker minted for it stops being ephemeral by
+     convention (the rebuild sweep only deletes events that still carry
+     `parentUuid`); it becomes the new root's permanent identity. No
+     fresh allocation needed.
+4. The subtree under `S` follows by construction: each descendant's
+   `xform` was relative to `S`'s resolved state, which is now `S`'s
+   baked-in field state, so the resolution math is unchanged. The next
+   rebuild deletes the descendants' stale materialisations (still
+   carrying the old root's `parentUuid`) and re-emits them under the
+   new root.
 
 `xform` on `S` is forgotten in the promotion — a root has no transform
 because it has no parent.
