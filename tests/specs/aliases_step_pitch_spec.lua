@@ -122,7 +122,10 @@ return {
       })
       local kids = {}
       for _, n in ipairs(h.fm:dump().notes) do
-        if n.parentUuid == 1 then kids[n.specPath] = n end
+        if n.parentUuid == 1 then
+          local idx = h.tm:specPathOf(n)
+          if idx then kids[table.concat(idx, '.')] = n end
+        end
       end
       local expP, expD = tuning.transposeStep(TEMPER_19, 60, 0, 2)
       t.eq(kids['1.1'].pitch,  expP)

@@ -9,7 +9,7 @@
 --@map:invariant preview-in-place leaves cm:slotEntries untouched while the JSFX slot is staged to a transient file; sm:syncSlot pushes cm's truth back on revert
 --@map:invariant drag.handle is set on the first active frame (closest of start/end to the mouse wins) and held until the button releases — the choice does not switch mid-drag
 
-loadModule('fs')
+require 'fs'
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)

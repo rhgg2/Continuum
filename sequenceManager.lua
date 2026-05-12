@@ -5,7 +5,7 @@
 --@map:invariant discovery (takesUsing) reads each take's usedSwings via cm:readTakeKey, never disturbing the active mm/cm; reswing (reswingAll) routes through tm:bindTake so each visited take swaps mm and cm atomically
 --@map:invariant takes that have never been bound by continuum (no ctm_config ext data yet) are absent from discovery — accepted bootstrap caveat; the projection populates lazily as users open takes
 
-loadModule('util')
+require 'util'
 
 function newSequenceManager(tm, vm, cm)
   local self = {}

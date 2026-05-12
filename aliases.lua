@@ -8,7 +8,7 @@
 --@map:invariant coalescence is trailing-op only and requires same opcode AND all-literal args
 --@map:shape Op = { opcode, arg1[, arg2, ...] }   -- numeric arg is a literal; table arg is a producing-op sub-expression
 --@map:shape Xform = { [field] = { Op, ... }, ... }
---@map:shape SpecNode = { id, xform, children }   -- id is base36 string; children is list
+--@map:shape SpecNode = { xform, children, [fit] }   -- children is a list; position in the list is identity
 
 aliases = {}
 local M = aliases
@@ -167,54 +167,51 @@ end
 
 ----- Spec-tree navigation
 
-local function splitPath(specPath)
-  local parts = {}
-  for s in specPath:gmatch('[^.]+') do parts[#parts + 1] = s end
-  return parts
-end
-
-local function findInList(list, id)
-  for _, node in ipairs(list) do
-    if node.id == id then return node end
-  end
-end
-
--- Walk the spec tree at `root.aliases`. specPath is dotted base36 ('1.2.1').
-function M.find(root, specPath)
-  local parts = splitPath(specPath)
+-- Walk the spec tree at `root.aliases`. specIdx is an array of
+-- 1-indexed integers naming child positions at each level.
+function M.find(root, specIdx)
+  if not (root and root.aliases and specIdx) then return nil end
   local list, node = root.aliases, nil
-  for _, id in ipairs(parts) do
+  for _, i in ipairs(specIdx) do
     if not list then return nil end
-    node = findInList(list, id)
+    node = list[i]
     if not node then return nil end
     list = node.children
   end
   return node
 end
 
--- Returns (parent_children_list, last_id) or nil if any intermediate is
--- missing. Top-level paths return (root.aliases, id).
-function M.parentOf(root, specPath)
-  local parts = splitPath(specPath)
-  if #parts == 0 then return nil end
+-- Returns (parent_children_list, last_idx) or nil if any intermediate
+-- is missing. Top-level paths return (root.aliases, specIdx[1]).
+function M.parentOf(root, specIdx)
+  if not (root and root.aliases and specIdx and #specIdx > 0) then return nil end
   local list = root.aliases
-  for i = 1, #parts - 1 do
-    local node = list and findInList(list, parts[i])
+  for i = 1, #specIdx - 1 do
+    local node = list and list[specIdx[i]]
     if not node then return nil end
     list = node.children
   end
   if not list then return nil end
-  return list, parts[#parts]
+  return list, specIdx[#specIdx]
 end
 
--- Mutates `root`: removes the subtree at specPath from its parent's
+-- Mutates `root`: removes the subtree at specIdx from its parent's
 -- children list. Returns the plucked node, or nil if not found.
-function M.pluckSubtree(root, specPath)
-  local list, id = M.parentOf(root, specPath)
-  if not list then return nil end
-  for i, node in ipairs(list) do
-    if node.id == id then
-      table.remove(list, i)
+function M.pluckSubtree(root, specIdx)
+  local list, i = M.parentOf(root, specIdx)
+  if not list or not list[i] then return nil end
+  return table.remove(list, i)
+end
+
+-- Remove `node` from `parentList` by table identity. Mutates the list;
+-- returns the node, or nil if not found. Identity-pluck is the
+-- spec-tree counterpart to string-path pluck: it survives positional
+-- addressing where dotted-base36 paths cannot.
+function M.pluckNode(parentList, node)
+  if not (parentList and node) then return nil end
+  for i, n in ipairs(parentList) do
+    if n == node then
+      table.remove(parentList, i)
       return node
     end
   end
@@ -240,26 +237,6 @@ function M.localRoots(events)
   return out
 end
 
------ Routing
-
--- Append `op` to the spec node at `evt.specPath` under `root`. Mutates
--- the node's xform in place (within `root.aliases`) and returns the
--- updated `root.aliases`. Returns nil if the spec path doesn't resolve
--- — caller should fall back to direct mutation.
-function M.route(root, evt, field, op)
-  if not (root and root.aliases and evt and evt.specPath) then return nil end
-  local node = M.find(root, evt.specPath)
-  if not node then return nil end
-  node.xform = M.appendOp(node.xform, field, op)
-  return root.aliases
-end
-
 ----- Construction
-
-function M.allocId(root)
-  local n = root.aliasCtr or 1
-  root.aliasCtr = n + 1
-  return util.toBase36(n)
-end
 
 function M.emptyXform() return {} end

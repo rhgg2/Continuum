@@ -8,15 +8,10 @@ local harness = {}
 local fakeReaper = require('fakeReaper').new()
 _G.reaper = fakeReaper
 
--- loadModule is how the production modules resolve their dependencies.
--- We honour the call for real modules (via require) but swallow it for
--- midiManager — our fake has already installed newMidiManager.
-_G.loadModule = function(name)
-  if name == 'midiManager' then return end
-  require(name)
-end
-
-require('fakeMidiManager')  -- installs newMidiManager global
+-- The fake installs newMidiManager globally; mark the real module as
+-- already loaded so production require('midiManager') calls are no-ops.
+require('fakeMidiManager')
+package.loaded['midiManager'] = package.loaded['fakeMidiManager'] or true
 require('util')
 require('timing')
 require('tuning')

@@ -1,5 +1,4 @@
 @module sampleManager  src=sampleManager.lua  loc=428  sha=2973124
-@deps util, fs
 
 # Invariants & contracts (module)
   @map:invariant  cm is the sole authority for slot state ({path, start, end, name}); JSFX is a pure consumer

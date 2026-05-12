@@ -5,7 +5,6 @@
 
 local t = require('support')
 
-_G.loadModule = _G.loadModule or function(n) require(n) end
 require('util')
 local realMM = require('realMidiManager')()
 

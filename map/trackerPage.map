@@ -1,5 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1272  sha=952e5a2
-@deps util, timing
+@module trackerPage  src=trackerPage.lua  loc=1281  sha=e00431d
 
 # Invariants & contracts (module)
   @map:invariant  page is render + input only; tracker state lives in vm/ec/tm — never cached here
@@ -70,23 +69,23 @@
     @fn rowToX(row)  @ 421
     @fn drawTracker()  @ 521
         @map:contract  assumes computeLayout ran this frame; reads chanX/chanW/chanOrder/totalWidth and gridOriginX/Y
-    @fn drawStatusBar()  @ 725
-    @fn nearestStop(mouseX, mouseY)  @ 828
+    @fn drawStatusBar()  @ 734
+    @fn nearestStop(mouseX, mouseY)  @ 837
         @map:contract  returns (col, stop, fracX) or (nil, nil, fracX); fracX kept separate so callers distinguish "past last col" from "inside col N"
-    @fn handleMouse()  @ 848
+    @fn handleMouse()  @ 857
         @map:contract  returns immediately if laneConsumed is set; lane strip wins gestures over the tracker grid
         @map:contract  right-click on channel-label row toggles mute; click on label rows selects channel/column; body click moves cursor and arms drag
-    @fn handleKeys(kr)  @ 956   -- Page-internal raw input. commandHeld gates a held command key from leaking into the char q
+    @fn handleKeys(kr)  @ 965   -- Page-internal raw input. commandHeld gates a held command key from leaking into the char q
         @map:contract  no-op when modalState or chrome.pickerIsActive() is set, or when any ImGui item is active (focused InputText etc.)
         @map:contract  drains the entire input-queue per frame; reads ec/grid fresh each iteration since editEvent may rebuild
-    @fn drawModal()  @ 1004
+    @fn drawModal()  @ 1013
         @map:contract  callback runs under pcall; an exception is logged to the REAPER console and does not abort the frame
-    @fn close(invoke, ...)  @ 1019
-    @fn scaleBy(factor)  @ 1047   -- Mutating rowsBuf externally is invisible to an active InputText, which caches its own buff
-    @fn pressedAny(specs)  @ 1054
-    @fn openPrompt(title, prompt, callback)  @ 1118
-    @fn openConfirm(title, callback, prompt)  @ 1123
-    @fn scopedAction(title, base)  @ 1136   -- Naming convention <base>Selection / <base>All is the contract.
+    @fn close(invoke, ...)  @ 1028
+    @fn scaleBy(factor)  @ 1056   -- Mutating rowsBuf externally is invisible to an active InputText, which caches its own buff
+    @fn pressedAny(specs)  @ 1063
+    @fn openPrompt(title, prompt, callback)  @ 1127
+    @fn openConfirm(title, callback, prompt)  @ 1132
+    @fn scopedAction(title, base)  @ 1145   -- Naming convention <base>Selection / <base>All is the contract.
         @map:contract  requires vm to expose both `<base>Selection` and `<base>All` methods
 
   # Public API
@@ -101,15 +100,15 @@
     -- Lane strip
     -- Input
     -- Modal-driven commands
-    @api tp:renderToolbarBits(_)  @ 1211
-    @api tp:renderBody(_, w, h, dispatch)  @ 1217
+    @api tp:renderToolbarBits(_)  @ 1220
+    @api tp:renderBody(_, w, h, dispatch)  @ 1226
         @map:contract  calls computeLayout twice — lane-strip drag callbacks may flush vm.grid.cols and clear col.x; second pass repopulates layout for drawTracker
-    @api tp:renderStatusBar(_)  @ 1238
-    @api tp:renderFloating(_)  @ 1242
-    @api tp:bind(t)  @ 1247
+    @api tp:renderStatusBar(_)  @ 1247
+    @api tp:renderFloating(_)  @ 1251
+    @api tp:bind(t)  @ 1256
         @map:contract  bind/unbind drive tm:bindTake — the page owns the cm/mm context swap for its own stack
-    @api tp:unbind()  @ 1248
-    @api tp:focusState()  @ 1258
+    @api tp:unbind()  @ 1257
+    @api tp:focusState()  @ 1267
         -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
         -- acceptCmds:  the page is visible and nothing inside it is currently
         --   consuming a keystroke. We deliberately don't gate on which child
@@ -117,9 +116,9 @@
         --   transiently, but bound commands should still fire. Anything that
         --   genuinely needs the keys (a focused InputText, an active slider,
         --   a held button) shows up as IsAnyItemActive.
-    @api tp:handleInput()  @ 1267
-    @api tp:save()  @ 1268
-    @api tp:load()  @ 1269
+    @api tp:handleInput()  @ 1276
+    @api tp:save()  @ 1277
+    @api tp:load()  @ 1278
 
   # REAPER API surface
     @reaper ShowConsoleMsg

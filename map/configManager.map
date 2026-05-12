@@ -1,5 +1,4 @@
-@module configManager  src=configManager.lua  loc=440  sha=ee85a77
-@deps util
+@module configManager  src=configManager.lua  loc=441  sha=e00431d
 
 # Invariants & contracts (module)
   @map:invariant  cm is the sole source of truth for valid keys; in-code reads/writes raise on unknown keys, persistence-loaded unknowns are silently pruned
@@ -20,72 +19,72 @@
 # Module-level functions (private)
   @fn print(...)  @ 16
   @fn hex(s, alpha)  @ 20
-  @fn copy(v)  @ 141
+  @fn copy(v)  @ 142
 
-@factory newConfigManager()  @ 148
+@factory newConfigManager()  @ 149
   @map:contract  caches are lazy: first getter call triggers refreshCache; setContext/setTrack refresh eagerly
   @map:contract  no take context means track context is also dropped (track derived from take in setContext)
 
   # Private state
-    @state CONFIG_PREFIX = 'ctm_'  @ 152
-    @state SCRIPT_PATH = debug.getinfo(1,'S').source:match[[^@?(.*[\/])[^\/]-$]]  @ 153
-    @state CONFIG_GLOBAL_PATH = SCRIPT_PATH .. 'ctm_cfg.txt'  @ 154
-    @state take = nil  @ 156
-    @state track = nil  @ 157
-    @state fire  @ 158   -- installed below, once cm exists
-    @state cache = {  @ 160
-    @state levels = { 'global', 'project', 'track', 'take', 'transient' }  @ 168
-    @state levelSet = {}  @ 170
-    @state loaders = {  @ 248
-    @state savers = {  @ 256
-    @state cm = {}  @ 303
+    @state CONFIG_PREFIX = 'ctm_'  @ 153
+    @state SCRIPT_PATH = debug.getinfo(1,'S').source:match[[^@?(.*[\/])[^\/]-$]]  @ 154
+    @state CONFIG_GLOBAL_PATH = SCRIPT_PATH .. 'ctm_cfg.txt'  @ 155
+    @state take = nil  @ 157
+    @state track = nil  @ 158
+    @state fire  @ 159   -- installed below, once cm exists
+    @state cache = {  @ 161
+    @state levels = { 'global', 'project', 'track', 'take', 'transient' }  @ 169
+    @state levelSet = {}  @ 171
+    @state loaders = {  @ 249
+    @state savers = {  @ 257
+    @state cm = {}  @ 304
 
   # Private functions
-    @fn pruneUnknown(tbl)  @ 176   -- Tolerant on load: stale keys from a rename shouldn't error.
-    @fn parse(text)  @ 184
+    @fn pruneUnknown(tbl)  @ 177   -- Tolerant on load: stale keys from a rename shouldn't error.
+    @fn parse(text)  @ 185
         @map:contract  parse failures (bad text or non-table result) fall through to {}; never raises
-    @fn loadGlobal()  @ 191
-    @fn saveGlobal(tbl)  @ 199
-    @fn loadProject()  @ 209
-    @fn saveProject(tbl)  @ 214
-    @fn loadTrack()  @ 218
-    @fn saveTrack(tbl)  @ 225
-    @fn loadTake()  @ 234
-    @fn saveTake(tbl)  @ 240
-    @fn refreshCache()  @ 266
-    @fn ensureCache()  @ 272
-    @fn mergedTable()  @ 277
+    @fn loadGlobal()  @ 192
+    @fn saveGlobal(tbl)  @ 200
+    @fn loadProject()  @ 210
+    @fn saveProject(tbl)  @ 215
+    @fn loadTrack()  @ 219
+    @fn saveTrack(tbl)  @ 226
+    @fn loadTake()  @ 235
+    @fn saveTake(tbl)  @ 241
+    @fn refreshCache()  @ 267
+    @fn ensureCache()  @ 273
+    @fn mergedTable()  @ 278
         @map:contract  starts from schema defaults, then overlays each level's cache in `levels` order so later (more-specific) tiers win
-    @fn checkLevel(level)  @ 289
-    @fn checkKey(key)  @ 295
+    @fn checkLevel(level)  @ 290
+    @fn checkKey(key)  @ 296
 
   # Public API
     -- PRIVATE DATA
     -- STORAGE BACKENDS
     -- CACHE MANAGEMENT
     -- PUBLIC INTERFACE
-    @api cm:setContext(newTake)  @ 308
+    @api cm:setContext(newTake)  @ 309
         @map:contract  setContext(nil) clears both take and track; setContext(take) derives track via GetMediaItemTrack
         @map:contract  refreshes all four persisted caches (transient resets to {}) and fires configChanged with empty payload
-    @api cm:clearTake()  @ 324
-    @api cm:setTrack(newTrack)  @ 331
+    @api cm:clearTake()  @ 325
+    @api cm:setTrack(newTrack)  @ 332
     -- Reading
-    @api cm:get(key)  @ 341
+    @api cm:get(key)  @ 342
         @map:contract  returns deep copy of merged value (defaults overlaid by all five tiers); raises on unknown key
-    @api cm:getAt(level, key)  @ 347
+    @api cm:getAt(level, key)  @ 348
         @map:contract  reads single tier only (no merge, no defaults); key omitted returns whole-cache deep clone; raises on unknown level/key
-    @api cm:readTrackKey(otherTrack, key)  @ 359
+    @api cm:readTrackKey(otherTrack, key)  @ 360
         @map:contract  bypasses cache and active context; reads otherTrack's P_EXT directly without firing configChanged or disturbing the bound track's cache
-    @api cm:readTakeKey(otherTake, key)  @ 370
+    @api cm:readTakeKey(otherTake, key)  @ 371
         @map:contract  bypasses cache and active context; reads otherTake's P_EXT directly without firing configChanged or disturbing the bound take's cache
-    @api cm:getLevel(key)  @ 381
+    @api cm:getLevel(key)  @ 382
         @map:contract  walks tiers most-specific to least, returning the first level whose cache defines the key (matches merge resolution); nil if no tier sets it
     -- Writing
-    @api cm:set(level, key, value)  @ 396
+    @api cm:set(level, key, value)  @ 397
         @map:contract  deep-copies value into the target tier's cache, persists that tier, fires targeted configChanged
-    @api cm:remove(level, key)  @ 409
+    @api cm:remove(level, key)  @ 410
         @map:contract  removes key from the named tier only; no-op (and no signal) if that tier's cache is unloaded
-    @api cm:assign(level, updates)  @ 423
+    @api cm:assign(level, updates)  @ 424
         @map:contract  validates every key in updates before any write (all-or-nothing); util.REMOVE sentinel deletes that key; fires keyless configChanged
 
   # Signals emitted (via util.installHooks)

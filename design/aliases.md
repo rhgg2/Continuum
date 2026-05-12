@@ -1,7 +1,18 @@
 # Aliases — pooled events with transformations
 
-A working design doc for the alias/pooled-event feature. Future
-`docs/aliases.md` is distilled from this once code lands.
+A working design doc for the alias/pooled-event feature. The
+steady-state model now lives in `docs/aliases.md`; this file is
+preserved for the rationale and historical record.
+
+> **Status.** Post-addressing-refactor (see
+> `design/alias_addressing.md`), spec-node `id`, root `aliasCtr`, and
+> materialised `specPath` are all gone. Addressing in memory is by
+> table identity via tm's `specOf` / `nodeMeta` side tables; addressing
+> across copy/paste is by integer-array `specIdx`. Sections below that
+> refer to `id` / `aliasCtr` / dotted-base36 `specPath` describe the
+> initial design and do not reflect current code. The behavioural
+> contract — composition, suppression, severance semantics, the
+> routing roles — is unchanged.
 
 An **alias** is a copy of an existing event that follows its source under
 a stored transformation. When the source mutates, the alias is

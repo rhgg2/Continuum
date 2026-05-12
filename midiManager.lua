@@ -6,7 +6,7 @@
 --@map:invariant muted is true-or-absent; false is coerced to nil on every write path; callers pass muted=false to clear
 --@map:invariant per-event metadata (fields beyond the structural set) is persisted to take extension data via util:serialise; loaded back via util:unserialise on take read
 
-loadModule('util')
+require 'util'
 
 local function print(...)
   return util.print(...)

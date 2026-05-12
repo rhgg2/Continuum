@@ -3,7 +3,7 @@
 -- in plain Lua tables, locations are reassigned after every modify to
 -- mirror the post-reload renumbering that tm relies on.
 
-loadModule('util')
+require 'util'
 
 local INTERNALS = { idx = true, uuidIdx = true }
 

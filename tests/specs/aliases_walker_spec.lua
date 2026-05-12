@@ -10,9 +10,12 @@ local function byParent(list, uuid)
   return out
 end
 
-local function specPaths(list)
+local function specPaths(h, list)
   local out = {}
-  for _, e in ipairs(list) do out[#out+1] = e.specPath end
+  for _, e in ipairs(list) do
+    local idx = h.tm:specPathOf(e)
+    out[#out+1] = idx and table.concat(idx, '.') or '<root>'
+  end
   table.sort(out)
   return out
 end
@@ -44,7 +47,7 @@ return {
       t.eq(kids[1].endppq, 720)         -- dur preserved at 240
       t.eq(kids[1].pitch,  60)
       t.eq(kids[1].vel,    100)
-      t.eq(kids[1].specPath, '1')
+      t.deepEq(h.tm:specPathOf(kids[1]), {1})
     end,
   },
 
@@ -69,9 +72,11 @@ return {
       }
       local kids = byParent(h.fm:dump().notes, 1)
       t.eq(#kids, 3)
-      t.deepEq(specPaths(kids), { '1', '1.1', '1.1.1' })
+      t.deepEq(specPaths(h, kids), { '1', '1.1', '1.1.1' })
       local byPath = {}
-      for _, k in ipairs(kids) do byPath[k.specPath] = k end
+      for _, k in ipairs(kids) do
+        byPath[table.concat(h.tm:specPathOf(k), '.')] = k
+      end
       t.eq(byPath['1'    ].ppq, 200);  t.eq(byPath['1'    ].vel, 100)
       t.eq(byPath['1.1'  ].ppq, 400);  t.eq(byPath['1.1'  ].vel, 100)
       t.eq(byPath['1.1.1'].ppq, 401);  t.eq(byPath['1.1.1'].vel, 110)
@@ -205,7 +210,7 @@ return {
       }
       local kids = byParent(h.fm:dump().notes, 1)
       t.eq(#kids, 1)
-      t.eq(kids[1].specPath, '1.1')
+      t.deepEq(h.tm:specPathOf(kids[1]), {1,1})
       t.eq(kids[1].ppq,    960)
       t.eq(kids[1].endppq, 1200)
     end,
@@ -215,7 +220,7 @@ return {
   -- Metadata fields surface on materialised events
   --------------------------------------------------------------------
   {
-    name = 'metadata: parentUuid and specPath ride on the materialised note',
+    name = 'metadata: parentUuid rides on the materialised note; specPath is derived via tm',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { rootNote{
@@ -227,7 +232,8 @@ return {
       }
       local kids = byParent(h.fm:dump().notes, 1)
       t.eq(kids[1].parentUuid, 1)
-      t.eq(kids[1].specPath,   '1')
+      t.eq(kids[1].specPath, nil, 'specPath no longer persisted on the materialised event')
+      t.deepEq(h.tm:specPathOf(kids[1]), {1})
     end,
   },
 

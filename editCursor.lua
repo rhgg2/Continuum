@@ -18,8 +18,8 @@
 --@map:shape clipColEntry = { type, chanDelta, key, events=[clipEvent,...] }   -- key: note=lane-pos, cc=cc#, singleton=nil
 --@map:shape clipEvent = source-event minus CLIP_RESERVED, plus { row, [endRow] }   -- row is 0-relative to clip top
 
-loadModule('util')
-loadModule('aliases')
+require 'util'
+require 'aliases'
 
 local function print(...)
   return util.print(...)
@@ -528,14 +528,15 @@ local CLIP_RESERVED = {
   loc = true, idx = true, uuid = true, uuidIdx = true,
   -- envelope-level
   type = true, msgType = true,
-  -- alias materialisation metadata: a fresh paste gets fresh parentUuid +
-  -- specPath from the rebuild walker if it's aliased, or none if it isn't.
+  -- alias materialisation metadata: a fresh paste gets fresh parentUuid
+  -- from the rebuild walker if it's aliased, or none if it isn't.
   -- aliasSrc carries the source identity through the clip; the writer at
   -- paste time decides whether to honour or strip it (alias vs plain mode).
-  parentUuid = true, specPath = true,
+  parentUuid = true,
   -- root-only spec-tree state. A pasted event is never a continuation of the
   -- source root; aliased-mode propagation is handled explicitly via aliasSrc
-  -- and the family-paste machinery.
+  -- and the family-paste machinery. aliasCtr is a vestigial counter on test
+  -- seeds; strip it at the clip boundary so paste outcomes are clean.
   aliases = true, aliasCtr = true,
 }
 -- Clip-only fields stripped before a paste materialises into a write event.
@@ -568,15 +569,18 @@ function newClipboard(deps)
     return util.unserialise(raw)
   end
 
-  --@map:contract '' as the empty / root prefix; nil parent is also an ancestor of any non-nil child specPath.
-  local function isStrictAncestor(parentPath, childPath)
-    if childPath == nil then return false end
-    if parentPath == nil then return true end
-    if parentPath == childPath then return false end
-    return childPath:sub(1, #parentPath + 1) == parentPath .. '.'
+  --@map:contract integer-array specIdx form; nil parent is an ancestor of any non-nil child specIdx. Strict: equal arrays are not ancestors.
+  local function isStrictAncestor(parent, child)
+    if child == nil then return false end
+    if parent == nil then return true end
+    if #parent >= #child then return false end
+    for i = 1, #parent do
+      if parent[i] ~= child[i] then return false end
+    end
+    return true
   end
 
-  --@map:contract walks every clip event (single mode: clip.events; multi: clip.cols[i].events) and stamps `aliasSrc.clipId` (1-based, dense across the whole clip). For each aliased event, finds the closest in-clip ancestor (same root uuid, longest specPath that's a strict prefix) and records `aliasSrc.parentClipId`. Then snapshots the structural xform list from family-parent's specPath down to and including this event's specPath via tm:pathXform, stored as `aliasSrc.pathXform`. This is the data paste-time aliasWriter consumes to attach a child under its in-clip parent's freshly-pasted spec node — robust against later spec-tree edits because xforms are captured at copy. Always runs: aliasSrc is captured unconditionally so the paste-time mode can choose freely.
+  --@map:contract stamps every aliasSrc with a dense clipId; for each event, records parentClipId (nearest in-clip ancestor) and pathXform (concatenated xforms from family parent down). Paste's aliasWriter consumes both to reattach descendants under their in-clip parent. Always runs — paste-time mode chooses. See docs/aliases.md.
   local function resolveAliasFamily(clip)
     local all = {}
     if clip.mode == 'single' then
@@ -597,20 +601,20 @@ function newClipboard(deps)
         for _, other in ipairs(all) do
           local o = other.aliasSrc
           if o and other ~= e and o.uuid == s.uuid
-             and isStrictAncestor(o.specPath, s.specPath) then
-            local len = o.specPath and #o.specPath or 0
+             and isStrictAncestor(o.specIdx, s.specIdx) then
+            local len = o.specIdx and #o.specIdx or 0
             if len > bestLen then bestSrc, bestLen = o, len end
           end
         end
         if bestSrc then
           s.parentClipId = bestSrc.clipId
-          s.pathXform    = tm:pathXform(s.uuid, bestSrc.specPath, s.specPath) or {}
+          s.pathXform    = tm:pathXform(s.uuid, bestSrc.specIdx, s.specIdx) or {}
         end
       end
     end
   end
 
-  --@map:contract returns nil if the resolved selection is empty (no events); single-col emits {mode='single',type,...}, multi-col emits {mode='multi',cols=[...]}; aliasSrc is always captured per event — the paste-time mode (getAliasMode) selects writer. cut behaves the same way as copy here: the deletion-fallback path in aliasWriter demotes it to a plain write at paste time once byUuid fails.
+  --@map:contract nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }. aliasSrc is always captured per event — paste-time mode selects writer. cut follows the same path; deletion-fallback demotes at paste once byUuid fails.
   local function collect()
     local ctx = getCtx()
     local r1, r2, c1, c2, part1 = ec:region()
@@ -622,17 +626,22 @@ function newClipboard(deps)
     end
 
     -- aliasSrc anchors the source in the spec tree; position/chan/lane are
-    -- reconstructed at paste from row + destination column.
+    -- reconstructed at paste from row + destination column. specIdx is the
+    -- integer-array spec path, derived live via tm:specPathOf (the field
+    -- no longer rides on the materialised event).
     local function aliasSrcOf(evt)
-      local chain
-      if evt.parentUuid and evt.specPath then
-        local snap = tm:aliasSrcSnapshot(evt.parentUuid, evt.specPath)
-        if snap then chain = snap.chain end
+      local chain, idx
+      if evt.parentUuid and evt.uuid then
+        idx = tm:specPathOf(evt)
+        if idx then
+          local snap = tm:aliasSrcSnapshot(evt.parentUuid, idx)
+          if snap then chain = snap.chain end
+        end
       end
       return {
-        uuid     = evt.parentUuid or evt.uuid,
-        specPath = evt.specPath,
-        chain    = chain,
+        uuid    = evt.parentUuid or evt.uuid,
+        specIdx = idx,
+        chain   = chain,
       }
     end
 
@@ -781,7 +790,7 @@ function newClipboard(deps)
   -- fallbacks (root or spec node simply gone) demote silently. pasteClip
   -- resets, runs paste, drains pending, and reads the count.
   local demotedCount = 0
-  local outcomes      -- clipId -> { kind='alias', uuid, specPath, evt } or { kind='plain', evt }
+  local outcomes      -- clipId -> { kind='alias', uuid, specIdx, evt } or { kind='plain', evt }
   local pending       -- list of { evtType, e } awaiting their family parent
 
   local function plainWriter(evtType, e)
@@ -797,7 +806,7 @@ function newClipboard(deps)
     if not (src and src.uuid) then
       tm:addEvent(evtType, e); return { kind='plain', evt=e }
     end
-    local r = tm:resolveAliasSrc(src.uuid, src.specPath, src.chain, evtType)
+    local r = tm:resolveAliasSrc(src.uuid, src.specIdx, src.chain, evtType)
     if not r then
       tm:addEvent(evtType, e); return { kind='plain', evt=e }
     end
@@ -839,15 +848,15 @@ function newClipboard(deps)
         xform.pitch = {{'add', dst.pitch - liveSrc.pitch}}
       end
     end
-    local newPath = tm:createAlias(src.uuid, src.specPath, xform, nil, true)
-    if newPath then
-      return { kind='alias', uuid=src.uuid, specPath=newPath, evt=e }
+    local newIdx = tm:createAlias(src.uuid, src.specIdx, xform, nil, true)
+    if newIdx then
+      return { kind='alias', uuid=src.uuid, specIdx=newIdx, evt=e }
     end
     tm:addEvent(evtType, e)
     return { kind='plain', evt=e }
   end
 
-  --@map:contract dispatches by family-relation. Events with no parentClipId go through writeAsRoot (today's resolve-and-corrective-delta path). Children with a captured parentClipId attach via tm:createAlias against the parent's recorded outcome (alias parent → under parent's new specPath; plain parent → top-level on the parent's mm uuid, set post-flush via the addNote uuid writeback). If the parent hasn't fired yet, its plain mm uuid isn't yet realised, or createAlias fails (most commonly because the parent's spec mutation hasn't been flushed and the parent's specPath isn't yet visible to mm), the event is deferred to `pending` for the next drain wave. Outcomes are recorded under aliasSrc.clipId for downstream children to pick up.
+  --@map:contract dispatches by family relation. No parentClipId → writeAsRoot (resolve-and-corrective-delta). With parentClipId → tm:createAlias under the parent's recorded outcome (alias → parent's new specIdx; plain → parent's mm uuid post-flush). Defers to `pending` if the parent isn't ready. Outcomes keyed by aliasSrc.clipId. See docs/aliases.md.
   local function aliasWriter(evtType, e)
     local src = e.aliasSrc
     local pid = src and src.parentClipId
@@ -858,17 +867,17 @@ function newClipboard(deps)
         pending[#pending + 1] = { evtType = evtType, e = e }
         return
       end
-      local rootUuid, underPath
+      local rootUuid, underIdx
       if parentRes.kind == 'alias' then
-        rootUuid, underPath = parentRes.uuid, parentRes.specPath
+        rootUuid, underIdx = parentRes.uuid, parentRes.specIdx
       else
-        rootUuid, underPath = parentRes.evt.uuid, nil
+        rootUuid, underIdx = parentRes.evt.uuid, nil
       end
-      local newPath = tm:createAlias(rootUuid, underPath, src.pathXform or {}, nil, true)
-      if newPath then
+      local newIdx = tm:createAlias(rootUuid, underIdx, src.pathXform or {}, nil, true)
+      if newIdx then
         e.aliasSrc = nil
         if src.clipId then
-          outcomes[src.clipId] = { kind='alias', uuid=rootUuid, specPath=newPath, evt=e }
+          outcomes[src.clipId] = { kind='alias', uuid=rootUuid, specIdx=newIdx, evt=e }
         end
         return
       end

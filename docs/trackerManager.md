@@ -338,6 +338,25 @@ and pushes it via `tm:setMutedChannels(set)`. tm:
 Mute state is a vm-side concern — it **does not** trigger a structural
 rebuild (see `vmOnlyKeys`).
 
+## Aliases
+
+tm holds the alias substrate: the spec-tree walker that runs inside
+`rebuild`, two side tables (`specOf` keyed by uuid, `nodeMeta` keyed
+by spec-node identity) for in-memory navigation, and the routing /
+severance / cascade-delete primitives consumed by vm. The model and
+the contract for each primitive are in `docs/aliases.md`. Two
+tm-local commitments worth recording here:
+
+- **Side-table lifetime.** Both maps are cleared at the head of every
+  `rebuild` and rebuilt by the walker. They never persist. Code outside
+  tm reaches them only through `tm:specOf` / `tm:nodeMeta`; reaching
+  past those accessors couples to the rebuild boundary.
+- **Mutation primitives flush nothing.** `tm:routeRelative`,
+  `tm:severBatch`, `tm:sever`, `tm:deleteAliased`, `tm:createAlias`
+  stage ops on `um` and return. The caller drives a single `tm:flush`
+  across a batch, so a structural delete that promotes ten children
+  flushes once.
+
 ## Conventions
 
 - **Channels 1..16**, inherited from mm.

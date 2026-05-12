@@ -12,8 +12,8 @@
 --@map:shape state = { name, snapshot, createBuf, createError, rpb, wild, lastCount, lastW }  -- composite is NOT cached here
 --@map:shape PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
 
-loadModule('util')
-loadModule('timing')
+require 'util'
+require 'timing'
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)

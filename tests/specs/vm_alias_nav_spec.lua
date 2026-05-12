@@ -29,7 +29,8 @@ end
 
 local function findChildBySpecPath(h, path)
   for _, n in ipairs(h.fm:dump().notes) do
-    if n.specPath == path then return n end
+    local idx = h.tm:specPathOf(n)
+    if idx and table.concat(idx, '.') == path then return n end
   end
 end
 

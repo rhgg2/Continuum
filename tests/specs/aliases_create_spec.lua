@@ -382,10 +382,9 @@ return {
 
       local root = rootByUuid(h.fm:dump().notes, 1)
       local twelve = root.aliases[1].children[1]
-      t.eq(#twelve.children, 2, 'original "1.2.3" plus the new sibling')
-      local fresh
-      for _, c in ipairs(twelve.children) do if c.id == '4' then fresh = c end end
-      t.truthy(fresh, 'new spec node "1.2.4" allocated')
+      t.eq(#twelve.children, 2, 'original child plus the newly-pasted sibling')
+      local fresh = twelve.children[2]   -- append-position identity (post-Phase C)
+      t.truthy(fresh, 'new spec node appended under twelve')
       t.deepEq(fresh.xform.ppqL, {{'add', 4 * lpr}},
                '+4 rows relative to source ppqL=2*lpr')
       t.eq(#fresh.children, 0, 'new sibling is a leaf — descendants of the source not carried')

@@ -1,5 +1,4 @@
-@module sequenceManager  src=sequenceManager.lua  loc=44  sha=ee85a77
-@deps util
+@module sequenceManager  src=sequenceManager.lua  loc=44  sha=b430243
 
 # Invariants & contracts (module)
   @map:invariant  project-wide singleton; pure orchestration over tm/vm/cm — owns no take state of its own

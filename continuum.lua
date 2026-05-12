@@ -6,29 +6,28 @@
 --@map:invariant no teardown path — coord:quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload
 --@map:invariant errors inside the defer loop surface through the same xpcall frame because each iteration reschedules itself
 
-function loadModule(module)
-  local info = debug.getinfo(1,'S')
-  local script_path = info.source:match[[^@?(.*[\/])[^\/]-$]]
-  require(script_path .. module)
+do
+  local script_path = debug.getinfo(1,'S').source:match[[^@?(.*[\/])[^\/]-$]]
+  package.path = script_path .. '?.lua;' .. package.path
 end
 
-loadModule('util')
-loadModule('fs')
-loadModule('configManager')
-loadModule('midiManager')
-loadModule('aliases')
-loadModule('trackerManager')
-loadModule('commandManager')
-loadModule('editCursor')
-loadModule('trackerView')
-loadModule('sampleManager')
-loadModule('sampleView')
-loadModule('swingEditor')
-loadModule('sequenceManager')
-loadModule('curveEditor')
-loadModule('chrome')
-loadModule('trackerPage')
-loadModule('samplePage')
+require 'util'
+require 'fs'
+require 'configManager'
+require 'midiManager'
+require 'aliases'
+require 'trackerManager'
+require 'commandManager'
+require 'editCursor'
+require 'trackerView'
+require 'sampleManager'
+require 'sampleView'
+require 'swingEditor'
+require 'sequenceManager'
+require 'curveEditor'
+require 'chrome'
+require 'trackerPage'
+require 'samplePage'
 
 local ImGui = require 'imgui' '0.10'
 

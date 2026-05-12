@@ -1,5 +1,4 @@
 @module samplePage  src=samplePage.lua  loc=651  sha=ee85a77
-@deps fs
 
 # Invariants & contracts (module)
   @map:invariant  render-only: persistent state lives in sampleView (selection/folder/track), configManager (slotEntries, currentSample, previewInPlace), and sampleManager (JSFX); only frame-local caches and ephemeral drag/preview state live here

@@ -9,10 +9,10 @@
 --@map:invariant column events are sorted by intent ppq; endppq is intent at every layer (delay shifts only the note-on)
 --@map:invariant 16 channels always present; channels[i] non-nil for i in 1..16 after rebuild
 
-loadModule('util')
-loadModule('midiManager')
-loadModule('timing')
-loadModule('aliases')
+require 'util'
+require 'midiManager'
+require 'timing'
+require 'aliases'
 
 local function print(...)
   return util.print(...)
@@ -76,8 +76,8 @@ local function slotKey(evt)
 end
 
 local SEED_EXCLUDE = {
-  aliases = true, aliasCtr = true,
-  uuid = true, parentUuid = true, specPath = true,
+  aliases = true,
+  uuid = true, parentUuid = true,
   loc = true,
 }
 
@@ -104,14 +104,13 @@ function newTrackerManager(mm, cm)
   ---------- PRIVATE
 
   local channels = {}
-  local tm    -- forward-declared so um's closures capture it as upvalue
-  local fire  -- installed below, once tm exists
-  local um    -- update manager; set by tm:rebuild
+  local um    -- forward-declared so tm:* methods capture it; rebuild reassigns
   local lastMuteSet = {}  -- { [chan] = true }, pushed by vm via tm:setMutedChannels
   --@map:invariant pendingFlushUuids: uuid-set of notes touched by the in-flight um:flush; read by allocateNoteColumn to attribute lane overlaps; nil outside a flush-driven rebuild
   local pendingFlushUuids
-  --@map:invariant aliasIndex: { byUuid = { [uuid] = {evt, chan} }, byParent = { [parentUuid] = [{evt, chan}, ...] sorted (ppq, chan) } }; rebuilt at the tail of tm:rebuild from column-projected events; empty tables when no aliases exist
-  local aliasIndex = { byUuid = {}, byParent = {} }
+  --@map:invariant specOf[uuid]=SpecNode; nodeMeta[node]={parent, uuid}. Cleared at rebuild head, populated by walker. parent=nil → top-level; uuid=nil → suppressed. See docs/aliases.md.
+  local specOf   = {}
+  local nodeMeta = {}
   --@map:invariant staleSwing[chan]=true: this channel's resolved swing changed; rebuild rule rederives raw from ppqL and clears
   local staleSwing = {}
 
@@ -130,6 +129,103 @@ function newTrackerManager(mm, cm)
   end
 
   local function delayToPPQ(d) return timing.delayToPPQ(d, mm:resolution()) end
+
+  ----- Column allocation
+
+  local function pushNoteCol(channel)
+    local notes = channel.columns.notes
+    return util.add(notes, { events = {} }), #notes
+  end
+
+  --@map:contract returns (true) on accept; (false, conflictEvt) when the refusal is the bump-prone overlap case (threshold exceeded, or coincident onset); (false) on the dominated-by-two refusal, which is structural rather than bug-attributable
+  local function noteColumnAccepts(col, note)
+    local lenient = cm:get('overlapOffset') * mm:resolution()
+    local noteppqI    = note.ppq - delayToPPQ(note.delay or 0)
+    local noteEndppqI = note.endppq
+    local dominated = 0
+    for _, evt in ipairs(col.events) do
+      local evtppqI = evt.ppq - delayToPPQ(evt.delay or 0)
+      if noteppqI == evtppqI then return false, evt end
+      if noteppqI < evt.endppq and evtppqI < noteEndppqI then
+        local threshold = (evt.pitch == note.pitch) and 0 or lenient
+        local overlapAmount = math.min(evt.endppq, noteEndppqI) - math.max(evtppqI, noteppqI)
+        if overlapAmount > threshold then return false, evt end
+        dominated = dominated + 1
+      end
+    end
+    if dominated >= 2 then return false end
+    return true
+  end
+
+  local function warnLaneOverlap(note, conflict)
+    local touched = pendingFlushUuids or {}
+    local count = 0
+    for _ in pairs(touched) do count = count + 1 end
+    local who = (touched[note.uuid] and touched[conflict.uuid] and 'both')
+             or (touched[note.uuid] and 'incoming')
+             or 'existing'
+    print(string.format(
+      'tm: lane overlap kept (chan=%d lane=%d): incoming pitch=%d ppq=%d..%d vs existing pitch=%d ppq=%d..%d; touched=%d (%s)',
+      note.chan, note.lane,
+      note.pitch, note.ppq, note.endppq,
+      conflict.pitch, conflict.ppq, conflict.endppq,
+      count, who))
+  end
+
+  --@map:contract requested-lane refusals attributable to the in-flight flush (incoming or conflicting note's uuid in pendingFlushUuids) keep the overlap and log a warning, surfacing the bug rather than silently bumping; refusals not attributable, and lane-less adds, fall through to sibling-search bumping unchanged
+  local function allocateNoteColumn(channel, note)
+    local notes = channel.columns.notes
+    if note.lane then
+      local col = notes[note.lane]
+      if col then
+        local ok, conflict = noteColumnAccepts(col, note)
+        if ok then return col, note.lane end
+        if conflict and pendingFlushUuids
+           and (pendingFlushUuids[note.uuid] or pendingFlushUuids[conflict.uuid]) then
+          warnLaneOverlap(note, conflict)
+          return col, note.lane
+        end
+      end
+      if not col then
+        while #notes < note.lane do pushNoteCol(channel) end
+        return notes[note.lane], note.lane
+      end
+    end
+    for i, col in ipairs(notes) do
+      if noteColumnAccepts(col, note) then return col, i end
+    end
+    return pushNoteCol(channel)
+  end
+
+  local function findNoteColumnForPitch(channel, pitch, ppq_pos)
+    local notes = channel.columns.notes
+    for _, col in ipairs(notes) do
+      for _, evt in ipairs(col.events) do
+        if evt.endppq and evt.pitch == pitch and evt.ppq <= ppq_pos and evt.endppq > ppq_pos then
+          return col
+        end
+      end
+    end
+    for _, col in ipairs(notes) do
+      for _, evt in ipairs(col.events) do
+        if evt.pitch == pitch then return col end
+      end
+    end
+  end
+
+  local CC_PROJECT_STRIP = { chan = true, msgType = true, cc = true }
+
+  local function projectCC(cc, loc, overlay)
+    local evt = util.clone(cc, CC_PROJECT_STRIP)
+    evt.loc = loc
+    if overlay then util.assign(evt, overlay) end
+    return evt
+  end
+
+  ---------- PUBLIC
+
+  local tm = {}
+  local fire = util.installHooks(tm)
 
   ----- Update manager
 
@@ -206,19 +302,16 @@ function newTrackerManager(mm, cm)
     --@map:contract only lane==1 notes index into chans[chan].notes; higher-lane notes get queued for mm but don't feed detune/realisation reads
     local function addLowlevel(evtType, evt)
       if evtType == 'note' then
-        local col1 = evt.lane == 1
-        if col1 then
+        if evt.lane == 1 then
           local tbl = chans[evt.chan].notes
-          util.add(tbl, evt)
-          sortByPPQ(tbl)
+          util.add(tbl, evt); sortByPPQ(tbl)
         end
-      elseif evtType == 'pb' then
-        local tbl = chans[evt.chan].pbs
-        evt.msgType = 'pb'
-        util.add(tbl, evt)
-        sortByPPQ(tbl)
       else
         evt.msgType = evtType
+        if evtType == 'pb' then
+          local tbl = chans[evt.chan].pbs
+          util.add(tbl, evt); sortByPPQ(tbl)
+        end
       end
       util.add(adds, { type = evtType, evt = evt })
     end
@@ -584,14 +677,19 @@ function newTrackerManager(mm, cm)
       c.pc = { events = desired }
     end
 
+    local function lookup(evtType, evtOrLoc)
+      local loc = type(evtOrLoc) == 'table' and evtOrLoc.loc or evtOrLoc
+      if not loc then return end
+      return (evtType == 'note' and notesByLoc[loc] or ccsByLoc[loc]), loc
+    end
+
     ----- Public interface
 
     local um = {}
 
     function um:deleteEvent(evtType, evtOrLoc)
-      local loc = type(evtOrLoc) == 'table' and evtOrLoc.loc or evtOrLoc
+      local evt, loc = lookup(evtType, evtOrLoc)
       if not loc then return end
-      local evt = evtType == 'note' and notesByLoc[loc] or ccsByLoc[loc]
 
       if evtType == 'note' then
         if evt then deleteNote(evt) end
@@ -640,10 +738,21 @@ function newTrackerManager(mm, cm)
       update.ppq  = util.round(tm:swingSnapshot().fromLogical(chan, update.ppqL))
     end
 
+    local function realiseAddPpq(evt, withDelay, withEnd)
+      if evt.ppq == nil or not evt.chan then return end
+      local snap = tm:swingSnapshot()
+      evt.ppqL = evt.ppq
+      evt.ppq  = util.round(snap.fromLogical(evt.chan, evt.ppqL))
+               + (withDelay and delayToPPQ(evt.delay or 0) or 0)
+      if withEnd and evt.endppq ~= nil then
+        evt.endppqL = evt.endppq
+        evt.endppq  = util.round(snap.fromLogical(evt.chan, evt.endppqL))
+      end
+    end
+
     function um:assignEvent(evtType, evtOrLoc, update)
-      local loc = type(evtOrLoc) == 'table' and evtOrLoc.loc or evtOrLoc
+      local evt, loc = lookup(evtType, evtOrLoc)
       if not loc then return end
-      local evt = evtType == 'note' and notesByLoc[loc] or ccsByLoc[loc]
 
       if evtType == 'note' then
         if evt then
@@ -681,38 +790,19 @@ function newTrackerManager(mm, cm)
         evt.detune = evt.detune or 0
         evt.delay  = evt.delay  or 0
         evt.lane   = evt.lane   or 1
-        if not rawCaller and evt.ppq ~= nil and evt.chan then
-          local snap = tm:swingSnapshot()
-          evt.ppqL = evt.ppq
-          evt.ppq  = util.round(snap.fromLogical(evt.chan, evt.ppqL)) + delayToPPQ(evt.delay)
-          if evt.endppq ~= nil then
-            evt.endppqL = evt.endppq
-            evt.endppq  = util.round(snap.fromLogical(evt.chan, evt.endppqL))
-          end
-        end
+        if not rawCaller then realiseAddPpq(evt, true, true) end
         local clamped, clampedL =
           clearSameKeyRange(evt.chan, evt.pitch, evt.ppq, evt.endppq, evt.ppqL, evt)
         evt.endppq = clamped
         if clampedL then evt.endppqL = clampedL end
         addNote(evt)
-      elseif evtType == 'pb' then
-        if not rawCaller and evt.ppq ~= nil and evt.chan then
-          evt.ppqL = evt.ppq
-          evt.ppq  = util.round(tm:swingSnapshot().fromLogical(evt.chan, evt.ppqL))
-        end
-        addPb(evt)
       else
-        if not rawCaller and evt.ppq ~= nil and evt.chan then
-          evt.ppqL = evt.ppq
-          evt.ppq  = util.round(tm:swingSnapshot().fromLogical(evt.chan, evt.ppqL))
-        end
-        addLowlevel(evtType, evt)
+        if not rawCaller then realiseAddPpq(evt, false, false) end
+        if evtType == 'pb' then addPb(evt) else addLowlevel(evtType, evt) end
       end
     end
 
     ----- Flush: commit accumulated ops to mm.
-
-    local flushing = false
 
     --@map:contract no-op if nothing staged; otherwise commits in fixed order (assigns, deletes desc by loc, adds) under a single mm:modify; pb cents→raw conversion happens here
     --@map:contract snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
@@ -798,103 +888,6 @@ function newTrackerManager(mm, cm)
     return um
   end
 
-  ----- Column allocation
-
-  local function pushNoteCol(channel)
-    local notes = channel.columns.notes
-    return util.add(notes, { events = {} }), #notes
-  end
-
-  --@map:contract returns (true) on accept; (false, conflictEvt) when the refusal is the bump-prone overlap case (threshold exceeded, or coincident onset); (false) on the dominated-by-two refusal, which is structural rather than bug-attributable
-  local function noteColumnAccepts(col, note)
-    local lenient = cm:get('overlapOffset') * mm:resolution()
-    local noteppqI    = note.ppq - delayToPPQ(note.delay or 0)
-    local noteEndppqI = note.endppq
-    local dominated = 0
-    for _, evt in ipairs(col.events) do
-      local evtppqI = evt.ppq - delayToPPQ(evt.delay or 0)
-      if noteppqI == evtppqI then return false, evt end
-      if noteppqI < evt.endppq and evtppqI < noteEndppqI then
-        local threshold = (evt.pitch == note.pitch) and 0 or lenient
-        local overlapAmount = math.min(evt.endppq, noteEndppqI) - math.max(evtppqI, noteppqI)
-        if overlapAmount > threshold then return false, evt end
-        dominated = dominated + 1
-      end
-    end
-    if dominated >= 2 then return false end
-    return true
-  end
-
-  local function warnLaneOverlap(note, conflict)
-    local touched = pendingFlushUuids or {}
-    local count = 0
-    for _ in pairs(touched) do count = count + 1 end
-    local who = (touched[note.uuid] and touched[conflict.uuid] and 'both')
-             or (touched[note.uuid] and 'incoming')
-             or 'existing'
-    print(string.format(
-      'tm: lane overlap kept (chan=%d lane=%d): incoming pitch=%d ppq=%d..%d vs existing pitch=%d ppq=%d..%d; touched=%d (%s)',
-      note.chan, note.lane,
-      note.pitch, note.ppq, note.endppq,
-      conflict.pitch, conflict.ppq, conflict.endppq,
-      count, who))
-  end
-
-  --@map:contract requested-lane refusals attributable to the in-flight flush (incoming or conflicting note's uuid in pendingFlushUuids) keep the overlap and log a warning, surfacing the bug rather than silently bumping; refusals not attributable, and lane-less adds, fall through to sibling-search bumping unchanged
-  local function allocateNoteColumn(channel, note)
-    local notes = channel.columns.notes
-    if note.lane then
-      local col = notes[note.lane]
-      if col then
-        local ok, conflict = noteColumnAccepts(col, note)
-        if ok then return col, note.lane end
-        if conflict and pendingFlushUuids
-           and (pendingFlushUuids[note.uuid] or pendingFlushUuids[conflict.uuid]) then
-          warnLaneOverlap(note, conflict)
-          return col, note.lane
-        end
-      end
-      if not col then
-        while #notes < note.lane do pushNoteCol(channel) end
-        return notes[note.lane], note.lane
-      end
-    end
-    for i, col in ipairs(notes) do
-      if noteColumnAccepts(col, note) then return col, i end
-    end
-    return pushNoteCol(channel)
-  end
-
-  local function findNoteColumnForPitch(channel, pitch, ppq_pos)
-    local notes = channel.columns.notes
-    for _, col in ipairs(notes) do
-      for _, evt in ipairs(col.events) do
-        if evt.endppq and evt.pitch == pitch and evt.ppq <= ppq_pos and evt.endppq > ppq_pos then
-          return col
-        end
-      end
-    end
-    for _, col in ipairs(notes) do
-      for _, evt in ipairs(col.events) do
-        if evt.pitch == pitch then return col end
-      end
-    end
-  end
-
-  local CC_PROJECT_STRIP = { chan = true, msgType = true, cc = true }
-
-  local function projectCC(cc, loc, overlay)
-    local evt = util.clone(cc, CC_PROJECT_STRIP)
-    evt.loc = loc
-    if overlay then util.assign(evt, overlay) end
-    return evt
-  end
-
-  ---------- PUBLIC
-
-  tm = {}
-  fire = util.installHooks(tm)
-
   -- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly.
   -- Defined here (above rebuild) so rebuild's tail-end usedSwings projection can
   -- share this iteration with applyTimeMap and the time-snap pass below.
@@ -918,6 +911,15 @@ function newTrackerManager(mm, cm)
     end
   end
 
+  -- evt.ppq integer-rounded for vm:rebuild's offGrid compare; ppqL stays float so swing inverse round-trips stay exact.
+  local function projectToLogical(col)
+    for _, evt in ipairs(col.events) do
+      if evt.ppqL    ~= nil then evt.ppq    = util.round(evt.ppqL)    end
+      if evt.endppqL ~= nil then evt.endppq = util.round(evt.endppqL) end
+    end
+    sortByPPQ(col.events)
+  end
+
   ----- Rebuild
 
   local rebuilding = false
@@ -927,6 +929,8 @@ function newTrackerManager(mm, cm)
     if rebuilding then return end
     rebuilding = true
     takeChanged = takeChanged or false
+
+    specOf, nodeMeta = {}, {}
 
     -- 0) Aliases: delete prior materialised events; emit new ones from spec
     --    trees on roots. Runs through mm:modify, which fires 'reload' and
@@ -961,6 +965,7 @@ function newTrackerManager(mm, cm)
         local lenPpq = mm:length() or 0
         local notesToAdd, ccsToAdd = {}, {}
         local fitEmits = {}  -- { emit, snap, rChan } for note-aliases marked fit
+        local claimedEmits = {}  -- { {node=SpecNode, emit=evt}, ... }; resolved post-flush once mm has minted uuids
         local temper     = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
         local octaveStep = temper and temper.octaveStep or 12
 
@@ -982,10 +987,11 @@ function newTrackerManager(mm, cm)
           local snap = tm:swingSnapshot()
           local q    = {}
           for _, c in ipairs(root.aliases) do
-            util.add(q, { spec = c, parent = seed, path = { c.id } })
+            util.add(q, { spec = c, parent = seed, parentSpec = nil })
           end
           while #q > 0 do
             local e = table.remove(q, 1)
+            nodeMeta[e.spec] = { parent = e.parentSpec, uuid = nil }
             local resolved = aliases.applyXform(e.parent, e.spec.xform, et, rng)
             if et == 'note' then
               resolved.endppqL = resolved.ppqL + resolved.durL
@@ -1021,9 +1027,6 @@ function newTrackerManager(mm, cm)
             if not claims[key] then
               claims[key] = true
               emit.parentUuid = root.uuid
-              emit.specPath   = table.concat(e.path, '.')
-              emit.aliases    = nil
-              emit.aliasCtr   = nil
               if et == 'note' then
                 util.add(notesToAdd, emit)
                 if e.spec.fit then
@@ -1032,12 +1035,10 @@ function newTrackerManager(mm, cm)
               else
                 util.add(ccsToAdd, emit)
               end
+              util.add(claimedEmits, { node = e.spec, emit = emit })
             end
             for _, child in ipairs(e.spec.children or {}) do
-              local p = {}
-              for _, id in ipairs(e.path) do p[#p + 1] = id end
-              p[#p + 1] = child.id
-              util.add(q, { spec = child, parent = resolved, path = p })
+              util.add(q, { spec = child, parent = resolved, parentSpec = e.spec })
             end
           end
         end
@@ -1087,6 +1088,14 @@ function newTrackerManager(mm, cm)
         for _, n   in ipairs(notesToAdd) do um:addEvent('note', n)      end
         for _, c   in ipairs(ccsToAdd)   do um:addEvent(c.msgType, c)   end
         um:flush()
+
+        for _, ce in ipairs(claimedEmits) do
+          local u = ce.emit.uuid
+          if u then
+            specOf[u] = ce.node
+            nodeMeta[ce.node].uuid = u
+          end
+        end
       end
     end
 
@@ -1391,15 +1400,7 @@ function newTrackerManager(mm, cm)
       end
     end
 
-    -- 5) Project to logical. evt.ppq integer-rounded for the offGrid compare
-    -- in vm:rebuild; evt.ppqL stays float so swing inverse round-trips stay exact.
-    local function projectToLogical(col)
-      for _, evt in ipairs(col.events) do
-        if evt.ppqL    ~= nil then evt.ppq    = util.round(evt.ppqL)    end
-        if evt.endppqL ~= nil then evt.endppq = util.round(evt.endppqL) end
-      end
-      sortByPPQ(col.events)
-    end
+    -- 5) Project to logical.
     for _, chan in ipairs(channels) do
       local c = chan.columns
       if c.pc then projectToLogical(c.pc) end
@@ -1426,29 +1427,6 @@ function newTrackerManager(mm, cm)
       if not same then cm:set('take', 'usedSwings', used) end
     end
 
-    -- 6) Alias dependency index. byUuid maps every event's uuid to its
-    --    column-projected event + channel; byParent groups materialised
-    --    children under their root, sorted into grid scan order (ppq,
-    --    then chan). Consumers: vm:aliasIndex (nav, focus highlight).
-    do
-      local byUuid, byParent = {}, {}
-      forEachEvent(function(_, evt, chan)
-        if evt.uuid then byUuid[evt.uuid] = { evt = evt, chan = chan } end
-        if evt.parentUuid then
-          local list = byParent[evt.parentUuid] or {}
-          byParent[evt.parentUuid] = list
-          util.add(list, { evt = evt, chan = chan })
-        end
-      end)
-      for _, list in pairs(byParent) do
-        table.sort(list, function(a, b)
-          if a.evt.ppq ~= b.evt.ppq then return a.evt.ppq < b.evt.ppq end
-          return a.chan < b.chan
-        end)
-      end
-      aliasIndex = { byUuid = byUuid, byParent = byParent }
-    end
-
     um = createUpdateManager()
     rebuilding = false
     pendingFlushUuids = nil
@@ -1457,7 +1435,38 @@ function newTrackerManager(mm, cm)
     fire('rebuild', nil)
   end
 
-  function tm:aliasIndex() return aliasIndex end
+  function tm:specOf(uuid)   return specOf[uuid] end
+  function tm:nodeMeta(node) return nodeMeta[node] end
+
+  -- Integer-array spec path for a materialised event, derived live by
+  -- walking nodeMeta up and finding each ancestor's position in its
+  -- parent's children list. Replaces the persisted emit.specPath.
+  -- Returns nil for plain events and for aliased events whose first
+  -- rebuild has not yet populated specOf.
+  function tm:specPathOf(evt)
+    if not (evt and evt.uuid and evt.parentUuid) then return nil end
+    local node = specOf[evt.uuid]
+    if not node then return nil end
+    local _, root = mm:byUuid(evt.parentUuid)
+    if not (root and root.aliases) then return nil end
+    local chain = {}
+    while node do
+      chain[#chain + 1] = node
+      node = nodeMeta[node].parent
+    end
+    local idx, list = {}, root.aliases
+    for i = #chain, 1, -1 do
+      local target = chain[i]
+      local found
+      for j, n in ipairs(list) do
+        if n == target then found = j; break end
+      end
+      if not found then return nil end
+      idx[#idx + 1] = found
+      list = target.children
+    end
+    return idx
+  end
 
   ----- Accessors
 
@@ -1708,12 +1717,18 @@ function newTrackerManager(mm, cm)
   function tm:assignEvent(type, evt, update) um:assignEvent(type, evt, update) end
   function tm:flush() um:flush() end
 
-  --@map:contract evt is a materialised alias child (carries parentUuid + specPath); appends each (field, op) entry of `opsByField` to the spec node and queues an aliases-only metadata write on the root. Multi-field is one call so coupled fields (e.g. pitch+detune under a temper) land on a single root snapshot. Per-field value is either a single op (opcode-string at [1]) or a list of ops (table at [1]); list form lands as successive appendOps, with coalescence applied at each step. Returns false when evt is not aliased or the root/spec lookup fails — caller should fall through to direct mutation.
-  function tm:routeRelative(evt, opsByField)
-    if not (evt and evt.parentUuid) then return false end
+  local function resolveAliased(evt)
+    if not (evt and evt.parentUuid) then return end
+    local node = specOf[evt.uuid]
+    if not node then return end
     local rootLoc, root, kind = mm:byUuid(evt.parentUuid)
-    if not (root and rootLoc) then return false end
-    local node = aliases.find(root, evt.specPath)
+    if not (root and rootLoc) then return end
+    return rootLoc, root, kind, node
+  end
+
+  --@map:contract appends a per-field op map onto evt's spec node; one root snapshot per call so coupled fields stay atomic. Per-field value is one op or a list (list lands as successive appendOps with coalescence). Returns false if evt isn't aliased or specOf lookup fails — caller falls through to direct mutation. See docs/aliases.md.
+  function tm:routeRelative(evt, opsByField)
+    local rootLoc, root, kind, node = resolveAliased(evt)
     if not node then return false end
     for field, op in pairs(opsByField) do
       if type(op[1]) == 'table' then
@@ -1728,50 +1743,34 @@ function newTrackerManager(mm, cm)
     return true
   end
 
-  -- Highest base36 id appearing anywhere in `list` (recursing through
-  -- .children). Returns `seed` if the tree is empty.
-  local function maxAliasId(list, seed)
-    local m = seed or 0
-    for _, c in ipairs(list or {}) do
-      local n = util.fromBase36(c.id) or 0
-      if n > m then m = n end
-      if c.children then m = maxAliasId(c.children, m) end
-    end
-    return m
-  end
-
-  --@map:contract group `events` by parentUuid and sever each in one snapshot per root: pluck every requested subtree from a single mm:byUuid clone before issuing the per-event metadata-clear assigns and one root-aliases assign. Deepest-first within each group so a parent's pluck never invalidates a sibling-grandchild's path. Events without parentUuid+specPath are skipped silently. Does not flush — caller drives a single flush across the batch.
+  --@map:contract groups events by parentUuid; one snapshot per root, deepest-first via nodeMeta walk. Pluck-by-identity dissolves the ordering hazard. Skips events without parentUuid or specOf lookup. Caller flushes. See docs/aliases.md.
   function tm:severBatch(events)
     local byParent = {}
     for _, e in ipairs(events) do
-      if e and e.parentUuid and e.specPath then
+      if e and e.parentUuid and specOf[e.uuid] then
         byParent[e.parentUuid] = byParent[e.parentUuid] or {}
         util.add(byParent[e.parentUuid], e)
       end
     end
-    -- Depth = dot-count + 1, not string length: '1.2.3' (depth 3) must
-    -- sever before '10.20' (depth 2) so an ancestor's pluck never voids
-    -- a descendant's path. Multi-char base36 ids (>35 children) make
-    -- length-as-depth wrong.
-    local function depth(p)
-      local n = 1
-      for _ in p:gmatch('%.') do n = n + 1 end
-      return n
+    local function depthOf(evt)
+      local d, n = 0, specOf[evt.uuid]
+      while n do d = d + 1; n = nodeMeta[n].parent end
+      return d
     end
     for parentUuid, list in pairs(byParent) do
-      table.sort(list, function(a, b) return depth(a.specPath) > depth(b.specPath) end)
+      table.sort(list, function(a, b) return depthOf(a) > depthOf(b) end)
       local rootLoc, root, rootKind = mm:byUuid(parentUuid)
       if root and rootLoc then
         for _, e in ipairs(list) do
-          local plucked = aliases.pluckSubtree(root, e.specPath)
+          local node = specOf[e.uuid]
+          local pSpec = nodeMeta[node].parent
+          local parentList = pSpec and pSpec.children or root.aliases
+          local plucked = aliases.pluckNode(parentList, node)
           if plucked then
-            local children = plucked.children or {}
-            local evtKind  = e.msgType and 'cc' or 'note'
+            local evtKind = evtTypeOf(e)
             um:assignEvent(evtKind, e, {
               parentUuid = util.REMOVE,
-              specPath   = util.REMOVE,
-              aliases    = children,
-              aliasCtr   = maxAliasId(children) + 1,
+              aliases    = plucked.children or {},
             })
           end
         end
@@ -1780,109 +1779,81 @@ function newTrackerManager(mm, cm)
     end
   end
 
-  --@map:contract evt is a materialised alias child (carries parentUuid + specPath); plucks evt's spec subtree from the old root, transplants its children onto evt as a new top-level root, and clears evt's materialisation metadata. The mm-uuid evt already carries — minted by the walker on the previous rebuild — becomes the new root's permanent identity (the rebuild sweep only deletes events still carrying parentUuid, so a stripped event stays put). aliasCtr is set past the highest id anywhere in the plucked subtree so subsequent allocations don't collide with surviving descendant ids. Returns true on success; false when evt is unaliased or root/spec lookup fails (no-op caller-side). Does not flush — the caller drives a single flush across a batch.
+  --@map:contract single-event wrapper over severBatch. Returns false when evt is unaliased or specOf lookup fails. See docs/aliases.md.
   function tm:sever(evt)
-    if not (evt and evt.parentUuid and evt.specPath) then return false end
-    local _, root = mm:byUuid(evt.parentUuid)
-    if not (root and aliases.find(root, evt.specPath)) then return false end
+    if not resolveAliased(evt) then return false end
     self:severBatch{ evt }
     return true
   end
 
-  --@map:contract structural delete that promotes the spec subtree's children to new roots before the spec node is removed. Two modes by evt shape: aliased child (parentUuid + specPath set) — removes evt's spec node from its root; each direct child's materialised event is promoted in place (sever-style); evt itself disappears via the rebuild sweep (still parentUuid-tagged, no surviving spec node to re-emit). Root with non-empty aliases — each top-level child's materialised event is promoted; the root event is then deleted outright. Suppressed branches (spec child with no live materialisation, e.g. slot collision) are dropped. Returns false for plain unaliased events so callers can fall back to tm:deleteEvent. Does not flush — caller drives a single flush across a batch.
+  --@map:contract structural delete: promote spec subtree's direct children to new roots, then drop. Two modes by evt shape — aliased child (drops spec node, evt vanishes via sweep) or root with aliases (drops root event). Suppressed branches dropped silently. Returns false for plain events. Caller flushes. See docs/aliases.md.
   function tm:deleteAliased(evt)
     if not evt then return false end
 
-    local rootLoc, root, rootKind, isRoot
+    local rootLoc, root, rootKind, isRoot, S
     if evt.parentUuid then
-      rootLoc, root, rootKind = mm:byUuid(evt.parentUuid)
-      if not (root and rootLoc) then return false end
+      rootLoc, root, rootKind, S = resolveAliased(evt)
+      if not S then return false end
       isRoot = false
     elseif evt.aliases and #evt.aliases > 0 then
-      rootLoc, root, rootKind = evt.loc, evt, evt.msgType and 'cc' or 'note'
+      rootLoc, root, rootKind = evt.loc, evt, evtTypeOf(evt)
       isRoot = true
     else
       return false
     end
 
-    local childSpecs
-    if isRoot then
-      childSpecs = root.aliases or {}
-    else
-      local S = aliases.find(root, evt.specPath)
-      childSpecs = (S and S.children) or {}
-    end
+    local childSpecs = isRoot and root.aliases or S.children
+    -- Snapshot direct-child list before mutating: pluckNode alters
+    -- childSpecs in place; ipairs over a list being mutated skips entries.
+    local directChildren = {}
+    for _, c in ipairs(childSpecs or {}) do directChildren[#directChildren + 1] = c end
 
-    local matsById = {}
-    if #childSpecs > 0 then
-      local prefix = isRoot and '' or (evt.specPath .. '.')
-      local function scan(iter)
-        for _, e in iter do
-          if e.parentUuid == root.uuid and e.specPath
-             and e.specPath:sub(1, #prefix) == prefix then
-            local seg = e.specPath:sub(#prefix + 1)
-            if seg ~= '' and not seg:find('.', 1, true) then
-              matsById[seg] = e
-            end
-          end
+    for _, child in ipairs(directChildren) do
+      local meta    = nodeMeta[child]
+      local matUuid = meta and meta.uuid
+      if matUuid then
+        local _, matEvt, matKind = mm:byUuid(matUuid)
+        if matEvt then
+          aliases.pluckNode(childSpecs, child)
+          um:assignEvent(matKind, matEvt, {
+            parentUuid = util.REMOVE,
+            aliases    = child.children or {},
+          })
         end
-      end
-      scan(mm:notes()); scan(mm:ccs())
-    end
-
-    -- Snapshot child ids before mutating: pluckSubtree alters the same
-    -- Lua list childSpecs aliases (S.children or root.aliases), so iterating
-    -- it directly via ipairs would skip alternate entries.
-    local childIds = {}
-    for _, c in ipairs(childSpecs) do childIds[#childIds + 1] = c.id end
-    for _, id in ipairs(childIds) do
-      local fullPath = isRoot and id or (evt.specPath .. '.' .. id)
-      local plucked  = aliases.pluckSubtree(root, fullPath)
-      local mat      = matsById[id]
-      if mat and plucked then
-        local kids    = plucked.children or {}
-        local matKind = mat.msgType and 'cc' or 'note'
-        um:assignEvent(matKind, mat, {
-          parentUuid = util.REMOVE,
-          specPath   = util.REMOVE,
-          aliases    = kids,
-          aliasCtr   = maxAliasId(kids) + 1,
-        })
       end
     end
 
     if isRoot then
       um:deleteEvent(rootKind, { loc = rootLoc })
     else
-      aliases.pluckSubtree(root, evt.specPath)
+      local pSpec = nodeMeta[S].parent
+      local parentList = pSpec and pSpec.children or root.aliases
+      aliases.pluckNode(parentList, S)
       um:assignEvent(rootKind, { loc = rootLoc }, { aliases = root.aliases })
     end
     return true
   end
 
-  --@map:contract for a materialised child source at (rootUuid, specPath), returns { children = deep clone of the leaf spec node's children, chain = [{id, xform-clone}, ...] one entry per ANCESTOR segment (the leaf itself is excluded). Returns nil if the root is missing or any path segment fails to resolve. The chain is the copy-time fingerprint of *ancestor* xforms only — the leaf is the source, so editing or moving it stays compatible with paste; only ancestor edits count as tree-mutation drift.
-  function tm:aliasSrcSnapshot(rootUuid, specPath)
-    if not (rootUuid and specPath) then return nil end
+  --@map:contract (rootUuid, specIdx) → { children = deep clone of leaf's children, chain = ancestor xform clones } or nil. Leaf excluded from chain — only ancestor drift counts as tree mutation. See docs/aliases.md.
+  function tm:aliasSrcSnapshot(rootUuid, specIdx)
+    if not (rootUuid and specIdx and #specIdx > 0) then return nil end
     local _, root = mm:byUuid(rootUuid)
     if not (root and root.aliases) then return nil end
-    local parts = {}
-    for id in specPath:gmatch('[^.]+') do parts[#parts + 1] = id end
     local list, node, chain = root.aliases, nil, {}
-    for i, id in ipairs(parts) do
+    for i, idx in ipairs(specIdx) do
       if not list then return nil end
-      node = nil
-      for _, n in ipairs(list) do if n.id == id then node = n; break end end
+      node = list[idx]
       if not node then return nil end
-      if i < #parts then
-        chain[#chain + 1] = { id = id, xform = util.deepClone(node.xform) }
+      if i < #specIdx then
+        chain[#chain + 1] = util.deepClone(node.xform)
       end
       list = node.children
     end
     return { children = util.deepClone(node.children or {}), chain = chain }
   end
 
-  --@map:contract resolves the source side of an alias-paste against the live spec tree. Returns nil if root or any path segment missing (→ silent demote, the (A) case); { mismatch = true } if a captured ANCESTOR's xform disagrees with the live one, or any path xform contains a producing-op we cannot re-roll (→ loud demote, "spec tree edited"); { resolved = field-table } otherwise. The leaf node's xform is free to drift — corrective deltas in aliasWriter compensate. Resolved starts at root's fields (with durL = endppqL − ppqL for notes) and composes each path segment's xform via aliases.applyXform.
-  function tm:resolveAliasSrc(rootUuid, specPath, chain, evtType)
+  --@map:contract resolves a captured alias source against the live tree. Three shapes: nil → silent demote (root/index gone); { mismatch=true } → loud demote (ancestor xform drift or unresolvable producing-op); { resolved=fields } otherwise. Leaf xform is free to drift — corrective deltas compensate. See docs/aliases.md.
+  function tm:resolveAliasSrc(rootUuid, specIdx, chain, evtType)
     if not rootUuid then return nil end
     local _, root = mm:byUuid(rootUuid)
     if not root then return nil end
@@ -1892,21 +1863,15 @@ function newTrackerManager(mm, cm)
     if evtType == 'note' and root.endppqL and root.ppqL then
       resolved.durL = root.endppqL - root.ppqL
     end
-    if not specPath then return { resolved = resolved } end
+    if not specIdx then return { resolved = resolved } end
     if not root.aliases then return nil end
-    local parts = {}
-    for id in specPath:gmatch('[^.]+') do parts[#parts + 1] = id end
     local list = root.aliases
-    for i, id in ipairs(parts) do
-      local node
-      if list then
-        for _, n in ipairs(list) do if n.id == id then node = n; break end end
-      end
+    for i, idx in ipairs(specIdx) do
+      local node = list and list[idx]
       if not node then return nil end
-      if i < #parts then
+      if i < #specIdx then
         local captured = chain and chain[i]
-        if not captured or captured.id ~= id
-           or not util.deepEq(captured.xform, node.xform) then
+        if not captured or not util.deepEq(captured, node.xform) then
           return { mismatch = true }
         end
       end
@@ -1923,36 +1888,27 @@ function newTrackerManager(mm, cm)
     return { resolved = resolved }
   end
 
-  --@map:contract walks the live spec tree from fromSpecPath (exclusive) to toSpecPath (inclusive) and concatenates per-field xform op-lists in order. Used at copy time by family-paste to snapshot the structural xforms between a clip's family-parent and its descendant; preserves producing-ops (rand) verbatim. fromSpecPath nil → walk from root. Returns nil if any path segment is missing or toSpecPath is not a strict descendant of fromSpecPath. Ops are deep-cloned.
-  function tm:pathXform(rootUuid, fromSpecPath, toSpecPath)
-    if not (rootUuid and toSpecPath) then return nil end
+  --@map:contract concatenates per-field xform op-lists between fromIdx (exclusive) and toIdx (inclusive). Used by family-paste at copy time. Preserves producing-ops verbatim, deep-clones. Returns nil if path invalid or toIdx not a strict descendant. See docs/aliases.md.
+  function tm:pathXform(rootUuid, fromIdx, toIdx)
+    if not (rootUuid and toIdx) then return nil end
     local _, root = mm:byUuid(rootUuid)
     if not (root and root.aliases) then return nil end
-    local function parts(p)
-      local r = {}
-      if not p then return r end
-      for id in p:gmatch('[^.]+') do r[#r + 1] = id end
-      return r
-    end
-    local fromParts, toParts = parts(fromSpecPath), parts(toSpecPath)
-    if #toParts <= #fromParts then return nil end
-    for i, fp in ipairs(fromParts) do
-      if toParts[i] ~= fp then return nil end
+    fromIdx = fromIdx or {}
+    if #toIdx <= #fromIdx then return nil end
+    for i, fp in ipairs(fromIdx) do
+      if toIdx[i] ~= fp then return nil end
     end
     local list, node = root.aliases, nil
-    for _, id in ipairs(fromParts) do
+    for _, idx in ipairs(fromIdx) do
       if not list then return nil end
-      node = nil
-      for _, n in ipairs(list) do if n.id == id then node = n; break end end
+      node = list[idx]
       if not node then return nil end
       list = node.children
     end
     local out = {}
-    for i = #fromParts + 1, #toParts do
+    for i = #fromIdx + 1, #toIdx do
       if not list then return nil end
-      local id = toParts[i]
-      node = nil
-      for _, n in ipairs(list) do if n.id == id then node = n; break end end
+      node = list[toIdx[i]]
       if not node then return nil end
       for f, ops in pairs(node.xform or {}) do
         out[f] = out[f] or {}
@@ -1963,27 +1919,28 @@ function newTrackerManager(mm, cm)
     return out
   end
 
-  --@map:contract creates a new alias spec node under the event identified by `rootUuid`. srcSpecPath nil → top of root.aliases; non-nil → child of the spec node at that path (so descendants of that spec compose this xform). `children`, when given, is taken verbatim as the new node's children (typically a deep clone of the source's subtree, captured at copy time so paste brings the source's alias-children along under the new node). `fit` (truthy) marks the new node as visually fit: at rebuild, its materialised endppq is clipped to the next event on the same column, so the alias never causes a new lane to be allocated for its successor. Returns the new node's full specPath, or nil if the root/spec lookup fails.
-  function tm:createAlias(rootUuid, srcSpecPath, xform, children, fit)
+  --@map:contract creates a spec node under rootUuid. srcIdx nil → top of root.aliases; non-nil → child of that spec. children passed verbatim (paste's captured subtree). fit clips materialised endppq to next col event so no new lane is allocated. Returns the new node's specIdx. See docs/aliases.md.
+  function tm:createAlias(rootUuid, srcIdx, xform, children, fit)
     local rootLoc, root, kind = mm:byUuid(rootUuid)
     if not (root and rootLoc) then return nil end
     root.aliases = root.aliases or {}
-    local list, prefix
-    if srcSpecPath then
-      local parent = aliases.find(root, srcSpecPath)
+    local list, newIdx
+    if srcIdx and #srcIdx > 0 then
+      local parent = aliases.find(root, srcIdx)
       if not parent then return nil end
       parent.children = parent.children or {}
-      list, prefix = parent.children, srcSpecPath .. '.'
+      list = parent.children
+      newIdx = {}
+      for _, i in ipairs(srcIdx) do newIdx[#newIdx + 1] = i end
     else
-      list, prefix = root.aliases, ''
+      list, newIdx = root.aliases, {}
     end
-    local id = aliases.allocId(root)
-    local node = { id = id, xform = xform or {}, children = children or {} }
+    local node = { xform = xform or {}, children = children or {} }
     if fit then node.fit = true end
     list[#list + 1] = node
-    um:assignEvent(kind, { loc = rootLoc },
-                   { aliases = root.aliases, aliasCtr = root.aliasCtr })
-    return prefix .. id
+    newIdx[#newIdx + 1] = #list
+    um:assignEvent(kind, { loc = rootLoc }, { aliases = root.aliases })
+    return newIdx
   end
 
   ----- Mute

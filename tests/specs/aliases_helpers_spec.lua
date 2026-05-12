@@ -313,97 +313,69 @@ return {
   -- Spec-tree navigation
   --------------------------------------------------------------------
   {
-    name = 'find: locates a 3-deep node',
+    name = 'find: locates a 3-deep node by integer-array path',
     run = function()
+      local target = { xform = { ppqL = {{'add',9}} }, children = {} }
       local root = {
         aliases = {
-          { id = '1', xform = {}, children = {
-            { id = '1', xform = { ppqL = {{'add',1}} }, children = {
-              { id = '2', xform = { ppqL = {{'add',9}} }, children = {} },
-            }},
+          { xform = {}, children = {
+            { xform = { ppqL = {{'add',1}} }, children = { target } },
           }},
         },
       }
-      local node = aliases.find(root, '1.1.2')
-      t.deepEq(node.xform, { ppqL = {{'add', 9}} })
+      t.eq(aliases.find(root, {1,1,1}), target)
     end,
   },
   {
     name = 'find: missing path returns nil',
     run = function()
-      local root = { aliases = { { id='1', xform={}, children={} } } }
-      t.eq(aliases.find(root, '1.7'), nil)
-      t.eq(aliases.find(root, '9'), nil)
+      local root = { aliases = { { xform={}, children={} } } }
+      t.eq(aliases.find(root, {1,7}), nil)
+      t.eq(aliases.find(root, {9}),   nil)
     end,
   },
   {
     name = 'parentOf: top-level returns root.aliases',
     run = function()
-      local root = { aliases = { { id='1', xform={}, children={} } } }
-      local list, id = aliases.parentOf(root, '1')
+      local root = { aliases = { { xform={}, children={} } } }
+      local list, i = aliases.parentOf(root, {1})
       t.eq(list, root.aliases)
-      t.eq(id, '1')
+      t.eq(i, 1)
     end,
   },
   {
     name = 'parentOf: nested returns intermediate children list',
     run = function()
-      local inner = { id='2', xform={}, children={} }
+      local inner = { xform={}, children={} }
       local root = { aliases = {
-        { id='1', xform={}, children = { inner } },
+        { xform={}, children = { inner } },
       }}
-      local list, id = aliases.parentOf(root, '1.2')
+      local list, i = aliases.parentOf(root, {1,1})
       t.eq(list, root.aliases[1].children)
-      t.eq(id, '2')
+      t.eq(i, 1)
     end,
   },
   {
     name = 'pluckSubtree: removes from parent, leaves siblings',
     run = function()
-      local root = { aliases = {
-        { id='1', xform={}, children={} },
-        { id='2', xform={ ppqL={{'add',9}} }, children={
-          { id='1', xform={}, children={} },
-        }},
-        { id='3', xform={}, children={} },
-      }}
-      local got = aliases.pluckSubtree(root, '2')
-      t.eq(got.id, '2')
+      local a = { xform={}, children={} }
+      local b = { xform={ ppqL={{'add',9}} }, children={ { xform={}, children={} } } }
+      local c = { xform={}, children={} }
+      local root = { aliases = { a, b, c } }
+      local got = aliases.pluckSubtree(root, {2})
+      t.eq(got, b)
       t.eq(#got.children, 1)            -- descendants survive
       t.eq(#root.aliases, 2)
-      t.eq(root.aliases[1].id, '1')
-      t.eq(root.aliases[2].id, '3')
+      t.eq(root.aliases[1], a)
+      t.eq(root.aliases[2], c)
     end,
   },
   {
     name = 'pluckSubtree: missing path returns nil, tree unchanged',
     run = function()
-      local root = { aliases = {
-        { id='1', xform={}, children={} },
-      }}
-      t.eq(aliases.pluckSubtree(root, '9'), nil)
+      local root = { aliases = { { xform={}, children={} } } }
+      t.eq(aliases.pluckSubtree(root, {9}), nil)
       t.eq(#root.aliases, 1)
-    end,
-  },
-
-  --------------------------------------------------------------------
-  -- allocId
-  --------------------------------------------------------------------
-  {
-    name = 'allocId: monotonic, base36',
-    run = function()
-      local root = {}
-      t.eq(aliases.allocId(root), '1')
-      t.eq(aliases.allocId(root), '2')
-      t.eq(root.aliasCtr, 3)
-    end,
-  },
-  {
-    name = 'allocId: bumps past 9 into base36',
-    run = function()
-      local root = { aliasCtr = 35 }
-      t.eq(aliases.allocId(root), 'Z')
-      t.eq(aliases.allocId(root), '10')   -- 36 in base36
     end,
   },
 

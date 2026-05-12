@@ -1,5 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=530  sha=b430243
-@deps util, timing
+@module swingEditor  src=swingEditor.lua  loc=530  sha=a100405
 
 # Invariants & contracts (module)
   @map:invariant  editor owns no swing data; composite lives in cm:get('swings')[name] and is read fresh each frame via swingRead

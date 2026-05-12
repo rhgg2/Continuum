@@ -6,8 +6,8 @@
 --@map:invariant cell coordinates are 0-indexed; header rows at -HEADER, row-number gutter at -GUTTER
 --@map:invariant writes go through vm or cmgr commands — page never reaches into tm
 
-loadModule('util')
-loadModule('timing')
+require 'util'
+require 'timing'
 
 local function print(...)
   return util.print(...)

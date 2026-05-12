@@ -1,5 +1,4 @@
 @module midiManager  src=midiManager.lua  loc=1074  sha=d4f20ff
-@deps util
 
 # Invariants & contracts (module)
   @map:invariant  channels are 1..16 internally; +1 applied on read from REAPER, -1 on write

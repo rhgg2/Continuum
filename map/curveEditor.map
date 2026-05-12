@@ -1,5 +1,4 @@
 @module curveEditor  src=curveEditor.lua  loc=330  sha=2973124
-@deps util
 
 # Invariants & contracts (module)
   @map:invariant  anchors never cross; t is clamped strictly between immediate neighbours before any onMove/onMoveFree fire

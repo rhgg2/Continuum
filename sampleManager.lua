@@ -10,8 +10,8 @@
 --@map:invariant boot-token watcher (BOOT_BASE+id) detects fresh JSFX mem[] (project reload, recompile) and triggers full rehydrate
 --@map:invariant JSFX user-string slot cap is 1023; PATH_MAX (1019) + SLOT_STRIDE bookkeeping must not push slot string writes past that ceiling
 
-loadModule('util')
-loadModule('fs')
+require 'util'
+require 'fs'
 
 --@map:shape slotEntry      = { path=string?, name=string?, start=number, ['end']=number }   -- cm-stored, path is project-relative
 --@map:shape pendingEntry   = { slot=number, op=0|1, path=string?, name=string?, start=number?, ['end']=number? }  -- mailbox queue entry; op=1 is clear

@@ -77,7 +77,7 @@ return {
       t.truthy(kid2, 'child still aliased')
       t.eq(kid2.ppq,    240, 'resolves to snapped row 4')
       t.eq(kid2.pitch,   61, 'pitch preserved')
-      t.eq(kid2.specPath, '1')
+      t.deepEq(h.tm:specPathOf(kid2), {1})
     end,
   },
 
@@ -178,7 +178,7 @@ return {
         'no snap appended — was already on-grid')
 
       local kids = byParent(notes, 1)
-      t.eq(#kids, 1); t.eq(kids[1].specPath, '1', 'still aliased')
+      t.eq(#kids, 1); t.deepEq(h.tm:specPathOf(kids[1]), {1}, 'still aliased')
     end,
   },
 
@@ -223,8 +223,10 @@ return {
       local kids = byParent(notes, 1)
       local emitMid, emitGrand
       for _, e in ipairs(kids) do
-        if     e.specPath == '1'   then emitMid = e
-        elseif e.specPath == '1.1' then emitGrand = e end
+        local idx = h.tm:specPathOf(e)
+        local key = idx and table.concat(idx, '.') or nil
+        if     key == '1'   then emitMid = e
+        elseif key == '1.1' then emitGrand = e end
       end
 
       t.truthy(emitMid)

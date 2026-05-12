@@ -88,18 +88,20 @@ return {
       t.eq(#kids, 2)
 
       local target
-      for _, k in ipairs(kids) do if k.specPath == '1' then target = k end end
+      for _, k in ipairs(kids) do
+        if h.tm:specPathOf(k) and table.concat(h.tm:specPathOf(k), '.') == '1' then target = k end
+      end
       t.truthy(h.tm:sever(target))
       h.tm:flush()
 
       local notes = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
       t.eq(#oldRoot.aliases, 1, 'one spec node remains')
-      t.eq(oldRoot.aliases[1].id, '2', 'the right one (sibling) remains')
+      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 960}}, 'the right one (sibling) remains')
 
       local survivors = byParent(notes, 1)
       t.eq(#survivors, 1, 'sibling materialisation re-emitted')
-      t.eq(survivors[1].specPath, '2')
+      t.deepEq(h.tm:specPathOf(survivors[1]), {1})
       t.eq(survivors[1].ppq, 960)
     end,
   },
@@ -126,13 +128,19 @@ return {
       local kids = byParent(h.fm:dump().notes, 1)
       t.eq(#kids, 3)
       local pre = {}
-      for _, k in ipairs(kids) do pre[k.specPath] = k.ppq end
+      for _, k in ipairs(kids) do
+        local idx = h.tm:specPathOf(k)
+        if idx then pre[table.concat(idx, '.')] = k.ppq end
+      end
       t.eq(pre['1'    ], 200)
       t.eq(pre['1.1'  ], 400)
       t.eq(pre['1.1.1'], 401)
 
       local mid
-      for _, k in ipairs(kids) do if k.specPath == '1.1' then mid = k end end
+      for _, k in ipairs(kids) do
+        local idx = h.tm:specPathOf(k)
+        if idx and table.concat(idx, '.') == '1.1' then mid = k end
+      end
       t.truthy(h.tm:sever(mid))
       h.tm:flush()
 
@@ -140,7 +148,7 @@ return {
       local oldRoot = rootByUuid(notes, 1)
       -- old root's '1' node had only one child, '1.1', which we plucked.
       t.eq(#oldRoot.aliases, 1)
-      t.eq(oldRoot.aliases[1].id, '1')
+      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 200}}, 'remaining spec is the outer +200')
       t.eq(#oldRoot.aliases[1].children, 0, 'plucked subtree gone from old root')
 
       -- The promoted root carries the plucked node's children as its aliases.
@@ -161,48 +169,10 @@ return {
       t.eq(#newKids, 1)
       t.eq(newKids[1].ppq, 401, 'grandchild ppq unchanged by sever')
       t.eq(newKids[1].vel, 110, 'grandchild vel unchanged by sever')
-      t.eq(newKids[1].specPath, '1', 'grandchild specPath now relative to new root')
+      t.deepEq(h.tm:specPathOf(newKids[1]), {1}, 'grandchild specPath now relative to new root')
     end,
   },
 
-  --------------------------------------------------------------------
-  -- aliasCtr is set past the highest id anywhere in the plucked subtree
-  --------------------------------------------------------------------
-  {
-    name = 'aliasCtr on promoted root skips ids surviving in the subtree',
-    run = function(harness)
-      -- Plucked subtree has children with ids '3' and '5', plus a deeper
-      -- '7' under '3'. After sever, aliasCtr on the new root must be ≥ 8
-      -- so a fresh allocation does not collide with surviving ids.
-      local h = harness.mk{
-        seed = { notes = { rootNote{
-          aliasCtr = 9,
-          aliases  = {
-            { id = '1', xform = { ppqL = {{'add', 100}} }, children = {
-              { id = '3', xform = {}, children = {
-                { id = '7', xform = {}, children = {} },
-              }},
-              { id = '5', xform = {}, children = {} },
-            }},
-          },
-        } } },
-      }
-      local mid
-      for _, k in ipairs(byParent(h.fm:dump().notes, 1)) do
-        if k.specPath == '1' then mid = k end
-      end
-      t.truthy(h.tm:sever(mid))
-      h.tm:flush()
-
-      local promoted
-      for _, n in ipairs(h.fm:dump().notes) do
-        if not n.parentUuid and n.uuid ~= 1 then promoted = n end
-      end
-      t.truthy(promoted)
-      local newId = aliases.allocId(promoted)
-      t.eq(util.fromBase36(newId), 8, 'next id is past the highest surviving id (7)')
-    end,
-  },
 
   --------------------------------------------------------------------
   -- severBatch: two children of the same root in one call. A naïve
@@ -238,6 +208,62 @@ return {
       local promotedCount = 0
       for u, _ in pairs(roots) do if u ~= 1 then promotedCount = promotedCount + 1 end end
       t.eq(promotedCount, 2, 'both materialisations promoted')
+    end,
+  },
+
+  --------------------------------------------------------------------
+  -- Non-monotonic severBatch on a 4-sibling parent. Targets are A and
+  -- C, at positions 1 and 3 of [A,B,C,D]. Under index-based pluck the
+  -- first pluck shifts C from index 3 to index 2; a second pluck of
+  -- index 3 would hit D, leaving C in place. Identity-pluck does not
+  -- care — table references survive list mutation.
+  --------------------------------------------------------------------
+  {
+    name = 'severBatch on non-adjacent siblings of one parent: identity-pluck preserves the right survivors',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = { rootNote{
+          aliases  = {
+            { xform = { ppqL = {{'add', 240}} }, children = {} },
+            { xform = { ppqL = {{'add', 480}} }, children = {} },
+            { xform = { ppqL = {{'add', 720}} }, children = {} },
+            { xform = { ppqL = {{'add', 960}} }, children = {} },
+          },
+        } } },
+      }
+      local kids = byParent(h.fm:dump().notes, 1)
+      t.eq(#kids, 4)
+
+      local a, c
+      for _, k in ipairs(kids) do
+        if k.ppq == 240 then a = k
+        elseif k.ppq == 720 then c = k
+        end
+      end
+      t.truthy(a); t.truthy(c)
+
+      h.tm:severBatch{ a, c }
+      h.tm:flush()
+
+      local notes   = h.fm:dump().notes
+      local oldRoot = rootByUuid(notes, 1)
+      t.eq(#oldRoot.aliases, 2, 'two spec nodes remain')
+      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 480}}, 'B survives at slot 1')
+      t.deepEq(oldRoot.aliases[2].xform.ppqL, {{'add', 960}}, 'D survives at slot 2')
+
+      local survivors = byParent(notes, 1)
+      t.eq(#survivors, 2, 'two aliased kids re-emit')
+      local byPpq = {}
+      for _, k in ipairs(survivors) do byPpq[k.ppq] = true end
+      t.truthy(byPpq[480], 'B re-emits unchanged')
+      t.truthy(byPpq[960], 'D re-emits unchanged')
+
+      local promoted = {}
+      for _, n in ipairs(notes) do
+        if n.uuid ~= 1 and not n.parentUuid then promoted[n.ppq] = n end
+      end
+      t.truthy(promoted[240], 'A promoted')
+      t.truthy(promoted[720], 'C promoted')
     end,
   },
 

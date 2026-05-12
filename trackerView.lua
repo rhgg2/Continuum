@@ -9,12 +9,12 @@
 --@map:invariant off-grid edits snap evt.ppq to cursor row; delay survives, rpb restamps to current
 --@map:invariant clipboard encodes rows in source's logical frame; paste decodes against dest's rpb — symmetric on (row, chan), not absolute ppq
 
-loadModule('util')
-loadModule('midiManager')
-loadModule('trackerManager')
-loadModule('tuning')
-loadModule('commandManager')
-loadModule('editCursor')
+require 'util'
+require 'midiManager'
+require 'trackerManager'
+require 'tuning'
+require 'commandManager'
+require 'editCursor'
 
 local function print(...)
   return util.print(...)
@@ -139,7 +139,7 @@ function newTrackerView(tm, cm, cmgr)
     chanLastCol  = {},
   }
 
-  --@map:invariant aliasIdx: spec-tree dependency index. byUuid: { [uuid] = {col, row, evt, chan, ppq, treeParent?} } over every event with a uuid whose start row falls in the grid. byChildren: { [parentUuid] = [record, ...] sorted (ppq, chan) } where parentUuid is the SPEC-TREE parent's uuid (the root for top-level aliases; an intermediate alias for nested ones). treeParent is derived from specPath, NOT evt.parentUuid (which is always the root because the walker emits flat). Consumers: alias-tree nav, transient focus highlight.
+  --@map:invariant aliasIdx: per-rebuild visual index over grid-visible events. byUuid[uuid] → { col, row, evt, chan, ppq, treeParent? }; byChildren[treeParent] → records sorted (ppq, chan). treeParent is the spec-tree parent uuid, derived from tm.nodeMeta. See docs/aliases.md.
   local aliasIdx = { byUuid = {}, byChildren = {} }
 
   local vm = {}
@@ -1095,14 +1095,18 @@ function newTrackerView(tm, cm, cmgr)
       tm:flush()
     end
 
+    --@map:contract aliased kids route { ppqL=[add δ] } (mirrors single-event adjustPosition); plain notes stamp. Filters via aliases.localRoots so a selected descendant of a selected root is skipped — the root's stamp re-derives the kid.
     local function adjustPositionMulti(rowDelta)
       if rowDelta == 0 then return end
       local logPerRow = ctx:ppqPerRow()
-      local runs = {}
+      local runs, flat = {}, {}
       for _, g in ipairs(eventsByCol()) do
         if g.col.type == 'note' then
           local ns = {}
-          for _, n in pairs(g.locs) do util.add(ns, n) end
+          for _, n in pairs(g.locs) do
+            util.add(ns, n)
+            flat[#flat + 1] = n
+          end
           if #ns > 0 then
             table.sort(ns, function(a, b) return a.ppq < b.ppq end)
             if rowDelta > 0 then
@@ -1118,6 +1122,9 @@ function newTrackerView(tm, cm, cmgr)
       end
       if #runs == 0 then return end
 
+      local keep = {}
+      for _, e in ipairs(aliases.localRoots(flat)) do keep[e] = true end
+
       -- resizeNote moves PBs in the note's ppq range; within each run, process in
       -- the direction that keeps shifted PBs out of unprocessed notes' ranges.
       for _, r in ipairs(runs) do
@@ -1127,9 +1134,16 @@ function newTrackerView(tm, cm, cmgr)
         if rowDelta > 0 then s, e, step = #notes, 1, -1 end
         for i = s, e, step do
           local n = notes[i]
-          local rowS = ctx:ppqToRow(n.ppq,    chan) + rowDelta
-          local rowE = ctx:ppqToRow(n.endppq, chan) + rowDelta
-          assignStamp('note', n, chan, rowS, rowE)
+          if keep[n] then
+            if n.parentUuid then
+              local newppq = (ctx:ppqToRow(n.ppq, chan) + rowDelta) * logPerRow
+              tm:routeRelative(n, { ppqL = { 'add', newppq - n.ppq } })
+            else
+              local rowS = ctx:ppqToRow(n.ppq,    chan) + rowDelta
+              local rowE = ctx:ppqToRow(n.endppq, chan) + rowDelta
+              assignStamp('note', n, chan, rowS, rowE)
+            end
+          end
         end
       end
       tm:flush()
@@ -1278,7 +1292,7 @@ function newTrackerView(tm, cm, cmgr)
     -- otherwise quantize-collapse onto the same ppq (or onto adjacent
     -- rows whose post-snap distance crosses the lenient threshold),
     -- and the allocator would reject the persisted lane on rebuild.
-    --@map:contract aliased events route a relative `{'snap', step}` op onto the spec node's ppqL (and durL for notes) so the child stays attached; the snap step is logPerRowFor(currentRpb()), baked as a literal so the alias keeps that grid even if rowPerBeat later changes. Root events go through the plan-and-write path as before.
+    --@map:contract aliased events route { ppqL=[snap step], durL=[snap step] for notes }. step = logPerRowFor(currentRpb()), baked as a literal so the alias keeps its grid even if rowPerBeat later changes. Root events use the plan-and-write path.
     local function quantizeScope(groups)
       local step  = logPerRowFor(currentRpb())
       local plans = {}
@@ -1315,7 +1329,7 @@ function newTrackerView(tm, cm, cmgr)
     end
 
     -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
-    --@map:contract intent ppq snaps to nearest row; delay absorbs the inverse to preserve realised onset; endppq held; delay clamped at delayRange; popup reports clamps. Aliased planned events are severed before writing — preserving realised onset writes per-emit delay, which an alias cannot carry; only events that actually have a plan sever, so on-grid aliased col-mates stay attached.
+    --@map:contract intent snaps to nearest row; delay absorbs the inverse to preserve realised onset; endppq held; delay clamped by delayRange; popup reports clamps. Aliased planned events sever first — alias vocabulary has no delay. On-grid aliased col-mates stay attached (no plan).
     local function quantizeKeepRealisedScope(groups)
       local plans, clamped = {}, 0
       for _, g in ipairs(groups) do
@@ -1369,7 +1383,7 @@ function newTrackerView(tm, cm, cmgr)
     -- than silently clamped (clamping would land us at the wrong grid).
     local SCALE_RPB_MAX = 32
 
-    --@map:contract scale positions and (note) durations around the selection-anchor row's logical ppq. Aliased events route { ppqL = [mul k, add a*(1-k)], durL = [mul k] } — durL has no translation because durations are intervals. Anchor falls back to cursor row when no selection (single-event scale is identity). Roots use the plan-then-write path so conformOverlaps clips overlaps before commit. Filters through aliases.localRoots so a descendant whose parent is also in the selection is skipped — the parent's mutation re-derives it through the spec tree. After writes flush, if a selection is active and the caller passed integers (kNum, kDen): reshape the selection in row-terms; if span*k is a non-integer rational, multiply rpb by the reduced denominator (capped at SCALE_RPB_MAX) so the new geometry lands on integer rows.
+    --@map:contract scale around the selection-anchor row's logical ppq (cursor row when no selection). Aliased route { ppqL=[mul k, add a*(1-k)], durL=[mul k] }; durations are intervals, no translation. Filters via aliases.localRoots so a selected descendant is skipped — the parent re-derives it. After flush, if span*k is non-integer rational, rpb multiplies by the reduced denominator (capped) so the geometry lands on integer rows. See docs/aliases.md.
     local function scaleScope(groups, kNum, kDen)
       kDen = kDen or 1
       if kDen == 0 then return end
@@ -2038,36 +2052,6 @@ function newTrackerView(tm, cm, cmgr)
     end
   end
 
-  -- dir ∈ 'up' | 'down' | 'left' | 'right'. Resolves the event under the
-  -- cursor, consults tm:aliasIndex, moves ec onto the target's cell. Each
-  -- direction no-ops at its boundary: up from a root, down from a leaf,
-  -- left/right at the sibling-list ends. No wrap.
-  local function aliasNav(dir)
-    local col = grid.cols[ec:col()]
-    local evt = col and col.cells and col.cells[ec:row()]
-    if not evt then return end
-    local idx = tm:aliasIndex()
-    local target
-    if dir == 'up' then
-      target = evt.parentUuid and idx.byUuid[evt.parentUuid]
-    elseif dir == 'down' then
-      local list = evt.uuid and idx.byParent[evt.uuid]
-      target = list and list[1]
-    else
-      if not evt.parentUuid then return end
-      local list = idx.byParent[evt.parentUuid]
-      if not list then return end
-      local step = dir == 'right' and 1 or -1
-      for i, rec in ipairs(list) do
-        if rec.evt == evt then target = list[i + step]; break end
-      end
-    end
-    if not target then return end
-    local tcol = locateEvent(target.evt, target.chan)
-    if not tcol then return end
-    ec:setPos(util.round(ctx:ppqToRow(target.evt.ppq, target.chan)), tcol, 1)
-  end
-
   ----- Alias-tree navigation
 
   -- dir ∈ 'up' | 'down' | 'left' | 'right'. Resolves the event under the
@@ -2112,10 +2096,6 @@ function newTrackerView(tm, cm, cmgr)
     duplicateDown           = function() duplicate( 1) end,
     duplicateUp             = function() duplicate(-1) end,
     toggleAliasMode         = function() vm.aliasMode = not vm.aliasMode end,
-    aliasUp                 = function() aliasNav('up')    end,
-    aliasDown               = function() aliasNav('down')  end,
-    aliasLeft               = function() aliasNav('left')  end,
-    aliasRight              = function() aliasNav('right') end,
     aliasUp                 = function() aliasNav('up')    end,
     aliasDown               = function() aliasNav('down')  end,
     aliasLeft               = function() aliasNav('left')  end,
@@ -2267,7 +2247,6 @@ function newTrackerView(tm, cm, cmgr)
       }
 
       aliasIdx = { byUuid = {}, byChildren = {} }
-      local bySpecPath = {}  -- bySpecPath[rootUuid][specPath] = rec; pass-1 scaffold for treeParent derivation
       for ci, gridCol in ipairs(grid.cols) do
         gridCol.overflow = {}
         gridCol.offGrid  = {}
@@ -2286,10 +2265,24 @@ function newTrackerView(tm, cm, cmgr)
             if evt.uuid then
               local rec = { col = ci, row = y, evt = evt, chan = chan, ppq = evt.ppq }
               aliasIdx.byUuid[evt.uuid] = rec
-              if evt.parentUuid and evt.specPath then
-                local m = bySpecPath[evt.parentUuid] or {}
-                bySpecPath[evt.parentUuid] = m
-                m[evt.specPath] = rec
+              if evt.parentUuid then
+                -- treeParent: spec-tree parent's uuid. nodeMeta(node).parent
+                -- nil → top-level (parent = root event); non-nil but its
+                -- materialised uuid nil → intermediate suppressed (collision
+                -- loser), fall back to root so the chain stays walkable.
+                local treeParent = evt.parentUuid
+                local node = tm:specOf(evt.uuid)
+                if node then
+                  local pSpec = tm:nodeMeta(node).parent
+                  if pSpec then
+                    local pMeta = tm:nodeMeta(pSpec)
+                    if pMeta and pMeta.uuid then treeParent = pMeta.uuid end
+                  end
+                end
+                rec.treeParent = treeParent
+                local list = aliasIdx.byChildren[treeParent] or {}
+                aliasIdx.byChildren[treeParent] = list
+                util.add(list, rec)
               end
             end
           end
@@ -2299,26 +2292,6 @@ function newTrackerView(tm, cm, cmgr)
               endRow   = ctx:ppqToRow(evt.endppq, chan),
             })
           end
-        end
-      end
-
-      -- Pass 2: tree links. Strip last spec-path segment to find the
-      -- intermediate parent; absent that, the spec-tree parent is the
-      -- materialisation root (evt.parentUuid).
-      for _, rec in pairs(aliasIdx.byUuid) do
-        local evt = rec.evt
-        if evt.parentUuid and evt.specPath then
-          local dot     = evt.specPath:find('%.[^.]+$')
-          local tParent = evt.parentUuid
-          if dot then
-            local parentPath = evt.specPath:sub(1, dot - 1)
-            local pRec = bySpecPath[evt.parentUuid] and bySpecPath[evt.parentUuid][parentPath]
-            if pRec then tParent = pRec.evt.uuid end
-          end
-          rec.treeParent = tParent
-          local list = aliasIdx.byChildren[tParent] or {}
-          aliasIdx.byChildren[tParent] = list
-          util.add(list, rec)
         end
       end
       for _, list in pairs(aliasIdx.byChildren) do

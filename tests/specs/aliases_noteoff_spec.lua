@@ -148,8 +148,12 @@ return {
       local pre = h.fm:dump().notes
       local mid, gk
       for _, n in ipairs(pre) do
-        if n.parentUuid == 1 and n.specPath == '1'   then mid = n end
-        if n.parentUuid == 1 and n.specPath == '1.1' then gk  = n end
+        if n.parentUuid == 1 then
+          local idx = h.tm:specPathOf(n)
+          local key = idx and table.concat(idx, '.') or nil
+          if key == '1'   then mid = n end
+          if key == '1.1' then gk  = n end
+        end
       end
       t.truthy(mid); t.eq(mid.pitch, 61); t.eq(mid.ppq, 480)
       t.truthy(gk);  t.eq(gk.pitch,  62); t.eq(gk.ppq,  720)

@@ -11,7 +11,7 @@
 --@map:shape configChangedPayload.bulk     = { level = string }                  -- assign (keyless)
 --@map:shape configChangedPayload.reload   = {}                                  -- setContext / clearTake / setTrack
 
-loadModule('util')
+require 'util'
 
 local function print(...)
   return util.print(...)

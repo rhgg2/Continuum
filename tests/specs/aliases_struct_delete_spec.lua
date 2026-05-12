@@ -84,9 +84,11 @@ return {
       local pre = h.fm:dump().notes
       local mid, ch1, ch2
       for _, k in ipairs(byParent(pre, 1)) do
-        if     k.specPath == '1'   then mid = k
-        elseif k.specPath == '1.1' then ch1 = k
-        elseif k.specPath == '1.2' then ch2 = k
+        local idx = h.tm:specPathOf(k)
+        local key = idx and table.concat(idx, '.') or nil
+        if     key == '1'   then mid = k
+        elseif key == '1.1' then ch1 = k
+        elseif key == '1.2' then ch2 = k
         end
       end
       t.truthy(mid); t.truthy(ch1); t.truthy(ch2)
@@ -115,7 +117,7 @@ return {
       t.eq(#gks, 1)
       t.eq(gks[1].ppq, 360, 'grandchild keeps its 300+60 resolved ppq')
       t.eq(gks[1].vel, 105, 'grandchild vel composes against new root vel')
-      t.eq(gks[1].specPath, '1', 'grandchild specPath now relative to new root')
+      t.deepEq(h.tm:specPathOf(gks[1]), {1}, 'grandchild specPath now relative to new root')
     end,
   },
 
@@ -136,7 +138,8 @@ return {
       }
       local target
       for _, k in ipairs(byParent(h.fm:dump().notes, 1)) do
-        if k.specPath == '1' then target = k end
+        local idx = h.tm:specPathOf(k)
+        if idx and table.concat(idx, '.') == '1' then target = k end
       end
       t.truthy(h.tm:deleteAliased(target))
       h.tm:flush()
@@ -144,7 +147,7 @@ return {
       local notes = h.fm:dump().notes
       local root  = rootByUuid(notes, 1)
       t.eq(#root.aliases, 1)
-      t.eq(root.aliases[1].id, '2', 'sibling preserved')
+      t.deepEq(root.aliases[1].xform.ppqL, {{'add', 960}}, 'sibling preserved')
 
       local survivors = byParent(notes, 1)
       t.eq(#survivors, 1)
@@ -215,6 +218,72 @@ return {
   },
 
   --------------------------------------------------------------------
+  -- Three-level subtree-delete with mixed materialised / suppressed
+  -- direct children. L1 has two children: A (suppressed by collision
+  -- with L1's own emit) and B (uncolliding, materialised). Under the
+  -- suppressed A sits a grandchild X that resolves to its own free
+  -- slot and *does* materialise. Deleting L1 must:
+  --   - promote B (materialised direct child) to a new root
+  --   - drop A silently (no materialisation to promote)
+  --   - sweep X's stale emit on the rebuild that follows; X carried
+  --     parentUuid=root.uuid but its spec line vanished with L1's pluck
+  --------------------------------------------------------------------
+  {
+    name = 'three-level delete: suppressed mid drops; its materialised grandchild is swept',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = { rootNote{
+          aliases = {
+            { xform = { ppqL = {{'add', 480}} }, children = {
+              { xform = {}, children = {
+                { xform = { ppqL = {{'add', 240}} }, children = {} },
+              }},
+              { xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
+                children = {} },
+            }},
+          },
+        } } },
+      }
+
+      -- Pre-state: L1 @480, A suppressed (collides with L1 @480),
+      -- A.X @720 pitch=60, B @720 pitch=61.
+      local pre = h.fm:dump().notes
+      local l1, ax, b
+      for _, k in ipairs(byParent(pre, 1)) do
+        if     k.ppq == 480                  then l1 = k
+        elseif k.ppq == 720 and k.pitch == 60 then ax = k
+        elseif k.ppq == 720 and k.pitch == 61 then b  = k
+        end
+      end
+      t.truthy(l1, 'L1 materialised at 480')
+      t.truthy(ax, 'A.X materialised at 720/60 under suppressed A')
+      t.truthy(b,  'B materialised at 720/61')
+
+      t.truthy(h.tm:deleteAliased(l1))
+      h.tm:flush()
+
+      local notes  = h.fm:dump().notes
+      local origin = rootByUuid(notes, 1)
+      t.deepEq(origin.aliases, {}, 'L1 plucked from root; whole subtree gone')
+
+      local roots = freeRoots(notes)
+      t.eq(#roots, 2, 'old root + one promoted (B); suppressed A and its kid X dropped')
+
+      local promoted
+      for _, r in ipairs(roots) do
+        if r.uuid ~= 1 then promoted = r end
+      end
+      t.truthy(promoted)
+      t.eq(promoted.ppq,   720, 'B keeps its resolved ppq')
+      t.eq(promoted.pitch, 61,  'B keeps its resolved pitch')
+      t.deepEq(promoted.aliases, {}, 'B carries no subtree')
+
+      -- No survivor with parentUuid=1 remains.
+      t.eq(#byParent(notes, 1), 0, 'all aliased kids of old root gone')
+    end,
+  },
+
+  --------------------------------------------------------------------
   -- Suppressed child: no materialisation to promote, subtree dropped
   --------------------------------------------------------------------
   {
@@ -241,7 +310,10 @@ return {
       -- Confirm the '1' alias is suppressed and '2' emits.
       local survived = byParent(h.fm:dump().notes, 1)
       local paths = {}
-      for _, k in ipairs(survived) do paths[k.specPath] = true end
+      for _, k in ipairs(survived) do
+        local idx = h.tm:specPathOf(k)
+        if idx then paths[table.concat(idx, '.')] = true end
+      end
       t.falsy(paths['1'], "suppressed child has no materialisation")
       t.truthy(paths['2'], "uncolliding child emits")
 
