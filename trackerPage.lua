@@ -156,7 +156,7 @@ function newTrackerPage(cm, cmgr, chrome, gui)
 
     local function drawTextAt(xpos, ypos, txt, c)
       for char in txt:gmatch(utf8.charpattern) do
-        ImGui.DrawList_AddText(drawList, xpos, ypos, chrome.colour(c), char)
+        ImGui.DrawList_AddText(drawList, xpos, ypos+1, chrome.colour(c), char)
         xpos = xpos + gX
       end
     end
@@ -580,10 +580,10 @@ function newTrackerPage(cm, cmgr, chrome, gui)
 
     draw:hLine(-GUTTER, totalWidth - 1, 0, 'text', -0.25)
 
-    for i = 1, #chanOrder - 1 do
-      local chan = chanOrder[i]
-      draw:vLine(chanX[chan] + chanW[chan], -HEADER, gridHeight - 1, 'separator')
-    end
+    -- for i = 1, #chanOrder - 1 do
+    --   local chan = chanOrder[i]
+    --   draw:vLine(chanX[chan] + chanW[chan], -HEADER, gridHeight - 1, 'separator')
+    -- end
 
     for y = 0, gridHeight - 1 do
       local row = scrollRow + y
@@ -605,20 +605,29 @@ function newTrackerPage(cm, cmgr, chrome, gui)
     end
 
     local drawList = ImGui.GetWindowDrawList(ctx)
-    local tailBord = chrome.colour('tailBord')
+    local tailCol = chrome.colour('tail')
     local viewTop  = scrollRow
     local viewBot  = scrollRow + gridHeight
     for _, col in ipairs(grid.cols) do
       if col.x and col.tails then
-        local colPx = gridOriginX + col.x * gridX
         for _, tail in ipairs(col.tails) do
           if tail.endRow > viewTop and tail.startRow < viewBot then
             local y1 = gridOriginY + math.max(tail.startRow - scrollRow, 0) * gridY
             local y2 = gridOriginY + math.min(tail.endRow - scrollRow, gridHeight) * gridY
-            local x1 = colPx - 4
-            ImGui.DrawList_AddRectFilled(drawList, x1-1, y1-1, x1 + 4, y1+1, tailBord)
-            ImGui.DrawList_AddRectFilled(drawList, x1-2, y1, x1, y2, tailBord)
-            ImGui.DrawList_AddRectFilled(drawList, x1-1, y2-1, x1 + 4, y2+1, tailBord)
+            local x1 = gridOriginX + col.x * gridX
+            local r  = 5
+            --  ImGui.DrawList_AddRectFilled(drawList, x1+1, y1-1, x1 + 6, y1+1, tailCol, 1)
+            --  ImGui.DrawList_AddRectFilled(drawList, x1+5, y1, x1+7, y2, tailCol)
+            --  ImGui.DrawList_AddRectFilled(drawList, x1+1, y2-1, x1 + 6, y2+1, tailCol, 1)
+            ImGui.DrawList_PathClear(drawList)
+--            ImGui.DrawList_PathLineTo(drawList, x1-1, y1)
+            ImGui.DrawList_PathArcTo( drawList, x1, y1+r, r, 3*math.pi/2, math.pi)
+            ImGui.DrawList_PathLineTo(drawList, x1-r, y1+r+1)
+            ImGui.DrawList_PathLineTo(drawList, x1-r, y2-r-1)
+            ImGui.DrawList_PathArcTo( drawList, x1, y2-r, r, math.pi, math.pi/2)
+            -- ImGui.DrawList_PathLineTo(drawList, x1+1, y2)
+            ImGui.DrawList_PathStroke(drawList, tailCol, ImGui.DrawFlags_None, 1.5)
+            ImGui.DrawList_PathClear(drawList)
           end
         end
       end

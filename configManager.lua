@@ -101,8 +101,9 @@ local declarations = {
   { 'colour.mute',             'colour.negative'                  },
   { 'colour.solo',             'palette.amber'                    },
   { 'colour.separator',        {'palette.mid',        0.3 }       },
-  { 'colour.tail',             {'palette.steel',      0.15}       },
-  { 'colour.tailBord',         hex('#8caac8')                     },  -- one-off lighter steel
+--  { 'colour.tail',             {'palette.steel',      0.3}       },
+  { 'colour.tail',             hex('#8caac8')                     },  -- one-off lighter steel
+  { 'colour.tailBord',         {'colour.tail', 0.4}               },  -- blend for corner
   { 'colour.ghost',            {'palette.steel',      0.9 }       },
   { 'colour.ghostNegative',    hex('#da8278', 0.9)                },  -- one-off faded red
   { 'colour.alias',            {'palette.steel',      0.22}       },  -- materialised-alias cell tint

@@ -2275,7 +2275,7 @@ function newTrackerView(tm, cm, cmgr)
         local chan = gridCol.midiChan
         for _, evt in ipairs(gridCol.events) do
           local startRow = ctx:ppqToRow(evt.ppq or 0, chan)
-          local y        = util.round(startRow)
+          local y        = math.floor(startRow)
           if y >= 0 and y < numRows then
             if gridCol.cells[y] then
               gridCol.overflow[y] = true
