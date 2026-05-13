@@ -15,10 +15,10 @@ end
 
 local mm = {}
 
---invariant: chanMsgTypes is derived from chanMsgLUT so the two directions can't drift
+--invariant: chanMsgEvTypes is derived from chanMsgLUT so the two directions can't drift
 local chanMsgLUT = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }
-local chanMsgTypes = {}
-for k, v in pairs(chanMsgLUT) do chanMsgTypes[v] = k end
+local chanMsgEvTypes = {}
+for k, v in pairs(chanMsgLUT) do chanMsgEvTypes[v] = k end
 
 
 ---------- PRIVATE
@@ -26,9 +26,21 @@ for k, v in pairs(chanMsgLUT) do chanMsgTypes[v] = k end
 local notes      = {}
 local ccs        = {}
 local eventsByUuid      = {}
+local tokenIdx   = {}
 local maxUUID    = 0
 local lock       = false
 local pendingSysexDeletes  -- list of uuids; non-nil only inside a modify()
+
+-- Opaque, content-keyed addressing. Token is private string built from
+-- the event's identity fields; collision-free by construction across the
+-- evType space. Rebuilt fresh in mm:load alongside eventsByUuid.
+local function tokenOf(evt)
+  local et = evt.evType
+  if et == 'note' then return 'note|' .. evt.chan .. '|' .. evt.pitch .. '|' .. evt.ppq end
+  if et == 'pa'   then return 'pa|'   .. evt.chan .. '|' .. evt.pitch .. '|' .. evt.ppq end
+  if et == 'cc'   then return 'cc|'   .. evt.chan .. '|' .. evt.cc    .. '|' .. evt.ppq end
+  return et .. '|' .. evt.chan .. '|' .. evt.ppq
+end
 
 --contract: INTERNALS fields (idx, uuidIdx) are stripped from all shallow clones returned to callers
 local INTERNALS = { idx = true, uuidIdx = true }
@@ -114,14 +126,16 @@ local noteSidecarEncode, noteSidecarDecode, ccSidecarEncode, ccSidecarDecode do
   end
 
   function ccSidecarEncode(cc)
-    local typeByte = chanMsgLUT[cc.msgType]
+    local typeByte = chanMsgLUT[cc.evType]
     if not typeByte then return nil end
     local typeNib = typeByte >> 4
 
     local lo, hi
-    if cc.msgType == 'pb' then
+    if cc.evType == 'pb' then
       local raw = (cc.val or 0) + 8192
       lo, hi = raw & 0x7F, (raw >> 7) & 0x7F
+    elseif cc.evType == 'pa' then
+      lo, hi = (cc.vel or 0) & 0x7F, 0
     else
       lo, hi = (cc.val or 0) & 0x7F, 0
     end
@@ -140,14 +154,16 @@ local noteSidecarEncode, noteSidecarDecode, ccSidecarEncode, ccSidecarDecode do
     if body:sub(1, 4) ~= SIDECAR_MAGIC then return nil end
 
     local out = {}
-    out.msgType = chanMsgTypes[body:byte(5) << 4]
+    out.evType = chanMsgEvTypes[body:byte(5) << 4]
     out.uuid = tonumber(body:sub(10), 36)
-    if not out.msgType or not out.uuid then return nil end
+    if not out.evType or not out.uuid then return nil end
     local lo, hi = body:byte(8), body:byte(9)
     out.chan = body:byte(6) + 1
-    out.val = (out.msgType == 'pb') and (((hi << 7) | lo) - 8192) or lo
-    if     out.msgType == 'cc' then out.cc    = body:byte(7)
-    elseif out.msgType == 'pa' then out.pitch = body:byte(7)
+    if     out.evType == 'pb' then out.val = ((hi << 7) | lo) - 8192
+    elseif out.evType == 'pa' then out.vel = lo
+    else                           out.val = lo end
+    if     out.evType == 'cc' then out.cc    = body:byte(7)
+    elseif out.evType == 'pa' then out.pitch = body:byte(7)
     end
     return out
   end
@@ -173,12 +189,12 @@ end
 
 local noteEventFields = {
   idx = true, loc = true, ppq = true, endppq = true, chan = true,
-  pitch = true, vel = true, muted = true, uuid = true, uuidIdx = true,
+  evType = true, pitch = true, vel = true, muted = true, uuid = true, uuidIdx = true,
   sampleShadowed = true,
 }
 local ccEventFields = {
-  idx = true, loc = true, uuidIdx = true, ppq = true, msgType = true, chan = true,
-  cc = true, pitch = true, val = true,
+  idx = true, loc = true, uuidIdx = true, ppq = true, evType = true, chan = true,
+  cc = true, pitch = true, val = true, vel = true,
   muted = true, shape = true, tension = true, uuid = true,
 }
 
@@ -193,7 +209,7 @@ local function saveMetadatum(uuid)
     return
   end
 
-  local strip = evt.msgType and ccEventFields or noteEventFields
+  local strip = (evt.evType == 'note') and noteEventFields or ccEventFields
   reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_' .. uuidTxt, util.serialise(evt, strip), true)
 
   -- Ensure uuid is in the keys list so loadMetadata() finds it on reload
@@ -239,16 +255,16 @@ end
 
 ---------- PUBLIC
 
---shape: note = { ppq=number, endppq=number, chan=1..16, pitch=0..127, vel=0..127, [muted=true], [uuid=number], [<metadata...>] }
---shape: cc   = { ppq=number, msgType=string, chan=1..16, [cc=0..127], [pitch=0..127], val=number, [muted=true], shape=string, [tension=number], [uuid=number], [<metadata...>] }
+--shape: note = { evType='note', ppq=number, endppq=number, chan=1..16, pitch=0..127, vel=0..127, [muted=true], [uuid=number], [<metadata...>] }
+--shape: cc   = { evType='cc'|'pb'|'pa'|'at'|'pc', ppq=number, chan=1..16, [cc=0..127], [pitch=0..127], val=number|vel=number(pa), [muted=true], shape=string, [tension=number], [uuid=number], [<metadata...>] }
 --shape: noteSidecarPayload = { ppq, chan, pitch, droppedCount }          -- notesDeduped event
 --shape: uuidsReassignedEvent = { ppq, chan, pitch, oldUuid, newUuid }
---shape: ccDedupEvent = { ppq, chan, msgType, cc, pitch, droppedCount }   -- ccsDeduped event
---shape: reconcileEvent.valueRebound    = { kind, uuid, chan, msgType, [cc], [pitch], ppq, oldVal, newVal }
---shape: reconcileEvent.consensusRebound = { kind, uuid, chan, msgType, [cc], [pitch], ppq, offset }
---shape: reconcileEvent.guessedRebound  = { kind, uuid, chan, msgType, [cc], [pitch], ppq }
+--shape: ccDedupEvent = { ppq, chan, evType, cc, pitch, droppedCount }   -- ccsDeduped event
+--shape: reconcileEvent.valueRebound    = { kind, uuid, chan, evType, [cc], [pitch], ppq, oldVal, newVal }
+--shape: reconcileEvent.consensusRebound = { kind, uuid, chan, evType, [cc], [pitch], ppq, offset }
+--shape: reconcileEvent.guessedRebound  = { kind, uuid, chan, evType, [cc], [pitch], ppq }
 --shape: reconcileEvent.ambiguous       = { kind, uuid, candidateppqs={...} }
---shape: reconcileEvent.orphaned        = { kind, uuid, chan, msgType, [cc], [pitch], lastppq }
+--shape: reconcileEvent.orphaned        = { kind, uuid, chan, evType, [cc], [pitch], lastppq }
 local fire = util.installHooks(mm)
 
 ----- Load
@@ -259,7 +275,7 @@ function mm:load(newTake)
   local takeSwapped = take ~= newTake
   if takeSwapped then take = newTake end
 
-  notes, ccs, eventsByUuid, maxUUID, lock = {}, {}, {}, 0, false
+  notes, ccs, eventsByUuid, tokenIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
   local ccSidecars, noteSidecars = {}, {}
   local sidecarRewrites, sidecarInserts, sidecarDeletes, ccDeletes = {}, {}, {}, {}
   local noteDedupEvents, ccDedupEvents, reassignEvents, reconcileEvents = {}, {}, {}, {}
@@ -270,7 +286,7 @@ function mm:load(newTake)
   ----- Helper functions
   local function noteKey(n)   return n.ppq .. '|' .. n.chan .. '|' .. n.pitch end
   local function idOf(cc)     return cc.cc or cc.pitch or 0 end
-  local function ccIdKey(e)   return e.msgType .. '|' .. e.chan .. '|' .. idOf(e) end
+  local function ccIdKey(e)   return e.evType .. '|' .. e.chan .. '|' .. idOf(e) end
   local function ccPPQKey(e)  return ccIdKey(e)  .. '|' .. e.ppq end
   local function ccFullKey(e) return ccPPQKey(e) .. '|' .. (e.val or 0) end
 
@@ -279,7 +295,7 @@ function mm:load(newTake)
   for i = 0, noteCount-1 do
     local ok, _, muted, ppq, endppq, chan, pitch, vel = reaper.MIDI_GetNote(take, i)
     if ok then
-      local evt = { idx = i, ppq = ppq, endppq = endppq, chan = chan + 1, pitch = pitch, vel = vel }
+      local evt = { idx = i, evType = 'note', ppq = ppq, endppq = endppq, chan = chan + 1, pitch = pitch, vel = vel }
       if muted then evt.muted = true end
       util.add(notes, evt)
     end
@@ -326,13 +342,13 @@ function mm:load(newTake)
   for i = 0, ccCount-1 do
     local ok, _, muted, ppq, chanmsg, chan, msg2, msg3 = reaper.MIDI_GetCC(take, i)
     if ok then
-      local msgType = chanMsgTypes[chanmsg] or ('chanmsg_' .. chanmsg)
-      local evt = { idx = i, ppq = ppq, msgType = msgType, chan = chan + 1}
+      local evType = chanMsgEvTypes[chanmsg] or ('chanmsg_' .. chanmsg)
+      local evt = { idx = i, ppq = ppq, evType = evType, chan = chan + 1}
       if muted then evt.muted = true end
-      if     msgType == 'pa' then evt.pitch, evt.val = msg2, msg3
-      elseif msgType == 'cc' then evt.cc,    evt.val = msg2, msg3
-      elseif msgType == 'pc' or msgType == 'at' then evt.val = msg2
-      elseif msgType == 'pb' then evt.val = ((msg3 << 7) | msg2) - 8192
+      if     evType == 'pa' then evt.pitch, evt.vel = msg2, msg3
+      elseif evType == 'cc' then evt.cc,    evt.val = msg2, msg3
+      elseif evType == 'pc' or evType == 'at' then evt.val = msg2
+      elseif evType == 'pb' then evt.val = ((msg3 << 7) | msg2) - 8192
       end
       local _, shape, tension = reaper.MIDI_GetCCShape(take, i)
       evt.shape = shapeNames[shape] or 'step'
@@ -373,7 +389,7 @@ function mm:load(newTake)
         local pool = #candidates > 0 and candidates or fallbacks
         local winnerLoc = pool[#pool]
         local kept = ccs[winnerLoc]
-        util.add(ccDedupEvents, util.pick(kept, 'ppq chan msgType cc pitch', { droppedCount = #locs - 1 }))
+        util.add(ccDedupEvents, util.pick(kept, 'ppq chan evType cc pitch', { droppedCount = #locs - 1 }))
         for _, loc in ipairs(locs) do
           if loc ~= winnerLoc then util.add(ccDeletes, ccs[loc].idx); ccs[loc] = nil end
         end
@@ -441,7 +457,7 @@ function mm:load(newTake)
       if kind then
         util.add(sidecarRewrites, { idx = s.idx, ppq = c.ppq, type = -1, body = ccSidecarEncode(c) })
         util.add(reconcileEvents,
-          util.assign(util.pick(c, 'ppq chan msgType cc pitch', { kind = kind, uuid = s.uuid }),
+          util.assign(util.pick(c, 'ppq chan evType cc pitch', { kind = kind, uuid = s.uuid }),
                       extras or {}))
       end
       removeFirst(scsWorking, s); removeFirst(ccsWorking, c)
@@ -463,7 +479,8 @@ function mm:load(newTake)
       for _, s in ipairs(scs) do
         local c = cs[1]
         if c then
-          bind(s, c, 'valueRebound', { oldVal = s.val, newVal = c.val })
+          bind(s, c, 'valueRebound', { oldVal = (s.evType == 'pa') and s.vel or s.val,
+                                       newVal = (c.evType == 'pa') and c.vel or c.val })
           table.remove(cs, 1)
         end
       end
@@ -516,7 +533,7 @@ function mm:load(newTake)
       local cs = ccBuckets[k] or {}
       for _, s in ipairs(scs) do
         if #cs == 0 then
-          util.add(reconcileEvents, util.pick(s, 'uuid chan msgType cc pitch', { kind = 'orphaned', lastppq = s.ppq }))
+          util.add(reconcileEvents, util.pick(s, 'uuid chan evType cc pitch', { kind = 'orphaned', lastppq = s.ppq }))
         elseif #cs == 1 then
           bind(s, cs[1], 'guessedRebound')
           table.remove(cs, 1)
@@ -573,10 +590,12 @@ function mm:load(newTake)
   local ccsKeyed = {}
   for _, n in ipairs(notes) do
     notesKeyed[noteKey(n)] = n
+    tokenIdx[tokenOf(n)] = n
     util.assign(n, metadata[n.uuid])
   end
   for _, c in ipairs(ccs) do
     ccsKeyed[ccPPQKey(c)] = c
+    tokenIdx[tokenOf(c)] = c
     if c.uuid then
       eventsByUuid[c.uuid] = c
       util.assign(c, metadata[c.uuid])
@@ -595,10 +614,10 @@ function mm:load(newTake)
   for i = 0, ccCount-1 do
     local ok, _, _, ppq, chanmsg, chan, msg2 = reaper.MIDI_GetCC(take, i)
     if ok then
-      local msgType = chanMsgTypes[chanmsg] or ('chanmsg_'..chanmsg)
-      local evt = { ppq = ppq, chan = chan + 1, msgType = msgType }
-      if msgType == 'cc' then evt.cc = msg2 end
-      if msgType == 'pa' then evt.pitch = msg2 end
+      local evType = chanMsgEvTypes[chanmsg] or ('chanmsg_'..chanmsg)
+      local evt = { ppq = ppq, chan = chan + 1, evType = evType }
+      if evType == 'cc' then evt.cc = msg2 end
+      if evType == 'pa' then evt.pitch = msg2 end
       local c = ccsKeyed[ccPPQKey(evt)]
       if c then c.idx = i end
     end
@@ -622,7 +641,7 @@ function mm:load(newTake)
   if #noteDedupEvents > 0  then fire('notesDeduped',    { events = noteDedupEvents }) end
   --emits: uuidsReassigned -- { events = [{ppq, chan, pitch, oldUuid, newUuid}, ...] }
   if #reassignEvents > 0   then fire('uuidsReassigned', { events = reassignEvents })  end
-  --emits: ccsDeduped     -- { events = [{ppq, chan, msgType, cc, pitch, droppedCount}, ...] }
+  --emits: ccsDeduped     -- { events = [{ppq, chan, evType, cc, pitch, droppedCount}, ...] }
   if #ccDedupEvents > 0    then fire('ccsDeduped',      { events = ccDedupEvents })   end
   --emits: ccsReconciled  -- { events = [reconcileEvent, ...] }; five kinds: valueRebound/consensusRebound/guessedRebound/ambiguous/orphaned
   if #reconcileEvents > 0  then fire('ccsReconciled',   { events = reconcileEvents }) end
@@ -755,6 +774,7 @@ function mm:addNote(t)
   reaper.MIDI_InsertNote(take, false, t.muted or false, t.ppq, t.endppq, t.chan - 1, t.pitch, t.vel, true)
 
   local note = util.clone(t)
+  note.evType = 'note'
   if not note.muted then note.muted = nil end
   assignNewUUID(note)
   t.uuid = note.uuid
@@ -804,18 +824,18 @@ function mm:deleteCC(loc)
 end
 
 local function reconstruct(tbl)
-  local msgType = tbl.msgType
-  if not msgType then return end
+  local evType = tbl.evType
+  if not evType or evType == 'note' then return end
 
   local msg2, msg3
-  if msgType == 'pb' then
+  if evType == 'pb' then
     local raw = (tbl.val or 0) + 8192
     msg2 = raw & 0x7F
     msg3 = (raw >> 7) & 0x7F
-  elseif msgType == 'pa' then
+  elseif evType == 'pa' then
     msg2 = tbl.pitch or 0
-    msg3 = tbl.val   or 0
-  elseif msgType == 'pc' or msgType == 'at' then
+    msg3 = tbl.vel   or 0
+  elseif evType == 'pc' or evType == 'at' then
     msg2 = tbl.val or 0
     msg3 = 0
   else
@@ -833,8 +853,8 @@ function mm:assignCC(loc, t)
   local msg = ccs[loc]
   if not msg then return end
 
-  local hasStructural = t.ppq or t.msgType or t.chan or t.cc or t.pitch
-                        or t.val or t.muted ~= nil or t.shape or t.tension
+  local hasStructural = t.ppq or t.evType or t.chan or t.cc or t.pitch
+                        or t.val or t.vel or t.muted ~= nil or t.shape or t.tension
   local hasMetadata = false
   for k in pairs(t) do
     if not ccEventFields[k] then hasMetadata = true; break end
@@ -850,8 +870,8 @@ function mm:assignCC(loc, t)
 
   if hasStructural then
     local chanmsg, msg2, msg3
-    if t.msgType then
-      chanmsg = chanMsgLUT[t.msgType]
+    if t.evType then
+      chanmsg = chanMsgLUT[t.evType]
       if not chanmsg then
         print('Error! Unspecified message type')
         return
@@ -868,8 +888,8 @@ function mm:assignCC(loc, t)
 
   if hasStructural then
     if msg.muted == false then msg.muted = nil end
-    if msg.msgType ~= 'cc' then msg.cc    = nil end
-    if msg.msgType ~= 'pa' then msg.pitch = nil end
+    if msg.evType ~= 'cc' then msg.cc    = nil end
+    if msg.evType ~= 'pa' then msg.pitch, msg.vel = nil, nil end
     if t.shape or t.tension then
       local shape = shapeLUT[msg.shape] or 0
       reaper.MIDI_SetCCShape(take, msg.idx, shape, msg.tension or 0, true)
@@ -895,14 +915,15 @@ end
 function mm:addCC(t)
   if not (take and checkLock()) then return end
 
-  if t.msgType == nil then t.msgType = 'cc' end
+  if t.evType == nil then t.evType = 'cc' end
 
-  if t.ppq == nil or t.chan == nil or t.val == nil then
+  local valueField = (t.evType == 'pa') and 'vel' or 'val'
+  if t.ppq == nil or t.chan == nil or t[valueField] == nil then
     print('Error! Underspecified new cc event')
     return
   end
 
-  local chanmsg = chanMsgLUT[t.msgType]
+  local chanmsg = chanMsgLUT[t.evType]
   if not chanmsg then
     print('Error! Unspecified message type')
     return
@@ -946,7 +967,20 @@ end
 function mm:byUuid(uuid)
   local evt = eventsByUuid[uuid]
   if not evt then return nil end
-  return evt.loc, util.clone(evt, INTERNALS), evt.msgType and 'cc' or 'note'
+  return evt.loc, util.clone(evt, INTERNALS), (evt.evType == 'note') and 'note' or 'cc'
+end
+
+--contract: token is opaque and stable across reload as long as the event's identity fields (evType, chan, ppq, and pitch|cc as relevant) don't change; mutating any of them retires the old token and issues a new one
+function mm:tokenOf(evt)
+  if not evt or not evt.evType then return nil end
+  return tokenOf(evt)
+end
+
+--contract: returns (loc, evt-clone, kind) for the live event with this token; nil if absent. Mirrors mm:byUuid; works on every event (including plain ccs with no uuid).
+function mm:byToken(token)
+  local evt = tokenIdx[token]
+  if not evt then return nil end
+  return evt.loc, util.clone(evt, INTERNALS), (evt.evType == 'note') and 'note' or 'cc'
 end
 
 ----- Take data

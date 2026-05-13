@@ -41,6 +41,7 @@ local specs = {
   'mm_cc_reconcile_spec',
   'mm_cc_dedup_spec',
   'mm_deletecc_sidecar_spec',
+  'mm_token_spec',
   'sidecar_reconcile_spec',
   'tm_rebuild_spec',
   'tm_rebuild_rule_spec',

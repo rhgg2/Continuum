@@ -7,9 +7,9 @@ local t = require('support')
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 local classic67 = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } }
 
-local function findCC(dump, msgType, chan)
+local function findCC(dump, evType, chan)
   for _, c in ipairs(dump.ccs) do
-    if c.msgType == msgType and (chan == nil or c.chan == chan) then return c end
+    if c.evType == evType and (chan == nil or c.chan == chan) then return c end
   end
 end
 
@@ -25,7 +25,7 @@ return {
         seed = {
           ccs = {
             { ppq = 139, ppqL = 120,
-              chan = 2, msgType = 'cc', cc = 1, val = 64,
+              chan = 2, evType = 'cc', cc = 1, val = 64,
               rpb = 4 },
           },
         },
@@ -51,7 +51,7 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 139, chan = 2, msgType = 'cc', cc = 1, val = 64 },
+            { ppq = 139, chan = 2, evType = 'cc', cc = 1, val = 64 },
           },
         },
         config = {
@@ -74,7 +74,7 @@ return {
         seed = {
           ccs = {
             { ppq = 139, ppqL = 120,
-              chan = 2, msgType = 'cc', cc = 1, val = 64,
+              chan = 2, evType = 'cc', cc = 1, val = 64,
               rpb = 4 },
           },
         },
@@ -114,7 +114,7 @@ return {
       local h = harness.mk{
         seed = {
           -- Existing cc to materialise a cc=11 column on chan 1.
-          ccs = { { ppq = 0, chan = 1, msgType = 'cc', cc = 11, val = 0 } },
+          ccs = { { ppq = 0, chan = 1, evType = 'cc', cc = 11, val = 0 } },
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
@@ -141,7 +141,7 @@ return {
 
       local fresh
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'cc' and c.cc == 11 and c.ppq ~= 0 then fresh = c end
+        if c.evType == 'cc' and c.cc == 11 and c.ppq ~= 0 then fresh = c end
       end
       t.truthy(fresh, 'authored cc landed')
       t.eq(fresh.rpb, 8, 'rpb stamped from take')
@@ -158,7 +158,7 @@ return {
         seed = {
           ccs = {
             { ppq = 139, ppqL = 120,
-              chan = 2, msgType = 'pb', val = 0,
+              chan = 2, evType = 'pb', val = 0,
               rpb = 4 },
           },
         },
@@ -237,7 +237,7 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60, chan = 1, msgType = 'cc', cc = 11, val = 50,
+            { ppq = 60, chan = 1, evType = 'cc', cc = 11, val = 50,
               rpb = 4 },
           },
         },

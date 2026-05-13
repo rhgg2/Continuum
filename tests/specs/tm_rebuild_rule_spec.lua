@@ -15,7 +15,7 @@ local function noteByPitch(dump, pitch)
 end
 local function ccByCC(dump, ccNum)
   for _, c in ipairs(dump.ccs) do
-    if c.msgType == 'cc' and c.cc == ccNum then return c end
+    if c.evType == 'cc' and c.cc == ccNum then return c end
   end
 end
 
@@ -60,7 +60,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = { ccs = {
-          { ppq = 90, msgType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 90, evType = 'cc', chan = 1, cc = 7, val = 64 },
         }},
       }
       local c = ccByCC(h.fm:dump(), 7)
@@ -154,7 +154,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = { ccs = {
-          { ppq = 139, msgType = 'cc', chan = 1, cc = 7, val = 64,
+          { ppq = 139, evType = 'cc', chan = 1, cc = 7, val = 64,
             ppqL = 120 },
         }},
         config = {

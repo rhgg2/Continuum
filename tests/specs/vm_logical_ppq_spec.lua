@@ -71,7 +71,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = {
-          ccs = { { ppq = 0, chan = 1, msgType = 'cc', cc = 11, val = 0 } },
+          ccs = { { ppq = 0, chan = 1, evType = 'cc', cc = 11, val = 0 } },
         },
         config = { take = { rowPerBeat = 8 } },
       }
@@ -344,7 +344,7 @@ return {
 
       local pa
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pa' then pa = c end
+        if c.evType == 'pa' then pa = c end
       end
       t.truthy(pa, 'PA emitted on sustain-row vel edit')
       t.eq(pa.rpb, 4, 'PA stamps current rpb')
@@ -360,7 +360,7 @@ return {
         seed = {
           ccs = {
             { ppq = 139, ppqL = 120,
-              chan = 1, msgType = 'cc', cc = 1, val = 64,
+              chan = 1, evType = 'cc', cc = 1, val = 64,
               frame = { swing = 'c58', colSwing = nil, rpb = 4 } },
           },
         },

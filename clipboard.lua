@@ -26,7 +26,7 @@ local CLIP_RESERVED = {
   -- mm/REAPER bookkeeping
   loc = true, idx = true, uuid = true, uuidIdx = true,
   -- envelope-level
-  type = true, msgType = true,
+  type = true, evType = true,
   -- alias materialisation metadata: a fresh paste gets fresh parentUuid
   -- from the rebuild walker if it's aliased, or none if it isn't.
   -- aliasSrc carries the source identity through the clip; the writer at

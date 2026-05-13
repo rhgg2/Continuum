@@ -71,11 +71,11 @@ return {
         },
         ccs = {
           -- before boundary (kept)
-          { ppq = 100,  msgType = 'cc', cc = 1, chan = 1, val = 64 },
+          { ppq = 100,  evType = 'cc', cc = 1, chan = 1, val = 64 },
           -- at boundary (deleted)
-          { ppq = 1920, msgType = 'cc', cc = 1, chan = 1, val = 100 },
+          { ppq = 1920, evType = 'cc', cc = 1, chan = 1, val = 100 },
           -- past boundary (deleted)
-          { ppq = 3000, msgType = 'cc', cc = 1, chan = 1, val = 0 },
+          { ppq = 3000, evType = 'cc', cc = 1, chan = 1, val = 0 },
         },
       }}
 
@@ -110,7 +110,7 @@ return {
           { ppq = 3780, endppq = 3840, chan = 1, pitch = 67, vel = 100, detune = 0, delay = 0 },
         },
         ccs = {
-          { ppq = 600, msgType = 'cc', cc = 1, chan = 1, val = 64 },
+          { ppq = 600, evType = 'cc', cc = 1, chan = 1, val = 64 },
         },
       }}
 
@@ -186,7 +186,7 @@ return {
           { ppq = 600,  endppq = 660,  chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0 },
         },
         ccs = {
-          { ppq = 100, msgType = 'cc', cc = 1, chan = 1, val = 64 },
+          { ppq = 100, evType = 'cc', cc = 1, chan = 1, val = 64 },
         },
       }}
 
@@ -270,11 +270,11 @@ return {
         },
         ccs = {
           -- distinct cc number — verifies col.cc isn't lost
-          { ppq = 100, msgType = 'cc', cc = 74, chan = 1, val = 64 },
+          { ppq = 100, evType = 'cc', cc = 74, chan = 1, val = 64 },
           -- fake pb — the marker the column projection drops
-          { ppq = 200, msgType = 'pb', chan = 1, val = 1024, fake = true },
+          { ppq = 200, evType = 'pb', chan = 1, val = 1024, fake = true },
           -- cc with custom metadata field — verifies arbitrary fields ride along
-          { ppq = 300, msgType = 'cc', cc = 1, chan = 1, val = 32, label = 'alpha' },
+          { ppq = 300, evType = 'cc', cc = 1, chan = 1, val = 32, label = 'alpha' },
         },
       }}
 
@@ -287,10 +287,10 @@ return {
       -- Copies live at oldPpq (3840) + source ppq: cc#74@3940, pb@4040, cc#1@4140.
       t.eq(ccs[4].ppq,     3940,    'cc#74 copy ppq')
       t.eq(ccs[4].cc,      74,      'cc number preserved')
-      t.eq(ccs[4].msgType, 'cc',    'msgType preserved')
+      t.eq(ccs[4].evType, 'cc',    'evType preserved')
 
       t.eq(ccs[5].ppq,     4040,    'pb copy ppq')
-      t.eq(ccs[5].msgType, 'pb',    'pb msgType preserved')
+      t.eq(ccs[5].evType, 'pb',    'pb evType preserved')
       t.eq(ccs[5].fake,    true,    'pb fake flag preserved')
       t.eq(ccs[5].val,     1024,    'pb val preserved verbatim')
 

@@ -22,17 +22,17 @@ end
 
 local function packCc(c)
   local msg2, msg3
-  if c.msgType == 'pb' then
+  if c.evType == 'pb' then
     local raw = (c.val or 0) + 8192
     msg2, msg3 = raw & 0x7F, (raw >> 7) & 0x7F
-  elseif c.msgType == 'pa' then
-    msg2, msg3 = c.pitch or 0, c.val or 0
-  elseif c.msgType == 'pc' or c.msgType == 'at' then
+  elseif c.evType == 'pa' then
+    msg2, msg3 = c.pitch or 0, c.vel or 0
+  elseif c.evType == 'pc' or c.evType == 'at' then
     msg2, msg3 = c.val or 0, 0
   else
     msg2, msg3 = c.cc or 0, c.val or 0
   end
-  return CHANMSG[c.msgType], msg2, msg3
+  return CHANMSG[c.evType], msg2, msg3
 end
 
 local function uuidTxt(u)
@@ -50,7 +50,7 @@ local function seed(take, reaper, spec)
                     msg2 = msg2, msg3 = msg3 }
   end
   for _, sc in ipairs(spec.sidecars or {}) do
-    local body = t.encodeSidecar{ uuid = sc.uuid, msgType = sc.msgType, chan = sc.chan,
+    local body = t.encodeSidecar{ uuid = sc.uuid, evType = sc.evType, chan = sc.chan,
                                   cc = sc.cc, pitch = sc.pitch, val = sc.val }
     texts[#texts+1] = { ppq = sc.ppq, eventtype = -1, msg = body }
   end
@@ -97,16 +97,16 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 64 },
-          { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 64 },
         },
-        sidecars = { { ppq = 100, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 64,
+        sidecars = { { ppq = 100, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 64,
                        metadata = { tag = 'kept' } } },
       })
       local mm, captured = loadWithCapture(take)
       t.eq(#captured.ccsDeduped, 1)
       local e = captured.ccsDeduped[1]
-      t.eq(e.ppq, 100); t.eq(e.chan, 1); t.eq(e.msgType, 'cc')
+      t.eq(e.ppq, 100); t.eq(e.chan, 1); t.eq(e.evType, 'cc')
       t.eq(e.cc, 7);    t.eq(e.pitch, nil)
       t.eq(e.droppedCount, 1)
       t.eq(e.keptHadUuid, nil, 'keptHadUuid retired with the post-reconcile dedup')
@@ -124,8 +124,8 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 50, msgType = 'cc', chan = 1, cc = 7, val = 10 },
-          { ppq = 50, msgType = 'cc', chan = 1, cc = 7, val = 90 },
+          { ppq = 50, evType = 'cc', chan = 1, cc = 7, val = 10 },
+          { ppq = 50, evType = 'cc', chan = 1, cc = 7, val = 90 },
         },
       })
       local mm, captured = loadWithCapture(take)
@@ -147,10 +147,10 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 42 },
-          { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 99 },
+          { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 42 },
+          { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 99 },
         },
-        sidecars = { { ppq = 100, uuid = 5, msgType = 'cc', chan = 1, cc = 7, val = 42,
+        sidecars = { { ppq = 100, uuid = 5, evType = 'cc', chan = 1, cc = 7, val = 42,
                        metadata = { tag = 'kept' } } },
       })
       local mm, captured = loadWithCapture(take)
@@ -171,10 +171,10 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 42 },
-          { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 99 },
+          { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 42 },
+          { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 99 },
         },
-        sidecars = { { ppq = 100, uuid = 6, msgType = 'cc', chan = 1, cc = 7, val = 7,
+        sidecars = { { ppq = 100, uuid = 6, evType = 'cc', chan = 1, cc = 7, val = 7,
                        metadata = { tag = 'drift' } } },
       })
       local mm, captured = loadWithCapture(take)
@@ -198,12 +198,12 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 200, msgType = 'cc', chan = 1, cc = 7, val = 64 },
-          { ppq = 200, msgType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 200, evType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 200, evType = 'cc', chan = 1, cc = 7, val = 64 },
         },
         sidecars = {
-          { ppq = 200, uuid = 11, msgType = 'cc', chan = 1, cc = 7, val = 64, metadata = { v = 'a' } },
-          { ppq = 200, uuid = 12, msgType = 'cc', chan = 1, cc = 7, val = 64, metadata = { v = 'b' } },
+          { ppq = 200, uuid = 11, evType = 'cc', chan = 1, cc = 7, val = 64, metadata = { v = 'a' } },
+          { ppq = 200, uuid = 12, evType = 'cc', chan = 1, cc = 7, val = 64, metadata = { v = 'b' } },
         },
       })
       local mm, captured = loadWithCapture(take)
@@ -242,9 +242,9 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 1 },
-          { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 2 },
-          { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 3 },
+          { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 1 },
+          { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 2 },
+          { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 3 },
         },
       })
       local mm, captured = loadWithCapture(take)
@@ -261,10 +261,10 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 0,   msgType = 'cc', chan = 1, cc = 7,  val = 1 },
-          { ppq = 0,   msgType = 'cc', chan = 1, cc = 7,  val = 2 },
-          { ppq = 100, msgType = 'cc', chan = 2, cc = 11, val = 30 },
-          { ppq = 100, msgType = 'cc', chan = 2, cc = 11, val = 40 },
+          { ppq = 0,   evType = 'cc', chan = 1, cc = 7,  val = 1 },
+          { ppq = 0,   evType = 'cc', chan = 1, cc = 7,  val = 2 },
+          { ppq = 100, evType = 'cc', chan = 2, cc = 11, val = 30 },
+          { ppq = 100, evType = 'cc', chan = 2, cc = 11, val = 40 },
         },
       })
       local mm, captured = loadWithCapture(take)
@@ -275,15 +275,15 @@ return {
   },
 
   {
-    name = 'no false dedup across (chan), (cc#), or (msgType) boundaries',
+    name = 'no false dedup across (chan), (cc#), or (evType) boundaries',
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 0, msgType = 'cc', chan = 1, cc = 7,    val = 1 },
-          { ppq = 0, msgType = 'cc', chan = 2, cc = 7,    val = 1 },  -- different chan
-          { ppq = 0, msgType = 'cc', chan = 1, cc = 11,   val = 1 },  -- different cc#
-          { ppq = 0, msgType = 'pa', chan = 1, pitch = 7, val = 1 },  -- different msgType (pa)
+          { ppq = 0, evType = 'cc', chan = 1, cc = 7,    val = 1 },
+          { ppq = 0, evType = 'cc', chan = 2, cc = 7,    val = 1 },  -- different chan
+          { ppq = 0, evType = 'cc', chan = 1, cc = 11,   val = 1 },  -- different cc#
+          { ppq = 0, evType = 'pa', chan = 1, pitch = 7, vel = 1 },  -- different evType (pa)
         },
       })
       local mm, captured = loadWithCapture(take)
@@ -299,14 +299,14 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 0, msgType = 'pa', chan = 1, pitch = 60, val = 100 },
-          { ppq = 0, msgType = 'pa', chan = 1, pitch = 60, val = 110 },
+          { ppq = 0, evType = 'pa', chan = 1, pitch = 60, vel = 100 },
+          { ppq = 0, evType = 'pa', chan = 1, pitch = 60, vel = 110 },
         },
       })
       local mm, captured = loadWithCapture(take)
       t.eq(#captured.ccsDeduped, 1)
       local e = captured.ccsDeduped[1]
-      t.eq(e.msgType, 'pa'); t.eq(e.pitch, 60); t.eq(e.cc, nil)
+      t.eq(e.evType, 'pa'); t.eq(e.pitch, 60); t.eq(e.cc, nil)
     end,
   },
 
@@ -316,13 +316,13 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 0, msgType = 'pb', chan = 1, val = -100 },
-          { ppq = 0, msgType = 'pb', chan = 1, val =  500 },
+          { ppq = 0, evType = 'pb', chan = 1, val = -100 },
+          { ppq = 0, evType = 'pb', chan = 1, val =  500 },
         },
       })
       local mm, captured = loadWithCapture(take)
       t.eq(#captured.ccsDeduped, 1)
-      t.eq(captured.ccsDeduped[1].msgType, 'pb')
+      t.eq(captured.ccsDeduped[1].evType, 'pb')
     end,
   },
 
@@ -333,11 +333,11 @@ return {
       -- One tier-2 valueRebound + one plain dup group, both in one load.
       seed(take, reaper, {
         ccs = {
-          { ppq = 100, msgType = 'cc', chan = 1, cc = 7,  val = 80 },
-          { ppq = 200, msgType = 'cc', chan = 1, cc = 11, val = 1 },
-          { ppq = 200, msgType = 'cc', chan = 1, cc = 11, val = 2 },
+          { ppq = 100, evType = 'cc', chan = 1, cc = 7,  val = 80 },
+          { ppq = 200, evType = 'cc', chan = 1, cc = 11, val = 1 },
+          { ppq = 200, evType = 'cc', chan = 1, cc = 11, val = 2 },
         },
-        sidecars = { { ppq = 100, uuid = 7, msgType = 'cc', chan = 1, cc = 7, val = 64,
+        sidecars = { { ppq = 100, uuid = 7, evType = 'cc', chan = 1, cc = 7, val = 64,
                        metadata = { kept = true } } },
       })
       local mm = realMM(nil)
@@ -361,15 +361,15 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 100, msgType = 'cc', chan = 1, cc = 7,  val = 64 },
-          { ppq = 100, msgType = 'cc', chan = 1, cc = 7,  val = 64 },
-          { ppq = 200, msgType = 'cc', chan = 1, cc = 11, val = 50 },
-          { ppq = 200, msgType = 'cc', chan = 1, cc = 11, val = 50 },
+          { ppq = 100, evType = 'cc', chan = 1, cc = 7,  val = 64 },
+          { ppq = 100, evType = 'cc', chan = 1, cc = 7,  val = 64 },
+          { ppq = 200, evType = 'cc', chan = 1, cc = 11, val = 50 },
+          { ppq = 200, evType = 'cc', chan = 1, cc = 11, val = 50 },
         },
         sidecars = {
-          { ppq = 100, uuid = 1, msgType = 'cc', chan = 1, cc = 7,  val = 64, metadata = { tag = 'a' } },
-          { ppq = 200, uuid = 2, msgType = 'cc', chan = 1, cc = 11, val = 50, metadata = { tag = 'b' } },
-          { ppq = 200, uuid = 3, msgType = 'cc', chan = 1, cc = 11, val = 50, metadata = { tag = 'c' } },
+          { ppq = 100, uuid = 1, evType = 'cc', chan = 1, cc = 7,  val = 64, metadata = { tag = 'a' } },
+          { ppq = 200, uuid = 2, evType = 'cc', chan = 1, cc = 11, val = 50, metadata = { tag = 'b' } },
+          { ppq = 200, uuid = 3, evType = 'cc', chan = 1, cc = 11, val = 50, metadata = { tag = 'c' } },
         },
       })
       local mm = loadWithCapture(take)

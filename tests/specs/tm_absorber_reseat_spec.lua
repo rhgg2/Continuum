@@ -16,7 +16,7 @@ local rawFor50 = 2048  -- under default pbRange=2 semitones, 50¢ → raw 2048.
 
 local function fakeIn(dump)
   for _, c in ipairs(dump.ccs) do
-    if c.msgType == 'pb' and c.fake then return c end
+    if c.evType == 'pb' and c.fake then return c end
   end
 end
 
@@ -35,8 +35,8 @@ return {
               detune = 50, delay = 500, ppqL = 0, endppqL = 240 },
           },
           ccs = {
-            { ppq = 120, chan = 1, msgType = 'pb', val = rawFor50, fake = true },
-            { ppq = 480, chan = 1, msgType = 'pb', val = 0 },  -- visible, surfaces column
+            { ppq = 120, chan = 1, evType = 'pb', val = rawFor50, fake = true },
+            { ppq = 480, chan = 1, evType = 'pb', val = 0 },  -- visible, surfaces column
           },
         },
       }
@@ -67,8 +67,8 @@ return {
               detune = 50, delay = 0, ppqL = 120, endppqL = 240 },
           },
           ccs = {
-            { ppq = 139, chan = 1, msgType = 'pb', val = rawFor50, fake = true },
-            { ppq = 480, chan = 1, msgType = 'pb', val = 0 },
+            { ppq = 139, chan = 1, evType = 'pb', val = rawFor50, fake = true },
+            { ppq = 480, chan = 1, evType = 'pb', val = 0 },
           },
         },
         config = {
@@ -109,7 +109,7 @@ return {
               detune = 50, delay = 0, ppqL = 0, endppqL = 240 },
           },
           ccs = {
-            { ppq = 0, chan = 1, msgType = 'pb', val = rawFor50, fake = true },
+            { ppq = 0, chan = 1, evType = 'pb', val = rawFor50, fake = true },
           },
         },
       }
@@ -136,7 +136,7 @@ return {
               detune = 50, delay = 0, ppqL = 240, endppqL = 480 },
           },
           ccs = {
-            { ppq = 240, chan = 1, msgType = 'pb', val = rawFor50, fake = true },
+            { ppq = 240, chan = 1, evType = 'pb', val = rawFor50, fake = true },
           },
         },
       }

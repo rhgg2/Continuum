@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1082  sha=fa4a61d  mode=chunk
+@module midiManager  src=midiManager.lua  loc=1116  sha=3d00a83  mode=chunk
 @deps take
 
 # Invariants & contracts
@@ -15,16 +15,16 @@
 # Shapes
   @shape  ccSidecarBody = '}RDM' <typeNib:byte> <chan-1:byte> <id:byte> <val_lo7:byte> <val_hi7:byte> <uuid-base36:string>
   @shape  noteSidecarBody = 'NOTE <chan-1> <pitch> custom ctm_<uuid-base36>'  -- REAPER text event type 15
-  @shape  note = { ppq=number, endppq=number, chan=1..16, pitch=0..127, vel=0..127, [muted=true], [uuid=number], [<metadata...>] }
-  @shape  cc   = { ppq=number, msgType=string, chan=1..16, [cc=0..127], [pitch=0..127], val=number, [muted=true], shape=string, [tension=number], [uuid=number], [<metadata...>] }
+  @shape  note = { evType='note', ppq=number, endppq=number, chan=1..16, pitch=0..127, vel=0..127, [muted=true], [uuid=number], [<metadata...>] }
+  @shape  cc   = { evType='cc'|'pb'|'pa'|'at'|'pc', ppq=number, chan=1..16, [cc=0..127], [pitch=0..127], val=number|vel=number(pa), [muted=true], shape=string, [tension=number], [uuid=number], [<metadata...>] }
   @shape  noteSidecarPayload = { ppq, chan, pitch, droppedCount }          -- notesDeduped event
   @shape  uuidsReassignedEvent = { ppq, chan, pitch, oldUuid, newUuid }
-  @shape  ccDedupEvent = { ppq, chan, msgType, cc, pitch, droppedCount }   -- ccsDeduped event
-  @shape  reconcileEvent.valueRebound    = { kind, uuid, chan, msgType, [cc], [pitch], ppq, oldVal, newVal }
-  @shape  reconcileEvent.consensusRebound = { kind, uuid, chan, msgType, [cc], [pitch], ppq, offset }
-  @shape  reconcileEvent.guessedRebound  = { kind, uuid, chan, msgType, [cc], [pitch], ppq }
+  @shape  ccDedupEvent = { ppq, chan, evType, cc, pitch, droppedCount }   -- ccsDeduped event
+  @shape  reconcileEvent.valueRebound    = { kind, uuid, chan, evType, [cc], [pitch], ppq, oldVal, newVal }
+  @shape  reconcileEvent.consensusRebound = { kind, uuid, chan, evType, [cc], [pitch], ppq, offset }
+  @shape  reconcileEvent.guessedRebound  = { kind, uuid, chan, evType, [cc], [pitch], ppq }
   @shape  reconcileEvent.ambiguous       = { kind, uuid, candidateppqs={...} }
-  @shape  reconcileEvent.orphaned        = { kind, uuid, chan, msgType, [cc], [pitch], lastppq }
+  @shape  reconcileEvent.orphaned        = { kind, uuid, chan, evType, [cc], [pitch], lastppq }
 
 # Imports
   @require util = 'util'  @ 8
@@ -32,34 +32,39 @@
 # Private state
   @state mm = {}  @ 16
   @state chanMsgLUT = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }  @ 19
-      @invariant  chanMsgTypes is derived from chanMsgLUT so the two directions can't drift
-  @state chanMsgTypes  @ 20   -- inverse of chanMsgLUT
+      @invariant  chanMsgEvTypes is derived from chanMsgLUT so the two directions can't drift
+  @state chanMsgEvTypes  @ 20   -- inverse of chanMsgLUT
   @state notes = {}  @ 26
   @state ccs = {}  @ 27
   @state eventsByUuid = {}  @ 28
-  @state maxUUID = 0  @ 29
-  @state lock = false  @ 30
-  @state pendingSysexDeletes  @ 31   -- list of uuids; non-nil only inside a modify()
-  @state INTERNALS = { idx = true, uuidIdx = true }  @ 34
+  @state tokenIdx = {}  @ 29
+  @state maxUUID = 0  @ 30
+  @state lock = false  @ 31
+  @state pendingSysexDeletes  @ 32   -- list of uuids; non-nil only inside a modify()
+  @state INTERNALS = { idx = true, uuidIdx = true }  @ 46
       @contract  INTERNALS fields (idx, uuidIdx) are stripped from all shallow clones returned to callers
-  @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 37
+  @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 49
       @invariant  shapeNames is derived from shapeLUT so the two directions can't drift
-  @state shapeNames  @ 38   -- inverse of shapeLUT
-  @state noteEventFields = {  @ 174
-  @state ccEventFields = {  @ 179
-  @state fire = util.installHooks(mm)  @ 252
+  @state shapeNames  @ 50   -- inverse of shapeLUT
+  @state noteEventFields = {  @ 190
+  @state ccEventFields = {  @ 195
+  @state fire = util.installHooks(mm)  @ 268
 
 # Private functions
   @fn print(...)  @ 12
-  @fn curveSample(shape, tension, t)  @ 82
-  @fn noteSidecarEncode(note)  @ 105
-  @fn noteSidecarDecode(msg)  @ 109
-  @fn ccSidecarEncode(cc)  @ 116
-  @fn ccSidecarDecode(body)  @ 138
-  @fn loadMetadata()  @ 156
-  @fn saveMetadatum(uuid)  @ 185
-  @fn saveMetadata()  @ 207
-  @fn assignNewUUID(evt)  @ 233
+  @fn tokenOf(evt)  @ 37
+      -- Opaque, content-keyed addressing. Token is private string built from
+      -- the event's identity fields; collision-free by construction across the
+      -- evType space. Rebuilt fresh in mm:load alongside eventsByUuid.
+  @fn curveSample(shape, tension, t)  @ 94
+  @fn noteSidecarEncode(note)  @ 117
+  @fn noteSidecarDecode(msg)  @ 121
+  @fn ccSidecarEncode(cc)  @ 128
+  @fn ccSidecarDecode(body)  @ 152
+  @fn loadMetadata()  @ 172
+  @fn saveMetadatum(uuid)  @ 201
+  @fn saveMetadata()  @ 223
+  @fn assignNewUUID(evt)  @ 249
       · Helper functions
       · Read notes
       · Note dedup
@@ -75,60 +80,64 @@
       · Persist + signals
   -- Load
   -- Locking
-  @fn checkLock()  @ 643
+  @fn checkLock()  @ 662
       @contract  all write paths (add*, delete*, assign* structural) must run inside mm:modify(fn)
       @contract  modify disables MIDI sort, runs fn under lock, flushes pending sidecar deletes, re-sorts, then reloads (fires callbacks)
-  @fn flushPendingSysexDeletes()  @ 648
+  @fn flushPendingSysexDeletes()  @ 667
   -- Notes
   -- CCs
-  @fn reconstruct(tbl)  @ 806
+  @fn reconstruct(tbl)  @ 826
   -- Take data
-  @fn retractEot(buf, targetPpq)  @ 1006
+  @fn retractEot(buf, targetPpq)  @ 1040
       -- Assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 
 # Public API (mm:*)
-  @api mm:load(newTake)  @ 256
-  @api mm:reload()  @ 633
-  @api mm:modify(fn)  @ 667
-  @api mm:getNote(loc)  @ 684
-  @api mm:notes()  @ 689
-  @api mm:deleteNote(loc)  @ 701
+  @api mm:load(newTake)  @ 272
+  @api mm:reload()  @ 652
+  @api mm:modify(fn)  @ 686
+  @api mm:getNote(loc)  @ 703
+  @api mm:notes()  @ 708
+  @api mm:deleteNote(loc)  @ 720
       @contract  deleteNote relies on REAPER to cascade-delete the associated notation event; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
-  @api mm:assignNote(loc, t)  @ 713
+  @api mm:assignNote(loc, t)  @ 732
       @contract  assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
-  @api mm:addNote(t)  @ 747
+  @api mm:addNote(t)  @ 766
       @contract  addNote always allocates a uuid and inserts a notation event (unconditional, unlike addCC)
-  @api mm:getCC(loc)  @ 776
-  @api mm:ccs()  @ 781
-  @api mm:deleteCC(loc)  @ 792
-  @api mm:assignCC(loc, t)  @ 830
+  @api mm:getCC(loc)  @ 796
+  @api mm:ccs()  @ 801
+  @api mm:deleteCC(loc)  @ 812
+  @api mm:assignCC(loc, t)  @ 850
       @contract  assignCC metadata-only carve-out: if t touches none of the structural CC fields AND the cc already has a uuid, skips the lock
       @contract  first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
-  @api mm:addCC(t)  @ 895
+  @api mm:addCC(t)  @ 915
       @contract  addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
-  @api mm:byUuid(uuid)  @ 946
+  @api mm:byUuid(uuid)  @ 967
       @contract  returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. loc is the lua position stamped at compact / addNote / addCC and is excluded from sidecar persistence.
-  @api mm:take()  @ 954
-  @api mm:interpolate(A, B, ppq)  @ 959
+  @api mm:tokenOf(evt)  @ 974
+      @contract  token is opaque and stable across reload as long as the event's identity fields (evType, chan, ppq, and pitch|cc as relevant) don't change; mutating any of them retires the old token and issues a new one
+  @api mm:byToken(token)  @ 980
+      @contract  returns (loc, evt-clone, kind) for the live event with this token; nil if absent. Mirrors mm:byUuid; works on every event (including plain ccs with no uuid).
+  @api mm:take()  @ 988
+  @api mm:interpolate(A, B, ppq)  @ 993
       -- REAPER convention: shape on A governs the curve from A to next.
-  @api mm:resolution()  @ 967
-  @api mm:length()  @ 973
+  @api mm:resolution()  @ 1001
+  @api mm:length()  @ 1007
       -- Source length. setLength truncates the source's EOT explicitly to keep this in sync after a shrink.
-  @api mm:name()  @ 980
-  @api mm:setName(name)  @ 986
-  @api mm:loadRegions()  @ 992
+  @api mm:name()  @ 1014
+  @api mm:setName(name)  @ 1020
+  @api mm:loadRegions()  @ 1026
       @contract  take-level region blob persisted under P_EXT:ctm_regions; serialised via util.serialise. Returns { regions={}, idCtr=0 } when no take or no stored blob — callers always get a well-formed shape.
-  @api mm:saveRegions(blob)  @ 999
-  @api mm:setLength(qn)  @ 1026
+  @api mm:saveRegions(blob)  @ 1033
+  @api mm:setLength(qn)  @ 1060
       -- MIDI_SetItemExtents leaves the source's EOT stale on contract; retract it explicitly so the source actually shrinks.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1040
+  @api mm:timeSigs()  @ 1074
 
 # Signals emitted (via util.installHooks)
   @emits takeSwapped   -- nil; only when load received a different take
   @emits notesDeduped   -- { events = [{ppq, chan, pitch, droppedCount}, ...] }
   @emits uuidsReassigned   -- { events = [{ppq, chan, pitch, oldUuid, newUuid}, ...] }
-  @emits ccsDeduped   -- { events = [{ppq, chan, msgType, cc, pitch, droppedCount}, ...] }
+  @emits ccsDeduped   -- { events = [{ppq, chan, evType, cc, pitch, droppedCount}, ...] }
   @emits ccsReconciled   -- { events = [reconcileEvent, ...] }; five kinds: valueRebound/consensusRebound/guessedRebound/ambiguous/orphaned
   @emits reload   -- nil; every load, including after modify()
 

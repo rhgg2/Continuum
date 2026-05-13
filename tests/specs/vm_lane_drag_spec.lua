@@ -27,9 +27,9 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60,  chan = 1, msgType = 'cc', cc = 1, val = 10 },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 20 },
-            { ppq = 360, chan = 1, msgType = 'cc', cc = 1, val = 30 },
+            { ppq = 60,  chan = 1, evType = 'cc', cc = 1, val = 10 },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 20 },
+            { ppq = 360, chan = 1, evType = 'cc', cc = 1, val = 30 },
           },
         },
         config = { take = { rowPerBeat = 4 } },
@@ -55,8 +55,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60,  chan = 1, msgType = 'cc', cc = 1, val = 10 },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 20 },
+            { ppq = 60,  chan = 1, evType = 'cc', cc = 1, val = 10 },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 20 },
           },
         },
         config = { take = { rowPerBeat = 4 } },
@@ -77,8 +77,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60,  chan = 1, msgType = 'cc', cc = 1, val = 10 },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 20 },
+            { ppq = 60,  chan = 1, evType = 'cc', cc = 1, val = 10 },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 20 },
           },
         },
         config = { take = { rowPerBeat = 4 } },
@@ -99,9 +99,9 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60,  chan = 1, msgType = 'cc', cc = 1, val = 10 },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 20 },
-            { ppq = 360, chan = 1, msgType = 'cc', cc = 1, val = 30 },
+            { ppq = 60,  chan = 1, evType = 'cc', cc = 1, val = 10 },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 20 },
+            { ppq = 360, chan = 1, evType = 'cc', cc = 1, val = 30 },
           },
         },
         config = { take = { rowPerBeat = 4 } },
@@ -143,8 +143,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60,  chan = 1, msgType = 'cc', cc = 1, val = 10 },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 20 },
+            { ppq = 60,  chan = 1, evType = 'cc', cc = 1, val = 10 },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 20 },
           },
         },
         config = { take = { rowPerBeat = 4 } },
@@ -281,9 +281,9 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60,  chan = 1, msgType = 'pb', val = 8192,
+            { ppq = 60,  chan = 1, evType = 'pb', val = 8192,
               shape = 'bezier', tension = 0.5 },
-            { ppq = 600, chan = 1, msgType = 'pb', val = 8192 },
+            { ppq = 600, chan = 1, evType = 'pb', val = 8192 },
           },
         },
         config = { take = { rowPerBeat = 4 } },
@@ -325,8 +325,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60,  chan = 1, msgType = 'cc', cc = 1, val = 10 },
-            { ppq = 360, chan = 1, msgType = 'cc', cc = 1, val = 30 },
+            { ppq = 60,  chan = 1, evType = 'cc', cc = 1, val = 10 },
+            { ppq = 360, chan = 1, evType = 'cc', cc = 1, val = 30 },
           },
         },
         config = { take = { rowPerBeat = 4 } },
@@ -355,7 +355,7 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 50 },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 50 },
           },
         },
         config = { take = { rowPerBeat = 4 } },
@@ -397,9 +397,9 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60,  chan = 1, msgType = 'cc', cc = 1, val = 10 },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 20 },
-            { ppq = 360, chan = 1, msgType = 'cc', cc = 1, val = 30 },
+            { ppq = 60,  chan = 1, evType = 'cc', cc = 1, val = 10 },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 20 },
+            { ppq = 360, chan = 1, evType = 'cc', cc = 1, val = 30 },
           },
         },
         config = { take = { rowPerBeat = 4 } },
@@ -444,8 +444,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60,  chan = 1, msgType = 'cc', cc = 1, val = 10 },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 20 },
+            { ppq = 60,  chan = 1, evType = 'cc', cc = 1, val = 10 },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 20 },
           },
         },
         config = { take = { rowPerBeat = 4 } },
@@ -488,8 +488,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 60,  chan = 1, msgType = 'cc', cc = 1, val = 10 },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 20 },
+            { ppq = 60,  chan = 1, evType = 'cc', cc = 1, val = 10 },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 20 },
           },
         },
         config = { take = { rowPerBeat = 4 } },

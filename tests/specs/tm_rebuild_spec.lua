@@ -110,7 +110,7 @@ return {
               detune = 50, delay = 0 },
           },
           ccs = {
-            { ppq = 0, chan = 1, msgType = 'pb', val = rawFor50, fake = true },
+            { ppq = 0, chan = 1, evType = 'pb', val = rawFor50, fake = true },
           },
         },
       }
@@ -138,9 +138,9 @@ return {
               detune = 50, delay = 500, ppqL = 0, endppqL = 240 },
           },
           ccs = {
-            { ppq = 120, chan = 1, msgType = 'pb', val = rawFor50, fake = true },
+            { ppq = 120, chan = 1, evType = 'pb', val = rawFor50, fake = true },
             -- A visible pb later on so the pb column surfaces at all.
-            { ppq = 480, chan = 1, msgType = 'pb', val = 0 },
+            { ppq = 480, chan = 1, evType = 'pb', val = 0 },
           },
         },
       }
@@ -198,7 +198,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = {
-          ccs = { { ppq = 0, chan = 1, msgType = 'pb', val = 4096 } },
+          ccs = { { ppq = 0, chan = 1, evType = 'pb', val = 4096 } },
         },
       }
       local ch = h.tm:getChannel(1)
@@ -255,10 +255,10 @@ return {
 
   {
     -- Pins forward-compat for the cc/pb/pa projection. Routing fields
-    -- (chan, msgType, cc) belong to the destination col and are stripped;
+    -- (chan, evType, cc) belong to the destination col and are stripped;
     -- everything else on the source mm-level event — including future
     -- metadata fields not known here — must ride through to col.events.
-    -- The previous implementation used per-msgType allowlists that
+    -- The previous implementation used per-evType allowlists that
     -- silently dropped any unknown field.
     name = 'arbitrary metadata on cc/pb/pa survives the projection',
     run = function(harness)
@@ -269,11 +269,11 @@ return {
               detune = 0, delay = 0 },
           },
           ccs = {
-            { ppq = 100, chan = 1, msgType = 'cc', cc = 74, val = 64,
+            { ppq = 100, chan = 1, evType = 'cc', cc = 74, val = 64,
               mood = 'blue', tag = 42 },
-            { ppq = 200, chan = 1, msgType = 'pb', val = 0,
+            { ppq = 200, chan = 1, evType = 'pb', val = 0,
               mood = 'green', tag = 7 },
-            { ppq = 300, chan = 1, msgType = 'pa', pitch = 60, val = 90,
+            { ppq = 300, chan = 1, evType = 'pa', pitch = 60, vel = 90,
               mood = 'red',  tag = 99 },
           },
         },

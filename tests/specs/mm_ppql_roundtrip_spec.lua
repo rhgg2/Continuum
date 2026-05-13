@@ -43,7 +43,7 @@ return {
       local take = freshTake()
       local mm = realMM(take)
       mm:modify(function()
-        mm:addCC{ ppq = 60, msgType = 'cc', chan = 1, cc = 7, val = 64,
+        mm:addCC{ ppq = 60, evType = 'cc', chan = 1, cc = 7, val = 64,
                   ppqL = 59 }
       end)
 
@@ -62,14 +62,14 @@ return {
       local take = freshTake()
       local mm = realMM(take)
       mm:modify(function()
-        mm:addCC{ ppq = 80, msgType = 'pb', chan = 2, val = 1024,
+        mm:addCC{ ppq = 80, evType = 'pb', chan = 2, val = 1024,
                   ppqL = 79 }
       end)
 
       local mm2 = realMM(take)
       local _, c = mm2:ccs()()
       t.truthy(c, 'pb round-tripped')
-      t.eq(c.msgType, 'pb')
+      t.eq(c.evType, 'pb')
       t.eq(c.ppq,  80)
       t.eq(c.ppqL, 79, 'ppqL restored from P_EXT')
     end,
@@ -81,7 +81,7 @@ return {
       local take = freshTake()
       local mm = realMM(take)
       mm:modify(function()
-        mm:addCC{ ppq = 30, msgType = 'cc', chan = 1, cc = 11, val = 32 }
+        mm:addCC{ ppq = 30, evType = 'cc', chan = 1, cc = 11, val = 32 }
       end)
 
       local mm2 = realMM(take)
@@ -100,8 +100,8 @@ return {
       mm:modify(function()
         mm:addNote{ ppq = 100, endppq = 200, chan = 1, pitch = 60, vel = 100, ppqL = 99,  endppqL = 199 }
         mm:addNote{ ppq = 300, endppq = 400, chan = 2, pitch = 64, vel = 110, ppqL = 301, endppqL = 401 }
-        mm:addCC  { ppq = 50,  msgType = 'cc', chan = 1, cc = 7,  val = 64,   ppqL = 49 }
-        mm:addCC  { ppq = 150, msgType = 'cc', chan = 1, cc = 7,  val = 80,   ppqL = 151 }
+        mm:addCC  { ppq = 50,  evType = 'cc', chan = 1, cc = 7,  val = 64,   ppqL = 49 }
+        mm:addCC  { ppq = 150, evType = 'cc', chan = 1, cc = 7,  val = 80,   ppqL = 151 }
       end)
 
       local mm2 = realMM(take)

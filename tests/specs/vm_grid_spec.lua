@@ -69,9 +69,9 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 0, chan = 1, msgType = 'cc', cc = 74, val = 0 },
-            { ppq = 0, chan = 1, msgType = 'cc', cc = 1,  val = 0 },
-            { ppq = 0, chan = 1, msgType = 'cc', cc = 11, val = 0 },
+            { ppq = 0, chan = 1, evType = 'cc', cc = 74, val = 0 },
+            { ppq = 0, chan = 1, evType = 'cc', cc = 1,  val = 0 },
+            { ppq = 0, chan = 1, evType = 'cc', cc = 11, val = 0 },
           },
         },
       }
@@ -90,10 +90,10 @@ return {
         seed = {
           notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } },
           ccs = {
-            { ppq = 0, chan = 1, msgType = 'cc', cc = 1, val = 0 },
-            { ppq = 0, chan = 1, msgType = 'at', val = 64 },
-            { ppq = 0, chan = 1, msgType = 'pc', val = 5 },
-            { ppq = 0, chan = 1, msgType = 'pb', val = 0 },
+            { ppq = 0, chan = 1, evType = 'cc', cc = 1, val = 0 },
+            { ppq = 0, chan = 1, evType = 'at', val = 64 },
+            { ppq = 0, chan = 1, evType = 'pc', val = 5 },
+            { ppq = 0, chan = 1, evType = 'pb', val = 0 },
           },
         },
       }
@@ -132,10 +132,10 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 0, chan = 1, msgType = 'pb', val = 0 },
-            { ppq = 0, chan = 1, msgType = 'cc', cc = 1, val = 0 },
-            { ppq = 0, chan = 1, msgType = 'at', val = 64 },
-            { ppq = 0, chan = 1, msgType = 'pc', val = 5 },
+            { ppq = 0, chan = 1, evType = 'pb', val = 0 },
+            { ppq = 0, chan = 1, evType = 'cc', cc = 1, val = 0 },
+            { ppq = 0, chan = 1, evType = 'at', val = 64 },
+            { ppq = 0, chan = 1, evType = 'pc', val = 5 },
           },
         },
       }
@@ -332,7 +332,7 @@ return {
       local c58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
       local h = harness.mk{
         seed = {
-          ccs = { { ppq = 0, chan = 1, msgType = 'pb', val = 0 } },
+          ccs = { { ppq = 0, chan = 1, evType = 'pb', val = 0 } },
         },
         config = {
           project = { swings = { c58 = c58 } },
@@ -365,7 +365,7 @@ return {
       local c58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
       local h = harness.mk{
         seed = {
-          ccs = { { ppq = 0, chan = 1, msgType = 'pb', val = 0 } },
+          ccs = { { ppq = 0, chan = 1, evType = 'pb', val = 0 } },
         },
         config = {
           project = { swings = { c58 = c58 } },
@@ -383,7 +383,7 @@ return {
 
       local fresh
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pb' and c.ppq ~= 0 then fresh = c end
+        if c.evType == 'pb' and c.ppq ~= 0 then fresh = c end
       end
       t.truthy(fresh,                'fresh pb landed in mm dump')
       t.eq(fresh.rpb,         4,     'fresh pb carries rpb stamp')

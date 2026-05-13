@@ -1,5 +1,5 @@
 -- Algorithm pin-tests for the load-time sidecar↔cc reconciliation pass folded
--- into mm:load. Bucket once by (msgType, chan, id) and run four stages:
+-- into mm:load. Bucket once by (evType, chan, id) and run four stages:
 --   1. exact (ppq, val) match    → silent bind (no ccsReconciled event)
 --   2. same ppq, val differs     → valueRebound
 --   3. consensus offset          → consensusRebound (≥ 50% of bucket sidecars,
@@ -26,17 +26,17 @@ end
 -- Cc-shaped record → REAPER's (chanmsg, msg2, msg3) packing.
 local function packCc(c)
   local msg2, msg3
-  if c.msgType == 'pb' then
+  if c.evType == 'pb' then
     local raw = (c.val or 0) + 8192
     msg2, msg3 = raw & 0x7F, (raw >> 7) & 0x7F
-  elseif c.msgType == 'pa' then
-    msg2, msg3 = c.pitch or 0, c.val or 0
-  elseif c.msgType == 'pc' or c.msgType == 'at' then
+  elseif c.evType == 'pa' then
+    msg2, msg3 = c.pitch or 0, c.vel or 0
+  elseif c.evType == 'pc' or c.evType == 'at' then
     msg2, msg3 = c.val or 0, 0
   else
     msg2, msg3 = c.cc or 0, c.val or 0
   end
-  return CHANMSG[c.msgType], msg2, msg3
+  return CHANMSG[c.evType], msg2, msg3
 end
 
 -- Seed ccs + sidecars onto the take. No metadata laid down — algorithm tests
@@ -49,7 +49,7 @@ local function seed(take, reaper, spec)
                     msg2 = msg2, msg3 = msg3 }
   end
   for _, sc in ipairs(spec.sidecars or {}) do
-    local body = t.encodeSidecar{ uuid = sc.uuid, msgType = sc.msgType, chan = sc.chan,
+    local body = t.encodeSidecar{ uuid = sc.uuid, evType = sc.evType, chan = sc.chan,
                                   cc = sc.cc, pitch = sc.pitch, val = sc.val }
     texts[#texts+1] = { ppq = sc.ppq, eventtype = -1, msg = body }
   end
@@ -87,8 +87,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 64 } },
-        sidecars = { { ppq = 100, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 64 } },
+        ccs      = { { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 64 } },
+        sidecars = { { ppq = 100, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 64 } },
       })
       local mm, _, evts = load(take)
       t.deepEq(evts, {})
@@ -101,8 +101,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 50, msgType = 'pa', chan = 5, pitch = 60, val = 100 } },
-        sidecars = { { ppq = 50, uuid = 9, msgType = 'pa', chan = 5, pitch = 60, val = 100 } },
+        ccs      = { { ppq = 50, evType = 'pa', chan = 5, pitch = 60, vel = 100 } },
+        sidecars = { { ppq = 50, uuid = 9, evType = 'pa', chan = 5, pitch = 60, vel = 100 } },
       })
       local mm, _, evts = load(take)
       t.deepEq(evts, {})
@@ -115,8 +115,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 0, msgType = 'pb', chan = 1, val = -4096 } },
-        sidecars = { { ppq = 0, uuid = 2, msgType = 'pb', chan = 1, val = -4096 } },
+        ccs      = { { ppq = 0, evType = 'pb', chan = 1, val = -4096 } },
+        sidecars = { { ppq = 0, uuid = 2, evType = 'pb', chan = 1, val = -4096 } },
       })
       local mm, _, evts = load(take)
       t.deepEq(evts, {})
@@ -130,14 +130,14 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq =   0, msgType = 'cc', chan = 1, cc = 7,  val = 0   },
-          { ppq = 240, msgType = 'cc', chan = 1, cc = 7,  val = 64  },
-          { ppq = 480, msgType = 'cc', chan = 1, cc = 11, val = 100 },
+          { ppq =   0, evType = 'cc', chan = 1, cc = 7,  val = 0   },
+          { ppq = 240, evType = 'cc', chan = 1, cc = 7,  val = 64  },
+          { ppq = 480, evType = 'cc', chan = 1, cc = 11, val = 100 },
         },
         sidecars = {
-          { ppq =   0, uuid = 1, msgType = 'cc', chan = 1, cc = 7,  val = 0   },
-          { ppq = 240, uuid = 2, msgType = 'cc', chan = 1, cc = 7,  val = 64  },
-          { ppq = 480, uuid = 3, msgType = 'cc', chan = 1, cc = 11, val = 100 },
+          { ppq =   0, uuid = 1, evType = 'cc', chan = 1, cc = 7,  val = 0   },
+          { ppq = 240, uuid = 2, evType = 'cc', chan = 1, cc = 7,  val = 64  },
+          { ppq = 480, uuid = 3, evType = 'cc', chan = 1, cc = 11, val = 100 },
         },
       })
       local mm, _, evts = load(take)
@@ -155,8 +155,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 80 } },
-        sidecars = { { ppq = 100, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 64 } },
+        ccs      = { { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 80 } },
+        sidecars = { { ppq = 100, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 64 } },
       })
       local mm, byUuid, evts = load(take)
       t.eq(#evts, 1)
@@ -164,7 +164,7 @@ return {
       t.eq(e.kind, 'valueRebound')
       t.eq(e.ppq, 100)
       t.eq(e.chan, 1)
-      t.eq(e.msgType, 'cc')
+      t.eq(e.evType, 'cc')
       t.eq(e.cc, 7)
       t.eq(e.oldVal, 64)
       t.eq(e.newVal, 80)
@@ -177,8 +177,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 0, msgType = 'pb', chan = 1, val = 2048 } },
-        sidecars = { { ppq = 0, uuid = 2, msgType = 'pb', chan = 1, val = -4096 } },
+        ccs      = { { ppq = 0, evType = 'pb', chan = 1, val = 2048 } },
+        sidecars = { { ppq = 0, uuid = 2, evType = 'pb', chan = 1, val = -4096 } },
       })
       local _, byUuid, evts = load(take)
       t.eq(#evts, 1)
@@ -193,10 +193,10 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 90 } },
+        ccs      = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 90 } },
         sidecars = {
-          { ppq = 0, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 0, uuid = 2, msgType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 0, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 0, uuid = 2, evType = 'cc', chan = 1, cc = 7, val = 0 },
         },
       })
       local _, byUuid = load(take)
@@ -213,12 +213,12 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 20,  msgType = 'cc', chan = 1, cc = 7, val = 0  },
-          { ppq = 120, msgType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 20,  evType = 'cc', chan = 1, cc = 7, val = 0  },
+          { ppq = 120, evType = 'cc', chan = 1, cc = 7, val = 64 },
         },
         sidecars = {
-          { ppq = 0,   uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 0  },
-          { ppq = 100, uuid = 2, msgType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 0,   uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 0  },
+          { ppq = 100, uuid = 2, evType = 'cc', chan = 1, cc = 7, val = 64 },
         },
       })
       local mm, _, evts = load(take)
@@ -239,12 +239,12 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = -10, msgType = 'cc', chan = 1, cc = 7, val = 0  },
-          { ppq =  90, msgType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = -10, evType = 'cc', chan = 1, cc = 7, val = 0  },
+          { ppq =  90, evType = 'cc', chan = 1, cc = 7, val = 64 },
         },
         sidecars = {
-          { ppq =   0, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 0  },
-          { ppq = 100, uuid = 2, msgType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq =   0, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 0  },
+          { ppq = 100, uuid = 2, evType = 'cc', chan = 1, cc = 7, val = 64 },
         },
       })
       local _, byUuid = load(take)
@@ -261,14 +261,14 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 20,  msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 120, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 220, msgType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 20,  evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 120, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 220, evType = 'cc', chan = 1, cc = 7, val = 0 },
         },
         sidecars = {
-          { ppq =   0, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 100, uuid = 2, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 200, uuid = 3, msgType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq =   0, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 100, uuid = 2, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 200, uuid = 3, evType = 'cc', chan = 1, cc = 7, val = 0 },
         },
       })
       local _, _, evts = load(take)
@@ -288,16 +288,16 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq =  10, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 110, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 220, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 320, msgType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq =  10, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 110, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 220, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 320, evType = 'cc', chan = 1, cc = 7, val = 0 },
         },
         sidecars = {
-          { ppq =   0, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 100, uuid = 2, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 200, uuid = 3, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 300, uuid = 4, msgType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq =   0, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 100, uuid = 2, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 200, uuid = 3, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 300, uuid = 4, evType = 'cc', chan = 1, cc = 7, val = 0 },
         },
       })
       local mm, _, evts = load(take)
@@ -315,7 +315,7 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs      = {},
-        sidecars = { { ppq = 100, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 64 } },
+        sidecars = { { ppq = 100, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 64 } },
       })
       local mm, byUuid, evts = load(take)
       t.eq(#evts, 1)
@@ -323,7 +323,7 @@ return {
       t.eq(e.kind, 'orphaned')
       t.eq(e.lastppq, 100)
       t.eq(e.chan, 1)
-      t.eq(e.msgType, 'cc')
+      t.eq(e.evType, 'cc')
       t.eq(e.cc, 7)
       t.eq(e.ppq, nil, 'orphans use lastppq, never ppq')
       t.eq(next(ccsByLoc(mm)), nil, 'no ccs')
@@ -335,8 +335,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 130, msgType = 'cc', chan = 1, cc = 7, val = 99 } },
-        sidecars = { { ppq = 100, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 64 } },
+        ccs      = { { ppq = 130, evType = 'cc', chan = 1, cc = 7, val = 99 } },
+        sidecars = { { ppq = 100, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 64 } },
       })
       local mm, byUuid, evts = load(take)
       t.eq(#evts, 1)
@@ -354,10 +354,10 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq =  50, msgType = 'cc', chan = 1, cc = 7, val = 64 },
-          { ppq = 150, msgType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq =  50, evType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 150, evType = 'cc', chan = 1, cc = 7, val = 64 },
         },
-        sidecars = { { ppq = 100, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 64 } },
+        sidecars = { { ppq = 100, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 64 } },
       })
       local mm, byUuid, evts = load(take)
       t.eq(#evts, 1)
@@ -374,7 +374,7 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs      = {},
-        sidecars = { { ppq = 100, uuid = 9, msgType = 'pa', chan = 5, pitch = 60, val = 100 } },
+        sidecars = { { ppq = 100, uuid = 9, evType = 'pa', chan = 5, pitch = 60, vel = 100 } },
       })
       local _, byUuid = load(take)
       t.eq(byUuid[9].pitch, 60)
@@ -390,10 +390,10 @@ return {
       -- candidates → orphaned.
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 50, msgType = 'cc', chan = 1, cc = 7, val = 0 } },
+        ccs      = { { ppq = 50, evType = 'cc', chan = 1, cc = 7, val = 0 } },
         sidecars = {
-          { ppq =   0, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 100, uuid = 2, msgType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq =   0, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 100, uuid = 2, evType = 'cc', chan = 1, cc = 7, val = 0 },
         },
       })
       local _, byUuid = load(take)
@@ -409,8 +409,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 0, msgType = 'cc', chan = 2, cc = 7, val = 0 } },
-        sidecars = { { ppq = 0, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 0 } },
+        ccs      = { { ppq = 0, evType = 'cc', chan = 2, cc = 7, val = 0 } },
+        sidecars = { { ppq = 0, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 0 } },
       })
       local mm, _, evts = load(take)
       t.eq(#evts, 1)
@@ -420,12 +420,12 @@ return {
   },
 
   {
-    name = 'mismatched msgType: separate buckets (cc vs pb)',
+    name = 'mismatched evType: separate buckets (cc vs pb)',
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 0, msgType = 'cc', chan = 1, cc = 0, val = 0 } },
-        sidecars = { { ppq = 0, uuid = 1, msgType = 'pb', chan = 1, val = 0 } },
+        ccs      = { { ppq = 0, evType = 'cc', chan = 1, cc = 0, val = 0 } },
+        sidecars = { { ppq = 0, uuid = 1, evType = 'pb', chan = 1, val = 0 } },
       })
       local mm, _, evts = load(take)
       t.eq(#evts, 1)
@@ -439,8 +439,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 0, msgType = 'cc', chan = 1, cc = 11, val = 50 } },
-        sidecars = { { ppq = 0, uuid = 1, msgType = 'cc', chan = 1, cc = 7,  val = 0  } },
+        ccs      = { { ppq = 0, evType = 'cc', chan = 1, cc = 11, val = 50 } },
+        sidecars = { { ppq = 0, uuid = 1, evType = 'cc', chan = 1, cc = 7,  val = 0  } },
       })
       local _, _, evts = load(take)
       t.eq(#evts, 1)
@@ -453,7 +453,7 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 0 } },
+        ccs      = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 0 } },
         sidecars = {},
       })
       local mm, _, evts = load(take)
@@ -470,14 +470,14 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq =  20, msgType = 'cc', chan = 1, cc = 7,  val = 0  },
-          { ppq = 120, msgType = 'cc', chan = 1, cc = 7,  val = 64 },
-          { ppq =  45, msgType = 'cc', chan = 1, cc = 11, val = 30 },
+          { ppq =  20, evType = 'cc', chan = 1, cc = 7,  val = 0  },
+          { ppq = 120, evType = 'cc', chan = 1, cc = 7,  val = 64 },
+          { ppq =  45, evType = 'cc', chan = 1, cc = 11, val = 30 },
         },
         sidecars = {
-          { ppq =   0, uuid = 1, msgType = 'cc', chan = 1, cc = 7,  val = 0  },
-          { ppq = 100, uuid = 2, msgType = 'cc', chan = 1, cc = 7,  val = 64 },
-          { ppq =  50, uuid = 3, msgType = 'cc', chan = 1, cc = 11, val = 30 },
+          { ppq =   0, uuid = 1, evType = 'cc', chan = 1, cc = 7,  val = 0  },
+          { ppq = 100, uuid = 2, evType = 'cc', chan = 1, cc = 7,  val = 64 },
+          { ppq =  50, uuid = 3, evType = 'cc', chan = 1, cc = 11, val = 30 },
         },
       })
       local _, byUuid = load(take)
@@ -488,19 +488,19 @@ return {
   },
 
   {
-    name = 'cross-msgType events live in different buckets — stage 4 each',
+    name = 'cross-evType events live in different buckets — stage 4 each',
     run = function()
       -- cc + pb at the same chan are different buckets: 1 sidecar + 1 cc each
       -- → guessedRebound apiece.
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq =  20, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 120, msgType = 'pb', chan = 1,         val = 0 },
+          { ppq =  20, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 120, evType = 'pb', chan = 1,         val = 0 },
         },
         sidecars = {
-          { ppq =   0, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 0 },
-          { ppq = 100, uuid = 2, msgType = 'pb', chan = 1,         val = 0 },
+          { ppq =   0, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 0 },
+          { ppq = 100, uuid = 2, evType = 'pb', chan = 1,         val = 0 },
         },
       })
       local _, _, evts = load(take)
@@ -520,17 +520,17 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq =   0, msgType = 'cc', chan = 1, cc = 7,  val = 10 },
-          { ppq = 130, msgType = 'cc', chan = 1, cc = 7,  val = 20 },
-          { ppq = 230, msgType = 'cc', chan = 1, cc = 7,  val = 30 },
-          { ppq = 400, msgType = 'cc', chan = 1, cc = 11, val = 77 },
+          { ppq =   0, evType = 'cc', chan = 1, cc = 7,  val = 10 },
+          { ppq = 130, evType = 'cc', chan = 1, cc = 7,  val = 20 },
+          { ppq = 230, evType = 'cc', chan = 1, cc = 7,  val = 30 },
+          { ppq = 400, evType = 'cc', chan = 1, cc = 11, val = 77 },
         },
         sidecars = {
-          { ppq =   0, uuid = 1, msgType = 'cc', chan = 1, cc = 7,  val = 10 },
-          { ppq = 100, uuid = 2, msgType = 'cc', chan = 1, cc = 7,  val = 20 },
-          { ppq = 200, uuid = 3, msgType = 'cc', chan = 1, cc = 7,  val = 30 },
-          { ppq = 400, uuid = 4, msgType = 'cc', chan = 1, cc = 11, val = 50 },
-          { ppq = 500, uuid = 5, msgType = 'cc', chan = 1, cc = 20, val = 99 },
+          { ppq =   0, uuid = 1, evType = 'cc', chan = 1, cc = 7,  val = 10 },
+          { ppq = 100, uuid = 2, evType = 'cc', chan = 1, cc = 7,  val = 20 },
+          { ppq = 200, uuid = 3, evType = 'cc', chan = 1, cc = 7,  val = 30 },
+          { ppq = 400, uuid = 4, evType = 'cc', chan = 1, cc = 11, val = 50 },
+          { ppq = 500, uuid = 5, evType = 'cc', chan = 1, cc = 20, val = 99 },
         },
       })
       local _, byUuid = load(take)

@@ -15,7 +15,7 @@ return {
     name = 'metadata-only assignCC on a plain (un-uuid\'d) cc requires the lock',
     run = function()
       local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
-      fm:seed{ ccs = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 64 } } }
+      fm:seed{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
       local ok, err = pcall(function() fm:assignCC(1, { foo = 1 }) end)
       t.falsy(ok, 'expected an assertion')
       t.truthy(tostring(err):find('modify'), 'error mentions modify lock')
@@ -26,7 +26,7 @@ return {
     name = 'first metadata stamp allocates a uuid and persists the field',
     run = function(harness)
       local h = harness.mk{
-        seed = { ccs = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 64 } } },
+        seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
       h.fm:modify(function() h.fm:assignCC(1, { foo = 'hello' }) end)
       local cc = h.fm:getCC(1)
@@ -39,7 +39,7 @@ return {
     name = 'subsequent metadata writes on a stamped cc are lockless',
     run = function(harness)
       local h = harness.mk{
-        seed = { ccs = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 64 } } },
+        seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
       h.fm:modify(function() h.fm:assignCC(1, { foo = 1 }) end)
       -- No modify wrapper this time — must not raise.
@@ -52,7 +52,7 @@ return {
     name = 'mixed structural+metadata write under modify stamps in one go',
     run = function(harness)
       local h = harness.mk{
-        seed = { ccs = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 64 } } },
+        seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
       h.fm:modify(function() h.fm:assignCC(1, { val = 100, label = 'tag' }) end)
       local cc = h.fm:getCC(1)
@@ -67,7 +67,7 @@ return {
     run = function()
       -- Bare mm (no tm), to keep the cc plain — see header note.
       local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
-      fm:seed{ ccs = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 64 } } }
+      fm:seed{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
       fm:modify(function() fm:assignCC(1, { val = 100 }) end)
       t.eq(fm:getCC(1).uuid, nil, 'no metadata, no uuid (sidecar-on-touch)')
     end,
@@ -79,8 +79,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq =  0, msgType = 'cc', chan = 1, cc = 7, val = 0   },
-            { ppq = 10, msgType = 'cc', chan = 1, cc = 7, val = 64  },
+            { ppq =  0, evType = 'cc', chan = 1, cc = 7, val = 0   },
+            { ppq = 10, evType = 'cc', chan = 1, cc = 7, val = 64  },
           },
         },
       }
@@ -99,7 +99,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = {
-          ccs = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 64, uuid = 100, foo = 'old' } },
+          ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64, uuid = 100, foo = 'old' } },
         },
       }
       -- Lockless carve-out path (uuid present, metadata-only)
@@ -114,7 +114,7 @@ return {
     name = 'deleteCC removes both event and uuid identity',
     run = function(harness)
       local h = harness.mk{
-        seed = { ccs = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 64 } } },
+        seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
       h.fm:modify(function() h.fm:assignCC(1, { foo = 'x' }) end)
       t.truthy(h.fm:getCC(1).uuid)
@@ -127,7 +127,7 @@ return {
     name = 'util.REMOVE clears a metadata field on a stamped cc (no lock)',
     run = function(harness)
       local h = harness.mk{
-        seed = { ccs = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 64,
+        seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64,
                            uuid = 7, foo = 'present' } } },
       }
       h.fm:assignCC(1, { foo = util.REMOVE })

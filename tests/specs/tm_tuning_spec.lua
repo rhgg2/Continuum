@@ -20,7 +20,7 @@ end
 local function pbsAt(dump, ppq)
   local out = {}
   for _, c in ipairs(dump.ccs) do
-    if c.msgType == 'pb' and c.ppq == ppq then out[#out + 1] = c end
+    if c.evType == 'pb' and c.ppq == ppq then out[#out + 1] = c end
   end
   return out
 end
@@ -145,7 +145,7 @@ return {
       -- Two fake pbs seated at the two onsets.
       local pbs = {}
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pb' then pbs[#pbs + 1] = c end
+        if c.evType == 'pb' then pbs[#pbs + 1] = c end
       end
       t.eq(#pbs, 2, 'one fake pb per detuned note')
 
@@ -158,7 +158,7 @@ return {
 
       pbs = {}
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pb' then pbs[#pbs + 1] = c end
+        if c.evType == 'pb' then pbs[#pbs + 1] = c end
       end
       t.eq(#pbs, 2, 'still exactly two pbs after the move')
       for _, p in ipairs(pbs) do
@@ -216,7 +216,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = {
-          ccs = { { ppq = 0, chan = 1, msgType = 'pb', val = cents2raw(100) } },
+          ccs = { { ppq = 0, chan = 1, evType = 'pb', val = cents2raw(100) } },
         },
       }
       -- Now add a detuned note at the same seat. The existing real pb
@@ -272,7 +272,7 @@ return {
       local function allPbs()
         local out = {}
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.msgType == 'pb' then out[#out + 1] = c end
+          if c.evType == 'pb' then out[#out + 1] = c end
         end
         table.sort(out, function(a, b) return a.ppq < b.ppq end)
         return out
@@ -320,7 +320,7 @@ return {
 
       local pbs = {}
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pb' then pbs[#pbs + 1] = c end
+        if c.evType == 'pb' then pbs[#pbs + 1] = c end
       end
       table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
       t.eq(#pbs, 2, 'two pbs — row 1 (A) and row 2 (B); row 3 boundary collapsed')
@@ -354,7 +354,7 @@ return {
       local function pbsByppq()
         local out = {}
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.msgType == 'pb' then out[#out + 1] = c end
+          if c.evType == 'pb' then out[#out + 1] = c end
         end
         table.sort(out, function(a, b) return a.ppq < b.ppq end)
         return out
@@ -421,7 +421,7 @@ return {
       local function pbsByppq()
         local out = {}
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.msgType == 'pb' then out[#out + 1] = c end
+          if c.evType == 'pb' then out[#out + 1] = c end
         end
         table.sort(out, function(a, b) return a.ppq < b.ppq end)
         return out
@@ -472,7 +472,7 @@ return {
 
       local pbs = {}
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pb' then pbs[#pbs + 1] = c end
+        if c.evType == 'pb' then pbs[#pbs + 1] = c end
       end
       t.eq(#pbs, 1, 'only the A pb at row 1 remains')
       t.eq(pbs[1].ppq, 0)
@@ -497,7 +497,7 @@ return {
 
       local pbs = {}
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pb' then pbs[#pbs + 1] = c end
+        if c.evType == 'pb' then pbs[#pbs + 1] = c end
       end
       t.eq(#pbs, 0, 'lane-2 detune does not seat a pb')
 
@@ -529,7 +529,7 @@ return {
       local function pbCount()
         local n = 0
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.msgType == 'pb' then n = n + 1 end
+          if c.evType == 'pb' then n = n + 1 end
         end
         return n
       end
@@ -547,7 +547,7 @@ return {
       t.eq(pbCount(), 1, "lane-1's absorber survives unrelated lane-2 deletion")
       local pb
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pb' then pb = c end
+        if c.evType == 'pb' then pb = c end
       end
       t.eq(pb.fake, true, 'absorber still flagged fake')
       t.eq(pb.val, cents2raw(50), 'absorber value unchanged')
@@ -570,7 +570,7 @@ return {
       local function pbs()
         local out = {}
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.msgType == 'pb' then out[#out + 1] = c end
+          if c.evType == 'pb' then out[#out + 1] = c end
         end
         return out
       end
@@ -605,7 +605,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = {
-          ccs = { { ppq = 0, chan = 1, msgType = 'pb', val = cents2raw(0) } },
+          ccs = { { ppq = 0, chan = 1, evType = 'pb', val = cents2raw(0) } },
         },
       }
       -- Add a detuned note on top: the pre-existing real pb stays real,
@@ -643,7 +643,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = {
-          ccs = { { ppq = 0, chan = 1, msgType = 'pb', val = cents2raw(40) } },
+          ccs = { { ppq = 0, chan = 1, evType = 'pb', val = cents2raw(40) } },
         },
       }
       h.tm:addEvent('note', {
@@ -654,7 +654,7 @@ return {
 
       local function realPbAtZero()
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.msgType == 'pb' and c.ppq == 0 then return c end
+          if c.evType == 'pb' and c.ppq == 0 then return c end
         end
       end
       t.falsy(realPbAtZero().fake, 'baseline: real pb stays real with detune=0')
@@ -696,7 +696,7 @@ return {
       local function snap()
         local out = {}
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.msgType == 'pb' then
+          if c.evType == 'pb' then
             out[#out + 1] = { ppq = c.ppq, val = c.val, fake = c.fake or false }
           end
         end
@@ -737,7 +737,7 @@ return {
       local function pbCount()
         local n = 0
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.msgType == 'pb' then n = n + 1 end
+          if c.evType == 'pb' then n = n + 1 end
         end
         return n
       end

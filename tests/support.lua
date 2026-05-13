@@ -111,12 +111,14 @@ do
   end
 
   function M.encodeSidecar(cc)
-    local typeByte = CHANMSG_LUT[cc.msgType]
+    local typeByte = CHANMSG_LUT[cc.evType]
     if not typeByte then return nil end
     local lo, hi
-    if cc.msgType == 'pb' then
+    if cc.evType == 'pb' then
       local raw = (cc.val or 0) + 8192
       lo, hi = raw & 0x7F, (raw >> 7) & 0x7F
+    elseif cc.evType == 'pa' then
+      lo, hi = (cc.vel or 0) & 0x7F, 0
     else
       lo, hi = (cc.val or 0) & 0x7F, 0
     end
@@ -133,14 +135,16 @@ do
     if not body or #body < 10 then return nil end
     if body:sub(1, 4) ~= SIDECAR_MAGIC then return nil end
     local out = {}
-    out.msgType = CHANMSG_TYPES[body:byte(5) << 4]
+    out.evType = CHANMSG_TYPES[body:byte(5) << 4]
     out.uuid = tonumber(body:sub(10), 36)
-    if not out.msgType or not out.uuid then return nil end
+    if not out.evType or not out.uuid then return nil end
     local lo, hi = body:byte(8), body:byte(9)
     out.chan = body:byte(6) + 1
-    out.val = (out.msgType == 'pb') and (((hi << 7) | lo) - 8192) or lo
-    if     out.msgType == 'cc' then out.cc    = body:byte(7)
-    elseif out.msgType == 'pa' then out.pitch = body:byte(7)
+    if     out.evType == 'pb' then out.val = ((hi << 7) | lo) - 8192
+    elseif out.evType == 'pa' then out.vel = lo
+    else                           out.val = lo end
+    if     out.evType == 'cc' then out.cc    = body:byte(7)
+    elseif out.evType == 'pa' then out.pitch = body:byte(7)
     end
     return out
   end

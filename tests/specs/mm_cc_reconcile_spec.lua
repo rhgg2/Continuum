@@ -26,17 +26,17 @@ end
 -- seed-call site.
 local function packCc(c)
   local msg2, msg3
-  if c.msgType == 'pb' then
+  if c.evType == 'pb' then
     local raw = (c.val or 0) + 8192
     msg2, msg3 = raw & 0x7F, (raw >> 7) & 0x7F
-  elseif c.msgType == 'pa' then
-    msg2, msg3 = c.pitch or 0, c.val or 0
-  elseif c.msgType == 'pc' or c.msgType == 'at' then
+  elseif c.evType == 'pa' then
+    msg2, msg3 = c.pitch or 0, c.vel or 0
+  elseif c.evType == 'pc' or c.evType == 'at' then
     msg2, msg3 = c.val or 0, 0
   else
     msg2, msg3 = c.cc or 0, c.val or 0
   end
-  return CHANMSG[c.msgType], msg2, msg3
+  return CHANMSG[c.evType], msg2, msg3
 end
 
 -- Spec for an event-row plus optional metadata. Sidecar specs that include
@@ -54,7 +54,7 @@ local function seed(take, reaper, spec)
                     msg2 = msg2, msg3 = msg3, muted = c.muted }
   end
   for _, sc in ipairs(spec.sidecars or {}) do
-    local body = t.encodeSidecar{ uuid = sc.uuid, msgType = sc.msgType, chan = sc.chan,
+    local body = t.encodeSidecar{ uuid = sc.uuid, evType = sc.evType, chan = sc.chan,
                                   cc = sc.cc, pitch = sc.pitch, val = sc.val }
     texts[#texts+1] = { ppq = sc.ppq, eventtype = -1, msg = body }
   end
@@ -107,8 +107,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 0, msgType = 'cc', chan = 1, cc = 7, val = 64 } },
-        sidecars = { { ppq = 0, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 64,
+        ccs      = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } },
+        sidecars = { { ppq = 0, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 64,
                        metadata = { foo = 'bar' } } },
       })
       local mm, captured = loadWithCapture(take)
@@ -124,8 +124,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 80 } },
-        sidecars = { { ppq = 100, uuid = 7, msgType = 'cc', chan = 1, cc = 7, val = 64,
+        ccs      = { { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 80 } },
+        sidecars = { { ppq = 100, uuid = 7, evType = 'cc', chan = 1, cc = 7, val = 64,
                        metadata = { label = 'kept' } } },
       })
       local mm, captured = loadWithCapture(take)
@@ -148,14 +148,14 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 20,  msgType = 'cc', chan = 1, cc = 7, val = 0  },
-          { ppq = 120, msgType = 'cc', chan = 1, cc = 7, val = 64 },
-          { ppq = 220, msgType = 'cc', chan = 1, cc = 7, val = 99 },
+          { ppq = 20,  evType = 'cc', chan = 1, cc = 7, val = 0  },
+          { ppq = 120, evType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 220, evType = 'cc', chan = 1, cc = 7, val = 99 },
         },
         sidecars = {
-          { ppq = 0,   uuid = 11, msgType = 'cc', chan = 1, cc = 7, val = 0,  metadata = { tag = 'a' } },
-          { ppq = 100, uuid = 12, msgType = 'cc', chan = 1, cc = 7, val = 64, metadata = { tag = 'b' } },
-          { ppq = 200, uuid = 13, msgType = 'cc', chan = 1, cc = 7, val = 99, metadata = { tag = 'c' } },
+          { ppq = 0,   uuid = 11, evType = 'cc', chan = 1, cc = 7, val = 0,  metadata = { tag = 'a' } },
+          { ppq = 100, uuid = 12, evType = 'cc', chan = 1, cc = 7, val = 64, metadata = { tag = 'b' } },
+          { ppq = 200, uuid = 13, evType = 'cc', chan = 1, cc = 7, val = 99, metadata = { tag = 'c' } },
         },
       })
       local mm, captured = loadWithCapture(take)
@@ -180,7 +180,7 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs      = {},  -- no candidate at all
-        sidecars = { { ppq = 100, uuid = 42, msgType = 'cc', chan = 1, cc = 7, val = 64,
+        sidecars = { { ppq = 100, uuid = 42, evType = 'cc', chan = 1, cc = 7, val = 64,
                        metadata = { gone = 1 } } },
       })
       local mm, captured = loadWithCapture(take)
@@ -203,8 +203,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 130, msgType = 'cc', chan = 1, cc = 7, val = 99 } },
-        sidecars = { { ppq = 100, uuid = 5, msgType = 'cc', chan = 1, cc = 7, val = 64,
+        ccs      = { { ppq = 130, evType = 'cc', chan = 1, cc = 7, val = 99 } },
+        sidecars = { { ppq = 100, uuid = 5, evType = 'cc', chan = 1, cc = 7, val = 64,
                        metadata = { keep = true } } },
       })
       local mm, captured = loadWithCapture(take)
@@ -221,10 +221,10 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq = 80,  msgType = 'cc', chan = 1, cc = 7, val = 64 },
-          { ppq = 130, msgType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 80,  evType = 'cc', chan = 1, cc = 7, val = 64 },
+          { ppq = 130, evType = 'cc', chan = 1, cc = 7, val = 64 },
         },
-        sidecars = { { ppq = 100, uuid = 9, msgType = 'cc', chan = 1, cc = 7, val = 64,
+        sidecars = { { ppq = 100, uuid = 9, evType = 'cc', chan = 1, cc = 7, val = 64,
                        metadata = { drop = 1 } } },
       })
       local mm, captured = loadWithCapture(take)
@@ -247,11 +247,11 @@ return {
       -- sidecar — which only works if cc.uuidIdx tracked the shift.
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs = { { ppq = 200, msgType = 'cc', chan = 1, cc = 7, val = 64 } },
+        ccs = { { ppq = 200, evType = 'cc', chan = 1, cc = 7, val = 64 } },
         sidecars = {
-          { ppq = 100, uuid = 1, msgType = 'cc', chan = 1, cc = 11, val = 0,
+          { ppq = 100, uuid = 1, evType = 'cc', chan = 1, cc = 11, val = 0,
             metadata = { gone = true } },             -- orphaned (no cc11 candidate)
-          { ppq = 200, uuid = 2, msgType = 'cc', chan = 1, cc = 7,  val = 64,
+          { ppq = 200, uuid = 2, evType = 'cc', chan = 1, cc = 7,  val = 64,
             metadata = { kept = true } },             -- tier 1
         },
       })
@@ -277,8 +277,8 @@ return {
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
-        ccs      = { { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 80 } },
-        sidecars = { { ppq = 100, uuid = 1, msgType = 'cc', chan = 1, cc = 7, val = 64,
+        ccs      = { { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 80 } },
+        sidecars = { { ppq = 100, uuid = 1, evType = 'cc', chan = 1, cc = 7, val = 64,
                        metadata = { foo = 'x' } } },
       })
       local mm = realMM(nil)

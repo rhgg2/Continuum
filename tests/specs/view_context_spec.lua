@@ -334,8 +334,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 0,   chan = 1, msgType = 'cc', cc = 1, val = 0,   shape = 'linear' },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 100 },
+            { ppq = 0,   chan = 1, evType = 'cc', cc = 1, val = 0,   shape = 'linear' },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 100 },
           },
         },
       }
@@ -358,8 +358,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 0,   chan = 1, msgType = 'cc', cc = 1, val = 0,   shape = 'linear' },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 100 },
+            { ppq = 0,   chan = 1, evType = 'cc', cc = 1, val = 0,   shape = 'linear' },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 100 },
           },
         },
       }
@@ -381,8 +381,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 0,   chan = 1, msgType = 'cc', cc = 1, val = 0,   shape = 'step' },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 100 },
+            { ppq = 0,   chan = 1, evType = 'cc', cc = 1, val = 0,   shape = 'step' },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 100 },
           },
         },
       }
@@ -400,7 +400,7 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 0, chan = 1, msgType = 'cc', cc = 1, val = 0, shape = 'linear' },
+            { ppq = 0, chan = 1, evType = 'cc', cc = 1, val = 0, shape = 'linear' },
           },
         },
       }
@@ -420,8 +420,8 @@ return {
       local h = harness.mk{
         seed = {
           ccs = {
-            { ppq = 0,   chan = 1, msgType = 'cc', cc = 1, val = 0,   shape = 'bezier', tension = 0 },
-            { ppq = 240, chan = 1, msgType = 'cc', cc = 1, val = 100 },
+            { ppq = 0,   chan = 1, evType = 'cc', cc = 1, val = 0,   shape = 'bezier', tension = 0 },
+            { ppq = 240, chan = 1, evType = 'cc', cc = 1, val = 100 },
           },
         },
       }

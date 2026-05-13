@@ -645,10 +645,7 @@ do
         end
 
         if evt and evt.type == 'pa' then
-          -- Column shape stores the PA's value in `vel` (so it joins the
-          -- prevVel chain like a note); mm stores it in `val`. Read the
-          -- in-memory `vel` and write the update via `val`.
-          tm:assignEvent('pa', evt, snap({ val = newVel(evt.vel) }))
+          tm:assignEvent('pa', evt, snap({ vel = newVel(evt.vel) }))
           return commit()
         end
 
@@ -663,7 +660,7 @@ do
             tm:addEvent('pa', {
               ppq = cursorppq,
               chan = col.midiChan,
-              pitch = note.pitch, val = newVel(0),
+              pitch = note.pitch, vel = newVel(0),
               rpb = currentRpb(),
             })
             return commit()

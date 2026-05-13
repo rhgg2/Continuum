@@ -149,7 +149,7 @@ return {
 
   -- Companion to test 4 for the cc path. Pins lossless flow through both
   -- layers: tm projection (which used to strip unknown fields via per-
-  -- msgType util.pick allowlists) AND clipboard collect/paste. Together
+  -- evType util.pick allowlists) AND clipboard collect/paste. Together
   -- with the tm_rebuild pin this is the structural guarantee that any
   -- metadata field added to a cc in future will round-trip without the
   -- author having to update either layer's strip rule.
@@ -158,7 +158,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = { ccs = {
-          { ppq = 0, chan = 1, msgType = 'cc', cc = 74, val = 64,
+          { ppq = 0, chan = 1, evType = 'cc', cc = 74, val = 64,
             mood = 'blue', tag = 42 },
         }},
       }

@@ -15,7 +15,7 @@ local function findCcCol(grid, ccNum, chan)
 end
 
 local function rootCc(extras)
-  local n = { ppq = 0, ppqL = 0, chan = 1, msgType = 'cc', cc = 7, val = 64,
+  local n = { ppq = 0, ppqL = 0, chan = 1, evType = 'cc', cc = 7, val = 64,
               shape = 'step', uuid = 1 }
   for k, v in pairs(extras or {}) do n[k] = v end
   return n
@@ -72,9 +72,9 @@ return {
     run = function(harness)
       local h = harness.mk(util.assign({
         seed = { ccs = {
-          { ppq =   0, chan = 1, msgType = 'cc', cc = 7, val =  10,
+          { ppq =   0, chan = 1, evType = 'cc', cc = 7, val =  10,
             shape = 'step', uuid = 1 },
-          { ppq = 480, chan = 1, msgType = 'cc', cc = 7, val = 100,
+          { ppq = 480, chan = 1, evType = 'cc', cc = 7, val = 100,
             shape = 'step', uuid = 2 },
         } },
       }, CFG))

@@ -25,7 +25,7 @@ end
 local ccCmp = function(a, b)
   if a.ppq     ~= b.ppq     then return a.ppq     < b.ppq     end
   if a.chan    ~= b.chan    then return a.chan    < b.chan    end
-  if a.msgType ~= b.msgType then return (a.msgType or '') < (b.msgType or '') end
+  if a.evType ~= b.evType then return (a.evType or '') < (b.evType or '') end
   return (a.cc or a.pitch or 0) < (b.cc or b.pitch or 0)
 end
 
@@ -36,6 +36,7 @@ function newMidiManager(opts)
 
   local noteList, ccList = {}, {}
   local noteByLoc, ccByLoc = {}, {}
+  local tokenIdx    = {}
   local lock        = false
   local take        = opts.take or 'fake-take'
   local resolution  = opts.resolution or 240
@@ -48,8 +49,8 @@ function newMidiManager(opts)
   -- Mirrors midiManager.lua's ccEventFields. A field outside this set is
   -- metadata; carve-out + first-stamp logic depends on the distinction.
   local ccEventFields = {
-    idx = true, uuidIdx = true, ppq = true, msgType = true, chan = true,
-    cc = true, pitch = true, val = true,
+    idx = true, uuidIdx = true, ppq = true, evType = true, chan = true,
+    cc = true, pitch = true, val = true, vel = true,
     muted = true, shape = true, tension = true, uuid = true,
   }
 
@@ -60,12 +61,22 @@ function newMidiManager(opts)
     assert(lock, 'Error! You must call modification functions via modify()!')
   end
 
+  -- Mirrors midiManager.lua's private tokenOf — opaque, content-keyed
+  -- addressing built from the event's identity fields.
+  local function tokenOf(evt)
+    local et = evt.evType
+    if et == 'note' then return 'note|' .. evt.chan .. '|' .. evt.pitch .. '|' .. evt.ppq end
+    if et == 'pa'   then return 'pa|'   .. evt.chan .. '|' .. evt.pitch .. '|' .. evt.ppq end
+    if et == 'cc'   then return 'cc|'   .. evt.chan .. '|' .. evt.cc    .. '|' .. evt.ppq end
+    return et .. '|' .. evt.chan .. '|' .. evt.ppq
+  end
+
   local function reindex()
     table.sort(noteList, noteCmp)
     table.sort(ccList,   ccCmp)
-    noteByLoc, ccByLoc = {}, {}
-    for i, n in ipairs(noteList) do noteByLoc[i] = n; n.idx = i - 1; n.loc = i end
-    for i, c in ipairs(ccList)   do ccByLoc[i]   = c; c.idx = i - 1; c.loc = i end
+    noteByLoc, ccByLoc, tokenIdx = {}, {}, {}
+    for i, n in ipairs(noteList) do noteByLoc[i] = n; n.idx = i - 1; n.loc = i; tokenIdx[tokenOf(n)] = n end
+    for i, c in ipairs(ccList)   do ccByLoc[i]   = c; c.idx = i - 1; c.loc = i; tokenIdx[tokenOf(c)] = c end
   end
 
   -- LIFECYCLE
@@ -91,7 +102,9 @@ function newMidiManager(opts)
     if seed.resolution then resolution = seed.resolution end
     if seed.length     then length     = seed.length     end
     if seed.timeSigs   then timeSigs   = seed.timeSigs   end
-    for _, n in ipairs(seed.notes or {}) do noteList[#noteList + 1] = util.clone(n) end
+    for _, n in ipairs(seed.notes or {}) do
+      local nn = util.clone(n); nn.evType = 'note'; noteList[#noteList + 1] = nn
+    end
     for _, c in ipairs(seed.ccs   or {}) do ccList[#ccList + 1]     = util.clone(c) end
     -- Track the high-water uuid across pre-seeded notes/ccs so subsequent
     -- allocations don't collide.
@@ -141,6 +154,7 @@ function newMidiManager(opts)
     assert(t.ppq and t.endppq and t.chan and t.pitch and t.vel,
       'Error! Underspecified new note')
     local n = util.clone(t)
+    n.evType = 'note'
     if not n.muted then n.muted = nil end
     if not n.uuid then maxUuid = maxUuid + 1; n.uuid = maxUuid end
     t.uuid = n.uuid
@@ -189,8 +203,9 @@ function newMidiManager(opts)
 
   function mm:addCC(t)
     assertLock()
-    if t.msgType == nil then t.msgType = 'cc' end
-    assert(t.ppq and t.chan and t.val, 'Error! Underspecified new cc event')
+    if t.evType == nil then t.evType = 'cc' end
+    local valueField = (t.evType == 'pa') and 'vel' or 'val'
+    assert(t.ppq and t.chan and t[valueField], 'Error! Underspecified new cc event')
     local c = util.clone(t)
     if not c.muted then c.muted = nil end
     if c.shape ~= 'bezier' then c.tension = nil end
@@ -221,8 +236,8 @@ function newMidiManager(opts)
     local c = ccByLoc[loc]
     if not c then return end
 
-    local hasStructural = t.ppq or t.msgType or t.chan or t.cc or t.pitch
-                          or t.val or t.muted ~= nil or t.shape or t.tension
+    local hasStructural = t.ppq or t.evType or t.chan or t.cc or t.pitch
+                          or t.val or t.vel or t.muted ~= nil or t.shape or t.tension
     local hasMetadata = false
     for k in pairs(t) do
       if not ccEventFields[k] then hasMetadata = true; break end
@@ -238,8 +253,8 @@ function newMidiManager(opts)
     assertLock()
     util.assign(c, t)
     if c.muted == false then c.muted = nil end
-    if c.msgType ~= 'cc' then c.cc    = nil end
-    if c.msgType ~= 'pa' then c.pitch = nil end
+    if c.evType ~= 'cc' then c.cc    = nil end
+    if c.evType ~= 'pa' then c.pitch, c.vel = nil, nil end
     if c.shape   ~= 'bezier' then c.tension = nil end
 
     -- First metadata stamp: allocate a uuid. Real mm also inserts a sidecar
@@ -258,6 +273,17 @@ function newMidiManager(opts)
     for i, c in ipairs(ccList) do
       if c.uuid == uuid then return i, cloneShallow(c, INTERNALS), 'cc' end
     end
+  end
+
+  function mm:tokenOf(evt)
+    if not evt or not evt.evType then return nil end
+    return tokenOf(evt)
+  end
+
+  function mm:byToken(token)
+    local evt = tokenIdx[token]
+    if not evt then return nil end
+    return evt.loc, cloneShallow(evt, INTERNALS), (evt.evType == 'note') and 'note' or 'cc'
   end
 
   -- TAKE DATA

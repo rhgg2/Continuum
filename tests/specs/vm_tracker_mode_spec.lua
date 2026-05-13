@@ -15,7 +15,7 @@ return {
       local h = harness.mk{
         seed = {
           notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
-          ccs   = { { ppq = 0, msgType = 'pc', chan = 1, val = 7 } },
+          ccs   = { { ppq = 0, evType = 'pc', chan = 1, val = 7 } },
         },
       }
       h.vm:setGridSize(80, 40)
@@ -33,7 +33,7 @@ return {
       local h = harness.mk{
         seed = {
           notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
-          ccs   = { { ppq = 0, msgType = 'pc', chan = 1, val = 7 } },
+          ccs   = { { ppq = 0, evType = 'pc', chan = 1, val = 7 } },
         },
         config = { transient = { trackerMode = true } },
       }
@@ -295,7 +295,7 @@ return {
         seed = {
           notes = { { ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, sample = 0x33 } },
-          ccs   = { { ppq = 240, msgType = 'pa', chan = 1, pitch = 60, val = 80 } },
+          ccs   = { { ppq = 240, evType = 'pa', chan = 1, pitch = 60, vel = 80 } },
         },
         config = { transient = { trackerMode = true } },
       }
@@ -315,7 +315,7 @@ return {
       h.vm:editEvent(col, col.cells[paRow], 3, string.byte('A'), false)
       local paDump
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pa' then paDump = c end
+        if c.evType == 'pa' then paDump = c end
       end
       t.falsy(paDump.sample, 'PA was not tagged with sample')
       t.eq(h.fm:dump().notes[1].sample, 0x33, 'host note sample untouched')
@@ -329,7 +329,7 @@ return {
         seed = {
           notes = { { ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, sample = 0 } },
-          ccs   = { { ppq = 240, msgType = 'pa', chan = 1, pitch = 60, val = 80 } },
+          ccs   = { { ppq = 240, evType = 'pa', chan = 1, pitch = 60, vel = 80 } },
         },
         config = { transient = { trackerMode = true } },
       }
@@ -346,7 +346,7 @@ return {
       h.cmgr:invoke('delete')    -- must not crash and must not delete the PA
       local stillPA = false
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pa' and c.ppq == 240 then stillPA = true end
+        if c.evType == 'pa' and c.ppq == 240 then stillPA = true end
       end
       t.truthy(stillPA, 'PA event survived delete on sample part')
     end,

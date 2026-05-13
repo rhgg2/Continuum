@@ -4,7 +4,7 @@
 --invariant: detune is intent (per-note); pb is realisation (channel-wide stream); only lane-1 notes drive detune realisation
 --invariant: pb.val is cents inside um; raw conversion happens only on load (rawToCents) and at flush (centsToRaw); cents window is cm:get('pbRange') * 100 per side
 --invariant: fake pbs are absorbers seated at lane-1 note onsets to absorb detune jumps; pb.fake is the sole marker (persisted as cc metadata via mm sidecar)
---invariant: pa events store pitch-aftertouch value in mm cc.val but are projected to col.events as { type='pa', vel } with val stripped via util.REMOVE
+--invariant: pa events store pitch-aftertouch value in mm cc.vel; col.events project as { type='pa', vel, ... } with the cc-routing fields stripped
 --invariant: loc values are valid only within a single rebuild-to-flush window; um's notesByLoc/ccsByLoc are rebuilt fresh each rebuild
 --invariant: column events are sorted by logical ppq; endppq carries no delay (delay shifts only the note-on)
 --invariant: 16 channels always present; channels[i] non-nil for i in 1..16 after rebuild
@@ -65,7 +65,10 @@ end
 
 local function delayToPPQ(d) return timing.delayToPPQ(d, mm:resolution()) end
 
-local function evtTypeOf(evt) return evt.msgType and 'cc' or 'note' end
+local function evtTypeOf(evt)
+  if evt.evType and evt.evType ~= 'note' then return 'cc' end
+  return 'note'
+end
 
 local function forEachEvent(fn)
   for i=1,16 do
@@ -112,7 +115,7 @@ local function reconcilePCsForChan(chan, records)
       kept[have] = true
     else
       util.add(toAdd, { ppq = ppq, ppqL = w.ppqL, val = w.sample,
-                        msgType = 'pc', chan = chan, fake = true })
+                        evType = 'pc', chan = chan, fake = true })
     end
     for i = 2, #g do
       if g[i].key then g[i].key.sampleShadowed = true end
@@ -190,7 +193,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   local function forEachAttachedPA(host, fn)
     for _, cc in pairs(ccsByLoc) do
-      if cc.msgType == 'pa' and cc.chan == host.chan and cc.pitch == host.pitch
+      if cc.evType == 'pa' and cc.chan == host.chan and cc.pitch == host.pitch
         and cc.ppq >= host.ppq and cc.ppq < host.endppq then
         fn(cc)
       end
@@ -207,7 +210,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
         util.add(tbl, evt); sortByPPQ(tbl)
       end
     else
-      evt.msgType = evtType
+      evt.evType = evtType
       if evtType == 'pb' then
         local tbl = chans[evt.chan].pbs
         util.add(tbl, evt); sortByPPQ(tbl)
@@ -320,9 +323,9 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   local function addPb(pb)
     local chan, P, L = pb.chan, pb.ppq, pb.val or 0
     local delta  = L - logicalAt(chan, P)
-    -- chan/ppq/val belong to forcePb's structural set; msgType is stamped by addLowlevel.
+    -- chan/ppq/val belong to forcePb's structural set; evType is stamped by addLowlevel.
     local extras = util.clone(pb,
-      { chan = true, ppq = true, val = true, msgType = true })
+      { chan = true, ppq = true, val = true, evType = true })
     if not next(extras) then extras = nil end
     if not forcePb(chan, P, extras) then
       if extras then assignLowlevel('pb', pbAt(chan, P), extras) end
@@ -358,7 +361,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       if (existing and existing ~= pb) or needFakeAtOld then
         local extras = util.clone(pb, { loc = true, fake = true,
                                          chan = true, ppq = true, val = true,
-                                         msgType = true })
+                                         evType = true })
         util.assign(extras, util.clone(update, { ppq = true, val = true }))
         deletePb(pb)
         addPb(util.assign({ chan = chan, ppq = newP, val = newL }, extras))
@@ -441,7 +444,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
           deleteLowlevel('pa', evt)
         end
       end)
-      if lastPA then assignLowlevel('note', n, { vel = lastPA.val }) end
+      if lastPA then assignLowlevel('note', n, { vel = lastPA.vel }) end
     end
 
     if not col1 then
@@ -751,7 +754,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
     for loc, cc in mm:ccs() do
       local evt
-      if cc.msgType == 'pb' then
+      if cc.evType == 'pb' then
         evt = util.pick(cc, 'ppq ppqL chan shape tension fake frame loc',
                         { val = rawToCents(cc.val) })
         util.add(chans[evt.chan].pbs, evt)
@@ -1312,13 +1315,13 @@ do
     children = true, uuid = true, parentUuid = true, loc = true,
   }
 
-  -- chan/msgType/ccNum overrides let column events (which carry no chan and have cc/msgType stripped) reuse the same keying as raw mm events.
-  local function slotKey(evt, chan, msgType, ccNum)
-    chan    = chan    or evt.chan
-    msgType = msgType or evt.msgType
-    if msgType then
+  -- chan/evType/ccNum overrides let column events (which carry no chan and have cc/evType stripped) reuse the same keying as raw mm events.
+  local function slotKey(evt, chan, evType, ccNum)
+    chan   = chan   or evt.chan
+    evType = evType or evt.evType
+    if evType and evType ~= 'note' then
       local sub = ccNum or evt.cc or evt.pitch or ''
-      return 'cc|c=' .. chan .. '|m=' .. msgType .. '|i=' .. sub .. '|t=' .. evt.ppq
+      return 'cc|c=' .. chan .. '|m=' .. evType .. '|i=' .. sub .. '|t=' .. evt.ppq
     end
     return 'note|c=' .. chan .. '|p=' .. evt.pitch .. '|t=' .. evt.ppq
   end
@@ -1420,7 +1423,7 @@ do
 
   ----- CC projection
 
-  local CC_PROJECT_STRIP = { chan = true, msgType = true, cc = true }
+  local CC_PROJECT_STRIP = { chan = true, evType = true, cc = true }
 
   local function projectCC(cc, loc, overlay)
     local evt = util.clone(cc, CC_PROJECT_STRIP)
@@ -1453,7 +1456,7 @@ do
         elseif n.children and #n.children > 0 then util.add(roots, n) end
       end
       for loc, c in mm:ccs() do
-        if c.parentUuid then util.add(ccsToDel, { c.msgType, loc })
+        if c.parentUuid then util.add(ccsToDel, { c.evType, loc })
         elseif c.children and #c.children > 0 then util.add(roots, c) end
       end
 
@@ -1589,7 +1592,7 @@ do
         for _, loc in ipairs(notesToDel) do deleteEvent('note', loc) end
         for _, e   in ipairs(ccsToDel)   do deleteEvent(e[1],  e[2]) end
         for _, n   in ipairs(notesToAdd) do addEvent('note', n)      end
-        for _, c   in ipairs(ccsToAdd)   do addEvent(c.msgType, c)   end
+        for _, c   in ipairs(ccsToAdd)   do addEvent(c.evType, c)   end
         flush()
 
         for _, ce in ipairs(claimedEmits) do
@@ -1614,7 +1617,7 @@ do
       if trackerMode then
         pcByChan = {}
         for _, cc in mm:ccs() do
-          if cc.msgType == 'pc' then
+          if cc.evType == 'pc' then
             util.bucket(pcByChan, cc.chan, { ppq = cc.ppq, val = cc.val })
           end
         end
@@ -1670,7 +1673,7 @@ do
       for loc, cc in mm:ccs() do
         local channel = channels[cc.chan]
 
-        if cc.msgType == 'pb' then
+        if cc.evType == 'pb' then
           local col1       = channel.columns.notes[1]
           local prevailing = col1 and util.seek(col1.events, 'at-or-before', cc.ppq) or nil
           local detune     = (prevailing and prevailing.detune) or 0
@@ -1685,22 +1688,20 @@ do
             hidden = hidden,
           }))
 
-        elseif cc.msgType == 'pa' then
+        elseif cc.evType == 'pa' then
           local noteCol = findNoteColumnForPitch(channel, cc.pitch, cc.ppq)
           if noteCol then
-            util.add(noteCol.events, projectCC(cc, loc, {
-              type = 'pa', vel = cc.val, val = util.REMOVE,
-            }))
+            util.add(noteCol.events, projectCC(cc, loc, { type = 'pa' }))
           end
 
-        elseif cc.msgType == 'cc' or cc.msgType == 'at' or cc.msgType == 'pc' then
+        elseif cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
           local col
-          if cc.msgType == 'cc' then
+          if cc.evType == 'cc' then
             col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
             channel.columns.ccs[cc.cc] = col
           else
-            col = channel.columns[cc.msgType] or { events = {} }
-            channel.columns[cc.msgType] = col
+            col = channel.columns[cc.evType] or { events = {} }
+            channel.columns[cc.evType] = col
           end
           util.add(col.events, projectCC(cc, loc))
         end
@@ -1760,7 +1761,7 @@ do
         end)
         for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
         for loc, cc in mm:ccs() do
-          if cc.msgType == 'pc' then
+          if cc.evType == 'pc' then
             util.add(channels[cc.chan].columns.pc.events, projectCC(cc, loc))
           end
         end
@@ -1871,7 +1872,7 @@ do
         -- column events stay resolvable through notesByLoc/ccsByLoc and
         -- subsequent tm:assignEvent routes to the right mm event. Raw
         -- MIDI notes carry no uuid until metadata is stamped; fall back
-        -- to the (chan, pitch, ppq) / (chan, msgType, cc|pitch, ppq)
+        -- to the (chan, pitch, ppq) / (chan, evType, cc|pitch, ppq)
         -- tuples mm enforces as unique under its sort.
         local locByKey = {}
         for loc, n in mm:notes() do locByKey[slotKey(n)] = loc end

@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=2039  sha=a37625e  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=2040  sha=3d00a83  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts
@@ -6,7 +6,7 @@
   @invariant  detune is intent (per-note); pb is realisation (channel-wide stream); only lane-1 notes drive detune realisation
   @invariant  pb.val is cents inside um; raw conversion happens only on load (rawToCents) and at flush (centsToRaw); cents window is cm:get('pbRange') * 100 per side
   @invariant  fake pbs are absorbers seated at lane-1 note onsets to absorb detune jumps; pb.fake is the sole marker (persisted as cc metadata via mm sidecar)
-  @invariant  pa events store pitch-aftertouch value in mm cc.val but are projected to col.events as { type='pa', vel } with val stripped via util.REMOVE
+  @invariant  pa events store pitch-aftertouch value in mm cc.vel; col.events project as { type='pa', vel, ... } with the cc-routing fields stripped
   @invariant  loc values are valid only within a single rebuild-to-flush window; um's notesByLoc/ccsByLoc are rebuilt fresh each rebuild
   @invariant  column events are sorted by logical ppq; endppq carries no delay (delay shifts only the note-on)
   @invariant  16 channels always present; channels[i] non-nil for i in 1..16 after rebuild
@@ -69,8 +69,8 @@
   @fn rawToCents(raw)  @ 61
   @fn delayToPPQ(d)  @ 66
   @fn evtTypeOf(evt)  @ 68
-  @fn forEachEvent(fn)  @ 70
-  @fn reconcilePCsForChan(chan, records)  @ 98
+  @fn forEachEvent(fn)  @ 73
+  @fn reconcilePCsForChan(chan, records)  @ 101
       @contract  synthesised PCs carry fake=true and inherit ppqL from the winning host-note record; an existing fake PC matching (ppq, val) is kept (omitted from both toRemove and toAdd), preserving its mm-side loc across rebuilds where val did not change
       @contract  if record.key is set, marks key.sampleShadowed=true on records lost to lane priority; returns (toRemove, toAdd) for the caller to persist. Shadow marking is rebuild-only — flush-time callers omit key since lane events are reclone'd by the rebuild that follows. c.pc.events is not written here; rebuild's CC walk refreshes it from mm after the caller's commit.
       · State
@@ -80,53 +80,53 @@
       · PC reconciliation (trackerMode mutation hook)
       · Public interface
   -- UPDATE MANAGER
-  @fn deleteEvent(evtType, evtOrLoc)  @ 576
-  @fn assignEvent(evtType, evtOrLoc, update)  @ 634
-  @fn addEvent(evtType, evt)  @ 668
+  @fn deleteEvent(evtType, evtOrLoc)  @ 579
+  @fn assignEvent(evtType, evtOrLoc, update)  @ 637
+  @fn addEvent(evtType, evt)  @ 671
       @contract  notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm. Caller-supplied evt.ppqL signals "raw already computed" — translation is skipped (mirrors assignEvent).
       · Flush: commit accumulated ops to mm.
-  @fn flush()  @ 690
+  @fn flush()  @ 693
       @contract  no-op if nothing staged; otherwise commits in fixed order (assigns, deletes desc by loc, adds) under a single mm:modify; pb cents→raw conversion happens here
       @contract  snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
       · Init / reload: (re)load local cache from mm.
-  @fn reload()  @ 746
+  @fn reload()  @ 749
       -- Also clears staging buffers: a rebuild must not carry un-flushed ops
       -- across (their locs may be invalid), matching the prior "fresh um per
       -- rebuild" semantics now that the um itself persists.
   -- Accessors
-  @fn clearSwing()  @ 858
+  @fn clearSwing()  @ 861
   -- Mutation
   -- Length
   -- Transport
   -- Mute
   -- Aliases
-  @fn resolveAliased(evt)  @ 1048
+  @fn resolveAliased(evt)  @ 1051
       · Aliases walker helpers
       · Column allocation
       · CC projection
       · Rebuild
 
 # Public API (tm:*)
-  @api tm:getChannel(chan)  @ 781
-  @api tm:channels()  @ 783
-  @api tm:editCursor()  @ 794
-  @api tm:length()  @ 800
-  @api tm:resolution()  @ 801
-  @api tm:name()  @ 802
-  @api tm:setName(name)  @ 803
-  @api tm:timeSigs()  @ 804
-  @api tm:interpolate(A, B, ppq)  @ 805
-  @api tm:loadRegions()  @ 806
-  @api tm:saveRegions(blob)  @ 807
-  @api tm:markSwingStale(chan)  @ 864
+  @api tm:getChannel(chan)  @ 784
+  @api tm:channels()  @ 786
+  @api tm:editCursor()  @ 797
+  @api tm:length()  @ 803
+  @api tm:resolution()  @ 804
+  @api tm:name()  @ 805
+  @api tm:setName(name)  @ 806
+  @api tm:timeSigs()  @ 807
+  @api tm:interpolate(A, B, ppq)  @ 808
+  @api tm:loadRegions()  @ 809
+  @api tm:saveRegions(blob)  @ 810
+  @api tm:markSwingStale(chan)  @ 867
       @contract  chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
-  @api tm:deleteEvent(type, evt)  @ 871
-  @api tm:addEvent(type, evt)  @ 872
-  @api tm:assignEvent(type, evt, update)  @ 873
-  @api tm:flush()  @ 874
-  @api tm:setLength(newPpq)  @ 879
+  @api tm:deleteEvent(type, evt)  @ 874
+  @api tm:addEvent(type, evt)  @ 875
+  @api tm:assignEvent(type, evt, update)  @ 876
+  @api tm:flush()  @ 877
+  @api tm:setLength(newPpq)  @ 882
       -- On shrink, notes spanning the boundary keep their onset and have endppq clamped.
-  @api tm:rescaleLength(newPpq)  @ 905
+  @api tm:rescaleLength(newPpq)  @ 908
       -- Stretch the take to `newPpq` by linearly remapping the logical
       -- frame: each event on logical row r ends up on row f·r where
       -- f = newPpq/oldPpq. ppqL stamps scale by f; raw ppqs are
@@ -134,39 +134,39 @@
       -- ppqs are not linearly scaled (rows are preserved instead, which
       -- keeps reswing well-defined). Note delays scale by f. Frame stamps
       -- (rpb, swing slot names) are untouched. No events are deleted.
-  @api tm:tileLength(newPpq)  @ 972
+  @api tm:tileLength(newPpq)  @ 975
       -- Because oldPpq sits on a swing-period boundary (take length aligns
       -- to QN), shifting by k·oldPpq is identical in logical and realised
       -- frames; one delta serves both ppq and ppqL paths.
-  @api tm:playFrom(ppq)  @ 1021
-  @api tm:play()  @ 1027
-  @api tm:stop()  @ 1028
-  @api tm:playPause()  @ 1029
-  @api tm:setMutedChannels(set)  @ 1034
+  @api tm:playFrom(ppq)  @ 1024
+  @api tm:play()  @ 1030
+  @api tm:stop()  @ 1031
+  @api tm:playPause()  @ 1032
+  @api tm:setMutedChannels(set)  @ 1037
       @contract  idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes. PA events ride along in note columns but carry no mute state — skipped.
-  @api tm:specOf(uuid)  @ 1057
-  @api tm:nodeMeta(node)  @ 1058
-  @api tm:specPathOf(evt)  @ 1065
+  @api tm:specOf(uuid)  @ 1060
+  @api tm:nodeMeta(node)  @ 1061
+  @api tm:specPathOf(evt)  @ 1068
       -- Integer-array spec path for a materialised event, derived live by
       -- walking nodeMeta up and finding each ancestor's position in its
       -- parent's children list. Replaces the persisted emit.specPath.
       -- Returns nil for plain events and for aliased events whose first
       -- rebuild has not yet populated specOf.
-  @api tm:routeRelative(evt, opsByField)  @ 1091
+  @api tm:routeRelative(evt, opsByField)  @ 1094
       @contract  appends a per-field op map onto evt's spec node; one root snapshot per call so coupled fields stay atomic. Per-field value is one op or a list (list lands as successive appendOps with coalescence). Returns false if evt isn't aliased or specOf lookup fails — caller falls through to direct mutation. See docs/aliases.md.
-  @api tm:severBatch(events)  @ 1108
+  @api tm:severBatch(events)  @ 1111
       @contract  groups events by parentUuid; one snapshot per root, deepest-first via nodeMeta walk. Pluck-by-identity dissolves the ordering hazard. Skips events without parentUuid or specOf lookup. Caller flushes. See docs/aliases.md.
-  @api tm:sever(evt)  @ 1143
+  @api tm:sever(evt)  @ 1146
       @contract  single-event wrapper over severBatch. Returns false when evt is unaliased or specOf lookup fails. See docs/aliases.md.
-  @api tm:deleteAliased(evt)  @ 1150
+  @api tm:deleteAliased(evt)  @ 1153
       @contract  structural delete: promote spec subtree's direct children to new roots, then drop. Two modes by evt shape — aliased child (drops spec node, evt vanishes via sweep) or root with aliases (drops root event). Suppressed branches dropped silently. Returns false for plain events. Caller flushes. See docs/aliases.md.
-  @api tm:aliasSrcSnapshot(rootUuid, specIdx)  @ 1198
+  @api tm:aliasSrcSnapshot(rootUuid, specIdx)  @ 1201
       @contract  (rootUuid, specIdx) → { children = deep clone of leaf's children, chain = ancestor xform clones } or nil. Leaf excluded from chain — only ancestor drift counts as tree mutation. See docs/aliases.md.
-  @api tm:resolveAliasSrc(rootUuid, specIdx, chain, evtType)  @ 1216
+  @api tm:resolveAliasSrc(rootUuid, specIdx, chain, evtType)  @ 1219
       @contract  resolves a captured alias source against the live tree. Three shapes: nil → silent demote (root/index gone); { mismatch=true } → loud demote (ancestor xform drift or unresolvable producing-op); { resolved=fields } otherwise. Leaf xform is free to drift — corrective deltas compensate. See docs/aliases.md.
-  @api tm:pathXform(rootUuid, fromIdx, toIdx)  @ 1252
+  @api tm:pathXform(rootUuid, fromIdx, toIdx)  @ 1255
       @contract  concatenates per-field xform op-lists between fromIdx (exclusive) and toIdx (inclusive). Used by family-paste at copy time. Preserves producing-ops verbatim, deep-clones. Returns nil if path invalid or toIdx not a strict descendant. See docs/aliases.md.
-  @api tm:createAlias(rootUuid, srcIdx, xform, children, fit)  @ 1283
+  @api tm:createAlias(rootUuid, srcIdx, xform, children, fit)  @ 1286
       @contract  creates a spec node under rootUuid. srcIdx nil → top of root.children; non-nil → child of that spec. children passed verbatim (paste's captured subtree). fit clips materialised endppq to next col event so no new lane is allocated. Returns the new node's specIdx. See docs/aliases.md.
 
 # Signals emitted (via util.installHooks)

@@ -17,7 +17,7 @@ end
 
 local function pbAt(dump, ppq)
   for _, c in ipairs(dump.ccs) do
-    if c.msgType == 'pb' and c.ppq == ppq then return c end
+    if c.evType == 'pb' and c.ppq == ppq then return c end
   end
 end
 

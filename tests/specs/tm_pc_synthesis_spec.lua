@@ -8,7 +8,7 @@ local t = require('support')
 local function pcsOnChan(dump, chan)
   local out = {}
   for _, c in ipairs(dump.ccs) do
-    if c.msgType == 'pc' and c.chan == chan then
+    if c.evType == 'pc' and c.chan == chan then
       out[#out + 1] = { ppq = c.ppq, val = c.val }
     end
   end
@@ -144,7 +144,7 @@ return {
       local h = harness.mk{
         seed = {
           notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
-          ccs   = { { ppq = 100, msgType = 'pc', chan = 1, val = 42 } },
+          ccs   = { { ppq = 100, evType = 'pc', chan = 1, val = 42 } },
         },
       }
       t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 100, val = 42 } })
@@ -159,7 +159,7 @@ return {
       local h = harness.mk{
         seed = {
           notes = { { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
-          ccs   = { { ppq = 0,   msgType = 'pc', chan = 1, val = 11 } },
+          ccs   = { { ppq = 0,   evType = 'pc', chan = 1, val = 11 } },
         },
         config = { transient = { trackerMode = true } },
       }

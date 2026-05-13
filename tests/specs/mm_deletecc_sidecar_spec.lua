@@ -16,11 +16,11 @@ local realMM = require('realMidiManager')()
 local CHANMSG = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }
 
 local function packCc(c)
-  if c.msgType == 'pb' then
+  if c.evType == 'pb' then
     local raw = (c.val or 0) + 8192
     return CHANMSG.pb, raw & 0x7F, (raw >> 7) & 0x7F
   end
-  return CHANMSG[c.msgType], c.cc or c.pitch or 0, c.val or 0
+  return CHANMSG[c.evType], c.cc or c.pitch or 0, c.evType == 'pa' and (c.vel or 0) or (c.val or 0)
 end
 
 local function freshTake()
@@ -41,7 +41,7 @@ local function seed(take, reaper, spec)
   for _, sc in ipairs(spec.sidecars or {}) do
     texts[#texts+1] = {
       ppq = sc.ppq, eventtype = -1,
-      msg = t.encodeSidecar{ uuid = sc.uuid, msgType = sc.msgType, chan = sc.chan,
+      msg = t.encodeSidecar{ uuid = sc.uuid, evType = sc.evType, chan = sc.chan,
                              cc = sc.cc, pitch = sc.pitch, val = sc.val },
     }
   end
@@ -71,16 +71,16 @@ return {
       local take, reaper = freshTake()
       seed(take, reaper, {
         ccs = {
-          { ppq =  50, msgType = 'cc', chan = 1, cc = 7, val = 10 },  -- A: no sidecar
-          { ppq =  75, msgType = 'cc', chan = 1, cc = 7, val = 20 },  -- E: no sidecar
-          { ppq = 100, msgType = 'cc', chan = 1, cc = 7, val = 30 },  -- B
-          { ppq = 200, msgType = 'cc', chan = 1, cc = 7, val = 40 },  -- C
-          { ppq = 300, msgType = 'cc', chan = 1, cc = 7, val = 50 },  -- D
+          { ppq =  50, evType = 'cc', chan = 1, cc = 7, val = 10 },  -- A: no sidecar
+          { ppq =  75, evType = 'cc', chan = 1, cc = 7, val = 20 },  -- E: no sidecar
+          { ppq = 100, evType = 'cc', chan = 1, cc = 7, val = 30 },  -- B
+          { ppq = 200, evType = 'cc', chan = 1, cc = 7, val = 40 },  -- C
+          { ppq = 300, evType = 'cc', chan = 1, cc = 7, val = 50 },  -- D
         },
         sidecars = {
-          { ppq = 100, uuid = 22, msgType = 'cc', chan = 1, cc = 7, val = 30 },
-          { ppq = 200, uuid = 33, msgType = 'cc', chan = 1, cc = 7, val = 40 },
-          { ppq = 300, uuid = 44, msgType = 'cc', chan = 1, cc = 7, val = 50 },
+          { ppq = 100, uuid = 22, evType = 'cc', chan = 1, cc = 7, val = 30 },
+          { ppq = 200, uuid = 33, evType = 'cc', chan = 1, cc = 7, val = 40 },
+          { ppq = 300, uuid = 44, evType = 'cc', chan = 1, cc = 7, val = 50 },
         },
       })
 

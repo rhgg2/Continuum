@@ -178,7 +178,7 @@ return {
             { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 80,  detune = 0, delay = 0 },
           },
           ccs = {
-            { ppq = 120, chan = 1, msgType = 'pa', pitch = 60, val = 70 },
+            { ppq = 120, chan = 1, evType = 'pa', pitch = 60, vel = 70 },
           },
         },
       }
@@ -206,7 +206,7 @@ return {
             { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
           },
           ccs = {
-            { ppq = 120, chan = 1, msgType = 'pa', pitch = 60, val = 70 },
+            { ppq = 120, chan = 1, evType = 'pa', pitch = 60, vel = 70 },
           },
         },
       }
@@ -218,7 +218,7 @@ return {
       t.eq(#dump.notes, 1, 'note untouched')
       local stillPA = false
       for _, c in ipairs(dump.ccs) do
-        if c.msgType == 'pa' and c.ppq == 120 then stillPA = true end
+        if c.evType == 'pa' and c.ppq == 120 then stillPA = true end
       end
       t.truthy(stillPA, 'PA untouched')
     end,
@@ -239,7 +239,7 @@ return {
           },
           ccs = {
             -- Cell at row 2; pitch=60 means hosted by the note above.
-            { ppq = 120, chan = 1, msgType = 'pa', pitch = 60, val = 70 },
+            { ppq = 120, chan = 1, evType = 'pa', pitch = 60, vel = 70 },
           },
         },
       }
@@ -254,7 +254,7 @@ return {
       t.eq(#dump.notes, 1, 'host note untouched (outside selection)')
       local stillPA = false
       for _, c in ipairs(dump.ccs) do
-        if c.msgType == 'pa' and c.ppq == 120 then stillPA = true end
+        if c.evType == 'pa' and c.ppq == 120 then stillPA = true end
       end
       t.truthy(stillPA, 'PA preserved under pitch-part selection delete')
     end,
@@ -271,7 +271,7 @@ return {
             { ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
           },
           ccs = {
-            { ppq = 120, chan = 1, msgType = 'pa', pitch = 60, val = 70 },
+            { ppq = 120, chan = 1, evType = 'pa', pitch = 60, vel = 70 },
           },
         },
       }
@@ -285,7 +285,7 @@ return {
       t.eq(#dump.notes, 1, 'host note survives')
       local paGone = true
       for _, c in ipairs(dump.ccs) do
-        if c.msgType == 'pa' and c.ppq == 120 then paGone = false end
+        if c.evType == 'pa' and c.ppq == 120 then paGone = false end
       end
       t.truthy(paGone, 'PA in vel-part selection deleted')
     end,
@@ -304,7 +304,7 @@ return {
             { ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
           },
           ccs = {
-            { ppq = 120, chan = 1, msgType = 'pa', pitch = 60, val = 0x70 },
+            { ppq = 120, chan = 1, evType = 'pa', pitch = 60, vel = 0x70 },
           },
         },
       }
@@ -317,10 +317,10 @@ return {
 
       local out
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pa' then out = c end
+        if c.evType == 'pa' then out = c end
       end
       t.truthy(out, 'PA survives')
-      t.eq(out.val, 0x50, 'high nibble updated to 5')
+      t.eq(out.vel, 0x50, 'high nibble updated to 5')
     end,
   },
 
@@ -373,7 +373,7 @@ return {
 
       local survivors = {}
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pa' then survivors[#survivors+1] = c end
+        if c.evType == 'pa' then survivors[#survivors+1] = c end
       end
       t.eq(#survivors, 1, 'one PA remains after deleting row 2')
 
@@ -382,7 +382,7 @@ return {
       h.cmgr:invoke('delete')
       survivors = {}
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.msgType == 'pa' then survivors[#survivors+1] = c end
+        if c.evType == 'pa' then survivors[#survivors+1] = c end
       end
       t.eq(#survivors, 0, 'all PAs deleted')
     end,
