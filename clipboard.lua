@@ -36,7 +36,7 @@ local CLIP_RESERVED = {
   -- source root; aliased-mode propagation is handled explicitly via aliasSrc
   -- and the family-paste machinery. aliasCtr is a vestigial counter on test
   -- seeds; strip it at the clip boundary so paste outcomes are clean.
-  aliases = true, aliasCtr = true,
+  children = true, aliasCtr = true,
 }
 -- Clip-only fields stripped before a paste materialises into a write event.
 -- aliasSrc rides through to the per-event write site (it carries the source

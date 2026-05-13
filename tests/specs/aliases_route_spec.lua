@@ -5,7 +5,8 @@
 local t = require('support')
 
 local function rootNote(extras)
-  local n = { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+  local n = { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
+              chan = 1, pitch = 60, vel = 100,
               detune = 0, delay = 0, uuid = 1 }
   for k, v in pairs(extras) do n[k] = v end
   return n
@@ -26,7 +27,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -37,8 +38,8 @@ return {
 
       local root = rootByUuid(h.fm:dump().notes, 1)
       t.truthy(root, 'root present')
-      t.deepEq(root.aliases[1].xform.pitch, {{'add', 1}})
-      t.deepEq(root.aliases[1].xform.ppqL,  {{'add', 240}}, 'ppqL op untouched')
+      t.deepEq(root.children[1].xform.pitch, {{'add', 1}})
+      t.deepEq(root.children[1].xform.ppqL,  {{'add', 240}}, 'ppqL op untouched')
       t.eq(root.pitch, 60, 'root pitch unchanged')
     end,
   },
@@ -63,7 +64,7 @@ return {
       local notes = h.fm:dump().notes
       t.eq(#notes, 1)
       t.eq(notes[1].pitch, 61)
-      t.falsy(notes[1].aliases)
+      t.falsy(notes[1].children)
     end,
   },
 
@@ -77,7 +78,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -88,7 +89,7 @@ return {
       h.cmgr:invoke('nudgeFineUp')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.deepEq(root.aliases[1].xform.pitch, {{'add', 2}},
+      t.deepEq(root.children[1].xform.pitch, {{'add', 2}},
                'single coalesced trailing add')
     end,
   },
@@ -106,7 +107,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
               children = {} },
           },
@@ -124,7 +125,7 @@ return {
 
       local root = rootByUuid(h.fm:dump().notes, 1)
       t.eq(root.pitch, 61, 'root bumped once by direct assign')
-      t.deepEq(root.aliases[1].xform.pitch, {{'add', 1}},
+      t.deepEq(root.children[1].xform.pitch, {{'add', 1}},
         'spec pitch unchanged — child filtered, no second [add 1] appended')
     end,
   },
@@ -141,7 +142,7 @@ return {
     run = function(harness)
       local hA = harness.mk{
         seed = { notes = { rootNote{
-          aliases = {
+          children = {
             { xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
               children = {} },
           },
@@ -162,7 +163,7 @@ return {
       hB.tm:flush()
 
       local root = rootByUuid(hB.fm:dump().notes, 1)
-      t.deepEq(root.aliases[1].xform.pitch, {{'add', 2}},
+      t.deepEq(root.children[1].xform.pitch, {{'add', 2}},
                'spec pitch op-list grew (1 from seed, +1 from route, coalesced)')
 
       local kidB
@@ -186,7 +187,7 @@ return {
       local h = harness.mk{
         config = { track = { rowPerBeat = 1 } },
         seed = { notes = { rootNote{
-          aliases = {
+          children = {
             { xform = { ppqL = {{'add', 480}} }, children = {} },
           },
         } } },
@@ -201,7 +202,7 @@ return {
       h.cmgr:invoke('nudgeForward')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.deepEq(root.aliases[1].xform.ppqL, {{'add', 720}},
+      t.deepEq(root.children[1].xform.ppqL, {{'add', 720}},
                'spec ppqL coalesced from 480 → 720 (one row forward)')
       t.eq(root.ppq, 0, 'root unmoved')
 
@@ -226,7 +227,7 @@ return {
       local h = harness.mk{
         config = { track = { rowPerBeat = 1 } },
         seed = { notes = { rootNote{
-          aliases = {
+          children = {
             { xform = { ppqL = {{'add', 480}} }, children = {} },
           },
         } } },
@@ -242,7 +243,7 @@ return {
 
       local root = rootByUuid(h.fm:dump().notes, 1)
       t.eq(root.ppq, 240, 'root stamped one row forward')
-      t.deepEq(root.aliases[1].xform.ppqL, {{'add', 480}},
+      t.deepEq(root.children[1].xform.ppqL, {{'add', 480}},
                'spec ppqL unchanged — child filtered, no second [add δ] appended')
 
       local kid
@@ -264,7 +265,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL  = {{'add', 240}},
                         pitch = {{'add', {'rand', 0, 1}}} },
@@ -277,7 +278,7 @@ return {
       h.cmgr:invoke('nudgeFineUp')
 
       local root  = rootByUuid(h.fm:dump().notes, 1)
-      local pitch = root.aliases[1].xform.pitch
+      local pitch = root.children[1].xform.pitch
       t.eq(#pitch, 2, 'op list grew to 2 entries')
       t.deepEq(pitch[1], {'add', {'rand', 0, 1}}, 'rand entry intact')
       t.deepEq(pitch[2], {'add', 1},              'fresh add appended')

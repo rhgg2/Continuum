@@ -28,7 +28,6 @@ end
 
 local resolution    = 240
 local rowPerBar     = 16
-local rowPPQs       = {}
 local length        = 0
 local timeSigs      = {}
 
@@ -1113,11 +1112,10 @@ do
       local col, chan = g.col, g.col.midiChan
       for _, e in pairs(g.locs) do
         if e.rpb and (not opts.include or opts.include(e, chan)) then
-          local tgt   = opts.target(chan)
           local entry = { col = col, e = e,
-            newppq = math.min(length, util.round(tgt.fromLogical(chan, e.ppqL))) }
+            newppq = math.min(length, tm:fromLogical(chan, e.ppqL)) }
           if util.isNote(e) then
-            entry.newEndppq = math.min(length, util.round(tgt.fromLogical(chan, e.endppqL)))
+            entry.newEndppq = math.min(length, tm:fromLogical(chan, e.endppqL))
             notePlansByChan[chan] = notePlansByChan[chan] or {}
             util.add(notePlansByChan[chan], entry)
           end
@@ -1157,7 +1155,7 @@ do
     end
 
     -- Pass 2: conform overlaps that monotone-but-rounded
-    -- swing.fromLogical may have nudged past noteColumnAccepts'
+    -- tm:fromLogical may have nudged past noteColumnAccepts'
     -- threshold (or onto the same ppq). Without this, allocator
     -- rejects the persisted lane and the successor drifts.
     conformOverlaps(plans)
@@ -1187,8 +1185,7 @@ do
   end
 
   local function reswingScope(groups)
-    local curSnap = tm:swingSnapshot()
-    reswingCore(groups, { target = function() return curSnap end })
+    reswingCore(groups, {})
   end
 
   -- Plan-then-write so conformOverlaps can clip plan geometry against
@@ -2056,7 +2053,7 @@ end
 
 local rebuilding = false
 
---contract: reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/rowPPQs/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
+--contract: reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
 function tv:rebuild(takeChanged)
   if not tm or rebuilding then return end
   if not tm:currentTake() then return end
@@ -2128,23 +2125,10 @@ function tv:rebuild(takeChanged)
       for _, n in ipairs(ccNums) do addGridCol(chan, 'cc', n, c.ccs[n].events) end
     end
 
-    -- Stored as floats so rowToPPQ/ppqToRow are mutually exact (single round
-    -- only at realisation) and on-grid tests collapse to integer compare.
-    rowPPQs = {}
-    local r = 0
-    while true do
-      local ppq = r * ppqPerRow
-      if ppq >= length and r > 0 then break end
-      rowPPQs[r] = ppq
-      r = r + 1
-    end
-
-    local numRows = r
-    grid.numRows = numRows
+    local numRows = math.max(1, math.ceil(length / ppqPerRow))
+    grid.numRows  = numRows
 
     ctx = util.instantiate('viewContext', {
-      swing      = tm:swingSnapshot(),
-      rowPPQs    = rowPPQs,
       length     = length,
       numRows    = numRows,
       rowPerBeat = rpb,

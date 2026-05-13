@@ -89,6 +89,13 @@ function util.bucket(buckets, key, val)
   return b
 end
 
+-- Sparse → dense; n is the pre-sparse length.
+function util.compact(t, n)
+  local out = {}
+  for i = 1, n do if t[i] ~= nil then out[#out+1] = t[i] end end
+  return out
+end
+
 --contract: assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
 function util.seek(items, mode, key, filter, keyFn)
   keyFn = keyFn or function(x) return x.ppq end

@@ -21,7 +21,8 @@ local function specPaths(h, list)
 end
 
 local function rootNote(extras)
-  local n = { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, uuid = 1 }
+  local n = { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
+              chan = 1, pitch = 60, vel = 100, uuid = 1 }
   for k, v in pairs(extras) do n[k] = v end
   return n
 end
@@ -36,7 +37,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
           },
         } } },
@@ -60,7 +61,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 200}} }, children = {
               { id = '1', xform = { ppqL = {{'mul', 2}} }, children = {
                 { id = '1', xform = { ppqL = {{'add', 1}}, vel = {{'add', 10}} },
@@ -98,7 +99,7 @@ return {
           notes  = { rootNote{
             ppq = 0, endppq = 240,
             aliasCtr = 2,
-            aliases  = {
+            children = {
               -- shift +480 → start 480, would-be end 720; tail clamps to 480.
               { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
             },
@@ -121,7 +122,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
           },
         } } },
@@ -146,7 +147,7 @@ return {
         seed = { notes = {
           rootNote{
             aliasCtr = 2,
-            aliases  = {
+            children = {
               { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
             },
           },
@@ -168,7 +169,7 @@ return {
         seed = { notes = {
           rootNote{
             aliasCtr = 2,
-            aliases  = {
+            children = {
               { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
             },
           },
@@ -179,7 +180,7 @@ return {
 
       local blockerLoc
       for loc, n in h.fm:notes() do
-        if not n.aliases and n.ppq == 480 then blockerLoc = loc end
+        if not n.children and n.ppq == 480 then blockerLoc = loc end
       end
       h.fm:modify(function() h.fm:deleteNote(blockerLoc) end)
 
@@ -199,7 +200,7 @@ return {
         seed = { notes = {
           rootNote{
             aliasCtr = 2,
-            aliases  = {
+            children = {
               { id = '1', xform = { ppqL = {{'add', 480}} }, children = {
                 { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
               }},
@@ -225,7 +226,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
           },
         } } },
@@ -248,7 +249,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
           },
         } } },
@@ -268,7 +269,7 @@ return {
         return harness.mk{
           seed = { notes = { rootNote{
             aliasCtr = 2,
-            aliases  = {
+            children = {
               { id = '1', xform = { ppqL = {{'add', {'rand', 0, 1000}}} },
                 children = {} },
             },

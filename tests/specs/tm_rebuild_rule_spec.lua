@@ -3,7 +3,7 @@
 --   - stale=true  & ppqL present  → raw rebuilt from ppqL (+ delay)
 --   - stale=false & raw matches   → no-op (steady state)
 --   - stale=false & raw disagrees → ppqL rederived from raw
--- Frame-bearing events are exempt (legacy reswing pathway still owns them).
+-- The rpb mark survives as authorship provenance but no longer gates the rule.
 
 local t = require('support')
 
@@ -146,6 +146,37 @@ return {
   },
 
   {
+    name = 'markSwingStale restamps cc-event loc so column writes route correctly',
+    -- Regression: column cc events have `cc` stripped by CC_PROJECT_STRIP,
+    -- so the loc-restamp block must source the cc number from the column,
+    -- not the event. A bug here only shows up when a stale-swing rebuild
+    -- is followed by a column-driven write to the cc.
+    run = function(harness)
+      local h = harness.mk{
+        seed = { ccs = {
+          { ppq = 139, msgType = 'cc', chan = 1, cc = 7, val = 64,
+            ppqL = 120 },
+        }},
+        config = {
+          project = { swings = { ['c58'] = classic58 } },
+          take    = { swing = 'c58' },
+        },
+      }
+      h.tm:markSwingStale(1)
+      h.fm:modify(function()
+        for loc, _ in h.fm:ccs() do h.fm:assignCC(loc, { ppq = 100 }) end
+      end)
+      t.eq(ccByCC(h.fm:dump(), 7).ppq, 139, 'cc raw reseated from ppqL')
+
+      -- Column event must carry a live loc; route an assign through it.
+      local colE = h.tm:getChannel(1).columns.ccs[7].events[1]
+      h.tm:assignEvent('cc', colE, { val = 99 })
+      h.tm:flush()
+      t.eq(ccByCC(h.fm:dump(), 7).val, 99, 'assign routes via restamped loc')
+    end,
+  },
+
+  {
     name = 'markSwingStale(nil) marks all 16 channels',
     run = function(harness)
       local h = harness.mk{
@@ -196,16 +227,15 @@ return {
     end,
   },
 
-  ----- Exempt events (rpb-stamped without stale, fake)
+  ----- Exempt events (fake only — rpb no longer gates the rule)
 
   {
-    name = 'rpb-stamped event without stale is exempt from the rule',
+    name = 'rpb-stamped event with stale ppqL: predicted-check rederives from raw',
     run = function(harness)
-      -- evt.rpb is the authoring-truth marker: ppqL/endppqL are the truth,
-      -- raw is realisation under cm's current swing. The rule must not
-      -- rederive ppqL from raw on cold load — only the stale-branch
-      -- (driven by configChanged or bindTake's markSwingStale) touches
-      -- rpb-stamped events.
+      -- rpb marks authorship but does not freeze ppqL. A non-stale channel
+      -- whose raw disagrees with predicted is an external REAPER edit;
+      -- ppqL follows raw so the next swing change rebuilds raw from a
+      -- ppqL that already reflects the user's intent.
       local h = harness.mk{
         seed = { notes = {
           { ppq = 200, endppq = 320, chan = 1, pitch = 60, vel = 100,
@@ -213,8 +243,8 @@ return {
         }},
       }
       local n = noteByPitch(h.fm:dump(), 60)
-      t.eq(n.ppqL,    999,  'ppqL untouched on rpb-stamped event')
-      t.eq(n.endppqL, 1119, 'endppqL untouched on rpb-stamped event')
+      t.eq(n.ppqL,    200, 'ppqL rederived from raw on disagreement')
+      t.eq(n.endppqL, 320, 'endppqL rederived from raw on disagreement')
     end,
   },
 

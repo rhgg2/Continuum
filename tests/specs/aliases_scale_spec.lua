@@ -62,7 +62,7 @@ return {
       t.eq(#notes, 1)
       t.eq(notes[1].ppq,    120)
       t.eq(notes[1].endppq, 240)
-      t.eq(notes[1].aliases, nil, 'no spec on plain event')
+      t.eq(notes[1].children, nil, 'no spec on plain event')
     end,
   },
 
@@ -78,7 +78,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { notes = { shortNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 120}}, pitch = {{'add', 1}} },
               children = {} },
@@ -94,7 +94,7 @@ return {
 
       local notes = h.fm:dump().notes
       local root  = rootByUuid(notes, 1)
-      local spec  = root.aliases[1]
+      local spec  = root.children[1]
       t.deepEq(spec.xform.ppqL, {{'add', 120}, {'mul', 2}, {'add', -120}},
         'mul and add both appended (anchor=row 2, k=2 → addTerm=-120)')
       t.deepEq(spec.xform.durL, {{'mul', 2}}, 'durL has mul only — no translation')
@@ -115,7 +115,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { notes = { shortNote{
           aliasCtr = 3,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 120}}, pitch = {{'add', 1}} }, children = {} },
             { id = '2', xform = { ppqL = {{'add', 240}}, pitch = {{'add', 2}} }, children = {} },
           },
@@ -130,10 +130,10 @@ return {
 
       local notes = h.fm:dump().notes
       local root  = rootByUuid(notes, 1)
-      t.deepEq(root.aliases[1].xform.ppqL,
+      t.deepEq(root.children[1].xform.ppqL,
         {{'add', 120}, {'mul', 0.5}, {'add', 60}},
         'on-anchor: aLogical*(1-0.5) = 60')
-      t.deepEq(root.aliases[2].xform.ppqL,
+      t.deepEq(root.children[2].xform.ppqL,
         {{'add', 240}, {'mul', 0.5}, {'add', 60}})
 
       local kids = byParent(notes, 1)
@@ -155,7 +155,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { notes = { shortNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 120}}, pitch = {{'add', 1}} },
               children = {} },
@@ -170,7 +170,7 @@ return {
       h.vm:scaleSelection(2)
       h.vm:scaleSelection(2)
 
-      local spec = rootByUuid(h.fm:dump().notes, 1).aliases[1]
+      local spec = rootByUuid(h.fm:dump().notes, 1).children[1]
       t.deepEq(spec.xform.durL, {{'mul', 4}},
         'durL muls collapse via coalescence (anchor-independent)')
     end,
@@ -286,7 +286,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { notes = { shortNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 120}}, pitch = {{'add', 1}} },
               children = {} },
@@ -302,9 +302,9 @@ return {
 
       local notes = h.fm:dump().notes
       local root  = rootByUuid(notes, 1)
-      t.deepEq(root.aliases[1].xform.ppqL, {{'add', 120}},
+      t.deepEq(root.children[1].xform.ppqL, {{'add', 120}},
         'spec ppqL unchanged — child filtered before routing')
-      t.eq(root.aliases[1].xform.durL, nil,
+      t.eq(root.children[1].xform.durL, nil,
         'spec durL untouched — child filtered before routing')
       t.eq(root.endppqL, 120, 'root scaled via plain path (60 → 120)')
     end,

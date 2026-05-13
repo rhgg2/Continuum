@@ -18,7 +18,9 @@ return {
     name = 'CC authored under c58 reswings to identity using its ppqL',
     run = function(harness)
       -- Row 2 in rpb=4 has logical ppq 120; under c58 that lands at 139.
-      -- Reswing target = identity, so the realised ppq returns to 120.
+      -- Seed coherent under c58, flip take swing off: the stale-arm
+      -- rebuild reseats raw to the identity-frame realisation (120),
+      -- and the explicit reswingAll no-ops on the now-coherent state.
       local h = harness.mk{
         seed = {
           ccs = {
@@ -29,14 +31,15 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = nil, rowPerBeat = 4 },
+          take    = { swing = 'c58', rowPerBeat = 4 },
         },
       }
+      h.cm:remove('take', 'swing')
       h.vm:setGridSize(80, 40)
       h.vm:reswingAll()
 
       local cc = findCC(h.fm:dump(), 'cc', 2)
-      t.truthy(cc, 'cc survives reswing')
+      t.truthy(cc, 'cc survives swing change')
       t.eq(cc.ppq, 120, 'cc reswung to identity-frame intent ppq=120')
     end,
   },
@@ -161,9 +164,10 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = nil, rowPerBeat = 4 },
+          take    = { swing = 'c58', rowPerBeat = 4 },
         },
       }
+      h.cm:remove('take', 'swing')
       h.vm:setGridSize(80, 40)
       h.vm:reswingAll()
       h.vm:reswingAll()
@@ -209,9 +213,10 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58', rowPerBeat = 4 },
+          take    = { rowPerBeat = 4 },
         },
       }
+      h.cm:set('take', 'swing', 'c58')
       h.vm:setGridSize(80, 40)
       h.vm:reswingAll()
 

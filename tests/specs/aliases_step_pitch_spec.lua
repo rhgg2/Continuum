@@ -49,7 +49,7 @@ return {
     run = function(harness)
       local h = temperedHarness(harness, rootNote{
         aliasCtr = 2,
-        aliases  = {
+        children = {
           { id = '1', xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
             children = {} },
         },
@@ -69,7 +69,7 @@ return {
     run = function(harness)
       local h = temperedHarness(harness, rootNote{
         aliasCtr = 2,
-        aliases  = {
+        children = {
           { id = '1', xform = { ppqL = {{'add', 240}}, octave = {{'add', 1}} },
             children = {} },
         },
@@ -89,7 +89,7 @@ return {
     run = function(harness)
       local h = temperedHarness(harness, rootNote{
         aliasCtr = 2,
-        aliases  = {
+        children = {
           { id = '1', xform = {
               ppqL   = {{'add', 240}},
               pitch  = {{'add', 2}},
@@ -113,7 +113,7 @@ return {
     run = function(harness)
       local h = temperedHarness(harness, rootNote{
         aliasCtr = 2,
-        aliases  = {
+        children = {
           { id = '1', xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
             children = {
               { id = '1', xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
@@ -144,7 +144,7 @@ return {
       local h = temperedHarness(harness, rootNote{
         detune  = 25,        -- off the 19EDO grid
         aliasCtr = 2,
-        aliases  = {
+        children = {
           { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
         },
       })
@@ -162,7 +162,7 @@ return {
     run = function(harness)
       local h = temperedHarness(harness, rootNote{
         aliasCtr = 2,
-        aliases  = {
+        children = {
           { id = '1', xform = { ppqL = {{'add', 240}}, detune = {{'add', 50}} },
             children = {} },
         },
@@ -189,7 +189,7 @@ return {
           { uuid = 1, ppq = 0,   endppq = 240, ppqL = 0,   endppqL = 240,
             chan = 1, pitch = 60, vel = 100, detune = 60, delay = 0, lane = 1,
             aliasCtr = 2,
-            aliases  = {
+            children = {
               { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
             } },
           { uuid = 2, ppq = 240, endppq = 480, ppqL = 240, endppqL = 480,

@@ -174,6 +174,7 @@ end
 local noteEventFields = {
   idx = true, loc = true, ppq = true, endppq = true, chan = true,
   pitch = true, vel = true, muted = true, uuid = true, uuidIdx = true,
+  sampleShadowed = true,
 }
 local ccEventFields = {
   idx = true, loc = true, uuidIdx = true, ppq = true, msgType = true, chan = true,
@@ -228,13 +229,6 @@ local function saveMetadata()
 end
 
 ----- Utils
-
--- Sparse → dense; n is the pre-sparse length.
-local function compact(t, n)
-  local out = {}
-  for i = 1, n do if t[i] ~= nil then out[#out+1] = t[i] end end
-  return out
-end
 
 local function assignNewUUID(evt)
   maxUUID = maxUUID + 1
@@ -568,9 +562,9 @@ function mm:load(newTake)
 
   ----- Compact in-memory tables to dense; loc is the lua position
   ----- (1-based), valid until next rebuild — see byUuid contract.
-  notes      = compact(notes,      noteCount)
-  ccs        = compact(ccs,        ccCount)
-  ccSidecars = compact(ccSidecars, sidecarCount)
+  notes      = util.compact(notes,      noteCount)
+  ccs        = util.compact(ccs,        ccCount)
+  ccSidecars = util.compact(ccSidecars, sidecarCount)
   for i, n in ipairs(notes) do n.loc = i end
   for i, c in ipairs(ccs)   do c.loc = i end
 

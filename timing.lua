@@ -334,7 +334,7 @@ end
 
 ----- Logical grid
 
---contract: callers must store result as float; vm relies on unrounded rowPPQs for swing-inversion exactness
+--contract: callers must store result as float; tv relies on unrounded ppqs for swing-inversion exactness
 function M.logPerRow(rpb, denom, resolution)
   return resolution * 4 / (denom * rpb)
 end

@@ -317,7 +317,7 @@ return {
     run = function()
       local target = { xform = { ppqL = {{'add',9}} }, children = {} }
       local root = {
-        aliases = {
+        children = {
           { xform = {}, children = {
             { xform = { ppqL = {{'add',1}} }, children = { target } },
           }},
@@ -329,17 +329,17 @@ return {
   {
     name = 'find: missing path returns nil',
     run = function()
-      local root = { aliases = { { xform={}, children={} } } }
+      local root = { children = { { xform={}, children={} } } }
       t.eq(aliases.find(root, {1,7}), nil)
       t.eq(aliases.find(root, {9}),   nil)
     end,
   },
   {
-    name = 'parentOf: top-level returns root.aliases',
+    name = 'parentOf: top-level returns root.children',
     run = function()
-      local root = { aliases = { { xform={}, children={} } } }
+      local root = { children = { { xform={}, children={} } } }
       local list, i = aliases.parentOf(root, {1})
-      t.eq(list, root.aliases)
+      t.eq(list, root.children)
       t.eq(i, 1)
     end,
   },
@@ -347,11 +347,11 @@ return {
     name = 'parentOf: nested returns intermediate children list',
     run = function()
       local inner = { xform={}, children={} }
-      local root = { aliases = {
+      local root = { children = {
         { xform={}, children = { inner } },
       }}
       local list, i = aliases.parentOf(root, {1,1})
-      t.eq(list, root.aliases[1].children)
+      t.eq(list, root.children[1].children)
       t.eq(i, 1)
     end,
   },
@@ -361,21 +361,21 @@ return {
       local a = { xform={}, children={} }
       local b = { xform={ ppqL={{'add',9}} }, children={ { xform={}, children={} } } }
       local c = { xform={}, children={} }
-      local root = { aliases = { a, b, c } }
+      local root = { children = { a, b, c } }
       local got = aliases.pluckSubtree(root, {2})
       t.eq(got, b)
       t.eq(#got.children, 1)            -- descendants survive
-      t.eq(#root.aliases, 2)
-      t.eq(root.aliases[1], a)
-      t.eq(root.aliases[2], c)
+      t.eq(#root.children, 2)
+      t.eq(root.children[1], a)
+      t.eq(root.children[2], c)
     end,
   },
   {
     name = 'pluckSubtree: missing path returns nil, tree unchanged',
     run = function()
-      local root = { aliases = { { xform={}, children={} } } }
+      local root = { children = { { xform={}, children={} } } }
       t.eq(aliases.pluckSubtree(root, {9}), nil)
-      t.eq(#root.aliases, 1)
+      t.eq(#root.children, 1)
     end,
   },
 
@@ -433,7 +433,7 @@ return {
     run = function()
       local tree = {
         aliasCtr = 4,
-        aliases = {
+        children = {
           { id='1', xform = { ppqL = {{'add',120}}, pitch = {{'add',7}} },
             children = {
               { id='1', xform = { ppqL = {{'add',240}} }, children = {} },

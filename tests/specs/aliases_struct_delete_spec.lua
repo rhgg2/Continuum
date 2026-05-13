@@ -28,7 +28,8 @@ local function freeRoots(list)
 end
 
 local function rootNote(extras)
-  local n = { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+  local n = { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
+              chan = 1, pitch = 60, vel = 100,
               detune = 0, delay = 0, uuid = 1 }
   for k, v in pairs(extras or {}) do n[k] = v end
   return n
@@ -44,7 +45,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
           },
         } } },
@@ -58,7 +59,7 @@ return {
       local notes = h.fm:dump().notes
       t.eq(#notes, 1, 'only the original root survives')
       local root = rootByUuid(notes, 1)
-      t.deepEq(root.aliases, {}, 'spec tree empty')
+      t.deepEq(root.children, {}, 'spec tree empty')
     end,
   },
 
@@ -71,7 +72,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 200}} }, children = {
               { id = '1', xform = { ppqL = {{'add',  50}} }, children = {} },
               { id = '2', xform = { ppqL = {{'add', 100}} }, children = {
@@ -100,7 +101,7 @@ return {
 
       local notes  = h.fm:dump().notes
       local origin = rootByUuid(notes, 1)
-      t.deepEq(origin.aliases, {}, 'mid spec node and its subtree gone from old root')
+      t.deepEq(origin.children, {}, 'mid spec node and its subtree gone from old root')
 
       local roots = freeRoots(notes)
       t.eq(#roots, 3, 'old root + two promoted')
@@ -111,8 +112,8 @@ return {
       end
       t.truthy(promoted[250], 'first promoted root keeps its resolved ppq')
       t.truthy(promoted[300], 'second promoted root keeps its resolved ppq')
-      t.deepEq(promoted[250].aliases, {}, 'leaf child carries empty subtree')
-      t.eq(#promoted[300].aliases, 1, 'second carries its one grandchild spec')
+      t.deepEq(promoted[250].children, {}, 'leaf child carries empty subtree')
+      t.eq(#promoted[300].children, 1, 'second carries its one grandchild spec')
 
       local gks = byParent(notes, promoted[300].uuid)
       t.eq(#gks, 1)
@@ -131,7 +132,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 3,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
             { id = '2', xform = { ppqL = {{'add', 960}} }, children = {} },
           },
@@ -147,8 +148,8 @@ return {
 
       local notes = h.fm:dump().notes
       local root  = rootByUuid(notes, 1)
-      t.eq(#root.aliases, 1)
-      t.deepEq(root.aliases[1].xform.ppqL, {{'add', 960}}, 'sibling preserved')
+      t.eq(#root.children, 1)
+      t.deepEq(root.children[1].xform.ppqL, {{'add', 960}}, 'sibling preserved')
 
       local survivors = byParent(notes, 1)
       t.eq(#survivors, 1)
@@ -166,7 +167,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 3,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 480}} }, children = {
               { id = '1', xform = { ppqL = {{'add', 100}}, vel = {{'add', 7}} },
                 children = {} },
@@ -234,7 +235,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { rootNote{
-          aliases = {
+          children = {
             { xform = { ppqL = {{'add', 480}} }, children = {
               { xform = {}, children = {
                 { xform = { ppqL = {{'add', 240}} }, children = {} },
@@ -265,7 +266,7 @@ return {
 
       local notes  = h.fm:dump().notes
       local origin = rootByUuid(notes, 1)
-      t.deepEq(origin.aliases, {}, 'L1 plucked from root; whole subtree gone')
+      t.deepEq(origin.children, {}, 'L1 plucked from root; whole subtree gone')
 
       local roots = freeRoots(notes)
       t.eq(#roots, 2, 'old root + one promoted (B); suppressed A and its kid X dropped')
@@ -277,7 +278,7 @@ return {
       t.truthy(promoted)
       t.eq(promoted.ppq,   720, 'B keeps its resolved ppq')
       t.eq(promoted.pitch, 61,  'B keeps its resolved pitch')
-      t.deepEq(promoted.aliases, {}, 'B carries no subtree')
+      t.deepEq(promoted.children, {}, 'B carries no subtree')
 
       -- No survivor with parentUuid=1 remains.
       t.eq(#byParent(notes, 1), 0, 'all aliased kids of old root gone')
@@ -298,13 +299,15 @@ return {
       -- root1 emits child A at ppq=480; root2 (ppq=480) blocks A.
       local h = harness.mk{
         seed = { notes = {
-          { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100,
+          { ppq = 0,   endppq = 240, ppqL = 0,   endppqL = 240,
+            chan = 1, pitch = 60, vel = 100,
             uuid = 1, aliasCtr = 3,
-            aliases = {
+            children = {
               { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
               { id = '2', xform = { ppqL = {{'add', 720}} }, children = {} },
             } },
-          { ppq = 480, endppq = 720, chan = 1, pitch = 60, vel = 100,
+          { ppq = 480, endppq = 720, ppqL = 480, endppqL = 720,
+            chan = 1, pitch = 60, vel = 100,
             uuid = 2 },
         } },
       }

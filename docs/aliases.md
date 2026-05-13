@@ -14,7 +14,7 @@ state in a one-line annotation.
 Two fields, both on the **root** (the topmost event in an alias tree):
 
 ```lua
-root.aliases = { SpecNode, ... }            -- ordered, position is identity
+root.children = { SpecNode, ... }           -- ordered, position is identity
 SpecNode     = { xform, children, [fit] }   -- fit is optional
 ```
 
@@ -50,7 +50,7 @@ walkable even across suppressed intermediaries.
 Both maps are cleared at the head of every `tm:rebuild` and repopulated
 by the alias walker as it emits. They never persist; save/load erases
 them harmlessly because the next rebuild rebuilds them from
-`parentUuid` + `root.aliases`. Cold state and hot state converge at the
+`parentUuid` + `root.children`. Cold state and hot state converge at the
 first rebuild after load.
 
 ## Routing — relative edits
@@ -79,9 +79,9 @@ and make it a new top-level root. Three things happen, in order:
    identity, not by index. Identity-pluck is the spec-tree counterpart
    to string-path-pluck: it survives positional addressing where
    dotted-base36 paths never could.
-2. The plucked subtree's `children` become the new root's `aliases`.
+2. The plucked subtree's `children` become the new root's `children`.
 3. The materialised event drops `parentUuid` and adopts the lifted
-   `aliases` list. **The mm-uuid it already carries becomes its
+   `children` list. **The mm-uuid it already carries becomes its
    permanent identity** — minted ephemeral by the walker, it stops
    being ephemeral by convention because the rebuild sweep only deletes
    events that still carry `parentUuid`. No fresh allocation is needed.
@@ -236,7 +236,7 @@ events only.
 
 ## What mm sees
 
-Nothing changes at the mm boundary. Roots carry `aliases` as
+Nothing changes at the mm boundary. Roots carry `children` as
 pass-through metadata; materialised children carry `parentUuid`. mm's
 structural-fields + extension-data split is unchanged. The walker
 plants new materialisations under `mm:modify`, which mm calls back

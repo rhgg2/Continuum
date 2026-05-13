@@ -42,7 +42,7 @@ return {
           length = 6000,
           notes  = { root{
             aliasCtr = 2,
-            aliases  = {
+            children = {
               { id = '1', fit = true,
                 xform    = { ppqL = {{'add', 4*R}}, durL = {{'add', 8*R}} },
                 children = {} },
@@ -70,7 +70,7 @@ return {
           notes  = {
             root{
               aliasCtr = 2,
-              aliases  = {
+              children = {
                 { id = '1', fit = true,
                   xform    = { ppqL = {{'add', 4*R}}, durL = {{'add', 8*R}} },
                   children = {} },
@@ -99,7 +99,7 @@ return {
           notes  = {
             root{
               aliasCtr = 2,
-              aliases  = {
+              children = {
                 { id = '1',  -- no fit
                   xform    = { ppqL = {{'add', 4*R}}, durL = {{'add', 8*R}} },
                   children = {} },
@@ -127,7 +127,7 @@ return {
           notes  = {
             root{
               aliasCtr = 2,
-              aliases  = {
+              children = {
                 { id = '1', fit = true,
                   xform    = { ppqL = {{'add', 4*R}}, durL = {{'add', 8*R}} },
                   children = {} },
@@ -156,7 +156,7 @@ return {
           notes  = {
             root{
               aliasCtr = 2,
-              aliases  = {
+              children = {
                 { id = '1', fit = true,
                   xform    = { ppqL = {{'add', 4*R}}, durL = {{'add', 8*R}} },
                   children = {} },
@@ -193,7 +193,7 @@ return {
           length = 6000,
           notes  = { root{
             aliasCtr = 3,
-            aliases  = {
+            children = {
               -- Different pitches so step-1 same-pitch truncation doesn't
               -- mask the fit-clip we're trying to test.
               { id = '1', fit = true,
@@ -228,7 +228,7 @@ return {
           notes  = {
             root{
               aliasCtr = 2,
-              aliases  = {
+              children = {
                 { id = '1', fit = true,
                   xform    = { ppqL = {{'add', 4*R}}, durL = {{'add', 2*R}} },
                   children = {} },

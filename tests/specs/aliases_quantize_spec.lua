@@ -54,7 +54,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 250}}, pitch = {{'add', 1}} },
               children = {} },
@@ -70,8 +70,8 @@ return {
 
       local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.eq(#oldRoot.aliases, 1, 'spec node stays in tree')
-      local spec = oldRoot.aliases[1]
+      t.eq(#oldRoot.children, 1, 'spec node stays in tree')
+      local spec = oldRoot.children[1]
       t.deepEq(spec.xform.ppqL, {{'add', 250}, {'snap', 60}})
       t.deepEq(spec.xform.durL, {{'snap', 60}})
 
@@ -93,7 +93,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { notes = { shortNote{
           aliasCtr = 3,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 250}}, pitch = {{'add', 1}} }, children = {} },
             { id = '2', xform = { ppqL = {{'add', 290}}, pitch = {{'add', 2}} }, children = {} },
           },
@@ -106,9 +106,9 @@ return {
 
       local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.eq(#oldRoot.aliases, 2, 'both spec nodes still present')
-      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 250}, {'snap', 60}})
-      t.deepEq(oldRoot.aliases[2].xform.ppqL, {{'add', 290}, {'snap', 60}})
+      t.eq(#oldRoot.children, 2, 'both spec nodes still present')
+      t.deepEq(oldRoot.children[1].xform.ppqL, {{'add', 250}, {'snap', 60}})
+      t.deepEq(oldRoot.children[2].xform.ppqL, {{'add', 290}, {'snap', 60}})
 
       local kids = byParent(notes, 1)
       table.sort(kids, function(a, b) return a.ppq < b.ppq end)
@@ -128,7 +128,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { notes = { shortNote{
           aliasCtr = 3,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} }, children = {} },
             { id = '2', xform = { ppqL = {{'add', 290}}, pitch = {{'add', 2}} }, children = {} },
           },
@@ -139,10 +139,10 @@ return {
 
       local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.eq(#oldRoot.aliases, 2, 'both still in tree')
-      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 240}},
+      t.eq(#oldRoot.children, 2, 'both still in tree')
+      t.deepEq(oldRoot.children[1].xform.ppqL, {{'add', 240}},
         'on-grid id=1 untouched')
-      t.deepEq(oldRoot.aliases[2].xform.ppqL, {{'add', 290}, {'snap', 60}},
+      t.deepEq(oldRoot.children[2].xform.ppqL, {{'add', 290}, {'snap', 60}},
         'off-grid id=2 snap appended')
 
       local kids = byParent(notes, 1)
@@ -162,7 +162,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
               children = {} },
@@ -175,8 +175,8 @@ return {
       local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
       t.truthy(oldRoot)
-      t.eq(#oldRoot.aliases, 1)
-      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 240}},
+      t.eq(#oldRoot.children, 1)
+      t.deepEq(oldRoot.children[1].xform.ppqL, {{'add', 240}},
         'no snap appended — was already on-grid')
 
       local kids = byParent(notes, 1)
@@ -200,7 +200,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { notes = { shortNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 250}}, pitch = {{'add', 1}} },
               children = {
@@ -217,8 +217,8 @@ return {
 
       local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.eq(#oldRoot.aliases, 1, 'mid spec stays in tree')
-      local mid = oldRoot.aliases[1]
+      t.eq(#oldRoot.children, 1, 'mid spec stays in tree')
+      local mid = oldRoot.children[1]
       t.deepEq(mid.xform.ppqL, {{'add', 250}, {'snap', 60}})
       t.eq(#mid.children, 1, 'grandchild spec preserved')
 
@@ -256,7 +256,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 250}}, pitch = {{'add', 1}} },
               children = {} },
@@ -269,7 +269,7 @@ return {
 
       local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.deepEq(oldRoot.aliases, {}, 'severed')
+      t.deepEq(oldRoot.children, {}, 'severed')
 
       local promoted
       for _, n in ipairs(notes) do

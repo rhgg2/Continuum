@@ -3,14 +3,12 @@
 
 --invariant: pure: no side effects, no signals, no mutation of args
 --invariant: identity row math: ppqToRow / rowToPPQ are inverses (modulo integer rounding) under uniform ppqPerRow
---shape: args = { swing, rowPPQs, length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper }
+--shape: args = { length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper }
 local util   = require 'util'
 local tuning = require 'tuning'
 
 local args = ...
 
-local swing      = args.swing
-local rowPPQs    = args.rowPPQs
 local length     = args.length
 local numRows    = args.numRows
 local rowPerBeat = args.rowPerBeat

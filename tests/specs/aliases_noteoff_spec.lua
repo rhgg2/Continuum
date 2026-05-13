@@ -49,7 +49,7 @@ return {
         config = CFG,
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}},
                         durL = {{'add', 480}} },
@@ -70,7 +70,7 @@ return {
       h.cmgr:invoke('noteOff')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.deepEq(root.aliases[1].xform.durL, {{'add', 0}},
+      t.deepEq(root.children[1].xform.durL, {{'add', 0}},
                'coalesce: 480 + (-480) = 0')
       t.eq(root.endppq, 240, 'root tail unchanged')
 
@@ -92,7 +92,7 @@ return {
         config = CFG,
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
               children = {} },
@@ -109,7 +109,7 @@ return {
       h.cmgr:invoke('noteOff')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.deepEq(root.aliases[1].xform.durL, {{'add', 3360}},
+      t.deepEq(root.children[1].xform.durL, {{'add', 3360}},
                'fresh durL op (was absent) appended with extension delta')
 
       local kid = aliasKid(h.fm:dump().notes, 1)
@@ -133,7 +133,7 @@ return {
         config = CFG,
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 480}}, pitch = {{'add', 1}} },
               children = {
@@ -165,7 +165,7 @@ return {
 
       local notes = h.fm:dump().notes
       local root  = rootByUuid(notes, 1)
-      t.eq(#root.aliases, 0, 'spec node id=1 (with grandchild beneath) removed')
+      t.eq(#root.children, 0, 'spec node id=1 (with grandchild beneath) removed')
 
       -- Two notes survive: original root + promoted ex-grandchild.
       t.eq(#notes, 2)

@@ -12,10 +12,10 @@ local function rootNote(extras)
   return n
 end
 
-local function mkH(harness, aliases)
+local function mkH(harness, children)
   local h = harness.mk{
     config = { track = { rowPerBeat = 1 } },
-    seed   = { notes = { rootNote{ aliasCtr = 1 + #aliases, aliases = aliases } } },
+    seed   = { notes = { rootNote{ aliasCtr = 1 + #children, children = children } } },
   }
   h.vm:setGridSize(80, 40)
   return h

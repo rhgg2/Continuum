@@ -20,7 +20,8 @@ local function byParent(list, uuid)
 end
 
 local function rootNote(extras)
-  local n = { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+  local n = { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
+              chan = 1, pitch = 60, vel = 100,
               detune = 0, delay = 0, uuid = 1 }
   for k, v in pairs(extras or {}) do n[k] = v end
   return n
@@ -36,7 +37,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 480}}, pitch = {{'add', 1}} },
               children = {} },
@@ -55,7 +56,7 @@ return {
 
       local oldRoot = rootByUuid(notes, 1)
       t.truthy(oldRoot)
-      t.deepEq(oldRoot.aliases, {}, 'old root spec tree empty')
+      t.deepEq(oldRoot.children, {}, 'old root spec tree empty')
 
       local promoted
       for _, n in ipairs(notes) do
@@ -66,7 +67,7 @@ return {
       t.eq(promoted.specPath,   nil, 'specPath stripped')
       t.eq(promoted.ppq,    480, 'resolved ppq preserved')
       t.eq(promoted.pitch,  61,  'resolved pitch preserved')
-      t.deepEq(promoted.aliases, {}, 'no inherited subtree')
+      t.deepEq(promoted.children, {}, 'no inherited subtree')
     end,
   },
 
@@ -79,7 +80,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 3,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 480}} },  children = {} },
             { id = '2', xform = { ppqL = {{'add', 960}} },  children = {} },
           },
@@ -97,8 +98,8 @@ return {
 
       local notes = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.eq(#oldRoot.aliases, 1, 'one spec node remains')
-      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 960}}, 'the right one (sibling) remains')
+      t.eq(#oldRoot.children, 1, 'one spec node remains')
+      t.deepEq(oldRoot.children[1].xform.ppqL, {{'add', 960}}, 'the right one (sibling) remains')
 
       local survivors = byParent(notes, 1)
       t.eq(#survivors, 1, 'sibling materialisation re-emitted')
@@ -116,7 +117,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 200}} }, children = {
               { id = '1', xform = { ppqL = {{'mul', 2}} }, children = {
                 { id = '1', xform = { ppqL = {{'add', 1}}, vel = {{'add', 10}} },
@@ -148,9 +149,9 @@ return {
       local notes = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
       -- old root's '1' node had only one child, '1.1', which we plucked.
-      t.eq(#oldRoot.aliases, 1)
-      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 200}}, 'remaining spec is the outer +200')
-      t.eq(#oldRoot.aliases[1].children, 0, 'plucked subtree gone from old root')
+      t.eq(#oldRoot.children, 1)
+      t.deepEq(oldRoot.children[1].xform.ppqL, {{'add', 200}}, 'remaining spec is the outer +200')
+      t.eq(#oldRoot.children[1].children, 0, 'plucked subtree gone from old root')
 
       -- The promoted root carries the plucked node's children as its aliases.
       -- Its baked-in ppq is mid's resolved value (400).
@@ -160,7 +161,7 @@ return {
       end
       t.truthy(promoted)
       t.eq(promoted.ppq, 400, 'promoted root keeps mid resolved ppq')
-      t.eq(#promoted.aliases, 1, 'plucked child carried over')
+      t.eq(#promoted.children, 1, 'plucked child carried over')
 
       -- Grandchild re-emits under the new root. Its resolved ppq is the
       -- new root's 400 plus its xform's ppqL +1 = 401, identical to before.
@@ -178,7 +179,7 @@ return {
   --------------------------------------------------------------------
   -- severBatch: two children of the same root in one call. A naïve
   -- per-event sever loop loses the second pluck because each tm:sever
-  -- writes the whole root.aliases back from its own clone.
+  -- writes the whole root.children back from its own clone.
   --------------------------------------------------------------------
   {
     name = 'severBatch on two children of one root: both spec nodes plucked',
@@ -186,7 +187,7 @@ return {
       local h = harness.mk{
         seed = { notes = { rootNote{
           aliasCtr = 3,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
             { id = '2', xform = { ppqL = {{'add', 480}} }, children = {} },
           },
@@ -199,7 +200,7 @@ return {
 
       local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.deepEq(oldRoot.aliases, {}, 'both spec nodes plucked in one batch')
+      t.deepEq(oldRoot.children, {}, 'both spec nodes plucked in one batch')
 
       local roots = {}
       for _, n in ipairs(notes) do
@@ -224,7 +225,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { rootNote{
-          aliases  = {
+          children = {
             { xform = { ppqL = {{'add', 240}} }, children = {} },
             { xform = { ppqL = {{'add', 480}} }, children = {} },
             { xform = { ppqL = {{'add', 720}} }, children = {} },
@@ -248,9 +249,9 @@ return {
 
       local notes   = h.fm:dump().notes
       local oldRoot = rootByUuid(notes, 1)
-      t.eq(#oldRoot.aliases, 2, 'two spec nodes remain')
-      t.deepEq(oldRoot.aliases[1].xform.ppqL, {{'add', 480}}, 'B survives at slot 1')
-      t.deepEq(oldRoot.aliases[2].xform.ppqL, {{'add', 960}}, 'D survives at slot 2')
+      t.eq(#oldRoot.children, 2, 'two spec nodes remain')
+      t.deepEq(oldRoot.children[1].xform.ppqL, {{'add', 480}}, 'B survives at slot 1')
+      t.deepEq(oldRoot.children[2].xform.ppqL, {{'add', 960}}, 'D survives at slot 2')
 
       local survivors = byParent(notes, 1)
       t.eq(#survivors, 2, 'two aliased kids re-emit')

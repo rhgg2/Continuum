@@ -6,8 +6,7 @@ selection / clipboard, and exposes the editing command surface. Produces
 
 ## viewContext
 
-A pure, throwaway snapshot built once per `vm:rebuild`. Binds the
-swing snapshot, `rowPPQs` (prefix array of PPQ per row boundary),
+A pure, throwaway snapshot built once per `vm:rebuild`. Binds
 `length`, `numRows`, `rowPerBeat`, `ppqPerRow` (the logical row
 width — fractional in odd `(rpb, denom)` combinations), `timeSigs`,
 `temper`. Every method is a function of the bound state plus its args —
@@ -16,12 +15,13 @@ is no migration.
 
 Two responsibilities:
 
-- **Row ↔ PPQ projection.** `ppqToRow(ppqI, chan)` binary-searches
-  `rowPPQs` after `swing.toLogical(chan, ppqI)`; `rowToPPQ` is the
-  inverse (floor + `swing.fromLogical`). Per-chan, because column
-  swings differ. `ppqPerRow()` exposes the bound logical row width so
-  callers (e.g. clipboard paste) can compute ppqL at the
-  destination row.
+- **Row ↔ PPQ projection.** `ppqToRow(ppqI)` is `ppqI / ppqPerRow`
+  (saturating at 0 and `numRows`); `rowToPPQ` is the integer-rounded
+  inverse. `ppqPerRow()` exposes the bound logical row width so callers
+  (e.g. clipboard paste) can compute ppqL at the destination row. The
+  `chan` argument is retained on the call signature but unused at this
+  layer — column-level swing transforms happen above, when events are
+  written into / read out of the column tree.
 - **Temperament lens.** `noteProjection(evt)` resolves `(pitch, detune)`
   into `(label, gap, halfGap)` under the bound temperament, or nil if
   none active. (Pure coordinate query — see `docs/tuning.md` for the
@@ -35,7 +35,7 @@ displayRow(e) = round(ppqToRow_c(e.ppq))                  -- under current swing
 offGrid(e)    = rowToPPQ_c(displayRow(e)) ≠ e.ppq
 ```
 
-The float-`rowPPQs` invariant (round-trip exactness, off-grid as
+The unrounded-`ppqPerRow` invariant (round-trip exactness, off-grid as
 clean integer compare) is owned by timing.md; vm's stake is the
 display consequence — a swing slot change correctly surfaces
 previously-on-grid events as off-grid, because their realised ppq
@@ -247,9 +247,9 @@ Triggers:
 
 Reentrancy-guarded by `rebuilding`. `vm:rebuild(takeChanged)` takes a
 bool: `true` resets cursor / selection and re-reads `resolution`, `length`,
-`timeSigs` from tm; the remaining work (grid cols, `rowPPQs`, the
-viewContext, cell/overflow/offGrid maps, ghost maps) runs unconditionally
-on every rebuild. Mute is pushed to tm unconditionally at the end.
+`timeSigs` from tm; the remaining work (grid cols, the viewContext,
+cell/overflow/offGrid maps, ghost maps) runs unconditionally on every
+rebuild. Mute is pushed to tm unconditionally at the end.
 
 ## Mute / solo
 

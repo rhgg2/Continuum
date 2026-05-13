@@ -94,10 +94,6 @@ Step 4.7 of `tm:rebuild`. For each non-derived event:
 
 - **fake** (absorbers, synthesised PCs) — exempt; reseated by step
   4.8 from host raw.
-- **rpb-stamped, channel not stale** — exempt. The rpb mark
-  identifies a Continuum-authored event whose ppqL is canonical;
-  raw is its realisation under cm's current swing. External REAPER
-  edits to raw do not override ppqL.
 - **stale and ppqL present** — rebuild raw:
   `ppq = round(swing.fromLogical(ppqL)) + delayToPPQ(delay)`, and
   similarly `endppq = round(swing.fromLogical(endppqL))`. The
@@ -109,11 +105,14 @@ Step 4.7 of `tm:rebuild`. For each non-derived event:
   `endppqL = swing.toLogical(endppq)`. Missing ppqL counts as
   disagreement.
 
-The asymmetry between rpb-stamped and unmarked events is what
-distinguishes Continuum-authored timing (ppqL canonical, foreign
-edits to raw ignored) from foreign-imported events (ppqL
-provisional, derived from raw on first sight and kept in sync by
-the predicted-check arm thereafter).
+The `rpb` mark survives as authorship provenance (it gates reswing
+and clipboard symmetry) but no longer gates this rule. Between
+rebuilds swing cannot change without setting the channel stale, so
+any raw/predicted disagreement on a non-stale channel is an
+external edit and ppqL follows raw. The earlier "rpb-stamped is
+exempt" arm froze ppqL silently and then wiped the external edit
+the next time the channel went stale — a recoverable disagreement
+turned into a silent loss.
 
 The single rule covers three cases that look distinct from
 outside but reduce to the same code path: a steady-state rebuild
@@ -351,12 +350,12 @@ fake-pb absorber".
   authoring intent.
 - **`endppq` carries no delay.** Only the note-on receives the
   offset, at every layer.
-- **Float `rowPPQs`.** vm stores `rowPPQs[r] = r · logPerRow`
-  without pre-rounding. Under non-divisor `rpb` (e.g. 7) the
-  rounded form would seed ε that compounds through swing inversion;
-  with floats, `rowToPPQ` / `ppqToRow` are mutually exact (single
-  round only at the column-projection step) and on-grid tests
-  collapse to a clean integer compare against `evt.ppq`.
+- **Float `ppqPerRow`.** vm holds `ppqPerRow = logPerRow(rpb, denom, res)`
+  without pre-rounding. Under non-divisor `rpb` (e.g. 7) the rounded
+  form would seed ε that compounds through swing inversion; with
+  floats, `rowToPPQ` / `ppqToRow` are mutually exact (single round
+  only at the column-projection step) and on-grid tests collapse to a
+  clean integer compare against `evt.ppq`.
 
 ## Conventions for `timing.lua`
 

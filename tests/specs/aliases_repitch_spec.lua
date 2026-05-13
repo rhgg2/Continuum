@@ -40,7 +40,7 @@ return {
         config = CFG,
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
               children = {} },
@@ -69,7 +69,7 @@ return {
 
       local root = rootByUuid(h.fm:dump().notes, 1)
       -- δ = 67 - 61 = 6; coalesces {{'add', 1}, {'add', 6}} → {{'add', 7}}.
-      t.deepEq(root.aliases[1].xform.pitch, {{'add', 7}})
+      t.deepEq(root.children[1].xform.pitch, {{'add', 7}})
       t.eq(root.pitch, 60,           'root pitch unchanged')
 
       local kid2 = aliasKid(h.fm:dump().notes, 1)
@@ -89,7 +89,7 @@ return {
         config = CFG,
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
               children = {} },
@@ -112,7 +112,7 @@ return {
 
       local root = rootByUuid(h.fm:dump().notes, 1)
       -- Coalesces {{'add', 1}, {'add', 12}} → {{'add', 13}}.
-      t.deepEq(root.aliases[1].xform.pitch, {{'add', 13}})
+      t.deepEq(root.children[1].xform.pitch, {{'add', 13}})
 
       local kid = aliasKid(h.fm:dump().notes, 1)
       t.eq(kid.pitch, 73,            'resolved pitch jumped one octave + one step')
@@ -142,7 +142,7 @@ return {
       local notes = h.fm:dump().notes
       t.eq(#notes, 1)
       t.eq(notes[1].pitch, 62)
-      t.falsy(notes[1].aliases, 'no alias spec written')
+      t.falsy(notes[1].children, 'no alias spec written')
     end,
   },
 
@@ -163,7 +163,7 @@ return {
         },
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -187,7 +187,7 @@ return {
       h.vm:editEvent(col, rowEvt, 1, string.byte('x'), false)
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.deepEq(root.aliases[1].xform.pitch, {{'add', 3}},
+      t.deepEq(root.children[1].xform.pitch, {{'add', 3}},
                '19EDO step delta from C to D (step 1 → step 4)')
 
       local kid2 = aliasKid(h.fm:dump().notes, 1)
@@ -207,7 +207,7 @@ return {
         config = CFG,
         seed = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 240}}, pitch = {{'add', 1}} },
               children = {} },
@@ -228,7 +228,7 @@ return {
       h.vm:editEvent(col, rowEvt, 1, string.byte('s'), false)
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.deepEq(root.aliases[1].xform.pitch, {{'add', 1}}, 'no zero-delta append')
+      t.deepEq(root.children[1].xform.pitch, {{'add', 1}}, 'no zero-delta append')
     end,
   },
 }

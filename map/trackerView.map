@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2294  sha=69f289a  mode=chunk
+@module trackerView  src=trackerView.lua  loc=2279  sha=fa4a61d  mode=chunk
 @deps tm, cm, cmgr
 
 # Invariants & contracts
@@ -17,8 +17,8 @@
   @contract  logical snaps to nearest row; delay absorbs the inverse to preserve realised onset; endppq held; delay clamped by delayRange; popup reports clamps. Aliased planned events sever first — alias vocabulary has no delay. On-grid aliased col-mates stay attached (no plan).
   @contract  scale around the selection-anchor row's logical ppq (cursor row when no selection). Aliased route { ppqL=[mul k, add a*(1-k)], durL=[mul k] }; durations are intervals, no translation. Filters via aliases.localRoots so a selected descendant is skipped — the parent re-derives it. After flush, if span*k is non-integer rational, rpb multiplies by the reduced denominator (capped) so the geometry lands on integer rows. See docs/aliases.md.
   @contract  sever the aliased event(s) under attention: selection if
-  @contract  vm consumes configChanged only for transient-frame release and mute pulse; rebuild is driven by tm's 'rebuild' signal — closes the (cm, tm) double-fire race
-  @contract  non-transient writes to FRAME_KEYS while a transient override is active short-circuit into releaseTransientFrame, whose recursive cm:assign fires a fresh configChanged → tm:rebuild → vm:rebuild chain
+  @contract  tv consumes configChanged only for transient-frame release and mute pulse; rebuild is driven by tm's 'rebuild' signal — closes the (cm, tm) double-fire race
+  @contract  non-transient writes to FRAME_KEYS while a transient override is active short-circuit into releaseTransientFrame, whose recursive cm:assign fires a fresh configChanged → tm:rebuild → tv:rebuild chain
 
 # Shapes
   @shape  grid = { cols = {<col>...}, chanFirstCol = {[chan]=i}, chanLastCol = {[chan]=i}, lane1Col = {[chan]=<col>}, numRows = int }
@@ -27,15 +27,14 @@
   @shape  plan = { col, e, [newppq], [newEndppq], [newDelay] }  -- consumed by writePlans / conformOverlaps
 
 # Imports
-  @require util = 'util'  @ 15
-  @require timing = 'timing'  @ 16
-  @require aliases = 'aliases'  @ 17
-  @require tuning = 'tuning'  @ 18
+  @require util = 'util'  @ 16
+  @require timing = 'timing'  @ 17
+  @require aliases = 'aliases'  @ 18
+  @require tuning = 'tuning'  @ 19
 
 # Private state
-  @state resolution = 240  @ 28
-  @state rowPerBar = 16  @ 29
-  @state rowPPQs = {}  @ 30
+  @state resolution = 240  @ 29
+  @state rowPerBar = 16  @ 30
   @state length = 0  @ 31
   @state timeSigs = {}  @ 32
   @state scrollCol = 1  @ 34
@@ -45,14 +44,14 @@
   @state grid = {  @ 40
   @state aliasIdx = { byUuid = {}, byChildren = {} }  @ 47
       @invariant  aliasIdx: per-rebuild visual index over grid-visible events. byUuid[uuid] → { col, row, evt, chan, ppq, treeParent? }; byChildren[treeParent] → records sorted (ppq, chan). treeParent is the spec-tree parent uuid, derived from tm.nodeMeta. See docs/aliases.md.
-  @state vm = {}  @ 49
+  @state tv = {}  @ 49
   @state ec, clipboard, ctx  @ 53
-  @state dupeClip = nil  @ 1782
-  @state tracker = cmgr:scope('tracker')  @ 1992
-  @state rebuilding = false  @ 2056
+  @state dupeClip = nil  @ 1780
+  @state tracker = cmgr:scope('tracker')  @ 1990
+  @state rebuilding = false  @ 2054
 
 # Private functions
-  @fn print(...)  @ 22
+  @fn print(...)  @ 23
   -- STATE
   -- SHARED HELPERS
   -- Note geometry (used by editing, adjust*, nudge, quantizeKeepRealised)
@@ -118,46 +117,46 @@
       -- swing reads ppqL exactly so round-trip noise can't refuse the slot.
       -- Cursor follows by rowDelta unless that row already holds another note.
   -- Reswing / quantize
-  @fn insertRow()  @ 1468
-  @fn deleteRow()  @ 1469
-  @fn insertRowCol()  @ 1470
-  @fn deleteRowCol()  @ 1471
+  @fn insertRow()  @ 1466
+  @fn deleteRow()  @ 1467
+  @fn insertRowCol()  @ 1468
+  @fn deleteRowCol()  @ 1469
   -- Nudge
-  @fn nudge(dir, coarse)  @ 1571
+  @fn nudge(dir, coarse)  @ 1569
       -- Column-typed nudge. Selection rule: if any note event is selected,
       -- transpose / velocity- / delay-nudge the notes and leave value events
       -- alone; otherwise nudge val on every value event. Solo cursor: first
       -- event in the cursor row, column- and part-typed.
   -- Deletion
-  @fn deleteEvent()  @ 1700
+  @fn deleteEvent()  @ 1698
       -- Pitch-column delete on an aliased event (or on a root with descendants)
       -- is structural: route through tm:deleteAliased, which removes the spec
       -- node and promotes its children to new roots. Tail-fixup logic doesn't
       -- apply — the materialised event vanishes via the rebuild sweep, with
       -- no cross-event extension across structural deletes.
-  @fn deleteSelection()  @ 1723
-  @fn deleteOrBackspace()  @ 1740
-  @fn severCmd()  @ 1750
+  @fn deleteSelection()  @ 1721
+  @fn deleteOrBackspace()  @ 1738
+  @fn severCmd()  @ 1748
       -- present, else the cursor event. Plain (non-aliased) events are ignored.
       -- Each aliased hit is plucked from its root's spec tree and promoted into
       -- a new root (see tm:sever); the next rebuild re-emits its descendants
       -- under the new root.
-  @fn stepSample(dir)  @ 1771
+  @fn stepSample(dir)  @ 1769
       -- Step currentSample by ±1 across the full 0..127 range. Empty slots
       -- are reachable — the user may want to author a sample value before
       -- the sampler has loaded that slot.
   -- Duplicate
-  @fn duplicate(dir)  @ 1785
+  @fn duplicate(dir)  @ 1783
       @contract  upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard. First call collects; subsequent immediate calls re-paste the cached clip so successive duplicates anchor to the original source row (matters for alias mode).
   -- Accessors for trackerPage
   -- Non-command callbacks from trackerPage
   -- Columns
   -- Alias-tree navigation
-  @fn locateEvent(evt, chan)  @ 1944
+  @fn locateEvent(evt, chan)  @ 1942
       -- Reverse lookup: grid col + row hosting `evt`. Restricted to chan so
       -- the scan stays bounded by the (few) cols of one channel.
   -- Alias-tree navigation
-  @fn aliasNav(dir)  @ 1966
+  @fn aliasNav(dir)  @ 1964
       -- dir ∈ 'up' | 'down' | 'left' | 'right'. Resolves the event under the
       -- cursor, walks aliasIdx, moves ec onto the target's cell. Each
       -- direction no-ops at its boundary: up from a root, down from a leaf,
@@ -165,48 +164,48 @@
       -- spec-tree parent (one level up the alias hierarchy), not the flat
       -- materialisation root that evt.parentUuid points at.
 
-# Public API (vm:*)
-  @api vm:setRowPerBeat(n)  @ 295
-  @api vm:setSwingSlot(name)  @ 334
-  @api vm:setTemperSlot(name)  @ 335
-  @api vm:setColSwingSlot(chan, name)  @ 340
+# Public API (tv:*)
+  @api tv:setRowPerBeat(n)  @ 295
+  @api tv:setSwingSlot(name)  @ 334
+  @api tv:setTemperSlot(name)  @ 335
+  @api tv:setColSwingSlot(chan, name)  @ 340
       -- colSwing is a per-channel map; cross-track bleed via project would
       -- mean track A's per-channel pattern surfaces on a fresh track B until
       -- B overrides every entry. Keep it track-scoped.
-  @api vm:setSwingComposite(name, composite)  @ 346
-  @api vm:setTemper(name, temper)  @ 353
-  @api vm:moveLaneEvent(col, i, toRow, toVal)  @ 725
+  @api tv:setSwingComposite(name, composite)  @ 346
+  @api tv:setTemper(name, temper)  @ 353
+  @api tv:moveLaneEvent(col, i, toRow, toVal)  @ 725
       @contract  clamps newppq strictly inside (prev.ppq, next.ppq) by ±1 — necessary-and-sufficient invariant for identity-by-visible-index to survive the post-flush rebuild
-  @api vm:addLaneEvent(col, colIdx, ppq, val)  @ 749
+  @api tv:addLaneEvent(col, colIdx, ppq, val)  @ 749
       -- Inherits prev visible's envelope shape so prev→next curve survives the new midpoint.
       -- Returns the new event's visible index post-flush for drag-seed.
-  @api vm:deleteLaneEvent(col, i)  @ 776
-  @api vm:setLaneTension(col, i, tension)  @ 786
+  @api tv:deleteLaneEvent(col, i)  @ 776
+  @api tv:setLaneTension(col, i, tension)  @ 786
       -- Set bezier tension on the i-th visible event. Forces shape to bezier
       -- so the tension is honoured (REAPER ignores tension on other shapes).
-  @api vm:ec()  @ 1814
-  @api vm:clipboard()  @ 1815
-  @api vm:rowPerBar()  @ 1819
-  @api vm:takeName()  @ 1820
-  @api vm:activeTemper()  @ 1821
-  @api vm:noteProjection(evt)  @ 1822
-  @api vm:rowBeatInfo(row)  @ 1823
-  @api vm:barBeatSub(row)  @ 1824
-  @api vm:ppqToRow(ppq, chan)  @ 1825
-  @api vm:rowToPPQ(row, chan)  @ 1826
-  @api vm:logPerRow()  @ 1827
-  @api vm:sampleCurve(A, B, ppq)  @ 1828
-  @api vm:getAliasMode()  @ 1829
-  @api vm:aliasIndex()  @ 1830
-  @api vm:timeSig()  @ 1831
-  @api vm:setGridSize(w, h)  @ 1838
-  @api vm:addExtraCol(type, cc)  @ 1844
-  @api vm:hideExtraCol()  @ 1869
-  @api vm:showDelay()  @ 1924
+  @api tv:ec()  @ 1812
+  @api tv:clipboard()  @ 1813
+  @api tv:rowPerBar()  @ 1817
+  @api tv:takeName()  @ 1818
+  @api tv:activeTemper()  @ 1819
+  @api tv:noteProjection(evt)  @ 1820
+  @api tv:rowBeatInfo(row)  @ 1821
+  @api tv:barBeatSub(row)  @ 1822
+  @api tv:ppqToRow(ppq, chan)  @ 1823
+  @api tv:rowToPPQ(row, chan)  @ 1824
+  @api tv:logPerRow()  @ 1825
+  @api tv:sampleCurve(A, B, ppq)  @ 1826
+  @api tv:getAliasMode()  @ 1827
+  @api tv:aliasIndex()  @ 1828
+  @api tv:timeSig()  @ 1829
+  @api tv:setGridSize(w, h)  @ 1836
+  @api tv:addExtraCol(type, cc)  @ 1842
+  @api tv:hideExtraCol()  @ 1867
+  @api tv:showDelay()  @ 1922
   -- Command table
   -- Rebuild
-  @api vm:rebuild(takeChanged)  @ 2059
-      @contract  reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/rowPPQs/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
+  @api tv:rebuild(takeChanged)  @ 2057
+      @contract  reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
 
 # REAPER API surface
   @reaper time_precise

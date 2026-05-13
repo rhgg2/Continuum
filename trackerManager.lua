@@ -42,6 +42,10 @@ local specOf      = {}
 local nodeMeta    = {}
 --invariant: staleSwing[chan]=true: this channel's resolved swing changed; rebuild rule rederives raw from ppqL and clears
 local staleSwing  = {}
+--invariant: swingSnap caches the (cm, mm)-derived swing transforms; nil
+--  means "needs rebuild". Invalidated at the head of every tm:rebuild —
+--  the sole synchronisation point at which mm/cm read coherently.
+local swingSnap
 
 ---------- SHARED HELPERS
 
@@ -63,78 +67,64 @@ local function delayToPPQ(d) return timing.delayToPPQ(d, mm:resolution()) end
 
 local function evtTypeOf(evt) return evt.msgType and 'cc' or 'note' end
 
--- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly.
 local function forEachEvent(fn)
-  for _, channel in tm:channels() do
-    local chan, cols = channel.chan, channel.columns
-    for _, col in ipairs(cols.notes) do
-      for _, evt in ipairs(col.events) do
-        local isNote = evt.type ~= 'pa'
-        fn(isNote and 'note' or 'pa', evt, chan, isNote)
+  for i=1,16 do
+    local channel = channels[i]
+    if channel then
+      local chan, cols = channel.chan, channel.columns
+      -- Note branch carries lane (column events strip it; see util.clone at row clone).
+      for lane, col in ipairs(cols.notes) do
+        for _, evt in ipairs(col.events) do
+          local isNote = evt.type ~= 'pa'
+          fn(isNote and 'note' or 'pa', evt, chan, isNote, nil, lane)
+        end
       end
-    end
-    for _, t in ipairs{'pb', 'at', 'pc'} do
-      if cols[t] then
-        for _, evt in ipairs(cols[t].events) do fn(t, evt, chan, false) end
+      for _, t in ipairs{'pb', 'at', 'pc'} do
+        if cols[t] then
+          for _, evt in ipairs(cols[t].events) do fn(t, evt, chan, false) end
+        end
       end
-    end
-    for _, col in pairs(cols.ccs) do
-      for _, evt in ipairs(col.events) do fn('cc', evt, chan, false) end
+      -- cc branch carries ccNum: column events have cc stripped (see CC_PROJECT_STRIP), so callers needing the cc number get it from the column key.
+      for ccNum, col in pairs(cols.ccs) do
+        for _, evt in ipairs(col.events) do fn('cc', evt, chan, false, ccNum) end
+      end
     end
   end
 end
 
---contract: pure; no mm/cm reads; emitted PCs carry fake=true so flush/rebuild can distinguish synthesised from user-authored
---contract: emitted PCs inherit ppqL from the winning host-note record so the synthesised stream carries logical truth alongside raw ppq
-local function synthesisePCs(chan, records)
-  local winners, order, shadowed = {}, {}, {}
-  for _, r in ipairs(records) do
-    local w = winners[r.ppq]
-    if not w then
-      winners[r.ppq] = r
-      util.add(order, r.ppq)
-    elseif r.lane < w.lane then
-      shadowed[w.key] = true
-      winners[r.ppq] = r
-    else
-      shadowed[r.key] = true
-    end
-  end
-  table.sort(order)
-  local pcs = {}
-  for _, ppq in ipairs(order) do
-    local w = winners[ppq]
-    util.add(pcs, { ppq = ppq, ppqL = w.ppqL, val = w.sample,
-                    msgType = 'pc', chan = chan, fake = true })
-  end
-  return pcs, shadowed
-end
 
---contract: returns (desired, shadowed, toRemove, toAdd); desired carries .loc on entries that survived the diff
-local function reconcilePCsForChan(chan, records, existing)
-  local desired, shadowed = synthesisePCs(chan, records)
-  local byPpq = {}
+--contract: synthesised PCs carry fake=true and inherit ppqL from the winning host-note record; an existing fake PC matching (ppq, val) is kept (omitted from both toRemove and toAdd), preserving its mm-side loc across rebuilds where val did not change
+--contract: if record.key is set, marks key.sampleShadowed=true on records lost to lane priority; returns (toRemove, toAdd) for the caller to persist. Shadow marking is rebuild-only — flush-time callers omit key since lane events are reclone'd by the rebuild that follows. c.pc.events is not written here; rebuild's CC walk refreshes it from mm after the caller's commit.
+local function reconcilePCsForChan(chan, records)
+  local existing = (channels[chan].columns.pc and channels[chan].columns.pc.events) or {}
+
+  local byPpq  = {}
+  local groups = {}
   for _, e in ipairs(existing) do byPpq[e.ppq] = e end
-  for _, want in ipairs(desired) do
-    local have = byPpq[want.ppq]
-    if have and have.val == want.val and have.fake then
-      want.loc = have.loc
-      byPpq[want.ppq] = nil
+  for _, r in ipairs(records) do util.bucket(groups, r.ppq, r) end
+
+  local toRemove, toAdd, kept = {}, {}, {}
+  for ppq, g in pairs(groups) do
+    table.sort(g, function(a, b) return a.lane < b.lane end)
+    local w = g[1]
+    local have = byPpq[ppq]
+    if have and have.fake and have.val == w.sample then
+      kept[have] = true
+    else
+      util.add(toAdd, { ppq = ppq, ppqL = w.ppqL, val = w.sample,
+                        msgType = 'pc', chan = chan, fake = true })
+    end
+    for i = 2, #g do
+      if g[i].key then g[i].key.sampleShadowed = true end
     end
   end
-  local toRemove, toAdd = {}, {}
   for _, have in ipairs(existing) do
-    if byPpq[have.ppq] then util.add(toRemove, have) end
+    if not kept[have] then util.add(toRemove, have) end
   end
-  for _, want in ipairs(desired) do
-    if not want.loc then util.add(toAdd, want) end
-  end
-  return desired, shadowed, toRemove, toAdd
+  return toRemove, toAdd
 end
 
----------- PUBLIC
-
------ Update manager
+---------- UPDATE MANAGER
 
 local addEvent, assignEvent, deleteEvent, flush, reload do
 
@@ -555,36 +545,24 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   ----- PC reconciliation (trackerMode mutation hook)
 
   local function reconcilePcs(chan)
-    local c = channels[chan].columns
-    local laneByLoc = {}
-    for _, lane in ipairs(c.notes) do
-      for _, evt in ipairs(lane.events) do
-        evt.sampleShadowed = nil
-        laneByLoc[evt.loc] = evt
-      end
-    end
-
     local records = {}
     for _, n in pairs(notesByLoc) do
       if n.chan == chan then
         util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
-                            sample = n.sample or 0, key = laneByLoc[n.loc] or n })
+                            sample = n.sample or 0 })
       end
     end
     for _, a in ipairs(adds) do
       if a.type == 'note' and a.evt.chan == chan then
         local n = a.evt
         util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
-                            sample = n.sample or 0, key = n })
+                            sample = n.sample or 0 })
       end
     end
 
-    local desired, shadowed, toRemove, toAdd =
-      reconcilePCsForChan(chan, records, (c.pc and c.pc.events) or {})
-    for evt in pairs(shadowed) do evt.sampleShadowed = true end
+    local toRemove, toAdd = reconcilePCsForChan(chan, records)
     for _, have in ipairs(toRemove) do deleteLowlevel('pc', have) end
     for _, want in ipairs(toAdd)    do addLowlevel('pc', want)    end
-    c.pc = { events = desired }
   end
 
   local function lookup(evtType, evtOrLoc)
@@ -621,21 +599,17 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       end
       return
     end
-    local snap
-    local function getSnap()
-      snap = snap or tm:swingSnapshot(); return snap
-    end
     if update.ppq ~= nil then
       update.ppqL = update.ppq
-      update.ppq  = util.round(getSnap().fromLogical(evt.chan, update.ppqL)) + dNew
+      update.ppq  = tm:fromLogical(evt.chan, update.ppqL, dNew)
     elseif evt.ppqL ~= nil then
-      update.ppq = util.round(getSnap().fromLogical(evt.chan, evt.ppqL)) + dNew
+      update.ppq = tm:fromLogical(evt.chan, evt.ppqL, dNew)
     else
       update.ppq = evt.ppq + (dNew - dOld)
     end
     if update.endppq ~= nil then
       update.endppqL = update.endppq
-      update.endppq  = util.round(getSnap().fromLogical(evt.chan, update.endppqL))
+      update.endppq  = tm:fromLogical(evt.chan, update.endppqL)
     end
   end
 
@@ -643,18 +617,17 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     if update.ppqL ~= nil then return end
     if not chan or update.ppq == nil then return end
     update.ppqL = update.ppq
-    update.ppq  = util.round(tm:swingSnapshot().fromLogical(chan, update.ppqL))
+    update.ppq  = tm:fromLogical(chan, update.ppqL)
   end
 
   local function realiseAddPpq(evt, withDelay, withEnd)
     if evt.ppq == nil or not evt.chan then return end
-    local snap = tm:swingSnapshot()
     evt.ppqL = evt.ppq
-    evt.ppq  = util.round(snap.fromLogical(evt.chan, evt.ppqL))
-             + (withDelay and delayToPPQ(evt.delay or 0) or 0)
+    evt.ppq  = tm:fromLogical(evt.chan, evt.ppqL,
+                              withDelay and delayToPPQ(evt.delay or 0) or 0)
     if withEnd and evt.endppq ~= nil then
       evt.endppqL = evt.endppq
-      evt.endppq  = util.round(snap.fromLogical(evt.chan, evt.endppqL))
+      evt.endppq  = tm:fromLogical(evt.chan, evt.endppqL)
     end
   end
 
@@ -801,11 +774,11 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   reload()
 end
 
+---------- PUBLIC
+
 ----- Accessors
 
-function tm:getChannel(chan)
-  return channels and channels[chan]
-end
+function tm:getChannel(chan)      return channels and channels[chan] end
 
 function tm:channels()
   local i = 0
@@ -824,7 +797,7 @@ function tm:editCursor()
   return reaper.MIDI_GetPPQPosFromProjTime(mm:take(), editCursorTime)
 end
 
-function tm:length()               return mm and mm:length() end
+function tm:length()               return mm and mm:length() or 0 end
 function tm:resolution()           return mm and mm:resolution() end
 function tm:name()                 return mm and mm:name() end
 function tm:setName(name)          if mm then mm:setName(name) end end
@@ -834,41 +807,57 @@ function tm:loadRegions()          return mm and mm:loadRegions() end
 function tm:saveRegions(blob)      if mm then mm:saveRegions(blob) end end
 
 -- E_c: column is inner, global is outer (see docs/timing.md).
---contract: returns clipped per-layer Shapes + closures; safe to retain across edits since closures capture the Shapes, not cm reads
-function tm:swingSnapshot()
-  local global, column = nil, {}
-  if mm then
-    local gSrc, cSrc = cm:get('swing'), cm:get('colSwing')
-    local length   = mm:length() or 0
-    local ppqPerQN = mm:resolution()
-    local function resolve(name)
-      local composite = timing.findShape(name, cm:get('swings'))
-      if timing.isIdentity(composite) or length <= 0 then return nil end
-      return timing.resolveComposite(composite, length, ppqPerQN)
+--contract: cached per-(cm, mm) pair; invalidated at rebuild head.
+--  fromLogical returns rounded int + optional offset (raw ppqs are integer).
+--  toLogical returns the raw float (ppqL is a float frame).
+local clearSwing do
+  local swing = nil
+  local function currentSwing()
+    if not swing then
+      local global, column = nil, {}
+      if mm then
+        local length, ppqPerQN = mm:length() or 0, mm:resolution()
+        local function resolve(name)
+          local composite = timing.findShape(name, cm:get('swings'))
+          if timing.isIdentity(composite) or length <= 0 then return nil end
+          return timing.resolveComposite(composite, length, ppqPerQN)
+        end
+        global = resolve(cm:get('swing'))
+        for chan, name in pairs(cm:get('colSwing') or {}) do
+          column[chan] = resolve(name)
+        end
+      end
+      swing = {
+        fromLogical = function(chan, ppqL)
+          local ppqI = ppqL
+          local c = column[chan]
+          if c      then ppqI = timing.eval(c, ppqI) end
+          if global then ppqI = timing.eval(global, ppqI) end
+          return ppqI
+        end,
+        toLogical = function(chan, ppqI)
+          local ppqL = ppqI
+          if global then ppqL = timing.invert(global, ppqL) end
+          local c = column[chan]
+          if c      then ppqL = timing.invert(c, ppqL) end
+          return ppqL
+        end,
+      }
     end
-    global = resolve(gSrc)
-    if cSrc then
-      for chan, name in pairs(cSrc) do column[chan] = resolve(name) end
-    end
+    return swing
   end
-  return {
-    global = global,
-    column = column,
-    fromLogical = function(chan, ppqL)
-      local ppqI = ppqL
-      local c = column[chan]
-      if c      then ppqI = timing.eval(c, ppqI) end
-      if global then ppqI = timing.eval(global, ppqI) end
-      return ppqI
-    end,
-    toLogical = function(chan, ppqI)
-      local ppqL = ppqI
-      if global then ppqL = timing.invert(global, ppqL) end
-      local c = column[chan]
-      if c      then ppqL = timing.invert(c, ppqL) end
-      return ppqL
-    end,
-  }
+
+  function tm:fromLogical(chan, ppqL, offset)
+    return util.round(currentSwing().fromLogical(chan, ppqL) + (offset or 0))
+  end
+
+  function tm:toLogical(chan, ppqI)
+    return currentSwing().toLogical(chan, ppqI)
+  end
+
+  function clearSwing()
+    swing = nil
+  end
 end
 
 --contract: chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
@@ -927,20 +916,19 @@ function tm:rescaleLength(newPpq)
   -- slopeAt scales note delays so realised stretch tracks logical stretch locally.
   -- Two passes (gather, then mutate) so all reads are stable.
   local function applyTimeMap(tau, slopeAt)
-    local snap  = tm:swingSnapshot()
     local plans = {}
     forEachEvent(function(type, evt, chan, isNote)
       local p = { type = type, evt = evt }
       if evt.ppqL ~= nil then
         p.newPpqL = tau(evt.ppqL)
-        p.newPpq  = util.round(snap.fromLogical(chan, p.newPpqL))
+        p.newPpq  = tm:fromLogical(chan, p.newPpqL)
       else
         p.newPpq = util.round(tau(evt.ppq))
       end
       if isNote then
         if evt.endppqL ~= nil then
           p.newEndppqL = tau(evt.endppqL)
-          p.newEndppq  = util.round(snap.fromLogical(chan, p.newEndppqL))
+          p.newEndppq  = tm:fromLogical(chan, p.newEndppqL)
         else
           p.newEndppq = util.round(tau(evt.endppq))
         end
@@ -1042,19 +1030,16 @@ function tm:playPause() reaper.Main_OnCommand(40073, 0) end
 
 ----- Mute
 
---contract: idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes
+--contract: idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes. PA events ride along in note columns but carry no mute state — skipped.
 function tm:setMutedChannels(set)
   lastMuteSet = util.clone(set or {})
-  for _, ch in ipairs(channels) do
-    local want = lastMuteSet[ch.chan] == true
-    for _, col in ipairs(ch.columns.notes) do
-      for _, n in ipairs(col.events) do
-        if (n.muted == true) ~= want then
-          assignEvent('note', n, { muted = want })
-        end
-      end
+  forEachEvent(function(_, n, chan, isNote)
+    if not isNote then return end
+    local want = lastMuteSet[chan] == true
+    if (n.muted == true) ~= want then
+      assignEvent('note', n, { muted = want })
     end
-  end
+  end)
   flush()
 end
 
@@ -1082,13 +1067,13 @@ function tm:specPathOf(evt)
   local node = specOf[evt.uuid]
   if not node then return nil end
   local _, root = mm:byUuid(evt.parentUuid)
-  if not (root and root.aliases) then return nil end
+  if not (root and root.children) then return nil end
   local chain = {}
   while node do
     chain[#chain + 1] = node
     node = nodeMeta[node].parent
   end
-  local idx, list = {}, root.aliases
+  local idx, list = {}, root.children
   for i = #chain, 1, -1 do
     local target = chain[i]
     local found
@@ -1115,7 +1100,7 @@ function tm:routeRelative(evt, opsByField)
       node.xform = aliases.appendOp(node.xform, field, op)
     end
   end
-  assignEvent(kind, { loc = rootLoc }, { aliases = root.aliases })
+  assignEvent(kind, { loc = rootLoc }, { children = root.children })
   return true
 end
 
@@ -1124,8 +1109,7 @@ function tm:severBatch(events)
   local byParent = {}
   for _, e in ipairs(events) do
     if e and e.parentUuid and specOf[e.uuid] then
-      byParent[e.parentUuid] = byParent[e.parentUuid] or {}
-      util.add(byParent[e.parentUuid], e)
+      util.bucket(byParent, e.parentUuid, e)
     end
   end
   local function depthOf(evt)
@@ -1140,17 +1124,17 @@ function tm:severBatch(events)
       for _, e in ipairs(list) do
         local node = specOf[e.uuid]
         local pSpec = nodeMeta[node].parent
-        local parentList = pSpec and pSpec.children or root.aliases
+        local parentList = pSpec and pSpec.children or root.children
         local plucked = aliases.pluckNode(parentList, node)
         if plucked then
           local evtKind = evtTypeOf(e)
           assignEvent(evtKind, e, {
             parentUuid = util.REMOVE,
-            aliases    = plucked.children or {},
+            children   = plucked.children or {},
           })
         end
       end
-      assignEvent(rootKind, { loc = rootLoc }, { aliases = root.aliases })
+      assignEvent(rootKind, { loc = rootLoc }, { children = root.children })
     end
   end
 end
@@ -1171,14 +1155,14 @@ function tm:deleteAliased(evt)
     rootLoc, root, rootKind, S = resolveAliased(evt)
     if not S then return false end
     isRoot = false
-  elseif evt.aliases and #evt.aliases > 0 then
+  elseif evt.children and #evt.children > 0 then
     rootLoc, root, rootKind = evt.loc, evt, evtTypeOf(evt)
     isRoot = true
   else
     return false
   end
 
-  local childSpecs = isRoot and root.aliases or S.children
+  local childSpecs = isRoot and root.children or S.children
   -- Snapshot direct-child list before mutating: pluckNode alters
   -- childSpecs in place; ipairs over a list being mutated skips entries.
   local directChildren = {}
@@ -1193,7 +1177,7 @@ function tm:deleteAliased(evt)
         aliases.pluckNode(childSpecs, child)
         assignEvent(matKind, matEvt, {
           parentUuid = util.REMOVE,
-          aliases    = child.children or {},
+          children   = child.children or {},
         })
       end
     end
@@ -1203,9 +1187,9 @@ function tm:deleteAliased(evt)
     deleteEvent(rootKind, { loc = rootLoc })
   else
     local pSpec = nodeMeta[S].parent
-    local parentList = pSpec and pSpec.children or root.aliases
+    local parentList = pSpec and pSpec.children or root.children
     aliases.pluckNode(parentList, S)
-    assignEvent(rootKind, { loc = rootLoc }, { aliases = root.aliases })
+    assignEvent(rootKind, { loc = rootLoc }, { children = root.children })
   end
   return true
 end
@@ -1214,8 +1198,8 @@ end
 function tm:aliasSrcSnapshot(rootUuid, specIdx)
   if not (rootUuid and specIdx and #specIdx > 0) then return nil end
   local _, root = mm:byUuid(rootUuid)
-  if not (root and root.aliases) then return nil end
-  local list, node, chain = root.aliases, nil, {}
+  if not (root and root.children) then return nil end
+  local list, node, chain = root.children, nil, {}
   for i, idx in ipairs(specIdx) do
     if not list then return nil end
     node = list[idx]
@@ -1240,8 +1224,8 @@ function tm:resolveAliasSrc(rootUuid, specIdx, chain, evtType)
     resolved.durL = root.endppqL - root.ppqL
   end
   if not specIdx then return { resolved = resolved } end
-  if not root.aliases then return nil end
-  local list = root.aliases
+  if not root.children then return nil end
+  local list = root.children
   for i, idx in ipairs(specIdx) do
     local node = list and list[idx]
     if not node then return nil end
@@ -1268,13 +1252,13 @@ end
 function tm:pathXform(rootUuid, fromIdx, toIdx)
   if not (rootUuid and toIdx) then return nil end
   local _, root = mm:byUuid(rootUuid)
-  if not (root and root.aliases) then return nil end
+  if not (root and root.children) then return nil end
   fromIdx = fromIdx or {}
   if #toIdx <= #fromIdx then return nil end
   for i, fp in ipairs(fromIdx) do
     if toIdx[i] ~= fp then return nil end
   end
-  local list, node = root.aliases, nil
+  local list, node = root.children, nil
   for _, idx in ipairs(fromIdx) do
     if not list then return nil end
     node = list[idx]
@@ -1295,11 +1279,11 @@ function tm:pathXform(rootUuid, fromIdx, toIdx)
   return out
 end
 
---contract: creates a spec node under rootUuid. srcIdx nil → top of root.aliases; non-nil → child of that spec. children passed verbatim (paste's captured subtree). fit clips materialised endppq to next col event so no new lane is allocated. Returns the new node's specIdx. See docs/aliases.md.
+--contract: creates a spec node under rootUuid. srcIdx nil → top of root.children; non-nil → child of that spec. children passed verbatim (paste's captured subtree). fit clips materialised endppq to next col event so no new lane is allocated. Returns the new node's specIdx. See docs/aliases.md.
 function tm:createAlias(rootUuid, srcIdx, xform, children, fit)
   local rootLoc, root, kind = mm:byUuid(rootUuid)
   if not (root and rootLoc) then return nil end
-  root.aliases = root.aliases or {}
+  root.children = root.children or {}
   local list, newIdx
   if srcIdx and #srcIdx > 0 then
     local parent = aliases.find(root, srcIdx)
@@ -1309,13 +1293,13 @@ function tm:createAlias(rootUuid, srcIdx, xform, children, fit)
     newIdx = {}
     for _, i in ipairs(srcIdx) do newIdx[#newIdx + 1] = i end
   else
-    list, newIdx = root.aliases, {}
+    list, newIdx = root.children, {}
   end
   local node = { xform = xform or {}, children = children or {} }
   if fit then node.fit = true end
   list[#list + 1] = node
   newIdx[#newIdx + 1] = #list
-  assignEvent(kind, { loc = rootLoc }, { aliases = root.aliases })
+  assignEvent(kind, { loc = rootLoc }, { children = root.children })
   return newIdx
 end
 
@@ -1325,14 +1309,18 @@ do
   ----- Aliases walker helpers
 
   local SEED_EXCLUDE = {
-    aliases = true,
-    uuid = true, parentUuid = true,
-    loc = true,
+    children = true, uuid = true, parentUuid = true, loc = true,
   }
 
-  local function slotKey(evt)
-    if evt.msgType then return 'cc|c=' .. evt.chan .. '|m=' .. evt.msgType .. '|i=' .. (evt.cc or evt.pitch or '') .. '|t=' .. evt.ppq end
-    return 'note|c=' .. evt.chan .. '|p=' .. evt.pitch .. '|t=' .. evt.ppq
+  -- chan/msgType/ccNum overrides let column events (which carry no chan and have cc/msgType stripped) reuse the same keying as raw mm events.
+  local function slotKey(evt, chan, msgType, ccNum)
+    chan    = chan    or evt.chan
+    msgType = msgType or evt.msgType
+    if msgType then
+      local sub = ccNum or evt.cc or evt.pitch or ''
+      return 'cc|c=' .. chan .. '|m=' .. msgType .. '|i=' .. sub .. '|t=' .. evt.ppq
+    end
+    return 'note|c=' .. chan .. '|p=' .. evt.pitch .. '|t=' .. evt.ppq
   end
 
   local function seedFields(root) return util.clone(root, SEED_EXCLUDE) end
@@ -1441,15 +1429,6 @@ do
     return evt
   end
 
-  -- evt.ppq integer-rounded for tv:rebuild's offGrid compare; ppqL stays float so swing inverse round-trips stay exact.
-  local function projectToLogical(col)
-    for _, evt in ipairs(col.events) do
-      if evt.ppqL    ~= nil then evt.ppq    = util.round(evt.ppqL)    end
-      if evt.endppqL ~= nil then evt.endppq = util.round(evt.endppqL) end
-    end
-    sortByPPQ(col.events)
-  end
-
   ----- Rebuild
 
   local rebuilding = false
@@ -1460,6 +1439,7 @@ do
     rebuilding = true
     takeChanged = takeChanged or false
 
+    clearSwing()   -- rebuild is the (cm, mm) coherence point
     specOf, nodeMeta = {}, {}
 
     -- 0) Aliases: delete prior materialised events; emit new ones from spec
@@ -1470,11 +1450,11 @@ do
       local notesToDel, ccsToDel, roots = {}, {}, {}
       for loc, n in mm:notes() do
         if n.parentUuid then util.add(notesToDel, loc)
-        elseif n.aliases and #n.aliases > 0 then util.add(roots, n) end
+        elseif n.children and #n.children > 0 then util.add(roots, n) end
       end
       for loc, c in mm:ccs() do
         if c.parentUuid then util.add(ccsToDel, { c.msgType, loc })
-        elseif c.aliases and #c.aliases > 0 then util.add(roots, c) end
+        elseif c.children and #c.children > 0 then util.add(roots, c) end
       end
 
       if #roots > 0 or #notesToDel > 0 or #ccsToDel > 0 then
@@ -1504,19 +1484,16 @@ do
           local seed = seedFields(root)
           -- Logical canonical: spec ops act on ppqL/durL; ppq/endppq are
           -- derived per-emit through the root's authoring-frame swing.
-          seed.ppqL = seed.ppqL or seed.ppq
           local rootPitch, rootDetune
           if et == 'note' then
-            seed.endppqL = seed.endppqL or seed.endppq
-            seed.durL    = (seed.endppqL or 0) - (seed.ppqL or 0)
+            seed.durL = seed.endppqL - seed.ppqL
             -- pitch/octave are tuning-step accumulators through the spec
             -- walk; the root's MIDI pitch+detune feed transposeStep at emit.
             rootPitch, rootDetune = seed.pitch, seed.detune or 0
             seed.pitch, seed.octave = 0, 0
           end
-          local snap = tm:swingSnapshot()
           local q    = {}
-          for _, c in ipairs(root.aliases) do
+          for _, c in ipairs(root.children) do
             util.add(q, { spec = c, parent = seed, parentSpec = nil })
           end
           while #q > 0 do
@@ -1527,13 +1504,13 @@ do
               resolved.endppqL = resolved.ppqL + resolved.durL
             end
             local rChan = resolved.chan or 1
-            resolved.ppq = util.round(snap.fromLogical(rChan, resolved.ppqL))
-                           + delayToPPQ(resolved.delay or 0)
+            resolved.ppq = tm:fromLogical(rChan, resolved.ppqL,
+                                          delayToPPQ(resolved.delay or 0))
             if et == 'note' then
-              resolved.endppq = util.round(snap.fromLogical(rChan, resolved.endppqL))
+              resolved.endppq = tm:fromLogical(rChan, resolved.endppqL)
               if resolved.endppq > lenPpq then
                 resolved.endppq  = lenPpq
-                resolved.endppqL = snap.toLogical(rChan, lenPpq)
+                resolved.endppqL = tm:toLogical(rChan, lenPpq)
               end
             end
             local emit = util.clone(resolved, { octave = true })
@@ -1560,7 +1537,7 @@ do
               if et == 'note' then
                 util.add(notesToAdd, emit)
                 if e.spec.fit then
-                  util.add(fitEmits, { emit = emit, snap = snap, rChan = rChan })
+                  util.add(fitEmits, { emit = emit, rChan = rChan })
                 end
               else
                 util.add(ccsToAdd, emit)
@@ -1583,15 +1560,11 @@ do
           local function colKey(chan, lane) return (chan or 1) .. ':' .. (lane or 1) end
           for _, n in mm:notes() do
             if not n.parentUuid then
-              local k = colKey(n.chan, n.lane)
-              byCol[k] = byCol[k] or {}
-              util.add(byCol[k], n.ppq)
+              util.bucket(byCol, colKey(n.chan, n.lane), n.ppq)
             end
           end
           for _, n in ipairs(notesToAdd) do
-            local k = colKey(n.chan, n.lane)
-            byCol[k] = byCol[k] or {}
-            util.add(byCol[k], n.ppq)
+            util.bucket(byCol, colKey(n.chan, n.lane), n.ppq)
           end
           for _, list in pairs(byCol) do table.sort(list) end
           for _, fe in ipairs(fitEmits) do
@@ -1602,7 +1575,7 @@ do
                 if ppq > emit.ppq then
                   if emit.endppq > ppq then
                     emit.endppq  = ppq
-                    emit.endppqL = fe.snap.toLogical(fe.rChan, ppq)
+                    emit.endppqL = tm:toLogical(fe.rChan, ppq)
                   end
                   break
                 end
@@ -1642,9 +1615,7 @@ do
         pcByChan = {}
         for _, cc in mm:ccs() do
           if cc.msgType == 'pc' then
-            local lst = pcByChan[cc.chan] or {}
-            pcByChan[cc.chan] = lst
-            util.add(lst, { ppq = cc.ppq, val = cc.val })
+            util.bucket(pcByChan, cc.chan, { ppq = cc.ppq, val = cc.val })
           end
         end
         for _, lst in pairs(pcByChan) do sortByPPQ(lst) end
@@ -1770,21 +1741,15 @@ do
     if cm:get('trackerMode') then
       local toDelete, toAdd = {}, {}
       for chan = 1, 16 do
-        local c = channels[chan].columns
         local records = {}
-        for L, lane in ipairs(c.notes) do
+        for L, lane in ipairs(channels[chan].columns.notes) do
           for _, n in ipairs(lane.events) do
-            n.sampleShadowed = nil
-            util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = L,
-                                sample = n.sample or 0, key = n })
+            util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = L, sample = n.sample or 0, key = n })
           end
         end
-        local desired, shadowed, rems, adds_ =
-          reconcilePCsForChan(chan, records, (c.pc and c.pc.events) or {})
-        for n in pairs(shadowed) do n.sampleShadowed = true end
+        local rems, adds_ = reconcilePCsForChan(chan, records)
         for _, r in ipairs(rems)  do util.add(toDelete, r.loc) end
         for _, a in ipairs(adds_) do util.add(toAdd, a) end
-        c.pc = { events = desired }
       end
 
       if #toDelete > 0 or #toAdd > 0 then
@@ -1801,38 +1766,44 @@ do
         end
       end
     end
-    -- 4.7) Two-frame rebuild rule. See docs/timing.md §"Rebuild rule".
-    -- Snapshot lane-1 note ppqs first so step 4.8 can reseat absorbers
-    -- whose host moved.
-    local laneOnePreRule = {}
-    for chan = 1, 16 do
-      local col1 = channels[chan].columns.notes[1]
-      if col1 then
-        local list = {}
-        for _, n in ipairs(col1.events) do
-          util.add(list, { oldPpq = n.ppq, evt = n })
-        end
-        if #list > 0 then laneOnePreRule[chan] = list end
-      end
-    end
+
+    -- 4.7) Two-frame rebuild rule + fake-pb reseating. See docs/timing.md §"Rebuild rule".
+    -- Fakes are absorbers parasitic on lane-1 hosts; the walk skips them
+    -- (they have no independent logical position) and reseats each onto
+    -- its host's new (ppq, ppqL) in the same pass.
     do
-      local snap     = tm:swingSnapshot()
       local EPS      = 1   -- ppq; tolerates rounding slop in fromLogical
       local toAssign = {}  -- { { isNote, loc, update } }
-      forEachEvent(function(evtType, evt, chan, isNote)
+
+      -- Index fakes by their pre-walk seat (= host's pre-walk ppq).
+      local fakesByPos = {}
+      local pbTouched  = {}
+      for chan = 1, 16 do
+        local pbCol = channels[chan].columns.pb
+        if pbCol then
+          for _, evt in ipairs(pbCol.events) do
+            if evt.fake then
+              local m = fakesByPos[chan] or {}; fakesByPos[chan] = m
+              m[evt.ppq] = evt
+            end
+          end
+        end
+      end
+
+      forEachEvent(function(_, evt, chan, isNote, _, lane)
         if evt.fake then return end
-        local stale = staleSwing[chan]
-        if evt.rpb and not stale then return end
-        local d     = isNote and delayToPPQ(evt.delay or 0) or 0
+        local stale  = staleSwing[chan]
+        local d      = isNote and delayToPPQ(evt.delay or 0) or 0
+        local oldPpq = evt.ppq
         local update
         if stale and evt.ppqL ~= nil then
-          local newPpq = util.round(snap.fromLogical(chan, evt.ppqL)) + d
+          local newPpq = tm:fromLogical(chan, evt.ppqL, d)
           if newPpq ~= evt.ppq then
             evt.ppq = newPpq
             update = { ppq = newPpq }
           end
           if isNote and evt.endppqL ~= nil then
-            local newEndppq = util.round(snap.fromLogical(chan, evt.endppqL))
+            local newEndppq = tm:fromLogical(chan, evt.endppqL)
             if newEndppq ~= evt.endppq then
               evt.endppq = newEndppq
               update = update or {}
@@ -1841,22 +1812,22 @@ do
           end
         else
           local predicted = evt.ppqL ~= nil
-            and (util.round(snap.fromLogical(chan, evt.ppqL)) + d) or nil
+            and tm:fromLogical(chan, evt.ppqL, d) or nil
           if not predicted or math.abs(evt.ppq - predicted) > EPS then
-            local newPpqL = snap.toLogical(chan, evt.ppq - d)
+            local newPpqL = tm:toLogical(chan, evt.ppq - d)
             evt.ppqL = newPpqL
             update = { ppqL = newPpqL }
             if isNote then
-              local newEndppqL = snap.toLogical(chan, evt.endppq)
+              local newEndppqL = tm:toLogical(chan, evt.endppq)
               evt.endppqL = newEndppqL
               update.endppqL = newEndppqL
             end
           elseif isNote then
             -- Tail may be stale even when onset agrees: rederive endppqL.
             local predictedEnd = evt.endppqL ~= nil
-              and util.round(snap.fromLogical(chan, evt.endppqL)) or nil
+              and tm:fromLogical(chan, evt.endppqL) or nil
             if not predictedEnd or math.abs(evt.endppq - predictedEnd) > EPS then
-              local newEndppqL = snap.toLogical(chan, evt.endppq)
+              local newEndppqL = tm:toLogical(chan, evt.endppq)
               evt.endppqL = newEndppqL
               update = update or {}
               update.endppqL = newEndppqL
@@ -1865,6 +1836,25 @@ do
         end
         if update then
           util.add(toAssign, { isNote = isNote, loc = evt.loc, update = update })
+        end
+        -- Reseat any fake-pb at this lane-1 host's seat. Stage the mm
+        -- assign and mirror into the live column event in lockstep.
+        if isNote and lane == 1 then
+          local m    = fakesByPos[chan]
+          local fake = m and m[oldPpq]
+          if fake then
+            local up = {}
+            if fake.ppq ~= evt.ppq then
+              up.ppq, fake.ppq = evt.ppq, evt.ppq
+              pbTouched[chan]  = true
+            end
+            if fake.ppqL ~= evt.ppqL then
+              up.ppqL, fake.ppqL = evt.ppqL, evt.ppqL
+            end
+            if next(up) then
+              util.add(toAssign, { isNote = false, loc = fake.loc, update = up })
+            end
+          end
         end
       end)
       if #toAssign > 0 then
@@ -1875,69 +1865,49 @@ do
             end
           end
         end)
+        -- mm:modify reindexes; step-2/3 column-event clones keep their
+        -- pre-modify loc, but post-modify mm may have sorted them into
+        -- different positions. Re-stamp by post-modify identity so the
+        -- column events stay resolvable through notesByLoc/ccsByLoc and
+        -- subsequent tm:assignEvent routes to the right mm event. Raw
+        -- MIDI notes carry no uuid until metadata is stamped; fall back
+        -- to the (chan, pitch, ppq) / (chan, msgType, cc|pitch, ppq)
+        -- tuples mm enforces as unique under its sort.
+        local locByKey = {}
+        for loc, n in mm:notes() do locByKey[slotKey(n)] = loc end
+        for loc, c in mm:ccs()   do locByKey[slotKey(c)] = loc end
+        forEachEvent(function(t, e, chan, isNote, ccNum)
+          local loc = isNote
+            and locByKey[slotKey(e, chan)]
+            or  locByKey[slotKey(e, chan, t, ccNum)]
+          if loc then e.loc = loc end
+        end)
+        for chan in pairs(pbTouched) do
+          sortByPPQ(channels[chan].columns.pb.events)
+        end
       end
       staleSwing = {}
     end
 
-    -- 4.8) Reseat fake pbs onto their host's seat (raw + logical).
-    do
-      local fakesByPos
-      local toReseat = {}
-      for chan, list in pairs(laneOnePreRule) do
-        for _, entry in ipairs(list) do
-          if not fakesByPos then
-            fakesByPos = {}
-            for loc, cc in mm:ccs() do
-              if cc.msgType == 'pb' and cc.fake then
-                local m = fakesByPos[cc.chan] or {}; fakesByPos[cc.chan] = m
-                m[cc.ppq] = { loc = loc, ppqL = cc.ppqL }
-              end
-            end
-          end
-          local m = fakesByPos[chan]; if not m then goto cont end
-          local n   = entry.evt
-          local hit = m[entry.oldPpq] or m[n.ppq]
-          if hit then
-            local update = {}
-            if m[entry.oldPpq] and entry.oldPpq ~= n.ppq then update.ppq = n.ppq end
-            if hit.ppqL ~= n.ppqL then update.ppqL = n.ppqL end
-            if next(update) then util.add(toReseat, { loc = hit.loc, update = update }) end
-          end
-          ::cont::
-        end
-      end
-      if #toReseat > 0 then
-        mm:modify(function()
-          for _, r in ipairs(toReseat) do mm:assignCC(r.loc, r.update) end
-        end)
-        local locToUpdate = {}
-        for _, r in ipairs(toReseat) do locToUpdate[r.loc] = r.update end
-        for chan = 1, 16 do
-          local pbCol = channels[chan].columns.pb
-          if pbCol then
-            local touched
-            for _, evt in ipairs(pbCol.events) do
-              local u = locToUpdate[evt.loc]
-              if u then
-                if u.ppq  then evt.ppq  = u.ppq  end
-                if u.ppqL then evt.ppqL = u.ppqL end
-                touched = true
-              end
-            end
-            if touched then sortByPPQ(pbCol.events) end
-          end
-        end
-      end
-    end
-
     -- 5) Project to logical.
-    for _, chan in ipairs(channels) do
-      local c = chan.columns
-      if c.pc then projectToLogical(c.pc) end
-      if c.pb then projectToLogical(c.pb) end
-      for _, col in ipairs(c.notes) do projectToLogical(col) end
-      if c.at then projectToLogical(c.at) end
-      for _, col in pairs(c.ccs) do projectToLogical(col) end
+    do
+      -- evt.ppq integer-rounded for tv:rebuild's offGrid compare; ppqL stays float so swing inverse round-trips stay exact.
+      local function projectToLogical(col)
+        for _, evt in ipairs(col.events) do
+          if evt.ppqL    ~= nil then evt.ppq    = util.round(evt.ppqL)    end
+          if evt.endppqL ~= nil then evt.endppq = util.round(evt.endppqL) end
+        end
+        sortByPPQ(col.events)
+      end
+
+      for _, chan in ipairs(channels) do
+        local c = chan.columns
+        if c.pc then projectToLogical(c.pc) end
+        if c.pb then projectToLogical(c.pb) end
+        for _, col in ipairs(c.notes) do projectToLogical(col) end
+        if c.at then projectToLogical(c.at) end
+        for _, col in pairs(c.ccs) do projectToLogical(col) end
+      end
     end
 
     -- Project the take's used swing names into take-tier cm so seqMgr can

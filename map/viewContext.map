@@ -1,8 +1,8 @@
-@module viewContext  src=viewContext.lua  loc=100  sha=untracked  mode=chunk
-@deps swing, rowPPQs, length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
+@module viewContext  src=viewContext.lua  loc=98  sha=fa4a61d  mode=chunk
+@deps length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
 
 # Shapes
-  @shape  args = { swing, rowPPQs, length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper }
+  @shape  args = { length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper }
 
 # Imports
   @require util = 'util'  @ 7
@@ -11,24 +11,22 @@
   @require tuning = 'tuning'  @ 8
 
 # Private state
-  @state swing = args.swing  @ 12
-  @state rowPPQs = args.rowPPQs  @ 13
-  @state length = args.length  @ 14
-  @state numRows = args.numRows  @ 15
-  @state rowPerBeat = args.rowPerBeat  @ 16
-  @state ppqPerRow = args.ppqPerRow  @ 17
-  @state timeSigs = args.timeSigs  @ 18
-  @state temper = args.temper  @ 19
-  @state ctx = {}  @ 20
+  @state length = args.length  @ 12
+  @state numRows = args.numRows  @ 13
+  @state rowPerBeat = args.rowPerBeat  @ 14
+  @state ppqPerRow = args.ppqPerRow  @ 15
+  @state timeSigs = args.timeSigs  @ 16
+  @state temper = args.temper  @ 17
+  @state ctx = {}  @ 18
 
 # Public API (ctx:*)
   -- Temperament
-  @api ctx:activeTemper()  @ 24
-  @api ctx:noteProjection(evt)  @ 26
+  @api ctx:activeTemper()  @ 22
+  @api ctx:noteProjection(evt)  @ 24
   -- Timing
-  @api ctx:ppqToRow(ppqI, chan)  @ 45
+  @api ctx:ppqToRow(ppqI, chan)  @ 43
       @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Inverse of rowToPPQ. The chan argument is unused at this layer (kept for the call-site signature).
-  @api ctx:rowToPPQ(row, chan)  @ 52
+  @api ctx:rowToPPQ(row, chan)  @ 50
       @contract  identity row math: row × ppqPerRow, integer-rounded, clamped at length. On-grid iff ctx:rowToPPQ(round(ppqToRow(p)), chan) == p.
-  @api ctx:snapRow(ppqI, chan)  @ 58
-  @api ctx:ppqPerRow()  @ 60
+  @api ctx:snapRow(ppqI, chan)  @ 56
+  @api ctx:ppqPerRow()  @ 58

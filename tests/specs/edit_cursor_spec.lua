@@ -485,7 +485,7 @@ return {
     name = 'growNote reaches overlap bound on first press under c58 swing',
     run = function(harness)
       local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
-      -- rowPerBeat=4, logPerRow=60. Under c58, rowPPQs[1]≈74, rowPPQs[2]=139.
+      -- rowPerBeat=4, logPerRow=60. Under c58, swung row 1 ≈ 74, row 2 = 139.
       -- A: rows 0..1 in c58 (endppq=74, endppqL=60).
       -- B: row 1, different pitch (touching A in realised + intent).
       -- maxPPQ = 74 + 15 = 89.
@@ -568,7 +568,7 @@ return {
     name = 'nudgeForward under c58 swing reaches a row-aligned next-note onset',
     run = function(harness)
       local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
-      -- 4 rpb, c58. rowPPQs[1]=74, rowPPQs[2]=139, rowPPQs[3]=194.
+      -- 4 rpb, c58. Swung row 1 = 74, row 2 = 139, row 3 = 194.
       -- A: row 0..1 (ppq 0..74). B: row 2..3 (ppq 139..194), diff pitch.
       -- nudgeForward(A) → A.ppq=74, A.endppq=139, just touching B.
       local h = harness.mk{

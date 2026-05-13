@@ -44,8 +44,8 @@ return {
 
       local root = rootByUuid(h.fm:dump().notes, 1)
       t.truthy(root, 'root present')
-      t.eq(#root.aliases, 1, 'one spec node added')
-      local node = root.aliases[1]
+      t.eq(#root.children, 1, 'one spec node added')
+      local node = root.children[1]
       t.deepEq(node.xform.ppqL, {{'add', 4 * lpr}}, '+4 logical rows')
       t.eq(#node.children, 0)
       t.eq(root.pitch, 60, 'root pitch unchanged')
@@ -69,8 +69,8 @@ return {
       h.cmgr:invoke('duplicateDown')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 1)
-      t.deepEq(root.aliases[1].xform.ppqL, {{'add', lpr}}, '+1 row')
+      t.eq(#root.children, 1)
+      t.deepEq(root.children[1].xform.ppqL, {{'add', lpr}}, '+1 row')
     end,
   },
 
@@ -85,7 +85,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -97,8 +97,8 @@ return {
       h.cmgr:invoke('duplicateDown')             -- collects alias source, pastes at row 2
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 1, 'top-level still 1')
-      local one = root.aliases[1]
+      t.eq(#root.children, 1, 'top-level still 1')
+      local one = root.children[1]
       t.eq(#one.children, 1, 'child created under source spec')
       t.deepEq(one.children[1].xform.ppqL,
                {{'add', lpr}}, '+1 row relative to source ppqL')
@@ -126,11 +126,11 @@ return {
       h.cmgr:invoke('duplicateDown')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 3, 'three top-level specs')
-      t.deepEq(root.aliases[1].xform.ppqL, {{'add', 1 * lpr}})
-      t.deepEq(root.aliases[2].xform.ppqL, {{'add', 2 * lpr}})
-      t.deepEq(root.aliases[3].xform.ppqL, {{'add', 3 * lpr}})
-      for _, n in ipairs(root.aliases) do
+      t.eq(#root.children, 3, 'three top-level specs')
+      t.deepEq(root.children[1].xform.ppqL, {{'add', 1 * lpr}})
+      t.deepEq(root.children[2].xform.ppqL, {{'add', 2 * lpr}})
+      t.deepEq(root.children[3].xform.ppqL, {{'add', 3 * lpr}})
+      for _, n in ipairs(root.children) do
         t.eq(#n.children, 0, 'no child specs (cache-anchored, top-level only)')
       end
     end,
@@ -158,8 +158,8 @@ return {
 
       local root = rootByUuid(h.fm:dump().notes, 1)
       -- After re-collect, source carries specPath='1' → child of '1'.
-      t.eq(#root.aliases, 1, 'still one top-level spec')
-      t.eq(#root.aliases[1].children, 1, 'child created under "1" after re-collect')
+      t.eq(#root.children, 1, 'still one top-level spec')
+      t.eq(#root.children[1].children, 1, 'child created under "1" after re-collect')
     end,
   },
 
@@ -194,8 +194,8 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 1)
-      local node = root.aliases[1]
+      t.eq(#root.children, 1)
+      local node = root.children[1]
       t.deepEq(node.xform.ppqL, {{'add', 5 * lpr}}, '+5 rows')
       t.falsy(node.xform.durL, 'no corrective durL on the spec')
       t.eq(node.fit, true, 'fit set; rebuild handles the visual clip')
@@ -231,8 +231,8 @@ return {
       for _, n in ipairs(notes) do if n.uuid == 2 then stillVictim = n end end
       t.falsy(stillVictim, 'pre-existing note in destination range deleted')
       local root = rootByUuid(notes, 1)
-      t.eq(#root.aliases, 1, 'one spec node added')
-      t.deepEq(root.aliases[1].xform.ppqL, {{'add', 4 * lpr}})
+      t.eq(#root.children, 1, 'one spec node added')
+      t.deepEq(root.children[1].xform.ppqL, {{'add', 4 * lpr}})
     end,
   },
 
@@ -270,8 +270,8 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 1)
-      local node = root.aliases[1]
+      t.eq(#root.children, 1)
+      local node = root.children[1]
       t.deepEq(node.xform.ppqL, {{'add', 4 * lpr}}, '+4 rows')
       t.deepEq(node.xform.chan, {{'add', 2}}, '+2 channels')
     end,
@@ -310,8 +310,8 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 1)
-      local node = root.aliases[1]
+      t.eq(#root.children, 1)
+      local node = root.children[1]
       t.deepEq(node.xform.ppqL, {{'add', 4 * lpr}}, '+4 rows')
       t.eq(node.xform.chan, nil, 'no chan delta')
       t.deepEq(node.xform.lane, {{'add', 1}}, '+1 lane')
@@ -330,7 +330,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -344,8 +344,8 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 2, 'two top-level: original + new')
-      local existing, fresh = root.aliases[1], root.aliases[2]
+      t.eq(#root.children, 2, 'two top-level: original + new')
+      local existing, fresh = root.children[1], root.children[2]
       t.deepEq(existing.xform.ppqL, {{'add', 240}}, 'existing untouched')
       t.eq(#existing.children, 0)
       t.deepEq(fresh.xform.ppqL, {{'add', 8 * lpr}}, 'new node anchored at paste row')
@@ -365,7 +365,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 4,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {
               { id = '2', xform = { ppqL = {{'add', 240}} }, children = {
                 { id = '3', xform = { ppqL = {{'add', 240}} }, children = {} },
@@ -383,7 +383,7 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      local twelve = root.aliases[1].children[1]
+      local twelve = root.children[1].children[1]
       t.eq(#twelve.children, 2, 'original child plus the newly-pasted sibling')
       local fresh = twelve.children[2]   -- append-position identity (post-Phase C)
       t.truthy(fresh, 'new spec node appended under twelve')
@@ -426,11 +426,11 @@ return {
 
       local root = rootByUuid(h.fm:dump().notes, 1)
       t.eq(root.pitch, 64, 'root keeps its mutated pitch')
-      t.eq(#root.aliases, 1, 'spec written')
-      t.deepEq(root.aliases[1].xform.ppqL,  {{'add', 4 * lpr}}, 'row delta')
+      t.eq(#root.children, 1, 'spec written')
+      t.deepEq(root.children[1].xform.ppqL,  {{'add', 4 * lpr}}, 'row delta')
       -- Corrective xform.pitch is a step delta under the active temper:
       -- (60 captured, 64 live) → step(60) − step(64) under 19EDO = −6.
-      t.deepEq(root.aliases[1].xform.pitch, {{'add', -6}},
+      t.deepEq(root.children[1].xform.pitch, {{'add', -6}},
                'corrective: step(60) − step(64) under 19EDO = −6')
       t.eq(#h.reaper._state.messages, 0, 'silent — root drift is corrected')
     end,
@@ -449,7 +449,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -464,7 +464,7 @@ return {
       local rootLoc
       for loc, n in h.fm:notes() do if n.uuid == 1 then rootLoc = loc end end
       h.fm:modify(function()
-        h.fm:assignNote(rootLoc, { aliases = {
+        h.fm:assignNote(rootLoc, { children = {
           { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
         } })
       end)
@@ -473,9 +473,9 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 1, 'still one top-level')
-      t.eq(#root.aliases[1].children, 1, 'new child under leaf')
-      t.deepEq(root.aliases[1].children[1].xform.ppqL, {{'add', 3 * lpr}},
+      t.eq(#root.children, 1, 'still one top-level')
+      t.eq(#root.children[1].children, 1, 'new child under leaf')
+      t.deepEq(root.children[1].children[1].xform.ppqL, {{'add', 3 * lpr}},
                'delta against liveSrc (row 2) → paste lands at row 5')
       t.eq(#h.reaper._state.messages, 0, 'silent — leaf edit is supported')
     end,
@@ -493,7 +493,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 3,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {
               { id = '2', xform = { ppqL = {{'add', 240}} }, children = {} },
             } },
@@ -508,7 +508,7 @@ return {
       local rootLoc
       for loc, n in h.fm:notes() do if n.uuid == 1 then rootLoc = loc end end
       h.fm:modify(function()
-        h.fm:assignNote(rootLoc, { aliases = {
+        h.fm:assignNote(rootLoc, { children = {
           { id = '1', xform = { ppqL = {{'add', 480}} }, children = {
             { id = '2', xform = { ppqL = {{'add', 240}} }, children = {} },
           } },
@@ -521,7 +521,7 @@ return {
       local notes = h.fm:dump().notes
       local plain
       for _, n in ipairs(notes) do
-        if not n.aliases and not n.parentUuid then plain = n end
+        if not n.children and not n.parentUuid then plain = n end
       end
       t.truthy(plain, 'plain paste landed')
 
@@ -555,7 +555,7 @@ return {
       local notes = h.fm:dump().notes
       t.eq(#notes, 1, 'source deleted; one fresh paste')
       t.falsy(rootByUuid(notes, 1), 'original root gone')
-      t.falsy(notes[1].aliases, 'no spec tree on the pasted note')
+      t.falsy(notes[1].children, 'no spec tree on the pasted note')
       t.falsy(notes[1].parentUuid, 'paste is a plain note, not an alias child')
     end,
   },
@@ -587,7 +587,7 @@ return {
 
       local notes = h.fm:dump().notes
       t.eq(#notes, 1, 'only the pasted note survives')
-      t.falsy(notes[1].aliases, 'no spec tree')
+      t.falsy(notes[1].children, 'no spec tree')
       t.falsy(notes[1].parentUuid, 'plain note')
       t.eq(#h.reaper._state.messages, 0, '(A)-class demotion is silent')
     end,
@@ -605,7 +605,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -619,16 +619,16 @@ return {
       for loc, n in h.fm:notes() do
         if n.uuid == 1 then rootLoc = loc end
       end
-      h.fm:modify(function() h.fm:assignNote(rootLoc, { aliases = {} }) end)
+      h.fm:modify(function() h.fm:assignNote(rootLoc, { children = {} }) end)
 
       h.ec:setPos(6, 1, 1)
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 0, 'spec tree still empty')
+      t.eq(#root.children, 0, 'spec tree still empty')
       local plain
       for _, n in ipairs(h.fm:dump().notes) do
-        if not n.aliases and not n.parentUuid then plain = n end
+        if not n.children and not n.parentUuid then plain = n end
       end
       t.truthy(plain, 'plain paste landed')
       t.eq(plain.pitch, 60, 'pasted note carries source pitch')
@@ -647,7 +647,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -660,13 +660,13 @@ return {
 
       local roots, plains = {}, {}
       for _, n in ipairs(h.fm:dump().notes) do
-        if n.aliases       then roots[#roots+1]   = n
+        if n.children       then roots[#roots+1]   = n
         elseif not n.parentUuid then plains[#plains+1] = n end
       end
       t.eq(#roots, 1, 'only the source carries a spec tree')
       t.eq(roots[1].uuid, 1, 'source root unchanged')
       t.eq(#plains, 1, 'one fresh plain paste')
-      t.falsy(plains[1].aliases,    'paste has no aliases')
+      t.falsy(plains[1].children,    'paste has no aliases')
       t.falsy(plains[1].aliasCtr,   'paste has no aliasCtr')
       t.falsy(plains[1].parentUuid, 'paste is a top-level note')
     end,
@@ -691,7 +691,7 @@ return {
       local notes = h.fm:dump().notes
       t.eq(#notes, 2, 'one source + one fresh paste')
       local root = rootByUuid(notes, 1)
-      t.falsy(root.aliases, 'no spec tree on root')
+      t.falsy(root.children, 'no spec tree on root')
     end,
   },
 
@@ -709,7 +709,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -723,8 +723,8 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 2, 'two top-level: original + new C')
-      local C = root.aliases[2]
+      t.eq(#root.children, 2, 'two top-level: original + new C')
+      local C = root.children[2]
       t.deepEq(C.xform.ppqL, {{'add', 8 * lpr}}, 'C anchored at paste row')
       t.eq(#C.children, 1, 'D attached under C, not as sibling of B')
       t.deepEq(C.children[1].xform.ppqL, {{'add', 240}},
@@ -745,7 +745,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 3,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {
               { id = '2', xform = { ppqL = {{'add', 240}} }, children = {} },
             } },
@@ -761,8 +761,8 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 2, 'two top-level: original + new C')
-      local C = root.aliases[2]
+      t.eq(#root.children, 2, 'two top-level: original + new C')
+      local C = root.children[2]
       t.deepEq(C.xform.ppqL, {{'add', 10 * lpr}}, 'C anchored at paste row')
       t.eq(#C.children, 1, 'D under C')
       local D = C.children[1]
@@ -784,7 +784,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -811,9 +811,9 @@ return {
       end
       t.truthy(C, 'C exists as a plain root')
       t.truthy(D, 'D materialised under C')
-      t.truthy(C.aliases, 'C carries an aliases list')
-      t.eq(#C.aliases, 1, 'one top-level alias under C')
-      t.deepEq(C.aliases[1].xform.ppqL, {{'add', 240}},
+      t.truthy(C.children, 'C carries an aliases list')
+      t.eq(#C.children, 1, 'one top-level alias under C')
+      t.deepEq(C.children[1].xform.ppqL, {{'add', 240}},
                'alias under C = captured pathXform from A to B')
       t.eq(D.parentUuid, C.uuid, 'D parented at C')
       t.eq(#h.reaper._state.messages, 0, 'silent — A-class demote')
@@ -832,7 +832,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -846,7 +846,7 @@ return {
       for loc, n in h.fm:notes() do if n.uuid == 1 then rootLoc = loc end end
       h.fm:modify(function()
         h.fm:assignNote(rootLoc, {
-          aliases = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
           },
         })
@@ -856,7 +856,7 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      local C = root.aliases[2]
+      local C = root.children[2]
       t.eq(#C.children, 1, 'D under C')
       t.deepEq(C.children[1].xform.ppqL, {{'add', 240}},
                "D xform pinned to copy-time '1'.xform (240), not the live edit (480)")
@@ -884,7 +884,7 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(root.aliases[1].fit, true, 'paste-created spec node carries fit')
+      t.eq(root.children[1].fit, true, 'paste-created spec node carries fit')
     end,
   },
 
@@ -895,7 +895,7 @@ return {
         config = { track = { rowPerBeat = 1 } },
         seed   = { notes = { rootNote{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1', xform = { ppqL = {{'add', 240}} }, children = {} },
           },
         } } },
@@ -908,7 +908,7 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      local C = root.aliases[2]
+      local C = root.children[2]
       t.eq(C.fit, true, 'pasted root C has fit')
       t.eq(C.children[1].fit, true, 'pasted child D has fit')
     end,
@@ -942,8 +942,8 @@ return {
       h.cmgr:invoke('paste')
 
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 1, 'one spec node added')
-      local node = root.aliases[1]
+      t.eq(#root.children, 1, 'one spec node added')
+      local node = root.children[1]
       t.eq(node.fit, true, 'fit set on the new spec node')
       t.falsy(node.xform.durL, 'no corrective durL op')
       t.deepEq(node.xform.ppqL, {{'add', 4 * 240}}, 'ppqL row offset preserved')
@@ -960,8 +960,8 @@ return {
       h.tm:createAlias(1, nil, { ppqL = {{'add', 240}} })
       h.tm:flush()
       local root = rootByUuid(h.fm:dump().notes, 1)
-      t.eq(#root.aliases, 1)
-      t.falsy(root.aliases[1].fit, 'no fit on manually-created spec node')
+      t.eq(#root.children, 1)
+      t.falsy(root.children[1].fit, 'no fit on manually-created spec node')
     end,
   },
 }

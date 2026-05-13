@@ -167,11 +167,11 @@ end
 
 ----- Spec-tree navigation
 
--- Walk the spec tree at `root.aliases`. specIdx is an array of
+-- Walk the spec tree at `root.children`. specIdx is an array of
 -- 1-indexed integers naming child positions at each level.
 function M.find(root, specIdx)
-  if not (root and root.aliases and specIdx) then return nil end
-  local list, node = root.aliases, nil
+  if not (root and root.children and specIdx) then return nil end
+  local list, node = root.children, nil
   for _, i in ipairs(specIdx) do
     if not list then return nil end
     node = list[i]
@@ -182,10 +182,10 @@ function M.find(root, specIdx)
 end
 
 -- Returns (parent_children_list, last_idx) or nil if any intermediate
--- is missing. Top-level paths return (root.aliases, specIdx[1]).
+-- is missing. Top-level paths return (root.children, specIdx[1]).
 function M.parentOf(root, specIdx)
-  if not (root and root.aliases and specIdx and #specIdx > 0) then return nil end
-  local list = root.aliases
+  if not (root and root.children and specIdx and #specIdx > 0) then return nil end
+  local list = root.children
   for i = 1, #specIdx - 1 do
     local node = list and list[specIdx[i]]
     if not node then return nil end

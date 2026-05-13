@@ -9,28 +9,16 @@ local util   = require('util')
 
 ---------- BUILDERS
 
-local function identitySwing()
-  return {
-    fromLogical = function(_, p) return p end,
-    toLogical   = function(_, p) return p end,
-  }
-end
-
--- Uniform logical-grid rowPPQs for 240 ppq/QN, 4 rows/beat, length 3840 ppq.
+-- Uniform logical grid for 240 ppq/QN, 4 rows/beat, length 3840 ppq.
 local function logicalGrid()
   local ppqPerRow = 60
   local length    = 3840
-  local numRows   = length // ppqPerRow
-  local rowPPQs   = {}
-  for r = 0, numRows - 1 do rowPPQs[r] = r * ppqPerRow end
-  return rowPPQs, numRows, length
+  return length // ppqPerRow, length
 end
 
 local function mkCtx(overrides)
-  local rowPPQs, numRows, length = logicalGrid()
+  local numRows, length = logicalGrid()
   local args = {
-    swing      = identitySwing(),
-    rowPPQs    = rowPPQs,
     length     = length,
     numRows    = numRows,
     rowPerBeat = 4,
@@ -42,39 +30,21 @@ local function mkCtx(overrides)
   return util.instantiate('viewContext', args)
 end
 
--- Non-divisor rpb: rowPPQs[r] = r · ppqPerRow is fractional for most r,
--- which exposes the F4 asymmetry between rowToPPQ (rounds at realisation)
--- and ppqToRow (returns a fractional row).
+-- Non-divisor rpb: ppqPerRow is fractional, so row · ppqPerRow lands
+-- between integers for most rows. Exposes the F4 asymmetry between
+-- rowToPPQ (rounds at realisation) and ppqToRow (returns a fractional row).
 local function mkCtxRpb(rpb, ppqPerQN)
   ppqPerQN        = ppqPerQN or 240
   local ppqPerRow = ppqPerQN / rpb        -- denom = 4 ⇒ resolution*4/denom = ppqPerQN
   local numRows   = rpb * 16              -- 4 bars of content
   local length    = numRows * ppqPerRow
-  local rowPPQs   = {}
-  for r = 0, numRows - 1 do rowPPQs[r] = r * ppqPerRow end
   return mkCtx{
-    rowPPQs    = rowPPQs,
     length     = length,
     numRows    = numRows,
     rowPerBeat = rpb,
     ppqPerRow  = ppqPerRow,
   }
 end
-
--- Build a swung snapshot via the real tm — the rowPPQs stay logical
--- (intent grid is uniform); swing only deflects the realised ppq.
-local function swungSnapshot(harness, composite, slot)
-  slot = slot or 'c58'
-  local h = harness.mk{
-    config = {
-      project = { swings = { [slot] = composite } },
-      take    = { swing = slot },
-    },
-  }
-  return h.tm:swingSnapshot()
-end
-
-local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 
 return {
   ---------- PPQ ↔ ROW
@@ -96,7 +66,7 @@ return {
       local ctx = mkCtx()
       -- 30 ppq is half a row at 60 ppq/row.
       t.truthy(math.abs(ctx:ppqToRow(30, 1) - 0.5) < 1e-9, 'ppqToRow(30) ≈ 0.5')
-      -- rowToPPQ(0.5) → swing.fromLogical identity → 30.0 → floor(30.5) = 30
+      -- rowToPPQ(0.5) → 30.0 → floor(30.5) = 30
       t.eq(ctx:rowToPPQ(0.5, 1), 30)
     end,
   },
@@ -122,34 +92,6 @@ return {
       t.eq(ctx:ppqToRow(99999, 1), 64)
       t.eq(ctx:rowToPPQ(-1,    1), 0)
       t.eq(ctx:rowToPPQ(99999, 1), 3840)
-    end,
-  },
-
-  {
-    name = 'swung snapshot: rowToPPQ then ppqToRow round-trips at bar boundaries (fixpoints)',
-    run = function(harness)
-      local ctx = mkCtx{ swing = swungSnapshot(harness, classic58) }
-      -- classic-58 with period = 1 QN = 240 ppq fixes period boundaries.
-      -- Bar boundaries (every 16 rows = 4 QN = 960 ppq) are fixpoints.
-      for _, r in ipairs{ 0, 16, 32, 48 } do
-        local ppq  = ctx:rowToPPQ(r, 1)
-        local back = ctx:ppqToRow(ppq, 1)
-        t.truthy(math.abs(back - r) < 1e-6,
-          'fixpoint round-trip at row ' .. r .. ' got ' .. tostring(back))
-      end
-    end,
-  },
-
-  {
-    name = 'Phase 6: rowToPPQ is identity ratio regardless of swing snapshot',
-    run = function(harness)
-      -- Phase 6 collapses ctx to a pure row↔logical-ppq map; the swing
-      -- snapshot is no longer consulted at this layer. Mid-period rows
-      -- land on their logical position whether the take swings or not.
-      local ctx = mkCtx{ swing = swungSnapshot(harness, classic58) }
-      t.eq(ctx:rowToPPQ(2, 1), 120, 'row 2 lands on logical 120 (identity ratio)')
-      local plain = mkCtx{}
-      t.eq(plain:rowToPPQ(2, 1), 120, 'identity snapshot agrees')
     end,
   },
 

@@ -255,9 +255,9 @@ return {
   {
     -- Spec (design/archive/swing.md): displayRow(e) = round(ppqToRow_c(e.ppq))
     -- under current swing; on-grid iff rowToPPQ_c reproduces e.ppq exactly.
-    -- With float rowPPQs the round-trip is bit-exact even for extreme
-    -- multi-atom composites, so a note authored under the active swing
-    -- lands on its row with no off-grid flag.
+    -- With float ppqPerRow (unrounded) the round-trip is bit-exact even
+    -- for extreme multi-atom composites, so a note authored under the
+    -- active swing lands on its row with no off-grid flag.
     name = 'extreme swing: a note authored under the current swing lands on its row, no off-grid flag',
     run = function(harness)
       local extreme = { factors = {
@@ -289,12 +289,12 @@ return {
   },
 
   {
-    -- Phase 6: column-event ppq is the logical position, so any note with
-    -- a ppqL stamp is on-grid by construction — swing config no longer
-    -- shifts the displayed grid. Off-grid surfaces only when ppqL is
-    -- absent and raw fails to round-trip exactly through the rule's
-    -- swing-inverse (e.g. legacy takes mid-import).
-    name = 'Phase 6: ppqL-stamped notes are on-grid regardless of swing config',
+    -- Phase 6: column-event ppq is the logical position, so notes with
+    -- a coherent ppqL stamp are on-grid regardless of the take's swing.
+    -- Seed coherently under identity then flip to c58: the stale-arm
+    -- rebuild reseats raw under c58, ppqL stays canonical, rows stay
+    -- on the grid.
+    name = 'Phase 6: ppqL-stamped notes stay on-grid through a swing change',
     run = function(harness)
       local c58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
       local h = harness.mk{
@@ -312,9 +312,10 @@ return {
         },
         config = {
           project = { swings = { c58 = c58 } },
-          take    = { swing = 'c58', rowPerBeat = 4 },
+          take    = { rowPerBeat = 4 },
         },
       }
+      h.cm:set('take', 'swing', 'c58')
       local col = h.vm.grid.cols[1]
       for _, r in ipairs{ 0, 1, 2, 4 } do
         t.truthy(col.cells[r],     'row ' .. r .. ' cell present')

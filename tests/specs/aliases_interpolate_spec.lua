@@ -15,7 +15,7 @@ local function findCcCol(grid, ccNum, chan)
 end
 
 local function rootCc(extras)
-  local n = { ppq = 0, chan = 1, msgType = 'cc', cc = 7, val = 64,
+  local n = { ppq = 0, ppqL = 0, chan = 1, msgType = 'cc', cc = 7, val = 64,
               shape = 'step', uuid = 1 }
   for k, v in pairs(extras or {}) do n[k] = v end
   return n
@@ -34,7 +34,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { ccs = { rootCc{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 480}}, val = {{'add', 10}} },
               children = {} },
@@ -58,7 +58,7 @@ return {
       local root
       for _, c in ipairs(ccs) do if c.uuid == 1 then root = c end end
       t.truthy(root)
-      t.eq(#root.aliases, 1, 'still aliased — not severed')
+      t.eq(#root.children, 1, 'still aliased — not severed')
       t.eq(root.shape, 'step', 'root shape unchanged (no plan ran)')
     end,
   },
@@ -103,7 +103,7 @@ return {
       local h = harness.mk(util.assign({
         seed = { ccs = { rootCc{
           aliasCtr = 2,
-          aliases  = {
+          children = {
             { id = '1',
               xform = { ppqL = {{'add', 480}}, val = {{'add', 10}} },
               children = {} },
@@ -127,7 +127,7 @@ return {
 
       local ccs = h.fm:dump().ccs
       local root; for _, c in ipairs(ccs) do if c.uuid == 1 then root = c end end
-      t.eq(#root.aliases, 1, 'still aliased — not severed')
+      t.eq(#root.children, 1, 'still aliased — not severed')
     end,
   },
 }
