@@ -2,8 +2,8 @@
 -- navigation. All pure; no REAPER, no mm.
 
 local t = require('support')
-require('util')
-require('aliases')
+local util    = require('util')
+local aliases = require('aliases')
 
 local seededRng = aliases.makeRng
 

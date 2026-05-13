@@ -212,53 +212,48 @@ def reaper_doc_lookup(
 
 _MAP_HEADER = re.compile(r'^@module\s+(\S+)\s+src=(\S+)\s+loc=(\d+)\s+sha=(\S+)')
 _DECL = re.compile(
-    r'^(?P<indent>\s*)@(?P<kind>fn|api|factory|state|const)\s+'
+    r'^(?P<indent>\s*)@(?P<kind>fn|api|state|const|require|construct)\s+'
     r'(?P<head>.+?)\s*@\s*(?P<line>\d+)\s*'
     r'(?P<doc>(?:--|·).*)?$'
 )
+# Annotations: `@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`,
+# any of which may carry a leading `?` (`@?invariant …`) for inferred-rather-
+# than-doc-grounded variants. `@deps` is rendered on its own line in the header.
 _ANN = re.compile(
-    r'^(?P<indent>\s*)@(?P<kind>map\??:\w+|shape\??|emits|reaper|deps)\s+'
+    r'^(?P<indent>\s*)@(?P<kind>\??(?:invariant|contract|shape|emits|reaper|deps))\s+'
     r'(?P<body>.*)$'
 )
-_FACTORY_HDR = re.compile(r'^@factory\s+(\w+)')
 
 
 def _bare_name(kind: str, head: str) -> str:
-    if kind in ("fn", "factory"):
+    if kind == "fn":
         m = re.match(r"^(\w+)\(", head)
         return m.group(1) if m else head
     if kind == "api":
         m = re.match(r"^[\w]+[:.](\w+)\(", head)
         return m.group(1) if m else head
-    if kind in ("state", "const"):
+    if kind in ("state", "const", "require", "construct"):
         m = re.match(r"^(\w+)", head)
         return m.group(1) if m else head
     return head
 
 
 def _normalize_kind(k: str) -> str:
-    k = k.lower()
-    if k.startswith("map:"):
-        k = k[4:]
-    if k.startswith("map?:"):
-        k = k[5:]
+    k = k.lower().lstrip("?")
     aliases = {
         "signal": "emits", "signals": "emits",
         "invariants": "invariant", "contracts": "contract", "shapes": "shape",
         "fns": "fn", "functions": "fn",
-        "apis": "api", "factories": "factory",
+        "apis": "api",
         "states": "state", "consts": "const", "constants": "const",
+        "requires": "require", "import": "require", "imports": "require",
+        "constructs": "construct",
     }
     return aliases.get(k, k)
 
 
 def _entry_kind(raw_kind: str) -> str:
-    k = raw_kind
-    if k.startswith("map?:"):
-        k = k[5:]
-    elif k.startswith("map:"):
-        k = k[4:]
-    return k.rstrip("?")
+    return raw_kind.lstrip("?")
 
 
 @mcp.tool(structured_output=False)
@@ -277,22 +272,22 @@ def map_query(
     Args:
       name: name pattern. Supports `*` and `?` glob wildcards;
             case-insensitive. Matches bare symbol names for structural
-            entries (`@fn`, `@api`, `@factory`, `@state`, `@const`) and
-            full body text for annotations (`@map:invariant`,
-            `@map:contract`, `@shape`, `@emits`, `@reaper`). Omit to
-            return everything matching the other filters.
+            entries (`@fn`, `@api`, `@state`, `@const`, `@require`,
+            `@construct`) and full body text for annotations
+            (`@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`).
+            Omit to return everything matching the other filters.
       kind: filter by entry kind. Accepted (case-insensitive, plurals
-            ok): fn, api, factory, state, const, invariant, contract,
-            shape, emits/signal, reaper, deps. Omit for any.
+            ok): fn, api, state, const, require/import, construct,
+            invariant, contract, shape, emits/signal, reaper, deps.
+            Omit for any.
       module: restrict to a module by stem (e.g. `trackerManager`) or
               glob (e.g. `tm_*`, `*Manager`). Matches the .map filename
               (without extension).
       max_results: cap (default 60).
 
     Returns:
-      Lines of `<source>.lua:<line>  @kind <head>  [in factory X]` for
-      structural entries, and `<source>.lua  @map:invariant  <body>`
-      for annotations.
+      Lines of `<source>.lua:<line>  @kind <head>` for structural entries,
+      and `<source>.lua  @kind  <body>` for annotations.
     """
     if not MAP_DIR.exists():
         return f"--- ERROR: {MAP_DIR} not found ---"
@@ -335,14 +330,9 @@ def map_query(
             if h:
                 src = h.group(2)
 
-        current_factory: Optional[str] = None
-
         for raw in lines:
             if not raw.strip():
                 continue
-            mf = _FACTORY_HDR.match(raw)
-            if mf:
-                current_factory = mf.group(1)
 
             md = _DECL.match(raw)
             if md:
@@ -361,11 +351,8 @@ def map_query(
                     if not name_rx.search(bare):
                         continue
 
-                ctx = ""
-                if k != "factory" and current_factory and md.group("indent"):
-                    ctx = f"  [in {current_factory}]"
                 tail = f"  {doc}" if doc else ""
-                results.append(f"{src}:{src_line}  @{k} {head}{ctx}{tail}")
+                results.append(f"{src}:{src_line}  @{k} {head}{tail}")
                 continue
 
             ma = _ANN.match(raw)
@@ -384,8 +371,7 @@ def map_query(
                 if len(results) >= max_results:
                     truncated = True
                     break
-                ctx = f"  [in {current_factory}]" if current_factory and ek not in ("invariant",) else ""
-                results.append(f"{src}  @{raw_kind}  {body}{ctx}")
+                results.append(f"{src}  @{raw_kind}  {body}")
                 continue
 
         if truncated:

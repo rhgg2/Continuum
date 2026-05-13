@@ -10,7 +10,7 @@
 -- fixup) is covered in mm_cc_reconcile_spec; this spec stays algorithm-only.
 
 local t = require('support')
-require('util')
+local util = require('util')
 local realMM = require('realMidiManager')()
 
 local CHANMSG = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }

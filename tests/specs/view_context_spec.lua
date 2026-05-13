@@ -4,7 +4,8 @@
 -- vm-integration tests live in vm_grid_spec.
 
 local t = require('support')
-require('trackerView')        -- registers global newViewContext
+local tuning = require('tuning')
+local util   = require('util')
 
 ---------- BUILDERS
 
@@ -38,7 +39,7 @@ local function mkCtx(overrides)
     temper     = nil,
   }
   for k, v in pairs(overrides or {}) do args[k] = v end
-  return newViewContext(args)
+  return util.instantiate('viewContext', args)
 end
 
 -- Non-divisor rpb: rowPPQs[r] = r · ppqPerRow is fractional for most r,

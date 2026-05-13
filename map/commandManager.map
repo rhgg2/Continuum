@@ -1,74 +1,81 @@
-@module commandManager  src=commandManager.lua  loc=239  sha=2973124
+@module commandManager  src=commandManager.lua  loc=318  sha=37eeb11  mode=chunk
+@deps cm
 
-# Invariants & contracts (module)
-  @map:invariant  commands and keymap are orthogonal name-keyed tables; a name may live in either alone
-  @map:invariant  root scope is global; named scopes are pages; at most one scope is active at a time
-  @map:invariant  active-scope entries shadow root entries during invoke and keychain lookups (first hit wins)
-  @map:invariant  command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)
-  @map:invariant  a keymap entry is an array of keyspecs — multiple bindings dispatch to the same command
-  @map:invariant  layouts row 1 = base octave (15 semitones, C..D+1oct); row 2 = +1 octave (17 semitones, C..F+1oct)
-  @map:invariant  chars is folded from layouts at load time so the LUT can't drift from the declaration
+# Invariants & contracts
+  @invariant  commands form a single flat namespace owned by mgr; scopes own keymaps + modal/passthrough only
+  @invariant  scope:register installs a gated wrapper into mgr.commands — invoke returns nil when the scope is not reachable on the stack
+  @invariant  scopes form a stack walked top-down; the bottom is the 'global' scope pushed at module load
+  @invariant  a modal scope without passthrough[name] blocks both key dispatch and invoke for names below it
+  @invariant  command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)
+  @invariant  a keymap entry is an array of keyspecs — multiple bindings dispatch to the same command
+  @invariant  layouts row 1 = base octave (15 semitones, C..D+1oct); row 2 = +1 octave (17 semitones, C..F+1oct)
+  @invariant  chars is folded from layouts at load time so the LUT can't drift from the declaration
 
 # Shapes
   @shape  keyspec = keyConstant | { keyConstant, mod1, mod2, ... }   -- mods OR'd into a single mask
   @shape  keymapEntry = { keyspec, ... }                              -- array; each keyspec triggers the same command
   @shape  noteChar = { semi = 0..16, octOff = 0..1 }
+  @shape  scope = { keymap={}, modal=false?, passthrough={[name]=true}?, registered={[name]=true} }
 
-# Module-level constants
-  @const layouts = {  @ 15
-  @const chars = {}  @ 34
+# Private state
+  @state layouts = {  @ 14
+  @state chars = {}  @ 33
+  @state mgr = {  @ 47
+  @state global = newScope()  @ 110
+  @state prefixBuf, pendingPrefix = nil, nil  @ 174
+  @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 175
 
-# Module-level functions (private)
-  @fn attachScope(scope)  @ 51
-      @map:contract  wrap is a no-op if name has no registered command; wrappers stack (compose outward)
-      @map:contract  doBefore/doAfter accept either a single name or an array of names
-      @map:contract  doAfter preserves the original command's return values (it's the dispatch signal)
-  @fn newScope()  @ 95
+# Private functions
+  -- Stack reachability
+  @fn isReachable(scope, name)  @ 61
+  -- Scope
+  @fn newScope()  @ 77
+  -- Bottom of the stack
+  -- Manager-level surface
+  -- Universal-argument prefix
+  -- Scopes & stack
+  @fn asScope(s)  @ 239
+  -- Dispatch
+  -- Keymap lookup
+  @fn resolveKeys(name)  @ 271
 
-@factory newCommandManager(cm)  @ 101
-  @map:contract  mgr.commands / mgr.keymap alias the root scope's tables; rm reads them directly in dispatch
-  @map:contract  mgr-level register/bind/wrap/doBefore/doAfter operate on the root scope only
-
-  # Private state
-    @state root = newScope()  @ 102
-    @state scopes = {}  @ 103
-    @state mgr = {  @ 108
-
-  # Public API
-    -- Scope
-    @api mgr:register(name, fn)  @ 117
-    @api mgr:registerAll(tbl)  @ 118
-    @api mgr:bind(name, keys)  @ 119
-    @api mgr:bindAll(tbl)  @ 120
-    @api mgr:wrap(name, wrapper)  @ 121
-    @api mgr:doBefore(name, before)  @ 122
-    @api mgr:doAfter(name, after)  @ 123
-    -- Universal-argument prefix
-    @api mgr:beginPrefix()  @ 135
-        @map:contract  buffer accepts only '0'..'9' and '/'; cancel/finish/consume each leave the state inactive
-    @api mgr:isPrefixActive()  @ 136
-    @api mgr:appendPrefix(ch)  @ 138
-    @api mgr:cancelPrefix()  @ 144
-    @api mgr:finishPrefix()  @ 150
-        @map:contract  empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
-    @api mgr:consumePrefix()  @ 171
-        @map:contract  returns pending value (number or nil) and clears all prefix state; idempotent thereafter until next finishPrefix
-    @api mgr:consumePrefixRational()  @ 178
-        @map:contract  returns (num, den) of the pending prefix as parsed integers, or (nil, nil) when no prefix is pending; clears all prefix state; consumers that need rationality (e.g. scale's rpb refinement) read this instead of consumePrefix
-    -- Scopes
-    @api mgr:scope(name)  @ 187
-        @map:contract  creates the scope on first request; idempotent thereafter
-    @api mgr:setActive(name)  @ 197
-        @map:contract  pass nil to clear active scope (drop back to root-only resolution)
-    @api mgr:dropScope(name)  @ 199
-    -- Lookup
-    @api mgr:invoke(name, ...)  @ 204
-        @map:contract  no-op (returns nil) if no scope resolves the name; never raises on unknown
-    @api mgr:keychain()  @ 210
-    @api mgr:keysFor(name)  @ 216
-    @api mgr:keySpec(spec, ImGui)  @ 223
-        -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
-    -- Note layout
-    @api mgr:noteChars(char)  @ 234
-        -- Re-read noteLayout on each call so a config change takes effect
-        -- without rebuilding vm.
+# Public API (mgr:*)
+  @api mgr:register(name, fn)  @ 121
+  @api mgr:registerAll(tbl)  @ 126
+  @api mgr:bind(name, keys)  @ 130
+  @api mgr:bindAll(tbl)  @ 131
+  @api mgr:wrap(name, wrapper)  @ 134
+      @contract  wrap is a no-op if name has no registered command; wrappers stack (compose outward)
+  @api mgr:doBefore(name, before)  @ 143
+      @contract  doBefore/doAfter accept either a single name or an array of names
+      @contract  doAfter preserves the original command's return values (the dispatch signal)
+      @invariant  wraps compose inside the gate — when invoke skips a gated command, no doBefore / doAfter side-effect fires
+  @api mgr:doAfter(name, after)  @ 153
+  @api mgr:beginPrefix()  @ 178
+      @contract  buffer accepts only '0'..'9' and '/'; cancel/finish/consume each leave the state inactive
+  @api mgr:isPrefixActive()  @ 179
+  @api mgr:appendPrefix(ch)  @ 181
+  @api mgr:cancelPrefix()  @ 187
+  @api mgr:finishPrefix()  @ 193
+      @contract  empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
+  @api mgr:consumePrefix()  @ 214
+      @contract  returns pending value (number or nil) and clears all prefix state; idempotent thereafter until next finishPrefix
+  @api mgr:consumePrefixRational()  @ 221
+      @contract  returns (num, den) of the pending prefix as parsed integers, or (nil, nil) when no prefix is pending; clears all prefix state; consumers that need rationality (e.g. scale's rpb refinement) read this instead of consumePrefix
+  @api mgr:scope(name)  @ 230
+      @contract  creates the scope on first request; idempotent thereafter
+  @api mgr:push(s)  @ 242
+      @contract  push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.
+  @api mgr:pop(s)  @ 249
+      @contract  pop(name|scope) asserts the named scope is currently on top; pops it
+  @api mgr:invoke(name, ...)  @ 258
+      @contract  returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)
+  @api mgr:keysFor(name)  @ 280
+  @api mgr:keychain()  @ 283
+      @contract  returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk
+  @api mgr:keySpec(spec, ImGui)  @ 303
+      -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
+  -- Note layout
+  @api mgr:noteChars(char)  @ 314
+      -- Re-read noteLayout on each call so a config change takes effect
+      -- without rebuilding vm.

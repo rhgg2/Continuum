@@ -5,6 +5,7 @@
 -- before the first require so the module loads in the pure-Lua harness.
 
 local t = require('support')
+local fs = require('fs')
 
 local n = 0
 local fakeImGui = setmetatable({ Mod_None = 0 }, {
@@ -14,9 +15,12 @@ package.preload['imgui'] = function()
   return function(_) return fakeImGui end
 end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
-require('sampleManager')
-require('sampleView')
-require('samplePage')
+
+local util = require('util')
+local function newSamplePage(cm, cmgr, chrome, gui, onPickTrack)
+  return util.instantiate('samplePage',
+    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
+end
 
 return {
   {

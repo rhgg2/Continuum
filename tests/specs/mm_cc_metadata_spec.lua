@@ -3,6 +3,7 @@
 -- and clean-up on delete.
 
 local t = require('support')
+local util = require('util')
 
 -- Plain-cc tests: tm's rebuild rule (Phase 2 two-frame) writes ppqL onto
 -- any non-frame cc passing through, which allocates a uuid via the

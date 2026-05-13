@@ -8,17 +8,17 @@ local harness = {}
 local fakeReaper = require('fakeReaper').new()
 _G.reaper = fakeReaper
 
--- The fake installs newMidiManager globally; mark the real module as
--- already loaded so production require('midiManager') calls are no-ops.
 require('fakeMidiManager')
-package.loaded['midiManager'] = package.loaded['fakeMidiManager'] or true
-require('util')
+local util = require('util')
+
+-- Route every util.instantiate('midiManager', …) — including the one
+-- inside trackerPage — through the fake. Production code still asks for
+-- 'midiManager' by name; the stub registry swaps it out without the
+-- production graph having to know.
+util._stubs['midiManager'] = function(deps) return newMidiManager(deps) end
 require('timing')
 require('tuning')
-require('configManager')
-require('trackerManager')
-require('commandManager')
-require('trackerView')
+
 
 -- Build a fresh scenario. Keys:
 --   seed      : seed payload for the fake mm (notes, ccs, resolution, length, timeSigs)
@@ -42,7 +42,7 @@ function harness.mk(opts)
     timeSigs   = opts.seed and opts.seed.timeSigs,
   })
 
-  local cm = newConfigManager()
+  local cm = util.instantiate('configManager')
   cm:setContext(take)
   if opts.config then
     for level, tbl in pairs(opts.config) do cm:assign(level, tbl) end
@@ -50,10 +50,10 @@ function harness.mk(opts)
 
   if opts.seed then mm:seed(opts.seed) end
 
-  local tm = newTrackerManager(mm, cm)
-  local cmgr = newCommandManager(cm)
-  local vm = newTrackerView(tm, cm, cmgr)
-  cmgr:setActive('tracker')
+  local tm = util.instantiate('trackerManager', { mm = mm, cm = cm })
+  local cmgr = util.instantiate('commandManager', { cm = cm })
+  local vm = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr })
+  cmgr:push('tracker')
 
   return { fm = mm, cm = cm, tm = tm, vm = vm, ec = vm:ec(),
            clipboard = vm:clipboard(), cmgr = cmgr, reaper = fakeReaper }

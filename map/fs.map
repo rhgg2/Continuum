@@ -1,30 +1,34 @@
-@module fs  src=fs.lua  loc=115  sha=ee85a77
-
-# Invariants & contracts (module)
-  @map:invariant  sole module touching reaper.Enumerate* and filesystem IO; UI/view layers route through here
-  @map:invariant  listDirs and listAudioFiles return case-insensitively sorted output (Finder/Explorer parity)
+@module fs  src=fs.lua  loc=116  sha=ee85a77  mode=namespace
 
 # Shapes
   @shape  fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }
 
 # Module-level constants
-  @const AUDIO_EXTS = {  @ 8
+  @const fs = {}  @ 5
+      @invariant  sole module touching reaper.Enumerate* and filesystem IO; UI/view layers route through here
+      @invariant  listDirs and listAudioFiles return case-insensitively sorted output (Finder/Explorer parity)
+  @const AUDIO_EXTS = {  @ 7
 
-# Module-level functions (private)
-  @fn ciLess(a, b)  @ 35
-  @fn copyFile(src, dst)  @ 91   -- 64KB chunks so big samples don't allocate a Lua string the size of the file.
+# Private functions
+  @fn ciLess(a, b)  @ 34
+  @fn copyFile(src, dst)  @ 90
+      -- 64KB chunks so big samples don't allocate a Lua string the size of the file.
 
 # Public API (fs.*)
-  @api fs.isAudio(name)  @ 13
-  @api fs.basename(path)  @ 19
-  @api fs.parent(path)  @ 24
-      @map:contract  returns '' if path has no separator; trailing separators on input are not stripped (caller passes canonical paths)
-  @api fs.join(a, b)  @ 29
-      @map:contract  inserts '/' between a and b unless a already ends in '/' or '\\'; no path normalisation
-  @api fs.listDirs(path)  @ 38
-      @map:contract  hides dotfile-prefixed entries (.git, .DS_Store, etc.)
-  @api fs.exists(path)  @ 50
-  @api fs.hashFile(path)  @ 57
-      @map:contract  FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md
-  @api fs.listAudioFiles(path)  @ 78
+  @api fs.isAudio(name)  @ 12
+  @api fs.basename(path)  @ 18
+  @api fs.parent(path)  @ 23
+      @contract  returns '' if path has no separator; trailing separators on input are not stripped (caller passes canonical paths)
+  @api fs.join(a, b)  @ 28
+      @contract  inserts '/' between a and b unless a already ends in '/' or '\\'; no path normalisation
+  @api fs.listDirs(path)  @ 37
+      @contract  hides dotfile-prefixed entries (.git, .DS_Store, etc.)
+  @api fs.exists(path)  @ 49
+  @api fs.hashFile(path)  @ 56
+      @contract  FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md
+  @api fs.listAudioFiles(path)  @ 77
 
+# REAPER API surface
+  @reaper EnumerateSubdirectories
+  @reaper EnumerateFiles
+  @reaper RecursiveCreateDirectory

@@ -24,6 +24,7 @@
 (require 'json)
 (require 'subr-x)
 (require 'cl-lib)
+(require 'magit-diff)
 
 (defvar-local continuum-review--response-file nil)
 (defvar-local continuum-review--submitted nil
@@ -80,9 +81,27 @@
       (let ((inhibit-read-only t))
         (replace-match "")))))
 
+(defun continuum-review--apply-stage-overlay (header-pos)
+  "Hide the body of the block at HEADER-POS; header stays visible."
+  (let* ((body-start (save-excursion (goto-char header-pos)
+                                     (forward-line 1) (point)))
+         (body-end (continuum-review--block-end header-pos))
+         (ov (make-overlay body-start body-end)))
+    (overlay-put ov 'continuum-stage t)
+    (overlay-put ov 'invisible t)))
+
+(defun continuum-review--clear-stage-overlay (header-pos)
+  (dolist (ov (overlays-in header-pos
+                           (continuum-review--block-end header-pos)))
+    (when (overlay-get ov 'continuum-stage)
+      (delete-overlay ov))))
+
 (defun continuum-review--apply-reject-overlay (header-pos)
-  (let* ((body-end (continuum-review--block-end header-pos))
-         (ov (make-overlay header-pos body-end)))
+  "Strike through the diff body only; header (with `[rejected]') and
+any `# comment:' lines remain unstyled and clearly visible."
+  (let* ((body-start (continuum-review--body-start header-pos))
+         (body-end   (continuum-review--block-end header-pos))
+         (ov (make-overlay body-start body-end)))
     (overlay-put ov 'continuum-reject t)
     (overlay-put ov 'face '(:strike-through t :inherit shadow))
     (overlay-put ov 'help-echo "rejected — press k to undo")))
@@ -110,35 +129,114 @@
         map))
 
 (defun continuum-review--magit-face-remap ()
-  "Repaint diff-mode faces in magit's palette, theme-aware."
-  (let* ((dark (eq (frame-parameter nil 'background-mode) 'dark))
-         (added-bg     (if dark "#335533" "#ddffdd"))
-         (added-hi-bg  (if dark "#336633" "#cceecc"))
-         (removed-bg   (if dark "#553333" "#ffdddd"))
-         (removed-hi-bg(if dark "#663333" "#eecccc"))
-         (hunk-bg      (if dark "#404040" "#dddddd"))
-         (hunk-fg      (if dark "#cccccc" "#000000"))
-         (file-bg      (if dark "#1c1c1c" "#eeeeee"))
-         (file-fg      (if dark "#ffffff" "#000000")))
-    (setq-local face-remapping-alist
-                `((diff-added              (:background ,added-bg    :extend t))
-                  (diff-indicator-added    (:background ,added-bg    :foreground ,(if dark "#a0e0a0" "#005500")))
-                  (diff-refine-added       (:background ,added-hi-bg :extend t))
-                  (diff-removed            (:background ,removed-bg  :extend t))
-                  (diff-indicator-removed  (:background ,removed-bg  :foreground ,(if dark "#e0a0a0" "#550000")))
-                  (diff-refine-removed     (:background ,removed-hi-bg :extend t))
-                  (diff-context            (:foreground ,(if dark "#a0a0a0" "#555555")))
-                  (diff-hunk-header        (:background ,hunk-bg :foreground ,hunk-fg :weight bold :extend t))
-                  (diff-file-header        (:background ,file-bg :foreground ,file-fg :weight bold :extend t))
-                  (diff-header             (:background ,file-bg :foreground ,file-fg :extend t))
-                  (diff-function           (:foreground ,(if dark "#87afd7" "#005f87")))))))
+  "Repaint diff-mode faces by inheriting from magit's diff faces."
+  (setq-local face-remapping-alist
+              '((diff-added             (:inherit magit-diff-added             :extend t))
+                (diff-indicator-added   (:inherit magit-diff-added             :extend t))
+                (diff-refine-added      (:inherit magit-diff-added-highlight   :extend t))
+                (diff-removed           (:inherit magit-diff-removed           :extend t))
+                (diff-indicator-removed (:inherit magit-diff-removed           :extend t))
+                (diff-refine-removed    (:inherit magit-diff-removed-highlight :extend t))
+                (diff-context           (:inherit magit-diff-context           :extend t))
+                (diff-hunk-header       (:inherit magit-diff-hunk-heading      :extend t))
+                (diff-file-header       (:inherit magit-diff-file-heading      :extend t))
+                (diff-header            (:inherit magit-diff-file-heading      :extend t))
+                (diff-function          (:inherit magit-diff-hunk-heading)))))
 
 (define-derived-mode continuum-review-mode diff-mode "Review"
   "Major mode for reviewing apply_patches batches."
   (setq buffer-read-only t)
   (setq-local truncate-lines nil)
   (continuum-review--magit-face-remap)
+  (continuum-review--fontify-all)
   (add-hook 'kill-buffer-hook #'continuum-review--maybe-abort-on-kill nil t))
+
+;;; ----- per-block syntax highlighting -----
+;;
+;; For each block, look up the major mode for its file path, render
+;; the `+' and `-' sides separately in a hidden buffer under that
+;; mode, and copy the resulting `face' text properties back onto the
+;; review buffer as overlays. The prefix column is left alone so
+;; diff-mode's indicator faces survive.
+
+(defun continuum-review--setup-mode-for (path)
+  "In the current buffer, set up the major mode `auto-mode-alist'
+would pick for PATH. Uses `set-auto-mode' under a fake
+`buffer-file-name' so the mode's full file-visit setup runs
+\(autoloads, derived-mode keymaps, tree-sitter grammars, etc.\).
+Returns the resolved mode symbol, or nil if no mode matched or
+setup errored."
+  (let ((buffer-file-name path)
+        (default-directory (or (and path (file-name-directory path))
+                               default-directory)))
+    (condition-case _err
+        (progn (delay-mode-hooks (set-auto-mode t))
+               major-mode)
+      (error nil))))
+
+(defun continuum-review--paint-runs (review-buf review-pos src-start length)
+  "Copy `face' runs from [SRC-START, SRC-START+LENGTH) in the current
+\(fontified\) buffer onto overlays at REVIEW-POS in REVIEW-BUF."
+  (let ((i src-start) (end (+ src-start length)))
+    (while (< i end)
+      (let* ((face (get-text-property i 'face))
+             (next (or (next-single-property-change i 'face nil end) end)))
+        (when face
+          (let ((ov (make-overlay (+ review-pos (- i src-start))
+                                  (+ review-pos (- next src-start))
+                                  review-buf)))
+            (overlay-put ov 'face face)
+            (overlay-put ov 'continuum-syntax t)))
+        (setq i next)))))
+
+(defun continuum-review--fontify-side (body-start body-end path prefix-char)
+  "Fontify all PREFIX-CHAR lines in [BODY-START, BODY-END) under the
+major mode `auto-mode-alist' would pick for PATH."
+  (let (entries)                    ; list of (review-content-start . text)
+    (save-excursion
+      (goto-char body-start)
+      (while (< (point) body-end)
+        (when (eq (char-after) prefix-char)
+          (let ((s (1+ (point))) (e (line-end-position)))
+            (push (cons s (buffer-substring-no-properties s e)) entries)))
+        (forward-line 1)))
+    (when entries
+      (setq entries (nreverse entries))
+      (let* ((review-buf (current-buffer))
+             (source (mapconcat #'cdr entries "\n"))
+             (offsets (let ((acc 1) out)
+                        (dolist (e entries (nreverse out))
+                          (push acc out)
+                          (setq acc (+ acc (length (cdr e)) 1))))))
+        (with-temp-buffer
+          (insert source)
+          (when (continuum-review--setup-mode-for path)
+            (font-lock-ensure)
+            (cl-loop for (pos . text) in entries
+                     for src in offsets do
+                     (continuum-review--paint-runs review-buf pos src (length text)))))))))
+
+(defun continuum-review--fontify-block (header-pos)
+  "Fontify both sides of the block at HEADER-POS using the file's mode."
+  (let ((path (save-excursion
+                (goto-char header-pos)
+                (and (looking-at continuum-review--header-re)
+                     (match-string-no-properties 3)))))
+    (when path
+      (let ((s (continuum-review--body-start header-pos))
+            (e (continuum-review--block-end header-pos)))
+        (continuum-review--fontify-side s e path ?+)
+        (continuum-review--fontify-side s e path ?-)))))
+
+(defun continuum-review--fontify-all ()
+  "Walk every block and apply per-language fontification. Per-block
+errors are logged to *Messages* and do not abort buffer setup."
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward continuum-review--header-re nil t)
+      (condition-case err
+          (continuum-review--fontify-block (line-beginning-position))
+        (error (message "continuum-review fontify (skipped): %S" err))))))
 
 ;;; ----- navigation -----
 
@@ -249,8 +347,11 @@ comment is pre-filled; clear it by deleting and submitting empty."
   (let ((pos (continuum-review--header-pos)))
     (unless pos (user-error "Not on a review block"))
     (if (continuum-review--has-tag pos "staged")
-        (continuum-review--remove-tag pos "staged")
-      (continuum-review--add-tag pos "staged"))
+        (progn
+          (continuum-review--remove-tag pos "staged")
+          (continuum-review--clear-stage-overlay pos))
+      (continuum-review--add-tag pos "staged")
+      (continuum-review--apply-stage-overlay pos))
     (continuum-review-next)))
 
 ;;; ----- reject (toggle, prompt, advance) -----
@@ -267,8 +368,8 @@ prompt for a comment. Advance to the next block in either direction."
           (continuum-review--clear-reject-overlay pos)
           (message "Rejection cleared."))
       (continuum-review--add-tag pos "rejected")
-      (continuum-review--apply-reject-overlay pos)
-      (continuum-review--prompt-and-set-comment pos))
+      (continuum-review--prompt-and-set-comment pos)
+      (continuum-review--apply-reject-overlay pos))
     (continuum-review-next)))
 
 ;;; ----- edit (side buffer) -----
@@ -382,7 +483,8 @@ clear any prior `[rejected]', prompt for a comment, advance."
             (save-excursion
               (delete-region body-start body-end)
               (goto-char body-start)
-              (insert regenerated)))
+              (insert regenerated))
+            (continuum-review--fontify-block header-pos))
           (continuum-review--add-tag header-pos "edited"))
         ;; Editing supersedes any prior rejection.
         (continuum-review--remove-tag header-pos "rejected")

@@ -1,153 +1,146 @@
-@module midiManager  src=midiManager.lua  loc=1074  sha=d4f20ff
+@module midiManager  src=midiManager.lua  loc=1088  sha=69f289a  mode=chunk
+@deps take
 
-# Invariants & contracts (module)
-  @map:invariant  channels are 1..16 internally; +1 applied on read from REAPER, -1 on write
-  @map:invariant  locations are 1-indexed snapshots of REAPER event order at load time; not stable across reloads
-  @map:invariant  mm holds the realisation frame — delay already baked into note-on ppq (see docs/timing.md)
-  @map:invariant  mm holds raw pb only; cents/detune conversions and the fake-pb absorber live in tm (see docs/tuning.md)
-  @map:invariant  muted is true-or-absent; false is coerced to nil on every write path; callers pass muted=false to clear
-  @map:invariant  per-event metadata (fields beyond the structural set) is persisted to take extension data via util:serialise; loaded back via util:unserialise on take read
+# Invariants & contracts
+  @invariant  channels are 1..16 internally; +1 applied on read from REAPER, -1 on write
+  @invariant  locations are 1-indexed snapshots of REAPER event order at load time; not stable across reloads
+  @invariant  mm holds the realisation frame — delay already baked into note-on ppq (see docs/timing.md)
+  @invariant  mm holds raw pb only; cents/detune conversions and the fake-pb absorber live in tm (see docs/tuning.md)
+  @invariant  muted is true-or-absent; false is coerced to nil on every write path; callers pass muted=false to clear
+  @invariant  per-event metadata (fields beyond the structural set) is persisted to take extension data via util:serialise; loaded back via util:unserialise on take read
+  @contract  stage-3 consensus threshold: winning offset must have ≥ max(2, ceil(0.5 × bucketSize)) votes and be unique (no tie)
+  @contract  signal order per load: takeSwapped → notesDeduped → uuidsReassigned → ccsDeduped → ccsReconciled → reload
+  @contract  dedup/reconcile signals fire only when at least one event of that kind is present
 
-# Module-level constants
-  @const chanMsgLUT = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }  @ 16
-      @map:invariant  chanMsgTypes is derived from chanMsgLUT so the two directions can't drift
-  @const chanMsgTypes  @ 17   -- inverse of chanMsgLUT
+# Shapes
+  @shape  ccSidecarBody = '}RDM' <typeNib:byte> <chan-1:byte> <id:byte> <val_lo7:byte> <val_hi7:byte> <uuid-base36:string>
+  @shape  noteSidecarBody = 'NOTE <chan-1> <pitch> custom ctm_<uuid-base36>'  -- REAPER text event type 15
+  @shape  note = { ppq=number, endppq=number, chan=1..16, pitch=0..127, vel=0..127, [muted=true], [uuid=number], [<metadata...>] }
+  @shape  cc   = { ppq=number, msgType=string, chan=1..16, [cc=0..127], [pitch=0..127], val=number, [muted=true], shape=string, [tension=number], [uuid=number], [<metadata...>] }
+  @shape  noteSidecarPayload = { ppq, chan, pitch, droppedCount }          -- notesDeduped event
+  @shape  uuidsReassignedEvent = { ppq, chan, pitch, oldUuid, newUuid }
+  @shape  ccDedupEvent = { ppq, chan, msgType, cc, pitch, droppedCount }   -- ccsDeduped event
+  @shape  reconcileEvent.valueRebound    = { kind, uuid, chan, msgType, [cc], [pitch], ppq, oldVal, newVal }
+  @shape  reconcileEvent.consensusRebound = { kind, uuid, chan, msgType, [cc], [pitch], ppq, offset }
+  @shape  reconcileEvent.guessedRebound  = { kind, uuid, chan, msgType, [cc], [pitch], ppq }
+  @shape  reconcileEvent.ambiguous       = { kind, uuid, candidateppqs={...} }
+  @shape  reconcileEvent.orphaned        = { kind, uuid, chan, msgType, [cc], [pitch], lastppq }
 
-# Module-level functions (private)
-  @fn print(...)  @ 11
+# Imports
+  @require util = 'util'  @ 8
 
-@factory newMidiManager(take)  @ 20
-  @map:contract  stage-3 consensus threshold: winning offset must have ≥ max(2, ceil(0.5 × bucketSize)) votes and be unique (no tie)
-  @map:contract  signal order per load: takeSwapped → notesDeduped → uuidsReassigned → ccsDeduped → ccsReconciled → reload
-  @map:contract  dedup/reconcile signals fire only when at least one event of that kind is present
+# Private state
+  @state mm = {}  @ 16
+  @state chanMsgLUT = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }  @ 19
+      @invariant  chanMsgTypes is derived from chanMsgLUT so the two directions can't drift
+  @state chanMsgTypes  @ 20   -- inverse of chanMsgLUT
+  @state notes = {}  @ 26
+  @state ccs = {}  @ 27
+  @state eventsByUuid = {}  @ 28
+  @state maxUUID = 0  @ 29
+  @state lock = false  @ 30
+  @state pendingSysexDeletes  @ 31   -- list of uuids; non-nil only inside a modify()
+  @state INTERNALS = { idx = true, uuidIdx = true }  @ 34
+      @contract  INTERNALS fields (idx, uuidIdx) are stripped from all shallow clones returned to callers
+  @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 37
+      @invariant  shapeNames is derived from shapeLUT so the two directions can't drift
+  @state shapeNames  @ 38   -- inverse of shapeLUT
+  @state noteEventFields = {  @ 174
+  @state ccEventFields = {  @ 178
+  @state fire = util.installHooks(mm)  @ 258
 
-  # Shapes
-    @shape  ccSidecarBody = '}RDM' <typeNib:byte> <chan-1:byte> <id:byte> <val_lo7:byte> <val_hi7:byte> <uuid-base36:string>
-    @shape  noteSidecarBody = 'NOTE <chan-1> <pitch> custom ctm_<uuid-base36>'  -- REAPER text event type 15
-    @shape  note = { ppq=number, endppq=number, chan=1..16, pitch=0..127, vel=0..127, [muted=true], [uuid=number], [<metadata...>] }
-    @shape  cc   = { ppq=number, msgType=string, chan=1..16, [cc=0..127], [pitch=0..127], val=number, [muted=true], shape=string, [tension=number], [uuid=number], [<metadata...>] }
-    @shape  noteSidecarPayload = { ppq, chan, pitch, droppedCount }          -- notesDeduped event
-    @shape  uuidsReassignedEvent = { ppq, chan, pitch, oldUuid, newUuid }
-    @shape  ccDedupEvent = { ppq, chan, msgType, cc, pitch, droppedCount }   -- ccsDeduped event
-    @shape  reconcileEvent.valueRebound    = { kind, uuid, chan, msgType, [cc], [pitch], ppq, oldVal, newVal }
-    @shape  reconcileEvent.consensusRebound = { kind, uuid, chan, msgType, [cc], [pitch], ppq, offset }
-    @shape  reconcileEvent.guessedRebound  = { kind, uuid, chan, msgType, [cc], [pitch], ppq }
-    @shape  reconcileEvent.ambiguous       = { kind, uuid, candidateppqs={...} }
-    @shape  reconcileEvent.orphaned        = { kind, uuid, chan, msgType, [cc], [pitch], lastppq }
+# Private functions
+  @fn print(...)  @ 12
+  @fn curveSample(shape, tension, t)  @ 82
+  @fn noteSidecarEncode(note)  @ 105
+  @fn noteSidecarDecode(msg)  @ 109
+  @fn ccSidecarEncode(cc)  @ 116
+  @fn ccSidecarDecode(body)  @ 138
+  @fn loadMetadata()  @ 156
+  @fn saveMetadatum(uuid)  @ 184
+  @fn saveMetadata()  @ 206
+  @fn compact(t, n)  @ 233
+      -- Sparse → dense; n is the pre-sparse length.
+  @fn assignNewUUID(evt)  @ 239
+      · Helper functions
+      · Read notes
+      · Note dedup
+      · Read ccs + sysex
+      · CC dedup
+      · UUID unification (notes ↔ noteSidecars)
+      · Sidecar reconcile (ccs ↔ ccSidecars)
+      · Single bracketed flush: sets first (idx-stable), deletes descending,
+      · inserts last (their idxs aren't tracked — final read will pick them up).
+      · Compact in-memory tables to dense; loc is the lua position
+      · (1-based), valid until next rebuild — see byUuid contract.
+      · Final read pass: refresh idx / uuidIdx from current REAPER state.
+      · Persist + signals
+  -- Load
+  -- Locking
+  @fn checkLock()  @ 649
+      @contract  all write paths (add*, delete*, assign* structural) must run inside mm:modify(fn)
+      @contract  modify disables MIDI sort, runs fn under lock, flushes pending sidecar deletes, re-sorts, then reloads (fires callbacks)
+  @fn flushPendingSysexDeletes()  @ 654
+  -- Notes
+  -- CCs
+  @fn reconstruct(tbl)  @ 812
+  -- Take data
+  @fn retractEot(buf, targetPpq)  @ 1012
+      -- Assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 
-  # Private state
-    @state notes = {}  @ 24
-    @state ccs = {}  @ 25
-    @state eventsByUuid = {}  @ 26
-    @state maxUUID = 0  @ 27
-    @state lock = false  @ 28
-    @state pendingSysexDeletes  @ 29   -- list of uuids; non-nil only inside a modify()
-    @state INTERNALS = { idx = true, uuidIdx = true }  @ 32
-        @map:contract  INTERNALS fields (idx, uuidIdx) are stripped from all shallow clones returned to callers
-    @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 35
-        @map:invariant  shapeNames is derived from shapeLUT so the two directions can't drift
-    @state shapeNames = -- inverse of shapeLUT  @ 36
-    @state noteEventFields = {  @ 172
-    @state ccEventFields = {  @ 176
-    @state mm = {}  @ 257
-    @state fire = util.installHooks(mm)  @ 258
+# Public API (mm:*)
+  @api mm:load(newTake)  @ 262
+  @api mm:reload()  @ 639
+  @api mm:modify(fn)  @ 673
+  @api mm:getNote(loc)  @ 690
+  @api mm:notes()  @ 695
+  @api mm:deleteNote(loc)  @ 707
+      @contract  deleteNote relies on REAPER to cascade-delete the associated notation event; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
+  @api mm:assignNote(loc, t)  @ 719
+      @contract  assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
+  @api mm:addNote(t)  @ 753
+      @contract  addNote always allocates a uuid and inserts a notation event (unconditional, unlike addCC)
+  @api mm:getCC(loc)  @ 782
+  @api mm:ccs()  @ 787
+  @api mm:deleteCC(loc)  @ 798
+  @api mm:assignCC(loc, t)  @ 836
+      @contract  assignCC metadata-only carve-out: if t touches none of the structural CC fields AND the cc already has a uuid, skips the lock
+      @contract  first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
+  @api mm:addCC(t)  @ 901
+      @contract  addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
+  @api mm:byUuid(uuid)  @ 952
+      @contract  returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. loc is the lua position stamped at compact / addNote / addCC and is excluded from sidecar persistence.
+  @api mm:take()  @ 960
+  @api mm:interpolate(A, B, ppq)  @ 965
+      -- REAPER convention: shape on A governs the curve from A to next.
+  @api mm:resolution()  @ 973
+  @api mm:length()  @ 979
+      -- Source length. setLength truncates the source's EOT explicitly to keep this in sync after a shrink.
+  @api mm:name()  @ 986
+  @api mm:setName(name)  @ 992
+  @api mm:loadRegions()  @ 998
+      @contract  take-level region blob persisted under P_EXT:ctm_regions; serialised via util.serialise. Returns { regions={}, idCtr=0 } when no take or no stored blob — callers always get a well-formed shape.
+  @api mm:saveRegions(blob)  @ 1005
+  @api mm:setLength(qn)  @ 1032
+      -- MIDI_SetItemExtents leaves the source's EOT stale on contract; retract it explicitly so the source actually shrinks.
+      -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
+  @api mm:timeSigs()  @ 1046
 
-  # Private functions
-    @fn bezierSample(tau, t)  @ 54
-    @fn curveSample(shape, tension, t)  @ 80
-    @fn idOf(cc)  @ 101
-    @fn noteSidecarEncode(note)  @ 103
-    @fn noteSidecarDecode(msg)  @ 107
-    @fn ccSidecarEncode(cc)  @ 114
-    @fn ccSidecarDecode(body)  @ 136
-    @fn loadMetadata()  @ 154
-    @fn saveMetadatum(uuid)  @ 182
-    @fn saveMetadata()  @ 204
-    @fn compact(t, n)  @ 231   -- Sparse → dense; n is the pre-sparse length.
-    @fn assignNewUUID(evt)  @ 237
-    @fn noteKey(n)  @ 277
-    @fn idOf(cc)  @ 278
-    @fn ccIdKey(e)  @ 279
-    @fn ccPPQKey(e)  @ 280
-    @fn ccFullKey(e)  @ 281
-    @fn bucketBy(keyFn)  @ 435
-    @fn bind(s, c, kind, extras)  @ 441
-    @fn removeFirst(t, e)  @ 442
-    @fn checkLock()  @ 649
-        @map:contract  all write paths (add*, delete*, assign* structural) must run inside mm:modify(fn)
-        @map:contract  modify disables MIDI sort, runs fn under lock, flushes pending sidecar deletes, re-sorts, then reloads (fires callbacks)
-    @fn flushPendingSysexDeletes()  @ 654
-    @fn reconstruct(tbl)  @ 812
-    @fn retractEot(buf, targetPpq)  @ 998   -- Assumes events past targetPpq are already deleted upstream (tm:setLength does this).
+# Signals emitted (via util.installHooks)
+  @emits takeSwapped   -- nil; only when load received a different take
+  @emits notesDeduped   -- { events = [{ppq, chan, pitch, droppedCount}, ...] }
+  @emits uuidsReassigned   -- { events = [{ppq, chan, pitch, oldUuid, newUuid}, ...] }
+  @emits ccsDeduped   -- { events = [{ppq, chan, msgType, cc, pitch, droppedCount}, ...] }
+  @emits ccsReconciled   -- { events = [reconcileEvent, ...] }; five kinds: valueRebound/consensusRebound/guessedRebound/ambiguous/orphaned
+  @emits reload   -- nil; every load, including after modify()
 
-  # Public API
-    -- Load
-    @api mm:load(newTake)  @ 262
-        · Helper functions
-        · Read notes
-        · Note dedup
-        · Read ccs + sysex
-        · CC dedup
-        · UUID unification (notes ↔ noteSidecars)
-        · Sidecar reconcile (ccs ↔ ccSidecars)
-        · Single bracketed flush: sets first (idx-stable), deletes descending,
-        · inserts last (their idxs aren't tracked — final read will pick them up).
-        · Compact in-memory tables to dense; loc is the lua position
-        · (1-based), valid until next rebuild — see byUuid contract.
-        · Final read pass: refresh idx / uuidIdx from current REAPER state.
-        · Persist + signals
-    @api mm:reload()  @ 639
-    -- Locking
-    @api mm:modify(fn)  @ 673
-    -- Notes
-    @api mm:getNote(loc)  @ 690
-    @api mm:notes()  @ 695
-    @api mm:deleteNote(loc)  @ 707
-        @map:contract  deleteNote relies on REAPER to cascade-delete the associated notation event; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
-    @api mm:assignNote(loc, t)  @ 719
-        @map:contract  assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
-    @api mm:addNote(t)  @ 753
-        @map:contract  addNote always allocates a uuid and inserts a notation event (unconditional, unlike addCC)
-    -- CCs
-    @api mm:getCC(loc)  @ 782
-    @api mm:ccs()  @ 787
-    @api mm:deleteCC(loc)  @ 798
-    @api mm:assignCC(loc, t)  @ 836
-        @map:contract  assignCC metadata-only carve-out: if t touches none of the structural CC fields AND the cc already has a uuid, skips the lock
-        @map:contract  first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
-    @api mm:addCC(t)  @ 901
-        @map:contract  addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
-    @api mm:byUuid(uuid)  @ 952
-        @map:contract  returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. loc is the lua position stamped at compact / addNote / addCC and is excluded from sidecar persistence.
-    -- Take data
-    @api mm:take()  @ 960
-    @api mm:interpolate(A, B, ppq)  @ 965
-        -- REAPER convention: shape on A governs the curve from A to next.
-    @api mm:resolution()  @ 973
-    @api mm:length()  @ 979
-        -- Source length. setLength truncates the source's EOT explicitly to keep this in sync after a shrink.
-    @api mm:name()  @ 986
-    @api mm:setName(name)  @ 992
-    @api mm:setLength(qn)  @ 1018
-        -- MIDI_SetItemExtents leaves the source's EOT stale on contract; retract it explicitly so the source actually shrinks.
-        -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-    @api mm:timeSigs()  @ 1032
-
-  # Signals emitted (via util.installHooks)
-    @emits takeSwapped   -- nil; only when load received a different take
-    @emits notesDeduped   -- { events = [{ppq, chan, pitch, droppedCount}, ...] }
-    @emits uuidsReassigned   -- { events = [{ppq, chan, pitch, oldUuid, newUuid}, ...] }
-    @emits ccsDeduped   -- { events = [{ppq, chan, msgType, cc, pitch, droppedCount}, ...] }
-    @emits ccsReconciled   -- { events = [reconcileEvent, ...] }; five kinds: valueRebound/consensusRebound/guessedRebound/ambiguous/orphaned
-    @emits reload   -- nil; every load, including after modify()
-
-  # REAPER API surface
-    @reaper GetSetMediaItemTakeInfo_String
-    @reaper MIDI_CountEvts, MIDI_GetNote, MIDI_DisableSort, MIDI_DeleteNote, MIDI_Sort, MIDI_GetCC, MIDI_GetCCShape, MIDI_GetTextSysexEvt, MIDI_SetTextSysexEvt, MIDI_DeleteCC, MIDI_DeleteTextSysexEvt, MIDI_InsertTextSysexEvt, MIDI_SetNote, MIDI_InsertNote, MIDI_SetCC, MIDI_SetCCShape, MIDI_InsertCC, MIDI_GetPPQPosFromProjQN, MIDI_SetItemExtents, MIDI_GetAllEvts, MIDI_SetAllEvts, MIDI_GetPPQPosFromProjTime
-    @reaper GetMediaItemTake_Source, GetMediaItemTake_Item
-    @reaper GetMediaSourceLength
-    @reaper GetMediaItemInfo_Value
-    @reaper TimeMap2_timeToQN
-    @reaper CountTempoTimeSigMarkers
-    @reaper GetTempoTimeSigMarker
-    @reaper TimeMap_GetTimeSigAtTime
+# REAPER API surface
+  @reaper GetSetMediaItemTakeInfo_String
+  @reaper MIDI_CountEvts, MIDI_GetNote, MIDI_DisableSort, MIDI_DeleteNote, MIDI_Sort, MIDI_GetCC, MIDI_GetCCShape, MIDI_GetTextSysexEvt, MIDI_SetTextSysexEvt, MIDI_DeleteCC, MIDI_DeleteTextSysexEvt, MIDI_InsertTextSysexEvt, MIDI_SetNote, MIDI_InsertNote, MIDI_SetCC, MIDI_SetCCShape, MIDI_InsertCC, MIDI_GetPPQPosFromProjQN, MIDI_SetItemExtents, MIDI_GetAllEvts, MIDI_SetAllEvts, MIDI_GetPPQPosFromProjTime
+  @reaper GetMediaItemTake_Source, GetMediaItemTake_Item
+  @reaper GetMediaSourceLength
+  @reaper GetMediaItemInfo_Value
+  @reaper TimeMap2_timeToQN
+  @reaper CountTempoTimeSigMarkers
+  @reaper GetTempoTimeSigMarker
+  @reaper TimeMap_GetTimeSigAtTime

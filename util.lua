@@ -1,9 +1,8 @@
 -- See docs/util.md for the model.
 
---@map:invariant stateless module: pure helpers, no module-level mutable state beyond the REMOVE sentinel
---@map:invariant util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
-
-util = {}
+--invariant: stateless module: pure helpers, no module-level mutable state beyond the REMOVE sentinel
+--invariant: util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
+local util = {}
 
 function util.print(...)
   if not ... then
@@ -40,7 +39,7 @@ end
 
 util.REMOVE = { }
 
---@map:contract values equal to util.REMOVE clear the key from t1 instead of being assigned
+--contract: values equal to util.REMOVE clear the key from t1 instead of being assigned
 function util.assign(t1,t2)
   if t2 then
     for k, v in pairs(t2) do
@@ -57,6 +56,19 @@ end
 function util.add(tbl, val)
   tbl[#tbl+1] = val
   return val
+end
+
+-- Wrap fn so each call is one REAPER undo entry. label is the undo
+-- description; the wrapper forwards args, propagates errors after
+-- closing the block, and is a no-op when reaper.Undo_BeginBlock is
+-- absent (test harness).
+function util.atomic(label, fn)
+  return function(...)
+    if reaper.Undo_BeginBlock then reaper.Undo_BeginBlock() end
+    local ok, err = xpcall(fn, debug.traceback, ...)
+    if reaper.Undo_EndBlock then reaper.Undo_EndBlock(label, -1) end
+    if not ok then error(err) end
+  end
 end
 
 function util.pick(src, keys, adds)
@@ -77,7 +89,7 @@ function util.bucket(buckets, key, val)
   return b
 end
 
---@map:contract assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
+--contract: assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
 function util.seek(items, mode, key, filter, keyFn)
   keyFn = keyFn or function(x) return x.ppq end
   local before = mode == 'before' or mode == 'at-or-before'
@@ -101,7 +113,7 @@ function util.seek(items, mode, key, filter, keyFn)
   return hit
 end
 
---@map:contract exclude applies only to the outermost table; deep recursion drops the exclude set
+--contract: exclude applies only to the outermost table; deep recursion drops the exclude set
 function util.clone(src, exclude, deep)
   if not src then return end
   local dst = {}
@@ -137,7 +149,7 @@ local function escape_string(s)
   return out
 end
 
---@map:contract listeners filter by signal name at registration; forward requires source itself ran installHooks
+--contract: listeners filter by signal name at registration; forward requires source itself ran installHooks
 function util.installHooks(owner)
   local listeners = {}
   function owner:subscribe(signal, fn)
@@ -159,7 +171,7 @@ end
 
 function util.isNote(e) return e and e.endppq end
 
---@map:contract iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap
+--contract: iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap
 function util.between(events, lo, hi, filter)
   filter = filter or function() return true end
   local i = 0
@@ -189,7 +201,7 @@ function util.setDigit(val, d, pos, base, half)
   return above + d * place + (half and place // 2 or 0)
 end
 
---@map:contract advances at least one full interval; values already on a boundary do not no-op
+--contract: advances at least one full interval; values already on a boundary do not no-op
 function util.snapTo(v, dir, interval)
   if dir > 0 then return (math.floor(v / interval) + 1) * interval end
   return (math.ceil(v / interval) - 1) * interval
@@ -240,7 +252,7 @@ function util.fromBase36(txt)
   return tonumber(txt, 36)
 end
 
---@map:contract overloaded on type of v: function => call n times for side effect; else build n-array filled with v
+--contract: overloaded on type of v: function => call n times for side effect; else build n-array filled with v
 function util.dotimes(n, v)
   if type(v) == 'function' then
     for _ = 1, n do v() end
@@ -251,7 +263,7 @@ function util.dotimes(n, v)
   return rv
 end
 
---@map:contract strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
+--contract: strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
 function util.serialise(value, exclude, seen)
   exclude = exclude or { }
   local t = type(value)
@@ -286,7 +298,7 @@ function util.serialise(value, exclude, seen)
   end
 end
 
---@map:contract strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
+--contract: strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
 function util.unserialise(input)
   local pos = 1
   local len = #input
@@ -395,3 +407,15 @@ function util.unserialise(input)
 
   return result
 end
+
+--contract: executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
+util._stubs = {}
+function util.instantiate(name, deps)
+  local stub = util._stubs[name]
+  if stub then return stub(deps) end
+  local path = assert(package.searchpath(name, package.path),
+                      'util.instantiate: cannot find module ' .. name)
+  return assert(loadfile(path))(deps)
+end
+
+return util

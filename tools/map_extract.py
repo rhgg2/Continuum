@@ -5,12 +5,21 @@ map_extract: Lua source → .map semantic-outline.
 The .map file is a derived view, not a source of truth. Regenerate after
 every change to the .lua. Read .map for orientation; open .lua before editing.
 
-Heuristics target this codebase's idioms:
-  - factory-closure pattern: `function newXxxManager(args) ... return mgr end`
-  - method assignment: `function tbl:method(args)`
-  - section banners: `----- Name` / `---------- Name`
-  - signal emission: `fire('signalName', ...)`
-  - REAPER calls: `reaper.X(...)`
+Two module shapes:
+  - chunk      — file body IS the constructor; deps come from `(...)`;
+                 returns an instance built with `function self:method(...)`.
+                 Loaded via `util.instantiate('name', deps)`.
+  - namespace  — `local M = {}` … `function M.fn(...)` … `return M`.
+                 Cached by `require`. Pure / stateless.
+
+Author-written annotations:
+  --invariant: BODY      always-true property of this module
+  --contract:  BODY      promise made to / by callers
+  --emits:     NAME -- payload doc
+  --shape:     NAME = { … }
+  --reaper:    BODY      notes on REAPER surface
+A leading `?` (`--?invariant: …`) marks the line as inferred rather than
+doc-grounded. Anything else is plain comment prose and is ignored.
 """
 
 from __future__ import annotations
@@ -22,43 +31,47 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 
-COMMENT_RE = re.compile(r"^\s*--\s?(.*)$")
-LOAD_MODULE_RE = re.compile(r"""loadModule\(\s*['"]([^'"]+)['"]\s*\)""")
-SECTION_RE = re.compile(r"^(\s*)-{5,}\s+(\S.*?)\s*$")
-FACTORY_RE = re.compile(r"^function\s+(new[A-Z]\w*)\s*\(([^)]*)\)")
-LOCAL_FN_RE = re.compile(r"^(\s*)local\s+function\s+(\w+)\s*\(([^)]*)\)")
-METHOD_RE = re.compile(r"^(\s*)function\s+(\w+):(\w+)\s*\(([^)]*)\)")
-DOT_FN_RE = re.compile(r"^(\s*)function\s+(\w+)\.(\w+)\s*\(([^)]*)\)")
-# Bare `function name(args)` indented inside a factory: assignment to a
-# forward-declared upvalue (idiom: `local moveCol do function moveCol(n) ... end end`).
-NESTED_FN_RE = re.compile(r"^(\s+)function\s+([a-z]\w*)\s*\(([^)]*)\)")
-LOCAL_DECL_RE = re.compile(r"^(\s*)local\s+(\w+)(?:\s*=\s*(.+?))?\s*(?:--.*)?$")
-FIRE_RE = re.compile(r"""\bfire\(\s*['"]([^'"]+)['"]""")
-REAPER_RE = re.compile(r"\breaper\.(\w+)")
-RETURN_TBL_RE = re.compile(r"^\s*return\s+(\w+)\s*$")
-INVERSE_RE = re.compile(
+KINDS = ('invariant', 'contract', 'emits', 'shape', 'reaper')
+
+ANN_RE        = re.compile(rf"^\s*--(\??)({'|'.join(KINDS)}):\s*(.*?)\s*$")
+COMMENT_RE    = re.compile(r"^\s*--\s?(.*)$")
+SECTION_RE    = re.compile(r"^(\s*)-{5,}\s+(\S.*?)\s*$")
+LOCAL_FN_RE   = re.compile(r"^(\s*)local\s+function\s+(\w+)\s*\(([^)]*)\)")
+METHOD_RE     = re.compile(r"^function\s+(\w+):(\w+)\s*\(([^)]*)\)")
+DOT_FN_RE     = re.compile(r"^function\s+(\w+)\.(\w+)\s*\(([^)]*)\)")
+# Bare `function name(args)` indented inside a `do` block — assignment to a
+# forward-declared upvalue (idiom: `local moveCol  do function moveCol(n) ... end end`).
+NESTED_FN_RE  = re.compile(r"^(\s+)function\s+([a-z]\w*)\s*\(([^)]*)\)")
+LOCAL_DECL_RE = re.compile(
+    r"^local\s+(\w+(?:\s*,\s*\w+)*)\s*(?:=\s*(.+?))?\s*(?:--.*)?$"
+)
+REQUIRE_RE    = re.compile(r"""require\s*\(?\s*['"]([^'"]+)['"]""")
+INSTANTIATE_RE = re.compile(r"""util\.instantiate\s*\(\s*['"]([^'"]+)['"]""")
+RETURN_RE     = re.compile(r"^return\s+(\w+)\s*$")
+RETURN_TBL_RE = re.compile(r"^return\s*\{")
+DEP_DEREF_RE  = re.compile(r"\(\s*\.\.\.\s*\)\s*\.(\w+)")
+DEPS_TABLE_RE = re.compile(r"^local\s+(\w+)\s*=\s*\.\.\.\s*$")
+FIRE_RE       = re.compile(r"""\bfire\(\s*['"]([^'"]+)['"]""")
+REAPER_RE     = re.compile(r"\breaper\.(\w+)")
+INVERSE_RE    = re.compile(
     r"for\s+\w+\s*,\s*\w+\s+in\s+pairs\(\s*(\w+)\s*\)\s+do\s+(\w+)\[\w+\]\s*=\s*\w+\s+end"
 )
-# --@map:KIND BODY  or  --@map?:KIND BODY
-MAP_ANN_RE = re.compile(r"^\s*--@map(\??):(\w+)\s+(.*?)\s*$")
 EMITS_BODY_RE = re.compile(r"^(\w+)\s*(?:--\s*(.*))?$")
 
-ATTACH_GAP = 3   # max line gap between an annotation and the element it attaches to
+ATTACH_GAP = 3   # max line gap from annotation to following structural element
 
 
-Annotation = tuple[str, str, bool]   # (kind, body, has_question)
+Annotation = tuple[str, str, bool]   # (kind, body, inferred)
 
 
 @dataclass
 class Block:
-    indent: int
-    kind: str               # 'fn', 'method', 'factory'
     name: str
-    owner: str = ''         # for methods: the table (e.g. 'mm')
     args: str = ''
     line: int = 0
-    end_line: int = 0       # factories: line of closing top-level `end`
-    factory_idx: int = -1   # for items inside a factory; -1 if module-level
+    owner: str = ''         # for methods: the receiver
+    kind: str = 'fn'        # 'fn' | 'method' | 'dotfn'
+    indent: int = 0
     doc: list[str] = field(default_factory=list)
     annotations: list[Annotation] = field(default_factory=list)
 
@@ -68,7 +81,6 @@ class Decl:
     name: str
     init: str = ''
     line: int = 0
-    factory_idx: int = -1
     inline_doc: str = ''
     annotations: list[Annotation] = field(default_factory=list)
 
@@ -79,47 +91,29 @@ class MapFile:
     src: Path
     loc: int
     sha: str
+    mode: str = 'script'                          # chunk | namespace | script
+    return_target: str = ''
     deps: list[str] = field(default_factory=list)
-    factories: list[Block] = field(default_factory=list)
-    module_fns: list[Block] = field(default_factory=list)
-    module_api: list[Block] = field(default_factory=list)   # function TBL.X(...)
-    module_consts: list[Decl] = field(default_factory=list)
-    private_fns: list[Block] = field(default_factory=list)   # inside factory
-    private_state: list[Decl] = field(default_factory=list)
-    methods: list[Block] = field(default_factory=list)       # mm:foo
-    method_owner: str = ''
-    sections: list[tuple[int, int, str]] = field(default_factory=list)  # (line, indent, label)
+    imports: list[Decl] = field(default_factory=list)
+    constructs: list[Decl] = field(default_factory=list)
+    state: list[Decl] = field(default_factory=list)
+    consts: list[Decl] = field(default_factory=list)
+    private_fns: list[Block] = field(default_factory=list)
+    methods: list[Block] = field(default_factory=list)
+    dotfns: list[Block] = field(default_factory=list)
+    api: list[Block] = field(default_factory=list)   # namespace: NS.fn
+    sections: list[tuple[int, int, str]] = field(default_factory=list)
     signals: list[str] = field(default_factory=list)
+    signal_lines: dict[str, list[int]] = field(default_factory=dict)
+    signal_payloads: dict[str, str] = field(default_factory=dict)
     reaper_calls: list[str] = field(default_factory=list)
-    signal_lines: dict[str, list[int]] = field(default_factory=dict)   # name -> source lines
     reaper_lines: dict[str, list[int]] = field(default_factory=dict)
     module_annotations: list[Annotation] = field(default_factory=list)
-    factory_annotations: dict[int, list[Annotation]] = field(default_factory=dict)
-    shape_annotations: list[tuple[str, str, bool, int]] = field(default_factory=list)  # +ann_line
-    signal_payloads: dict[str, str] = field(default_factory=dict)
+    shape_annotations: list[tuple[str, str, bool, int]] = field(default_factory=list)
     pending_annotations: list[tuple[int, str, str, bool]] = field(default_factory=list)
 
 
-def collect_doc(lines: list[str], i: int) -> list[str]:
-    """Walk backwards from line i collecting contiguous comment lines.
-    Skips --@map: annotation lines (they're collected separately and rendered
-    as structured entries; including them here would duplicate the content)."""
-    out: list[str] = []
-    j = i - 1
-    while j >= 0:
-        if MAP_ANN_RE.match(lines[j]):
-            j -= 1
-            continue
-        m = COMMENT_RE.match(lines[j])
-        if not m:
-            break
-        text = m.group(1).rstrip()
-        if not text or text.startswith('-'):  # skip banner residue / empty
-            break
-        out.append(text)
-        j -= 1
-    return list(reversed(out))
-
+# ----- Helpers
 
 def short_sha(path: Path) -> str:
     try:
@@ -132,450 +126,429 @@ def short_sha(path: Path) -> str:
         return 'unknown'
 
 
+def collect_doc(lines: list[str], i: int) -> list[str]:
+    """Walk back from line i collecting contiguous prose comments. Skips
+    annotation lines (rendered separately) and banner residue."""
+    out: list[str] = []
+    j = i - 1
+    while j >= 0:
+        if ANN_RE.match(lines[j]):
+            j -= 1; continue
+        m = COMMENT_RE.match(lines[j])
+        if not m:
+            break
+        text = m.group(1).rstrip()
+        if not text or text.startswith('-'):
+            break
+        out.append(text)
+        j -= 1
+    return list(reversed(out))
+
+
+def classify(lines: list[str]) -> tuple[str, str]:
+    """Return (mode, return_target). Chunks have ≥1 colon-method;
+    namespaces have dot-functions and `return M`. Otherwise script."""
+    return_target = ''
+    has_method = False
+    has_dotfn = False
+    for raw in lines:
+        if METHOD_RE.match(raw):
+            has_method = True
+        elif DOT_FN_RE.match(raw):
+            has_dotfn = True
+        m = RETURN_RE.match(raw.lstrip())
+        if m:
+            return_target = m.group(1)
+    if has_method:
+        return ('chunk', return_target)
+    if has_dotfn and return_target:
+        return ('namespace', return_target)
+    if any(RETURN_TBL_RE.match(r.lstrip()) for r in lines):
+        return ('chunk', '')         # table-literal return, e.g. chrome.lua
+    return ('script', return_target)
+
+
+def discover_deps(lines: list[str]) -> list[str]:
+    """Read deps from `(...).<name>` derefs and from `local X = ...` followed
+    by `X.<name>` derefs in subsequent lines."""
+    out: list[str] = []
+    seen: set[str] = set()
+    deps_tables: list[str] = []
+    for raw in lines:
+        for m in DEP_DEREF_RE.finditer(raw):
+            n = m.group(1)
+            if n not in seen:
+                seen.add(n); out.append(n)
+        td = DEPS_TABLE_RE.match(raw.strip())
+        if td:
+            deps_tables.append(td.group(1))
+    if deps_tables:
+        # second pass: any `<table>.<name>` in module-level local decls.
+        for raw in lines:
+            md = LOCAL_DECL_RE.match(raw)
+            if not md or not md.group(2):
+                continue
+            for tbl in deps_tables:
+                for m in re.finditer(rf"\b{re.escape(tbl)}\.(\w+)", md.group(2)):
+                    n = m.group(1)
+                    if n not in seen:
+                        seen.add(n); out.append(n)
+    return out
+
+
 def parse(path: Path) -> MapFile:
     text = path.read_text()
     lines = text.splitlines()
 
-    cm = MapFile(
-        module=path.stem,
-        src=path,
-        loc=len(lines),
-        sha=short_sha(path),
-    )
-
-    in_factory = False
-    current_fac_idx = -1
-    factory_body_indent: int | None = None    # the indent of factory's direct children
+    cm = MapFile(module=path.stem, src=path, loc=len(lines), sha=short_sha(path))
+    cm.mode, cm.return_target = classify(lines)
+    if cm.mode == 'chunk':
+        cm.deps = discover_deps(lines)
 
     for i, raw in enumerate(lines):
         if not raw.strip():
             continue
 
-        # Top-level `end` closes the current factory.
-        if in_factory and raw.rstrip() == 'end':
-            cm.factories[current_fac_idx].end_line = i + 1
-            in_factory = False
-            current_fac_idx = -1
-            factory_body_indent = None
-            continue
-
-        # --@map[?]?:KIND BODY  — accumulate; attached after parse by line proximity
-        ma = MAP_ANN_RE.match(raw)
+        ma = ANN_RE.match(raw)
         if ma:
-            has_q = ma.group(1) == '?'
+            inferred = (ma.group(1) == '?')
             kind, body = ma.group(2), ma.group(3)
-            cm.pending_annotations.append((i + 1, kind, body, has_q))
+            cm.pending_annotations.append((i + 1, kind, body, inferred))
             if kind == 'emits':
                 em = EMITS_BODY_RE.match(body)
                 if em:
                     cm.signal_payloads[em.group(1)] = (em.group(2) or '').strip()
             continue
 
-        # loadModule deps
-        for m in LOAD_MODULE_RE.finditer(raw):
-            if m.group(1) not in cm.deps:
-                cm.deps.append(m.group(1))
-
-        # section banners: line is exactly "----- Name" (5+ dashes, then label, EOL)
         ms = SECTION_RE.match(raw)
         if ms:
             cm.sections.append((i + 1, len(ms.group(1)), ms.group(2)))
-
-        # factory definition
-        mf = FACTORY_RE.match(raw)
-        if mf:
-            blk = Block(indent=0, kind='factory', name=mf.group(1),
-                        args=mf.group(2).strip(), line=i + 1,
-                        doc=collect_doc(lines, i))
-            cm.factories.append(blk)
-            in_factory = True
-            current_fac_idx = len(cm.factories) - 1
-            factory_body_indent = None
             continue
 
-        # First indented non-blank line inside the factory sets the body indent.
-        # Subsequent @state filters use exact equality with this indent.
-        if in_factory and factory_body_indent is None:
-            stripped = raw.lstrip()
-            if stripped and not stripped.startswith('--'):
-                indent = len(raw) - len(stripped)
-                if indent > 0:
-                    factory_body_indent = indent
-
-        # method on table (colon = self-receiver)
+        # methods on a table — colon receiver
         mm = METHOD_RE.match(raw)
         if mm:
-            indent = len(mm.group(1))
-            blk = Block(indent=indent, kind='method',
-                        owner=mm.group(2), name=mm.group(3),
-                        args=mm.group(4).strip(), line=i + 1,
-                        factory_idx=current_fac_idx,
+            blk = Block(name=mm.group(2), args=mm.group(3).strip(),
+                        line=i + 1, owner=mm.group(1), kind='method',
                         doc=collect_doc(lines, i))
             cm.methods.append(blk)
-            if not cm.method_owner:
-                cm.method_owner = blk.owner
             continue
 
-        # module-table function (dot = no self): function util.assign(...)
-        md_fn = DOT_FN_RE.match(raw)
-        if md_fn and not in_factory:
-            blk = Block(indent=0, kind='method',
-                        owner=md_fn.group(2), name=md_fn.group(3),
-                        args=md_fn.group(4).strip(), line=i + 1,
+        # dot functions on a table (no self)
+        md = DOT_FN_RE.match(raw)
+        if md:
+            blk = Block(name=md.group(2), args=md.group(3).strip(),
+                        line=i + 1, owner=md.group(1), kind='dotfn',
                         doc=collect_doc(lines, i))
-            cm.module_api.append(blk)
-            continue
-
-        # local function
-        ml = LOCAL_FN_RE.match(raw)
-        if ml:
-            indent = len(ml.group(1))
-            blk = Block(indent=indent, kind='fn', name=ml.group(2),
-                        args=ml.group(3).strip(), line=i + 1,
-                        factory_idx=current_fac_idx if indent > 0 else -1,
-                        doc=collect_doc(lines, i))
-            if indent == 0:
-                cm.module_fns.append(blk)
+            if cm.mode == 'namespace' and md.group(1) == cm.return_target:
+                cm.api.append(blk)
             else:
-                cm.private_fns.append(blk)
+                cm.dotfns.append(blk)
             continue
 
-        # bare nested `function name(args)` inside factory: assignment to
-        # a forward-declared upvalue (local moveCol; function moveCol(n) ... end).
-        if in_factory:
-            mn = NESTED_FN_RE.match(raw)
-            if mn:
-                indent = len(mn.group(1))
-                blk = Block(indent=indent, kind='fn', name=mn.group(2),
-                            args=mn.group(3).strip(), line=i + 1,
-                            factory_idx=current_fac_idx,
-                            doc=collect_doc(lines, i))
-                cm.private_fns.append(blk)
-                continue
+        # local function — private helper
+        ml = LOCAL_FN_RE.match(raw)
+        if ml and len(ml.group(1)) == 0:
+            blk = Block(name=ml.group(2), args=ml.group(3).strip(),
+                        line=i + 1, kind='fn',
+                        doc=collect_doc(lines, i))
+            cm.private_fns.append(blk)
+            continue
+
+        # bare `function name(args)` inside a `do` block — assignment to a
+        # forward-declared upvalue.
+        mn = NESTED_FN_RE.match(raw)
+        if mn:
+            blk = Block(name=mn.group(2), args=mn.group(3).strip(),
+                        line=i + 1, kind='fn',
+                        doc=collect_doc(lines, i))
+            cm.private_fns.append(blk)
+            continue
 
         # signals
         for m in FIRE_RE.finditer(raw):
-            name = m.group(1)
-            cm.signal_lines.setdefault(name, []).append(i + 1)
-            if name not in cm.signals:
-                cm.signals.append(name)
+            n = m.group(1)
+            cm.signal_lines.setdefault(n, []).append(i + 1)
+            if n not in cm.signals:
+                cm.signals.append(n)
 
         # reaper.X
         for m in REAPER_RE.finditer(raw):
-            name = m.group(1)
-            cm.reaper_lines.setdefault(name, []).append(i + 1)
-            if name not in cm.reaper_calls:
-                cm.reaper_calls.append(name)
+            n = m.group(1)
+            cm.reaper_lines.setdefault(n, []).append(i + 1)
+            if n not in cm.reaper_calls:
+                cm.reaper_calls.append(n)
 
-        # private state: `local foo` at exactly the factory body indent,
-        # before the first method *of the current factory*. Excludes loop-locals
-        # nested in helpers.
-        if in_factory and factory_body_indent is not None:
-            has_method_in_fac = any(
-                m.factory_idx == current_fac_idx for m in cm.methods
-            )
-            if not has_method_in_fac:
-                md = LOCAL_DECL_RE.match(raw)
-                if md and not LOCAL_FN_RE.match(raw):
-                    indent = len(md.group(1))
-                    if indent == factory_body_indent:
-                        init = (md.group(3) or '').strip()
-                        inline_doc = ''
-                        if '--' in raw and not init.startswith("'"):
-                            # take inline doc that follows declaration
-                            tail = raw.split('--', 1)[1].strip()
-                            if tail and not init.endswith(tail):
-                                inline_doc = tail
-                        if len(init) > 60:
-                            init = init[:57] + '...'
-                        cm.private_state.append(Decl(name=md.group(2), init=init,
-                                                      line=i + 1,
-                                                      factory_idx=current_fac_idx,
-                                                      inline_doc=inline_doc))
+        # module-level local declarations
+        if not raw.startswith((' ', '\t')):
+            decl = LOCAL_DECL_RE.match(raw)
+            if decl and not LOCAL_FN_RE.match(raw):
+                names = [n.strip() for n in decl.group(1).split(',')]
+                init = (decl.group(2) or '').strip()
+                inline_doc = ''
+                if '--' in raw and (not init or not init.startswith("'")):
+                    tail = raw.split('--', 1)[1].strip()
+                    if tail and (not init or not init.endswith(tail)):
+                        inline_doc = tail
+                # Classify the declaration.
+                if '(...)' in init or init == '...' or DEPS_TABLE_RE.match(raw):
+                    # `local x, y = (...).x, (...).y`  or  `local args = ...`
+                    continue   # captured under cm.deps
+                req = REQUIRE_RE.search(init)
+                inst = INSTANTIATE_RE.search(init)
+                short = init if len(init) <= 60 else init[:57] + '...'
+                if req:
+                    cm.imports.append(Decl(name=names[0], init=req.group(1),
+                                           line=i + 1, inline_doc=inline_doc))
+                elif inst:
+                    cm.constructs.append(Decl(name=names[0], init=inst.group(1),
+                                              line=i + 1, inline_doc=inline_doc))
+                else:
+                    # Multi-name decls share one init expression; collapse the
+                    # name list into a single entry rather than repeating the
+                    # init across each name.
+                    name = ', '.join(names)
+                    bucket = cm.state if cm.mode == 'chunk' else cm.consts
+                    bucket.append(Decl(name=name, init=short, line=i + 1,
+                                       inline_doc=inline_doc))
 
-        # module-level constants (indent 0, before factory)
-        if not in_factory:
-            md = LOCAL_DECL_RE.match(raw)
-            if md and md.group(1) == '' and md.group(3):
-                init = md.group(3).strip()
-                if len(init) > 80:
-                    init = init[:77] + '...'
-                cm.module_consts.append(Decl(name=md.group(2), init=init, line=i + 1))
-
-        # Loop-built inverse: `for k,v in pairs(Y) do X[v]=k end`
-        # Rewrites a prior @const X = {} entry to "inverse of Y" (module or private).
+        # `for k,v in pairs(Y) do X[v]=k end` — rewrite empty-table init
         mi = INVERSE_RE.search(raw)
         if mi:
             src_tbl, dst_tbl = mi.group(1), mi.group(2)
-            for d in cm.module_consts:
-                if d.name == dst_tbl and d.init == '{}':
-                    d.init = f'-- inverse of {src_tbl}'
-                    break
-            for d in cm.private_state:
+            for d in (cm.consts + cm.state):
                 if d.name == dst_tbl and d.init == '{}':
                     d.init = f'-- inverse of {src_tbl}'
                     break
 
-    if in_factory:
-        cm.factories[current_fac_idx].end_line = len(lines)
+    # Drop forward-decl shells like `local moveCol` that exist only to be
+    # filled in by a `do function moveCol(...) end end` block.
+    fn_names = {b.name for b in cm.private_fns}
+    cm.state = [d for d in cm.state if not (not d.init and d.name in fn_names)]
+    cm.consts = [d for d in cm.consts if not (not d.init and d.name in fn_names)]
 
     attach_annotations(cm)
     return cm
-
-
-def factory_for_line(cm: MapFile, line: int) -> int:
-    """Index of the factory whose body contains `line`. Lines that fall in the
-    gap between two factories belong to the *next* factory (an annotation between
-    factories introduces the section it precedes). Returns -1 if past all factories
-    or there are none."""
-    for idx, fac in enumerate(cm.factories):
-        end = fac.end_line if fac.end_line else 10**9
-        if line <= end:
-            return idx
-    return -1
 
 
 def attach_annotations(cm: MapFile) -> None:
     """Attach pending annotations to nearest following structural element.
 
     Rules:
-      - shape  → always rendered standalone (under # Shapes), never attached.
-      - emits  → consumed into cm.signal_payloads during parse; not attached.
-      - other (contract, invariant) → attach to next element with line ≥ ann_line
-        and (target.line - ann_line) ≤ ATTACH_GAP. Otherwise route to
-        module_annotations (before any factory) or to the enclosing factory's
-        annotations bucket. Annotations between two factories (no nearby struct)
-        attach to the *next* factory's bucket via factory_for_line.
+      shape    → standalone (under # Shapes), never attached.
+      emits    → already consumed into cm.signal_payloads.
+      others   → grouped into contiguous runs (consecutive lines). A run
+                 attaches to the next structural element only if every
+                 annotation in the run is within ATTACH_GAP of the target.
+                 Otherwise the whole run routes to module_annotations.
+                 (Prevents a five-line block of module-wide invariants
+                 latching onto the first `require` purely by adjacency.)
     """
     targets: list = []
-    targets.extend(cm.module_consts)
-    targets.extend(cm.private_state)
-    targets.extend(cm.factories)
-    targets.extend(cm.methods)
-    targets.extend(cm.module_fns)
-    targets.extend(cm.module_api)
+    targets.extend(cm.imports)
+    targets.extend(cm.constructs)
+    targets.extend(cm.state)
+    targets.extend(cm.consts)
     targets.extend(cm.private_fns)
+    targets.extend(cm.methods)
+    targets.extend(cm.dotfns)
+    targets.extend(cm.api)
     targets.sort(key=lambda t: t.line)
 
-    for ann_line, kind, body, has_q in cm.pending_annotations:
-        if kind == 'emits':
-            continue
-        if kind == 'shape':
-            cm.shape_annotations.append((kind, body, has_q, ann_line))
-            continue
-        target = None
-        for t in targets:
-            if t.line >= ann_line:
-                target = t
-                break
-        if target is not None and target.line - ann_line <= ATTACH_GAP:
-            target.annotations.append((kind, body, has_q))
-            continue
-        # Fallback: route to enclosing factory by line range; module-level
-        # otherwise (i.e. before any factory).
-        before_first_factory = (
-            cm.factories and ann_line < cm.factories[0].line
-        ) or not cm.factories
-        if before_first_factory:
-            cm.module_annotations.append((kind, body, has_q))
-            continue
-        fac_idx = factory_for_line(cm, ann_line)
-        if fac_idx < 0:
-            cm.module_annotations.append((kind, body, has_q))
-        else:
-            cm.factory_annotations.setdefault(fac_idx, []).append((kind, body, has_q))
+    # Group attachable annotations into contiguous runs.
+    pending = [(L, k, b, q) for (L, k, b, q) in cm.pending_annotations
+               if k not in ('shape', 'emits')]
+    pending.sort(key=lambda x: x[0])
+    for L, k, b, q in cm.pending_annotations:
+        if k == 'shape':
+            cm.shape_annotations.append((k, b, q, L))
 
+    runs: list[list[tuple[int, str, str, bool]]] = []
+    for ann in pending:
+        if runs and ann[0] == runs[-1][-1][0] + 1:
+            runs[-1].append(ann)
+        else:
+            runs.append([ann])
+
+    for run in runs:
+        first_line = run[0][0]
+        target = next((t for t in targets if t.line >= first_line), None)
+        if target and target.line - first_line <= ATTACH_GAP:
+            for _, k, b, q in run:
+                target.annotations.append((k, b, q))
+        else:
+            for _, k, b, q in run:
+                cm.module_annotations.append((k, b, q))
+
+
+# ----- Emission
 
 def fmt_args(args: str) -> str:
     return f"({args})" if args else "()"
 
 
 def fmt_ann(ann: Annotation) -> str:
-    kind, body, q = ann
-    mark = '?' if q else ''
-    return f"@map{mark}:{kind}  {body}"
+    kind, body, inferred = ann
+    mark = '?' if inferred else ''
+    return f"@{mark}{kind}  {body}"
 
 
-def emit_annotations(out: list[str], anns: list[Annotation], indent: str) -> None:
-    for ann in anns:
-        out.append(f"{indent}{fmt_ann(ann)}")
+def emit_anns(out: list[str], anns: list[Annotation], indent: str) -> None:
+    for a in anns:
+        out.append(f"{indent}{fmt_ann(a)}")
+
+
+def emit_items(out: list[str], sections: list, items: list,
+               label_prefix: str, owner_join: str = '') -> None:
+    """Render `items` (already line-sorted) interleaving section banners
+    that precede them. `sections` is a shared mutable cursor: each banner
+    is consumed by the first call whose item-range covers it. Banners
+    indented past the items appear as inline sub-bullets."""
+    skip = ('PRIVATE', 'PUBLIC', 'Utils')
+    for idx, m in enumerate(items):
+        next_line = items[idx + 1].line if idx + 1 < len(items) else 10**9
+        pre, inside, rest = [], [], []
+        for sec in sections:
+            line, sec_indent, _ = sec
+            if line >= next_line:
+                rest.append(sec)
+            elif sec_indent <= 0:
+                if line < m.line: pre.append(sec)
+                else:             rest.append(sec)
+            else:
+                if line >= m.line: inside.append(sec)
+                else:              pre.append(sec)
+        sections[:] = rest
+        for sec in pre:
+            if sec[2] not in skip:
+                out.append(f"  -- {sec[2]}")
+        if m.owner:
+            join = owner_join or (':' if m.kind == 'method' else '.')
+            head = f"  {label_prefix}{m.owner}{join}{m.name}"
+        else:
+            head = f"  {label_prefix}{m.name}"
+        out.append(f"{head}{fmt_args(m.args)}  @ {m.line}")
+        for d in m.doc:
+            out.append(f"      -- {d}")
+        emit_anns(out, m.annotations, '      ')
+        for sec in inside:
+            out.append(f"      · {sec[2]}")
 
 
 def emit(cm: MapFile) -> str:
     out: list[str] = []
     add = out.append
+    sections = list(cm.sections)        # consumed by emit_items as we walk
 
-    add(f"@module {cm.module}  src={cm.src.name}  loc={cm.loc}  sha={cm.sha}")
+    add(f"@module {cm.module}  src={cm.src.name}  loc={cm.loc}  sha={cm.sha}  mode={cm.mode}")
     if cm.deps:
         add(f"@deps {', '.join(cm.deps)}")
     add('')
 
     if cm.module_annotations:
-        add("# Invariants & contracts (module)")
-        emit_annotations(out, cm.module_annotations, '  ')
+        add("# Invariants & contracts")
+        emit_anns(out, cm.module_annotations, '  ')
         add('')
 
-    fac0_line = cm.factories[0].line if cm.factories else 10**9
-    module_shapes = [(k, b, q) for (k, b, q, L) in cm.shape_annotations if L < fac0_line]
-    if module_shapes:
+    if cm.shape_annotations:
         add("# Shapes")
-        for _, body, q in module_shapes:
-            mark = '?' if q else ''
-            add(f"  @shape{mark}  {body}")
+        for kind, body, inferred, _ in cm.shape_annotations:
+            mark = '?' if inferred else ''
+            add(f"  @{mark}shape  {body}")
         add('')
 
-    if cm.module_consts:
+    if cm.imports:
+        add("# Imports")
+        for d in cm.imports:
+            tag = 'require' if cm.mode == 'chunk' else 'const'
+            line = f"  @{tag} {d.name} = '{d.init}'  @ {d.line}"
+            if d.inline_doc:
+                line += f"   -- {d.inline_doc}"
+            add(line)
+            emit_anns(out, d.annotations, '      ')
+        add('')
+
+    if cm.constructs:
+        add("# Constructed sub-instances")
+        width = max(len(d.name) for d in cm.constructs)
+        for d in cm.constructs:
+            add(f"  @construct {d.name:<{width}} = util.instantiate('{d.init}')  @ {d.line}")
+            emit_anns(out, d.annotations, '      ')
+        add('')
+
+    if cm.consts:
         add("# Module-level constants")
-        for d in cm.module_consts:
-            if d.init.startswith('--'):
-                add(f"  @const {d.name}  @ {d.line}   {d.init}")
+        for d in cm.consts:
+            head = f"  @const {d.name}"
+            if d.init.startswith('-- inverse'):
+                head += f"  @ {d.line}   {d.init}"
+            elif d.init:
+                head += f" = {d.init}  @ {d.line}"
             else:
-                add(f"  @const {d.name} = {d.init}  @ {d.line}")
-            emit_annotations(out, d.annotations, '      ')
-        add('')
-
-    if cm.module_fns:
-        add("# Module-level functions (private)")
-        for f in cm.module_fns:
-            line = f"  @fn {f.name}{fmt_args(f.args)}  @ {f.line}"
-            if f.doc:
-                line += f"   -- {' '.join(f.doc)[:80]}"
-            add(line)
-            emit_annotations(out, f.annotations, '      ')
-        add('')
-
-    if cm.module_api:
-        # Resolve `local M = <alias>` to <alias>.X for legibility.
-        alias_target: str | None = None
-        for d in cm.module_consts:
-            if d.init and d.init.isidentifier():
-                alias_target = d.init
-                break
-        owners = sorted({(alias_target if a.owner == 'M' and alias_target else a.owner)
-                         for a in cm.module_api})
-        owner_label = ' / '.join(owners)
-        add(f"# Public API ({owner_label}.*)")
-        for f in cm.module_api:
-            owner = alias_target if (f.owner == 'M' and alias_target) else f.owner
-            line = f"  @api {owner}.{f.name}{fmt_args(f.args)}  @ {f.line}"
-            add(line)
-            if f.doc:
-                for d in f.doc:
-                    add(f"      -- {d}")
-            emit_annotations(out, f.annotations, '      ')
-        add('')
-
-    for fac_idx, fac in enumerate(cm.factories):
-        fac_end = fac.end_line if fac.end_line else 10**9
-        in_fac = lambda L, _s=fac.line, _e=fac_end: _s <= L <= _e
-        fac_methods = [m for m in cm.methods if in_fac(m.line)]
-        fac_pfns    = [f for f in cm.private_fns if in_fac(f.line)]
-        fac_state   = [d for d in cm.private_state if in_fac(d.line)]
-        fac_shapes  = [(k, b, q) for (k, b, q, L) in cm.shape_annotations
-                       if L >= fac0_line and factory_for_line(cm, L) == fac_idx]
-        fac_signals = [n for n in cm.signals
-                       if any(in_fac(L) for L in cm.signal_lines.get(n, []))]
-        fac_reaper  = [n for n in cm.reaper_calls
-                       if any(in_fac(L) for L in cm.reaper_lines.get(n, []))]
-
-        add(f"@factory {fac.name}{fmt_args(fac.args)}  @ {fac.line}")
-        if fac.doc:
-            for d in fac.doc:
-                add(f"  -- {d}")
-        emit_annotations(out, fac.annotations, '  ')
-        emit_annotations(out, cm.factory_annotations.get(fac_idx, []), '  ')
-
-        if fac_shapes:
-            add("")
-            add("  # Shapes")
-            for kind, body, q in fac_shapes:
-                mark = '?' if q else ''
-                add(f"    @shape{mark}  {body}")
-
-        if fac_state:
-            add("")
-            add("  # Private state")
-            for d in fac_state:
-                head = f"    @state {d.name}"
-                if d.init:
-                    head += f" = {d.init}"
                 head += f"  @ {d.line}"
-                if d.inline_doc:
-                    head += f"   -- {d.inline_doc}"
-                add(head)
-                emit_annotations(out, d.annotations, '        ')
+            if d.inline_doc:
+                head += f"   -- {d.inline_doc}"
+            add(head)
+            emit_anns(out, d.annotations, '      ')
+        add('')
 
-        if fac_pfns:
-            add("")
-            add("  # Private functions")
-            for f in fac_pfns:
-                line = f"    @fn {f.name}{fmt_args(f.args)}  @ {f.line}"
-                if f.doc:
-                    line += f"   -- {' '.join(f.doc)[:90]}"
-                add(line)
-                emit_annotations(out, f.annotations, '        ')
+    if cm.state:
+        add("# Private state")
+        for d in cm.state:
+            head = f"  @state {d.name}"
+            if d.init.startswith('-- inverse'):
+                head += f"  @ {d.line}   {d.init}"
+            elif d.init:
+                head += f" = {d.init}  @ {d.line}"
+            else:
+                head += f"  @ {d.line}"
+            if d.inline_doc:
+                head += f"   -- {d.inline_doc}"
+            add(head)
+            emit_anns(out, d.annotations, '      ')
+        add('')
 
-        if fac_methods:
-            add("")
-            add(f"  # Public API")
-            sections = list(cm.sections)
-            for idx, m in enumerate(fac_methods):
-                next_line = fac_methods[idx + 1].line if idx + 1 < len(fac_methods) else 10**9
-                # Banner classification by indent:
-                #   indent <= method indent → sibling divider (emit before @api)
-                #   indent  > method indent → sub-section inside this method's body
-                pre, inside = [], []
-                rest = []
-                for sec in sections:
-                    line, sec_indent, label = sec
-                    if line >= next_line:
-                        rest.append(sec); continue
-                    if sec_indent <= m.indent:
-                        if line < m.line:
-                            pre.append(sec)
-                        else:
-                            # banner at same level but after method start: belongs to next
-                            rest.append(sec)
-                    else:
-                        if line >= m.line:
-                            inside.append(sec)
-                        else:
-                            pre.append(sec)
-                sections = rest
-                for sec in pre:
-                    if sec[2] not in ('PRIVATE', 'PUBLIC', 'Utils'):
-                        add(f"    -- {sec[2]}")
-                add(f"    @api {m.owner}:{m.name}{fmt_args(m.args)}  @ {m.line}")
-                if m.doc:
-                    for d in m.doc:
-                        add(f"        -- {d}")
-                emit_annotations(out, m.annotations, '        ')
-                for sec in inside:
-                    add(f"        · {sec[2]}")
+    if cm.private_fns:
+        add("# Private functions")
+        emit_items(out, sections, cm.private_fns, '@fn ')
+        add('')
 
-        if fac_signals:
-            add("")
-            add("  # Signals emitted (via util.installHooks)")
-            for s in fac_signals:
-                payload = cm.signal_payloads.get(s)
-                if payload:
-                    add(f"    @emits {s}   -- {payload}")
-                else:
-                    add(f"    @emits {s}")
+    if cm.api:
+        owners = sorted({a.owner for a in cm.api})
+        add(f"# Public API ({' / '.join(owners)}.*)")
+        emit_items(out, sections, cm.api, '@api ', owner_join='.')
+        add('')
 
-        if fac_reaper:
-            add("")
-            add("  # REAPER API surface")
-            # group reaper calls by prefix
-            groups: dict[str, list[str]] = {}
-            for r in fac_reaper:
-                key = r.split('_', 1)[0] if '_' in r else r
-                groups.setdefault(key, []).append(r)
-            for key, names in groups.items():
-                add(f"    @reaper {', '.join(names)}")
+    if cm.methods or cm.dotfns:
+        merged = sorted(cm.methods + cm.dotfns, key=lambda b: b.line)
+        owners = sorted({m.owner for m in merged})
+        suffix = '*' if cm.mode == 'chunk' else '.*'
+        label = ' / '.join(o + (':' if any(b.kind == 'method' and b.owner == o for b in merged) else '.') + suffix
+                           for o in owners)
+        add(f"# Public API ({label})")
+        emit_items(out, sections, merged, '@api ')
+        add('')
 
-    return '\n'.join(out) + '\n'
+    if cm.signals:
+        add("# Signals emitted (via util.installHooks)")
+        for s in cm.signals:
+            payload = cm.signal_payloads.get(s)
+            add(f"  @emits {s}   -- {payload}" if payload else f"  @emits {s}")
+        add('')
 
+    if cm.reaper_calls:
+        add("# REAPER API surface")
+        groups: dict[str, list[str]] = {}
+        for r in cm.reaper_calls:
+            key = r.split('_', 1)[0] if '_' in r else r
+            groups.setdefault(key, []).append(r)
+        for _, names in groups.items():
+            add(f"  @reaper {', '.join(names)}")
+
+    return '\n'.join(out).rstrip() + '\n'
+
+
+# ----- CLI
 
 def main(argv: list[str]) -> int:
     if len(argv) < 2:

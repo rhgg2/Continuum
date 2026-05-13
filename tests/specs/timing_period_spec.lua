@@ -4,8 +4,8 @@
 -- nᵢ/dᵢ the result is lcm(nᵢ)/gcd(dᵢ).
 
 local t = require('support')
-require('util')
-require('timing')
+local util   = require('util')
+local timing = require('timing')
 
 return {
   {

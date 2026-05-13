@@ -1,5 +1,4 @@
 - rebuild on MIDI hash change
-- ghost paste (grouped notes/CCs)
 - tuning editor
 - FX, ideas:
   - flam
@@ -7,3 +6,5 @@
   - cc macros
 - automation smoothing
 - 14bit CCs
+- undo
+- fix up swing editor

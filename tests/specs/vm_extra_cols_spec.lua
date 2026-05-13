@@ -6,6 +6,7 @@
 -- and the user hides from the right inwards.
 
 local t = require('support')
+local util = require('util')
 
 return {
 

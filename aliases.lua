@@ -2,16 +2,16 @@
 -- Phase 1: pure helpers — apply xforms, append ops, navigate spec trees.
 -- Depends only on util.
 
---@map:invariant pure module — no module-level mutable state
---@map:invariant per-field op lists; ops applied left-to-right
---@map:invariant fail-closed: fields outside the event type's vocabulary are skipped
---@map:invariant coalescence is trailing-op only and requires same opcode AND all-literal args
---@map:shape Op = { opcode, arg1[, arg2, ...] }   -- numeric arg is a literal; table arg is a producing-op sub-expression
---@map:shape Xform = { [field] = { Op, ... }, ... }
---@map:shape SpecNode = { xform, children, [fit] }   -- children is a list; position in the list is identity
+--invariant: pure module — no module-level mutable state
+--invariant: per-field op lists; ops applied left-to-right
+--invariant: fail-closed: fields outside the event type's vocabulary are skipped
+--invariant: coalescence is trailing-op only and requires same opcode AND all-literal args
+--shape: Op = { opcode, arg1[, arg2, ...] }   -- numeric arg is a literal; table arg is a producing-op sub-expression
+--shape: Xform = { [field] = { Op, ... }, ... }
+--shape: SpecNode = { xform, children, [fit] }   -- children is a list; position in the list is identity
+local util = require 'util'
 
-aliases = {}
-local M = aliases
+local M = {}
 
 ----- Vocabulary
 
@@ -240,3 +240,5 @@ end
 ----- Construction
 
 function M.emptyXform() return {} end
+
+return M

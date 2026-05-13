@@ -1,9 +1,8 @@
 -- See docs/fs.md for the model.
 
---@map:invariant sole module touching reaper.Enumerate* and filesystem IO; UI/view layers route through here
---@map:invariant listDirs and listAudioFiles return case-insensitively sorted output (Finder/Explorer parity)
-
-fs = {}
+--invariant: sole module touching reaper.Enumerate* and filesystem IO; UI/view layers route through here
+--invariant: listDirs and listAudioFiles return case-insensitively sorted output (Finder/Explorer parity)
+local fs = {}
 
 local AUDIO_EXTS = {
   wav = true, aif = true, aiff = true, flac = true,
@@ -20,12 +19,12 @@ function fs.basename(path)
   return path:match('([^/\\]+)$') or path
 end
 
---@map:contract returns '' if path has no separator; trailing separators on input are not stripped (caller passes canonical paths)
+--contract: returns '' if path has no separator; trailing separators on input are not stripped (caller passes canonical paths)
 function fs.parent(path)
   return path:match('^(.+)[/\\][^/\\]+$') or ''
 end
 
---@map:contract inserts '/' between a and b unless a already ends in '/' or '\\'; no path normalisation
+--contract: inserts '/' between a and b unless a already ends in '/' or '\\'; no path normalisation
 function fs.join(a, b)
   local last = a:sub(-1)
   if last == '/' or last == '\\' then return a .. b end
@@ -34,7 +33,7 @@ end
 
 local function ciLess(a, b) return a:lower() < b:lower() end
 
---@map:contract hides dotfile-prefixed entries (.git, .DS_Store, etc.)
+--contract: hides dotfile-prefixed entries (.git, .DS_Store, etc.)
 function fs.listDirs(path)
   local out, i = {}, 0
   while true do
@@ -53,7 +52,7 @@ function fs.exists(path)
   return false
 end
 
---@map:contract FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md
+--contract: FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md
 function fs.hashFile(path)
   local f = io.open(path, 'rb')
   if not f then return nil end
@@ -100,7 +99,7 @@ local function copyFile(src, dst)
   return true
 end
 
---@map:shape fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }
+--shape: fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }
 fs.fileOps = {
   copy  = copyFile,
   -- os.rename fails across filesystems; fall back to copy+delete.
@@ -113,3 +112,5 @@ fs.fileOps = {
   exists = fs.exists,
   hash   = fs.hashFile,
 }
+
+return fs

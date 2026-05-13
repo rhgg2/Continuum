@@ -1,97 +1,109 @@
-@module samplePage  src=samplePage.lua  loc=651  sha=ee85a77
+@module samplePage  src=samplePage.lua  loc=653  sha=69f289a  mode=chunk
+@deps cm, cmgr, chrome, gui, onPickTrack
 
-# Invariants & contracts (module)
-  @map:invariant  render-only: persistent state lives in sampleView (selection/folder/track), configManager (slotEntries, currentSample, previewInPlace), and sampleManager (JSFX); only frame-local caches and ephemeral drag/preview state live here
-  @map:invariant  slot index space is linear 0..N_SLOTS-1 (N_SLOTS=64); the slot grid is a 2-col ImGui table (right-aligned index, stretch label) — no row/col addressing
-  @map:invariant  strip coordinates are audio sample-frames (0..frames-1); pixel x is derived only at draw via frameToX, and InputInt round-trips frames directly
-  @map:invariant  peakCache/durCache are file-path-keyed and survive across frames; peakCache entries are dropped whenever the requested column count changes (window resize) so a strip never reuses peaks computed at a foreign width
-  @map:invariant  browser keyboard shortcuts (browserUp/Preview/Assign, slotNext/Prev) are dispatched only when the sample-scope is active in cmgr; the middle pane disables ImGui nav so its own arrow handling produces a single focus rectangle
-  @map:invariant  preview-in-place leaves cm:slotEntries untouched while the JSFX slot is staged to a transient file; sm:syncSlot pushes cm's truth back on revert
-  @map:invariant  drag.handle is set on the first active frame (closest of start/end to the mouse wins) and held until the button releases — the choice does not switch mid-drag
+# Invariants & contracts
+  @invariant  render-only: persistent state lives in sampleView (selection/folder/track), configManager (slotEntries, currentSample, previewInPlace), and sampleManager (JSFX); only frame-local caches and ephemeral drag/preview state live here
+  @invariant  slot index space is linear 0..N_SLOTS-1 (N_SLOTS=64); the slot grid is a 2-col ImGui table (right-aligned index, stretch label) — no row/col addressing
+  @invariant  strip coordinates are audio sample-frames (0..frames-1); pixel x is derived only at draw via frameToX, and InputInt round-trips frames directly
+  @invariant  peakCache/durCache are file-path-keyed and survive across frames; peakCache entries are dropped whenever the requested column count changes (window resize) so a strip never reuses peaks computed at a foreign width
+  @invariant  browser keyboard shortcuts (browserUp/Preview/Assign, slotNext/Prev) are dispatched only when the sample-scope is active in cmgr; the middle pane disables ImGui nav so its own arrow handling produces a single focus rectangle
+  @invariant  preview-in-place leaves cm:slotEntries untouched while the JSFX slot is staged to a transient file; sm:syncSlot pushes cm's truth back on revert
+  @invariant  drag.handle is set on the first active frame (closest of start/end to the mouse wins) and held until the button releases — the choice does not switch mid-drag
+  @contract  owns the sample substack: builds sm and sv internally; coord supplies only primitives + the take (per-frame, via tick) and a slot index (on demand, via loadSampleIntoSlot)
+  @contract  track-picker is a proxy — onPick routes through onPickTrack so coord owns the active sampler track; the page never picks its own track
 
-# Module-level constants
-  @const ImGui = require 'imgui' '0.10'  @ 18
-  @const N_SLOTS = 64  @ 20
-  @const UP = '__up__'  @ 22
+# Shapes
+  @shape  peakCacheEntry = { src?=PCM_Source, cols=int, fs=number, nch=int, frames=int, lenSec=number, building=bool, amps?={number,...} } | false
+  @shape  durCacheEntry  = number | false
+  @shape  drag = { handle='start'|'end'|nil, slot=int|nil, startF=int|nil, endF=int|nil }
+  @shape  pip = { slot=int|nil, track=track|nil, justTriggered=bool, browserAtTrigger=path|nil, slotAtTrigger=int|nil }
+  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
 
-@factory newSamplePage(cm, cmgr, chrome, gui, onPickTrack)  @ 26
-  @map:contract  owns the sample substack: builds sm and sv internally; coord supplies only primitives + the take (per-frame, via tick) and a slot index (on demand, via loadSampleIntoSlot)
-  @map:contract  track-picker is a proxy — onPick routes through onPickTrack so coord owns the active sampler track; the page never picks its own track
-  @map:invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])
+# Imports
+  @require fs = 'fs'  @ 11
+  @require util = 'util'  @ 12
+  @require ImGui = 'imgui'  @ 18
 
-  # Shapes
-    @shape  peakCacheEntry = { src?=PCM_Source, cols=int, fs=number, nch=int, frames=int, lenSec=number, building=bool, amps?={number,...} } | false
-    @shape  durCacheEntry  = number | false
-    @shape  drag = { handle='start'|'end'|nil, slot=int|nil, startF=int|nil, endF=int|nil }
-    @shape  pip = { slot=int|nil, track=track|nil, justTriggered=bool, browserAtTrigger=path|nil, slotAtTrigger=int|nil }
-    @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
+# Constructed sub-instances
+  @construct sm = util.instantiate('sampleManager')  @ 30
 
-  # Private state
-    @state ctx = gui.ctx  @ 27
-    @state rename = nil  @ 28
-    @state sm = newSampleManager(fs.fileOps)  @ 29
-    @state lastProjectPath = nil  @ 30
-    @state sv  @ 32
-    @state peakCache = {}  @ 46
-    @state durCache = {}  @ 47
-    @state drag = { handle = nil, slot = nil, startF = nil, endF = nil }  @ 48
-    @state pip = { slot = nil, justTriggered = false,  @ 52
-    @state toolbar  @ 393   -- lazy: chrome may be nil at construction in tests
-    @state toolbarSegments = {  @ 396
-    @state sp = {}  @ 439
+# Private state
+  @state N_SLOTS = 64  @ 24
+  @state UP = '__up__'  @ 26
+  @state ctx = gui.ctx  @ 28
+  @state rename = nil  @ 29
+  @state lastProjectPath = nil  @ 31
+  @state sv  @ 33
+  @state peakCache = {}  @ 49
+  @state durCache = {}  @ 50
+  @state drag = { handle = nil, slot = nil, startF = nil, endF = nil }  @ 51
+  @state pip = { slot = nil, justTriggered = false,  @ 54
+  @state toolbar  @ 395   -- lazy: chrome may be nil at construction in tests
+  @state toolbarSegments = {  @ 398
+  @state sp = {}  @ 441
+  @state sampler = cmgr:scope('sample')  @ 611
+      @invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])
 
-  # Private functions
-    @fn revertPreviewInPlace()  @ 56
-        @map:contract  no-op when no preview is staged; otherwise restores the JSFX slot to cm's stored entry and clears all pip fields
-    @fn triggerPreviewInPlace(srcPath)  @ 65
-        @map:contract  silently aborts if sm:stageInto fails (returns false); otherwise pip captures the nav state at trigger so any subsequent change reverts
-    @fn durFor(abs)  @ 76
-    @fn peakFor(abs, cols)  @ 93   -- PCM_Source_GetPeaks lays the buffer out as two blocks back-to-back: maxes (cols * nch floa
-        @map:contract  returns nil for unreadable files (cached as false); returns an entry with hi=nil while peaks are still building (caller must draw a flat line); width-mismatched cache entries are dropped before re-reading
-    @fn drawTree(path)  @ 145
-        @map:contract  recursive walk; only descends into open TreeNodes — listDirs is not called for collapsed branches
-    @fn goUp()  @ 163
-        @map:contract  no-op at the browse root; otherwise highlights the folder being left so a subsequent down-arrow lands somewhere meaningful
-    @fn drawFiles(folder, root)  @ 175
-        @map:contract  items are ordered '..' (if not at root), then folders (alpha), then audio files; selection auto-snaps to items[1] when the prior selection isn't in the new list
-        @map:contract  double-click semantics: '..' → goUp; folder → setCurrentFolder; file → triggerPreviewInPlace if previewInPlace is on, else auditionPath
-    @fn drawSlots()  @ 236
-        @map:contract  iterates all N_SLOTS rows whether populated or not (empty rows render as '(empty)'); single-click sets currentSample and slotFocus, double-click also auditions
-    @fn drawStrip(stripW, stripH)  @ 299   -- Drag locally overrides start/end this frame so the markers track the cursor without round-
-        @map:contract  early-returns when the focused slot is empty or the source can't be read; otherwise every code path through here calls sm:setTrim before frame end if the user changed start/end
-        @map:contract  drag handle is held in `drag` across frames keyed by slot — switching to a different slot mid-drag implicitly drops the drag (liveDrag check fails)
-        @map:contract  trim invariants enforced at write: 0 <= start <= end-1 and start+1 <= end <= frames-2 (last 2 frames reserved)
-    @fn frameToX(fr)  @ 349
+# Private functions
+  @fn revertPreviewInPlace()  @ 58
+      @contract  no-op when no preview is staged; otherwise restores the JSFX slot to cm's stored entry and clears all pip fields
+  @fn triggerPreviewInPlace(srcPath)  @ 67
+      @contract  silently aborts if sm:stageInto fails (returns false); otherwise pip captures the nav state at trigger so any subsequent change reverts
+  @fn durFor(abs)  @ 78
+  @fn peakFor(abs, cols)  @ 95
+      -- PCM_Source_GetPeaks lays the buffer out as two blocks back-to-back:
+      -- maxes (cols * nch floats), then mins (cols * nch floats). Channels
+      -- are interleaved within each block per pixel. Reduce to per-pixel
+      -- (hi, lo) — signed max/min across channels — so the strip can draw
+      -- asymmetrically and reveal DC offset or one-sided transients.
+      @contract  returns nil for unreadable files (cached as false); returns an entry with hi=nil while peaks are still building (caller must draw a flat line); width-mismatched cache entries are dropped before re-reading
+  @fn drawTree(path)  @ 147
+      @contract  recursive walk; only descends into open TreeNodes — listDirs is not called for collapsed branches
+  @fn goUp()  @ 165
+      @contract  no-op at the browse root; otherwise highlights the folder being left so a subsequent down-arrow lands somewhere meaningful
+  @fn drawFiles(folder, root)  @ 177
+      @contract  items are ordered '..' (if not at root), then folders (alpha), then audio files; selection auto-snaps to items[1] when the prior selection isn't in the new list
+      @contract  double-click semantics: '..' → goUp; folder → setCurrentFolder; file → triggerPreviewInPlace if previewInPlace is on, else auditionPath
+  @fn drawSlots()  @ 238
+      @contract  iterates all N_SLOTS rows whether populated or not (empty rows render as '(empty)'); single-click sets currentSample and slotFocus, double-click also auditions
+  @fn drawStrip(stripW, stripH)  @ 301
+      -- Drag locally overrides start/end this frame so the markers track the
+      -- cursor without round-trip lag; cm catches up on the next setTrim.
+      @contract  early-returns when the focused slot is empty or the source can't be read; otherwise every code path through here calls sm:setTrim before frame end if the user changed start/end
+      @contract  drag handle is held in `drag` across frames keyed by slot — switching to a different slot mid-drag implicitly drops the drag (liveDrag check fails)
+      @contract  trim invariants enforced at write: 0 <= start <= end-1 and start+1 <= end <= frames-2 (last 2 frames reserved)
 
-  # Public API
-    @api sp:renderToolbarBits(_)  @ 441
-    @api sp:renderBody(_, w, h, dispatch)  @ 450
-        @map:contract  layout splits vertically (stripH = min(140, h*0.4)) then horizontally inside the top region (treeW = max(220, w*0.25); filesW = (w-treeW)*0.55); the right slots pane consumes the remainder
-        @map:contract  whole body is wrapped in chrome.disabledIf(not isLive) — when the bound track has no live sampler FX the entire interactive surface is greyed and inert
-        @map:contract  pip auto-revert is checked at end of body: justTriggered=true edge consumes the trigger frame, after which any browser/slot-focus change or stray mouse click reverts
-    @api sp:renderStatusBar(_)  @ 548
-    @api sp:bind(track)  @ 563
-        @map:contract  bind forwards the track to sv (which re-keys cm via cm:setTrack); never touches cm:setContext — the tracker take stays bound for sm:probeMode
-    @api sp:listTracks()  @ 568
-        @map:contract  listTracks proxies sm:listTracks via sv — coord queries this to seed its active sampler track on first activation
-    @api sp:unbind()  @ 571
-        @map:contract  unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
-    @api sp:tick(take)  @ 574
-        @map:contract  tick runs every frame regardless of active page — sm needs the tracker take to maintain isTrackerMode and the gmem mailbox; project-path migration runs only on actual change
-    @api sp:loadSampleIntoSlot(take, slot)  @ 586
-        @map:contract  opens a file dialog and assigns the chosen path to (take's track, slot); silent no-op on cancel; called by coord's tracker-scope command, not by sample-page UI
-    @api sp:focusState()  @ 595
-        @map:contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
-    @api sp:handleInput()  @ 604
-    @api sp:save()  @ 605
-    @api sp:load()  @ 606
+# Public API (sp:*)
+  @api sp:renderToolbarBits(_)  @ 443
+  @api sp:renderBody(_, w, h, dispatch)  @ 452
+      @contract  layout splits vertically (stripH = min(140, h*0.4)) then horizontally inside the top region (treeW = max(220, w*0.25); filesW = (w-treeW)*0.55); the right slots pane consumes the remainder
+      @contract  whole body is wrapped in chrome.disabledIf(not isLive) — when the bound track has no live sampler FX the entire interactive surface is greyed and inert
+      @contract  pip auto-revert is checked at end of body: justTriggered=true edge consumes the trigger frame, after which any browser/slot-focus change or stray mouse click reverts
+  @api sp:renderStatusBar(_)  @ 550
+  @api sp:bind(track)  @ 565
+      @contract  bind forwards the track to sv (which re-keys cm via cm:setTrack); never touches cm:setContext — the tracker take stays bound for sm:probeMode
+  @api sp:listTracks()  @ 570
+      @contract  listTracks proxies sm:listTracks via sv — coord queries this to seed its active sampler track on first activation
+  @api sp:unbind()  @ 573
+      @contract  unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
+  @api sp:tick(take)  @ 576
+      @contract  tick runs every frame regardless of active page — sm needs the tracker take to maintain isTrackerMode and the gmem mailbox; project-path migration runs only on actual change
+  @api sp:loadSampleIntoSlot(take, slot)  @ 588
+      @contract  opens a file dialog and assigns the chosen path to (take's track, slot); silent no-op on cancel; called by coord's tracker-scope command, not by sample-page UI
+  @api sp:focusState()  @ 597
+      @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
+  @api sp:handleInput()  @ 606
+  @api sp:save()  @ 607
+  @api sp:load()  @ 608
 
-  # REAPER API surface
-    @reaper GetProjectPath
-    @reaper PCM_Source_CreateFromFile, PCM_Source_Destroy, PCM_Source_BuildPeaks, PCM_Source_GetPeaks
-    @reaper GetMediaSourceLength
-    @reaper GetMediaSourceSampleRate
-    @reaper GetMediaSourceNumChannels
-    @reaper new_array
-    @reaper GetUserFileNameForRead
-    @reaper GetMediaItemTake_Track
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB
+  @reaper GetProjectPath
+  @reaper PCM_Source_CreateFromFile, PCM_Source_Destroy, PCM_Source_BuildPeaks, PCM_Source_GetPeaks
+  @reaper GetMediaSourceLength
+  @reaper GetMediaSourceSampleRate
+  @reaper GetMediaSourceNumChannels
+  @reaper new_array
+  @reaper GetUserFileNameForRead
+  @reaper GetMediaItemTake_Track

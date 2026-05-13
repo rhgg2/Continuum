@@ -4,6 +4,7 @@
 -- design/swing.md).
 
 local t = require('support')
+local timing = require('timing')
 
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 local classic67 = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } }

@@ -4,7 +4,16 @@
 -- rendering is verified manually in REAPER.
 
 local t = require('support')
-require('sampleView')
+local util = require('util')
+
+local function newSampleView(cm, assignSlot, previewSlot, previewPath,
+                             listSamplerTracks, clearSlot, stopPreview)
+  return util.instantiate('sampleView', {
+    cm = cm, assignSlot = assignSlot, previewSlot = previewSlot,
+    previewPath = previewPath, listSamplerTracks = listSamplerTracks,
+    clearSlot = clearSlot, stopPreview = stopPreview,
+  })
+end
 
 return {
   {

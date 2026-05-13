@@ -1,17 +1,16 @@
 -- See docs/commandManager.md for the model.
 
---@map:invariant commands and keymap are orthogonal name-keyed tables; a name may live in either alone
---@map:invariant root scope is global; named scopes are pages; at most one scope is active at a time
---@map:invariant active-scope entries shadow root entries during invoke and keychain lookups (first hit wins)
---@map:invariant command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)
---@map:invariant a keymap entry is an array of keyspecs — multiple bindings dispatch to the same command
---@map:invariant layouts row 1 = base octave (15 semitones, C..D+1oct); row 2 = +1 octave (17 semitones, C..F+1oct)
---@map:invariant chars is folded from layouts at load time so the LUT can't drift from the declaration
-
---@map:shape keyspec = keyConstant | { keyConstant, mod1, mod2, ... }   -- mods OR'd into a single mask
---@map:shape keymapEntry = { keyspec, ... }                              -- array; each keyspec triggers the same command
---@map:shape noteChar = { semi = 0..16, octOff = 0..1 }
-
+--invariant: commands form a single flat namespace owned by mgr; scopes own keymaps + modal/passthrough only
+--invariant: scope:register installs a gated wrapper into mgr.commands — invoke returns nil when the scope is not reachable on the stack
+--invariant: scopes form a stack walked top-down; the bottom is the 'global' scope pushed at module load
+--invariant: a modal scope without passthrough[name] blocks both key dispatch and invoke for names below it
+--invariant: command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)
+--invariant: a keymap entry is an array of keyspecs — multiple bindings dispatch to the same command
+--invariant: layouts row 1 = base octave (15 semitones, C..D+1oct); row 2 = +1 octave (17 semitones, C..F+1oct)
+--invariant: chars is folded from layouts at load time so the LUT can't drift from the declaration
+--shape: keyspec = keyConstant | { keyConstant, mod1, mod2, ... }   -- mods OR'd into a single mask
+--shape: keymapEntry = { keyspec, ... }                              -- array; each keyspec triggers the same command
+--shape: noteChar = { semi = 0..16, octOff = 0..1 }
 local layouts = {
   qwerty = {
     { 'z','s','x','d','c','v','g','b','h','n','j','m',',','l','.' },
@@ -43,197 +42,277 @@ for name, layout in pairs(layouts) do
   chars[name] = t
 end
 
+local cm = (...).cm
+
+local mgr = {
+  commands = {},          -- flat: name → fn (may be a wrap chain)
+  gates    = {},          -- name → owning scope; absent = ungated (global)
+  scopes   = {},
+  stack    = {},
+  layouts  = layouts,
+}
+
+----- Stack reachability
+--
+-- A name registered on scope S is reachable when S is on the stack and
+-- no scope above S is modal-without-passthrough[name]. invoke gates on
+-- this; key dispatch's keychain filter encodes the same predicate.
+
+local function isReachable(scope, name)
+  local idx
+  for i, s in ipairs(mgr.stack) do
+    if s == scope then idx = i; break end
+  end
+  if not idx then return false end
+  for i = idx + 1, #mgr.stack do
+    local s = mgr.stack[i]
+    if s.modal and not (s.passthrough and s.passthrough[name]) then return false end
+  end
+  return true
+end
+
 ----- Scope
 
---@map:contract wrap is a no-op if name has no registered command; wrappers stack (compose outward)
---@map:contract doBefore/doAfter accept either a single name or an array of names
---@map:contract doAfter preserves the original command's return values (it's the dispatch signal)
-local function attachScope(scope)
-  function scope:register(name, fn) self.commands[name] = fn end
+--shape: scope = { keymap={}, modal=false?, passthrough={[name]=true}?, registered={[name]=true} }
+local function newScope()
+  local s = { keymap = {}, registered = {} }
 
-  function scope:registerAll(tbl)
-    for name, fn in pairs(tbl) do self.commands[name] = fn end
+  -- Module-side register installs a gated entry: invoke fires the fn
+  -- only when the scope is reachable. Bookkeeping in `registered` lets
+  -- callers iterate names this scope owns (vm uses this). Re-registration
+  -- silently overwrites — the test harness exercises this when a spec
+  -- builds a second vm against an already-populated cmgr.
+  function s:register(name, fn)
+    self.registered[name] = true
+    mgr.commands[name] = fn
+    mgr.gates[name]    = self
   end
 
-  function scope:bind(name, keys) self.keymap[name] = keys end
+  function s:registerAll(tbl)
+    for name, fn in pairs(tbl) do self:register(name, fn) end
+  end
 
-  function scope:bindAll(tbl)
+  function s:bind(name, keys)        self.keymap[name] = keys end
+  function s:bindAll(tbl)
     for name, keys in pairs(tbl) do self.keymap[name] = keys end
   end
 
-  function scope:wrap(name, wrapper)
-    local orig = self.commands[name]
-    if not orig then return end
-    self.commands[name] = wrapper(orig)
-  end
+  return s
+end
 
-  function scope:doBefore(name, before)
-    if type(name) == 'table' then
-      for _, n in ipairs(name) do self:doBefore(n, before) end
-      return
-    end
-    self:wrap(name, function(orig)
-      return function () before(); return orig() end
-    end)
-  end
+----- Bottom of the stack
+--
+-- 'global' is an ordinary scope; it lives at the bottom and is never
+-- popped. Commands registered via mgr:register are flat in mgr.commands
+-- with no gate (always reachable). mgr.keymap aliases global.keymap so
+-- root-level binds land on the bottom-of-stack keymap.
 
-  function scope:doAfter(name, after)
-    if type(name) == 'table' then
-      for _, n in ipairs(name) do self:doAfter(n, after) end
-      return
+local global = newScope()
+mgr.scopes.global = global
+mgr.stack[1]      = global
+mgr.keymap        = global.keymap
+
+----- Manager-level surface
+--
+-- mgr:register installs an ungated command (always reachable). Pages and
+-- modules use scope:register for mode-gated verbs; mgr:register is for
+-- the unconditional ones (play, quit, switchPage).
+
+function mgr:register(name, fn)
+  self.commands[name] = fn
+  self.gates[name]    = nil
+end
+
+function mgr:registerAll(tbl)
+  for name, fn in pairs(tbl) do self:register(name, fn) end
+end
+
+function mgr:bind(name, keys)    global:bind(name, keys) end
+function mgr:bindAll(tbl)        global:bindAll(tbl)     end
+
+--contract: wrap is a no-op if name has no registered command; wrappers stack (compose outward)
+function mgr:wrap(name, wrapper)
+  local orig = self.commands[name]
+  if not orig then return end
+  self.commands[name] = wrapper(orig)
+end
+
+--contract: doBefore/doAfter accept either a single name or an array of names
+--contract: doAfter preserves the original command's return values (the dispatch signal)
+--invariant: wraps compose inside the gate — when invoke skips a gated command, no doBefore / doAfter side-effect fires
+function mgr:doBefore(name, before)
+  if type(name) == 'table' then
+    for _, n in ipairs(name) do self:doBefore(n, before) end
+    return
+  end
+  self:wrap(name, function(orig)
+    return function() before(); return orig() end
+  end)
+end
+
+function mgr:doAfter(name, after)
+  if type(name) == 'table' then
+    for _, n in ipairs(name) do self:doAfter(n, after) end
+    return
+  end
+  self:wrap(name, function(orig)
+    return function()
+      local r, s = orig(); after(); return r, s
     end
-    self:wrap(name, function(orig)
-      return function ()
-        local r, s = orig(); after(); return r, s
+  end)
+end
+
+----- Universal-argument prefix
+--
+-- Emacs-style numeric prefix. `beginPrefix` opens accumulation; the
+-- dispatcher feeds digit and `/` characters via `appendPrefix`. The
+-- next non-accumulating key calls `finishPrefix` to parse the buffer
+-- and stash a pending value, then falls through to the normal
+-- keychain walk. Commands that want the value call `consumePrefix`.
+-- No negatives — direction is the bound command's job.
+
+local prefixBuf, pendingPrefix = nil, nil
+local pendingPrefixNum, pendingPrefixDen = nil, nil
+
+--contract: buffer accepts only '0'..'9' and '/'; cancel/finish/consume each leave the state inactive
+function mgr:beginPrefix()   prefixBuf = '' end
+function mgr:isPrefixActive() return prefixBuf ~= nil end
+
+function mgr:appendPrefix(ch)
+  if not prefixBuf then return end
+  if ch == '/' and prefixBuf:find('/', 1, true) then return end
+  prefixBuf = prefixBuf .. ch
+end
+
+function mgr:cancelPrefix()
+  prefixBuf, pendingPrefix = nil, nil
+  pendingPrefixNum, pendingPrefixDen = nil, nil
+end
+
+--contract: empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
+function mgr:finishPrefix()
+  local buf = prefixBuf
+  prefixBuf = nil
+  pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
+  if not buf or buf == '' then return nil end
+  local num, den = buf:match('^(%d+)/(%d+)$')
+  if num then
+    local n, d = tonumber(num), tonumber(den)
+    if d ~= 0 then
+      pendingPrefix    = n / d
+      pendingPrefixNum, pendingPrefixDen = n, d
+    end
+  elseif buf:match('^%d+$') then
+    local n = tonumber(buf)
+    pendingPrefix    = n
+    pendingPrefixNum, pendingPrefixDen = n, 1
+  end
+  return pendingPrefix
+end
+
+--contract: returns pending value (number or nil) and clears all prefix state; idempotent thereafter until next finishPrefix
+function mgr:consumePrefix()
+  local p = pendingPrefix
+  pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
+  return p
+end
+
+--contract: returns (num, den) of the pending prefix as parsed integers, or (nil, nil) when no prefix is pending; clears all prefix state; consumers that need rationality (e.g. scale's rpb refinement) read this instead of consumePrefix
+function mgr:consumePrefixRational()
+  local n, d = pendingPrefixNum, pendingPrefixDen
+  pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
+  return n, d
+end
+
+----- Scopes & stack
+
+--contract: creates the scope on first request; idempotent thereafter
+function mgr:scope(name)
+  local s = self.scopes[name]
+  if not s then
+    s = newScope()
+    self.scopes[name] = s
+  end
+  return s
+end
+
+local function asScope(s) return type(s) == 'string' and mgr.scopes[s] or s end
+
+--contract: push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.
+function mgr:push(s)
+  s = type(s) == 'string' and self:scope(s) or s
+  self.stack[#self.stack + 1] = s
+  return s
+end
+
+--contract: pop(name|scope) asserts the named scope is currently on top; pops it
+function mgr:pop(s)
+  s = asScope(s)
+  assert(self.stack[#self.stack] == s, 'cmgr:pop — scope is not on top of the stack')
+  self.stack[#self.stack] = nil
+end
+
+----- Dispatch
+
+--contract: returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)
+function mgr:invoke(name, ...)
+  local fn = self.commands[name]
+  if not fn then return end
+  local scope = self.gates[name]
+  if scope and not isReachable(scope, name) then return end
+  return fn(...)
+end
+
+----- Keymap lookup
+--
+-- Keymap shadowing walks the same stack with the same modal+passthrough
+-- rule, but on `scope.keymap` rather than the flat command table.
+
+local function resolveKeys(name)
+  for i = #mgr.stack, 1, -1 do
+    local s = mgr.stack[i]
+    local hit = s.keymap[name]
+    if hit then return hit end
+    if s.modal and not (s.passthrough and s.passthrough[name]) then return end
+  end
+end
+
+function mgr:keysFor(name) return resolveKeys(name) end
+
+--contract: returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk
+function mgr:keychain()
+  local out = {}
+  for i = #self.stack, 1, -1 do
+    out[#out + 1] = self.stack[i].keymap
+    if self.stack[i].modal then
+      local pass = self.stack[i].passthrough or {}
+      for j = i - 1, 1, -1 do
+        local view = {}
+        for name, keys in pairs(self.stack[j].keymap) do
+          if pass[name] then view[name] = keys end
+        end
+        out[#out + 1] = view
       end
-    end)
-  end
-
-  return scope
-end
-
-local function newScope()
-  return attachScope({ commands = {}, keymap = {} })
-end
-
---@map:contract mgr.commands / mgr.keymap alias the root scope's tables; rm reads them directly in dispatch
---@map:contract mgr-level register/bind/wrap/doBefore/doAfter operate on the root scope only
-function newCommandManager(cm)
-  local root   = newScope()
-  local scopes = {}
-
-  local prefixBuf, pendingPrefix = nil, nil
-  local pendingPrefixNum, pendingPrefixDen = nil, nil
-
-  local mgr = {
-    commands    = root.commands,    -- alias: tests and dispatch read here
-    keymap      = root.keymap,
-    layouts     = layouts,
-    root        = root,
-    scopes      = scopes,
-    activeScope = nil,
-  }
-
-  function mgr:register(name, fn)     root:register(name, fn) end
-  function mgr:registerAll(tbl)       root:registerAll(tbl) end
-  function mgr:bind(name, keys)       root:bind(name, keys) end
-  function mgr:bindAll(tbl)           root:bindAll(tbl) end
-  function mgr:wrap(name, wrapper)    root:wrap(name, wrapper) end
-  function mgr:doBefore(name, before) root:doBefore(name, before) end
-  function mgr:doAfter(name, after)   root:doAfter(name, after) end
-
-  ----- Universal-argument prefix
-  --
-  -- Emacs-style numeric prefix. `beginPrefix` opens accumulation; the
-  -- dispatcher feeds digit and `/` characters via `appendPrefix`. The
-  -- next non-accumulating key calls `finishPrefix` to parse the buffer
-  -- and stash a pending value, then falls through to the normal
-  -- keychain walk. Commands that want the value call `consumePrefix`.
-  -- No negatives — direction is the bound command's job.
-
-  --@map:contract buffer accepts only '0'..'9' and '/'; cancel/finish/consume each leave the state inactive
-  function mgr:beginPrefix()   prefixBuf = '' end
-  function mgr:isPrefixActive() return prefixBuf ~= nil end
-
-  function mgr:appendPrefix(ch)
-    if not prefixBuf then return end
-    if ch == '/' and prefixBuf:find('/', 1, true) then return end
-    prefixBuf = prefixBuf .. ch
-  end
-
-  function mgr:cancelPrefix()
-    prefixBuf, pendingPrefix = nil, nil
-    pendingPrefixNum, pendingPrefixDen = nil, nil
-  end
-
-  --@map:contract empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
-  function mgr:finishPrefix()
-    local buf = prefixBuf
-    prefixBuf = nil
-    pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
-    if not buf or buf == '' then return nil end
-    local num, den = buf:match('^(%d+)/(%d+)$')
-    if num then
-      local n, d = tonumber(num), tonumber(den)
-      if d ~= 0 then
-        pendingPrefix    = n / d
-        pendingPrefixNum, pendingPrefixDen = n, d
-      end
-    elseif buf:match('^%d+$') then
-      local n = tonumber(buf)
-      pendingPrefix    = n
-      pendingPrefixNum, pendingPrefixDen = n, 1
-    end
-    return pendingPrefix
-  end
-
-  --@map:contract returns pending value (number or nil) and clears all prefix state; idempotent thereafter until next finishPrefix
-  function mgr:consumePrefix()
-    local p = pendingPrefix
-    pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
-    return p
-  end
-
-  --@map:contract returns (num, den) of the pending prefix as parsed integers, or (nil, nil) when no prefix is pending; clears all prefix state; consumers that need rationality (e.g. scale's rpb refinement) read this instead of consumePrefix
-  function mgr:consumePrefixRational()
-    local n, d = pendingPrefixNum, pendingPrefixDen
-    pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
-    return n, d
-  end
-
-  ----- Scopes
-
-  --@map:contract creates the scope on first request; idempotent thereafter
-  function mgr:scope(name)
-    local s = scopes[name]
-    if not s then
-      s = newScope()
-      scopes[name] = s
-    end
-    return s
-  end
-
-  --@map:contract pass nil to clear active scope (drop back to root-only resolution)
-  function mgr:setActive(name) self.activeScope = name end
-
-  function mgr:dropScope(name) scopes[name] = nil end
-
-  ----- Lookup
-
-  --@map:contract no-op (returns nil) if no scope resolves the name; never raises on unknown
-  function mgr:invoke(name, ...)
-    local s  = self.activeScope and scopes[self.activeScope]
-    local fn = (s and s.commands[name]) or root.commands[name]
-    if fn then return fn(...) end
-  end
-
-  function mgr:keychain()
-    local s = self.activeScope and scopes[self.activeScope]
-    if s then return { s.keymap, root.keymap } end
-    return { root.keymap }
-  end
-
-  function mgr:keysFor(name)
-    for _, km in ipairs(self:keychain()) do
-      if km[name] then return km[name] end
+      return out
     end
   end
-
-  -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
-  function mgr:keySpec(spec, ImGui)
-    if type(spec) ~= 'table' then return spec, ImGui.Mod_None end
-    local mods = ImGui.Mod_None
-    for i = 2, #spec do mods = mods | spec[i] end
-    return spec[1], mods
-  end
-
-  ----- Note layout
-
-  -- Re-read noteLayout on each call so a config change takes effect
-  -- without rebuilding vm.
-  function mgr:noteChars(char)
-    return chars[cm:get('noteLayout')][char]
-  end
-
-  return mgr
+  return out
 end
+
+-- ImGui injected so cmgr stays free of REAPER-side imports at module load.
+function mgr:keySpec(spec, ImGui)
+  if type(spec) ~= 'table' then return spec, ImGui.Mod_None end
+  local mods = ImGui.Mod_None
+  for i = 2, #spec do mods = mods | spec[i] end
+  return spec[1], mods
+end
+
+----- Note layout
+
+-- Re-read noteLayout on each call so a config change takes effect
+-- without rebuilding vm.
+function mgr:noteChars(char)
+  return chars[cm:get('noteLayout')][char]
+end
+
+return mgr

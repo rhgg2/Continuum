@@ -8,13 +8,25 @@ note-input layouts used when typing notes into the grid.
 
 Two orthogonal tables live on the manager:
 
-- `commands[name] = fn` — what the command does
-- `keymap[name]   = { keyspec, ... }` — which keys trigger it
+- `commands[name] = fn` — what the command does. **Flat namespace.**
+  One fn per name, owned by exactly one module. There is no scoped
+  copy of `commands`; the scope a verb belongs to is recorded
+  separately in `gates[name]` and only affects whether `invoke` will
+  fire it.
+- `keymap[name]   = { keyspec, ... }` — which keys trigger it. **Per
+  scope.** Each scope carries its own keymap; bindings are what stack
+  and shadow.
 
-Keeping them name-addressable (rather than closing keys over handlers
-directly) lets rm invoke commands by name outside the keymap path —
-mouse-wheel scrolling and the swing editor both do this — and lets vm
-wrap existing commands without threading through the dispatch loop.
+Commands are flat because a verb has one meaning. *deleteSel* always
+means "delete the selection" — that doesn't depend on which scope is
+on top. What changes per mode is which **key** fires which verb, not
+what the verb itself does. So bindings are scoped; commands aren't.
+
+Keeping the tables name-addressable (rather than closing keys over
+handlers directly) lets rm invoke commands by name outside the keymap
+path — mouse-wheel scrolling and the swing editor both do this — and
+lets vm wrap existing commands without threading through the dispatch
+loop.
 
 ## Registration lifecycle
 
@@ -47,11 +59,46 @@ After registration vm applies `wrap` calls for cross-cutting behaviour
 (see below). rm installs the default keymap at construction; users
 will eventually layer overrides on top.
 
+## Scope stack
+
+Scopes form a stack. The `'global'` scope sits at the bottom (pushed
+at module load, never popped); `mgr.keymap` aliases its keymap so
+unscoped binds land there. Above it: the active page scope (`tracker`
+or `sample`), pushed by `coord:setActive` and popped on page switch.
+Above that: optional overlay scopes (`region` today; letter-chord
+menus later).
+
+A scope's `register(name, fn)` writes `mgr.commands[name] = fn` and
+records `mgr.gates[name] = scope`. At `invoke` time the gate is
+checked: the fn fires only if the scope is somewhere on the stack
+AND no modal scope above it blocks the name. So a module's `register`
+is its own guard — the command can't accidentally fire when its mode
+is inactive, even if reached by programmatic invoke or a stray
+binding. `mgr:register` (ungated) is reserved for verbs whose mode
+is always-on: `play`, `quit`, `switchPage`.
+
+Bindings shadow by ordinary top-down keymap walk. A scope can
+declare `modal=true` with a `passthrough = { [name]=true, ... }`
+set; on hitting that scope, the walk continues only for names in
+`passthrough`, otherwise it stops there. `keysFor` and `keychain`
+both honour this. The gate on `invoke` honours the same rule, so
+the two paths agree: a key that doesn't dispatch in a given mode
+will also not invoke its command.
+
+The same key may bind different verbs in different scopes — region's
+Delete fires `regionDrop`; tracker's Delete fires `deleteSel`. Two
+distinct verbs, one shared key. No name collision; no wrapper hack.
+
+`mgr:push(scopeOrName)` / `mgr:pop(scopeOrName)` are the only
+mutators. `pop` asserts the popped scope is on top, so an
+out-of-order pop is loud rather than silent.
+
 ## Dispatch & result protocol
 
-rm's key-handling loop iterates `cmgr.keymap`, matches ImGui key +
-modifier state, and invokes `cmgr.commands[name]()`. The return value is
-a single boolean-ish:
+The dispatcher iterates `cmgr:keychain()` — one filtered keymap per
+stack scope, top-down, modal-aware. It matches ImGui key + modifier
+state and invokes `cmgr.commands[name]()` via the same walker. The
+return value is a single boolean-ish:
 
 | return          | meaning                                                    |
 |-----------------|------------------------------------------------------------|

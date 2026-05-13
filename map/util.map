@@ -1,50 +1,60 @@
-@module util  src=util.lua  loc=397  sha=d4f20ff
-
-# Invariants & contracts (module)
-  @map:invariant  stateless module: pure helpers, no module-level mutable state beyond the REMOVE sentinel
-  @map:invariant  util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
+@module util  src=util.lua  loc=421  sha=d4f20ff  mode=namespace
 
 # Module-level constants
-  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 226
+  @const util = {}  @ 5
+      @invariant  stateless module: pure helpers, no module-level mutable state beyond the REMOVE sentinel
+      @invariant  util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
+  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 238
 
-# Module-level functions (private)
-  @fn print(...)  @ 16
-  @fn escape_string(s)  @ 126
+# Private functions
+  @fn print(...)  @ 15
+  @fn escape_string(s)  @ 138
+  @fn parseValue()  @ 394
 
 # Public API (util.*)
-  @api util.print(...)  @ 8
-  @api util.print_r(root)  @ 20
-  @api util.assign(t1,t2)  @ 44
-      @map:contract  values equal to util.REMOVE clear the key from t1 instead of being assigned
-  @api util.add(tbl, val)  @ 57
-  @api util.pick(src, keys, adds)  @ 62
-  @api util.bucket(buckets, key, val)  @ 73
-  @api util.seek(items, mode, key, filter, keyFn)  @ 81
-      @map:contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
-  @api util.clone(src, exclude, deep)  @ 105
-      @map:contract  exclude applies only to the outermost table; deep recursion drops the exclude set
-  @api util.deepClone(src)  @ 116
-  @api util.deepEq(a, b)  @ 118
-  @api util.installHooks(owner)  @ 141
-      @map:contract  listeners filter by signal name at registration; forward requires source itself ran installHooks
-  @api util.isNote(e)  @ 160
-  @api util.between(events, lo, hi, filter)  @ 163
-      @map:contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap
-  @api util.clamp(val,min,max)  @ 176
-  @api util.setDigit(val, d, pos, base, half)  @ 186
-  @api util.snapTo(v, dir, interval)  @ 193
-      @map:contract  advances at least one full interval; values already on a boundary do not no-op
-  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 198
-  @api util.oneOf(choices, txt)  @ 203
-  @api util.round(n, to)  @ 210
-  @api util.gcd(a, b)  @ 218
-  @api util.lcm(a, b)  @ 224
-  @api util.toBase36(n)  @ 228
-  @api util.fromBase36(txt)  @ 239
-  @api util.dotimes(n, v)  @ 244
-      @map:contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v
-  @api util.serialise(value, exclude, seen)  @ 255
-      @map:contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
-  @api util.unserialise(input)  @ 290
-      @map:contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
+  @api util.print(...)  @ 7
+  @api util.print_r(root)  @ 19
+  @api util.assign(t1,t2)  @ 43
+      @contract  values equal to util.REMOVE clear the key from t1 instead of being assigned
+  @api util.add(tbl, val)  @ 56
+  @api util.atomic(label, fn)  @ 65
+      -- Wrap fn so each call is one REAPER undo entry. label is the undo
+      -- description; the wrapper forwards args, propagates errors after
+      -- closing the block, and is a no-op when reaper.Undo_BeginBlock is
+      -- absent (test harness).
+  @api util.pick(src, keys, adds)  @ 74
+  @api util.bucket(buckets, key, val)  @ 85
+  @api util.seek(items, mode, key, filter, keyFn)  @ 93
+      @contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
+  @api util.clone(src, exclude, deep)  @ 117
+      @contract  exclude applies only to the outermost table; deep recursion drops the exclude set
+  @api util.deepClone(src)  @ 128
+  @api util.deepEq(a, b)  @ 130
+  @api util.installHooks(owner)  @ 153
+      @contract  listeners filter by signal name at registration; forward requires source itself ran installHooks
+  @api util.isNote(e)  @ 172
+  @api util.between(events, lo, hi, filter)  @ 175
+      @contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap
+  @api util.clamp(val,min,max)  @ 188
+  @api util.setDigit(val, d, pos, base, half)  @ 198
+  @api util.snapTo(v, dir, interval)  @ 205
+      @contract  advances at least one full interval; values already on a boundary do not no-op
+  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 210
+  @api util.oneOf(choices, txt)  @ 215
+  @api util.round(n, to)  @ 222
+  @api util.gcd(a, b)  @ 230
+  @api util.lcm(a, b)  @ 236
+  @api util.toBase36(n)  @ 240
+  @api util.fromBase36(txt)  @ 251
+  @api util.dotimes(n, v)  @ 256
+      @contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v
+  @api util.serialise(value, exclude, seen)  @ 267
+      @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
+  @api util.unserialise(input)  @ 302
+      @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
+  @api util.instantiate(name, deps)  @ 413
+      @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
 
+# REAPER API surface
+  @reaper ShowConsoleMsg
+  @reaper Undo_BeginBlock, Undo_EndBlock

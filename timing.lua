@@ -1,21 +1,21 @@
 -- See docs/timing.md for the model.
 -- @noindex
 
---@map:invariant pure module — no module-level state; all functions take operands explicitly
---@map:invariant two frames: ppqL (logical) and raw ppq (realisation); forward only — ppq = fromLogical(ppqL) + delayToPPQ(delay), endppq = fromLogical(endppqL); see docs/timing.md
---@map:invariant atoms are pure (u, shift) functions on the unit interval; inverse via Newton (closed form for id)
---@map:invariant tile period unit is QN (quarter notes); period may be scalar or {num,den}
---@map:invariant factor order is inner-to-outer: applyFactors walks forward, unapplyFactors walks backward
---@map:invariant K is the max stretch factor; bounded atoms have posRange/negRange = max |s| (per sign) keeping slope ∈ [1/K, K]
---@map:shape Atom = { forward = fn(u, shift) -> v, inverse = fn(v, shift) -> u }
---@map:shape Factor = { atom = string, shift = number_qn, period = number|{num,den}, phase? = number_qn|{num,den} }
---@map:shape Composite = { phase? = number_qn|{num,den}, factors = Factor[] }   -- bare {} or {factors={}} both denote identity
---@map:shape ResolvedFactor = { atom = string, shift = number_unit, T = number_ppq, phase? = number_ppq }
---@map:shape Shape = { factors, a, b, ya, yb, length, identity? }   -- linear ramps on [0,a] and [b,length]; analytic middle on (a,b)
---@map:shape AtomMeta = { posRange = number, negRange = number, pulsesPerCycle = 1|2 }
+--invariant: pure module — no module-level state; all functions take operands explicitly
+--invariant: two frames: ppqL (logical) and raw ppq (realisation); forward only — ppq = fromLogical(ppqL) + delayToPPQ(delay), endppq = fromLogical(endppqL); see docs/timing.md
+--invariant: atoms are pure (u, shift) functions on the unit interval; inverse via Newton (closed form for id)
+--invariant: tile period unit is QN (quarter notes); period may be scalar or {num,den}
+--invariant: factor order is inner-to-outer: applyFactors walks forward, unapplyFactors walks backward
+--invariant: K is the max stretch factor; bounded atoms have posRange/negRange = max |s| (per sign) keeping slope ∈ [1/K, K]
+--shape: Atom = { forward = fn(u, shift) -> v, inverse = fn(v, shift) -> u }
+--shape: Factor = { atom = string, shift = number_qn, period = number|{num,den}, phase? = number_qn|{num,den} }
+--shape: Composite = { phase? = number_qn|{num,den}, factors = Factor[] }   -- bare {} or {factors={}} both denote identity
+--shape: ResolvedFactor = { atom = string, shift = number_unit, T = number_ppq, phase? = number_ppq }
+--shape: Shape = { factors, a, b, ya, yb, length, identity? }   -- linear ramps on [0,a] and [b,length]; analytic middle on (a,b)
+--shape: AtomMeta = { posRange = number, negRange = number, pulsesPerCycle = 1|2 }
+local util = require 'util'
 
-timing = {}
-local M = timing
+local M = {}
 
 -- Project-level max stretch factor: every bounded atom and the composite-
 -- boundary ramp pin slope ∈ [1/K, K]. K=60 is well above any realistic
@@ -138,7 +138,7 @@ M.atomMeta = {
   tilt    = { posRange = 4 * (K - 1) / (9 * K),                      negRange = 4 * (K - 1) / (27 * K),                     pulsesPerCycle = 1 },
 }
 
---@map:contract returns QN, not PPQ; multiply by resolution at the swing-resolution boundary
+--contract: returns QN, not PPQ; multiply by resolution at the swing-resolution boundary
 function M.atomTilePeriod(factor)
   return M.periodQN(factor.period) * M.atomMeta[factor.atom].pulsesPerCycle
 end
@@ -160,13 +160,13 @@ M.presets = {
   ['delay-30']   = { factors = { { atom = 'id', shift = -1/8,  period = 1 } } },
 }
 
---@map:contract sole resolution path; tm/vm never read presets. nil result means identity to callers
+--contract: sole resolution path; tm/vm never read presets. nil result means identity to callers
 function M.findShape(name, userLib)
   if not name or not userLib then return nil end
   return userLib[name]
 end
 
---@map:contract bare {} treated as identity; either missing factors or empty factors with zero phase counts
+--contract: bare {} treated as identity; either missing factors or empty factors with zero phase counts
 function M.isIdentity(composite)
   if not composite then return true end
   local fs = composite.factors
@@ -202,7 +202,7 @@ end
 
 ----- Factor resolution
 
---@map:contract Composite + ppqPerQN -> ResolvedFactor[]; folds composite.phase into each factor's effective phase. Sole pre-flight for applyFactors / unapplyFactors and resolveComposite.
+--contract: Composite + ppqPerQN -> ResolvedFactor[]; folds composite.phase into each factor's effective phase. Sole pre-flight for applyFactors / unapplyFactors and resolveComposite.
 function M.resolveFactors(composite, ppqPerQN)
   if not composite or not composite.factors then return {} end
   local cPhaseQN = composite.phase and M.periodQN(composite.phase) or 0
@@ -242,13 +242,13 @@ local function tileUnapply(rf, p)
   return rf.phase and (y + rf.phase) or y
 end
 
---@map:contract ppqL -> ppqI; identity-safe on empty factors
+--contract: ppqL -> ppqI; identity-safe on empty factors
 function M.applyFactors(factors, ppq)
   for _, rf in ipairs(factors) do ppq = tileApply(rf, ppq) end
   return ppq
 end
 
---@map:contract ppqI -> ppqL; reverses factor order to invert composition
+--contract: ppqI -> ppqL; reverses factor order to invert composition
 function M.unapplyFactors(factors, ppq)
   for i = #factors, 1, -1 do ppq = tileUnapply(factors[i], ppq) end
   return ppq
@@ -294,7 +294,7 @@ local function identityShape(length)
   return { factors = {}, a = 0, b = length, ya = 0, yb = length, length = length, identity = true }
 end
 
---@map:contract identity composite or length≤0 returns an identity-Shape sentinel; otherwise returns Shape{factors, a, b, ya, yb, length}. Consumers eval/invert across both forms.
+--contract: identity composite or length≤0 returns an identity-Shape sentinel; otherwise returns Shape{factors, a, b, ya, yb, length}. Consumers eval/invert across both forms.
 function M.resolveComposite(composite, length, ppqPerQN)
   if M.isIdentity(composite) or length <= 0 then return identityShape(length) end
   local factors = M.resolveFactors(composite, ppqPerQN)
@@ -308,7 +308,7 @@ function M.resolveComposite(composite, length, ppqPerQN)
   return { factors = factors, a = a, b = b, ya = ya, yb = yb, length = length }
 end
 
---@map:contract eval routes by x: ramp-on for x≤a, applyFactors for a<x<b, ramp-off for x≥b
+--contract: eval routes by x: ramp-on for x≤a, applyFactors for a<x<b, ramp-off for x≥b
 function M.eval(S, x)
   if S.identity then return x end
   if x <= S.a then
@@ -320,7 +320,7 @@ function M.eval(S, x)
   return M.applyFactors(S.factors, x)
 end
 
---@map:contract invert routes by y: ramp-on inverse for y≤ya, unapplyFactors for ya<y<yb, ramp-off inverse for y≥yb
+--contract: invert routes by y: ramp-on inverse for y≤ya, unapplyFactors for ya<y<yb, ramp-off inverse for y≥yb
 function M.invert(S, y)
   if S.identity then return y end
   if y <= S.ya then
@@ -334,14 +334,14 @@ end
 
 ----- Logical grid
 
---@map:contract callers must store result as float; vm relies on unrounded rowPPQs for swing-inversion exactness
+--contract: callers must store result as float; vm relies on unrounded rowPPQs for swing-inversion exactness
 function M.logPerRow(rpb, denom, resolution)
   return resolution * 4 / (denom * rpb)
 end
 
 ----- Delay <-> PPQ
 
---@map:contract d in signed milli-QN, res in PPQ/QN; nil d treated as 0
+--contract: d in signed milli-QN, res in PPQ/QN; nil d treated as 0
 function M.delayToPPQ(d, res)
   return util.round(res * (d or 0) / 1000)
 end

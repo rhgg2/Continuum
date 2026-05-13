@@ -5,6 +5,7 @@
 -- their onset, same as user-authored notes.
 
 local t = require('support')
+local tuning = require('tuning')
 
 local function cents2raw(c) return math.floor(c * 8192 / 200 + 0.5) end
 

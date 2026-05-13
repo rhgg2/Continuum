@@ -1,38 +1,50 @@
-@module chrome  src=chrome.lua  loc=285  sha=ee85a77
+@module chrome  src=chrome.lua  loc=285  sha=ee85a77  mode=chunk
+@deps cm, ctx
 
 # Shapes
   @shape  chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), makeToolbar()->fn(segments), drawPicker(d), pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
   @shape  pickerSpec = { kind: string, heading: string, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
+  @shape  toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
 
-# Module-level constants
-  @const ImGui = require 'imgui' '0.10'  @ 8
-      @map:contract  one chrome instance per coordinator; threaded into every page
-      @map:invariant  colour cache lives on the chrome instance and is invalidated on cm:configChanged
+# Imports
+  @require ImGui = 'imgui'  @ 7
+      @contract  one chrome instance per coordinator; threaded into every page
+      @invariant  colour cache lives on the chrome instance and is invalidated on cm:configChanged
 
-@factory newChrome(cm, ctx)  @ 10
+# Private state
+  @state cache = {}  @ 11
+  @state pickerFilter, pickerCursor = {}, {}  @ 157
+  @state pickerOpenReq = nil  @ 158   -- kind name; consumed by next drawPicker(kind)
+  @state pickerActive = false  @ 159   -- frame-scoped: any picker popup live this frame
 
-  # Shapes
-    @shape  toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
-
-  # Private state
-    @state cache = {}  @ 11
-    @state pickerOpenReq = nil  @ 158   -- kind name; consumed by next drawPicker(kind)
-    @state pickerActive = false  @ 159   -- frame-scoped: any picker popup live this frame
-
-  # Private functions
-    @fn resolve(key)  @ 15
-        @map:contract  walks colour aliases (see docs/configManager.md) to a terminal atom; outermost alpha override wins; cycles raise with the resolved chain
-    @fn colour(name)  @ 36
-    @fn pushChromeStyles()  @ 45
-    @fn popChromeStyles()  @ 59
-    @fn pushChromeWindow()  @ 65   -- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed th
-    @fn popChromeWindow()  @ 76
-    @fn verticalSeparator()  @ 84   -- reaper-imgui has no Separator(Vertical); draw a 1px vertical line via the window draw list
-    @fn disabledIf(cond, fn)  @ 94   -- RAII wrapper for ImGui.BeginDisabled / EndDisabled: dropping the bracket-match removes a c
-    @fn checkbox(label, value)  @ 103   -- Compact checkbox / radio for toolbar contexts: zero FramePadding shrinks the box to its gl
-    @fn radio(label, active)  @ 111
-    @fn makeToolbar()  @ 123   -- Wraps each segment in BeginGroup/EndGroup so GetItemRectMin/Max measures the whole segment
-    @fn requestPickerOpen(kind)  @ 161
-    @fn pickerIsActive()  @ 162
-    @fn resetPickerActive()  @ 163
-    @fn drawPicker(d)  @ 167   -- Generic typeahead picker. Enter picks the highlighted match; group separators show only wh
+# Private functions
+  @fn resolve(key)  @ 15
+      @contract  walks colour aliases (see docs/configManager.md) to a terminal atom; outermost alpha override wins; cycles raise with the resolved chain
+  @fn colour(name)  @ 36
+  @fn pushChromeStyles()  @ 45
+  @fn popChromeStyles()  @ 59
+  @fn pushChromeWindow()  @ 65
+      -- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed the grid through.
+  @fn popChromeWindow()  @ 76
+  @fn verticalSeparator()  @ 84
+      -- reaper-imgui has no Separator(Vertical); draw a 1px vertical line
+      -- via the window draw list and reserve a Dummy slot so SameLine works.
+  @fn disabledIf(cond, fn)  @ 94
+      -- RAII wrapper for ImGui.BeginDisabled / EndDisabled: dropping the
+      -- bracket-match removes a class of mismatched-pop bugs on early return.
+  @fn checkbox(label, value)  @ 103
+      -- Compact checkbox / radio for toolbar contexts: zero FramePadding
+      -- shrinks the box to its glyph; the +3 cursorY nudge re-aligns the
+      -- small box with framed siblings on the same row.
+  @fn radio(label, active)  @ 111
+  @fn makeToolbar()  @ 123
+      -- Wraps each segment in BeginGroup/EndGroup so GetItemRectMin/Max measures the whole
+      -- segment. Caches last-frame width per id; if (lastEnd + sep + cached) overflows the
+      -- row, the leading SameLine is skipped and ImGui wraps. One-frame slop on size change.
+  -- Picker (typeahead popup, shared across pages)
+  @fn requestPickerOpen(kind)  @ 161
+  @fn pickerIsActive()  @ 162
+  @fn resetPickerActive()  @ 163
+  @fn drawPicker(d)  @ 167
+      -- Generic typeahead picker. Enter picks the highlighted match; group
+      -- separators show only when filter is empty.

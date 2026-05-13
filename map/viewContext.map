@@ -1,0 +1,34 @@
+@module viewContext  src=viewContext.lua  loc=100  sha=untracked  mode=chunk
+@deps swing, rowPPQs, length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
+
+# Shapes
+  @shape  args = { swing, rowPPQs, length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper }
+
+# Imports
+  @require util = 'util'  @ 7
+      @invariant  pure: no side effects, no signals, no mutation of args
+      @invariant  identity row math: ppqToRow / rowToPPQ are inverses (modulo integer rounding) under uniform ppqPerRow
+  @require tuning = 'tuning'  @ 8
+
+# Private state
+  @state swing = args.swing  @ 12
+  @state rowPPQs = args.rowPPQs  @ 13
+  @state length = args.length  @ 14
+  @state numRows = args.numRows  @ 15
+  @state rowPerBeat = args.rowPerBeat  @ 16
+  @state ppqPerRow = args.ppqPerRow  @ 17
+  @state timeSigs = args.timeSigs  @ 18
+  @state temper = args.temper  @ 19
+  @state ctx = {}  @ 20
+
+# Public API (ctx:*)
+  -- Temperament
+  @api ctx:activeTemper()  @ 24
+  @api ctx:noteProjection(evt)  @ 26
+  -- Timing
+  @api ctx:ppqToRow(ppqI, chan)  @ 45
+      @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Inverse of rowToPPQ. The chan argument is unused at this layer (kept for the call-site signature).
+  @api ctx:rowToPPQ(row, chan)  @ 52
+      @contract  identity row math: row × ppqPerRow, integer-rounded, clamped at length. On-grid iff ctx:rowToPPQ(round(ppqToRow(p)), chan) == p.
+  @api ctx:snapRow(ppqI, chan)  @ 58
+  @api ctx:ppqPerRow()  @ 60

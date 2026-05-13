@@ -1,26 +1,27 @@
-@module sequenceManager  src=sequenceManager.lua  loc=44  sha=b430243
+@module sequenceManager  src=sequenceManager.lua  loc=43  sha=69f289a  mode=chunk
+@deps tm, vm, cm
 
-# Invariants & contracts (module)
-  @map:invariant  project-wide singleton; pure orchestration over tm/vm/cm — owns no take state of its own
-  @map:invariant  discovery (takesUsing) reads each take's usedSwings via cm:readTakeKey, never disturbing the active mm/cm; reswing (reswingAll) routes through tm:bindTake so each visited take swaps mm and cm atomically
-  @map:invariant  takes that have never been bound by continuum (no ctm_config ext data yet) are absent from discovery — accepted bootstrap caveat; the projection populates lazily as users open takes
+# Imports
+  @require util = 'util'  @ 7
+      @invariant  project-wide singleton; pure orchestration over tm/vm/cm — owns no take state of its own
+      @invariant  discovery (takesUsing) reads each take's usedSwings via cm:readTakeKey, never disturbing the active mm/cm; reswing (reswingAll) routes through tm:bindTake so each visited take swaps mm and cm atomically
+      @invariant  takes that have never been bound by continuum (no ctm_config ext data yet) are absent from discovery — accepted bootstrap caveat; the projection populates lazily as users open takes
 
-@factory newSequenceManager(tm, vm, cm)  @ 10
+# Private state
+  @state self = {}  @ 11
 
-  # Private state
-    @state self = {}  @ 11
+# Private functions
+  @fn projectTakes()  @ 14
+      -- Active take of every MIDI item in the project, in REAPER order.
 
-  # Private functions
-    @fn projectTakes()  @ 14   -- Active take of every MIDI item in the project, in REAPER order.
+# Public API (self:*)
+  @api self:takesUsing(name)  @ 25
+      @contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
+  @api self:reswingAll(name)  @ 35
+      @contract  iterates affected takes via tm:bindTake with opts.markSwingStale=true; that flag drives the post-load rebuild's stale-branch, which rebuilds raw from each event's ppqL under the take's current swing. Restores the original take at the end (no stale-mark — the active take's events are unchanged by the visit).
 
-  # Public API
-    @api self:takesUsing(name)  @ 25
-        @map:contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
-    @api self:reswingAll(name)  @ 35
-        @map:contract  iterates affected takes via tm:bindTake with opts.markSwingStale=true; that flag drives the post-load rebuild's stale-branch, which rebuilds raw from each event's ppqL under the take's current swing. Restores the original take at the end (no stale-mark — the active take's events are unchanged by the visit).
-
-  # REAPER API surface
-    @reaper CountMediaItems
-    @reaper GetMediaItem
-    @reaper GetActiveTake
-    @reaper TakeIsMIDI
+# REAPER API surface
+  @reaper CountMediaItems
+  @reaper GetMediaItem
+  @reaper GetActiveTake
+  @reaper TakeIsMIDI

@@ -1,0 +1,21 @@
+@module regions  src=regions.lua  loc=93  sha=untracked  mode=namespace
+
+# Imports
+  @const util = 'util'  @ 20
+
+# Module-level constants
+  @const M = {}  @ 22
+
+# Public API (M.*)
+  -- colKey
+  @api M.colKey(col, partName)  @ 26
+  @api M.parseColKey(key)  @ 38
+  -- Parts set ops
+  @api M.partsUnion(a, b)  @ 54
+  @api M.partsDifference(a, b)  @ 61
+  @api M.partsCopy(p)  @ 67
+  @api M.partsIsEmpty(p)  @ 71
+  @api M.partsCount(p)  @ 75
+  -- Region predicates and seed
+  @api M.containsCell(region, key, ppq)  @ 83
+  @api M.seed(ppqLo, ppqHi, parts)  @ 89

@@ -6,7 +6,7 @@
 --   forward(signal, source)  subscribes on source, re-fires on owner
 
 local t = require('support')
-require('util')
+local util = require('util')
 
 local function newOwner()
   local owner = {}

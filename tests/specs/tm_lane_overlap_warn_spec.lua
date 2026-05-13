@@ -5,6 +5,7 @@
 -- path; surfacing the bug case is what this spec pins.
 
 local t = require('support')
+local util = require('util')
 
 return {
   {

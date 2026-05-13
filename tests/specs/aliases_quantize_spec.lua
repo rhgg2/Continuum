@@ -9,6 +9,8 @@
 -- residual logical overlap (see prior incident note in git history).
 
 local t = require('support')
+local util    = require('util')
+local aliases = require('aliases')
 
 local function rootByUuid(notes, uuid)
   for _, n in ipairs(notes) do if n.uuid == uuid then return n end end

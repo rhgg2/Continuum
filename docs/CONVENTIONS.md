@@ -3,8 +3,11 @@
 Three layers carry information about a module:
 
 1. **Source code** — the `.lua` file. Names and structure say WHAT.
-2. **`--@map:` annotations** — single-line invariants and contracts
+2. **`--KIND:` annotations** — single-line invariants and contracts
    embedded in source, surfacing the WHATs the code can't say plainly.
+   Five kinds: `--invariant:`, `--contract:`, `--shape:`,
+   `--emits:`, `--reaper:`. A leading `?` (`--?invariant:`) marks
+   the line as inferred rather than doc-grounded.
 3. **`.map` files** — derived semantic outline produced by
    `tools/map_extract.py`. One per `.lua`. Read first; the source second.
 4. **`docs/<file>.md`** — prose. WHY only: the model behind the design,
@@ -28,22 +31,23 @@ Thematic prose, nothing else. Include only what applies:
 - the model — identity, persistence, lifecycle, ownership
 - mutation/locking contract, if there is one
 - the *why* behind any invariant complex enough that the one-line
-  `--@map:invariant` leaves a question — incidents that motivated it,
+  `--invariant:` leaves a question — incidents that motivated it,
   alternatives considered, how it interacts with other modules
 - cross-cut concerns that span files (the `time` and `pitch` model in
   `docs/timing.md` and `docs/tuning.md` are the templates)
 - wire-format / external-API quirks worth a paragraph
 
-If the only thing a section can say is what a `--@map:` annotation
+If the only thing a section can say is what a `--KIND:` annotation
 already says, drop the section. The `.map` is the API reference.
 
 ## Shape of the source file
 
 - **Header:** single line, `-- See docs/<file>.md for the model.`
   No docstring essay. No per-function preambles.
-- **`--@map:` annotations:** attach to the construct they describe.
-  See `tools/map_extract.py` for the recognised kinds (`:invariant`,
-  `:contract`, `:shape`, `:emits`; `?:` variant for inferred).
+- **`--KIND:` annotations:** attach to the construct they describe.
+  Five recognised kinds: `--invariant:`, `--contract:`, `--shape:`,
+  `--emits:`, `--reaper:`. Prefix with `?` (`--?invariant:`) for
+  inferred. See `tools/map_extract.py` for attachment rules.
 - **Inline comments:** only where they encode a non-obvious WHY.
   Good: "notation event encodes (chan, pitch) at ppq, so keep it in sync",
   "rescan: step 3 inserted notation events, so uuidIdx values are stale",
@@ -63,7 +67,7 @@ already says, drop the section. The `.map` is the API reference.
 
 ## Workflow
 
-1. Source change first. Update or add `--@map:` annotations alongside.
+1. Source change first. Update or add `--KIND:` annotations alongside.
 2. The `.map` file regenerates via the post-edit hook.
 3. If the change touches anything `docs/<file>.md` describes, update the
    doc in the same pass.
@@ -80,5 +84,5 @@ Doc updates are required when:
 Doc updates are **not** required when:
 
 - a public method is added, removed, or renamed — `.map` carries it
-- a `--@map:contract` body changes — `.map` carries it
+- a `--contract:` body changes — `.map` carries it
 - pure internal refactors that preserve every documented property

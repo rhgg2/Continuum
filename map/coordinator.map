@@ -1,0 +1,69 @@
+@module coordinator  src=coordinator.lua  loc=271  sha=untracked  mode=chunk
+@deps cm, cmgr, gui
+
+# Invariants & contracts
+  @invariant  owns the active tracker take; polls REAPER's selection each frame while tracker page is active (sticky on no-item or non-MIDI)
+  @invariant  no teardown path — quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload
+  @invariant  errors inside the defer loop surface through the same xpcall frame because each iteration reschedules itself
+  @contract  owns the cross-cutting tracker-scope command (loadSampleAtCurrentSlot) but dispatches into samplePage which owns sm; coord never speaks sm directly
+
+# Shapes
+  @shape  dispatchResult = { consumed: bool, commandHeld: bool }
+  @shape  page = { renderToolbarBits(ctx), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind(), [renderFloating(ctx)] }
+
+# Imports
+  @require util = 'util'  @ 7
+  @require ImGui = 'imgui'  @ 14
+
+# Constructed sub-instances
+  @construct chrome = util.instantiate('chrome')  @ 19
+
+# Private state
+  @state ctx, uiFont = gui.ctx, gui.uiFont  @ 17
+  @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 21
+  @state pages, active = {}, nil  @ 23
+  @state quitting = false  @ 24
+  @state samplerTrack = nil  @ 26
+      @contract  owns the active sampler track — the picker on samplePage delegates here, and first sample-page activation seeds the default from pages.sample:listTracks()
+  @state currentTake = nil  @ 28
+      @contract  owns currentTake — refreshTakeFromReaper polls GetSelectedMediaItem→GetActiveTake→TakeIsMIDI, mutates currentTake only on a real MIDI take that differs (sticky on nothing-selected or non-MIDI), and returns true so the caller can rebind
+  @state coord = {}  @ 227
+      @contract  pages must be registered via coord:register(name,page); first registered becomes active
+
+# Private functions
+  -- Keyboard router
+  @fn handlePrefixCapture(cmgr, ctx)  @ 36
+      -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns
+      -- 'consumed' if a prefix-accumulating key fired this frame; 'fall' to
+      -- finishPrefix and let the normal keychain walk handle this key; nil if
+      -- prefix mode is inactive.
+  @fn dispatchKeys(state, cmgr, ctx)  @ 59
+      @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
+      @contract  first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
+      @contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
+  -- Coordinator
+  @fn refreshTakeFromReaper()  @ 90
+  @fn tick()  @ 109
+      @contract  tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
+  @fn drawSwitcher()  @ 116
+  @fn dispatch(state)  @ 132
+  @fn frame()  @ 134
+
+# Public API (coord:*)
+  @api coord:register(name, page)  @ 229
+  @api coord:setActive(name)  @ 235
+      @contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack)
+  @api coord:setSamplerTrack(t)  @ 256
+      @contract  stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
+  @api coord:togglePage()  @ 263
+  @api coord:quit()  @ 267
+  @api coord:chrome()  @ 268
+  @api coord:run()  @ 269
+
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB
+  @reaper GetSelectedMediaItem
+  @reaper GetActiveTake
+  @reaper TakeIsMIDI
+  @reaper defer

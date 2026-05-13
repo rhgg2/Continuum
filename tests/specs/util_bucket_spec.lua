@@ -1,5 +1,5 @@
 local t = require('support')
-require('util')
+local util = require('util')
 
 return {
   {

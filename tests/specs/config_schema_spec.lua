@@ -4,6 +4,7 @@
 -- callers never alias cm's internal state.
 
 local t = require('support')
+local util = require('util')
 
 return {
   --------------------------------------------------------------------
@@ -110,7 +111,7 @@ return {
       h.reaper._state.takeExt[take .. '/P_EXT:ctm_config'] = serialised
 
       -- Fresh cm sharing the same reaper state.
-      local cm2 = newConfigManager()
+      local cm2 = util.instantiate('configManager')
       cm2:setContext(take)
       t.eq(cm2:get('pbRange'), 5, 'known key survived the load')
       local ok = pcall(function() return cm2:get('legacyKey') end)
@@ -221,7 +222,7 @@ return {
       t.eq(h.cm:get('pbRange'), 9, 'transient write is visible on this cm')
       -- Rebuild a cm against the same take: persisted tiers reload from
       -- ext-state, transient must come up empty.
-      local cm2 = newConfigManager()
+      local cm2 = util.instantiate('configManager')
       cm2:setContext('take1')
       t.eq(cm2:get('pbRange'), 5, 'fresh cm sees take but no transient leak')
       t.eq(cm2:getAt('transient', 'pbRange'), nil, 'transient cache is empty on reload')

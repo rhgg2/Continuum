@@ -4,7 +4,7 @@
 -- harness installs as _G.reaper.
 
 local t = require('support')
-require('fs')
+local fs = require('fs')
 
 local function stubEnum(h, key, items)
   h.reaper[key] = function(_path, i)

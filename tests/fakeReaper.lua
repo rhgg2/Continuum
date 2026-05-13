@@ -24,6 +24,12 @@ function M.new()
   }
   r._state = state
 
+  -- Page-loading factories (samplePage/trackerPage/swingEditor/curveEditor)
+  -- guard their chunks on this; without it, util.instantiate fires the
+  -- "ReaImGui not installed" path on every call. Specs that need a real
+  -- ImGui surface still preload `imgui` themselves; this just clears the gate.
+  function r.ImGui_GetBuiltinPath() return '/stub' end
+
   -- Config storage
 
   function r.GetProjExtState(_proj, section, key)

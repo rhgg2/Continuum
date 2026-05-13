@@ -1,6 +1,8 @@
 -- Exercises vm's grid construction against seeded tm state.
 
 local t = require('support')
+local util   = require('util')
+local timing = require('timing')
 
 return {
   {

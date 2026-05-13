@@ -4,6 +4,8 @@
 -- so the source stays anchored.
 
 local t = require('support')
+local aliases = require('aliases')
+local tuning  = require('tuning')
 
 local function rootNote(extras)
   local n = { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,

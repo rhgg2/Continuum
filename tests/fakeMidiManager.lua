@@ -3,7 +3,7 @@
 -- in plain Lua tables, locations are reassigned after every modify to
 -- mirror the post-reload renumbering that tm relies on.
 
-require 'util'
+local util = require 'util'
 
 local INTERNALS = { idx = true, uuidIdx = true }
 
@@ -268,6 +268,15 @@ function newMidiManager(opts)
   function mm:timeSigs()   return util.clone(timeSigs, nil, true) or {} end
   function mm:name()       return takeName end
   function mm:setName(n)   takeName = n or '' end
+
+  local regionBlob = nil
+  function mm:loadRegions()
+    if not regionBlob then return { regions = {}, idCtr = 0 } end
+    return util.clone(regionBlob, nil, true)
+  end
+  function mm:saveRegions(blob)
+    regionBlob = blob and util.clone(blob, nil, true) or nil
+  end
   function mm:setLength(qn)
     length = qn * resolution
     fire('reload', nil)

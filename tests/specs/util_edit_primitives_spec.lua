@@ -5,8 +5,11 @@
 -- fails, the hoist has changed observable behaviour.
 
 local t = require('support')
-require('util')
-require('commandManager')
+local util = require('util')
+
+local function newCommandManager(cm)
+  return util.instantiate('commandManager', { cm = cm })
+end
 
 local function byte(c) return string.byte(c) end
 

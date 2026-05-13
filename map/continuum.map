@@ -1,36 +1,26 @@
-@module continuum  src=continuum.lua  loc=353  sha=37eeb11
+@module continuum  src=continuum.lua  loc=87  sha=69f289a  mode=chunk
 
-# Invariants & contracts (module)
-  @map:invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer
-  @map:invariant  module load order is bottom-up: util first (everyone calls util.installHooks), commandManager before view layers (which self-register commands), pages last
-  @map:invariant  the coordinator owns the active tracker take; Main starts with no take and the coordinator polls REAPER's selection each frame while the tracker page is active (sticky on no-item or non-MIDI)
-  @map:invariant  no teardown path — coord:quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload
-  @map:invariant  errors inside the defer loop surface through the same xpcall frame because each iteration reschedules itself
-  @map:contract  pages must be registered via coord:register(name,page); first registered becomes active
-  @map:contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack)
-  @map:contract  tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
+# Invariants & contracts
+  @invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer
+  @invariant  module load order is bottom-up: util first (everyone calls util.installHooks), commandManager before view layers (which self-register commands), pages last
 
-# Shapes
-  @shape  dispatchResult = { consumed: bool, commandHeld: bool }
-  @shape  page = { renderToolbarBits(ctx), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind(), [renderFloating(ctx)] }
+# Imports
+  @require util = 'util'  @ 10
+  @require ImGui = 'imgui'  @ 17
 
-# Module-level constants
-  @const ImGui = require 'imgui' '0.10'  @ 32
+# Private functions
+  @fn print(...)  @ 21
+  @fn err_handler(err)  @ 25
+  @fn run(fn)  @ 31
+  @fn createImGui()  @ 36
+  @fn Main()  @ 54
+      @contract  Main builds the manager stack bottom-up with no take, then enters the defer loop via coord:run(); the coordinator picks up the user's MIDI selection on its first tracker-page tick
 
-# Module-level functions (private)
-  @fn print(...)  @ 36
-  @fn err_handler(err)  @ 40
-  @fn run(fn)  @ 46
-  @fn createImGui()  @ 51
-  @fn handlePrefixCapture(cmgr, ctx)  @ 73   -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns 'consumed' i
-  @fn dispatchKeys(state, cmgr, ctx)  @ 96
-      @map:contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
-      @map:contract  first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
-      @map:contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
-  @fn newCoordinator(cm, cmgr, gui)  @ 136
-      @map:contract  owns the cross-cutting tracker-scope command (loadSampleAtCurrentSlot) but dispatches into samplePage which owns sm; coord never speaks sm directly
-      @map:contract  owns the active sampler track — the picker on samplePage delegates here, and first sample-page activation seeds the default from pages.sample:listTracks()
-      @map:contract  owns currentTake — refreshTakeFromReaper polls GetSelectedMediaItem→GetActiveTake→TakeIsMIDI, mutates currentTake only on a real MIDI take that differs (sticky on nothing-selected or non-MIDI), and returns true so the caller can rebind
-  @fn Main()  @ 323
-      @map:contract  Main builds the manager stack bottom-up with no take, then enters the defer loop via coord:run(); the coordinator picks up the user's MIDI selection on its first tracker-page tick
-
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB
+  @reaper ShowConsoleMsg
+  @reaper defer
+  @reaper ClearConsole
+  @reaper GetOS
+  @reaper Main_OnCommand

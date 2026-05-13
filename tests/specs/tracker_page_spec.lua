@@ -7,6 +7,7 @@
 -- in the pure-Lua harness.
 
 local t = require('support')
+local fs = require('fs')
 
 local n = 0
 local fakeImGui = setmetatable({ Mod_None = 0 }, {
@@ -16,17 +17,19 @@ package.preload['imgui'] = function()
   return function(_) return fakeImGui end
 end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
-require('swingEditor')
-require('curveEditor')
-require('sequenceManager')
-require('trackerPage')
+
+local util = require('util')
+local function newTrackerPage(cm, cmgr, chrome, gui)
+  return util.instantiate('trackerPage',
+    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui })
+end
 
 return {
   {
     name = "bind(take) drives cm:setContext via the page's own tm:bindTake",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {}, 'take0')
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
       local got = {}
       h.cm.setContext = function(_, take) got[#got+1] = take end
       tp:bind('take99')
@@ -37,7 +40,7 @@ return {
     name = "unbind() drives cm:setContext(nil) via the page's own tm:bindTake",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {}, 'take0')
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
       local calls, lastTake = 0, 'sentinel'
       h.cm.setContext = function(_, take) calls = calls + 1; lastTake = take end
       tp:unbind()
@@ -49,7 +52,7 @@ return {
     name = "focusState before any render returns both bits false",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {}, 'take0')
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
       local fs = tp:focusState()
       t.eq(fs.suppressKbd, false, "no suppression without a context")
       t.eq(fs.acceptCmds,  false, "no acceptance without a context")

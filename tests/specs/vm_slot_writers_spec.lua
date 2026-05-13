@@ -7,6 +7,7 @@
 --     tracks via the project mirror.
 
 local t = require('support')
+local tuning = require('tuning')
 
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 local classic67 = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } }

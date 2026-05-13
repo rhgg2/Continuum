@@ -5,8 +5,8 @@
 -- internal layout.
 
 local t = require('support')
-require('util')
-require('timing')
+local util   = require('util')
+local timing = require('timing')
 
 local function evalAt(S, x)  return timing.eval(S, x)   end
 local function invAt(S, y)   return timing.invert(S, y) end

@@ -1,190 +1,163 @@
-@module editCursor  src=editCursor.lua  loc=1172  sha=37eeb11
+@module editCursor  src=editCursor.lua  loc=879  sha=69f289a  mode=chunk
+@deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, regionsHook
 
-# Invariants & contracts (module)
-  @map:invariant  cursor lives at (row, col, stop) — stop is a char-offset index into col.stopPos, not a part index
-  @map:invariant  cursorRow is 0-indexed; cursorCol/cursorStop are 1-indexed (Lua-array)
-  @map:invariant  ec owns no MIDI/take state — pure caret + selection over grid.cols; mutations go via tm/cm
-  @map:invariant  selection is anchor + cursor; selAnchor is the fixed end, cursor is the moving end; sel is the resolved rect
-  @map:invariant  sel == nil iff no selection; hasSelection() / region() degenerate-to-cursor is a callsite policy, not stored
-  @map:invariant  sticky scopes are orthogonal: hBlockScope ∈ {0=free,1=col,2=channel,3=all-cols}, vBlockScope ∈ {0=free,1=beat,2=bar,3=all-rows}
-  @map:invariant  sticky == any nonzero scope; cursor moves while sticky update sel rather than clearing it
-  @map:invariant  HBlock=2/3 use sentinel part1=part2='*' that no real part name matches — selectionStopSpan falls through to whole-col
-  @map:invariant  within a single col, parts order via col.partStart (lower partStart = earlier part); not stop index, since parts may be multi-stop
-  @map:invariant  moveHook fires after every position-changing operation (clampPos+moveHook are paired)
+# Invariants & contracts
+  @invariant  cursor lives at (row, col, stop) — stop is a char-offset index into col.stopPos, not a part index
+  @invariant  cursorRow is 0-indexed; cursorCol/cursorStop are 1-indexed (Lua-array)
+  @invariant  ec owns caret, selection, clipboard, and regions; no MIDI event state — MIDI mutations go via tm/cm. Regions persist on the take (see docs/regions.md) but their authoring lives here as a peer to selection.
+  @invariant  selection is anchor + cursor; selAnchor is the fixed end, cursor is the moving end; sel is the resolved rect
+  @invariant  sel == nil iff no selection; hasSelection() / region() degenerate-to-cursor is a callsite policy, not stored
+  @invariant  sticky scopes are orthogonal: hBlockScope ∈ {0=free,1=col,2=channel,3=all-cols}, vBlockScope ∈ {0=free,1=beat,2=bar,3=all-rows}
+  @invariant  sticky == any nonzero scope; cursor moves while sticky update sel rather than clearing it
+  @invariant  HBlock=2/3 use sentinel part1=part2='*' that no real part name matches — selectionStopSpan falls through to whole-col
+  @invariant  within a single col, parts order via col.partStart (lower partStart = earlier part); not stop index, since parts may be multi-stop
+  @invariant  moveHook fires after every position-changing operation (clampPos+moveHook are paired)
+  @contract  idempotent — re-entering while pushed is a no-op; if cursor sits inside a region, seeds it as the active region.
+  @contract  stamps col.parts/stopPos/partAt/partStart/width derived from col.type + showDelay + trackerMode; ec is the sole writer of these fields, addGridCol never names them
 
 # Shapes
   @shape  selection = { row1, row2, col1, col2, part1, part2 }   -- inclusive on both axes; part1/part2 are part names or '*' sentinel
   @shape  selAnchor = { row, col, stop }                          -- fixed end of an active selection
+  @shape  region = { id, colour, ppqLo, ppqHi, parts = { [colKey]=true, ... } }  -- one logical-ppq slab × sparse column-parts; colour is a palette index (1..REGION_PALETTE_SIZE), resolved by the renderer; see regions.lua
   @shape  clip.single = { mode='single', type='note'|'7bit'|'pb', numRows, events=[clipEvent,...] }
   @shape  clip.multi  = { mode='multi', numRows, startType, cols=[clipColEntry,...] }
   @shape  clipColEntry = { type, chanDelta, key, events=[clipEvent,...] }   -- key: note=lane-pos, cc=cc#, singleton=nil
   @shape  clipEvent = source-event minus CLIP_RESERVED, plus { row, [endRow] }   -- row is 0-relative to clip top
 
-# Module-level constants
-  @const CLIP_RESERVED = {  @ 522
-  @const CLIP_ARTIFACTS = { row = true, endRow = true }  @ 546
+# Imports
+  @require util = 'util'  @ 20
+  @require regions = 'regions'  @ 21
 
-# Module-level functions (private)
-  @fn print(...)  @ 24
+# Private state
+  @state grid = deps.grid  @ 27
+  @state cm = deps.cm  @ 28
+  @state cmgr = deps.cmgr  @ 29
+  @state getRPBar = deps.rowPerBar  @ 30
+  @state logPerRow = deps.logPerRow   or function () return 1 end  @ 31
+  @state moveHook = deps.moveHook    or function () end  @ 32
+  @state regionsHook = deps.regionsHook or function () end  @ 33
+  @state cursorRow, cursorCol, cursorStop = 0, 1, 1  @ 35
+  @state hBlockScope, vBlockScope = 0, 0  @ 36
+  @state sel, selAnchor  @ 37
+  @state REGION_PALETTE_SIZE = 8  @ 43
+  @state regionStore = {}  @ 44
+  @state regionOrder = {}  @ 45
+  @state regionIdCtr = 0  @ 46
+  @state regionActive = nil  @ 47
+  @state regionScope  @ 50   -- forward — built lazily on first enter (no cmgr at module load in some test fixtures)
+  @state regionPushed = false  @ 51
+  @state ec = {}  @ 311
+  @state REGION_PASSTHROUGH = {  @ 682
 
-@factory newEditCursor(deps)  @ 28
+# Private functions
+  -- Position
+  @fn clampPos()  @ 56
+      @contract  clamps to grid extents; idempotent; stop clamped against current col's stopPos length so col-changes must precede stop reads
+  -- Parts
+  @fn partAt(col, stop)  @ 65
+  @fn cursorPart()  @ 70
+  @fn firstStopForPart(col, part)  @ 73
+      @contract  returns first stop whose partAt name matches; used by selection-set and regionStart to land the caret on the part's leading char
+  -- Selection
+  @fn isSticky()  @ 84
+  @fn selStart()  @ 87
+      @contract  pins anchor at current cursor and produces a 1x1 sel; precondition for any selUpdate that follows
+  @fn selUpdate()  @ 94
+      @contract  recomputes sel from anchor + cursor + scopes; rows snap to beat/bar under vBlock=1/2; cols expand to channel/all under hBlock=2/3; no-op when selAnchor is nil
+  @fn selClear()  @ 135
+      @contract  drops sel + anchor + both sticky scopes; the only path that turns sticky off without explicit unstick()
+  @fn cycleHBlock()  @ 141
+      @contract  first call seeds anchor and sets scope=1 (col); subsequent cycles 1->2->3->1 (col->channel->all-cols)
+  @fn cycleVBlock()  @ 152
+      @contract  first call seeds anchor and sets scope=1 (beat); subsequent cycles 1->2->3->1 (beat->bar->all-rows); no-op on empty grid
+  @fn swapEnds()  @ 164
+      @contract  swaps anchor<->cursor on whichever axes aren't scope-locked (vBlock<1 swaps row, hBlock<2 swaps col+stop); no-op without an active selection
+  -- Movement
+  @fn moveRow(n, selecting)  @ 180
+      @contract  selecting=true (or sticky) extends sel; otherwise clears sel before moving; clamps at top/bottom edges (no wrap)
+  @fn moveStop(n, selecting)  @ 190
+      @contract  walks stops within col, crossing into adjacent col at the boundary; stops at first/last col (no wrap); under hBlock>=2 collapses scope to 1 and re-anchors at current cursor first
+  @fn moveCol(n)  @ 242
+      @contract  jumps one col per step, landing on first/last stop of the destination col; under sticky, extends/contracts selection one col per step
+  @fn moveChannel(n)  @ 261
+      @contract  jumps one channel per step; non-sticky lands on the first note col of the destination channel (skipping pc/pb sentinels); sticky preserves the raw chan-edge land
+  -- Regions
+  @fn regionIndexOf(id)  @ 292
+  @fn cloneRegion(r)  @ 296
+  @fn emitRegions(verb, id)  @ 305
+  -- Position
+  -- Part & Region
+  -- Regions
+  @fn setActiveRegion(id)  @ 435
+      @contract  nil clears the active pointer; non-nil must name an existing region or it is rejected silently. Fires 'active' so subscribers can refresh.
+  @fn nextRegion()  @ 443
+      @contract  cycles regionActive through regionOrder; from nil lands on first (next) or last (prev); no wrap past the ends — sticks at the boundary so the user notices.
+  @fn prevRegion()  @ 450
+  @fn createRegion(ppqLo, ppqHi, parts)  @ 458
+      @contract  creates a region from (ppqLo, ppqHi, parts); deep-copies parts; auto-assigns colour by cycling the palette; sets active to the new region. parts may be empty — caller is expected to follow up with extendRegionParts.
+  @fn extendRegionParts(id, partsAdd)  @ 473
+      @contract  unions partsAdd into the region's parts; no-op (no signal) if every key was already present.
+  @fn shrinkRegionParts(id, partsRemove)  @ 481
+      @contract  removes partsRemove from the region's parts (set difference); keeps the region even if parts becomes empty — the caller decides whether to deleteRegion. No-op if nothing was removed.
+  @fn setRegionPpqRange(id, ppqLo, ppqHi)  @ 489
+      @contract  sets the region's logical-ppq span; ppqHi clamped to ppqLo so the half-open range stays well-formed.
+  @fn translateRegion(id, delta)  @ 497
+  @fn deleteRegion(id)  @ 505
+      @contract  drops the region; if it was active, regionActive is cleared (no implicit promotion of a neighbour — that's a command-scope choice).
+  @fn regionAt(colKey, ppq)  @ 515
+      @contract  returns a clone of the first region (in regionOrder) whose (parts, ppq) contain the cell; nil if none. First-match keeps the lookup deterministic even when regions overlap.
+  @fn activeRegion()  @ 522
+  @fn selectionAsParts()  @ 525
+      @contract  enumerates colKeys covered by the current selection; falls back to the cursor cell when no selection is active. Pure read.
+  @fn selectionAsRegionShape()  @ 547
+      @contract  turns the current selection (or cursor cell) into a region shape. ppqHi is half-open: row r covers ppq [r·lpr, (r+1)·lpr).
+  @fn setSelectionFromRegionShape(r)  @ 556
+      @contract  installs a bounding-box selection from a region shape. No-op when no part in the shape resolves to a live grid col (parts empty, or all parts reference cols not on this grid). Within col1 picks the earliest matching part; within col2 the latest.
 
-  # Private state
-    @state grid = deps.grid  @ 32
-    @state cm = deps.cm  @ 33
-    @state getRPBar = deps.rowPerBar  @ 34
-    @state moveHook = deps.moveHook or function () end  @ 35
-    @state ec = {}  @ 280
-
-  # Private functions
-    @fn clampPos()  @ 44
-        @map:contract  clamps to grid extents; idempotent; stop clamped against current col's stopPos length so col-changes must precede stop reads
-    @fn partAt(col, stop)  @ 53
-    @fn cursorPart()  @ 58
-    @fn firstStopForPart(col, part)  @ 61
-        @map:contract  returns first stop whose partAt name matches; used by selection-set and regionStart to land the caret on the part's leading char
-    @fn isSticky()  @ 72
-    @fn selStart()  @ 75
-        @map:contract  pins anchor at current cursor and produces a 1x1 sel; precondition for any selUpdate that follows
-    @fn selUpdate()  @ 82
-        @map:contract  recomputes sel from anchor + cursor + scopes; rows snap to beat/bar under vBlock=1/2; cols expand to channel/all under hBlock=2/3; no-op when selAnchor is nil
-    @fn selClear()  @ 123
-        @map:contract  drops sel + anchor + both sticky scopes; the only path that turns sticky off without explicit unstick()
-    @fn cycleHBlock()  @ 129
-        @map:contract  first call seeds anchor and sets scope=1 (col); subsequent cycles 1->2->3->1 (col->channel->all-cols)
-    @fn cycleVBlock()  @ 140
-        @map:contract  first call seeds anchor and sets scope=1 (beat); subsequent cycles 1->2->3->1 (beat->bar->all-rows); no-op on empty grid
-    @fn swapEnds()  @ 152
-        @map:contract  swaps anchor<->cursor on whichever axes aren't scope-locked (vBlock<1 swaps row, hBlock<2 swaps col+stop); no-op without an active selection
-    @fn moveRow(n, selecting)  @ 168
-        @map:contract  selecting=true (or sticky) extends sel; otherwise clears sel before moving; clamps at top/bottom edges (no wrap)
-    @fn moveStop(n, selecting)  @ 178
-        @map:contract  walks stops within col, crossing into adjacent col at the boundary; stops at first/last col (no wrap); under hBlock>=2 collapses scope to 1 and re-anchors at current cursor first
-    @fn moveUnit(n, toFirstStop, toLastStop)  @ 207
-    @fn moveCol(n)  @ 230
-        @map:contract  jumps one col per step, landing on first/last stop of the destination col; under sticky, extends/contracts selection one col per step
-    @fn moveChannel(n)  @ 249
-        @map:contract  jumps one channel per step; non-sticky lands on the first note col of the destination channel (skipping pc/pb sentinels); sticky preserves the raw chan-edge land
-    @fn chanRange()  @ 250
-    @fn selectSpan(scope, col, stop1, stop2)  @ 402
-    @fn partsFor(type, showDelay, trackerMode)  @ 465   -- One char of separator between adjacent parts in the rendered cell.
-
-  # Public API
-    -- Position
-    -- Parts
-    -- Selection
-    -- Movement
-    -- Position
-    @api ec:row()  @ 284
-    @api ec:col()  @ 285
-    @api ec:pos()  @ 286
-    @api ec:setPos(row, col, stop)  @ 289
-        @map:contract  any nil arg leaves that axis untouched; clamps and fires moveHook unconditionally
-    @api ec:clampPos()  @ 296
-    @api ec:rescaleRow(oldRPB, newRPB)  @ 299
-        @map:contract  scales cursorRow by newRPB/oldRPB; called by vm when rowPerBeat changes mid-session so caret stays at the same musical time
-    @api ec:reset()  @ 303
-    -- Part & Region
-    @api ec:cursorPart()  @ 310
-    @api ec:hasSelection()  @ 311
-    @api ec:isSticky()  @ 312
-    @api ec:anchorRow()  @ 313
-    @api ec:region()  @ 315
-    @api ec:regionStart()  @ 324
-        -- Pair so callers can splat: `ec:setPos(row, ec:regionStart())`.
-    @api ec:eachSelectedCol()  @ 329
-    @api ec:setSelection(r)  @ 351
-        @map:contract  installs a selection from a part-typed record; clears sticky scopes; anchor lands at top-left part-start so subsequent extends behave like a fresh drag
-    @api ec:selectionStopSpan(col)  @ 358
-    @api ec:selClear()  @ 376
-    @api ec:unstick()  @ 377
-    @api ec:extendTo(row, col, stop)  @ 380
-        -- Mouse shift-click and drag both speak this verb.
-    @api ec:shiftSelection(rowDelta)  @ 387
-        @map:contract  shifts both selection rows + anchor + cursor by rowDelta; clamps each independently (selection can compress against the edge while cursor doesn't)
-    -- Motion
-    @api ec:advance()  @ 399
-        @map:contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
-    @api ec:selectChannel(chan)  @ 409
-    @api ec:selectColumn(col)  @ 414
-    -- Commands
-    @api ec:registerCommands(scope)  @ 422
-    -- Decoration
-    @api ec:decorateCol(col)  @ 480
-        @map:contract  stamps col.parts/stopPos/partAt/partStart/width derived from col.type + showDelay + trackerMode; ec is the sole writer of these fields, addGridCol never names them
-@factory newClipboard(deps)  @ 548
-  @map:invariant  clipboard persists via REAPER ExtState under ('rdm','clipboard'), serialised by util.serialise
-  @map:invariant  clip rows are 0-relative to the clip's top (row=0 is first row of selection); paste re-bases against current cursor row
-  @map:invariant  single vs multi mode is decided by selected-col count: c1==c2 -> single, otherwise multi
-  @map:invariant  single.type ∈ { 'note', '7bit', 'pb' } — note/vel split decided at copy by region's part1
-  @map:invariant  multi.cols carry chanDelta from leftmost source channel; cursor's channel becomes the leftmost destination
-  @map:invariant  CLIP_RESERVED keys are stripped at copy; CLIP_ARTIFACTS (row/endRow) are stripped at paste; everything else (including custom metadata) round-trips
-  @map:invariant  velEvent is the only collector that synthesises a clip event rather than cloning the source — vel-mode pastes must not carry note metadata onto cc destinations
-
-  # Private state
-    @state ec = deps.ec  @ 552
-    @state grid = deps.grid  @ 553
-    @state tm = deps.tm  @ 554
-    @state cm = deps.cm  @ 555
-    @state currentRpb = deps.currentRpb  @ 556
-    @state assignTail = deps.assignTail  @ 557
-    @state getCtx = deps.getCtx  @ 558
-    @state getLength = deps.getLength  @ 559
-    @state getAliasMode = deps.getAliasMode or function() return false end  @ 560
-    @state demotedCount = 0  @ 792
-    @state outcomes  @ 793   -- clipId -> { kind='alias', uuid, specIdx, evt } or { kind='plain', evt }
-    @state pending  @ 794   -- list of { evtType, e } awaiting their family parent
-    @state clipboard = {}  @ 1154
-
-  # Private functions
-    @fn save(clip)  @ 562
-    @fn load()  @ 566
-    @fn isStrictAncestor(parent, child)  @ 573
-        @map:contract  integer-array specIdx form; nil parent is an ancestor of any non-nil child specIdx. Strict: equal arrays are not ancestors.
-    @fn resolveAliasFamily(clip)  @ 584
-        @map:contract  stamps every aliasSrc with a dense clipId; for each event, records parentClipId (nearest in-clip ancestor) and pathXform (concatenated xforms from family parent down). Paste's aliasWriter consumes both to reattach descendants under their in-clip parent. Always runs — paste-time mode chooses. See docs/aliases.md.
-    @fn collect()  @ 618
-        @map:contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }. aliasSrc is always captured per event — paste-time mode selects writer. cut follows the same path; deletion-fallback demotes at paste once byUuid fails.
-    @fn rowOf(p)  @ 624
-    @fn aliasSrcOf(evt)  @ 632   -- aliasSrc anchors the source in the spec tree; position/chan/lane are reconstructed at past
-    @fn noteEvent(evt)  @ 651   -- Source duration is structural: endRow always reflects evt.endppq, regardless of where sele
-    @fn scalarEvent(evt)  @ 661
-    @fn velEvent(evt)  @ 670   -- Scalar abstraction over a note: only `val` carries. A clone would land the source note's p
-    @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 740
-        @map:contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
-    @fn plainWriter(evtType, e)  @ 796
-    @fn writeAsRoot(evtType, e)  @ 803   -- Family root or no family relation: today's resolve-and-corrective-delta logic. Returns the
-    @fn aliasWriter(evtType, e)  @ 860
-        @map:contract  dispatches by family relation. No parentClipId → writeAsRoot (resolve-and-corrective-delta). With parentClipId → tm:createAlias under the parent's recorded outcome (alias → parent's new specIdx; plain → parent's mm uuid post-flush). Defers to `pending` if the parent isn't ready. Outcomes keyed by aliasSrc.clipId. See docs/aliases.md.
-    @fn pasteSingle(clip, writer)  @ 892
-        @map:contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op. writer is plainWriter or aliasWriter — every paste mode uses the same pipeline (cap, clear, tail clamp); only the per-event write differs.
-    @fn pasteMulti(clip, writer)  @ 981
-        @map:contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col. writer is plainWriter or aliasWriter (see pasteSingle).
-    @fn infoFor(chan)  @ 991
-    @fn resolve(clipCol)  @ 1014
-    @fn pasteClip(clip)  @ 1102
-    @fn trimTop(clip, trim)  @ 1131   -- A note whose start row falls within the trimmed band is dropped entirely.
-        @map:contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
-    @fn filter(events)  @ 1132
-
-  # Public API
-    -- Position
-    -- Parts
-    -- Selection
-    -- Movement
-    -- Position
-    -- Part & Region
-    -- Motion
-    -- Commands
-    -- Decoration
-    -- CLIPBOARD
-    @api clipboard:collect()  @ 1155
-    @api clipboard:copy()  @ 1156
-    @api clipboard:pasteClip(clip)  @ 1157
-    @api clipboard:trimTop(clip, trim)  @ 1158
-    @api clipboard:registerCommands(scope)  @ 1160
-
-  # REAPER API surface
-    @reaper SetExtState
-    @reaper GetExtState
-    @reaper ShowMessageBox
+# Public API (ec:*)
+  @api ec:row()  @ 315
+  @api ec:col()  @ 316
+  @api ec:pos()  @ 317
+  @api ec:setPos(row, col, stop)  @ 320
+      @contract  any nil arg leaves that axis untouched; clamps and fires moveHook unconditionally
+  @api ec:clampPos()  @ 327
+  @api ec:rescaleRow(oldRPB, newRPB)  @ 330
+      @contract  scales cursorRow by newRPB/oldRPB; called by vm when rowPerBeat changes mid-session so caret stays at the same musical time
+  @api ec:reset()  @ 334
+  @api ec:cursorPart()  @ 341
+  @api ec:hasSelection()  @ 342
+  @api ec:isSticky()  @ 343
+  @api ec:anchorRow()  @ 344
+  @api ec:region()  @ 346
+  @api ec:regionStart()  @ 355
+      -- Pair so callers can splat: `ec:setPos(row, ec:regionStart())`.
+  @api ec:eachSelectedCol()  @ 360
+  @api ec:setSelection(r)  @ 382
+      @contract  installs a selection from a part-typed record; clears sticky scopes; anchor lands at top-left part-start so subsequent extends behave like a fresh drag
+  @api ec:selectionStopSpan(col)  @ 389
+  @api ec:selClear()  @ 407
+  @api ec:unstick()  @ 408
+  @api ec:extendTo(row, col, stop)  @ 411
+      -- Mouse shift-click and drag both speak this verb.
+  @api ec:shiftSelection(rowDelta)  @ 418
+      @contract  shifts both selection rows + anchor + cursor by rowDelta; clamps each independently (selection can compress against the edge while cursor doesn't)
+  -- Public surface
+  @api ec:listRegions()  @ 587
+  @api ec:getRegion(id)  @ 593
+  @api ec:activeRegionId()  @ 594
+  @api ec:paintRegionCell(row, colKey, mode)  @ 601
+      -- Mouse-paint primitive. One call per painted cell; mode ∈ 'extend' |
+      -- 'shrink'. extend auto-seeds an empty region at the painted row if
+      -- none is active, then grows ppq span and unions the colKey. Public
+      -- because mouse input is page-driven and not bound through the command
+      -- scope.
+  @api ec:regionsBlob()  @ 623
+      @contract  returns the persistable shape { regions=[..], idCtr=N }. Each region is a deep clone; mutating the result has no effect on the live store. Parts are preserved as their raw colKey-set.
+  @api ec:loadRegions(blob)  @ 630
+      @contract  replaces the in-memory store from a blob. nil clears everything. Silent — does not fire regionsHook, since callers (vm:rebuild on takeChanged) already drive a redraw and re-emitting would loop persistence back through save. idCtr is restored from the blob to keep ids monotonic across sessions.
+  -- Motion
+  @api ec:advance()  @ 650
+      @contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
+  -- Commands
+  @api ec:isInRegionMode()  @ 673
+  @api ec:registerCommands(scope)  @ 798

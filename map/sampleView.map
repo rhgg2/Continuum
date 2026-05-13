@@ -1,59 +1,58 @@
-@module sampleView  src=sampleView.lua  loc=118  sha=ee85a77
+@module sampleView  src=sampleView.lua  loc=117  sha=ee85a77  mode=chunk
+@deps cm, assignSlot, previewSlot, previewPath, listSamplerTracks, clearSlot, stopPreview
 
-# Invariants & contracts (module)
-  @map:invariant  sv keys against a REAPER track (not a take); cm is rebound only via sv:setTrack
-  @map:invariant  sv emits no signals — it is a passive state holder polled by samplePage each frame
-  @map:invariant  sv never speaks REAPER, gmem, or ImGui directly; all side-effects route through injected callbacks
-  @map:invariant  browserPath/selectedFile/previewSource are transient locals; nothing in sv is persisted (cm owns persistence)
-  @map:invariant  selectedFile mirrors browserPath only when the highlighted item is a file (folders null it)
-  @map:invariant  previewSource gates auditionCurrent dispatch: 'file' → path branch, 'slot' → currentSample branch
-  @map:invariant  slot index space is 0..63 (advanceOnLoad scan upper bound)
+# Invariants & contracts
+  @invariant  sv keys against a REAPER track (not a take); cm is rebound only via sv:setTrack
+  @invariant  sv emits no signals — it is a passive state holder polled by samplePage each frame
+  @invariant  sv never speaks REAPER, gmem, or ImGui directly; all side-effects route through injected callbacks
+  @invariant  browserPath/selectedFile/previewSource are transient locals; nothing in sv is persisted (cm owns persistence)
+  @invariant  selectedFile mirrors browserPath only when the highlighted item is a file (folders null it)
+  @invariant  previewSource gates auditionCurrent dispatch: 'file' → path branch, 'slot' → currentSample branch
+  @invariant  slot index space is 0..63 (advanceOnLoad scan upper bound)
 
 # Shapes
   @shape  browserState = { track, currentFolder, browserPath, browserIsFolder, selectedFile, previewSource = 'file'|'slot'|nil }
   @shape  trackEntry = { track, name }   -- listSamplerTracks() element
 
-@factory newSampleView(cm, assignSlot, previewSlot, previewPath, listSamplerTracks, clearSlot, stopPreview)  @ 15
+# Private state
+  @state sv = {}  @ 15
+  @state track = nil  @ 16
+  @state currentFolder = nil  @ 17
+  @state selectedFile = nil  @ 18
+  @state browserPath = nil  @ 19
+  @state browserIsFolder = false  @ 20
+  @state previewSource = nil  @ 21
 
-  # Private state
-    @state sv = {}  @ 16
-    @state track = nil  @ 17
-    @state currentFolder = nil  @ 18
-    @state selectedFile = nil  @ 19
-    @state browserPath = nil  @ 20
-    @state browserIsFolder = false  @ 21
-    @state previewSource = nil  @ 22
-
-  # Public API
-    @api sv:setTrack(t)  @ 27
-        @map:contract  idempotent rebind: always re-primes cm.track tier so cache survives a prior cm:setContext(nil) (e.g. tm:bindTake(nil) on page switch)
-    @api sv:getTrack()  @ 34
-    @api sv:listTracks()  @ 35
-    @api sv:browseRoot()  @ 37
-        @map:contract  resolution order: cm:sampleBrowserRoot → $HOME → '/'; never returns nil
-    @api sv:getCurrentFolder()  @ 40
-    @api sv:setCurrentFolder(p)  @ 41
-    @api sv:setBrowseRoot(path)  @ 43
-        @map:contract  persists at the global tier; resets currentFolder so the new root takes effect immediately
-    @api sv:getBrowserPath()  @ 47
-    @api sv:isBrowserFolder()  @ 48
-    @api sv:setBrowserItem(path, isFolder)  @ 50
-        @map:contract  folder selection clears selectedFile and leaves previewSource untouched; file selection sets both selectedFile and previewSource='file'
-    @api sv:setSlotFocus()  @ 57
-    @api sv:canAuditionCurrent()  @ 60
-        @map:contract  slot branch needs a track; file branch needs a selected file (track is checked downstream by auditionPath)
-    @api sv:auditionCurrent()  @ 66
-        @map:contract  dispatches to slot/path branch by previewSource; defaults to slot 0 if cm is absent
-    @api sv:setSelectedFile(p)  @ 72
-    @api sv:getSelectedFile()  @ 73
-    @api sv:loadSelectedIntoCurrent()  @ 77
-        @map:contract  returns false on no selection or assignSlot failure; on success, optionally advances currentSample to the next empty slot in [slot+1, 63]
-        @map:contract  advance is a no-op when no empty slot exists in range (currentSample left unchanged)
-    @api sv:auditionPath(path)  @ 94
-        @map:contract  requires both path and track; returns false otherwise without invoking previewPath
-    @api sv:auditionSlot(idx)  @ 101
-        @map:contract  requires track; bounds=1 (honours SH_START/SH_END trim)
-    @api sv:clearCurrentSlot()  @ 107
-        @map:contract  no-op when clearSlot or cm not injected (test seam)
-    @api sv:stopAudition()  @ 113
-        @map:contract  no-op when stopPreview not injected (test seam)
+# Public API (sv:*)
+  @api sv:setTrack(t)  @ 26
+      @contract  idempotent rebind: always re-primes cm.track tier so cache survives a prior cm:setContext(nil) (e.g. tm:bindTake(nil) on page switch)
+  @api sv:getTrack()  @ 33
+  @api sv:listTracks()  @ 34
+  @api sv:browseRoot()  @ 36
+      @contract  resolution order: cm:sampleBrowserRoot → $HOME → '/'; never returns nil
+  @api sv:getCurrentFolder()  @ 39
+  @api sv:setCurrentFolder(p)  @ 40
+  @api sv:setBrowseRoot(path)  @ 42
+      @contract  persists at the global tier; resets currentFolder so the new root takes effect immediately
+  @api sv:getBrowserPath()  @ 46
+  @api sv:isBrowserFolder()  @ 47
+  @api sv:setBrowserItem(path, isFolder)  @ 49
+      @contract  folder selection clears selectedFile and leaves previewSource untouched; file selection sets both selectedFile and previewSource='file'
+  @api sv:setSlotFocus()  @ 56
+  @api sv:canAuditionCurrent()  @ 59
+      @contract  slot branch needs a track; file branch needs a selected file (track is checked downstream by auditionPath)
+  @api sv:auditionCurrent()  @ 65
+      @contract  dispatches to slot/path branch by previewSource; defaults to slot 0 if cm is absent
+  @api sv:setSelectedFile(p)  @ 71
+  @api sv:getSelectedFile()  @ 72
+  @api sv:loadSelectedIntoCurrent()  @ 76
+      @contract  returns false on no selection or assignSlot failure; on success, optionally advances currentSample to the next empty slot in [slot+1, 63]
+      @contract  advance is a no-op when no empty slot exists in range (currentSample left unchanged)
+  @api sv:auditionPath(path)  @ 93
+      @contract  requires both path and track; returns false otherwise without invoking previewPath
+  @api sv:auditionSlot(idx)  @ 100
+      @contract  requires track; bounds=1 (honours SH_START/SH_END trim)
+  @api sv:clearCurrentSlot()  @ 106
+      @contract  no-op when clearSlot or cm not injected (test seam)
+  @api sv:stopAudition()  @ 112
+      @contract  no-op when stopPreview not injected (test seam)

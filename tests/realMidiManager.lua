@@ -1,15 +1,8 @@
--- Loads the real midiManager.lua under the harness, returning newMidiManager
--- without leaving the real factory sitting in `_G`. The harness has stuffed
--- `_G.newMidiManager` with a fake; specs that need the real one save/restore
--- around a require, but `require` is process-cached, so the second spec to do
--- this dance would silently get the fake back. Going through this helper
--- guarantees a fresh chunk execution every call.
-
+-- Returns a `newMidiManager` function that builds a fresh real mm per call.
+-- Bypasses util._stubs (which the harness sets to the fake) by going
+-- straight through loadfile — these specs deliberately want the real
+-- sidecar/dedup/reconcile pipeline.
 return function()
-  package.loaded['midiManager'] = nil
-  local savedMM = _G.newMidiManager
-  require('midiManager')
-  local realMM = _G.newMidiManager
-  _G.newMidiManager = savedMM
-  return realMM
+  local path = assert(package.searchpath('midiManager', package.path))
+  return function(take) return assert(loadfile(path))({ take = take }) end
 end

@@ -7,6 +7,7 @@
 -- silently drift the layout of existing col types.
 
 local t = require('support')
+local util = require('util')
 
 -- decorateCol only reads col.type, col.showDelay and col.trackerMode.
 -- We don't need a full harness — a minimal shell is enough.
@@ -19,9 +20,11 @@ end
 -- Decorate a col through ec; ec needs deps but only `grid` is touched by
 -- decorateCol. Pass an empty grid.
 local function decorate(col)
-  local ec = newEditCursor{ grid = { cols = {}, numRows = 1 },
-                            cm = { get = function() return 0 end },
-                            rowPerBar = function() return 4 end }
+  local ec = util.instantiate('editCursor', {
+    grid = { cols = {}, numRows = 1 },
+    cm = { get = function() return 0 end },
+    rowPerBar = function() return 4 end,
+  })
   ec:decorateCol(col)
   return col
 end

@@ -4,6 +4,7 @@
 -- produce a misleading curve. Whole command no-ops with a status warning.
 
 local t = require('support')
+local util = require('util')
 
 local function findCcCol(grid, ccNum, chan)
   for i, c in ipairs(grid.cols) do

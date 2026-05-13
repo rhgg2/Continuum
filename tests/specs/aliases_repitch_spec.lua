@@ -4,6 +4,7 @@
 -- computed in tuning steps (step + oct*octaveStep), not MIDI semitones.
 
 local t = require('support')
+local tuning = require('tuning')
 
 local function rootByUuid(notes, uuid)
   for _, n in ipairs(notes) do if n.uuid == uuid then return n end end

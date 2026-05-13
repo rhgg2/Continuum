@@ -33,9 +33,9 @@ fs                         -- pure: filesystem utilities (path ops, audio-file d
 
 Two critical concepts in the tracker stack:
 
-- **Time** — three frames (logical / intent / realisation), connected
-  by swing (logical↔intent) and delay (intent↔realisation). See
-  `docs/timing.md`.
+- **Time** — two frames (logical / realisation), connected by swing.
+  Delay is a per-note offset added to the raw note-on, not a frame of
+  its own. See `docs/timing.md`.
 - **Pitch** — detune is intent (per-note metadata); pb is realisation
   (channel-wide stream). The view layer above the realisation line
   never touches pb directly. See `docs/tuning.md`.
@@ -49,17 +49,21 @@ Four places carry information about a module. Each holds what the
 others can't.
 
 1. **Source** (`<file>.lua`) — names and structure say WHAT.
-2. **`--@map:` annotations** embedded in source — single-line
-   invariants, contracts, shapes, emitted signals. Recognised kinds
-   and attachment rules in `tools/map_extract.py`. Use `?:` variant
-   for inferred-rather-than-doc-grounded.
+2. **`--KIND:` annotations** embedded in source — single-line
+   invariants, contracts, shapes, emitted signals. Five kinds:
+   `--invariant:`, `--contract:`, `--shape:`, `--emits:`,
+   `--reaper:`. Prefix with `?` (`--?invariant:`) for
+   inferred-rather-than-doc-grounded. Attachment rules in
+   `tools/map_extract.py`.
 3. **`.map` file** (`map/<file>.map`) — derived semantic outline,
-   one per `.lua`. Lists factories, state, private fns, public API,
-   signals, REAPER surface, plus the surfaced annotations. Read this
-   first — it answers "where does X live" in one screen.
+   one per `.lua`. Header carries `mode=chunk` (constructor) or
+   `mode=namespace` (require'd table). Lists imports, constructed
+   sub-instances, state, private fns, public API, signals, REAPER
+   surface, plus the surfaced annotations. Read this first — it
+   answers "where does X live" in one screen.
 4. **`docs/<file>.md`** — prose. WHY only: the model, history,
    incidents that motivated a shape, cross-cut concerns that span
-   files. Never repeats API surface; never restates what a `--@map:`
+   files. Never repeats API surface; never restates what a `--KIND:`
    annotation already says.
 
 **Doc shape contract:** `docs/CONVENTIONS.md`. Read it before
@@ -73,10 +77,10 @@ register — model exposition without API repetition.
 
 | Change | Update |
 |---|---|
-| Public method added/removed/renamed | `--@map:` (if needed); `.map` regenerates |
-| Contract/shape/invariant body changes | `--@map:` annotation |
+| Public method added/removed/renamed | `--KIND:` (if needed); `.map` regenerates |
+| Contract/shape/invariant body changes | `--KIND:` annotation |
 | Cross-cut invariant or model shifts | `docs/<file>.md` prose |
-| New module without a doc | Stub `docs/<file>.md` (WHY only); add `--@map:` annotations |
+| New module without a doc | Stub `docs/<file>.md` (WHY only); add `--KIND:` annotations |
 | Pure refactor preserving documented properties | Nothing |
 
 **Tool-generated:** `.map` files regenerate via the post-edit hook.
@@ -86,10 +90,11 @@ Never hand-edit them.
 
 - Always read `map/<file>.map` before fetching source ranges from
   `<file>.lua`, **including for files you've worked with before**. The
-  map gives factories, public API, signals, and `@map:` annotations in
-  ~3 KB. Many fetches that feel like "I need to scan the file" resolve
-  to 4–5 surgical 30–50-line ranges once the map has done its work.
-  Open `docs/<file>.md` when you need the WHY.
+  map gives constructed sub-instances, public API, signals, and
+  surfaced annotations in ~3 KB. Many fetches that feel like "I need
+  to scan the file" resolve to 4–5 surgical 30–50-line ranges once
+  the map has done its work. Open `docs/<file>.md` when you need the
+  WHY.
 
 - Cross-module navigation: use `mcp__readium_docs__map_query` instead of
   grepping `map/*.map`. It parses every map and returns
@@ -150,3 +155,4 @@ direct. Compact, but clear.
 - Use closures extensively.
 - Scope tightly: wrap private helpers in `local fn do ... end`; readers then see which belong to which function.
 - Section banners: `----- Name`.
+- Major section banners: `----------- PUBLIC`.

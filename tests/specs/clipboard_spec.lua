@@ -5,6 +5,7 @@
 -- so the file move can't drift the contract silently.
 
 local t = require('support')
+local util = require('util')
 
 return {
 

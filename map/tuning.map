@@ -1,34 +1,37 @@
-@module tuning  src=tuning.lua  loc=131  sha=2973124
+@module tuning  src=tuning.lua  loc=128  sha=2973124  mode=namespace
 
-# Invariants & contracts (module)
-  @map:invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
-  @map:invariant  intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain
-  @map:invariant  detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
-  @map:invariant  first step of every temper is C; octaveStep derivation depends on this
-  @map:invariant  octave parameters are MIDI-relative (C4 → 4), not period-index
+# Invariants & contracts
+  @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
+  @invariant  intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain
+  @invariant  detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
+  @invariant  first step of every temper is C; octaveStep derivation depends on this
+  @invariant  octave parameters are MIDI-relative (C4 → 4), not period-index
 
 # Shapes
   @shape  Temper = {name=string, period=cents, cents=number[ascending], stepNames=string[], octaveStep=int}
 
 # Module-level constants
-  @const M = tuning  @ 13
+  @const M = {}  @ 10
 
-# Module-level functions (private)
-  @fn computeOctaveStep(stepNames)  @ 17
-  @fn edo(n, names)  @ 24
-  @fn octaveLabel(o)  @ 121   -- Octave -1 renders as "M" so the cell width stays fixed.
+# Private functions
+  -- Temperament presets
+  @fn computeOctaveStep(stepNames)  @ 14
+  @fn edo(n, names)  @ 21
+  -- Coordinate conversions
+  -- Display
+  @fn octaveLabel(o)  @ 118
+      -- Octave -1 renders as "M" so the cell width stays fixed.
 
-# Public API (tuning.*)
-  @api tuning.findTemper(name, userLib)  @ 59
-      @map:contract  returns nil if either name or userLib is missing; callers treat nil as "no temperament"
-  @api tuning.midiToStep(temper, midi, detune)  @ 68
-      @map:contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
-      @map:contract  returned octave is MIDI-relative (C-1 → -1)
-  @api tuning.stepToMidi(temper, step, octave)  @ 90
-      @map:contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
-  @api tuning.snap(temper, midi, detune)  @ 108
-  @api tuning.transposeStep(temper, midi, detune, n)  @ 113
-      @map:contract  moves by n scale steps under temper, carrying the octave; n may be negative
-  @api tuning.stepToText(temper, step, octave)  @ 126
-      @map:contract  bumps displayed octave by 1 when step >= temper.octaveStep (C-variant tail belongs to next octave by label convention)
-
+# Public API (M.*)
+  @api M.findTemper(name, userLib)  @ 56
+      @contract  returns nil if either name or userLib is missing; callers treat nil as "no temperament"
+  @api M.midiToStep(temper, midi, detune)  @ 65
+      @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
+      @contract  returned octave is MIDI-relative (C-1 → -1)
+  @api M.stepToMidi(temper, step, octave)  @ 87
+      @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
+  @api M.snap(temper, midi, detune)  @ 105
+  @api M.transposeStep(temper, midi, detune, n)  @ 110
+      @contract  moves by n scale steps under temper, carrying the octave; n may be negative
+  @api M.stepToText(temper, step, octave)  @ 123
+      @contract  bumps displayed octave by 1 when step >= temper.octaveStep (C-variant tail belongs to next octave by label convention)

@@ -5,8 +5,12 @@
 -- harness puts the sampler FX on each so getInstanceId resolves cleanly.
 
 local t = require('support')
-require('fs')
-require('sampleManager')
+local fs = require('fs')
+local util = require('util')
+
+local function newSampleManager(fileOps)
+  return util.instantiate('sampleManager', { fileOps = fileOps })
+end
 
 local MAGIC        = 1717658484  -- 'CTML' as 32-bit ASCII; mirrors sampleManager
 local PREVIEW_BASE = 1024
@@ -101,7 +105,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.cm:set('track', 'slotEntries', { [3] = { path = 'Continuum/k.wav' } })
-      local cm2 = newConfigManager()
+      local cm2 = util.instantiate('configManager')
       cm2:setContext('take1')
       t.eq(cm2:get('slotEntries')[3].path, 'Continuum/k.wav', 'rehydrated from track P_EXT')
     end,

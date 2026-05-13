@@ -393,8 +393,10 @@ def _emacs_available() -> bool:
 
 
 def _emacs_ensure_loaded() -> bool:
-    form = (f'(unless (fboundp \'continuum-review-start) '
-            f'(load "{ELISP_PATH}" nil t))')
+    # Always reload: the elisp lives next to this file and we want
+    # edits to take effect on the next apply_patches without forcing
+    # the user to restart Emacs.
+    form = f'(load "{ELISP_PATH}" nil t)'
     try:
         r = subprocess.run(_emacs_cmd_prefix() + ["-e", form],
                            capture_output=True, timeout=10, text=True)
@@ -590,34 +592,43 @@ def _apply_decisions(edit_recs: list[dict], create_recs: list[dict],
 
 
 def _format_review_result(decisions: dict, instructions: str) -> str:
-    """Render the per-edit verdict back to Claude."""
-    accepted: list[tuple[str, int]] = []
-    rejected: list[tuple[str, int, dict]] = []
-    edited:   list[tuple[str, int, dict]] = []
+    """Render the per-edit verdict back to Claude.
+
+    User comments are surfaced as `feedback:` blocks under each tagged
+    item, regardless of accept/reject/edit verdict — they are user
+    directives to Claude, not metadata, and need to read that way.
+    """
+    accepted:  list[tuple[str, int, dict]] = []
+    rejected:  list[tuple[str, int, dict]] = []
+    edited:    list[tuple[str, int, dict]] = []
     conflicts: list[tuple[str, int, dict]] = []
-    for key, d in decisions.items():
-        kind, idx = key
+    for (kind, idx), d in decisions.items():
         if d.get("conflict"):
             conflicts.append((kind, idx, d))
             continue
-        a = d["action"]
-        if a == "accept":
-            accepted.append((kind, idx))
-        elif a == "reject":
-            rejected.append((kind, idx, d))
-        elif a == "edit":
-            edited.append((kind, idx, d))
+        bucket = {"accept": accepted, "reject": rejected, "edit": edited}.get(d["action"])
+        if bucket is not None:
+            bucket.append((kind, idx, d))
+
+    def _emit_feedback(out: list[str], d: dict, indent: str) -> None:
+        c = (d.get("comment") or "").strip()
+        if not c:
+            return
+        out.append(f"{indent}feedback:")
+        for ln in c.splitlines():
+            out.append(f"{indent}  {ln}")
 
     out: list[str] = ["review:"]
     if accepted:
-        keys = ", ".join(f"{k}{i}" for k, i in accepted)
-        out.append(f"  accepted ({len(accepted)}): {keys}")
+        out.append(f"  accepted ({len(accepted)}):")
+        for kind, idx, d in accepted:
+            out.append(f"    {kind}{idx}")
+            _emit_feedback(out, d, "      ")
     if rejected:
         out.append(f"  rejected ({len(rejected)}):")
         for kind, idx, d in rejected:
-            tag = f"{kind}{idx}"
-            c = d.get("comment", "").strip()
-            out.append(f"    {tag}: {c!r}" if c else f"    {tag}")
+            out.append(f"    {kind}{idx}")
+            _emit_feedback(out, d, "      ")
     if edited:
         out.append(f"  edited ({len(edited)}):")
         for kind, idx, d in edited:
@@ -631,13 +642,12 @@ def _format_review_result(decisions: dict, instructions: str) -> str:
             out.append(f"    {tag}:")
             for ln in residual.splitlines():
                 out.append(f"      {ln}")
-            c = d.get("comment", "").strip()
-            if c:
-                out.append(f"      comment: {c!r}")
+            _emit_feedback(out, d, "      ")
     if conflicts:
         out.append(f"  conflicts ({len(conflicts)}):")
         for kind, idx, d in conflicts:
             out.append(f"    {kind}{idx}: {d.get('conflict','')}")
+            _emit_feedback(out, d, "      ")
     if instructions.strip():
         out.append("instructions: |")
         for ln in instructions.splitlines():

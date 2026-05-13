@@ -5,6 +5,7 @@
 -- Suppressed branches are dropped.
 
 local t = require('support')
+local aliases = require('aliases')
 
 local function rootByUuid(notes, uuid)
   for _, n in ipairs(notes) do if n.uuid == uuid then return n end end

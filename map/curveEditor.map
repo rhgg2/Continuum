@@ -1,50 +1,44 @@
-@module curveEditor  src=curveEditor.lua  loc=330  sha=2973124
+@module curveEditor  src=curveEditor.lua  loc=330  sha=69f289a  mode=chunk
+@deps ctx
 
-# Invariants & contracts (module)
-  @map:invariant  anchors never cross; t is clamped strictly between immediate neighbours before any onMove/onMoveFree fire
-  @map:invariant  editor owns no domain data; events/projections/eval/callbacks all supplied by host per frame
-  @map:invariant  transient state (hover, segHover, segPin, preview, previewSuppress, drag) lives in factory closure; segPin and drag straddle frames and are invalidated when host's dragId changes
-  @map:invariant  snapped move (no shift) constrains t to integer ticks; shift-held free move uses FREE_EPS_T margin against neighbours
-  @map:invariant  exactly one of {move-drag, hover, insert-preview, segHover} is active per frame; later branches are gated on earlier ones being absent
+# Invariants & contracts
+  @invariant  anchors never cross; t is clamped strictly between immediate neighbours before any onMove/onMoveFree fire
+  @invariant  editor owns no domain data; events/projections/eval/callbacks all supplied by host per frame
+  @invariant  transient state (hover, segHover, segPin, preview, previewSuppress, drag) lives in factory closure; segPin and drag straddle frames and are invalidated when host's dragId changes
+  @invariant  snapped move (no shift) constrains t to integer ticks; shift-held free move uses FREE_EPS_T margin against neighbours
+  @invariant  exactly one of {move-drag, hover, insert-preview, segHover} is active per frame; later branches are gated on earlier ones being absent
+  @contract  evalAtT mutates the enclosing segIdx; safe across forward and backward t sequences but not concurrent with itself
+  @contract  inert drag consumes input but never invokes callbacks; pure ImGui empty-area-move suppression
 
 # Shapes
   @shape  drag = { kind='move'|'tension'|'inert', id=dragId, idx=number, startMx, startMy, moved=bool, [startMouseT], [startTension, ax, ay, bx, by] }
   @shape  segPin = { id=dragId, segI=number, mx=number, my=number }
   @shape  preview = { t=number, val=number }
   @shape  previewSuppress = { x=number, y=number }
+  @shape  FrameArgs = { drawList, rect={x0,yTop,w,h}, vMin, vMax, tMin, tMax, events, tOf=(evt)->t, evalCurve=(A,B,fracT)->val, snap=(t)->snappedT|nil, hovered=bool, dragId, colours={axis,envelope,anchor,anchorActive}, callbacks={onMove(idx,t,val), onMoveFree(idx,t,val), onInsert(t,val)->newIdx, onDelete(idx), onTension(idx,tau), onCycleShape(idx)} }
 
-# Module-level constants
-  @const ImGui = require 'imgui' '0.10'  @ 16
-  @const HIT_PX = 6  @ 18
-  @const HIT_PX2 = HIT_PX * HIT_PX  @ 19
-  @const R_PASSIVE = 2.5  @ 20
-  @const R_ACTIVE = 4.5  @ 21
-  @const R_PREVIEW = 3.5  @ 22
-  @const FREE_EPS_T = 1e-3  @ 23
+# Imports
+  @require util = 'util'  @ 13
+  @require ImGui = 'imgui'  @ 19
 
-@factory newCurveEditor(ctx)  @ 29
-  @map:contract  inert drag consumes input but never invokes callbacks; pure ImGui empty-area-move suppression
+# Private state
+  @state HIT_PX = 6  @ 23
+  @state HIT_PX2 = HIT_PX * HIT_PX  @ 24
+  @state R_PASSIVE = 2.5  @ 25
+  @state R_ACTIVE = 4.5  @ 26
+  @state R_PREVIEW = 3.5  @ 27
+  @state FREE_EPS_T = 1e-3  @ 28   -- strict-between-neighbours margin in free (shift) mode
+  @state hover, segHover, segPin, preview, previewSuppress, drag  @ 30
+  @state self = {}  @ 32
 
-  # Shapes
-    @shape  FrameArgs = { drawList, rect={x0,yTop,w,h}, vMin, vMax, tMin, tMax, events, tOf=(evt)->t, evalCurve=(A,B,fracT)->val, snap=(t)->snappedT|nil, hovered=bool, dragId, colours={axis,envelope,anchor,anchorActive}, callbacks={onMove(idx,t,val), onMoveFree(idx,t,val), onInsert(t,val)->newIdx, onDelete(idx), onTension(idx,tau), onCycleShape(idx)} }
+# Public API (self:*)
+  @api self:frame(a)  @ 38
+      @contract  returns true iff the editor consumed the mouse this frame (host should suppress its own click handling)
+      @contract  callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame
+      @contract  host must call frame() inside a window whose drawList is a.drawList and gate a.hovered on its own IsWindowHovered
+      · Mouse handling
 
-  # Private state
-    @state self = {}  @ 32
-
-  # Private functions
-    @fn tToX(t)  @ 54
-    @fn valToY(v)  @ 55
-    @fn evalAtT(t)  @ 76
-        @map:contract  evalAtT mutates the enclosing segIdx; safe across forward and backward t sequences but not concurrent with itself
-    @fn seedDrag(kind, idx)  @ 211
-    @fn seedMove(idx)  @ 218
-
-  # Public API
-    @api self:frame(a)  @ 38
-        @map:contract  returns true iff the editor consumed the mouse this frame (host should suppress its own click handling)
-        @map:contract  callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame
-        @map:contract  host must call frame() inside a window whose drawList is a.drawList and gate a.hovered on its own IsWindowHovered
-        · Mouse handling
-
-  # REAPER API surface
-    @reaper new_array
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB
+  @reaper new_array

@@ -3,8 +3,11 @@
 -- and that the single-name form still works.
 
 local t = require('support')
+local util = require('util')
 
-require('commandManager')
+local function newCommandManager(cm)
+  return util.instantiate('commandManager', { cm = cm })
+end
 
 local function fresh()
   local mgr = newCommandManager(nil)
@@ -68,91 +71,75 @@ return {
   },
 
   {
-    name = 'scope command resolves only when its scope is active',
+    name = 'scope command resolves only when its scope is pushed',
     run = function()
       local mgr = newCommandManager(nil)
       local log = {}
       mgr:scope('tracker'):register('cursorUp', function() log[#log + 1] = 'tracker' end)
-      mgr:invoke('cursorUp')           -- no active scope: miss
-      mgr:setActive('tracker')
-      mgr:invoke('cursorUp')           -- active: hit
-      mgr:setActive(nil)
-      mgr:invoke('cursorUp')           -- inactive again: miss
+      mgr:invoke('cursorUp')           -- not pushed: miss
+      mgr:push('tracker')
+      mgr:invoke('cursorUp')           -- pushed: hit
+      mgr:pop('tracker')
+      mgr:invoke('cursorUp')           -- popped: miss
       t.deepEq(log, { 'tracker' })
     end,
   },
 
   {
-    name = 'active scope shadows global; clearing it falls back',
+    name = 'doAfter composes inside the scope gate — off-stack invoke fires neither orig nor after',
     run = function()
       local mgr = newCommandManager(nil)
       local log = {}
-      mgr:register('save', function() log[#log + 1] = 'global' end)
-      mgr:scope('tracker'):register('save', function() log[#log + 1] = 'tracker' end)
-      mgr:setActive('tracker'); mgr:invoke('save')
-      mgr:setActive(nil);       mgr:invoke('save')
-      t.deepEq(log, { 'tracker', 'global' })
+      mgr:scope('tracker'):register('act', function() log[#log + 1] = 'act' end)
+      mgr:doAfter('act', function() log[#log + 1] = 'after' end)
+      mgr:invoke('act')                          -- off-stack: gated, no fire
+      mgr:push('tracker'); mgr:invoke('act')     -- on-stack: act + after
+      t.deepEq(log, { 'act', 'after' })
     end,
   },
 
   {
-    name = 'doAfter on a scope does not leak to global',
-    run = function()
-      local mgr = newCommandManager(nil)
-      local log = {}
-      mgr:register('act', function() log[#log + 1] = 'G' end)
-      local s = mgr:scope('tracker')
-      s:register('act', function() log[#log + 1] = 'S' end)
-      s:doAfter('act', function() log[#log + 1] = 'after' end)
-      mgr:invoke('act')                -- global: 'G', no after
-      mgr:setActive('tracker'); mgr:invoke('act')   -- scope: 'S', then 'after'
-      t.deepEq(log, { 'G', 'S', 'after' })
-    end,
-  },
-
-  {
-    name = 'invoke on a global-only name still works regardless of active scope',
+    name = 'invoke on a global-only name still works regardless of pushed scope',
     run = function()
       local mgr = newCommandManager(nil)
       local log = {}
       mgr:register('quit', function() log[#log + 1] = 'quit' end)
-      mgr:scope('tracker')   -- created, but no shadow
-      mgr:setActive('tracker')
+      mgr:push('tracker')              -- created, but no shadow
       mgr:invoke('quit')
       t.deepEq(log, { 'quit' })
     end,
   },
 
   {
-    name = 'keychain returns active-then-root; root only when no active',
+    name = 'keychain returns top-down; global-only when nothing pushed',
     run = function()
       local mgr = newCommandManager(nil)
       mgr:bind('playPause', { 1 })
       mgr:scope('tracker'):bind('cursorUp', { 2 })
 
       local k1 = mgr:keychain()
-      t.eq(#k1, 1,                "no active scope: only root")
-      t.eq(k1[1].playPause[1], 1, "root keymap is the only entry")
+      t.eq(#k1, 1,                "nothing pushed: only global")
+      t.eq(k1[1].playPause[1], 1, "global keymap is the only entry")
 
-      mgr:setActive('tracker')
+      mgr:push('tracker')
       local k2 = mgr:keychain()
-      t.eq(#k2, 2,                "active scope present: two entries")
-      t.eq(k2[1].cursorUp[1],   2, "active first")
-      t.eq(k2[2].playPause[1],  1, "root second")
+      t.eq(#k2, 2,                "tracker pushed: two entries")
+      t.eq(k2[1].cursorUp[1],   2, "top first")
+      t.eq(k2[2].playPause[1],  1, "global last")
     end,
   },
 
   {
-    name = 'keysFor walks the chain; active shadows root',
+    name = 'keysFor walks the stack; upper shadows global',
     run = function()
       local mgr = newCommandManager(nil)
       mgr:bind('foo', { 1 })
       mgr:bind('bar', { 2 })
       mgr:scope('tracker'):bind('foo', { 99 })
-      mgr:setActive('tracker')
+      mgr:push('tracker')
 
-      t.eq(mgr:keysFor('foo')[1], 99, "active scope shadows root for 'foo'")
-      t.eq(mgr:keysFor('bar')[1], 2,  "falls through to root for 'bar'")
+      t.eq(mgr:keysFor('foo')[1], 99, "upper scope shadows global for 'foo'")
+      t.eq(mgr:keysFor('bar')[1], 2,  "falls through to global for 'bar'")
       t.eq(mgr:keysFor('absent'), nil, "absent name returns nil")
     end,
   },
