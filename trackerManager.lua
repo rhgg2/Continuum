@@ -28,19 +28,20 @@ end
 
 local mm, cm = (...).mm, (...).cm
 
+local tm = {}
+local fire = util.installHooks(tm)
+
 ---------- STATE
 
 local channels    = {}
 local lastMuteSet = {}
---invariant: pendingFlushUuids: uuid-set of notes touched by the in-flight um:flush; read by allocateNoteColumn to attribute lane overlaps; nil outside a flush-driven rebuild
+--invariant: pendingFlushUuids: uuid-set of notes touched by the in-flight flush; read by allocateNoteColumn to attribute lane overlaps; nil outside a flush-driven rebuild
 local pendingFlushUuids
 --invariant: specOf[uuid]=SpecNode; nodeMeta[node]={parent, uuid}. Cleared at rebuild head, populated by walker. parent=nil → top-level; uuid=nil → suppressed. See docs/aliases.md.
 local specOf      = {}
 local nodeMeta    = {}
 --invariant: staleSwing[chan]=true: this channel's resolved swing changed; rebuild rule rederives raw from ppqL and clears
 local staleSwing  = {}
-
-local um    -- forward-declared so tm:* methods capture it; rebuild reassigns
 
 ---------- SHARED HELPERS
 
@@ -61,6 +62,27 @@ end
 local function delayToPPQ(d) return timing.delayToPPQ(d, mm:resolution()) end
 
 local function evtTypeOf(evt) return evt.msgType and 'cc' or 'note' end
+
+-- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly.
+local function forEachEvent(fn)
+  for _, channel in tm:channels() do
+    local chan, cols = channel.chan, channel.columns
+    for _, col in ipairs(cols.notes) do
+      for _, evt in ipairs(col.events) do
+        local isNote = evt.type ~= 'pa'
+        fn(isNote and 'note' or 'pa', evt, chan, isNote)
+      end
+    end
+    for _, t in ipairs{'pb', 'at', 'pc'} do
+      if cols[t] then
+        for _, evt in ipairs(cols[t].events) do fn(t, evt, chan, false) end
+      end
+    end
+    for _, col in pairs(cols.ccs) do
+      for _, evt in ipairs(col.events) do fn('cc', evt, chan, false) end
+    end
+  end
+end
 
 --contract: pure; no mm/cm reads; emitted PCs carry fake=true so flush/rebuild can distinguish synthesised from user-authored
 --contract: emitted PCs inherit ppqL from the winning host-note record so the synthesised stream carries logical truth alongside raw ppq
@@ -112,33 +134,12 @@ end
 
 ---------- PUBLIC
 
-local tm = {}
-local fire = util.installHooks(tm)
-
--- Operates on column-projected events; raw fidelity (cc number, fake) needs mm directly.
-local function forEachEvent(fn)
-  for _, channel in tm:channels() do
-    local chan, cols = channel.chan, channel.columns
-    for _, col in ipairs(cols.notes) do
-      for _, evt in ipairs(col.events) do
-        local isNote = evt.type ~= 'pa'
-        fn(isNote and 'note' or 'pa', evt, chan, isNote)
-      end
-    end
-    for _, t in ipairs{'pb', 'at', 'pc'} do
-      if cols[t] then
-        for _, evt in ipairs(cols[t].events) do fn(t, evt, chan, false) end
-      end
-    end
-    for _, col in pairs(cols.ccs) do
-      for _, evt in ipairs(col.events) do fn('cc', evt, chan, false) end
-    end
-  end
-end
-
 ----- Update manager
 
-local function createUpdateManager()
+local addEvent, assignEvent, deleteEvent, flush, reload do
+
+  ----- State
+
   local adds = {}
   local assigns = {}
   local deletes = {}
@@ -594,9 +595,7 @@ local function createUpdateManager()
 
   ----- Public interface
 
-  local um = {}
-
-  function um:deleteEvent(evtType, evtOrLoc)
+  function deleteEvent(evtType, evtOrLoc)
     local evt, loc = lookup(evtType, evtOrLoc)
     if not loc then return end
 
@@ -659,7 +658,7 @@ local function createUpdateManager()
     end
   end
 
-  function um:assignEvent(evtType, evtOrLoc, update)
+  function assignEvent(evtType, evtOrLoc, update)
     local evt, loc = lookup(evtType, evtOrLoc)
     if not loc then return end
 
@@ -692,8 +691,8 @@ local function createUpdateManager()
     end
   end
 
-  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm. Caller-supplied evt.ppqL signals "raw already computed" — translation is skipped (mirrors um:assignEvent).
-  function um:addEvent(evtType, evt)
+  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm. Caller-supplied evt.ppqL signals "raw already computed" — translation is skipped (mirrors assignEvent).
+  function addEvent(evtType, evt)
     local rawCaller = evt.ppqL ~= nil
     if evtType == 'note' then
       evt.detune = evt.detune or 0
@@ -715,7 +714,7 @@ local function createUpdateManager()
 
   --contract: no-op if nothing staged; otherwise commits in fixed order (assigns, deletes desc by loc, adds) under a single mm:modify; pb cents→raw conversion happens here
   --contract: snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
-  function um:flush()
+  function flush()
     if cm:get('trackerMode') and next(dirtyPcChans) then
       for chan in pairs(dirtyPcChans) do reconcilePcs(chan) end
       dirtyPcChans = {}
@@ -766,9 +765,15 @@ local function createUpdateManager()
     end)
   end
 
-  ----- Init: load local cache from mm.
+  ----- Init / reload: (re)load local cache from mm.
 
-  local function init()
+  -- Also clears staging buffers: a rebuild must not carry un-flushed ops
+  -- across (their locs may be invalid), matching the prior "fresh um per
+  -- rebuild" semantics now that the um itself persists.
+  function reload()
+    adds, assigns, deletes = {}, {}, {}
+    dirtyPcChans           = {}
+    notesByLoc, ccsByLoc   = {}, {}
     for i = 1, 16 do chans[i] = { notes = {}, pbs = {} } end
 
     for loc, cc in mm:ccs() do
@@ -793,8 +798,7 @@ local function createUpdateManager()
     for i = 1, 16 do sortByPPQ(chans[i].notes) end
   end
 
-  init()
-  return um
+  reload()
 end
 
 ----- Accessors
@@ -820,29 +824,14 @@ function tm:editCursor()
   return reaper.MIDI_GetPPQPosFromProjTime(mm:take(), editCursorTime)
 end
 
-function tm:length()
-  return mm and mm:length()
-end
-
-function tm:resolution()
-  return mm and mm:resolution()
-end
-
-function tm:name()        return mm and mm:name() end
-function tm:setName(name) if mm then mm:setName(name) end end
-
--- Region persistence pass-through. ec is the source of truth for the live
--- store; tm/mm just shuttle the blob to/from the take's P_EXT.
-function tm:loadRegions()      return mm and mm:loadRegions() end
-function tm:saveRegions(blob)  if mm then mm:saveRegions(blob) end end
-
-function tm:timeSigs()
-  return mm and mm:timeSigs() or {}
-end
-
-function tm:interpolate(A, B, ppq)
-  return mm and mm:interpolate(A, B, ppq)
-end
+function tm:length()               return mm and mm:length() end
+function tm:resolution()           return mm and mm:resolution() end
+function tm:name()                 return mm and mm:name() end
+function tm:setName(name)          if mm then mm:setName(name) end end
+function tm:timeSigs()             return mm and mm:timeSigs() or {} end
+function tm:interpolate(A, B, ppq) return mm and mm:interpolate(A, B, ppq) end
+function tm:loadRegions()          return mm and mm:loadRegions() end
+function tm:saveRegions(blob)      if mm then mm:saveRegions(blob) end end
 
 -- E_c: column is inner, global is outer (see docs/timing.md).
 --contract: returns clipped per-layer Shapes + closures; safe to retain across edits since closures capture the Shapes, not cm reads
@@ -884,19 +873,16 @@ end
 
 --contract: chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
 function tm:markSwingStale(chan)
-  if chan == nil then
-    for i = 1, 16 do staleSwing[i] = true end
-  else
-    staleSwing[chan] = true
-  end
+  if chan then staleSwing[chan] = true; return end
+  for i = 1, 16 do staleSwing[i] = true end
 end
 
 ----- Mutation
 
-function tm:deleteEvent(type, evt)            um:deleteEvent(type, evt)         end
-function tm:addEvent(type, evt)               um:addEvent(type, evt)            end
-function tm:assignEvent(type, evt, update)    um:assignEvent(type, evt, update) end
-function tm:flush()                           um:flush()                        end
+function tm:deleteEvent(type, evt)            deleteEvent(type, evt)         end
+function tm:addEvent(type, evt)               addEvent(type, evt)            end
+function tm:assignEvent(type, evt, update)    assignEvent(type, evt, update) end
+function tm:flush()                           flush()                        end
 
 ----- Length
 
@@ -913,9 +899,9 @@ function tm:setLength(newPpq)
         util.add(clamps, evt)
       end
     end)
-    for _, k in ipairs(kills)    do um:deleteEvent(k[1], k[2]) end
-    for _, evt in ipairs(clamps) do um:assignEvent('note', evt, { endppq = newPpq }) end
-    um:flush()
+    for _, k in ipairs(kills)    do deleteEvent(k[1], k[2]) end
+    for _, evt in ipairs(clamps) do assignEvent('note', evt, { endppq = newPpq }) end
+    flush()
   end
   if newPpq ~= oldPpq then mm:setLength(newPpq / mm:resolution()) end
 end
@@ -965,7 +951,7 @@ function tm:rescaleLength(newPpq)
       util.add(plans, p)
     end)
     for _, p in ipairs(plans) do
-      um:assignEvent(p.type, p.evt, {
+      assignEvent(p.type, p.evt, {
         ppq      = p.newPpq,
         endppq   = p.newEndppq,
         delay    = p.newDelay,
@@ -973,7 +959,7 @@ function tm:rescaleLength(newPpq)
         endppqL  = p.newEndppqL,
       })
     end
-    um:flush()
+    flush()
   end
 
   applyTimeMap(function(t) return f * t end, function() return f end)
@@ -1059,18 +1045,17 @@ function tm:playPause() reaper.Main_OnCommand(40073, 0) end
 --contract: idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes
 function tm:setMutedChannels(set)
   lastMuteSet = util.clone(set or {})
-  if not um then return end
   for _, ch in ipairs(channels) do
     local want = lastMuteSet[ch.chan] == true
     for _, col in ipairs(ch.columns.notes) do
       for _, n in ipairs(col.events) do
         if (n.muted == true) ~= want then
-          um:assignEvent('note', n, { muted = want })
+          assignEvent('note', n, { muted = want })
         end
       end
     end
   end
-  um:flush()
+  flush()
 end
 
 ----- Aliases
@@ -1130,7 +1115,7 @@ function tm:routeRelative(evt, opsByField)
       node.xform = aliases.appendOp(node.xform, field, op)
     end
   end
-  um:assignEvent(kind, { loc = rootLoc }, { aliases = root.aliases })
+  assignEvent(kind, { loc = rootLoc }, { aliases = root.aliases })
   return true
 end
 
@@ -1159,13 +1144,13 @@ function tm:severBatch(events)
         local plucked = aliases.pluckNode(parentList, node)
         if plucked then
           local evtKind = evtTypeOf(e)
-          um:assignEvent(evtKind, e, {
+          assignEvent(evtKind, e, {
             parentUuid = util.REMOVE,
             aliases    = plucked.children or {},
           })
         end
       end
-      um:assignEvent(rootKind, { loc = rootLoc }, { aliases = root.aliases })
+      assignEvent(rootKind, { loc = rootLoc }, { aliases = root.aliases })
     end
   end
 end
@@ -1206,7 +1191,7 @@ function tm:deleteAliased(evt)
       local _, matEvt, matKind = mm:byUuid(matUuid)
       if matEvt then
         aliases.pluckNode(childSpecs, child)
-        um:assignEvent(matKind, matEvt, {
+        assignEvent(matKind, matEvt, {
           parentUuid = util.REMOVE,
           aliases    = child.children or {},
         })
@@ -1215,12 +1200,12 @@ function tm:deleteAliased(evt)
   end
 
   if isRoot then
-    um:deleteEvent(rootKind, { loc = rootLoc })
+    deleteEvent(rootKind, { loc = rootLoc })
   else
     local pSpec = nodeMeta[S].parent
     local parentList = pSpec and pSpec.children or root.aliases
     aliases.pluckNode(parentList, S)
-    um:assignEvent(rootKind, { loc = rootLoc }, { aliases = root.aliases })
+    assignEvent(rootKind, { loc = rootLoc }, { aliases = root.aliases })
   end
   return true
 end
@@ -1330,7 +1315,7 @@ function tm:createAlias(rootUuid, srcIdx, xform, children, fit)
   if fit then node.fit = true end
   list[#list + 1] = node
   newIdx[#newIdx + 1] = #list
-  um:assignEvent(kind, { loc = rootLoc }, { aliases = root.aliases })
+  assignEvent(kind, { loc = rootLoc }, { aliases = root.aliases })
   return newIdx
 end
 
@@ -1469,7 +1454,7 @@ do
 
   local rebuilding = false
 
-  --contract: reentrancy-guarded; rebuilds channels[] from mm, recreates um, fires 'rebuild'; takeChanged forwarded to subscribers via the captured pendingTakeSwap
+  --contract: reentrancy-guarded; rebuilds channels[] from mm, reloads the update-manager cache, fires 'rebuild'; takeChanged forwarded to subscribers via the captured pendingTakeSwap
   function tm:rebuild(takeChanged)
     if rebuilding then return end
     rebuilding = true
@@ -1495,9 +1480,9 @@ do
       if #roots > 0 or #notesToDel > 0 or #ccsToDel > 0 then
         -- Route alias-child writes through um so lane-1 onsets seat
         -- fake-pb absorbers when their detune differs from the carry,
-        -- same as user-authored notes. Recreate um first so its chans
-        -- cache reflects current mm.
-        um = createUpdateManager()
+        -- same as user-authored notes. Reload first so its chans cache
+        -- reflects current mm.
+        reload()
         local claims = {}
         for _, n in mm:notes() do
           if not n.parentUuid then claims[slotKey(n)] = true end
@@ -1628,11 +1613,11 @@ do
 
         table.sort(notesToDel, function(a, b) return a > b end)
         table.sort(ccsToDel,   function(a, b) return a[2] > b[2] end)
-        for _, loc in ipairs(notesToDel) do um:deleteEvent('note', loc) end
-        for _, e   in ipairs(ccsToDel)   do um:deleteEvent(e[1],  e[2]) end
-        for _, n   in ipairs(notesToAdd) do um:addEvent('note', n)      end
-        for _, c   in ipairs(ccsToAdd)   do um:addEvent(c.msgType, c)   end
-        um:flush()
+        for _, loc in ipairs(notesToDel) do deleteEvent('note', loc) end
+        for _, e   in ipairs(ccsToDel)   do deleteEvent(e[1],  e[2]) end
+        for _, n   in ipairs(notesToAdd) do addEvent('note', n)      end
+        for _, c   in ipairs(ccsToAdd)   do addEvent(c.msgType, c)   end
+        flush()
 
         for _, ce in ipairs(claimedEmits) do
           local u = ce.emit.uuid
@@ -1972,11 +1957,11 @@ do
       if not same then cm:set('take', 'usedSwings', used) end
     end
 
-    um = createUpdateManager()
+    reload()
     rebuilding = false
     pendingFlushUuids = nil
 
-    --emits: rebuild  -- nil; fires once at the end of every rebuild after um is recreated
+    --emits: rebuild  -- nil; fires once at the end of every rebuild after the update-manager cache is reloaded
     fire('rebuild', nil)
   end
 end
