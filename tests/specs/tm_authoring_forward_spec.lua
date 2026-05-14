@@ -18,7 +18,7 @@ return {
           take    = { swing = 'c58' },
         },
       }
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 120, endppq = 240,
         chan = 1, pitch = 60, vel = 100,
         detune = 0, delay = 0, lane = 1,
@@ -42,7 +42,7 @@ return {
         },
       }
       -- delay in milli-QN: 125 mQN @ 240 ppq/QN = 30 ppq nudge on note-on.
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 120, endppq = 240,
         chan = 1, pitch = 60, vel = 100,
         detune = 0, delay = 125, lane = 1,
@@ -70,7 +70,7 @@ return {
         }},
       }
       local n = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:assignEvent('note', n, { ppq = 120 })
+      h.tm:assignEvent(n, { ppq = 120 })
       h.tm:flush()
 
       local notes = h.fm:dump().notes
@@ -94,7 +94,7 @@ return {
         }},
       }
       local n = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:assignEvent('note', n, { delay = 125 })
+      h.tm:assignEvent(n, { delay = 125 })
       h.tm:flush()
 
       local notes = h.fm:dump().notes

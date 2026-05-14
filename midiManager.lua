@@ -707,10 +707,6 @@ local function cloneOut(evt)
   return c
 end
 
-local function getNote(loc)
-  return cloneOut(notes[loc])
-end
-
 function mm:notes()
   local i = 0
   return function()
@@ -796,10 +792,6 @@ local function addNote(t)
 end
 
 ----- CCs
-
-local function getCC(loc)
-  return cloneOut(ccs[loc])
-end
 
 function mm:ccs()
   local i = 0

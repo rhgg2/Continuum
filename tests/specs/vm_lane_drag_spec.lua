@@ -174,12 +174,12 @@ return {
       local h = harness.mk{
         config = { take = { rowPerBeat = 4 } },
       }
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100,
         detune = 50, delay = 0, lane = 1,
       })
-      h.tm:addEvent('pb', { ppq = 60,  chan = 1, val = 0 })
-      h.tm:addEvent('pb', { ppq = 600, chan = 1, val = 0 })
+      h.tm:addEvent({ evType = 'pb', ppq = 60,  chan = 1, val = 0 })
+      h.tm:addEvent({ evType = 'pb', ppq = 600, chan = 1, val = 0 })
       h.tm:flush()
       h.vm:setGridSize(80, 40)
 
@@ -230,12 +230,12 @@ return {
       local h = harness.mk{
         config = { take = { rowPerBeat = 4 } },
       }
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100,
         detune = 50, delay = 0, lane = 1,
       })
-      h.tm:addEvent('pb', { ppq = 60,  chan = 1, val = 0 })
-      h.tm:addEvent('pb', { ppq = 600, chan = 1, val = 0 })
+      h.tm:addEvent({ evType = 'pb', ppq = 60,  chan = 1, val = 0 })
+      h.tm:addEvent({ evType = 'pb', ppq = 600, chan = 1, val = 0 })
       h.tm:flush()
       h.vm:setGridSize(80, 40)
 
@@ -335,7 +335,7 @@ return {
       local idx = findCcCol(h.vm, 1)
       -- Mark first event's outgoing shape as 'linear' so the curve from
       -- prev→next is non-trivial; the new midpoint should inherit that.
-      h.tm:assignEvent('cc', h.vm.grid.cols[idx].events[1], { shape = 'linear' })
+      h.tm:assignEvent(h.vm.grid.cols[idx].events[1], { shape = 'linear' })
       h.tm:flush()
 
       local newIdx = h.vm:addLaneEvent(h.vm.grid.cols[idx], idx, 180, 20)
@@ -497,7 +497,7 @@ return {
       h.vm:setGridSize(80, 40)
       local idx = findCcCol(h.vm, 1)
       -- Start the segment as linear; tension write should override.
-      h.tm:assignEvent('cc', h.vm.grid.cols[idx].events[1], { shape = 'linear' })
+      h.tm:assignEvent(h.vm.grid.cols[idx].events[1], { shape = 'linear' })
       h.tm:flush()
 
       h.vm:setLaneTension(h.vm.grid.cols[idx], 1, 0.5)

@@ -59,7 +59,7 @@ return {
         seed = { notes = {} },
         config = { transient = { trackerMode = true } },
       }
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 100, endppq = 300, chan = 1, pitch = 60, vel = 100,
         detune = 0, delay = 500, sample = 7, lane = 1,
       })
@@ -83,7 +83,7 @@ return {
         config = { transient = { trackerMode = true } },
       }
       local tok = tokenOfNote(h.fm, 1, 62)
-      h.tm:assignEvent('note', { token = tok }, { sample = 9 })
+      h.tm:assignEvent({ token = tok }, { sample = 9 })
       h.tm:flush()
       t.deepEq(pcsOnChan(h.fm:dump(), 1),
         { { ppq = 0, val = 1 }, { ppq = 240, val = 9 } })
@@ -103,7 +103,7 @@ return {
         config = { transient = { trackerMode = true } },
       }
       local tok = tokenOfNote(h.fm, 1, 62)
-      h.tm:deleteEvent('note', tok)
+      h.tm:deleteEvent(tok)
       h.tm:flush()
       t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 1 } })
     end,
@@ -130,7 +130,7 @@ return {
         config = { transient = { trackerMode = true } },
       }
       local tok = tokenOfNote(h.fm, 1, 60)
-      h.tm:assignEvent('note', { token = tok }, { sample = 9 })
+      h.tm:assignEvent({ token = tok }, { sample = 9 })
       h.tm:flush()
       t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 240, val = 9 } })
       t.deepEq(pcsOnChan(h.fm:dump(), 2), { { ppq = 0,   val = 5 } })
@@ -194,7 +194,7 @@ return {
       -- Both notes share realised ppq 0 → leftmost (lane 1) wins.
       -- Move the lane-2 note off by 100 ppq so it has its own group.
       local lane2evt = laneEvent(h.tm, 1, 2, 1)
-      h.tm:assignEvent('note', { token = lane2evt.token }, { ppq = 100, endppq = 580 })
+      h.tm:assignEvent({ token = lane2evt.token }, { ppq = 100, endppq = 580 })
       h.tm:flush()
       local pcs = pcsOnChan(h.fm:dump(), 1)
       -- Two distinct realised onsets: lane-1 at 0, lane-2 at 100.
@@ -232,9 +232,9 @@ return {
         seed = { notes = {} },
         config = { transient = { trackerMode = true } },
       }
-      h.tm:addEvent('note', { ppq = 100, endppq = 480, chan = 1, pitch = 60, vel = 100,
+      h.tm:addEvent({ evType = 'note', ppq = 100, endppq = 480, chan = 1, pitch = 60, vel = 100,
                               detune = 0, delay = 0,    sample = 0xA, lane = 1 })
-      h.tm:addEvent('note', { ppq = 100, endppq = 480, chan = 1, pitch = 64, vel = 100,
+      h.tm:addEvent({ evType = 'note', ppq = 100, endppq = 480, chan = 1, pitch = 64, vel = 100,
                               detune = 0, delay = -417, sample = 0xB, lane = 2 })
       h.tm:flush()
       local pcs = pcsOnChan(h.fm:dump(), 1)
@@ -259,7 +259,7 @@ return {
         config = { transient = { trackerMode = true } },
       }
       local shadowerTok = tokenOfNote(h.fm, 1, 60)
-      h.tm:deleteEvent('note', shadowerTok)
+      h.tm:deleteEvent(shadowerTok)
       h.tm:flush()
       t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 0xB } })
       -- After delete, the lane-2 survivor's lane assignment may rebalance.

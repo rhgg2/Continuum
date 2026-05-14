@@ -30,7 +30,7 @@ return {
     name = 'adding a note with detune seats a fake pb at the note',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 50, delay = 0, lane = 1,
       })
@@ -52,7 +52,7 @@ return {
     name = 'logical pb at the note seat is zero (detune absorbs the raw step)',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 50, delay = 0, lane = 1,
       })
@@ -73,7 +73,7 @@ return {
     name = 'clearing detune back to 0 removes the fake pb',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 50, delay = 0, lane = 1,
       })
@@ -81,7 +81,7 @@ return {
 
       -- Retune to 0 via tm's intent-speaking API.
       local note = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:assignEvent('note', note, { detune = 0 })
+      h.tm:assignEvent(note, { detune = 0 })
       h.tm:flush()
 
       local dump = h.fm:dump()
@@ -96,11 +96,11 @@ return {
     name = 'two notes with different detunes produce stepwise pbs between them',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 25, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100,
         detune = -30, delay = 0, lane = 1,
       })
@@ -132,11 +132,11 @@ return {
     name = 'mutating a note past a same-channel neighbour keeps fake pbs fake',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 120, endppq = 150, chan = 1, pitch = 60, vel = 100,
         detune = 30, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 180, endppq = 240, chan = 1, pitch = 64, vel = 100,
         detune = 50, delay = 0, lane = 1,
       })
@@ -153,7 +153,7 @@ return {
       -- detuneBefore(A.new) correctly returns B's detune; without it,
       -- it returns 0 and L != logicalBefore seats a real pb at A.new.
       local A = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:assignEvent('note', A, { ppq = 200, endppq = 230 })
+      h.tm:assignEvent(A, { ppq = 200, endppq = 230 })
       h.tm:flush()
 
       pbs = {}
@@ -171,7 +171,7 @@ return {
     name = 'pb.fake survives a rebuild (persisted as cc metadata)',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 50, delay = 0, lane = 1,
       })
@@ -194,7 +194,7 @@ return {
     name = 'deleting a detuned note cleans up its fake pb',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 50, delay = 0, lane = 1,
       })
@@ -202,7 +202,7 @@ return {
       t.eq(#pbsAt(h.fm:dump(), 0), 1, 'pb seated')
 
       local note = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:deleteEvent('note', note)
+      h.tm:deleteEvent(note)
       h.tm:flush()
 
       local dump = h.fm:dump()
@@ -221,7 +221,7 @@ return {
       }
       -- Now add a detuned note at the same seat. The existing real pb
       -- carries the logical value; detune is expressed on top.
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 25, delay = 0, lane = 1,
       })
@@ -254,15 +254,15 @@ return {
       local h = harness.mk()
       -- Three notes back to back at ppqs 0, 240, 480, two different
       -- pitches and detunes (mimicking a 19EDO Eb2 Eb2 D-2 sequence).
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0,   endppq = 240, chan = 1, pitch = 51, vel = 100,
         detune = 30, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 240, endppq = 480, chan = 1, pitch = 51, vel = 100,
         detune = 30, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 480, endppq = 720, chan = 1, pitch = 50, vel = 100,
         detune = -30, delay = 0, lane = 1,
       })
@@ -284,7 +284,7 @@ return {
 
       -- Overwrite the second A with B (same detune as the third note).
       local middle = h.tm:getChannel(1).columns.notes[1].events[2]
-      h.tm:assignEvent('note', middle, { pitch = 50, detune = -30 })
+      h.tm:assignEvent(middle, { pitch = 50, detune = -30 })
       h.tm:flush()
 
       pbs = allPbs()
@@ -302,17 +302,17 @@ return {
     name = 'inserting B between A and B drops the now-redundant fake pb at the existing B',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0,   endppq = 240, chan = 1, pitch = 51, vel = 100,
         detune = 30, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 480, endppq = 720, chan = 1, pitch = 50, vel = 100,
         detune = -30, delay = 0, lane = 1,
       })
       h.tm:flush()
 
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 240, endppq = 480, chan = 1, pitch = 50, vel = 100,
         detune = -30, delay = 0, lane = 1,
       })
@@ -337,15 +337,15 @@ return {
     name = 'A A A then B A A then B B A keeps the fake-pb invariant at every note seat',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0,   endppq = 240, chan = 1, pitch = 51, vel = 100,
         detune = 30, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 240, endppq = 480, chan = 1, pitch = 51, vel = 100,
         detune = 30, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 480, endppq = 720, chan = 1, pitch = 51, vel = 100,
         detune = 30, delay = 0, lane = 1,
       })
@@ -367,7 +367,7 @@ return {
 
       -- AAA → BAA: overwrite first A.
       local first = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:assignEvent('note', first, { pitch = 50, detune = -30 })
+      h.tm:assignEvent(first, { pitch = 50, detune = -30 })
       h.tm:flush()
 
       pbs = pbsByppq()
@@ -379,7 +379,7 @@ return {
 
       -- BAA → BBA: overwrite second A.
       local second = h.tm:getChannel(1).columns.notes[1].events[2]
-      h.tm:assignEvent('note', second, { pitch = 50, detune = -30 })
+      h.tm:assignEvent(second, { pitch = 50, detune = -30 })
       h.tm:flush()
 
       pbs = pbsByppq()
@@ -404,15 +404,15 @@ return {
     name = 'moving a detuned note past a same-detune neighbour seats absorber at the unmasked seat',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 0, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 240, endppq = 480, chan = 1, pitch = 64, vel = 100,
         detune = 10, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 480, endppq = 720, chan = 1, pitch = 65, vel = 100,
         detune = 10, delay = 0, lane = 1,
       })
@@ -434,7 +434,7 @@ return {
 
       -- Move B past C. B sits at ppq=600 now; C's prior is A (detune 0).
       local B = h.tm:getChannel(1).columns.notes[1].events[2]
-      h.tm:assignEvent('note', B, { ppq = 600, endppq = 840 })
+      h.tm:assignEvent(B, { ppq = 600, endppq = 840 })
       h.tm:flush()
 
       pbs = pbsByppq()
@@ -452,22 +452,22 @@ return {
     name = 'deleting middle B in A B A drops the now-redundant fake pb at row 3',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0,   endppq = 240, chan = 1, pitch = 51, vel = 100,
         detune = 30, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 240, endppq = 480, chan = 1, pitch = 50, vel = 100,
         detune = -30, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 480, endppq = 720, chan = 1, pitch = 51, vel = 100,
         detune = 30, delay = 0, lane = 1,
       })
       h.tm:flush()
 
       local middle = h.tm:getChannel(1).columns.notes[1].events[2]
-      h.tm:deleteEvent('note', middle)
+      h.tm:deleteEvent(middle)
       h.tm:flush()
 
       local pbs = {}
@@ -485,11 +485,11 @@ return {
     name = 'lane-2 detuned note seats no pb (lane-1 monopoly on realisation)',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 0, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 64, vel = 100,
         detune = 50, delay = 0, lane = 2,
       })
@@ -516,11 +516,11 @@ return {
     name = 'deleting a lane-2 note at a lane-1 fake-pb seat leaves the absorber intact',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 50, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 64, vel = 100,
         detune = 0, delay = 0, lane = 2,
       })
@@ -541,7 +541,7 @@ return {
       local lane2Evt = lane2Col.events[1]
       t.eq(lane2Evt.pitch, 64, 'lane-2 holds the pitch-64 note')
 
-      h.tm:deleteEvent('note', lane2Evt)
+      h.tm:deleteEvent(lane2Evt)
       h.tm:flush()
 
       t.eq(pbCount(), 1, "lane-1's absorber survives unrelated lane-2 deletion")
@@ -561,7 +561,7 @@ return {
     name = 'pure delay change shifts the fake pb with its host (count and value preserved)',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 120, endppq = 360, chan = 1, pitch = 60, vel = 100,
         detune = 50, delay = 0, lane = 1,
       })
@@ -581,7 +581,7 @@ return {
       -- Nudge the note's delay only. delayToPPQ(500, res=240) = 120,
       -- so the note's realised ppq shifts 0 → 120 added → 240.
       local note = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:assignEvent('note', note, { delay = 500 })
+      h.tm:assignEvent(note, { delay = 500 })
       h.tm:flush()
 
       local after = pbs()
@@ -610,7 +610,7 @@ return {
       }
       -- Add a detuned note on top: the pre-existing real pb stays real,
       -- its raw advances by the detune delta (existing-test territory).
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 20, delay = 0, lane = 1,
       })
@@ -646,7 +646,7 @@ return {
           ccs = { { ppq = 0, chan = 1, evType = 'pb', val = cents2raw(40) } },
         },
       }
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 0, delay = 0, lane = 1,
       })
@@ -660,7 +660,7 @@ return {
       t.falsy(realPbAtZero().fake, 'baseline: real pb stays real with detune=0')
 
       local note = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:assignEvent('note', note, { detune = 20 })
+      h.tm:assignEvent(note, { detune = 20 })
       h.tm:flush()
 
       local pb = realPbAtZero()
@@ -679,15 +679,15 @@ return {
     name = 'flush + rebuild + flush is idempotent on the pb dump',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 30, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100,
         detune = -20, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 480, endppq = 720, chan = 1, pitch = 64, vel = 100,
         detune = 10, delay = 0, lane = 1,
       })
@@ -724,11 +724,11 @@ return {
     name = 'editing a lane-2 note detune does not seat or move any pb',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
         detune = 0, delay = 0, lane = 1,
       })
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 0, endppq = 240, chan = 1, pitch = 64, vel = 100,
         detune = 0, delay = 0, lane = 2,
       })
@@ -744,7 +744,7 @@ return {
       t.eq(pbCount(), 0, 'baseline: no pbs (both detunes 0)')
 
       local lane2 = h.tm:getChannel(1).columns.notes[2].events[1]
-      h.tm:assignEvent('note', lane2, { detune = 75 })
+      h.tm:assignEvent(lane2, { detune = 75 })
       h.tm:flush()
 
       t.eq(pbCount(), 0, 'lane-2 detune update does not author a pb')

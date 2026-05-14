@@ -176,12 +176,11 @@ end
 
 local function writePlans(plans)
   for _, p in ipairs(plans) do
-    local kind = util.isNote(p.e) and 'note' or p.col.type
     local u    = {}
     if p.newppq    ~= nil then u.ppq    = p.newppq    end
     if p.newDelay  ~= nil then u.delay  = p.newDelay  end
     if util.isNote(p.e) and p.newEndppq ~= nil then u.endppq = p.newEndppq end
-    tm:assignEvent(kind, p.e, u)
+    tm:assignEvent(p.e, u)
   end
 end
 
@@ -266,17 +265,17 @@ local isFrameChange, currentRpb, releaseTransientFrame do
 end
 
 -- Pass rowE for span events (notes).
-local function assignStamp(type, evt, chan, rowS, rowE)
+local function assignStamp(evt, chan, rowS, rowE)
   local rpb       = currentRpb()
   local logPerRow = logPerRowFor(rpb)
   local s = { ppq = rowS * logPerRow, rpb = rpb }
   if rowE then s.endppq = rowE * logPerRow end
-  tm:assignEvent(type, evt, s)
+  tm:assignEvent(evt, s)
 end
 
 --contract: whenever a note's tail moves: rebases evt.rpb to current alongside the new endppq
 local function assignTail(evt, chan, endppq)
-  tm:assignEvent('note', evt, { endppq = endppq, rpb = currentRpb() })
+  tm:assignEvent(evt, { endppq = endppq, rpb = currentRpb() })
 end
 
 local function matchGridToCursor()
@@ -481,7 +480,8 @@ do
     update.endppq          = next and next.ppq or length
     update.lane            = col.lane
     if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
-    tm:addEvent('note', update)
+    update.evType = 'note'
+    tm:addEvent(update)
   end
 
   local function notePAEvents(col, pitch, startppq, endppq)
@@ -558,7 +558,7 @@ do
           end
           local upd = { pitch = pitch, detune = detune }
           if cm:get('trackerMode') then upd.sample = cm:get('currentSample') end
-          tm:assignEvent('note', evt, snap(upd))
+          tm:assignEvent(evt, snap(upd))
           return commit(pitch, evt.vel)
         end
 
@@ -567,10 +567,10 @@ do
           local host = util.seek(col.events, 'before', evt.ppq, util.isNote)
           if host and host.endppq > evt.ppq then
             for _, pa in ipairs(notePAEvents(col, host.pitch, evt.ppq, host.endppq)) do
-              tm:deleteEvent('pa', pa)
+              tm:deleteEvent(pa)
             end
           else
-            tm:deleteEvent('pa', evt)
+            tm:deleteEvent(evt)
           end
         end
 
@@ -599,7 +599,7 @@ do
             return commit(pitch, evt.vel)
           end
         end
-        tm:assignEvent('note', evt, { pitch = pitch })
+        tm:assignEvent(evt, { pitch = pitch })
         return commit(pitch, evt.vel)
 
       -- sample: 2 hex nibbles, 0..127.
@@ -608,7 +608,7 @@ do
         local d = hexDigit[char]; if not d then return end
         local newSample = util.clamp(
           util.setDigit(evt.sample or 0, d, 1 - digit, 16, half), 0, 127)
-        tm:assignEvent('note', evt, { sample = newSample })
+        tm:assignEvent(evt, { sample = newSample })
         commit()
         -- After flush so the configChanged-driven rebuild reads the
         -- already-written sample rather than racing the queued assign.
@@ -634,7 +634,7 @@ do
 
         local minD, maxD = delayRange(col, evt)
         newDelay = util.clamp(newDelay, math.ceil(minD), math.floor(maxD))
-        tm:assignEvent('note', evt, { delay = newDelay })
+        tm:assignEvent(evt, { delay = newDelay })
         return commit()
 
       -- velocity nibble (on note) or PA value
@@ -645,19 +645,20 @@ do
         end
 
         if evt and evt.type == 'pa' then
-          tm:assignEvent('pa', evt, snap({ vel = newVel(evt.vel) }))
+          tm:assignEvent(evt, snap({ vel = newVel(evt.vel) }))
           return commit()
         end
 
         if evt then
-          tm:assignEvent('note', evt, { vel = newVel(evt.vel) })
+          tm:assignEvent(evt, { vel = newVel(evt.vel) })
           return commit()
         end
 
         if cm:get('polyAftertouch') then
           local note = util.seek(col.events, 'before', cursorppq, util.isNote)
           if note and note.endppq > cursorppq then
-            tm:addEvent('pa', {
+            tm:addEvent({
+              evType = 'pa',
               ppq = cursorppq,
               chan = col.midiChan,
               pitch = note.pitch, vel = newVel(0),
@@ -691,14 +692,15 @@ do
     end
 
     if evt then
-      tm:assignEvent(type, evt, snap(update))
+      tm:assignEvent(evt, snap(update))
     else
       if type == 'cc' then util.assign(update, { cc = col.cc }) end
       util.assign(update, {
         ppq = cursorppq,
         chan = col.midiChan, rpb = rpbNow,
       })
-      tm:addEvent(type, update)
+      update.evType = type
+      tm:addEvent(update)
     end
     commit()
   end
@@ -737,7 +739,7 @@ function tv:moveLaneEvent(col, i, toRow, toVal)
   if next and newppq >= next.ppq then newppq = next.ppq - 1 end
   if prev and newppq <= prev.ppq then return end  -- gap < 2 ppq, nowhere to go
 
-  tm:assignEvent(col.type, evt, { val = toVal, ppq = newppq, rpb = currentRpb() })
+  tm:assignEvent(evt, { val = toVal, ppq = newppq, rpb = currentRpb() })
   tm:flush()
 end
 
@@ -756,7 +758,8 @@ function tv:addLaneEvent(col, colIdx, ppq, val)
     shape = prev and prev.shape or nil,
   }
   if col.type == 'cc' then update.cc = col.cc end
-  tm:addEvent(col.type, update)
+  update.evType = col.type
+  tm:addEvent(update)
   tm:flush()
 
   local newCol = grid.cols[colIdx]
@@ -774,7 +777,7 @@ function tv:deleteLaneEvent(col, i)
   if not col or not util.oneOf('cc pb at', col.type) then return end
   local evt = visibleAt(col, i)
   if not evt then return end
-  tm:deleteEvent(col.type, evt)
+  tm:deleteEvent(evt)
   tm:flush()
 end
 
@@ -784,7 +787,7 @@ function tv:setLaneTension(col, i, tension)
   if not col or not util.oneOf('cc pb at', col.type) then return end
   local A = visibleAt(col, i)
   if not A then return end
-  tm:assignEvent(col.type, A, { tension = tension, shape = 'bezier' })
+  tm:assignEvent(A, { tension = tension, shape = 'bezier' })
   tm:flush()
 end
 
@@ -803,7 +806,7 @@ local interpolate, interpolateValues do
 
   local function cycleShape(col, A)
     if not A then return end
-    tm:assignEvent(col.type, A, { shape = nextShape(A.shape or 'step') })
+    tm:assignEvent(A, { shape = nextShape(A.shape or 'step') })
   end
 
   -- Cycle the segment-owner's shape on the i-th visible event in a
@@ -908,7 +911,7 @@ local noteOff, adjustDuration, adjustPosition do
       assignTail(last, col.midiChan, newEnd)
     elseif last.ppq >= targetppq then
       if last.parentUuid and tm:deleteAliased(last) then return end
-      tm:deleteEvent('note', last)
+      tm:deleteEvent(last)
     else
       local _, maxEnd = overlapBounds(col, last.ppq, last, true)
       local newEnd    = util.clamp(targetppq, last.ppq + 1, maxEnd)
@@ -1041,7 +1044,7 @@ local noteOff, adjustDuration, adjustPosition do
           else
             local rowS = ctx:ppqToRow(n.ppq,    chan) + rowDelta
             local rowE = ctx:ppqToRow(n.endppq, chan) + rowDelta
-            assignStamp('note', n, chan, rowS, rowE)
+            assignStamp(n, chan, rowS, rowE)
           end
         end
       end
@@ -1079,7 +1082,7 @@ local noteOff, adjustDuration, adjustPosition do
     local logPerRow = logPerRowFor(currentRpb())
     if not (note.parentUuid
             and tm:routeRelative(note, { ppqL = { 'add', newStart * logPerRow - note.ppq } })) then
-      assignStamp('note', note, chan, newStart, newEnd)
+      assignStamp(note, chan, newStart, newEnd)
     end
     tm:flush()
     if not cursorBlocked then ec:setPos(newCursorRow) end
@@ -1170,7 +1173,7 @@ do
         u.endppqL = e.endppqL
       end
       if p.newDelay ~= nil then u.delay = p.newDelay end
-      if next(u) then tm:assignEvent(util.isNote(e) and 'note' or p.col.type, e, u) end
+      if next(u) then tm:assignEvent(e, u) end
     end
     tm:flush()
 
@@ -1402,7 +1405,7 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     end
 
     conformOverlaps(plans)
-    for _, d in ipairs(deletes) do tm:deleteEvent(d.col.type, d.evt) end
+    for _, d in ipairs(deletes) do tm:deleteEvent(d.evt) end
     writePlans(plans)
 
     if col.type == 'note' then
@@ -1438,7 +1441,7 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     end
 
     conformOverlaps(plans)
-    for _, d in ipairs(deletes) do tm:deleteEvent(d.col.type, d.evt) end
+    for _, d in ipairs(deletes) do tm:deleteEvent(d.evt) end
     writePlans(plans)
   end
 
@@ -1511,7 +1514,7 @@ local nudge do
       pitch, detune = util.clamp(note.pitch + delta, 0, 127), note.detune
     end
     if pitch == note.pitch and detune == note.detune then return end
-    tm:assignEvent('note', note, { pitch = pitch, detune = detune })
+    tm:assignEvent(note, { pitch = pitch, detune = detune })
     if audible then audition(pitch, note.vel, col.midiChan) end
   end
 
@@ -1520,7 +1523,7 @@ local nudge do
     if newVel == note.vel then return end
     if note.parentUuid
        and tm:routeRelative(note, { vel = { 'add', newVel - note.vel } }) then return end
-    tm:assignEvent('note', note, { vel = newVel })
+    tm:assignEvent(note, { vel = newVel })
   end
 
   local function nudgeDelay(col, note, dir, coarse, p)
@@ -1530,7 +1533,7 @@ local nudge do
     if new == old then return end
     if note.parentUuid
        and tm:routeRelative(note, { delay = { 'add', new - old } }) then return end
-    tm:assignEvent('note', note, { delay = new })
+    tm:assignEvent(note, { delay = new })
   end
 
   local function nudgeValue(col, evt, dir, coarse, p)
@@ -1539,7 +1542,7 @@ local nudge do
     if newVal == evt.val then return end
     if evt.parentUuid
        and tm:routeRelative(evt, { val = { 'add', newVal - evt.val } }) then return end
-    tm:assignEvent(col.type, evt, { val = newVal })
+    tm:assignEvent(evt, { val = newVal })
   end
 
   local function applyNudge(col, evt, part, dir, coarse, audible, p)
@@ -1642,7 +1645,7 @@ local deleteEvent, deleteSelection do
     end
 
     for _, evt in pairs(locs) do
-      if evt.type ~= 'pa' then tm:deleteEvent('note', evt) end
+      if evt.type ~= 'pa' then tm:deleteEvent(evt) end
     end
     for _, f in ipairs(fixups) do
       assignTail(f.evt, chan, f.endppq)
@@ -1653,7 +1656,7 @@ local deleteEvent, deleteSelection do
   local function queueResetDelays(col, locs)
     for _, evt in pairs(locs) do
       if evt.type ~= 'pa' and evt.delay ~= 0 then
-        tm:assignEvent('note', evt, { delay = 0 })
+        tm:assignEvent(evt, { delay = 0 })
       end
     end
   end
@@ -1665,9 +1668,9 @@ local deleteEvent, deleteSelection do
     for _, evt in ipairs(col.events) do
       if locs[evt] then
         if evt.type == 'pa' then
-          tm:deleteEvent('pa', evt)
+          tm:deleteEvent(evt)
         else
-          tm:assignEvent('note', evt, { vel = prevVel })
+          tm:assignEvent(evt, { vel = prevVel })
         end
       else
         prevVel = evt.vel
@@ -1676,7 +1679,7 @@ local deleteEvent, deleteSelection do
   end
 
   local function queueDeleteCCs(col, locs)
-    for _, evt in pairs(locs) do tm:deleteEvent(col.type, evt) end
+    for _, evt in pairs(locs) do tm:deleteEvent(evt) end
   end
 
   local DELETE_BY_PART = {
@@ -1701,7 +1704,7 @@ local deleteEvent, deleteSelection do
       -- Delete on a ghost cell: unset interpolation on the governing event.
       local ghost = col.ghosts and col.ghosts[r]
       if ghost then
-        tm:assignEvent(col.type, ghost.fromEvt, { shape = 'step' })
+        tm:assignEvent(ghost.fromEvt, { shape = 'step' })
         tm:flush()
       end
       return

@@ -304,7 +304,7 @@ return {
     name = 'tm:addEvent + flush round-trips through mm',
     run = function(harness)
       local h = harness.mk()
-      h.tm:addEvent('note', { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, lane = 1 })
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, lane = 1 })
       h.tm:flush()
 
       local dump = h.fm:dump()
@@ -325,8 +325,8 @@ return {
         },
       }
       local before = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:deleteEvent('note', before)
-      h.tm:addEvent('note', { ppq = 480, endppq = 720, chan = 1, pitch = 62, vel = 90, detune = 0, delay = 0, lane = 1 })
+      h.tm:deleteEvent(before)
+      h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 720, chan = 1, pitch = 62, vel = 90, detune = 0, delay = 0, lane = 1 })
       h.tm:flush()
 
       local dump = h.fm:dump()

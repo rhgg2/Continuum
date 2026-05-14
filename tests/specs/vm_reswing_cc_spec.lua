@@ -100,7 +100,7 @@ return {
           take    = { swing = 'c58', rowPerBeat = 8 },
         },
       }
-      h.tm:addEvent('cc', { ppq = 0, chan = 3, cc = 7, val = 100 })
+      h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 3, cc = 7, val = 100 })
       h.tm:flush()
       local cc = findCC(h.fm:dump(), 'cc', 3)
       t.truthy(cc, 'cc landed')

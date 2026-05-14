@@ -172,7 +172,7 @@ return {
 
       -- Column event must carry a live loc; route an assign through it.
       local colE = h.tm:getChannel(1).columns.ccs[7].events[1]
-      h.tm:assignEvent('cc', colE, { val = 99 })
+      h.tm:assignEvent(colE, { val = 99 })
       h.tm:flush()
       t.eq(ccByCC(h.fm:dump(), 7).val, 99, 'assign routes via restamped loc')
     end,

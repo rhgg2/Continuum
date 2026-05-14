@@ -114,7 +114,7 @@ return {
         },
       }
       local n = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:assignEvent('note', n, { delay = 250 })
+      h.tm:assignEvent(n, { delay = 250 })
       h.tm:flush()
 
       local dump = h.fm:dump()
@@ -147,7 +147,7 @@ return {
       for _, n in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
         if n.pitch == 62 then second = n end
       end
-      h.tm:assignEvent('note', second, { detune = 0 })
+      h.tm:assignEvent(second, { detune = 0 })
       h.tm:flush()
 
       t.falsy(fakeIn(h.fm:dump()), 'absorber dropped — no jump remains')

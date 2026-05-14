@@ -25,7 +25,7 @@ return {
       local h = harness.mk()
 
       -- delayToPPQ(500, 240) = round(240 * 500 / 1000) = 120.
-      h.tm:addEvent('note', {
+      h.tm:addEvent({ evType = 'note',
         ppq = 100, endppq = 200, chan = 1, pitch = 60, vel = 100,
         detune = 0, delay = 500, lane = 1,
       })
@@ -50,7 +50,7 @@ return {
         seed = { notes = { { ppq = 0, endppq = 480, ppqL = 0, endppqL = 480,
                              chan = 1, pitch = 60, vel = 100, uuid = 1, lane = 1 } } },
       }
-      h.tm:addEvent('note', { ppq = 240, endppq = 480, ppqL = 240, endppqL = 480,
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, ppqL = 240, endppqL = 480,
                               chan = 1, pitch = 60, vel = 100, lane = 1 })
       h.tm:flush()
 
@@ -70,7 +70,7 @@ return {
         seed = { notes = { { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
                              chan = 1, pitch = 60, vel = 100, uuid = 1, lane = 1 } } },
       }
-      h.tm:addEvent('note', { ppq = 0, endppq = 720, ppqL = 0, endppqL = 720,
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 720, ppqL = 0, endppqL = 720,
                               chan = 1, pitch = 60, vel = 100, lane = 1 })
       h.tm:flush()
 

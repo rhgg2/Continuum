@@ -42,7 +42,7 @@ return {
       end
       t.truthy(first, 'pitch-60 note present pre-flush')
 
-      h.tm:assignEvent('note', first, { endppq = 350 })
+      h.tm:assignEvent(first, { endppq = 350 })
       h.tm:flush()
 
       util.print = origPrint

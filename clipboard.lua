@@ -242,7 +242,7 @@ local function pasteVelocities(events, dstCol, startppq, endppq)
 
   -- Delete existing PA events in the paste region
   for evt in util.between(dstCol.events, startppq, endppq) do
-    if evt.type == 'pa' then tm:deleteEvent('pa', evt) end
+    if evt.type == 'pa' then tm:deleteEvent(evt) end
   end
 
   -- Pass 1: carry-forward velocities onto note-ons
@@ -255,7 +255,7 @@ local function pasteVelocities(events, dstCol, startppq, endppq)
         end
         ci = ci + 1
       end
-      tm:assignEvent('note', evt, { vel = currentVel })
+      tm:assignEvent(evt, { vel = currentVel })
     end
   end
 
@@ -265,7 +265,8 @@ local function pasteVelocities(events, dstCol, startppq, endppq)
       local note = util.seek(dstCol.events, 'before', ce.ppq, util.isNote)
       if note and note.endppq > ce.ppq
         and note.ppq ~= ce.ppq then
-        tm:addEvent('pa', {
+        tm:addEvent({
+          evType = 'pa',
           ppq = ce.ppq,
           chan = dstCol.midiChan,
           pitch = note.pitch, val = util.clamp(ce.val, 1, 127),
@@ -294,7 +295,8 @@ local pending       -- list of { evtType, e } awaiting their family parent
 
 local function plainWriter(evtType, e)
   e.aliasSrc = nil
-  tm:addEvent(evtType, e)
+  e.evType   = evtType
+  tm:addEvent(e)
 end
 
 -- Family root or no family relation: today's resolve-and-corrective-delta
@@ -302,16 +304,17 @@ end
 local function writeAsRoot(evtType, e)
   local src = e.aliasSrc
   e.aliasSrc = nil
+  e.evType   = evtType
   if not (src and src.uuid) then
-    tm:addEvent(evtType, e); return { kind='plain', evt=e }
+    tm:addEvent(e); return { kind='plain', evt=e }
   end
   local r = tm:resolveAliasSrc(src.uuid, src.specIdx, src.chain, evtType)
   if not r then
-    tm:addEvent(evtType, e); return { kind='plain', evt=e }
+    tm:addEvent(e); return { kind='plain', evt=e }
   end
   if r.mismatch then
     demotedCount = demotedCount + 1
-    tm:addEvent(evtType, e); return { kind='plain', evt=e }
+    tm:addEvent(e); return { kind='plain', evt=e }
   end
   local liveSrc = r.resolved
   -- alias xform speaks ppqL/durL; translate at the boundary.
@@ -351,7 +354,7 @@ local function writeAsRoot(evtType, e)
   if newIdx then
     return { kind='alias', uuid=src.uuid, specIdx=newIdx, evt=e }
   end
-  tm:addEvent(evtType, e)
+  tm:addEvent(e)
   return { kind='plain', evt=e }
 end
 
@@ -436,7 +439,7 @@ local function pasteSingle(clip, writer)
       assignTail(lastNote, dstCol.midiChan, events[1].ppq)
     end
     for evt in util.between(dstCol.events, startppq, endppq) do
-      tm:deleteEvent(evt.type == 'pa' and 'pa' or 'note', evt)
+      tm:deleteEvent(evt)
     end
 
     local rpb = currentRpb()
@@ -462,7 +465,7 @@ local function pasteSingle(clip, writer)
   if (clip.type == 'pb' and dstCol.type == 'pb')
   or (clip.type == '7bit' and dstCol.type ~= 'note' and dstCol.type ~= 'pb') then
     for evt in util.between(dstCol.events, startppq, endppq) do
-      tm:deleteEvent(dstCol.type, evt)
+      tm:deleteEvent(evt)
     end
 
     local rpb = currentRpb()
@@ -563,11 +566,11 @@ local function pasteMulti(clip, writer)
           assignTail(last, r.chan, events[1].ppq)
         end
         for evt in util.between(dst.events, startppq, endppq, util.isNote) do
-          tm:deleteEvent('note', evt)
+          tm:deleteEvent(evt)
         end
       else
         for evt in util.between(dst.events, startppq, endppq) do
-          tm:deleteEvent(r.type, evt)
+          tm:deleteEvent(evt)
         end
       end
     end

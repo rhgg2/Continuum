@@ -453,7 +453,7 @@ def _gate_with_emacs(edit_recs: list[dict], create_recs: list[dict],
     form = f'(continuum-review-start "{_q(req_path)}" "{_q(resp_path)}")'
     try:
         subprocess.run(_emacs_cmd_prefix() + ["--no-wait", "-e", form],
-                       capture_output=True, timeout=5, check=True)
+                       capture_output=True, timeout=30, check=True)
     except (OSError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
         for p in (req_path,):
             try: os.unlink(p)
@@ -868,6 +868,16 @@ def apply_patches(
         return _format_review_result(decisions, instructions)
 
     # ---- Browser fallback (coarse all-or-nothing) ----
+    # Suppressed when the user has opted into the emacs transport: a
+    # dual-window race — emacs review accepted but browser tab also
+    # open — leaves python blocked on the browser event and the accept
+    # is silently dropped. Better to surface the emacs failure.
+    if os.environ.get("CONTINUUM_REVIEW_EMACS") == "1":
+        _perf_log(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] emacs gate failed; "
+                  f"browser fallback suppressed (CONTINUUM_REVIEW_EMACS=1)")
+        return ("ABORT — emacs review gate failed (CONTINUUM_REVIEW_EMACS=1)\n"
+                "(no files written)")
+
     _t = time.perf_counter()
     diff_chunks: list[str] = []
     n_hunks = 0
