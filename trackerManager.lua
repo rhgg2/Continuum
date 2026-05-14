@@ -979,16 +979,15 @@ function tm:tileLength(newPpq)
     end
     return out
   end
-  local sourceNotes = snapshot(mm:notes())
-  local sourceCCs   = snapshot(mm:ccs())
+  local sourceEvents = snapshot(mm:events())
 
   mm:setLength(newPpq / mm:resolution())
 
-  local function shift(c, delta, isNote)
+  local function shift(c, delta)
     c.ppq = c.ppq + delta
     if c.ppqL    then c.ppqL    = c.ppqL    + delta end
     if c.ppq >= newPpq then return false end
-    if isNote then
+    if c.evType == 'note' then
       c.endppq = c.endppq + delta
       if c.endppqL then c.endppqL = c.endppqL + delta end
       if c.endppq > newPpq then c.endppq, c.endppqL = newPpq, nil end
@@ -999,13 +998,9 @@ function tm:tileLength(newPpq)
   mm:modify(function()
     for k = 1, math.ceil(newPpq / oldPpq) - 1 do
       local delta = k * oldPpq
-      for _, src in ipairs(sourceNotes) do
+      for _, src in ipairs(sourceEvents) do
         local c = util.clone(src)
-        if shift(c, delta, true) then mm:add(c) end
-      end
-      for _, src in ipairs(sourceCCs) do
-        local c = util.clone(src)
-        if shift(c, delta, false) then mm:add(c) end
+        if shift(c, delta) then mm:add(c) end
       end
     end
   end)
@@ -1444,33 +1439,26 @@ do
     --    re-enters rebuild; the rebuilding guard above bails on re-entry,
     --    and the outer rebuild reads the refreshed mm state.
     do
-      local notesToDel, ccsToDel, roots = {}, {}, {}
-      for _, n in mm:notes() do
-        if n.parentUuid then util.add(notesToDel, mm:tokenOf(n))
-        elseif n.children and #n.children > 0 then util.add(roots, n) end
-      end
-      for _, c in mm:ccs() do
-        if c.parentUuid then util.add(ccsToDel, { c.evType, mm:tokenOf(c) })
-        elseif c.children and #c.children > 0 then util.add(roots, c) end
+      local toDel, roots = {}, {}
+      for tok, e in mm:events() do
+        if e.parentUuid then util.add(toDel, { e.evType, tok })
+        elseif e.children and #e.children > 0 then util.add(roots, e) end
       end
 
-      if #roots > 0 or #notesToDel > 0 or #ccsToDel > 0 then
+      if #roots > 0 or #toDel > 0 then
         -- Route alias-child writes through um so lane-1 onsets seat
         -- fake-pb absorbers when their detune differs from the carry,
         -- same as user-authored notes. Reload first so its chans cache
         -- reflects current mm.
         reload()
         local claims = {}
-        for _, n in mm:notes() do
-          if not n.parentUuid then claims[slotKey(n)] = true end
-        end
-        for _, c in mm:ccs() do
-          if not c.parentUuid then claims[slotKey(c)] = true end
+        for _, e in mm:events() do
+          if not e.parentUuid then claims[slotKey(e)] = true end
         end
 
         local rng = aliases.makeRng(seedFromTake(mm:take()))
         local lenPpq = mm:length() or 0
-        local notesToAdd, ccsToAdd = {}, {}
+        local toAdd = {}
         local fitEmits = {}  -- { emit, snap, rChan } for note-aliases marked fit
         local claimedEmits = {}  -- { {node=SpecNode, emit=evt}, ... }; resolved post-flush once mm has minted uuids
         local temper     = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
@@ -1531,13 +1519,9 @@ do
             if not claims[key] then
               claims[key] = true
               emit.parentUuid = root.uuid
-              if et == 'note' then
-                util.add(notesToAdd, emit)
-                if e.spec.fit then
-                  util.add(fitEmits, { emit = emit, rChan = rChan })
-                end
-              else
-                util.add(ccsToAdd, emit)
+              util.add(toAdd, emit)
+              if et == 'note' and e.spec.fit then
+                util.add(fitEmits, { emit = emit, rChan = rChan })
               end
               util.add(claimedEmits, { node = e.spec, emit = emit })
             end
@@ -1560,8 +1544,10 @@ do
               util.bucket(byCol, colKey(n.chan, n.lane), n.ppq)
             end
           end
-          for _, n in ipairs(notesToAdd) do
-            util.bucket(byCol, colKey(n.chan, n.lane), n.ppq)
+          for _, e in ipairs(toAdd) do
+            if e.evType == 'note' then
+              util.bucket(byCol, colKey(e.chan, e.lane), e.ppq)
+            end
           end
           for _, list in pairs(byCol) do table.sort(list) end
           for _, fe in ipairs(fitEmits) do
@@ -1581,10 +1567,8 @@ do
           end
         end
 
-        for _, tok in ipairs(notesToDel) do deleteEvent('note', tok) end
-        for _, e   in ipairs(ccsToDel)   do deleteEvent(e[1],  e[2]) end
-        for _, n   in ipairs(notesToAdd) do addEvent('note', n)      end
-        for _, c   in ipairs(ccsToAdd)   do addEvent(c.evType, c)   end
+        for _, e in ipairs(toDel) do deleteEvent(e[1], e[2]) end
+        for _, e in ipairs(toAdd) do addEvent(e.evType, e)   end
         flush()
 
         for _, ce in ipairs(claimedEmits) do
