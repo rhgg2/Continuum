@@ -786,8 +786,6 @@ function tm:name()                 return mm and mm:name() end
 function tm:setName(name)          if mm then mm:setName(name) end end
 function tm:timeSigs()             return mm and mm:timeSigs() or {} end
 function tm:interpolate(A, B, ppq) return mm and mm:interpolate(A, B, ppq) end
-function tm:loadRegions()          return mm and mm:loadRegions() end
-function tm:saveRegions(blob)      if mm then mm:saveRegions(blob) end end
 
 -- E_c: column is inner, global is outer (see docs/timing.md).
 --contract: cached per-(cm, mm) pair; invalidated at rebuild head.
@@ -1883,7 +1881,7 @@ end
 
 do
   --invariant: usedSwings is rebuild output, not input — suppressed to prevent rebuild's cm:set from firing a redundant follow-up rebuild
-  local tvOnlyKeys = { mutedChannels = true, soloedChannels = true, usedSwings = true }
+  local tvOnlyKeys = { mutedChannels = true, soloedChannels = true, usedSwings = true, regions = true }
 
   --invariant: configChanged routes: 'swing' → all 16; 'colSwing' → channels with diff vs prevColSwing; 'swings' → channels resolving to names with diff body vs prevSwings. Caches refresh after each event and on bindTake.
   local prevSwings   = util.deepClone(cm:get('swings')   or {})

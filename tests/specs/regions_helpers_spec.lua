@@ -2,6 +2,7 @@
 
 local t = require('support')
 local R = require('regions')
+local util = require('util')
 
 local function noteCol(chan, lane) return { type='note', midiChan=chan, lane=lane } end
 local function ccCol  (chan, cc)   return { type='cc',   midiChan=chan, cc=cc } end
@@ -118,5 +119,177 @@ return {
       t.eq(r.parts['note:1:1:pitch'], true)
       t.eq(r.ppqLo, 0)
       t.eq(r.ppqHi, 10)
+  end },
+
+  ----- allocVuid
+
+  { name = 'allocVuid: lazy-inits template; returns base36 "1" on first call', run = function()
+      local r = { id = 1, parts = {} }
+      local v = R.allocVuid(r)
+      t.eq(v, '1')
+      t.eq(r.template.eventCtr, 1)
+      t.deepEq(r.template.events, {})
+  end },
+
+  { name = 'allocVuid: monotonic across calls; base36 rolls past digits', run = function()
+      local r = { id = 1, parts = {} }
+      local got = {}
+      for _ = 1, 12 do got[#got+1] = R.allocVuid(r) end
+      t.deepEq(got, {'1','2','3','4','5','6','7','8','9','A','B','C'})
+      t.eq(r.template.eventCtr, 12)
+  end },
+
+  { name = 'allocVuid: preserves existing template.events', run = function()
+      local r = { id = 1, parts = {},
+        template = { events = { ['1'] = { pitch = 60 } }, eventCtr = 1 } }
+      local v = R.allocVuid(r)
+      t.eq(v, '2')
+      t.eq(r.template.events['1'].pitch, 60)
+  end },
+
+  ----- composeOp
+
+  { name = 'composeOp: lazy-inits region.xform and slot', run = function()
+      local r = { id = 1, parts = {} }
+      R.composeOp(r, '*', 'ppqL', { 'add', 10 })
+      t.deepEq(r.xform, { ['*'] = { ppqL = { { 'add', 10 } } } })
+  end },
+
+  { name = 'composeOp: appends within a slot', run = function()
+      local r = { id = 1, parts = {} }
+      R.composeOp(r, '*', 'ppqL', { 'add', 10 })
+      R.composeOp(r, '*', 'durL', { 'mul', 2 })
+      t.deepEq(r.xform['*'], {
+        ppqL = { { 'add', 10 } },
+        durL = { { 'mul', 2 } },
+      })
+  end },
+
+  { name = 'composeOp: coalesces same-opcode literal ops (via aliases.appendOp)', run = function()
+      local r = { id = 1, parts = {} }
+      R.composeOp(r, '*', 'ppqL', { 'add', 10 })
+      R.composeOp(r, '*', 'ppqL', { 'add', 5 })
+      t.deepEq(r.xform['*'].ppqL, { { 'add', 15 } })
+  end },
+
+  { name = 'composeOp: separate slots stay isolated', run = function()
+      local r = { id = 1, parts = {} }
+      R.composeOp(r, '*',                 'ppqL',  { 'add', 10 })
+      R.composeOp(r, 'note:1:1:pitch',    'pitch', { 'add',  1 })
+      t.deepEq(r.xform['*'].ppqL,                 { { 'add', 10 } })
+      t.deepEq(r.xform['note:1:1:pitch'].pitch,   { { 'add',  1 } })
+  end },
+
+  ----- refuseStarVal
+
+  { name = 'refuseStarVal: only star+val is refused', run = function()
+      t.eq(R.refuseStarVal('*', 'val'),               true)
+      t.eq(R.refuseStarVal('*', 'ppqL'),              false)
+      t.eq(R.refuseStarVal('*', 'pitch'),             false)
+      t.eq(R.refuseStarVal('cc:1:74', 'val'),         false)
+      t.eq(R.refuseStarVal('note:1:1:pitch', 'val'),  false)
+  end },
+
+  ----- resolveEvent
+
+  { name = 'resolveEvent: nil xforms are identity', run = function()
+      local out = R.resolveEvent({ pitch = 60, vel = 64, ppqL = 0 }, nil, nil, 'note')
+      t.deepEq(out, { pitch = 60, vel = 64, ppqL = 0 })
+  end },
+
+  { name = 'resolveEvent: star xform alone', run = function()
+      local out = R.resolveEvent(
+        { pitch = 60, vel = 64, ppqL = 0 },
+        { ppqL = { { 'add', 24 } } },
+        nil,
+        'note')
+      t.eq(out.ppqL, 24)
+      t.eq(out.pitch, 60)
+  end },
+
+  { name = 'resolveEvent: col xform alone', run = function()
+      local out = R.resolveEvent(
+        { pitch = 60, vel = 64, ppqL = 0 },
+        nil,
+        { pitch = { { 'add', 1 } } },
+        'note')
+      t.eq(out.pitch, 61)
+  end },
+
+  { name = 'resolveEvent: star then col compose on the same field — star first', run = function()
+      -- vel 64 -> +10 (star) -> 74 -> *2 (col) -> 148
+      local out = R.resolveEvent(
+        { vel = 64 },
+        { vel = { { 'add', 10 } } },
+        { vel = { { 'mul',  2 } } },
+        'note')
+      t.eq(out.vel, 148)
+  end },
+
+  { name = 'resolveEvent: cross-type fail-closed (pitch op skipped on cc)', run = function()
+      local out = R.resolveEvent(
+        { ppqL = 0, val = 64 },
+        { val = { { 'add', 1 } } },
+        { pitch = { { 'add', 12 } } },
+        'cc')
+      t.eq(out.val, 65)
+      t.eq(out.pitch, nil)
+  end },
+
+  { name = 'resolveEvent: inputs untouched (xforms and template event)', run = function()
+      local templ = { pitch = 60, vel = 64 }
+      local star  = { vel = { { 'add', 10 } } }
+      local col   = { pitch = { { 'add', 1 } } }
+      local _ = R.resolveEvent(templ, star, col, 'note')
+      t.deepEq(templ, { pitch = 60, vel = 64 })
+      t.deepEq(star,  { vel = { { 'add', 10 } } })
+      t.deepEq(col,   { pitch = { { 'add', 1 } } })
+  end },
+
+  ----- cm round-trip on the 'regions' key
+
+  { name = 'cm: regions default is { regions={}, idCtr=0 }',
+    run = function(harness)
+      local h = harness.mk()
+      t.deepEq(h.cm:get('regions'), { regions = {}, idCtr = 0 })
+  end },
+
+  { name = 'cm: regions round-trip through take tier',
+    run = function(harness)
+      local h = harness.mk()
+      local blob = {
+        regions = {
+          { id = 1, colour = 1, ppqLo = 0, ppqHi = 240,
+            parts = { ['note:1:1:pitch'] = true } },
+          { id = 2, colour = 2, ppqLo = 240, ppqHi = 480,
+            parts = { ['cc:1:74'] = true } },
+        },
+        idCtr = 2,
+      }
+      h.cm:set('take', 'regions', blob)
+      t.deepEq(h.cm:get('regions'), blob)
+
+      -- Reload a fresh cm against the same take.
+      local cm2 = util.instantiate('configManager')
+      cm2:setContext('take1')
+      t.deepEq(cm2:get('regions'), blob)
+  end },
+
+  { name = 'cm: regions read returns a deep copy — caller mutation does not leak',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('take', 'regions', {
+        regions = { { id = 1, colour = 1, ppqLo = 0, ppqHi = 100,
+                      parts = { ['note:1:1:pitch'] = true } } },
+        idCtr = 1,
+      })
+      local a = h.cm:get('regions')
+      a.regions[1].ppqHi = 999
+      a.regions[2] = { id = 99 }
+      a.idCtr = 42
+      local b = h.cm:get('regions')
+      t.eq(b.regions[1].ppqHi, 100, 'inner field independent across reads')
+      t.eq(b.regions[2], nil,       'caller-added entry does not leak')
+      t.eq(b.idCtr, 1,              'caller-added field does not leak')
   end },
 }

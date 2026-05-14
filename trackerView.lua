@@ -2072,7 +2072,10 @@ function tv:rebuild(takeChanged)
   timeSigs   = tm:timeSigs()
   if takeChanged then
     ec:reset()
-    ec:loadRegions(tm:loadRegions())
+    local b = cm:get('regions')
+    ec.regionData.regions = b.regions
+    ec.regionData.idCtr   = b.idCtr
+    ec.regionData.active  = b.active
   end
 
   do
@@ -2232,7 +2235,7 @@ ec = util.instantiate('editCursor', {
   rowPerBar   = function() return rowPerBar end,
   logPerRow   = function() return logPerRowFor(currentRpb()) end,
   moveHook    = followViewport,
-  regionsHook = function() tm:saveRegions(ec:regionsBlob()) end,
+  regionsHook = function() cm:set('take', 'regions', ec.regionData) end,
 })
 
 clipboard = util.instantiate('clipboard', {

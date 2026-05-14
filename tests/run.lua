@@ -35,7 +35,6 @@ local specs = {
   'aliases_noteoff_spec',
   'aliases_interpolate_spec',
   'mm_signal_flow_spec',
-  'mm_regions_spec',
   'mm_cc_metadata_spec',
   'mm_ppql_roundtrip_spec',
   'mm_cc_reconcile_spec',

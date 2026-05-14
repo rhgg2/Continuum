@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=879  sha=69f289a  mode=chunk
+@module editCursor  src=editCursor.lua  loc=869  sha=fa4a61d  mode=chunk
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, regionsHook
 
 # Invariants & contracts
@@ -39,15 +39,12 @@
   @state cursorRow, cursorCol, cursorStop = 0, 1, 1  @ 35
   @state hBlockScope, vBlockScope = 0, 0  @ 36
   @state sel, selAnchor  @ 37
-  @state REGION_PALETTE_SIZE = 8  @ 43
-  @state regionStore = {}  @ 44
-  @state regionOrder = {}  @ 45
-  @state regionIdCtr = 0  @ 46
-  @state regionActive = nil  @ 47
+  @state REGION_PALETTE_SIZE = 8  @ 46
+  @state regionData = { regions = {}, idCtr = 0, active = nil }  @ 47
   @state regionScope  @ 50   -- forward — built lazily on first enter (no cmgr at module load in some test fixtures)
   @state regionPushed = false  @ 51
-  @state ec = {}  @ 311
-  @state REGION_PASSTHROUGH = {  @ 682
+  @state ec = {}  @ 304
+  @state REGION_PASSTHROUGH = {  @ 669
 
 # Private functions
   -- Position
@@ -82,82 +79,79 @@
   @fn moveChannel(n)  @ 261
       @contract  jumps one channel per step; non-sticky lands on the first note col of the destination channel (skipping pc/pb sentinels); sticky preserves the raw chan-edge land
   -- Regions
-  @fn regionIndexOf(id)  @ 292
-  @fn cloneRegion(r)  @ 296
-  @fn emitRegions(verb, id)  @ 305
+  @fn findRegion(id)  @ 292
+  @fn emitRegions(verb, id)  @ 298
   -- Position
   -- Part & Region
   -- Regions
-  @fn setActiveRegion(id)  @ 435
+  @fn setActiveRegion(id)  @ 430
       @contract  nil clears the active pointer; non-nil must name an existing region or it is rejected silently. Fires 'active' so subscribers can refresh.
-  @fn nextRegion()  @ 443
-      @contract  cycles regionActive through regionOrder; from nil lands on first (next) or last (prev); no wrap past the ends — sticks at the boundary so the user notices.
-  @fn prevRegion()  @ 450
-  @fn createRegion(ppqLo, ppqHi, parts)  @ 458
+  @fn cursorToRegionHead(r)  @ 438
+      @contract  snaps cursor to the region's top-left — row at floor(ppqLo/lpr), leftmost grid col-part in r.parts (first stop of that part). Clears selection so the post-snap state is unsticky. No-op when no part in r.parts resolves to a live grid col.
+  @fn nextRegion()  @ 460
+      @contract  cycles regionActive through regionOrder; from nil lands on first (next) or last (prev); no wrap past the ends — sticks at the boundary so the user notices. Snaps cursor to the newly-active region's top-left.
+  @fn prevRegion()  @ 468
+  @fn createRegion(ppqLo, ppqHi, parts)  @ 477
       @contract  creates a region from (ppqLo, ppqHi, parts); deep-copies parts; auto-assigns colour by cycling the palette; sets active to the new region. parts may be empty — caller is expected to follow up with extendRegionParts.
-  @fn extendRegionParts(id, partsAdd)  @ 473
+  @fn extendRegionParts(id, partsAdd)  @ 493
       @contract  unions partsAdd into the region's parts; no-op (no signal) if every key was already present.
-  @fn shrinkRegionParts(id, partsRemove)  @ 481
+  @fn shrinkRegionParts(id, partsRemove)  @ 501
       @contract  removes partsRemove from the region's parts (set difference); keeps the region even if parts becomes empty — the caller decides whether to deleteRegion. No-op if nothing was removed.
-  @fn setRegionPpqRange(id, ppqLo, ppqHi)  @ 489
+  @fn setRegionPpqRange(id, ppqLo, ppqHi)  @ 509
       @contract  sets the region's logical-ppq span; ppqHi clamped to ppqLo so the half-open range stays well-formed.
-  @fn translateRegion(id, delta)  @ 497
-  @fn deleteRegion(id)  @ 505
+  @fn translateRegion(id, delta)  @ 517
+  @fn deleteRegion(id)  @ 525
       @contract  drops the region; if it was active, regionActive is cleared (no implicit promotion of a neighbour — that's a command-scope choice).
-  @fn regionAt(colKey, ppq)  @ 515
+  @fn regionAt(colKey, ppq)  @ 533
       @contract  returns a clone of the first region (in regionOrder) whose (parts, ppq) contain the cell; nil if none. First-match keeps the lookup deterministic even when regions overlap.
-  @fn activeRegion()  @ 522
-  @fn selectionAsParts()  @ 525
+  @fn activeRegion()  @ 539
+  @fn selectionAsParts()  @ 542
       @contract  enumerates colKeys covered by the current selection; falls back to the cursor cell when no selection is active. Pure read.
-  @fn selectionAsRegionShape()  @ 547
+  @fn selectionAsRegionShape()  @ 564
       @contract  turns the current selection (or cursor cell) into a region shape. ppqHi is half-open: row r covers ppq [r·lpr, (r+1)·lpr).
-  @fn setSelectionFromRegionShape(r)  @ 556
+  @fn setSelectionFromRegionShape(r)  @ 573
       @contract  installs a bounding-box selection from a region shape. No-op when no part in the shape resolves to a live grid col (parts empty, or all parts reference cols not on this grid). Within col1 picks the earliest matching part; within col2 the latest.
 
 # Public API (ec:*)
-  @api ec:row()  @ 315
-  @api ec:col()  @ 316
-  @api ec:pos()  @ 317
-  @api ec:setPos(row, col, stop)  @ 320
+  @api ec:row()  @ 309
+  @api ec:col()  @ 310
+  @api ec:pos()  @ 311
+  @api ec:setPos(row, col, stop)  @ 314
       @contract  any nil arg leaves that axis untouched; clamps and fires moveHook unconditionally
-  @api ec:clampPos()  @ 327
-  @api ec:rescaleRow(oldRPB, newRPB)  @ 330
+  @api ec:clampPos()  @ 321
+  @api ec:rescaleRow(oldRPB, newRPB)  @ 324
       @contract  scales cursorRow by newRPB/oldRPB; called by vm when rowPerBeat changes mid-session so caret stays at the same musical time
-  @api ec:reset()  @ 334
-  @api ec:cursorPart()  @ 341
-  @api ec:hasSelection()  @ 342
-  @api ec:isSticky()  @ 343
-  @api ec:anchorRow()  @ 344
-  @api ec:region()  @ 346
-  @api ec:regionStart()  @ 355
+  @api ec:reset()  @ 328
+  @api ec:cursorPart()  @ 336
+  @api ec:hasSelection()  @ 337
+  @api ec:isSticky()  @ 338
+  @api ec:anchorRow()  @ 339
+  @api ec:region()  @ 341
+  @api ec:regionStart()  @ 350
       -- Pair so callers can splat: `ec:setPos(row, ec:regionStart())`.
-  @api ec:eachSelectedCol()  @ 360
-  @api ec:setSelection(r)  @ 382
+  @api ec:eachSelectedCol()  @ 355
+  @api ec:setSelection(r)  @ 377
       @contract  installs a selection from a part-typed record; clears sticky scopes; anchor lands at top-left part-start so subsequent extends behave like a fresh drag
-  @api ec:selectionStopSpan(col)  @ 389
-  @api ec:selClear()  @ 407
-  @api ec:unstick()  @ 408
-  @api ec:extendTo(row, col, stop)  @ 411
+  @api ec:selectionStopSpan(col)  @ 384
+  @api ec:selClear()  @ 402
+  @api ec:unstick()  @ 403
+  @api ec:extendTo(row, col, stop)  @ 406
       -- Mouse shift-click and drag both speak this verb.
-  @api ec:shiftSelection(rowDelta)  @ 418
+  @api ec:shiftSelection(rowDelta)  @ 413
       @contract  shifts both selection rows + anchor + cursor by rowDelta; clamps each independently (selection can compress against the edge while cursor doesn't)
   -- Public surface
-  @api ec:listRegions()  @ 587
-  @api ec:getRegion(id)  @ 593
-  @api ec:activeRegionId()  @ 594
-  @api ec:paintRegionCell(row, colKey, mode)  @ 601
+  @api ec:listRegions()  @ 604
+  @api ec:getRegion(id)  @ 605
+  @api ec:activeRegionId()  @ 606
+  @api ec:paintRegionCell(row, colKey, mode)  @ 613
       -- Mouse-paint primitive. One call per painted cell; mode ∈ 'extend' |
       -- 'shrink'. extend auto-seeds an empty region at the painted row if
       -- none is active, then grows ppq span and unions the colKey. Public
       -- because mouse input is page-driven and not bound through the command
       -- scope.
-  @api ec:regionsBlob()  @ 623
-      @contract  returns the persistable shape { regions=[..], idCtr=N }. Each region is a deep clone; mutating the result has no effect on the live store. Parts are preserved as their raw colKey-set.
-  @api ec:loadRegions(blob)  @ 630
-      @contract  replaces the in-memory store from a blob. nil clears everything. Silent — does not fire regionsHook, since callers (vm:rebuild on takeChanged) already drive a redraw and re-emitting would loop persistence back through save. idCtr is restored from the blob to keep ids monotonic across sessions.
   -- Motion
-  @api ec:advance()  @ 650
+  @api ec:advance()  @ 637
       @contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
   -- Commands
-  @api ec:isInRegionMode()  @ 673
-  @api ec:registerCommands(scope)  @ 798
+  @api ec:isInRegionMode()  @ 660
+  @api ec:registerCommands(scope)  @ 788

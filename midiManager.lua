@@ -716,18 +716,6 @@ function mm:notes()
   end
 end
 
---contract: deleteNote relies on REAPER to cascade-delete the associated notation event; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
-local function deleteNote(loc)
-  if not (take and checkLock()) then return end
-
-  local note = notes[loc]
-  if not note then return end
-
-  reaper.MIDI_DeleteNote(take, note.idx)
-  eventsByUuid[note.uuid] = nil
-  notes[loc] = nil
-end
-
 --contract: assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
 local function assignNote(loc, t)
   if not take then return end
@@ -800,20 +788,6 @@ function mm:ccs()
     local msg = ccs[i]
     if msg then return i, cloneOut(msg) end
   end
-end
-
-local function deleteCC(loc)
-  if not (take and checkLock()) then return end
-
-  local msg = ccs[loc]
-  if not msg then return end
-
-  reaper.MIDI_DeleteCC(take, msg.idx)
-  if msg.uuid then
-    util.add(pendingSysexDeletes, msg.uuid)
-    eventsByUuid[msg.uuid] = nil
-  end
-  ccs[loc] = nil
 end
 
 local function reconstruct(tbl)
@@ -994,11 +968,24 @@ function mm:assign(token, t)
   return tokenOf(evt)
 end
 
+--contract: REAPER cascade-deletes the notation sidecar when MIDI_DeleteNote runs; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
 function mm:delete(token)
+  if not (take and checkLock()) then return end
   local evt = tokenIdx[token]
   if not evt then return end
-  if evt.evType == 'note' then deleteNote(evt.loc)
-  else                         deleteCC(evt.loc) end
+
+  if evt.evType == 'note' then
+    reaper.MIDI_DeleteNote(take, evt.idx)
+    eventsByUuid[evt.uuid] = nil
+    notes[evt.loc] = nil
+  else
+    reaper.MIDI_DeleteCC(take, evt.idx)
+    if evt.uuid then
+      util.add(pendingSysexDeletes, evt.uuid)
+      eventsByUuid[evt.uuid] = nil
+    end
+    ccs[evt.loc] = nil
+  end
 end
 
 --contract: yields (token, evt-clone) over all live events, notes then ccs. Token is the addressing primitive of the unified surface; the clone also carries .token. loc is intentionally absent.
@@ -1052,20 +1039,6 @@ end
 function mm:setName(name)
   if not take then return end
   reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
-end
-
---contract: take-level region blob persisted under P_EXT:ctm_regions; serialised via util.serialise. Returns { regions={}, idCtr=0 } when no take or no stored blob — callers always get a well-formed shape.
-function mm:loadRegions()
-  if not take then return { regions = {}, idCtr = 0 } end
-  local ok, txt = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_regions', '', false)
-  if not (ok and txt and txt ~= '') then return { regions = {}, idCtr = 0 } end
-  return util.unserialise(txt) or { regions = {}, idCtr = 0 }
-end
-
-function mm:saveRegions(blob)
-  if not take then return end
-  reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_regions',
-    util.serialise(blob or { regions = {}, idCtr = 0 }), true)
 end
 
 -- Assumes events past targetPpq are already deleted upstream (tm:setLength does this).

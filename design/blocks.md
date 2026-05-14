@@ -1,150 +1,219 @@
-# Blocks — regional aliases over the spec substrate
+# Blocks — regions with template events
 
 A working design doc for the block feature. Future `docs/blocks.md` is
 distilled from this once code lands.
 
-A **block** is a region-level alias: events inside one region of the
-take propagate to matching positions in other regions, each region
-carrying its own transformation. Adding an event to any region adds
-it to all; deleting from any region deletes from all; editing within
-any region edits the shared content for everyone.
+A **block** is a region that owns its content. Events inside a block do
+not exist as plain MIDI; they live as **template events** in the
+block's metadata, and the walker emits a transformed materialisation
+per template event on every rebuild. The block carries an **xform**
+that shapes its emit — geometric ops (move, scale) and per-column
+content ops (shift pitch, vel, val) compose into the same xform table,
+keyed differently.
 
-All instances of a block are siblings. There is no privileged "source"
-or "original." Reference-counted hard-link semantics: the block's
-content persists as long as ≥1 instance exists; when the last instance
-is deleted the block is gone.
+Phase 1 is **single-instance**: a block IS its sole instance, the
+region itself. Multi-instance (paste-as-instance, duplicate-as-instance,
+hard-link propagation) is deferred to a later phase. The data shape
+allows multi-instance from the start; the verbs for creating additional
+instances do not exist yet.
 
-Blocks sit on top of the spec-tree primitives in
+Blocks sit on top of the per-event spec-tree primitives in
 [`aliases.md`](aliases.md). Read that first.
+
+---
+
+## Regions ARE blocks
+
+A region without template events is the existing UI primitive — a
+tinted slab × parts-set, used for selection-like persistent marking
+(see `docs/regions.md`). A region WITH template events is a block.
+
+There is **no separate region-to-block promotion step**. The data
+object is the same; adding the first template event to a region turns
+it into a block. Removing the last template event turns it back into a
+plain region (the tinted slab persists; the block-shaped content is
+gone). A region without an `xform` is identity-emit.
+
+ec continues to drive region authoring (create / cycle / nudge /
+parts paint). Persistence moves: regions live in cm's take tier under
+a single key `regions`, shape `{ regions = [...], idCtr = N }`. No
+`mm` pass-through, no `util.serialise` round-trip outside cm's own
+persistence path. ec exposes its live store as `ec.regionData` —
+trackerView seeds it on takeChanged from `cm:get('regions')` and
+writes it back through `cm:set('take', 'regions', ec.regionData)` via
+the `regionsHook`. ec does not own the wire.
 
 ---
 
 ## Layering invariant
 
-Blocks are a higher-level abstraction over per-event aliasing. The
-spec tree handles point-to-point (this event derives from that one).
-The block layer handles region-to-region membership.
-
-**Layers own disjoint state:**
+Blocks compose two scales of mutation. The block layer owns
+content-and-region-scoped state; the spec-tree from `aliases.md` owns
+per-event variation under each materialisation.
 
 | concern | layer |
 |---|---|
-| which events belong to which instances | block |
-| structural xform — the per-instance transform that defines this region's offset/scale | block |
+| which template events belong to the block | block (`template.events`, keyed by `vuid`) |
+| block's geometric + content xform | block (`block.xform`, keyed by `'*'` or `colKey`) |
 | per-event override xform — variation unique to one materialised event | spec node |
-| persistent identity of an aliased event | spec node |
+| persistent identity of a materialised event | `(blockId, vuid)` — a synthetic root |
 
-The block's structural xform is **never copied into spec nodes**. The
-walker composes at emit time:
+The block's xform is **never copied into spec nodes**. The walker
+composes at emit time:
 
 ```
-resolved = applyXform(template.event.fields,
-                      instance.xform,
+resolved = applyXform(template.events[vuid],
+                      block.xform['*'],
+                      block.xform[colKey(vuid)],
                       specNode.overrideXform)
 ```
 
-This rule is the membrane between layers. The principled implementation
+This is the membrane between layers. The principled implementation
 holds it; the lazy implementation (stamp block xform into spec nodes at
-creation) duplicates state and ends with a consistency problem on every
-block edit.
+template-event creation) duplicates state and creates a consistency
+problem on every block edit.
 
 The walker described in `aliases.md` does not know blocks exist. A
-*reconciliation pass* runs before the walker to synthesise the spec
-nodes the block layer wants; the walker then renders them. Reconciliation
-is additive — it creates and prunes spec nodes — not corrective.
+**reconciliation pass** runs before the walker to synthesise the spec
+nodes the block layer wants, parented at synthetic roots; the walker
+then renders them. Reconciliation is additive — it creates and prunes
+spec nodes — not corrective.
 
 ---
 
 ## Data shape
 
-### Take metadata
+### Storage — cm take tier
 
-A take carries `take.blocks` and `take.blockCtr`, plumbed through the
-same metadata pass-through as `note.aliases`.
+The regions blob is a take-scope cm entry under the single key
+`regions`. cm's existing persistence handles it transparently; no
+extra plumbing. Reading: `cm:get('regions')`. Writing:
+`cm:set('take', 'regions', value)`.
 
 ```lua
-take.blocks = {
-  [blockId] = {
-    template = {
-      region    = <Region>,     -- set of cells; see below
-      events    = {             -- abstract events, keyed by virtual uuid
-        [vuid] = { pitch=60, dur=480, vel=96, ppqLocal=0, ... },
+take.regions = {
+  regions = {       -- array, order = ec's regionOrder
+    {
+      -- region surface — same fields the existing region UI uses
+      id, colour,
+      ppqLo, ppqHi,
+      parts = { [colKey] = true, ... },
+
+      -- template content (absent on a region with no events)
+      template = {
+        events = {
+          [vuid] = { col=<colKey>, ppqLocal=<int>, pitch=60, dur=480, vel=96, ... },
+          ...
+        },
+        eventCtr = 7,        -- next vuid allocator (base36)
+      },
+
+      -- xform, keyed by colKey or the '*' sentinel
+      xform = {
+        ['*']     = { ppq={...}, ppqL={...}, dur={...}, durL={...}, delay={...} },
+        [colKey1] = { pitch={...}, vel={...}, detune={...} },
+        [colKey2] = { val={...}, chan={...} },
         ...
       },
-      eventCtr  = 7,            -- next vuid allocator (base36)
     },
-    instances = {
-      [idx] = {
-        region = <Region>,      -- where this instance materialises
-        xform  = <op-list-per-field>,  -- structural transform
-      },
-      ...
-    },
-    instanceCtr = 4,
-  },
-}
-take.blockCtr = 12
-```
-
-### Region
-
-A region is a set of cells, not necessarily contiguous:
-
-```lua
-Region = {
-  cells = {                      -- ordered list of disjoint rectangles
-    { colLo, colHi, ppqLLo, ppqLHi },
     ...
   },
+  idCtr = 12,       -- next region.id allocator (monotonic integer)
 }
 ```
 
-- **col** for notes = `(chan, pitch)` pair; for ccs = `(chan, msgType, id)`.
-  A region is single-event-type — notes and ccs do not mix in one block.
-- **ppqL** bounds are logical (pre-swing). Bounds are half-open
-  `[lo, hi)` so adjacent rectangles can abut.
-- Membership predicate: an event with `(col, ppqL)` lies in the region
-  iff some rectangle contains it.
+A region with no `template` field (or `template.events` empty) and no
+`xform` is just a tinted slab — pre-block behaviour. Add a template
+event and the same record acts as a block. `blockId` throughout this
+doc refers to `region.id` — there is no second namespace.
 
 ### Template events
 
-Template events are **not** MIDI events. They hold the platonic field
-values that materialise per instance. Each carries a `vuid` (virtual
-uuid, base36 monotonic per block) and a `ppqLocal` — its logical-ppq
-offset from the template region's origin.
+Template events are platonic field tuples, **not** MIDI events. Each
+carries:
+
+- `vuid` — base-36 monotonic, allocated from `template.eventCtr`. Stable
+  across rebuilds and save/load. The `(blockId, vuid)` pair is the
+  persistent identity of a materialised event; its mm-uuid is
+  ephemeral.
+- `col` — the `colKey` of the column the event sits in. Used to look up
+  the per-colKey xform slot; pinned at creation, never mutated by
+  xform.
+- `ppqLocal` — logical-ppq offset from the block's `ppqLo`.
+- Field values — `pitch`, `dur`, `vel`, `delay`, `chan`, `val`,
+  `detune` etc., as appropriate to the event type implied by `col`.
 
 ```lua
 template.events['1'] = {
-  ppqLocal = 0,    pitch = 60, dur = 480, vel = 96, ...
+  col      = 'note:1:60:pitch',
+  ppqLocal = 0,
+  pitch    = 60, dur = 480, vel = 96, ...
 }
 template.events['2'] = {
-  ppqLocal = 240,  pitch = 64, dur = 240, vel = 80, ...
+  col      = 'cc:1:7',
+  ppqLocal = 240,
+  val      = 100,
 }
 ```
 
-The vuid is the persistent identity of an event *within the block*. A
-materialised event in instance `k` carries
-`(blockId, instanceIdx=k, vuid)` as metadata, and that triple is its
-persistent identity across rebuilds (its MIDI uuid is ephemeral, as
-elsewhere).
+A materialised event in the block instance carries
+`(blockId, vuid)` as metadata. That triple is its persistent identity
+across rebuilds.
 
-### Instance regions and origin
+### Xform — `'*'` sentinel + per-colKey
 
-Each instance has its own region. The template region defines the
-*shape* (extent and inner structure of the cells); each instance's
-region has the same shape translated to its origin. The instance's
-origin is `(instance.region.cells[1].colLo, instance.region.cells[1].ppqLLo)`
-by convention — the top-left of its first rectangle.
+`block.xform[K]` is an op-list-per-field of the shape from
+`aliases.md`. Two keying conventions:
 
-A template event at `ppqLocal = p, col = c (relative)` materialises in
-instance `k` at:
+- `'*'` — geometric xform applied uniformly to every template event in
+  the block. The natural home for `ppq`, `ppqL`, `dur`, `durL`,
+  `delay` ops. Moving / scaling the whole block writes here.
+- `colKey` — content xform applied only to template events whose
+  `col == colKey`. The natural home for `pitch`, `vel`, `val`,
+  `detune`, `chan` ops. Per-column tweaks land here.
+
+The data shape does not enforce the split — `xform['*'].pitch` is
+syntactically legal — but the command layer routes by convention.
+Block-wide geometric verbs write `'*'`; content verbs write the
+cursor's `colKey`. A selection spanning multiple colKeys fans out
+across them.
+
+Resolution composes `'*'` first, then the colKey:
 
 ```
-ppqL = instance.origin.ppqL + p
-col  = instance.origin.col  + cRelative
+resolveField(vuid, F) =
+  applyOps(applyOps(template.events[vuid][F],
+                    block.xform['*'][F]  or {}),
+           block.xform[col(vuid)][F] or {})
 ```
 
-Then `instance.xform` and `specNode.overrideXform` apply.
+Composition with `aliases.md`'s op semantics is unchanged: ops are
+applied left-to-right within each list; coalescence rules carry over.
+
+### Allowed ops — phase 1 (deterministic only)
+
+Phase 1 supports the **literal-arg deterministic** subset of the
+`aliases.md` op vocabulary: `add`, `mul`, `snap`, all with number-
+literal arguments. The resolved field is a deterministic function of
+the template field; the grid displays the **post-xform** value, since
+the user expects what they see to match what plays.
+
+Stochastic and modulation ops — `rand` arguments, future `sin` /
+`lfo` / per-emit modulators — defer to a separate **FX layer**.
+The FX layer runs at materialisation time but does not feed the grid
+display, so the grid stays grid-faithful. The FX op vocabulary is
+distinct from `block.xform` so the two phases do not entangle. Verb
+namespace, storage slot, and resolver are all separate; details
+deferred until that phase.
+
+### Mixed event types
+
+A block may contain events of any type — notes, ccs, pitchbend —
+mixed in one block. The single-event-type restriction from earlier
+drafts is lifted. The per-colKey xform keying makes this natural: a
+mixed block writes pitch ops only under note colKeys and val ops only
+under cc/pb colKeys; content xforms cannot cross types because they
+share no slot.
 
 ---
 
@@ -152,188 +221,148 @@ Then `instance.xform` and `specNode.overrideXform` apply.
 
 ### Reconciliation pass (tm-side, before the walker)
 
-On every `'reload'` from mm, before the alias walker described in
-`aliases.md` runs:
+On every `'reload'` from mm, before the alias walker from `aliases.md`
+runs:
 
-1. For each block in `take.blocks`:
-   - For each instance `k`:
-     - For each template event `vuid`:
-       - Compute the target position and resolved fields under
-         `instance.xform`.
-       - Ensure a spec node exists tagged with `(blockId, k, vuid)`.
-         If absent, create it as a child of a **synthetic root** for
-         this template event (see below). If present, leave its
-         `overrideXform` untouched.
-     - Prune spec nodes tagged with `(blockId, k, *)` whose `vuid` is
-       no longer in the template.
-   - Prune instances absent from this block (handled by deletion path,
-     not reconciliation).
+1. For each region in `cm:get('regions').regions` whose `template.events` is non-empty:
+   - For each template event `vuid`:
+     - Compute the synthetic-root key `(blockId, vuid)`.
+     - Compute resolved fields via `resolveField` above. ppq comes from
+       `block.ppqLo + template.events[vuid].ppqLocal`, then composes
+       through `xform['*'].ppq` and `xform[col].ppq`.
+     - Ensure a spec node exists tagged with `(blockId, vuid)` and
+       parented at the synthetic root. If absent, create with empty
+       `overrideXform`. If present, leave `overrideXform` untouched.
+   - Prune spec nodes tagged with `(blockId, *)` whose `vuid` is no
+     longer in `template.events`.
 
-2. Then the alias walker runs as `aliases.md` describes.
+2. Prune blocks whose `template.events` is empty AND `xform` is empty
+   (the record decays back to a plain region).
+
+3. The alias walker then runs as `aliases.md` describes, reading the
+   synthetic-root-parented spec nodes.
 
 ### Synthetic roots
 
-Spec nodes need parents (the spec tree is rooted in something). For
-template events, the parent is a **synthetic root** — a virtual event
-that exists only as a key into the spec tree. It has no MIDI
-materialisation. Its resolved fields are
-`template.events[vuid]` extended with `ppq = instance.origin + ppqLocal`.
+Spec nodes need parents. For block-materialised events, the parent is
+a synthetic root keyed `{blockId, vuid}`. It has no MIDI emission and
+no fields of its own — its resolved fields are computed on demand from
+`template.events[vuid]` composed through the block's xform.
 
-In implementation: the spec tree's parent map accepts either a
-materialised-event uuid (current behaviour) or a synthetic-root key
-`{blockId, vuid}`. The walker, when resolving a spec node whose parent
-is a synthetic root, reads fields from the template event rather than
-from a MIDI event. Everything else is unchanged.
-
-This is the only intrusion the block layer makes into the spec layer.
-The walker grows one branch in its parent-resolution step; nothing else
-changes.
+The parent-resolution branch in the walker is the only intrusion the
+block layer makes into the spec layer. Other branches are unchanged.
 
 ### Source mutation propagates automatically
 
-Because reconciliation runs every rebuild and reads the *current*
-template, adding/deleting/editing a template event surfaces in all
-instances on the next rebuild. The user does not invoke a "sync"
-command; sync is the default.
+Adding / deleting / editing a template event surfaces in the next
+rebuild because reconciliation reads the current template. No
+explicit sync. (Under multi-instance, this is the load-bearing
+auto-sync; under single-instance it is trivially correct.)
 
 ---
 
 ## Mutation
 
-Block mutation falls in three categories.
+Block mutation falls in three categories at the command surface.
 
 ### Template-edit (the common case)
 
-The user nudges, adds, deletes, or otherwise edits an event in any
-instance. The intent is to edit the shared content.
+The user nudges, adds, deletes, or otherwise edits a materialised
+block event. Intent is to edit the shared content.
 
-For each touched materialised event:
-
-1. Find its `(blockId, k, vuid)` metadata.
+1. Find the event's `(blockId, vuid)` metadata.
 2. Compute the equivalent edit on the template event:
-   - For invertible xforms (composed `add`, `mul ≠ 0`): apply the
-     inverse of `instance.xform ∘ specNode.overrideXform` to the user's
-     edit, then apply to `template.events[vuid]`.
-   - For non-invertible (`snap`, `rand` at structural level): degrade
-     to per-event override — the edit lands in `specNode.overrideXform`
-     for this instance only. Surface a status warning ("block edit
-     applied to this instance only — structural transform is not
-     invertible"). The user may sever to make the override permanent.
+   - For invertible xforms (composed `add` and `mul ≠ 0` with literal
+     args), apply the inverse of `xform['*'] ∘ xform[col]` to the
+     user's edit, then apply to `template.events[vuid][field]`.
+   - For non-invertible (`snap`, or any future non-literal arg), degrade
+     to per-event override — the edit lands in
+     `specNode.overrideXform` for this materialisation only. Surface a
+     status warning ("block edit applied to this materialisation only —
+     structural transform is not invertible"). The user can sever to
+     make the override permanent.
 
-3. Reconciliation on the next rebuild propagates to all instances.
+Adding an event inside the block's region: synthesise a template event
+with `col` and `ppqLocal` from the cursor / event position, allocate a
+fresh `vuid`, write to `template.events`. Reconciliation creates the
+spec node.
 
-Adding an event inside an instance's region: synthesise a new template
-event with `ppqLocal` computed from the region origin, allocate a fresh
-vuid, write it to `template.events`. Reconciliation creates spec nodes
-in all instances.
-
-Deleting an event inside an instance's region: drop the template event
-by vuid. Reconciliation prunes spec nodes in all instances.
+Deleting an event inside the block's region: drop the template event
+by `vuid`. Reconciliation prunes the spec node.
 
 ### Block-wide edit
 
-A command operating on the block as a whole (e.g. "scale all instances
-by 0.5") composes into each instance's `xform`. The template is
-untouched. All instances reshape.
+A command targeting the block as a whole composes into `block.xform`:
 
-This is the surface where block-wide ops are distinguished from
-per-event ops: a block-wide command writes into `instance.xform`, a
-per-event command writes into the template (via inverse) or into
-`specNode.overrideXform` (per-event override).
+- **Geometric** verbs (move, scale, quantize-position) compose into
+  `xform['*']` under `ppq` / `ppqL` / `dur` / `durL` / `delay`. All
+  template events in the block are affected uniformly.
+- **Content** verbs (shift pitch, shift vel, shift val) compose into
+  `xform[K]` where `K` is the cursor's colKey, or fan out across the
+  selection's colKeys. Only template events on those colKeys are
+  affected.
+
+`xform['*'].val` ("shift every value field across heterogeneous
+columns by N") is **refused** at the command surface — it's
+semantically nonsense across CC numbers and pitchbend.
 
 ### Per-event override
 
-Explicit override commands (per-event humanise, per-event nudge with a
-modifier, etc.) write into `specNode.overrideXform` of the touched
-instance only. No propagation. The template is unchanged.
+Explicit override verbs (per-event humanise via modifier, per-event
+nudge via modifier) write into `specNode.overrideXform` of the touched
+materialisation only. No propagation. The template is unchanged.
 
-The UX distinguishes these three at the command surface — same key
-chord with different modifiers, or three separate commands. Defer
-specifics to phase 3 of impl.
+The command surface distinguishes the three by mode and/or modifier;
+specifics deferred to phase 3.
 
 ---
 
-## Hard-link semantics
+## Reference counting
 
-### Creation
+A block lives as long as it has *content or shape*:
 
-`copyAsBlock` (or `duplicate` in block mode) takes the current
-selection and creates a new block:
+- `template.events` non-empty → block is live.
+- `template.events` empty but `xform` non-empty → block persists (an
+  empty staged xform).
+- Both empty → record decays to a plain region (the tinted slab
+  persists; the block-shaped surface is gone).
 
-1. Allocate a fresh `blockId`.
-2. Derive a `template.region` from the selection's bounding shape.
-3. For each event in the selection, mint a template event with
-   `ppqLocal` relative to the selection's origin. The selected events
-   themselves are **deleted from MIDI** — they become template-only.
-4. Create the first instance at the selection's original position
-   (`xform` is identity).
-5. On paste/duplicate, create additional instances at the target
-   positions, each with `xform` reflecting the offset/scale from the
-   source.
+Severance under single-instance: extracting the block's content to
+plain MIDI events drops the template, drops the xform, and drops the
+record (region included if the user chose) — equivalent to "convert to
+plain MIDI."
 
-Step 3 is the inversion of (2) in the previous discussion: the event's
-MIDI value moves *into* the template's `events` table; instances are
-then reconciled in, materialising fresh MIDI under the new
-`(blockId, k, vuid)` keys.
-
-### Deletion
-
-Deleting all events in an instance's region removes the instance from
-`block.instances` (and prunes its spec nodes).
-
-When `#block.instances == 0`, the block itself is deleted — `template`
-and `instances` both gone. This is the hard-link "last reference"
-collection.
-
-### Severing an instance
-
-`sever` on a materialised event of a block extracts its instance and
-its current resolved content into plain MIDI events; the block loses
-that instance. If the block has other instances, they continue. If it
-was the last instance, the block is collected.
-
-Severance is a per-instance operation, not a per-event operation
-(within a block). Severing one event from an instance is a per-event
-override (above) — it stops following the template but the instance
-itself remains a block member.
-
-### "Promote one instance to plain MIDI without breaking the block"
-
-Equivalent to severing one instance.
+Multi-instance reference counting (the `#instances == 0 ⇒ block GCd`
+rule) lands when multi-instance arrives.
 
 ---
 
 ## Composition with single-event aliases
 
-A block's instance can contain events that are also single-event aliases
-(per `aliases.md`'s spec tree). Mechanically: a materialised block
-event under `(blockId, k, vuid)` can itself be a parent for further
-spec nodes outside the block.
+A materialised block event can itself be a parent for further spec
+nodes outside the block — its synthetic-root resolved fields are the
+parent fields, and per-event aliases compose on top normally.
 
-The reverse — a single-event alias whose parent is itself a block
-materialisation — is fine; its parent uuid is the materialised event's
-ephemeral uuid, and on rebuild the alias re-derives. (This is the same
+The reverse — a single-event alias whose parent is a block
+materialisation — is also fine; the parent uuid is the materialised
+event's ephemeral uuid, and on rebuild the alias re-derives. (Same
 contract as today; nothing block-specific.)
-
-What's **not** allowed: nesting a block inside a block via region
-overlap. If instance region of block A overlaps source-or-instance
-region of block B, refuse the second block's creation. Region nesting
-is reserved for a later phase if it becomes necessary.
 
 ---
 
 ## Precedence and collisions
 
-The slot key from `aliases.md` (`(chan, pitch, ppq)` for notes,
-`(chan, msgType, id, ppq)` for ccs) carries over. A block instance can
-collide with a plain event, or with another instance, or with a
-single-event alias.
+The slot key from `aliases.md` carries over: `(chan, pitch, ppq)` for
+notes, `(chan, msgType, id, ppq)` for ccs. BFS order extends to
+synthetic roots:
 
-BFS order from `aliases.md` extends: depth 0 = plain events and
-synthetic roots; depth 1 = first-level spec nodes (block instances and
-single-event aliases alike); depth ≥ 2 = nested. First arrival wins
-the slot; losers are suppressed-but-spec-retained.
+- Depth 0: plain MIDI events.
+- Depth 1: block template events (resolved through their synthetic
+  root) and single-event spec nodes alike.
+- Depth ≥ 2: nested spec children (per-event overrides count as depth
+  ≥ 2 under a synthetic root).
 
+First arrival wins the slot; losers are suppressed-but-spec-retained.
 Resurface is automatic when the blocker moves, same as today.
 
 ---
@@ -342,18 +371,20 @@ Resurface is automatic when the blocker moves, same as today.
 
 (Renderer-side; final design in `docs/renderManager.md` once landed.)
 
-A block has spatial extent, so the renderer has room to draw it:
+The block's region tint already exists. Additions:
 
-- Instance region outline — a bracket or coloured boundary around each
-  instance's cells.
-- Block colour — a per-block hue distinguishes instances of one block
-  from instances of another.
-- Instance handles — a small affordance near each instance's origin
-  for grabbing the block (move, scale, delete).
-- Materialised aliased events inside an instance render with the
-  alias marker from `aliases.md`, tinted with the block's hue.
+- **Block colour** — distinct per-block hue (already on regions as
+  `colour`), tints the slab and outlines materialised events.
+- **Materialisation marker** — a small glyph distinguishes block-
+  materialised events from plain MIDI. Echoes the alias marker but is
+  block-coloured.
+- **Xform-head readout** — the active block's gutter bar gains a
+  compact text glyph of the xform's trailing ops per field
+  (`+5v ±3v` for "vel +5 then humanise ±3"). Drops when xform is
+  empty.
 
-The template itself is not rendered (it has no spatial position).
+The template events themselves are not rendered (they have no
+position outside the block); only their materialisations are.
 
 ---
 
@@ -361,80 +392,85 @@ The template itself is not rendered (it has no spatial position).
 
 | phase | scope |
 |---|---|
-| 0 | this design doc + corresponding edits to `aliases.md` (synthetic-root branch in walker) |
-| 1 | data types (Region predicates, block/template/instance shapes), pure helpers, serialise round-trip |
-| 2 | reconciliation pass — synthesise spec nodes for block instances, prune orphans, walker reads synthetic-root branch |
-| 3 | mutation routing — distinguish template-edit / block-wide / per-event-override at the command surface; inverse-xform path for invertible ops; degrade-to-override path for non-invertible |
-| 4 | creation UX — `copyAsBlock`, paste/duplicate-as-instance, block-mode toggle |
-| 5 | deletion + hard-link GC; severance per-instance |
-| 6 | renderer markers (region outlines, block colours, instance handles) |
+| 0 | this design doc |
+| 1 | schema (single cm take-tier key `regions`, blob shape `{ regions = [...], idCtr = N }`), pure helpers in `regions.lua` (`allocVuid`, `composeOp`, `refuseStarVal`, `resolveEvent`), cm round-trip |
+| 2 | reconciliation pass (tm) — synthesise / prune spec nodes parented at synthetic roots, walker parent-resolution branch for `{blockId, vuid}` |
+| 3 | mutation routing — template-edit / block-wide-`'*'`-vs-`colKey` / per-event-override at the command surface; inverse path for invertible literal-arg ops; degrade-to-override for `snap` |
+| 4 | creation UX — within region mode, `blockSeed` walks the events currently in the region and writes them into `template.events`; `blockClear` empties the template; deterministic block-wide / content edit verbs |
+| 5 | severance: extract block content to plain MIDI; record decay to plain region |
+| 6 | renderer markers, xform-head gutter readout |
+| later | multi-instance: paste-as-instance, duplicate-as-instance, multi-instance hard-link semantics |
+| later | FX layer: stochastic / modulation ops (`rand`, `sin`, `lfo`) in a separate verb namespace, materialisation-only, not in grid display |
 
 ---
 
 ## Test surface
 
-Tests live under `tests/specs/blocks_*.lua` plus
-`tests/specs/blocks_helpers_spec.lua` for pure helpers.
+Pure helpers for the block layer live in `regions.lua` and are pinned
+in `tests/specs/regions_helpers_spec.lua` alongside the existing
+region-storage tests. Higher-phase reconciliation / mutation tests
+land under `tests/specs/blocks_*.lua`.
 
-**Phase 1** — Region predicates
-- Membership: point inside / outside / on boundary (half-open).
-- Disjoint-rectangle composition: union, intersection-empty check.
-- Round-trip through `util.serialise`.
+**Phase 1** — pure helpers and cm round-trip (✅ landed)
+- `resolveEvent(template, xformStar, xformCol, evtType, rng)`
+  composes `'*'` then `[col]` then applies via `aliases.applyXform`;
+  either xform may be nil; cross-event-type fail-closed inherited
+  from `applyXform`.
+- `composeOp(region, slotKey, field, op)` delegates to
+  `aliases.appendOp` — coalescence rules carry over.
+- `allocVuid(region)` lazily inits `template` and returns a fresh
+  base36 vuid.
+- `refuseStarVal(slotKey, field)` — predicate for the command-surface
+  refusal of block-wide val shifts across heterogeneous columns.
+- cm round-trip: write `cm:set('take', 'regions', blob)`, reload a
+  fresh cm against the same take, deep-equal.
 
-**Phase 2** — Reconciliation
-- Template event added → spec nodes appear in every instance on next
-  rebuild.
-- Template event removed → spec nodes pruned from every instance.
-- Instance added → spec nodes for all template events appear in it.
-- Block with no instances → block GCd.
+**Phase 2** — reconciliation
+- Template event present in block → spec node appears at
+  `{blockId, vuid}` on next rebuild.
+- Template event removed → spec node pruned.
+- Block with `xform['*'].ppq={add, lpr}` materialises events one row
+  later than `ppqLocal` implies; grid reflects post-xform position.
+- Synthetic-root resolved fields compose `template.events[vuid]` plus
+  full xform stack.
 
-**Phase 3** — Mutation
-- Edit-through with invertible xform: template field updates by the
-  inverse-composed delta; all instances reflect.
-- Edit-through with `snap` xform: lands as per-event override on the
-  touched instance only; other instances unchanged.
-- Block-wide xform edit composes into `instance.xform`; template
-  untouched.
-- Per-event override on one instance does not propagate.
+**Phase 3** — mutation
+- Edit-through with literal-arg `add` xform: template field updates by
+  inverse delta; materialisation reflects unchanged at the user's
+  nudged position.
+- Edit-through under `snap` xform: lands as per-event override; other
+  fields unchanged.
+- Block-wide geometric nudge composes into `xform['*'].ppq`; block-
+  wide content nudge composes into `xform[cursorColKey].<field>`.
+- `xform['*'].val` write is refused at the command surface.
 
-**Phase 4** — Creation
-- `copyAsBlock` on N selected events produces a block with N template
-  events; selected events become an instance.
-- Paste creates a second instance with `xform` capturing the position
-  delta.
-- Multiple instances on different rows compose distinct xforms.
+**Phase 4** — creation
+- `blockSeed` on a region containing N events writes N template events
+  with correct `col`, `ppqLocal`, and content; the original events are
+  removed from MIDI (now materialised via reconciliation).
+- `blockClear` empties `template.events`; reconciliation prunes; the
+  record decays to plain region if `xform` also empty.
 
-**Phase 5** — Deletion and severance
-- Deleting all events in an instance's region removes the instance.
-- Deleting the last instance GCs the block (`take.blocks[id] == nil`).
-- Severance extracts an instance to plain MIDI; block continues with
-  remaining instances.
-- Severance of last instance equals "convert to plain MIDI."
+**Phase 5** — severance
+- Sever extracts every materialisation to plain MIDI with current
+  resolved fields, drops template + xform, drops the block record.
 
 ---
 
 ## Open questions
 
-- **Region shape primitives** — is a list of disjoint rectangles
-  sufficient? Selections in the tracker today are typically rectangles
-  or thin columns; multi-region selection isn't a current primitive.
-  Probably yes for phase 1; revisit if real use cases need richer shapes.
-
-- **Invertibility threshold for edit-through** — `add` and
-  `mul (k≠0)` invert exactly. `mul (k=0)` is degenerate. Composed
-  invertibles invert. Where exactly does the "degrade to override" path
-  cut in? Likely: walk the xform op list; if any op is non-invertible
-  (`snap`, `rand` argument anywhere), refuse inverse and degrade.
-
-- **Mixed-type blocks** — can a block contain both notes and ccs? Phase
-  1 says no (single event type per block). Lift the restriction if a
-  use case appears.
-
-- **Block nesting via region overlap** — explicitly forbidden in phase
-  1. The cycle-detection machinery for nesting is a real cost; defer
-  until we have a use case that justifies it.
-
-- **Renaming `aliases.md`** — once blocks exist, the doc layering is
-  `aliases.md` (per-event substrate) → `blocks.md` (regional layer).
-  The user-facing primitive in the UI may want a different name from
-  either ("group"? "clip"? "region"?). Settle in phase 4 with the UX.
+- **Invertibility threshold for edit-through** — literal-arg `add`
+  and `mul (k≠0)` invert exactly. Composed invertibles invert. `snap`
+  and (later) `rand`-arg ops do not. Walk the xform op list at the
+  routing site; if any op is non-invertible, refuse inverse and
+  degrade to override.
+- **Block colour allocation** — phase 1 uses the existing region
+  `colour` field. Verify the palette is large enough once blocks
+  proliferate; punt to renderer phase.
+- **Block ↔ region UX semantics** — a region with only `xform` (no
+  template) is a "staged" block. Should that state be reachable via
+  the UI, or only ever as a transient between `blockSeed` calls?
+  Defer to phase 4 with the create flow.
+- **FX-layer surface** — vocabulary, storage, materialisation
+  semantics, FX-vs-xform precedence. Full deferral; reopen when the
+  block xform shape has settled.

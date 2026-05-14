@@ -17,7 +17,8 @@
 --
 -- ppq ranges are logical (pre-swing), half-open [ppqLo, ppqHi).
 
-local util = require('util')
+local util    = require('util')
+local aliases = require('aliases')
 
 local M = {}
 
@@ -88,6 +89,43 @@ end
 
 function M.seed(ppqLo, ppqHi, parts)
   return { ppqLo = ppqLo, ppqHi = ppqHi, parts = M.partsCopy(parts) }
+end
+
+----- Template & xform (a region with template events is a block).
+
+--contract: allocates a fresh base36 vuid on region.template; initialises template/eventCtr lazily. Returned vuid is stable across rebuilds and save/load.
+function M.allocVuid(region)
+  region.template = region.template or { events = {}, eventCtr = 0 }
+  region.template.eventCtr = (region.template.eventCtr or 0) + 1
+  return util.toBase36(region.template.eventCtr)
+ end
+
+--contract: appends `op` into region.xform[slotKey][field] via aliases.appendOp; lazily initialises region.xform and the slot. slotKey is '*' (geometric, all template events) or a colKey (content, only events on that col).
+function M.composeOp(region, slotKey, field, op)
+  region.xform = region.xform or {}
+  region.xform[slotKey] =
+    aliases.appendOp(region.xform[slotKey] or aliases.emptyXform(), field, op)
+end
+
+--contract: predicate for the command-surface refusal of block-wide val shifts across heterogeneous columns. True iff slotKey is '*' AND field is 'val' — nonsense across CCs and pitchbend.
+function M.refuseStarVal(slotKey, field)
+  return slotKey == '*' and field == 'val'
+end
+
+--contract: composes xformStar then xformCol onto templateEvent via per-field op-list concatenation, then applies through aliases.applyXform. Either xform may be nil (treated as empty). Cross-event-type fail-closed comes from applyXform.
+function M.resolveEvent(templateEvent, xformStar, xformCol, evtType, rng)
+  local merged = {}
+  local function mergeIn(src)
+    if not src then return end
+    for field, ops in pairs(src) do
+      local list = merged[field] or {}
+      for _, op in ipairs(ops) do list[#list+1] = op end
+      merged[field] = list
+    end
+  end
+  mergeIn(xformStar)
+  mergeIn(xformCol)
+  return aliases.applyXform(templateEvent, merged, evtType, rng)
 end
 
 return M

@@ -1,21 +1,31 @@
-@module regions  src=regions.lua  loc=93  sha=untracked  mode=namespace
+@module regions  src=regions.lua  loc=131  sha=fa4a61d  mode=namespace
 
 # Imports
   @const util = 'util'  @ 20
+  @const aliases = 'aliases'  @ 21
 
 # Module-level constants
-  @const M = {}  @ 22
+  @const M = {}  @ 23
 
 # Public API (M.*)
   -- colKey
-  @api M.colKey(col, partName)  @ 26
-  @api M.parseColKey(key)  @ 38
+  @api M.colKey(col, partName)  @ 27
+  @api M.parseColKey(key)  @ 39
   -- Parts set ops
-  @api M.partsUnion(a, b)  @ 54
-  @api M.partsDifference(a, b)  @ 61
-  @api M.partsCopy(p)  @ 67
-  @api M.partsIsEmpty(p)  @ 71
-  @api M.partsCount(p)  @ 75
+  @api M.partsUnion(a, b)  @ 55
+  @api M.partsDifference(a, b)  @ 62
+  @api M.partsCopy(p)  @ 68
+  @api M.partsIsEmpty(p)  @ 72
+  @api M.partsCount(p)  @ 76
   -- Region predicates and seed
-  @api M.containsCell(region, key, ppq)  @ 83
-  @api M.seed(ppqLo, ppqHi, parts)  @ 89
+  @api M.containsCell(region, key, ppq)  @ 84
+  @api M.seed(ppqLo, ppqHi, parts)  @ 90
+  -- Template & xform (a region with template events is a block).
+  @api M.allocVuid(region)  @ 97
+      @contract  allocates a fresh base36 vuid on region.template; initialises template/eventCtr lazily. Returned vuid is stable across rebuilds and save/load.
+  @api M.composeOp(region, slotKey, field, op)  @ 104
+      @contract  appends `op` into region.xform[slotKey][field] via aliases.appendOp; lazily initialises region.xform and the slot. slotKey is '*' (geometric, all template events) or a colKey (content, only events on that col).
+  @api M.refuseStarVal(slotKey, field)  @ 111
+      @contract  predicate for the command-surface refusal of block-wide val shifts across heterogeneous columns. True iff slotKey is '*' AND field is 'val' — nonsense across CCs and pitchbend.
+  @api M.resolveEvent(templateEvent, xformStar, xformCol, evtType, rng)  @ 116
+      @contract  composes xformStar then xformCol onto templateEvent via per-field op-list concatenation, then applies through aliases.applyXform. Either xform may be nil (treated as empty). Cross-event-type fail-closed comes from applyXform.

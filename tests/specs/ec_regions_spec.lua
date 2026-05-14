@@ -211,6 +211,62 @@ return {
     end,
   },
 
+  {
+    name = 'regionNext/regionPrev snap cursor to active region top-left',
+    run = function()
+      local ec, c = mkEc{ logPerRow = 10, numRows = 20 }
+      ec:enterRegionMode()
+      ec:setSelection{ row1=0, row2=1, col1=1, col2=1, part1='pitch', part2='pitch' }
+      c.cmgr:invoke('regionNew')   -- A at row 0, col 1, pitch
+      ec:setSelection{ row1=5, row2=6, col1=2, col2=2, part1='vel',   part2='vel'   }
+      c.cmgr:invoke('regionNew')   -- B at row 5, col 2, vel
+
+      -- B is active (newest). Park cursor away, then Prev → A's top-left.
+      ec:setPos(12, 1, 1)
+      c.cmgr:invoke('regionPrev')
+      t.eq(ec:row(), 0); t.eq(ec:col(), 1)
+      t.eq(ec:cursorPart(), 'pitch')
+
+      ec:setPos(12, 1, 1)
+      c.cmgr:invoke('regionNext')
+      t.eq(ec:row(), 5); t.eq(ec:col(), 2)
+      t.eq(ec:cursorPart(), 'vel')
+
+      t.falsy(ec:hasSelection(), 'cycle clears selection')
+    end,
+  },
+
+  {
+    name = 'regionNudgeForward/Back shift cursor by the same row delta',
+    run = function()
+      local ec, c = mkEc{ logPerRow = 10, numRows = 20 }
+      ec:enterRegionMode()
+      ec:setSelection{ row1=2, row2=3, col1=1, col2=1, part1='pitch', part2='pitch' }
+      c.cmgr:invoke('regionNew')
+
+      ec:setPos(5, 1, 1)
+      c.cmgr:invoke('regionNudgeForward')
+      t.eq(ec:row(), 6, 'cursor follows +1 row')
+      c.cmgr:invoke('regionNudgeBack')
+      c.cmgr:invoke('regionNudgeBack')
+      t.eq(ec:row(), 4, 'cursor follows -2 rows')
+    end,
+  },
+
+  {
+    name = 'regionNudge cursor delta matches clamped translation, not raw input',
+    run = function()
+      local ec, c = mkEc{ logPerRow = 10, numRows = 20 }
+      ec:enterRegionMode()
+      ec:setSelection{ row1=0, row2=1, col1=1, col2=1, part1='pitch', part2='pitch' }
+      c.cmgr:invoke('regionNew')   -- region at the top; back is fully clamped
+
+      ec:setPos(10, 1, 1)
+      c.cmgr:invoke('regionNudgeBack')
+      t.eq(ec:row(), 10, 'clamped translation: cursor does not move')
+    end,
+  },
+
   ----- drop
 
   {
@@ -250,15 +306,15 @@ return {
       ec:setSelection{ row1=2, row2=3, col1=1, col2=1, part1='pitch', part2='pitch' }
       c.cmgr:invoke('regionNew')
       local id = ec:activeRegionId()
-      local r0 = ec:getRegion(id)
+      local lo, hi = ec:getRegion(id).ppqLo, ec:getRegion(id).ppqHi
 
       c.cmgr:invoke('regionNudgeForward')
       local r1 = ec:getRegion(id)
-      t.eq(r1.ppqLo, r0.ppqLo + 10); t.eq(r1.ppqHi, r0.ppqHi + 10)
+      t.eq(r1.ppqLo, lo + 10); t.eq(r1.ppqHi, hi + 10)
 
       c.cmgr:invoke('regionNudgeBack'); c.cmgr:invoke('regionNudgeBack')
       local r2 = ec:getRegion(id)
-      t.eq(r2.ppqLo, r0.ppqLo - 10); t.eq(r2.ppqHi, r0.ppqHi - 10)
+      t.eq(r2.ppqLo, lo - 10); t.eq(r2.ppqHi, hi - 10)
     end,
   },
 
@@ -325,11 +381,9 @@ return {
     name = 'regionCommit on region whose parts are not on the grid is a silent no-op (no selection installed)',
     run = function()
       local ec, c = mkEc{ logPerRow = 10 }
-      ec:loadRegions{
-        idCtr   = 1,
-        regions = {{ id=1, colour=1, ppqLo=0, ppqHi=20,
-                     parts = { ['note:9:9:pitch'] = true } }},
-      }
+      ec.regionData.regions = {{ id=1, colour=1, ppqLo=0, ppqHi=20,
+                                  parts = { ['note:9:9:pitch'] = true } }}
+      ec.regionData.idCtr = 1
       ec:enterRegionMode()
       c.cmgr:invoke('regionNext')
       t.eq(ec:activeRegionId(), 1)
@@ -438,7 +492,7 @@ return {
   ----- read-side: listRegions
 
   {
-    name = 'listRegions returns clones in insertion order; getRegion(unknown) is nil',
+    name = 'listRegions returns regions in insertion order; getRegion(unknown) is nil',
     run = function()
       local ec, c = mkEc{ logPerRow = 10 }
       ec:enterRegionMode()
@@ -449,90 +503,7 @@ return {
       local list = ec:listRegions()
       t.eq(#list, 3)
       t.eq(list[1].id, 1); t.eq(list[2].id, 2); t.eq(list[3].id, 3)
-      list[1].ppqLo = 9999
-      list[1].parts['poisoned'] = true
-      t.eq(ec:getRegion(1).ppqLo, 0,                'returned clone is independent (range)')
-      t.falsy(ec:getRegion(1).parts['poisoned'],    'returned clone is independent (parts)')
-      t.eq(ec:getRegion(42), nil,                   'unknown id is nil')
-    end,
-  },
-
-  ----- persistence: blob round-trip, idCtr, silent load
-
-  {
-    name = 'regionsBlob captures regions + idCtr; mutating blob does not affect store',
-    run = function()
-      local ec, c = mkEc{ logPerRow = 10 }
-      ec:enterRegionMode()
-      ec:setSelection{ row1=0, row2=0, col1=1, col2=1, part1='pitch', part2='pitch' }
-      c.cmgr:invoke('regionNew')
-      ec:setSelection{ row1=5, row2=5, col1=2, col2=2, part1='vel', part2='vel' }
-      c.cmgr:invoke('regionNew')
-
-      local blob = ec:regionsBlob()
-      t.eq(#blob.regions, 2)
-      t.eq(blob.idCtr, 2)
-      blob.regions[1].ppqLo = 9999
-      blob.regions[1].parts['poisoned'] = true
-      t.eq(ec:getRegion(1).ppqLo, 0)
-      t.falsy(ec:getRegion(1).parts['poisoned'])
-    end,
-  },
-
-  {
-    name = 'loadRegions installs blob, restores idCtr, clears active, fires no hook',
-    run = function()
-      local ec, c = mkEc{ logPerRow = 10 }
-      ec:enterRegionMode()
-      ec:setSelection{ row1=0, row2=0, col1=1, col2=1, part1='pitch', part2='pitch' }
-      c.cmgr:invoke('regionNew')
-      ec:setSelection{ row1=5, row2=5, col1=2, col2=2, part1='vel', part2='vel' }
-      c.cmgr:invoke('regionNew')
-      local blob = ec:regionsBlob()
-
-      local ec2, c2 = mkEc{ logPerRow = 10 }
-      local pre = #c2.events
-      ec2:loadRegions(blob)
-      t.eq(#c2.events, pre, 'load fires no regionsHook')
-      t.eq(ec2:activeRegionId(), nil, 'active cleared by load')
-      t.eq(#ec2:listRegions(), 2)
-
-      -- idCtr restored: next id is 3, not 1
-      ec2:paintRegionCell(0, regions.colKey(c2.cols[1], 'pitch'), 'extend')
-      t.eq(ec2:activeRegionId(), 3, 'next id picks up at idCtr+1')
-    end,
-  },
-
-  {
-    name = 'loadRegions(nil) clears the store; idCtr resets to 0',
-    run = function()
-      local ec, c = mkEc{ logPerRow = 10 }
-      ec:paintRegionCell(0, regions.colKey(c.cols[1], 'pitch'), 'extend')
-      ec:paintRegionCell(0, regions.colKey(c.cols[2], 'pitch'), 'extend')
-      ec:loadRegions(nil)
-      t.eq(#ec:listRegions(), 0)
-      t.eq(ec:activeRegionId(), nil)
-      ec:paintRegionCell(0, regions.colKey(c.cols[1], 'pitch'), 'extend')
-      t.eq(ec:activeRegionId(), 1, 'idCtr reset → next id is 1')
-    end,
-  },
-
-  {
-    name = 'parts survive a blob round-trip across an independent ec',
-    run = function()
-      local ec, c = mkEc{ logPerRow = 10 }
-      ec:enterRegionMode()
-      ec:setSelection{ row1=0, row2=0, col1=1, col2=2, part1='pitch', part2='vel' }
-      c.cmgr:invoke('regionNew')
-      local blob = ec:regionsBlob()
-
-      local ec2 = mkEc{ logPerRow = 10 }
-      ec2:loadRegions(blob)
-      local r = ec2:getRegion(1)
-      t.truthy(r.parts[regions.colKey(c.cols[1], 'pitch')])
-      t.truthy(r.parts[regions.colKey(c.cols[1], 'vel')])
-      t.truthy(r.parts[regions.colKey(c.cols[2], 'pitch')])
-      t.truthy(r.parts[regions.colKey(c.cols[2], 'vel')])
+      t.eq(ec:getRegion(42), nil, 'unknown id is nil')
     end,
   },
 

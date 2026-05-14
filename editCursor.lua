@@ -36,15 +36,15 @@ local cursorRow, cursorCol, cursorStop = 0, 1, 1
 local hBlockScope, vBlockScope         = 0, 0
 local sel, selAnchor
 
--- Regions. Storage is by id; regionOrder gives a stable iteration order
--- (insertion order, minus deletions). regionActive ∈ ids ∪ {nil}.
--- colour is a palette index in 1..REGION_PALETTE_SIZE — the renderer
--- resolves to actual RGBA via the theme; ec stays theme-agnostic.
+-- Regions. regionData is the single live store (exposed as ec.regionData).
+-- trackerView reads/writes it via cm at scope='take'. Shape:
+--   { regions = [{ id, colour, ppqLo, ppqHi, parts, template?, xform? }, ...],
+--     idCtr  = N,
+--     active = id|nil }
+-- colour is a palette index in 1..REGION_PALETTE_SIZE — the renderer resolves
+-- to actual RGBA via the theme; ec stays theme-agnostic.
 local REGION_PALETTE_SIZE = 8
-local regionStore  = {}
-local regionOrder  = {}
-local regionIdCtr  = 0
-local regionActive = nil
+local regionData = { regions = {}, idCtr = 0, active = nil }
 -- Region mode = the 'region' scope is on top of cmgr's stack. ec owns
 -- the push/pop end-to-end; the page only binds the entry chord.
 local regionScope    -- forward — built lazily on first enter (no cmgr at module load in some test fixtures)
@@ -289,17 +289,10 @@ end
 
 ----- Regions
 
-local function regionIndexOf(id)
-  for i, x in ipairs(regionOrder) do if x == id then return i end end
-end
-
-local function cloneRegion(r)
-  if not r then return nil end
-  return { id     = r.id,
-           colour = r.colour,
-           ppqLo  = r.ppqLo,
-           ppqHi  = r.ppqHi,
-           parts  = regions.partsCopy(r.parts) }
+local function findRegion(id)
+  for i, r in ipairs(regionData.regions) do
+    if r.id == id then return r, i end
+  end
 end
 
 local function emitRegions(verb, id)
@@ -309,6 +302,7 @@ end
 ---------- PUBLIC
 
 local ec = {}
+ec.regionData = regionData
 
 ----- Position
 
@@ -334,6 +328,7 @@ end
 function ec:reset()
   cursorRow, cursorCol, cursorStop = 0, 1, 1
   selClear()
+  regionData.active = nil
 end
 
 ----- Part & Region
@@ -433,45 +428,70 @@ end
 
 --contract: nil clears the active pointer; non-nil must name an existing region or it is rejected silently. Fires 'active' so subscribers can refresh.
 local function setActiveRegion(id)
-  if id ~= nil and not regionStore[id] then return end
-  if regionActive == id then return end
-  regionActive = id
+  if id ~= nil and not findRegion(id) then return end
+  if regionData.active == id then return end
+  regionData.active = id
   emitRegions('active', id)
 end
 
---contract: cycles regionActive through regionOrder; from nil lands on first (next) or last (prev); no wrap past the ends — sticks at the boundary so the user notices.
+--contract: snaps cursor to the region's top-left — row at floor(ppqLo/lpr), leftmost grid col-part in r.parts (first stop of that part). Clears selection so the post-snap state is unsticky. No-op when no part in r.parts resolves to a live grid col.
+local function cursorToRegionHead(r)
+  if not r then return end
+  local col1, part1
+  for ci, col in ipairs(grid.cols) do
+    if col.parts then
+      for _, p in ipairs(col.parts) do
+        if r.parts and r.parts[regions.colKey(col, p)] then
+          col1, part1 = ci, p; break
+        end
+      end
+      if col1 then break end
+    end
+  end
+  if not col1 then return end
+  selClear()
+  cursorRow  = math.floor(r.ppqLo / logPerRow())
+  cursorCol  = col1
+  cursorStop = firstStopForPart(col1, part1)
+  clampPos(); moveHook()
+end
+
+--contract: cycles regionActive through regionOrder; from nil lands on first (next) or last (prev); no wrap past the ends — sticks at the boundary so the user notices. Snaps cursor to the newly-active region's top-left.
 local function nextRegion()
-  if #regionOrder == 0 then return end
-  local i = regionActive and regionIndexOf(regionActive) or 0
-  local j = math.min(#regionOrder, i + 1)
-  setActiveRegion(regionOrder[j])
+  local n = #regionData.regions; if n == 0 then return end
+  local _, i = findRegion(regionData.active)
+  local r = regionData.regions[math.min(n, (i or 0) + 1)]
+  setActiveRegion(r.id)
+  cursorToRegionHead(r)
 end
 
 local function prevRegion()
-  if #regionOrder == 0 then return end
-  local i = regionActive and regionIndexOf(regionActive) or (#regionOrder + 1)
-  local j = math.max(1, i - 1)
-  setActiveRegion(regionOrder[j])
+  local n = #regionData.regions; if n == 0 then return end
+  local _, i = findRegion(regionData.active)
+  local r = regionData.regions[math.max(1, (i or n + 1) - 1)]
+  setActiveRegion(r.id)
+  cursorToRegionHead(r)
 end
 
 --contract: creates a region from (ppqLo, ppqHi, parts); deep-copies parts; auto-assigns colour by cycling the palette; sets active to the new region. parts may be empty — caller is expected to follow up with extendRegionParts.
 local function createRegion(ppqLo, ppqHi, parts)
-  regionIdCtr = regionIdCtr + 1
-  local id = regionIdCtr
-  regionStore[id] = { id     = id,
-                      colour = ((id - 1) % REGION_PALETTE_SIZE) + 1,
-                      ppqLo  = ppqLo,
-                      ppqHi  = ppqHi,
-                      parts  = regions.partsCopy(parts or {}) }
-  util.add(regionOrder, id)
-  regionActive = id
+  regionData.idCtr = regionData.idCtr + 1
+  local id = regionData.idCtr
+  regionData.regions[#regionData.regions + 1] = {
+    id     = id,
+    colour = ((id - 1) % REGION_PALETTE_SIZE) + 1,
+    ppqLo  = ppqLo,
+    ppqHi  = ppqHi,
+    parts  = regions.partsCopy(parts or {}),
+  }
+  regionData.active = id
   emitRegions('create', id)
   return id
 end
 
 --contract: unions partsAdd into the region's parts; no-op (no signal) if every key was already present.
 local function extendRegionParts(id, partsAdd)
-  local r = regionStore[id]; if not r then return end
+  local r = findRegion(id); if not r then return end
   local before = regions.partsCount(r.parts)
   r.parts = regions.partsUnion(r.parts, partsAdd)
   if regions.partsCount(r.parts) ~= before then emitRegions('extendParts', id) end
@@ -479,7 +499,7 @@ end
 
 --contract: removes partsRemove from the region's parts (set difference); keeps the region even if parts becomes empty — the caller decides whether to deleteRegion. No-op if nothing was removed.
 local function shrinkRegionParts(id, partsRemove)
-  local r = regionStore[id]; if not r then return end
+  local r = findRegion(id); if not r then return end
   local before = regions.partsCount(r.parts)
   r.parts = regions.partsDifference(r.parts, partsRemove)
   if regions.partsCount(r.parts) ~= before then emitRegions('shrinkParts', id) end
@@ -487,7 +507,7 @@ end
 
 --contract: sets the region's logical-ppq span; ppqHi clamped to ppqLo so the half-open range stays well-formed.
 local function setRegionPpqRange(id, ppqLo, ppqHi)
-  local r = regionStore[id]; if not r then return end
+  local r = findRegion(id); if not r then return end
   if ppqHi < ppqLo then ppqHi = ppqLo end
   if r.ppqLo == ppqLo and r.ppqHi == ppqHi then return end
   r.ppqLo, r.ppqHi = ppqLo, ppqHi
@@ -495,7 +515,7 @@ local function setRegionPpqRange(id, ppqLo, ppqHi)
 end
 
 local function translateRegion(id, delta)
-  local r = regionStore[id]; if not r or delta == 0 then return end
+  local r = findRegion(id); if not r or delta == 0 then return end
   r.ppqLo = r.ppqLo + delta
   r.ppqHi = r.ppqHi + delta
   emitRegions('translatePpq', id)
@@ -503,23 +523,20 @@ end
 
 --contract: drops the region; if it was active, regionActive is cleared (no implicit promotion of a neighbour — that's a command-scope choice).
 local function deleteRegion(id)
-  if not regionStore[id] then return end
-  regionStore[id] = nil
-  local i = regionIndexOf(id)
-  if i then table.remove(regionOrder, i) end
-  if regionActive == id then regionActive = nil end
+  local _, idx = findRegion(id); if not idx then return end
+  table.remove(regionData.regions, idx)
+  if regionData.active == id then regionData.active = nil end
   emitRegions('delete', id)
 end
 
 --contract: returns a clone of the first region (in regionOrder) whose (parts, ppq) contain the cell; nil if none. First-match keeps the lookup deterministic even when regions overlap.
 local function regionAt(colKey, ppq)
-  for _, id in ipairs(regionOrder) do
-    local r = regionStore[id]
-    if regions.containsCell(r, colKey, ppq) then return cloneRegion(r) end
+  for _, r in ipairs(regionData.regions) do
+    if regions.containsCell(r, colKey, ppq) then return r end
   end
 end
 
-local function activeRegion() return cloneRegion(regionStore[regionActive]) end
+local function activeRegion() return (findRegion(regionData.active)) end
 
 --contract: enumerates colKeys covered by the current selection; falls back to the cursor cell when no selection is active. Pure read.
 local function selectionAsParts()
@@ -584,14 +601,9 @@ end
 
 ----- Public surface
 
-function ec:listRegions()
-  local out = {}
-  for i, id in ipairs(regionOrder) do out[i] = cloneRegion(regionStore[id]) end
-  return out
-end
-
-function ec:getRegion(id)    return cloneRegion(regionStore[id]) end
-function ec:activeRegionId() return regionActive end
+function ec:listRegions()    return regionData.regions end
+function ec:getRegion(id)    return (findRegion(id)) end
+function ec:activeRegionId() return regionData.active end
 
 -- Mouse-paint primitive. One call per painted cell; mode ∈ 'extend' |
 -- 'shrink'. extend auto-seeds an empty region at the painted row if
@@ -600,12 +612,12 @@ function ec:activeRegionId() return regionActive end
 -- scope.
 function ec:paintRegionCell(row, colKey, mode)
   local lpr = logPerRow()
-  if mode == 'extend' and not regionActive then
+  if mode == 'extend' and not regionData.active then
     createRegion(row * lpr, (row + 1) * lpr, {})
   end
-  local id = regionActive; if not id then return end
+  local id = regionData.active; if not id then return end
   if mode == 'extend' then
-    local r = regionStore[id]
+    local r = findRegion(id)
     if r then
       local newLo = math.min(r.ppqLo,   row * lpr)
       local newHi = math.max(r.ppqHi, (row + 1) * lpr)
@@ -617,31 +629,6 @@ function ec:paintRegionCell(row, colKey, mode)
   else
     shrinkRegionParts(id, { [colKey] = true })
   end
-end
-
---contract: returns the persistable shape { regions=[..], idCtr=N }. Each region is a deep clone; mutating the result has no effect on the live store. Parts are preserved as their raw colKey-set.
-function ec:regionsBlob()
-  local regs = {}
-  for i, id in ipairs(regionOrder) do regs[i] = cloneRegion(regionStore[id]) end
-  return { regions = regs, idCtr = regionIdCtr }
-end
-
---contract: replaces the in-memory store from a blob. nil clears everything. Silent — does not fire regionsHook, since callers (vm:rebuild on takeChanged) already drive a redraw and re-emitting would loop persistence back through save. idCtr is restored from the blob to keep ids monotonic across sessions.
-function ec:loadRegions(blob)
-  regionStore  = {}
-  regionOrder  = {}
-  regionActive = nil
-  regionIdCtr  = 0
-  if not blob then return end
-  for _, r in ipairs(blob.regions or {}) do
-    regionStore[r.id] = { id     = r.id,
-                          colour = r.colour,
-                          ppqLo  = r.ppqLo,
-                          ppqHi  = r.ppqHi,
-                          parts  = regions.partsCopy(r.parts or {}) }
-    util.add(regionOrder, r.id)
-  end
-  regionIdCtr = blob.idCtr or 0
 end
 
 ----- Motion
@@ -697,48 +684,51 @@ do
   end
 
   local function dropActive()
-    if regionActive then deleteRegion(regionActive) end
+    if regionData.active then deleteRegion(regionData.active) end
   end
 
   -- Time-axis verbs clamp to the take's logical span [0, numRows·lpr].
   -- adjustDurationCore in trackerView does the same on note tails — region
   -- ppq stays in the same frame, so the same boundary applies.
   local function translateByRow(delta)
-    local r = regionStore[regionActive or 0]; if not r or delta == 0 then return end
+    local r = findRegion(regionData.active); if not r or delta == 0 then return end
     local lpr     = logPerRow()
     local len     = (grid.numRows or 0) * lpr
     local clamped = util.clamp(delta * lpr, -r.ppqLo, len - r.ppqHi)
-    if clamped ~= 0 then translateRegion(regionActive, clamped) end
+    if clamped ~= 0 then
+      translateRegion(regionData.active, clamped)
+      cursorRow = cursorRow + clamped // lpr
+      clampPos(); moveHook()
+    end
   end
 
   local function adjustHiByRow(delta)
-    local r = regionStore[regionActive or 0]; if not r then return end
+    local r = findRegion(regionData.active); if not r then return end
     local lpr   = logPerRow()
     local len   = (grid.numRows or 0) * lpr
     local newHi = util.clamp(r.ppqHi + delta * lpr, r.ppqLo, len)
-    setRegionPpqRange(regionActive, r.ppqLo, newHi)
+    setRegionPpqRange(regionData.active, r.ppqLo, newHi)
   end
 
   -- Half-open [ppqLo, ppqHi): hi = cursor*logPerRow ends the region on
   -- the row just above the cursor. Toggle to take length on a second
   -- press so the same key both snaps and extends.
   local function setHiToCursor()
-    local r = regionStore[regionActive or 0]; if not r then return end
+    local r = findRegion(regionData.active); if not r then return end
     local lpr       = logPerRow()
     local justAbove = cursorRow * lpr
     local atLength  = (grid.numRows or 0) * lpr
     local newHi     = (r.ppqHi == justAbove) and atLength or justAbove
-    setRegionPpqRange(regionActive, r.ppqLo, newHi)
+    setRegionPpqRange(regionData.active, r.ppqLo, newHi)
   end
 
   -- Mode-exit sweeps every empty-parts region (transient empties from
   -- shrink-all then extend cycles) and pops the overlay. Two callers
   -- (bail, commit).
   local function exitMode()
-    for i = #regionOrder, 1, -1 do
-      local id = regionOrder[i]
-      local r  = regionStore[id]
-      if r and regions.partsIsEmpty(r.parts) then deleteRegion(id) end
+    for i = #regionData.regions, 1, -1 do
+      local r = regionData.regions[i]
+      if regions.partsIsEmpty(r.parts) then deleteRegion(r.id) end
     end
     cmgr:pop(regionScope)
     regionPushed = false
@@ -751,9 +741,9 @@ do
     regionPushed = true
     local col = grid.cols[cursorCol]
     if col and col.parts then
-      local r = regionAt(regions.colKey(col, cursorPart()),
-                         cursorRow * logPerRow())
-      if r then setActiveRegion(r.id) end
+      local hit = regionAt(regions.colKey(col, cursorPart()),
+                           cursorRow * logPerRow())
+      if hit then setActiveRegion(hit.id) end
     end
   end
 
@@ -775,13 +765,13 @@ do
       regionDrop    = atomic('drop',    dropActive),
       regionNew     = atomic('new',     newFromSelection),
       regionExtendParts = atomic('extend', function()
-        if not regionActive then return newFromSelection() end
-        extendRegionParts(regionActive, selectionAsParts())
+        if not regionData.active then return newFromSelection() end
+        extendRegionParts(regionData.active, selectionAsParts())
         selClear()
       end),
       regionShrinkParts = atomic('shrink', function()
-        if not regionActive then return end
-        shrinkRegionParts(regionActive, selectionAsParts())
+        if not regionData.active then return end
+        shrinkRegionParts(regionData.active, selectionAsParts())
         selClear()
       end),
       regionNext         = atomic('next',     nextRegion),
