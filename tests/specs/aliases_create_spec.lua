@@ -279,7 +279,7 @@ return {
 
   --------------------------------------------------------------------
   -- lane delta: paste across lanes within the same channel encodes
-  -- lane = +N. Two simultaneous same-pitch notes force two lanes.
+  -- lane = +N. A note placed explicitly on lane 2 forces the column.
   --------------------------------------------------------------------
   {
     name = 'alias paste cross-lane encodes lane delta',
@@ -289,7 +289,7 @@ return {
         seed   = { notes = {
           rootNote{},                                                   -- chan 1 lane 1
           { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
-            chan = 1, pitch = 60, vel = 100, uuid = 2, lane = 2 },      -- forces lane 2
+            chan = 1, pitch = 62, vel = 100, uuid = 2, lane = 2 },      -- forces lane 2
         } },
       }
       h.vm:setGridSize(80, 40)

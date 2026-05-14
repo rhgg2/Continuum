@@ -118,7 +118,11 @@ function newMidiManager(opts)
   function mm:dump()
     local function each(list)
       local out = {}
-      for i, e in ipairs(list) do out[i] = util.clone(e) end
+      for i, e in ipairs(list) do
+        local c = util.clone(e)
+        c.token = tokenOf(e)
+        out[i] = c
+      end
       return out
     end
     return { notes = each(noteList), ccs = each(ccList) }
@@ -138,14 +142,21 @@ function newMidiManager(opts)
 
   -- NOTES
 
-  function mm:getNote(loc) return cloneShallow(noteByLoc[loc], INTERNALS) end
+  local function cloneOut(evt)
+    if not evt then return nil end
+    local c = cloneShallow(evt, INTERNALS)
+    c.token = tokenOf(evt)
+    return c
+  end
+
+  function mm:getNote(loc) return cloneOut(noteByLoc[loc]) end
 
   function mm:notes()
     local i = 0
     return function()
       i = i + 1
       local n = noteByLoc[i]
-      if n then return i, cloneShallow(n, INTERNALS) end
+      if n then return i, cloneOut(n) end
     end
   end
 
@@ -190,14 +201,14 @@ function newMidiManager(opts)
 
   -- CCs
 
-  function mm:getCC(loc) return cloneShallow(ccByLoc[loc], INTERNALS) end
+  function mm:getCC(loc) return cloneOut(ccByLoc[loc]) end
 
   function mm:ccs()
     local i = 0
     return function()
       i = i + 1
       local c = ccByLoc[i]
-      if c then return i, cloneShallow(c, INTERNALS) end
+      if c then return i, cloneOut(c) end
     end
   end
 
@@ -268,10 +279,10 @@ function newMidiManager(opts)
   function mm:byUuid(uuid)
     if not uuid then return nil end
     for i, n in ipairs(noteList) do
-      if n.uuid == uuid then return i, cloneShallow(n, INTERNALS), 'note' end
+      if n.uuid == uuid then return i, cloneOut(n), 'note' end
     end
     for i, c in ipairs(ccList) do
-      if c.uuid == uuid then return i, cloneShallow(c, INTERNALS), 'cc' end
+      if c.uuid == uuid then return i, cloneOut(c), 'cc' end
     end
   end
 
@@ -283,7 +294,43 @@ function newMidiManager(opts)
   function mm:byToken(token)
     local evt = tokenIdx[token]
     if not evt then return nil end
-    return evt.loc, cloneShallow(evt, INTERNALS), (evt.evType == 'note') and 'note' or 'cc'
+    return evt.loc, cloneOut(evt), (evt.evType == 'note') and 'note' or 'cc'
+  end
+
+  -- UNIFIED TOKEN-KEYED SURFACE
+
+  function mm:add(t)
+    if not t or not t.evType then return nil end
+    if t.evType == 'note' then self:addNote(t) else self:addCC(t) end
+    return tokenOf(t)
+  end
+
+  function mm:assign(token, t)
+    local evt = tokenIdx[token]
+    if not evt then return nil end
+    if evt.evType == 'note' then self:assignNote(evt.loc, t)
+    else                         self:assignCC(evt.loc, t) end
+    return tokenOf(evt)
+  end
+
+  function mm:delete(token)
+    local evt = tokenIdx[token]
+    if not evt then return end
+    if evt.evType == 'note' then self:deleteNote(evt.loc)
+    else                         self:deleteCC(evt.loc) end
+  end
+
+  function mm:events()
+    local i, src = 0, noteList
+    return function()
+      while true do
+        i = i + 1
+        local e = src[i]
+        if e then return tokenOf(e), cloneOut(e) end
+        if src == ccList then return end
+        src, i = ccList, 0
+      end
+    end
   end
 
   -- TAKE DATA

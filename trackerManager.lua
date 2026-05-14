@@ -137,9 +137,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   local assigns = {}
   local deletes = {}
   local chans = {}
-  local notesByLoc = {}
+  local byToken = {}
   local dirtyPcChans = {}
-  local ccsByLoc = {}
 
   ----- Accessors
 
@@ -192,7 +191,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   end
 
   local function forEachAttachedPA(host, fn)
-    for _, cc in pairs(ccsByLoc) do
+    for _, cc in pairs(byToken) do
       if cc.evType == 'pa' and cc.chan == host.chan and cc.pitch == host.pitch
         and cc.ppq >= host.ppq and cc.ppq < host.endppq then
         fn(cc)
@@ -204,45 +203,41 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   --contract: only lane==1 notes index into chans[chan].notes; higher-lane notes get queued for mm but don't feed detune/realisation reads
   local function addLowlevel(evtType, evt)
+    evt.evType = evtType
     if evtType == 'note' then
       if evt.lane == 1 then
         local tbl = chans[evt.chan].notes
         util.add(tbl, evt); sortByPPQ(tbl)
       end
-    else
-      evt.evType = evtType
-      if evtType == 'pb' then
-        local tbl = chans[evt.chan].pbs
-        util.add(tbl, evt); sortByPPQ(tbl)
-      end
+    elseif evtType == 'pb' then
+      local tbl = chans[evt.chan].pbs
+      util.add(tbl, evt); sortByPPQ(tbl)
     end
-    util.add(adds, { type = evtType, evt = evt })
+    util.add(adds, { evt = evt })
   end
 
-  --contract: dedupes by (loc, evtType) so multiple in-flight assigns to the same event collapse into one mm write; util.REMOVE markers must survive merging
+  --contract: dedupes by token (unique across types) so multiple in-flight assigns to the same event collapse into one mm write; util.REMOVE markers must survive merging
   local function assignLowlevel(evtType, evt, update)
     util.assign(evt, update)
     -- ppq mutates in place; resort so subsequent util.seek calls keyed off chans[chan].notes stay correct under non-monotone callers (reswing).
     if evtType == 'note' and update.ppq ~= nil and evt.lane == 1 then
       sortByPPQ(chans[evt.chan].notes)
     end
-    if not evt.loc then return end
+    if not evt.token then return end
     for _, e in ipairs(assigns) do
-      if e.loc == evt.loc and e.type == evtType then
+      if e.token == evt.token then
         -- Plain copy, not util.assign: util.assign collapses util.REMOVE → nil-the-key.
         for k, v in pairs(update) do e.update[k] = v end
         return
       end
     end
-    util.add(assigns, { type = evtType, loc = evt.loc, update = update })
+    util.add(assigns, { token = evt.token, update = update, evt = evt })
   end
 
   local function deleteLowlevel(evtType, evt)
     local tbl
-    local locTbl = ccsByLoc
     if evtType == 'note' then
       tbl = chans[evt.chan].notes
-      locTbl = notesByLoc
     elseif evtType == 'pb' then
       tbl = chans[evt.chan].pbs
     end
@@ -256,14 +251,13 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       end
     end
 
-    local loc = evt.loc
+    local token = evt.token
 
-    if loc then
-      locTbl[loc] = nil
-      util.add(deletes, { type = evtType, loc = loc })
+    if token then
+      byToken[token] = nil
+      util.add(deletes, { token = token })
       for j = #assigns, 1, -1 do
-        local e = assigns[j]
-        if e.loc == loc and e.type == evtType then table.remove(assigns, j) end
+        if assigns[j].token == token then table.remove(assigns, j) end
       end
     else
       for j = #adds, 1, -1 do
@@ -359,7 +353,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       local needFakeAtOld = (detuneAt(chan, oldP) ~= detuneBefore(chan, oldP))
                             and owner(chan, oldP)
       if (existing and existing ~= pb) or needFakeAtOld then
-        local extras = util.clone(pb, { loc = true, fake = true,
+        local extras = util.clone(pb, { token = true, fake = true,
                                          chan = true, ppq = true, val = true,
                                          evType = true })
         util.assign(extras, util.clone(update, { ppq = true, val = true }))
@@ -528,8 +522,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   local function clearSameKeyRange(chan, pitch, P, Pend, selfPpqL, selfEvt)
     local clampEnd, clampEndL = Pend, nil
     local toDelete, toTruncate = {}, {}
-    for _, n in pairs(notesByLoc) do
-      if n ~= selfEvt and n.chan == chan and n.pitch == pitch then
+    for _, n in pairs(byToken) do
+      if n.evType == 'note' and n ~= selfEvt and n.chan == chan and n.pitch == pitch then
         if n.ppq <= P and n.endppq > P then
           if n.ppq == P then util.add(toDelete, n)
           else util.add(toTruncate, n) end
@@ -549,14 +543,14 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   local function reconcilePcs(chan)
     local records = {}
-    for _, n in pairs(notesByLoc) do
-      if n.chan == chan then
+    for _, n in pairs(byToken) do
+      if n.evType == 'note' and n.chan == chan then
         util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
                             sample = n.sample or 0 })
       end
     end
     for _, a in ipairs(adds) do
-      if a.type == 'note' and a.evt.chan == chan then
+      if a.evt.evType == 'note' and a.evt.chan == chan then
         local n = a.evt
         util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
                             sample = n.sample or 0 })
@@ -568,24 +562,24 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     for _, want in ipairs(toAdd)    do addLowlevel('pc', want)    end
   end
 
-  local function lookup(evtType, evtOrLoc)
-    local loc = type(evtOrLoc) == 'table' and evtOrLoc.loc or evtOrLoc
-    if not loc then return end
-    return (evtType == 'note' and notesByLoc[loc] or ccsByLoc[loc]), loc
+  local function lookup(evtOrToken)
+    local token = type(evtOrToken) == 'table' and evtOrToken.token or evtOrToken
+    if not token then return end
+    return byToken[token], token
   end
 
   ----- Public interface
 
-  function deleteEvent(evtType, evtOrLoc)
-    local evt, loc = lookup(evtType, evtOrLoc)
-    if not loc then return end
+  function deleteEvent(evtType, evtOrToken)
+    local evt, token = lookup(evtOrToken)
+    if not token then return end
 
     if evtType == 'note' then
       if evt then deleteNote(evt) end
     elseif evtType == 'pb' then
       if evt then deletePb(evt) end
     else
-      deleteLowlevel(evtType, evt or { loc = loc })
+      deleteLowlevel(evtType, evt or { token = token })
     end
   end
 
@@ -634,9 +628,9 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
   end
 
-  function assignEvent(evtType, evtOrLoc, update)
-    local evt, loc = lookup(evtType, evtOrLoc)
-    if not loc then return end
+  function assignEvent(evtType, evtOrToken, update)
+    local evt, token = lookup(evtOrToken)
+    if not token then return end
 
     if evtType == 'note' then
       if evt then
@@ -663,7 +657,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       end
     else
       realiseNonNoteUpdate(evt and evt.chan, update)
-      assignLowlevel(evtType, evt or { loc = loc }, update)
+      assignLowlevel(evtType, evt or { token = token }, update)
     end
   end
 
@@ -688,7 +682,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   ----- Flush: commit accumulated ops to mm.
 
-  --contract: no-op if nothing staged; otherwise commits in fixed order (assigns, deletes desc by loc, adds) under a single mm:modify; pb cents→raw conversion happens here
+  --contract: no-op if nothing staged; otherwise commits assigns then deletes then adds under one mm:modify; pb cents→raw conversion happens here; byToken is re-keyed live from mm:assign's returned token whenever an identity field moved
   --contract: snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
   function flush()
     if cm:get('trackerMode') and next(dirtyPcChans) then
@@ -701,42 +695,44 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     adds, assigns, deletes = {}, {}, {}
 
     for _, e in ipairs(flushAssigns) do
-      if e.type == 'pb' and e.update.val ~= nil then
+      if e.evt.evType == 'pb' and e.update.val ~= nil then
         e.update.val = centsToRaw(e.update.val)
       end
     end
     for _, a in ipairs(flushAdds) do
-      if a.type == 'pb' then
+      if a.evt.evType == 'pb' then
         a.evt.val = centsToRaw(a.evt.val)
       end
     end
-    table.sort(flushDeletes, function(a, b) return a.loc > b.loc end)
 
     -- Capture uuids of notes this flush touches, so the rebuild fired
     -- from mm's reload can attribute over-threshold lane overlaps to us.
     local touched = {}
     for _, o in ipairs(flushAssigns) do
-      if o.type == 'note' then
-        local n = mm:getNote(o.loc)
-        if n and n.uuid then touched[n.uuid] = true end
-      end
+      if o.evt.evType == 'note' and o.evt.uuid then touched[o.evt.uuid] = true end
     end
     pendingFlushUuids = touched
 
     mm:modify(function()
       for _, o in ipairs(flushAssigns) do
-        if o.type == 'note' then mm:assignNote(o.loc, o.update)
-        else mm:assignCC(o.loc, o.update) end
+        local newTok = mm:assign(o.token, o.update)
+        if newTok and newTok ~= o.token then
+          byToken[o.token] = nil
+          byToken[newTok]  = o.evt
+          o.evt.token      = newTok
+        end
       end
       for _, o in ipairs(flushDeletes) do
-        if o.type == 'note' then mm:deleteNote(o.loc)
-        else mm:deleteCC(o.loc) end
+        mm:delete(o.token)
+        byToken[o.token] = nil
       end
       for _, o in ipairs(flushAdds) do
-        if o.type == 'note' then
-          mm:addNote(o.evt)
-          if o.evt.uuid then touched[o.evt.uuid] = true end
-        else mm:addCC(o.evt) end
+        local tok = mm:add(o.evt)
+        if tok then
+          byToken[tok] = o.evt
+          o.evt.token  = tok
+          if o.evt.evType == 'note' and o.evt.uuid then touched[o.evt.uuid] = true end
+        end
       end
     end)
   end
@@ -744,34 +740,30 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   ----- Init / reload: (re)load local cache from mm.
 
   -- Also clears staging buffers: a rebuild must not carry un-flushed ops
-  -- across (their locs may be invalid), matching the prior "fresh um per
-  -- rebuild" semantics now that the um itself persists.
+  -- across (their tokens may be stale for newly-added events), matching the
+  -- prior "fresh um per rebuild" semantics now that the um itself persists.
   function reload()
     adds, assigns, deletes = {}, {}, {}
     dirtyPcChans           = {}
-    notesByLoc, ccsByLoc   = {}, {}
+    byToken                = {}
     for i = 1, 16 do chans[i] = { notes = {}, pbs = {} } end
 
-    for loc, cc in mm:ccs() do
+    for tok, e in mm:events() do
       local evt
-      if cc.evType == 'pb' then
-        evt = util.pick(cc, 'ppq ppqL chan shape tension fake frame loc',
-                        { val = rawToCents(cc.val) })
+      if e.evType == 'pb' then
+        evt = util.pick(e, 'ppq ppqL chan shape tension fake frame',
+                        { val = rawToCents(e.val), token = tok, evType = 'pb' })
         util.add(chans[evt.chan].pbs, evt)
       else
-        evt = cc
+        evt = e
+        evt.token = tok
+        if evt.evType == 'note' and evt.lane == 1 then
+          util.add(chans[evt.chan].notes, evt)
+        end
       end
-      ccsByLoc[loc] = evt
+      byToken[tok] = evt
     end
-    for i = 1, 16 do sortByPPQ(chans[i].pbs) end
-
-    for loc, n in mm:notes() do
-      notesByLoc[loc] = n
-      if n.lane == 1 then
-        util.add(chans[n.chan].notes, n)
-      end
-    end
-    for i = 1, 16 do sortByPPQ(chans[i].notes) end
+    for i = 1, 16 do sortByPPQ(chans[i].notes); sortByPPQ(chans[i].pbs) end
   end
 
   reload()
@@ -1052,9 +1044,9 @@ local function resolveAliased(evt)
   if not (evt and evt.parentUuid) then return end
   local node = specOf[evt.uuid]
   if not node then return end
-  local rootLoc, root, kind = mm:byUuid(evt.parentUuid)
-  if not (root and rootLoc) then return end
-  return rootLoc, root, kind, node
+  local _, root, kind = mm:byUuid(evt.parentUuid)
+  if not root then return end
+  return mm:tokenOf(root), root, kind, node
 end
 
 function tm:specOf(uuid)   return specOf[uuid] end
@@ -1092,7 +1084,7 @@ end
 
 --contract: appends a per-field op map onto evt's spec node; one root snapshot per call so coupled fields stay atomic. Per-field value is one op or a list (list lands as successive appendOps with coalescence). Returns false if evt isn't aliased or specOf lookup fails — caller falls through to direct mutation. See docs/aliases.md.
 function tm:routeRelative(evt, opsByField)
-  local rootLoc, root, kind, node = resolveAliased(evt)
+  local rootTok, root, kind, node = resolveAliased(evt)
   if not node then return false end
   for field, op in pairs(opsByField) do
     if type(op[1]) == 'table' then
@@ -1103,7 +1095,7 @@ function tm:routeRelative(evt, opsByField)
       node.xform = aliases.appendOp(node.xform, field, op)
     end
   end
-  assignEvent(kind, { loc = rootLoc }, { children = root.children })
+  assignEvent(kind, { token = rootTok }, { children = root.children })
   return true
 end
 
@@ -1122,8 +1114,9 @@ function tm:severBatch(events)
   end
   for parentUuid, list in pairs(byParent) do
     table.sort(list, function(a, b) return depthOf(a) > depthOf(b) end)
-    local rootLoc, root, rootKind = mm:byUuid(parentUuid)
-    if root and rootLoc then
+    local _, root, rootKind = mm:byUuid(parentUuid)
+    local rootTok = root and mm:tokenOf(root)
+    if root and rootTok then
       for _, e in ipairs(list) do
         local node = specOf[e.uuid]
         local pSpec = nodeMeta[node].parent
@@ -1137,7 +1130,7 @@ function tm:severBatch(events)
           })
         end
       end
-      assignEvent(rootKind, { loc = rootLoc }, { children = root.children })
+      assignEvent(rootKind, { token = rootTok }, { children = root.children })
     end
   end
 end
@@ -1153,13 +1146,13 @@ end
 function tm:deleteAliased(evt)
   if not evt then return false end
 
-  local rootLoc, root, rootKind, isRoot, S
+  local rootTok, root, rootKind, isRoot, S
   if evt.parentUuid then
-    rootLoc, root, rootKind, S = resolveAliased(evt)
+    rootTok, root, rootKind, S = resolveAliased(evt)
     if not S then return false end
     isRoot = false
   elseif evt.children and #evt.children > 0 then
-    rootLoc, root, rootKind = evt.loc, evt, evtTypeOf(evt)
+    rootTok, root, rootKind = evt.token, evt, evtTypeOf(evt)
     isRoot = true
   else
     return false
@@ -1178,7 +1171,7 @@ function tm:deleteAliased(evt)
       local _, matEvt, matKind = mm:byUuid(matUuid)
       if matEvt then
         aliases.pluckNode(childSpecs, child)
-        assignEvent(matKind, matEvt, {
+        assignEvent(matKind, { token = mm:tokenOf(matEvt) }, {
           parentUuid = util.REMOVE,
           children   = child.children or {},
         })
@@ -1187,12 +1180,12 @@ function tm:deleteAliased(evt)
   end
 
   if isRoot then
-    deleteEvent(rootKind, { loc = rootLoc })
+    deleteEvent(rootKind, { token = rootTok })
   else
     local pSpec = nodeMeta[S].parent
     local parentList = pSpec and pSpec.children or root.children
     aliases.pluckNode(parentList, S)
-    assignEvent(rootKind, { loc = rootLoc }, { children = root.children })
+    assignEvent(rootKind, { token = rootTok }, { children = root.children })
   end
   return true
 end
@@ -1284,8 +1277,9 @@ end
 
 --contract: creates a spec node under rootUuid. srcIdx nil → top of root.children; non-nil → child of that spec. children passed verbatim (paste's captured subtree). fit clips materialised endppq to next col event so no new lane is allocated. Returns the new node's specIdx. See docs/aliases.md.
 function tm:createAlias(rootUuid, srcIdx, xform, children, fit)
-  local rootLoc, root, kind = mm:byUuid(rootUuid)
-  if not (root and rootLoc) then return nil end
+  local _, root, kind = mm:byUuid(rootUuid)
+  if not root then return nil end
+  local rootTok = mm:tokenOf(root)
   root.children = root.children or {}
   local list, newIdx
   if srcIdx and #srcIdx > 0 then
@@ -1302,7 +1296,7 @@ function tm:createAlias(rootUuid, srcIdx, xform, children, fit)
   if fit then node.fit = true end
   list[#list + 1] = node
   newIdx[#newIdx + 1] = #list
-  assignEvent(kind, { loc = rootLoc }, { children = root.children })
+  assignEvent(kind, { token = rootTok }, { children = root.children })
   return newIdx
 end
 
@@ -1312,7 +1306,7 @@ do
   ----- Aliases walker helpers
 
   local SEED_EXCLUDE = {
-    children = true, uuid = true, parentUuid = true, loc = true,
+    children = true, uuid = true, parentUuid = true, loc = true, token = true,
   }
 
   -- chan/evType/ccNum overrides let column events (which carry no chan and have cc/evType stripped) reuse the same keying as raw mm events.
@@ -1425,9 +1419,9 @@ do
 
   local CC_PROJECT_STRIP = { chan = true, evType = true, cc = true }
 
-  local function projectCC(cc, loc, overlay)
+  local function projectCC(cc, token, overlay)
     local evt = util.clone(cc, CC_PROJECT_STRIP)
-    evt.loc = loc
+    evt.token = token
     if overlay then util.assign(evt, overlay) end
     return evt
   end
@@ -1451,12 +1445,12 @@ do
     --    and the outer rebuild reads the refreshed mm state.
     do
       local notesToDel, ccsToDel, roots = {}, {}, {}
-      for loc, n in mm:notes() do
-        if n.parentUuid then util.add(notesToDel, loc)
+      for _, n in mm:notes() do
+        if n.parentUuid then util.add(notesToDel, mm:tokenOf(n))
         elseif n.children and #n.children > 0 then util.add(roots, n) end
       end
-      for loc, c in mm:ccs() do
-        if c.parentUuid then util.add(ccsToDel, { c.evType, loc })
+      for _, c in mm:ccs() do
+        if c.parentUuid then util.add(ccsToDel, { c.evType, mm:tokenOf(c) })
         elseif c.children and #c.children > 0 then util.add(roots, c) end
       end
 
@@ -1587,9 +1581,7 @@ do
           end
         end
 
-        table.sort(notesToDel, function(a, b) return a > b end)
-        table.sort(ccsToDel,   function(a, b) return a[2] > b[2] end)
-        for _, loc in ipairs(notesToDel) do deleteEvent('note', loc) end
+        for _, tok in ipairs(notesToDel) do deleteEvent('note', tok) end
         for _, e   in ipairs(ccsToDel)   do deleteEvent(e[1],  e[2]) end
         for _, n   in ipairs(notesToAdd) do addEvent('note', n)      end
         for _, c   in ipairs(ccsToAdd)   do addEvent(c.evType, c)   end
@@ -1625,7 +1617,7 @@ do
       end
 
       local groups, work = {}, {}
-      for loc, note in mm:notes() do
+      for _, note in mm:notes() do
         local update
         if note.detune == nil then update = update or {}; update.detune = 0 end
         if note.delay  == nil then update = update or {}; update.delay  = 0 end
@@ -1635,43 +1627,45 @@ do
           update = update or {}
           update.sample = (prev and prev.val) or 0
         end
-        if update then mm:assignNote(loc, update) end
+        local tok = mm:tokenOf(note)
+        if update then mm:assign(tok, update) end
         util.bucket(groups, note.chan .. '|' .. note.pitch,
-                    { loc = loc, ppq = note.ppq, endppq = note.endppq })
+                    { token = tok, ppq = note.ppq, endppq = note.endppq })
       end
       for _, group in pairs(groups) do
         sortByPPQ(group)
         for i = 1, #group - 1 do
           if group[i].endppq > group[i + 1].ppq then
-            util.add(work, { loc = group[i].loc, endppq = group[i + 1].ppq })
+            util.add(work, { token = group[i].token, endppq = group[i + 1].ppq })
           end
         end
       end
       if #work > 0 then
         mm:modify(function()
-          for _, w in ipairs(work) do mm:assignNote(w.loc, { endppq = w.endppq }) end
+          for _, w in ipairs(work) do mm:assign(w.token, { endppq = w.endppq }) end
         end)
       end
     end
 
     -- 2) Allocate note columns. Clone rather than alias: step 5 overwrites
-    -- column evt.ppq with logical while mm retains raw.
-    for loc, note in mm:notes() do
+    -- column evt.ppq with logical while mm retains raw. Lane is non-identity
+    -- in the note token, so an allocator-driven lane fix doesn't retire it.
+    for _, note in mm:notes() do
       local channel = channels[note.chan]
       local col, lane = allocateNoteColumn(channel, note)
-      if note.lane ~= lane then
-        mm:assignNote(loc, { lane = lane })
-      end
+      local tok = mm:tokenOf(note)
+      if note.lane ~= lane then mm:assign(tok, { lane = lane }) end
       local ce = util.clone(note, { chan = true, lane = true })
-      ce.loc = loc
+      ce.token = tok
       util.add(col.events, ce)
     end
 
     -- 3) Single CC walk.
     do
       local pbByChan = {}
-      for loc, cc in mm:ccs() do
+      for _, cc in mm:ccs() do
         local channel = channels[cc.chan]
+        local tok     = mm:tokenOf(cc)
 
         if cc.evType == 'pb' then
           local col1       = channel.columns.notes[1]
@@ -1682,7 +1676,7 @@ do
           local pb = pbByChan[cc.chan] or { events = {}, anyVisible = false }
           pbByChan[cc.chan] = pb
           pb.anyVisible = pb.anyVisible or not hidden
-          util.add(pb.events, projectCC(cc, loc, {
+          util.add(pb.events, projectCC(cc, tok, {
             val    = util.round(rawToCents(cc.val) - detune),
             detune = detune,
             hidden = hidden,
@@ -1691,7 +1685,7 @@ do
         elseif cc.evType == 'pa' then
           local noteCol = findNoteColumnForPitch(channel, cc.pitch, cc.ppq)
           if noteCol then
-            util.add(noteCol.events, projectCC(cc, loc, { type = 'pa' }))
+            util.add(noteCol.events, projectCC(cc, tok, { type = 'pa' }))
           end
 
         elseif cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
@@ -1703,7 +1697,7 @@ do
             col = channel.columns[cc.evType] or { events = {} }
             channel.columns[cc.evType] = col
           end
-          util.add(col.events, projectCC(cc, loc))
+          util.add(col.events, projectCC(cc, tok))
         end
       end
 
@@ -1749,20 +1743,19 @@ do
           end
         end
         local rems, adds_ = reconcilePCsForChan(chan, records)
-        for _, r in ipairs(rems)  do util.add(toDelete, r.loc) end
+        for _, r in ipairs(rems)  do util.add(toDelete, r.token) end
         for _, a in ipairs(adds_) do util.add(toAdd, a) end
       end
 
       if #toDelete > 0 or #toAdd > 0 then
-        table.sort(toDelete, function(a, b) return a > b end)
         mm:modify(function()
-          for _, loc in ipairs(toDelete) do mm:deleteCC(loc) end
-          for _, pc  in ipairs(toAdd)    do mm:addCC(pc) end
+          for _, tok in ipairs(toDelete) do mm:delete(tok) end
+          for _, pc  in ipairs(toAdd)    do mm:add(pc) end
         end)
         for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
-        for loc, cc in mm:ccs() do
+        for _, cc in mm:ccs() do
           if cc.evType == 'pc' then
-            util.add(channels[cc.chan].columns.pc.events, projectCC(cc, loc))
+            util.add(channels[cc.chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
           end
         end
       end
@@ -1774,7 +1767,7 @@ do
     -- its host's new (ppq, ppqL) in the same pass.
     do
       local EPS      = 1   -- ppq; tolerates rounding slop in fromLogical
-      local toAssign = {}  -- { { isNote, loc, update } }
+      local toAssign = {}  -- { { evt, update } }; evt is a column event whose .token is restamped if mm:assign returns a fresh token (any ppq mutation)
 
       -- Index fakes by their pre-walk seat (= host's pre-walk ppq).
       local fakesByPos = {}
@@ -1836,7 +1829,7 @@ do
           end
         end
         if update then
-          util.add(toAssign, { isNote = isNote, loc = evt.loc, update = update })
+          util.add(toAssign, { evt = evt, update = update })
         end
         -- Reseat any fake-pb at this lane-1 host's seat. Stage the mm
         -- assign and mirror into the live column event in lockstep.
@@ -1853,7 +1846,7 @@ do
               up.ppqL, fake.ppqL = evt.ppqL, evt.ppqL
             end
             if next(up) then
-              util.add(toAssign, { isNote = false, loc = fake.loc, update = up })
+              util.add(toAssign, { evt = fake, update = up })
             end
           end
         end
@@ -1861,28 +1854,14 @@ do
       if #toAssign > 0 then
         mm:modify(function()
           for _, a in ipairs(toAssign) do
-            if a.isNote then mm:assignNote(a.loc, a.update)
-            else             mm:assignCC(a.loc,   a.update)
-            end
+            local newTok = mm:assign(a.evt.token, a.update)
+            if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
           end
         end)
-        -- mm:modify reindexes; step-2/3 column-event clones keep their
-        -- pre-modify loc, but post-modify mm may have sorted them into
-        -- different positions. Re-stamp by post-modify identity so the
-        -- column events stay resolvable through notesByLoc/ccsByLoc and
-        -- subsequent tm:assignEvent routes to the right mm event. Raw
-        -- MIDI notes carry no uuid until metadata is stamped; fall back
-        -- to the (chan, pitch, ppq) / (chan, evType, cc|pitch, ppq)
-        -- tuples mm enforces as unique under its sort.
-        local locByKey = {}
-        for loc, n in mm:notes() do locByKey[slotKey(n)] = loc end
-        for loc, c in mm:ccs()   do locByKey[slotKey(c)] = loc end
-        forEachEvent(function(t, e, chan, isNote, ccNum)
-          local loc = isNote
-            and locByKey[slotKey(e, chan)]
-            or  locByKey[slotKey(e, chan, t, ccNum)]
-          if loc then e.loc = loc end
-        end)
+        -- Tokens are stable across mm reindex by construction; the slotKey
+        -- reseat that loc-form rebuilds needed is not required here. The
+        -- end-of-rebuild reload() refreshes byToken, and column events
+        -- already carry their post-mutation tokens.
         for chan in pairs(pbTouched) do
           sortByPPQ(channels[chan].columns.pb.events)
         end

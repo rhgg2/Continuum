@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1116  sha=3d00a83  mode=chunk
+@module midiManager  src=midiManager.lua  loc=1156  sha=c3b5daa  mode=chunk
 @deps take
 
 # Invariants & contracts
@@ -85,53 +85,62 @@
       @contract  modify disables MIDI sort, runs fn under lock, flushes pending sidecar deletes, re-sorts, then reloads (fires callbacks)
   @fn flushPendingSysexDeletes()  @ 667
   -- Notes
+  @fn cloneOut(evt)  @ 703
   -- CCs
-  @fn reconstruct(tbl)  @ 826
+  @fn reconstruct(tbl)  @ 827
+  -- Unified token-keyed surface
   -- Take data
-  @fn retractEot(buf, targetPpq)  @ 1040
+  @fn retractEot(buf, targetPpq)  @ 1080
       -- Assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 
 # Public API (mm:*)
   @api mm:load(newTake)  @ 272
   @api mm:reload()  @ 652
   @api mm:modify(fn)  @ 686
-  @api mm:getNote(loc)  @ 703
-  @api mm:notes()  @ 708
-  @api mm:deleteNote(loc)  @ 720
+  @api mm:getNote(loc)  @ 710
+  @api mm:notes()  @ 714
+  @api mm:deleteNote(loc)  @ 724
       @contract  deleteNote relies on REAPER to cascade-delete the associated notation event; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
-  @api mm:assignNote(loc, t)  @ 732
+  @api mm:assignNote(loc, t)  @ 736
       @contract  assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
-  @api mm:addNote(t)  @ 766
+  @api mm:addNote(t)  @ 770
       @contract  addNote always allocates a uuid and inserts a notation event (unconditional, unlike addCC)
-  @api mm:getCC(loc)  @ 796
-  @api mm:ccs()  @ 801
-  @api mm:deleteCC(loc)  @ 812
-  @api mm:assignCC(loc, t)  @ 850
+  @api mm:getCC(loc)  @ 800
+  @api mm:ccs()  @ 804
+  @api mm:deleteCC(loc)  @ 813
+  @api mm:assignCC(loc, t)  @ 851
       @contract  assignCC metadata-only carve-out: if t touches none of the structural CC fields AND the cc already has a uuid, skips the lock
       @contract  first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
-  @api mm:addCC(t)  @ 915
+  @api mm:addCC(t)  @ 916
       @contract  addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
-  @api mm:byUuid(uuid)  @ 967
-      @contract  returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. loc is the lua position stamped at compact / addNote / addCC and is excluded from sidecar persistence.
-  @api mm:tokenOf(evt)  @ 974
+  @api mm:byUuid(uuid)  @ 968
+      @contract  returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. The clone carries .loc and .token; loc is excluded from sidecar persistence.
+  @api mm:tokenOf(evt)  @ 975
       @contract  token is opaque and stable across reload as long as the event's identity fields (evType, chan, ppq, and pitch|cc as relevant) don't change; mutating any of them retires the old token and issues a new one
-  @api mm:byToken(token)  @ 980
-      @contract  returns (loc, evt-clone, kind) for the live event with this token; nil if absent. Mirrors mm:byUuid; works on every event (including plain ccs with no uuid).
-  @api mm:take()  @ 988
-  @api mm:interpolate(A, B, ppq)  @ 993
+  @api mm:byToken(token)  @ 981
+      @contract  returns (loc, evt-clone, kind) for the live event with this token; nil if absent. Mirrors mm:byUuid; works on every event (including plain ccs with no uuid). The clone carries .token equal to the input.
+  @api mm:add(t)  @ 990
+      @contract  dispatches on t.evType; 'note' → addNote, anything else → addCC. Returns the token of the just-added event, or nil if t is malformed. Inherits the lock requirement of the inner call.
+  @api mm:assign(token, t)  @ 997
+      @contract  dispatches on the resolved event's evType. Returns the token of the (possibly mutated) event — equal to the input token iff t touched no identity field. Caller re-keys when they differ. Inherits the inner method's metadata-only lockless carve-out.
+  @api mm:delete(token)  @ 1005
+  @api mm:events()  @ 1013
+      @contract  yields (token, evt-clone) over all live events, notes then ccs. Token is the addressing primitive of the unified surface; the clone also carries .token. loc is intentionally absent.
+  @api mm:take()  @ 1028
+  @api mm:interpolate(A, B, ppq)  @ 1033
       -- REAPER convention: shape on A governs the curve from A to next.
-  @api mm:resolution()  @ 1001
-  @api mm:length()  @ 1007
+  @api mm:resolution()  @ 1041
+  @api mm:length()  @ 1047
       -- Source length. setLength truncates the source's EOT explicitly to keep this in sync after a shrink.
-  @api mm:name()  @ 1014
-  @api mm:setName(name)  @ 1020
-  @api mm:loadRegions()  @ 1026
+  @api mm:name()  @ 1054
+  @api mm:setName(name)  @ 1060
+  @api mm:loadRegions()  @ 1066
       @contract  take-level region blob persisted under P_EXT:ctm_regions; serialised via util.serialise. Returns { regions={}, idCtr=0 } when no take or no stored blob — callers always get a well-formed shape.
-  @api mm:saveRegions(blob)  @ 1033
-  @api mm:setLength(qn)  @ 1060
+  @api mm:saveRegions(blob)  @ 1073
+  @api mm:setLength(qn)  @ 1100
       -- MIDI_SetItemExtents leaves the source's EOT stale on contract; retract it explicitly so the source actually shrinks.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1074
+  @api mm:timeSigs()  @ 1114
 
 # Signals emitted (via util.installHooks)
   @emits takeSwapped   -- nil; only when load received a different take

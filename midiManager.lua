@@ -700,9 +700,15 @@ end
 
 ----- Notes
 
+local function cloneOut(evt)
+  if not evt then return nil end
+  local c = util.clone(evt, INTERNALS)
+  c.token = tokenOf(evt)
+  return c
+end
+
 function mm:getNote(loc)
-  local note = notes[loc]
-  return util.clone(note, INTERNALS)
+  return cloneOut(notes[loc])
 end
 
 function mm:notes()
@@ -710,9 +716,7 @@ function mm:notes()
   return function()
     i = i + 1
     local note = notes[i]
-    if note then
-      return i, util.clone(note, INTERNALS)
-    end
+    if note then return i, cloneOut(note) end
   end
 end
 
@@ -794,8 +798,7 @@ end
 ----- CCs
 
 function mm:getCC(loc)
-  local msg = ccs[loc]
-  return util.clone(msg, INTERNALS)
+  return cloneOut(ccs[loc])
 end
 
 function mm:ccs()
@@ -803,9 +806,7 @@ function mm:ccs()
   return function()
     i = i + 1
     local msg = ccs[i]
-    if msg then
-      return i, util.clone(msg, INTERNALS)
-    end
+    if msg then return i, cloneOut(msg) end
   end
 end
 
@@ -963,11 +964,11 @@ function mm:addCC(t)
 end
 
 
---contract: returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. loc is the lua position stamped at compact / addNote / addCC and is excluded from sidecar persistence.
+--contract: returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. The clone carries .loc and .token; loc is excluded from sidecar persistence.
 function mm:byUuid(uuid)
   local evt = eventsByUuid[uuid]
   if not evt then return nil end
-  return evt.loc, util.clone(evt, INTERNALS), (evt.evType == 'note') and 'note' or 'cc'
+  return evt.loc, cloneOut(evt), (evt.evType == 'note') and 'note' or 'cc'
 end
 
 --contract: token is opaque and stable across reload as long as the event's identity fields (evType, chan, ppq, and pitch|cc as relevant) don't change; mutating any of them retires the old token and issues a new one
@@ -976,11 +977,50 @@ function mm:tokenOf(evt)
   return tokenOf(evt)
 end
 
---contract: returns (loc, evt-clone, kind) for the live event with this token; nil if absent. Mirrors mm:byUuid; works on every event (including plain ccs with no uuid).
+--contract: returns (loc, evt-clone, kind) for the live event with this token; nil if absent. Mirrors mm:byUuid; works on every event (including plain ccs with no uuid). The clone carries .token equal to the input.
 function mm:byToken(token)
   local evt = tokenIdx[token]
   if not evt then return nil end
-  return evt.loc, util.clone(evt, INTERNALS), (evt.evType == 'note') and 'note' or 'cc'
+  return evt.loc, cloneOut(evt), (evt.evType == 'note') and 'note' or 'cc'
+end
+
+----- Unified token-keyed surface
+
+--contract: dispatches on t.evType; 'note' → addNote, anything else → addCC. Returns the token of the just-added event, or nil if t is malformed. Inherits the lock requirement of the inner call.
+function mm:add(t)
+  if not t or not t.evType then return nil end
+  if t.evType == 'note' then self:addNote(t) else self:addCC(t) end
+  return tokenOf(t)
+end
+
+--contract: dispatches on the resolved event's evType. Returns the token of the (possibly mutated) event — equal to the input token iff t touched no identity field. Caller re-keys when they differ. Inherits the inner method's metadata-only lockless carve-out.
+function mm:assign(token, t)
+  local evt = tokenIdx[token]
+  if not evt then return nil end
+  if evt.evType == 'note' then self:assignNote(evt.loc, t)
+  else                         self:assignCC(evt.loc, t) end
+  return tokenOf(evt)
+end
+
+function mm:delete(token)
+  local evt = tokenIdx[token]
+  if not evt then return end
+  if evt.evType == 'note' then self:deleteNote(evt.loc)
+  else                         self:deleteCC(evt.loc) end
+end
+
+--contract: yields (token, evt-clone) over all live events, notes then ccs. Token is the addressing primitive of the unified surface; the clone also carries .token. loc is intentionally absent.
+function mm:events()
+  local i, src = 0, notes
+  return function()
+    while true do
+      i = i + 1
+      local e = src[i]
+      if e then return tokenOf(e), cloneOut(e) end
+      if src == ccs then return end
+      src, i = ccs, 0
+    end
+  end
 end
 
 ----- Take data

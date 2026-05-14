@@ -1095,7 +1095,7 @@ do
     local groups = {}
     for _, col in ipairs(grid.cols) do
       local locs = {}
-      for _, e in ipairs(col.events) do locs[e.loc] = e end
+      for _, e in ipairs(col.events) do locs[e.token] = e end
       util.add(groups, { col = col, locs = locs })
     end
     return groups
