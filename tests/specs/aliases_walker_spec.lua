@@ -178,11 +178,11 @@ return {
       }
       t.eq(#byParent(h.fm:dump().notes, 1), 0)
 
-      local blockerLoc
-      for loc, n in h.fm:notes() do
-        if not n.children and n.ppq == 480 then blockerLoc = loc end
+      local blockerToken
+      for _, n in h.fm:notes() do
+        if not n.children and n.ppq == 480 then blockerToken = n.token end
       end
-      h.fm:modify(function() h.fm:deleteNote(blockerLoc) end)
+      h.fm:modify(function() h.fm:delete(blockerToken) end)
 
       local kids = byParent(h.fm:dump().notes, 1)
       t.eq(#kids, 1)

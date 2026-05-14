@@ -169,9 +169,9 @@ return {
       local kids = aliasChildren(h.fm:dump().notes, 1)
       t.eq(kids[1].endppq, 8*R, 'pre-delete: clipped to row 8')
 
-      local victimLoc
-      for loc, n in h.fm:notes() do if n.uuid == 2 then victimLoc = loc end end
-      h.fm:modify(function() h.fm:deleteNote(victimLoc) end)
+      local victimToken
+      for _, n in h.fm:notes() do if n.uuid == 2 then victimToken = n.token end end
+      h.fm:modify(function() h.fm:delete(victimToken) end)
       h.tm:rebuild()
 
       kids = aliasChildren(h.fm:dump().notes, 1)

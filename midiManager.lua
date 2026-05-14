@@ -707,7 +707,7 @@ local function cloneOut(evt)
   return c
 end
 
-function mm:getNote(loc)
+local function getNote(loc)
   return cloneOut(notes[loc])
 end
 
@@ -721,7 +721,7 @@ function mm:notes()
 end
 
 --contract: deleteNote relies on REAPER to cascade-delete the associated notation event; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
-function mm:deleteNote(loc)
+local function deleteNote(loc)
   if not (take and checkLock()) then return end
 
   local note = notes[loc]
@@ -733,7 +733,7 @@ function mm:deleteNote(loc)
 end
 
 --contract: assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
-function mm:assignNote(loc, t)
+local function assignNote(loc, t)
   if not take then return end
 
   if not (t.ppq or t.endppq or t.pitch or t.vel or t.chan or t.muted ~= nil) then
@@ -767,7 +767,7 @@ function mm:assignNote(loc, t)
 end
 
 --contract: addNote always allocates a uuid and inserts a notation event (unconditional, unlike addCC)
-function mm:addNote(t)
+local function addNote(t)
   if not (take and checkLock()) then return end
 
   if t.ppq == nil or t.endppq == nil or t.chan == nil or t.pitch == nil or t.vel == nil then
@@ -797,7 +797,7 @@ end
 
 ----- CCs
 
-function mm:getCC(loc)
+local function getCC(loc)
   return cloneOut(ccs[loc])
 end
 
@@ -810,7 +810,7 @@ function mm:ccs()
   end
 end
 
-function mm:deleteCC(loc)
+local function deleteCC(loc)
   if not (take and checkLock()) then return end
 
   local msg = ccs[loc]
@@ -848,7 +848,7 @@ end
 
 --contract: assignCC metadata-only carve-out: if t touches none of the structural CC fields AND the cc already has a uuid, skips the lock
 --contract: first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
-function mm:assignCC(loc, t)
+local function assignCC(loc, t)
   if not take then return end
 
   local msg = ccs[loc]
@@ -913,7 +913,7 @@ function mm:assignCC(loc, t)
 end
 
 --contract: addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
-function mm:addCC(t)
+local function addCC(t)
   if not (take and checkLock()) then return end
 
   if t.evType == nil then t.evType = 'cc' end
@@ -989,7 +989,7 @@ end
 --contract: dispatches on t.evType; 'note' → addNote, anything else → addCC. Returns the token of the just-added event, or nil if t is malformed. Inherits the lock requirement of the inner call.
 function mm:add(t)
   if not t or not t.evType then return nil end
-  if t.evType == 'note' then self:addNote(t) else self:addCC(t) end
+  if t.evType == 'note' then addNote(t) else addCC(t) end
   return tokenOf(t)
 end
 
@@ -997,16 +997,16 @@ end
 function mm:assign(token, t)
   local evt = tokenIdx[token]
   if not evt then return nil end
-  if evt.evType == 'note' then self:assignNote(evt.loc, t)
-  else                         self:assignCC(evt.loc, t) end
+  if evt.evType == 'note' then assignNote(evt.loc, t)
+  else                         assignCC(evt.loc, t) end
   return tokenOf(evt)
 end
 
 function mm:delete(token)
   local evt = tokenIdx[token]
   if not evt then return end
-  if evt.evType == 'note' then self:deleteNote(evt.loc)
-  else                         self:deleteCC(evt.loc) end
+  if evt.evType == 'note' then deleteNote(evt.loc)
+  else                         deleteCC(evt.loc) end
 end
 
 --contract: yields (token, evt-clone) over all live events, notes then ccs. Token is the addressing primitive of the unified surface; the clone also carries .token. loc is intentionally absent.

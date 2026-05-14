@@ -12,9 +12,9 @@ return {
     run = function(harness)
       local h = harness.mk()
       local ok, err = pcall(function()
-        h.fm:addNote{ ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 }
+        h.fm:add{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 }
       end)
-      t.falsy(ok, 'addNote without modify should fail')
+      t.falsy(ok, 'add without modify should fail')
       t.truthy(tostring(err):find('modify'), 'error should mention modify(), got: ' .. tostring(err))
     end,
   },
@@ -29,7 +29,7 @@ return {
       t.eq(#h.tm:getChannel(1).columns.notes[1].events, 0, 'lane 1 empty initially')
 
       h.fm:modify(function()
-        h.fm:addNote{ ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 }
+        h.fm:add{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 }
       end)
 
       -- tm only sees this if the mm callback fired AND tm is attached.
@@ -41,15 +41,16 @@ return {
     -- If fake mm returned internal references instead of clones, mutating
     -- a returned note would silently corrupt state and half the invariants
     -- we test would be meaningless.
-    name = 'getNote returns a shallow clone — mutation does not leak',
+    name = 'byToken returns a shallow clone — mutation does not leak',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
-      local n1 = h.fm:getNote(1)
+      local tk = (h.fm:dump().notes[1] or {}).token
+      local _, n1 = h.fm:byToken(tk)
       n1.pitch = 999
       n1.detune = 12345
-      local n2 = h.fm:getNote(1)
+      local _, n2 = h.fm:byToken(tk)
       t.eq(n2.pitch, 60, 'pitch untouched by caller mutation')
       t.truthy(n2.detune ~= 12345, 'detune untouched by caller mutation')
     end,

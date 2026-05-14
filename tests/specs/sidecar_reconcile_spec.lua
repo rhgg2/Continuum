@@ -15,6 +15,14 @@ local realMM = require('realMidiManager')()
 
 local CHANMSG = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }
 
+local function ccAt(mm, i)
+  local n = 0
+  for _, c in mm:ccs() do
+    n = n + 1
+    if n == i then return c end
+  end
+end
+
 local function freshTake()
   local fakeReaper = require('fakeReaper').new()
   _G.reaper = fakeReaper
@@ -92,7 +100,7 @@ return {
       })
       local mm, _, evts = load(take)
       t.deepEq(evts, {})
-      t.eq(mm:getCC(1).uuid, 1)
+      t.eq(ccAt(mm, 1).uuid, 1)
     end,
   },
 
@@ -106,7 +114,7 @@ return {
       })
       local mm, _, evts = load(take)
       t.deepEq(evts, {})
-      t.eq(mm:getCC(1).uuid, 9)
+      t.eq(ccAt(mm, 1).uuid, 9)
     end,
   },
 
@@ -120,7 +128,7 @@ return {
       })
       local mm, _, evts = load(take)
       t.deepEq(evts, {})
-      t.eq(mm:getCC(1).uuid, 2)
+      t.eq(ccAt(mm, 1).uuid, 2)
     end,
   },
 
@@ -168,7 +176,7 @@ return {
       t.eq(e.cc, 7)
       t.eq(e.oldVal, 64)
       t.eq(e.newVal, 80)
-      t.eq(mm:getCC(1).uuid, 1)
+      t.eq(ccAt(mm, 1).uuid, 1)
     end,
   },
 
@@ -344,7 +352,7 @@ return {
       t.eq(e.kind, 'guessedRebound')
       t.eq(e.ppq, 130)
       t.eq(e.cc, 7)
-      t.eq(mm:getCC(1).uuid, 1)
+      t.eq(ccAt(mm, 1).uuid, 1)
     end,
   },
 
@@ -415,7 +423,7 @@ return {
       local mm, _, evts = load(take)
       t.eq(#evts, 1)
       t.eq(evts[1].kind, 'orphaned')
-      t.eq(mm:getCC(1).uuid, nil)
+      t.eq(ccAt(mm, 1).uuid, nil)
     end,
   },
 
@@ -430,7 +438,7 @@ return {
       local mm, _, evts = load(take)
       t.eq(#evts, 1)
       t.eq(evts[1].kind, 'orphaned')
-      t.eq(mm:getCC(1).uuid, nil)
+      t.eq(ccAt(mm, 1).uuid, nil)
     end,
   },
 
@@ -458,7 +466,7 @@ return {
       })
       local mm, _, evts = load(take)
       t.deepEq(evts, {})
-      t.eq(mm:getCC(1).uuid, nil)
+      t.eq(ccAt(mm, 1).uuid, nil)
     end,
   },
 

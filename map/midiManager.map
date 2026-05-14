@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1156  sha=c3b5daa  mode=chunk
+@module midiManager  src=midiManager.lua  loc=1156  sha=c7a293c  mode=chunk
 @deps take
 
 # Invariants & contracts
@@ -86,8 +86,22 @@
   @fn flushPendingSysexDeletes()  @ 667
   -- Notes
   @fn cloneOut(evt)  @ 703
+  @fn getNote(loc)  @ 710
+  @fn deleteNote(loc)  @ 724
+      @contract  deleteNote relies on REAPER to cascade-delete the associated notation event; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
+  @fn assignNote(loc, t)  @ 736
+      @contract  assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
+  @fn addNote(t)  @ 770
+      @contract  addNote always allocates a uuid and inserts a notation event (unconditional, unlike addCC)
   -- CCs
+  @fn getCC(loc)  @ 800
+  @fn deleteCC(loc)  @ 813
   @fn reconstruct(tbl)  @ 827
+  @fn assignCC(loc, t)  @ 851
+      @contract  assignCC metadata-only carve-out: if t touches none of the structural CC fields AND the cc already has a uuid, skips the lock
+      @contract  first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
+  @fn addCC(t)  @ 916
+      @contract  addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
   -- Unified token-keyed surface
   -- Take data
   @fn retractEot(buf, targetPpq)  @ 1080
@@ -97,22 +111,8 @@
   @api mm:load(newTake)  @ 272
   @api mm:reload()  @ 652
   @api mm:modify(fn)  @ 686
-  @api mm:getNote(loc)  @ 710
   @api mm:notes()  @ 714
-  @api mm:deleteNote(loc)  @ 724
-      @contract  deleteNote relies on REAPER to cascade-delete the associated notation event; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
-  @api mm:assignNote(loc, t)  @ 736
-      @contract  assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
-  @api mm:addNote(t)  @ 770
-      @contract  addNote always allocates a uuid and inserts a notation event (unconditional, unlike addCC)
-  @api mm:getCC(loc)  @ 800
   @api mm:ccs()  @ 804
-  @api mm:deleteCC(loc)  @ 813
-  @api mm:assignCC(loc, t)  @ 851
-      @contract  assignCC metadata-only carve-out: if t touches none of the structural CC fields AND the cc already has a uuid, skips the lock
-      @contract  first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
-  @api mm:addCC(t)  @ 916
-      @contract  addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
   @api mm:byUuid(uuid)  @ 968
       @contract  returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. The clone carries .loc and .token; loc is excluded from sidecar persistence.
   @api mm:tokenOf(evt)  @ 975

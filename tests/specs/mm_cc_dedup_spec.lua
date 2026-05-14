@@ -374,8 +374,8 @@ return {
       })
       local mm = loadWithCapture(take)
       mm:modify(function()
-        for loc, c in mm:ccs() do
-          if c.cc == 7 then mm:assignCC(loc, { val = 99 }) end
+        for _, c in mm:ccs() do
+          if c.cc == 7 then mm:assign(c.token, { val = 99 }) end
         end
       end)
 

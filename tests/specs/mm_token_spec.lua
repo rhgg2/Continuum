@@ -113,7 +113,7 @@ return {
       local _, note = h.fm:notes()()
       local oldTok = h.fm:tokenOf(note)
 
-      h.fm:modify(function() h.fm:assignNote(note.loc, { ppq = 480 }) end)
+      h.fm:modify(function() h.fm:assign(oldTok, { ppq = 480 }) end)
 
       t.eq(h.fm:byToken(oldTok), nil, 'old (ppq=0) token no longer resolves')
       local _, moved = h.fm:notes()()

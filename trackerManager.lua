@@ -1001,11 +1001,11 @@ function tm:tileLength(newPpq)
       local delta = k * oldPpq
       for _, src in ipairs(sourceNotes) do
         local c = util.clone(src)
-        if shift(c, delta, true) then mm:addNote(c) end
+        if shift(c, delta, true) then mm:add(c) end
       end
       for _, src in ipairs(sourceCCs) do
         local c = util.clone(src)
-        if shift(c, delta, false) then mm:addCC(c) end
+        if shift(c, delta, false) then mm:add(c) end
       end
     end
   end)

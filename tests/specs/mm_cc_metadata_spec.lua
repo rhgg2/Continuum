@@ -10,13 +10,21 @@ local util = require('util')
 -- metadata path. To pin mm's lock-on-plain-cc contract we need a cc that
 -- never went through tm — so a couple of tests below build a bare fakeMM.
 
+local function ccAt(mm, i)
+  local n = 0
+  for _, c in mm:ccs() do
+    n = n + 1
+    if n == i then return c end
+  end
+end
+
 return {
   {
-    name = 'metadata-only assignCC on a plain (un-uuid\'d) cc requires the lock',
+    name = 'metadata-only assign on a plain (un-uuid\'d) cc requires the lock',
     run = function()
       local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
       fm:seed{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
-      local ok, err = pcall(function() fm:assignCC(1, { foo = 1 }) end)
+      local ok, err = pcall(function() fm:assign(ccAt(fm, 1).token, { foo = 1 }) end)
       t.falsy(ok, 'expected an assertion')
       t.truthy(tostring(err):find('modify'), 'error mentions modify lock')
     end,
@@ -28,8 +36,8 @@ return {
       local h = harness.mk{
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
-      h.fm:modify(function() h.fm:assignCC(1, { foo = 'hello' }) end)
-      local cc = h.fm:getCC(1)
+      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).token, { foo = 'hello' }) end)
+      local cc = ccAt(h.fm, 1)
       t.truthy(cc.uuid, 'uuid allocated')
       t.eq(cc.foo, 'hello')
     end,
@@ -41,10 +49,10 @@ return {
       local h = harness.mk{
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
-      h.fm:modify(function() h.fm:assignCC(1, { foo = 1 }) end)
+      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).token, { foo = 1 }) end)
       -- No modify wrapper this time — must not raise.
-      h.fm:assignCC(1, { foo = 2 })
-      t.eq(h.fm:getCC(1).foo, 2)
+      h.fm:assign(ccAt(h.fm, 1).token, { foo = 2 })
+      t.eq(ccAt(h.fm, 1).foo, 2)
     end,
   },
 
@@ -54,8 +62,8 @@ return {
       local h = harness.mk{
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
-      h.fm:modify(function() h.fm:assignCC(1, { val = 100, label = 'tag' }) end)
-      local cc = h.fm:getCC(1)
+      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).token, { val = 100, label = 'tag' }) end)
+      local cc = ccAt(h.fm, 1)
       t.eq(cc.val, 100)
       t.eq(cc.label, 'tag')
       t.truthy(cc.uuid, 'uuid stamped on the same write')
@@ -68,8 +76,8 @@ return {
       -- Bare mm (no tm), to keep the cc plain — see header note.
       local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
       fm:seed{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
-      fm:modify(function() fm:assignCC(1, { val = 100 }) end)
-      t.eq(fm:getCC(1).uuid, nil, 'no metadata, no uuid (sidecar-on-touch)')
+      fm:modify(function() fm:assign(ccAt(fm, 1).token, { val = 100 }) end)
+      t.eq(ccAt(fm, 1).uuid, nil, 'no metadata, no uuid (sidecar-on-touch)')
     end,
   },
 
@@ -85,10 +93,10 @@ return {
         },
       }
       h.fm:modify(function()
-        h.fm:assignCC(1, { foo = 1 })
-        h.fm:assignCC(2, { foo = 2 })
+        h.fm:assign(ccAt(h.fm, 1).token, { foo = 1 })
+        h.fm:assign(ccAt(h.fm, 2).token, { foo = 2 })
       end)
-      local u1, u2 = h.fm:getCC(1).uuid, h.fm:getCC(2).uuid
+      local u1, u2 = ccAt(h.fm, 1).uuid, ccAt(h.fm, 2).uuid
       t.truthy(u1 and u2, 'both got uuids')
       t.truthy(u1 ~= u2, 'and they differ')
     end,
@@ -103,23 +111,24 @@ return {
         },
       }
       -- Lockless carve-out path (uuid present, metadata-only)
-      h.fm:assignCC(1, { foo = 'new' })
-      local cc = h.fm:getCC(1)
+      h.fm:assign(ccAt(h.fm, 1).token, { foo = 'new' })
+      local cc = ccAt(h.fm, 1)
       t.eq(cc.uuid, 100, 'pre-seeded uuid retained')
       t.eq(cc.foo, 'new')
     end,
   },
 
   {
-    name = 'deleteCC removes both event and uuid identity',
+    name = 'delete removes both event and uuid identity',
     run = function(harness)
       local h = harness.mk{
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
-      h.fm:modify(function() h.fm:assignCC(1, { foo = 'x' }) end)
-      t.truthy(h.fm:getCC(1).uuid)
-      h.fm:modify(function() h.fm:deleteCC(1) end)
-      t.eq(h.fm:getCC(1), nil, 'cc gone')
+      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).token, { foo = 'x' }) end)
+      t.truthy(ccAt(h.fm, 1).uuid)
+      local tk = ccAt(h.fm, 1).token
+      h.fm:modify(function() h.fm:delete(tk) end)
+      t.eq(ccAt(h.fm, 1), nil, 'cc gone')
     end,
   },
 
@@ -130,8 +139,8 @@ return {
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64,
                            uuid = 7, foo = 'present' } } },
       }
-      h.fm:assignCC(1, { foo = util.REMOVE })
-      t.eq(h.fm:getCC(1).foo, nil)
+      h.fm:assign(ccAt(h.fm, 1).token, { foo = util.REMOVE })
+      t.eq(ccAt(h.fm, 1).foo, nil)
     end,
   },
 }

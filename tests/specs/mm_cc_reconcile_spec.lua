@@ -12,6 +12,14 @@ local realMM = require('realMidiManager')()
 
 local CHANMSG = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }
 
+local function ccAt(mm, i)
+  local n = 0
+  for _, c in mm:ccs() do
+    n = n + 1
+    if n == i then return c end
+  end
+end
+
 -- Build a fresh take + reaper. Returns (take, reaper).
 local function freshTake()
   local fakeReaper = require('fakeReaper').new()
@@ -113,7 +121,7 @@ return {
       })
       local mm, captured = loadWithCapture(take)
       t.eq(captured.ccsReconciled, nil, 'no signal on tier-1 silent bind')
-      local cc = mm:getCC(1)
+      local cc = ccAt(mm, 1)
       t.eq(cc.uuid, 1, 'cc bound to sidecar uuid')
       t.eq(cc.foo, 'bar', 'metadata merged from ctm_<uuid>')
     end,
@@ -134,7 +142,7 @@ return {
       local e = captured.ccsReconciled[1]
       t.eq(e.kind, 'valueRebound')
       t.eq(e.uuid, 7); t.eq(e.oldVal, 64); t.eq(e.newVal, 80)
-      t.eq(mm:getCC(1).label, 'kept', 'metadata preserved across val drift')
+      t.eq(ccAt(mm, 1).label, 'kept', 'metadata preserved across val drift')
 
       -- Reload should now be silent (sidecar body matches cc).
       local _, again = loadWithCapture(take)
@@ -211,7 +219,7 @@ return {
       t.eq(#captured.ccsReconciled, 1)
       t.eq(captured.ccsReconciled[1].kind, 'guessedRebound')
       t.eq(captured.ccsReconciled[1].ppq, 130)
-      t.eq(mm:getCC(1).keep, true)
+      t.eq(ccAt(mm, 1).keep, true)
     end,
   },
 
@@ -256,14 +264,14 @@ return {
         },
       })
       local mm = loadWithCapture(take)
-      local cc = mm:getCC(1)
+      local cc = ccAt(mm, 1)
       t.eq(cc.uuid, 2)
       t.eq(cc.kept, true)
 
       -- Structural assignCC rewrites the sidecar via cc.uuidIdx. If that
       -- idx is stale (failure to fix up after orphan deletion), this would
       -- mutate some unrelated sysex or fail.
-      mm:modify(function() mm:assignCC(1, { val = 100 }) end)
+      mm:modify(function() mm:assign(ccAt(mm, 1).token, { val = 100 }) end)
       local m = reaper:dumpMidi(take)
       t.eq(#m.texts, 1, 'one sidecar survives')
       local decoded = t.decodeSidecar(m.texts[1].msg)

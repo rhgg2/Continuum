@@ -417,9 +417,9 @@ return {
       h.cmgr:invoke('toggleAliasMode')
       h.cmgr:invoke('copy')
 
-      local rootLoc
-      for loc, n in h.fm:notes() do if n.uuid == 1 then rootLoc = loc end end
-      h.fm:modify(function() h.fm:assignNote(rootLoc, { pitch = 64 }) end)
+      local rootToken
+      for _, n in h.fm:notes() do if n.uuid == 1 then rootToken = n.token end end
+      h.fm:modify(function() h.fm:assign(rootToken, { pitch = 64 }) end)
 
       h.ec:setPos(4, 1, 1)
       h.cmgr:invoke('paste')
@@ -461,10 +461,10 @@ return {
       h.cmgr:invoke('copy')
 
       -- Edit the leaf: '1' now resolves at row 2 instead of row 1.
-      local rootLoc
-      for loc, n in h.fm:notes() do if n.uuid == 1 then rootLoc = loc end end
+      local rootToken
+      for _, n in h.fm:notes() do if n.uuid == 1 then rootToken = n.token end end
       h.fm:modify(function()
-        h.fm:assignNote(rootLoc, { children = {
+        h.fm:assign(rootToken, { children = {
           { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
         } })
       end)
@@ -505,10 +505,10 @@ return {
       h.cmgr:invoke('toggleAliasMode')
       h.cmgr:invoke('copy')
 
-      local rootLoc
-      for loc, n in h.fm:notes() do if n.uuid == 1 then rootLoc = loc end end
+      local rootToken
+      for _, n in h.fm:notes() do if n.uuid == 1 then rootToken = n.token end end
       h.fm:modify(function()
-        h.fm:assignNote(rootLoc, { children = {
+        h.fm:assign(rootToken, { children = {
           { id = '1', xform = { ppqL = {{'add', 480}} }, children = {
             { id = '2', xform = { ppqL = {{'add', 240}} }, children = {} },
           } },
@@ -576,11 +576,11 @@ return {
       h.cmgr:invoke('toggleAliasMode')
       h.cmgr:invoke('copy')
 
-      local rootLoc
-      for loc, n in h.fm:notes() do
-        if n.uuid == 1 then rootLoc = loc end
+      local rootToken
+      for _, n in h.fm:notes() do
+        if n.uuid == 1 then rootToken = n.token end
       end
-      h.fm:modify(function() h.fm:deleteNote(rootLoc) end)
+      h.fm:modify(function() h.fm:delete(rootToken) end)
 
       h.ec:setPos(4, 1, 1)
       h.cmgr:invoke('paste')
@@ -615,11 +615,11 @@ return {
       h.cmgr:invoke('toggleAliasMode')
       h.cmgr:invoke('copy')
 
-      local rootLoc
-      for loc, n in h.fm:notes() do
-        if n.uuid == 1 then rootLoc = loc end
+      local rootToken
+      for _, n in h.fm:notes() do
+        if n.uuid == 1 then rootToken = n.token end
       end
-      h.fm:modify(function() h.fm:assignNote(rootLoc, { children = {} }) end)
+      h.fm:modify(function() h.fm:assign(rootToken, { children = {} }) end)
 
       h.ec:setPos(6, 1, 1)
       h.cmgr:invoke('paste')
@@ -794,9 +794,9 @@ return {
       h.cmgr:invoke('toggleAliasMode')
       h.cmgr:invoke('copy')
 
-      local rootLoc
-      for loc, n in h.fm:notes() do if n.uuid == 1 then rootLoc = loc end end
-      h.fm:modify(function() h.fm:deleteNote(rootLoc) end)
+      local rootToken
+      for _, n in h.fm:notes() do if n.uuid == 1 then rootToken = n.token end end
+      h.fm:modify(function() h.fm:delete(rootToken) end)
 
       h.ec:setPos(8, 1, 1)
       h.cmgr:invoke('paste')
@@ -842,10 +842,10 @@ return {
       h.cmgr:invoke('toggleAliasMode')
       h.cmgr:invoke('copy')
 
-      local rootLoc
-      for loc, n in h.fm:notes() do if n.uuid == 1 then rootLoc = loc end end
+      local rootToken
+      for _, n in h.fm:notes() do if n.uuid == 1 then rootToken = n.token end end
       h.fm:modify(function()
-        h.fm:assignNote(rootLoc, {
+        h.fm:assign(rootToken, {
           children = {
             { id = '1', xform = { ppqL = {{'add', 480}} }, children = {} },
           },

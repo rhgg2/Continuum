@@ -87,16 +87,16 @@ return {
       local mm = realMM(nil)
       mm:load(take)
 
-      -- Find locs by ppq.
-      local locByppq = {}
-      for loc, c in mm:ccs() do locByppq[c.ppq] = loc end
-      local locA, locE, locB = locByppq[50], locByppq[75], locByppq[100]
+      -- Find tokens by ppq.
+      local tokByppq = {}
+      for _, c in mm:ccs() do tokByppq[c.ppq] = c.token end
+      local tokA, tokE, tokB = tokByppq[50], tokByppq[75], tokByppq[100]
 
       mm:modify(function()
-        mm:assignCC(locA, { tag = 'fromA' })  -- distinguishable per-cc tag
-        mm:assignCC(locE, { tag = 'fromE' })
-        mm:deleteCC(locB)
-        mm:deleteCC(locA)
+        mm:assign(tokA, { tag = 'fromA' })  -- distinguishable per-cc tag
+        mm:assign(tokE, { tag = 'fromE' })
+        mm:delete(tokB)
+        mm:delete(tokA)
       end)
 
       -- Find the surviving cc_E (ppq=75, val=20) and verify its sidecar/metadata

@@ -128,7 +128,8 @@ return {
       -- Mark stale, then nudge raw out of band. fm:modify fires reload →
       -- tm:rebuild, which sees stale=true and reseats raw from ppqL=120.
       h.tm:markSwingStale(1)
-      h.fm:modify(function() h.fm:assignNote(1, { ppq = 100 }) end)
+      local _, seed1 = h.fm:notes()()
+      h.fm:modify(function() h.fm:assign(seed1.token, { ppq = 100 }) end)
 
       local n = noteByPitch(h.fm:dump(), 60)
       t.eq(n.ppq,    139, 'raw reseated from ppqL under c58')
@@ -137,7 +138,8 @@ return {
 
       -- Flag is consumed: a second nudge without re-marking is treated as
       -- external edit (disagreement), recomputing ppqL from the new raw.
-      h.fm:modify(function() h.fm:assignNote(1, { ppq = 100 }) end)
+      local _, seed2 = h.fm:notes()()
+      h.fm:modify(function() h.fm:assign(seed2.token, { ppq = 100 }) end)
       local n2 = noteByPitch(h.fm:dump(), 60)
       t.eq(n2.ppq, 100, 'raw kept on second nudge (flag was cleared)')
       -- ppqL = toLogical_c58(100) ≠ 120; assert it changed.
@@ -164,7 +166,7 @@ return {
       }
       h.tm:markSwingStale(1)
       h.fm:modify(function()
-        for loc, _ in h.fm:ccs() do h.fm:assignCC(loc, { ppq = 100 }) end
+        for _, c in h.fm:ccs() do h.fm:assign(c.token, { ppq = 100 }) end
       end)
       t.eq(ccByCC(h.fm:dump(), 7).ppq, 139, 'cc raw reseated from ppqL')
 
@@ -193,7 +195,7 @@ return {
       }
       h.tm:markSwingStale(nil)
       h.fm:modify(function()
-        for loc, n in h.fm:notes() do h.fm:assignNote(loc, { ppq = 100 }) end
+        for _, n in h.fm:notes() do h.fm:assign(n.token, { ppq = 100 }) end
       end)
 
       local dump = h.fm:dump()
@@ -497,7 +499,8 @@ return {
           take    = { swing = 'c58' },
         },
       }
-      h.fm:modify(function() h.fm:assignNote(1, { ppq = 100 }) end)
+      local _, seedN = h.fm:notes()()
+      h.fm:modify(function() h.fm:assign(seedN.token, { ppq = 100 }) end)
       local n1 = noteByPitch(h.fm:dump(), 60)
       t.eq(n1.ppq, 100, 'external raw edit preserved by disagreement branch')
       local ppqLAfterExternal = n1.ppqL

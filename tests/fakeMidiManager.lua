@@ -149,7 +149,7 @@ function newMidiManager(opts)
     return c
   end
 
-  function mm:getNote(loc) return cloneOut(noteByLoc[loc]) end
+  local function getNote(loc) return cloneOut(noteByLoc[loc]) end
 
   function mm:notes()
     local i = 0
@@ -160,7 +160,7 @@ function newMidiManager(opts)
     end
   end
 
-  function mm:addNote(t)
+  local function addNote(t)
     assertLock()
     assert(t.ppq and t.endppq and t.chan and t.pitch and t.vel,
       'Error! Underspecified new note')
@@ -173,7 +173,7 @@ function newMidiManager(opts)
     return #noteList  -- imprecise until reindex; tm discards it
   end
 
-  function mm:deleteNote(loc)
+  local function deleteNote(loc)
     assertLock()
     local n = noteByLoc[loc]
     if not n then return end
@@ -183,7 +183,7 @@ function newMidiManager(opts)
     noteByLoc[loc] = nil
   end
 
-  function mm:assignNote(loc, t)
+  local function assignNote(loc, t)
     -- Metadata-only writes bypass the lock, matching the real mm's carve-out.
     local structural = t.ppq or t.endppq or t.pitch or t.vel or t.chan or t.muted ~= nil
     if not structural then
@@ -201,7 +201,7 @@ function newMidiManager(opts)
 
   -- CCs
 
-  function mm:getCC(loc) return cloneOut(ccByLoc[loc]) end
+  local function getCC(loc) return cloneOut(ccByLoc[loc]) end
 
   function mm:ccs()
     local i = 0
@@ -212,7 +212,7 @@ function newMidiManager(opts)
     end
   end
 
-  function mm:addCC(t)
+  local function addCC(t)
     assertLock()
     if t.evType == nil then t.evType = 'cc' end
     local valueField = (t.evType == 'pa') and 'vel' or 'val'
@@ -233,7 +233,7 @@ function newMidiManager(opts)
     return #ccList
   end
 
-  function mm:deleteCC(loc)
+  local function deleteCC(loc)
     assertLock()
     local c = ccByLoc[loc]
     if not c then return end
@@ -243,7 +243,7 @@ function newMidiManager(opts)
     ccByLoc[loc] = nil
   end
 
-  function mm:assignCC(loc, t)
+  local function assignCC(loc, t)
     local c = ccByLoc[loc]
     if not c then return end
 
@@ -301,23 +301,23 @@ function newMidiManager(opts)
 
   function mm:add(t)
     if not t or not t.evType then return nil end
-    if t.evType == 'note' then self:addNote(t) else self:addCC(t) end
+    if t.evType == 'note' then addNote(t) else addCC(t) end
     return tokenOf(t)
   end
 
   function mm:assign(token, t)
     local evt = tokenIdx[token]
     if not evt then return nil end
-    if evt.evType == 'note' then self:assignNote(evt.loc, t)
-    else                         self:assignCC(evt.loc, t) end
+    if evt.evType == 'note' then assignNote(evt.loc, t)
+    else                         assignCC(evt.loc, t) end
     return tokenOf(evt)
   end
 
   function mm:delete(token)
     local evt = tokenIdx[token]
     if not evt then return end
-    if evt.evType == 'note' then self:deleteNote(evt.loc)
-    else                         self:deleteCC(evt.loc) end
+    if evt.evType == 'note' then deleteNote(evt.loc)
+    else                         deleteCC(evt.loc) end
   end
 
   function mm:events()
