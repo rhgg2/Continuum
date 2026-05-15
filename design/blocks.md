@@ -102,7 +102,7 @@ take.regions = {
       -- template content (absent on a region with no events)
       template = {
         events = {
-          [vuid] = { col=<colKey>, ppqLocal=<int>, pitch=60, dur=480, vel=96, ... },
+          [vuid] = { col=<colKey>, ppqL=<int>, pitch=60, durL=480, vel=96, ... },
           ...
         },
         eventCtr = 7,        -- next vuid allocator (base36)
@@ -110,7 +110,7 @@ take.regions = {
 
       -- xform, keyed by colKey or the '*' sentinel
       xform = {
-        ['*']     = { ppq={...}, ppqL={...}, dur={...}, durL={...}, delay={...} },
+        ['*']     = { ppqL={...}, durL={...}, delay={...} },
         [colKey1] = { pitch={...}, vel={...}, detune={...} },
         [colKey2] = { val={...}, chan={...} },
         ...
@@ -139,19 +139,19 @@ carries:
 - `col` — the `colKey` of the column the event sits in. Used to look up
   the per-colKey xform slot; pinned at creation, never mutated by
   xform.
-- `ppqLocal` — logical-ppq offset from the block's `ppqLo`.
-- Field values — `pitch`, `dur`, `vel`, `delay`, `chan`, `val`,
+- `ppqL` — logical-ppq offset from the block's `ppqLo`.
+- Field values — `pitch`, `durL`, `vel`, `delay`, `chan`, `val`,
   `detune` etc., as appropriate to the event type implied by `col`.
 
 ```lua
 template.events['1'] = {
   col      = 'note:1:60:pitch',
-  ppqLocal = 0,
-  pitch    = 60, dur = 480, vel = 96, ...
+  ppqL = 0,
+  pitch    = 60, durL = 480, vel = 96, ...
 }
 template.events['2'] = {
   col      = 'cc:1:7',
-  ppqLocal = 240,
+  ppqL = 240,
   val      = 100,
 }
 ```
@@ -166,8 +166,8 @@ across rebuilds.
 `aliases.md`. Two keying conventions:
 
 - `'*'` — geometric xform applied uniformly to every template event in
-  the block. The natural home for `ppq`, `ppqL`, `dur`, `durL`,
-  `delay` ops. Moving / scaling the whole block writes here.
+  the block. The natural home for `ppqL`, `durL`, `delay` ops.
+  Moving / scaling the whole block writes here.
 - `colKey` — content xform applied only to template events whose
   `col == colKey`. The natural home for `pitch`, `vel`, `val`,
   `detune`, `chan` ops. Per-column tweaks land here.
@@ -227,9 +227,9 @@ runs:
 1. For each region in `cm:get('regions').regions` whose `template.events` is non-empty:
    - For each template event `vuid`:
      - Compute the synthetic-root key `(blockId, vuid)`.
-     - Compute resolved fields via `resolveField` above. ppq comes from
-       `block.ppqLo + template.events[vuid].ppqLocal`, then composes
-       through `xform['*'].ppq` and `xform[col].ppq`.
+     - Compute resolved fields via `resolveField` above. `ppqL` comes
+       from `block.ppqLo + template.events[vuid].ppqL`, then composes
+       through `xform['*'].ppqL` and `xform[col].ppqL`.
      - Ensure a spec node exists tagged with `(blockId, vuid)` and
        parented at the synthetic root. If absent, create with empty
        `overrideXform`. If present, leave `overrideXform` untouched.
@@ -283,7 +283,7 @@ block event. Intent is to edit the shared content.
      make the override permanent.
 
 Adding an event inside the block's region: synthesise a template event
-with `col` and `ppqLocal` from the cursor / event position, allocate a
+with `col` and `ppqL` from the cursor / event position, allocate a
 fresh `vuid`, write to `template.events`. Reconciliation creates the
 spec node.
 
@@ -295,7 +295,7 @@ by `vuid`. Reconciliation prunes the spec node.
 A command targeting the block as a whole composes into `block.xform`:
 
 - **Geometric** verbs (move, scale, quantize-position) compose into
-  `xform['*']` under `ppq` / `ppqL` / `dur` / `durL` / `delay`. All
+  `xform['*']` under `ppqL` / `durL` / `delay`. All
   template events in the block are affected uniformly.
 - **Content** verbs (shift pitch, shift vel, shift val) compose into
   `xform[K]` where `K` is the cursor's colKey, or fan out across the
@@ -430,7 +430,7 @@ land under `tests/specs/blocks_*.lua`.
   `{blockId, vuid}` on next rebuild.
 - Template event removed → spec node pruned.
 - Block with `xform['*'].ppq={add, lpr}` materialises events one row
-  later than `ppqLocal` implies; grid reflects post-xform position.
+  later than `ppqL` implies; grid reflects post-xform position.
 - Synthetic-root resolved fields compose `template.events[vuid]` plus
   full xform stack.
 
@@ -446,7 +446,7 @@ land under `tests/specs/blocks_*.lua`.
 
 **Phase 4** — creation
 - `blockSeed` on a region containing N events writes N template events
-  with correct `col`, `ppqLocal`, and content; the original events are
+  with correct `col`, `ppqL`, and content; the original events are
   removed from MIDI (now materialised via reconciliation).
 - `blockClear` empties `template.events`; reconciliation prunes; the
   record decays to plain region if `xform` also empty.

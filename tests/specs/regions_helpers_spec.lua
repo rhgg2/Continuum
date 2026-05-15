@@ -35,20 +35,20 @@ return {
 
   { name = 'parseColKey: note round-trip', run = function()
       t.deepEq(R.parseColKey('note:1:2:pitch'),
-               { type='note', chan=1, lane=2, part='pitch' })
+               { evType='note', chan=1, lane=2, part='pitch' })
       t.deepEq(R.parseColKey('note:16:4:vel'),
-               { type='note', chan=16, lane=4, part='vel' })
+               { evType='note', chan=16, lane=4, part='vel' })
   end },
 
   { name = 'parseColKey: cc round-trip', run = function()
       t.deepEq(R.parseColKey('cc:3:74'),
-               { type='cc', chan=3, cc=74 })
+               { evType='cc', chan=3, cc=74 })
   end },
 
   { name = 'parseColKey: pb / pc / at', run = function()
-      t.deepEq(R.parseColKey('pb:5'), { type='pb', chan=5 })
-      t.deepEq(R.parseColKey('pc:5'), { type='pc', chan=5 })
-      t.deepEq(R.parseColKey('at:5'), { type='at', chan=5 })
+      t.deepEq(R.parseColKey('pb:5'), { evType='pb', chan=5 })
+      t.deepEq(R.parseColKey('pc:5'), { evType='pc', chan=5 })
+      t.deepEq(R.parseColKey('at:5'), { evType='at', chan=5 })
   end },
 
   ----- Parts set ops
@@ -244,6 +244,124 @@ return {
       t.deepEq(templ, { pitch = 60, vel = 64 })
       t.deepEq(star,  { vel = { { 'add', 10 } } })
       t.deepEq(col,   { pitch = { { 'add', 1 } } })
+  end },
+
+  ----- resolveSyntheticRoot
+
+  { name = 'resolveSyntheticRoot: identity (no xform, ppqLocal=0)', run = function()
+      local r = {
+        id = 1, ppqLo = 480,
+        template = { events = { ['1'] = {
+          col = 'note:1:60:pitch', ppqL = 0,
+          pitch = 60, vel = 96, durL = 240, chan = 1, lane = 60,
+        } } },
+      }
+      local out = R.resolveSyntheticRoot(r, '1')
+      t.deepEq(out, { ppqL = 480, endppqL = 720, pitch = 60, vel = 96, durL = 240,
+                      chan = 1, lane = 60, evType = 'note' })
+  end },
+
+  { name = 'resolveSyntheticRoot: shifts ppqL by region.ppqLo', run = function()
+      local r = {
+        ppqLo = 480,
+        template = { events = { ['1'] = {
+          col = 'note:1:60:pitch', ppqL = 120,
+          pitch = 60, vel = 96, durL = 240, chan = 1, lane = 60,
+        } } },
+      }
+      local out = R.resolveSyntheticRoot(r, '1')
+      t.eq(out.ppqL, 600)
+  end },
+
+  { name = 'resolveSyntheticRoot: star geometric op composes (durL *2)', run = function()
+      local r = {
+        ppqLo = 0,
+        template = { events = { ['1'] = {
+          col = 'note:1:60:pitch', ppqL = 0,
+          pitch = 60, vel = 96, durL = 240, chan = 1, lane = 60,
+        } } },
+        xform = { ['*'] = { durL = { { 'mul', 2 } } } },
+      }
+      local out = R.resolveSyntheticRoot(r, '1')
+      t.eq(out.durL, 480)
+      t.eq(out.pitch, 60)
+  end },
+
+  { name = 'resolveSyntheticRoot: col content op composes (pitch +12)', run = function()
+      local r = {
+        ppqLo = 0,
+        template = { events = { ['1'] = {
+          col = 'note:1:60:pitch', ppqL = 0,
+          pitch = 60, vel = 96, durL = 240, chan = 1, lane = 60,
+        } } },
+        xform = { ['note:1:60:pitch'] = { pitch = { { 'add', 12 } } } },
+      }
+      local out = R.resolveSyntheticRoot(r, '1')
+      t.eq(out.pitch, 72)
+  end },
+
+  { name = "resolveSyntheticRoot: star then col compose in order on the same field (vel +10 -> *2 = 148)", run = function()
+      local r = {
+        ppqLo = 0,
+        template = { events = { ['1'] = {
+          col = 'note:1:60:pitch', ppqL = 0,
+          pitch = 60, vel = 64, durL = 240, chan = 1, lane = 60,
+        } } },
+        xform = {
+          ['*']                  = { vel = { { 'add', 10 } } },
+          ['note:1:60:pitch']    = { vel = { { 'mul',  2 } } },
+        },
+      }
+      local out = R.resolveSyntheticRoot(r, '1')
+      t.eq(out.vel, 148)
+  end },
+
+  { name = 'resolveSyntheticRoot: cross-type fail-closed (pitch op on cc col is skipped)', run = function()
+      local r = {
+        ppqLo = 0,
+        template = { events = { ['1'] = {
+          col = 'cc:1:74', ppqL = 0,
+          val = 64, chan = 1,
+        } } },
+        xform = {
+          ['*']        = { val   = { { 'add',  1 } } },
+          ['cc:1:74']  = { pitch = { { 'add', 12 } } },  -- not a CC field; skipped
+        },
+      }
+      local out = R.resolveSyntheticRoot(r, '1')
+      t.eq(out.val, 65)
+      t.eq(out.pitch, nil)
+  end },
+
+  { name = 'resolveSyntheticRoot: missing vuid raises', run = function()
+      local r = {
+        ppqLo = 0,
+        template = { events = { ['1'] = {
+          col = 'note:1:60:pitch', ppqL = 0,
+          pitch = 60, vel = 96, durL = 240, chan = 1, lane = 60,
+        } } },
+      }
+      local ok, err = pcall(R.resolveSyntheticRoot, r, '99')
+      t.eq(ok, false)
+      t.truthy(err:find('no template event'), 'error names the missing vuid path')
+  end },
+
+  { name = 'resolveSyntheticRoot: inputs untouched (region, template, xform)', run = function()
+      local te = { col = 'note:1:60:pitch', ppqL = 100,
+                   pitch = 60, vel = 64, durL = 240, chan = 1, lane = 60 }
+      local star = { vel = { { 'add', 10 } } }
+      local col  = { pitch = { { 'add', 1 } } }
+      local r = {
+        ppqLo = 480,
+        template = { events = { ['1'] = te } },
+        xform = { ['*'] = star, ['note:1:60:pitch'] = col },
+      }
+      local _ = R.resolveSyntheticRoot(r, '1')
+      t.deepEq(te, { col = 'note:1:60:pitch', ppqL = 100,
+                     pitch = 60, vel = 64, durL = 240, chan = 1, lane = 60 })
+      t.deepEq(star, { vel   = { { 'add', 10 } } })
+      t.deepEq(col,  { pitch = { { 'add',  1 } } })
+      t.eq(r.ppqLo, 480)
   end },
 
   ----- cm round-trip on the 'regions' key

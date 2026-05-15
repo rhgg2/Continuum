@@ -1,4 +1,4 @@
-@module regions  src=regions.lua  loc=131  sha=fa4a61d  mode=namespace
+@module regions  src=regions.lua  loc=159  sha=4734531  mode=namespace
 
 # Imports
   @const util = 'util'  @ 20
@@ -29,3 +29,5 @@
       @contract  predicate for the command-surface refusal of block-wide val shifts across heterogeneous columns. True iff slotKey is '*' AND field is 'val' — nonsense across CCs and pitchbend.
   @api M.resolveEvent(templateEvent, xformStar, xformCol, evtType, rng)  @ 116
       @contract  composes xformStar then xformCol onto templateEvent via per-field op-list concatenation, then applies through aliases.applyXform. Either xform may be nil (treated as empty). Cross-event-type fail-closed comes from applyXform.
+  @api M.resolveSyntheticRoot(region, vuid, rng)  @ 132
+      @contract  resolves a (region, vuid) synthetic root to its emit-time field set. Synthesises base from template[vuid] (drops `col` and `spec`), shifts ppqL by region.ppqLo, hydrates evType/chan plus lane (note) or cc (cc) from the colKey, composes region.xform['*'] then region.xform[te.col] via resolveEvent, then te.spec.xform if present. For notes, derives endppqL = ppqL + durL after composition. Frame-dependent ppq/endppq are NOT computed here — caller (tm) supplies swing. Raises if no template event for vuid.

@@ -41,11 +41,11 @@ function M.parseColKey(key)
   for s in key:gmatch('[^:]+') do parts[#parts+1] = s end
   local t = parts[1]
   if t == 'note' then
-    return { type='note', chan=tonumber(parts[2]), lane=tonumber(parts[3]), part=parts[4] }
+    return { evType='note', chan=tonumber(parts[2]), lane=tonumber(parts[3]), part=parts[4] }
   elseif t == 'cc' then
-    return { type='cc', chan=tonumber(parts[2]), cc=tonumber(parts[3]) }
+    return { evType='cc', chan=tonumber(parts[2]), cc=tonumber(parts[3]) }
   elseif t == 'pb' or t == 'pc' or t == 'at' then
-    return { type=t, chan=tonumber(parts[2]) }
+    return { evType=t, chan=tonumber(parts[2]) }
   end
   error('regions.parseColKey: unknown key ' .. tostring(key))
 end
@@ -126,6 +126,34 @@ function M.resolveEvent(templateEvent, xformStar, xformCol, evtType, rng)
   mergeIn(xformStar)
   mergeIn(xformCol)
   return aliases.applyXform(templateEvent, merged, evtType, rng)
+end
+
+--contract: resolves a (region, vuid) synthetic root to its emit-time field set. Synthesises base from template[vuid] (drops `col` and `spec`), shifts ppqL by region.ppqLo, hydrates evType/chan plus lane (note) or cc (cc) from the colKey, composes region.xform['*'] then region.xform[te.col] via resolveEvent, then te.spec.xform if present. For notes, derives endppqL = ppqL + durL after composition. Frame-dependent ppq/endppq are NOT computed here — caller (tm) supplies swing. Raises if no template event for vuid.
+function M.resolveSyntheticRoot(region, vuid, rng)
+  local te = region.template and region.template.events and region.template.events[vuid]
+  if not te then
+    error('regions.resolveSyntheticRoot: no template event for vuid ' .. tostring(vuid))
+  end
+  local meta = M.parseColKey(te.col)
+  local et   = (meta.evType == 'note') and 'note' or 'cc'
+  local base = util.clone(te, { col = true, spec = true })
+  base.ppqL   = (region.ppqLo or 0) + (base.ppqL or 0)
+  base.evType = meta.evType
+  base.chan   = meta.chan
+  if meta.evType == 'note' then
+    base.lane = meta.lane
+  elseif meta.evType == 'cc' then
+    base.cc = meta.cc
+  end
+  local xform    = region.xform or {}
+  local resolved = M.resolveEvent(base, xform['*'], xform[te.col], et, rng)
+  if te.spec and te.spec.xform then
+    resolved = aliases.applyXform(resolved, te.spec.xform, et, rng)
+  end
+  if meta.evType == 'note' then
+    resolved.endppqL = resolved.ppqL + (resolved.durL or 0)
+  end
+  return resolved
 end
 
 return M

@@ -61,6 +61,7 @@ local specs = {
   'view_context_spec',
   'parts_spec',
   'regions_helpers_spec',
+  'blocks_reconciliation_spec',
   'ec_regions_spec',
   'vm_tracker_mode_spec',
   'sample_view_spec',

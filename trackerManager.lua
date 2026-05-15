@@ -21,6 +21,7 @@ local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
 local aliases = require 'aliases'
+local regions = require 'regions'
 
 local function print(...)
   return util.print(...)
@@ -1415,7 +1416,17 @@ do
       elseif e.children and #e.children > 0 then util.add(roots, e) end
     end
 
-    if #roots == 0 and #toDel == 0 then return end
+    -- Synthetic roots: regions whose template has events. One materialisation
+    -- per (blockId, vuid). See design/blocks.md (Reconciliation pass).
+    local regionsBlob = cm:get('regions') or { regions = {} }
+    local hasSynth = false
+    for _, r in ipairs(regionsBlob.regions or {}) do
+      if r.template and next(r.template.events or {}) then
+        hasSynth = true; break
+      end
+    end
+
+    if #roots == 0 and #toDel == 0 and not hasSynth then return end
 
     -- Route alias-child writes through um so lane-1 onsets seat
     -- fake-pb absorbers when their detune differs from the carry,
@@ -1498,6 +1509,44 @@ do
         end
         for _, child in ipairs(e.spec.children or {}) do
           util.add(q, { spec = child, parent = resolved, parentSpec = e.spec })
+        end
+      end
+    end
+
+    -- Synth-root pass. regions.resolveSyntheticRoot returns the fully
+    -- composed event (template + region.xform + te.spec.xform, with
+    -- evType/chan/lane/cc/endppqL hydrated). tm only adds frame
+    -- transforms (raw ppq via swing, length clamp) and slot-claim plumbing.
+    if hasSynth then
+      for _, region in ipairs(regionsBlob.regions or {}) do
+        if region.template and next(region.template.events or {}) then
+          local vuids = {}
+          for v in pairs(region.template.events) do vuids[#vuids + 1] = v end
+          table.sort(vuids)
+          for _, vuid in ipairs(vuids) do
+            local synthUuid = 'synth:' .. tostring(region.id) .. ':' .. vuid
+            local resolved  = regions.resolveSyntheticRoot(region, vuid, rng)
+            local et        = (resolved.evType == 'note') and 'note' or 'cc'
+
+            local rChan = resolved.chan or 1
+            resolved.ppq = tm:fromLogical(rChan, resolved.ppqL,
+                                          delayToPPQ(resolved.delay or 0))
+            if et == 'note' then
+              resolved.endppq = tm:fromLogical(rChan, resolved.endppqL)
+              if resolved.endppq > lenPpq then
+                resolved.endppq  = lenPpq
+                resolved.endppqL = tm:toLogical(rChan, lenPpq)
+              end
+            end
+
+            local emit = util.clone(resolved)
+            local key  = slotKey(emit)
+            if not claims[key] then
+              claims[key] = true
+              emit.parentUuid = synthUuid
+              util.add(toAdd, emit)
+            end
+          end
         end
       end
     end
