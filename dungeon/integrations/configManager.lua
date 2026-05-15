@@ -57,6 +57,7 @@ local declarations = {
   { 'extraColumns',    {}    },
   { 'noteDelay',       {}    },
   { 'slotEntries',     {}    },
+  { 'regions',         { regions = {}, idCtr = 0 } },
 
   -- Atoms — parchment palette
   { 'palette.bg',        hex('#dad6c9') },  -- cream paper

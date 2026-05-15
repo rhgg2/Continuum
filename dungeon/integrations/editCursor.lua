@@ -2,7 +2,7 @@
 
 --invariant: cursor lives at (row, col, stop) — stop is a char-offset index into col.stopPos, not a part index
 --invariant: cursorRow is 0-indexed; cursorCol/cursorStop are 1-indexed (Lua-array)
---invariant: ec owns caret, selection, and clipboard; no MIDI event state — MIDI mutations go via tm/cm
+--invariant: ec owns caret, selection, clipboard, and regions; no MIDI event state — MIDI mutations go via tm/cm. Regions persist on the take (see docs/regions.md) but their authoring lives here as a peer to selection.
 --invariant: selection is anchor + cursor; selAnchor is the fixed end, cursor is the moving end; sel is the resolved rect
 --invariant: sel == nil iff no selection; hasSelection() / region() degenerate-to-cursor is a callsite policy, not stored
 --invariant: sticky scopes are orthogonal: hBlockScope ∈ {0=free,1=col,2=channel,3=all-cols}, vBlockScope ∈ {0=free,1=beat,2=bar,3=all-rows}
@@ -12,11 +12,13 @@
 --invariant: moveHook fires after every position-changing operation (clampPos+moveHook are paired)
 --shape: selection = { row1, row2, col1, col2, part1, part2 }   -- inclusive on both axes; part1/part2 are part names or '*' sentinel
 --shape: selAnchor = { row, col, stop }                          -- fixed end of an active selection
+--shape: region = { id, colour, ppqLo, ppqHi, parts = { [colKey]=true, ... } }  -- one logical-ppq slab × sparse column-parts; colour is a palette index (1..REGION_PALETTE_SIZE), resolved by the renderer; see regions.lua
 --shape: clip.single = { mode='single', type='note'|'7bit'|'pb', numRows, events=[clipEvent,...] }
 --shape: clip.multi  = { mode='multi', numRows, startType, cols=[clipColEntry,...] }
 --shape: clipColEntry = { type, chanDelta, key, events=[clipEvent,...] }   -- key: note=lane-pos, cc=cc#, singleton=nil
 --shape: clipEvent = source-event minus CLIP_RESERVED, plus { row, [endRow] }   -- row is 0-relative to clip top
-local util = require 'util'
+local util    = require 'util'
+local regions = require 'regions'
 
 local deps = ...
 
@@ -28,10 +30,25 @@ local cmgr        = deps.cmgr
 local getRPBar    = deps.rowPerBar
 local logPerRow   = deps.logPerRow   or function () return 1 end
 local moveHook    = deps.moveHook    or function () end
+local regionsHook = deps.regionsHook or function () end
 
 local cursorRow, cursorCol, cursorStop = 0, 1, 1
 local hBlockScope, vBlockScope         = 0, 0
 local sel, selAnchor
+
+-- Regions. regionData is the single live store (exposed as ec.regionData).
+-- trackerView reads/writes it via cm at scope='take'. Shape:
+--   { regions = [{ id, colour, ppqLo, ppqHi, parts, template?, xform? }, ...],
+--     idCtr  = N,
+--     active = id|nil }
+-- colour is a palette index in 1..REGION_PALETTE_SIZE — the renderer resolves
+-- to actual RGBA via the theme; ec stays theme-agnostic.
+local REGION_PALETTE_SIZE = 8
+local regionData = { regions = {}, idCtr = 0, active = nil }
+-- Region mode = the 'region' scope is on top of cmgr's stack. ec owns
+-- the push/pop end-to-end; the page only binds the entry chord.
+local regionScope    -- forward — built lazily on first enter (no cmgr at module load in some test fixtures)
+local regionPushed = false
 
 ----- Position
 
@@ -270,9 +287,22 @@ local moveCol, moveChannel do
   end
 end
 
+----- Regions
+
+local function findRegion(id)
+  for i, r in ipairs(regionData.regions) do
+    if r.id == id then return r, i end
+  end
+end
+
+local function emitRegions(verb, id)
+  regionsHook(verb, id)
+end
+
 ---------- PUBLIC
 
 local ec = {}
+ec.regionData = regionData
 
 ----- Position
 
@@ -298,6 +328,7 @@ end
 function ec:reset()
   cursorRow, cursorCol, cursorStop = 0, 1, 1
   selClear()
+  regionData.active = nil
 end
 
 ----- Part & Region
@@ -388,6 +419,218 @@ function ec:shiftSelection(rowDelta)
   clampPos(); moveHook()
 end
 
+----- Regions
+
+-- Region primitives are private. The command surface (registerRegionCommands)
+-- drives them; the renderer and the persistence seam reach in only via
+-- listRegions / getRegion / activeRegionId / paintRegionCell / regionsBlob /
+-- loadRegions further down.
+
+--contract: nil clears the active pointer; non-nil must name an existing region or it is rejected silently. Fires 'active' so subscribers can refresh.
+local function setActiveRegion(id)
+  if id ~= nil and not findRegion(id) then return end
+  if regionData.active == id then return end
+  regionData.active = id
+  emitRegions('active', id)
+end
+
+--contract: snaps cursor to the region's top-left — row at floor(ppqLo/lpr), leftmost grid col-part in r.parts (first stop of that part). Clears selection so the post-snap state is unsticky. No-op when no part in r.parts resolves to a live grid col.
+local function cursorToRegionHead(r)
+  if not r then return end
+  local col1, part1
+  for ci, col in ipairs(grid.cols) do
+    if col.parts then
+      for _, p in ipairs(col.parts) do
+        if r.parts and r.parts[regions.colKey(col, p)] then
+          col1, part1 = ci, p; break
+        end
+      end
+      if col1 then break end
+    end
+  end
+  if not col1 then return end
+  selClear()
+  cursorRow  = math.floor(r.ppqLo / logPerRow())
+  cursorCol  = col1
+  cursorStop = firstStopForPart(col1, part1)
+  clampPos(); moveHook()
+end
+
+--contract: cycles regionActive through regionOrder; from nil lands on first (next) or last (prev); no wrap past the ends — sticks at the boundary so the user notices. Snaps cursor to the newly-active region's top-left.
+local function nextRegion()
+  local n = #regionData.regions; if n == 0 then return end
+  local _, i = findRegion(regionData.active)
+  local r = regionData.regions[math.min(n, (i or 0) + 1)]
+  setActiveRegion(r.id)
+  cursorToRegionHead(r)
+end
+
+local function prevRegion()
+  local n = #regionData.regions; if n == 0 then return end
+  local _, i = findRegion(regionData.active)
+  local r = regionData.regions[math.max(1, (i or n + 1) - 1)]
+  setActiveRegion(r.id)
+  cursorToRegionHead(r)
+end
+
+--contract: creates a region from (ppqLo, ppqHi, parts); deep-copies parts; auto-assigns colour by cycling the palette; sets active to the new region. parts may be empty — caller is expected to follow up with extendRegionParts.
+local function createRegion(ppqLo, ppqHi, parts)
+  regionData.idCtr = regionData.idCtr + 1
+  local id = regionData.idCtr
+  regionData.regions[#regionData.regions + 1] = {
+    id     = id,
+    colour = ((id - 1) % REGION_PALETTE_SIZE) + 1,
+    ppqLo  = ppqLo,
+    ppqHi  = ppqHi,
+    parts  = regions.partsCopy(parts or {}),
+  }
+  regionData.active = id
+  emitRegions('create', id)
+  return id
+end
+
+--contract: unions partsAdd into the region's parts; no-op (no signal) if every key was already present.
+local function extendRegionParts(id, partsAdd)
+  local r = findRegion(id); if not r then return end
+  local before = regions.partsCount(r.parts)
+  r.parts = regions.partsUnion(r.parts, partsAdd)
+  if regions.partsCount(r.parts) ~= before then emitRegions('extendParts', id) end
+end
+
+--contract: removes partsRemove from the region's parts (set difference); keeps the region even if parts becomes empty — the caller decides whether to deleteRegion. No-op if nothing was removed.
+local function shrinkRegionParts(id, partsRemove)
+  local r = findRegion(id); if not r then return end
+  local before = regions.partsCount(r.parts)
+  r.parts = regions.partsDifference(r.parts, partsRemove)
+  if regions.partsCount(r.parts) ~= before then emitRegions('shrinkParts', id) end
+end
+
+--contract: sets the region's logical-ppq span; ppqHi clamped to ppqLo so the half-open range stays well-formed.
+local function setRegionPpqRange(id, ppqLo, ppqHi)
+  local r = findRegion(id); if not r then return end
+  if ppqHi < ppqLo then ppqHi = ppqLo end
+  if r.ppqLo == ppqLo and r.ppqHi == ppqHi then return end
+  r.ppqLo, r.ppqHi = ppqLo, ppqHi
+  emitRegions('setPpqRange', id)
+end
+
+local function translateRegion(id, delta)
+  local r = findRegion(id); if not r or delta == 0 then return end
+  r.ppqLo = r.ppqLo + delta
+  r.ppqHi = r.ppqHi + delta
+  emitRegions('translatePpq', id)
+end
+
+--contract: drops the region; if it was active, regionActive is cleared (no implicit promotion of a neighbour — that's a command-scope choice).
+local function deleteRegion(id)
+  local _, idx = findRegion(id); if not idx then return end
+  table.remove(regionData.regions, idx)
+  if regionData.active == id then regionData.active = nil end
+  emitRegions('delete', id)
+end
+
+--contract: returns a clone of the first region (in regionOrder) whose (parts, ppq) contain the cell; nil if none. First-match keeps the lookup deterministic even when regions overlap.
+local function regionAt(colKey, ppq)
+  for _, r in ipairs(regionData.regions) do
+    if regions.containsCell(r, colKey, ppq) then return r end
+  end
+end
+
+local function activeRegion() return (findRegion(regionData.active)) end
+
+--contract: enumerates colKeys covered by the current selection; falls back to the cursor cell when no selection is active. Pure read.
+local function selectionAsParts()
+  local out = {}
+  if sel then
+    for col, ci in ec:eachSelectedCol() do
+      local s1, s2 = ec:selectionStopSpan(ci)
+      local seen = {}
+      for s = s1, s2 do
+        local p = col.partAt and col.partAt[s]
+        if p and not seen[p] then
+          seen[p] = true
+          out[regions.colKey(col, p)] = true
+        end
+      end
+    end
+  else
+    local col = grid.cols[cursorCol]
+    if col then out[regions.colKey(col, cursorPart())] = true end
+  end
+  return out
+end
+
+--contract: turns the current selection (or cursor cell) into a region shape. ppqHi is half-open: row r covers ppq [r·lpr, (r+1)·lpr).
+local function selectionAsRegionShape()
+  local lpr  = logPerRow()
+  local row1 = sel and sel.row1 or cursorRow
+  local row2 = sel and sel.row2 or cursorRow
+  return { ppqLo = row1 * lpr, ppqHi = (row2 + 1) * lpr,
+           parts = selectionAsParts() }
+end
+
+--contract: installs a bounding-box selection from a region shape. No-op when no part in the shape resolves to a live grid col (parts empty, or all parts reference cols not on this grid). Within col1 picks the earliest matching part; within col2 the latest.
+local function setSelectionFromRegionShape(r)
+  if not r then return end
+  local lpr  = logPerRow()
+  local row1 = math.floor(r.ppqLo / lpr)
+  local row2 = math.max(row1, math.ceil(r.ppqHi / lpr) - 1)
+  local col1, col2, part1, part2
+  for ci, col in ipairs(grid.cols) do
+    if col.parts then
+      local first, last
+      for _, p in ipairs(col.parts) do
+        if r.parts and r.parts[regions.colKey(col, p)] then
+          first = first or p
+          last  = p
+        end
+      end
+      if first then
+        if not col1 then col1, part1 = ci, first end
+        col2, part2 = ci, last
+      end
+    end
+  end
+  if not col1 then return end
+  local maxRow = math.max(0, (grid.numRows or 1) - 1)
+  ec:setSelection{ row1 = util.clamp(row1, 0, maxRow),
+                   row2 = util.clamp(row2, 0, maxRow),
+                   col1 = col1, col2 = col2,
+                   part1 = part1, part2 = part2 }
+end
+
+----- Public surface
+
+function ec:listRegions()    return regionData.regions end
+function ec:getRegion(id)    return (findRegion(id)) end
+function ec:activeRegionId() return regionData.active end
+
+-- Mouse-paint primitive. One call per painted cell; mode ∈ 'extend' |
+-- 'shrink'. extend auto-seeds an empty region at the painted row if
+-- none is active, then grows ppq span and unions the colKey. Public
+-- because mouse input is page-driven and not bound through the command
+-- scope.
+function ec:paintRegionCell(row, colKey, mode)
+  local lpr = logPerRow()
+  if mode == 'extend' and not regionData.active then
+    createRegion(row * lpr, (row + 1) * lpr, {})
+  end
+  local id = regionData.active; if not id then return end
+  if mode == 'extend' then
+    local r = findRegion(id)
+    if r then
+      local newLo = math.min(r.ppqLo,   row * lpr)
+      local newHi = math.max(r.ppqHi, (row + 1) * lpr)
+      if newLo ~= r.ppqLo or newHi ~= r.ppqHi then
+        setRegionPpqRange(id, newLo, newHi)
+      end
+    end
+    extendRegionParts(id, { [colKey] = true })
+  else
+    shrinkRegionParts(id, { [colKey] = true })
+  end
+end
+
 ----- Motion
 
 --contract: advances by cm.advanceBy rows; the per-keystroke auto-step after a write
@@ -413,6 +656,134 @@ do
 end
 
 ----- Commands
+
+function ec:isInRegionMode() return regionPushed end
+
+-- Region mode is a cmgr overlay scope. ec owns the verbs and the
+-- push/pop lifecycle; the page only binds the entry chord on the
+-- tracker scope. While the overlay is on top of the stack, its modal
+-- flag halts the stack walk and only REGION_PASSTHROUGH names reach
+-- tracker / global below. Region verbs are named distinctly from their
+-- tracker counterparts (regionNudgeBack vs nudgeBack, regionDrop vs
+-- deleteSel) — commands are flat; only bindings reuse the same keys.
+local REGION_PASSTHROUGH = {
+  cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
+  pageUp=true, pageDown=true, goTop=true, goBottom=true, goLeft=true, goRight=true,
+  colLeft=true, colRight=true, channelLeft=true, channelRight=true,
+  selectUp=true, selectDown=true, selectLeft=true, selectRight=true, selectClear=true,
+  cycleBlock=true, cycleVBlock=true, swapBlockEnds=true,
+}
+
+do
+  local function atomic(label, fn) return util.atomic('region: ' .. label, fn) end
+
+  local function newFromSelection()
+    local shape = selectionAsRegionShape()
+    createRegion(shape.ppqLo, shape.ppqHi, shape.parts)
+    selClear()
+  end
+
+  local function dropActive()
+    if regionData.active then deleteRegion(regionData.active) end
+  end
+
+  -- Time-axis verbs clamp to the take's logical span [0, numRows·lpr].
+  -- adjustDurationCore in trackerView does the same on note tails — region
+  -- ppq stays in the same frame, so the same boundary applies.
+  local function translateByRow(delta)
+    local r = findRegion(regionData.active); if not r or delta == 0 then return end
+    local lpr     = logPerRow()
+    local len     = (grid.numRows or 0) * lpr
+    local clamped = util.clamp(delta * lpr, -r.ppqLo, len - r.ppqHi)
+    if clamped ~= 0 then
+      translateRegion(regionData.active, clamped)
+      cursorRow = cursorRow + clamped // lpr
+      clampPos(); moveHook()
+    end
+  end
+
+  local function adjustHiByRow(delta)
+    local r = findRegion(regionData.active); if not r then return end
+    local lpr   = logPerRow()
+    local len   = (grid.numRows or 0) * lpr
+    local newHi = util.clamp(r.ppqHi + delta * lpr, r.ppqLo, len)
+    setRegionPpqRange(regionData.active, r.ppqLo, newHi)
+  end
+
+  -- Half-open [ppqLo, ppqHi): hi = cursor*logPerRow ends the region on
+  -- the row just above the cursor. Toggle to take length on a second
+  -- press so the same key both snaps and extends.
+  local function setHiToCursor()
+    local r = findRegion(regionData.active); if not r then return end
+    local lpr       = logPerRow()
+    local justAbove = cursorRow * lpr
+    local atLength  = (grid.numRows or 0) * lpr
+    local newHi     = (r.ppqHi == justAbove) and atLength or justAbove
+    setRegionPpqRange(regionData.active, r.ppqLo, newHi)
+  end
+
+  -- Mode-exit sweeps every empty-parts region (transient empties from
+  -- shrink-all then extend cycles) and pops the overlay. Two callers
+  -- (bail, commit).
+  local function exitMode()
+    for i = #regionData.regions, 1, -1 do
+      local r = regionData.regions[i]
+      if regions.partsIsEmpty(r.parts) then deleteRegion(r.id) end
+    end
+    cmgr:pop(regionScope)
+    regionPushed = false
+  end
+
+  --contract: idempotent — re-entering while pushed is a no-op; if cursor sits inside a region, seeds it as the active region.
+  function ec:enterRegionMode()
+    if regionPushed then return end
+    cmgr:push(regionScope)
+    regionPushed = true
+    local col = grid.cols[cursorCol]
+    if col and col.parts then
+      local hit = regionAt(regions.colKey(col, cursorPart()),
+                           cursorRow * logPerRow())
+      if hit then setActiveRegion(hit.id) end
+    end
+  end
+
+  -- Build the overlay scope once at instantiate. trackerPage binds keys
+  -- on this same scope later; the registry is shared. Test fixtures
+  -- that only need decorateCol can omit cmgr — region mode then errors
+  -- loudly if entered, which is intentional.
+  if cmgr then
+    regionScope = cmgr:scope('region')
+    regionScope.modal       = true
+    regionScope.passthrough = REGION_PASSTHROUGH
+    regionScope:registerAll{
+      regionBail    = atomic('bail',    exitMode),
+      regionCommit  = atomic('commit',  function()
+        local r = activeRegion()
+        if r then setSelectionFromRegionShape(r) end
+        exitMode()
+      end),
+      regionDrop    = atomic('drop',    dropActive),
+      regionNew     = atomic('new',     newFromSelection),
+      regionExtendParts = atomic('extend', function()
+        if not regionData.active then return newFromSelection() end
+        extendRegionParts(regionData.active, selectionAsParts())
+        selClear()
+      end),
+      regionShrinkParts = atomic('shrink', function()
+        if not regionData.active then return end
+        shrinkRegionParts(regionData.active, selectionAsParts())
+        selClear()
+      end),
+      regionNext         = atomic('next',     nextRegion),
+      regionPrev         = atomic('prev',     prevRegion),
+      regionNudgeBack    = atomic('back',     function() translateByRow(-1) end),
+      regionNudgeForward = atomic('forward',  function() translateByRow( 1) end),
+      regionGrow         = atomic('grow',     function() adjustHiByRow ( 1) end),
+      regionShrink       = atomic('shrink-hi',function() adjustHiByRow (-1) end),
+      regionSnapHi       = atomic('hi=cur',   setHiToCursor),
+    }
+  end
+end
 
 function ec:registerCommands(scope)
   scope:registerAll{

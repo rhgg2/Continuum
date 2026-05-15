@@ -8,6 +8,7 @@
 local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
+local regions = require 'regions'
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
@@ -74,6 +75,7 @@ local toolbar                              -- lazy: chrome may be nil at constru
 -- The page queries ec:isInRegionMode() to gate the char queue and the
 -- renderer's active-outline / gutter-bar pass; bindings live below
 -- alongside the rest of the tracker bindings.
+local paintLastCell = nil   -- mouse-paint dedupe key (row × colKey)
 
 ----- Cell renderers
 
@@ -322,6 +324,13 @@ local toolbarSegments = {
     end,
   },
   {
+    id = 'aliasMode',
+    render = function()
+      local cv = chrome.checkbox('  Alias', tv:getAliasMode())
+      if cv then cmgr:invoke('toggleAliasMode') end
+    end,
+  },
+  {
     id = 'tuning',
     render = function()
       local cur = cm:get('temper')
@@ -524,6 +533,23 @@ local function drawTracker()
   local cursorRow, cursorCol, cursorStop = ec:pos()
   local scrollRow, scrollCol, lastVisCol = tv:scroll()
 
+  -- Transient alias-family focus: the cursor event plus its spec-tree
+  -- parent and immediate children (one level each side). aliasFocus
+  -- supersedes the default alias tint inside this set; non-family
+  -- aliased cells keep the dimmer phase-7 tint.
+  local focus, focusCol = {}, grid.cols[cursorCol]
+  local cursorEvt = focusCol and focusCol.cells and focusCol.cells[cursorRow]
+  if cursorEvt and cursorEvt.uuid then
+    local idx = tv:aliasIndex()
+    local rec = idx.byUuid[cursorEvt.uuid]
+    -- The cursor cell already carries the selection/caret marker; the
+    -- transient family tint highlights only relatives.
+    if rec and rec.treeParent then focus[rec.treeParent] = true end
+    for _, child in ipairs(idx.byChildren[cursorEvt.uuid] or {}) do
+      focus[child.evt.uuid] = true
+    end
+  end
+
   local px, py = ImGui.GetCursorScreenPos(ctx)
   gridOriginX  = px + GUTTER * gridX
   gridOriginY  = py + HEADER * gridY
@@ -589,6 +615,73 @@ local function drawTracker()
 
   local drawList = ImGui.GetWindowDrawList(ctx)
 
+  -- Region pass. Logical-ppq slab × sparse colKey set → row span × stop
+  -- span per visible column-part. Drawn before tails and cells so the
+  -- per-cell text reads over the tint. The active outline only shows
+  -- while in region mode (it is a mode affordance). The gutter slot
+  -- at x=-1, right of the row-num field, indicates regions that contain
+  -- the cursor regardless of mode.
+  local logPerRow    = tv:logPerRow()
+  local activeId     = ec:activeRegionId()
+  local cursorColObj = grid.cols[cursorCol]
+  local cursorPart   = cursorColObj and cursorColObj.partAt and cursorColObj.partAt[cursorStop] or 'val'
+  local cursorKey    = cursorColObj and regions.colKey(cursorColObj, cursorPart) or nil
+  local cursorPpq    = cursorRow * logPerRow
+  for _, r in ipairs(ec:listRegions()) do
+    local yLo = math.max(r.ppqLo / logPerRow - scrollRow, 0)
+    local yHi = math.min(r.ppqHi / logPerRow - scrollRow, gridHeight)
+    if yHi > yLo then
+      local fillKey  = 'region.' .. r.colour .. '.tint'
+      local outKey   = 'region.' .. r.colour .. '.outline'
+      local isActive = ec:isInRegionMode() and (r.id == activeId)
+      local cursorIn = cursorKey and r.parts[cursorKey]
+                    and cursorPpq >= r.ppqLo and cursorPpq < r.ppqHi
+      local function paintSpan(col, sLo, sHi)
+        local x1c = col.x + (col.stopPos[sLo] or 0)
+        local x2c = col.x + (col.stopPos[sHi] or (col.width - 1))
+        draw:box(x1c, x2c, yLo, yHi - 1, fillKey)
+        if isActive then
+          local x1 = gridOriginX + x1c * gridX
+          local x2 = gridOriginX + (x2c + 1) * gridX
+          local y1 = gridOriginY + yLo * gridY
+          local y2 = gridOriginY + yHi * gridY
+          ImGui.DrawList_AddRect(drawList, x1, y1, x2, y2, chrome.colour(outKey), 0, 0, 1)
+        end
+      end
+      for _, col in ipairs(grid.cols) do
+        if col.x then
+          if col.type == 'note' then
+            -- Coalesce adjacent parts into runs so an outline doesn't
+            -- double its internal edge between e.g. pitch+vel.
+            local runLo, runHi
+            local function flush()
+              if runLo then paintSpan(col, runLo, runHi); runLo, runHi = nil, nil end
+            end
+            for _, part in ipairs{'pitch','vel','delay'} do
+              local hit = r.parts[regions.colKey(col, part)]
+              if hit then
+                local sLo, sHi
+                for s, p in ipairs(col.partAt or {}) do
+                  if p == part then sLo = sLo or s; sHi = s end
+                end
+                if sLo then
+                  if runLo and runHi + 1 == sLo then runHi = sHi
+                  else flush(); runLo, runHi = sLo, sHi end
+                end
+              else
+                flush()
+              end
+            end
+            flush()
+          elseif r.parts[regions.colKey(col)] then
+            paintSpan(col, 1, #col.stopPos)
+          end
+        end
+      end
+      if isActive or cursorIn then draw:box(-1, -1, yLo, yHi - 1, fillKey) end
+    end
+  end
+
   local tailCol = chrome.colour('tail')
   local viewTop  = scrollRow
   local viewBot  = scrollRow + gridHeight
@@ -639,6 +732,13 @@ local function drawTracker()
         end
         local muted = tv:isChannelEffectivelyMuted(col.midiChan)
         if muted then textCol, overrides = 'inactive', nil end
+        if evt and not muted then
+          if evt.uuid and focus[evt.uuid] then
+            draw:box(col.x, col.x + col.width - 1, y, y, 'aliasFocus')
+          elseif evt.parentUuid then
+            draw:box(col.x, col.x + col.width - 1, y, y, 'alias')
+          end
+        end
         if not text then text = '' end
         local cx, i = col.x, 0
         for ch in text:gmatch(utf8.charpattern) do
@@ -767,6 +867,12 @@ cmgr:scope('tracker'):bindAll{
   cycleBlock     = { {ImGui.Key_Space,       ImGui.Mod_Super} },
   cycleVBlock    = { {ImGui.Key_O,           ImGui.Mod_Super} },
   swapBlockEnds  = { {ImGui.Key_GraveAccent, ImGui.Mod_Ctrl} },
+  toggleAliasMode = { ImGui.Key_GraveAccent },
+  aliasUp         = { {ImGui.Key_UpArrow,    ImGui.Mod_Super} },
+  aliasDown       = { {ImGui.Key_DownArrow,  ImGui.Mod_Super} },
+  aliasLeft       = { {ImGui.Key_LeftArrow,  ImGui.Mod_Super} },
+  aliasRight      = { {ImGui.Key_RightArrow, ImGui.Mod_Super} },
+  sever           = { {ImGui.Key_Period, ImGui.Mod_Super} },
   selectClear    = { {ImGui.Key_G, ImGui.Mod_Super} },
   cut            = { {ImGui.Key_W, ImGui.Mod_Super}, {ImGui.Key_X, ImGui.Mod_Ctrl} },
   copy           = { {ImGui.Key_W, ImGui.Mod_Ctrl},  {ImGui.Key_C, ImGui.Mod_Ctrl} },
@@ -835,6 +941,40 @@ local function handleMouse()
   local clicked      = ImGui.IsMouseClicked(ctx, 0)
   local rightClicked = ImGui.IsMouseClicked(ctx, 1)
   local held         = ImGui.IsMouseDown(ctx, 0)
+
+  -- Region paint. Shift-drag adds cells (auto-`n`s if no active region),
+  -- alt-drag removes them. Each painted cell is one atomic undo entry;
+  -- paintLastCell debounces so a held drag across one cell fires once.
+  if ec:isInRegionMode() then
+    if held and ImGui.IsWindowHovered(ctx) then
+      local mods  = ImGui.GetKeyMods(ctx)
+      local shift = (mods & ImGui.Mod_Shift) ~= 0
+      local alt   = (mods & ImGui.Mod_Alt)   ~= 0
+      if shift or alt then
+        local mouseX, mouseY = ImGui.GetMousePos(ctx)
+        local charY = math.floor((mouseY - gridOriginY) / gridY)
+        if charY >= 0 and charY < gridHeight then
+          local col, stop = nearestStop(mouseX, mouseY)
+          local c = col and grid.cols[col]
+          if c and c.parts then
+            local part = (c.partAt and c.partAt[stop]) or 'val'
+            local key  = regions.colKey(c, part)
+            local row  = scrollRow + charY
+            local cell = row .. '|' .. key
+            if cell ~= paintLastCell then
+              paintLastCell = cell
+              util.atomic('region: paint', function()
+                ec:paintRegionCell(row, key, shift and 'extend' or 'shrink')
+              end)()
+            end
+          end
+        end
+        return
+      end
+    else
+      paintLastCell = nil
+    end
+  end
 
   if rightClicked and ImGui.IsWindowHovered(ctx) then
     local mouseX, mouseY = ImGui.GetMousePos(ctx)
@@ -935,6 +1075,10 @@ end
 local function handleKeys(kr)
   if modalState or chrome.pickerIsActive() then return end
   if ImGui.IsAnyItemActive(ctx) then return end
+  -- Region mode owns the keyboard for region verbs; cell editing (char
+  -- queue + shift-digit value entry) must not leak through.
+  if tv:ec():isInRegionMode() then return end
+
   local grid = tv.grid
   local ec = tv:ec()
   local cursorRow, cursorCol, cursorStop = ec:pos()
@@ -1180,6 +1324,33 @@ tracker:registerAll{
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
              function() tv:ec():unstick() end)
+
+----- Region mode
+
+-- ec built the 'region' overlay scope at construct (modal + verbs).
+-- The page binds the entry chord on tracker and every in-mode chord on
+-- the region scope. Region verbs are distinct names from tracker's; the
+-- table below copies the *keys* of the parallel tracker verbs so the
+-- two stay in sync if the tracker map is re-bound.
+tracker:register('regionEnter', function() tv:ec():enterRegionMode() end)
+tracker:bind    ('regionEnter', { {ImGui.Key_R, ImGui.Mod_Super} })
+
+local trackerKeys = tracker.keymap
+cmgr:scope('region'):bindAll{
+  regionBail         = { ImGui.Key_Escape, {ImGui.Key_R, ImGui.Mod_Super} },
+  regionCommit       = { ImGui.Key_Enter, ImGui.Key_KeypadEnter },
+  regionNew          = { ImGui.Key_N },
+  regionExtendParts  = { ImGui.Key_Equal },
+  regionShrinkParts  = { ImGui.Key_Minus },
+  regionDrop         = trackerKeys.deleteSel,
+  regionNudgeBack    = trackerKeys.nudgeBack,
+  regionNudgeForward = trackerKeys.nudgeForward,
+  regionShrink       = trackerKeys.shrinkNote,
+  regionGrow         = trackerKeys.growNote,
+  regionSnapHi       = trackerKeys.noteOff,
+  regionPrev         = trackerKeys.inputSampleDown,
+  regionNext         = trackerKeys.inputSampleUp,
+}
 
 ---------- PUBLIC
 

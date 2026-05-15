@@ -1,5 +1,5 @@
-@module clipboard  src=clipboard.lua  loc=673  sha=c3b5daa  mode=chunk
-@deps ec, grid, tm, cm, currentRpb, assignTail, getCtx, getLength, getAliasMode
+@module clipboard  src=clipboard.lua  loc=460  sha=7ea98b2  mode=chunk
+@deps ec, grid, tm, cm, currentRpb, assignTail, getCtx, getLength
 
 # Invariants & contracts
   @invariant  clipboard persists via REAPER ExtState under ('rdm','clipboard'), serialised by util.serialise
@@ -12,60 +12,44 @@
 
 # Imports
   @require util = 'util'  @ 11
-  @require aliases = 'aliases'  @ 12
-  @require tuning = 'tuning'  @ 13
+  @require tuning = 'tuning'  @ 12
 
 # Private state
-  @state CLIP_RESERVED = {  @ 21
-  @state CLIP_ARTIFACTS = { row = true, endRow = true }  @ 45
-  @state ec = deps.ec  @ 51
-  @state grid = deps.grid  @ 52
-  @state tm = deps.tm  @ 53
-  @state cm = deps.cm  @ 54
-  @state currentRpb = deps.currentRpb  @ 55
-  @state assignTail = deps.assignTail  @ 56
-  @state getCtx = deps.getCtx  @ 57
-  @state getLength = deps.getLength  @ 58
-  @state getAliasMode = deps.getAliasMode or function() return false end  @ 59
-  @state demotedCount = 0  @ 292
-  @state outcomes  @ 293   -- clipId -> { kind='alias', uuid, specIdx, evt } or { kind='plain', evt }
-  @state pending  @ 294   -- list of { evtType, e } awaiting their family parent
-  @state clipboard = {}  @ 656
+  @state CLIP_RESERVED = {  @ 20
+  @state CLIP_ARTIFACTS = { row = true, endRow = true }  @ 31
+  @state ec = deps.ec  @ 37
+  @state grid = deps.grid  @ 38
+  @state tm = deps.tm  @ 39
+  @state cm = deps.cm  @ 40
+  @state currentRpb = deps.currentRpb  @ 41
+  @state assignTail = deps.assignTail  @ 42
+  @state getCtx = deps.getCtx  @ 43
+  @state getLength = deps.getLength  @ 44
+  @state clipboard = {}  @ 443
 
 # Private functions
-  @fn save(clip)  @ 61
-  @fn load()  @ 65
-  @fn isStrictAncestor(parent, child)  @ 72
-      @contract  integer-array specIdx form; nil parent is an ancestor of any non-nil child specIdx. Strict: equal arrays are not ancestors.
-  @fn resolveAliasFamily(clip)  @ 83
-      @contract  stamps every aliasSrc with a dense clipId; for each event, records parentClipId (nearest in-clip ancestor) and pathXform (concatenated xforms from family parent down). Paste's aliasWriter consumes both to reattach descendants under their in-clip parent. Always runs — paste-time mode chooses. See docs/aliases.md.
-  @fn collect()  @ 117
-      @contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }. aliasSrc is always captured per event — paste-time mode selects writer. cut follows the same path; deletion-fallback demotes at paste once byUuid fails.
-  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 239
+  @fn save(clip)  @ 46
+  @fn load()  @ 50
+  @fn collect()  @ 57
+      @contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }.
+  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 155
       @contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
-  @fn plainWriter(evtType, e)  @ 296
-  @fn writeAsRoot(evtType, e)  @ 304
-      -- Family root or no family relation: today's resolve-and-corrective-delta
-      -- logic. Returns the outcome so a child in the clip can attach to it.
-  @fn aliasWriter(evtType, e)  @ 362
-      @contract  dispatches by family relation. No parentClipId → writeAsRoot (resolve-and-corrective-delta). With parentClipId → tm:createAlias under the parent's recorded outcome (alias → parent's new specIdx; plain → parent's mm uuid post-flush). Defers to `pending` if the parent isn't ready. Outcomes keyed by aliasSrc.clipId. See docs/aliases.md.
-  @fn pasteSingle(clip, writer)  @ 394
-      @contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op. writer is plainWriter or aliasWriter — every paste mode uses the same pipeline (cap, clear, tail clamp); only the per-event write differs.
-  @fn pasteMulti(clip, writer)  @ 483
-      @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col. writer is plainWriter or aliasWriter (see pasteSingle).
-  @fn pasteClip(clip)  @ 604
-  @fn trimTop(clip, trim)  @ 633
+  @fn pasteSingle(clip)  @ 199
+      @contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op.
+  @fn pasteMulti(clip)  @ 290
+      @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col.
+  @fn pasteClip(clip)  @ 412
+  @fn trimTop(clip, trim)  @ 420
       -- A note whose start row falls within the trimmed band is dropped entirely.
       @contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
 
 # Public API (clipboard:*)
-  @api clipboard:collect()  @ 657
-  @api clipboard:copy()  @ 658
-  @api clipboard:pasteClip(clip)  @ 659
-  @api clipboard:trimTop(clip, trim)  @ 660
-  @api clipboard:registerCommands(scope)  @ 662
+  @api clipboard:collect()  @ 444
+  @api clipboard:copy()  @ 445
+  @api clipboard:pasteClip(clip)  @ 446
+  @api clipboard:trimTop(clip, trim)  @ 447
+  @api clipboard:registerCommands(scope)  @ 449
 
 # REAPER API surface
   @reaper SetExtState
   @reaper GetExtState
-  @reaper ShowMessageBox

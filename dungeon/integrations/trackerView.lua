@@ -15,6 +15,7 @@
 
 local util    = require 'util'
 local timing  = require 'timing'
+local aliases = require 'aliases'
 local tuning  = require 'tuning'
 
 local tm, cm, cmgr = (...).tm, (...).cm, (...).cmgr
@@ -42,9 +43,12 @@ local grid = {
   chanLastCol  = {},
 }
 
+--invariant: aliasIdx: per-rebuild visual index over grid-visible events. byUuid[uuid] → { col, row, evt, chan, ppq, treeParent? }; byChildren[treeParent] → records sorted (ppq, chan). treeParent is the spec-tree parent uuid, derived from tm.nodeMeta. See docs/aliases.md.
+local aliasIdx = { byUuid = {}, byChildren = {} }
 
 local tv = {}
 tv.grid = grid  -- live handle for rm; mutated in place on rebuild
+tv.aliasMode = false  -- toggled by `toggleAliasMode`; sampled at paste/duplicate time to choose aliased vs plain writer (the clip itself always carries aliasSrc)
 
 local ec, clipboard, ctx
 
@@ -516,6 +520,18 @@ do
       return update
     end
 
+    -- Step delta for re-relativising typed pitch on an aliased child.
+    -- Under temper, midi+detune fold to a step index (step + oct *
+    -- octaveStep); the delta is the integer step difference. Without
+    -- temper, the scalar MIDI delta is the step delta.
+    local function pitchStepDelta(fromMidi, fromDetune, toMidi, toDetune)
+      local temper = ctx:activeTemper()
+      if not temper then return toMidi - fromMidi end
+      local fs, fo = tuning.midiToStep(temper, fromMidi, fromDetune)
+      local ts, to = tuning.midiToStep(temper, toMidi,   toDetune)
+      local osStep = temper.octaveStep
+      return (ts + to * osStep) - (fs + fo * osStep)
+    end
 
     -- Within a part the cursor walks left-to-right (digit 0 = MS char,
     -- digit (width-1) = LS char). setDigit speaks position-from-LS, so
@@ -533,6 +549,13 @@ do
         if temper then pitch, detune = tuning.snap(temper, pitch, 0) end
 
         if util.isNote(evt) then
+          if evt.parentUuid then
+            local d = pitchStepDelta(evt.pitch, evt.detune, pitch, detune)
+            if d == 0 then return commit(pitch, evt.vel) end
+            if tm:routeRelative(evt, { pitch = { 'add', d } }) then
+              return commit(pitch, evt.vel)
+            end
+          end
           local upd = { pitch = pitch, detune = detune }
           if cm:get('trackerMode') then upd.sample = cm:get('currentSample') end
           tm:assignEvent(evt, snap(upd))
@@ -569,6 +592,13 @@ do
           oct = d
         end
         local pitch = util.clamp((oct + 1) * 12 + evt.pitch % 12, 0, 127)
+        if evt.parentUuid then
+          local d = pitchStepDelta(evt.pitch, evt.detune, pitch, evt.detune)
+          if d == 0 then return commit(pitch, evt.vel) end
+          if tm:routeRelative(evt, { pitch = { 'add', d } }) then
+            return commit(pitch, evt.vel)
+          end
+        end
         tm:assignEvent(evt, { pitch = pitch })
         return commit(pitch, evt.vel)
 
@@ -790,6 +820,16 @@ local interpolate, interpolateValues do
     tm:flush()
   end
 
+  -- Refused-on-aliased: interpolate writes computed absolute values
+  -- (cycleShape → assignEvent on shape). On an aliased child this would
+  -- sever and lose the spec relationship; partially skipping aliased
+  -- events would produce a misleading curve. Whole command no-ops.
+  local function refuseAliased()
+    reaper.ShowMessageBox(
+      'interpolate: aliased event(s) in scope. Sever (Ctrl+.) first.',
+      'interpolate refused', 0)
+  end
+
   function interpolate()
     if ec:hasSelection() then
       local r1, r2 = ec:region()
@@ -800,6 +840,7 @@ local interpolate, interpolateValues do
           local endppq   = ctx:rowToPPQ(r2 + 1, col.midiChan)
           local evts = {}
           for evt in util.between(col.events, startppq, endppq) do
+            if evt.parentUuid then refuseAliased(); return end
             evts[#evts + 1] = evt
           end
           plans[#plans + 1] = { col = col, evts = evts }
@@ -820,6 +861,7 @@ local interpolate, interpolateValues do
       or (col.cells and col.cells[r])
       or util.seek(col.events, 'before', ctx:rowToPPQ(r + 1, col.midiChan))
     if not A then return end
+    if A.parentUuid then refuseAliased(); return end
     cycleShape(col, A); tm:flush()
   end
 
@@ -855,16 +897,28 @@ local noteOff, adjustDuration, adjustPosition do
     return col, util.seek(col.events, 'at-or-before', cursorppq, util.isNote)
   end
 
+  -- Aliased: tail moves route durL relative; the zero/negative-duration
+  -- branch routes through deleteAliased so spec-tree descendants promote
+  -- in place rather than vanishing with the swept materialisation.
   local function applyNoteOff(col, last, targetppq, undo)
     if undo then
       local next = util.seek(col.events, 'at-or-after', targetppq, util.isNote)
       local newEnd = next and next.ppq or length
+      if last.parentUuid
+         and tm:routeRelative(last, { durL = { 'add', newEnd - last.endppq } }) then
+        return
+      end
       assignTail(last, col.midiChan, newEnd)
     elseif last.ppq >= targetppq then
+      if last.parentUuid and tm:deleteAliased(last) then return end
       tm:deleteEvent(last)
     else
       local _, maxEnd = overlapBounds(col, last.ppq, last, true)
       local newEnd    = util.clamp(targetppq, last.ppq + 1, maxEnd)
+      if last.parentUuid
+         and tm:routeRelative(last, { durL = { 'add', newEnd - last.endppq } }) then
+        return
+      end
       assignTail(last, col.midiChan, newEnd)
     end
   end
@@ -920,6 +974,10 @@ local noteOff, adjustDuration, adjustPosition do
     local _, maxPPQ = overlapBounds(col, note.ppq, note, true)
     local newppq    = util.clamp(ctx:rowToPPQ(newRow, chan), minPPQ, maxPPQ)
     if newppq == note.endppq then return end
+    if note.parentUuid
+       and tm:routeRelative(note, { durL = { 'add', newRow * logPerRow - note.endppq } }) then
+      return
+    end
     assignTail(note, chan, newppq)
   end
 
@@ -940,15 +998,17 @@ local noteOff, adjustDuration, adjustPosition do
     tm:flush()
   end
 
+  --contract: aliased kids route { ppqL=[add δ] } (mirrors single-event adjustPosition); plain notes stamp. Filters via aliases.localRoots so a selected descendant of a selected root is skipped — the root's stamp re-derives the kid.
   local function adjustPositionMulti(rowDelta)
     if rowDelta == 0 then return end
     local logPerRow = ctx:ppqPerRow()
-    local runs = {}
+    local runs, flat = {}, {}
     for _, g in ipairs(eventsByCol()) do
       if g.col.type == 'note' then
         local ns = {}
         for _, n in pairs(g.locs) do
           util.add(ns, n)
+          flat[#flat + 1] = n
         end
         if #ns > 0 then
           table.sort(ns, function(a, b) return a.ppq < b.ppq end)
@@ -965,6 +1025,9 @@ local noteOff, adjustDuration, adjustPosition do
     end
     if #runs == 0 then return end
 
+    local keep = {}
+    for _, e in ipairs(aliases.localRoots(flat)) do keep[e] = true end
+
     -- resizeNote moves PBs in the note's ppq range; within each run, process in
     -- the direction that keeps shifted PBs out of unprocessed notes' ranges.
     for _, r in ipairs(runs) do
@@ -974,9 +1037,16 @@ local noteOff, adjustDuration, adjustPosition do
       if rowDelta > 0 then s, e, step = #notes, 1, -1 end
       for i = s, e, step do
         local n = notes[i]
-        local rowS = ctx:ppqToRow(n.ppq,    chan) + rowDelta
-        local rowE = ctx:ppqToRow(n.endppq, chan) + rowDelta
-        assignStamp(n, chan, rowS, rowE)
+        if keep[n] then
+          if n.parentUuid then
+            local newppq = (ctx:ppqToRow(n.ppq, chan) + rowDelta) * logPerRow
+            tm:routeRelative(n, { ppqL = { 'add', newppq - n.ppq } })
+          else
+            local rowS = ctx:ppqToRow(n.ppq,    chan) + rowDelta
+            local rowE = ctx:ppqToRow(n.endppq, chan) + rowDelta
+            assignStamp(n, chan, rowS, rowE)
+          end
+        end
       end
     end
     tm:flush()
@@ -1009,7 +1079,11 @@ local noteOff, adjustDuration, adjustPosition do
       end
     end
 
-    assignStamp(note, chan, newStart, newEnd)
+    local logPerRow = logPerRowFor(currentRpb())
+    if not (note.parentUuid
+            and tm:routeRelative(note, { ppqL = { 'add', newStart * logPerRow - note.ppq } })) then
+      assignStamp(note, chan, newStart, newEnd)
+    end
     tm:flush()
     if not cursorBlocked then ec:setPos(newCursorRow) end
   end
@@ -1119,6 +1193,7 @@ do
   -- otherwise quantize-collapse onto the same ppq (or onto adjacent
   -- rows whose post-snap distance crosses the lenient threshold),
   -- and the allocator would reject the persisted lane on rebuild.
+  --contract: aliased events route { ppqL=[snap step], durL=[snap step] for notes }. step = logPerRowFor(currentRpb()), baked as a literal so the alias keeps its grid even if rowPerBeat later changes. Root events use the plan-and-write path.
   local function quantizeScope(groups)
     local step  = logPerRowFor(currentRpb())
     local plans = {}
@@ -1136,9 +1211,15 @@ do
         local changed = newppq ~= e.ppq
                         or (util.isNote(e) and newEndppq ~= e.endppq)
         if changed then
-          local entry = { col = col, e = e, newppq = newppq }
-          if util.isNote(e) then entry.newEndppq = newEndppq end
-          util.add(plans, entry)
+          if e.parentUuid then
+            local ops = { ppqL = { 'snap', step } }
+            if util.isNote(e) then ops.durL = { 'snap', step } end
+            tm:routeRelative(e, ops)
+          else
+            local entry = { col = col, e = e, newppq = newppq }
+            if util.isNote(e) then entry.newEndppq = newEndppq end
+            util.add(plans, entry)
+          end
         end
       end
     end
@@ -1149,6 +1230,7 @@ do
   end
 
   -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
+  --contract: logical snaps to nearest row; delay absorbs the inverse to preserve realised onset; endppq held; delay clamped by delayRange; popup reports clamps. Aliased planned events sever first — alias vocabulary has no delay. On-grid aliased col-mates stay attached (no plan).
   local function quantizeKeepRealisedScope(groups)
     local plans, clamped = {}, 0
     for _, g in ipairs(groups) do
@@ -1174,6 +1256,12 @@ do
       end
     end
 
+    local hits = {}
+    for _, p in ipairs(plans) do
+      if p.e.parentUuid then util.add(hits, p.e) end
+    end
+    if #hits > 0 then tm:severBatch(hits) end
+
     writePlans(plans)
     tm:flush()
 
@@ -1195,6 +1283,7 @@ do
   -- than silently clamped (clamping would land us at the wrong grid).
   local SCALE_RPB_MAX = 32
 
+  --contract: scale around the selection-anchor row's logical ppq (cursor row when no selection). Aliased route { ppqL=[mul k, add a*(1-k)], durL=[mul k] }; durations are intervals, no translation. Filters via aliases.localRoots so a selected descendant is skipped — the parent re-derives it. After flush, if span*k is non-integer rational, rpb multiplies by the reduced denominator (capped) so the geometry lands on integer rows. See docs/aliases.md.
   local function scaleScope(groups, kNum, kDen)
     kDen = kDen or 1
     if kDen == 0 then return end
@@ -1204,17 +1293,36 @@ do
     local aRow      = ec:anchorRow() or ec:row()
     local aLogical  = aRow * logPerRow
 
+    local flat = {}
+    for _, g in ipairs(groups) do
+      for _, e in pairs(g.locs) do flat[#flat + 1] = e end
+    end
+    local keep = {}
+    for _, e in ipairs(aliases.localRoots(flat)) do keep[e] = true end
+
     local plans = {}
     for _, g in ipairs(groups) do
       local col, chan = g.col, g.col.midiChan
       local aPpq = ctx:rowToPPQ(aRow, chan)
       for _, e in pairs(g.locs) do
-        local newppq = util.round(aPpq + k * (e.ppq - aPpq))
-        local entry  = { col = col, e = e, newppq = newppq }
-        if util.isNote(e) then
-          entry.newEndppq = newppq + util.round(k * (e.endppq - e.ppq))
+        if keep[e] then
+          if e.parentUuid then
+            local addTerm = aLogical * (1 - k)
+            local ppqLOps = addTerm ~= 0
+              and { { 'mul', k }, { 'add', addTerm } }
+              or  { 'mul', k }
+            local ops = { ppqL = ppqLOps }
+            if util.isNote(e) then ops.durL = { 'mul', k } end
+            tm:routeRelative(e, ops)
+          else
+            local newppq = util.round(aPpq + k * (e.ppq - aPpq))
+            local entry  = { col = col, e = e, newppq = newppq }
+            if util.isNote(e) then
+              entry.newEndppq = newppq + util.round(k * (e.endppq - e.ppq))
+            end
+            util.add(plans, entry)
+          end
         end
-        util.add(plans, entry)
       end
     end
     conformOverlaps(plans)
@@ -1393,6 +1501,10 @@ local nudge do
   end
 
   local function nudgePitch(col, note, dir, coarse, audible, p)
+    if note.parentUuid then
+      local field = coarse and 'octave' or 'pitch'
+      if tm:routeRelative(note, { [field] = { 'add', dir * p } }) then return end
+    end
     local delta  = dir * pitchStep(coarse) * p
     local temper = ctx:activeTemper()
     local pitch, detune
@@ -1409,6 +1521,8 @@ local nudge do
   local function nudgeVel(note, dir, coarse, p)
     local newVel = scaledScalar(note.vel, 1, 127, dir, coarse and 8 or nil, p)
     if newVel == note.vel then return end
+    if note.parentUuid
+       and tm:routeRelative(note, { vel = { 'add', newVel - note.vel } }) then return end
     tm:assignEvent(note, { vel = newVel })
   end
 
@@ -1417,6 +1531,8 @@ local nudge do
     local old = note.delay
     local new = scaledScalar(old, math.ceil(minD), math.floor(maxD), dir, coarse and 10 or nil, p)
     if new == old then return end
+    if note.parentUuid
+       and tm:routeRelative(note, { delay = { 'add', new - old } }) then return end
     tm:assignEvent(note, { delay = new })
   end
 
@@ -1424,6 +1540,8 @@ local nudge do
     local lo, hi   = valueBounds(col)
     local newVal   = scaledScalar(evt.val, lo, hi, dir, coarse and valueInterval(col) or nil, p)
     if newVal == evt.val then return end
+    if evt.parentUuid
+       and tm:routeRelative(evt, { val = { 'add', newVal - evt.val } }) then return end
     tm:assignEvent(evt, { val = newVal })
   end
 
@@ -1463,11 +1581,22 @@ local nudge do
         end
       end
 
+      -- Filter to local roots: a child whose parent is also in the
+      -- selection drops out, otherwise the parent's direct mutation
+      -- plus the child's spec-append would compose into a double-delta
+      -- on rebuild.
+      local flat = {}
+      for _, g in ipairs(groups) do
+        for _, e in pairs(g.locs) do flat[#flat + 1] = e end
+      end
+      local keep = {}
+      for _, e in ipairs(aliases.localRoots(flat)) do keep[e] = true end
+
       for _, g in ipairs(groups) do
         local skip = g.part == 'val' and anyNote
         if not skip then
           for _, e in pairs(g.locs) do
-            if g.part == 'val' or util.isNote(e) then
+            if keep[e] and (g.part == 'val' or util.isNote(e)) then
               applyNudge(g.col, e, g.part, dir, coarse, false, p)
             end
           end
@@ -1561,6 +1690,11 @@ local deleteEvent, deleteSelection do
     sample = function() end,
   }
 
+  -- Pitch-column delete on an aliased event (or on a root with descendants)
+  -- is structural: route through tm:deleteAliased, which removes the spec
+  -- node and promotes its children to new roots. Tail-fixup logic doesn't
+  -- apply — the materialised event vanishes via the rebuild sweep, with
+  -- no cross-event extension across structural deletes.
   function deleteEvent()
     local col = grid.cols[ec:col()]
     if not col then return end
@@ -1576,13 +1710,25 @@ local deleteEvent, deleteSelection do
       return
     end
     local part = col.type == 'note' and ec:cursorPart() or 'val'
+    if part == 'pitch' and tm:deleteAliased(evt) then
+      tm:flush()
+      return
+    end
     DELETE_BY_PART[part](col, { [evt] = evt })
     tm:flush()
   end
 
   function deleteSelection()
     for _, g in ipairs(eventsByCol()) do
-      DELETE_BY_PART[g.part](g.col, g.locs)
+      if g.part == 'pitch' then
+        local rest = {}
+        for k, evt in pairs(g.locs) do
+          if not tm:deleteAliased(evt) then rest[k] = evt end
+        end
+        if next(rest) then DELETE_BY_PART[g.part](g.col, rest) end
+      else
+        DELETE_BY_PART[g.part](g.col, g.locs)
+      end
     end
     tm:flush()
     ec:selClear()
@@ -1592,6 +1738,29 @@ end
 local function deleteOrBackspace()
   if ec:isSticky() then deleteSelection()
   else ec:selClear(); deleteEvent(); ec:advance() end
+end
+
+--contract: sever the aliased event(s) under attention: selection if
+-- present, else the cursor event. Plain (non-aliased) events are ignored.
+-- Each aliased hit is plucked from its root's spec tree and promoted into
+-- a new root (see tm:sever); the next rebuild re-emits its descendants
+-- under the new root.
+local function severCmd()
+  local hits = {}
+  if ec:hasSelection() then
+    for _, g in ipairs(eventsByCol()) do
+      for _, e in pairs(g.locs) do
+        if e.parentUuid then util.add(hits, e) end
+      end
+    end
+  else
+    local col = grid.cols[ec:col()]
+    local evt = col and col.cells and col.cells[ec:row()]
+    if evt and evt.parentUuid then util.add(hits, evt) end
+  end
+  if #hits == 0 then return end
+  tm:severBatch(hits)
+  tm:flush()
 end
 
 -- Step currentSample by ±1 across the full 0..127 range. Empty slots
@@ -1604,9 +1773,13 @@ end
 
 ----- Duplicate
 
+-- Cache of the clip captured on the first duplicate of a run. Subsequent
+-- immediate duplicates re-paste this clip rather than re-collecting, so the
+-- alias-mode `aliasSrc` (uuid, specPath, ppqL) stays anchored to the
+-- original source. Cleared by `doBefore` on every other tracker command.
 local dupeClip = nil
 
---contract: upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard. First call collects; subsequent immediate calls re-paste the cached clip.
+--contract: upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard. First call collects; subsequent immediate calls re-paste the cached clip so successive duplicates anchor to the original source row (matters for alias mode).
 local function duplicate(dir)
   local clip = dupeClip or clipboard:collect()
   if not clip then return end
@@ -1651,6 +1824,8 @@ function tv:ppqToRow(ppq, chan) return ctx:ppqToRow(ppq, chan) end
 function tv:rowToPPQ(row, chan) return ctx:rowToPPQ(row, chan) end
 function tv:logPerRow()         return logPerRowFor(currentRpb()) end
 function tv:sampleCurve(A, B, ppq) return tm:interpolate(A, B, ppq) end
+function tv:getAliasMode() return self.aliasMode end
+function tv:aliasIndex()   return aliasIdx end
 function tv:timeSig()
   local ts = timeSigs[1] or { num = 4, denom = 4 }
   return ts.num, ts.denom
@@ -1760,6 +1935,55 @@ function tv:showDelay()
   if changed then cm:set('take', 'noteDelay', nd) end
 end
 
+----- Alias-tree navigation
+
+-- Reverse lookup: grid col + row hosting `evt`. Restricted to chan so
+-- the scan stays bounded by the (few) cols of one channel.
+local function locateEvent(evt, chan)
+  if not (evt and chan) then return end
+  local first, last = grid.chanFirstCol[chan], grid.chanLastCol[chan]
+  if not first then return end
+  for ci = first, last do
+    local cells = grid.cols[ci].cells
+    if cells then
+      for r, e in pairs(cells) do
+        if e == evt then return ci, r end
+      end
+    end
+  end
+end
+
+----- Alias-tree navigation
+
+-- dir ∈ 'up' | 'down' | 'left' | 'right'. Resolves the event under the
+-- cursor, walks aliasIdx, moves ec onto the target's cell. Each
+-- direction no-ops at its boundary: up from a root, down from a leaf,
+-- left/right at the sibling-list ends. No wrap. "Parent" here is the
+-- spec-tree parent (one level up the alias hierarchy), not the flat
+-- materialisation root that evt.parentUuid points at.
+local function aliasNav(dir)
+  local col = grid.cols[ec:col()]
+  local evt = col and col.cells and col.cells[ec:row()]
+  if not evt or not evt.uuid then return end
+  local rec = aliasIdx.byUuid[evt.uuid]
+  if not rec then return end
+  local target
+  if dir == 'up' then
+    target = rec.treeParent and aliasIdx.byUuid[rec.treeParent]
+  elseif dir == 'down' then
+    local list = aliasIdx.byChildren[evt.uuid]
+    target = list and list[1]
+  else
+    if not rec.treeParent then return end
+    local list = aliasIdx.byChildren[rec.treeParent]
+    if not list then return end
+    local step = dir == 'right' and 1 or -1
+    for i, sib in ipairs(list) do
+      if sib == rec then target = list[i + step]; break end
+    end
+  end
+  if target then ec:setPos(target.row, target.col, 1) end
+end
 
 ----- Command table
 
@@ -1772,6 +1996,12 @@ tracker:registerAll{
   deleteSel               = function() deleteSelection() end,
   duplicateDown           = function() duplicate( 1) end,
   duplicateUp             = function() duplicate(-1) end,
+  toggleAliasMode         = function() tv.aliasMode = not tv.aliasMode end,
+  aliasUp                 = function() aliasNav('up')    end,
+  aliasDown               = function() aliasNav('down')  end,
+  aliasLeft               = function() aliasNav('left')  end,
+  aliasRight              = function() aliasNav('right') end,
+  sever                   = severCmd,
   inputOctaveUp           = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')+1, -1, 9)) end,
   inputOctaveDown         = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')-1, -1, 9)) end,
   inputSampleUp           = function() stepSample( 1) end,
@@ -1842,6 +2072,10 @@ function tv:rebuild(takeChanged)
   timeSigs   = tm:timeSigs()
   if takeChanged then
     ec:reset()
+    local b = cm:get('regions')
+    ec.regionData.regions = b.regions
+    ec.regionData.idCtr   = b.idCtr
+    ec.regionData.active  = b.active
   end
 
   do
@@ -1906,6 +2140,7 @@ function tv:rebuild(takeChanged)
       temper     = tuning.findTemper(cm:get('temper'), cm:get('tempers')),
     })
 
+    aliasIdx = { byUuid = {}, byChildren = {} }
     for ci, gridCol in ipairs(grid.cols) do
       gridCol.overflow = {}
       gridCol.offGrid  = {}
@@ -1921,6 +2156,29 @@ function tv:rebuild(takeChanged)
             gridCol.cells[y] = evt
             if ctx:rowToPPQ(y, chan) ~= evt.ppq then gridCol.offGrid[y] = true end
           end
+          if evt.uuid then
+            local rec = { col = ci, row = y, evt = evt, chan = chan, ppq = evt.ppq }
+            aliasIdx.byUuid[evt.uuid] = rec
+            if evt.parentUuid then
+              -- treeParent: spec-tree parent's uuid. nodeMeta(node).parent
+              -- nil → top-level (parent = root event); non-nil but its
+              -- materialised uuid nil → intermediate suppressed (collision
+              -- loser), fall back to root so the chain stays walkable.
+              local treeParent = evt.parentUuid
+              local node = tm:specOf(evt.uuid)
+              if node then
+                local pSpec = tm:nodeMeta(node).parent
+                if pSpec then
+                  local pMeta = tm:nodeMeta(pSpec)
+                  if pMeta and pMeta.uuid then treeParent = pMeta.uuid end
+                end
+              end
+              rec.treeParent = treeParent
+              local list = aliasIdx.byChildren[treeParent] or {}
+              aliasIdx.byChildren[treeParent] = list
+              util.add(list, rec)
+            end
+          end
         end
         if evt.endppq then
           util.add(gridCol.tails, {
@@ -1929,6 +2187,12 @@ function tv:rebuild(takeChanged)
           })
         end
       end
+    end
+    for _, list in pairs(aliasIdx.byChildren) do
+      table.sort(list, function(a, b)
+        if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+        return a.chan < b.chan
+      end)
     end
 
     for _, gridCol in ipairs(grid.cols) do
@@ -1971,6 +2235,7 @@ ec = util.instantiate('editCursor', {
   rowPerBar   = function() return rowPerBar end,
   logPerRow   = function() return logPerRowFor(currentRpb()) end,
   moveHook    = followViewport,
+  regionsHook = function() cm:set('take', 'regions', ec.regionData) end,
 })
 
 clipboard = util.instantiate('clipboard', {
@@ -1979,6 +2244,7 @@ clipboard = util.instantiate('clipboard', {
   assignTail   = assignTail,
   getCtx       = function() return ctx end,
   getLength    = function() return length end,
+  getAliasMode = function() return tv.aliasMode end,
 })
 
 ec:registerCommands(tracker)
