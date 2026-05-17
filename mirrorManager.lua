@@ -209,9 +209,14 @@ end
 
 -- Re-resolve the lane: every tail clipped to the next onset; the
 -- last-in-lane note keeps its own dur (conform clips the realised tail).
-local function groupPlaceLegato(group, vuid)
+-- A just-`created` note has no meaningful birth dur under legato (like
+-- tv's placeNewNote): drop it so it takes the legato tail -- the next
+-- onset, or an infinite tail when it lands last in the lane. An explicit
+-- adjustDuration/noteOff arrives later as a non-create assign and is kept.
+local function groupPlaceLegato(group, vuid, created)
   local g = group.events[vuid]
   if not g or g.evType ~= 'note' then return end
+  if created then g.dur = nil end
   local list = groupLane(group, mirror.laneId(g))
   for _, n in ipairs(list) do
     local _, _, tail = legato.place(list, n.ppq, math.huge)
@@ -603,7 +608,7 @@ do
       elseif isCreate then
         local g = toGroup(evt, instance.anchor)
         group.events[vuid] = g
-        groupPlaceLegato(group, vuid)
+        groupPlaceLegato(group, vuid, true)
         link(groupId, instId, vuid, projOf(groupId, instId), evt.uuid,
              util.clone(g), evt)
       else

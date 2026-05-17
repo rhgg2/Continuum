@@ -109,4 +109,41 @@ return {
     end,
   },
 
+  {
+    name = 'a create that lands last-in-lane gets an infinite group tail (runs to end of take)',
+    run = function()
+      local mirm, tm, staged = mk()
+      local A = note(0, 60, 240)
+      local gid = mirm:markGroup({ A }, rect())
+      mirm:newInstance(gid, { ppq = 1000, chan = 1 })
+      tm:flush(); staged.add, staged.assign, staged.del = {}, {}, {}
+
+      local born = note(240, 62, 240)                   -- created after A: last in lane
+      tm:flush({ { evt = born } }, {}, {})
+
+      -- The sibling copy: project clips the infinite group dur to
+      -- patternLen (fake tm:length 4000), not the 240 birth dur.
+      local bornDur, bornConform
+      for _, e in ipairs(staged.add) do
+        if e.pitch == 62 then
+          bornDur, bornConform = e.endppq - e.ppq, e.conform
+        end
+      end
+      t.eq(bornDur, 4000 - 240, 'birth dur discarded; tail runs to end of take')
+      t.truthy(bornConform, 'last-in-lane copy is conform-marked')
+
+      -- An explicit length (adjustDuration/noteOff) is a non-create
+      -- assign: it must be kept, not re-opened to infinite.
+      staged.add, staged.assign, staged.del = {}, {}, {}
+      tm:flush({}, { { evt = born, update = { ppq = born.ppq, endppq = born.ppq + 360 } } }, {})
+      local kept
+      for _, a in ipairs(staged.assign) do
+        if a.evt.pitch == 62 and a.update.endppq ~= nil then
+          kept = a.update.endppq - (a.update.ppq or a.evt.ppq)
+        end
+      end
+      t.eq(kept, 360, 'explicit duration adjust is preserved on the last-in-lane note')
+    end,
+  },
+
 }
