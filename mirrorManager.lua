@@ -203,7 +203,8 @@ local function groupDeleteLegato(group, deletedG)
   util.add(list, hole)
   table.sort(list, function(a, b) return a.ppq < b.ppq end)
   for _, f in ipairs(legato.deleteFixups(list, { [hole] = true }, math.huge)) do
-    f.evt.g.dur = f.endppq - (f.evt.g.ppq or 0)
+    local dur = f.endppq - (f.evt.g.ppq or 0)
+    f.evt.g.dur = dur < math.huge and dur or nil
   end
 end
 
@@ -218,10 +219,14 @@ local function groupPlaceLegato(group, vuid, created)
   if not g or g.evType ~= 'note' then return end
   if created then g.dur = nil end
   local list = groupLane(group, mirror.laneId(g))
+  -- An open last-in-lane tail is canonically `nil` dur, not `math.huge`:
+  -- the infinite sentinel serialises to "inf" and Lua's tonumber can't
+  -- round-trip it, so a persisted group would fail to reload.
   for _, n in ipairs(list) do
     local _, _, tail = legato.place(list, n.ppq, math.huge)
-    n.g.dur = n.g.dur == nil and tail - n.ppq
-              or math.min(n.ppq + n.g.dur, tail) - n.ppq
+    local dur = n.g.dur == nil and tail - n.ppq
+                or math.min(n.ppq + n.g.dur, tail) - n.ppq
+    n.g.dur = dur < math.huge and dur or nil
   end
 end
 

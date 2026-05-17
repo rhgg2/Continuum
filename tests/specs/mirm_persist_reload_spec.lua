@@ -51,7 +51,52 @@ local function rect(ppq, chan)
            streams = { [0] = { ['note:1'] = true } } }
 end
 
+-- Round-trips the persisted blob through util.serialise/unserialise, as
+-- the real take tier does. A group note left open at its lane tail must
+-- not be stored as math.huge: it serialises to "inf", which Lua's
+-- tonumber refuses, so unserialise hands back the string and reload
+-- crashes in mirror.project (number + "inf").
+local function serialisingCm()
+  local store = {}
+  return {
+    get = function(_, k) return store[k] end,
+    set = function(_, _lvl, k, v)
+      store[k] = util.unserialise(util.serialise(v))
+    end,
+  }
+end
+
 return {
+  {
+    name = 'an open last-in-lane group note survives the serialised reload',
+    run = function()
+      local cm = serialisingCm()
+
+      -- Session 1: stamp a group + sibling, then a global create whose
+      -- group event lands last-in-lane (open tail -> math.huge dur).
+      local tmA, stagedA = fakeTm()
+      local A   = util.instantiate('mirrorManager', { tm = tmA, cm = cm })
+      local src = note(0, 1, 1)
+      local gid = A:markGroup({ src }, rect(0, 1))
+      A:newInstance(gid, { ppq = 960, chan = 1 })
+      tmA:flush()
+
+      local born = note(480, 1, 1, { pitch = 65 })  -- inside region, last in lane
+      tmA:flush({ { evt = born } }, {}, {})
+
+      local uuidMap = { [src.uuid] = src, [born.uuid] = born }
+      for _, e in ipairs(stagedA.add) do uuidMap[e.uuid] = e end
+
+      -- Session 2: fresh mirm sharing the (serialised) cm. Without the
+      -- finite-dur normalisation rehydrate raises in mirror.project.
+      local tmB = fakeTm(uuidMap)
+      local B   = util.instantiate('mirrorManager', { tm = tmB, cm = cm })
+      tmB:fireRebuild(true)
+
+      t.eq(#B:eachInstance(), 2, 'group + its mirrored instance rehydrated')
+      t.truthy(B:stateOf(src.uuid), 'origin reverse-lookup rehydrated')
+    end,
+  },
   {
     name = 'a persisted group rehydrates on the take-changed rebuild',
     run = function()
