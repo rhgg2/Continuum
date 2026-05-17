@@ -62,6 +62,7 @@ local specs = {
   'gm_revive_delete_spec',
   'gm_seed_conform_spec',
   'gm_overlap_spec',
+  'gm_lifecycle_spec',
   'gm_override_transition_spec',
   'gm_two_channel_spec',
   'timing_period_spec',

@@ -45,6 +45,11 @@ local locByUuid = {}  -- concrete uuid -> { groupId, instId, vuid }
 -- newInstance's own projection adds; the preflush adds loop skips them
 -- (gm's echo, not a user create) and clears each as seen.
 local selfStaged = {}
+-- moveInstance's own re-place assigns; the preflush assigns loop skips
+-- them. Distinct from selfStaged: the assigns loop runs before the adds
+-- loop, so a shared marker would let it drain a pending add-echo (and
+-- vice versa) when both land in one flush.
+local selfAssigned = {}
 -- uuids the user directly touched this flush. Gates userOwned (per
 -- event, not per instance) so a create/delete's redundant tm op is
 -- skipped while a same-flush edit in two instances still propagates.
@@ -441,11 +446,13 @@ end
 -- groupId of an existing group an instance of `rect` at `anchor` would
 -- collide with -- shared time span AND a shared (channel, streamId)
 -- cell -- or nil.
-local function regionConflict(rect, anchor)
+local function regionConflict(rect, anchor, exclude)
   local cells = rectCells(rect, anchor)
   for groupId, group in pairs(groups) do
-    for _, inst in pairs(group.instances) do
-      if spansOverlap(anchor.ppq, rect.dur,
+    for instId, inst in pairs(group.instances) do
+      local skip = exclude and exclude.groupId == groupId
+                   and (exclude.instId == nil or exclude.instId == instId)
+      if not skip and spansOverlap(anchor.ppq, rect.dur,
                        inst.anchor.ppq, group.rect.dur) then
         for chanOff, streams in pairs(group.rect.streams) do
           local row = cells[inst.anchor.chan + chanOff]
@@ -781,7 +788,13 @@ do
   tm:subscribe('preflush', function(adds, assigns, deletes)
     if propagating then return end
     touchedGroups, touchedUuids = {}, {}
-    for _, o in ipairs(assigns) do applyEdit(o.evt, o.update) end
+    -- An assign tm delivers may be gm's own re-place echo (moveInstance):
+    -- skip & clear so it never re-enters applyEdit and pollutes an
+    -- override instance's assigns.
+    for _, o in ipairs(assigns) do
+      if selfAssigned[o.evt] then selfAssigned[o.evt] = nil
+      else applyEdit(o.evt, o.update) end
+    end
     for _, o in ipairs(deletes) do applyEdit(o.evt, nil)      end
     -- newInstance stages its projection adds, but the commit flush fires
     -- later (after `propagating` has cleared), so they reappear here as
@@ -824,5 +837,136 @@ tm:subscribe('rebuild', function(takeChanged)
     end
   end
 end)
+
+----------- INSTANCE / GROUP LIFECYCLE
+
+-- Stage a tm delete for every projected concrete of one instance, drop
+-- the instance, and -- if it was the group's last -- drop the group,
+-- clearing the active pointer if it named it. Unknown id -> nil, reason.
+--contract: (groupId, instId) -> true | nil,reason; stages tm deletes for the instance's concretes, last instance drops the group + clears active. Unknown id -> nil,reason.
+function gm:deleteInstance(groupId, instId)
+  local group = groups[groupId]
+  if not group then return nil, 'no such group' end
+  if not group.instances[instId] then return nil, 'no such instance' end
+
+  local p = projOf(groupId, instId)
+  propagating = true
+  for _, rec in pairs(p) do
+    if rec.evt  then tm:deleteEvent(rec.evt) end
+    if rec.uuid then locByUuid[rec.uuid] = nil end
+  end
+  propagating = false
+
+  proj[groupId][instId]   = nil
+  group.instances[instId] = nil
+  if next(group.instances) == nil then
+    groups[groupId], proj[groupId] = nil, nil
+    if activeGroup == groupId then activeGroup = nil end
+  end
+  persist()
+  return true
+end
+
+-- Re-anchor an instance. The group frame is anchor-invariant, so a pure
+-- move is zero group-frame drift and reproject (drift-driven) cannot see
+-- it: re-place every projected concrete through the group->instance dual
+-- at the new anchor directly, gated selfStaged so the echo never
+-- re-enters applyEdit. Rejected (instance untouched) on channel range or
+-- a collision with another group or a sibling -- the moving instance
+-- itself excluded so it cannot self-collide.
+--contract: (groupId, instId, anchor) -> true | nil,reason. Precondition: caller has cleared the destination cells -- gm only re-places its own concretes, never clears foreign ones (as gm:newInstance, take/region bounds are the caller's). gm validates channel range + cross-group/sibling disjointness only.
+function gm:moveInstance(groupId, instId, anchor)
+  local group = groups[groupId]
+  if not group then return nil, 'no such group' end
+  local instance = group.instances[instId]
+  if not instance then return nil, 'no such instance' end
+  for _, g in pairs(group.events) do
+    local e = toInstance(g, anchor)
+    if e.chan < 1 or e.chan > 16 then return nil, 'channel out of range' end
+  end
+  if regionConflict(group.rect, anchor, { groupId = groupId, instId = instId }) then
+    return nil, 'overlaps an existing mirror group'
+  end
+
+  propagating = true
+  for _, rec in pairs(projOf(groupId, instId)) do
+    if rec.evt and rec.groupEvt then
+      local placed = toInstance(rec.groupEvt, anchor)
+      selfAssigned[rec.evt] = true
+      tm:assignEvent(rec.evt,
+        { ppq = placed.ppq, chan = placed.chan, endppq = placed.endppq })
+    end
+  end
+  propagating = false
+  instance.anchor = anchor
+  persist()
+  return true
+end
+
+-- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
+-- re-origins (Model A: every anchor += startDelta, every group event
+-- ppq -= startDelta) so realised positions hold while the boundary
+-- slides; endDelta moves the end edge; streams swaps the per-channel
+-- stream-set. A member the new rect no longer covers leaves the group --
+-- unlinked from every instance BEFORE reproject so reconcile emits no
+-- del: its concrete survives as an ordinary event. `gained` concretes
+-- (from the acting instance, caller-supplied -- gm has no tm-enumeration
+-- surface) fold in at that instance's anchor. Whole op rejected, nothing
+-- mutated, if any instance's new placement collides with another group
+-- or the region would vanish.
+--contract: (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true | nil,reason. gm validates cross-group disjointness + non-vanishing region only; take bounds are the caller's, deferred as in gm:newInstance (gm holds no take authority -- takeLen is advisory). Leaving members orphan (concrete kept, unmanaged); gained fold in at the actor anchor.
+function gm:resizeGroup(groupId, instId, edits)
+  local group = groups[groupId]
+  if not group then return nil, 'no such group' end
+  local instance = group.instances[instId]
+  if not instance then return nil, 'no such instance' end
+
+  local rect       = group.rect
+  local startDelta = edits.startDelta or 0
+  local endDelta   = edits.endDelta   or 0
+  local newDur     = rect.dur - startDelta + endDelta
+  if newDur <= 0 then return nil, 'region would vanish' end
+  local newRect = { ppq     = rect.ppq + startDelta,
+                    dur     = newDur,
+                    chanLo  = rect.chanLo,
+                    streams = edits.streams or rect.streams }
+
+  for _, inst in pairs(group.instances) do
+    local at = { ppq = inst.anchor.ppq + startDelta, chan = inst.anchor.chan }
+    if regionConflict(newRect, at, { groupId = groupId }) then
+      return nil, 'overlaps an existing mirror group'
+    end
+  end
+
+  for _, inst in pairs(group.instances) do
+    inst.anchor.ppq = inst.anchor.ppq + startDelta
+  end
+  local leaving = {}
+  for vuid, g in pairs(group.events) do
+    g.ppq = (g.ppq or 0) - startDelta
+    if not groupsCore.inRect(newRect, g.ppq, g.chanDelta or 0, g) then
+      leaving[#leaving + 1] = vuid
+    end
+  end
+  for _, vuid in ipairs(leaving) do
+    group.events[vuid] = nil
+    for siblingId in pairs(group.instances) do
+      unlink(projOf(groupId, siblingId), vuid)
+    end
+  end
+  group.rect = newRect
+  for _, evt in ipairs(edits.gained or {}) do
+    local g    = toGroup(evt, instance.anchor)
+    local vuid = group.nextVuid
+    group.nextVuid = vuid + 1
+    group.events[vuid] = g
+    link(groupId, instId, vuid, projOf(groupId, instId),
+         evt.uuid, util.clone(g), evt)
+  end
+
+  reproject(groupId)
+  persist()
+  return true
+end
 
 return gm

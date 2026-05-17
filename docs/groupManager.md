@@ -150,6 +150,50 @@ rebuild, so the runtime projection is re-anchored by uuid each window;
 only the vuid→uuid slice persists, rebuilt by `rehydrate` on a
 take-changed rebuild.
 
+## Instance lifecycle & region resize
+
+`reconcile` is drift-driven and the group frame is anchor-invariant, so
+a pure re-anchor produces *zero* drift: `reproject` would compare an
+unchanged shadow against an unchanged `desired` and emit nothing.
+`moveInstance` therefore cannot delegate the move to the seam — it
+stages the re-placement itself, mapping each projected concrete through
+the group→instance dual at the new anchor. That staged assign echoes
+back through `preflush` like any gm-driven write; for a synced instance
+it is neutral, but on an override instance the echo would re-enter
+`applyEdit` and accrete a base-valued sticky `assign` that later pins
+the instance. So move-echoes carry their own `selfAssigned` marker. It
+is deliberately *not* `selfStaged`: the `preflush` assigns loop runs
+before the adds loop, so one shared set would let the assigns pass
+drain a pending `newInstance` add-echo (whose add then misclassifies as
+a user create) and vice versa. One marker per loop, each drained only
+by its own.
+
+A region resize moves the boundary, never the music. Trimming the
+start edge re-origins — every anchor shifts by `startDelta`, every
+group event counter-shifts — so realised positions are invariant
+(`(anchor+Δ) + (g−Δ)`) and siblings do not visually jump. The rejected
+alternative, dragging content with the edge (DAW clip-slip), is wrong
+here precisely because a group's instances would lurch under a resize
+none of them authored. Because the re-origin *is* group-frame drift,
+`reproject` then does the concrete work for free as ordinary `set`s.
+
+A member the shrunk rect no longer covers **leaves** the group: it is
+dropped from `group.events` and unlinked from every instance *before*
+`reproject`, so reconcile sees it in neither `desired` nor `current`
+and emits no `del`. Its concrete is untouched — it persists as an
+ordinary, unmanaged event. The region defines membership, not
+existence; deleting on shrink would be a destructive surprise. Symmetrically,
+events an *expanded* rect now covers are absorbed — but gm has no
+tm-enumeration surface (the dropped-hose decision), so they arrive from
+the acting instance via the caller, folded at that instance's anchor,
+the same events-passed idiom as `markGroup`.
+
+Take and region bounds, and clearing the destination, are the caller's
+(tv/ec). gm validates only group-domain invariants — channel range and
+cross-group disjointness, the moving instance excluded from its own
+collision. `takeLen` stays advisory; gm holds no take authority, as
+`newInstance` already established.
+
 ## localMode
 
 A single global UI flag, not per-instance. Off (default), an edit
