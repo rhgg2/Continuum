@@ -179,10 +179,10 @@ end
 
 ----- Group-frame legato
 
-local function groupLane(group, streamId)
+local function groupLane(group, laneId)
   local list = {}
   for vuid, g in pairs(group.events) do
-    if g.evType == 'note' and mirror.streamId(g) == streamId then
+    if g.evType == 'note' and mirror.laneId(g) == laneId then
       util.add(list, { g = g, ppq = g.ppq or 0,
                        endppq = (g.ppq or 0) + (g.dur or 0) })
     end
@@ -197,7 +197,7 @@ end
 -- the one thing project's clip-only pass cannot do.
 local function groupDeleteLegato(group, deletedG)
   if deletedG.evType ~= 'note' then return end
-  local list = groupLane(group, mirror.streamId(deletedG))
+  local list = groupLane(group, mirror.laneId(deletedG))
   local hole = { g = deletedG, ppq = deletedG.ppq or 0,
                  endppq = (deletedG.ppq or 0) + (deletedG.dur or 0) }
   util.add(list, hole)
@@ -212,7 +212,7 @@ end
 local function groupPlaceLegato(group, vuid)
   local g = group.events[vuid]
   if not g or g.evType ~= 'note' then return end
-  local list = groupLane(group, mirror.streamId(g))
+  local list = groupLane(group, mirror.laneId(g))
   for _, n in ipairs(list) do
     local _, _, tail = legato.place(list, n.ppq, math.huge)
     n.g.dur = n.g.dur == nil and tail - n.ppq
@@ -333,10 +333,10 @@ end
 -- Mark the last-in-lane note per stream so tm's conform pass clips its
 -- realised note-off. Marker only, never a shared group field.
 local function conformVuids(desired)
-  local last = {}                       -- lane -> { ppq, vuid }
+  local last = {}                       -- laneId -> { ppq, vuid }
   for vuid, g in pairs(desired) do
     if g.evType == 'note' then
-      local lane = g.key or 1
+      local lane = mirror.laneId(g)
       local l    = last[lane]
       if not l or g.ppq > l.ppq or (g.ppq == l.ppq and vuid > l.vuid) then
         last[lane] = { ppq = g.ppq, vuid = vuid }

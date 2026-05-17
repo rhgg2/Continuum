@@ -1,4 +1,4 @@
-@module mirrorManager  src=mirrorManager.lua  loc=667  sha=4a6bfb0  mode=chunk
+@module mirrorManager  src=mirrorManager.lua  loc=667  sha=b415fcb  mode=chunk
 @deps tm, cm
 
 # Invariants & contracts
@@ -59,7 +59,7 @@
   @fn diffGroup(oldG, newG)  @ 169
       -- Neutral field diff between two group events (feeds updToInstance).
   -- Group-frame legato
-  @fn groupLane(group, streamId)  @ 182
+  @fn groupLane(group, laneId)  @ 182
   @fn groupDeleteLegato(group, deletedG)  @ 198
       -- The surviving legato owner grows over the hole (ABC.D, delete C ->
       -- B.endppq := D.ppq); deleting the last note grows its predecessor

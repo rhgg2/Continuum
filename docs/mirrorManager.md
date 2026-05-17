@@ -80,6 +80,20 @@ update straight through: it is realisation, not a logical edit, and
 must not retrigger `classify`/`groupPlaceLegato`/`reproject` or it
 would churn the canonical group geometry.
 
+## Lane identity is per channel
+
+The region is per-channel — `rect.streams` is keyed `[chanOffset][streamId]`,
+so `streamId` there is correctly channel-free; the offset is its own
+dimension. But geometry *inside* the group frame — `mirror.project`'s
+slot-dedup, its legato chains, `conformVuids`, `groupLane` — resolves per
+lane, and a lane lives in one channel. Keying those by `streamId` alone
+(`evType:key`) collapsed two channels at the same lane and onset into one
+slot: the lower-vuid (leftmost) note claimed it, the other was conflicted
+out of `desired` and never projected, so only the leftmost channel of a
+multi-channel group mirrored. `mirror.laneId` (`chanDelta` + `streamId`) is
+the group-frame lane identity those passes key by; `streamId` stays the
+channel-free region-membership key.
+
 ## The flush seam
 
 `reproject` runs *inside* tm's `preflush`, re-entrantly, so it must not

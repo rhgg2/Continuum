@@ -103,7 +103,7 @@ function mirror.project(group, instance, patternLen)
   local claimed = {}
   for _, vuid in ipairs(ordered) do
     local e = desired[vuid]
-    local slot = mirror.streamId(e) .. '@' .. tostring(e.ppq or 0)
+    local slot = mirror.laneId(e) .. '@' .. tostring(e.ppq or 0)
     if claimed[slot] then
       desired[vuid]   = nil
       states[vuid]    = 'conflicted'
@@ -121,7 +121,7 @@ function mirror.project(group, instance, patternLen)
     for vuid, e in pairs(src) do
       if e.evType == 'note' then
         e.ppq = e.ppq or 0
-        util.bucket(lanes, mirror.streamId(e),
+        util.bucket(lanes, mirror.laneId(e),
           { vuid = vuid, e = desired[vuid],
             ppq = e.ppq, endppq = e.ppq + (e.dur or 0) })
       end
@@ -193,6 +193,15 @@ end
 --           insert/reorder, unlike a view-column position.
 function mirror.streamId(evt)
   return evt.evType .. ':' .. tostring(evt.key or 0)
+end
+
+--contract: group-frame lane identity -- streamId plus chanDelta. Geometry
+--           (slot dedup, legato chains, conform) resolves per lane within
+--           one channel; two channels at the same lane and onset are
+--           distinct slots. rect.streams keeps streamId channel-free
+--           because chanOffset is already its own dimension there.
+function mirror.laneId(evt)
+  return tostring(evt.chanDelta or 0) .. '/' .. mirror.streamId(evt)
 end
 
 --contract: region membership predicate. chanOffset = concrete chan minus

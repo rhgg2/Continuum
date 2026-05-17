@@ -1,4 +1,4 @@
-@module mirror  src=mirror.lua  loc=224  sha=untracked  mode=namespace
+@module mirror  src=mirror.lua  loc=233  sha=4a6bfb0  mode=namespace
 
 # Invariants & contracts
   @invariant  evType is identity, never merged or overridden; changing type is delete+create upstream
@@ -6,6 +6,7 @@
   @invariant  an assign is sticky -- local value always wins; a drifted base only raises a conflict flag, it does not change the resolved value
   @invariant  the region is the identity, not an event set; membership is the rect predicate (time span x per-channel streamId set), so streamId must be index-free (evType+key) and survive column insert/reorder
   @contract  returns (desired, conflicts, states). desired[vuid] is a
+  @contract  group-frame lane identity -- streamId plus chanDelta. Geometry
   @contract  region membership predicate. chanOffset = concrete chan minus
 
 # Shapes
@@ -22,7 +23,7 @@
 
 # Module-level constants
   @const mirror = {}  @ 54
-  @const TINT = { overridden = 'mirror.overridden',  @ 212
+  @const TINT = { overridden = 'mirror.overridden',  @ 221
 
 # Private functions
   @fn resolve(groupEvt, assign)  @ 60
@@ -48,9 +49,14 @@
       --           (note->lane, cc->cc-number). Index-free: survives column
       --           insert/reorder, unlike a view-column position.
       @contract  the region's stable per-stream identity -- evType plus `key`
-  @api mirror.inRect(rect, ppq, chanOffset, evt)  @ 202
+  @api mirror.laneId(evt)  @ 203
+      --           (slot dedup, legato chains, conform) resolves per lane within
+      --           one channel; two channels at the same lane and onset are
+      --           distinct slots. rect.streams keeps streamId channel-free
+      --           because chanOffset is already its own dimension there.
+  @api mirror.inRect(rect, ppq, chanOffset, evt)  @ 211
       --           the instance anchor (caller does the anchor maths). True iff
       --           ppq is in the time span AND that channel offset participates
       --           AND the event's streamId is selected for it.
-  @api mirror.tintKey(state, active)  @ 214
-  @api mirror.outlineKey(state)  @ 219
+  @api mirror.tintKey(state, active)  @ 223
+  @api mirror.outlineKey(state)  @ 228
