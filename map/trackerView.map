@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2215  sha=19451fd  mode=chunk
+@module trackerView  src=trackerView.lua  loc=2221  sha=4a6bfb0  mode=chunk
 @deps tm, cm, cmgr
 
 # Invariants & contracts
@@ -39,9 +39,9 @@
   @state grid = {  @ 40
   @state tv = {}  @ 47
   @state ec, clipboard, ctx  @ 50
-  @state dupeState = nil  @ 1634
-  @state tracker = cmgr:scope('tracker')  @ 1959
-  @state rebuilding = false  @ 2016
+  @state dupeState = nil  @ 1640
+  @state tracker = cmgr:scope('tracker')  @ 1965
+  @state rebuilding = false  @ 2022
 
 # Private functions
   @fn print(...)  @ 23
@@ -132,33 +132,33 @@
       -- alone; otherwise nudge val on every value event. Solo cursor: first
       -- event in the cursor row, column- and part-typed.
   -- Deletion
-  @fn deleteEvent()  @ 1591
-  @fn deleteSelection()  @ 1610
-  @fn deleteOrBackspace()  @ 1619
-  @fn stepSample(dir)  @ 1627
+  @fn deleteEvent()  @ 1597
+  @fn deleteSelection()  @ 1616
+  @fn deleteOrBackspace()  @ 1625
+  @fn stepSample(dir)  @ 1633
       -- Step currentSample by ±1 across the full 0..127 range. Empty slots
       -- are reachable — the user may want to author a sample value before
       -- the sampler has loaded that slot.
   -- Duplicate
-  @fn cursorRect()  @ 1640
+  @fn cursorRect()  @ 1646
       -- Cursor cell as a 1-row mirror rect: the seed-rect fallback for plain
       -- duplicate when there is no real selection (selectionAsRect is nil).
       -- This is the 1x1 carveout -- mirror passes no fallback, so a degenerate
       -- selection is a no-op there; plain duplicate clones the cursor cell.
-  @fn colsForAnchor(anchor, rect)  @ 1653
+  @fn colsForAnchor(anchor, rect)  @ 1659
       -- The grid columns the rect's stream set lands on when its chanLo is
       -- pinned to `anchor.chan` -- the shared logical->grid mapping. Resolving
       -- this at paste/select time (not freezing the seed column) is what lets
       -- a channel-changing cursor move carry the cascade to the new channel.
-  @fn stopForPart(col, part)  @ 1668
+  @fn stopForPart(col, part)  @ 1674
       -- First stop in `col` carrying part `part` (the seed's part name), or
       -- 1 if unknown -- keeps pasteSingle's pitch/vel dispatch on the part
       -- the user duplicated, at whatever column the anchor resolved to.
-  @fn selectRegionAt(anchor, rect)  @ 1678
+  @fn selectRegionAt(anchor, rect)  @ 1684
       -- Inverse of selectionAsRect: drop a grid selection (cursor at its
       -- top-left) at a logical anchor. Whole-column parts -- the cascade
       -- carries part precision in its payload, not in the live selection.
-  @fn duplicate()  @ 1694
+  @fn duplicate()  @ 1700
       -- Plain duplicate: clip payload, cursor-cell seed fallback. The cascade
       -- lifetime, anchor and select-the-copy live in tv:duplicateCascade.
       -- place re-homes the paste to the anchor's channel (colsForAnchor), so a
@@ -183,22 +183,22 @@
   @api tv:setLaneTension(col, i, tension)  @ 793
       -- Set bezier tension on the i-th visible event. Forces shape to bezier
       -- so the tension is honoured (REAPER ignores tension on other shapes).
-  @api tv:ec()  @ 1715
-  @api tv:clipboard()  @ 1716
+  @api tv:ec()  @ 1721
+  @api tv:clipboard()  @ 1722
   -- Accessors for trackerPage
-  @api tv:rowPerBar()  @ 1720
-  @api tv:takeName()  @ 1721
-  @api tv:activeTemper()  @ 1722
-  @api tv:noteProjection(evt)  @ 1723
-  @api tv:rowBeatInfo(row)  @ 1724
-  @api tv:barBeatSub(row)  @ 1725
-  @api tv:ppqToRow(ppq, chan)  @ 1726
-  @api tv:rowToPPQ(row, chan)  @ 1727
-  @api tv:logPerRow()  @ 1728
-  @api tv:sampleCurve(A, B, ppq)  @ 1729
-  @api tv:timeSig()  @ 1730
+  @api tv:rowPerBar()  @ 1726
+  @api tv:takeName()  @ 1727
+  @api tv:activeTemper()  @ 1728
+  @api tv:noteProjection(evt)  @ 1729
+  @api tv:rowBeatInfo(row)  @ 1730
+  @api tv:barBeatSub(row)  @ 1731
+  @api tv:ppqToRow(ppq, chan)  @ 1732
+  @api tv:rowToPPQ(row, chan)  @ 1733
+  @api tv:logPerRow()  @ 1734
+  @api tv:sampleCurve(A, B, ppq)  @ 1735
+  @api tv:timeSig()  @ 1736
   -- Mirror bridge
-  @api tv:duplicateCascade(state, collectSource, place, fallbackRect)  @ 1748
+  @api tv:duplicateCascade(state, collectSource, place, fallbackRect)  @ 1754
       -- Shared duplicate cascade. `state` is the run token (nil seeds);
       -- `collectSource` captures a payload while the source is still intact
       -- (plain dup: clip + part; mirror: nil -- events come from the rect in
@@ -210,11 +210,11 @@
       -- selection re-selects each copy; one seeded from the fallback rect
       -- (no selection -- the 1x1 cell carveout) leaves no selection, like a
       -- classic cell duplicate. Returns the new run token.
-  @api tv:selectionAsRect()  @ 1786
+  @api tv:selectionAsRect()  @ 1792
       -- The active selection as a mirror rect: a logical-frame time span x a
       -- per-channel streamId set, chanOffset relative to the lowest selected
       -- channel. nil unless a real (non-degenerate) selection exists.
-  @api tv:eventsInRect(rect)  @ 1819
+  @api tv:eventsInRect(rect)  @ 1825
       -- Concrete events the rect contains. Membership is the mirror predicate
       -- in the logical frame: onset ppq in the span AND the column's stream is
       -- selected for its channel offset. col.events ppq is logical (tm
@@ -223,20 +223,20 @@
       -- channel/lane); mirm needs them per-event for its anchor maths and must
       -- keep object identity (it links the live evt for propagation), so we
       -- backfill the authoritative column values rather than clone.
-  @api tv:cursorAnchor()  @ 1837
+  @api tv:cursorAnchor()  @ 1843
       -- Cursor as a mirror anchor: { ppq, chan } in the logical frame.
-  @api tv:streamRefAt(colIx, chanLo)  @ 1846
+  @api tv:streamRefAt(colIx, chanLo)  @ 1852
       -- (channel offset, stream id) for a grid column, relative to chanLo —
       -- the coordinates a mirror rect's `streams` table is keyed by.
   -- Non-command callbacks from trackerPage
-  @api tv:setGridSize(w, h)  @ 1854
+  @api tv:setGridSize(w, h)  @ 1860
   -- Columns
-  @api tv:addExtraCol(type, cc)  @ 1860
-  @api tv:hideExtraCol()  @ 1885
-  @api tv:showDelay()  @ 1940
+  @api tv:addExtraCol(type, cc)  @ 1866
+  @api tv:hideExtraCol()  @ 1891
+  @api tv:showDelay()  @ 1946
   -- Command table
   -- Rebuild
-  @api tv:rebuild(takeChanged)  @ 2019
+  @api tv:rebuild(takeChanged)  @ 2025
       @contract  reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
 
 # REAPER API surface

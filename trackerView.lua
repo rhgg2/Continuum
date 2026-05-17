@@ -1546,7 +1546,13 @@ local deleteEvent, deleteSelection do
       if evt.type ~= 'pa' then tm:deleteEvent(evt) end
     end
     for _, f in ipairs(fixups) do
-      assignTail(f.evt, chan, f.endppq)
+      -- A conform note's raw tail is realisation tm owns: the conform-
+      -- tail rebuild pass already regrows it to the next onset when its
+      -- blocker goes. Growing it here double-handles that and -- when it
+      -- is a mirrored event -- leaks a spurious endppq into the shared
+      -- group via mirm's applyEdit, collapsing an infinite last-in-lane
+      -- tail. Same carve-out as conformOverlaps / tailEnd.
+      if not f.evt.conform then assignTail(f.evt, chan, f.endppq) end
     end
   end
 

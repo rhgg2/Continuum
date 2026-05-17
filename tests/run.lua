@@ -52,6 +52,8 @@ local specs = {
   'mirm_origin_conform_spec',
   'mirm_wiring_spec',
   'mirm_dup_cascade_spec',
+  'mirm_delete_sibling_spec',
+  'mirm_delete_conform_integration_spec',
   'mirm_render_spec',
   'mirm_bridge_spec',
   'mirm_pitch_dupe_spec',
