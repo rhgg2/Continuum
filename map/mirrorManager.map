@@ -1,4 +1,4 @@
-@module mirrorManager  src=mirrorManager.lua  loc=729  sha=3e51bd8  mode=chunk
+@module mirrorManager  src=mirrorManager.lua  loc=822  sha=d5fc610  mode=chunk
 @deps tm, cm
 
 # Invariants & contracts
@@ -85,23 +85,37 @@
   @fn classify(evt)  @ 286
       -- Locate (groupId, instId, vuid) by uuid -- the durable identity; a
       -- table mirm holds is valid only within one rebuild window.
-  @fn revivableVuid(group, instance, evt)  @ 312
+  @fn sameSlot(a, b)  @ 311
+      -- Two group-frame events occupy the same region slot: same onset, same
+      -- channel offset, same stream. The identity the override-transition
+      -- helpers (revive, sibling absorb) match on.
+  @fn revivableVuid(group, instance, evt)  @ 320
       -- A global-mode create on a slot this instance locally deleted: the group
-      -- event whose delete is shadowing it (same stream + onset), still alive in
-      -- the shared pattern. Returns its vuid so the create revives it in place
-      -- instead of allocating a coincident second vuid.
-  @fn classifyCreate(evt)  @ 325
+      -- event whose delete is shadowing it, still alive in the shared pattern.
+      -- Returns its vuid so the create revives it in place instead of
+      -- allocating a coincident second vuid.
+  @fn absorbSiblingOverrides(group, vuid, actingInstId, created)  @ 337
+      -- A global-mode group-event create/delete flips whether a shared event
+      -- exists at a slot. A SIBLING instance carrying its own override there
+      -- must keep its visible event: re-express the override across the flip
+      -- instead of letting it collide (create) or orphan (delete). create:
+      -- a colliding add-ov upgrades to an assign-ov on the now-real vuid.
+      -- delete: an assign-ov demotes to a materialised add-ov -- resolve
+      -- needs the live base, so this runs before the group event is cleared.
+      -- The acting instance is the on-ov-local path's job; skip it. A sibling
+      -- that locally hides the slot has no visible event -- nothing to keep.
+  @fn classifyCreate(evt)  @ 367
       -- A create with no projected ref: does it fall inside some instance's
       -- region, on a stream the region already selects? inRect enforces the gate.
-  @fn conformVuids(desired)  @ 340
+  @fn conformVuids(desired)  @ 382
       -- Mark the last-in-lane note per stream so tm's conform pass clips its
       -- realised note-off. Marker only, never a shared group field.
-  @fn conformSweep(groupId, instId, cset)  @ 360
+  @fn conformSweep(groupId, instId, cset)  @ 402
       -- Stage only the conform deltas for one instance: each note whose
       -- realisation flag disagrees with `cset` (the last-in-lane set per
       -- stream). Promote/demote never surfaces as a reconcile op, so the
       -- marker is swept directly off the live records.
-  @fn rectCells(rect, anchor)  @ 379
+  @fn rectCells(rect, anchor)  @ 421
       -- Overlapping mirror groups have no defined semantics: classifyCreate
       -- adopts a fresh event into whichever group pairs() yields first, and
       -- two groups projecting the same slot collide with no cross-group
@@ -109,54 +123,59 @@
       -- (channel, streamId, time): same bars on a different lane or channel
       -- do not conflict, and an adjacent stack (next = ppq+dur, half-open)
       -- does not either.
-  @fn spansOverlap(aPpq, aDur, bPpq, bDur)  @ 390
-  @fn regionConflict(rect, anchor)  @ 397
+  @fn spansOverlap(aPpq, aDur, bPpq, bDur)  @ 432
+  @fn regionConflict(rect, anchor)  @ 439
       -- groupId of an existing group an instance of `rect` at `anchor` would
       -- collide with -- shared time span AND a shared (channel, streamId)
       -- cell -- or nil.
   -- Active group (dupeClip-idiom selector; the command layer owns the
   -- clear-on-other-command lifetime, mirm only the pointer)
   -- SEAM
-  @fn reproject(groupId)  @ 560
-  @fn conformOnlyUpdate(evt, update)  @ 608
+  @fn reproject(groupId)  @ 602
+  @fn conformOnlyUpdate(evt, update)  @ 661
       -- conform is a per-instance realisation marker mirm itself stages (seed
       -- sweep, reproject); it is never a logical user edit and never enters the
       -- group frame. A conform-only assign reaching applyEdit -- e.g. the seed
       -- sweep's assign surfacing in the next preflush -- must pass straight
       -- through, not retrigger classify/groupPlaceLegato/reproject.
+  @fn localAmend(instance, vuid, group, update)  @ 671
+      -- Local edit of an existing override -- shared by localMode and the
+      -- on-ov-in-global path. An assign'd / synced group event accrues a
+      -- sticky per-instance assign; a local-only add is edited in place.
+      -- Never touches group.events, so no sibling sees it.
 
 # Public API (mirm:*)
-  @api mirm:markGroup(events, rect)  @ 423
+  @api mirm:markGroup(events, rect)  @ 465
       --          resolved region `rect`. Instance 1's anchor is the region origin
       --          { rect.ppq, rect.chanLo }; proj points at the passed events.
       --          Returns the new groupId, or (nil, reason) if the region
       --          collides with a live group (disjoint-region invariant).
-  @api mirm:newInstance(groupId, anchor)  @ 458
+  @api mirm:newInstance(groupId, anchor)  @ 500
       --          region and cleared it. Validates the projection (every group
       --          event's instance channel in 1..16), then stages a concrete
       --          clone of the group at `anchor`. Returns instId, or
       --          (nil, reason) if the projection is invalid or the placement
       --          collides with a live group (disjoint-region invariant).
-  @api mirm:activeGroup()  @ 489
-  @api mirm:clearActive()  @ 490
-  @api mirm:mark(events, rect)  @ 494
+  @api mirm:activeGroup()  @ 531
+  @api mirm:clearActive()  @ 532
+  @api mirm:mark(events, rect)  @ 536
       --          group becomes active.
       @contract  case 1 -- seed a group from the selection, no copy. The new
-  @api mirm:stamp(events, rect, anchor)  @ 504
+  @api mirm:stamp(events, rect, anchor)  @ 546
       --          instId). No active -> case 2, seed the group AND its first copy
       --          (returns groupId, instId); the group becomes active.
       @contract  active live -> case 3, drop one more copy at `anchor` (returns
-  @api mirm:duplicateInto(groupId, events, rect, anchor)  @ 521
+  @api mirm:duplicateInto(groupId, events, rect, anchor)  @ 563
       --          cascade. `groupId` live -> drop one more copy at `anchor`
       --          into it; nil or stale -> seed group + first copy. Returns
       --          the groupId either way. Sets it active for render parity,
       --          but NEVER reads the shared active pointer -- the caller's
       --          token is the sole continuation state (stamp's activeGroup
       --          fallback belongs to mark/paste, not the cascade).
-  @api mirm:setLocalMode(on)  @ 531
-  @api mirm:localMode()  @ 532
-  @api mirm:stateOf(uuid)  @ 534
-  @api mirm:eachInstance()  @ 546
+  @api mirm:setLocalMode(on)  @ 573
+  @api mirm:localMode()  @ 574
+  @api mirm:stateOf(uuid)  @ 576
+  @api mirm:eachInstance()  @ 588
       -- Read accessor for the render pass: every live instance with the group
       -- rect it projects, its anchor, and whether its group is active. No new
       -- mutable state; rect/anchor are by reference (render reads, never

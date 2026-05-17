@@ -305,17 +305,59 @@ local function classify(evt)
   return loc.groupId, loc.instId, loc.vuid
 end
 
+-- Two group-frame events occupy the same region slot: same onset, same
+-- channel offset, same stream. The identity the override-transition
+-- helpers (revive, sibling absorb) match on.
+local function sameSlot(a, b)
+  return a.ppq == b.ppq and a.chanDelta == b.chanDelta
+         and mirror.streamId(a) == mirror.streamId(b)
+end
+
 -- A global-mode create on a slot this instance locally deleted: the group
--- event whose delete is shadowing it (same stream + onset), still alive in
--- the shared pattern. Returns its vuid so the create revives it in place
--- instead of allocating a coincident second vuid.
+-- event whose delete is shadowing it, still alive in the shared pattern.
+-- Returns its vuid so the create revives it in place instead of
+-- allocating a coincident second vuid.
 local function revivableVuid(group, instance, evt)
   local g = toGroup(evt, instance.anchor)
   for vuid in pairs(instance.deletes) do
     local ge = group.events[vuid]
-    if ge and ge.ppq == g.ppq and ge.chanDelta == g.chanDelta
-       and mirror.streamId(ge) == mirror.streamId(g) then
-      return vuid
+    if ge and sameSlot(ge, g) then return vuid end
+  end
+end
+
+-- A global-mode group-event create/delete flips whether a shared event
+-- exists at a slot. A SIBLING instance carrying its own override there
+-- must keep its visible event: re-express the override across the flip
+-- instead of letting it collide (create) or orphan (delete). create:
+-- a colliding add-ov upgrades to an assign-ov on the now-real vuid.
+-- delete: an assign-ov demotes to a materialised add-ov -- resolve
+-- needs the live base, so this runs before the group event is cleared.
+-- The acting instance is the on-ov-local path's job; skip it. A sibling
+-- that locally hides the slot has no visible event -- nothing to keep.
+local function absorbSiblingOverrides(group, vuid, actingInstId, created)
+  local g = group.events[vuid]
+  if not g then return end
+  for instId, instance in pairs(group.instances) do
+    if instId ~= actingInstId then
+      if created then
+        for addVuid, addG in pairs(instance.adds) do
+          if not instance.deletes[addVuid] and sameSlot(addG, g) then
+            local a = instance.assigns
+            a[vuid] = a[vuid] or {}
+            for field, val in pairs(addG) do
+              if field ~= 'evType' and g[field] ~= val then
+                a[vuid][field] = mirror.deriveAssign(g, field, val)
+              end
+            end
+            instance.adds[addVuid] = nil   -- reproject del's the stale concrete
+          end
+        end
+      elseif instance.assigns[vuid] and not instance.deletes[vuid] then
+        local nv = group.nextVuid
+        group.nextVuid = nv + 1
+        instance.adds[nv]      = mirror.resolve(g, instance.assigns[vuid])
+        instance.assigns[vuid] = nil
+      end
     end
   end
 end
@@ -564,6 +606,17 @@ local function reproject(groupId)
     local desired = mirror.project(group, instance, takeLen())
     local cset    = conformVuids(desired)
     local instProj = projOf(groupId, instId)
+    -- tv is mirror-unaware: a user edit can mutate a projected concrete
+    -- directly (legato grows a neighbour on delete) without the group
+    -- geometry changing, so the projection shadow no longer reflects
+    -- realisation and reconcile would see no drift. Refresh the shadow
+    -- from the live concrete for every user-touched record, so reconcile
+    -- both detects the drift and writes the corrective clip back.
+    for _, rec in pairs(instProj) do
+      if rec.evt and rec.evt.uuid and touchedUuids[rec.evt.uuid] then
+        rec.groupEvt = toGroup(rec.evt, instance.anchor)
+      end
+    end
     for _, op in ipairs(mirror.reconcile(desired, currentOf(instProj))) do
       local vuidProj = instProj[op.vuid]
       -- userOwned suppresses only the redundant tm op a user
@@ -611,6 +664,23 @@ local function conformOnlyUpdate(evt, update)
   return true
 end
 
+-- Local edit of an existing override -- shared by localMode and the
+-- on-ov-in-global path. An assign'd / synced group event accrues a
+-- sticky per-instance assign; a local-only add is edited in place.
+-- Never touches group.events, so no sibling sees it.
+local function localAmend(instance, vuid, group, update)
+  local groupEvt = group.events[vuid]
+  if groupEvt then
+    instance.assigns[vuid] = instance.assigns[vuid] or {}
+    for field, val in pairs(updToGroup(update, instance.anchor, groupEvt)) do
+      instance.assigns[vuid][field] = mirror.deriveAssign(groupEvt, field, val)
+    end
+  else
+    local addEvt = instance.adds[vuid]
+    util.assign(addEvt, updToGroup(update, instance.anchor, addEvt))
+  end
+end
+
 do
   local touchedGroups = {}
 
@@ -638,27 +708,49 @@ do
     local group    = groups[groupId]
     local instance = group.instances[instId]
 
+    -- Same-instance "on-ov => local": once this instance carries its own
+    -- override at vuid, a further edit there stays local and never
+    -- propagates -- in localMode by definition, in global mode because a
+    -- declared divergence is an intent to differ (clear it to rejoin the
+    -- group). See docs/mirrorManager.md "Override transitions".
+    local onOv = not isCreate and (instance.adds[vuid] ~= nil
+                  or instance.assigns[vuid] ~= nil
+                  or instance.deletes[vuid] == true)
+
     if localMode then
       if update == nil then
-        instance.deletes[vuid] = true
+        if instance.adds[vuid] ~= nil then
+          instance.adds[vuid] = nil       -- a local add deleted is just gone
+        else
+          instance.deletes[vuid] = true
+        end
       elseif isCreate then
         local g = toGroup(evt, instance.anchor)
         instance.adds[vuid] = g
         link(groupId, instId, vuid, projOf(groupId, instId), evt.uuid, util.clone(g), evt)
       else
-        local groupEvt = group.events[vuid]
-        if groupEvt then
-          instance.assigns[vuid] = instance.assigns[vuid] or {}
-          for field, val in pairs(updToGroup(update, instance.anchor, groupEvt)) do
-            instance.assigns[vuid][field] = mirror.deriveAssign(groupEvt, field, val)
-          end
-        else                              -- a local-only add: edit it in place
-          local addEvt = instance.adds[vuid]
-          util.assign(addEvt, updToGroup(update, instance.anchor, addEvt))
+        localAmend(instance, vuid, group, update)
+      end
+    elseif onOv then
+      if update == nil then
+        if instance.adds[vuid] ~= nil then
+          instance.adds[vuid] = nil       -- local add: just gone
+        elseif instance.assigns[vuid] ~= nil then
+          instance.assigns[vuid] = nil    -- drop the divergence, rejoin the group
+          -- The user's delete removed this instance's concrete, but the
+          -- group event survives, so the link still reads vuid-alive and
+          -- reconcile would emit `set` against the dead event. Unlink so
+          -- it emits `add` and re-materialises the group projection here.
+          unlink(projOf(groupId, instId), vuid)
         end
+        -- delete-ov + delete: the slot is already hidden here. No-op --
+        -- and crucially never the propagating group delete below.
+      else
+        localAmend(instance, vuid, group, update)
       end
     else
       if update == nil then
+        absorbSiblingOverrides(group, vuid, instId, false)
         local g = group.events[vuid]
         group.events[vuid] = nil
         if g then groupDeleteLegato(group, g) end
@@ -668,10 +760,11 @@ do
         groupPlaceLegato(group, vuid, true)
         link(groupId, instId, vuid, projOf(groupId, instId), evt.uuid,
              util.clone(g), evt)
+        absorbSiblingOverrides(group, vuid, instId, true)
       else
-        local groupEvt = group.events[vuid] or instance.adds[vuid]
+        local groupEvt = group.events[vuid]
         util.assign(groupEvt, updToGroup(update, instance.anchor, groupEvt))
-        if group.events[vuid] then groupPlaceLegato(group, vuid) end
+        groupPlaceLegato(group, vuid)
       end
     end
 

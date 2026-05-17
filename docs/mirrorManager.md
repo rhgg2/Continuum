@@ -126,6 +126,23 @@ carry the ops. `propagating` guards mirm's own staged adds from
 re-entering `applyEdit` as user edits; `selfStaged` does the same for
 newInstance's projection adds, which commit on a later flush.
 
+`reconcile` compares `desired` against the projection *shadow*
+(`rec.groupEvt`, what reproject last wrote), not the live concrete —
+cheap, and the two agree as long as only mirm drives concretes. But tv
+is mirror-unaware: deleting a note legato-grows its lane predecessor's
+*concrete* in the same flush, and when that predecessor's group
+geometry is unchanged (it was already clipped to that onset — the note
+*identity* at the slot changed, not its position) the shadow still
+equals `desired`, reconcile emits nothing, and tv's growth is never
+clipped back. So before reconcile, `reproject` refreshes the shadow
+from the live concrete (`toGroup(rec.evt)`) for every record whose
+concrete the user touched this flush (`touchedUuids`). Scoped there
+because only a user edit can mutate a concrete behind reproject's back;
+mirm's own staged adds never enter `touchedUuids`, so the steady-state
+shadow path is untouched. This is the same realisation-leak the replay
+model exists to kill, at the one seam where reconcile's optimisation
+let it back in.
+
 `uuid` is mirm's only durable identity. tm swaps every event table on
 rebuild, so the runtime projection is re-anchored by uuid each window;
 only the vuid→uuid slice persists, rebuilt by `rehydrate` on a
@@ -149,6 +166,64 @@ slot-dedup then silently collapses, losing one. Instead `revivableVuid`
 matches the typed event against the instance's `deletes` by stream +
 onset; on a hit the create clears `instance.deletes[vuid]` and
 overwrites that existing group vuid in place — "type over deleted
-clears the delete". This is one case of a general clear-any-override
-mechanism; the others (local assigns/adds, local-mode revive) are not
-yet implemented.
+clears the delete". This is the delete-ov case of the override
+transitions below.
+
+## Override transitions
+
+One principle governs every override: *a local override pins this
+instance's visible event at that slot; a group-event existence flip
+never silently breaks the pin.* It splits by whose action it is.
+
+**Same-instance, global mode — "on-ov ⇒ local".** Once an instance
+carries its own override at a vuid, a further edit there stays local
+and never propagates. In `localMode` that is the definition; in global
+mode it holds *because the override is a declared intent to differ* —
+re-touching it must not silently re-merge you into the group, and the
+way to rejoin is to clear the override, not to have an unrelated edit
+clear it for you. So global mode means "propagate **except** on cells
+this instance has locally diverged." The table (acting instance, the
+slot carries its override):
+
+- add-ov + amend → edit the add in place (no propagation).
+- add-ov + delete → the local add is just gone. (`deletes[vuid]=true`
+  would not work: `project`'s adds pass ignores `deletes`.)
+- assign-ov + amend → accrue the assign locally; `group.events`
+  untouched, no sibling sees it.
+- assign-ov + delete → drop the assign, the cell rejoins the shared
+  group value. The user's keystroke already removed this instance's
+  concrete, but the group event survives, so the projection link still
+  reads vuid-alive and `reconcile` would emit `set` against the dead
+  event; the branch must `unlink` so it emits `add` and the group note
+  re-materialises here. (A second delete then does the propagating
+  group delete — you cannot one-keystroke-destroy a shared event from
+  a diverged instance.)
+- delete-ov + amend (type) → `revivableVuid` (above).
+- delete-ov + delete → no-op. Unreachable by construction — a hidden
+  slot has no concrete event to delete — but the guard is load-bearing:
+  without it the bare global-delete branch would fire a *propagating
+  group delete from a cell invisible in this instance*.
+
+`localAmend` is the shared amend body; `onOv` gates the acting
+instance onto this path before the global branches.
+
+**Cross-instance — `absorbSiblingOverrides`.** When the acting
+instance's global create/delete flips whether a shared event exists at
+a slot, a *sibling* carrying its own override there must keep its
+visible event:
+
+- sibling add-ov + a peer global **create** at that slot → the add-ov
+  *upgrades* to an assign-ov on the now-real vuid (its fields become
+  the per-field delta from the new group event). Run after
+  `groupPlaceLegato` so the sibling diverges from the post-legato
+  geometry.
+- sibling assign-ov + a peer global **delete** of that event →
+  *demote* to a materialised add-ov: `mirror.resolve(groupEvt,
+  assign)` snapshots group-base + delta *before* the group event is
+  cleared (an assign delta is meaningless without its base). A sibling
+  that locally hides the slot has no visible event — skipped.
+
+Neither sweep unlinks the stale concrete; the touched group reprojects
+and `reconcile` deletes the now-absent vuid and adds the new one. The
+acting instance is the on-ov-local path's job and is skipped here, so
+the two mechanisms never double-handle a slot.

@@ -53,16 +53,17 @@ local legato = require 'legato'
 
 local mirror = {}
 
--- Group event + sticky local assign -> resolved event. Local always
--- wins; a drifted base is NOT a conflict (the only conflict is two
--- events at one onset, decided in project). State is 'synced' with no
--- assign, else 'overridden'.
-local function resolve(groupEvt, assign)
+--contract: group event + sticky local assign -> resolved event. Local
+--           always wins; a drifted base is NOT a conflict (the only
+--           conflict is two events at one onset, decided in project).
+--           State is 'synced' with no assign, else 'overridden'.
+function mirror.resolve(groupEvt, assign)
   local out = util.clone(groupEvt) or {}
   if not assign then return out, 'synced' end
   for field, rec in pairs(assign) do out[field] = rec.value end
   return out, 'overridden'
 end
+local resolve = mirror.resolve
 
 --contract: returns (desired, conflicts, states). desired[vuid] is a
 --           clean group-space event with no provenance keys; states[vuid]

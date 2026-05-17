@@ -62,6 +62,7 @@ local specs = {
   'mirm_revive_delete_spec',
   'mirm_seed_conform_spec',
   'mirm_overlap_spec',
+  'mirm_override_transition_spec',
   'mirm_two_channel_spec',
   'timing_period_spec',
   'timing_atoms_spec',
