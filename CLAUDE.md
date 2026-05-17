@@ -170,3 +170,25 @@ direct. Compact, but clear.
 - Scope tightly: wrap private helpers in `local fn do ... end`; readers then see which belong to which function.
 - Section banners: `----- Name`.
 - Major section banners: `----------- PUBLIC`.
+
+## Committing
+
+Whenever a change lands — a bugfix, a refactor, a feature slice — and
+the suite is green, stop and remind me to commit before moving on.
+Don't commit unprompted; just nag, once, and propose the message.
+
+The proposed message must actually describe the change: what changed
+and why, in the imperative, scoped to the affected area. A reader
+scanning `git log` should learn what happened from the subject line
+alone.
+
+- Good: `mirm: conform-mark instance 1 at seed so first dup copy keeps its lane`
+- Good: `tv: fix off-by-one in selection rect when cursor on last row`
+- Bad: `drop huge mess in the toilet`, `fixes`, `wip`, `cleanup`
+
+If several unrelated things landed, propose separate commits, not one
+catch-all.
+
+Committing is fine once I say go; **never push**. No `Co-Authored-By`
+trailer and no Claude/Anthropic tagline in the message — plain message
+only.
