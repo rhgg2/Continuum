@@ -94,6 +94,29 @@ multi-channel group mirrored. `mirror.laneId` (`chanDelta` + `streamId`) is
 the group-frame lane identity those passes key by; `streamId` stays the
 channel-free region-membership key.
 
+## Regions are disjoint
+
+Two groups whose footprints overlap have no defined behaviour, so
+`markGroup` and `newInstance` reject a placement that collides with a
+live instance and the op becomes a silent no-op (the existing
+out-of-range precedent). Two failures motivate the bar. A freshly
+typed event with no prior identity is adopted by `classifyCreate`,
+which walks `pairs(groups)` and takes the first containing region — so
+in an overlap *which* group claims the note, and therefore which
+siblings it mirrors into, is unspecified and can change between
+rebuilds. And `mirror.project`'s slot-dedup and `conformVuids` resolve
+within one group; two overlapping instances each project a note-on
+into the same slot with no cross-group dedup and each conform pass
+blind to the other's tail — the cross-identity leak the replay model
+exists to kill, reappearing across groups where replay cannot see it.
+
+"Footprint" is per `(channel, streamId, time)`: the half-open span
+`[anchor.ppq, anchor.ppq + rect.dur)` against the absolute
+`(anchor.chan + chanOffset, streamId)` cells of `rect.streams`. Same
+bars on a different lane or channel do not collide, and an adjacent
+stack (`next = ppq + dur`, the cascade's normal step) does not either —
+the span test is strict.
+
 ## The flush seam
 
 `reproject` runs *inside* tm's `preflush`, re-entrantly, so it must not

@@ -72,7 +72,7 @@ return {
       local mirm, tm, staged = mk()
       local A, B, C, D = note(0, 60), note(240, 62), note(480, 64), note(720, 65)
       local gid = mirm:markGroup({ A, B, C, D }, rect())
-      mirm:newInstance(gid, { ppq = 1000, chan = 1 })  -- sibling Y
+      mirm:newInstance(gid, { ppq = 2000, chan = 1 })  -- sibling Y, past the seed
       tm:flush(); staged.add, staged.assign, staged.del = {}, {}, {}
 
       tm:flush({}, {}, { { evt = C } })                -- non-local delete of C
@@ -91,7 +91,7 @@ return {
       local mirm, tm, staged = mk()
       local A = note(0, 60, 480)                        -- A overruns to 480
       local gid = mirm:markGroup({ A }, rect())
-      mirm:newInstance(gid, { ppq = 1000, chan = 1 })
+      mirm:newInstance(gid, { ppq = 2000, chan = 1 })
       tm:flush(); staged.add, staged.assign, staged.del = {}, {}, {}
 
       local born = note(240, 62, 240)                   -- created at group ppq 240
@@ -115,7 +115,7 @@ return {
       local mirm, tm, staged = mk()
       local A = note(0, 60, 240)
       local gid = mirm:markGroup({ A }, rect())
-      mirm:newInstance(gid, { ppq = 1000, chan = 1 })
+      mirm:newInstance(gid, { ppq = 2000, chan = 1 })
       tm:flush(); staged.add, staged.assign, staged.del = {}, {}, {}
 
       local born = note(240, 62, 240)                   -- created after A: last in lane

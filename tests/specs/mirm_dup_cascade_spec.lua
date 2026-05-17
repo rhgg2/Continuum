@@ -49,14 +49,23 @@ local function rect() return { ppq = 0, dur = 960, chanLo = 1,
 local function wire(mirm, cmgr)
   local DUP_KEEP = { mirrorDuplicate = true, cursorDown = true }
   local mirrorDupGroupId
+  -- A cascade-ending action (a new selection, a mutation) leaves the
+  -- user at a DIFFERENT region; only there can the next mirrorDuplicate
+  -- seed a fresh group (a re-seed overlapping the old one is rejected).
+  -- A kept cursor move does not move the region.
+  local region = 0
+  local function regionRect()
+    return { ppq = region, dur = 960, chanLo = 1,
+             streams = { [0] = { ['note:1'] = true } } }
+  end
   local sc = cmgr:scope('tracker')
   sc:registerAll{
     cursorDown = function() end,
-    selectDown = function() end,
-    deleteSel  = function() end,
+    selectDown = function() region = region + 4000 end,
+    deleteSel  = function() region = region + 4000 end,
     mirrorDuplicate = function()
       mirrorDupGroupId = mirm:duplicateInto(mirrorDupGroupId,
-        { note() }, rect(), { ppq = 960, chan = 1 })
+        { note() }, regionRect(), { ppq = region + 960, chan = 1 })
     end,
   }
   local dupClearOn = {}

@@ -87,7 +87,11 @@ return {
       mirm:clearActive()
       t.eq(mirm:activeGroup(), nil)
 
-      local gid2, iid2 = mirm:stamp({ note(0) }, rect(), { ppq = 1920, chan = 1 })
+      -- A fresh group must be seeded at a non-overlapping region (a
+      -- re-seed over the cleared group's footprint is rejected).
+      local far = { ppq = 2880, dur = 960, chanLo = 1,
+                    streams = { [0] = { ['note:1'] = true } } }
+      local gid2, iid2 = mirm:stamp({ note(0) }, far, { ppq = 3840, chan = 1 })
       t.truthy(iid2, 'new group path returns (gid, iid)')
       t.truthy(gid2 ~= gid1, 'a distinct group, not the cleared one')
       t.eq(mirm:activeGroup(), gid2)

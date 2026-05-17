@@ -369,13 +369,61 @@ local function conformSweep(groupId, instId, cset)
   end
 end
 
+-- Overlapping mirror groups have no defined semantics: classifyCreate
+-- adopts a fresh event into whichever group pairs() yields first, and
+-- two groups projecting the same slot collide with no cross-group
+-- dedup. Regions are kept disjoint instead. Disjoint is per
+-- (channel, streamId, time): same bars on a different lane or channel
+-- do not conflict, and an adjacent stack (next = ppq+dur, half-open)
+-- does not either.
+local function rectCells(rect, anchor)
+  local cells = {}                       -- cells[chan][streamId] = true
+  for chanOff, streams in pairs(rect.streams) do
+    local chan = anchor.chan + chanOff
+    local row  = cells[chan] or {}
+    cells[chan] = row
+    for sid in pairs(streams) do row[sid] = true end
+  end
+  return cells
+end
+
+local function spansOverlap(aPpq, aDur, bPpq, bDur)
+  return aPpq < bPpq + bDur and bPpq < aPpq + aDur
+end
+
+-- groupId of an existing group an instance of `rect` at `anchor` would
+-- collide with -- shared time span AND a shared (channel, streamId)
+-- cell -- or nil.
+local function regionConflict(rect, anchor)
+  local cells = rectCells(rect, anchor)
+  for groupId, group in pairs(groups) do
+    for _, inst in pairs(group.instances) do
+      if spansOverlap(anchor.ppq, rect.dur,
+                       inst.anchor.ppq, group.rect.dur) then
+        for chanOff, streams in pairs(group.rect.streams) do
+          local row = cells[inst.anchor.chan + chanOff]
+          if row then
+            for sid in pairs(streams) do
+              if row[sid] then return groupId end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
 ----------- PUBLIC
 
 --contract: seeds a new group from clipboard-sourced concrete `events` and a
 --          resolved region `rect`. Instance 1's anchor is the region origin
 --          { rect.ppq, rect.chanLo }; proj points at the passed events.
---          Returns the new groupId.
+--          Returns the new groupId, or (nil, reason) if the region
+--          collides with a live group (disjoint-region invariant).
 function mirm:markGroup(events, rect)
+  if regionConflict(rect, { ppq = rect.ppq, chan = rect.chanLo }) then
+    return nil, 'overlaps an existing mirror group'
+  end
   local groupId = nextGroupId
   nextGroupId = groupId + 1
   local anchor = { ppq = rect.ppq, chan = rect.chanLo }
@@ -405,12 +453,16 @@ end
 --          region and cleared it. Validates the projection (every group
 --          event's instance channel in 1..16), then stages a concrete
 --          clone of the group at `anchor`. Returns instId, or
---          (nil, reason) if the projection is invalid.
+--          (nil, reason) if the projection is invalid or the placement
+--          collides with a live group (disjoint-region invariant).
 function mirm:newInstance(groupId, anchor)
   local group = groups[groupId]
   for _, g in pairs(group.events) do
     local e = toInstance(g, anchor)
     if e.chan < 1 or e.chan > 16 then return nil, 'channel out of range' end
+  end
+  if regionConflict(group.rect, anchor) then
+    return nil, 'overlaps an existing mirror group'
   end
 
   propagating = true
@@ -440,7 +492,9 @@ function mirm:clearActive() activeGroup = nil end
 --contract: case 1 -- seed a group from the selection, no copy. The new
 --          group becomes active.
 function mirm:mark(events, rect)
-  activeGroup = self:markGroup(events, rect)
+  local groupId, why = self:markGroup(events, rect)
+  if not groupId then return nil, why end
+  activeGroup = groupId
   return activeGroup
 end
 
@@ -451,7 +505,9 @@ function mirm:stamp(events, rect, anchor)
   if activeGroup then
     return self:newInstance(activeGroup, anchor)
   end
-  activeGroup = self:markGroup(events, rect)
+  local groupId = self:markGroup(events, rect)
+  if not groupId then return end
+  activeGroup = groupId
   return activeGroup, self:newInstance(activeGroup, anchor)
 end
 
@@ -465,6 +521,7 @@ end
 function mirm:duplicateInto(groupId, events, rect, anchor)
   if not (groupId and groups[groupId]) then
     groupId = self:markGroup(events, rect)
+    if not groupId then return end
   end
   activeGroup = groupId
   self:newInstance(groupId, anchor)

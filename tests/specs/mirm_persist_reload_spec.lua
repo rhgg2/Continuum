@@ -78,7 +78,7 @@ return {
       t.truthy(B:stateOf(src.uuid), 'origin reverse-lookup rehydrated')
 
       -- nextGroupId advanced past the persisted group (no clobber).
-      local gid2 = B:markGroup({ note(0, 1, 1) }, rect(0, 1))
+      local gid2 = B:markGroup({ note(0, 1, 1) }, rect(2000, 1))
       t.eq(gid2, gid + 1, 'nextGroupId restored, not reset to 1')
 
       -- Propagation lives end to end: edit the origin, sibling reprojects.
