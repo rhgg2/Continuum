@@ -66,6 +66,13 @@ others can't.
    files. Never repeats API surface; never restates what a `--KIND:`
    annotation already says.
 
+Layers 2 and 4 are a **pair, not alternatives**: the `--KIND:` line
+states an invariant tersely; the doc explains why it exists and what
+breaks without it. If a doc paragraph collapses to a one-liner with no
+loss it was an annotation; if an annotation needs a paragraph to be
+believed, that justification belongs in the doc. Semantic split, not a
+length test — see `docs/CONVENTIONS.md` § The annotation/doc boundary.
+
 **Doc shape contract:** `docs/CONVENTIONS.md`. Read it before
 authoring or editing a doc.
 

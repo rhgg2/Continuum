@@ -40,6 +40,23 @@ Thematic prose, nothing else. Include only what applies:
 If the only thing a section can say is what a `--KIND:` annotation
 already says, drop the section. The `.map` is the API reference.
 
+## The annotation/doc boundary
+
+A non-obvious invariant is itself a kind of WHY, so the same fact has
+a plausible home in either layer. They are a **pair, not
+alternatives**: the `--KIND:` line *states* the invariant tersely; the
+doc explains *why it exists and what breaks without it*. Two tests
+settle every borderline case:
+
+- If a doc paragraph collapses to a one-liner with no loss, it was an
+  annotation — move it.
+- If an annotation isn't believable without a paragraph of
+  justification, that justification belongs in the doc — and the
+  annotation stays, stating the rule the doc now defends.
+
+The boundary is semantic, not a length test. Never split one fact
+across both layers as duplicated prose.
+
 ## Shape of the source file
 
 - **Header:** single line, `-- See docs/<file>.md for the model.`
