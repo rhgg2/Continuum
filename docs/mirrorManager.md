@@ -60,8 +60,25 @@ return.
 `conform` is a per-instance realisation marker mirm owns — never a
 shared group field, never through `toGroup`, never set by the user.
 Promote/demote does not surface as a reconcile op on the demoted note,
-so `reproject` sweeps the live records directly rather than relying on
-reconcile to carry it.
+so `conformSweep` stages the marker delta off the live records
+directly rather than relying on reconcile to carry it. `reproject`
+sweeps every instance through it; `markGroup` runs the same sweep on
+instance 1 at seed time. That symmetry is load-bearing: `markGroup`
+adopts the user's existing take events as instance 1, and that
+geometry is *canonical* for the group — only the realisation flag is
+mirm's to add. Omitting the seed sweep left instance 1's last-in-lane
+note unconformed until some later edit reprojected it, so the
+conform-tail rebuild pass could not clip a pattern-length tail; a note
+dropped inside that tail — the first duplicate copy placed one region
+below — overlapped the live source tail and was bumped to a sibling
+lane (later copies land past the CSK-clipped tail and were unaffected,
+which is why only the first copy showed it).
+
+Because the sweep stages conform assigns that can surface in a later
+preflush, `conformOnlyUpdate` makes `applyEdit` pass a conform-only
+update straight through: it is realisation, not a logical edit, and
+must not retrigger `classify`/`groupPlaceLegato`/`reproject` or it
+would churn the canonical group geometry.
 
 ## The flush seam
 

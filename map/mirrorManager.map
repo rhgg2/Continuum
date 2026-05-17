@@ -1,4 +1,4 @@
-@module mirrorManager  src=mirrorManager.lua  loc=641  sha=untracked  mode=chunk
+@module mirrorManager  src=mirrorManager.lua  loc=667  sha=4a6bfb0  mode=chunk
 @deps tm, cm
 
 # Invariants & contracts
@@ -92,41 +92,52 @@
   @fn conformVuids(desired)  @ 335
       -- Mark the last-in-lane note per stream so tm's conform pass clips its
       -- realised note-off. Marker only, never a shared group field.
+  @fn conformSweep(groupId, instId, cset)  @ 355
+      -- Stage only the conform deltas for one instance: each note whose
+      -- realisation flag disagrees with `cset` (the last-in-lane set per
+      -- stream). Promote/demote never surfaces as a reconcile op, so the
+      -- marker is swept directly off the live records.
   -- Active group (dupeClip-idiom selector; the command layer owns the
   -- clear-on-other-command lifetime, mirm only the pointer)
   -- SEAM
-  @fn reproject(groupId)  @ 474
+  @fn reproject(groupId)  @ 498
+  @fn conformOnlyUpdate(evt, update)  @ 546
+      -- conform is a per-instance realisation marker mirm itself stages (seed
+      -- sweep, reproject); it is never a logical user edit and never enters the
+      -- group frame. A conform-only assign reaching applyEdit -- e.g. the seed
+      -- sweep's assign surfacing in the next preflush -- must pass straight
+      -- through, not retrigger classify/groupPlaceLegato/reproject.
 
 # Public API (mirm:*)
-  @api mirm:markGroup(events, rect)  @ 357
+  @api mirm:markGroup(events, rect)  @ 373
       --          resolved region `rect`. Instance 1's anchor is the region origin
       --          { rect.ppq, rect.chanLo }; proj points at the passed events.
       --          Returns the new groupId.
-  @api mirm:newInstance(groupId, anchor)  @ 380
+  @api mirm:newInstance(groupId, anchor)  @ 404
       --          region and cleared it. Validates the projection (every group
       --          event's instance channel in 1..16), then stages a concrete
       --          clone of the group at `anchor`. Returns instId, or
       --          (nil, reason) if the projection is invalid.
-  @api mirm:activeGroup()  @ 408
-  @api mirm:clearActive()  @ 409
-  @api mirm:mark(events, rect)  @ 413
+  @api mirm:activeGroup()  @ 432
+  @api mirm:clearActive()  @ 433
+  @api mirm:mark(events, rect)  @ 437
       --          group becomes active.
       @contract  case 1 -- seed a group from the selection, no copy. The new
-  @api mirm:stamp(events, rect, anchor)  @ 421
+  @api mirm:stamp(events, rect, anchor)  @ 445
       --          instId). No active -> case 2, seed the group AND its first copy
       --          (returns groupId, instId); the group becomes active.
       @contract  active live -> case 3, drop one more copy at `anchor` (returns
-  @api mirm:duplicateInto(groupId, events, rect, anchor)  @ 436
+  @api mirm:duplicateInto(groupId, events, rect, anchor)  @ 460
       --          cascade. `groupId` live -> drop one more copy at `anchor`
       --          into it; nil or stale -> seed group + first copy. Returns
       --          the groupId either way. Sets it active for render parity,
       --          but NEVER reads the shared active pointer -- the caller's
       --          token is the sole continuation state (stamp's activeGroup
       --          fallback belongs to mark/paste, not the cascade).
-  @api mirm:setLocalMode(on)  @ 445
-  @api mirm:localMode()  @ 446
-  @api mirm:stateOf(uuid)  @ 448
-  @api mirm:eachInstance()  @ 460
+  @api mirm:setLocalMode(on)  @ 469
+  @api mirm:localMode()  @ 470
+  @api mirm:stateOf(uuid)  @ 472
+  @api mirm:eachInstance()  @ 484
       -- Read accessor for the render pass: every live instance with the group
       -- rect it projects, its anchor, and whether its group is active. No new
       -- mutable state; rect/anchor are by reference (render reads, never

@@ -58,6 +58,7 @@ local specs = {
   'mirm_stamp_commit_spec',
   'mirm_persist_reload_spec',
   'mirm_revive_delete_spec',
+  'mirm_seed_conform_spec',
   'timing_period_spec',
   'timing_atoms_spec',
   'timing_composite_spec',

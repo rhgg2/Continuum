@@ -348,6 +348,22 @@ local function conformVuids(desired)
   return set
 end
 
+-- Stage only the conform deltas for one instance: each note whose
+-- realisation flag disagrees with `cset` (the last-in-lane set per
+-- stream). Promote/demote never surfaces as a reconcile op, so the
+-- marker is swept directly off the live records.
+local function conformSweep(groupId, instId, cset)
+  for vuid, vuidProj in pairs(projOf(groupId, instId)) do
+    if vuidProj.evt and vuidProj.evt.evType == 'note' then
+      local want = cset[vuid] or false
+      if (vuidProj.evt.conform or false) ~= want then
+        tm:assignEvent(vuidProj.evt, { conform = want })
+        vuidProj.evt.conform = want or nil
+      end
+    end
+  end
+end
+
 ----------- PUBLIC
 
 --contract: seeds a new group from clipboard-sourced concrete `events` and a
@@ -369,6 +385,14 @@ function mirm:markGroup(events, rect)
 
   groups[groupId] = { rect = rect, events = evs, nextVuid = vuid + 1,
                       instances = { [1] = freshInstance(anchor) } }
+
+  -- The adopted take is canonical geometry; only the realisation flag is
+  -- mirm's to add. Without this seed-time sweep instance 1's last-in-lane
+  -- tail stays unconformed until some later edit reprojects it, so the
+  -- conform-tail rebuild pass can't clip a pattern-length tail and a note
+  -- dropped inside it (the first duplicate copy) is lane-bumped.
+  local desired = mirror.project(groups[groupId], groups[groupId].instances[1], takeLen())
+  conformSweep(groupId, 1, conformVuids(desired))
   return groupId
 end
 
@@ -509,25 +533,27 @@ local function reproject(groupId)
         unlink(instProj, op.vuid)
       end
     end
-    -- Promote/demote does not surface as a reconcile op on the demoted
-    -- note, so sweep the conform marker on every instance directly.
-    for vuid, vuidProj in pairs(instProj) do
-      if vuidProj.evt and vuidProj.evt.evType == 'note' then
-        local want = cset[vuid] or false
-        if (vuidProj.evt.conform or false) ~= want then
-          tm:assignEvent(vuidProj.evt, { conform = want })
-          vuidProj.evt.conform = want or nil
-        end
-      end
-    end
+    conformSweep(groupId, instId, cset)
   end
   propagating = false
+end
+
+-- conform is a per-instance realisation marker mirm itself stages (seed
+-- sweep, reproject); it is never a logical user edit and never enters the
+-- group frame. A conform-only assign reaching applyEdit -- e.g. the seed
+-- sweep's assign surfacing in the next preflush -- must pass straight
+-- through, not retrigger classify/groupPlaceLegato/reproject.
+local function conformOnlyUpdate(evt, update)
+  if not update or update == evt or update.conform == nil then return false end
+  for k in pairs(update) do if k ~= 'conform' then return false end end
+  return true
 end
 
 do
   local touchedGroups = {}
 
   local function applyEdit(evt, update)
+    if conformOnlyUpdate(evt, update) then return end
     local groupId, instId, vuid = classify(evt)
     local isCreate = false
     if not groupId and update ~= nil then          -- a brand-new event (create)
