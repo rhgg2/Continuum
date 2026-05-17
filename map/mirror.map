@@ -1,4 +1,4 @@
-@module mirror  src=mirror.lua  loc=233  sha=4a6bfb0  mode=namespace
+@module mirror  src=mirror.lua  loc=237  sha=9ea1afb  mode=namespace
 
 # Invariants & contracts
   @invariant  evType is identity, never merged or overridden; changing type is delete+create upstream
@@ -7,7 +7,7 @@
   @invariant  the region is the identity, not an event set; membership is the rect predicate (time span x per-channel streamId set), so streamId must be index-free (evType+key) and survive column insert/reorder
   @contract  returns (desired, conflicts, states). desired[vuid] is a
   @contract  group-frame lane identity -- streamId plus chanDelta. Geometry
-  @contract  region membership predicate. chanOffset = concrete chan minus
+  @contract  region membership predicate. Both coords are anchor-relative:
 
 # Shapes
   @shape  group = { rect, events = { [vuid] = groupEvt } }
@@ -23,7 +23,7 @@
 
 # Module-level constants
   @const mirror = {}  @ 54
-  @const TINT = { overridden = 'mirror.overridden',  @ 221
+  @const TINT = { overridden = 'mirror.overridden',  @ 225
 
 # Private functions
   @fn resolve(groupEvt, assign)  @ 60
@@ -54,9 +54,13 @@
       --           one channel; two channels at the same lane and onset are
       --           distinct slots. rect.streams keeps streamId channel-free
       --           because chanOffset is already its own dimension there.
-  @api mirror.inRect(rect, ppq, chanOffset, evt)  @ 211
-      --           the instance anchor (caller does the anchor maths). True iff
-      --           ppq is in the time span AND that channel offset participates
-      --           AND the event's streamId is selected for it.
-  @api mirror.tintKey(state, active)  @ 223
-  @api mirror.outlineKey(state)  @ 228
+  @api mirror.inRect(rect, ppq, chanOffset, evt)  @ 215
+      --           ppq = concrete ppq minus the instance anchor ppq, chanOffset =
+      --           concrete chan minus the instance anchor chan (caller does the
+      --           anchor maths). True iff ppq is within the span [0, rect.dur)
+      --           AND that channel offset participates AND the event's streamId
+      --           is selected for it. rect.ppq is the absolute placement origin
+      --           (cascade/render); it is NOT the membership time origin -- that
+      --           is the anchor, already subtracted out, mirroring chanOffset.
+  @api mirror.tintKey(state, active)  @ 227
+  @api mirror.outlineKey(state)  @ 232

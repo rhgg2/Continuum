@@ -204,12 +204,16 @@ function mirror.laneId(evt)
   return tostring(evt.chanDelta or 0) .. '/' .. mirror.streamId(evt)
 end
 
---contract: region membership predicate. chanOffset = concrete chan minus
---           the instance anchor (caller does the anchor maths). True iff
---           ppq is in the time span AND that channel offset participates
---           AND the event's streamId is selected for it.
+--contract: region membership predicate. Both coords are anchor-relative:
+--           ppq = concrete ppq minus the instance anchor ppq, chanOffset =
+--           concrete chan minus the instance anchor chan (caller does the
+--           anchor maths). True iff ppq is within the span [0, rect.dur)
+--           AND that channel offset participates AND the event's streamId
+--           is selected for it. rect.ppq is the absolute placement origin
+--           (cascade/render); it is NOT the membership time origin -- that
+--           is the anchor, already subtracted out, mirroring chanOffset.
 function mirror.inRect(rect, ppq, chanOffset, evt)
-  if ppq < rect.ppq or ppq >= rect.ppq + rect.dur then return false end
+  if ppq < 0 or ppq >= rect.dur then return false end
   local sel = rect.streams[chanOffset]
   return sel ~= nil and sel[mirror.streamId(evt)] == true
 end

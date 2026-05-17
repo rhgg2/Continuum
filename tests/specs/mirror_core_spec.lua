@@ -326,14 +326,22 @@ return {
   ---------- inRect: region membership predicate
 
   {
-    name = 'inRect true only inside the time span',
+    name = 'inRect: span is anchor-relative [0, dur), rect.ppq does not shift it',
     run = function()
-      local rect = { ppq = 480, dur = 480, chanLo = 1, streams = { [0] = { ['note:0'] = true } } }
       local n = note(0)
-      t.falsy(mirror.inRect(rect, 479,  0, n))                       -- before span
-      t.truthy(mirror.inRect(rect, 480,  0, n))                      -- span start (inclusive)
-      t.truthy(mirror.inRect(rect, 959,  0, n))                      -- last ppq in span
-      t.falsy(mirror.inRect(rect, 960,  0, n))                       -- span end (exclusive)
+      -- Coords are anchor-relative (caller subtracts the instance anchor),
+      -- symmetric with chanOffset. rect.ppq is the absolute placement
+      -- origin, NOT the membership origin: a group seeded from a selection
+      -- partway down the take (rect.ppq > 0) must still classify creates at
+      -- offsets [0, dur), or its edits "take" rect.ppq lower than it draws.
+      for _, originPpq in ipairs{ 0, 480, 1920 } do
+        local rect = { ppq = originPpq, dur = 480, chanLo = 1,
+                       streams = { [0] = { ['note:0'] = true } } }
+        t.falsy(mirror.inRect(rect, -1,  0, n))                      -- before span
+        t.truthy(mirror.inRect(rect, 0,   0, n))                     -- span start (inclusive)
+        t.truthy(mirror.inRect(rect, 479, 0, n))                     -- last ppq in span
+        t.falsy(mirror.inRect(rect, 480, 0, n))                      -- span end (exclusive)
+      end
     end,
   },
 
