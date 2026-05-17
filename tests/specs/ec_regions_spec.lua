@@ -41,7 +41,8 @@ local LPR = 10
 
 local function mk(opts)
   opts = opts or {}
-  local gm = util.instantiate('groupManager', { tm = (fakeTm()), cm = fakeCm() })
+  local tm = fakeTm()
+  local gm = util.instantiate('groupManager', { tm = tm, cm = fakeCm() })
 
   local cols = { { type = 'note', midiChan = 1, lane = 1 },
                  { type = 'note', midiChan = 1, lane = 2 } }
@@ -51,10 +52,17 @@ local function mk(opts)
   local cmgr = util.instantiate('commandManager',
                                 { cm = { get = function() return 'qwerty' end } })
 
-  local bridge = { gm = gm, selCalls = {}, rect = nil, anchor = nil }
+  local bridge = { gm = gm, selCalls = {}, paintCalls = {},
+                   rect = nil, anchor = nil, commits = 0 }
   function bridge.eventsInRect()       return {} end
   function bridge.selectionAsRect()    return bridge.rect end
   function bridge.cursorAnchor()       return bridge.anchor end
+  function bridge.instanceAt()         return bridge.instAt end
+  function bridge.commit()             bridge.commits = bridge.commits + 1
+                                       return tm:flush() end
+  function bridge.paintStream(g, i, col, on)
+    bridge.paintCalls[#bridge.paintCalls + 1] = { g, i, col, on }
+  end
 
   local ec = util.instantiate('editCursor', {
     grid        = grid,
@@ -137,12 +145,25 @@ return {
   },
 
   {
-    name = 'enterRegionMode seeds the cursor from gm:activeGroup',
+    name = 'enterRegionMode seeds the region cursor from the caret instance',
+    run = function()
+      local ec, c = mk()
+      local g = c.gm:mark({}, rect(0, LPR))
+      c.bridge.instAt = { groupId = g, instId = instances(c.gm, g)[1].instId }
+      ec:enterRegionMode()
+      t.eq(ec:regionCursor().groupId, g, 'seeded from the caret instance')
+      t.eq(ec:regionCursor().instId, instances(c.gm, g)[1].instId)
+    end,
+  },
+
+  {
+    name = 'enterRegionMode falls back to the active group when caret over none',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, LPR))   -- mark sets it active
+      c.bridge.instAt = nil
       ec:enterRegionMode()
-      t.eq(ec:regionCursor().groupId, g, 'seeded from the active group')
+      t.eq(ec:regionCursor().groupId, g, 'fell back to the active group')
       t.eq(ec:regionCursor().instId, instances(c.gm, g)[1].instId)
     end,
   },
@@ -193,6 +214,20 @@ return {
     end,
   },
 
+  {
+    name = 'creation verbs flush so a new region materialises immediately',
+    run = function()
+      local ec, c = mk()
+      ec:enterRegionMode()
+      c.bridge.rect = rect(0, LPR)
+      c.cmgr:invoke('regionNew')
+      t.eq(c.bridge.commits, 1, 'regionNew flushed staged group ops')
+      c.bridge.anchor = { ppq = LPR, chan = 1 }
+      c.cmgr:invoke('regionInstance')
+      t.eq(c.bridge.commits, 2, 'regionInstance flushed the new copy')
+    end,
+  },
+
   ----- next / prev cycling
 
   {
@@ -215,8 +250,8 @@ return {
       c.cmgr:invoke('regionNext')
       c.cmgr:invoke('regionNext')
       t.eq(ec:regionCursor().instId, list[3], 'next at end clamps')
-      t.truthy(ec:hasSelection(), 'cycle installs the instance selection')
-      t.eq(#c.bridge.selCalls > 0, true)
+      t.falsy(ec:hasSelection(), 'nav is border-only -- no grid selection')
+      t.eq(#c.bridge.selCalls, 0, 'cycle never calls instanceSelection')
     end,
   },
 
@@ -304,6 +339,24 @@ return {
       r = instances(c.gm, g)[1].rect
       t.eq(r.ppq, LPR)
       t.eq(r.dur, 2 * LPR)
+    end,
+  },
+
+  ----- paint (stream-set sculpt via the bridge)
+
+  {
+    name = 'regionPaintExtend/Shrink forward (groupId, instId, cursorCol, on) to the bridge',
+    run = function()
+      local ec, c = mk()
+      local g = c.gm:mark({}, rect(0, LPR))
+      ec:enterRegionMode()
+      local iid = ec:regionCursor().instId
+      ec:setPos(0, 2, 1)                       -- caret on col 2
+      c.cmgr:invoke('regionPaintExtend')
+      c.cmgr:invoke('regionPaintShrink')
+      t.eq(#c.bridge.paintCalls, 2)
+      t.deepEq(c.bridge.paintCalls[1], { g, iid, 2, true })
+      t.deepEq(c.bridge.paintCalls[2], { g, iid, 2, false })
     end,
   },
 

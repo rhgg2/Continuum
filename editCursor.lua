@@ -310,11 +310,10 @@ local function currentEntry()
   end
 end
 
--- Install the instance's cells as the live selection (caret at its
--- top-left, via the bridge) and point the region cursor at it.
-local function snapToInstance(entry)
+-- Points the region cursor; the border follows. No grid selection
+-- until commit -- a live selection mid-mode would let edits escape.
+local function pointAt(entry)
   regionCursor = { groupId = entry.groupId, instId = entry.instId }
-  groupBridge.instanceSelection(entry.groupId, entry.instId)
 end
 
 ---------- PUBLIC
@@ -482,12 +481,18 @@ do
     regionCursor = nil
   end
 
-  --contract: idempotent while pushed; seeds the nav cursor from gm's
-  --          active group's first instance if one is set.
+  --contract: idempotent while pushed; seeds the nav cursor from the
+  --          instance under the caret (groupBridge.instanceAt), else
+  --          the active group's first instance.
   function ec:enterRegionMode()
     if regionPushed then return end
     cmgr:push(regionScope)
     regionPushed = true
+    local at = groupBridge.instanceAt and groupBridge.instanceAt()
+    if at then
+      regionCursor = { groupId = at.groupId, instId = at.instId }
+      return
+    end
     local gm = gmgr()
     local active = gm and gm:activeGroup()
     if not active then return end
@@ -506,6 +511,7 @@ do
     if not groupId then return end
     regionCursor = { groupId = groupId, instId = 1 }
     selClear()
+    if groupBridge.commit then groupBridge.commit() end
   end
 
   local function newInstance()
@@ -514,14 +520,15 @@ do
     if not anchor then return end
     local instId = gmgr():newInstance(regionCursor.groupId, anchor)
     if instId then regionCursor.instId = instId end
+    if groupBridge.commit then groupBridge.commit() end
   end
 
   local function dropInstance()
     if not regionCursor then return end
-    local at = cursorIndex(orderedInstances()) or 1
+    local idx = cursorIndex(orderedInstances()) or 1
     gmgr():deleteInstance(regionCursor.groupId, regionCursor.instId)
     local after = orderedInstances()
-    local pick  = after[math.min(at, #after)]
+    local pick  = after[math.min(idx, #after)]
     regionCursor = pick and { groupId = pick.groupId, instId = pick.instId }
                         or nil
   end
@@ -530,7 +537,7 @@ do
     local list = orderedInstances()
     if #list == 0 then return end
     local at = cursorIndex(list) or (step > 0 and 0 or #list + 1)
-    snapToInstance(list[util.clamp(at + step, 1, #list)])
+    pointAt(list[util.clamp(at + step, 1, #list)])
   end
 
   local function moveBy(rowDelta)
@@ -547,6 +554,12 @@ do
   local function resizeBy(edits)
     if not regionCursor then return end
     gmgr():resizeGroup(regionCursor.groupId, regionCursor.instId, edits)
+  end
+
+  local function paintCell(on)
+    if not regionCursor then return end
+    groupBridge.paintStream(regionCursor.groupId, regionCursor.instId,
+                            cursorCol, on)
   end
 
   local function commit()
@@ -577,6 +590,8 @@ do
       regionShrink       = function() resizeBy{ endDelta   = -logPerRow() } end,
       regionGrowStart    = function() resizeBy{ startDelta = -logPerRow() } end,
       regionShrinkStart  = function() resizeBy{ startDelta =  logPerRow() } end,
+      regionPaintExtend  = function() paintCell(true)  end,
+      regionPaintShrink  = function() paintCell(false) end,
     }
   end
 end

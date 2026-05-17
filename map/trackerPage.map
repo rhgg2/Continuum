@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1520  sha=b27ba28  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1505  sha=79a62e8  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
@@ -44,25 +44,21 @@
   @state modalState = nil  @ 68
   @state laneConsumed = false  @ 72
   @state toolbar  @ 73   -- lazy: chrome may be nil at construction in tests
-  @state mirrorMode = false  @ 78   -- 'mirror' overlay scope is on the stack
-  @state mirrorRect = nil  @ 79   -- authoring rect for asymmetric sculpt
-  @state mirrorSrc = nil  @ 80   -- last-copy source rect; nil once mutated
-  @state mirrorDupState = nil  @ 88
-  @state paintLast = nil  @ 89   -- mirror-paint per-cell debounce
-  @state mirrorPaint  @ 90   -- fn(colIx, on); assigned with the scope
-  @state renderFns = {  @ 155
-  @state SWING_PRESET_EXCLUDE = { id = true }  @ 267
-  @state toolbarSegments = {  @ 301
-  @state laneRenderable = { cc = true, pb = true, at = true }  @ 416
+  @state mirrorSrc = nil  @ 77   -- last-copy source rect for mirrorPaste; nil once mutated
+  @state mirrorDupState = nil  @ 85
+  @state paintLast = nil  @ 86   -- region-paint per-cell debounce
+  @state renderFns = {  @ 151
+  @state SWING_PRESET_EXCLUDE = { id = true }  @ 263
+  @state toolbarSegments = {  @ 297
+  @state laneRenderable = { cc = true, pb = true, at = true }  @ 412
       @invariant  lane strip renders only cc/pb/at columns; other types show as tinted background
-  @state LANE_ROW_MIN = 3  @ 418
-  @state LANE_ROW_MAX = 32  @ 419
-  @state tracker = cmgr:scope('tracker')  @ 1228
-  @state MIRROR_PASSTHROUGH = {  @ 1296
-  @state MIRROR_KEEP = {}  @ 1306
-  @state DUP_KEEP = { mirrorDuplicate = true, selectClear = true,  @ 1321
-  @state mirrorScope = cmgr:scope('mirror')  @ 1329
-  @state tp = {}  @ 1438
+  @state LANE_ROW_MIN = 3  @ 414
+  @state LANE_ROW_MAX = 32  @ 415
+  @state tracker = cmgr:scope('tracker')  @ 1229
+  @state MIRROR_PASSTHROUGH = {  @ 1297
+  @state MIRROR_KEEP = {}  @ 1307
+  @state DUP_KEEP = { mirrorDuplicate = true, selectClear = true,  @ 1322
+  @state tp = {}  @ 1423
 
 # Private functions
   @fn print(...)  @ 22
@@ -70,34 +66,34 @@
   @fn layoutColumns(cols, scrollCol)  @ 47
       @contract  clears col.x on every col before assigning; off-screen cols end the frame with col.x == nil
   -- Cell renderers
-  @fn renderNote(evt, col, row)  @ 94
-  @fn renderPB(evt)  @ 143
-  @fn renderCC(evt)  @ 150
-  @fn renderCell(evt, col, row)  @ 164
+  @fn renderNote(evt, col, row)  @ 90
+  @fn renderPB(evt)  @ 139
+  @fn renderCC(evt)  @ 146
+  @fn renderCell(evt, col, row)  @ 160
   -- Drawing
-  @fn printer(ctx, gX, gY, x0, y0)  @ 171
-  @fn laneStripRows()  @ 227
+  @fn printer(ctx, gX, gY, x0, y0)  @ 167
+  @fn laneStripRows()  @ 223
       @contract  returns 0 when laneStrip.visible is false — both layout and draw branch on this
-  @fn libPickerItems(current, lib, presets, excludePresets)  @ 233
+  @fn libPickerItems(current, lib, presets, excludePresets)  @ 229
       -- Off=group 1, saved lib=group 2, unseeded preset (+ prefix)=group 3.
-  @fn pickTemper(name)  @ 255
+  @fn pickTemper(name)  @ 251
       -- Seed lib if absent before committing to slot.
-  @fn pickSwing(name)  @ 262
-  @fn pickColSwing(chan, name)  @ 263
-  @fn drawSampleDropdown()  @ 271
+  @fn pickSwing(name)  @ 258
+  @fn pickColSwing(chan, name)  @ 259
+  @fn drawSampleDropdown()  @ 267
       -- Hex stays visible when unassigned so `<`/`>` advertise their step.
       -- No "Off" row — every slot is real.
-  @fn drawTrackerToolbarBits()  @ 376
+  @fn drawTrackerToolbarBits()  @ 372
       -- While the swing editor is open, the tracker body is replaced and
       -- only swing-related toolbar segments stay live (the picker is how
       -- the user switches what they're editing). Other segments grey out.
-  @fn computeLayout(budgetW, budgetH)  @ 395
+  @fn computeLayout(budgetW, budgetH)  @ 391
       @contract  must run before any draw routine that reads chanX/chanW/chanOrder/totalWidth/gridHeight
       @contract  calls tv:setGridSize(gridWidth, gridHeight) so tv scroll math sees the live viewport
   -- Lane strip
-  @fn drawLaneStrip()  @ 422
+  @fn drawLaneStrip()  @ 418
       @contract  publishes laneConsumed=true if the curve editor claimed input this frame; handleMouse short-circuits on it
-  @fn drawTracker()  @ 537
+  @fn drawTracker()  @ 533
       @contract  assumes computeLayout ran this frame; reads chanX/chanW/chanOrder/totalWidth and gridOriginX/Y
   @fn drawStatusBar()  @ 780
   -- Input
@@ -106,34 +102,33 @@
   @fn handleMouse()  @ 900
       @contract  returns immediately if laneConsumed is set; lane strip wins gestures over the tracker grid
       @contract  right-click on channel-label row toggles mute; click on label rows selects channel/column; body click moves cursor and arms drag
-  @fn handleKeys(kr)  @ 1041
+  @fn handleKeys(kr)  @ 1042
       -- Page-internal raw input. commandHeld gates a held command key from
       -- leaking into the char queue (different auto-repeat timing).
       @contract  no-op when modalState or chrome.pickerIsActive() is set, or when any ImGui item is active (focused InputText etc.)
       @contract  drains the entire input-queue per frame; reads ec/grid fresh each iteration since editEvent may rebuild
-  @fn drawModal()  @ 1088
+  @fn drawModal()  @ 1089
       @contract  callback runs under pcall; an exception is logged to the REAPER console and does not abort the frame
   -- Modal-driven commands
-  @fn openPrompt(title, prompt, callback)  @ 1202
-  @fn openConfirm(title, callback, prompt)  @ 1207
-  @fn scopedAction(title, base)  @ 1220
+  @fn openPrompt(title, prompt, callback)  @ 1203
+  @fn openConfirm(title, callback, prompt)  @ 1208
+  @fn scopedAction(title, base)  @ 1221
       -- Naming convention <base>Selection / <base>All is the contract.
       @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
-  -- Mirror regions
-  @fn exitMirror()  @ 1342
 
 # Public API (tp:*)
-  @api tp:renderToolbarBits(_)  @ 1440
-  @api tp:renderBody(_, w, h, dispatch)  @ 1446
+  -- Mirror quick-verbs & region entry
+  @api tp:renderToolbarBits(_)  @ 1425
+  @api tp:renderBody(_, w, h, dispatch)  @ 1431
       @contract  calls computeLayout twice — lane-strip drag callbacks may flush tv.grid.cols and clear col.x; second pass repopulates layout for drawTracker
-  @api tp:renderStatusBar(_)  @ 1480
-  @api tp:renderFloating(_)  @ 1484
-  @api tp:bind(t)  @ 1487
+  @api tp:renderStatusBar(_)  @ 1465
+  @api tp:renderFloating(_)  @ 1469
+  @api tp:bind(t)  @ 1472
       @contract  bind/unbind drive tm:bindTake — the page owns the cm/mm context swap for its own stack
-  @api tp:unbind()  @ 1488
-  @api tp:reloadFromReaper()  @ 1491
+  @api tp:unbind()  @ 1473
+  @api tp:reloadFromReaper()  @ 1476
       @contract  pass-through for coord's external-mutation watcher; re-reads the bound take without changing it
-  @api tp:focusState()  @ 1504
+  @api tp:focusState()  @ 1489
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo
@@ -144,9 +139,9 @@
       --   transiently, but bound commands should still fire. Anything that
       --   genuinely needs the keys (a focused InputText, an active slider,
       --   a held button) shows up as IsAnyItemActive.
-  @api tp:handleInput()  @ 1515
-  @api tp:save()  @ 1516
-  @api tp:load()  @ 1517
+  @api tp:handleInput()  @ 1500
+  @api tp:save()  @ 1501
+  @api tp:load()  @ 1502
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

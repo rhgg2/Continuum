@@ -52,10 +52,15 @@ function harness.mk(opts)
 
   local tm = util.instantiate('trackerManager', { mm = mm, cm = cm })
   local cmgr = util.instantiate('commandManager', { cm = cm })
-  local vm = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr })
+  -- gm is opt-in: it subscribes to tm flush signals, so wiring it
+  -- unconditionally would perturb every tm-unit spec's flush pipeline.
+  -- Only region-wired specs need the real group engine.
+  local gm = opts.groups
+         and util.instantiate('groupManager', { tm = tm, cm = cm }) or nil
+  local vm = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr, gm = gm })
   cmgr:push('tracker')
 
-  return { fm = mm, cm = cm, tm = tm, vm = vm, ec = vm:ec(),
+  return { fm = mm, cm = cm, tm = tm, vm = vm, ec = vm:ec(), gm = gm,
            clipboard = vm:clipboard(), cmgr = cmgr, reaper = fakeReaper }
 end
 

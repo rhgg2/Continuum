@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2243  sha=b27ba28  mode=chunk
+@module trackerView  src=trackerView.lua  loc=2293  sha=79a62e8  mode=chunk
 @deps tm, cm, cmgr, gm
 
 # Invariants & contracts
@@ -40,9 +40,9 @@
   @state tv = {}  @ 47
   @state ec, clipboard, ctx  @ 50
   @state dupeState = nil  @ 1640
-  @state tracker = cmgr:scope('tracker')  @ 1976
-  @state rebuilding = false  @ 2033
-  @state groupBridge = {  @ 2178
+  @state tracker = cmgr:scope('tracker')  @ 2021
+  @state rebuilding = false  @ 2078
+  @state groupBridge = {  @ 2223
 
 # Private functions
   @fn print(...)  @ 23
@@ -229,19 +229,24 @@
   @api tv:streamRefAt(colIx, chanLo)  @ 1852
       -- (channel offset, stream id) for a grid column, relative to chanLo —
       -- the coordinates a mirror rect's `streams` table is keyed by.
-  @api tv:instanceSelection(groupId, instId)  @ 1861
+  @api tv:instanceAtCursor()  @ 1860
+      -- The instance whose region covers the caret cell, or nil. Region mode
+      -- seeds from this so entry lands on what the caret is over.
+  @api tv:instanceSelection(groupId, instId)  @ 1877
       -- Install the grid selection for one group instance: its anchor + the
       -- group rect -> selectRegionAt (the duplicate-cascade selector). The ec
       -- region-mode bridge speaks this; ec never reads gm geometry directly.
+  @api tv:paintRegionStream(groupId, instId, colIx, on)  @ 1886
+      @contract  extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans the take); idempotent -- re-painting an already on/off stream is a no-op true. The group's live rect is found by id off gm:eachInstance so ec carries no geometry.
   -- Non-command callbacks from trackerPage
-  @api tv:setGridSize(w, h)  @ 1871
+  @api tv:setGridSize(w, h)  @ 1916
   -- Columns
-  @api tv:addExtraCol(type, cc)  @ 1877
-  @api tv:hideExtraCol()  @ 1902
-  @api tv:showDelay()  @ 1957
+  @api tv:addExtraCol(type, cc)  @ 1922
+  @api tv:hideExtraCol()  @ 1947
+  @api tv:showDelay()  @ 2002
   -- Command table
   -- Rebuild
-  @api tv:rebuild(takeChanged)  @ 2036
+  @api tv:rebuild(takeChanged)  @ 2081
       @contract  reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
 
 # REAPER API surface

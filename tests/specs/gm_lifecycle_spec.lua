@@ -217,7 +217,7 @@ return {
     run = function()
       local gm, staged = mk()
       local g = gm:duplicateInto(nil, { note(0, 1) }, rect(0, 480),
-                                   { ppq = 480, chan = 1 })  -- seed + copy
+                                   { ppq = 2000, chan = 1 })  -- seed + copy, clear of the grown span
       local seedIid = instOf(gm, g)[1].instId
       local extra = note(720, 9001)               -- a plain event under the actor
       t.eq(gm:stateOf(9001), nil, 'not group-managed yet')
@@ -242,4 +242,21 @@ return {
       t.eq(instOf(gm, a)[1].rect.dur, 480, 'rect unchanged on rejection')
     end,
   },
+
+  {
+    name = 'resizeGroup rejects growing one instance into a sibling',
+    run = function()
+      local gm = mk()
+      local g  = gm:duplicateInto(nil, { note(0, 1) }, rect(0, 480),
+                                    { ppq = 480, chan = 1 })  -- inst1 [0,480), inst2 [480,960)
+      local seedIid
+      for _, r in ipairs(instOf(gm, g)) do
+        if r.anchor.ppq == 0 then seedIid = r.instId end
+      end
+      local ok, why = gm:resizeGroup(g, seedIid, { endDelta = 240 }) -- ->[0,720) over inst2
+      t.eq(ok, nil); t.eq(why, 'overlaps an existing mirror group')
+      t.eq(instOf(gm, g)[1].rect.dur, 480, 'rect unchanged on sibling collision')
+    end,
+  },
+
 }

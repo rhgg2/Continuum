@@ -60,6 +60,15 @@ render and no mode affordance, so the entry chord either no-op'd or
 dropped the user into an invisible modal. A real scope plus
 `isInRegionMode()` makes the state observable to the renderer.
 
+Entry lands on the instance under the caret (the bridge's
+`instanceAt`), not gm's active pointer, so authoring starts on what you
+are looking at. Nav is **border-only**: moving the region cursor just
+outlines an instance; it never installs a grid selection. A live
+selection mid-mode would both let a stray keystroke escape the modal
+and conflate "the instance I'm authoring" with "what's selected for
+editing". The selection is installed once, on commit -- the deliberate
+handoff back to normal editing.
+
 ec owns only the lifecycle and an **ephemeral** nav cursor
 (`{groupId, instId}`, never persisted). The group store, projection,
 conform and persistence stay entirely in the group engine. ec reaches
@@ -73,6 +82,14 @@ A pure re-anchor is invisible to the group engine's drift-driven
 reprojection (the group frame is anchor-invariant), so `regionNudge`
 goes through the engine's explicit move verb, not a reproject. Why
 that is lives in the group engine's doc, not here.
+
+Paint sculpts the *existing* active group's stream-set — there is no
+pre-commit authoring rect any more (the old mirror flow had one). A
+painted column is a `resizeGroup` of the rect's streams, and an extend
+must hand the newly-covered concretes in itself: the engine recomputes
+from the rect, it never rescans the take for gained members. That
+grid↔stream translation is trackerView's, reached through the bridge
+like every other region verb.
 
 ## Clipboard: single vs multi
 

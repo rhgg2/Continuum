@@ -1855,6 +1855,22 @@ function tv:streamRefAt(colIx, chanLo)
   return col.midiChan - chanLo, streamIdOf(col)
 end
 
+-- The instance whose region covers the caret cell, or nil. Region mode
+-- seeds from this so entry lands on what the caret is over.
+function tv:instanceAtCursor()
+  local _, c = ec:pos()
+  if not grid.cols[c] then return nil end
+  local ppq = ec:row() * logPerRowFor(currentRpb())
+  for _, e in ipairs(gm:eachInstance()) do
+    if ppq >= e.anchor.ppq and ppq < e.anchor.ppq + e.rect.dur then
+      local off, sid = tv:streamRefAt(c, e.anchor.chan)
+      if off and e.rect.streams[off] and e.rect.streams[off][sid] then
+        return { groupId = e.groupId, instId = e.instId }
+      end
+    end
+  end
+end
+
 -- Install the grid selection for one group instance: its anchor + the
 -- group rect -> selectRegionAt (the duplicate-cascade selector). The ec
 -- region-mode bridge speaks this; ec never reads gm geometry directly.
@@ -1864,6 +1880,35 @@ function tv:instanceSelection(groupId, instId)
       return selectRegionAt(e.anchor, e.rect)
     end
   end
+end
+
+--contract: extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans the take); idempotent -- re-painting an already on/off stream is a no-op true. The group's live rect is found by id off gm:eachInstance so ec carries no geometry.
+function tv:paintRegionStream(groupId, instId, colIx, on)
+  local rect
+  for _, e in ipairs(gm:eachInstance()) do
+    if e.groupId == groupId then rect = e.rect; break end
+  end
+  if not rect then return end
+  local off, sid = tv:streamRefAt(colIx, rect.chanLo)
+  if not off then return end
+
+  local already = rect.streams[off] and rect.streams[off][sid] == true
+  if (on and already) or (not on and not already) then return true end
+
+  local streams = {}
+  for o, set in pairs(rect.streams) do
+    streams[o] = {}
+    for k in pairs(set) do streams[o][k] = true end
+  end
+  streams[off] = streams[off] or {}
+  streams[off][sid] = on or nil
+
+  local gained
+  if on then
+    gained = tv:eventsInRect{ ppq = rect.ppq, dur = rect.dur,
+      chanLo = rect.chanLo, streams = { [off] = { [sid] = true } } }
+  end
+  return gm:resizeGroup(groupId, instId, { streams = streams, gained = gained })
 end
 
 ----- Non-command callbacks from trackerPage
@@ -2181,6 +2226,11 @@ local groupBridge = {
   selectionAsRect   = function()     return tv:selectionAsRect() end,
   cursorAnchor      = function()     return tv:cursorAnchor() end,
   instanceSelection = function(g, i) return tv:instanceSelection(g, i) end,
+  instanceAt        = function()     return tv:instanceAtCursor() end,
+  paintStream       = function(g, i, c, on) return tv:paintRegionStream(g, i, c, on) end,
+  -- gm only stages; the creation verbs flush so a new instance
+  -- materialises now, not on the next unrelated mutation.
+  commit            = function()     return tm:flush() end,
 }
 
 ec = util.instantiate('editCursor', {

@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=667  sha=19451fd  mode=chunk
+@module editCursor  src=editCursor.lua  loc=682  sha=79a62e8  mode=chunk
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -12,7 +12,7 @@
   @invariant  HBlock=2/3 use sentinel part1=part2='*' that no real part name matches — selectionStopSpan falls through to whole-col
   @invariant  within a single col, parts order via col.partStart (lower partStart = earlier part); not stop index, since parts may be multi-stop
   @invariant  moveHook fires after every position-changing operation (clampPos+moveHook are paired)
-  @contract  idempotent while pushed; seeds the nav cursor from gm's
+  @contract  idempotent while pushed; seeds the nav cursor from the
   @contract  stamps col.parts/stopPos/partAt/partStart/width derived from col.type + showDelay + trackerMode; ec is the sole writer of these fields, addGridCol never names them
 
 # Shapes
@@ -39,8 +39,8 @@
   @state sel, selAnchor  @ 35
   @state regionCursor  @ 40   -- { groupId, instId } | nil
   @state regionScope, regionPushed  @ 41
-  @state ec = {}  @ 322
-  @state REGION_PASSTHROUGH = {  @ 470
+  @state ec = {}  @ 321
+  @state REGION_PASSTHROUGH = {  @ 469
 
 # Private functions
   -- Position
@@ -83,44 +83,44 @@
       -- order so next/prev cycle deterministically.
   @fn cursorIndex(list)  @ 298
   @fn currentEntry()  @ 306
-  @fn snapToInstance(entry)  @ 315
-      -- Install the instance's cells as the live selection (caret at its
-      -- top-left, via the bridge) and point the region cursor at it.
+  @fn pointAt(entry)  @ 315
+      -- Points the region cursor; the border follows. No grid selection
+      -- until commit -- a live selection mid-mode would let edits escape.
 
 # Public API (ec:*)
   -- Position
-  @api ec:row()  @ 326
-  @api ec:col()  @ 327
-  @api ec:pos()  @ 328
-  @api ec:setPos(row, col, stop)  @ 331
+  @api ec:row()  @ 325
+  @api ec:col()  @ 326
+  @api ec:pos()  @ 327
+  @api ec:setPos(row, col, stop)  @ 330
       @contract  any nil arg leaves that axis untouched; clamps and fires moveHook unconditionally
-  @api ec:clampPos()  @ 338
-  @api ec:rescaleRow(oldRPB, newRPB)  @ 341
+  @api ec:clampPos()  @ 337
+  @api ec:rescaleRow(oldRPB, newRPB)  @ 340
       @contract  scales cursorRow by newRPB/oldRPB; called by vm when rowPerBeat changes mid-session so caret stays at the same musical time
-  @api ec:reset()  @ 345
+  @api ec:reset()  @ 344
   -- Part & Region
-  @api ec:cursorPart()  @ 353
-  @api ec:hasSelection()  @ 354
-  @api ec:isSticky()  @ 355
-  @api ec:anchorRow()  @ 356
-  @api ec:region()  @ 358
-  @api ec:regionStart()  @ 367
+  @api ec:cursorPart()  @ 352
+  @api ec:hasSelection()  @ 353
+  @api ec:isSticky()  @ 354
+  @api ec:anchorRow()  @ 355
+  @api ec:region()  @ 357
+  @api ec:regionStart()  @ 366
       -- Pair so callers can splat: `ec:setPos(row, ec:regionStart())`.
-  @api ec:eachSelectedCol()  @ 372
-  @api ec:setSelection(r)  @ 394
+  @api ec:eachSelectedCol()  @ 371
+  @api ec:setSelection(r)  @ 393
       @contract  installs a selection from a part-typed record; clears sticky scopes; anchor lands at top-left part-start so subsequent extends behave like a fresh drag
-  @api ec:selectionStopSpan(col)  @ 401
-  @api ec:selClear()  @ 419
-  @api ec:unstick()  @ 420
-  @api ec:extendTo(row, col, stop)  @ 423
+  @api ec:selectionStopSpan(col)  @ 400
+  @api ec:selClear()  @ 418
+  @api ec:unstick()  @ 419
+  @api ec:extendTo(row, col, stop)  @ 422
       -- Mouse shift-click and drag both speak this verb.
-  @api ec:shiftSelection(rowDelta)  @ 430
+  @api ec:shiftSelection(rowDelta)  @ 429
       @contract  shifts both selection rows + anchor + cursor by rowDelta; clamps each independently (selection can compress against the edge while cursor doesn't)
   -- Motion
-  @api ec:advance()  @ 442
+  @api ec:advance()  @ 441
       @contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
   -- Region mode
-  @api ec:isInRegionMode()  @ 465
-  @api ec:regionCursor()  @ 466
+  @api ec:isInRegionMode()  @ 464
+  @api ec:regionCursor()  @ 465
   -- Commands
-  @api ec:registerCommands(scope)  @ 586
+  @api ec:registerCommands(scope)  @ 601

@@ -42,18 +42,19 @@ local activeGroup = nil
 -- is the durable key (tm's token is internal and re-keyed).
 local proj      = {}
 local locByUuid = {}  -- concrete uuid -> { groupId, instId, vuid }
--- newInstance's own projection adds; the preflush adds loop skips them
--- (gm's echo, not a user create) and clears each as seen.
+-- newInstance's own projection adds; the preflush adds loop skips them.
 local selfStaged = {}
--- moveInstance's own re-place assigns; the preflush assigns loop skips
--- them. Distinct from selfStaged: the assigns loop runs before the adds
--- loop, so a shared marker would let it drain a pending add-echo (and
--- vice versa) when both land in one flush.
+-- moveInstance's own re-place assigns; the preflush assigns loop skips them.
 local selfAssigned = {}
 -- uuids the user directly touched this flush. Gates userOwned (per
 -- event, not per instance) so a create/delete's redundant tm op is
 -- skipped while a same-flush edit in two instances still propagates.
 local touchedUuids = {}
+-- newInstance's adds are selfStaged, so the preflush adds loop skips
+-- them and the new group never lands in touchedGroups -- it would stay
+-- unreprojected (no conform) until some later edit touched it. Carry it
+-- here so the next preflush reprojects it once.
+local pendingReproject = {}
 
 local function projOf(groupId, instId)
   local g = proj[groupId]
@@ -534,6 +535,7 @@ function gm:newInstance(groupId, anchor)
     link(groupId, instId, vuid, p, nil, util.clone(g), e)
   end
   propagating = false
+  pendingReproject[groupId] = true
   return instId
 end
 
@@ -796,15 +798,17 @@ do
       else applyEdit(o.evt, o.update) end
     end
     for _, o in ipairs(deletes) do applyEdit(o.evt, nil)      end
-    -- newInstance stages its projection adds, but the commit flush fires
-    -- later (after `propagating` has cleared), so they reappear here as
-    -- gm's own echo -- skip them. A genuine user create is never staged
-    -- by gm.
+    -- newInstance stages its projection adds; the commit flush fires
+    -- later, so they reappear as gm's echo -- skip them.
     for _, o in ipairs(adds) do
       if selfStaged[o.evt] then selfStaged[o.evt] = nil
       else applyEdit(o.evt, o.evt) end
     end
     for groupId in pairs(touchedGroups) do reproject(groupId) end
+    for groupId in pairs(pendingReproject) do
+      if not touchedGroups[groupId] and groups[groupId] then reproject(groupId) end
+      pendingReproject[groupId] = nil
+    end
   end)
 end
 
@@ -913,8 +917,8 @@ end
 -- (from the acting instance, caller-supplied -- gm has no tm-enumeration
 -- surface) fold in at that instance's anchor. Whole op rejected, nothing
 -- mutated, if any instance's new placement collides with another group
--- or the region would vanish.
---contract: (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true | nil,reason. gm validates cross-group disjointness + non-vanishing region only; take bounds are the caller's, deferred as in gm:newInstance (gm holds no take authority -- takeLen is advisory). Leaving members orphan (concrete kept, unmanaged); gained fold in at the actor anchor.
+-- or a sibling instance of the same group, or the region would vanish.
+--contract: (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true | nil,reason. gm validates cross-group AND same-group sibling disjointness + non-vanishing region only; take bounds are the caller's, deferred as in gm:newInstance (gm holds no take authority -- takeLen is advisory). Leaving members orphan (concrete kept, unmanaged); gained fold in at the actor anchor.
 function gm:resizeGroup(groupId, instId, edits)
   local group = groups[groupId]
   if not group then return nil, 'no such group' end
@@ -931,9 +935,11 @@ function gm:resizeGroup(groupId, instId, edits)
                     chanLo  = rect.chanLo,
                     streams = edits.streams or rect.streams }
 
-  for _, inst in pairs(group.instances) do
+  -- exclude only this instance: a grown shared rect must still refuse
+  -- two siblings of the same group overlapping each other.
+  for thisId, inst in pairs(group.instances) do
     local at = { ppq = inst.anchor.ppq + startDelta, chan = inst.anchor.chan }
-    if regionConflict(newRect, at, { groupId = groupId }) then
+    if regionConflict(newRect, at, { groupId = groupId, instId = thisId }) then
       return nil, 'overlaps an existing mirror group'
     end
   end

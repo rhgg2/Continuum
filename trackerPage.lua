@@ -72,12 +72,9 @@ local curveEd      = util.instantiate('curveEditor', { ctx = ctx })
 local laneConsumed = false
 local toolbar                              -- lazy: chrome may be nil at construction in tests
 
--- Mirror-region UI state. Forward-declared so handleMouse (defined
--- well above the wiring) can read the mode flag and paint hook; both
--- are assigned in the "Mirror regions" section near the bindings.
-local mirrorMode  = false   -- 'mirror' overlay scope is on the stack
-local mirrorRect  = nil     -- authoring rect for asymmetric sculpt
-local mirrorSrc   = nil     -- last-copy source rect; nil once mutated
+-- Forward-declared so cmgr:doBefore('copy') (wired far below) sets it
+-- before handleMouse / the body read it.
+local mirrorSrc   = nil     -- last-copy source rect for mirrorPaste; nil once mutated
 
 -- mirrorDuplicate cascade state, or nil -- the shared tv:duplicateCascade
 -- run token { rect, payload, next, mark }: the SOURCE region (captured
@@ -86,8 +83,7 @@ local mirrorSrc   = nil     -- last-copy source rect; nil once mutated
 -- move from a plain repeat. Survives cursor moves; dropped by any new
 -- selection or mutation (see DUP_KEEP).
 local mirrorDupState = nil
-local paintLast   = nil     -- mirror-paint per-cell debounce
-local mirrorPaint           -- fn(colIx, on); assigned with the scope
+local paintLast   = nil     -- region-paint per-cell debounce
 
 ----- Cell renderers
 
@@ -608,12 +604,14 @@ local function drawTracker()
   -- Mirror regions. Before tails/cells so per-cell text reads over the
   -- wash. A per-group hue washes the whole instance area (membership =
   -- selected streams x time span); overridden/conflicted cells
-  -- overpaint a louder state colour. A plain instance has no border;
-  -- the active group, or any conflicted one, gets a hue outline. The
-  -- x=-1 gutter slot lights only when the cursor is actually inside the
-  -- instance, not merely on one of its rows.
+  -- overpaint a louder state colour. The wash is always on (group viz);
+  -- the region-cursor instance's border + the x=-1 cursor gutter are
+  -- region-mode affordances, shown only while authoring. A conflicted
+  -- instance always outlines -- a data problem worth seeing in any mode.
   local logPerRow = tv:logPerRow()
   local cursorPpq = cursorRow * logPerRow
+  local inRegion  = tv:ec():isInRegionMode()
+  local rc        = inRegion and tv:ec():regionCursor()
   for _, inst in ipairs(gm:eachInstance()) do
     local rect  = inst.rect
     local ppqLo = inst.anchor.ppq
@@ -645,15 +643,17 @@ local function drawTracker()
         end
       end
       if xMin then
-        if inst.active or conflicted then
+        local isCursorInst = rc and rc.groupId == inst.groupId
+                                and rc.instId == inst.instId
+        if conflicted or isCursorInst then
           local outCol = chrome.colour(groups.outlineKey(
             conflicted and 'conflicted' or 'synced', inst.colour))
           ImGui.DrawList_AddRect(drawList,
             gridOriginX + xMin * gridX,       gridOriginY + yLo * gridY,
             gridOriginX + (xMax + 1) * gridX, gridOriginY + yHi * gridY,
-            outCol, 0, 0, inst.active and 2 or 1)
+            outCol, 0, 0, isCursorInst and 2 or 1)
         end
-        if cursorIn then draw:box(-1, -1, yLo, yHi - 1, baseTint) end
+        if inRegion and cursorIn then draw:box(-1, -1, yLo, yHi - 1, baseTint) end
       end
     end
   end
@@ -857,7 +857,7 @@ cmgr:scope('tracker'):bindAll{
   mirrorDuplicate   = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   mirrorPaste       = { {ImGui.Key_V, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   mirrorLocalToggle = { {ImGui.Key_M, ImGui.Mod_Super} },
-  mirrorEnter       = { {ImGui.Key_R, ImGui.Mod_Super} },
+  regionEnter       = { {ImGui.Key_R, ImGui.Mod_Super} },
   hideExtraCol   = { {ImGui.Key_H, ImGui.Mod_Ctrl} },
   inputOctaveUp   = { {ImGui.Key_8, ImGui.Mod_Shift} },
   inputOctaveDown = { ImGui.Key_Slash },
@@ -909,9 +909,10 @@ local function handleMouse()
   local rightClicked = ImGui.IsMouseClicked(ctx, 1)
   local held         = ImGui.IsMouseDown(ctx, 0)
 
-  -- Mirror sculpt paint: shift-drag extends the authoring rect's
-  -- stream set, alt-drag shrinks it; debounced per cell via paintLast.
-  if mirrorMode and held and ImGui.IsWindowHovered(ctx) then
+  -- Region sculpt paint: shift-drag adds the column's stream to the
+  -- active group, alt-drag removes it; debounced per cell via paintLast.
+  local rc = ec:regionCursor()
+  if ec:isInRegionMode() and rc and held and ImGui.IsWindowHovered(ctx) then
     local mods = ImGui.GetKeyMods(ctx)
     local add  = (mods & ImGui.Mod_Shift) ~= 0
     local sub  = (mods & ImGui.Mod_Alt)   ~= 0
@@ -923,12 +924,12 @@ local function handleMouse()
         local cell = col and (col .. (add and '+' or '-'))
         if col and cell ~= paintLast then
           paintLast = cell
-          mirrorPaint(col, add)
+          tv:paintRegionStream(rc.groupId, rc.instId, col, add)
         end
       end
       return
     end
-  elseif mirrorMode and not held then
+  elseif ec:isInRegionMode() and not held then
     paintLast = nil
   end
 
@@ -1047,7 +1048,7 @@ local function handleKeys(kr)
   local commandHeld = kr.commandHeld
 
   if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_None
-     and not cmgr:isPrefixActive() then
+     and not cmgr:isPrefixActive() and not ec:isInRegionMode() then
       -- Drain the queue: ImGui buffers all chars typed within a frame, so
       -- reading only index 0 drops the rest under fast typing / rollover.
       -- Re-fetch grid + cursor each step: editEvent flushes and may rebuild.
@@ -1069,7 +1070,7 @@ local function handleKeys(kr)
     end
 
   if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_Shift and not ec:isSticky()
-     and not cmgr:isPrefixActive() then
+     and not cmgr:isPrefixActive() and not ec:isInRegionMode() then
     local col = grid.cols[cursorCol]
     if col then
       for d = 0, 9 do
@@ -1287,12 +1288,12 @@ tracker:registerAll{
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
              function() tv:ec():unstick() end)
 
------ Mirror regions
+----- Mirror quick-verbs & region entry
 
--- Pure navigation/selection verbs. They reach through the modal
--- 'mirror' overlay (passthrough) AND they are the keep-set for the
--- mutation sweep: cursor/selection moves between copy and mirrorPaste
--- must NOT defeat the mirror — only a real edit/cut does.
+-- Keep-set seed for the mirrorSrc/active-group mutation sweep:
+-- cursor/selection moves between copy and mirrorPaste must NOT clear
+-- the source or active group — only a real edit/cut does. (No longer a
+-- modal-overlay passthrough; the region overlay is ec's, with its own.)
 local MIRROR_PASSTHROUGH = {
   cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
   pageUp=true, pageDown=true, goTop=true, goBottom=true, goLeft=true, goRight=true,
@@ -1306,7 +1307,7 @@ for i = 0, 9 do MIRROR_PASSTHROUGH['advBy' .. i] = true end
 local MIRROR_KEEP = {}
 for k in pairs(MIRROR_PASSTHROUGH) do MIRROR_KEEP[k] = true end
 for _, n in ipairs{ 'copy', 'mirrorMark', 'mirrorDuplicate',
-                    'mirrorPaste', 'mirrorLocalToggle', 'mirrorEnter' } do
+                    'mirrorPaste', 'mirrorLocalToggle', 'regionEnter' } do
   MIRROR_KEEP[n] = true
 end
 
@@ -1326,38 +1327,25 @@ local DUP_KEEP = { mirrorDuplicate = true, selectClear = true,
 }
 for i = 0, 9 do DUP_KEEP['advBy' .. i] = true end
 
-local mirrorScope = cmgr:scope('mirror')
-mirrorScope.modal       = true
-mirrorScope.passthrough = MIRROR_PASSTHROUGH
-
-function mirrorPaint(colIx, on)
-  if not mirrorRect then return end
-  local off, sid = tv:streamRefAt(colIx, mirrorRect.chanLo)
-  if not off then return end
-  local s = mirrorRect.streams
-  s[off] = s[off] or {}
-  s[off][sid] = on or nil
-end
-
-local function exitMirror()
-  mirrorRect, mirrorMode = nil, false
-  cmgr:pop(mirrorScope)
-end
-
-mirrorScope:registerAll{
-  mirrorBail   = exitMirror,
-  mirrorCommit = function()
-    if mirrorRect then gm:mark(tv:eventsInRect(mirrorRect), mirrorRect) end
-    exitMirror()
-  end,
-  mirrorPaintExtend = function() local _, c = tv:ec():pos(); mirrorPaint(c, true)  end,
-  mirrorPaintShrink = function() local _, c = tv:ec():pos(); mirrorPaint(c, false) end,
-}
-cmgr:scope('mirror'):bindAll{
-  mirrorBail        = { ImGui.Key_Escape, {ImGui.Key_R, ImGui.Mod_Super} },
-  mirrorCommit      = { ImGui.Key_Enter, ImGui.Key_KeypadEnter },
-  mirrorPaintExtend = { ImGui.Key_Equal },
-  mirrorPaintShrink = { ImGui.Key_Minus },
+-- The 'region' modal overlay + every region verb body live on ec
+-- (built at tv construct). The page wires only entry on the tracker
+-- scope and the overlay key map; ec owns lifecycle and dispatch.
+cmgr:scope('region'):bindAll{
+  regionBail         = { ImGui.Key_Escape, {ImGui.Key_R, ImGui.Mod_Super} },
+  regionCommit       = { ImGui.Key_Enter, ImGui.Key_KeypadEnter },
+  regionNew          = { ImGui.Key_N },
+  regionInstance     = { ImGui.Key_I },
+  regionPaintExtend  = { ImGui.Key_Equal },
+  regionPaintShrink  = { ImGui.Key_Minus },
+  regionDrop         = { ImGui.Key_Delete },
+  regionNudgeBack    = { ImGui.Key_LeftBracket },
+  regionNudgeForward = { ImGui.Key_RightBracket },
+  regionShrink       = { {ImGui.Key_LeftBracket,  ImGui.Mod_Shift} },
+  regionGrow         = { {ImGui.Key_RightBracket, ImGui.Mod_Shift} },
+  regionShrinkStart  = { {ImGui.Key_LeftBracket,  ImGui.Mod_Alt} },
+  regionGrowStart    = { {ImGui.Key_RightBracket, ImGui.Mod_Alt} },
+  regionPrev         = { {ImGui.Key_Comma,  ImGui.Mod_Shift} },
+  regionNext         = { {ImGui.Key_Period, ImGui.Mod_Shift} },
 }
 
 tracker:registerAll{
@@ -1399,10 +1387,7 @@ tracker:registerAll{
     end
   end,
   mirrorLocalToggle = function() gm:setLocalMode(not gm:localMode()) end,
-  mirrorEnter = function()
-    local r = tv:selectionAsRect()
-    if r then mirrorRect, mirrorMode = r, true; cmgr:push(mirrorScope) end
-  end,
+  regionEnter = function() tv:ec():enterRegionMode() end,
 }
 
 -- copy is plain — the page only observes it to snapshot the source
