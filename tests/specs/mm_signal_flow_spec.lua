@@ -88,7 +88,7 @@ return {
   },
 
   {
-    name = 'tm.rebuild forwards takeChanged (so mirm can reload take-tier state)',
+    name = 'tm.rebuild forwards takeChanged (so gm can reload take-tier state)',
     run = function()
       local h = harness.mk()
       local count, lastPayload = 0, 'unset'

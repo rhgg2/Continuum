@@ -1,4 +1,4 @@
--- Override transitions (docs/mirrorManager.md "Override transitions").
+-- Override transitions (docs/groupManager.md "Override transitions").
 --
 -- Two mechanisms, one principle: a local override pins this instance's
 -- visible event at a slot; a group-event existence flip never silently
@@ -19,7 +19,7 @@
 --    sibling assign-ov + peer global DELETE of that event -> demote to
 --                          a materialised add-ov
 --
--- Real mirm; fake tm/cm as in mirm_propagate_spec. tm:flush(adds,
+-- Real gm; fake tm/cm as in mirm_propagate_spec. tm:flush(adds,
 -- assigns, deletes) drives the real preflush/applyEdit/reproject path.
 
 local t    = require('support')
@@ -50,8 +50,8 @@ end
 
 local function mk()
   local tm, staged = fakeTm()
-  local mirm = util.instantiate('mirrorManager', { tm = tm, cm = fakeCm() })
-  return mirm, tm, staged
+  local gm = util.instantiate('groupManager', { tm = tm, cm = fakeCm() })
+  return gm, tm, staged
 end
 
 local nextUuid = 0
@@ -70,9 +70,9 @@ end
 
 -- Pitch of the lone event a fresh probe instance projects (group state
 -- as every clean sibling sees it); nil if the group projects nothing.
-local function groupPitch(mirm, tm, staged, anchorPpq)
+local function groupPitch(gm, tm, staged, anchorPpq)
   local before = #staged.add
-  mirm:newInstance(1, { ppq = anchorPpq, chan = 1 })
+  gm:newInstance(1, { ppq = anchorPpq, chan = 1 })
   tm:flush()
   for i = #staged.add, before + 1, -1 do
     if staged.add[i].evType == 'note' then return staged.add[i].pitch end
@@ -84,15 +84,15 @@ return {
   {
     name = 'assign-ov + global amend stays local: shared group untouched',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1, { pitch = 60 })
-      mirm:markGroup({ src }, rect(0, 1))
-      mirm:newInstance(1, { ppq = 960, chan = 1 })
+      gm:markGroup({ src }, rect(0, 1))
+      gm:newInstance(1, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
-      mirm:setLocalMode(true)                 -- assign-ov on src (instance 1)
+      gm:setLocalMode(true)                 -- assign-ov on src (instance 1)
       tm:flush({}, { { evt = src, update = { pitch = 80 } } }, {})
-      mirm:setLocalMode(false)
+      gm:setLocalMode(false)
 
       staged.add, staged.assign = {}, {}
       tm:flush({}, { { evt = src, update = { pitch = 90 } } }, {})
@@ -104,7 +104,7 @@ return {
           t.eq(a.evt, src, 'only the diverged origin itself moved; no propagation')
         end
       end
-      t.eq(groupPitch(mirm, tm, staged, 1920), 60,
+      t.eq(groupPitch(gm, tm, staged, 1920), 60,
         'shared group value is untouched by the on-ov edit')
     end,
   },
@@ -112,22 +112,22 @@ return {
   {
     name = 'assign-ov + global delete drops the divergence, group survives',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1, { pitch = 60 })
-      mirm:markGroup({ src }, rect(0, 1))
-      mirm:newInstance(1, { ppq = 960, chan = 1 })
+      gm:markGroup({ src }, rect(0, 1))
+      gm:newInstance(1, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
-      mirm:setLocalMode(true)
+      gm:setLocalMode(true)
       tm:flush({}, { { evt = src, update = { pitch = 80 } } }, {})
-      mirm:setLocalMode(false)
+      gm:setLocalMode(false)
 
       staged.add, staged.del = {}, {}
       tm:flush({}, {}, { { evt = src } })     -- delete on the assign-ov
 
       t.eq(#staged.del, 0,
         'no propagating group delete: the shared event survives')
-      t.eq(groupPitch(mirm, tm, staged, 1920), 60,
+      t.eq(groupPitch(gm, tm, staged, 1920), 60,
         'group still projects its value to a clean probe')
     end,
   },
@@ -135,15 +135,15 @@ return {
   {
     name = 'assign-ov + global delete re-materialises the group note in the acting instance',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1, { pitch = 60 })
-      mirm:markGroup({ src }, rect(0, 1))      -- instance 1 @ anchor 0
-      mirm:newInstance(1, { ppq = 960, chan = 1 })
+      gm:markGroup({ src }, rect(0, 1))      -- instance 1 @ anchor 0
+      gm:newInstance(1, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
-      mirm:setLocalMode(true)
+      gm:setLocalMode(true)
       tm:flush({}, { { evt = src, update = { pitch = 80 } } }, {})
-      mirm:setLocalMode(false)
+      gm:setLocalMode(false)
 
       staged.add, staged.del = {}, {}
       tm:flush({}, {}, { { evt = src } })      -- delete on the assign-ov
@@ -170,18 +170,18 @@ return {
     -- shadow must be refreshed from the live concrete first.
     name = 'assign-ov + global delete clips the legato predecessor back',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       -- p is long enough to already be legato-clipped to q's onset in
       -- the group steady state, so its group dur never moves across the
       -- delete flush -- only its concrete (tv-grown) does.
       local p = note(0,   1, 1, { endppq = 960 })  -- predecessor, same lane
       local q = note(480, 1, 1)                     -- slot that gets diverged
-      mirm:markGroup({ p, q }, rect(0, 1))   -- instance 1 @ anchor 0
+      gm:markGroup({ p, q }, rect(0, 1))   -- instance 1 @ anchor 0
       tm:flush(); staged.add, staged.assign = {}, {}
 
-      mirm:setLocalMode(true)               -- diverge q (assign-ov)
+      gm:setLocalMode(true)               -- diverge q (assign-ov)
       tm:flush({}, { { evt = q, update = { pitch = 80 } } }, {})
-      mirm:setLocalMode(false)
+      gm:setLocalMode(false)
       staged.add, staged.assign, staged.del = {}, {}, {}
 
       -- Global delete of q, with tv's legato-on-delete growing p over
@@ -206,22 +206,22 @@ return {
   {
     name = 'add-ov + global delete removes the local add (no crash, group intact)',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1)
-      mirm:markGroup({ src }, rect(0, 1))
+      gm:markGroup({ src }, rect(0, 1))
       tm:flush(); staged.add = {}
 
-      mirm:setLocalMode(true)
+      gm:setLocalMode(true)
       local born = note(480, 1, 1, { pitch = 65 })
       tm:flush({ { evt = born } }, {}, {})     -- local-only add in instance 1
       tm:flush(); staged.add = {}
-      mirm:setLocalMode(false)
+      gm:setLocalMode(false)
 
       tm:flush({}, {}, { { evt = born } })     -- delete on the add-ov
 
       -- The group never carried `born`; a probe still shows only the
       -- single seeded event, and nothing blew up.
-      t.eq(groupPitch(mirm, tm, staged, 1920), 60,
+      t.eq(groupPitch(gm, tm, staged, 1920), 60,
         'the shared group is unchanged; the add was purely local')
     end,
   },
@@ -229,20 +229,20 @@ return {
   {
     name = 'add-ov + global amend edits the add locally, never the group',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1)
-      mirm:markGroup({ src }, rect(0, 1))
+      gm:markGroup({ src }, rect(0, 1))
       tm:flush(); staged.add = {}
 
-      mirm:setLocalMode(true)
+      gm:setLocalMode(true)
       local born = note(480, 1, 1, { pitch = 65 })
       tm:flush({ { evt = born } }, {}, {})
       tm:flush(); staged.add = {}
-      mirm:setLocalMode(false)
+      gm:setLocalMode(false)
 
       tm:flush({}, { { evt = born, update = { pitch = 70 } } }, {})
 
-      t.eq(groupPitch(mirm, tm, staged, 1920), 60,
+      t.eq(groupPitch(gm, tm, staged, 1920), 60,
         'editing the local add did not leak into the shared group')
     end,
   },
@@ -250,18 +250,18 @@ return {
   {
     name = 'sibling add-ov upgrades to assign-ov on a peer global create',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1, { pitch = 60 })
-      mirm:markGroup({ src }, rect(0, 1))              -- instance 1 @ anchor 0
-      mirm:newInstance(1, { ppq = 960, chan = 1 })     -- instance 2 @ anchor 960
+      gm:markGroup({ src }, rect(0, 1))              -- instance 1 @ anchor 0
+      gm:newInstance(1, { ppq = 960, chan = 1 })     -- instance 2 @ anchor 960
       tm:flush(); staged.add = {}
 
       -- Instance 2 grows a local add at the (group-frame) empty slot 480.
-      mirm:setLocalMode(true)
+      gm:setLocalMode(true)
       local sibAdd = note(1440, 1, 1, { pitch = 70 })  -- 960 + 480
       tm:flush({ { evt = sibAdd } }, {}, {})
       tm:flush(); staged.add, staged.del = {}, {}
-      mirm:setLocalMode(false)
+      gm:setLocalMode(false)
 
       -- Instance 1 globally creates a real event at group slot 480.
       local peer = note(480, 1, 1, { pitch = 50 })
@@ -274,7 +274,7 @@ return {
         if a.ppq == 1440 then kept = a.pitch end
       end
       t.eq(kept, 70, 'sibling divergence preserved as an assign-ov')
-      t.eq(groupPitch(mirm, tm, staged, 1920), 50,
+      t.eq(groupPitch(gm, tm, staged, 1920), 50,
         'the new group event propagates to clean instances at 50')
     end,
   },
@@ -282,10 +282,10 @@ return {
   {
     name = 'sibling assign-ov demotes to a materialised add on a peer global delete',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1, { pitch = 60 })
-      mirm:markGroup({ src }, rect(0, 1))              -- instance 1 @ anchor 0
-      mirm:newInstance(1, { ppq = 960, chan = 1 })     -- instance 2 @ anchor 960
+      gm:markGroup({ src }, rect(0, 1))              -- instance 1 @ anchor 0
+      gm:newInstance(1, { ppq = 960, chan = 1 })     -- instance 2 @ anchor 960
       tm:flush()
       local sib
       for _, e in ipairs(staged.add) do if e.ppq == 960 then sib = e end end
@@ -293,9 +293,9 @@ return {
       staged.add = {}
 
       -- Instance 2 diverges its copy (assign-ov on the shared vuid).
-      mirm:setLocalMode(true)
+      gm:setLocalMode(true)
       tm:flush({}, { { evt = sib, update = { pitch = 88 } } }, {})
-      mirm:setLocalMode(false)
+      gm:setLocalMode(false)
       staged.add, staged.del = {}, {}
 
       -- Instance 1 globally deletes the shared event.
@@ -303,7 +303,7 @@ return {
 
       -- The shared event is gone for clean instances, but instance 2
       -- keeps its diverged note (now a materialised local add @ 960/88).
-      t.eq(groupPitch(mirm, tm, staged, 1920), nil,
+      t.eq(groupPitch(gm, tm, staged, 1920), nil,
         'group event deleted: a clean probe projects nothing')
       local survived
       for _, a in ipairs(staged.add) do

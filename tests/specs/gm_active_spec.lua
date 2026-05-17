@@ -1,4 +1,4 @@
--- mirm active-group selector (dupeClip idiom). mark = case 1 (group, no
+-- gm active-group selector (dupeClip idiom). mark = case 1 (group, no
 -- copy). stamp = case 2 (no active: seed group + first copy, group goes
 -- active) or case 3 (active live: one more copy, no new group).
 -- clearActive drops the pointer so the next stamp seeds afresh.
@@ -31,7 +31,7 @@ end
 
 local function mk()
   local tm, staged = fakeTm()
-  return util.instantiate('mirrorManager', { tm = tm, cm = fakeCm() }), staged
+  return util.instantiate('groupManager', { tm = tm, cm = fakeCm() }), staged
 end
 
 local function note(ppq) return { evType = 'note', chan = 1, lane = 1,
@@ -44,10 +44,10 @@ return {
   {
     name = 'mark seeds a group, copies nothing, and makes it active',
     run = function()
-      local mirm, staged = mk()
-      local gid = mirm:mark({ note(0) }, rect())
+      local gm, staged = mk()
+      local gid = gm:mark({ note(0) }, rect())
       t.truthy(gid)
-      t.eq(mirm:activeGroup(), gid, 'marked group is active')
+      t.eq(gm:activeGroup(), gid, 'marked group is active')
       t.eq(#staged.add, 0, 'mark does not stage any copy')
     end,
   },
@@ -55,10 +55,10 @@ return {
   {
     name = 'stamp with no active seeds group + first copy, returns (gid, iid), goes active',
     run = function()
-      local mirm, staged = mk()
-      local gid, iid = mirm:stamp({ note(0) }, rect(), { ppq = 960, chan = 1 })
+      local gm, staged = mk()
+      local gid, iid = gm:stamp({ note(0) }, rect(), { ppq = 960, chan = 1 })
       t.truthy(gid); t.truthy(iid)
-      t.eq(mirm:activeGroup(), gid)
+      t.eq(gm:activeGroup(), gid)
       t.eq(#staged.add, 1, 'first copy staged at the anchor')
       t.eq(staged.add[1].ppq, 960)
     end,
@@ -67,11 +67,11 @@ return {
   {
     name = 'stamp with active live drops one more copy, no new group (single return)',
     run = function()
-      local mirm, staged = mk()
-      local gid = mirm:stamp({ note(0) }, rect(), { ppq = 960, chan = 1 })
-      local r2, r3 = mirm:stamp({ note(0) }, rect(), { ppq = 1920, chan = 1 })
+      local gm, staged = mk()
+      local gid = gm:stamp({ note(0) }, rect(), { ppq = 960, chan = 1 })
+      local r2, r3 = gm:stamp({ note(0) }, rect(), { ppq = 1920, chan = 1 })
 
-      t.eq(mirm:activeGroup(), gid, 'still the same active group')
+      t.eq(gm:activeGroup(), gid, 'still the same active group')
       t.eq(r3, nil, 'active path returns instId only, not (gid, iid)')
       t.truthy(r2, 'a fresh instId for the existing group')
       t.eq(#staged.add, 2, 'second stamp added one more copy, not a new group')
@@ -82,19 +82,19 @@ return {
   {
     name = 'clearActive drops the pointer; the next stamp seeds a fresh group',
     run = function()
-      local mirm = mk()
-      local gid1 = mirm:stamp({ note(0) }, rect(), { ppq = 960, chan = 1 })
-      mirm:clearActive()
-      t.eq(mirm:activeGroup(), nil)
+      local gm = mk()
+      local gid1 = gm:stamp({ note(0) }, rect(), { ppq = 960, chan = 1 })
+      gm:clearActive()
+      t.eq(gm:activeGroup(), nil)
 
       -- A fresh group must be seeded at a non-overlapping region (a
       -- re-seed over the cleared group's footprint is rejected).
       local far = { ppq = 2880, dur = 960, chanLo = 1,
                     streams = { [0] = { ['note:1'] = true } } }
-      local gid2, iid2 = mirm:stamp({ note(0) }, far, { ppq = 3840, chan = 1 })
+      local gid2, iid2 = gm:stamp({ note(0) }, far, { ppq = 3840, chan = 1 })
       t.truthy(iid2, 'new group path returns (gid, iid)')
       t.truthy(gid2 ~= gid1, 'a distinct group, not the cleared one')
-      t.eq(mirm:activeGroup(), gid2)
+      t.eq(gm:activeGroup(), gid2)
     end,
   },
 }

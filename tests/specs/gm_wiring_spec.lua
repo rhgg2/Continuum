@@ -4,7 +4,7 @@
 -- keep-set is navigation). mirrorPaste mirrors only while a source
 -- snapshot is live, else it falls back to ordinary paste. BOTH copy
 -- and mirrorMark must take that snapshot, or mark -> paste silently
--- degrades to plain paste. Real mirm + real cmgr; fake tm as in
+-- degrades to plain paste. Real gm + real cmgr; fake tm as in
 -- mirm_active_spec.
 
 local t    = require('support')
@@ -48,7 +48,7 @@ local function rect() return { ppq = 0, dur = 960, chanLo = 1,
 -- once cleared). copy ends with selClear (clipboard:copy does), so the
 -- page's source snapshot MUST hook doBefore('copy') -- a doAfter would
 -- see the emptied selection. ctl exposes sel so tests can arm it.
-local function wire(mirm, cmgr, tm, ctl)
+local function wire(gm, cmgr, tm, ctl)
   local KEEP  = { cursorDown = true, copy = true,
                   mirrorMark = true, mirrorPaste = true }
   local mirrorSrc, fell = nil, { v = false }
@@ -60,11 +60,11 @@ local function wire(mirm, cmgr, tm, ctl)
     copy        = function() ctl.sel = false end,   -- clipboard:copy selClears
     mirrorMark  = function()
       mirrorSrc = selRect()
-      if mirrorSrc then mirm:mark({ note(0) }, mirrorSrc) end
+      if mirrorSrc then gm:mark({ note(0) }, mirrorSrc) end
     end,
     mirrorPaste = function()
       if mirrorSrc then
-        mirm:stamp({ note(0) }, mirrorSrc, { ppq = 960, chan = 1 }); tm:flush()
+        gm:stamp({ note(0) }, mirrorSrc, { ppq = 960, chan = 1 }); tm:flush()
       else fell.v = true end
     end,
   }
@@ -75,7 +75,7 @@ local function wire(mirm, cmgr, tm, ctl)
   end
   cmgr:doBefore(clearOn, function()
     mirrorSrc = nil
-    mirm:clearActive()
+    gm:clearActive()
   end)
   cmgr:push('tracker')
   return fell
@@ -85,29 +85,29 @@ local function mk()
   local tm, staged = fakeTm()
   local cm   = fakeCm()
   local ctl  = { sel = true }   -- a live selection by default
-  local mirm = util.instantiate('mirrorManager', { tm = tm, cm = cm })
+  local gm = util.instantiate('groupManager', { tm = tm, cm = cm })
   local cmgr = util.instantiate('commandManager', { cm = cm })
-  local fell = wire(mirm, cmgr, tm, ctl)
-  return mirm, cmgr, staged, fell, ctl
+  local fell = wire(gm, cmgr, tm, ctl)
+  return gm, cmgr, staged, fell, ctl
 end
 
 return {
   {
     name = 'mark goes active; navigation preserves it; a mutation clears it',
     run = function()
-      local mirm, cmgr = mk()
+      local gm, cmgr = mk()
       cmgr:invoke('mirrorMark')
-      t.truthy(mirm:activeGroup(), 'mark set active')
+      t.truthy(gm:activeGroup(), 'mark set active')
       cmgr:invoke('cursorDown')
-      t.truthy(mirm:activeGroup(), 'navigation did NOT clear active')
+      t.truthy(gm:activeGroup(), 'navigation did NOT clear active')
       cmgr:invoke('deleteSel')
-      t.eq(mirm:activeGroup(), nil, 'a mutation cleared active')
+      t.eq(gm:activeGroup(), nil, 'a mutation cleared active')
     end,
   },
   {
     name = 'mirrorMark then nav then mirrorPaste mirrors (does NOT fall back)',
     run = function()
-      local mirm, cmgr, staged, fell = mk()
+      local gm, cmgr, staged, fell = mk()
       cmgr:invoke('mirrorMark')              -- mark: active + source snapshot
       cmgr:invoke('cursorDown')              -- nav keeps both
       cmgr:invoke('mirrorPaste')
@@ -119,7 +119,7 @@ return {
   {
     name = 'copy snapshots the source BEFORE its own selClear',
     run = function()
-      local mirm, cmgr, staged, fell = mk()  -- ctl.sel = true
+      local gm, cmgr, staged, fell = mk()  -- ctl.sel = true
       cmgr:invoke('copy')                    -- body selClears; hook ran first
       cmgr:invoke('mirrorPaste')
       t.eq(fell.v, false, 'copy-time snapshot survived the selClear')
@@ -130,11 +130,11 @@ return {
   {
     name = 'mirrorPaste mirrors while pristine, falls back after a mutation',
     run = function()
-      local mirm, cmgr, staged, fell = mk()
+      local gm, cmgr, staged, fell = mk()
       cmgr:invoke('copy')
       cmgr:invoke('cursorDown')              -- nav keeps pristine
       cmgr:invoke('mirrorPaste')
-      t.truthy(mirm:activeGroup(), 'pristine: stamp seeded a group')
+      t.truthy(gm:activeGroup(), 'pristine: stamp seeded a group')
       t.eq(#staged.add, 1, 'one copy staged at the anchor')
       t.eq(fell.v, false, 'did not fall back while pristine')
 

@@ -4,7 +4,7 @@
 -- allocate a fresh vuid, which would leave two coincident group events and
 -- corrupt every sibling that never deleted it.
 --
--- Same faithful-fake seam as mirm_propagate_spec: real mirm rides the fake
+-- Same faithful-fake seam as mirm_propagate_spec: real gm rides the fake
 -- tm's preflush/postflush; group state is read back by projecting a fresh
 -- instance and counting its staged concrete copies.
 
@@ -38,8 +38,8 @@ end
 
 local function mk()
   local tm, staged = fakeTm()
-  local mirm = util.instantiate('mirrorManager', { tm = tm, cm = fakeCm() })
-  return mirm, tm, staged
+  local gm = util.instantiate('groupManager', { tm = tm, cm = fakeCm() })
+  return gm, tm, staged
 end
 
 local nextUuid = 0
@@ -63,22 +63,22 @@ return {
   {
     name = 'global create on a slot this instance locally deleted revives the existing group vuid',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       -- Group ABCD: back-to-back lane-1 notes, distinct pitches.
       local abcd = { note(0, 1, 1, 60), note(240, 1, 1, 61),
                      note(480, 1, 1, 62), note(720, 1, 1, 63) }
-      local gid = mirm:markGroup(abcd, rect(0, 1))
+      local gid = gm:markGroup(abcd, rect(0, 1))
 
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })   -- instance Y
+      gm:newInstance(gid, { ppq = 960, chan = 1 })   -- instance Y
       tm:flush()                                        -- commit + stamp uuids
       local yC = atPpq(staged.add, 1440)                -- Y's C (anchor 960 + 480)
       t.truthy(yC, 'Y projected C at 1440')
       staged.add = {}
 
       -- Locally delete C in Y, then leave local mode.
-      mirm:setLocalMode(true)
+      gm:setLocalMode(true)
       tm:flush({}, {}, { { evt = yC } })
-      mirm:setLocalMode(false)
+      gm:setLocalMode(false)
 
       -- Type a new note over the now-empty C cell in Y (global mode).
       local born = note(1440, 1, 1, 99)
@@ -86,7 +86,7 @@ return {
 
       -- Read the group back via a pristine fresh instance Z.
       staged.add = {}
-      local iidZ = mirm:newInstance(gid, { ppq = 2880, chan = 1 })
+      local iidZ = gm:newInstance(gid, { ppq = 2880, chan = 1 })
       t.truthy(iidZ, 'Z projects the group')
 
       t.eq(#staged.add, 4,

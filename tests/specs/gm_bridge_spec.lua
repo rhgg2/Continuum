@@ -1,6 +1,6 @@
--- Repro: the live tv -> mirm bridge. selectionAsRect + eventsInRect feed
--- mirm:mark / mirm:stamp with REAL trackerView column events (not the
--- hand-built {chan=1,...} the mirm unit specs use). Pins the seam that
+-- Repro: the live tv -> gm bridge. selectionAsRect + eventsInRect feed
+-- gm:mark / gm:stamp with REAL trackerView column events (not the
+-- hand-built {chan=1,...} the gm unit specs use). Pins the seam that
 -- crashed in REAPER ("arithmetic on nil field 'chan'").
 
 local t    = require('support')
@@ -14,7 +14,7 @@ end
 
 return {
   {
-    name = 'mirm:mark accepts real eventsInRect output (chan present on tv col events)',
+    name = 'gm:mark accepts real eventsInRect output (chan present on tv col events)',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = {
@@ -30,13 +30,13 @@ return {
       t.eq(#events, 1, 'one event in the rect')
       t.truthy(events[1].chan, 'tv col event carries chan')
 
-      local mirm = util.instantiate('mirrorManager', { tm = h.tm, cm = h.cm })
-      local gid  = mirm:mark(events, rect)
+      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
+      local gid  = gm:mark(events, rect)
       t.truthy(gid, 'mark returned a group id')
     end,
   },
   {
-    name = 'mirm:stamp (mirrorDuplicate path) accepts real rect + cursor anchor',
+    name = 'gm:stamp (mirrorDuplicate path) accepts real rect + cursor anchor',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = {
@@ -53,8 +53,8 @@ return {
       local anchor = h.vm:cursorAnchor()
       t.truthy(anchor and anchor.chan, 'cursor anchor carries chan')
 
-      local mirm = util.instantiate('mirrorManager', { tm = h.tm, cm = h.cm })
-      local gid, iid = mirm:stamp(events, rect, anchor)
+      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
+      local gid, iid = gm:stamp(events, rect, anchor)
       t.truthy(gid and iid, 'stamp seeded a group and an instance')
     end,
   },

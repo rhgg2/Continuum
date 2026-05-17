@@ -1,4 +1,4 @@
--- Persistence reload: mirm reads `mirrorGroups` once at construction —
+-- Persistence reload: gm reads `groups` once at construction —
 -- before any take is bound (continuum builds the stack with no take), so
 -- that read is always empty. The take-changed rebuild must re-read cm and
 -- rehydrate the runtime projection (proj / locByUuid / nextGroupId) from
@@ -75,7 +75,7 @@ return {
       -- Session 1: stamp a group + sibling, then a global create whose
       -- group event lands last-in-lane (open tail -> math.huge dur).
       local tmA, stagedA = fakeTm()
-      local A   = util.instantiate('mirrorManager', { tm = tmA, cm = cm })
+      local A   = util.instantiate('groupManager', { tm = tmA, cm = cm })
       local src = note(0, 1, 1)
       local gid = A:markGroup({ src }, rect(0, 1))
       A:newInstance(gid, { ppq = 960, chan = 1 })
@@ -87,10 +87,10 @@ return {
       local uuidMap = { [src.uuid] = src, [born.uuid] = born }
       for _, e in ipairs(stagedA.add) do uuidMap[e.uuid] = e end
 
-      -- Session 2: fresh mirm sharing the (serialised) cm. Without the
+      -- Session 2: fresh gm sharing the (serialised) cm. Without the
       -- finite-dur normalisation rehydrate raises in mirror.project.
       local tmB = fakeTm(uuidMap)
-      local B   = util.instantiate('mirrorManager', { tm = tmB, cm = cm })
+      local B   = util.instantiate('groupManager', { tm = tmB, cm = cm })
       tmB:fireRebuild(true)
 
       t.eq(#B:eachInstance(), 2, 'group + its mirrored instance rehydrated')
@@ -104,7 +104,7 @@ return {
 
       -- Session 1: stamp a group + one mirrored instance, commit (persists).
       local tmA, stagedA = fakeTm()
-      local A   = util.instantiate('mirrorManager', { tm = tmA, cm = cm })
+      local A   = util.instantiate('groupManager', { tm = tmA, cm = cm })
       local src = note(0, 1, 1, { pitch = 60 })
       local gid = A:markGroup({ src }, rect(0, 1))
       A:newInstance(gid, { ppq = 960, chan = 1 })
@@ -112,10 +112,10 @@ return {
       local addEvt = stagedA.add[1]
       t.truthy(addEvt and addEvt.uuid, 'mirrored add got a uuid')
 
-      -- Session 2: a fresh mirm sharing cm; its tm resolves the durable
+      -- Session 2: a fresh gm sharing cm; its tm resolves the durable
       -- uuids mm would have re-minted on the reloaded take.
       local tmB, stagedB = fakeTm({ [src.uuid] = src, [addEvt.uuid] = addEvt })
-      local B = util.instantiate('mirrorManager', { tm = tmB, cm = cm })
+      local B = util.instantiate('groupManager', { tm = tmB, cm = cm })
 
       tmB:fireRebuild(true)
 

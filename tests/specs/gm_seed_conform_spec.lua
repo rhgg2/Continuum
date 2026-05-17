@@ -38,8 +38,8 @@ end
 
 local function mk()
   local tm, staged = fakeTm()
-  local mirm = util.instantiate('mirrorManager', { tm = tm, cm = fakeCm() })
-  return mirm, tm, staged
+  local gm = util.instantiate('groupManager', { tm = tm, cm = fakeCm() })
+  return gm, tm, staged
 end
 
 local nextUuid = 0
@@ -64,12 +64,12 @@ return {
   {
     name = 'duplicate-seed markGroup conform-marks the last-in-lane note, leaving its geometry canonical',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local A = note(0,   240,  60)            -- clipped, row 1
       local B = note(240, 9600, 62)            -- pattern-length, row 2, last in lane
 
       -- Cascade seed: nil group -> markGroup + first copy one region below.
-      mirm:duplicateInto(nil, { A, B }, rect(), { ppq = 480, chan = 1 })
+      gm:duplicateInto(nil, { A, B }, rect(), { ppq = 480, chan = 1 })
       tm:flush()
 
       t.eq(conformUpdateFor(staged, B), true,

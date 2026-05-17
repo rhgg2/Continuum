@@ -1550,7 +1550,7 @@ local deleteEvent, deleteSelection do
       -- tail rebuild pass already regrows it to the next onset when its
       -- blocker goes. Growing it here double-handles that and -- when it
       -- is a mirrored event -- leaks a spurious endppq into the shared
-      -- group via mirm's applyEdit, collapsing an infinite last-in-lane
+      -- group via gm's applyEdit, collapsing an infinite last-in-lane
       -- tail. Same carve-out as conformOverlaps / tailEnd.
       if not f.evt.conform then assignTail(f.evt, chan, f.endppq) end
     end
@@ -1819,7 +1819,7 @@ end
 -- selected for its channel offset. col.events ppq is logical (tm
 -- invariant), so the comparison needs no swing maths.
 -- chan/lane/cc are column-implicit in the tm stack (the container is the
--- channel/lane); mirm needs them per-event for its anchor maths and must
+-- channel/lane); gm needs them per-event for its anchor maths and must
 -- keep object identity (it links the live evt for propagation), so we
 -- backfill the authoritative column values rather than clone.
 function tv:eventsInRect(rect)

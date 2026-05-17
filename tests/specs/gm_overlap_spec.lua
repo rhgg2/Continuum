@@ -32,7 +32,7 @@ local function fakeCm()
 end
 
 local function mk()
-  return util.instantiate('mirrorManager', { tm = fakeTm(), cm = fakeCm() })
+  return util.instantiate('groupManager', { tm = fakeTm(), cm = fakeCm() })
 end
 
 local uuid = 0
@@ -48,58 +48,58 @@ local function rect(ppq, dur, chanLo, lane)
            streams = { [0] = { ['note:' .. (lane or 1)] = true } } }
 end
 
-local function instanceCount(mirm)
-  return #mirm:eachInstance()
+local function instanceCount(gm)
+  return #gm:eachInstance()
 end
 
 return {
   {
     name = 'mark over a live group region is rejected; no group allocated',
     run = function()
-      local mirm = mk()
-      t.truthy(mirm:mark({ note() }, rect(0, 480, 1, 1)),
+      local gm = mk()
+      t.truthy(gm:mark({ note() }, rect(0, 480, 1, 1)),
         'first mark seeds a group')
-      t.eq(instanceCount(mirm), 1, 'one instance live')
-      local g, why = mirm:mark({ note() }, rect(240, 480, 1, 1))
+      t.eq(instanceCount(gm), 1, 'one instance live')
+      local g, why = gm:mark({ note() }, rect(240, 480, 1, 1))
       t.eq(g, nil, 'overlapping mark rejected')
       t.eq(why, 'overlaps an existing mirror group', 'with a reason')
-      t.eq(instanceCount(mirm), 1, 'no second group allocated')
+      t.eq(instanceCount(gm), 1, 'no second group allocated')
     end,
   },
   {
     name = 'same bars, different lane does not conflict',
     run = function()
-      local mirm = mk()
-      mirm:mark({ note(1, 1) }, rect(0, 480, 1, 1))
-      t.truthy(mirm:mark({ note(1, 2) }, rect(0, 480, 1, 2)),
+      local gm = mk()
+      gm:mark({ note(1, 1) }, rect(0, 480, 1, 1))
+      t.truthy(gm:mark({ note(1, 2) }, rect(0, 480, 1, 2)),
         'a group on a different lane in the same span is allowed')
-      t.eq(instanceCount(mirm), 2, 'both groups live')
+      t.eq(instanceCount(gm), 2, 'both groups live')
     end,
   },
   {
     name = 'adjacent cascade stack (next = ppq+dur) is allowed',
     run = function()
-      local mirm = mk()
-      local g = mirm:duplicateInto(nil, { note() }, rect(0, 480, 1, 1),
+      local gm = mk()
+      local g = gm:duplicateInto(nil, { note() }, rect(0, 480, 1, 1),
                                    { ppq = 480, chan = 1 })
       t.truthy(g, 'seed: group + first copy at [480,960)')
-      t.eq(mirm:duplicateInto(g, {}, rect(0, 480, 1, 1),
+      t.eq(gm:duplicateInto(g, {}, rect(0, 480, 1, 1),
                               { ppq = 960, chan = 1 }), g,
         'a second adjacent copy joins the same group')
-      t.eq(instanceCount(mirm), 3, 'seed + two copies, no rejection')
+      t.eq(instanceCount(gm), 3, 'seed + two copies, no rejection')
     end,
   },
   {
     name = 'a copy landing on an existing sibling is rejected',
     run = function()
-      local mirm = mk()
-      local g = mirm:duplicateInto(nil, { note() }, rect(0, 480, 1, 1),
+      local gm = mk()
+      local g = gm:duplicateInto(nil, { note() }, rect(0, 480, 1, 1),
                                    { ppq = 480, chan = 1 })
-      local before = instanceCount(mirm)
-      local instId, why = mirm:newInstance(g, { ppq = 240, chan = 1 })
+      local before = instanceCount(gm)
+      local instId, why = gm:newInstance(g, { ppq = 240, chan = 1 })
       t.eq(instId, nil, 'a copy overlapping the source region is rejected')
       t.eq(why, 'overlaps an existing mirror group', 'with a reason')
-      t.eq(instanceCount(mirm), before, 'no instance added')
+      t.eq(instanceCount(gm), before, 'no instance added')
     end,
   },
 }

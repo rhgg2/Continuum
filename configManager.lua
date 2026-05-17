@@ -73,8 +73,8 @@ local declarations = {
   { 'extraColumns',    {}    },
   { 'noteDelay',       {}    },
   { 'slotEntries',     {}    },
-  -- Mirror groups, persisted at the take tier. See docs/mirrorManager.md.
-  { 'mirrorGroups',    {}    },
+  -- Mirror groups, persisted at the take tier. See docs/groupManager.md.
+  { 'groups',    {}    },
 
   -- Atoms — parchment palette
   { 'palette.bg',        hex('#dad6c9') },  -- cream paper

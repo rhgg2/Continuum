@@ -7,10 +7,10 @@
 -- group instead of silently extending the old one wherever the cursor
 -- drifted.
 --
--- The earlier bug: the cascade rode mirm's shared active pointer,
+-- The earlier bug: the cascade rode gm's shared active pointer,
 -- whose keep-set is the broad MIRROR_KEEP, so it never stopped "as
--- long as there's a selection". mirm:duplicateInto takes the explicit
--- token only and never falls back to active. Real mirm + real cmgr;
+-- long as there's a selection". gm:duplicateInto takes the explicit
+-- token only and never falls back to active. Real gm + real cmgr;
 -- fake tm as in mirm_wiring_spec.
 
 local t    = require('support')
@@ -46,7 +46,7 @@ local function rect() return { ppq = 0, dur = 960, chanLo = 1,
 
 -- Reproduces trackerPage's mirrorDuplicate body + DUP_KEEP sweep
 -- against a real cmgr scope. groupOf() exposes the page token.
-local function wire(mirm, cmgr)
+local function wire(gm, cmgr)
   local DUP_KEEP = { mirrorDuplicate = true, cursorDown = true }
   local mirrorDupGroupId
   -- A cascade-ending action (a new selection, a mutation) leaves the
@@ -64,7 +64,7 @@ local function wire(mirm, cmgr)
     selectDown = function() region = region + 4000 end,
     deleteSel  = function() region = region + 4000 end,
     mirrorDuplicate = function()
-      mirrorDupGroupId = mirm:duplicateInto(mirrorDupGroupId,
+      mirrorDupGroupId = gm:duplicateInto(mirrorDupGroupId,
         { note() }, regionRect(), { ppq = region + 960, chan = 1 })
     end,
   }
@@ -80,17 +80,17 @@ end
 local function mk()
   local tm     = fakeTm()
   local cm     = fakeCm()
-  local mirm   = util.instantiate('mirrorManager', { tm = tm, cm = cm })
+  local gm   = util.instantiate('groupManager', { tm = tm, cm = cm })
   local cmgr   = util.instantiate('commandManager', { cm = cm })
-  local groupOf = wire(mirm, cmgr)
-  return mirm, cmgr, groupOf
+  local groupOf = wire(gm, cmgr)
+  return gm, cmgr, groupOf
 end
 
 return {
   {
     name = 'a cursor move keeps the cascade: the next duplicate joins the same group',
     run = function()
-      local mirm, cmgr, groupOf = mk()
+      local gm, cmgr, groupOf = mk()
       cmgr:invoke('mirrorDuplicate')
       local g1 = groupOf()
       t.truthy(g1, 'first duplicate seeded a cascade group')
@@ -102,7 +102,7 @@ return {
   {
     name = 'a new selection ends the cascade: the next duplicate seeds a fresh group',
     run = function()
-      local mirm, cmgr, groupOf = mk()
+      local gm, cmgr, groupOf = mk()
       cmgr:invoke('mirrorDuplicate')
       local g1 = groupOf()
       cmgr:invoke('selectDown')
@@ -115,7 +115,7 @@ return {
   {
     name = 'a mutation ends the cascade: the next duplicate seeds a fresh group',
     run = function()
-      local mirm, cmgr, groupOf = mk()
+      local gm, cmgr, groupOf = mk()
       cmgr:invoke('mirrorDuplicate')
       local g1 = groupOf()
       cmgr:invoke('deleteSel')

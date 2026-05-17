@@ -1,9 +1,9 @@
-# mirrorManager
+# groupManager
 
 A group is a region; an instance is one concrete placement of it. Every
 instance's events are a *pure replay* of the shared group pattern plus
 that instance's own overrides — recomputed from scratch on every flush,
-never diffed forward. mirm wraps the pure `mirror` core with the anchor
+never diffed forward. gm wraps the pure `mirror` core with the anchor
 maths between the group frame and the instance frame, and rides tm's
 flush seam.
 
@@ -57,7 +57,7 @@ note-off against whatever physically follows, across instances. An
 earlier design deleted conform; the cross-instance case forced its
 return.
 
-`conform` is a per-instance realisation marker mirm owns — never a
+`conform` is a per-instance realisation marker gm owns — never a
 shared group field, never through `toGroup`, never set by the user.
 Promote/demote does not surface as a reconcile op on the demoted note,
 so `conformSweep` stages the marker delta off the live records
@@ -66,7 +66,7 @@ sweeps every instance through it; `markGroup` runs the same sweep on
 instance 1 at seed time. That symmetry is load-bearing: `markGroup`
 adopts the user's existing take events as instance 1, and that
 geometry is *canonical* for the group — only the realisation flag is
-mirm's to add. Omitting the seed sweep left instance 1's last-in-lane
+gm's to add. Omitting the seed sweep left instance 1's last-in-lane
 note unconformed until some later edit reprojected it, so the
 conform-tail rebuild pass could not clip a pattern-length tail; a note
 dropped inside that tail — the first duplicate copy placed one region
@@ -122,13 +122,13 @@ the span test is strict.
 `reproject` runs *inside* tm's `preflush`, re-entrantly, so it must not
 call tv (tv's edit verbs assume cursor/grid/audition and themselves
 call `tm:flush`). It stages through tm and lets the in-flight flush
-carry the ops. `propagating` guards mirm's own staged adds from
+carry the ops. `propagating` guards gm's own staged adds from
 re-entering `applyEdit` as user edits; `selfStaged` does the same for
 newInstance's projection adds, which commit on a later flush.
 
 `reconcile` compares `desired` against the projection *shadow*
 (`rec.groupEvt`, what reproject last wrote), not the live concrete —
-cheap, and the two agree as long as only mirm drives concretes. But tv
+cheap, and the two agree as long as only gm drives concretes. But tv
 is mirror-unaware: deleting a note legato-grows its lane predecessor's
 *concrete* in the same flush, and when that predecessor's group
 geometry is unchanged (it was already clipped to that onset — the note
@@ -138,12 +138,12 @@ clipped back. So before reconcile, `reproject` refreshes the shadow
 from the live concrete (`toGroup(rec.evt)`) for every record whose
 concrete the user touched this flush (`touchedUuids`). Scoped there
 because only a user edit can mutate a concrete behind reproject's back;
-mirm's own staged adds never enter `touchedUuids`, so the steady-state
+gm's own staged adds never enter `touchedUuids`, so the steady-state
 shadow path is untouched. This is the same realisation-leak the replay
 model exists to kill, at the one seam where reconcile's optimisation
 let it back in.
 
-`uuid` is mirm's only durable identity. tm swaps every event table on
+`uuid` is gm's only durable identity. tm swaps every event table on
 rebuild, so the runtime projection is re-anchored by uuid each window;
 only the vuid→uuid slice persists, rebuilt by `rehydrate` on a
 take-changed rebuild.

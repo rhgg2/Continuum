@@ -47,7 +47,7 @@ end
 
 local function mk()
   local tm, staged = fakeTm()
-  return util.instantiate('mirrorManager', { tm = tm, cm = fakeCm() }), tm, staged
+  return util.instantiate('groupManager', { tm = tm, cm = fakeCm() }), tm, staged
 end
 
 local nextUuid = 0
@@ -69,12 +69,12 @@ return {
   {
     name = 'origin overrunning note is NOT marked conform (collides with sibling, bumped to lane 2)',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
 
       -- duplicateMirror on an empty col1/row1: empty group, one sibling
       -- instance at anchor 960 (sibling region [960, 1920)).
-      local gid = mirm:markGroup({}, rect(0, 1))
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gid = gm:markGroup({}, rect(0, 1))
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush()                                  -- commit (nothing staged)
       staged.add = {}
 
@@ -110,12 +110,12 @@ return {
     -- restaged onto its own touched event from the group.
     name = 'a same-flush edit in two instances round-trips both, origin included',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
 
       local a = note(0,   1, 1, { pitch = 60 })
       local b = note(480, 1, 1, { pitch = 62 })
-      local gid = mirm:markGroup({ a, b }, rect(0, 1))
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })   -- sibling at 960
+      local gid = gm:markGroup({ a, b }, rect(0, 1))
+      gm:newInstance(gid, { ppq = 960, chan = 1 })   -- sibling at 960
       tm:flush()                                       -- stamp sibling uuids
 
       -- The sibling's own copies of A and B (rebased to anchor 960).
@@ -162,11 +162,11 @@ return {
     name = 'instance 1 clips its overrun to instance 2 (real tm, no lane-2 bump)',
     run = function(harness)
       local h = harness.mk{ seed = { length = 1500, notes = {} } }
-      local mirm = util.instantiate('mirrorManager', { tm = h.tm, cm = h.cm })
+      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
 
       local rect = { ppq = 0, dur = 960, chanLo = 1,
                      streams = { [0] = { ['note:1'] = true } } }
-      mirm:stamp({}, rect, { ppq = 960, chan = 1 })   -- group + sibling
+      gm:stamp({}, rect, { ppq = 960, chan = 1 })   -- group + sibling
       h.tm:flush()
 
       -- Type a note into instance 1 whose tail runs past 960 into the

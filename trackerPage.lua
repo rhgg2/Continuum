@@ -8,7 +8,7 @@
 local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
-local mirror  = require 'mirror'
+local groups = require 'groups'
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
@@ -27,7 +27,7 @@ local mm     = util.instantiate('midiManager',    { take = nil })
 local tm     = util.instantiate('trackerManager', { mm = mm, cm = cm })
 local tv     = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr })
 local seqMgr = util.instantiate('sequenceManager', { tm = tm, cm = cm })
-local mirm   = util.instantiate('mirrorManager', { tm = tm, cm = cm })
+local gm   = util.instantiate('groupManager', { tm = tm, cm = cm })
 
 ---------- PRIVATE
 
@@ -614,14 +614,14 @@ local function drawTracker()
   -- instance, not merely on one of its rows.
   local logPerRow = tv:logPerRow()
   local cursorPpq = cursorRow * logPerRow
-  for _, inst in ipairs(mirm:eachInstance()) do
+  for _, inst in ipairs(gm:eachInstance()) do
     local rect  = inst.rect
     local ppqLo = inst.anchor.ppq
     local ppqHi = ppqLo + rect.dur
     local yLo = math.max(math.floor(ppqLo / logPerRow + 0.5) - scrollRow, 0)
     local yHi = math.min(math.floor(ppqHi / logPerRow + 0.5) - scrollRow, gridHeight)
     if yHi > yLo then
-      local baseTint = mirror.regionKey(inst.colour, 'tint')
+      local baseTint = groups.regionKey(inst.colour, 'tint')
       local xMin, xMax, conflicted, cursorIn
       for x, col in ipairs(grid.cols) do
         if col.x then
@@ -633,9 +633,9 @@ local function drawTracker()
             draw:box(x1, x2, yLo, yHi - 1, baseTint)
             for y = yLo, yHi - 1 do
               local evt = col.cells and col.cells[scrollRow + y]
-              local st  = evt and evt.uuid and mirm:stateOf(evt.uuid)
+              local st  = evt and evt.uuid and gm:stateOf(evt.uuid)
               if st == 'conflicted' then conflicted = true end
-              local key = st and mirror.tintKey(st)
+              local key = st and groups.tintKey(st)
               if key then draw:box(x1, x2, y, y, key) end
             end
             if x == cursorCol and cursorPpq >= ppqLo and cursorPpq < ppqHi then
@@ -646,7 +646,7 @@ local function drawTracker()
       end
       if xMin then
         if inst.active or conflicted then
-          local outCol = chrome.colour(mirror.outlineKey(
+          local outCol = chrome.colour(groups.outlineKey(
             conflicted and 'conflicted' or 'synced', inst.colour))
           ImGui.DrawList_AddRect(drawList,
             gridOriginX + xMin * gridX,       gridOriginY + yLo * gridY,
@@ -1347,7 +1347,7 @@ end
 mirrorScope:registerAll{
   mirrorBail   = exitMirror,
   mirrorCommit = function()
-    if mirrorRect then mirm:mark(tv:eventsInRect(mirrorRect), mirrorRect) end
+    if mirrorRect then gm:mark(tv:eventsInRect(mirrorRect), mirrorRect) end
     exitMirror()
   end,
   mirrorPaintExtend = function() local _, c = tv:ec():pos(); mirrorPaint(c, true)  end,
@@ -1366,17 +1366,17 @@ tracker:registerAll{
     -- Snapshot the source for mirrorPaste too: mark and copy share the
     -- one mirrorSrc lifetime; without this, mark -> paste degrades to
     -- plain paste (mirrorPaste gates on mirrorSrc, not the active group).
-    if r then mirrorSrc = r; mirm:mark(tv:eventsInRect(r), r) end
+    if r then mirrorSrc = r; gm:mark(tv:eventsInRect(r), r) end
   end,
   mirrorDuplicate = function()
     -- Cascade copies into one mirror group via the shared controller.
     -- No collectSource: each copy's events come from the rect. Commit
-    -- now (mirm leaves it staged in tm otherwise, colliding with the
+    -- now (gm leaves it staged in tm otherwise, colliding with the
     -- next user edit). No fallbackRect: a degenerate selection is a
     -- no-op, but a real 1x1 selection still mirrors.
     mirrorDupState = tv:duplicateCascade(mirrorDupState, nil,
       function(rect, anchor, gid)
-        gid = mirm:duplicateInto(gid, gid and {} or tv:eventsInRect(rect),
+        gid = gm:duplicateInto(gid, gid and {} or tv:eventsInRect(rect),
                                  rect, anchor)
         tm:flush()
         return gid
@@ -1391,14 +1391,14 @@ tracker:registerAll{
       -- paste (that would paste non-mirror content the user didn't ask
       -- for); the fallthrough is only for "no mirror source".
       if a.ppq + mirrorSrc.dur <= tm:length() then
-        mirm:stamp(tv:eventsInRect(mirrorSrc), mirrorSrc, a)
-        tm:flush()   -- mirm only stages; without this the copy never materialises
+        gm:stamp(tv:eventsInRect(mirrorSrc), mirrorSrc, a)
+        tm:flush()   -- gm only stages; without this the copy never materialises
       end
     else
       cmgr:invoke('paste')
     end
   end,
-  mirrorLocalToggle = function() mirm:setLocalMode(not mirm:localMode()) end,
+  mirrorLocalToggle = function() gm:setLocalMode(not gm:localMode()) end,
   mirrorEnter = function()
     local r = tv:selectionAsRect()
     if r then mirrorRect, mirrorMode = r, true; cmgr:push(mirrorScope) end
@@ -1408,7 +1408,7 @@ tracker:registerAll{
 -- copy is plain — the page only observes it to snapshot the source
 -- rect. Must run BEFORE the body: clipboard:copy ends with ec:selClear(),
 -- so a doAfter snapshot would always see an empty selection (nil rect)
--- and mirrorPaste would never mirror.
+-- and mirrorPaste would never groups.
 cmgr:doBefore('copy', function() mirrorSrc = tv:selectionAsRect() end)
 
 -- Three mirror lifetimes, three keep-sets. Runs after every tracker
@@ -1428,7 +1428,7 @@ do
   end
   cmgr:doBefore(clearOn, function()
     mirrorSrc = nil
-    mirm:clearActive()
+    gm:clearActive()
   end)
   cmgr:doBefore(dupClearOn, function() mirrorDupState = nil end)
 end

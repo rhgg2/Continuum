@@ -37,8 +37,8 @@ end
 
 local function mk()
   local tm, staged = fakeTm()
-  local mirm = util.instantiate('mirrorManager', { tm = tm, cm = fakeCm() })
-  return mirm, tm, staged
+  local gm = util.instantiate('groupManager', { tm = tm, cm = fakeCm() })
+  return gm, tm, staged
 end
 
 local nextUuid = 0
@@ -68,13 +68,13 @@ return {
   {
     name = 'a two-channel group projects both channels into a duplicate copy',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local c1 = note(1, 0, 240, 60)
       local c2 = note(2, 0, 240, 67)
 
       -- Cascade seed: nil group -> markGroup + first copy one region below
       -- at the same chanLo, so the copy spans chan 1 and chan 2 too.
-      mirm:duplicateInto(nil, { c1, c2 }, rect2ch(), { ppq = 480, chan = 1 })
+      gm:duplicateInto(nil, { c1, c2 }, rect2ch(), { ppq = 480, chan = 1 })
       tm:flush()
 
       local byChan = copyNotesByChan(staged)

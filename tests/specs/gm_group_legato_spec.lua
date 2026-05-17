@@ -39,8 +39,8 @@ end
 
 local function mk()
   local tm, staged = fakeTm()
-  local mirm = util.instantiate('mirrorManager', { tm = tm, cm = fakeCm() })
-  return mirm, tm, staged
+  local gm = util.instantiate('groupManager', { tm = tm, cm = fakeCm() })
+  return gm, tm, staged
 end
 
 local nextUuid = 0
@@ -69,10 +69,10 @@ return {
   {
     name = 'a group-level delete grows the predecessor in the group frame (ABC.D -> B to D)',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local A, B, C, D = note(0, 60), note(240, 62), note(480, 64), note(720, 65)
-      local gid = mirm:markGroup({ A, B, C, D }, rect())
-      mirm:newInstance(gid, { ppq = 2000, chan = 1 })  -- sibling Y, past the seed
+      local gid = gm:markGroup({ A, B, C, D }, rect())
+      gm:newInstance(gid, { ppq = 2000, chan = 1 })  -- sibling Y, past the seed
       tm:flush(); staged.add, staged.assign, staged.del = {}, {}, {}
 
       tm:flush({}, {}, { { evt = C } })                -- non-local delete of C
@@ -88,10 +88,10 @@ return {
   {
     name = 'a group-level create clips the predecessor it lands inside (group frame)',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local A = note(0, 60, 480)                        -- A overruns to 480
-      local gid = mirm:markGroup({ A }, rect())
-      mirm:newInstance(gid, { ppq = 2000, chan = 1 })
+      local gid = gm:markGroup({ A }, rect())
+      gm:newInstance(gid, { ppq = 2000, chan = 1 })
       tm:flush(); staged.add, staged.assign, staged.del = {}, {}, {}
 
       local born = note(240, 62, 240)                   -- created at group ppq 240
@@ -112,10 +112,10 @@ return {
   {
     name = 'a create that lands last-in-lane gets an infinite group tail (runs to end of take)',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local A = note(0, 60, 240)
-      local gid = mirm:markGroup({ A }, rect())
-      mirm:newInstance(gid, { ppq = 2000, chan = 1 })
+      local gid = gm:markGroup({ A }, rect())
+      gm:newInstance(gid, { ppq = 2000, chan = 1 })
       tm:flush(); staged.add, staged.assign, staged.del = {}, {}, {}
 
       local born = note(240, 62, 240)                   -- created after A: last in lane

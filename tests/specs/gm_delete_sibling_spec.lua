@@ -33,8 +33,8 @@ end
 
 local function mk()
   local tm, staged = fakeTm()
-  local mirm = util.instantiate('mirrorManager', { tm = tm, cm = fakeCm() })
-  return mirm, tm, staged
+  local gm = util.instantiate('groupManager', { tm = tm, cm = fakeCm() })
+  return gm, tm, staged
 end
 
 local nextUuid = 0
@@ -61,10 +61,10 @@ return {
   {
     name = 'deleting both instance notes one flush at a time propagates both deletes',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local A, B = note(0, 60), note(240, 62)
-      local gid = mirm:markGroup({ A, B }, rect())
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })       -- instance 2
+      local gid = gm:markGroup({ A, B }, rect())
+      gm:newInstance(gid, { ppq = 960, chan = 1 })       -- instance 2
       tm:flush()
       local copyA = copyAt(staged, 960)
       local copyB = copyAt(staged, 1200)
@@ -83,10 +83,10 @@ return {
   {
     name = 'deleting both instance notes in one flush propagates both deletes',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local A, B = note(0, 60), note(240, 62)
-      local gid = mirm:markGroup({ A, B }, rect())
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gid = gm:markGroup({ A, B }, rect())
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush()
       local copyA = copyAt(staged, 960)
       local copyB = copyAt(staged, 1200)
@@ -102,14 +102,14 @@ return {
   {
     name = 'deleting the predecessor must not shrink an infinite last-in-lane tail',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       -- A adopted (finite); B *created* into the region so it is the
       -- last-in-lane note with an infinite group tail (runs to take end).
       local A = note(0, 60)
-      local gid = mirm:markGroup({ A }, rect())
+      local gid = gm:markGroup({ A }, rect())
       local B = note(240, 62)
       tm:flush({ { evt = B } }, {}, {})                    -- create B: infinite tail
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })       -- instance 2
+      gm:newInstance(gid, { ppq = 960, chan = 1 })       -- instance 2
       tm:flush()
       local copyA = copyAt(staged, 960)
       t.truthy(copyA, 'instance 2 copy of A materialised')
@@ -119,7 +119,7 @@ return {
 
       -- A fresh instance reveals the shared group's B tail: it must still
       -- run to take length (4000), not have collapsed to B's 240 dur.
-      mirm:newInstance(gid, { ppq = 2000, chan = 1 })
+      gm:newInstance(gid, { ppq = 2000, chan = 1 })
       local freshB
       for _, e in ipairs(staged.add) do if e.pitch == 62 then freshB = e end end
       t.truthy(freshB, 'fresh instance projected B')

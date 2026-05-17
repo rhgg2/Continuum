@@ -1,6 +1,6 @@
 -- Integration repro driving the REAL tracker delete command, so
 -- trackerView's queueDeleteNotes (column legato) and trackerManager's
--- conform-tail pass both run, wired to a real mirrorManager.
+-- conform-tail pass both run, wired to a real groupManager.
 --
 -- AB in col1 rows 0-1 (B last-in-lane, open tail to take end). Mirror-
 -- duplicate down: instance 2 at rows 2-3, sharing chan|lane -- so the
@@ -40,12 +40,12 @@ return {
             chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
         } },
       }
-      local mirm = util.instantiate('mirrorManager', { tm = h.tm, cm = h.cm })
+      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
 
       local evA, evB = h.tm:byUuid(1), h.tm:byUuid(2)
       for _, e in ipairs{ evA, evB } do e.chan = 1; e.lane = e.lane or 1 end
-      local gid = mirm:markGroup({ evA, evB }, rect())
-      mirm:newInstance(gid, { ppq = 2 * LPR, chan = 1 })   -- rows 2-3
+      local gid = gm:markGroup({ evA, evB }, rect())
+      gm:newInstance(gid, { ppq = 2 * LPR, chan = 1 })   -- rows 2-3
       h.tm:flush()
 
       local before = h.fm:dump().notes

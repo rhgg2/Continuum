@@ -1,4 +1,4 @@
--- mirm owns the conform MARKER (not the clip — tm does that). Per
+-- gm owns the conform MARKER (not the clip — tm does that). Per
 -- instance, exactly the last-in-lane note of each note stream is
 -- conform=true; earlier members are not. When a later note appears in
 -- a lane the previously-last member is demoted (conform=false) and the
@@ -36,7 +36,7 @@ end
 
 local function mk()
   local tm, staged = fakeTm()
-  return util.instantiate('mirrorManager', { tm = tm, cm = fakeCm() }), tm, staged
+  return util.instantiate('groupManager', { tm = tm, cm = fakeCm() }), tm, staged
 end
 
 local function note(ppq, lane, pitch)
@@ -52,13 +52,13 @@ return {
   {
     name = 'newInstance flags only the last note in each lane as conform',
     run = function()
-      local mirm, _, staged = mk()
+      local gm, _, staged = mk()
       local sel = { note(0, 1, 60), note(240, 1, 62), note(480, 1, 64),
                     note(120, 2, 67) }
       local rect = { ppq = 0, dur = 960, chanLo = 1,
                      streams = { [0] = { ['note:1'] = true, ['note:2'] = true } } }
-      local gid = mirm:markGroup(sel, rect)
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gid = gm:markGroup(sel, rect)
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
 
       t.eq(#staged.add, 4)
       -- anchor 960: lane1 -> 960,1200,1440 ; lane2 -> 1080
@@ -72,11 +72,11 @@ return {
   {
     name = 'a single-note instance: that note is conform',
     run = function()
-      local mirm, tm, staged = mk()
-      local gid = mirm:markGroup({ note(0, 1, 60) },
+      local gm, tm, staged = mk()
+      local gid = gm:markGroup({ note(0, 1, 60) },
         { ppq = 0, dur = 960, chanLo = 1,
           streams = { [0] = { ['note:1'] = true } } })
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
       t.eq(#staged.add, 1)
       t.truthy(staged.add[1].conform, 'the only note overruns -> conform')
     end,
@@ -85,12 +85,12 @@ return {
   {
     name = 'appending a later group note demotes the old last and promotes the new',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 60)
-      local gid = mirm:markGroup({ src },
+      local gid = gm:markGroup({ src },
         { ppq = 0, dur = 960, chanLo = 1,
           streams = { [0] = { ['note:1'] = true } } })
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })   -- sibling copy
+      gm:newInstance(gid, { ppq = 960, chan = 1 })   -- sibling copy
       tm:flush()                                       -- stamp uuids
       t.truthy(byPpq(staged.add, 960).conform, 'sibling sole note starts conform')
       staged.add, staged.assign = {}, {}

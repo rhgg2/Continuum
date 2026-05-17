@@ -1,12 +1,12 @@
 -- Repro: mirrorDuplicate (stamp) must COMMIT its projection before the
--- next user edit. The command flushes after mirm:stamp (duplicateDown
+-- next user edit. The command flushes after gm:stamp (duplicateDown
 -- commits the same way, via pasteClip's flush). Skipping that flush left
 -- the sibling add staged in tm until the next edit's flush, where it
 -- collided with the origin edit's reproject: the sibling materialised
 -- with the OLD value and its proj record went stale, so further edits
 -- had no effect ("empty boxes -> fills with A -> no effect").
 --
--- This pins the mirm + real-tm seam the command drives. It cannot invoke
+-- This pins the gm + real-tm seam the command drives. It cannot invoke
 -- trackerPage's command closure (trackerPage builds its own tm, not the
 -- harness's), so it models the fixed command's sequence:
 --   stamp -> tm:flush (commit) -> edit -> tm:flush -> edit -> tm:flush
@@ -46,7 +46,7 @@ return {
           { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 },
         } },
       }
-      local mirm = util.instantiate('mirrorManager', { tm = h.tm, cm = h.cm })
+      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
 
       local ci = noteCol(h, 1)
       h.ec:setSelection{ row1 = 0, row2 = 0, col1 = ci, col2 = ci,
@@ -57,7 +57,7 @@ return {
 
       -- mirrorDuplicate body: stamp the copy after the source region,
       -- then commit it (the fix). Anchor = region end, like the command.
-      mirm:stamp(events, rect, { ppq = rect.ppq + rect.dur, chan = 1 })
+      gm:stamp(events, rect, { ppq = rect.ppq + rect.dur, chan = 1 })
       h.tm:flush()
 
       local committed = chanNotes(h, 1)

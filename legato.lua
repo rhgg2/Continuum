@@ -11,7 +11,7 @@
 --
 -- `notes` is a column's events in ppq order, same lane/chan; callers
 -- pre-filter anything that is not a note (PAs, value events). tv calls
--- this from placeNewNote / queueDeleteNotes; mirm from group-frame
+-- this from placeNewNote / queueDeleteNotes; gm from group-frame
 -- Step 1 and the Step 2 manifest. Shared so the two cannot drift.
 
 local util = require 'util'

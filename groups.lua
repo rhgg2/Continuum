@@ -1,10 +1,10 @@
--- Pure mirror core. No REAPER, no anchor arithmetic. Two frames: the
+-- Pure groups core. No REAPER, no anchor arithmetic. Two frames: the
 -- `group` (shared, relative -- the identity all mirrors agree on) and the
 -- `instance` (a concrete placement of that group in the take). Every group
 -- event is expressed relative to the group origin -- chanDelta = chan minus
 -- the instance anchor's chan, key = the stream's identity within that
 -- channel (lane for notes, cc-number for cc), ppq relative to the anchor.
--- The stateful mirrorManager owns the anchor maths between the two frames.
+-- The stateful groupManager owns the anchor maths between the two frames.
 --
 -- A `group` is a region plus its contents: `rect` and `events` (vuid ->
 -- flat group-space event). The region is the identity, not an enumerated
@@ -51,19 +51,19 @@
 local util   = require 'util'
 local legato = require 'legato'
 
-local mirror = {}
+local groups = {}
 
 --contract: group event + sticky local assign -> resolved event. Local
 --           always wins; a drifted base is NOT a conflict (the only
 --           conflict is two events at one onset, decided in project).
 --           State is 'synced' with no assign, else 'overridden'.
-function mirror.resolve(groupEvt, assign)
+function groups.resolve(groupEvt, assign)
   local out = util.clone(groupEvt) or {}
   if not assign then return out, 'synced' end
   for field, rec in pairs(assign) do out[field] = rec.value end
   return out, 'overridden'
 end
-local resolve = mirror.resolve
+local resolve = groups.resolve
 
 --contract: returns (desired, conflicts, states). desired[vuid] is a
 --           clean group-space event with no provenance keys; states[vuid]
@@ -71,7 +71,7 @@ local resolve = mirror.resolve
 --           every call -- a terminal set, never a diff. `patternLen` is
 --           the take length (tm:length, caller-supplied -- the core is
 --           pure); a tailless note runs to it when nothing follows.
-function mirror.project(group, instance, patternLen)
+function groups.project(group, instance, patternLen)
   instance = instance or {}
   patternLen = patternLen or math.huge
   local assigns = instance.assigns or {}
@@ -104,7 +104,7 @@ function mirror.project(group, instance, patternLen)
   local claimed = {}
   for _, vuid in ipairs(ordered) do
     local e = desired[vuid]
-    local slot = mirror.laneId(e) .. '@' .. tostring(e.ppq or 0)
+    local slot = groups.laneId(e) .. '@' .. tostring(e.ppq or 0)
     if claimed[slot] then
       desired[vuid]   = nil
       states[vuid]    = 'conflicted'
@@ -122,7 +122,7 @@ function mirror.project(group, instance, patternLen)
     for vuid, e in pairs(src) do
       if e.evType == 'note' then
         e.ppq = e.ppq or 0
-        util.bucket(lanes, mirror.laneId(e),
+        util.bucket(lanes, groups.laneId(e),
           { vuid = vuid, e = desired[vuid],
             ppq = e.ppq, endppq = e.ppq + (e.dur or 0) })
       end
@@ -165,7 +165,7 @@ end
 
 --contract: current[vuid] = { uuid, groupEvt }. Returns an op list; a moved
 --           or resized event is a single `set`, never del+add.
-function mirror.reconcile(desired, current)
+function groups.reconcile(desired, current)
   local ops = {}
   for vuid, groupEvt in pairs(desired) do
     local cur = current[vuid]
@@ -185,14 +185,14 @@ end
 
 --contract: captures the live group value as the merge base at fork time;
 --           nil groupEvt (local-only edit) captures nil base.
-function mirror.deriveAssign(groupEvt, field, value)
+function groups.deriveAssign(groupEvt, field, value)
   return { base = groupEvt and groupEvt[field] or nil, value = value }
 end
 
 --contract: the region's stable per-stream identity -- evType plus `key`
 --           (note->lane, cc->cc-number). Index-free: survives column
 --           insert/reorder, unlike a view-column position.
-function mirror.streamId(evt)
+function groups.streamId(evt)
   return evt.evType .. ':' .. tostring(evt.key or 0)
 end
 
@@ -201,8 +201,8 @@ end
 --           one channel; two channels at the same lane and onset are
 --           distinct slots. rect.streams keeps streamId channel-free
 --           because chanOffset is already its own dimension there.
-function mirror.laneId(evt)
-  return tostring(evt.chanDelta or 0) .. '/' .. mirror.streamId(evt)
+function groups.laneId(evt)
+  return tostring(evt.chanDelta or 0) .. '/' .. groups.streamId(evt)
 end
 
 --contract: region membership predicate. Both coords are anchor-relative:
@@ -213,10 +213,10 @@ end
 --           is selected for it. rect.ppq is the absolute placement origin
 --           (cascade/render); it is NOT the membership time origin -- that
 --           is the anchor, already subtracted out, mirroring chanOffset.
-function mirror.inRect(rect, ppq, chanOffset, evt)
+function groups.inRect(rect, ppq, chanOffset, evt)
   if ppq < 0 or ppq >= rect.dur then return false end
   local sel = rect.streams[chanOffset]
-  return sel ~= nil and sel[mirror.streamId(evt)] == true
+  return sel ~= nil and sel[groups.streamId(evt)] == true
 end
 
 -- View mapping: projection state -> chrome colour name. Colocated with
@@ -227,15 +227,15 @@ end
 -- regardless of which group it belongs to.
 local OVERLAY = { overridden = 'mirror.overridden.tint',
                   conflicted = 'mirror.conflicted.tint' }
-function mirror.tintKey(state)
+function groups.tintKey(state)
   return OVERLAY[state]
 end
-function mirror.regionKey(colour, kind)
+function groups.regionKey(colour, kind)
   return 'region.' .. colour .. '.' .. kind
 end
-function mirror.outlineKey(state, colour)
+function groups.outlineKey(state, colour)
   if state == 'conflicted' then return 'mirror.conflicted.outline' end
-  return mirror.regionKey(colour, 'outline')
+  return groups.regionKey(colour, 'outline')
 end
 
-return mirror
+return groups

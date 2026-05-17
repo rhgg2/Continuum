@@ -542,7 +542,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   -- The live column event for a uuid, valid until the next rebuild.
   -- uuid is mm's durable identity; token is internal and re-keyed, so
-  -- cross-rebuild handles (mirm) resolve through this, never the token.
+  -- cross-rebuild handles (gm) resolve through this, never the token.
   function tm:byUuid(uuid) return byUuid[uuid] end
 
   function deleteEvent(evtOrToken)
@@ -634,7 +634,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   --contract: no-op if nothing staged; otherwise commits assigns then deletes then adds under one mm:modify; pb cents→raw conversion happens here; byToken is re-keyed live from mm:assign's returned token whenever an identity field moved
   --contract: snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
-  --emits: preflush -- (adds, assigns, deletes); fired first, before the no-op check, so a subscriber (mirm) can stage peer ops into the same lists and ride the one mm:modify
+  --emits: preflush -- (adds, assigns, deletes); fired first, before the no-op check, so a subscriber (gm) can stage peer ops into the same lists and ride the one mm:modify
   --emits: postflush -- nil; fired after mm:modify so a subscriber can read the uuids mm just stamped onto staged add events
   function flush()
     fire('preflush', adds, assigns, deletes)

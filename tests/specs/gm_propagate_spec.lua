@@ -1,10 +1,10 @@
--- Stateful mirror manager (mirm). Wraps the pure mirror core with anchor
+-- Stateful mirror manager (gm). Wraps the pure mirror core with anchor
 -- maths and rides tm's preflush/postflush seam: a staged edit landing in a
 -- group's region mutates the shared group, reprojects every sibling
 -- instance, and stages the diff back through tm so it commits in the same
 -- mm:modify.
 --
--- mirm is a constructor chunk (util.instantiate('mirrorManager', {tm,cm})).
+-- gm is a constructor chunk (util.instantiate('groupManager', {tm,cm})).
 -- The fake tm captures the seam handlers and records staged peer ops;
 -- flush(trio) fires preflush, fakes mm uuid-stamping on staged adds, then
 -- fires postflush.
@@ -39,8 +39,8 @@ end
 
 local function mk(cm)
   local tm, staged, hooks = fakeTm()
-  local mirm = util.instantiate('mirrorManager', { tm = tm, cm = cm or fakeCm() })
-  return mirm, tm, staged, hooks
+  local gm = util.instantiate('groupManager', { tm = tm, cm = cm or fakeCm() })
+  return gm, tm, staged, hooks
 end
 
 local nextUuid = 0
@@ -62,10 +62,10 @@ return {
   {
     name = 'newInstance stages a concrete copy of every group event at the new anchor',
     run = function()
-      local mirm, _, staged = mk()
+      local gm, _, staged = mk()
       local sel = { note(0, 1, 1, { pitch = 64 }), note(240, 1, 1, { pitch = 67 }) }
-      local gid = mirm:markGroup(sel, rect(0, 1))
-      local iid = mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gid = gm:markGroup(sel, rect(0, 1))
+      local iid = gm:newInstance(gid, { ppq = 960, chan = 1 })
 
       t.truthy(iid, 'newInstance returns an instId')
       t.eq(#staged.add, 2)
@@ -80,9 +80,9 @@ return {
   {
     name = 'newInstance rejects a projection whose channel falls out of range',
     run = function()
-      local mirm = mk()
-      local gid = mirm:markGroup({ note(0, 1, 1) }, rect(0, 1))
-      local iid, reason = mirm:newInstance(gid, { ppq = 0, chan = 17 })
+      local gm = mk()
+      local gid = gm:markGroup({ note(0, 1, 1) }, rect(0, 1))
+      local iid, reason = gm:newInstance(gid, { ppq = 0, chan = 17 })
       t.falsy(iid)
       t.eq(reason, 'channel out of range')
     end,
@@ -91,10 +91,10 @@ return {
   {
     name = 'a staged edit inside one instance propagates to the sibling via the group',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1, { pitch = 60 })
-      local gid = mirm:markGroup({ src }, rect(0, 1))
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gid = gm:markGroup({ src }, rect(0, 1))
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush()                                -- commit the mirrored add; stamp its uuid
       staged.add = {}
 
@@ -121,10 +121,10 @@ return {
   {
     name = 'a moved group note carries its tail to the sibling (endppq shifts with ppq)',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1)                  -- ppq 0, endppq 240 (dur 240)
-      local gid = mirm:markGroup({ src }, rect(0, 1))
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gid = gm:markGroup({ src }, rect(0, 1))
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
       -- Pure move in the origin: start 0->480, end 240->720 (dur 240 fixed).
@@ -149,10 +149,10 @@ return {
   {
     name = 'a create inside the region on a selected stream propagates to siblings',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1)
-      local gid = mirm:markGroup({ src }, rect(0, 1))
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gid = gm:markGroup({ src }, rect(0, 1))
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
       local born = note(480, 1, 1, { pitch = 65 })   -- inside region, note:1 selected
@@ -167,9 +167,9 @@ return {
   {
     name = 'a create on a stream the region does not select is ignored',
     run = function()
-      local mirm, tm, staged = mk()
-      local gid = mirm:markGroup({ note(0, 1, 1) }, rect(0, 1))
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gm, tm, staged = mk()
+      local gid = gm:markGroup({ note(0, 1, 1) }, rect(0, 1))
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
       tm:flush({ { evt = note(480, 1, 2) } }, {}, {})  -- lane 2 -> note:2, unselected
@@ -181,13 +181,13 @@ return {
   {
     name = 'localMode keeps the edit local: no propagation, shared group untouched',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1, { pitch = 60 })
-      local gid = mirm:markGroup({ src }, rect(0, 1))
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gid = gm:markGroup({ src }, rect(0, 1))
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
-      mirm:setLocalMode(true)
+      gm:setLocalMode(true)
       tm:flush({}, { { token = 't1', evt = src, update = { pitch = 99 } } }, {})
 
       -- localMode contains the edit to its own instance. The replay
@@ -203,8 +203,8 @@ return {
       end
 
       -- The shared group is untouched: a fresh instance still shows pitch 60.
-      mirm:setLocalMode(false)
-      local iid = mirm:newInstance(gid, { ppq = 1920, chan = 1 })
+      gm:setLocalMode(false)
+      local iid = gm:newInstance(gid, { ppq = 1920, chan = 1 })
       t.truthy(iid)
       t.eq(staged.add[#staged.add].pitch, 60)
     end,
@@ -213,23 +213,23 @@ return {
   {
     name = 'editing a localMode-added event after leaving localMode does not crash',
     run = function()
-      local mirm, tm, staged = mk()
+      local gm, tm, staged = mk()
       local src = note(0, 1, 1, { pitch = 60 })
-      local gid = mirm:markGroup({ src }, rect(0, 1))
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gid = gm:markGroup({ src }, rect(0, 1))
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
-      mirm:setLocalMode(true)
+      gm:setLocalMode(true)
       local born = note(480, 1, 1, { pitch = 65 })   -- inside region
       tm:flush({ { evt = born } }, {}, {})            -- local-only add
       tm:flush(); staged.add = {}
 
-      mirm:setLocalMode(false)
+      gm:setLocalMode(false)
       -- Editing the local-only add: group.events[vuid] is nil (it lives in
       -- instance.adds), so the non-local assign branch must not util.assign nil.
       tm:flush({}, { { token = 'tb', evt = born, update = { pitch = 70 } } }, {})
 
-      local iid = mirm:newInstance(gid, { ppq = 1920, chan = 1 })
+      local iid = gm:newInstance(gid, { ppq = 1920, chan = 1 })
       t.truthy(iid, 'shared group still projectable; the local add stayed local')
     end,
   },

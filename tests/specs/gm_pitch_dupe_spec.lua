@@ -1,6 +1,6 @@
 -- Repro: a pitch edit on the origin instance must UPDATE the sibling's
 -- note in place, not leave a stale old-pitch note beside a new one.
--- Rides the REAL tm flush seam (mirm subscribes to h.tm preflush/postflush).
+-- Rides the REAL tm flush seam (gm subscribes to h.tm preflush/postflush).
 
 local t    = require('support')
 local util = require('util')
@@ -31,7 +31,7 @@ return {
           { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 },
         } },
       }
-      local mirm = util.instantiate('mirrorManager', { tm = h.tm, cm = h.cm })
+      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
 
       local ci = noteCol(h, 1)
       h.ec:setSelection{ row1 = 0, row2 = 0, col1 = ci, col2 = ci,
@@ -40,8 +40,8 @@ return {
       local events = h.vm:eventsInRect(rect)
       t.eq(#events, 1, 'one source event')
 
-      local gid = mirm:markGroup(events, rect)
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
+      local gid = gm:markGroup(events, rect)
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
       h.tm:flush()
 
       local before = chanNotes(h, 1)

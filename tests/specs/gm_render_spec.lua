@@ -1,12 +1,12 @@
 -- 4d render-pass seam: the pure state->theme-key mapping and the
--- mirm:eachInstance read accessor the trackerPage render pass drives.
+-- gm:eachInstance read accessor the trackerPage render pass drives.
 -- The geometry/draw itself is REAPER-only; what is unit-testable is
 -- (a) the mapping is total and stable, (b) eachInstance reports rect /
 -- anchor / active faithfully.
 
 local t      = require('support')
 local util   = require('util')
-local mirror = require('mirror')
+local groups = require('groups')
 
 local function fakeTm()
   local staged, seq = { add = {} }, 0
@@ -30,7 +30,7 @@ local function fakeCm()
 end
 
 local function mk()
-  return util.instantiate('mirrorManager', { tm = fakeTm(), cm = fakeCm() })
+  return util.instantiate('groupManager', { tm = fakeTm(), cm = fakeCm() })
 end
 
 local function note(ppq, lane)
@@ -45,27 +45,27 @@ return {
   {
     name = 'tintKey: synced has no overlay; deviation states map to .tint',
     run = function()
-      t.eq(mirror.tintKey('synced'),     nil)
-      t.eq(mirror.tintKey('overridden'), 'mirror.overridden.tint')
-      t.eq(mirror.tintKey('conflicted'), 'mirror.conflicted.tint')
+      t.eq(groups.tintKey('synced'),     nil)
+      t.eq(groups.tintKey('overridden'), 'mirror.overridden.tint')
+      t.eq(groups.tintKey('conflicted'), 'mirror.conflicted.tint')
     end,
   },
   {
     name = 'regionKey/outlineKey: group hue by default, conflicted is loud',
     run = function()
-      t.eq(mirror.regionKey(3, 'tint'),    'region.3.tint')
-      t.eq(mirror.regionKey(1, 'outline'), 'region.1.outline')
-      t.eq(mirror.outlineKey('conflicted', 5), 'mirror.conflicted.outline')
-      t.eq(mirror.outlineKey('synced', 5),     'region.5.outline')
+      t.eq(groups.regionKey(3, 'tint'),    'region.3.tint')
+      t.eq(groups.regionKey(1, 'outline'), 'region.1.outline')
+      t.eq(groups.outlineKey('conflicted', 5), 'mirror.conflicted.outline')
+      t.eq(groups.outlineKey('synced', 5),     'region.5.outline')
     end,
   },
   {
     name = 'eachInstance enumerates every instance with rect+anchor+active',
     run = function()
-      local mirm = mk()
-      local gid  = mirm:mark({ note(0, 1) }, rect)   -- mark sets active
-      mirm:newInstance(gid, { ppq = 960, chan = 1 })
-      local all = mirm:eachInstance()
+      local gm = mk()
+      local gid  = gm:mark({ note(0, 1) }, rect)   -- mark sets active
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
+      local all = gm:eachInstance()
       t.eq(#all, 2, 'two instances enumerated')
       table.sort(all, function(a, b) return a.instId < b.instId end)
       t.eq(all[1].rect, rect,       'rect returned by reference')
@@ -78,9 +78,9 @@ return {
   {
     name = 'eachInstance: a markGroup (no copy) group is inactive',
     run = function()
-      local mirm = mk()
-      mirm:markGroup({ note(0, 1) }, rect)           -- no active set
-      local all = mirm:eachInstance()
+      local gm = mk()
+      gm:markGroup({ note(0, 1) }, rect)           -- no active set
+      local all = gm:eachInstance()
       t.eq(#all, 1)
       t.falsy(all[1].active, 'markGroup does not set active')
     end,

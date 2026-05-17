@@ -1,5 +1,5 @@
 -- The shared, frame-agnostic legato primitive. tv (placeNewNote /
--- queueDeleteNotes) and mirm (group-frame Step 1 / manifest Step 2) both
+-- queueDeleteNotes) and gm (group-frame Step 1 / manifest Step 2) both
 -- speak it: a note's tail runs to the next onset in its column; deleting
 -- a note that legato-owned the run grows its predecessor over the gap.
 -- One rule, pinned once here so the two call sites cannot drift.

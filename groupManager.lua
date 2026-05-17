@@ -1,14 +1,14 @@
--- See docs/mirrorManager.md for the model.
+-- See docs/groupManager.md for the model.
 
 --shape: group = { rect, events = { [vuid]=groupEvt }, nextVuid, instances = { [instId]=instance } }
 --shape: instance = { anchor = { ppq, chan }, assigns, adds, deletes }  -- pure data, persisted verbatim
 --shape: proj[groupId][instId][vuid] = { uuid, groupEvt=clone, evt=liveEvt }  -- module-level, runtime; only `uuid` serialised, persisted as `uuids[groupId][instId][vuid]`
---shape: persisted mirrorGroups = { groups = groups, uuids = { [groupId]={ [instId]={ [vuid]=uuid } } } }
+--shape: persisted groups = { groups = groups, uuids = { [groupId]={ [instId]={ [vuid]=uuid } } } }
 --invariant: localMode is a single global UI flag, not per-instance; default propagate edits the shared group
 --invariant: a staged edit is matched to its vuid by evt-table identity (proj evt slot), else by the rect predicate gated on streamIds already present
 
 local util   = require 'util'
-local mirror = require 'mirror'
+local groupsCore = require 'groups'
 local legato = require 'legato'
 
 local deps   = ...
@@ -22,11 +22,11 @@ local function takeLen() return tm.length and tm:length() or math.huge end
 -- or positional (chanDelta/key/ppq/dur, handled by anchor maths).
 local SCALARS = { 'pitch', 'vel', 'detune', 'delay', 'val', 'shape', 'tension', 'muted' }
 
-local mirm = {}
+local gm = {}
 
 ----- State
 
-local blob        = cm:get('mirrorGroups') or {}
+local blob        = cm:get('groups') or {}
 local groups      = blob.groups or {}
 local localMode   = false
 local propagating = false
@@ -43,7 +43,7 @@ local activeGroup = nil
 local proj      = {}
 local locByUuid = {}  -- concrete uuid -> { groupId, instId, vuid }
 -- newInstance's own projection adds; the preflush adds loop skips them
--- (mirm's echo, not a user create) and clears each as seen.
+-- (gm's echo, not a user create) and clears each as seen.
 local selfStaged = {}
 -- uuids the user directly touched this flush. Gates userOwned (per
 -- event, not per instance) so a create/delete's redundant tm op is
@@ -182,7 +182,7 @@ end
 local function groupLane(group, laneId)
   local list = {}
   for vuid, g in pairs(group.events) do
-    if g.evType == 'note' and mirror.laneId(g) == laneId then
+    if g.evType == 'note' and groupsCore.laneId(g) == laneId then
       util.add(list, { g = g, ppq = g.ppq or 0,
                        endppq = (g.ppq or 0) + (g.dur or 0) })
     end
@@ -197,7 +197,7 @@ end
 -- the one thing project's clip-only pass cannot do.
 local function groupDeleteLegato(group, deletedG)
   if deletedG.evType ~= 'note' then return end
-  local list = groupLane(group, mirror.laneId(deletedG))
+  local list = groupLane(group, groupsCore.laneId(deletedG))
   local hole = { g = deletedG, ppq = deletedG.ppq or 0,
                  endppq = (deletedG.ppq or 0) + (deletedG.dur or 0) }
   util.add(list, hole)
@@ -218,7 +218,7 @@ local function groupPlaceLegato(group, vuid, created)
   local g = group.events[vuid]
   if not g or g.evType ~= 'note' then return end
   if created then g.dur = nil end
-  local list = groupLane(group, mirror.laneId(g))
+  local list = groupLane(group, groupsCore.laneId(g))
   -- An open last-in-lane tail is canonically `nil` dur, not `math.huge`:
   -- the infinite sentinel serialises to "inf" and Lua's tonumber can't
   -- round-trip it, so a persisted group would fail to reload.
@@ -243,7 +243,7 @@ local function persist()
     end
     uuids[groupId] = gi
   end
-  cm:set('take', 'mirrorGroups', { groups = groups, uuids = uuids })
+  cm:set('take', 'groups', { groups = groups, uuids = uuids })
 end
 
 -- Construction-time cm read runs before any take binds, so it is empty;
@@ -251,7 +251,7 @@ end
 -- restored groups are inert and nextGroupId stays 1, clobbering the
 -- persisted group on the next markGroup.
 local function rehydrate()
-  local b = cm:get('mirrorGroups') or {}
+  local b = cm:get('groups') or {}
   groups      = b.groups or {}
   proj        = {}
   locByUuid   = {}
@@ -261,7 +261,7 @@ local function rehydrate()
     if groupId >= nextGroupId then nextGroupId = groupId + 1 end
     local gu = uuids[groupId] or {}
     for instId, instance in pairs(group.instances) do
-      local desired = mirror.project(group, instance, takeLen())
+      local desired = groupsCore.project(group, instance, takeLen())
       local p       = projOf(groupId, instId)
       for vuid, uuid in pairs(gu[instId] or {}) do
         local evt = tm:byUuid(uuid)
@@ -287,7 +287,7 @@ local function nextKey(map)
 end
 
 -- Locate (groupId, instId, vuid) by uuid -- the durable identity; a
--- table mirm holds is valid only within one rebuild window.
+-- table gm holds is valid only within one rebuild window.
 local function classify(evt)
   local loc = evt.uuid and locByUuid[evt.uuid]
   if not loc then return end
@@ -315,7 +315,7 @@ end
 -- helpers (revive, sibling absorb) match on.
 local function sameSlot(a, b)
   return a.ppq == b.ppq and a.chanDelta == b.chanDelta
-         and mirror.streamId(a) == mirror.streamId(b)
+         and groupsCore.streamId(a) == groupsCore.streamId(b)
 end
 
 -- A global-mode create on a slot this instance locally deleted: the group
@@ -351,7 +351,7 @@ local function absorbSiblingOverrides(group, vuid, actingInstId, created)
             a[vuid] = a[vuid] or {}
             for field, val in pairs(addG) do
               if field ~= 'evType' and g[field] ~= val then
-                a[vuid][field] = mirror.deriveAssign(g, field, val)
+                a[vuid][field] = groupsCore.deriveAssign(g, field, val)
               end
             end
             instance.adds[addVuid] = nil   -- reproject del's the stale concrete
@@ -360,7 +360,7 @@ local function absorbSiblingOverrides(group, vuid, actingInstId, created)
       elseif instance.assigns[vuid] and not instance.deletes[vuid] then
         local nv = group.nextVuid
         group.nextVuid = nv + 1
-        instance.adds[nv]      = mirror.resolve(g, instance.assigns[vuid])
+        instance.adds[nv]      = groupsCore.resolve(g, instance.assigns[vuid])
         instance.assigns[vuid] = nil
       end
     end
@@ -372,7 +372,7 @@ end
 local function classifyCreate(evt)
   for groupId, group in pairs(groups) do
     for instId, instance in pairs(group.instances) do
-      if mirror.inRect(group.rect,
+      if groupsCore.inRect(group.rect,
                        evt.ppq  - instance.anchor.ppq,
                        evt.chan - instance.anchor.chan,
                        { evType = evt.evType, key = keyOf(evt) }) then
@@ -388,7 +388,7 @@ local function conformVuids(desired)
   local last = {}                       -- laneId -> { ppq, vuid }
   for vuid, g in pairs(desired) do
     if g.evType == 'note' then
-      local lane = mirror.laneId(g)
+      local lane = groupsCore.laneId(g)
       local l    = last[lane]
       if not l or g.ppq > l.ppq or (g.ppq == l.ppq and vuid > l.vuid) then
         last[lane] = { ppq = g.ppq, vuid = vuid }
@@ -467,7 +467,7 @@ end
 --          { rect.ppq, rect.chanLo }; proj points at the passed events.
 --          Returns the new groupId, or (nil, reason) if the region
 --          collides with a live group (disjoint-region invariant).
-function mirm:markGroup(events, rect)
+function gm:markGroup(events, rect)
   if regionConflict(rect, { ppq = rect.ppq, chan = rect.chanLo }) then
     return nil, 'overlaps an existing mirror group'
   end
@@ -487,11 +487,11 @@ function mirm:markGroup(events, rect)
                       instances = { [1] = freshInstance(anchor) } }
 
   -- The adopted take is canonical geometry; only the realisation flag is
-  -- mirm's to add. Without this seed-time sweep instance 1's last-in-lane
+  -- gm's to add. Without this seed-time sweep instance 1's last-in-lane
   -- tail stays unconformed until some later edit reprojects it, so the
   -- conform-tail rebuild pass can't clip a pattern-length tail and a note
   -- dropped inside it (the first duplicate copy) is lane-bumped.
-  local desired = mirror.project(groups[groupId], groups[groupId].instances[1], takeLen())
+  local desired = groupsCore.project(groups[groupId], groups[groupId].instances[1], takeLen())
   conformSweep(groupId, 1, conformVuids(desired))
   return groupId
 end
@@ -502,7 +502,7 @@ end
 --          clone of the group at `anchor`. Returns instId, or
 --          (nil, reason) if the projection is invalid or the placement
 --          collides with a live group (disjoint-region invariant).
-function mirm:newInstance(groupId, anchor)
+function gm:newInstance(groupId, anchor)
   local group = groups[groupId]
   for _, g in pairs(group.events) do
     local e = toInstance(g, anchor)
@@ -517,7 +517,7 @@ function mirm:newInstance(groupId, anchor)
   local instance = freshInstance(anchor)
   group.instances[instId] = instance
   local p       = projOf(groupId, instId)
-  local desired = mirror.project(group, instance, takeLen())
+  local desired = groupsCore.project(group, instance, takeLen())
   local cset    = conformVuids(desired)
   for vuid, g in pairs(desired) do
     local e = toInstance(g, anchor)
@@ -531,14 +531,14 @@ function mirm:newInstance(groupId, anchor)
 end
 
 ----- Active group (dupeClip-idiom selector; the command layer owns the
------  clear-on-other-command lifetime, mirm only the pointer)
+-----  clear-on-other-command lifetime, gm only the pointer)
 
-function mirm:activeGroup() return activeGroup end
-function mirm:clearActive() activeGroup = nil end
+function gm:activeGroup() return activeGroup end
+function gm:clearActive() activeGroup = nil end
 
 --contract: case 1 -- seed a group from the selection, no copy. The new
 --          group becomes active.
-function mirm:mark(events, rect)
+function gm:mark(events, rect)
   local groupId, why = self:markGroup(events, rect)
   if not groupId then return nil, why end
   activeGroup = groupId
@@ -548,7 +548,7 @@ end
 --contract: active live -> case 3, drop one more copy at `anchor` (returns
 --          instId). No active -> case 2, seed the group AND its first copy
 --          (returns groupId, instId); the group becomes active.
-function mirm:stamp(events, rect, anchor)
+function gm:stamp(events, rect, anchor)
   if activeGroup then
     return self:newInstance(activeGroup, anchor)
   end
@@ -565,7 +565,7 @@ end
 --          but NEVER reads the shared active pointer -- the caller's
 --          token is the sole continuation state (stamp's activeGroup
 --          fallback belongs to mark/paste, not the cascade).
-function mirm:duplicateInto(groupId, events, rect, anchor)
+function gm:duplicateInto(groupId, events, rect, anchor)
   if not (groupId and groups[groupId]) then
     groupId = self:markGroup(events, rect)
     if not groupId then return end
@@ -575,14 +575,14 @@ function mirm:duplicateInto(groupId, events, rect, anchor)
   return groupId
 end
 
-function mirm:setLocalMode(on) localMode = not not on end
-function mirm:localMode()     return localMode end
+function gm:setLocalMode(on) localMode = not not on end
+function gm:localMode()     return localMode end
 
-function mirm:stateOf(uuid)
+function gm:stateOf(uuid)
   local loc = locByUuid[uuid]
   if not loc then return end
   local group = groups[loc.groupId]
-  local _, _, states = mirror.project(group, group.instances[loc.instId], takeLen())
+  local _, _, states = groupsCore.project(group, group.instances[loc.instId], takeLen())
   return states[loc.vuid]
 end
 
@@ -590,7 +590,7 @@ end
 -- rect it projects, its anchor, and whether its group is active. No new
 -- mutable state; rect/anchor are by reference (render reads, never
 -- mutates).
-function mirm:eachInstance()
+function gm:eachInstance()
   local out = {}
   for groupId, group in pairs(groups) do
     for instId, inst in pairs(group.instances) do
@@ -609,7 +609,7 @@ local function reproject(groupId)
   local group = groups[groupId]
   propagating = true
   for instId, instance in pairs(group.instances) do
-    local desired = mirror.project(group, instance, takeLen())
+    local desired = groupsCore.project(group, instance, takeLen())
     local cset    = conformVuids(desired)
     local instProj = projOf(groupId, instId)
     -- tv is mirror-unaware: a user edit can mutate a projected concrete
@@ -623,7 +623,7 @@ local function reproject(groupId)
         rec.groupEvt = toGroup(rec.evt, instance.anchor)
       end
     end
-    for _, op in ipairs(mirror.reconcile(desired, currentOf(instProj))) do
+    for _, op in ipairs(groupsCore.reconcile(desired, currentOf(instProj))) do
       local vuidProj = instProj[op.vuid]
       -- userOwned suppresses only the redundant tm op a user
       -- create/delete already staged (carrier reuse / no second
@@ -659,7 +659,7 @@ local function reproject(groupId)
   propagating = false
 end
 
--- conform is a per-instance realisation marker mirm itself stages (seed
+-- conform is a per-instance realisation marker gm itself stages (seed
 -- sweep, reproject); it is never a logical user edit and never enters the
 -- group frame. A conform-only assign reaching applyEdit -- e.g. the seed
 -- sweep's assign surfacing in the next preflush -- must pass straight
@@ -679,7 +679,7 @@ local function localAmend(instance, vuid, group, update)
   if groupEvt then
     instance.assigns[vuid] = instance.assigns[vuid] or {}
     for field, val in pairs(updToGroup(update, instance.anchor, groupEvt)) do
-      instance.assigns[vuid][field] = mirror.deriveAssign(groupEvt, field, val)
+      instance.assigns[vuid][field] = groupsCore.deriveAssign(groupEvt, field, val)
     end
   else
     local addEvt = instance.adds[vuid]
@@ -718,7 +718,7 @@ do
     -- override at vuid, a further edit there stays local and never
     -- propagates -- in localMode by definition, in global mode because a
     -- declared divergence is an intent to differ (clear it to rejoin the
-    -- group). See docs/mirrorManager.md "Override transitions".
+    -- group). See docs/groupManager.md "Override transitions".
     local onOv = not isCreate and (instance.adds[vuid] ~= nil
                   or instance.assigns[vuid] ~= nil
                   or instance.deletes[vuid] == true)
@@ -785,8 +785,8 @@ do
     for _, o in ipairs(deletes) do applyEdit(o.evt, nil)      end
     -- newInstance stages its projection adds, but the commit flush fires
     -- later (after `propagating` has cleared), so they reappear here as
-    -- mirm's own echo -- skip them. A genuine user create is never staged
-    -- by mirm.
+    -- gm's own echo -- skip them. A genuine user create is never staged
+    -- by gm.
     for _, o in ipairs(adds) do
       if selfStaged[o.evt] then selfStaged[o.evt] = nil
       else applyEdit(o.evt, o.evt) end
@@ -825,4 +825,4 @@ tm:subscribe('rebuild', function(takeChanged)
   end
 end)
 
-return mirm
+return gm
