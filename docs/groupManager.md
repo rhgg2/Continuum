@@ -3,7 +3,7 @@
 A group is a region; an instance is one concrete placement of it. Every
 instance's events are a *pure replay* of the shared group pattern plus
 that instance's own overrides — recomputed from scratch on every flush,
-never diffed forward. gm wraps the pure `mirror` core with the anchor
+never diffed forward. gm wraps the pure `groups` core with the anchor
 maths between the group frame and the instance frame, and rides tm's
 flush seam.
 
@@ -26,7 +26,7 @@ Three mechanisms enforce that:
   is transferred into the group frame through the instance anchor, then
   tv's legato rule is replayed within the group's *own* pristine event
   set. `group.events` only ever holds the canonical pattern.
-- **Per-flush re-derivation.** `mirror.project` clones the group and
+- **Per-flush re-derivation.** `groups.project` clones the group and
   replays the instance's deletes/adds/assigns, resolving geometry from
   scratch. A terminal set, order-independent — not an incremental patch.
 - **Origin round-trip.** `reproject` re-drives *every* instance's
@@ -46,7 +46,7 @@ suppressed both writebacks, so neither edit reached the other.
 ## The two-layer conform split
 
 Tail clipping happens in two places, and neither subsumes the other.
-`mirror.project` clips to `patternLen` — a hard bound so a note-off
+`groups.project` clips to `patternLen` — a hard bound so a note-off
 never runs past the take (REAPER would physically extend it). project
 sees one instance's projection, so the *realised* next note may belong
 to another instance and is not in `desired` by construction; it cannot
@@ -84,15 +84,17 @@ would churn the canonical group geometry.
 
 The region is per-channel — `rect.streams` is keyed `[chanOffset][streamId]`,
 so `streamId` there is correctly channel-free; the offset is its own
-dimension. But geometry *inside* the group frame — `mirror.project`'s
+dimension. But geometry *inside* the group frame — `groups.project`'s
 slot-dedup, its legato chains, `conformVuids`, `groupLane` — resolves per
 lane, and a lane lives in one channel. Keying those by `streamId` alone
 (`evType:key`) collapsed two channels at the same lane and onset into one
 slot: the lower-vuid (leftmost) note claimed it, the other was conflicted
 out of `desired` and never projected, so only the leftmost channel of a
-multi-channel group mirrored. `mirror.laneId` (`chanDelta` + `streamId`) is
+multi-channel group mirrored. `groups.laneId` (`chanDelta` + `streamId`) is
 the group-frame lane identity those passes key by; `streamId` stays the
-channel-free region-membership key.
+channel-free region-membership key — `evType:key`, never a column
+position, because inserting a cc reindexes neighbouring columns, so an
+index-based region would not survive a column insert or reorder.
 
 ## Regions are disjoint
 
@@ -104,7 +106,7 @@ typed event with no prior identity is adopted by `classifyCreate`,
 which walks `pairs(groups)` and takes the first containing region — so
 in an overlap *which* group claims the note, and therefore which
 siblings it mirrors into, is unspecified and can change between
-rebuilds. And `mirror.project`'s slot-dedup and `conformVuids` resolve
+rebuilds. And `groups.project`'s slot-dedup and `conformVuids` resolve
 within one group; two overlapping instances each project a note-on
 into the same slot with no cross-group dedup and each conform pass
 blind to the other's tail — the cross-identity leak the replay model
@@ -129,7 +131,7 @@ newInstance's projection adds, which commit on a later flush.
 `reconcile` compares `desired` against the projection *shadow*
 (`rec.groupEvt`, what reproject last wrote), not the live concrete —
 cheap, and the two agree as long as only gm drives concretes. But tv
-is mirror-unaware: deleting a note legato-grows its lane predecessor's
+is group-unaware: deleting a note legato-grows its lane predecessor's
 *concrete* in the same flush, and when that predecessor's group
 geometry is unchanged (it was already clipped to that onset — the note
 *identity* at the slot changed, not its position) the shadow still
@@ -161,7 +163,7 @@ group and *other* instances stay untouched.
 A locally deleted event still lives in `group.events`; the delete only
 shadows it for this instance. So a global-mode create on that slot is
 not a new event — `classifyCreate` would otherwise allocate a fresh
-vuid coincident with the still-alive original, which `mirror.project`'s
+vuid coincident with the still-alive original, which `groups.project`'s
 slot-dedup then silently collapses, losing one. Instead `revivableVuid`
 matches the typed event against the instance's `deletes` by stream +
 onset; on a hit the create clears `instance.deletes[vuid]` and
@@ -218,7 +220,7 @@ visible event:
   `groupPlaceLegato` so the sibling diverges from the post-legato
   geometry.
 - sibling assign-ov + a peer global **delete** of that event →
-  *demote* to a materialised add-ov: `mirror.resolve(groupEvt,
+  *demote* to a materialised add-ov: `groups.resolve(groupEvt,
   assign)` snapshots group-base + delta *before* the group event is
   cleared (an assign delta is meaningless without its base). A sibling
   that locally hides the slot has no visible event — skipped.
@@ -230,7 +232,7 @@ the two mechanisms never double-handle a slot.
 
 ## `conflicted` is not UI-reachable
 
-`mirror.project`'s slot-dedup marks the loser at a colliding
+`groups.project`'s slot-dedup marks the loser at a colliding
 `(chanDelta, streamId, ppq)` slot `conflicted`. No UI gesture
 constructs that collision. A group event projects into *every*
 instance, so the first create's concrete pre-occupies that cell
