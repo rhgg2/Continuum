@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1508  sha=19451fd  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1513  sha=4a6bfb0  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
@@ -57,12 +57,12 @@
       @invariant  lane strip renders only cc/pb/at columns; other types show as tinted background
   @state LANE_ROW_MIN = 3  @ 418
   @state LANE_ROW_MAX = 32  @ 419
-  @state tracker = cmgr:scope('tracker')  @ 1216
-  @state MIRROR_PASSTHROUGH = {  @ 1284
-  @state MIRROR_KEEP = {}  @ 1294
-  @state DUP_KEEP = { mirrorDuplicate = true, selectClear = true,  @ 1309
-  @state mirrorScope = cmgr:scope('mirror')  @ 1317
-  @state tp = {}  @ 1426
+  @state tracker = cmgr:scope('tracker')  @ 1221
+  @state MIRROR_PASSTHROUGH = {  @ 1289
+  @state MIRROR_KEEP = {}  @ 1299
+  @state DUP_KEEP = { mirrorDuplicate = true, selectClear = true,  @ 1314
+  @state mirrorScope = cmgr:scope('mirror')  @ 1322
+  @state tp = {}  @ 1431
 
 # Private functions
   @fn print(...)  @ 22
@@ -106,34 +106,34 @@
   @fn handleMouse()  @ 893
       @contract  returns immediately if laneConsumed is set; lane strip wins gestures over the tracker grid
       @contract  right-click on channel-label row toggles mute; click on label rows selects channel/column; body click moves cursor and arms drag
-  @fn handleKeys(kr)  @ 1029
+  @fn handleKeys(kr)  @ 1034
       -- Page-internal raw input. commandHeld gates a held command key from
       -- leaking into the char queue (different auto-repeat timing).
       @contract  no-op when modalState or chrome.pickerIsActive() is set, or when any ImGui item is active (focused InputText etc.)
       @contract  drains the entire input-queue per frame; reads ec/grid fresh each iteration since editEvent may rebuild
-  @fn drawModal()  @ 1076
+  @fn drawModal()  @ 1081
       @contract  callback runs under pcall; an exception is logged to the REAPER console and does not abort the frame
   -- Modal-driven commands
-  @fn openPrompt(title, prompt, callback)  @ 1190
-  @fn openConfirm(title, callback, prompt)  @ 1195
-  @fn scopedAction(title, base)  @ 1208
+  @fn openPrompt(title, prompt, callback)  @ 1195
+  @fn openConfirm(title, callback, prompt)  @ 1200
+  @fn scopedAction(title, base)  @ 1213
       -- Naming convention <base>Selection / <base>All is the contract.
       @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
   -- Mirror regions
-  @fn exitMirror()  @ 1330
+  @fn exitMirror()  @ 1335
 
 # Public API (tp:*)
-  @api tp:renderToolbarBits(_)  @ 1428
-  @api tp:renderBody(_, w, h, dispatch)  @ 1434
+  @api tp:renderToolbarBits(_)  @ 1433
+  @api tp:renderBody(_, w, h, dispatch)  @ 1439
       @contract  calls computeLayout twice — lane-strip drag callbacks may flush tv.grid.cols and clear col.x; second pass repopulates layout for drawTracker
-  @api tp:renderStatusBar(_)  @ 1468
-  @api tp:renderFloating(_)  @ 1472
-  @api tp:bind(t)  @ 1475
+  @api tp:renderStatusBar(_)  @ 1473
+  @api tp:renderFloating(_)  @ 1477
+  @api tp:bind(t)  @ 1480
       @contract  bind/unbind drive tm:bindTake — the page owns the cm/mm context swap for its own stack
-  @api tp:unbind()  @ 1476
-  @api tp:reloadFromReaper()  @ 1479
+  @api tp:unbind()  @ 1481
+  @api tp:reloadFromReaper()  @ 1484
       @contract  pass-through for coord's external-mutation watcher; re-reads the bound take without changing it
-  @api tp:focusState()  @ 1492
+  @api tp:focusState()  @ 1497
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo
@@ -144,9 +144,9 @@
       --   transiently, but bound commands should still fire. Anything that
       --   genuinely needs the keys (a focused InputText, an active slider,
       --   a held button) shows up as IsAnyItemActive.
-  @api tp:handleInput()  @ 1503
-  @api tp:save()  @ 1504
-  @api tp:load()  @ 1505
+  @api tp:handleInput()  @ 1508
+  @api tp:save()  @ 1509
+  @api tp:load()  @ 1510
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

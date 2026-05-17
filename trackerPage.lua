@@ -948,11 +948,15 @@ local function handleMouse()
     local last = grid.cols[col]
     if fracX >= last.x + last.width + 1 then return end
 
-    -- A qualified click is a new selection/position; mouse bypasses
-    -- cmgr's DUP_KEEP sweep, so end the duplicate cascade here.
-    mirrorDupState = nil
+    -- Mouse bypasses cmgr's DUP_KEEP sweep, so the cascade lifetime is
+    -- enforced here by hand. A plain reposition click is the mouse
+    -- equivalent of a cursor move -- DUP_KEEP keeps the run across it,
+    -- so don't clear here. Only a genuine RE-selection ends the run:
+    -- label-row select, shift-extend (both below) and drag (in the
+    -- dragging branch). Mirrors cursor-key behaviour.
 
     if charY < 0 then
+      mirrorDupState = nil   -- label-row select is a re-selection
       if charY == -HEADER then ec:selectChannel(last.midiChan)
       else ec:selectColumn(col) end
       return
@@ -961,6 +965,7 @@ local function handleMouse()
     local shift = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
 
     if shift then
+      mirrorDupState = nil   -- shift-extend is a re-selection
       ec:extendTo(scrollRow + charY, col, stop)
     else
       ec:selClear()
