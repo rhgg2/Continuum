@@ -1,4 +1,4 @@
-@module mirror  src=mirror.lua  loc=238  sha=86b3850  mode=namespace
+@module mirror  src=mirror.lua  loc=241  sha=25e9642  mode=namespace
 
 # Invariants & contracts
   @invariant  evType is identity, never merged or overridden; changing type is delete+create upstream
@@ -25,7 +25,7 @@
 # Module-level constants
   @const mirror = {}  @ 54
   @const resolve = mirror.resolve  @ 66
-  @const TINT = { overridden = 'mirror.overridden',  @ 226
+  @const OVERLAY = { overridden = 'mirror.overridden.tint',  @ 228
 
 # Public API (mirror.*)
   @api mirror.resolve(groupEvt, assign)  @ 60
@@ -61,5 +61,6 @@
       --           is selected for it. rect.ppq is the absolute placement origin
       --           (cascade/render); it is NOT the membership time origin -- that
       --           is the anchor, already subtracted out, mirroring chanOffset.
-  @api mirror.tintKey(state, active)  @ 228
-  @api mirror.outlineKey(state)  @ 233
+  @api mirror.tintKey(state)  @ 230
+  @api mirror.regionKey(colour, kind)  @ 233
+  @api mirror.outlineKey(state, colour)  @ 236

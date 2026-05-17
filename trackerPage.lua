@@ -606,11 +606,14 @@ local function drawTracker()
   local drawList = ImGui.GetWindowDrawList(ctx)
 
   -- Mirror regions. Before tails/cells so per-cell text reads over the
-  -- wash. Membership authority is mirm:stateOf (the projection), not
-  -- geometry; the projected rect only sizes the bracket. Active group:
-  -- 2px outline + cursor-containment gutter slot. Inactive: focus-faded
-  -- wash, 1px bracket.
+  -- wash. A per-group hue washes the whole instance area (membership =
+  -- selected streams x time span); overridden/conflicted cells
+  -- overpaint a louder state colour. A plain instance has no border;
+  -- the active group, or any conflicted one, gets a hue outline. The
+  -- x=-1 gutter slot lights only when the cursor is actually inside the
+  -- instance, not merely on one of its rows.
   local logPerRow = tv:logPerRow()
+  local cursorPpq = cursorRow * logPerRow
   for _, inst in ipairs(mirm:eachInstance()) do
     local rect  = inst.rect
     local ppqLo = inst.anchor.ppq
@@ -618,7 +621,8 @@ local function drawTracker()
     local yLo = math.max(math.floor(ppqLo / logPerRow + 0.5) - scrollRow, 0)
     local yHi = math.min(math.floor(ppqHi / logPerRow + 0.5) - scrollRow, gridHeight)
     if yHi > yLo then
-      local xMin, xMax, conflicted
+      local baseTint = mirror.regionKey(inst.colour, 'tint')
+      local xMin, xMax, conflicted, cursorIn
       for x, col in ipairs(grid.cols) do
         if col.x then
           local off, sid = tv:streamRefAt(x, inst.anchor.chan)
@@ -626,27 +630,30 @@ local function drawTracker()
             local x1, x2 = col.x, col.x + col.width - 1
             xMin = math.min(xMin or x1, x1)
             xMax = math.max(xMax or x2, x2)
+            draw:box(x1, x2, yLo, yHi - 1, baseTint)
             for y = yLo, yHi - 1 do
               local evt = col.cells and col.cells[scrollRow + y]
               local st  = evt and evt.uuid and mirm:stateOf(evt.uuid)
               if st == 'conflicted' then conflicted = true end
-              local key = st and mirror.tintKey(st, inst.active)
+              local key = st and mirror.tintKey(st)
               if key then draw:box(x1, x2, y, y, key) end
+            end
+            if x == cursorCol and cursorPpq >= ppqLo and cursorPpq < ppqHi then
+              cursorIn = true
             end
           end
         end
       end
       if xMin then
-        local outCol = chrome.colour(
-          mirror.outlineKey(conflicted and 'conflicted' or 'synced'))
-        ImGui.DrawList_AddRect(drawList,
-          gridOriginX + xMin * gridX,       gridOriginY + yLo * gridY,
-          gridOriginX + (xMax + 1) * gridX, gridOriginY + yHi * gridY,
-          outCol, 0, 0, inst.active and 2 or 1)
-        local cur = cursorRow * logPerRow
-        if cur >= ppqLo and cur < ppqHi then
-          draw:box(-1, -1, yLo, yHi - 1, 'mirror.synced.tint')
+        if inst.active or conflicted then
+          local outCol = chrome.colour(mirror.outlineKey(
+            conflicted and 'conflicted' or 'synced', inst.colour))
+          ImGui.DrawList_AddRect(drawList,
+            gridOriginX + xMin * gridX,       gridOriginY + yLo * gridY,
+            gridOriginX + (xMax + 1) * gridX, gridOriginY + yHi * gridY,
+            outCol, 0, 0, inst.active and 2 or 1)
         end
+        if cursorIn then draw:box(-1, -1, yLo, yHi - 1, baseTint) end
       end
     end
   end

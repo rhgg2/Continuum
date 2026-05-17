@@ -1,4 +1,4 @@
-@module mirrorManager  src=mirrorManager.lua  loc=827  sha=25e9642  mode=chunk
+@module mirrorManager  src=mirrorManager.lua  loc=828  sha=ab90614  mode=chunk
 @deps tm, cm
 
 # Invariants & contracts
@@ -131,14 +131,14 @@
   -- Active group (dupeClip-idiom selector; the command layer owns the
   -- clear-on-other-command lifetime, mirm only the pointer)
   -- SEAM
-  @fn reproject(groupId)  @ 607
-  @fn conformOnlyUpdate(evt, update)  @ 666
+  @fn reproject(groupId)  @ 608
+  @fn conformOnlyUpdate(evt, update)  @ 667
       -- conform is a per-instance realisation marker mirm itself stages (seed
       -- sweep, reproject); it is never a logical user edit and never enters the
       -- group frame. A conform-only assign reaching applyEdit -- e.g. the seed
       -- sweep's assign surfacing in the next preflush -- must pass straight
       -- through, not retrigger classify/groupPlaceLegato/reproject.
-  @fn localAmend(instance, vuid, group, update)  @ 676
+  @fn localAmend(instance, vuid, group, update)  @ 677
       -- Local edit of an existing override -- shared by localMode and the
       -- on-ov-in-global path. An assign'd / synced group event accrues a
       -- sticky per-instance assign; a local-only add is edited in place.

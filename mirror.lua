@@ -219,20 +219,23 @@ function mirror.inRect(rect, ppq, chanOffset, evt)
   return sel ~= nil and sel[mirror.streamId(evt)] == true
 end
 
--- View mapping: a projection state -> chrome colour name. Colocated
--- with the state vocabulary so the two never drift. synced has no
--- per-cell wash (nil); a non-active (focus-faded) instance gets the
--- dimmer `.fade`. conflicted is the only loud outline.
-local TINT = { overridden = 'mirror.overridden',
-               conflicted = 'mirror.conflicted' }
-function mirror.tintKey(state, active)
-  local base = TINT[state]
-  if not base then return nil end
-  return base .. (active and '.tint' or '.fade')
+-- View mapping: projection state -> chrome colour name. Colocated with
+-- the state vocabulary so the two never drift. A per-group hue
+-- (`region.<colour>`) carries group identity as the membership wash;
+-- tintKey is only the per-cell deviation overlay painted on top, so
+-- synced (the common case) has none. conflicted forces a loud outline
+-- regardless of which group it belongs to.
+local OVERLAY = { overridden = 'mirror.overridden.tint',
+                  conflicted = 'mirror.conflicted.tint' }
+function mirror.tintKey(state)
+  return OVERLAY[state]
 end
-function mirror.outlineKey(state)
-  return (state == 'conflicted' and 'mirror.conflicted' or 'mirror.synced')
-         .. '.outline'
+function mirror.regionKey(colour, kind)
+  return 'region.' .. colour .. '.' .. kind
+end
+function mirror.outlineKey(state, colour)
+  if state == 'conflicted' then return 'mirror.conflicted.outline' end
+  return mirror.regionKey(colour, 'outline')
 end
 
 return mirror

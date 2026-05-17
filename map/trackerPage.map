@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1513  sha=4a6bfb0  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1520  sha=c1da075  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
@@ -57,12 +57,12 @@
       @invariant  lane strip renders only cc/pb/at columns; other types show as tinted background
   @state LANE_ROW_MIN = 3  @ 418
   @state LANE_ROW_MAX = 32  @ 419
-  @state tracker = cmgr:scope('tracker')  @ 1221
-  @state MIRROR_PASSTHROUGH = {  @ 1289
-  @state MIRROR_KEEP = {}  @ 1299
-  @state DUP_KEEP = { mirrorDuplicate = true, selectClear = true,  @ 1314
-  @state mirrorScope = cmgr:scope('mirror')  @ 1322
-  @state tp = {}  @ 1431
+  @state tracker = cmgr:scope('tracker')  @ 1228
+  @state MIRROR_PASSTHROUGH = {  @ 1296
+  @state MIRROR_KEEP = {}  @ 1306
+  @state DUP_KEEP = { mirrorDuplicate = true, selectClear = true,  @ 1321
+  @state mirrorScope = cmgr:scope('mirror')  @ 1329
+  @state tp = {}  @ 1438
 
 # Private functions
   @fn print(...)  @ 22
@@ -99,41 +99,41 @@
       @contract  publishes laneConsumed=true if the curve editor claimed input this frame; handleMouse short-circuits on it
   @fn drawTracker()  @ 537
       @contract  assumes computeLayout ran this frame; reads chanX/chanW/chanOrder/totalWidth and gridOriginX/Y
-  @fn drawStatusBar()  @ 773
+  @fn drawStatusBar()  @ 780
   -- Input
-  @fn nearestStop(mouseX, mouseY)  @ 873
+  @fn nearestStop(mouseX, mouseY)  @ 880
       @contract  returns (col, stop, fracX) or (nil, nil, fracX); fracX kept separate so callers distinguish "past last col" from "inside col N"
-  @fn handleMouse()  @ 893
+  @fn handleMouse()  @ 900
       @contract  returns immediately if laneConsumed is set; lane strip wins gestures over the tracker grid
       @contract  right-click on channel-label row toggles mute; click on label rows selects channel/column; body click moves cursor and arms drag
-  @fn handleKeys(kr)  @ 1034
+  @fn handleKeys(kr)  @ 1041
       -- Page-internal raw input. commandHeld gates a held command key from
       -- leaking into the char queue (different auto-repeat timing).
       @contract  no-op when modalState or chrome.pickerIsActive() is set, or when any ImGui item is active (focused InputText etc.)
       @contract  drains the entire input-queue per frame; reads ec/grid fresh each iteration since editEvent may rebuild
-  @fn drawModal()  @ 1081
+  @fn drawModal()  @ 1088
       @contract  callback runs under pcall; an exception is logged to the REAPER console and does not abort the frame
   -- Modal-driven commands
-  @fn openPrompt(title, prompt, callback)  @ 1195
-  @fn openConfirm(title, callback, prompt)  @ 1200
-  @fn scopedAction(title, base)  @ 1213
+  @fn openPrompt(title, prompt, callback)  @ 1202
+  @fn openConfirm(title, callback, prompt)  @ 1207
+  @fn scopedAction(title, base)  @ 1220
       -- Naming convention <base>Selection / <base>All is the contract.
       @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
   -- Mirror regions
-  @fn exitMirror()  @ 1335
+  @fn exitMirror()  @ 1342
 
 # Public API (tp:*)
-  @api tp:renderToolbarBits(_)  @ 1433
-  @api tp:renderBody(_, w, h, dispatch)  @ 1439
+  @api tp:renderToolbarBits(_)  @ 1440
+  @api tp:renderBody(_, w, h, dispatch)  @ 1446
       @contract  calls computeLayout twice — lane-strip drag callbacks may flush tv.grid.cols and clear col.x; second pass repopulates layout for drawTracker
-  @api tp:renderStatusBar(_)  @ 1473
-  @api tp:renderFloating(_)  @ 1477
-  @api tp:bind(t)  @ 1480
+  @api tp:renderStatusBar(_)  @ 1480
+  @api tp:renderFloating(_)  @ 1484
+  @api tp:bind(t)  @ 1487
       @contract  bind/unbind drive tm:bindTake — the page owns the cm/mm context swap for its own stack
-  @api tp:unbind()  @ 1481
-  @api tp:reloadFromReaper()  @ 1484
+  @api tp:unbind()  @ 1488
+  @api tp:reloadFromReaper()  @ 1491
       @contract  pass-through for coord's external-mutation watcher; re-reads the bound take without changing it
-  @api tp:focusState()  @ 1497
+  @api tp:focusState()  @ 1504
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo
@@ -144,9 +144,9 @@
       --   transiently, but bound commands should still fire. Anything that
       --   genuinely needs the keys (a focused InputText, an active slider,
       --   a held button) shows up as IsAnyItemActive.
-  @api tp:handleInput()  @ 1508
-  @api tp:save()  @ 1509
-  @api tp:load()  @ 1510
+  @api tp:handleInput()  @ 1515
+  @api tp:save()  @ 1516
+  @api tp:load()  @ 1517
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

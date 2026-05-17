@@ -243,3 +243,20 @@ path — a hand-edited or corrupt persisted blob, `rehydrate` after an
 external take mutation, a future programmatic API. `conflicted` is the
 defensive guarantee that `project` stays a deterministic total
 function under that input; it is dead with respect to the editor.
+
+## Region rendering
+
+The page draws each instance as a wash over its whole membership area
+(selected streams × time span), not only its occupied cells: a region
+is a place, present even where empty. Hue is per group —
+`(groupId-1) % 8 + 1` into the shared 8-colour `palette.region`, stable
+because `groupId` is stable and persisted, so deleting a group never
+recolours the survivors. Colour carries group *identity*; the per-cell
+`overridden`/`conflicted` overlay is a louder coat on top — divergence
+read against the group's own hue, never instead of it (hence its
+heavier alpha, so it stays legible over the wash). A plain instance has
+no border: the shade alone says "member". Only the active group, or any
+conflicted one (an alarm that must always show), gets the hue outline.
+The `x=-1` gutter slot is a containment affordance — it lights only
+when the cursor is genuinely inside the instance (a member stream at
+the cursor column ∧ ppq within the span), not merely sharing a row.

@@ -171,9 +171,13 @@ for i = 1, 8 do
   util.add(declarations, { 'colour.region.' .. i .. '.outline', base })
 end
 
+-- overridden is a per-cell deviation overlay painted over the group
+-- hue, so it carries a heavier alpha than a plain membership wash to
+-- read clearly against it.
 for _, st in ipairs{ 'synced', 'overridden', 'conflicted', 'local' } do
-  local base = 'palette.mirror.' .. st
-  util.add(declarations, { 'colour.mirror.' .. st .. '.tint',    { base, 0.22 } })
+  local base  = 'palette.mirror.' .. st
+  local alpha = st == 'overridden' and 0.55 or 0.22
+  util.add(declarations, { 'colour.mirror.' .. st .. '.tint',    { base, alpha } })
   util.add(declarations, { 'colour.mirror.' .. st .. '.fade',    { base, 0.08 } })
   util.add(declarations, { 'colour.mirror.' .. st .. '.outline', base })
 end

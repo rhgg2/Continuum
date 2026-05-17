@@ -43,21 +43,20 @@ local rect = { ppq = 0, dur = 960, chanLo = 1,
 
 return {
   {
-    name = 'tintKey: synced has no wash; states split active vs fade',
+    name = 'tintKey: synced has no overlay; deviation states map to .tint',
     run = function()
-      t.eq(mirror.tintKey('synced', true),       nil)
-      t.eq(mirror.tintKey('overridden', true),  'mirror.overridden.tint')
-      t.eq(mirror.tintKey('overridden', false), 'mirror.overridden.fade')
-      t.eq(mirror.tintKey('conflicted', true),  'mirror.conflicted.tint')
-      t.eq(mirror.tintKey('conflicted', false), 'mirror.conflicted.fade')
+      t.eq(mirror.tintKey('synced'),     nil)
+      t.eq(mirror.tintKey('overridden'), 'mirror.overridden.tint')
+      t.eq(mirror.tintKey('conflicted'), 'mirror.conflicted.tint')
     end,
   },
   {
-    name = 'outlineKey: conflicted is loud, all else the synced border',
+    name = 'regionKey/outlineKey: group hue by default, conflicted is loud',
     run = function()
-      t.eq(mirror.outlineKey('conflicted'), 'mirror.conflicted.outline')
-      t.eq(mirror.outlineKey('synced'),     'mirror.synced.outline')
-      t.eq(mirror.outlineKey('overridden'), 'mirror.synced.outline')
+      t.eq(mirror.regionKey(3, 'tint'),    'region.3.tint')
+      t.eq(mirror.regionKey(1, 'outline'), 'region.1.outline')
+      t.eq(mirror.outlineKey('conflicted', 5), 'mirror.conflicted.outline')
+      t.eq(mirror.outlineKey('synced', 5),     'region.5.outline')
     end,
   },
   {
@@ -73,6 +72,7 @@ return {
       t.eq(all[1].anchor.ppq, 0,    'instance 1 at the region origin')
       t.eq(all[2].anchor.ppq, 960,  'instance 2 at the stamp ppq')
       t.truthy(all[1].active and all[2].active, 'mark made the group active')
+      t.eq(all[1].colour, 1, 'group 1 -> region hue 1')
     end,
   },
   {

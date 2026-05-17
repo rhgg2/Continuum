@@ -596,6 +596,7 @@ function mirm:eachInstance()
     for instId, inst in pairs(group.instances) do
       out[#out + 1] = { groupId = groupId, instId = instId,
                         rect = group.rect, anchor = inst.anchor,
+                        colour = (groupId - 1) % 8 + 1,
                         active = groupId == activeGroup }
     end
   end
