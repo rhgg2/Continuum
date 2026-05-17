@@ -28,10 +28,17 @@ local cmgr        = deps.cmgr
 local getRPBar    = deps.rowPerBar
 local logPerRow   = deps.logPerRow   or function () return 1 end
 local moveHook    = deps.moveHook    or function () end
+local groupBridge = deps.groupBridge
 
 local cursorRow, cursorCol, cursorStop = 0, 1, 1
 local hBlockScope, vBlockScope         = 0, 0
 local sel, selAnchor
+
+-- Region authoring mode: a modal cmgr overlay. ec owns only the
+-- push/pop lifecycle + this ephemeral nav cursor (NOT persisted); the
+-- group store/projection/persistence is gm's.
+local regionCursor                       -- { groupId, instId } | nil
+local regionScope, regionPushed
 
 ----- Position
 
@@ -270,6 +277,46 @@ local moveCol, moveChannel do
   end
 end
 
+----- Regions (group authoring mode)
+
+-- All group geometry/persistence is gm's, reached through the bridge
+-- (trackerView's grid<->logical surface). ec never touches gm directly.
+local function gmgr() return groupBridge and groupBridge.gm end
+
+-- gm:eachInstance iterates pairs(); sort to a stable (groupId, instId)
+-- order so next/prev cycle deterministically.
+local function orderedInstances()
+  local gm = gmgr(); if not gm then return {} end
+  local list = gm:eachInstance()
+  table.sort(list, function(a, b)
+    if a.groupId ~= b.groupId then return a.groupId < b.groupId end
+    return a.instId < b.instId
+  end)
+  return list
+end
+
+local function cursorIndex(list)
+  if not regionCursor then return end
+  for i, e in ipairs(list) do
+    if e.groupId == regionCursor.groupId
+       and e.instId == regionCursor.instId then return i end
+  end
+end
+
+local function currentEntry()
+  for _, e in ipairs(orderedInstances()) do
+    if regionCursor and e.groupId == regionCursor.groupId
+       and e.instId == regionCursor.instId then return e end
+  end
+end
+
+-- Install the instance's cells as the live selection (caret at its
+-- top-left, via the bridge) and point the region cursor at it.
+local function snapToInstance(entry)
+  regionCursor = { groupId = entry.groupId, instId = entry.instId }
+  groupBridge.instanceSelection(entry.groupId, entry.instId)
+end
+
 ---------- PUBLIC
 
 local ec = {}
@@ -298,6 +345,7 @@ end
 function ec:reset()
   cursorRow, cursorCol, cursorStop = 0, 1, 1
   selClear()
+  regionCursor = nil
 end
 
 ----- Part & Region
@@ -409,6 +457,127 @@ do
   function ec:selectColumn(col)
     local c = grid.cols[col]
     if c then selectSpan(1, col, 1, #c.stopPos) end
+  end
+end
+
+----- Region mode
+
+function ec:isInRegionMode() return regionPushed == true end
+function ec:regionCursor()   return regionCursor end
+
+-- Nav verbs fall through the modal overlay to tracker/global below;
+-- everything else is gated so a stray edit can't escape region mode.
+local REGION_PASSTHROUGH = {
+  cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
+  pageUp=true, pageDown=true, goTop=true, goBottom=true, goLeft=true, goRight=true,
+  colLeft=true, colRight=true, channelLeft=true, channelRight=true,
+  selectUp=true, selectDown=true, selectLeft=true, selectRight=true, selectClear=true,
+  cycleBlock=true, cycleVBlock=true, swapBlockEnds=true,
+}
+
+do
+  local function exitMode()
+    cmgr:pop(regionScope)
+    regionPushed = false
+    regionCursor = nil
+  end
+
+  --contract: idempotent while pushed; seeds the nav cursor from gm's
+  --          active group's first instance if one is set.
+  function ec:enterRegionMode()
+    if regionPushed then return end
+    cmgr:push(regionScope)
+    regionPushed = true
+    local gm = gmgr()
+    local active = gm and gm:activeGroup()
+    if not active then return end
+    for _, e in ipairs(orderedInstances()) do
+      if e.groupId == active then
+        regionCursor = { groupId = e.groupId, instId = e.instId }
+        return
+      end
+    end
+  end
+
+  local function newFromSelection()
+    local rect = groupBridge.selectionAsRect()
+    if not rect then return end
+    local groupId = gmgr():mark(groupBridge.eventsInRect(rect), rect)
+    if not groupId then return end
+    regionCursor = { groupId = groupId, instId = 1 }
+    selClear()
+  end
+
+  local function newInstance()
+    if not regionCursor then return end
+    local anchor = groupBridge.cursorAnchor()
+    if not anchor then return end
+    local instId = gmgr():newInstance(regionCursor.groupId, anchor)
+    if instId then regionCursor.instId = instId end
+  end
+
+  local function dropInstance()
+    if not regionCursor then return end
+    local at = cursorIndex(orderedInstances()) or 1
+    gmgr():deleteInstance(regionCursor.groupId, regionCursor.instId)
+    local after = orderedInstances()
+    local pick  = after[math.min(at, #after)]
+    regionCursor = pick and { groupId = pick.groupId, instId = pick.instId }
+                        or nil
+  end
+
+  local function cycle(step)
+    local list = orderedInstances()
+    if #list == 0 then return end
+    local at = cursorIndex(list) or (step > 0 and 0 or #list + 1)
+    snapToInstance(list[util.clamp(at + step, 1, #list)])
+  end
+
+  local function moveBy(rowDelta)
+    local cur = currentEntry()
+    if not cur then return end
+    local anchor = { ppq  = cur.anchor.ppq + rowDelta * logPerRow(),
+                     chan = cur.anchor.chan }
+    if gmgr():moveInstance(regionCursor.groupId, regionCursor.instId, anchor) then
+      cursorRow = cursorRow + rowDelta
+      clampPos(); moveHook()
+    end
+  end
+
+  local function resizeBy(edits)
+    if not regionCursor then return end
+    gmgr():resizeGroup(regionCursor.groupId, regionCursor.instId, edits)
+  end
+
+  local function commit()
+    if regionCursor then
+      groupBridge.instanceSelection(regionCursor.groupId, regionCursor.instId)
+    end
+    exitMode()
+  end
+
+  -- Built once at instantiate; trackerPage binds keys on this same
+  -- scope later (shared registry). Without cmgr region mode errors
+  -- loudly if entered -- intentional, like the tracker scope.
+  if cmgr then
+    regionScope = cmgr:scope('region')
+    regionScope.modal       = true
+    regionScope.passthrough = REGION_PASSTHROUGH
+    regionScope:registerAll{
+      regionBail         = exitMode,
+      regionCommit       = commit,
+      regionNew          = newFromSelection,
+      regionInstance     = newInstance,
+      regionDrop         = dropInstance,
+      regionNext         = function() cycle( 1) end,
+      regionPrev         = function() cycle(-1) end,
+      regionNudgeForward = function() moveBy( 1) end,
+      regionNudgeBack    = function() moveBy(-1) end,
+      regionGrow         = function() resizeBy{ endDelta   =  logPerRow() } end,
+      regionShrink       = function() resizeBy{ endDelta   = -logPerRow() } end,
+      regionGrowStart    = function() resizeBy{ startDelta = -logPerRow() } end,
+      regionShrinkStart  = function() resizeBy{ startDelta =  logPerRow() } end,
+    }
   end
 end
 

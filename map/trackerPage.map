@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1520  sha=c1da075  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1520  sha=b27ba28  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
@@ -17,15 +17,15 @@
   @require util = 'util'  @ 8
   @require timing = 'timing'  @ 9
   @require tuning = 'tuning'  @ 10
-  @require mirror = 'mirror'  @ 11
+  @require groups = 'groups'  @ 11
   @require ImGui = 'imgui'  @ 17
 
 # Constructed sub-instances
   @construct mm          = util.instantiate('midiManager')  @ 26
   @construct tm          = util.instantiate('trackerManager')  @ 27
-  @construct tv          = util.instantiate('trackerView')  @ 28
-  @construct seqMgr      = util.instantiate('sequenceManager')  @ 29
-  @construct mirm        = util.instantiate('mirrorManager')  @ 30
+  @construct gm          = util.instantiate('groupManager')  @ 28
+  @construct tv          = util.instantiate('trackerView')  @ 29
+  @construct seqMgr      = util.instantiate('sequenceManager')  @ 30
   @construct swingEditor = util.instantiate('swingEditor')  @ 69
   @construct curveEd     = util.instantiate('curveEditor')  @ 71
 

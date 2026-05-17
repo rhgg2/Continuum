@@ -52,6 +52,28 @@ Every position-changing path ends with `clampPos()` followed by
 listeners stale; hook without clamp can announce an off-grid position.
 The view layer subscribes to drive scroll-into-view.
 
+## Region mode
+
+Region authoring is a modal `cmgr` overlay ec pushes, not a page-local
+flag. The reason is feedback: the old page-local scope had no live
+render and no mode affordance, so the entry chord either no-op'd or
+dropped the user into an invisible modal. A real scope plus
+`isInRegionMode()` makes the state observable to the renderer.
+
+ec owns only the lifecycle and an **ephemeral** nav cursor
+(`{groupId, instId}`, never persisted). The group store, projection,
+conform and persistence stay entirely in the group engine. ec reaches
+it through an injected bridge — never `tm`, never gm internals — so
+the editing cursor keeps its single invariant (caret/selection only,
+no MIDI state) even while driving group geometry. The bridge is
+trackerView's grid↔logical surface; faking it in tests fakes tv, not
+ec's verbs.
+
+A pure re-anchor is invisible to the group engine's drift-driven
+reprojection (the group frame is anchor-invariant), so `regionNudge`
+goes through the engine's explicit move verb, not a reproject. Why
+that is lives in the group engine's doc, not here.
+
 ## Clipboard: single vs multi
 
 The mode is decided at copy by the resolved selection: one column

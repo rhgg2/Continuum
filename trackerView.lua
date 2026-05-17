@@ -18,7 +18,7 @@ local timing  = require 'timing'
 local tuning  = require 'tuning'
 local legato  = require 'legato'
 
-local tm, cm, cmgr = (...).tm, (...).cm, (...).cmgr
+local tm, cm, cmgr, gm = (...).tm, (...).cm, (...).cmgr, (...).gm
 
 local function print(...)
   return util.print(...)
@@ -1855,6 +1855,17 @@ function tv:streamRefAt(colIx, chanLo)
   return col.midiChan - chanLo, streamIdOf(col)
 end
 
+-- Install the grid selection for one group instance: its anchor + the
+-- group rect -> selectRegionAt (the duplicate-cascade selector). The ec
+-- region-mode bridge speaks this; ec never reads gm geometry directly.
+function tv:instanceSelection(groupId, instId)
+  for _, e in ipairs(gm:eachInstance()) do
+    if e.groupId == groupId and e.instId == instId then
+      return selectRegionAt(e.anchor, e.rect)
+    end
+  end
+end
+
 ----- Non-command callbacks from trackerPage
 
 function tv:setGridSize(w, h)
@@ -2162,6 +2173,16 @@ end
 
 ----- Factory load
 
+-- The grid<->logical surface ec region mode reaches gm through. ec
+-- never touches gm geometry or tm directly -- everything via these.
+local groupBridge = {
+  gm                = gm,
+  eventsInRect      = function(rect) return tv:eventsInRect(rect) end,
+  selectionAsRect   = function()     return tv:selectionAsRect() end,
+  cursorAnchor      = function()     return tv:cursorAnchor() end,
+  instanceSelection = function(g, i) return tv:instanceSelection(g, i) end,
+}
+
 ec = util.instantiate('editCursor', {
   grid        = grid,
   cm          = cm,
@@ -2169,6 +2190,7 @@ ec = util.instantiate('editCursor', {
   rowPerBar   = function() return rowPerBar end,
   logPerRow   = function() return logPerRowFor(currentRpb()) end,
   moveHook    = followViewport,
+  groupBridge = groupBridge,
 })
 
 clipboard = util.instantiate('clipboard', {

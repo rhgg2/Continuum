@@ -77,6 +77,7 @@ local specs = {
   'slot_store_spec',
   'fs_spec',
   'edit_cursor_spec',
+  'ec_regions_spec',
   'tv_dup_cascade_spec',
   'clipboard_spec',
   'vm_transient_frame_spec',

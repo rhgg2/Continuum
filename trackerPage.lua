@@ -25,9 +25,9 @@ end
 
 local mm     = util.instantiate('midiManager',    { take = nil })
 local tm     = util.instantiate('trackerManager', { mm = mm, cm = cm })
-local tv     = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr })
+local gm     = util.instantiate('groupManager', { tm = tm, cm = cm })
+local tv     = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr, gm = gm })
 local seqMgr = util.instantiate('sequenceManager', { tm = tm, cm = cm })
-local gm   = util.instantiate('groupManager', { tm = tm, cm = cm })
 
 ---------- PRIVATE
 
