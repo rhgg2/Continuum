@@ -227,3 +227,19 @@ Neither sweep unlinks the stale concrete; the touched group reprojects
 and `reconcile` deletes the now-absent vuid and adds the new one. The
 acting instance is the on-ov-local path's job and is skipped here, so
 the two mechanisms never double-handle a slot.
+
+## `conflicted` is not UI-reachable
+
+`mirror.project`'s slot-dedup marks the loser at a colliding
+`(chanDelta, streamId, ppq)` slot `conflicted`. No UI gesture
+constructs that collision. A group event projects into *every*
+instance, so the first create's concrete pre-occupies that cell
+everywhere; a second edit there classifies to the existing uuid (an
+on-ov/assign), never a fresh `classifyCreate`. If the instance locally
+deleted the event so the cell *is* empty, `revivableVuid` revives the
+shadowed vuid in place rather than allocating a coincident second one.
+Two distinct group vuids at one slot therefore only arise off the UI
+path — a hand-edited or corrupt persisted blob, `rehydrate` after an
+external take mutation, a future programmatic API. `conflicted` is the
+defensive guarantee that `project` stays a deterministic total
+function under that input; it is dead with respect to the editor.
