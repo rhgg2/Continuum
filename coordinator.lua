@@ -26,6 +26,8 @@ local quitting      = false
 local samplerTrack  = nil
 --contract: owns currentTake — refreshTakeFromReaper polls GetSelectedMediaItem→GetActiveTake→TakeIsMIDI, mutates currentTake only on a real MIDI take that differs (sticky on nothing-selected or non-MIDI), and returns true so the caller can rebind
 local currentTake   = nil
+--contract: external-mutation watcher — captured at end of every tracker-active frame; top-of-tick diff triggers tp:reloadFromReaper. Cleared on take swap (bind path is the reload). Nil disables the diff check (one-frame grace after swap/first activation).
+local lastTakeHash  = nil
 
 ----- Keyboard router
 
@@ -54,6 +56,7 @@ end
 
 --shape: dispatchResult = { consumed: bool, commandHeld: bool }
 --contract: returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
+--contract: state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
 --contract: first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
 --contract: while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
 local function dispatchKeys(state, cmgr, ctx)
@@ -65,7 +68,8 @@ local function dispatchKeys(state, cmgr, ctx)
     return { consumed = true, commandHeld = false }
   end
   local commandHeld = false
-  for _, keymap in ipairs(cmgr:keychain()) do
+  local keychain = state.pageSuppressed and { cmgr:rootKeymap() } or cmgr:keychain()
+  for _, keymap in ipairs(keychain) do
     for command, keys in pairs(keymap) do
       for _, spec in ipairs(keys) do
         local key, mods = cmgr:keySpec(spec, ImGui)
@@ -105,10 +109,26 @@ cmgr:scope('tracker'):register('loadSampleAtCurrentSlot', function()
   end
 end)
 
+local function takeMidiHash()
+  if not currentTake then return nil end
+  local ok, h = reaper.MIDI_GetHash(currentTake, false)
+  return ok and h or nil
+end
+
 --contract: tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
+--contract: tracker-active branch — take swap takes priority (clears the watcher so the post-bind end-of-frame capture is the new baseline); otherwise a hash diff signals an external mutation (REAPER Ctrl-Z, external script) and we reload the bound take
 local function tick()
-  if active == 'tracker' and refreshTakeFromReaper() and pages.tracker then
-    pages.tracker:bind(currentTake)
+  if active == 'tracker' and pages.tracker then
+    if refreshTakeFromReaper() then
+      pages.tracker:bind(currentTake)
+      lastTakeHash = nil
+    elseif lastTakeHash then
+      local h = takeMidiHash()
+      if h and h ~= lastTakeHash then
+        pages.tracker:reloadFromReaper()
+        lastTakeHash = takeMidiHash()
+      end
+    end
   end
   if pages.sample and currentTake then pages.sample:tick(currentTake) end
 end
@@ -217,6 +237,12 @@ local function frame()
   ImGui.PopStyleColor(ctx, 5)
   ImGui.PopFont(ctx)
 
+  -- End-of-frame baseline for the external-mutation watcher: by now any
+  -- user-triggered mutation this frame has flushed through mm:modify, so the
+  -- hash reflects truth. Next frame's tick() diffs against this value; a
+  -- difference can only have come from outside Continuum.
+  if active == 'tracker' and currentTake then lastTakeHash = takeMidiHash() end
+
   if open and not quitting then reaper.defer(frame) end
 end
 
@@ -262,6 +288,13 @@ end
 
 function coord:togglePage()
   self:setActive(active == 'tracker' and 'sample' or 'tracker')
+end
+
+--contract: invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
+function coord:reloadAfterExternalMutation()
+  if active == 'tracker' and pages.tracker and currentTake then
+    pages.tracker:reloadFromReaper()
+  end
 end
 
 function coord:quit()   quitting = true end

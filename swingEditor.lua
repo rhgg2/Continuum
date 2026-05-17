@@ -1,15 +1,15 @@
 -- See docs/swingEditor.md for the model.
 -- @noindex
 
---invariant: editor owns no swing data; composite lives in cm:get('swings')[name] and is read fresh each frame via swingRead
---invariant: all writes route through swingWrite (idempotent → vm:setSwingComposite); commit() drives cross-take reswing on widget release
---invariant: state == nil iff editor is closed; open() is a no-op when already open; Esc / Begin-close clears state
---invariant: snapshot is captured at open() and never mutated; Reset writes a deepClone of it
+--invariant: editor owns no swing data; composite resolves via cm:get('swings', {mergeTiers=true})[name] (defaults ∪ global ∪ project) and is read fresh each frame via swingRead
+--invariant: all writes route through swingWrite (idempotent → tv:setSwingComposite); commit() drives cross-take reswing on widget release
+--invariant: state == nil iff editor is closed; open() is a no-op when already open; Esc / close-button clears state
+--invariant: snapshot is captured at open() (and on swing-switch via the library picker) and never mutated; Reset writes a deepClone of it
 --invariant: shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
 --invariant: on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
 --invariant: slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider
 --invariant: atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
---shape: state = { name, snapshot, createBuf, createError, rpb, wild, lastCount, lastW }  -- composite is NOT cached here
+--shape: state = { name, snapshot, createBuf, createError, rpb, wild }  -- composite is NOT cached here
 --shape: PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
 local util   = require 'util'
 local timing = require 'timing'
@@ -41,7 +41,7 @@ local SWING_ERR     = 0xff6060ff
 local SWING_MARK    = 0x000000b0
 local SWING_SOFT_QN = 0.15
 
-local vm, cm, chrome, ctx, seqMgr = (...).vm, (...).cm, (...).chrome, (...).ctx, (...).seqMgr
+local tv, cm, chrome, ctx, seqMgr = (...).tv, (...).cm, (...).chrome, (...).ctx, (...).seqMgr
 
 local state = nil
 
@@ -51,7 +51,7 @@ local function commit()
 end
 
 local function meterQN()
-  local num, denom = vm:timeSig()
+  local num, denom = tv:timeSig()
   local beat = 4 / denom
   return beat, num * beat
 end
@@ -169,7 +169,7 @@ local function drawSwingGrid(composite, periodQN, rpb, w, h, shadeMeter)
 end
 
 local function swingRead()
-  return cm:get('swings')[state.name]
+  return cm:get('swings', { mergeTiers = true })[state.name]
 end
 
 -- Tolerant accessor: bare {} and {factors={}} both mean identity. Read-only;
@@ -198,10 +198,10 @@ local function compositesEqual(a, b)
   return true
 end
 
---contract: sole write path; idempotent on equal composites; the active-take refresh happens via vm:setSwingComposite's configChanged broadcast (granular per-channel stale-mark + tm:rebuild)
+--contract: sole write path; idempotent on equal composites; the active-take refresh happens via tv:setSwingComposite's configChanged broadcast (granular per-channel stale-mark + tm:rebuild)
 local function swingWrite(composite)
   if compositesEqual(swingRead() or {}, composite) then return end
-  vm:setSwingComposite(state.name, composite)
+  tv:setSwingComposite(state.name, composite)
 end
 
 -- Editable clone with a guaranteed factors[] array, so write paths can
@@ -342,167 +342,240 @@ local function drawFactorRow(i, f, availW)
   ImGui.PopID(ctx)
 end
 
--- Generous estimate — better to show a few px of empty space than to
--- clip the add-factor button at the bottom.
-local function idealSwingHeight(nFactors)
-  return 130         -- chrome: padding + title row + 2 separators + composite preview + add button
-       + nFactors * 72  -- controls row + factor preview + separator + spacing
+----- Tier-aware library writes
+
+local function projectSwings() return cm:getAt('project', 'swings') or {} end
+local function globalSwings()  return cm:getAt('global',  'swings') or {} end
+
+--contract: copies the currently-edited composite into the global tier (defaults are immutable; project copy survives untouched, still shadowing it)
+local function saveGlobal(name)
+  if not name then return end
+  local g = globalSwings()
+  g[name] = util.deepClone(swingRead())
+  cm:set('global', 'swings', g)
 end
 
-local function idealSwingWidth() return 560 end
+local function deleteFromTier(level, name)
+  local key = level == 'global' and globalSwings() or projectSwings()
+  if key[name] == nil then return end
+  key[name] = nil
+  cm:set(level, 'swings', key)
+end
 
-local function draw()
+-- Switch the edited swing without closing the editor. Re-captures the
+-- snapshot so Reset/dirty-check stay coherent.
+local function switchTo(name)
+  state.name        = name
+  state.snapshot    = name and swingRead() or nil
+  state.createBuf   = ''
+  state.createError = nil
+end
+
+-- Library row sits above the edit/create body. Picker + name input flow
+-- coexist: the picker offers existing swings (including the implicit
+-- "Off" → enter create mode); +New is just an alias for picking Off and
+-- focusing the name field.
+local function drawLibraryRow(closeOnClick, rowW)
+  local cur          = state.name
+  local inProject    = cur and projectSwings()[cur] ~= nil
+  local inGlobal     = cur and globalSwings()[cur]  ~= nil
+  local hasGlobalCopy = inGlobal
+
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 10, 3)
+  chrome.drawPicker {
+    kind        = 'swingLib',
+    heading     = 'Swing',
+    buttonLabel = cur or 'Off',
+    minWidth    = 160,
+    items       = chrome.libPicker('swings', cur, { id = true }),
+    onPick      = switchTo,
+  }
+
+  ImGui.SameLine(ctx, 0, 12)
+  if ImGui.Button(ctx, '+ New')                        then switchTo(nil) end
+
+  ImGui.SameLine(ctx, 0, 12)
+  chrome.verticalSeparator()
+  ImGui.SameLine(ctx, 0, 12)
+
+  -- Save globally: only meaningful if there's a project-tier copy to
+  -- promote. Default-only entries can't be saved as "global" because
+  -- they already are (in spirit) — a re-save just clones the default
+  -- into the cache, which is pointless until edited.
+  chrome.disabledIf(not inProject, function()
+    if ImGui.Button(ctx, 'Save globally') then saveGlobal(cur) end
+  end)
+
+  ImGui.SameLine(ctx, 0, 8)
+  local usage = (cur and inProject) and seqMgr:takesUsing(cur) or {}
+  chrome.disabledIf(not inProject or #usage > 0, function()
+    if ImGui.Button(ctx, 'Delete from project') then
+      deleteFromTier('project', cur)
+      switchTo(hasGlobalCopy and cur or nil)
+    end
+  end)
+
+  ImGui.SameLine(ctx, 0, 8)
+  chrome.disabledIf(not inGlobal, function()
+    if ImGui.Button(ctx, 'Delete globally') then
+      deleteFromTier('global', cur)
+      if not inProject then switchTo(nil) end
+    end
+  end)
+
+  -- Close button at the far right of the row. SetCursorPosX is
+  -- measured from the child's left edge; rowW is the child's full
+  -- width (no GetWindowContentRegionMax in ReaImGui).
+  ImGui.SameLine(ctx)
+  local closeLabel = 'Close (Esc)'
+  local tw  = ImGui.CalcTextSize(ctx, closeLabel)
+  local fpx = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+  ImGui.SetCursorPosX(ctx, rowW - (tw + fpx * 2) - 4)
+  if ImGui.Button(ctx, closeLabel) then closeOnClick() end
+  ImGui.PopStyleVar(ctx, 1)
+end
+
+local function drawCreateForm()
+  ImGui.Text(ctx, 'Create a swing or pick one above.')
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, 'Name:')
+  ImGui.SameLine(ctx)
+  ImGui.SetNextItemWidth(ctx, 240)
+  local rv, buf = ImGui.InputText(ctx, '##newname', state.createBuf,
+    ImGui.InputTextFlags_EnterReturnsTrue)
+  state.createBuf = buf
+  ImGui.SameLine(ctx)
+  local confirm = rv or ImGui.Button(ctx, 'Create')
+  if confirm then
+    local name = buf and buf:match('^%s*(.-)%s*$')
+    local lib  = cm:get('swings', { mergeTiers = true })
+    if not name or name == '' then
+      state.createError = 'Name required.'
+    elseif lib[name] then
+      state.createError = 'Name already in use.'
+    else
+      tv:setSwingComposite(name, {})
+      tv:setSwingSlot(name)
+      state.name        = name
+      state.snapshot    = {}
+      state.createBuf   = ''
+      state.createError = nil
+    end
+  end
+  if state and state.createError then
+    ImGui.TextColored(ctx, SWING_ERR, state.createError)
+  end
+end
+
+local function drawEditBody(composite, n)
+  -- Tools row: Reset / Rows-per-qn / Wild / Composite-phase
+  -- (10, 3) FramePadding, vertical separators between groups, compact
+  -- checkbox, manual ▾ on the rpb picker. Padding push is scoped to
+  -- the row; the factor strip below uses the inherited padding.
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 10, 3)
+
+  local dirty = not compositesEqual(composite, state.snapshot)
+  chrome.disabledIf(not dirty, function()
+    if ImGui.Button(ctx, 'Reset') then
+      swingWrite(util.deepClone(state.snapshot) or {})
+      commit()
+    end
+  end)
+
+  ImGui.SameLine(ctx, 0, 12)
+  chrome.verticalSeparator()
+  ImGui.SameLine(ctx, 0, 12)
+
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, 'Rows/qn:')
+  ImGui.SameLine(ctx, 0, 6)
+  local rpbBtn = tostring(state.rpb) .. ' \xe2\x96\xbe##rpb'
+  if ImGui.Button(ctx, rpbBtn) then ImGui.OpenPopup(ctx, '##rpb_popup') end
+  local btnX = ImGui.GetItemRectMin(ctx)
+  local _, btnY = ImGui.GetItemRectMax(ctx)
+  ImGui.SetNextWindowPos(ctx, btnX, btnY, ImGui.Cond_Appearing)
+  if ImGui.BeginPopup(ctx, '##rpb_popup', ImGui.WindowFlags_NoNav) then
+    for _, v in ipairs(RPB_CHOICES) do
+      if ImGui.Selectable(ctx, tostring(v), v == state.rpb) then
+        state.rpb = v
+      end
+    end
+    ImGui.EndPopup(ctx)
+  end
+
+  ImGui.SameLine(ctx, 0, 12)
+  chrome.verticalSeparator()
+  ImGui.SameLine(ctx, 0, 12)
+
+  local rvW, newWild = chrome.checkbox('  Wild', state.wild or false)
+  if rvW then state.wild = newWild end
+
+  -- Composite phase: bounded by the LCM tile of all factors. Greyed
+  -- when there are no factors (no lattice to slide).
+  ImGui.SameLine(ctx, 0, 12)
+  chrome.verticalSeparator()
+  ImGui.SameLine(ctx, 0, 12)
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, 'Phase \xcf\x86:')
+  ImGui.SameLine(ctx, 0, 6)
+  chrome.disabledIf(n == 0, function()
+    local lcmQN  = timing.compositePeriodQN(composite)
+    local pCur   = (composite.phase and timing.periodQN(composite.phase) or 0) % lcmQN
+    ImGui.SetNextItemWidth(ctx, 140)
+    local rvCp, newCp = ImGui.SliderDouble(ctx, '##cphase', pCur, 0, lcmQN, '%.3f qn')
+    if rvCp then
+      local wrapped = newCp % lcmQN
+      local c = cloneForEdit()
+      c.phase = (wrapped == 0) and nil or wrapped
+      swingWrite(c)
+    end
+    if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
+  end)
+
+  ImGui.PopStyleVar(ctx, 1)
+  ImGui.Separator(ctx)
+  local availW = ImGui.GetContentRegionAvail(ctx)
+  local _, qpb = meterQN()
+  local lcmQN  = timing.compositePeriodQN(composite)
+  local nBars  = math.max(1, math.ceil(lcmQN / qpb - 1e-9))
+  drawSwingGrid(composite, nBars * qpb, state.rpb, availW, 32, true)
+  ImGui.Separator(ctx)
+
+  for i, f in ipairs(readFactors(composite)) do
+    drawFactorRow(i, f, availW)
+  end
+
+  if ImGui.Button(ctx, '+ add factor') then addFactor() end
+end
+
+-- Body-region draw. Caller (trackerPage) hands us its body rect via
+-- renderBody; we run inside a child window so the chrome palette
+-- (editor.bg + toolbar button/text colours + separator tint) takes
+-- the place of the tracker grid's background. Mirrors the styling
+-- that pushChromeWindow gave the editor in its old floating-window
+-- form, swapping Col_WindowBg for Col_ChildBg.
+local function draw(w, h)
   if not state then return end
+
+  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then state = nil; return end
 
   local composite = (state.name and swingRead()) or {}
   local n = #readFactors(composite)
 
-  -- First-time default; then max height = viewport so auto-grow
-  -- stays on-screen. Width is user-resizable thereafter.
-  local _, vpH = ImGui.Viewport_GetSize(ImGui.GetMainViewport(ctx))
-  ImGui.SetNextWindowSizeConstraints(ctx, 400, 120, 9999, vpH)
-  ImGui.SetNextWindowSize(ctx, 560, 420, ImGui.Cond_FirstUseEver)
-
-  local idealW = idealSwingWidth()
-  if state.lastCount ~= n or (state.lastW or 560) < idealW then
-    local w = math.max(state.lastW or 560, idealW)
-    local h = math.min(idealSwingHeight(n), vpH)
-    ImGui.SetNextWindowSize(ctx, w, h, ImGui.Cond_Always)
-    state.lastCount = n
-  end
-
-  chrome.pushChromeWindow()
-  local visible, open = ImGui.Begin(ctx, 'Swing', true,
-    ImGui.WindowFlags_NoDecoration | ImGui.WindowFlags_NoDocking)
-  if not open then state = nil end
-
-  if visible and state then
-    state.lastW = ImGui.GetWindowWidth(ctx)
-
-    if ImGui.IsWindowFocused(ctx) and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-      state = nil
-    end
-
-    if state and not state.name then
-      -- CREATE MODE
-      ImGui.Text(ctx, 'No swing slot is set.')
-      ImGui.Text(ctx, 'Name:')
-      ImGui.SameLine(ctx)
-      ImGui.SetNextItemWidth(ctx, 240)
-      local rv, buf = ImGui.InputText(ctx, '##newname', state.createBuf,
-        ImGui.InputTextFlags_EnterReturnsTrue)
-      state.createBuf = buf
-      ImGui.SameLine(ctx)
-      local confirm = rv or ImGui.Button(ctx, 'Create new swing')
-      if confirm then
-        local name = buf and buf:match('^%s*(.-)%s*$')
-        local lib  = cm:get('swings')
-        if not name or name == '' then
-          state.createError = 'Name required.'
-        elseif lib[name] then
-          state.createError = 'Name already in use.'
-        else
-          vm:setSwingComposite(name, {})
-          vm:setSwingSlot(name)
-          state.name        = name
-          state.snapshot    = {}
-          state.createBuf   = ''
-          state.createError = nil
-        end
-      end
-      if state and state.createError then
-        ImGui.TextColored(ctx, SWING_ERR, state.createError)
-      end
-    elseif state then
-      -- EDIT MODE — toolbar row mirrors the main toolbar's chrome:
-      -- (10, 3) FramePadding, vertical separators between groups,
-      -- compact checkbox, manual ▾ on the rpb picker (smaller than
-      -- ImGui.Combo's auto-arrow). Padding push is scoped to the row;
-      -- the factor strip below uses the inherited padding.
-      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 10, 3)
-
-      ImGui.AlignTextToFramePadding(ctx)
-      ImGui.Text(ctx, 'Editing: ' .. state.name)
-      ImGui.SameLine(ctx, 0, 12)
-      local dirty = not compositesEqual(composite, state.snapshot)
-      chrome.disabledIf(not dirty, function()
-        if ImGui.Button(ctx, 'Reset') then
-          swingWrite(util.deepClone(state.snapshot) or {})
-          commit()
-        end
-      end)
-
-      ImGui.SameLine(ctx, 0, 12)
-      chrome.verticalSeparator()
-      ImGui.SameLine(ctx, 0, 12)
-
-      ImGui.AlignTextToFramePadding(ctx)
-      ImGui.Text(ctx, 'Rows/qn:')
-      ImGui.SameLine(ctx, 0, 6)
-      -- Button + popup, mirroring chrome.drawPicker (manual ▾ glyph at
-      -- font size, smaller than ImGui.Combo's frame-tall arrow).
-      local rpbBtn = tostring(state.rpb) .. ' \xe2\x96\xbe##rpb'
-      if ImGui.Button(ctx, rpbBtn) then ImGui.OpenPopup(ctx, '##rpb_popup') end
-      local btnX = ImGui.GetItemRectMin(ctx)
-      local _, btnY = ImGui.GetItemRectMax(ctx)
-      ImGui.SetNextWindowPos(ctx, btnX, btnY, ImGui.Cond_Appearing)
-      if ImGui.BeginPopup(ctx, '##rpb_popup', ImGui.WindowFlags_NoNav) then
-        for _, v in ipairs(RPB_CHOICES) do
-          if ImGui.Selectable(ctx, tostring(v), v == state.rpb) then
-            state.rpb = v
-          end
-        end
-        ImGui.EndPopup(ctx)
-      end
-
-      ImGui.SameLine(ctx, 0, 12)
-      chrome.verticalSeparator()
-      ImGui.SameLine(ctx, 0, 12)
-
-      local rvW, newWild = chrome.checkbox('  Wild', state.wild or false)
-      if rvW then state.wild = newWild end
-
-      -- Composite phase: bounded by the LCM tile of all factors. Greyed
-      -- when there are no factors (no lattice to slide).
-      ImGui.SameLine(ctx, 0, 12)
-      chrome.verticalSeparator()
-      ImGui.SameLine(ctx, 0, 12)
-      ImGui.AlignTextToFramePadding(ctx)
-      ImGui.Text(ctx, 'Phase \xcf\x86:')
-      ImGui.SameLine(ctx, 0, 6)
-      chrome.disabledIf(n == 0, function()
-        local lcmQN  = timing.compositePeriodQN(composite)
-        local pCur   = (composite.phase and timing.periodQN(composite.phase) or 0) % lcmQN
-        ImGui.SetNextItemWidth(ctx, 140)
-        local rvCp, newCp = ImGui.SliderDouble(ctx, '##cphase', pCur, 0, lcmQN, '%.3f qn')
-        if rvCp then
-          local wrapped = newCp % lcmQN
-          local c = cloneForEdit()
-          c.phase = (wrapped == 0) and nil or wrapped
-          swingWrite(c)
-        end
-        if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
-      end)
-
-      ImGui.PopStyleVar(ctx, 1)
+  chrome.pushChromeStyles()
+  ImGui.PushStyleColor(ctx, ImGui.Col_Separator, chrome.colour('toolbar.buttonBorder'))
+  if ImGui.BeginChild(ctx, '##swingEditor', w, h) then
+    local function close() state = nil end
+    drawLibraryRow(close, w)
+    if state then
       ImGui.Separator(ctx)
-      local availW       = ImGui.GetContentRegionAvail(ctx)
-      local _, qpb       = meterQN()
-      local lcmQN        = timing.compositePeriodQN(composite)
-      local nBars        = math.max(1, math.ceil(lcmQN / qpb - 1e-9))
-      drawSwingGrid(composite, nBars * qpb,
-                    state.rpb, availW, 32, true)
-      ImGui.Separator(ctx)
-
-      for i, f in ipairs(readFactors(composite)) do
-        drawFactorRow(i, f, availW)
-      end
-
-      if ImGui.Button(ctx, '+ add factor') then addFactor() end
+      if not state.name then drawCreateForm()
+      else                   drawEditBody(composite, n) end
     end
   end
-  ImGui.End(ctx)
-  chrome.popChromeWindow()
+  ImGui.EndChild(ctx)
+  ImGui.PopStyleColor(ctx, 1)
+  chrome.popChromeStyles()
 end
 
 ----- Public
@@ -513,7 +586,7 @@ local self = {}
 function self:open()
   if state then return end
   local name = cm:get('swing')
-  local lib  = cm:get('swings')
+  local lib  = cm:get('swings', { mergeTiers = true })
   state = {
     name      = name,
     snapshot  = name and lib[name] or nil,
@@ -522,7 +595,9 @@ function self:open()
   }
 end
 
-function self:render() draw() end
+function self:render(w, h) draw(w, h) end
+
+function self:close() state = nil end
 
 function self:isOpen() return state ~= nil end
 

@@ -143,29 +143,6 @@ function M.atomTilePeriod(factor)
   return M.periodQN(factor.period) * M.atomMeta[factor.atom].pulsesPerCycle
 end
 
------ Composite registry
-
-M.presets = {
-  ['id']         = {},
-  ['classic-55'] = { factors = { { atom = 'classic', shift = 0.05, period = 1 } } },
-  ['classic-58'] = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } },
-  ['classic-62'] = { factors = { { atom = 'classic', shift = 0.12, period = 1 } } },
-  ['classic-67'] = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } },
-  -- Identity-shift = pure delay. shift × period_QN × ppqPerQN = PPQ offset
-  -- on the tile-interior; the boundary ramp absorbs the partial-tile
-  -- overhang at the take edges.
-  ['delay+15']   = { factors = { { atom = 'id', shift =  1/16, period = 1 } } },
-  ['delay+30']   = { factors = { { atom = 'id', shift =  1/8,  period = 1 } } },
-  ['delay-15']   = { factors = { { atom = 'id', shift = -1/16, period = 1 } } },
-  ['delay-30']   = { factors = { { atom = 'id', shift = -1/8,  period = 1 } } },
-}
-
---contract: sole resolution path; tm/vm never read presets. nil result means identity to callers
-function M.findShape(name, userLib)
-  if not name or not userLib then return nil end
-  return userLib[name]
-end
-
 --contract: bare {} treated as identity; either missing factors or empty factors with zero phase counts
 function M.isIdentity(composite)
   if not composite then return true end

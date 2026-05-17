@@ -49,7 +49,23 @@ local declarations = {
 
   -- table-valued
   { 'colSwing',        {}    },
-  { 'swings',          {}    },
+  -- The swings default is the system preset library: built-in
+  -- compositions visible in every project until either the global
+  -- tier (user-saved presets) or the project tier (project-local
+  -- swings) overlays them per-name. Read with mergeTiers=true to
+  -- get the union.
+  { 'swings',          {
+      ['id']         = {},
+      ['classic-55'] = { factors = { { atom = 'classic', shift = 0.05, period = 1 } } },
+      ['classic-58'] = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } },
+      ['classic-62'] = { factors = { { atom = 'classic', shift = 0.12, period = 1 } } },
+      ['classic-67'] = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } },
+      -- Identity-shift = pure delay.
+      ['delay+15']   = { factors = { { atom = 'id', shift =  1/16, period = 1 } } },
+      ['delay+30']   = { factors = { { atom = 'id', shift =  1/8,  period = 1 } } },
+      ['delay-15']   = { factors = { { atom = 'id', shift = -1/16, period = 1 } } },
+      ['delay-30']   = { factors = { { atom = 'id', shift = -1/8,  period = 1 } } },
+    } },
   { 'usedSwings',      {}    },
   { 'tempers',         {}    },
   { 'mutedChannels',   {}    },
@@ -57,6 +73,8 @@ local declarations = {
   { 'extraColumns',    {}    },
   { 'noteDelay',       {}    },
   { 'slotEntries',     {}    },
+  -- Mirror groups, persisted at the take tier. See docs/mirrorManager.md.
+  { 'mirrorGroups',    {}    },
 
   -- Atoms — parchment palette
   { 'palette.bg',        hex('#dad6c9') },  -- cream paper
@@ -115,6 +133,13 @@ local declarations = {
   { 'palette.region.6', hex('#4ea99c') },
   { 'palette.region.7', hex('#6ba35a') },
   { 'palette.region.8', hex('#a39342') },
+  -- Mirror-region state palette. tint = wash behind a synced/diverged
+  -- cell; fade = the same hue dimmed for a non-focused (inactive)
+  -- group; outline = the active group's border. Conflicted is loud.
+  { 'palette.mirror.synced',     hex('#4ea99c') },  -- calm teal
+  { 'palette.mirror.overridden', hex('#d2a52a') },  -- amber: locally diverged, coherent
+  { 'palette.mirror.conflicted', hex('#d83a3a') },  -- alarming red
+  { 'palette.mirror.local',      hex('#8a6bb1') },  -- violet: instance-only stream
   -- Lane strip (CC/PB/AT envelope visualiser above the tracker grid).
   { 'colour.laneAxis',         {'palette.inactive',   0.6 }       },
   { 'colour.laneRowDivider',   {'palette.inactive',   0.15}       },
@@ -144,6 +169,13 @@ for i = 1, 8 do
   local base = 'palette.region.' .. i
   util.add(declarations, { 'colour.region.' .. i .. '.tint',    { base, 0.22 } })
   util.add(declarations, { 'colour.region.' .. i .. '.outline', base })
+end
+
+for _, st in ipairs{ 'synced', 'overridden', 'conflicted', 'local' } do
+  local base = 'palette.mirror.' .. st
+  util.add(declarations, { 'colour.mirror.' .. st .. '.tint',    { base, 0.22 } })
+  util.add(declarations, { 'colour.mirror.' .. st .. '.fade',    { base, 0.08 } })
+  util.add(declarations, { 'colour.mirror.' .. st .. '.outline', base })
 end
 
 local declared, defaults = {}, {}
@@ -349,9 +381,30 @@ end
 
 ----- Reading
 
+-- Per-subkey union of a single key's tables across defaults→tiers,
+-- most-specific tier wins on name collision. Non-table contributions
+-- (including a scalar default) are skipped, so the result is always
+-- a table.
+local function mergedKey(key)
+  ensureCache()
+  local out = {}
+  local function overlay(src)
+    if type(src) == 'table' then
+      for k, v in pairs(src) do out[k] = v end
+    end
+  end
+  overlay(defaults[key])
+  for _, level in ipairs(levels) do
+    if cache[level] then overlay(cache[level][key]) end
+  end
+  return out
+end
+
 --contract: returns deep copy of merged value (defaults overlaid by all five tiers); raises on unknown key
-function cm:get(key)
+--contract: opts.mergeTiers=true switches to per-subkey union across defaults+tiers (most-specific wins on collision) — only meaningful for table-valued keys
+function cm:get(key, opts)
   checkKey(key)
+  if opts and opts.mergeTiers then return copy(mergedKey(key)) end
   return copy(mergedTable()[key])
 end
 

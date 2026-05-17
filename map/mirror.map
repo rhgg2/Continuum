@@ -1,0 +1,56 @@
+@module mirror  src=mirror.lua  loc=224  sha=untracked  mode=namespace
+
+# Invariants & contracts
+  @invariant  evType is identity, never merged or overridden; changing type is delete+create upstream
+  @invariant  the core is field-agnostic -- it merges every event key except evType and never interprets one
+  @invariant  an assign is sticky -- local value always wins; a drifted base only raises a conflict flag, it does not change the resolved value
+  @invariant  the region is the identity, not an event set; membership is the rect predicate (time span x per-channel streamId set), so streamId must be index-free (evType+key) and survive column insert/reorder
+  @contract  returns (desired, conflicts, states). desired[vuid] is a
+  @contract  region membership predicate. chanOffset = concrete chan minus
+
+# Shapes
+  @shape  group = { rect, events = { [vuid] = groupEvt } }
+  @shape  rect = { ppq, dur, chanLo, streams = { [chanOffset] = { [streamId]=true } } }  -- chanHi derived from max chanOffset
+  @shape  groupEvt = { evType, <scalar fields: chanDelta,key,ppq,dur,pitch,vel,detune,delay,val,shape,tension,muted...> }
+  @shape  instanceState = { assigns={[vuid]={[field]={base,value}}}, adds={[vuid]=groupEvt}, deletes={[vuid]=true} }
+  @shape  conflict = { [vuid] = { [field] = { base, group, value } } }
+  @shape  op = { op='add'|'del'|'set', vuid, [uuid], [groupEvt] }
+
+# Imports
+  @const util = 'util'  @ 51
+  @const legato = 'legato'  @ 52
+
+# Module-level constants
+  @const mirror = {}  @ 54
+  @const TINT = { overridden = 'mirror.overridden',  @ 212
+
+# Private functions
+  @fn resolve(groupEvt, assign)  @ 60
+      -- Group event + sticky local assign -> resolved event. Local always
+      -- wins; a drifted base is NOT a conflict (the only conflict is two
+      -- events at one onset, decided in project). State is 'synced' with no
+      -- assign, else 'overridden'.
+
+# Public API (mirror.*)
+  @api mirror.project(group, instance, patternLen)  @ 73
+      --           clean group-space event with no provenance keys; states[vuid]
+      --           is synced|overridden|conflicted. Recomputed from scratch
+      --           every call -- a terminal set, never a diff. `patternLen` is
+      --           the take length (tm:length, caller-supplied -- the core is
+      --           pure); a tailless note runs to it when nothing follows.
+  @api mirror.reconcile(desired, current)  @ 167
+      --           or resized event is a single `set`, never del+add.
+      @contract  current[vuid] = { uuid, groupEvt }. Returns an op list; a moved
+  @api mirror.deriveAssign(groupEvt, field, value)  @ 187
+      --           nil groupEvt (local-only edit) captures nil base.
+      @contract  captures the live group value as the merge base at fork time;
+  @api mirror.streamId(evt)  @ 194
+      --           (note->lane, cc->cc-number). Index-free: survives column
+      --           insert/reorder, unlike a view-column position.
+      @contract  the region's stable per-stream identity -- evType plus `key`
+  @api mirror.inRect(rect, ppq, chanOffset, evt)  @ 202
+      --           the instance anchor (caller does the anchor maths). True iff
+      --           ppq is in the time span AND that channel offset participates
+      --           AND the event's streamId is selected for it.
+  @api mirror.tintKey(state, active)  @ 214
+  @api mirror.outlineKey(state)  @ 219

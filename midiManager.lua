@@ -29,7 +29,6 @@ local eventsByUuid      = {}
 local tokenIdx   = {}
 local maxUUID    = 0
 local lock       = false
-local pendingSysexDeletes  -- list of uuids; non-nil only inside a modify()
 
 -- Opaque, content-keyed addressing. Token is private string built from
 -- the event's identity fields; collision-free by construction across the
@@ -578,7 +577,7 @@ function mm:load(newTake)
   end
 
   ----- Compact in-memory tables to dense; loc is the lua position
-  ----- (1-based), valid until next rebuild — see byUuid contract.
+  ----- (1-based), valid until next rebuild
   notes      = util.compact(notes,      noteCount)
   ccs        = util.compact(ccs,        ccCount)
   ccSidecars = util.compact(ccSidecars, sidecarCount)
@@ -658,40 +657,18 @@ end
 ----- Locking
 
 --contract: all write paths (add*, delete*, assign* structural) must run inside mm:modify(fn)
---contract: modify disables MIDI sort, runs fn under lock, flushes pending sidecar deletes, re-sorts, then reloads (fires callbacks)
+--contract: modify disables MIDI sort, runs fn under lock, re-sorts, then reloads (fires callbacks)
 local function checkLock()
   assert(lock, 'Error! You must call modification functions via modify()!')
   return true
-end
-
-local function flushPendingSysexDeletes()
-  if not pendingSysexDeletes or #pendingSysexDeletes == 0 then return end
-  local toDelete = {}
-  for _, uuid in ipairs(pendingSysexDeletes) do toDelete[uuid] = true end
-  local _, _, _, sysexCount = reaper.MIDI_CountEvts(take)
-  local idxs = {}
-  for i = 0, sysexCount - 1 do
-    local ok, _, _, _, eventtype, msg = reaper.MIDI_GetTextSysexEvt(take, i)
-    if ok then
-      local sc
-      if     eventtype == 15 then sc = noteSidecarDecode(msg)
-      elseif eventtype == -1 then sc = ccSidecarDecode(msg) end
-      if sc and sc.uuid and toDelete[sc.uuid] then util.add(idxs, i) end
-    end
-  end
-  table.sort(idxs, function(a, b) return a > b end)
-  for _, idx in ipairs(idxs) do reaper.MIDI_DeleteTextSysexEvt(take, idx) end
 end
 
 function mm:modify(fn)
   if not take then return end
 
   lock = true
-  pendingSysexDeletes = {}
   reaper.MIDI_DisableSort(take)
   local ok, err = pcall(fn)
-  flushPendingSysexDeletes()
-  pendingSysexDeletes = nil
   reaper.MIDI_Sort(take)
   self:reload()
   lock = false
@@ -735,12 +712,19 @@ local function assignNote(loc, t)
   if not note then return end
 
   local chan = (t.chan or note.chan) - 1
+  local oldTok = tokenOf(note)
 
   -- nil args leave REAPER's value unchanged
   reaper.MIDI_SetNote(take, note.idx, nil, t.muted, t.ppq, t.endppq, chan, t.pitch, t.vel, true)
 
   util.assign(note, t)
   if note.muted == false then note.muted = nil end
+
+  local newTok = tokenOf(note)
+  if newTok ~= oldTok then
+    tokenIdx[oldTok] = nil
+    tokenIdx[newTok] = note
+  end
 
   -- notation event encodes (chan, pitch) at ppq, so keep it in sync
   if (t.ppq or t.chan or t.pitch) and note.uuidIdx then
@@ -773,6 +757,7 @@ local function addNote(t)
   note.idx = noteCount - 1
   util.add(notes, note)
   note.loc = #notes
+  tokenIdx[tokenOf(note)] = note
 
   saveMetadatum(note.uuid)
 
@@ -835,6 +820,8 @@ local function assignCC(loc, t)
 
   if not checkLock() then return end
 
+  local oldTok = tokenOf(msg)
+
   if hasStructural then
     local chanmsg, msg2, msg3
     if t.evType then
@@ -862,6 +849,12 @@ local function assignCC(loc, t)
       reaper.MIDI_SetCCShape(take, msg.idx, shape, msg.tension or 0, true)
     end
     if msg.shape ~= 'bezier' then msg.tension = nil end
+  end
+
+  local newTok = tokenOf(msg)
+  if newTok ~= oldTok then
+    tokenIdx[oldTok] = nil
+    tokenIdx[newTok] = msg
   end
 
   if hasMetadata and not msg.uuid then
@@ -912,6 +905,7 @@ local function addCC(t)
 
   util.add(ccs, msg)
   msg.loc = #ccs
+  tokenIdx[tokenOf(msg)] = msg
 
   local hasMetadata = false
   for k in pairs(t) do
@@ -929,21 +923,13 @@ local function addCC(t)
   return #ccs
 end
 
-
---contract: returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. The clone carries .loc and .token; loc is excluded from sidecar persistence.
-function mm:byUuid(uuid)
-  local evt = eventsByUuid[uuid]
-  if not evt then return nil end
-  return evt.loc, cloneOut(evt), (evt.evType == 'note') and 'note' or 'cc'
-end
-
 --contract: token is opaque and stable across reload as long as the event's identity fields (evType, chan, ppq, and pitch|cc as relevant) don't change; mutating any of them retires the old token and issues a new one
 function mm:tokenOf(evt)
   if not evt or not evt.evType then return nil end
   return tokenOf(evt)
 end
 
---contract: returns (loc, evt-clone, kind) for the live event with this token; nil if absent. Mirrors mm:byUuid; works on every event (including plain ccs with no uuid). The clone carries .token equal to the input.
+--contract: returns (loc, evt-clone, kind) for the live event with this token; nil if absent. Works on every event (including plain ccs with no uuid). The clone carries .token equal to the input.
 function mm:byToken(token)
   local evt = tokenIdx[token]
   if not evt then return nil end
@@ -968,23 +954,45 @@ function mm:assign(token, t)
   return tokenOf(evt)
 end
 
---contract: REAPER cascade-deletes the notation sidecar when MIDI_DeleteNote runs; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
+-- Mirror REAPER's idx-shift-down after a delete: decrement evt[field] on every
+-- event in tbl whose field > threshold. Guarded by `v and` so uuidIdx (absent
+-- on plain ccs) is safely skipped.
+local function shiftDown(tbl, field, threshold)
+  for _, e in pairs(tbl) do
+    local v = e[field]
+    if v and v > threshold then e[field] = v - 1 end
+  end
+end
+
+local function shiftSysexDown(threshold)
+  shiftDown(notes, 'uuidIdx', threshold)
+  shiftDown(ccs,   'uuidIdx', threshold)
+end
+
+--contract: immediate-mode. MIDI_DeleteNote cascade-removes the notation sidecar; MIDI_DeleteCC does not cascade — the cc sidecar is removed here explicitly. After each REAPER delete we walk live events and decrement idx / uuidIdx of anything REAPER shifted down, so subsequent deletes in the same modify see correct slots.
 function mm:delete(token)
   if not (take and checkLock()) then return end
   local evt = tokenIdx[token]
   if not evt then return end
 
+  tokenIdx[token] = nil
+  local idx, uuidIdx = evt.idx, evt.uuidIdx
+
   if evt.evType == 'note' then
-    reaper.MIDI_DeleteNote(take, evt.idx)
-    eventsByUuid[evt.uuid] = nil
     notes[evt.loc] = nil
+    eventsByUuid[evt.uuid] = nil
+    reaper.MIDI_DeleteNote(take, idx)
+    shiftDown(notes, 'idx', idx)
+    if uuidIdx then shiftSysexDown(uuidIdx) end
   else
-    reaper.MIDI_DeleteCC(take, evt.idx)
-    if evt.uuid then
-      util.add(pendingSysexDeletes, evt.uuid)
-      eventsByUuid[evt.uuid] = nil
-    end
     ccs[evt.loc] = nil
+    if evt.uuid then eventsByUuid[evt.uuid] = nil end
+    reaper.MIDI_DeleteCC(take, idx)
+    shiftDown(ccs, 'idx', idx)
+    if uuidIdx then
+      reaper.MIDI_DeleteTextSysexEvt(take, uuidIdx)
+      shiftSysexDown(uuidIdx)
+    end
   end
 end
 

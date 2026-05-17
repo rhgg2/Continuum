@@ -110,6 +110,10 @@ function newMidiManager(opts)
     -- allocations don't collide.
     for _, e in ipairs(noteList) do if e.uuid and e.uuid > maxUuid then maxUuid = e.uuid end end
     for _, e in ipairs(ccList)   do if e.uuid and e.uuid > maxUuid then maxUuid = e.uuid end end
+    -- Real mm uuids every loaded note; seeded notes must too, or
+    -- uuid-keyed consumers (mirm) can't classify them. CCs stay
+    -- un-uuid'd until metadata touches them (sidecar-on-touch).
+    for _, e in ipairs(noteList) do if not e.uuid then maxUuid = maxUuid + 1; e.uuid = maxUuid end end
     reindex()
     fire('takeSwapped', nil)
     fire('reload', nil)

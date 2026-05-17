@@ -63,11 +63,13 @@ end
 -- closing the block, and is a no-op when reaper.Undo_BeginBlock is
 -- absent (test harness).
 function util.atomic(label, fn)
+  label = label and 'Continuum: ' .. label
   return function(...)
     if reaper.Undo_BeginBlock then reaper.Undo_BeginBlock() end
-    local ok, err = xpcall(fn, debug.traceback, ...)
+    local ok, a, b, c, d = xpcall(fn, debug.traceback, ...)
     if reaper.Undo_EndBlock then reaper.Undo_EndBlock(label, -1) end
-    if not ok then error(err) end
+    if not ok then error(a) end
+    return a, b, c, d
   end
 end
 
@@ -166,12 +168,12 @@ function util.installHooks(owner)
   function owner:unsubscribe(signal, fn)
     if listeners[signal] then listeners[signal][fn] = nil end
   end
-  local function fire(signal, data)
+  local function fire(signal, ...)
     local subs = listeners[signal]
-    if subs then for fn in pairs(subs) do fn(data) end end
+    if subs then for fn in pairs(subs) do fn(...) end end
   end
   function owner:forward(signal, source)
-    source:subscribe(signal, function(data) fire(signal, data) end)
+    source:subscribe(signal, function(...) fire(signal, ...) end)
   end
   return fire
 end

@@ -1,4 +1,3 @@
-- rebuild on MIDI hash change
 - tuning editor
 - FX, ideas:
   - flam
@@ -6,5 +5,3 @@
   - cc macros
 - automation smoothing
 - 14bit CCs
-- undo
-- fix up swing editor

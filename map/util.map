@@ -1,15 +1,15 @@
-@module util  src=util.lua  loc=421  sha=d4f20ff  mode=namespace
+@module util  src=util.lua  loc=430  sha=3d00a83  mode=namespace
 
 # Module-level constants
   @const util = {}  @ 5
       @invariant  stateless module: pure helpers, no module-level mutable state beyond the REMOVE sentinel
       @invariant  util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
-  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 238
+  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 247
 
 # Private functions
   @fn print(...)  @ 15
-  @fn escape_string(s)  @ 138
-  @fn parseValue()  @ 394
+  @fn escape_string(s)  @ 147
+  @fn parseValue()  @ 403
 
 # Public API (util.*)
   @api util.print(...)  @ 7
@@ -22,37 +22,39 @@
       -- description; the wrapper forwards args, propagates errors after
       -- closing the block, and is a no-op when reaper.Undo_BeginBlock is
       -- absent (test harness).
-  @api util.pick(src, keys, adds)  @ 74
-  @api util.bucket(buckets, key, val)  @ 85
-  @api util.seek(items, mode, key, filter, keyFn)  @ 93
+  @api util.pick(src, keys, adds)  @ 76
+  @api util.bucket(buckets, key, val)  @ 87
+  @api util.compact(t, n)  @ 95
+      -- Sparse → dense; n is the pre-sparse length.
+  @api util.seek(items, mode, key, filter, keyFn)  @ 102
       @contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
-  @api util.clone(src, exclude, deep)  @ 117
+  @api util.clone(src, exclude, deep)  @ 126
       @contract  exclude applies only to the outermost table; deep recursion drops the exclude set
-  @api util.deepClone(src)  @ 128
-  @api util.deepEq(a, b)  @ 130
-  @api util.installHooks(owner)  @ 153
+  @api util.deepClone(src)  @ 137
+  @api util.deepEq(a, b)  @ 139
+  @api util.installHooks(owner)  @ 162
       @contract  listeners filter by signal name at registration; forward requires source itself ran installHooks
-  @api util.isNote(e)  @ 172
-  @api util.between(events, lo, hi, filter)  @ 175
+  @api util.isNote(e)  @ 181
+  @api util.between(events, lo, hi, filter)  @ 184
       @contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap
-  @api util.clamp(val,min,max)  @ 188
-  @api util.setDigit(val, d, pos, base, half)  @ 198
-  @api util.snapTo(v, dir, interval)  @ 205
+  @api util.clamp(val,min,max)  @ 197
+  @api util.setDigit(val, d, pos, base, half)  @ 207
+  @api util.snapTo(v, dir, interval)  @ 214
       @contract  advances at least one full interval; values already on a boundary do not no-op
-  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 210
-  @api util.oneOf(choices, txt)  @ 215
-  @api util.round(n, to)  @ 222
-  @api util.gcd(a, b)  @ 230
-  @api util.lcm(a, b)  @ 236
-  @api util.toBase36(n)  @ 240
-  @api util.fromBase36(txt)  @ 251
-  @api util.dotimes(n, v)  @ 256
+  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 219
+  @api util.oneOf(choices, txt)  @ 224
+  @api util.round(n, to)  @ 231
+  @api util.gcd(a, b)  @ 239
+  @api util.lcm(a, b)  @ 245
+  @api util.toBase36(n)  @ 249
+  @api util.fromBase36(txt)  @ 260
+  @api util.dotimes(n, v)  @ 265
       @contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v
-  @api util.serialise(value, exclude, seen)  @ 267
+  @api util.serialise(value, exclude, seen)  @ 276
       @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
-  @api util.unserialise(input)  @ 302
+  @api util.unserialise(input)  @ 311
       @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
-  @api util.instantiate(name, deps)  @ 413
+  @api util.instantiate(name, deps)  @ 422
       @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
 
 # REAPER API surface

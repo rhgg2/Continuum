@@ -1,6 +1,6 @@
 -- See docs/chrome.md for the model.
 
---shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), makeToolbar()->fn(segments), drawPicker(d), pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+--shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
 --shape: pickerSpec = { kind: string, heading: string, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
@@ -162,6 +162,41 @@ local function requestPickerOpen(kind) pickerOpenReq = kind end
 local function pickerIsActive()        return pickerActive end
 local function resetPickerActive()     pickerActive = false end
 
+-- Build the picker-item list for a library-shaped cm key (e.g. 'swings',
+-- 'tempers'). Three groups, in order:
+--   1. Off    — nil key.
+--   2. Project entries (cm.project[key]) — plain label.
+--   3. Other entries (anything in the merged view but not in project) —
+--      `+` prefix, marking "available but not yet localized to project".
+-- excludeOthers is a set of names to filter out of group 3 only — used
+-- to hide `id` from the swing picker (already covered by Off).
+local function libPicker(key, current, excludeOthers)
+  excludeOthers = excludeOthers or {}
+  local proj   = cm:getAt('project', key) or {}
+  local merged = cm:get(key, { mergeTiers = true }) or {}
+
+  local items = { { label = 'Off', key = nil, group = 1, current = current == nil } }
+
+  local projNames = {}
+  for k in pairs(proj) do projNames[#projNames+1] = k end
+  table.sort(projNames)
+  for _, name in ipairs(projNames) do
+    items[#items+1] = { label = name, key = name, group = 2, current = current == name }
+  end
+
+  local otherNames = {}
+  for k in pairs(merged) do
+    if not proj[k] and not excludeOthers[k] then
+      otherNames[#otherNames+1] = k
+    end
+  end
+  table.sort(otherNames)
+  for _, name in ipairs(otherNames) do
+    items[#items+1] = { label = '+ ' .. name, key = name, group = 3, current = false }
+  end
+  return items
+end
+
 -- Generic typeahead picker. Enter picks the highlighted match; group
 -- separators show only when filter is empty.
 local function drawPicker(d)
@@ -278,6 +313,7 @@ return {
   radio              = radio,
   makeToolbar        = makeToolbar,
   drawPicker         = drawPicker,
+  libPicker          = libPicker,
   pickerIsActive     = pickerIsActive,
   resetPickerActive  = resetPickerActive,
   requestPickerOpen  = requestPickerOpen,

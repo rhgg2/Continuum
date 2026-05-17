@@ -291,6 +291,97 @@ return {
     end,
   },
 
+  --------------------------------------------------------------------
+  -- mergeTiers: per-subkey union across defaults + tiers
+  --
+  -- These specs use project/take rather than global because the
+  -- 'global' tier persists through real io.open (CONFIG_GLOBAL_PATH);
+  -- the fake reaper covers project/track/take only. Merge semantics
+  -- are identical across tiers, so this loses no coverage.
+  --------------------------------------------------------------------
+  {
+    -- Without the flag, take's table-value replaces project's
+    -- entirely (the existing whole-value overlay). With the flag,
+    -- entries union per sub-key. This is the read-path libraries
+    -- like swings/tempers rely on once presets live in the global
+    -- tier and users save their own project-tier swings.
+    name = 'mergeTiers unions tier tables per sub-key',
+    run = function(harness)
+      local h = harness.mk{
+        config = {
+          project = { swings = { a = { tag = 'p-a' }, b = { tag = 'p-b' } } },
+          take    = { swings = { b = { tag = 't-b' }, c = { tag = 't-c' } } },
+        },
+      }
+      -- Default semantics: take replaces project wholesale.
+      local plain = h.cm:get('swings')
+      t.eq(plain.a, nil,        'plain get: take shadows project')
+      t.eq(plain.b.tag, 't-b',  'plain get: take value present')
+      t.eq(plain.c.tag, 't-c',  'plain get: take value present')
+
+      -- Merged semantics: per-sub-key union, more-specific wins.
+      local merged = h.cm:get('swings', { mergeTiers = true })
+      t.eq(merged.a.tag, 'p-a', 'merged: project-only entry surfaces')
+      t.eq(merged.b.tag, 't-b', 'merged: take wins on collision')
+      t.eq(merged.c.tag, 't-c', 'merged: take-only entry present')
+    end,
+  },
+  {
+    name = 'mergeTiers returns a fresh deep copy',
+    run = function(harness)
+      local h = harness.mk{
+        config = {
+          project = { swings = { a = { tag = 'p-a' } } },
+          take    = { swings = { b = { tag = 't-b' } } },
+        },
+      }
+      local a = h.cm:get('swings', { mergeTiers = true })
+      a.a.tag = 'mutated'
+      a.zzz = { tag = 'new' }
+      local b = h.cm:get('swings', { mergeTiers = true })
+      t.eq(b.a.tag, 'p-a', 'inner field is independent across calls')
+      t.eq(b.zzz, nil,     'top-level mutation does not leak')
+    end,
+  },
+  {
+    name = 'mergeTiers with no tier contributions returns the schema default',
+    -- swings carries a non-empty default (the system preset catalogue).
+    -- A fresh harness with no tier writes must surface those entries
+    -- through the merged read — this is what makes presets-as-default
+    -- visible to every project.
+    run = function(harness)
+      local h = harness.mk()
+      local merged = h.cm:get('swings', { mergeTiers = true })
+      t.truthy(merged['classic-58'],
+        'classic-58 default surfaces under merge with no tier writes')
+      t.truthy(merged['delay+30'], 'delay+30 default surfaces')
+    end,
+  },
+  {
+    name = 'mergeTiers default + tier writes union per sub-key',
+    run = function(harness)
+      local h = harness.mk{
+        config = { project = { swings = { ['my-groove'] = { tag = 'p' } } } },
+      }
+      local merged = h.cm:get('swings', { mergeTiers = true })
+      t.truthy(merged['classic-58'],    'default preset still present')
+      t.eq(merged['my-groove'].tag, 'p','project entry present')
+    end,
+  },
+  {
+    name = 'mergeTiers: tier write on a default-named key wins',
+    run = function(harness)
+      local h = harness.mk{
+        config = { project = { swings = { ['classic-58'] = { tag = 'override' } } } },
+      }
+      local merged = h.cm:get('swings', { mergeTiers = true })
+      t.eq(merged['classic-58'].tag, 'override',
+        'project override beats default for the same name')
+      t.truthy(merged['classic-55'],
+        'other defaults untouched by overlapping override')
+    end,
+  },
+
   {
     name = 'cm fires changes with their level on the broadcast',
     run = function(harness)

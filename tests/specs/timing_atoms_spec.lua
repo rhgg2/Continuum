@@ -10,6 +10,21 @@ local timing = require('timing')
 
 local SMOOTH = { 'classic', 'pocket', 'lilt', 'shuffle', 'tilt' }
 
+-- Canonical preset catalogue, mirroring the configManager swings
+-- default. Duplicated here so the K-bound smoke test isn't coupled
+-- to cm bootstrap.
+local PRESETS = {
+  ['id']         = {},
+  ['classic-55'] = { factors = { { atom = 'classic', shift = 0.05, period = 1 } } },
+  ['classic-58'] = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } },
+  ['classic-62'] = { factors = { { atom = 'classic', shift = 0.12, period = 1 } } },
+  ['classic-67'] = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } },
+  ['delay+15']   = { factors = { { atom = 'id', shift =  1/16, period = 1 } } },
+  ['delay+30']   = { factors = { { atom = 'id', shift =  1/8,  period = 1 } } },
+  ['delay-15']   = { factors = { { atom = 'id', shift = -1/16, period = 1 } } },
+  ['delay-30']   = { factors = { { atom = 'id', shift = -1/8,  period = 1 } } },
+}
+
 -- Where the atom's principal sits, in QN. For PPC=1 atoms this is the
 -- principal feature within pulse 1; for PPC=2 atoms it sits at unit-x=0.5
 -- of the tile.
@@ -192,7 +207,7 @@ return {
   {
     name = 'classic-58 preset matches the legacy 0.58 mapping',
     run = function()
-      local factors = timing.resolveFactors(timing.presets['classic-58'], 1)
+      local factors = timing.resolveFactors(PRESETS['classic-58'], 1)
       t.truthy(math.abs(timing.applyFactors(factors, 0.5) - 0.58) < 1e-9)
     end,
   },
@@ -323,7 +338,7 @@ return {
   {
     name = 'existing presets stay within their K-bounded atom ranges',
     run = function()
-      for name, comp in pairs(timing.presets) do
+      for name, comp in pairs(PRESETS) do
         for _, f in ipairs((comp or {}).factors or {}) do
           local tilePeriod = timing.atomTilePeriod(f)
           local a          = f.shift / tilePeriod

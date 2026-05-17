@@ -1,18 +1,18 @@
-@module swingEditor  src=swingEditor.lua  loc=530  sha=69f289a  mode=chunk
-@deps vm, cm, chrome, ctx, seqMgr
+@module swingEditor  src=swingEditor.lua  loc=605  sha=fa4a61d  mode=chunk
+@deps tv, cm, chrome, ctx, seqMgr
 
 # Invariants & contracts
-  @invariant  editor owns no swing data; composite lives in cm:get('swings')[name] and is read fresh each frame via swingRead
-  @invariant  all writes route through swingWrite (idempotent → vm:setSwingComposite); commit() drives cross-take reswing on widget release
-  @invariant  state == nil iff editor is closed; open() is a no-op when already open; Esc / Begin-close clears state
-  @invariant  snapshot is captured at open() and never mutated; Reset writes a deepClone of it
+  @invariant  editor owns no swing data; composite resolves via cm:get('swings', {mergeTiers=true})[name] (defaults ∪ global ∪ project) and is read fresh each frame via swingRead
+  @invariant  all writes route through swingWrite (idempotent → tv:setSwingComposite); commit() drives cross-take reswing on widget release
+  @invariant  state == nil iff editor is closed; open() is a no-op when already open; Esc / close-button clears state
+  @invariant  snapshot is captured at open() (and on swing-switch via the library picker) and never mutated; Reset writes a deepClone of it
   @invariant  shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
   @invariant  on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
   @invariant  slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider
   @invariant  atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
 
 # Shapes
-  @shape  state = { name, snapshot, createBuf, createError, rpb, wild, lastCount, lastW }  -- composite is NOT cached here
+  @shape  state = { name, snapshot, createBuf, createError, rpb, wild }  -- composite is NOT cached here
   @shape  PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
 
 # Imports
@@ -29,7 +29,7 @@
   @state SWING_MARK = 0x000000b0  @ 41
   @state SWING_SOFT_QN = 0.15  @ 42
   @state state = nil  @ 46
-  @state self = {}  @ 510
+  @state self = {}  @ 583
 
 # Private functions
   @fn commit()  @ 49
@@ -59,7 +59,7 @@
   @fn compositesEqual(a, b)  @ 185
       @contract  compares composite phase, per-factor phase, period, atom and shift — phase fields normalise to QN before comparing, so {1,2} and {2,4} count equal
   @fn swingWrite(composite)  @ 202
-      @contract  sole write path; idempotent on equal composites; the active-take refresh happens via vm:setSwingComposite's configChanged broadcast (granular per-channel stale-mark + tm:rebuild)
+      @contract  sole write path; idempotent on equal composites; the active-take refresh happens via tv:setSwingComposite's configChanged broadcast (granular per-channel stale-mark + tm:rebuild)
   @fn cloneForEdit()  @ 209
       -- Editable clone with a guaranteed factors[] array, so write paths can
       -- index it without re-checking. Phase is preserved as-is.
@@ -69,18 +69,37 @@
   @fn removeFactor(i)  @ 229
   @fn moveFactor(i, dir)  @ 235
   @fn drawFactorRow(i, f, availW)  @ 245
-  @fn idealSwingHeight(nFactors)  @ 347
-      -- Generous estimate — better to show a few px of empty space than to
-      -- clip the add-factor button at the bottom.
-  @fn idealSwingWidth()  @ 352
-  @fn draw()  @ 354
+  -- Tier-aware library writes
+  @fn projectSwings()  @ 347
+  @fn globalSwings()  @ 348
+  @fn saveGlobal(name)  @ 351
+      @contract  copies the currently-edited composite into the global tier (defaults are immutable; project copy survives untouched, still shadowing it)
+  @fn deleteFromTier(level, name)  @ 358
+  @fn switchTo(name)  @ 367
+      -- Switch the edited swing without closing the editor. Re-captures the
+      -- snapshot so Reset/dirty-check stay coherent.
+  @fn drawLibraryRow(closeOnClick, rowW)  @ 378
+      -- Library row sits above the edit/create body. Picker + name input flow
+      -- coexist: the picker offers existing swings (including the implicit
+      -- "Off" → enter create mode); +New is just an alias for picking Off and
+      -- focusing the name field.
+  @fn drawCreateForm()  @ 438
+  @fn drawEditBody(composite, n)  @ 470
+  @fn draw(w, h)  @ 557
+      -- Body-region draw. Caller (trackerPage) hands us its body rect via
+      -- renderBody; we run inside a child window so the chrome palette
+      -- (editor.bg + toolbar button/text colours + separator tint) takes
+      -- the place of the tracker grid's background. Mirrors the styling
+      -- that pushChromeWindow gave the editor in its old floating-window
+      -- form, swapping Col_WindowBg for Col_ChildBg.
 
 # Public API (self:*)
   -- Public
-  @api self:open()  @ 513
+  @api self:open()  @ 586
       @contract  no-op when already open; snapshot is current cm composite at open time, used for Reset and dirty-check
-  @api self:render()  @ 525
-  @api self:isOpen()  @ 527
+  @api self:render(w, h)  @ 598
+  @api self:close()  @ 600
+  @api self:isOpen()  @ 602
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

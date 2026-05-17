@@ -65,10 +65,22 @@ local function Main()
 
   -- Globals: transport wrappers, page switching, quit. Bound on root
   -- so any page picks them up unchanged.
+  -- Remember the top of REAPER's undo stack at open time; refuse to undo
+  -- past it. Undo_OnStateChange without a real diff doesn't add an entry,
+  -- so we can't drop our own sentinel — we use what's already there (or
+  -- nil if the stack was empty). Edits outside Continuum (REAPER's own
+  -- Ctrl-Z) bypass this guard by design.
+  local undoFence = reaper.Undo_CanUndo2(0)
+
   cmgr:registerAll{
     play        = function() reaper.Main_OnCommand(1007,  0) end,
     playPause   = function() reaper.Main_OnCommand(40073, 0) end,
     stop        = function() reaper.Main_OnCommand(1016,  0) end,
+    undo        = function()
+      if reaper.Undo_CanUndo2(0) == undoFence then return end
+      reaper.Main_OnCommand(40029, 0); coord:reloadAfterExternalMutation()
+    end,
+    redo        = function() reaper.Main_OnCommand(40030, 0); coord:reloadAfterExternalMutation() end,
     switchPage  = function(name) coord:setActive(name)      end,
     togglePage  = function()     coord:togglePage()         end,
     quit        = function()     coord:quit()               end,
@@ -77,6 +89,8 @@ local function Main()
   cmgr:bindAll{
     playPause   = { ImGui.Key_Space },
     stop        = { ImGui.Key_F8    },
+    undo        = { {ImGui.Key_Z, ImGui.Mod_Ctrl} },
+    redo        = { {ImGui.Key_Z, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
     togglePage  = { {ImGui.Key_Tab, ImGui.Mod_Super} },
     quit        = { ImGui.Key_Enter },
     beginPrefix = { {ImGui.Key_U, ImGui.Mod_Super} },

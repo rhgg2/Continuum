@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1121  sha=7ea98b2  mode=chunk
+@module midiManager  src=midiManager.lua  loc=1137  sha=4734531  mode=chunk
 @deps take
 
 # Invariants & contracts
@@ -40,31 +40,30 @@
   @state tokenIdx = {}  @ 29
   @state maxUUID = 0  @ 30
   @state lock = false  @ 31
-  @state pendingSysexDeletes  @ 32   -- list of uuids; non-nil only inside a modify()
-  @state INTERNALS = { idx = true, uuidIdx = true }  @ 46
+  @state INTERNALS = { idx = true, uuidIdx = true }  @ 45
       @contract  INTERNALS fields (idx, uuidIdx) are stripped from all shallow clones returned to callers
-  @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 49
+  @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 48
       @invariant  shapeNames is derived from shapeLUT so the two directions can't drift
-  @state shapeNames  @ 50   -- inverse of shapeLUT
-  @state noteEventFields = {  @ 190
-  @state ccEventFields = {  @ 195
-  @state fire = util.installHooks(mm)  @ 268
+  @state shapeNames  @ 49   -- inverse of shapeLUT
+  @state noteEventFields = {  @ 189
+  @state ccEventFields = {  @ 194
+  @state fire = util.installHooks(mm)  @ 267
 
 # Private functions
   @fn print(...)  @ 12
-  @fn tokenOf(evt)  @ 37
+  @fn tokenOf(evt)  @ 36
       -- Opaque, content-keyed addressing. Token is private string built from
       -- the event's identity fields; collision-free by construction across the
       -- evType space. Rebuilt fresh in mm:load alongside eventsByUuid.
-  @fn curveSample(shape, tension, t)  @ 94
-  @fn noteSidecarEncode(note)  @ 117
-  @fn noteSidecarDecode(msg)  @ 121
-  @fn ccSidecarEncode(cc)  @ 128
-  @fn ccSidecarDecode(body)  @ 152
-  @fn loadMetadata()  @ 172
-  @fn saveMetadatum(uuid)  @ 201
-  @fn saveMetadata()  @ 223
-  @fn assignNewUUID(evt)  @ 249
+  @fn curveSample(shape, tension, t)  @ 93
+  @fn noteSidecarEncode(note)  @ 116
+  @fn noteSidecarDecode(msg)  @ 120
+  @fn ccSidecarEncode(cc)  @ 127
+  @fn ccSidecarDecode(body)  @ 151
+  @fn loadMetadata()  @ 171
+  @fn saveMetadatum(uuid)  @ 200
+  @fn saveMetadata()  @ 222
+  @fn assignNewUUID(evt)  @ 248
       · Helper functions
       · Read notes
       · Note dedup
@@ -80,60 +79,64 @@
       · Persist + signals
   -- Load
   -- Locking
-  @fn checkLock()  @ 662
+  @fn checkLock()  @ 661
       @contract  all write paths (add*, delete*, assign* structural) must run inside mm:modify(fn)
-      @contract  modify disables MIDI sort, runs fn under lock, flushes pending sidecar deletes, re-sorts, then reloads (fires callbacks)
-  @fn flushPendingSysexDeletes()  @ 667
+      @contract  modify disables MIDI sort, runs fn under lock, re-sorts, then reloads (fires callbacks)
   -- Notes
-  @fn cloneOut(evt)  @ 703
-  @fn assignNote(loc, t)  @ 720
+  @fn cloneOut(evt)  @ 680
+  @fn assignNote(loc, t)  @ 697
       @contract  assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
-  @fn addNote(t)  @ 754
+  @fn addNote(t)  @ 738
       @contract  addNote always allocates a uuid and inserts a notation event (unconditional, unlike addCC)
   -- CCs
-  @fn reconstruct(tbl)  @ 793
-  @fn assignCC(loc, t)  @ 817
+  @fn reconstruct(tbl)  @ 778
+  @fn assignCC(loc, t)  @ 802
       @contract  assignCC metadata-only carve-out: if t touches none of the structural CC fields AND the cc already has a uuid, skips the lock
       @contract  first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
-  @fn addCC(t)  @ 882
+  @fn addCC(t)  @ 875
       @contract  addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
   -- Unified token-keyed surface
+  @fn shiftDown(tbl, field, threshold)  @ 968
+      -- Mirror REAPER's idx-shift-down after a delete: decrement evt[field] on every
+      -- event in tbl whose field > threshold. Guarded by `v and` so uuidIdx (absent
+      -- on plain ccs) is safely skipped.
+  @fn shiftSysexDown(threshold)  @ 975
   -- Take data
-  @fn retractEot(buf, targetPpq)  @ 1045
+  @fn retractEot(buf, targetPpq)  @ 1061
       -- Assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 
 # Public API (mm:*)
-  @api mm:load(newTake)  @ 272
-  @api mm:reload()  @ 652
-  @api mm:modify(fn)  @ 686
-  @api mm:notes()  @ 710
-  @api mm:ccs()  @ 784
-  @api mm:byUuid(uuid)  @ 934
+  @api mm:load(newTake)  @ 271
+  @api mm:reload()  @ 651
+  @api mm:modify(fn)  @ 666
+  @api mm:notes()  @ 687
+  @api mm:ccs()  @ 769
+  @api mm:byUuid(uuid)  @ 928
       @contract  returns (loc, evt-clone, kind) for the live event with this uuid; nil if absent. kind is 'note' or 'cc'. The clone carries .loc and .token; loc is excluded from sidecar persistence.
-  @api mm:tokenOf(evt)  @ 941
+  @api mm:tokenOf(evt)  @ 935
       @contract  token is opaque and stable across reload as long as the event's identity fields (evType, chan, ppq, and pitch|cc as relevant) don't change; mutating any of them retires the old token and issues a new one
-  @api mm:byToken(token)  @ 947
+  @api mm:byToken(token)  @ 941
       @contract  returns (loc, evt-clone, kind) for the live event with this token; nil if absent. Mirrors mm:byUuid; works on every event (including plain ccs with no uuid). The clone carries .token equal to the input.
-  @api mm:add(t)  @ 956
+  @api mm:add(t)  @ 950
       @contract  dispatches on t.evType; 'note' → addNote, anything else → addCC. Returns the token of the just-added event, or nil if t is malformed. Inherits the lock requirement of the inner call.
-  @api mm:assign(token, t)  @ 963
+  @api mm:assign(token, t)  @ 957
       @contract  dispatches on the resolved event's evType. Returns the token of the (possibly mutated) event — equal to the input token iff t touched no identity field. Caller re-keys when they differ. Inherits the inner method's metadata-only lockless carve-out.
-  @api mm:delete(token)  @ 972
-      @contract  REAPER cascade-deletes the notation sidecar when MIDI_DeleteNote runs; the cascade shifts sysex idxs, which is why flushPendingSysexDeletes re-scans by uuid rather than using cached uuidIdx
-  @api mm:events()  @ 992
+  @api mm:delete(token)  @ 981
+      @contract  immediate-mode. MIDI_DeleteNote cascade-removes the notation sidecar; MIDI_DeleteCC does not cascade — the cc sidecar is removed here explicitly. After each REAPER delete we walk live events and decrement idx / uuidIdx of anything REAPER shifted down, so subsequent deletes in the same modify see correct slots.
+  @api mm:events()  @ 1008
       @contract  yields (token, evt-clone) over all live events, notes then ccs. Token is the addressing primitive of the unified surface; the clone also carries .token. loc is intentionally absent.
-  @api mm:take()  @ 1007
-  @api mm:interpolate(A, B, ppq)  @ 1012
+  @api mm:take()  @ 1023
+  @api mm:interpolate(A, B, ppq)  @ 1028
       -- REAPER convention: shape on A governs the curve from A to next.
-  @api mm:resolution()  @ 1020
-  @api mm:length()  @ 1026
+  @api mm:resolution()  @ 1036
+  @api mm:length()  @ 1042
       -- Source length. setLength truncates the source's EOT explicitly to keep this in sync after a shrink.
-  @api mm:name()  @ 1033
-  @api mm:setName(name)  @ 1039
-  @api mm:setLength(qn)  @ 1065
+  @api mm:name()  @ 1049
+  @api mm:setName(name)  @ 1055
+  @api mm:setLength(qn)  @ 1081
       -- MIDI_SetItemExtents leaves the source's EOT stale on contract; retract it explicitly so the source actually shrinks.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1079
+  @api mm:timeSigs()  @ 1095
 
 # Signals emitted (via util.installHooks)
   @emits takeSwapped   -- nil; only when load received a different take

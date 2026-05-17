@@ -16,6 +16,7 @@
 local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
+local legato  = require 'legato'
 
 local tm, cm, cmgr = (...).tm, (...).cm, (...).cmgr
 
@@ -52,13 +53,18 @@ local ec, clipboard, ctx
 
 ----- Note geometry (used by editing, adjust*, nudge, quantizeKeepRealised)
 
--- prev maximises endppq; nxt minimises ppq.
+-- A conform note's stored tail is an intended overrun (tm owns the
+-- realised clip); it must never act as a real tail in vm overlap
+-- geometry. Effective end for that geometry is its onset.
+local function tailEnd(e) return e.conform and e.ppq or e.endppq end
+
+-- prev maximises (effective) endppq; nxt minimises ppq.
 local function neighbourEvents(cols, ppq, pred)
   local prev, nxt
   for _, c in ipairs(cols) do
     local p = util.seek(c.events, 'before', ppq, pred)
     local n = util.seek(c.events, 'after',  ppq, pred)
-    if p and (not prev or p.endppq > prev.endppq) then prev = p end
+    if p and (not prev or tailEnd(p) > tailEnd(prev)) then prev = p end
     if n and (not nxt  or n.ppq    < nxt.ppq    ) then nxt  = n end
   end
   return prev, nxt
@@ -79,7 +85,7 @@ local function overlapBounds(col, ppq, excludeEvt, allowOverlap)
   local prevD, nextD = neighbourEvents({col}, ppq, diff)
   local prevS, nextS = neighbourEvents(tm:getChannel(col.midiChan).columns.notes, ppq, same)
 
-  local minStart = math.max(prevD and (prevD.endppq - lenient) or 0,      prevS and prevS.endppq or 0)
+  local minStart = math.max(prevD and (tailEnd(prevD) - lenient) or 0,      prevS and tailEnd(prevS) or 0)
   local maxEnd   = math.min(nextD and (nextD.ppq    + lenient) or length, nextS and nextS.ppq    or length)
   return minStart, maxEnd
 end
@@ -95,7 +101,7 @@ local function rowBounds(col, ppq, excludeEvt, allowOverlap)
   local prevS, nextS = neighbourEvents(tm:getChannel(chan).columns.notes, ppq, same)
 
   local function startL(e, slack) return e.ppq    + slack end
-  local function endL  (e, slack) return e.endppq + slack end
+  local function endL  (e, slack) return tailEnd(e) + slack end
 
   local fullL = grid.numRows * logPerRow
   local prevEndL   = math.max(prevD and endL  (prevD, -lenient) or 0,     prevS and endL  (prevS, 0) or 0)
@@ -103,27 +109,29 @@ local function rowBounds(col, ppq, excludeEvt, allowOverlap)
   return math.ceil(prevEndL / logPerRow), math.floor(nextStartL / logPerRow)
 end
 
---contract: resolves overlap excess in a per-column plan list; mutates plan entries in place. Tail-overlap clips predecessor's tail (legato — onset stays); same-onset shifts the later-source-ppq one by 1 ppq. Non-note plans/cols skipped; unplanned col-mates treated as fixed
-local function conformOverlaps(plans)
+--contract: resolves overlap excess in a per-column plan list; mutates plan entries in place. Tail-overlap clips predecessor's tail (legato — onset stays); same-onset shifts the later-source-ppq one by 1 ppq. Non-note plans/cols skipped; unplanned col-mates treated as fixed; optional `deleted` event-set excluded from the timeline (corpses still live in the col.events snapshot until next rebuild)
+local function conformOverlaps(plans, deleted)
   local lenient = cm:get('overlapOffset') * resolution
+  local skip = {}
+  if deleted then for _, e in ipairs(deleted) do skip[e] = true end end
   local plansByCol = {}
-  for _, p in ipairs(plans) do
-    if util.isNote(p.e) then
-      plansByCol[p.col] = plansByCol[p.col] or {}
-      util.add(plansByCol[p.col], p)
+  for _, plan in ipairs(plans) do
+    if util.isNote(plan.e) then
+      plansByCol[plan.col] = plansByCol[plan.col] or {}
+      util.add(plansByCol[plan.col], plan)
     end
   end
   for col, colPlans in pairs(plansByCol) do
     local planByEvt = {}
-    for _, p in ipairs(colPlans) do planByEvt[p.e] = p end
+    for _, plan in ipairs(colPlans) do planByEvt[plan.e] = plan end
 
     local timeline = {}
     for _, e in ipairs(col.events) do
-      if util.isNote(e) then
-        local p = planByEvt[e]
-        util.add(timeline, { e = e, plan = p,
-          ppq    = (p and p.newppq)    or e.ppq,
-          endppq = (p and p.newEndppq) or e.endppq })
+      if util.isNote(e) and not skip[e] then
+        local plan = planByEvt[e]
+        util.add(timeline, { e = e, plan = plan,
+          ppq    = (plan and plan.newppq)    or e.ppq,
+          endppq = (plan and plan.newEndppq) or e.endppq })
       end
     end
     table.sort(timeline, function(a, b)
@@ -151,10 +159,12 @@ local function conformOverlaps(plans)
       end
       -- Tail-overlap clip on the post-shift state. Predecessor's
       -- tail clips first (legato — onset stays); only when the
-      -- predecessor is fixed does the successor's onset lift.
+      -- predecessor is fixed does the successor's onset lift. A
+      -- conform predecessor's tail is an intended overrun (tm owns
+      -- its realised clip) — it neither clips nor lifts here.
       local threshold = (prev.e.pitch == curr.e.pitch) and 0 or lenient
       local excess    = prev.endppq - curr.ppq - threshold
-      if excess > 0 then
+      if excess > 0 and not prev.e.conform then
         if prev.plan then
           local clipped = math.max(prev.ppq + 1,
                                    (prev.plan.newEndppq or prev.e.endppq) - excess)
@@ -170,7 +180,21 @@ local function conformOverlaps(plans)
   end
 end
 
+-- Sort by shift direction so a still-old same-pitch peer vacates
+-- before its slot gets written. Without this, assignEvent's
+-- clearSameKeyRange kills the not-yet-moved peer.
 local function writePlans(plans)
+  local netShift = 0
+  for _, p in ipairs(plans) do
+    if p.newppq then netShift = netShift + (p.newppq - p.e.ppq) end
+  end
+  if netShift ~= 0 then
+    local desc = netShift > 0
+    table.sort(plans, function(a, b)
+      local an, bn = a.newppq or a.e.ppq, b.newppq or b.e.ppq
+      if desc then return an > bn else return an < bn end
+    end)
+  end
   for _, p in ipairs(plans) do
     local u    = {}
     if p.newppq    ~= nil then u.ppq    = p.newppq    end
@@ -227,6 +251,16 @@ local function eventsByCol()
     ::nextCol::
   end
   return result
+end
+
+-- The mirror region's per-stream identity, derived from the column (the
+-- column IS the stream): evType:key, key = lane for notes, cc-number for
+-- cc, 0 otherwise. Index-free, so it survives column insert/reorder.
+local function streamIdOf(col)
+  local key = col.type == 'note' and (col.lane or 1)
+           or col.type == 'cc'   and (col.cc or 0)
+           or 0
+  return col.type .. ':' .. tostring(key)
 end
 
 ----- Frames & timing
@@ -467,13 +501,12 @@ do
 
   -- Caller has already pinned (ppq, ppqL, rpb) onto `update`.
   local function placeNewNote(col, update)
-    local last = util.seek(col.events, 'before', update.ppq, util.isNote)
-    local next = util.seek(col.events, 'after',  update.ppq, util.isNote)
-    if last and last.endppq >= update.ppq then
-      assignTail(last, col.midiChan, update.ppq)
+    local prev, _, endppq = legato.place(col.events, update.ppq, length)
+    if prev and prev.endppq >= update.ppq then
+      assignTail(prev, col.midiChan, update.ppq)
     end
-    update.vel             = last and last.vel or cm:get('defaultVelocity')
-    update.endppq          = next and next.ppq or length
+    update.vel             = prev and prev.vel or cm:get('defaultVelocity')
+    update.endppq          = endppq
     update.lane            = col.lane
     if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
     update.evType = 'note'
@@ -674,6 +707,10 @@ do
     end
     commit()
   end
+
+  -- Every keystroke that flows through editEvent is one undo block.
+  -- Includes note entry, pitch octave digit, sample/vel/delay/pb/val digits.
+  tv.editEvent = util.atomic('Edit', tv.editEvent)
 end
 
 ----- Lane-strip edits (drag, add, delete, shape, tension)
@@ -1275,10 +1312,15 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
   -- shift only real events and leave fake pbs to tm's reconcile.
   local function notFake(e) return not e.fake end
 
+  -- A conform note's raw endppq is the clipped realisation tm owns, NOT
+  -- its length; shifting that and writing it back would clobber the
+  -- natural endppqL. Source the conform tail from endppqL and let
+  -- conform-tail re-clip the raw after the shift.
   local function shiftPlan(col, e, dLogical)
     local entry = { col = col, e = e, newppq = e.ppq + dLogical }
     if util.isNote(e) then
-      entry.newEndppq = math.min(e.endppq + dLogical, length)
+      local tail = (e.conform and e.endppqL) or e.endppq
+      entry.newEndppq = math.min(tail + dLogical, length)
     end
     return entry
   end
@@ -1292,12 +1334,14 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     local plans, deletes = {}, {}
     for e in util.between(col.events, C, length, notFake) do
       local p = shiftPlan(col, e, dLogical)
-      if p.newppq >= length then util.add(deletes, { col = col, evt = e })
+      if p.newppq >= length then util.add(deletes, e)
       else                       util.add(plans, p) end
     end
 
-    conformOverlaps(plans)
-    for _, d in ipairs(deletes) do tm:deleteEvent(d.evt) end
+    -- col.events is a rebuild-snapshot; deletes don't refresh it,
+    -- so corpses must be passed to conform explicitly.
+    conformOverlaps(plans, deletes)
+    for _, e in ipairs(deletes) do tm:deleteEvent(e) end
     writePlans(plans)
 
     if col.type == 'note' then
@@ -1328,12 +1372,12 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
 
     local plans, deletes = {}, {}
     for e in util.between(col.events, C, length, notFake) do
-      if e.ppq < D then util.add(deletes, { col = col, evt = e })
+      if e.ppq < D then util.add(deletes, e)
       else              util.add(plans, shiftPlan(col, e, -dLogical)) end
     end
 
-    conformOverlaps(plans)
-    for _, d in ipairs(deletes) do tm:deleteEvent(d.evt) end
+    conformOverlaps(plans, deletes)
+    for _, e in ipairs(deletes) do tm:deleteEvent(e) end
     writePlans(plans)
   end
 
@@ -1493,28 +1537,11 @@ local deleteEvent, deleteSelection do
   -- Fixups are computed before any mutation: tm:assignEvent's same-key clamp
   -- reads live state, so we must delete first and stretch second.
   local function queueDeleteNotes(col, locs)
-    local chan = col.midiChan
-    local fixups = {}
-    local lastSurvivor, pendingFixup = nil, false
+    local chan, notes = col.midiChan, {}
     for _, evt in ipairs(col.events) do
-      if evt.type ~= 'pa' then
-        if locs[evt] then
-          if not pendingFixup and lastSurvivor and lastSurvivor.endppq >= evt.ppq then
-            pendingFixup = true
-          end
-        else
-          if pendingFixup then
-            util.add(fixups, { evt = lastSurvivor, endppq = evt.ppq })
-          end
-          pendingFixup = false
-          lastSurvivor = evt
-        end
-      end
+      if evt.type ~= 'pa' then notes[#notes + 1] = evt end
     end
-    if pendingFixup then
-      util.add(fixups, { evt = lastSurvivor, endppq = length })
-    end
-
+    local fixups = legato.deleteFixups(notes, locs, length)
     for _, evt in pairs(locs) do
       if evt.type ~= 'pa' then tm:deleteEvent(evt) end
     end
@@ -1604,34 +1631,83 @@ end
 
 ----- Duplicate
 
-local dupeClip = nil
+local dupeState = nil
 
---contract: upward duplication past row 0 trims the top of the clip (start cut, not end), so repeated upward stamps stay anchored at the cursor; never touches user clipboard. First call collects; subsequent immediate calls re-paste the cached clip.
-local function duplicate(dir)
-  local clip = dupeClip or clipboard:collect()
-  if not clip then return end
-  local r1, r2, c1, c2, part1, part2 = ec:region()
-  local numRows   = r2 - r1 + 1
-  local targetRow = dir > 0 and r2 + 1 or r1 - numRows
-  local trim      = targetRow < 0 and -targetRow or 0
-  targetRow       = math.max(targetRow, 0)
-  local effRows   = numRows - trim
-  if effRows <= 0 or targetRow >= (grid.numRows or 0) then return end
+-- Cursor cell as a 1-row mirror rect: the seed-rect fallback for plain
+-- duplicate when there is no real selection (selectionAsRect is nil).
+-- This is the 1x1 carveout -- mirror passes no fallback, so a degenerate
+-- selection is a no-op there; plain duplicate clones the cursor cell.
+local function cursorRect()
+  local _, c = ec:pos()
+  local col  = grid.cols[c]
+  if not col then return nil end
+  local lpr = logPerRowFor(currentRpb())
+  return { ppq = ec:row() * lpr, dur = lpr, chanLo = col.midiChan,
+           streams = { [0] = { [streamIdOf(col)] = true } } }
+end
 
-  if trim > 0 then clipboard:trimTop(clip, trim) end
-
-  local savedRow, savedCol, savedStop = ec:pos()
-  ec:setPos(targetRow, ec:regionStart())
-
-  clipboard:pasteClip(clip)
-
-  local shift = targetRow - r1
-  ec:setPos(savedRow + shift, savedCol, savedStop)
-  if ec:hasSelection() then
-    ec:setSelection{ row1 = targetRow, row2 = targetRow + effRows - 1,
-                     col1 = c1, col2 = c2, part1 = part1, part2 = part2 }
+-- The grid columns the rect's stream set lands on when its chanLo is
+-- pinned to `anchor.chan` -- the shared logical->grid mapping. Resolving
+-- this at paste/select time (not freezing the seed column) is what lets
+-- a channel-changing cursor move carry the cascade to the new channel.
+local function colsForAnchor(anchor, rect)
+  local col1, col2
+  for ci, col in ipairs(grid.cols) do
+    local sel = rect.streams[col.midiChan - anchor.chan]
+    if sel and sel[streamIdOf(col)] then
+      col1 = col1 or ci
+      col2 = ci
+    end
   end
-  dupeClip = clip
+  return col1, col2
+end
+
+-- First stop in `col` carrying part `part` (the seed's part name), or
+-- 1 if unknown -- keeps pasteSingle's pitch/vel dispatch on the part
+-- the user duplicated, at whatever column the anchor resolved to.
+local function stopForPart(col, part)
+  for stop, name in ipairs(grid.cols[col].partAt) do
+    if name == part then return stop end
+  end
+  return 1
+end
+
+-- Inverse of selectionAsRect: drop a grid selection (cursor at its
+-- top-left) at a logical anchor. Whole-column parts -- the cascade
+-- carries part precision in its payload, not in the live selection.
+local function selectRegionAt(anchor, rect)
+  local col1, col2 = colsForAnchor(anchor, rect)
+  if not col1 then return end
+  local lpr  = logPerRowFor(currentRpb())
+  local row1 = anchor.ppq // lpr
+  local row2 = row1 + rect.dur // lpr - 1
+  local pa1, pa2 = grid.cols[col1].partAt, grid.cols[col2].partAt
+  ec:setPos(row1, col1, 1)
+  ec:setSelection{ row1 = row1, row2 = row2, col1 = col1, col2 = col2,
+                   part1 = pa1[1], part2 = pa2[#pa2] }
+end
+
+-- Plain duplicate: clip payload, cursor-cell seed fallback. The cascade
+-- lifetime, anchor and select-the-copy live in tv:duplicateCascade.
+-- place re-homes the paste to the anchor's channel (colsForAnchor), so a
+-- channel-changing cursor move moves subsequent copies, not just rows.
+local function duplicate()
+  dupeState = tv:duplicateCascade(dupeState,
+    function()
+      local clip = clipboard:collect()
+      if not clip then return nil end
+      local col, stop = ec:regionStart()
+      return { clip = clip, part = grid.cols[col].partAt[stop] }
+    end,
+    function(rect, anchor, payload)
+      local col = colsForAnchor(anchor, rect)
+      if not col then return payload end
+      ec:setPos(anchor.ppq // logPerRowFor(currentRpb()),
+                col, stopForPart(col, payload.part))
+      clipboard:pasteClip(payload.clip)
+      return payload
+    end,
+    cursorRect)
 end
 
 ---------- PUBLIC
@@ -1654,6 +1730,123 @@ function tv:sampleCurve(A, B, ppq) return tm:interpolate(A, B, ppq) end
 function tv:timeSig()
   local ts = timeSigs[1] or { num = 4, denom = 4 }
   return ts.num, ts.denom
+end
+
+----- Mirror bridge
+
+-- Shared duplicate cascade. `state` is the run token (nil seeds);
+-- `collectSource` captures a payload while the source is still intact
+-- (plain dup: clip + part; mirror: nil -- events come from the rect in
+-- `place`); `place(rect, anchor, payload)` drops a copy and returns the
+-- payload to carry forward; `fallbackRect` (plain dup only) supplies a
+-- seed rect when there is no real selection. The seed lands one region
+-- below the source; an unmoved cursor stacks the next copy at `next`, a
+-- moved cursor drops it at the cursor. A cascade seeded from a real
+-- selection re-selects each copy; one seeded from the fallback rect
+-- (no selection -- the 1x1 cell carveout) leaves no selection, like a
+-- classic cell duplicate. Returns the new run token.
+function tv:duplicateCascade(state, collectSource, place, fallbackRect)
+  local rect, fromSel
+  if state then
+    rect, fromSel = state.rect, state.fromSel
+  else
+    rect    = tv:selectionAsRect()
+    fromSel = rect ~= nil
+    rect    = rect or (fallbackRect and fallbackRect())
+  end
+  if not rect then return state end
+  local payload = state and state.payload
+  local ppq, chan
+  if not state then
+    if collectSource then
+      payload = collectSource()
+      if payload == nil then return nil end
+    end
+    ppq, chan = rect.ppq + rect.dur, rect.chanLo
+  else
+    local a = tv:cursorAnchor()
+    if not a then return state end
+    if state.mark and a.ppq == state.mark.ppq and a.chan == state.mark.chan then
+      ppq, chan = state.next, a.chan   -- not moved: stack below, same channel
+    else
+      ppq, chan = a.ppq, a.chan        -- moved: at the cursor
+    end
+  end
+  if ppq + rect.dur > tm:length() then return state end
+  local anchor = { ppq = ppq, chan = chan }
+  payload = place(rect, anchor, payload)
+  if fromSel then selectRegionAt(anchor, rect) else ec:selClear() end
+  return { rect = rect, payload = payload, fromSel = fromSel,
+           next = ppq + rect.dur, mark = tv:cursorAnchor() }
+end
+
+-- The active selection as a mirror rect: a logical-frame time span x a
+-- per-channel streamId set, chanOffset relative to the lowest selected
+-- channel. nil unless a real (non-degenerate) selection exists.
+function tv:selectionAsRect()
+  if not ec:hasSelection() then return nil end
+  local r1, r2, c1, c2 = ec:region()
+  local chanLo
+  for ci = c1, c2 do
+    local col = grid.cols[ci]
+    if col then chanLo = math.min(chanLo or col.midiChan, col.midiChan) end
+  end
+  if not chanLo then return nil end
+
+  local streams = {}
+  for ci = c1, c2 do
+    local col = grid.cols[ci]
+    if col then
+      local off = col.midiChan - chanLo
+      streams[off] = streams[off] or {}
+      streams[off][streamIdOf(col)] = true
+    end
+  end
+
+  local lpr = logPerRowFor(currentRpb())
+  return { ppq = r1 * lpr, dur = (r2 - r1 + 1) * lpr,
+           chanLo = chanLo, streams = streams }
+end
+
+-- Concrete events the rect contains. Membership is the mirror predicate
+-- in the logical frame: onset ppq in the span AND the column's stream is
+-- selected for its channel offset. col.events ppq is logical (tm
+-- invariant), so the comparison needs no swing maths.
+-- chan/lane/cc are column-implicit in the tm stack (the container is the
+-- channel/lane); mirm needs them per-event for its anchor maths and must
+-- keep object identity (it links the live evt for propagation), so we
+-- backfill the authoritative column values rather than clone.
+function tv:eventsInRect(rect)
+  local lo, hi = rect.ppq, rect.ppq + rect.dur
+  local out = {}
+  for _, col in ipairs(grid.cols) do
+    local sel = rect.streams[col.midiChan - rect.chanLo]
+    if sel and sel[streamIdOf(col)] then
+      for evt in util.between(col.events, lo, hi) do
+        evt.chan = evt.chan or col.midiChan
+        if col.type == 'note' then evt.lane = evt.lane or col.lane
+        elseif col.type == 'cc' then evt.cc  = evt.cc  or col.cc end
+        util.add(out, evt)
+      end
+    end
+  end
+  return out
+end
+
+-- Cursor as a mirror anchor: { ppq, chan } in the logical frame.
+function tv:cursorAnchor()
+  local _, c = ec:pos()
+  local col = grid.cols[c]
+  if not col then return nil end
+  return { ppq = ec:row() * logPerRowFor(currentRpb()), chan = col.midiChan }
+end
+
+-- (channel offset, stream id) for a grid column, relative to chanLo —
+-- the coordinates a mirror rect's `streams` table is keyed by.
+function tv:streamRefAt(colIx, chanLo)
+  local col = grid.cols[colIx]
+  if not col then return nil end
+  return col.midiChan - chanLo, streamIdOf(col)
 end
 
 ----- Non-command callbacks from trackerPage
@@ -1766,43 +1959,42 @@ end
 local tracker = cmgr:scope('tracker')
 
 tracker:registerAll{
-  cut                     = function() clipboard:copy(); deleteSelection() end,
-  delete                  = deleteOrBackspace,
-  interpolate             = function() interpolate() end,
-  deleteSel               = function() deleteSelection() end,
-  duplicateDown           = function() duplicate( 1) end,
-  duplicateUp             = function() duplicate(-1) end,
+  cut                     = { function() clipboard:copy(); deleteSelection() end, 'Cut' },
+  delete                  = { deleteOrBackspace,                                  'Delete' },
+  interpolate             = { function() interpolate() end,                       'Interpolate' },
+  deleteSel               = { function() deleteSelection() end,                   'Delete selection' },
+  duplicateDown           = { duplicate,                                          'Duplicate' },
   inputOctaveUp           = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')+1, -1, 9)) end,
   inputOctaveDown         = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')-1, -1, 9)) end,
   inputSampleUp           = function() stepSample( 1) end,
   inputSampleDown         = function() stepSample(-1) end,
-  noteOff                 = noteOff,
-  growNote                = function() adjustDuration(1) end,
-  shrinkNote              = function() adjustDuration(-1) end,
-  nudgeBack               = function() adjustPosition(-1) end,
-  nudgeForward            = function() adjustPosition(1) end,
+  noteOff                 = { noteOff,                                            'Note off' },
+  growNote                = { function() adjustDuration(1) end,                   'Resize note' },
+  shrinkNote              = { function() adjustDuration(-1) end,                  'Resize note' },
+  nudgeBack               = { function() adjustPosition(-1) end,                  'Nudge' },
+  nudgeForward            = { function() adjustPosition(1) end,                   'Nudge' },
   -- '(' halves: with prefix p = pn/pd, k = pd/pn (reciprocal). Default 1/2.
-  scaleHalf               = function()
+  scaleHalf               = { function()
     if not ec:hasSelection() then return end
     local pn, pd = cmgr:consumePrefixRational()
     if pn then tv:scaleSelection(pd, pn)
     else       tv:scaleSelection(1, 2) end
-  end,
+  end, 'Halve' },
   -- ')' doubles: with prefix p = pn/pd, k = pn/pd. Default 2/1.
-  scaleDouble             = function()
+  scaleDouble             = { function()
     if not ec:hasSelection() then return end
     local pn, pd = cmgr:consumePrefixRational()
     if pn then tv:scaleSelection(pn, pd)
     else       tv:scaleSelection(2, 1) end
-  end,
-  insertRow               = function() insertRow() end,
-  deleteRow               = function() deleteRow() end,
-  insertRowCol            = function() insertRowCol() end,
-  deleteRowCol            = function() deleteRowCol() end,
-  nudgeCoarseUp           = function() nudge( 1, true)  end,
-  nudgeCoarseDown         = function() nudge(-1, true)  end,
-  nudgeFineUp             = function() nudge( 1, false) end,
-  nudgeFineDown           = function() nudge(-1, false) end,
+  end, 'Double' },
+  insertRow               = { function() insertRow() end,         'Insert row' },
+  deleteRow               = { function() deleteRow() end,         'Delete row' },
+  insertRowCol            = { function() insertRowCol() end,      'Insert row in column' },
+  deleteRowCol            = { function() deleteRowCol() end,      'Delete row in column' },
+  nudgeCoarseUp           = { function() nudge( 1, true)  end,    'Nudge' },
+  nudgeCoarseDown         = { function() nudge(-1, true)  end,    'Nudge' },
+  nudgeFineUp             = { function() nudge( 1, false) end,    'Nudge' },
+  nudgeFineDown           = { function() nudge(-1, false) end,    'Nudge' },
   playFromTop             = function() tm:playFrom(0) end,
   playFromCursor          = function()
     local col = grid.cols[ec:col()]
@@ -1987,7 +2179,7 @@ clipboard:registerCommands(tracker)
 cmgr:doAfter({
   'nudgeCoarseUp', 'nudgeCoarseDown', 'nudgeFineUp', 'nudgeFineDown',
   'nudgeBack', 'nudgeForward', 'growNote', 'shrinkNote',
-  'duplicateDown', 'duplicateUp', 'interpolate', 'insertRow',
+  'duplicateDown', 'interpolate', 'insertRow',
   'deleteRow', 'insertRowCol', 'deleteRowCol', 'noteOff',
 }, function() ec:unstick() end)
 
@@ -2001,14 +2193,21 @@ cmgr:doBefore({
   'colLeft', 'channelRight', 'channelLeft', 'delete',
 }, killAudition)
 
--- Any non-duplicate command breaks the duplicate run.
+-- A plain duplicate run survives pure cursor moves and the deselection
+-- they cause (the DUP_KEEP policy, mirroring trackerPage's); any new
+-- selection or mutation ends it.
 do
-  local keep = { duplicateDown = true, duplicateUp = true }
+  local keep = { duplicateDown = true, selectClear = true,
+    cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
+    pageUp=true, pageDown=true, goTop=true, goBottom=true,
+    goLeft=true, goRight=true, colLeft=true, colRight=true,
+    channelLeft=true, channelRight=true }
+  for i = 0, 9 do keep['advBy' .. i] = true end
   local clearOn = {}
   for name in pairs(tracker.registered) do
     if not keep[name] then clearOn[#clearOn + 1] = name end
   end
-  cmgr:doBefore(clearOn, function() dupeClip = nil end)
+  cmgr:doBefore(clearOn, function() dupeState = nil end)
 end
 
 tv:rebuild(true)

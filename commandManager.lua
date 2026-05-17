@@ -11,6 +11,8 @@
 --shape: keyspec = keyConstant | { keyConstant, mod1, mod2, ... }   -- mods OR'd into a single mask
 --shape: keymapEntry = { keyspec, ... }                              -- array; each keyspec triggers the same command
 --shape: noteChar = { semi = 0..16, octOff = 0..1 }
+local util = require 'util'
+
 local layouts = {
   qwerty = {
     { 'z','s','x','d','c','v','g','b','h','n','j','m',',','l','.' },
@@ -82,14 +84,19 @@ local function newScope()
   -- callers iterate names this scope owns (vm uses this). Re-registration
   -- silently overwrites — the test harness exercises this when a spec
   -- builds a second vm against an already-populated cmgr.
-  function s:register(name, fn)
+  --contract: optional undoDesc wraps fn in util.atomic(undoDesc, fn) so REAPER's undo stack records this command as a labelled block
+  function s:register(name, fn, undoDesc)
     self.registered[name] = true
-    mgr.commands[name] = fn
+    mgr.commands[name] = undoDesc and util.atomic(undoDesc, fn) or fn
     mgr.gates[name]    = self
   end
 
+  --contract: registerAll value is either fn or {fn, undoDesc}; the tuple form opts the command into REAPER undo wrapping with the given label
   function s:registerAll(tbl)
-    for name, fn in pairs(tbl) do self:register(name, fn) end
+    for name, v in pairs(tbl) do
+      if type(v) == 'function' then self:register(name, v)
+      else                          self:register(name, v[1], v[2]) end
+    end
   end
 
   function s:bind(name, keys)        self.keymap[name] = keys end
@@ -118,14 +125,12 @@ mgr.keymap        = global.keymap
 -- modules use scope:register for mode-gated verbs; mgr:register is for
 -- the unconditional ones (play, quit, switchPage).
 
-function mgr:register(name, fn)
-  self.commands[name] = fn
-  self.gates[name]    = nil
-end
+--contract: delegates to the global scope — root-level commands are gated-to-global, which is always reachable; the duplicated registration body now lives only in scope:register
+function mgr:register(name, fn, undoDesc) global:register(name, fn, undoDesc) end
+function mgr:registerAll(tbl)             global:registerAll(tbl)             end
 
-function mgr:registerAll(tbl)
-  for name, fn in pairs(tbl) do self:register(name, fn) end
-end
+--contract: returns the bottom-of-stack ('global') keymap directly — used by dispatchers that want to fire ONLY root bindings (e.g. trackerPage's swing editor wants playPause/quit live but page-scoped commands off)
+function mgr:rootKeymap() return global.keymap end
 
 function mgr:bind(name, keys)    global:bind(name, keys) end
 function mgr:bindAll(tbl)        global:bindAll(tbl)     end

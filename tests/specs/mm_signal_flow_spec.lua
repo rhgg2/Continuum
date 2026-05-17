@@ -88,14 +88,14 @@ return {
   },
 
   {
-    name = 'tm.rebuild payload is nil (takeSwapped travels via its own signal)',
+    name = 'tm.rebuild forwards takeChanged (so mirm can reload take-tier state)',
     run = function()
       local h = harness.mk()
       local count, lastPayload = 0, 'unset'
       h.tm:subscribe('rebuild', function(data) count = count + 1; lastPayload = data end)
       h.fm:load('different-take')
       t.eq(count, 1, 'rebuild fired exactly once')
-      t.eq(lastPayload, nil, 'rebuild payload is nil')
+      t.eq(lastPayload, true, 'rebuild payload carries takeChanged from the take swap')
     end,
   },
 

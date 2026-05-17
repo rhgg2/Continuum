@@ -125,6 +125,14 @@ Never hand-edit them.
   add red-first regression tests. All refactors add tests pinning
   the invariant.
 
+- Unit specs may fake a layer, but a spec covering a wired
+  behaviour (commands, hooks, lifetime, the UI path) must exercise
+  the **actual** production wiring — the real command body, the real
+  doBefore/doAfter hooks, the real flush. A hand-fake that
+  re-implements the production handler tests the fake, not the code:
+  it stays green while production breaks. If the real path needs
+  ImGui or REAPER, stub the surface, not the behaviour under test.
+
 - Spec files live in `tests/specs/`, registered in `tests/run.lua`.
   Read only specs adjacent to your changes.
 
@@ -151,6 +159,12 @@ Never hand-edit them.
 
 Aim for limpid elegance. Use whatever paradigm is most expressive and
 direct. Compact, but clear.
+
+- Comments and doc notes are for a future reader with no memory of
+  this session. Never leave a note whose sense depends on context
+  only you currently hold — "the episode above", "as we discussed",
+  "the bug we just hit", "for now". If it can't be understood cold,
+  state the actual constraint or delete it.
 
 - Use closures extensively.
 - Scope tightly: wrap private helpers in `local fn do ... end`; readers then see which belong to which function.

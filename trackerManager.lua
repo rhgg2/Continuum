@@ -129,6 +129,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   local deletes = {}
   local chans = {}
   local byToken = {}
+  local byUuid  = {}
   local dirtyPcChans = {}
 
   ----- Accessors
@@ -247,7 +248,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
     if token then
       byToken[token] = nil
-      util.add(deletes, { token = token })
+      util.add(deletes, { token = token, evt = evt })
       for j = #assigns, 1, -1 do
         if assigns[j].token == token then table.remove(assigns, j) end
       end
@@ -508,29 +509,6 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     if next(update) then assignLowlevel(n, update) end
   end
 
-  -- Returns (clampEnd, clampEndL): the realised end and its logical
-  -- counterpart. Truncated peers are stamped with endppqL = selfPpqL so
-  -- the canonical logical frame stays coherent with endppq.
-  local function clearSameKeyRange(chan, pitch, P, Pend, selfPpqL, selfEvt)
-    local clampEnd, clampEndL = Pend, nil
-    local toDelete, toTruncate = {}, {}
-    for _, n in pairs(byToken) do
-      if n.evType == 'note' and n ~= selfEvt and n.chan == chan and n.pitch == pitch then
-        if n.ppq <= P and n.endppq > P then
-          if n.ppq == P then util.add(toDelete, n)
-          else util.add(toTruncate, n) end
-        elseif clampEnd and n.ppq > P and n.ppq < clampEnd then
-          clampEnd, clampEndL = n.ppq, n.ppqL
-        end
-      end
-    end
-    for _, n in ipairs(toDelete)   do deleteNote(n) end
-    for _, n in ipairs(toTruncate) do
-      assignNote(n, { endppq = P, endppqL = selfPpqL })
-    end
-    return clampEnd, clampEndL
-  end
-
   ----- PC reconciliation (trackerMode mutation hook)
 
   local function reconcilePcs(chan)
@@ -561,6 +539,11 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   end
 
   ----- Public interface
+
+  -- The live column event for a uuid, valid until the next rebuild.
+  -- uuid is mm's durable identity; token is internal and re-keyed, so
+  -- cross-rebuild handles (mirm) resolve through this, never the token.
+  function tm:byUuid(uuid) return byUuid[uuid] end
 
   function deleteEvent(evtOrToken)
     local evt = lookup(evtOrToken)
@@ -621,20 +604,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     if not evt then return end
     local et = evt.evType
     if et == 'note' then
-      local rawCaller = update.ppqL ~= nil or update.endppqL ~= nil
       realiseNoteUpdate(evt, update)
-      if not rawCaller
-         and (update.pitch ~= nil or update.ppq ~= nil or update.endppq ~= nil) then
-        local P      = update.ppq    or evt.ppq
-        local Pend   = update.endppq or evt.endppq
-        local pitch  = update.pitch  or evt.pitch
-        local selfL  = update.ppqL   or evt.ppqL
-        local clamped, clampedL = clearSameKeyRange(evt.chan, pitch, P, Pend, selfL, evt)
-        if clamped ~= Pend then
-          update.endppq  = clamped
-          update.endppqL = clampedL
-        end
-      end
       assignNote(evt, update)
     elseif et == 'pb' then
       realiseNonNoteUpdate(evt.chan, update)
@@ -653,10 +623,6 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       evt.delay  = evt.delay  or 0
       evt.lane   = evt.lane   or 1
       if not rawCaller then realiseAddPpq(evt, true, true) end
-      local clamped, clampedL =
-        clearSameKeyRange(evt.chan, evt.pitch, evt.ppq, evt.endppq, evt.ppqL, evt)
-      evt.endppq = clamped
-      if clampedL then evt.endppqL = clampedL end
       addNote(evt)
     else
       if not rawCaller then realiseAddPpq(evt, false, false) end
@@ -668,12 +634,90 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   --contract: no-op if nothing staged; otherwise commits assigns then deletes then adds under one mm:modify; pb cents→raw conversion happens here; byToken is re-keyed live from mm:assign's returned token whenever an identity field moved
   --contract: snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
+  --emits: preflush -- (adds, assigns, deletes); fired first, before the no-op check, so a subscriber (mirm) can stage peer ops into the same lists and ride the one mm:modify
+  --emits: postflush -- nil; fired after mm:modify so a subscriber can read the uuids mm just stamped onto staged add events
   function flush()
+    fire('preflush', adds, assigns, deletes)
     if cm:get('trackerMode') and next(dirtyPcChans) then
       for chan in pairs(dirtyPcChans) do reconcilePcs(chan) end
       dirtyPcChans = {}
     end
     if #adds == 0 and #assigns == 0 and #deletes == 0 then return end
+
+    -- CSK enforced once here as a SINGLE scan over every note that
+    -- will exist post-flush — committed (byToken, all lanes) and
+    -- staged adds alike. Not a per-self peer walk: two notes can
+    -- collide without either being the edited one, and repeated
+    -- per-self truncation damages peers a later same-flush op would
+    -- resolve. Run after preflush (propagated peers staged) and before
+    -- the snapshot (clamps/deletes ride this flush). Invariant: at
+    -- most one voice per (chan,pitch); a conform tail also capped at
+    -- the take (its intended overrun must not auto-extend the source).
+    -- The length cap is conform-only: a grow-rescale legitimately
+    -- doubles non-conform tails before the length grows in the same
+    -- flush, so capping those here would wrongly shorten them. conform
+    -- keeps its natural endppqL (raw note-off is realisation only;
+    -- conform-tail re-derives it); non-conform endppqL tracks the clip
+    -- so the next rebuild can't re-expand it.
+    do
+      local takeLen = tm:length()
+      local byKey   = {}
+      for _, n in pairs(byToken) do
+        if n.evType == 'note' then util.bucket(byKey, n.chan .. '|' .. n.pitch, n) end
+      end
+      for _, o in ipairs(adds) do
+        if o.evt.evType == 'note' then util.bucket(byKey, o.evt.chan .. '|' .. o.evt.pitch, o.evt) end
+      end
+
+      local clips, kills = {}, {}
+      for _, group in pairs(byKey) do
+        -- Coincident-onset dedup: keep the longest, drop the rest
+        -- (mm's note-dedup rule). Outcome-deterministic — equal-length
+        -- duplicates are geometrically identical.
+        local longestAt = {}
+        for _, n in ipairs(group) do
+          local kept = longestAt[n.ppq]
+          if not kept then
+            longestAt[n.ppq] = n
+          elseif n.endppq > kept.endppq then
+            longestAt[n.ppq] = n; util.add(kills, kept)
+          else
+            util.add(kills, n)
+          end
+        end
+
+        local voiced = {}
+        for _, n in pairs(longestAt) do util.add(voiced, n) end
+        table.sort(voiced, function(a, b) return a.ppq < b.ppq end)
+
+        for i = 1, #voiced do
+          local n      = voiced[i]
+          local nextOn = voiced[i + 1] and voiced[i + 1].ppq or math.huge
+          local cap    = n.conform and takeLen or math.huge
+          local bound  = math.max(n.ppq + 1, math.min(n.endppq, nextOn, cap))
+          if bound < n.endppq then
+            -- conform keeps its natural endppqL (raw note-off is
+            -- realisation only; conform-tail re-derives it).
+            local endppqL
+            if not n.conform then
+              endppqL = (voiced[i + 1] and bound == voiced[i + 1].ppq
+                           and voiced[i + 1].ppqL)
+                        or tm:toLogical(n.chan, bound)
+            end
+            util.add(clips, { n = n, endppq = bound, endppqL = endppqL })
+          end
+        end
+      end
+
+      for _, n in ipairs(kills) do deleteNote(n) end
+      for _, c in ipairs(clips) do
+        local up = { endppq = c.endppq }
+        if c.endppqL ~= nil then up.endppqL = c.endppqL end
+        if c.n.token then assignNote(c.n, up)   -- committed: route PA/detune resize
+        else              util.assign(c.n, up)  -- staged add: geometry only
+        end
+      end
+    end
 
     local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
     adds, assigns, deletes = {}, {}, {}
@@ -719,6 +763,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
         end
       end
     end)
+    fire('postflush')
   end
 
   ----- Init / reload: (re)load local cache from mm.
@@ -730,6 +775,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     adds, assigns, deletes = {}, {}, {}
     dirtyPcChans           = {}
     byToken                = {}
+    byUuid                 = {}
     for i = 1, 16 do chans[i] = { notes = {}, pbs = {} } end
 
     for tok, e in mm:events() do
@@ -746,6 +792,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
         end
       end
       byToken[tok] = evt
+      if evt.uuid then byUuid[evt.uuid] = evt end
     end
     for i = 1, 16 do sortByPPQ(chans[i].notes); sortByPPQ(chans[i].pbs) end
   end
@@ -794,8 +841,9 @@ local clearSwing do
       local global, column = nil, {}
       if mm then
         local length, ppqPerQN = mm:length() or 0, mm:resolution()
+        local lib = cm:get('swings', { mergeTiers = true })
         local function resolve(name)
-          local composite = timing.findShape(name, cm:get('swings'))
+          local composite = name and lib[name]
           if timing.isIdentity(composite) or length <= 0 then return nil end
           return timing.resolveComposite(composite, length, ppqPerQN)
         end
@@ -1142,7 +1190,11 @@ do
         for _, lst in pairs(pcByChan) do sortByPPQ(lst) end
       end
 
-      local groups, work = {}, {}
+      -- byPitch drives the MIDI-legality same-(chan,pitch) overlap clamp;
+      -- byLane drives conform-tail realisation. Both run BEFORE column
+      -- allocation so the allocator sees the realised (short) raw tail
+      -- and doesn't bump a would-be lane blocker out of the lane.
+      local byPitch, byLane, work = {}, {}, {}
       for _, note in mm:notes() do
         local update = {}
         if note.detune == nil then update.detune = 0 end
@@ -1154,14 +1206,46 @@ do
         end
         local tok = mm:tokenOf(note)
         if next(update) then mm:assign(tok, update) end
-        util.bucket(groups, note.chan .. '|' .. note.pitch,
-                    { token = tok, ppq = note.ppq, endppq = note.endppq })
+        local e = { token = tok, chan = note.chan, pitch = note.pitch,
+                    ppq = note.ppq, endppq = note.endppq, ppqL = note.ppqL,
+                    endppqL = note.endppqL, conform = note.conform }
+        util.bucket(byPitch, note.chan .. '|' .. note.pitch, e)
+        util.bucket(byLane,  note.chan .. '|' .. (note.lane or 1), e)
       end
-      for _, group in pairs(groups) do
-        sortByPPQ(group)
+      for _, g in pairs(byPitch) do sortByPPQ(g) end
+      for _, g in pairs(byLane)  do sortByPPQ(g) end
+
+      -- Logical onset of the first strictly-later note in a ppq-sorted
+      -- group (chords at the same onset are not "following").
+      local function laterL(group, ppq)
+        local n = util.seek(group, 'after', ppq)
+        return n and n.ppqL
+      end
+
+      for _, group in pairs(byPitch) do
         for i = 1, #group - 1 do
-          if group[i].endppq > group[i + 1].ppq then
+          if not group[i].conform and group[i].endppq > group[i + 1].ppq then
             util.add(work, { token = group[i].token, endppq = group[i + 1].ppq })
+          end
+        end
+      end
+      -- Conform: raw note-off = min(natural endppqL, next same-lane onset,
+      -- next same-pitch chan-wide onset, take length), floored at onset+1.
+      -- The take length is the absolute backstop: a trailing conform note
+      -- (no follower in its lane or pitch) would otherwise keep its full
+      -- natural tail and overrun the take. endppqL is never touched —
+      -- deleting the blocker grows the raw tail back.
+      local takeLenL = tm:length()
+      for _, group in pairs(byLane) do
+        for _, e in ipairs(group) do
+          if e.conform then
+            local laneL  = laterL(group, e.ppq)
+            local pitchL = laterL(byPitch[e.chan .. '|' .. e.pitch], e.ppq)
+            local boundL = math.max(e.ppqL + 1,
+              math.min(e.endppqL, laneL or math.huge,
+                       pitchL or math.huge, takeLenL))
+            util.add(work, { token = e.token,
+                             endppq = util.round(tm:fromLogical(e.chan, boundL)) })
           end
         end
       end
@@ -1254,7 +1338,7 @@ do
           c.ccs[ccNum] = c.ccs[ccNum] or { cc = ccNum, events = {} }
         end
       end
-      if grew then cm:set('take', 'extraColumns', extras) end
+      if grew and mm:take() then cm:set('take', 'extraColumns', extras) end
     end
 
     -- 4.5) PC synthesis (trackerMode only).
@@ -1318,7 +1402,9 @@ do
         if stale and evt.ppqL ~= nil then
           local newPpq = tm:fromLogical(chan, evt.ppqL, d)
           if newPpq ~= evt.ppq then update.ppq, evt.ppq = newPpq, newPpq end
-          if isNote and evt.endppqL ~= nil then
+          -- conform: raw endppq is owned by the conform-tail pass, not
+          -- reseated from endppqL (which is the natural truth, kept long).
+          if isNote and not evt.conform and evt.endppqL ~= nil then
             local newEndppq = tm:fromLogical(chan, evt.endppqL)
             if newEndppq ~= evt.endppq then
               update.endppq, evt.endppq = newEndppq, newEndppq
@@ -1333,7 +1419,10 @@ do
             local newPpqL = tm:toLogical(chan, evt.ppq - d)
             update.ppqL, evt.ppqL = newPpqL, newPpqL
           end
-          if isNote then
+          -- conform: deliberate raw≠fromLogical(endppqL) disagreement —
+          -- it is the clipped projection, not an external edit, so do
+          -- NOT back-derive (it would clobber the natural endppqL).
+          if isNote and not evt.conform then
             local predEnd = evt.endppqL ~= nil
               and tm:fromLogical(chan, evt.endppqL) or nil
             if not predEnd or math.abs(evt.endppq - predEnd) > EPS then
@@ -1386,10 +1475,17 @@ do
     -- 5) Project to logical.
     do
       -- evt.ppq integer-rounded for tv:rebuild's offGrid compare; ppqL stays float so swing inverse round-trips stay exact.
+      -- conform: raw endppq is owned by the conform-tail pass (step 1),
+      -- not reseated from endppqL here — endppqL stays the natural truth
+      -- (kept long), while the realised note-off the user sees is the
+      -- clipped value the conform-tail wrote. Symmetric with step 4's
+      -- `not evt.conform` carve-out.
       local function projectToLogical(col)
         for _, evt in ipairs(col.events) do
-          if evt.ppqL    ~= nil then evt.ppq    = util.round(evt.ppqL)    end
-          if evt.endppqL ~= nil then evt.endppq = util.round(evt.endppqL) end
+          if evt.ppqL ~= nil then evt.ppq = util.round(evt.ppqL) end
+          if evt.endppqL ~= nil and not evt.conform then
+            evt.endppq = util.round(evt.endppqL)
+          end
         end
         sortByPPQ(col.events)
       end
@@ -1406,8 +1502,10 @@ do
 
     -- Project the take's used swing names into take-tier cm so seqMgr can
     -- discover affected takes via cm:readTakeKey. String entries only —
-    -- anonymous composites are frozen at authoring.
-    do
+    -- anonymous composites are frozen at authoring. No-op when no take is
+    -- bound: usedSwings is take-scoped and global tiers can still resolve
+    -- a non-empty `swing` here (e.g. samplePage's setTrack-induced rebuild).
+    if mm:take() then
       local used = {}
       local g = cm:get('swing')
       if type(g) == 'string' then used[g] = true end
@@ -1425,8 +1523,8 @@ do
     rebuilding = false
     pendingFlushUuids = nil
 
-    --emits: rebuild  -- nil; fires once at the end of every rebuild after the update-manager cache is reloaded
-    fire('rebuild', nil)
+    --emits: rebuild  -- takeChanged:boolean; fires once at the end of every rebuild after the update-manager cache is reloaded. True only when this rebuild followed a take swap (bindTake), so a subscriber can reload take-tier state.
+    fire('rebuild', takeChanged)
   end
 end
 
@@ -1437,11 +1535,15 @@ do
   local tvOnlyKeys = { mutedChannels = true, soloedChannels = true, usedSwings = true }
 
   --invariant: configChanged routes: 'swing' → all 16; 'colSwing' → channels with diff vs prevColSwing; 'swings' → channels resolving to names with diff body vs prevSwings. Caches refresh after each event and on bindTake.
-  local prevSwings   = util.deepClone(cm:get('swings')   or {})
+  -- Merged-tier read: a save at any tier (project, global) lands in the
+  -- same merged view, so diff captures real change to the composite a
+  -- channel will resolve to.
+  local function readSwings() return cm:get('swings', { mergeTiers = true }) end
+  local prevSwings   = util.deepClone(readSwings())
   local prevColSwing = util.deepClone(cm:get('colSwing') or {})
 
   local function snapshotSwingState()
-    prevSwings   = util.deepClone(cm:get('swings')   or {})
+    prevSwings   = util.deepClone(readSwings())
     prevColSwing = util.deepClone(cm:get('colSwing') or {})
   end
 
@@ -1505,10 +1607,11 @@ do
       end
       prevColSwing = util.deepClone(cm:get('colSwing') or {})
     elseif key == 'swings' then
-      for chan in pairs(channelsResolvingTo(changedSwingNames(prevSwings, cm:get('swings')))) do
+      local curSwings = readSwings()
+      for chan in pairs(channelsResolvingTo(changedSwingNames(prevSwings, curSwings))) do
         tm:markSwingStale(chan)
       end
-      prevSwings = util.deepClone(cm:get('swings') or {})
+      prevSwings = util.deepClone(curSwings)
     end
     if not tvOnlyKeys[key] then tm:rebuild(false) end
   end)
@@ -1527,6 +1630,9 @@ do
   end
 
   function tm:currentTake() return mm and mm:take() end
+
+  --contract: re-reads the bound take from REAPER. Used by the coord-owned external-mutation watcher (e.g. user hit Ctrl-Z, an external script wrote the take). mm:reload fires the standard reload→rebuild chain; no take swap.
+  function tm:reloadFromReaper() if mm then mm:reload() end end
 end
 
 tm:rebuild(true)

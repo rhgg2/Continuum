@@ -11,6 +11,18 @@ local timing = require('timing')
 local function evalAt(S, x)  return timing.eval(S, x)   end
 local function invAt(S, y)   return timing.invert(S, y) end
 
+-- Test fixtures: literal composites pinned by name. The canonical
+-- catalogue now lives in configManager's swings default; these specs
+-- exercise the timing math, not the catalogue, so the small literal
+-- subset they need lives here.
+local FIX = {
+  ['classic-58'] = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } },
+  ['delay+15']   = { factors = { { atom = 'id', shift =  1/16, period = 1 } } },
+  ['delay+30']   = { factors = { { atom = 'id', shift =  1/8,  period = 1 } } },
+  ['delay-15']   = { factors = { { atom = 'id', shift = -1/16, period = 1 } } },
+  ['delay-30']   = { factors = { { atom = 'id', shift = -1/8,  period = 1 } } },
+}
+
 return {
   {
     name = 'identity composite: eval and invert are identity over [0, length]',
@@ -27,7 +39,7 @@ return {
   {
     name = 'length = 0: degenerate Shape evaluates trivially',
     run = function()
-      local S = timing.resolveComposite(timing.presets['classic-58'], 0, 240)
+      local S = timing.resolveComposite(FIX['classic-58'], 0, 240)
       t.truthy(math.abs(evalAt(S, 0)) < 1e-9, 'eval(0) at L=0')
     end,
   },
@@ -36,7 +48,7 @@ return {
     name = 'endpoints are pinned: eval(0)=0, eval(L)=L, and invert agrees',
     run = function()
       local L = 960
-      local S = timing.resolveComposite(timing.presets['classic-58'], L, 240)
+      local S = timing.resolveComposite(FIX['classic-58'], L, 240)
       t.truthy(math.abs(evalAt(S, 0))     < 1e-9, 'eval(0) = ' .. evalAt(S, 0))
       t.truthy(math.abs(evalAt(S, L) - L) < 1e-9, 'eval(L) = ' .. evalAt(S, L))
       t.truthy(math.abs(invAt(S, 0))      < 1e-9, 'invert(0) = ' .. invAt(S, 0))
@@ -86,7 +98,7 @@ return {
       local K  = timing.K
       local L  = 960
       local cs = {
-        timing.presets['classic-58'],
+        FIX['classic-58'],
         { factors = { { atom = 'id',     shift = 0.1, period = 1 } } },
         { factors = { { atom = 'id',     shift = 0.1, period = 1 },
                       { atom = 'classic',shift = 0.08,period = 1 } } },
@@ -110,7 +122,7 @@ return {
     name = 'eval/invert round-trip is exact across the take',
     run = function()
       local L = 960
-      local S = timing.resolveComposite(timing.presets['classic-58'], L, 240)
+      local S = timing.resolveComposite(FIX['classic-58'], L, 240)
       for _, p in ipairs{ 0, 1, 73, 240, 481, 720, 959, L } do
         local round = invAt(S, evalAt(S, p))
         t.truthy(math.abs(round - p) < 1e-9,
@@ -125,7 +137,7 @@ return {
     -- ⇒ 240·0.58 = 139.2 PPQ at the tile midpoint, which lands in the
     -- analytic middle.
     run = function()
-      local S = timing.resolveComposite(timing.presets['classic-58'], 240, 240)
+      local S = timing.resolveComposite(FIX['classic-58'], 240, 240)
       local y = evalAt(S, 120)
       t.truthy(math.abs(y - 139.2) < 1e-9, 'midpoint: ' .. y)
     end,
@@ -142,7 +154,7 @@ return {
         { name = 'delay-30', delta = -30 },
       }
       for _, c in ipairs(cases) do
-        local S = timing.resolveComposite(timing.presets[c.name], L, 240)
+        local S = timing.resolveComposite(FIX[c.name], L, 240)
         t.truthy(math.abs(evalAt(S, 0))     < 1e-9, c.name .. ' eval(0) pinned')
         t.truthy(math.abs(evalAt(S, L) - L) < 1e-9, c.name .. ' eval(L) pinned')
         local p = 480

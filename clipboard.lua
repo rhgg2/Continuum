@@ -9,7 +9,6 @@
 --invariant: CLIP_RESERVED keys are stripped at copy; CLIP_ARTIFACTS (row/endRow) are stripped at paste; everything else (including custom metadata) round-trips
 --invariant: velEvent is the only collector that synthesises a clip event rather than cloning the source — vel-mode pastes must not carry note metadata onto cc destinations
 local util    = require 'util'
-local tuning  = require 'tuning'
 
 -- Reserved keys never carried verbatim through copy/paste: position is
 -- rebuilt from `row` at paste, identity is decided by the destination
@@ -26,6 +25,9 @@ local CLIP_RESERVED = {
   loc = true, idx = true, uuid = true, uuidIdx = true,
   -- envelope-level
   type = true, evType = true,
+  -- region realisation state: a copied note must not carry conform out
+  -- of its region, or its tail would clip outside any block
+  conform = true,
 }
 -- Clip-only fields stripped before a paste materialises into a write event.
 local CLIP_ARTIFACTS = { row = true, endRow = true }
@@ -449,11 +451,11 @@ function clipboard:trimTop(clip, trim) trimTop(clip, trim) end
 function clipboard:registerCommands(scope)
   scope:registerAll{
     copy  = function() local c = collect(); if c then save(c) end; ec:selClear() end,
-    paste = function()
+    paste = { function()
       if ec:isSticky() then ec:selClear()
       else local c = load(); if c then pasteClip(c) end
       end
-    end,
+    end, 'Paste' },
   }
 end
 

@@ -8,6 +8,7 @@
 local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
+local mirror  = require 'mirror'
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
@@ -26,6 +27,7 @@ local mm     = util.instantiate('midiManager',    { take = nil })
 local tm     = util.instantiate('trackerManager', { mm = mm, cm = cm })
 local tv     = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr })
 local seqMgr = util.instantiate('sequenceManager', { tm = tm, cm = cm })
+local mirm   = util.instantiate('mirrorManager', { tm = tm, cm = cm })
 
 ---------- PRIVATE
 
@@ -70,10 +72,22 @@ local curveEd      = util.instantiate('curveEditor', { ctx = ctx })
 local laneConsumed = false
 local toolbar                              -- lazy: chrome may be nil at construction in tests
 
--- Region mode lives on ec (state + verbs + redirects + wrap-all).
--- The page queries ec:isInRegionMode() to gate the char queue and the
--- renderer's active-outline / gutter-bar pass; bindings live below
--- alongside the rest of the tracker bindings.
+-- Mirror-region UI state. Forward-declared so handleMouse (defined
+-- well above the wiring) can read the mode flag and paint hook; both
+-- are assigned in the "Mirror regions" section near the bindings.
+local mirrorMode  = false   -- 'mirror' overlay scope is on the stack
+local mirrorRect  = nil     -- authoring rect for asymmetric sculpt
+local mirrorSrc   = nil     -- last-copy source rect; nil once mutated
+
+-- mirrorDuplicate cascade state, or nil -- the shared tv:duplicateCascade
+-- run token { rect, payload, next, mark }: the SOURCE region (captured
+-- on the first press, never re-read), the mirror group id, the ppq of
+-- the next stacked copy, and the cursor mark that tells a deliberate
+-- move from a plain repeat. Survives cursor moves; dropped by any new
+-- selection or mutation (see DUP_KEEP).
+local mirrorDupState = nil
+local paintLast   = nil     -- mirror-paint per-cell debounce
+local mirrorPaint           -- fn(colIx, on); assigned with the scope
 
 ----- Cell renderers
 
@@ -245,19 +259,8 @@ local function pickTemper(name)
   tv:setTemperSlot(name)
 end
 
-local function pickSwing(name)
-  if name and not cm:get('swings')[name] then
-    tv:setSwingComposite(name, timing.presets[name])
-  end
-  tv:setSwingSlot(name)
-end
-
-local function pickColSwing(chan, name)
-  if name and not cm:get('swings')[name] then
-    tv:setSwingComposite(name, timing.presets[name])
-  end
-  tv:setColSwingSlot(chan, name)
-end
+local function pickSwing(name)              tv:setSwingSlot(name)         end
+local function pickColSwing(chan, name)      tv:setColSwingSlot(chan, name) end
 
 -- Identity composite ('id') is the no-swing default — represented in
 -- the UI as "Off" rather than as a pickable preset row.
@@ -341,8 +344,7 @@ local toolbarSegments = {
         chrome.drawPicker {
           kind        = 'swing', heading = 'Swing',
           buttonLabel = cur or 'Off',
-          items       = libPickerItems(cur, cm:get('swings'),
-                                       timing.presets, SWING_PRESET_EXCLUDE),
+          items       = chrome.libPicker('swings', cur, SWING_PRESET_EXCLUDE),
           onPick      = pickSwing,
         }
       end
@@ -355,8 +357,7 @@ local toolbarSegments = {
         chrome.drawPicker {
           kind        = 'colSwing', heading = 'Ch swing',
           buttonLabel = cur or 'Off',
-          items       = libPickerItems(cur, cm:get('swings'),
-                                       timing.presets, SWING_PRESET_EXCLUDE),
+          items       = chrome.libPicker('swings', cur, SWING_PRESET_EXCLUDE),
           onPick      = function(name) pickColSwing(chan, name) end,
         }
       end)
@@ -369,9 +370,24 @@ local toolbarSegments = {
   },
 }
 
+-- While the swing editor is open, the tracker body is replaced and
+-- only swing-related toolbar segments stay live (the picker is how
+-- the user switches what they're editing). Other segments grey out.
 local function drawTrackerToolbarBits()
   toolbar = toolbar or chrome.makeToolbar()
-  toolbar(toolbarSegments)
+  if not swingEditor:isOpen() then return toolbar(toolbarSegments) end
+  local wrapped = {}
+  for i, seg in ipairs(toolbarSegments) do
+    if seg.id == 'swing' then
+      wrapped[i] = seg
+    else
+      wrapped[i] = {
+        id = seg.id, visible = seg.visible,
+        render = function() chrome.disabledIf(true, seg.render) end,
+      }
+    end
+  end
+  toolbar(wrapped)
 end
 
 --contract: must run before any draw routine that reads chanX/chanW/chanOrder/totalWidth/gridHeight
@@ -589,6 +605,52 @@ local function drawTracker()
 
   local drawList = ImGui.GetWindowDrawList(ctx)
 
+  -- Mirror regions. Before tails/cells so per-cell text reads over the
+  -- wash. Membership authority is mirm:stateOf (the projection), not
+  -- geometry; the projected rect only sizes the bracket. Active group:
+  -- 2px outline + cursor-containment gutter slot. Inactive: focus-faded
+  -- wash, 1px bracket.
+  local logPerRow = tv:logPerRow()
+  for _, inst in ipairs(mirm:eachInstance()) do
+    local rect  = inst.rect
+    local ppqLo = inst.anchor.ppq
+    local ppqHi = ppqLo + rect.dur
+    local yLo = math.max(math.floor(ppqLo / logPerRow + 0.5) - scrollRow, 0)
+    local yHi = math.min(math.floor(ppqHi / logPerRow + 0.5) - scrollRow, gridHeight)
+    if yHi > yLo then
+      local xMin, xMax, conflicted
+      for x, col in ipairs(grid.cols) do
+        if col.x then
+          local off, sid = tv:streamRefAt(x, inst.anchor.chan)
+          if off and rect.streams[off] and rect.streams[off][sid] then
+            local x1, x2 = col.x, col.x + col.width - 1
+            xMin = math.min(xMin or x1, x1)
+            xMax = math.max(xMax or x2, x2)
+            for y = yLo, yHi - 1 do
+              local evt = col.cells and col.cells[scrollRow + y]
+              local st  = evt and evt.uuid and mirm:stateOf(evt.uuid)
+              if st == 'conflicted' then conflicted = true end
+              local key = st and mirror.tintKey(st, inst.active)
+              if key then draw:box(x1, x2, y, y, key) end
+            end
+          end
+        end
+      end
+      if xMin then
+        local outCol = chrome.colour(
+          mirror.outlineKey(conflicted and 'conflicted' or 'synced'))
+        ImGui.DrawList_AddRect(drawList,
+          gridOriginX + xMin * gridX,       gridOriginY + yLo * gridY,
+          gridOriginX + (xMax + 1) * gridX, gridOriginY + yHi * gridY,
+          outCol, 0, 0, inst.active and 2 or 1)
+        local cur = cursorRow * logPerRow
+        if cur >= ppqLo and cur < ppqHi then
+          draw:box(-1, -1, yLo, yHi - 1, 'mirror.synced.tint')
+        end
+      end
+    end
+  end
+
   local tailCol = chrome.colour('tail')
   local viewTop  = scrollRow
   local viewBot  = scrollRow + gridHeight
@@ -772,7 +834,6 @@ cmgr:scope('tracker'):bindAll{
   copy           = { {ImGui.Key_W, ImGui.Mod_Ctrl},  {ImGui.Key_C, ImGui.Mod_Ctrl} },
   paste          = { {ImGui.Key_Y, ImGui.Mod_Super}, {ImGui.Key_V, ImGui.Mod_Ctrl} },
   duplicateDown  = { {ImGui.Key_D, ImGui.Mod_Ctrl} },
-  duplicateUp    = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   deleteSel      = { ImGui.Key_Delete },
   nudgeCoarseUp   = { {ImGui.Key_Equal, ImGui.Mod_Ctrl} },
   nudgeCoarseDown = { {ImGui.Key_Minus, ImGui.Mod_Ctrl} },
@@ -784,7 +845,12 @@ cmgr:scope('tracker'):bindAll{
   halveRPB       = { {ImGui.Key_Minus, ImGui.Mod_Super} },
   setRPB         = { {ImGui.Key_Z,     ImGui.Mod_Super} },
   takeProperties = { {ImGui.Key_Backspace, ImGui.Mod_Ctrl} },
-  matchGridToCursor = { {ImGui.Key_M, ImGui.Mod_Super} },
+  matchGridToCursor = { {ImGui.Key_G, ImGui.Mod_Super, ImGui.Mod_Shift} },
+  mirrorMark        = { {ImGui.Key_M, ImGui.Mod_Ctrl} },
+  mirrorDuplicate   = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
+  mirrorPaste       = { {ImGui.Key_V, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
+  mirrorLocalToggle = { {ImGui.Key_M, ImGui.Mod_Super} },
+  mirrorEnter       = { {ImGui.Key_R, ImGui.Mod_Super} },
   hideExtraCol   = { {ImGui.Key_H, ImGui.Mod_Ctrl} },
   inputOctaveUp   = { {ImGui.Key_8, ImGui.Mod_Shift} },
   inputOctaveDown = { ImGui.Key_Slash },
@@ -836,6 +902,29 @@ local function handleMouse()
   local rightClicked = ImGui.IsMouseClicked(ctx, 1)
   local held         = ImGui.IsMouseDown(ctx, 0)
 
+  -- Mirror sculpt paint: shift-drag extends the authoring rect's
+  -- stream set, alt-drag shrinks it; debounced per cell via paintLast.
+  if mirrorMode and held and ImGui.IsWindowHovered(ctx) then
+    local mods = ImGui.GetKeyMods(ctx)
+    local add  = (mods & ImGui.Mod_Shift) ~= 0
+    local sub  = (mods & ImGui.Mod_Alt)   ~= 0
+    if add or sub then
+      local mouseX, mouseY = ImGui.GetMousePos(ctx)
+      local charY = math.floor((mouseY - gridOriginY) / gridY)
+      if charY >= 0 and charY < gridHeight then
+        local col  = nearestStop(mouseX, mouseY)
+        local cell = col and (col .. (add and '+' or '-'))
+        if col and cell ~= paintLast then
+          paintLast = cell
+          mirrorPaint(col, add)
+        end
+      end
+      return
+    end
+  elseif mirrorMode and not held then
+    paintLast = nil
+  end
+
   if rightClicked and ImGui.IsWindowHovered(ctx) then
     local mouseX, mouseY = ImGui.GetMousePos(ctx)
     local charY = math.floor((mouseY - gridOriginY) / gridY)
@@ -858,6 +947,10 @@ local function handleMouse()
     if fracX < 0 then return end
     local last = grid.cols[col]
     if fracX >= last.x + last.width + 1 then return end
+
+    -- A qualified click is a new selection/position; mouse bypasses
+    -- cmgr's DUP_KEEP sweep, so end the duplicate cascade here.
+    mirrorDupState = nil
 
     if charY < 0 then
       if charY == -HEADER then ec:selectChannel(last.midiChan)
@@ -902,6 +995,7 @@ local function handleMouse()
 
     -- Only start selection once cursor moves to a different position
     if row ~= cursorRow or col ~= cursorCol or stop ~= cursorStop then
+      mirrorDupState = nil   -- drag-select is a new selection
       ec:extendTo(row, col, stop)
     end
 
@@ -1128,7 +1222,7 @@ tracker:registerAll{
     end)
   end,
 
-  takeProperties = function()
+  takeProperties = { function()
     local origRows = tv.grid.numRows or 0
     local title    = 'Take properties'
     modalState = {
@@ -1154,7 +1248,7 @@ tracker:registerAll{
       end,
     }
     ImGui.OpenPopup(ctx, title)
-  end,
+  end, 'Take properties' },
 
   addTypedCol = function()
     openPrompt('Add Column', 'cc0-127, pb, at, pc, dly', function(typeStr)
@@ -1169,8 +1263,8 @@ tracker:registerAll{
     end)
   end,
 
-  quantize             = scopedAction('quantize',               'quantize'),
-  quantizeKeepRealised = scopedAction('quantize keep realised', 'quantizeKeepRealised'),
+  quantize             = { scopedAction('quantize',               'quantize'),             'Quantize' },
+  quantizeKeepRealised = { scopedAction('quantize keep realised', 'quantizeKeepRealised'), 'Quantize (keep realised)' },
 
   openSwingEditor = function() swingEditor:open() end,
 
@@ -1180,6 +1274,152 @@ tracker:registerAll{
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
              function() tv:ec():unstick() end)
+
+----- Mirror regions
+
+-- Pure navigation/selection verbs. They reach through the modal
+-- 'mirror' overlay (passthrough) AND they are the keep-set for the
+-- mutation sweep: cursor/selection moves between copy and mirrorPaste
+-- must NOT defeat the mirror — only a real edit/cut does.
+local MIRROR_PASSTHROUGH = {
+  cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
+  pageUp=true, pageDown=true, goTop=true, goBottom=true, goLeft=true, goRight=true,
+  colLeft=true, colRight=true, channelLeft=true, channelRight=true,
+  selectUp=true, selectDown=true, selectLeft=true, selectRight=true, selectClear=true,
+  cycleBlock=true, cycleVBlock=true, swapBlockEnds=true,
+}
+for i = 0, 9 do MIRROR_PASSTHROUGH['advBy' .. i] = true end
+
+-- keep-set = passthrough + copy + the mirror verbs themselves.
+local MIRROR_KEEP = {}
+for k in pairs(MIRROR_PASSTHROUGH) do MIRROR_KEEP[k] = true end
+for _, n in ipairs{ 'copy', 'mirrorMark', 'mirrorDuplicate',
+                    'mirrorPaste', 'mirrorLocalToggle', 'mirrorEnter' } do
+  MIRROR_KEEP[n] = true
+end
+
+-- mirrorDuplicate cascade keep-set. A run of duplicates survives pure
+-- cursor repositioning AND the deselection that follows it (a cursor
+-- move collapsing the region the cascade auto-selected is harmless --
+-- the rect lives in the token, not the selection). Only a genuine
+-- RE-selection (select*, block verbs, mouse drag/extend) or a mutation
+-- ends the run. selectClear is a deselection, not a re-selection, so
+-- it is KEPT. Tighter than MIRROR_KEEP (no extend-selection, no copy,
+-- no sibling mirror verbs).
+local DUP_KEEP = { mirrorDuplicate = true, selectClear = true,
+  cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
+  pageUp=true, pageDown=true, goTop=true, goBottom=true,
+  goLeft=true, goRight=true, colLeft=true, colRight=true,
+  channelLeft=true, channelRight=true,
+}
+for i = 0, 9 do DUP_KEEP['advBy' .. i] = true end
+
+local mirrorScope = cmgr:scope('mirror')
+mirrorScope.modal       = true
+mirrorScope.passthrough = MIRROR_PASSTHROUGH
+
+function mirrorPaint(colIx, on)
+  if not mirrorRect then return end
+  local off, sid = tv:streamRefAt(colIx, mirrorRect.chanLo)
+  if not off then return end
+  local s = mirrorRect.streams
+  s[off] = s[off] or {}
+  s[off][sid] = on or nil
+end
+
+local function exitMirror()
+  mirrorRect, mirrorMode = nil, false
+  cmgr:pop(mirrorScope)
+end
+
+mirrorScope:registerAll{
+  mirrorBail   = exitMirror,
+  mirrorCommit = function()
+    if mirrorRect then mirm:mark(tv:eventsInRect(mirrorRect), mirrorRect) end
+    exitMirror()
+  end,
+  mirrorPaintExtend = function() local _, c = tv:ec():pos(); mirrorPaint(c, true)  end,
+  mirrorPaintShrink = function() local _, c = tv:ec():pos(); mirrorPaint(c, false) end,
+}
+cmgr:scope('mirror'):bindAll{
+  mirrorBail        = { ImGui.Key_Escape, {ImGui.Key_R, ImGui.Mod_Super} },
+  mirrorCommit      = { ImGui.Key_Enter, ImGui.Key_KeypadEnter },
+  mirrorPaintExtend = { ImGui.Key_Equal },
+  mirrorPaintShrink = { ImGui.Key_Minus },
+}
+
+tracker:registerAll{
+  mirrorMark = function()
+    local r = tv:selectionAsRect()
+    -- Snapshot the source for mirrorPaste too: mark and copy share the
+    -- one mirrorSrc lifetime; without this, mark -> paste degrades to
+    -- plain paste (mirrorPaste gates on mirrorSrc, not the active group).
+    if r then mirrorSrc = r; mirm:mark(tv:eventsInRect(r), r) end
+  end,
+  mirrorDuplicate = function()
+    -- Cascade copies into one mirror group via the shared controller.
+    -- No collectSource: each copy's events come from the rect. Commit
+    -- now (mirm leaves it staged in tm otherwise, colliding with the
+    -- next user edit). No fallbackRect: a degenerate selection is a
+    -- no-op, but a real 1x1 selection still mirrors.
+    mirrorDupState = tv:duplicateCascade(mirrorDupState, nil,
+      function(rect, anchor, gid)
+        gid = mirm:duplicateInto(gid, gid and {} or tv:eventsInRect(rect),
+                                 rect, anchor)
+        tm:flush()
+        return gid
+      end)
+  end,
+  mirrorPaste = function()
+    local a = tv:cursorAnchor()
+    if mirrorSrc and a then
+      -- Same no-straddle rule as mirrorDuplicate: the pasted region
+      -- [a.ppq, a.ppq+mirrorSrc.dur) must fit wholly inside the take.
+      -- Out of bounds is a silent no-op, NOT a fallthrough to plain
+      -- paste (that would paste non-mirror content the user didn't ask
+      -- for); the fallthrough is only for "no mirror source".
+      if a.ppq + mirrorSrc.dur <= tm:length() then
+        mirm:stamp(tv:eventsInRect(mirrorSrc), mirrorSrc, a)
+        tm:flush()   -- mirm only stages; without this the copy never materialises
+      end
+    else
+      cmgr:invoke('paste')
+    end
+  end,
+  mirrorLocalToggle = function() mirm:setLocalMode(not mirm:localMode()) end,
+  mirrorEnter = function()
+    local r = tv:selectionAsRect()
+    if r then mirrorRect, mirrorMode = r, true; cmgr:push(mirrorScope) end
+  end,
+}
+
+-- copy is plain — the page only observes it to snapshot the source
+-- rect. Must run BEFORE the body: clipboard:copy ends with ec:selClear(),
+-- so a doAfter snapshot would always see an empty selection (nil rect)
+-- and mirrorPaste would never mirror.
+cmgr:doBefore('copy', function() mirrorSrc = tv:selectionAsRect() end)
+
+-- Three mirror lifetimes, three keep-sets. Runs after every tracker
+-- command is registered.
+--
+--  * mirrorSrc + active (mark/copy -> mirrorPaste): survive navigation
+--    between the copy and the paste; only a real mutation clears them.
+--    Keep-set = MIRROR_KEEP.
+--  * mirrorDupState (mirrorDuplicate cascade): survives pure cursor
+--    moves only; any new selection or mutation ends the run.
+--    Keep-set = DUP_KEEP (a strict subset of MIRROR_KEEP).
+do
+  local clearOn, dupClearOn = {}, {}
+  for name in pairs(tracker.registered) do
+    if not MIRROR_KEEP[name] then clearOn[#clearOn + 1]    = name end
+    if not DUP_KEEP[name]    then dupClearOn[#dupClearOn+1] = name end
+  end
+  cmgr:doBefore(clearOn, function()
+    mirrorSrc = nil
+    mirm:clearActive()
+  end)
+  cmgr:doBefore(dupClearOn, function() mirrorDupState = nil end)
+end
 
 ---------- PUBLIC
 
@@ -1192,6 +1432,19 @@ end
 
 --contract: calls computeLayout twice — lane-strip drag callbacks may flush tv.grid.cols and clear col.x; second pass repopulates layout for drawTracker
 function tp:renderBody(_, w, h, dispatch)
+  -- Swing editor commandeers the body region. The editor draws in
+  -- chrome/UI register, not the tracker monospace — push uiFont
+  -- explicitly so it doesn't inherit the (yet-to-be-pushed) tracker
+  -- font. Toolbar stays drawn above with non-swing segments greyed;
+  -- dispatcher is gated via focusState so tracker bindings don't
+  -- fire underneath.
+  if swingEditor:isOpen() then
+    ImGui.PushFont(ctx, uiFont, 13)
+    swingEditor:render(w, h)
+    ImGui.PopFont(ctx)
+    if dispatch then dispatch(self:focusState()) end
+    return
+  end
   if #tv.grid.cols == 0 then
     ImGui.Text(ctx, 'Select a MIDI item to begin.')
     return
@@ -1216,28 +1469,34 @@ function tp:renderStatusBar(_)
   drawStatusBar()
 end
 
-function tp:renderFloating(_)
-  swingEditor:render()
-end
+function tp:renderFloating(_) end
 
 --contract: bind/unbind drive tm:bindTake — the page owns the cm/mm context swap for its own stack
 function tp:bind(t)  tm:bindTake(t)   end
-function tp:unbind() tm:bindTake(nil) end
+function tp:unbind() swingEditor:close(); tm:bindTake(nil) end
+
+--contract: pass-through for coord's external-mutation watcher; re-reads the bound take without changing it
+function tp:reloadFromReaper() tm:reloadFromReaper() end
 
 -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
+-- pageSuppressed: a body-region editor (swing, tuning) commandeers the
+--   page — dispatcher walks root bindings only, so playPause/quit/undo
+--   still fire while page-scoped commands stay quiet.
 -- acceptCmds:  the page is visible and nothing inside it is currently
 --   consuming a keystroke. We deliberately don't gate on which child
 --   window holds focus: a toolbar click leaves the chrome focused
 --   transiently, but bound commands should still fire. Anything that
 --   genuinely needs the keys (a focused InputText, an active slider,
 --   a held button) shows up as IsAnyItemActive.
---shape: focusState = { suppressKbd:bool, acceptCmds:bool }
+--shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
 function tp:focusState()
-  if not ctx then return { suppressKbd = false, acceptCmds = false } end
-  local suppress = modalState ~= nil or chrome.pickerIsActive()
+  if not ctx then return { suppressKbd = false, pageSuppressed = false, acceptCmds = false } end
+  local suppressKbd    = modalState ~= nil or chrome.pickerIsActive()
+  local pageSuppressed = swingEditor:isOpen()
   return {
-    suppressKbd = suppress,
-    acceptCmds  = (not suppress) and not ImGui.IsAnyItemActive(ctx),
+    suppressKbd    = suppressKbd,
+    pageSuppressed = pageSuppressed,
+    acceptCmds     = (not suppressKbd) and not ImGui.IsAnyItemActive(ctx),
   }
 end
 

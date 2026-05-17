@@ -1,8 +1,8 @@
-@module chrome  src=chrome.lua  loc=285  sha=ee85a77  mode=chunk
+@module chrome  src=chrome.lua  loc=321  sha=fa4a61d  mode=chunk
 @deps cm, ctx
 
 # Shapes
-  @shape  chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), makeToolbar()->fn(segments), drawPicker(d), pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+  @shape  chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
   @shape  pickerSpec = { kind: string, heading: string, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
   @shape  toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
 
@@ -45,6 +45,15 @@
   @fn requestPickerOpen(kind)  @ 161
   @fn pickerIsActive()  @ 162
   @fn resetPickerActive()  @ 163
-  @fn drawPicker(d)  @ 167
+  @fn libPicker(key, current, excludeOthers)  @ 173
+      -- Build the picker-item list for a library-shaped cm key (e.g. 'swings',
+      -- 'tempers'). Three groups, in order:
+      --   1. Off    — nil key.
+      --   2. Project entries (cm.project[key]) — plain label.
+      --   3. Other entries (anything in the merged view but not in project) —
+      --      `+` prefix, marking "available but not yet localized to project".
+      -- excludeOthers is a set of names to filter out of group 3 only — used
+      -- to hide `id` from the swing picker (already covered by Off).
+  @fn drawPicker(d)  @ 202
       -- Generic typeahead picker. Enter picks the highlighted match; group
       -- separators show only when filter is empty.

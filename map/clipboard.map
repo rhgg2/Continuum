@@ -1,4 +1,4 @@
-@module clipboard  src=clipboard.lua  loc=460  sha=7ea98b2  mode=chunk
+@module clipboard  src=clipboard.lua  loc=462  sha=19451fd  mode=chunk
 @deps ec, grid, tm, cm, currentRpb, assignTail, getCtx, getLength
 
 # Invariants & contracts
@@ -12,43 +12,42 @@
 
 # Imports
   @require util = 'util'  @ 11
-  @require tuning = 'tuning'  @ 12
 
 # Private state
-  @state CLIP_RESERVED = {  @ 20
-  @state CLIP_ARTIFACTS = { row = true, endRow = true }  @ 31
-  @state ec = deps.ec  @ 37
-  @state grid = deps.grid  @ 38
-  @state tm = deps.tm  @ 39
-  @state cm = deps.cm  @ 40
-  @state currentRpb = deps.currentRpb  @ 41
-  @state assignTail = deps.assignTail  @ 42
-  @state getCtx = deps.getCtx  @ 43
-  @state getLength = deps.getLength  @ 44
-  @state clipboard = {}  @ 443
+  @state CLIP_RESERVED = {  @ 19
+  @state CLIP_ARTIFACTS = { row = true, endRow = true }  @ 33
+  @state ec = deps.ec  @ 39
+  @state grid = deps.grid  @ 40
+  @state tm = deps.tm  @ 41
+  @state cm = deps.cm  @ 42
+  @state currentRpb = deps.currentRpb  @ 43
+  @state assignTail = deps.assignTail  @ 44
+  @state getCtx = deps.getCtx  @ 45
+  @state getLength = deps.getLength  @ 46
+  @state clipboard = {}  @ 445
 
 # Private functions
-  @fn save(clip)  @ 46
-  @fn load()  @ 50
-  @fn collect()  @ 57
+  @fn save(clip)  @ 48
+  @fn load()  @ 52
+  @fn collect()  @ 59
       @contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }.
-  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 155
+  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 157
       @contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
-  @fn pasteSingle(clip)  @ 199
+  @fn pasteSingle(clip)  @ 201
       @contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op.
-  @fn pasteMulti(clip)  @ 290
+  @fn pasteMulti(clip)  @ 292
       @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col.
-  @fn pasteClip(clip)  @ 412
-  @fn trimTop(clip, trim)  @ 420
+  @fn pasteClip(clip)  @ 414
+  @fn trimTop(clip, trim)  @ 422
       -- A note whose start row falls within the trimmed band is dropped entirely.
       @contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
 
 # Public API (clipboard:*)
-  @api clipboard:collect()  @ 444
-  @api clipboard:copy()  @ 445
-  @api clipboard:pasteClip(clip)  @ 446
-  @api clipboard:trimTop(clip, trim)  @ 447
-  @api clipboard:registerCommands(scope)  @ 449
+  @api clipboard:collect()  @ 446
+  @api clipboard:copy()  @ 447
+  @api clipboard:pasteClip(clip)  @ 448
+  @api clipboard:trimTop(clip, trim)  @ 449
+  @api clipboard:registerCommands(scope)  @ 451
 
 # REAPER API surface
   @reaper SetExtState

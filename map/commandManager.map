@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=318  sha=37eeb11  mode=chunk
+@module commandManager  src=commandManager.lua  loc=323  sha=fa4a61d  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -10,6 +10,8 @@
   @invariant  a keymap entry is an array of keyspecs — multiple bindings dispatch to the same command
   @invariant  layouts row 1 = base octave (15 semitones, C..D+1oct); row 2 = +1 octave (17 semitones, C..F+1oct)
   @invariant  chars is folded from layouts at load time so the LUT can't drift from the declaration
+  @contract  optional undoDesc wraps fn in util.atomic(undoDesc, fn) so REAPER's undo stack records this command as a labelled block
+  @contract  registerAll value is either fn or {fn, undoDesc}; the tuple form opts the command into REAPER undo wrapping with the given label
 
 # Shapes
   @shape  keyspec = keyConstant | { keyConstant, mod1, mod2, ... }   -- mods OR'd into a single mask
@@ -17,65 +19,71 @@
   @shape  noteChar = { semi = 0..16, octOff = 0..1 }
   @shape  scope = { keymap={}, modal=false?, passthrough={[name]=true}?, registered={[name]=true} }
 
+# Imports
+  @require util = 'util'  @ 14
+
 # Private state
-  @state layouts = {  @ 14
-  @state chars = {}  @ 33
-  @state mgr = {  @ 47
-  @state global = newScope()  @ 110
-  @state prefixBuf, pendingPrefix = nil, nil  @ 174
-  @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 175
+  @state layouts = {  @ 16
+  @state chars = {}  @ 35
+  @state mgr = {  @ 49
+  @state global = newScope()  @ 117
+  @state prefixBuf, pendingPrefix = nil, nil  @ 179
+  @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 180
 
 # Private functions
   -- Stack reachability
-  @fn isReachable(scope, name)  @ 61
+  @fn isReachable(scope, name)  @ 63
   -- Scope
-  @fn newScope()  @ 77
+  @fn newScope()  @ 79
   -- Bottom of the stack
   -- Manager-level surface
   -- Universal-argument prefix
   -- Scopes & stack
-  @fn asScope(s)  @ 239
+  @fn asScope(s)  @ 244
   -- Dispatch
   -- Keymap lookup
-  @fn resolveKeys(name)  @ 271
+  @fn resolveKeys(name)  @ 276
 
 # Public API (mgr:*)
-  @api mgr:register(name, fn)  @ 121
-  @api mgr:registerAll(tbl)  @ 126
-  @api mgr:bind(name, keys)  @ 130
-  @api mgr:bindAll(tbl)  @ 131
-  @api mgr:wrap(name, wrapper)  @ 134
+  @api mgr:register(name, fn, undoDesc)  @ 129
+      @contract  delegates to the global scope — root-level commands are gated-to-global, which is always reachable; the duplicated registration body now lives only in scope:register
+  @api mgr:registerAll(tbl)  @ 130
+  @api mgr:rootKeymap()  @ 133
+      @contract  returns the bottom-of-stack ('global') keymap directly — used by dispatchers that want to fire ONLY root bindings (e.g. trackerPage's swing editor wants playPause/quit live but page-scoped commands off)
+  @api mgr:bind(name, keys)  @ 135
+  @api mgr:bindAll(tbl)  @ 136
+  @api mgr:wrap(name, wrapper)  @ 139
       @contract  wrap is a no-op if name has no registered command; wrappers stack (compose outward)
-  @api mgr:doBefore(name, before)  @ 143
+  @api mgr:doBefore(name, before)  @ 148
       @contract  doBefore/doAfter accept either a single name or an array of names
       @contract  doAfter preserves the original command's return values (the dispatch signal)
       @invariant  wraps compose inside the gate — when invoke skips a gated command, no doBefore / doAfter side-effect fires
-  @api mgr:doAfter(name, after)  @ 153
-  @api mgr:beginPrefix()  @ 178
+  @api mgr:doAfter(name, after)  @ 158
+  @api mgr:beginPrefix()  @ 183
       @contract  buffer accepts only '0'..'9' and '/'; cancel/finish/consume each leave the state inactive
-  @api mgr:isPrefixActive()  @ 179
-  @api mgr:appendPrefix(ch)  @ 181
-  @api mgr:cancelPrefix()  @ 187
-  @api mgr:finishPrefix()  @ 193
+  @api mgr:isPrefixActive()  @ 184
+  @api mgr:appendPrefix(ch)  @ 186
+  @api mgr:cancelPrefix()  @ 192
+  @api mgr:finishPrefix()  @ 198
       @contract  empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
-  @api mgr:consumePrefix()  @ 214
+  @api mgr:consumePrefix()  @ 219
       @contract  returns pending value (number or nil) and clears all prefix state; idempotent thereafter until next finishPrefix
-  @api mgr:consumePrefixRational()  @ 221
+  @api mgr:consumePrefixRational()  @ 226
       @contract  returns (num, den) of the pending prefix as parsed integers, or (nil, nil) when no prefix is pending; clears all prefix state; consumers that need rationality (e.g. scale's rpb refinement) read this instead of consumePrefix
-  @api mgr:scope(name)  @ 230
+  @api mgr:scope(name)  @ 235
       @contract  creates the scope on first request; idempotent thereafter
-  @api mgr:push(s)  @ 242
+  @api mgr:push(s)  @ 247
       @contract  push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.
-  @api mgr:pop(s)  @ 249
+  @api mgr:pop(s)  @ 254
       @contract  pop(name|scope) asserts the named scope is currently on top; pops it
-  @api mgr:invoke(name, ...)  @ 258
+  @api mgr:invoke(name, ...)  @ 263
       @contract  returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)
-  @api mgr:keysFor(name)  @ 280
-  @api mgr:keychain()  @ 283
+  @api mgr:keysFor(name)  @ 285
+  @api mgr:keychain()  @ 288
       @contract  returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk
-  @api mgr:keySpec(spec, ImGui)  @ 303
+  @api mgr:keySpec(spec, ImGui)  @ 308
       -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
   -- Note layout
-  @api mgr:noteChars(char)  @ 314
+  @api mgr:noteChars(char)  @ 319
       -- Re-read noteLayout on each call so a config change takes effect
       -- without rebuilding vm.
