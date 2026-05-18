@@ -121,14 +121,23 @@ between rebuilds; and an event arriving without a persisted ppqL.
 
 ### "Caller speaks raw" signal
 
-Some callers — notably reswing's plan-then-mutate path — have
-already computed raw locally and want the assignment to bypass the
-forward translation. Presence of `update.ppqL` (or `update.endppqL`)
-in an `tm:assignEvent` update is the signal: the realise step
-threads the caller's raw through unmodified, applying only the
-delay-delta correction. Absent the field, realise runs
-`fromLogical` to derive raw from the (possibly updated) logical
-stamp.
+Some callers — reswing's plan-then-mutate path (`vm` and
+`tm:rescaleLength`) — have already computed raw locally and want the
+assignment to bypass the forward translation. The signal is an
+explicit `rawTime = true` on the `tm:assignEvent`/`tm:addEvent`
+payload: the realise step threads the caller's raw through
+unmodified, applies only the delay-delta correction, and **consumes
+the flag** (strips it) so it never persists on the record or reaches
+mm. Absent the flag, realise runs `fromLogical` to derive raw from
+the (possibly updated) logical stamp.
+
+`ppqL`/`endppqL` are intent stamps, not the bypass signal. They are
+orthogonal: a logical caller (groups projecting an instance) sets
+`endppqL` to express the intent ceiling while still wanting the
+onset swung. Conflating the two — treating the presence of the data
+stamp as the control signal — placed group-projected notes off-grid
+by exactly the swing displacement under a non-identity swing
+(`tests/specs/gm_swing_spec.lua`).
 
 ## Swing: logical → realisation
 

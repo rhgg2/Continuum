@@ -556,12 +556,12 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     else                     deleteLowlevel(evt) end
   end
 
-  --contract: update.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw. Caller-supplied update.ppqL/endppqL signals "raw already computed" — translation is skipped, only delay-delta applies. See docs/timing.md.
+  --contract: update.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw. update.rawTime=true is the explicit "caller already computed raw" bypass (reswing/rescale's plan-then-mutate): translation is skipped, only the delay-delta applies, and the flag is consumed here so it never reaches mm. ppqL/endppqL are intent stamps, NOT the bypass signal — a logical caller (groups) sets endppqL freely. See docs/timing.md.
   local function realiseNoteUpdate(evt, update)
     local dOld = delayToPPQ(evt.delay)
     local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
-    if update.ppq == nil and update.endppq == nil and dNew == dOld then return end
-    if update.ppqL ~= nil or update.endppqL ~= nil then
+    if update.rawTime then
+      update.rawTime = nil
       if update.ppq ~= nil then
         update.ppq = update.ppq + dNew
       elseif dNew ~= dOld then
@@ -569,6 +569,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       end
       return
     end
+    if update.ppq == nil and update.endppq == nil and dNew == dOld then return end
     if update.ppq ~= nil then
       update.ppqL = update.ppq
       update.ppq  = tm:fromLogical(evt.chan, update.ppqL, dNew)
@@ -578,13 +579,18 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       update.ppq = evt.ppq + (dNew - dOld)
     end
     if update.endppq ~= nil then
-      update.endppqL = update.endppq
-      update.endppq  = tm:fromLogical(evt.chan, update.endppqL)
+      -- Reopening (open / endppqL=REMOVE) clears the ceiling: pass the
+      -- clear through, never overwrite it with the provisional onset+1
+      -- tail. A finite move stamps endppqL from the logical note-off.
+      if not (update.open or update.endppqL == util.REMOVE) then
+        update.endppqL = update.endppq
+      end
+      update.endppq = tm:fromLogical(evt.chan, update.endppq)
     end
   end
 
   local function realiseNonNoteUpdate(chan, update)
-    if update.ppqL ~= nil then return end
+    if update.rawTime then update.rawTime = nil; return end
     if not chan or update.ppq == nil then return end
     update.ppqL = update.ppq
     update.ppq  = tm:fromLogical(chan, update.ppqL)
@@ -619,9 +625,10 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
   end
 
-  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm. Caller-supplied evt.ppqL signals "raw already computed" — translation is skipped (mirrors assignEvent).
+  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent); consumed here so it never persists on the record or reaches mm.
   function addEvent(evt)
-    local rawCaller = evt.ppqL ~= nil
+    local rawCaller = evt.rawTime
+    evt.rawTime = nil
     if evt.evType == 'note' then
       evt.detune = evt.detune or 0
       evt.delay  = evt.delay  or 0
@@ -953,6 +960,7 @@ function tm:rescaleLength(newPpq)
         delay    = p.newDelay,
         ppqL     = p.newPpqL,
         endppqL  = p.newEndppqL,
+        rawTime  = true,
       })
     end
     flush()

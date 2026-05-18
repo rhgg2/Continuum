@@ -1111,8 +1111,9 @@ do
     -- rejects the persisted lane and the successor drifts.
     conformOverlaps(plans)
 
-    -- conformOverlaps nudges raw mid-plan, so reswing must ship raw and
-    -- ppqL together — see "Caller speaks raw" in docs/timing.md.
+    -- conformOverlaps nudges raw mid-plan, so reswing ships raw and
+    -- ppqL together and flags rawTime so tm threads it through without
+    -- a second swing — see "Caller speaks raw" in docs/timing.md.
     for _, p in ipairs(plans) do
       local e, u = p.e, {}
       if p.newppq then
@@ -1124,6 +1125,7 @@ do
         u.endppqL = e.endppqL
       end
       if p.newDelay ~= nil then u.delay = p.newDelay end
+      if u.ppq ~= nil or u.endppq ~= nil then u.rawTime = true end
       if next(u) then tm:assignEvent(e, u) end
     end
     tm:flush()

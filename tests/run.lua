@@ -62,6 +62,7 @@ local specs = {
   'gm_lifecycle_spec',
   'gm_override_transition_spec',
   'gm_two_channel_spec',
+  'gm_swing_spec',
   'timing_period_spec',
   'timing_atoms_spec',
   'timing_composite_spec',
