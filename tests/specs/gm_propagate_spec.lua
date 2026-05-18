@@ -127,11 +127,14 @@ return {
       gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
-      -- A move authors a new ceiling: tm's realiseNoteUpdate stamps
-      -- endppqL (open=false). gm reads intent (endppqL), never raw
-      -- endppq. Start 0->480, ceiling 240->720 (span 240 fixed).
+      -- A move authors a new ceiling: tm's realiseNoteUpdate stamps the
+      -- logical onset (ppqL) and the intent ceiling (endppqL, open=false),
+      -- leaving ppq RAW. gm reads the logical frame (ppqL/endppqL), never
+      -- raw. No swing here so raw == logical == 480. Start 0->480,
+      -- ceiling 240->720 (span 240 fixed).
       tm:flush({}, { { token = 't1', evt = src,
-                       update = { ppq = 480, endppqL = 720, open = false } } }, {})
+                       update = { ppq = 480, ppqL = 480,
+                                  endppqL = 720, open = false } } }, {})
 
       local bySibling, byOrigin
       for _, a in ipairs(staged.assign) do

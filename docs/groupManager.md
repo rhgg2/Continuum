@@ -55,6 +55,19 @@ nil group dur. `toGroup`/`toInstance` rebase between frames;
 (`open` ⇒ `dur` removed, a finite `dur` ⇒ `endppqL` restamped). The
 realised note-off never enters the group frame.
 
+The onset is logical the same way the ceiling is. The group frame is
+the authoring grid; a concrete's `ppq` is realised — swing and the
+note's `delay` baked in by tm's `realiseNoteUpdate`. So onsets cross on
+`ppqL`, never `ppq`: `toGroup` rebases off `evt.ppqL`, and `updToGroup`
+moves the group onset only when the update carries `ppqL` (the explicit
+"logical onset moved" stamp tm sets). A pure `delay` edit leaves `ppq`
+raw with no `ppqL` — it must move no group onset; `delay` rides across
+as its own scalar via `copyScalars`. The two coincide only under
+identity swing with zero delay, which is why a `delay` edit was the
+first to expose the leak: the offset entered the shared template and
+every sibling reproject re-realised it a second time, pushing the
+copies off-grid.
+
 Realisation is tm's, universally. tm's tail pass re-derives *every*
 note's raw note-off each rebuild, clipping it to whatever physically
 follows in the same lane — and because it walks all of `mm:notes()`,

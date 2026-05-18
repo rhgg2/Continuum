@@ -115,12 +115,17 @@ end
 -- the realised endppq tm re-derives every rebuild. An open note (no
 -- ceiling) carries no dur: a nil dur IS open in the group frame.
 local function toGroup(evt, anchor)
+  -- The group frame is LOGICAL. A concrete's realised ppq carries swing
+  -- and delay; ppqL is its logical onset. Rebase off ppqL so neither
+  -- leaks into the shared template (ppqL absent only under identity
+  -- swing + zero delay, where raw == logical).
+  local onset = evt.ppqL or evt.ppq
   local g = copyScalars(evt, { evType    = evt.evType,
                                chanDelta = evt.chan - anchor.chan,
                                key       = keyOf(evt),
-                               ppq       = evt.ppq - anchor.ppq })
+                               ppq       = onset - anchor.ppq })
   if evt.evType == 'note' and not evt.open and evt.endppqL ~= nil then
-    g.dur = evt.endppqL - evt.ppq
+    g.dur = evt.endppqL - onset
   end
   return g
 end
@@ -152,14 +157,18 @@ end
 -- (nil dur IS open). The realised endppq never enters the group frame.
 local function updToGroup(update, anchor, groupEvt)
   local u = copyScalars(update, {})
-  if update.ppq ~= nil then u.ppq = update.ppq - anchor.ppq end
+  -- ppqL is the logical onset; tm's realiseNoteUpdate leaves update.ppq
+  -- RAW (swing + delay baked in). The group frame is logical, so a pure
+  -- delay edit (raw ppq set, no ppqL) must move no group onset — delay
+  -- rides as its own scalar via copyScalars.
+  if update.ppqL ~= nil then u.ppq = update.ppqL - anchor.ppq end
   if update.chan ~= nil then u.chanDelta = update.chan - anchor.chan end
   if update.lane ~= nil then u.key = update.lane end
   if update.cc   ~= nil then u.key = update.cc end
   if update.open == true then
     u.dur = util.REMOVE
   elseif update.endppqL ~= nil then
-    local startAbs = update.ppq or (anchor.ppq + (groupEvt.ppq or 0))
+    local startAbs = update.ppqL or (anchor.ppq + (groupEvt.ppq or 0))
     u.dur = update.endppqL - startAbs
   end
   return u
