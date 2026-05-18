@@ -80,6 +80,7 @@ local specs = {
   'ec_regions_spec',
   'tv_region_paint_spec',
   'group_clear_zone_spec',
+  'tv_cascade_cancel_spec',
   'tv_dup_cascade_spec',
   'clipboard_spec',
   'vm_transient_frame_spec',

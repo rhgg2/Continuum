@@ -5,3 +5,5 @@
   - cc macros
 - automation smoothing
 - 14bit CCs
+- clean up smelliness gm/tv conform
+- move to command based key/mouse interactions

@@ -533,6 +533,10 @@ do
     local cursorppq      = ec:row() * logPerRowNow
 
     local function commit(auditionPitch, auditionVel)
+      -- The one mutation that bypasses cmgr (trackerPage's char drain
+      -- calls editEvent direct), so the keep-set doBefore sweeps never
+      -- see it: end every cascade by hand.
+      tv:endAllCascades()
       tm:flush()
       ec:advance()
       killAudition()
@@ -2429,6 +2433,14 @@ end
 -- A mouse re-selection ends the cascade by hand (the mouse bypasses
 -- cmgr's keep-set sweep).
 function tv:endGroupCascade() groupDupState = nil end
+
+-- A committed typed edit cancels every cascade and drops the groupPaste
+-- source, exactly as a non-keep cmgr command would -- editEvent is the
+-- mutation the keep-set sweeps cannot see (it never reaches cmgr).
+function tv:endAllCascades()
+  dupeState, groupDupState, groupSrc = nil, nil, nil
+  if gm then gm:clearActive() end
+end
 
 tv:rebuild(true)
 return tv
