@@ -122,14 +122,16 @@ return {
     name = 'a moved group note carries its tail to the sibling (endppq shifts with ppq)',
     run = function()
       local gm, tm, staged = mk()
-      local src = note(0, 1, 1)                  -- ppq 0, endppq 240 (dur 240)
+      local src = note(0, 1, 1, { endppqL = 240 })  -- ceiling 240 (finite intent)
       local gid = gm:markGroup({ src }, rect(0, 1))
       gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
-      -- Pure move in the origin: start 0->480, end 240->720 (dur 240 fixed).
+      -- A move authors a new ceiling: tm's realiseNoteUpdate stamps
+      -- endppqL (open=false). gm reads intent (endppqL), never raw
+      -- endppq. Start 0->480, ceiling 240->720 (span 240 fixed).
       tm:flush({}, { { token = 't1', evt = src,
-                       update = { ppq = 480, endppq = 720 } } }, {})
+                       update = { ppq = 480, endppqL = 720, open = false } } }, {})
 
       local bySibling, byOrigin
       for _, a in ipairs(staged.assign) do
@@ -139,10 +141,11 @@ return {
       end
       t.truthy(bySibling, 'sibling note reprojected')
       t.eq(bySibling.update.ppq, 1440, 'sibling start shifts to anchor 960 + 480')
-      t.eq(bySibling.update.endppq, 1680, 'sibling end shifts too — moves rigidly')
+      t.eq(bySibling.update.endppqL, 1680, 'sibling ceiling shifts rigidly (960+480+240)')
+      t.eq(bySibling.update.endppq, 1680, 'sibling provisional raw tail tracks the ceiling')
       t.truthy(byOrigin, 'the user-touched origin is round-tripped too')
       t.eq(byOrigin.update.ppq, 480, 'origin restaged at its own anchor 0 + 480')
-      t.eq(byOrigin.update.endppq, 720, 'origin tail moves rigidly with it')
+      t.eq(byOrigin.update.endppqL, 720, 'origin ceiling moves rigidly with it')
     end,
   },
 

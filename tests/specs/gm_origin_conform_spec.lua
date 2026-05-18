@@ -67,39 +67,6 @@ end
 
 return {
   {
-    name = 'origin overrunning note is NOT marked conform (collides with sibling, bumped to lane 2)',
-    run = function()
-      local gm, tm, staged = mk()
-
-      -- duplicateMirror on an empty col1/row1: empty group, one sibling
-      -- instance at anchor 960 (sibling region [960, 1920)).
-      local gid = gm:markGroup({}, rect(0, 1))
-      gm:newInstance(gid, { ppq = 960, chan = 1 })
-      tm:flush()                                  -- commit (nothing staged)
-      staged.add = {}
-
-      -- The user types a note into instance 1 (origin region [0, 960))
-      -- whose tail overruns the group bound into the sibling region.
-      local born = note(0, 1, 1, { endppq = 1500 })
-      tm:flush({ { evt = born } }, {}, {})
-
-      -- The non-origin half works: the projected sibling copy lands at
-      -- anchor 960 and IS flagged conform, so tm will clip its tail.
-      local sib = staged.add[1]
-      t.truthy(sib, 'sibling copy projected')
-      t.eq(sib.ppq, 960, 'sibling copy rebased to anchor 960')
-      t.truthy(sib.conform, 'sibling (non-origin) last-in-lane note is conform')
-
-      -- The bug: the ORIGIN note is equally the last-in-lane note of its
-      -- own region and equally overruns it, but reproject skips conform on
-      -- the origin instance — so tm never clips its raw tail and it
-      -- collides (same pitch) with the sibling copy, bumped to lane 2.
-      t.truthy(born.conform,
-        'origin overrunning note must be conform too (reproject skips origin)')
-    end,
-  },
-
-  {
     -- Replay model (Step 3): the origin is round-tripped like every
     -- sibling. A user edit lands in the group frame; reproject re-drives
     -- EVERY instance's concrete event — the user-touched one included —
@@ -152,13 +119,15 @@ return {
   },
 
   {
-    -- End-to-end on the REAL tm (real reload + conform-tail clip), the
-    -- only path that exposes the user-visible symptom: the fake-tm specs
-    -- above prove the conform MARKER is set, but never run the clip.
-    -- Sequence: empty duplicateMirror (group + sibling at 960), then type
-    -- a note into instance 1 [0,960) whose tail overruns into the sibling
-    -- region [960,1920). Expect instance 1's raw note-off clipped to the
-    -- sibling copy's onset (same pitch), and NO lane-2 bump.
+    -- End-to-end on the REAL tm (universal tail pass). Empty
+    -- duplicateMirror (group + sibling at 960), then type a note into
+    -- instance 1 [0,960) whose raw tail overruns into the sibling region
+    -- [960,1920). There is no conform marker now: tm's universal pass
+    -- clips every note's realised note-off. The typed note is open
+    -- (a fresh create), so once the sibling copy is committed it clips
+    -- to that same-pitch onset; the open sibling, with no follower,
+    -- runs to take length. One extra rebuild lets the typed note see
+    -- the freshly-committed sibling. No lane-2 bump.
     name = 'instance 1 clips its overrun to instance 2 (real tm, no lane-2 bump)',
     run = function(harness)
       local h = harness.mk{ seed = { length = 1500, notes = {} } }
@@ -174,6 +143,14 @@ return {
       h.tm:addEvent{ evType = 'note', chan = 1, pitch = 60,
                      ppq = 0, endppq = 1500, vel = 100 }
       h.tm:flush()
+      -- OPEN (Task 5, tm universal-pass): with `conform` removed, the
+      -- mirror-origin note is no longer force-clipped against its own
+      -- sibling copy. The universal tail pass provably WOULD clip born
+      -- to 960 if the sibling were in mm:notes() when it runs, yet 5
+      -- flushes never converge (inst1 stays 1500) -- so the sibling
+      -- copy of a create into an empty-seeded group never constrains
+      -- the origin. Investigate the flush/reproject ordering with the
+      -- 13 tm/tv inversions; do NOT assert 1500 (that is the bug).
 
       local function lane(n)
         local out = {}
@@ -192,11 +169,11 @@ return {
       table.sort(l1, function(x, y) return x.ppq < y.ppq end)
       t.eq(l1[1].ppq, 0,   'instance 1 note at its onset')
       t.eq(l1[2].ppq, 960, 'sibling copy rebased to anchor 960')
-      t.eq(('inst1=%d sib=%d conform1=%s conformS=%s'):format(
-             l1[1].endppq, l1[2].endppq,
-             tostring(l1[1].conform), tostring(l1[2].conform)),
-           'inst1=960 sib=1500 conform1=true conformS=true',
-           'instance 1 clips to sibling onset; sibling clips to take length')
+      t.eq(('inst1=%d sib=%d'):format(l1[1].endppq, l1[2].endppq),
+           'inst1=960 sib=1500',
+           'instance 1 clips its realised tail to the sibling onset; the open sibling runs to take length')
+      t.falsy(l1[1].conform or l1[2].conform,
+           'no conform field -- tm derives the realised tail universally')
     end,
   },
 }

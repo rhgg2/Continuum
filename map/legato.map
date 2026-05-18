@@ -1,25 +1,16 @@
-@module legato  src=legato.lua  loc=57  sha=untracked  mode=namespace
+@module legato  src=legato.lua  loc=27  sha=b27ba28  mode=namespace
 
 # Imports
-  @const util = 'util'  @ 17
+  @const util = 'util'  @ 11
 
 # Module-level constants
-  @const legato = {}  @ 19
+  @const legato = {}  @ 13
 
 # Public API (legato.*)
-  @api legato.place(notes, ppq, fallback)  @ 27
+  @api legato.place(notes, ppq, fallback)  @ 21
       -- (predecessor, successor, tail) for an onset at `ppq`. The predecessor
       -- is the note the new onset hands off from; the successor the one it
       -- hands off to; the tail is the successor's onset, or `fallback` when
       -- nothing follows. The caller decides whether to clip the predecessor
       -- (it does iff `prev.endppq >= ppq`) — that one-liner stays at the call
       -- site in each frame's own mutation idiom.
-  @api legato.deleteFixups(notes, deleted, fallback)  @ 41
-      -- Removing every note in `deleted` (an [evt]=truthy set) from the
-      -- ordered column `notes`: when a deleted run leaves a hole, the
-      -- surviving note that was legato-running into it grows to swallow the
-      -- hole — its tail moves to the next survivor's onset, or `fallback`
-      -- past the last. A consecutive run of deletes is bridged by a single
-      -- fixup. Returns { { evt = <surviving note whose tail grows>,
-      -- endppq = <new tail> }... }; the caller applies them after deleting (a
-      -- same-key clamp reads live state, so delete-first / stretch-second).

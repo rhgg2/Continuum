@@ -1,4 +1,4 @@
-@module groups  src=groups.lua  loc=167  sha=b27ba28  mode=namespace
+@module groups  src=groups.lua  loc=127  sha=c2d297c  mode=namespace
 
 # Invariants & contracts
   @invariant  evType is identity, never merged or overridden; changing type is delete+create upstream
@@ -16,28 +16,27 @@
 
 # Imports
   @const util = 'util'  @ 14
-  @const legato = 'legato'  @ 15
 
 # Module-level constants
-  @const groups = {}  @ 17
-  @const resolve = groups.resolve  @ 26
-  @const OVERLAY = { overridden = 'mirror.overridden.tint',  @ 154
+  @const groups = {}  @ 16
+  @const resolve = groups.resolve  @ 25
+  @const OVERLAY = { overridden = 'mirror.overridden.tint',  @ 114
 
 # Public API (groups.*)
-  @api groups.resolve(groupEvt, assign)  @ 20
+  @api groups.resolve(groupEvt, assign)  @ 19
       @contract  (groupEvt, assign?) -> resolved event, 'synced'|'overridden'. Local value wins; per the sticky-assign invariant a drifted base raises no conflict here.
-  @api groups.project(group, instance, patternLen)  @ 29
-      @contract  (group, instance?, patternLen?) -> desired, conflicts, states. desired[vuid] is provenance-free; states[vuid] is synced|overridden|conflicted. Recomputed from scratch each call (terminal set, never a diff); a tailless note runs to patternLen.
-  @api groups.reconcile(desired, current)  @ 112
+  @api groups.project(group, instance)  @ 28
+      @contract  (group, instance?) -> desired, conflicts, states. desired[vuid] is provenance-free intent (dur is the authored ceiling; nil dur = open); states[vuid] is synced|overridden|conflicted. Recomputed from scratch each call (terminal set, never a diff). Carries intent only -- tm's universal tail pass derives every realised note-off, so project never clips or grows a dur.
+  @api groups.reconcile(desired, current)  @ 72
       @contract  (desired, current) where current[vuid]={uuid,groupEvt} -> op list; a move/resize is one `set`, never del+add.
-  @api groups.deriveAssign(groupEvt, field, value)  @ 131
+  @api groups.deriveAssign(groupEvt, field, value)  @ 91
       @contract  (groupEvt?, field, value) -> assign rec capturing the live group value as the merge base at fork time (nil groupEvt -> nil base).
-  @api groups.streamId(evt)  @ 136
+  @api groups.streamId(evt)  @ 96
       @contract  stream identity = evType..':'..(key or 0) (note->lane, cc->cc-number); index-free per the region invariant.
-  @api groups.laneId(evt)  @ 141
+  @api groups.laneId(evt)  @ 101
       @contract  group-frame lane identity = (chanDelta or 0)..'/'..streamId; per-channel, so two channels at one lane+onset are distinct slots.
-  @api groups.inRect(rect, ppq, chanOffset, evt)  @ 146
+  @api groups.inRect(rect, ppq, chanOffset, evt)  @ 106
       @contract  membership predicate; ppq/chanOffset are anchor-relative (caller does the anchor maths). True iff 0<=ppq<rect.dur AND rect.streams[chanOffset][streamId(evt)]. rect.ppq is the placement origin, not the membership origin.
-  @api groups.tintKey(state)  @ 156
-  @api groups.regionKey(colour, kind)  @ 159
-  @api groups.outlineKey(state, colour)  @ 162
+  @api groups.tintKey(state)  @ 116
+  @api groups.regionKey(colour, kind)  @ 119
+  @api groups.outlineKey(state, colour)  @ 122

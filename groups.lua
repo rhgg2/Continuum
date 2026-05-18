@@ -11,8 +11,7 @@
 --invariant: an assign is sticky -- local value always wins; a drifted base only raises a conflict flag, it does not change the resolved value
 --invariant: the region is the identity, not an event set; membership is the rect predicate (time span x per-channel streamId set), so streamId must be index-free (evType+key) and survive column insert/reorder
 
-local util   = require 'util'
-local legato = require 'legato'
+local util = require 'util'
 
 local groups = {}
 
@@ -25,10 +24,9 @@ function groups.resolve(groupEvt, assign)
 end
 local resolve = groups.resolve
 
---contract: (group, instance?, patternLen?) -> desired, conflicts, states. desired[vuid] is provenance-free; states[vuid] is synced|overridden|conflicted. Recomputed from scratch each call (terminal set, never a diff); a tailless note runs to patternLen.
-function groups.project(group, instance, patternLen)
+--contract: (group, instance?) -> desired, conflicts, states. desired[vuid] is provenance-free intent (dur is the authored ceiling; nil dur = open); states[vuid] is synced|overridden|conflicted. Recomputed from scratch each call (terminal set, never a diff). Carries intent only -- tm's universal tail pass derives every realised note-off, so project never clips or grows a dur.
+function groups.project(group, instance)
   instance = instance or {}
-  patternLen = patternLen or math.huge
   local assigns = instance.assigns or {}
   local adds    = instance.adds    or {}
   local deletes = instance.deletes or {}
@@ -64,44 +62,6 @@ function groups.project(group, instance, patternLen)
       conflicts[vuid] = true
     else
       claimed[slot] = vuid
-    end
-  end
-
-  -- Legato replayed on the desired set via the shared primitive, never re-derived here, so it cannot drift from tv's rule.
-  local function noteLanes(src)
-    local lanes = {}
-    for vuid, e in pairs(src) do
-      if e.evType == 'note' then
-        e.ppq = e.ppq or 0
-        util.bucket(lanes, groups.laneId(e),
-          { vuid = vuid, e = desired[vuid],
-            ppq = e.ppq, endppq = e.ppq + (e.dur or 0) })
-      end
-    end
-    for _, list in pairs(lanes) do
-      table.sort(list, function(a, b) return a.ppq < b.ppq end)
-    end
-    return lanes
-  end
-
-  -- (1) Instance-local deletes grow the surviving legato owner over the hole, walked on the *group*
-  --     chain. The only place a tail is *extended*.
-  for _, list in pairs(noteLanes(group.events)) do
-    local del = {}
-    for _, n in ipairs(list) do if deletes[n.vuid] then del[n] = true end end
-    for _, f in ipairs(legato.deleteFixups(list, del, patternLen)) do
-      if f.evt.e then f.evt.e.dur = f.endppq - (f.evt.e.ppq or 0) end
-    end
-  end
-
-  -- (2) Tail runs to the next desired-lane onset, else patternLen: a hard bound so REAPER can't
-  --     extend the take, NOT the cross-instance realised clip (conform's job -- see docs).
-  --     A bare add (no dur) takes the tail; a stored note is only clipped, never grown.
-  for _, list in pairs(noteLanes(desired)) do
-    for _, n in ipairs(list) do
-      local _, _, tail = legato.place(list, n.ppq, patternLen)
-      n.e.dur = n.e.dur == nil and tail - n.ppq
-                or math.min(n.ppq + n.e.dur, tail) - n.ppq
     end
   end
 

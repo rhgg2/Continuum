@@ -140,12 +140,13 @@ return {
     end,
   },
 
-  ---------- project: legato replay (the mirror replay model)
+  ---------- project: intent is verbatim -- no legato here, tm derives the tail
 
   {
-    name = 'delete extends the legato predecessor over the hole',
+    name = 'delete does not extend the predecessor -- project carries intent, tm regrows',
     run = function()
-      -- A B C D, each legato into the next (end == next onset).
+      -- A B C D were a legato chain; deleting C must NOT grow B here.
+      -- tm's universal tail pass regrows the raw note-off at rebuild.
       local head = hd({
         [1] = note(0,   { dur = 240 }),
         [2] = note(240, { dur = 240 }),
@@ -154,34 +155,33 @@ return {
       })
       local desired = groups.project(head, { deletes = { [3] = true } })
       t.falsy(desired[3], 'C is gone')
-      t.eq(desired[2].dur, 480, 'B legato-owned C -> grows to D onset (720-240)')
-      t.eq(desired[1].dur, 240, 'A untouched (gap-free, not the owner of the hole)')
-      t.eq(desired[4].dur, 240, 'D, last in lane, keeps its own dur')
+      t.eq(desired[2].dur, 240, 'B keeps its authored dur -- project never grows')
+      t.eq(desired[1].dur, 240)
+      t.eq(desired[4].dur, 240)
     end,
   },
 
   {
-    name = 'a gap before the deleted note means the predecessor does not grow',
-    run = function()
-      local head = hd({
-        [1] = note(0,   { dur = 120 }),  -- ends at 120, gap before C
-        [3] = note(480, { dur = 240 }),
-      })
-      local desired = groups.project(head, { deletes = { [3] = true } })
-      t.eq(desired[1].dur, 120, 'A did not legato-own C -> unchanged')
-    end,
-  },
-
-  {
-    name = 'an override add clips the template note it lands inside (legato handoff)',
+    name = 'a bare add carries no dur (open) and does not clip the note it lands in',
     run = function()
       local head = hd({ [1] = note(0, { dur = 480 }) })  -- overruns to 480
       local add  = { evType = 'note', chanDelta = 0, key = 0, ppq = 240,
-                     pitch = 60, vel = 100 }              -- no dur (a bare insert)
+                     pitch = 60, vel = 100 }              -- no dur -> open
       local desired, _, states = groups.project(head, { adds = { [99] = add } })
-      t.eq(desired[1].dur, 240, 'template clipped to the add onset')
+      t.eq(desired[1].dur, 480, 'template dur is intent -- not clipped to the add onset')
+      t.eq(desired[99].dur, nil, 'a bare add stays open (nil dur); tm derives its tail')
       t.eq(desired[99].ppq, 240)
       t.eq(states[99], 'overridden')
+    end,
+  },
+
+  {
+    name = 'an overrunning note keeps its dur -- project never clips to a neighbour',
+    run = function()
+      local head = hd({ [1] = note(0, { dur = 900 }), [2] = note(480, { dur = 240 }) })
+      local desired = groups.project(head, {})
+      t.eq(desired[1].dur, 900, 'intent preserved; tm clips the realised note-off at rebuild')
+      t.eq(desired[2].dur, 240)
     end,
   },
 
@@ -208,34 +208,6 @@ return {
       t.truthy(desired[1])
       t.falsy(desired[2], 'moved-onto-occupied is skipped')
       t.eq(states[2], 'conflicted')
-    end,
-  },
-
-  {
-    name = 'the last note in a lane is clipped to the pattern length (conform)',
-    run = function()
-      local head = hd({ [1] = note(0, { dur = 2000 }) })   -- overruns the take
-      local desired = groups.project(head, {}, 960)
-      t.eq(desired[1].dur, 960, 'trailing note clipped to patternLen')
-    end,
-  },
-
-  {
-    name = 'a short trailing note is not extended -- clip only, never grow',
-    run = function()
-      local head = hd({ [1] = note(0, { dur = 120 }) })
-      local desired = groups.project(head, {}, 960)
-      t.eq(desired[1].dur, 120, 'staccato at the end stays short')
-    end,
-  },
-
-  {
-    name = 'a note overrunning its next realised neighbour is clipped to that onset',
-    run = function()
-      local head = hd({ [1] = note(0, { dur = 900 }), [2] = note(480, { dur = 240 }) })
-      local desired = groups.project(head, {}, 4000)
-      t.eq(desired[1].dur, 480, 'clipped to the next note in the realised lane')
-      t.eq(desired[2].dur, 240, 'last note keeps its own (shorter) dur')
     end,
   },
 

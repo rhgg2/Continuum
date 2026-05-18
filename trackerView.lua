@@ -109,9 +109,8 @@ local function rowBounds(col, ppq, excludeEvt, allowOverlap)
   return math.ceil(prevEndL / logPerRow), math.floor(nextStartL / logPerRow)
 end
 
---contract: resolves overlap excess in a per-column plan list; mutates plan entries in place. Tail-overlap clips predecessor's tail (legato — onset stays); same-onset shifts the later-source-ppq one by 1 ppq. Non-note plans/cols skipped; unplanned col-mates treated as fixed; optional `deleted` event-set excluded from the timeline (corpses still live in the col.events snapshot until next rebuild)
+--contract: resolves same-onset plan collisions in a per-column plan list; mutates plan entries in place. fromLogical is monotone but not isotone, so two distinct logical onsets can round onto one raw ppq — the later-source-ppq one (curr by sort tie-break) shifts up 1 ppq, or if it is fixed the predecessor shifts back. Tail overlaps are NOT resolved here: tm's universal tail pass owns every raw note-off. Non-note plans/cols skipped; optional `deleted` event-set excluded (corpses still live in the col.events snapshot until next rebuild)
 local function conformOverlaps(plans, deleted)
-  local lenient = cm:get('overlapOffset') * resolution
   local skip = {}
   if deleted then for _, e in ipairs(deleted) do skip[e] = true end end
   local plansByCol = {}
@@ -130,8 +129,7 @@ local function conformOverlaps(plans, deleted)
       if util.isNote(e) and not skip[e] then
         local plan = planByEvt[e]
         util.add(timeline, { e = e, plan = plan,
-          ppq    = (plan and plan.newppq)    or e.ppq,
-          endppq = (plan and plan.newEndppq) or e.endppq })
+          ppq = (plan and plan.newppq) or e.ppq })
       end
     end
     table.sort(timeline, function(a, b)
@@ -155,25 +153,6 @@ local function conformOverlaps(plans, deleted)
         elseif prev.plan then
           nudgePpq(prev.plan, prev.e, -1)
           prev.ppq = prev.ppq - 1
-        end
-      end
-      -- Tail-overlap clip on the post-shift state. Predecessor's
-      -- tail clips first (legato — onset stays); only when the
-      -- predecessor is fixed does the successor's onset lift. A
-      -- conform predecessor's tail is an intended overrun (tm owns
-      -- its realised clip) — it neither clips nor lifts here.
-      local threshold = (prev.e.pitch == curr.e.pitch) and 0 or lenient
-      local excess    = prev.endppq - curr.ppq - threshold
-      if excess > 0 and not prev.e.conform then
-        if prev.plan then
-          local clipped = math.max(prev.ppq + 1,
-                                   (prev.plan.newEndppq or prev.e.endppq) - excess)
-          prev.plan.newEndppq = clipped
-          prev.endppq         = clipped
-        elseif curr.plan then
-          local lifted = math.min(curr.endppq - 1, curr.ppq + excess)
-          nudgePpq(curr.plan, curr.e, lifted - curr.ppq)
-          curr.ppq = lifted
         end
       end
     end
@@ -303,9 +282,13 @@ local function assignStamp(evt, chan, rowS, rowE)
   tm:assignEvent(evt, s)
 end
 
---contract: whenever a note's tail moves: rebases evt.rpb to current alongside the new endppq
+-- Authoring a tail authors a ceiling: the note is no longer the open
+-- (unbounded legato) note. Clearing `open` lets the universal tail
+-- pass honour the freshly-stamped endppqL instead of treating the
+-- note as infinite and re-clipping it to the next onset every rebuild.
+--contract: whenever a note's tail moves: clears `open`, stamps the endppqL ceiling (via tm), rebases evt.rpb to current alongside the new endppq
 local function assignTail(evt, chan, endppq)
-  tm:assignEvent(evt, { endppq = endppq, rpb = currentRpb() })
+  tm:assignEvent(evt, { endppq = endppq, rpb = currentRpb(), open = false })
 end
 
 local function matchGridToCursor()
@@ -499,14 +482,15 @@ do
     hexDigit[string.byte('A') + i] = 10 + i
   end
 
-  -- Caller has already pinned (ppq, ppqL, rpb) onto `update`.
+  -- Caller has already pinned (ppq, ppqL, rpb) onto `update`. A freshly
+  -- placed note is `open`: no authored ceiling, so tm derives its raw
+  -- tail (next onset / take length) every rebuild. endppq here is only
+  -- a provisional note-off keeping mm valid until that first derivation.
   local function placeNewNote(col, update)
     local prev, _, endppq = legato.place(col.events, update.ppq, length)
-    if prev and prev.endppq >= update.ppq then
-      assignTail(prev, col.midiChan, update.ppq)
-    end
     update.vel             = prev and prev.vel or cm:get('defaultVelocity')
     update.endppq          = endppq
+    update.open            = true
     update.lane            = col.lane
     if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
     update.evType = 'note'
@@ -1540,23 +1524,12 @@ local deleteEvent, deleteSelection do
   -- into the next survivor's start (or `length`). PAs are out of scope here.
   -- Fixups are computed before any mutation: tm:assignEvent's same-key clamp
   -- reads live state, so we must delete first and stretch second.
+  -- Plain delete. A survivor that legato-owned the run grows back over
+  -- the hole for free: tm re-derives every raw tail next rebuild, up to
+  -- the survivor's ceiling (take length when it is open).
   local function queueDeleteNotes(col, locs)
-    local chan, notes = col.midiChan, {}
-    for _, evt in ipairs(col.events) do
-      if evt.type ~= 'pa' then notes[#notes + 1] = evt end
-    end
-    local fixups = legato.deleteFixups(notes, locs, length)
     for _, evt in pairs(locs) do
       if evt.type ~= 'pa' then tm:deleteEvent(evt) end
-    end
-    for _, f in ipairs(fixups) do
-      -- A conform note's raw tail is realisation tm owns: the conform-
-      -- tail rebuild pass already regrows it to the next onset when its
-      -- blocker goes. Growing it here double-handles that and -- when it
-      -- is a mirrored event -- leaks a spurious endppq into the shared
-      -- group via gm's applyEdit, collapsing an infinite last-in-lane
-      -- tail. Same carve-out as conformOverlaps / tailEnd.
-      if not f.evt.conform then assignTail(f.evt, chan, f.endppq) end
     end
   end
 

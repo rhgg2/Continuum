@@ -1,14 +1,23 @@
--- conform-flag tail realisation. A `conform` note's natural length is
--- the logical truth (endppqL); its raw MIDI note-off is a realised
--- projection that tm clips, every rebuild, to the first thing that
--- would block it in this instance:
+-- Universal tail realisation. EVERY note's natural length is logical
+-- intent (endppqL, a ceiling; absent => derive from raw); its raw MIDI
+-- note-off is a realised projection tm re-derives every rebuild:
 --
 --   raw endppq = max(ppqL+1,
---                    min(endppqL, nextSameLaneOnset, nextSamePitchChanWideOnset))
+--                    min(ceiling,
+--                        nextSameLaneOnsetL + (overlap or 0),
+--                        nextSamePitchChanWideOnsetL,
+--                        takeLenL))
 --
--- endppqL is NEVER overwritten -> editing commands keep seeing the
--- natural length, and deleting the blocker grows the raw tail back.
--- Non-conform notes are untouched by this pass.
+--   ceiling = open and inf or (endppqL or toLogical(endppq))
+--
+-- endppqL is intent: never overwritten from a clipped raw, only
+-- backfilled once when absent. An `open` note carries no ceiling (the
+-- freshly-placed legato note) and never gets an endppqL. Deleting a
+-- blocker grows the raw tail back up to the ceiling (take length when
+-- open). There is no `conform` flag: legato is universal, a finite
+-- ceiling shorter than every gap is staccato, and `overlap` is the
+-- only per-note legato datum (it overruns the next column onset, never
+-- the same-pitch MIDI onset).
 --
 -- Identity swing in the harness (no swing config) => raw == logical,
 -- so a note's ppq/endppq equal its ppqL/endppqL on the way in.
@@ -22,130 +31,136 @@ end
 return {
 
   {
-    name = 'conform note clips raw endppq to next same-lane onset; endppqL natural',
+    name = 'open note (no ceiling) clips its raw tail to the next same-lane onset',
     run = function(harness)
       local h = harness.mk{
-        seed = { notes = {
-          { ppq = 0,   endppq = 960, ppqL = 0,   endppqL = 960,
-            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1, conform = true },
+        seed = { length = 3840, notes = {
+          { ppq = 0,   endppq = 3840, ppqL = 0, open = true,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
           { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
             chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
         } },
       }
       local notes = h.fm:dump().notes
-      local c = noteByPitch(notes, 60)
-      t.truthy(c, 'conform note present')
-      t.eq(c.endppq,  480, 'raw note-off clipped to the next same-lane onset')
-      t.eq(c.endppqL, 960, 'endppqL stays the natural length')
-      local other = noteByPitch(notes, 62)
-      t.eq(other.endppq, 600, 'the blocking note is itself untouched')
+      local a = noteByPitch(notes, 60)
+      t.eq(a.endppq,  480, 'open tail clipped to the next same-lane onset')
+      t.eq(a.endppqL, nil, 'open note never gets a ceiling stamped')
+      t.eq(noteByPitch(notes, 62).endppq, 600, 'the blocking note is untouched')
     end,
   },
 
   {
-    name = 'non-conform note in the same geometry is NOT clipped',
+    name = 'finite ceiling shorter than the gap is staccato — stays on blocker delete',
     run = function(harness)
       local h = harness.mk{
-        seed = { notes = {
+        seed = { length = 3840, notes = {
+          { ppq = 0,   endppq = 240, ppqL = 0,   endppqL = 240,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
+          { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
+            chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
+        } },
+      }
+      t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 240, 'ceiling < gap -> note is its ceiling')
+
+      local blocker = noteByPitch(h.fm:dump().notes, 62)
+      h.tm:deleteEvent(blocker)
+      h.tm:flush()
+
+      local a = noteByPitch(h.fm:dump().notes, 60)
+      t.eq(a.endppq,  240, 'blocker gone but ceiling caps it — does not breathe')
+      t.eq(a.endppqL, 240, 'ceiling intact')
+    end,
+  },
+
+  {
+    name = 'finite ceiling longer than the gap clips down, regrows up to the ceiling',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { length = 3840, notes = {
           { ppq = 0,   endppq = 960, ppqL = 0,   endppqL = 960,
             chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
           { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
             chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
         } },
       }
-      local c = noteByPitch(h.fm:dump().notes, 60)
-      t.eq(c.endppq,  960, 'no conform flag -> tail unclipped')
-      t.eq(c.endppqL, 960, 'endppqL unchanged')
-    end,
-  },
+      t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 480, 'clipped down to the blocker')
 
-  {
-    name = 'clearSameKey truncates a conform peer: raw clips, endppqL stays natural',
-    run = function(harness)
-      local h = harness.mk{
-        seed = { notes = { { ppq = 0, endppq = 480, ppqL = 0, endppqL = 480,
-                             chan = 1, pitch = 60, vel = 100, uuid = 1,
-                             lane = 1, conform = true } } },
-      }
-      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480,
-                      ppqL = 240, endppqL = 480,
-                      chan = 1, pitch = 60, vel = 100, lane = 1 })
+      h.tm:deleteEvent(noteByPitch(h.fm:dump().notes, 62))
       h.tm:flush()
 
-      local first
-      for _, n in ipairs(h.fm:dump().notes) do if n.ppq == 0 then first = n end end
-      t.truthy(first, 'conform peer survived')
-      t.eq(first.endppq,  240, 'raw note-off clipped for MIDI legality')
-      t.eq(first.endppqL, 480, 'endppqL NOT stamped to selfPpqL (conform carve-out)')
+      local a = noteByPitch(h.fm:dump().notes, 60)
+      t.eq(a.endppq,  960, 'blocker gone -> regrows up to the ceiling, not past it')
+      t.eq(a.endppqL, 960, 'ceiling intact')
     end,
   },
 
   {
-    name = 'deleting the blocker grows the conform raw tail back to endppqL',
+    name = 'overlap overruns the next column onset but never the same-pitch MIDI onset',
     run = function(harness)
-      local h = harness.mk{
-        seed = { notes = {
-          { ppq = 0,   endppq = 960, ppqL = 0,   endppqL = 960,
-            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1, conform = true },
+      local diffPitch = harness.mk{
+        seed = { length = 3840, notes = {
+          { ppq = 0,   endppq = 3840, ppqL = 0, open = true, overlap = 120,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
           { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
             chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
         } },
       }
-      t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 480, 'clipped while blocked')
+      t.eq(noteByPitch(diffPitch.fm:dump().notes, 60).endppq, 600,
+           'overruns the next (different-pitch) column onset by overlap')
 
-      local blocker
-      for _, n in ipairs(h.fm:dump().notes) do if n.pitch == 62 then blocker = n end end
-      h.tm:deleteEvent(blocker)
-      h.tm:flush()
-
-      local c = noteByPitch(h.fm:dump().notes, 60)
-      t.eq(c.endppq,  960, 'blocker gone -> raw tail back to natural')
-      t.eq(c.endppqL, 960, 'endppqL was the natural length all along')
+      local samePitch = harness.mk{
+        seed = { length = 3840, notes = {
+          { ppq = 0,   endppq = 3840, ppqL = 0, open = true, overlap = 120,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
+          { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 2 },
+        } },
+      }
+      t.eq(noteByPitch(samePitch.fm:dump().notes, 60).endppq, 480,
+           'same-pitch MIDI onset is hard physics — overlap cannot cross it')
     end,
   },
 
   {
-    name = 'a coincident-onset lane peer does NOT clip (strictly-after semantics)',
+    name = 'a trailing open note with no follower clips its raw tail to take length',
     run = function(harness)
       local h = harness.mk{
-        seed = { notes = {
-          { ppq = 0, endppq = 960, ppqL = 0, endppqL = 960,
-            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1, conform = true },
+        seed = { length = 3840, notes = {
+          { ppq = 0, endppq = 3840, ppqL = 0, open = true,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
+        } },
+      }
+      t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 3840,
+           'no lane/pitch follower -> take length is the backstop')
+    end,
+  },
+
+  {
+    name = 'a coincident-onset chord-mate is not "following" -> no clip',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { length = 3840, notes = {
+          { ppq = 0, endppq = 3840, ppqL = 0, open = true,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
           { ppq = 0, endppq = 480, ppqL = 0, endppqL = 480,
             chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
         } },
       }
-      local c = noteByPitch(h.fm:dump().notes, 60)
-      t.eq(c.endppq,  960, 'chord-mate at the same onset is not "following" -> no clip')
-      t.eq(c.endppqL, 960, 'endppqL natural')
+      t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 3840,
+           'chord-mate at the same onset is not a blocker -> take length')
     end,
   },
 
   {
-    name = 'a trailing conform note with no follower clips its raw tail to take length',
+    name = 'raw note-off is floored at onset+1 (degenerate ceiling)',
     run = function(harness)
       local h = harness.mk{
         seed = { length = 3840, notes = {
-          { ppq = 0, endppq = 5000, ppqL = 0, endppqL = 5000,
-            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1, conform = true },
-        } },
+          { ppq = 240, endppq = 240, ppqL = 240, endppqL = 240,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 } } },
       }
-      local c = noteByPitch(h.fm:dump().notes, 60)
-      t.eq(c.endppq,  3840, 'no lane/pitch follower -> take length is the backstop')
-      t.eq(c.endppqL, 5000, 'endppqL stays the natural length')
-    end,
-  },
-
-  {
-    name = 'conform raw note-off is floored at onset+1 (degenerate natural length)',
-    run = function(harness)
-      local h = harness.mk{
-        seed = { notes = { { ppq = 240, endppq = 240, ppqL = 240, endppqL = 240,
-                             chan = 1, pitch = 60, vel = 100, lane = 1,
-                             uuid = 1, conform = true } } },
-      }
-      local c = noteByPitch(h.fm:dump().notes, 60)
-      t.eq(c.endppq, 241, 'zero natural length floored to onset+1, never <= onset')
+      t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 241,
+           'zero-length ceiling floored to onset+1, never <= onset')
     end,
   },
 }

@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1639  sha=19451fd  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1622  sha=b27ba28  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts
@@ -85,37 +85,37 @@
       · Flush: commit accumulated ops to mm.
   @fn flush()  @ 639
       · Init / reload: (re)load local cache from mm.
-  @fn reload()  @ 774
+  @fn reload()  @ 762
       -- Also clears staging buffers: a rebuild must not carry un-flushed ops
       -- across (their tokens may be stale for newly-added events), matching the
       -- prior "fresh um per rebuild" semantics now that the um itself persists.
   -- Accessors
-  @fn clearSwing()  @ 883
+  @fn clearSwing()  @ 871
       · Column allocation
       · CC projection
       · Rebuild
 
 # Public API (tm:*)
-  @api tm:getChannel(chan)  @ 807
-  @api tm:channels()  @ 809
-  @api tm:editCursor()  @ 820
-  @api tm:length()  @ 826
-  @api tm:resolution()  @ 827
-  @api tm:name()  @ 828
-  @api tm:setName(name)  @ 829
-  @api tm:timeSigs()  @ 830
-  @api tm:interpolate(A, B, ppq)  @ 831
-  @api tm:markSwingStale(chan)  @ 889
+  @api tm:getChannel(chan)  @ 795
+  @api tm:channels()  @ 797
+  @api tm:editCursor()  @ 808
+  @api tm:length()  @ 814
+  @api tm:resolution()  @ 815
+  @api tm:name()  @ 816
+  @api tm:setName(name)  @ 817
+  @api tm:timeSigs()  @ 818
+  @api tm:interpolate(A, B, ppq)  @ 819
+  @api tm:markSwingStale(chan)  @ 877
       @contract  chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
   -- Mutation
-  @api tm:deleteEvent(evt)  @ 896
-  @api tm:addEvent(evt)  @ 897
-  @api tm:assignEvent(evt, update)  @ 898
-  @api tm:flush()  @ 899
+  @api tm:deleteEvent(evt)  @ 884
+  @api tm:addEvent(evt)  @ 885
+  @api tm:assignEvent(evt, update)  @ 886
+  @api tm:flush()  @ 887
   -- Length
-  @api tm:setLength(newPpq)  @ 904
+  @api tm:setLength(newPpq)  @ 892
       -- On shrink, notes spanning the boundary keep their onset and have endppq clamped.
-  @api tm:rescaleLength(newPpq)  @ 930
+  @api tm:rescaleLength(newPpq)  @ 918
       -- Stretch the take to `newPpq` by linearly remapping the logical
       -- frame: each event on logical row r ends up on row f·r where
       -- f = newPpq/oldPpq. ppqL stamps scale by f; raw ppqs are
@@ -123,21 +123,21 @@
       -- ppqs are not linearly scaled (rows are preserved instead, which
       -- keeps reswing well-defined). Note delays scale by f. Frame stamps
       -- (rpb, swing slot names) are untouched. No events are deleted.
-  @api tm:tileLength(newPpq)  @ 997
+  @api tm:tileLength(newPpq)  @ 985
       -- Because oldPpq sits on a swing-period boundary (take length aligns
       -- to QN), shifting by k·oldPpq is identical in logical and realised
       -- frames; one delta serves both ppq and ppqL paths.
   -- Transport
-  @api tm:playFrom(ppq)  @ 1041
-  @api tm:play()  @ 1047
-  @api tm:stop()  @ 1048
-  @api tm:playPause()  @ 1049
+  @api tm:playFrom(ppq)  @ 1029
+  @api tm:play()  @ 1035
+  @api tm:stop()  @ 1036
+  @api tm:playPause()  @ 1037
   -- Mute
-  @api tm:setMutedChannels(set)  @ 1054
+  @api tm:setMutedChannels(set)  @ 1042
       @contract  idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes. PA events ride along in note columns but carry no mute state — skipped.
 
 # Signals emitted (via util.installHooks)
-  @emits preflush   -- (adds, assigns, deletes); fired first, before the no-op check, so a subscriber (mirm) can stage peer ops into the same lists and ride the one mm:modify
+  @emits preflush   -- (adds, assigns, deletes); fired first, before the no-op check, so a subscriber (gm) can stage peer ops into the same lists and ride the one mm:modify
   @emits postflush   -- nil; fired after mm:modify so a subscriber can read the uuids mm just stamped onto staged add events
   @emits rebuild   -- takeChanged:boolean; fires once at the end of every rebuild after the update-manager cache is reloaded. True only when this rebuild followed a take swap (bindTake), so a subscriber can reload take-tier state.
 

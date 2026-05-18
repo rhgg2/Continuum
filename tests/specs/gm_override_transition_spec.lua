@@ -160,50 +160,6 @@ return {
   },
 
   {
-    -- tv is mirror-unaware: deleting Q stages, in the same flush, a
-    -- legato GROW of the predecessor P's concrete (it sees a hole). The
-    -- group frame re-clips P to the still-present original's onset, but
-    -- P's grown *concrete* must be clipped back too or it overlaps the
-    -- resurfaced note and tv bumps it to a sibling lane. reproject only
-    -- re-drives a concrete when the group geometry changed; P's did not
-    -- (only the note's identity at the onset did), so the projection
-    -- shadow must be refreshed from the live concrete first.
-    name = 'assign-ov + global delete clips the legato predecessor back',
-    run = function()
-      local gm, tm, staged = mk()
-      -- p is long enough to already be legato-clipped to q's onset in
-      -- the group steady state, so its group dur never moves across the
-      -- delete flush -- only its concrete (tv-grown) does.
-      local p = note(0,   1, 1, { endppq = 960 })  -- predecessor, same lane
-      local q = note(480, 1, 1)                     -- slot that gets diverged
-      gm:markGroup({ p, q }, rect(0, 1))   -- instance 1 @ anchor 0
-      tm:flush(); staged.add, staged.assign = {}, {}
-
-      gm:setLocalMode(true)               -- diverge q (assign-ov)
-      tm:flush({}, { { evt = q, update = { pitch = 80 } } }, {})
-      gm:setLocalMode(false)
-      staged.add, staged.assign, staged.del = {}, {}, {}
-
-      -- Global delete of q, with tv's legato-on-delete growing p over
-      -- the vacated span (assigns before deletes, as in preflush).
-      tm:flush({}, { { evt = p, update = { endppq = 720 } } },
-                    { { evt = q } })
-
-      local clip
-      for _, a in ipairs(staged.assign) do
-        if a.evt == p then clip = a.update.endppq end
-      end
-      t.eq(clip, 480, 'predecessor concrete clipped back to the original onset')
-
-      local back
-      for _, a in ipairs(staged.add) do
-        if a.ppq == 480 and a.evType == 'note' then back = a.pitch end
-      end
-      t.eq(back, 60, 'the original resurfaces at its own slot, lane intact')
-    end,
-  },
-
-  {
     name = 'add-ov + global delete removes the local add (no crash, group intact)',
     run = function()
       local gm, tm, staged = mk()

@@ -792,4 +792,48 @@ return {
       t.eq(p2, 'vel', 'part2 emerges as part name')
     end,
   },
+
+  -- Authoring a duration on an `open` (freshly-placed legato) note must
+  -- turn it into a finite-ceiling note: growNote clears `open` and
+  -- stamps endppqL, so the universal tail pass honours the authored
+  -- ceiling instead of re-clipping to the next onset forever. Without
+  -- the clear, deleting the follower lets the still-open note breathe
+  -- to take length (3840) — the red this pins against.
+  {
+    name = 'growNote on an open note clears `open` and authors a finite ceiling',
+    run = function(harness)
+      local function noteByPitch(notes, pitch)
+        for _, n in ipairs(notes) do if n.pitch == pitch then return n end end
+      end
+      local h = harness.mk{
+        seed = { length = 3840, notes = {
+          { ppq = 0,   endppq = 3840, ppqL = 0, open = true,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
+          { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
+            chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
+        } },
+      }
+      h.vm:setGridSize(80, 40)
+
+      -- Open A clips to B's onset (480) before any authoring.
+      t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 480, 'open A clipped to B onset')
+
+      h.ec:setPos(0, 1, 1)  -- cursorNoteBefore at row 0 picks A
+      h.cmgr:invoke('growNote')
+
+      local a = noteByPitch(h.fm:dump().notes, 60)
+      t.truthy(not a.open,       'growNote cleared `open`')
+      t.truthy(a.endppqL ~= nil, 'growNote stamped an endppqL ceiling')
+      local ceil = a.endppqL
+
+      -- Removing the blocker: a finite ceiling caps the regrow; an
+      -- un-cleared `open` note would breathe all the way to take length.
+      h.tm:deleteEvent(noteByPitch(h.fm:dump().notes, 62))
+      h.tm:flush()
+
+      local grown = noteByPitch(h.fm:dump().notes, 60)
+      t.eq(grown.endppq, ceil, 'regrows up to the authored ceiling, not past it')
+      t.truthy(grown.endppq ~= 3840, 'did NOT breathe to take length (open was cleared)')
+    end,
+  },
 }

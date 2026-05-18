@@ -9,18 +9,13 @@
 
 local util   = require 'util'
 local groupsCore = require 'groups'
-local legato = require 'legato'
 
 local deps   = ...
 local tm, cm = deps.tm, deps.cm
 
--- project is pure; the legato fallback (a tailless note runs to the
--- take length) is supplied here. math.huge = no take bound, no backstop.
-local function takeLen() return tm.length and tm:length() or math.huge end
-
 -- Scalar payload: everything the core merges that is not identity (evType)
 -- or positional (chanDelta/key/ppq/dur, handled by anchor maths).
-local SCALARS = { 'pitch', 'vel', 'detune', 'delay', 'val', 'shape', 'tension', 'muted', 'sample' }
+local SCALARS = { 'pitch', 'vel', 'detune', 'delay', 'val', 'shape', 'tension', 'muted', 'sample', 'overlap' }
 
 local gm = {}
 
@@ -116,21 +111,35 @@ local function copyScalars(src, dst)
   return dst
 end
 
+-- A note's group dur is its INTENT ceiling span (endppqL - onset), never
+-- the realised endppq tm re-derives every rebuild. An open note (no
+-- ceiling) carries no dur: a nil dur IS open in the group frame.
 local function toGroup(evt, anchor)
   local g = copyScalars(evt, { evType    = evt.evType,
                                chanDelta = evt.chan - anchor.chan,
                                key       = keyOf(evt),
                                ppq       = evt.ppq - anchor.ppq })
-  if evt.endppq then g.dur = evt.endppq - evt.ppq end
+  if evt.evType == 'note' and not evt.open and evt.endppqL ~= nil then
+    g.dur = evt.endppqL - evt.ppq
+  end
   return g
 end
 
+-- A nil group dur is an open note: stamp `open` and a provisional
+-- onset+1 raw tail (tm's universal pass derives the real note-off next
+-- rebuild). A finite dur is the intent ceiling: stamp endppqL so a
+-- blocker delete regrows the raw tail back up to it, never merely clips.
 local function toInstance(g, anchor)
   local e = copyScalars(g, { evType = g.evType,
                              chan   = anchor.chan + (g.chanDelta or 0),
                              ppq    = anchor.ppq + (g.ppq or 0) })
   if g.evType == 'note' then
-    e.lane, e.endppq = g.key, anchor.ppq + (g.ppq or 0) + (g.dur or 0)
+    e.lane = g.key
+    if g.dur == nil then
+      e.open, e.endppq = true, e.ppq + 1
+    else
+      e.endppqL, e.endppq = e.ppq + g.dur, e.ppq + g.dur
+    end
   elseif g.evType == 'cc' then
     e.cc = g.key
   end
@@ -138,21 +147,29 @@ local function toInstance(g, anchor)
 end
 
 -- Instance-frame partial update -> group-frame partial update. `groupEvt`
--- is the event's current group entry, the reference for endppq<->dur.
+-- is the event's current group entry, the reference for ceiling<->dur.
+-- A note's ceiling is INTENT: endppqL (authored), or open -> dur removed
+-- (nil dur IS open). The realised endppq never enters the group frame.
 local function updToGroup(update, anchor, groupEvt)
   local u = copyScalars(update, {})
   if update.ppq ~= nil then u.ppq = update.ppq - anchor.ppq end
   if update.chan ~= nil then u.chanDelta = update.chan - anchor.chan end
   if update.lane ~= nil then u.key = update.lane end
   if update.cc   ~= nil then u.key = update.cc end
-  if update.endppq ~= nil then
+  if update.open == true then
+    u.dur = util.REMOVE
+  elseif update.endppqL ~= nil then
     local startAbs = update.ppq or (anchor.ppq + (groupEvt.ppq or 0))
-    u.dur = update.endppq - startAbs
+    u.dur = update.endppqL - startAbs
   end
   return u
 end
 
 -- Exact inverse: group-frame partial update -> instance-frame update.
+-- dur removed (util.REMOVE), OR a move of an already-open note, => the
+-- note is open: clear its ceiling (endppqL) and re-open it, provisional
+-- onset+1 raw tail. A finite dur (or a move of a finite note) restamps
+-- the intent ceiling endppqL alongside the raw endppq and closes `open`.
 local function updToInstance(update, anchor, groupEvt)
   local u = copyScalars(update, {})
   if update.ppq ~= nil then u.ppq = anchor.ppq + update.ppq end
@@ -160,13 +177,18 @@ local function updToInstance(update, anchor, groupEvt)
   if update.key ~= nil then
     if groupEvt.evType == 'note' then u.lane = update.key else u.cc = update.key end
   end
-  -- A note's tail moves with its start: a pure move changes ppq but not
-  -- dur, so reproject must still shift endppq or the sibling note keeps
-  -- its old end and reads as a stale leftover.
-  if groupEvt.evType == 'note' and (update.ppq ~= nil or update.dur ~= nil) then
-    local startT = update.ppq ~= nil and update.ppq or (groupEvt.ppq or 0)
-    local dur    = update.dur ~= nil and update.dur or (groupEvt.dur or 0)
-    u.endppq = anchor.ppq + startT + dur
+  if groupEvt.evType == 'note' then
+    local startT  = update.ppq ~= nil and update.ppq or (groupEvt.ppq or 0)
+    local goeOpen = update.dur == util.REMOVE
+                    or (update.dur == nil and groupEvt.dur == nil
+                        and update.ppq ~= nil)
+    if goeOpen then
+      u.open, u.endppqL, u.endppq = true, util.REMOVE, anchor.ppq + startT + 1
+    elseif update.ppq ~= nil or update.dur ~= nil then
+      local dur = update.dur ~= nil and update.dur or (groupEvt.dur or 0)
+      u.open, u.endppqL = false, anchor.ppq + startT + dur
+      u.endppq = anchor.ppq + startT + dur
+    end
   end
   return u
 end
@@ -181,59 +203,6 @@ local function diffGroup(oldG, newG)
     if k ~= 'evType' and newG[k] == nil then d[k] = util.REMOVE end
   end
   return d
-end
-
------ Group-frame legato
-
-local function groupLane(group, laneId)
-  local list = {}
-  for vuid, g in pairs(group.events) do
-    if g.evType == 'note' and groupsCore.laneId(g) == laneId then
-      util.add(list, { g = g, ppq = g.ppq or 0,
-                       endppq = (g.ppq or 0) + (g.dur or 0) })
-    end
-  end
-  table.sort(list, function(a, b) return a.ppq < b.ppq end)
-  return list
-end
-
--- The surviving legato owner grows over the hole (ABC.D, delete C ->
--- B.endppq := D.ppq); deleting the last note grows its predecessor
--- open (math.huge -- conform clips the realised tail). This grow is
--- the one thing project's clip-only pass cannot do.
-local function groupDeleteLegato(group, deletedG)
-  if deletedG.evType ~= 'note' then return end
-  local list = groupLane(group, groupsCore.laneId(deletedG))
-  local hole = { g = deletedG, ppq = deletedG.ppq or 0,
-                 endppq = (deletedG.ppq or 0) + (deletedG.dur or 0) }
-  util.add(list, hole)
-  table.sort(list, function(a, b) return a.ppq < b.ppq end)
-  for _, f in ipairs(legato.deleteFixups(list, { [hole] = true }, math.huge)) do
-    local dur = f.endppq - (f.evt.g.ppq or 0)
-    f.evt.g.dur = dur < math.huge and dur or nil
-  end
-end
-
--- Re-resolve the lane: every tail clipped to the next onset; the
--- last-in-lane note keeps its own dur (conform clips the realised tail).
--- A just-`created` note has no meaningful birth dur under legato (like
--- tv's placeNewNote): drop it so it takes the legato tail -- the next
--- onset, or an infinite tail when it lands last in the lane. An explicit
--- adjustDuration/noteOff arrives later as a non-create assign and is kept.
-local function groupPlaceLegato(group, vuid, created)
-  local g = group.events[vuid]
-  if not g or g.evType ~= 'note' then return end
-  if created then g.dur = nil end
-  local list = groupLane(group, groupsCore.laneId(g))
-  -- An open last-in-lane tail is canonically `nil` dur, not `math.huge`:
-  -- the infinite sentinel serialises to "inf" and Lua's tonumber can't
-  -- round-trip it, so a persisted group would fail to reload.
-  for _, n in ipairs(list) do
-    local _, _, tail = legato.place(list, n.ppq, math.huge)
-    local dur = n.g.dur == nil and tail - n.ppq
-                or math.min(n.ppq + n.g.dur, tail) - n.ppq
-    n.g.dur = dur < math.huge and dur or nil
-  end
 end
 
 ----- Persistence
@@ -267,7 +236,7 @@ local function rehydrate()
     if groupId >= nextGroupId then nextGroupId = groupId + 1 end
     local gu = uuids[groupId] or {}
     for instId, instance in pairs(group.instances) do
-      local desired = groupsCore.project(group, instance, takeLen())
+      local desired = groupsCore.project(group, instance)
       local p       = projOf(groupId, instId)
       for vuid, uuid in pairs(gu[instId] or {}) do
         local evt = tm:byUuid(uuid)
@@ -388,39 +357,6 @@ local function classifyCreate(evt)
   end
 end
 
--- Mark the last-in-lane note per stream so tm's conform pass clips its
--- realised note-off. Marker only, never a shared group field.
-local function conformVuids(desired)
-  local last = {}                       -- laneId -> { ppq, vuid }
-  for vuid, g in pairs(desired) do
-    if g.evType == 'note' then
-      local lane = groupsCore.laneId(g)
-      local l    = last[lane]
-      if not l or g.ppq > l.ppq or (g.ppq == l.ppq and vuid > l.vuid) then
-        last[lane] = { ppq = g.ppq, vuid = vuid }
-      end
-    end
-  end
-  local set = {}
-  for _, l in pairs(last) do set[l.vuid] = true end
-  return set
-end
-
--- Stage only the conform deltas for one instance: each note whose
--- realisation flag disagrees with `cset` (the last-in-lane set per
--- stream). Promote/demote never surfaces as a reconcile op, so the
--- marker is swept directly off the live records.
-local function conformSweep(groupId, instId, cset)
-  for vuid, vuidProj in pairs(projOf(groupId, instId)) do
-    if vuidProj.evt and vuidProj.evt.evType == 'note' then
-      local want = cset[vuid] or false
-      if (vuidProj.evt.conform or false) ~= want then
-        tm:assignEvent(vuidProj.evt, { conform = want })
-        vuidProj.evt.conform = want or nil
-      end
-    end
-  end
-end
 
 -- Overlapping mirror groups have no defined semantics: classifyCreate
 -- adopts a fresh event into whichever group pairs() yields first, and
@@ -493,14 +429,6 @@ function gm:markGroup(events, rect)
 
   groups[groupId] = { rect = rect, events = evs, nextVuid = vuid + 1,
                       instances = { [1] = freshInstance(anchor) } }
-
-  -- The adopted take is canonical geometry; only the realisation flag is
-  -- gm's to add. Without this seed-time sweep instance 1's last-in-lane
-  -- tail stays unconformed until some later edit reprojects it, so the
-  -- conform-tail rebuild pass can't clip a pattern-length tail and a note
-  -- dropped inside it (the first duplicate copy) is lane-bumped.
-  local desired = groupsCore.project(groups[groupId], groups[groupId].instances[1], takeLen())
-  conformSweep(groupId, 1, conformVuids(desired))
   return groupId
 end
 
@@ -525,11 +453,9 @@ function gm:newInstance(groupId, anchor)
   local instance = freshInstance(anchor)
   group.instances[instId] = instance
   local p       = projOf(groupId, instId)
-  local desired = groupsCore.project(group, instance, takeLen())
-  local cset    = conformVuids(desired)
+  local desired = groupsCore.project(group, instance)
   for vuid, g in pairs(desired) do
     local e = toInstance(g, anchor)
-    if cset[vuid] then e.conform = true end
     tm:addEvent(e)
     selfStaged[e] = true
     link(groupId, instId, vuid, p, nil, util.clone(g), e)
@@ -598,7 +524,7 @@ function gm:stateOf(uuid)
   local loc = locByUuid[uuid]
   if not loc then return end
   local group = groups[loc.groupId]
-  local _, _, states = groupsCore.project(group, group.instances[loc.instId], takeLen())
+  local _, _, states = groupsCore.project(group, group.instances[loc.instId])
   return states[loc.vuid]
 end
 
@@ -625,15 +551,14 @@ local function reproject(groupId)
   local group = groups[groupId]
   propagating = true
   for instId, instance in pairs(group.instances) do
-    local desired = groupsCore.project(group, instance, takeLen())
-    local cset    = conformVuids(desired)
+    local desired = groupsCore.project(group, instance)
     local instProj = projOf(groupId, instId)
-    -- tv is mirror-unaware: a user edit can mutate a projected concrete
-    -- directly (legato grows a neighbour on delete) without the group
-    -- geometry changing, so the projection shadow no longer reflects
-    -- realisation and reconcile would see no drift. Refresh the shadow
-    -- from the live concrete for every user-touched record, so reconcile
-    -- both detects the drift and writes the corrective clip back.
+    -- tv is mirror-unaware: a user edit mutates a projected concrete's
+    -- intent (ppq / endppqL / open) directly, with no group-geometry
+    -- change, so the projection shadow goes stale and reconcile would
+    -- see no drift. Refresh the shadow from the live concrete for every
+    -- user-touched record, so reconcile both detects the drift and
+    -- writes the corrective edit back to the siblings.
     for _, rec in pairs(instProj) do
       if rec.evt and rec.evt.uuid and touchedUuids[rec.evt.uuid] then
         rec.groupEvt = toGroup(rec.evt, instance.anchor)
@@ -653,7 +578,6 @@ local function reproject(groupId)
           instEvt = vuidProj.evt
         else
           instEvt = toInstance(op.groupEvt, instance.anchor)
-          if cset[op.vuid] then instEvt.conform = true end
           tm:addEvent(instEvt)
         end
         link(groupId, instId, op.vuid, instProj,
@@ -670,21 +594,10 @@ local function reproject(groupId)
         unlink(instProj, op.vuid)
       end
     end
-    conformSweep(groupId, instId, cset)
   end
   propagating = false
 end
 
--- conform is a per-instance realisation marker gm itself stages (seed
--- sweep, reproject); it is never a logical user edit and never enters the
--- group frame. A conform-only assign reaching applyEdit -- e.g. the seed
--- sweep's assign surfacing in the next preflush -- must pass straight
--- through, not retrigger classify/groupPlaceLegato/reproject.
-local function conformOnlyUpdate(evt, update)
-  if not update or update == evt or update.conform == nil then return false end
-  for k in pairs(update) do if k ~= 'conform' then return false end end
-  return true
-end
 
 -- Local edit of an existing override -- shared by localMode and the
 -- on-ov-in-global path. An assign'd / synced group event accrues a
@@ -707,7 +620,6 @@ do
   local touchedGroups = {}
 
   local function applyEdit(evt, update)
-    if conformOnlyUpdate(evt, update) then return end
     local groupId, instId, vuid = classify(evt)
     local isCreate = false
     if not groupId and update ~= nil then          -- a brand-new event (create)
@@ -773,20 +685,20 @@ do
     else
       if update == nil then
         absorbSiblingOverrides(group, vuid, instId, false)
-        local g = group.events[vuid]
         group.events[vuid] = nil
-        if g then groupDeleteLegato(group, g) end
       elseif isCreate then
+        -- A fresh create is open like tv's placeNewNote: no birth
+        -- ceiling (nil dur). tm derives its raw tail; an explicit
+        -- duration arrives later as a non-create assign -> finite dur.
         local g = toGroup(evt, instance.anchor)
+        g.dur = nil
         group.events[vuid] = g
-        groupPlaceLegato(group, vuid, true)
         link(groupId, instId, vuid, projOf(groupId, instId), evt.uuid,
              util.clone(g), evt)
         absorbSiblingOverrides(group, vuid, instId, true)
       else
         local groupEvt = group.events[vuid]
         util.assign(groupEvt, updToGroup(update, instance.anchor, groupEvt))
-        groupPlaceLegato(group, vuid)
       end
     end
 

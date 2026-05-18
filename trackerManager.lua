@@ -594,8 +594,10 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     evt.ppq  = tm:fromLogical(evt.chan, evt.ppqL,
                               withDelay and delayToPPQ(evt.delay or 0) or 0)
     if withEnd and evt.endppq ~= nil then
-      evt.endppqL = evt.endppq
-      evt.endppq  = tm:fromLogical(evt.chan, evt.endppqL)
+      -- An open note carries no ceiling: convert the provisional raw
+      -- note-off but never stamp endppqL (intent stays unbounded).
+      if not evt.open then evt.endppqL = evt.endppq end
+      evt.endppq = tm:fromLogical(evt.chan, evt.endppq)
     end
   end
 
@@ -644,21 +646,18 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
     if #adds == 0 and #assigns == 0 and #deletes == 0 then return end
 
-    -- CSK enforced once here as a SINGLE scan over every note that
-    -- will exist post-flush — committed (byToken, all lanes) and
-    -- staged adds alike. Not a per-self peer walk: two notes can
-    -- collide without either being the edited one, and repeated
-    -- per-self truncation damages peers a later same-flush op would
-    -- resolve. Run after preflush (propagated peers staged) and before
-    -- the snapshot (clamps/deletes ride this flush). Invariant: at
-    -- most one voice per (chan,pitch); a conform tail also capped at
-    -- the take (its intended overrun must not auto-extend the source).
-    -- The length cap is conform-only: a grow-rescale legitimately
-    -- doubles non-conform tails before the length grows in the same
-    -- flush, so capping those here would wrongly shorten them. conform
-    -- keeps its natural endppqL (raw note-off is realisation only;
-    -- conform-tail re-derives it); non-conform endppqL tracks the clip
-    -- so the next rebuild can't re-expand it.
+    -- Same-(chan,pitch) MIDI legality enforced once here as a SINGLE
+    -- scan over every note that will exist post-flush — committed
+    -- (byToken, all lanes) and staged adds alike. Not a per-self peer
+    -- walk: two notes can collide without either being the edited one,
+    -- and repeated per-self truncation damages peers a later same-flush
+    -- op would resolve. Run after preflush (propagated peers staged)
+    -- and before the snapshot (clamps/deletes ride this flush). This is
+    -- only the staging pre-clip so PA/detune resize routing sees
+    -- coherent geometry inside this mm:modify; the authoritative raw
+    -- tail is re-derived by the rebuild tail pass that follows. raw
+    -- endppq is realisation; endppqL is intent and is never written
+    -- here — deleting a blocker regrows the raw tail up to it.
     do
       local takeLen = tm:length()
       local byKey   = {}
@@ -693,18 +692,9 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
         for i = 1, #voiced do
           local n      = voiced[i]
           local nextOn = voiced[i + 1] and voiced[i + 1].ppq or math.huge
-          local cap    = n.conform and takeLen or math.huge
-          local bound  = math.max(n.ppq + 1, math.min(n.endppq, nextOn, cap))
+          local bound  = math.max(n.ppq + 1, math.min(n.endppq, nextOn, takeLen))
           if bound < n.endppq then
-            -- conform keeps its natural endppqL (raw note-off is
-            -- realisation only; conform-tail re-derives it).
-            local endppqL
-            if not n.conform then
-              endppqL = (voiced[i + 1] and bound == voiced[i + 1].ppq
-                           and voiced[i + 1].ppqL)
-                        or tm:toLogical(n.chan, bound)
-            end
-            util.add(clips, { n = n, endppq = bound, endppqL = endppqL })
+            util.add(clips, { n = n, endppq = bound })
           end
         end
       end
@@ -1190,8 +1180,8 @@ do
         for _, lst in pairs(pcByChan) do sortByPPQ(lst) end
       end
 
-      -- byPitch drives the MIDI-legality same-(chan,pitch) overlap clamp;
-      -- byLane drives conform-tail realisation. Both run BEFORE column
+      -- byLane drives the universal tail-realisation pass; byPitch is
+      -- its same-(chan,pitch) physics input. Runs BEFORE column
       -- allocation so the allocator sees the realised (short) raw tail
       -- and doesn't bump a would-be lane blocker out of the lane.
       local byPitch, byLane, work = {}, {}, {}
@@ -1208,44 +1198,47 @@ do
         if next(update) then mm:assign(tok, update) end
         local e = { token = tok, chan = note.chan, pitch = note.pitch,
                     ppq = note.ppq, endppq = note.endppq, ppqL = note.ppqL,
-                    endppqL = note.endppqL, conform = note.conform }
+                    endppqL = note.endppqL, overlap = note.overlap,
+                    open = note.open }
         util.bucket(byPitch, note.chan .. '|' .. note.pitch, e)
         util.bucket(byLane,  note.chan .. '|' .. (note.lane or 1), e)
       end
       for _, g in pairs(byPitch) do sortByPPQ(g) end
       for _, g in pairs(byLane)  do sortByPPQ(g) end
 
+      -- Logical onset; ppqL is not yet reconciled at this pre-allocation
+      -- phase for raw-arrived notes, so fall back to toLogical.
+      local function onsetL(x) return x.ppqL or tm:toLogical(x.chan, x.ppq) end
       -- Logical onset of the first strictly-later note in a ppq-sorted
       -- group (chords at the same onset are not "following").
       local function laterL(group, ppq)
         local n = util.seek(group, 'after', ppq)
-        return n and n.ppqL
+        return n and onsetL(n)
       end
 
-      for _, group in pairs(byPitch) do
-        for i = 1, #group - 1 do
-          if not group[i].conform and group[i].endppq > group[i + 1].ppq then
-            util.add(work, { token = group[i].token, endppq = group[i + 1].ppq })
-          end
-        end
-      end
-      -- Conform: raw note-off = min(natural endppqL, next same-lane onset,
-      -- next same-pitch chan-wide onset, take length), floored at onset+1.
-      -- The take length is the absolute backstop: a trailing conform note
-      -- (no follower in its lane or pitch) would otherwise keep its full
-      -- natural tail and overrun the take. endppqL is never touched —
-      -- deleting the blocker grows the raw tail back.
+      -- Universal tail realisation. raw note-off = min(endppqL ceiling
+      -- (nil = unbounded), next same-lane onset + overlap, next
+      -- same-pitch chan-wide onset, take length), floored at onset+1.
+      -- overlap widens only the column onset (the monophonic-legato
+      -- glide); the same-pitch onset is hard MIDI physics and the take
+      -- length the absolute backstop. endppqL is never touched —
+      -- deleting a blocker grows the raw tail back up to the ceiling.
       local takeLenL = tm:length()
       for _, group in pairs(byLane) do
         for _, e in ipairs(group) do
-          if e.conform then
-            local laneL  = laterL(group, e.ppq)
-            local pitchL = laterL(byPitch[e.chan .. '|' .. e.pitch], e.ppq)
-            local boundL = math.max(e.ppqL + 1,
-              math.min(e.endppqL, laneL or math.huge,
-                       pitchL or math.huge, takeLenL))
-            util.add(work, { token = e.token,
-                             endppq = util.round(tm:fromLogical(e.chan, boundL)) })
+          local laneL    = laterL(group, e.ppq)
+          local pitchL   = laterL(byPitch[e.chan .. '|' .. e.pitch], e.ppq)
+          -- Absent endppqL is an uncached ceiling, not an open tail —
+          -- derive it from raw. Only an explicitly `open` note (the
+          -- freshly-placed legato note) is unbounded.
+          local ceilingL = e.open and math.huge
+                           or e.endppqL or tm:toLogical(e.chan, e.endppq)
+          local colL     = laneL and laneL + (e.overlap or 0) or math.huge
+          local boundL   = math.max(onsetL(e) + 1,
+            math.min(ceilingL, colL, pitchL or math.huge, takeLenL))
+          local raw      = util.round(tm:fromLogical(e.chan, boundL))
+          if raw ~= e.endppq then
+            util.add(work, { token = e.token, endppq = raw })
           end
         end
       end
@@ -1402,14 +1395,8 @@ do
         if stale and evt.ppqL ~= nil then
           local newPpq = tm:fromLogical(chan, evt.ppqL, d)
           if newPpq ~= evt.ppq then update.ppq, evt.ppq = newPpq, newPpq end
-          -- conform: raw endppq is owned by the conform-tail pass, not
-          -- reseated from endppqL (which is the natural truth, kept long).
-          if isNote and not evt.conform and evt.endppqL ~= nil then
-            local newEndppq = tm:fromLogical(chan, evt.endppqL)
-            if newEndppq ~= evt.endppq then
-              update.endppq, evt.endppq = newEndppq, newEndppq
-            end
-          end
+          -- raw endppq is owned by the tail-realisation pass, never
+          -- reseated from endppqL (which is intent, kept long).
         else
           -- Onset and tail may be stale independently; check each frame
           -- against its predict and rederive only the one that disagrees.
@@ -1419,16 +1406,14 @@ do
             local newPpqL = tm:toLogical(chan, evt.ppq - d)
             update.ppqL, evt.ppqL = newPpqL, newPpqL
           end
-          -- conform: deliberate raw≠fromLogical(endppqL) disagreement —
-          -- it is the clipped projection, not an external edit, so do
-          -- NOT back-derive (it would clobber the natural endppqL).
-          if isNote and not evt.conform then
-            local predEnd = evt.endppqL ~= nil
-              and tm:fromLogical(chan, evt.endppqL) or nil
-            if not predEnd or math.abs(evt.endppq - predEnd) > EPS then
-              local newEndppqL = tm:toLogical(chan, evt.endppq)
-              update.endppqL, evt.endppqL = newEndppqL, newEndppqL
-            end
+          -- raw endppq is the clipped projection the tail pass owns —
+          -- never back-derive an existing endppqL from it (intent is
+          -- set only by edits). But an external raw note arrives with
+          -- no ceiling cached: establish it once from raw, never on an
+          -- `open` note (which is unbounded by definition).
+          if isNote and not evt.open and evt.endppqL == nil then
+            local seed = tm:toLogical(chan, evt.endppq)
+            update.endppqL, evt.endppqL = seed, seed
           end
         end
         if next(update) then

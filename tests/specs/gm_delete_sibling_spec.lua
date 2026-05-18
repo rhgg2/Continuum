@@ -103,8 +103,8 @@ return {
     name = 'deleting the predecessor must not shrink an infinite last-in-lane tail',
     run = function()
       local gm, tm, staged = mk()
-      -- A adopted (finite); B *created* into the region so it is the
-      -- last-in-lane note with an infinite group tail (runs to take end).
+      -- A adopted; B *created* into the region so it is open (a fresh
+      -- create has no birth ceiling -- tm derives its take-length tail).
       local A = note(0, 60)
       local gid = gm:markGroup({ A }, rect())
       local B = note(240, 62)
@@ -117,14 +117,17 @@ return {
 
       tm:flush({}, {}, { { evt = copyA } })                -- delete instance 2's A
 
-      -- A fresh instance reveals the shared group's B tail: it must still
-      -- run to take length (4000), not have collapsed to B's 240 dur.
+      -- A fresh instance reveals the shared group's B: created notes are
+      -- open (no birth ceiling), and deleting the predecessor must not
+      -- shrink that intent. B stays open; tm derives its take-length
+      -- realised tail (not exercised by the fake tm here).
       gm:newInstance(gid, { ppq = 2000, chan = 1 })
       local freshB
       for _, e in ipairs(staged.add) do if e.pitch == 62 then freshB = e end end
       t.truthy(freshB, 'fresh instance projected B')
-      t.eq(freshB.endppq - freshB.ppq, 4000 - 240,
-        'B keeps its infinite (take-length) group tail after the delete')
+      t.eq(freshB.open, true,
+        'B stays open after the predecessor delete -- intent not shrunk')
+      t.eq(freshB.endppqL, nil, 'open B carries no ceiling; tm derives the tail')
     end,
   },
 }
