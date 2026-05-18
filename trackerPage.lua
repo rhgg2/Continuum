@@ -770,6 +770,10 @@ local function drawTracker()
 end
 
 local function drawStatusBar()
+  -- ctx and grid.cols are built together in tv:rebuild; an empty grid
+  -- (no take yet on script reopen) means ctx is nil. Match renderBody's
+  -- placeholder guard rather than indexing a nil ctx via barBeatSub.
+  if #tv.grid.cols == 0 then return end
   local ec = tv:ec()
   local cursorRow, cursorCol = ec:row(), ec:col()
   local rowPerBeat    = cm:get('rowPerBeat')
