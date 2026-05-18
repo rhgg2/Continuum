@@ -28,6 +28,23 @@ return {
     end,
   },
   {
+    name = 'take-tier write with no bound take is a silent no-op (dormant seam)',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:setContext(nil)  -- bindTake(nil) dormant seam: no take context
+      local said = {}
+      local realPrint = _G.print
+      _G.print = function(...) said[#said + 1] = table.concat({ ... }, ' ') end
+      local ok = pcall(function() h.cm:set('take', 'usedSwings', { a = true }) end)
+      _G.print = realPrint
+      t.truthy(ok, 'no-take take-tier write must not raise')
+      for _, line in ipairs(said) do
+        t.falsy(line:find('No take context'),
+          'must not log a lost-write error; derived take config is benign')
+      end
+    end,
+  },
+  {
     name = 'cm:remove on an unknown key raises',
     run = function(harness)
       local h = harness.mk()

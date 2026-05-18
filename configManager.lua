@@ -286,10 +286,12 @@ local function loadTake()
 end
 
 local function saveTake(tbl)
-  if not take then
-    print('Error! No take context for config storage')
-    return
-  end
+  -- No bound take: the dormant seam after bindTake(nil). Take-tier
+  -- config is wholly derived state (usedSwings/extraColumns/groups,
+  -- recomputed on the next take-changed rebuild); a real lost user
+  -- edit is impossible since editing requires a bound take. So a
+  -- no-take take-tier write is always benign -- drop it silently.
+  if not take then return end
   reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_config', util.serialise(tbl), true)
 end
 
