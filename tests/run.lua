@@ -40,7 +40,6 @@ local specs = {
   'tm_clear_same_key_spec',
   'tm_conform_tail_spec',
   'tm_rescale_conform_spec',
-  'tm_lane_overlap_warn_spec',
   'tm_pc_synthesis_spec',
   'legato_spec',
   'groups_core_spec',

@@ -22,10 +22,12 @@ of truth.
 
 Three mechanisms enforce that:
 
-- **Group-frame legato.** A tracker edit on a concrete instance event
-  is transferred into the group frame through the instance anchor, then
-  tv's legato rule is replayed within the group's *own* pristine event
-  set. `group.events` only ever holds the canonical pattern.
+- **Intent into the group frame.** A tracker edit on a concrete
+  instance event is transferred into the group frame through the
+  instance anchor as pure *intent* — onset, and the ceiling (`endppqL`
+  → group `dur`, or `open` → nil dur). The realised note-off tm
+  re-derives never enters the frame. `group.events` only ever holds the
+  canonical pattern.
 - **Per-flush re-derivation.** `groups.project` clones the group and
   replays the instance's deletes/adds/assigns, resolving geometry from
   scratch. A terminal set, order-independent — not an incremental patch.
@@ -43,50 +45,35 @@ not per instance: per-instance gating once flagged both sides "origin"
 when two notes were edited in one flush through different instances and
 suppressed both writebacks, so neither edit reached the other.
 
-## The two-layer conform split
+## Intent in, realisation out
 
-Tail clipping happens in two places, and neither subsumes the other.
-`groups.project` clips to `patternLen` — a hard bound so a note-off
-never runs past the take (REAPER would physically extend it). project
-sees one instance's projection, so the *realised* next note may belong
-to another instance and is not in `desired` by construction; it cannot
-do the cross-instance clip. That is conform's job: `conformVuids` marks
-the last-in-lane note per stream, `reproject` sets `conform=true` on it,
-and trackerManager's conform-tail rebuild pass caps the realised
-note-off against whatever physically follows, across instances. An
-earlier design deleted conform; the cross-instance case forced its
-return.
+gm carries *intent* across the seam and nothing else. A note's intent
+is its ceiling: an authored `endppqL`, anchor-rebased to a group `dur`;
+or `open` — a freshly-placed note with no ceiling, which travels as a
+nil group dur. `toGroup`/`toInstance` rebase between frames;
+`updToGroup`/`updToInstance` are the exact partial-update inverses
+(`open` ⇒ `dur` removed, a finite `dur` ⇒ `endppqL` restamped). The
+realised note-off never enters the group frame.
 
-`conform` is a per-instance realisation marker gm owns — never a
-shared group field, never through `toGroup`, never set by the user.
-Promote/demote does not surface as a reconcile op on the demoted note,
-so `conformSweep` stages the marker delta off the live records
-directly rather than relying on reconcile to carry it. `reproject`
-sweeps every instance through it; `markGroup` runs the same sweep on
-instance 1 at seed time. That symmetry is load-bearing: `markGroup`
-adopts the user's existing take events as instance 1, and that
-geometry is *canonical* for the group — only the realisation flag is
-gm's to add. Omitting the seed sweep left instance 1's last-in-lane
-note unconformed until some later edit reprojected it, so the
-conform-tail rebuild pass could not clip a pattern-length tail; a note
-dropped inside that tail — the first duplicate copy placed one region
-below — overlapped the live source tail and was bumped to a sibling
-lane (later copies land past the CSK-clipped tail and were unaffected,
-which is why only the first copy showed it).
-
-Because the sweep stages conform assigns that can surface in a later
-preflush, `conformOnlyUpdate` makes `applyEdit` pass a conform-only
-update straight through: it is realisation, not a logical edit, and
-must not retrigger `classify`/`groupPlaceLegato`/`reproject` or it
-would churn the canonical group geometry.
+Realisation is tm's, universally. tm's tail pass re-derives *every*
+note's raw note-off each rebuild, clipping it to whatever physically
+follows in the same lane — and because it walks all of `mm:notes()`,
+that "whatever follows" is cross-instance for free. An earlier design
+carried a per-instance `conform` marker and replayed legato inside the
+group frame so the last-in-lane note's tail could be clipped across
+instances; the universal pass subsumes both. There is no `conform`
+field, no group-frame legato, no conform-tail rebuild pass.
+`groups.project` never clips or grows a `dur` (its contract): a blocker
+delete regrows the realised tail back up to the surviving `endppqL`
+ceiling, never merely to the old clip.
 
 ## Lane identity is per channel
 
 The region is per-channel — `rect.streams` is keyed `[chanOffset][streamId]`,
 so `streamId` there is correctly channel-free; the offset is its own
 dimension. But geometry *inside* the group frame — `groups.project`'s
-slot-dedup, its legato chains, `conformVuids`, `groupLane` — resolves per
-lane, and a lane lives in one channel. Keying those by `streamId` alone
+slot-dedup and `groups.laneId` — resolves per lane, and a lane lives in
+one channel. Keying those by `streamId` alone
 (`evType:key`) collapsed two channels at the same lane and onset into one
 slot: the lower-vuid (leftmost) note claimed it, the other was conflicted
 out of `desired` and never projected, so only the leftmost channel of a
@@ -106,10 +93,9 @@ typed event with no prior identity is adopted by `classifyCreate`,
 which walks `pairs(groups)` and takes the first containing region — so
 in an overlap *which* group claims the note, and therefore which
 siblings it mirrors into, is unspecified and can change between
-rebuilds. And `groups.project`'s slot-dedup and `conformVuids` resolve
-within one group; two overlapping instances each project a note-on
-into the same slot with no cross-group dedup and each conform pass
-blind to the other's tail — the cross-identity leak the replay model
+rebuilds. And `groups.project`'s slot-dedup resolves within one group;
+two overlapping instances each project a note-on into the same slot
+with no cross-group dedup — the cross-identity leak the replay model
 exists to kill, reappearing across groups where replay cannot see it.
 
 "Footprint" is per `(channel, streamId, time)`: the half-open span
@@ -131,19 +117,17 @@ newInstance's projection adds, which commit on a later flush.
 `reconcile` compares `desired` against the projection *shadow*
 (`rec.groupEvt`, what reproject last wrote), not the live concrete —
 cheap, and the two agree as long as only gm drives concretes. But tv
-is group-unaware: deleting a note legato-grows its lane predecessor's
-*concrete* in the same flush, and when that predecessor's group
-geometry is unchanged (it was already clipped to that onset — the note
-*identity* at the slot changed, not its position) the shadow still
-equals `desired`, reconcile emits nothing, and tv's growth is never
-clipped back. So before reconcile, `reproject` refreshes the shadow
-from the live concrete (`toGroup(rec.evt)`) for every record whose
-concrete the user touched this flush (`touchedUuids`). Scoped there
-because only a user edit can mutate a concrete behind reproject's back;
-gm's own staged adds never enter `touchedUuids`, so the steady-state
-shadow path is untouched. This is the same realisation-leak the replay
-model exists to kill, at the one seam where reconcile's optimisation
-let it back in.
+is group-unaware: a user edit mutates a projected concrete's intent
+(`ppq` / `endppqL` / `open`) in place, with no group-geometry change,
+so the shadow still equals `desired`, reconcile emits nothing, and the
+edit never reaches the siblings. So before reconcile, `reproject`
+refreshes the shadow from the live concrete (`toGroup(rec.evt)`) for
+every record whose concrete the user touched this flush
+(`touchedUuids`). Scoped there because only a user edit can mutate a
+concrete behind reproject's back; gm's own staged adds never enter
+`touchedUuids`, so the steady-state shadow path is untouched. This is
+the same cross-identity leak the replay model exists to kill, at the
+one seam where reconcile's optimisation let it back in.
 
 `uuid` is gm's only durable identity. tm swaps every event table on
 rebuild, so the runtime projection is re-anchored by uuid each window;
@@ -260,9 +244,9 @@ visible event:
 
 - sibling add-ov + a peer global **create** at that slot → the add-ov
   *upgrades* to an assign-ov on the now-real vuid (its fields become
-  the per-field delta from the new group event). Run after
-  `groupPlaceLegato` so the sibling diverges from the post-legato
-  geometry.
+  the per-field delta from the new group event). Runs after the create
+  is linked into `group.events`, so the delta is taken against the
+  committed group event.
 - sibling assign-ov + a peer global **delete** of that event →
   *demote* to a materialised add-ov: `groups.resolve(groupEvt,
   assign)` snapshots group-base + delta *before* the group event is

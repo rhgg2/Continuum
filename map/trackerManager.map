@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1622  sha=b27ba28  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1611  sha=7dae3ed  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts
@@ -24,8 +24,8 @@
   @contract  no-op if nothing staged; otherwise commits assigns then deletes then adds under one mm:modify; pb cents→raw conversion happens here; byToken is re-keyed live from mm:assign's returned token whenever an identity field moved
   @contract  snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
   @contract  cached per-(cm, mm) pair; invalidated at rebuild head.
-  @contract  returns (true) on accept; (false, conflictEvt) when the refusal is the bump-prone overlap case (threshold exceeded, or coincident onset); (false) on the dominated-by-two refusal, which is structural rather than bug-attributable
-  @contract  requested-lane refusals attributable to the in-flight flush (incoming or conflicting note's uuid in pendingFlushUuids) keep the overlap and log a warning, surfacing the bug rather than silently bumping; refusals not attributable, and lane-less adds, fall through to sibling-search bumping unchanged
+  @contract  true iff note fits col -- no over-threshold overlap (same-pitch: zero tolerance; cross-pitch: overlapOffset lenient), coincident onset always refuses, dominated-by->=2 refuses. Only consulted for unstamped raw notes (stamped notes never reach it).
+  @contract  a stamped note (ppqL ~= nil) is model-governed -- the universal tail pass clips its realised note-off to its lane neighbour so it cannot overlap; its authored lane is returned verbatim, extending notes[] if absent. Only an unstamped raw note (ppqL == nil: foreign-MIDI import) runs the accept -> sibling-search -> push bump path.
   @contract  reentrancy-guarded; rebuilds channels[] from mm, reloads the update-manager cache, fires 'rebuild'; takeChanged forwarded to subscribers via the captured pendingTakeSwap
   @invariant  usedSwings is rebuild output, not input — suppressed to prevent rebuild's cm:set from firing a redundant follow-up rebuild
   @invariant  configChanged routes: 'swing' → all 16; 'colSwing' → channels with diff vs prevColSwing; 'swings' → channels resolving to names with diff body vs prevSwings. Caches refresh after each event and on bindTake.
@@ -52,23 +52,22 @@
   @state fire = util.installHooks(tm)  @ 31
   @state channels = {}  @ 35
   @state lastMuteSet = {}  @ 36
-  @state pendingFlushUuids  @ 38
-      @invariant  pendingFlushUuids: uuid-set of notes touched by the in-flight flush; read by allocateNoteColumn to attribute lane overlaps; nil outside a flush-driven rebuild
-  @state staleSwing = {}  @ 40
+  @state staleSwing = {}  @ 38
       @invariant  staleSwing[chan]=true: this channel's resolved swing changed; rebuild rule rederives raw from ppqL and clears
-  @state swingSnap  @ 44
+  @state EPS = 1  @ 42
+  @state swingSnap  @ 46
       @invariant  swingSnap caches the (cm, mm)-derived swing transforms; nil
 
 # Private functions
   @fn print(...)  @ 24
   -- STATE
   -- SHARED HELPERS
-  @fn sortByPPQ(tbl)  @ 48
-  @fn centsToRaw(cents)  @ 52
-  @fn rawToCents(raw)  @ 57
-  @fn delayToPPQ(d)  @ 62
-  @fn forEachEvent(fn)  @ 64
-  @fn reconcilePCsForChan(chan, records)  @ 92
+  @fn sortByPPQ(tbl)  @ 50
+  @fn centsToRaw(cents)  @ 54
+  @fn rawToCents(raw)  @ 59
+  @fn delayToPPQ(d)  @ 64
+  @fn forEachEvent(fn)  @ 66
+  @fn reconcilePCsForChan(chan, records)  @ 94
       @contract  synthesised PCs carry fake=true and inherit ppqL from the winning host-note record; an existing fake PC matching (ppq, val) is kept (omitted from both toRemove and toAdd), preserving its mm-side loc across rebuilds where val did not change
       @contract  if record.key is set, marks key.sampleShadowed=true on records lost to lane priority; returns (toRemove, toAdd) for the caller to persist. Shadow marking is rebuild-only — flush-time callers omit key since lane events are reclone'd by the rebuild that follows. c.pc.events is not written here; rebuild's CC walk refreshes it from mm after the caller's commit.
       · State
@@ -78,44 +77,44 @@
       · PC reconciliation (trackerMode mutation hook)
       · Public interface
   -- UPDATE MANAGER
-  @fn deleteEvent(evtOrToken)  @ 548
-  @fn assignEvent(evtOrToken, update)  @ 602
-  @fn addEvent(evt)  @ 619
+  @fn deleteEvent(evtOrToken)  @ 550
+  @fn assignEvent(evtOrToken, update)  @ 606
+  @fn addEvent(evt)  @ 623
       @contract  notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm. Caller-supplied evt.ppqL signals "raw already computed" — translation is skipped (mirrors assignEvent).
       · Flush: commit accumulated ops to mm.
-  @fn flush()  @ 639
+  @fn flush()  @ 643
       · Init / reload: (re)load local cache from mm.
-  @fn reload()  @ 762
+  @fn reload()  @ 757
       -- Also clears staging buffers: a rebuild must not carry un-flushed ops
       -- across (their tokens may be stale for newly-added events), matching the
       -- prior "fresh um per rebuild" semantics now that the um itself persists.
   -- Accessors
-  @fn clearSwing()  @ 871
+  @fn clearSwing()  @ 866
       · Column allocation
       · CC projection
       · Rebuild
 
 # Public API (tm:*)
-  @api tm:getChannel(chan)  @ 795
-  @api tm:channels()  @ 797
-  @api tm:editCursor()  @ 808
-  @api tm:length()  @ 814
-  @api tm:resolution()  @ 815
-  @api tm:name()  @ 816
-  @api tm:setName(name)  @ 817
-  @api tm:timeSigs()  @ 818
-  @api tm:interpolate(A, B, ppq)  @ 819
-  @api tm:markSwingStale(chan)  @ 877
+  @api tm:getChannel(chan)  @ 790
+  @api tm:channels()  @ 792
+  @api tm:editCursor()  @ 803
+  @api tm:length()  @ 809
+  @api tm:resolution()  @ 810
+  @api tm:name()  @ 811
+  @api tm:setName(name)  @ 812
+  @api tm:timeSigs()  @ 813
+  @api tm:interpolate(A, B, ppq)  @ 814
+  @api tm:markSwingStale(chan)  @ 872
       @contract  chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
   -- Mutation
-  @api tm:deleteEvent(evt)  @ 884
-  @api tm:addEvent(evt)  @ 885
-  @api tm:assignEvent(evt, update)  @ 886
-  @api tm:flush()  @ 887
+  @api tm:deleteEvent(evt)  @ 879
+  @api tm:addEvent(evt)  @ 880
+  @api tm:assignEvent(evt, update)  @ 881
+  @api tm:flush()  @ 882
   -- Length
-  @api tm:setLength(newPpq)  @ 892
+  @api tm:setLength(newPpq)  @ 887
       -- On shrink, notes spanning the boundary keep their onset and have endppq clamped.
-  @api tm:rescaleLength(newPpq)  @ 918
+  @api tm:rescaleLength(newPpq)  @ 913
       -- Stretch the take to `newPpq` by linearly remapping the logical
       -- frame: each event on logical row r ends up on row f·r where
       -- f = newPpq/oldPpq. ppqL stamps scale by f; raw ppqs are
@@ -123,17 +122,17 @@
       -- ppqs are not linearly scaled (rows are preserved instead, which
       -- keeps reswing well-defined). Note delays scale by f. Frame stamps
       -- (rpb, swing slot names) are untouched. No events are deleted.
-  @api tm:tileLength(newPpq)  @ 985
+  @api tm:tileLength(newPpq)  @ 980
       -- Because oldPpq sits on a swing-period boundary (take length aligns
       -- to QN), shifting by k·oldPpq is identical in logical and realised
       -- frames; one delta serves both ppq and ppqL paths.
   -- Transport
-  @api tm:playFrom(ppq)  @ 1029
-  @api tm:play()  @ 1035
-  @api tm:stop()  @ 1036
-  @api tm:playPause()  @ 1037
+  @api tm:playFrom(ppq)  @ 1024
+  @api tm:play()  @ 1030
+  @api tm:stop()  @ 1031
+  @api tm:playPause()  @ 1032
   -- Mute
-  @api tm:setMutedChannels(set)  @ 1042
+  @api tm:setMutedChannels(set)  @ 1037
       @contract  idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes. PA events ride along in note columns but carry no mute state — skipped.
 
 # Signals emitted (via util.installHooks)

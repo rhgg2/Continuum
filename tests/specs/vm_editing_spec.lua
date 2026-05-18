@@ -46,17 +46,19 @@ return {
   {
     name = 'placing a new note clears same-pitch coverage in other cols of the channel',
     run = function(harness)
-      -- Overlapping notes of DIFFERENT pitches on chan 1 force two lanes:
-      --   A  pitch=60 covers [0, 600) → col 1
-      --   Y  pitch=64 covers [120, 360) → col 2
+      -- Two note columns on chan 1 via explicit lanes (under the
+      -- universal model adjacency alone no longer forces a second lane
+      -- — the tail pass would clip A to the next column onset):
+      --   A  pitch=60 lane 1 covers [0, 600) → col 1
+      --   Y  pitch=64 lane 2 covers [120, 360) → col 2
       -- Typing C at row 8 (ppq=480) in col 2 places a new pitch-60 note
       -- past Y's end. A still covers ppq=480 and must be truncated back —
       -- cross-col, same pitch, same channel.
       local h = harness.mk{
         seed = {
           notes = {
-            { ppq = 0,   endppq = 600, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
-            { ppq = 120, endppq = 360, chan = 1, pitch = 64, vel = 80,  detune = 0, delay = 0 },
+            { ppq = 0,   endppq = 600, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, lane = 1 },
+            { ppq = 120, endppq = 360, chan = 1, pitch = 64, vel = 80,  detune = 0, delay = 0, lane = 2 },
           },
         },
         config = { take = { currentOctave = 4 } },
@@ -137,14 +139,16 @@ return {
     name = 'delete on pitch tied predecessor extends to next note',
     run = function(harness)
       -- res=240, 4 rpb → 1 row = 60 ppq. Three sequential same-pitch notes:
-      --   A: rows 0..1 (ppq 0..120), tied to B
-      --   B: rows 2..3 (ppq 120..240), tied to C
+      --   A: open (legato) at ppq 0, runs to the next same-pitch onset
+      --   B: rows 2..3 (ppq 120..240)
       --   C: rows 4..5 (ppq 240..360)
-      -- Delete B → A.endppq should jump to C.ppq=240.
+      -- A is open, so the universal tail pass clips it to B's onset.
+      -- Delete B → A's realised tail regrows to the next same-pitch
+      -- onset C.ppq=240. (Legato is `open` now, not implicit adjacency.)
       local h = harness.mk{
         seed = {
           notes = {
-            { ppq = 0,   endppq = 120, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
+            { ppq = 0,   endppq = 120, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, open = true },
             { ppq = 120, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
             { ppq = 240, endppq = 360, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
           },
@@ -162,7 +166,7 @@ return {
         elseif n.ppq == 240 then C = n end
       end
       t.truthy(A and C, 'A and C survive')
-      t.eq(A.endppq, 240, 'A extended to C.ppq')
+      t.eq(A.endppq, 240, 'open A regrows its realised tail to the next same-pitch onset')
     end,
   },
 

@@ -1,18 +1,14 @@
--- Pins F3's "endppq is intent at every layer" at the addEvent seam.
+-- Same-(chan, pitch) overlap is hard MIDI physics: one voice per
+-- (chan, pitch), so a realised collision truncates the earlier note's
+-- raw note-off. Under the universal tail model that clip is REALISED
+-- only -- endppqL is intent and survives it, so removing the blocker
+-- regrows the raw tail back up to the authored ceiling. The vm-side
+-- delayRange gate still prevents legitimate edits from manufacturing
+-- these collisions.
 --
--- Note on the bug class: same-(chan, pitch) overlap reconciliation in
--- `clearSameKeyRange` lives in REALISED space — MIDI gives one voice
--- per (chan, pitch), so a realised collision MUST truncate or shorten
--- regardless of intent geometry. vm-side `delayRange` is the gate
--- that prevents legitimate edits from creating those collisions.
--- That's a firm rule, not a bug.
---
--- F3 #3, however, was a separate stale shift in `um:addEvent`: pre-fix,
--- a non-zero `delay` on the payload shifted both ppq AND endppq by
--- delayToPPQ(delay). Shifting endppq is wrong — endppq is intent and
--- delay is a realisation-level shift on the note-on only. Today no
--- caller passes delay≠0 to addEvent, so the bug is unreachable; this
--- pin makes that the contract.
+-- F3 #3: tm:addEvent must not shift endppq by delay (endppq is intent,
+-- delay a realisation-level shift on the note-on only). No caller
+-- passes delay≠0 to addEvent today; this pins it as the contract.
 
 local t = require('support')
 
@@ -39,12 +35,11 @@ return {
     end,
   },
 
-  -- clearSameKey must keep endppqL coherent with endppq. Pre-fix the
-  -- helper stamped only endppq; the canonical logical end either
-  -- resurfaced on rebuild (alias roots) or made the view show an
-  -- unclamped tail (endLogicalOf prefers endppqL when present).
+  -- The realised same-pitch clip shortens raw endppq only; endppqL is
+  -- intent and is never pulled down to the peer onset (deleting the
+  -- peer would regrow the raw tail back up to it).
   {
-    name = 'clearSameKey truncates peer: endppqL matches selfPpqL',
+    name = 'same-pitch peer clips realised endppq; endppqL (intent) survives',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 480, ppqL = 0, endppqL = 480,
@@ -58,13 +53,13 @@ return {
       local first
       for _, n in ipairs(notes) do if n.ppq == 0 then first = n end end
       t.truthy(first, 'first note survived')
-      t.eq(first.endppq,  240, 'first note truncated to peer onset')
-      t.eq(first.endppqL, 240, 'endppqL stamped to peer ppqL')
+      t.eq(first.endppq,  240, 'realised tail clipped to the peer onset (MIDI physics)')
+      t.eq(first.endppqL, 480, 'endppqL is intent — the realised clip never shortens it')
     end,
   },
 
   {
-    name = 'clearSameKey clamps self: endppqL matches next peer ppqL',
+    name = 'self clamped by a later same-pitch peer; endppqL (intent) survives',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
@@ -78,8 +73,8 @@ return {
       local self_
       for _, n in ipairs(notes) do if n.ppq == 0 then self_ = n end end
       t.truthy(self_, 'self note added')
-      t.eq(self_.endppq,  480, 'self clamped to next peer onset')
-      t.eq(self_.endppqL, 480, 'endppqL clamped to next peer ppqL')
+      t.eq(self_.endppq,  480, 'self realised-clamped to the next peer onset')
+      t.eq(self_.endppqL, 720, 'endppqL is intent — the clamp never shortens it')
     end,
   },
 }

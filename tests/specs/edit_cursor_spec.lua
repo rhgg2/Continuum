@@ -447,9 +447,9 @@ return {
       -- A: intent 0..240. B: intent 240..480, delay = 500 → realised
       -- onset = 240 + delayToPPQ(500, 240) = 360. Same lane (intent
       -- intervals just touch, so allocation accepts).
-      -- ppqPerRow = 60. With overlapOffset default 1/16 → off = 15 ppq.
-      -- Old (realised) maxEnd = 360 + 15 = 375 → grow lands at 300.
-      -- New (intent)   maxEnd = 240 + 15 = 255 → grow clamps at 255.
+      -- The bound is B's INTENT onset (240), not its realised onset
+      -- (360). overlapOffset dissolved into per-note `overlap` (default
+      -- 0), so a plain grow clamps exactly at the intent onset 240.
       local h = harness.mk{ seed = { notes = {
         { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0   },
         { ppq = 360, endppq = 480, chan = 1, pitch = 64, vel = 80,  detune = 0, delay = 500 },
@@ -468,8 +468,8 @@ return {
       for _, n in ipairs(h.fm:dump().notes) do
         if n.pitch == 60 then a = n end
       end
-      t.eq(a.endppq, 255,
-        "A.endppq clamps at B.intent + overlapOffset (240 + 15), not B.realised + overlapOffset (360 + 15)")
+      t.eq(a.endppq, 240,
+        "A.endppq clamps at B's INTENT onset (240), not its realised onset (360); overlap default 0")
     end,
   },
 
@@ -515,13 +515,12 @@ return {
       for _, n in ipairs(h.fm:dump().notes) do
         if n.pitch == 60 then a = n end
       end
-      -- overlapOffset = 1/16, resolution = 240 → lenient = 15 logical ppq.
-      -- Under Phase 6 vm operates in the logical frame: A.endppq lands at
-      -- B.ppqL + lenient = 75 logical, which fromLogical(c58, 75) renders
-      -- to raw 91. The pre-Phase-6 expectation (74 + 15 = 89) measured the
-      -- bound in raw — still numerically close (within slope·lenient).
-      t.eq(a.endppq, 91,
-        "A.endppq lands at fromLogical(c58, B.ppqL + lenient) on the FIRST press")
+      -- overlapOffset dissolved into per-note `overlap` (default 0), so
+      -- the bound is B's intent onset exactly: A.endppq lands at
+      -- B.ppqL = 60 logical, which fromLogical(c58, 60) renders to
+      -- raw 74 on the FIRST press (no swing-rounding no-op).
+      t.eq(a.endppq, 74,
+        "A.endppq lands at fromLogical(c58, B.ppqL) on the FIRST press; overlap default 0")
     end,
   },
 

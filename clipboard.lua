@@ -25,9 +25,6 @@ local CLIP_RESERVED = {
   loc = true, idx = true, uuid = true, uuidIdx = true,
   -- envelope-level
   type = true, evType = true,
-  -- region realisation state: a copied note must not carry conform out
-  -- of its region, or its tail would clip outside any block
-  conform = true,
 }
 -- Clip-only fields stripped before a paste materialises into a write event.
 local CLIP_ARTIFACTS = { row = true, endRow = true }

@@ -34,10 +34,12 @@ local fire = util.installHooks(tm)
 
 local channels    = {}
 local lastMuteSet = {}
---invariant: pendingFlushUuids: uuid-set of notes touched by the in-flight flush; read by allocateNoteColumn to attribute lane overlaps; nil outside a flush-driven rebuild
-local pendingFlushUuids
 --invariant: staleSwing[chan]=true: this channel's resolved swing changed; rebuild rule rederives raw from ppqL and clears
 local staleSwing  = {}
+-- ppq tolerance for "raw agrees with its logical projection"; absorbs
+-- fromLogical rounding slop. Shared by the tail pass (stale-frame
+-- detection) and the rebuild rule (onset disagreement).
+local EPS         = 1
 --invariant: swingSnap caches the (cm, mm)-derived swing transforms; nil
 --  means "needs rebuild". Invalidated at the head of every tm:rebuild —
 --  the sole synchronisation point at which mm/cm read coherently.
@@ -723,14 +725,6 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       end
     end
 
-    -- Capture uuids of notes this flush touches, so the rebuild fired
-    -- from mm's reload can attribute over-threshold lane overlaps to us.
-    local touched = {}
-    for _, o in ipairs(flushAssigns) do
-      if o.evt.evType == 'note' and o.evt.uuid then touched[o.evt.uuid] = true end
-    end
-    pendingFlushUuids = touched
-
     mm:modify(function()
       for _, o in ipairs(flushAssigns) do
         local newTok = mm:assign(o.token, o.update)
@@ -749,7 +743,6 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
         if tok then
           byToken[tok] = o.evt
           o.evt.token  = tok
-          if o.evt.evType == 'note' and o.evt.uuid then touched[o.evt.uuid] = true end
         end
       end
     end)
@@ -1063,7 +1056,7 @@ do
     return util.add(notes, { events = {} }), #notes
   end
 
-  --contract: returns (true) on accept; (false, conflictEvt) when the refusal is the bump-prone overlap case (threshold exceeded, or coincident onset); (false) on the dominated-by-two refusal, which is structural rather than bug-attributable
+  --contract: true iff note fits col -- no over-threshold overlap (same-pitch: zero tolerance; cross-pitch: overlapOffset lenient), coincident onset always refuses, dominated-by->=2 refuses. Only consulted for unstamped raw notes (stamped notes never reach it).
   local function noteColumnAccepts(col, note)
     local lenient = cm:get('overlapOffset') * mm:resolution()
     local noteppqI    = note.ppq - delayToPPQ(note.delay or 0)
@@ -1071,11 +1064,11 @@ do
     local dominated = 0
     for _, evt in ipairs(col.events) do
       local evtppqI = evt.ppq - delayToPPQ(evt.delay or 0)
-      if noteppqI == evtppqI then return false, evt end
+      if noteppqI == evtppqI then return false end
       if noteppqI < evt.endppq and evtppqI < noteEndppqI then
         local threshold = (evt.pitch == note.pitch) and 0 or lenient
         local overlapAmount = math.min(evt.endppq, noteEndppqI) - math.max(evtppqI, noteppqI)
-        if overlapAmount > threshold then return false, evt end
+        if overlapAmount > threshold then return false end
         dominated = dominated + 1
       end
     end
@@ -1083,35 +1076,17 @@ do
     return true
   end
 
-  local function warnLaneOverlap(note, conflict)
-    local touched = pendingFlushUuids or {}
-    local count = 0
-    for _ in pairs(touched) do count = count + 1 end
-    local who = (touched[note.uuid] and touched[conflict.uuid] and 'both')
-             or (touched[note.uuid] and 'incoming')
-             or 'existing'
-    print(string.format(
-      'tm: lane overlap kept (chan=%d lane=%d): incoming pitch=%d ppq=%d..%d vs existing pitch=%d ppq=%d..%d; touched=%d (%s)',
-      note.chan, note.lane,
-      note.pitch, note.ppq, note.endppq,
-      conflict.pitch, conflict.ppq, conflict.endppq,
-      count, who))
-  end
-
-  --contract: requested-lane refusals attributable to the in-flight flush (incoming or conflicting note's uuid in pendingFlushUuids) keep the overlap and log a warning, surfacing the bug rather than silently bumping; refusals not attributable, and lane-less adds, fall through to sibling-search bumping unchanged
+  --contract: a stamped note (ppqL ~= nil) is model-governed -- the universal tail pass clips its realised note-off to its lane neighbour so it cannot overlap; its authored lane is returned verbatim, extending notes[] if absent. Only an unstamped raw note (ppqL == nil: foreign-MIDI import) runs the accept -> sibling-search -> push bump path.
   local function allocateNoteColumn(channel, note)
     local notes = channel.columns.notes
+    if note.ppqL ~= nil then
+      local lane = note.lane or 1
+      while #notes < lane do pushNoteCol(channel) end
+      return notes[lane], lane
+    end
     if note.lane then
       local col = notes[note.lane]
-      if col then
-        local ok, conflict = noteColumnAccepts(col, note)
-        if ok then return col, note.lane end
-        if conflict and pendingFlushUuids
-           and (pendingFlushUuids[note.uuid] or pendingFlushUuids[conflict.uuid]) then
-          warnLaneOverlap(note, conflict)
-          return col, note.lane
-        end
-      end
+      if col and noteColumnAccepts(col, note) then return col, note.lane end
       if not col then
         while #notes < note.lane do pushNoteCol(channel) end
         return notes[note.lane], note.lane
@@ -1196,10 +1171,23 @@ do
         end
         local tok = mm:tokenOf(note)
         if next(update) then mm:assign(tok, update) end
+        -- A stale logical frame is no logical frame. On a NON-stale
+        -- channel a raw onset that disagrees with ppqL is an external/
+        -- legacy edit: raw is the truth, the cached ppqL/endppqL are
+        -- garbage. Drop them so every tail-pass fallback (onsetL,
+        -- ceilingL, laterL) reads raw; the rebuild rule recaches the
+        -- real logical frame right after. (A staleSwing channel is the
+        -- opposite — ppqL is authoritative there, raw the stale one —
+        -- so it is excluded.)
+        local frameStale = not staleSwing[note.chan]
+          and note.ppqL ~= nil
+          and math.abs(note.ppq - tm:fromLogical(note.chan, note.ppqL,
+                delayToPPQ(note.delay or 0))) > EPS
         local e = { token = tok, chan = note.chan, pitch = note.pitch,
-                    ppq = note.ppq, endppq = note.endppq, ppqL = note.ppqL,
-                    endppqL = note.endppqL, overlap = note.overlap,
-                    open = note.open }
+                    ppq = note.ppq, endppq = note.endppq,
+                    ppqL    = not frameStale and note.ppqL or nil,
+                    endppqL = not frameStale and note.endppqL or nil,
+                    overlap = note.overlap, open = note.open }
         util.bucket(byPitch, note.chan .. '|' .. note.pitch, e)
         util.bucket(byLane,  note.chan .. '|' .. (note.lane or 1), e)
       end
@@ -1368,7 +1356,6 @@ do
     -- (they have no independent logical position) and reseats each onto
     -- its host's new (ppq, ppqL) in the same pass.
     do
-      local EPS      = 1   -- ppq; tolerates rounding slop in fromLogical
       local toAssign = {}  -- { { evt, update } }; evt is a column event whose .token is restamped if mm:assign returns a fresh token (any ppq mutation)
 
       -- Index fakes by their pre-walk seat (= host's pre-walk ppq).
@@ -1402,16 +1389,21 @@ do
           -- against its predict and rederive only the one that disagrees.
           local predOn = evt.ppqL ~= nil
             and tm:fromLogical(chan, evt.ppqL, d) or nil
-          if not predOn or math.abs(evt.ppq - predOn) > EPS then
+          local onsetExternal = not predOn
+            or math.abs(evt.ppq - predOn) > EPS
+          if onsetExternal then
             local newPpqL = tm:toLogical(chan, evt.ppq - d)
             update.ppqL, evt.ppqL = newPpqL, newPpqL
           end
-          -- raw endppq is the clipped projection the tail pass owns —
-          -- never back-derive an existing endppqL from it (intent is
-          -- set only by edits). But an external raw note arrives with
-          -- no ceiling cached: establish it once from raw, never on an
-          -- `open` note (which is unbounded by definition).
-          if isNote and not evt.open and evt.endppqL == nil then
+          -- endppqL is intent: in steady state raw is the tail pass's
+          -- clipped projection of it, so never back-derive it from raw.
+          -- Two cases mean "raw is the truth here, not a clip": an
+          -- absent ceiling on an external raw note (cache it once), and
+          -- a disagreeing onset (the whole record was externally edited
+          -- — ppqL just followed raw, so endppqL must too). Never on an
+          -- `open` note (unbounded by definition).
+          if isNote and not evt.open
+             and (evt.endppqL == nil or onsetExternal) then
             local seed = tm:toLogical(chan, evt.endppq)
             update.endppqL, evt.endppqL = seed, seed
           end
@@ -1459,18 +1451,14 @@ do
 
     -- 5) Project to logical.
     do
-      -- evt.ppq integer-rounded for tv:rebuild's offGrid compare; ppqL stays float so swing inverse round-trips stay exact.
-      -- conform: raw endppq is owned by the conform-tail pass (step 1),
-      -- not reseated from endppqL here — endppqL stays the natural truth
-      -- (kept long), while the realised note-off the user sees is the
-      -- clipped value the conform-tail wrote. Symmetric with step 4's
-      -- `not evt.conform` carve-out.
+      -- evt.ppq integer-rounded for tv:rebuild's offGrid compare; ppqL
+      -- stays float so swing inverse round-trips stay exact. raw endppq
+      -- is the tail pass's clipped realisation, NOT reseated from
+      -- endppqL here — endppqL is intent (kept long); the note-off the
+      -- user sees is the clipped value the tail pass wrote.
       local function projectToLogical(col)
         for _, evt in ipairs(col.events) do
           if evt.ppqL ~= nil then evt.ppq = util.round(evt.ppqL) end
-          if evt.endppqL ~= nil and not evt.conform then
-            evt.endppq = util.round(evt.endppqL)
-          end
         end
         sortByPPQ(col.events)
       end
@@ -1506,7 +1494,6 @@ do
 
     reload()
     rebuilding = false
-    pendingFlushUuids = nil
 
     --emits: rebuild  -- takeChanged:boolean; fires once at the end of every rebuild after the update-manager cache is reloaded. True only when this rebuild followed a take swap (bindTake), so a subscriber can reload take-tier state.
     fire('rebuild', takeChanged)

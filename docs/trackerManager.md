@@ -183,8 +183,8 @@ Semantics:
   `update.ppqL` / `update.endppqL` alongside `update.ppq` /
   `update.endppq`; tm then skips the per-write clamp and the
   logical→raw translation. Reswing uses this — without it, the
-  first-processed of two legato siblings sees its endppq clipped
-  against the second's still-old ppq.
+  first-processed of two reswung same-lane notes sees its endppq
+  clipped against the second's still-old ppq.
 - **Detune changes (col-1 notes).** `assignNote` seats a pb at the
   boundary if needed, retunes the raw stream forward to the next note,
   then drops the boundary if it became redundant.
@@ -223,10 +223,13 @@ Reentrancy-guarded by `rebuilding`. Steps:
    steady-state default. Build `(chan,pitch)` groups, then truncate
    overlaps under a single `mm:modify` so every subsequent walk sees
    clean intervals.
-2. **Allocate lanes.** `allocateNoteColumn` prefers the persisted
-   `note.lane`; falls through to first-fit, then spills to a new
-   column. If the preferred lane doesn't exist yet, columns are pushed
-   until it does. Lane changes write back via `mm:assignNote`.
+2. **Allocate lanes.** A *stamped* note (`ppqL ~= nil`: authored
+   tracker data) is model-governed — the universal tail pass clips its
+   realised note-off to its lane neighbour, so it can never overlap;
+   `allocateNoteColumn` returns its authored `note.lane` verbatim,
+   pushing columns until it exists. Only an *unstamped* raw note
+   (`ppqL == nil`: foreign-MIDI import) runs first-fit and spills to a
+   new column. Lane changes write back via `mm:assignNote`.
 3. **Single CC walk.** Distributes by `msgType`:
    - `pb` — emit logical-cents events with detune context and hidden
      flag; accumulate per channel so the column installs only when at
@@ -294,7 +297,9 @@ their own PC each, even if their intent ppqs match.
 
 ## Column allocation rules
 
-`noteColumnAccepts(col, note)`:
+`noteColumnAccepts` is consulted only for unstamped raw notes; a
+stamped note never reaches it (see Rebuild step 2). For an unstamped
+candidate, `noteColumnAccepts(col, note)`:
 
 Comparisons run in **intent space**: the candidate's note-on has its
 delay subtracted, and each existing event's note-on has its own delay

@@ -107,7 +107,11 @@ return {
       local n = h.fm:dump().notes[1]
       t.eq(n.delay, 900, 'no neighbour clamp; column cap (±999) binds')
       t.eq(n.ppq, 216, 'realised onset = ppq + delayToPPQ(900) = 216')
-      t.eq(n.endppq, 600, 'endppq unchanged')
+      -- The delay constraint is unaffected (what this test pins); A's
+      -- realised tail is independently clipped to the next column onset
+      -- (B@240) by the monophonic-column rule -- pitch-independent for
+      -- the column bound. endppqL (intent 600) is untouched.
+      t.eq(n.endppq, 240, 'realised tail clipped to the next column onset (monophonic)')
     end,
   },
 

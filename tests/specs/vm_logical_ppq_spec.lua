@@ -261,20 +261,17 @@ return {
     end,
   },
 
-  -- quantizeKeepRealised path: head gets at(newRow), but endppqL is
-  -- separate — it must be re-derived under the new (current) frame
-  -- so it stays coherent with the rebased head's frame. To make the
-  -- fix observable in a no-swing setup (where the rebase formula
-  -- happens to be identity for well-formed seeds), seed with a
-  -- deliberately stale endppqL — the kind of value left behind by
-  -- a prior frame change that didn't sweep tails.
+  -- Universal tail model: with an AGREEING onset (ppqL matches raw),
+  -- the logical frame is trusted and endppqL is authoritative intent.
+  -- The rebuild rule no longer pulls endppqL back from raw (the old
+  -- endppq↔endppqL consistency check went with `conform`); instead the
+  -- tail pass derives raw FROM endppqL. So a present endppqL is the
+  -- ceiling and raw realises up to it -- there is no "stale endppqL"
+  -- to fix, endppqL IS the truth. (An onset disagreement would mark
+  -- the frame external/stale and rederive both from raw -- covered by
+  -- tm_rebuild_rule_spec.)
   {
-    -- Stale endppqL is now caught by the rebuild rule's endppq↔endppqL
-    -- consistency check (added in Phase 6 commit A): when ppq matches
-    -- predicted but endppq disagrees with endppqL, the rule rederives
-    -- endppqL from endppq under the current swing snapshot. The seed
-    -- omits frame so the rule applies; quantize then runs unchanged.
-    name = 'rebuild rule re-derives stale endppqL when ppq is consistent',
+    name = 'agreeing onset: endppqL is authoritative intent, raw realises up to it',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = {
@@ -287,8 +284,8 @@ return {
       h.vm:setGridSize(80, 40)
 
       local n = noteByPitch(h.fm:dump(), 60)
-      t.eq(n.endppq,  240, 'endppq (intent) untouched')
-      t.eq(n.endppqL, 240, 'stale endppqL rewritten by rebuild rule')
+      t.eq(n.endppqL, 999, 'endppqL is intent — onset agrees, so it is trusted, not rederived')
+      t.eq(n.endppq,  999, 'raw realises up to the authored ceiling (no blocker, within take length)')
     end,
   },
 
