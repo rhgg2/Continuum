@@ -20,7 +20,7 @@ local function takeLen() return tm.length and tm:length() or math.huge end
 
 -- Scalar payload: everything the core merges that is not identity (evType)
 -- or positional (chanDelta/key/ppq/dur, handled by anchor maths).
-local SCALARS = { 'pitch', 'vel', 'detune', 'delay', 'val', 'shape', 'tension', 'muted' }
+local SCALARS = { 'pitch', 'vel', 'detune', 'delay', 'val', 'shape', 'tension', 'muted', 'sample' }
 
 local gm = {}
 
@@ -545,6 +545,13 @@ end
 function gm:activeGroup() return activeGroup end
 function gm:clearActive() activeGroup = nil end
 
+-- The group's projection rect, for the caller's pre-stage clear of the
+-- destination zone (gm:newInstance contract). nil if the group is gone.
+function gm:groupRect(groupId)
+  local g = groups[groupId]
+  return g and g.rect
+end
+
 --contract: case 1 -- seed a group from the selection, no copy. The new
 --          group becomes active.
 function gm:mark(events, rect)
@@ -567,7 +574,7 @@ function gm:stamp(events, rect, anchor)
   return activeGroup, self:newInstance(activeGroup, anchor)
 end
 
---contract: explicit-group duplicate, used by the mirrorDuplicate
+--contract: explicit-group duplicate, used by the groupDuplicate
 --          cascade. `groupId` live -> drop one more copy at `anchor`
 --          into it; nil or stale -> seed group + first copy. Returns
 --          the groupId either way. Sets it active for render parity,

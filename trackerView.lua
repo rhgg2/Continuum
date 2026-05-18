@@ -1639,6 +1639,13 @@ end
 
 local dupeState = nil
 
+-- Group quick-verb lifetimes (moved off trackerPage, which is pure
+-- render/UI). groupSrc: last copy/mark source rect for groupPaste, nil
+-- once mutated. groupDupState: the groupDuplicate cascade run token (see
+-- tv:duplicateCascade). Cleared by tv:wireGroupLifetime's keep-set sweep
+-- and the mouse re-selection paths via tv:endGroupCascade.
+local groupSrc, groupDupState
+
 -- Cursor cell as a 1-row mirror rect: the seed-rect fallback for plain
 -- duplicate when there is no real selection (selectionAsRect is nil).
 -- This is the 1x1 carveout -- mirror passes no fallback, so a degenerate
@@ -1839,6 +1846,33 @@ function tv:eventsInRect(rect)
   return out
 end
 
+-- Clears the take cells the rect's projection lands on at `anchor` -- the
+-- footprint inverse of eventsInRect. gm:stamp / gm:newInstance only
+-- re-place their own concretes (contract: the caller clears foreign
+-- ones), so a group dropped on populated cells must wipe them first or
+-- the projection interleaves with stale notes. A note that STARTS before
+-- the zone and sustains into it is tail-trimmed to the boundary, never
+-- deleted and never left overlapping: an overlapping survivor forces the
+-- lane allocator to spill the projection onto another lane on rebuild,
+-- and lane identity is load-bearing under groups. Stages deletes/trims
+-- only; the caller flushes alongside gm's staged adds. Called strictly
+-- before gm stages, so it never eats the projection; a gm op that then
+-- rejects (out-of-range / live-group overlap) is a rare pre-beta edge
+-- the bounds/no-straddle gates already exclude for the common path.
+function tv:clearRegionAt(rect, anchor)
+  local lo, hi = anchor.ppq, anchor.ppq + rect.dur
+  for _, col in ipairs(grid.cols) do
+    local sel = rect.streams[col.midiChan - anchor.chan]
+    if sel and sel[streamIdOf(col)] then
+      if col.type == 'note' then
+        local prev = util.seek(col.events, 'before', lo, util.isNote)
+        if prev and prev.endppq > lo then assignTail(prev, col.midiChan, lo) end
+      end
+      for evt in util.between(col.events, lo, hi) do tm:deleteEvent(evt) end
+    end
+  end
+end
+
 -- Cursor as a mirror anchor: { ppq, chan } in the logical frame.
 function tv:cursorAnchor()
   local _, c = ec:pos()
@@ -2016,6 +2050,51 @@ function tv:showDelay()
 end
 
 
+----- Group quick-verbs
+
+-- mark and copy share the one groupSrc lifetime; without this, mark ->
+-- groupPaste degrades to plain paste (groupPaste gates on groupSrc, not
+-- the active group).
+local function groupMark()
+  local r = tv:selectionAsRect()
+  if r then groupSrc = r; gm:mark(tv:eventsInRect(r), r) end
+end
+
+-- Cascade copies into one group. Capture the seed events BEFORE clearing
+-- -- source and destination may overlap. clearRegionAt wipes the
+-- destination so the projection replaces rather than interleaves;
+-- tm:flush commits gm's staged adds (it only stages otherwise,
+-- colliding with the next edit).
+local function groupDuplicate()
+  groupDupState = tv:duplicateCascade(groupDupState, nil,
+    function(rect, anchor, gid)
+      local src = gid and {} or tv:eventsInRect(rect)
+      tv:clearRegionAt(rect, anchor)
+      gid = gm:duplicateInto(gid, src, rect, anchor)
+      tm:flush()
+      return gid
+    end)
+end
+
+-- The pasted region [a.ppq, a.ppq+groupSrc.dur) must fit wholly inside
+-- the take. Out of bounds is a silent no-op, NOT a fallthrough to plain
+-- paste (that would paste non-group content the user didn't ask for);
+-- the fallthrough is only for "no group source".
+local function groupPaste()
+  local a = tv:cursorAnchor()
+  if groupSrc and a then
+    if a.ppq + groupSrc.dur <= tm:length() then
+      local src = tv:eventsInRect(groupSrc)
+      tv:clearRegionAt(groupSrc, a)
+      gm:stamp(src, groupSrc, a)
+      tm:flush()
+    end
+  else
+    cmgr:invoke('paste')
+  end
+end
+
+
 ----- Command table
 
 local tracker = cmgr:scope('tracker')
@@ -2067,6 +2146,11 @@ tracker:registerAll{
   doubleRPB               = function() tv:setRowPerBeat(cm:get('rowPerBeat') * 2) end,
   halveRPB                = function() tv:setRowPerBeat(math.floor(cm:get('rowPerBeat') / 2)) end,
   matchGridToCursor       = matchGridToCursor,
+  groupMark               = groupMark,
+  groupDuplicate          = groupDuplicate,
+  groupPaste              = groupPaste,
+  groupLocalToggle        = function() gm:setLocalMode(not gm:localMode()) end,
+  regionEnter             = function() ec:enterRegionMode() end,
 }
 
 for i = 0, 9 do
@@ -2228,6 +2312,12 @@ local groupBridge = {
   instanceSelection = function(g, i) return tv:instanceSelection(g, i) end,
   instanceAt        = function()     return tv:instanceAtCursor() end,
   paintStream       = function(g, i, c, on) return tv:paintRegionStream(g, i, c, on) end,
+  -- The caller clears the destination before gm stages its projection
+  -- (gm:newInstance contract: gm only re-places its own concretes).
+  clearAt           = function(g, anchor)
+    local rect = gm:groupRect(g)
+    if rect then tv:clearRegionAt(rect, anchor) end
+  end,
   -- gm only stages; the creation verbs flush so a new instance
   -- materialises now, not on the next unrelated mutation.
   commit            = function()     return tm:flush() end,
@@ -2287,6 +2377,58 @@ do
   end
   cmgr:doBefore(clearOn, function() dupeState = nil end)
 end
+
+----- Group quick-verb lifetimes
+--
+-- groupSrc + active (mark/copy -> groupPaste): survive navigation
+-- between copy and paste; only a real mutation clears them. Keep-set =
+-- GROUP_KEEP. groupDupState (groupDuplicate cascade): survives pure
+-- cursor moves only; any new selection or mutation ends the run.
+-- Keep-set = DUP_KEEP (a strict subset of GROUP_KEEP).
+local GROUP_PASSTHROUGH = {
+  cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
+  pageUp=true, pageDown=true, goTop=true, goBottom=true, goLeft=true, goRight=true,
+  colLeft=true, colRight=true, channelLeft=true, channelRight=true,
+  selectUp=true, selectDown=true, selectLeft=true, selectRight=true, selectClear=true,
+  cycleBlock=true, cycleVBlock=true, swapBlockEnds=true,
+}
+for i = 0, 9 do GROUP_PASSTHROUGH['advBy' .. i] = true end
+
+local GROUP_KEEP = {}
+for k in pairs(GROUP_PASSTHROUGH) do GROUP_KEEP[k] = true end
+for _, n in ipairs{ 'copy', 'groupMark', 'groupDuplicate',
+                    'groupPaste', 'groupLocalToggle', 'regionEnter' } do
+  GROUP_KEEP[n] = true
+end
+
+local DUP_KEEP = { groupDuplicate = true, selectClear = true,
+  cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
+  pageUp=true, pageDown=true, goTop=true, goBottom=true,
+  goLeft=true, goRight=true, colLeft=true, colRight=true,
+  channelLeft=true, channelRight=true,
+}
+for i = 0, 9 do DUP_KEEP['advBy' .. i] = true end
+
+-- Snapshot the source on copy + install the clear-on-mutation sweep.
+-- Must run AFTER every tracker command (tv's, clipboard's, ec's AND
+-- trackerPage's page verbs) registers, so the sweep covers page commands
+-- too -- trackerPage calls this once post-registration. copy is plain:
+-- clipboard:copy ends with ec:selClear(), so a doAfter snapshot would
+-- see an empty selection; doBefore captures the live rect.
+function tv:wireGroupLifetime()
+  cmgr:doBefore('copy', function() groupSrc = tv:selectionAsRect() end)
+  local clearOn, dupClearOn = {}, {}
+  for name in pairs(tracker.registered) do
+    if not GROUP_KEEP[name] then clearOn[#clearOn + 1]    = name end
+    if not DUP_KEEP[name]   then dupClearOn[#dupClearOn+1] = name end
+  end
+  cmgr:doBefore(clearOn, function() groupSrc = nil; gm:clearActive() end)
+  cmgr:doBefore(dupClearOn, function() groupDupState = nil end)
+end
+
+-- A mouse re-selection ends the cascade by hand (the mouse bypasses
+-- cmgr's keep-set sweep).
+function tv:endGroupCascade() groupDupState = nil end
 
 tv:rebuild(true)
 return tv

@@ -83,6 +83,12 @@ reprojection (the group frame is anchor-invariant), so `regionNudge`
 goes through the engine's explicit move verb, not a reproject. Why
 that is lives in the group engine's doc, not here.
 
+Creation verbs (`newFromSelection` aside, which seeds in place) clear the
+destination zone before gm stages its projection: gm only re-places its
+own concretes, and a foreign note straddling the zone, left in place,
+would force the lane allocator to spill the projection onto another lane
+on rebuild -- lane identity is load-bearing under groups.
+
 Paint sculpts the *existing* active group's stream-set — there is no
 pre-commit authoring rect any more (the old mirror flow had one). A
 painted column is a `resizeGroup` of the rect's streams, and an extend

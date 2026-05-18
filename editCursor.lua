@@ -518,6 +518,10 @@ do
     if not regionCursor then return end
     local anchor = groupBridge.cursorAnchor()
     if not anchor then return end
+    -- Clear the destination first (gm only re-places its own concretes);
+    -- clearAt completes before gm stages, so it never eats the
+    -- projection. Both stage; commit flushes them together.
+    if groupBridge.clearAt then groupBridge.clearAt(regionCursor.groupId, anchor) end
     local instId = gmgr():newInstance(regionCursor.groupId, anchor)
     if instId then regionCursor.instId = instId end
     if groupBridge.commit then groupBridge.commit() end

@@ -1,10 +1,10 @@
-@module groupManager  src=groupManager.lua  loc=978  sha=b1fd3bd  mode=chunk
+@module groupManager  src=groupManager.lua  loc=985  sha=e25c39b  mode=chunk
 @deps tm, cm
 
 # Invariants & contracts
   @contract  seeds a new group from clipboard-sourced concrete `events` and a
   @contract  the caller (clipboard) has already bounds-checked the target
-  @contract  explicit-group duplicate, used by the mirrorDuplicate
+  @contract  explicit-group duplicate, used by the groupDuplicate
 
 # Shapes
   @shape  group = { rect, events = { [vuid]=groupEvt }, nextVuid, instances = { [instId]=instance } }
@@ -133,14 +133,14 @@
   -- Active group (dupeClip-idiom selector; the command layer owns the
   -- clear-on-other-command lifetime, gm only the pointer)
   -- SEAM
-  @fn reproject(groupId)  @ 617
-  @fn conformOnlyUpdate(evt, update)  @ 676
+  @fn reproject(groupId)  @ 624
+  @fn conformOnlyUpdate(evt, update)  @ 683
       -- conform is a per-instance realisation marker gm itself stages (seed
       -- sweep, reproject); it is never a logical user edit and never enters the
       -- group frame. A conform-only assign reaching applyEdit -- e.g. the seed
       -- sweep's assign surfacing in the next preflush -- must pass straight
       -- through, not retrigger classify/groupPlaceLegato/reproject.
-  @fn localAmend(instance, vuid, group, update)  @ 686
+  @fn localAmend(instance, vuid, group, update)  @ 693
       -- Local edit of an existing override -- shared by localMode and the
       -- on-ov-in-global path. An assign'd / synced group event accrues a
       -- sticky per-instance assign; a local-only add is edited in place.
@@ -160,35 +160,38 @@
       --          collides with a live group (disjoint-region invariant).
   @api gm:activeGroup()  @ 545
   @api gm:clearActive()  @ 546
-  @api gm:mark(events, rect)  @ 550
+  @api gm:groupRect(groupId)  @ 550
+      -- The group's projection rect, for the caller's pre-stage clear of the
+      -- destination zone (gm:newInstance contract). nil if the group is gone.
+  @api gm:mark(events, rect)  @ 557
       --          group becomes active.
       @contract  case 1 -- seed a group from the selection, no copy. The new
-  @api gm:stamp(events, rect, anchor)  @ 560
+  @api gm:stamp(events, rect, anchor)  @ 567
       --          instId). No active -> case 2, seed the group AND its first copy
       --          (returns groupId, instId); the group becomes active.
       @contract  active live -> case 3, drop one more copy at `anchor` (returns
-  @api gm:duplicateInto(groupId, events, rect, anchor)  @ 577
+  @api gm:duplicateInto(groupId, events, rect, anchor)  @ 584
       --          cascade. `groupId` live -> drop one more copy at `anchor`
       --          into it; nil or stale -> seed group + first copy. Returns
       --          the groupId either way. Sets it active for render parity,
       --          but NEVER reads the shared active pointer -- the caller's
       --          token is the sole continuation state (stamp's activeGroup
       --          fallback belongs to mark/paste, not the cascade).
-  @api gm:setLocalMode(on)  @ 587
-  @api gm:localMode()  @ 588
-  @api gm:stateOf(uuid)  @ 590
-  @api gm:eachInstance()  @ 602
+  @api gm:setLocalMode(on)  @ 594
+  @api gm:localMode()  @ 595
+  @api gm:stateOf(uuid)  @ 597
+  @api gm:eachInstance()  @ 609
       -- Read accessor for the render pass: every live instance with the group
       -- rect it projects, its anchor, and whether its group is active. No new
       -- mutable state; rect/anchor are by reference (render reads, never
       -- mutates).
   -- INSTANCE / GROUP LIFECYCLE
-  @api gm:deleteInstance(groupId, instId)  @ 851
+  @api gm:deleteInstance(groupId, instId)  @ 858
       -- Stage a tm delete for every projected concrete of one instance, drop
       -- the instance, and -- if it was the group's last -- drop the group,
       -- clearing the active pointer if it named it. Unknown id -> nil, reason.
       @contract  (groupId, instId) -> true | nil,reason; stages tm deletes for the instance's concretes, last instance drops the group + clears active. Unknown id -> nil,reason.
-  @api gm:moveInstance(groupId, instId, anchor)  @ 882
+  @api gm:moveInstance(groupId, instId, anchor)  @ 889
       -- Re-anchor an instance. The group frame is anchor-invariant, so a pure
       -- move is zero group-frame drift and reproject (drift-driven) cannot see
       -- it: re-place every projected concrete through the group->instance dual
@@ -197,7 +200,7 @@
       -- a collision with another group or a sibling -- the moving instance
       -- itself excluded so it cannot self-collide.
       @contract  (groupId, instId, anchor) -> true | nil,reason. Precondition: caller has cleared the destination cells -- gm only re-places its own concretes, never clears foreign ones (as gm:newInstance, take/region bounds are the caller's). gm validates channel range + cross-group/sibling disjointness only.
-  @api gm:resizeGroup(groupId, instId, edits)  @ 922
+  @api gm:resizeGroup(groupId, instId, edits)  @ 929
       -- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
       -- re-origins (Model A: every anchor += startDelta, every group event
       -- ppq -= startDelta) so realised positions hold while the boundary

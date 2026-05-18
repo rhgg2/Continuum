@@ -72,17 +72,9 @@ local curveEd      = util.instantiate('curveEditor', { ctx = ctx })
 local laneConsumed = false
 local toolbar                              -- lazy: chrome may be nil at construction in tests
 
--- Forward-declared so cmgr:doBefore('copy') (wired far below) sets it
--- before handleMouse / the body read it.
-local mirrorSrc   = nil     -- last-copy source rect for mirrorPaste; nil once mutated
-
--- mirrorDuplicate cascade state, or nil -- the shared tv:duplicateCascade
--- run token { rect, payload, next, mark }: the SOURCE region (captured
--- on the first press, never re-read), the mirror group id, the ppq of
--- the next stacked copy, and the cursor mark that tells a deliberate
--- move from a plain repeat. Survives cursor moves; dropped by any new
--- selection or mutation (see DUP_KEEP).
-local mirrorDupState = nil
+-- Group quick-verb state and lifetime moved to trackerView (this page is
+-- pure render/UI). The 'region' overlay keymap and the
+-- tv:wireGroupLifetime call stay here.
 local paintLast   = nil     -- region-paint per-cell debounce
 
 ----- Cell renderers
@@ -853,10 +845,10 @@ cmgr:scope('tracker'):bindAll{
   setRPB         = { {ImGui.Key_Z,     ImGui.Mod_Super} },
   takeProperties = { {ImGui.Key_Backspace, ImGui.Mod_Ctrl} },
   matchGridToCursor = { {ImGui.Key_G, ImGui.Mod_Super, ImGui.Mod_Shift} },
-  mirrorMark        = { {ImGui.Key_M, ImGui.Mod_Ctrl} },
-  mirrorDuplicate   = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-  mirrorPaste       = { {ImGui.Key_V, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-  mirrorLocalToggle = { {ImGui.Key_M, ImGui.Mod_Super} },
+  groupMark         = { {ImGui.Key_M, ImGui.Mod_Ctrl} },
+  groupDuplicate    = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
+  groupPaste        = { {ImGui.Key_V, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
+  groupLocalToggle  = { {ImGui.Key_M, ImGui.Mod_Super} },
   regionEnter       = { {ImGui.Key_R, ImGui.Mod_Super} },
   hideExtraCol   = { {ImGui.Key_H, ImGui.Mod_Ctrl} },
   inputOctaveUp   = { {ImGui.Key_8, ImGui.Mod_Shift} },
@@ -964,7 +956,7 @@ local function handleMouse()
     -- dragging branch). Mirrors cursor-key behaviour.
 
     if charY < 0 then
-      mirrorDupState = nil   -- label-row select is a re-selection
+      tv:endGroupCascade()   -- label-row select is a re-selection
       if charY == -HEADER then ec:selectChannel(last.midiChan)
       else ec:selectColumn(col) end
       return
@@ -973,7 +965,7 @@ local function handleMouse()
     local shift = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
 
     if shift then
-      mirrorDupState = nil   -- shift-extend is a re-selection
+      tv:endGroupCascade()   -- shift-extend is a re-selection
       ec:extendTo(scrollRow + charY, col, stop)
     else
       ec:selClear()
@@ -1008,7 +1000,7 @@ local function handleMouse()
 
     -- Only start selection once cursor moves to a different position
     if row ~= cursorRow or col ~= cursorCol or stop ~= cursorStop then
-      mirrorDupState = nil   -- drag-select is a new selection
+      tv:endGroupCascade()   -- drag-select is a new selection
       ec:extendTo(row, col, stop)
     end
 
@@ -1288,44 +1280,7 @@ tracker:registerAll{
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
              function() tv:ec():unstick() end)
 
------ Mirror quick-verbs & region entry
-
--- Keep-set seed for the mirrorSrc/active-group mutation sweep:
--- cursor/selection moves between copy and mirrorPaste must NOT clear
--- the source or active group — only a real edit/cut does. (No longer a
--- modal-overlay passthrough; the region overlay is ec's, with its own.)
-local MIRROR_PASSTHROUGH = {
-  cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
-  pageUp=true, pageDown=true, goTop=true, goBottom=true, goLeft=true, goRight=true,
-  colLeft=true, colRight=true, channelLeft=true, channelRight=true,
-  selectUp=true, selectDown=true, selectLeft=true, selectRight=true, selectClear=true,
-  cycleBlock=true, cycleVBlock=true, swapBlockEnds=true,
-}
-for i = 0, 9 do MIRROR_PASSTHROUGH['advBy' .. i] = true end
-
--- keep-set = passthrough + copy + the mirror verbs themselves.
-local MIRROR_KEEP = {}
-for k in pairs(MIRROR_PASSTHROUGH) do MIRROR_KEEP[k] = true end
-for _, n in ipairs{ 'copy', 'mirrorMark', 'mirrorDuplicate',
-                    'mirrorPaste', 'mirrorLocalToggle', 'regionEnter' } do
-  MIRROR_KEEP[n] = true
-end
-
--- mirrorDuplicate cascade keep-set. A run of duplicates survives pure
--- cursor repositioning AND the deselection that follows it (a cursor
--- move collapsing the region the cascade auto-selected is harmless --
--- the rect lives in the token, not the selection). Only a genuine
--- RE-selection (select*, block verbs, mouse drag/extend) or a mutation
--- ends the run. selectClear is a deselection, not a re-selection, so
--- it is KEPT. Tighter than MIRROR_KEEP (no extend-selection, no copy,
--- no sibling mirror verbs).
-local DUP_KEEP = { mirrorDuplicate = true, selectClear = true,
-  cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
-  pageUp=true, pageDown=true, goTop=true, goBottom=true,
-  goLeft=true, goRight=true, colLeft=true, colRight=true,
-  channelLeft=true, channelRight=true,
-}
-for i = 0, 9 do DUP_KEEP['advBy' .. i] = true end
+----- Region overlay keymap
 
 -- The 'region' modal overlay + every region verb body live on ec
 -- (built at tv construct). The page wires only entry on the tracker
@@ -1348,75 +1303,10 @@ cmgr:scope('region'):bindAll{
   regionNext         = { {ImGui.Key_Period, ImGui.Mod_Shift} },
 }
 
-tracker:registerAll{
-  mirrorMark = function()
-    local r = tv:selectionAsRect()
-    -- Snapshot the source for mirrorPaste too: mark and copy share the
-    -- one mirrorSrc lifetime; without this, mark -> paste degrades to
-    -- plain paste (mirrorPaste gates on mirrorSrc, not the active group).
-    if r then mirrorSrc = r; gm:mark(tv:eventsInRect(r), r) end
-  end,
-  mirrorDuplicate = function()
-    -- Cascade copies into one mirror group via the shared controller.
-    -- No collectSource: each copy's events come from the rect. Commit
-    -- now (gm leaves it staged in tm otherwise, colliding with the
-    -- next user edit). No fallbackRect: a degenerate selection is a
-    -- no-op, but a real 1x1 selection still mirrors.
-    mirrorDupState = tv:duplicateCascade(mirrorDupState, nil,
-      function(rect, anchor, gid)
-        gid = gm:duplicateInto(gid, gid and {} or tv:eventsInRect(rect),
-                                 rect, anchor)
-        tm:flush()
-        return gid
-      end)
-  end,
-  mirrorPaste = function()
-    local a = tv:cursorAnchor()
-    if mirrorSrc and a then
-      -- Same no-straddle rule as mirrorDuplicate: the pasted region
-      -- [a.ppq, a.ppq+mirrorSrc.dur) must fit wholly inside the take.
-      -- Out of bounds is a silent no-op, NOT a fallthrough to plain
-      -- paste (that would paste non-mirror content the user didn't ask
-      -- for); the fallthrough is only for "no mirror source".
-      if a.ppq + mirrorSrc.dur <= tm:length() then
-        gm:stamp(tv:eventsInRect(mirrorSrc), mirrorSrc, a)
-        tm:flush()   -- gm only stages; without this the copy never materialises
-      end
-    else
-      cmgr:invoke('paste')
-    end
-  end,
-  mirrorLocalToggle = function() gm:setLocalMode(not gm:localMode()) end,
-  regionEnter = function() tv:ec():enterRegionMode() end,
-}
-
--- copy is plain — the page only observes it to snapshot the source
--- rect. Must run BEFORE the body: clipboard:copy ends with ec:selClear(),
--- so a doAfter snapshot would always see an empty selection (nil rect)
--- and mirrorPaste would never groups.
-cmgr:doBefore('copy', function() mirrorSrc = tv:selectionAsRect() end)
-
--- Three mirror lifetimes, three keep-sets. Runs after every tracker
--- command is registered.
---
---  * mirrorSrc + active (mark/copy -> mirrorPaste): survive navigation
---    between the copy and the paste; only a real mutation clears them.
---    Keep-set = MIRROR_KEEP.
---  * mirrorDupState (mirrorDuplicate cascade): survives pure cursor
---    moves only; any new selection or mutation ends the run.
---    Keep-set = DUP_KEEP (a strict subset of MIRROR_KEEP).
-do
-  local clearOn, dupClearOn = {}, {}
-  for name in pairs(tracker.registered) do
-    if not MIRROR_KEEP[name] then clearOn[#clearOn + 1]    = name end
-    if not DUP_KEEP[name]    then dupClearOn[#dupClearOn+1] = name end
-  end
-  cmgr:doBefore(clearOn, function()
-    mirrorSrc = nil
-    gm:clearActive()
-  end)
-  cmgr:doBefore(dupClearOn, function() mirrorDupState = nil end)
-end
+-- Group quick-verb bodies + lifetime live on trackerView; install the
+-- copy snapshot + clear-on-mutation sweep now that every tracker command
+-- (incl. this page's) is registered.
+tv:wireGroupLifetime()
 
 ---------- PUBLIC
 

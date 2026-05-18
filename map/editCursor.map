@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=682  sha=79a62e8  mode=chunk
+@module editCursor  src=editCursor.lua  loc=686  sha=e25c39b  mode=chunk
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -123,4 +123,4 @@
   @api ec:isInRegionMode()  @ 464
   @api ec:regionCursor()  @ 465
   -- Commands
-  @api ec:registerCommands(scope)  @ 601
+  @api ec:registerCommands(scope)  @ 605
