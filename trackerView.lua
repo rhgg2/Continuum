@@ -1606,6 +1606,133 @@ local function deleteOrBackspace()
   else ec:selClear(); deleteEvent(); ec:advance() end
 end
 
+----- Horizontal move
+
+-- Shift the cursor event (or an n-row x 1-col selection block) to an
+-- adjacent column. Notes step to the next/prev lane that exists in the
+-- channel, else cross to the next/prev channel -- right lands on lane 1,
+-- left on the channel's highest lane, so the two are inverses. Other
+-- event types just step channel. All-or-nothing, like adjustPosition:
+-- refuse if the move runs off the grid edge, or onto a destination
+-- note-on. Note tails are not a barrier -- a moved note's tail, or a
+-- straddling destination note's tail, is clipped by tm's universal tail
+-- pass on the rebuild that follows.
+--contract: a selection must be exactly one grid column (a 1-col block stays contiguous when it lands on the destination col); a multi-col selection is a no-op
+--contract: notes refuse only on a destination note-on whose row is within the moved block's onset-row band [minOnsetRow, maxOnsetRow] inclusive; tails (either direction) are clipped by tm's tail pass and never block. Non-note types refuse on a same-ppq event
+local PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at = 'val' }
+
+local function shiftEvents(dir)
+  local function noteColsByLane(chan)
+    local byLane = {}
+    for ci = grid.chanFirstCol[chan], grid.chanLastCol[chan] do
+      local c = grid.cols[ci]
+      if c and c.type == 'note' then byLane[c.lane or 1] = c end
+    end
+    return byLane
+  end
+
+  local function findCol(d)
+    for i, c in ipairs(grid.cols) do
+      if c.midiChan == d.chan and c.type == d.type
+         and (d.type ~= 'note' or (c.lane or 1) == d.lane)
+         and (d.type ~= 'cc'   or c.cc == d.cc) then
+        return c, i
+      end
+    end
+  end
+
+  -- Gather source column + the events that move.
+  local srcCol, rows, moving
+  if ec:hasSelection() then
+    local r1, r2, c1, c2 = ec:region()
+    if c1 ~= c2 then return end
+    srcCol = grid.cols[c1]
+    if not srcCol then return end
+    rows, moving = { r1, r2 }, {}
+    local pred = srcCol.type == 'note' and util.isNote or nil
+    local lo, hi = ctx:rowToPPQ(r1, srcCol.midiChan),
+                   ctx:rowToPPQ(r2 + 1, srcCol.midiChan)
+    for evt in util.between(srcCol.events, lo, hi, pred) do util.add(moving, evt) end
+  else
+    srcCol = grid.cols[ec:col()]
+    local evt = srcCol and srcCol.cells and srcCol.cells[ec:row()]
+    if not evt or (srcCol.type == 'note' and not util.isNote(evt)) then return end
+    moving = { evt }
+  end
+  if #moving == 0 then return end
+
+  -- Destination descriptor, or nil if the move runs off the grid edge.
+  local chan = srcCol.midiChan
+  local function destDescriptor()
+    if srcCol.type ~= 'note' then
+      local nc = chan + dir
+      if nc < 1 or nc > 16 then return end
+      return { chan = nc, type = srcCol.type, cc = srcCol.cc }
+    end
+    local lane = srcCol.lane or 1
+    if noteColsByLane(chan)[lane + dir] then
+      return { chan = chan, type = 'note', lane = lane + dir }
+    end
+    local nc = chan + dir
+    if nc < 1 or nc > 16 then return end
+    local L = 1
+    if dir < 0 then
+      for ln in pairs(noteColsByLane(nc)) do if ln > L then L = ln end end
+    end
+    return { chan = nc, type = 'note', lane = L }
+  end
+  local dest = destDescriptor()
+  if not dest then return end
+
+  -- Refuse the whole move on a real collision. Notes: a destination
+  -- note-on inside the moved block's onset-row band (tails truncate on
+  -- rebuild and never block). Other types: a same-ppq event.
+  local destCol = findCol(dest)
+  if destCol then
+    if srcCol.type == 'note' then
+      local minR, maxR = math.huge, -math.huge
+      for _, src in ipairs(moving) do
+        local r = ctx:ppqToRow(src.ppq, srcCol.midiChan)
+        if r < minR then minR = r end
+        if r > maxR then maxR = r end
+      end
+      for _, e in ipairs(destCol.events) do
+        if util.isNote(e) then
+          local r = ctx:ppqToRow(e.ppq, destCol.midiChan)
+          if r >= minR and r <= maxR then return end
+        end
+      end
+    else
+      for _, src in ipairs(moving) do
+        for _, e in ipairs(destCol.events) do
+          if e.ppq == src.ppq then return end
+        end
+      end
+    end
+  end
+
+  for _, src in ipairs(moving) do
+    local clone = util.clone(src, { token = true, loc = true })
+    clone.evType = srcCol.type
+    clone.chan   = dest.chan
+    if     dest.type == 'note' then clone.lane = dest.lane
+    elseif dest.type == 'cc'   then clone.cc   = dest.cc end
+    tm:deleteEvent(src)
+    tm:addEvent(clone)
+  end
+  tm:flush()
+
+  local landed, idx = findCol(dest)
+  if not landed then return end
+  if rows then
+    local p = PART_FOR[srcCol.type]
+    ec:setSelection{ row1 = rows[1], row2 = rows[2], col1 = idx, col2 = idx,
+                     part1 = p, part2 = p }
+  else
+    ec:setPos(ec:row(), idx)
+  end
+end
+
 -- Step currentSample by ±1 across the full 0..127 range. Empty slots
 -- are reachable — the user may want to author a sample value before
 -- the sampler has loaded that slot.
@@ -2115,6 +2242,8 @@ tracker:registerAll{
   nudgeCoarseDown         = { function() nudge(-1, true)  end,    'Nudge' },
   nudgeFineUp             = { function() nudge( 1, false) end,    'Nudge' },
   nudgeFineDown           = { function() nudge(-1, false) end,    'Nudge' },
+  eventShiftLeft          = { function() shiftEvents(-1) end,     'Move event left'  },
+  eventShiftRight         = { function() shiftEvents( 1) end,     'Move event right' },
   playFromTop             = function() tm:playFrom(0) end,
   playFromCursor          = function()
     local col = grid.cols[ec:col()]

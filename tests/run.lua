@@ -47,6 +47,7 @@ local specs = {
   'gm_propagate_spec',
   'gm_realisation_spec',
   'tv_selection_rect_spec',
+  'tv_event_shift_spec',
   'gm_active_spec',
   'gm_origin_conform_spec',
   'gm_wiring_spec',
