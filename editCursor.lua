@@ -537,11 +537,40 @@ do
                         or nil
   end
 
-  local function cycle(step)
-    local list = orderedInstances()
-    if #list == 0 then return end
-    local at = cursorIndex(list) or (step > 0 and 0 or #list + 1)
-    pointAt(list[util.clamp(at + step, 1, #list)])
+  -- < / > step between groups, landing on the prev/next group's first
+  -- instance (orderedInstances is (groupId, instId) sorted, so the first
+  -- match is instId-lowest). [ / ] step instances within the current
+  -- group. Both are border-only -- no grid selection until commit.
+  local function stepGroup(step)
+    local ids, seen = {}, {}
+    for _, e in ipairs(orderedInstances()) do
+      if not seen[e.groupId] then
+        seen[e.groupId] = true
+        ids[#ids + 1] = e.groupId
+      end
+    end
+    if #ids == 0 then return end
+    local cur = regionCursor and regionCursor.groupId
+    local at
+    for k, id in ipairs(ids) do if id == cur then at = k end end
+    at = at or (step > 0 and 0 or #ids + 1)
+    local g = ids[util.clamp(at + step, 1, #ids)]
+    for _, e in ipairs(orderedInstances()) do
+      if e.groupId == g then pointAt(e); return end
+    end
+  end
+
+  local function stepInstance(step)
+    if not regionCursor then return end
+    local sibs = {}
+    for _, e in ipairs(orderedInstances()) do
+      if e.groupId == regionCursor.groupId then sibs[#sibs + 1] = e end
+    end
+    if #sibs == 0 then return end
+    local at
+    for k, e in ipairs(sibs) do if e.instId == regionCursor.instId then at = k end end
+    at = at or (step > 0 and 0 or #sibs + 1)
+    pointAt(sibs[util.clamp(at + step, 1, #sibs)])
   end
 
   local function moveBy(rowDelta)
@@ -586,8 +615,10 @@ do
       regionNew          = newFromSelection,
       regionInstance     = newInstance,
       regionDrop         = dropInstance,
-      regionNext         = function() cycle( 1) end,
-      regionPrev         = function() cycle(-1) end,
+      regionNext         = function() stepGroup( 1) end,
+      regionPrev         = function() stepGroup(-1) end,
+      regionInstNext     = function() stepInstance( 1) end,
+      regionInstPrev     = function() stepInstance(-1) end,
       regionNudgeForward = function() moveBy( 1) end,
       regionNudgeBack    = function() moveBy(-1) end,
       regionGrow         = function() resizeBy{ endDelta   =  logPerRow() } end,

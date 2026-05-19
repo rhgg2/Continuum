@@ -228,30 +228,74 @@ return {
     end,
   },
 
-  ----- next / prev cycling
+  ----- group / instance navigation
 
   {
-    name = 'regionNext / regionPrev cycle deterministically and clamp',
+    name = 'regionPrev/regionNext step between groups (first instance), clamp',
+    run = function()
+      local ec, c = mk()
+      local g1 = c.gm:mark({}, rect(0,  LPR))         -- [0,10)
+      local g2 = c.gm:mark({}, rect(20, LPR))         -- [20,30), active
+      c.gm:newInstance(g2, { ppq = 200, chan = 1 })   -- g2 gets 2 instances
+
+      ec:enterRegionMode()                            -- seeds at active g2
+      t.eq(ec:regionCursor().groupId, g2)
+      t.eq(ec:regionCursor().instId, 1, 'lands on g2 first instance')
+      c.cmgr:invoke('regionNext')
+      t.eq(ec:regionCursor().groupId, g2, 'next at last group clamps')
+      c.cmgr:invoke('regionPrev')
+      t.eq(ec:regionCursor().groupId, g1)
+      t.eq(ec:regionCursor().instId, 1, 'first instance of the prev group')
+      c.cmgr:invoke('regionPrev')
+      t.eq(ec:regionCursor().groupId, g1, 'prev at first group clamps')
+      t.falsy(ec:hasSelection(), 'group step is border-only')
+      t.eq(#c.bridge.selCalls, 0)
+    end,
+  },
+
+  {
+    name = 'regionInstPrev/regionInstNext cycle within the group, clamp',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, LPR))
       c.gm:newInstance(g, { ppq = 100, chan = 1 })
       c.gm:newInstance(g, { ppq = 200, chan = 1 })
-      local list = {}
-      for _, e in ipairs(c.gm:eachInstance()) do list[#list + 1] = e.instId end
-      table.sort(list)
+      local ids = {}
+      for _, e in ipairs(instances(c.gm, g)) do ids[#ids + 1] = e.instId end
+      table.sort(ids)
 
-      ec:enterRegionMode()                    -- seeded at active group's first
-      t.eq(ec:regionCursor().instId, list[1])
-      c.cmgr:invoke('regionPrev')
-      t.eq(ec:regionCursor().instId, list[1], 'prev at start clamps')
-      c.cmgr:invoke('regionNext')
-      t.eq(ec:regionCursor().instId, list[2])
-      c.cmgr:invoke('regionNext')
-      c.cmgr:invoke('regionNext')
-      t.eq(ec:regionCursor().instId, list[3], 'next at end clamps')
-      t.falsy(ec:hasSelection(), 'nav is border-only -- no grid selection')
-      t.eq(#c.bridge.selCalls, 0, 'cycle never calls instanceSelection')
+      ec:enterRegionMode()
+      t.eq(ec:regionCursor().instId, ids[1])
+      c.cmgr:invoke('regionInstPrev')
+      t.eq(ec:regionCursor().instId, ids[1], 'prev at first clamps')
+      c.cmgr:invoke('regionInstNext')
+      t.eq(ec:regionCursor().instId, ids[2])
+      c.cmgr:invoke('regionInstNext')
+      c.cmgr:invoke('regionInstNext')
+      t.eq(ec:regionCursor().instId, ids[3], 'next at last clamps')
+      t.eq(ec:regionCursor().groupId, g, 'never leaves the group')
+      t.falsy(ec:hasSelection(), 'instance step is border-only')
+    end,
+  },
+
+  {
+    name = 'groupInstNext/Prev hop caret to same row offset in sibling',
+    run = function()
+      local ec, c = mk()
+      ec:registerCommands(c.cmgr:scope('tracker'))
+      local g = c.gm:mark({}, rect(0, LPR))           -- inst 1 @ ppq 0
+      c.gm:newInstance(g, { ppq = 100, chan = 1 })    -- inst 2 @ ppq 100
+      ec:setPos(2, 1, 1)                              -- +2 rows into inst 1
+
+      c.bridge.instAt = { groupId = g, instId = 1 }
+      c.cmgr:invoke('groupInstNext')
+      t.eq(ec:row(), 12, 'same +2 offset in next instance (ppq 100 = row 10)')
+      c.bridge.instAt = { groupId = g, instId = 2 }
+      c.cmgr:invoke('groupInstPrev')
+      t.eq(ec:row(), 2, 'back to the original offset in instance 1')
+      c.bridge.instAt = { groupId = g, instId = 1 }   -- caret now in inst 1
+      c.cmgr:invoke('groupInstPrev')
+      t.eq(ec:row(), 2, 'no prev sibling: caret unchanged')
     end,
   },
 

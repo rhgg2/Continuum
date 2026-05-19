@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=686  sha=e25c39b  mode=chunk
+@module editCursor  src=editCursor.lua  loc=746  sha=2d985df  mode=chunk
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -86,9 +86,19 @@
   @fn pointAt(entry)  @ 315
       -- Points the region cursor; the border follows. No grid selection
       -- until commit -- a live selection mid-mode would let edits escape.
+  -- Position
+  -- Part & Region
+  -- Motion
+  -- Region mode
+  -- Group-instance hop (editing mode)
+  @fn hopInstance(step)  @ 641
+      -- [ / ] in normal editing jump the caret to the same row offset in the
+      -- prev/next instance of the group it sits inside. Column is left as-is:
+      -- "same place" is the relative row; chasing the stream across instances
+      -- on different channels would be a non-linear column remap, out of scope
+      -- for this verb. The border feedback is the rendering layer's.
 
 # Public API (ec:*)
-  -- Position
   @api ec:row()  @ 325
   @api ec:col()  @ 326
   @api ec:pos()  @ 327
@@ -98,7 +108,6 @@
   @api ec:rescaleRow(oldRPB, newRPB)  @ 340
       @contract  scales cursorRow by newRPB/oldRPB; called by vm when rowPerBeat changes mid-session so caret stays at the same musical time
   @api ec:reset()  @ 344
-  -- Part & Region
   @api ec:cursorPart()  @ 352
   @api ec:hasSelection()  @ 353
   @api ec:isSticky()  @ 354
@@ -116,11 +125,9 @@
       -- Mouse shift-click and drag both speak this verb.
   @api ec:shiftSelection(rowDelta)  @ 429
       @contract  shifts both selection rows + anchor + cursor by rowDelta; clamps each independently (selection can compress against the edge while cursor doesn't)
-  -- Motion
   @api ec:advance()  @ 441
       @contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
-  -- Region mode
   @api ec:isInRegionMode()  @ 464
   @api ec:regionCursor()  @ 465
   -- Commands
-  @api ec:registerCommands(scope)  @ 605
+  @api ec:registerCommands(scope)  @ 663
