@@ -1063,7 +1063,7 @@ local function handleKeys(kr)
     end
 end
 
---shape: modalState = { title, prompt, callback, buf, kind?='confirm'|'takeProps', nameBuf?, rowsBuf?, rowsGen?, mode?, refocusRows? }
+--shape: modalState = { title, prompt, callback, resolve?, buf, kind?='confirm'|'takeProps', nameBuf?, rowsBuf?, rowsGen?, mode?, refocusRows? }
 --contract: callback runs under pcall; an exception is logged to the REAPER console and does not abort the frame
 local function drawModal()
   if not modalState then return end
@@ -1160,14 +1160,30 @@ local function drawModal()
       if ImGui.IsWindowAppearing(ctx) then
         ImGui.SetKeyboardFocusHere(ctx)
       end
-      local rv, buf = ImGui.InputText(ctx, '##modal', modalState.buf,
-        ImGui.InputTextFlags_EnterReturnsTrue)
-      if rv then
-        close(true, buf)
-      elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-        close(false)
-      else
+      if modalState.resolve then
+        -- No EnterReturnsTrue: that flag holds buf stale until commit, so
+        -- the live preview would lag a keystroke. Read each frame, resolve
+        -- for the preview, detect Enter manually (as takeProps does).
+        local _, buf = ImGui.InputText(ctx, '##modal', modalState.buf)
         modalState.buf = buf
+        local shown = modalState.resolve(buf)
+        if shown ~= '' then ImGui.Text(ctx, '\xe2\x86\x92 ' .. shown) end
+        if ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+        or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter) then
+          close(true, shown ~= '' and shown or buf)
+        elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+          close(false)
+        end
+      else
+        local rv, buf = ImGui.InputText(ctx, '##modal', modalState.buf,
+          ImGui.InputTextFlags_EnterReturnsTrue)
+        if rv then
+          close(true, buf)
+        elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+          close(false)
+        else
+          modalState.buf = buf
+        end
       end
     end
     ImGui.EndPopup(ctx)
@@ -1179,8 +1195,8 @@ end
 
 ----- Modal-driven commands
 
-local function openPrompt(title, prompt, callback)
-  modalState = { title = title, prompt = prompt, callback = callback, buf = '' }
+local function openPrompt(title, prompt, callback, resolve)
+  modalState = { title = title, prompt = prompt, callback = callback, resolve = resolve, buf = '' }
   ImGui.OpenPopup(ctx, title)
 end
 
@@ -1203,6 +1219,34 @@ local function scopedAction(title, base)
     else openConfirm(title, function(yes) if yes then tv[base..'All'](tv) end end)
     end
   end
+end
+
+-- Add-Column type vocabulary. First letter is unique except p (pb/pc):
+-- `p`→pb, a following `c`→pc. Digits ride through (only cc takes an id).
+local function resolveColType(s)
+  local a, digits = s:lower():match('^(%a*)(%d*)$')
+  if not a or a == '' then return digits or '' end
+  local first = a:sub(1, 1)
+  local canon = first == 'n' and 'note'
+             or first == 'c' and 'cc'
+             or first == 'a' and 'at'
+             or first == 'd' and 'dly'
+             or first == 'p' and (a:sub(2, 2) == 'c' and 'pc' or 'pb')
+             or a
+  return canon .. digits
+end
+
+local function addColumn()
+  openPrompt('Add Column', 'note, cc0-127, pb, at, pc, dly', function(typeStr)
+    local type, idStr = typeStr:lower():match('^(%a+)(%d*)$')
+    if not type then return end
+    local id = idStr ~= '' and tonumber(idStr) or nil
+    if type == 'dly' then tv:showDelay()
+    elseif util.oneOf('note cc pb at pc', type) then
+      if type == 'cc' and (not id or id < 0 or id > 127) then return end
+      tv:addExtraCol(type, id)
+    end
+  end, resolveColType)
 end
 
 local tracker = cmgr:scope('tracker')
@@ -1242,18 +1286,7 @@ tracker:registerAll{
     ImGui.OpenPopup(ctx, title)
   end, 'Take properties' },
 
-  addTypedCol = function()
-    openPrompt('Add Column', 'note, cc0-127, pb, at, pc, dly', function(typeStr)
-      local type, idStr = typeStr:lower():match('^(%a+)(%d*)$')
-      if not type then return end
-      local id = idStr ~= '' and tonumber(idStr) or nil
-      if type == 'dly' then tv:showDelay()
-      elseif util.oneOf('note cc pb at pc', type) then
-        if type == 'cc' and (not id or id < 0 or id > 127) then return end
-        tv:addExtraCol(type, id)
-      end
-    end)
-  end,
+  addTypedCol = addColumn,
 
   quantize             = { scopedAction('quantize',               'quantize'),             'Quantize' },
   quantizeKeepRealised = { scopedAction('quantize keep realised', 'quantizeKeepRealised'), 'Quantize (keep realised)' },
