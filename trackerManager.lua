@@ -1460,27 +1460,45 @@ do
       staleSwing = {}
     end
 
-    -- 5) Project to logical.
+    -- 5) Project to logical. The tv surface is logical-only: both the
+    -- onset and the tail leave here in the authoring frame, raw stays
+    -- private to tm/mm.
+    --
+    -- evt.ppq integer-rounded for tv:rebuild's offGrid compare; ppqL
+    -- stays float so swing inverse round-trips stay exact.
+    --
+    -- evt.endppq is the AUTHORED logical ceiling, unclipped: round(
+    -- endppqL), or util.OPEN for a deliberately-unbounded tail. The
+    -- tail pass already folded every blocker into mm's raw endppq;
+    -- inverting it gives evt.endppqC, the CLIPPED logical ceiling —
+    -- render-only (the tp tail build is the sole consumer). An
+    -- uncached note (no endppqL) has no authored stamp, so its
+    -- authored ceiling is the realised one.
     do
-      -- evt.ppq integer-rounded for tv:rebuild's offGrid compare; ppqL
-      -- stays float so swing inverse round-trips stay exact. raw endppq
-      -- is the tail pass's clipped realisation, NOT reseated from
-      -- endppqL here — endppqL is intent (kept long); the note-off the
-      -- user sees is the clipped value the tail pass wrote.
-      local function projectToLogical(col)
+      local function projectToLogical(col, chan)
         for _, evt in ipairs(col.events) do
           if evt.ppqL ~= nil then evt.ppq = util.round(evt.ppqL) end
+          if evt.endppq ~= nil then
+            evt.endppqC = util.round(tm:toLogical(chan, evt.endppq))
+            if evt.endppqL == util.OPEN then
+              evt.endppq = util.OPEN
+            elseif evt.endppqL ~= nil then
+              evt.endppq = util.round(evt.endppqL)
+            else
+              evt.endppq = evt.endppqC
+            end
+          end
         end
         sortByPPQ(col.events)
       end
 
       for _, chan in ipairs(channels) do
-        local c = chan.columns
-        if c.pc then projectToLogical(c.pc) end
-        if c.pb then projectToLogical(c.pb) end
-        for _, col in ipairs(c.notes) do projectToLogical(col) end
-        if c.at then projectToLogical(c.at) end
-        for _, col in pairs(c.ccs) do projectToLogical(col) end
+        local c, n = chan.columns, chan.chan
+        if c.pc then projectToLogical(c.pc, n) end
+        if c.pb then projectToLogical(c.pb, n) end
+        for _, col in ipairs(c.notes) do projectToLogical(col, n) end
+        if c.at then projectToLogical(c.at, n) end
+        for _, col in pairs(c.ccs) do projectToLogical(col, n) end
       end
     end
 

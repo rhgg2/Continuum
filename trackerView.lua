@@ -916,7 +916,7 @@ local noteOff, adjustDuration, adjustPosition do
 
       local undo = true
       for _, h in ipairs(hits) do
-        if h.note.endppq ~= h.targetppq then undo = false; break end
+        if h.note.endppqC ~= h.targetppq then undo = false; break end
       end
 
       for _, h in ipairs(hits) do applyNoteOff(h.col, h.note, h.targetppq, undo) end
@@ -937,19 +937,24 @@ local noteOff, adjustDuration, adjustPosition do
 
     local last = util.seek(col.events, 'before', nextCursorPPQ, util.isNote)
     if not last then return end
-    applyNoteOff(col, last, cursorppq, last.endppq == cursorppq)
+    applyNoteOff(col, last, cursorppq, last.endppqC == cursorppq)
     tm:flush()
   end
 
+  -- The user grows/shrinks from the ceiling they SEE — the clipped
+  -- logical endppqC — even when the authored endppq is util.OPEN or
+  -- runs longer. assignTail writes a finite logical ceiling, so tm
+  -- stamps endppqL and an open note closes.
   local function adjustDurationCore(col, note, rowDelta)
     local chan      = col.midiChan
     local logPerRow = ctx:ppqPerRow()
-    local curRow    = note.endppq / logPerRow
+    local visEnd    = note.endppqC
+    local curRow    = visEnd / logPerRow
     local newRow    = util.clamp(util.round(curRow + rowDelta), 0, grid.numRows)
-    local minPPQ    = math.min(note.endppq, ctx:rowToPPQ(ctx:snapRow(note.ppq, chan) + 1, chan))
+    local minPPQ    = math.min(visEnd, ctx:rowToPPQ(ctx:snapRow(note.ppq, chan) + 1, chan))
     local _, maxPPQ = overlapBounds(col, note.ppq, note, true)
     local newppq    = util.clamp(ctx:rowToPPQ(newRow, chan), minPPQ, maxPPQ)
-    if newppq == note.endppq then return end
+    if newppq == visEnd then return end
     assignTail(note, chan, newppq)
   end
 
@@ -2400,10 +2405,13 @@ function tv:rebuild(takeChanged)
             if ctx:rowToPPQ(y, chan) ~= evt.ppq then gridCol.offGrid[y] = true end
           end
         end
-        if evt.endppq then
+        -- endppqC is the clipped logical ceiling (always numeric, even
+        -- when the authored endppq is util.OPEN); the tail render is its
+        -- sole consumer.
+        if evt.endppqC then
           util.add(gridCol.tails, {
             startRow = startRow,
-            endRow   = ctx:ppqToRow(evt.endppq, chan),
+            endRow   = ctx:ppqToRow(evt.endppqC, chan),
           })
         end
       end

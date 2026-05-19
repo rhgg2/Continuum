@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1622  sha=e73a809  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1640  sha=36ed5a5  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts

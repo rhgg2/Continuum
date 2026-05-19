@@ -143,14 +143,12 @@ return {
       h.tm:addEvent{ evType = 'note', chan = 1, pitch = 60,
                      ppq = 0, endppq = 1500, vel = 100 }
       h.tm:flush()
-      -- OPEN (Task 5, tm universal-pass): with `conform` removed, the
-      -- mirror-origin note is no longer force-clipped against its own
-      -- sibling copy. The universal tail pass provably WOULD clip born
-      -- to 960 if the sibling were in mm:notes() when it runs, yet 5
-      -- flushes never converge (inst1 stays 1500) -- so the sibling
-      -- copy of a create into an empty-seeded group never constrains
-      -- the origin. Investigate the flush/reproject ordering with the
-      -- 13 tm/tv inversions; do NOT assert 1500 (that is the bug).
+      -- With `conform` removed the mirror-origin note is not
+      -- force-clipped against its own sibling copy: its AUTHORED tail
+      -- stays where the user typed it (1500). The universal tail pass
+      -- still clips the *realised* tail to the sibling onset (960).
+      -- Projection surfaces both: endppq = authored intent, endppqC =
+      -- the clipped logical the renderer draws.
 
       local function lane(n)
         local out = {}
@@ -169,9 +167,14 @@ return {
       table.sort(l1, function(x, y) return x.ppq < y.ppq end)
       t.eq(l1[1].ppq, 0,   'instance 1 note at its onset')
       t.eq(l1[2].ppq, 960, 'sibling copy rebased to anchor 960')
-      t.eq(('inst1=%d sib=%d'):format(l1[1].endppq, l1[2].endppq),
-           'inst1=960 sib=1500',
-           'instance 1 clips its realised tail to the sibling onset; the open sibling runs to take length')
+      -- The tv surface is logical-only: endppq is the AUTHORED ceiling,
+      -- endppqC the clipped logical the renderer draws.
+      t.eq(l1[1].endppq,  1500, 'instance 1 keeps its authored tail (typed to 1500)')
+      t.eq(l1[1].endppqC, 960,  'instance 1 renders clipped to the sibling onset')
+      t.eq(l1[2].endppq, util.OPEN,
+           'the sibling copy keeps its open authored intent on the surface')
+      t.eq(l1[2].endppqC, 1500,
+           'the open sibling renders (endppqC) to take length')
       t.falsy(l1[1].conform or l1[2].conform,
            'no conform field -- tm derives the realised tail universally')
     end,

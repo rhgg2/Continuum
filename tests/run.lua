@@ -33,6 +33,7 @@ local specs = {
   'mm_unified_spec',
   'sidecar_reconcile_spec',
   'tm_rebuild_spec',
+  'tm_proj_symmetry_spec',
   'tm_rebuild_rule_spec',
   'tm_authoring_forward_spec',
   'tm_absorber_reseat_spec',
