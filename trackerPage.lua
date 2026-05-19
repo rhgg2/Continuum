@@ -1039,7 +1039,6 @@ local function handleKeys(kr)
   if ImGui.IsAnyItemActive(ctx) then return end
   local grid = tv.grid
   local ec = tv:ec()
-  local cursorRow, cursorCol, cursorStop = ec:pos()
   local commandHeld = kr.commandHeld
 
   if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_None
@@ -1063,20 +1062,6 @@ local function handleKeys(kr)
         i = i + 1
       end
     end
-
-  if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_Shift and not ec:isSticky()
-     and not cmgr:isPrefixActive() and not ec:isInRegionMode() then
-    local col = grid.cols[cursorCol]
-    if col then
-      for d = 0, 9 do
-        if ImGui.IsKeyPressed(ctx, ImGui.Key_0 + d) then
-          local evt = col.cells and col.cells[cursorRow]
-          tv:editEvent(col, evt, cursorStop, string.byte('0') + d, true)
-          break
-        end
-      end
-    end
-  end
 end
 
 --shape: modalState = { title, prompt, callback, buf, kind?='confirm'|'takeProps', nameBuf?, rowsBuf?, rowsGen?, mode?, refocusRows? }
