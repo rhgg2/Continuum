@@ -173,6 +173,39 @@ return {
     end,
   },
 
+  -- Onset-only neighbour geometry (overlapBounds): a same-pitch
+  -- predecessor with an OPEN authored tail must not bound a duration
+  -- edit by its tail. Pre-fix, overlapBounds read tailEnd(prevS) ==
+  -- util.OPEN and did math.max(number, 'open') -> error. Post-fix it
+  -- bounds by the predecessor's ONSET; tm clips any overrun on rebuild.
+  {
+    name = 'growNote past an open-tailed same-pitch predecessor does not throw',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0,   endppq = 120, chan = 1, pitch = 60, vel = 100,
+              detune = 0, delay = 0, endppqL = util.OPEN },
+            { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100,
+              detune = 0, delay = 0 },
+          },
+        },
+      }
+      h.vm:setGridSize(80, 40)
+      h.ec:setPos(4, 1, 1) -- row 4 = ppq 240 = B (same pitch as open A)
+      h.cmgr:invoke('growNote')
+
+      local A, B
+      for _, n in ipairs(h.fm:dump().notes) do
+        if     n.ppq == 0   then A = n
+        elseif n.ppq == 240 then B = n end
+      end
+      t.truthy(A and B, 'both notes survive the duration edit')
+      t.truthy(B.endppq > 480, 'B grew its tail (overlapBounds did not throw)')
+      t.eq(A.endppq, 240, 'open A still clips to B onset, unbounded by the edit')
+    end,
+  },
+
   -- Single-cell vel delete carries forward from the most recent prior event,
   -- including PAs — not just the previous note.
   {

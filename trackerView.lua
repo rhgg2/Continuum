@@ -53,16 +53,17 @@ local ec, clipboard, ctx
 
 ----- Note geometry (used by editing, adjust*, nudge, quantizeKeepRealised)
 
-local function tailEnd(e) return e.endppq end
-
--- prev maximises (effective) endppq; nxt minimises ppq.
+-- Onset-only: prev maximises onset (nearest predecessor before ppq),
+-- nxt minimises onset (nearest successor). Neighbour tails never enter
+-- here -- tm's universal tail pass clips an overrun on rebuild, so a
+-- tail must not bound a move (the rowBounds/shiftEvents rule).
 local function neighbourEvents(cols, ppq, pred)
   local prev, nxt
   for _, c in ipairs(cols) do
     local p = util.seek(c.events, 'before', ppq, pred)
     local n = util.seek(c.events, 'after',  ppq, pred)
-    if p and (not prev or tailEnd(p) > tailEnd(prev)) then prev = p end
-    if n and (not nxt  or n.ppq    < nxt.ppq    ) then nxt  = n end
+    if p and (not prev or p.ppq > prev.ppq) then prev = p end
+    if n and (not nxt  or n.ppq < nxt.ppq ) then nxt  = n end
   end
   return prev, nxt
 end
@@ -75,6 +76,8 @@ end
 
 -- Diff-pitch col-local with `overlapOffset` leniency (matches column allocator).
 -- Same-pitch chan-wide with no leniency: MIDI permits one voice per (chan, pitch).
+-- Onset-only, like rowBounds: bounds are neighbour ONSETS, never tails --
+-- tm clips a tail overrun on the next rebuild.
 local function overlapBounds(col, ppq, excludeEvt, allowOverlap)
   local lenient = allowOverlap and cm:get('overlapOffset') * resolution or 0
   local diff, same = notePreds(excludeEvt)
@@ -82,8 +85,8 @@ local function overlapBounds(col, ppq, excludeEvt, allowOverlap)
   local prevD, nextD = neighbourEvents({col}, ppq, diff)
   local prevS, nextS = neighbourEvents(tm:getChannel(col.midiChan).columns.notes, ppq, same)
 
-  local minStart = math.max(prevD and (tailEnd(prevD) - lenient) or 0,      prevS and tailEnd(prevS) or 0)
-  local maxEnd   = math.min(nextD and (nextD.ppq    + lenient) or length, nextS and nextS.ppq    or length)
+  local minStart = math.max(prevD and (prevD.ppq - lenient) or 0,      prevS and prevS.ppq or 0)
+  local maxEnd   = math.min(nextD and (nextD.ppq + lenient) or length, nextS and nextS.ppq or length)
   return minStart, maxEnd
 end
 
