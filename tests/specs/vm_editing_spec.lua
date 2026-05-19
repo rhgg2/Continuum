@@ -1,6 +1,7 @@
 -- Exercises vm editing commands against seeded tm state.
 
-local t = require('support')
+local t    = require('support')
+local util = require('util')
 
 return {
   -- Delete on a note's delay stop (selGrp 3, no block selection) resets
@@ -139,16 +140,18 @@ return {
     name = 'delete on pitch tied predecessor extends to next note',
     run = function(harness)
       -- res=240, 4 rpb → 1 row = 60 ppq. Three sequential same-pitch notes:
-      --   A: open (legato) at ppq 0, runs to the next same-pitch onset
+      --   A: open (legato, endppqL=util.OPEN) at ppq 0, runs to the
+      --      next same-pitch onset
       --   B: rows 2..3 (ppq 120..240)
       --   C: rows 4..5 (ppq 240..360)
       -- A is open, so the universal tail pass clips it to B's onset.
       -- Delete B → A's realised tail regrows to the next same-pitch
-      -- onset C.ppq=240. (Legato is `open` now, not implicit adjacency.)
+      -- onset C.ppq=240. (Legato is util.OPEN now, not implicit
+      -- adjacency.)
       local h = harness.mk{
         seed = {
           notes = {
-            { ppq = 0,   endppq = 120, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, open = true },
+            { ppq = 0,   endppq = 120, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, endppqL = util.OPEN },
             { ppq = 120, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
             { ppq = 240, endppq = 360, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
           },

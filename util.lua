@@ -1,6 +1,6 @@
 -- See docs/util.md for the model.
 
---invariant: stateless module: pure helpers, no module-level mutable state beyond the REMOVE sentinel
+--invariant: stateless module: pure helpers, no module-level mutable state beyond the REMOVE/OPEN sentinels
 --invariant: util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
 local util = {}
 
@@ -38,6 +38,9 @@ function util.print_r(root)
 end
 
 util.REMOVE = { }
+
+--invariant: util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL. A plain string (not a table like REMOVE) so it round-trips serialise/unserialise by value and stays ==-comparable across a take reload. endppqL is otherwise numeric, so the string is unambiguous; readers feeding endppqL into arithmetic map OPEN to math.huge at that one site.
+util.OPEN = 'open'
 
 --contract: values equal to util.REMOVE clear the key from t1 instead of being assigned
 function util.assign(t1,t2)

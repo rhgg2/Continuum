@@ -282,13 +282,13 @@ local function assignStamp(evt, chan, rowS, rowE)
   tm:assignEvent(evt, s)
 end
 
--- Authoring a tail authors a ceiling: the note is no longer the open
--- (unbounded legato) note. Clearing `open` lets the universal tail
--- pass honour the freshly-stamped endppqL instead of treating the
--- note as infinite and re-clipping it to the next onset every rebuild.
---contract: whenever a note's tail moves: clears `open`, stamps the endppqL ceiling (via tm), rebases evt.rpb to current alongside the new endppq
+-- Authoring a tail authors a finite ceiling: passing endppq with no
+-- endppqL makes tm stamp the ceiling from this note-off (closing a
+-- previously util.OPEN note), so the universal tail pass honours it
+-- instead of treating the note as unbounded every rebuild.
+--contract: whenever a note's tail moves: stamps the endppqL ceiling from the note-off (via tm), rebases evt.rpb to current alongside the new endppq
 local function assignTail(evt, chan, endppq)
-  tm:assignEvent(evt, { endppq = endppq, rpb = currentRpb(), open = false })
+  tm:assignEvent(evt, { endppq = endppq, rpb = currentRpb() })
 end
 
 local function matchGridToCursor()
@@ -483,14 +483,15 @@ do
   end
 
   -- Caller has already pinned (ppq, ppqL, rpb) onto `update`. A freshly
-  -- placed note is `open`: no authored ceiling, so tm derives its raw
-  -- tail (next onset / take length) every rebuild. endppq here is only
-  -- a provisional note-off keeping mm valid until that first derivation.
+  -- placed note is unbounded: endppqL = util.OPEN, no authored ceiling,
+  -- so tm derives its raw tail (next onset / take length) every
+  -- rebuild. endppq here is only a provisional note-off keeping mm
+  -- valid until that first derivation.
   local function placeNewNote(col, update)
     local prev, _, endppq = legato.place(col.events, update.ppq, length)
     update.vel             = prev and prev.vel or cm:get('defaultVelocity')
     update.endppq          = endppq
-    update.open            = true
+    update.endppqL         = util.OPEN
     update.lane            = col.lane
     if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
     update.evType = 'note'

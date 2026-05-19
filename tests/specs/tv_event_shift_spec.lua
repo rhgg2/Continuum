@@ -218,6 +218,36 @@ return {
   },
 
   {
+    name = "a clipped note keeps its full intent ceiling when shifted (clip must not clobber endppqL)",
+    run = function(harness)
+      -- 60 is an authored note intending a long tail (endppqL 960) but
+      -- a same-lane blocker at ppq 480 clips its REALISED note-off in
+      -- chan 1. Shifting 60 to empty chan 2 must carry the 960 INTENT,
+      -- not the 480 clip: with nothing blocking there it must realise
+      -- its full length. The bug is shiftEvents cloning the clipped
+      -- column endppq and addEvent stamping it as endppqL, permanently
+      -- destroying the intent.
+      local h = harness.mk{ seed = { length = 3840, notes = {
+        { ppq = 0,   endppq = 960, ppqL = 0,   endppqL = 960,
+          chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
+        { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
+          chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
+      }}}
+      h.vm:setGridSize(80, 40)
+      t.truthy(noteByPitch(h, 60).endppq <= 480,
+               '60 clipped by the same-lane blocker in chan 1')
+
+      h.ec:setPos(0, noteCol(h, 1, 1), 1)
+      h.cmgr:invoke('eventShiftRight')   -- 60 -> empty chan 2, lane 1
+
+      local moved = noteByPitch(h, 60)
+      t.eq(moved.chan, 2, '60 crossed to channel 2')
+      t.eq(moved.endppq, 960,
+           'full intent ceiling survived the shift; realises unclipped in the empty channel')
+    end,
+  },
+
+  {
     name = "a moving note truncates the tail of an earlier destination note",
     run = function(harness)
       -- Dest chan-2 64 starts at row 0 and sustains to row 4 (ppq 240).

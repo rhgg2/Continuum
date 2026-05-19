@@ -16,6 +16,25 @@ REAPER-native boolean flags (`muted`) opt out: they clear by assigning
 `false`, not `REMOVE`, because they are not metadata and the backend
 has no "absent" state.
 
+## The `OPEN` sentinel
+
+`util.OPEN` marks a note's `endppqL` as *deliberately unbounded* — a
+freshly-placed legato note with no authored ceiling — as opposed to
+`endppqL == nil`, which means *uncached* (foreign-MIDI import; derive
+the tail from raw). Collapsing those two meanings into one nil was the
+bug it exists to kill: a re-author path (shiftEvents, paste, gm)
+cloning a note already clipped by a blocker re-stamped the clip as
+intent, and the note could never regrow. Openness as a *value of*
+`endppqL`, not a parallel `open` flag, makes the rule uniform —
+`endppqL` present (finite or `OPEN`) is authoritative intent, never
+overwritten from a realised clip.
+
+Unlike `REMOVE` (a unique table, identity-compared, transient), `OPEN`
+is a plain string: it round-trips `serialise`/`unserialise` by value
+and stays `==`-comparable across a take reload. `endppqL` is otherwise
+numeric, so the string is unambiguous; the one site feeding it into
+arithmetic (tm's tail pass) maps `OPEN` to `math.huge`.
+
 ## Serialisation format
 
 `util.serialise` / `util.unserialise` implement a custom escaped format

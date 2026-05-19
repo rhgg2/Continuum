@@ -24,10 +24,10 @@ Three mechanisms enforce that:
 
 - **Intent into the group frame.** A tracker edit on a concrete
   instance event is transferred into the group frame through the
-  instance anchor as pure *intent* — onset, and the ceiling (`endppqL`
-  → group `dur`, or `open` → nil dur). The realised note-off tm
-  re-derives never enters the frame. `group.events` only ever holds the
-  canonical pattern.
+  instance anchor as pure *intent* — onset, and the ceiling (a finite
+  `endppqL` → group `dur`, or `endppqL == util.OPEN` → nil dur). The
+  realised note-off tm re-derives never enters the frame.
+  `group.events` only ever holds the canonical pattern.
 - **Per-flush re-derivation.** `groups.project` clones the group and
   replays the instance's deletes/adds/assigns, resolving geometry from
   scratch. A terminal set, order-independent — not an incremental patch.
@@ -48,12 +48,13 @@ suppressed both writebacks, so neither edit reached the other.
 ## Intent in, realisation out
 
 gm carries *intent* across the seam and nothing else. A note's intent
-is its ceiling: an authored `endppqL`, anchor-rebased to a group `dur`;
-or `open` — a freshly-placed note with no ceiling, which travels as a
-nil group dur. `toGroup`/`toInstance` rebase between frames;
-`updToGroup`/`updToInstance` are the exact partial-update inverses
-(`open` ⇒ `dur` removed, a finite `dur` ⇒ `endppqL` restamped). The
-realised note-off never enters the group frame.
+is its ceiling: a finite authored `endppqL`, anchor-rebased to a group
+`dur`; or `endppqL == util.OPEN` — a freshly-placed note with no
+ceiling, which travels as a nil group dur. `toGroup`/`toInstance`
+rebase between frames; `updToGroup`/`updToInstance` are the exact
+partial-update inverses (`util.OPEN` ⇒ `dur` removed, a finite `dur` ⇒
+`endppqL` restamped). The realised note-off never enters the group
+frame.
 
 The onset is logical the same way the ceiling is. The group frame is
 the authoring grid; a concrete's `ppq` is realised — swing and the
@@ -131,7 +132,8 @@ newInstance's projection adds, which commit on a later flush.
 (`rec.groupEvt`, what reproject last wrote), not the live concrete —
 cheap, and the two agree as long as only gm drives concretes. But tv
 is group-unaware: a user edit mutates a projected concrete's intent
-(`ppq` / `endppqL` / `open`) in place, with no group-geometry change,
+(`ppq` / `endppqL`, including `util.OPEN`) in place, with no
+group-geometry change,
 so the shadow still equals `desired`, reconcile emits nothing, and the
 edit never reaches the siblings. So before reconcile, `reproject`
 refreshes the shadow from the live concrete (`toGroup(rec.evt)`) for

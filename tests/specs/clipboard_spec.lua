@@ -75,6 +75,94 @@ return {
     end,
   },
 
+  -- 2b. Copy round-trips a note's INTENT ceiling (endppqL), not the
+  -- realised clip. A note truncated by a same-lane blocker, copied and
+  -- pasted into empty space, must realise its full authored length —
+  -- the clip must never become the pasted note's intent.
+  {
+    name = 'copy/paste carries intent ceiling, not the clipped tail',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { length = 7680, notes = {
+          -- A intends 16 rows (endppqL 960) but a same-lane blocker at
+          -- ppq 480 clips its realised note-off to 480.
+          { ppq = 0,   endppq = 960, ppqL = 0,   endppqL = 960,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
+          { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
+            chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
+        }},
+      }
+      h.vm:setGridSize(80, 80)
+      t.eq(h.fm:dump().notes[1].endppq, 480, 'A realised tail clipped to the blocker')
+
+      h.ec:setPos(0, 1, 1)
+      h.ec:extendTo(h.ec:pos())
+      local clip = h.clipboard:collect()
+      t.eq(clip.events[1].endRow, 16, 'endRow encodes the INTENT ceiling (960/60), not the clip (480/60=8)')
+
+      -- Paste far below, into empty space with nothing to clip against.
+      h.ec:setPos(32, 1, 1)
+      h.clipboard:pasteClip(clip)
+
+      local pasted
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.ppq == 1920 then pasted = n end
+      end
+      t.truthy(pasted, 'note pasted at cursor ppq 1920')
+      t.eq(pasted.endppq, 2880, 'pasted note realises its full intent (1920 + 960), not the clip')
+    end,
+  },
+
+  -- 2c. Pasting into a column with a blocker inside the pasted note's
+  -- span clips the REALISED tail but not the intent: removing the
+  -- blocker regrows the note to its full pasted length.
+  {
+    name = 'paste fit-clip against a blocker keeps intent; regrows when blocker removed',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { length = 7680, notes = {
+          -- Source: a 4-row note (ppq 0..240) on chan 1.
+          { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
+            chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
+          -- Blocker on chan 2, lane 1, at row 3 of where we'll paste
+          -- (cursor row 0 → paste rows 0..4; blocker at ppq 180).
+          { ppq = 180, endppq = 300, ppqL = 180, endppqL = 300,
+            chan = 2, pitch = 64, vel = 100, lane = 1, uuid = 2 },
+        }},
+      }
+      h.vm:setGridSize(80, 80)
+
+      h.ec:setPos(0, 1, 1)
+      h.ec:extendTo(h.ec:pos())
+      local clip = h.clipboard:collect()
+
+      -- Paste at chan-2 col, row 0: note spans ppq 0..240, blocker at 180.
+      local c2 = nil
+      for i, col in ipairs(h.vm.grid.cols) do
+        if col.type == 'note' and col.midiChan == 2 then c2 = i end
+      end
+      h.ec:setPos(0, c2, 1)
+      h.clipboard:pasteClip(clip)
+
+      local function pastedAt(ppq)
+        for _, n in ipairs(h.fm:dump().notes) do
+          if n.chan == 2 and n.pitch == 60 and n.ppq == ppq then return n end
+        end
+      end
+      t.truthy(pastedAt(0), 'note pasted on chan 2 at ppq 0')
+      t.truthy(pastedAt(0).endppq <= 180, 'realised tail clipped at the blocker')
+
+      local blocker
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.pitch == 64 then blocker = n end
+      end
+      h.tm:deleteEvent(blocker)
+      h.tm:flush()
+
+      t.eq(pastedAt(0).endppq, 240, 'blocker gone -> regrows to the full pasted intent')
+    end,
+  },
+
   -- 3. Multi-mode collect encodes chanDelta as the offset from the
   -- leftmost selected col's channel. pasteClip's resolve() decodes by
   -- adding chanDelta to the cursor's channel, so this is the wire that

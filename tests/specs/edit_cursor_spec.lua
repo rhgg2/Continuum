@@ -3,7 +3,8 @@
 -- drift it silently. They cover the seams where cursor-only and selection
 -- paths are expected to coincide, and the asymmetric-defaults carveouts.
 
-local t = require('support')
+local t    = require('support')
+local util = require('util')
 
 -- Shared seed: a single chan-1 note at row 4 (ppq 240 with resolution=240,
 -- 4 rpb → 60 ppq/row), endppq at row 6. Used wherever a spec pokes the
@@ -792,21 +793,21 @@ return {
     end,
   },
 
-  -- Authoring a duration on an `open` (freshly-placed legato) note must
-  -- turn it into a finite-ceiling note: growNote clears `open` and
-  -- stamps endppqL, so the universal tail pass honours the authored
-  -- ceiling instead of re-clipping to the next onset forever. Without
-  -- the clear, deleting the follower lets the still-open note breathe
-  -- to take length (3840) — the red this pins against.
+  -- Authoring a duration on an open (util.OPEN, freshly-placed legato)
+  -- note must turn it into a finite-ceiling note: growNote stamps a
+  -- finite endppqL (no longer util.OPEN), so the universal tail pass
+  -- honours the authored ceiling instead of re-clipping to the next
+  -- onset forever. Without the close, deleting the follower lets the
+  -- still-open note breathe to take length (3840) — the red this pins.
   {
-    name = 'growNote on an open note clears `open` and authors a finite ceiling',
+    name = 'growNote on an open note closes it and authors a finite ceiling',
     run = function(harness)
       local function noteByPitch(notes, pitch)
         for _, n in ipairs(notes) do if n.pitch == pitch then return n end end
       end
       local h = harness.mk{
         seed = { length = 3840, notes = {
-          { ppq = 0,   endppq = 3840, ppqL = 0, open = true,
+          { ppq = 0,   endppq = 3840, ppqL = 0, endppqL = util.OPEN,
             chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
           { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
             chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
@@ -821,8 +822,8 @@ return {
       h.cmgr:invoke('growNote')
 
       local a = noteByPitch(h.fm:dump().notes, 60)
-      t.truthy(not a.open,       'growNote cleared `open`')
-      t.truthy(a.endppqL ~= nil, 'growNote stamped an endppqL ceiling')
+      t.truthy(a.endppqL ~= util.OPEN, 'growNote closed the open note (endppqL no longer util.OPEN)')
+      t.truthy(a.endppqL ~= nil,       'growNote stamped a finite endppqL ceiling')
       local ceil = a.endppqL
 
       -- Removing the blocker: a finite ceiling caps the regrow; an

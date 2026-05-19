@@ -25,7 +25,7 @@ local tm, cm = deps.tm, deps.cm
 --   absorber synth -- fake/hidden pbs are re-seated from note onsets.
 local DERIVED = {
   evType=true, chan=true, chanDelta=true, lane=true, key=true, cc=true,
-  ppq=true, ppqL=true, endppq=true, endppqL=true, dur=true, open=true,
+  ppq=true, ppqL=true, endppq=true, endppqL=true, dur=true,
   loc=true, sampleShadowed=true, fake=true, hidden=true, uuid=true,
 }
 
@@ -127,8 +127,9 @@ local function copyScalars(src, dst)
 end
 
 -- A note's group dur is its INTENT ceiling span (endppqL - onset), never
--- the realised endppq tm re-derives every rebuild. An open note (no
--- ceiling) carries no dur: a nil dur IS open in the group frame.
+-- the realised endppq tm re-derives every rebuild. An open note
+-- (endppqL == util.OPEN, no ceiling) carries no dur: a nil dur IS open
+-- in the group frame.
 local function toGroup(evt, anchor)
   -- The group frame is LOGICAL. A concrete's realised ppq carries swing
   -- and delay; ppqL is its logical onset. Rebase off ppqL so neither
@@ -139,16 +140,18 @@ local function toGroup(evt, anchor)
                                chanDelta = evt.chan - anchor.chan,
                                key       = keyOf(evt),
                                ppq       = onset - anchor.ppq })
-  if evt.evType == 'note' and not evt.open and evt.endppqL ~= nil then
+  if evt.evType == 'note' and evt.endppqL ~= util.OPEN
+     and evt.endppqL ~= nil then
     g.dur = evt.endppqL - onset
   end
   return g
 end
 
--- A nil group dur is an open note: stamp `open` and a provisional
--- onset+1 raw tail (tm's universal pass derives the real note-off next
--- rebuild). A finite dur is the intent ceiling: stamp endppqL so a
--- blocker delete regrows the raw tail back up to it, never merely clips.
+-- A nil group dur is an open note: stamp endppqL = util.OPEN and a
+-- provisional onset+1 raw tail (tm's universal pass derives the real
+-- note-off next rebuild). A finite dur is the intent ceiling: stamp
+-- endppqL so a blocker delete regrows the raw tail back up to it,
+-- never merely clips.
 local function toInstance(g, anchor)
   local e = copyScalars(g, { evType = g.evType,
                              chan   = anchor.chan + (g.chanDelta or 0),
@@ -156,7 +159,7 @@ local function toInstance(g, anchor)
   if g.evType == 'note' then
     e.lane = g.key
     if g.dur == nil then
-      e.open, e.endppq = true, e.ppq + 1
+      e.endppqL, e.endppq = util.OPEN, e.ppq + 1
     else
       e.endppqL, e.endppq = e.ppq + g.dur, e.ppq + g.dur
     end
@@ -180,7 +183,7 @@ local function updToGroup(update, anchor, groupEvt)
   if update.chan ~= nil then u.chanDelta = update.chan - anchor.chan end
   if update.lane ~= nil then u.key = update.lane end
   if update.cc   ~= nil then u.key = update.cc end
-  if update.open == true then
+  if update.endppqL == util.OPEN then
     u.dur = util.REMOVE
   elseif update.endppqL ~= nil then
     local startAbs = update.ppqL or (anchor.ppq + (groupEvt.ppq or 0))
@@ -191,9 +194,9 @@ end
 
 -- Exact inverse: group-frame partial update -> instance-frame update.
 -- dur removed (util.REMOVE), OR a move of an already-open note, => the
--- note is open: clear its ceiling (endppqL) and re-open it, provisional
--- onset+1 raw tail. A finite dur (or a move of a finite note) restamps
--- the intent ceiling endppqL alongside the raw endppq and closes `open`.
+-- note is open: stamp endppqL = util.OPEN, provisional onset+1 raw
+-- tail. A finite dur (or a move of a finite note) restamps the intent
+-- ceiling endppqL alongside the raw endppq.
 local function updToInstance(update, anchor, groupEvt)
   local u = copyScalars(update, {})
   if update.ppq ~= nil then u.ppq = anchor.ppq + update.ppq end
@@ -207,11 +210,11 @@ local function updToInstance(update, anchor, groupEvt)
                     or (update.dur == nil and groupEvt.dur == nil
                         and update.ppq ~= nil)
     if goeOpen then
-      u.open, u.endppqL, u.endppq = true, util.REMOVE, anchor.ppq + startT + 1
+      u.endppqL, u.endppq = util.OPEN, anchor.ppq + startT + 1
     elseif update.ppq ~= nil or update.dur ~= nil then
       local dur = update.dur ~= nil and update.dur or (groupEvt.dur or 0)
-      u.open, u.endppqL = false, anchor.ppq + startT + dur
-      u.endppq = anchor.ppq + startT + dur
+      u.endppqL = anchor.ppq + startT + dur
+      u.endppq  = anchor.ppq + startT + dur
     end
   end
   return u

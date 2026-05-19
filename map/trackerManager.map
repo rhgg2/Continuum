@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1619  sha=8db4fab  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1622  sha=e73a809  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts
@@ -20,7 +20,7 @@
   @contract  lane-1 path: seat fake-pb if detune jumps the carry, retune forward to next note, then reconcile the next-note boundary; lane>1 just queues with no realisation work
   @contract  attached PAs are deleted with the host unless keepPAs; lane-1 path drops any fake seat at n.ppq and retunes back to the prior detune over [n.ppq, nextNote)
   @contract  chan/lane updates are rejected with a warning; ppq/endppq route through resizeNote; detune updates retune forward and reconcile both endpoint boundaries
-  @contract  update.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw. update.rawTime=true is the explicit "caller already computed raw" bypass (reswing/rescale's plan-then-mutate): translation is skipped, only the delay-delta applies, and the flag is consumed here so it never reaches mm. ppqL/endppqL are intent stamps, NOT the bypass signal — a logical caller (groups) sets endppqL freely. See docs/timing.md.
+  @contract  update.ppq/endppq arrive logical; stamps ppqL, and stamps endppqL from the note-off only when the caller omitted it. A caller-supplied endppqL is authoritative: a finite ceiling, or util.OPEN to reopen an unbounded tail. update.rawTime=true is the explicit "caller already computed raw" bypass (reswing/rescale's plan-then-mutate): translation is skipped, only the delay-delta applies, and the flag is consumed here so it never reaches mm. ppqL/endppqL are intent stamps, NOT the bypass signal — a logical caller (groups) sets endppqL freely. See docs/timing.md.
   @contract  no-op if nothing staged; otherwise commits assigns then deletes then adds under one mm:modify; pb cents→raw conversion happens here; byToken is re-keyed live from mm:assign's returned token whenever an identity field moved
   @contract  snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
   @contract  cached per-(cm, mm) pair; invalidated at rebuild head.
@@ -78,43 +78,43 @@
       · Public interface
   -- UPDATE MANAGER
   @fn deleteEvent(evtOrToken)  @ 550
-  @fn assignEvent(evtOrToken, update)  @ 612
-  @fn addEvent(evt)  @ 629
-      @contract  notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent); consumed here so it never persists on the record or reaches mm.
+  @fn assignEvent(evtOrToken, update)  @ 614
+  @fn addEvent(evt)  @ 631
+      @contract  notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL, stamps endppqL from the note-off only when the caller omitted it (a supplied endppqL — finite, or util.OPEN — is authoritative), rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent); consumed here so it never persists on the record or reaches mm.
       · Flush: commit accumulated ops to mm.
-  @fn flush()  @ 650
+  @fn flush()  @ 652
       · Init / reload: (re)load local cache from mm.
-  @fn reload()  @ 764
+  @fn reload()  @ 766
       -- Also clears staging buffers: a rebuild must not carry un-flushed ops
       -- across (their tokens may be stale for newly-added events), matching the
       -- prior "fresh um per rebuild" semantics now that the um itself persists.
   -- Accessors
-  @fn clearSwing()  @ 873
+  @fn clearSwing()  @ 875
       · Column allocation
       · CC projection
       · Rebuild
 
 # Public API (tm:*)
-  @api tm:getChannel(chan)  @ 797
-  @api tm:channels()  @ 799
-  @api tm:editCursor()  @ 810
-  @api tm:length()  @ 816
-  @api tm:resolution()  @ 817
-  @api tm:name()  @ 818
-  @api tm:setName(name)  @ 819
-  @api tm:timeSigs()  @ 820
-  @api tm:interpolate(A, B, ppq)  @ 821
-  @api tm:markSwingStale(chan)  @ 879
+  @api tm:getChannel(chan)  @ 799
+  @api tm:channels()  @ 801
+  @api tm:editCursor()  @ 812
+  @api tm:length()  @ 818
+  @api tm:resolution()  @ 819
+  @api tm:name()  @ 820
+  @api tm:setName(name)  @ 821
+  @api tm:timeSigs()  @ 822
+  @api tm:interpolate(A, B, ppq)  @ 823
+  @api tm:markSwingStale(chan)  @ 881
       @contract  chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
   -- Mutation
-  @api tm:deleteEvent(evt)  @ 886
-  @api tm:addEvent(evt)  @ 887
-  @api tm:assignEvent(evt, update)  @ 888
-  @api tm:flush()  @ 889
+  @api tm:deleteEvent(evt)  @ 888
+  @api tm:addEvent(evt)  @ 889
+  @api tm:assignEvent(evt, update)  @ 890
+  @api tm:flush()  @ 891
   -- Length
-  @api tm:setLength(newPpq)  @ 894
+  @api tm:setLength(newPpq)  @ 896
       -- On shrink, notes spanning the boundary keep their onset and have endppq clamped.
-  @api tm:rescaleLength(newPpq)  @ 920
+  @api tm:rescaleLength(newPpq)  @ 922
       -- Stretch the take to `newPpq` by linearly remapping the logical
       -- frame: each event on logical row r ends up on row f·r where
       -- f = newPpq/oldPpq. ppqL stamps scale by f; raw ppqs are
@@ -122,17 +122,17 @@
       -- ppqs are not linearly scaled (rows are preserved instead, which
       -- keeps reswing well-defined). Note delays scale by f. Frame stamps
       -- (rpb, swing slot names) are untouched. No events are deleted.
-  @api tm:tileLength(newPpq)  @ 988
+  @api tm:tileLength(newPpq)  @ 990
       -- Because oldPpq sits on a swing-period boundary (take length aligns
       -- to QN), shifting by k·oldPpq is identical in logical and realised
       -- frames; one delta serves both ppq and ppqL paths.
   -- Transport
-  @api tm:playFrom(ppq)  @ 1032
-  @api tm:play()  @ 1038
-  @api tm:stop()  @ 1039
-  @api tm:playPause()  @ 1040
+  @api tm:playFrom(ppq)  @ 1034
+  @api tm:play()  @ 1040
+  @api tm:stop()  @ 1041
+  @api tm:playPause()  @ 1042
   -- Mute
-  @api tm:setMutedChannels(set)  @ 1045
+  @api tm:setMutedChannels(set)  @ 1047
       @contract  idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes. PA events ride along in note columns but carry no mute state — skipped.
 
 # Signals emitted (via util.installHooks)

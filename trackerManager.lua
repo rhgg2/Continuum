@@ -556,7 +556,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     else                     deleteLowlevel(evt) end
   end
 
-  --contract: update.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw. update.rawTime=true is the explicit "caller already computed raw" bypass (reswing/rescale's plan-then-mutate): translation is skipped, only the delay-delta applies, and the flag is consumed here so it never reaches mm. ppqL/endppqL are intent stamps, NOT the bypass signal — a logical caller (groups) sets endppqL freely. See docs/timing.md.
+  --contract: update.ppq/endppq arrive logical; stamps ppqL, and stamps endppqL from the note-off only when the caller omitted it. A caller-supplied endppqL is authoritative: a finite ceiling, or util.OPEN to reopen an unbounded tail. update.rawTime=true is the explicit "caller already computed raw" bypass (reswing/rescale's plan-then-mutate): translation is skipped, only the delay-delta applies, and the flag is consumed here so it never reaches mm. ppqL/endppqL are intent stamps, NOT the bypass signal — a logical caller (groups) sets endppqL freely. See docs/timing.md.
   local function realiseNoteUpdate(evt, update)
     local dOld = delayToPPQ(evt.delay)
     local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
@@ -579,12 +579,11 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       update.ppq = evt.ppq + (dNew - dOld)
     end
     if update.endppq ~= nil then
-      -- Reopening (open / endppqL=REMOVE) clears the ceiling: pass the
-      -- clear through, never overwrite it with the provisional onset+1
-      -- tail. A finite move stamps endppqL from the logical note-off.
-      if not (update.open or update.endppqL == util.REMOVE) then
-        update.endppqL = update.endppq
-      end
+      -- endppq arrives logical. Stamp the ceiling from this note-off
+      -- only when the caller didn't author one: a finite endppqL, or
+      -- util.OPEN to reopen, is authoritative and rides through (the
+      -- provisional raw note-off is still derived below).
+      if update.endppqL == nil then update.endppqL = update.endppq end
       update.endppq = tm:fromLogical(evt.chan, update.endppq)
     end
   end
@@ -602,9 +601,12 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     evt.ppq  = tm:fromLogical(evt.chan, evt.ppqL,
                               withDelay and delayToPPQ(evt.delay or 0) or 0)
     if withEnd and evt.endppq ~= nil then
-      -- An open note carries no ceiling: convert the provisional raw
-      -- note-off but never stamp endppqL (intent stays unbounded).
-      if not evt.open then evt.endppqL = evt.endppq end
+      -- Stamp the ceiling from the note-off only when the caller didn't
+      -- author one. A supplied endppqL is authoritative and survives:
+      -- a finite intent carried through a clone (the re-author paths —
+      -- shiftEvents, paste, gm), or util.OPEN for a freshly-placed
+      -- unbounded note. The raw note-off is still derived.
+      if evt.endppqL == nil then evt.endppqL = evt.endppq end
       evt.endppq = tm:fromLogical(evt.chan, evt.endppq)
     end
   end
@@ -625,7 +627,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
   end
 
-  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL/endppqL and rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent); consumed here so it never persists on the record or reaches mm.
+  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL, stamps endppqL from the note-off only when the caller omitted it (a supplied endppqL — finite, or util.OPEN — is authoritative), rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent); consumed here so it never persists on the record or reaches mm.
   function addEvent(evt)
     local rawCaller = evt.rawTime
     evt.rawTime = nil
@@ -1195,7 +1197,7 @@ do
                     ppq = note.ppq, endppq = note.endppq,
                     ppqL    = not frameStale and note.ppqL or nil,
                     endppqL = not frameStale and note.endppqL or nil,
-                    overlap = note.overlap, open = note.open }
+                    overlap = note.overlap }
         util.bucket(byPitch, note.chan .. '|' .. note.pitch, e)
         util.bucket(byLane,  note.chan .. '|' .. (note.lane or 1), e)
       end
@@ -1213,8 +1215,9 @@ do
       end
 
       -- Universal tail realisation. raw note-off = min(endppqL ceiling
-      -- (nil = unbounded), next same-lane onset + overlap, next
-      -- same-pitch chan-wide onset, take length), floored at onset+1.
+      -- (util.OPEN = unbounded; nil = uncached, derive from raw), next
+      -- same-lane onset + overlap, next same-pitch chan-wide onset,
+      -- take length), floored at onset+1.
       -- overlap widens only the column onset (the monophonic-legato
       -- glide); the same-pitch onset is hard MIDI physics and the take
       -- length the absolute backstop. endppqL is never touched —
@@ -1224,10 +1227,10 @@ do
         for _, e in ipairs(group) do
           local laneL    = laterL(group, e.ppq)
           local pitchL   = laterL(byPitch[e.chan .. '|' .. e.pitch], e.ppq)
-          -- Absent endppqL is an uncached ceiling, not an open tail —
-          -- derive it from raw. Only an explicitly `open` note (the
-          -- freshly-placed legato note) is unbounded.
-          local ceilingL = e.open and math.huge
+          -- endppqL == util.OPEN is the deliberately-unbounded tail
+          -- (freshly-placed legato note). Absent endppqL is an uncached
+          -- ceiling, not open — derive it from raw.
+          local ceilingL = e.endppqL == util.OPEN and math.huge
                            or e.endppqL or tm:toLogical(e.chan, e.endppq)
           local colL     = laneL and laneL + (e.overlap or 0) or math.huge
           local boundL   = math.max(onsetL(e) + 1,
@@ -1408,9 +1411,9 @@ do
           -- Two cases mean "raw is the truth here, not a clip": an
           -- absent ceiling on an external raw note (cache it once), and
           -- a disagreeing onset (the whole record was externally edited
-          -- — ppqL just followed raw, so endppqL must too). Never on an
-          -- `open` note (unbounded by definition).
-          if isNote and not evt.open
+          -- — ppqL just followed raw, so endppqL must too). Never on a
+          -- util.OPEN note (unbounded by definition).
+          if isNote and evt.endppqL ~= util.OPEN
              and (evt.endppqL == nil or onsetExternal) then
             local seed = tm:toLogical(chan, evt.endppq)
             update.endppqL, evt.endppqL = seed, seed

@@ -125,9 +125,8 @@ return {
       local freshB
       for _, e in ipairs(staged.add) do if e.pitch == 62 then freshB = e end end
       t.truthy(freshB, 'fresh instance projected B')
-      t.eq(freshB.open, true,
-        'B stays open after the predecessor delete -- intent not shrunk')
-      t.eq(freshB.endppqL, nil, 'open B carries no ceiling; tm derives the tail')
+      t.eq(freshB.endppqL, util.OPEN,
+        'B stays open (util.OPEN) after the predecessor delete -- intent not shrunk')
     end,
   },
 }

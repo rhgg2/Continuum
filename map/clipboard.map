@@ -1,4 +1,4 @@
-@module clipboard  src=clipboard.lua  loc=459  sha=4a6bfb0  mode=chunk
+@module clipboard  src=clipboard.lua  loc=473  sha=8db4fab  mode=chunk
 @deps ec, grid, tm, cm, currentRpb, assignTail, getCtx, getLength
 
 # Invariants & contracts
@@ -24,30 +24,30 @@
   @state assignTail = deps.assignTail  @ 41
   @state getCtx = deps.getCtx  @ 42
   @state getLength = deps.getLength  @ 43
-  @state clipboard = {}  @ 442
+  @state clipboard = {}  @ 456
 
 # Private functions
   @fn save(clip)  @ 45
   @fn load()  @ 49
   @fn collect()  @ 56
       @contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }.
-  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 154
+  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 158
       @contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
-  @fn pasteSingle(clip)  @ 198
+  @fn pasteSingle(clip)  @ 202
       @contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op.
-  @fn pasteMulti(clip)  @ 289
+  @fn pasteMulti(clip)  @ 298
       @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col.
-  @fn pasteClip(clip)  @ 411
-  @fn trimTop(clip, trim)  @ 419
+  @fn pasteClip(clip)  @ 425
+  @fn trimTop(clip, trim)  @ 433
       -- A note whose start row falls within the trimmed band is dropped entirely.
       @contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
 
 # Public API (clipboard:*)
-  @api clipboard:collect()  @ 443
-  @api clipboard:copy()  @ 444
-  @api clipboard:pasteClip(clip)  @ 445
-  @api clipboard:trimTop(clip, trim)  @ 446
-  @api clipboard:registerCommands(scope)  @ 448
+  @api clipboard:collect()  @ 457
+  @api clipboard:copy()  @ 458
+  @api clipboard:pasteClip(clip)  @ 459
+  @api clipboard:trimTop(clip, trim)  @ 460
+  @api clipboard:registerCommands(scope)  @ 462
 
 # REAPER API surface
   @reaper SetExtState

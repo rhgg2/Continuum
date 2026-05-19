@@ -3,8 +3,9 @@
 -- universal tail pass owns every realised note-off, pinned by
 -- tm_conform_tail_spec). gm's job is now narrow: carry INTENT into the
 -- group frame and back out to siblings. A note's intent is its ceiling
--- (endppqL, anchor-rebased to a group `dur`) or `open` (no ceiling --
--- nil group dur). The realised endppq tm derives never enters the frame.
+-- (endppqL, anchor-rebased to a group `dur`) or open (endppqL ==
+-- util.OPEN -- no ceiling, nil group dur). The realised endppq tm
+-- derives never enters the frame.
 --
 -- These tests pin that seam through the real preflush/reproject path
 -- with a faithful fake tm (it does NOT run the tail pass -- so it can
@@ -45,15 +46,16 @@ end
 
 local nextUuid = 0
 -- Finite by default: a real authored note carries endppqL (intent
--- ceiling). `extra.open=true` seeds the freshly-placed open note (no
--- ceiling) -- it intentionally omits endppqL.
+-- ceiling). `extra.open=true` seeds the freshly-placed open note --
+-- endppqL = util.OPEN. (`open` itself is not a note field any more;
+-- it must not leak into the group template via copyScalars.)
 local function note(ppq, pitch, dur, extra)
   nextUuid = nextUuid + 1
   local n = { evType = 'note', chan = 1, lane = 1, ppq = ppq,
               endppq = ppq + (dur or 240), pitch = pitch, vel = 100,
               uuid = nextUuid }
-  if not (extra and extra.open) then n.endppqL = n.endppq end
-  for k, v in pairs(extra or {}) do n[k] = v end
+  n.endppqL = (extra and extra.open) and util.OPEN or n.endppq
+  for k, v in pairs(extra or {}) do if k ~= 'open' then n[k] = v end end
   return n
 end
 
@@ -82,7 +84,7 @@ return {
       t.truthy(copy, 'sibling copy projected')
       t.eq(copy.endppqL, 1200, 'ceiling rebased to anchor 960 (960+0+240)')
       t.eq(copy.endppq,  1200, 'provisional raw endppq matches the ceiling')
-      t.falsy(copy.open, 'a finite note is not open')
+      t.truthy(copy.endppqL ~= util.OPEN, 'a finite note is not open')
     end,
   },
 
@@ -96,8 +98,7 @@ return {
 
       local copy = addAt(staged, 960)
       t.truthy(copy, 'sibling copy projected')
-      t.eq(copy.open, true, 'open intent survives the round-trip')
-      t.eq(copy.endppqL, nil, 'an open note carries no ceiling')
+      t.eq(copy.endppqL, util.OPEN, 'open intent (util.OPEN) survives the round-trip')
       t.eq(copy.endppq, 961, 'provisional onset+1 raw tail; tm derives the real one')
     end,
   },
@@ -118,8 +119,7 @@ return {
       -- the birth endppq it arrived with. Its sibling copy is open.
       local sib = addAt(staged, 1200)                  -- 960 + 240
       t.truthy(sib, 'sibling copy of the created note projected')
-      t.eq(sib.open, true, 'a fresh create has no birth ceiling -> open')
-      t.eq(sib.endppqL, nil, 'no ceiling stamped on a created note')
+      t.eq(sib.endppqL, util.OPEN, 'a fresh create has no birth ceiling -> util.OPEN')
 
       -- A is NOT clipped in the group frame by the new onset: the
       -- group frame carries intent only; tm clips the realised tail.

@@ -156,7 +156,7 @@ return {
   },
 
   {
-    name = 'assignEvent: reopening (endppqL=REMOVE) still swings the onset',
+    name = 'assignEvent: reopening (endppqL=util.OPEN) still swings the onset',
     run = function()
       local p = probe()
       local h = seededHarness{
@@ -165,16 +165,16 @@ return {
           pitch = 60, vel = 100, uuid = 1 },
       }
       local n = h.tm:byUuid(1)
-      -- updToInstance's open shape: clear the ceiling, provisional tail.
-      h.tm:assignEvent(n, { ppq = 300, open = true,
-                            endppqL = util.REMOVE, endppq = 301 })
+      -- updToInstance's open shape: util.OPEN ceiling, provisional tail.
+      h.tm:assignEvent(n, { ppq = 300,
+                            endppqL = util.OPEN, endppq = 301 })
       h.tm:flush()
 
       local moved = h.fm:dump().notes[1]
       t.eq(moved.ppq, h.tm:fromLogical(1, 300),
         'open-note onset swung, not threaded through unswung')
-      t.eq(h.tm:byUuid(1).endppqL, nil,
-        'ceiling cleared -- the note is unbounded again')
+      t.eq(h.tm:byUuid(1).endppqL, util.OPEN,
+        'ceiling set to util.OPEN -- the note is unbounded again')
     end,
   },
 

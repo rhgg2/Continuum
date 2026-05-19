@@ -63,14 +63,18 @@ local function collect()
     return p / logPerRow - r1
   end
 
-  -- Source duration is structural: endRow always reflects evt.endppq,
-  -- regardless of where selection bounds fall. The paste site clips
-  -- the materialised note against the next same-column event.
+  -- Source duration is structural: endRow is the INTENT ceiling
+  -- (endppqL) in clip-row space, never the realised endppq tm clips
+  -- every rebuild. An open note (endppqL == util.OPEN) carries
+  -- endRow = util.OPEN; the paste site restamps the sentinel. A finite
+  -- note's materialised tail is clipped against the next same-column
+  -- event at the paste site.
   local function noteEvent(evt)
     local ce = util.clone(evt, CLIP_RESERVED)
     ce.row = rowOf(evt.ppq)
     if util.isNote(evt) then
-      ce.endRow = rowOf(evt.endppq)
+      ce.endRow = evt.endppqL == util.OPEN and util.OPEN
+                  or rowOf(evt.endppqL or evt.endppq)
     end
     return ce
   end
@@ -213,8 +217,13 @@ local function pasteSingle(clip)
     if ctx:rowToPPQ(r + ce.row, chan) >= endppq then goto nextCe end
     local e = util.clone(ce, CLIP_ARTIFACTS)
     e.ppq = ppq
-    if ce.endRow then
-      e.endppq = (r + ce.endRow) * logPerRow
+    if ce.endRow == util.OPEN then
+      e.endppqL, e.endppq = util.OPEN, ppq + 1
+    elseif ce.endRow then
+      -- endppqL is the intent; the fit-clip below trims only the
+      -- provisional realised endppq, which tm re-derives each rebuild.
+      e.endppqL = (r + ce.endRow) * logPerRow
+      e.endppq  = e.endppqL
     end
     util.add(events, e)
     ::nextCe::
@@ -352,8 +361,13 @@ local function pasteMulti(clip)
       if ctx:rowToPPQ(cRow + ce.row, r.chan) < endppq then
         local e = util.clone(ce, CLIP_ARTIFACTS)
         e.ppq = ppq
-        if ce.endRow then
-          e.endppq = (cRow + ce.endRow) * logPerRow
+        if ce.endRow == util.OPEN then
+          e.endppqL, e.endppq = util.OPEN, ppq + 1
+        elseif ce.endRow then
+          -- endppqL is the intent; the fit-clip below trims only the
+          -- provisional realised endppq, which tm re-derives.
+          e.endppqL = (cRow + ce.endRow) * logPerRow
+          e.endppq  = e.endppqL
         end
         util.add(events, e)
       end
@@ -422,7 +436,7 @@ local function trimTop(clip, trim)
     for _, e in ipairs(events) do
       if e.row >= trim then
         e.row = e.row - trim
-        if e.endRow then e.endRow = e.endRow - trim end
+        if type(e.endRow) == 'number' then e.endRow = e.endRow - trim end
         events[i] = e
         i = i + 1
       end
