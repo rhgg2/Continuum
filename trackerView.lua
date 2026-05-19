@@ -90,23 +90,27 @@ local function overlapBounds(col, ppq, excludeEvt, allowOverlap)
   return minStart, maxEnd
 end
 
--- Row-space sibling of overlapBounds. e.ppq is exact logical-ppq
--- post-projection; lenient diff edges add slack in the same frame.
-local function rowBounds(col, ppq, excludeEvt, allowOverlap)
-  local chan, logPerRow = col.midiChan, ctx:ppqPerRow()
-  local lenient = allowOverlap and cm:get('overlapOffset') * resolution or 0
+-- Row-space onset band for a moved note: the inclusive [minRow, maxRow]
+-- its onset may occupy without reordering against a neighbour. Bounds
+-- are the *onsets* of the nearest diff-pitch col-local and same-pitch
+-- chan-wide neighbours -- never their tails. A tail an onset move
+-- overruns is clipped by tm's universal tail pass on the next rebuild,
+-- so it must not bound the move (mirrors shiftEvents' reorder-not-tail
+-- rule). No prev -> the -1 sentinel makes minRow 0, the item-start
+-- guard. e.ppq is exact logical-ppq post-projection.
+--contract: onset-only -- neighbour tails never bound the move; tm clips an overrun on rebuild
+local function rowBounds(col, ppq, excludeEvt)
+  local logPerRow = ctx:ppqPerRow()
   local diff, same = notePreds(excludeEvt)
 
   local prevD, nextD = neighbourEvents({col}, ppq, diff)
-  local prevS, nextS = neighbourEvents(tm:getChannel(chan).columns.notes, ppq, same)
+  local prevS, nextS = neighbourEvents(tm:getChannel(col.midiChan).columns.notes, ppq, same)
 
-  local function startL(e, slack) return e.ppq    + slack end
-  local function endL  (e, slack) return tailEnd(e) + slack end
-
-  local fullL = grid.numRows * logPerRow
-  local prevEndL   = math.max(prevD and endL  (prevD, -lenient) or 0,     prevS and endL  (prevS, 0) or 0)
-  local nextStartL = math.min(nextD and startL(nextD,  lenient) or fullL, nextS and startL(nextS, 0) or fullL)
-  return math.ceil(prevEndL / logPerRow), math.floor(nextStartL / logPerRow)
+  local fullL      = grid.numRows * logPerRow
+  local prevOnsetL = math.max(prevD and prevD.ppq or -1,    prevS and prevS.ppq or -1)
+  local nextOnsetL = math.min(nextD and nextD.ppq or fullL, nextS and nextS.ppq or fullL)
+  return math.floor(prevOnsetL / logPerRow) + 1,
+         math.ceil (nextOnsetL / logPerRow) - 1
 end
 
 --contract: resolves same-onset plan collisions in a per-column plan list; mutates plan entries in place. fromLogical is monotone but not isotone, so two distinct logical onsets can round onto one raw ppq — the later-source-ppq one (curr by sort tie-break) shifts up 1 ppq, or if it is fixed the predecessor shifts back. Tail overlaps are NOT resolved here: tm's universal tail pass owns every raw note-off. Non-note plans/cols skipped; optional `deleted` event-set excluded (corpses still live in the col.events snapshot until next rebuild)
@@ -966,78 +970,104 @@ local noteOff, adjustDuration, adjustPosition do
     tm:flush()
   end
 
+  -- Selection nudge: the rows the block will occupy after the shift
+  -- ([selLo..selHi] + rowDelta) must be clear of any foreign onset in
+  -- every touched column -- the SELECTION's full row extent, not just
+  -- the sparse moving-onset rows. A foreign onset on a selected-but-
+  -- empty row would otherwise slip through and let repeated nudges
+  -- accumulate overlaps. Onset-only: tm clips note tails on rebuild.
   local function adjustPositionMulti(rowDelta)
     if rowDelta == 0 then return end
-    local logPerRow = ctx:ppqPerRow()
+    local r1, r2 = ec:region()
+    local loDest, hiDest = r1 + rowDelta, r2 + rowDelta
+    if loDest < 0 or hiDest >= grid.numRows then return end
+
     local runs = {}
     for _, g in ipairs(eventsByCol()) do
-      if g.col.type == 'note' then
-        local ns = {}
-        for _, n in pairs(g.locs) do
-          util.add(ns, n)
-        end
-        if #ns > 0 then
-          table.sort(ns, function(a, b) return a.ppq < b.ppq end)
-          if rowDelta > 0 then
-            local _, maxRow = rowBounds(g.col, ns[#ns].ppq, ns[#ns], true)
-            if maxRow - ns[#ns].endppq / logPerRow < rowDelta then return end
-          else
-            local minRow = rowBounds(g.col, ns[1].ppq, ns[1], true)
-            if minRow - ns[1].ppq / logPerRow > rowDelta then return end
+      local col = g.col
+      local moving, evs = {}, {}
+      for _, e in pairs(g.locs) do moving[e] = true; util.add(evs, e) end
+      if #evs > 0 then
+        local noteOnly = col.type == 'note'
+        for _, e in ipairs(col.events) do
+          if not moving[e] and (not noteOnly or util.isNote(e)) then
+            local r = ctx:ppqToRow(e.ppq, col.midiChan)
+            if r >= loDest and r <= hiDest then return end
           end
-          util.add(runs, { col = g.col, notes = ns })
         end
+        util.add(runs, { col = col, evs = evs, note = noteOnly })
       end
     end
     if #runs == 0 then return end
 
     -- resizeNote moves PBs in the note's ppq range; within each run, process in
     -- the direction that keeps shifted PBs out of unprocessed notes' ranges.
-    for _, r in ipairs(runs) do
-      local chan = r.col.midiChan
-      local notes = r.notes
-      local s, e, step = 1, #notes, 1
-      if rowDelta > 0 then s, e, step = #notes, 1, -1 end
+    for _, run in ipairs(runs) do
+      local chan = run.col.midiChan
+      table.sort(run.evs, function(a, b) return a.ppq < b.ppq end)
+      local s, e, step = 1, #run.evs, 1
+      if rowDelta > 0 then s, e, step = #run.evs, 1, -1 end
       for i = s, e, step do
-        local n = notes[i]
-        local rowS = ctx:ppqToRow(n.ppq,    chan) + rowDelta
-        local rowE = ctx:ppqToRow(n.endppq, chan) + rowDelta
-        assignStamp(n, chan, rowS, rowE)
+        local ev = run.evs[i]
+        if run.note then
+          assignStamp(ev, chan,
+                      ctx:ppqToRow(ev.ppq,    chan) + rowDelta,
+                      ctx:ppqToRow(ev.endppq, chan) + rowDelta)
+        else
+          assignStamp(ev, chan, ctx:ppqToRow(ev.ppq, chan) + rowDelta)
+        end
       end
     end
     tm:flush()
     ec:shiftSelection(rowDelta)
   end
 
-  -- Off-grid neighbours pull integer row inward via ceil/floor (item-start
-  -- guard: ceil(0) = 0 catches newStart = -1); on-grid under non-trivial
-  -- swing reads ppqL exactly so round-trip noise can't refuse the slot.
-  -- Cursor follows by rowDelta unless that row already holds another note.
+  -- Notes: onset-only band (rowBounds) -- a neighbour tail never blocks
+  -- the move; tm clips an overrun on the next rebuild. The cursor
+  -- follows by rowDelta unless that row already holds another note
+  -- (cursorNoteBefore would otherwise retarget it). Non-note events
+  -- nudge in time too, all-or-nothing like shiftEvents: refuse off the
+  -- grid edge or onto a same-column event (a same-ppq collision).
+  --contract: single: notes blocked only by an onset reorder (tm clips tails), cc/at/pa/pc by an occupied destination row. Selection: refuse if any touched column's destination row span [selLo..selHi]+rowDelta holds a foreign onset
   function adjustPosition(rowDelta)
     rowDelta = rowDelta * (cmgr:consumePrefix() or 1)
     if ec:hasSelection() then return adjustPositionMulti(rowDelta) end
 
-    local col, note = cursorNoteBefore()
-    if not col or not note then return end
-    local chan = col.midiChan
-
-    local newStart = ctx:snapRow(note.ppq,    chan) + rowDelta
-    local newEnd   = ctx:snapRow(note.endppq, chan) + rowDelta
-    local minRow, maxRow = rowBounds(col, note.ppq, note, true)
-    if newStart < minRow or newEnd > maxRow then return end
-
+    local col = grid.cols[ec:col()]
+    if not col then return end
+    local chan         = col.midiChan
     local newCursorRow = ec:row() + rowDelta
-    local cursorBlocked = false
-    for _, e in ipairs(col.events) do
-      if util.isNote(e) and e ~= note
-         and ctx:snapRow(e.ppq, chan) == newCursorRow then
-        cursorBlocked = true; break
+
+    if col.type == 'note' then
+      local _, note = cursorNoteBefore()
+      if not note then return end
+      local newStart = ctx:snapRow(note.ppq, chan) + rowDelta
+      local minRow, maxRow = rowBounds(col, note.ppq, note)
+      if newStart < minRow or newStart > maxRow then return end
+
+      local cursorBlocked = false
+      for _, e in ipairs(col.events) do
+        if util.isNote(e) and e ~= note
+           and ctx:snapRow(e.ppq, chan) == newCursorRow then
+          cursorBlocked = true; break
+        end
       end
+
+      assignStamp(note, chan, newStart, ctx:snapRow(note.endppq, chan) + rowDelta)
+      tm:flush()
+      if not cursorBlocked then ec:setPos(newCursorRow) end
+      return
     end
 
-    assignStamp(note, chan, newStart, newEnd)
+    local evt = col.cells and col.cells[ec:row()]
+    if not evt then return end
+    if newCursorRow < 0 or newCursorRow >= grid.numRows then return end
+    for _, e in ipairs(col.events) do
+      if e ~= evt and ctx:snapRow(e.ppq, chan) == newCursorRow then return end
+    end
+    assignStamp(evt, chan, newCursorRow)
     tm:flush()
-    if not cursorBlocked then ec:setPos(newCursorRow) end
+    ec:setPos(newCursorRow)
   end
 end
 
@@ -1617,9 +1647,10 @@ end
 -- refuse if the move runs off the grid edge, or onto a destination
 -- note-on. Note tails are not a barrier -- a moved note's tail, or a
 -- straddling destination note's tail, is clipped by tm's universal tail
--- pass on the rebuild that follows.
---contract: a selection must be exactly one grid column (a 1-col block stays contiguous when it lands on the destination col); a multi-col selection is a no-op
---contract: notes refuse only on a destination note-on whose row is within the moved block's onset-row band [minOnsetRow, maxOnsetRow] inclusive; tails (either direction) are clipped by tm's tail pass and never block. Non-note types refuse on a same-ppq event
+-- pass on the rebuild that follows. The cursor follows to the
+-- destination column -- single event and selection alike.
+--contract: a selection must be exactly one grid column (a 1-col block stays contiguous when it lands on the destination col); a multi-col selection is a no-op. The cursor follows to the destination column in both cases
+--contract: refuse if the destination column has any onset (note: note-on; other types: any event) whose row lies in the source's row extent -- the selection's [r1,r2] for a block, the moved event's onset row for a single. Tails (either direction) are clipped by tm's tail pass and never block
 local PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at = 'val' }
 
 local function shiftEvents(dir)
@@ -1685,29 +1716,31 @@ local function shiftEvents(dir)
   local dest = destDescriptor()
   if not dest then return end
 
-  -- Refuse the whole move on a real collision. Notes: a destination
-  -- note-on inside the moved block's onset-row band (tails truncate on
-  -- rebuild and never block). Other types: a same-ppq event.
+  -- Refuse the whole move if any onset in the destination column lands
+  -- on a row the source occupies: the SELECTION's full row extent
+  -- (rows[1..2]) for a block, the moved event's onset row for a
+  -- single. Using the selection extent -- not just the sparse moving-
+  -- onset band -- stops a dest onset on a selected-but-empty row
+  -- slipping through, which would let repeated cross-column shifts
+  -- pile up overlapping events. Onset-only: tails truncate on rebuild
+  -- and never block.
   local destCol = findCol(dest)
   if destCol then
-    if srcCol.type == 'note' then
-      local minR, maxR = math.huge, -math.huge
+    local loR, hiR
+    if rows then
+      loR, hiR = rows[1], rows[2]
+    else
+      loR, hiR = math.huge, -math.huge
       for _, src in ipairs(moving) do
         local r = ctx:ppqToRow(src.ppq, srcCol.midiChan)
-        if r < minR then minR = r end
-        if r > maxR then maxR = r end
+        loR, hiR = math.min(loR, r), math.max(hiR, r)
       end
-      for _, e in ipairs(destCol.events) do
-        if util.isNote(e) then
-          local r = ctx:ppqToRow(e.ppq, destCol.midiChan)
-          if r >= minR and r <= maxR then return end
-        end
-      end
-    else
-      for _, src in ipairs(moving) do
-        for _, e in ipairs(destCol.events) do
-          if e.ppq == src.ppq then return end
-        end
+    end
+    local noteOnly = srcCol.type == 'note'
+    for _, e in ipairs(destCol.events) do
+      if not noteOnly or util.isNote(e) then
+        local r = ctx:ppqToRow(e.ppq, destCol.midiChan)
+        if r >= loR and r <= hiR then return end
       end
     end
   end
@@ -1729,9 +1762,8 @@ local function shiftEvents(dir)
     local p = PART_FOR[srcCol.type]
     ec:setSelection{ row1 = rows[1], row2 = rows[2], col1 = idx, col2 = idx,
                      part1 = p, part2 = p }
-  else
-    ec:setPos(ec:row(), idx)
   end
+  ec:setPos(ec:row(), idx)   -- cursor follows to the destination column
 end
 
 -- Step currentSample by ±1 across the full 0..127 range. Empty slots

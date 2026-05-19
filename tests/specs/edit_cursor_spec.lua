@@ -338,12 +338,13 @@ return {
     end,
   },
 
-  -- 5a-i. Length-preservation against a hard wall. With prev.endppq on the
-  -- cursor-note's onset row, nudgeBack has nowhere to go without
-  -- shortening the note. The pre-fix code shrank the note to fit; the
-  -- contract now is all-or-nothing — refuse the move outright.
+  -- 5a-i. Onset-only policy: a neighbour TAIL never blocks the nudge.
+  -- A (0..120) ends on B's onset row, but its tail is not a wall --
+  -- nudgeBack moves B back a row and tm's universal tail pass clips A's
+  -- realised note-off to B's new onset. Only an onset reorder refuses
+  -- (see 5a-ii). Pre-policy this move was refused outright.
   {
-    name = 'nudgeBack against adjacent prev refuses move; length preserved',
+    name = 'nudgeBack past a neighbour tail is allowed; tm clips the tail',
     run = function(harness)
       local h = harness.mk{ seed = { notes = {
         { ppq = 0,   endppq = 120, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
@@ -353,26 +354,27 @@ return {
       h.ec:setPos(2, 1, 1)  -- on note B's onset row
       h.cmgr:invoke('nudgeBack')
 
-      local notes = h.fm:dump().notes
-      local b
-      for _, n in ipairs(notes) do if n.pitch == 62 then b = n end end
-      t.truthy(b, 'second note still present')
-      t.eq(b.ppq,    120, 'note B onset unchanged (move refused)')
-      t.eq(b.endppq, 240, 'note B endppq unchanged (length preserved)')
-      t.eq(h.ec:row(), 2, 'cursor stays put when move refused')
+      local a, b
+      for _, n in ipairs(h.fm:dump().notes) do
+        if     n.pitch == 62 then b = n
+        elseif n.pitch == 60 then a = n end
+      end
+      t.eq(b.ppq,    60,  'note B nudged back one row (tail was not a wall)')
+      t.eq(b.endppq, 180, 'note B length preserved')
+      t.eq(a.ppq,    0,   'note A onset unchanged')
+      t.eq(a.endppq, 60,  "note A's tail clipped by tm to B's new onset")
+      t.eq(h.ec:row(), 1, 'cursor follows the nudged note')
     end,
   },
 
-  -- 5a-ii. Off-grid bound. Prev.endppq sits between rows; pre-fix code
-  -- clamped to the fractional row and landed the moved note off-grid.
-  -- The new comparison is candidate-ppq vs bound-ppq, so a sub-row
-  -- collision blocks the whole move rather than producing an off-grid
-  -- onset.
+  -- 5a-ii. Onset reorder refuses. B's onset is row 1; nudgeBack would
+  -- put it on row 0 where A already onsets (ppq 0) -- a same-row onset
+  -- collision, the one thing the onset-only policy still refuses. A's
+  -- off-grid tail (ppq 50) is irrelevant: tails never bound the move.
   {
-    name = 'nudgeBack with off-grid prev.endppq does not land note off grid',
+    name = 'nudgeBack onto a neighbour onset row refuses the move',
     run = function(harness)
       local h = harness.mk{ seed = { notes = {
-        -- prev ends at ppq 50 — between row 0 (ppq 0) and row 1 (ppq 60)
         { ppq = 0,  endppq = 50,  chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
         { ppq = 60, endppq = 120, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0 },
       } } }
@@ -382,9 +384,8 @@ return {
 
       local b
       for _, n in ipairs(h.fm:dump().notes) do if n.pitch == 62 then b = n end end
-      t.eq(b.ppq,    60,  'note B onset unchanged (move refused — would-be ppq 0 < bound 50)')
+      t.eq(b.ppq,    60,  'note B onset unchanged (row 0 holds A’s onset)')
       t.eq(b.endppq, 120, 'note B endppq unchanged')
-      -- Critical: ppq is on a row, never the off-grid bound (50).
       t.truthy(b.ppq % 60 == 0, 'note B ppq is grid-aligned')
     end,
   },
@@ -433,6 +434,133 @@ return {
       t.eq(a.endppq, 180, 'note A endppq advanced; just touches B')
       t.eq(b.ppq,    180, 'note B unmoved')
       t.eq(h.ec:row(), 2, 'cursor stays — row 3 is occupied by B')
+    end,
+  },
+
+  -- 5a-iv. Forward nudge whose tail overruns the next note is allowed;
+  -- tm clips the realised tail. Pre-policy `newEnd > maxRow` refused
+  -- this outright.
+  {
+    name = 'nudgeForward overrunning the next note is allowed; tm clips the tail',
+    run = function(harness)
+      local h = harness.mk{ seed = { notes = {
+        { ppq = 0,   endppq = 180, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
+        { ppq = 180, endppq = 300, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0 },
+      } } }
+      h.vm:setGridSize(80, 40)
+      h.ec:setPos(0, 1, 1)  -- on A's onset row
+      h.cmgr:invoke('nudgeForward')
+
+      local a, b
+      for _, n in ipairs(h.fm:dump().notes) do
+        if     n.pitch == 60 then a = n
+        elseif n.pitch == 62 then b = n end
+      end
+      t.eq(a.ppq,    60,  'note A nudged forward one row')
+      t.eq(a.endppq, 180, "A's tail clipped by tm to B's onset (overrun allowed)")
+      t.eq(b.ppq,    180, 'note B unmoved')
+    end,
+  },
+
+  -- 5a-v. A non-note (cc) event nudges in time and the cursor follows,
+  -- matching shiftEvents' reach across every column type.
+  {
+    name = 'nudgeForward moves a cc event one row and the cursor follows',
+    run = function(harness)
+      local h = harness.mk{ seed = { ccs = {
+        { ppq = 0, chan = 1, cc = 11, val = 64, evType = 'cc' },
+      } } }
+      h.vm:setGridSize(80, 40)
+      local ci
+      for i, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'cc' and c.midiChan == 1 then ci = i end
+      end
+      h.ec:setPos(0, ci, 1)
+      h.cmgr:invoke('nudgeForward')
+
+      local moved
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'cc' and c.cc == 11 then moved = c end
+      end
+      t.truthy(moved, 'cc 11 still present')
+      t.eq(moved.ppq, 60, 'cc 11 advanced one row (60 ppq)')
+      t.eq(h.ec:row(), 1, 'cursor follows the cc forward')
+    end,
+  },
+
+  -- 5a-vi. Non-note nudge is all-or-nothing: refuse onto a row that
+  -- already holds a same-column event (a same-ppq collision).
+  {
+    name = 'nudgeForward refuses a cc onto an occupied row',
+    run = function(harness)
+      local h = harness.mk{ seed = { ccs = {
+        { ppq = 0,  chan = 1, cc = 11, val = 64, evType = 'cc' },
+        { ppq = 60, chan = 1, cc = 11, val = 90, evType = 'cc' },
+      } } }
+      h.vm:setGridSize(80, 40)
+      local ci
+      for i, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'cc' and c.midiChan == 1 then ci = i end
+      end
+      h.ec:setPos(0, ci, 1)
+      h.cmgr:invoke('nudgeForward')
+
+      local vals = {}
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'cc' and c.cc == 11 then vals[c.ppq] = c.val end
+      end
+      t.eq(vals[0],  64, 'first cc unmoved (row 1 occupied)')
+      t.eq(vals[60], 90, 'second cc unmoved')
+      t.eq(h.ec:row(), 0, 'cursor stays when the move is refused')
+    end,
+  },
+
+  -- 5a-vii. Selection nudge: a foreign onset anywhere in the
+  -- destination row span refuses the whole move (accumulation guard).
+  {
+    name = 'selection nudgeForward refuses when a foreign onset is in the destination span',
+    run = function(harness)
+      -- Selection rows 0..2 (notes at rows 0 and 2). A foreign note at
+      -- row 3 sits in the post-shift span [1,3]; the move must refuse.
+      local h = harness.mk{ seed = { notes = {
+        { ppq = 0,   endppq = 60,  chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
+        { ppq = 120, endppq = 180, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0 },
+        { ppq = 180, endppq = 240, chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0 },
+      } } }
+      h.vm:setGridSize(80, 40)
+      h.ec:setSelection{ row1 = 0, row2 = 2, col1 = 1, col2 = 1,
+                         part1 = 'pitch', part2 = 'pitch' }
+      h.cmgr:invoke('nudgeForward')
+
+      local p = {}
+      for _, n in ipairs(h.fm:dump().notes) do p[n.pitch] = n.ppq end
+      t.eq(p[60], 0,   '60 unmoved (foreign onset at row 3 blocks the block)')
+      t.eq(p[62], 120, '62 unmoved')
+      t.eq(p[64], 180, 'foreign note 64 unmoved')
+    end,
+  },
+
+  -- 5a-viii. Selection nudge with a clear destination span moves the
+  -- whole block and the selection follows.
+  {
+    name = 'selection nudgeForward shifts the block when the destination span is clear',
+    run = function(harness)
+      local h = harness.mk{ seed = { notes = {
+        { ppq = 0,   endppq = 60,  chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
+        { ppq = 120, endppq = 180, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0 },
+      } } }
+      h.vm:setGridSize(80, 40)
+      h.ec:setSelection{ row1 = 0, row2 = 2, col1 = 1, col2 = 1,
+                         part1 = 'pitch', part2 = 'pitch' }
+      h.cmgr:invoke('nudgeForward')
+
+      local p = {}
+      for _, n in ipairs(h.fm:dump().notes) do p[n.pitch] = n.ppq end
+      t.eq(p[60], 60,  '60 advanced one row')
+      t.eq(p[62], 180, '62 advanced one row')
+      local r1, r2 = h.ec:region()
+      t.eq(r1, 1, 'selection followed: row1')
+      t.eq(r2, 3, 'selection followed: row2')
     end,
   },
 

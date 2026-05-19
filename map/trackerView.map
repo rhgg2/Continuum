@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2551  sha=e30f0f1  mode=chunk
+@module trackerView  src=trackerView.lua  loc=2583  sha=36ed5a5  mode=chunk
 @deps tm, cm, cmgr, gm
 
 # Invariants & contracts
@@ -39,17 +39,17 @@
   @state grid = {  @ 40
   @state tv = {}  @ 47
   @state ec, clipboard, ctx  @ 50
-  @state PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at =...  @ 1623
-      @contract  a selection must be exactly one grid column (a 1-col block stays contiguous when it lands on the destination col); a multi-col selection is a no-op
-      @contract  notes refuse only on a destination note-on whose row is within the moved block's onset-row band [minOnsetRow, maxOnsetRow] inclusive; tails (either direction) are clipped by tm's tail pass and never block. Non-note types refuse on a same-ppq event
-  @state dupeState = nil  @ 1747
-  @state groupSrc, groupDupState  @ 1754
-  @state tracker = cmgr:scope('tracker')  @ 2207
-  @state rebuilding = false  @ 2270
-  @state groupBridge = {  @ 2415
-  @state GROUP_PASSTHROUGH = {  @ 2496
-  @state GROUP_KEEP = {}  @ 2505
-  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 2512
+  @state PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at =...  @ 1654
+      @contract  a selection must be exactly one grid column (a 1-col block stays contiguous when it lands on the destination col); a multi-col selection is a no-op. The cursor follows to the destination column in both cases
+      @contract  refuse if the destination column has any onset (note: note-on; other types: any event) whose row lies in the source's row extent -- the selection's [r1,r2] for a block, the moved event's onset row for a single. Tails (either direction) are clipped by tm's tail pass and never block
+  @state dupeState = nil  @ 1779
+  @state groupSrc, groupDupState  @ 1786
+  @state tracker = cmgr:scope('tracker')  @ 2239
+  @state rebuilding = false  @ 2302
+  @state groupBridge = {  @ 2447
+  @state GROUP_PASSTHROUGH = {  @ 2528
+  @state GROUP_KEEP = {}  @ 2537
+  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 2544
 
 # Private functions
   @fn print(...)  @ 23
@@ -66,113 +66,123 @@
   @fn overlapBounds(col, ppq, excludeEvt, allowOverlap)  @ 81
       -- Diff-pitch col-local with `overlapOffset` leniency (matches column allocator).
       -- Same-pitch chan-wide with no leniency: MIDI permits one voice per (chan, pitch).
-  @fn rowBounds(col, ppq, excludeEvt, allowOverlap)  @ 95
-      -- Row-space sibling of overlapBounds. e.ppq is exact logical-ppq
-      -- post-projection; lenient diff edges add slack in the same frame.
-  @fn conformOverlaps(plans, deleted)  @ 113
+  @fn rowBounds(col, ppq, excludeEvt)  @ 102
+      -- Row-space onset band for a moved note: the inclusive [minRow, maxRow]
+      -- its onset may occupy without reordering against a neighbour. Bounds
+      -- are the *onsets* of the nearest diff-pitch col-local and same-pitch
+      -- chan-wide neighbours -- never their tails. A tail an onset move
+      -- overruns is clipped by tm's universal tail pass on the next rebuild,
+      -- so it must not bound the move (mirrors shiftEvents' reorder-not-tail
+      -- rule). No prev -> the -1 sentinel makes minRow 0, the item-start
+      -- guard. e.ppq is exact logical-ppq post-projection.
+      @contract  onset-only -- neighbour tails never bound the move; tm clips an overrun on rebuild
+  @fn conformOverlaps(plans, deleted)  @ 117
       @contract  resolves same-onset plan collisions in a per-column plan list; mutates plan entries in place. fromLogical is monotone but not isotone, so two distinct logical onsets can round onto one raw ppq — the later-source-ppq one (curr by sort tie-break) shifts up 1 ppq, or if it is fixed the predecessor shifts back. Tail overlaps are NOT resolved here: tm's universal tail pass owns every raw note-off. Non-note plans/cols skipped; optional `deleted` event-set excluded (corpses still live in the col.events snapshot until next rebuild)
-  @fn writePlans(plans)  @ 165
+  @fn writePlans(plans)  @ 169
       -- Sort by shift direction so a still-old same-pitch peer vacates
       -- before its slot gets written. Without this, assignEvent's
       -- clearSameKeyRange kills the not-yet-moved peer.
-  @fn delayRange(col, n)  @ 191
+  @fn delayRange(col, n)  @ 195
       -- Two bounds: same-pitch chan-wide (MIDI one-voice-per-pair) at the prior
       -- note's endppq, and same-column any-pitch at neighbour's realised onset
       -- (so realised order = logical order within every column — the pb model
       -- leans on this).
       -- Floor at 0; ceiling at n.endppq − 1 so realised duration ≥ 1 ppq.
   -- Show events by column, used by lots of selection ops
-  @fn eventsByCol()  @ 210
-  @fn streamIdOf(col)  @ 238
+  @fn eventsByCol()  @ 214
+  @fn streamIdOf(col)  @ 242
       -- The mirror region's per-stream identity, derived from the column (the
       -- column IS the stream): evType:key, key = lane for notes, cc-number for
       -- cc, 0 otherwise. Index-free, so it survives column insert/reorder.
   -- Frames & timing
-  @fn logPerRowFor(rpb)  @ 247
-  @fn isFrameChange(change)  @ 256
+  @fn logPerRowFor(rpb)  @ 251
+  @fn isFrameChange(change)  @ 260
       @contract  a write to a FRAME_KEYS member at any tier other than 'transient' counts as a real frame change — fires releaseTransientFrame from configCallback
-  @fn currentRpb()  @ 260
-  @fn releaseTransientFrame()  @ 263
+  @fn currentRpb()  @ 264
+  @fn releaseTransientFrame()  @ 267
       -- Returns true iff a transient override was released.
-  @fn assignStamp(evt, chan, rowS, rowE)  @ 277
+  @fn assignStamp(evt, chan, rowS, rowE)  @ 281
       -- Pass rowE for span events (notes).
-  @fn assignTail(evt, chan, endppq)  @ 290
+  @fn assignTail(evt, chan, endppq)  @ 294
       -- Authoring a tail authors a finite ceiling: passing endppq with no
       -- endppqL makes tm stamp the ceiling from this note-off (closing a
       -- previously util.OPEN note), so the universal tail pass honours it
       -- instead of treating the note as unbounded every rebuild.
       @contract  whenever a note's tail moves: stamps the endppqL ceiling from the note-off (via tm), rebases evt.rpb to current alongside the new endppq
-  @fn matchGridToCursor()  @ 294
-  @fn writeShared(key, value)  @ 336
+  @fn matchGridToCursor()  @ 298
+  @fn writeShared(key, value)  @ 340
       -- Slot selections (temper, swing) are views over the data, not data
       -- themselves. Mirroring at project+track means a fresh take inherits
       -- the most recent selection, while takes on an existing track inherit
       -- from their siblings via the track-level value.
   -- Mute / solo
-  @fn pushMute()  @ 384
+  @fn pushMute()  @ 388
       @contract  effective mute = persistent-mute ∪ solo-implied mute; when any channel soloed, non-soloed forced muted and soloed forced audible (DAW solo-wins). Both sets persist in cm so reload's tm:lastMuteSet matches the wire
   -- Audition
-  @fn killAudition()  @ 411
-  @fn audition(pitch, vel, chan)  @ 417
+  @fn killAudition()  @ 415
+  @fn audition(pitch, vel, chan)  @ 421
   -- Viewport
-  @fn followViewport()  @ 447
+  @fn followViewport()  @ 451
   -- Editing
   -- Lane-strip edits (drag, add, delete, shape, tension)
-  @fn visibleAt(col, i)  @ 708
+  @fn visibleAt(col, i)  @ 712
       -- Skips hidden absorbers; returns nil if i out of range.
   -- Interpolation
-  @fn interpolate()  @ 819
-  @fn interpolateValues(col)  @ 853
+  @fn interpolate()  @ 823
+  @fn interpolateValues(col)  @ 857
       -- Returns nil for non-interpolable cols so callers can assign unconditionally.
   -- Duration & position
-  @fn noteOff()  @ 898
-  @fn adjustDuration(rowDelta)  @ 952
-  @fn adjustPosition(rowDelta)  @ 1016
-      -- Off-grid neighbours pull integer row inward via ceil/floor (item-start
-      -- guard: ceil(0) = 0 catches newStart = -1); on-grid under non-trivial
-      -- swing reads ppqL exactly so round-trip noise can't refuse the slot.
-      -- Cursor follows by rowDelta unless that row already holds another note.
+  @fn noteOff()  @ 902
+  @fn adjustDuration(rowDelta)  @ 956
+  @fn adjustPosition(rowDelta)  @ 1032
+      -- Notes: onset-only band (rowBounds) -- a neighbour tail never blocks
+      -- the move; tm clips an overrun on the next rebuild. The cursor
+      -- follows by rowDelta unless that row already holds another note
+      -- (cursorNoteBefore would otherwise retarget it). Non-note events
+      -- nudge in time too, all-or-nothing like shiftEvents: refuse off the
+      -- grid edge or onto a same-column event (a same-ppq collision).
+      @contract  single: notes blocked only by an onset reorder (tm clips tails), cc/at/pa/pc by an occupied destination row. Selection: refuse if any touched column's destination row span [selLo..selHi]+rowDelta holds a foreign onset
   -- Reswing / quantize
-  @fn insertRow()  @ 1393
-  @fn deleteRow()  @ 1394
-  @fn insertRowCol()  @ 1395
-  @fn deleteRowCol()  @ 1396
+  @fn insertRow()  @ 1423
+  @fn deleteRow()  @ 1424
+  @fn insertRowCol()  @ 1425
+  @fn deleteRowCol()  @ 1426
   -- Nudge
-  @fn nudge(dir, coarse)  @ 1486
+  @fn nudge(dir, coarse)  @ 1516
       -- Column-typed nudge. Selection rule: if any note event is selected,
       -- transpose / velocity- / delay-nudge the notes and leave value events
       -- alone; otherwise nudge val on every value event. Solo cursor: first
       -- event in the cursor row, column- and part-typed.
   -- Deletion
-  @fn deleteEvent()  @ 1577
-  @fn deleteSelection()  @ 1596
-  @fn deleteOrBackspace()  @ 1605
+  @fn deleteEvent()  @ 1607
+  @fn deleteSelection()  @ 1626
+  @fn deleteOrBackspace()  @ 1635
   -- Horizontal move
-  @fn shiftEvents(dir)  @ 1625
-  @fn stepSample(dir)  @ 1740
+  @fn shiftEvents(dir)  @ 1656
+  @fn stepSample(dir)  @ 1772
       -- Step currentSample by ±1 across the full 0..127 range. Empty slots
       -- are reachable — the user may want to author a sample value before
       -- the sampler has loaded that slot.
   -- Duplicate
-  @fn cursorRect()  @ 1760
+  @fn cursorRect()  @ 1792
       -- Cursor cell as a 1-row mirror rect: the seed-rect fallback for plain
       -- duplicate when there is no real selection (selectionAsRect is nil).
       -- This is the 1x1 carveout -- mirror passes no fallback, so a degenerate
       -- selection is a no-op there; plain duplicate clones the cursor cell.
-  @fn colsForAnchor(anchor, rect)  @ 1773
+  @fn colsForAnchor(anchor, rect)  @ 1805
       -- The grid columns the rect's stream set lands on when its chanLo is
       -- pinned to `anchor.chan` -- the shared logical->grid mapping. Resolving
       -- this at paste/select time (not freezing the seed column) is what lets
       -- a channel-changing cursor move carry the cascade to the new channel.
-  @fn stopForPart(col, part)  @ 1788
+  @fn stopForPart(col, part)  @ 1820
       -- First stop in `col` carrying part `part` (the seed's part name), or
       -- 1 if unknown -- keeps pasteSingle's pitch/vel dispatch on the part
       -- the user duplicated, at whatever column the anchor resolved to.
-  @fn selectRegionAt(anchor, rect)  @ 1798
+  @fn selectRegionAt(anchor, rect)  @ 1830
       -- Inverse of selectionAsRect: drop a grid selection (cursor at its
       -- top-left) at a logical anchor. Whole-column parts -- the cascade
       -- carries part precision in its payload, not in the live selection.
-  @fn duplicate()  @ 1814
+  @fn duplicate()  @ 1846
       -- Plain duplicate: clip payload, cursor-cell seed fallback. The cascade
       -- lifetime, anchor and select-the-copy live in tv:duplicateCascade.
       -- place re-homes the paste to the anchor's channel (colsForAnchor), so a
@@ -182,53 +192,53 @@
   -- Non-command callbacks from trackerPage
   -- Columns
   -- Group quick-verbs
-  @fn groupMark()  @ 2165
+  @fn groupMark()  @ 2197
       -- mark and copy share the one groupSrc lifetime; without this, mark ->
       -- groupPaste degrades to plain paste (groupPaste gates on groupSrc, not
       -- the active group).
-  @fn groupDuplicate()  @ 2175
+  @fn groupDuplicate()  @ 2207
       -- destination so the projection replaces rather than interleaves;
       -- tm:flush commits gm's staged adds (it only stages otherwise,
       -- colliding with the next edit).
-  @fn groupPaste()  @ 2190
+  @fn groupPaste()  @ 2222
       -- The pasted region [a.ppq, a.ppq+groupSrc.dur) must fit wholly inside
       -- the take. Out of bounds is a silent no-op, NOT a fallthrough to plain
       -- paste (that would paste non-group content the user didn't ask for);
       -- the fallthrough is only for "no group source".
 
 # Public API (tv:*)
-  @api tv:setRowPerBeat(n)  @ 307
-  @api tv:setSwingSlot(name)  @ 346
-  @api tv:setTemperSlot(name)  @ 347
-  @api tv:setColSwingSlot(chan, name)  @ 352
+  @api tv:setRowPerBeat(n)  @ 311
+  @api tv:setSwingSlot(name)  @ 350
+  @api tv:setTemperSlot(name)  @ 351
+  @api tv:setColSwingSlot(chan, name)  @ 356
       -- colSwing is a per-channel map; cross-track bleed via project would
       -- mean track A's per-channel pattern surfaces on a fresh track B until
       -- B overrides every entry. Keep it track-scoped.
-  @api tv:setSwingComposite(name, composite)  @ 358
-  @api tv:setTemper(name, temper)  @ 365
-  @api tv:moveLaneEvent(col, i, toRow, toVal)  @ 720
+  @api tv:setSwingComposite(name, composite)  @ 362
+  @api tv:setTemper(name, temper)  @ 369
+  @api tv:moveLaneEvent(col, i, toRow, toVal)  @ 724
       @contract  clamps newppq strictly inside (prev.ppq, next.ppq) by ±1 — necessary-and-sufficient invariant for identity-by-visible-index to survive the post-flush rebuild
-  @api tv:addLaneEvent(col, colIdx, ppq, val)  @ 744
+  @api tv:addLaneEvent(col, colIdx, ppq, val)  @ 748
       -- Inherits prev visible's envelope shape so prev→next curve survives the new midpoint.
       -- Returns the new event's visible index post-flush for drag-seed.
-  @api tv:deleteLaneEvent(col, i)  @ 772
-  @api tv:setLaneTension(col, i, tension)  @ 782
+  @api tv:deleteLaneEvent(col, i)  @ 776
+  @api tv:setLaneTension(col, i, tension)  @ 786
       -- Set bezier tension on the i-th visible event. Forces shape to bezier
       -- so the tension is honoured (REAPER ignores tension on other shapes).
-  @api tv:ec()  @ 1835
-  @api tv:clipboard()  @ 1836
-  @api tv:rowPerBar()  @ 1840
-  @api tv:takeName()  @ 1841
-  @api tv:activeTemper()  @ 1842
-  @api tv:noteProjection(evt)  @ 1843
-  @api tv:rowBeatInfo(row)  @ 1844
-  @api tv:barBeatSub(row)  @ 1845
-  @api tv:ppqToRow(ppq, chan)  @ 1846
-  @api tv:rowToPPQ(row, chan)  @ 1847
-  @api tv:logPerRow()  @ 1848
-  @api tv:sampleCurve(A, B, ppq)  @ 1849
-  @api tv:timeSig()  @ 1850
-  @api tv:duplicateCascade(state, collectSource, place, fallbackRect)  @ 1868
+  @api tv:ec()  @ 1867
+  @api tv:clipboard()  @ 1868
+  @api tv:rowPerBar()  @ 1872
+  @api tv:takeName()  @ 1873
+  @api tv:activeTemper()  @ 1874
+  @api tv:noteProjection(evt)  @ 1875
+  @api tv:rowBeatInfo(row)  @ 1876
+  @api tv:barBeatSub(row)  @ 1877
+  @api tv:ppqToRow(ppq, chan)  @ 1878
+  @api tv:rowToPPQ(row, chan)  @ 1879
+  @api tv:logPerRow()  @ 1880
+  @api tv:sampleCurve(A, B, ppq)  @ 1881
+  @api tv:timeSig()  @ 1882
+  @api tv:duplicateCascade(state, collectSource, place, fallbackRect)  @ 1900
       -- Shared duplicate cascade. `state` is the run token (nil seeds);
       -- `collectSource` captures a payload while the source is still intact
       -- (plain dup: clip + part; mirror: nil -- events come from the rect in
@@ -240,11 +250,11 @@
       -- selection re-selects each copy; one seeded from the fallback rect
       -- (no selection -- the 1x1 cell carveout) leaves no selection, like a
       -- classic cell duplicate. Returns the new run token.
-  @api tv:selectionAsRect()  @ 1906
+  @api tv:selectionAsRect()  @ 1938
       -- The active selection as a mirror rect: a logical-frame time span x a
       -- per-channel streamId set, chanOffset relative to the lowest selected
       -- channel. nil unless a real (non-degenerate) selection exists.
-  @api tv:eventsInRect(rect)  @ 1939
+  @api tv:eventsInRect(rect)  @ 1971
       -- Concrete events the rect contains. Membership is the mirror predicate
       -- in the logical frame: onset ppq in the span AND the column's stream is
       -- selected for its channel offset. col.events ppq is logical (tm
@@ -253,7 +263,7 @@
       -- channel/lane); gm needs them per-event for its anchor maths and must
       -- keep object identity (it links the live evt for propagation), so we
       -- backfill the authoritative column values rather than clone.
-  @api tv:clearRegionAt(rect, anchor)  @ 1969
+  @api tv:clearRegionAt(rect, anchor)  @ 2001
       -- Clears the take cells the rect's projection lands on at `anchor` -- the
       -- footprint inverse of eventsInRect. gm:stamp / gm:newInstance only
       -- re-place their own concretes (contract: the caller clears foreign
@@ -267,42 +277,42 @@
       -- before gm stages, so it never eats the projection; a gm op that then
       -- rejects (out-of-range / live-group overlap) is a rare pre-beta edge
       -- the bounds/no-straddle gates already exclude for the common path.
-  @api tv:cursorAnchor()  @ 1984
+  @api tv:cursorAnchor()  @ 2016
       -- Cursor as a mirror anchor: { ppq, chan } in the logical frame.
-  @api tv:streamRefAt(colIx, chanLo)  @ 1993
+  @api tv:streamRefAt(colIx, chanLo)  @ 2025
       -- (channel offset, stream id) for a grid column, relative to chanLo —
       -- the coordinates a mirror rect's `streams` table is keyed by.
-  @api tv:instanceAtCursor()  @ 2001
+  @api tv:instanceAtCursor()  @ 2033
       -- The instance whose region covers the caret cell, or nil. Region mode
       -- seeds from this so entry lands on what the caret is over.
-  @api tv:instanceSelection(groupId, instId)  @ 2018
+  @api tv:instanceSelection(groupId, instId)  @ 2050
       -- Install the grid selection for one group instance: its anchor + the
       -- group rect -> selectRegionAt (the duplicate-cascade selector). The ec
       -- region-mode bridge speaks this; ec never reads gm geometry directly.
-  @api tv:paintRegionStream(groupId, instId, colIx, on)  @ 2027
+  @api tv:paintRegionStream(groupId, instId, colIx, on)  @ 2059
       @contract  extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans the take); idempotent -- re-painting an already on/off stream is a no-op true. The group's live rect is found by id off gm:eachInstance so ec carries no geometry.
-  @api tv:setGridSize(w, h)  @ 2057
-  @api tv:addExtraCol(type, cc)  @ 2063
-  @api tv:hideExtraCol()  @ 2088
-  @api tv:showDelay()  @ 2143
+  @api tv:setGridSize(w, h)  @ 2089
+  @api tv:addExtraCol(type, cc)  @ 2095
+  @api tv:hideExtraCol()  @ 2120
+  @api tv:showDelay()  @ 2175
   -- Command table
   -- Rebuild
-  @api tv:rebuild(takeChanged)  @ 2273
+  @api tv:rebuild(takeChanged)  @ 2305
       @contract  reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
   -- Lifecycle
   -- Factory load
   -- Group quick-verb lifetimes
-  @api tv:wireGroupLifetime()  @ 2526
+  @api tv:wireGroupLifetime()  @ 2558
       -- Snapshot the source on copy + install the clear-on-mutation sweep.
       -- Must run AFTER every tracker command (tv's, clipboard's, ec's AND
       -- trackerPage's page verbs) registers, so the sweep covers page commands
       -- too -- trackerPage calls this once post-registration. copy is plain:
       -- clipboard:copy ends with ec:selClear(), so a doAfter snapshot would
       -- see an empty selection; doBefore captures the live rect.
-  @api tv:endGroupCascade()  @ 2539
+  @api tv:endGroupCascade()  @ 2571
       -- A mouse re-selection ends the cascade by hand (the mouse bypasses
       -- cmgr's keep-set sweep).
-  @api tv:endAllCascades()  @ 2544
+  @api tv:endAllCascades()  @ 2576
       -- A committed typed edit cancels every cascade and drops the groupPaste
       -- source, exactly as a non-keep cmgr command would -- editEvent is the
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).

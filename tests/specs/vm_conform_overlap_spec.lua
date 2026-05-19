@@ -1,8 +1,9 @@
--- vm overlap-geometry carve-out for conform notes. A conform note's
--- STORED tail (endppqL) is an intended overrun: tm owns the realised
--- clip, so vm must (a) not let a conform predecessor's long tail
--- constrain a sibling edit (neighbourEvents/rowBounds), and (b) not
--- shorten a conform note's own planned tail in conformOverlaps.
+-- vm position edits use an onset-only band (rowBounds): NO predecessor's
+-- tail constrains a later same-col note's nudge -- conform or not. tm
+-- owns the realised clip. A conform note's STORED tail (endppqL) is an
+-- intended overrun, so vm must additionally (b) not shorten a conform
+-- note's own planned tail in conformOverlaps. (The former conform-only
+-- rowBounds carve-out is now the universal onset-only rule.)
 --
 -- Harness identity swing: ppq == ppqL. resolution 240, rpb 4 ->
 -- 60 ppq/row. overlapOffset default 1/16 -> lenient 15 ppq.
@@ -39,7 +40,7 @@ return {
   },
 
   {
-    name = 'control: a NON-conform predecessor with the same geometry DOES block',
+    name = 'a non-conform predecessor tail also does not block (onset-only band)',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = {
@@ -54,7 +55,10 @@ return {
       h.cmgr:invoke('nudgeBack')
 
       local b = byPitch(h.fm:dump().notes, 62)
-      t.eq(b.ppq, 960, 'non-conform predecessor still clamps the nudge (carve-out is gated)')
+      t.eq(b.ppq, 900, 'non-conform tail no longer clamps the nudge -- onset-only')
+      local a = byPitch(h.fm:dump().notes, 60)
+      t.eq(a.endppq, 900, "A's realised tail clipped by tm to B's new onset")
+      t.eq(a.endppqL, 960, 'A intent ceiling untouched by the sibling edit')
     end,
   },
 

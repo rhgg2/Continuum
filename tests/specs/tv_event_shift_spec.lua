@@ -150,6 +150,7 @@ return {
       local _, _, c1, c2 = h.ec:region()
       t.eq(c1, destCol, 'selection followed to the destination column')
       t.eq(c2, destCol, 'selection still single-column')
+      t.eq(h.ec:col(), destCol, 'cursor followed into the destination column')
     end,
   },
 
@@ -244,6 +245,33 @@ return {
       t.eq(moved.chan, 2, '60 crossed to channel 2')
       t.eq(moved.endppq, 960,
            'full intent ceiling survived the shift; realises unclipped in the empty channel')
+    end,
+  },
+
+  {
+    name = "refuses when a dest onset sits on a selected-but-empty row",
+    run = function(harness)
+      -- Selection spans rows 0..6 but only rows 1 and 3 hold notes.
+      -- Dest chan-2 has a note-on at row 5 -- a selected row with no
+      -- moving note. The old moving-onset band [1,3] missed it; the
+      -- selection-extent rule [0,6] must refuse so a repeated shift
+      -- can't accumulate overlaps.
+      local h = harness.mk{ seed = { notes = {
+        { ppq = 60,  endppq = 120, chan = 1, pitch = 60, vel = 100, lane = 1 },
+        { ppq = 180, endppq = 240, chan = 1, pitch = 64, vel = 100, lane = 1 },
+        { ppq = 300, endppq = 360, chan = 2, pitch = 67, vel = 100, lane = 1 },
+      }}}
+      h.vm:setGridSize(80, 40)
+
+      local lane1 = noteCol(h, 1, 1)
+      h.ec:setSelection{ row1 = 0, row2 = 6, col1 = lane1, col2 = lane1,
+                         part1 = 'pitch', part2 = 'pitch' }
+      h.cmgr:invoke('eventShiftRight')
+
+      local by = notesByChanLane(h)
+      t.eq(by[60].chan, 1, '60 did not move -- dest onset on a selected row')
+      t.eq(by[64].chan, 1, '64 did not move')
+      t.eq(by[67].chan, 2, '67 (the blocker) untouched')
     end,
   },
 
