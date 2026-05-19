@@ -3,6 +3,7 @@
   - flam
   - trill
   - cc macros
+  - arpeggio
 - automation smoothing
 - 14bit CCs
 - move to command based key/mouse interactions

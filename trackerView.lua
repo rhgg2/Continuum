@@ -884,17 +884,18 @@ local noteOff, adjustDuration, adjustPosition do
     return col, util.seek(col.events, 'at-or-before', cursorppq, util.isNote)
   end
 
+  -- Undo reopens authored intent: the tail was OPEN before any noteOff
+  -- closed it (or we have no record), so write util.OPEN and let tm's
+  -- universal tail pass re-derive the realised note-off. The finite
+  -- branch writes the user's targeted ceiling unclamped -- tm clips
+  -- realised against same-pitch onsets and take length on rebuild.
   local function applyNoteOff(col, last, targetppq, undo)
     if undo then
-      local next = util.seek(col.events, 'at-or-after', targetppq, util.isNote)
-      local newEnd = next and next.ppq or length
-      assignTail(last, col.midiChan, newEnd)
+      tm:assignEvent(last, { endppq = util.OPEN, rpb = currentRpb() })
     elseif last.ppq >= targetppq then
       tm:deleteEvent(last)
     else
-      local _, maxEnd = overlapBounds(col, last.ppq, last, true)
-      local newEnd    = util.clamp(targetppq, last.ppq + 1, maxEnd)
-      assignTail(last, col.midiChan, newEnd)
+      assignTail(last, col.midiChan, math.max(targetppq, last.ppq + 1))
     end
   end
 
@@ -951,8 +952,7 @@ local noteOff, adjustDuration, adjustPosition do
     local curRow    = visEnd / logPerRow
     local newRow    = util.clamp(util.round(curRow + rowDelta), 0, grid.numRows)
     local minPPQ    = math.min(visEnd, ctx:rowToPPQ(ctx:snapRow(note.ppq, chan) + 1, chan))
-    local _, maxPPQ = overlapBounds(col, note.ppq, note, true)
-    local newppq    = util.clamp(ctx:rowToPPQ(newRow, chan), minPPQ, maxPPQ)
+    local newppq    = math.max(ctx:rowToPPQ(newRow, chan), minPPQ)
     if newppq == visEnd then return end
     assignTail(note, chan, newppq)
   end
@@ -1369,10 +1369,16 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     for _, e in ipairs(deletes) do tm:deleteEvent(e) end
     writePlans(plans)
 
+    -- A spanning note (onset before C, tail crosses C) shifts forward
+    -- alongside the events at/past C -- the inserted rows widen the gap
+    -- between onset and tail. Unclamped: endppq is authored intent, tm's
+    -- tail pass clips realised against take length on rebuild. An OPEN
+    -- authored tail stays OPEN: no arithmetic on the sentinel, and the
+    -- realised tail is re-derived from scratch every rebuild anyway.
     if col.type == 'note' then
       local spanning = util.seek(col.events, 'before', C, util.isNote)
-      if spanning and spanning.endppq > C then
-        assignTail(spanning, chan, math.min(spanning.endppq + dLogical, length))
+      if spanning and spanning.endppq ~= util.OPEN and spanning.endppq > C then
+        assignTail(spanning, chan, spanning.endppq + dLogical)
       end
     end
   end
@@ -1384,14 +1390,15 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     local D        = ctx:rowToPPQ(topRow + numRows, chan)
     local dLogical = numRows * logPerRow
 
+    -- A spanning finite tail either shifts back (tail past the deleted
+    -- band) or collapses to C (tail inside the deleted band). An OPEN
+    -- authored tail stays OPEN -- a deletion below the onset doesn't
+    -- close the note; tm re-derives the realised note-off on rebuild.
     if col.type == 'note' then
       local spanning = util.seek(col.events, 'before', C, util.isNote)
-      if spanning and spanning.endppq > C then
-        if spanning.endppq > D then
-          assignTail(spanning, chan, spanning.endppq - dLogical)
-        else
-          assignTail(spanning, chan, C)
-        end
+      if spanning and spanning.endppq ~= util.OPEN and spanning.endppq > C then
+        assignTail(spanning, chan,
+                   spanning.endppq > D and spanning.endppq - dLogical or C)
       end
     end
 
@@ -1993,24 +2000,20 @@ end
 -- footprint inverse of eventsInRect. gm:stamp / gm:newInstance only
 -- re-place their own concretes (contract: the caller clears foreign
 -- ones), so a group dropped on populated cells must wipe them first or
--- the projection interleaves with stale notes. A note that STARTS before
--- the zone and sustains into it is tail-trimmed to the boundary, never
--- deleted and never left overlapping: an overlapping survivor forces the
--- lane allocator to spill the projection onto another lane on rebuild,
--- and lane identity is load-bearing under groups. Stages deletes/trims
--- only; the caller flushes alongside gm's staged adds. Called strictly
--- before gm stages, so it never eats the projection; a gm op that then
--- rejects (out-of-range / live-group overlap) is a rare pre-beta edge
--- the bounds/no-straddle gates already exclude for the common path.
+-- the projection interleaves with stale notes. Authored intent on notes
+-- whose onset is before the zone is left alone -- tm's universal tail
+-- pass clips realised against same-pitch/same-lane successors (the
+-- projection that lands post-clear among them) on the next rebuild, so a
+-- pre-trim here would only shrink intent. Stages deletes only; the
+-- caller flushes alongside gm's staged adds. Called strictly before gm
+-- stages, so it never eats the projection; a gm op that then rejects
+-- (out-of-range / live-group overlap) is a rare pre-beta edge the
+-- bounds/no-straddle gates already exclude for the common path.
 function tv:clearRegionAt(rect, anchor)
   local lo, hi = anchor.ppq, anchor.ppq + rect.dur
   for _, col in ipairs(grid.cols) do
     local sel = rect.streams[col.midiChan - anchor.chan]
     if sel and sel[streamIdOf(col)] then
-      if col.type == 'note' then
-        local prev = util.seek(col.events, 'before', lo, util.isNote)
-        if prev and prev.endppq > lo then assignTail(prev, col.midiChan, lo) end
-      end
       for evt in util.between(col.events, lo, hi) do tm:deleteEvent(evt) end
     end
   end

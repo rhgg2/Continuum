@@ -38,6 +38,60 @@ return {
     end,
   },
 
+  {
+    -- Refactor pin: post-clamp drop in adjustDurationCore. The user
+    -- grows past a same-pitch successor; the authored ceiling must move
+    -- past, even though tm's universal tail pass clips realised back to
+    -- the successor onset. Pre-fix the overlapBounds maxPPQ clamp
+    -- silently capped newppq at the successor and the command no-op'd.
+    name = 'growNote past a same-pitch successor authors a tail past, tm clips realised',
+    run = function(harness)
+      local h = harness.mk{ seed = { notes = {
+        { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
+        { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
+      } } }
+      h.vm:setGridSize(80, 40)
+
+      h.ec:setPos(0, 1, 1)
+      h.cmgr:invoke('growNote')
+
+      local A
+      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if e.pitch == 60 and e.ppq == 0 then A = e end
+      end
+      t.truthy(A, 'A survives')
+      t.truthy(A.endppq > 240,
+               'authored ceiling shifted past the same-pitch successor (endppq=' ..
+               tostring(A.endppq) .. ')')
+      t.eq(A.endppqC, 240, 'realised clipped to the successor onset')
+    end,
+  },
+
+  {
+    -- noteOff undo branch: cursor at the rendered tail row reopens the
+    -- authored ceiling. Pre-fix wrote `next.ppq or length` (a finite
+    -- ceiling at the next blocker); post-fix writes util.OPEN and lets
+    -- tm's tail pass re-derive the realised note-off.
+    name = 'noteOff at the rendered tail row reopens authored endppq to util.OPEN',
+    run = function(harness)
+      local h = harness.mk{ seed = { notes = {
+        { ppq = 0,   endppq = 180, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
+        { ppq = 300, endppq = 420, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
+      } } }
+      h.vm:setGridSize(80, 40)
+
+      h.ec:setPos(3, 1, 1)   -- ppq 180 = A.endppqC
+      h.cmgr:invoke('noteOff')
+
+      local A
+      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if e.pitch == 60 and e.ppq == 0 then A = e end
+      end
+      t.truthy(A, 'A survives')
+      t.eq(A.endppq, util.OPEN, 'authored tail reopened to OPEN')
+    end,
+  },
+
   -- End-state invariant: after placing a new note at (chan, pitch, ppq),
   -- no other note on the same (chan, pitch) may still cover ppq. The
   -- invariant is enforced jointly by addNoteEvent's cross-col truncate

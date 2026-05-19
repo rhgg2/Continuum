@@ -7,7 +7,8 @@
 -- identity is strictly preserved under groups. Real trackerView + real
 -- groupManager via harness.mk (the wired path, not a fake).
 
-local t = require('support')
+local t    = require('support')
+local util = require('util')
 
 local function noteCol(h, chan)
   for i, col in ipairs(h.vm.grid.cols) do
@@ -28,10 +29,11 @@ end
 
 return {
   {
-    name = 'clearRegionAt: in-zone deleted, pre-zone straddler trimmed (lane kept), outside untouched',
+    name = 'clearRegionAt: in-zone deleted, pre-zone straddler keeps authored tail, outside untouched',
     run = function(harness)
       -- chan-1, single lane, non-overlapping in the seed so all land on
-      -- note:1. Zone = [300, 600).
+      -- note:1. Zone = [300, 600). Authored intent on the straddler is
+      -- left alone -- tm's universal tail pass clips realised on rebuild.
       local h = harness.mk{ groups = true, seed = { notes = {
         { ppq =   0, endppq = 120, chan = 1, pitch = 60, vel = 100 }, -- before
         { ppq = 120, endppq = 360, chan = 1, pitch = 62, vel = 100 }, -- STRADDLER
@@ -53,11 +55,38 @@ return {
                'in-zone note (64) deleted; before (60), straddler (62), after (65) survive')
 
       local str = byPitch(notes, 62)
-      t.eq(str.endppq, 300, 'straddler tail trimmed to the zone boundary, not deleted')
+      t.eq(str.endppq, 360, 'straddler authored tail untouched by the clear')
       t.eq(str.ppq, 120, 'straddler onset unchanged')
-      t.eq(str.lane, laneBefore, 'straddler lane preserved (no spill)')
+      t.eq(str.lane, laneBefore, 'straddler lane preserved')
 
       t.eq(byPitch(notes, 65).ppq, 600, 'note at hi (exclusive) untouched')
+    end,
+  },
+
+  {
+    -- OPEN straddler: authored endppq is util.OPEN, so 'prev.endppq > lo'
+    -- throws pre-fix. Post-fix the OPEN tail counts as spanning into the
+    -- zone and trims to the boundary, matching the clear-zone contract.
+    name = 'clearRegionAt trims an open-tailed straddler to the zone boundary',
+    run = function(harness)
+      local h = harness.mk{ groups = true, seed = { notes = {
+        { ppq = 0, endppq = 120, ppqL = 0, endppqL = util.OPEN,
+          chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0,
+          lane = 1, rpb = 4 },
+      } } }
+
+      h.vm:clearRegionAt(
+        { ppq = 0, dur = 300, chanLo = 1, streams = { [0] = { ['note:1'] = true } } },
+        { ppq = 300, chan = 1 })
+      h.tm:flush()
+
+      local A
+      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if e.pitch == 60 then A = e end
+      end
+      t.truthy(A, 'OPEN straddler survives the clear')
+      t.eq(A.endppq, util.OPEN,
+           'OPEN authored intent is non-committed; the clear leaves it alone')
     end,
   },
 
