@@ -51,6 +51,7 @@ local specs = {
   'gm_origin_conform_spec',
   'gm_wiring_spec',
   'gm_dup_cascade_spec',
+  'gm_metadata_propagate_spec',
   'gm_delete_sibling_spec',
   'gm_delete_conform_integration_spec',
   'gm_render_spec',

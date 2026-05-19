@@ -13,9 +13,21 @@ local groupsCore = require 'groups'
 local deps   = ...
 local tm, cm = deps.tm, deps.cm
 
--- Scalar payload: everything the core merges that is not identity (evType)
--- or positional (chanDelta/key/ppq/dur, handled by anchor maths).
-local SCALARS = { 'pitch', 'vel', 'detune', 'delay', 'val', 'shape', 'tension', 'muted', 'sample', 'overlap' }
+-- copyScalars carries the event's full payload across the frame, MINUS
+-- these. mm round-trips arbitrary per-event metadata; an allowlist here
+-- would silently eat every key it didn't enumerate (the rpb-drop bug).
+-- So it is opt-OUT. Three reasons a key is denied:
+--   positional/identity -- the four duals translate these explicitly
+--     between the logical group frame and the realised instance frame;
+--     copying them raw would double-write or leak realised time;
+--   regenerated -- tm re-derives every rebuild, must never persist into
+--     the shared group template;
+--   absorber synth -- fake/hidden pbs are re-seated from note onsets.
+local DERIVED = {
+  evType=true, chan=true, chanDelta=true, lane=true, key=true, cc=true,
+  ppq=true, ppqL=true, endppq=true, endppqL=true, dur=true, open=true,
+  loc=true, sampleShadowed=true, fake=true, hidden=true, uuid=true,
+}
 
 local gm = {}
 
@@ -106,8 +118,11 @@ local function keyOf(evt)
   return 0
 end
 
+--invariant: payload crossing the group<->instance frame is opt-OUT --
+--           every src field except DERIVED is carried, so mm's
+--           arbitrary per-event metadata (rpb included) survives.
 local function copyScalars(src, dst)
-  for _, f in ipairs(SCALARS) do if src[f] ~= nil then dst[f] = src[f] end end
+  for f, v in pairs(src) do if not DERIVED[f] then dst[f] = v end end
   return dst
 end
 
