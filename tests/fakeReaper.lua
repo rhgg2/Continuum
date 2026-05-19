@@ -214,8 +214,24 @@ function M.new()
     m.sortDisabled = false
   end
 
+  -- Real REAPER cascade-removes a note's notation event (eventtype = 15)
+  -- when the note is deleted. Notation sits at the note's onset and encodes
+  -- its 0-based chan + pitch; modelling the cascade is what shifts the
+  -- shared text stream and desyncs any cached uuidIdx — the surface this
+  -- spec/fix turn on.
   function r.MIDI_DeleteNote(take, i)
-    table.remove(midi(take).notes, i + 1)
+    local m = midi(take)
+    local n = m.notes[i + 1]
+    table.remove(m.notes, i + 1)
+    if n then
+      for ti, e in ipairs(m.texts) do
+        local c0, p = e.eventtype == 15 and e.msg:match('^NOTE%s+(%d+)%s+(%d+)%s+custom')
+        if c0 and e.ppq == n.ppq and tonumber(c0) == n.chan and tonumber(p) == n.pitch then
+          table.remove(m.texts, ti)
+          break
+        end
+      end
+    end
     return true
   end
   function r.MIDI_DeleteCC(take, i)

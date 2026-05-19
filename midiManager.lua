@@ -964,35 +964,43 @@ local function shiftDown(tbl, field, threshold)
   end
 end
 
-local function shiftSysexDown(threshold)
-  shiftDown(notes, 'uuidIdx', threshold)
-  shiftDown(ccs,   'uuidIdx', threshold)
+-- Sidecars (notation type 15, cc/pb type -1) share one TextSysexEvt index
+-- space; a cached uuidIdx desyncs across a mixed multi-delete in one modify
+-- (MIDI_DeleteNote cascades its notation event). Match by content instead.
+local function deleteSidecarByUuid(uuid)
+  if not uuid then return end
+  local _, _, _, textCount = reaper.MIDI_CountEvts(take)
+  for i = 0, textCount-1 do
+    local ok, _, _, _, eventtype, msg = reaper.MIDI_GetTextSysexEvt(take, i)
+    local sc = ok and (eventtype == 15 and noteSidecarDecode(msg)
+                    or eventtype == -1 and ccSidecarDecode(msg))
+    if sc and sc.uuid == uuid then
+      reaper.MIDI_DeleteTextSysexEvt(take, i)
+      return
+    end
+  end
 end
 
---contract: immediate-mode. MIDI_DeleteNote cascade-removes the notation sidecar; MIDI_DeleteCC does not cascade — the cc sidecar is removed here explicitly. After each REAPER delete we walk live events and decrement idx / uuidIdx of anything REAPER shifted down, so subsequent deletes in the same modify see correct slots.
+--contract: immediate-mode. MIDI_DeleteNote cascade-removes the notation sidecar; MIDI_DeleteCC does not — the cc/pb sidecar is removed here by content-addressed scan (decode each text event, match evt.uuid). Per-array idx is shifted down so later deletes in the same modify see correct note/cc slots; uuidIdx is NOT tracked here — the post-modify final read pass re-resolves it from REAPER state.
 function mm:delete(token)
   if not (take and checkLock()) then return end
   local evt = tokenIdx[token]
   if not evt then return end
 
   tokenIdx[token] = nil
-  local idx, uuidIdx = evt.idx, evt.uuidIdx
+  local idx = evt.idx
 
   if evt.evType == 'note' then
     notes[evt.loc] = nil
     eventsByUuid[evt.uuid] = nil
     reaper.MIDI_DeleteNote(take, idx)
     shiftDown(notes, 'idx', idx)
-    if uuidIdx then shiftSysexDown(uuidIdx) end
   else
     ccs[evt.loc] = nil
     if evt.uuid then eventsByUuid[evt.uuid] = nil end
     reaper.MIDI_DeleteCC(take, idx)
     shiftDown(ccs, 'idx', idx)
-    if uuidIdx then
-      reaper.MIDI_DeleteTextSysexEvt(take, uuidIdx)
-      shiftSysexDown(uuidIdx)
-    end
+    deleteSidecarByUuid(evt.uuid)
   end
 end
 

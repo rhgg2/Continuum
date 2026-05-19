@@ -28,6 +28,7 @@ local specs = {
   'mm_cc_dedup_spec',
   'mm_deletecc_sidecar_spec',
   'mm_multi_note_delete_spec',
+  'mm_note_cascade_sidecar_spec',
   'mm_token_spec',
   'mm_unified_spec',
   'sidecar_reconcile_spec',
