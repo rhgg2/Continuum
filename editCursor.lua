@@ -600,6 +600,33 @@ do
   end
 end
 
+----- Group-instance hop (editing mode)
+
+-- [ / ] in normal editing jump the caret to the same row offset in the
+-- prev/next instance of the group it sits inside. Column is left as-is:
+-- "same place" is the relative row; chasing the stream across instances
+-- on different channels would be a non-linear column remap, out of scope
+-- for this verb. The border feedback is the rendering layer's.
+local function hopInstance(step)
+  local gm = gmgr(); if not gm then return end
+  local at = groupBridge and groupBridge.instanceAt and groupBridge.instanceAt()
+  if not at then return end
+  local sibs = {}
+  for _, e in ipairs(gm:eachInstance()) do
+    if e.groupId == at.groupId then sibs[#sibs + 1] = e end
+  end
+  table.sort(sibs, function(a, b) return a.anchor.ppq < b.anchor.ppq end)
+  local i
+  for k, e in ipairs(sibs) do if e.instId == at.instId then i = k end end
+  local cur, dest = i and sibs[i], i and sibs[i + step]
+  if not dest then return end
+  local lpr = logPerRow()
+  cursorRow = cursorRow
+            - math.floor(cur.anchor.ppq  / lpr + 0.5)
+            + math.floor(dest.anchor.ppq / lpr + 0.5)
+  clampPos(); moveHook()
+end
+
 ----- Commands
 
 function ec:registerCommands(scope)
@@ -626,6 +653,8 @@ function ec:registerCommands(scope)
     cycleBlock    = function() cycleHBlock() end,
     cycleVBlock   = function() cycleVBlock() end,
     swapBlockEnds = function() swapEnds() end,
+    groupInstPrev = function() hopInstance(-1) end,
+    groupInstNext = function() hopInstance( 1) end,
   }
 end
 

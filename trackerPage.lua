@@ -859,6 +859,8 @@ cmgr:scope('tracker'):bindAll{
   groupPaste        = { {ImGui.Key_V, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   groupLocalToggle  = { {ImGui.Key_M, ImGui.Mod_Super} },
   regionEnter       = { {ImGui.Key_R, ImGui.Mod_Super} },
+  groupInstPrev     = { ImGui.Key_LeftBracket },
+  groupInstNext     = { ImGui.Key_RightBracket },
   inputOctaveUp   = { {ImGui.Key_8, ImGui.Mod_Shift} },
   inputOctaveDown = { ImGui.Key_Slash },
   inputSampleUp   = { {ImGui.Key_Period, ImGui.Mod_Shift} },  -- '>'
