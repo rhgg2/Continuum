@@ -1,5 +1,5 @@
-@module clipboard  src=clipboard.lua  loc=473  sha=8db4fab  mode=chunk
-@deps ec, grid, tm, cm, currentRpb, assignTail, getCtx, getLength
+@module clipboard  src=clipboard.lua  loc=458  sha=a2943f2  mode=chunk
+@deps ec, grid, tm, cm, currentRpb, getCtx, getLength
 
 # Invariants & contracts
   @invariant  clipboard persists via REAPER ExtState under ('rdm','clipboard'), serialised by util.serialise
@@ -21,33 +21,32 @@
   @state tm = deps.tm  @ 38
   @state cm = deps.cm  @ 39
   @state currentRpb = deps.currentRpb  @ 40
-  @state assignTail = deps.assignTail  @ 41
-  @state getCtx = deps.getCtx  @ 42
-  @state getLength = deps.getLength  @ 43
-  @state clipboard = {}  @ 456
+  @state getCtx = deps.getCtx  @ 41
+  @state getLength = deps.getLength  @ 42
+  @state clipboard = {}  @ 441
 
 # Private functions
-  @fn save(clip)  @ 45
-  @fn load()  @ 49
-  @fn collect()  @ 56
+  @fn save(clip)  @ 44
+  @fn load()  @ 48
+  @fn collect()  @ 55
       @contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }.
   @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 158
       @contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
   @fn pasteSingle(clip)  @ 202
       @contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op.
-  @fn pasteMulti(clip)  @ 298
+  @fn pasteMulti(clip)  @ 295
       @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col.
-  @fn pasteClip(clip)  @ 425
-  @fn trimTop(clip, trim)  @ 433
+  @fn pasteClip(clip)  @ 410
+  @fn trimTop(clip, trim)  @ 418
       -- A note whose start row falls within the trimmed band is dropped entirely.
       @contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
 
 # Public API (clipboard:*)
-  @api clipboard:collect()  @ 457
-  @api clipboard:copy()  @ 458
-  @api clipboard:pasteClip(clip)  @ 459
-  @api clipboard:trimTop(clip, trim)  @ 460
-  @api clipboard:registerCommands(scope)  @ 462
+  @api clipboard:collect()  @ 442
+  @api clipboard:copy()  @ 443
+  @api clipboard:pasteClip(clip)  @ 444
+  @api clipboard:trimTop(clip, trim)  @ 445
+  @api clipboard:registerCommands(scope)  @ 447
 
 # REAPER API surface
   @reaper SetExtState

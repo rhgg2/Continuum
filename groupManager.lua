@@ -147,11 +147,10 @@ local function toGroup(evt, anchor)
   return g
 end
 
--- A nil group dur is an open note: stamp endppqL = util.OPEN and a
--- provisional onset+1 raw tail (tm's universal pass derives the real
--- note-off next rebuild). A finite dur is the intent ceiling: stamp
--- endppqL so a blocker delete regrows the raw tail back up to it,
--- never merely clips.
+-- A nil group dur is an open note: author endppq = util.OPEN. A finite
+-- dur is the intent ceiling: author endppq = onset + dur. tm stamps
+-- endppqL and derives the raw tail, so a blocker delete regrows the
+-- tail back up to the ceiling rather than merely clipping.
 local function toInstance(g, anchor)
   local e = copyScalars(g, { evType = g.evType,
                              chan   = anchor.chan + (g.chanDelta or 0),
@@ -159,9 +158,9 @@ local function toInstance(g, anchor)
   if g.evType == 'note' then
     e.lane = g.key
     if g.dur == nil then
-      e.endppqL, e.endppq = util.OPEN, e.ppq + 1
+      e.endppq = util.OPEN
     else
-      e.endppqL, e.endppq = e.ppq + g.dur, e.ppq + g.dur
+      e.endppq = e.ppq + g.dur
     end
   elseif g.evType == 'cc' then
     e.cc = g.key
@@ -194,9 +193,9 @@ end
 
 -- Exact inverse: group-frame partial update -> instance-frame update.
 -- dur removed (util.REMOVE), OR a move of an already-open note, => the
--- note is open: stamp endppqL = util.OPEN, provisional onset+1 raw
--- tail. A finite dur (or a move of a finite note) restamps the intent
--- ceiling endppqL alongside the raw endppq.
+-- note is open: author endppq = util.OPEN. A finite dur (or a move of
+-- a finite note) authors the intent ceiling on endppq; tm stamps
+-- endppqL and derives the raw tail.
 local function updToInstance(update, anchor, groupEvt)
   local u = copyScalars(update, {})
   if update.ppq ~= nil then u.ppq = anchor.ppq + update.ppq end
@@ -210,11 +209,10 @@ local function updToInstance(update, anchor, groupEvt)
                     or (update.dur == nil and groupEvt.dur == nil
                         and update.ppq ~= nil)
     if goeOpen then
-      u.endppqL, u.endppq = util.OPEN, anchor.ppq + startT + 1
+      u.endppq = util.OPEN
     elseif update.ppq ~= nil or update.dur ~= nil then
       local dur = update.dur ~= nil and update.dur or (groupEvt.dur or 0)
-      u.endppqL = anchor.ppq + startT + dur
-      u.endppq  = anchor.ppq + startT + dur
+      u.endppq = anchor.ppq + startT + dur
     end
   end
   return u

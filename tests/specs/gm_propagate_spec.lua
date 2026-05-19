@@ -127,11 +127,11 @@ return {
       gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
-      -- A move authors a new ceiling: tm's realiseNoteUpdate stamps the
-      -- logical onset (ppqL) and the intent ceiling (endppqL, open=false),
-      -- leaving ppq RAW. gm reads the logical frame (ppqL/endppqL), never
-      -- raw. No swing here so raw == logical == 480. Start 0->480,
-      -- ceiling 240->720 (span 240 fixed).
+      -- A move authors a new ceiling. The injected update is the
+      -- post-realise shape the real tm hands gm: ppqL stamped, the
+      -- intent ceiling on endppqL, ppq RAW. gm reads that logical frame
+      -- and STAGES the sibling's intent as endppq. No swing here so raw
+      -- == logical == 480. Start 0->480, ceiling 240->720 (span fixed).
       tm:flush({}, { { token = 't1', evt = src,
                        update = { ppq = 480, ppqL = 480,
                                   endppqL = 720, open = false } } }, {})
@@ -144,11 +144,11 @@ return {
       end
       t.truthy(bySibling, 'sibling note reprojected')
       t.eq(bySibling.update.ppq, 1440, 'sibling start shifts to anchor 960 + 480')
-      t.eq(bySibling.update.endppqL, 1680, 'sibling ceiling shifts rigidly (960+480+240)')
-      t.eq(bySibling.update.endppq, 1680, 'sibling provisional raw tail tracks the ceiling')
+      t.eq(bySibling.update.endppq, 1680, 'sibling ceiling shifts rigidly (960+480+240), staged on endppq')
+      t.eq(bySibling.update.endppqL, nil, 'gm stages endppq only; endppqL is tm-private')
       t.truthy(byOrigin, 'the user-touched origin is round-tripped too')
       t.eq(byOrigin.update.ppq, 480, 'origin restaged at its own anchor 0 + 480')
-      t.eq(byOrigin.update.endppqL, 720, 'origin ceiling moves rigidly with it')
+      t.eq(byOrigin.update.endppq, 720, 'origin ceiling moves rigidly with it, staged on endppq')
     end,
   },
 

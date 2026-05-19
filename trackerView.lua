@@ -487,16 +487,15 @@ do
   end
 
   -- Caller has already pinned (ppq, ppqL, rpb) onto `update`. A freshly
-  -- placed note is unbounded: endppqL = util.OPEN, no authored ceiling,
-  -- so tm derives its raw tail (next onset / take length) every
-  -- rebuild. endppq here is only a provisional note-off keeping mm
-  -- valid until that first derivation.
+  -- placed note is unbounded: author endppq = util.OPEN. tm stamps the
+  -- open ceiling and a provisional raw note-off; the universal tail
+  -- pass derives the real tail (next onset / take length) every
+  -- rebuild.
   local function placeNewNote(col, update)
-    local prev, _, endppq = legato.place(col.events, update.ppq, length)
-    update.vel             = prev and prev.vel or cm:get('defaultVelocity')
-    update.endppq          = endppq
-    update.endppqL         = util.OPEN
-    update.lane            = col.lane
+    local prev    = legato.place(col.events, update.ppq, length)
+    update.vel    = prev and prev.vel or cm:get('defaultVelocity')
+    update.endppq = util.OPEN
+    update.lane   = col.lane
     if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
     update.evType = 'note'
     tm:addEvent(update)
@@ -2484,7 +2483,6 @@ ec = util.instantiate('editCursor', {
 clipboard = util.instantiate('clipboard', {
   ec = ec, grid = grid, tm = tm, cm = cm,
   currentRpb   = currentRpb,
-  assignTail   = assignTail,
   getCtx       = function() return ctx end,
   getLength    = function() return length end,
 })

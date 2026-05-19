@@ -156,7 +156,7 @@ return {
   },
 
   {
-    name = 'assignEvent: reopening (endppqL=util.OPEN) still swings the onset',
+    name = 'assignEvent: reopening (endppq=util.OPEN) still swings the onset',
     run = function()
       local p = probe()
       local h = seededHarness{
@@ -165,9 +165,9 @@ return {
           pitch = 60, vel = 100, uuid = 1 },
       }
       local n = h.tm:byUuid(1)
-      -- updToInstance's open shape: util.OPEN ceiling, provisional tail.
-      h.tm:assignEvent(n, { ppq = 300,
-                            endppqL = util.OPEN, endppq = 301 })
+      -- The reopen contract: author endppq = util.OPEN. tm stamps
+      -- endppqL = util.OPEN and a provisional raw tail.
+      h.tm:assignEvent(n, { ppq = 300, endppq = util.OPEN })
       h.tm:flush()
 
       local moved = h.fm:dump().notes[1]

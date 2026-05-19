@@ -2,7 +2,8 @@
 -- logical frame; um stamps ppqL with that value and overwrites ppq
 -- with raw via fromLogical(ppq) + delay before mm sees the record.
 
-local t = require('support')
+local t    = require('support')
+local util = require('util')
 
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 
@@ -100,6 +101,56 @@ return {
       local notes = h.fm:dump().notes
       -- raw = round(fromLogical(120)) + delayToPPQ(125) = 139 + 30 = 169.
       t.eq(notes[1].ppq, 169, 'raw forward-derived from evt.ppqL + new delay')
+    end,
+  },
+
+  -- util.OPEN is authored on endppq, not endppqL. The caller never
+  -- touches endppqL; tm stamps it and derives the realised tail.
+  {
+    name = 'addEvent: caller authors endppq=util.OPEN; tm derives the tail, caller sets no endppqL',
+    run = function(harness)
+      local h = harness.mk{ seed = { length = 1920, notes = {} } }
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = util.OPEN,
+                      chan = 1, pitch = 60, vel = 100 })
+      h.tm:flush()
+      local ev = h.tm:getChannel(1).columns.notes[1].events[1]
+      t.eq(ev.endppq,  util.OPEN, 'authored-open tail survives addEvent on endppq')
+      t.eq(ev.endppqC, 1920,      'tm derives the realised tail to take length')
+    end,
+  },
+
+  {
+    name = 'addEvent: open tail renders clipped to the next same-pitch onset, intent stays OPEN',
+    run = function(harness)
+      local h = harness.mk{ seed = { length = 1920, notes = {} } }
+      h.tm:addEvent({ evType = 'note', ppq = 0,   endppq = util.OPEN,
+                      chan = 1, pitch = 60, vel = 100 })
+      h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 600,
+                      chan = 1, pitch = 60, vel = 100 })
+      h.tm:flush()
+      local function at(p)
+        for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+          if e.ppq == p then return e end
+        end
+      end
+      t.eq(at(0).endppq,  util.OPEN, 'authored intent stays OPEN')
+      t.eq(at(0).endppqC, 480,       'render clips to the next same-pitch onset')
+    end,
+  },
+
+  {
+    name = 'assignEvent: endppq=util.OPEN reopens a finite note (caller sets no endppqL)',
+    run = function(harness)
+      local h = harness.mk{ seed = { length = 1920, notes = {
+        { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
+          chan = 1, pitch = 60, vel = 100 },
+      }}}
+      local n = h.tm:getChannel(1).columns.notes[1].events[1]
+      h.tm:assignEvent(n, { endppq = util.OPEN })
+      h.tm:flush()
+      local ev = h.tm:getChannel(1).columns.notes[1].events[1]
+      t.eq(ev.endppq,  util.OPEN, 'finite note reopened via endppq=util.OPEN')
+      t.eq(ev.endppqC, 1920,      'realised tail regrows to take length')
     end,
   },
 }

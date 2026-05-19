@@ -556,7 +556,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     else                     deleteLowlevel(evt) end
   end
 
-  --contract: update.ppq/endppq arrive logical; stamps ppqL, and stamps endppqL from the note-off only when the caller omitted it. A caller-supplied endppqL is authoritative: a finite ceiling, or util.OPEN to reopen an unbounded tail. update.rawTime=true is the explicit "caller already computed raw" bypass (reswing/rescale's plan-then-mutate): translation is skipped, only the delay-delta applies, and the flag is consumed here so it never reaches mm. ppqL/endppqL are intent stamps, NOT the bypass signal — a logical caller (groups) sets endppqL freely. See docs/timing.md.
+  --contract: update.ppq/endppq arrive logical. endppq is the authored ceiling: a finite logical value, or util.OPEN for a deliberately-unbounded tail. Stamps ppqL; stamps endppqL (util.OPEN→OPEN, else the logical ceiling) and derives a provisional raw note-off — the universal tail pass owns the real one. Callers never set endppqL; it is tm-private. update.rawTime=true is the explicit "caller already computed raw" bypass (reswing/rescale's plan-then-mutate): translation is skipped, only the delay-delta applies, and the flag is consumed here so it never reaches mm. See docs/timing.md.
   local function realiseNoteUpdate(evt, update)
     local dOld = delayToPPQ(evt.delay)
     local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
@@ -579,12 +579,17 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       update.ppq = evt.ppq + (dNew - dOld)
     end
     if update.endppq ~= nil then
-      -- endppq arrives logical. Stamp the ceiling from this note-off
-      -- only when the caller didn't author one: a finite endppqL, or
-      -- util.OPEN to reopen, is authoritative and rides through (the
-      -- provisional raw note-off is still derived below).
-      if update.endppqL == nil then update.endppqL = update.endppq end
-      update.endppq = tm:fromLogical(evt.chan, update.endppq)
+      -- endppq arrives logical and is the authored ceiling. util.OPEN
+      -- stamps an open ceiling + a provisional raw note-off (the tail
+      -- pass derives the real one); a finite value stamps the logical
+      -- ceiling and derives raw. update.ppq is already raw here.
+      if update.endppq == util.OPEN then
+        update.endppqL = util.OPEN
+        update.endppq  = update.ppq + 1
+      else
+        update.endppqL = update.endppq
+        update.endppq  = tm:fromLogical(evt.chan, update.endppq)
+      end
     end
   end
 
@@ -601,13 +606,17 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     evt.ppq  = tm:fromLogical(evt.chan, evt.ppqL,
                               withDelay and delayToPPQ(evt.delay or 0) or 0)
     if withEnd and evt.endppq ~= nil then
-      -- Stamp the ceiling from the note-off only when the caller didn't
-      -- author one. A supplied endppqL is authoritative and survives:
-      -- a finite intent carried through a clone (the re-author paths —
-      -- shiftEvents, paste, gm), or util.OPEN for a freshly-placed
-      -- unbounded note. The raw note-off is still derived.
-      if evt.endppqL == nil then evt.endppqL = evt.endppq end
-      evt.endppq = tm:fromLogical(evt.chan, evt.endppq)
+      -- evt.endppq is the authored ceiling. util.OPEN stamps an open
+      -- ceiling + a provisional raw note-off (the tail pass derives the
+      -- real one); a finite value stamps the logical ceiling and
+      -- derives raw. evt.ppq is already raw here.
+      if evt.endppq == util.OPEN then
+        evt.endppqL = util.OPEN
+        evt.endppq  = evt.ppq + 1
+      else
+        evt.endppqL = evt.endppq
+        evt.endppq  = tm:fromLogical(evt.chan, evt.endppq)
+      end
     end
   end
 
@@ -627,7 +636,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
   end
 
-  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical; stamps ppqL, stamps endppqL from the note-off only when the caller omitted it (a supplied endppqL — finite, or util.OPEN — is authoritative), rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent); consumed here so it never persists on the record or reaches mm.
+  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical. endppq is the authored ceiling (finite logical, or util.OPEN for an unbounded tail); stamps ppqL and endppqL (tm-private; callers never set it), rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent); consumed here so it never persists on the record or reaches mm.
   function addEvent(evt)
     local rawCaller = evt.rawTime
     evt.rawTime = nil

@@ -2,10 +2,12 @@
 -- `conform` marker and the group-frame legato passes are gone; tm's
 -- universal tail pass owns every realised note-off, pinned by
 -- tm_conform_tail_spec). gm's job is now narrow: carry INTENT into the
--- group frame and back out to siblings. A note's intent is its ceiling
--- (endppqL, anchor-rebased to a group `dur`) or open (endppqL ==
--- util.OPEN -- no ceiling, nil group dur). The realised endppq tm
--- derives never enters the frame.
+-- group frame and back out to siblings. It reads a concrete's intent
+-- from the tm-stamped endppqL (anchor-rebased to a group `dur`, or
+-- open == nil dur) and STAGES that intent back as endppq (finite, or
+-- util.OPEN); the real tm stamps endppqL and derives the realised
+-- tail. The fake tm does neither, so these tests assert the staged
+-- endppq, never a realised clip.
 --
 -- These tests pin that seam through the real preflush/reproject path
 -- with a faithful fake tm (it does NOT run the tail pass -- so it can
@@ -82,9 +84,9 @@ return {
 
       local copy = addAt(staged, 960)
       t.truthy(copy, 'sibling copy projected')
-      t.eq(copy.endppqL, 1200, 'ceiling rebased to anchor 960 (960+0+240)')
-      t.eq(copy.endppq,  1200, 'provisional raw endppq matches the ceiling')
-      t.truthy(copy.endppqL ~= util.OPEN, 'a finite note is not open')
+      t.eq(copy.endppq, 1200, 'intent ceiling staged on endppq, rebased to anchor 960 (960+0+240)')
+      t.eq(copy.endppqL, nil, 'gm stages endppq only; endppqL is tm-private')
+      t.truthy(copy.endppq ~= util.OPEN, 'a finite note is not open')
     end,
   },
 
@@ -98,8 +100,8 @@ return {
 
       local copy = addAt(staged, 960)
       t.truthy(copy, 'sibling copy projected')
-      t.eq(copy.endppqL, util.OPEN, 'open intent (util.OPEN) survives the round-trip')
-      t.eq(copy.endppq, 961, 'provisional onset+1 raw tail; tm derives the real one')
+      t.eq(copy.endppq, util.OPEN, 'open intent staged on endppq; tm derives the real tail')
+      t.eq(copy.endppqL, nil, 'gm stages endppq only; endppqL is tm-private')
     end,
   },
 
@@ -119,7 +121,7 @@ return {
       -- the birth endppq it arrived with. Its sibling copy is open.
       local sib = addAt(staged, 1200)                  -- 960 + 240
       t.truthy(sib, 'sibling copy of the created note projected')
-      t.eq(sib.endppqL, util.OPEN, 'a fresh create has no birth ceiling -> util.OPEN')
+      t.eq(sib.endppq, util.OPEN, 'a fresh create has no birth ceiling -> util.OPEN')
 
       -- A is NOT clipped in the group frame by the new onset: the
       -- group frame carries intent only; tm clips the realised tail.
@@ -129,7 +131,7 @@ return {
           if a.evt.pitch == 60 then aSib = a.update end
         end
       end
-      t.falsy(aSib and aSib.endppqL and aSib.endppqL ~= 1200,
+      t.falsy(aSib and aSib.endppq and aSib.endppq ~= 1200 and aSib.endppq ~= util.OPEN,
         'A keeps its own ceiling -- project never clips intent to the new onset')
     end,
   },

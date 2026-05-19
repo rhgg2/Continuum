@@ -131,12 +131,12 @@ return {
 
   ---------- PASTE TRUNCATE
 
-  -- F1 / Class A: when paste truncates a note that overhangs into the
-  -- paste region, both endppq and endppqL must be rewritten. Writing
-  -- only endppq leaves the tail off the logical grid even when frames
-  -- match.
+  -- Paste no longer pre-trims a note that overhangs into the paste
+  -- region: endppq is authored intent now. The note keeps its ceiling
+  -- (endppqL); tm's universal tail pass clips the realised endppq to
+  -- the pasted onset, and regrows it if the paste is later removed.
   {
-    name = 'pasteSingle truncating an overhanging note rewrites endppq AND endppqL',
+    name = 'pasteSingle does not shrink an overhung note: intent survives, tm clips the realised tail',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = {
@@ -158,14 +158,15 @@ return {
 
       local long = noteByPitch(h.fm:dump(), 60)
       t.truthy(long, 'long note survived')
-      t.eq(long.endppq,  240, 'truncated endppq lands at paste row')
-      t.eq(long.endppqL, 240, 'truncated endppqL written alongside endppq')
+      t.eq(long.endppq,  240, 'realised tail clipped to the pasted onset by tm')
+      t.eq(long.endppqL, 480, 'intent ceiling survives -- paste does not shrink it')
     end,
   },
 
-  -- F1 / Class A: same fix for multi-col paste's truncate-last branch.
+  -- Same for multi-col paste: the overhung notes keep their intent;
+  -- tm clips the realised tails to the pasted onset.
   {
-    name = 'pasteMulti truncating an overhanging note rewrites endppq AND endppqL',
+    name = 'pasteMulti does not shrink overhung notes: intent survives, tm clips the realised tails',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = {
@@ -193,10 +194,10 @@ return {
 
       local long1 = noteByPitch(h.fm:dump(), 60)
       local long2 = noteByPitch(h.fm:dump(), 64)
-      t.eq(long1.endppq,  240, 'chan-1 truncated endppq')
-      t.eq(long1.endppqL, 240, 'chan-1 truncated endppqL written')
-      t.eq(long2.endppq,  240, 'chan-2 truncated endppq')
-      t.eq(long2.endppqL, 240, 'chan-2 truncated endppqL written')
+      t.eq(long1.endppq,  240, 'chan-1 realised tail clipped by tm')
+      t.eq(long1.endppqL, 480, 'chan-1 intent ceiling survives')
+      t.eq(long2.endppq,  240, 'chan-2 realised tail clipped by tm')
+      t.eq(long2.endppqL, 480, 'chan-2 intent ceiling survives')
     end,
   },
 

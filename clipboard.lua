@@ -38,7 +38,6 @@ local grid         = deps.grid
 local tm           = deps.tm
 local cm           = deps.cm
 local currentRpb   = deps.currentRpb
-local assignTail   = deps.assignTail
 local getCtx       = deps.getCtx
 local getLength    = deps.getLength
 
@@ -63,18 +62,19 @@ local function collect()
     return p / logPerRow - r1
   end
 
-  -- Source duration is structural: endRow is the INTENT ceiling
-  -- (endppqL) in clip-row space, never the realised endppq tm clips
-  -- every rebuild. An open note (endppqL == util.OPEN) carries
-  -- endRow = util.OPEN; the paste site restamps the sentinel. A finite
-  -- note's materialised tail is clipped against the next same-column
-  -- event at the paste site.
+  -- Source duration is structural: endRow is the INTENT ceiling in
+  -- clip-row space, never the realised tail tm re-clips every rebuild.
+  -- The projected surface carries that intent on endppq (authored
+  -- logical, or util.OPEN). An open note carries endRow = util.OPEN;
+  -- the paste site restamps the sentinel onto endppq. A finite note's
+  -- materialised tail is clipped against the next same-column event at
+  -- the paste site.
   local function noteEvent(evt)
     local ce = util.clone(evt, CLIP_RESERVED)
     ce.row = rowOf(evt.ppq)
     if util.isNote(evt) then
-      ce.endRow = evt.endppqL == util.OPEN and util.OPEN
-                  or rowOf(evt.endppqL or evt.endppq)
+      ce.endRow = evt.endppq == util.OPEN and util.OPEN
+                  or rowOf(evt.endppq)
     end
     return ce
   end
@@ -218,12 +218,11 @@ local function pasteSingle(clip)
     local e = util.clone(ce, CLIP_ARTIFACTS)
     e.ppq = ppq
     if ce.endRow == util.OPEN then
-      e.endppqL, e.endppq = util.OPEN, ppq + 1
+      e.endppq = util.OPEN
     elseif ce.endRow then
-      -- endppqL is the intent; the fit-clip below trims only the
-      -- provisional realised endppq, which tm re-derives each rebuild.
-      e.endppqL = (r + ce.endRow) * logPerRow
-      e.endppq  = e.endppqL
+      -- Author the intent ceiling on endppq; tm stamps endppqL and
+      -- re-derives the realised tail every rebuild.
+      e.endppq = (r + ce.endRow) * logPerRow
     end
     util.add(events, e)
     ::nextCe::
@@ -240,17 +239,13 @@ local function pasteSingle(clip)
     local last = util.seek(dstCol.events, 'before', startppq)
     local currentVel = last and last.vel or cm:get('defaultVelocity')
 
-    local lastNote = util.seek(dstCol.events, 'before', startppq, util.isNote)
-    local nextNote = util.seek(dstCol.events, 'at-or-after', endppq, util.isNote)
-    local nextNotePpq = nextNote and nextNote.ppq or getLength()
     local lane = dstCol.lane
 
-    -- Delete in-region events directly: queueDeleteNotes' survivor-extension
-    -- fixup is for leaving a hole, but we're filling it. An extended lastNote
-    -- would overlap the new notes and force the allocator to spill on rebuild.
-    if lastNote and events[1] and lastNote.endppq > events[1].ppq then
-      assignTail(lastNote, dstCol.midiChan, events[1].ppq)
-    end
+    -- Delete in-region events directly: queueDeleteNotes' survivor-
+    -- extension fixup is for leaving a hole, but we're filling it. No
+    -- predecessor pre-trim: tm's universal tail pass clips the prior
+    -- note's realised tail to the pasted onset and regrows it if the
+    -- paste is later removed -- pre-trimming would shrink its intent.
     for evt in util.between(dstCol.events, startppq, endppq) do
       tm:deleteEvent(evt)
     end
@@ -262,7 +257,9 @@ local function pasteSingle(clip)
         currentVel = util.clamp(velList[vi].val, 1, 127)
         vi = vi + 1
       end
-      e.endppq = math.min(e.endppq, nextNotePpq)
+      -- No pre-trim of endppq: it is the authored intent now. tm's
+      -- universal tail pass clips the realised note-off against any
+      -- blocker; the intent survives so removing the blocker regrows.
       e.chan, e.vel, e.lane, e.rpb = dstCol.midiChan, currentVel, lane, rpb
       e.evType = 'note'
       tm:addEvent(e)
@@ -362,12 +359,11 @@ local function pasteMulti(clip)
         local e = util.clone(ce, CLIP_ARTIFACTS)
         e.ppq = ppq
         if ce.endRow == util.OPEN then
-          e.endppqL, e.endppq = util.OPEN, ppq + 1
+          e.endppq = util.OPEN
         elseif ce.endRow then
-          -- endppqL is the intent; the fit-clip below trims only the
-          -- provisional realised endppq, which tm re-derives.
-          e.endppqL = (cRow + ce.endRow) * logPerRow
-          e.endppq  = e.endppqL
+          -- Author the intent ceiling on endppq; tm stamps endppqL and
+          -- re-derives the realised tail every rebuild.
+          e.endppq = (cRow + ce.endRow) * logPerRow
         end
         util.add(events, e)
       end
@@ -376,15 +372,12 @@ local function pasteMulti(clip)
 
     -- Wipe existing events in the paste region. For notes, delete directly
     -- rather than via queueDeleteNotes — its survivor-extension fixup is for
-    -- leaving a hole, but we're filling it. An extended last-survivor would
-    -- overlap the new notes and force the allocator to spill on rebuild.
+    -- leaving a hole, but we're filling it. No predecessor pre-trim: tm's
+    -- universal tail pass clips the prior note's realised tail to the
+    -- pasted onset and regrows it if the paste is removed.
     -- Attached PAs cascade-delete with their host note.
     if dst then
       if r.type == 'note' then
-        local last = util.seek(dst.events, 'before', startppq, util.isNote)
-        if last and events[1] and last.endppq > events[1].ppq then
-          assignTail(last, r.chan, events[1].ppq)
-        end
         for evt in util.between(dst.events, startppq, endppq, util.isNote) do
           tm:deleteEvent(evt)
         end
@@ -395,21 +388,13 @@ local function pasteMulti(clip)
       end
     end
 
-    -- Fit-clip pasted notes against the next same-column event in the
-    -- destination. Source duration is preserved unless something stands
-    -- in the way; nothing → take length is the upper bound.
-    local capPPQ
-    if r.type == 'note' and dst then
-      local nn = util.seek(dst.events, 'at-or-after', endppq, util.isNote)
-      capPPQ = nn and nn.ppq or getLength()
-    end
-
-    -- Overlay destination identity onto the materialised clones.
+    -- Overlay destination identity onto the materialised clones. No
+    -- pre-trim of endppq: it is the authored intent; tm clips the
+    -- realised tail against any blocker and regrows it when that goes.
     local rpb = currentRpb()
     for _, e in ipairs(events) do
       e.chan, e.rpb = r.chan, rpb
       if r.type == 'note' then
-        e.endppq = math.min(e.endppq, capPPQ)
         e.lane   = r.lane
       elseif r.type == 'cc' then
         e.cc = r.ccNum
