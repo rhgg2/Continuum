@@ -842,8 +842,7 @@ cmgr:scope('tracker'):bindAll{
   nudgeCoarseDown = { {ImGui.Key_Minus, ImGui.Mod_Ctrl} },
   nudgeFineUp     = { {ImGui.Key_Equal, ImGui.Mod_Shift} },
   nudgeFineDown   = { {ImGui.Key_Minus, ImGui.Mod_Shift} },
-  addNoteCol     = { {ImGui.Key_N, ImGui.Mod_Ctrl} },
-  addTypedCol    = { {ImGui.Key_T, ImGui.Mod_Ctrl} },
+  addTypedCol    = { {ImGui.Key_RightArrow, ImGui.Mod_Ctrl} },
   doubleRPB      = { {ImGui.Key_Equal, ImGui.Mod_Super} },
   halveRPB       = { {ImGui.Key_Minus, ImGui.Mod_Super} },
   setRPB         = { {ImGui.Key_Z,     ImGui.Mod_Super} },
@@ -854,7 +853,7 @@ cmgr:scope('tracker'):bindAll{
   groupPaste        = { {ImGui.Key_V, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   groupLocalToggle  = { {ImGui.Key_M, ImGui.Mod_Super} },
   regionEnter       = { {ImGui.Key_R, ImGui.Mod_Super} },
-  hideExtraCol   = { {ImGui.Key_H, ImGui.Mod_Ctrl} },
+  hideExtraCol   = { {ImGui.Key_LeftArrow, ImGui.Mod_Ctrl} },
   inputOctaveUp   = { {ImGui.Key_8, ImGui.Mod_Shift} },
   inputOctaveDown = { ImGui.Key_Slash },
   inputSampleUp   = { {ImGui.Key_Period, ImGui.Mod_Shift} },  -- '>'
@@ -1244,12 +1243,12 @@ tracker:registerAll{
   end, 'Take properties' },
 
   addTypedCol = function()
-    openPrompt('Add Column', 'cc0-127, pb, at, pc, dly', function(typeStr)
+    openPrompt('Add Column', 'note, cc0-127, pb, at, pc, dly', function(typeStr)
       local type, idStr = typeStr:lower():match('^(%a+)(%d*)$')
       if not type then return end
       local id = idStr ~= '' and tonumber(idStr) or nil
       if type == 'dly' then tv:showDelay()
-      elseif util.oneOf('cc pb at pc', type) then
+      elseif util.oneOf('note cc pb at pc', type) then
         if type == 'cc' and (not id or id < 0 or id > 127) then return end
         tv:addExtraCol(type, id)
       end

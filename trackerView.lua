@@ -2120,7 +2120,6 @@ tracker:registerAll{
     local col = grid.cols[ec:col()]
     tm:playFrom(ctx:rowToPPQ(ec:row(), col and col.midiChan))
   end,
-  addNoteCol              = function() tv:addExtraCol('note') end,
   hideExtraCol            = function() tv:hideExtraCol() end,
   doubleRPB               = function() tv:setRowPerBeat(cm:get('rowPerBeat') * 2) end,
   halveRPB                = function() tv:setRowPerBeat(math.floor(cm:get('rowPerBeat') / 2)) end,

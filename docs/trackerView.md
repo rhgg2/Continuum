@@ -455,7 +455,7 @@ in a single `cmgr:registerAll` at construction. Categories:
 - **note shaping** — `growNote`, `shrinkNote`, `noteOff`,
   `nudgeForward/Back`, `nudgeCoarse/FineUp/Down`
 - **transport** — `play`, `stop`, `playPause`, `playFromTop/Cursor`
-- **column management** — `addNoteCol`, `hideExtraCol`
+- **column management** — `addTypedCol`, `hideExtraCol`
 - **display** — `doubleRPB`, `halveRPB`,
   `matchGridToCursor`, `inputOctaveUp/Down`, `inputSampleUp/Down`,
   `advBy0..9`

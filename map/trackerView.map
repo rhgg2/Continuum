@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2422  sha=7dae3ed  mode=chunk
+@module trackerView  src=trackerView.lua  loc=2421  sha=e73a809  mode=chunk
 @deps tm, cm, cmgr, gm
 
 # Invariants & contracts
@@ -42,11 +42,11 @@
   @state dupeState = nil  @ 1619
   @state groupSrc, groupDupState  @ 1626
   @state tracker = cmgr:scope('tracker')  @ 2079
-  @state rebuilding = false  @ 2141
-  @state groupBridge = {  @ 2286
-  @state GROUP_PASSTHROUGH = {  @ 2367
-  @state GROUP_KEEP = {}  @ 2376
-  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 2383
+  @state rebuilding = false  @ 2140
+  @state groupBridge = {  @ 2285
+  @state GROUP_PASSTHROUGH = {  @ 2366
+  @state GROUP_KEEP = {}  @ 2375
+  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 2382
 
 # Private functions
   @fn print(...)  @ 23
@@ -282,22 +282,22 @@
   @api tv:showDelay()  @ 2015
   -- Command table
   -- Rebuild
-  @api tv:rebuild(takeChanged)  @ 2144
+  @api tv:rebuild(takeChanged)  @ 2143
       @contract  reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
   -- Lifecycle
   -- Factory load
   -- Group quick-verb lifetimes
-  @api tv:wireGroupLifetime()  @ 2397
+  @api tv:wireGroupLifetime()  @ 2396
       -- Snapshot the source on copy + install the clear-on-mutation sweep.
       -- Must run AFTER every tracker command (tv's, clipboard's, ec's AND
       -- trackerPage's page verbs) registers, so the sweep covers page commands
       -- too -- trackerPage calls this once post-registration. copy is plain:
       -- clipboard:copy ends with ec:selClear(), so a doAfter snapshot would
       -- see an empty selection; doBefore captures the live rect.
-  @api tv:endGroupCascade()  @ 2410
+  @api tv:endGroupCascade()  @ 2409
       -- A mouse re-selection ends the cascade by hand (the mouse bypasses
       -- cmgr's keep-set sweep).
-  @api tv:endAllCascades()  @ 2415
+  @api tv:endAllCascades()  @ 2414
       -- A committed typed edit cancels every cascade and drops the groupPaste
       -- source, exactly as a non-keep cmgr command would -- editEvent is the
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).
