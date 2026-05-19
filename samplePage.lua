@@ -584,15 +584,6 @@ function sp:tick(take)
   lastProjectPath = pp
 end
 
---contract: opens a file dialog and assigns the chosen path to (take's track, slot); silent no-op on cancel; called by coord's tracker-scope command, not by sample-page UI
-function sp:loadSampleIntoSlot(take, slot)
-  local rv, path = reaper.GetUserFileNameForRead('', 'Load sample into current slot', '')
-  if rv and path ~= '' then
-    sm:assign(reaper.GetMediaItemTake_Track(take), slot, path,
-              reaper.GetProjectPath(0), cm)
-  end
-end
-
 --contract: acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
 function sp:focusState()
   if not ctx then return { suppressKbd = false, acceptCmds = false } end

@@ -101,14 +101,6 @@ local function refreshTakeFromReaper()
   return true
 end
 
---contract: owns the cross-cutting tracker-scope command (loadSampleAtCurrentSlot) but dispatches into samplePage which owns sm; coord never speaks sm directly
-cmgr:scope('tracker'):register('loadSampleAtCurrentSlot', function()
-  if not cm:get('trackerMode') then return end
-  if pages.sample and currentTake then
-    pages.sample:loadSampleIntoSlot(currentTake, cm:get('currentSample'))
-  end
-end)
-
 local function takeMidiHash()
   if not currentTake then return nil end
   local ok, h = reaper.MIDI_GetHash(currentTake, false)

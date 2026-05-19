@@ -1,4 +1,4 @@
-@module samplePage  src=samplePage.lua  loc=653  sha=69f289a  mode=chunk
+@module samplePage  src=samplePage.lua  loc=644  sha=fa4a61d  mode=chunk
 @deps cm, cmgr, chrome, gui, onPickTrack
 
 # Invariants & contracts
@@ -41,7 +41,7 @@
   @state toolbar  @ 395   -- lazy: chrome may be nil at construction in tests
   @state toolbarSegments = {  @ 398
   @state sp = {}  @ 441
-  @state sampler = cmgr:scope('sample')  @ 611
+  @state sampler = cmgr:scope('sample')  @ 602
       @invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])
 
 # Private functions
@@ -88,13 +88,11 @@
       @contract  unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
   @api sp:tick(take)  @ 576
       @contract  tick runs every frame regardless of active page — sm needs the tracker take to maintain isTrackerMode and the gmem mailbox; project-path migration runs only on actual change
-  @api sp:loadSampleIntoSlot(take, slot)  @ 588
-      @contract  opens a file dialog and assigns the chosen path to (take's track, slot); silent no-op on cancel; called by coord's tracker-scope command, not by sample-page UI
-  @api sp:focusState()  @ 597
+  @api sp:focusState()  @ 588
       @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
-  @api sp:handleInput()  @ 606
-  @api sp:save()  @ 607
-  @api sp:load()  @ 608
+  @api sp:handleInput()  @ 597
+  @api sp:save()  @ 598
+  @api sp:load()  @ 599
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -105,5 +103,3 @@
   @reaper GetMediaSourceSampleRate
   @reaper GetMediaSourceNumChannels
   @reaper new_array
-  @reaper GetUserFileNameForRead
-  @reaper GetMediaItemTake_Track

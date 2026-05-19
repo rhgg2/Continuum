@@ -859,7 +859,6 @@ cmgr:scope('tracker'):bindAll{
   inputOctaveDown = { ImGui.Key_Slash },
   inputSampleUp   = { {ImGui.Key_Period, ImGui.Mod_Shift} },  -- '>'
   inputSampleDown = { {ImGui.Key_Comma,  ImGui.Mod_Shift} },  -- '<'
-  loadSampleAtCurrentSlot = { {ImGui.Key_L, ImGui.Mod_Super} },
   playFromTop    = { ImGui.Key_F6 },
   playFromCursor = { ImGui.Key_F7 },
   openTemperPicker = { {ImGui.Key_T, ImGui.Mod_Super} },

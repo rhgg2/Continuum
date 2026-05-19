@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=304  sha=fa4a61d  mode=chunk
+@module coordinator  src=coordinator.lua  loc=296  sha=4a6bfb0  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
@@ -9,7 +9,6 @@
   @contract  state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
   @contract  first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
   @contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
-  @contract  owns the cross-cutting tracker-scope command (loadSampleAtCurrentSlot) but dispatches into samplePage which owns sm; coord never speaks sm directly
 
 # Shapes
   @shape  dispatchResult = { consumed: bool, commandHeld: bool }
@@ -33,7 +32,7 @@
       @contract  owns currentTake — refreshTakeFromReaper polls GetSelectedMediaItem→GetActiveTake→TakeIsMIDI, mutates currentTake only on a real MIDI take that differs (sticky on nothing-selected or non-MIDI), and returns true so the caller can rebind
   @state lastTakeHash = nil  @ 30
       @contract  external-mutation watcher — captured at end of every tracker-active frame; top-of-tick diff triggers tp:reloadFromReaper. Cleared on take swap (bind path is the reload). Nil disables the diff check (one-frame grace after swap/first activation).
-  @state coord = {}  @ 253
+  @state coord = {}  @ 245
       @contract  pages must be registered via coord:register(name,page); first registered becomes active
 
 # Private functions
@@ -46,26 +45,26 @@
   @fn dispatchKeys(state, cmgr, ctx)  @ 62
   -- Coordinator
   @fn refreshTakeFromReaper()  @ 94
-  @fn takeMidiHash()  @ 112
-  @fn tick()  @ 120
+  @fn takeMidiHash()  @ 104
+  @fn tick()  @ 112
       @contract  tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
       @contract  tracker-active branch — take swap takes priority (clears the watcher so the post-bind end-of-frame capture is the new baseline); otherwise a hash diff signals an external mutation (REAPER Ctrl-Z, external script) and we reload the bound take
-  @fn drawSwitcher()  @ 136
-  @fn dispatch(state)  @ 152
-  @fn frame()  @ 154
+  @fn drawSwitcher()  @ 128
+  @fn dispatch(state)  @ 144
+  @fn frame()  @ 146
 
 # Public API (coord:*)
-  @api coord:register(name, page)  @ 255
-  @api coord:setActive(name)  @ 261
+  @api coord:register(name, page)  @ 247
+  @api coord:setActive(name)  @ 253
       @contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack)
-  @api coord:setSamplerTrack(t)  @ 282
+  @api coord:setSamplerTrack(t)  @ 274
       @contract  stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
-  @api coord:togglePage()  @ 289
-  @api coord:reloadAfterExternalMutation()  @ 294
+  @api coord:togglePage()  @ 281
+  @api coord:reloadAfterExternalMutation()  @ 286
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:quit()  @ 300
-  @api coord:chrome()  @ 301
-  @api coord:run()  @ 302
+  @api coord:quit()  @ 292
+  @api coord:chrome()  @ 293
+  @api coord:run()  @ 294
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
