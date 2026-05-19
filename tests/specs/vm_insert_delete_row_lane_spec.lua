@@ -3,7 +3,8 @@
 -- rounds independently per event. Two diff-pitch col-mates sitting at
 -- exactly `lenient` pre-edit overlap can land past it post-shift.
 
-local t = require('support')
+local t    = require('support')
+local util = require('util')
 
 local classic58 = { { atom = 'classic', shift = 0.08, period = 1 } }
 
@@ -53,6 +54,41 @@ return {
       t.truthy((A.endppq - B.ppq) <= lenient,
                'A tail clipped within lenient: A.endppq=' .. A.endppq ..
                ', B.ppq=' .. B.ppq)
+    end,
+  },
+
+  {
+    -- Regression: an open-tailed note (endppq == util.OPEN) shifted by
+    -- insertRow. shiftPlan must NOT do arithmetic on the OPEN sentinel
+    -- (math.min(util.OPEN + dLogical, ...) throws); the authored tail
+    -- stays open across the shift and tm re-derives the realised
+    -- note-off. Pre-fix this test errors in shiftPlan.
+    name = 'insertRow over an open-tailed note keeps endppq == util.OPEN',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 240, endppq = 480, ppqL = 240, endppqL = util.OPEN,
+              chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0,
+              lane = 1, rpb = 4 },
+          },
+        },
+      }
+      h.vm:setGridSize(80, 40)
+
+      h.ec:setPos(0, 1, 1)
+      h.cmgr:invoke('insertRow')
+
+      local note
+      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if e.pitch == 60 then note = e end
+      end
+      t.truthy(note, 'open note survives insertRow')
+      t.eq(note.endppq, util.OPEN,
+           'authored tail stays open across the shift')
+      t.truthy(note.ppq > 240,
+           'onset shifted down by the inserted row (ppq=' ..
+           tostring(note.ppq) .. ')')
     end,
   },
 

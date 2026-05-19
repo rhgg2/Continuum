@@ -53,10 +53,7 @@ local ec, clipboard, ctx
 
 ----- Note geometry (used by editing, adjust*, nudge, quantizeKeepRealised)
 
--- A conform note's stored tail is an intended overrun (tm owns the
--- realised clip); it must never act as a real tail in vm overlap
--- geometry. Effective end for that geometry is its onset.
-local function tailEnd(e) return e.conform and e.ppq or e.endppq end
+local function tailEnd(e) return e.endppq end
 
 -- prev maximises (effective) endppq; nxt minimises ppq.
 local function neighbourEvents(cols, ppq, pred)
@@ -1337,15 +1334,15 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
   -- shift only real events and leave fake pbs to tm's reconcile.
   local function notFake(e) return not e.fake end
 
-  -- A conform note's raw endppq is the clipped realisation tm owns, NOT
-  -- its length; shifting that and writing it back would clobber the
-  -- natural endppqL. Source the conform tail from endppqL and let
-  -- conform-tail re-clip the raw after the shift.
+  -- An open authored tail stays open across the shift; a finite ceiling
+  -- shifts with the note, UNCLAMPED — endppq is authored intent, not a
+  -- realised value. tm's universal tail pass owns clipping (against take
+  -- length and same-pitch onsets); clamping here would shrink intent.
   local function shiftPlan(col, e, dLogical)
     local entry = { col = col, e = e, newppq = e.ppq + dLogical }
     if util.isNote(e) then
-      local tail = (e.conform and e.endppqL) or e.endppq
-      entry.newEndppq = math.min(tail + dLogical, length)
+      entry.newEndppq = e.endppq == util.OPEN and util.OPEN
+                        or e.endppq + dLogical
     end
     return entry
   end

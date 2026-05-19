@@ -10,6 +10,9 @@
 - fix swing editor not loading current swing
 - groups small highlight at caret
 - fix prefix argument / scale
+- undo for groups feature / swing / tuning changes
+- audit token
+- can ppq logical be float everywhere?
 
   Reframing to "what a competent tracker offers that Continuum's
   tracker doesn't" — and discounting what's REAPER's job (transport,
