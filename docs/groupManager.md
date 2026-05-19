@@ -299,9 +299,11 @@ because `groupId` is stable and persisted, so deleting a group never
 recolours the survivors. Colour carries group *identity*; the per-cell
 `overridden`/`conflicted` overlay is a louder coat on top — divergence
 read against the group's own hue, never instead of it (hence its
-heavier alpha, so it stays legible over the wash). A plain instance has
-no border: the shade alone says "member". Only the active group, or any
-conflicted one (an alarm that must always show), gets the hue outline.
-The `x=-1` gutter slot is a containment affordance — it lights only
-when the cursor is genuinely inside the instance (a member stream at
-the cursor column ∧ ppq within the span), not merely sharing a row.
+heavier alpha, so it stays legible over the wash). A member instance
+shows only the wash. Outside region mode the instance the caret sits
+inside gains a 1px hue outline — a quiet "you are here". In region mode
+that gives way to the region-cursor instance's 2px outline plus the
+`x=-1` gutter slot, which lights only when the cursor is genuinely
+inside the instance (a member stream at the cursor column ∧ ppq within
+the span), not merely sharing a row. A conflicted instance always
+outlines in any mode — an alarm that must always show.

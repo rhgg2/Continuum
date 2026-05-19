@@ -597,9 +597,11 @@ local function drawTracker()
   -- wash. A per-group hue washes the whole instance area (membership =
   -- selected streams x time span); overridden/conflicted cells
   -- overpaint a louder state colour. The wash is always on (group viz);
-  -- the region-cursor instance's border + the x=-1 cursor gutter are
-  -- region-mode affordances, shown only while authoring. A conflicted
-  -- instance always outlines -- a data problem worth seeing in any mode.
+  -- the region-cursor instance's 2px border + the x=-1 cursor gutter
+  -- are region-mode affordances, shown only while authoring. Outside
+  -- region mode the instance the caret sits inside gets a quieter 1px
+  -- border (a "you are here"). A conflicted instance always outlines --
+  -- a data problem worth seeing in any mode.
   local logPerRow = tv:logPerRow()
   local cursorPpq = cursorRow * logPerRow
   local inRegion  = tv:ec():isInRegionMode()
@@ -637,7 +639,8 @@ local function drawTracker()
       if xMin then
         local isCursorInst = rc and rc.groupId == inst.groupId
                                 and rc.instId == inst.instId
-        if conflicted or isCursorInst then
+        local plainCursorIn = cursorIn and not inRegion
+        if conflicted or isCursorInst or plainCursorIn then
           local outCol = chrome.colour(groups.outlineKey(
             conflicted and 'conflicted' or 'synced', inst.colour))
           ImGui.DrawList_AddRect(drawList,
