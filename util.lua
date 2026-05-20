@@ -39,8 +39,8 @@ end
 
 util.REMOVE = { }
 
---invariant: util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL. A plain string (not a table like REMOVE) so it round-trips serialise/unserialise by value and stays ==-comparable across a take reload. endppqL is otherwise numeric, so the string is unambiguous; readers feeding endppqL into arithmetic map OPEN to math.huge at that one site.
-util.OPEN = 'open'
+--invariant: util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. It is math.huge, so arithmetic on an open tail just works (inf + finite = inf, inf > finite = true) — callers no longer special-case the sentinel except to communicate intent. util.serialise/unserialise round-trip the non-finite floats via explicit inf/-inf/nan literals so the on-disk form is stable. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL.
+util.OPEN = math.huge
 
 --contract: values equal to util.REMOVE clear the key from t1 instead of being assigned
 function util.assign(t1,t2)
@@ -280,7 +280,15 @@ function util.serialise(value, exclude, seen)
   exclude = exclude or { }
   local t = type(value)
 
-  if t == 'number' or t == 'boolean' then
+  if t == 'number' then
+    -- tostring of inf/nan is platform-dependent (libc printf %g); pin the
+    -- wire form so unserialise can recognise it without ambiguity.
+    if value ~= value then return 'nan' end
+    if value ==  math.huge then return 'inf' end
+    if value == -math.huge then return '-inf' end
+    return tostring(value)
+
+  elseif t == 'boolean' then
     return tostring(value)
 
   elseif t == 'string' then
@@ -360,6 +368,8 @@ function util.unserialise(input)
 
     local n = tonumber(s)
     if n then return n end
+    if s == 'inf'  then return  math.huge end
+    if s == '-inf' then return -math.huge end
     if s == 'true' then return true end
     if s == 'false' then return false end
     return s

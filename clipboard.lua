@@ -65,16 +65,14 @@ local function collect()
   -- Source duration is structural: endRow is the INTENT ceiling in
   -- clip-row space, never the realised tail tm re-clips every rebuild.
   -- The projected surface carries that intent on endppq (authored
-  -- logical, or util.OPEN). An open note carries endRow = util.OPEN;
-  -- the paste site restamps the sentinel onto endppq. A finite note's
-  -- materialised tail is clipped against the next same-column event at
-  -- the paste site.
+  -- logical, or util.OPEN = inf). An open note's endRow stays inf
+  -- through rowOf; the paste site clips finite tails against the next
+  -- same-column event.
   local function noteEvent(evt)
     local ce = util.clone(evt, CLIP_RESERVED)
     ce.row = rowOf(evt.ppq)
     if util.isNote(evt) then
-      ce.endRow = evt.endppq == util.OPEN and util.OPEN
-                  or rowOf(evt.endppq)
+      ce.endRow = rowOf(evt.endppq)
     end
     return ce
   end
@@ -217,11 +215,10 @@ local function pasteSingle(clip)
     if ctx:rowToPPQ(r + ce.row, chan) >= endppq then goto nextCe end
     local e = util.clone(ce, CLIP_ARTIFACTS)
     e.ppq = ppq
-    if ce.endRow == util.OPEN then
-      e.endppq = util.OPEN
-    elseif ce.endRow then
+    if ce.endRow then
       -- Author the intent ceiling on endppq; tm stamps endppqL and
-      -- re-derives the realised tail every rebuild.
+      -- re-derives the realised tail every rebuild. util.OPEN = inf
+      -- rides through arithmetic and lands back as inf on endppq.
       e.endppq = (r + ce.endRow) * logPerRow
     end
     util.add(events, e)
@@ -358,11 +355,10 @@ local function pasteMulti(clip)
       if ctx:rowToPPQ(cRow + ce.row, r.chan) < endppq then
         local e = util.clone(ce, CLIP_ARTIFACTS)
         e.ppq = ppq
-        if ce.endRow == util.OPEN then
-          e.endppq = util.OPEN
-        elseif ce.endRow then
+        if ce.endRow then
           -- Author the intent ceiling on endppq; tm stamps endppqL and
-          -- re-derives the realised tail every rebuild.
+          -- re-derives the realised tail every rebuild. util.OPEN = inf
+          -- rides through arithmetic and lands back as inf on endppq.
           e.endppq = (cRow + ce.endRow) * logPerRow
         end
         util.add(events, e)

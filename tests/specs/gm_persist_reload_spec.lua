@@ -52,10 +52,10 @@ local function rect(ppq, chan)
 end
 
 -- Round-trips the persisted blob through util.serialise/unserialise, as
--- the real take tier does. A group note left open at its lane tail must
--- not be stored as math.huge: it serialises to "inf", which Lua's
--- tonumber refuses, so unserialise hands back the string and reload
--- crashes in mirror.project (number + "inf").
+-- the real take tier does. util.OPEN (= math.huge) round-trips by an
+-- explicit "inf" literal, so an open lane tail survives the reload as a
+-- number, not a string. The group frame still uses nil-dur to express
+-- "open" (no ceiling), independent of how endppqL is persisted.
 local function serialisingCm()
   local store = {}
   return {

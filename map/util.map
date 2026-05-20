@@ -1,7 +1,7 @@
-@module util  src=util.lua  loc=433  sha=4a6bfb0  mode=namespace
+@module util  src=util.lua  loc=443  sha=36ed5a5  mode=namespace
 
 # Invariants & contracts
-  @invariant  util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL. A plain string (not a table like REMOVE) so it round-trips serialise/unserialise by value and stays ==-comparable across a take reload. endppqL is otherwise numeric, so the string is unambiguous; readers feeding endppqL into arithmetic map OPEN to math.huge at that one site.
+  @invariant  util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. It is math.huge, so arithmetic on an open tail just works (inf + finite = inf, inf > finite = true) — callers no longer special-case the sentinel except to communicate intent. util.serialise/unserialise round-trip the non-finite floats via explicit inf/-inf/nan literals so the on-disk form is stable. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL.
 
 # Module-level constants
   @const util = {}  @ 5
@@ -12,7 +12,7 @@
 # Private functions
   @fn print(...)  @ 15
   @fn escape_string(s)  @ 150
-  @fn parseValue()  @ 406
+  @fn parseValue()  @ 416
 
 # Public API (util.*)
   @api util.print(...)  @ 7
@@ -55,9 +55,9 @@
       @contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v
   @api util.serialise(value, exclude, seen)  @ 279
       @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
-  @api util.unserialise(input)  @ 314
+  @api util.unserialise(input)  @ 322
       @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
-  @api util.instantiate(name, deps)  @ 425
+  @api util.instantiate(name, deps)  @ 435
       @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
 
 # REAPER API surface

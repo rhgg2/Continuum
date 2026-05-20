@@ -1230,8 +1230,9 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
   local function shiftPlan(col, e, dLogical)
     local entry = { col = col, e = e, newppq = e.ppq + dLogical }
     if util.isNote(e) then
-      entry.newEndppq = e.endppq == util.OPEN and util.OPEN
-                        or e.endppq + dLogical
+      -- util.OPEN = inf: inf + dLogical = inf, so an open tail stays open
+      -- across the shift without a sentinel guard.
+      entry.newEndppq = e.endppq + dLogical
     end
     return entry
   end
