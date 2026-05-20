@@ -15,8 +15,10 @@ local ImGui = require 'imgui' '0.10'
 
 local cm, cmgr, gui = (...).cm, (...).cmgr, (...).gui
 local ctx, uiFont   = gui.ctx, gui.uiFont
+local uiSize        = gui.fontSize.ui
 
-local chrome = util.instantiate('chrome', { cm = cm, ctx = ctx })
+local chrome = util.instantiate('chrome',
+  { cm = cm, ctx = ctx, uiFontBold = gui.uiFontBold, uiSize = uiSize })
 
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 
@@ -136,9 +138,9 @@ local function drawSwitcher()
     end
     if isActive then ImGui.PopStyleColor(ctx, 1) end
   end
-  pageButton('Tracker', 'tracker')
+  pageButton('T', 'tracker')
   ImGui.SameLine(ctx, 0, 4)
-  pageButton('Sample',  'sample')
+  pageButton('S', 'sample')
 end
 
 local function dispatch(state) return dispatchKeys(state, cmgr, ctx) end
@@ -147,7 +149,7 @@ local function frame()
   tick()
   local page = pages[active]
 
-  ImGui.PushFont(ctx, uiFont, 13)
+  ImGui.PushFont(ctx, uiFont, uiSize)
   ImGui.PushStyleColor(ctx, ImGui.Col_WindowBg,     chrome.colour('bg'))
   ImGui.PushStyleColor(ctx, ImGui.Col_TitleBg,      chrome.colour('toolbar.bg'))
   ImGui.PushStyleColor(ctx, ImGui.Col_TitleBgActive,chrome.colour('toolbar.bg'))

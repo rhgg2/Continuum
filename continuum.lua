@@ -40,12 +40,29 @@ local function createImGui()
 
   local osName = reaper.GetOS()
   local font   = ImGui.CreateFont('Source Code Pro')
-  local uiFont = (osName:find('OSX') or osName:find('mac'))
-               and ImGui.CreateFontFromFile('/System/Library/Fonts/SFNS.ttf')
-               or  ImGui.CreateFont(osName:find('Win') and 'Segoe UI' or 'sans-serif')
+  local isMac  = osName:find('OSX') or osName:find('mac')
+  local sfns   = '/System/Library/Fonts/SFNS.ttf'
+  local family = osName:find('Win') and 'Segoe UI' or 'sans-serif'
+  local uiFont     = isMac and ImGui.CreateFontFromFile(sfns)
+                           or  ImGui.CreateFont(family)
+  -- FontFlags_Bold is rasterizer-simulated, so the same family/file
+  -- gives a usable bold without shipping a separate face.
+  local uiFontBold = isMac and ImGui.CreateFontFromFile(sfns, 0, ImGui.FontFlags_Bold)
+                           or  ImGui.CreateFont(family, ImGui.FontFlags_Bold)
   ImGui.Attach(ctx, font)
   ImGui.Attach(ctx, uiFont)
-  return {ctx = ctx, font = font, uiFont = uiFont}
+  ImGui.Attach(ctx, uiFontBold)
+  -- Chrome (toolbar, status, popups, swing editor) all scale off the
+  -- grid size so the two registers stay in proportion if either moves.
+  local GRID_SIZE = 15
+  local UI_SIZE   = math.floor(GRID_SIZE * 4 / 5)
+  return {
+    ctx        = ctx,
+    font       = font,
+    uiFont     = uiFont,
+    uiFontBold = uiFontBold,
+    fontSize   = { grid = GRID_SIZE, ui = UI_SIZE },
+  }
 end
 
 --contract: Main builds the manager stack bottom-up with no take, then enters the defer loop via coord:run(); the coordinator picks up the user's MIDI selection on its first tracker-page tick

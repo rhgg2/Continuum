@@ -316,8 +316,8 @@ local toolbarSegments = {
     render = function()
       local rowPerBeat = cm:get('rowPerBeat')
       ImGui.AlignTextToFramePadding(ctx)
-      ImGui.Text(ctx, 'Rows/beat:')
-      ImGui.SameLine(ctx, 0, 12)
+      chrome.headingLabel('RPB')
+      ImGui.SameLine(ctx, 0, 8)
       local textW = ImGui.CalcTextSize(ctx, '32')
       local btnW  = ImGui.GetFrameHeight(ctx)
       ImGui.SetNextItemWidth(ctx, textW + btnW * 2 + 16)
@@ -330,19 +330,15 @@ local toolbarSegments = {
     end,
   },
   {
-    id = 'graph',
-    render = function()
-      local cv, newVis = chrome.checkbox('  Graph', cm:get('laneStrip.visible'))
-      if cv then cm:set('global', 'laneStrip.visible', newVis) end
-    end,
-  },
-  {
     id = 'tuning',
     render = function()
+      chrome.headingLabel('Tuning')
+      ImGui.SameLine(ctx, 0, 8)
       local cur = cm:get('temper')
       chrome.drawPicker {
-        kind        = 'temper', heading = 'Tuning',
+        kind        = 'temper',
         buttonLabel = cur or 'Off',
+        width       = 120,
         items       = libPickerItems(cur, cm:get('tempers'), tuning.presets),
         onPick      = pickTemper,
       }
@@ -351,11 +347,14 @@ local toolbarSegments = {
   {
     id = 'swing',
     render = function()
+      chrome.headingLabel('Swing')
+      ImGui.SameLine(ctx, 0, 8)
       do
         local cur = cm:get('swing')
         chrome.drawPicker {
-          kind        = 'swing', heading = 'Swing',
+          kind        = 'swing', heading = 'Take',
           buttonLabel = cur == 'identity' and 'Off' or cur,
+          width       = 120,
           items       = chrome.libPicker('swings', cur, SWING_PRESET_EXCLUDE),
           onPick      = pickSwing,
         }
@@ -367,8 +366,9 @@ local toolbarSegments = {
       chrome.disabledIf(not chan, function()
         local cur = chan and cm:get('colSwing')[chan] or nil
         chrome.drawPicker {
-          kind        = 'colSwing', heading = 'Ch swing',
+          kind        = 'colSwing', heading = 'Ch',
           buttonLabel = cur or 'Off',
+          width       = 120,
           items       = chrome.libPicker('swings', cur, SWING_PRESET_EXCLUDE),
           onPick      = function(name) pickColSwing(chan, name) end,
         }
@@ -379,6 +379,15 @@ local toolbarSegments = {
     id      = 'sample',
     visible = function() return cm:get('trackerMode') end,
     render  = function() drawSampleDropdown() end,
+  },
+  {
+    id = 'graph',
+    render = function()
+      chrome.headingLabel('Graph')
+      ImGui.SameLine(ctx, 0, 8)
+      local cv, newVis = chrome.checkbox('##', cm:get('laneStrip.visible'))
+      if cv then cm:set('global', 'laneStrip.visible', newVis) end
+    end,
   },
 }
 
@@ -1386,7 +1395,7 @@ function tp:renderBody(_, w, h, dispatch)
     -- while it's still set; render is what clears it on Enter/Cancel.
     -- Same ordering as the main path: dispatch → drawModal.
     if dispatch then dispatch(self:focusState()) end
-    ImGui.PushFont(ctx, uiFont, 13)
+    ImGui.PushFont(ctx, uiFont, gui.fontSize.ui)
     swingEditor:render(w, h)
     ImGui.PopFont(ctx)
     return

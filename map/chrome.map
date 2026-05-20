@@ -1,9 +1,9 @@
-@module chrome  src=chrome.lua  loc=324  sha=4a6bfb0  mode=chunk
-@deps cm, ctx
+@module chrome  src=chrome.lua  loc=344  sha=111654f  mode=chunk
+@deps cm, ctx, uiFontBold, uiSize
 
 # Shapes
-  @shape  chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
-  @shape  pickerSpec = { kind: string, heading: string, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
+  @shape  chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+  @shape  pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
   @shape  toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
 
 # Imports
@@ -12,40 +12,43 @@
       @invariant  colour cache lives on the chrome instance and is invalidated on cm:configChanged
 
 # Private state
-  @state cache = {}  @ 11
-  @state pickerFilter, pickerCursor = {}, {}  @ 160
-  @state pickerOpenReq = nil  @ 161   -- kind name; consumed by next drawPicker(kind)
-  @state pickerActive = false  @ 162   -- frame-scoped: any picker popup live this frame
+  @state cache = {}  @ 13
+  @state pickerFilter, pickerCursor = {}, {}  @ 175
+  @state pickerOpenReq = nil  @ 176   -- kind name; consumed by next drawPicker(kind)
+  @state pickerActive = false  @ 177   -- frame-scoped: any picker popup live this frame
 
 # Private functions
-  @fn resolve(key)  @ 15
+  @fn resolve(key)  @ 17
       @contract  walks colour aliases (see docs/configManager.md) to a terminal atom; outermost alpha override wins; cycles raise with the resolved chain
-  @fn colour(name)  @ 36
-  @fn pushChromeStyles()  @ 45
-  @fn popChromeStyles()  @ 62
-  @fn pushChromeWindow()  @ 68
+  @fn colour(name)  @ 38
+  @fn pushChromeStyles()  @ 47
+  @fn popChromeStyles()  @ 64
+  @fn pushChromeWindow()  @ 70
       -- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed the grid through.
-  @fn popChromeWindow()  @ 79
-  @fn verticalSeparator()  @ 87
+  @fn popChromeWindow()  @ 81
+  @fn verticalSeparator()  @ 89
       -- reaper-imgui has no Separator(Vertical); draw a 1px vertical line
       -- via the window draw list and reserve a Dummy slot so SameLine works.
-  @fn disabledIf(cond, fn)  @ 97
+  @fn disabledIf(cond, fn)  @ 99
       -- RAII wrapper for ImGui.BeginDisabled / EndDisabled: dropping the
       -- bracket-match removes a class of mismatched-pop bugs on early return.
-  @fn checkbox(label, value)  @ 106
+  @fn checkbox(label, value)  @ 108
       -- Compact checkbox / radio for toolbar contexts: zero FramePadding
       -- shrinks the box to its glyph; the +3 cursorY nudge re-aligns the
       -- small box with framed siblings on the same row.
-  @fn radio(label, active)  @ 114
-  @fn makeToolbar()  @ 126
+  @fn radio(label, active)  @ 116
+  @fn headingLabel(text)  @ 126
+      -- Section label for toolbar segments: bold + uppercase + dimmed so it
+      -- reads as a heading and not a control. Caller follows with SameLine.
+  @fn makeToolbar()  @ 141
       -- Wraps each segment in BeginGroup/EndGroup so GetItemRectMin/Max measures the whole
       -- segment. Caches last-frame width per id; if (lastEnd + sep + cached) overflows the
       -- row, the leading SameLine is skipped and ImGui wraps. One-frame slop on size change.
   -- Picker (typeahead popup, shared across pages)
-  @fn requestPickerOpen(kind)  @ 164
-  @fn pickerIsActive()  @ 165
-  @fn resetPickerActive()  @ 166
-  @fn libPicker(key, current, excludeOthers)  @ 176
+  @fn requestPickerOpen(kind)  @ 179
+  @fn pickerIsActive()  @ 180
+  @fn resetPickerActive()  @ 181
+  @fn libPicker(key, current, excludeOthers)  @ 191
       -- Build the picker-item list for a library-shaped cm key (e.g. 'swings',
       -- 'tempers'). Three groups, in order:
       --   1. Off    — nil key.
@@ -54,6 +57,6 @@
       --      `+` prefix, marking "available but not yet localized to project".
       -- excludeOthers is a set of names to filter out of group 3 only — used
       -- to hide `id` from the swing picker (already covered by Off).
-  @fn drawPicker(d)  @ 205
+  @fn drawPicker(d)  @ 220
       -- Generic typeahead picker. Enter picks the highlighted match; group
       -- separators show only when filter is empty.

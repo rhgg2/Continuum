@@ -1,12 +1,14 @@
 -- See docs/chrome.md for the model.
 
---shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
---shape: pickerSpec = { kind: string, heading: string, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
+--shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+--shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
 local ImGui = require 'imgui' '0.10'
 
-local cm, ctx = (...).cm, (...).ctx
+local cm, ctx       = (...).cm, (...).ctx
+local uiFontBold    = (...).uiFontBold
+local uiSize        = (...).uiSize
 
 local cache = {}
 cm:subscribe('configChanged', function() cache = {} end)
@@ -119,6 +121,17 @@ local function radio(label, active)
   return pressed
 end
 
+-- Section label for toolbar segments: bold + uppercase + dimmed so it
+-- reads as a heading and not a control. Caller follows with SameLine.
+local function headingLabel(text)
+  local r, g, b, a = ImGui.ColorConvertU32ToDouble4(colour('toolbar.text'))
+  local dim = ImGui.ColorConvertDouble4ToU32(r, g, b, a * 0.55)
+  ImGui.PushStyleColor(ctx, ImGui.Col_Text, dim)
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, text)
+  ImGui.PopStyleColor(ctx, 1)
+end
+
 --shape: toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
 -- Wraps each segment in BeginGroup/EndGroup so GetItemRectMin/Max measures the whole
 -- segment. Caches last-frame width per id; if (lastEnd + sep + cached) overflows the
@@ -206,9 +219,13 @@ local function drawPicker(d)
   local popupId = '##picker_' .. d.kind
 
   -- Heading inherits the toolbar's outer Col_Text push; no inner push.
-  ImGui.AlignTextToFramePadding(ctx)
-  ImGui.Text(ctx, d.heading .. ':  ')
-  ImGui.SameLine(ctx)
+  -- Optional: callers that want a section-label register render the
+  -- heading themselves via headingLabel and pass heading=nil.
+  if d.heading then
+    ImGui.AlignTextToFramePadding(ctx)
+    ImGui.Text(ctx, d.heading .. ':')
+    ImGui.SameLine(ctx)
+  end
 
   -- ##d.kind disambiguates the ImGui ID — different pickers may all
   -- show the same buttonLabel once the heading is no longer in the ID.
@@ -314,6 +331,7 @@ return {
   disabledIf         = disabledIf,
   checkbox           = checkbox,
   radio              = radio,
+  headingLabel       = headingLabel,
   makeToolbar        = makeToolbar,
   drawPicker         = drawPicker,
   libPicker          = libPicker,
