@@ -14,7 +14,14 @@ local t = require('support')
 
 return {
 
-  -- F3 #3: tm:addEvent must not shift endppq by delay.
+  -- F3 #3: tm:addEvent must not shift endppq by delay. Caller's
+  -- endppq is authored intent (logical ceiling); realiseAddPpq stamps
+  -- it as endppqL and derives raw via fromLogical(endppqL) -- the
+  -- delay is NOT applied to the note-off. Step 4.8's raw-frame floor
+  -- (no negative-duration MIDI) then clips endppq to ppq+1 when the
+  -- forward delay shoves the realised note-on past the authored
+  -- ceiling -- a degenerate 1-tick note rather than the bug-shape
+  -- where endppq itself drifted by delay.
   {
     name = 'F3 #3: tm:addEvent with delay≠0 leaves endppq at caller value',
     run = function(harness)
@@ -29,9 +36,10 @@ return {
 
       local n = h.fm:dump().notes[1]
       t.truthy(n, 'note added')
-      t.eq(n.delay,  500, 'delay survives')
-      t.eq(n.ppq,    220, 'realised onset = caller ppq + delayToPPQ(delay)')
-      t.eq(n.endppq, 200, 'endppq unchanged — F3 (was 320 pre-fix)')
+      t.eq(n.delay,   500, 'delay survives')
+      t.eq(n.ppq,     220, 'realised onset = caller ppq + delayToPPQ(delay)')
+      t.eq(n.endppqL, 200, 'endppqL unchanged — addEvent did not shift intent by delay')
+      t.eq(n.endppq,  221, 'realised endppq floored at ppq+1 (forward delay pushed onset past authored ceiling)')
     end,
   },
 

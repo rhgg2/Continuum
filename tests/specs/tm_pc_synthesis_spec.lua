@@ -152,10 +152,15 @@ return {
     end,
   },
 
-  ----- Toggle-on derives sample from prevailing PC
+  ----- External notes do NOT inherit sample from the prevailing PC
 
+  -- Foreign MIDI (no ppqL/lane stamp) gets sample=0 at step 6, not the
+  -- prevailing-PC value. External MIDI doesn't carry tracker semantics,
+  -- so an arbitrary PC predating the note isn't a meaningful sample
+  -- assignment for it. Regression guard against re-adding PC-lookup
+  -- backfill.
   {
-    name = 'enabling trackerMode seeds note.sample from the prevailing PC',
+    name = 'external note enters trackerMode with sample=0 (no PC inheritance)',
     run = function(harness)
       local h = harness.mk{
         seed = {
@@ -165,14 +170,11 @@ return {
         config = { transient = { trackerMode = true } },
       }
       local n = h.fm:dump().notes[1]
-      t.eq(n.sample, 11, 'sample seeded from PC at-or-before realised onset')
-      -- Synthesised PC at the note's realised onset, val = derived sample.
+      t.eq(n.sample, 0, 'external note seeded with sample=0, not the prevailing PC value')
       local pcs = pcsOnChan(h.fm:dump(), 1)
-      -- The pre-existing PC at ppq 0 should not have been duplicated;
-      -- the synthesis only emits one PC per realised note onset.
       local atNoteOnset
       for _, p in ipairs(pcs) do if p.ppq == 240 then atNoteOnset = p end end
-      t.eq(atNoteOnset and atNoteOnset.val, 11, 'PC emitted at note onset')
+      t.eq(atNoteOnset and atNoteOnset.val, 0, 'synthesised PC at note onset reads the note sample (0)')
     end,
   },
 

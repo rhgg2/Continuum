@@ -1095,14 +1095,16 @@ do
     return true
   end
 
-  --contract: a stamped note (ppqL ~= nil) is model-governed -- the universal tail pass clips its realised note-off to its lane neighbour so it cannot overlap; its authored lane is returned verbatim, extending notes[] if absent. Only an unstamped raw note (ppqL == nil: foreign-MIDI import) runs the accept -> sibling-search -> push bump path.
-  local function allocateNoteColumn(channel, note)
+  --contract: stamped notes (ppqL ~= nil) take their authored lane verbatim; the unified raw walk at step 4.8 clips their tails so they cannot overlap. Lane extends if missing.
+  local function pickStampedLane(channel, note)
     local notes = channel.columns.notes
-    if note.ppqL ~= nil then
-      local lane = note.lane or 1
-      while #notes < lane do pushNoteCol(channel) end
-      return notes[lane], lane
-    end
+    while #notes < note.lane do pushNoteCol(channel) end
+    return notes[note.lane], note.lane
+  end
+
+  --contract: pick a lane for an external (unstamped) note via accept -> sibling -> push bump. Step 6 calls this AFTER internals' raw tails are settled, so the accept check sees realised state.
+  local function packExternalLane(channel, note)
+    local notes = channel.columns.notes
     if note.lane then
       local col = notes[note.lane]
       if col and noteColumnAccepts(col, note) then return col, note.lane end
@@ -1160,120 +1162,70 @@ do
       channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
     end
 
-    -- 1) Seed defaults and truncate same-key overlaps.
-    do
-      local trackerMode = cm:get('trackerMode')
-      local pcByChan
-      if trackerMode then
-        pcByChan = {}
-        for _, cc in mm:ccs() do
-          if cc.evType == 'pc' then
-            util.bucket(pcByChan, cc.chan, { ppq = cc.ppq, val = cc.val })
-          end
-        end
-        for _, lst in pairs(pcByChan) do sortByPPQ(lst) end
-      end
-
-      -- byLane drives the universal tail-realisation pass; byPitch is
-      -- its same-(chan,pitch) physics input. Runs BEFORE column
-      -- allocation so the allocator sees the realised (short) raw tail
-      -- and doesn't bump a would-be lane blocker out of the lane.
-      local byPitch, byLane, work = {}, {}, {}
-      for _, note in mm:notes() do
-        local update = {}
-        if note.detune == nil then update.detune = 0 end
-        if note.delay  == nil then update.delay  = 0 end
-        if trackerMode and note.sample == nil then
-          local realisedPpq = note.ppq + delayToPPQ(note.delay or 0)
-          local prev = util.seek(pcByChan[note.chan] or {}, 'at-or-before', realisedPpq)
-          update.sample = (prev and prev.val) or 0
-        end
-        local tok = mm:tokenOf(note)
-        if next(update) then mm:assign(tok, update) end
-        -- A stale logical frame is no logical frame. On a NON-stale
-        -- channel a raw onset that disagrees with ppqL is an external/
-        -- legacy edit: raw is the truth, the cached ppqL/endppqL are
-        -- garbage. Drop them so every tail-pass fallback (onsetL,
-        -- ceilingL, laterL) reads raw; the rebuild rule recaches the
-        -- real logical frame right after. (A staleSwing channel is the
-        -- opposite — ppqL is authoritative there, raw the stale one —
-        -- so it is excluded.)
-        local frameStale = not staleSwing[note.chan]
-          and note.ppqL ~= nil
-          and math.abs(note.ppq - tm:fromLogical(note.chan, note.ppqL,
-                delayToPPQ(note.delay or 0))) > EPS
-        local e = { token = tok, chan = note.chan, pitch = note.pitch,
-                    ppq = note.ppq, endppq = note.endppq,
-                    ppqL    = not frameStale and note.ppqL or nil,
-                    endppqL = not frameStale and note.endppqL or nil,
-                    overlap = note.overlap }
-        util.bucket(byPitch, note.chan .. '|' .. note.pitch, e)
-        util.bucket(byLane,  note.chan .. '|' .. (note.lane or 1), e)
-      end
-      for _, g in pairs(byPitch) do sortByPPQ(g) end
-      for _, g in pairs(byLane)  do sortByPPQ(g) end
-
-      -- Logical onset; ppqL is not yet reconciled at this pre-allocation
-      -- phase for raw-arrived notes, so fall back to toLogical.
-      local function onsetL(x) return x.ppqL or tm:toLogical(x.chan, x.ppq) end
-      -- Logical onset of the first strictly-later note in a ppq-sorted
-      -- group (chords at the same onset are not "following").
-      local function laterL(group, ppq)
-        local n = util.seek(group, 'after', ppq)
-        return n and onsetL(n)
-      end
-
-      -- Universal tail realisation. raw note-off = min(endppqL ceiling
-      -- (util.OPEN = unbounded; nil = uncached, derive from raw), next
-      -- same-lane onset + overlap, next same-pitch chan-wide onset,
-      -- take length), floored at onset+1.
-      -- overlap widens only the column onset (the monophonic-legato
-      -- glide); the same-pitch onset is hard MIDI physics and the take
-      -- length the absolute backstop. endppqL is never touched —
-      -- deleting a blocker grows the raw tail back up to the ceiling.
-      local takeLenL = tm:length()
-      for _, group in pairs(byLane) do
-        for _, e in ipairs(group) do
-          local laneL    = laterL(group, e.ppq)
-          local pitchL   = laterL(byPitch[e.chan .. '|' .. e.pitch], e.ppq)
-          -- endppqL == util.OPEN is the deliberately-unbounded tail
-          -- (freshly-placed legato note). Absent endppqL is an uncached
-          -- ceiling, not open — derive it from raw.
-          local ceilingL = e.endppqL == util.OPEN and math.huge
-                           or e.endppqL or tm:toLogical(e.chan, e.endppq)
-          local colL     = laneL and laneL + (e.overlap or 0) or math.huge
-          local boundL   = math.max(onsetL(e) + 1,
-            math.min(ceilingL, colL, pitchL or math.huge, takeLenL))
-          local raw      = util.round(tm:fromLogical(e.chan, boundL))
-          if raw ~= e.endppq then
-            util.add(work, { token = e.token, endppq = raw })
-          end
-        end
-      end
-      if #work > 0 then
-        mm:modify(function()
-          for _, w in ipairs(work) do mm:assign(w.token, { endppq = w.endppq }) end
-        end)
-      end
+    -- 0) Partition mm events into internal (stamped + raw consistent
+    -- with ppqL: model-governed) and external (foreign-MIDI, or
+    -- external raw edit on a stamped record). Internals are fully-
+    -- schema'd by construction; the main rebuild flows them branchlessly.
+    -- Externals re-enter at step 6: notes get a fresh lane pack and
+    -- ppqL/endppqL stamp; CCs get ppqL stamped in line here (no lane,
+    -- no tail, single-field recache).
+    --
+    -- A stamped note whose raw disagrees with fromLogical(ppqL, delay)
+    -- under non-staleSwing has been externally edited (Ctrl-Z, foreign
+    -- script): raw is truth, the cached ppqL/endppqL are stale. Route
+    -- to external so step 6 re-stamps from raw.
+    local function rawDivergesFromLogical(evt)
+      if evt.ppqL == nil      then return true  end
+      if staleSwing[evt.chan] then return false end
+      local d = evt.evType == 'note' and delayToPPQ(evt.delay or 0) or 0
+      local rawFromLogical = tm:fromLogical(evt.chan, evt.ppqL, d)
+      return math.abs(evt.ppq - rawFromLogical) > EPS
     end
 
-    -- 2) Allocate note columns. Clone rather than alias: step 5 overwrites
-    -- column evt.ppq with logical while mm retains raw. Lane is non-identity
-    -- in the note token, so an allocator-driven lane fix doesn't retire it.
+    local internal, external = {}, {}
     for _, note in mm:notes() do
+      if rawDivergesFromLogical(note) then util.add(external, note)
+      else util.add(internal, note)
+      end
+    end
+    -- 2) Allocate note columns for internals (stamped path). Clone rather
+    -- than alias: step 5 overwrites column evt.ppq with logical while mm
+    -- retains raw.
+    for _, note in ipairs(internal) do
       local channel = channels[note.chan]
-      local col, lane = allocateNoteColumn(channel, note)
-      local tok = mm:tokenOf(note)
-      if note.lane ~= lane then mm:assign(tok, { lane = lane }) end
+      local col, lane = pickStampedLane(channel, note)
       local ce = util.clone(note, { chan = true, lane = true })
-      ce.token = tok
+      ce.token = mm:tokenOf(note)
       util.add(col.events, ce)
     end
 
-    -- 3) Single CC walk.
+    -- 3) Single CC walk. Reconciles each non-fake CC's (raw, ppqL) under
+    -- the current swing, then projects into columns:
+    --   - staleSwing[chan]: ppqL is truth, reseat raw = fromLogical(ppqL).
+    --   - else, raw diverges from ppqL: external edit on raw; restamp
+    --     ppqL = toLogical(raw).
+    -- Reconcile updates are mutated into the live cc record so the
+    -- subsequent column-event clone sees up-to-date values; mm:assign
+    -- propagates them at the end of the walk. Fakes are parasitic: fake
+    -- pbs are reseated onto their host by step 4.7; fake PCs reconciled
+    -- fresh by step 4.5.
     do
-      local pbByChan = {}
+      local pbByChan, ccUpdates = {}, {}
       for _, cc in mm:ccs() do
+        if not cc.fake then
+          if staleSwing[cc.chan] and cc.ppqL ~= nil then
+            local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
+            if newPpq ~= cc.ppq then
+              util.add(ccUpdates, { tok = mm:tokenOf(cc), update = { ppq = newPpq } })
+              cc.ppq = newPpq
+            end
+          elseif rawDivergesFromLogical(cc) then
+            local newPpqL = tm:toLogical(cc.chan, cc.ppq)
+            util.add(ccUpdates, { tok = mm:tokenOf(cc), update = { ppqL = newPpqL } })
+            cc.ppqL = newPpqL
+          end
+        end
+
         local channel = channels[cc.chan]
         local tok     = mm:tokenOf(cc)
 
@@ -1292,12 +1244,6 @@ do
             hidden = hidden,
           }))
 
-        elseif cc.evType == 'pa' then
-          local noteCol = findNoteColumnForPitch(channel, cc.pitch, cc.ppq)
-          if noteCol then
-            util.add(noteCol.events, projectCC(cc, tok, { type = 'pa' }))
-          end
-
         elseif cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
           local col
           if cc.evType == 'cc' then
@@ -1315,6 +1261,11 @@ do
         if pb.anyVisible then
           channels[chan].columns.pb = { events = pb.events }
         end
+      end
+      if #ccUpdates > 0 then
+        mm:modify(function()
+          for _, u in ipairs(ccUpdates) do mm:assign(u.tok, u.update) end
+        end)
       end
     end
 
@@ -1342,35 +1293,6 @@ do
       if grew and mm:take() then cm:set('take', 'extraColumns', extras) end
     end
 
-    -- 4.5) PC synthesis (trackerMode only).
-    if cm:get('trackerMode') then
-      local toDelete, toAdd = {}, {}
-      for chan = 1, 16 do
-        local records = {}
-        for L, lane in ipairs(channels[chan].columns.notes) do
-          for _, n in ipairs(lane.events) do
-            util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = L, sample = n.sample or 0, key = n })
-          end
-        end
-        local rems, adds_ = reconcilePCsForChan(chan, records)
-        for _, r in ipairs(rems)  do util.add(toDelete, r.token) end
-        for _, a in ipairs(adds_) do util.add(toAdd, a) end
-      end
-
-      if #toDelete > 0 or #toAdd > 0 then
-        mm:modify(function()
-          for _, tok in ipairs(toDelete) do mm:delete(tok) end
-          for _, pc  in ipairs(toAdd)    do mm:add(pc) end
-        end)
-        for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
-        for _, cc in mm:ccs() do
-          if cc.evType == 'pc' then
-            util.add(channels[cc.chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
-          end
-        end
-      end
-    end
-
     -- 4.7) Two-frame rebuild rule + fake-pb reseating. See docs/timing.md §"Rebuild rule".
     -- Fakes are absorbers parasitic on lane-1 hosts; the walk skips them
     -- (they have no independent logical position) and reseats each onto
@@ -1394,42 +1316,20 @@ do
       end
 
       forEachEvent(function(_, evt, chan, isNote, _, lane)
-        if evt.fake then return end
-        local stale  = staleSwing[chan]
-        local d      = isNote and delayToPPQ(evt.delay or 0) or 0
+        if not isNote or evt.fake then return end  -- step 0 reconciled non-fake CCs
         local oldPpq = evt.ppq
-        local update = {}
-        if stale and evt.ppqL ~= nil then
+        -- staleSwing-only reseat: rederive raw from ppqL under the
+        -- channel's new swing. Step 0 has guaranteed every event reaching
+        -- here carries a ppqL consistent with raw under the OLD swing,
+        -- so external-edit recache is unreachable. raw endppq is owned
+        -- by step 4.8's tail-realisation pass, never reseated from endppqL.
+        if staleSwing[chan] then
+          local d      = isNote and delayToPPQ(evt.delay or 0) or 0
           local newPpq = tm:fromLogical(chan, evt.ppqL, d)
-          if newPpq ~= evt.ppq then update.ppq, evt.ppq = newPpq, newPpq end
-          -- raw endppq is owned by the tail-realisation pass, never
-          -- reseated from endppqL (which is intent, kept long).
-        else
-          -- Onset and tail may be stale independently; check each frame
-          -- against its predict and rederive only the one that disagrees.
-          local predOn = evt.ppqL ~= nil
-            and tm:fromLogical(chan, evt.ppqL, d) or nil
-          local onsetExternal = not predOn
-            or math.abs(evt.ppq - predOn) > EPS
-          if onsetExternal then
-            local newPpqL = tm:toLogical(chan, evt.ppq - d)
-            update.ppqL, evt.ppqL = newPpqL, newPpqL
+          if newPpq ~= evt.ppq then
+            evt.ppq = newPpq
+            util.add(toAssign, { evt = evt, update = { ppq = newPpq } })
           end
-          -- endppqL is intent: in steady state raw is the tail pass's
-          -- clipped projection of it, so never back-derive it from raw.
-          -- Two cases mean "raw is the truth here, not a clip": an
-          -- absent ceiling on an external raw note (cache it once), and
-          -- a disagreeing onset (the whole record was externally edited
-          -- — ppqL just followed raw, so endppqL must too). Never on a
-          -- util.OPEN note (unbounded by definition).
-          if isNote and evt.endppqL ~= util.OPEN
-             and (evt.endppqL == nil or onsetExternal) then
-            local seed = tm:toLogical(chan, evt.endppq)
-            update.endppqL, evt.endppqL = seed, seed
-          end
-        end
-        if next(update) then
-          util.add(toAssign, { evt = evt, update = update })
         end
         -- Reseat any fake-pb at this lane-1 host's seat. Stage the mm
         -- assign and mirror into the live column event in lockstep.
@@ -1469,51 +1369,142 @@ do
       staleSwing = {}
     end
 
-    -- 4.8) Same-pitch onset clamp + tail retro-clip in realised raw
-    -- order. The step-1 tail pass clips in the LOGICAL frame; here we
-    -- enforce same-pitch MIDI physics in RAW. Walk each channel's
-    -- notes in raw-onset order (tie-broken by ppqL so a true collision
-    -- lets the logical-earlier note win); retro-clip the predecessor's
-    -- raw tail to the successor's onset; if the successor's raw lands
-    -- at or below the predecessor's, clamp it to predecessor + 1.
-    -- Authored delay and endppqL stay untouched -- this is realisation,
-    -- not intent. A user-authored swap (e.g. -delay pulling B before A
-    -- in raw) is respected: B becomes the realised predecessor, A's
-    -- tail is unchanged, B's tail clips to A's onset.
+    -- 6) Reintroduce externals. Per external (raw-ppq order): pack a
+    -- lane against the now-settled internals plus any earlier externals
+    -- already placed (noteColumnAccepts sees realised tails); stamp
+    -- ppqL/endppqL from raw, backfill any missing metadata (foreign-
+    -- MIDI lacks all; stale-stamped notes come in with authored detune/
+    -- delay intact -- preserved here). The column event is inserted
+    -- in lockstep so the next external's pack sees this one, and tagged
+    -- evt.external = true so step 4.8 treats it as a blocker (its onset
+    -- shows up as 'next' for internals) but never writes to its tail or
+    -- clamps its onset.
+    if #external > 0 then
+      table.sort(external, function(a, b) return a.ppq < b.ppq end)
+      local trackerMode = cm:get('trackerMode')
+      local inserts = {}
+      for _, note in ipairs(external) do
+        local delay     = note.delay or 0
+        local d         = delayToPPQ(delay)
+        local probe     = { ppq = note.ppq, endppq = note.endppq,
+                            pitch = note.pitch, delay = delay, lane = note.lane }
+        local col, lane = packExternalLane(channels[note.chan], probe)
+        local update    = {
+          ppqL    = tm:toLogical(note.chan, note.ppq - d),
+          endppqL = tm:toLogical(note.chan, note.endppq),
+        }
+        if note.lane   ~= lane then update.lane   = lane   end
+        if note.detune == nil  then update.detune = 0      end
+        if note.delay  == nil  then update.delay  = 0      end
+        if trackerMode and note.sample == nil then update.sample = 0 end
+        local ce = util.clone(note, { chan = true, lane = true })
+        util.assign(ce, update)
+        ce.external = true
+        util.add(col.events, ce)
+        util.add(inserts, { note = note, ce = ce, update = update })
+      end
+      mm:modify(function()
+        for _, ins in ipairs(inserts) do
+          local newTok = mm:assign(mm:tokenOf(ins.note), ins.update)
+          ins.ce.token = newTok or mm:tokenOf(ins.note)
+        end
+      end)
+    end
+
+    -- 4.8) Unified tail/onset walk on internals. Externals (tagged
+    -- evt.external by step 6) participate as BLOCKERS only -- their
+    -- onsets show up as "next" lookups so internals' tails clip against
+    -- them -- but the walk never writes to them.
+    --
+    --   tail target = max(onset+1, min(
+    --     authored ceiling = fromLogical(endppqL); math.huge for util.OPEN,
+    --     same-lane next intent = fromLogical(nextSameLane.ppqL) + overlap,
+    --     same-pitch next raw   = nextSamePitch.ppq,
+    --     take length))
+    --
+    -- Same-lane uses INTENT (logical) so authored music geometry wins
+    -- over realisation delays. Same-pitch uses RAW because MIDI physics
+    -- is realised. "Next" is strict-greater on raw ppq -- a chord-mate
+    -- at the same onset is not "following".
+    --
+    -- Collision (current raw <= prev same-pitch raw, raw order with ppqL
+    -- tie-break) clamps the successor to prev+1. Authored swap survives:
+    -- when raw order differs from logical order, whoever lands first in
+    -- raw becomes the realised predecessor.
     do
+      local takeLen = tm:length()
       local clamps, clips = {}, {}
       for chan = 1, 16 do
-        local notes = {}
-        for _, col in ipairs(channels[chan].columns.notes) do
+        local notes, byLane, byPitch = {}, {}, {}
+        for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, evt in ipairs(col.events) do
-            if evt.type ~= 'pa' and evt.ppqL ~= nil then util.add(notes, evt) end
+            if evt.type ~= 'pa' and evt.ppqL ~= nil then
+              local n = { evt = evt, lane = laneIdx }
+              util.add(notes, n)
+              util.bucket(byLane,  laneIdx,   n)
+              util.bucket(byPitch, evt.pitch, n)
+            end
           end
         end
-        table.sort(notes, function(a, b)
-          if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-          return a.ppqL < b.ppqL
-        end)
+        if #notes == 0 then goto nextChan end
+
+        local function rawThenLogical(a, b)
+          if a.evt.ppq ~= b.evt.ppq then return a.evt.ppq < b.evt.ppq end
+          return a.evt.ppqL < b.evt.ppqL
+        end
+        local function sortAll()
+          table.sort(notes, rawThenLogical)
+          for _, g in pairs(byLane)  do table.sort(g, rawThenLogical) end
+          for _, g in pairs(byPitch) do table.sort(g, rawThenLogical) end
+        end
+        sortAll()
+
+        -- Same-pitch onset clamp. Retro-clip of the predecessor's tail
+        -- is subsumed by the tail pass below (the clamped successor's
+        -- onset shows up as same-pitch next).
         local lastByPitch = {}
-        for _, e in ipairs(notes) do
-          local prev = lastByPitch[e.pitch]
-          if prev and e.ppq <= prev.ppq then
-            local floor = prev.ppq + 1
+        for _, n in ipairs(notes) do
+          local e, prev = n.evt, lastByPitch[n.evt.pitch]
+          if prev and not n.evt.external and e.ppq <= prev.evt.ppq then
+            local floor = prev.evt.ppq + 1
             util.add(clamps, { evt = e, update = { ppq = floor } })
             e.ppq = floor
           end
-          if prev and prev.endppq > e.ppq then
-            util.add(clips, { evt = prev, update = { endppq = e.ppq } })
-            prev.endppq = e.ppq
-          end
-          lastByPitch[e.pitch] = e
+          lastByPitch[e.pitch] = n
         end
+        sortAll()
+
+        -- Strict-next lookup: skip chord-mates at the same ppq.
+        local function strictNext(group, n)
+          for _, x in ipairs(group) do
+            if x.evt.ppq > n.evt.ppq then return x end
+          end
+        end
+
+        for _, n in ipairs(notes) do
+          local e         = n.evt
+          local ceiling   = e.endppqL == util.OPEN and math.huge
+                            or e.endppqL and tm:fromLogical(chan, e.endppqL)
+                            or math.huge
+          local laneNext  = strictNext(byLane[n.lane], n)
+          local pitchNext = strictNext(byPitch[e.pitch], n)
+          local laneClip  = laneNext
+            and tm:fromLogical(chan, laneNext.evt.ppqL) + (e.overlap or 0)
+            or math.huge
+          local pitchClip = pitchNext and pitchNext.evt.ppq or math.huge
+          local bound     = math.max(e.ppq + 1,
+                              math.min(ceiling, laneClip, pitchClip, takeLen))
+          local rounded   = util.round(bound)
+          if rounded ~= e.endppq then
+            util.add(clips, { evt = e, update = { endppq = rounded } })
+            e.endppq = rounded
+          end
+        end
+        ::nextChan::
       end
-      -- Clamps move identity (ppq); land them first so the reindex
-      -- separates colliding tokens (post-step-4.7 reseat can leave two
-      -- same-pitch notes briefly at the same raw -- tokenIdx isn't
-      -- refreshed mid-modify, so a single batched write would route
-      -- the second assign to the wrong note). Tail retro-clips then
-      -- address now-distinct tokens.
+      -- Clamps first: reindex separates colliding tokens before clip
+      -- assigns dereference them (same-pitch notes can share a content-
+      -- keyed token until ppq differs).
       if #clamps > 0 then
         mm:modify(function()
           for _, a in ipairs(clamps) do
@@ -1529,6 +1520,49 @@ do
             if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
           end
         end)
+      end
+    end
+
+    -- 6.5) PA dispatch. Runs after step 6 so foreign-MIDI PAs can locate
+    -- their host note (now in channels[]). PAs do not own a lane in the
+    -- model -- they ride a same-pitch note's column.
+    for _, cc in mm:ccs() do
+      if cc.evType == 'pa' then
+        local noteCol = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
+        if noteCol then
+          util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { type = 'pa' }))
+        end
+      end
+    end
+
+    -- 4.5) PC synthesis (trackerMode only). Runs after step 6 so it sees
+    -- externals too: a foreign-MIDI note in trackerMode inherits sample
+    -- from the prevailing PC and is reflected in the synthesised set.
+    if cm:get('trackerMode') then
+      local toDelete, toAdd = {}, {}
+      for chan = 1, 16 do
+        local records = {}
+        for L, lane in ipairs(channels[chan].columns.notes) do
+          for _, n in ipairs(lane.events) do
+            util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = L, sample = n.sample or 0, key = n })
+          end
+        end
+        local rems, adds_ = reconcilePCsForChan(chan, records)
+        for _, r in ipairs(rems)  do util.add(toDelete, r.token) end
+        for _, a in ipairs(adds_) do util.add(toAdd, a) end
+      end
+
+      if #toDelete > 0 or #toAdd > 0 then
+        mm:modify(function()
+          for _, tok in ipairs(toDelete) do mm:delete(tok) end
+          for _, pc  in ipairs(toAdd)    do mm:add(pc) end
+        end)
+        for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
+        for _, cc in mm:ccs() do
+          if cc.evType == 'pc' then
+            util.add(channels[cc.chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
+          end
+        end
       end
     end
 

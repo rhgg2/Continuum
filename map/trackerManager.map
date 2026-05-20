@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1722  sha=dabb224  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1756  sha=acd0e0e  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts
@@ -25,7 +25,8 @@
   @contract  snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
   @contract  cached per-(cm, mm) pair; invalidated at rebuild head.
   @contract  true iff note fits col -- no over-threshold overlap (same-pitch: zero tolerance; cross-pitch: overlapOffset lenient), coincident onset always refuses, dominated-by->=2 refuses. Only consulted for unstamped raw notes (stamped notes never reach it).
-  @contract  a stamped note (ppqL ~= nil) is model-governed -- the universal tail pass clips its realised note-off to its lane neighbour so it cannot overlap; its authored lane is returned verbatim, extending notes[] if absent. Only an unstamped raw note (ppqL == nil: foreign-MIDI import) runs the accept -> sibling-search -> push bump path.
+  @contract  stamped notes (ppqL ~= nil) take their authored lane verbatim; the unified raw walk at step 4.8 clips their tails so they cannot overlap. Lane extends if missing.
+  @contract  pick a lane for an external (unstamped) note via accept -> sibling -> push bump. Step 6 calls this AFTER internals' raw tails are settled, so the accept check sees realised state.
   @contract  reentrancy-guarded; rebuilds channels[] from mm, reloads the update-manager cache, fires 'rebuild'; takeChanged forwarded to subscribers via the captured pendingTakeSwap
   @invariant  usedSwings is rebuild output, not input — suppressed to prevent rebuild's cm:set from firing a redundant follow-up rebuild
   @invariant  configChanged routes: 'swing' → all 16; 'colSwing' → channels with diff vs prevColSwing; 'swings' → channels resolving to names with diff body vs prevSwings. Caches refresh after each event and on bindTake.

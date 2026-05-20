@@ -102,8 +102,22 @@ function newMidiManager(opts)
     if seed.resolution then resolution = seed.resolution end
     if seed.length     then length     = seed.length     end
     if seed.timeSigs   then timeSigs   = seed.timeSigs   end
+    -- A real take never holds a stamped note (ppqL set) without lane/
+    -- detune/delay -- those are authored together. Seeds frequently
+    -- omit them for terseness; backfill the model invariant so prod
+    -- code doesn't need defensive checks for shapes that don't exist.
+    -- An explicit endppqL (intent ceiling, or util.OPEN) implies the
+    -- note is stamped -- harness backfills ppqL = ppq (seeds run under
+    -- identity swing unless they set ppqL themselves).
     for _, n in ipairs(seed.notes or {}) do
-      local nn = util.clone(n); nn.evType = 'note'; noteList[#noteList + 1] = nn
+      local nn = util.clone(n); nn.evType = 'note'
+      if nn.ppqL == nil and nn.endppqL ~= nil then nn.ppqL = nn.ppq end
+      if nn.ppqL ~= nil then
+        if nn.lane   == nil then nn.lane   = 1 end
+        if nn.detune == nil then nn.detune = 0 end
+        if nn.delay  == nil then nn.delay  = 0 end
+      end
+      noteList[#noteList + 1] = nn
     end
     for _, c in ipairs(seed.ccs   or {}) do ccList[#ccList + 1]     = util.clone(c) end
     -- Track the high-water uuid across pre-seeded notes/ccs so subsequent
