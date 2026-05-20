@@ -167,24 +167,19 @@ Semantics:
 
 - **Rejected updates.** Changing a note's `chan` or `lane` via
   `assignEvent` is rejected (prints a warning and drops the call).
-- **Single voice per (chan, pitch) — realised space.** `clearSameKeyRange`
-  truncates or deletes overlapping same-key notes around any add or
-  move. The MIDI spec gives one voice per `(chan, pitch)`, so a
-  *realised* collision must always shorten or drop a note regardless
-  of intent geometry. The reconciliation therefore compares onsets in
-  realised space (`n.ppq` from `notesByLoc` is realised), and the
-  resulting `endppq` write — though `endppq` is intent at every layer
-  per F3 — is the moment we now intend to end, forced by the voice
-  collision. vm-side `delayRange` is the user-facing gate that keeps
-  legitimate edits from creating these collisions in the first place;
-  rebuild's group-by-pitch pass is the backstop for foreign MIDI.
-  A caller staging a coherent monotone batch (where the end-state has
-  no new same-key overlaps) signals raw intent by shipping
-  `update.ppqL` / `update.endppqL` alongside `update.ppq` /
-  `update.endppq`; tm then skips the per-write clamp and the
-  logical→raw translation. Reswing uses this — without it, the
-  first-processed of two reswung same-lane notes sees its endppq
-  clipped against the second's still-old ppq.
+- **Single voice per (chan, pitch) — realised space.** MIDI permits
+  one voice per `(chan, pitch)`, so a realised collision must shorten
+  or drop a note regardless of intent geometry. vm writes authored
+  intent verbatim; `tm:rebuild` step 4.8 (universal tail walk,
+  grouped by pitch within channel) is the sole gate — it clamps each
+  note's realised onset against the next same-pitch onset and
+  surfaces the divergence as `endppq ≠ endppqC` in the projection.
+  The clamp lives entirely on the realisation side: `endppqL` retains
+  the authored ceiling. A caller staging a coherent monotone plan can
+  bypass the per-write logical→raw translation by setting
+  `rawTime = true` on the payload — `tm:rescaleLength`'s
+  plan-then-mutate path is the sole such caller; the flag is consumed
+  in realise so it never reaches mm.
 - **Detune changes (col-1 notes).** `assignNote` seats a pb at the
   boundary if needed, retunes the raw stream forward to the next note,
   then drops the boundary if it became redundant.

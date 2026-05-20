@@ -11,13 +11,16 @@ A swing composite lives in the project-tier swing library (one
 definition, shared by every take that references it by name). But the
 intent ppqs of events authored against that composite are baked into
 each take's MIDI. When a user drags a slider in `swingEditor`, the
-active take stays in sync via `vm:reswingPreset`; every *other* take
-that references the same swing falls behind.
+active take stays in sync via the `configChanged → tm:markSwingStale
+→ tm:rebuild` step 4.7 chain; every *other* take that references the
+same swing falls behind.
 
 `sequenceManager` closes that gap. On slider release (any of the six
 write paths in `swingEditor`), it walks the project, finds takes whose
-events still reference the edited swing name, swaps mm + cm to each in
-turn, runs `vm:reswingPreset`, and restores the original take.
+events still reference the edited swing name, and binds each via
+`tm:bindTake(opts.markSwingStale=true)` — the post-load rebuild
+reseats that take's raw from ppqL under the edited composite, then
+restores the original take.
 
 ## Discovery — caching the per-take usedSwings set
 

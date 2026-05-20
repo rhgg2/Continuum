@@ -121,9 +121,9 @@ between rebuilds; and an event arriving without a persisted ppqL.
 
 ### "Caller speaks raw" signal
 
-Some callers — reswing's plan-then-mutate path (`vm` and
-`tm:rescaleLength`) — have already computed raw locally and want the
-assignment to bypass the forward translation. The signal is an
+Some callers — `tm:rescaleLength`'s plan-then-mutate path — have
+already computed raw locally and want the assignment to bypass the
+forward translation. The signal is an
 explicit `rawTime = true` on the `tm:assignEvent`/`tm:addEvent`
 payload: the realise step threads the caller's raw through
 unmodified, applies only the delay-delta correction, and **consumes

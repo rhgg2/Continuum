@@ -42,10 +42,10 @@ previously-on-grid events as off-grid, because their realised ppq
 sits at the old grid's swung position and no longer matches
 `rowToPPQ_c(N)` under the new swing.
 
-`evt.ppqL` and `evt.frame` are not consulted by rebuild's row
-placement — they exist for `reswing` (preserve authored row across
-swing changes) and for editing operations that need the unswung row
-position.
+`evt.ppqL` is not consulted by rebuild's row placement — it exists
+as the canonical authoring stamp that survives swing changes (tm's
+rebuild step 4.7 rederives raw from ppqL when a channel is marked
+stale) and for editing operations that need the unswung row position.
 
 ## Ghost sampling
 
@@ -162,75 +162,24 @@ Cursor-axis clamping lives in `ec:clampPos`; viewport follow stays
 vm-side because it touches scrollRow/scrollCol and runs through the
 move hook.
 
-## Frames and logical ppq
+## Logical ppq stamping
 
-vm sits on the swing boundary in the timing model (see
-`docs/timing.md` for the three-frame stack and the
-logical/intent/realisation distinction). Two halves of one mechanism
-specifically vm's: authoring frames stamped on notes at write time,
-and a view-layer override that pushes a frame onto cm's `transient`
-tier when active.
+vm passes intent in the logical frame: every authoring call site
+sends `evt.ppq` / `evt.endppq` as logical positions; `tm:addEvent` /
+`tm:assignEvent` stamp `ppqL` / `endppqL` and derive raw via
+`fromLogical` under the channel's current swing. There is no
+per-event frame — the channel's swing is read from cm at realisation,
+and `tm:rebuild` step 4.7 reseats raw from ppqL when cm broadcasts a
+swing change (see `docs/timing.md`).
 
-**Per-event stamp.** vm (and clipboard, in `editCursor.lua`) set
-`evt.frame = currentFrame(chan)` at every authoring call site before
-handing the event to `tm:addEvent`. tm doesn't know what a frame is —
-it just persists whatever is supplied as sidecar metadata. `currentFrame`
-reads merged cm, so a transient override is naturally inherited:
-events authored under the override stamp the override's frame, not
-the underlying cfg's. PAs are bound to a host note, so the call site
-sets `evt.frame = host.frame` instead.
-
-CC / PB / AT / PC frames travel as sidecar metadata at the mm layer
-(the same channel the per-note `uuid → metadata` map uses). On rebuild,
-tm copies `cc.frame` onto the column-level event tables.
-
-**Logical ppq** rides alongside `frame`. Every event with a frame
-carries `ppqL` (and `endppqL` for notes), the canonical
-authoring-grid position pre-swing, pre-delay. The invariant is
-
-```
-evt.ppq  = round(fromLogical(frame.swing, evt.ppqL))
-evt.ppqL = r · timing.logPerRow(frame.rpb, denom, res)   -- r integer ⇔ on-grid
-```
-
-Mutation rules (one rule per kind of edit, exhaustively):
-
-| operation                                | ppqL                                                   | frame             |
-| ---------------------------------------- | ------------------------------------------------------------- | ----------------- |
-| snap-to-cursor (off-grid → cursor row)   | `cursorRow · logPerRow_currentFrame`; end preserves logical delta | restamp `currentFrame` |
-| shift-by-rows (`adjustPosition`, multi)  | `+= rowDelta · logPerRow_currentFrame`                             | restamp `currentFrame` |
-| quantize (snap to nearest row)           | `newRow · logPerRow_currentFrame`                                  | restamp `currentFrame` |
-| insert-row / delete-row                  | `± numRows · logPerRow_currentFrame`                               | restamp `currentFrame` |
-| delay nudge                              | unchanged                                                     | unchanged              |
-| reswing (frame swap)                     | unchanged; realised re-applied                                | restamp `currentFrame` |
-| reswing-preset (composite for `name` changes) | unchanged; realised re-applied                          | unchanged (name kept)  |
-
-Events without a `frame` (e.g. older data) are skipped by
-`reswingCore`: there is no after-the-fact frame inference. They also
-carry no `ppqL`; rebuild displays them via `ppqToRow` on the
-realised ppq directly (which, in the absence of swing, is the same as
-logical).
-
-**View-layer override.** `matchGridToCursor` (Ctrl-G) reads the
-authoring frame off the note under the cursor and writes it to cm's
-`transient` tier as a unit (`swing`, `colSwing`, `rowPerBeat`).
-Because `transient` is most-specific in the merge, every reader of
-those keys — including `tm:swingSnapshot()` and the rebuild itself —
-sees the override values without any vm-side lensing. Toggling the
-command again drops the three keys via `cm:assign('transient', ...)`
-with `util.REMOVE` sentinels.
-
-`FRAME_KEYS = { swing, colSwing, rowPerBeat }` is the unit of override.
-`frameTransientActive()` checks whether any of them currently sit at
-the transient tier. `releaseTransientFrame()` peels them and rescales
-ec if rpb changes underneath.
-
-The configCallback releases the override automatically when a real
-edit lands: any non-`transient` write to a frame key (e.g. the toolbar
-calling `cm:set('track', 'rowPerBeat', n)`) triggers
-`releaseTransientFrame()` so the user's input is visible. The check
-hinges on `changed.level ~= 'transient'`, so vm's own transient-tier
-writes don't recursively self-release.
+**View-layer rpb override.** `matchGridToCursor` (Ctrl-G) writes
+`rowPerBeat` to cm's `transient` tier; `transient` is most-specific
+in the merge, so every reader (including `tm:rebuild`) sees the
+override transparently. Toggling drops the key via
+`cm:assign('transient', ...)` with `util.REMOVE`.
+`releaseTransientFrame` peels the override on any non-`transient`
+write to a `FRAME_KEYS` member (narrowed to `rowPerBeat` once
+per-event frames went away) and rescales ec if rpb changed underneath.
 
 ## Rebuild & callbacks
 
@@ -282,11 +231,12 @@ evt-kind)`:
 - **note**, stop 2: octave (on real notes only).
 - **note**, stops 3–4: velocity nibble (hex); falls through to PA
   creation on a sustain row when `polyAftertouch` is on.
-- **note**, stops 5–7: decimal signed delay, clamped by `delayRange`.
-  Same-pitch prev (channel-wide) binds hard at its intent end —
-  MIDI permits only one voice per (chan, pitch). Different-pitch
-  neighbours impose no delay constraint. Floor at 0; ceiling at
-  `endppq − 1` (realised duration ≥ 1 ppq).
+- **note**, stops 5–7: decimal signed delay (±999), unbounded at the
+  vm layer. tm clamps raw at realisation — onset floors at 0 and
+  same-pitch collisions resolve via rebuild step 4.8's universal tail
+  walk; divergence between authored delay and realised onset surfaces
+  as `delay ≠ delayC`, which trackerPage paints as a `*` next to the
+  delay digits.
 - **cc / at / pc**: hex nibble on `val`.
 - **pb**: decimal signed nibble on `val`, with `-` toggling sign.
 
@@ -375,38 +325,26 @@ Editing commands route through tm's primitives:
   is skipped; the parent's mutation re-derives it through the spec
   tree.
 
-## Reswing / quantize
+## Quantize
 
-vm exposes paired domain verbs `vm:<base>Selection()` /
-`vm:<base>All()` for each batch op (reswing, quantize,
-quantizeKeepRealised). The selection-vs-all-with-confirm UX choice
-lives in rm, which dispatches to one or the other.
+vm exposes paired domain verbs `vm:quantize{Selection,All}` and
+`vm:quantizeKeepRealised{Selection,All}`. The selection-vs-all-with-
+confirm UX choice lives in rm, which dispatches to one or the other.
 
-- **`reswingScope`** — for each event, apply the current target swing
-  to the event's stored ppqL and restamp the frame to current.
-  Two passes (plan, then mutate) so in-flight writes don't disturb
-  later events. Writes are clamped to take length: when length doesn't
-  sit on a swing-period boundary, apply at the last event can land
-  past it, and any write past length makes REAPER auto-extend the
-  source on MIDI_Sort — which leaks an extra row into the next
-  rebuild.
-- **`reswingPresetChange(name)`** — for every event whose authoring
-  frame references `name`, re-realise from ppqL under the new
-  composite. The caller must update the project lib first; the
-  snapshot reads it back via cm. No restamp — the name didn't change,
-  only the composite behind it.
 - **`quantizeScope`** — snap every event to the nearest row under the
-  current frame; notes preserve logical length in rows.
-- **`quantizeKeepRealisedScope`** — move the intent onto the grid
+  current swing; notes preserve logical length in rows.
+- **`quantizeKeepRealisedScope`** — move intent onto the grid
   **without changing realised time**: intent shifts, delay absorbs
-  the inverse. If the required delay exceeds `delayRange`, clamp —
-  realised still preserved, intent remains partially off-grid.
-  `delayRange` enforces three bounds: same-pitch chan-wide at intent
-  end (MIDI one-voice-per-pair), same-column any-pitch at
-  neighbour's realised onset (so realised order matches intent order
-  within every column — the pb model leans on this), and the
-  duration self-cap (realised duration ≥ 1 ppq). Popup reports the
-  clamp count.
+  the inverse. The required delay is written verbatim; tm clamps raw
+  at realisation when necessary, and any residual divergence between
+  authored delay and realised onset surfaces as `delay ≠ delayC` in
+  the painter.
+
+Reswing is not a vm verb. Swing changes broadcast as `configChanged`;
+tm's subscriber marks affected channels via `tm:markSwingStale` and
+`tm:rebuild` step 4.7 reseats raw from each event's ppqL under the
+new swing. Cross-take propagation is `seqMgr:reswingAll`, which binds
+each affected take through `tm:bindTake(opts.markSwingStale=true)`.
 
 ## Extra columns & delay sub-column
 
@@ -459,11 +397,10 @@ in a single `cmgr:registerAll` at construction. Categories:
 - **display** — `doubleRPB`, `halveRPB`,
   `matchGridToCursor`, `inputOctaveUp/Down`, `inputSampleUp/Down`,
   `advBy0..9`
-- **timing** — `setSwingComposite`, `reswingPreset`,
-  `setSwingSlot`, `setColSwingSlot`
+- **timing** — `setSwingComposite`, `setSwingSlot`, `setColSwingSlot`
 - **tuning** — `setTemper`, `setTemperSlot`
 
-`addTypedCol`, `setRPB`, `reswing`, `quantize`, `quantizeKeepRealised`,
+`addTypedCol`, `setRPB`, `quantize`, `quantizeKeepRealised`,
 `openSwingEditor`, `openTemperPicker`, `openSwingPicker`, `quit` are
 owned by rm (they wrap UI orchestration around vm's domain verbs).
 
@@ -477,7 +414,7 @@ vm then applies three families of `cmgr:wrap`:
   press pastes at the cursor.
 - **auto-unstick** — all nudge / grow / duplicate / interpolate /
   row-insert / `noteOff` commands drop sticky flags after running.
-  (rm applies the same wrapper to its `reswing` / `quantize` /
+  (rm applies the same wrapper to its `quantize` /
   `quantizeKeepRealised` registrations.)
 - **auto-selClear** — `delete` / `deleteSel` / `cut` clear the
   selection after running, since the affected events are gone.
@@ -492,11 +429,10 @@ vm then applies three families of `cmgr:wrap`:
   `vm.grid`, `vm:ec()`, `vm:rowPerBar()` etc. each frame, and reads
   pure config (`rowPerBeat`, `currentOctave`, `advanceBy`) directly
   from cm rather than through vm.
-- **Frame + ppqL stamping is the view layer's responsibility** —
-  every authoring call site in vm and clipboard sets `evt.frame =
-  currentFrame(chan)` (or `host.frame` for PA) and
-  `evt.ppqL = row · logPerRow_currentFrame` before `tm:addEvent`. tm
-  is frame-agnostic.
+- **Callers speak logical** — every authoring call site in vm and
+  clipboard sends `evt.ppq` / `evt.endppq` in the logical frame;
+  `tm:addEvent` / `tm:assignEvent` stamp `ppqL` / `endppqL` and
+  derive raw via `fromLogical`.
 - **Row encoding in the clipboard uses the source column's swing**;
   paste decodes into the destination column's. Round-trip is
   symmetric, not absolute-ppq.
