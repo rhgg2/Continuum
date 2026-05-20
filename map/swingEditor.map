@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=609  sha=4a6bfb0  mode=chunk
+@module swingEditor  src=swingEditor.lua  loc=672  sha=24be50a  mode=chunk
 @deps tv, cm, chrome, ctx, seqMgr
 
 # Invariants & contracts
@@ -10,10 +10,10 @@
   @invariant  on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
   @invariant  slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider
   @invariant  atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
-  @contract  no-op when already open or when the current selection is the
+  @contract  no-op when already open. Default selection prefers the cursor
 
 # Shapes
-  @shape  state = { name, snapshot, createBuf, createError, rpb, wild }  -- composite is NOT cached here
+  @shape  state = { name, snapshot, rpb, wild, create? = { buf, err?, gen?, refocus? } }  -- composite is NOT cached here; create is the New-swing modal substate (gen bumps to re-seed the InputText after we clear buf on error)
   @shape  PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
 
 # Imports
@@ -30,7 +30,7 @@
   @state SWING_MARK = 0x000000b0  @ 41
   @state SWING_SOFT_QN = 0.15  @ 42
   @state state = nil  @ 46
-  @state self = {}  @ 583
+  @state self = {}  @ 645
 
 # Private functions
   @fn commit()  @ 49
@@ -79,14 +79,22 @@
   @fn switchTo(name)  @ 367
       -- Switch the edited swing without closing the editor. Re-captures the
       -- snapshot so Reset/dirty-check stay coherent.
-  @fn drawLibraryRow(closeOnClick, rowW)  @ 378
+  @fn resolvedSlots()  @ 376
+      -- Resolved take and channel slots for the open-default and the
+      -- library-row shortcut buttons. 'identity' at the take tier is treated
+      -- as no-slot (matches open()'s bail); at the channel tier nil means
+      -- 'no override, fall through to take'.
+  @fn drawLibraryRow(closeOnClick, rowW)  @ 388
       -- Library row sits above the edit/create body. Picker + name input flow
       -- coexist: the picker offers existing swings (including the implicit
       -- "Off" → enter create mode); +New is just an alias for picking Off and
       -- focusing the name field.
-  @fn drawCreateForm()  @ 438
-  @fn drawEditBody(composite, n)  @ 470
-  @fn draw(w, h)  @ 557
+  @fn drawCreateModal()  @ 467
+      -- '+ New' modal. Lives at draw() top-level so the popup isn't bound to a
+      -- child window's lifetime; the editor body greys out behind it via the
+      -- disabled wrap in drawEditBody.
+  @fn drawEditBody(composite, n)  @ 522
+  @fn draw(w, h)  @ 615
       -- Body-region draw. Caller (trackerPage) hands us its body rect via
       -- renderBody; we run inside a child window so the chrome palette
       -- (editor.bg + toolbar button/text colours + separator tint) takes
@@ -96,13 +104,15 @@
 
 # Public API (self:*)
   -- Public
-  @api self:open()  @ 589
-      --           'identity' sentinel (editing the identity composite would
-      --           silently swing every take that chose "off"). snapshot is the
-      --           current cm composite at open time, used for Reset and dirty-check.
-  @api self:render(w, h)  @ 602
-  @api self:close()  @ 604
-  @api self:isOpen()  @ 606
+  @api self:open()  @ 652
+      --           channel's swing override, falls back to the take's swing, and
+      --           is nil when neither resolves (body greys out; user can '+' or
+      --           use the Take/Chan shortcut buttons). snapshot is the current cm
+      --           composite at open time, used for Reset and dirty-check.
+  @api self:render(w, h)  @ 664
+  @api self:close()  @ 666
+  @api self:isOpen()  @ 668
+  @api self:modalActive()  @ 669
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

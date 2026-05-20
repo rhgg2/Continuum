@@ -1382,10 +1382,13 @@ function tp:renderBody(_, w, h, dispatch)
   -- dispatcher is gated via focusState so tracker bindings don't
   -- fire underneath.
   if swingEditor:isOpen() then
+    -- Dispatch BEFORE render so focusState reads the modal-active flag
+    -- while it's still set; render is what clears it on Enter/Cancel.
+    -- Same ordering as the main path: dispatch → drawModal.
+    if dispatch then dispatch(self:focusState()) end
     ImGui.PushFont(ctx, uiFont, 13)
     swingEditor:render(w, h)
     ImGui.PopFont(ctx)
-    if dispatch then dispatch(self:focusState()) end
     return
   end
   if #tv.grid.cols == 0 then
@@ -1434,7 +1437,7 @@ function tp:reloadFromReaper() tm:reloadFromReaper() end
 --shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
 function tp:focusState()
   if not ctx then return { suppressKbd = false, pageSuppressed = false, acceptCmds = false } end
-  local suppressKbd    = modalState ~= nil or chrome.pickerIsActive()
+  local suppressKbd    = modalState ~= nil or chrome.pickerIsActive() or swingEditor:modalActive()
   local pageSuppressed = swingEditor:isOpen()
   return {
     suppressKbd    = suppressKbd,

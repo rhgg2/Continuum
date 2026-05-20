@@ -9,7 +9,7 @@
 --invariant: on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
 --invariant: slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider
 --invariant: atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
---shape: state = { name, snapshot, createBuf, createError, rpb, wild }  -- composite is NOT cached here
+--shape: state = { name, snapshot, rpb, wild, create? = { buf, err?, gen?, refocus? } }  -- composite is NOT cached here; create is the New-swing modal substate (gen bumps to re-seed the InputText after we clear buf on error)
 --shape: PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
 local util   = require 'util'
 local timing = require 'timing'
@@ -365,10 +365,20 @@ end
 -- Switch the edited swing without closing the editor. Re-captures the
 -- snapshot so Reset/dirty-check stay coherent.
 local function switchTo(name)
-  state.name        = name
-  state.snapshot    = name and swingRead() or nil
-  state.createBuf   = ''
-  state.createError = nil
+  state.name     = name
+  state.snapshot = name and swingRead() or nil
+end
+
+-- Resolved take and channel slots for the open-default and the
+-- library-row shortcut buttons. 'identity' at the take tier is treated
+-- as no-slot (matches open()'s bail); at the channel tier nil means
+-- 'no override, fall through to take'.
+local function resolvedSlots()
+  local takeName = cm:get('swing')
+  if takeName == 'identity' then takeName = nil end
+  local anchor   = tv:cursorAnchor()
+  local chanName = anchor and cm:get('colSwing')[anchor.chan] or nil
+  return takeName, chanName
 end
 
 -- Library row sits above the edit/create body. Picker + name input flow
@@ -392,7 +402,23 @@ local function drawLibraryRow(closeOnClick, rowW)
   }
 
   ImGui.SameLine(ctx, 0, 12)
-  if ImGui.Button(ctx, '+ New')                        then switchTo(nil) end
+
+  -- Shortcut buttons to edit the take's swing and the cursor channel's
+  -- swing override. The name is visible on the button so the user sees
+  -- what they'll get; em-dash means the slot is unset (button disabled).
+  local takeName, chanName = resolvedSlots()
+  local function slotButton(label, name)
+    ImGui.SameLine(ctx, 0, 8)
+    chrome.disabledIf(not name or name == cur, function()
+      if ImGui.Button(ctx, label) then
+        switchTo(name)
+      end
+    end)
+  end
+  slotButton('Take', takeName)
+  slotButton('Chan',   chanName)
+  ImGui.SameLine(ctx, 0, 8)
+  if ImGui.Button(ctx, '+') then state.create = { buf = '' } end
 
   ImGui.SameLine(ctx, 0, 12)
   chrome.verticalSeparator()
@@ -403,13 +429,13 @@ local function drawLibraryRow(closeOnClick, rowW)
   -- they already are (in spirit) — a re-save just clones the default
   -- into the cache, which is pointless until edited.
   chrome.disabledIf(not inProject, function()
-    if ImGui.Button(ctx, 'Save globally') then saveGlobal(cur) end
+    if ImGui.Button(ctx, 'Save global') then saveGlobal(cur) end
   end)
 
   ImGui.SameLine(ctx, 0, 8)
   local usage = (cur and inProject) and seqMgr:takesUsing(cur) or {}
   chrome.disabledIf(not inProject or #usage > 0, function()
-    if ImGui.Button(ctx, 'Delete from project') then
+    if ImGui.Button(ctx, 'Delete proj') then
       deleteFromTier('project', cur)
       switchTo(hasGlobalCopy and cur or nil)
     end
@@ -417,7 +443,7 @@ local function drawLibraryRow(closeOnClick, rowW)
 
   ImGui.SameLine(ctx, 0, 8)
   chrome.disabledIf(not inGlobal, function()
-    if ImGui.Button(ctx, 'Delete globally') then
+    if ImGui.Button(ctx, 'Delete global') then
       deleteFromTier('global', cur)
       if not inProject then switchTo(nil) end
     end
@@ -435,39 +461,69 @@ local function drawLibraryRow(closeOnClick, rowW)
   ImGui.PopStyleVar(ctx, 1)
 end
 
-local function drawCreateForm()
-  ImGui.Text(ctx, 'Create a swing or pick one above.')
-  ImGui.AlignTextToFramePadding(ctx)
-  ImGui.Text(ctx, 'Name:')
-  ImGui.SameLine(ctx)
-  ImGui.SetNextItemWidth(ctx, 240)
-  local rv, buf = ImGui.InputText(ctx, '##newname', state.createBuf,
-    ImGui.InputTextFlags_EnterReturnsTrue)
-  state.createBuf = buf
-  ImGui.SameLine(ctx)
-  local confirm = rv or ImGui.Button(ctx, 'Create')
-  if confirm then
-    local name = buf and buf:match('^%s*(.-)%s*$')
-    local lib  = cm:get('swings', { mergeTiers = true })
-    if not name or name == '' then
-      state.createError = 'Name required.'
-    elseif lib[name] then
-      state.createError = 'Name already in use.'
-    else
-      tv:setSwingComposite(name, {})
-      tv:setSwingSlot(name)
-      state.name        = name
-      state.snapshot    = {}
-      state.createBuf   = ''
-      state.createError = nil
+-- '+ New' modal. Lives at draw() top-level so the popup isn't bound to a
+-- child window's lifetime; the editor body greys out behind it via the
+-- disabled wrap in drawEditBody.
+local function drawCreateModal()
+  if not state.create then return end
+  state.create.gen = state.create.gen or 0
+  if not ImGui.IsPopupOpen(ctx, 'New swing') then
+    ImGui.OpenPopup(ctx, 'New swing')
+  end
+  local cx, cy = ImGui.Viewport_GetCenter(ImGui.GetWindowViewport(ctx))
+  ImGui.SetNextWindowPos(ctx, cx, cy, ImGui.Cond_Appearing, 0.5, 0.5)
+  chrome.pushChromeWindow()
+  if ImGui.BeginPopupModal(ctx, 'New swing', true, ImGui.WindowFlags_AlwaysAutoResize) then
+    local function dismiss() state.create = nil; ImGui.CloseCurrentPopup(ctx) end
+    ImGui.AlignTextToFramePadding(ctx)
+    ImGui.Text(ctx, 'Name:')
+    ImGui.SameLine(ctx)
+    if ImGui.IsWindowAppearing(ctx) or state.create.refocus then
+      ImGui.SetKeyboardFocusHere(ctx)
+      state.create.refocus = nil
     end
+    ImGui.SetNextItemWidth(ctx, 240)
+    -- PushID(gen) forces the InputText to re-init from buf after we
+    -- clear it on error; without it the widget keeps its own cached buffer.
+    ImGui.PushID(ctx, state.create.gen)
+    local rv, buf = ImGui.InputText(ctx, '##newname', state.create.buf,
+      ImGui.InputTextFlags_EnterReturnsTrue)
+    ImGui.PopID(ctx)
+    state.create.buf = buf
+    ImGui.SameLine(ctx)
+    local confirm = rv or ImGui.Button(ctx, 'Create')
+    ImGui.SameLine(ctx)
+    local cancel  = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
+    if confirm then
+      local name = buf and buf:match('^%s*(.-)%s*$')
+      local lib  = cm:get('swings', { mergeTiers = true })
+      if not name or name == '' then
+        state.create.err = 'Name required.'
+      elseif lib[name] then
+        state.create.err     = 'Name already in use.'
+        state.create.buf     = ''
+        state.create.gen     = state.create.gen + 1
+        state.create.refocus = true
+      else
+        tv:setSwingComposite(name, {})
+        tv:setSwingSlot(name)
+        switchTo(name)
+        dismiss()
+      end
+    elseif cancel then dismiss() end
+    if state.create and state.create.err then
+      ImGui.TextColored(ctx, SWING_ERR, state.create.err)
+    end
+    ImGui.EndPopup(ctx)
   end
-  if state and state.createError then
-    ImGui.TextColored(ctx, SWING_ERR, state.createError)
-  end
+  chrome.popChromeWindow()
 end
 
 local function drawEditBody(composite, n)
+  -- Greyed-out when no slot is selected: still rendered so the chrome
+  -- (factor strip, grid, tools row) stays in place rather than blinking
+  -- out and shrinking the body region.
+  if not state.name then ImGui.BeginDisabled(ctx) end
   -- Tools row: Reset / Rows-per-qn / Wild / Composite-phase
   -- (10, 3) FramePadding, vertical separators between groups, compact
   -- checkbox, manual ▾ on the rpb picker. Padding push is scoped to
@@ -546,6 +602,8 @@ local function drawEditBody(composite, n)
   end
 
   if ImGui.Button(ctx, '+ add factor') then addFactor() end
+
+  if not state.name then ImGui.EndDisabled(ctx) end
 end
 
 -- Body-region draw. Caller (trackerPage) hands us its body rect via
@@ -557,7 +615,11 @@ end
 local function draw(w, h)
   if not state then return end
 
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then state = nil; return end
+  -- Escape closes the editor, but only when no modal is open — otherwise
+  -- the modal's Cancel never gets to consume it.
+  if not state.create and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+    state = nil; return
+  end
 
   local composite = (state.name and swingRead()) or {}
   local n = #readFactors(composite)
@@ -569,8 +631,8 @@ local function draw(w, h)
     drawLibraryRow(close, w)
     if state then
       ImGui.Separator(ctx)
-      if not state.name then drawCreateForm()
-      else                   drawEditBody(composite, n) end
+      drawEditBody(composite, n)
+      drawCreateModal()
     end
   end
   ImGui.EndChild(ctx)
@@ -582,20 +644,20 @@ end
 
 local self = {}
 
---contract: no-op when already open or when the current selection is the
---           'identity' sentinel (editing the identity composite would
---           silently swing every take that chose "off"). snapshot is the
---           current cm composite at open time, used for Reset and dirty-check.
+--contract: no-op when already open. Default selection prefers the cursor
+--           channel's swing override, falls back to the take's swing, and
+--           is nil when neither resolves (body greys out; user can '+' or
+--           use the Take/Chan shortcut buttons). snapshot is the current cm
+--           composite at open time, used for Reset and dirty-check.
 function self:open()
   if state then return end
-  local name = cm:get('swing')
-  if name == 'identity' then return end
+  local takeName, chanName = resolvedSlots()
+  local name = chanName or takeName
   local lib  = cm:get('swings', { mergeTiers = true })
   state = {
-    name      = name,
-    snapshot  = name and lib[name] or nil,
-    createBuf = '',
-    rpb       = 4,
+    name     = name,
+    snapshot = name and lib[name] or nil,
+    rpb      = 4,
   }
 end
 
@@ -603,7 +665,8 @@ function self:render(w, h) draw(w, h) end
 
 function self:close() state = nil end
 
-function self:isOpen() return state ~= nil end
+function self:isOpen()      return state ~= nil end
+function self:modalActive() return state ~= nil and state.create ~= nil end
 
 return self
 

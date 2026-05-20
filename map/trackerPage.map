@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1451  sha=bba67af  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1454  sha=24be50a  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
@@ -125,14 +125,14 @@
   @api tp:renderToolbarBits(_)  @ 1371
   @api tp:renderBody(_, w, h, dispatch)  @ 1377
       @contract  calls computeLayout twice — lane-strip drag callbacks may flush tv.grid.cols and clear col.x; second pass repopulates layout for drawTracker
-  @api tp:renderStatusBar(_)  @ 1411
-  @api tp:renderFloating(_)  @ 1415
-  @api tp:bind(t)  @ 1418
+  @api tp:renderStatusBar(_)  @ 1414
+  @api tp:renderFloating(_)  @ 1418
+  @api tp:bind(t)  @ 1421
       @contract  bind/unbind drive tm:bindTake — the page owns the cm/mm context swap for its own stack
-  @api tp:unbind()  @ 1419
-  @api tp:reloadFromReaper()  @ 1422
+  @api tp:unbind()  @ 1422
+  @api tp:reloadFromReaper()  @ 1425
       @contract  pass-through for coord's external-mutation watcher; re-reads the bound take without changing it
-  @api tp:focusState()  @ 1435
+  @api tp:focusState()  @ 1438
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo
@@ -143,9 +143,9 @@
       --   transiently, but bound commands should still fire. Anything that
       --   genuinely needs the keys (a focused InputText, an active slider,
       --   a held button) shows up as IsAnyItemActive.
-  @api tp:handleInput()  @ 1446
-  @api tp:save()  @ 1447
-  @api tp:load()  @ 1448
+  @api tp:handleInput()  @ 1449
+  @api tp:save()  @ 1450
+  @api tp:load()  @ 1451
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
