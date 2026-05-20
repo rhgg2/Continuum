@@ -187,8 +187,8 @@ Semantics:
   with it when the shift preserves the window; otherwise PAs outside
   the new window are deleted and the last trimmed PA's value becomes
   the note's `vel`.
-- **Fake-pb housekeeping.** `addPb` unmarks fake on the affected
-  boundary; `deletePb` either really deletes or re-marks fake
+- **Fake-pb housekeeping.** Adding a pb unmarks fake on the affected
+  boundary; deleting one either really deletes or re-marks fake
   depending on whether detune and neighbour detune agree.
 - **Flush re-entrancy.** `flush` snapshots and clears `adds/assigns/
   deletes` **before** calling `mm:modify`, because mm's callbacks can

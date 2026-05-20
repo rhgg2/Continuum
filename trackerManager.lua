@@ -246,28 +246,6 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   -- step 4.9 from the final note layout — so a clamp or delay change
   -- that moves a lane-1 onset takes its absorber along automatically.
 
-  --contract: authoring frame is logical cents; um stages only, the
-  -- absorber pass at rebuild step 4.9 reconciles seats and recomputes
-  -- raw vals. Caller passes `val` (logical cents) for back-compat;
-  -- stored as `cents` on the event.
-  local function addPb(pb)
-    pb.cents = pb.val or 0
-    pb.val   = nil
-    addLowlevel(pb)
-  end
-
-  local function deletePb(pb)
-    deleteLowlevel(pb)
-  end
-
-  local function assignPb(pb, update)
-    if update.val ~= nil then
-      update.cents = update.val
-      update.val   = nil
-    end
-    assignLowlevel(pb, update)
-  end
-
   local function dirtyPc(chan) dirtyPcChans[chan] = true end
 
   local function addNote(n)
@@ -360,18 +338,27 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   function deleteEvent(evtOrToken)
     local evt = lookup(evtOrToken)
     if not evt then return end
-    local et = evt.evType
-    if     et == 'note' then deleteNote(evt)
-    elseif et == 'pb'   then deletePb(evt)
-    else                     deleteLowlevel(evt) end
+    if evt.evType == 'note' then deleteNote(evt)
+    else                        deleteLowlevel(evt) end
   end
 
-  --contract: update.ppq/endppq arrive logical. endppq is the authored ceiling: a finite logical value, or util.OPEN for a deliberately-unbounded tail. Stamps ppqL; stamps endppqL (util.OPEN→OPEN, else the logical ceiling) and derives a provisional raw note-off — the universal tail pass owns the real one. Callers never set endppqL; it is tm-private. update.rawTime=true is the explicit "caller already computed raw" bypass (rescale's plan-then-mutate): translation is skipped, only the delay-delta applies, and the flag is consumed here so it never reaches mm. See docs/timing.md.
-  local function realiseNoteUpdate(evt, update)
+  -- endppq arrives logical and is the authored ceiling. util.OPEN stamps
+  -- an open ceiling + a provisional raw note-off (the tail pass derives
+  -- the real one); a finite value stamps the logical ceiling and derives
+  -- raw. rec.ppq must already be raw (the OPEN branch uses rec.ppq + 1).
+  local function stampEndppq(rec, chan)
+    if rec.endppq == util.OPEN then
+      rec.endppqL, rec.endppq = util.OPEN, rec.ppq + 1
+    else
+      rec.endppqL, rec.endppq = rec.endppq, tm:fromLogical(chan, rec.endppq)
+    end
+  end
+
+  --contract: update.ppq/endppq arrive logical. endppq is the authored ceiling: a finite logical value, or util.OPEN for a deliberately-unbounded tail. Stamps ppqL; stamps endppqL (util.OPEN→OPEN, else the logical ceiling) and derives a provisional raw note-off — the universal tail pass owns the real one. Callers never set endppqL; it is tm-private. rawCaller=true is the explicit "caller already computed raw" bypass (rescale's plan-then-mutate): translation is skipped, only the delay-delta applies. assignEvent consumes the rawTime flag before calling, so it never reaches mm. See docs/timing.md.
+  local function realiseNoteUpdate(evt, update, rawCaller)
     local dOld = delayToPPQ(evt.delay)
     local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
-    if update.rawTime then
-      update.rawTime = nil
+    if rawCaller then
       if update.ppq ~= nil then
         update.ppq = update.ppq + dNew
       elseif dNew ~= dOld then
@@ -400,66 +387,45 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     -- endppq), so no separate endppq cue is needed.
     if update.ppq < 0 then update.ppq = 0 end
     if update.endppq ~= nil then
-      -- endppq arrives logical and is the authored ceiling. util.OPEN
-      -- stamps an open ceiling + a provisional raw note-off (the tail
-      -- pass derives the real one); a finite value stamps the logical
-      -- ceiling and derives raw. update.ppq is already raw here.
-      if update.endppq == util.OPEN then
-        update.endppqL = util.OPEN
-        update.endppq  = update.ppq + 1
-      else
-        update.endppqL = update.endppq
-        update.endppq  = tm:fromLogical(evt.chan, update.endppq)
-      end
+      stampEndppq(update, evt.chan)
       local takeLen = tm:length()
       if update.endppq > takeLen then update.endppq = takeLen end
     end
   end
 
   local function realiseNonNoteUpdate(chan, update)
-    if update.rawTime then update.rawTime = nil; return end
     if not chan or update.ppq == nil then return end
     update.ppqL = update.ppq
     update.ppq  = tm:fromLogical(chan, update.ppqL)
   end
 
-  local function realiseAddPpq(evt, withDelay, withEnd)
+  local function realiseAddPpq(evt, isNote)
     if evt.ppq == nil or not evt.chan then return end
     evt.ppqL = evt.ppq
     evt.ppq  = tm:fromLogical(evt.chan, evt.ppqL,
-                              withDelay and delayToPPQ(evt.delay or 0) or 0)
-    if withEnd and evt.endppq ~= nil then
-      -- evt.endppq is the authored ceiling. util.OPEN stamps an open
-      -- ceiling + a provisional raw note-off (the tail pass derives the
-      -- real one); a finite value stamps the logical ceiling and
-      -- derives raw. evt.ppq is already raw here.
-      if evt.endppq == util.OPEN then
-        evt.endppqL = util.OPEN
-        evt.endppq  = evt.ppq + 1
-      else
-        evt.endppqL = evt.endppq
-        evt.endppq  = tm:fromLogical(evt.chan, evt.endppq)
-      end
-    end
+                              isNote and delayToPPQ(evt.delay or 0) or 0)
+    if isNote and evt.endppq ~= nil then stampEndppq(evt, evt.chan) end
   end
 
   function assignEvent(evtOrToken, update)
     local evt = lookup(evtOrToken)
     if not evt then return end
-    local et = evt.evType
-    if et == 'note' then
-      realiseNoteUpdate(evt, update)
+    local rawCaller = update.rawTime
+    update.rawTime = nil
+    if evt.evType == 'note' then
+      realiseNoteUpdate(evt, update, rawCaller)
       assignNote(evt, update)
-    elseif et == 'pb' then
-      realiseNonNoteUpdate(evt.chan, update)
-      assignPb(evt, update)
     else
-      realiseNonNoteUpdate(evt.chan, update)
+      if not rawCaller then realiseNonNoteUpdate(evt.chan, update) end
+      if evt.evType == 'pb' and update.val ~= nil then
+        update.cents, update.val = update.val, nil
+      end
       assignLowlevel(evt, update)
     end
   end
 
   --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical. endppq is the authored ceiling (finite logical, or util.OPEN for an unbounded tail); stamps ppqL and endppqL (tm-private; callers never set it), rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent; rescale's plan-then-mutate is the sole caller): consumed here so it never persists on the record or reaches mm.
+  --contract: pb authoring frame is logical cents; the val argument is stored as cents on the event. um stages only — the absorber pass at rebuild step 4.9 reconciles seats and recomputes raw vals at flush.
   function addEvent(evt)
     local rawCaller = evt.rawTime
     evt.rawTime = nil
@@ -467,11 +433,12 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       evt.detune = evt.detune or 0
       evt.delay  = evt.delay  or 0
       evt.lane   = evt.lane   or 1
-      if not rawCaller then realiseAddPpq(evt, true, true) end
+      if not rawCaller then realiseAddPpq(evt, true) end
       addNote(evt)
     else
-      if not rawCaller then realiseAddPpq(evt, false, false) end
-      if evt.evType == 'pb' then addPb(evt) else addLowlevel(evt) end
+      if not rawCaller then realiseAddPpq(evt, false) end
+      if evt.evType == 'pb' then evt.cents, evt.val = evt.val or 0, nil end
+      addLowlevel(evt)
     end
   end
 
