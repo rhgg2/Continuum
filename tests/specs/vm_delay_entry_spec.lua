@@ -1,23 +1,19 @@
--- Pins the "delay shifts only the note-on" model and the bounds vm
--- enforces when the user types into the delay sub-column.
+-- Authored delay is intent: vm writes it through unbounded (modulo the
+-- ±999 digit-entry cap). tm clamps raw at realisation -- raw ≥ 0 in
+-- realiseNoteUpdate, same-pitch onset floor in step 4.8 -- and exposes
+-- the realised-frame equivalent as evt.delayC. tp surfaces the
+-- divergence (delay ~= delayC) via a small * next to the delay digits.
 
 local t = require('support')
 
 return {
 
-  -- Regression: a note ending at the item edge used to be uneditable
-  -- on the delay column because overlapBounds capped maxEnd at item
-  -- length and delayRange treated that as a cap on realised endppq.
-  -- Under the new model endppq is intent and never moves, so item
-  -- length is irrelevant — only the next-note onset and the duration
-  -- collapse bound clamp.
+  -- A note ending at item edge used to be uneditable on the delay column
+  -- because delayRange capped against item length. Under the unified
+  -- model that gate is gone -- authored delay survives.
   {
     name = 'positive delay accepted on a note ending at item length',
     run = function(harness)
-      -- Item length defaults to 4 bars (rpb=4, beats=4 per bar →
-      -- numRows≈64, length=3840 ppq at res=240). Seed a single note that
-      -- ends well inside that, and another with endppq at length to be
-      -- sure neither is clamped.
       local h = harness.mk{
         seed = {
           notes = {
@@ -30,28 +26,22 @@ return {
       h.vm:setGridSize(80, 40)
 
       local col = h.vm.grid.cols[1]
-      local note = col.cells[0]
-      t.truthy(note, 'note at row 0')
-
-      h.ec:setPos(0, 1, 5)  -- delay 100s digit
-      h.vm:editEvent(col, note, 5, string.byte('5'), false)
+      h.ec:setPos(0, 1, 5)
+      h.vm:editEvent(col, col.cells[0], 5, string.byte('5'), false)
 
       local n = h.fm:dump().notes[1]
-      t.eq(n.delay, 500, 'digit landed despite endppq sitting at item length')
-      t.eq(n.endppq, 3840, 'endppq unchanged — delay does not move it')
-      t.eq(n.ppq, 120, 'realised onset shifted by delayToPPQ(500) = 120')
+      t.eq(n.delay, 500, 'authored delay survives — no bound on delay in vm')
+      t.eq(n.ppq, 120, 'realised onset = 0 + delayToPPQ(500) = 120')
     end,
   },
 
-  -- The duration-collapse bound: realised onset must stay strictly
-  -- below endppq, so a delay that would push the note-on at or past
-  -- the note's own end gets clamped at endppq - 1 ppq.
+  -- delay past the note's authored end is allowed: intent is preserved,
+  -- step 4.8's tail walk gives the realised note its 1-tick minimum.
+  -- (Previously delayRange clamped here; now the divergence shows up
+  -- via the tp marker rather than a vm-side refusal.)
   {
-    name = 'delay clamped so realised duration stays >= 1 ppq',
+    name = 'delay past intent-end survives — tail walk handles realisation',
     run = function(harness)
-      -- Note covers intent ppq 0..120 (one row at rpb=4, res=240).
-      -- maxDelayPPQ = endppq - ppq - 1 = 119 → maxDelay (ms-QN) =
-      -- floor(1000 * 119 / 240) = 495.
       local h = harness.mk{
         seed = {
           notes = {
@@ -68,22 +58,17 @@ return {
       h.vm:editEvent(col, col.cells[0], 5, string.byte('9'), false)
 
       local n = h.fm:dump().notes[1]
-      t.eq(n.delay, 495, 'delay clamped to floor((endppq-ppq-1)*1000/res)')
-      t.eq(n.endppq, 120, 'endppq still pinned at intent end')
+      t.eq(n.delay, 900, 'authored delay preserved')
+      t.eq(n.ppq, 216, 'realised onset moves past authored end')
+      t.eq(n.endppq, 217, 'step 4.8 tail walk pinches endppq up to onset+1')
     end,
   },
 
-  -- Different-pitch neighbours impose NO delay constraint — chord
-  -- /dyad realisation overlap is musically fine. Only the duration
-  -- self-cap and the digit-entry cap (±999) bind on this geometry.
+  -- Different-pitch column-mate imposes no constraint. Same as before
+  -- the rework; pinned to guard against accidental re-introduction.
   {
     name = 'different-pitch next imposes no delay constraint',
     run = function(harness)
-      -- A at intent 0..600, B different pitch at intent 240..480.
-      -- They share the channel; B is in lane 2 (intent overlap of 360
-      -- exceeds the default overlapOffset). delayRange on A sees no
-      -- same-pitch neighbour at all → only the duration cap (599 ppq
-      -- → 2495 ms-QN) bounds. The digit-entry cap (±999) binds first.
       local h = harness.mk{
         seed = {
           notes = {
@@ -98,36 +83,22 @@ return {
       h.vm:setGridSize(80, 40)
 
       local col = h.vm.grid.cols[1]
-      local A = col.cells[0]
-      t.eq(A.pitch, 60, 'col 1 row 0 is A')
-
-      h.ec:setPos(0, 1, 5)  -- 100s digit
-      h.vm:editEvent(col, A, 5, string.byte('9'), false)
+      h.ec:setPos(0, 1, 5)
+      h.vm:editEvent(col, col.cells[0], 5, string.byte('9'), false)
 
       local n = h.fm:dump().notes[1]
-      t.eq(n.delay, 900, 'no neighbour clamp; column cap (±999) binds')
+      t.eq(n.delay, 900, 'column cap (±999) is the only bound')
       t.eq(n.ppq, 216, 'realised onset = ppq + delayToPPQ(900) = 216')
-      -- A and B's intent overlap (360) exceeds overlapOffset, so the
-      -- rebuild places them in different lanes. A has no same-lane
-      -- successor and no same-pitch successor, so its realised tail
-      -- runs to its authored ceiling. Different-pitch cross-lane
-      -- neighbours do not clip each other.
-      t.eq(n.endppq, 600, 'realised tail at authored ceiling — cross-lane neighbour does not clip')
+      t.eq(n.endppq, 600, 'authored tail untouched by cross-lane neighbour')
     end,
   },
 
-  -- Same-pitch repeats can't co-exist on a MIDI (chan, pitch), so a
-  -- same-pitch prev binds delay HARD at its intent end — no
-  -- overlapOffset leniency. Different from the different-pitch case
-  -- above, where the neighbour imposes no constraint at all.
+  -- Same-pitch prev used to clamp delay HARD at intent end via
+  -- delayRange. Under the unified model authored delay survives; the
+  -- tail walk clips A's endppq down to B's realised onset instead.
   {
-    name = 'same-pitch prev binds delay hard at intent end (no off)',
+    name = 'same-pitch prev: authored delay survives; A.endppq clips to B.ppq',
     run = function(harness)
-      -- A pitch 60 ends at intent 120. B pitch 60 starts at intent 240,
-      -- pre-seeded with delay = 600 ms-QN (storage ppq = 240 + 144 =
-      -- 384). Typing '-' negates the delay → wants -600. delayRange's
-      -- minDelay = (A.endppq − B.intent) × 1000 / res = (120 − 240) ×
-      -- 1000 / 240 = -500. Hard zero, no leniency. -600 clamps to -500.
       local h = harness.mk{
         seed = {
           notes = {
@@ -142,32 +113,23 @@ return {
       h.vm:setGridSize(80, 40)
 
       local col = h.vm.grid.cols[1]
-      local B = col.cells[4]  -- B at intent ppq 240 = row 4 (rpb=4, res=240)
-      t.truthy(B, 'B is at row 4')
-      t.eq(B.delay, 600, 'B seeded with delay = 600')
-
+      local B = col.cells[4]
       h.ec:setPos(4, 1, 5)
       h.vm:editEvent(col, B, 5, string.byte('-'), false)
 
-      -- A still at storage ppq 0; B's storage ppq shifted by clamped delay.
-      local Bafter
-      for _, x in ipairs(h.fm:dump().notes) do
-        if x.ppq ~= 0 then Bafter = x end
-      end
-      t.eq(Bafter.delay, -500, 'delay clamped at same-pitch minimum (no off)')
-      t.eq(Bafter.ppq, 120, 'realised onset = A.endppq exactly')
+      local dump = h.fm:dump().notes
+      local A, Bafter = dump[1], dump[2]
+      t.eq(Bafter.delay, -600, 'authored delay preserved (no vm clamp)')
+      t.eq(Bafter.ppq, 96, 'realised onset = 240 + delayToPPQ(-600) = 96')
+      t.eq(A.endppq, 96, 'A.endppq clipped to B.ppq by the tail walk')
     end,
   },
 
-  -- Same-pitch lookup is per (chan, pitch), not per column. If a
-  -- same-pitch prev sits in a different lane (forced via lane
-  -- metadata), delayRange must still find it.
+  -- Same-pitch lookup is per (chan, pitch). With B in a different lane,
+  -- A's tail walk still finds B and clips. Authored delay preserved.
   {
-    name = 'same-pitch prev in another column still binds delay',
+    name = 'same-pitch prev in another column — A.endppq still clips',
     run = function(harness)
-      -- A in lane 1, B in lane 2, both pitch 60 on chan 1, intent
-      -- non-overlapping. Without channel-wide lookup, delayRange on B
-      -- would see no prev (B is alone in lane 2) and let -600 land.
       local h = harness.mk{
         seed = {
           notes = {
@@ -186,42 +148,32 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      -- B is in col 2 (channel 1's second note lane).
       local colB = h.vm.grid.cols[2]
       local B = colB.cells[4]
-      t.truthy(B, 'B at row 4 in lane 2')
-
       h.ec:setPos(4, 2, 5)
       h.vm:editEvent(colB, B, 5, string.byte('-'), false)
 
-      local Bafter
-      for _, x in ipairs(h.fm:dump().notes) do
-        if x.ppq ~= 0 then Bafter = x end
-      end
-      t.eq(Bafter.delay, -500,
-        'channel-wide same-pitch lookup found A in lane 1; clamp at -500')
+      local dump = h.fm:dump().notes
+      local A, Bafter = dump[1], dump[2]
+      t.eq(Bafter.delay, -600, 'authored delay preserved across lanes')
+      t.eq(A.endppq, 96, 'A.endppq clipped via channel-wide same-pitch lookup')
     end,
   },
 
-  -- Performance delay must not reorder onsets within a column. A
-  -- same-column predecessor (any pitch) binds the floor at its
-  -- realised onset; without this, a large negative delay could
-  -- push a later note's onset before its column-neighbour's,
-  -- breaking the realised-order = intent-order invariant the pb
-  -- model relies on.
+  -- Same-column same-lane realised-order used to be a delay bound: the
+  -- "realised order = logical order within a column" invariant the pb
+  -- model leaned on. Under the unified projection that constraint is
+  -- dropped: authored swap survives just as same-pitch does. Whoever
+  -- lands first in raw becomes the realised predecessor.
   {
-    name = 'same-column prev binds delay so realised onsets stay ordered',
+    name = 'same-column prev: authored swap survives in raw',
     run = function(harness)
-      -- A and B both lane 1 of channel 1, different pitches, intent
-      -- non-overlapping. B is seeded with delay = -100 (storage ppq
-      -- 336 = intent 360 + delayToPPQ(-100,240) = 360 − 24) so a
-      -- single '9' on the 100s digit produces newDelay = -1 * 900
-      -- (sign carried from the existing negative). Bound floor =
-      -- ppqToDelay(A.realisedOnset + 1 − B.intent, 240)
-      --        = ppqToDelay(241 − 360, 240) ≈ -495.83 → ceil = -495.
-      -- So -900 clamps to -495, leaving B's realised onset at 241 —
-      -- just after A's at 240. Without the bound, -900 would land
-      -- and B's realised onset would jump to 144, before A.
+      -- A pitch 60 at ppqL=240, B pitch 64 at ppqL=360 (lane 1, chan 1).
+      -- B seeded with delay=-100; user types '9' on the 100s digit →
+      -- sign=-1 (from existing negative), newDelay = -900. Old code
+      -- clamped at -495. New policy lets it through: B.raw = 360 - 216
+      -- = 144 (before A.raw=240). Display still shows B below A; raw
+      -- plays B first.
       local h = harness.mk{
         seed = {
           notes = {
@@ -237,26 +189,25 @@ return {
 
       local col = h.vm.grid.cols[1]
       local B = col.cells[6]
-      t.truthy(B and B.pitch == 64, 'B at row 6, lane 1')
-
-      h.ec:setPos(6, 1, 5)  -- delay 100s digit
+      h.ec:setPos(6, 1, 5)
       h.vm:editEvent(col, B, 5, string.byte('9'), false)
 
       local Bafter
       for _, x in ipairs(h.fm:dump().notes) do
         if x.pitch == 64 then Bafter = x end
       end
-      t.eq(Bafter.delay, -495,
-        'clamped at A.realisedOnset + 1 — performance delay must not reorder')
-      t.eq(Bafter.ppq, 241,
-        'realised onset stays just after A.realisedOnset = 240')
+      t.eq(Bafter.delay, -900, 'authored swap survives — no realised-order bound')
+      t.eq(Bafter.ppq, 144, 'B lands at 144, before A at 240')
     end,
   },
 
-  -- Negative delay floors at 0: a note at ppq=0 cannot be nudged
-  -- earlier (realised ppq must remain non-negative).
+  -- Negative delay on a note at intent ppq 0 is still a vm-level no-op
+  -- (sign-toggling zero is futile). Distinct from "delay clamps to 0"
+  -- which would write -delay and let tm realise it; the early return
+  -- skips the assign entirely. Pinned so the guard survives the
+  -- delayRange removal.
   {
-    name = 'negative delay refused on a note at intent ppq 0',
+    name = 'negative-on-zero is a vm no-op (no futile assign)',
     run = function(harness)
       local h = harness.mk{
         seed = {
@@ -271,12 +222,88 @@ return {
 
       local col = h.vm.grid.cols[1]
       h.ec:setPos(0, 1, 5)
-      -- '-' on a zero delay is a no-op (the editEvent guard).
       h.vm:editEvent(col, col.cells[0], 5, string.byte('-'), false)
 
       local n = h.fm:dump().notes[1]
       t.eq(n.delay, 0)
       t.eq(n.ppq, 0)
+    end,
+  },
+
+  -- Authored delay that pushes raw onset below 0 is clamped by
+  -- realiseNoteUpdate (raw must be ≥ 0). The stored delay is unchanged
+  -- — intent preserved — and delayC reflects the realised value, so
+  -- divergence (delay ~= delayC) flags it for tp's * marker.
+  {
+    name = 'raw < 0 clamped in tm; delay ~= delayC flags the divergence',
+    run = function(harness)
+      -- Note at ppqL=60 (row 1), seeded with delay=-100 so the '-' sign
+      -- carries through the next digit edit. Typing '5' on the 100s
+      -- gives newDelay=-500 (delayPPQ=-120 → raw=-60). realiseNoteUpdate
+      -- clamps to 0; delayC = ppqToDelay(0-60, 240) = -250.
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 36, ppqL = 60, endppq = 240, endppqL = 240,
+              chan = 1, pitch = 60, vel = 100,
+              detune = 0, delay = -100 },
+          },
+        },
+        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+      }
+      h.vm:setGridSize(80, 40)
+
+      local col = h.vm.grid.cols[1]
+      h.ec:setPos(1, 1, 5)
+      h.vm:editEvent(col, col.cells[1], 5, string.byte('5'), false)
+
+      local n = h.fm:dump().notes[1]
+      t.eq(n.delay, -500, 'authored delay preserved')
+      t.eq(n.ppq, 0, 'raw clamped to 0 (cannot go negative)')
+
+      -- delayC is computed by tm's projection (line 1527).
+      local col1 = h.tm:getChannel(1).columns.notes[1]
+      local cn = col1.events[1]
+      t.eq(cn.delayC, -250, 'delayC reflects the realised onset')
+      t.truthy(cn.delay ~= cn.delayC, 'divergence flag fires (delay ~= delayC)')
+    end,
+  },
+
+  -- Same-pitch raw collision: A's positive delay puts A.raw past B.intent
+  -- onset. step 4.8 clamps B to A.ppq+1; B's delayC reports the drift.
+  {
+    name = 'same-pitch raw collision: step 4.8 clamps B; delayC reflects it',
+    run = function(harness)
+      -- A at ppqL=0 endppqL=120 with delay=+500 (delayPPQ=120 → A.raw=120).
+      -- B at ppqL=120 endppqL=240 same pitch, delay=0 → B.raw=120. Intent
+      -- non-overlapping so both share lane 1. Raw collision: byPitch
+      -- sorts by raw then ppqL → A first (ppqL=0), B clamped to A.raw+1
+      -- = 121. delayC for B = ppqToDelay(121-120, 240) ≈ 4.
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 120, ppqL = 0,   endppq = 120, endppqL = 120,
+              chan = 1, pitch = 60, vel = 100,
+              detune = 0, delay = 500 },
+            { ppq = 120, ppqL = 120, endppq = 240, endppqL = 240,
+              chan = 1, pitch = 60, vel = 100,
+              detune = 0, delay = 0   },
+          },
+        },
+        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+      }
+      h.vm:setGridSize(80, 40)
+
+      local col1 = h.tm:getChannel(1).columns.notes[1]
+      local A, B
+      for _, e in ipairs(col1.events) do
+        if e.ppqL == 0   then A = e end
+        if e.ppqL == 120 then B = e end
+      end
+      t.truthy(A and B, 'both notes share lane 1 (intent non-overlapping)')
+      t.eq(B.delay, 0, 'authored delay 0 preserved')
+      t.eq(B.delayC, 4, 'delayC reflects step-4.8 onset clamp to 121')
+      t.truthy(B.delay ~= B.delayC, 'divergence — B sounds 1 tick after A')
     end,
   },
 }

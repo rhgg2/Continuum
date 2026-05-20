@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1690  sha=03f0a23  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1702  sha=03f0a23  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts
@@ -73,43 +73,43 @@
       · Public interface
   -- UPDATE MANAGER
   @fn deleteEvent(evtOrToken)  @ 359
-  @fn assignEvent(evtOrToken, update)  @ 432
-  @fn addEvent(evt)  @ 449
+  @fn assignEvent(evtOrToken, update)  @ 437
+  @fn addEvent(evt)  @ 454
       @contract  notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical. endppq is the authored ceiling (finite logical, or util.OPEN for an unbounded tail); stamps ppqL and endppqL (tm-private; callers never set it), rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent); consumed here so it never persists on the record or reaches mm.
       · Flush: commit accumulated ops to mm.
-  @fn flush()  @ 470
+  @fn flush()  @ 475
       · Init / reload: (re)load local cache from mm.
-  @fn reload()  @ 589
+  @fn reload()  @ 594
       -- Also clears staging buffers: a rebuild must not carry un-flushed ops
       -- across (their tokens may be stale for newly-added events), matching the
       -- prior "fresh um per rebuild" semantics now that the um itself persists.
   -- Accessors
-  @fn clearSwing()  @ 702
+  @fn clearSwing()  @ 707
       · Column allocation
       · CC projection
       · Rebuild
 
 # Public API (tm:*)
-  @api tm:getChannel(chan)  @ 626
-  @api tm:channels()  @ 628
-  @api tm:editCursor()  @ 639
-  @api tm:length()  @ 645
-  @api tm:resolution()  @ 646
-  @api tm:name()  @ 647
-  @api tm:setName(name)  @ 648
-  @api tm:timeSigs()  @ 649
-  @api tm:interpolate(A, B, ppq)  @ 650
-  @api tm:markSwingStale(chan)  @ 708
+  @api tm:getChannel(chan)  @ 631
+  @api tm:channels()  @ 633
+  @api tm:editCursor()  @ 644
+  @api tm:length()  @ 650
+  @api tm:resolution()  @ 651
+  @api tm:name()  @ 652
+  @api tm:setName(name)  @ 653
+  @api tm:timeSigs()  @ 654
+  @api tm:interpolate(A, B, ppq)  @ 655
+  @api tm:markSwingStale(chan)  @ 713
       @contract  chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
   -- Mutation
-  @api tm:deleteEvent(evt)  @ 715
-  @api tm:addEvent(evt)  @ 716
-  @api tm:assignEvent(evt, update)  @ 717
-  @api tm:flush()  @ 718
+  @api tm:deleteEvent(evt)  @ 720
+  @api tm:addEvent(evt)  @ 721
+  @api tm:assignEvent(evt, update)  @ 722
+  @api tm:flush()  @ 723
   -- Length
-  @api tm:setLength(newPpq)  @ 723
+  @api tm:setLength(newPpq)  @ 728
       -- On shrink, notes spanning the boundary keep their onset and have endppq clamped.
-  @api tm:rescaleLength(newPpq)  @ 749
+  @api tm:rescaleLength(newPpq)  @ 754
       -- Stretch the take to `newPpq` by linearly remapping the logical
       -- frame: each event on logical row r ends up on row f·r where
       -- f = newPpq/oldPpq. ppqL stamps scale by f; raw ppqs are
@@ -117,17 +117,17 @@
       -- ppqs are not linearly scaled (rows are preserved instead, which
       -- keeps reswing well-defined). Note delays scale by f. Frame stamps
       -- (rpb, swing slot names) are untouched. No events are deleted.
-  @api tm:tileLength(newPpq)  @ 817
+  @api tm:tileLength(newPpq)  @ 822
       -- Because oldPpq sits on a swing-period boundary (take length aligns
       -- to QN), shifting by k·oldPpq is identical in logical and realised
       -- frames; one delta serves both ppq and ppqL paths.
   -- Transport
-  @api tm:playFrom(ppq)  @ 861
-  @api tm:play()  @ 867
-  @api tm:stop()  @ 868
-  @api tm:playPause()  @ 869
+  @api tm:playFrom(ppq)  @ 866
+  @api tm:play()  @ 872
+  @api tm:stop()  @ 873
+  @api tm:playPause()  @ 874
   -- Mute
-  @api tm:setMutedChannels(set)  @ 874
+  @api tm:setMutedChannels(set)  @ 879
       @contract  idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes. PA events ride along in note columns but carry no mute state — skipped.
 
 # Signals emitted (via util.installHooks)

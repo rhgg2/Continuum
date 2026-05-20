@@ -187,28 +187,6 @@ local function writePlans(plans)
   end
 end
 
--- Two bounds: same-pitch chan-wide (MIDI one-voice-per-pair) at the prior
--- note's endppq, and same-column any-pitch at neighbour's realised onset
--- (so realised order = logical order within every column — the pb model
--- leans on this).
--- Floor at 0; ceiling at n.endppq − 1 so realised duration ≥ 1 ppq.
-local function delayRange(col, n)
-  local sameP = function(e) return util.isNote(e) and e ~= n and e.pitch == n.pitch end
-  local prevSame    = neighbourEvents(tm:getChannel(col.midiChan).columns.notes, n.ppq, sameP)
-  local prevSameEnd = prevSame and prevSame.endppq
-
-  local prev  = util.seek(col.events, 'before', n.ppq, util.isNote)
-  local nextE = util.seek(col.events, 'after',  n.ppq, util.isNote)
-  local realised = function(e) return e.ppq + timing.delayToPPQ(e.delay or 0, resolution) end
-
-  local minStart = math.max(prevSameEnd or 0,
-                            prev and (realised(prev) + 1) or 0)
-  local maxStart = math.min(n.endppq - 1,
-                            nextE and (realised(nextE) - 1) or math.huge)
-  return timing.ppqToDelay(minStart - n.ppq, resolution),
-         timing.ppqToDelay(maxStart - n.ppq, resolution)
-end
-
 ----- Show events by column, used by lots of selection ops
 
 local function eventsByCol()
@@ -627,8 +605,9 @@ do
           newDelay = sign * mag
         end
 
-        local minD, maxD = delayRange(col, evt)
-        newDelay = util.clamp(newDelay, math.ceil(minD), math.floor(maxD))
+        -- Authored delay is intent: write through unbounded (modulo the
+        -- ±999 cap that sign*mag already enforces). tm clamps raw at
+        -- realisation; divergence (delay ~= delayC) surfaces in tp.
         tm:assignEvent(evt, { delay = newDelay })
         return commit()
 
@@ -1126,7 +1105,7 @@ do
 
   -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
   local function quantizeKeepRealisedScope(groups)
-    local plans, clamped = {}, 0
+    local plans = {}
     for _, g in ipairs(groups) do
       local col, chan = g.col, g.col.midiChan
       for _, e in pairs(g.locs) do
@@ -1140,24 +1119,18 @@ do
 
     conformOverlaps(plans)
 
+    -- Write the ideal delay verbatim. tm clamps raw on assign and step
+    -- 4.8 reapplies the same-pitch onset floor; any clamp surfaces as
+    -- delay ~= delayC, painted by tp's divergent marker.
     for _, p in ipairs(plans) do
       if util.isNote(p.e) then
         local realised = p.e.ppq + timing.delayToPPQ(p.e.delay, resolution)
-        local ideal    = timing.ppqToDelay(realised - p.newppq, resolution)
-        local dMin, dMax = delayRange(p.col, p.e)
-        p.newDelay = util.clamp(ideal, dMin, dMax)
-        if p.newDelay ~= ideal then clamped = clamped + 1 end
+        p.newDelay = timing.ppqToDelay(realised - p.newppq, resolution)
       end
     end
 
     writePlans(plans)
     tm:flush()
-
-    if clamped > 0 then
-      reaper.ShowMessageBox(
-        clamped .. ' note(s) partially quantized — delay clamped at overlap bound.',
-        'quantize keep realised', 0)
-    end
   end
 
   function tv:quantizeSelection()             quantizeScope(eventsByCol())              end
@@ -1402,9 +1375,10 @@ local nudge do
   end
 
   local function nudgeDelay(col, note, dir, coarse, p)
-    local minD, maxD = delayRange(col, note)
+    -- Authored delay is intent; the only bound is the display cap that
+    -- digit entry also enforces. Realisation clamps live in tm.
     local old = note.delay
-    local new = scaledScalar(old, math.ceil(minD), math.floor(maxD), dir, coarse and 10 or nil, p)
+    local new = scaledScalar(old, -999, 999, dir, coarse and 10 or nil, p)
     if new == old then return end
     tm:assignEvent(note, { delay = new })
   end

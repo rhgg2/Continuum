@@ -387,6 +387,11 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     else
       update.ppq = evt.ppq + (dNew - dOld)
     end
+    -- Authored delay is intent; raw is realisation. A delay that pushes
+    -- raw below 0 (or past a same-pitch predecessor — step 4.8 handles
+    -- that) clamps the realised onset; the divergence surfaces as
+    -- delay ~= delayC, which tp paints amber on the delay digits.
+    if update.ppq < 0 then update.ppq = 0 end
     if update.endppq ~= nil then
       -- endppq arrives logical and is the authored ceiling. util.OPEN
       -- stamps an open ceiling + a provisional raw note-off (the tail
@@ -992,11 +997,18 @@ do
     -- under non-staleSwing has been externally edited (Ctrl-Z, foreign
     -- script): raw is truth, the cached ppqL/endppqL are stale. Route
     -- to external so step 6 re-stamps from raw.
+    --
+    -- Exception: realiseNoteUpdate floors raw at 0 when authored delay
+    -- pushes the realised onset negative. ppqL/delay are still the
+    -- intent; the divergence is intentional and surfaces as delayC
+    -- (which tp paints with a * next to the delay digits). Recognise
+    -- the clamp shape (raw == 0, fromLogical < 0) and stay internal.
     local function rawDivergesFromLogical(evt)
       if evt.ppqL == nil      then return true  end
       if staleSwing[evt.chan] then return false end
       local d = evt.evType == 'note' and delayToPPQ(evt.delay or 0) or 0
       local rawFromLogical = tm:fromLogical(evt.chan, evt.ppqL, d)
+      if evt.ppq == 0 and rawFromLogical < 0 then return false end
       return math.abs(evt.ppq - rawFromLogical) > EPS
     end
 

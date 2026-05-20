@@ -113,10 +113,15 @@ local function renderNote(evt, col, row)
     overrides = { [5] = 'shadowed', [6] = 'shadowed' }
   end
 
+  -- delayC is the realised-frame delay; divergence (delay ~= delayC) means
+  -- the authored intent couldn't be realised (raw clamped at 0 or by
+  -- step 4.8's same-pitch onset floor). tp signals it with a small star.
+  local divergent = evt.delayC ~= nil and evt.delayC ~= (evt.delay or 0)
+
   if showDelay then
     local d = evt.delay or 0
     if d == 0 then
-      return text .. ' ···', nil, overrides
+      return text .. ' ···', nil, overrides, divergent
     end
     text = text .. ' ' .. string.format('%03d', math.abs(d))
     if d < 0 then
@@ -125,7 +130,7 @@ local function renderNote(evt, col, row)
       overrides[n-2], overrides[n-1], overrides[n] = 'negative', 'negative', 'negative'
     end
   end
-  return text, nil, overrides
+  return text, nil, overrides, divergent
 end
 
 local function renderPB(evt)
@@ -152,6 +157,14 @@ local renderFns = {
 local function renderCell(evt, col, row)
   local fn = renderFns[col.type]
   if fn then return fn(evt, col, row) end
+end
+
+-- Offset (in grid cells) of the gap that sits just before the 3 delay
+-- digits in a note cell. The * marker is dropped here. Layout: pitch(3)
+-- + optional sample(3) + ' ' + vel(2). The next char is the separator
+-- space-before-delay -- our marker slot.
+local function delayMarkerOffset(col)
+  return 3 + (col.trackerMode and 3 or 0) + 1 + 2
 end
 
 ----- Drawing
@@ -193,6 +206,17 @@ local function printer(ctx, gX, gY, x0, y0)
     local maxWidth  = (x2 - x1 + 1) * gX
     local xPos = x0 + x1 * gX + math.floor((maxWidth - textWidth) / 2)
     ImGui.DrawList_AddTextEx(drawList, font, size, xPos, y0 + y * gY, chrome.colour(c), txt)
+  end
+
+  -- Small glyph centred in a single grid cell. Used for the * marker
+  -- that tp drops next to a note's delay field when authored delay
+  -- could not be realised (delay ~= delayC).
+  function pt:smallGlyph(x, y, txt, size, c)
+    local scale     = size / 15
+    local textWidth = ImGui.CalcTextSize(ctx, txt) * scale
+    local xPos = x0 + x * gX + math.floor((gX - textWidth) / 2)
+    local yPos = y0 + y * gY + math.floor((gY - size) / 2)
+    ImGui.DrawList_AddTextEx(drawList, font, size, xPos, yPos, chrome.colour(c), txt)
   end
 
   function pt:vLine(x, y1, y2, c)
@@ -688,13 +712,13 @@ local function drawTracker()
       if col.x then
         local evt = col.cells and col.cells[row]
         local ghost = not evt and col.ghosts and col.ghosts[row]
-        local text, textCol, overrides
+        local text, textCol, overrides, divergent
         if ghost then
           local cellCol
           text, cellCol = renderCell({ val = ghost.val }, col, row)
           textCol = cellCol == 'negative' and 'ghostNegative' or 'ghost'
         else
-          text, textCol, overrides = renderCell(evt, col, row)
+          text, textCol, overrides, divergent = renderCell(evt, col, row)
           if col.overflow and col.overflow[row] then textCol, overrides = 'overflow', nil end
           textCol = textCol or 'text'
           if textCol == 'text' and col.offGrid and col.offGrid[row] then
@@ -702,7 +726,7 @@ local function drawTracker()
           end
         end
         local muted = tv:isChannelEffectivelyMuted(col.midiChan)
-        if muted then textCol, overrides = 'inactive', nil end
+        if muted then textCol, overrides, divergent = 'inactive', nil, false end
         if not text then text = '' end
         local cx, i = col.x, 0
         for ch in text:gmatch(utf8.charpattern) do
@@ -710,6 +734,9 @@ local function drawTracker()
           local c = (overrides and overrides[i]) or (ch == '·' and 'inactive' or textCol)
           draw:text(cx, y, ch, c)
           cx = cx + 1
+        end
+        if divergent and col.showDelay then
+          draw:smallGlyph(col.x + delayMarkerOffset(col), y, '*', 9, textCol)
         end
       end
     end
