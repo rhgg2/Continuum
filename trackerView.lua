@@ -1075,7 +1075,7 @@ local noteOff, adjustDuration, adjustPosition do
   end
 end
 
------ Reswing / quantize
+----- Quantize / scale
 
 do
 
@@ -1088,92 +1088,6 @@ do
       util.add(groups, { col = col, locs = locs })
     end
     return groups
-  end
-
-  --contract: skips events without evt.rpb (foreign-imported); plan→mutate so reads stay stable; clamps plan ppq to take length to stop MIDI_Sort auto-extending the source; rpb left untouched (ppqL is truth)
-  local function reswingCore(groups, opts)
-    local plans = {}
-    local notePlansByChan = {}
-    for _, g in ipairs(groups) do
-      local col, chan = g.col, g.col.midiChan
-      for _, e in pairs(g.locs) do
-        if e.rpb and (not opts.include or opts.include(e, chan)) then
-          local entry = { col = col, e = e,
-            newppq = math.min(length, tm:fromLogical(chan, e.ppqL)) }
-          if util.isNote(e) then
-            entry.newEndppq = math.min(length, tm:fromLogical(chan, e.endppqL))
-            notePlansByChan[chan] = notePlansByChan[chan] or {}
-            util.add(notePlansByChan[chan], entry)
-          end
-          util.add(plans, entry)
-        end
-      end
-    end
-
-    -- Pass 1.5: clamp delays so realised order = logical order under
-    -- the post-reswing geometry. delayRange enforces this on direct
-    -- edits; reswing changes raw ppqs without touching delay, so
-    -- a delay that fit the old gap can spill into the new one. Walk
-    -- each channel's note plans in new logical order, tracking the
-    -- last realised onset per column (same-col bound) and last
-    -- endppq per pitch (same-pitch bound) — same two bounds
-    -- delayRange uses, sourced from post-reswing positions.
-    local clamped = 0
-    for _, list in pairs(notePlansByChan) do
-      table.sort(list, function(a, b) return a.newppq < b.newppq end)
-      local lastInCol, lastInPitch = {}, {}
-      for _, p in ipairs(list) do
-        local e = p.e
-        local realised = p.newppq + timing.delayToPPQ(e.delay or 0, resolution)
-        local floor    = 0
-        local prevCol  = lastInCol[p.col]
-        if prevCol   then floor = math.max(floor, prevCol.realised + 1) end
-        local prevPit  = lastInPitch[e.pitch]
-        if prevPit   then floor = math.max(floor, prevPit.newEndppq)   end
-        if realised < floor then
-          p.newDelay = math.ceil(timing.ppqToDelay(floor - p.newppq, resolution))
-          realised   = p.newppq + timing.delayToPPQ(p.newDelay, resolution)
-          clamped    = clamped + 1
-        end
-        lastInCol[p.col]     = { realised = realised, newEndppq = p.newEndppq }
-        lastInPitch[e.pitch] = { realised = realised, newEndppq = p.newEndppq }
-      end
-    end
-
-    -- Pass 2: conform overlaps that monotone-but-rounded
-    -- tm:fromLogical may have nudged past noteColumnAccepts'
-    -- threshold (or onto the same ppq). Without this, allocator
-    -- rejects the persisted lane and the successor drifts.
-    conformOverlaps(plans)
-
-    -- conformOverlaps nudges raw mid-plan, so reswing ships raw and
-    -- ppqL together and flags rawTime so tm threads it through without
-    -- a second swing — see "Caller speaks raw" in docs/timing.md.
-    for _, p in ipairs(plans) do
-      local e, u = p.e, {}
-      if p.newppq then
-        u.ppq  = p.newppq
-        u.ppqL = e.ppqL
-      end
-      if p.newEndppq ~= nil and util.isNote(e) then
-        u.endppq  = p.newEndppq
-        u.endppqL = e.endppqL
-      end
-      if p.newDelay ~= nil then u.delay = p.newDelay end
-      if u.ppq ~= nil or u.endppq ~= nil then u.rawTime = true end
-      if next(u) then tm:assignEvent(e, u) end
-    end
-    tm:flush()
-
-    if clamped > 0 then
-      reaper.ShowMessageBox(
-        clamped .. ' note(s) reswung — delay clamped at realised-order bound.',
-        'reswing', 0)
-    end
-  end
-
-  local function reswingScope(groups)
-    reswingCore(groups, {})
   end
 
   -- Plan-then-write so conformOverlaps can clip plan geometry against
@@ -1246,7 +1160,6 @@ do
     end
   end
 
-  function tv:reswingAll()                    reswingScope(allGroups())                 end
   function tv:quantizeSelection()             quantizeScope(eventsByCol())              end
   function tv:quantizeAll()                   quantizeScope(allGroups())                end
   function tv:quantizeKeepRealisedSelection() quantizeKeepRealisedScope(eventsByCol())  end

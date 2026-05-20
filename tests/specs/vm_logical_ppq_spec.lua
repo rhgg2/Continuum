@@ -305,7 +305,7 @@ return {
         config = { take = { rowPerBeat = 4 } },
       }
       h.vm:setGridSize(80, 40)
-      h.vm:reswingAll()
+      h.tm:markSwingStale(nil); h.tm:rebuild(false)
 
       local n = noteByPitch(h.fm:dump(), 60)
       t.eq(n.ppqL,    60,  'ppqL preserved across reswing')
@@ -368,7 +368,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.vm:reswingAll()
+      h.tm:markSwingStale(nil); h.tm:rebuild(false)
 
       local c = ccByCC(h.fm:dump(), 1)
       t.eq(c.ppqL, 120, 'ppqL unchanged across same-swing reswing')

@@ -45,7 +45,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.vm:reswingAll()
+      h.tm:markSwingStale(nil); h.tm:rebuild(false)
 
       local notes = h.fm:dump().notes
       table.sort(notes, function(a, b) return a.pitch < b.pitch end)

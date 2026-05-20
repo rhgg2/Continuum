@@ -36,7 +36,6 @@ return {
       }
       h.cm:remove('take', 'swing')
       h.vm:setGridSize(80, 40)
-      h.vm:reswingAll()
 
       local cc = findCC(h.fm:dump(), 'cc', 2)
       t.truthy(cc, 'cc survives swing change')
@@ -60,7 +59,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.vm:reswingAll()
+      h.tm:markSwingStale(nil); h.tm:rebuild(false)
 
       local cc = findCC(h.fm:dump(), 'cc', 2)
       t.eq(cc.ppq, 139, 'frameless cc untouched')
@@ -84,7 +83,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.vm:reswingAll()
+      h.tm:markSwingStale(nil); h.tm:rebuild(false)
 
       local cc = findCC(h.fm:dump(), 'cc', 2)
       t.eq(cc.rpb, 4, 'rpb preserved (reswing does not restamp)')
@@ -169,8 +168,7 @@ return {
       }
       h.cm:remove('take', 'swing')
       h.vm:setGridSize(80, 40)
-      h.vm:reswingAll()
-      h.vm:reswingAll()
+      h.tm:markSwingStale(nil); h.tm:rebuild(false)
 
       local pb = findCC(h.fm:dump(), 'pb', 2)
       t.truthy(pb, 'pb survives both reswings')
@@ -180,26 +178,18 @@ return {
     end,
   },
 
-  -- Reswing recomputes intent ppqs but leaves delay alone. If the
-  -- new swing closes a gap below the magnitude of an existing delay,
-  -- the same realised reorder delayRange now forbids on direct edits
-  -- would slip in via reswing. The pass-1.5 clamp in reswingCore
-  -- pulls offending delays back to the post-reswing realised-order
-  -- bound, so the invariant holds across reswing too.
+  -- Reswing recomputes intent ppqs but leaves delay alone. If the new
+  -- swing closes a gap below the magnitude of an existing delay, raw
+  -- order inverts relative to logical order. Under the unified model
+  -- delay is intent and stays as authored; same-lane swap is allowed
+  -- (same authored-swap-survives policy as same-pitch). Display shows
+  -- B below A in the column; B sounds first.
   {
-    name = 'reswing into tighter swing clamps delay to preserve realised order',
+    name = 'reswing into tighter swing: same-lane swap survives, delay stays authored',
     run = function(harness)
       -- A (pitch 60) at row 2, B (pitch 64) at row 3, both lane 1 of
-      -- channel 1, both authored under identity (swing = nil). B has
-      -- delay = -240 ms-QN (= -58 ppq @ res=240), valid pre-reswing:
-      -- A.realised=120, B.realised=122.
-      --
-      -- Reswing target = c58. Under c58, ppqL 120 → 139,
-      -- 180 → 194 (= round(240 * (0.75 + 0.08·sin(π·0.75)))). The
-      -- unclamped delay would put B.realised at 194 + (-58) = 136 —
-      -- *before* A's 139. Pass 1.5 clamps B.delay to ceil(ppqToDelay
-      -- (140 − 194, 240)) = ceil(-225) = -225, landing B.realised at
-      -- 140, just after A.
+      -- channel 1. B has delay = -240 ms-QN (= -58 ppq @ res=240).
+      -- Under c58: ppqL 120 → 139, 180 → 194. B.raw = 194 + (-58) = 136.
       local h = harness.mk{
         seed = {
           notes = {
@@ -218,16 +208,14 @@ return {
       }
       h.cm:set('take', 'swing', 'c58')
       h.vm:setGridSize(80, 40)
-      h.vm:reswingAll()
 
       local Bafter
       for _, x in ipairs(h.fm:dump().notes) do
         if x.pitch == 64 then Bafter = x end
       end
       t.truthy(Bafter, 'B survives reswing')
-      t.eq(Bafter.delay, -225,
-        'delay clamped at A.realisedOnset + 1 in the post-reswing geometry')
-      t.eq(Bafter.ppq, 140, 'realised onset = A.realisedOnset + 1 = 140')
+      t.eq(Bafter.delay, -240, 'stored delay unchanged — intent preserved')
+      t.eq(Bafter.ppq, 136, 'B realised before A — authored swap survives in raw')
     end,
   },
 
