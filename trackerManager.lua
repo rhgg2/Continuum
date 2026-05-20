@@ -1548,9 +1548,9 @@ do
     if mm:take() then
       local used = {}
       local g = cm:get('swing')
-      if type(g) == 'string' then used[g] = true end
+      if type(g) == 'string' and g ~= 'identity' then used[g] = true end
       for _, v in pairs(cm:get('colSwing') or {}) do
-        if type(v) == 'string' then used[v] = true end
+        if type(v) == 'string' and v ~= 'identity' then used[v] = true end
       end
       local prev = cm:get('usedSwings') or {}
       local same = true

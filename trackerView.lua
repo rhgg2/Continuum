@@ -325,8 +325,17 @@ local function writeShared(key, value)
   end
 end
 
-function tv:setSwingSlot(name)  writeShared('swing',  name) end
-function tv:setTemperSlot(name) writeShared('temper', name) end
+-- Explicit sentinel write (not cm:remove) on "off": nil at a tier would
+-- fall through to project, which is exactly the silent-bleed bug we're
+-- avoiding. Sentinels resolve to no-op downstream.
+function tv:setSwingSlot(name)
+  if name == nil or name == '' then name = 'identity' end
+  writeShared('swing', name)
+end
+function tv:setTemperSlot(name)
+  if name == nil or name == '' then name = '12EDO' end
+  writeShared('temper', name)
+end
 
 -- colSwing is a per-channel map; cross-track bleed via project would
 -- mean track A's per-channel pattern surfaces on a fresh track B until

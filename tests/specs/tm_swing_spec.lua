@@ -113,8 +113,8 @@ return {
     run = function(harness)
       local h = harness.mk{
         config = {
-          project = { swings = { ['id'] = {} } },
-          take    = { swing = 'id' },
+          project = { swings = { ['identity'] = {} } },
+          take    = { swing = 'identity' },
         },
       }
       t.eq(h.tm:fromLogical(1, 120), 120, 'empty composite is identity')

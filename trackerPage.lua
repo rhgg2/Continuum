@@ -274,9 +274,9 @@ end
 local function pickSwing(name)              tv:setSwingSlot(name)         end
 local function pickColSwing(chan, name)      tv:setColSwingSlot(chan, name) end
 
--- Identity composite ('id') is the no-swing default — represented in
--- the UI as "Off" rather than as a pickable preset row.
-local SWING_PRESET_EXCLUDE = { id = true }
+-- 'identity' is the explicit no-swing sentinel (schema default); shown as
+-- "Off" in the button, hidden from the picker rows.
+local SWING_PRESET_EXCLUDE = { identity = true }
 
 -- Hex stays visible when unassigned so `<`/`>` advertise their step.
 -- No "Off" row — every slot is real.
@@ -355,7 +355,7 @@ local toolbarSegments = {
         local cur = cm:get('swing')
         chrome.drawPicker {
           kind        = 'swing', heading = 'Swing',
-          buttonLabel = cur or 'Off',
+          buttonLabel = cur == 'identity' and 'Off' or cur,
           items       = chrome.libPicker('swings', cur, SWING_PRESET_EXCLUDE),
           onPick      = pickSwing,
         }

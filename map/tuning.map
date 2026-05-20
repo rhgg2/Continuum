@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=128  sha=2973124  mode=namespace
+@module tuning  src=tuning.lua  loc=128  sha=fa4a61d  mode=namespace
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
@@ -24,7 +24,7 @@
 
 # Public API (M.*)
   @api M.findTemper(name, userLib)  @ 56
-      @contract  returns nil if either name or userLib is missing; callers treat nil as "no temperament"
+      @contract  looks up name in userLib first, then falls back to built-in M.presets; returns nil only if name is missing or unknown to both. Lets the '12EDO' sentinel resolve even when userLib is empty.
   @api M.midiToStep(temper, midi, detune)  @ 65
       @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
       @contract  returned octave is MIDI-relative (C-1 → -1)

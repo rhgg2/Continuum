@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1451  sha=80e8c7d  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1451  sha=bba67af  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
@@ -46,7 +46,7 @@
   @state toolbar  @ 73   -- lazy: chrome may be nil at construction in tests
   @state paintLast = nil  @ 78   -- region-paint per-cell debounce
   @state renderFns = {  @ 148
-  @state SWING_PRESET_EXCLUDE = { id = true }  @ 279
+  @state SWING_PRESET_EXCLUDE = { identity = true }  @ 279
   @state toolbarSegments = {  @ 313
   @state laneRenderable = { cc = true, pb = true, at = true }  @ 428
       @invariant  lane strip renders only cc/pb/at columns; other types show as tinted background

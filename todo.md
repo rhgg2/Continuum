@@ -7,7 +7,6 @@
 - automation smoothing
 - 14bit CCs
 - move to command based key/mouse interactions
-- fix swing default override
 - fix swing editor not loading current swing
 - groups small highlight at caret
 - fix prefix argument / scale

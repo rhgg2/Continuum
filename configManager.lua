@@ -4,7 +4,7 @@
 --invariant: cm owns its cache tables: every read deep-clones on the way out, every write deep-clones on the way in (callers never alias cm state)
 --invariant: 5-tier merge order: global → project → track → take → transient; most-specific cache holding the key wins, falling through to schema defaults
 --invariant: transient tier never persists (saver is a no-op) and resets to {} on every refreshCache
---invariant: declarations is an ordered array-of-pairs so declared-but-nil keys (e.g. temper, swing) coexist with non-nil defaults without ambiguity
+--invariant: declarations is an ordered array-of-pairs so declared-but-nil keys (e.g. sampleBrowserRoot) coexist with non-nil defaults without ambiguity
 --invariant: track and take tiers require the corresponding REAPER context; without it their loaders return {} and savers print an error
 --shape: configChangedPayload.targeted = { key = string, level = string }   -- set / remove
 --shape: configChangedPayload.bulk     = { level = string }                  -- assign (keyless)
@@ -41,10 +41,13 @@ local declarations = {
 
   -- string choice
   { 'noteLayout',      'colemak' },
+  -- Slot keys: defaults are explicit no-op sentinels, not nil. nil would let
+  -- project-tier writes silently bleed into takes that chose "off". '12EDO'
+  -- resolves via tuning.presets; 'identity' resolves via the swings library.
+  { 'temper',          '12EDO'    },
+  { 'swing',           'identity' },
 
   -- null-defaulted (declared, no initial value)
-  { 'temper',          nil   },
-  { 'swing',           nil   },
   { 'sampleBrowserRoot', nil },
 
   -- table-valued
@@ -55,7 +58,7 @@ local declarations = {
   -- swings) overlays them per-name. Read with mergeTiers=true to
   -- get the union.
   { 'swings',          {
-      ['id']         = {},
+      ['identity']   = {},
       ['classic-55'] = { factors = { { atom = 'classic', shift = 0.05, period = 1 } } },
       ['classic-58'] = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } },
       ['classic-62'] = { factors = { { atom = 'classic', shift = 0.12, period = 1 } } },

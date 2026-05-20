@@ -52,10 +52,10 @@ M.presets = {
   }),
 }
 
---contract: returns nil if either name or userLib is missing; callers treat nil as "no temperament"
+--contract: looks up name in userLib first, then falls back to built-in M.presets; returns nil only if name is missing or unknown to both. Lets the '12EDO' sentinel resolve even when userLib is empty.
 function M.findTemper(name, userLib)
-  if not (name and userLib) then return nil end
-  return userLib[name]
+  if not name then return nil end
+  return (userLib and userLib[name]) or M.presets[name]
 end
 
 ----- Coordinate conversions

@@ -103,10 +103,15 @@ return {
     name = 'null-defaulted keys are declared but return nil',
     run = function(harness)
       local h = harness.mk()
-      -- 'temper' is declared with no default; should not raise, should return nil.
-      local ok, v = pcall(function() return h.cm:get('temper') end)
+      -- 'sampleBrowserRoot' is null-defaulted. Real global state can leak
+      -- into the harness, so first clear all tiers, then verify the schema
+      -- declaration surfaces as nil rather than raising.
+      for _, level in ipairs({'global', 'project', 'track', 'take', 'transient'}) do
+        pcall(function() h.cm:remove(level, 'sampleBrowserRoot') end)
+      end
+      local ok, v = pcall(function() return h.cm:get('sampleBrowserRoot') end)
       t.truthy(ok,  'get on null-defaulted key does not raise')
-      t.eq(v, nil, 'null-defaulted key returns nil')
+      t.eq(v, nil, 'null-defaulted key returns nil when no tier has set it')
     end,
   },
 

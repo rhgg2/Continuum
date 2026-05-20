@@ -582,10 +582,14 @@ end
 
 local self = {}
 
---contract: no-op when already open; snapshot is current cm composite at open time, used for Reset and dirty-check
+--contract: no-op when already open or when the current selection is the
+--           'identity' sentinel (editing the identity composite would
+--           silently swing every take that chose "off"). snapshot is the
+--           current cm composite at open time, used for Reset and dirty-check.
 function self:open()
   if state then return end
   local name = cm:get('swing')
+  if name == 'identity' then return end
   local lib  = cm:get('swings', { mergeTiers = true })
   state = {
     name      = name,

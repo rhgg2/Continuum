@@ -434,21 +434,27 @@ return {
   },
 
   {
-    name = 'temper slot resolves only against the project lib (presets are seed-only)',
-    -- Mirrors the swing slot model: setting `cfg.temper` to a preset name
-    -- without seeding it into `cfg.tempers` must not activate.
+    name = 'temper resolves via cfg.tempers, falls back to built-in presets, returns nil for unknown names',
+    -- findTemper looks in the user lib first then in tuning.presets. The
+    -- schema default '12EDO' is a built-in preset name, so it resolves
+    -- with no seeding required. Unknown names still resolve to nil.
     run = function(harness)
       local h = harness.mk()
-      t.eq(h.vm:activeTemper(), nil, 'no temper initially')
+      local def = h.vm:activeTemper()
+      t.truthy(def,           'schema-default 12EDO resolves via presets fallback')
+      t.eq(def.name, '12EDO')
 
       h.cm:set('track', 'temper', '19EDO')
-      t.eq(h.vm:activeTemper(), nil,
-        'slot name alone does not resolve — project lib is empty')
+      local t19 = h.vm:activeTemper()
+      t.truthy(t19,           'built-in preset name resolves without seeding cfg.tempers')
+      t.eq(t19.name, '19EDO')
 
-      h.vm:setTemper('19EDO', tuning.presets['19EDO'])
-      local temper = h.vm:activeTemper()
-      t.truthy(temper,           '19EDO active after seeding the project lib')
-      t.eq(temper.name, '19EDO')
+      h.cm:set('track', 'temper', 'NotARealTemperName')
+      t.eq(h.vm:activeTemper(), nil, 'unknown name resolves to nil')
+
+      h.vm:setTemper('myCustom', tuning.presets['19EDO'])
+      h.cm:set('track', 'temper', 'myCustom')
+      t.eq(h.vm:activeTemper().name, '19EDO', 'user-seeded temper resolves')
     end,
   },
 }

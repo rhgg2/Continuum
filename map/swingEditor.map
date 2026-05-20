@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=605  sha=fa4a61d  mode=chunk
+@module swingEditor  src=swingEditor.lua  loc=609  sha=4a6bfb0  mode=chunk
 @deps tv, cm, chrome, ctx, seqMgr
 
 # Invariants & contracts
@@ -10,6 +10,7 @@
   @invariant  on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
   @invariant  slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider
   @invariant  atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
+  @contract  no-op when already open or when the current selection is the
 
 # Shapes
   @shape  state = { name, snapshot, createBuf, createError, rpb, wild }  -- composite is NOT cached here
@@ -95,11 +96,13 @@
 
 # Public API (self:*)
   -- Public
-  @api self:open()  @ 586
-      @contract  no-op when already open; snapshot is current cm composite at open time, used for Reset and dirty-check
-  @api self:render(w, h)  @ 598
-  @api self:close()  @ 600
-  @api self:isOpen()  @ 602
+  @api self:open()  @ 589
+      --           'identity' sentinel (editing the identity composite would
+      --           silently swing every take that chose "off"). snapshot is the
+      --           current cm composite at open time, used for Reset and dirty-check.
+  @api self:render(w, h)  @ 602
+  @api self:close()  @ 604
+  @api self:isOpen()  @ 606
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

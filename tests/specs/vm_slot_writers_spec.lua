@@ -28,7 +28,10 @@ return {
     end,
   },
   {
-    name = 'setTemperSlot(nil) clears at BOTH project and track',
+    name = 'setTemperSlot(nil) writes the 12EDO sentinel at BOTH project and track',
+    -- Sentinel write (not cm:remove) is what blocks cross-take bleed: a
+    -- removed key falls through to whatever the other take last wrote
+    -- to project. '12EDO' resolves no-op via tuning.presets.
     run = function(harness)
       local h = harness.mk{
         config = {
@@ -38,19 +41,19 @@ return {
         },
       }
       h.vm:setTemperSlot(nil)
-      t.eq(h.cm:getAt('project', 'temper'), nil, 'project cleared')
-      t.eq(h.cm:getAt('track',   'temper'), nil, 'track  cleared')
+      t.eq(h.cm:getAt('project', 'temper'), '12EDO', 'project mirror -> 12EDO sentinel')
+      t.eq(h.cm:getAt('track',   'temper'), '12EDO', 'track selection -> 12EDO sentinel')
     end,
   },
   {
-    name = 'setTemperSlot("") clears at BOTH project and track',
+    name = 'setTemperSlot("") writes the 12EDO sentinel at BOTH project and track',
     run = function(harness)
       local h = harness.mk{
         config = { project = { temper = '19EDO' }, track = { temper = '19EDO' } },
       }
       h.vm:setTemperSlot('')
-      t.eq(h.cm:getAt('project', 'temper'), nil, 'project cleared on empty string')
-      t.eq(h.cm:getAt('track',   'temper'), nil, 'track  cleared on empty string')
+      t.eq(h.cm:getAt('project', 'temper'), '12EDO', 'project mirror -> 12EDO')
+      t.eq(h.cm:getAt('track',   'temper'), '12EDO', 'track selection -> 12EDO')
     end,
   },
 
@@ -69,7 +72,7 @@ return {
     end,
   },
   {
-    name = 'setSwingSlot(nil) clears at BOTH project and track',
+    name = 'setSwingSlot(nil) writes the identity sentinel at BOTH project and track',
     run = function(harness)
       local h = harness.mk{
         config = {
@@ -78,8 +81,8 @@ return {
         },
       }
       h.vm:setSwingSlot(nil)
-      t.eq(h.cm:getAt('project', 'swing'), nil, 'project cleared')
-      t.eq(h.cm:getAt('track',   'swing'), nil, 'track  cleared')
+      t.eq(h.cm:getAt('project', 'swing'), 'identity', 'project mirror -> identity sentinel')
+      t.eq(h.cm:getAt('track',   'swing'), 'identity', 'track selection -> identity sentinel')
     end,
   },
 
@@ -150,6 +153,50 @@ return {
       h.cm:remove('track', 'temper')
       t.eq(h.cm:get('temper'), '31EDO',
            'fresh-track view sees the most recent selection via project')
+    end,
+  },
+
+  ----------------------------------------------------------------
+  -- No-bleed: explicit-off sentinel at the take blocks project-tier
+  -- inheritance. This is the bug the sentinel migration exists to fix:
+  -- nil-at-tier used to fall through silently, letting another take's
+  -- swing pick contaminate a take that had explicitly chosen "Off".
+  ----------------------------------------------------------------
+  {
+    name = 'no-bleed: setSwingSlot(nil) records identity, blocks later project-tier writes',
+    run = function(harness)
+      local h = harness.mk{
+        config = { project = { swings = { ['classic-55'] = classic55 } } },
+      }
+      h.vm:setSwingSlot(nil)
+      t.eq(h.cm:getAt('track', 'swing'), 'identity',
+           'Off persisted as identity sentinel at the track tier')
+      t.eq(h.cm:getAt('project', 'swing'), 'identity',
+           'Off persisted at project tier too (mirroring intact)')
+
+      -- Simulate another take on the same project writing a different swing
+      -- to the project tier (this is what tv:setSwingSlot('classic-55') does
+      -- when invoked from another take).
+      h.cm:set('project', 'swing', 'classic-55')
+
+      t.eq(h.cm:get('swing'), 'identity',
+           'track-tier identity sentinel blocks fall-through to project')
+    end,
+  },
+  {
+    name = 'no-bleed: setTemperSlot(nil) records 12EDO, blocks later project-tier writes',
+    run = function(harness)
+      local h = harness.mk{
+        config = { project = { tempers = { ['31EDO'] = tuning.presets['31EDO'] } } },
+      }
+      h.vm:setTemperSlot(nil)
+      t.eq(h.cm:getAt('track', 'temper'), '12EDO',
+           '12EDO sentinel at track tier')
+
+      h.cm:set('project', 'temper', '31EDO')
+
+      t.eq(h.cm:get('temper'), '12EDO',
+           'track-tier 12EDO blocks fall-through to project')
     end,
   },
 }
