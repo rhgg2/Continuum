@@ -14,6 +14,7 @@
 - undo for groups feature / swing / tuning changes
 - audit token
 - can ppq logical be float everywhere?
+- 
 - util.OPEN ~~> math.huge
 
   Reframing to "what a competent tracker offers that Continuum's

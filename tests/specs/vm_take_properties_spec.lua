@@ -259,10 +259,14 @@ return {
   },
 
   {
-    name = 'tile preserves cc number, fake-pb flag, and arbitrary metadata on copies',
-    -- Pins the bug fix: the column projection drops cc.cc, pb.fake, and
-    -- anything beyond a hardcoded field list. Tile must walk mm directly so
-    -- copies are bit-for-bit replicas modulo the ppq shift.
+    name = 'tile preserves cc number, pb shape, and arbitrary metadata on copies',
+    -- Pins the bug fix: the column projection drops cc.cc, pb metadata,
+    -- and anything beyond a hardcoded field list. Tile must walk mm
+    -- directly so copies are bit-for-bit replicas modulo the ppq shift.
+    -- (The pb.fake flag is reconciled by tm:rebuild step 4.9 against
+    -- lane-1 detune jumps, so orphan fakes don't survive; the
+    -- arbitrary-field property is tested here via a real pb's shape
+    -- field. Fake-pb persistence has its own coverage in tm_tuning_spec.)
     run = function(harness)
       local h = harness.mk{ seed = {
         notes = {
@@ -271,8 +275,10 @@ return {
         ccs = {
           -- distinct cc number — verifies col.cc isn't lost
           { ppq = 100, evType = 'cc', cc = 74, chan = 1, val = 64 },
-          -- fake pb — the marker the column projection drops
-          { ppq = 200, evType = 'pb', chan = 1, val = 1024, fake = true },
+          -- real pb with a custom metadata field — verifies non-
+          -- hardcoded fields survive the tile copy (kept off the shape
+          -- field so interpolation doesn't try to render it)
+          { ppq = 200, evType = 'pb', chan = 1, val = 1024, tag = 'pb-foo' },
           -- cc with custom metadata field — verifies arbitrary fields ride along
           { ppq = 300, evType = 'cc', cc = 1, chan = 1, val = 32, label = 'alpha' },
         },
@@ -291,7 +297,7 @@ return {
 
       t.eq(ccs[5].ppq,     4040,    'pb copy ppq')
       t.eq(ccs[5].evType, 'pb',    'pb evType preserved')
-      t.eq(ccs[5].fake,    true,    'pb fake flag preserved')
+      t.eq(ccs[5].tag,    'pb-foo', 'pb arbitrary-field metadata preserved')
       t.eq(ccs[5].val,     1024,    'pb val preserved verbatim')
 
       t.eq(ccs[6].ppq,     4140,    'cc#1 copy ppq')

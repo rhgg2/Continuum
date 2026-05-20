@@ -136,52 +136,13 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   ----- Accessors
 
-  local function owner(chan, P)
-    return util.seek(chans[chan].notes, 'at-or-before', P, function(n) return n.endppq > P end)
-  end
-
+  -- Prevailing lane-1 detune at-or-before ppq. Used by flush to derive
+  -- a pb's wire-raw from its authored cents (raw = cents + detune at
+  -- seat). The full absorber reconciliation lives in tm:rebuild step
+  -- 4.9; um just stages.
   local function detuneAt(chan, P)
     local n = util.seek(chans[chan].notes, 'at-or-before', P)
     return (n and n.detune) or 0
-  end
-
-  local function detuneBefore(chan, P)
-    local n = util.seek(chans[chan].notes, 'before', P)
-    return (n and n.detune) or 0
-  end
-
-  local function rawAt(chan, P)
-    local pb = util.seek(chans[chan].pbs, 'at-or-before', P)
-    return pb and pb.val or 0
-  end
-
-  local function rawBefore(chan, P)
-    local pb = util.seek(chans[chan].pbs, 'before', P)
-    return pb and pb.val or 0
-  end
-
-  local function pbAt(chan, P)
-    local pb = util.seek(chans[chan].pbs, 'at-or-before', P)
-    return pb and pb.ppq == P and pb or nil
-  end
-
-  --contract: logical = raw − detune; this is the "user heard pitch" frame, decoupled from the absorber bookkeeping
-  local function logicalAt(chan, P)
-    return rawAt(chan, P) - detuneAt(chan, P)
-  end
-
-  local function logicalBefore(chan, P)
-    return rawBefore(chan, P) - detuneBefore(chan, P)
-  end
-
-  local function nextRealChange(chan, P)
-    local pb = util.seek(chans[chan].pbs, 'after', P, function(e) return not e.fake end)
-    return (pb and pb.ppq) or math.huge
-  end
-
-  local function nextNotePPQ(chan, P)
-    local n = util.seek(chans[chan].notes, 'after', P)
-    return (n and n.ppq) or math.huge
   end
 
   local function forEachAttachedPA(host, fn)
@@ -212,10 +173,25 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   --contract: dedupes by token (unique across types) so multiple in-flight assigns to the same event collapse into one mm write; util.REMOVE markers must survive merging
   local function assignLowlevel(evt, update)
+    local oldChan = evt.chan
     util.assign(evt, update)
-    -- ppq mutates in place; resort so subsequent util.seek calls keyed off chans[chan].notes stay correct under non-monotone callers (reswing).
-    if evt.evType == 'note' and update.ppq ~= nil and evt.lane == 1 then
-      sortByPPQ(chans[evt.chan].notes)
+    -- Keep the per-chan index coherent. chan change migrates the entry;
+    -- ppq change resorts (util.seek callers depend on ascending ppq;
+    -- non-monotone updaters like reswing leave it out of order).
+    local function listOf(c)
+      if evt.evType == 'note' and evt.lane == 1 then return chans[c].notes end
+      if evt.evType == 'pb' then return chans[c].pbs end
+    end
+    if update.chan and update.chan ~= oldChan then
+      local old = listOf(oldChan)
+      if old then
+        for i, item in ipairs(old) do if item == evt then table.remove(old, i); break end end
+      end
+      local new = listOf(evt.chan)
+      if new then util.add(new, evt); sortByPPQ(new) end
+    elseif update.ppq ~= nil then
+      local list = listOf(evt.chan)
+      if list then sortByPPQ(list) end
     end
     if not evt.token then return end
     for _, e in ipairs(assigns) do
@@ -261,165 +237,51 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
   end
 
-  --contract: shifts every pb's raw val by delta over [P1, P2); preserves logical stream above by definition since detune absorbs delta
-  local function retuneLowlevel(chan, P1, P2, delta)
-    if delta == 0 then return end
-    for _, pb in ipairs(chans[chan].pbs) do
-      if pb.ppq >= P1 and pb.ppq < P2 then
-        assignLowlevel(pb, { val = pb.val + delta })
-      end
-    end
-  end
-
-  --contract: no-op (returns false) if a pb already sits at P; otherwise seats one at the carrier value (rawAt) so logical stream is preserved
-  local function forcePb(chan, P, extras)
-    if pbAt(chan, P) then return false end
-    addLowlevel(util.assign({ ppq = P, chan = chan, val = rawAt(chan, P), evType = 'pb' }, extras))
-    return true
-  end
-
-  local function markFake(chan, P)
-    local pb = pbAt(chan, P)
-    if pb then assignLowlevel(pb, { fake = true }) end
-  end
-
-  local function unmarkFake(chan, P)
-    local pb = pbAt(chan, P)
-    if not (pb and pb.fake) then return end
-    assignLowlevel(pb, { fake = util.REMOVE })
-  end
-
-  -- Callers invoke post-mutation (note edits committed) so detuneAt/Before see live values.
-  local function reconcileBoundary(chan, P)
-    if P >= math.huge then return end
-    local D, C = detuneAt(chan, P), detuneBefore(chan, P)
-    local pb   = pbAt(chan, P)
-    if D == C then
-      if pb and pb.fake and rawAt(chan, P) == rawBefore(chan, P) then
-        deleteLowlevel(pb)
-      end
-    elseif not pb then
-      forcePb(chan, P)               -- val = rawAt = rawBefore (no pb yet)
-      markFake(chan, P)
-      pb = pbAt(chan, P)
-      assignLowlevel(pb, { val = pb.val + (D - C) })
-    end
-  end
-
   ----- High-level ops
 
-  --contract: authoring frame is logical (pb.val is logical cents); seats/updates the carrier and retunes forward to next real pb so logical above is preserved
+  -- um is a stager. Pb authoring writes cents (the logical authored
+  -- value); the wire raw is derived at flush (cents + detune at seat).
+  -- All absorber seating, removal, and reseating happens in tm:rebuild
+  -- step 4.9 from the final note layout — so a clamp or delay change
+  -- that moves a lane-1 onset takes its absorber along automatically.
+
+  --contract: authoring frame is logical cents; um stages only, the
+  -- absorber pass at rebuild step 4.9 reconciles seats and recomputes
+  -- raw vals. Caller passes `val` (logical cents) for back-compat;
+  -- stored as `cents` on the event.
   local function addPb(pb)
-    local chan, P, L = pb.chan, pb.ppq, pb.val or 0
-    local delta  = L - logicalAt(chan, P)
-    -- chan/ppq/val belong to forcePb's structural set; evType comes through the literal.
-    local extras = util.clone(pb,
-      { chan = true, ppq = true, val = true, evType = true })
-    if not next(extras) then extras = nil end
-    if not forcePb(chan, P, extras) then
-      if extras then assignLowlevel(pbAt(chan, P), extras) end
-      unmarkFake(chan, P)
-    end
-    retuneLowlevel(chan, P, nextRealChange(chan, P), delta)
+    pb.cents = pb.val or 0
+    pb.val   = nil
+    addLowlevel(pb)
   end
 
-  --contract: retunes forward to undo pb's logical contribution; collapses to a real delete only if the seat would also be redundant as a fake (detuneAt == detuneBefore)
   local function deletePb(pb)
-    local chan, P = pb.chan, pb.ppq
-    retuneLowlevel(chan, P, nextRealChange(chan, P), logicalBefore(chan, P) - logicalAt(chan, P))
-    if detuneAt(chan, P) == detuneBefore(chan, P) then
-      deleteLowlevel(pb)
-    else
-      if owner(chan, P) then markFake(chan, P) end
-    end
+    deleteLowlevel(pb)
   end
 
   local function assignPb(pb, update)
-    if update.ppq and update.ppq ~= pb.ppq then
-      local chan, oldP, newP = pb.chan, pb.ppq, update.ppq
-      local oldL = logicalAt(chan, oldP)
-      local newL = update.val ~= nil and update.val or oldL
-
-      -- Two cases need a true destroy/create on the mm stream and fall
-      -- through to deletePb+addPb: a non-self pb already sits at newP
-      -- (typically a fake absorber to be merged in), or oldP needs a
-      -- fresh fake born to absorb a detune jump after we leave.
-      local existing      = pbAt(chan, newP)
-      local needFakeAtOld = (detuneAt(chan, oldP) ~= detuneBefore(chan, oldP))
-                            and owner(chan, oldP)
-      if (existing and existing ~= pb) or needFakeAtOld then
-        local extras = util.clone(pb, { token = true, fake = true,
-                                         chan = true, ppq = true, val = true,
-                                         evType = true })
-        util.assign(extras, util.clone(update, { ppq = true, val = true }))
-        deletePb(pb)
-        addPb(util.assign({ chan = chan, ppq = newP, val = newL }, extras))
-        return
-      end
-
-      -- In-place move. Mirror deletePb's retune over [oldP, nextRealOld)
-      -- to revert the pb's old contribution (this also bumps pb itself
-      -- to a passthrough val); then mutate ppq+val+metadata in one
-      -- assignLowlevel; then mirror addPb's retune over [newP, nextRealNew)
-      -- to lift pb to its new logical value. mm-side identity (uuid,
-      -- sidecar, idx) survives the move.
-      retuneLowlevel(chan, oldP, nextRealChange(chan, oldP),
-                     logicalBefore(chan, oldP) - oldL)
-      local carrierAtNew = rawAt(chan, newP)
-      local moveUpdate   = util.clone(update)
-      moveUpdate.ppq = newP
-      moveUpdate.val = carrierAtNew
-      assignLowlevel(pb, moveUpdate)
-      sortByPPQ(chans[chan].pbs)
-      retuneLowlevel(chan, newP, nextRealChange(chan, newP),
-                     newL - logicalAt(chan, newP))
-      return
+    if update.val ~= nil then
+      update.cents = update.val
+      update.val   = nil
     end
-    if update.val then
-      local chan, P = pb.chan, pb.ppq
-      local delta = update.val - logicalAt(chan, P)
-      unmarkFake(chan, P)
-      retuneLowlevel(chan, P, nextRealChange(chan, P), delta)
-    end
-    local rest = util.clone(update, { val = true, ppq = true })
-    if next(rest) then assignLowlevel(pb, rest) end
+    assignLowlevel(pb, update)
   end
 
   local function dirtyPc(chan) dirtyPcChans[chan] = true end
 
-  --contract: lane-1 path: seat fake-pb if detune jumps the carry, retune forward to next note, then reconcile the next-note boundary; lane>1 just queues with no realisation work
   local function addNote(n)
     dirtyPc(n.chan)
-    local D = n.detune
     if lastMuteSet[n.chan] then n.muted = true end
-    if n.lane == 1 then
-      local C     = detuneAt(n.chan, n.ppq)
-      local nextP = nextNotePPQ(n.chan, n.ppq)
-      if D ~= C and forcePb(n.chan, n.ppq) then markFake(n.chan, n.ppq) end
-      retuneLowlevel(n.chan, n.ppq, nextP, D - C)
-      addLowlevel(util.assign(n, { detune = D }))
-      reconcileBoundary(n.chan, nextP)
-    else
-      addLowlevel(util.assign(n, { detune = D }))
-    end
+    addLowlevel(n)
   end
 
-  --contract: attached PAs are deleted with the host unless keepPAs; lane-1 path drops any fake seat at n.ppq and retunes back to the prior detune over [n.ppq, nextNote)
   local function deleteNote(n, keepPAs)
     dirtyPc(n.chan)
     if not keepPAs then forEachAttachedPA(n, function(evt) deleteLowlevel(evt) end) end
-    if n.lane ~= 1 then deleteLowlevel(n); return end
-    local D1, D2 = detuneBefore(n.chan, n.ppq), detuneAt(n.chan, n.ppq)
-    local nextP  = nextNotePPQ(n.chan, n.ppq)
-    local pb     = pbAt(n.chan, n.ppq)
-    if pb and pb.fake then deleteLowlevel(pb) end
     deleteLowlevel(n)
-    retuneLowlevel(n.chan, n.ppq, nextP, D1 - D2)
-    reconcileBoundary(n.chan, nextP)
   end
 
   local function resizeNote(n, P1, P2)
-    local col1  = n.lane == 1
     local shift = P1 - n.ppq
     if shift ~= 0 and P2 - n.endppq == shift then
       forEachAttachedPA(n, function(evt)
@@ -435,57 +297,18 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       end)
       if lastPA then assignLowlevel(n, { vel = lastPA.vel }) end
     end
-
-    if not col1 then
-      assignLowlevel(n, { ppq = P1, endppq = P2 })
-      return
-    end
-
-    -- col-1: withdraw detune at old seat, move, reapply at new. L is the
-    -- logical pb the user authored at P1 *before* the move — if it
-    -- differs from prevailing logical there we seat a real pb to carry it.
-    local oldppq = n.ppq
-    local D   = n.detune
-    local L   = logicalAt(n.chan, P1)
-    local C1  = detuneBefore(n.chan, oldppq)
-    local NP1 = nextNotePPQ(n.chan, oldppq)
-    local oldPb = pbAt(n.chan, oldppq)
-
     assignLowlevel(n, { ppq = P1, endppq = P2 })
-
-    if oldPb and oldPb.fake then
-      deleteLowlevel(oldPb)
-    end
-    retuneLowlevel(n.chan, oldppq, NP1, C1 - D)
-    -- The carry into NP1 has shifted from D to C1 (n no longer
-    -- bridges); a previously-masked jump may now need its own
-    -- absorber, or a previously-needed one may have collapsed.
-    reconcileBoundary(n.chan, NP1)
-
-    -- New seat: real pb wins over fake; pre-existing pb wins over
-    -- both. logicalBefore(P1) is read after the boundary at NP1
-    -- has been reconciled — placing the absorber there can change
-    -- rawBefore at P1 in leapfrog moves.
-    local C2 = detuneBefore(n.chan, P1)
-    if L ~= logicalBefore(n.chan, P1) then
-      forcePb(n.chan, P1)
-    elseif D ~= C2 and forcePb(n.chan, P1) then
-      markFake(n.chan, P1)
-    end
-    local NP2 = nextNotePPQ(n.chan, P1)
-    retuneLowlevel(n.chan, P1, NP2, D - C2)
-    reconcileBoundary(n.chan, NP2)
   end
 
-  --contract: chan/lane updates are rejected with a warning; ppq/endppq route through resizeNote; detune updates retune forward and reconcile both endpoint boundaries
+  --contract: lane updates are rejected with a warning (column membership is rebuild-owned); chan changes are accepted -- rebuild's absorber pass reconciles fakes across both old and new channels in one hit. ppq/endppq route through resizeNote.
   local function assignNote(n, update)
-    if update.chan then print('um: not allowed to change channel of notes'); return end
     if update.lane then print('um: not allowed to change lane of notes'); return end
 
     -- update.ppq covers both direct ppq edits and delay edits
     -- (realiseNoteUpdate maps delay→ppq before we get here). endppq
     -- alone doesn't move the realised onset, so it doesn't dirty.
     if update.sample ~= nil or update.ppq ~= nil then dirtyPc(n.chan) end
+    if update.chan and update.chan ~= n.chan then dirtyPc(n.chan); dirtyPc(update.chan) end
 
     if update.ppq ~= nil or update.endppq ~= nil then
       resizeNote(n, update.ppq or n.ppq, update.endppq or n.endppq)
@@ -493,20 +316,6 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
     if update.pitch then
       forEachAttachedPA(n, function(e) assignLowlevel(e, { pitch = update.pitch }) end)
-    end
-    if n.lane == 1 and update.detune ~= nil and update.detune ~= n.detune then
-      local nextP = nextNotePPQ(n.chan, n.ppq)
-      if forcePb(n.chan, n.ppq) then markFake(n.chan, n.ppq) end
-      retuneLowlevel(n.chan, n.ppq, nextP, update.detune - n.detune)
-      -- Commit detune now so the boundary reconciliations below read
-      -- post-update state. Our own seat may collapse (detune now
-      -- matches prior); the next note's seat may flip either way —
-      -- a previously-absorbed jump may erase, or a previously-absent
-      -- jump may appear because the carry has shifted.
-      assignLowlevel(n, { detune = update.detune })
-      update.detune = nil
-      reconcileBoundary(n.chan, n.ppq)
-      reconcileBoundary(n.chan, nextP)
     end
     if next(update) then assignLowlevel(n, update) end
   end
@@ -732,14 +541,19 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
     adds, assigns, deletes = {}, {}, {}
 
+    -- pb wire conversion: um stores authored cents in pb.cents; mm wire
+    -- carries raw 14-bit. Compute raw = cents + prevailing lane-1 detune
+    -- at seat, clamped via centsToRaw. The rebuild absorber pass refines
+    -- this (and seats/removes fakes) using the post-walk note layout;
+    -- this is the best-effort wire value for the interim.
     for _, e in ipairs(flushAssigns) do
-      if e.evt.evType == 'pb' and e.update.val ~= nil then
-        e.update.val = centsToRaw(e.update.val)
+      if e.evt.evType == 'pb' and e.update.cents ~= nil then
+        e.update.val = centsToRaw(e.update.cents + detuneAt(e.evt.chan, e.evt.ppq))
       end
     end
     for _, a in ipairs(flushAdds) do
       if a.evt.evType == 'pb' then
-        a.evt.val = centsToRaw(a.evt.val)
+        a.evt.val = centsToRaw((a.evt.cents or 0) + detuneAt(a.evt.chan, a.evt.ppq))
       end
     end
 
@@ -782,7 +596,11 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     for tok, e in mm:events() do
       local evt
       if e.evType == 'pb' then
-        evt = util.pick(e, 'ppq ppqL chan shape tension fake frame',
+        -- val is the wire raw cents (raw 14-bit → cents for um's frame).
+        -- cents (sidecar) is the authored logical value; nil for foreign-
+        -- MIDI or pre-cents pbs -- back-derived in rebuild step 4.9
+        -- once the final lane-1 layout is settled.
+        evt = util.pick(e, 'ppq ppqL chan shape tension fake frame cents',
                         { val = rawToCents(e.val), token = tok, evType = 'pb' })
         util.add(chans[evt.chan].pbs, evt)
       else
@@ -1200,17 +1018,19 @@ do
     end
 
     -- 3) Single CC walk. Reconciles each non-fake CC's (raw, ppqL) under
-    -- the current swing, then projects into columns:
+    -- the current swing, then projects non-pb CCs into columns:
     --   - staleSwing[chan]: ppqL is truth, reseat raw = fromLogical(ppqL).
     --   - else, raw diverges from ppqL: external edit on raw; restamp
     --     ppqL = toLogical(raw).
     -- Reconcile updates are mutated into the live cc record so the
     -- subsequent column-event clone sees up-to-date values; mm:assign
     -- propagates them at the end of the walk. Fakes are parasitic: fake
-    -- pbs are reseated onto their host by step 4.7; fake PCs reconciled
-    -- fresh by step 4.5.
+    -- pbs are reconciled by step 4.9 (whole absorber pass against the
+    -- post-walk lane-1 layout); fake PCs reconciled fresh by step 4.5.
+    -- Pb column projection is deferred to step 4.9 so it sees the final
+    -- reconciled fakes and the recomputed raw vals.
     do
-      local pbByChan, ccUpdates = {}, {}
+      local ccUpdates = {}
       for _, cc in mm:ccs() do
         if not cc.fake then
           if staleSwing[cc.chan] and cc.ppqL ~= nil then
@@ -1226,25 +1046,9 @@ do
           end
         end
 
-        local channel = channels[cc.chan]
-        local tok     = mm:tokenOf(cc)
-
-        if cc.evType == 'pb' then
-          local col1       = channel.columns.notes[1]
-          local prevailing = col1 and util.seek(col1.events, 'at-or-before', cc.ppq) or nil
-          local detune     = (prevailing and prevailing.detune) or 0
-          local hidden     = cc.fake and (cc.shape == nil or cc.shape == 'step')
-
-          local pb = pbByChan[cc.chan] or { events = {}, anyVisible = false }
-          pbByChan[cc.chan] = pb
-          pb.anyVisible = pb.anyVisible or not hidden
-          util.add(pb.events, projectCC(cc, tok, {
-            val    = util.round(rawToCents(cc.val) - detune),
-            detune = detune,
-            hidden = hidden,
-          }))
-
-        elseif cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
+        if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
+          local channel = channels[cc.chan]
+          local tok     = mm:tokenOf(cc)
           local col
           if cc.evType == 'cc' then
             col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
@@ -1257,11 +1061,6 @@ do
         end
       end
 
-      for chan, pb in pairs(pbByChan) do
-        if pb.anyVisible then
-          channels[chan].columns.pb = { events = pb.events }
-        end
-      end
       if #ccUpdates > 0 then
         mm:modify(function()
           for _, u in ipairs(ccUpdates) do mm:assign(u.tok, u.update) end
@@ -1293,61 +1092,22 @@ do
       if grew and mm:take() then cm:set('take', 'extraColumns', extras) end
     end
 
-    -- 4.7) Two-frame rebuild rule + fake-pb reseating. See docs/timing.md §"Rebuild rule".
-    -- Fakes are absorbers parasitic on lane-1 hosts; the walk skips them
-    -- (they have no independent logical position) and reseats each onto
-    -- its host's new (ppq, ppqL) in the same pass.
+    -- 4.7) Two-frame rebuild rule. See docs/timing.md §"Rebuild rule".
+    -- staleSwing reseat on notes only: rederive raw from ppqL under the
+    -- channel's new swing. Non-fake CCs are reconciled by step 3; fakes
+    -- (pb absorbers, synthesised PCs) are reconciled by step 4.9 and
+    -- step 4.5 respectively against the post-walk layout. raw endppq is
+    -- owned by step 4.8's tail-realisation pass, never reseated from
+    -- endppqL here.
     do
-      local toAssign = {}  -- { { evt, update } }; evt is a column event whose .token is restamped if mm:assign returns a fresh token (any ppq mutation)
-
-      -- Index fakes by their pre-walk seat (= host's pre-walk ppq).
-      local fakesByPos = {}
-      local pbTouched  = {}
-      for chan = 1, 16 do
-        local pbCol = channels[chan].columns.pb
-        if pbCol then
-          for _, evt in ipairs(pbCol.events) do
-            if evt.fake then
-              local m = fakesByPos[chan] or {}; fakesByPos[chan] = m
-              m[evt.ppq] = evt
-            end
-          end
-        end
-      end
-
+      local toAssign = {}
       forEachEvent(function(_, evt, chan, isNote, _, lane)
-        if not isNote or evt.fake then return end  -- step 0 reconciled non-fake CCs
-        local oldPpq = evt.ppq
-        -- staleSwing-only reseat: rederive raw from ppqL under the
-        -- channel's new swing. Step 0 has guaranteed every event reaching
-        -- here carries a ppqL consistent with raw under the OLD swing,
-        -- so external-edit recache is unreachable. raw endppq is owned
-        -- by step 4.8's tail-realisation pass, never reseated from endppqL.
+        if not isNote or evt.fake then return end
         if staleSwing[chan] then
-          local d      = isNote and delayToPPQ(evt.delay or 0) or 0
-          local newPpq = tm:fromLogical(chan, evt.ppqL, d)
+          local newPpq = tm:fromLogical(chan, evt.ppqL, delayToPPQ(evt.delay or 0))
           if newPpq ~= evt.ppq then
             evt.ppq = newPpq
             util.add(toAssign, { evt = evt, update = { ppq = newPpq } })
-          end
-        end
-        -- Reseat any fake-pb at this lane-1 host's seat. Stage the mm
-        -- assign and mirror into the live column event in lockstep.
-        if isNote and lane == 1 then
-          local m    = fakesByPos[chan]
-          local fake = m and m[oldPpq]
-          if fake then
-            local up = {}
-            if fake.ppq ~= evt.ppq then
-              up.ppq, fake.ppq = evt.ppq, evt.ppq
-              pbTouched[chan]  = true
-            end
-            if fake.ppqL ~= evt.ppqL then
-              up.ppqL, fake.ppqL = evt.ppqL, evt.ppqL
-            end
-            if next(up) then
-              util.add(toAssign, { evt = fake, update = up })
-            end
           end
         end
       end)
@@ -1358,13 +1118,6 @@ do
             if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
           end
         end)
-        -- Tokens are stable across mm reindex by construction; the slotKey
-        -- reseat that loc-form rebuilds needed is not required here. The
-        -- end-of-rebuild reload() refreshes byToken, and column events
-        -- already carry their post-mutation tokens.
-        for chan in pairs(pbTouched) do
-          sortByPPQ(channels[chan].columns.pb.events)
-        end
       end
       staleSwing = {}
     end
@@ -1518,6 +1271,187 @@ do
           for _, a in ipairs(clips) do
             local newTok = mm:assign(a.evt.token, a.update)
             if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
+          end
+        end)
+      end
+    end
+
+    -- 4.9) Absorber reconciliation + pb wire/column resynthesis.
+    -- Runs after step 4.8 finalised lane-1 raw ppqs (same-pitch onset
+    -- clamps, delay/clamp combinations that reorder hosts) and step 6
+    -- placed externals. From the final realised lane-1 sequence we
+    --   * back-derive cents for any pb missing it (foreign-MIDI / first
+    --     load): cents = rawToCents(wire) − detune at pb's seat.
+    --   * cover every detune-jump seat: a real pb at that ppq counts;
+    --     otherwise reuse an existing fake if any (in-place first,
+    --     else move), else create a new fake (cents=0).
+    --   * drop fakes whose seat is no longer needed.
+    --   * write wire raw = centsToRaw(cents + carrying lane-1 detune).
+    --   * project the pb column from the final set, with val=cents
+    --     (the authored value tv displays) and hidden=fake.
+    -- Reads pbs directly from mm; the um cache (chans, byToken) is
+    -- rebuilt at the end-of-rebuild reload().
+    do
+      local function detuneAt(events, P)
+        local n = util.seek(events, 'at-or-before', P)
+        return (n and n.detune) or 0
+      end
+
+      -- Per-chan lane-1 sort, used both at reconcile and inside mm:modify.
+      local lane1ByChan = {}
+      for chan = 1, 16 do
+        local lane1 = channels[chan].columns.notes[1]
+        local list  = {}
+        if lane1 then
+          for _, n in ipairs(lane1.events) do
+            if n.type ~= 'pa' then util.add(list, n) end
+          end
+          table.sort(list, function(a, b) return a.ppq < b.ppq end)
+        end
+        lane1ByChan[chan] = list
+      end
+
+      -- mm uses content-keyed tokens, so any pb whose ppq we touch
+      -- needs its pre-mutation token captured up front. Each pb here
+      -- is a mm:ccs() clone with origTok set once.
+      local pbsByChan = {}
+      for _, cc in mm:ccs() do
+        if cc.evType == 'pb' then
+          cc.origTok = mm:tokenOf(cc)
+          util.bucket(pbsByChan, cc.chan, cc)
+        end
+      end
+
+      local pbAdds, pbAssigns, pbDeletes = {}, {}, {}
+
+      for chan = 1, 16 do
+        local lane1Events = lane1ByChan[chan]
+        local pbs         = pbsByChan[chan] or {}
+        table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+
+        -- Needed seats: every lane-1 onset where detune ≠ predecessor.
+        -- hostPpqL captures the lane-1 ppqL at each needed seat so a
+        -- fake placed (or moved) there carries its host's logical
+        -- position into the pb column (step 5's logical projection
+        -- and the tv-facing pb display rely on ppqL, not raw).
+        local needed, hostPpqL = {}, {}
+        local prev = 0
+        for _, n in ipairs(lane1Events) do
+          local d = n.detune or 0
+          if d ~= prev then
+            needed[n.ppq] = true
+            hostPpqL[n.ppq] = n.ppqL
+          end
+          prev = d
+        end
+
+        -- Back-derive cents for any pb missing it; foreign-MIDI / pre-
+        -- cents-sidecar pbs carry only raw on the wire, so the authored
+        -- value is recovered once here against the current lane-1
+        -- layout. Marked so the consolidated assign below always
+        -- carries cents to the sidecar (raw alone may stay unchanged).
+        local persistCents = {}
+        for _, pb in ipairs(pbs) do
+          if pb.cents == nil then
+            pb.cents = rawToCents(pb.val) - detuneAt(lane1Events, pb.ppq)
+            persistCents[pb] = true
+          end
+        end
+
+        -- Match existing pbs to needed seats. Real pbs cover their seat.
+        -- Fakes: consume any already at a needed seat in place, move
+        -- remaining fakes to fill the rest, delete leftovers.
+        local realAt, availFakes = {}, {}
+        for _, pb in ipairs(pbs) do
+          if pb.fake then util.add(availFakes, pb)
+          else            realAt[pb.ppq] = pb end
+        end
+
+        local restampPpqL = {}  -- pb -> newPpqL (existing fake at needed seat with stale ppqL)
+        for i = #availFakes, 1, -1 do
+          local f = availFakes[i]
+          if needed[f.ppq] and not realAt[f.ppq] then
+            if f.ppqL ~= hostPpqL[f.ppq] then
+              restampPpqL[f] = hostPpqL[f.ppq]
+              f.ppqL = hostPpqL[f.ppq]   -- mirror into the clone so step 5 / column projection sees it
+            end
+            needed[f.ppq] = nil
+            table.remove(availFakes, i)
+          end
+        end
+
+        local moved = {}  -- pb -> newPpq
+        for ppq in pairs(needed) do
+          if not realAt[ppq] then
+            local f = table.remove(availFakes)
+            if f then
+              moved[f] = ppq
+              f.ppq, f.cents, f.ppqL = ppq, 0, hostPpqL[ppq]
+              util.add(pbs, f)
+            else
+              local fresh = { chan = chan, ppq = ppq, cents = 0,
+                              ppqL = hostPpqL[ppq], fake = true, evType = 'pb' }
+              util.add(pbs, fresh)
+              util.add(pbAdds, { evt = fresh })
+            end
+          end
+        end
+
+        for _, f in ipairs(availFakes) do
+          util.add(pbDeletes, { token = f.origTok })
+          for i, p in ipairs(pbs) do
+            if p == f then table.remove(pbs, i); break end
+          end
+        end
+
+        table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+
+        -- Consolidated assign: one entry per existing pb where ANY of
+        -- (ppq moved, ppqL restamped, raw changed, cents back-derived)
+        -- needs to land.
+        for _, pb in ipairs(pbs) do
+          if pb.origTok then
+            local d      = detuneAt(lane1Events, pb.ppq)
+            local newRaw = centsToRaw(pb.cents + d)
+            local update = nil
+            if moved[pb] then
+              update = { ppq = pb.ppq, ppqL = pb.ppqL,
+                         cents = pb.cents, val = newRaw }
+            elseif restampPpqL[pb] then
+              update = { ppqL = restampPpqL[pb], cents = pb.cents, val = newRaw }
+            elseif pb.val ~= newRaw or persistCents[pb] then
+              update = { cents = pb.cents, val = newRaw }
+            end
+            if update then
+              pb.val = newRaw
+              util.add(pbAssigns, { token = pb.origTok, update = update })
+            end
+          end
+        end
+
+        -- Column projection.
+        local anyVisible, pbColEvents = false, {}
+        for _, pb in ipairs(pbs) do
+          local hidden = pb.fake and (pb.shape == nil or pb.shape == 'step')
+          anyVisible = anyVisible or not hidden
+          util.add(pbColEvents, projectCC(pb, pb.origTok, {
+            val    = pb.cents,
+            detune = detuneAt(lane1Events, pb.ppq),
+            hidden = hidden,
+          }))
+        end
+        channels[chan].columns.pb = anyVisible and { events = pbColEvents } or nil
+      end
+
+      if #pbAdds > 0 or #pbAssigns > 0 or #pbDeletes > 0 then
+        mm:modify(function()
+          for _, op in ipairs(pbDeletes) do mm:delete(op.token) end
+          for _, op in ipairs(pbAssigns) do mm:assign(op.token, op.update) end
+          for _, op in ipairs(pbAdds) do
+            local d = detuneAt(lane1ByChan[op.evt.chan], op.evt.ppq)
+            local writeEvt = util.clone(op.evt)
+            writeEvt.val = centsToRaw(op.evt.cents + d)
+            mm:add(writeEvt)
           end
         end)
       end

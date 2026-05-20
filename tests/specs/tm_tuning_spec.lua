@@ -755,4 +755,121 @@ return {
       t.eq(note.detune, 75, 'lane-2 detune metadata updated')
     end,
   },
+
+  -- Order-change regression: a large negative delay can pull a later
+  -- lane-1 host's realised onset BEFORE its predecessor's. Step 4.9
+  -- builds the needed-seat set from the post-walk realised lane-1
+  -- sequence -- not authored order -- so absorbers seat at the right
+  -- raw ppqs after the swap.
+  {
+    name = 'negative delay reorders lane-1 hosts; absorbers seat at realised ppqs',
+    run = function(harness)
+      -- A at intent 240, B at intent 480 with delay -999 (~ -240 ppq @
+      -- res 240). B's realised ppq = 480 - 240 = 240 (coincident with
+      -- A's, same-pitch onset clamp will push B to 241). Detunes
+      -- differ (A=30, B=-30); after the swap the realised sequence in
+      -- lane 1 is A@240(d=30) then B@241(d=-30), needing absorbers at
+      -- 240 and 241.
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 240, endppq = 360, ppqL = 240, endppqL = 360,
+              chan = 1, pitch = 60, vel = 100, detune = 30, delay = 0, lane = 1 },
+            -- Same-pitch as A so step 4.8 clamps the realised collision.
+            { ppq = 240, endppq = 600, ppqL = 480, endppqL = 600,
+              chan = 1, pitch = 60, vel = 100, detune = -30, delay = -999, lane = 1 },
+          },
+        },
+      }
+
+      local pbs = {}
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' then pbs[#pbs + 1] = c end
+      end
+      table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+
+      -- Two absorbers, one per realised lane-1 onset (not authored ppq).
+      t.eq(#pbs, 2, 'two absorbers — one at each realised seat')
+      t.eq(pbs[1].ppq, 240, 'first absorber tracks A at realised 240')
+      t.eq(pbs[2].ppq, 241, 'second absorber tracks B at clamp-displaced 241')
+      t.eq(pbs[1].val, cents2raw(30),  'A absorber +30 cents')
+      t.eq(pbs[2].val, cents2raw(-30), 'B absorber -30 cents (no carry-over)')
+      t.eq(pbs[1].fake, true)
+      t.eq(pbs[2].fake, true)
+    end,
+  },
+
+  -- Order-change regression: same-pitch clamp shifts a lane-1 host's
+  -- raw ppq by +1. Step 4.9 recomputes needed seats from the
+  -- post-clamp positions, so the absorber follows.
+  {
+    name = 'same-pitch clamp moves lane-1 host by 1 tick; absorber follows',
+    run = function(harness)
+      -- A and B same pitch, coincident raw onset, different detunes.
+      -- Step 4.8 clamps B's raw to A.ppq+1. Absorbers needed at A's
+      -- onset and at B's clamp-displaced onset.
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
+              chan = 1, pitch = 60, vel = 100, detune = 20, delay = 0, lane = 1 },
+            { ppq = 0, endppq = 480, ppqL = 0, endppqL = 480,
+              chan = 1, pitch = 60, vel = 100, detune = -20, delay = 0, lane = 1 },
+          },
+        },
+      }
+
+      local pbs = {}
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' then pbs[#pbs + 1] = c end
+      end
+      table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+
+      t.eq(#pbs, 2, 'one absorber per realised lane-1 seat after clamp')
+      t.eq(pbs[1].ppq, 0,  'first absorber at A')
+      t.eq(pbs[2].ppq, 1,  'second absorber at B (clamp-displaced by +1)')
+      t.eq(pbs[1].val, cents2raw(20),  'A absorber +20')
+      t.eq(pbs[2].val, cents2raw(-20), 'B absorber -20')
+    end,
+  },
+
+  -- Foreign-MIDI pb regression: a pb loaded with no cents sidecar
+  -- (just raw wire bytes) gets cents back-derived at step 4.9, then
+  -- behaves like any other pb under subsequent detune edits — its
+  -- authored logical value is preserved as raw retunes around it.
+  {
+    name = 'foreign pb (no cents sidecar) back-derives cents; survives detune edit',
+    run = function(harness)
+      -- Foreign-MIDI shape: pb on the wire at raw cents2raw(40), no
+      -- cents stamp, no host note nearby. Lane-1 detune is 0 at the
+      -- pb's ppq, so back-derived cents = rawToCents(val) - 0 = 40.
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+              detune = 0, delay = 0, ppqL = 0, endppqL = 240 },
+          },
+          ccs = { { ppq = 0, chan = 1, evType = 'pb', val = cents2raw(40) } },
+        },
+      }
+      local function realPb()
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'pb' and not c.fake then return c end
+        end
+      end
+      local pb = realPb()
+      t.eq(pb.cents, 40, 'cents back-derived from raw at first rebuild')
+      t.eq(pb.val,   cents2raw(40), 'raw wire value unchanged')
+
+      -- Now bump the note's detune to 25. Authored logical (cents=40)
+      -- must survive; raw advances to cents+detune = 40+25 = 65.
+      local note = h.tm:getChannel(1).columns.notes[1].events[1]
+      h.tm:assignEvent(note, { detune = 25 })
+      h.tm:flush()
+
+      pb = realPb()
+      t.eq(pb.cents, 40, 'cents (authored logical) preserved across detune edit')
+      t.eq(pb.val,   cents2raw(65), 'raw advanced by detune delta to preserve logical')
+    end,
+  },
 }
