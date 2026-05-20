@@ -152,16 +152,6 @@ Never hand-edit them.
   this stack; reading the fixture before the code costs less than
   reverse-engineering a red test.
 
-- Batched writes: use `mcp__readium_patches__apply_patches` whenever
-  you'd otherwise issue ≥2 Edits — same search/replace semantics as
-  the built-in `Edit` tool, but atomic across many paths. Single
-  round-trip: every call opens a browser tab with a unified diff and
-  Approve/Reject buttons (plus an optional comment textarea). The tool
-  blocks until the user clicks. No dry-run flag. The user's comment,
-  if any, comes back in the result — read it, they may have approved
-  with a caveat or rejected with a reason. Prefer built-in `Edit` for
-  single-file work where the in-chat per-file diff prompt is enough.
-
 ## Coding style
 
 Aim for limpid elegance. Use whatever paradigm is most expressive and

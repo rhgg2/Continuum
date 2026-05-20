@@ -8,9 +8,9 @@
 One tool: lua_test_run. Wraps `lua tests/run.lua` and returns a focused
 failures-only report with file:line jumps.
 
-Split off from the original single-server `readium`. Sister servers:
-readium_docs (reaper_doc_lookup, map_query), readium_patches
-(apply_patches).
+Split off from the original single-server `readium`. Sister server:
+readium_docs (reaper_doc_lookup, map_query). Batched writes are
+handled by the global `patches` server (mcp__patches__apply_patches).
 """
 
 from __future__ import annotations

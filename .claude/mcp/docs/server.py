@@ -11,8 +11,9 @@ Two read-only lookup tools:
   - map_query: structured search over the project's .map semantic outlines.
 
 Split off from the original single-server `readium` so each tool call shows
-under its own server name in dispatch and tooling. Sister servers:
-readium_tests (lua_test_run), readium_patches (apply_patches).
+under its own server name in dispatch and tooling. Sister server:
+readium_tests (lua_test_run). Batched writes are handled by the global
+`patches` server (mcp__patches__apply_patches).
 """
 
 from __future__ import annotations
