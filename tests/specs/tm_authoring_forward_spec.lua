@@ -153,4 +153,30 @@ return {
       t.eq(ev.endppqC, 1920,      'realised tail regrows to take length')
     end,
   },
+
+  -- Dual to realiseNoteUpdate's raw-onset floor (ppq < 0 → 0): authored
+  -- endppq that maps past take-end clips raw at takeLen the moment the
+  -- update lands in mm. endppqL retains the authored intent; the
+  -- divergence surfaces in step 5's projection as endppq ~= endppqC.
+  -- (Step 4.8 and flush also clamp, this just keeps the staged raw
+  -- bounded immediately rather than waiting for the next rebuild.)
+  {
+    name = 'assignEvent: endppq past take-end is clamped to takeLen; endppqL keeps the authored intent',
+    run = function(harness)
+      local h = harness.mk{ seed = { length = 480, notes = {
+        { ppq = 0, endppq = 120, ppqL = 0, endppqL = 120,
+          chan = 1, pitch = 60, vel = 100 },
+      }}}
+      local n = h.tm:getChannel(1).columns.notes[1].events[1]
+      h.tm:assignEvent(n, { endppq = 600 })  -- 120 past take-end
+      h.tm:flush()
+
+      local notes = h.fm:dump().notes
+      t.eq(notes[1].endppq,  480, 'raw endppq clipped at take length')
+      t.eq(notes[1].endppqL, 600, 'authored ceiling preserved past take-end')
+
+      local ev = h.tm:getChannel(1).columns.notes[1].events[1]
+      t.eq(ev.endppqC, 480, 'endppqC reflects the realised tail')
+    end,
+  },
 }

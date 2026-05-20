@@ -387,10 +387,16 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     else
       update.ppq = evt.ppq + (dNew - dOld)
     end
-    -- Authored delay is intent; raw is realisation. A delay that pushes
-    -- raw below 0 (or past a same-pitch predecessor — step 4.8 handles
-    -- that) clamps the realised onset; the divergence surfaces as
-    -- delay ~= delayC, which tp paints amber on the delay digits.
+    -- Authored delay / endppq are intent; raw is realisation. A delay
+    -- that pushes raw onset below 0 (or past a same-pitch predecessor
+    -- — step 4.8 handles that) floors at 0; a tail past the take edge
+    -- clips at takeLen. Step 4.8 and flush both re-apply these against
+    -- the post-walk geometry; clamping here keeps the staged raw value
+    -- bounded the moment it lands in mm, so interim readers don't see
+    -- out-of-range raw. Divergence surfaces as delay ~= delayC and
+    -- endppq ~= endppqC; tp paints a * next to the delay digits, and
+    -- the realised tail is what the renderer draws (endppqC, not
+    -- endppq), so no separate endppq cue is needed.
     if update.ppq < 0 then update.ppq = 0 end
     if update.endppq ~= nil then
       -- endppq arrives logical and is the authored ceiling. util.OPEN
@@ -404,6 +410,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
         update.endppqL = update.endppq
         update.endppq  = tm:fromLogical(evt.chan, update.endppq)
       end
+      local takeLen = tm:length()
+      if update.endppq > takeLen then update.endppq = takeLen end
     end
   end
 
