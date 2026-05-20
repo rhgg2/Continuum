@@ -28,6 +28,19 @@ local function noteAt(notes, ppq, pitch)
   end
 end
 
+-- Stable identifier for the long-tailed B: gm's mirror placement leaves
+-- TWO pitch-62 notes at the same raw onset (a malformed-MIDI shape
+-- tm's same-pitch onset clamp now separates by 1 tick), so noteAt(ppq,
+-- 62) is ambiguous and ppqL can be re-derived from raw. The duplicate
+-- B is identified instead by its take-spanning tail.
+local function longTailB(notes)
+  local best
+  for _, n in ipairs(notes) do
+    if n.pitch == 62 and (not best or n.endppq > best.endppq) then best = n end
+  end
+  return best
+end
+
 return {
   {
     name = 'single-cell delete of the duplicate A must not shrink the duplicate B',
@@ -50,7 +63,7 @@ return {
 
       local before = h.fm:dump().notes
       local copyA  = noteAt(before, 2 * LPR, 60)            -- row 2
-      local copyB  = noteAt(before, 3 * LPR, 62)            -- row 3
+      local copyB  = longTailB(before)
       t.truthy(copyA and copyB, 'duplicate A and B materialised')
       t.eq(copyB.endppq, TAKE_LEN,
         'duplicate B runs to take length before the delete')
@@ -60,7 +73,7 @@ return {
       h.cmgr:invoke('delete')
 
       local after  = h.fm:dump().notes
-      local copyB2 = noteAt(after, 3 * LPR, 62)
+      local copyB2 = longTailB(after)
       t.truthy(copyB2, 'duplicate B still present')
       t.eq(copyB2.endppq, TAKE_LEN,
         'duplicate B keeps its take-length tail -- not collapsed to 2 rows')

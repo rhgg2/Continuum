@@ -41,6 +41,7 @@ local specs = {
   'tm_swing_spec',
   'tm_clear_same_key_spec',
   'tm_conform_tail_spec',
+  'tm_unified_projection_spec',
   'tm_rescale_conform_spec',
   'tm_pc_synthesis_spec',
   'legato_spec',

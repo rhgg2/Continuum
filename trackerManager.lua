@@ -1469,6 +1469,69 @@ do
       staleSwing = {}
     end
 
+    -- 4.8) Same-pitch onset clamp + tail retro-clip in realised raw
+    -- order. The step-1 tail pass clips in the LOGICAL frame; here we
+    -- enforce same-pitch MIDI physics in RAW. Walk each channel's
+    -- notes in raw-onset order (tie-broken by ppqL so a true collision
+    -- lets the logical-earlier note win); retro-clip the predecessor's
+    -- raw tail to the successor's onset; if the successor's raw lands
+    -- at or below the predecessor's, clamp it to predecessor + 1.
+    -- Authored delay and endppqL stay untouched -- this is realisation,
+    -- not intent. A user-authored swap (e.g. -delay pulling B before A
+    -- in raw) is respected: B becomes the realised predecessor, A's
+    -- tail is unchanged, B's tail clips to A's onset.
+    do
+      local clamps, clips = {}, {}
+      for chan = 1, 16 do
+        local notes = {}
+        for _, col in ipairs(channels[chan].columns.notes) do
+          for _, evt in ipairs(col.events) do
+            if evt.type ~= 'pa' and evt.ppqL ~= nil then util.add(notes, evt) end
+          end
+        end
+        table.sort(notes, function(a, b)
+          if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+          return a.ppqL < b.ppqL
+        end)
+        local lastByPitch = {}
+        for _, e in ipairs(notes) do
+          local prev = lastByPitch[e.pitch]
+          if prev and e.ppq <= prev.ppq then
+            local floor = prev.ppq + 1
+            util.add(clamps, { evt = e, update = { ppq = floor } })
+            e.ppq = floor
+          end
+          if prev and prev.endppq > e.ppq then
+            util.add(clips, { evt = prev, update = { endppq = e.ppq } })
+            prev.endppq = e.ppq
+          end
+          lastByPitch[e.pitch] = e
+        end
+      end
+      -- Clamps move identity (ppq); land them first so the reindex
+      -- separates colliding tokens (post-step-4.7 reseat can leave two
+      -- same-pitch notes briefly at the same raw -- tokenIdx isn't
+      -- refreshed mid-modify, so a single batched write would route
+      -- the second assign to the wrong note). Tail retro-clips then
+      -- address now-distinct tokens.
+      if #clamps > 0 then
+        mm:modify(function()
+          for _, a in ipairs(clamps) do
+            local newTok = mm:assign(a.evt.token, a.update)
+            if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
+          end
+        end)
+      end
+      if #clips > 0 then
+        mm:modify(function()
+          for _, a in ipairs(clips) do
+            local newTok = mm:assign(a.evt.token, a.update)
+            if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
+          end
+        end)
+      end
+    end
+
     -- 5) Project to logical. The tv surface is logical-only: both the
     -- onset and the tail leave here in the authoring frame, raw stays
     -- private to tm/mm.
@@ -1484,9 +1547,19 @@ do
     -- uncached note (no endppqL) has no authored stamp, so its
     -- authored ceiling is the realised one.
     do
+      local res = mm:resolution()
       local function projectToLogical(col, chan)
         for _, evt in ipairs(col.events) do
-          if evt.ppqL ~= nil then evt.ppq = util.round(evt.ppqL) end
+          if evt.ppqL ~= nil then
+            -- delayC: realised-frame delay equivalent. Differs from
+            -- authored delay when the unified walk clamped raw against
+            -- a same-pitch predecessor; renderer cues the give-way.
+            if evt.delay ~= nil then
+              local baseline = tm:fromLogical(chan, evt.ppqL)
+              evt.delayC = util.round(timing.ppqToDelay(evt.ppq - baseline, res))
+            end
+            evt.ppq = util.round(evt.ppqL)
+          end
           if evt.endppq ~= nil then
             evt.endppqC = util.round(tm:toLogical(chan, evt.endppq))
             if evt.endppqL == util.OPEN then
