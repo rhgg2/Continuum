@@ -177,7 +177,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     util.assign(evt, update)
     -- Keep the per-chan index coherent. chan change migrates the entry;
     -- ppq change resorts (util.seek callers depend on ascending ppq;
-    -- non-monotone updaters like reswing leave it out of order).
+    -- rebuild's stale-swing pass updates events in original-order, not
+    -- new-raw-order, so a resort is needed after).
     local function listOf(c)
       if evt.evType == 'note' and evt.lane == 1 then return chans[c].notes end
       if evt.evType == 'pb' then return chans[c].pbs end
@@ -365,7 +366,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     else                     deleteLowlevel(evt) end
   end
 
-  --contract: update.ppq/endppq arrive logical. endppq is the authored ceiling: a finite logical value, or util.OPEN for a deliberately-unbounded tail. Stamps ppqL; stamps endppqL (util.OPEN→OPEN, else the logical ceiling) and derives a provisional raw note-off — the universal tail pass owns the real one. Callers never set endppqL; it is tm-private. update.rawTime=true is the explicit "caller already computed raw" bypass (reswing/rescale's plan-then-mutate): translation is skipped, only the delay-delta applies, and the flag is consumed here so it never reaches mm. See docs/timing.md.
+  --contract: update.ppq/endppq arrive logical. endppq is the authored ceiling: a finite logical value, or util.OPEN for a deliberately-unbounded tail. Stamps ppqL; stamps endppqL (util.OPEN→OPEN, else the logical ceiling) and derives a provisional raw note-off — the universal tail pass owns the real one. Callers never set endppqL; it is tm-private. update.rawTime=true is the explicit "caller already computed raw" bypass (rescale's plan-then-mutate): translation is skipped, only the delay-delta applies, and the flag is consumed here so it never reaches mm. See docs/timing.md.
   local function realiseNoteUpdate(evt, update)
     local dOld = delayToPPQ(evt.delay)
     local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
@@ -458,7 +459,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
   end
 
-  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical. endppq is the authored ceiling (finite logical, or util.OPEN for an unbounded tail); stamps ppqL and endppqL (tm-private; callers never set it), rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent); consumed here so it never persists on the record or reaches mm.
+  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical. endppq is the authored ceiling (finite logical, or util.OPEN for an unbounded tail); stamps ppqL and endppqL (tm-private; callers never set it), rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent; rescale's plan-then-mutate is the sole caller): consumed here so it never persists on the record or reaches mm.
   function addEvent(evt)
     local rawCaller = evt.rawTime
     evt.rawTime = nil
