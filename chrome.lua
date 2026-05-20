@@ -54,10 +54,13 @@ local function pushChromeStyles()
   ImGui.PushStyleColor(ctx, ImGui.Col_CheckMark,      colour('toolbar.checkMark'))
   ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg,        colour('toolbar.popupBg'))
   ImGui.PushStyleColor(ctx, ImGui.Col_Border,         colour('toolbar.buttonBorder'))
+  -- Col_InputTextCursor has its own slot; default is invisible against
+  -- chrome-styled frame backgrounds, so InputText shows focused but caretless.
+  ImGui.PushStyleColor(ctx, ImGui.Col_InputTextCursor, colour('toolbar.text'))
 end
 
 local function popChromeStyles()
-  ImGui.PopStyleColor(ctx, 10)
+  ImGui.PopStyleColor(ctx, 11)
   ImGui.PopStyleVar(ctx, 1)
 end
 
