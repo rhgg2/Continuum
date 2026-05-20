@@ -36,7 +36,7 @@
         ]
       },
       {
-        "matcher": "mcp__readium_patches__apply_patches",
+        "matcher": "mcp__patches__apply_patches",
         "hooks": [
           {
             "type": "command",

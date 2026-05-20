@@ -17,15 +17,6 @@
         "--script",
         ".claude/mcp/test_runner/server.py"
       ]
-    },
-    "readium_patches": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--quiet",
-        "--script",
-        ".claude/mcp/patches/server.py"
-      ]
     }
   }
 }
