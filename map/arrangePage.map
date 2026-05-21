@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=412  sha=c3b1a39  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=436  sha=54cba34  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
@@ -22,15 +22,17 @@
   @state uiSize = gui and gui.fontSize and gui.fontSize.ui or 12  @ 24
   @state ap = {}  @ 29
   @state PALETTE_W = 200  @ 31
-  @state PANE_GAP = 6  @ 34
+  @state PANE_GAP = 11  @ 34
   @state QN_W, TRACK_W = 32, 72  @ 35
   @state SLOT_KEY_W, SLOT_KIND_W = 18, 16  @ 37
   @state renameRequest = nil  @ 48   -- { trackIdx, slotIdx } | nil
   @state renameBuf = ''  @ 49
   @state renameFocus = false  @ 50
   @state renameOpenAtFrameStart = false  @ 51
-  @state arrange = cmgr:scope('arrange')  @ 398
+  @state arrange = cmgr:scope('arrange')  @ 399
       @invariant  arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
+      @invariant  62 place commands (drop0..dropZ) sit in cmgr:scope('arrange'), one per base62 slot. Pressing a key with no slot defined at that index is a silent no-op (am:dropInstance returns nil). Length defaults to one row (beatPerRow) — a real snap selector lands with the toolbar.
+  @state placeCmds, placeBinds = {}, {}  @ 427
 
 # Private functions
   -- Style + draw helpers
@@ -72,6 +74,11 @@
       -- chrome.pushChromeWindow wraps the Begin/End pair so the popup
       -- inherits parchment/chrome styles instead of ImGui's dark defaults.
   @fn renderPalette(tracks)  @ 294
+  @fn dropAt(slotIdx)  @ 416
+      -- Place commands (drop0..dropZ). 0..9 → digit keys, 10..35 → letter
+      -- keys, 36..61 → Shift+letter. ImGui.Key_0 + n and Key_A + n are
+      -- contiguous (already exploited at coordinator.lua:53).
+  @fn placeKey(slotIdx)  @ 422
 
 # Public API (ap:*)
   @api ap:bind()  @ 315

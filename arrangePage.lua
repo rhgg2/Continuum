@@ -31,7 +31,7 @@ local ap = {}
 local PALETTE_W = 200
 -- Gap between grid and palette panes; the 1px vrule sits in the
 -- middle of the gap so neither pane edge touches the line.
-local PANE_GAP  = 6
+local PANE_GAP  = 11
 local QN_W, TRACK_W = 32, 72
 -- Palette row column widths: monospace key, kind glyph, name fills.
 local SLOT_KEY_W, SLOT_KIND_W = 18, 16
@@ -395,6 +395,7 @@ function ap:save()        end
 function ap:load()        end
 
 --invariant: arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
+--invariant: 62 place commands (drop0..dropZ) sit in cmgr:scope('arrange'), one per base62 slot. Pressing a key with no slot defined at that index is a silent no-op (am:dropInstance returns nil). Length defaults to one row (beatPerRow) — a real snap selector lands with the toolbar.
 local arrange = cmgr:scope('arrange')
 arrange:registerAll {
   cursorUp    = function() av:setCursor(av:cursorRow() - 1, av:cursorCol()) end,
@@ -408,5 +409,28 @@ arrange:bindAll {
   cursorLeft  = { { ImGui.Key_LeftArrow  } },
   cursorRight = { { ImGui.Key_RightArrow } },
 }
+
+-- Place commands (drop0..dropZ). 0..9 → digit keys, 10..35 → letter
+-- keys, 36..61 → Shift+letter. ImGui.Key_0 + n and Key_A + n are
+-- contiguous (already exploited at coordinator.lua:53).
+local function dropAt(slotIdx)
+  return function()
+    am:dropInstance(av:cursorCol(), slotIdx,
+                    av:rowToQN(av:cursorRow()), av:beatPerRow())
+  end
+end
+local function placeKey(slotIdx)
+  if slotIdx < 10 then return { ImGui.Key_0 + slotIdx } end
+  if slotIdx < 36 then return { ImGui.Key_A + (slotIdx - 10) } end
+  return { ImGui.Key_A + (slotIdx - 36), ImGui.Mod_Shift }
+end
+local placeCmds, placeBinds = {}, {}
+for i = 0, 61 do
+  local name = 'drop' .. am:keyForSlot(i)
+  placeCmds[name]  = dropAt(i)
+  placeBinds[name] = { placeKey(i) }
+end
+arrange:registerAll(placeCmds)
+arrange:bindAll(placeBinds)
 
 return ap

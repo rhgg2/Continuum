@@ -92,12 +92,35 @@ question into focus. Both render as disabled buttons with explanatory
 tooltips so the UI shape is visible and the design intent is on
 screen.
 
+## Place commands (base62 scope)
+
+The arrange scope registers 62 `drop<key>` commands at load — one per
+slot index, named with the same base62 alphabet `am:keyForSlot`
+emits. Keys map: `0..9` to digit keys, `a..z` to bare letter keys,
+`A..Z` to Shift+letter. Pressing a key with no slot defined at that
+index is a silent no-op (`am:dropInstance` returns nil); the user
+learns the palette is empty there by trying and seeing nothing.
+
+Drops land at `(av:cursorCol(), slotIdx, av:rowToQN(av:cursorRow()))`
+with length `av:beatPerRow()` — one visible row. There is no separate
+snap setting: the cursor already lives on row boundaries, so drops
+are implicitly row-snapped. A real snap selector lands with the
+toolbar in a later slice; until then beatPerRow is both the row
+density and the default length, which keeps the visible cell and the
+dropped rectangle aligned by construction.
+
+Digit keys do not collide with the universal-argument prefix:
+`cmgr:beginPrefix` is bound to Super+U and the dispatcher only feeds
+digits into `appendPrefix` while `isPrefixActive()` is true. So bare
+0–9 are free in any scope unless the user has just typed Super+U.
+
 ## What's deferred
 
-Phase 2 shipped the read-only grid with cursor navigation. Phase 3
-adds the palette pane, slot list, new-MIDI-slot, and rename. Still
-ahead: base36 placement scope (phase 4), take-edit commands (phase 5),
-tracker dive hotkey (phase 6), and mouse drag (phase 7) per
-`design/arrange.md`. The current `renderGrid` paints a `>` at the
+Phases 1–4 have shipped: model, page skeleton with read-only grid +
+cursor nav, right-side palette with slot list / new-MIDI / rename,
+and the base62 placement scope. Still ahead per `design/arrange.md`:
+take-edit commands (phase 5), tracker dive hotkey (phase 6), and
+mouse drag (phase 7). The current `renderGrid` paints a `>` at the
 cursor cell and a `|` down the focused column so navigation is
-visible; that placeholder is replaced as the placement UI arrives.
+visible; rectangles for the actual takes arrive with the take-edit
+phase.

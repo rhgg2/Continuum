@@ -61,4 +61,19 @@ return {
       t.eq(ok, true, 'cursorRight is bound under the arrange scope')
     end,
   },
+
+  {
+    name = 'arrange-scope place commands are registered (drop0/dropA/dropZ invokable)',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      for _, name in ipairs{ 'drop0', 'drop9', 'dropa', 'dropz', 'dropA', 'dropZ' } do
+        local ok = pcall(function() h.cmgr:invoke(name) end)
+        t.eq(ok, true, name .. ' is bound under the arrange scope')
+      end
+    end,
+  },
 }
