@@ -75,9 +75,11 @@ local function Main()
   local chrome = coord:chrome()
   local function onPickTrack(t) coord:setSamplerTrack(t) end
   local tp = util.instantiate('trackerPage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui })
-  local sp = util.instantiate('samplePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
+  local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui })
+  local sp = util.instantiate('samplePage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
 
   coord:register('tracker', tp)
+  coord:register('arrange', ap)
   coord:register('sample',  sp)
 
   -- Globals: transport wrappers, page switching, quit. Bound on root

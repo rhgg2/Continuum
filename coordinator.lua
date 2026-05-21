@@ -152,6 +152,8 @@ local function drawSwitcher()
   end
   pageButton('T', 'tracker')
   ImGui.SameLine(ctx, 0, 4)
+  pageButton('A', 'arrange')
+  ImGui.SameLine(ctx, 0, 4)
   pageButton('S', 'sample')
 end
 
@@ -263,7 +265,7 @@ function coord:register(name, page)
   if not active then self:setActive(name) end
 end
 
---contract: setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack)
+--contract: setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange→no-op since the page is project-wide)
 function coord:setActive(name)
   if active == name then return end
   if active and pages[active] then
@@ -281,6 +283,8 @@ function coord:setActive(name)
       samplerTrack = tracks[1] and tracks[1].track or nil
     end
     pages.sample:bind(samplerTrack)
+  elseif name == 'arrange' then
+    pages.arrange:bind()
   end
 end
 
@@ -292,8 +296,16 @@ function coord:setSamplerTrack(t)
   end
 end
 
+-- Cycle tracker → arrange → sample → tracker. Pages absent from the registry
+-- are skipped so a partial wiring (e.g. tests with only one page) still cycles.
 function coord:togglePage()
-  self:setActive(active == 'tracker' and 'sample' or 'tracker')
+  local order = { 'tracker', 'arrange', 'sample' }
+  local idx
+  for i, name in ipairs(order) do if name == active then idx = i; break end end
+  for step = 1, #order do
+    local next = order[((idx or 0) + step - 1) % #order + 1]
+    if pages[next] then self:setActive(next); return end
+  end
 end
 
 --contract: invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.

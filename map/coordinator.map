@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=310  sha=d71cae5  mode=chunk
+@module coordinator  src=coordinator.lua  loc=322  sha=1a1393f  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
@@ -33,7 +33,7 @@
       @contract  owns currentTake — refreshTakeFromReaper polls GetSelectedMediaItem→GetActiveTake→TakeIsMIDI, mutates currentTake only on a real MIDI take that differs (sticky on nothing-selected or non-MIDI), and returns true so the caller can rebind
   @state lastTakeHash = nil  @ 32
       @contract  external-mutation watcher — captured at end of every tracker-active frame; top-of-tick diff triggers tp:reloadFromReaper. Cleared on take swap (bind path is the reload). Nil disables the diff check (one-frame grace after swap/first activation).
-  @state coord = {}  @ 259
+  @state coord = {}  @ 261
       @contract  pages must be registered via coord:register(name,page); first registered becomes active
 
 # Private functions
@@ -57,21 +57,23 @@
       @contract  tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
       @contract  tracker-active branch — take swap takes priority (clears the watcher so the post-bind end-of-frame capture is the new baseline); otherwise a hash diff signals an external mutation (REAPER Ctrl-Z, external script) and we reload the bound take
   @fn drawSwitcher()  @ 142
-  @fn dispatch(state)  @ 158
-  @fn frame()  @ 160
+  @fn dispatch(state)  @ 160
+  @fn frame()  @ 162
 
 # Public API (coord:*)
-  @api coord:register(name, page)  @ 261
-  @api coord:setActive(name)  @ 267
-      @contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack)
-  @api coord:setSamplerTrack(t)  @ 288
+  @api coord:register(name, page)  @ 263
+  @api coord:setActive(name)  @ 269
+      @contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange→no-op since the page is project-wide)
+  @api coord:setSamplerTrack(t)  @ 292
       @contract  stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
-  @api coord:togglePage()  @ 295
-  @api coord:reloadAfterExternalMutation()  @ 300
+  @api coord:togglePage()  @ 301
+      -- Cycle tracker → arrange → sample → tracker. Pages absent from the registry
+      -- are skipped so a partial wiring (e.g. tests with only one page) still cycles.
+  @api coord:reloadAfterExternalMutation()  @ 312
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:quit()  @ 306
-  @api coord:chrome()  @ 307
-  @api coord:run()  @ 308
+  @api coord:quit()  @ 318
+  @api coord:chrome()  @ 319
+  @api coord:run()  @ 320
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
