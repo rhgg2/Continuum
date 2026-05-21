@@ -98,7 +98,7 @@ local function Main()
       reaper.Main_OnCommand(40029, 0); coord:reloadAfterExternalMutation()
     end,
     redo        = function() reaper.Main_OnCommand(40030, 0); coord:reloadAfterExternalMutation() end,
-    switchPage  = function(name) coord:setActive(name)      end,
+    switchPage  = function(_, name) coord:setActive(name)   end,
     togglePage  = function()     coord:togglePage()         end,
     quit        = function()     coord:quit()               end,
     beginPrefix = function()     cmgr:beginPrefix()         end,

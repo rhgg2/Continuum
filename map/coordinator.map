@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=298  sha=1f0eda3  mode=chunk
+@module coordinator  src=coordinator.lua  loc=310  sha=d71cae5  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
@@ -33,39 +33,45 @@
       @contract  owns currentTake — refreshTakeFromReaper polls GetSelectedMediaItem→GetActiveTake→TakeIsMIDI, mutates currentTake only on a real MIDI take that differs (sticky on nothing-selected or non-MIDI), and returns true so the caller can rebind
   @state lastTakeHash = nil  @ 32
       @contract  external-mutation watcher — captured at end of every tracker-active frame; top-of-tick diff triggers tp:reloadFromReaper. Cleared on take swap (bind path is the reload). Nil disables the diff check (one-frame grace after swap/first activation).
-  @state coord = {}  @ 247
+  @state coord = {}  @ 259
       @contract  pages must be registered via coord:register(name,page); first registered becomes active
 
 # Private functions
   -- Keyboard router
-  @fn handlePrefixCapture(cmgr, ctx)  @ 40
+  @fn isDigitMods(mods)  @ 45
       -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns
-      -- 'consumed' if a prefix-accumulating key fired this frame; 'fall' to
-      -- finishPrefix and let the normal keychain walk handle this key; nil if
-      -- prefix mode is inactive.
-  @fn dispatchKeys(state, cmgr, ctx)  @ 64
+      -- 'consumed' if a prefix-accumulating key fired this frame; nil otherwise
+      -- (so the normal keychain walk proceeds). The prefix is NOT finished here
+      -- on fall-through: dispatchKeys calls finishPrefix only at the moment a
+      -- bound command is about to fire, so idle frames don't kill the buffer.
+      -- In prefix mode, digit keys count even with Ctrl/Super held: holding the
+      -- chord open while typing a count is a natural reach, and any Ctrl-N or
+      -- Super-N command binding is overridden for the duration of prefix mode.
+      -- Shift/Alt still disqualify (Shift-digit emits a different char).
+  @fn handlePrefixCapture(cmgr, ctx)  @ 49
+  @fn dispatchKeys(state, cmgr, ctx)  @ 71
   -- Coordinator
-  @fn refreshTakeFromReaper()  @ 96
-  @fn takeMidiHash()  @ 106
-  @fn tick()  @ 114
+  @fn refreshTakeFromReaper()  @ 108
+  @fn takeMidiHash()  @ 118
+  @fn tick()  @ 126
       @contract  tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
       @contract  tracker-active branch — take swap takes priority (clears the watcher so the post-bind end-of-frame capture is the new baseline); otherwise a hash diff signals an external mutation (REAPER Ctrl-Z, external script) and we reload the bound take
-  @fn drawSwitcher()  @ 130
-  @fn dispatch(state)  @ 146
-  @fn frame()  @ 148
+  @fn drawSwitcher()  @ 142
+  @fn dispatch(state)  @ 158
+  @fn frame()  @ 160
 
 # Public API (coord:*)
-  @api coord:register(name, page)  @ 249
-  @api coord:setActive(name)  @ 255
+  @api coord:register(name, page)  @ 261
+  @api coord:setActive(name)  @ 267
       @contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack)
-  @api coord:setSamplerTrack(t)  @ 276
+  @api coord:setSamplerTrack(t)  @ 288
       @contract  stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
-  @api coord:togglePage()  @ 283
-  @api coord:reloadAfterExternalMutation()  @ 288
+  @api coord:togglePage()  @ 295
+  @api coord:reloadAfterExternalMutation()  @ 300
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:quit()  @ 294
-  @api coord:chrome()  @ 295
-  @api coord:run()  @ 296
+  @api coord:quit()  @ 306
+  @api coord:chrome()  @ 307
+  @api coord:run()  @ 308
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

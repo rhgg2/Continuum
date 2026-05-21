@@ -145,47 +145,59 @@ return {
   },
 
   {
-    name = 'prefix: inactive by default; consume returns nil',
+    name = 'prefix: inactive by default; invoke passes default 1',
     run = function()
       local mgr = newCommandManager(nil)
+      local seen
+      mgr:register('probe', function(p) seen = p end)
       t.eq(mgr:isPrefixActive(), false)
-      t.eq(mgr:consumePrefix(), nil)
+      mgr:invoke('probe')
+      t.eq(seen, 1, 'invoke defaults prefix to 1 when nothing pending')
     end,
   },
 
   {
-    name = 'prefix: begin → digits → finish parses integer',
+    name = 'prefix: begin → digits → finish → invoke passes integer',
     run = function()
       local mgr = newCommandManager(nil)
+      local seen
+      mgr:register('probe', function(p) seen = p end)
       mgr:beginPrefix()
       t.eq(mgr:isPrefixActive(), true)
       mgr:appendPrefix('1'); mgr:appendPrefix('2'); mgr:appendPrefix('0')
       mgr:finishPrefix()
       t.eq(mgr:isPrefixActive(), false)
-      t.eq(mgr:consumePrefix(), 120)
-      t.eq(mgr:consumePrefix(), nil, 'consume clears')
+      mgr:invoke('probe')
+      t.eq(seen, 120)
+      mgr:invoke('probe')
+      t.eq(seen, 1, 'invoke clears state — next call sees the default')
     end,
   },
 
   {
-    name = 'prefix: fraction a/b parses to a number',
+    name = 'prefix: fraction a/b passes as a number',
     run = function()
       local mgr = newCommandManager(nil)
+      local seen
+      mgr:register('probe', function(p) seen = p end)
       mgr:beginPrefix()
       mgr:appendPrefix('4'); mgr:appendPrefix('/'); mgr:appendPrefix('3')
       mgr:finishPrefix()
-      local v = mgr:consumePrefix()
-      t.truthy(v); t.truthy(math.abs(v - 4/3) < 1e-12)
+      mgr:invoke('probe')
+      t.truthy(seen); t.truthy(math.abs(seen - 4/3) < 1e-12)
     end,
   },
 
   {
-    name = 'prefix: empty buffer at finish yields nil',
+    name = 'prefix: empty buffer at finish yields default 1 at invoke',
     run = function()
       local mgr = newCommandManager(nil)
+      local seen
+      mgr:register('probe', function(p) seen = p end)
       mgr:beginPrefix()
       mgr:finishPrefix()
-      t.eq(mgr:consumePrefix(), nil)
+      mgr:invoke('probe')
+      t.eq(seen, 1)
     end,
   },
 
@@ -193,10 +205,13 @@ return {
     name = 'prefix: cancel discards buffer and any pending',
     run = function()
       local mgr = newCommandManager(nil)
+      local seen
+      mgr:register('probe', function(p) seen = p end)
       mgr:beginPrefix(); mgr:appendPrefix('7')
       mgr:cancelPrefix()
       t.eq(mgr:isPrefixActive(), false)
-      t.eq(mgr:consumePrefix(), nil)
+      mgr:invoke('probe')
+      t.eq(seen, 1)
     end,
   },
 
@@ -204,68 +219,75 @@ return {
     name = 'prefix: only one slash accepted',
     run = function()
       local mgr = newCommandManager(nil)
+      local seen
+      mgr:register('probe', function(p) seen = p end)
       mgr:beginPrefix()
       mgr:appendPrefix('1'); mgr:appendPrefix('/')
       mgr:appendPrefix('2'); mgr:appendPrefix('/')   -- second / dropped
       mgr:appendPrefix('3')
       mgr:finishPrefix()
-      local v = mgr:consumePrefix()
-      t.truthy(v); t.truthy(math.abs(v - 1/23) < 1e-12)
+      mgr:invoke('probe')
+      t.truthy(seen); t.truthy(math.abs(seen - 1/23) < 1e-12)
     end,
   },
 
   {
-    name = 'prefix: malformed buffer (e.g. lone slash) finishes to nil',
+    name = 'prefix: malformed buffer (e.g. lone slash) defaults to 1',
     run = function()
       local mgr = newCommandManager(nil)
+      local seen
+      mgr:register('probe', function(p) seen = p end)
       mgr:beginPrefix(); mgr:appendPrefix('/')
       mgr:finishPrefix()
-      t.eq(mgr:consumePrefix(), nil)
+      mgr:invoke('probe')
+      t.eq(seen, 1)
     end,
   },
 
   {
-    name = 'prefix: consumePrefixRational returns (n, d) for an integer',
+    name = 'prefix: prefixRational returns (n, d) for an integer inside invoke',
     run = function()
       local mgr = newCommandManager(nil)
+      local sn, sd
+      mgr:register('probe', function() sn, sd = mgr:prefixRational() end)
       mgr:beginPrefix(); mgr:appendPrefix('5')
       mgr:finishPrefix()
-      local n, d = mgr:consumePrefixRational()
-      t.eq(n, 5); t.eq(d, 1)
+      mgr:invoke('probe')
+      t.eq(sn, 5); t.eq(sd, 1)
     end,
   },
 
   {
-    name = 'prefix: consumePrefixRational returns (n, d) for a fraction; consume clears',
+    name = 'prefix: prefixRational returns (n, d) for a fraction; invoke clears',
     run = function()
       local mgr = newCommandManager(nil)
+      local sn, sd
+      mgr:register('probe', function() sn, sd = mgr:prefixRational() end)
       mgr:beginPrefix(); mgr:appendPrefix('4'); mgr:appendPrefix('/'); mgr:appendPrefix('3')
       mgr:finishPrefix()
-      local n, d = mgr:consumePrefixRational()
-      t.eq(n, 4); t.eq(d, 3)
-      local n2, d2 = mgr:consumePrefixRational()
-      t.eq(n2, nil); t.eq(d2, nil)
+      mgr:invoke('probe')
+      t.eq(sn, 4); t.eq(sd, 3)
+      mgr:invoke('probe')
+      t.eq(sn, nil); t.eq(sd, nil, 'state cleared at end of first invoke')
     end,
   },
 
   {
-    name = 'prefix: consumePrefix and consumePrefixRational both clear all state',
+    name = 'prefix: prefixRational on empty buffer yields (nil, nil)',
     run = function()
       local mgr = newCommandManager(nil)
-      mgr:beginPrefix(); mgr:appendPrefix('7')
-      mgr:finishPrefix()
-      t.eq(mgr:consumePrefix(), 7)
-      local n, d = mgr:consumePrefixRational()
+      local n, d = mgr:prefixRational()
       t.eq(n, nil); t.eq(d, nil)
     end,
   },
 
   {
-    name = 'prefix: consumePrefixRational on empty buffer yields (nil, nil)',
+    name = 'prefix: beginPrefix-via-invoke leaves the buffer active',
     run = function()
       local mgr = newCommandManager(nil)
-      local n, d = mgr:consumePrefixRational()
-      t.eq(n, nil); t.eq(d, nil)
+      mgr:register('begin', function() mgr:beginPrefix() end)
+      mgr:invoke('begin')
+      t.eq(mgr:isPrefixActive(), true, 'invoke must not clear state a command just opened')
     end,
   },
 

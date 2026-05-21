@@ -34,26 +34,33 @@ local lastTakeHash  = nil
 ----- Keyboard router
 
 -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns
--- 'consumed' if a prefix-accumulating key fired this frame; 'fall' to
--- finishPrefix and let the normal keychain walk handle this key; nil if
--- prefix mode is inactive.
+-- 'consumed' if a prefix-accumulating key fired this frame; nil otherwise
+-- (so the normal keychain walk proceeds). The prefix is NOT finished here
+-- on fall-through: dispatchKeys calls finishPrefix only at the moment a
+-- bound command is about to fire, so idle frames don't kill the buffer.
+-- In prefix mode, digit keys count even with Ctrl/Super held: holding the
+-- chord open while typing a count is a natural reach, and any Ctrl-N or
+-- Super-N command binding is overridden for the duration of prefix mode.
+-- Shift/Alt still disqualify (Shift-digit emits a different char).
+local function isDigitMods(mods)
+  return (mods & ~(ImGui.Mod_Ctrl | ImGui.Mod_Super)) == 0
+end
+
 local function handlePrefixCapture(cmgr, ctx)
   if not cmgr:isPrefixActive() then return nil end
+  local mods = ImGui.GetKeyMods(ctx)
   for d = 0, 9 do
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_0 + d) and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
+    if ImGui.IsKeyPressed(ctx, ImGui.Key_0 + d) and isDigitMods(mods) then
       cmgr:appendPrefix(tostring(d)); return 'consumed'
     end
   end
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Slash) and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
+  if ImGui.IsKeyPressed(ctx, ImGui.Key_Slash) and isDigitMods(mods) then
     cmgr:appendPrefix('/'); return 'consumed'
   end
   if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     cmgr:cancelPrefix(); return 'consumed'
   end
-  -- Any non-accumulating press freezes the buffer so the dispatched
-  -- command can consumePrefix() on this same frame.
-  cmgr:finishPrefix()
-  return 'fall'
+  return nil
 end
 
 --shape: dispatchResult = { consumed: bool, commandHeld: bool }
@@ -79,6 +86,11 @@ local function dispatchKeys(state, cmgr, ctx)
           commandHeld = true
         end
         if ImGui.IsKeyPressed(ctx, key) and ImGui.GetKeyMods(ctx) == mods then
+          -- Freeze the prefix buffer immediately before invoke so
+          -- pendingPrefix is set when invoke reads it as the first arg.
+          if cmgr:isPrefixActive() and command ~= 'beginPrefix' then
+            cmgr:finishPrefix()
+          end
           if cmgr:invoke(command) == false then
             commandHeld = false
           else

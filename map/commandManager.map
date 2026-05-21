@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=323  sha=fa4a61d  mode=chunk
+@module commandManager  src=commandManager.lua  loc=322  sha=4a6bfb0  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -27,8 +27,8 @@
   @state chars = {}  @ 35
   @state mgr = {  @ 49
   @state global = newScope()  @ 117
-  @state prefixBuf, pendingPrefix = nil, nil  @ 179
-  @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 180
+  @state prefixBuf, pendingPrefix = nil, nil  @ 181
+  @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 182
 
 # Private functions
   -- Stack reachability
@@ -38,11 +38,12 @@
   -- Bottom of the stack
   -- Manager-level surface
   -- Universal-argument prefix
+  @fn clearPrefixState()  @ 184
   -- Scopes & stack
-  @fn asScope(s)  @ 244
+  @fn asScope(s)  @ 239
   -- Dispatch
   -- Keymap lookup
-  @fn resolveKeys(name)  @ 276
+  @fn resolveKeys(name)  @ 275
 
 # Public API (mgr:*)
   @api mgr:register(name, fn, undoDesc)  @ 129
@@ -59,31 +60,30 @@
       @contract  doAfter preserves the original command's return values (the dispatch signal)
       @invariant  wraps compose inside the gate — when invoke skips a gated command, no doBefore / doAfter side-effect fires
   @api mgr:doAfter(name, after)  @ 158
-  @api mgr:beginPrefix()  @ 183
-      @contract  buffer accepts only '0'..'9' and '/'; cancel/finish/consume each leave the state inactive
-  @api mgr:isPrefixActive()  @ 184
-  @api mgr:appendPrefix(ch)  @ 186
-  @api mgr:cancelPrefix()  @ 192
-  @api mgr:finishPrefix()  @ 198
+  @api mgr:beginPrefix()  @ 190
+      @contract  buffer accepts only '0'..'9' and '/'; cancel/finish/invoke each leave the state inactive
+  @api mgr:isPrefixActive()  @ 191
+  @api mgr:appendPrefix(ch)  @ 193
+  @api mgr:cancelPrefix()  @ 199
+  @api mgr:finishPrefix()  @ 202
       @contract  empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
-  @api mgr:consumePrefix()  @ 219
-      @contract  returns pending value (number or nil) and clears all prefix state; idempotent thereafter until next finishPrefix
-  @api mgr:consumePrefixRational()  @ 226
-      @contract  returns (num, den) of the pending prefix as parsed integers, or (nil, nil) when no prefix is pending; clears all prefix state; consumers that need rationality (e.g. scale's rpb refinement) read this instead of consumePrefix
-  @api mgr:scope(name)  @ 235
+  @api mgr:prefixRational()  @ 223
+      @contract  non-consuming reader of the parsed rational; safe to call inside a command body. Returns (nil, nil) when no prefix is pending. State is cleared at the end of invoke, not by this call.
+  @api mgr:scope(name)  @ 230
       @contract  creates the scope on first request; idempotent thereafter
-  @api mgr:push(s)  @ 247
+  @api mgr:push(s)  @ 242
       @contract  push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.
-  @api mgr:pop(s)  @ 254
+  @api mgr:pop(s)  @ 249
       @contract  pop(name|scope) asserts the named scope is currently on top; pops it
-  @api mgr:invoke(name, ...)  @ 263
+  @api mgr:invoke(name, ...)  @ 259
       @contract  returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)
-  @api mgr:keysFor(name)  @ 285
-  @api mgr:keychain()  @ 288
+      @contract  always prepends the pending prefix (defaulted to 1 when nothing is pending) as the first argument to the command body. Bodies that need to distinguish "user typed 1" from "no prefix" read prefixRational() — it returns (nil, nil) when nothing is pending. State stays live for the call so the body may read it; cleared on return ONLY if there was a pending prefix at entry, so a command body that opens prefix mode (beginPrefix) is not wiped out by its own invoke.
+  @api mgr:keysFor(name)  @ 284
+  @api mgr:keychain()  @ 287
       @contract  returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk
-  @api mgr:keySpec(spec, ImGui)  @ 308
+  @api mgr:keySpec(spec, ImGui)  @ 307
       -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
   -- Note layout
-  @api mgr:noteChars(char)  @ 319
+  @api mgr:noteChars(char)  @ 318
       -- Re-read noteLayout on each call so a config change takes effect
       -- without rebuilding vm.

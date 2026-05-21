@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=746  sha=2d985df  mode=chunk
+@module editCursor  src=editCursor.lua  loc=746  sha=80e8c7d  mode=chunk
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts

@@ -7,7 +7,6 @@
 - automation smoothing
 - 14bit CCs
 - move to command based key/mouse interactions
-- fix prefix argument / scale
 - undo for groups feature / swing / tuning changes
 - can ppq logical be float everywhere?
 

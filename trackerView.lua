@@ -945,8 +945,8 @@ local noteOff, adjustDuration, adjustPosition do
     assignTail(note, chan, newppq)
   end
 
-  function adjustDuration(rowDelta)
-    rowDelta = rowDelta * (cmgr:consumePrefix() or 1)
+  function adjustDuration(prefix, rowDelta)
+    rowDelta = rowDelta * prefix
     if ec:hasSelection() then
       for _, group in ipairs(eventsByCol()) do
         if group.col.type == 'note' then
@@ -1021,8 +1021,8 @@ local noteOff, adjustDuration, adjustPosition do
   -- nudge in time too, all-or-nothing like shiftEvents: refuse off the
   -- grid edge or onto a same-column event (a same-ppq collision).
   --contract: single: notes blocked only by an onset reorder (tm clips tails), cc/at/pa/pc by an occupied destination row. Selection: refuse if any touched column's destination row span [selLo..selHi]+rowDelta holds a foreign onset
-  function adjustPosition(rowDelta)
-    rowDelta = rowDelta * (cmgr:consumePrefix() or 1)
+  function adjustPosition(prefix, rowDelta)
+    rowDelta = rowDelta * prefix
     if ec:hasSelection() then return adjustPositionMulti(rowDelta) end
 
     local col = grid.cols[ec:col()]
@@ -1421,8 +1421,7 @@ local nudge do
   -- transpose / velocity- / delay-nudge the notes and leave value events
   -- alone; otherwise nudge val on every value event. Solo cursor: first
   -- event in the cursor row, column- and part-typed.
-  function nudge(dir, coarse)
-    local p = cmgr:consumePrefix() or 1
+  function nudge(prefix, dir, coarse)
     if ec:hasSelection() then
       local groups = eventsByCol()
 
@@ -1441,7 +1440,7 @@ local nudge do
         if not skip then
           for _, e in pairs(g.locs) do
             if g.part == 'val' or util.isNote(e) then
-              applyNudge(g.col, e, g.part, dir, coarse, false, p)
+              applyNudge(g.col, e, g.part, dir, coarse, false, prefix)
             end
           end
         end
@@ -1453,7 +1452,7 @@ local nudge do
     local col = grid.cols[ec:col()]
     local evt = cursorRowEvent(col)
     if not evt then return end
-    applyNudge(col, evt, ec:cursorPart(), dir, coarse, true, p)
+    applyNudge(col, evt, ec:cursorPart(), dir, coarse, true, prefix)
     tm:flush()
   end
 end
@@ -2153,21 +2152,21 @@ tracker:registerAll{
   inputSampleUp           = function() stepSample( 1) end,
   inputSampleDown         = function() stepSample(-1) end,
   noteOff                 = { noteOff,                                            'Note off' },
-  growNote                = { function() adjustDuration(1) end,                   'Resize note' },
-  shrinkNote              = { function() adjustDuration(-1) end,                  'Resize note' },
-  nudgeBack               = { function() adjustPosition(-1) end,                  'Nudge' },
-  nudgeForward            = { function() adjustPosition(1) end,                   'Nudge' },
+  growNote                = { function(p) adjustDuration(p,  1) end,              'Resize note' },
+  shrinkNote              = { function(p) adjustDuration(p, -1) end,              'Resize note' },
+  nudgeBack               = { function(p) adjustPosition(p, -1) end,              'Nudge' },
+  nudgeForward            = { function(p) adjustPosition(p,  1) end,              'Nudge' },
   -- '(' halves: with prefix p = pn/pd, k = pd/pn (reciprocal). Default 1/2.
   scaleHalf               = { function()
     if not ec:hasSelection() then return end
-    local pn, pd = cmgr:consumePrefixRational()
+    local pn, pd = cmgr:prefixRational()
     if pn then tv:scaleSelection(pd, pn)
     else       tv:scaleSelection(1, 2) end
   end, 'Halve' },
   -- ')' doubles: with prefix p = pn/pd, k = pn/pd. Default 2/1.
   scaleDouble             = { function()
     if not ec:hasSelection() then return end
-    local pn, pd = cmgr:consumePrefixRational()
+    local pn, pd = cmgr:prefixRational()
     if pn then tv:scaleSelection(pn, pd)
     else       tv:scaleSelection(2, 1) end
   end, 'Double' },
@@ -2175,10 +2174,10 @@ tracker:registerAll{
   deleteRow               = { function() deleteRow() end,         'Delete row' },
   insertRowCol            = { function() insertRowCol() end,      'Insert row in column' },
   deleteRowCol            = { function() deleteRowCol() end,      'Delete row in column' },
-  nudgeCoarseUp           = { function() nudge( 1, true)  end,    'Nudge' },
-  nudgeCoarseDown         = { function() nudge(-1, true)  end,    'Nudge' },
-  nudgeFineUp             = { function() nudge( 1, false) end,    'Nudge' },
-  nudgeFineDown           = { function() nudge(-1, false) end,    'Nudge' },
+  nudgeCoarseUp           = { function(p) nudge(p,  1, true)  end, 'Nudge' },
+  nudgeCoarseDown         = { function(p) nudge(p, -1, true)  end, 'Nudge' },
+  nudgeFineUp             = { function(p) nudge(p,  1, false) end, 'Nudge' },
+  nudgeFineDown           = { function(p) nudge(p, -1, false) end, 'Nudge' },
   eventShiftLeft          = { function() shiftEvents(-1) end,     'Move event left'  },
   eventShiftRight         = { function() shiftEvents( 1) end,     'Move event right' },
   playFromTop             = function() tm:playFrom(0) end,

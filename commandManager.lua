@@ -151,7 +151,7 @@ function mgr:doBefore(name, before)
     return
   end
   self:wrap(name, function(orig)
-    return function() before(); return orig() end
+    return function(...) before(); return orig(...) end
   end)
 end
 
@@ -161,8 +161,8 @@ function mgr:doAfter(name, after)
     return
   end
   self:wrap(name, function(orig)
-    return function()
-      local r, s = orig(); after(); return r, s
+    return function(...)
+      local r, s = orig(...); after(); return r, s
     end
   end)
 end
@@ -171,16 +171,23 @@ end
 --
 -- Emacs-style numeric prefix. `beginPrefix` opens accumulation; the
 -- dispatcher feeds digit and `/` characters via `appendPrefix`. The
--- next non-accumulating key calls `finishPrefix` to parse the buffer
--- and stash a pending value, then falls through to the normal
--- keychain walk. Commands that want the value call `consumePrefix`.
--- No negatives — direction is the bound command's job.
+-- next non-accumulating bound key calls `finishPrefix` to parse the
+-- buffer and stash a pending value; the subsequent `invoke` reads it
+-- as the first arg passed to the command, then clears all prefix state.
+-- Commands needing the rational (num/den) call `prefixRational()` as a
+-- non-consuming reader inside their body (state is live until invoke
+-- returns). No negatives — direction is the bound command's job.
 
 local prefixBuf, pendingPrefix = nil, nil
 local pendingPrefixNum, pendingPrefixDen = nil, nil
 
---contract: buffer accepts only '0'..'9' and '/'; cancel/finish/consume each leave the state inactive
-function mgr:beginPrefix()   prefixBuf = '' end
+local function clearPrefixState()
+  prefixBuf = nil
+  pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
+end
+
+--contract: buffer accepts only '0'..'9' and '/'; cancel/finish/invoke each leave the state inactive
+function mgr:beginPrefix()    prefixBuf = ''           end
 function mgr:isPrefixActive() return prefixBuf ~= nil end
 
 function mgr:appendPrefix(ch)
@@ -189,10 +196,7 @@ function mgr:appendPrefix(ch)
   prefixBuf = prefixBuf .. ch
 end
 
-function mgr:cancelPrefix()
-  prefixBuf, pendingPrefix = nil, nil
-  pendingPrefixNum, pendingPrefixDen = nil, nil
-end
+function mgr:cancelPrefix() clearPrefixState() end
 
 --contract: empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
 function mgr:finishPrefix()
@@ -215,18 +219,9 @@ function mgr:finishPrefix()
   return pendingPrefix
 end
 
---contract: returns pending value (number or nil) and clears all prefix state; idempotent thereafter until next finishPrefix
-function mgr:consumePrefix()
-  local p = pendingPrefix
-  pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
-  return p
-end
-
---contract: returns (num, den) of the pending prefix as parsed integers, or (nil, nil) when no prefix is pending; clears all prefix state; consumers that need rationality (e.g. scale's rpb refinement) read this instead of consumePrefix
-function mgr:consumePrefixRational()
-  local n, d = pendingPrefixNum, pendingPrefixDen
-  pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
-  return n, d
+--contract: non-consuming reader of the parsed rational; safe to call inside a command body. Returns (nil, nil) when no prefix is pending. State is cleared at the end of invoke, not by this call.
+function mgr:prefixRational()
+  return pendingPrefixNum, pendingPrefixDen
 end
 
 ----- Scopes & stack
@@ -260,12 +255,16 @@ end
 ----- Dispatch
 
 --contract: returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)
+--contract: always prepends the pending prefix (defaulted to 1 when nothing is pending) as the first argument to the command body. Bodies that need to distinguish "user typed 1" from "no prefix" read prefixRational() — it returns (nil, nil) when nothing is pending. State stays live for the call so the body may read it; cleared on return ONLY if there was a pending prefix at entry, so a command body that opens prefix mode (beginPrefix) is not wiped out by its own invoke.
 function mgr:invoke(name, ...)
   local fn = self.commands[name]
   if not fn then return end
   local scope = self.gates[name]
   if scope and not isReachable(scope, name) then return end
-  return fn(...)
+  local hadPending = pendingPrefix ~= nil
+  local r1, r2 = fn(pendingPrefix or 1, ...)
+  if hadPending then clearPrefixState() end
+  return r1, r2
 end
 
 ----- Keymap lookup
