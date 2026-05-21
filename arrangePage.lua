@@ -25,9 +25,10 @@ local ap = {}
 
 ----- Render helpers
 
--- Row label = QN at the row's top edge. Cheap because rowToQN is a multiply.
+-- Row label = QN at the row's top edge. beatPerRow is integer-valued in
+-- normal use (1, 4, 8, 16); show the QN as an integer.
 local function rowLabel(row)
-  return string.format('%6.2f', av:rowToQN(row))
+  return string.format('%4d', math.floor(av:rowToQN(row) + 0.5))
 end
 
 ----------- PUBLIC
@@ -39,67 +40,140 @@ function ap:unbind() end
 function ap:renderToolbarBits(_) end
 
 --contract: read-only skeleton render — track-name header row, row-number gutter, empty body cells. Cursor cell + focused column are tinted. Take rectangles come in a later phase.
-function ap:renderBody(_, w, h, _dispatch)
+--contract: pushes parchment palette across the body (Col_Text, Col_TableHeaderBg, Col_TableRowBg, Col_TableBorder*) because coord pops chrome styles before body draw; without these the table inherits ImGui's dark defaults.
+--contract: invokes the dispatch callback at end of body so arrange-scope arrow keys reach the dispatcher; samplePage and trackerPage follow the same pattern.
+function ap:renderBody(_, w, h, dispatch)
   if not ctx then return end
+
+  local function pushBodyStyles()
+    ImGui.PushStyleColor(ctx, ImGui.Col_Text,             chrome.colour('text'))
+    ImGui.PushStyleColor(ctx, ImGui.Col_TableHeaderBg,    chrome.colour('bg'))
+    ImGui.PushStyleColor(ctx, ImGui.Col_TableRowBg,       chrome.colour('bg'))
+    ImGui.PushStyleColor(ctx, ImGui.Col_TableRowBgAlt,    chrome.colour('bg'))
+    ImGui.PushStyleColor(ctx, ImGui.Col_TableBorderLight, chrome.colour('separator'))
+    ImGui.PushStyleColor(ctx, ImGui.Col_TableBorderStrong,chrome.colour('separator'))
+  end
+  local function popBodyStyles() ImGui.PopStyleColor(ctx, 6) end
+
+  pushBodyStyles()
 
   local tracks  = am:projectTracks()
   local nTracks = #tracks
   if nTracks == 0 then
-    ImGui.TextUnformatted(ctx, '(no tracks in project)')
+    ImGui.Text(ctx, '(no tracks in project)')
     av:setGridSize(0, 0)
+    popBodyStyles()
+    if dispatch then dispatch(self:focusState()) end
     return
   end
 
   -- Single ImGui.Table — first column is the QN gutter, the rest are tracks.
   local cols = nTracks + 1
-  local flags = ImGui.TableFlags_Borders | ImGui.TableFlags_RowBg
-               | ImGui.TableFlags_ScrollY | ImGui.TableFlags_SizingFixedFit
-  if not ImGui.BeginTable(ctx, 'arrange', cols, flags, w, h) then return end
-
-  ImGui.TableSetupColumn(ctx, 'qn', ImGui.TableColumnFlags_WidthFixed, 64)
-  for i, tr in ipairs(tracks) do
-    ImGui.TableSetupColumn(ctx, tr.name or string.format('Track %d', i),
-                           ImGui.TableColumnFlags_WidthStretch)
+  -- Compute the table width from the column sum (gutter + N tracks).
+  -- ImGui sizing policy otherwise lets the last column absorb slack;
+  -- passing an explicit outer width that matches the columns sidesteps
+  -- the policy entirely. Clamp to the body width so the host doesn't
+  -- over-extend when there are many tracks (horizontal scroll arrives
+  -- with the palette in a later phase).
+  local QN_W, TRACK_W = 32, 72
+  local tableW = math.min(w, QN_W + TRACK_W * nTracks)
+  local flags  = ImGui.TableFlags_Borders | ImGui.TableFlags_RowBg
+               | ImGui.TableFlags_ScrollY | ImGui.TableFlags_NoHostExtendX
+  if not ImGui.BeginTable(ctx, 'arrange', cols, flags, tableW, h) then
+    popBodyStyles()
+    if dispatch then dispatch(self:focusState()) end
+    return
   end
-  ImGui.TableHeadersRow(ctx)
+
+  ImGui.TableSetupColumn(ctx, '',   ImGui.TableColumnFlags_WidthFixed, QN_W)
+  for i, tr in ipairs(tracks) do
+    -- Fixed track width — zoom comes in a later phase via a cm-persisted px-per-track.
+    -- Stretch would interact badly with the cursor's column addressing and ImGui's table nav.
+    ImGui.TableSetupColumn(ctx, tr.name or string.format('Track %d', i),
+                           ImGui.TableColumnFlags_WidthFixed, TRACK_W)
+  end
+  -- Shift text within the current table cell. align: 'r' right-aligns,
+  -- 'c' centres. ImGui has no built-in alignment for Text — measure
+  -- the live cell width (GetContentRegionAvail) and offset the cursor.
+  -- TRACK_W is the column width including cell padding; the actual
+  -- usable area is narrower, so we don't pass it in.
+  local function alignedText(text, align)
+    local cellW = ImGui.GetContentRegionAvail(ctx)
+    local textW = ImGui.CalcTextSize(ctx, text)
+    local pad   = align == 'r' and (cellW - textW)
+                                 or math.floor((cellW - textW) / 2)
+    if pad > 0 then ImGui.SetCursorPosX(ctx, ImGui.GetCursorPosX(ctx) + pad) end
+    ImGui.Text(ctx, text)
+  end
+
+  -- Manual header row, not TableHeadersRow: the headers are decorative,
+  -- and TableHeadersRow makes them selectable, which steals ImGui's
+  -- keyboard nav focus and renders a blue highlight that cycles between
+  -- the cells as the user presses arrow keys.
+  ImGui.TableNextRow(ctx, ImGui.TableRowFlags_Headers)
+  ImGui.TableSetColumnIndex(ctx, 0)  -- gutter header is intentionally blank
+  for i, tr in ipairs(tracks) do
+    ImGui.TableSetColumnIndex(ctx, i)
+    alignedText(tr.name or string.format('Track %d', i), 'c')
+  end
 
   -- Capacity: how many body rows fit in the remaining region right now.
   local _, regionH = ImGui.GetContentRegionAvail(ctx)
   local rowH       = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
   local visRows    = math.max(1, math.floor(regionH / rowH))
   av:setGridSize(visRows, nTracks)
+  av:setMaxCol(nTracks)
 
   local sr, sc      = av:scroll()
   local curRow, curCol = av:cursorRow(), av:cursorCol()
+
+  -- Bar / phrase highlight tints. 16 QN per bar (4/4), 64 QN per 4-bar
+  -- phrase. rowBeat is defined as palette.highlight at alpha 0.4; the
+  -- phrase tint reuses the same hue at full opacity so phrases read
+  -- stronger than the bars they contain.
+  local rb            = chrome.colour('rowBeat')
+  local r, g, b       = ImGui.ColorConvertU32ToDouble4(rb)
+  local barRowTint    = rb
+  local phraseRowTint = ImGui.ColorConvertDouble4ToU32(r, g, b, 1.0)
 
   for r = 0, visRows - 1 do
     local row = sr + r
     ImGui.TableNextRow(ctx)
 
+    local qn = math.floor(av:rowToQN(row) + 0.5)
+    if qn > 0 and qn % 64 == 0 then
+      ImGui.TableSetBgColor(ctx, ImGui.TableBgTarget_RowBg0, phraseRowTint)
+    elseif qn > 0 and qn % 16 == 0 then
+      ImGui.TableSetBgColor(ctx, ImGui.TableBgTarget_RowBg0, barRowTint)
+    end
+
     ImGui.TableSetColumnIndex(ctx, 0)
-    ImGui.TextUnformatted(ctx, rowLabel(row))
+    alignedText(rowLabel(row), 'r')
 
     for c = 0, nTracks - 1 do
       local col = sc + c
       if col < nTracks then
         ImGui.TableSetColumnIndex(ctx, c + 1)
         if row == curRow and col == curCol then
-          ImGui.TextUnformatted(ctx, '>')
+          ImGui.Text(ctx, '>')
         elseif col == curCol then
-          ImGui.TextUnformatted(ctx, '|')
+          ImGui.Text(ctx, '|')
         else
-          ImGui.TextUnformatted(ctx, '')
+          ImGui.Text(ctx, '')
         end
       end
     end
   end
 
   ImGui.EndTable(ctx)
+  popBodyStyles()
+
+  if dispatch then dispatch(self:focusState()) end
 end
 
 function ap:renderStatusBar(_)
   if not ctx then return end
-  ImGui.TextUnformatted(ctx, string.format(
+  ImGui.Text(ctx, string.format(
     'arrange | row %d  col %d  | %g beats/row',
     av:cursorRow(), av:cursorCol(), av:beatPerRow()))
 end

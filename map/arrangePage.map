@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=136  sha=untracked  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=210  sha=c1efa11  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
@@ -18,27 +18,30 @@
   @state ctx = gui and gui.ctx or nil  @ 19
       @contract  owns the arrange substack: builds am and av internally; coord passes only primitives (cm, cmgr, chrome, gui).
   @state ap = {}  @ 24
-  @state arrange = cmgr:scope('arrange')  @ 122
+  @state arrange = cmgr:scope('arrange')  @ 196
       @invariant  arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
 
 # Private functions
   -- Render helpers
-  @fn rowLabel(row)  @ 29
-      -- Row label = QN at the row's top edge. Cheap because rowToQN is a multiply.
+  @fn rowLabel(row)  @ 30
+      -- Row label = QN at the row's top edge. beatPerRow is integer-valued in
+      -- normal use (1, 4, 8, 16); show the QN as an integer.
 
 # Public API (ap:*)
-  @api ap:bind()  @ 36
+  @api ap:bind()  @ 37
       @contract  bind takes no take — arrange is project-wide. coord may call with no args (or a take, ignored).
-  @api ap:unbind()  @ 37
-  @api ap:renderToolbarBits(_)  @ 39
-  @api ap:renderBody(_, w, h, _dispatch)  @ 42
+  @api ap:unbind()  @ 38
+  @api ap:renderToolbarBits(_)  @ 40
+  @api ap:renderBody(_, w, h, dispatch)  @ 45
       @contract  read-only skeleton render — track-name header row, row-number gutter, empty body cells. Cursor cell + focused column are tinted. Take rectangles come in a later phase.
-  @api ap:renderStatusBar(_)  @ 100
-  @api ap:focusState()  @ 108
+      @contract  pushes parchment palette across the body (Col_Text, Col_TableHeaderBg, Col_TableRowBg, Col_TableBorder*) because coord pops chrome styles before body draw; without these the table inherits ImGui's dark defaults.
+      @contract  invokes the dispatch callback at end of body so arrange-scope arrow keys reach the dispatcher; samplePage and trackerPage follow the same pattern.
+  @api ap:renderStatusBar(_)  @ 174
+  @api ap:focusState()  @ 182
       @contract  focusState mirrors samplePage — picker or any active ImGui item suppresses commands.
-  @api ap:handleInput()  @ 117
-  @api ap:save()  @ 118
-  @api ap:load()  @ 119
+  @api ap:handleInput()  @ 191
+  @api ap:save()  @ 192
+  @api ap:load()  @ 193
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
