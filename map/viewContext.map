@@ -1,4 +1,4 @@
-@module viewContext  src=viewContext.lua  loc=98  sha=fa4a61d  mode=chunk
+@module viewContext  src=viewContext.lua  loc=110  sha=3d00a83  mode=chunk
 @deps length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
 
 # Shapes
@@ -7,7 +7,7 @@
 # Imports
   @require util = 'util'  @ 7
       @invariant  pure: no side effects, no signals, no mutation of args
-      @invariant  identity row math: ppqToRow / rowToPPQ are inverses (modulo integer rounding) under uniform ppqPerRow
+      @invariant  identity row math: ppqToRow and rowToPPQ are exact inverses under uniform ppqPerRow; both return float. "on the grid" is a tolerance question, owned by ctx:isOnGrid (PPQ_GRID_EPS).
   @require tuning = 'tuning'  @ 8
 
 # Private state
@@ -18,6 +18,7 @@
   @state timeSigs = args.timeSigs  @ 16
   @state temper = args.temper  @ 17
   @state ctx = {}  @ 18
+  @state PPQ_GRID_EPS = 0.5  @ 64
 
 # Public API (ctx:*)
   -- Temperament
@@ -25,8 +26,10 @@
   @api ctx:noteProjection(evt)  @ 24
   -- Timing
   @api ctx:ppqToRow(ppqI, chan)  @ 43
-      @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Inverse of rowToPPQ. The chan argument is unused at this layer (kept for the call-site signature).
+      @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Exact inverse of rowToPPQ. Returns float; integer rows are float fixpoints. The chan argument is unused at this layer (kept for the call-site signature).
   @api ctx:rowToPPQ(row, chan)  @ 50
-      @contract  identity row math: row × ppqPerRow, integer-rounded, clamped at length. On-grid iff ctx:rowToPPQ(round(ppqToRow(p)), chan) == p.
+      @contract  identity row math: row × ppqPerRow, clamped at length. Returns float; no rounding. On-grid is a tolerance question — see ctx:isOnGrid.
   @api ctx:snapRow(ppqI, chan)  @ 56
   @api ctx:ppqPerRow()  @ 58
+  @api ctx:isOnGrid(ppqI, chan)  @ 67
+      @contract  true iff ppqI lies within PPQ_GRID_EPS ppq of the nearest row's ppq under this ctx. The sole owner of the on-grid threshold; callers must not re-implement it from rowToPPQ.

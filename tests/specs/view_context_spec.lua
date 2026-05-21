@@ -31,8 +31,9 @@ local function mkCtx(overrides)
 end
 
 -- Non-divisor rpb: ppqPerRow is fractional, so row · ppqPerRow lands
--- between integers for most rows. Exposes the F4 asymmetry between
--- rowToPPQ (rounds at realisation) and ppqToRow (returns a fractional row).
+-- between integers for most rows. Pins that rowToPPQ / ppqToRow are
+-- now both float — the old F4 asymmetry (rowToPPQ rounded at the
+-- realisation boundary) is gone; "on the grid" is owned by isOnGrid.
 local function mkCtxRpb(rpb, ppqPerQN)
   ppqPerQN        = ppqPerQN or 240
   local ppqPerRow = ppqPerQN / rpb        -- denom = 4 ⇒ resolution*4/denom = ppqPerQN
@@ -61,13 +62,14 @@ return {
   },
 
   {
-    name = 'identity swing: ppqToRow returns fractional row mid-cell; rowToPPQ rounds to int',
+    name = 'identity swing: ppqToRow and rowToPPQ are exact inverses, both returning float',
     run = function()
       local ctx = mkCtx()
       -- 30 ppq is half a row at 60 ppq/row.
-      t.truthy(math.abs(ctx:ppqToRow(30, 1) - 0.5) < 1e-9, 'ppqToRow(30) ≈ 0.5')
-      -- rowToPPQ(0.5) → 30.0 → floor(30.5) = 30
+      t.truthy(math.abs(ctx:ppqToRow(30, 1) - 0.5) < 1e-9, 'ppqToRow(30) = 0.5')
+      -- rowToPPQ(0.5) = 30.0 exact — no rounding at the realisation boundary.
       t.eq(ctx:rowToPPQ(0.5, 1), 30)
+      t.eq(ctx:rowToPPQ(0.49, 1), 0.49 * 60)
     end,
   },
 
@@ -95,13 +97,14 @@ return {
     end,
   },
 
-  ---------- F4 ROUND-TRIP UNDER NON-DIVISOR RPB
+  ---------- ROUND-TRIP UNDER NON-DIVISOR RPB
   --
-  -- See design/swing_delay_invariants.md F4. Two corners hold; the raw
-  -- round-trip is asymmetric by design (snapRow is the recovery operator).
+  -- The logical frame is float. rowToPPQ and ppqToRow are exact
+  -- inverses; the on-grid threshold lives in ctx:isOnGrid, not in
+  -- the projection.
 
   {
-    name = 'F4 corner 1: snapRow(rowToPPQ(r,c),c) == r under non-divisor rpb',
+    name = 'snapRow(rowToPPQ(r,c),c) == r under non-divisor rpb',
     run = function()
       for _, rpb in ipairs{ 5, 7 } do
         local ctx = mkCtxRpb(rpb)
@@ -114,7 +117,7 @@ return {
   },
 
   {
-    name = 'F4 corner 2: on-grid p round-trips exactly under non-divisor rpb',
+    name = 'on-grid p round-trips exactly under non-divisor rpb',
     run = function()
       for _, rpb in ipairs{ 5, 7 } do
         local ctx = mkCtxRpb(rpb)
@@ -128,23 +131,62 @@ return {
   },
 
   {
-    name = 'F4 asymmetry: raw ppqToRow ∘ rowToPPQ is NOT the identity under non-divisor rpb',
-    -- Witnesses why snapRow is the recovery operator, not "fix ppqToRow to
-    -- round." The drift is bounded by < 0.5 (snapRow's recovery range);
-    -- removing it would cost the fractional-row resolution that lane drag
-    -- and off-grid display rely on.
+    name = 'ppqToRow ∘ rowToPPQ is the identity (float) under non-divisor rpb',
+    -- The old F4 asymmetry came from rowToPPQ flooring at the
+    -- realisation boundary; that round is gone, so the round-trip is
+    -- exact (modulo IEEE-754 ulps, well under 1e-9).
+    run = function()
+      for _, rpb in ipairs{ 5, 7 } do
+        local ctx = mkCtxRpb(rpb)
+        for r = 0, rpb * 4 - 1 do
+          local back  = ctx:ppqToRow(ctx:rowToPPQ(r, 1), 1)
+          t.truthy(math.abs(back - r) < 1e-9,
+            'rpb=' .. rpb .. ' r=' .. r .. ' back=' .. back)
+        end
+      end
+    end,
+  },
+
+  ---------- ON-GRID PREDICATE
+
+  {
+    name = 'isOnGrid: exact row ppqs are on-grid',
+    run = function()
+      local ctx = mkCtx()    -- ppqPerRow = 60
+      for _, r in ipairs{ 0, 1, 4, 16, 63 } do
+        t.truthy(ctx:isOnGrid(ctx:rowToPPQ(r, 1), 1),
+          'exact rowToPPQ(' .. r .. ') is on-grid')
+      end
+    end,
+  },
+
+  {
+    name = 'isOnGrid: tolerates float drift up to (but not including) 0.5 ppq',
+    -- The threshold matches mm's integer raw frame: anything closer
+    -- than half a tick to a row boundary collapses to the same raw
+    -- onset on flush, so the predicate treats it as on-grid.
+    run = function()
+      local ctx = mkCtx()    -- row 1 is ppq 60
+      t.truthy(ctx:isOnGrid(60,        1), 'on the row')
+      t.truthy(ctx:isOnGrid(60 + 0.49, 1), '+0.49 ppq from a row is on-grid')
+      t.truthy(ctx:isOnGrid(60 - 0.49, 1), '-0.49 ppq from a row is on-grid')
+      t.eq    (ctx:isOnGrid(60 + 0.5,  1), false, '±0.5 ppq is the strict cutoff')
+      t.eq    (ctx:isOnGrid(75,        1), false, 'mid-row ppq is off-grid')
+    end,
+  },
+
+  {
+    name = 'isOnGrid: rebuild-inverted ppqs land on-grid under non-divisor rpb',
+    -- Mirrors the rebuild path where toLogical(fromLogical(rowPPQ))
+    -- carries IEEE-754 drift; isOnGrid must absorb it.
     run = function()
       local ctx = mkCtxRpb(7)
-      local witnessed = false
-      for r = 1, 6 do                       -- r=0 and r=7 are integer-ppq fixpoints
-        local back  = ctx:ppqToRow(ctx:rowToPPQ(r, 1), 1)
-        local drift = math.abs(back - r)
-        t.truthy(drift < 0.5,
-          'drift must stay within snapRow recovery range, r=' .. r .. ' got ' .. drift)
-        if back ~= r then witnessed = true end
+      for r = 0, 27 do
+        local p     = ctx:rowToPPQ(r, 1)
+        local drift = p + 1e-12
+        t.truthy(ctx:isOnGrid(drift, 1),
+          'rpb=7 r=' .. r .. ' p+ulp on-grid')
       end
-      t.truthy(witnessed,
-        'expected at least one r in 1..6 to witness raw round-trip drift under rpb=7')
     end,
   },
 

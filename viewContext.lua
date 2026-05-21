@@ -2,7 +2,7 @@
 -- mutation, no migration — discard and rebuild on every change.
 
 --invariant: pure: no side effects, no signals, no mutation of args
---invariant: identity row math: ppqToRow / rowToPPQ are inverses (modulo integer rounding) under uniform ppqPerRow
+--invariant: identity row math: ppqToRow and rowToPPQ are exact inverses under uniform ppqPerRow; both return float. "on the grid" is a tolerance question, owned by ctx:isOnGrid (PPQ_GRID_EPS).
 --shape: args = { length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper }
 local util   = require 'util'
 local tuning = require 'tuning'
@@ -39,23 +39,35 @@ end
 
 ----- Timing
 
---contract: identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Inverse of rowToPPQ. The chan argument is unused at this layer (kept for the call-site signature).
+--contract: identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Exact inverse of rowToPPQ. Returns float; integer rows are float fixpoints. The chan argument is unused at this layer (kept for the call-site signature).
 function ctx:ppqToRow(ppqI, chan)
   if ppqI <= 0 then return 0 end
   if ppqI >= length then return numRows end
   return ppqI / ppqPerRow
 end
 
---contract: identity row math: row × ppqPerRow, integer-rounded, clamped at length. On-grid iff ctx:rowToPPQ(round(ppqToRow(p)), chan) == p.
+--contract: identity row math: row × ppqPerRow, clamped at length. Returns float; no rounding. On-grid is a tolerance question — see ctx:isOnGrid.
 function ctx:rowToPPQ(row, chan)
   if row <= 0 then return 0 end
   if row >= numRows then return length end
-  return math.floor(row * ppqPerRow + 0.5)
+  return row * ppqPerRow
 end
 
 function ctx:snapRow(ppqI, chan) return util.round(self:ppqToRow(ppqI, chan)) end
 
 function ctx:ppqPerRow() return ppqPerRow end
+
+-- Tolerance for "on the grid". The logical frame is float, so the
+-- predicate cannot be `== rowToPPQ(snapRow)`. Half a ppq tick matches
+-- the granularity of mm's integer raw frame: anything closer than
+-- that to a row boundary collapses to the same raw note on flush.
+local PPQ_GRID_EPS = 0.5
+
+--contract: true iff ppqI lies within PPQ_GRID_EPS ppq of the nearest row's ppq under this ctx. The sole owner of the on-grid threshold; callers must not re-implement it from rowToPPQ.
+function ctx:isOnGrid(ppqI, chan)
+  local snapped = self:rowToPPQ(self:snapRow(ppqI, chan), chan)
+  return math.abs(ppqI - snapped) < PPQ_GRID_EPS
+end
 
 do -- exports ctx:rowBeatInfo, ctx:barBeatSub
   local function timeSigAt(ppq)

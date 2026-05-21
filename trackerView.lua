@@ -2303,7 +2303,7 @@ function tv:rebuild(takeChanged)
             gridCol.overflow[y] = true
           else
             gridCol.cells[y] = evt
-            if ctx:rowToPPQ(y, chan) ~= evt.ppq then gridCol.offGrid[y] = true end
+            if not ctx:isOnGrid(evt.ppq, chan) then gridCol.offGrid[y] = true end
           end
         end
         -- endppqC is the clipped logical ceiling (always numeric, even

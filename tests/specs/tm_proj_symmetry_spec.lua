@@ -6,10 +6,11 @@
 -- evt.endppq got a swung, clipped realisation while evt.ppq was logical
 -- -- the asymmetry this suite pins shut.
 --
--- After: evt.endppq = round(endppqL) (authored logical ceiling,
--- UNCLIPPED; util.OPEN stays OPEN). evt.endppqC = clipped logical
--- ceiling (render-only; the tp tail build is the sole consumer). Raw
--- never appears on the tv surface.
+-- After: evt.endppq = endppqL (authored logical ceiling, UNCLIPPED;
+-- util.OPEN stays OPEN). evt.endppqC = clipped logical ceiling, the
+-- float inversion of the realised raw tail (render-only; the tp tail
+-- build is the sole consumer; ctx:isOnGrid owns the row-membership
+-- tolerance). Raw never appears on the tv surface.
 --
 -- Real tm, real cm under a non-identity swing (classic-55) so a raw
 -- leak is detectable: logical 600 and swung-raw(600) differ.
@@ -58,7 +59,8 @@ return {
 
       t.eq(a.ppq, 180, 'onset projected to logical')
       t.eq(a.endppq, 600, 'endppq is the authored logical ceiling, unclipped')
-      t.eq(a.endppqC, 360, 'endppqC is the clipped logical ceiling (next same-pitch onset)')
+      t.truthy(math.abs(a.endppqC - 360) < 0.5,
+        'endppqC is the clipped logical ceiling (next same-pitch onset), got ' .. a.endppqC)
 
       -- The leak guard: under classic-55, raw(600) != 600. If projection
       -- regressed to leaving raw on the surface, endppq would equal one
@@ -86,7 +88,8 @@ return {
       local a = noteAt(h.tm, 60)
 
       t.eq(a.endppq, util.OPEN, 'open authored tail stays OPEN on the surface')
-      t.eq(a.endppqC, 360, 'endppqC clips the open tail to the next same-pitch onset')
+      t.truthy(math.abs(a.endppqC - 360) < 0.5,
+        'endppqC clips the open tail to the next same-pitch onset, got ' .. a.endppqC)
     end,
   },
 }

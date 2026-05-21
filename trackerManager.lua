@@ -1492,16 +1492,18 @@ do
     -- onset and the tail leave here in the authoring frame, raw stays
     -- private to tm/mm.
     --
-    -- evt.ppq integer-rounded for tv:rebuild's offGrid compare; ppqL
-    -- stays float so swing inverse round-trips stay exact.
+    -- evt.ppq and evt.endppq leave here as floats: the logical frame
+    -- is float by design, and the on-grid predicate (ctx:isOnGrid) is
+    -- the sole owner of the row-membership tolerance. Rounding here
+    -- would silently widen that tolerance to 1 ppq.
     --
-    -- evt.endppq is the AUTHORED logical ceiling, unclipped: round(
-    -- endppqL), or util.OPEN for a deliberately-unbounded tail. The
-    -- tail pass already folded every blocker into mm's raw endppq;
-    -- inverting it gives evt.endppqC, the CLIPPED logical ceiling —
-    -- render-only (the tp tail build is the sole consumer). An
-    -- uncached note (no endppqL) has no authored stamp, so its
-    -- authored ceiling is the realised one.
+    -- evt.endppq is the AUTHORED logical ceiling, unclipped: endppqL,
+    -- or util.OPEN for a deliberately-unbounded tail. The tail pass
+    -- already folded every blocker into mm's raw endppq; inverting it
+    -- gives evt.endppqC, the CLIPPED logical ceiling — render-only
+    -- (the tp tail build is the sole consumer). An uncached note (no
+    -- endppqL) has no authored stamp, so its authored ceiling is the
+    -- realised one.
     do
       local res = mm:resolution()
       local function projectToLogical(col, chan)
@@ -1514,14 +1516,14 @@ do
               local baseline = tm:fromLogical(chan, evt.ppqL)
               evt.delayC = util.round(timing.ppqToDelay(evt.ppq - baseline, res))
             end
-            evt.ppq = util.round(evt.ppqL)
+            evt.ppq = evt.ppqL
           end
           if evt.endppq ~= nil then
-            evt.endppqC = util.round(tm:toLogical(chan, evt.endppq))
+            evt.endppqC = tm:toLogical(chan, evt.endppq)
             if evt.endppqL == util.OPEN then
               evt.endppq = util.OPEN
             elseif evt.endppqL ~= nil then
-              evt.endppq = util.round(evt.endppqL)
+              evt.endppq = evt.endppqL
             else
               evt.endppq = evt.endppqC
             end
