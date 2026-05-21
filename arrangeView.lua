@@ -15,6 +15,10 @@ local av = {}
 local cursorRow, cursorCol = 0, 0
 local scrollRow, scrollCol = 0, 0
 local gridRows, gridCols   = 0, 0
+-- Upper clamp for cursorCol — the page pushes the live track count
+-- each frame. Nil means unbounded (initial frame before the page has
+-- drawn).
+local maxCol = nil
 
 ----- Viewport follow
 
@@ -38,10 +42,12 @@ end
 function av:cursorRow() return cursorRow end
 function av:cursorCol() return cursorCol end
 
---contract: setCursor clamps negative coords to 0 and triggers followViewport; upper-bound clamp (track count, project end) is the caller's job
+--contract: setCursor clamps negative coords to 0 and (for cursorCol) at maxCol if the page has pushed one; row upper-bound clamp is still the caller's job until project-end is wired
 function av:setCursor(row, col)
   cursorRow = math.max(0, math.floor(row))
-  cursorCol = math.max(0, math.floor(col))
+  local c = math.max(0, math.floor(col))
+  if maxCol then c = math.min(c, maxCol) end
+  cursorCol = c
   followViewport()
 end
 
@@ -53,6 +59,9 @@ function av:setGridSize(rows, cols)
   gridCols = math.max(0, math.floor(cols))
   followViewport()
 end
+
+--contract: page pushes the live track count each frame so cursorCol upper-clamps without av needing to call am
+function av:setMaxCol(n) maxCol = n and math.max(0, math.floor(n) - 1) or nil end
 
 function av:beatPerRow()    return cm:get('arrangeBeatPerRow') end
 function av:setBeatPerRow(v) cm:set('project', 'arrangeBeatPerRow', math.max(1/4, v)) end
