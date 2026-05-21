@@ -119,6 +119,8 @@ local declarations = {
   { 'colour.shadowed',         'colour.inactive'                  },
   { 'colour.cursor',           'palette.night'                    },
   { 'colour.cursorText',       'palette.nightText'                },
+  { 'colour.arrangeCursor',       {'palette.pale',  0.2}         },  -- cream fill, take shows through
+  { 'colour.arrangeCursorBorder', {'palette.shade'}          },
   { 'colour.rowNormal',        {'palette.bg',         0   }       },
   { 'colour.rowBeat',          {'palette.highlight',  0.4 }       },
   { 'colour.rowBarStart',      {'palette.mid',        0.4 }       },

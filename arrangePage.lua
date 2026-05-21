@@ -174,12 +174,6 @@ local function renderGrid(tracks, nTracks)
     end
   end
 
-  -- Focused-column faint vertical tint (body only, behind takes).
-  if curCol >= 0 and curCol < nTracks then
-    ImGui.DrawList_AddRectFilled(dl,
-      trackLeft(curCol), bodyTop, trackRight(curCol), bodyBot, colHiTint)
-  end
-
   -- Gridlines first — take rectangles occlude them within their span,
   -- and their 1px borders re-state the cell boundary at the take edge.
   -- Topmost and leftmost outer borders are intentionally omitted; verticals
@@ -201,7 +195,12 @@ local function renderGrid(tracks, nTracks)
   -- snap to integer pixels so adjacent takes' borders land on the same
   -- pixel row/column and visually coincide — without the snap, fractional
   -- rowH antialiases the shared edge across two pixel rows.
+  --
+  -- Three passes so the cursor cell can paint between fills and names:
+  -- the translucent cursor fill lies over the take fill, and names draw
+  -- last so they stay crisp over it.
   local function snap(v) return math.floor(v + 0.5) end
+  local nameDraws = {}
   for c = 0, nTracks - 1 do
     local rx0, rx1 = snap(trackLeft(c)), snap(trackRight(c))
     for _, tk in ipairs(am:tracksTakes(c)) do
@@ -209,27 +208,42 @@ local function renderGrid(tracks, nTracks)
       local endRow   = av:qnToRow(tk.startQN + tk.lengthQN)
       if endRow > sr and startRow < sr + visRows then
         local ry0 = snap(rowY(math.max(startRow, sr)))
-        local ry1 = snap(rowY(math.min(endRow,   sr + visRows)))
+        local ry1 = snap(rowY(math.min(endRow, sr + visRows)))
         local fill, border = slotColours(tk.slotIdx)
         ImGui.DrawList_AddRectFilled(dl, rx0+1, ry0+1, rx1, ry1, fill)
         ImGui.DrawList_AddRect      (dl, rx0, ry0, rx1+1, ry1+1, border, 0, 0, 1)
-        local name = tk.name or ''
-        if name ~= '' then
-          local tw = ImGui.CalcTextSize(ctx, name)
-          local tx = rx0 + math.floor((rx1 - rx0 - tw) / 2)
-          ImGui.DrawList_PushClipRect(dl, rx0 + 2, ry0, rx1 - 2, ry1, true)
-          ImGui.DrawList_AddText(dl, tx, ry0 + 1, textCol, name)
-          ImGui.DrawList_PopClipRect(dl)
+        if tk.name and tk.name ~= '' then
+          nameDraws[#nameDraws + 1] = {
+            name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
+          }
         end
       end
     end
   end
 
-  -- Cursor glyph, on top of rectangles.
+  -- Cursor cell — cream fill at half opacity (the take fill shows
+  -- through) inside a dark-parchment border. The border lands on the
+  -- column gridlines, so the cell reads exactly as wide as the column.
   if curRow >= sr and curRow < sr + visRows
      and curCol >= 0 and curCol < nTracks then
-    ImGui.DrawList_AddText(dl,
-      trackLeft(curCol) + 2, rowY(curRow), textCol, '>')
+    local cx0 = snap(trackLeft(curCol))
+    local cx1 = snap(trackRight(curCol))
+    local cy0 = snap(rowY(curRow))
+    local cy1 = snap(rowY(curRow + 1))
+    ImGui.DrawList_AddRectFilled(dl, cx0+1, cy0+1, cx1, cy1,
+      chrome.colour('arrangeCursor'))
+    ImGui.DrawList_AddRect(dl, cx0, cy0, cx1+1, cy1+1,
+      chrome.colour('arrangeCursorBorder'), 0, 0, 2)
+  end
+
+  -- Take names — last, so they stay crisp over the translucent cursor
+  -- fill.
+  for _, nd in ipairs(nameDraws) do
+    local tw = ImGui.CalcTextSize(ctx, nd.name)
+    local tx = nd.rx0 + math.floor((nd.rx1 - nd.rx0 - tw) / 2)
+    ImGui.DrawList_PushClipRect(dl, nd.rx0 + 2, nd.ry0, nd.rx1 - 2, nd.ry1, true)
+    ImGui.DrawList_AddText(dl, tx, nd.ry0 + 1, textCol, nd.name)
+    ImGui.DrawList_PopClipRect(dl)
   end
 
   -- Gutter row labels (right-aligned within QN_W).
