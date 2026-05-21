@@ -955,6 +955,16 @@ do
     rebuilding = true
     takeChanged = takeChanged or false
 
+    local function applyAssigns(list)
+      if #list == 0 then return end
+      mm:modify(function()
+        for _, a in ipairs(list) do
+          local newTok = mm:assign(a.evt.token, a.update)
+          if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
+        end
+      end)
+    end
+
     clearSwing()   -- rebuild is the (cm, mm) coherence point
     channels = {}
     for i = 1, 16 do
@@ -1099,14 +1109,7 @@ do
           end
         end
       end)
-      if #toAssign > 0 then
-        mm:modify(function()
-          for _, a in ipairs(toAssign) do
-            local newTok = mm:assign(a.evt.token, a.update)
-            if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
-          end
-        end)
-      end
+      applyAssigns(toAssign)
       staleSwing = {}
     end
 
@@ -1246,22 +1249,8 @@ do
       -- Clamps first: reindex separates colliding tokens before clip
       -- assigns dereference them (same-pitch notes can share a content-
       -- keyed token until ppq differs).
-      if #clamps > 0 then
-        mm:modify(function()
-          for _, a in ipairs(clamps) do
-            local newTok = mm:assign(a.evt.token, a.update)
-            if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
-          end
-        end)
-      end
-      if #clips > 0 then
-        mm:modify(function()
-          for _, a in ipairs(clips) do
-            local newTok = mm:assign(a.evt.token, a.update)
-            if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
-          end
-        end)
-      end
+      applyAssigns(clamps)
+      applyAssigns(clips)
     end
 
     -- 4.9) Absorber reconciliation + pb wire/column resynthesis.
