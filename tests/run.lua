@@ -106,6 +106,8 @@ local specs = {
   'tracker_page_spec',
   'sample_page_spec',
   'am_spec',
+  'arrange_view_spec',
+  'arrange_page_spec',
 }
 
 local pass, fail, failures = 0, 0, {}

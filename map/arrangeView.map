@@ -1,0 +1,36 @@
+@module arrangeView  src=arrangeView.lua  loc=63  sha=untracked  mode=chunk
+@deps cm
+
+# Invariants & contracts
+  @invariant  mirrors trackerView's viewport pattern. Cursor (row, col) and scroll (row, col) are in-memory module-locals; only beatPerRow persists via cm. Re-opening a project lands cursor at (0, 0); density is restored.
+  @invariant  row/col addressing — cursorRow is integer rows; cursorCol is the project track index (0-based). One row spans `beatPerRow` beats of QN, so qn ↔ row is `qn / beatPerRow` ↔ `row * beatPerRow`.
+  @invariant  gridRows / gridCols are visible cell counts set by the page each frame via setGridSize; followViewport runs on every cursor mutation so the cursor stays in the visible band.
+  @invariant  av speaks no REAPER / ImGui / am — bounds (track count, project end row) come from callers when relevant.
+
+# Imports
+  @require util = 'util'  @ 9
+
+# Private state
+  @state av = {}  @ 13
+  @state cursorRow, cursorCol = 0, 0  @ 15
+  @state scrollRow, scrollCol = 0, 0  @ 16
+  @state gridRows, gridCols = 0, 0  @ 17
+
+# Private functions
+  -- Viewport follow
+  @fn followViewport()  @ 23
+      -- Keep the cursor in the visible band, biased to the leading edge: if the
+      -- cursor leaves on either side, scroll just enough to bring it back in.
+
+# Public API (av:*)
+  @api av:cursorRow()  @ 38
+  @api av:cursorCol()  @ 39
+  @api av:setCursor(row, col)  @ 42
+      @contract  setCursor clamps negative coords to 0 and triggers followViewport; upper-bound clamp (track count, project end) is the caller's job
+  @api av:scroll()  @ 48
+  @api av:setGridSize(rows, cols)  @ 51
+      @contract  page hands over the visible cell counts each frame so followViewport has live bounds
+  @api av:beatPerRow()  @ 57
+  @api av:setBeatPerRow(v)  @ 58
+  @api av:qnToRow(qn)  @ 60
+  @api av:rowToQN(row)  @ 61
