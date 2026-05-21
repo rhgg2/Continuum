@@ -82,6 +82,12 @@ local declarations = {
   -- { kind = 'midi'|'audio', id = <pool-guid-or-source-path> }. See
   -- docs/arrangeManager.md.
   { 'arrangeSlots', {} },
+  -- Arrange-page grid density. Row/col addressing mirrors the tracker
+  -- view; cursor and scroll live in arrangeView module-locals (in-memory,
+  -- not persisted) the same way trackerView and editCursor handle them.
+  -- Only the density preference earns a persisted slot. Typical values
+  -- 4, 8, 16 beats per row (one bar to four bars per row in 4/4).
+  { 'arrangeBeatPerRow', 4 },
 
   -- Atoms — parchment palette
   { 'palette.bg',        hex('#dad6c9') },  -- cream paper
