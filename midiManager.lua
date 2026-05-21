@@ -1,10 +1,10 @@
 -- See docs/midiManager.md for the model.
 --invariant: channels are 1..16 internally; +1 applied on read from REAPER, -1 on write
---invariant: locations are 1-indexed snapshots of REAPER event order at load time; not stable across reloads
---invariant: mm holds the realisation frame — delay already baked into note-on ppq (see docs/timing.md)
---invariant: mm holds raw pb only; cents/detune conversions and the fake-pb absorber live in tm (see docs/tuning.md)
---invariant: muted is true-or-absent; false is coerced to nil on every write path; callers pass muted=false to clear
---invariant: per-event metadata (fields beyond the structural set) is persisted to take extension data via util:serialise; loaded back via util:unserialise on take read
+--invariant: loc is 1-indexed REAPER event-order; not stable across reloads
+--invariant: mm holds realisation frame; delay baked into note-on ppq (docs/timing.md)
+--invariant: mm holds raw pb; cents/detune + fake-pb absorber live in tm (docs/tuning.md)
+--invariant: muted is true-or-absent; false coerces to nil at write; pass false to clear
+--invariant: per-event metadata: util:serialise to take ext-data, unserialised on read
 local util = require 'util'
 
 local take = (...).take
@@ -41,7 +41,7 @@ local function tokenOf(evt)
   return et .. '|' .. evt.chan .. '|' .. evt.ppq
 end
 
---contract: INTERNALS fields (idx, uuidIdx) are stripped from all shallow clones returned to callers
+--contract: INTERNALS fields (idx, uuidIdx) stripped from clones returned to callers
 local INTERNALS = { idx = true, uuidIdx = true }
 
 --invariant: shapeNames is derived from shapeLUT so the two directions can't drift
@@ -107,8 +107,8 @@ local curveSample do
   end
 end
 
---shape: ccSidecarBody = '}RDM' <typeNib:byte> <chan-1:byte> <id:byte> <val_lo7:byte> <val_hi7:byte> <uuid-base36:string>
---shape: noteSidecarBody = 'NOTE <chan-1> <pitch> custom ctm_<uuid-base36>'  -- REAPER text event type 15
+--shape: ccSidecar.body = '}RDM' [typeNib chan-1 id val_lo7 val_hi7] uuid-base36
+--shape: noteSidecar.body = 'NOTE <chan-1> <pitch> custom ctm_<base36>'   (text type 15)
 local noteSidecarEncode, noteSidecarDecode, ccSidecarEncode, ccSidecarDecode do
   local SIDECAR_MAGIC = '\x7D\x52\x44\x4D'  -- '}RDM'
   local function idOf(cc) return cc.cc or cc.pitch or 0 end
@@ -254,16 +254,21 @@ end
 
 ---------- PUBLIC
 
---shape: note = { evType='note', ppq=number, endppq=number, chan=1..16, pitch=0..127, vel=0..127, [muted=true], [uuid=number], [<metadata...>] }
---shape: cc   = { evType='cc'|'pb'|'pa'|'at'|'pc', ppq=number, chan=1..16, [cc=0..127], [pitch=0..127], val=number|vel=number(pa), [muted=true], shape=string, [tension=number], [uuid=number], [<metadata...>] }
---shape: noteSidecarPayload = { ppq, chan, pitch, droppedCount }          -- notesDeduped event
+--shape: note = { evType, ppq, endppq, chan, pitch, vel, [muted], [uuid], [...meta] }
+--invariant: note.chan ∈ 1..16; pitch/vel ∈ 0..127; muted is true-or-absent
+--shape: cc = { evType, ppq, chan, val, shape, [tension], [muted], [uuid], [...meta] }
+--invariant: cc.evType ∈ {cc, pb, pa, at, pc}; pa stores in .vel, others in .val
+--invariant: cc.cc set on evType='cc'; cc.pitch set on 'pa'; chan ∈ 1..16; cc/pitch ∈ 0..127
+--invariant: cc.shape ∈ {step, linear, slow, fast-start, fast-end, bezier}; tension only on bezier
+--shape: noteSidecarPayload = { ppq, chan, pitch, droppedCount }  -- notesDeduped event
 --shape: uuidsReassignedEvent = { ppq, chan, pitch, oldUuid, newUuid }
---shape: ccDedupEvent = { ppq, chan, evType, cc, pitch, droppedCount }   -- ccsDeduped event
---shape: reconcileEvent.valueRebound    = { kind, uuid, chan, evType, [cc], [pitch], ppq, oldVal, newVal }
---shape: reconcileEvent.consensusRebound = { kind, uuid, chan, evType, [cc], [pitch], ppq, offset }
---shape: reconcileEvent.guessedRebound  = { kind, uuid, chan, evType, [cc], [pitch], ppq }
---shape: reconcileEvent.ambiguous       = { kind, uuid, candidateppqs={...} }
---shape: reconcileEvent.orphaned        = { kind, uuid, chan, evType, [cc], [pitch], lastppq }
+--shape: ccDedupEvent = { ppq, chan, evType, cc, pitch, droppedCount }  -- ccsDeduped event
+--shape: reconcileEvent base = { kind, uuid, chan, evType, [cc], [pitch], ppq }
+--shape: reconcileEvent.valueRebound = base + { oldVal, newVal }
+--shape: reconcileEvent.consensusRebound = base + { offset }
+--shape: reconcileEvent.guessedRebound = base
+--shape: reconcileEvent.ambiguous = { kind, uuid, candidateppqs }
+--shape: reconcileEvent.orphaned = base + { lastppq } (lastppq replaces ppq)
 local fire = util.installHooks(mm)
 
 ----- Load
@@ -436,7 +441,7 @@ function mm:load(newTake)
 
   ----- Sidecar reconcile (ccs ↔ ccSidecars)
   if next(ccSidecars) then
-    --contract: stage-3 consensus threshold: winning offset must have ≥ max(2, ceil(0.5 × bucketSize)) votes and be unique (no tie)
+    --contract: stage-3 consensus: winning offset needs ≥ max(2, ceil(0.5·n)) votes, unique
     local THRESHOLD_FRAC, THRESHOLD_MIN = 0.5, 2
     local scsWorking, ccsWorking = util.clone(ccSidecars), util.clone(ccs)
     local scBuckets, ccBuckets
@@ -632,17 +637,18 @@ function mm:load(newTake)
   ----- Persist + signals
   saveMetadata()
 
-  --contract: signal order per load: takeSwapped → notesDeduped → uuidsReassigned → ccsDeduped → ccsReconciled → reload
-  --contract: dedup/reconcile signals fire only when at least one event of that kind is present
+  --contract: load fires signals in order: takeSwapped, notesDeduped, uuidsReassigned
+  --contract: then: ccsDeduped, ccsReconciled, reload
+  --contract: dedup/reconcile signals fire only when their event kind has ≥1 record
   --emits: takeSwapped    -- nil; only when load received a different take
   if takeSwapped           then fire('takeSwapped',     nil) end
   --emits: notesDeduped   -- { events = [{ppq, chan, pitch, droppedCount}, ...] }
   if #noteDedupEvents > 0  then fire('notesDeduped',    { events = noteDedupEvents }) end
   --emits: uuidsReassigned -- { events = [{ppq, chan, pitch, oldUuid, newUuid}, ...] }
   if #reassignEvents > 0   then fire('uuidsReassigned', { events = reassignEvents })  end
-  --emits: ccsDeduped     -- { events = [{ppq, chan, evType, cc, pitch, droppedCount}, ...] }
+  --emits: ccsDeduped -- { events = [{ppq, chan, evType, cc, pitch, droppedCount}, ...] }
   if #ccDedupEvents > 0    then fire('ccsDeduped',      { events = ccDedupEvents })   end
-  --emits: ccsReconciled  -- { events = [reconcileEvent, ...] }; five kinds: valueRebound/consensusRebound/guessedRebound/ambiguous/orphaned
+  --emits: ccsReconciled -- { events = [reconcileEvent, ...] }  -- 5 kinds in reconcileEvent.*
   if #reconcileEvents > 0  then fire('ccsReconciled',   { events = reconcileEvents }) end
   --emits: reload         -- nil; every load, including after modify()
   fire('reload', nil)
@@ -656,8 +662,8 @@ end
 
 ----- Locking
 
---contract: all write paths (add*, delete*, assign* structural) must run inside mm:modify(fn)
---contract: modify disables MIDI sort, runs fn under lock, re-sorts, then reloads (fires callbacks)
+--contract: writes (add*, delete*, structural assign*) must run inside mm:modify(fn)
+--contract: modify disables sort, runs fn under lock, re-sorts, then reload→callbacks
 local function checkLock()
   assert(lock, 'Error! You must call modification functions via modify()!')
   return true
@@ -693,7 +699,8 @@ function mm:notes()
   end
 end
 
---contract: assignNote metadata-only carve-out: if t touches none of {ppq,endppq,pitch,vel,chan,muted}, skips the lock and writes straight to extension data
+--contract: assignNote: lockless write when t touches no structural field
+--invariant: assignNote structural fields = {ppq, endppq, pitch, vel, chan, muted}
 local function assignNote(loc, t)
   if not take then return end
 
@@ -734,7 +741,7 @@ local function assignNote(loc, t)
   saveMetadatum(note.uuid)
 end
 
---contract: addNote always allocates a uuid and inserts a notation event (unconditional, unlike addCC)
+--contract: addNote always allocates a uuid + inserts a notation event (unlike addCC)
 local function addNote(t)
   if not (take and checkLock()) then return end
 
@@ -797,8 +804,8 @@ local function reconstruct(tbl)
   return msg2, msg3
 end
 
---contract: assignCC metadata-only carve-out: if t touches none of the structural CC fields AND the cc already has a uuid, skips the lock
---contract: first metadata stamp on a plain cc (no uuid yet) requires the lock — it inserts a sidecar sysex, which is a structural mutation
+--contract: assignCC: lockless iff t touches no structural field and the cc has a uuid
+--contract: first metadata stamp on a plain cc needs lock — inserts a sidecar sysex
 local function assignCC(loc, t)
   if not take then return end
 
@@ -871,7 +878,7 @@ local function assignCC(loc, t)
   if msg.uuid then saveMetadatum(msg.uuid) end
 end
 
---contract: addCC lazy-sidecar: uuid and sidecar allocated only if t carries any non-structural key; plain ccs skip allocation entirely
+--contract: addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
 local function addCC(t)
   if not (take and checkLock()) then return end
 
@@ -923,13 +930,17 @@ local function addCC(t)
   return #ccs
 end
 
---contract: token is opaque and stable across reload as long as the event's identity fields (evType, chan, ppq, and pitch|cc as relevant) don't change; mutating any of them retires the old token and issues a new one
+--contract: token stable across reload while identity fields don't change
+--invariant: token identity fields = evType, chan, ppq, and pitch|cc as relevant
+--contract: mutating an identity field retires the old token and issues a new one
 function mm:tokenOf(evt)
   if not evt or not evt.evType then return nil end
   return tokenOf(evt)
 end
 
---contract: returns (loc, evt-clone, kind) for the live event with this token; nil if absent. Works on every event (including plain ccs with no uuid). The clone carries .token equal to the input.
+--contract: returns (loc, evt-clone, kind) for the token, or nil if absent
+--contract: works on every event (including plain ccs with no uuid)
+--invariant: byToken's evt-clone carries .token equal to the input
 function mm:byToken(token)
   local evt = tokenIdx[token]
   if not evt then return nil end
@@ -938,14 +949,17 @@ end
 
 ----- Unified token-keyed surface
 
---contract: dispatches on t.evType; 'note' → addNote, anything else → addCC. Returns the token of the just-added event, or nil if t is malformed. Inherits the lock requirement of the inner call.
+--contract: t.evType='note' routes to addNote; anything else to addCC
+--contract: returns the new token, or nil if t is malformed; inherits inner lock req
 function mm:add(t)
   if not t or not t.evType then return nil end
   if t.evType == 'note' then addNote(t) else addCC(t) end
   return tokenOf(t)
 end
 
---contract: dispatches on the resolved event's evType. Returns the token of the (possibly mutated) event — equal to the input token iff t touched no identity field. Caller re-keys when they differ. Inherits the inner method's metadata-only lockless carve-out.
+--contract: dispatches on the resolved event's evType
+--contract: returns the event's token, == input iff no identity field changed (caller re-keys)
+--contract: inherits the inner method's metadata-only lockless carve-out
 function mm:assign(token, t)
   local evt = tokenIdx[token]
   if not evt then return nil end
@@ -981,7 +995,11 @@ local function deleteSidecarByUuid(uuid)
   end
 end
 
---contract: immediate-mode. MIDI_DeleteNote cascade-removes the notation sidecar; MIDI_DeleteCC does not — the cc/pb sidecar is removed here by content-addressed scan (decode each text event, match evt.uuid). Per-array idx is shifted down so later deletes in the same modify see correct note/cc slots; uuidIdx is NOT tracked here — the post-modify final read pass re-resolves it from REAPER state.
+--contract: immediate-mode delete (no batch); fires inside the modify caller's lock
+--invariant: MIDI_DeleteNote cascade-removes notation sidecar; MIDI_DeleteCC does not
+--contract: cc/pb sidecar is removed here by content-addressed scan on text events
+--contract: per-array idx is shifted down so later deletes in this modify see correct slots
+--invariant: uuidIdx is NOT tracked across deletes — post-modify read pass re-resolves
 function mm:delete(token)
   if not (take and checkLock()) then return end
   local evt = tokenIdx[token]
@@ -1004,7 +1022,8 @@ function mm:delete(token)
   end
 end
 
---contract: yields (token, evt-clone) over all live events, notes then ccs. Token is the addressing primitive of the unified surface; the clone also carries .token. loc is intentionally absent.
+--contract: yields (token, evt-clone) over all live events, notes then ccs
+--invariant: events()'s clone carries .token; loc is intentionally absent
 function mm:events()
   local i, src = 0, notes
   return function()

@@ -1,17 +1,26 @@
 -- See docs/trackerView.md for the model.
 
 --invariant: rows 0-indexed, cols 1-indexed, channels 1..16, stops 1-indexed
---invariant: vm.grid is a live handle — rm reads it each frame; mutated in place on rebuild, never reassigned
---invariant: rm is pull-only — vm fires no render callbacks; rm queries vm.grid / vm:ec() / vm:rowPerBar() each frame
---invariant: all writes funnel through tm (addEvent/assignEvent/deleteEvent/flush); vm never touches mm
---invariant: vm works in logical time and detune-intent for pitch — never reads/writes raw pb directly (see docs/tuning.md)
---invariant: authoring stamps evt.rpb = currentRpb() and evt.ppq = row · logPerRow before tm:addEvent
---invariant: off-grid edits snap evt.ppq to cursor row; delay survives, rpb restamps to current
---invariant: clipboard encodes rows in source's logical frame; paste decodes against dest's rpb — symmetric on (row, chan), not absolute ppq
---shape: grid = { cols = {<col>...}, chanFirstCol = {[chan]=i}, chanLastCol = {[chan]=i}, lane1Col = {[chan]=<col>}, numRows = int }
---shape: gridCol = { type, midiChan, lane?, cc?, label, events, width, parts, stopPos, partAt, partStart, showDelay, cells={[y]=evt}, overflow={[y]=true}, offGrid={[y]=true}, ghosts={[y]={val,fromEvt,toEvt}}, tails? }
---shape: selection = { row1, row2, col1, col2, part1, part2 }  -- part names: 'pitch'|'vel'|'delay' on note, 'pb' on pb, 'val' on scalar
---shape: plan = { col, e, [newppq], [newEndppq], [newDelay] }  -- consumed by writePlans / conformOverlaps
+--invariant: vm.grid is a live handle; rm reads it each frame
+--invariant: vm.grid is mutated in place on rebuild, never reassigned
+--invariant: rm is pull-only; vm fires no render callbacks
+--invariant: rm queries vm.grid / vm:ec() / vm:rowPerBar() each frame
+--invariant: writes go via tm (add/assign/delete/flush Event); vm never touches mm
+--invariant: vm works in logical time and detune-intent for pitch
+--invariant: vm never reads/writes raw pb directly (docs/tuning.md)
+--invariant: authoring stamps evt.rpb and evt.ppq = row·logPerRow before tm:addEvent
+--invariant: off-grid edits snap evt.ppq to cursor row; delay survives, rpb restamps
+--invariant: clipboard encodes rows in source's logical frame; paste decodes against dest's rpb
+--invariant: clipboard symmetry is on (row, chan), not absolute ppq
+--shape: grid = { cols, chanFirstCol, chanLastCol, lane1Col, numRows }
+--invariant: grid.chanFirst/Last/lane1Col are chan-keyed; numRows is int
+--shape: gridCol core = { type, midiChan, [lane], [cc], label, events, width }
+--shape: gridCol parts = { parts, stopPos, partAt, partStart, showDelay }
+--shape: gridCol render = { cells={[y]=evt}, overflow, offGrid, ghosts, [tails] }
+--shape: selection = { row1, row2, col1, col2, part1, part2 }
+--invariant: selection part names: pitch/vel/delay on note; pb on pb; val on scalar
+--shape: plan = { col, e, [newppq], [newEndppq], [newDelay] }
+--invariant: plan is consumed by writePlans / conformOverlaps
 
 local util    = require 'util'
 local timing  = require 'timing'
@@ -98,7 +107,7 @@ end
 -- so it must not bound the move (mirrors shiftEvents' reorder-not-tail
 -- rule). No prev -> the -1 sentinel makes minRow 0, the item-start
 -- guard. e.ppq is exact logical-ppq post-projection.
---contract: onset-only -- neighbour tails never bound the move; tm clips an overrun on rebuild
+--contract: onset-only; tails never bound the move (tm clips overrun on rebuild)
 local function rowBounds(col, ppq, excludeEvt)
   local logPerRow = ctx:ppqPerRow()
   local diff, same = notePreds(excludeEvt)
@@ -113,7 +122,12 @@ local function rowBounds(col, ppq, excludeEvt)
          math.ceil (nextOnsetL / logPerRow) - 1
 end
 
---contract: resolves same-onset plan collisions in a per-column plan list; mutates plan entries in place. fromLogical is monotone but not isotone, so two distinct logical onsets can round onto one raw ppq — the later-source-ppq one (curr by sort tie-break) shifts up 1 ppq, or if it is fixed the predecessor shifts back. Tail overlaps are NOT resolved here: tm's universal tail pass owns every raw note-off. Non-note plans/cols skipped; optional `deleted` event-set excluded (corpses still live in the col.events snapshot until next rebuild)
+--contract: resolves same-onset plan collisions in a per-column plan list (mutates in place)
+--invariant: fromLogical is monotone but not isotone; two logical onsets can round onto one raw ppq
+--contract: later-source-ppq plan (curr by tie-break) shifts up 1 ppq, else predecessor shifts back
+--invariant: tail overlaps NOT resolved here; tm's universal tail pass owns every raw note-off
+--contract: skips non-note plans/cols; optional `deleted` event-set excluded from the walk
+--invariant: deleted corpses still live in col.events snapshot until next rebuild
 local function conformOverlaps(plans, deleted)
   local skip = {}
   if deleted then for _, e in ipairs(deleted) do skip[e] = true end end
@@ -234,7 +248,8 @@ end
 local isFrameChange, currentRpb, releaseTransientFrame do
   local FRAME_KEYS = { rowPerBeat = true }
 
-  --contract: a write to a FRAME_KEYS member at any tier other than 'transient' counts as a real frame change — fires releaseTransientFrame from configCallback
+  --contract: a non-transient write to a FRAME_KEYS member is a real frame change
+  --contract: real frame change fires releaseTransientFrame from configCallback
   function isFrameChange(change)
     return FRAME_KEYS[change.key] and change.level ~= 'transient'
   end
@@ -268,7 +283,7 @@ end
 -- endppqL makes tm stamp the ceiling from this note-off (closing a
 -- previously util.OPEN note), so the universal tail pass honours it
 -- instead of treating the note as unbounded every rebuild.
---contract: whenever a note's tail moves: stamps the endppqL ceiling from the note-off (via tm), rebases evt.rpb to current alongside the new endppq
+--contract: on tail move: stamps endppqL ceiling via tm; rebases evt.rpb alongside endppq
 local function assignTail(evt, chan, endppq)
   tm:assignEvent(evt, { endppq = endppq, rpb = currentRpb() })
 end
@@ -371,7 +386,9 @@ local pushMute do
     cm:set('take', key, s)
   end
 
-  --contract: effective mute = persistent-mute ∪ solo-implied mute; when any channel soloed, non-soloed forced muted and soloed forced audible (DAW solo-wins). Both sets persist in cm so reload's tm:lastMuteSet matches the wire
+  --contract: effective mute = persistent-mute ∪ solo-implied mute
+  --invariant: any solo: non-soloed forced muted, soloed forced audible (DAW solo-wins)
+  --invariant: both sets persist in cm so reload's tm:lastMuteSet matches the wire
   function pushMute()
     local m = cm:get('mutedChannels')
     local s = cm:get('soloedChannels')
@@ -499,7 +516,9 @@ do
     return pas
   end
 
-  --contract: single typed-input entry point; dispatches on (col.type, stop, evt-kind). Off-grid edits run through `snap` to repin evt.ppq to cursor row and restamp frame; commit flushes, advances by advanceBy, and may audition
+  --contract: single typed-input entry point; dispatches on (col.type, stop, evt-kind)
+  --contract: off-grid edits run through snap to repin evt.ppq to cursor row and restamp frame
+  --contract: commit flushes, advances by advanceBy, and may audition
   function tv:editEvent(col, evt, stop, char, half)
     if not col then return end
     local type      = col.type
@@ -707,7 +726,8 @@ local function visibleAt(col, i)
   end
 end
 
---contract: clamps newppq strictly inside (prev.ppq, next.ppq) by ±1 — necessary-and-sufficient invariant for identity-by-visible-index to survive the post-flush rebuild
+--contract: clamps newppq strictly inside (prev.ppq, next.ppq) by ±1
+--invariant: ±1 clamp is necessary-and-sufficient for identity-by-visible-index across rebuild
 function tv:moveLaneEvent(col, i, toRow, toVal)
   if not col or not col.events then return end
   if not util.oneOf('cc pb at', col.type) then return end
@@ -1020,7 +1040,8 @@ local noteOff, adjustDuration, adjustPosition do
   -- (cursorNoteBefore would otherwise retarget it). Non-note events
   -- nudge in time too, all-or-nothing like shiftEvents: refuse off the
   -- grid edge or onto a same-column event (a same-ppq collision).
-  --contract: single: notes blocked only by an onset reorder (tm clips tails), cc/at/pa/pc by an occupied destination row. Selection: refuse if any touched column's destination row span [selLo..selHi]+rowDelta holds a foreign onset
+  --contract: single move: notes blocked only by onset reorder; cc/at/pa/pc by occupied dest row
+  --contract: selection: refuse if any col's [selLo..selHi]+rowDelta destination holds a foreign onset
   function adjustPosition(prefix, rowDelta)
     rowDelta = rowDelta * prefix
     if ec:hasSelection() then return adjustPositionMulti(rowDelta) end
@@ -1559,8 +1580,12 @@ end
 -- straddling destination note's tail, is clipped by tm's universal tail
 -- pass on the rebuild that follows. The cursor follows to the
 -- destination column -- single event and selection alike.
---contract: a selection must be exactly one grid column (a 1-col block stays contiguous when it lands on the destination col); a multi-col selection is a no-op. The cursor follows to the destination column in both cases
---contract: refuse if the destination column has any onset (note: note-on; other types: any event) whose row lies in the source's row extent -- the selection's [r1,r2] for a block, the moved event's onset row for a single. Tails (either direction) are clipped by tm's tail pass and never block
+--contract: selection must be exactly one grid column; multi-col selection is a no-op
+--invariant: a 1-col block stays contiguous when it lands on the destination col
+--contract: cursor follows to the destination column (single event and selection alike)
+--contract: refuse if dest col has any onset in source's row extent (note: note-on; else any event)
+--invariant: source's row extent = selection's [r1,r2] for a block, moved event's onset row for a single
+--invariant: tails (either direction) clipped by tm's tail pass; never block
 local PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at = 'val' }
 
 local function shiftEvents(dir)
@@ -1961,7 +1986,9 @@ function tv:instanceSelection(groupId, instId)
   end
 end
 
---contract: extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans the take); idempotent -- re-painting an already on/off stream is a no-op true. The group's live rect is found by id off gm:eachInstance so ec carries no geometry.
+--contract: extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)
+--contract: idempotent: re-painting an already on/off stream is a no-op true
+--invariant: group's live rect found by id off gm:eachInstance — ec carries no geometry
 function tv:paintRegionStream(groupId, instId, colIx, on)
   local rect
   for _, e in ipairs(gm:eachInstance()) do
@@ -2207,7 +2234,9 @@ end
 
 local rebuilding = false
 
---contract: reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
+--contract: reentrancy-guarded; bails on no-take (page shows placeholder)
+--contract: takeChanged=true resets ec and re-reads resolution/length/timeSigs
+--contract: grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
 function tv:rebuild(takeChanged)
   if not tm or rebuilding then return end
   if not tm:currentTake() then return end
@@ -2341,8 +2370,10 @@ do
     tv:rebuild(pendingTakeSwap)
     pendingTakeSwap = false
   end)
-  --contract: tv consumes configChanged only for transient-frame release and mute pulse; rebuild is driven by tm's 'rebuild' signal — closes the (cm, tm) double-fire race
-  --contract: non-transient writes to FRAME_KEYS while a transient override is active short-circuit into releaseTransientFrame, whose recursive cm:assign fires a fresh configChanged → tm:rebuild → tv:rebuild chain
+  --contract: tv consumes configChanged only for transient-frame release and mute pulse
+  --contract: rebuild is driven by tm's 'rebuild' signal — closes the (cm, tm) double-fire race
+  --contract: non-transient FRAME_KEYS write while transient override active routes into releaseTransientFrame
+  --invariant: releaseTransientFrame's cm:assign fires configChanged → tm:rebuild → tv:rebuild
   cm:subscribe('configChanged', function(change)
     if isFrameChange(change) and releaseTransientFrame() then return end
     if muteKeys[change.key] then pushMute(); return end

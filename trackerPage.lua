@@ -1,10 +1,11 @@
 -- See docs/trackerPage.md for the model.
 
---invariant: page is render + input only; tracker state lives in tv/ec/tm — never cached here
---invariant: cm/tv read fresh each frame; only ephemeral UI state persists across frames (gridX/Y, dragging, modalState, picker*, laneConsumed)
---invariant: col.x == nil is the visibility predicate; every per-column draw must gate on it
---invariant: cell coordinates are 0-indexed; header rows at -HEADER, row-number gutter at -GUTTER
---invariant: writes go through tv or cmgr commands — page never reaches into tm
+--invariant: page is render + input only; tracker state lives in tv/ec/tm, never cached
+--invariant: cm/tv read fresh each frame; only ephemeral UI state persists across frames
+--invariant: page-persistent state: gridX/Y, dragging, modalState, picker*, laneConsumed
+--invariant: col.x == nil is the visibility predicate; per-column draws must gate on it
+--invariant: cell coords 0-indexed; header rows at -HEADER, row-num gutter at -GUTTER
+--invariant: writes go through tv or cmgr commands; page never reaches into tm
 local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
@@ -16,7 +17,9 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
---contract: owns and constructs the tracker substack (mm/tm/tv/am) — coord hands it primitives, never the substack; the take arrives later via tp:bind from the coordinator's poll loop
+--contract: owns and constructs the tracker substack (mm/tm/tv/am)
+--contract: coord hands primitives, never the substack
+--contract: take arrives later via tp:bind from coord's poll loop
 local cm, cmgr, chrome, gui = (...).cm, (...).cmgr, (...).chrome, (...).gui
 
 local function print(...)
@@ -43,7 +46,7 @@ local gridHeight  = 0
 
 local chanX, chanW, chanOrder, totalWidth = {}, {}, {}, 0
 
---contract: clears col.x on every col before assigning; off-screen cols end the frame with col.x == nil
+--contract: clears col.x on every col before assigning; off-screen cols stay nil
 local function layoutColumns(cols, scrollCol)
   for _, col in ipairs(cols) do col.x = nil end
   local cX, cW, cOrder = {}, {}, {}
@@ -235,7 +238,7 @@ local function printer(ctx, gX, gY, x0, y0)
   return pt
 end
 
---contract: returns 0 when laneStrip.visible is false — both layout and draw branch on this
+--contract: returns 0 when laneStrip.visible is false; layout and draw branch on this
 local function laneStripRows()
   if not cm:get('laneStrip.visible') then return 0 end
   return cm:get('laneStrip.rows') or 0
@@ -411,8 +414,8 @@ local function drawTrackerToolbarBits()
   toolbar(wrapped)
 end
 
---contract: must run before any draw routine that reads chanX/chanW/chanOrder/totalWidth/gridHeight
---contract: calls tv:setGridSize(gridWidth, gridHeight) so tv scroll math sees the live viewport
+--contract: must run before draws reading chanX/chanW/chanOrder/totalWidth/gridHeight
+--contract: calls tv:setGridSize so tv scroll math sees the live viewport
 local function computeLayout(budgetW, budgetH)
   local grid = tv.grid
   local _, scrollCol = tv:scroll()
@@ -433,13 +436,14 @@ end
 
 ----- Lane strip
 
---invariant: lane strip renders only cc/pb/at columns; other types show as tinted background
+--invariant: lane strip renders only cc/pb/at; other types show as tinted background
 local laneRenderable = { cc = true, pb = true, at = true }
 
 local LANE_ROW_MIN = 3
 local LANE_ROW_MAX = 32
 
---contract: publishes laneConsumed=true if the curve editor claimed input this frame; handleMouse short-circuits on it
+--contract: publishes laneConsumed=true if curve editor claimed input this frame
+--contract: handleMouse short-circuits on laneConsumed
 local function drawLaneStrip()
 
   local laneRows = laneStripRows()
@@ -554,7 +558,7 @@ local function drawLaneStrip()
   ImGui.SetCursorScreenPos(ctx, cx, cy)
 end
 
---contract: assumes computeLayout ran this frame; reads chanX/chanW/chanOrder/totalWidth and gridOriginX/Y
+--contract: assumes computeLayout ran this frame; reads chanX/W/Order, gridOriginX/Y
 local function drawTracker()
   local grid = tv.grid
   local ec = tv:ec()
@@ -915,7 +919,8 @@ for i = 0, 9 do
   cmgr:scope('tracker'):bind('advBy' .. i, { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} })
 end
 
---contract: returns (col, stop, fracX) or (nil, nil, fracX); fracX kept separate so callers distinguish "past last col" from "inside col N"
+--contract: returns (col, stop, fracX) or (nil, nil, fracX)
+--invariant: fracX is separate so callers distinguish 'past last col' from 'inside col N'
 local function nearestStop(mouseX, mouseY)
   local grid = tv.grid
   local fracX = (mouseX - gridOriginX) / gridX
@@ -934,8 +939,10 @@ local function nearestStop(mouseX, mouseY)
 end
 
 
---contract: returns immediately if laneConsumed is set; lane strip wins gestures over the tracker grid
---contract: right-click on channel-label row toggles mute; click on label rows selects channel/column; body click moves cursor and arms drag
+--contract: bails if laneConsumed; lane strip wins gestures over the tracker grid
+--contract: right-click on channel-label row toggles mute
+--contract: click on label rows selects channel/column
+--contract: body click moves cursor and arms drag
 local function handleMouse()
   if laneConsumed then return end
 
@@ -1076,8 +1083,8 @@ end
 
 -- Page-internal raw input. commandHeld gates a held command key from
 -- leaking into the char queue (different auto-repeat timing).
---contract: no-op when modalState or chrome.pickerIsActive() is set, or when any ImGui item is active (focused InputText etc.)
---contract: drains the entire input-queue per frame; reads ec/grid fresh each iteration since editEvent may rebuild
+--contract: no-op when modalState, picker active, or any ImGui item is active
+--contract: drains the input-queue per frame; reads ec/grid fresh (editEvent may rebuild)
 local function handleKeys(kr)
   if modalState or chrome.pickerIsActive() then return end
   if ImGui.IsAnyItemActive(ctx) then return end
@@ -1108,8 +1115,10 @@ local function handleKeys(kr)
     end
 end
 
---shape: modalState = { title, prompt, callback, resolve?, buf, kind?='confirm'|'takeProps', nameBuf?, rowsBuf?, rowsGen?, mode?, refocusRows? }
---contract: callback runs under pcall; an exception is logged to the REAPER console and does not abort the frame
+--shape: modalState core = { title, prompt, callback, buf }
+--shape: modalState optional: resolve, kind, nameBuf, rowsBuf, rowsGen, mode, refocusRows
+--invariant: modalState.kind ∈ {'confirm', 'takeProps'} when set
+--contract: callback runs under pcall; exceptions log to console, frame continues
 local function drawModal()
   if not modalState then return end
   -- Self-heal: if modalState was set from inside a callback (e.g. takeProps OK
@@ -1384,7 +1393,9 @@ function tp:renderToolbarBits(_)
   drawTrackerToolbarBits()
 end
 
---contract: calls computeLayout twice — lane-strip drag callbacks may flush tv.grid.cols and clear col.x; second pass repopulates layout for drawTracker
+--contract: calls computeLayout twice
+--invariant: lane-strip drag callbacks may flush tv.grid.cols and clear col.x
+--contract: second pass repopulates layout for drawTracker
 function tp:renderBody(_, w, h, dispatch)
   -- Swing editor commandeers the body region. The editor draws in
   -- chrome/UI register, not the tracker monospace — push uiFont
@@ -1428,11 +1439,11 @@ end
 
 function tp:renderFloating(_) end
 
---contract: bind/unbind drive tm:bindTake — the page owns the cm/mm context swap for its own stack
+--contract: bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
 function tp:bind(t)  tm:bindTake(t)   end
 function tp:unbind() swingEditor:close(); tm:bindTake(nil) end
 
---contract: pass-through for coord's external-mutation watcher; re-reads the bound take without changing it
+--contract: for coord's external-mutation watcher; re-reads the bound take, no swap
 function tp:reloadFromReaper() tm:reloadFromReaper() end
 
 -- suppressKbd: a popup or modal owns input — dispatcher does nothing.

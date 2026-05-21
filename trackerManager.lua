@@ -1,20 +1,30 @@
 -- See docs/trackerManager.md for the model.
 
---invariant: tm holds (ppqL, raw) per event; mm holds raw; column events expose evt.ppq as logical. Rebuild reconciles raw ↔ ppqL each pass; see docs/timing.md
---invariant: detune is intent (per-note); pb is realisation (channel-wide stream); only lane-1 notes drive detune realisation
---invariant: pb.val is cents inside um; raw conversion happens only on load (rawToCents) and at flush (centsToRaw); cents window is cm:get('pbRange') * 100 per side
---invariant: fake pbs are absorbers seated at lane-1 note onsets to absorb detune jumps; pb.fake is the sole marker (persisted as cc metadata via mm sidecar)
---invariant: pa events store pitch-aftertouch value in mm cc.vel; col.events project as { type='pa', vel, ... } with the cc-routing fields stripped
---invariant: loc values are valid only within a single rebuild-to-flush window; um's notesByLoc/ccsByLoc are rebuilt fresh each rebuild
---invariant: column events are sorted by logical ppq; endppq carries no delay (delay shifts only the note-on)
+--invariant: tm holds (ppqL, raw) per event; mm holds raw; col events expose evt.ppq as logical
+--invariant: rebuild reconciles raw ↔ ppqL each pass (docs/timing.md)
+--invariant: detune is intent (per-note); pb is realisation (channel-wide stream)
+--invariant: only lane-1 notes drive detune realisation
+--invariant: pb.val is cents inside um; raw↔cents only at load/flush (rawToCents/centsToRaw)
+--invariant: cents window = cm:get('pbRange') * 100 per side
+--invariant: fake pbs are absorbers seated at lane-1 onsets to absorb detune jumps
+--invariant: pb.fake is the sole absorber marker (persisted as cc metadata via mm sidecar)
+--invariant: pa stores aftertouch value in mm cc.vel; cc-routing fields stripped on projection
+--invariant: loc values valid only within one rebuild-to-flush window
+--invariant: um's notesByLoc/ccsByLoc rebuild fresh each rebuild
+--invariant: col events sort by logical ppq
+--invariant: endppq carries no delay; delay shifts only the note-on
 --invariant: 16 channels always present; channels[i] non-nil for i in 1..16 after rebuild
 
---shape: channel = { chan=1..16, columns = { notes=[col,...], ccs={[ccNum]=col,...}, pc=col|nil, pb=col|nil, at=col|nil } }
+--shape: channel = { chan, columns = { notes, ccs={[ccNum]=col}, [pc], [pb], [at] } }
 --shape: column = { events=[evt,...], [cc=ccNum] }  -- events sorted by logical ppq
---shape: noteEvent = { ppq, endppq, pitch, vel, lane, detune, delay, [muted], [sample], [sampleShadowed], loc, [<metadata...>] }
---shape: pbEventCol = { ppq, val=cents-minus-detune, detune, hidden, [delay], [shape], [tension], loc, ... }  -- column projection; um cache holds raw cents in val
---shape: paEventCol = { type='pa', ppq, pitch, vel, loc, ... }  -- mixed into note column events
---shape: extraColumns[chan] = { notes=count, [pc=true], [pb=true], [at=true], [ccs={[ccNum]=true}] }
+--shape: noteEvent core = { ppq, endppq, pitch, vel, lane, detune, delay, loc }
+--invariant: noteEvent optional: muted, sample, sampleShadowed, <metadata...>
+--shape: pbEventCol = { ppq, val=cents-minus-detune, detune, hidden, loc, ... }
+--invariant: pbEventCol optional: delay, shape, tension
+--invariant: pbEventCol is the col projection; um cache holds raw cents in val
+--shape: paEventCol = { type='pa', ppq, pitch, vel, loc, ... }
+--invariant: paEventCol mixes into note column events
+--shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 
 local util    = require 'util'
@@ -34,7 +44,7 @@ local fire = util.installHooks(tm)
 
 local channels    = {}
 local lastMuteSet = {}
---invariant: staleSwing[chan]=true: this channel's resolved swing changed; rebuild rule rederives raw from ppqL and clears
+--invariant: staleSwing[chan]=true: resolved swing changed; rebuild rederives raw, clears
 local staleSwing  = {}
 -- ppq tolerance for "raw agrees with its logical projection"; absorbs
 -- fromLogical rounding slop. Shared by the tail pass (stale-frame
@@ -89,8 +99,12 @@ local function forEachEvent(fn)
 end
 
 
---contract: synthesised PCs carry fake=true and inherit ppqL from the winning host-note record; an existing fake PC matching (ppq, val) is kept (omitted from both toRemove and toAdd), preserving its mm-side loc across rebuilds where val did not change
---contract: if record.key is set, marks key.sampleShadowed=true on records lost to lane priority; returns (toRemove, toAdd) for the caller to persist. Shadow marking is rebuild-only — flush-time callers omit key since lane events are reclone'd by the rebuild that follows. c.pc.events is not written here; rebuild's CC walk refreshes it from mm after the caller's commit.
+--contract: synthesised PCs carry fake=true; ppqL inherited from winning host-note record
+--contract: an existing fake PC matching (ppq, val) is kept, preserving mm-side loc
+--contract: returns (toRemove, toAdd) for the caller to persist
+--contract: if record.key set, marks key.sampleShadowed=true on records lost to lane priority
+--invariant: shadow marking is rebuild-only; flush callers omit key (rebuild reclones lane events)
+--invariant: c.pc.events not written here; rebuild's CC walk refreshes it from mm after commit
 local function reconcilePCsForChan(chan, records)
   local existing = (channels[chan].columns.pc and channels[chan].columns.pc.events) or {}
 
@@ -156,7 +170,9 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   ----- Low-level mutation
 
-  --contract: only lane==1 notes index into chans[chan].notes; higher-lane notes get queued for mm but don't feed detune/realisation reads. Caller supplies evt.evType.
+  --contract: only lane==1 notes index into chans[chan].notes
+  --contract: higher-lane notes get queued for mm but don't feed detune/realisation reads
+  --contract: caller supplies evt.evType
   local function addLowlevel(evt)
     local et = evt.evType
     if et == 'note' then
@@ -171,7 +187,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     util.add(adds, { evt = evt })
   end
 
-  --contract: dedupes by token (unique across types) so multiple in-flight assigns to the same event collapse into one mm write; util.REMOVE markers must survive merging
+  --contract: dedupes by token; in-flight assigns to the same event collapse into one mm write
+  --invariant: util.REMOVE markers must survive merging
   local function assignLowlevel(evt, update)
     local oldChan = evt.chan
     util.assign(evt, update)
@@ -279,7 +296,9 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     assignLowlevel(n, { ppq = P1, endppq = P2 })
   end
 
-  --contract: lane updates are rejected with a warning (column membership is rebuild-owned); chan changes are accepted -- rebuild's absorber pass reconciles fakes across both old and new channels in one hit. ppq/endppq route through resizeNote.
+  --contract: lane updates rejected with a warning (column membership is rebuild-owned)
+  --contract: chan changes accepted; rebuild's absorber pass reconciles fakes across both channels
+  --contract: ppq/endppq route through resizeNote
   local function assignNote(n, update)
     if update.lane then print('um: not allowed to change lane of notes'); return end
 
@@ -354,7 +373,13 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
   end
 
-  --contract: update.ppq/endppq arrive logical. endppq is the authored ceiling: a finite logical value, or util.OPEN for a deliberately-unbounded tail. Stamps ppqL; stamps endppqL (util.OPEN→OPEN, else the logical ceiling) and derives a provisional raw note-off — the universal tail pass owns the real one. Callers never set endppqL; it is tm-private. rawCaller=true is the explicit "caller already computed raw" bypass (rescale's plan-then-mutate): translation is skipped, only the delay-delta applies. assignEvent consumes the rawTime flag before calling, so it never reaches mm. See docs/timing.md.
+  --contract: update.ppq/endppq arrive logical
+  --invariant: endppq is the authored ceiling: a finite logical value, or util.OPEN
+  --contract: stamps ppqL and endppqL (OPEN→OPEN, else the logical ceiling)
+  --contract: derives a provisional raw note-off; the universal tail pass owns the real one
+  --invariant: endppqL is tm-private; callers never set it
+  --contract: rawCaller=true bypass: translation skipped, only delay-delta applies
+  --invariant: assignEvent consumes rawTime before calling; never reaches mm (docs/timing.md)
   local function realiseNoteUpdate(evt, update, rawCaller)
     local dOld = delayToPPQ(evt.delay)
     local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
@@ -424,8 +449,13 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
   end
 
-  --contract: notes default detune=0, delay=0, lane=1; evt.ppq/endppq arrive logical. endppq is the authored ceiling (finite logical, or util.OPEN for an unbounded tail); stamps ppqL and endppqL (tm-private; callers never set it), rewrites ppq/endppq to raw before mm. evt.rawTime=true is the explicit "caller already computed raw" bypass (mirrors assignEvent; rescale's plan-then-mutate is the sole caller): consumed here so it never persists on the record or reaches mm.
-  --contract: pb authoring frame is logical cents; the val argument is stored as cents on the event. um stages only — the absorber pass at rebuild step 4.9 reconciles seats and recomputes raw vals at flush.
+  --contract: notes default detune=0, delay=0, lane=1
+  --contract: evt.ppq/endppq arrive logical; endppq is the authored ceiling (or util.OPEN)
+  --contract: stamps ppqL and endppqL (tm-private); rewrites ppq/endppq to raw before mm
+  --contract: evt.rawTime=true bypasses translation (mirrors assignEvent; rescale-only caller)
+  --invariant: rawTime consumed here so it never persists on the record or reaches mm
+  --contract: pb authoring frame is logical cents; val stored as cents on the event
+  --contract: um only stages; rebuild step 4.9 reconciles seats and recomputes raw vals at flush
   function addEvent(evt)
     local rawCaller = evt.rawTime
     evt.rawTime = nil
@@ -444,10 +474,15 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   ----- Flush: commit accumulated ops to mm.
 
-  --contract: no-op if nothing staged; otherwise commits assigns then deletes then adds under one mm:modify; pb cents→raw conversion happens here; byToken is re-keyed live from mm:assign's returned token whenever an identity field moved
-  --contract: snapshots adds/assigns/deletes before mm:modify so re-entry from mm callbacks (e.g. setMutedChannels via rebuild) cannot re-emit in-flight ops
-  --emits: preflush -- (adds, assigns, deletes); fired first, before the no-op check, so a subscriber (gm) can stage peer ops into the same lists and ride the one mm:modify
-  --emits: postflush -- nil; fired after mm:modify so a subscriber can read the uuids mm just stamped onto staged add events
+  --contract: no-op if nothing staged
+  --contract: commits assigns, then deletes, then adds under one mm:modify
+  --contract: pb cents→raw conversion happens here
+  --contract: byToken re-keyed live from mm:assign's returned token when an identity field moved
+  --contract: snapshots ops before mm:modify; mm-callback re-entry can't re-emit in-flight ops
+  --emits: preflush -- (adds, assigns, deletes)
+  --contract: preflush fires before the no-op check so a subscriber can stage peer ops
+  --emits: postflush -- nil
+  --contract: postflush fires after mm:modify; subscribers read mm-stamped uuids on staged adds
   function flush()
     fire('preflush', adds, assigns, deletes)
     if cm:get('trackerMode') and next(dirtyPcChans) then
@@ -685,7 +720,8 @@ local clearSwing do
   end
 end
 
---contract: chan==nil marks all 16 channels stale; otherwise just the named channel. Consumed by the rebuild rule on the next tm:rebuild, then cleared.
+--contract: chan==nil marks all 16 channels stale; otherwise just the named channel
+--contract: consumed by the next tm:rebuild, then cleared
 function tm:markSwingStale(chan)
   if chan then staleSwing[chan] = true; return end
   for i = 1, 16 do staleSwing[i] = true end
@@ -851,7 +887,9 @@ function tm:playPause() reaper.Main_OnCommand(40073, 0) end
 
 ----- Mute
 
---contract: idempotent: walks every existing note and only emits an assign when n.muted differs from desired; lastMuteSet also tags later-added notes. PA events ride along in note columns but carry no mute state — skipped.
+--contract: idempotent: emits an assign only when n.muted differs from desired
+--invariant: lastMuteSet also tags later-added notes
+--invariant: PA events ride along in note columns but carry no mute state — skipped
 function tm:setMutedChannels(set)
   lastMuteSet = util.clone(set or {})
   forEachEvent(function(_, n, chan, isNote)
@@ -874,7 +912,9 @@ do
     return util.add(notes, { events = {} }), #notes
   end
 
-  --contract: true iff note fits col -- no over-threshold overlap (same-pitch: zero tolerance; cross-pitch: overlapOffset lenient), coincident onset always refuses, dominated-by->=2 refuses. Only consulted for unstamped raw notes (stamped notes never reach it).
+  --contract: true iff note fits col: no over-threshold overlap, coincident onset always refuses
+  --invariant: overlap threshold: same-pitch 0, cross-pitch overlapOffset lenient; dominated-by≥2 refuses
+  --contract: consulted only for unstamped raw notes; stamped notes never reach it
   local function noteColumnAccepts(col, note)
     local lenient = cm:get('overlapOffset') * mm:resolution()
     local noteppqI    = note.ppq - delayToPPQ(note.delay or 0)
@@ -894,14 +934,16 @@ do
     return true
   end
 
-  --contract: stamped notes (ppqL ~= nil) take their authored lane verbatim; the unified raw walk at step 4.8 clips their tails so they cannot overlap. Lane extends if missing.
+  --contract: stamped notes (ppqL ~= nil) take their authored lane verbatim
+  --invariant: step 4.8's unified raw walk clips their tails so they can't overlap; lane extends if missing
   local function pickStampedLane(channel, note)
     local notes = channel.columns.notes
     while #notes < note.lane do pushNoteCol(channel) end
     return notes[note.lane], note.lane
   end
 
-  --contract: pick a lane for an external (unstamped) note via accept -> sibling -> push bump. Step 6 calls this AFTER internals' raw tails are settled, so the accept check sees realised state.
+  --contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
+  --invariant: called by step 6 AFTER internals' raw tails settle, so accept sees realised state
   local function packExternalLane(channel, note)
     local notes = channel.columns.notes
     if note.lane then
@@ -949,7 +991,8 @@ do
 
   local rebuilding = false
 
-  --contract: reentrancy-guarded; rebuilds channels[] from mm, reloads the update-manager cache, fires 'rebuild'; takeChanged forwarded to subscribers via the captured pendingTakeSwap
+  --contract: reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'
+  --contract: takeChanged forwarded to subscribers via the captured pendingTakeSwap
   function tm:rebuild(takeChanged)
     if rebuilding then return end
     rebuilding = true
@@ -1553,7 +1596,9 @@ do
     reload()
     rebuilding = false
 
-    --emits: rebuild  -- takeChanged:boolean; fires once at the end of every rebuild after the update-manager cache is reloaded. True only when this rebuild followed a take swap (bindTake), so a subscriber can reload take-tier state.
+    --emits: rebuild -- takeChanged:boolean
+    --contract: rebuild fires at end of every rebuild after the um cache is reloaded
+    --invariant: takeChanged is true only when rebuild followed bindTake; signals take-tier reload
     fire('rebuild', takeChanged)
   end
 end
@@ -1561,10 +1606,14 @@ end
 ----- Lifecycle
 
 do
-  --invariant: usedSwings is rebuild output, not input — suppressed to prevent rebuild's cm:set from firing a redundant follow-up rebuild
+  --invariant: usedSwings is rebuild output, not input
+  --contract: usedSwings is suppressed to avoid a redundant follow-up rebuild from cm:set
   local tvOnlyKeys = { mutedChannels = true, soloedChannels = true, usedSwings = true }
 
-  --invariant: configChanged routes: 'swing' → all 16; 'colSwing' → channels with diff vs prevColSwing; 'swings' → channels resolving to names with diff body vs prevSwings. Caches refresh after each event and on bindTake.
+  --invariant: configChanged 'swing' → all 16 channels
+  --invariant: configChanged 'colSwing' → channels with diff vs prevColSwing
+  --invariant: configChanged 'swings' → channels resolving to names with diff body vs prevSwings
+  --invariant: prev*-caches refresh after each event and on bindTake
   -- Merged-tier read: a save at any tier (project, global) lands in the
   -- same merged view, so diff captures real change to the composite a
   -- channel will resolve to.
@@ -1646,8 +1695,10 @@ do
     if not tvOnlyKeys[key] then tm:rebuild(false) end
   end)
 
-  --contract: atomic take swap: cm:setContext runs silently; mm:load fires the single coherent rebuild. opts.markSwingStale=true rebuilds raw from ppqL under the new (cm, mm) pair (used by seqMgr:reswingAll).
-  --contract: bindTake(nil) is the dormant seam (e.g. samplePage); cm clears under suppression, mm:load(nil) is a no-op, tm/tv retain last frame.
+  --contract: atomic take swap: cm:setContext runs silently; mm:load fires the coherent rebuild
+  --contract: opts.markSwingStale=true rebuilds raw from ppqL under new (cm, mm) (seqMgr:reswingAll)
+  --contract: bindTake(nil) is the dormant seam (e.g. samplePage)
+  --invariant: bindTake(nil): cm clears under suppression; mm:load(nil) no-op; tm/tv keep last frame
   function tm:bindTake(take, opts)
     bindingTake = true
     cm:setContext(take)
@@ -1661,7 +1712,8 @@ do
 
   function tm:currentTake() return mm and mm:take() end
 
-  --contract: re-reads the bound take from REAPER. Used by the coord-owned external-mutation watcher (e.g. user hit Ctrl-Z, an external script wrote the take). mm:reload fires the standard reload→rebuild chain; no take swap.
+  --contract: re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild
+  --invariant: reloadFromReaper does not swap take; for coord's external-mutation watcher
   function tm:reloadFromReaper() if mm then mm:reload() end end
 end
 
