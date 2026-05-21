@@ -1,47 +1,93 @@
-@module arrangePage  src=arrangePage.lua  loc=210  sha=c1efa11  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=412  sha=c3b1a39  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
   @invariant  render-only — cursor + scroll live in av (module-locals); track list + slot palette come from am, which reads cm/REAPER fresh each query. Page holds no persistent state of its own.
   @invariant  arrange page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from arrange.
   @invariant  cursor-nav commands live in cmgr:scope('arrange'); coord pushes the scope on activation. Names overlap with the tracker scope's arrow commands but scopes don't stack — only one is active at a time.
+  @invariant  body splits horizontally into a grid pane (variable width) and a fixed-width palette pane (PALETTE_W). The palette shows slots for the focused track, i.e. the track under av:cursorCol() — no separate "focused track" pointer.
 
 # Imports
-  @require util = 'util'  @ 8
-  @require ImGui = 'imgui'  @ 14
+  @require util = 'util'  @ 9
+  @require ImGui = 'imgui'  @ 15
 
 # Constructed sub-instances
-  @construct am = util.instantiate('arrangeManager')  @ 21
-  @construct av = util.instantiate('arrangeView')  @ 22
+  @construct am = util.instantiate('arrangeManager')  @ 26
+  @construct av = util.instantiate('arrangeView')  @ 27
 
 # Private state
-  @state ctx = gui and gui.ctx or nil  @ 19
+  @state ctx = gui and gui.ctx or nil  @ 20
       @contract  owns the arrange substack: builds am and av internally; coord passes only primitives (cm, cmgr, chrome, gui).
-  @state ap = {}  @ 24
-  @state arrange = cmgr:scope('arrange')  @ 196
+  @state monoFont = gui and gui.font or nil  @ 23
+  @state uiSize = gui and gui.fontSize and gui.fontSize.ui or 12  @ 24
+  @state ap = {}  @ 29
+  @state PALETTE_W = 200  @ 31
+  @state PANE_GAP = 6  @ 34
+  @state QN_W, TRACK_W = 32, 72  @ 35
+  @state SLOT_KEY_W, SLOT_KIND_W = 18, 16  @ 37
+  @state renameRequest = nil  @ 48   -- { trackIdx, slotIdx } | nil
+  @state renameBuf = ''  @ 49
+  @state renameFocus = false  @ 50
+  @state renameOpenAtFrameStart = false  @ 51
+  @state arrange = cmgr:scope('arrange')  @ 398
       @invariant  arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
 
 # Private functions
-  -- Render helpers
-  @fn rowLabel(row)  @ 30
-      -- Row label = QN at the row's top edge. beatPerRow is integer-valued in
-      -- normal use (1, 4, 8, 16); show the QN as an integer.
+  -- Style + draw helpers
+  @fn pushBodyStyles()  @ 55
+  @fn popBodyStyles()  @ 63
+  @fn alignedText(text, align)  @ 68
+      -- Shift text within the current table cell. 'r' right-aligns; 'c'
+      -- centres. ImGui has no built-in alignment for Text — measure the
+      -- live cell width via GetContentRegionAvail and offset the cursor.
+  @fn rowLabel(row)  @ 79
+      -- Row label = QN at the row's top edge. beatPerRow is integer-valued
+      -- in normal use (1, 4, 8, 16); show the QN as an integer.
+  -- Grid pane
+  @fn renderGrid(tracks, nTracks)  @ 85
+  -- Palette pane
+  @fn focusedSlotEntry(slots, slotIdx)  @ 169
+      -- Locate the slot entry in trackSlots() output (a packed array, not
+      -- indexed by slotIdx). Returns nil when no slot is focused or the
+      -- focused slot index isn't currently populated.
+  @fn renderPaletteHeader(focusedTrack)  @ 181
+      -- Render the header inside a 1-col table with TableRowFlags_Headers so
+      -- the vertical text offset (cell padding) matches the grid's first
+      -- header row exactly — the two "Track N" labels line up across the
+      -- gap without manual Y tweaking.
+  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 195
+  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 202
+  @fn renderPaletteList(slots)  @ 228
+      -- Three columns so the key/kind/name align vertically across rows
+      -- without depending on a monospace font for the whole line. The key
+      -- cell uses the monospace font (it's a hotkey to press); kind and
+      -- name use the default UI font. Selectable lives in col 0 with
+      -- SpanAllColumns so the entire row is the click target; we paint the
+      -- key text on top with SameLine.
+  @fn renderRenameModal()  @ 267
+      -- Modal lives inside the palette child window. EnterReturnsTrue is
+      -- correct here because we only consume the buffer on commit (see
+      -- reaimgui-gotchas memory; modal-prompt pattern). NoNav prevents
+      -- ImGui's popup nav from stealing keys from the InputText.
+      -- chrome.pushChromeWindow wraps the Begin/End pair so the popup
+      -- inherits parchment/chrome styles instead of ImGui's dark defaults.
+  @fn renderPalette(tracks)  @ 294
 
 # Public API (ap:*)
-  @api ap:bind()  @ 37
+  @api ap:bind()  @ 315
       @contract  bind takes no take — arrange is project-wide. coord may call with no args (or a take, ignored).
-  @api ap:unbind()  @ 38
-  @api ap:renderToolbarBits(_)  @ 40
-  @api ap:renderBody(_, w, h, dispatch)  @ 45
+  @api ap:unbind()  @ 316
+  @api ap:renderToolbarBits(_)  @ 318
+  @api ap:renderBody(_, w, h, dispatch)  @ 323
       @contract  read-only skeleton render — track-name header row, row-number gutter, empty body cells. Cursor cell + focused column are tinted. Take rectangles come in a later phase.
       @contract  pushes parchment palette across the body (Col_Text, Col_TableHeaderBg, Col_TableRowBg, Col_TableBorder*) because coord pops chrome styles before body draw; without these the table inherits ImGui's dark defaults.
       @contract  invokes the dispatch callback at end of body so arrange-scope arrow keys reach the dispatcher; samplePage and trackerPage follow the same pattern.
-  @api ap:renderStatusBar(_)  @ 174
-  @api ap:focusState()  @ 182
-      @contract  focusState mirrors samplePage — picker or any active ImGui item suppresses commands.
-  @api ap:handleInput()  @ 191
-  @api ap:save()  @ 192
-  @api ap:load()  @ 193
+  @api ap:renderStatusBar(_)  @ 374
+  @api ap:focusState()  @ 382
+      @contract  focusState mirrors samplePage — picker or any active ImGui item suppresses commands. Also gated by renameOpenAtFrameStart so the Enter that commits the rename InputText can't leak to root-scope bindings (notably quit) on the same frame.
+  @api ap:handleInput()  @ 393
+  @api ap:save()  @ 394
+  @api ap:load()  @ 395
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
