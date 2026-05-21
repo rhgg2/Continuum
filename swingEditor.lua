@@ -41,13 +41,13 @@ local SWING_ERR     = 0xff6060ff
 local SWING_MARK    = 0x000000b0
 local SWING_SOFT_QN = 0.15
 
-local tv, cm, chrome, ctx, seqMgr = (...).tv, (...).cm, (...).chrome, (...).ctx, (...).seqMgr
+local tv, cm, chrome, ctx, am = (...).tv, (...).cm, (...).chrome, (...).ctx, (...).am
 
 local state = nil
 
 -- Fired on widget release so the project-wide pass runs once per gesture, not per frame.
 local function commit()
-  if state and state.name then seqMgr:reswingAll(state.name) end
+  if state and state.name then am:reswingAll(state.name) end
 end
 
 local function meterQN()
@@ -433,7 +433,7 @@ local function drawLibraryRow(closeOnClick, rowW)
   end)
 
   ImGui.SameLine(ctx, 0, 8)
-  local usage = (cur and inProject) and seqMgr:takesUsing(cur) or {}
+  local usage = (cur and inProject) and am:takesUsing(cur) or {}
   chrome.disabledIf(not inProject or #usage > 0, function()
     if ImGui.Button(ctx, 'Delete proj') then
       deleteFromTier('project', cur)

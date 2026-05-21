@@ -16,7 +16,7 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
---contract: owns and constructs the tracker substack (mm/tm/tv/seqMgr) — coord hands it primitives, never the substack; the take arrives later via tp:bind from the coordinator's poll loop
+--contract: owns and constructs the tracker substack (mm/tm/tv/am) — coord hands it primitives, never the substack; the take arrives later via tp:bind from the coordinator's poll loop
 local cm, cmgr, chrome, gui = (...).cm, (...).cmgr, (...).chrome, (...).gui
 
 local function print(...)
@@ -27,7 +27,7 @@ local mm     = util.instantiate('midiManager',    { take = nil })
 local tm     = util.instantiate('trackerManager', { mm = mm, cm = cm })
 local gm     = util.instantiate('groupManager', { tm = tm, cm = cm })
 local tv     = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr, gm = gm })
-local seqMgr = util.instantiate('sequenceManager', { tm = tm, cm = cm })
+local am     = util.instantiate('arrangeManager', { cm = cm, tm = tm })
 
 ---------- PRIVATE
 
@@ -67,7 +67,7 @@ local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
 local dragging    = false   -- tracker-grid selection drag: click → held → release
 local modalState = nil
 local swingEditor = util.instantiate('swingEditor',
-  { tv = tv, cm = cm, chrome = chrome, ctx = ctx, seqMgr = seqMgr })
+  { tv = tv, cm = cm, chrome = chrome, ctx = ctx, am = am })
 local curveEd      = util.instantiate('curveEditor', { ctx = ctx })
 local laneConsumed = false
 local toolbar                              -- lazy: chrome may be nil at construction in tests

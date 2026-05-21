@@ -49,6 +49,10 @@ function M.new()
   end
 
   function r.GetSetMediaItemTakeInfo_String(take, key, value, setNew)
+    if key == 'P_NAME' then
+      if setNew then state.takeName[take] = value; return true, value end
+      return true, state.takeName[take] or ''
+    end
     local k = tostring(take) .. '/' .. key
     if setNew then state.takeExt[k] = value; return true, value end
     return true, state.takeExt[k] or ''
@@ -100,6 +104,73 @@ function M.new()
   function r.GetTrackName(track)
     local n = state.trackNames[track]
     return n ~= nil, n or ''
+  end
+
+  -- Track media items (used by arrangeManager). Each track holds an
+  -- ordered list of opaque item tokens; each item carries pos/len in
+  -- seconds, an active take, and (for MIDI) a pool guid that fakes
+  -- POOLEDEVTS in the item state chunk.
+  state.itemsByTrack    = {}    -- track → { item, ... }
+  state.itemPos         = {}    -- item  → seconds
+  state.itemLen         = {}    -- item  → seconds
+  state.activeTake      = {}    -- item  → take
+  state.poolByItem      = {}    -- item  → guid string (MIDI pool)
+  state.takeIsMidi      = {}    -- take  → bool
+  state.takeName        = {}    -- take  → string
+  state.takeSrc         = {}    -- take  → src token (e.g. filename for audio)
+  state.srcFile         = {}    -- src   → filename string
+  function r.CountTrackMediaItems(track) return #(state.itemsByTrack[track] or {}) end
+  function r.GetTrackMediaItem(track, i) return (state.itemsByTrack[track] or {})[i + 1] end
+  function r.GetActiveTake(item)         return state.activeTake[item] end
+  function r.TakeIsMIDI(take)            return state.takeIsMidi[take] == true end
+  function r.GetTakeName(take)           return state.takeName[take] end
+  function r.GetMediaItemTake_Source(take) return state.takeSrc[take] end
+  function r.GetMediaSourceFileName(src) return state.srcFile[src] or tostring(src) end
+  function r.GetItemStateChunk(item, _, _)
+    local guid = state.poolByItem[item]
+    if not guid then return true, '' end
+    return true, '<ITEM\n  <SOURCE MIDI\n    POOLEDEVTS ' .. guid .. '\n  >\n>'
+  end
+  function r.GetMediaItemInfo_Value(item, parm)
+    if parm == 'D_POSITION' then return state.itemPos[item] or 0 end
+    if parm == 'D_LENGTH'   then return state.itemLen[item] or 0 end
+    return 0
+  end
+  -- Spec convenience: D_POSITION/D_LENGTH are seconds in REAPER;
+  -- the fake treats one second as one QN at 60 BPM so tests can
+  -- author positions directly in QN.
+  function r.TimeMap2_timeToQN(_proj, t) return t end
+  function r.DeleteTrackMediaItem(track, item)
+    local list = state.itemsByTrack[track] or {}
+    for i, it in ipairs(list) do
+      if it == item then table.remove(list, i); return true end
+    end
+    return false
+  end
+  local guidN = 0
+  function r.genGuid(_s) guidN = guidN + 1; return '{guid-' .. guidN .. '}' end
+
+  -- Spec helper: seed one item on a track. Returns the item token.
+  -- opts = { take, isMidi, pos, len, poolGuid?, srcFile?, takeName? }
+  function r:addItem(track, opts)
+    local item = opts.item or { __item = #(state.itemsByTrack[track] or {}) + 1, track = track }
+    local list = state.itemsByTrack[track]
+    if not list then list = {}; state.itemsByTrack[track] = list end
+    list[#list+1] = item
+    state.itemPos[item]    = opts.pos or 0
+    state.itemLen[item]    = opts.len or 1
+    state.activeTake[item] = opts.take
+    state.itemForTake[opts.take]  = item
+    state.trackForItem[item]      = track
+    state.takeIsMidi[opts.take]   = opts.isMidi == true
+    state.takeName[opts.take]     = opts.takeName or ''
+    if opts.isMidi then
+      state.poolByItem[item] = opts.poolGuid or ('{pool-' .. tostring(opts.take) .. '}')
+    elseif opts.srcFile then
+      state.takeSrc[opts.take] = opts.srcFile
+      state.srcFile[opts.srcFile] = opts.srcFile
+    end
+    return item
   end
 
   -- Transport / cursor

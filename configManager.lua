@@ -6,7 +6,7 @@
 --invariant: transient tier never persists (saver is a no-op) and resets to {} on every refreshCache
 --invariant: declarations is an ordered array-of-pairs so declared-but-nil keys (e.g. sampleBrowserRoot) coexist with non-nil defaults without ambiguity
 --invariant: track and take tiers require the corresponding REAPER context; without it their loaders return {} and savers print an error
---shape: configChangedPayload.targeted = { key = string, level = string }   -- set / remove
+--shape: configChangedPayload.targeted = { key = string, level = string, track? = MediaTrack }   -- set / remove; track set only by writeTrackKey for foreign-track writes
 --shape: configChangedPayload.bulk     = { level = string }                  -- assign (keyless)
 --shape: configChangedPayload.reload   = {}                                  -- setContext / clearTake / setTrack
 local util = require 'util'
@@ -78,6 +78,10 @@ local declarations = {
   { 'slotEntries',     {}    },
   -- Mirror groups, persisted at the take tier. See docs/groupManager.md.
   { 'groups',    {}    },
+  -- Arrange-page slot palette, per track. Indexed 0..61; entry shape
+  -- { kind = 'midi'|'audio', id = <pool-guid-or-source-path> }. See
+  -- docs/arrangeManager.md.
+  { 'arrangeSlots', {} },
 
   -- Atoms — parchment palette
   { 'palette.bg',        hex('#dad6c9') },  -- cream paper
@@ -438,6 +442,23 @@ function cm:readTrackKey(otherTrack, key)
   if not ok or not val or val == '' then return nil end
   local parsed = parse(val)
   return copy(parsed[key])
+end
+
+--contract: bypasses cache and active context; updates a single key on otherTrack's P_EXT (read-modify-write the parsed table). Fires targeted configChanged with .track set so subscribers of the bound track can ignore foreign-track edits.
+function cm:writeTrackKey(otherTrack, key, value)
+  checkKey(key)
+  if not otherTrack then return end
+  local ok, val = reaper.GetSetMediaTrackInfo_String(
+    otherTrack, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
+  local parsed = (ok and val and val ~= '') and parse(val) or {}
+  if value == util.REMOVE then parsed[key] = nil
+  else                         parsed[key] = copy(value) end
+  reaper.GetSetMediaTrackInfo_String(
+    otherTrack, 'P_EXT:' .. CONFIG_PREFIX .. 'config', util.serialise(parsed), true)
+  -- If the foreign track happens to be the bound one, refresh its cache so the next get sees the write.
+  if otherTrack == track then cache.track = loaders.track() end
+  --emits: configChanged -- configChangedPayload.targeted (with .track for cross-track writes)
+  fire('configChanged', { key = key, level = 'track', track = otherTrack })
 end
 
 --contract: bypasses cache and active context; reads otherTake's P_EXT directly without firing configChanged or disturbing the bound take's cache

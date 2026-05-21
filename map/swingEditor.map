@@ -1,5 +1,5 @@
-@module swingEditor  src=swingEditor.lua  loc=672  sha=24be50a  mode=chunk
-@deps tv, cm, chrome, ctx, seqMgr
+@module swingEditor  src=swingEditor.lua  loc=672  sha=5d7d2a2  mode=chunk
+@deps tv, cm, chrome, ctx, am
 
 # Invariants & contracts
   @invariant  editor owns no swing data; composite resolves via cm:get('swings', {mergeTiers=true})[name] (defaults ∪ global ∪ project) and is read fresh each frame via swingRead

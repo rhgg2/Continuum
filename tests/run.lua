@@ -105,6 +105,7 @@ local specs = {
   'vm_scale_spec',
   'tracker_page_spec',
   'sample_page_spec',
+  'am_spec',
 }
 
 local pass, fail, failures = 0, 0, {}
