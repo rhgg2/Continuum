@@ -99,6 +99,24 @@ return {
   },
 
   {
+    name = 'paletteSlot defaults nil; setter clamps to 0..61; nil clears',
+    run = function(harness)
+      local _, av = mkAv(harness)
+      t.eq(av:paletteSlot(), nil)
+      av:setPaletteSlot(5)
+      t.eq(av:paletteSlot(), 5)
+      av:setPaletteSlot(-1)
+      t.eq(av:paletteSlot(), 0, 'negative clamps to 0')
+      av:setPaletteSlot(99)
+      t.eq(av:paletteSlot(), 61, 'over-max clamps to 61')
+      av:setPaletteSlot(3.7)
+      t.eq(av:paletteSlot(), 3, 'floored')
+      av:setPaletteSlot(nil)
+      t.eq(av:paletteSlot(), nil, 'nil clears')
+    end,
+  },
+
+  {
     name = 'qnToRow / rowToQN are inverses through beatPerRow',
     run = function(harness)
       local _, av = mkAv(harness)
