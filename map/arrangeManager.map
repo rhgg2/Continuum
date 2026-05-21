@@ -1,10 +1,10 @@
-@module arrangeManager  src=arrangeManager.lua  loc=263  sha=untracked  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=263  sha=0067830  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts
   @invariant  project-wide singleton; reads REAPER items + cm directly, owns no take state of its own
   @invariant  slot palette lives in cm at the track tier under 'arrangeSlots'; foreign-track writes route through cm:writeTrackKey
-  @invariant  slot indices are 0..61, base36-keyed via util.toBase36; allocation is lowest-free; gaps allowed
+  @invariant  slot indices are 0..61, base62-keyed via util.toBase62 (62 chars: 0-9, a-z, A-Z); allocation is lowest-free; gaps allowed
   @invariant  takeId derivation is the source-identity chokepoint — MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it); audio: source filename. A take whose id can't be derived shows as an orphan, never crashes.
   @invariant  reswing (reswingAll) is the legacy sequenceManager behaviour folded in and needs the optional tm dependency; pure-discovery callers may omit tm
 
@@ -13,7 +13,7 @@
 
 # Private state
   @state am = {}  @ 14
-  @state SLOT_MAX = 61  @ 16   -- inclusive: 62 slots, base36 0..9 + a..z + A..Z
+  @state SLOT_MAX = 61  @ 16   -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
 
 # Private functions
   -- Helpers

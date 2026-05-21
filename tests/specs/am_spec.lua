@@ -208,16 +208,18 @@ return {
   },
 
   --------------------------------------------------------------------
-  -- Base36 key mapping
+  -- Base62 key mapping (0..61 -> '0'..'9','a'..'z','A'..'Z')
   --------------------------------------------------------------------
   {
-    name = 'keyForSlot maps 0..61 through util.toBase36',
+    name = 'keyForSlot maps 0..61 through util.toBase62',
     run = function(harness)
       local _, am = mkAm(harness)
       t.eq(am:keyForSlot(0),  '0')
       t.eq(am:keyForSlot(9),  '9')
-      t.eq(am:keyForSlot(10), 'A')
-      t.eq(am:keyForSlot(35), 'Z')
+      t.eq(am:keyForSlot(10), 'a')
+      t.eq(am:keyForSlot(35), 'z')
+      t.eq(am:keyForSlot(36), 'A')
+      t.eq(am:keyForSlot(61), 'Z')
     end,
   },
 

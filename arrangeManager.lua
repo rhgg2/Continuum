@@ -3,7 +3,7 @@
 
 --invariant: project-wide singleton; reads REAPER items + cm directly, owns no take state of its own
 --invariant: slot palette lives in cm at the track tier under 'arrangeSlots'; foreign-track writes route through cm:writeTrackKey
---invariant: slot indices are 0..61, base36-keyed via util.toBase36; allocation is lowest-free; gaps allowed
+--invariant: slot indices are 0..61, base62-keyed via util.toBase62 (62 chars: 0-9, a-z, A-Z); allocation is lowest-free; gaps allowed
 --invariant: takeId derivation is the source-identity chokepoint — MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it); audio: source filename. A take whose id can't be derived shows as an orphan, never crashes.
 --invariant: reswing (reswingAll) is the legacy sequenceManager behaviour folded in and needs the optional tm dependency; pure-discovery callers may omit tm
 
@@ -13,7 +13,7 @@ local cm, tm = (...).cm, (...).tm
 
 local am = {}
 
-local SLOT_MAX = 61    -- inclusive: 62 slots, base36 0..9 + a..z + A..Z
+local SLOT_MAX = 61    -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
 
 ----- Helpers
 
@@ -158,7 +158,7 @@ function am:slotForTake(take)
 end
 
 function am:keyForSlot(slotIdx)
-  return util.toBase36(slotIdx)
+  return util.toBase62(slotIdx)
 end
 
 ----- Slot management
@@ -166,7 +166,7 @@ end
 -- Phase 1 surface: dictionary writers only. Source creation
 -- (PCM_Source_CreateFromType for MIDI, file picker for audio) and the
 -- placement primitives (dropInstance, duplicateTake, move/resize/trim)
--- land in phase 4 alongside the base36 command scope. newMidiSlot's
+-- land in phase 4 alongside the base62 command scope. newMidiSlot's
 -- opts.id seam lets phase-4 callers (and tests) inject the pool guid
 -- of an already-created source.
 
