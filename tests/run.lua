@@ -102,6 +102,7 @@ local specs = {
   'vm_row_shift_same_pitch_spec',
   'vm_conform_overlap_spec',
   'vm_take_properties_spec',
+  'vm_scale_spec',
   'tracker_page_spec',
   'sample_page_spec',
 }

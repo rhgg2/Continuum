@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2489  sha=b522f9a  mode=chunk
+@module trackerView  src=trackerView.lua  loc=2491  sha=24be50a  mode=chunk
 @deps tm, cm, cmgr, gm
 
 # Invariants & contracts
@@ -38,17 +38,17 @@
   @state grid = {  @ 40
   @state tv = {}  @ 47
   @state ec, clipboard, ctx  @ 50
-  @state PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at =...  @ 1562
+  @state PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at =...  @ 1564
       @contract  a selection must be exactly one grid column (a 1-col block stays contiguous when it lands on the destination col); a multi-col selection is a no-op. The cursor follows to the destination column in both cases
       @contract  refuse if the destination column has any onset (note: note-on; other types: any event) whose row lies in the source's row extent -- the selection's [r1,r2] for a block, the moved event's onset row for a single. Tails (either direction) are clipped by tm's tail pass and never block
-  @state dupeState = nil  @ 1687
-  @state groupSrc, groupDupState  @ 1694
-  @state tracker = cmgr:scope('tracker')  @ 2143
-  @state rebuilding = false  @ 2206
-  @state groupBridge = {  @ 2354
-  @state GROUP_PASSTHROUGH = {  @ 2434
-  @state GROUP_KEEP = {}  @ 2443
-  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 2450
+  @state dupeState = nil  @ 1689
+  @state groupSrc, groupDupState  @ 1696
+  @state tracker = cmgr:scope('tracker')  @ 2145
+  @state rebuilding = false  @ 2208
+  @state groupBridge = {  @ 2356
+  @state GROUP_PASSTHROUGH = {  @ 2436
+  @state GROUP_KEEP = {}  @ 2445
+  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 2452
 
 # Private functions
   @fn print(...)  @ 23
@@ -127,8 +127,8 @@
       -- Returns nil for non-interpolable cols so callers can assign unconditionally.
   -- Duration & position
   @fn noteOff()  @ 890
-  @fn adjustDuration(rowDelta)  @ 948
-  @fn adjustPosition(rowDelta)  @ 1024
+  @fn adjustDuration(prefix, rowDelta)  @ 948
+  @fn adjustPosition(prefix, rowDelta)  @ 1024
       -- Notes: onset-only band (rowBounds) -- a neighbour tail never blocks
       -- the move; tm clips an overrun on the next rebuild. The cursor
       -- follows by rowDelta unless that row already holds another note
@@ -137,46 +137,46 @@
       -- grid edge or onto a same-column event (a same-ppq collision).
       @contract  single: notes blocked only by an onset reorder (tm clips tails), cc/at/pa/pc by an occupied destination row. Selection: refuse if any touched column's destination row span [selLo..selHi]+rowDelta holds a foreign onset
   -- Quantize / scale
-  @fn insertRow()  @ 1330
-  @fn deleteRow()  @ 1331
-  @fn insertRowCol()  @ 1332
-  @fn deleteRowCol()  @ 1333
+  @fn insertRow()  @ 1333
+  @fn deleteRow()  @ 1334
+  @fn insertRowCol()  @ 1335
+  @fn deleteRowCol()  @ 1336
   -- Nudge
-  @fn nudge(dir, coarse)  @ 1424
+  @fn nudge(prefix, dir, coarse)  @ 1427
       -- Column-typed nudge. Selection rule: if any note event is selected,
       -- transpose / velocity- / delay-nudge the notes and leave value events
       -- alone; otherwise nudge val on every value event. Solo cursor: first
       -- event in the cursor row, column- and part-typed.
   -- Deletion
-  @fn deleteEvent()  @ 1515
-  @fn deleteSelection()  @ 1534
-  @fn deleteOrBackspace()  @ 1543
+  @fn deleteEvent()  @ 1517
+  @fn deleteSelection()  @ 1536
+  @fn deleteOrBackspace()  @ 1545
   -- Horizontal move
-  @fn shiftEvents(dir)  @ 1564
-  @fn stepSample(dir)  @ 1680
+  @fn shiftEvents(dir)  @ 1566
+  @fn stepSample(dir)  @ 1682
       -- Step currentSample by ±1 across the full 0..127 range. Empty slots
       -- are reachable — the user may want to author a sample value before
       -- the sampler has loaded that slot.
   -- Duplicate
-  @fn cursorRect()  @ 1700
+  @fn cursorRect()  @ 1702
       -- Cursor cell as a 1-row mirror rect: the seed-rect fallback for plain
       -- duplicate when there is no real selection (selectionAsRect is nil).
       -- This is the 1x1 carveout -- mirror passes no fallback, so a degenerate
       -- selection is a no-op there; plain duplicate clones the cursor cell.
-  @fn colsForAnchor(anchor, rect)  @ 1713
+  @fn colsForAnchor(anchor, rect)  @ 1715
       -- The grid columns the rect's stream set lands on when its chanLo is
       -- pinned to `anchor.chan` -- the shared logical->grid mapping. Resolving
       -- this at paste/select time (not freezing the seed column) is what lets
       -- a channel-changing cursor move carry the cascade to the new channel.
-  @fn stopForPart(col, part)  @ 1728
+  @fn stopForPart(col, part)  @ 1730
       -- First stop in `col` carrying part `part` (the seed's part name), or
       -- 1 if unknown -- keeps pasteSingle's pitch/vel dispatch on the part
       -- the user duplicated, at whatever column the anchor resolved to.
-  @fn selectRegionAt(anchor, rect)  @ 1738
+  @fn selectRegionAt(anchor, rect)  @ 1740
       -- Inverse of selectionAsRect: drop a grid selection (cursor at its
       -- top-left) at a logical anchor. Whole-column parts -- the cascade
       -- carries part precision in its payload, not in the live selection.
-  @fn duplicate()  @ 1754
+  @fn duplicate()  @ 1756
       -- Plain duplicate: clip payload, cursor-cell seed fallback. The cascade
       -- lifetime, anchor and select-the-copy live in tv:duplicateCascade.
       -- place re-homes the paste to the anchor's channel (colsForAnchor), so a
@@ -186,15 +186,15 @@
   -- Non-command callbacks from trackerPage
   -- Columns
   -- Group quick-verbs
-  @fn groupMark()  @ 2101
+  @fn groupMark()  @ 2103
       -- mark and copy share the one groupSrc lifetime; without this, mark ->
       -- groupPaste degrades to plain paste (groupPaste gates on groupSrc, not
       -- the active group).
-  @fn groupDuplicate()  @ 2111
+  @fn groupDuplicate()  @ 2113
       -- destination so the projection replaces rather than interleaves;
       -- tm:flush commits gm's staged adds (it only stages otherwise,
       -- colliding with the next edit).
-  @fn groupPaste()  @ 2126
+  @fn groupPaste()  @ 2128
       -- The pasted region [a.ppq, a.ppq+groupSrc.dur) must fit wholly inside
       -- the take. Out of bounds is a silent no-op, NOT a fallthrough to plain
       -- paste (that would paste non-group content the user didn't ask for);
@@ -222,20 +222,20 @@
   @api tv:setLaneTension(col, i, tension)  @ 773
       -- Set bezier tension on the i-th visible event. Forces shape to bezier
       -- so the tension is honoured (REAPER ignores tension on other shapes).
-  @api tv:ec()  @ 1775
-  @api tv:clipboard()  @ 1776
-  @api tv:rowPerBar()  @ 1780
-  @api tv:takeName()  @ 1781
-  @api tv:activeTemper()  @ 1782
-  @api tv:noteProjection(evt)  @ 1783
-  @api tv:rowBeatInfo(row)  @ 1784
-  @api tv:barBeatSub(row)  @ 1785
-  @api tv:ppqToRow(ppq, chan)  @ 1786
-  @api tv:rowToPPQ(row, chan)  @ 1787
-  @api tv:logPerRow()  @ 1788
-  @api tv:sampleCurve(A, B, ppq)  @ 1789
-  @api tv:timeSig()  @ 1790
-  @api tv:duplicateCascade(state, collectSource, place, fallbackRect)  @ 1808
+  @api tv:ec()  @ 1777
+  @api tv:clipboard()  @ 1778
+  @api tv:rowPerBar()  @ 1782
+  @api tv:takeName()  @ 1783
+  @api tv:activeTemper()  @ 1784
+  @api tv:noteProjection(evt)  @ 1785
+  @api tv:rowBeatInfo(row)  @ 1786
+  @api tv:barBeatSub(row)  @ 1787
+  @api tv:ppqToRow(ppq, chan)  @ 1788
+  @api tv:rowToPPQ(row, chan)  @ 1789
+  @api tv:logPerRow()  @ 1790
+  @api tv:sampleCurve(A, B, ppq)  @ 1791
+  @api tv:timeSig()  @ 1792
+  @api tv:duplicateCascade(state, collectSource, place, fallbackRect)  @ 1810
       -- Shared duplicate cascade. `state` is the run token (nil seeds);
       -- `collectSource` captures a payload while the source is still intact
       -- (plain dup: clip + part; mirror: nil -- events come from the rect in
@@ -247,11 +247,11 @@
       -- selection re-selects each copy; one seeded from the fallback rect
       -- (no selection -- the 1x1 cell carveout) leaves no selection, like a
       -- classic cell duplicate. Returns the new run token.
-  @api tv:selectionAsRect()  @ 1846
+  @api tv:selectionAsRect()  @ 1848
       -- The active selection as a mirror rect: a logical-frame time span x a
       -- per-channel streamId set, chanOffset relative to the lowest selected
       -- channel. nil unless a real (non-degenerate) selection exists.
-  @api tv:eventsInRect(rect)  @ 1879
+  @api tv:eventsInRect(rect)  @ 1881
       -- Concrete events the rect contains. Membership is the mirror predicate
       -- in the logical frame: onset ppq in the span AND the column's stream is
       -- selected for its channel offset. col.events ppq is logical (tm
@@ -260,7 +260,7 @@
       -- channel/lane); gm needs them per-event for its anchor maths and must
       -- keep object identity (it links the live evt for propagation), so we
       -- backfill the authoritative column values rather than clone.
-  @api tv:clearRegionAt(rect, anchor)  @ 1909
+  @api tv:clearRegionAt(rect, anchor)  @ 1911
       -- Clears the take cells the rect's projection lands on at `anchor` -- the
       -- footprint inverse of eventsInRect. gm:stamp / gm:newInstance only
       -- re-place their own concretes (contract: the caller clears foreign
@@ -274,42 +274,42 @@
       -- stages, so it never eats the projection; a gm op that then rejects
       -- (out-of-range / live-group overlap) is a rare pre-beta edge the
       -- bounds/no-straddle gates already exclude for the common path.
-  @api tv:cursorAnchor()  @ 1920
+  @api tv:cursorAnchor()  @ 1922
       -- Cursor as a mirror anchor: { ppq, chan } in the logical frame.
-  @api tv:streamRefAt(colIx, chanLo)  @ 1929
+  @api tv:streamRefAt(colIx, chanLo)  @ 1931
       -- (channel offset, stream id) for a grid column, relative to chanLo —
       -- the coordinates a mirror rect's `streams` table is keyed by.
-  @api tv:instanceAtCursor()  @ 1937
+  @api tv:instanceAtCursor()  @ 1939
       -- The instance whose region covers the caret cell, or nil. Region mode
       -- seeds from this so entry lands on what the caret is over.
-  @api tv:instanceSelection(groupId, instId)  @ 1954
+  @api tv:instanceSelection(groupId, instId)  @ 1956
       -- Install the grid selection for one group instance: its anchor + the
       -- group rect -> selectRegionAt (the duplicate-cascade selector). The ec
       -- region-mode bridge speaks this; ec never reads gm geometry directly.
-  @api tv:paintRegionStream(groupId, instId, colIx, on)  @ 1963
+  @api tv:paintRegionStream(groupId, instId, colIx, on)  @ 1965
       @contract  extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans the take); idempotent -- re-painting an already on/off stream is a no-op true. The group's live rect is found by id off gm:eachInstance so ec carries no geometry.
-  @api tv:setGridSize(w, h)  @ 1993
-  @api tv:addExtraCol(type, cc)  @ 1999
-  @api tv:hideExtraCol()  @ 2024
-  @api tv:showDelay()  @ 2079
+  @api tv:setGridSize(w, h)  @ 1995
+  @api tv:addExtraCol(type, cc)  @ 2001
+  @api tv:hideExtraCol()  @ 2026
+  @api tv:showDelay()  @ 2081
   -- Command table
   -- Rebuild
-  @api tv:rebuild(takeChanged)  @ 2209
+  @api tv:rebuild(takeChanged)  @ 2211
       @contract  reentrancy-guarded; bails on no-take (page shows placeholder); takeChanged=true resets ec + re-reads resolution/length/timeSigs; grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
   -- Lifecycle
   -- Factory load
   -- Group quick-verb lifetimes
-  @api tv:wireGroupLifetime()  @ 2464
+  @api tv:wireGroupLifetime()  @ 2466
       -- Snapshot the source on copy + install the clear-on-mutation sweep.
       -- Must run AFTER every tracker command (tv's, clipboard's, ec's AND
       -- trackerPage's page verbs) registers, so the sweep covers page commands
       -- too -- trackerPage calls this once post-registration. copy is plain:
       -- clipboard:copy ends with ec:selClear(), so a doAfter snapshot would
       -- see an empty selection; doBefore captures the live rect.
-  @api tv:endGroupCascade()  @ 2477
+  @api tv:endGroupCascade()  @ 2479
       -- A mouse re-selection ends the cascade by hand (the mouse bypasses
       -- cmgr's keep-set sweep).
-  @api tv:endAllCascades()  @ 2482
+  @api tv:endAllCascades()  @ 2484
       -- A committed typed edit cancels every cascade and drops the groupPaste
       -- source, exactly as a non-keep cmgr command would -- editEvent is the
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).

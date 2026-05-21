@@ -1174,6 +1174,11 @@ do
         util.add(plans, entry)
       end
     end
+    -- Silent refusal if any onset would land off-grid. Tails are clipped
+    -- by tm's universal tail pass, so newEndppq overshoot is benign.
+    for _, p in ipairs(plans) do
+      if p.newppq < 0 or p.newppq >= length then return end
+    end
     conformOverlaps(plans)
     writePlans(plans)
     tm:flush()
