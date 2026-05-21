@@ -1,4 +1,4 @@
--- arrangeManager: discovery, slot dictionary, reswing-folded API.
+-- arrangeManager: discovery, slot auto-allocation, placement, reswing.
 
 local t = require('support')
 local util = require('util')
@@ -55,16 +55,38 @@ return {
       t.eq(rows[1].name, 'A')
       t.eq(rows[2].takeCount, 0, 'empty track reports 0 items')
       t.eq(rows[3].takeCount, 2, 'two items on C')
-      t.eq(rows[1].slotCount, 0, 'no slots declared yet')
+      t.eq(rows[1].slotCount, 1, 'one take auto-materialised one slot')
+      t.eq(rows[3].slotCount, 2, 'two distinct pool ids -> two slots')
+    end,
+  },
+
+  --------------------------------------------------------------------
+  -- Auto-materialisation: every grouped take becomes a slot on read
+  --------------------------------------------------------------------
+  {
+    name = 'trackSlots auto-allocates slot indices for live takes',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', poolGuid = '{p1}', takeName = 'lead' },
+                    { kind = 'midi', poolGuid = '{p1}', takeName = 'lead-2' },
+                    { kind = 'midi', poolGuid = '{p2}', takeName = 'bass' } } },
+      })
+      local slots = am:trackSlots(0)
+      t.eq(#slots, 2, 'two pool ids -> two slots; pooled takes share one')
+      t.eq(slots[1].id, '{p1}')
+      t.eq(slots[1].name, 'lead', 'first-found take name wins')
+      t.eq(slots[2].id, '{p2}')
+      t.eq(slots[2].name, 'bass')
     end,
   },
 
   {
-    name = 'tracksTakes builds take rows with QN range, kind, and orphan slotIdx',
+    name = 'tracksTakes assigns slotIdx to every grouped take',
     run = function(harness)
       local h, am = mkAm(harness)
-      local tracks = seedTracks(h, {
-        { items = { { kind = 'midi', pos = 0, len = 4, poolGuid = '{p1}', takeName = 'lead' },
+      seedTracks(h, {
+        { items = { { kind = 'midi',  pos = 0, len = 4, poolGuid = '{p1}', takeName = 'lead' },
                     { kind = 'audio', pos = 4, len = 2, srcFile = '/a.wav', takeName = 'kick' } } },
       })
       local takes = am:tracksTakes(0)
@@ -72,89 +94,45 @@ return {
       t.eq(takes[1].kind, 'midi')
       t.eq(takes[1].startQN, 0)
       t.eq(takes[1].lengthQN, 4)
+      t.truthy(takes[1].slotIdx, 'midi take has a slot')
       t.eq(takes[2].kind, 'audio')
       t.eq(takes[2].startQN, 4)
       t.eq(takes[2].name, 'kick')
-      t.eq(takes[1].slotIdx, nil, 'orphan: no matching slot')
-      t.eq(takes[2].slotIdx, nil, 'orphan: no matching slot')
-      t.eq(takes[1].trackIdx, 0)
-      t.truthy(tracks[1])
-    end,
-  },
-
-  --------------------------------------------------------------------
-  -- Slot allocation / dictionary writes
-  --------------------------------------------------------------------
-  {
-    name = 'newMidiSlot allocates lowest-free index; gaps are preserved',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, { { items = {} } })
-      local a = am:newMidiSlot(0, { id = '{x}' })
-      local b = am:newMidiSlot(0, { id = '{y}' })
-      local c = am:newMidiSlot(0, { id = '{z}' })
-      t.eq(a, 0); t.eq(b, 1); t.eq(c, 2)
-      am:deleteSlot(0, 1)
-      local d = am:newMidiSlot(0, { id = '{w}' })
-      t.eq(d, 1, 'fills gap before extending')
+      t.truthy(takes[2].slotIdx, 'audio take has a slot')
+      t.eq(takes[1].slotIdx ~= takes[2].slotIdx, true, 'distinct sources -> distinct slots')
     end,
   },
 
   {
-    name = 'newAudioSlot stores path as id',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, { { items = {} } })
-      local idx = am:newAudioSlot(0, '/samples/snare.wav')
-      t.eq(idx, 0)
-      local slots = am:trackSlots(0)
-      t.eq(slots[1].kind, 'audio')
-      t.eq(slots[1].id, '/samples/snare.wav')
-    end,
-  },
-
-  {
-    name = 'newAudioSlot rejects empty path',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, { { items = {} } })
-      t.eq(am:newAudioSlot(0, ''), nil)
-      t.eq(am:newAudioSlot(0, nil), nil)
-    end,
-  },
-
-  --------------------------------------------------------------------
-  -- Name resolution (derived per call, first-found wins)
-  --------------------------------------------------------------------
-  {
-    name = 'trackSlots derives slot name from any matching take (first-found wins)',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, {
-        { items = { { kind = 'midi', poolGuid = '{p1}', takeName = 'verse' },
-                    { kind = 'midi', poolGuid = '{p1}', takeName = 'verse-2' },
-                    { kind = 'midi', poolGuid = '{p2}', takeName = 'bridge' } } },
-      })
-      am:newMidiSlot(0, { id = '{p1}' })
-      am:newMidiSlot(0, { id = '{p2}' })
-      local slots = am:trackSlots(0)
-      t.eq(slots[1].name, 'verse', 'first-found take name')
-      t.eq(slots[2].name, 'bridge')
-    end,
-  },
-
-  {
-    name = 'slotForTake resolves slot from take pool guid; nil for orphan',
+    name = 'ensureSlots is idempotent — second read does not reallocate',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
         { items = { { kind = 'midi', poolGuid = '{p1}' },
-                    { kind = 'midi', poolGuid = '{orphan}' } } },
+                    { kind = 'midi', poolGuid = '{p2}' } } },
       })
-      am:newMidiSlot(0, { id = '{p1}' })
+      local first  = am:trackSlots(0)
+      local second = am:trackSlots(0)
+      t.eq(first[1].idx, second[1].idx, 'p1 keeps its index across reads')
+      t.eq(first[2].idx, second[2].idx, 'p2 keeps its index across reads')
+    end,
+  },
+
+  --------------------------------------------------------------------
+  -- Identity resolution
+  --------------------------------------------------------------------
+  {
+    name = 'slotForTake resolves slot from take pool guid',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', poolGuid = '{p1}' },
+                    { kind = 'midi', poolGuid = '{p2}' } } },
+      })
       local takes = am:tracksTakes(0)
-      t.eq(am:slotForTake(takes[1].take), 0)
-      t.eq(am:slotForTake(takes[2].take), nil)
+      t.truthy(am:slotForTake(takes[1].take))
+      t.truthy(am:slotForTake(takes[2].take))
+      t.eq(am:slotForTake(takes[1].take) ~= am:slotForTake(takes[2].take), true)
     end,
   },
 
@@ -170,8 +148,10 @@ return {
                     { kind = 'midi', poolGuid = '{p1}', takeName = 'old' },
                     { kind = 'midi', poolGuid = '{other}', takeName = 'leave-me' } } },
       })
-      am:newMidiSlot(0, { id = '{p1}' })
-      am:renameSlot(0, 0, 'lead')
+      local slots = am:trackSlots(0)
+      local p1Slot
+      for _, s in ipairs(slots) do if s.id == '{p1}' then p1Slot = s.idx end end
+      am:renameSlot(0, p1Slot, 'lead')
       local takes = am:tracksTakes(0)
       t.eq(takes[1].name, 'lead')
       t.eq(takes[2].name, 'lead')
@@ -180,7 +160,7 @@ return {
   },
 
   {
-    name = 'deleteSlot removes dict entry; opts.removeInstances=true deletes matching items',
+    name = 'deleteSlot removes every matching item and prunes the dict entry',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
@@ -188,105 +168,71 @@ return {
                     { kind = 'midi', poolGuid = '{p1}' },
                     { kind = 'midi', poolGuid = '{p2}' } } },
       })
-      am:newMidiSlot(0, { id = '{p1}' })
-      am:newMidiSlot(0, { id = '{p2}' })
-
-      am:deleteSlot(0, 0)
-      t.eq(#am:trackSlots(0), 1, 'slot entry removed from palette')
-      t.eq(#am:tracksTakes(0), 3, 'instances left as orphans by default')
-      -- The {p1} takes are now orphans (slotIdx nil).
+      local slots = am:trackSlots(0)
+      local p1Slot
+      for _, s in ipairs(slots) do if s.id == '{p1}' then p1Slot = s.idx end end
+      local removed = am:deleteSlot(0, p1Slot)
+      t.eq(removed, 2, 'two {p1} takes removed')
       local takes = am:tracksTakes(0)
-      local orphanCount = 0
-      for _, tk in ipairs(takes) do
-        if tk.slotIdx == nil then orphanCount = orphanCount + 1 end
-      end
-      t.eq(orphanCount, 2, 'two {p1} instances orphaned')
-
-      am:deleteSlot(0, 1, { removeInstances = true })
-      t.eq(#am:tracksTakes(0), 2, '{p2} instance deleted alongside its slot')
+      t.eq(#takes, 1, 'only the {p2} take remains')
+      local slotsAfter = am:trackSlots(0)
+      t.eq(#slotsAfter, 1, 'palette no longer carries the {p1} slot')
+      t.eq(slotsAfter[1].id, '{p2}')
     end,
   },
 
   --------------------------------------------------------------------
-  -- Placement (dropInstance)
+  -- Placement
   --------------------------------------------------------------------
   {
-    name = 'newMidiSlot without opts.id reserves slot with nil id',
+    name = 'createAndDropMidi mints slot 0, creates a take, names it',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, { { items = {} } })
-      t.eq(am:newMidiSlot(0), 0)
-      local slots = am:trackSlots(0)
-      t.eq(#slots, 1)
-      t.eq(slots[1].id, nil, 'lazy slot has no guid until first drop')
-      t.eq(slots[1].name, '', 'no name to derive without instances')
-    end,
-  },
-
-  {
-    name = 'dropInstance(midi) first drop harvests POOLEDEVTS guid into slot',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, { { items = {} } })
-      am:newMidiSlot(0)
-      local take = am:dropInstance(0, 0, 4, 2)
-      t.truthy(take, 'drop returns the new take')
-      local slots = am:trackSlots(0)
-      t.truthy(slots[1].id, 'slot id was filled on first drop')
-      t.eq(am:slotForTake(take), 0, 'fresh take resolves back to its slot')
+      local idx, take = am:createAndDropMidi(0, 4, 2, 'lead')
+      t.eq(idx, 0, 'first slot is index 0')
+      t.truthy(take, 'returns the new take')
       local takes = am:tracksTakes(0)
       t.eq(#takes, 1)
       t.eq(takes[1].startQN,  4)
       t.eq(takes[1].lengthQN, 2)
       t.eq(takes[1].slotIdx,  0)
+      t.eq(takes[1].name,     'lead')
+      local slots = am:trackSlots(0)
+      t.eq(#slots, 1)
+      t.truthy(slots[1].id, 'slot id was harvested from the new pool')
     end,
   },
 
   {
-    name = 'dropInstance(midi) second drop pools to first via POOLEDEVTS',
+    name = 'createAndDropMidi allocates lowest-free index across calls',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, { { items = {} } })
-      am:newMidiSlot(0)
-      local t1 = am:dropInstance(0, 0, 0, 1)
-      local t2 = am:dropInstance(0, 0, 4, 1)
-      t.eq(am:slotForTake(t1), 0, 'first take pools to slot 0')
-      t.eq(am:slotForTake(t2), 0, 'second take pools to slot 0 (same POOLEDEVTS guid)')
+      local a = am:createAndDropMidi(0, 0, 1, 'a')
+      local b = am:createAndDropMidi(0, 0, 1, 'b')
+      local c = am:createAndDropMidi(0, 0, 1, 'c')
+      t.eq(a, 0); t.eq(b, 1); t.eq(c, 2)
+      am:deleteSlot(0, 1)
+      local d = am:createAndDropMidi(0, 0, 1, 'd')
+      t.eq(d, 1, 'fills the gap left by delete')
+    end,
+  },
+
+  {
+    name = 'dropInstance pools to an existing slot',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local slot, t1 = am:createAndDropMidi(0, 0, 1, 'lead')
+      local t2 = am:dropInstance(0, slot, 4, 1)
+      t.eq(am:slotForTake(t1), slot, 'original take pools to its slot')
+      t.eq(am:slotForTake(t2), slot, 'second pools to same slot via shared POOLEDEVTS')
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2)
       for _, tk in ipairs(takes) do
-        t.eq(tk.slotIdx, 0, 'every instance back-links to slot 0')
+        t.eq(tk.slotIdx, slot, 'every instance back-links to the slot')
       end
-    end,
-  },
-
-  {
-    name = 'dropInstance(midi) with opts.id-preseeded slot pools without harvest',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, { { items = {} } })
-      am:newMidiSlot(0, { id = '{preset}' })
-      local take = am:dropInstance(0, 0, 0, 1)
-      t.eq(am:slotForTake(take), 0)
-      local slots = am:trackSlots(0)
-      t.eq(slots[1].id, '{preset}', 'caller-supplied guid is preserved through the drop')
-    end,
-  },
-
-  {
-    name = 'dropInstance(audio) creates non-pooled sibling with slot path as source',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, { { items = {} } })
-      am:newAudioSlot(0, '/samples/snare.wav')
-      local t1 = am:dropInstance(0, 0, 0, 1)
-      local t2 = am:dropInstance(0, 0, 4, 1)
-      t.eq(am:slotForTake(t1), 0)
-      t.eq(am:slotForTake(t2), 0, 'both audio takes resolve via shared filename id')
-      local takes = am:tracksTakes(0)
-      t.eq(#takes, 2)
-      t.eq(takes[1].kind, 'audio')
-      t.eq(takes[2].kind, 'audio')
     end,
   },
 
@@ -297,6 +243,15 @@ return {
       seedTracks(h, { { items = {} } })
       t.eq(am:dropInstance(0, 5, 0, 1), nil, 'no slot at index 5')
       t.eq(am:dropInstance(7, 0, 0, 1), nil, 'no track at index 7')
+    end,
+  },
+
+  {
+    name = 'createAndDropMidi returns nil when no track exists',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      t.eq(am:createAndDropMidi(7, 0, 1, 'x'), nil)
     end,
   },
 

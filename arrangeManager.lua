@@ -4,8 +4,9 @@
 --invariant: project-wide singleton; reads REAPER items + cm directly, owns no take state of its own
 --invariant: slot palette lives in cm at the track tier under 'arrangeSlots'; foreign-track writes route through cm:writeTrackKey
 --invariant: slot indices are 0..61, base62-keyed via util.toBase62 (62 chars: 0-9, a-z, A-Z); allocation is lowest-free; gaps allowed
---invariant: takeId derivation is the source-identity chokepoint — MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it); audio: source filename. A take whose id can't be derived shows as an orphan, never crashes.
---invariant: newMidiSlot is lazy-id by default — the slot entry's id is nil until the first dropInstance harvests the POOLEDEVTS guid from REAPER. Callers that already own a pool guid pass it via opts.id.
+--invariant: every grouped take is a slot — `trackSlots`, `tracksTakes`, `slotForTake` and `projectTracks` route through ensureSlots, which allocates indices for live ids not yet in the dict and prunes dict entries whose id has no live take. A slot has no existence apart from at least one take on the grid carrying its id.
+--invariant: createAndDropMidi is the only path that mints a slot; everything else either inherits one from existing items (auto-materialisation) or drops another instance into one that already exists
+--invariant: takeId derivation is the source-identity chokepoint — MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it); audio: source filename. Takes whose id can't be derived are skipped during ensureSlots — they neither materialise a slot nor pin one.
 --invariant: reswing (reswingAll) is the legacy sequenceManager behaviour folded in and needs the optional tm dependency; pure-discovery callers may omit tm
 
 local util = require 'util'
@@ -71,6 +72,45 @@ local function forEachActiveTake(track, fn)
   end
 end
 
+-- Walk the track's live takes; assign the lowest-free slot to any id
+-- not yet in the dict; drop dict entries whose id has no live take.
+-- Idempotent — repeated calls in one frame do nothing after the first.
+-- Returns (dict, slotForId, firstName) so callers don't repeat the walk.
+local function ensureSlots(track)
+  local dict = readSlots(track)
+  local idOrder, liveIds, firstName, kindForId = {}, {}, {}, {}
+  forEachActiveTake(track, function(take)
+    local id = takeIdOf(take)
+    if not id or liveIds[id] then return end
+    liveIds[id]      = true
+    firstName[id]    = reaper.GetTakeName(take) or ''
+    kindForId[id]    = takeKind(take)
+    idOrder[#idOrder+1] = id
+  end)
+
+  local slotForId, dirty = {}, false
+  for slotIdx, entry in pairs(dict) do
+    if entry.id and liveIds[entry.id] then
+      slotForId[entry.id] = slotIdx
+    else
+      dict[slotIdx] = nil
+      dirty = true
+    end
+  end
+  for _, id in ipairs(idOrder) do
+    if not slotForId[id] then
+      local idx = nextFreeSlot(dict)
+      if idx then
+        dict[idx]     = { kind = kindForId[id], id = id }
+        slotForId[id] = idx
+        dirty = true
+      end
+    end
+  end
+  if dirty then writeSlots(track, dict) end
+  return dict, slotForId, firstName
+end
+
 ----------- PUBLIC
 
 ----- Discovery
@@ -80,8 +120,9 @@ function am:projectTracks()
   for ti = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, ti)
     local _, name = reaper.GetTrackName(track)
+    local dict = ensureSlots(track)
     local slotCount = 0
-    for _ in pairs(readSlots(track)) do slotCount = slotCount + 1 end
+    for _ in pairs(dict) do slotCount = slotCount + 1 end
     out[#out+1] = {
       idx       = ti,
       track     = track,
@@ -96,11 +137,7 @@ end
 function am:tracksTakes(trackIdx)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return {} end
-  local dict = readSlots(track)
-  local idToSlot = {}
-  for slotIdx, entry in pairs(dict) do
-    if entry.id then idToSlot[entry.id] = slotIdx end
-  end
+  local _, slotForId = ensureSlots(track)
 
   local out = {}
   forEachActiveTake(track, function(take, item)
@@ -113,7 +150,7 @@ function am:tracksTakes(trackIdx)
       startQN  = startQN,
       lengthQN = lengthQN,
       kind     = takeKind(take),
-      slotIdx  = id and idToSlot[id] or nil,
+      slotIdx  = id and slotForId[id] or nil,
       name     = reaper.GetTakeName(take) or '',
     }
   end)
@@ -123,16 +160,7 @@ end
 function am:trackSlots(trackIdx)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return {} end
-  local dict = readSlots(track)
-
-  -- Resolve names: first take whose id matches the slot's id wins.
-  local nameById = {}
-  forEachActiveTake(track, function(take)
-    local id = takeIdOf(take)
-    if id and nameById[id] == nil then
-      nameById[id] = reaper.GetTakeName(take) or ''
-    end
-  end)
+  local dict, _, firstName = ensureSlots(track)
 
   local out = {}
   for i = 0, SLOT_MAX do
@@ -142,7 +170,7 @@ function am:trackSlots(trackIdx)
         idx  = i,
         kind = entry.kind,
         id   = entry.id,
-        name = (entry.id and nameById[entry.id]) or '',
+        name = firstName[entry.id] or '',
       }
     end
   end
@@ -154,68 +182,15 @@ function am:slotForTake(take)
   local track = reaper.GetMediaItemTake_Track(take)
   local id    = takeIdOf(take)
   if not track or not id then return nil end
-  for slotIdx, entry in pairs(readSlots(track)) do
-    if entry.id and entry.id == id then return slotIdx end
-  end
-  return nil
+  local _, slotForId = ensureSlots(track)
+  return slotForId[id]
 end
 
 function am:keyForSlot(slotIdx)
   return util.toBase62(slotIdx)
 end
 
------ Slot management
-
--- MIDI slots are lazy-id by default: the pool guid only exists once
--- REAPER has created a source for the first instance. The slot is
--- reserved here with id = nil; the first dropInstance harvests the
--- real POOLEDEVTS guid and writes it back into the dict. Callers that
--- already hold a guid (tests, future re-import paths) pass it via
--- opts.id to skip the harvest.
-
-function am:newMidiSlot(trackIdx, opts)
-  local track = reaper.GetTrack(0, trackIdx)
-  if not track then return nil end
-  local dict = readSlots(track)
-  local slotIdx = nextFreeSlot(dict)
-  if not slotIdx then return nil end
-  dict[slotIdx] = { kind = 'midi', id = opts and opts.id or nil }
-  writeSlots(track, dict)
-  return slotIdx
-end
-
-function am:newAudioSlot(trackIdx, path)
-  if not path or path == '' then return nil end
-  local track = reaper.GetTrack(0, trackIdx)
-  if not track then return nil end
-  local dict = readSlots(track)
-  local slotIdx = nextFreeSlot(dict)
-  if not slotIdx then return nil end
-  dict[slotIdx] = { kind = 'audio', id = path }
-  writeSlots(track, dict)
-  return slotIdx
-end
-
-function am:deleteSlot(trackIdx, slotIdx, opts)
-  local track = reaper.GetTrack(0, trackIdx)
-  if not track then return end
-  local dict = readSlots(track)
-  local entry = dict[slotIdx]
-  if not entry then return end
-  dict[slotIdx] = nil
-
-  if opts and opts.removeInstances and entry.id then
-    for ii = reaper.CountTrackMediaItems(track) - 1, 0, -1 do
-      local item = reaper.GetTrackMediaItem(track, ii)
-      local take = item and reaper.GetActiveTake(item)
-      if take and takeIdOf(take) == entry.id then
-        reaper.DeleteTrackMediaItem(track, item)
-      end
-    end
-  end
-
-  writeSlots(track, dict)
-end
+----- Slot mutation
 
 function am:renameSlot(trackIdx, slotIdx, name)
   local track = reaper.GetTrack(0, trackIdx)
@@ -227,6 +202,25 @@ function am:renameSlot(trackIdx, slotIdx, name)
       reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
     end
   end)
+end
+
+--contract: deletes every live take whose id matches this slot's id. ensureSlots prunes the now-orphaned dict entry on the next read; we run it inline so the palette doesn't briefly carry a ghost row. Returns the number of takes removed.
+function am:deleteSlot(trackIdx, slotIdx)
+  local track = reaper.GetTrack(0, trackIdx)
+  if not track then return 0 end
+  local entry = readSlots(track)[slotIdx]
+  if not entry or not entry.id then return 0 end
+  local removed = 0
+  for ii = reaper.CountTrackMediaItems(track) - 1, 0, -1 do
+    local item = reaper.GetTrackMediaItem(track, ii)
+    local take = item and reaper.GetActiveTake(item)
+    if take and takeIdOf(take) == entry.id then
+      reaper.DeleteTrackMediaItem(track, item)
+      removed = removed + 1
+    end
+  end
+  ensureSlots(track)
+  return removed
 end
 
 ----- Placement
@@ -254,34 +248,46 @@ local function poolMidiItem(item, guid)
   end
 end
 
---contract: drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos, length `lengthQN` (defaults to one QN). For MIDI: CreateNewMIDIItemInProj; the first drop into a lazy slot harvests the assigned POOLEDEVTS guid into the slot dict; subsequent drops swap their POOLEDEVTS to match so REAPER pools them. For audio: PCM_Source_CreateFromFile + take wiring — audio is not pooled; instances are siblings referencing the same file. Returns the take, or nil if track/slot is missing.
+--contract: creates a fresh MIDI source on `trackIdx` at qnPos for lengthQN, allocates the lowest-free slot pointing at the new pool guid, names the take, returns (slotIdx, take). Nil if track missing or slots exhausted. The only path that mints a slot.
+function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
+  local track = reaper.GetTrack(0, trackIdx)
+  if not track then return nil end
+  local dict    = readSlots(track)
+  local slotIdx = nextFreeSlot(dict)
+  if not slotIdx then return nil end
+  qnPos    = qnPos    or 0
+  lengthQN = lengthQN or 1
+  local item, take = reaper.CreateNewMIDIItemInProj(
+    track, qnPos, qnPos + lengthQN, true)
+  if not item or not take then return nil end
+  local guid = harvestPoolGuid(item)
+  if not guid then return nil end
+  dict[slotIdx] = { kind = 'midi', id = guid }
+  writeSlots(track, dict)
+  if name and name ~= '' then
+    reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
+  end
+  return slotIdx, take
+end
+
+--contract: drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos for lengthQN (default 1 QN). MIDI: CreateNewMIDIItemInProj + POOLEDEVTS swap so REAPER pools with the existing instances. Audio: PCM_Source_CreateFromFile + take wiring (REAPER doesn't pool audio — instances are siblings sharing a filename). Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
 function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return nil end
-  local dict  = readSlots(track)
-  local entry = dict[slotIdx]
-  if not entry then return nil end
+  local entry = readSlots(track)[slotIdx]
+  if not entry or not entry.id then return nil end
 
-  qnPos    = qnPos or 0
+  qnPos    = qnPos    or 0
   lengthQN = lengthQN or 1
 
   if entry.kind == 'midi' then
     local item, take = reaper.CreateNewMIDIItemInProj(
       track, qnPos, qnPos + lengthQN, true)
     if not item or not take then return nil end
-    if entry.id then
-      poolMidiItem(item, entry.id)
-    else
-      local guid = harvestPoolGuid(item)
-      if guid then
-        entry.id = guid
-        writeSlots(track, dict)
-      end
-    end
+    poolMidiItem(item, entry.id)
     return take
   end
 
-  if not entry.id then return nil end
   local item = reaper.AddMediaItemToTrack(track)
   if not item then return nil end
   local startSec = reaper.TimeMap2_QNToTime(0, qnPos)

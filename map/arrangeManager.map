@@ -1,60 +1,67 @@
-@module arrangeManager  src=arrangeManager.lua  loc=331  sha=0739742  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=337  sha=21b57c0  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts
   @invariant  project-wide singleton; reads REAPER items + cm directly, owns no take state of its own
   @invariant  slot palette lives in cm at the track tier under 'arrangeSlots'; foreign-track writes route through cm:writeTrackKey
   @invariant  slot indices are 0..61, base62-keyed via util.toBase62 (62 chars: 0-9, a-z, A-Z); allocation is lowest-free; gaps allowed
-  @invariant  takeId derivation is the source-identity chokepoint — MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it); audio: source filename. A take whose id can't be derived shows as an orphan, never crashes.
-  @invariant  newMidiSlot is lazy-id by default — the slot entry's id is nil until the first dropInstance harvests the POOLEDEVTS guid from REAPER. Callers that already own a pool guid pass it via opts.id.
+  @invariant  every grouped take is a slot — `trackSlots`, `tracksTakes`, `slotForTake` and `projectTracks` route through ensureSlots, which allocates indices for live ids not yet in the dict and prunes dict entries whose id has no live take. A slot has no existence apart from at least one take on the grid carrying its id.
+  @invariant  createAndDropMidi is the only path that mints a slot; everything else either inherits one from existing items (auto-materialisation) or drops another instance into one that already exists
+  @invariant  takeId derivation is the source-identity chokepoint — MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it); audio: source filename. Takes whose id can't be derived are skipped during ensureSlots — they neither materialise a slot nor pin one.
   @invariant  reswing (reswingAll) is the legacy sequenceManager behaviour folded in and needs the optional tm dependency; pure-discovery callers may omit tm
 
 # Imports
-  @require util = 'util'  @ 11
+  @require util = 'util'  @ 12
 
 # Private state
-  @state am = {}  @ 15
-  @state SLOT_MAX = 61  @ 17   -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
+  @state am = {}  @ 16
+  @state SLOT_MAX = 61  @ 18   -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
 
 # Private functions
   -- Helpers
-  @fn takeIdOf(take)  @ 24
+  @fn takeIdOf(take)  @ 25
       -- Identity of a take's underlying source. Stable per session for both kinds.
       -- MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it).
       -- Audio: absolute source filename.
-  @fn itemQNRange(item)  @ 38
-  @fn takeKind(take)  @ 46
-  @fn readSlots(track)  @ 50
-  @fn writeSlots(track, dict)  @ 55
-  @fn nextFreeSlot(dict)  @ 59
-  @fn forEachActiveTake(track, fn)  @ 66
+  @fn itemQNRange(item)  @ 39
+  @fn takeKind(take)  @ 47
+  @fn readSlots(track)  @ 51
+  @fn writeSlots(track, dict)  @ 56
+  @fn nextFreeSlot(dict)  @ 60
+  @fn forEachActiveTake(track, fn)  @ 67
+  @fn ensureSlots(track)  @ 79
+      -- Walk the track's live takes; assign the lowest-free slot to any id
+      -- not yet in the dict; drop dict entries whose id has no live take.
+      -- Idempotent — repeated calls in one frame do nothing after the first.
+      -- Returns (dict, slotForId, firstName) so callers don't repeat the walk.
   -- Discovery
-  -- Slot management
+  -- Slot mutation
   -- Placement
-  @fn chunkSetPool(chunk, guid)  @ 237
+  @fn chunkSetPool(chunk, guid)  @ 231
       -- POOLEDEVTS swap. Splice the existing pool line, or insert one after
       -- the SOURCE MIDI header when REAPER returned a chunk without one
       -- (defensive — CreateNewMIDIItemInProj always emits a fresh pool line).
-  @fn harvestPoolGuid(item)  @ 244
-  @fn poolMidiItem(item, guid)  @ 250
+  @fn harvestPoolGuid(item)  @ 238
+  @fn poolMidiItem(item, guid)  @ 244
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 300
+  @fn projectMidiTakes()  @ 306
 
 # Public API (am:*)
-  @api am:projectTracks()  @ 78
-  @api am:tracksTakes(trackIdx)  @ 96
-  @api am:trackSlots(trackIdx)  @ 123
-  @api am:slotForTake(take)  @ 152
-  @api am:keyForSlot(slotIdx)  @ 163
-  @api am:newMidiSlot(trackIdx, opts)  @ 176
-  @api am:newAudioSlot(trackIdx, path)  @ 187
-  @api am:deleteSlot(trackIdx, slotIdx, opts)  @ 199
-  @api am:renameSlot(trackIdx, slotIdx, name)  @ 220
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 258
-      @contract  drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos, length `lengthQN` (defaults to one QN). For MIDI: CreateNewMIDIItemInProj; the first drop into a lazy slot harvests the assigned POOLEDEVTS guid into the slot dict; subsequent drops swap their POOLEDEVTS to match so REAPER pools them. For audio: PCM_Source_CreateFromFile + take wiring — audio is not pooled; instances are siblings referencing the same file. Returns the take, or nil if track/slot is missing.
-  @api am:takesUsing(name)  @ 312
+  @api am:projectTracks()  @ 118
+  @api am:tracksTakes(trackIdx)  @ 137
+  @api am:trackSlots(trackIdx)  @ 160
+  @api am:slotForTake(take)  @ 180
+  @api am:keyForSlot(slotIdx)  @ 189
+  @api am:renameSlot(trackIdx, slotIdx, name)  @ 195
+  @api am:deleteSlot(trackIdx, slotIdx)  @ 208
+      @contract  deletes every live take whose id matches this slot's id. ensureSlots prunes the now-orphaned dict entry on the next read; we run it inline so the palette doesn't briefly carry a ghost row. Returns the number of takes removed.
+  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 252
+      @contract  creates a fresh MIDI source on `trackIdx` at qnPos for lengthQN, allocates the lowest-free slot pointing at the new pool guid, names the take, returns (slotIdx, take). Nil if track missing or slots exhausted. The only path that mints a slot.
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 274
+      @contract  drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos for lengthQN (default 1 QN). MIDI: CreateNewMIDIItemInProj + POOLEDEVTS swap so REAPER pools with the existing instances. Audio: PCM_Source_CreateFromFile + take wiring (REAPER doesn't pool audio — instances are siblings sharing a filename). Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
+  @api am:takesUsing(name)  @ 318
       @contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 322
+  @api am:reswingAll(name)  @ 328
       @contract  iterates affected takes via tm:bindTake with opts.markSwingStale=true; the post-load rebuild's stale-branch reseats raw from each event's ppqL under the take's current swing. Restores the original take at the end (no stale-mark — the active take's events are unchanged by the visit).
 
 # REAPER API surface
@@ -67,12 +74,12 @@
   @reaper CountTrackMediaItems
   @reaper GetTrackMediaItem
   @reaper GetActiveTake
+  @reaper GetTakeName
   @reaper CountTracks
   @reaper GetTrack
   @reaper GetTrackName
-  @reaper GetTakeName
-  @reaper DeleteTrackMediaItem
   @reaper GetSetMediaItemTakeInfo_String
+  @reaper DeleteTrackMediaItem
   @reaper SetItemStateChunk
   @reaper CreateNewMIDIItemInProj
   @reaper AddMediaItemToTrack
