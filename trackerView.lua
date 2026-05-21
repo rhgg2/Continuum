@@ -1210,13 +1210,11 @@ do
       if newRpb <= SCALE_RPB_MAX then
         local newA = aRowSel * q
         local newC = newA + p * span
-        -- Write rpb at 'take' (more specific than 'track', which
-        -- tv:setRowPerBeat uses) so the refinement survives even when
-        -- the take already has its own rpb override. Mirror the
-        -- transient-release + ec:rescaleRow that setRowPerBeat does.
+        -- Same tier as tv:setRowPerBeat so a later toolbar / Cmd+= nudge
+        -- isn't shadowed by a more-specific override left behind here.
         releaseTransientFrame()
         ec:rescaleRow(oldRpb, newRpb)
-        cm:set('take', 'rowPerBeat', newRpb)
+        cm:set('track', 'rowPerBeat', newRpb)
         reshape(newA, newC)
       end
       -- else: silent refusal — selection stays at current rpb, geometry slipped.

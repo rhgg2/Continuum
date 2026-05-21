@@ -885,6 +885,8 @@ cmgr:scope('tracker'):bindAll{
   nudgeCoarseDown = { {ImGui.Key_Minus, ImGui.Mod_Ctrl} },
   nudgeFineUp     = { {ImGui.Key_Equal, ImGui.Mod_Shift} },
   nudgeFineDown   = { {ImGui.Key_Minus, ImGui.Mod_Shift} },
+  scaleHalf       = { {ImGui.Key_9, ImGui.Mod_Shift} },  -- '('
+  scaleDouble     = { {ImGui.Key_0,  ImGui.Mod_Shift} },  -- ')'
   doubleRPB      = { {ImGui.Key_Equal, ImGui.Mod_Super} },
   halveRPB       = { {ImGui.Key_Minus, ImGui.Mod_Super} },
   setRPB         = { {ImGui.Key_Z,     ImGui.Mod_Super} },
