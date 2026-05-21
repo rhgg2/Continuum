@@ -150,6 +150,73 @@ function M.new()
   local guidN = 0
   function r.genGuid(_s) guidN = guidN + 1; return '{guid-' .. guidN .. '}' end
 
+  -- Production-side item creators. Mirror the REAPER surface that
+  -- arrangeManager calls on dropInstance. Tokens are fresh tables and
+  -- register into the same state.* tables the spec-side addItem helper
+  -- uses, so seeded and dropped items coexist in tracksTakes output.
+  local function attachItem(track)
+    local list = state.itemsByTrack[track]
+    if not list then list = {}; state.itemsByTrack[track] = list end
+    local item = { __item = #list + 1, track = track }
+    list[#list+1] = item
+    state.trackForItem[item] = track
+    return item
+  end
+  function r.CreateNewMIDIItemInProj(track, qnStart, qnEnd, _qnIn)
+    -- Fake treats 1s == 1QN (TimeMap2_timeToQN is identity); qnIn flag is
+    -- informational. CreateNew returns (item, take) and auto-pools the
+    -- take into a fresh POOLEDEVTS guid — that's the seam dropInstance
+    -- harvests on first drop.
+    local item = attachItem(track)
+    state.itemPos[item] = qnStart
+    state.itemLen[item] = math.max(0, (qnEnd or qnStart) - qnStart)
+    local take = { __take = 'mt' .. tostring(item.__item), item = item }
+    state.activeTake[item]  = take
+    state.itemForTake[take] = item
+    state.takeIsMidi[take]  = true
+    state.takeName[take]    = ''
+    state.poolByItem[item]  = r.genGuid('')
+    return item, take
+  end
+  function r.AddMediaItemToTrack(track)
+    local item = attachItem(track)
+    state.itemPos[item] = 0
+    state.itemLen[item] = 0
+    return item
+  end
+  function r.AddTakeToMediaItem(item)
+    local take = { __take = 'at' .. tostring(item.__item), item = item }
+    state.activeTake[item]  = take
+    state.itemForTake[take] = item
+    state.takeIsMidi[take]  = false
+    state.takeName[take]    = ''
+    return take
+  end
+  function r.PCM_Source_CreateFromFile(path)
+    local src = { __src = path }
+    state.srcFile[src] = path
+    return src
+  end
+  function r.SetMediaItemTake_Source(take, src)
+    state.takeSrc[take] = src
+    return true
+  end
+  function r.SetMediaItemInfo_Value(item, parm, value)
+    if parm == 'D_POSITION' then state.itemPos[item] = value
+    elseif parm == 'D_LENGTH' then state.itemLen[item] = value end
+    return true
+  end
+  -- Round-trip POOLEDEVTS via the chunk. Only the guid is preserved;
+  -- the surrounding XML shape is regenerated on every read.
+  function r.SetItemStateChunk(item, chunk, _isUndo)
+    local guid = chunk and chunk:match('POOLEDEVTS%s+({[^}]+})')
+    if guid then state.poolByItem[item] = guid end
+    return true
+  end
+  -- Identity inverse to TimeMap2_timeToQN — the fake treats QN and
+  -- seconds 1:1, so audio drops compute the same numbers either way.
+  function r.TimeMap2_QNToTime(_proj, qn) return qn end
+
   -- Spec helper: seed one item on a track. Returns the item token.
   -- opts = { take, isMidi, pos, len, poolGuid?, srcFile?, takeName? }
   function r:addItem(track, opts)

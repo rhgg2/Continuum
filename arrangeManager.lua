@@ -5,6 +5,7 @@
 --invariant: slot palette lives in cm at the track tier under 'arrangeSlots'; foreign-track writes route through cm:writeTrackKey
 --invariant: slot indices are 0..61, base62-keyed via util.toBase62 (62 chars: 0-9, a-z, A-Z); allocation is lowest-free; gaps allowed
 --invariant: takeId derivation is the source-identity chokepoint — MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it); audio: source filename. A take whose id can't be derived shows as an orphan, never crashes.
+--invariant: newMidiSlot is lazy-id by default — the slot entry's id is nil until the first dropInstance harvests the POOLEDEVTS guid from REAPER. Callers that already own a pool guid pass it via opts.id.
 --invariant: reswing (reswingAll) is the legacy sequenceManager behaviour folded in and needs the optional tm dependency; pure-discovery callers may omit tm
 
 local util = require 'util'
@@ -97,7 +98,9 @@ function am:tracksTakes(trackIdx)
   if not track then return {} end
   local dict = readSlots(track)
   local idToSlot = {}
-  for slotIdx, entry in pairs(dict) do idToSlot[entry.id] = slotIdx end
+  for slotIdx, entry in pairs(dict) do
+    if entry.id then idToSlot[entry.id] = slotIdx end
+  end
 
   local out = {}
   forEachActiveTake(track, function(take, item)
@@ -139,7 +142,7 @@ function am:trackSlots(trackIdx)
         idx  = i,
         kind = entry.kind,
         id   = entry.id,
-        name = nameById[entry.id] or '',
+        name = (entry.id and nameById[entry.id]) or '',
       }
     end
   end
@@ -152,7 +155,7 @@ function am:slotForTake(take)
   local id    = takeIdOf(take)
   if not track or not id then return nil end
   for slotIdx, entry in pairs(readSlots(track)) do
-    if entry.id == id then return slotIdx end
+    if entry.id and entry.id == id then return slotIdx end
   end
   return nil
 end
@@ -163,12 +166,12 @@ end
 
 ----- Slot management
 
--- Phase 1 surface: dictionary writers only. Source creation
--- (PCM_Source_CreateFromType for MIDI, file picker for audio) and the
--- placement primitives (dropInstance, duplicateTake, move/resize/trim)
--- land in phase 4 alongside the base62 command scope. newMidiSlot's
--- opts.id seam lets phase-4 callers (and tests) inject the pool guid
--- of an already-created source.
+-- MIDI slots are lazy-id by default: the pool guid only exists once
+-- REAPER has created a source for the first instance. The slot is
+-- reserved here with id = nil; the first dropInstance harvests the
+-- real POOLEDEVTS guid and writes it back into the dict. Callers that
+-- already hold a guid (tests, future re-import paths) pass it via
+-- opts.id to skip the harvest.
 
 function am:newMidiSlot(trackIdx, opts)
   local track = reaper.GetTrack(0, trackIdx)
@@ -176,8 +179,7 @@ function am:newMidiSlot(trackIdx, opts)
   local dict = readSlots(track)
   local slotIdx = nextFreeSlot(dict)
   if not slotIdx then return nil end
-  local id = (opts and opts.id) or reaper.genGuid('')
-  dict[slotIdx] = { kind = 'midi', id = id }
+  dict[slotIdx] = { kind = 'midi', id = opts and opts.id or nil }
   writeSlots(track, dict)
   return slotIdx
 end
@@ -202,7 +204,7 @@ function am:deleteSlot(trackIdx, slotIdx, opts)
   if not entry then return end
   dict[slotIdx] = nil
 
-  if opts and opts.removeInstances then
+  if opts and opts.removeInstances and entry.id then
     for ii = reaper.CountTrackMediaItems(track) - 1, 0, -1 do
       local item = reaper.GetTrackMediaItem(track, ii)
       local take = item and reaper.GetActiveTake(item)
@@ -219,12 +221,78 @@ function am:renameSlot(trackIdx, slotIdx, name)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return end
   local entry = readSlots(track)[slotIdx]
-  if not entry then return end
+  if not entry or not entry.id then return end
   forEachActiveTake(track, function(take)
     if takeIdOf(take) == entry.id then
       reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
     end
   end)
+end
+
+----- Placement
+
+-- POOLEDEVTS swap. Splice the existing pool line, or insert one after
+-- the SOURCE MIDI header when REAPER returned a chunk without one
+-- (defensive — CreateNewMIDIItemInProj always emits a fresh pool line).
+local function chunkSetPool(chunk, guid)
+  if chunk:find('POOLEDEVTS', 1, true) then
+    return (chunk:gsub('POOLEDEVTS%s+{[^}]+}', 'POOLEDEVTS ' .. guid))
+  end
+  return (chunk:gsub('(<SOURCE MIDI\n)', '%1    POOLEDEVTS ' .. guid .. '\n', 1))
+end
+
+local function harvestPoolGuid(item)
+  local ok, chunk = reaper.GetItemStateChunk(item, '', false)
+  if not ok or not chunk then return nil end
+  return chunk:match('POOLEDEVTS%s+({[^}]+})')
+end
+
+local function poolMidiItem(item, guid)
+  local ok, chunk = reaper.GetItemStateChunk(item, '', false)
+  if ok and chunk then
+    reaper.SetItemStateChunk(item, chunkSetPool(chunk, guid), false)
+  end
+end
+
+--contract: drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos, length `lengthQN` (defaults to one QN). For MIDI: CreateNewMIDIItemInProj; the first drop into a lazy slot harvests the assigned POOLEDEVTS guid into the slot dict; subsequent drops swap their POOLEDEVTS to match so REAPER pools them. For audio: PCM_Source_CreateFromFile + take wiring — audio is not pooled; instances are siblings referencing the same file. Returns the take, or nil if track/slot is missing.
+function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
+  local track = reaper.GetTrack(0, trackIdx)
+  if not track then return nil end
+  local dict  = readSlots(track)
+  local entry = dict[slotIdx]
+  if not entry then return nil end
+
+  qnPos    = qnPos or 0
+  lengthQN = lengthQN or 1
+
+  if entry.kind == 'midi' then
+    local item, take = reaper.CreateNewMIDIItemInProj(
+      track, qnPos, qnPos + lengthQN, true)
+    if not item or not take then return nil end
+    if entry.id then
+      poolMidiItem(item, entry.id)
+    else
+      local guid = harvestPoolGuid(item)
+      if guid then
+        entry.id = guid
+        writeSlots(track, dict)
+      end
+    end
+    return take
+  end
+
+  if not entry.id then return nil end
+  local item = reaper.AddMediaItemToTrack(track)
+  if not item then return nil end
+  local startSec = reaper.TimeMap2_QNToTime(0, qnPos)
+  local endSec   = reaper.TimeMap2_QNToTime(0, qnPos + lengthQN)
+  reaper.SetMediaItemInfo_Value(item, 'D_POSITION', startSec)
+  reaper.SetMediaItemInfo_Value(item, 'D_LENGTH',   endSec - startSec)
+  local take = reaper.AddTakeToMediaItem(item)
+  if not take then return nil end
+  local src = reaper.PCM_Source_CreateFromFile(entry.id)
+  if src then reaper.SetMediaItemTake_Source(take, src) end
+  return take
 end
 
 ----- Reswing (folded from sequenceManager)

@@ -208,6 +208,99 @@ return {
   },
 
   --------------------------------------------------------------------
+  -- Placement (dropInstance)
+  --------------------------------------------------------------------
+  {
+    name = 'newMidiSlot without opts.id reserves slot with nil id',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      t.eq(am:newMidiSlot(0), 0)
+      local slots = am:trackSlots(0)
+      t.eq(#slots, 1)
+      t.eq(slots[1].id, nil, 'lazy slot has no guid until first drop')
+      t.eq(slots[1].name, '', 'no name to derive without instances')
+    end,
+  },
+
+  {
+    name = 'dropInstance(midi) first drop harvests POOLEDEVTS guid into slot',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      am:newMidiSlot(0)
+      local take = am:dropInstance(0, 0, 4, 2)
+      t.truthy(take, 'drop returns the new take')
+      local slots = am:trackSlots(0)
+      t.truthy(slots[1].id, 'slot id was filled on first drop')
+      t.eq(am:slotForTake(take), 0, 'fresh take resolves back to its slot')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 1)
+      t.eq(takes[1].startQN,  4)
+      t.eq(takes[1].lengthQN, 2)
+      t.eq(takes[1].slotIdx,  0)
+    end,
+  },
+
+  {
+    name = 'dropInstance(midi) second drop pools to first via POOLEDEVTS',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      am:newMidiSlot(0)
+      local t1 = am:dropInstance(0, 0, 0, 1)
+      local t2 = am:dropInstance(0, 0, 4, 1)
+      t.eq(am:slotForTake(t1), 0, 'first take pools to slot 0')
+      t.eq(am:slotForTake(t2), 0, 'second take pools to slot 0 (same POOLEDEVTS guid)')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2)
+      for _, tk in ipairs(takes) do
+        t.eq(tk.slotIdx, 0, 'every instance back-links to slot 0')
+      end
+    end,
+  },
+
+  {
+    name = 'dropInstance(midi) with opts.id-preseeded slot pools without harvest',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      am:newMidiSlot(0, { id = '{preset}' })
+      local take = am:dropInstance(0, 0, 0, 1)
+      t.eq(am:slotForTake(take), 0)
+      local slots = am:trackSlots(0)
+      t.eq(slots[1].id, '{preset}', 'caller-supplied guid is preserved through the drop')
+    end,
+  },
+
+  {
+    name = 'dropInstance(audio) creates non-pooled sibling with slot path as source',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      am:newAudioSlot(0, '/samples/snare.wav')
+      local t1 = am:dropInstance(0, 0, 0, 1)
+      local t2 = am:dropInstance(0, 0, 4, 1)
+      t.eq(am:slotForTake(t1), 0)
+      t.eq(am:slotForTake(t2), 0, 'both audio takes resolve via shared filename id')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2)
+      t.eq(takes[1].kind, 'audio')
+      t.eq(takes[2].kind, 'audio')
+    end,
+  },
+
+  {
+    name = 'dropInstance returns nil for missing slot or missing track',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      t.eq(am:dropInstance(0, 5, 0, 1), nil, 'no slot at index 5')
+      t.eq(am:dropInstance(7, 0, 0, 1), nil, 'no track at index 7')
+    end,
+  },
+
+  --------------------------------------------------------------------
   -- Base62 key mapping (0..61 -> '0'..'9','a'..'z','A'..'Z')
   --------------------------------------------------------------------
   {
