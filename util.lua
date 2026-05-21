@@ -264,6 +264,32 @@ function util.fromBase36(txt)
   return tonumber(txt, 36)
 end
 
+-- Base62: digits + lowercase + uppercase. Used for slot keys (62 slots
+-- per palette). Case-sensitive — 'a' and 'A' are distinct values.
+local BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+function util.toBase62(n)
+  if n == 0 then return '0' end
+  local s = ''
+  while n > 0 do
+    local r = n % 62
+    s = string.sub(BASE62, r + 1, r + 1) .. s
+    n = n // 62
+  end
+  return s
+end
+
+function util.fromBase62(txt)
+  local n = 0
+  for i = 1, #txt do
+    local c = string.sub(txt, i, i)
+    local v = string.find(BASE62, c, 1, true)
+    if not v then return nil end
+    n = n * 62 + (v - 1)
+  end
+  return n
+end
+
 --contract: overloaded on type of v: function => call n times for side effect; else build n-array filled with v
 function util.dotimes(n, v)
   if type(v) == 'function' then
