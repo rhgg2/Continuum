@@ -274,9 +274,11 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   if not slotIdx then return nil end
   qnPos    = qnPos    or 0
   lengthQN = lengthQN or 1
-  local item, take = reaper.CreateNewMIDIItemInProj(
+  local item = reaper.CreateNewMIDIItemInProj(
     track, qnPos, qnPos + lengthQN, true)
-  if not item or not take then return nil end
+  if not item then return nil end
+  local take = reaper.GetActiveTake(item)
+  if not take then return nil end
   local guid = harvestPoolGuid(item)
   if not guid then return nil end
   dict[slotIdx] = { kind = 'midi', id = guid }
@@ -298,11 +300,11 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   lengthQN = lengthQN or 1
 
   if entry.kind == 'midi' then
-    local item, take = reaper.CreateNewMIDIItemInProj(
+    local item = reaper.CreateNewMIDIItemInProj(
       track, qnPos, qnPos + lengthQN, true)
-    if not item or not take then return nil end
+    if not item then return nil end
     poolMidiItem(item, entry.id)
-    return take
+    return reaper.GetActiveTake(item)
   end
 
   local item = reaper.AddMediaItemToTrack(track)

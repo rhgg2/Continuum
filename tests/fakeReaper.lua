@@ -164,9 +164,9 @@ function M.new()
   end
   function r.CreateNewMIDIItemInProj(track, qnStart, qnEnd, _qnIn)
     -- Fake treats 1s == 1QN (TimeMap2_timeToQN is identity); qnIn flag is
-    -- informational. CreateNew returns (item, take) and auto-pools the
-    -- take into a fresh POOLEDEVTS guid — that's the seam dropInstance
-    -- harvests on first drop.
+    -- informational. Real REAPER returns the item only — the take is
+    -- reached via GetActiveTake. The fresh POOLEDEVTS guid is the seam
+    -- dropInstance harvests on first drop.
     local item = attachItem(track)
     state.itemPos[item] = qnStart
     state.itemLen[item] = math.max(0, (qnEnd or qnStart) - qnStart)
@@ -176,7 +176,7 @@ function M.new()
     state.takeIsMidi[take]  = true
     state.takeName[take]    = ''
     state.poolByItem[item]  = r.genGuid('')
-    return item, take
+    return item
   end
   function r.AddMediaItemToTrack(track)
     local item = attachItem(track)
