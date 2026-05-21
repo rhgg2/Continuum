@@ -134,13 +134,28 @@ Digit keys do not collide with the universal-argument prefix:
 digits into `appendPrefix` while `isPrefixActive()` is true. So bare
 0–9 are free in any scope unless the user has just typed Super+U.
 
+## Grid is hand-drawn
+
+The grid is not an ImGui table — it is laid out directly into the
+window draw list. ImGui tables resist shapes that span rows, which is
+exactly what a take rectangle is, and we were already bypassing the
+table for header text, row tints, and cursor glyphs. Hand-drawing
+unifies the model: one set of screen-space coordinates feeds the
+header, the gutter, the row tints, the gridlines, the cursor marker,
+and the take rectangles. Mouse hit-testing (phase 7) is then a single
+division per axis.
+
+Takes are tinted by slot via golden-ratio hue rotation in HSV: 62
+visually distinct hues with no hand-picked palette, and pooled
+instances share a hue because they share `slotIdx`. Orphan takes
+(slot not in the cm dictionary) get a neutral grey. The label inside a
+rectangle is `<slot key> <take name>`, mono font, clipped at the
+rectangle edge.
+
 ## What's deferred
 
-Phases 1–4 have shipped: model, page skeleton with read-only grid +
-cursor nav, right-side palette with slot list / rename / delete /
-Ctrl-Enter creation, and the base62 placement scope. Still ahead per
-`design/arrange.md`: take-edit commands (phase 5), tracker dive
-hotkey (phase 6), and mouse drag (phase 7). The current `renderGrid`
-paints a `>` at the cursor cell and a `|` down the focused column so
-navigation is visible; rectangles for the actual takes arrive with
-the take-edit phase.
+Phases 1–5a have shipped: model, page skeleton, right-side palette
+with slot list / rename / delete / Ctrl-Enter creation, the base62
+placement scope, and the hand-drawn grid with take rectangles. Still
+ahead per `design/arrange.md`: take-edit commands (5b — move /
+resize / trim / delete), tracker dive hotkey (6), and mouse drag (7).

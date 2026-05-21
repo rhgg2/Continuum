@@ -33,6 +33,10 @@ local PALETTE_W = 200
 -- middle of the gap so neither pane edge touches the line.
 local PANE_GAP  = 11
 local QN_W, TRACK_W = 32, 72
+-- Empty band between the gutter numbers and the first vertical
+-- gridline. Numbers stay right-aligned at QN_W; the first track
+-- column starts QN_W + GUTTER_PAD pixels in.
+local GUTTER_PAD = 8
 -- Palette row column widths: monospace key, kind glyph, name fills.
 local SLOT_KEY_W, SLOT_KIND_W = 18, 16
 
@@ -83,85 +87,180 @@ local function rowLabel(row)
   return string.format('%4d', math.floor(av:rowToQN(row) + 0.5))
 end
 
------ Grid pane
+-- Per-slot colours. Golden-ratio hue rotation gives 62 visually-distinct
+-- hues without a hand-picked palette; pooled instances share a hue
+-- because they share slotIdx. Orphans (slotIdx = nil) get neutral grey.
+-- Returns (fill, border) — same hue, fill at SLOT_FILL_ALPHA, border
+-- darker and fully opaque so the rectangle reads cleanly over row tints.
+local SLOT_FILL_ALPHA = 0.85
+local SLOT_BORDER_ALPHA = 0.75
+local slotColourCache = {}
+local ORPHAN_FILL, ORPHAN_BORDER
+local function slotColours(slotIdx)
+  if slotIdx == nil then
+    ORPHAN_FILL   = ORPHAN_FILL   or ImGui.ColorConvertDouble4ToU32(0.5, 0.5, 0.5, 0.35)
+    ORPHAN_BORDER = ORPHAN_BORDER or ImGui.ColorConvertDouble4ToU32(0.3, 0.3, 0.3, 1.0)
+    return ORPHAN_FILL, ORPHAN_BORDER
+  end
+  local pair = slotColourCache[slotIdx]
+  if pair then return pair[1], pair[2] end
+  local PHI = 0.6180339887498949
+  local h   = ((slotIdx + 1) * PHI) % 1.0
+  local fr, fg, fb = ImGui.ColorConvertHSVtoRGB(h, 0.55, 0.78)
+  local br, bg, bb = ImGui.ColorConvertHSVtoRGB(h, 0.85, 0.55)
+  pair = {
+    ImGui.ColorConvertDouble4ToU32(fr, fg, fb, SLOT_FILL_ALPHA),
+    ImGui.ColorConvertDouble4ToU32(br, bg, bb, SLOT_BORDER_ALPHA),
+  }
+  slotColourCache[slotIdx] = pair
+  return pair[1], pair[2]
+end
+
+----- Grid pane (hand-drawn — ImGui tables fight row-spanning shapes)
+
+-- Header band sits at the top of both panes (grid + palette). HEADER_PAD
+-- is the breathing room above the header text; HEADER_GAP is the slim
+-- band of empty space between the header divider and row 0 of the body.
+-- Both panes use these constants so the dividers line up across the gap.
+local HEADER_PAD = 8
+local HEADER_GAP = 4
 
 local function renderGrid(tracks, nTracks)
-  local cols = nTracks + 1
-  -- Clamp the table to the column sum so the last column doesn't
-  -- absorb slack; clamp to pane width when nTracks is large
-  -- (horizontal scroll arrives with palette navigation in a later phase).
-  local paneW   = select(1, ImGui.GetContentRegionAvail(ctx))
-  local tableW  = math.min(paneW, QN_W + TRACK_W * nTracks)
-  local _, paneH = ImGui.GetContentRegionAvail(ctx)
-  local flags  = ImGui.TableFlags_Borders | ImGui.TableFlags_RowBg
-               | ImGui.TableFlags_ScrollY | ImGui.TableFlags_NoHostExtendX
-  if not ImGui.BeginTable(ctx, 'arrange', cols, flags, tableW, paneH) then
-    return
-  end
+  local dl       = ImGui.GetWindowDrawList(ctx)
+  local ox, oy   = ImGui.GetCursorScreenPos(ctx)
+  local _, availH = ImGui.GetContentRegionAvail(ctx)
+  local rowH     = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
+  local headerH  = rowH + HEADER_PAD
+  local bodyTop  = oy + headerH + HEADER_GAP
+  local visRows  = math.max(1, math.floor((oy + availH - bodyTop) / rowH))
+  local bodyBot  = bodyTop + visRows * rowH
+  local gridW    = QN_W + GUTTER_PAD + TRACK_W * nTracks
+  local gridR    = ox + gridW
 
-  ImGui.TableSetupColumn(ctx, '', ImGui.TableColumnFlags_WidthFixed, QN_W)
-  for i, tr in ipairs(tracks) do
-    ImGui.TableSetupColumn(ctx, tr.name or string.format('Track %d', i),
-                           ImGui.TableColumnFlags_WidthFixed, TRACK_W)
-  end
-
-  -- Manual header row, not TableHeadersRow: headers are decorative,
-  -- and TableHeadersRow makes them selectable, which steals ImGui's
-  -- keyboard nav focus and cycles a blue highlight between them.
-  ImGui.TableNextRow(ctx, ImGui.TableRowFlags_Headers)
-  ImGui.TableSetColumnIndex(ctx, 0)  -- blank gutter header
-  for i, tr in ipairs(tracks) do
-    ImGui.TableSetColumnIndex(ctx, i)
-    alignedText(tr.name or string.format('Track %d', i), 'c')
-  end
-
-  local _, regionH = ImGui.GetContentRegionAvail(ctx)
-  local rowH       = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
-  local visRows    = math.max(1, math.floor(regionH / rowH))
   av:setGridSize(visRows, nTracks)
   av:setMaxCol(nTracks)
 
-  local sr, sc      = av:scroll()
+  local sr      = (select(1, av:scroll())) or 0
   local curRow, curCol = av:cursorRow(), av:cursorCol()
 
-  -- Phrase tint reuses the bar tint's hue at full opacity (rowBeat is
-  -- palette.highlight at alpha 0.4) so phrases read stronger than the
-  -- bars they contain.
-  local rb            = chrome.colour('rowBeat')
-  local r, g, b       = ImGui.ColorConvertU32ToDouble4(rb)
-  local barRowTint    = rb
-  local phraseRowTint = ImGui.ColorConvertDouble4ToU32(r, g, b, 1.0)
+  local textCol     = chrome.colour('text')
+  local sepCol      = chrome.colour('separator')
+  local dividerCol  = textCol  -- matches the tracker's header divider
+  -- Phrase tint reuses bar tint's hue at full opacity (rowBeat is
+  -- palette.highlight at alpha 0.4) so phrases read stronger than
+  -- the bars they contain.
+  local barTint    = chrome.colour('rowBeat')
+  local cr, cg, cb = ImGui.ColorConvertU32ToDouble4(barTint)
+  local phraseTint = ImGui.ColorConvertDouble4ToU32(cr, cg, cb, 1.0)
+  local colHiTint  = ImGui.ColorConvertDouble4ToU32(1, 1, 1, 0.05)
 
+  local function trackLeft(c)  return ox + QN_W + GUTTER_PAD + c * TRACK_W end
+  local function trackRight(c) return trackLeft(c) + TRACK_W                end
+  local function rowY(row)     return bodyTop + (row - sr) * rowH end
+
+  ImGui.DrawList_PushClipRect(dl, ox, oy, gridR, oy + availH, true)
+
+  -- Row tints (bar / phrase). Row 0 (qn = 0) is the strongest phrase
+  -- boundary in the project, so it gets the phrase tint too — no qn > 0
+  -- guard.
   for r = 0, visRows - 1 do
-    local row = sr + r
-    ImGui.TableNextRow(ctx)
-
-    local qn = math.floor(av:rowToQN(row) + 0.5)
-    if qn > 0 and qn % 64 == 0 then
-      ImGui.TableSetBgColor(ctx, ImGui.TableBgTarget_RowBg0, phraseRowTint)
-    elseif qn > 0 and qn % 16 == 0 then
-      ImGui.TableSetBgColor(ctx, ImGui.TableBgTarget_RowBg0, barRowTint)
+    local qn = math.floor(av:rowToQN(sr + r) + 0.5)
+    local tint = (qn % 64 == 0) and phraseTint
+              or (qn % 16 == 0) and barTint
+              or nil
+    if tint then
+      ImGui.DrawList_AddRectFilled(dl,
+        ox, bodyTop + r * rowH, gridR, bodyTop + (r + 1) * rowH, tint)
     end
+  end
 
-    ImGui.TableSetColumnIndex(ctx, 0)
-    alignedText(rowLabel(row), 'r')
+  -- Focused-column faint vertical tint (body only, behind takes).
+  if curCol >= 0 and curCol < nTracks then
+    ImGui.DrawList_AddRectFilled(dl,
+      trackLeft(curCol), bodyTop, trackRight(curCol), bodyBot, colHiTint)
+  end
 
-    for c = 0, nTracks - 1 do
-      local col = sc + c
-      if col < nTracks then
-        ImGui.TableSetColumnIndex(ctx, c + 1)
-        if row == curRow and col == curCol then
-          ImGui.Text(ctx, '>')
-        elseif col == curCol then
-          ImGui.Text(ctx, '|')
-        else
-          ImGui.Text(ctx, '')
+  -- Gridlines first — take rectangles occlude them within their span,
+  -- and their 1px borders re-state the cell boundary at the take edge.
+  -- Topmost and leftmost outer borders are intentionally omitted; verticals
+  -- start at row 0, not the header band, so the header reads as open space.
+  for c = 0, nTracks do
+    local lx = trackLeft(c)
+    ImGui.DrawList_AddLine(dl, lx, bodyTop, lx, bodyBot, sepCol, 1)
+  end
+  ImGui.DrawList_AddLine(dl, gridR, bodyTop, gridR, bodyBot, sepCol, 1)
+  ImGui.DrawList_AddLine(dl, ox, oy + headerH,  gridR, oy + headerH,  dividerCol, 1)
+  ImGui.DrawList_AddLine(dl, ox, bodyBot,       gridR, bodyBot,       sepCol, 1)
+  for r = 1, visRows - 1 do
+    local y = bodyTop + r * rowH
+    ImGui.DrawList_AddLine(dl, ox, y, gridR, y, sepCol, 1)
+  end
+
+  -- Take rectangles, drawn on top of gridlines. Fill exactly the column
+  -- (edges coincide with the gridline), 1px border, centred name. Coords
+  -- snap to integer pixels so adjacent takes' borders land on the same
+  -- pixel row/column and visually coincide — without the snap, fractional
+  -- rowH antialiases the shared edge across two pixel rows.
+  local function snap(v) return math.floor(v + 0.5) end
+  for c = 0, nTracks - 1 do
+    local rx0, rx1 = snap(trackLeft(c)), snap(trackRight(c))
+    for _, tk in ipairs(am:tracksTakes(c)) do
+      local startRow = av:qnToRow(tk.startQN)
+      local endRow   = av:qnToRow(tk.startQN + tk.lengthQN)
+      if endRow > sr and startRow < sr + visRows then
+        local ry0 = snap(rowY(math.max(startRow, sr)))
+        local ry1 = snap(rowY(math.min(endRow,   sr + visRows)))
+        local fill, border = slotColours(tk.slotIdx)
+        ImGui.DrawList_AddRectFilled(dl, rx0+1, ry0+1, rx1, ry1, fill)
+        ImGui.DrawList_AddRect      (dl, rx0, ry0, rx1+1, ry1+1, border, 0, 0, 1)
+        local name = tk.name or ''
+        if name ~= '' then
+          local tw = ImGui.CalcTextSize(ctx, name)
+          local tx = rx0 + math.floor((rx1 - rx0 - tw) / 2)
+          ImGui.DrawList_PushClipRect(dl, rx0 + 2, ry0, rx1 - 2, ry1, true)
+          ImGui.DrawList_AddText(dl, tx, ry0 + 1, textCol, name)
+          ImGui.DrawList_PopClipRect(dl)
         end
       end
     end
   end
 
-  ImGui.EndTable(ctx)
+  -- Cursor glyph, on top of rectangles.
+  if curRow >= sr and curRow < sr + visRows
+     and curCol >= 0 and curCol < nTracks then
+    ImGui.DrawList_AddText(dl,
+      trackLeft(curCol) + 2, rowY(curRow), textCol, '>')
+  end
+
+  -- Gutter row labels (right-aligned within QN_W).
+  for r = 0, visRows - 1 do
+    local label = rowLabel(sr + r)
+    local tw    = ImGui.CalcTextSize(ctx, label)
+    ImGui.DrawList_AddText(dl,
+      ox + QN_W - tw - 4, bodyTop + r * rowH + 1, textCol, label)
+  end
+
+  -- Header track names — sit at the bottom of the header band so the
+  -- HEADER_PAD breathing room reads as space above them. Clipped at
+  -- cell edges so long names ellipsise into nothing rather than spill.
+  local headerTextY = oy + HEADER_PAD
+  for c = 0, nTracks - 1 do
+    local tr   = tracks[c + 1]
+    local name = (tr and tr.name and tr.name ~= '')
+                 and tr.name or string.format('Track %d', c + 1)
+    local tw   = ImGui.CalcTextSize(ctx, name)
+    local lx   = trackLeft(c) + math.floor((TRACK_W - tw) / 2)
+    ImGui.DrawList_PushClipRect(dl,
+      trackLeft(c) + 2, oy, trackRight(c) - 2, oy + headerH, true)
+    ImGui.DrawList_AddText(dl, lx, headerTextY, textCol, name)
+    ImGui.DrawList_PopClipRect(dl)
+  end
+
+  ImGui.DrawList_PopClipRect(dl)
+
+  -- Advance the ImGui layout cursor so subsequent siblings know we
+  -- consumed the grid's footprint.
+  ImGui.Dummy(ctx, gridW, headerH + HEADER_GAP + visRows * rowH)
 end
 
 ----- Palette pane
@@ -177,22 +276,26 @@ local function focusedSlotEntry(slots, slotIdx)
   return nil
 end
 
--- Render the header inside a 1-col table with TableRowFlags_Headers so
--- the vertical text offset (cell padding) matches the grid's first
--- header row exactly — the two "Track N" labels line up across the
--- gap without manual Y tweaking.
+-- Hand-drawn so the header band height (HEADER_PAD + rowH) and the
+-- divider position match the grid's by construction — both panes start
+-- at the same `oy` (they share the renderBody row), so the divider
+-- lines up across the PANE_GAP without measurement.
 local function renderPaletteHeader(focusedTrack)
   local trackLabel = focusedTrack
     and (focusedTrack.name ~= '' and focusedTrack.name
          or string.format('Track %d', focusedTrack.idx + 1))
     or '(no track)'
-  if ImGui.BeginTable(ctx, '##paletteHdr', 1) then
-    ImGui.TableSetupColumn(ctx, '', ImGui.TableColumnFlags_WidthStretch)
-    ImGui.TableNextRow(ctx, ImGui.TableRowFlags_Headers)
-    ImGui.TableSetColumnIndex(ctx, 0)
-    alignedText(trackLabel, 'c')
-    ImGui.EndTable(ctx)
-  end
+  local dl       = ImGui.GetWindowDrawList(ctx)
+  local ox, oy   = ImGui.GetCursorScreenPos(ctx)
+  local paneW    = (select(1, ImGui.GetContentRegionAvail(ctx)))
+  local rowH     = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
+  local headerH  = rowH + HEADER_PAD
+  local textCol  = chrome.colour('text')
+  local tw       = ImGui.CalcTextSize(ctx, trackLabel)
+  local lx       = ox + math.floor((paneW - tw) / 2)
+  ImGui.DrawList_AddText(dl, lx, oy + HEADER_PAD, textCol, trackLabel)
+  ImGui.DrawList_AddLine(dl, ox, oy + headerH, ox + paneW, oy + headerH, textCol, 1)
+  ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
 end
 
 local function openModal(state)
@@ -386,8 +489,8 @@ function ap:unbind() end
 
 function ap:renderToolbarBits(_) end
 
---contract: read-only skeleton render — track-name header row, row-number gutter, empty body cells. Cursor cell + focused column are tinted. Take rectangles come in a later phase.
---contract: pushes parchment palette across the body (Col_Text, Col_TableHeaderBg, Col_TableRowBg, Col_TableBorder*) because coord pops chrome styles before body draw; without these the table inherits ImGui's dark defaults.
+--contract: grid is hand-drawn via the window draw list (no ImGui table): header band, row-number gutter, bar/phrase row tints, gridlines, focused-column tint, take rectangles tinted per slot (pooled siblings share a hue), and the cursor '>' glyph on top.
+--contract: pushes parchment palette across the body (Col_Text, Col_TableHeaderBg, Col_TableRowBg, Col_TableBorder*) because coord pops chrome styles before body draw; the palette tables below still need these — the grid itself no longer does.
 --contract: invokes the dispatch callback at end of body so arrange-scope arrow keys reach the dispatcher; samplePage and trackerPage follow the same pattern.
 function ap:renderBody(_, w, h, dispatch)
   if not ctx then return end
