@@ -69,28 +69,48 @@ module-local, set by clicking a row in the palette, cleared with
 `setPaletteSlot(nil)`. Same persistence model as the grid cursor —
 not a project property, just a UI attention pointer.
 
-### Rename modal
+### Palette buttons
 
+`rename` and `del` act on the focused slot (`av:paletteSlot()`).
 `rename` opens an `InputText` modal seeded with the slot's current
-derived name. The `(trackIdx, slotIdx)` is captured at click time into
-`renameRequest` so the modal acts on the slot the user pressed rename
-for, even if the arrange cursor moves while the modal is open. The
-modal commits on Enter (via `InputTextFlags_EnterReturnsTrue`, which
-is correct here because we only consume the buffer on commit) and
-dismisses on Esc or Cancel. The popup carries `WindowFlags_NoNav` so
-ImGui's popup-nav doesn't steal arrow keys from the InputText — see
-the reaimgui-gotchas notes.
+derived name. `del` opens a confirm modal — deletion removes every
+instance of the slot's source on the track, which always warrants
+the extra click. There are no "new slot" buttons; minting is a
+keyboard gesture (see below).
 
-### Stubbed buttons
+### Modal infrastructure
 
-`+♪` (new audio slot) and `del` (delete slot) are present but
-disabled. Audio waits on a file picker — we don't add
-`js_ReaScriptAPI` just for this phase; integration with the sample
-page's existing tree picker is the better path. Delete waits on the
-mouse/placement phase that also brings the "remove instances?"
-question into focus. Both render as disabled buttons with explanatory
-tooltips so the UI shape is visible and the design intent is on
-screen.
+A single popup id (`MODAL_TITLE`) backs all three modals (rename,
+create, delete). The `modal` module-local holds `{ kind, ... fields }`
+or nil; `renderModal()` dispatches by `kind`. Pinning `(trackIdx,
+slotIdx)` (or `(trackIdx, qnPos)` for create) into modal at open-time
+means the cursor moving mid-edit can't retarget the action.
+
+`modalOpenAtFrameStart` is captured at the top of `renderBody` and
+fed into `focusState`: while a modal is open at frame start,
+`acceptCmds` is false so that the Enter committing the modal's
+InputText can't leak to root-scope bindings (notably quit) on the
+same frame. CloseCurrentPopup deactivates the InputText same-frame,
+flipping `IsAnyItemActive` to false before dispatch runs — the
+frame-start capture is what closes that hole.
+
+The popup carries `WindowFlags_NoNav` so ImGui's popup-nav doesn't
+steal arrow keys from the InputText. `chrome.pushChromeWindow` wraps
+Begin/End so the popup inherits parchment/chrome styles.
+
+## Slot creation: Ctrl+Enter
+
+`createSlot` is bound to Ctrl+Enter under the arrange scope. It opens
+the create modal at the cursor position; the modal asks for a name
+and a length in rows (seeded to 4). On commit, it calls
+`am:createAndDropMidi(cursorCol, cursorQN, rows * beatPerRow, name)`
+and sets `paletteSlot` to the new index so the palette highlights it.
+
+This is the only slot-minting gesture. There is no separate "declare
+a slot" step — a slot has no existence apart from items on the grid
+that carry its id. Audio creation waits on a file picker (`del` and
+the place commands still handle audio slots that pre-existing REAPER
+items materialise; only the *creation* gesture is MIDI-only).
 
 ## Place commands (base62 scope)
 
@@ -117,10 +137,10 @@ digits into `appendPrefix` while `isPrefixActive()` is true. So bare
 ## What's deferred
 
 Phases 1–4 have shipped: model, page skeleton with read-only grid +
-cursor nav, right-side palette with slot list / new-MIDI / rename,
-and the base62 placement scope. Still ahead per `design/arrange.md`:
-take-edit commands (phase 5), tracker dive hotkey (phase 6), and
-mouse drag (phase 7). The current `renderGrid` paints a `>` at the
-cursor cell and a `|` down the focused column so navigation is
-visible; rectangles for the actual takes arrive with the take-edit
-phase.
+cursor nav, right-side palette with slot list / rename / delete /
+Ctrl-Enter creation, and the base62 placement scope. Still ahead per
+`design/arrange.md`: take-edit commands (phase 5), tracker dive
+hotkey (phase 6), and mouse drag (phase 7). The current `renderGrid`
+paints a `>` at the cursor cell and a `|` down the focused column so
+navigation is visible; rectangles for the actual takes arrive with
+the take-edit phase.

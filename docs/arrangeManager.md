@@ -5,27 +5,40 @@ state of its own — every read walks REAPER's track/item lists directly,
 every write goes through cm. The per-track **slot palette** lives in cm
 at the track tier under `arrangeSlots`.
 
-## Why slot identity is derived per frame
+## Every grouped take is a slot
 
-A take's "which slot is this an instance of?" is not stored on the take.
-It is rederived each frame from `takeIdOf(take)`, then joined against
-the per-track `arrangeSlots` dictionary. Two consequences:
+The palette is not a curated set sitting alongside the project items.
+It is the project items, grouped by source identity. A slot has no
+existence apart from at least one take on the grid carrying its id;
+the last take to leave takes the slot with it. The biconditional in
+one direction: minting a slot means dropping an item. In the other:
+deleting the last instance prunes the slot.
 
-- A take whose underlying source no longer matches any slot in the
-  dictionary becomes an **orphan**: rendered, editable, but absent from
-  the palette. The user sees it on the grid; the palette doesn't know
-  about it. This is by design — the palette is the user's curated set,
-  not the union of everything REAPER happens to hold.
-- Renaming a slot is realised by walking every item on the track and
-  writing `SetTakeName` to each take whose id matches. cm holds no
-  name; the name is whatever the takes happen to say (first-found
-  wins). Drift is accepted: if the user renames a single take in
-  REAPER, the palette will start showing that name once it's the
-  first-found.
+The persistence in `arrangeSlots` is an **index-to-id stability map**.
+Without it, two reads of the same project could allocate `{p1}` to
+slot 0 in frame N and slot 1 in frame N+1 — base62 hotkeys would shift
+under the user's fingers. The dict pins indices across reads and
+across sessions; the live takes drive what gets pinned.
 
-This trades a small surface (no slot-name field, no cache invalidation
-on rename) for an accepted drift mode. The alternative — caching names
-in cm — multiplies the staleness problem instead of resolving it.
+`ensureSlots(track)` is the single chokepoint. It walks live takes,
+allocates the lowest-free slot for any id not yet in the dict,
+prunes dict entries whose id has no live take, writes back if
+anything changed, and returns the freshened `(dict, slotForId,
+firstName)` so callers don't repeat the walk. It is idempotent — a
+second call in the same frame performs no writes. Every public read
+(`projectTracks`, `tracksTakes`, `trackSlots`, `slotForTake`) routes
+through it, so the four reads always agree on which slot owns which
+id.
+
+### Renaming and name drift
+
+No slot-name field is stored. The displayed name is whatever the
+first-found take with that id is called. Renaming a slot walks every
+item on the track and writes `SetTakeName` to each take whose id
+matches. cm holds no name. If the user renames a single take
+directly in REAPER, the palette will start showing that name once
+it's the first-found — accepted drift, in exchange for not
+multiplying the staleness problem with a cm cache.
 
 ## The id chokepoint
 
@@ -39,11 +52,11 @@ in cm — multiplies the staleness problem instead of resolving it.
   audio takes referencing the same file are independent items — so
   filename is the only stable identity we can lean on.
 
-A take whose id can't be derived (no chunk, no source) is treated as
-an orphan; nothing else fails. Phase 1 leaves the cross-session
-stability of MIDI ids as accepted: REAPER's pool GUID is in fact
-persisted in the project file, so reload preserves it; in-session
-re-creation does not.
+A take whose id can't be derived (no chunk, no source) is skipped
+during `ensureSlots`: it neither materialises a slot nor pins one,
+and `slotForTake` returns nil for it. Cross-session stability of
+MIDI ids is accepted as REAPER's responsibility: the pool GUID is
+persisted in the project file, so reload preserves slot identity.
 
 ## Why writes go through `cm:writeTrackKey`
 
@@ -85,47 +98,52 @@ at the tail. Read via `am:displayOrder()`; write via
 `am:reorderTracks(newGuids)`. Both land alongside the UI in phase 2
 rather than now — shipping a writer with no reader earns nothing.
 
-## Why MIDI slots are lazy-id
+## Creation: one round-trip
 
-A REAPER pool GUID only exists once a source exists. `newMidiSlot`
-can't generate the GUID up front — there's nothing to belong to a
-pool of one. So a fresh slot is reserved with `id = nil`. The first
-`dropInstance` calls `CreateNewMIDIItemInProj`, lets REAPER pick a
-GUID, reads it back out of the item state chunk, and writes it into
-the slot dict. Every subsequent drop reads `slot.id`, builds an item
-chunk with that GUID in the `POOLEDEVTS` line, and `SetItemStateChunk`s
-it back — REAPER then treats the items as one pool, so edits
-propagate.
+`createAndDropMidi(trackIdx, qnPos, lengthQN, name)` is the only path
+that mints a slot. It allocates the lowest-free index, calls
+`CreateNewMIDIItemInProj` (which auto-assigns a fresh `POOLEDEVTS`
+GUID), harvests the GUID into the slot dict, names the take, and
+returns `(slotIdx, take)`. One round-trip; no "reserve, then drop
+later" intermediate state.
 
-The alternative (eager: create a parked item just to harvest the
-GUID) was rejected: a visible-but-zero-length stub on every track is
-worse than a sometimes-nil slot id. Callers that already hold a GUID
-(tests, future re-import paths) pass it via `opts.id` to skip the
-harvest.
+This is a deliberate retreat from an earlier two-step lazy-id design.
+That design carried a `slot.id == nil` state for slots that hadn't
+been dropped yet, and every consumer of the slot dict had to guard
+against it. The current model collapses the state: a slot exists only
+when at least one instance exists, so id is always populated.
 
-A consequence of nil ids: `tracksTakes`, `trackSlots`, `slotForTake`,
-`deleteSlot(removeInstances=true)`, and `renameSlot` all guard against
-nil before comparing or removing — a lazy slot must never match an
-orphan take whose own id-derivation happened to return nil.
+## Subsequent drops: pool via POOLEDEVTS swap
+
+`dropInstance(trackIdx, slotIdx, qnPos, lengthQN)` creates another
+MIDI item, reads back its fresh chunk, splices the slot's pinned
+`POOLEDEVTS` GUID over the one REAPER assigned, and writes the chunk
+back. REAPER then treats every instance as a single pool, so MIDI
+edits propagate across them.
 
 ## Audio drops are not pooled
 
-`dropInstance` for audio creates a fresh `PCM_Source_CreateFromFile`
+For audio, `dropInstance` creates a fresh `PCM_Source_CreateFromFile`
 and wires it onto a new item/take. REAPER does not pool audio, so
 two instances of the same audio slot are independent items that
 happen to reference the same file. The grouping you see in the
 palette is purely a property of the shared filename, which is what
-`takeIdOf` returns for audio sources.
+`takeIdOf` returns for audio sources. There is currently no surface
+that mints an audio slot — audio creation waits on a file picker.
+The `dropInstance` audio branch stays so that audio slots
+materialised from pre-existing REAPER items remain droppable.
 
 ## Surface
 
 Discovery: `am:projectTracks`, `am:tracksTakes`, `am:trackSlots`,
 `am:slotForTake`, `am:keyForSlot`.
 
-Slot management: `am:newMidiSlot`, `am:newAudioSlot`, `am:deleteSlot`,
-`am:renameSlot`.
+Slot mutation: `am:renameSlot`, `am:deleteSlot` (removes every
+instance of the slot's source on the track, returns the count).
 
-Placement: `am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN?)`.
+Placement: `am:createAndDropMidi(trackIdx, qnPos, lengthQN, name) ->
+(slotIdx, take)`, `am:dropInstance(trackIdx, slotIdx, qnPos,
+lengthQN?)`.
 
 Folded from sequenceManager: `am:takesUsing`, `am:reswingAll`.
 
