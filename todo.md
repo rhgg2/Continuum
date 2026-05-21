@@ -8,6 +8,7 @@
 - 14bit CCs
 - move to command based key/mouse interactions
 - undo for groups feature / swing / tuning changes
+- page switcher broken
 
   Reframing to "what a competent tracker offers that Continuum's
   tracker doesn't" — and discounting what's REAPER's job (transport,

@@ -1,0 +1,45 @@
+@module arrangePage  src=arrangePage.lua  loc=136  sha=untracked  mode=chunk
+@deps cm, cmgr, chrome, gui
+
+# Invariants & contracts
+  @invariant  render-only — cursor + scroll live in av (module-locals); track list + slot palette come from am, which reads cm/REAPER fresh each query. Page holds no persistent state of its own.
+  @invariant  arrange page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from arrange.
+  @invariant  cursor-nav commands live in cmgr:scope('arrange'); coord pushes the scope on activation. Names overlap with the tracker scope's arrow commands but scopes don't stack — only one is active at a time.
+
+# Imports
+  @require util = 'util'  @ 8
+  @require ImGui = 'imgui'  @ 14
+
+# Constructed sub-instances
+  @construct am = util.instantiate('arrangeManager')  @ 21
+  @construct av = util.instantiate('arrangeView')  @ 22
+
+# Private state
+  @state ctx = gui and gui.ctx or nil  @ 19
+      @contract  owns the arrange substack: builds am and av internally; coord passes only primitives (cm, cmgr, chrome, gui).
+  @state ap = {}  @ 24
+  @state arrange = cmgr:scope('arrange')  @ 122
+      @invariant  arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
+
+# Private functions
+  -- Render helpers
+  @fn rowLabel(row)  @ 29
+      -- Row label = QN at the row's top edge. Cheap because rowToQN is a multiply.
+
+# Public API (ap:*)
+  @api ap:bind()  @ 36
+      @contract  bind takes no take — arrange is project-wide. coord may call with no args (or a take, ignored).
+  @api ap:unbind()  @ 37
+  @api ap:renderToolbarBits(_)  @ 39
+  @api ap:renderBody(_, w, h, _dispatch)  @ 42
+      @contract  read-only skeleton render — track-name header row, row-number gutter, empty body cells. Cursor cell + focused column are tinted. Take rectangles come in a later phase.
+  @api ap:renderStatusBar(_)  @ 100
+  @api ap:focusState()  @ 108
+      @contract  focusState mirrors samplePage — picker or any active ImGui item suppresses commands.
+  @api ap:handleInput()  @ 117
+  @api ap:save()  @ 118
+  @api ap:load()  @ 119
+
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB
