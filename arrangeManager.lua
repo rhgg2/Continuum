@@ -44,6 +44,13 @@ local function itemQNRange(item)
   return startQN, endQN - startQN
 end
 
+local function setItemQNRange(item, startQN, endQN)
+  local startSec = reaper.TimeMap2_QNToTime(0, startQN)
+  local endSec   = reaper.TimeMap2_QNToTime(0, endQN)
+  reaper.SetMediaItemInfo_Value(item, 'D_POSITION', startSec)
+  reaper.SetMediaItemInfo_Value(item, 'D_LENGTH',   endSec - startSec)
+end
+
 local function takeKind(take)
   return reaper.TakeIsMIDI(take) and 'midi' or 'audio'
 end
@@ -155,6 +162,16 @@ function am:tracksTakes(trackIdx)
     }
   end)
   return out
+end
+
+--contract: returns the take on `trackIdx` whose half-open QN range [startQN, startQN+lengthQN) contains `qn`; nil if none. First match in REAPER item order when ranges overlap.
+function am:takeAt(trackIdx, qn)
+  for _, take in ipairs(am:tracksTakes(trackIdx)) do
+    if qn >= take.startQN and qn < take.startQN + take.lengthQN then
+      return take
+    end
+  end
+  return nil
 end
 
 function am:trackSlots(trackIdx)
@@ -299,6 +316,30 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   local src = reaper.PCM_Source_CreateFromFile(entry.id)
   if src then reaper.SetMediaItemTake_Source(take, src) end
   return take
+end
+
+----- Per-take edits
+
+--contract: shifts the take's item start by deltaQN with length unchanged; start clamps at 0. Returns the QN delta actually applied (smaller than requested when the clamp bites) so callers can step a cursor in lockstep.
+function am:moveTake(take, deltaQN)
+  if not take then return 0 end
+  local startQN, lengthQN = itemQNRange(take.item)
+  local newStart = math.max(0, startQN + deltaQN)
+  setItemQNRange(take.item, newStart, newStart + lengthQN)
+  return newStart - startQN
+end
+
+--contract: sets the take's item length to newLengthQN absolutely, start edge fixed. Callers own snap and minimum-length policy.
+function am:resizeTake(take, newLengthQN)
+  if not take then return end
+  local startQN = itemQNRange(take.item)
+  setItemQNRange(take.item, startQN, startQN + newLengthQN)
+end
+
+function am:deleteTake(take)
+  if not take then return end
+  local track = reaper.GetTrack(0, take.trackIdx)
+  if track then reaper.DeleteTrackMediaItem(track, take.item) end
 end
 
 ----- Reswing (folded from sequenceManager)

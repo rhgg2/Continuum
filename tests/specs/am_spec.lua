@@ -295,4 +295,79 @@ return {
       t.eq(#miss, 0)
     end,
   },
+
+  --------------------------------------------------------------------
+  -- Per-take edits
+  --------------------------------------------------------------------
+  {
+    name = 'takeAt resolves the take whose half-open QN range holds the point',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 2, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 2, poolGuid = '{p2}' } } },
+      })
+      t.truthy(am:takeAt(0, 1), 'point inside the first take')
+      t.eq(am:takeAt(0, 2), nil, 'gap between takes resolves nil')
+      t.eq(am:takeAt(0, 0).startQN, 0, 'start edge is inside (half-open)')
+      t.eq(am:takeAt(0, 4).startQN, 4, 'second take resolved by its range')
+    end,
+  },
+
+  {
+    name = 'moveTake shifts start, preserves length, returns applied delta',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 4, len = 2, poolGuid = '{p1}' } } },
+      })
+      local applied = am:moveTake(am:tracksTakes(0)[1], 3)
+      t.eq(applied, 3, 'unclamped move returns the full delta')
+      local moved = am:tracksTakes(0)[1]
+      t.eq(moved.startQN,  7)
+      t.eq(moved.lengthQN, 2, 'length unchanged by a move')
+    end,
+  },
+
+  {
+    name = 'moveTake clamps start at 0 and reports the reduced delta',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 2, len = 2, poolGuid = '{p1}' } } },
+      })
+      local applied = am:moveTake(am:tracksTakes(0)[1], -5)
+      t.eq(applied, -2, 'clamp at 0 caps the applied delta')
+      t.eq(am:tracksTakes(0)[1].startQN, 0, 'start pinned to 0')
+    end,
+  },
+
+  {
+    name = 'resizeTake sets length absolutely, start edge fixed',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 4, len = 2, poolGuid = '{p1}' } } },
+      })
+      am:resizeTake(am:tracksTakes(0)[1], 5)
+      local resized = am:tracksTakes(0)[1]
+      t.eq(resized.startQN,  4, 'start edge fixed')
+      t.eq(resized.lengthQN, 5)
+    end,
+  },
+
+  {
+    name = 'deleteTake removes the item, leaving the other take intact',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 1, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 1, poolGuid = '{p2}' } } },
+      })
+      am:deleteTake(am:takeAt(0, 0))
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 1, 'one take left after delete')
+      t.eq(takes[1].startQN, 4, 'the surviving take is the other one')
+    end,
+  },
 }

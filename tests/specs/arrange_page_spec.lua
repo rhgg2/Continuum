@@ -76,4 +76,55 @@ return {
       end
     end,
   },
+
+  {
+    name = 'arrangeNudgeForward moves the take under the cursor by one row',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeNudgeForward')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].startQN, 1, 'take advanced one row')
+    end,
+  },
+
+  {
+    name = 'arrangeGrowTake lengthens the take under the cursor by one row',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeGrowTake')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].lengthQN, 3, 'take grew one row')
+    end,
+  },
+
+  {
+    name = 'arrangeDeleteTake removes the take under the cursor',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDeleteTake')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(#am:tracksTakes(0), 0, 'no takes left')
+    end,
+  },
 }

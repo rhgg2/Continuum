@@ -106,11 +106,10 @@ am:renameSlot(trackIdx, slotIdx, name)
 am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN?) -> take
 am:duplicateTake(take, qnPos)     -> take
 
--- per-take edits (mirror tracker mutation vocabulary)
-am:moveTake(take, deltaQN)
+-- per-take edits (mirror tracker nudge / grow / shrink)
+am:takeAt(trackIdx, qn)           -> take | nil
+am:moveTake(take, deltaQN)        -> appliedDeltaQN
 am:resizeTake(take, newLengthQN)
-am:trimStart(take, deltaQN)
-am:trimEnd(take, deltaQN)
 am:deleteTake(take)
 
 -- folded from sequenceManager
@@ -162,7 +161,9 @@ Each phase ships green and committable.
    with cursor navigation.
 3. Right-side palette UI: list, new-slot, rename.
 4. Placement: base36 scope, `dropInstance` at cursor.
-5. Take edits: move/resize/trim/delete with tracker-mirrored vocab.
+5. Take edits: move/resize/delete with tracker-mirrored vocab. Trim-
+   start has no tracker note command to clone — deferred to the
+   mouse-drag slice (7), where edge-dragging makes it natural.
 6. Tracker dive hotkey.
 7. Mouse drag: move / resize / modifier-duplicate.
 

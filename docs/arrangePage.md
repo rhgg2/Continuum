@@ -154,8 +154,9 @@ rectangle edge.
 
 ## What's deferred
 
-Phases 1–5a have shipped: model, page skeleton, right-side palette
+Phases 1–5b have shipped: model, page skeleton, right-side palette
 with slot list / rename / delete / Ctrl-Enter creation, the base62
-placement scope, and the hand-drawn grid with take rectangles. Still
-ahead per `design/arrange.md`: take-edit commands (5b — move /
-resize / trim / delete), tracker dive hotkey (6), and mouse drag (7).
+placement scope, the hand-drawn grid with take rectangles, and the
+take-edit commands (move / resize / delete). Still ahead per
+`design/arrange.md`: trim-start, the tracker dive hotkey (6), and
+mouse drag (7).

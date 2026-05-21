@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=635  sha=52850f7  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=673  sha=37a9f9e  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
@@ -36,12 +36,12 @@
   @state ORPHAN_FILL, ORPHAN_BORDER  @ 98
   @state HEADER_PAD = 8  @ 125
   @state HEADER_GAP = 4  @ 126
-  @state CREATE_DEFAULT_ROWS = 4  @ 342
-  @state arrange = cmgr:scope('arrange')  @ 592
+  @state CREATE_DEFAULT_ROWS = 4  @ 336
+  @state arrange = cmgr:scope('arrange')  @ 586
       @invariant  arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
       @invariant  62 place commands (drop0..dropZ) sit in cmgr:scope('arrange'), one per base62 slot. Pressing a key with no slot defined at that index is a silent no-op (am:dropInstance returns nil). Length defaults to one row (beatPerRow) — a real snap selector lands with the toolbar.
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the *only* slot-minting gesture. Slots have no existence apart from items on the grid; rename/delete buttons in the palette act on existing slots.
-  @state placeCmds, placeBinds = {}, {}  @ 626
+  @state placeCmds, placeBinds = {}, {}  @ 664
 
 # Private functions
   -- Style + draw helpers
@@ -58,55 +58,64 @@
   -- Grid pane (hand-drawn — ImGui tables fight row-spanning shapes)
   @fn renderGrid(tracks, nTracks)  @ 128
   -- Palette pane
-  @fn focusedSlotEntry(slots, slotIdx)  @ 291
+  @fn focusedSlotEntry(slots, slotIdx)  @ 285
       -- Locate the slot entry in trackSlots() output (a packed array, not
       -- indexed by slotIdx). Returns nil when no slot is focused or the
       -- focused slot index isn't currently populated.
-  @fn renderPaletteHeader(focusedTrack)  @ 303
+  @fn renderPaletteHeader(focusedTrack)  @ 297
       -- Hand-drawn so the header band height (HEADER_PAD + rowH) and the
       -- divider position match the grid's by construction — both panes start
       -- at the same `oy` (they share the renderBody row), so the divider
       -- lines up across the PANE_GAP without measurement.
-  @fn openModal(state)  @ 321
-  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 327
-  @fn openDeleteModal(trackIdx, slot)  @ 332
-  @fn openCreateModal(trackIdx, qnPos)  @ 343
-  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 348
-  @fn renderPaletteList(slots)  @ 371
+  @fn openModal(state)  @ 315
+  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 321
+  @fn openDeleteModal(trackIdx, slot)  @ 326
+  @fn openCreateModal(trackIdx, qnPos)  @ 337
+  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 342
+  @fn renderPaletteList(slots)  @ 365
       -- Three columns so the key/kind/name align vertically across rows
       -- without depending on a monospace font for the whole line. The key
       -- cell uses the monospace font (it's a hotkey to press); kind and
       -- name use the default UI font. Selectable lives in col 0 with
       -- SpanAllColumns so the entire row is the click target; we paint the
       -- key text on top with SameLine.
-  @fn renderModal()  @ 415
+  @fn renderModal()  @ 409
       -- Single popup id (MODAL_TITLE) drives all three kinds — the popup
       -- can't be open in two configurations simultaneously, and one id keeps
       -- the open/close bookkeeping symmetrical. Self-heal: if the modal
       -- state was set but ImGui's popup queue lost it (e.g. command opened
       -- the popup from outside any window), re-open here.
-  @fn renderPalette(tracks)  @ 486
-  @fn dropAt(slotIdx)  @ 615
+  @fn renderPalette(tracks)  @ 480
+  @fn takeAtCursor()  @ 611
+      -- Take edits — move / resize / delete the take under the cursor. Snap is
+      -- one row (av:beatPerRow), matching the place commands. Keys clone the
+      -- tracker note-edit vocab (nudge / grow / shrink); names are arrange-
+      -- prefixed for the same flat-registry reason as the cursor commands.
+      @invariant  a nudge steps the cursor by the delta moveTake actually applied, so the take stays under the cursor across repeated nudges even when the start-at-0 clamp shortens a step.
+  @fn nudgeCmd(direction)  @ 614
+  @fn resizeCmd(direction)  @ 623
+  @fn deleteTakeAtCursor()  @ 631
+  @fn dropAt(slotIdx)  @ 653
       -- Place commands (drop0..dropZ). 0..9 → digit keys, 10..35 → letter
       -- keys, 36..61 → Shift+letter. ImGui.Key_0 + n and Key_A + n are
       -- contiguous (already exploited at coordinator.lua:53).
-  @fn placeKey(slotIdx)  @ 621
+  @fn placeKey(slotIdx)  @ 659
 
 # Public API (ap:*)
-  @api ap:bind()  @ 507
+  @api ap:bind()  @ 501
       @contract  bind takes no take — arrange is project-wide. coord may call with no args (or a take, ignored).
-  @api ap:unbind()  @ 508
-  @api ap:renderToolbarBits(_)  @ 510
-  @api ap:renderBody(_, w, h, dispatch)  @ 515
+  @api ap:unbind()  @ 502
+  @api ap:renderToolbarBits(_)  @ 504
+  @api ap:renderBody(_, w, h, dispatch)  @ 509
       @contract  grid is hand-drawn via the window draw list (no ImGui table): header band, row-number gutter, bar/phrase row tints, gridlines, focused-column tint, take rectangles tinted per slot (pooled siblings share a hue), and the cursor '>' glyph on top.
       @contract  pushes parchment palette across the body (Col_Text, Col_TableHeaderBg, Col_TableRowBg, Col_TableBorder*) because coord pops chrome styles before body draw; the palette tables below still need these — the grid itself no longer does.
       @contract  invokes the dispatch callback at end of body so arrange-scope arrow keys reach the dispatcher; samplePage and trackerPage follow the same pattern.
-  @api ap:renderStatusBar(_)  @ 566
-  @api ap:focusState()  @ 574
+  @api ap:renderStatusBar(_)  @ 560
+  @api ap:focusState()  @ 568
       @contract  focusState mirrors samplePage — picker or any active ImGui item suppresses commands. Also gated by modalOpenAtFrameStart so the Enter that commits any modal's InputText can't leak to root-scope bindings (notably quit) on the same frame.
-  @api ap:handleInput()  @ 585
-  @api ap:save()  @ 586
-  @api ap:load()  @ 587
+  @api ap:handleInput()  @ 579
+  @api ap:save()  @ 580
+  @api ap:load()  @ 581
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

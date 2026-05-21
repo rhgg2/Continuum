@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=337  sha=21b57c0  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=378  sha=8f69eef  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts
@@ -24,12 +24,13 @@
       -- MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it).
       -- Audio: absolute source filename.
   @fn itemQNRange(item)  @ 39
-  @fn takeKind(take)  @ 47
-  @fn readSlots(track)  @ 51
-  @fn writeSlots(track, dict)  @ 56
-  @fn nextFreeSlot(dict)  @ 60
-  @fn forEachActiveTake(track, fn)  @ 67
-  @fn ensureSlots(track)  @ 79
+  @fn setItemQNRange(item, startQN, endQN)  @ 47
+  @fn takeKind(take)  @ 54
+  @fn readSlots(track)  @ 58
+  @fn writeSlots(track, dict)  @ 63
+  @fn nextFreeSlot(dict)  @ 67
+  @fn forEachActiveTake(track, fn)  @ 74
+  @fn ensureSlots(track)  @ 86
       -- Walk the track's live takes; assign the lowest-free slot to any id
       -- not yet in the dict; drop dict entries whose id has no live take.
       -- Idempotent — repeated calls in one frame do nothing after the first.
@@ -37,31 +38,39 @@
   -- Discovery
   -- Slot mutation
   -- Placement
-  @fn chunkSetPool(chunk, guid)  @ 231
+  @fn chunkSetPool(chunk, guid)  @ 248
       -- POOLEDEVTS swap. Splice the existing pool line, or insert one after
       -- the SOURCE MIDI header when REAPER returned a chunk without one
       -- (defensive — CreateNewMIDIItemInProj always emits a fresh pool line).
-  @fn harvestPoolGuid(item)  @ 238
-  @fn poolMidiItem(item, guid)  @ 244
+  @fn harvestPoolGuid(item)  @ 255
+  @fn poolMidiItem(item, guid)  @ 261
+  -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 306
+  @fn projectMidiTakes()  @ 347
 
 # Public API (am:*)
-  @api am:projectTracks()  @ 118
-  @api am:tracksTakes(trackIdx)  @ 137
-  @api am:trackSlots(trackIdx)  @ 160
-  @api am:slotForTake(take)  @ 180
-  @api am:keyForSlot(slotIdx)  @ 189
-  @api am:renameSlot(trackIdx, slotIdx, name)  @ 195
-  @api am:deleteSlot(trackIdx, slotIdx)  @ 208
+  @api am:projectTracks()  @ 125
+  @api am:tracksTakes(trackIdx)  @ 144
+  @api am:takeAt(trackIdx, qn)  @ 168
+      @contract  returns the take on `trackIdx` whose half-open QN range [startQN, startQN+lengthQN) contains `qn`; nil if none. First match in REAPER item order when ranges overlap.
+  @api am:trackSlots(trackIdx)  @ 177
+  @api am:slotForTake(take)  @ 197
+  @api am:keyForSlot(slotIdx)  @ 206
+  @api am:renameSlot(trackIdx, slotIdx, name)  @ 212
+  @api am:deleteSlot(trackIdx, slotIdx)  @ 225
       @contract  deletes every live take whose id matches this slot's id. ensureSlots prunes the now-orphaned dict entry on the next read; we run it inline so the palette doesn't briefly carry a ghost row. Returns the number of takes removed.
-  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 252
+  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 269
       @contract  creates a fresh MIDI source on `trackIdx` at qnPos for lengthQN, allocates the lowest-free slot pointing at the new pool guid, names the take, returns (slotIdx, take). Nil if track missing or slots exhausted. The only path that mints a slot.
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 274
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 291
       @contract  drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos for lengthQN (default 1 QN). MIDI: CreateNewMIDIItemInProj + POOLEDEVTS swap so REAPER pools with the existing instances. Audio: PCM_Source_CreateFromFile + take wiring (REAPER doesn't pool audio — instances are siblings sharing a filename). Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
-  @api am:takesUsing(name)  @ 318
+  @api am:moveTake(take, deltaQN)  @ 324
+      @contract  shifts the take's item start by deltaQN with length unchanged; start clamps at 0. Returns the QN delta actually applied (smaller than requested when the clamp bites) so callers can step a cursor in lockstep.
+  @api am:resizeTake(take, newLengthQN)  @ 333
+      @contract  sets the take's item length to newLengthQN absolutely, start edge fixed. Callers own snap and minimum-length policy.
+  @api am:deleteTake(take)  @ 339
+  @api am:takesUsing(name)  @ 359
       @contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 328
+  @api am:reswingAll(name)  @ 369
       @contract  iterates affected takes via tm:bindTake with opts.markSwingStale=true; the post-load rebuild's stale-branch reseats raw from each event's ppqL under the take's current swing. Restores the original take at the end (no stale-mark — the active take's events are unchanged by the visit).
 
 # REAPER API surface
@@ -71,6 +80,7 @@
   @reaper GetMediaSourceFileName
   @reaper GetMediaItemInfo_Value
   @reaper TimeMap2_timeToQN, TimeMap2_QNToTime
+  @reaper SetMediaItemInfo_Value
   @reaper CountTrackMediaItems
   @reaper GetTrackMediaItem
   @reaper GetActiveTake
@@ -83,7 +93,6 @@
   @reaper SetItemStateChunk
   @reaper CreateNewMIDIItemInProj
   @reaper AddMediaItemToTrack
-  @reaper SetMediaItemInfo_Value
   @reaper AddTakeToMediaItem
   @reaper PCM_Source_CreateFromFile
   @reaper SetMediaItemTake_Source

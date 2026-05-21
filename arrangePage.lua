@@ -603,6 +603,50 @@ arrange:bindAll {
   createSlot         = { { ImGui.Key_Enter, ImGui.Mod_Ctrl } },
 }
 
+-- Take edits — move / resize / delete the take under the cursor. Snap is
+-- one row (av:beatPerRow), matching the place commands. Keys clone the
+-- tracker note-edit vocab (nudge / grow / shrink); names are arrange-
+-- prefixed for the same flat-registry reason as the cursor commands.
+--invariant: a nudge steps the cursor by the delta moveTake actually applied, so the take stays under the cursor across repeated nudges even when the start-at-0 clamp shortens a step.
+local function takeAtCursor()
+  return am:takeAt(av:cursorCol(), av:rowToQN(av:cursorRow()))
+end
+local function nudgeCmd(direction)
+  return function()
+    local take = takeAtCursor()
+    if not take then return end
+    local beatPerRow = av:beatPerRow()
+    local applied = am:moveTake(take, direction * beatPerRow)
+    av:setCursor(av:cursorRow() + applied / beatPerRow, av:cursorCol())
+  end
+end
+local function resizeCmd(direction)
+  return function()
+    local take = takeAtCursor()
+    if not take then return end
+    local snap = av:beatPerRow()
+    am:resizeTake(take, math.max(snap, take.lengthQN + direction * snap))
+  end
+end
+local function deleteTakeAtCursor()
+  local take = takeAtCursor()
+  if take then am:deleteTake(take) end
+end
+arrange:registerAll {
+  arrangeNudgeBack    = nudgeCmd(-1),
+  arrangeNudgeForward = nudgeCmd(1),
+  arrangeShrinkTake   = resizeCmd(-1),
+  arrangeGrowTake     = resizeCmd(1),
+  arrangeDeleteTake   = deleteTakeAtCursor,
+}
+arrange:bindAll {
+  arrangeNudgeBack    = { { ImGui.Key_UpArrow,   ImGui.Mod_Super } },
+  arrangeNudgeForward = { { ImGui.Key_DownArrow, ImGui.Mod_Super } },
+  arrangeShrinkTake   = { { ImGui.Key_UpArrow,   ImGui.Mod_Super, ImGui.Mod_Shift } },
+  arrangeGrowTake     = { { ImGui.Key_DownArrow, ImGui.Mod_Super, ImGui.Mod_Shift } },
+  arrangeDeleteTake   = { { ImGui.Key_Delete } },
+}
+
 -- Place commands (drop0..dropZ). 0..9 → digit keys, 10..35 → letter
 -- keys, 36..61 → Shift+letter. ImGui.Key_0 + n and Key_A + n are
 -- contiguous (already exploited at coordinator.lua:53).
