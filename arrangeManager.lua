@@ -223,6 +223,11 @@ function am:setLoopRangeQN(loQN, hiQN)
     reaper.TimeMap2_QNToTime(0, loQN), reaper.TimeMap2_QNToTime(0, hiQN), false)
 end
 
+--contract: clears the project loop range (start == end); loopRangeQN then returns nil.
+function am:clearLoopRange()
+  reaper.GetSet_LoopTimeRange(true, true, 0, 0, false)
+end
+
 --contract: QN of the play head; nil when the transport is not playing.
 function am:playPositionQN()
   if reaper.GetPlayState() & 1 == 0 then return nil end

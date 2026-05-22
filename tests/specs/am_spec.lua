@@ -593,6 +593,16 @@ return {
   },
 
   {
+    name = 'clearLoopRange removes the project loop range',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      h.reaper:setLoopRange(2, 6)
+      am:clearLoopRange()
+      t.falsy(am:loopRangeQN(), 'cleared loop -> nil')
+    end,
+  },
+
+  {
     name = 'playPositionQN is nil when the transport is stopped',
     run = function(harness)
       local _, am = mkAm(harness)

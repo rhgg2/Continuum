@@ -63,15 +63,20 @@ local MODAL_TITLES            = { rename = 'Rename slot', create = 'New take',
 local modal                   = nil   -- { kind, ... } | nil
 local modalFocus              = false
 local modalOpenAtFrameStart   = false
+-- Forward decl: runGridMouse (defined far above openCreateModal) opens
+-- the create modal on a double-click-drag release in empty grid space.
+local openCreateModal
 
---shape: press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter } — mouse-down snapshot, nil when no button is down over the grid. A track-column press carries `take`/`row`/`col`/`mode`; a QN-gutter press carries `qn` and `gutter = true` only. `row`/`col` is the pressed cell, applied to the cursor on a no-drag grid release; `moved` flips once ImGui's drag threshold is crossed.
+--shape: press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — mouse-down snapshot, nil when no button is down over the grid. A track-column press carries `take`/`row`/`col`/`mode`; a QN-gutter press carries `qn` and `gutter = true` only; an empty-space double-click carries `qn`/`col` and `create = true`. `row`/`col` is the pressed cell, applied to the cursor on a no-drag grid release; `moved` flips once ImGui's drag threshold is crossed.
 --invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Pressing a take focuses it. The cursor moves only on release, and only when no take was dragged — it then lands on the pressed cell; a drag (even one blocked by rangeIsClear) leaves the cursor put. An empty-space press with no drag also clears focus.
---invariant: a press in the QN gutter drives the REAPER transport, not the grid — a no-drag release sets the edit cursor, a drag sets the loop range; both endpoints snap to row boxes unless Shift is held. The arrange grid cursor and take focus are untouched.
+--invariant: a press in the QN gutter drives the REAPER transport, not the grid — a no-drag release sets the edit cursor, a drag sets the loop range; both endpoints snap to row boxes unless Shift is held. The arrange grid cursor and take focus are untouched. A right-click in the gutter clears the loop range.
+--invariant: a double-click on empty grid space starts a create press — the drag previews a ghost take, release opens the create modal seeded with the swept column / start row / row count. A bare double-click opens it with the default row count.
 local press = nil
 local DRAG_EDGE_PX = 5
 local BLOCKED_BORDER  -- lazy: red border for a drag that would overlap
 local EDIT_LINE       -- lazy: REAPER edit-cursor rule across all tracks
 local PLAY_LINE       -- lazy: yellow play-head rule
+local CREATE_GHOST    -- lazy { fill, border }: double-click-drag take preview
 
 ----- Style + draw helpers
 
@@ -219,6 +224,17 @@ local function gutterLoopCand(press, mouseQN, beatPerRow)
   return { loQN = loQN, hiQN = hiQN }
 end
 
+-- In-flight create drag: { startQN, lengthQN }. startQN is the
+-- double-clicked row box; the end follows the mouse, floored to a row
+-- box unless Shift is held. A zero-height sweep is one row.
+local function createCandidate(press, mouseQN, beatPerRow)
+  local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
+  local endQN   = math.max(press.qn, mouseQN)
+  if snapped then endQN = floorTo(endQN, beatPerRow) end
+  local lengthQN = math.max(beatPerRow, endQN - press.qn)
+  return { startQN = press.qn, lengthQN = lengthQN }
+end
+
 -- Commit a released drag. The focused take rides its handle unchanged
 -- through a move or resize; a duplicate shifts focus to the new copy.
 local function commitDrag(press, cand)
@@ -300,14 +316,19 @@ local function renderGrid(tracks, nTracks)
   -- sets the loop range. A grid release that dragged no take moves the
   -- cursor to the pressed cell; an empty-space press clears focus. Runs
   -- before the take pass so the candidate is in hand when the pass
-  -- relocates the dragged take. Returns the in-flight take drag and
-  -- loop drag, each nil when not active.
+  -- relocates the dragged take. Returns the in-flight take drag, loop
+  -- drag and create drag, each nil when not active.
   local function runGridMouse()
     local mx, my  = ImGui.GetMousePos(ctx)
     local bpr     = av:beatPerRow()
     local yToQN   = function(y) return (sr + (y - bodyTop) / rowH) * bpr end
     local gutterR = trackLeft(0)
 
+    if ImGui.IsMouseClicked(ctx, 1) and ImGui.IsWindowHovered(ctx)
+       and my >= bodyTop and my <= bodyBot
+       and mx >= paneLeft and mx < gutterR then
+      am:clearLoopRange()
+    end
     if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
        and my >= bodyTop and my <= bodyBot then
       if mx >= paneLeft and mx < gutterR then
@@ -318,19 +339,25 @@ local function renderGrid(tracks, nTracks)
           local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
           local qn = yToQN(my)
           local take, mode = hitTake(col, qn, bpr / rowH)
-          press = {
-            qn = qn, row = sr + row, col = col,
-            take = take, mode = mode, moved = false,
-            duplicate = mode == 'move'
-                        and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
-          }
-          -- Focus the take on press, so a drag visibly carries it.
-          if take then av:setFocus(take.take) end
+          if not take and ImGui.IsMouseDoubleClicked(ctx, 0) then
+            press = { qn = floorTo(qn, bpr), col = col,
+                      create = true, moved = false }
+          else
+            press = {
+              qn = qn, row = sr + row, col = col,
+              take = take, mode = mode, moved = false,
+              duplicate = mode == 'move'
+                          and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
+            }
+            -- Focus the take on press, so a drag visibly carries it.
+            if take then av:setFocus(take.take) end
+          end
         end
       end
     end
-    if not press then return nil, nil end
-    if (press.take or press.gutter) and ImGui.IsMouseDragging(ctx, 0) then
+    if not press then return nil, nil, nil end
+    if (press.take or press.gutter or press.create)
+       and ImGui.IsMouseDragging(ctx, 0) then
       press.moved = true
     end
 
@@ -338,12 +365,21 @@ local function renderGrid(tracks, nTracks)
                      and dragCandidate(press, yToQN(my), bpr) or nil
     local loopCand = (press.moved and press.gutter)
                      and gutterLoopCand(press, yToQN(my), bpr) or nil
+    local createCand = (press.moved and press.create)
+                       and createCandidate(press, yToQN(my), bpr) or nil
 
     if ImGui.IsMouseReleased(ctx, 0) then
       if dragCand then
         if dragCand.fits then commitDrag(press, dragCand) end
       elseif loopCand then
         am:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
+      elseif press.create then
+        -- Empty-space double-click: open the create modal at the pressed
+        -- column / row. A drag prefills the row count from the sweep; a
+        -- bare double-click leaves it at the default.
+        local rows = createCand
+                     and math.floor(createCand.lengthQN / bpr + 0.5) or nil
+        openCreateModal(press.col, press.qn, rows)
       elseif press.gutter then
         -- Gutter press with no drag: drop the REAPER edit cursor on the
         -- pressed row — floored to the top edge of the row box the click
@@ -358,11 +394,11 @@ local function renderGrid(tracks, nTracks)
         if not press.take then av:setFocus(nil) end
       end
       press = nil
-      return nil, nil
+      return nil, nil, nil
     end
-    return dragCand, loopCand
+    return dragCand, loopCand, createCand
   end
-  local dragCand, loopCand = runGridMouse()
+  local dragCand, loopCand, createCand = runGridMouse()
   local curRow, curCol = av:cursorRow(), av:cursorCol()
 
   -- The right border (gridline at gridR; rightmost take-rect border a
@@ -453,6 +489,25 @@ local function renderGrid(tracks, nTracks)
   if dragCand then
     drawTakeRect(press.take, dragCand.startQN, dragCand.lengthQN,
                  true, not dragCand.fits)
+  end
+
+  -- Ghost of the take a double-click-drag will create: translucent
+  -- fill + border at the swept column and span, no name.
+  if createCand then
+    local startRow = av:qnToRow(createCand.startQN)
+    local endRow   = av:qnToRow(createCand.startQN + createCand.lengthQN)
+    if endRow > sr and startRow < sr + visRows then
+      CREATE_GHOST = CREATE_GHOST or {
+        fill   = ImGui.ColorConvertDouble4ToU32(0.95, 0.93, 0.80, 0.35),
+        border = ImGui.ColorConvertDouble4ToU32(0.45, 0.42, 0.30, 0.90),
+      }
+      local gx0 = snap(trackLeft(press.col))
+      local gx1 = snap(trackRight(press.col))
+      local gy0 = snap(rowY(math.max(startRow, sr)))
+      local gy1 = snap(rowY(math.min(endRow, sr + visRows)))
+      ImGui.DrawList_AddRectFilled(dl, gx0+1, gy0+1, gx1, gy1, CREATE_GHOST.fill)
+      ImGui.DrawList_AddRect(dl, gx0, gy0, gx1+1, gy1+1, CREATE_GHOST.border, 0, 0, 1)
+    end
   end
 
   -- Cursor cell — cream fill at half opacity (the take fill shows
@@ -617,9 +672,9 @@ end
 -- ("create something musical-sized, not a one-row stub"). User can
 -- override in the modal.
 local CREATE_DEFAULT_ROWS = 4
-local function openCreateModal(trackIdx, qnPos)
+function openCreateModal(trackIdx, qnPos, rows)
   openModal{ kind = 'create', trackIdx = trackIdx, qnPos = qnPos,
-             nameBuf = '', rowsBuf = tostring(CREATE_DEFAULT_ROWS) }
+             nameBuf = '', rowsBuf = tostring(rows or CREATE_DEFAULT_ROWS) }
 end
 
 local function renderPaletteActions(focusedTrack, focusedSlot)
