@@ -379,6 +379,19 @@ function am:freeSpan(take)
   return lo, hi
 end
 
+--contract: true when [startQN, startQN+lengthQN) on `trackIdx` overlaps no take whose item differs from `exceptItem` — the placement test for a free mouse move (pass the dragged take's item) or an Alt-duplicate (pass nil, so the original counts). Abutting is legal under half-open ranges.
+function am:rangeIsClear(trackIdx, startQN, lengthQN, exceptItem)
+  local endQN = startQN + lengthQN
+  for _, other in ipairs(am:tracksTakes(trackIdx)) do
+    if other.item ~= exceptItem
+       and startQN < other.startQN + other.lengthQN
+       and other.startQN < endQN then
+      return false
+    end
+  end
+  return true
+end
+
 --contract: shifts the take's item start by deltaQN, length unchanged. Faithful — no clamping; callers consult freeSpan and own the grid/snap policy.
 function am:moveTake(take, deltaQN)
   if not take then return end

@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=435  sha=c103f7e  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=448  sha=adbbd85  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts
@@ -51,7 +51,7 @@
       -- take, or nil if REAPER refused the item.
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 404
+  @fn projectMidiTakes()  @ 417
 
 # Public API (am:*)
   @api am:projectTracks()  @ 125
@@ -76,14 +76,16 @@
       @contract  clones `take` at qnPos on its own track, original untouched; returns the new take, or nil if take/track is missing or the take's id can't be derived. MIDI: a pooled clone sharing the POOLEDEVTS guid; audio: a sibling on the same file.
   @api am:freeSpan(take)  @ 365
       @contract  returns (loQN, hiQN), the QN window the take may occupy on its track without overlapping a neighbour — lo the nearest left take's end (>=0), hi the nearest right take's start (math.huge if none). Left/right are decided against the take's current range; abutting is legal under half-open ranges. The mutators below are faithful, so a grid-aware caller consults this to refuse a step that would overlap.
-  @api am:moveTake(take, deltaQN)  @ 383
+  @api am:rangeIsClear(trackIdx, startQN, lengthQN, exceptItem)  @ 383
+      @contract  true when [startQN, startQN+lengthQN) on `trackIdx` overlaps no take whose item differs from `exceptItem` — the placement test for a free mouse move (pass the dragged take's item) or an Alt-duplicate (pass nil, so the original counts). Abutting is legal under half-open ranges.
+  @api am:moveTake(take, deltaQN)  @ 396
       @contract  shifts the take's item start by deltaQN, length unchanged. Faithful — no clamping; callers consult freeSpan and own the grid/snap policy.
-  @api am:resizeTake(take, newLengthQN)  @ 390
+  @api am:resizeTake(take, newLengthQN)  @ 403
       @contract  sets the take's item length to newLengthQN absolutely, start edge fixed. Faithful — no clamping; callers consult freeSpan and own snap and the minimum-length floor.
-  @api am:deleteTake(take)  @ 396
-  @api am:takesUsing(name)  @ 416
+  @api am:deleteTake(take)  @ 409
+  @api am:takesUsing(name)  @ 429
       @contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 426
+  @api am:reswingAll(name)  @ 439
       @contract  iterates affected takes via tm:bindTake with opts.markSwingStale=true; the post-load rebuild's stale-branch reseats raw from each event's ppqL under the take's current swing. Restores the original take at the end (no stale-mark — the active take's events are unchanged by the visit).
 
 # REAPER API surface

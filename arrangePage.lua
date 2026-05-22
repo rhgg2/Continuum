@@ -57,6 +57,12 @@ local modal                   = nil   -- { kind, ... } | nil
 local modalFocus              = false
 local modalOpenAtFrameStart   = false
 
+--shape: press = { trackIdx, row, qn, take, mode = 'move'|'resizeEnd', duplicate, moved } — mouse-down snapshot, nil when no button is down over the grid; `moved` flips once ImGui's drag threshold is crossed.
+--invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. A press that never crosses the drag threshold is a cursor-move click.
+local press = nil
+local DRAG_EDGE_PX = 5
+local GHOST_BLOCKED  -- lazy: blocked-drag ghost colour
+
 ----- Style + draw helpers
 
 local function pushBodyStyles()
@@ -124,6 +130,65 @@ end
 -- Both panes use these constants so the dividers line up across the gap.
 local HEADER_PAD = 8
 local HEADER_GAP = 4
+
+----- Grid mouse — drag a take to move / resize, Alt-drag to duplicate
+
+local function roundTo(v, step)
+  return math.floor(v / step + 0.5) * step
+end
+
+-- The take under (trackIdx, qn) and the mode its grab implies:
+-- 'resizeEnd' within DRAG_EDGE_PX of the end edge (clamped to half the
+-- take, so a short take stays grabbable for a move), else 'move'.
+local function hitTake(trackIdx, qn, qnPerPx)
+  for _, take in ipairs(am:tracksTakes(trackIdx)) do
+    local endQN = take.startQN + take.lengthQN
+    if qn >= take.startQN and qn < endQN then
+      local edgeQN = math.min(DRAG_EDGE_PX * qnPerPx, take.lengthQN / 2)
+      return take, (qn >= endQN - edgeQN) and 'resizeEnd' or 'move'
+    end
+  end
+  return nil
+end
+
+-- In-flight drag geometry: { startQN, lengthQN, fits }. The moved edge
+-- snaps to a row box unless Shift is held; `fits` is am:rangeIsClear
+-- for the candidate, excluding the dragged take itself (or nothing for
+-- an Alt-duplicate, whose original stays put).
+local function dragCandidate(press, mouseQN, beatPerRow)
+  local take    = press.take
+  local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
+  local startQN, lengthQN = take.startQN, take.lengthQN
+  if press.mode == 'resizeEnd' then
+    lengthQN = take.lengthQN + (mouseQN - press.qn)
+    if snapped then
+      lengthQN = roundTo(startQN + lengthQN, beatPerRow) - startQN
+    end
+    lengthQN = math.max(beatPerRow, lengthQN)
+  else
+    startQN = take.startQN + (mouseQN - press.qn)
+    if snapped then startQN = roundTo(startQN, beatPerRow) end
+    startQN = math.max(0, startQN)
+  end
+  local exceptItem = press.duplicate and nil or take.item
+  return {
+    startQN = startQN, lengthQN = lengthQN,
+    fits = am:rangeIsClear(take.trackIdx, startQN, lengthQN, exceptItem),
+  }
+end
+
+-- Commit a released drag. resizeEnd leaves the cursor put; move and
+-- duplicate land it on the resulting take.
+local function commitDrag(press, cand)
+  local take = press.take
+  if press.mode == 'resizeEnd' then
+    am:resizeTake(take, cand.lengthQN)
+  else
+    if press.duplicate then am:duplicateTake(take, cand.startQN)
+    else am:moveTake(take, cand.startQN - take.startQN) end
+    av:setCursor(math.floor(av:qnToRow(cand.startQN)), take.trackIdx)
+  end
+end
 
 local function renderGrid(tracks, nTracks)
   local dl       = ImGui.GetWindowDrawList(ctx)
@@ -269,6 +334,56 @@ local function renderGrid(tracks, nTracks)
     ImGui.DrawList_AddText(dl, lx, headerTextY, textCol, name)
     ImGui.DrawList_PopClipRect(dl)
   end
+
+  -- Mouse: drag a take to move / resize / Alt-duplicate; a plain click
+  -- moves the cursor. The closures here invert renderGrid's geometry.
+  local function drawGhost(cand, take)
+    local rx0, rx1 = snap(trackLeft(take.trackIdx)), snap(trackRight(take.trackIdx))
+    local ry0 = snap(rowY(av:qnToRow(cand.startQN)))
+    local ry1 = snap(rowY(av:qnToRow(cand.startQN + cand.lengthQN)))
+    local _, border = slotColours(take.slotIdx)
+    GHOST_BLOCKED = GHOST_BLOCKED
+      or ImGui.ColorConvertDouble4ToU32(0.80, 0.16, 0.16, 0.95)
+    ImGui.DrawList_AddRect(dl, rx0, ry0, rx1 + 1, ry1 + 1,
+      cand.fits and border or GHOST_BLOCKED, 0, 0, 2)
+  end
+
+  local function handleGridMouse()
+    local mx, my = ImGui.GetMousePos(ctx)
+    local bpr    = av:beatPerRow()
+    local yToQN  = function(y) return (sr + (y - bodyTop) / rowH) * bpr end
+
+    if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
+       and my >= bodyTop and my <= bodyBot then
+      local col = math.floor((mx - ox - QN_W - GUTTER_PAD) / TRACK_W)
+      if col >= 0 and col < nTracks then
+        local qn = yToQN(my)
+        local take, mode = hitTake(col, qn, bpr / rowH)
+        press = {
+          trackIdx = col, row = sr + math.floor((my - bodyTop) / rowH),
+          qn = qn, take = take, mode = mode, moved = false,
+          duplicate = mode == 'move'
+                      and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
+        }
+      end
+    end
+    if not press then return end
+    if press.take and ImGui.IsMouseDragging(ctx, 0) then press.moved = true end
+
+    local cand = (press.moved and press.take)
+                 and dragCandidate(press, yToQN(my), bpr) or nil
+    if cand then drawGhost(cand, press.take) end
+
+    if ImGui.IsMouseReleased(ctx, 0) then
+      if cand then
+        if cand.fits then commitDrag(press, cand) end
+      elseif not press.moved then
+        av:setCursor(press.row, press.trackIdx)
+      end
+      press = nil
+    end
+  end
+  handleGridMouse()
 
   ImGui.DrawList_PopClipRect(dl)
 

@@ -30,8 +30,7 @@ coordinator
   ├─ samplePage
   └─ arrangePage          -- toolbar, status, key/mouse, page scope
        └─ arrangeView     -- viewport (visible track range, qn range,
-            │                zoom), cursor, selection, palette UI,
-            │                drag preview
+            │                zoom), cursor, selection, palette UI
             └─ arrangeManager   -- project-wide; reads REAPER items
                                   directly; owns slot dictionary via cm
 ```
@@ -113,6 +112,7 @@ am:duplicateTake(take, qnPos)     -> take
 -- per-take edits (mirror tracker nudge / grow / shrink)
 am:takeAt(trackIdx, boxLoQN, boxHiQN, accept?) -> take | nil  -- largest-overlap take
 am:freeSpan(take)                 -> loQN, hiQN  -- non-overlap window
+am:rangeIsClear(trackIdx, startQN, lengthQN, exceptItem?) -> bool
 am:moveTake(take, deltaQN)
 am:resizeTake(take, newLengthQN)
 am:deleteTake(take)
@@ -150,9 +150,11 @@ confirm if instances exist).
 
 ## Mouse
 
-Click a take → cursor jumps, take becomes focus. Drag → move. Drag an
-edge → resize. Modifier+drag → duplicate (pooled clone for MIDI). The
-grid responds to snap.
+Click a take → cursor jumps. Drag the body → move; drag the end edge →
+resize. Default snaps the moved edge to a row box; Shift disables snap.
+Alt+drag duplicates (pooled clone for MIDI). A drag never carries a
+take into another's QN span — it lands only in clear space. Trim-start
+(dragging the start edge) is deferred — see build phases.
 
 ## Build phases
 
@@ -170,7 +172,9 @@ Each phase ships green and committable.
    start has no tracker note command to clone — deferred to the
    mouse-drag slice (7), where edge-dragging makes it natural.
 6. Tracker dive hotkey.
-7. Mouse drag: move / resize / modifier-duplicate.
+7. Mouse drag: move / resize-end / Alt-duplicate.
+7b. Trim-start: drag the start edge — needs `am:trimStart` advancing
+   the take's source offset so content doesn't shift.
 8. Boot into the arrange page; cursor seeded from the REAPER
    selection (selected take, else edit cursor). `Enter` round-trips
    tracker ↔ arrange.

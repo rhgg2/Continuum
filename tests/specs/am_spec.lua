@@ -279,6 +279,24 @@ return {
   },
 
   {
+    name = 'rangeIsClear detects QN overlap, honouring exceptItem',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = {
+          { kind = 'midi', pos = 0, len = 2, poolGuid = '{a}' },
+          { kind = 'midi', pos = 8, len = 2, poolGuid = '{b}' },
+        } },
+      })
+      t.eq(am:rangeIsClear(0, 3, 2, nil),  true,  'gap between the takes is clear')
+      t.eq(am:rangeIsClear(0, 1, 2, nil),  false, 'overlapping the first take is not clear')
+      t.eq(am:rangeIsClear(0, 2, 2, nil),  true,  'abutting the first take is legal')
+      local first = am:tracksTakes(0)[1]
+      t.eq(am:rangeIsClear(0, 0, 2, first.item), true, 'exceptItem excludes the take itself')
+    end,
+  },
+
+  {
     name = 'createAndDropMidi returns nil when no track exists',
     run = function(harness)
       local h, am = mkAm(harness)
