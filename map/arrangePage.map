@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=673  sha=37a9f9e  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=692  sha=ff5ae2b  mode=chunk
 @deps cm, cmgr, chrome, gui
 
 # Invariants & contracts
@@ -41,7 +41,7 @@
       @invariant  arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
       @invariant  62 place commands (drop0..dropZ) sit in cmgr:scope('arrange'), one per base62 slot. Pressing a key with no slot defined at that index is a silent no-op (am:dropInstance returns nil). Length defaults to one row (beatPerRow) — a real snap selector lands with the toolbar.
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the *only* slot-minting gesture. Slots have no existence apart from items on the grid; rename/delete buttons in the palette act on existing slots.
-  @state placeCmds, placeBinds = {}, {}  @ 664
+  @state placeCmds, placeBinds = {}, {}  @ 683
 
 # Private functions
   -- Style + draw helpers
@@ -91,15 +91,15 @@
       -- one row (av:beatPerRow), matching the place commands. Keys clone the
       -- tracker note-edit vocab (nudge / grow / shrink); names are arrange-
       -- prefixed for the same flat-registry reason as the cursor commands.
-      @invariant  a nudge steps the cursor by the delta moveTake actually applied, so the take stays under the cursor across repeated nudges even when the start-at-0 clamp shortens a step.
-  @fn nudgeCmd(direction)  @ 614
-  @fn resizeCmd(direction)  @ 623
-  @fn deleteTakeAtCursor()  @ 631
-  @fn dropAt(slotIdx)  @ 653
+      @invariant  nudge and resize step by exactly one row or not at all — a partial step would desync the cursor, which only sits on row lines. Neither edit lets a take enter a row box another take inhabits, even when geometry alone would allow it: a nudge refuses a destination row holding another take's start; a grow stops at the next take's row-box top, not its exact (maybe off-grid) start.
+  @fn nudgeCmd(direction)  @ 615
+  @fn resizeCmd(direction)  @ 635
+  @fn deleteTakeAtCursor()  @ 650
+  @fn dropAt(slotIdx)  @ 672
       -- Place commands (drop0..dropZ). 0..9 → digit keys, 10..35 → letter
       -- keys, 36..61 → Shift+letter. ImGui.Key_0 + n and Key_A + n are
       -- contiguous (already exploited at coordinator.lua:53).
-  @fn placeKey(slotIdx)  @ 659
+  @fn placeKey(slotIdx)  @ 678
 
 # Public API (ap:*)
   @api ap:bind()  @ 501

@@ -607,25 +607,44 @@ arrange:bindAll {
 -- one row (av:beatPerRow), matching the place commands. Keys clone the
 -- tracker note-edit vocab (nudge / grow / shrink); names are arrange-
 -- prefixed for the same flat-registry reason as the cursor commands.
---invariant: a nudge steps the cursor by the delta moveTake actually applied, so the take stays under the cursor across repeated nudges even when the start-at-0 clamp shortens a step.
+--invariant: nudge and resize step by exactly one row or not at all — a partial step would desync the cursor, which only sits on row lines. Neither edit lets a take enter a row box another take inhabits, even when geometry alone would allow it: a nudge refuses a destination row holding another take's start; a grow stops at the next take's row-box top, not its exact (maybe off-grid) start.
 local function takeAtCursor()
-  return am:takeAt(av:cursorCol(), av:rowToQN(av:cursorRow()))
+  local boxTop = av:rowToQN(av:cursorRow())
+  return am:takeAt(av:cursorCol(), boxTop, boxTop + av:beatPerRow())
 end
 local function nudgeCmd(direction)
   return function()
     local take = takeAtCursor()
     if not take then return end
     local beatPerRow = av:beatPerRow()
-    local applied = am:moveTake(take, direction * beatPerRow)
-    av:setCursor(av:cursorRow() + applied / beatPerRow, av:cursorCol())
+    local step       = direction * beatPerRow
+    local destRow    = av:cursorRow() + direction
+    local destBoxTop = av:rowToQN(destRow)
+    local destTaken  = am:takeAt(av:cursorCol(), destBoxTop, destBoxTop + beatPerRow)
+    local newStart   = take.startQN + step
+    local lo, hi     = am:freeSpan(take)
+    local fits = not destTaken
+             and newStart >= lo
+             and newStart + take.lengthQN <= hi
+    if fits then
+      am:moveTake(take, step)
+      av:setCursor(destRow, av:cursorCol())
+    end
   end
 end
 local function resizeCmd(direction)
   return function()
     local take = takeAtCursor()
     if not take then return end
-    local snap = av:beatPerRow()
-    am:resizeTake(take, math.max(snap, take.lengthQN + direction * snap))
+    local beatPerRow = av:beatPerRow()
+    local newLength  = math.max(beatPerRow, take.lengthQN + direction * beatPerRow)
+    local _, hi      = am:freeSpan(take)
+    -- Clamp to the row-box top of the next take, not its exact (maybe
+    -- off-grid) start: a grow may abut that box but never enter it.
+    local neighbourBoxTop = math.floor(hi / beatPerRow) * beatPerRow
+    if take.startQN + newLength <= neighbourBoxTop then
+      am:resizeTake(take, newLength)
+    end
   end
 end
 local function deleteTakeAtCursor()

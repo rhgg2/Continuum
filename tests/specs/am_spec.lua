@@ -300,29 +300,56 @@ return {
   -- Per-take edits
   --------------------------------------------------------------------
   {
-    name = 'takeAt resolves the take whose half-open QN range holds the point',
+    name = 'takeAt returns the first take whose start falls in the cursor box',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
-        { items = { { kind = 'midi', pos = 0, len = 2, poolGuid = '{p1}' },
-                    { kind = 'midi', pos = 4, len = 2, poolGuid = '{p2}' } } },
+        { items = { { kind = 'midi', pos = 0,   len = 2, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4.5, len = 2, poolGuid = '{p2}' } } },
       })
-      t.truthy(am:takeAt(0, 1), 'point inside the first take')
-      t.eq(am:takeAt(0, 2), nil, 'gap between takes resolves nil')
-      t.eq(am:takeAt(0, 0).startQN, 0, 'start edge is inside (half-open)')
-      t.eq(am:takeAt(0, 4).startQN, 4, 'second take resolved by its range')
+      t.eq(am:takeAt(0, 0, 1).startQN, 0,   'a take starting at the box top is selected')
+      t.eq(am:takeAt(0, 1, 2),        nil,  'a take spanning the box but not starting in it is skipped')
+      t.eq(am:takeAt(0, 4, 5).startQN, 4.5, 'an off-grid start inside the box is selected')
+      t.eq(am:takeAt(0, 2, 4),        nil,  'no take starts in an empty box')
     end,
   },
 
   {
-    name = 'moveTake shifts start, preserves length, returns applied delta',
+    name = 'freeSpan reports an open window when the take has no neighbours',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
         { items = { { kind = 'midi', pos = 4, len = 2, poolGuid = '{p1}' } } },
       })
-      local applied = am:moveTake(am:tracksTakes(0)[1], 3)
-      t.eq(applied, 3, 'unclamped move returns the full delta')
+      local lo, hi = am:freeSpan(am:tracksTakes(0)[1])
+      t.eq(lo, 0,         'floor is 0 with nothing to the left')
+      t.eq(hi, math.huge, 'ceiling is open with nothing to the right')
+    end,
+  },
+
+  {
+    name = 'freeSpan bounds the window by the nearest neighbour on each side',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0,   len = 1.5, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4,   len = 2,   poolGuid = '{p2}' },
+                    { kind = 'midi', pos = 8.5, len = 1,   poolGuid = '{p3}' } } },
+      })
+      local lo, hi = am:freeSpan(am:tracksTakes(0)[2])
+      t.eq(lo, 1.5, 'floor is the left take end, off-grid and all')
+      t.eq(hi, 8.5, 'ceiling is the right take start')
+    end,
+  },
+
+  {
+    name = 'moveTake shifts start, preserves length — faithful, no clamp',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 4, len = 2, poolGuid = '{p1}' } } },
+      })
+      am:moveTake(am:tracksTakes(0)[1], 3)
       local moved = am:tracksTakes(0)[1]
       t.eq(moved.startQN,  7)
       t.eq(moved.lengthQN, 2, 'length unchanged by a move')
@@ -330,20 +357,7 @@ return {
   },
 
   {
-    name = 'moveTake clamps start at 0 and reports the reduced delta',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, {
-        { items = { { kind = 'midi', pos = 2, len = 2, poolGuid = '{p1}' } } },
-      })
-      local applied = am:moveTake(am:tracksTakes(0)[1], -5)
-      t.eq(applied, -2, 'clamp at 0 caps the applied delta')
-      t.eq(am:tracksTakes(0)[1].startQN, 0, 'start pinned to 0')
-    end,
-  },
-
-  {
-    name = 'resizeTake sets length absolutely, start edge fixed',
+    name = 'resizeTake sets length absolutely, start edge fixed — faithful',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
@@ -364,7 +378,7 @@ return {
         { items = { { kind = 'midi', pos = 0, len = 1, poolGuid = '{p1}' },
                     { kind = 'midi', pos = 4, len = 1, poolGuid = '{p2}' } } },
       })
-      am:deleteTake(am:takeAt(0, 0))
+      am:deleteTake(am:tracksTakes(0)[1])
       local takes = am:tracksTakes(0)
       t.eq(#takes, 1, 'one take left after delete')
       t.eq(takes[1].startQN, 4, 'the surviving take is the other one')

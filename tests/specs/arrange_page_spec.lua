@@ -127,4 +127,101 @@ return {
       t.eq(#am:tracksTakes(0), 0, 'no takes left')
     end,
   },
+
+  {
+    name = 'arrangeNudgeForward is a no-op when the next row is occupied',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 1, len = 1, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeNudgeForward')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].startQN, 0, 'blocked take stays put')
+    end,
+  },
+
+  {
+    name = 'arrangeNudgeBack is a no-op when the take is already at row 0',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeNudgeBack')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].startQN, 0, 'cannot nudge below 0')
+    end,
+  },
+
+  {
+    name = 'arrangeGrowTake is a no-op when the next row is occupied',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 2, len = 1, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeGrowTake')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].lengthQN, 2, 'blocked grow leaves length unchanged')
+    end,
+  },
+
+  {
+    name = 'arrangeNudgeForward refuses an inhabited row even when no overlap would result',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      -- Two sub-row takes: moving t1 into row 1 would not overlap t2,
+      -- but row 1 already holds t2's start, so the nudge is refused.
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 0.3, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 1.5, len = 0.3, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeNudgeForward')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].startQN, 0, 'stays put — destination row is inhabited')
+    end,
+  },
+
+  {
+    name = 'arrangeGrowTake refuses growth into a row box another take inhabits',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      -- Growing t1 reaches QN 2.5 — clear of t2 at 2.7, no overlap — but
+      -- 2.5 lies in row 2, the box t2 starts in, so the grow is refused.
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1.5, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 2.7, len = 0.2, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeGrowTake')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].lengthQN, 1.5, 'stays put: grow would enter the neighbour row box')
+    end,
+  },
 }

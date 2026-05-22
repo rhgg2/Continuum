@@ -164,10 +164,10 @@ function am:tracksTakes(trackIdx)
   return out
 end
 
---contract: returns the take on `trackIdx` whose half-open QN range [startQN, startQN+lengthQN) contains `qn`; nil if none. First match in REAPER item order when ranges overlap.
-function am:takeAt(trackIdx, qn)
+--contract: returns the first take on `trackIdx` (REAPER item order) whose start QN lies in the half-open box [boxStartQN, boxEndQN); nil if none. The arrange cursor is one row tall, so a take belongs to the cursor's row when it *begins* in that row — a take merely spanning the row does not count.
+function am:takeAt(trackIdx, boxStartQN, boxEndQN)
   for _, take in ipairs(am:tracksTakes(trackIdx)) do
-    if qn >= take.startQN and qn < take.startQN + take.lengthQN then
+    if take.startQN >= boxStartQN and take.startQN < boxEndQN then
       return take
     end
   end
@@ -322,16 +322,32 @@ end
 
 ----- Per-take edits
 
---contract: shifts the take's item start by deltaQN with length unchanged; start clamps at 0. Returns the QN delta actually applied (smaller than requested when the clamp bites) so callers can step a cursor in lockstep.
-function am:moveTake(take, deltaQN)
-  if not take then return 0 end
+--contract: returns (loQN, hiQN), the QN window the take may occupy on its track without overlapping a neighbour — lo the nearest left take's end (>=0), hi the nearest right take's start (math.huge if none). Left/right are decided against the take's current range; abutting is legal under half-open ranges. The mutators below are faithful, so a grid-aware caller consults this to refuse a step that would overlap.
+function am:freeSpan(take)
   local startQN, lengthQN = itemQNRange(take.item)
-  local newStart = math.max(0, startQN + deltaQN)
-  setItemQNRange(take.item, newStart, newStart + lengthQN)
-  return newStart - startQN
+  local endQN = startQN + lengthQN
+  local lo, hi = 0, math.huge
+  for _, other in ipairs(am:tracksTakes(take.trackIdx)) do
+    if other.item ~= take.item then
+      local otherEnd = other.startQN + other.lengthQN
+      if otherEnd <= startQN then
+        lo = math.max(lo, otherEnd)
+      elseif other.startQN >= endQN then
+        hi = math.min(hi, other.startQN)
+      end
+    end
+  end
+  return lo, hi
 end
 
---contract: sets the take's item length to newLengthQN absolutely, start edge fixed. Callers own snap and minimum-length policy.
+--contract: shifts the take's item start by deltaQN, length unchanged. Faithful — no clamping; callers consult freeSpan and own the grid/snap policy.
+function am:moveTake(take, deltaQN)
+  if not take then return end
+  local startQN, lengthQN = itemQNRange(take.item)
+  setItemQNRange(take.item, startQN + deltaQN, startQN + lengthQN + deltaQN)
+end
+
+--contract: sets the take's item length to newLengthQN absolutely, start edge fixed. Faithful — no clamping; callers consult freeSpan and own snap and the minimum-length floor.
 function am:resizeTake(take, newLengthQN)
   if not take then return end
   local startQN = itemQNRange(take.item)
