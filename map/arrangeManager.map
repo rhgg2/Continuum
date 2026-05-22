@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=461  sha=5d056d7  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=470  sha=e90785c  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts
@@ -44,17 +44,17 @@
       -- (defensive — CreateNewMIDIItemInProj always emits a fresh pool line).
   @fn harvestPoolGuid(item)  @ 282
   @fn poolMidiItem(item, guid)  @ 288
-  @fn placeSource(track, kind, id, qnPos, lengthQN)  @ 299
+  @fn placeSource(track, kind, id, qnPos, lengthQN, name)  @ 299
       -- Place a fresh item carrying source `id` on `track` at qnPos for
-      -- lengthQN. MIDI: a pooled clone (POOLEDEVTS swap to `id`); audio: a
-      -- sibling item on file `id` — REAPER doesn't pool audio. Returns the
-      -- take, or nil if REAPER refused the item.
-  @fn siblingLength(track, id)  @ 346
-      -- Length of the first existing instance of source `id` on `track` —
-      -- the length a fresh drop inherits when the caller names none.
+      -- lengthQN, named `name` when given. MIDI: a pooled clone (POOLEDEVTS
+      -- swap to `id`); audio: a sibling item on file `id` — REAPER doesn't
+      -- pool audio. Returns the take, or nil if REAPER refused the item.
+  @fn siblingInstance(track, id)  @ 353
+      -- Length and name of the first existing instance of source `id` on
+      -- `track` — what a fresh drop inherits when the caller supplies neither.
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 430
+  @fn projectMidiTakes()  @ 439
 
 # Public API (am:*)
   @api am:projectTracks()  @ 125
@@ -71,24 +71,24 @@
   @api am:renameSlot(trackIdx, slotIdx, name)  @ 239
   @api am:deleteSlot(trackIdx, slotIdx)  @ 252
       @contract  deletes every live take whose id matches this slot's id. ensureSlots prunes the now-orphaned dict entry on the next read; we run it inline so the palette doesn't briefly carry a ghost row. Returns the number of takes removed.
-  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 321
+  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 328
       @contract  creates a fresh MIDI source on `trackIdx` at qnPos for lengthQN, allocates the lowest-free slot pointing at the new pool guid, names the take, returns (slotIdx, take). Nil if track missing or slots exhausted. The only path that mints a slot.
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 357
-      @contract  drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos. lengthQN defaults to the length of an existing instance of the slot (a slot always has one), else 1 QN. MIDI pools via POOLEDEVTS; audio adds a sibling on the slot's file. Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
-  @api am:duplicateTake(take, qnPos)  @ 367
-      @contract  clones `take` at qnPos on its own track, original untouched; returns the new take, or nil if take/track is missing or the take's id can't be derived. MIDI: a pooled clone sharing the POOLEDEVTS guid; audio: a sibling on the same file.
-  @api am:freeSpan(take)  @ 378
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 365
+      @contract  drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos. lengthQN defaults to the length of an existing instance of the slot (a slot always has one), else 1 QN; the dropped take inherits that instance's name. MIDI pools via POOLEDEVTS; audio adds a sibling on the slot's file. Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
+  @api am:duplicateTake(take, qnPos)  @ 376
+      @contract  clones `take` (name included) at qnPos on its own track, original untouched; returns the new take, or nil if take/track is missing or the take's id can't be derived. MIDI: a pooled clone sharing the POOLEDEVTS guid; audio: a sibling on the same file.
+  @api am:freeSpan(take)  @ 387
       @contract  returns (loQN, hiQN), the QN window the take may occupy on its track without overlapping a neighbour — lo the nearest left take's end (>=0), hi the nearest right take's start (math.huge if none). Left/right are decided against the take's current range; abutting is legal under half-open ranges. The mutators below are faithful, so a grid-aware caller consults this to refuse a step that would overlap.
-  @api am:rangeIsClear(trackIdx, startQN, lengthQN, exceptItem)  @ 396
+  @api am:rangeIsClear(trackIdx, startQN, lengthQN, exceptItem)  @ 405
       @contract  true when [startQN, startQN+lengthQN) on `trackIdx` overlaps no take whose item differs from `exceptItem` — the placement test for a free mouse move (pass the dragged take's item) or an Alt-duplicate (pass nil, so the original counts). Abutting is legal under half-open ranges.
-  @api am:moveTake(take, deltaQN)  @ 409
+  @api am:moveTake(take, deltaQN)  @ 418
       @contract  shifts the take's item start by deltaQN, length unchanged. Faithful — no clamping; callers consult freeSpan and own the grid/snap policy.
-  @api am:resizeTake(take, newLengthQN)  @ 416
+  @api am:resizeTake(take, newLengthQN)  @ 425
       @contract  sets the take's item length to newLengthQN absolutely, start edge fixed. Faithful — no clamping; callers consult freeSpan and own snap and the minimum-length floor.
-  @api am:deleteTake(take)  @ 422
-  @api am:takesUsing(name)  @ 442
+  @api am:deleteTake(take)  @ 431
+  @api am:takesUsing(name)  @ 451
       @contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 452
+  @api am:reswingAll(name)  @ 461
       @contract  iterates affected takes via tm:bindTake with opts.markSwingStale=true; the post-load rebuild's stale-branch reseats raw from each event's ppqL under the take's current swing. Restores the original take at the end (no stale-mark — the active take's events are unchanged by the visit).
 
 # REAPER API surface

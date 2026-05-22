@@ -293,27 +293,34 @@ local function poolMidiItem(item, guid)
 end
 
 -- Place a fresh item carrying source `id` on `track` at qnPos for
--- lengthQN. MIDI: a pooled clone (POOLEDEVTS swap to `id`); audio: a
--- sibling item on file `id` — REAPER doesn't pool audio. Returns the
--- take, or nil if REAPER refused the item.
-local function placeSource(track, kind, id, qnPos, lengthQN)
+-- lengthQN, named `name` when given. MIDI: a pooled clone (POOLEDEVTS
+-- swap to `id`); audio: a sibling item on file `id` — REAPER doesn't
+-- pool audio. Returns the take, or nil if REAPER refused the item.
+local function placeSource(track, kind, id, qnPos, lengthQN, name)
+  local take
   if kind == 'midi' then
     local item = reaper.CreateNewMIDIItemInProj(
       track, qnPos, qnPos + lengthQN, true)
     if not item then return nil end
     poolMidiItem(item, id)
-    return reaper.GetActiveTake(item)
+    take = reaper.GetActiveTake(item)
+  else
+    local item = reaper.AddMediaItemToTrack(track)
+    if not item then return nil end
+    local startSec = reaper.TimeMap2_QNToTime(0, qnPos)
+    local endSec   = reaper.TimeMap2_QNToTime(0, qnPos + lengthQN)
+    reaper.SetMediaItemInfo_Value(item, 'D_POSITION', startSec)
+    reaper.SetMediaItemInfo_Value(item, 'D_LENGTH',   endSec - startSec)
+    take = reaper.AddTakeToMediaItem(item)
+    if take then
+      local src = reaper.PCM_Source_CreateFromFile(id)
+      if src then reaper.SetMediaItemTake_Source(take, src) end
+    end
   end
-  local item = reaper.AddMediaItemToTrack(track)
-  if not item then return nil end
-  local startSec = reaper.TimeMap2_QNToTime(0, qnPos)
-  local endSec   = reaper.TimeMap2_QNToTime(0, qnPos + lengthQN)
-  reaper.SetMediaItemInfo_Value(item, 'D_POSITION', startSec)
-  reaper.SetMediaItemInfo_Value(item, 'D_LENGTH',   endSec - startSec)
-  local take = reaper.AddTakeToMediaItem(item)
   if not take then return nil end
-  local src = reaper.PCM_Source_CreateFromFile(id)
-  if src then reaper.SetMediaItemTake_Source(take, src) end
+  if name and name ~= '' then
+    reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
+  end
   return take
 end
 
@@ -341,35 +348,37 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   return slotIdx, take
 end
 
--- Length of the first existing instance of source `id` on `track` —
--- the length a fresh drop inherits when the caller names none.
-local function siblingLength(track, id)
-  local len
+-- Length and name of the first existing instance of source `id` on
+-- `track` — what a fresh drop inherits when the caller supplies neither.
+local function siblingInstance(track, id)
+  local len, name
   forEachActiveTake(track, function(take, item)
     if not len and takeIdOf(take) == id then
-      len = select(2, itemQNRange(item))
+      len  = select(2, itemQNRange(item))
+      name = reaper.GetTakeName(take) or ''
     end
   end)
-  return len
+  return len, name
 end
 
---contract: drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos. lengthQN defaults to the length of an existing instance of the slot (a slot always has one), else 1 QN. MIDI pools via POOLEDEVTS; audio adds a sibling on the slot's file. Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
+--contract: drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos. lengthQN defaults to the length of an existing instance of the slot (a slot always has one), else 1 QN; the dropped take inherits that instance's name. MIDI pools via POOLEDEVTS; audio adds a sibling on the slot's file. Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
 function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return nil end
   local entry = readSlots(track)[slotIdx]
   if not entry or not entry.id then return nil end
+  local siblingLen, siblingName = siblingInstance(track, entry.id)
   return placeSource(track, entry.kind, entry.id, qnPos or 0,
-                     lengthQN or siblingLength(track, entry.id) or 1)
+                     lengthQN or siblingLen or 1, siblingName)
 end
 
---contract: clones `take` at qnPos on its own track, original untouched; returns the new take, or nil if take/track is missing or the take's id can't be derived. MIDI: a pooled clone sharing the POOLEDEVTS guid; audio: a sibling on the same file.
+--contract: clones `take` (name included) at qnPos on its own track, original untouched; returns the new take, or nil if take/track is missing or the take's id can't be derived. MIDI: a pooled clone sharing the POOLEDEVTS guid; audio: a sibling on the same file.
 function am:duplicateTake(take, qnPos)
   if not take then return nil end
   local track = reaper.GetTrack(0, take.trackIdx)
   local id    = takeIdOf(take.take)
   if not track or not id then return nil end
-  return placeSource(track, take.kind, id, qnPos, take.lengthQN)
+  return placeSource(track, take.kind, id, qnPos, take.lengthQN, take.name)
 end
 
 ----- Per-take edits

@@ -266,6 +266,21 @@ return {
   },
 
   {
+    name = 'dropInstance and duplicateTake name the new take after the slot',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local slot = am:createAndDropMidi(0, 0, 2, 'lead')
+      local dropped = am:dropInstance(0, slot, 8)
+      t.eq(h.reaper.GetTakeName(dropped), 'lead',
+           'a placed instance inherits the slot name')
+      local clone = am:duplicateTake(am:tracksTakes(0)[1], 16)
+      t.eq(h.reaper.GetTakeName(clone), 'lead',
+           'a duplicate carries the original take name')
+    end,
+  },
+
+  {
     name = 'duplicateTake returns nil for a missing take or track',
     run = function(harness)
       local h, am = mkAm(harness)
