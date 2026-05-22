@@ -52,7 +52,10 @@ local SLOT_KEY_W, SLOT_KIND_W = 18, 16
 -- the root-scope quit binding because CloseCurrentPopup deactivates
 -- the InputText same-frame, flipping IsAnyItemActive to false before
 -- dispatch runs.
-local MODAL_TITLE             = 'arrange modal'
+-- Popup id is stable (### suffix); the visible title varies per kind.
+local MODAL_ID                = '###arrangeModal'
+local MODAL_TITLES            = { rename = 'Rename slot', create = 'New take',
+                                  delete = 'Delete slot' }
 local modal                   = nil   -- { kind, ... } | nil
 local modalFocus              = false
 local modalOpenAtFrameStart   = false
@@ -478,10 +481,16 @@ local function renderPaletteHeader(focusedTrack)
   ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
 end
 
+-- Popup label: stable id (so OpenPopup / BeginPopupModal agree) under a
+-- per-kind visible title.
+local function modalLabel()
+  return (MODAL_TITLES[modal and modal.kind] or 'Arrange') .. MODAL_ID
+end
+
 local function openModal(state)
   modal      = state
   modalFocus = true
-  ImGui.OpenPopup(ctx, MODAL_TITLE)
+  ImGui.OpenPopup(ctx, modalLabel())
 end
 
 local function openRenameModal(trackIdx, slotIdx, currentName)
@@ -567,19 +576,24 @@ end
 -- Begin/End so the popup inherits parchment/chrome styles instead of
 -- ImGui's dark defaults.
 --
--- Single popup id (MODAL_TITLE) drives all three kinds — the popup
--- can't be open in two configurations simultaneously, and one id keeps
--- the open/close bookkeeping symmetrical. Self-heal: if the modal
--- state was set but ImGui's popup queue lost it (e.g. command opened
--- the popup from outside any window), re-open here.
+-- One stable popup id (modalLabel's ### suffix) drives all three kinds,
+-- under a per-kind visible title — the popup can't be open in two
+-- configurations simultaneously, and one id keeps the open/close
+-- bookkeeping symmetrical. Self-heal: if the modal state was set but
+-- ImGui's popup queue lost it (e.g. command opened the popup from
+-- outside any window), re-open here.
 local function renderModal()
   if not modal then return end
-  if not ImGui.IsPopupOpen(ctx, MODAL_TITLE) then
-    ImGui.OpenPopup(ctx, MODAL_TITLE)
+  if not ImGui.IsPopupOpen(ctx, modalLabel()) then
+    ImGui.OpenPopup(ctx, modalLabel())
   end
-  local flags = ImGui.WindowFlags_AlwaysAutoResize | ImGui.WindowFlags_NoNav
+  -- NoNav keeps ImGui's popup nav from stealing keys from a lone
+  -- InputText; the create modal has two fields plus a button row, so it
+  -- keeps nav on for Tab to walk between them.
+  local flags = ImGui.WindowFlags_AlwaysAutoResize
+  if modal.kind ~= 'create' then flags = flags | ImGui.WindowFlags_NoNav end
   chrome.pushChromeWindow()
-  if ImGui.BeginPopupModal(ctx, MODAL_TITLE, nil, flags) then
+  if ImGui.BeginPopupModal(ctx, modalLabel(), nil, flags) then
     local function close() modal = nil; ImGui.CloseCurrentPopup(ctx) end
 
     if modal.kind == 'rename' then
@@ -598,13 +612,14 @@ local function renderModal()
     elseif modal.kind == 'create' then
       ImGui.Text(ctx, 'Name')
       if modalFocus then ImGui.SetKeyboardFocusHere(ctx); modalFocus = false end
-      local _, nb = ImGui.InputText(ctx, '##createName', modal.nameBuf)
+      local commitN, nb = ImGui.InputText(ctx, '##createName', modal.nameBuf,
+                                          ImGui.InputTextFlags_EnterReturnsTrue)
       modal.nameBuf = nb
       ImGui.Text(ctx, 'Length (rows)')
       local commitR, rb = ImGui.InputText(ctx, '##createRows', modal.rowsBuf,
                                           ImGui.InputTextFlags_EnterReturnsTrue)
       modal.rowsBuf = rb
-      local ok     = commitR or ImGui.Button(ctx, 'OK')
+      local ok     = commitN or commitR or ImGui.Button(ctx, 'OK')
       ImGui.SameLine(ctx)
       local cancel = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
       if ok then
