@@ -247,6 +247,38 @@ return {
   },
 
   {
+    name = 'duplicateTake clones a MIDI take into a pooled sibling',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local slot  = am:createAndDropMidi(0, 0, 2, 'lead')
+      local clone = am:duplicateTake(am:tracksTakes(0)[1], 6)
+      t.eq(am:slotForTake(clone), slot, 'clone pools to the source take\'s slot')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2, 'original survives, clone added')
+      local cloneShape
+      for _, tk in ipairs(takes) do
+        if tk.startQN == 6 then cloneShape = tk end
+      end
+      t.eq(cloneShape ~= nil, true, 'clone placed at qnPos 6')
+      t.eq(cloneShape.lengthQN, 2, 'clone copies the source length')
+    end,
+  },
+
+  {
+    name = 'duplicateTake returns nil for a missing take or track',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      am:createAndDropMidi(0, 0, 1, 'x')
+      local shape = am:tracksTakes(0)[1]
+      shape.trackIdx = 7
+      t.eq(am:duplicateTake(shape, 4), nil, 'no track at index 7')
+      t.eq(am:duplicateTake(nil, 0), nil, 'nil take')
+    end,
+  },
+
+  {
     name = 'createAndDropMidi returns nil when no track exists',
     run = function(harness)
       local h, am = mkAm(harness)
