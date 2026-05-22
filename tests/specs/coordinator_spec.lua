@@ -79,4 +79,38 @@ return {
       t.eq(#tracker.calls, 0, 'tracker never touched')
     end,
   },
+
+  {
+    name = 'returnToArrange activates arrange and reveals the take just edited',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local item = h.reaper:addItem('tr1', { take = 'mt1', isMidi = true, pos = 0, len = 1 })
+
+      local tracker, arrange = fakePage(), fakePage()
+      local coord = newCoord(h, { { 'arrange', arrange }, { 'tracker', tracker } })
+
+      coord:diveToTake(item)      -- arrange -> tracker, currentTake = mt1
+      coord:returnToArrange()     -- tracker -> arrange
+
+      t.eq(lastCall(tracker)[1], 'unbind', 'tracker page unbound on the way out')
+      local reveal = lastCall(arrange)
+      t.eq(reveal[1], 'revealTake', 'arrange page asked to reveal a take')
+      t.eq(reveal[2], 'mt1',        'revealed the take just edited')
+    end,
+  },
+
+  {
+    name = 'returnToArrange is a no-op when the arrange page is not registered',
+    run = function(harness)
+      local h = harness.mk()
+      local tracker = fakePage()
+      local coord = newCoord(h, { { 'tracker', tracker } })
+      local before = #tracker.calls
+
+      coord:returnToArrange()
+
+      t.eq(#tracker.calls, before, 'no page churn without an arrange page')
+    end,
+  },
 }

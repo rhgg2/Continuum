@@ -116,9 +116,16 @@ local function Main()
     undo        = { {ImGui.Key_Z, ImGui.Mod_Ctrl} },
     redo        = { {ImGui.Key_Z, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
     togglePage  = { {ImGui.Key_Tab, ImGui.Mod_Super} },
-    quit        = { ImGui.Key_Enter },
+    quit        = { {ImGui.Key_Q, ImGui.Mod_Ctrl} },
     beginPrefix = { {ImGui.Key_U, ImGui.Mod_Super} },
   }
+
+  -- Enter on the tracker scope returns to the arrange page — the inverse
+  -- of arrange's Tab/Enter dive. Tracker-scoped, not root: each page owns
+  -- what Enter does (arrange dives, tracker returns).
+  local trackerScope = cmgr:scope('tracker')
+  trackerScope:registerAll{ returnToArrange = function() coord:returnToArrange() end }
+  trackerScope:bindAll{ returnToArrange = { ImGui.Key_Enter, ImGui.Key_KeypadEnter } }
 
   coord:run()
 end

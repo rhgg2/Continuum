@@ -296,6 +296,13 @@ function coord:diveToTake(item)
   self:setActive('tracker')
 end
 
+--contract: return from the tracker page to arrange, landing the arrange cursor on the take just edited (coord's currentTake). The inverse of diveToTake; a no-op when arrange isn't registered.
+function coord:returnToArrange()
+  if not pages.arrange then return end
+  self:setActive('arrange')
+  pages.arrange:revealTake(currentTake)
+end
+
 --contract: stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
 function coord:setSamplerTrack(t)
   samplerTrack = t

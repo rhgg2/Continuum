@@ -37,8 +37,10 @@ coordinator
 ```
 
 `arrangeManager` has no `midiManager` / `trackerManager` dependency.
-Diving into a MIDI take routes through the coordinator: set
-`currentTake`, switch page. The tracker stack stays untouched.
+Diving into a MIDI take routes through the coordinator: it selects the
+item in REAPER so the take poll binds it, then switches to the tracker
+page. `Enter` in the tracker returns to arrange with the cursor on the
+take just edited. The tracker stack stays untouched.
 
 `sequenceManager` is folded into `arrangeManager` and deleted —
 `takesUsing` and `reswingAll` are degenerate cases of the project-wide
@@ -95,6 +97,8 @@ am:tracksTakes(trackIdx)          -> take[]
 am:trackSlots(trackIdx)           -> {idx, kind, id, name, defaultLengthQN}[]
 am:slotForTake(take)              -> slotIdx | nil
 am:keyForSlot(slotIdx)            -> "0".."Z"
+am:findTake(reaperTake)           -> take | nil
+am:initialCursor()                -> trackIdx, qn
 
 -- slot mgmt
 am:newMidiSlot(trackIdx)          -> slotIdx     -- creates empty pooled source
@@ -167,6 +171,9 @@ Each phase ships green and committable.
    mouse-drag slice (7), where edge-dragging makes it natural.
 6. Tracker dive hotkey.
 7. Mouse drag: move / resize / modifier-duplicate.
+8. Boot into the arrange page; cursor seeded from the REAPER
+   selection (selected take, else edit cursor). `Enter` round-trips
+   tracker ↔ arrange.
 
 ## Open
 

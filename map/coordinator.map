@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=330  sha=4befd7f  mode=chunk
+@module coordinator  src=coordinator.lua  loc=337  sha=c4c0e82  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
@@ -66,16 +66,18 @@
       @contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange→no-op since the page is project-wide)
   @api coord:diveToTake(item)  @ 292
       @contract  dive from the arrange page into a MIDI take — selects the item alone in REAPER so refreshTakeFromReaper reads it, then activates the tracker page (whose bind picks it up). Trusts the caller to pass a MIDI item; nil is a no-op.
-  @api coord:setSamplerTrack(t)  @ 300
+  @api coord:returnToArrange()  @ 300
+      @contract  return from the tracker page to arrange, landing the arrange cursor on the take just edited (coord's currentTake). The inverse of diveToTake; a no-op when arrange isn't registered.
+  @api coord:setSamplerTrack(t)  @ 307
       @contract  stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
-  @api coord:togglePage()  @ 309
+  @api coord:togglePage()  @ 316
       -- Cycle tracker → arrange → sample → tracker. Pages absent from the registry
       -- are skipped so a partial wiring (e.g. tests with only one page) still cycles.
-  @api coord:reloadAfterExternalMutation()  @ 320
+  @api coord:reloadAfterExternalMutation()  @ 327
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:quit()  @ 326
-  @api coord:chrome()  @ 327
-  @api coord:run()  @ 328
+  @api coord:quit()  @ 333
+  @api coord:chrome()  @ 334
+  @api coord:run()  @ 335
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
