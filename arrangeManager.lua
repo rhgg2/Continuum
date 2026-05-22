@@ -201,7 +201,7 @@ function am:initialCursor()
   return trackIdx, qn
 end
 
------ Transport — project edit cursor, loop range, play head
+----- Transport — project edit cursor, loop range, play head, project end
 
 function am:editCursorQN()
   return reaper.TimeMap2_timeToQN(0, reaper.GetCursorPositionEx(0))
@@ -232,6 +232,19 @@ end
 function am:playPositionQN()
   if reaper.GetPlayState() & 1 == 0 then return nil end
   return reaper.TimeMap2_timeToQN(0, reaper.GetPlayPosition())
+end
+
+--contract: QN of the end of the last take in the project — the largest item end across all tracks; 0 when the project has no items.
+function am:projectEndQN()
+  local endQN = 0
+  for ti = 0, reaper.CountTracks(0) - 1 do
+    forEachActiveTake(reaper.GetTrack(0, ti), function(_, item)
+      local startQN, lengthQN = itemQNRange(item)
+      local e = startQN + lengthQN
+      if e > endQN then endQN = e end
+    end)
+  end
+  return endQN
 end
 
 function am:trackSlots(trackIdx)

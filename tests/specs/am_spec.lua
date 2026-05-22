@@ -542,7 +542,7 @@ return {
   },
 
   --------------------------------------------------------------------
-  -- Transport — edit cursor, loop range, play head
+  -- Transport — edit cursor, loop range, play head, project end
   --------------------------------------------------------------------
   {
     name = 'editCursorQN reads the REAPER edit cursor',
@@ -616,6 +616,27 @@ return {
       local h, am = mkAm(harness)
       h.reaper:setPlay(true, 9)
       t.eq(am:playPositionQN(), 9, 'play head qn')
+    end,
+  },
+
+  {
+    name = 'projectEndQN is 0 for a project with no items',
+    run = function(harness)
+      local _, am = mkAm(harness)
+      t.eq(am:projectEndQN(), 0, 'empty project ends at 0')
+    end,
+  },
+
+  {
+    name = 'projectEndQN reports the largest take end across all tracks',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4,  poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 8, len = 3,  poolGuid = '{p2}' } } },
+        { items = { { kind = 'midi', pos = 2, len = 20, poolGuid = '{p3}' } } },
+      })
+      t.eq(am:projectEndQN(), 22, 'the last take end wins, across tracks')
     end,
   },
 }

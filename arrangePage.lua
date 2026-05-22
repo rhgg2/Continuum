@@ -73,6 +73,8 @@ local openCreateModal
 --invariant: a double-click on empty grid space starts a create press — the drag previews a ghost take, release opens the create modal seeded with the swept column / start row / row count. A bare double-click opens it with the default row count.
 local press = nil
 local DRAG_EDGE_PX = 5
+local WHEEL_ROWS   = 1   -- cursor rows moved per mouse-wheel notch
+local wheelAccum   = 0   -- fractional wheel carried between frames
 local BLOCKED_BORDER  -- lazy: red border for a drag that would overlap
 local EDIT_LINE       -- lazy: REAPER edit-cursor rule across all tracks
 local PLAY_LINE       -- lazy: yellow play-head rule
@@ -328,6 +330,19 @@ local function renderGrid(tracks, nTracks)
        and my >= bodyTop and my <= bodyBot
        and mx >= paneLeft and mx < gutterR then
       am:clearLoopRange()
+    end
+    -- Wheel scrolls by moving the cursor: a detached viewport scroll
+    -- would be pulled back to the cursor by followViewport next frame.
+    -- Fractional trackpad deltas accumulate; whole rows drain off.
+    local wheel = ImGui.GetMouseWheel(ctx)
+    if wheel ~= 0 and ImGui.IsWindowHovered(ctx) then
+      wheelAccum = wheelAccum + wheel * WHEEL_ROWS
+      local trunc = wheelAccum >= 0 and math.floor or math.ceil
+      local rows  = trunc(wheelAccum)
+      if rows ~= 0 then
+        wheelAccum = wheelAccum - rows
+        placeCursor(av:cursorRow() - rows, av:cursorCol())
+      end
     end
     if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
        and my >= bodyTop and my <= bodyBot then
@@ -939,9 +954,10 @@ function ap:handleInput() end
 function ap:save()        end
 function ap:load()        end
 
---invariant: arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
+--invariant: arrange-scope cursor-nav — arrows move ±1 row/col, PageUp/Down ±PAGE_ROWS rows, Home to row 0, End to the row of the project's last take end (am:projectEndQN). The timeline is unbounded below: only negative coords clamp (in av), so PageDown / End / the wheel may sit the cursor on empty rows past the last take.
 --invariant: 62 place commands (drop0..dropZ) sit in cmgr:scope('arrange'), one per base62 slot. Pressing a key with no slot defined at that index is a silent no-op (am:dropInstance returns nil). The drop inherits the slot's existing-instance length — a real snap selector lands with the toolbar.
 --invariant: createSlot (Ctrl+Enter) opens the create modal — the *only* slot-minting gesture. Slots have no existence apart from items on the grid; rename/delete buttons in the palette act on existing slots.
+local PAGE_ROWS = 16   -- PageUp / PageDown step
 local arrange = cmgr:scope('arrange')
 -- Distinct names from tracker's cursorUp/Down/Left/Right: cmgr.commands
 -- is flat, so re-registering the same name overwrites the gate and
@@ -952,6 +968,10 @@ arrange:registerAll {
   arrangeCursorDown  = function() placeCursor(av:cursorRow() + 1, av:cursorCol()) end,
   arrangeCursorLeft  = function() placeCursor(av:cursorRow(),     av:cursorCol() - 1) end,
   arrangeCursorRight = function() placeCursor(av:cursorRow(),     av:cursorCol() + 1) end,
+  arrangePageUp      = function() placeCursor(av:cursorRow() - PAGE_ROWS, av:cursorCol()) end,
+  arrangePageDown    = function() placeCursor(av:cursorRow() + PAGE_ROWS, av:cursorCol()) end,
+  arrangeHome        = function() placeCursor(0, av:cursorCol()) end,
+  arrangeEnd         = function() placeCursor(av:qnToRow(am:projectEndQN()), av:cursorCol()) end,
   createSlot         = function() openCreateModal(av:cursorCol(), av:rowToQN(av:cursorRow())) end,
 }
 arrange:bindAll {
@@ -959,6 +979,10 @@ arrange:bindAll {
   arrangeCursorDown  = { { ImGui.Key_DownArrow  } },
   arrangeCursorLeft  = { { ImGui.Key_LeftArrow  } },
   arrangeCursorRight = { { ImGui.Key_RightArrow } },
+  arrangePageUp      = { { ImGui.Key_PageUp   } },
+  arrangePageDown    = { { ImGui.Key_PageDown } },
+  arrangeHome        = { { ImGui.Key_Home     } },
+  arrangeEnd         = { { ImGui.Key_End      } },
   createSlot         = { { ImGui.Key_Enter, ImGui.Mod_Ctrl } },
 }
 
