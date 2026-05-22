@@ -1,5 +1,5 @@
-@module arrangePage  src=arrangePage.lua  loc=692  sha=ff5ae2b  mode=chunk
-@deps cm, cmgr, chrome, gui
+@module arrangePage  src=arrangePage.lua  loc=699  sha=d32240d  mode=chunk
+@deps cm, cmgr, chrome, gui, onDive
 
 # Invariants & contracts
   @invariant  render-only — cursor + scroll live in av (module-locals); track list + slot palette come from am, which reads cm/REAPER fresh each query. Page holds no persistent state of its own.
@@ -17,7 +17,7 @@
 
 # Private state
   @state ctx = gui and gui.ctx or nil  @ 20
-      @contract  owns the arrange substack: builds am and av internally; coord passes only primitives (cm, cmgr, chrome, gui).
+      @contract  owns the arrange substack: builds am and av internally; coord passes primitives (cm, cmgr, chrome, gui) and the onDive callback (routes a MIDI take into the tracker page).
   @state monoFont = gui and gui.font or nil  @ 23
   @state uiSize = gui and gui.fontSize and gui.fontSize.ui or 12  @ 24
   @state ap = {}  @ 29
@@ -41,7 +41,7 @@
       @invariant  arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
       @invariant  62 place commands (drop0..dropZ) sit in cmgr:scope('arrange'), one per base62 slot. Pressing a key with no slot defined at that index is a silent no-op (am:dropInstance returns nil). Length defaults to one row (beatPerRow) — a real snap selector lands with the toolbar.
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the *only* slot-minting gesture. Slots have no existence apart from items on the grid; rename/delete buttons in the palette act on existing slots.
-  @state placeCmds, placeBinds = {}, {}  @ 683
+  @state placeCmds, placeBinds = {}, {}  @ 690
 
 # Private functions
   -- Style + draw helpers
@@ -95,11 +95,13 @@
   @fn nudgeCmd(direction)  @ 615
   @fn resizeCmd(direction)  @ 635
   @fn deleteTakeAtCursor()  @ 650
-  @fn dropAt(slotIdx)  @ 672
+  @fn diveCmd()  @ 655
+      @invariant  arrangeDive is MIDI-only — audio takes have no tracker representation, so an audio take or an empty cursor box under the dive key is a silent no-op. Routes through the onDive callback so coord owns the page swap.
+  @fn dropAt(slotIdx)  @ 679
       -- Place commands (drop0..dropZ). 0..9 → digit keys, 10..35 → letter
       -- keys, 36..61 → Shift+letter. ImGui.Key_0 + n and Key_A + n are
       -- contiguous (already exploited at coordinator.lua:53).
-  @fn placeKey(slotIdx)  @ 678
+  @fn placeKey(slotIdx)  @ 685
 
 # Public API (ap:*)
   @api ap:bind()  @ 501

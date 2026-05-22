@@ -288,6 +288,14 @@ function coord:setActive(name)
   end
 end
 
+--contract: dive from the arrange page into a MIDI take — selects the item alone in REAPER so refreshTakeFromReaper reads it, then activates the tracker page (whose bind picks it up). Trusts the caller to pass a MIDI item; nil is a no-op.
+function coord:diveToTake(item)
+  if not item then return end
+  reaper.SelectAllMediaItems(0, false)
+  reaper.SetMediaItemSelected(item, true)
+  self:setActive('tracker')
+end
+
 --contract: stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
 function coord:setSamplerTrack(t)
   samplerTrack = t

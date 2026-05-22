@@ -74,8 +74,9 @@ local function Main()
 
   local chrome = coord:chrome()
   local function onPickTrack(t) coord:setSamplerTrack(t) end
+  local function onDive(item)   coord:diveToTake(item)    end
   local tp = util.instantiate('trackerPage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui })
-  local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui })
+  local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onDive = onDive })
   local sp = util.instantiate('samplePage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
 
   coord:register('tracker', tp)

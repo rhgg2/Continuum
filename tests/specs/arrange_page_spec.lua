@@ -20,9 +20,9 @@ _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
 local util = require('util')
 
-local function newArrangePage(cm, cmgr, chrome, gui)
+local function newArrangePage(cm, cmgr, chrome, gui, onDive)
   return util.instantiate('arrangePage',
-    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui })
+    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onDive = onDive })
 end
 
 return {
@@ -222,6 +222,55 @@ return {
       h.cmgr:invoke('arrangeGrowTake')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].lengthQN, 1.5, 'stays put: grow would enter the neighbour row box')
+    end,
+  },
+
+  {
+    name = 'arrangeDive routes the MIDI take under the cursor through onDive',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      local item = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                             pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local dived
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDive')
+      t.eq(dived, item, 'onDive received the cursor take item')
+    end,
+  },
+
+  {
+    name = 'arrangeDive is a no-op over an audio take',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/a1', isMidi = false,
+                                pos = 0, len = 1, srcFile = '/snd/a.wav' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local dived = false
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {}, function() dived = true end)
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDive')
+      t.eq(dived, false, 'audio take does not dive')
+    end,
+  },
+
+  {
+    name = 'arrangeDive is a no-op when the cursor box is empty',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:setProjectTracks{ 'tr1' }
+      local dived = false
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {}, function() dived = true end)
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDive')
+      t.eq(dived, false, 'empty cursor box does not dive')
     end,
   },
 }

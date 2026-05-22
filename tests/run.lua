@@ -108,6 +108,7 @@ local specs = {
   'am_spec',
   'arrange_view_spec',
   'arrange_page_spec',
+  'coordinator_spec',
 }
 
 local pass, fail, failures = 0, 0, {}

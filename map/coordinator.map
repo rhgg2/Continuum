@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=322  sha=1a1393f  mode=chunk
+@module coordinator  src=coordinator.lua  loc=330  sha=4befd7f  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
@@ -64,16 +64,18 @@
   @api coord:register(name, page)  @ 263
   @api coord:setActive(name)  @ 269
       @contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange→no-op since the page is project-wide)
-  @api coord:setSamplerTrack(t)  @ 292
+  @api coord:diveToTake(item)  @ 292
+      @contract  dive from the arrange page into a MIDI take — selects the item alone in REAPER so refreshTakeFromReaper reads it, then activates the tracker page (whose bind picks it up). Trusts the caller to pass a MIDI item; nil is a no-op.
+  @api coord:setSamplerTrack(t)  @ 300
       @contract  stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
-  @api coord:togglePage()  @ 301
+  @api coord:togglePage()  @ 309
       -- Cycle tracker → arrange → sample → tracker. Pages absent from the registry
       -- are skipped so a partial wiring (e.g. tests with only one page) still cycles.
-  @api coord:reloadAfterExternalMutation()  @ 312
+  @api coord:reloadAfterExternalMutation()  @ 320
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:quit()  @ 318
-  @api coord:chrome()  @ 319
-  @api coord:run()  @ 320
+  @api coord:quit()  @ 326
+  @api coord:chrome()  @ 327
+  @api coord:run()  @ 328
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -83,3 +85,5 @@
   @reaper TakeIsMIDI
   @reaper MIDI_GetHash
   @reaper defer
+  @reaper SelectAllMediaItems
+  @reaper SetMediaItemSelected

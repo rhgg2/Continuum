@@ -14,8 +14,8 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
---contract: owns the arrange substack: builds am and av internally; coord passes only primitives (cm, cmgr, chrome, gui).
-local cm, cmgr, chrome, gui = (...).cm, (...).cmgr, (...).chrome, (...).gui
+--contract: owns the arrange substack: builds am and av internally; coord passes primitives (cm, cmgr, chrome, gui) and the onDive callback (routes a MIDI take into the tracker page).
+local cm, cmgr, chrome, gui, onDive = (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).onDive
 
 local ctx = gui and gui.ctx or nil
 -- gui.font is monospace (Source Code Pro) attached at context create;
@@ -651,12 +651,18 @@ local function deleteTakeAtCursor()
   local take = takeAtCursor()
   if take then am:deleteTake(take) end
 end
+--invariant: arrangeDive is MIDI-only — audio takes have no tracker representation, so an audio take or an empty cursor box under the dive key is a silent no-op. Routes through the onDive callback so coord owns the page swap.
+local function diveCmd()
+  local take = takeAtCursor()
+  if take and take.kind == 'midi' then onDive(take.item) end
+end
 arrange:registerAll {
   arrangeNudgeBack    = nudgeCmd(-1),
   arrangeNudgeForward = nudgeCmd(1),
   arrangeShrinkTake   = resizeCmd(-1),
   arrangeGrowTake     = resizeCmd(1),
   arrangeDeleteTake   = deleteTakeAtCursor,
+  arrangeDive         = diveCmd,
 }
 arrange:bindAll {
   arrangeNudgeBack    = { { ImGui.Key_UpArrow,   ImGui.Mod_Super } },
@@ -664,6 +670,7 @@ arrange:bindAll {
   arrangeShrinkTake   = { { ImGui.Key_UpArrow,   ImGui.Mod_Super, ImGui.Mod_Shift } },
   arrangeGrowTake     = { { ImGui.Key_DownArrow, ImGui.Mod_Super, ImGui.Mod_Shift } },
   arrangeDeleteTake   = { { ImGui.Key_Delete } },
+  arrangeDive         = { { ImGui.Key_Tab }, { ImGui.Key_Enter }, { ImGui.Key_KeypadEnter } },
 }
 
 -- Place commands (drop0..dropZ). 0..9 → digit keys, 10..35 → letter

@@ -240,6 +240,31 @@ function M.new()
     return item
   end
 
+  -- Item selection (used by the coordinator dive). state.selectedItems
+  -- is a set; GetSelectedMediaItem walks tracks in registration order.
+  state.selectedItems = {}
+  function r.SelectAllMediaItems(_proj, selected)
+    if not selected then state.selectedItems = {}; return end
+    for _, list in pairs(state.itemsByTrack) do
+      for _, it in ipairs(list) do state.selectedItems[it] = true end
+    end
+  end
+  function r.SetMediaItemSelected(item, selected)
+    state.selectedItems[item] = selected and true or nil
+  end
+  function r.GetSelectedMediaItem(_proj, idx)
+    local n = 0
+    for _, track in ipairs(state.projectTracks) do
+      for _, it in ipairs(state.itemsByTrack[track] or {}) do
+        if state.selectedItems[it] then
+          if n == idx then return it end
+          n = n + 1
+        end
+      end
+    end
+    return nil
+  end
+
   -- Transport / cursor
 
   function r.GetCursorPosition() return state.cursorTime end
