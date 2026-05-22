@@ -23,16 +23,15 @@ local SLOT_MAX = 61    -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
 -- MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it).
 -- Audio: absolute source filename.
 local function takeIdOf(take)
-  if not take then return nil end
   if reaper.TakeIsMIDI(take) then
     local item = reaper.GetMediaItemTake_Item(take)
-    if not item then return nil end
+    if not item then return end
     local ok, chunk = reaper.GetItemStateChunk(item, '', false)
-    if not ok or not chunk then return nil end
+    if not ok or not chunk then return end
     return chunk:match('POOLEDEVTS%s+({[^}]+})')
   end
   local src = reaper.GetMediaItemTake_Source(take)
-  if not src then return nil end
+  if not src then return end
   return reaper.GetMediaSourceFileName(src)
 end
 
@@ -68,7 +67,6 @@ local function nextFreeSlot(dict)
   for i = 0, SLOT_MAX do
     if dict[i] == nil then return i end
   end
-  return nil
 end
 
 local function forEachActiveTake(track, fn)
@@ -179,7 +177,7 @@ end
 
 --contract: returns the take-shape on any project track whose underlying REAPER take is `reaperTake`; nil if not found. Turns a REAPER take handle back into a grid position.
 function am:findTake(reaperTake)
-  if not reaperTake then return nil end
+  if not reaperTake then return end
   for _, track in ipairs(am:projectTracks()) do
     for _, take in ipairs(am:tracksTakes(track.idx)) do
       if take.take == reaperTake then return take end
@@ -214,7 +212,7 @@ end
 --contract: (loQN, hiQN) of the project loop range; nil when no loop is set (start == end).
 function am:loopRangeQN()
   local startT, endT = reaper.GetSet_LoopTimeRange(false, true, 0, 0, false)
-  if startT == endT then return nil end
+  if startT == endT then return end
   return reaper.TimeMap2_timeToQN(0, startT), reaper.TimeMap2_timeToQN(0, endT)
 end
 
@@ -230,7 +228,7 @@ end
 
 --contract: QN of the play head; nil when the transport is not playing.
 function am:playPositionQN()
-  if reaper.GetPlayState() & 1 == 0 then return nil end
+  if reaper.GetPlayState() & 1 == 0 then return end
   return reaper.TimeMap2_timeToQN(0, reaper.GetPlayPosition())
 end
 
@@ -268,10 +266,9 @@ function am:trackSlots(trackIdx)
 end
 
 function am:slotForTake(take)
-  if not take then return nil end
   local track = reaper.GetMediaItemTake_Track(take)
   local id    = takeIdOf(take)
-  if not track or not id then return nil end
+  if not track or not id then return end
   local _, slotForId = ensureSlots(track)
   return slotForId[id]
 end
@@ -327,7 +324,7 @@ end
 
 local function harvestPoolGuid(item)
   local ok, chunk = reaper.GetItemStateChunk(item, '', false)
-  if not ok or not chunk then return nil end
+  if not ok or not chunk then return end
   return chunk:match('POOLEDEVTS%s+({[^}]+})')
 end
 
@@ -347,12 +344,12 @@ local function placeSource(track, kind, id, qnPos, lengthQN, name)
   if kind == 'midi' then
     local item = reaper.CreateNewMIDIItemInProj(
       track, qnPos, qnPos + lengthQN, true)
-    if not item then return nil end
+    if not item then return end
     poolMidiItem(item, id)
     take = reaper.GetActiveTake(item)
   else
     local item = reaper.AddMediaItemToTrack(track)
-    if not item then return nil end
+    if not item then return end
     local startSec = reaper.TimeMap2_QNToTime(0, qnPos)
     local endSec   = reaper.TimeMap2_QNToTime(0, qnPos + lengthQN)
     reaper.SetMediaItemInfo_Value(item, 'D_POSITION', startSec)
@@ -363,7 +360,7 @@ local function placeSource(track, kind, id, qnPos, lengthQN, name)
       if src then reaper.SetMediaItemTake_Source(take, src) end
     end
   end
-  if not take then return nil end
+  if not take then return end
   if name and name ~= '' then
     reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
   end
@@ -372,20 +369,16 @@ end
 
 --contract: creates a fresh MIDI source on `trackIdx` at qnPos for lengthQN, allocates the lowest-free slot pointing at the new pool guid, names the take, returns (slotIdx, take). Nil if track missing or slots exhausted. The only path that mints a slot.
 function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
-  local track = reaper.GetTrack(0, trackIdx)
-  if not track then return nil end
-  local dict    = readSlots(track)
-  local slotIdx = nextFreeSlot(dict)
-  if not slotIdx then return nil end
-  qnPos    = qnPos    or 0
-  lengthQN = lengthQN or 1
-  local item = reaper.CreateNewMIDIItemInProj(
-    track, qnPos, qnPos + lengthQN, true)
-  if not item then return nil end
-  local take = reaper.GetActiveTake(item)
-  if not take then return nil end
-  local guid = harvestPoolGuid(item)
-  if not guid then return nil end
+  local track   = reaper.GetTrack(0, trackIdx)
+  local dict    = track and readSlots(track)
+  local slotIdx = dict and nextFreeSlot(dict)
+  if not slotIdx then return end
+
+  local item = reaper.CreateNewMIDIItemInProj(track, qnPos, qnPos + lengthQN, true)
+  local take = item and reaper.GetActiveTake(item)
+  local guid = take and harvestPoolGuid(item)
+  if not guid then return end
+
   dict[slotIdx] = { kind = 'midi', id = guid }
   writeSlots(track, dict)
   if name and name ~= '' then
@@ -410,20 +403,19 @@ end
 --contract: drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos. lengthQN defaults to the length of an existing instance of the slot (a slot always has one), else 1 QN; the dropped take inherits that instance's name. MIDI pools via POOLEDEVTS; audio adds a sibling on the slot's file. Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
 function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   local track = reaper.GetTrack(0, trackIdx)
-  if not track then return nil end
+  if not track then return end
   local entry = readSlots(track)[slotIdx]
-  if not entry or not entry.id then return nil end
+  if not entry or not entry.id then return end
   local siblingLen, siblingName = siblingInstance(track, entry.id)
-  return placeSource(track, entry.kind, entry.id, qnPos or 0,
+  return placeSource(track, entry.kind, entry.id, qnPos,
                      lengthQN or siblingLen or 1, siblingName)
 end
 
 --contract: clones `take` (name included) at qnPos on its own track, original untouched; returns the new take, or nil if take/track is missing or the take's id can't be derived. MIDI: a pooled clone sharing the POOLEDEVTS guid; audio: a sibling on the same file.
 function am:duplicateTake(take, qnPos)
-  if not take then return nil end
   local track = reaper.GetTrack(0, take.trackIdx)
   local id    = takeIdOf(take.take)
-  if not track or not id then return nil end
+  if not track or not id then return end
   return placeSource(track, take.kind, id, qnPos, take.lengthQN, take.name)
 end
 
@@ -462,20 +454,17 @@ end
 
 --contract: shifts the take's item start by deltaQN, length unchanged. Faithful — no clamping; callers consult freeSpan and own the grid/snap policy.
 function am:moveTake(take, deltaQN)
-  if not take then return end
   local startQN, lengthQN = itemQNRange(take.item)
   setItemQNRange(take.item, startQN + deltaQN, startQN + lengthQN + deltaQN)
 end
 
 --contract: sets the take's item length to newLengthQN absolutely, start edge fixed. Faithful — no clamping; callers consult freeSpan and own snap and the minimum-length floor.
 function am:resizeTake(take, newLengthQN)
-  if not take then return end
   local startQN = itemQNRange(take.item)
   setItemQNRange(take.item, startQN, startQN + newLengthQN)
 end
 
 function am:deleteTake(take)
-  if not take then return end
   local track = reaper.GetTrack(0, take.trackIdx)
   if track then reaper.DeleteTrackMediaItem(track, take.item) end
 end

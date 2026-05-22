@@ -281,7 +281,7 @@ return {
   },
 
   {
-    name = 'duplicateTake returns nil for a missing take or track',
+    name = 'duplicateTake returns nil for a missing track',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, { { items = {} } })
@@ -289,7 +289,6 @@ return {
       local shape = am:tracksTakes(0)[1]
       shape.trackIdx = 7
       t.eq(am:duplicateTake(shape, 4), nil, 'no track at index 7')
-      t.eq(am:duplicateTake(nil, 0), nil, 'nil take')
     end,
   },
 
