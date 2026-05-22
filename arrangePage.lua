@@ -58,7 +58,7 @@ local modalFocus              = false
 local modalOpenAtFrameStart   = false
 
 --shape: press = { qn, take, mode = 'move'|'resizeEnd', duplicate, moved } — mouse-down snapshot, nil when no button is down over the grid; `moved` flips once ImGui's drag threshold is crossed.
---invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. A press that never crosses the drag threshold is a focus click: it focuses the take under the press, or clears focus if the press was on empty space — the cursor never moves.
+--invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Every press moves the cursor to the clicked cell. A press that never crosses the drag threshold is also a focus click: it focuses the take under the press, or clears focus if the press was on empty space.
 local press = nil
 local DRAG_EDGE_PX = 5
 local GHOST_BLOCKED  -- lazy: blocked-drag ghost colour
@@ -380,8 +380,9 @@ local function renderGrid(tracks, nTracks)
     ImGui.DrawList_PopClipRect(dl)
   end
 
-  -- Mouse: drag a take to move / resize / Alt-duplicate; a plain click
-  -- focuses the take under it (empty space deselects). The closures
+  -- Mouse: a press moves the cursor to the clicked cell; then drag a
+  -- take to move / resize / Alt-duplicate, or release without dragging
+  -- to focus the take under it (empty space deselects). The closures
   -- here invert renderGrid's geometry.
   local function drawGhost(cand, take)
     local rx0, rx1 = snap(trackLeft(take.trackIdx)), snap(trackRight(take.trackIdx))
@@ -403,6 +404,8 @@ local function renderGrid(tracks, nTracks)
        and my >= bodyTop and my <= bodyBot then
       local col = math.floor((mx - ox - QN_W - GUTTER_PAD) / TRACK_W)
       if col >= 0 and col < nTracks then
+        local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
+        av:setCursor(sr + row, col)
         local qn = yToQN(my)
         local take, mode = hitTake(col, qn, bpr / rowH)
         press = {
