@@ -540,4 +540,72 @@ return {
       t.eq(qn,       3, 'row qn is still the edit cursor')
     end,
   },
+
+  --------------------------------------------------------------------
+  -- Transport — edit cursor, loop range, play head
+  --------------------------------------------------------------------
+  {
+    name = 'editCursorQN reads the REAPER edit cursor',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      h.reaper:setCursor(12)
+      t.eq(am:editCursorQN(), 12, 'edit cursor qn')
+    end,
+  },
+
+  {
+    name = 'setEditCursorQN moves the REAPER edit cursor',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      am:setEditCursorQN(8)
+      t.eq(am:editCursorQN(), 8, 'edit cursor follows the write')
+    end,
+  },
+
+  {
+    name = 'loopRangeQN returns the project loop range',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      h.reaper:setLoopRange(2, 6)
+      local loQN, hiQN = am:loopRangeQN()
+      t.eq(loQN, 2, 'loop start qn')
+      t.eq(hiQN, 6, 'loop end qn')
+    end,
+  },
+
+  {
+    name = 'loopRangeQN is nil when no loop is set',
+    run = function(harness)
+      local _, am = mkAm(harness)
+      t.falsy(am:loopRangeQN(), 'no loop -> nil')
+    end,
+  },
+
+  {
+    name = 'setLoopRangeQN writes the project loop range',
+    run = function(harness)
+      local _, am = mkAm(harness)
+      am:setLoopRangeQN(3, 7)
+      local loQN, hiQN = am:loopRangeQN()
+      t.eq(loQN, 3, 'loop start follows the write')
+      t.eq(hiQN, 7, 'loop end follows the write')
+    end,
+  },
+
+  {
+    name = 'playPositionQN is nil when the transport is stopped',
+    run = function(harness)
+      local _, am = mkAm(harness)
+      t.falsy(am:playPositionQN(), 'stopped -> nil')
+    end,
+  },
+
+  {
+    name = 'playPositionQN returns the play head qn while playing',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      h.reaper:setPlay(true, 9)
+      t.eq(am:playPositionQN(), 9, 'play head qn')
+    end,
+  },
 }

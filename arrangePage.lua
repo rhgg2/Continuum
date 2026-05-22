@@ -37,6 +37,10 @@ local QN_W, TRACK_W = 32, 72
 -- gridline. Numbers stay right-aligned at QN_W; the first track
 -- column starts QN_W + GUTTER_PAD pixels in.
 local GUTTER_PAD = 8
+-- The loop bracket — the tracker's tail `[` — strokes down the left edge
+-- of the grid; the whole grid shifts LOOP_PAD pixels right to clear it.
+-- Must exceed the bracket radius (5) plus its 1.5px stroke.
+local LOOP_PAD = 7
 -- Palette row column widths: monospace key, kind glyph, name fills.
 local SLOT_KEY_W, SLOT_KIND_W = 18, 16
 
@@ -60,11 +64,14 @@ local modal                   = nil   -- { kind, ... } | nil
 local modalFocus              = false
 local modalOpenAtFrameStart   = false
 
---shape: press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved } — mouse-down snapshot, nil when no button is down over the grid; `row`/`col` is the pressed cell, applied to the cursor on a no-drag release; `moved` flips once ImGui's drag threshold is crossed.
+--shape: press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter } — mouse-down snapshot, nil when no button is down over the grid. A track-column press carries `take`/`row`/`col`/`mode`; a QN-gutter press carries `qn` and `gutter = true` only. `row`/`col` is the pressed cell, applied to the cursor on a no-drag grid release; `moved` flips once ImGui's drag threshold is crossed.
 --invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Pressing a take focuses it. The cursor moves only on release, and only when no take was dragged — it then lands on the pressed cell; a drag (even one blocked by rangeIsClear) leaves the cursor put. An empty-space press with no drag also clears focus.
+--invariant: a press in the QN gutter drives the REAPER transport, not the grid — a no-drag release sets the edit cursor, a drag sets the loop range; both endpoints snap to row boxes unless Shift is held. The arrange grid cursor and take focus are untouched.
 local press = nil
 local DRAG_EDGE_PX = 5
 local BLOCKED_BORDER  -- lazy: red border for a drag that would overlap
+local EDIT_LINE       -- lazy: REAPER edit-cursor rule across all tracks
+local PLAY_LINE       -- lazy: yellow play-head rule
 
 ----- Style + draw helpers
 
@@ -153,6 +160,10 @@ local function roundTo(v, step)
   return math.floor(v / step + 0.5) * step
 end
 
+local function floorTo(v, step)
+  return math.floor(v / step) * step
+end
+
 -- The take under (trackIdx, qn) and the mode its grab implies:
 -- 'resizeEnd' within DRAG_EDGE_PX of the end edge (clamped to half the
 -- take, so a short take stays grabbable for a move), else 'move'.
@@ -191,6 +202,21 @@ local function dragCandidate(press, mouseQN, beatPerRow)
     startQN = startQN, lengthQN = lengthQN,
     fits = am:rangeIsClear(take.trackIdx, startQN, lengthQN, exceptItem),
   }
+end
+
+-- In-flight gutter loop drag: { loQN, hiQN }. Both endpoints floor to
+-- the row box they sit in unless Shift is held; a zero-height sweep
+-- widens to one row so the loop is never empty.
+local function gutterLoopCand(press, mouseQN, beatPerRow)
+  local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
+  local loQN = math.max(0, math.min(press.qn, mouseQN))
+  local hiQN = math.max(press.qn, mouseQN)
+  if snapped then
+    loQN = floorTo(loQN, beatPerRow)
+    hiQN = floorTo(hiQN, beatPerRow)
+  end
+  if hiQN <= loQN then hiQN = loQN + beatPerRow end
+  return { loQN = loQN, hiQN = hiQN }
 end
 
 -- Commit a released drag. The focused take rides its handle unchanged
@@ -236,7 +262,8 @@ end
 
 local function renderGrid(tracks, nTracks)
   local dl       = ImGui.GetWindowDrawList(ctx)
-  local ox, oy   = ImGui.GetCursorScreenPos(ctx)
+  local paneLeft, oy = ImGui.GetCursorScreenPos(ctx)
+  local ox           = paneLeft + LOOP_PAD
   local _, availH = ImGui.GetContentRegionAvail(ctx)
   local rowH     = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
   local headerH  = rowH + HEADER_PAD
@@ -266,62 +293,81 @@ local function renderGrid(tracks, nTracks)
   local function trackRight(c) return trackLeft(c) + TRACK_W                end
   local function rowY(row)     return bodyTop + (row - sr) * rowH end
 
-  -- Mouse: press a take to focus it, then drag — the take itself rides
-  -- the cursor (the take pass below draws it at the candidate, not at
-  -- its committed position); Alt-drag duplicates. A release that
-  -- dragged no take moves the cursor to the pressed cell, and an
-  -- empty-space press also clears focus. Runs before the take pass so
-  -- the candidate is in hand when the pass relocates the dragged take.
+  -- Mouse: in a track column, press a take to focus it then drag — the
+  -- take rides the cursor (the take pass below draws it at the
+  -- candidate, not its committed position); Alt-drag duplicates. In the
+  -- QN gutter, a no-drag press sets the REAPER edit cursor and a drag
+  -- sets the loop range. A grid release that dragged no take moves the
+  -- cursor to the pressed cell; an empty-space press clears focus. Runs
+  -- before the take pass so the candidate is in hand when the pass
+  -- relocates the dragged take. Returns the in-flight take drag and
+  -- loop drag, each nil when not active.
   local function runGridMouse()
-    local mx, my = ImGui.GetMousePos(ctx)
-    local bpr    = av:beatPerRow()
-    local yToQN  = function(y) return (sr + (y - bodyTop) / rowH) * bpr end
+    local mx, my  = ImGui.GetMousePos(ctx)
+    local bpr     = av:beatPerRow()
+    local yToQN   = function(y) return (sr + (y - bodyTop) / rowH) * bpr end
+    local gutterR = trackLeft(0)
 
     if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
        and my >= bodyTop and my <= bodyBot then
-      local col = math.floor((mx - ox - QN_W - GUTTER_PAD) / TRACK_W)
-      if col >= 0 and col < nTracks then
-        local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
-        local qn = yToQN(my)
-        local take, mode = hitTake(col, qn, bpr / rowH)
-        press = {
-          qn = qn, row = sr + row, col = col,
-          take = take, mode = mode, moved = false,
-          duplicate = mode == 'move'
-                      and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
-        }
-        -- Focus the take on press, so a drag visibly carries it.
-        if take then av:setFocus(take.take) end
+      if mx >= paneLeft and mx < gutterR then
+        press = { qn = yToQN(my), gutter = true, moved = false }
+      else
+        local col = math.floor((mx - gutterR) / TRACK_W)
+        if col >= 0 and col < nTracks then
+          local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
+          local qn = yToQN(my)
+          local take, mode = hitTake(col, qn, bpr / rowH)
+          press = {
+            qn = qn, row = sr + row, col = col,
+            take = take, mode = mode, moved = false,
+            duplicate = mode == 'move'
+                        and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
+          }
+          -- Focus the take on press, so a drag visibly carries it.
+          if take then av:setFocus(take.take) end
+        end
       end
     end
-    if not press then return nil end
-    if press.take and ImGui.IsMouseDragging(ctx, 0) then press.moved = true end
+    if not press then return nil, nil end
+    if (press.take or press.gutter) and ImGui.IsMouseDragging(ctx, 0) then
+      press.moved = true
+    end
 
-    local cand = (press.moved and press.take)
-                 and dragCandidate(press, yToQN(my), bpr) or nil
+    local dragCand = (press.moved and press.take)
+                     and dragCandidate(press, yToQN(my), bpr) or nil
+    local loopCand = (press.moved and press.gutter)
+                     and gutterLoopCand(press, yToQN(my), bpr) or nil
 
     if ImGui.IsMouseReleased(ctx, 0) then
-      if cand then
-        if cand.fits then commitDrag(press, cand) end
+      if dragCand then
+        if dragCand.fits then commitDrag(press, dragCand) end
+      elseif loopCand then
+        am:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
+      elseif press.gutter then
+        -- Gutter press with no drag: drop the REAPER edit cursor on the
+        -- pressed row — floored to the top edge of the row box the click
+        -- sits in, not the nearest edge — unless Shift is held.
+        local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
+        am:setEditCursorQN(snapped and floorTo(press.qn, bpr) or press.qn)
       else
-        -- Released without dragging a take: a plain click. Move the
+        -- Grid press with no take dragged: a plain click. Move the
         -- cursor to the pressed cell; an empty-space press also clears
-        -- focus. `cand` is non-nil only when a take was dragged, so a
-        -- drag (even one blocked by rangeIsClear) leaves the cursor put.
+        -- focus. A take drag (even one blocked) leaves the cursor put.
         av:setCursor(press.row, press.col)
         if not press.take then av:setFocus(nil) end
       end
       press = nil
-      return nil
+      return nil, nil
     end
-    return cand
+    return dragCand, loopCand
   end
-  local dragCand = runGridMouse()
+  local dragCand, loopCand = runGridMouse()
   local curRow, curCol = av:cursorRow(), av:cursorCol()
 
   -- The right border (gridline at gridR; rightmost take-rect border a
   -- px beyond) sits on the clip boundary — clip past it or it's chopped.
-  ImGui.DrawList_PushClipRect(dl, ox, oy, gridR + 2, oy + availH, true)
+  ImGui.DrawList_PushClipRect(dl, paneLeft, oy, gridR + 2, oy + availH, true)
 
   -- Row tints (bar / phrase). Row 0 (qn = 0) is the strongest phrase
   -- boundary in the project, so it gets the phrase tint too — no qn > 0
@@ -424,6 +470,32 @@ local function renderGrid(tracks, nTracks)
       chrome.colour('arrangeCursorBorder'), 0, 0, 2)
   end
 
+  -- Loop region — the tracker's tail bracket: a stroked `[` down the
+  -- left of the gutter, chrome 'tail' colour, no fill. An in-flight
+  -- gutter drag preempts the committed range so the bracket tracks the
+  -- mouse before release.
+  local loopLo, loopHi
+  if loopCand then
+    loopLo, loopHi = loopCand.loQN, loopCand.hiQN
+  else
+    loopLo, loopHi = am:loopRangeQN()
+  end
+  if loopLo then
+    local loTop, loBot = av:qnToRow(loopLo), av:qnToRow(loopHi)
+    if loBot > sr and loTop < sr + visRows then
+      local r  = 5
+      local x1 = paneLeft + 1 + r
+      local y1, y2 = snap(rowY(loTop)), snap(rowY(loBot))
+      ImGui.DrawList_PathClear(dl)
+      ImGui.DrawList_PathArcTo(dl, x1, y1 + r, r, 3 * math.pi / 2, math.pi)
+      ImGui.DrawList_PathLineTo(dl, x1 - r, y1 + r + 1)
+      ImGui.DrawList_PathLineTo(dl, x1 - r, y2 - r - 1)
+      ImGui.DrawList_PathArcTo(dl, x1, y2 - r, r, math.pi, math.pi / 2)
+      ImGui.DrawList_PathStroke(dl, chrome.colour('tail'), ImGui.DrawFlags_None, 1.5)
+      ImGui.DrawList_PathClear(dl)
+    end
+  end
+
   -- Take names — last, so they stay crisp over the translucent cursor
   -- fill.
   for _, nd in ipairs(nameDraws) do
@@ -432,6 +504,23 @@ local function renderGrid(tracks, nTracks)
     ImGui.DrawList_PushClipRect(dl, nd.rx0 + 2, nd.ry0, nd.rx1 - 2, nd.ry1, true)
     ImGui.DrawList_AddText(dl, tx, nd.ry0 + 1, textCol, nd.name)
     ImGui.DrawList_PopClipRect(dl)
+  end
+
+  -- Edit cursor + play head — full-width rules on top of takes and
+  -- names. The play head is yellow and drawn only while the transport
+  -- runs; the grid clip rect already in force trims an off-screen rule.
+  local function qnRule(qn, colour)
+    local y = snap(rowY(av:qnToRow(qn)))
+    ImGui.DrawList_AddLine(dl, ox, y, gridR, y, colour, 1)
+  end
+  EDIT_LINE = EDIT_LINE
+    or ImGui.ColorConvertDouble4ToU32(0.20, 0.20, 0.26, 0.85)
+  qnRule(am:editCursorQN(), EDIT_LINE)
+  local playQN = am:playPositionQN()
+  if playQN then
+    PLAY_LINE = PLAY_LINE
+      or ImGui.ColorConvertDouble4ToU32(1.00, 0.85, 0.10, 0.95)
+    qnRule(playQN, PLAY_LINE)
   end
 
   -- Gutter row labels (right-aligned within QN_W).
@@ -462,7 +551,7 @@ local function renderGrid(tracks, nTracks)
 
   -- Advance the ImGui layout cursor so subsequent siblings know we
   -- consumed the grid's footprint.
-  ImGui.Dummy(ctx, gridW, headerH + HEADER_GAP + visRows * rowH)
+  ImGui.Dummy(ctx, gridW + LOOP_PAD, headerH + HEADER_GAP + visRows * rowH)
 end
 
 ----- Palette pane

@@ -201,6 +201,34 @@ function am:initialCursor()
   return trackIdx, qn
 end
 
+----- Transport — project edit cursor, loop range, play head
+
+function am:editCursorQN()
+  return reaper.TimeMap2_timeToQN(0, reaper.GetCursorPositionEx(0))
+end
+
+function am:setEditCursorQN(qn)
+  reaper.SetEditCurPos(reaper.TimeMap2_QNToTime(0, qn), false, false)
+end
+
+--contract: (loQN, hiQN) of the project loop range; nil when no loop is set (start == end).
+function am:loopRangeQN()
+  local startT, endT = reaper.GetSet_LoopTimeRange(false, true, 0, 0, false)
+  if startT == endT then return nil end
+  return reaper.TimeMap2_timeToQN(0, startT), reaper.TimeMap2_timeToQN(0, endT)
+end
+
+function am:setLoopRangeQN(loQN, hiQN)
+  reaper.GetSet_LoopTimeRange(true, true,
+    reaper.TimeMap2_QNToTime(0, loQN), reaper.TimeMap2_QNToTime(0, hiQN), false)
+end
+
+--contract: QN of the play head; nil when the transport is not playing.
+function am:playPositionQN()
+  if reaper.GetPlayState() & 1 == 0 then return nil end
+  return reaper.TimeMap2_timeToQN(0, reaper.GetPlayPosition())
+end
+
 function am:trackSlots(trackIdx)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return {} end

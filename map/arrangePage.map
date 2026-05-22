@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=908  sha=bc94358  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=997  sha=ad6d95d  mode=chunk
 @deps cm, cmgr, chrome, gui, onDive
 
 # Invariants & contracts
@@ -8,7 +8,7 @@
   @invariant  body splits horizontally into a grid pane (variable width) and a fixed-width palette pane (PALETTE_W). The palette shows slots for the focused track, i.e. the track under av:cursorCol() — no separate "focused track" pointer.
 
 # Shapes
-  @shape  press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved } — mouse-down snapshot, nil when no button is down over the grid; `row`/`col` is the pressed cell, applied to the cursor on a no-drag release; `moved` flips once ImGui's drag threshold is crossed.
+  @shape  press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter } — mouse-down snapshot, nil when no button is down over the grid. A track-column press carries `take`/`row`/`col`/`mode`; a QN-gutter press carries `qn` and `gutter = true` only. `row`/`col` is the pressed cell, applied to the cursor on a no-drag grid release; `moved` flips once ImGui's drag threshold is crossed.
 
 # Imports
   @require util = 'util'  @ 9
@@ -28,135 +28,144 @@
   @state PANE_GAP = 11  @ 34
   @state QN_W, TRACK_W = 32, 72  @ 35
   @state GUTTER_PAD = 8  @ 39
-  @state SLOT_KEY_W, SLOT_KIND_W = 18, 16  @ 41
-  @state MODAL_ID = '###arrangeModal'  @ 56
-  @state MODAL_TITLES = { rename = 'Rename slot', create = 'New take',  @ 57
-  @state modal = nil  @ 59   -- { kind, ... } | nil
-  @state modalFocus = false  @ 60
-  @state modalOpenAtFrameStart = false  @ 61
-  @state press = nil  @ 65
+  @state LOOP_PAD = 7  @ 43
+  @state SLOT_KEY_W, SLOT_KIND_W = 18, 16  @ 45
+  @state MODAL_ID = '###arrangeModal'  @ 60
+  @state MODAL_TITLES = { rename = 'Rename slot', create = 'New take',  @ 61
+  @state modal = nil  @ 63   -- { kind, ... } | nil
+  @state modalFocus = false  @ 64
+  @state modalOpenAtFrameStart = false  @ 65
+  @state press = nil  @ 70
       @invariant  mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Pressing a take focuses it. The cursor moves only on release, and only when no take was dragged — it then lands on the pressed cell; a drag (even one blocked by rangeIsClear) leaves the cursor put. An empty-space press with no drag also clears focus.
-  @state DRAG_EDGE_PX = 5  @ 66
-  @state BLOCKED_BORDER  @ 67   -- lazy: red border for a drag that would overlap
-  @state SLOT_FILL_ALPHA = 0.85  @ 105
-  @state SLOT_BORDER_ALPHA = 0.75  @ 106
-  @state slotColourCache = {}  @ 107
-  @state ORPHAN  @ 108   -- lazy { fill, border, focusFill, focusBorder }
-  @state HEADER_PAD = 8  @ 147
-  @state HEADER_GAP = 4  @ 148
-  @state CREATE_DEFAULT_ROWS = 4  @ 530
-  @state arrange = cmgr:scope('arrange')  @ 801
+      @invariant  a press in the QN gutter drives the REAPER transport, not the grid — a no-drag release sets the edit cursor, a drag sets the loop range; both endpoints snap to row boxes unless Shift is held. The arrange grid cursor and take focus are untouched.
+  @state DRAG_EDGE_PX = 5  @ 71
+  @state BLOCKED_BORDER  @ 72   -- lazy: red border for a drag that would overlap
+  @state EDIT_LINE  @ 73   -- lazy: REAPER edit-cursor rule across all tracks
+  @state PLAY_LINE  @ 74   -- lazy: yellow play-head rule
+  @state SLOT_FILL_ALPHA = 0.85  @ 112
+  @state SLOT_BORDER_ALPHA = 0.75  @ 113
+  @state slotColourCache = {}  @ 114
+  @state ORPHAN  @ 115   -- lazy { fill, border, focusFill, focusBorder }
+  @state HEADER_PAD = 8  @ 154
+  @state HEADER_GAP = 4  @ 155
+  @state CREATE_DEFAULT_ROWS = 4  @ 619
+  @state arrange = cmgr:scope('arrange')  @ 890
       @invariant  arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
       @invariant  62 place commands (drop0..dropZ) sit in cmgr:scope('arrange'), one per base62 slot. Pressing a key with no slot defined at that index is a silent no-op (am:dropInstance returns nil). The drop inherits the slot's existing-instance length — a real snap selector lands with the toolbar.
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the *only* slot-minting gesture. Slots have no existence apart from items on the grid; rename/delete buttons in the palette act on existing slots.
-  @state placeCmds, placeBinds = {}, {}  @ 899
+  @state placeCmds, placeBinds = {}, {}  @ 988
 
 # Private functions
   -- Style + draw helpers
-  @fn pushBodyStyles()  @ 71
-  @fn popBodyStyles()  @ 79
-  @fn alignedText(text, align)  @ 84
+  @fn pushBodyStyles()  @ 78
+  @fn popBodyStyles()  @ 86
+  @fn alignedText(text, align)  @ 91
       -- Shift text within the current table cell. 'r' right-aligns; 'c'
       -- centres. ImGui has no built-in alignment for Text — measure the
       -- live cell width via GetContentRegionAvail and offset the cursor.
-  @fn rowLabel(row)  @ 95
+  @fn rowLabel(row)  @ 102
       -- Row label = QN at the row's top edge. beatPerRow is integer-valued
       -- in normal use (1, 4, 8, 16); show the QN as an integer.
-  @fn slotColours(slotIdx, focused)  @ 109
+  @fn slotColours(slotIdx, focused)  @ 116
   -- Grid pane (hand-drawn — ImGui tables fight row-spanning shapes)
   -- Grid mouse — drag a take to move / resize, Alt-drag to duplicate
-  @fn roundTo(v, step)  @ 152
-  @fn hitTake(trackIdx, qn, qnPerPx)  @ 159
+  @fn roundTo(v, step)  @ 159
+  @fn floorTo(v, step)  @ 163
+  @fn hitTake(trackIdx, qn, qnPerPx)  @ 170
       -- The take under (trackIdx, qn) and the mode its grab implies:
       -- 'resizeEnd' within DRAG_EDGE_PX of the end edge (clamped to half the
       -- take, so a short take stays grabbable for a move), else 'move'.
-  @fn dragCandidate(press, mouseQN, beatPerRow)  @ 174
+  @fn dragCandidate(press, mouseQN, beatPerRow)  @ 185
       -- In-flight drag geometry: { startQN, lengthQN, fits }. The moved edge
       -- snaps to a row box unless Shift is held; `fits` is am:rangeIsClear
       -- for the candidate, excluding the dragged take itself (or nothing for
       -- an Alt-duplicate, whose original stays put).
-  @fn commitDrag(press, cand)  @ 198
+  @fn gutterLoopCand(press, mouseQN, beatPerRow)  @ 210
+      -- In-flight gutter loop drag: { loQN, hiQN }. Both endpoints floor to
+      -- the row box they sit in unless Shift is held; a zero-height sweep
+      -- widens to one row so the loop is never empty.
+  @fn commitDrag(press, cand)  @ 224
       -- Commit a released drag. The focused take rides its handle unchanged
       -- through a move or resize; a duplicate shifts focus to the new copy.
   -- Focus — the take the edit commands act on, independent of the cursor
-  @fn takeAtCursor()  @ 213
+  @fn takeAtCursor()  @ 239
       -- The take under the cursor's one-row box, by largest QN overlap.
-  @fn focusedTake()  @ 220
+  @fn focusedTake()  @ 246
       -- The stored focus handle resolved to a live take-shape. Self-heals: a
       -- handle whose take is gone (deleted here or in REAPER) clears focus.
-  @fn placeCursor(row, col)  @ 231
+  @fn placeCursor(row, col)  @ 257
       -- Move the cursor, then adopt the take it lands on as the focus.
       -- Landing on empty space leaves the previous focus intact — focus
       -- persists until another take claims it.
-  @fn renderGrid(tracks, nTracks)  @ 237
+  @fn renderGrid(tracks, nTracks)  @ 263
   -- Palette pane
-  @fn focusedSlotEntry(slots, slotIdx)  @ 473
+  @fn focusedSlotEntry(slots, slotIdx)  @ 562
       -- Locate the slot entry in trackSlots() output (a packed array, not
       -- indexed by slotIdx). Returns nil when no slot is focused or the
       -- focused slot index isn't currently populated.
-  @fn renderPaletteHeader(focusedTrack)  @ 485
+  @fn renderPaletteHeader(focusedTrack)  @ 574
       -- Hand-drawn so the header band height (HEADER_PAD + rowH) and the
       -- divider position match the grid's by construction — both panes start
       -- at the same `oy` (they share the renderBody row), so the divider
       -- lines up across the PANE_GAP without measurement.
-  @fn modalLabel()  @ 505
+  @fn modalLabel()  @ 594
       -- Popup label: stable id (so OpenPopup / BeginPopupModal agree) under a
       -- per-kind visible title.
-  @fn openModal(state)  @ 509
-  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 515
-  @fn openDeleteModal(trackIdx, slot)  @ 520
-  @fn openCreateModal(trackIdx, qnPos)  @ 531
-  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 536
-  @fn renderPaletteList(slots)  @ 559
+  @fn openModal(state)  @ 598
+  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 604
+  @fn openDeleteModal(trackIdx, slot)  @ 609
+  @fn openCreateModal(trackIdx, qnPos)  @ 620
+  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 625
+  @fn renderPaletteList(slots)  @ 648
       -- Three columns so the key/kind/name align vertically across rows
       -- without depending on a monospace font for the whole line. The key
       -- cell uses the monospace font (it's a hotkey to press); kind and
       -- name use the default UI font. Selectable lives in col 0 with
       -- SpanAllColumns so the entire row is the click target; we paint the
       -- key text on top with SameLine.
-  @fn renderModal()  @ 604
+  @fn renderModal()  @ 693
       -- One stable popup id (modalLabel's ### suffix) drives all three kinds,
       -- under a per-kind visible title — the popup can't be open in two
       -- configurations simultaneously, and one id keeps the open/close
       -- bookkeeping symmetrical. Self-heal: if the modal state was set but
       -- ImGui's popup queue lost it (e.g. command opened the popup from
       -- outside any window), re-open here.
-  @fn renderPalette(tracks)  @ 680
-  @fn nudgeCmd(direction)  @ 826
+  @fn renderPalette(tracks)  @ 769
+  @fn nudgeCmd(direction)  @ 915
       -- Take edits — move / resize / delete the focused take. Snap is one row
       -- (av:beatPerRow), matching the place commands. Keys clone the tracker
       -- note-edit vocab (nudge / grow / shrink); names are arrange-prefixed
       -- for the same flat-registry reason as the cursor commands.
       @invariant  nudge and resize step by exactly one row or not at all — takes sit on row-box edges, matching the place-command snap; the cursor is independent and does not follow. Neither edit lets a take enter a row box another take inhabits, even when geometry alone would allow it: both clamp to freeSpan's non-overlap window quantised to row-box edges, so a take may abut a neighbour's row box but never enter it — correct even for a take taller than one row.
-  @fn resizeCmd(direction)  @ 845
-  @fn deleteFocusedTake()  @ 860
-  @fn diveCmd()  @ 865
+  @fn resizeCmd(direction)  @ 934
+  @fn deleteFocusedTake()  @ 949
+  @fn diveCmd()  @ 954
       @invariant  arrangeDive acts on the focused take and is MIDI-only — audio takes have no tracker representation, so dive over an audio take is a silent no-op, as is dive with nothing focused. Routes through the onDive callback so coord owns the page swap.
-  @fn dropAt(slotIdx)  @ 889
+  @fn dropAt(slotIdx)  @ 978
       -- Place commands (drop0..dropZ). 0..9 → digit keys, 10..35 → letter
       -- keys, 36..61 → Shift+letter. ImGui.Key_0 + n and Key_A + n are
       -- contiguous (already exploited at coordinator.lua:53).
-  @fn placeKey(slotIdx)  @ 894
+  @fn placeKey(slotIdx)  @ 983
 
 # Public API (ap:*)
-  @api ap:bind()  @ 701
+  @api ap:bind()  @ 790
       @contract  bind takes no take — arrange is project-wide. coord may call with no args (or a take, ignored).
-  @api ap:unbind()  @ 702
-  @api ap:revealTake(reaperTake)  @ 705
+  @api ap:unbind()  @ 791
+  @api ap:revealTake(reaperTake)  @ 794
       @contract  positions the arrange cursor on the take wrapping the REAPER take `reaperTake` and focuses it — coord:returnToArrange lands on the take just edited. Silent no-op when the take isn't on the grid.
-  @api ap:seedCursorFromReaper()  @ 714
+  @api ap:seedCursorFromReaper()  @ 803
       @contract  seeds the arrange cursor and focus at boot from am:initialCursor — the first selected take, else REAPER's edit cursor / selected track. continuum calls this once after registering the page.
-  @api ap:renderToolbarBits(_)  @ 719
-  @api ap:renderBody(_, w, h, dispatch)  @ 724
+  @api ap:renderToolbarBits(_)  @ 808
+  @api ap:renderBody(_, w, h, dispatch)  @ 813
       @contract  grid is hand-drawn via the window draw list (no ImGui table): header band, row-number gutter, bar/phrase row tints, gridlines, focused-column tint, take rectangles tinted per slot (pooled siblings share a hue, the focused take lightened with a brighter border), and the cursor cell on top.
       @contract  pushes parchment palette across the body (Col_Text, Col_TableHeaderBg, Col_TableRowBg, Col_TableBorder*) because coord pops chrome styles before body draw; the palette tables below still need these — the grid itself no longer does.
       @contract  invokes the dispatch callback at end of body so arrange-scope arrow keys reach the dispatcher; samplePage and trackerPage follow the same pattern.
-  @api ap:renderStatusBar(_)  @ 775
-  @api ap:focusState()  @ 783
+  @api ap:renderStatusBar(_)  @ 864
+  @api ap:focusState()  @ 872
       @contract  focusState mirrors samplePage — picker or any active ImGui item suppresses commands. Also gated by modalOpenAtFrameStart so the Enter that commits any modal's InputText can't leak to root-scope bindings (notably quit) on the same frame.
-  @api ap:handleInput()  @ 794
-  @api ap:save()  @ 795
-  @api ap:load()  @ 796
+  @api ap:handleInput()  @ 883
+  @api ap:save()  @ 884
+  @api ap:load()  @ 885
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

@@ -17,6 +17,10 @@ function M.new()
     globalExt    = {},
     itemForTake  = {},
     trackForItem = {},
+    playState    = 0,
+    playTime     = 0,
+    loopStart    = 0,
+    loopEnd      = 0,
     calls        = {},
     console      = {},
     messages     = {},
@@ -287,6 +291,19 @@ function M.new()
     state.calls[#state.calls + 1] = { fn = 'SetEditCurPos', time = time }
   end
 
+  function r.GetPlayState()           return state.playState end
+  function r.GetPlayPosition()        return state.playTime end
+  function r.GetPlayPositionEx(_proj) return state.playTime end
+
+  function r.GetSet_LoopTimeRange(isSet, _isLoop, startT, endT, _seek)
+    if isSet then
+      state.loopStart, state.loopEnd = startT, endT
+      state.calls[#state.calls + 1] =
+        { fn = 'GetSet_LoopTimeRange', startT = startT, endT = endT }
+    end
+    return state.loopStart, state.loopEnd
+  end
+
   function r.MIDI_GetPPQPosFromProjTime(_take, time)
     return time * (state.tempoBPM / 60) * state.ppqPerQN
   end
@@ -483,6 +500,11 @@ function M.new()
   -- Test helpers
 
   function r:setCursor(time)  state.cursorTime = time end
+  function r:setLoopRange(startT, endT) state.loopStart, state.loopEnd = startT, endT end
+  function r:setPlay(playing, time)
+    state.playState = playing and 1 or 0
+    if time then state.playTime = time end
+  end
   function r:tick(dt)         state.precise = state.precise + dt end
   function r:setTempo(bpm)    state.tempoBPM = bpm end
   function r:bindTake(take, item, track)
