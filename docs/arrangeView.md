@@ -27,6 +27,17 @@ back; arrange_page is the only caller that joins av to live project
 data, and it does the join at the render site rather than threading
 am into av's construction.
 
+## Focus is stored here, resolved by the page
+
+`focus` joins the cursor as per-session view state — the take the
+arrange page's edit commands act on. av holds it as an opaque REAPER
+take handle and never dereferences it: turning a handle back into a
+grid position needs am, which av does not have. So `setFocus` is a
+bare store and `focus` a bare read — the page does the resolving, and
+the self-heal when the take is gone. It is the same boundary the
+section above draws: av carries view *state*, not the project
+knowledge needed to interpret it.
+
 ## Viewport follow
 
 `followViewport` runs on every cursor mutation and on every

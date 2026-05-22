@@ -1,7 +1,7 @@
 -- See docs/arrangePage.md for the model.
 -- @noindex
 
---invariant: render-only — cursor + scroll live in av (module-locals); track list + slot palette come from am, which reads cm/REAPER fresh each query. Page holds no persistent state of its own.
+--invariant: render-only — cursor + scroll + focus live in av (module-locals); track list + slot palette come from am, which reads cm/REAPER fresh each query. Page holds no persistent state of its own.
 --invariant: arrange page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from arrange.
 --invariant: cursor-nav commands live in cmgr:scope('arrange'); coord pushes the scope on activation. Names overlap with the tracker scope's arrow commands but scopes don't stack — only one is active at a time.
 --invariant: body splits horizontally into a grid pane (variable width) and a fixed-width palette pane (PALETTE_W). The palette shows slots for the focused track, i.e. the track under av:cursorCol() — no separate "focused track" pointer.
@@ -57,8 +57,8 @@ local modal                   = nil   -- { kind, ... } | nil
 local modalFocus              = false
 local modalOpenAtFrameStart   = false
 
---shape: press = { trackIdx, row, qn, take, mode = 'move'|'resizeEnd', duplicate, moved } — mouse-down snapshot, nil when no button is down over the grid; `moved` flips once ImGui's drag threshold is crossed.
---invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. A press that never crosses the drag threshold is a cursor-move click.
+--shape: press = { qn, take, mode = 'move'|'resizeEnd', duplicate, moved } — mouse-down snapshot, nil when no button is down over the grid; `moved` flips once ImGui's drag threshold is crossed.
+--invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. A press that never crosses the drag threshold is a focus click: it focuses the take under the press, or clears focus if the press was on empty space — the cursor never moves.
 local press = nil
 local DRAG_EDGE_PX = 5
 local GHOST_BLOCKED  -- lazy: blocked-drag ghost colour
@@ -96,30 +96,43 @@ end
 -- Per-slot colours. Golden-ratio hue rotation gives 62 visually-distinct
 -- hues without a hand-picked palette; pooled instances share a hue
 -- because they share slotIdx. Orphans (slotIdx = nil) get neutral grey.
--- Returns (fill, border) — same hue, fill at SLOT_FILL_ALPHA, border
--- darker and fully opaque so the rectangle reads cleanly over row tints.
+-- Each entry is a quad { fill, border, focusFill, focusBorder }: the
+-- focus pair lightens the fill and brightens the border to full opacity
+-- so the focused take reads as picked-out without losing its hue.
 local SLOT_FILL_ALPHA = 0.85
 local SLOT_BORDER_ALPHA = 0.75
 local slotColourCache = {}
-local ORPHAN_FILL, ORPHAN_BORDER
-local function slotColours(slotIdx)
+local ORPHAN  -- lazy { fill, border, focusFill, focusBorder }
+local function slotColours(slotIdx, focused)
+  local quad
   if slotIdx == nil then
-    ORPHAN_FILL   = ORPHAN_FILL   or ImGui.ColorConvertDouble4ToU32(0.5, 0.5, 0.5, 0.35)
-    ORPHAN_BORDER = ORPHAN_BORDER or ImGui.ColorConvertDouble4ToU32(0.3, 0.3, 0.3, 1.0)
-    return ORPHAN_FILL, ORPHAN_BORDER
+    ORPHAN = ORPHAN or {
+      ImGui.ColorConvertDouble4ToU32(0.50, 0.50, 0.50, 0.35),
+      ImGui.ColorConvertDouble4ToU32(0.30, 0.30, 0.30, 1.0),
+      ImGui.ColorConvertDouble4ToU32(0.85, 0.85, 0.85, 0.55),
+      ImGui.ColorConvertDouble4ToU32(0.97, 0.97, 0.97, 1.0),
+    }
+    quad = ORPHAN
+  else
+    quad = slotColourCache[slotIdx]
+    if not quad then
+      local PHI = 0.6180339887498949
+      local h   = ((slotIdx + 1) * PHI) % 1.0
+      local function hue(s, v, a)
+        local r, g, b = ImGui.ColorConvertHSVtoRGB(h, s, v)
+        return ImGui.ColorConvertDouble4ToU32(r, g, b, a)
+      end
+      quad = {
+        hue(0.55, 0.78, SLOT_FILL_ALPHA),
+        hue(0.85, 0.55, SLOT_BORDER_ALPHA),
+        hue(0.30, 0.97, SLOT_FILL_ALPHA),
+        hue(0.92, 0.90, 1.0),
+      }
+      slotColourCache[slotIdx] = quad
+    end
   end
-  local pair = slotColourCache[slotIdx]
-  if pair then return pair[1], pair[2] end
-  local PHI = 0.6180339887498949
-  local h   = ((slotIdx + 1) * PHI) % 1.0
-  local fr, fg, fb = ImGui.ColorConvertHSVtoRGB(h, 0.55, 0.78)
-  local br, bg, bb = ImGui.ColorConvertHSVtoRGB(h, 0.85, 0.55)
-  pair = {
-    ImGui.ColorConvertDouble4ToU32(fr, fg, fb, SLOT_FILL_ALPHA),
-    ImGui.ColorConvertDouble4ToU32(br, bg, bb, SLOT_BORDER_ALPHA),
-  }
-  slotColourCache[slotIdx] = pair
-  return pair[1], pair[2]
+  if focused then return quad[3], quad[4] end
+  return quad[1], quad[2]
 end
 
 ----- Grid pane (hand-drawn — ImGui tables fight row-spanning shapes)
@@ -177,17 +190,45 @@ local function dragCandidate(press, mouseQN, beatPerRow)
   }
 end
 
--- Commit a released drag. resizeEnd leaves the cursor put; move and
--- duplicate land it on the resulting take.
+-- Commit a released drag. The focused take rides its handle unchanged
+-- through a move or resize; a duplicate shifts focus to the new copy.
 local function commitDrag(press, cand)
   local take = press.take
   if press.mode == 'resizeEnd' then
     am:resizeTake(take, cand.lengthQN)
+  elseif press.duplicate then
+    local copy = am:duplicateTake(take, cand.startQN)
+    if copy then av:setFocus(copy.take) end
   else
-    if press.duplicate then am:duplicateTake(take, cand.startQN)
-    else am:moveTake(take, cand.startQN - take.startQN) end
-    av:setCursor(math.floor(av:qnToRow(cand.startQN)), take.trackIdx)
+    am:moveTake(take, cand.startQN - take.startQN)
   end
+end
+
+----- Focus — the take the edit commands act on, independent of the cursor
+
+-- The take under the cursor's one-row box, by largest QN overlap.
+local function takeAtCursor()
+  local boxTop = av:rowToQN(av:cursorRow())
+  return am:takeAt(av:cursorCol(), boxTop, boxTop + av:beatPerRow())
+end
+
+-- The stored focus handle resolved to a live take-shape. Self-heals: a
+-- handle whose take is gone (deleted here or in REAPER) clears focus.
+local function focusedTake()
+  local handle = av:focus()
+  if not handle then return nil end
+  local take = am:findTake(handle)
+  if not take then av:setFocus(nil) end
+  return take
+end
+
+-- Move the cursor, then adopt the take it lands on as the focus.
+-- Landing on empty space leaves the previous focus intact — focus
+-- persists until another take claims it.
+local function placeCursor(row, col)
+  av:setCursor(row, col)
+  local under = takeAtCursor()
+  if under then av:setFocus(under.take) end
 end
 
 local function renderGrid(tracks, nTracks)
@@ -265,6 +306,7 @@ local function renderGrid(tracks, nTracks)
   -- the translucent cursor fill lies over the take fill, and names draw
   -- last so they stay crisp over it.
   local function snap(v) return math.floor(v + 0.5) end
+  local focusHandle = av:focus()
   local nameDraws = {}
   for c = 0, nTracks - 1 do
     local rx0, rx1 = snap(trackLeft(c)), snap(trackRight(c))
@@ -274,9 +316,10 @@ local function renderGrid(tracks, nTracks)
       if endRow > sr and startRow < sr + visRows then
         local ry0 = snap(rowY(math.max(startRow, sr)))
         local ry1 = snap(rowY(math.min(endRow, sr + visRows)))
-        local fill, border = slotColours(tk.slotIdx)
+        local focused      = tk.take == focusHandle
+        local fill, border = slotColours(tk.slotIdx, focused)
         ImGui.DrawList_AddRectFilled(dl, rx0+1, ry0+1, rx1, ry1, fill)
-        ImGui.DrawList_AddRect      (dl, rx0, ry0, rx1+1, ry1+1, border, 0, 0, 1)
+        ImGui.DrawList_AddRect      (dl, rx0, ry0, rx1+1, ry1+1, border, 0, 0, focused and 2 or 1)
         if tk.name and tk.name ~= '' then
           nameDraws[#nameDraws + 1] = {
             name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
@@ -336,7 +379,8 @@ local function renderGrid(tracks, nTracks)
   end
 
   -- Mouse: drag a take to move / resize / Alt-duplicate; a plain click
-  -- moves the cursor. The closures here invert renderGrid's geometry.
+  -- focuses the take under it (empty space deselects). The closures
+  -- here invert renderGrid's geometry.
   local function drawGhost(cand, take)
     local rx0, rx1 = snap(trackLeft(take.trackIdx)), snap(trackRight(take.trackIdx))
     local ry0 = snap(rowY(av:qnToRow(cand.startQN)))
@@ -360,11 +404,13 @@ local function renderGrid(tracks, nTracks)
         local qn = yToQN(my)
         local take, mode = hitTake(col, qn, bpr / rowH)
         press = {
-          trackIdx = col, row = sr + math.floor((my - bodyTop) / rowH),
           qn = qn, take = take, mode = mode, moved = false,
           duplicate = mode == 'move'
                       and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
         }
+        -- Pressing inside a take focuses it at once, so a drag that
+        -- follows visibly carries the focused take.
+        if take then av:setFocus(take.take) end
       end
     end
     if not press then return end
@@ -377,8 +423,8 @@ local function renderGrid(tracks, nTracks)
     if ImGui.IsMouseReleased(ctx, 0) then
       if cand then
         if cand.fits then commitDrag(press, cand) end
-      elseif not press.moved then
-        av:setCursor(press.row, press.trackIdx)
+      elseif not press.moved and not press.take then
+        av:setFocus(nil)  -- a plain click on empty space deselects
       end
       press = nil
     end
@@ -616,21 +662,24 @@ end
 function ap:bind() end
 function ap:unbind() end
 
---contract: positions the arrange cursor on the take wrapping the REAPER take `reaperTake` — coord:returnToArrange lands on the take just edited. Silent no-op when the take isn't on the grid.
+--contract: positions the arrange cursor on the take wrapping the REAPER take `reaperTake` and focuses it — coord:returnToArrange lands on the take just edited. Silent no-op when the take isn't on the grid.
 function ap:revealTake(reaperTake)
   local take = am:findTake(reaperTake)
-  if take then av:setCursor(av:qnToRow(take.startQN), take.trackIdx) end
+  if take then
+    av:setFocus(reaperTake)
+    av:setCursor(av:qnToRow(take.startQN), take.trackIdx)
+  end
 end
 
---contract: seeds the arrange cursor at boot from am:initialCursor — the first selected take, else REAPER's edit cursor / selected track. continuum calls this once after registering the page.
+--contract: seeds the arrange cursor and focus at boot from am:initialCursor — the first selected take, else REAPER's edit cursor / selected track. continuum calls this once after registering the page.
 function ap:seedCursorFromReaper()
   local trackIdx, qn = am:initialCursor()
-  av:setCursor(av:qnToRow(qn), trackIdx)
+  placeCursor(av:qnToRow(qn), trackIdx)
 end
 
 function ap:renderToolbarBits(_) end
 
---contract: grid is hand-drawn via the window draw list (no ImGui table): header band, row-number gutter, bar/phrase row tints, gridlines, focused-column tint, take rectangles tinted per slot (pooled siblings share a hue), and the cursor '>' glyph on top.
+--contract: grid is hand-drawn via the window draw list (no ImGui table): header band, row-number gutter, bar/phrase row tints, gridlines, focused-column tint, take rectangles tinted per slot (pooled siblings share a hue, the focused take lightened with a brighter border), and the cursor cell on top.
 --contract: pushes parchment palette across the body (Col_Text, Col_TableHeaderBg, Col_TableRowBg, Col_TableBorder*) because coord pops chrome styles before body draw; the palette tables below still need these — the grid itself no longer does.
 --contract: invokes the dispatch callback at end of body so arrange-scope arrow keys reach the dispatcher; samplePage and trackerPage follow the same pattern.
 function ap:renderBody(_, w, h, dispatch)
@@ -716,10 +765,10 @@ local arrange = cmgr:scope('arrange')
 -- silently breaks the other scope's binding. Reuse the keys, not the
 -- name (see reference_commandmanager_limits).
 arrange:registerAll {
-  arrangeCursorUp    = function() av:setCursor(av:cursorRow() - 1, av:cursorCol()) end,
-  arrangeCursorDown  = function() av:setCursor(av:cursorRow() + 1, av:cursorCol()) end,
-  arrangeCursorLeft  = function() av:setCursor(av:cursorRow(),     av:cursorCol() - 1) end,
-  arrangeCursorRight = function() av:setCursor(av:cursorRow(),     av:cursorCol() + 1) end,
+  arrangeCursorUp    = function() placeCursor(av:cursorRow() - 1, av:cursorCol()) end,
+  arrangeCursorDown  = function() placeCursor(av:cursorRow() + 1, av:cursorCol()) end,
+  arrangeCursorLeft  = function() placeCursor(av:cursorRow(),     av:cursorCol() - 1) end,
+  arrangeCursorRight = function() placeCursor(av:cursorRow(),     av:cursorCol() + 1) end,
   createSlot         = function() openCreateModal(av:cursorCol(), av:rowToQN(av:cursorRow())) end,
 }
 arrange:bindAll {
@@ -730,18 +779,14 @@ arrange:bindAll {
   createSlot         = { { ImGui.Key_Enter, ImGui.Mod_Ctrl } },
 }
 
--- Take edits — move / resize / delete the take under the cursor. Snap is
--- one row (av:beatPerRow), matching the place commands. Keys clone the
--- tracker note-edit vocab (nudge / grow / shrink); names are arrange-
--- prefixed for the same flat-registry reason as the cursor commands.
---invariant: nudge and resize step by exactly one row or not at all — a partial step would desync the cursor, which only sits on row lines. Neither edit lets a take enter a row box another take inhabits, even when geometry alone would allow it: both clamp to freeSpan's non-overlap window quantised to row-box edges, so a take may abut a neighbour's row box but never enter it — correct even for a take taller than one row, whose entered row is not the cursor's neighbour.
-local function takeAtCursor(accept)
-  local boxTop = av:rowToQN(av:cursorRow())
-  return am:takeAt(av:cursorCol(), boxTop, boxTop + av:beatPerRow(), accept)
-end
+-- Take edits — move / resize / delete the focused take. Snap is one row
+-- (av:beatPerRow), matching the place commands. Keys clone the tracker
+-- note-edit vocab (nudge / grow / shrink); names are arrange-prefixed
+-- for the same flat-registry reason as the cursor commands.
+--invariant: nudge and resize step by exactly one row or not at all — takes sit on row-box edges, matching the place-command snap; the cursor is independent and does not follow. Neither edit lets a take enter a row box another take inhabits, even when geometry alone would allow it: both clamp to freeSpan's non-overlap window quantised to row-box edges, so a take may abut a neighbour's row box but never enter it — correct even for a take taller than one row.
 local function nudgeCmd(direction)
   return function()
-    local take = takeAtCursor()
+    local take = focusedTake()
     if not take then return end
     local beatPerRow = av:beatPerRow()
     local step       = direction * beatPerRow
@@ -755,13 +800,12 @@ local function nudgeCmd(direction)
     local hiBox = math.floor(hi / beatPerRow) * beatPerRow
     if newStart >= loBox and newStart + take.lengthQN <= hiBox then
       am:moveTake(take, step)
-      av:setCursor(av:cursorRow() + direction, av:cursorCol())
     end
   end
 end
 local function resizeCmd(direction)
   return function()
-    local take = takeAtCursor()
+    local take = focusedTake()
     if not take then return end
     local beatPerRow = av:beatPerRow()
     local newLength  = math.max(beatPerRow, take.lengthQN + direction * beatPerRow)
@@ -774,21 +818,21 @@ local function resizeCmd(direction)
     end
   end
 end
-local function deleteTakeAtCursor()
-  local take = takeAtCursor()
+local function deleteFocusedTake()
+  local take = focusedTake()
   if take then am:deleteTake(take) end
 end
---invariant: arrangeDive is MIDI-only — audio takes have no tracker representation. dive picks the largest-overlap MIDI take in the cursor box, falling through any audio take that overlaps more; a box with no MIDI take is a silent no-op. Routes through the onDive callback so coord owns the page swap.
+--invariant: arrangeDive acts on the focused take and is MIDI-only — audio takes have no tracker representation, so dive over an audio take is a silent no-op, as is dive with nothing focused. Routes through the onDive callback so coord owns the page swap.
 local function diveCmd()
-  local take = takeAtCursor(function(other) return other.kind == 'midi' end)
-  if take then onDive(take.item) end
+  local take = focusedTake()
+  if take and take.kind == 'midi' then onDive(take.item) end
 end
 arrange:registerAll {
   arrangeNudgeBack    = nudgeCmd(-1),
   arrangeNudgeForward = nudgeCmd(1),
   arrangeShrinkTake   = resizeCmd(-1),
   arrangeGrowTake     = resizeCmd(1),
-  arrangeDeleteTake   = deleteTakeAtCursor,
+  arrangeDeleteTake   = deleteFocusedTake,
   arrangeDive         = diveCmd,
 }
 arrange:bindAll {

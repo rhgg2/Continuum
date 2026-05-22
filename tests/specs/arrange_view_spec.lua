@@ -117,6 +117,19 @@ return {
   },
 
   {
+    name = 'focus defaults nil; setFocus stores an opaque handle, nil clears',
+    run = function(harness)
+      local _, av = mkAv(harness)
+      t.eq(av:focus(), nil)
+      local handle = {}              -- opaque to av — stored, never read into
+      av:setFocus(handle)
+      t.eq(av:focus(), handle, 'stores the handle as-is')
+      av:setFocus(nil)
+      t.eq(av:focus(), nil, 'nil clears')
+    end,
+  },
+
+  {
     name = 'qnToRow / rowToQN are inverses through beatPerRow',
     run = function(harness)
       local _, av = mkAv(harness)

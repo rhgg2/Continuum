@@ -1,8 +1,9 @@
--- Pin-tests for arrangePage's Page interface (bind / unbind / focusState).
--- The arrange-scope cursor commands are 4-line closures over av:setCursor;
--- av's cursor mechanics are pinned in arrange_view_spec, and the closures
--- are inspectable in source. Render methods pull in ImGui and are
--- exercised manually in REAPER.
+-- Pin-tests for arrangePage's Page interface (bind / unbind / focusState)
+-- and the arrange-scope edit commands. Edit commands act on the focused
+-- take, not the cursor cell; tests seed focus the way boot does, via
+-- seedCursorFromReaper, or move it with the cursor-nav commands. av's
+-- cursor mechanics are pinned in arrange_view_spec. Render methods (and
+-- mouse focus) pull in ImGui and are exercised manually in REAPER.
 --
 -- arrangePage requires ImGui at module scope; stub via package.preload
 -- before the first require so the module loads in the pure-Lua harness.
@@ -78,7 +79,7 @@ return {
   },
 
   {
-    name = 'arrangeNudgeForward moves the take under the cursor by one row',
+    name = 'arrangeNudgeForward moves the focused take by one row',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -86,7 +87,8 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeForward')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
@@ -103,7 +105,8 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 3, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeForward')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
@@ -113,7 +116,7 @@ return {
   },
 
   {
-    name = 'arrangeGrowTake lengthens the take under the cursor by one row',
+    name = 'arrangeGrowTake lengthens the focused take by one row',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -121,7 +124,8 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeGrowTake')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
@@ -130,7 +134,7 @@ return {
   },
 
   {
-    name = 'arrangeDeleteTake removes the take under the cursor',
+    name = 'arrangeDeleteTake removes the focused take',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -138,7 +142,8 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDeleteTake')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
@@ -157,7 +162,8 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 1, len = 1, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeForward')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
@@ -174,7 +180,8 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeBack')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
@@ -193,7 +200,8 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 2, len = 1, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeGrowTake')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
@@ -214,7 +222,8 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 1.5, len = 0.3, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeForward')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
@@ -238,7 +247,8 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 3.6, len = 0.3, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeForward')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
@@ -259,7 +269,8 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 2.7, len = 0.2, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeGrowTake')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
@@ -268,7 +279,7 @@ return {
   },
 
   {
-    name = 'arrangeDive routes the MIDI take under the cursor through onDive',
+    name = 'arrangeDive routes the focused MIDI take through onDive',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -277,15 +288,16 @@ return {
                                              pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
       local dived
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, item, 'onDive received the cursor take item')
+      t.eq(dived, item, 'onDive received the focused take item')
     end,
   },
 
   {
-    name = 'arrangeDive is a no-op over an audio take',
+    name = 'arrangeDive is a no-op when the focused take is audio',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -294,7 +306,8 @@ return {
                                 pos = 0, len = 1, srcFile = '/snd/a.wav' })
       h.reaper:setProjectTracks{ 'tr1' }
       local dived = false
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {}, function() dived = true end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function() dived = true end)
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
       t.eq(dived, false, 'audio take does not dive')
@@ -302,41 +315,124 @@ return {
   },
 
   {
-    name = 'arrangeDive falls through an audio take to a co-box MIDI take',
-    run = function(harness)
-      local h = harness.mk()
-      h.cm:set('project', 'arrangeBeatPerRow', 1)
-      h.reaper:setTrackName('tr1', 'Track 1')
-      h.reaper:addItem('tr1', { take = 'tr1/a1', isMidi = false,
-                                pos = 0, len = 1, srcFile = '/snd/a.wav' })
-      local midi = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                             pos = 0, len = 0.5, poolGuid = '{p1}' })
-      h.reaper:setProjectTracks{ 'tr1' }
-      local dived
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
-      h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeDive')
-      t.eq(dived, midi, 'dive picks the MIDI take though the audio take fills more of the box')
-    end,
-  },
-
-  {
-    name = 'arrangeDive is a no-op when the cursor box is empty',
+    name = 'arrangeDive is a no-op when nothing is focused',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:setProjectTracks{ 'tr1' }
       local dived = false
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {}, function() dived = true end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function() dived = true end)
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, false, 'empty cursor box does not dive')
+      t.eq(dived, false, 'empty grid focuses nothing — dive is a no-op')
     end,
   },
 
   {
-    name = 'seedCursorFromReaper places the cursor on the selected take',
+    name = 'keyboard nav adopts the take the cursor lands on as the focus',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      -- Take at row 2; the boot cursor sits at (0,0) over empty space,
+      -- so nothing is focused until the cursor is driven onto the take.
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 2, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeDeleteTake')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(#am:tracksTakes(0), 0, 'cursor reached the take, focused it, delete removed it')
+    end,
+  },
+
+  {
+    name = 'focus persists when the cursor moves on across empty space',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()      -- focuses t1 under the boot cursor
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeCursorDown')   -- cursor moves to empty row 1
+      h.cmgr:invoke('arrangeDeleteTake')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(#am:tracksTakes(0), 0, 'delete still hit t1 — focus held while the cursor moved off')
+    end,
+  },
+
+  {
+    name = 'nudge moves the focused take even when the cursor sits on another row',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()      -- focuses t1
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeCursorDown')   -- cursor leaves the take's row
+      h.cmgr:invoke('arrangeNudgeForward')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].startQN, 1, 'nudge acted on focus, not the empty cursor cell')
+    end,
+  },
+
+  {
+    name = 'an edit command is a no-op when nothing is focused',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      -- Take well clear of the boot cursor, so seeding focuses nothing.
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 5, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDeleteTake')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(#am:tracksTakes(0), 1, 'delete with no focus leaves the take alone')
+    end,
+  },
+
+  {
+    name = 'deleting the focused take clears focus — a second delete is a no-op',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 4, len = 1, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()      -- focuses t1
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDeleteTake')
+      local ok = pcall(function() h.cmgr:invoke('arrangeDeleteTake') end)
+      t.eq(ok, true, 'a second delete on the now-stale handle does not error')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(#am:tracksTakes(0), 1, 't2 untouched — focus cleared, did not jump to it')
+    end,
+  },
+
+  {
+    name = 'seedCursorFromReaper focuses the selected take',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -353,7 +449,7 @@ return {
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, item2, 'cursor seeded on the selected take — dive lands on it')
+      t.eq(dived, item2, 'focus seeded on the selected take — dive lands on it')
     end,
   },
 
@@ -372,12 +468,12 @@ return {
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, item, 'cursor seeded at the edit-cursor row — dive lands on the take there')
+      t.eq(dived, item, 'focus seeded at the edit-cursor row — dive lands on the take there')
     end,
   },
 
   {
-    name = 'revealTake places the cursor on the take wrapping a REAPER take handle',
+    name = 'revealTake focuses the take wrapping a REAPER take handle',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -390,7 +486,7 @@ return {
       ap:revealTake('tr1/t1')
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, item, 'cursor revealed on the take — dive lands on it')
+      t.eq(dived, item, 'take revealed and focused — dive lands on it')
     end,
   },
 }

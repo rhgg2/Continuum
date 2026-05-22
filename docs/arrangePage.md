@@ -36,7 +36,8 @@ All cell content the page paints is derived per-frame:
 
 - track list and slot palette come from `am`, which reads cm and
   REAPER on each query;
-- cursor position and scroll come from `av`'s module-locals;
+- cursor position, scroll, and the focused-take handle come from
+  `av`'s module-locals;
 - visible row count is computed from the live content region every
   frame and pushed back to `av:setGridSize` so `followViewport` has
   the right bounds.
@@ -46,6 +47,39 @@ The page itself caches nothing across frames. The cost is one
 invalidated by some signal we'd have to choose) costs more than it
 saves at this stage. If profiling later argues otherwise, the cache
 belongs in am, not here.
+
+## Cursor and focus are separate
+
+The grid carries two independent pointers.
+
+The **cursor** is the grid caret — a `(row, col)` cell in `av`, moved
+only by the keyboard (arrow keys, and the boot / reveal seeds). The
+mouse never moves it.
+
+The **focused take** is what the edit commands — nudge, resize,
+delete, dive — act on. It is a take, not a cell: `av` stores the
+REAPER take handle opaquely and the page resolves it through
+`am:findTake` whenever a command fires. It is set two ways — the
+keyboard cursor landing on a cell that holds a take adopts that take
+(`placeCursor`), and a mouse click on a take focuses it without
+moving the cursor. Landing on, or clicking, empty space does not
+silently re-target: a keyboard move across a gap keeps the focus it
+had; a click on a gap clears it.
+
+The split is what lets mouse and keyboard coexist. A click that
+yanked the caret would fight keyboard nav; a focus that evaporated
+when the cursor moved away would be nothing more than "the take under
+the cursor" — the separate, persistent pointer is what makes "park
+the cursor, the take stays picked" true. Nudge moves the focused take
+alone; the cursor does not trail it.
+
+Focus self-heals — a handle whose take has been deleted (here or in
+REAPER) resolves to nil and clears on the next command.
+
+The word "focus" does triple duty on this page: the *focused track*
+is the column under `cursorCol`, the *focused slot* is
+`av:paletteSlot()`, and the *focused take* is the pointer above. The
+first two are cursor-derived; the take is not.
 
 ## Right-side palette
 
@@ -154,9 +188,14 @@ rectangle edge.
 
 ## What's deferred
 
-Phases 1–5b have shipped: model, page skeleton, right-side palette
-with slot list / rename / delete / Ctrl-Enter creation, the base62
-placement scope, the hand-drawn grid with take rectangles, and the
-take-edit commands (move / resize / delete). Still ahead per
-`design/arrange.md`: trim-start, the tracker dive hotkey (6), and
-mouse drag (7).
+Shipped: the model, the page skeleton, the right-side palette (slot
+list / rename / delete / Ctrl-Enter creation), the base62 placement
+scope, the hand-drawn grid, the take-edit commands, the tracker dive
+hotkey, mouse drag (move / resize / Alt-duplicate), and the
+cursor / focus split.
+
+Still ahead: a *selection* — a set of focused takes, gathered by a
+drag-rectangle in empty space or by shift-extending the cursor, that
+the edit commands act on as a group. The single-take focus above is
+the degenerate case; widening the stored handle to a list is the next
+slice.

@@ -6,6 +6,7 @@
 --invariant: gridRows / gridCols are visible cell counts set by the page each frame via setGridSize; followViewport runs on every cursor mutation so the cursor stays in the visible band.
 --invariant: av speaks no REAPER / ImGui / am — bounds (track count, project end row) come from callers when relevant.
 --invariant: paletteSlot is a per-session module-local pointer (0..61 or nil) — which slot the right-side palette has focused for rename/delete; doesn't persist (cursor-like), nothing to do with cursorCol.
+--invariant: focus is a per-session module-local — the REAPER take handle of the take commands act on, set by the page. av stores it opaquely and never dereferences it; resolving it to a grid position needs am, which is the page's job. nil when nothing is focused.
 
 local util = require 'util'
 
@@ -21,6 +22,7 @@ local gridRows, gridCols   = 0, 0
 -- drawn).
 local maxCol = nil
 local paletteSlot = nil
+local focus = nil
 
 ----- Viewport follow
 
@@ -72,6 +74,11 @@ function av:setPaletteSlot(idx)
   if idx == nil then paletteSlot = nil; return end
   paletteSlot = math.max(0, math.min(61, math.floor(idx)))
 end
+
+function av:focus() return focus end
+
+--contract: stores an opaque take handle (or nil) — av never dereferences it; the page resolves it via am
+function av:setFocus(handle) focus = handle end
 
 function av:beatPerRow()    return cm:get('arrangeBeatPerRow') end
 function av:setBeatPerRow(v) cm:set('project', 'arrangeBeatPerRow', math.max(1/4, v)) end
