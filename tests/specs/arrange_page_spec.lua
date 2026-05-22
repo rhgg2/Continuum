@@ -95,6 +95,24 @@ return {
   },
 
   {
+    name = 'arrangeNudgeForward moves a take taller than one row',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 3, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeNudgeForward')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].startQN, 1,
+           'a multi-row take is not blocked by overlapping its own destination row')
+    end,
+  },
+
+  {
     name = 'arrangeGrowTake lengthens the take under the cursor by one row',
     run = function(harness)
       local h = harness.mk()
@@ -205,6 +223,30 @@ return {
   },
 
   {
+    name = 'arrangeNudgeForward refuses a tall take entering a row another take occupies',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      -- t1's off-grid length leaves it occupying part of row 2; nudged
+      -- down its body reaches into row 3, where t2 sits. The exact QN
+      -- ranges never touch (so freeSpan's raw bound permits the step)
+      -- and row 3 is not t1's cursor-neighbour row — only freeSpan
+      -- quantised to row boxes catches the co-tenancy.
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2.5, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 3.6, len = 0.3, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeNudgeForward')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].startQN, 0, 'tall take stays put — row 3 is already occupied')
+    end,
+  },
+
+  {
     name = 'arrangeGrowTake refuses growth into a row box another take inhabits',
     run = function(harness)
       local h = harness.mk()
@@ -256,6 +298,25 @@ return {
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
       t.eq(dived, false, 'audio take does not dive')
+    end,
+  },
+
+  {
+    name = 'arrangeDive falls through an audio take to a co-box MIDI take',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/a1', isMidi = false,
+                                pos = 0, len = 1, srcFile = '/snd/a.wav' })
+      local midi = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                             pos = 0, len = 0.5, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local dived
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDive')
+      t.eq(dived, midi, 'dive picks the MIDI take though the audio take fills more of the box')
     end,
   },
 

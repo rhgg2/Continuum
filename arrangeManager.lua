@@ -164,14 +164,17 @@ function am:tracksTakes(trackIdx)
   return out
 end
 
---contract: returns the first take on `trackIdx` (REAPER item order) whose start QN lies in the half-open box [boxStartQN, boxEndQN); nil if none. The arrange cursor is one row tall, so a take belongs to the cursor's row when it *begins* in that row — a take merely spanning the row does not count.
-function am:takeAt(trackIdx, boxStartQN, boxEndQN)
+--contract: returns the take on `trackIdx` overlapping the half-open box [boxStartQN, boxEndQN) by the largest QN span — the take the one-row cursor sits "on"; nil if no take overlaps. Ties resolve to REAPER item order. `accept`, when given, filters candidates first: a take failing accept(take) is never ranked.
+function am:takeAt(trackIdx, boxStartQN, boxEndQN, accept)
+  local best, bestOverlap = nil, 0
   for _, take in ipairs(am:tracksTakes(trackIdx)) do
-    if take.startQN >= boxStartQN and take.startQN < boxEndQN then
-      return take
+    local overlap = math.min(take.startQN + take.lengthQN, boxEndQN)
+                  - math.max(take.startQN, boxStartQN)
+    if overlap > bestOverlap and (not accept or accept(take)) then
+      best, bestOverlap = take, overlap
     end
   end
-  return nil
+  return best
 end
 
 --contract: returns the take-shape on any project track whose underlying REAPER take is `reaperTake`; nil if not found. Turns a REAPER take handle back into a grid position.

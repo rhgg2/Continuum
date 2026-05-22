@@ -111,7 +111,7 @@ am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN?) -> take
 am:duplicateTake(take, qnPos)     -> take
 
 -- per-take edits (mirror tracker nudge / grow / shrink)
-am:takeAt(trackIdx, boxLoQN, boxHiQN) -> take | nil
+am:takeAt(trackIdx, boxLoQN, boxHiQN, accept?) -> take | nil  -- largest-overlap take
 am:freeSpan(take)                 -> loQN, hiQN  -- non-overlap window
 am:moveTake(take, deltaQN)
 am:resizeTake(take, newLengthQN)

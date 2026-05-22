@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=711  sha=c4c0e82  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=711  sha=d2340b5  mode=chunk
 @deps cm, cmgr, chrome, gui, onDive
 
 # Invariants & contracts
@@ -86,17 +86,17 @@
       -- state was set but ImGui's popup queue lost it (e.g. command opened
       -- the popup from outside any window), re-open here.
   @fn renderPalette(tracks)  @ 480
-  @fn takeAtCursor()  @ 623
+  @fn takeAtCursor(accept)  @ 623
       -- Take edits — move / resize / delete the take under the cursor. Snap is
       -- one row (av:beatPerRow), matching the place commands. Keys clone the
       -- tracker note-edit vocab (nudge / grow / shrink); names are arrange-
       -- prefixed for the same flat-registry reason as the cursor commands.
-      @invariant  nudge and resize step by exactly one row or not at all — a partial step would desync the cursor, which only sits on row lines. Neither edit lets a take enter a row box another take inhabits, even when geometry alone would allow it: a nudge refuses a destination row holding another take's start; a grow stops at the next take's row-box top, not its exact (maybe off-grid) start.
+      @invariant  nudge and resize step by exactly one row or not at all — a partial step would desync the cursor, which only sits on row lines. Neither edit lets a take enter a row box another take inhabits, even when geometry alone would allow it: both clamp to freeSpan's non-overlap window quantised to row-box edges, so a take may abut a neighbour's row box but never enter it — correct even for a take taller than one row, whose entered row is not the cursor's neighbour.
   @fn nudgeCmd(direction)  @ 627
   @fn resizeCmd(direction)  @ 647
   @fn deleteTakeAtCursor()  @ 662
   @fn diveCmd()  @ 667
-      @invariant  arrangeDive is MIDI-only — audio takes have no tracker representation, so an audio take or an empty cursor box under the dive key is a silent no-op. Routes through the onDive callback so coord owns the page swap.
+      @invariant  arrangeDive is MIDI-only — audio takes have no tracker representation. dive picks the largest-overlap MIDI take in the cursor box, falling through any audio take that overlaps more; a box with no MIDI take is a silent no-op. Routes through the onDive callback so coord owns the page swap.
   @fn dropAt(slotIdx)  @ 691
       -- Place commands (drop0..dropZ). 0..9 → digit keys, 10..35 → letter
       -- keys, 36..61 → Shift+letter. ImGui.Key_0 + n and Key_A + n are

@@ -300,17 +300,46 @@ return {
   -- Per-take edits
   --------------------------------------------------------------------
   {
-    name = 'takeAt returns the first take whose start falls in the cursor box',
+    name = 'takeAt selects the take with the largest overlap of the cursor box',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
-        { items = { { kind = 'midi', pos = 0,   len = 2, poolGuid = '{p1}' },
-                    { kind = 'midi', pos = 4.5, len = 2, poolGuid = '{p2}' } } },
+        { items = { { kind = 'midi', pos = 0, len = 10,  poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 1, len = 0.2, poolGuid = '{p2}' } } },
       })
-      t.eq(am:takeAt(0, 0, 1).startQN, 0,   'a take starting at the box top is selected')
-      t.eq(am:takeAt(0, 1, 2),        nil,  'a take spanning the box but not starting in it is skipped')
-      t.eq(am:takeAt(0, 4, 5).startQN, 4.5, 'an off-grid start inside the box is selected')
-      t.eq(am:takeAt(0, 2, 4),        nil,  'no take starts in an empty box')
+      t.eq(am:takeAt(0, 1, 2).startQN, 0,
+           'a take filling more of the box beats one that merely starts in it')
+      t.eq(am:takeAt(0, 3, 4).startQN, 0,
+           'a take spanning the box is selected even though it starts elsewhere')
+      t.eq(am:takeAt(0, 10, 11), nil, 'a take ending exactly at the box top contributes no overlap')
+      t.eq(am:takeAt(0, 20, 21), nil, 'no take overlaps an empty box')
+    end,
+  },
+
+  {
+    name = 'takeAt breaks an overlap tie by REAPER item order',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 1, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 0, len = 1, poolGuid = '{p2}' } } },
+      })
+      t.eq(am:takeAt(0, 0, 1).take, 'tr1/take1', 'the earlier item wins an exact tie')
+    end,
+  },
+
+  {
+    name = 'takeAt accept-predicate filters candidates before ranking',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'audio', pos = 0, len = 5,   srcFile = '/snd/a.wav' },
+                    { kind = 'midi',  pos = 2, len = 0.5, poolGuid = '{p1}' } } },
+      })
+      t.eq(am:takeAt(0, 2, 3).startQN, 0,
+           'unfiltered: the larger audio take wins the box')
+      t.eq(am:takeAt(0, 2, 3, function(take) return take.kind == 'midi' end).startQN, 2,
+           'accept filter falls through to the smaller MIDI take')
     end,
   },
 

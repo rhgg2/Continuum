@@ -619,10 +619,10 @@ arrange:bindAll {
 -- one row (av:beatPerRow), matching the place commands. Keys clone the
 -- tracker note-edit vocab (nudge / grow / shrink); names are arrange-
 -- prefixed for the same flat-registry reason as the cursor commands.
---invariant: nudge and resize step by exactly one row or not at all — a partial step would desync the cursor, which only sits on row lines. Neither edit lets a take enter a row box another take inhabits, even when geometry alone would allow it: a nudge refuses a destination row holding another take's start; a grow stops at the next take's row-box top, not its exact (maybe off-grid) start.
-local function takeAtCursor()
+--invariant: nudge and resize step by exactly one row or not at all — a partial step would desync the cursor, which only sits on row lines. Neither edit lets a take enter a row box another take inhabits, even when geometry alone would allow it: both clamp to freeSpan's non-overlap window quantised to row-box edges, so a take may abut a neighbour's row box but never enter it — correct even for a take taller than one row, whose entered row is not the cursor's neighbour.
+local function takeAtCursor(accept)
   local boxTop = av:rowToQN(av:cursorRow())
-  return am:takeAt(av:cursorCol(), boxTop, boxTop + av:beatPerRow())
+  return am:takeAt(av:cursorCol(), boxTop, boxTop + av:beatPerRow(), accept)
 end
 local function nudgeCmd(direction)
   return function()
@@ -630,17 +630,17 @@ local function nudgeCmd(direction)
     if not take then return end
     local beatPerRow = av:beatPerRow()
     local step       = direction * beatPerRow
-    local destRow    = av:cursorRow() + direction
-    local destBoxTop = av:rowToQN(destRow)
-    local destTaken  = am:takeAt(av:cursorCol(), destBoxTop, destBoxTop + beatPerRow)
     local newStart   = take.startQN + step
     local lo, hi     = am:freeSpan(take)
-    local fits = not destTaken
-             and newStart >= lo
-             and newStart + take.lengthQN <= hi
-    if fits then
+    -- Quantise the non-overlap window to row boxes: the moved take may
+    -- abut a neighbour's row box but never enter it. freeSpan's bounds
+    -- are height-agnostic, so this holds for takes taller than one row,
+    -- whose entered row is not the cursor's neighbour row.
+    local loBox = math.ceil(lo / beatPerRow) * beatPerRow
+    local hiBox = math.floor(hi / beatPerRow) * beatPerRow
+    if newStart >= loBox and newStart + take.lengthQN <= hiBox then
       am:moveTake(take, step)
-      av:setCursor(destRow, av:cursorCol())
+      av:setCursor(av:cursorRow() + direction, av:cursorCol())
     end
   end
 end
@@ -663,10 +663,10 @@ local function deleteTakeAtCursor()
   local take = takeAtCursor()
   if take then am:deleteTake(take) end
 end
---invariant: arrangeDive is MIDI-only — audio takes have no tracker representation, so an audio take or an empty cursor box under the dive key is a silent no-op. Routes through the onDive callback so coord owns the page swap.
+--invariant: arrangeDive is MIDI-only — audio takes have no tracker representation. dive picks the largest-overlap MIDI take in the cursor box, falling through any audio take that overlaps more; a box with no MIDI take is a silent no-op. Routes through the onDive callback so coord owns the page swap.
 local function diveCmd()
-  local take = takeAtCursor()
-  if take and take.kind == 'midi' then onDive(take.item) end
+  local take = takeAtCursor(function(other) return other.kind == 'midi' end)
+  if take then onDive(take.item) end
 end
 arrange:registerAll {
   arrangeNudgeBack    = nudgeCmd(-1),
