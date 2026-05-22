@@ -79,6 +79,31 @@ return {
   },
 
   {
+    name = 'a place-command drop inherits the length of an existing instance',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      -- One three-row instance of the slot, parked clear of the boot
+      -- cursor at (0,0) where drop0 lands.
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 10, len = 3, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      am:tracksTakes(0)            -- materialise {p1} into a slot, as a render frame would
+      h.cmgr:invoke('drop0')
+      local dropped
+      for _, tk in ipairs(am:tracksTakes(0)) do
+        if tk.startQN == 0 then dropped = tk end
+      end
+      t.eq(dropped and dropped.lengthQN, 3,
+           'dropped instance matches its sibling, not a one-row default')
+    end,
+  },
+
+  {
     name = 'arrangeNudgeForward moves the focused take by one row',
     run = function(harness)
       local h = harness.mk()

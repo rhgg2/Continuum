@@ -341,13 +341,26 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   return slotIdx, take
 end
 
---contract: drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos for lengthQN (default 1 QN). MIDI pools via POOLEDEVTS; audio adds a sibling on the slot's file. Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
+-- Length of the first existing instance of source `id` on `track` —
+-- the length a fresh drop inherits when the caller names none.
+local function siblingLength(track, id)
+  local len
+  forEachActiveTake(track, function(take, item)
+    if not len and takeIdOf(take) == id then
+      len = select(2, itemQNRange(item))
+    end
+  end)
+  return len
+end
+
+--contract: drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos. lengthQN defaults to the length of an existing instance of the slot (a slot always has one), else 1 QN. MIDI pools via POOLEDEVTS; audio adds a sibling on the slot's file. Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
 function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return nil end
   local entry = readSlots(track)[slotIdx]
   if not entry or not entry.id then return nil end
-  return placeSource(track, entry.kind, entry.id, qnPos or 0, lengthQN or 1)
+  return placeSource(track, entry.kind, entry.id, qnPos or 0,
+                     lengthQN or siblingLength(track, entry.id) or 1)
 end
 
 --contract: clones `take` at qnPos on its own track, original untouched; returns the new take, or nil if take/track is missing or the take's id can't be derived. MIDI: a pooled clone sharing the POOLEDEVTS guid; audio: a sibling on the same file.

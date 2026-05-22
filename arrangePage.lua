@@ -198,7 +198,7 @@ local function commitDrag(press, cand)
     am:resizeTake(take, cand.lengthQN)
   elseif press.duplicate then
     local copy = am:duplicateTake(take, cand.startQN)
-    if copy then av:setFocus(copy.take) end
+    if copy then av:setFocus(copy) end  -- am hands back a bare take handle
   else
     am:moveTake(take, cand.startQN - take.startQN)
   end
@@ -264,7 +264,9 @@ local function renderGrid(tracks, nTracks)
   local function trackRight(c) return trackLeft(c) + TRACK_W                end
   local function rowY(row)     return bodyTop + (row - sr) * rowH end
 
-  ImGui.DrawList_PushClipRect(dl, ox, oy, gridR, oy + availH, true)
+  -- The right border (gridline at gridR; rightmost take-rect border a
+  -- px beyond) sits on the clip boundary — clip past it or it's chopped.
+  ImGui.DrawList_PushClipRect(dl, ox, oy, gridR + 2, oy + availH, true)
 
   -- Row tints (bar / phrase). Row 0 (qn = 0) is the strongest phrase
   -- boundary in the project, so it gets the phrase tint too — no qn > 0
@@ -757,7 +759,7 @@ function ap:save()        end
 function ap:load()        end
 
 --invariant: arrange-scope cursor-nav: arrow keys move cursor by 1 row / 1 col. Negative coords clamp in av; upper-bound clamping belongs to the page once it knows project size (deferred — phase 4+ adds Home/End/PgUp/PgDn that need real bounds).
---invariant: 62 place commands (drop0..dropZ) sit in cmgr:scope('arrange'), one per base62 slot. Pressing a key with no slot defined at that index is a silent no-op (am:dropInstance returns nil). Length defaults to one row (beatPerRow) — a real snap selector lands with the toolbar.
+--invariant: 62 place commands (drop0..dropZ) sit in cmgr:scope('arrange'), one per base62 slot. Pressing a key with no slot defined at that index is a silent no-op (am:dropInstance returns nil). The drop inherits the slot's existing-instance length — a real snap selector lands with the toolbar.
 --invariant: createSlot (Ctrl+Enter) opens the create modal — the *only* slot-minting gesture. Slots have no existence apart from items on the grid; rename/delete buttons in the palette act on existing slots.
 local arrange = cmgr:scope('arrange')
 -- Distinct names from tracker's cursorUp/Down/Left/Right: cmgr.commands
@@ -849,8 +851,7 @@ arrange:bindAll {
 -- contiguous (already exploited at coordinator.lua:53).
 local function dropAt(slotIdx)
   return function()
-    am:dropInstance(av:cursorCol(), slotIdx,
-                    av:rowToQN(av:cursorRow()), av:beatPerRow())
+    am:dropInstance(av:cursorCol(), slotIdx, av:rowToQN(av:cursorRow()))
   end
 end
 local function placeKey(slotIdx)
