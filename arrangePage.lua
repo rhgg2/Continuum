@@ -64,7 +64,7 @@ local modalOpenAtFrameStart   = false
 --invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Pressing a take focuses it. The cursor moves only on release, and only when no take was dragged — it then lands on the pressed cell; a drag (even one blocked by rangeIsClear) leaves the cursor put. An empty-space press with no drag also clears focus.
 local press = nil
 local DRAG_EDGE_PX = 5
-local GHOST_BLOCKED  -- lazy: blocked-drag ghost colour
+local BLOCKED_BORDER  -- lazy: red border for a drag that would overlap
 
 ----- Style + draw helpers
 
@@ -250,7 +250,6 @@ local function renderGrid(tracks, nTracks)
   av:setMaxCol(nTracks)
 
   local sr      = (select(1, av:scroll())) or 0
-  local curRow, curCol = av:cursorRow(), av:cursorCol()
 
   local textCol     = chrome.colour('text')
   local sepCol      = chrome.colour('separator')
@@ -266,6 +265,59 @@ local function renderGrid(tracks, nTracks)
   local function trackLeft(c)  return ox + QN_W + GUTTER_PAD + c * TRACK_W end
   local function trackRight(c) return trackLeft(c) + TRACK_W                end
   local function rowY(row)     return bodyTop + (row - sr) * rowH end
+
+  -- Mouse: press a take to focus it, then drag — the take itself rides
+  -- the cursor (the take pass below draws it at the candidate, not at
+  -- its committed position); Alt-drag duplicates. A release that
+  -- dragged no take moves the cursor to the pressed cell, and an
+  -- empty-space press also clears focus. Runs before the take pass so
+  -- the candidate is in hand when the pass relocates the dragged take.
+  local function runGridMouse()
+    local mx, my = ImGui.GetMousePos(ctx)
+    local bpr    = av:beatPerRow()
+    local yToQN  = function(y) return (sr + (y - bodyTop) / rowH) * bpr end
+
+    if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
+       and my >= bodyTop and my <= bodyBot then
+      local col = math.floor((mx - ox - QN_W - GUTTER_PAD) / TRACK_W)
+      if col >= 0 and col < nTracks then
+        local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
+        local qn = yToQN(my)
+        local take, mode = hitTake(col, qn, bpr / rowH)
+        press = {
+          qn = qn, row = sr + row, col = col,
+          take = take, mode = mode, moved = false,
+          duplicate = mode == 'move'
+                      and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
+        }
+        -- Focus the take on press, so a drag visibly carries it.
+        if take then av:setFocus(take.take) end
+      end
+    end
+    if not press then return nil end
+    if press.take and ImGui.IsMouseDragging(ctx, 0) then press.moved = true end
+
+    local cand = (press.moved and press.take)
+                 and dragCandidate(press, yToQN(my), bpr) or nil
+
+    if ImGui.IsMouseReleased(ctx, 0) then
+      if cand then
+        if cand.fits then commitDrag(press, cand) end
+      else
+        -- Released without dragging a take: a plain click. Move the
+        -- cursor to the pressed cell; an empty-space press also clears
+        -- focus. `cand` is non-nil only when a take was dragged, so a
+        -- drag (even one blocked by rangeIsClear) leaves the cursor put.
+        av:setCursor(press.row, press.col)
+        if not press.take then av:setFocus(nil) end
+      end
+      press = nil
+      return nil
+    end
+    return cand
+  end
+  local dragCand = runGridMouse()
+  local curRow, curCol = av:cursorRow(), av:cursorCol()
 
   -- The right border (gridline at gridR; rightmost take-rect border a
   -- px beyond) sits on the clip boundary — clip past it or it's chopped.
@@ -313,25 +365,48 @@ local function renderGrid(tracks, nTracks)
   local function snap(v) return math.floor(v + 0.5) end
   local focusHandle = av:focus()
   local nameDraws = {}
+
+  -- One take rectangle at an arbitrary QN range: fill, 1px border,
+  -- name queued for the final pass. Focus reads as the slot's focus
+  -- colours, not a thicker border. `blocked` paints the border red —
+  -- a drag whose candidate range overlaps another take.
+  local function drawTakeRect(tk, startQN, lengthQN, focused, blocked)
+    local startRow = av:qnToRow(startQN)
+    local endRow   = av:qnToRow(startQN + lengthQN)
+    if endRow <= sr or startRow >= sr + visRows then return end
+    local rx0, rx1 = snap(trackLeft(tk.trackIdx)), snap(trackRight(tk.trackIdx))
+    local ry0 = snap(rowY(math.max(startRow, sr)))
+    local ry1 = snap(rowY(math.min(endRow, sr + visRows)))
+    local fill, border = slotColours(tk.slotIdx, focused)
+    if blocked then
+      BLOCKED_BORDER = BLOCKED_BORDER
+        or ImGui.ColorConvertDouble4ToU32(0.80, 0.16, 0.16, 0.95)
+      border = BLOCKED_BORDER
+    end
+    ImGui.DrawList_AddRectFilled(dl, rx0+1, ry0+1, rx1, ry1, fill)
+    ImGui.DrawList_AddRect(dl, rx0, ry0, rx1+1, ry1+1, border, 0, 0, 1)
+    if tk.name and tk.name ~= '' then
+      nameDraws[#nameDraws + 1] = {
+        name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
+      }
+    end
+  end
+
+  -- Settled takes; the dragged take is held back (a move would draw it
+  -- twice) and painted last, on top, at its candidate range. A
+  -- duplicate keeps its original here and adds the copy after.
   for c = 0, nTracks - 1 do
-    local rx0, rx1 = snap(trackLeft(c)), snap(trackRight(c))
     for _, tk in ipairs(am:tracksTakes(c)) do
-      local startRow = av:qnToRow(tk.startQN)
-      local endRow   = av:qnToRow(tk.startQN + tk.lengthQN)
-      if endRow > sr and startRow < sr + visRows then
-        local ry0 = snap(rowY(math.max(startRow, sr)))
-        local ry1 = snap(rowY(math.min(endRow, sr + visRows)))
-        local focused      = tk.take == focusHandle
-        local fill, border = slotColours(tk.slotIdx, focused)
-        ImGui.DrawList_AddRectFilled(dl, rx0+1, ry0+1, rx1, ry1, fill)
-        ImGui.DrawList_AddRect      (dl, rx0, ry0, rx1+1, ry1+1, border, 0, 0, focused and 2 or 1)
-        if tk.name and tk.name ~= '' then
-          nameDraws[#nameDraws + 1] = {
-            name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
-          }
-        end
+      local relocating = dragCand and not press.duplicate
+                         and tk.item == press.take.item
+      if not relocating then
+        drawTakeRect(tk, tk.startQN, tk.lengthQN, tk.take == focusHandle)
       end
     end
+  end
+  if dragCand then
+    drawTakeRect(press.take, dragCand.startQN, dragCand.lengthQN,
+                 true, not dragCand.fits)
   end
 
   -- Cursor cell — cream fill at half opacity (the take fill shows
@@ -382,67 +457,6 @@ local function renderGrid(tracks, nTracks)
     ImGui.DrawList_AddText(dl, lx, headerTextY, textCol, name)
     ImGui.DrawList_PopClipRect(dl)
   end
-
-  -- Mouse: press a take to focus it, then drag to move / resize /
-  -- Alt-duplicate. A release that dragged no take moves the cursor to
-  -- the pressed cell (empty space also deselects). The closures here
-  -- invert renderGrid's geometry.
-  local function drawGhost(cand, take)
-    local rx0, rx1 = snap(trackLeft(take.trackIdx)), snap(trackRight(take.trackIdx))
-    local ry0 = snap(rowY(av:qnToRow(cand.startQN)))
-    local ry1 = snap(rowY(av:qnToRow(cand.startQN + cand.lengthQN)))
-    local _, border = slotColours(take.slotIdx)
-    GHOST_BLOCKED = GHOST_BLOCKED
-      or ImGui.ColorConvertDouble4ToU32(0.80, 0.16, 0.16, 0.95)
-    ImGui.DrawList_AddRect(dl, rx0, ry0, rx1 + 1, ry1 + 1,
-      cand.fits and border or GHOST_BLOCKED, 0, 0, 2)
-  end
-
-  local function handleGridMouse()
-    local mx, my = ImGui.GetMousePos(ctx)
-    local bpr    = av:beatPerRow()
-    local yToQN  = function(y) return (sr + (y - bodyTop) / rowH) * bpr end
-
-    if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
-       and my >= bodyTop and my <= bodyBot then
-      local col = math.floor((mx - ox - QN_W - GUTTER_PAD) / TRACK_W)
-      if col >= 0 and col < nTracks then
-        local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
-        local qn = yToQN(my)
-        local take, mode = hitTake(col, qn, bpr / rowH)
-        press = {
-          qn = qn, row = sr + row, col = col,
-          take = take, mode = mode, moved = false,
-          duplicate = mode == 'move'
-                      and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
-        }
-        -- Pressing inside a take focuses it at once, so a drag that
-        -- follows visibly carries the focused take.
-        if take then av:setFocus(take.take) end
-      end
-    end
-    if not press then return end
-    if press.take and ImGui.IsMouseDragging(ctx, 0) then press.moved = true end
-
-    local cand = (press.moved and press.take)
-                 and dragCandidate(press, yToQN(my), bpr) or nil
-    if cand then drawGhost(cand, press.take) end
-
-    if ImGui.IsMouseReleased(ctx, 0) then
-      if cand then
-        if cand.fits then commitDrag(press, cand) end
-      else
-        -- Released without dragging a take: a plain click. Move the
-        -- cursor to the pressed cell; an empty-space press also clears
-        -- focus. `cand` is non-nil only when a take was dragged, so a
-        -- drag (even one blocked by rangeIsClear) leaves the cursor put.
-        av:setCursor(press.row, press.col)
-        if not press.take then av:setFocus(nil) end
-      end
-      press = nil
-    end
-  end
-  handleGridMouse()
 
   ImGui.DrawList_PopClipRect(dl)
 
