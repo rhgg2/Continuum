@@ -92,18 +92,6 @@ local function pushBodyStyles()
 end
 local function popBodyStyles() ImGui.PopStyleColor(ctx, 6) end
 
--- Shift text within the current table cell. 'r' right-aligns; 'c'
--- centres. ImGui has no built-in alignment for Text — measure the
--- live cell width via GetContentRegionAvail and offset the cursor.
-local function alignedText(text, align)
-  local cellW = ImGui.GetContentRegionAvail(ctx)
-  local textW = ImGui.CalcTextSize(ctx, text)
-  local pad   = align == 'r' and (cellW - textW)
-                               or math.floor((cellW - textW) / 2)
-  if pad > 0 then ImGui.SetCursorPosX(ctx, ImGui.GetCursorPosX(ctx) + pad) end
-  ImGui.Text(ctx, text)
-end
-
 -- Row label = QN at the row's top edge. beatPerRow is integer-valued
 -- in normal use (1, 4, 8, 16); show the QN as an integer.
 local function rowLabel(row)
@@ -305,7 +293,6 @@ local function renderGrid(tracks, nTracks)
   local barTint    = chrome.colour('rowBeat')
   local cr, cg, cb = ImGui.ColorConvertU32ToDouble4(barTint)
   local phraseTint = ImGui.ColorConvertDouble4ToU32(cr, cg, cb, 1.0)
-  local colHiTint  = ImGui.ColorConvertDouble4ToU32(1, 1, 1, 0.05)
 
   local function trackLeft(c)  return ox + QN_W + GUTTER_PAD + c * TRACK_W end
   local function trackRight(c) return trackLeft(c) + TRACK_W                end
@@ -983,7 +970,7 @@ arrange:bindAll {
   arrangePageDown    = { { ImGui.Key_PageDown } },
   arrangeHome        = { { ImGui.Key_Home     } },
   arrangeEnd         = { { ImGui.Key_End      } },
-  createSlot         = { { ImGui.Key_Enter, ImGui.Mod_Ctrl } },
+  createSlot         = { { ImGui.Key_Enter, ImGui.Mod_Super } },
 }
 
 -- Take edits — move / resize / delete the focused take. Snap is one row
