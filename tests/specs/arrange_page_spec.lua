@@ -273,4 +273,63 @@ return {
       t.eq(dived, false, 'empty cursor box does not dive')
     end,
   },
+
+  {
+    name = 'seedCursorFromReaper places the cursor on the selected take',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:setTrackName('tr2', 'Track 2')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      local item2 = h.reaper:addItem('tr2', { take = 'tr2/t1', isMidi = true,
+                                              pos = 5, len = 1, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1', 'tr2' }
+      h.reaper.SetMediaItemSelected(item2, true)
+      local dived
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDive')
+      t.eq(dived, item2, 'cursor seeded on the selected take — dive lands on it')
+    end,
+  },
+
+  {
+    name = 'seedCursorFromReaper falls back to the edit-cursor row',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      local item = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                             pos = 7, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      h.reaper:setCursor(7)
+      local dived
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDive')
+      t.eq(dived, item, 'cursor seeded at the edit-cursor row — dive lands on the take there')
+    end,
+  },
+
+  {
+    name = 'revealTake places the cursor on the take wrapping a REAPER take handle',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      local item = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                             pos = 3, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local dived
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      ap:revealTake('tr1/t1')
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDive')
+      t.eq(dived, item, 'cursor revealed on the take — dive lands on it')
+    end,
+  },
 }

@@ -384,4 +384,66 @@ return {
       t.eq(takes[1].startQN, 4, 'the surviving take is the other one')
     end,
   },
+
+  --------------------------------------------------------------------
+  -- Boot cursor
+  --------------------------------------------------------------------
+  {
+    name = 'findTake resolves a REAPER take handle back to its grid take-shape',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 2, poolGuid = '{p1}' } } },
+        { items = { { kind = 'midi', pos = 4, len = 1, poolGuid = '{p2}' } } },
+      })
+      local target = am:tracksTakes(1)[1]
+      local found  = am:findTake(target.take)
+      t.truthy(found, 'the take is found')
+      t.eq(found.trackIdx, 1)
+      t.eq(found.startQN,  4)
+      t.eq(am:findTake('no-such-take'), nil, 'an unknown handle resolves to nil')
+      t.eq(am:findTake(nil),            nil, 'a nil handle resolves to nil')
+    end,
+  },
+
+  {
+    name = 'initialCursor reads the selected item: its take track and start',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = {} },
+        { items = { { kind = 'midi', pos = 6, len = 1, poolGuid = '{p1}' } } },
+      })
+      local target = am:tracksTakes(1)[1]
+      h.reaper.SetMediaItemSelected(target.item, true)
+      local trackIdx, qn = am:initialCursor()
+      t.eq(trackIdx, 1, 'column is the selected take track')
+      t.eq(qn,       6, 'row qn is the selected take start')
+    end,
+  },
+
+  {
+    name = 'initialCursor falls back to the edit cursor and selected track',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      local tracks = seedTracks(h, { { items = {} }, { items = {} } })
+      h.reaper:setCursor(12)
+      h.reaper:setSelectedTracks{ tracks[2] }
+      local trackIdx, qn = am:initialCursor()
+      t.eq(trackIdx, 1,  'column is the selected track index, 0-based')
+      t.eq(qn,       12, 'row qn is the edit-cursor position')
+    end,
+  },
+
+  {
+    name = 'initialCursor defaults to track 0 when nothing is selected',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      h.reaper:setCursor(3)
+      local trackIdx, qn = am:initialCursor()
+      t.eq(trackIdx, 0, 'column defaults to 0')
+      t.eq(qn,       3, 'row qn is still the edit cursor')
+    end,
+  },
 }

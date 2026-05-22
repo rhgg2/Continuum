@@ -174,6 +174,30 @@ function am:takeAt(trackIdx, boxStartQN, boxEndQN)
   return nil
 end
 
+--contract: returns the take-shape on any project track whose underlying REAPER take is `reaperTake`; nil if not found. Turns a REAPER take handle back into a grid position.
+function am:findTake(reaperTake)
+  if not reaperTake then return nil end
+  for _, track in ipairs(am:projectTracks()) do
+    for _, take in ipairs(am:tracksTakes(track.idx)) do
+      if take.take == reaperTake then return take end
+    end
+  end
+  return nil
+end
+
+--contract: the arrange cursor's boot position as (trackIdx, qn): the first selected item's take start when an item is selected, else REAPER's edit-cursor QN and selected-track column. trackIdx 0 when no track is selected.
+function am:initialCursor()
+  local item = reaper.GetSelectedMediaItem(0, 0)
+  if item then
+    local found = am:findTake(reaper.GetActiveTake(item))
+    if found then return found.trackIdx, found.startQN end
+  end
+  local qn       = reaper.TimeMap2_timeToQN(0, reaper.GetCursorPositionEx(0))
+  local track    = reaper.GetSelectedTrack(0, 0)
+  local trackIdx = track and (reaper.GetMediaTrackInfo_Value(track, 'IP_TRACKNUMBER') - 1) or 0
+  return trackIdx, qn
+end
+
 function am:trackSlots(trackIdx)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return {} end

@@ -501,6 +501,18 @@ end
 function ap:bind() end
 function ap:unbind() end
 
+--contract: positions the arrange cursor on the take wrapping the REAPER take `reaperTake` — coord:returnToArrange lands on the take just edited. Silent no-op when the take isn't on the grid.
+function ap:revealTake(reaperTake)
+  local take = am:findTake(reaperTake)
+  if take then av:setCursor(av:qnToRow(take.startQN), take.trackIdx) end
+end
+
+--contract: seeds the arrange cursor at boot from am:initialCursor — the first selected take, else REAPER's edit cursor / selected track. continuum calls this once after registering the page.
+function ap:seedCursorFromReaper()
+  local trackIdx, qn = am:initialCursor()
+  av:setCursor(av:qnToRow(qn), trackIdx)
+end
+
 function ap:renderToolbarBits(_) end
 
 --contract: grid is hand-drawn via the window draw list (no ImGui table): header band, row-number gutter, bar/phrase row tints, gridlines, focused-column tint, take rectangles tinted per slot (pooled siblings share a hue), and the cursor '>' glyph on top.

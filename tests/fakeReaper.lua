@@ -105,6 +105,18 @@ function M.new()
     local n = state.trackNames[track]
     return n ~= nil, n or ''
   end
+  -- Track selection + properties (arrange boot-cursor seed). IP_TRACKNUMBER
+  -- is 1-based in REAPER; am:initialCursor subtracts 1 for the 0-based column.
+  state.selectedTracks = {}
+  function r.GetSelectedTrack(_proj, idx) return state.selectedTracks[idx + 1] end
+  function r.GetMediaTrackInfo_Value(track, parm)
+    if parm == 'IP_TRACKNUMBER' then
+      for i, tr in ipairs(state.projectTracks) do
+        if tr == track then return i end
+      end
+    end
+    return 0
+  end
 
   -- Track media items (used by arrangeManager). Each track holds an
   -- ordered list of opaque item tokens; each item carries pos/len in
@@ -267,7 +279,8 @@ function M.new()
 
   -- Transport / cursor
 
-  function r.GetCursorPosition() return state.cursorTime end
+  function r.GetCursorPosition()        return state.cursorTime end
+  function r.GetCursorPositionEx(_proj) return state.cursorTime end
 
   function r.SetEditCurPos(time)
     state.cursorTime = time
@@ -484,6 +497,9 @@ function M.new()
   end
   function r:setProjectTracks(tracks)
     state.projectTracks = tracks
+  end
+  function r:setSelectedTracks(tracks)
+    state.selectedTracks = tracks
   end
   function r:setTrackName(track, name)
     state.trackNames[track] = name

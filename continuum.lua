@@ -79,9 +79,13 @@ local function Main()
   local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onDive = onDive })
   local sp = util.instantiate('samplePage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
 
-  coord:register('tracker', tp)
+  -- Arrange registered first so Continuum boots into it (coord:register
+  -- makes the first registered page active). seedCursorFromReaper then
+  -- places the cursor on the selected take / edit-cursor position.
   coord:register('arrange', ap)
+  coord:register('tracker', tp)
   coord:register('sample',  sp)
+  ap:seedCursorFromReaper()
 
   -- Globals: transport wrappers, page switching, quit. Bound on root
   -- so any page picks them up unchanged.
