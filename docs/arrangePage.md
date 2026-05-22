@@ -1,8 +1,10 @@
 # arrangePage
 
-Page wrapper for the arrange view. Mirrors `samplePage`'s shape: owns
-no persistent state, constructs its substack (`am` + `av`) internally,
-exposes the standard Page interface to `coordinator`.
+Page wrapper for the arrange view: render and input only. It draws the
+grid and palette, reads keyboard and mouse, and exposes the standard
+Page interface to `coordinator`. It constructs `av` (which builds
+`am`), holds no persistent state, and keeps no am reference — all
+project data and all state operations go through av.
 
 ## Project-wide, so bind is a no-op
 
@@ -18,35 +20,50 @@ The contract on `coord:setActive` documents this explicitly: tracker
 binds to `currentTake`, sample binds to `samplerTrack`, arrange binds
 to nothing.
 
-## Separate cmgr scope, overlapping command names
+## Separate cmgr scope
 
-The cursor commands live in `cmgr:scope('arrange')` and reuse the
-tracker scope's names (`cursorUp` / `cursorDown` / `cursorLeft` /
-`cursorRight`). This is safe because cmgr scopes don't stack — only
-one scope is active at a time, and coord pushes/pops on page switch.
-Reusing the names rather than coining `arrangeCursorUp` keeps the
-key-binding table small and means the user's mental model ("arrow
-keys move the cursor") carries unchanged across pages.
+The arrange commands live in `cmgr:scope('arrange')`; coord pushes the
+scope when the page activates and pops it on the way out. Scopes don't
+stack — exactly one is active — so the arrow keys can mean "move the
+arrange cursor" here and "move the tracker cursor" elsewhere with no
+collision.
 
-The same trick is already in use between tracker and sample.
+The names are arrange-prefixed (`arrangeCursorUp`, not `cursorUp`)
+even though the keys match the tracker scope's. `cmgr`'s command table
+is flat: a shared name would overwrite the other scope's gate. Reuse
+the keys, not the names.
 
-## Render-only
+Registration is split along the render/operation line. av registers
+the command *bodies* — it owns what they do. The page registers the
+*key bindings*: it holds the ImGui key constants, and mapping a key to
+a command name is an input concern. The page also registers
+`createSlot`, the one command whose body belongs here because it opens
+the page's modal.
 
-All cell content the page paints is derived per-frame:
+## Render + input only
 
-- track list and slot palette come from `am`, which reads cm and
-  REAPER on each query;
-- cursor position, scroll, and the focused-take handle come from
-  `av`'s module-locals;
+Every cell the page paints is derived per-frame, and all of it comes
+from `av` — the page holds no am reference:
+
+- track list and slot palette come through `av`'s am proxies, which
+  read cm and REAPER on each query;
+- cursor position, scroll, and the focused-take handle are `av`'s
+  state;
 - visible row count is computed from the live content region every
   frame and pushed back to `av:setGridSize` so `followViewport` has
   the right bounds.
 
-The page itself caches nothing across frames. The cost is one
+The page caches nothing across frames. The cost is one
 `projectTracks()` walk per draw — cheap, and the alternative (a cache
 invalidated by some signal we'd have to choose) costs more than it
 saves at this stage. If profiling later argues otherwise, the cache
-belongs in am, not here.
+belongs in am.
+
+Input is the page's other half. The keyboard goes through the command
+scope; the mouse — clicks, drags, the wheel — is read in
+`runGridMouse`, which assembles a `press` gesture and, on release,
+calls the matching av operation. The page decides which gesture
+happened; av decides what it does to the state.
 
 ## Cursor and focus are separate
 
@@ -58,10 +75,10 @@ mouse never moves it.
 
 The **focused take** is what the edit commands — nudge, resize,
 delete, dive — act on. It is a take, not a cell: `av` stores the
-REAPER take handle opaquely and the page resolves it through
-`am:findTake` whenever a command fires. It is set two ways — the
-keyboard cursor landing on a cell that holds a take adopts that take
-(`placeCursor`), and a mouse click on a take focuses it without
+REAPER take handle opaquely and resolves it through `am:findTake`
+whenever a command fires. It is set two ways — the keyboard cursor
+landing on a cell that holds a take adopts that take
+(`av:placeCursor`), and a mouse click on a take focuses it without
 moving the cursor. Landing on, or clicking, empty space does not
 silently re-target: a keyboard move across a gap keeps the focus it
 had; a click on a gap clears it.
@@ -135,10 +152,10 @@ Begin/End so the popup inherits parchment/chrome styles.
 ## Slot creation: Ctrl+Enter
 
 `createSlot` is bound to Ctrl+Enter under the arrange scope. It opens
-the create modal at the cursor position; the modal asks for a name
-and a length in rows (seeded to 4). On commit, it calls
-`am:createAndDropMidi(cursorCol, cursorQN, rows * beatPerRow, name)`
-and sets `paletteSlot` to the new index so the palette highlights it.
+the create modal at the cursor position; the modal asks for a name and
+a length in rows (seeded to 4). On commit it calls `av:createSlot`,
+which mints the slot through am and points `paletteSlot` at the new
+index so the palette highlights it.
 
 This is the only slot-minting gesture. There is no separate "declare
 a slot" step — a slot has no existence apart from items on the grid

@@ -1,8 +1,14 @@
 # arrangeView
 
-Viewport for the arrange page — cursor, scroll, and grid density.
-Counterpart to `trackerView`'s viewport role on the tracker side,
-deliberately the same shape so the keyboard model transfers.
+The arrange page's state and the operations on it — cursor, scroll,
+grid density, focus, and every command that moves or edits a take. It
+sits between `arrangePage` (render and input only) and `arrangeManager`
+(the REAPER bridge): av builds am, holds the page state, and is the
+only module that calls am.
+
+On the tracker side `editCursor` and `trackerView` split cursor
+mechanics from grid mapping across two modules. The arrange grid is
+simpler and av keeps both — the split would buy nothing here.
 
 ## What persists, what doesn't
 
@@ -17,26 +23,42 @@ This also keeps `setCursor` a pure mutation of two integers. There is
 no cm round-trip on every arrow key, and no `configChanged` storm
 through subscribers that have nothing to say about cursor motion.
 
-## Why am isn't a constructor dep
+## av owns am
 
-av speaks no REAPER and no am. Bounds — track count, project end row
-— are the caller's responsibility because the same view module needs
-to be testable without a fake REAPER project standing behind it. The
-spec just drives `setGridSize` + `setCursor` and reads `scroll()`
-back; arrange_page is the only caller that joins av to live project
-data, and it does the join at the render site rather than threading
-am into av's construction.
+av builds `arrangeManager` and is the only module that touches it.
+`arrangePage` holds no am reference: every project query it draws with
+and every mutation it triggers go through av.
 
-## Focus is stored here, resolved by the page
+This is the layered rule, not a preference. A page reaching past av
+into am could mutate project state without av's cursor and focus
+bookkeeping ever seeing it. Routing everything through av keeps one
+module answerable for the page — focus adoption, the focus self-heal,
+the row-box snap policy all live in the same place as the mutations
+they constrain.
 
-`focus` joins the cursor as per-session view state — the take the
-arrange page's edit commands act on. av holds it as an opaque REAPER
-take handle and never dereferences it: turning a handle back into a
-grid position needs am, which av does not have. So `setFocus` is a
-bare store and `focus` a bare read — the page does the resolving, and
-the self-heal when the take is gone. It is the same boundary the
-section above draws: av carries view *state*, not the project
-knowledge needed to interpret it.
+It costs av its REAPER independence. An earlier design kept am out so
+av could be tested without a fake project behind it. That trade no
+longer holds: av now *is* the operations, and the operations are
+defined against project takes — there is nothing left to test in
+isolation from them. The arrange specs build av over the same fake
+REAPER the page specs already rely on.
+
+## Focus: stored and resolved here
+
+`focus` is the REAPER take handle the edit commands act on — per-session
+view state beside the cursor. av stores it opaquely and resolves it on
+demand: `focusedTake` turns the handle into a live take-shape through
+`am:findTake`, and clears focus when the take is gone (deleted here or
+in REAPER). Storing a handle rather than a grid position means a take
+moved or resized under it still resolves correctly.
+
+Cursor and focus are separate pointers, and that is deliberate. The
+cursor is the keyboard caret; focus is a take. Focus persists when the
+cursor moves on across empty space — a keyboard move that lands on a
+take adopts it (`placeCursor`), a move across a gap leaves focus
+intact. That is what makes "park the cursor, the take stays picked"
+true, and what lets a nudge move the focused take while the cursor
+sits elsewhere.
 
 ## Viewport follow
 

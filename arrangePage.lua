@@ -1,9 +1,9 @@
 -- See docs/arrangePage.md for the model.
 -- @noindex
 
---invariant: render-only — cursor + scroll + focus live in av (module-locals); track list + slot palette come from am, which reads cm/REAPER fresh each query. Page holds no persistent state of its own.
+--invariant: render + input only — arrangePage draws the grid and palette and reads keyboard / mouse. It holds no am reference: every project query and every state mutation goes through av.
 --invariant: arrange page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from arrange.
---invariant: cursor-nav commands live in cmgr:scope('arrange'); coord pushes the scope on activation. Names overlap with the tracker scope's arrow commands but scopes don't stack — only one is active at a time.
+--invariant: the arrange scope's key bindings live here; the command bodies live in av. coord pushes the scope on activation. Names overlap the tracker scope's arrow commands but scopes don't stack — only one is active at a time. createSlot is registered here too — it drives this page's modal.
 --invariant: body splits horizontally into a grid pane (variable width) and a fixed-width palette pane (PALETTE_W). The palette shows slots for the focused track, i.e. the track under av:cursorCol() — no separate "focused track" pointer.
 
 local util = require 'util'
@@ -14,7 +14,7 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
---contract: owns the arrange substack: builds am and av internally; coord passes primitives (cm, cmgr, chrome, gui) and the onDive callback (routes a MIDI take into the tracker page).
+--contract: builds av, which builds am; coord passes primitives (cm, cmgr, chrome, gui) and the onDive callback. cm / cmgr / onDive forward to av — ap keeps no am reference and uses cmgr only to bind keys.
 local cm, cmgr, chrome, gui, onDive = (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).onDive
 
 local ctx = gui and gui.ctx or nil
@@ -23,8 +23,8 @@ local ctx = gui and gui.ctx or nil
 local monoFont = gui and gui.font or nil
 local uiSize   = gui and gui.fontSize and gui.fontSize.ui or 12
 
-local am = util.instantiate('arrangeManager', { cm = cm })
-local av = util.instantiate('arrangeView',    { cm = cm })
+local av = util.instantiate('arrangeView',
+  { cm = cm, cmgr = cmgr, onDive = onDive })
 
 local ap = {}
 
@@ -72,7 +72,6 @@ local openCreateModal
 --invariant: a press in the QN gutter drives the REAPER transport, not the grid — a no-drag release sets the edit cursor, a drag sets the loop range; both endpoints snap to row boxes unless Shift is held. The arrange grid cursor and take focus are untouched. A right-click in the gutter clears the loop range.
 --invariant: a double-click on empty grid space starts a create press — the drag previews a ghost take, release opens the create modal seeded with the swept column / start row / row count. A bare double-click opens it with the default row count.
 local press = nil
-local DRAG_EDGE_PX = 5
 local WHEEL_ROWS   = 1   -- cursor rows moved per mouse-wheel notch
 local wheelAccum   = 0   -- fractional wheel carried between frames
 local BLOCKED_BORDER  -- lazy: red border for a drag that would overlap
@@ -149,122 +148,8 @@ end
 local HEADER_PAD = 8
 local HEADER_GAP = 4
 
------ Grid mouse — drag a take to move / resize, Alt-drag to duplicate
-
-local function roundTo(v, step)
-  return math.floor(v / step + 0.5) * step
-end
-
-local function floorTo(v, step)
-  return math.floor(v / step) * step
-end
-
--- The take under (trackIdx, qn) and the mode its grab implies:
--- 'resizeEnd' within DRAG_EDGE_PX of the end edge (clamped to half the
--- take, so a short take stays grabbable for a move), else 'move'.
-local function hitTake(trackIdx, qn, qnPerPx)
-  for _, take in ipairs(am:tracksTakes(trackIdx)) do
-    local endQN = take.startQN + take.lengthQN
-    if qn >= take.startQN and qn < endQN then
-      local edgeQN = math.min(DRAG_EDGE_PX * qnPerPx, take.lengthQN / 2)
-      return take, (qn >= endQN - edgeQN) and 'resizeEnd' or 'move'
-    end
-  end
-  return nil
-end
-
--- In-flight drag geometry: { startQN, lengthQN, fits }. The moved edge
--- snaps to a row box unless Shift is held; `fits` is am:rangeIsClear
--- for the candidate, excluding the dragged take itself (or nothing for
--- an Alt-duplicate, whose original stays put).
-local function dragCandidate(press, mouseQN, beatPerRow)
-  local take    = press.take
-  local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
-  local startQN, lengthQN = take.startQN, take.lengthQN
-  if press.mode == 'resizeEnd' then
-    lengthQN = take.lengthQN + (mouseQN - press.qn)
-    if snapped then
-      lengthQN = roundTo(startQN + lengthQN, beatPerRow) - startQN
-    end
-    lengthQN = math.max(beatPerRow, lengthQN)
-  else
-    startQN = take.startQN + (mouseQN - press.qn)
-    if snapped then startQN = roundTo(startQN, beatPerRow) end
-    startQN = math.max(0, startQN)
-  end
-  local exceptItem = press.duplicate and nil or take.item
-  return {
-    startQN = startQN, lengthQN = lengthQN,
-    fits = am:rangeIsClear(take.trackIdx, startQN, lengthQN, exceptItem),
-  }
-end
-
--- In-flight gutter loop drag: { loQN, hiQN }. Both endpoints floor to
--- the row box they sit in unless Shift is held; a zero-height sweep
--- widens to one row so the loop is never empty.
-local function gutterLoopCand(press, mouseQN, beatPerRow)
-  local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
-  local loQN = math.max(0, math.min(press.qn, mouseQN))
-  local hiQN = math.max(press.qn, mouseQN)
-  if snapped then
-    loQN = floorTo(loQN, beatPerRow)
-    hiQN = floorTo(hiQN, beatPerRow)
-  end
-  if hiQN <= loQN then hiQN = loQN + beatPerRow end
-  return { loQN = loQN, hiQN = hiQN }
-end
-
--- In-flight create drag: { startQN, lengthQN }. startQN is the
--- double-clicked row box; the end follows the mouse, floored to a row
--- box unless Shift is held. A zero-height sweep is one row.
-local function createCandidate(press, mouseQN, beatPerRow)
-  local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
-  local endQN   = math.max(press.qn, mouseQN)
-  if snapped then endQN = floorTo(endQN, beatPerRow) end
-  local lengthQN = math.max(beatPerRow, endQN - press.qn)
-  return { startQN = press.qn, lengthQN = lengthQN }
-end
-
--- Commit a released drag. The focused take rides its handle unchanged
--- through a move or resize; a duplicate shifts focus to the new copy.
-local function commitDrag(press, cand)
-  local take = press.take
-  if press.mode == 'resizeEnd' then
-    am:resizeTake(take, cand.lengthQN)
-  elseif press.duplicate then
-    local copy = am:duplicateTake(take, cand.startQN)
-    if copy then av:setFocus(copy) end  -- am hands back a bare take handle
-  else
-    am:moveTake(take, cand.startQN - take.startQN)
-  end
-end
-
------ Focus — the take the edit commands act on, independent of the cursor
-
--- The take under the cursor's one-row box, by largest QN overlap.
-local function takeAtCursor()
-  local boxTop = av:rowToQN(av:cursorRow())
-  return am:takeAt(av:cursorCol(), boxTop, boxTop + av:beatPerRow())
-end
-
--- The stored focus handle resolved to a live take-shape. Self-heals: a
--- handle whose take is gone (deleted here or in REAPER) clears focus.
-local function focusedTake()
-  local handle = av:focus()
-  if not handle then return nil end
-  local take = am:findTake(handle)
-  if not take then av:setFocus(nil) end
-  return take
-end
-
--- Move the cursor, then adopt the take it lands on as the focus.
--- Landing on empty space leaves the previous focus intact — focus
--- persists until another take claims it.
-local function placeCursor(row, col)
-  av:setCursor(row, col)
-  local under = takeAtCursor()
-  if under then av:setFocus(under.take) end
-end
+-- Snap a click's QN down to the top edge of the row box it sits in.
+local function floorTo(v, step) return math.floor(v / step) * step end
 
 local function renderGrid(tracks, nTracks)
   local dl       = ImGui.GetWindowDrawList(ctx)
@@ -312,11 +197,12 @@ local function renderGrid(tracks, nTracks)
     local bpr     = av:beatPerRow()
     local yToQN   = function(y) return (sr + (y - bodyTop) / rowH) * bpr end
     local gutterR = trackLeft(0)
+    local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
 
     if ImGui.IsMouseClicked(ctx, 1) and ImGui.IsWindowHovered(ctx)
        and my >= bodyTop and my <= bodyBot
        and mx >= paneLeft and mx < gutterR then
-      am:clearLoopRange()
+      av:clearLoopRange()
     end
     -- Wheel scrolls by moving the cursor: a detached viewport scroll
     -- would be pulled back to the cursor by followViewport next frame.
@@ -328,7 +214,7 @@ local function renderGrid(tracks, nTracks)
       local rows  = trunc(wheelAccum)
       if rows ~= 0 then
         wheelAccum = wheelAccum - rows
-        placeCursor(av:cursorRow() - rows, av:cursorCol())
+        av:placeCursor(av:cursorRow() - rows, av:cursorCol())
       end
     end
     if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
@@ -340,7 +226,7 @@ local function renderGrid(tracks, nTracks)
         if col >= 0 and col < nTracks then
           local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
           local qn = yToQN(my)
-          local take, mode = hitTake(col, qn, bpr / rowH)
+          local take, mode = av:hitTake(col, qn, bpr / rowH)
           if not take and ImGui.IsMouseDoubleClicked(ctx, 0) then
             press = { qn = floorTo(qn, bpr), col = col,
                       create = true, moved = false }
@@ -364,17 +250,17 @@ local function renderGrid(tracks, nTracks)
     end
 
     local dragCand = (press.moved and press.take)
-                     and dragCandidate(press, yToQN(my), bpr) or nil
+                     and av:dragCandidate(press, yToQN(my), snapped) or nil
     local loopCand = (press.moved and press.gutter)
-                     and gutterLoopCand(press, yToQN(my), bpr) or nil
+                     and av:gutterLoopCand(press, yToQN(my), snapped) or nil
     local createCand = (press.moved and press.create)
-                       and createCandidate(press, yToQN(my), bpr) or nil
+                       and av:createCandidate(press, yToQN(my), snapped) or nil
 
     if ImGui.IsMouseReleased(ctx, 0) then
       if dragCand then
-        if dragCand.fits then commitDrag(press, dragCand) end
+        if dragCand.fits then av:commitDrag(press, dragCand) end
       elseif loopCand then
-        am:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
+        av:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
       elseif press.create then
         -- Empty-space double-click: open the create modal at the pressed
         -- column / row. A drag prefills the row count from the sweep; a
@@ -386,8 +272,7 @@ local function renderGrid(tracks, nTracks)
         -- Gutter press with no drag: drop the REAPER edit cursor on the
         -- pressed row — floored to the top edge of the row box the click
         -- sits in, not the nearest edge — unless Shift is held.
-        local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
-        am:setEditCursorQN(snapped and floorTo(press.qn, bpr) or press.qn)
+        av:setEditCursorQN(snapped and floorTo(press.qn, bpr) or press.qn)
       else
         -- Grid press with no take dragged: a plain click. Move the
         -- cursor to the pressed cell; an empty-space press also clears
@@ -480,7 +365,7 @@ local function renderGrid(tracks, nTracks)
   -- twice) and painted last, on top, at its candidate range. A
   -- duplicate keeps its original here and adds the copy after.
   for c = 0, nTracks - 1 do
-    for _, tk in ipairs(am:tracksTakes(c)) do
+    for _, tk in ipairs(av:tracksTakes(c)) do
       local relocating = dragCand and not press.duplicate
                          and tk.item == press.take.item
       if not relocating then
@@ -535,7 +420,7 @@ local function renderGrid(tracks, nTracks)
   if loopCand then
     loopLo, loopHi = loopCand.loQN, loopCand.hiQN
   else
-    loopLo, loopHi = am:loopRangeQN()
+    loopLo, loopHi = av:loopRangeQN()
   end
   if loopLo then
     local loTop, loBot = av:qnToRow(loopLo), av:qnToRow(loopHi)
@@ -572,8 +457,8 @@ local function renderGrid(tracks, nTracks)
   end
   EDIT_LINE = EDIT_LINE
     or ImGui.ColorConvertDouble4ToU32(0.20, 0.20, 0.26, 0.85)
-  qnRule(am:editCursorQN(), EDIT_LINE)
-  local playQN = am:playPositionQN()
+  qnRule(av:editCursorQN(), EDIT_LINE)
+  local playQN = av:playPositionQN()
   if playQN then
     PLAY_LINE = PLAY_LINE
       or ImGui.ColorConvertDouble4ToU32(1.00, 0.85, 0.10, 0.95)
@@ -665,7 +550,7 @@ end
 
 local function openDeleteModal(trackIdx, slot)
   openModal{ kind = 'delete', trackIdx = trackIdx, slotIdx = slot.idx,
-             slotKey = am:keyForSlot(slot.idx),
+             slotKey = av:keyForSlot(slot.idx),
              slotName = slot.name ~= '' and slot.name
                                        or string.format('(slot %d)', slot.idx) }
 end
@@ -722,7 +607,7 @@ local function renderPaletteList(slots)
     end
     ImGui.SameLine(ctx, 0, 0)
     if monoFont then ImGui.PushFont(ctx, monoFont, uiSize) end
-    ImGui.Text(ctx, am:keyForSlot(slot.idx))
+    ImGui.Text(ctx, av:keyForSlot(slot.idx))
     if monoFont then ImGui.PopFont(ctx) end
 
     ImGui.TableSetColumnIndex(ctx, 1)
@@ -766,7 +651,7 @@ local function renderModal()
       local commit, buf = ImGui.InputText(ctx, '##rename', modal.buf,
                                           ImGui.InputTextFlags_EnterReturnsTrue)
       if commit then
-        am:renameSlot(modal.trackIdx, modal.slotIdx, buf)
+        av:renameSlot(modal.trackIdx, modal.slotIdx, buf)
         close()
       end
       ImGui.SameLine(ctx)
@@ -788,12 +673,10 @@ local function renderModal()
       ImGui.SameLine(ctx)
       local cancel = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
       if ok then
-        local rows = tonumber(modal.rowsBuf) or CREATE_DEFAULT_ROWS
-        rows = math.max(1, math.floor(rows))
-        local lengthQN = rows * av:beatPerRow()
-        local slotIdx = am:createAndDropMidi(modal.trackIdx, modal.qnPos,
-                                             lengthQN, modal.nameBuf)
-        if slotIdx then av:setPaletteSlot(slotIdx) end
+        local rows = math.max(1, math.floor(tonumber(modal.rowsBuf)
+                                             or CREATE_DEFAULT_ROWS))
+        av:createSlot(modal.trackIdx, modal.qnPos,
+                      rows * av:beatPerRow(), modal.nameBuf)
         close()
       elseif cancel then
         close()
@@ -811,8 +694,7 @@ local function renderModal()
                   or ImGui.IsKeyPressed(ctx, ImGui.Key_N)
                   or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
       if yes then
-        am:deleteSlot(modal.trackIdx, modal.slotIdx)
-        av:setPaletteSlot(nil)
+        av:deleteSlot(modal.trackIdx, modal.slotIdx)
         close()
       elseif no then
         close()
@@ -826,7 +708,7 @@ end
 local function renderPalette(tracks)
   -- tracks is 1-based; cursorCol is 0-based track index.
   local focusedTrack = tracks[av:cursorCol() + 1]
-  local slots        = focusedTrack and am:trackSlots(focusedTrack.idx) or {}
+  local slots        = focusedTrack and av:trackSlots(focusedTrack.idx) or {}
   local focusedSlot  = focusedSlotEntry(slots, av:paletteSlot())
 
   -- Push chrome styles inside the palette child so buttons get
@@ -847,20 +729,11 @@ end
 function ap:bind() end
 function ap:unbind() end
 
---contract: positions the arrange cursor on the take wrapping the REAPER take `reaperTake` and focuses it — coord:returnToArrange lands on the take just edited. Silent no-op when the take isn't on the grid.
-function ap:revealTake(reaperTake)
-  local take = am:findTake(reaperTake)
-  if take then
-    av:setFocus(reaperTake)
-    av:setCursor(av:qnToRow(take.startQN), take.trackIdx)
-  end
-end
+--contract: positions the arrange cursor on the take wrapping `reaperTake` and focuses it — coord:returnToArrange lands on the take just edited. Silent no-op when the take isn't on the grid.
+function ap:revealTake(reaperTake) av:revealTake(reaperTake) end
 
---contract: seeds the arrange cursor and focus at boot from am:initialCursor — the first selected take, else REAPER's edit cursor / selected track. continuum calls this once after registering the page.
-function ap:seedCursorFromReaper()
-  local trackIdx, qn = am:initialCursor()
-  placeCursor(av:qnToRow(qn), trackIdx)
-end
+--contract: seeds the arrange cursor and focus at boot — the first selected take, else REAPER's edit cursor / selected track. continuum calls this once after registering the page.
+function ap:seedCursorFromReaper() av:seedCursor() end
 
 function ap:renderToolbarBits(_) end
 
@@ -876,7 +749,7 @@ function ap:renderBody(_, w, h, dispatch)
 
   pushBodyStyles()
 
-  local tracks  = am:projectTracks()
+  local tracks  = av:projectTracks()
   local nTracks = #tracks
   if nTracks == 0 then
     ImGui.Text(ctx, '(no tracks in project)')
@@ -941,95 +814,32 @@ function ap:handleInput() end
 function ap:save()        end
 function ap:load()        end
 
---invariant: arrange-scope cursor-nav — arrows move ±1 row/col, PageUp/Down ±PAGE_ROWS rows, Home to row 0, End to the row of the project's last take end (am:projectEndQN). The timeline is unbounded below: only negative coords clamp (in av), so PageDown / End / the wheel may sit the cursor on empty rows past the last take.
---invariant: 62 place commands (drop0..dropZ) sit in cmgr:scope('arrange'), one per base62 slot. Pressing a key with no slot defined at that index is a silent no-op (am:dropInstance returns nil). The drop inherits the slot's existing-instance length — a real snap selector lands with the toolbar.
---invariant: createSlot (Ctrl+Enter) opens the create modal — the *only* slot-minting gesture. Slots have no existence apart from items on the grid; rename/delete buttons in the palette act on existing slots.
-local PAGE_ROWS = 16   -- PageUp / PageDown step
+--invariant: createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture. Slots have no existence apart from items on the grid; the palette's rename / delete buttons act on existing slots.
+-- The arrange scope's command bodies live in av; ap owns the key
+-- bindings (it holds the ImGui key constants) and createSlot, whose body
+-- drives the modal. cmgr:scope is idempotent — the same scope av
+-- registered into.
 local arrange = cmgr:scope('arrange')
--- Distinct names from tracker's cursorUp/Down/Left/Right: cmgr.commands
--- is flat, so re-registering the same name overwrites the gate and
--- silently breaks the other scope's binding. Reuse the keys, not the
--- name (see reference_commandmanager_limits).
+
 arrange:registerAll {
-  arrangeCursorUp    = function() placeCursor(av:cursorRow() - 1, av:cursorCol()) end,
-  arrangeCursorDown  = function() placeCursor(av:cursorRow() + 1, av:cursorCol()) end,
-  arrangeCursorLeft  = function() placeCursor(av:cursorRow(),     av:cursorCol() - 1) end,
-  arrangeCursorRight = function() placeCursor(av:cursorRow(),     av:cursorCol() + 1) end,
-  arrangePageUp      = function() placeCursor(av:cursorRow() - PAGE_ROWS, av:cursorCol()) end,
-  arrangePageDown    = function() placeCursor(av:cursorRow() + PAGE_ROWS, av:cursorCol()) end,
-  arrangeHome        = function() placeCursor(0, av:cursorCol()) end,
-  arrangeEnd         = function() placeCursor(av:qnToRow(am:projectEndQN()), av:cursorCol()) end,
-  createSlot         = function() openCreateModal(av:cursorCol(), av:rowToQN(av:cursorRow())) end,
-}
-arrange:bindAll {
-  arrangeCursorUp    = { { ImGui.Key_UpArrow    } },
-  arrangeCursorDown  = { { ImGui.Key_DownArrow  } },
-  arrangeCursorLeft  = { { ImGui.Key_LeftArrow  } },
-  arrangeCursorRight = { { ImGui.Key_RightArrow } },
-  arrangePageUp      = { { ImGui.Key_PageUp   } },
-  arrangePageDown    = { { ImGui.Key_PageDown } },
-  arrangeHome        = { { ImGui.Key_Home     } },
-  arrangeEnd         = { { ImGui.Key_End      } },
-  createSlot         = { { ImGui.Key_Enter, ImGui.Mod_Super } },
+  createSlot = function()
+    openCreateModal(av:cursorCol(), av:rowToQN(av:cursorRow()))
+  end,
 }
 
--- Take edits — move / resize / delete the focused take. Snap is one row
--- (av:beatPerRow), matching the place commands. Keys clone the tracker
--- note-edit vocab (nudge / grow / shrink); names are arrange-prefixed
--- for the same flat-registry reason as the cursor commands.
---invariant: nudge and resize step by exactly one row or not at all — takes sit on row-box edges, matching the place-command snap; the cursor is independent and does not follow. Neither edit lets a take enter a row box another take inhabits, even when geometry alone would allow it: both clamp to freeSpan's non-overlap window quantised to row-box edges, so a take may abut a neighbour's row box but never enter it — correct even for a take taller than one row.
-local function nudgeCmd(direction)
-  return function()
-    local take = focusedTake()
-    if not take then return end
-    local beatPerRow = av:beatPerRow()
-    local step       = direction * beatPerRow
-    local newStart   = take.startQN + step
-    local lo, hi     = am:freeSpan(take)
-    -- Quantise the non-overlap window to row boxes: the moved take may
-    -- abut a neighbour's row box but never enter it. freeSpan's bounds
-    -- are height-agnostic, so this holds for takes taller than one row,
-    -- whose entered row is not the cursor's neighbour row.
-    local loBox = math.ceil(lo / beatPerRow) * beatPerRow
-    local hiBox = math.floor(hi / beatPerRow) * beatPerRow
-    if newStart >= loBox and newStart + take.lengthQN <= hiBox then
-      am:moveTake(take, step)
-    end
-  end
-end
-local function resizeCmd(direction)
-  return function()
-    local take = focusedTake()
-    if not take then return end
-    local beatPerRow = av:beatPerRow()
-    local newLength  = math.max(beatPerRow, take.lengthQN + direction * beatPerRow)
-    local _, hi      = am:freeSpan(take)
-    -- Clamp to the row-box top of the next take, not its exact (maybe
-    -- off-grid) start: a grow may abut that box but never enter it.
-    local neighbourBoxTop = math.floor(hi / beatPerRow) * beatPerRow
-    if take.startQN + newLength <= neighbourBoxTop then
-      am:resizeTake(take, newLength)
-    end
-  end
-end
-local function deleteFocusedTake()
-  local take = focusedTake()
-  if take then am:deleteTake(take) end
-end
---invariant: arrangeDive acts on the focused take and is MIDI-only — audio takes have no tracker representation, so dive over an audio take is a silent no-op, as is dive with nothing focused. Routes through the onDive callback so coord owns the page swap.
-local function diveCmd()
-  local take = focusedTake()
-  if take and take.kind == 'midi' then onDive(take.item) end
-end
-arrange:registerAll {
-  arrangeNudgeBack    = nudgeCmd(-1),
-  arrangeNudgeForward = nudgeCmd(1),
-  arrangeShrinkTake   = resizeCmd(-1),
-  arrangeGrowTake     = resizeCmd(1),
-  arrangeDeleteTake   = deleteFocusedTake,
-  arrangeDive         = diveCmd,
-}
-arrange:bindAll {
+-- The cursor-nav and take-edit commands reuse the tracker scope's keys
+-- but not its names: cmgr.commands is flat, so a shared name would
+-- overwrite the other scope's gate (see reference_commandmanager_limits).
+local binds = {
+  arrangeCursorUp     = { { ImGui.Key_UpArrow    } },
+  arrangeCursorDown   = { { ImGui.Key_DownArrow  } },
+  arrangeCursorLeft   = { { ImGui.Key_LeftArrow  } },
+  arrangeCursorRight  = { { ImGui.Key_RightArrow } },
+  arrangePageUp       = { { ImGui.Key_PageUp   } },
+  arrangePageDown     = { { ImGui.Key_PageDown } },
+  arrangeHome         = { { ImGui.Key_Home     } },
+  arrangeEnd          = { { ImGui.Key_End      } },
+  createSlot          = { { ImGui.Key_Enter, ImGui.Mod_Super } },
   arrangeNudgeBack    = { { ImGui.Key_UpArrow,   ImGui.Mod_Super } },
   arrangeNudgeForward = { { ImGui.Key_DownArrow, ImGui.Mod_Super } },
   arrangeShrinkTake   = { { ImGui.Key_UpArrow,   ImGui.Mod_Super, ImGui.Mod_Shift } },
@@ -1038,26 +848,17 @@ arrange:bindAll {
   arrangeDive         = { { ImGui.Key_Tab }, { ImGui.Key_Enter }, { ImGui.Key_KeypadEnter } },
 }
 
--- Place commands (drop0..dropZ). 0..9 → digit keys, 10..35 → letter
--- keys, 36..61 → Shift+letter. ImGui.Key_0 + n and Key_A + n are
--- contiguous (already exploited at coordinator.lua:53).
-local function dropAt(slotIdx)
-  return function()
-    am:dropInstance(av:cursorCol(), slotIdx, av:rowToQN(av:cursorRow()))
-  end
-end
+-- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
+-- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous (already
+-- exploited at coordinator.lua:53).
 local function placeKey(slotIdx)
   if slotIdx < 10 then return { ImGui.Key_0 + slotIdx } end
   if slotIdx < 36 then return { ImGui.Key_A + (slotIdx - 10) } end
   return { ImGui.Key_A + (slotIdx - 36), ImGui.Mod_Shift }
 end
-local placeCmds, placeBinds = {}, {}
 for i = 0, 61 do
-  local name = 'drop' .. am:keyForSlot(i)
-  placeCmds[name]  = dropAt(i)
-  placeBinds[name] = { placeKey(i) }
+  binds['drop' .. av:keyForSlot(i)] = { placeKey(i) }
 end
-arrange:registerAll(placeCmds)
-arrange:bindAll(placeBinds)
+arrange:bindAll(binds)
 
 return ap

@@ -6,7 +6,8 @@ local util = require('util')
 
 local function mkAv(harness)
   local h  = harness.mk()
-  local av = util.instantiate('arrangeView', { cm = h.cm })
+  local av = util.instantiate('arrangeView',
+    { cm = h.cm, cmgr = h.cmgr, onDive = function() end })
   return h, av
 end
 
