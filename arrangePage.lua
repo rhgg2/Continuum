@@ -60,8 +60,8 @@ local modal                   = nil   -- { kind, ... } | nil
 local modalFocus              = false
 local modalOpenAtFrameStart   = false
 
---shape: press = { qn, take, mode = 'move'|'resizeEnd', duplicate, moved } — mouse-down snapshot, nil when no button is down over the grid; `moved` flips once ImGui's drag threshold is crossed.
---invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Every press moves the cursor to the clicked cell. A press that never crosses the drag threshold is also a focus click: it focuses the take under the press, or clears focus if the press was on empty space.
+--shape: press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved } — mouse-down snapshot, nil when no button is down over the grid; `row`/`col` is the pressed cell, applied to the cursor on a no-drag release; `moved` flips once ImGui's drag threshold is crossed.
+--invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Pressing a take focuses it. The cursor moves only on release, and only when no take was dragged — it then lands on the pressed cell; a drag (even one blocked by rangeIsClear) leaves the cursor put. An empty-space press with no drag also clears focus.
 local press = nil
 local DRAG_EDGE_PX = 5
 local GHOST_BLOCKED  -- lazy: blocked-drag ghost colour
@@ -383,10 +383,10 @@ local function renderGrid(tracks, nTracks)
     ImGui.DrawList_PopClipRect(dl)
   end
 
-  -- Mouse: a press moves the cursor to the clicked cell; then drag a
-  -- take to move / resize / Alt-duplicate, or release without dragging
-  -- to focus the take under it (empty space deselects). The closures
-  -- here invert renderGrid's geometry.
+  -- Mouse: press a take to focus it, then drag to move / resize /
+  -- Alt-duplicate. A release that dragged no take moves the cursor to
+  -- the pressed cell (empty space also deselects). The closures here
+  -- invert renderGrid's geometry.
   local function drawGhost(cand, take)
     local rx0, rx1 = snap(trackLeft(take.trackIdx)), snap(trackRight(take.trackIdx))
     local ry0 = snap(rowY(av:qnToRow(cand.startQN)))
@@ -408,11 +408,11 @@ local function renderGrid(tracks, nTracks)
       local col = math.floor((mx - ox - QN_W - GUTTER_PAD) / TRACK_W)
       if col >= 0 and col < nTracks then
         local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
-        av:setCursor(sr + row, col)
         local qn = yToQN(my)
         local take, mode = hitTake(col, qn, bpr / rowH)
         press = {
-          qn = qn, take = take, mode = mode, moved = false,
+          qn = qn, row = sr + row, col = col,
+          take = take, mode = mode, moved = false,
           duplicate = mode == 'move'
                       and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
         }
@@ -431,8 +431,13 @@ local function renderGrid(tracks, nTracks)
     if ImGui.IsMouseReleased(ctx, 0) then
       if cand then
         if cand.fits then commitDrag(press, cand) end
-      elseif not press.moved and not press.take then
-        av:setFocus(nil)  -- a plain click on empty space deselects
+      else
+        -- Released without dragging a take: a plain click. Move the
+        -- cursor to the pressed cell; an empty-space press also clears
+        -- focus. `cand` is non-nil only when a take was dragged, so a
+        -- drag (even one blocked by rangeIsClear) leaves the cursor put.
+        av:setCursor(press.row, press.col)
+        if not press.take then av:setFocus(nil) end
       end
       press = nil
     end
