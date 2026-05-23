@@ -288,6 +288,20 @@ local function assignTail(evt, chan, endppq)
   tm:assignEvent(evt, { endppq = endppq, rpb = currentRpb() })
 end
 
+-- Shift onset to rowS and shift endppq by the same ppq delta. endppq
+-- is the authored logical ceiling (endppqL), which may run past the
+-- take length when an earlier move overshot. Routing it through a row
+-- here would clamp to numRows (ctx:ppqToRow) and erase the overshoot,
+-- so any further inward move can't regrow the tail. util.OPEN stays open.
+local function assignNoteMove(evt, rowS)
+  local rpb       = currentRpb()
+  local logPerRow = logPerRowFor(rpb)
+  local newPpq    = rowS * logPerRow
+  local newEnd    = evt.endppq == util.OPEN and util.OPEN
+                    or evt.endppq + (newPpq - evt.ppq)
+  tm:assignEvent(evt, { ppq = newPpq, endppq = newEnd, rpb = rpb })
+end
+
 local function matchGridToCursor()
   if releaseTransientFrame() then return end
 
@@ -1022,9 +1036,7 @@ local noteOff, adjustDuration, adjustPosition do
       for i = s, e, step do
         local ev = run.evs[i]
         if run.note then
-          assignStamp(ev, chan,
-                      ctx:ppqToRow(ev.ppq,    chan) + rowDelta,
-                      ctx:ppqToRow(ev.endppq, chan) + rowDelta)
+          assignNoteMove(ev, ctx:ppqToRow(ev.ppq, chan) + rowDelta)
         else
           assignStamp(ev, chan, ctx:ppqToRow(ev.ppq, chan) + rowDelta)
         end
@@ -1066,7 +1078,7 @@ local noteOff, adjustDuration, adjustPosition do
         end
       end
 
-      assignStamp(note, chan, newStart, ctx:snapRow(note.endppq, chan) + rowDelta)
+      assignNoteMove(note, newStart)
       tm:flush()
       if not cursorBlocked then ec:setPos(newCursorRow) end
       return
