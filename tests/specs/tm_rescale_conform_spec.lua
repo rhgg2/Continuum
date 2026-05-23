@@ -23,7 +23,7 @@ return {
           lane = 1, conform = true },
       } } }
 
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 128, mode = 'rescale' }
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 32, mode = 'rescale' }
 
       t.eq(h.fm:length(), 7680, 'length doubled')
       local conf

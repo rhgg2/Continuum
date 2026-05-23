@@ -7,7 +7,7 @@
 --             copies past newPpq dropped, endppqs clamped.
 --
 -- Layer split under test:
---   vm:applyTakeProperties — converts rows → ppq, dispatches by mode.
+--   vm:applyTakeProperties — converts beats → rows → ppq, dispatches by mode.
 --   tm:setLength / rescaleLength / tileLength — own the event walk.
 --   tm:setName             — proxies to mm:setName.
 
@@ -28,7 +28,7 @@ return {
         },
       }}
       h.fm:setName('Original')
-      h.vm:applyTakeProperties{ name = 'Renamed', rows = h.vm.grid.numRows }
+      h.vm:applyTakeProperties{ name = 'Renamed', beats = h.vm.grid.numRows / h.cm:get('rowPerBeat') }
 
       t.eq(h.fm:name(),   'Renamed', 'name written')
       t.eq(h.fm:length(), 3840,      'length unchanged')
@@ -45,8 +45,8 @@ return {
           { ppq = 3780, endppq = 3840, chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0 },
         },
       }}
-      -- 64 → 128 rows
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 128 }
+      -- 64 → 128 rows (16 → 32 beats at rpb=4)
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 32 }
 
       t.eq(h.fm:length(), 128 * PPR, 'length grown')
       local notes = h.fm:dump().notes
@@ -79,7 +79,7 @@ return {
         },
       }}
 
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 32 }
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 8 }
 
       t.eq(h.fm:length(), 32 * PPR, 'length shrunk')
 
@@ -114,7 +114,7 @@ return {
         },
       }}
 
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 128, mode = 'rescale' }
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 32, mode = 'rescale' }
 
       t.eq(h.fm:length(), 128 * PPR, 'length doubles')
       local notes = h.fm:dump().notes
@@ -142,7 +142,7 @@ return {
         },
       }}
 
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 32, mode = 'rescale' }
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 8, mode = 'rescale' }
 
       t.eq(h.fm:length(), 32 * PPR, 'length halves')
       local notes = h.fm:dump().notes
@@ -166,7 +166,7 @@ return {
         },
       }}
 
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 128, mode = 'rescale' }
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 32, mode = 'rescale' }
 
       local notes = h.fm:dump().notes
       t.eq(notes[1].delay,  100,  'delay doubles')
@@ -190,7 +190,7 @@ return {
         },
       }}
 
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 128, mode = 'tile' }
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 32, mode = 'tile' }
 
       t.eq(h.fm:length(), 128 * PPR, 'length doubles')
       local notes = h.fm:dump().notes
@@ -223,8 +223,8 @@ return {
         },
       }}
 
-      -- 64 → 96 rows = 1.5 tiles. ceil(96/64)=2, so k=1 only.
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 96, mode = 'tile' }
+      -- 64 → 96 rows = 1.5 tiles (16 → 24 beats). ceil(96/64)=2, so k=1 only.
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 24, mode = 'tile' }
 
       t.eq(h.fm:length(), 96 * PPR, 'length 1.5×')
       local notes = h.fm:dump().notes
@@ -247,7 +247,7 @@ return {
         },
       }}
 
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 96, mode = 'tile' }
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 24, mode = 'tile' }
 
       local notes = h.fm:dump().notes
       table.sort(notes, function(a, b) return a.ppq < b.ppq end)
@@ -284,7 +284,7 @@ return {
         },
       }}
 
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 128, mode = 'tile' }
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 32, mode = 'tile' }
 
       local ccs = h.fm:dump().ccs
       table.sort(ccs, function(a, b) return a.ppq < b.ppq end)
@@ -316,7 +316,7 @@ return {
         },
       }}
 
-      h.vm:applyTakeProperties{ name = h.fm:name(), rows = 32, mode = 'tile' }
+      h.vm:applyTakeProperties{ name = h.fm:name(), beats = 8, mode = 'tile' }
 
       t.eq(h.fm:length(), 32 * PPR, 'length shrunk')
       local notes = h.fm:dump().notes

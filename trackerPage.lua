@@ -1133,11 +1133,12 @@ end
 -- chord and button paths share this so the InputText stays in sync.
 modalHost:registerKind('takeProps', function(s, close)
   local function scaleBy(factor)
-    local n = tonumber(s.rowsBuf)
+    local n = tonumber(s.beatsBuf)
     if not n then return end
-    s.rowsBuf     = tostring(math.max(1, math.floor(n * factor)))
-    s.rowsGen     = s.rowsGen + 1
-    s.refocusRows = true
+    local minBeats = 1 / cm:get('rowPerBeat')
+    s.beatsBuf     = ('%g'):format(math.max(minBeats, n * factor))
+    s.beatsGen     = s.beatsGen + 1
+    s.refocusBeats = true
   end
   local function pressedAny(specs)
     if not specs then return false end
@@ -1155,15 +1156,15 @@ modalHost:registerKind('takeProps', function(s, close)
   local rvN, name = ImGui.InputText(ctx, '##takeprops_name', s.nameBuf)
   if rvN then s.nameBuf = name end
 
-  ImGui.Text(ctx, 'Length (rows)')
-  if ImGui.IsWindowAppearing(ctx) or s.refocusRows then
+  ImGui.Text(ctx, 'Length (beats)')
+  if ImGui.IsWindowAppearing(ctx) or s.refocusBeats then
     ImGui.SetKeyboardFocusHere(ctx)
-    s.refocusRows = nil
+    s.refocusBeats = nil
   end
-  ImGui.PushID(ctx, s.rowsGen)
-  local rvR, rows = ImGui.InputText(ctx, '##takeprops_rows', s.rowsBuf)
+  ImGui.PushID(ctx, s.beatsGen)
+  local rvR, beats = ImGui.InputText(ctx, '##takeprops_beats', s.beatsBuf)
   ImGui.PopID(ctx)
-  if rvR then s.rowsBuf = rows end
+  if rvR then s.beatsBuf = beats end
   ImGui.SameLine(ctx); if ImGui.Button(ctx, '\xc3\x97' .. '2') then scaleBy(2)   end  -- ×2
   ImGui.SameLine(ctx); if ImGui.Button(ctx, '\xc3\xb7' .. '2') then scaleBy(0.5) end  -- ÷2
 
@@ -1178,7 +1179,7 @@ modalHost:registerKind('takeProps', function(s, close)
   ImGui.SameLine(ctx)
   local cancelPressed = ImGui.Button(ctx, 'Cancel')
                      or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
-  if     okPressed     then close(true, s.nameBuf, tonumber(s.rowsBuf), s.mode)
+  if     okPressed     then close(true, s.nameBuf, tonumber(s.beatsBuf), s.mode)
   elseif cancelPressed then close(false) end
 end)
 
@@ -1230,24 +1231,24 @@ tracker:registerAll{
   end,
 
   takeProperties = { function()
-    local origRows = tv.grid.numRows or 0
+    local rpb       = cm:get('rowPerBeat')
+    local origBeats = (tv.grid.numRows or 0) / rpb
     modalHost:open{
       kind     = 'takeProps',
       title    = 'Take properties',
       nameBuf  = tv:takeName() or '',
-      rowsBuf  = tostring(origRows),
-      rowsGen  = 0,
+      beatsBuf = ('%g'):format(origBeats),
+      beatsGen = 0,
       mode     = 'resize',
-      callback = function(name, rows, mode)
-        if not rows or rows < 1 then return end
-        rows = math.floor(rows)
-        local apply = function() tv:applyTakeProperties{ name = name, rows = rows, mode = mode } end
+      callback = function(name, beats, mode)
+        if not beats or beats <= 0 then return end
+        local apply = function() tv:applyTakeProperties{ name = name, beats = beats, mode = mode } end
         -- rescale is the monotone stretch — never deletes events.
         -- resize and tile both fall back to truncation when shrinking.
-        if rows < origRows and mode ~= 'rescale' then
+        if beats < origBeats and mode ~= 'rescale' then
+          local txt = ('%g'):format(beats)
           openConfirm('Truncate take', function(yes) if yes then apply() end end,
-            ('Truncate to %d rows? Events past row %d will be deleted. (y/n)')
-            :format(rows, rows))
+            ('Truncate to %s beats? Events past beat %s will be deleted. (y/n)'):format(txt, txt))
         else
           apply()
         end

@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1390  sha=0678a54  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1391  sha=6362c91  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -58,8 +58,8 @@
       @invariant  lane strip renders only cc/pb/at; other types show as tinted background
   @state LANE_ROW_MIN = 3  @ 442
   @state LANE_ROW_MAX = 32  @ 443
-  @state tracker = cmgr:scope('tracker')  @ 1223
-  @state tp = {}  @ 1304
+  @state tracker = cmgr:scope('tracker')  @ 1224
+  @state tp = {}  @ 1305
 
 # Private functions
   @fn print(...)  @ 26
@@ -115,29 +115,29 @@
   -- Modal-driven commands
   @fn openPrompt(title, prompt, callback, resolve)  @ 1120
   @fn openConfirm(title, callback, prompt)  @ 1124
-  @fn scopedAction(title, base)  @ 1187
+  @fn scopedAction(title, base)  @ 1188
       -- Naming convention <base>Selection / <base>All is the contract.
       @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
-  @fn resolveColType(s)  @ 1197
+  @fn resolveColType(s)  @ 1198
       -- Add-Column type vocabulary. First letter is unique except p (pb/pc):
       -- `p`→pb, a following `c`→pc. Digits ride through (only cc takes an id).
-  @fn addColumn()  @ 1210
+  @fn addColumn()  @ 1211
 
 # Public API (tp:*)
   -- Region overlay keymap
-  @api tp:renderToolbarBits(_)  @ 1306
-  @api tp:renderBody(_, w, h, dispatch)  @ 1314
+  @api tp:renderToolbarBits(_)  @ 1307
+  @api tp:renderBody(_, w, h, dispatch)  @ 1315
       @contract  calls computeLayout twice
       @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x
       @contract  second pass repopulates layout for drawTracker
-  @api tp:renderStatusBar(_)  @ 1350
-  @api tp:renderFloating(_)  @ 1354
-  @api tp:bind(t)  @ 1357
+  @api tp:renderStatusBar(_)  @ 1351
+  @api tp:renderFloating(_)  @ 1355
+  @api tp:bind(t)  @ 1358
       @contract  bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
-  @api tp:unbind()  @ 1358
-  @api tp:reloadFromReaper()  @ 1361
+  @api tp:unbind()  @ 1359
+  @api tp:reloadFromReaper()  @ 1362
       @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
-  @api tp:focusState()  @ 1374
+  @api tp:focusState()  @ 1375
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo
@@ -148,9 +148,9 @@
       --   transiently, but bound commands should still fire. Anything that
       --   genuinely needs the keys (a focused InputText, an active slider,
       --   a held button) shows up as IsAnyItemActive.
-  @api tp:handleInput()  @ 1385
-  @api tp:save()  @ 1386
-  @api tp:load()  @ 1387
+  @api tp:handleInput()  @ 1386
+  @api tp:save()  @ 1387
+  @api tp:load()  @ 1388
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

@@ -327,10 +327,12 @@ function tv:setRowPerBeat(n)
   cm:set('track', 'rowPerBeat', n)
 end
 
--- props = { name, rows, mode = 'resize'|'rescale'|'tile' }; mode defaults to 'resize'.
+-- props = { name, beats, mode = 'resize'|'rescale'|'tile' }; mode defaults to 'resize'.
+-- Length is universal beats; rows = round(beats * rpb), floored at 1 row.
 tv.applyTakeProperties = util.atomic('Take properties', function(self, props)
   if props.name ~= tm:name() then tm:setName(props.name) end
-  local newPpq = props.rows * ctx:ppqPerRow()
+  local rows   = math.max(1, math.floor(props.beats * currentRpb() + 0.5))
+  local newPpq = rows * ctx:ppqPerRow()
   if newPpq ~= (tm:length() or 0) then
     local mode = props.mode or 'resize'
     if     mode == 'rescale' then tm:rescaleLength(newPpq)
