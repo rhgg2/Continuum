@@ -19,6 +19,7 @@ local uiSize        = gui.fontSize.ui
 
 local chrome = util.instantiate('chrome',
   { cm = cm, ctx = ctx, uiFontBold = gui.uiFontBold, uiSize = uiSize })
+local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 
@@ -124,6 +125,7 @@ end
 --contract: tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
 --contract: tracker-active branch — take swap takes priority (clears the watcher so the post-bind end-of-frame capture is the new baseline); otherwise a hash diff signals an external mutation (REAPER Ctrl-Z, external script) and we reload the bound take
 local function tick()
+  modalHost:tick()
   if active == 'tracker' and pages.tracker then
     if refreshTakeFromReaper() then
       pages.tracker:bind(currentTake)
@@ -238,6 +240,8 @@ local function frame()
     ImGui.Text(ctx, 'Select a MIDI item to begin.')
   end
 
+  if visible then modalHost:draw() end
+
   ImGui.End(ctx)
 
   if page and page.renderFloating then page:renderFloating(ctx) end
@@ -330,8 +334,9 @@ function coord:reloadAfterExternalMutation()
   end
 end
 
-function coord:quit()   quitting = true end
-function coord:chrome() return chrome   end
-function coord:run()    frame()         end
+function coord:quit()      quitting = true end
+function coord:chrome()    return chrome    end
+function coord:modalHost() return modalHost end
+function coord:run()       frame()          end
 
 return coord

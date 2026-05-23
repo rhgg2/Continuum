@@ -2,7 +2,7 @@
 
 --invariant: page is render + input only; tracker state lives in tv/ec/tm, never cached
 --invariant: cm/tv read fresh each frame; only ephemeral UI state persists across frames
---invariant: page-persistent state: gridX/Y, dragging, modalState, picker*, laneConsumed
+--invariant: page-persistent state: gridX/Y, dragging, picker*, laneConsumed (modal state lives on modalHost)
 --invariant: col.x == nil is the visibility predicate; per-column draws must gate on it
 --invariant: cell coords 0-indexed; header rows at -HEADER, row-num gutter at -GUTTER
 --invariant: writes go through tv or cmgr commands; page never reaches into tm
@@ -20,7 +20,8 @@ local ImGui = require 'imgui' '0.10'
 --contract: owns and constructs the tracker substack (mm/tm/tv/am)
 --contract: coord hands primitives, never the substack
 --contract: take arrives later via tp:bind from coord's poll loop
-local cm, cmgr, chrome, gui = (...).cm, (...).cmgr, (...).chrome, (...).gui
+local cm, cmgr, chrome, gui, modalHost =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost
 
 local function print(...)
   return util.print(...)
@@ -68,7 +69,6 @@ end
 
 local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
 local dragging    = false   -- tracker-grid selection drag: click → held → release
-local modalState = nil
 local swingEditor = util.instantiate('swingEditor',
   { tv = tv, cm = cm, chrome = chrome, ctx = ctx, am = am })
 local curveEd      = util.instantiate('curveEditor', { ctx = ctx })
@@ -1083,10 +1083,10 @@ end
 
 -- Page-internal raw input. commandHeld gates a held command key from
 -- leaking into the char queue (different auto-repeat timing).
---contract: no-op when modalState, picker active, or any ImGui item is active
+--contract: no-op when modal open, picker active, or any ImGui item is active
 --contract: drains the input-queue per frame; reads ec/grid fresh (editEvent may rebuild)
 local function handleKeys(kr)
-  if modalState or chrome.pickerIsActive() then return end
+  if modalHost:isOpen() or chrome.pickerIsActive() then return end
   if ImGui.IsAnyItemActive(ctx) then return end
   local grid = tv.grid
   local ec = tv:ec()
@@ -1115,155 +1115,72 @@ local function handleKeys(kr)
     end
 end
 
---shape: modalState core = { title, prompt, callback, buf }
---shape: modalState optional: resolve, kind, nameBuf, rowsBuf, rowsGen, mode, refocusRows
---invariant: modalState.kind ∈ {'confirm', 'takeProps'} when set
---contract: callback runs under pcall; exceptions log to console, frame continues
-local function drawModal()
-  if not modalState then return end
-  -- Self-heal: if modalState was set from inside a callback (e.g. takeProps OK
-  -- → openConfirm) the OpenPopup queued there can be cancelled by the
-  -- enclosing CloseCurrentPopup. Re-open here at the top level.
-  if not ImGui.IsPopupOpen(ctx, modalState.title) then
-    ImGui.OpenPopup(ctx, modalState.title)
-  end
-  local center_x, center_y = ImGui.Viewport_GetCenter(ImGui.GetWindowViewport(ctx))
-  ImGui.SetNextWindowPos(ctx, center_x, center_y, ImGui.Cond_Appearing, 0.5, 0.5)
-
-  chrome.pushChromeWindow()
-  if ImGui.BeginPopupModal(ctx, modalState.title, true, ImGui.WindowFlags_AlwaysAutoResize) then
-    ImGui.Text(ctx, modalState.prompt)
-
-    local function close(invoke, ...)
-      -- Capture and clear before invoking: the callback may open a follow-up
-      -- modal (e.g. takeProps → confirm-on-shrink) by setting modalState
-      -- itself, and we mustn't nil that out from under it.
-      local cb = modalState.callback
-      modalState = nil
-      ImGui.CloseCurrentPopup(ctx)
-      if invoke and cb then
-        local ok, err = pcall(cb, ...)
-        if not ok then
-          reaper.ShowConsoleMsg('\nModal callback error: ' .. tostring(err) .. '\n')
-        end
-      end
-    end
-
-    if modalState.kind == 'confirm' then
-      if ImGui.IsKeyPressed(ctx, ImGui.Key_Y) or ImGui.IsKeyPressed(ctx, ImGui.Key_Enter) then
-        close(true, true)
-      elseif ImGui.IsKeyPressed(ctx, ImGui.Key_N) or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-        close(true, false)
-      end
-    elseif modalState.kind == 'takeProps' then
-      -- Mutating rowsBuf externally is invisible to an active InputText,
-      -- which caches its own buffer. Bumping rowsGen changes the widget's
-      -- PushID identity and forces it to re-initialise from rowsBuf;
-      -- refocusRows then puts the cursor back so the user can keep typing.
-      -- Both chord and button paths share this so the InputText stays
-      -- in sync regardless of which one fired.
-      local function scaleBy(factor)
-        local n = tonumber(modalState.rowsBuf)
-        if not n then return end
-        modalState.rowsBuf     = tostring(math.max(1, math.floor(n * factor)))
-        modalState.rowsGen     = modalState.rowsGen + 1
-        modalState.refocusRows = true
-      end
-      local function pressedAny(specs)
-        if not specs then return false end
-        for _, spec in ipairs(specs) do
-          local key, mods = cmgr:keySpec(spec, ImGui)
-          if ImGui.IsKeyPressed(ctx, key) and ImGui.GetKeyMods(ctx) == mods then return true end
-        end
-        return false
-      end
-
-      if     pressedAny(cmgr:keysFor('doubleRPB')) then scaleBy(2)
-      elseif pressedAny(cmgr:keysFor('halveRPB'))  then scaleBy(0.5) end
-
-      ImGui.Text(ctx, 'Item name')
-      local rvN, name = ImGui.InputText(ctx, '##takeprops_name', modalState.nameBuf)
-      if rvN then modalState.nameBuf = name end
-
-      ImGui.Text(ctx, 'Length (rows)')
-      if ImGui.IsWindowAppearing(ctx) or modalState.refocusRows then
-        ImGui.SetKeyboardFocusHere(ctx)
-        modalState.refocusRows = nil
-      end
-      ImGui.PushID(ctx, modalState.rowsGen)
-      local rvR, rows = ImGui.InputText(ctx, '##takeprops_rows', modalState.rowsBuf)
-      ImGui.PopID(ctx)
-      if rvR then modalState.rowsBuf = rows end
-      ImGui.SameLine(ctx); if ImGui.Button(ctx, '\xc3\x97' .. '2') then scaleBy(2)   end  -- ×2
-      ImGui.SameLine(ctx); if ImGui.Button(ctx, '\xc3\xb7' .. '2') then scaleBy(0.5) end  -- ÷2
-
-      for i, m in ipairs{ {'resize', 'Resize'}, {'rescale', 'Rescale'}, {'tile', 'Tile'} } do
-        if i > 1 then ImGui.SameLine(ctx) end
-        if ImGui.RadioButton(ctx, m[2], modalState.mode == m[1]) then modalState.mode = m[1] end
-      end
-
-      local okPressed     = ImGui.Button(ctx, 'OK')
-                         or ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                         or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
-      ImGui.SameLine(ctx)
-      local cancelPressed = ImGui.Button(ctx, 'Cancel')
-                         or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
-      if     okPressed     then close(true, modalState.nameBuf, tonumber(modalState.rowsBuf), modalState.mode)
-      elseif cancelPressed then close(false) end
-    else
-      if ImGui.IsWindowAppearing(ctx) then
-        ImGui.SetKeyboardFocusHere(ctx)
-      end
-      if modalState.resolve then
-        -- No EnterReturnsTrue: that flag holds buf stale until commit, so
-        -- the live preview would lag a keystroke. Read each frame, resolve
-        -- for the preview, detect Enter manually (as takeProps does).
-        local _, buf = ImGui.InputText(ctx, '##modal', modalState.buf)
-        modalState.buf = buf
-        local shown = modalState.resolve(buf)
-        if shown ~= '' then ImGui.Text(ctx, '\xe2\x86\x92 ' .. shown) end
-        if ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-        or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter) then
-          close(true, shown ~= '' and shown or buf)
-        elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-          close(false)
-        end
-      else
-        local rv, buf = ImGui.InputText(ctx, '##modal', modalState.buf,
-          ImGui.InputTextFlags_EnterReturnsTrue)
-        if rv then
-          close(true, buf)
-        elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-          close(false)
-        else
-          modalState.buf = buf
-        end
-      end
-    end
-    ImGui.EndPopup(ctx)
-  else
-    modalState = nil
-  end
-  chrome.popChromeWindow()
-end
-
 ----- Modal-driven commands
 
 local function openPrompt(title, prompt, callback, resolve)
-  modalState = { title = title, prompt = prompt, callback = callback, resolve = resolve, buf = '' }
-  ImGui.OpenPopup(ctx, title)
+  modalHost:openPrompt{ title = title, prompt = prompt, callback = callback, resolve = resolve }
 end
 
 local function openConfirm(title, callback, prompt)
-  modalState = {
-    title    = title,
-    prompt   = prompt or ('No selection — ' .. title .. ' whole take? (y/n)'),
-    kind     = 'confirm',
-    callback = callback,
-    buf      = '',
-  }
-  ImGui.OpenPopup(ctx, title)
+  modalHost:openConfirm{ title = title, prompt = prompt, callback = callback }
 end
+
+-- Custom modal: take properties. Renderer reads/writes per-instance state
+-- (s) supplied at open time. Mutating rowsBuf externally is invisible to an
+-- active InputText, which caches its own buffer. Bumping rowsGen changes the
+-- widget's PushID identity and forces it to re-initialise from rowsBuf;
+-- refocusRows then puts the cursor back so the user can keep typing. Both
+-- chord and button paths share this so the InputText stays in sync.
+modalHost:registerKind('takeProps', function(s, close)
+  local function scaleBy(factor)
+    local n = tonumber(s.rowsBuf)
+    if not n then return end
+    s.rowsBuf     = tostring(math.max(1, math.floor(n * factor)))
+    s.rowsGen     = s.rowsGen + 1
+    s.refocusRows = true
+  end
+  local function pressedAny(specs)
+    if not specs then return false end
+    for _, spec in ipairs(specs) do
+      local key, mods = cmgr:keySpec(spec, ImGui)
+      if ImGui.IsKeyPressed(ctx, key) and ImGui.GetKeyMods(ctx) == mods then return true end
+    end
+    return false
+  end
+
+  if     pressedAny(cmgr:keysFor('doubleRPB')) then scaleBy(2)
+  elseif pressedAny(cmgr:keysFor('halveRPB'))  then scaleBy(0.5) end
+
+  ImGui.Text(ctx, 'Item name')
+  local rvN, name = ImGui.InputText(ctx, '##takeprops_name', s.nameBuf)
+  if rvN then s.nameBuf = name end
+
+  ImGui.Text(ctx, 'Length (rows)')
+  if ImGui.IsWindowAppearing(ctx) or s.refocusRows then
+    ImGui.SetKeyboardFocusHere(ctx)
+    s.refocusRows = nil
+  end
+  ImGui.PushID(ctx, s.rowsGen)
+  local rvR, rows = ImGui.InputText(ctx, '##takeprops_rows', s.rowsBuf)
+  ImGui.PopID(ctx)
+  if rvR then s.rowsBuf = rows end
+  ImGui.SameLine(ctx); if ImGui.Button(ctx, '\xc3\x97' .. '2') then scaleBy(2)   end  -- ×2
+  ImGui.SameLine(ctx); if ImGui.Button(ctx, '\xc3\xb7' .. '2') then scaleBy(0.5) end  -- ÷2
+
+  for i, m in ipairs{ {'resize', 'Resize'}, {'rescale', 'Rescale'}, {'tile', 'Tile'} } do
+    if i > 1 then ImGui.SameLine(ctx) end
+    if ImGui.RadioButton(ctx, m[2], s.mode == m[1]) then s.mode = m[1] end
+  end
+
+  local okPressed     = ImGui.Button(ctx, 'OK')
+                     or ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+                     or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
+  ImGui.SameLine(ctx)
+  local cancelPressed = ImGui.Button(ctx, 'Cancel')
+                     or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
+  if     okPressed     then close(true, s.nameBuf, tonumber(s.rowsBuf), s.mode)
+  elseif cancelPressed then close(false) end
+end)
 
 -- Naming convention <base>Selection / <base>All is the contract.
 --contract: requires tv to expose both `<base>Selection` and `<base>All` methods
@@ -1314,10 +1231,9 @@ tracker:registerAll{
 
   takeProperties = { function()
     local origRows = tv.grid.numRows or 0
-    local title    = 'Take properties'
-    modalState = {
+    modalHost:open{
       kind     = 'takeProps',
-      title    = title,
+      title    = 'Take properties',
       nameBuf  = tv:takeName() or '',
       rowsBuf  = tostring(origRows),
       rowsGen  = 0,
@@ -1337,7 +1253,6 @@ tracker:registerAll{
         end
       end,
     }
-    ImGui.OpenPopup(ctx, title)
   end, 'Take properties' },
 
   addTypedCol = addColumn,
@@ -1428,7 +1343,6 @@ function tp:renderBody(_, w, h, dispatch)
   handleMouse()
   local kr = dispatch and dispatch(self:focusState()) or { commandHeld = false }
   handleKeys(kr)
-  drawModal()
 
   tv:tick()
 end
@@ -1459,7 +1373,7 @@ function tp:reloadFromReaper() tm:reloadFromReaper() end
 --shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
 function tp:focusState()
   if not ctx then return { suppressKbd = false, pageSuppressed = false, acceptCmds = false } end
-  local suppressKbd    = modalState ~= nil or chrome.pickerIsActive() or swingEditor:modalActive()
+  local suppressKbd    = modalHost:isOpen() or chrome.pickerIsActive() or swingEditor:modalActive()
   local pageSuppressed = swingEditor:isOpen()
   return {
     suppressKbd    = suppressKbd,

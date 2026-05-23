@@ -19,9 +19,16 @@ end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
 local util = require('util')
+local fakeModalHost = {
+  open         = function() end,
+  openPrompt   = function() end,
+  openConfirm  = function() end,
+  registerKind = function() end,
+  isOpen       = function() return false end,
+}
 local function newTrackerPage(cm, cmgr, chrome, gui)
   return util.instantiate('trackerPage',
-    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui })
+    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = fakeModalHost })
 end
 
 return {

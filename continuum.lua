@@ -72,10 +72,11 @@ local function Main()
   local cmgr  = util.instantiate('commandManager', { cm = cm })
   local coord = util.instantiate('coordinator', { cm = cm, cmgr = cmgr, gui = gui })
 
-  local chrome = coord:chrome()
+  local chrome    = coord:chrome()
+  local modalHost = coord:modalHost()
   local function onPickTrack(t) coord:setSamplerTrack(t) end
   local function onDive(item)   coord:diveToTake(item)    end
-  local tp = util.instantiate('trackerPage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui })
+  local tp = util.instantiate('trackerPage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
   local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onDive = onDive })
   local sp = util.instantiate('samplePage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
 

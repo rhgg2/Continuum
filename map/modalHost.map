@@ -1,0 +1,36 @@
+@module modalHost  src=modalHost.lua  loc=132  sha=untracked  mode=chunk
+@deps ctx, chrome
+
+# Invariants & contracts
+  @invariant  one modalHost per coordinator; threaded into every page that opens modals
+  @invariant  state.kind picks the render; built-ins are 'prompt' and 'confirm'; pages register custom kinds at load time
+
+# Shapes
+  @shape  state = { kind, title, callback?, onClose?, flags?, ... per-kind fields }
+
+# Imports
+  @require ImGui = 'imgui'  @ 7
+      @contract  render(state, close) draws inside an active BeginPopupModal; close(invoke, ...args) captures+clears state, closes popup, pcalls callback if invoke, then pcalls onClose unconditionally
+
+# Private state
+  @state POPUP_ID = '###modalHost'  @ 12
+  @state kinds = {}  @ 14
+  @state state = nil  @ 15
+  @state wasOpen = false  @ 16   -- snapshot at tick(); stays true across the closing frame
+  @state mh = {}  @ 20
+
+# Private functions
+  @fn label()  @ 18
+
+# Public API (mh:*)
+  @api mh:registerKind(kind, render)  @ 22
+  @api mh:open(s)  @ 24
+  @api mh:openPrompt(args)  @ 29
+  @api mh:openConfirm(args)  @ 40
+  @api mh:isOpen()  @ 49
+  @api mh:wasOpenAtFrameStart()  @ 50
+  @api mh:tick()  @ 52
+  @api mh:draw()  @ 54
+
+# REAPER API surface
+  @reaper ShowConsoleMsg
