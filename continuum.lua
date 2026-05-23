@@ -77,7 +77,25 @@ local function Main()
   local function onPickTrack(t) coord:setSamplerTrack(t) end
   local function onDive(item)   coord:diveToTake(item)    end
   local tp = util.instantiate('trackerPage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
-  local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onDive = onDive })
+  -- Arrange's takeProperties + dup-unpooled-below commands open the
+  -- tracker page's takeProps modal on a take that may not be the
+  -- tracker page's current bind. We snapshot tp's bind, point tp at
+  -- the target take just for the modal's lifetime, then restore on
+  -- close. tp:openTakeProperties fires onClose exactly once after the
+  -- whole modal chain (incl. truncate-confirm).
+  local function onTakeProperties(item)
+    if not item then return end
+    local newTake = reaper.GetActiveTake(item)
+    if not newTake then return end
+    local prior = tp:currentTake()
+    if newTake == prior then
+      tp:openTakeProperties{}
+      return
+    end
+    tp:bind(newTake)
+    tp:openTakeProperties{ onClose = function() tp:bind(prior) end }
+  end
+  local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onDive = onDive, onTakeProperties = onTakeProperties })
   local sp = util.instantiate('samplePage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
 
   -- Arrange registered first so Continuum boots into it (coord:register

@@ -14,7 +14,8 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
-local cm, cmgr, chrome, gui, onDive = (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).onDive
+local cm, cmgr, chrome, gui, onDive, onTakeProperties =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).onDive, (...).onTakeProperties
 
 local ctx = gui and gui.ctx or nil
 -- gui.font is monospace (Source Code Pro) attached at context create;
@@ -23,7 +24,7 @@ local monoFont = gui and gui.font or nil
 local uiSize   = gui and gui.fontSize and gui.fontSize.ui or 12
 
 local av = util.instantiate('arrangeView',
-  { cm = cm, cmgr = cmgr, onDive = onDive })
+  { cm = cm, cmgr = cmgr, onDive = onDive, onTakeProperties = onTakeProperties })
 
 local ap = {}
 
@@ -843,8 +844,11 @@ local binds = {
   arrangeNudgeForward = { { ImGui.Key_DownArrow, ImGui.Mod_Super } },
   arrangeShrinkTake   = { { ImGui.Key_UpArrow,   ImGui.Mod_Super, ImGui.Mod_Shift } },
   arrangeGrowTake     = { { ImGui.Key_DownArrow, ImGui.Mod_Super, ImGui.Mod_Shift } },
-  arrangeDeleteTake   = { { ImGui.Key_Delete } },
-  arrangeDive         = { { ImGui.Key_Tab }, { ImGui.Key_Enter }, { ImGui.Key_KeypadEnter } },
+  arrangeDeleteTake             = { { ImGui.Key_Delete } },
+  arrangeDive                   = { { ImGui.Key_Tab }, { ImGui.Key_Enter }, { ImGui.Key_KeypadEnter } },
+  arrangeTakeProperties         = { { ImGui.Key_Backspace, ImGui.Mod_Super } },
+  arrangeDuplicateBelow         = { { ImGui.Key_D, ImGui.Mod_Super } },
+  arrangeDuplicateUnpooledBelow = { { ImGui.Key_Enter, ImGui.Mod_Super, ImGui.Mod_Shift } },
 }
 
 -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →

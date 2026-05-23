@@ -21,9 +21,10 @@ _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
 local util = require('util')
 
-local function newArrangePage(cm, cmgr, chrome, gui, onDive)
+local function newArrangePage(cm, cmgr, chrome, gui, onDive, onTakeProperties)
   return util.instantiate('arrangePage',
-    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onDive = onDive })
+    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui,
+      onDive = onDive, onTakeProperties = onTakeProperties })
 end
 
 return {
@@ -540,6 +541,112 @@ return {
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
       t.eq(dived, item, 'focus seeded at the edit-cursor row — dive lands on the take there')
+    end,
+  },
+
+  -- arrangeTakeProperties / arrangeDuplicateBelow / arrangeDuplicateUnpooledBelow:
+  -- the keyboard-bound counterparts of the take-props modal and the dup-below
+  -- trio. arrangeTakeProperties + arrangeDuplicateUnpooledBelow both route the
+  -- target take's item through onTakeProperties so coord can host the modal on
+  -- the tracker page's tm/tv. arrangeDuplicateBelow is silent.
+  {
+    name = 'arrangeTakeProperties routes the focused MIDI take through onTakeProperties',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      local item = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                             pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local opened
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, nil, function(it) opened = it end)
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeTakeProperties')
+      t.eq(opened, item, 'onTakeProperties received the focused take item')
+    end,
+  },
+
+  {
+    name = 'arrangeTakeProperties is a no-op on an audio take',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/a1', isMidi = false,
+                                pos = 0, len = 1, srcFile = '/snd/a.wav' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local opened = false
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, nil, function() opened = true end)
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeTakeProperties')
+      t.eq(opened, false, 'audio take is silently skipped')
+    end,
+  },
+
+  {
+    name = 'arrangeDuplicateBelow drops a pooled clone at the focused take\'s natural end',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDuplicateBelow')
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2, 'pooled clone added below')
+      t.eq(takes[2].startQN, 2, 'clone starts at the source take\'s natural end')
+    end,
+  },
+
+  {
+    name = 'arrangeDuplicateBelow is silent on start-collision and on audio takes',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      -- A flush downstream neighbour shares the natural-end QN — the dup
+      -- would collide and is refused silently.
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 2, len = 1, srcLen = 1, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDuplicateBelow')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(#am:tracksTakes(0), 2, 'no clone added — destination collided')
+    end,
+  },
+
+  {
+    name = 'arrangeDuplicateUnpooledBelow mints a fresh-pool clone and auto-opens take-props',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local opened
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, nil, function(it) opened = it end)
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDuplicateUnpooledBelow')
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2, 'fresh clone added below')
+      t.eq(takes[2].startQN, 2, 'clone starts at the source take\'s natural end')
+      t.truthy(opened, 'onTakeProperties fired with the new item')
+      t.truthy(opened ~= takes[1].item, 'auto-open targets the new take, not the source')
     end,
   },
 

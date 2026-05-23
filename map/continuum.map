@@ -1,4 +1,4 @@
-@module continuum  src=continuum.lua  loc=134  sha=b494336  mode=chunk
+@module continuum  src=continuum.lua  loc=152  sha=6362c91  mode=chunk
 
 # Invariants & contracts
   @invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer
@@ -23,5 +23,6 @@
   @reaper defer
   @reaper ClearConsole
   @reaper GetOS
+  @reaper GetActiveTake
   @reaper Undo_CanUndo2
   @reaper Main_OnCommand

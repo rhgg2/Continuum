@@ -13,7 +13,8 @@
 
 local util = require 'util'
 
-local cm, cmgr, onDive = (...).cm, (...).cmgr, (...).onDive
+local cm, cmgr, onDive, onTakeProperties =
+  (...).cm, (...).cmgr, (...).onDive, (...).onTakeProperties
 
 local am = util.instantiate('arrangeManager', { cm = cm })
 
@@ -119,6 +120,34 @@ local function diveFocused()
   adoptCursor()
   local take = focusedTake()
   if take and take.kind == 'midi' then onDive(take.item) end
+end
+
+--invariant: arrangeTakeProperties opens the takeProps modal on the focused take. MIDI-only — audio takes have no editable name/beats here. Routes through onTakeProperties so continuum can do the tm-bind-and-restore dance.
+local function focusedTakeProperties()
+  adoptCursor()
+  local take = focusedTake()
+  if take and take.kind == 'midi' then onTakeProperties(take.item) end
+end
+
+--invariant: arrangeDuplicateBelow drops a pooled clone at the focused take's natural end and shifts focus to the new copy. MIDI-only; silent on collision or audio. The new take keeps the source's pool guid — the "another copy please" gesture.
+local function duplicateFocusedBelow()
+  adoptCursor()
+  local take = focusedTake()
+  if not take then return end
+  local newTake = am:duplicateBelow(take)
+  if newTake then av:setFocus(newTake) end
+end
+
+--invariant: arrangeDuplicateUnpooledBelow drops a fresh-pool MIDI clone (events copied) at the focused take's natural end, shifts focus to it, and auto-opens take properties so the user can name + size it.
+local function duplicateUnpooledFocusedBelow()
+  adoptCursor()
+  local take = focusedTake()
+  if not take then return end
+  local newTake = am:duplicateUnpooledBelow(take)
+  if newTake then
+    av:setFocus(newTake)
+    onTakeProperties(reaper.GetMediaItemTake_Item(newTake))
+  end
 end
 
 --invariant: place commands drop0..dropZ — one per base62 slot — drop a fresh instance at the cursor. A key whose slot index is unpopulated is a silent no-op (am:dropInstance returns nil). The drop inherits the slot's existing-instance length.
@@ -308,8 +337,11 @@ arrange:registerAll {
   arrangeNudgeForward = function() nudgeFocused( 1) end,
   arrangeShrinkTake   = function() resizeFocused(-1) end,
   arrangeGrowTake     = function() resizeFocused( 1) end,
-  arrangeDeleteTake   = deleteFocused,
-  arrangeDive         = diveFocused,
+  arrangeDeleteTake             = deleteFocused,
+  arrangeDive                   = diveFocused,
+  arrangeTakeProperties         = focusedTakeProperties,
+  arrangeDuplicateBelow         = duplicateFocusedBelow,
+  arrangeDuplicateUnpooledBelow = duplicateUnpooledFocusedBelow,
 }
 
 local placeCmds = {}

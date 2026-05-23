@@ -12,7 +12,8 @@
 - are rows integer height in ap?
 - multiselect / copy / paste in ap
 - advanceBy in ap
-
+- wave previews in ap
+- show take/track name and navigate by track take in tp
 
   Reframing to "what a competent tracker offers that Continuum's
   tracker doesn't" — and discounting what's REAPER's job (transport,
