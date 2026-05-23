@@ -14,7 +14,6 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
---contract: builds av, which builds am; coord passes primitives (cm, cmgr, chrome, gui) and the onDive callback. cm / cmgr / onDive forward to av — ap keeps no am reference and uses cmgr only to bind keys.
 local cm, cmgr, chrome, gui, onDive = (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).onDive
 
 local ctx = gui and gui.ctx or nil
@@ -63,8 +62,7 @@ local MODAL_TITLES            = { rename = 'Rename slot', create = 'New take',
 local modal                   = nil   -- { kind, ... } | nil
 local modalFocus              = false
 local modalOpenAtFrameStart   = false
--- Forward decl: runGridMouse (defined far above openCreateModal) opens
--- the create modal on a double-click-drag release in empty grid space.
+-- Forward decl: runGridMouse (in renderGrid below) calls openCreateModal, defined further down.
 local openCreateModal
 
 --shape: press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — mouse-down snapshot, nil when no button is down over the grid. A track-column press carries `take`/`row`/`col`/`mode`; a QN-gutter press carries `qn` and `gutter = true` only; an empty-space double-click carries `qn`/`col` and `create = true`. `row`/`col` is the pressed cell, applied to the cursor on a no-drag grid release; `moved` flips once ImGui's drag threshold is crossed.
@@ -262,21 +260,14 @@ local function renderGrid(tracks, nTracks)
       elseif loopCand then
         av:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
       elseif press.create then
-        -- Empty-space double-click: open the create modal at the pressed
-        -- column / row. A drag prefills the row count from the sweep; a
-        -- bare double-click leaves it at the default.
+        -- Sweep prefills the row count; bare double-click uses the default.
         local rows = createCand
                      and math.floor(createCand.lengthQN / bpr + 0.5) or nil
         openCreateModal(press.col, press.qn, rows)
       elseif press.gutter then
-        -- Gutter press with no drag: drop the REAPER edit cursor on the
-        -- pressed row — floored to the top edge of the row box the click
-        -- sits in, not the nearest edge — unless Shift is held.
+        -- Floor to the row box's top edge (not the nearest edge) unless Shift is held.
         av:setEditCursorQN(snapped and floorTo(press.qn, bpr) or press.qn)
       else
-        -- Grid press with no take dragged: a plain click. Move the
-        -- cursor to the pressed cell; an empty-space press also clears
-        -- focus. A take drag (even one blocked) leaves the cursor put.
         av:setCursor(press.row, press.col)
         if not press.take then av:setFocus(nil) end
       end
@@ -378,8 +369,7 @@ local function renderGrid(tracks, nTracks)
                  true, not dragCand.fits)
   end
 
-  -- Ghost of the take a double-click-drag will create: translucent
-  -- fill + border at the swept column and span, no name.
+  -- Ghost preview of the take the in-flight double-click-drag will create.
   if createCand then
     local startRow = av:qnToRow(createCand.startQN)
     local endRow   = av:qnToRow(createCand.startQN + createCand.lengthQN)
@@ -465,7 +455,6 @@ local function renderGrid(tracks, nTracks)
     qnRule(playQN, PLAY_LINE)
   end
 
-  -- Gutter row labels (right-aligned within QN_W).
   for r = 0, visRows - 1 do
     local label = rowLabel(sr + r)
     local tw    = ImGui.CalcTextSize(ctx, label)
@@ -620,18 +609,10 @@ local function renderPaletteList(slots)
   ImGui.EndTable(ctx)
 end
 
--- Modal lives inside the palette child window. NoNav prevents ImGui's
--- popup nav from stealing keys from the InputText; AlwaysAutoResize
--- because all three modals are small. chrome.pushChromeWindow wraps
--- Begin/End so the popup inherits parchment/chrome styles instead of
--- ImGui's dark defaults.
---
--- One stable popup id (modalLabel's ### suffix) drives all three kinds,
--- under a per-kind visible title — the popup can't be open in two
--- configurations simultaneously, and one id keeps the open/close
--- bookkeeping symmetrical. Self-heal: if the modal state was set but
--- ImGui's popup queue lost it (e.g. command opened the popup from
--- outside any window), re-open here.
+-- chrome.pushChromeWindow wraps Begin/End so the popup inherits parchment
+-- styles instead of ImGui's dark defaults.
+-- Self-heal: if modal state was set but ImGui's popup queue lost it (e.g. a
+-- command opened the popup from outside any window), re-open here.
 local function renderModal()
   if not modal then return end
   if not ImGui.IsPopupOpen(ctx, modalLabel()) then
@@ -729,17 +710,17 @@ end
 function ap:bind() end
 function ap:unbind() end
 
---contract: positions the arrange cursor on the take wrapping `reaperTake` and focuses it — coord:returnToArrange lands on the take just edited. Silent no-op when the take isn't on the grid.
+--contract: positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
 function ap:revealTake(reaperTake) av:revealTake(reaperTake) end
 
---contract: seeds the arrange cursor and focus at boot — the first selected take, else REAPER's edit cursor / selected track. continuum calls this once after registering the page.
+--contract: seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
 function ap:seedCursorFromReaper() av:seedCursor() end
 
 function ap:renderToolbarBits(_) end
 
---contract: grid is hand-drawn via the window draw list (no ImGui table): header band, row-number gutter, bar/phrase row tints, gridlines, focused-column tint, take rectangles tinted per slot (pooled siblings share a hue, the focused take lightened with a brighter border), and the cursor cell on top.
---contract: pushes parchment palette across the body (Col_Text, Col_TableHeaderBg, Col_TableRowBg, Col_TableBorder*) because coord pops chrome styles before body draw; the palette tables below still need these — the grid itself no longer does.
---contract: invokes the dispatch callback at end of body so arrange-scope arrow keys reach the dispatcher; samplePage and trackerPage follow the same pattern.
+--invariant: grid is hand-drawn (no ImGui table) — tints, gridlines, take rects per slot, cursor on top.
+--contract: pushes parchment body palette (coord popped chrome before body draw); palette tables below need it.
+--contract: invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
 function ap:renderBody(_, w, h, dispatch)
   if not ctx then return end
 
@@ -798,7 +779,7 @@ function ap:renderStatusBar(_)
     av:cursorRow(), av:cursorCol(), av:beatPerRow()))
 end
 
---contract: focusState mirrors samplePage — picker or any active ImGui item suppresses commands. Also gated by modalOpenAtFrameStart so the Enter that commits any modal's InputText can't leak to root-scope bindings (notably quit) on the same frame.
+--contract: acceptCmds=false if picker active, any item active, or modal was open at frame start.
 function ap:focusState()
   if not ctx then return { suppressKbd = false, acceptCmds = false } end
   local pa = chrome and chrome.pickerIsActive() or false
@@ -815,10 +796,7 @@ function ap:save()        end
 function ap:load()        end
 
 --invariant: createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture. Slots have no existence apart from items on the grid; the palette's rename / delete buttons act on existing slots.
--- The arrange scope's command bodies live in av; ap owns the key
--- bindings (it holds the ImGui key constants) and createSlot, whose body
--- drives the modal. cmgr:scope is idempotent — the same scope av
--- registered into.
+-- cmgr:scope is idempotent — same scope av registers into.
 local arrange = cmgr:scope('arrange')
 
 arrange:registerAll {
@@ -849,8 +827,7 @@ local binds = {
 }
 
 -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
--- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous (already
--- exploited at coordinator.lua:53).
+-- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 local function placeKey(slotIdx)
   if slotIdx < 10 then return { ImGui.Key_0 + slotIdx } end
   if slotIdx < 36 then return { ImGui.Key_A + (slotIdx - 10) } end

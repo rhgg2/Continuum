@@ -8,7 +8,7 @@
 --invariant: row/col addressing — cursorRow is integer rows; cursorCol is the project track index (0-based). One row spans `beatPerRow` beats of QN, so qn ↔ row is `qn / beatPerRow` ↔ `row * beatPerRow`.
 --invariant: gridRows / gridCols are visible cell counts set by the page each frame via setGridSize; followViewport runs on every cursor mutation so the cursor stays in the visible band.
 --invariant: av registers the arrange-scope command bodies in cmgr:scope('arrange'); the page owns the key bindings (it holds the ImGui key constants) and the createSlot command (it drives the page's modal).
---invariant: focus is a per-session module-local — the REAPER take handle the edit commands act on. av resolves it through am (focusedTake self-heals to nil when the take is gone). Set by cursor nav landing on a take and by a mouse press on one.
+--invariant: focus is a per-session module-local — the REAPER take handle the edit commands act on. av resolves it through am (focusedTake self-heals to nil when the take is gone). Cursor nav never changes focus; each kb mutation reselects the take under the cursor (adoptCursor), so an empty cell is a no-op. Mouse press on a take sets focus directly.
 --invariant: paletteSlot is a per-session module-local pointer (0..61 or nil) — the slot the palette has focused for rename/delete; doesn't persist, nothing to do with cursorCol.
 
 local util = require 'util'
@@ -133,7 +133,7 @@ function av:scroll()      return scrollRow, scrollCol end
 function av:focus()       return focus end
 function av:paletteSlot() return paletteSlot end
 
---contract: setCursor clamps negative coords to 0 and cursorCol at maxCol when the page has pushed one; the row upper bound is the caller's job until project-end is wired.
+--contract: clamps negative coords to 0; clamps cursorCol to maxCol if set; no row upper bound.
 function av:setCursor(row, col)
   cursorRow = math.max(0, math.floor(row))
   local c = math.max(0, math.floor(col))
@@ -142,14 +142,7 @@ function av:setCursor(row, col)
   followViewport()
 end
 
---contract: placeCursor moves the cursor, then adopts the take it lands on as the focus. Landing on empty space leaves the previous focus intact.
-function av:placeCursor(row, col)
-  self:setCursor(row, col)
-  local under = takeAtCursor()
-  if under then focus = under.take end
-end
-
---contract: stores an opaque take handle (or nil); focusedTake resolves it via am when an edit command fires.
+--contract: stores an opaque take handle or nil; av resolves it via am at edit-command time.
 function av:setFocus(handle) focus = handle end
 
 --contract: setPaletteSlot(nil) clears; numeric values clamp into 0..61 (the base62 slot range).
@@ -169,7 +162,7 @@ function av:setGridSize(rows, cols)
   followViewport()
 end
 
---contract: the page pushes the live track count each frame so cursorCol upper-clamps without av reaching for am.
+--contract: page pushes live track count each frame; setCursor clamps cursorCol to it.
 function av:setMaxCol(n) maxCol = n and math.max(0, math.floor(n) - 1) or nil end
 
 ----- Project data — proxied from am so the page holds no am reference
@@ -190,7 +183,8 @@ function av:clearLoopRange()       am:clearLoopRange() end
 
 ----- Grid mouse — hit-test, in-flight drag geometry, commit
 
---contract: the take under (trackIdx, qn) and the mode its grab implies — 'resizeEnd' within DRAG_EDGE_PX of the end edge (clamped to half the take, so a short take stays grabbable for a move), else 'move'. qnPerPx converts the pixel edge band to QN. nil when no take is hit.
+--contract: returns take, mode='resizeEnd' within DRAG_EDGE_PX of the end edge, else 'move'. nil if no hit.
+--contract: end-edge band clamps to half the take so short takes stay movable; qnPerPx scales px→QN.
 function av:hitTake(trackIdx, qn, qnPerPx)
   for _, take in ipairs(am:tracksTakes(trackIdx)) do
     local endQN = take.startQN + take.lengthQN
@@ -202,7 +196,8 @@ function av:hitTake(trackIdx, qn, qnPerPx)
   return nil
 end
 
---contract: in-flight take drag { startQN, lengthQN, fits }. The moved edge snaps to a row box unless `snapped` is false; `fits` is am:rangeIsClear for the candidate, excluding the dragged take itself (or nothing for an Alt-duplicate, whose original stays put).
+--contract: returns { startQN, lengthQN, fits }; moved edge snaps to a row box unless snapped=false.
+--contract: fits excludes the dragged take, or nothing on press.duplicate (original stays put).
 function av:dragCandidate(press, mouseQN, snapped)
   local take = press.take
   local bpr  = self:beatPerRow()
@@ -223,7 +218,7 @@ function av:dragCandidate(press, mouseQN, snapped)
   }
 end
 
---contract: in-flight gutter loop drag { loQN, hiQN }. Both endpoints floor to a row box unless `snapped` is false; a zero-height sweep widens to one row so the loop is never empty.
+--contract: returns { loQN, hiQN } floored to row boxes unless snapped=false; widens to ≥1 row.
 function av:gutterLoopCand(press, mouseQN, snapped)
   local bpr  = self:beatPerRow()
   local loQN = math.max(0, math.min(press.qn, mouseQN))
@@ -233,7 +228,7 @@ function av:gutterLoopCand(press, mouseQN, snapped)
   return { loQN = loQN, hiQN = hiQN }
 end
 
---contract: in-flight create drag { startQN, lengthQN }. startQN is the double-clicked row box; the end follows the mouse, floored to a row box unless `snapped` is false. A zero-height sweep is one row.
+--contract: returns { startQN=press.qn, lengthQN }; end floors to a row box unless snapped=false; ≥1 row.
 function av:createCandidate(press, mouseQN, snapped)
   local bpr   = self:beatPerRow()
   local endQN = math.max(press.qn, mouseQN)
@@ -241,7 +236,7 @@ function av:createCandidate(press, mouseQN, snapped)
   return { startQN = press.qn, lengthQN = math.max(bpr, endQN - press.qn) }
 end
 
---contract: commit a released drag. The focused take rides its handle unchanged through a move or resize; a duplicate shifts focus to the new copy.
+--contract: move/resize preserves the focus handle; duplicate shifts focus to the new copy.
 function av:commitDrag(press, cand)
   local take = press.take
   if press.mode == 'resizeEnd' then
@@ -260,7 +255,7 @@ function av:renameSlot(trackIdx, slotIdx, name)
   am:renameSlot(trackIdx, slotIdx, name)
 end
 
---contract: createSlot mints a MIDI slot via am and focuses it in the palette; returns the new slot index, or nil if am refused (track missing / slots exhausted).
+--contract: mints a MIDI slot via am and focuses it in the palette; nil if am refused.
 function av:createSlot(trackIdx, qnPos, lengthQN, name)
   local slotIdx = am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   if slotIdx then self:setPaletteSlot(slotIdx) end
@@ -274,7 +269,7 @@ end
 
 ----- Boot + reveal — the page interface delegates here
 
---contract: positions the cursor on the take wrapping REAPER take `reaperTake` and focuses it. Silent no-op when the take isn't on the grid.
+--contract: positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
 function av:revealTake(reaperTake)
   local take = am:findTake(reaperTake)
   if take then
@@ -314,8 +309,6 @@ arrange:registerAll {
   arrangeDive         = diveFocused,
 }
 
--- Place commands drop0..dropZ — one body per base62 slot; the page binds
--- the matching keys.
 local placeCmds = {}
 for i = 0, 61 do
   placeCmds['drop' .. am:keyForSlot(i)] = function() dropAt(i) end

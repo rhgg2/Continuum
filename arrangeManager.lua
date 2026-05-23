@@ -19,9 +19,6 @@ local SLOT_MAX = 61    -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
 
 ----- Helpers
 
--- Identity of a take's underlying source. Stable per session for both kinds.
--- MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it).
--- Audio: absolute source filename.
 local function takeIdOf(take)
   if reaper.TakeIsMIDI(take) then
     local item = reaper.GetMediaItemTake_Item(take)
@@ -77,10 +74,7 @@ local function forEachActiveTake(track, fn)
   end
 end
 
--- Walk the track's live takes; assign the lowest-free slot to any id
--- not yet in the dict; drop dict entries whose id has no live take.
--- Idempotent — repeated calls in one frame do nothing after the first.
--- Returns (dict, slotForId, firstName) so callers don't repeat the walk.
+--contract: idempotent within a frame; returns (dict, slotForId, firstName) so callers don't re-walk
 local function ensureSlots(track)
   local dict = readSlots(track)
   local idOrder, liveIds, firstName, kindForId = {}, {}, {}, {}
@@ -162,7 +156,7 @@ function am:tracksTakes(trackIdx)
   return out
 end
 
---contract: returns the take on `trackIdx` overlapping the half-open box [boxStartQN, boxEndQN) by the largest QN span — the take the one-row cursor sits "on"; nil if no take overlaps. Ties resolve to REAPER item order. `accept`, when given, filters candidates first: a take failing accept(take) is never ranked.
+--contract: take with largest overlap of [boxStartQN, boxEndQN) on trackIdx; accept(t) prefilters; nil if none
 function am:takeAt(trackIdx, boxStartQN, boxEndQN, accept)
   local best, bestOverlap = nil, 0
   for _, take in ipairs(am:tracksTakes(trackIdx)) do
@@ -175,7 +169,7 @@ function am:takeAt(trackIdx, boxStartQN, boxEndQN, accept)
   return best
 end
 
---contract: returns the take-shape on any project track whose underlying REAPER take is `reaperTake`; nil if not found. Turns a REAPER take handle back into a grid position.
+--contract: take-shape (from tracksTakes) wrapping reaperTake on any project track; nil if not found
 function am:findTake(reaperTake)
   if not reaperTake then return end
   for _, track in ipairs(am:projectTracks()) do
@@ -186,7 +180,7 @@ function am:findTake(reaperTake)
   return nil
 end
 
---contract: the arrange cursor's boot position as (trackIdx, qn): the first selected item's take start when an item is selected, else REAPER's edit-cursor QN and selected-track column. trackIdx 0 when no track is selected.
+--contract: (trackIdx, qn) boot pos: selected item, else edit-cursor QN + selected track; 0 if no track
 function am:initialCursor()
   local item = reaper.GetSelectedMediaItem(0, 0)
   if item then
@@ -221,7 +215,6 @@ function am:setLoopRangeQN(loQN, hiQN)
     reaper.TimeMap2_QNToTime(0, loQN), reaper.TimeMap2_QNToTime(0, hiQN), false)
 end
 
---contract: clears the project loop range (start == end); loopRangeQN then returns nil.
 function am:clearLoopRange()
   reaper.GetSet_LoopTimeRange(true, true, 0, 0, false)
 end
@@ -232,7 +225,7 @@ function am:playPositionQN()
   return reaper.TimeMap2_timeToQN(0, reaper.GetPlayPosition())
 end
 
---contract: QN of the end of the last take in the project — the largest item end across all tracks; 0 when the project has no items.
+--contract: largest item-end QN across all tracks; 0 when the project has no items
 function am:projectEndQN()
   local endQN = 0
   for ti = 0, reaper.CountTracks(0) - 1 do
@@ -291,7 +284,7 @@ function am:renameSlot(trackIdx, slotIdx, name)
   end)
 end
 
---contract: deletes every live take whose id matches this slot's id. ensureSlots prunes the now-orphaned dict entry on the next read; we run it inline so the palette doesn't briefly carry a ghost row. Returns the number of takes removed.
+--contract: deletes every take on trackIdx with this slot's id; returns the removed count
 function am:deleteSlot(trackIdx, slotIdx)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return 0 end
@@ -306,19 +299,17 @@ function am:deleteSlot(trackIdx, slotIdx)
       removed = removed + 1
     end
   end
-  ensureSlots(track)
+  ensureSlots(track)    -- prune the now-orphaned dict entry inline so the palette doesn't briefly show a ghost row
   return removed
 end
 
 ----- Placement
 
--- POOLEDEVTS swap. Splice the existing pool line, or insert one after
--- the SOURCE MIDI header when REAPER returned a chunk without one
--- (defensive — CreateNewMIDIItemInProj always emits a fresh pool line).
 local function chunkSetPool(chunk, guid)
   if chunk:find('POOLEDEVTS', 1, true) then
     return (chunk:gsub('POOLEDEVTS%s+{[^}]+}', 'POOLEDEVTS ' .. guid))
   end
+  -- Defensive: CreateNewMIDIItemInProj always emits a POOLEDEVTS line, so this branch is unreachable in practice.
   return (chunk:gsub('(<SOURCE MIDI\n)', '%1    POOLEDEVTS ' .. guid .. '\n', 1))
 end
 
@@ -335,10 +326,7 @@ local function poolMidiItem(item, guid)
   end
 end
 
--- Place a fresh item carrying source `id` on `track` at qnPos for
--- lengthQN, named `name` when given. MIDI: a pooled clone (POOLEDEVTS
--- swap to `id`); audio: a sibling item on file `id` — REAPER doesn't
--- pool audio. Returns the take, or nil if REAPER refused the item.
+--contract: MIDI: pooled clone via POOLEDEVTS swap; audio: sibling on file id; nil if REAPER refuses
 local function placeSource(track, kind, id, qnPos, lengthQN, name)
   local take
   if kind == 'midi' then
@@ -367,7 +355,7 @@ local function placeSource(track, kind, id, qnPos, lengthQN, name)
   return take
 end
 
---contract: creates a fresh MIDI source on `trackIdx` at qnPos for lengthQN, allocates the lowest-free slot pointing at the new pool guid, names the take, returns (slotIdx, take). Nil if track missing or slots exhausted. The only path that mints a slot.
+--contract: (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track or no free slot
 function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   local track   = reaper.GetTrack(0, trackIdx)
   local dict    = track and readSlots(track)
@@ -387,8 +375,7 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   return slotIdx, take
 end
 
--- Length and name of the first existing instance of source `id` on
--- `track` — what a fresh drop inherits when the caller supplies neither.
+-- What a fresh drop inherits when the caller supplies neither length nor name.
 local function siblingInstance(track, id)
   local len, name
   forEachActiveTake(track, function(take, item)
@@ -400,7 +387,7 @@ local function siblingInstance(track, id)
   return len, name
 end
 
---contract: drops a fresh instance of slot `slotIdx` on track `trackIdx` at qnPos. lengthQN defaults to the length of an existing instance of the slot (a slot always has one), else 1 QN; the dropped take inherits that instance's name. MIDI pools via POOLEDEVTS; audio adds a sibling on the slot's file. Returns the take, or nil if track/slot is missing. Audio branch is currently dormant: no surface creates audio slots, but ensureSlots will materialise one from any pre-existing audio item REAPER hands us.
+--contract: instance of slot at qnPos; lengthQN <- sibling len or 1; name <- sibling; nil if track/slot missing
 function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return end
@@ -411,7 +398,7 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
                      lengthQN or siblingLen or 1, siblingName)
 end
 
---contract: clones `take` (name included) at qnPos on its own track, original untouched; returns the new take, or nil if take/track is missing or the take's id can't be derived. MIDI: a pooled clone sharing the POOLEDEVTS guid; audio: a sibling on the same file.
+--contract: clones take at qnPos on its own track (name included, original untouched); nil if track/id missing
 function am:duplicateTake(take, qnPos)
   local track = reaper.GetTrack(0, take.trackIdx)
   local id    = takeIdOf(take.take)
@@ -421,7 +408,7 @@ end
 
 ----- Per-take edits
 
---contract: returns (loQN, hiQN), the QN window the take may occupy on its track without overlapping a neighbour — lo the nearest left take's end (>=0), hi the nearest right take's start (math.huge if none). Left/right are decided against the take's current range; abutting is legal under half-open ranges. The mutators below are faithful, so a grid-aware caller consults this to refuse a step that would overlap.
+--contract: (loQN, hiQN) of take's free QN window: nearest left end (>=0), nearest right start (huge if none)
 function am:freeSpan(take)
   local startQN, lengthQN = itemQNRange(take.item)
   local endQN = startQN + lengthQN
@@ -439,7 +426,7 @@ function am:freeSpan(take)
   return lo, hi
 end
 
---contract: true when [startQN, startQN+lengthQN) on `trackIdx` overlaps no take whose item differs from `exceptItem` — the placement test for a free mouse move (pass the dragged take's item) or an Alt-duplicate (pass nil, so the original counts). Abutting is legal under half-open ranges.
+--contract: true iff [startQN, startQN+lengthQN) on trackIdx overlaps no take whose item ~= exceptItem
 function am:rangeIsClear(trackIdx, startQN, lengthQN, exceptItem)
   local endQN = startQN + lengthQN
   for _, other in ipairs(am:tracksTakes(trackIdx)) do
@@ -452,13 +439,13 @@ function am:rangeIsClear(trackIdx, startQN, lengthQN, exceptItem)
   return true
 end
 
---contract: shifts the take's item start by deltaQN, length unchanged. Faithful — no clamping; callers consult freeSpan and own the grid/snap policy.
+--contract: shifts item start by deltaQN, length unchanged; no clamping (caller owns snap and overlap policy)
 function am:moveTake(take, deltaQN)
   local startQN, lengthQN = itemQNRange(take.item)
   setItemQNRange(take.item, startQN + deltaQN, startQN + lengthQN + deltaQN)
 end
 
---contract: sets the take's item length to newLengthQN absolutely, start edge fixed. Faithful — no clamping; callers consult freeSpan and own snap and the minimum-length floor.
+--contract: sets item length to newLengthQN, start fixed; no clamping (caller owns snap and floors)
 function am:resizeTake(take, newLengthQN)
   local startQN = itemQNRange(take.item)
   setItemQNRange(take.item, startQN, startQN + newLengthQN)
@@ -492,7 +479,7 @@ function am:takesUsing(name)
   return hits
 end
 
---contract: iterates affected takes via tm:bindTake with opts.markSwingStale=true; the post-load rebuild's stale-branch reseats raw from each event's ppqL under the take's current swing. Restores the original take at the end (no stale-mark — the active take's events are unchanged by the visit).
+--contract: re-binds each takesUsing(name) take with markSwingStale=true; restores the original bound take at end
 function am:reswingAll(name)
   assert(tm, 'arrangeManager: reswingAll requires the tm dependency')
   local origTake = tm:currentTake()
