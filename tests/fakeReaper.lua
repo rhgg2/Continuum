@@ -135,6 +135,8 @@ function M.new()
   state.takeName        = {}    -- take  → string
   state.takeSrc         = {}    -- take  → src token (e.g. filename for audio)
   state.srcFile         = {}    -- src   → filename string
+  state.srcLen          = {}    -- src   → length (QN for MIDI, sec for audio)
+  state.srcIsQN         = {}    -- src   → true if MIDI (beat-based)
   function r.CountTrackMediaItems(track) return #(state.itemsByTrack[track] or {}) end
   function r.GetTrackMediaItem(track, i) return (state.itemsByTrack[track] or {})[i + 1] end
   function r.GetActiveTake(item)         return state.activeTake[item] end
@@ -142,6 +144,9 @@ function M.new()
   function r.GetTakeName(take)           return state.takeName[take] end
   function r.GetMediaItemTake_Source(take) return state.takeSrc[take] end
   function r.GetMediaSourceFileName(src) return state.srcFile[src] or tostring(src) end
+  function r.GetMediaSourceLength(src)
+    return state.srcLen[src] or math.huge, state.srcIsQN[src] == true
+  end
   function r.GetItemStateChunk(item, _, _)
     local guid = state.poolByItem[item]
     if not guid then return true, '' end
@@ -249,9 +254,15 @@ function M.new()
     state.takeName[opts.take]     = opts.takeName or ''
     if opts.isMidi then
       state.poolByItem[item] = opts.poolGuid or ('{pool-' .. tostring(opts.take) .. '}')
+      local src = { __midiSrc = opts.take }
+      state.takeSrc[opts.take] = src
+      state.srcLen[src]  = opts.srcLen or math.huge
+      state.srcIsQN[src] = true
     elseif opts.srcFile then
       state.takeSrc[opts.take] = opts.srcFile
       state.srcFile[opts.srcFile] = opts.srcFile
+      state.srcLen[opts.srcFile]  = opts.srcLen or math.huge
+      state.srcIsQN[opts.srcFile] = false
     end
     return item
   end

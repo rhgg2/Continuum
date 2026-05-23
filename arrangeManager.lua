@@ -451,6 +451,16 @@ function am:resizeTake(take, newLengthQN)
   setItemQNRange(take.item, startQN, startQN + newLengthQN)
 end
 
+--contract: source length in QN at the take's position; 0 if source missing.
+function am:takeSourceLengthQN(take)
+  local src = reaper.GetMediaItemTake_Source(take.take)
+  if not src then return 0 end
+  local len, isQN = reaper.GetMediaSourceLength(src)
+  if isQN then return len end
+  local posSec = reaper.GetMediaItemInfo_Value(take.item, 'D_POSITION')
+  return reaper.TimeMap2_timeToQN(0, posSec + len) - reaper.TimeMap2_timeToQN(0, posSec)
+end
+
 function am:deleteTake(take)
   local track = reaper.GetTrack(0, take.trackIdx)
   if track then reaper.DeleteTrackMediaItem(track, take.item) end

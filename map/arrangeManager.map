@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=492  sha=2061b19  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=502  sha=4571be3  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts
@@ -42,7 +42,7 @@
       -- What a fresh drop inherits when the caller supplies neither length nor name.
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 461
+  @fn projectMidiTakes()  @ 471
 
 # Public API (am:*)
   @api am:projectTracks()  @ 117
@@ -83,10 +83,12 @@
       @contract  shifts item start by deltaQN, length unchanged; no clamping (caller owns snap and overlap policy)
   @api am:resizeTake(take, newLengthQN)  @ 449
       @contract  sets item length to newLengthQN, start fixed; no clamping (caller owns snap and floors)
-  @api am:deleteTake(take)  @ 454
-  @api am:takesUsing(name)  @ 473
+  @api am:takeSourceLengthQN(take)  @ 455
+      @contract  source length in QN at the take's position; 0 if source missing.
+  @api am:deleteTake(take)  @ 464
+  @api am:takesUsing(name)  @ 483
       @contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 483
+  @api am:reswingAll(name)  @ 493
       @contract  re-binds each takesUsing(name) take with markSwingStale=true; restores the original bound take at end
 
 # REAPER API surface
@@ -120,3 +122,4 @@
   @reaper AddTakeToMediaItem
   @reaper PCM_Source_CreateFromFile
   @reaper SetMediaItemTake_Source
+  @reaper GetMediaSourceLength

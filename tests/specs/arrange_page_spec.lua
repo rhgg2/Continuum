@@ -159,6 +159,42 @@ return {
   },
 
   {
+    name = 'arrangeGrowTake silently no-ops at the take-source length cap',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeGrowTake')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].lengthQN, 2, 'grow past source length is a no-op')
+    end,
+  },
+
+  {
+    name = 'arrangeShrinkTake bypasses the source-length cap',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 3, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeShrinkTake')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am:tracksTakes(0)[1].lengthQN, 2, 'shrink still works even when current length already exceeds source')
+    end,
+  },
+
+  {
     name = 'arrangeDeleteTake removes the focused take',
     run = function(harness)
       local h = harness.mk()

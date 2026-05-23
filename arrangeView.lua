@@ -99,6 +99,7 @@ local function nudgeFocused(direction)
   end
 end
 
+--invariant: grow caps at takeSourceLengthQN; shrink bypasses. Past-source grow silently no-ops — authoring pattern length is tm's job (setLength/rescaleLength).
 local function resizeFocused(direction)
   adoptCursor()
   local take = focusedTake()
@@ -107,7 +108,9 @@ local function resizeFocused(direction)
   local newLength = math.max(bpr, take.lengthQN + direction * bpr)
   local _, hi     = am:freeSpan(take)
   local neighbourBoxTop = math.floor(hi / bpr) * bpr
-  if take.startQN + newLength <= neighbourBoxTop then
+  local cap = neighbourBoxTop - take.startQN
+  if direction > 0 then cap = math.min(cap, am:takeSourceLengthQN(take)) end
+  if newLength <= cap then
     am:resizeTake(take, newLength)
     -- A shrink that ate the row the cursor sat on pulls the cursor
     -- back to the take's new last row; otherwise the cursor stays put.
