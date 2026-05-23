@@ -19,14 +19,22 @@ end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
 local util = require('util')
+
+-- Capturing fake: stash the last open state so tests can simulate the
+-- modal commit by calling fakeModalHost.last.callback(...). registerKind
+-- accepts but ignores renderer bodies (no rendering happens here).
 local fakeModalHost = {
-  open         = function() end,
-  openPrompt   = function() end,
-  openConfirm  = function() end,
-  registerKind = function() end,
-  isOpen       = function() return false end,
+  last                = nil,
+  open                = function(self, state) self.last = state end,
+  openPrompt          = function(self, state) self.last = state end,
+  openConfirm         = function(self, state) self.last = state end,
+  registerKind        = function() end,
+  isOpen              = function() return false end,
+  wasOpenAtFrameStart = function() return false end,
+  reset               = function(self) self.last = nil end,
 }
 local function newTrackerPage(cm, cmgr, chrome, gui)
+  fakeModalHost:reset()
   return util.instantiate('trackerPage',
     { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = fakeModalHost })
 end
@@ -66,14 +74,16 @@ return {
     end,
   },
 
-  -- newTakeBelow / duplicateUnpooledBelow: tracker back-ports of the arrange
-  -- dup-below trio. Both mint a sibling at the bound take's natural end and
-  -- rebind tm to the new take. The pooled variant is intentionally absent.
+  -- newTakeBelow / duplicateUnpooledBelow: tracker back-ports of arrange's
+  -- dup-below trio. newTakeBelow opens the createSlot modal (name + beats);
+  -- on commit it mints at the bound take's natural end and rebinds tm.
+  -- duplicateUnpooledBelow clones first, rebinds tm, then opens take-properties
+  -- on the new take so the user can rename / truncate / extend. The pooled
+  -- variant is intentionally absent — instancing belongs to arrange's palette.
   {
-    name = 'newTakeBelow mints an empty sibling at natural end and rebinds tm',
+    name = 'newTakeBelow opens createSlot modal; commit mints at natural end and rebinds tm',
     run = function(harness)
       local h = harness.mk()
-      h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
@@ -82,20 +92,24 @@ return {
       tp:bind('tr1/t1')
       h.cmgr:push('tracker')
       h.cmgr:invoke('newTakeBelow')
+      local s = fakeModalHost.last
+      t.truthy(s,                       'modal opened')
+      t.eq(s.kind,    'createSlot',     'createSlot kind')
+      t.eq(s.beatsBuf, '4',             'default 4 beats')
+      s.callback('Verse', '3')
       local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
       local takes = am:tracksTakes(0)
-      t.eq(#takes, 2, 'sibling minted')
-      t.eq(takes[2].startQN, 2, 'sibling starts at the source take\'s natural end')
-      t.truthy(tp:currentTake() ~= 'tr1/t1', 'tm rebound away from the source take')
+      t.eq(#takes, 2,                   'sibling minted on commit')
+      t.eq(takes[2].startQN, 2,         'sibling starts at the source take\'s natural end')
+      t.eq(takes[2].naturalLenQN, 3,    'sibling honours the user\'s 3 beats')
       t.eq(tp:currentTake(), takes[2].take, 'tm now bound to the new sibling')
     end,
   },
 
   {
-    name = 'duplicateUnpooledBelow mints a fresh-pool clone and rebinds tm',
+    name = 'duplicateUnpooledBelow mints a clone, rebinds tm, then opens take-properties',
     run = function(harness)
       local h = harness.mk()
-      h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
@@ -106,17 +120,19 @@ return {
       h.cmgr:invoke('duplicateUnpooledBelow')
       local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
       local takes = am:tracksTakes(0)
-      t.eq(#takes, 2, 'fresh clone added below')
-      t.eq(takes[2].startQN, 2, 'clone starts at the source take\'s natural end')
+      t.eq(#takes, 2,                       'fresh clone added below')
+      t.eq(takes[2].startQN, 2,             'clone starts at the source take\'s natural end')
       t.eq(tp:currentTake(), takes[2].take, 'tm now bound to the clone')
+      local s = fakeModalHost.last
+      t.truthy(s,                           'take-properties opened on the clone')
+      t.eq(s.kind, 'takeProps',             'takeProps kind')
     end,
   },
 
   {
-    name = 'newTakeBelow + duplicateUnpooledBelow are silent on start-collision',
+    name = 'newTakeBelow + duplicateUnpooledBelow no-op silently on start-collision',
     run = function(harness)
       local h = harness.mk()
-      h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
@@ -126,11 +142,13 @@ return {
       local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
       tp:bind('tr1/t1')
       h.cmgr:push('tracker')
+      fakeModalHost:reset()
       h.cmgr:invoke('newTakeBelow')
       h.cmgr:invoke('duplicateUnpooledBelow')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
-      t.eq(#am:tracksTakes(0), 2, 'destination collided — no take added')
-      t.eq(tp:currentTake(), 'tr1/t1', 'tm stays on the source take')
+      t.eq(#am:tracksTakes(0), 2,           'destination collided — no take added')
+      t.eq(tp:currentTake(), 'tr1/t1',      'tm stays on the source take')
+      t.eq(fakeModalHost.last, nil,         'no modal opened')
     end,
   },
 }

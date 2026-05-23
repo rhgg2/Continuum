@@ -1227,18 +1227,44 @@ end
 -- below, captures the same table the helper installs methods on.
 local tp = {}
 
--- Tracker analogues of arrange's dup-unpooled / new-take below: mint a
--- sibling at the bound take's natural end and rebind tm to it. The
--- pooled variant isn't back-ported — instancing belongs to the arrange
--- palette, not the tracker canvas.
-local function siblingBelow(makeSibling)
-  local reaperTake = tm:currentTake();      if not reaperTake then return end
-  local amTake     = am:findTake(reaperTake); if not amTake then return end
-  local newTake    = makeSibling(amTake)
-  if newTake then tp:bind(newTake) end
+-- Tracker back-ports of arrange's dup-unpooled / new-take below. Both
+-- target the bound take's natural end; arrange does the same off its
+-- focused take. The pooled variant isn't back-ported — instancing
+-- belongs to the arrange palette, not the tracker canvas.
+--
+-- newTakeBelow opens the same createSlot modal arrange's Cmd-Enter
+-- uses: the user supplies name + length-in-beats first, then we mint
+-- there. duplicateUnpooledBelow clones the bound take first (events
+-- copied, fresh pool, naturalLenQN-sized) and then opens take-properties
+-- on the new take so the user can rename / truncate / extend it.
+local NEW_TAKE_DEFAULT_BEATS = 4
+local function boundAmTake()
+  local reaperTake = tm:currentTake();        if not reaperTake then return end
+  return am:findTake(reaperTake)
 end
-local function duplicateUnpooledBelow() siblingBelow(function(t) return am:duplicateUnpooledBelow(t) end) end
-local function newTakeBelow()           siblingBelow(function(t) return am:newTakeBelow(t)           end) end
+local function newTakeBelow()
+  local amTake = boundAmTake(); if not amTake then return end
+  local destQN = amTake.startQN + amTake.naturalLenQN
+  if not am:startIsClear(amTake.trackIdx, destQN) then return end
+  modalHost:open{
+    kind     = 'createSlot',
+    title    = 'New take',
+    nameBuf  = '',
+    beatsBuf = tostring(NEW_TAKE_DEFAULT_BEATS),
+    callback = function(name, beatsBuf)
+      local b = math.max(1e-3, tonumber(beatsBuf) or NEW_TAKE_DEFAULT_BEATS)
+      local _, newTake = am:createAndDropMidi(amTake.trackIdx, destQN, b, name)
+      if newTake then tp:bind(newTake) end
+    end,
+  }
+end
+local function duplicateUnpooledBelow()
+  local amTake = boundAmTake(); if not amTake then return end
+  local newTake = am:duplicateUnpooledBelow(amTake)
+  if not newTake then return end
+  tp:bind(newTake)
+  tp:openTakeProperties{}
+end
 
 local tracker = cmgr:scope('tracker')
 

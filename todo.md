@@ -15,6 +15,7 @@
 - wave previews in ap
 - show take/track name and navigate by track take in tp
 - bug: change take length doesn't extend
+- bug: midiManager crash on take delete
 
   Reframing to "what a competent tracker offers that Continuum's
   tracker doesn't" — and discounting what's REAPER's job (transport,

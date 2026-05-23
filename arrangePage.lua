@@ -242,10 +242,9 @@ local function renderGrid(tracks, nTracks)
       elseif loopCand then
         av:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
       elseif press.create then
-        -- Sweep prefills the row count; bare double-click uses the default.
-        local rows = createCand
-                     and math.floor(createCand.lengthQN / bpr + 0.5) or nil
-        openCreateModal(press.col, press.qn, rows)
+        -- Sweep prefills the length in beats; bare double-click uses the default.
+        local beats = createCand and createCand.lengthQN or nil
+        openCreateModal(press.col, press.qn, beats)
       elseif press.gutter then
         -- Floor to the row box's top edge (not the nearest edge) unless Shift is held.
         av:setEditCursorQN(snapped and floorTo(press.qn, bpr) or press.qn)
@@ -543,40 +542,38 @@ local function openDeleteModal(trackIdx, slot)
   }
 end
 
--- Default length 4 rows — matches the design's default phrase length
--- ("create something musical-sized, not a one-row stub"). User can
--- override in the modal.
-local CREATE_DEFAULT_ROWS = 4
-function openCreateModal(trackIdx, qnPos, rows)
+-- Default length 4 beats (one bar in 4/4) — musical-sized, not a stub.
+local CREATE_DEFAULT_BEATS = 4
+function openCreateModal(trackIdx, qnPos, beats)
   modalHost:open{
     kind     = 'createSlot',
     title    = 'New take',
     nameBuf  = '',
-    rowsBuf  = tostring(rows or CREATE_DEFAULT_ROWS),
-    callback = function(nameBuf, rowsBuf)
-      local rowsN = math.max(1, math.floor(tonumber(rowsBuf) or CREATE_DEFAULT_ROWS))
-      av:createSlot(trackIdx, qnPos, rowsN * av:beatPerRow(), nameBuf)
+    beatsBuf = tostring(beats or CREATE_DEFAULT_BEATS),
+    callback = function(nameBuf, beatsBuf)
+      local b = math.max(1e-3, tonumber(beatsBuf) or CREATE_DEFAULT_BEATS)
+      av:createSlot(trackIdx, qnPos, b, nameBuf)
     end,
   }
 end
 
--- Two-field create modal: name + row count. Built-in prompt/confirm
--- don't fit; the renderer converts rowsBuf at close, so the page-level
--- callback gets the raw strings and applies its own defaulting/floor.
+-- Two-field create modal: name + length-in-beats. Built-in prompt/confirm
+-- don't fit; the renderer hands the raw strings to the page callback,
+-- which applies its own defaulting and clamps.
 modalHost:registerKind('createSlot', function(s, close)
   if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
   ImGui.Text(ctx, 'Name')
   local commitN, nb = ImGui.InputText(ctx, '##createName', s.nameBuf,
                                       ImGui.InputTextFlags_EnterReturnsTrue)
   s.nameBuf = nb
-  ImGui.Text(ctx, 'Length (rows)')
-  local commitR, rb = ImGui.InputText(ctx, '##createRows', s.rowsBuf,
+  ImGui.Text(ctx, 'Length (beats)')
+  local commitB, bb = ImGui.InputText(ctx, '##createBeats', s.beatsBuf,
                                       ImGui.InputTextFlags_EnterReturnsTrue)
-  s.rowsBuf = rb
-  local ok     = commitN or commitR or ImGui.Button(ctx, 'OK')
+  s.beatsBuf = bb
+  local ok     = commitN or commitB or ImGui.Button(ctx, 'OK')
   ImGui.SameLine(ctx)
   local cancel = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
-  if ok then close(true, s.nameBuf, s.rowsBuf)
+  if ok then close(true, s.nameBuf, s.beatsBuf)
   elseif cancel then close(false) end
 end)
 

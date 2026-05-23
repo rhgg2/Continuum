@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1446  sha=484993a  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1472  sha=0ff4daa  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -59,7 +59,8 @@
   @state LANE_ROW_MIN = 3  @ 442
   @state LANE_ROW_MAX = 32  @ 443
   @state tp = {}  @ 1228
-  @state tracker = cmgr:scope('tracker')  @ 1243
+  @state NEW_TAKE_DEFAULT_BEATS = 4  @ 1240
+  @state tracker = cmgr:scope('tracker')  @ 1269
 
 # Private functions
   @fn print(...)  @ 26
@@ -122,18 +123,14 @@
       -- Add-Column type vocabulary. First letter is unique except p (pb/pc):
       -- `p`→pb, a following `c`→pc. Digits ride through (only cc takes an id).
   @fn addColumn()  @ 1213
-  @fn siblingBelow(makeSibling)  @ 1234
-      -- Tracker analogues of arrange's dup-unpooled / new-take below: mint a
-      -- sibling at the bound take's natural end and rebind tm to it. The
-      -- pooled variant isn't back-ported — instancing belongs to the arrange
-      -- palette, not the tracker canvas.
-  @fn duplicateUnpooledBelow()  @ 1240
-  @fn newTakeBelow()  @ 1241
+  @fn boundAmTake()  @ 1241
+  @fn newTakeBelow()  @ 1245
+  @fn duplicateUnpooledBelow()  @ 1261
 
 # Public API (tp:*)
   -- Region overlay keymap
   -- Take properties modal helper
-  @api tp:openTakeProperties(args)  @ 1319
+  @api tp:openTakeProperties(args)  @ 1345
       -- onClose fires exactly once, after the whole modal chain — including
       -- any truncate-confirm follow-up. Two sources of "chain done":
       -- the apply path (callback ran, valid input, either direct apply or
@@ -142,21 +139,21 @@
       -- onClose. The `transfer` flag handshake makes these mutually
       -- exclusive: once a valid callback starts the apply chain it claims
       -- ownership, so modalHost's onClose becomes a no-op.
-  @api tp:currentTake()  @ 1358
+  @api tp:currentTake()  @ 1384
   -- Page interface
-  @api tp:renderToolbarBits(_)  @ 1362
-  @api tp:renderBody(_, w, h, dispatch)  @ 1370
+  @api tp:renderToolbarBits(_)  @ 1388
+  @api tp:renderBody(_, w, h, dispatch)  @ 1396
       @contract  calls computeLayout twice
       @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x
       @contract  second pass repopulates layout for drawTracker
-  @api tp:renderStatusBar(_)  @ 1406
-  @api tp:renderFloating(_)  @ 1410
-  @api tp:bind(t)  @ 1413
+  @api tp:renderStatusBar(_)  @ 1432
+  @api tp:renderFloating(_)  @ 1436
+  @api tp:bind(t)  @ 1439
       @contract  bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
-  @api tp:unbind()  @ 1414
-  @api tp:reloadFromReaper()  @ 1417
+  @api tp:unbind()  @ 1440
+  @api tp:reloadFromReaper()  @ 1443
       @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
-  @api tp:focusState()  @ 1430
+  @api tp:focusState()  @ 1456
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo
@@ -167,9 +164,9 @@
       --   transiently, but bound commands should still fire. Anything that
       --   genuinely needs the keys (a focused InputText, an active slider,
       --   a held button) shows up as IsAnyItemActive.
-  @api tp:handleInput()  @ 1441
-  @api tp:save()  @ 1442
-  @api tp:load()  @ 1443
+  @api tp:handleInput()  @ 1467
+  @api tp:save()  @ 1468
+  @api tp:load()  @ 1469
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

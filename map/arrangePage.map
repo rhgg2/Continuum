@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=789  sha=484993a  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=786  sha=a1cd4e3  mode=chunk
 @deps cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost
 
 # Invariants & contracts
@@ -45,10 +45,10 @@
   @state ORPHAN  @ 89   -- lazy { fill, border, focusFill, focusBorder }
   @state HEADER_PAD = 8  @ 128
   @state HEADER_GAP = 4  @ 129
-  @state CREATE_DEFAULT_ROWS = 4  @ 549
-  @state arrange = cmgr:scope('arrange')  @ 745
+  @state CREATE_DEFAULT_BEATS = 4  @ 546
+  @state arrange = cmgr:scope('arrange')  @ 742
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture. Slots have no existence apart from items on the grid; the palette's rename / delete buttons act on existing slots.
-  @state binds = {  @ 756
+  @state binds = {  @ 753
 
 # Private functions
   -- Style + draw helpers
@@ -63,49 +63,49 @@
       -- Snap a click's QN down to the top edge of the row box it sits in.
   @fn renderGrid(tracks, nTracks)  @ 134
   -- Palette pane
-  @fn focusedSlotEntry(slots, slotIdx)  @ 496
+  @fn focusedSlotEntry(slots, slotIdx)  @ 495
       -- Locate the slot entry in trackSlots() output (a packed array, not
       -- indexed by slotIdx). Returns nil when no slot is focused or the
       -- focused slot index isn't currently populated.
-  @fn renderPaletteHeader(focusedTrack)  @ 508
+  @fn renderPaletteHeader(focusedTrack)  @ 507
       -- Hand-drawn so the header band height (HEADER_PAD + rowH) and the
       -- divider position match the grid's by construction — both panes start
       -- at the same `oy` (they share the renderBody row), so the divider
       -- lines up across the PANE_GAP without measurement.
-  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 526
-  @fn openDeleteModal(trackIdx, slot)  @ 535
-  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 583
-  @fn renderPaletteList(slots)  @ 606
+  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 525
+  @fn openDeleteModal(trackIdx, slot)  @ 534
+  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 580
+  @fn renderPaletteList(slots)  @ 603
       -- Three columns so the key/kind/name align vertically across rows
       -- without depending on a monospace font for the whole line. The key
       -- cell uses the monospace font (it's a hotkey to press); kind and
       -- name use the default UI font. Selectable lives in col 0 with
       -- SpanAllColumns so the entire row is the click target; we paint the
       -- key text on top with SameLine.
-  @fn renderPalette(tracks)  @ 639
-  @fn placeKey(slotIdx)  @ 779
+  @fn renderPalette(tracks)  @ 636
+  @fn placeKey(slotIdx)  @ 776
       -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
 # Public API (ap:*)
-  @api ap:bind()  @ 659
+  @api ap:bind()  @ 656
       @contract  bind takes no take — arrange is project-wide. coord may call with no args (or a take, ignored).
-  @api ap:unbind()  @ 660
-  @api ap:revealTake(reaperTake)  @ 663
+  @api ap:unbind()  @ 657
+  @api ap:revealTake(reaperTake)  @ 660
       @contract  positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
-  @api ap:seedCursorFromReaper()  @ 666
+  @api ap:seedCursorFromReaper()  @ 663
       @contract  seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
-  @api ap:renderToolbarBits(_)  @ 668
-  @api ap:renderBody(_, w, h, dispatch)  @ 673
+  @api ap:renderToolbarBits(_)  @ 665
+  @api ap:renderBody(_, w, h, dispatch)  @ 670
       @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects per slot, cursor on top.
       @contract  pushes parchment body palette (coord popped chrome before body draw); palette tables below need it.
       @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
-  @api ap:renderStatusBar(_)  @ 720
-  @api ap:focusState()  @ 728
+  @api ap:renderStatusBar(_)  @ 717
+  @api ap:focusState()  @ 725
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
-  @api ap:handleInput()  @ 739
-  @api ap:save()  @ 740
-  @api ap:load()  @ 741
+  @api ap:handleInput()  @ 736
+  @api ap:save()  @ 737
+  @api ap:load()  @ 738
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
