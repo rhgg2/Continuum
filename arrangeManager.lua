@@ -8,6 +8,7 @@
 --invariant: createAndDropMidi is the only path that mints a slot; everything else either inherits one from existing items (auto-materialisation) or drops another instance into one that already exists
 --invariant: takeId derivation is the source-identity chokepoint — MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it); audio: source filename. Takes whose id can't be derived are skipped during ensureSlots — they neither materialise a slot nor pin one.
 --invariant: reswing (reswingAll) is the legacy sequenceManager behaviour folded in and needs the optional tm dependency; pure-discovery callers may omit tm
+--invariant: per-take natural length (cm key 'arrangeNaturalLenQN'). Default nil → util.OPEN. The item's D_LENGTH on each track is derived: min(effective natural, gap to next take, source length). relayoutTrack enforces this after every mutation. A stored natural >= source length is demoted to util.OPEN (= nil) so future source growth widens the cap automatically.
 
 local util = require 'util'
 
@@ -72,6 +73,60 @@ local function forEachActiveTake(track, fn)
     local take = item and reaper.GetActiveTake(item)
     if take then fn(take, item, ii) end
   end
+end
+
+----- Natural length
+
+local function sourceLenQN(take, item)
+  local src = reaper.GetMediaItemTake_Source(take)
+  if not src then return math.huge end
+  local len, isQN = reaper.GetMediaSourceLength(src)
+  if isQN then return len end
+  local posSec = reaper.GetMediaItemInfo_Value(item, 'D_POSITION')
+  return reaper.TimeMap2_timeToQN(0, posSec + len) - reaper.TimeMap2_timeToQN(0, posSec)
+end
+
+local function naturalLenOf(take)
+  local stored = cm:readTakeKey(take, 'arrangeNaturalLenQN')
+  return stored or util.OPEN
+end
+
+local function setNaturalLenOf(take, v)
+  if v == util.OPEN then cm:writeTakeKey(take, 'arrangeNaturalLenQN', util.REMOVE)
+  else                   cm:writeTakeKey(take, 'arrangeNaturalLenQN', v) end
+end
+
+--contract: walks track in startQN order; demotes natural ≥ source to OPEN; sets each item's D_LENGTH = min(effective, gap-to-next, source). Cheap to over-call: idempotent.
+local function relayoutTrack(track)
+  if not track then return end
+  local rows = {}
+  forEachActiveTake(track, function(take, item)
+    local startQN = itemQNRange(item)
+    rows[#rows+1] = { take = take, item = item, startQN = startQN }
+  end)
+  table.sort(rows, function(a, b) return a.startQN < b.startQN end)
+
+  for i, r in ipairs(rows) do
+    local src     = sourceLenQN(r.take, r.item)
+    local natural = naturalLenOf(r.take)
+    if natural ~= util.OPEN and natural >= src then
+      setNaturalLenOf(r.take, util.OPEN)
+      natural = util.OPEN
+    end
+    local effective = natural == util.OPEN and src or math.min(natural, src)
+    local nextStart = rows[i+1] and rows[i+1].startQN or math.huge
+    local rendered  = math.min(effective, nextStart - r.startQN)
+    if rendered < 0 then rendered = 0 end
+    setItemQNRange(r.item, r.startQN, r.startQN + rendered)
+  end
+end
+
+-- The effective natural length (post-OPEN-resolution) exposed via tracksTakes.
+local function effectiveNaturalLenQN(take, item)
+  local natural = naturalLenOf(take)
+  local src     = sourceLenQN(take, item)
+  if natural == util.OPEN then return src end
+  return math.min(natural, src)
 end
 
 --contract: idempotent within a frame; returns (dict, slotForId, firstName) so callers don't re-walk
@@ -143,14 +198,15 @@ function am:tracksTakes(trackIdx)
     local startQN, lengthQN = itemQNRange(item)
     local id = takeIdOf(take)
     out[#out+1] = {
-      item     = item,
-      take     = take,
-      trackIdx = trackIdx,
-      startQN  = startQN,
-      lengthQN = lengthQN,
-      kind     = takeKind(take),
-      slotIdx  = id and slotForId[id] or nil,
-      name     = reaper.GetTakeName(take) or '',
+      item           = item,
+      take           = take,
+      trackIdx       = trackIdx,
+      startQN        = startQN,
+      lengthQN       = lengthQN,
+      naturalLenQN   = effectiveNaturalLenQN(take, item),
+      kind           = takeKind(take),
+      slotIdx        = id and slotForId[id] or nil,
+      name           = reaper.GetTakeName(take) or '',
     }
   end)
   return out
@@ -326,7 +382,7 @@ local function poolMidiItem(item, guid)
   end
 end
 
---contract: MIDI: pooled clone via POOLEDEVTS swap; audio: sibling on file id; nil if REAPER refuses
+--contract: MIDI: pooled clone via POOLEDEVTS swap; audio: sibling on file id; nil if REAPER refuses. Natural length defaults to util.OPEN (caller must not write a numeric natural here — placement is an "open the tap" gesture).
 local function placeSource(track, kind, id, qnPos, lengthQN, name)
   local take
   if kind == 'midi' then
@@ -355,7 +411,7 @@ local function placeSource(track, kind, id, qnPos, lengthQN, name)
   return take
 end
 
---contract: (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track or no free slot
+--contract: (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track or no free slot. Natural length defaults to util.OPEN.
 function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   local track   = reaper.GetTrack(0, trackIdx)
   local dict    = track and readSlots(track)
@@ -372,6 +428,7 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   if name and name ~= '' then
     reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
   end
+  relayoutTrack(track)
   return slotIdx, take
 end
 
@@ -394,8 +451,10 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   local entry = readSlots(track)[slotIdx]
   if not entry or not entry.id then return end
   local siblingLen, siblingName = siblingInstance(track, entry.id)
-  return placeSource(track, entry.kind, entry.id, qnPos,
-                     lengthQN or siblingLen or 1, siblingName)
+  local take = placeSource(track, entry.kind, entry.id, qnPos,
+                           lengthQN or siblingLen or 1, siblingName)
+  if take then relayoutTrack(track) end
+  return take
 end
 
 --contract: clones take at qnPos on its own track (name included, original untouched); nil if track/id missing
@@ -403,52 +462,41 @@ function am:duplicateTake(take, qnPos)
   local track = reaper.GetTrack(0, take.trackIdx)
   local id    = takeIdOf(take.take)
   if not track or not id then return end
-  return placeSource(track, take.kind, id, qnPos, take.lengthQN, take.name)
+  local copy = placeSource(track, take.kind, id, qnPos, take.lengthQN, take.name)
+  if copy then relayoutTrack(track) end
+  return copy
 end
 
 ----- Per-take edits
 
---contract: (loQN, hiQN) of take's free QN window: nearest left end (>=0), nearest right start (huge if none)
-function am:freeSpan(take)
-  local startQN, lengthQN = itemQNRange(take.item)
-  local endQN = startQN + lengthQN
-  local lo, hi = 0, math.huge
-  for _, other in ipairs(am:tracksTakes(take.trackIdx)) do
-    if other.item ~= take.item then
-      local otherEnd = other.startQN + other.lengthQN
-      if otherEnd <= startQN then
-        lo = math.max(lo, otherEnd)
-      elseif other.startQN >= endQN then
-        hi = math.min(hi, other.startQN)
-      end
-    end
-  end
-  return lo, hi
-end
-
---contract: true iff [startQN, startQN+lengthQN) on trackIdx overlaps no take whose item ~= exceptItem
-function am:rangeIsClear(trackIdx, startQN, lengthQN, exceptItem)
-  local endQN = startQN + lengthQN
+--contract: true iff no other take on trackIdx starts exactly at startQN (item ~= exceptItem). Replaces the old range-overlap gate: under the natural-length model items may share span, but never a start position.
+function am:startIsClear(trackIdx, startQN, exceptItem)
   for _, other in ipairs(am:tracksTakes(trackIdx)) do
-    if other.item ~= exceptItem
-       and startQN < other.startQN + other.lengthQN
-       and other.startQN < endQN then
+    if other.item ~= exceptItem and other.startQN == startQN then
       return false
     end
   end
   return true
 end
 
---contract: shifts item start by deltaQN, length unchanged; no clamping (caller owns snap and overlap policy)
+--contract: shifts item start by deltaQN; relayouts the track. Natural length is preserved; D_LENGTH is re-derived. Returns true iff the new start clears existing starts (no-op on collision).
 function am:moveTake(take, deltaQN)
-  local startQN, lengthQN = itemQNRange(take.item)
-  setItemQNRange(take.item, startQN + deltaQN, startQN + lengthQN + deltaQN)
+  local startQN  = itemQNRange(take.item)
+  local newStart = startQN + deltaQN
+  if newStart < 0 then return false end
+  if not am:startIsClear(take.trackIdx, newStart, take.item) then return false end
+  local _, lengthQN = itemQNRange(take.item)
+  setItemQNRange(take.item, newStart, newStart + lengthQN)
+  local track = reaper.GetTrack(0, take.trackIdx)
+  relayoutTrack(track)
+  return true
 end
 
---contract: sets item length to newLengthQN, start fixed; no clamping (caller owns snap and floors)
-function am:resizeTake(take, newLengthQN)
-  local startQN = itemQNRange(take.item)
-  setItemQNRange(take.item, startQN, startQN + newLengthQN)
+--contract: writes the take's natural length; relayout caps it (source / next-take gap). A value ≥ source is demoted to util.OPEN during relayout.
+function am:resizeTake(take, newNaturalQN)
+  setNaturalLenOf(take.take, newNaturalQN)
+  local track = reaper.GetTrack(0, take.trackIdx)
+  relayoutTrack(track)
 end
 
 --contract: source length in QN at the take's position; 0 if source missing.
@@ -463,7 +511,9 @@ end
 
 function am:deleteTake(take)
   local track = reaper.GetTrack(0, take.trackIdx)
-  if track then reaper.DeleteTrackMediaItem(track, take.item) end
+  if not track then return end
+  reaper.DeleteTrackMediaItem(track, take.item)
+  relayoutTrack(track)
 end
 
 ----- Reswing (folded from sequenceManager)

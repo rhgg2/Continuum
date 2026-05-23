@@ -26,6 +26,7 @@ local function seedTracks(h, specs)
         isMidi   = item.kind == 'midi',
         pos      = item.pos or 0,
         len      = item.len or 1,
+        srcLen   = item.srcLen,
         poolGuid = item.poolGuid,
         srcFile  = item.srcFile,
         takeName = item.takeName or '',
@@ -293,7 +294,7 @@ return {
   },
 
   {
-    name = 'rangeIsClear detects QN overlap, honouring exceptItem',
+    name = 'startIsClear only collides on an exact start match (item ~= exceptItem)',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
@@ -302,11 +303,12 @@ return {
           { kind = 'midi', pos = 8, len = 2, poolGuid = '{b}' },
         } },
       })
-      t.eq(am:rangeIsClear(0, 3, 2, nil),  true,  'gap between the takes is clear')
-      t.eq(am:rangeIsClear(0, 1, 2, nil),  false, 'overlapping the first take is not clear')
-      t.eq(am:rangeIsClear(0, 2, 2, nil),  true,  'abutting the first take is legal')
+      t.eq(am:startIsClear(0, 3, nil),  true,  'a free start position is clear')
+      t.eq(am:startIsClear(0, 1, nil),  true,  'mid-take is fine — only start-collision blocks')
+      t.eq(am:startIsClear(0, 0, nil),  false, 'another take starts here — blocked')
+      t.eq(am:startIsClear(0, 8, nil),  false, 'another take starts here — blocked')
       local first = am:tracksTakes(0)[1]
-      t.eq(am:rangeIsClear(0, 0, 2, first.item), true, 'exceptItem excludes the take itself')
+      t.eq(am:startIsClear(0, 0, first.item), true, 'exceptItem excludes the take itself')
     end,
   },
 
@@ -407,59 +409,87 @@ return {
     end,
   },
 
+  --------------------------------------------------------------------
+  -- Natural length + relayout
+  --------------------------------------------------------------------
   {
-    name = 'freeSpan reports an open window when the take has no neighbours',
+    name = 'tracksTakes reports naturalLenQN; default is util.OPEN → source length',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
-        { items = { { kind = 'midi', pos = 4, len = 2, poolGuid = '{p1}' } } },
+        { items = { { kind = 'midi', pos = 0, len = 2, srcLen = 6, poolGuid = '{p1}' } } },
       })
-      local lo, hi = am:freeSpan(am:tracksTakes(0)[1])
-      t.eq(lo, 0,         'floor is 0 with nothing to the left')
-      t.eq(hi, math.huge, 'ceiling is open with nothing to the right')
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.naturalLenQN, 6, 'default natural = source length')
+      t.eq(tk.lengthQN,     2, 'rendered stays at the seeded item length until relayout reads source')
     end,
   },
 
   {
-    name = 'freeSpan bounds the window by the nearest neighbour on each side',
+    name = 'a later take truncates an earlier one; deleting the later regrows it',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
-        { items = { { kind = 'midi', pos = 0,   len = 1.5, poolGuid = '{p1}' },
-                    { kind = 'midi', pos = 4,   len = 2,   poolGuid = '{p2}' },
-                    { kind = 'midi', pos = 8.5, len = 1,   poolGuid = '{p3}' } } },
+        { items = { { kind = 'midi', pos = 0, len = 8, srcLen = 8, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}' } } },
       })
-      local lo, hi = am:freeSpan(am:tracksTakes(0)[2])
-      t.eq(lo, 1.5, 'floor is the left take end, off-grid and all')
-      t.eq(hi, 8.5, 'ceiling is the right take start')
+      -- Trigger an explicit relayout via a no-op move on the second take.
+      am:moveTake(am:tracksTakes(0)[2], 0)
+      local takes = am:tracksTakes(0)
+      t.eq(takes[1].lengthQN, 4, 'first take truncated to the second\'s start')
+      t.eq(takes[1].naturalLenQN, 8, 'natural is still 8 — only rendered shrinks')
+      am:deleteTake(takes[2])
+      t.eq(am:tracksTakes(0)[1].lengthQN, 8, 'regrows to natural after the blocker is gone')
     end,
   },
 
   {
-    name = 'moveTake shifts start, preserves length — faithful, no clamp',
+    name = 'resizeTake stores a numeric natural; ≥ source demotes back to util.OPEN',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
-        { items = { { kind = 'midi', pos = 4, len = 2, poolGuid = '{p1}' } } },
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
       })
-      am:moveTake(am:tracksTakes(0)[1], 3)
-      local moved = am:tracksTakes(0)[1]
-      t.eq(moved.startQN,  7)
-      t.eq(moved.lengthQN, 2, 'length unchanged by a move')
+      am:resizeTake(am:tracksTakes(0)[1], 2)
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.lengthQN,     2, 'rendered shrinks to the new natural')
+      t.eq(tk.naturalLenQN, 2, 'natural recorded')
+      am:resizeTake(am:tracksTakes(0)[1], 6)
+      tk = am:tracksTakes(0)[1]
+      t.eq(tk.lengthQN,     4, 'rendered capped at source')
+      t.eq(tk.naturalLenQN, 4, 'natural demoted to OPEN — effective = source')
+      t.eq(h.cm:readTakeKey(tk.take, 'arrangeNaturalLenQN'), nil,
+           'OPEN persists as a missing key, not a stored math.huge')
     end,
   },
 
   {
-    name = 'resizeTake sets length absolutely, start edge fixed — faithful',
+    name = 'moveTake shifts start; refused on start-collision; returns ok flag',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
-        { items = { { kind = 'midi', pos = 4, len = 2, poolGuid = '{p1}' } } },
+        { items = { { kind = 'midi', pos = 4, len = 2, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 8, len = 2, poolGuid = '{p2}' } } },
+      })
+      t.eq(am:moveTake(am:tracksTakes(0)[1], 3), true,  'free start — move succeeds')
+      t.eq(am:tracksTakes(0)[1].startQN, 7)
+      t.eq(am:moveTake(am:tracksTakes(0)[1], 1), false, 'would collide with {p2} at 8')
+      t.eq(am:tracksTakes(0)[1].startQN, 7, 'stays put on collision')
+    end,
+  },
+
+  {
+    name = 'resizeTake writes natural; rendered is min(natural, source, gap)',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 4, len = 2, srcLen = 8, poolGuid = '{p1}' } } },
       })
       am:resizeTake(am:tracksTakes(0)[1], 5)
       local resized = am:tracksTakes(0)[1]
       t.eq(resized.startQN,  4, 'start edge fixed')
-      t.eq(resized.lengthQN, 5)
+      t.eq(resized.lengthQN, 5, 'rendered tracks natural under source cap')
+      t.eq(resized.naturalLenQN, 5, 'natural recorded')
     end,
   },
 

@@ -82,40 +82,29 @@ end
 
 ----- Take edits — move / resize / delete / dive the focused take
 
---invariant: nudge and resize step by exactly one row or not at all — takes sit on row-box edges, matching the place-command snap; the cursor is independent and does not follow. Neither edit lets a take enter a row box another take inhabits: both clamp to freeSpan's non-overlap window quantised to row-box edges, so a take may abut a neighbour's row box but never enter it — correct even for a take taller than one row.
+--invariant: nudge steps by one row; blocked only when the destination start coincides with another take's start. Later takes truncate earlier ones in the rendered frame (see arrangeManager's natural-length model), so passing through a neighbour is allowed — am:moveTake handles the relayout.
 local function nudgeFocused(direction)
   adoptCursor()
   local take = focusedTake()
   if not take then return end
-  local bpr      = av:beatPerRow()
-  local step     = direction * bpr
-  local newStart = take.startQN + step
-  local lo, hi   = am:freeSpan(take)
-  local loBox = math.ceil(lo / bpr) * bpr
-  local hiBox = math.floor(hi / bpr) * bpr
-  if newStart >= loBox and newStart + take.lengthQN <= hiBox then
-    am:moveTake(take, step)
+  if am:moveTake(take, direction * av:beatPerRow()) then
     moveCursorBy(direction, 0)
   end
 end
 
---invariant: grow caps at takeSourceLengthQN; shrink bypasses. Past-source grow silently no-ops — authoring pattern length is tm's job (setLength/rescaleLength).
+--invariant: resize writes a numeric natural length (±1 bpr from the current rendered length, floored at 1 bpr). The relayout pass caps it against source and the next take, and demotes any natural ≥ source back to util.OPEN — so grow past the source cap is a self-healing no-op, and grow past a neighbour stores intent that takes effect when the neighbour moves away.
 local function resizeFocused(direction)
   adoptCursor()
   local take = focusedTake()
   if not take then return end
   local bpr       = av:beatPerRow()
-  local newLength = math.max(bpr, take.lengthQN + direction * bpr)
-  local _, hi     = am:freeSpan(take)
-  local neighbourBoxTop = math.floor(hi / bpr) * bpr
-  local cap = neighbourBoxTop - take.startQN
-  if direction > 0 then cap = math.min(cap, am:takeSourceLengthQN(take)) end
-  if newLength <= cap then
-    am:resizeTake(take, newLength)
-    -- A shrink that ate the row the cursor sat on pulls the cursor
-    -- back to the take's new last row; otherwise the cursor stays put.
-    local endRow = (take.startQN + newLength) / bpr
-    if direction < 0 and cursorRow >= endRow then moveCursorBy(-1, 0) end
+  local newNatural = math.max(bpr, take.lengthQN + direction * bpr)
+  am:resizeTake(take, newNatural)
+  -- A shrink that ate the row the cursor sat on pulls the cursor
+  -- back to the take's new last row; otherwise the cursor stays put.
+  if direction < 0 then
+    local endRow = (take.startQN + newNatural) / bpr
+    if cursorRow >= endRow then moveCursorBy(-1, 0) end
   end
 end
 
@@ -211,7 +200,8 @@ function av:hitTake(trackIdx, qn, qnPerPx)
 end
 
 --contract: returns { startQN, lengthQN, fits }; moved edge snaps to a row box unless snapped=false.
---contract: fits excludes the dragged take, or nothing on press.duplicate (original stays put).
+--contract: fits is false iff another take on this track starts at startQN — under the natural-length model, the only forbidden configuration is two takes sharing a start. exceptItem excludes the dragged take itself (or nothing on press.duplicate, where the original stays put).
+--contract: move/duplicate ghost length = take.naturalLenQN (the take's full extent, ignoring downstream truncation) so the in-flight preview shows what the take would render to once dropped. Resize ghost length grows/shrinks from the current rendered length.
 function av:dragCandidate(press, mouseQN, snapped)
   local take = press.take
   local bpr  = self:beatPerRow()
@@ -221,14 +211,15 @@ function av:dragCandidate(press, mouseQN, snapped)
     if snapped then lengthQN = roundTo(startQN + lengthQN, bpr) - startQN end
     lengthQN = math.max(bpr, lengthQN)
   else
-    startQN = take.startQN + (mouseQN - press.qn)
+    startQN  = take.startQN + (mouseQN - press.qn)
     if snapped then startQN = roundTo(startQN, bpr) end
-    startQN = math.max(0, startQN)
+    startQN  = math.max(0, startQN)
+    lengthQN = take.naturalLenQN
   end
   local exceptItem = press.duplicate and nil or take.item
   return {
     startQN = startQN, lengthQN = lengthQN,
-    fits = am:rangeIsClear(take.trackIdx, startQN, lengthQN, exceptItem),
+    fits = am:startIsClear(take.trackIdx, startQN, exceptItem),
   }
 end
 
@@ -250,7 +241,7 @@ function av:createCandidate(press, mouseQN, snapped)
   return { startQN = press.qn, lengthQN = math.max(bpr, endQN - press.qn) }
 end
 
---contract: move/resize preserves the focus handle; duplicate shifts focus to the new copy.
+--contract: move/resize preserves the focus handle; duplicate shifts focus to the new copy. Resize writes natural length — the relayout pass caps the rendered length.
 function av:commitDrag(press, cand)
   local take = press.take
   if press.mode == 'resizeEnd' then

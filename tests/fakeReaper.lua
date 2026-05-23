@@ -187,16 +187,23 @@ function M.new()
     -- Fake treats 1s == 1QN (TimeMap2_timeToQN is identity); qnIn flag is
     -- informational. Real REAPER returns the item only — the take is
     -- reached via GetActiveTake. The fresh POOLEDEVTS guid is the seam
-    -- dropInstance harvests on first drop.
+    -- dropInstance harvests on first drop. Source length tracks the item
+    -- length (REAPER mints a pooled source sized to the request), so
+    -- relayout's source cap is meaningful for freshly-created items.
     local item = attachItem(track)
+    local len  = math.max(0, (qnEnd or qnStart) - qnStart)
     state.itemPos[item] = qnStart
-    state.itemLen[item] = math.max(0, (qnEnd or qnStart) - qnStart)
+    state.itemLen[item] = len
     local take = { __take = 'mt' .. tostring(item.__item), item = item }
     state.activeTake[item]  = take
     state.itemForTake[take] = item
     state.takeIsMidi[take]  = true
     state.takeName[take]    = ''
     state.poolByItem[item]  = r.genGuid('')
+    local src = { __midiSrc = take }
+    state.takeSrc[take] = src
+    state.srcLen[src]   = len
+    state.srcIsQN[src]  = true
     return item
   end
   function r.AddMediaItemToTrack(track)
@@ -256,7 +263,10 @@ function M.new()
       state.poolByItem[item] = opts.poolGuid or ('{pool-' .. tostring(opts.take) .. '}')
       local src = { __midiSrc = opts.take }
       state.takeSrc[opts.take] = src
-      state.srcLen[src]  = opts.srcLen or math.huge
+      -- Mirror REAPER: CreateNewMIDIItemInProj sets the source length to
+      -- the item length on creation. Tests that want a longer source can
+      -- pass srcLen explicitly; the default = item length matches reality.
+      state.srcLen[src]  = opts.srcLen or (opts.len or 1)
       state.srcIsQN[src] = true
     elseif opts.srcFile then
       state.takeSrc[opts.take] = opts.srcFile

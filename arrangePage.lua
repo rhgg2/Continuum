@@ -66,7 +66,7 @@ local modalOpenAtFrameStart   = false
 local openCreateModal
 
 --shape: press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — mouse-down snapshot, nil when no button is down over the grid. A track-column press carries `take`/`row`/`col`/`mode`; a QN-gutter press carries `qn` and `gutter = true` only; an empty-space double-click carries `qn`/`col` and `create = true`. `row`/`col` is the pressed cell, applied to the cursor on a no-drag grid release; `moved` flips once ImGui's drag threshold is crossed.
---invariant: mouse drag relocates a take freely, not gap-bounded like the keyboard nudge — the candidate is validated by am:rangeIsClear against every other take, so a drag may carry a take past a neighbour into any clear space. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Pressing a take focuses it. The cursor moves only on release, and only when no take was dragged — it then lands on the pressed cell; a drag (even one blocked by rangeIsClear) leaves the cursor put. An empty-space press with no drag also clears focus.
+--invariant: mouse drag relocates a take freely — the candidate is validated by am:startIsClear, so a drag may carry a take past a neighbour into any space whose start position is not already claimed. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Pressing a take focuses it. The cursor moves only on release, and only when no take was dragged — it then lands on the pressed cell; a drag (even one blocked by a start collision) leaves the cursor put. An empty-space press with no drag also clears focus.
 --invariant: a press in the QN gutter drives the REAPER transport, not the grid — a no-drag release sets the edit cursor, a drag sets the loop range; both endpoints snap to row boxes unless Shift is held. The arrange grid cursor and take focus are untouched. A right-click in the gutter clears the loop range.
 --invariant: a double-click on empty grid space starts a create press — the drag previews a ghost take, release opens the create modal seeded with the swept column / start row / row count. A bare double-click opens it with the default row count.
 local press = nil
@@ -325,6 +325,7 @@ local function renderGrid(tracks, nTracks)
   local function snap(v) return math.floor(v + 0.5) end
   local focusHandle = av:focus()
   local nameDraws = {}
+  local truncDraws = {}   -- ellipsis decoration for items truncated below natural
 
   -- One take rectangle at an arbitrary QN range: fill, 1px border,
   -- name queued for the final pass. Focus reads as the slot's focus
@@ -349,6 +350,12 @@ local function renderGrid(tracks, nTracks)
       nameDraws[#nameDraws + 1] = {
         name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
       }
+    end
+    -- Truncation indicator: a downstream take is cutting this one short of
+    -- its natural extent. Show only when the box is tall enough to spare a
+    -- bottom row — a single-row box would lose its name to the ellipsis.
+    if lengthQN + 1e-6 < tk.naturalLenQN and endRow - startRow > 1 then
+      truncDraws[#truncDraws + 1] = { rx0 = rx0, rx1 = rx1, ry1 = ry1 }
     end
   end
 
@@ -436,6 +443,19 @@ local function renderGrid(tracks, nTracks)
     local tx = nd.rx0 + math.floor((nd.rx1 - nd.rx0 - tw) / 2)
     ImGui.DrawList_PushClipRect(dl, nd.rx0 + 2, nd.ry0, nd.rx1 - 2, nd.ry1, true)
     ImGui.DrawList_AddText(dl, tx, nd.ry0 + 1, textCol, nd.name)
+    ImGui.DrawList_PopClipRect(dl)
+  end
+
+  -- Truncation ellipsis — bottom-row glyph for items the relayout pass
+  -- shortened below their natural length. Same final-pass treatment as
+  -- names so it sits over the cursor fill.
+  for _, td in ipairs(truncDraws) do
+    local ell = '…'
+    local tw  = ImGui.CalcTextSize(ctx, ell)
+    local tx  = td.rx0 + math.floor((td.rx1 - td.rx0 - tw) / 2)
+    local ty  = td.ry1 - rowH + 1
+    ImGui.DrawList_PushClipRect(dl, td.rx0 + 2, ty, td.rx1 - 2, td.ry1, true)
+    ImGui.DrawList_AddText(dl, tx, ty, textCol, ell)
     ImGui.DrawList_PopClipRect(dl)
   end
 

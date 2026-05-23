@@ -88,6 +88,11 @@ local declarations = {
   -- Only the density preference earns a persisted slot. Typical values
   -- 4, 8, 16 beats per row (one bar to four bars per row in 4/4).
   { 'arrangeBeatPerRow', 4 },
+  -- Arrange-take natural length in QN: the ceiling the item regrows
+  -- toward when neighbours move out of the way. Persisted per-take via
+  -- writeTakeKey (P_EXT). Default (nil at storage) reads as util.OPEN —
+  -- the source's length is the effective cap. See docs/arrangeManager.md.
+  { 'arrangeNaturalLenQN', nil },
 
   -- Atoms — parchment palette
   { 'palette.bg',        hex('#dad6c9') },  -- cream paper
@@ -478,6 +483,20 @@ function cm:readTakeKey(otherTake, key)
   if not ok or not val or val == '' then return nil end
   local parsed = parse(val)
   return copy(parsed[key])
+end
+
+--contract: bypasses cache and active context; updates a single key on otherTake's P_EXT (read-modify-write). util.REMOVE clears. No signal fired — read/write helpers are silent seams for foreign-take state.
+function cm:writeTakeKey(otherTake, key, value)
+  checkKey(key)
+  if not otherTake then return end
+  local ok, val = reaper.GetSetMediaItemTakeInfo_String(
+    otherTake, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
+  local parsed = (ok and val and val ~= '') and parse(val) or {}
+  if value == util.REMOVE then parsed[key] = nil
+  else                         parsed[key] = copy(value) end
+  reaper.GetSetMediaItemTakeInfo_String(
+    otherTake, 'P_EXT:' .. CONFIG_PREFIX .. 'config', util.serialise(parsed), true)
+  if otherTake == take then cache.take = loaders.take() end
 end
 
 --contract: walks tiers most-specific to least, returning the first level whose cache defines the key (matches merge resolution); nil if no tier sets it
