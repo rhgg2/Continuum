@@ -895,6 +895,8 @@ cmgr:scope('tracker'):bindAll{
   halveRPB       = { {ImGui.Key_Minus, ImGui.Mod_Super} },
   setRPB         = { {ImGui.Key_Z,     ImGui.Mod_Super} },
   takeProperties = { {ImGui.Key_Backspace, ImGui.Mod_Ctrl} },
+  newTakeBelow           = { {ImGui.Key_Enter, ImGui.Mod_Ctrl} },
+  duplicateUnpooledBelow = { {ImGui.Key_Enter, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   matchGridToCursor = { {ImGui.Key_G, ImGui.Mod_Super, ImGui.Mod_Shift} },
   groupMark         = { {ImGui.Key_M, ImGui.Mod_Ctrl} },
   groupDuplicate    = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
@@ -1225,6 +1227,19 @@ end
 -- below, captures the same table the helper installs methods on.
 local tp = {}
 
+-- Tracker analogues of arrange's dup-unpooled / new-take below: mint a
+-- sibling at the bound take's natural end and rebind tm to it. The
+-- pooled variant isn't back-ported — instancing belongs to the arrange
+-- palette, not the tracker canvas.
+local function siblingBelow(makeSibling)
+  local reaperTake = tm:currentTake();      if not reaperTake then return end
+  local amTake     = am:findTake(reaperTake); if not amTake then return end
+  local newTake    = makeSibling(amTake)
+  if newTake then tp:bind(newTake) end
+end
+local function duplicateUnpooledBelow() siblingBelow(function(t) return am:duplicateUnpooledBelow(t) end) end
+local function newTakeBelow()           siblingBelow(function(t) return am:newTakeBelow(t)           end) end
+
 local tracker = cmgr:scope('tracker')
 
 tracker:registerAll{
@@ -1234,7 +1249,9 @@ tracker:registerAll{
     end)
   end,
 
-  takeProperties = { function() tp:openTakeProperties{} end, 'Take properties' },
+  takeProperties         = { function() tp:openTakeProperties{} end, 'Take properties' },
+  newTakeBelow           = { newTakeBelow,           'New take below' },
+  duplicateUnpooledBelow = { duplicateUnpooledBelow, 'Duplicate take (unpooled) below' },
 
   addTypedCol = addColumn,
 

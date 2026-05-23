@@ -65,4 +65,72 @@ return {
       t.eq(fs.acceptCmds,  false, "no acceptance without a context")
     end,
   },
+
+  -- newTakeBelow / duplicateUnpooledBelow: tracker back-ports of the arrange
+  -- dup-below trio. Both mint a sibling at the bound take's natural end and
+  -- rebind tm to the new take. The pooled variant is intentionally absent.
+  {
+    name = 'newTakeBelow mints an empty sibling at natural end and rebinds tm',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      tp:bind('tr1/t1')
+      h.cmgr:push('tracker')
+      h.cmgr:invoke('newTakeBelow')
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2, 'sibling minted')
+      t.eq(takes[2].startQN, 2, 'sibling starts at the source take\'s natural end')
+      t.truthy(tp:currentTake() ~= 'tr1/t1', 'tm rebound away from the source take')
+      t.eq(tp:currentTake(), takes[2].take, 'tm now bound to the new sibling')
+    end,
+  },
+
+  {
+    name = 'duplicateUnpooledBelow mints a fresh-pool clone and rebinds tm',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      tp:bind('tr1/t1')
+      h.cmgr:push('tracker')
+      h.cmgr:invoke('duplicateUnpooledBelow')
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2, 'fresh clone added below')
+      t.eq(takes[2].startQN, 2, 'clone starts at the source take\'s natural end')
+      t.eq(tp:currentTake(), takes[2].take, 'tm now bound to the clone')
+    end,
+  },
+
+  {
+    name = 'newTakeBelow + duplicateUnpooledBelow are silent on start-collision',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 2, len = 1, srcLen = 1, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      tp:bind('tr1/t1')
+      h.cmgr:push('tracker')
+      h.cmgr:invoke('newTakeBelow')
+      h.cmgr:invoke('duplicateUnpooledBelow')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(#am:tracksTakes(0), 2, 'destination collided — no take added')
+      t.eq(tp:currentTake(), 'tr1/t1', 'tm stays on the source take')
+    end,
+  },
 }
