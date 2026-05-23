@@ -467,6 +467,43 @@ function am:duplicateTake(take, qnPos)
   return copy
 end
 
+-- Destination for the *-Below trio. Natural end (not rendered) so a
+-- truncated upstream still drops past its downstream neighbour; relayout
+-- handles the symmetric truncation in the other direction.
+local function destBelow(take) return take.startQN + take.naturalLenQN end
+
+local function copyMidiEvents(srcTake, dstTake)
+  local ok, evts = reaper.MIDI_GetAllEvts(srcTake, '')
+  if ok and evts then reaper.MIDI_SetAllEvts(dstTake, evts) end
+end
+
+--contract: pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
+function am:duplicateBelow(take)
+  if take.kind ~= 'midi' then return end
+  local destQN = destBelow(take)
+  if not am:startIsClear(take.trackIdx, destQN) then return end
+  return am:duplicateTake(take, destQN)
+end
+
+--contract: fresh-pool MIDI clone at natural end with copied events; nil iff non-MIDI or start collision.
+function am:duplicateUnpooledBelow(take)
+  if take.kind ~= 'midi' then return end
+  local destQN = destBelow(take)
+  if not am:startIsClear(take.trackIdx, destQN) then return end
+  local _, newTake = am:createAndDropMidi(take.trackIdx, destQN, take.naturalLenQN, take.name)
+  if newTake then copyMidiEvents(take.take, newTake) end
+  return newTake
+end
+
+--contract: empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
+function am:newTakeBelow(take)
+  if take.kind ~= 'midi' then return end
+  local destQN = destBelow(take)
+  if not am:startIsClear(take.trackIdx, destQN) then return end
+  local _, newTake = am:createAndDropMidi(take.trackIdx, destQN, take.naturalLenQN, '')
+  return newTake
+end
+
 ----- Per-take edits
 
 --contract: true iff no other take on trackIdx starts exactly at startQN (item ~= exceptItem). Replaces the old range-overlap gate: under the natural-length model items may share span, but never a start position.

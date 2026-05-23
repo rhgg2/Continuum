@@ -9,6 +9,10 @@
 - move to command based key/mouse interactions
 - undo for groups feature / swing / tuning changes
 - page switcher broken
+- are rows integer height in ap?
+- multiselect / copy / paste in ap
+- advanceBy in ap
+
 
   Reframing to "what a competent tracker offers that Continuum's
   tracker doesn't" — and discounting what's REAPER's job (transport,

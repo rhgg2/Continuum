@@ -395,6 +395,17 @@ function M.new()
     return true, #m.notes, #m.ccs, #m.texts
   end
 
+  -- Opaque event blobs by take. Production only needs a faithful
+  -- round-trip (Get then Set on another take), not real parsing.
+  state.midiBlob = state.midiBlob or {}
+  function r.MIDI_GetAllEvts(take, _)
+    return true, state.midiBlob[take] or ''
+  end
+  function r.MIDI_SetAllEvts(take, evts)
+    state.midiBlob[take] = evts
+    return true
+  end
+
   function r.MIDI_GetNote(take, i)
     local n = midi(take).notes[i + 1]
     if not n then return false end

@@ -668,4 +668,156 @@ return {
       t.eq(am:projectEndQN(), 22, 'the last take end wins, across tracks')
     end,
   },
+
+  --------------------------------------------------------------------
+  -- Below-trio: duplicateBelow / duplicateUnpooledBelow / newTakeBelow
+  --------------------------------------------------------------------
+  {
+    name = 'duplicateBelow places a pooled clone at startQN + naturalLenQN',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'lead' } } },
+      })
+      local src   = am:tracksTakes(0)[1]
+      local clone = am:duplicateBelow(src)
+      t.truthy(clone, 'clone returned')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2)
+      local below
+      for _, tk in ipairs(takes) do if tk.startQN == 4 then below = tk end end
+      t.truthy(below, 'second take lands at the natural end of the first')
+      t.eq(below.slotIdx, src.slotIdx, 'pooled — same slot as the source')
+      t.eq(below.name,    'lead',       'pooled clone keeps the source name')
+    end,
+  },
+
+  {
+    name = 'duplicateBelow lands past a truncating downstream neighbour',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      -- upstream natural=8, downstream at QN 4 → relayout truncates
+      -- upstream's rendered to 4, but natural still 8.
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 8, srcLen = 8, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}' } } },
+      })
+      am:moveTake(am:tracksTakes(0)[2], 0)    -- nudge relayout to truncate
+      local src   = am:tracksTakes(0)[1]
+      t.eq(src.lengthQN, 4, 'rendered is truncated')
+      t.eq(src.naturalLenQN, 8, 'natural still 8')
+      local clone = am:duplicateBelow(src)
+      t.truthy(clone, 'truncation does not block the below-drop')
+      local atEight
+      for _, tk in ipairs(am:tracksTakes(0)) do if tk.startQN == 8 then atEight = tk end end
+      t.truthy(atEight, 'clone lands at the natural end (QN 8), past the downstream neighbour')
+    end,
+  },
+
+  {
+    name = 'duplicateBelow refuses on exact-start collision at the destination',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}' } } },
+      })
+      local src = am:tracksTakes(0)[1]
+      t.eq(am:duplicateBelow(src), nil, 'downstream already starts at QN 4')
+      t.eq(#am:tracksTakes(0), 2, 'no take added')
+    end,
+  },
+
+  {
+    name = 'duplicateBelow refuses on audio takes',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'audio', pos = 0, len = 4, srcFile = '/a.wav' } } },
+      })
+      local src = am:tracksTakes(0)[1]
+      t.eq(am:duplicateBelow(src), nil, 'audio refused silently')
+      t.eq(#am:tracksTakes(0), 1)
+    end,
+  },
+
+  {
+    name = 'duplicateUnpooledBelow mints a fresh slot and copies the MIDI blob',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'lead' } } },
+      })
+      local src = am:tracksTakes(0)[1]
+      h.reaper.MIDI_SetAllEvts(src.take, 'EVTS-BLOB')
+      local copy = am:duplicateUnpooledBelow(src)
+      t.truthy(copy, 'copy returned')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2)
+      local below
+      for _, tk in ipairs(takes) do if tk.startQN == 4 then below = tk end end
+      t.truthy(below, 'copy lands at natural end')
+      t.eq(below.slotIdx ~= src.slotIdx, true, 'fresh slot — not pooled with the source')
+      t.eq(below.name, 'lead', 'inherits the source name')
+      local _, blob = h.reaper.MIDI_GetAllEvts(copy, '')
+      t.eq(blob, 'EVTS-BLOB', 'MIDI events copied to the new take')
+    end,
+  },
+
+  {
+    name = 'duplicateUnpooledBelow refuses on collision and on audio',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi',  pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi',  pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}' },
+                    { kind = 'audio', pos = 16, len = 4, srcFile = '/a.wav' } } },
+      })
+      local takes = am:tracksTakes(0)
+      t.eq(am:duplicateUnpooledBelow(takes[1]), nil, 'destination QN 4 collides')
+      local audio
+      for _, tk in ipairs(takes) do if tk.kind == 'audio' then audio = tk end end
+      t.eq(am:duplicateUnpooledBelow(audio), nil, 'audio refused silently')
+    end,
+  },
+
+  {
+    name = 'newTakeBelow creates an empty MIDI take at natural end',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'lead' } } },
+      })
+      local src = am:tracksTakes(0)[1]
+      h.reaper.MIDI_SetAllEvts(src.take, 'EVTS-BLOB')
+      local fresh = am:newTakeBelow(src)
+      t.truthy(fresh, 'fresh take returned')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2)
+      local below
+      for _, tk in ipairs(takes) do if tk.startQN == 4 then below = tk end end
+      t.truthy(below, 'fresh take lands at the natural end')
+      t.eq(below.slotIdx ~= src.slotIdx, true, 'separate slot')
+      t.eq(below.name, '', 'empty name — caller will rename via take-props')
+      local _, blob = h.reaper.MIDI_GetAllEvts(fresh, '')
+      t.eq(blob, '', 'no events copied across')
+    end,
+  },
+
+  {
+    name = 'newTakeBelow refuses on collision and on audio',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi',  pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi',  pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}' },
+                    { kind = 'audio', pos = 16, len = 4, srcFile = '/a.wav' } } },
+      })
+      local takes = am:tracksTakes(0)
+      t.eq(am:newTakeBelow(takes[1]), nil, 'destination QN 4 collides')
+      local audio
+      for _, tk in ipairs(takes) do if tk.kind == 'audio' then audio = tk end end
+      t.eq(am:newTakeBelow(audio), nil, 'audio refused silently')
+    end,
+  },
 }

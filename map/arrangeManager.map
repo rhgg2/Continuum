@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=552  sha=751fadf  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=589  sha=00c83bb  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts
@@ -49,9 +49,14 @@
       @contract  MIDI: pooled clone via POOLEDEVTS swap; audio: sibling on file id; nil if REAPER refuses. Natural length defaults to util.OPEN (caller must not write a numeric natural here — placement is an "open the tap" gesture).
   @fn siblingInstance(track, id)  @ 436
       -- What a fresh drop inherits when the caller supplies neither length nor name.
+  @fn destBelow(take)  @ 473
+      -- Destination for the *-Below trio. Natural end (not rendered) so a
+      -- truncated upstream still drops past its downstream neighbour; relayout
+      -- handles the symmetric truncation in the other direction.
+  @fn copyMidiEvents(srcTake, dstTake)  @ 475
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 521
+  @fn projectMidiTakes()  @ 558
 
 # Public API (am:*)
   @api am:projectTracks()  @ 172
@@ -84,18 +89,24 @@
       @contract  instance of slot at qnPos; lengthQN <- sibling len or 1; name <- sibling; nil if track/slot missing
   @api am:duplicateTake(take, qnPos)  @ 461
       @contract  clones take at qnPos on its own track (name included, original untouched); nil if track/id missing
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 473
+  @api am:duplicateBelow(take)  @ 481
+      @contract  pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
+  @api am:duplicateUnpooledBelow(take)  @ 489
+      @contract  fresh-pool MIDI clone at natural end with copied events; nil iff non-MIDI or start collision.
+  @api am:newTakeBelow(take)  @ 499
+      @contract  empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 510
       @contract  true iff no other take on trackIdx starts exactly at startQN (item ~= exceptItem). Replaces the old range-overlap gate: under the natural-length model items may share span, but never a start position.
-  @api am:moveTake(take, deltaQN)  @ 483
+  @api am:moveTake(take, deltaQN)  @ 520
       @contract  shifts item start by deltaQN; relayouts the track. Natural length is preserved; D_LENGTH is re-derived. Returns true iff the new start clears existing starts (no-op on collision).
-  @api am:resizeTake(take, newNaturalQN)  @ 496
+  @api am:resizeTake(take, newNaturalQN)  @ 533
       @contract  writes the take's natural length; relayout caps it (source / next-take gap). A value ≥ source is demoted to util.OPEN during relayout.
-  @api am:takeSourceLengthQN(take)  @ 503
+  @api am:takeSourceLengthQN(take)  @ 540
       @contract  source length in QN at the take's position; 0 if source missing.
-  @api am:deleteTake(take)  @ 512
-  @api am:takesUsing(name)  @ 533
+  @api am:deleteTake(take)  @ 549
+  @api am:takesUsing(name)  @ 570
       @contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 543
+  @api am:reswingAll(name)  @ 580
       @contract  re-binds each takesUsing(name) take with markSwingStale=true; restores the original bound take at end
 
 # REAPER API surface
@@ -130,3 +141,4 @@
   @reaper AddTakeToMediaItem
   @reaper PCM_Source_CreateFromFile
   @reaper SetMediaItemTake_Source
+  @reaper MIDI_GetAllEvts, MIDI_SetAllEvts
