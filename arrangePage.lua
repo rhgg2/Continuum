@@ -212,7 +212,7 @@ local function renderGrid(tracks, nTracks)
       local rows  = trunc(wheelAccum)
       if rows ~= 0 then
         wheelAccum = wheelAccum - rows
-        av:placeCursor(av:cursorRow() - rows, av:cursorCol())
+        av:setCursor(av:cursorRow() - rows, av:cursorCol())
       end
     end
     if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
@@ -387,19 +387,20 @@ local function renderGrid(tracks, nTracks)
     end
   end
 
-  -- Cursor cell — cream fill at half opacity (the take fill shows
-  -- through) inside a dark-parchment border. The border lands on the
-  -- column gridlines, so the cell reads exactly as wide as the column.
+  -- Cursor caret — a horizontal I-beam on the top edge of the cursor
+  -- row, spanning the column. Cursor position is a line, not a cell:
+  -- mere movement doesn't pick a take, so a cell-shaped highlight
+  -- would lie about the model.
   if curRow >= sr and curRow < sr + visRows
      and curCol >= 0 and curCol < nTracks then
-    local cx0 = snap(trackLeft(curCol))
-    local cx1 = snap(trackRight(curCol))
-    local cy0 = snap(rowY(curRow))
-    local cy1 = snap(rowY(curRow + 1))
-    ImGui.DrawList_AddRectFilled(dl, cx0+1, cy0+1, cx1, cy1,
-      chrome.colour('arrangeCursor'))
-    ImGui.DrawList_AddRect(dl, cx0, cy0, cx1+1, cy1+1,
-      chrome.colour('arrangeCursorBorder'), 0, 0, 2)
+    local cx0   = snap(trackLeft(curCol))
+    local cx1   = snap(trackRight(curCol))
+    local cy    = snap(rowY(curRow))
+    local serif = 4
+    local col   = chrome.colour('arrangeCursorBorder')
+    ImGui.DrawList_AddLine(dl, cx0 + 1, cy, cx1-1,     cy,        col, 2)
+    ImGui.DrawList_AddLine(dl, cx0 + 1, cy - serif,  cx0 +1, cy + serif, col, 2)
+    ImGui.DrawList_AddLine(dl, cx1, cy - serif,  cx1, cy + serif, col, 2)
   end
 
   -- Loop region — the tracker's tail bracket: a stroked `[` down the

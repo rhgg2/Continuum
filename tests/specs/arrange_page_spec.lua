@@ -356,7 +356,7 @@ return {
   },
 
   {
-    name = 'keyboard nav adopts the take the cursor lands on as the focus',
+    name = 'kb mutation reselects the take under the cursor',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -378,7 +378,7 @@ return {
   },
 
   {
-    name = 'focus persists when the cursor moves on across empty space',
+    name = 'kb delete no-ops when the cursor has moved off the focused take',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -387,17 +387,17 @@ return {
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
       local ap = newArrangePage(h.cm, h.cmgr, nil, {})
-      ap:seedCursorFromReaper()      -- focuses t1 under the boot cursor
+      ap:seedCursorFromReaper()      -- cursor and focus on t1
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeCursorDown')   -- cursor moves to empty row 1
       h.cmgr:invoke('arrangeDeleteTake')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
-      t.eq(#am:tracksTakes(0), 0, 'delete still hit t1 — focus held while the cursor moved off')
+      t.eq(#am:tracksTakes(0), 1, 'delete reselected under cursor (empty), so t1 survives')
     end,
   },
 
   {
-    name = 'nudge moves the focused take even when the cursor sits on another row',
+    name = 'kb nudge no-ops when cursor sits on empty space',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -406,12 +406,12 @@ return {
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
       local ap = newArrangePage(h.cm, h.cmgr, nil, {})
-      ap:seedCursorFromReaper()      -- focuses t1
+      ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeCursorDown')   -- cursor leaves the take's row
       h.cmgr:invoke('arrangeNudgeForward')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
-      t.eq(am:tracksTakes(0)[1].startQN, 1, 'nudge acted on focus, not the empty cursor cell')
+      t.eq(am:tracksTakes(0)[1].startQN, 0, 'nudge reselected under empty cursor — no-op')
     end,
   },
 

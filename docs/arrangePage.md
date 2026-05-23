@@ -69,26 +69,26 @@ happened; av decides what it does to the state.
 
 The grid carries two independent pointers.
 
-The **cursor** is the grid caret — a `(row, col)` cell in `av`, moved
-only by the keyboard (arrow keys, and the boot / reveal seeds). The
-mouse never moves it.
+The **cursor** is the grid caret — a `(row, col)` position in `av`,
+drawn as a horizontal I-beam on the top edge of the cursor row. Moved
+only by the keyboard (arrow keys, PageUp/Down, Home/End, the wheel,
+and the boot / reveal seeds). The mouse never moves it.
 
 The **focused take** is what the edit commands — nudge, resize,
 delete, dive — act on. It is a take, not a cell: `av` stores the
 REAPER take handle opaquely and resolves it through `am:findTake`
-whenever a command fires. It is set two ways — the keyboard cursor
-landing on a cell that holds a take adopts that take
-(`av:placeCursor`), and a mouse click on a take focuses it without
-moving the cursor. Landing on, or clicking, empty space does not
-silently re-target: a keyboard move across a gap keeps the focus it
-had; a click on a gap clears it.
+whenever a command fires. It is set in three ways — a mouse click on
+a take focuses it directly; each kb mutation opens with `adoptCursor`,
+which reselects the take under the cursor (an empty cell clears
+focus, so the mutation no-ops); and the boot / reveal seeds adopt the
+take they land on. Plain cursor nav does not touch focus.
 
-The split is what lets mouse and keyboard coexist. A click that
-yanked the caret would fight keyboard nav; a focus that evaporated
-when the cursor moved away would be nothing more than "the take under
-the cursor" — the separate, persistent pointer is what makes "park
-the cursor, the take stays picked" true. Nudge moves the focused take
-alone; the cursor does not trail it.
+The caret shape and the adopt-on-mutate rule line up: cursor position
+is a line, not a cell, so what the next command picks is decided at
+command time, not at landing time. The visible focus indicator
+survives across cursor nav so the user can see what the most recent
+mouse click or mutation picked, but it is overwritten the moment the
+next kb mutation fires.
 
 Focus self-heals — a handle whose take has been deleted (here or in
 REAPER) resolves to nil and clears on the next command.

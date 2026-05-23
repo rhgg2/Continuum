@@ -53,12 +53,23 @@ in REAPER). Storing a handle rather than a grid position means a take
 moved or resized under it still resolves correctly.
 
 Cursor and focus are separate pointers, and that is deliberate. The
-cursor is the keyboard caret; focus is a take. Focus persists when the
-cursor moves on across empty space — a keyboard move that lands on a
-take adopts it (`placeCursor`), a move across a gap leaves focus
-intact. That is what makes "park the cursor, the take stays picked"
-true, and what lets a nudge move the focused take while the cursor
-sits elsewhere.
+cursor is the keyboard caret — drawn as a horizontal I-beam on the top
+edge of the cursor row; focus is a take. Cursor nav never changes
+focus: the caret moves on its own, the previously focused take keeps
+its focus indicator. Each kb mutation (`nudgeFocused`,
+`resizeFocused`, `deleteFocused`, `diveFocused`) opens with
+`adoptCursor`, which reselects the take under the cursor — an empty
+cell clears focus and the mutation no-ops. Mouse press on a take
+focuses it directly; the focus indicator survives until the next kb
+mutation reselects.
+
+The earlier model adopted focus on every keyboard landing, so a take
+"stayed picked" once the cursor crossed it even if nav carried on past.
+This made park-and-mutate convenient but meant the cursor was lying
+about which take the next command would hit. The caret rendering and
+the adopt-on-mutate rule are the same shift: cursor position is a
+line, not a cell — what it picks is decided at command time, not at
+landing time.
 
 ## Viewport follow
 

@@ -133,6 +133,16 @@ that mints an audio slot — audio creation waits on a file picker.
 The `dropInstance` audio branch stays so that audio slots
 materialised from pre-existing REAPER items remain droppable.
 
+## Faithful mutators
+
+`moveTake`, `resizeTake`, `dropInstance`, and `duplicateTake` are
+unclamped — they pass the requested QN straight to REAPER without
+checking for overlap or snapping to grid. Overlap prevention, grid
+snap, and the minimum-length floor are owned by the caller.
+`freeSpan` and `rangeIsClear` are the reads a caller consults to
+decide what placement is legal before invoking a mutator. Abutting
+items are legal under the half-open ranges used throughout.
+
 ## Surface
 
 Discovery: `am:projectTracks`, `am:tracksTakes`, `am:trackSlots`,

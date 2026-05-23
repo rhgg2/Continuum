@@ -68,52 +68,63 @@ local function focusedTake()
   return take
 end
 
+-- Reselect the take under the cursor as focus — the kb-mutation entry
+-- gesture. An empty cell clears focus, so the mutation no-ops.
+local function adoptCursor()
+  local under = takeAtCursor()
+  focus = under and under.take or nil
+end
+
 --invariant: arrange-scope cursor-nav steps by whole rows/cols — arrows ±1, PageUp/Down ±PAGE_ROWS, Home to row 0, End to the row of the project's last take end (am:projectEndQN). Only negative coords clamp (in setCursor), so PageDown / End / the wheel may sit the cursor on empty rows past the last take.
 local function moveCursorBy(dRow, dCol)
-  av:placeCursor(cursorRow + dRow, cursorCol + dCol)
+  av:setCursor(cursorRow + dRow, cursorCol + dCol)
 end
 
 ----- Take edits — move / resize / delete / dive the focused take
 
 --invariant: nudge and resize step by exactly one row or not at all — takes sit on row-box edges, matching the place-command snap; the cursor is independent and does not follow. Neither edit lets a take enter a row box another take inhabits: both clamp to freeSpan's non-overlap window quantised to row-box edges, so a take may abut a neighbour's row box but never enter it — correct even for a take taller than one row.
 local function nudgeFocused(direction)
+  adoptCursor()
   local take = focusedTake()
   if not take then return end
   local bpr      = av:beatPerRow()
   local step     = direction * bpr
   local newStart = take.startQN + step
   local lo, hi   = am:freeSpan(take)
-  -- Quantise the non-overlap window to row boxes: the moved take may abut
-  -- a neighbour's row box but never enter it. freeSpan's bounds are
-  -- height-agnostic, so this holds for takes taller than one row.
   local loBox = math.ceil(lo / bpr) * bpr
   local hiBox = math.floor(hi / bpr) * bpr
   if newStart >= loBox and newStart + take.lengthQN <= hiBox then
     am:moveTake(take, step)
+    moveCursorBy(direction, 0)
   end
 end
 
 local function resizeFocused(direction)
+  adoptCursor()
   local take = focusedTake()
   if not take then return end
   local bpr       = av:beatPerRow()
   local newLength = math.max(bpr, take.lengthQN + direction * bpr)
   local _, hi     = am:freeSpan(take)
-  -- Clamp to the row-box top of the next take, not its exact (maybe
-  -- off-grid) start: a grow may abut that box but never enter it.
   local neighbourBoxTop = math.floor(hi / bpr) * bpr
   if take.startQN + newLength <= neighbourBoxTop then
     am:resizeTake(take, newLength)
+    -- A shrink that ate the row the cursor sat on pulls the cursor
+    -- back to the take's new last row; otherwise the cursor stays put.
+    local endRow = (take.startQN + newLength) / bpr
+    if direction < 0 and cursorRow >= endRow then moveCursorBy(-1, 0) end
   end
 end
 
 local function deleteFocused()
+  adoptCursor()
   local take = focusedTake()
   if take then am:deleteTake(take) end
 end
 
 --invariant: arrangeDive acts on the focused take and is MIDI-only — audio takes have no tracker representation, so dive over an audio take is a silent no-op, as is dive with nothing focused. Routes through the onDive callback so coord owns the page swap.
 local function diveFocused()
+  adoptCursor()
   local take = focusedTake()
   if take and take.kind == 'midi' then onDive(take.item) end
 end
@@ -278,18 +289,16 @@ function av:revealTake(reaperTake)
   end
 end
 
---contract: seeds the cursor and focus at boot from am:initialCursor — the first selected take, else REAPER's edit cursor / selected track.
+--contract: seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
 function av:seedCursor()
   local trackIdx, qn = am:initialCursor()
-  self:placeCursor(self:qnToRow(qn), trackIdx)
+  self:setCursor(self:qnToRow(qn), trackIdx)
+  adoptCursor()
 end
 
 ----------- COMMANDS
 
--- av registers the arrange-scope command bodies; the page owns the key
--- bindings (it has the ImGui key constants) and the createSlot command
--- (it drives the page's modal). cmgr:scope is idempotent, so the page
--- addresses the same scope.
+-- cmgr:scope is idempotent — page addresses the same scope.
 local arrange = cmgr:scope('arrange')
 
 arrange:registerAll {
@@ -299,8 +308,8 @@ arrange:registerAll {
   arrangeCursorRight  = function() moveCursorBy( 0,  1) end,
   arrangePageUp       = function() moveCursorBy(-PAGE_ROWS, 0) end,
   arrangePageDown     = function() moveCursorBy( PAGE_ROWS, 0) end,
-  arrangeHome         = function() av:placeCursor(0, cursorCol) end,
-  arrangeEnd          = function() av:placeCursor(av:qnToRow(am:projectEndQN()), cursorCol) end,
+  arrangeHome         = function() av:setCursor(0, cursorCol) end,
+  arrangeEnd          = function() av:setCursor(av:qnToRow(am:projectEndQN()), cursorCol) end,
   arrangeNudgeBack    = function() nudgeFocused(-1) end,
   arrangeNudgeForward = function() nudgeFocused( 1) end,
   arrangeShrinkTake   = function() resizeFocused(-1) end,
