@@ -95,7 +95,7 @@ local function Main()
     tp:bind(newTake)
     tp:openTakeProperties{ onClose = function() tp:bind(prior) end }
   end
-  local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onDive = onDive, onTakeProperties = onTakeProperties })
+  local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, onDive = onDive, onTakeProperties = onTakeProperties })
   local sp = util.instantiate('samplePage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
 
   -- Arrange registered first so Continuum boots into it (coord:register

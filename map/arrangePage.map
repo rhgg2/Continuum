@@ -1,5 +1,5 @@
-@module arrangePage  src=arrangePage.lua  loc=866  sha=00c83bb  mode=chunk
-@deps cm, cmgr, chrome, gui, onDive, onTakeProperties
+@module arrangePage  src=arrangePage.lua  loc=789  sha=484993a  mode=chunk
+@deps cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost
 
 # Invariants & contracts
   @invariant  render + input only — arrangePage draws the grid and palette and reads keyboard / mouse. It holds no am reference: every project query and every state mutation goes through av.
@@ -28,98 +28,84 @@
   @state GUTTER_PAD = 8  @ 39
   @state LOOP_PAD = 7  @ 43
   @state SLOT_KEY_W, SLOT_KIND_W = 18, 16  @ 45
-  @state MODAL_ID = '###arrangeModal'  @ 60
-  @state MODAL_TITLES = { rename = 'Rename slot', create = 'New take',  @ 61
-  @state modal = nil  @ 63   -- { kind, ... } | nil
-  @state modalFocus = false  @ 64
-  @state modalOpenAtFrameStart = false  @ 65
-  @state openCreateModal  @ 67
-  @state press = nil  @ 73
+  @state openCreateModal  @ 48
+  @state press = nil  @ 54
       @invariant  mouse drag relocates a take freely — the candidate is validated by am:startIsClear, so a drag may carry a take past a neighbour into any space whose start position is not already claimed. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Pressing a take focuses it. The cursor moves only on release, and only when no take was dragged — it then lands on the pressed cell; a drag (even one blocked by a start collision) leaves the cursor put. An empty-space press with no drag also clears focus.
       @invariant  a press in the QN gutter drives the REAPER transport, not the grid — a no-drag release sets the edit cursor, a drag sets the loop range; both endpoints snap to row boxes unless Shift is held. The arrange grid cursor and take focus are untouched. A right-click in the gutter clears the loop range.
       @invariant  a double-click on empty grid space starts a create press — the drag previews a ghost take, release opens the create modal seeded with the swept column / start row / row count. A bare double-click opens it with the default row count.
-  @state WHEEL_ROWS = 1  @ 74   -- cursor rows moved per mouse-wheel notch
-  @state wheelAccum = 0  @ 75   -- fractional wheel carried between frames
-  @state BLOCKED_BORDER  @ 76   -- lazy: red border for a drag that would overlap
-  @state EDIT_LINE  @ 77   -- lazy: REAPER edit-cursor rule across all tracks
-  @state PLAY_LINE  @ 78   -- lazy: yellow play-head rule
-  @state CREATE_GHOST  @ 79   -- lazy { fill, border }: double-click-drag take preview
-  @state SLOT_FILL_ALPHA = 0.85  @ 105
-  @state SLOT_BORDER_ALPHA = 0.75  @ 106
-  @state slotColourCache = {}  @ 107
-  @state ORPHAN  @ 108   -- lazy { fill, border, focusFill, focusBorder }
-  @state HEADER_PAD = 8  @ 147
-  @state HEADER_GAP = 4  @ 148
-  @state CREATE_DEFAULT_ROWS = 4  @ 572
-  @state arrange = cmgr:scope('arrange')  @ 822
+  @state WHEEL_ROWS = 1  @ 55   -- cursor rows moved per mouse-wheel notch
+  @state wheelAccum = 0  @ 56   -- fractional wheel carried between frames
+  @state BLOCKED_BORDER  @ 57   -- lazy: red border for a drag that would overlap
+  @state EDIT_LINE  @ 58   -- lazy: REAPER edit-cursor rule across all tracks
+  @state PLAY_LINE  @ 59   -- lazy: yellow play-head rule
+  @state CREATE_GHOST  @ 60   -- lazy { fill, border }: double-click-drag take preview
+  @state SLOT_FILL_ALPHA = 0.85  @ 86
+  @state SLOT_BORDER_ALPHA = 0.75  @ 87
+  @state slotColourCache = {}  @ 88
+  @state ORPHAN  @ 89   -- lazy { fill, border, focusFill, focusBorder }
+  @state HEADER_PAD = 8  @ 128
+  @state HEADER_GAP = 4  @ 129
+  @state CREATE_DEFAULT_ROWS = 4  @ 549
+  @state arrange = cmgr:scope('arrange')  @ 745
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture. Slots have no existence apart from items on the grid; the palette's rename / delete buttons act on existing slots.
-  @state binds = {  @ 833
+  @state binds = {  @ 756
 
 # Private functions
   -- Style + draw helpers
-  @fn pushBodyStyles()  @ 83
-  @fn popBodyStyles()  @ 91
-  @fn rowLabel(row)  @ 95
+  @fn pushBodyStyles()  @ 64
+  @fn popBodyStyles()  @ 72
+  @fn rowLabel(row)  @ 76
       -- Row label = QN at the row's top edge. beatPerRow is integer-valued
       -- in normal use (1, 4, 8, 16); show the QN as an integer.
-  @fn slotColours(slotIdx, focused)  @ 109
+  @fn slotColours(slotIdx, focused)  @ 90
   -- Grid pane (hand-drawn — ImGui tables fight row-spanning shapes)
-  @fn floorTo(v, step)  @ 151
+  @fn floorTo(v, step)  @ 132
       -- Snap a click's QN down to the top edge of the row box it sits in.
-  @fn renderGrid(tracks, nTracks)  @ 153
+  @fn renderGrid(tracks, nTracks)  @ 134
   -- Palette pane
-  @fn focusedSlotEntry(slots, slotIdx)  @ 515
+  @fn focusedSlotEntry(slots, slotIdx)  @ 496
       -- Locate the slot entry in trackSlots() output (a packed array, not
       -- indexed by slotIdx). Returns nil when no slot is focused or the
       -- focused slot index isn't currently populated.
-  @fn renderPaletteHeader(focusedTrack)  @ 527
+  @fn renderPaletteHeader(focusedTrack)  @ 508
       -- Hand-drawn so the header band height (HEADER_PAD + rowH) and the
       -- divider position match the grid's by construction — both panes start
       -- at the same `oy` (they share the renderBody row), so the divider
       -- lines up across the PANE_GAP without measurement.
-  @fn modalLabel()  @ 547
-      -- Popup label: stable id (so OpenPopup / BeginPopupModal agree) under a
-      -- per-kind visible title.
-  @fn openModal(state)  @ 551
-  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 557
-  @fn openDeleteModal(trackIdx, slot)  @ 562
-  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 578
-  @fn renderPaletteList(slots)  @ 601
+  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 526
+  @fn openDeleteModal(trackIdx, slot)  @ 535
+  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 583
+  @fn renderPaletteList(slots)  @ 606
       -- Three columns so the key/kind/name align vertically across rows
       -- without depending on a monospace font for the whole line. The key
       -- cell uses the monospace font (it's a hotkey to press); kind and
       -- name use the default UI font. Selectable lives in col 0 with
       -- SpanAllColumns so the entire row is the click target; we paint the
       -- key text on top with SameLine.
-  @fn renderModal()  @ 638
-      -- chrome.pushChromeWindow wraps Begin/End so the popup inherits parchment
-      -- styles instead of ImGui's dark defaults.
-      -- Self-heal: if modal state was set but ImGui's popup queue lost it (e.g. a
-      -- command opened the popup from outside any window), re-open here.
-  @fn renderPalette(tracks)  @ 711
-  @fn placeKey(slotIdx)  @ 856
+  @fn renderPalette(tracks)  @ 639
+  @fn placeKey(slotIdx)  @ 779
       -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
 # Public API (ap:*)
-  @api ap:bind()  @ 732
+  @api ap:bind()  @ 659
       @contract  bind takes no take — arrange is project-wide. coord may call with no args (or a take, ignored).
-  @api ap:unbind()  @ 733
-  @api ap:revealTake(reaperTake)  @ 736
+  @api ap:unbind()  @ 660
+  @api ap:revealTake(reaperTake)  @ 663
       @contract  positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
-  @api ap:seedCursorFromReaper()  @ 739
+  @api ap:seedCursorFromReaper()  @ 666
       @contract  seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
-  @api ap:renderToolbarBits(_)  @ 741
-  @api ap:renderBody(_, w, h, dispatch)  @ 746
+  @api ap:renderToolbarBits(_)  @ 668
+  @api ap:renderBody(_, w, h, dispatch)  @ 673
       @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects per slot, cursor on top.
       @contract  pushes parchment body palette (coord popped chrome before body draw); palette tables below need it.
       @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
-  @api ap:renderStatusBar(_)  @ 797
-  @api ap:focusState()  @ 805
+  @api ap:renderStatusBar(_)  @ 720
+  @api ap:focusState()  @ 728
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
-  @api ap:handleInput()  @ 816
-  @api ap:save()  @ 817
-  @api ap:load()  @ 818
+  @api ap:handleInput()  @ 739
+  @api ap:save()  @ 740
+  @api ap:load()  @ 741
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

@@ -21,10 +21,19 @@ _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
 local util = require('util')
 
+local fakeModalHost = {
+  open                = function() end,
+  openPrompt          = function() end,
+  openConfirm         = function() end,
+  registerKind        = function() end,
+  isOpen              = function() return false end,
+  wasOpenAtFrameStart = function() return false end,
+}
 local function newArrangePage(cm, cmgr, chrome, gui, onDive, onTakeProperties)
   return util.instantiate('arrangePage',
     { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui,
-      onDive = onDive, onTakeProperties = onTakeProperties })
+      onDive = onDive, onTakeProperties = onTakeProperties,
+      modalHost = fakeModalHost })
 end
 
 return {

@@ -14,8 +14,8 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
-local cm, cmgr, chrome, gui, onDive, onTakeProperties =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).onDive, (...).onTakeProperties
+local cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).onDive, (...).onTakeProperties, (...).modalHost
 
 local ctx = gui and gui.ctx or nil
 -- gui.font is monospace (Source Code Pro) attached at context create;
@@ -44,25 +44,6 @@ local LOOP_PAD = 7
 -- Palette row column widths: monospace key, kind glyph, name fills.
 local SLOT_KEY_W, SLOT_KIND_W = 18, 16
 
--- Unified modal state. `modal` is nil when no modal is open, or
--- { kind = 'rename'|'create'|'delete', ... } when one is. Pinning the
--- (track, slot) into modal at open-time means the cursor moving
--- mid-edit can't retarget the action.
---
--- modalFocus is consumed on the first frame each modal draws to seat
--- keyboard focus in its InputText. modalOpenAtFrameStart is captured
--- at the top of renderBody so focusState can deny acceptCmds for the
--- entire frame on which a modal closes — Enter would otherwise reach
--- the root-scope quit binding because CloseCurrentPopup deactivates
--- the InputText same-frame, flipping IsAnyItemActive to false before
--- dispatch runs.
--- Popup id is stable (### suffix); the visible title varies per kind.
-local MODAL_ID                = '###arrangeModal'
-local MODAL_TITLES            = { rename = 'Rename slot', create = 'New take',
-                                  delete = 'Delete slot' }
-local modal                   = nil   -- { kind, ... } | nil
-local modalFocus              = false
-local modalOpenAtFrameStart   = false
 -- Forward decl: runGridMouse (in renderGrid below) calls openCreateModal, defined further down.
 local openCreateModal
 
@@ -542,28 +523,24 @@ local function renderPaletteHeader(focusedTrack)
   ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
 end
 
--- Popup label: stable id (so OpenPopup / BeginPopupModal agree) under a
--- per-kind visible title.
-local function modalLabel()
-  return (MODAL_TITLES[modal and modal.kind] or 'Arrange') .. MODAL_ID
-end
-
-local function openModal(state)
-  modal      = state
-  modalFocus = true
-  ImGui.OpenPopup(ctx, modalLabel())
-end
-
 local function openRenameModal(trackIdx, slotIdx, currentName)
-  openModal{ kind = 'rename', trackIdx = trackIdx, slotIdx = slotIdx,
-             buf = currentName or '' }
+  modalHost:openPrompt{
+    title    = 'Rename slot',
+    prompt   = 'New name',
+    buf      = currentName or '',
+    callback = function(name) av:renameSlot(trackIdx, slotIdx, name) end,
+  }
 end
 
 local function openDeleteModal(trackIdx, slot)
-  openModal{ kind = 'delete', trackIdx = trackIdx, slotIdx = slot.idx,
-             slotKey = av:keyForSlot(slot.idx),
-             slotName = slot.name ~= '' and slot.name
-                                       or string.format('(slot %d)', slot.idx) }
+  local key  = av:keyForSlot(slot.idx)
+  local name = slot.name ~= '' and slot.name
+                              or string.format('(slot %d)', slot.idx)
+  modalHost:openConfirm{
+    title    = 'Delete slot',
+    prompt   = string.format('Delete slot %s "%s"?\nRemoves every instance on the track. (y/n)', key, name),
+    callback = function(yes) if yes then av:deleteSlot(trackIdx, slot.idx) end end,
+  }
 end
 
 -- Default length 4 rows — matches the design's default phrase length
@@ -571,9 +548,37 @@ end
 -- override in the modal.
 local CREATE_DEFAULT_ROWS = 4
 function openCreateModal(trackIdx, qnPos, rows)
-  openModal{ kind = 'create', trackIdx = trackIdx, qnPos = qnPos,
-             nameBuf = '', rowsBuf = tostring(rows or CREATE_DEFAULT_ROWS) }
+  modalHost:open{
+    kind     = 'createSlot',
+    title    = 'New take',
+    nameBuf  = '',
+    rowsBuf  = tostring(rows or CREATE_DEFAULT_ROWS),
+    callback = function(nameBuf, rowsBuf)
+      local rowsN = math.max(1, math.floor(tonumber(rowsBuf) or CREATE_DEFAULT_ROWS))
+      av:createSlot(trackIdx, qnPos, rowsN * av:beatPerRow(), nameBuf)
+    end,
+  }
 end
+
+-- Two-field create modal: name + row count. Built-in prompt/confirm
+-- don't fit; the renderer converts rowsBuf at close, so the page-level
+-- callback gets the raw strings and applies its own defaulting/floor.
+modalHost:registerKind('createSlot', function(s, close)
+  if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
+  ImGui.Text(ctx, 'Name')
+  local commitN, nb = ImGui.InputText(ctx, '##createName', s.nameBuf,
+                                      ImGui.InputTextFlags_EnterReturnsTrue)
+  s.nameBuf = nb
+  ImGui.Text(ctx, 'Length (rows)')
+  local commitR, rb = ImGui.InputText(ctx, '##createRows', s.rowsBuf,
+                                      ImGui.InputTextFlags_EnterReturnsTrue)
+  s.rowsBuf = rb
+  local ok     = commitN or commitR or ImGui.Button(ctx, 'OK')
+  ImGui.SameLine(ctx)
+  local cancel = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
+  if ok then close(true, s.nameBuf, s.rowsBuf)
+  elseif cancel then close(false) end
+end)
 
 local function renderPaletteActions(focusedTrack, focusedSlot)
   local trackIdx = focusedTrack and focusedTrack.idx
@@ -631,83 +636,6 @@ local function renderPaletteList(slots)
   ImGui.EndTable(ctx)
 end
 
--- chrome.pushChromeWindow wraps Begin/End so the popup inherits parchment
--- styles instead of ImGui's dark defaults.
--- Self-heal: if modal state was set but ImGui's popup queue lost it (e.g. a
--- command opened the popup from outside any window), re-open here.
-local function renderModal()
-  if not modal then return end
-  if not ImGui.IsPopupOpen(ctx, modalLabel()) then
-    ImGui.OpenPopup(ctx, modalLabel())
-  end
-  -- NoNav keeps ImGui's popup nav from stealing keys from a lone
-  -- InputText; the create modal has two fields plus a button row, so it
-  -- keeps nav on for Tab to walk between them.
-  local flags = ImGui.WindowFlags_AlwaysAutoResize
-  if modal.kind ~= 'create' then flags = flags | ImGui.WindowFlags_NoNav end
-  chrome.pushChromeWindow()
-  if ImGui.BeginPopupModal(ctx, modalLabel(), nil, flags) then
-    local function close() modal = nil; ImGui.CloseCurrentPopup(ctx) end
-
-    if modal.kind == 'rename' then
-      if modalFocus then ImGui.SetKeyboardFocusHere(ctx); modalFocus = false end
-      local commit, buf = ImGui.InputText(ctx, '##rename', modal.buf,
-                                          ImGui.InputTextFlags_EnterReturnsTrue)
-      if commit then
-        av:renameSlot(modal.trackIdx, modal.slotIdx, buf)
-        close()
-      end
-      ImGui.SameLine(ctx)
-      if ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-        close()
-      end
-
-    elseif modal.kind == 'create' then
-      ImGui.Text(ctx, 'Name')
-      if modalFocus then ImGui.SetKeyboardFocusHere(ctx); modalFocus = false end
-      local commitN, nb = ImGui.InputText(ctx, '##createName', modal.nameBuf,
-                                          ImGui.InputTextFlags_EnterReturnsTrue)
-      modal.nameBuf = nb
-      ImGui.Text(ctx, 'Length (rows)')
-      local commitR, rb = ImGui.InputText(ctx, '##createRows', modal.rowsBuf,
-                                          ImGui.InputTextFlags_EnterReturnsTrue)
-      modal.rowsBuf = rb
-      local ok     = commitN or commitR or ImGui.Button(ctx, 'OK')
-      ImGui.SameLine(ctx)
-      local cancel = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
-      if ok then
-        local rows = math.max(1, math.floor(tonumber(modal.rowsBuf)
-                                             or CREATE_DEFAULT_ROWS))
-        av:createSlot(modal.trackIdx, modal.qnPos,
-                      rows * av:beatPerRow(), modal.nameBuf)
-        close()
-      elseif cancel then
-        close()
-      end
-
-    elseif modal.kind == 'delete' then
-      ImGui.Text(ctx, string.format('Delete slot %s "%s"?',
-                                    modal.slotKey, modal.slotName))
-      ImGui.Text(ctx, 'Removes every instance on the track. (y/n)')
-      local yes = ImGui.Button(ctx, 'Delete')
-                  or ImGui.IsKeyPressed(ctx, ImGui.Key_Y)
-                  or ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-      ImGui.SameLine(ctx)
-      local no  = ImGui.Button(ctx, 'Cancel')
-                  or ImGui.IsKeyPressed(ctx, ImGui.Key_N)
-                  or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
-      if yes then
-        av:deleteSlot(modal.trackIdx, modal.slotIdx)
-        close()
-      elseif no then
-        close()
-      end
-    end
-    ImGui.EndPopup(ctx)
-  end
-  chrome.popChromeWindow()
-end
-
 local function renderPalette(tracks)
   -- tracks is 1-based; cursorCol is 0-based track index.
   local focusedTrack = tracks[av:cursorCol() + 1]
@@ -723,7 +651,6 @@ local function renderPalette(tracks)
   ImGui.Separator(ctx)
   renderPaletteList(slots)
   chrome.popChromeStyles()
-  renderModal()
 end
 
 ----------- PUBLIC
@@ -745,10 +672,6 @@ function ap:renderToolbarBits(_) end
 --contract: invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
 function ap:renderBody(_, w, h, dispatch)
   if not ctx then return end
-
-  -- Capture at top of frame, not after the modal might have closed
-  -- itself mid-frame. See modalOpenAtFrameStart comment.
-  modalOpenAtFrameStart = (modal ~= nil)
 
   pushBodyStyles()
 
@@ -809,7 +732,7 @@ function ap:focusState()
     suppressKbd = pa,
     acceptCmds  = (not pa)
                   and not ImGui.IsAnyItemActive(ctx)
-                  and not modalOpenAtFrameStart,
+                  and not modalHost:wasOpenAtFrameStart(),
   }
 end
 
