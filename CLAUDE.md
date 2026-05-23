@@ -55,6 +55,16 @@ others can't.
    `--reaper:`. Prefix with `?` (`--?invariant:`) for
    inferred-rather-than-doc-grounded. Attachment rules in
    `tools/map_extract.py`.
+
+   **`--contract:` discipline — non-negotiable.** A contract states
+   **non-trivial pre- and post-conditions**: what the caller must
+   guarantee, what the function guarantees back, what it mutates,
+   degenerate-input behaviour. It is **NOT** the function's
+   behaviour written out as prose — the name and body already say
+   that. If the line reads like an English paraphrase of the code,
+   delete it. **Hard cap: 100 characters, aim for 90.** If it won't
+   fit, split it or move the model concern to `docs/<file>.md`. See
+   `docs/CONVENTIONS.md` § `--contract:` discipline.
 3. **`.map` file** (`map/<file>.map`) — derived semantic outline,
    one per `.lua`. Header carries `mode=chunk` (constructor) or
    `mode=namespace` (require'd table). Lists imports, constructed

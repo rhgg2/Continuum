@@ -57,6 +57,31 @@ settle every borderline case:
 The boundary is semantic, not a length test. Never split one fact
 across both layers as duplicated prose.
 
+## `--contract:` discipline
+
+A `--contract:` line states **non-trivial pre- and post-conditions** —
+what the caller must guarantee on entry, what the function guarantees
+on exit, what it mutates, what it returns when inputs are degenerate.
+It is **not** a prose paraphrase of the function's behaviour: the name
+and body already say what the function does. If the line reads like an
+English restatement of the code ("computes the swung ppq for a row"),
+delete it.
+
+Three rules, applied hard:
+
+1. **Pre/post only.** Conditions that hold at the boundary, not a
+   walkthrough of the implementation. Good: `caller holds the mm
+   lock; returns nil if row is off-grid`. Bad: `iterates channels
+   and accumulates onsets`.
+2. **Not behaviour-as-prose.** If the contract collapses to "does
+   what the name says", there is no contract — drop the annotation.
+   A contract earns its line only when something non-obvious binds
+   the caller or the result.
+3. **One line, ≤100 characters.** Hard cap at 100; aim for 90. If
+   it won't fit, the constraint is either two contracts (split) or
+   a model concern (move to `docs/<file>.md` and leave a terse
+   `--contract:` pointing at the rule).
+
 ## Shape of the source file
 
 - **Header:** single line, `-- See docs/<file>.md for the model.`
