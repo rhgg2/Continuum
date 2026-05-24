@@ -15,7 +15,7 @@
 --shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|pairIdx, to=id, toPort=nil|pairIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
 --shape: CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
 --shape: CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap'|'monoSum'|'monoReplicate', cuParams?=table }
---shape: Conn = { type='audio'|'midi', from=id, to=id, fromCh?=number, toCh?=number }
+--shape: Conn = { type='audio'|'midi', from=id, to=id, fromCh?=number, toCh?=number, primary?=true }
 local util = require('util')
 
 local M = {}
@@ -152,6 +152,7 @@ function M.lower(user)
   end
 
   -- Terminate head into (targetId, targetCh0). targetCh0 unused for MIDI.
+  -- head.primary travels with the wire and lands on every conn it produces.
   local function flush(head, targetId, targetCh0)
     if head.type == 'audio' then
       for c = 1, head.width do
@@ -159,10 +160,12 @@ function M.lower(user)
           type = 'audio',
           from = head.id, fromCh = head.ch0 + c - 1,
           to   = targetId, toCh   = targetCh0 + c - 1,
+          primary = head.primary,
         })
       end
     else
-      util.add(compile.conns, { type = 'midi', from = head.id, to = targetId })
+      util.add(compile.conns, { type = 'midi', from = head.id, to = targetId,
+                                primary = head.primary })
     end
   end
 
@@ -174,9 +177,10 @@ function M.lower(user)
     local id = mintCu({ kind = 'cu', cuMode = cuMode, cuParams = cuParams })
     flush(head, id, 1)
     if head.type == 'audio' then
-      return { type = 'audio', id = id, ch0 = 1, width = outWidth }
+      return { type = 'audio', id = id, ch0 = 1, width = outWidth,
+               primary = head.primary }
     end
-    return { type = 'midi', id = id }
+    return { type = 'midi', id = id, primary = head.primary }
   end
 
   local function lowerAudioEdge(edge, fromNode, toNode)
@@ -186,7 +190,8 @@ function M.lower(user)
     local toWidth   = audioPairs(toNode).ins[toPair]
 
     local head = { type = 'audio', id = edge.from,
-                   ch0 = pairStartCh(fromPair), width = fromWidth }
+                   ch0 = pairStartCh(fromPair), width = fromWidth,
+                   primary = edge.primary }
 
     if edge.ops and edge.ops.gain then
       head = splice(head, 'gain',
@@ -203,7 +208,7 @@ function M.lower(user)
   end
 
   local function lowerMidiEdge(edge)
-    local head = { type = 'midi', id = edge.from }
+    local head = { type = 'midi', id = edge.from, primary = edge.primary }
     if edge.ops and edge.ops.channelMap then
       head = splice(head, 'channelRemap', { map = edge.ops.channelMap })
     end
@@ -267,6 +272,94 @@ function M.classes(compile)
     table.sort(guids)
     util.bucket(out, table.concat(guids, '|'), id)
   end
+  return out
+end
+
+----- quotientGraph / absorption / capacityErrors
+
+--contract: class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryParents ⊆ audioParents, flagged by `primary` wires
+function M.quotientGraph(compile, classes)
+  local classOf, quotient = {}, {}
+  for cls, members in pairs(classes) do
+    quotient[cls] = { audioParents = {}, midiParents = {},
+                      audioChildren = {}, midiChildren = {},
+                      primaryParents = {} }
+    for _, id in ipairs(members) do classOf[id] = cls end
+  end
+
+  for _, conn in ipairs(compile.conns) do
+    local fromCls, toCls = classOf[conn.from], classOf[conn.to]
+    if fromCls ~= toCls then
+      local toQ, fromQ = quotient[toCls], quotient[fromCls]
+      if conn.type == 'audio' then
+        toQ.audioParents[fromCls] = true
+        if conn.primary then toQ.primaryParents[fromCls] = true end
+        fromQ.audioChildren[toCls] = true
+      else
+        toQ.midiParents[fromCls] = true
+        fromQ.midiChildren[toCls] = true
+      end
+    end
+  end
+  return quotient
+end
+
+-- Direct (one-hop) host for cls under the absorption rule. Returns nil if cls
+-- has no eligible host: zero audio parents, ambiguous primaries, or multiple
+-- non-primary audio parents.
+local function directHost(q)
+  local audioParents, primaryParents = {}, {}
+  for parent in pairs(q.audioParents)   do util.add(audioParents,   parent) end
+  for parent in pairs(q.primaryParents) do util.add(primaryParents, parent) end
+  if #primaryParents == 1 then return primaryParents[1] end
+  if #primaryParents == 0 and #audioParents == 1 then return audioParents[1] end
+  return nil
+end
+
+--contract: sparse {[cls]=hostCls}; chains resolved to terminal host; absent = self-hosting; cycle-safe
+function M.absorption(quotient)
+  local direct = {}
+  for cls, q in pairs(quotient) do direct[cls] = directHost(q) end
+
+  local function terminal(cls, seen)
+    local next_ = direct[cls]
+    if not next_ or seen[next_] then return cls end
+    seen[next_] = true
+    return terminal(next_, seen)
+  end
+
+  local out = {}
+  for cls in pairs(quotient) do
+    if direct[cls] then
+      local seen = { [cls] = true }
+      out[cls] = terminal(direct[cls], seen)
+    end
+  end
+  return out
+end
+
+--contract: list of {classKey, kind='audio'|'midi', count} for intra-class conn counts exceeding 64 audio / 128 midi; sorted by classKey then kind
+function M.capacityErrors(compile, classes)
+  local classOf, counts = {}, {}
+  for cls, members in pairs(classes) do
+    for _, id in ipairs(members) do classOf[id] = cls end
+  end
+  for _, conn in ipairs(compile.conns) do
+    local cls = classOf[conn.from]
+    if cls and cls == classOf[conn.to] then
+      counts[cls] = counts[cls] or { audio = 0, midi = 0 }
+      counts[cls][conn.type] = counts[cls][conn.type] + 1
+    end
+  end
+  local out = {}
+  for cls, c in pairs(counts) do
+    if c.audio > 64  then util.add(out, { classKey = cls, kind = 'audio', count = c.audio }) end
+    if c.midi  > 128 then util.add(out, { classKey = cls, kind = 'midi',  count = c.midi  }) end
+  end
+  table.sort(out, function(a, b)
+    if a.classKey ~= b.classKey then return a.classKey < b.classKey end
+    return a.kind < b.kind
+  end)
   return out
 end
 
