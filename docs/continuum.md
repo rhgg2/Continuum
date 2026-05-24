@@ -42,8 +42,7 @@ The coordinator owns the shared frame. Pages register with it;
 `coord:setActive(name)` swaps the cmgr scope and rebinds the
 incoming page (`tracker` to the take, `sample` to the take's
 track). Each frame draws the toolbar, delegates the body region to
-the active page, draws the status band, then dispatches any
-floating overlay the page provides (`page:renderFloating`).
+the active page and draws the status band.
 
 Chrome lives on the coordinator and is threaded into every page;
 one chrome instance per coordinator.

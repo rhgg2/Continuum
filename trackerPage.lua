@@ -1437,8 +1437,6 @@ function tp:renderStatusBar(_)
   drawStatusBar()
 end
 
-function tp:renderFloating(_) end
-
 --contract: bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
 function tp:bind(t)
   tm:bindTake(t)

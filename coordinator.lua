@@ -250,8 +250,6 @@ local function frame()
 
   ImGui.End(ctx)
 
-  if page and page.renderFloating then page:renderFloating(ctx) end
-
   ImGui.PopStyleColor(ctx, 5)
   ImGui.PopFont(ctx)
 
@@ -266,7 +264,7 @@ end
 
 ---------- PUBLIC
 
---shape: page = { renderToolbarBits(ctx), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind(), [renderFloating(ctx)] }
+--shape: page = { renderToolbarBits(ctx), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind() }
 --contract: pages must be registered via coord:register(name,page); first registered becomes active
 local coord = {}
 
