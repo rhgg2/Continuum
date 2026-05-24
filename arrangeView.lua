@@ -304,15 +304,20 @@ end
 
 --contract: move/resize preserves the focus handle; duplicate shifts focus to the new copy. Resize writes natural length — the relayout pass caps the rendered length.
 function av:commitDrag(press, cand)
-  local take = press.take
-  if press.mode == 'resizeEnd' then
-    am:resizeTake(take, cand.lengthQN)
-  elseif press.duplicate then
-    local copy = am:duplicateTake(take, cand.startQN)
-    if copy then focus = copy end   -- am hands back a bare take handle
-  else
-    am:moveTake(take, cand.startQN - take.startQN)
-  end
+  local label = press.mode == 'resizeEnd' and 'Resize take'
+             or press.duplicate          and 'Duplicate take'
+             or                              'Move take'
+  util.atomic(label, function()
+    local take = press.take
+    if press.mode == 'resizeEnd' then
+      am:resizeTake(take, cand.lengthQN)
+    elseif press.duplicate then
+      local copy = am:duplicateTake(take, cand.startQN)
+      if copy then focus = copy end   -- am hands back a bare take handle
+    else
+      am:moveTake(take, cand.startQN - take.startQN)
+    end
+  end)()
 end
 
 ----- Slot operations — the page's modal commits these
@@ -368,20 +373,20 @@ arrange:registerAll {
   arrangePageDown     = function() moveCursorBy( PAGE_ROWS, 0) end,
   arrangeHome         = function() av:setCursor(0, cursorCol) end,
   arrangeEnd          = function() av:setCursor(av:qnToRow(am:projectEndQN()), cursorCol) end,
-  arrangeNudgeBack    = function() nudgeFocused(-1) end,
-  arrangeNudgeForward = function() nudgeFocused( 1) end,
-  arrangeShrinkTake   = function() resizeFocused(-1) end,
-  arrangeGrowTake     = function() resizeFocused( 1) end,
-  arrangeDeleteTake             = deleteFocused,
+  arrangeNudgeBack    = { function() nudgeFocused(-1) end, 'Nudge take back'    },
+  arrangeNudgeForward = { function() nudgeFocused( 1) end, 'Nudge take forward' },
+  arrangeShrinkTake   = { function() resizeFocused(-1) end, 'Shrink take' },
+  arrangeGrowTake     = { function() resizeFocused( 1) end, 'Grow take'   },
+  arrangeDeleteTake             = { deleteFocused,                  'Delete take' },
   arrangeDive                   = diveFocused,
   arrangeTakeProperties         = focusedTakeProperties,
-  arrangeDuplicateBelow         = duplicateFocusedBelow,
-  arrangeDuplicateUnpooledBelow = duplicateUnpooledFocusedBelow,
+  arrangeDuplicateBelow         = { duplicateFocusedBelow,          'Duplicate pooled take' },
+  arrangeDuplicateUnpooledBelow = { duplicateUnpooledFocusedBelow,  'Duplicate take' },
 }
 
 local placeCmds = {}
 for i = 0, 61 do
-  placeCmds['drop' .. am:keyForSlot(i)] = function() dropAt(i) end
+  placeCmds['drop' .. am:keyForSlot(i)] = { function() dropAt(i) end, 'Place pooled take' }
 end
 arrange:registerAll(placeCmds)
 

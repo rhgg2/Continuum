@@ -1,4 +1,4 @@
-@module arrangeView  src=arrangeView.lua  loc=388  sha=484993a  mode=chunk
+@module arrangeView  src=arrangeView.lua  loc=393  sha=96d6b79  mode=chunk
 @deps cm, cmgr, onDive, onTakeProperties
 
 # Invariants & contracts
@@ -28,8 +28,8 @@
   @state focus = nil  @ 30
   @state DRAG_EDGE_PX = 5  @ 32   -- end-edge grab band for a resize hit-test
   @state PAGE_ROWS = 16  @ 33   -- PageUp / PageDown cursor step
-  @state arrange = cmgr:scope('arrange')  @ 360
-  @state placeCmds = {}  @ 382
+  @state arrange = cmgr:scope('arrange')  @ 365
+  @state placeCmds = {}  @ 387
 
 # Private functions
   -- Viewport follow
@@ -123,14 +123,14 @@
   @api av:commitDrag(press, cand)  @ 306
       @contract  move/resize preserves the focus handle; duplicate shifts focus to the new copy. Resize writes natural length — the relayout pass caps the rendered length.
   -- Slot operations — the page's modal commits these
-  @api av:renameSlot(trackIdx, slotIdx, name)  @ 320
-  @api av:createSlot(trackIdx, qnPos, lengthQN, name)  @ 325
+  @api av:renameSlot(trackIdx, slotIdx, name)  @ 325
+  @api av:createSlot(trackIdx, qnPos, lengthQN, name)  @ 330
       @contract  mints a MIDI slot via am, focuses it in the palette, and advances the cursor by the new take's row count; nil if am refused.
-  @api av:deleteSlot(trackIdx, slotIdx)  @ 334
+  @api av:deleteSlot(trackIdx, slotIdx)  @ 339
   -- Boot + reveal — the page interface delegates here
-  @api av:revealTake(reaperTake)  @ 342
+  @api av:revealTake(reaperTake)  @ 347
       @contract  positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
-  @api av:seedCursor()  @ 351
+  @api av:seedCursor()  @ 356
       @contract  seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
 
 # REAPER API surface

@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=786  sha=a1cd4e3  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=786  sha=96d6b79  mode=chunk
 @deps cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost
 
 # Invariants & contracts
@@ -58,7 +58,7 @@
       -- Row label = QN at the row's top edge. beatPerRow is integer-valued
       -- in normal use (1, 4, 8, 16); show the QN as an integer.
   @fn slotColours(slotIdx, focused)  @ 90
-  -- Grid pane (hand-drawn — ImGui tables fight row-spanning shapes)
+  -- Grid pane
   @fn floorTo(v, step)  @ 132
       -- Snap a click's QN down to the top edge of the row box it sits in.
   @fn renderGrid(tracks, nTracks)  @ 134

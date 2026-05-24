@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1479  sha=d748626  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1479  sha=d4eeb3a  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -52,6 +52,9 @@
   @state toolbar  @ 76   -- lazy: chrome may be nil at construction in tests
   @state paintLast = nil  @ 81   -- region-paint per-cell debounce
   @state renderFns = {  @ 151
+  @state pickTemper = util.atomic('Set temper', function(name)  @ 270
+  @state pickSwing = util.atomic('Set swing',        function(name)       tv:s...  @ 277
+  @state pickColSwing = util.atomic('Set column swing', function(chan, name) tv:s...  @ 278
   @state SWING_PRESET_EXCLUDE = { identity = true }  @ 282
   @state toolbarSegments = {  @ 316
   @state laneRenderable = { cc = true, pb = true, at = true }  @ 440
@@ -82,10 +85,6 @@
       @contract  returns 0 when laneStrip.visible is false; layout and draw branch on this
   @fn libPickerItems(current, lib, presets, excludePresets)  @ 248
       -- Off=group 1, saved lib=group 2, unseeded preset (+ prefix)=group 3.
-  @fn pickTemper(name)  @ 270
-      -- Seed lib if absent before committing to slot.
-  @fn pickSwing(name)  @ 277
-  @fn pickColSwing(chan, name)  @ 278
   @fn drawSampleDropdown()  @ 286
       -- Hex stays visible when unassigned so `<`/`>` advertise their step.
       -- No "Off" row — every slot is real.

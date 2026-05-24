@@ -2233,9 +2233,9 @@ tracker:registerAll{
   doubleRPB               = function() tv:setRowPerBeat(cm:get('rowPerBeat') * 2) end,
   halveRPB                = function() tv:setRowPerBeat(math.floor(cm:get('rowPerBeat') / 2)) end,
   matchGridToCursor       = matchGridToCursor,
-  groupMark               = groupMark,
-  groupDuplicate          = groupDuplicate,
-  groupPaste              = groupPaste,
+  groupMark               = { groupMark,      'Mark group'      },
+  groupDuplicate          = { groupDuplicate, 'Duplicate group' },
+  groupPaste              = { groupPaste,     'Paste group'     },
   groupLocalToggle        = function() gm:setLocalMode(not gm:localMode()) end,
   regionEnter             = function() ec:enterRegionMode() end,
 }

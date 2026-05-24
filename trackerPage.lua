@@ -267,15 +267,15 @@ local function libPickerItems(current, lib, presets, excludePresets)
 end
 
 -- Seed lib if absent before committing to slot.
-local function pickTemper(name)
+local pickTemper = util.atomic('Set temper', function(name)
   if name and not cm:get('tempers')[name] then
     tv:setTemper(name, tuning.presets[name])
   end
   tv:setTemperSlot(name)
-end
+end)
 
-local function pickSwing(name)              tv:setSwingSlot(name)         end
-local function pickColSwing(chan, name)      tv:setColSwingSlot(chan, name) end
+local pickSwing    = util.atomic('Set swing',        function(name)       tv:setSwingSlot(name)          end)
+local pickColSwing = util.atomic('Set column swing', function(chan, name) tv:setColSwingSlot(chan, name) end)
 
 -- 'identity' is the explicit no-swing sentinel (schema default); shown as
 -- "Off" in the button, hidden from the picker rows.
@@ -307,7 +307,7 @@ local function drawSampleDropdown()
     buttonLabel = string.format('%02X', cur) .. (curName and (' ' .. curName) or ''),
     width       = 220,
     items       = items,
-    onPick      = function(idx) cm:set('take', 'currentSample', idx) end,
+    onPick      = util.atomic('Set sample', function(idx) cm:set('take', 'currentSample', idx) end),
   }
 end
 
@@ -1255,11 +1255,11 @@ local function newTakeBelow()
     title    = 'New take',
     nameBuf  = '',
     beatsBuf = tostring(NEW_TAKE_DEFAULT_BEATS),
-    callback = function(name, beatsBuf)
+    callback = util.atomic('Create take', function(name, beatsBuf)
       local b = math.max(1e-3, tonumber(beatsBuf) or NEW_TAKE_DEFAULT_BEATS)
       local _, newTake = am:createAndDropMidi(amTake.trackIdx, destQN, b, name)
       if newTake then tp:bind(newTake) end
-    end,
+    end),
   }
 end
 local function duplicateUnpooledBelow()
@@ -1280,7 +1280,7 @@ tracker:registerAll{
   end,
 
   takeProperties         = { function() tp:openTakeProperties{} end, 'Take properties' },
-  newTakeBelow           = { newTakeBelow,           'New take below' },
+  newTakeBelow           = newTakeBelow,
   duplicateUnpooledBelow = { duplicateUnpooledBelow, 'Duplicate take (unpooled) below' },
 
   addTypedCol = addColumn,

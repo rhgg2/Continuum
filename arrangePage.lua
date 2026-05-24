@@ -527,7 +527,7 @@ local function openRenameModal(trackIdx, slotIdx, currentName)
     title    = 'Rename slot',
     prompt   = 'New name',
     buf      = currentName or '',
-    callback = function(name) av:renameSlot(trackIdx, slotIdx, name) end,
+    callback = util.atomic('Rename slot', function(name) av:renameSlot(trackIdx, slotIdx, name) end),
   }
 end
 
@@ -538,7 +538,7 @@ local function openDeleteModal(trackIdx, slot)
   modalHost:openConfirm{
     title    = 'Delete slot',
     prompt   = string.format('Delete slot %s "%s"?\nRemoves every instance on the track. (y/n)', key, name),
-    callback = function(yes) if yes then av:deleteSlot(trackIdx, slot.idx) end end,
+    callback = util.atomic('Delete slot', function(yes) if yes then av:deleteSlot(trackIdx, slot.idx) end end),
   }
 end
 
@@ -550,10 +550,10 @@ function openCreateModal(trackIdx, qnPos, beats)
     title    = 'New take',
     nameBuf  = '',
     beatsBuf = tostring(beats or CREATE_DEFAULT_BEATS),
-    callback = function(nameBuf, beatsBuf)
+    callback = util.atomic('Create take', function(nameBuf, beatsBuf)
       local b = math.max(1e-3, tonumber(beatsBuf) or CREATE_DEFAULT_BEATS)
       av:createSlot(trackIdx, qnPos, b, nameBuf)
-    end,
+    end),
   }
 end
 
