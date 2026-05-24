@@ -4,7 +4,7 @@
 --invariant: render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
 --invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
---invariant: at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; ports still hover-only.
+--invariant: at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; shift-gated split-band hover drives wire creation, see design/wiring.md.
 
 local util = require 'util'
 
@@ -110,10 +110,21 @@ local WIRE_LABEL_PERP = 6     -- perpendicular displacement of the label off the
 -- band: captured at mousedown-on-empty-canvas. While IsMouseDown, drawn
 -- as a translucent rect. Mouseup with movement → wv:setSelection of
 -- intersected node ids (replace, not additive); mouseup without movement
--- (a click) clears the selection. Drag and band are mutually exclusive:
--- body-hit wins, port-band hit suppresses both (reserved for wire-pull).
-local drag = nil  -- { mx0, my0, starts = { [id] = {x,y}, … } }
-local band = nil  -- { mx0, my0 } — current corner is GetMousePos
+-- (a click) clears the selection.
+--
+-- wireDraft: captured at mousedown-on-shift-hover. type locks the wire
+-- kind at drag-start (shift can release thereafter). descendants is the
+-- forward reachability set from fromId, computed once and consulted at
+-- hover-time so cycle-forming drop targets get no visual encouragement.
+-- Cleared on mouseup (committing the wire if a target was eligible) or
+-- on Esc.
+--
+-- Mousedown precedence: shift-hover (wireDraft) > body-hit (drag) >
+-- anywhere else (band). All three are mutually exclusive while live.
+local drag      = nil  -- { mx0, my0, starts = { [id] = {x,y}, … } }
+local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
+local wireDraft = nil  -- { type='audio'|'midi', fromId, fromPort?, descendants }
+local shiftWas  = false
 
 ----- Pixel geometry (page-owned)
 
@@ -191,19 +202,149 @@ local function drawPortBand(dl, x0, x1, y, audio, midi, audioCol, midiCol, idPre
   end
 end
 
-local function drawHoverPorts(dl, nv, ox, oy)
+----- Wire-creation gesture helpers
+
+local AUDIO_BAND_FRAC = 2/3  -- left 2/3 = audio band, right 1/3 = midi band
+local TINT_ALPHA      = 0.5  -- midi-band tint over the right 1/3
+local HOVER_ALPHA     = 0.4  -- hover overlay tint for either band
+
+local function withAlpha(col, alphaFrac)
+  local r, g, b = ImGui.ColorConvertU32ToDouble4(col)
+  return ImGui.ColorConvertDouble4ToU32(r, g, b, alphaFrac)
+end
+
+local function inRect(px, py, x0, y0, x1, y1)
+  return px >= x0 and px <= x1 and py >= y0 and py <= y1
+end
+
+-- Per-port hit test for a popped-out audio port row. Mirrors drawPortBand's
+-- centred layout. dir='out' for the row below the body, 'in' for above.
+local function audioPortHit(nv, mx, my, ox, oy, dir)
+  local ports = (dir == 'out') and nv.outs.audio or nv.ins.audio
+  local count = #ports
+  if count == 0 then return nil end
+  local lx0, ly0, lx1, ly1 = nodeRect(nv)
+  local rowW = count * PORT_SIZE + (count - 1) * PORT_GAP
+  local cx   = math.floor((ox + lx0 + ox + lx1 - rowW) / 2)
+  local y    = (dir == 'out') and (oy + ly1 + PORT_BAND_OFFSET)
+                              or  (oy + ly0 - PORT_BAND_OFFSET - PORT_SIZE)
+  for i = 1, count do
+    local px = cx + (i - 1) * (PORT_SIZE + PORT_GAP)
+    if inRect(mx, my, px - PORT_HIT_PAD, y - PORT_HIT_PAD,
+              px + PORT_SIZE + PORT_HIT_PAD, y + PORT_SIZE + PORT_HIT_PAD) then
+      return i
+    end
+  end
+end
+
+-- Which sides of the node have outputs (drives whether the split shows and
+-- where a body-click lands). master / midi-only generators / audio-only
+-- effects all suppress whichever side has nothing to drag from.
+local function sourceSides(nv)
+  return { audio = #nv.outs.audio > 0, midi = #nv.outs.midi > 0 }
+end
+
+-- Source-side hover (shift held, no draft). Returns {nv, band, portIdx?} or
+-- nil. Either band of the body, or a popped-out output port box.
+local function shiftHoverHit(nodeViews, mx, my, ox, oy)
+  for _, nv in ipairs(nodeViews) do
+    local sides = sourceSides(nv)
+    if sides.audio or sides.midi then
+      local lx0, ly0, lx1, ly1 = nodeRect(nv)
+      local bx0, by0 = ox + lx0, oy + ly0
+      local bx1, by1 = ox + lx1, oy + ly1
+      if inRect(mx, my, bx0, by0, bx1, by1) then
+        local band
+        if sides.audio and sides.midi then
+          band = (mx < bx0 + (bx1 - bx0) * AUDIO_BAND_FRAC) and 'audio' or 'midi'
+        else
+          band = sides.audio and 'audio' or 'midi'
+        end
+        return { nv = nv, band = band }
+      end
+      if sides.audio and #nv.outs.audio > 1 then
+        local i = audioPortHit(nv, mx, my, ox, oy, 'out')
+        if i then return { nv = nv, band = 'audio', portIdx = i } end
+      end
+    end
+  end
+end
+
+-- Target-side hover (draft in flight). Returns {nv, portIdx?} or nil. Audio
+-- drafts can also land on a popped-out input port above the target.
+local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
+  for _, nv in ipairs(nodeViews) do
+    local lx0, ly0, lx1, ly1 = nodeRect(nv)
+    if inRect(mx, my, ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
+      return { nv = nv }
+    end
+    if draft.type == 'audio' and #nv.ins.audio > 1 then
+      local i = audioPortHit(nv, mx, my, ox, oy, 'in')
+      if i then return { nv = nv, portIdx = i } end
+    end
+  end
+end
+
+-- Refuse self / descendants (cycle), midi→master, audio→audio-less target.
+-- DAG.validate would catch them too, but hover-time rejection gives instant
+-- visual feedback rather than a silent drop with no edge appearing.
+local function dropEligible(draft, target)
+  if not target then return false end
+  if draft.descendants[target.nv.id] then return false end
+  if draft.type == 'midi' and target.nv.id == 'master' then return false end
+  if draft.type == 'audio' and #target.nv.ins.audio == 0 then return false end
+  return true
+end
+
+local function drawShiftHoverBands(dl, nv, ox, oy, hoveredBand, isPortHit)
   local lx0, ly0, lx1, ly1 = nodeRect(nv)
   local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
-  local audioCol = chrome.colour('wiring.port.audio')
-  local midiCol  = chrome.colour('wiring.port.midi')
-  drawPortBand(dl, x0, x1,
-    y0 - PORT_BAND_OFFSET - PORT_SIZE,
-    nv.ins.audio,  nv.ins.midi,  audioCol, midiCol,
-    '##port/' .. nv.id .. '/in')
-  drawPortBand(dl, x0, x1,
-    y1 + PORT_BAND_OFFSET,
-    nv.outs.audio, nv.outs.midi, audioCol, midiCol,
-    '##port/' .. nv.id .. '/out')
+  local sides    = sourceSides(nv)
+  local tintCol  = withAlpha(chrome.colour('wiring.port.midi'),     TINT_ALPHA)
+  local hoverCol = withAlpha(chrome.colour('wiring.node.selected'), HOVER_ALPHA)
+
+  if sides.audio and sides.midi then
+    local split = x0 + (x1 - x0) * AUDIO_BAND_FRAC
+    ImGui.DrawList_AddRectFilled(dl, split, y0, x1, y1, tintCol,
+      CORNER_R, ImGui.DrawFlags_RoundCornersRight)
+    if not isPortHit then
+      if hoveredBand == 'audio' then
+        ImGui.DrawList_AddRectFilled(dl, x0, y0, split, y1, hoverCol,
+          CORNER_R, ImGui.DrawFlags_RoundCornersLeft)
+      else
+        ImGui.DrawList_AddRectFilled(dl, split, y0, x1, y1, hoverCol,
+          CORNER_R, ImGui.DrawFlags_RoundCornersRight)
+      end
+    end
+  elseif sides.midi then
+    ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, tintCol, CORNER_R)
+  elseif not isPortHit then
+    ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, hoverCol, CORNER_R)
+  end
+end
+
+local function drawDropTargetOverlay(dl, nv, ox, oy, draftType, portIdx)
+  local lx0, ly0, lx1, ly1 = nodeRect(nv)
+  local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
+  local tintCol  = withAlpha(chrome.colour('wiring.port.midi'),     TINT_ALPHA)
+  local hoverCol = withAlpha(chrome.colour('wiring.node.selected'), HOVER_ALPHA)
+  if draftType == 'midi' then
+    ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, tintCol, CORNER_R)
+  elseif not portIdx then
+    ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, hoverCol, CORNER_R)
+  end
+end
+
+-- Pop-out audio port rows (outputs below source on shift-hover, inputs above
+-- target during an audio draft). MIDI stays implicit on the band itself.
+local function drawAudioPortRow(dl, nv, ox, oy, dir)
+  local lx0, ly0, lx1, ly1 = nodeRect(nv)
+  local ports = (dir == 'out') and nv.outs.audio or nv.ins.audio
+  local y     = (dir == 'out') and (oy + ly1 + PORT_BAND_OFFSET)
+                              or  (oy + ly0 - PORT_BAND_OFFSET - PORT_SIZE)
+  drawPortBand(dl, ox + lx0, ox + lx1, y, ports, {},
+    chrome.colour('wiring.port.audio'), chrome.colour('wiring.port.midi'),
+    '##port/' .. nv.id .. '/' .. dir)
 end
 
 ----- Wire drawing
@@ -394,6 +535,14 @@ local function renderCanvas(w, h)
   -- in the middle, positions extend in all four quadrants from there.
   local ox, oy = sx + math.floor(w / 2), sy + math.floor(h / 2)
 
+  local mx, my    = ImGui.GetMousePos(ctx)
+  local shiftHeld = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
+  -- Pressing shift clears the selection so the wire-creation hover
+  -- affordance owns the visual layer. Rising edge only — holding shift
+  -- doesn't keep wiping selections the user might rebuild mid-frame.
+  if shiftHeld and not shiftWas then wv:setSelection{} end
+  shiftWas = shiftHeld
+
   local nodeViews = wv:nodeViews()
 
   -- In-flight selection preview: while a band is live, nodes its rect
@@ -402,7 +551,6 @@ local function renderCanvas(w, h)
   -- selection drives the outline.
   local selection
   if band then
-    local mx, my = ImGui.GetMousePos(ctx)
     selection = nodesInBand(nodeViews, ox, oy, band.mx0, band.my0, mx, my)
   else
     selection = wv:selection()
@@ -412,7 +560,6 @@ local function renderCanvas(w, h)
   -- node's pos by (delta) so geometry below (wire pre-pass, hit test,
   -- node draw, hover band) all see the in-flight positions.
   if drag then
-    local mx, my = ImGui.GetMousePos(ctx)
     local dx, dy = mx - drag.mx0, my - drag.my0
     for _, nv in ipairs(nodeViews) do
       local s = drag.starts[nv.id]
@@ -423,54 +570,99 @@ local function renderCanvas(w, h)
   local nodesById = {}
   for _, nv in ipairs(nodeViews) do nodesById[nv.id] = nv end
 
-  -- Wire pre-pass: lines run centre-to-centre, the rounded node rects
-  -- below overpaint the middle. Wire colour reuses the matching port
-  -- colour role.
+  -- Existing wires: pre-pass so the rounded node rects below overpaint
+  -- the centre. Wire colour reuses the matching port colour role.
   local audioCol = chrome.colour('wiring.port.audio')
   local midiCol  = chrome.colour('wiring.port.midi')
   drawWiresPass(dl, wv:wireViews(), nodesById, ox, oy, audioCol, midiCol)
 
-  -- Hover region includes the port bands above/below the node (plus
-  -- the per-port hit padding) so the mouse can dwell on a port without
-  -- the hover dropping and erasing the port mid-aim.
-  local hoverInflate = PORT_REACH
-  local hoveredNV = nil
-  for _, nv in ipairs(nodeViews) do
-    local lx0, ly0, lx1, ly1 = nodeRect(nv)
-    if ImGui.IsMouseHoveringRect(ctx,
-         ox + lx0, oy + ly0 - hoverInflate,
-         ox + lx1, oy + ly1 + hoverInflate) then
-      hoveredNV = nv
-    end
-    drawNode(dl, nv, ox, oy, selection[nv.id])
+  -- Wire-creation hover state: source-side while shift is held with no
+  -- draft in flight; target-side while a draft is in flight (shift may
+  -- have been released). dropTargetHit returns the under-cursor node;
+  -- dropEligible then refuses self / descendants / type-mismatched
+  -- targets so the hover gives no visual encouragement to invalid drops.
+  local sourceHit, targetHit
+  if wireDraft then
+    local hit = dropTargetHit(nodeViews, mx, my, ox, oy, wireDraft)
+    if hit and dropEligible(wireDraft, hit) then targetHit = hit end
+  elseif shiftHeld then
+    sourceHit = shiftHoverHit(nodeViews, mx, my, ox, oy)
   end
-  if hoveredNV then drawHoverPorts(dl, hoveredNV, ox, oy) end
-  wv:setHover(hoveredNV and hoveredNV.id or nil)
 
-  -- Drag / band bookkeeping. Mousedown on a node body starts a drag;
-  -- mousedown on bare canvas (not over any node's hover region) starts
-  -- a rubber-band — clicks landing on a hovered port band do neither,
-  -- reserving that surface for the future wire-pull gesture. Mouseup
-  -- commits whichever was live.
-  if not drag and not band and ImGui.IsMouseClicked(ctx, 0) then
-    local bodyHit = nodeUnderMouse(nodeViews, ox, oy)
-    if bodyHit then
-      local mx, my = ImGui.GetMousePos(ctx)
-      local starts = {}
-      if selection[bodyHit.id] then
-        for _, nv in ipairs(nodeViews) do
-          if selection[nv.id] then starts[nv.id] = { x = nv.pos.x, y = nv.pos.y } end
-        end
-      else
-        starts[bodyHit.id] = { x = bodyHit.pos.x, y = bodyHit.pos.y }
-      end
-      drag = { mx0 = mx, my0 = my, starts = starts }
-    elseif not hoveredNV then
-      local mx, my = ImGui.GetMousePos(ctx)
-      band = { mx0 = mx, my0 = my }
+  for _, nv in ipairs(nodeViews) do
+    drawNode(dl, nv, ox, oy, selection[nv.id])
+    if sourceHit and sourceHit.nv == nv then
+      drawShiftHoverBands(dl, nv, ox, oy, sourceHit.band, sourceHit.portIdx ~= nil)
+    elseif targetHit and targetHit.nv == nv then
+      drawDropTargetOverlay(dl, nv, ox, oy, wireDraft.type, targetHit.portIdx)
     end
+  end
+
+  -- Pop-out audio port rows: outputs below source on shift-hover,
+  -- inputs above target during an audio draft. MIDI port stays implicit.
+  if sourceHit and sourceHit.band == 'audio' and #sourceHit.nv.outs.audio > 1 then
+    drawAudioPortRow(dl, sourceHit.nv, ox, oy, 'out')
+  end
+  if targetHit and wireDraft.type == 'audio' and #targetHit.nv.ins.audio > 1 then
+    drawAudioPortRow(dl, targetHit.nv, ox, oy, 'in')
+  end
+
+  -- In-flight wire from source-node centre to the cursor.
+  if wireDraft then
+    local src = nodesById[wireDraft.fromId]
+    if src then
+      local col = wireDraft.type == 'midi' and midiCol or audioCol
+      ImGui.DrawList_AddLine(dl, ox + src.pos.x, oy + src.pos.y, mx, my, col, WIRE_THICK)
+    end
+  end
+
+  wv:setHover((sourceHit and sourceHit.nv.id)
+              or (targetHit and targetHit.nv.id) or nil)
+
+  -- Esc cancels an in-flight draft. Consume the press so the wiring-scope
+  -- wiringClearSelection (also bound to Esc) doesn't run on the same key.
+  if wireDraft and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+    wireDraft = nil
+  end
+
+  -- Mousedown precedence: shift-hover wins (starts a wire draft); body
+  -- hit falls through to drag-to-move; anything else starts a band.
+  if not drag and not band and not wireDraft
+      and ImGui.IsMouseClicked(ctx, 0) then
+    if sourceHit then
+      local desc = wv:descendantsOf(sourceHit.nv.id)
+      if sourceHit.band == 'midi' then
+        wireDraft = { type = 'midi', fromId = sourceHit.nv.id, descendants = desc }
+      else
+        wireDraft = { type = 'audio', fromId = sourceHit.nv.id,
+                      fromPort = sourceHit.portIdx or 1, descendants = desc }
+      end
+    else
+      local bodyHit = nodeUnderMouse(nodeViews, ox, oy)
+      if bodyHit then
+        local starts = {}
+        if selection[bodyHit.id] then
+          for _, nv in ipairs(nodeViews) do
+            if selection[nv.id] then starts[nv.id] = { x = nv.pos.x, y = nv.pos.y } end
+          end
+        else
+          starts[bodyHit.id] = { x = bodyHit.pos.x, y = bodyHit.pos.y }
+        end
+        drag = { mx0 = mx, my0 = my, starts = starts }
+      else
+        band = { mx0 = mx, my0 = my }
+      end
+    end
+  elseif wireDraft and not ImGui.IsMouseDown(ctx, 0) then
+    if targetHit then
+      wv:addWire{
+        type = wireDraft.type,
+        from = wireDraft.fromId, fromPort = wireDraft.fromPort,
+        to   = targetHit.nv.id,  toPort   = targetHit.portIdx,
+      }
+    end
+    wireDraft = nil
   elseif drag and not ImGui.IsMouseDown(ctx, 0) then
-    local mx, my = ImGui.GetMousePos(ctx)
     local dx, dy = mx - drag.mx0, my - drag.my0
     if dx ~= 0 or dy ~= 0 then
       local moves = {}
@@ -479,7 +671,6 @@ local function renderCanvas(w, h)
     end
     drag = nil
   elseif band and not ImGui.IsMouseDown(ctx, 0) then
-    local mx, my = ImGui.GetMousePos(ctx)
     if mx == band.mx0 and my == band.my0 then
       wv:setSelection{}                                        -- empty-canvas click
     else
@@ -489,9 +680,8 @@ local function renderCanvas(w, h)
     band = nil
   end
 
-  -- Band overlay: drawn last so it floats over nodes and hover ports.
+  -- Band overlay: drawn last so it floats over nodes and hover affordances.
   if band then
-    local mx, my = ImGui.GetMousePos(ctx)
     local bx0, by0, bx1, by1 = band.mx0, band.my0, mx, my
     if bx0 > bx1 then bx0, bx1 = bx1, bx0 end
     if by0 > by1 then by0, by1 = by1, by0 end
@@ -515,7 +705,7 @@ local function popBodyStyles() ImGui.PopStyleColor(ctx, 1) end
 
 --contract: bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
 function wp:bind() end
-function wp:unbind() drag, band = nil, nil end
+function wp:unbind() drag, band, wireDraft, shiftWas = nil, nil, nil, false end
 
 function wp:renderToolbarBits(_) end
 

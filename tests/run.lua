@@ -118,6 +118,7 @@ local specs = {
   'dag_quotient_spec',
   'dag_absorption_spec',
   'dag_capacity_spec',
+  'dag_descendants_spec',
   'wm_persistence_spec',
   'wm_installed_fx_spec',
   'wv_authoring_spec',

@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=327  sha=669d30e  mode=namespace
+@module DAG  src=DAG.lua  loc=346  sha=dc12cac  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module — no state; functions take operands explicitly
@@ -27,16 +27,17 @@
   @fn audioPorts(node)  @ 25
       -- Source: one stereo out, no audio in. fx/master: explicit integer counts.
   -- validate
+  -- descendants
   -- lower
-  @fn passthroughNode(node)  @ 123
+  @fn passthroughNode(node)  @ 142
       -- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
       -- the audio shape).
   -- srcSet / classes
-  @fn inboundOf(compile)  @ 196
+  @fn inboundOf(compile)  @ 215
       -- Reverse adjacency: for each node id, the list of input-side node ids.
       -- Stashed on compile so the cost is paid once per graph instance.
   -- quotientGraph / absorption / capacityErrors
-  @fn directHost(q)  @ 271
+  @fn directHost(q)  @ 290
       -- Direct (one-hop) host for cls under the absorption rule. Returns nil if cls
       -- has no eligible host: zero audio parents, ambiguous primaries, or multiple
       -- non-primary audio parents.
@@ -44,15 +45,19 @@
 # Public API (M.*)
   @api M.validate(user)  @ 39
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.lower(user)  @ 130
+  @api M.descendants(user, sourceId)  @ 124
+      -- Forward reachability over the user graph. Used by the wiring page at
+      -- drag-start to disqualify cycle-forming drop targets in one set lookup.
+      @contract  set { [id]=true } incl sourceId; transitive over user.edges; cycle-safe via visited
+  @api M.lower(user)  @ 149
       @contract  assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
-  @api M.srcSet(compile, nodeId)  @ 207
+  @api M.srcSet(compile, nodeId)  @ 226
       @contract  set<trackGuid> of source ancestors; memoised on compile (stashes _srcSet, _inbound)
-  @api M.classes(compile)  @ 228
+  @api M.classes(compile)  @ 247
       @contract  partitions compile.nodes by srcSet; classKey = sorted trackGuids joined by '|', '' for empty
-  @api M.quotientGraph(compile, classes)  @ 242
+  @api M.quotientGraph(compile, classes)  @ 261
       @contract  class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryAudioParents ⊆ audioParents, flagged by `primary` wires
-  @api M.absorption(quotient)  @ 281
+  @api M.absorption(quotient)  @ 300
       @contract  sparse {[cls]=hostCls}; chains resolved to terminal host; absent = self-hosting; cycle-safe
-  @api M.capacityErrors(compile, classes)  @ 303
+  @api M.capacityErrors(compile, classes)  @ 322
       @contract  list of {classKey, kind='audio'|'midi', count} for intra-class conn counts exceeding 64 audio / 128 midi; sorted by classKey then kind

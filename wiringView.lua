@@ -6,6 +6,7 @@
 --invariant: hover / selection are nodeId-only and per-session; they don't persist. Camera (pan/zoom) lands here when 1.3b adds the drag UX.
 
 local util = require 'util'
+local DAG  = require 'DAG'
 
 local cm = (...).cm
 
@@ -110,6 +111,25 @@ function wv:moveNodes(moves)
       if node then node.pos.x, node.pos.y = p.x, p.y end
     end
   end)
+end
+
+--contract: appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
+function wv:addWire(spec)
+  return wm:mutate(function(g)
+    local edge = { type = spec.type, from = spec.from, to = spec.to }
+    if spec.type == 'audio' then
+      edge.fromPort = spec.fromPort or 1
+      edge.toPort   = spec.toPort   or 1
+    end
+    util.add(g.edges, edge)
+  end)
+end
+
+----- Topology queries
+
+--contract: forward reachability over user.edges; returns { [id]=true } including sourceId
+function wv:descendantsOf(sourceId)
+  return DAG.descendants(wm:graph(), sourceId)
 end
 
 ----- Render-ready, viewport-independent

@@ -116,6 +116,25 @@ function M.validate(user)
   return nil
 end
 
+----- descendants
+
+-- Forward reachability over the user graph. Used by the wiring page at
+-- drag-start to disqualify cycle-forming drop targets in one set lookup.
+--contract: set { [id]=true } incl sourceId; transitive over user.edges; cycle-safe via visited
+function M.descendants(user, sourceId)
+  local out, adj = {}, {}
+  for _, edge in ipairs(user.edges or {}) do
+    util.bucket(adj, edge.from, edge.to)
+  end
+  local function visit(id)
+    if out[id] then return end
+    out[id] = true
+    for _, nxt in ipairs(adj[id] or {}) do visit(nxt) end
+  end
+  visit(sourceId)
+  return out
+end
+
 ----- lower
 
 -- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,

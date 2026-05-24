@@ -404,6 +404,37 @@ saw.
 - Error overlay renders capacity overflows inline on the
   offending nodes.
 
+**Wire creation gesture:**
+
+Shift is the wire-creation modifier — pressing it clears any current
+selection. With shift held, hovering a node splits it visually into
+a 2/3-wide audio band (original colour) and a 1/3-wide MIDI band
+(MIDI port colour), with a hover overlay on whichever band the
+cursor is in. If the node has more than one audio output port,
+hovering the audio band also pops out per-port boxes below the node.
+
+Drag-start fixes the wire kind:
+
+- audio band → audio wire from port 1
+- popped-out port box → audio wire from that port
+- MIDI band → MIDI wire
+
+Shift may be released once the drag is underway. As the cursor enters
+another node, the target highlights and the feedback depends on the
+in-flight wire kind: a MIDI wire tints the whole target in the MIDI
+colour; an audio wire shows only the overlay, and if the target has
+more than one audio input port, pops the input boxes out *above* the
+node. Cycle-forming targets — the source itself and its transitive
+descendants — are ineligible and suppress all of this; the check
+uses each node's child list, walked transitively at drag-start. Drop
+completes the wire — on the node body it lands on port 1 (audio) or
+the sole MIDI port; on a popped-out port box it lands on that port.
+Release over empty canvas cancels.
+
+Nodes with nothing to drag from on a side — the master node's audio
+band (no outs), an FX with zero audio outs, etc. — suppress that
+side's split and hover the full-width node instead.
+
 **Coordinator wiring:**
 
 - `coord:register('wiring', wp)` in `continuum.lua`, registered
