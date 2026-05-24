@@ -104,11 +104,13 @@ function wv:addFx(x, y)
   end)
 end
 
---contract: writes node.pos for an existing node id in logical canvas units; no-op if id missing
-function wv:moveNode(id, x, y)
+--contract: atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
+function wv:moveNodes(moves)
   return wm:mutate(function(g)
-    local node = g.nodes[id]
-    if node then node.pos.x, node.pos.y = x, y end
+    for id, p in pairs(moves) do
+      local node = g.nodes[id]
+      if node then node.pos.x, node.pos.y = p.x, p.y end
+    end
   end)
 end
 

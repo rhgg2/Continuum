@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=140  sha=58ce00a  mode=chunk
+@module wiringView  src=wiringView.lua  loc=142  sha=a452aa4  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -51,15 +51,15 @@
       -- something to chew on. The hardcoded fxIdent won't resolve in REAPER;
       -- the whole entry-point gets replaced when 1.3c lands the real flow.
       @contract  appends an fx node at logical canvas pos (x,y); mints id 'n'<_nextId>; bumps _nextId
-  @api wv:moveNode(id, x, y)  @ 108
-      @contract  writes node.pos for an existing node id in logical canvas units; no-op if id missing
+  @api wv:moveNodes(moves)  @ 108
+      @contract  atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 119
+  @api wv:nodeViews()  @ 121
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 128
-  @api wv:setHover(id)  @ 129
-  @api wv:selection()  @ 132
+  @api wv:hover()  @ 130
+  @api wv:setHover(id)  @ 131
+  @api wv:selection()  @ 134
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 134
+  @api wv:setSelection(idSet)  @ 136
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.

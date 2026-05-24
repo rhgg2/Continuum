@@ -4,7 +4,7 @@
 --invariant: render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
 --invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
---invariant: at Stage 1.3b the page handles add-fx (scope key N, testing-only), drag-to-move single node, and rubber-band selection (replace-only, Esc / empty-click clears). Ports remain hover-only.
+--invariant: at Stage 1.3b the page handles add-fx (scope key N, testing-only), drag-to-move (single node, or the whole selection when the grabbed node is selected), and rubber-band selection (replace-only, Esc / empty-click clears). Ports remain hover-only.
 
 local util = require 'util'
 
@@ -41,16 +41,19 @@ local PORT_REACH = PORT_BAND_OFFSET + PORT_SIZE + PORT_HIT_PAD
 
 ----- Drag / band state (page-local; ephemeral, never persisted)
 
--- drag: captured at mousedown-on-node-body. While IsMouseDown, the node
--- draws at start + (curMouse - startMouse). Mouseup commits through
--- wv:moveNode (one wm:mutate, one wiringChanged signal).
+-- drag: captured at mousedown-on-node-body. starts maps every node
+-- under the drag (just the grabbed one if it's unselected, or the
+-- whole selection if the grabbed one is in it) to its origin pos.
+-- While IsMouseDown each draws at start + (curMouse - startMouse).
+-- Mouseup commits the whole set in one wv:moveNodes (one wm:mutate,
+-- one wiringChanged signal).
 --
 -- band: captured at mousedown-on-empty-canvas. While IsMouseDown, drawn
 -- as a translucent rect. Mouseup with movement → wv:setSelection of
 -- intersected node ids (replace, not additive); mouseup without movement
 -- (a click) clears the selection. Drag and band are mutually exclusive:
 -- body-hit wins, port-band hit suppresses both (reserved for wire-pull).
-local drag = nil  -- { id, mx0, my0, x0, y0 }
+local drag = nil  -- { mx0, my0, starts = { [id] = {x,y}, … } }
 local band = nil  -- { mx0, my0 } — current corner is GetMousePos
 
 ----- Pixel geometry (page-owned)
@@ -197,17 +200,15 @@ local function renderCanvas(w, h)
     selection = wv:selection()
   end
 
-  -- Drag projection: while a drag is live, override the dragged node's
-  -- pos in this frame's nodeViews so geometry below (hit test, draw,
-  -- hover band) all see the in-flight position.
+  -- Drag projection: while a drag is live, override every dragged
+  -- node's pos by (delta) so geometry below (hit test, draw, hover
+  -- band) all see the in-flight positions.
   if drag then
+    local mx, my = ImGui.GetMousePos(ctx)
+    local dx, dy = mx - drag.mx0, my - drag.my0
     for _, nv in ipairs(nodeViews) do
-      if nv.id == drag.id then
-        local mx, my = ImGui.GetMousePos(ctx)
-        nv.pos.x = drag.x0 + (mx - drag.mx0)
-        nv.pos.y = drag.y0 + (my - drag.my0)
-        break
-      end
+      local s = drag.starts[nv.id]
+      if s then nv.pos.x, nv.pos.y = s.x + dx, s.y + dy end
     end
   end
 
@@ -237,16 +238,27 @@ local function renderCanvas(w, h)
     local bodyHit = nodeUnderMouse(nodeViews, ox, oy)
     if bodyHit then
       local mx, my = ImGui.GetMousePos(ctx)
-      drag = { id = bodyHit.id, mx0 = mx, my0 = my,
-               x0 = bodyHit.pos.x, y0 = bodyHit.pos.y }
+      local starts = {}
+      if selection[bodyHit.id] then
+        for _, nv in ipairs(nodeViews) do
+          if selection[nv.id] then starts[nv.id] = { x = nv.pos.x, y = nv.pos.y } end
+        end
+      else
+        starts[bodyHit.id] = { x = bodyHit.pos.x, y = bodyHit.pos.y }
+      end
+      drag = { mx0 = mx, my0 = my, starts = starts }
     elseif not hoveredNV then
       local mx, my = ImGui.GetMousePos(ctx)
       band = { mx0 = mx, my0 = my }
     end
   elseif drag and not ImGui.IsMouseDown(ctx, 0) then
     local mx, my = ImGui.GetMousePos(ctx)
-    local fx, fy = drag.x0 + (mx - drag.mx0), drag.y0 + (my - drag.my0)
-    if fx ~= drag.x0 or fy ~= drag.y0 then wv:moveNode(drag.id, fx, fy) end
+    local dx, dy = mx - drag.mx0, my - drag.my0
+    if dx ~= 0 or dy ~= 0 then
+      local moves = {}
+      for id, s in pairs(drag.starts) do moves[id] = { x = s.x + dx, y = s.y + dy } end
+      wv:moveNodes(moves)
+    end
     drag = nil
   elseif band and not ImGui.IsMouseDown(ctx, 0) then
     local mx, my = ImGui.GetMousePos(ctx)

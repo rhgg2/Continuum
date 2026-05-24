@@ -53,24 +53,56 @@ return {
     end,
   },
   {
-    name = 'moveNode updates pos of an existing node via wm:mutate',
+    name = 'moveNodes writes pos for one node via wm:mutate',
     run = function(harness)
       local _, wv = mkWv(harness)
       wv:addFx(0, 0)
-      t.truthy(wv:moveNode('n1', 50, -25))
+      t.truthy(wv:moveNodes{ n1 = { x = 50, y = -25 } })
       local g = wv:graph()
       t.eq(g.nodes.n1.pos.x, 50)
       t.eq(g.nodes.n1.pos.y, -25)
     end,
   },
   {
-    name = 'moveNode on missing id is a no-op (validation still passes)',
+    name = 'moveNodes writes several ids atomically in one mutate',
     run = function(harness)
       local _, wv = mkWv(harness)
+      wv:addFx(0, 0); wv:addFx(0, 0); wv:addFx(0, 0)
+      t.truthy(wv:moveNodes{
+        n1 = { x = 10, y = 20 },
+        n2 = { x = 30, y = 40 },
+        n3 = { x = 50, y = 60 },
+      })
+      local g = wv:graph()
+      t.eq(g.nodes.n1.pos.x, 10); t.eq(g.nodes.n1.pos.y, 20)
+      t.eq(g.nodes.n2.pos.x, 30); t.eq(g.nodes.n2.pos.y, 40)
+      t.eq(g.nodes.n3.pos.x, 50); t.eq(g.nodes.n3.pos.y, 60)
+    end,
+  },
+  {
+    name = 'moveNodes skips missing ids; existing ids still land',
+    run = function(harness)
+      local _, wv = mkWv(harness)
+      wv:addFx(0, 0)
+      t.truthy(wv:moveNodes{
+        n1    = { x = 7, y = 8 },
+        ghost = { x = 1, y = 2 },
+      })
+      local g = wv:graph()
+      t.eq(g.nodes.n1.pos.x, 7)
+      t.eq(g.nodes.n1.pos.y, 8)
+      t.truthy(g.nodes.ghost == nil, 'missing id stayed missing')
+    end,
+  },
+  {
+    name = 'moveNodes with empty map is a no-op (mutate still succeeds)',
+    run = function(harness)
+      local _, wv = mkWv(harness)
+      wv:addFx(11, 22)
       local before = wv:graph()
-      t.truthy(wv:moveNode('ghost', 1, 2))
+      t.truthy(wv:moveNodes{})
       local after = wv:graph()
-      t.deepEq(after.nodes, before.nodes, 'no nodes changed')
+      t.deepEq(after.nodes, before.nodes)
     end,
   },
   {
