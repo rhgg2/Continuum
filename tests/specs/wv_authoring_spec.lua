@@ -1,6 +1,8 @@
 local t    = require('support')
 local util = require('util')
 
+local FX = { name = 'ReaEQ', ident = 'VST3:ReaEQ (Cockos)' }
+
 local function mkWv(harness)
   local h  = harness.mk()
   local wv = util.instantiate('wiringView', { cm = h.cm })
@@ -29,13 +31,15 @@ return {
       local before = wv:graph()
       t.eq(before._nextId, 1, 'fresh _nextId is 1')
 
-      t.truthy(wv:addFx(12, -34))
+      t.truthy(wv:addFx(12, -34, FX))
       local after = wv:graph()
       t.eq(after._nextId, 2, '_nextId bumped to 2')
       t.truthy(after.nodes.n1,           'id minted as n1')
       t.eq(after.nodes.n1.kind, 'fx')
       t.eq(after.nodes.n1.pos.x, 12)
       t.eq(after.nodes.n1.pos.y, -34)
+      t.eq(after.nodes.n1.fxIdent,   FX.ident, 'ident from picker record')
+      t.eq(after.nodes.n1.fxDisplay, FX.name,  'display name from picker record')
       t.eq(after.nodes.n1.audio.ins,  1, 'stereo in')
       t.eq(after.nodes.n1.audio.outs, 1, 'stereo out')
     end,
@@ -44,7 +48,7 @@ return {
     name = 'successive addFx calls stair-step ids and leave master alone',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0, 0); wv:addFx(10, 10); wv:addFx(20, 20)
+      wv:addFx(0, 0, FX); wv:addFx(10, 10, FX); wv:addFx(20, 20, FX)
       local g = wv:graph()
       t.eq(fxCount(g), 3,                'three fx nodes')
       t.truthy(g.nodes.n1 and g.nodes.n2 and g.nodes.n3, 'ids n1,n2,n3')
@@ -56,7 +60,7 @@ return {
     name = 'moveNodes writes pos for one node via wm:mutate',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0, 0)
+      wv:addFx(0, 0, FX)
       t.truthy(wv:moveNodes{ n1 = { x = 50, y = -25 } })
       local g = wv:graph()
       t.eq(g.nodes.n1.pos.x, 50)
@@ -67,7 +71,7 @@ return {
     name = 'moveNodes writes several ids atomically in one mutate',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0, 0); wv:addFx(0, 0); wv:addFx(0, 0)
+      wv:addFx(0, 0, FX); wv:addFx(0, 0, FX); wv:addFx(0, 0, FX)
       t.truthy(wv:moveNodes{
         n1 = { x = 10, y = 20 },
         n2 = { x = 30, y = 40 },
@@ -83,7 +87,7 @@ return {
     name = 'moveNodes skips missing ids; existing ids still land',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0, 0)
+      wv:addFx(0, 0, FX)
       t.truthy(wv:moveNodes{
         n1    = { x = 7, y = 8 },
         ghost = { x = 1, y = 2 },
@@ -98,11 +102,26 @@ return {
     name = 'moveNodes with empty map is a no-op (mutate still succeeds)',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(11, 22)
+      wv:addFx(11, 22, FX)
       local before = wv:graph()
       t.truthy(wv:moveNodes{})
       local after = wv:graph()
       t.deepEq(after.nodes, before.nodes)
+    end,
+  },
+  {
+    name = 'listInstalledFX is a passthrough to wm',
+    run = function(harness)
+      local _, wv = mkWv(harness)
+      reaper.EnumInstalledFX = function(i)
+        if i == 0 then return true, 'VST3: ReaEQ (Cockos)',   'VST3:ReaEQ (Cockos)'   end
+        if i == 1 then return true, 'VST3: ReaComp (Cockos)', 'VST3:ReaComp (Cockos)' end
+        return false
+      end
+      local list = wv:listInstalledFX()
+      t.eq(#list, 2)
+      t.eq(list[1].name,  'VST3: ReaEQ (Cockos)',   'raw name passes through')
+      t.eq(list[2].ident, 'VST3:ReaComp (Cockos)',  'ident untouched')
     end,
   },
   {

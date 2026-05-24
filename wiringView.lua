@@ -85,24 +85,22 @@ function wv:load()  wm:load() end
 
 ----- Authoring (slice 1.3b)
 
--- TESTING-ONLY: no FX picker yet. wiringAddFx (Key_N in the wiring
--- scope) calls this so selection / drag / multi-node geometry have
--- something to chew on. The hardcoded fxIdent won't resolve in REAPER;
--- the whole entry-point gets replaced when 1.3c lands the real flow.
---contract: appends an fx node at logical canvas pos (x,y); mints id 'n'<_nextId>; bumps _nextId
-function wv:addFx(x, y)
+--contract: appends an fx node at logical (x,y); mints id 'n'<_nextId>; fx = {name, ident} from wv:listInstalledFX
+function wv:addFx(x, y, fx)
   return wm:mutate(function(g)
     local id = 'n' .. g._nextId
     g._nextId = g._nextId + 1
     g.nodes[id] = {
       kind      = 'fx',
       pos       = { x = x, y = y },
-      fxIdent   = 'JS:placeholder',
-      fxDisplay = 'fx',
+      fxIdent   = fx.ident,
+      fxDisplay = fx.name,
       audio     = { ins = 1, outs = 1 },
     }
   end)
 end
+
+function wv:listInstalledFX() return wm:listInstalledFX() end
 
 --contract: atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
 function wv:moveNodes(moves)

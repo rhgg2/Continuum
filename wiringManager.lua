@@ -14,6 +14,7 @@ local wm = {}
 local fire = util.installHooks(wm)
 
 local _graph = nil
+local _installedFx = nil  -- session cache; reaper's installed-FX set is fixed at runtime
 
 ----- Helpers
 
@@ -80,6 +81,20 @@ end
 function wm:errors()
   local compile = self:compile()
   return DAG.capacityErrors(compile, DAG.classes(compile))
+end
+
+--contract: enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
+function wm:listInstalledFX()
+  if _installedFx then return _installedFx end
+  local out, i = {}, 0
+  while true do
+    local ok, name, ident = reaper.EnumInstalledFX(i)
+    if not ok then break end
+    util.add(out, { name = name, ident = ident })
+    i = i + 1
+  end
+  _installedFx = out
+  return out
 end
 
 return wm

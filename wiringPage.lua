@@ -4,7 +4,7 @@
 --invariant: render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
 --invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
---invariant: at Stage 1.3b the page handles add-fx (scope key N, testing-only), drag-to-move (single node, or the whole selection when the grabbed node is selected), and rubber-band selection (replace-only, Esc / empty-click clears). Ports remain hover-only.
+--invariant: at Stage 1.3c the page handles add-fx (scope key N opens an FX-picker modal whose pick lands at canvas centre), drag-to-move (single node, or the whole selection when the grabbed node is selected), and rubber-band selection (replace-only, Esc / empty-click clears). Ports remain hover-only.
 
 local util = require 'util'
 
@@ -25,7 +25,59 @@ local wv = util.instantiate('wiringView', { cm = cm, cmgr = cmgr })
 
 local wp = {}
 
-local NODE_W           = 90
+----- FX-picker modal kind
+
+-- Typeahead picker, hosted as a modalHost kind so it has no anchor
+-- requirement (the wiring page has no toolbar button to hang an inline
+-- chrome.drawPicker off). Body mirrors drawPicker's filter+matches+cursor
+-- shape but draws inside an active BeginPopupModal; flags=NoNav on open
+-- kills ImGui's built-in nav highlight so it doesn't fight our cursor.
+-- state = { kind, title, items, buf, cursor, callback }; close(true, fx)
+-- delivers one entry from `items`.
+modalHost:registerKind('wiringFxPicker', function(state, close)
+  if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
+  ImGui.SetNextItemWidth(ctx, 280)
+  local prev = state.buf or ''
+  local _, buf = ImGui.InputText(ctx, '##fxFilter', prev)
+  state.buf = buf
+  local entered = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+               or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
+  ImGui.Separator(ctx)
+
+  local lf = buf:lower()
+  local matches = {}
+  for _, fx in ipairs(state.items) do
+    if buf == '' or fx.name:lower():find(lf, 1, true) then
+      matches[#matches + 1] = fx
+    end
+  end
+  if ImGui.IsWindowAppearing(ctx) or buf ~= prev then state.cursor = 1 end
+  local n = #matches
+  local cursor = state.cursor or 1
+  if n > 0 then
+    if     ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow) then cursor = cursor % n + 1
+    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow)   then cursor = (cursor - 2) % n + 1
+    end
+  end
+  cursor = math.min(math.max(cursor, 1), math.max(n, 1))
+  state.cursor = cursor
+
+  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+    close(false)
+  elseif entered and matches[cursor] then
+    close(true, matches[cursor])
+  else
+    if ImGui.BeginChild(ctx, '##fxList', 280, 240,
+                        ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
+      for i, fx in ipairs(matches) do
+        if ImGui.Selectable(ctx, fx.name, i == cursor) then close(true, fx) end
+      end
+    end
+    ImGui.EndChild(ctx)
+  end
+end)
+
+local NODE_W           = 96
 local NODE_H           = 60
 local CORNER_R         = 5
 local PORT_SIZE        = 8
@@ -333,11 +385,33 @@ function wp:focusState()
 end
 
 
------ Wiring scope (slice 1.3b)
+----- Wiring scope
+
+-- REAPER hands us "Type: Name (Author)" in EnumInstalledFX. The picker
+-- row shows the full form (the prefix and author disambiguate same-named
+-- plugins from different vendors), but the node label keeps just the bare
+-- name so a 90px box has room to read it. Strip on commit, not in wm.
+local function shortFxName(s)
+  s = s:gsub('^[^:]+:%s*', '')
+  s = s:gsub('%s*%([^()]*%)%s*$', '')
+  return s
+end
+
+local function openFxPicker()
+  modalHost:open{
+    kind     = 'wiringFxPicker',
+    title    = 'Add FX',
+    items    = wv:listInstalledFX(),
+    flags    = ImGui.WindowFlags_NoNav,
+    callback = function(fx)
+      wv:addFx(0, 0, { name = shortFxName(fx.name), ident = fx.ident })
+    end,
+  }
+end
 
 local wiring = cmgr:scope('wiring')
 wiring:registerAll{
-  wiringAddFx          = function() wv:addFx(0, 0) end,
+  wiringAddFx          = openFxPicker,
   wiringClearSelection = function() wv:setSelection{} end,
 }
 wiring:bindAll{
