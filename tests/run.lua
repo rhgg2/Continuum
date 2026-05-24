@@ -18,6 +18,7 @@ local specs = {
   'command_manager_spec',
   'cmgr_stack_spec',
   'config_schema_spec',
+  'cm_poll_undo_spec',
   'util_edit_primitives_spec',
   'util_bucket_spec',
   'util_install_hooks_spec',
@@ -118,6 +119,7 @@ local specs = {
   'dag_absorption_spec',
   'dag_capacity_spec',
   'wm_persistence_spec',
+  'wp_smoke_spec',
 }
 
 local pass, fail, failures = 0, 0, {}

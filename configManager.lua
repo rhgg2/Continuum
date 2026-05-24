@@ -232,6 +232,18 @@ local take      = nil
 local track     = nil
 local fire  -- installed below, once cm exists
 
+-- External-mutation watcher. REAPER undo / redo (and any third-party
+-- script) can rewrite the take + track P_EXT strings without telling
+-- us, so cm's cache would stay stale until the next setContext.
+-- pollUndo() compares the project state count once a frame; on a tick
+-- it re-reads the bound take + track P_EXT and refreshes if either
+-- differs from what we last wrote. Project + global tiers live outside
+-- REAPER's undo system (SetProjExtState / disk file) and stay
+-- unreversed -- a known gap, not a bug.
+local lastStateCount = -1
+local lastTakeRaw    = ''
+local lastTrackRaw   = ''
+
 local cache = {
   global    = nil,
   project   = nil,
@@ -302,8 +314,9 @@ local function saveTrack(tbl)
     print('Error! No track context for config storage')
     return
   end
+  lastTrackRaw = util.serialise(tbl)
   reaper.GetSetMediaTrackInfo_String(
-    track, 'P_EXT:' .. CONFIG_PREFIX .. 'config', util.serialise(tbl), true)
+    track, 'P_EXT:' .. CONFIG_PREFIX .. 'config', lastTrackRaw, true)
 end
 
 local function loadTake()
@@ -319,7 +332,8 @@ local function saveTake(tbl)
   -- edit is impossible since editing requires a bound take. So a
   -- no-take take-tier write is always benign -- drop it silently.
   if not take then return end
-  reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_config', util.serialise(tbl), true)
+  lastTakeRaw = util.serialise(tbl)
+  reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_config', lastTakeRaw, true)
 end
 
 local loaders = {
@@ -337,6 +351,29 @@ local savers = {
   take      = saveTake,
   transient = function() end,
 }
+
+local function readTakeRaw()
+  if not take then return '' end
+  local _, val = reaper.GetSetMediaItemTakeInfo_String(
+    take, 'P_EXT:ctm_config', '', false)
+  return val or ''
+end
+
+local function readTrackRaw()
+  if not track then return '' end
+  local _, val = reaper.GetSetMediaTrackInfo_String(
+    track, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
+  return val or ''
+end
+
+-- Called after every context-changing path so pollUndo's next compare
+-- is against the just-bound state, not whatever the previous take held.
+local function snapshotBaseline()
+  lastStateCount = reaper.GetProjectStateChangeCount
+                   and reaper.GetProjectStateChangeCount(0) or -1
+  lastTakeRaw    = readTakeRaw()
+  lastTrackRaw   = readTrackRaw()
+end
 
 ---------- CACHE MANAGEMENT
 
@@ -394,6 +431,7 @@ function cm:setContext(newTake)
   end
 
   refreshCache()
+  snapshotBaseline()
   --emits: configChanged -- configChangedPayload.reload
   fire('configChanged', {})
 end
@@ -401,6 +439,7 @@ end
 function cm:clearTake()
   take = nil
   cache.take = {}
+  snapshotBaseline()
   --emits: configChanged -- configChangedPayload.reload
   fire('configChanged', {})
 end
@@ -408,8 +447,37 @@ end
 function cm:setTrack(newTrack)
   track = newTrack
   cache.track = loaders.track()
+  snapshotBaseline()
   --emits: configChanged -- configChangedPayload.reload
   fire('configChanged', {})
+end
+
+--invariant: poll REAPER's project state count once per frame; on a tick, re-read the bound take + track P_EXT strings and refresh the cache + fire reload if either differs from what cm last wrote. Catches REAPER undo / redo, which rewinds P_EXT without notifying us. Project + global tiers live outside REAPER's undo and stay unreversed.
+--contract: no-op when reaper.GetProjectStateChangeCount is absent (test harness without state-count fake); cheap poll otherwise -- one int compare per frame, two string reads + compares only on a state-count tick
+--emits: configChanged -- configChangedPayload.reload (only when an external diff is observed)
+function cm:pollUndo()
+  if not reaper.GetProjectStateChangeCount then return end
+  local count = reaper.GetProjectStateChangeCount(0)
+  if count == lastStateCount then return end
+  lastStateCount = count
+  local changed = false
+  if take then
+    local raw = readTakeRaw()
+    if raw ~= lastTakeRaw then
+      lastTakeRaw = raw
+      cache.take  = loaders.take() or {}
+      changed = true
+    end
+  end
+  if track then
+    local raw = readTrackRaw()
+    if raw ~= lastTrackRaw then
+      lastTrackRaw = raw
+      cache.track  = loaders.track() or {}
+      changed = true
+    end
+  end
+  if changed then fire('configChanged', {}) end
 end
 
 ----- Reading

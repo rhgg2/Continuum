@@ -12,6 +12,7 @@ function M.new()
     tempoBPM     = 120,
     ppqPerQN     = 240,
     projExt      = {},
+    projStateCount = 0,
     trackExt     = {},
     takeExt      = {},
     globalExt    = {},
@@ -44,6 +45,10 @@ function M.new()
 
   function r.SetProjExtState(_proj, section, key, value)
     state.projExt[section .. '/' .. key] = value
+  end
+
+  function r.GetProjectStateChangeCount(_proj)
+    return state.projStateCount
   end
 
   function r.GetSetMediaTrackInfo_String(track, key, value, setNew)

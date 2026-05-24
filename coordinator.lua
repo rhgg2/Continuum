@@ -167,6 +167,7 @@ end
 local function dispatch(state) return dispatchKeys(state, cmgr, ctx) end
 
 local function frame()
+  cm:pollUndo()
   tick()
   local page = pages[active]
 
