@@ -1159,7 +1159,11 @@ modalHost:registerKind('takeProps', function(s, close)
   if rvN then s.nameBuf = name end
 
   ImGui.Text(ctx, 'Length (beats)')
-  if ImGui.IsWindowAppearing(ctx) or s.refocusBeats then
+  -- Appearing frame: the same Enter that opened the popup is still
+  -- IsKeyPressed=true this frame. Gate OK/Cancel below so a binding
+  -- like Super+Shift+Enter doesn't immediately self-dismiss the modal.
+  local appearing = ImGui.IsWindowAppearing(ctx)
+  if appearing or s.refocusBeats then
     ImGui.SetKeyboardFocusHere(ctx)
     s.refocusBeats = nil
   end
@@ -1176,11 +1180,11 @@ modalHost:registerKind('takeProps', function(s, close)
   end
 
   local okPressed     = ImGui.Button(ctx, 'OK')
-                     or ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                     or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
+                     or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+                                         or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
   ImGui.SameLine(ctx)
   local cancelPressed = ImGui.Button(ctx, 'Cancel')
-                     or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
+                     or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
   if     okPressed     then close(true, s.nameBuf, tonumber(s.beatsBuf), s.mode)
   elseif cancelPressed then close(false) end
 end)
