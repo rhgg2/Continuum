@@ -131,7 +131,116 @@ local HEADER_GAP = 4
 -- Snap a click's QN down to the top edge of the row box it sits in.
 local function floorTo(v, step) return math.floor(v / step) * step end
 
-local function renderGrid(tracks, nTracks)
+-- Grid mouse pass — runs before renderGrid so the in-flight take, loop
+-- and create candidates are in hand when the paint pass relocates the
+-- dragged take. In a track column, press a take to focus it then drag —
+-- the take rides the cursor; Alt-drag duplicates. In the QN gutter, a
+-- no-drag press sets the REAPER edit cursor and a drag sets the loop
+-- range. A grid release that dragged no take moves the cursor to the
+-- pressed cell; an empty-space press clears focus. Must run inside the
+-- ##arrangeGrid child so IsWindowHovered resolves correctly. Also
+-- pushes the current row/col extent into av (geometric input). Returns
+-- the in-flight drag/loop/create candidates, each nil when not active.
+local function handleGridMouse(nTracks)
+  local paneLeft, oy = ImGui.GetCursorScreenPos(ctx)
+  local ox           = paneLeft + LOOP_PAD
+  local _, availH    = ImGui.GetContentRegionAvail(ctx)
+  local rowH         = math.ceil(math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx)))
+  local headerH      = rowH + HEADER_PAD
+  local bodyTop      = oy + headerH + HEADER_GAP
+  local visRows      = math.max(1, math.floor((oy + availH - bodyTop) / rowH))
+  local bodyBot      = bodyTop + visRows * rowH
+  local sr           = (select(1, av:scroll())) or 0
+  local gutterR      = ox + QN_W + GUTTER_PAD
+
+  av:setGridSize(visRows, nTracks)
+  av:setMaxCol(nTracks)
+
+  local mx, my  = ImGui.GetMousePos(ctx)
+  local bpr     = av:beatPerRow()
+  local yToQN   = function(y) return (sr + (y - bodyTop) / rowH) * bpr end
+  local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
+
+  if ImGui.IsMouseClicked(ctx, 1) and ImGui.IsWindowHovered(ctx)
+     and my >= bodyTop and my <= bodyBot
+     and mx >= paneLeft and mx < gutterR then
+    av:clearLoopRange()
+  end
+  -- Wheel scrolls by moving the cursor: a detached viewport scroll
+  -- would be pulled back to the cursor by followViewport next frame.
+  -- Fractional trackpad deltas accumulate; whole rows drain off.
+  local wheel = ImGui.GetMouseWheel(ctx)
+  if wheel ~= 0 and ImGui.IsWindowHovered(ctx) then
+    wheelAccum = wheelAccum + wheel * WHEEL_ROWS
+    local trunc = wheelAccum >= 0 and math.floor or math.ceil
+    local rows  = trunc(wheelAccum)
+    if rows ~= 0 then
+      wheelAccum = wheelAccum - rows
+      av:setCursor(av:cursorRow() - rows, av:cursorCol())
+    end
+  end
+  if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
+     and my >= bodyTop and my <= bodyBot then
+    if mx >= paneLeft and mx < gutterR then
+      press = { qn = yToQN(my), gutter = true, moved = false }
+    else
+      local col = math.floor((mx - gutterR) / TRACK_W)
+      if col >= 0 and col < nTracks then
+        local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
+        local qn = yToQN(my)
+        local take, mode = av:hitTake(col, qn, bpr / rowH)
+        if not take and ImGui.IsMouseDoubleClicked(ctx, 0) then
+          press = { qn = floorTo(qn, bpr), col = col,
+                    create = true, moved = false }
+        else
+          press = {
+            qn = qn, row = sr + row, col = col,
+            take = take, mode = mode, moved = false,
+            duplicate = mode == 'move'
+                        and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
+          }
+          -- Focus the take on press, so a drag visibly carries it.
+          if take then av:setFocus(take.take) end
+        end
+      end
+    end
+  end
+  if not press then return nil, nil, nil end
+  if (press.take or press.gutter or press.create)
+     and ImGui.IsMouseDragging(ctx, 0) then
+    press.moved = true
+  end
+
+  local dragCand = (press.moved and press.take)
+                   and av:dragCandidate(press, yToQN(my), snapped) or nil
+  local loopCand = (press.moved and press.gutter)
+                   and av:gutterLoopCand(press, yToQN(my), snapped) or nil
+  local createCand = (press.moved and press.create)
+                     and av:createCandidate(press, yToQN(my), snapped) or nil
+
+  if ImGui.IsMouseReleased(ctx, 0) then
+    if dragCand then
+      if dragCand.fits then av:commitDrag(press, dragCand) end
+    elseif loopCand then
+      av:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
+    elseif press.create then
+      -- Sweep prefills the length in beats; bare double-click uses the default.
+      local beats = createCand and createCand.lengthQN or nil
+      openCreateModal(press.col, press.qn, beats)
+    elseif press.gutter then
+      -- Floor to the row box's top edge (not the nearest edge) unless Shift is held.
+      av:setEditCursorQN(snapped and floorTo(press.qn, bpr) or press.qn)
+    else
+      av:setCursor(press.row, press.col)
+      if not press.take then av:setFocus(nil) end
+    end
+    press = nil
+    return nil, nil, nil
+  end
+  return dragCand, loopCand, createCand
+end
+
+local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   local dl       = ImGui.GetWindowDrawList(ctx)
   local paneLeft, oy = ImGui.GetCursorScreenPos(ctx)
   local ox           = paneLeft + LOOP_PAD
@@ -143,9 +252,6 @@ local function renderGrid(tracks, nTracks)
   local bodyBot  = bodyTop + visRows * rowH
   local gridW    = QN_W + GUTTER_PAD + TRACK_W * nTracks
   local gridR    = ox + gridW
-
-  av:setGridSize(visRows, nTracks)
-  av:setMaxCol(nTracks)
 
   local sr      = (select(1, av:scroll())) or 0
 
@@ -163,101 +269,6 @@ local function renderGrid(tracks, nTracks)
   local function trackRight(c) return trackLeft(c) + TRACK_W                end
   local function rowY(row)     return bodyTop + (row - sr) * rowH end
 
-  -- Mouse: in a track column, press a take to focus it then drag — the
-  -- take rides the cursor (the take pass below draws it at the
-  -- candidate, not its committed position); Alt-drag duplicates. In the
-  -- QN gutter, a no-drag press sets the REAPER edit cursor and a drag
-  -- sets the loop range. A grid release that dragged no take moves the
-  -- cursor to the pressed cell; an empty-space press clears focus. Runs
-  -- before the take pass so the candidate is in hand when the pass
-  -- relocates the dragged take. Returns the in-flight take drag, loop
-  -- drag and create drag, each nil when not active.
-  local function runGridMouse()
-    local mx, my  = ImGui.GetMousePos(ctx)
-    local bpr     = av:beatPerRow()
-    local yToQN   = function(y) return (sr + (y - bodyTop) / rowH) * bpr end
-    local gutterR = trackLeft(0)
-    local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
-
-    if ImGui.IsMouseClicked(ctx, 1) and ImGui.IsWindowHovered(ctx)
-       and my >= bodyTop and my <= bodyBot
-       and mx >= paneLeft and mx < gutterR then
-      av:clearLoopRange()
-    end
-    -- Wheel scrolls by moving the cursor: a detached viewport scroll
-    -- would be pulled back to the cursor by followViewport next frame.
-    -- Fractional trackpad deltas accumulate; whole rows drain off.
-    local wheel = ImGui.GetMouseWheel(ctx)
-    if wheel ~= 0 and ImGui.IsWindowHovered(ctx) then
-      wheelAccum = wheelAccum + wheel * WHEEL_ROWS
-      local trunc = wheelAccum >= 0 and math.floor or math.ceil
-      local rows  = trunc(wheelAccum)
-      if rows ~= 0 then
-        wheelAccum = wheelAccum - rows
-        av:setCursor(av:cursorRow() - rows, av:cursorCol())
-      end
-    end
-    if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
-       and my >= bodyTop and my <= bodyBot then
-      if mx >= paneLeft and mx < gutterR then
-        press = { qn = yToQN(my), gutter = true, moved = false }
-      else
-        local col = math.floor((mx - gutterR) / TRACK_W)
-        if col >= 0 and col < nTracks then
-          local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
-          local qn = yToQN(my)
-          local take, mode = av:hitTake(col, qn, bpr / rowH)
-          if not take and ImGui.IsMouseDoubleClicked(ctx, 0) then
-            press = { qn = floorTo(qn, bpr), col = col,
-                      create = true, moved = false }
-          else
-            press = {
-              qn = qn, row = sr + row, col = col,
-              take = take, mode = mode, moved = false,
-              duplicate = mode == 'move'
-                          and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
-            }
-            -- Focus the take on press, so a drag visibly carries it.
-            if take then av:setFocus(take.take) end
-          end
-        end
-      end
-    end
-    if not press then return nil, nil, nil end
-    if (press.take or press.gutter or press.create)
-       and ImGui.IsMouseDragging(ctx, 0) then
-      press.moved = true
-    end
-
-    local dragCand = (press.moved and press.take)
-                     and av:dragCandidate(press, yToQN(my), snapped) or nil
-    local loopCand = (press.moved and press.gutter)
-                     and av:gutterLoopCand(press, yToQN(my), snapped) or nil
-    local createCand = (press.moved and press.create)
-                       and av:createCandidate(press, yToQN(my), snapped) or nil
-
-    if ImGui.IsMouseReleased(ctx, 0) then
-      if dragCand then
-        if dragCand.fits then av:commitDrag(press, dragCand) end
-      elseif loopCand then
-        av:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
-      elseif press.create then
-        -- Sweep prefills the length in beats; bare double-click uses the default.
-        local beats = createCand and createCand.lengthQN or nil
-        openCreateModal(press.col, press.qn, beats)
-      elseif press.gutter then
-        -- Floor to the row box's top edge (not the nearest edge) unless Shift is held.
-        av:setEditCursorQN(snapped and floorTo(press.qn, bpr) or press.qn)
-      else
-        av:setCursor(press.row, press.col)
-        if not press.take then av:setFocus(nil) end
-      end
-      press = nil
-      return nil, nil, nil
-    end
-    return dragCand, loopCand, createCand
-  end
-  local dragCand, loopCand, createCand = runGridMouse()
   local curRow, curCol = av:cursorRow(), av:cursorCol()
 
   -- The right border (gridline at gridR; rightmost take-rect border a
@@ -687,7 +698,8 @@ function ap:renderBody(_, w, h, dispatch)
   if ImGui.BeginChild(ctx, '##arrangeGrid', gridW, h,
                       ImGui.ChildFlags_None,
                       ImGui.WindowFlags_NoNav) then
-    renderGrid(tracks, nTracks)
+    local dragCand, loopCand, createCand = handleGridMouse(nTracks)
+    renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   end
   ImGui.EndChild(ctx)
 
