@@ -2372,6 +2372,14 @@ function tv:rebuild(takeChanged)
   rebuilding = false
 end
 
+--contract: blank the grid so renderBody falls through to the "Select a MIDI item" placeholder. Counterpart to bindTake(nil)'s dormant seam, for when the take is destroyed rather than handed off.
+function tv:dropGrid()
+  grid.cols         = {}
+  grid.chanFirstCol = {}
+  grid.chanLastCol  = {}
+  grid.lane1Col     = {}
+end
+
 ----- Lifecycle
 
 do

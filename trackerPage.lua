@@ -894,9 +894,9 @@ cmgr:scope('tracker'):bindAll{
   doubleRPB      = { {ImGui.Key_Equal, ImGui.Mod_Super} },
   halveRPB       = { {ImGui.Key_Minus, ImGui.Mod_Super} },
   setRPB         = { {ImGui.Key_Z,     ImGui.Mod_Super} },
-  takeProperties = { {ImGui.Key_Backspace, ImGui.Mod_Ctrl} },
-  newTakeBelow           = { {ImGui.Key_Enter, ImGui.Mod_Ctrl} },
-  duplicateUnpooledBelow = { {ImGui.Key_Enter, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
+  takeProperties = { {ImGui.Key_Backspace, ImGui.Mod_Super} },
+  newTakeBelow           = { {ImGui.Key_Enter, ImGui.Mod_Super} },
+  duplicateUnpooledBelow = { {ImGui.Key_Enter, ImGui.Mod_Super, ImGui.Mod_Shift} },
   matchGridToCursor = { {ImGui.Key_G, ImGui.Mod_Super, ImGui.Mod_Shift} },
   groupMark         = { {ImGui.Key_M, ImGui.Mod_Ctrl} },
   groupDuplicate    = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
@@ -1438,6 +1438,9 @@ function tp:renderFloating(_) end
 --contract: bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
 function tp:bind(t)  tm:bindTake(t)   end
 function tp:unbind() swingEditor:close(); tm:bindTake(nil) end
+
+--contract: take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.
+function tp:dropTake() swingEditor:close(); tm:bindTake(nil); tv:dropGrid() end
 
 --contract: for coord's external-mutation watcher; re-reads the bound take, no swap
 function tp:reloadFromReaper() tm:reloadFromReaper() end

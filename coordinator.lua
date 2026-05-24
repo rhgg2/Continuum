@@ -124,8 +124,13 @@ end
 
 --contract: tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
 --contract: tracker-active branch — take swap takes priority (clears the watcher so the post-bind end-of-frame capture is the new baseline); otherwise a hash diff signals an external mutation (REAPER Ctrl-Z, external script) and we reload the bound take
+--contract: currentTake invalidation (item deleted in-app or out) is detected here via ValidatePtr2; on a dead pointer we drop the take so downstream (sample:tick, takeMidiHash, edit commands) stops poking REAPER with garbage
 local function tick()
   modalHost:tick()
+  if currentTake and not reaper.ValidatePtr2(0, currentTake, 'MediaItem_Take*') then
+    currentTake, lastTakeHash = nil, nil
+    if pages.tracker then pages.tracker:dropTake() end
+  end
   if active == 'tracker' and pages.tracker then
     if refreshTakeFromReaper() then
       pages.tracker:bind(currentTake)

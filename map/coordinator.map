@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=342  sha=b494336  mode=chunk
+@module coordinator  src=coordinator.lua  loc=347  sha=6362c91  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
@@ -34,7 +34,7 @@
       @contract  owns currentTake — refreshTakeFromReaper polls GetSelectedMediaItem→GetActiveTake→TakeIsMIDI, mutates currentTake only on a real MIDI take that differs (sticky on nothing-selected or non-MIDI), and returns true so the caller can rebind
   @state lastTakeHash = nil  @ 33
       @contract  external-mutation watcher — captured at end of every tracker-active frame; top-of-tick diff triggers tp:reloadFromReaper. Cleared on take swap (bind path is the reload). Nil disables the diff check (one-frame grace after swap/first activation).
-  @state coord = {}  @ 265
+  @state coord = {}  @ 270
       @contract  pages must be registered via coord:register(name,page); first registered becomes active
 
 # Private functions
@@ -54,32 +54,33 @@
   -- Coordinator
   @fn refreshTakeFromReaper()  @ 109
   @fn takeMidiHash()  @ 119
-  @fn tick()  @ 127
+  @fn tick()  @ 128
       @contract  tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
       @contract  tracker-active branch — take swap takes priority (clears the watcher so the post-bind end-of-frame capture is the new baseline); otherwise a hash diff signals an external mutation (REAPER Ctrl-Z, external script) and we reload the bound take
-  @fn drawSwitcher()  @ 144
-  @fn dispatch(state)  @ 162
-  @fn frame()  @ 164
+      @contract  currentTake invalidation (item deleted in-app or out) is detected here via ValidatePtr2; on a dead pointer we drop the take so downstream (sample:tick, takeMidiHash, edit commands) stops poking REAPER with garbage
+  @fn drawSwitcher()  @ 149
+  @fn dispatch(state)  @ 167
+  @fn frame()  @ 169
 
 # Public API (coord:*)
-  @api coord:register(name, page)  @ 267
-  @api coord:setActive(name)  @ 273
+  @api coord:register(name, page)  @ 272
+  @api coord:setActive(name)  @ 278
       @contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange→no-op since the page is project-wide)
-  @api coord:diveToTake(item)  @ 296
+  @api coord:diveToTake(item)  @ 301
       @contract  dive from the arrange page into a MIDI take — selects the item alone in REAPER so refreshTakeFromReaper reads it, then activates the tracker page (whose bind picks it up). Trusts the caller to pass a MIDI item; nil is a no-op.
-  @api coord:returnToArrange()  @ 304
+  @api coord:returnToArrange()  @ 309
       @contract  return from the tracker page to arrange, landing the arrange cursor on the take just edited (coord's currentTake). The inverse of diveToTake; a no-op when arrange isn't registered.
-  @api coord:setSamplerTrack(t)  @ 311
+  @api coord:setSamplerTrack(t)  @ 316
       @contract  stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
-  @api coord:togglePage()  @ 320
+  @api coord:togglePage()  @ 325
       -- Cycle tracker → arrange → sample → tracker. Pages absent from the registry
       -- are skipped so a partial wiring (e.g. tests with only one page) still cycles.
-  @api coord:reloadAfterExternalMutation()  @ 331
+  @api coord:reloadAfterExternalMutation()  @ 336
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:quit()  @ 337
-  @api coord:chrome()  @ 338
-  @api coord:modalHost()  @ 339
-  @api coord:run()  @ 340
+  @api coord:quit()  @ 342
+  @api coord:chrome()  @ 343
+  @api coord:modalHost()  @ 344
+  @api coord:run()  @ 345
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -88,6 +89,7 @@
   @reaper GetActiveTake
   @reaper TakeIsMIDI
   @reaper MIDI_GetHash
+  @reaper ValidatePtr2
   @reaper defer
   @reaper SelectAllMediaItems
   @reaper SetMediaItemSelected

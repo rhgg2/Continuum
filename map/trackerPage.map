@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1472  sha=0ff4daa  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1475  sha=1ac0f4b  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -151,9 +151,11 @@
   @api tp:bind(t)  @ 1439
       @contract  bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
   @api tp:unbind()  @ 1440
-  @api tp:reloadFromReaper()  @ 1443
+  @api tp:dropTake()  @ 1443
+      @contract  take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.
+  @api tp:reloadFromReaper()  @ 1446
       @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
-  @api tp:focusState()  @ 1456
+  @api tp:focusState()  @ 1459
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo
@@ -164,9 +166,9 @@
       --   transiently, but bound commands should still fire. Anything that
       --   genuinely needs the keys (a focused InputText, an active slider,
       --   a held button) shows up as IsAnyItemActive.
-  @api tp:handleInput()  @ 1467
-  @api tp:save()  @ 1468
-  @api tp:load()  @ 1469
+  @api tp:handleInput()  @ 1470
+  @api tp:save()  @ 1471
+  @api tp:load()  @ 1472
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
