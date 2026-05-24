@@ -97,6 +97,7 @@ local function Main()
   end
   local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, onDive = onDive, onTakeProperties = onTakeProperties })
   local sp = util.instantiate('samplePage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
+  local wp = util.instantiate('wiringPage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
 
   -- Arrange registered first so Continuum boots into it (coord:register
   -- makes the first registered page active). seedCursorFromReaper then
@@ -104,6 +105,7 @@ local function Main()
   coord:register('arrange', ap)
   coord:register('tracker', tp)
   coord:register('sample',  sp)
+  coord:register('wiring',  wp)
   ap:seedCursorFromReaper()
 
   -- Globals: transport wrappers, page switching, quit. Bound on root

@@ -1,0 +1,44 @@
+@module wiringView  src=wiringView.lua  loc=80  sha=untracked  mode=chunk
+@deps cm
+
+# Invariants & contracts
+  @invariant  wiringView owns wm and is the only module that speaks to it — wiringPage runs every graph query and every mutation through wv. Mirrors av→am, vm→tm.
+  @invariant  wv is the logical view layer — it projects the raw graph into render-ready descriptors (label, port counts split into audio/MIDI) and carries per-session pointers (hover, selection by nodeId). Viewport geometry, screen coordinates, hit-testing, and every ImGui call live in wiringPage. wv never speaks ImGui.
+  @invariant  hover / selection are nodeId-only and per-session; they don't persist. Camera (pan/zoom) lands here when 1.3b adds the drag UX.
+
+# Shapes
+  @shape  nodeView = { id, pos={x,y}, label, ins={audio,midi}, outs={audio,midi} } — everything the page needs to lay out a node, with no viewport / pixel concerns
+
+# Imports
+  @require util = 'util'  @ 8
+
+# Constructed sub-instances
+  @construct wm = util.instantiate('wiringManager')  @ 12
+
+# Private state
+  @state wv = {}  @ 14
+  @state hoverNodeId = nil  @ 16
+  @state selectionNodeId = nil  @ 17
+
+# Private functions
+  -- Logical projection (viewport-independent)
+  @fn nodeLabel(node)  @ 21
+  @fn audioCount(node, dir)  @ 32
+  @fn midiCount(node, dir)  @ 39
+      -- Per the design doc: master has no MIDI; source / fx carry exactly one
+      -- MIDI port in each direction.
+  @fn nodeView(id, node)  @ 44
+
+# Public API (wv:*)
+  -- wm pass-through
+  @api wv:graph()  @ 58
+  @api wv:save()  @ 59
+  @api wv:load()  @ 60
+  -- Render-ready, viewport-independent
+  @api wv:nodeViews()  @ 66
+      @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
+  -- Logical view-state (nodeId only)
+  @api wv:hover()  @ 75
+  @api wv:setHover(id)  @ 76
+  @api wv:selection()  @ 77
+  @api wv:setSelection(id)  @ 78

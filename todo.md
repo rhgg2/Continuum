@@ -4,8 +4,9 @@
   - trill
   - cc macros
   - arpeggio
-- automation smoothing
+- CC smoothing
 - 14bit CCs
+- automation items
 - move to command based key/mouse interactions
 - multiselect / copy / paste in ap
 - wave previews in ap

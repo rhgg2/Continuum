@@ -1,0 +1,52 @@
+@module wiringPage  src=wiringPage.lua  loc=134  sha=untracked  mode=chunk
+@deps cm, cmgr, chrome, gui, modalHost
+
+# Invariants & contracts
+  @invariant  render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
+  @invariant  wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
+  @invariant  the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + audio/midi counts; the page turns those into rects.
+  @invariant  at Stage 1.3a the page draws only — no editing, no wiring-scope commands, no palette. Selection / hover / drag arrive in 1.3b.
+
+# Imports
+  @require util = 'util'  @ 9
+  @require ImGui = 'imgui'  @ 15
+
+# Constructed sub-instances
+  @construct wv = util.instantiate('wiringView')  @ 23
+
+# Private state
+  @state ctx = gui and gui.ctx or nil  @ 20
+  @state uiSize = gui and gui.fontSize and gui.fontSize.ui or 12  @ 21
+  @state wp = {}  @ 25
+  @state NODE_W = 120  @ 27
+  @state NODE_HEADER_H = 18  @ 28
+  @state PORT_SIZE = 8  @ 29
+  @state PORT_SPACING = 4  @ 30
+  @state PORT_EDGE_INSET = 6  @ 31
+
+# Private functions
+  -- Pixel geometry (page-owned)
+  @fn totalPortCount(side)  @ 35
+  @fn nodeRect(nv)  @ 39
+      -- Per-node pixel rect in canvas-local coordinates (origin = top-left of the
+      -- canvas child window). Height grows with port count so ports never overflow.
+  -- Drawing
+  @fn drawNode(dl, nv, ox, oy, fill, border, textCol)  @ 49
+  @fn renderCanvas(w, h)  @ 74
+  @fn pushBodyStyles()  @ 89
+  @fn popBodyStyles()  @ 92
+
+# Public API (wp:*)
+  @api wp:bind()  @ 97
+      @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
+  @api wp:unbind()  @ 98
+  @api wp:renderToolbarBits(_)  @ 100
+  @api wp:renderBody(_, w, h, dispatch)  @ 103
+      @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
+  @api wp:renderStatusBar(_)  @ 116
+  @api wp:focusState()  @ 122
+      @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
+
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB

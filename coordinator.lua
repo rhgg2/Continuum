@@ -274,7 +274,7 @@ function coord:register(name, page)
   if not active then self:setActive(name) end
 end
 
---contract: setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange→no-op since the page is project-wide)
+--contract: setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange/wiring→no-op since project-wide)
 function coord:setActive(name)
   if active == name then return end
   if active and pages[active] then
@@ -294,6 +294,8 @@ function coord:setActive(name)
     pages.sample:bind(samplerTrack)
   elseif name == 'arrange' then
     pages.arrange:bind()
+  elseif name == 'wiring' then
+    pages.wiring:bind()
   end
 end
 
@@ -320,10 +322,11 @@ function coord:setSamplerTrack(t)
   end
 end
 
--- Cycle tracker → arrange → sample → tracker. Pages absent from the registry
--- are skipped so a partial wiring (e.g. tests with only one page) still cycles.
+-- Cycle tracker → arrange → sample → wiring → tracker. Pages absent from
+-- the registry are skipped so a partial wiring (e.g. tests with only one
+-- page) still cycles.
 function coord:togglePage()
-  local order = { 'tracker', 'arrange', 'sample' }
+  local order = { 'tracker', 'arrange', 'sample', 'wiring' }
   local idx
   for i, name in ipairs(order) do if name == active then idx = i; break end end
   for step = 1, #order do
