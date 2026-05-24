@@ -29,19 +29,27 @@ local function nodeLabel(node)
   return node.kind or '?'
 end
 
--- audio.ins / audio.outs are integer stereo-port counts; fx/master store
--- them directly. Source nodes default to (0 in, 1 stereo out).
-local function audioCount(node, dir)
-  if node.kind == 'source' then return dir == 'in' and 0 or 1 end
-  local n = node.audio and node.audio[dir == 'in' and 'ins' or 'outs']
-  return n or 0
+-- audio.ins / audio.outs are integer stereo-port counts; fx/master
+-- store them directly, source defaults to (0 in, 1 stereo out). The
+-- view projects each count as a list of names — synthetic 'in 1' /
+-- 'out 1' baseline today; once wm queries TrackFX_GetIOName it will
+-- override per-port via node.audio.inNames / outNames.
+local function audioPorts(node, dir)
+  local n = node.kind == 'source' and (dir == 'in' and 0 or 1)
+         or (node.audio and node.audio[dir == 'in' and 'ins' or 'outs'])
+         or 0
+  local names  = node.audio and node.audio[dir == 'in' and 'inNames' or 'outNames']
+  local prefix = dir == 'in' and 'in' or 'out'
+  local list = {}
+  for i = 1, n do list[i] = (names and names[i]) or (prefix .. ' ' .. i) end
+  return list
 end
 
--- Per the design doc: master has no MIDI; source / fx carry exactly one
--- MIDI port in each direction.
-local function midiCount(node, dir)
-  if node.kind == 'master' then return 0 end
-  return 1
+-- Per the design doc: master has no MIDI; source / fx carry exactly
+-- one MIDI port in each direction.
+local function midiPorts(node, dir)
+  if node.kind == 'master' then return {} end
+  return { 'midi' }
 end
 
 -- Category is a function of port shape, not node.kind: a node with no
@@ -49,14 +57,14 @@ end
 -- audio in is a generator (source / synth), one with audio in is an
 -- effect. Drives the colour.wiring.node.<category> fill role.
 local function nodeCategory(ins, outs)
-  if outs.audio + outs.midi == 0 then return 'master'    end
-  if ins.audio == 0              then return 'generator' end
+  if #outs.audio + #outs.midi == 0 then return 'master'    end
+  if #ins.audio == 0               then return 'generator' end
   return 'effect'
 end
 
 local function nodeView(id, node)
-  local ins  = { audio = audioCount(node, 'in'),  midi = midiCount(node, 'in')  }
-  local outs = { audio = audioCount(node, 'out'), midi = midiCount(node, 'out') }
+  local ins  = { audio = audioPorts(node, 'in'),  midi = midiPorts(node, 'in')  }
+  local outs = { audio = audioPorts(node, 'out'), midi = midiPorts(node, 'out') }
   return {
     id       = id,
     pos      = { x = node.pos.x, y = node.pos.y },
@@ -77,7 +85,7 @@ function wv:load()  wm:load() end
 
 ----- Render-ready, viewport-independent
 
---shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', ins={audio,midi}, outs={audio,midi} } — render-ready descriptors, no viewport / pixel concerns
+--shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}} } — port lists carry names; counts = #list
 --contract: returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
 function wv:nodeViews()
   local g = wm:graph()

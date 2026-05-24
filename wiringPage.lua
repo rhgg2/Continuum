@@ -25,12 +25,19 @@ local wv = util.instantiate('wiringView', { cm = cm, cmgr = cmgr })
 
 local wp = {}
 
-local NODE_W           = 96
-local NODE_H           = 72
-local CORNER_R         = 4
+local NODE_W           = 90
+local NODE_H           = 60
+local CORNER_R         = 5
 local PORT_SIZE        = 8
 local PORT_GAP         = 4
 local PORT_BAND_OFFSET = 6   -- gap between node edge and the hover-only port row
+local PORT_HIT_PAD     = 4   -- hit area extends this far beyond the visual square on each side
+local PORT_TOOLTIP_GAP = 4   -- pixels between port top and tooltip bottom edge
+
+-- How far port geometry reaches past a node edge. Drives the node-level
+-- hover inflation so the row stays drawn while the mouse is anywhere in
+-- the padded hit area.
+local PORT_REACH = PORT_BAND_OFFSET + PORT_SIZE + PORT_HIT_PAD
 
 ----- Pixel geometry (page-owned)
 
@@ -58,20 +65,44 @@ local function drawNode(dl, nv, ox, oy)
   if wireFont then ImGui.PopFont(ctx) end
 end
 
+-- One port: filled square + invisible button (padded outward so the
+-- hit area is comfortably larger than the 8px visual) and a tooltip
+-- anchored right above the port. The InvisibleButton advances the
+-- layout cursor; caller restores it before reserving canvas area.
+local function drawPort(dl, px, y, colour, idStem, name)
+  ImGui.DrawList_AddRectFilled(dl, px, y, px + PORT_SIZE, y + PORT_SIZE, colour)
+  local hit = PORT_SIZE + 2 * PORT_HIT_PAD
+  ImGui.SetCursorScreenPos(ctx, px - PORT_HIT_PAD, y - PORT_HIT_PAD)
+  ImGui.InvisibleButton(ctx, idStem, hit, hit)
+  if ImGui.IsItemHovered(ctx, ImGui.HoveredFlags_ForTooltip) then
+    ImGui.SetNextWindowPos(ctx,
+      px + PORT_SIZE / 2, y - PORT_TOOLTIP_GAP,
+      ImGui.Cond_Always, 0.5, 1.0)
+    ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg, chrome.colour('wiring.tooltip.bg'))
+    ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 4, 2)
+    if ImGui.BeginTooltip(ctx) then
+      ImGui.Text(ctx, name)
+      ImGui.EndTooltip(ctx)
+    end
+    ImGui.PopStyleVar(ctx, 1)
+    ImGui.PopStyleColor(ctx, 1)
+  end
+end
+
 -- Horizontal row of port squares centred over [x0,x1] at vertical `y`.
--- Audio squares first, then MIDI; counts may be 0.
-local function drawPortBand(dl, x0, x1, y, audio, midi, audioCol, midiCol)
-  local total = audio + midi
+-- Audio squares first, then MIDI; either list may be empty.
+local function drawPortBand(dl, x0, x1, y, audio, midi, audioCol, midiCol, idPrefix)
+  local total = #audio + #midi
   if total == 0 then return end
   local rowW = total * PORT_SIZE + (total - 1) * PORT_GAP
   local cx   = math.floor((x0 + x1 - rowW) / 2)
-  for i = 1, audio do
+  for i, name in ipairs(audio) do
     local px = cx + (i - 1) * (PORT_SIZE + PORT_GAP)
-    ImGui.DrawList_AddRectFilled(dl, px, y, px + PORT_SIZE, y + PORT_SIZE, audioCol)
+    drawPort(dl, px, y, audioCol, idPrefix .. '/a/' .. i, name)
   end
-  for i = 1, midi do
-    local px = cx + (audio + i - 1) * (PORT_SIZE + PORT_GAP)
-    ImGui.DrawList_AddRectFilled(dl, px, y, px + PORT_SIZE, y + PORT_SIZE, midiCol)
+  for i, name in ipairs(midi) do
+    local px = cx + (#audio + i - 1) * (PORT_SIZE + PORT_GAP)
+    drawPort(dl, px, y, midiCol, idPrefix .. '/m/' .. i, name)
   end
 end
 
@@ -82,10 +113,12 @@ local function drawHoverPorts(dl, nv, ox, oy)
   local midiCol  = chrome.colour('wiring.port.midi')
   drawPortBand(dl, x0, x1,
     y0 - PORT_BAND_OFFSET - PORT_SIZE,
-    nv.ins.audio,  nv.ins.midi,  audioCol, midiCol)
+    nv.ins.audio,  nv.ins.midi,  audioCol, midiCol,
+    '##port/' .. nv.id .. '/in')
   drawPortBand(dl, x0, x1,
     y1 + PORT_BAND_OFFSET,
-    nv.outs.audio, nv.outs.midi, audioCol, midiCol)
+    nv.outs.audio, nv.outs.midi, audioCol, midiCol,
+    '##port/' .. nv.id .. '/out')
 end
 
 local function renderCanvas(w, h)
@@ -96,11 +129,16 @@ local function renderCanvas(w, h)
   -- in the middle, positions extend in all four quadrants from there.
   local ox, oy = sx + math.floor(w / 2), sy + math.floor(h / 2)
 
+  -- Hover region includes the port bands above/below the node (plus
+  -- the per-port hit padding) so the mouse can dwell on a port without
+  -- the hover dropping and erasing the port mid-aim.
+  local hoverInflate = PORT_REACH
   local hoveredNV = nil
   for _, nv in ipairs(wv:nodeViews()) do
     local lx0, ly0, lx1, ly1 = nodeRect(nv)
     if ImGui.IsMouseHoveringRect(ctx,
-         ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
+         ox + lx0, oy + ly0 - hoverInflate,
+         ox + lx1, oy + ly1 + hoverInflate) then
       hoveredNV = nv
     end
     drawNode(dl, nv, ox, oy)
@@ -108,8 +146,10 @@ local function renderCanvas(w, h)
   if hoveredNV then drawHoverPorts(dl, hoveredNV, ox, oy) end
   wv:setHover(hoveredNV and hoveredNV.id or nil)
 
-  -- Reserve canvas area so the child window sizes itself; without this
-  -- the drawlist paints into a zero-sized child and hover never fires.
+  -- Port InvisibleButtons advance the layout cursor; rewind it so the
+  -- canvas-sizing Dummy reserves from the canvas origin, not from
+  -- wherever the last port landed.
+  ImGui.SetCursorScreenPos(ctx, sx, sy)
   ImGui.Dummy(ctx, w, h)
 end
 

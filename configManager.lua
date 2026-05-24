@@ -196,6 +196,7 @@ local declarations = {
   { 'colour.wiring.node.effect',    'palette.salmon' },
   { 'colour.wiring.port.audio',     'palette.shade'  },
   { 'colour.wiring.port.midi',      'palette.steel'  },
+  { 'colour.wiring.tooltip.bg',     'palette.pale'   },  -- pale popup bg so the body's dark text reads
 
   -- Chrome roles — toolbar (top band) and statusBar (bottom band).
   -- They share the chrome palette today; split aliases let either diverge.

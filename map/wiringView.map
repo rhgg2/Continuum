@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=96  sha=bbdef0a  mode=chunk
+@module wiringView  src=wiringView.lua  loc=104  sha=04c4de1  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -7,7 +7,7 @@
   @invariant  hover / selection are nodeId-only and per-session; they don't persist. Camera (pan/zoom) lands here when 1.3b adds the drag UX.
 
 # Shapes
-  @shape  nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', ins={audio,midi}, outs={audio,midi} } — render-ready descriptors, no viewport / pixel concerns
+  @shape  nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}} } — port lists carry names; counts = #list
 
 # Imports
   @require util = 'util'  @ 8
@@ -23,29 +23,32 @@
 # Private functions
   -- Logical projection (viewport-independent)
   @fn nodeLabel(node)  @ 21
-  @fn audioCount(node, dir)  @ 34
-      -- audio.ins / audio.outs are integer stereo-port counts; fx/master store
-      -- them directly. Source nodes default to (0 in, 1 stereo out).
-  @fn midiCount(node, dir)  @ 42
-      -- Per the design doc: master has no MIDI; source / fx carry exactly one
-      -- MIDI port in each direction.
-  @fn nodeCategory(ins, outs)  @ 51
+  @fn audioPorts(node, dir)  @ 37
+      -- audio.ins / audio.outs are integer stereo-port counts; fx/master
+      -- store them directly, source defaults to (0 in, 1 stereo out). The
+      -- view projects each count as a list of names — synthetic 'in 1' /
+      -- 'out 1' baseline today; once wm queries TrackFX_GetIOName it will
+      -- override per-port via node.audio.inNames / outNames.
+  @fn midiPorts(node, dir)  @ 50
+      -- Per the design doc: master has no MIDI; source / fx carry exactly
+      -- one MIDI port in each direction.
+  @fn nodeCategory(ins, outs)  @ 59
       -- Category is a function of port shape, not node.kind: a node with no
       -- outputs is a sink (master / hardware send), one with outputs but no
       -- audio in is a generator (source / synth), one with audio in is an
       -- effect. Drives the colour.wiring.node.<category> fill role.
-  @fn nodeView(id, node)  @ 57
+  @fn nodeView(id, node)  @ 65
 
 # Public API (wv:*)
   -- wm pass-through
-  @api wv:graph()  @ 74
-  @api wv:save()  @ 75
-  @api wv:load()  @ 76
+  @api wv:graph()  @ 82
+  @api wv:save()  @ 83
+  @api wv:load()  @ 84
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 82
+  @api wv:nodeViews()  @ 90
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 91
-  @api wv:setHover(id)  @ 92
-  @api wv:selection()  @ 93
-  @api wv:setSelection(id)  @ 94
+  @api wv:hover()  @ 99
+  @api wv:setHover(id)  @ 100
+  @api wv:selection()  @ 101
+  @api wv:setSelection(id)  @ 102
