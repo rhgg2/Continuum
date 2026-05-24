@@ -44,13 +44,26 @@ local function midiCount(node, dir)
   return 1
 end
 
+-- Category is a function of port shape, not node.kind: a node with no
+-- outputs is a sink (master / hardware send), one with outputs but no
+-- audio in is a generator (source / synth), one with audio in is an
+-- effect. Drives the colour.wiring.node.<category> fill role.
+local function nodeCategory(ins, outs)
+  if outs.audio + outs.midi == 0 then return 'master'    end
+  if ins.audio == 0              then return 'generator' end
+  return 'effect'
+end
+
 local function nodeView(id, node)
+  local ins  = { audio = audioCount(node, 'in'),  midi = midiCount(node, 'in')  }
+  local outs = { audio = audioCount(node, 'out'), midi = midiCount(node, 'out') }
   return {
-    id    = id,
-    pos   = { x = node.pos.x, y = node.pos.y },
-    label = nodeLabel(node),
-    ins   = { audio = audioCount(node, 'in'),  midi = midiCount(node, 'in')  },
-    outs  = { audio = audioCount(node, 'out'), midi = midiCount(node, 'out') },
+    id       = id,
+    pos      = { x = node.pos.x, y = node.pos.y },
+    label    = nodeLabel(node),
+    category = nodeCategory(ins, outs),
+    ins      = ins,
+    outs     = outs,
   }
 end
 
@@ -64,7 +77,7 @@ function wv:load()  wm:load() end
 
 ----- Render-ready, viewport-independent
 
---shape: nodeView = { id, pos={x,y}, label, ins={audio,midi}, outs={audio,midi} } — everything the page needs to lay out a node, with no viewport / pixel concerns
+--shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', ins={audio,midi}, outs={audio,midi} } — render-ready descriptors, no viewport / pixel concerns
 --contract: returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
 function wv:nodeViews()
   local g = wm:graph()

@@ -3,8 +3,8 @@
 
 --invariant: render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
---invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + audio/midi counts; the page turns those into rects.
---invariant: at Stage 1.3a the page draws only — no editing, no wiring-scope commands, no palette. Selection / hover / drag arrive in 1.3b.
+--invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
+--invariant: at Stage 1.3a the page draws only — no editing, no wiring-scope commands, no palette. Hover reveals ports (visual cue, no interaction). Selection / drag arrive in 1.3b.
 
 local util = require 'util'
 
@@ -17,72 +17,99 @@ local ImGui = require 'imgui' '0.10'
 local cm, cmgr, chrome, gui, modalHost =
   (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost
 
-local ctx    = gui and gui.ctx or nil
-local uiSize = gui and gui.fontSize and gui.fontSize.ui or 12
+local ctx      = gui and gui.ctx or nil
+local wireFont = gui and gui.wireFont or nil
+local wireSize = gui and gui.fontSize and gui.fontSize.wire or 14
 
 local wv = util.instantiate('wiringView', { cm = cm, cmgr = cmgr })
 
 local wp = {}
 
-local NODE_W          = 120
-local NODE_HEADER_H   = 18
-local PORT_SIZE       = 8
-local PORT_SPACING    = 4
-local PORT_EDGE_INSET = 6
+local NODE_W           = 96
+local NODE_H           = 72
+local CORNER_R         = 4
+local PORT_SIZE        = 8
+local PORT_GAP         = 4
+local PORT_BAND_OFFSET = 6   -- gap between node edge and the hover-only port row
 
 ----- Pixel geometry (page-owned)
 
-local function totalPortCount(side) return side.audio + side.midi end
-
--- Per-node pixel rect in canvas-local coordinates (origin = top-left of the
--- canvas child window). Height grows with port count so ports never overflow.
+-- pos is the node's centre in canvas-local coordinates (origin = centre
+-- of the viewport, set up in renderCanvas); rect is laid out symmetrically.
 local function nodeRect(nv)
-  local rows  = math.max(totalPortCount(nv.ins), totalPortCount(nv.outs))
-  local bodyH = math.max(NODE_HEADER_H,
-                         rows * (PORT_SIZE + PORT_SPACING) + PORT_SPACING)
-  local h     = NODE_HEADER_H + bodyH
-  return nv.pos.x, nv.pos.y, nv.pos.x + NODE_W, nv.pos.y + h
+  local hw, hh = NODE_W / 2, NODE_H / 2
+  return nv.pos.x - hw, nv.pos.y - hh, nv.pos.x + hw, nv.pos.y + hh
 end
 
 ----- Drawing
 
-local function drawNode(dl, nv, ox, oy, fill, border, textCol)
+local function drawNode(dl, nv, ox, oy)
   local lx0, ly0, lx1, ly1 = nodeRect(nv)
   local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
-  ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, fill)
-  ImGui.DrawList_AddRect      (dl, x0, y0, x1, y1, border, 0, 0, 1)
-  ImGui.DrawList_AddLine      (dl, x0, y0 + NODE_HEADER_H,
-                                   x1, y0 + NODE_HEADER_H, border, 1)
-  local tw = ImGui.CalcTextSize(ctx, nv.label)
+  local fill = chrome.colour('wiring.node.' .. nv.category)
+  local text = chrome.colour('text')
+  ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, fill, CORNER_R)
+  if wireFont then ImGui.PushFont(ctx, wireFont, wireSize) end
+  local tw, th = ImGui.CalcTextSize(ctx, nv.label)
   ImGui.DrawList_AddText(dl,
-    x0 + math.floor((NODE_W - tw) / 2), y0 + 2, textCol, nv.label)
+    x0 + math.floor((NODE_W - tw) / 2),
+    y0 + math.floor((NODE_H - th) / 2),
+    text, nv.label)
+  if wireFont then ImGui.PopFont(ctx) end
+end
 
-  -- Ports: small filled squares on the body edges, in/out columns. Audio
-  -- rows above MIDI rows.
-  local bodyTop = y0 + NODE_HEADER_H + PORT_SPACING
-  local function drawColumn(count, atX)
-    for i = 1, count do
-      local py = bodyTop + (i - 1) * (PORT_SIZE + PORT_SPACING)
-      ImGui.DrawList_AddRectFilled(dl,
-        atX, py, atX + PORT_SIZE, py + PORT_SIZE, border)
-    end
+-- Horizontal row of port squares centred over [x0,x1] at vertical `y`.
+-- Audio squares first, then MIDI; counts may be 0.
+local function drawPortBand(dl, x0, x1, y, audio, midi, audioCol, midiCol)
+  local total = audio + midi
+  if total == 0 then return end
+  local rowW = total * PORT_SIZE + (total - 1) * PORT_GAP
+  local cx   = math.floor((x0 + x1 - rowW) / 2)
+  for i = 1, audio do
+    local px = cx + (i - 1) * (PORT_SIZE + PORT_GAP)
+    ImGui.DrawList_AddRectFilled(dl, px, y, px + PORT_SIZE, y + PORT_SIZE, audioCol)
   end
-  drawColumn(totalPortCount(nv.ins),  x0 + PORT_EDGE_INSET)
-  drawColumn(totalPortCount(nv.outs), x1 - PORT_EDGE_INSET - PORT_SIZE)
+  for i = 1, midi do
+    local px = cx + (audio + i - 1) * (PORT_SIZE + PORT_GAP)
+    ImGui.DrawList_AddRectFilled(dl, px, y, px + PORT_SIZE, y + PORT_SIZE, midiCol)
+  end
+end
+
+local function drawHoverPorts(dl, nv, ox, oy)
+  local lx0, ly0, lx1, ly1 = nodeRect(nv)
+  local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
+  local audioCol = chrome.colour('wiring.port.audio')
+  local midiCol  = chrome.colour('wiring.port.midi')
+  drawPortBand(dl, x0, x1,
+    y0 - PORT_BAND_OFFSET - PORT_SIZE,
+    nv.ins.audio,  nv.ins.midi,  audioCol, midiCol)
+  drawPortBand(dl, x0, x1,
+    y1 + PORT_BAND_OFFSET,
+    nv.outs.audio, nv.outs.midi, audioCol, midiCol)
 end
 
 local function renderCanvas(w, h)
-  local dl       = ImGui.GetWindowDrawList(ctx)
-  local ox, oy   = ImGui.GetCursorScreenPos(ctx)
-  local bgFill   = chrome.colour('bg')
-  local border   = chrome.colour('separator')
-  local textCol  = chrome.colour('text')
-  ImGui.DrawList_AddRectFilled(dl, ox, oy, ox + w, oy + h, bgFill)
+  local dl     = ImGui.GetWindowDrawList(ctx)
+  local sx, sy = ImGui.GetCursorScreenPos(ctx)
+  ImGui.DrawList_AddRectFilled(dl, sx, sy, sx + w, sy + h, chrome.colour('bg'))
+  -- Canvas origin is the centre of the viewport: logical (0,0) draws
+  -- in the middle, positions extend in all four quadrants from there.
+  local ox, oy = sx + math.floor(w / 2), sy + math.floor(h / 2)
+
+  local hoveredNV = nil
   for _, nv in ipairs(wv:nodeViews()) do
-    drawNode(dl, nv, ox, oy, bgFill, border, textCol)
+    local lx0, ly0, lx1, ly1 = nodeRect(nv)
+    if ImGui.IsMouseHoveringRect(ctx,
+         ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
+      hoveredNV = nv
+    end
+    drawNode(dl, nv, ox, oy)
   end
-  -- Reserve the canvas area so the child window sizes itself; without
-  -- this the drawlist paints into a zero-sized child.
+  if hoveredNV then drawHoverPorts(dl, hoveredNV, ox, oy) end
+  wv:setHover(hoveredNV and hoveredNV.id or nil)
+
+  -- Reserve canvas area so the child window sizes itself; without this
+  -- the drawlist paints into a zero-sized child and hover never fires.
   ImGui.Dummy(ctx, w, h)
 end
 

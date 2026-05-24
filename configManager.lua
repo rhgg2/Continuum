@@ -127,6 +127,8 @@ local declarations = {
   { 'palette.pale',      hex('#f7f7f4') },
   { 'palette.night',     hex('#252936') },
   { 'palette.nightText', hex('#cfcfde') },
+  { 'palette.slate',     hex('#79829f') },  -- matches chrome.bg; named for use as a palette atom
+  { 'palette.salmon',    hex('#e89282') },  -- muted pink-orange (wiring effect-node tint)
 
   -- Atoms — chrome palette
   { 'chrome.bg',        hex('#79829f') },              -- slate
@@ -185,6 +187,15 @@ local declarations = {
   { 'colour.laneAnchor',       'colour.text'                      },
   { 'colour.laneAnchorActive', 'colour.negative'                  },
   { 'colour.laneEnvelope',     'colour.accent'                    },
+
+  -- Wiring page node tints + port marker colours. Category drives the
+  -- node fill: master = sink (no outputs), generator = outputs but no
+  -- audio in, effect = has audio in. Port colours distinguish audio vs MIDI.
+  { 'colour.wiring.node.master',    'palette.mid'    },
+  { 'colour.wiring.node.generator', 'palette.slate'  },
+  { 'colour.wiring.node.effect',    'palette.salmon' },
+  { 'colour.wiring.port.audio',     'palette.shade'  },
+  { 'colour.wiring.port.midi',      'palette.steel'  },
 
   -- Chrome roles — toolbar (top band) and statusBar (bottom band).
   -- They share the chrome palette today; split aliases let either diverge.

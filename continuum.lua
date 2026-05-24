@@ -49,19 +49,27 @@ local function createImGui()
   -- gives a usable bold without shipping a separate face.
   local uiFontBold = isMac and ImGui.CreateFontFromFile(sfns, 0, ImGui.FontFlags_Bold)
                            or  ImGui.CreateFont(family, ImGui.FontFlags_Bold)
+  -- Wiring node labels want a heavier face at a size between ui and
+  -- grid; same family/flags as uiFontBold today, kept as its own slot
+  -- so the wiring page can diverge without dragging chrome with it.
+  local wireFont = isMac and ImGui.CreateFontFromFile(sfns, 0, ImGui.FontFlags_Bold)
+                          or  ImGui.CreateFont(family, ImGui.FontFlags_Bold)
   ImGui.Attach(ctx, font)
   ImGui.Attach(ctx, uiFont)
   ImGui.Attach(ctx, uiFontBold)
+  ImGui.Attach(ctx, wireFont)
   -- Chrome (toolbar, status, popups, swing editor) all scale off the
   -- grid size so the two registers stay in proportion if either moves.
   local GRID_SIZE = 15
   local UI_SIZE   = math.floor(GRID_SIZE * 4 / 5)
+  local WIRE_SIZE = 14
   return {
     ctx        = ctx,
     font       = font,
     uiFont     = uiFont,
     uiFontBold = uiFontBold,
-    fontSize   = { grid = GRID_SIZE, ui = UI_SIZE },
+    wireFont   = wireFont,
+    fontSize   = { grid = GRID_SIZE, ui = UI_SIZE, wire = WIRE_SIZE },
   }
 end
 

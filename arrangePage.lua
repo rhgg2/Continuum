@@ -287,7 +287,6 @@ local function renderGrid(tracks, nTracks)
     ImGui.DrawList_AddLine(dl, lx, bodyTop, lx, bodyBot, sepCol, 1)
   end
   ImGui.DrawList_AddLine(dl, gridR, bodyTop, gridR, bodyBot, sepCol, 1)
-  ImGui.DrawList_AddLine(dl, ox, oy + headerH,  gridR, oy + headerH,  dividerCol, 1)
   ImGui.DrawList_AddLine(dl, ox, bodyBot,       gridR, bodyBot,       sepCol, 1)
   for r = 1, visRows - 1 do
     local y = bodyTop + r * rowH

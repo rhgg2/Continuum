@@ -1,50 +1,55 @@
-@module wiringPage  src=wiringPage.lua  loc=134  sha=untracked  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=161  sha=bbdef0a  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
   @invariant  render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
   @invariant  wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
-  @invariant  the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + audio/midi counts; the page turns those into rects.
-  @invariant  at Stage 1.3a the page draws only — no editing, no wiring-scope commands, no palette. Selection / hover / drag arrive in 1.3b.
+  @invariant  the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
+  @invariant  at Stage 1.3a the page draws only — no editing, no wiring-scope commands, no palette. Hover reveals ports (visual cue, no interaction). Selection / drag arrive in 1.3b.
 
 # Imports
   @require util = 'util'  @ 9
   @require ImGui = 'imgui'  @ 15
 
 # Constructed sub-instances
-  @construct wv = util.instantiate('wiringView')  @ 23
+  @construct wv = util.instantiate('wiringView')  @ 24
 
 # Private state
   @state ctx = gui and gui.ctx or nil  @ 20
-  @state uiSize = gui and gui.fontSize and gui.fontSize.ui or 12  @ 21
-  @state wp = {}  @ 25
-  @state NODE_W = 120  @ 27
-  @state NODE_HEADER_H = 18  @ 28
-  @state PORT_SIZE = 8  @ 29
-  @state PORT_SPACING = 4  @ 30
-  @state PORT_EDGE_INSET = 6  @ 31
+  @state wireFont = gui and gui.wireFont or nil  @ 21
+  @state wireSize = gui and gui.fontSize and gui.fontSize.wire or 14  @ 22
+  @state wp = {}  @ 26
+  @state NODE_W = 96  @ 28
+  @state NODE_H = 72  @ 29
+  @state CORNER_R = 4  @ 30
+  @state PORT_SIZE = 8  @ 31
+  @state PORT_GAP = 4  @ 32
+  @state PORT_BAND_OFFSET = 6  @ 33   -- gap between node edge and the hover-only port row
 
 # Private functions
   -- Pixel geometry (page-owned)
-  @fn totalPortCount(side)  @ 35
   @fn nodeRect(nv)  @ 39
-      -- Per-node pixel rect in canvas-local coordinates (origin = top-left of the
-      -- canvas child window). Height grows with port count so ports never overflow.
+      -- pos is the node's centre in canvas-local coordinates (origin = centre
+      -- of the viewport, set up in renderCanvas); rect is laid out symmetrically.
   -- Drawing
-  @fn drawNode(dl, nv, ox, oy, fill, border, textCol)  @ 49
-  @fn renderCanvas(w, h)  @ 74
-  @fn pushBodyStyles()  @ 89
-  @fn popBodyStyles()  @ 92
+  @fn drawNode(dl, nv, ox, oy)  @ 46
+  @fn drawPortBand(dl, x0, x1, y, audio, midi, audioCol, midiCol)  @ 63
+      -- Horizontal row of port squares centred over [x0,x1] at vertical `y`.
+      -- Audio squares first, then MIDI; counts may be 0.
+  @fn drawHoverPorts(dl, nv, ox, oy)  @ 78
+  @fn renderCanvas(w, h)  @ 91
+  @fn pushBodyStyles()  @ 116
+  @fn popBodyStyles()  @ 119
 
 # Public API (wp:*)
-  @api wp:bind()  @ 97
+  @api wp:bind()  @ 124
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 98
-  @api wp:renderToolbarBits(_)  @ 100
-  @api wp:renderBody(_, w, h, dispatch)  @ 103
+  @api wp:unbind()  @ 125
+  @api wp:renderToolbarBits(_)  @ 127
+  @api wp:renderBody(_, w, h, dispatch)  @ 130
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 116
-  @api wp:focusState()  @ 122
+  @api wp:renderStatusBar(_)  @ 143
+  @api wp:focusState()  @ 149
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface
