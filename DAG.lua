@@ -13,6 +13,9 @@
 --shape: UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
 --shape: Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=string[], outs?=string[]} }
 --shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|pairIdx, to=id, toPort=nil|pairIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
+--shape: CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
+--shape: CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap'|'monoSum'|'monoReplicate', cuParams?=table }
+--shape: Conn = { type='audio'|'midi', from=id, to=id, fromCh?=number, toCh?=number }
 local util = require('util')
 
 local M = {}
@@ -121,6 +124,103 @@ function M.validate(user)
   end
 
   return nil
+end
+
+----- lower
+
+-- pair k starts at channel 2k-1; if stereo it covers 2k-1 and 2k, if mono just 2k-1.
+local function pairStartCh(pair) return 2 * pair - 1 end
+
+-- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
+-- the audio shape we've already consumed for pair widths).
+local function passthroughNode(node)
+  return { kind      = node.kind,
+           trackGuid = node.trackGuid,
+           fxIdent   = node.fxIdent }
+end
+
+--contract: assumes M.validate(user)==nil; lowers wires into per-channel/port conns, materialises CU nodes for ops and mono adapters
+function M.lower(user)
+  local compile = { nodes = {}, conns = {} }
+  local cuN = 0
+
+  local function mintCu(cuNode)
+    cuN = cuN + 1
+    local id = '_cu_' .. cuN
+    compile.nodes[id] = cuNode
+    return id
+  end
+
+  -- Terminate head into (targetId, targetCh0). targetCh0 unused for MIDI.
+  local function flush(head, targetId, targetCh0)
+    if head.type == 'audio' then
+      for c = 1, head.width do
+        util.add(compile.conns, {
+          type = 'audio',
+          from = head.id, fromCh = head.ch0 + c - 1,
+          to   = targetId, toCh   = targetCh0 + c - 1,
+        })
+      end
+    else
+      util.add(compile.conns, { type = 'midi', from = head.id, to = targetId })
+    end
+  end
+
+  -- Splice a CU into the wire between head and whatever target would follow:
+  -- mints the CU, routes head into it (CU inputs always start at ch 1), and
+  -- returns the new head positioned at the CU's output. outWidth = the CU's
+  -- output channel count (audio only; ignored for MIDI).
+  local function splice(head, cuMode, cuParams, outWidth)
+    local id = mintCu({ kind = 'cu', cuMode = cuMode, cuParams = cuParams })
+    flush(head, id, 1)
+    if head.type == 'audio' then
+      return { type = 'audio', id = id, ch0 = 1, width = outWidth }
+    end
+    return { type = 'midi', id = id }
+  end
+
+  local function lowerAudioEdge(edge, fromNode, toNode)
+    local fromPair  = edge.fromPort or 1
+    local toPair    = edge.toPort   or 1
+    local fromWidth = audioPairs(fromNode).outs[fromPair]
+    local toWidth   = audioPairs(toNode).ins[toPair]
+
+    local head = { type = 'audio', id = edge.from,
+                   ch0 = pairStartCh(fromPair), width = fromWidth }
+
+    if edge.ops and edge.ops.gain then
+      head = splice(head, 'gain',
+                    { gain = edge.ops.gain, channels = head.width },
+                    head.width)
+    end
+
+    if head.width ~= toWidth then
+      local mode = (head.width == 2 and toWidth == 1) and 'monoSum' or 'monoReplicate'
+      head = splice(head, mode, nil, toWidth)
+    end
+
+    flush(head, edge.to, pairStartCh(toPair))
+  end
+
+  local function lowerMidiEdge(edge)
+    local head = { type = 'midi', id = edge.from }
+    if edge.ops and edge.ops.channelMap then
+      head = splice(head, 'channelRemap', { map = edge.ops.channelMap })
+    end
+    flush(head, edge.to)
+  end
+
+  for id, node in pairs(user.nodes or {}) do
+    compile.nodes[id] = passthroughNode(node)
+  end
+  for _, edge in ipairs(user.edges or {}) do
+    if edge.type == 'audio' then
+      lowerAudioEdge(edge, user.nodes[edge.from], user.nodes[edge.to])
+    else
+      lowerMidiEdge(edge)
+    end
+  end
+  return compile
 end
 
 return M

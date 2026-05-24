@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=126  sha=acd3573  mode=namespace
+@module DAG  src=DAG.lua  loc=226  sha=e5f5556  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module — no state; functions take operands explicitly
@@ -12,21 +12,32 @@
   @shape  UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
   @shape  Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=string[], outs?=string[]} }
   @shape  Edge = { type='audio'|'midi', from=id, fromPort=nil|pairIdx, to=id, toPort=nil|pairIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
+  @shape  CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
+  @shape  CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap'|'monoSum'|'monoReplicate', cuParams?=table }
+  @shape  Conn = { type='audio'|'midi', from=id, to=id, fromCh?=number, toCh?=number }
 
 # Imports
-  @const util = 'util'  @ 16
+  @const util = 'util'  @ 19
 
 # Module-level constants
-  @const M = {}  @ 18
+  @const M = {}  @ 21
 
 # Private functions
   -- Pair shape helpers (user graph)
-  @fn pairWidths(channels)  @ 23
+  @fn pairWidths(channels)  @ 26
       -- {'L','R'} -> {2}; {'L','R','L','R'} -> {2,2}; {'L','R','C'} -> {2,1}.
-  @fn audioPairs(node)  @ 33
+  @fn audioPairs(node)  @ 36
       -- Sources have implicit I/O: one stereo output pair, no audio inputs.
+  -- validate
+  -- lower
+  @fn pairStartCh(pair)  @ 132
+      -- pair k starts at channel 2k-1; if stereo it covers 2k-1 and 2k, if mono just 2k-1.
+  @fn passthroughNode(node)  @ 136
+      -- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
+      -- the audio shape we've already consumed for pair widths).
 
 # Public API (M.*)
-  -- validate
-  @api M.validate(user)  @ 46
+  @api M.validate(user)  @ 49
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
+  @api M.lower(user)  @ 143
+      @contract  assumes M.validate(user)==nil; lowers wires into per-channel/port conns, materialises CU nodes for ops and mono adapters

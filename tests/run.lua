@@ -111,6 +111,7 @@ local specs = {
   'arrange_page_spec',
   'coordinator_spec',
   'dag_validate_spec',
+  'dag_lower_spec',
 }
 
 local pass, fail, failures = 0, 0, {}
