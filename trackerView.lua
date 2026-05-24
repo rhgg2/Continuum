@@ -342,30 +342,37 @@ tv.applyTakeProperties = util.atomic('Take properties', function(self, props)
   end
 end)
 
--- Slot selections (temper, swing) are views over the data, not data
--- themselves. Mirroring at project+track means a fresh take inherits
--- the most recent selection, while takes on an existing track inherit
--- from their siblings via the track-level value.
-local function writeShared(key, value)
-  if value == nil or value == '' then
-    cm:remove('project', key)
-    cm:remove('track',   key)
-  else
-    cm:set('project', key, value)
-    cm:set('track',   key, value)
-  end
+-- Slot selections (temper, swing) live at the take tier; the project
+-- tier holds a sibling 'last*Used' seed that tv:seedSharedSlots copies
+-- into the take tier on first bind of a take with no value of its own.
+-- Sentinel ('identity' / '12EDO') over cm:remove because nil at the
+-- take tier would fall through to schema defaults rather than blocking
+-- the next bind-time seed -- we want an explicit "Off" to stick.
+local SHARED_SLOTS = { { 'swing', 'lastSwingUsed' }, { 'temper', 'lastTemperUsed' } }
+
+local function pickShared(key, seedKey, value)
+  cm:set('take',    key,     value)
+  cm:set('project', seedKey, value)
 end
 
--- Explicit sentinel write (not cm:remove) on "off": nil at a tier would
--- fall through to project, which is exactly the silent-bleed bug we're
--- avoiding. Sentinels resolve to no-op downstream.
 function tv:setSwingSlot(name)
   if name == nil or name == '' then name = 'identity' end
-  writeShared('swing', name)
+  pickShared('swing', 'lastSwingUsed', name)
 end
 function tv:setTemperSlot(name)
   if name == nil or name == '' then name = '12EDO' end
-  writeShared('temper', name)
+  pickShared('temper', 'lastTemperUsed', name)
+end
+
+--contract: on bind, copy project-tier 'last*Used' into take tier for any shared slot the take lacks. No-op when the seed itself is unset (no user pick yet) so fresh projects do not dirty every visited take.
+function tv:seedSharedSlots()
+  for _, pair in ipairs(SHARED_SLOTS) do
+    local key, seedKey = pair[1], pair[2]
+    if cm:getAt('take', key) == nil then
+      local seed = cm:getAt('project', seedKey)
+      if seed ~= nil then cm:set('take', key, seed) end
+    end
+  end
 end
 
 -- colSwing is a per-channel map; cross-track bleed via project would

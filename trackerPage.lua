@@ -1440,7 +1440,10 @@ end
 function tp:renderFloating(_) end
 
 --contract: bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
-function tp:bind(t)  tm:bindTake(t)   end
+function tp:bind(t)
+  tm:bindTake(t)
+  if t then tv:seedSharedSlots() end
+end
 function tp:unbind() swingEditor:close(); tm:bindTake(nil) end
 
 --contract: take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.

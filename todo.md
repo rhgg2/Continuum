@@ -12,6 +12,7 @@
 - wave previews in ap
 - show take/track name and navigate by track take in tp
 - ap edit cursor and general bad look weirdness
+- why is there mouse handling code in ap:renderPage()?
 
 
   Reframing to "what a competent tracker offers that Continuum's

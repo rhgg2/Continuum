@@ -41,11 +41,23 @@ local declarations = {
 
   -- string choice
   { 'noteLayout',      'colemak' },
-  -- Slot keys: defaults are explicit no-op sentinels, not nil. nil would let
-  -- project-tier writes silently bleed into takes that chose "off". '12EDO'
-  -- resolves via tuning.presets; 'identity' resolves via the swings library.
+  -- Slot keys: take-tier so each take can carry its own swing/temper
+  -- without rewriting siblings. Defaults are explicit no-op sentinels,
+  -- not nil. '12EDO' resolves via tuning.presets; 'identity' resolves
+  -- via the swings library. The sentinel blocks the bind-time seed --
+  -- an explicit "Off" pick must stick across rebinds.
   { 'temper',          '12EDO'    },
   { 'swing',           'identity' },
+  -- Project-tier seeds for first-encounter takes. Pickers mirror the
+  -- chosen value into 'last*Used' at project tier; tp:bind copies the
+  -- seed into the take tier on bind when the take has no value of its
+  -- own (created in REAPER outside Continuum, or pre-existing). Pickers
+  -- used to mirror 'swing'/'temper' themselves at project tier as the
+  -- cross-take seed, but SetProjExtState lives outside REAPER's undo,
+  -- so a Ctrl-Z over a pick left the project mirror at the new value
+  -- while the lower tier was rewound -- picker desync.
+  { 'lastSwingUsed',   'identity' },
+  { 'lastTemperUsed',  '12EDO'    },
 
   -- null-defaulted (declared, no initial value)
   { 'sampleBrowserRoot', nil },

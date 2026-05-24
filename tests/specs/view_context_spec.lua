@@ -486,16 +486,16 @@ return {
       t.truthy(def,           'schema-default 12EDO resolves via presets fallback')
       t.eq(def.name, '12EDO')
 
-      h.cm:set('track', 'temper', '19EDO')
+      h.cm:set('take', 'temper', '19EDO')
       local t19 = h.vm:activeTemper()
       t.truthy(t19,           'built-in preset name resolves without seeding cfg.tempers')
       t.eq(t19.name, '19EDO')
 
-      h.cm:set('track', 'temper', 'NotARealTemperName')
+      h.cm:set('take', 'temper', 'NotARealTemperName')
       t.eq(h.vm:activeTemper(), nil, 'unknown name resolves to nil')
 
       h.vm:setTemper('myCustom', tuning.presets['19EDO'])
-      h.cm:set('track', 'temper', 'myCustom')
+      h.cm:set('take', 'temper', 'myCustom')
       t.eq(h.vm:activeTemper().name, '19EDO', 'user-seeded temper resolves')
     end,
   },

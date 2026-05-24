@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1475  sha=0190da7  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1478  sha=b3ab3fa  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -149,12 +149,12 @@
   @api tp:renderFloating(_)  @ 1440
   @api tp:bind(t)  @ 1443
       @contract  bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
-  @api tp:unbind()  @ 1444
-  @api tp:dropTake()  @ 1447
+  @api tp:unbind()  @ 1447
+  @api tp:dropTake()  @ 1450
       @contract  take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.
-  @api tp:reloadFromReaper()  @ 1450
+  @api tp:reloadFromReaper()  @ 1453
       @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
-  @api tp:focusState()  @ 1463
+  @api tp:focusState()  @ 1466
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo

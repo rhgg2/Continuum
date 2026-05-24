@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=576  sha=27e6c04  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=576  sha=96d6b79  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts

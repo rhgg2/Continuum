@@ -1,10 +1,10 @@
--- Pin the dual-level write contract for slot selections (temper, swing,
--- colSwing). The view-picker UI depends on:
---   - temper / swing: write at project AND track, so a fresh take on a
---     new track inherits the most recent selection (project), while
---     siblings on an existing track inherit from their track.
---   - colSwing: track-only — per-channel maps shouldn't bleed across
---     tracks via the project mirror.
+-- Pin the slot-selection write contract: take-tier holds the actual
+-- selection; project-tier 'last*Used' is the seed tv:seedSharedSlots
+-- copies onto a fresh take on bind. The old project-tier mirror of
+-- 'swing' / 'temper' lived outside REAPER's undo and desynced the
+-- picker from the rewound take-tier value on Ctrl-Z, so it was
+-- removed -- picker inheritance is now an explicit bind-time seed,
+-- not a silent fallthrough.
 
 local t = require('support')
 local tuning = require('tuning')
@@ -14,83 +14,71 @@ local classic67 = { factors = { { atom = 'classic', shift = 0.17, period = 1 } }
 
 return {
   ----------------------------------------------------------------
-  -- temper: project + track mirror
+  -- temper: take tier + lastTemperUsed seed
   ----------------------------------------------------------------
   {
-    name = 'setTemperSlot writes the slot at BOTH project and track',
+    name = 'setTemperSlot writes take tier and lastTemperUsed seed',
     run = function(harness)
       local h = harness.mk{
         config = { project = { tempers = { ['19EDO'] = tuning.presets['19EDO'] } } },
       }
       h.vm:setTemperSlot('19EDO')
-      t.eq(h.cm:getAt('project', 'temper'), '19EDO', 'project mirror set')
-      t.eq(h.cm:getAt('track',   'temper'), '19EDO', 'track  selection set')
+      t.eq(h.cm:getAt('take',    'temper'),         '19EDO', 'take holds the selection')
+      t.eq(h.cm:getAt('project', 'lastTemperUsed'), '19EDO', 'project seeds fresh takes')
+      t.eq(h.cm:getAt('project', 'temper'),         nil,     'no project-tier mirror of the slot itself')
+      t.eq(h.cm:getAt('track',   'temper'),         nil,     'no track-tier mirror either -- per-take')
     end,
   },
   {
-    name = 'setTemperSlot(nil) writes the 12EDO sentinel at BOTH project and track',
-    -- Sentinel write (not cm:remove) is what blocks cross-take bleed: a
-    -- removed key falls through to whatever the other take last wrote
-    -- to project. '12EDO' resolves no-op via tuning.presets.
+    name = 'setTemperSlot(nil) writes the 12EDO sentinel at take and seed',
     run = function(harness)
-      local h = harness.mk{
-        config = {
-          project = { temper = '19EDO',
-                      tempers = { ['19EDO'] = tuning.presets['19EDO'] } },
-          track   = { temper = '19EDO' },
-        },
-      }
+      local h = harness.mk{ config = { take = { temper = '19EDO' } } }
       h.vm:setTemperSlot(nil)
-      t.eq(h.cm:getAt('project', 'temper'), '12EDO', 'project mirror -> 12EDO sentinel')
-      t.eq(h.cm:getAt('track',   'temper'), '12EDO', 'track selection -> 12EDO sentinel')
+      t.eq(h.cm:getAt('take',    'temper'),         '12EDO', 'take -> 12EDO sentinel')
+      t.eq(h.cm:getAt('project', 'lastTemperUsed'), '12EDO', 'seed records the Off choice')
     end,
   },
   {
-    name = 'setTemperSlot("") writes the 12EDO sentinel at BOTH project and track',
+    name = 'setTemperSlot("") writes the 12EDO sentinel at take and seed',
     run = function(harness)
-      local h = harness.mk{
-        config = { project = { temper = '19EDO' }, track = { temper = '19EDO' } },
-      }
+      local h = harness.mk{ config = { take = { temper = '19EDO' } } }
       h.vm:setTemperSlot('')
-      t.eq(h.cm:getAt('project', 'temper'), '12EDO', 'project mirror -> 12EDO')
-      t.eq(h.cm:getAt('track',   'temper'), '12EDO', 'track selection -> 12EDO')
+      t.eq(h.cm:getAt('take',    'temper'),         '12EDO', 'take -> 12EDO')
+      t.eq(h.cm:getAt('project', 'lastTemperUsed'), '12EDO', 'seed -> 12EDO')
     end,
   },
 
   ----------------------------------------------------------------
-  -- swing: project + track mirror
+  -- swing: take tier + lastSwingUsed seed
   ----------------------------------------------------------------
   {
-    name = 'setSwingSlot writes the slot at BOTH project and track',
+    name = 'setSwingSlot writes take tier and lastSwingUsed seed',
     run = function(harness)
       local h = harness.mk{
         config = { project = { swings = { c58 = classic58 } } },
       }
       h.vm:setSwingSlot('c58')
-      t.eq(h.cm:getAt('project', 'swing'), 'c58', 'project mirror set')
-      t.eq(h.cm:getAt('track',   'swing'), 'c58', 'track  selection set')
+      t.eq(h.cm:getAt('take',    'swing'),         'c58', 'take holds the selection')
+      t.eq(h.cm:getAt('project', 'lastSwingUsed'), 'c58', 'project seeds fresh takes')
+      t.eq(h.cm:getAt('project', 'swing'),         nil,   'no project-tier mirror of the slot itself')
+      t.eq(h.cm:getAt('track',   'swing'),         nil,   'no track-tier mirror either -- per-take')
     end,
   },
   {
-    name = 'setSwingSlot(nil) writes the identity sentinel at BOTH project and track',
+    name = 'setSwingSlot(nil) writes the identity sentinel at take and seed',
     run = function(harness)
-      local h = harness.mk{
-        config = {
-          project = { swing = 'c58', swings = { c58 = classic58 } },
-          track   = { swing = 'c58' },
-        },
-      }
+      local h = harness.mk{ config = { take = { swing = 'c58' } } }
       h.vm:setSwingSlot(nil)
-      t.eq(h.cm:getAt('project', 'swing'), 'identity', 'project mirror -> identity sentinel')
-      t.eq(h.cm:getAt('track',   'swing'), 'identity', 'track selection -> identity sentinel')
+      t.eq(h.cm:getAt('take',    'swing'),         'identity', 'take -> identity')
+      t.eq(h.cm:getAt('project', 'lastSwingUsed'), 'identity', 'seed -> identity')
     end,
   },
 
   ----------------------------------------------------------------
-  -- colSwing: track-only, no project mirror
+  -- colSwing: track-only, no seed (per-channel maps don't cross tracks)
   ----------------------------------------------------------------
   {
-    name = 'setColSwingSlot writes at track only — project is left alone',
+    name = 'setColSwingSlot writes at track only -- project is left alone',
     run = function(harness)
       local h = harness.mk{
         config = { project = { swings = { c58 = classic58 } } },
@@ -99,7 +87,7 @@ return {
       local trackMap   = h.cm:getAt('track',   'colSwing') or {}
       local projectMap = h.cm:getAt('project', 'colSwing')
       t.eq(trackMap[3], 'c58', 'track holds the per-channel entry')
-      t.eq(projectMap, nil,    'project is not mirrored — no cross-track bleed')
+      t.eq(projectMap, nil,    'project is not mirrored -- no cross-track bleed')
     end,
   },
   {
@@ -136,67 +124,45 @@ return {
   },
 
   ----------------------------------------------------------------
-  -- Inheritance: the *point* of the project mirror
+  -- Bind-time seed: tv:seedSharedSlots copies last*Used into take tier
+  -- for first-encounter takes (created in REAPER outside Continuum, or
+  -- pre-existing). No-op when the take already has a value or when no
+  -- pick has happened yet.
   ----------------------------------------------------------------
   {
-    -- After picking on track A, a fresh track (no track-level value)
-    -- should see the most recent selection through the project tier.
-    name = 'project mirror lets a track with no own value inherit the most recent pick',
+    name = 'seedSharedSlots copies last*Used into take tier when the take has none',
     run = function(harness)
       local h = harness.mk{
-        config = { project = { tempers = { ['31EDO'] = tuning.presets['31EDO'] } } },
+        config = { project = { lastSwingUsed = 'c58', lastTemperUsed = '19EDO',
+                               swings = { c58 = classic58 },
+                               tempers = { ['19EDO'] = tuning.presets['19EDO'] } } },
       }
-      h.vm:setTemperSlot('31EDO')
-
-      -- Drop the track-level entry to simulate switching to a track that
-      -- has never had an explicit pick. cm:get must fall through to project.
-      h.cm:remove('track', 'temper')
-      t.eq(h.cm:get('temper'), '31EDO',
-           'fresh-track view sees the most recent selection via project')
-    end,
-  },
-
-  ----------------------------------------------------------------
-  -- No-bleed: explicit-off sentinel at the take blocks project-tier
-  -- inheritance. This is the bug the sentinel migration exists to fix:
-  -- nil-at-tier used to fall through silently, letting another take's
-  -- swing pick contaminate a take that had explicitly chosen "Off".
-  ----------------------------------------------------------------
-  {
-    name = 'no-bleed: setSwingSlot(nil) records identity, blocks later project-tier writes',
-    run = function(harness)
-      local h = harness.mk{
-        config = { project = { swings = { ['classic-55'] = classic55 } } },
-      }
-      h.vm:setSwingSlot(nil)
-      t.eq(h.cm:getAt('track', 'swing'), 'identity',
-           'Off persisted as identity sentinel at the track tier')
-      t.eq(h.cm:getAt('project', 'swing'), 'identity',
-           'Off persisted at project tier too (mirroring intact)')
-
-      -- Simulate another take on the same project writing a different swing
-      -- to the project tier (this is what tv:setSwingSlot('classic-55') does
-      -- when invoked from another take).
-      h.cm:set('project', 'swing', 'classic-55')
-
-      t.eq(h.cm:get('swing'), 'identity',
-           'track-tier identity sentinel blocks fall-through to project')
+      h.vm:seedSharedSlots()
+      t.eq(h.cm:getAt('take', 'swing'),  'c58',   'swing seeded onto take')
+      t.eq(h.cm:getAt('take', 'temper'), '19EDO', 'temper seeded onto take')
     end,
   },
   {
-    name = 'no-bleed: setTemperSlot(nil) records 12EDO, blocks later project-tier writes',
+    name = 'seedSharedSlots does not overwrite a deliberate take-tier value',
     run = function(harness)
       local h = harness.mk{
-        config = { project = { tempers = { ['31EDO'] = tuning.presets['31EDO'] } } },
+        config = { take    = { swing = 'prior-swing', temper = 'prior-temper' },
+                   project = { lastSwingUsed = 'c58', lastTemperUsed = '19EDO' } },
       }
-      h.vm:setTemperSlot(nil)
-      t.eq(h.cm:getAt('track', 'temper'), '12EDO',
-           '12EDO sentinel at track tier')
-
-      h.cm:set('project', 'temper', '31EDO')
-
-      t.eq(h.cm:get('temper'), '12EDO',
-           'track-tier 12EDO blocks fall-through to project')
+      h.vm:seedSharedSlots()
+      t.eq(h.cm:getAt('take', 'swing'),  'prior-swing',  'prior swing preserved')
+      t.eq(h.cm:getAt('take', 'temper'), 'prior-temper', 'prior temper preserved')
+    end,
+  },
+  {
+    name = 'seedSharedSlots is a no-op when no last*Used has been recorded',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:seedSharedSlots()
+      t.eq(h.cm:getAt('take', 'swing'),  nil, 'no spurious take-tier write')
+      t.eq(h.cm:getAt('take', 'temper'), nil, 'no spurious take-tier write')
+      t.eq(h.cm:get('swing'),  'identity', 'schema default still surfaces')
+      t.eq(h.cm:get('temper'), '12EDO',    'schema default still surfaces')
     end,
   },
 }
