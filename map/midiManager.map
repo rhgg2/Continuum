@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1156  sha=becdcd8  mode=chunk
+@module midiManager  src=midiManager.lua  loc=1161  sha=0678a54  mode=chunk
 @deps take
 
 # Invariants & contracts
@@ -117,8 +117,11 @@
       -- space; a cached uuidIdx desyncs across a mixed multi-delete in one modify
       -- (MIDI_DeleteNote cascades its notation event). Match by content instead.
   -- Take data
-  @fn retractEot(buf, targetPpq)  @ 1080
-      -- Assumes events past targetPpq are already deleted upstream (tm:setLength does this).
+  @fn setEot(buf, targetPpq)  @ 1083
+      -- Rewrite the trailing EOT meta event so it sits exactly at targetPpq.
+      -- Handles both shrink (offset reduces) and grow (offset increases).
+      -- Assumes events past targetPpq are already deleted upstream on shrink
+      -- (tm:setLength does this).
 
 # Public API (mm:*)
   @api mm:load(newTake)  @ 276
@@ -150,13 +153,15 @@
       -- REAPER convention: shape on A governs the curve from A to next.
   @api mm:resolution()  @ 1055
   @api mm:length()  @ 1061
-      -- Source length. setLength truncates the source's EOT explicitly to keep this in sync after a shrink.
+      -- Source length. setLength positions the source's EOT explicitly to keep this in sync.
   @api mm:name()  @ 1068
   @api mm:setName(name)  @ 1074
-  @api mm:setLength(qn)  @ 1100
-      -- MIDI_SetItemExtents leaves the source's EOT stale on contract; retract it explicitly so the source actually shrinks.
+  @api mm:setLength(qn)  @ 1105
+      -- MIDI_SetItemExtents only resizes the item; on grow it leaves source EOT short,
+      -- on shrink it leaves source EOT stale. Reposition the source EOT first so the
+      -- source is the right size, then bring the item to match.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1114
+  @api mm:timeSigs()  @ 1119
 
 # Signals emitted (via util.installHooks)
   @emits takeSwapped   -- nil; only when load received a different take
@@ -168,7 +173,7 @@
 
 # REAPER API surface
   @reaper GetSetMediaItemTakeInfo_String
-  @reaper MIDI_CountEvts, MIDI_GetNote, MIDI_DisableSort, MIDI_DeleteNote, MIDI_Sort, MIDI_GetCC, MIDI_GetCCShape, MIDI_GetTextSysexEvt, MIDI_SetTextSysexEvt, MIDI_DeleteCC, MIDI_DeleteTextSysexEvt, MIDI_InsertTextSysexEvt, MIDI_SetNote, MIDI_InsertNote, MIDI_SetCC, MIDI_SetCCShape, MIDI_InsertCC, MIDI_GetPPQPosFromProjQN, MIDI_SetItemExtents, MIDI_GetAllEvts, MIDI_SetAllEvts, MIDI_GetPPQPosFromProjTime
+  @reaper MIDI_CountEvts, MIDI_GetNote, MIDI_DisableSort, MIDI_DeleteNote, MIDI_Sort, MIDI_GetCC, MIDI_GetCCShape, MIDI_GetTextSysexEvt, MIDI_SetTextSysexEvt, MIDI_DeleteCC, MIDI_DeleteTextSysexEvt, MIDI_InsertTextSysexEvt, MIDI_SetNote, MIDI_InsertNote, MIDI_SetCC, MIDI_SetCCShape, MIDI_InsertCC, MIDI_GetPPQPosFromProjQN, MIDI_GetAllEvts, MIDI_SetAllEvts, MIDI_SetItemExtents, MIDI_GetPPQPosFromProjTime
   @reaper GetMediaItemTake_Source, GetMediaItemTake_Item
   @reaper GetMediaSourceLength
   @reaper GetMediaItemInfo_Value

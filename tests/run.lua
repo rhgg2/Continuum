@@ -110,6 +110,7 @@ local specs = {
   'arrange_view_spec',
   'arrange_page_spec',
   'coordinator_spec',
+  'dag_validate_spec',
 }
 
 local pass, fail, failures = 0, 0, {}

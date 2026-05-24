@@ -15,7 +15,20 @@ local function fx(id, opts)
                          outs = opts.outs or { 'L', 'R' } } }
 end
 
-local function mk(nodes, edges)
+local function master(opts)
+  opts = opts or {}
+  return 'master', { kind = 'master', pos = { x = 0, y = 0 },
+                     audio = { ins = opts.ins or { 'L', 'R' } } }
+end
+
+-- mk auto-adds a default master (matches production: every graph has one)
+-- unless opts.noMaster is set, or the caller already supplied one.
+local function mk(nodes, edges, opts)
+  opts = opts or {}
+  if not opts.noMaster and not nodes.master then
+    local k, v = master()
+    nodes[k] = v
+  end
   return { nodes = nodes, edges = edges or {}, _nextId = 1 }
 end
 
@@ -224,6 +237,82 @@ return {
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'split' },
       })), nil)
+    end,
+  },
+  {
+    name = 'no master rejects (singleton)',
+    run = function()
+      local err = DAG.validate(mk({}, {}, { noMaster = true }))
+      t.eq(err.code,  'master_singleton')
+      t.eq(err.count, 0)
+    end,
+  },
+  {
+    name = 'two masters reject (singleton)',
+    run = function()
+      local ns = {}
+      local k,  v  = master(); ns[k] = v
+      ns.master2 = { kind = 'master', pos = { x = 0, y = 0 },
+                     audio = { ins = { 'L', 'R' } } }
+      local err = DAG.validate({ nodes = ns, edges = {}, _nextId = 1 })
+      t.eq(err.code,  'master_singleton')
+      t.eq(err.count, 2)
+    end,
+  },
+  {
+    name = 'master cannot be `from` of any edge',
+    run = function()
+      local ns = {}
+      local k, v = fx('b'); ns[k] = v
+      local err = DAG.validate(mk(ns, {
+        { type = 'audio', from = 'master', to = 'b' },
+      }))
+      t.eq(err.code, 'master_as_source')
+      t.eq(err.id,   'master')
+    end,
+  },
+  {
+    name = 'MIDI wire to master rejects',
+    run = function()
+      local ns = {}
+      local k, v = source('a'); ns[k] = v
+      local err = DAG.validate(mk(ns, {
+        { type = 'midi', from = 'a', to = 'master' },
+      }))
+      t.eq(err.code, 'midi_to_master')
+    end,
+  },
+  {
+    name = 'audio wire from source to master passes',
+    run = function()
+      local ns = {}
+      local k, v = source('a'); ns[k] = v
+      t.eq(DAG.validate(mk(ns, {
+        { type = 'audio', from = 'a', to = 'master' },
+      })), nil)
+    end,
+  },
+  {
+    name = 'audio wire to master with port=2 oob (default ins={L,R}) rejects',
+    run = function()
+      local ns = {}
+      local k, v = source('a'); ns[k] = v
+      local err = DAG.validate(mk(ns, {
+        { type = 'audio', from = 'a', to = 'master', toPort = 2 },
+      }))
+      t.eq(err.code, 'audio_to_port_oob')
+      t.eq(err.have, 1)
+    end,
+  },
+  {
+    name = 'audio wire to master with explicit pair 2 (4-ch master) passes',
+    run = function()
+      local ns = {}
+      local k,  v  = master({ ins = { 'L', 'R', 'L', 'R' } }); ns[k] = v
+      local k2, v2 = source('a');                              ns[k2] = v2
+      t.eq(DAG.validate({ nodes = ns, edges = {
+        { type = 'audio', from = 'a', to = 'master', toPort = 2 },
+      }, _nextId = 1 }), nil)
     end,
   },
   {

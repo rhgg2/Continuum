@@ -6,12 +6,15 @@
 
 --invariant: pure module — no state; functions take operands explicitly
 --invariant: two graph shapes — user (wires, always stereo audio / 16-ch MIDI) and compile (per-channel audio / per-port MIDI); lower() bridges them
---invariant: source nodes have implicit I/O (one stereo output pair, one MIDI out port); fx nodes carry explicit audio.ins/outs at channel granularity; MIDI is one implicit port everywhere
+--invariant: source nodes have implicit I/O (one stereo output pair, one MIDI out port); fx nodes carry explicit audio.ins/outs at channel granularity; MIDI is one implicit port on sources/fx
+--invariant: master is a singleton node (id='master'); audio.ins explicit (mirrors REAPER master hardware-output channel count); no audio outs, no MIDI; terminal-only (never `from`)
 --invariant: wire pairs derive from adjacent channel indices in audio.ins/outs; trailing odd channel = single-channel pair that lowers to a mono connection
 --invariant: srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
 --shape: UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
---shape: Node = { kind='source'|'fx', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=string[], outs=string[]} }
+--shape: Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=string[], outs?=string[]} }
 --shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|pairIdx, to=id, toPort=nil|pairIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
+local util = require('util')
+
 local M = {}
 
 ----- Pair shape helpers (user graph)
@@ -43,6 +46,14 @@ end
 function M.validate(user)
   local nodes, edges = user.nodes or {}, user.edges or {}
 
+  local masters = 0
+  for _, n in pairs(nodes) do
+    if n.kind == 'master' then masters = masters + 1 end
+  end
+  if masters ~= 1 then
+    return { code = 'master_singleton', count = masters }
+  end
+
   for i, edge in ipairs(edges) do
     local fromNode, toNode = nodes[edge.from], nodes[edge.to]
     if not fromNode then
@@ -53,6 +64,12 @@ function M.validate(user)
     end
     if toNode.kind == 'source' then
       return { code = 'source_as_sink', edge = i, id = edge.to }
+    end
+    if fromNode.kind == 'master' then
+      return { code = 'master_as_source', edge = i, id = edge.from }
+    end
+    if edge.type == 'midi' and toNode.kind == 'master' then
+      return { code = 'midi_to_master', edge = i }
     end
 
     if edge.type == 'midi' then
@@ -82,24 +99,22 @@ function M.validate(user)
   -- A cycle in either layer is a cycle in the dependency graph.
   local adj = {}
   for _, edge in ipairs(edges) do
-    local bucket = adj[edge.from]
-    if not bucket then bucket = {}; adj[edge.from] = bucket end
-    bucket[#bucket + 1] = edge.to
+    util.bucket(adj, edge.from, edge.to)
   end
-  local color = {} -- nil=white, 1=grey, 2=black
+  local colour = {} -- nil=white, 1=grey, 2=black
   local function visit(id)
-    color[id] = 1
+    colour[id] = 1
     for _, nxt in ipairs(adj[id] or {}) do
-      if color[nxt] == 1 then return nxt end
-      if color[nxt] == nil then
+      if colour[nxt] == 1 then return nxt end
+      if colour[nxt] == nil then
         local hit = visit(nxt)
         if hit then return hit end
       end
     end
-    color[id] = 2
+    colour[id] = 2
   end
   for id in pairs(nodes) do
-    if color[id] == nil then
+    if colour[id] == nil then
       local hit = visit(id)
       if hit then return { code = 'cycle', at = hit } end
     end

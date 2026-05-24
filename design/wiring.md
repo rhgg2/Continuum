@@ -40,18 +40,25 @@ adapter (sum, L-only, or replicate) inserted on the fly. The choice
 is a compiler heuristic at Stage 1 (default: sum); promoting it to a
 wire-menu option lands when a real case earns the UI.
 
-## Sources and sinks
+## Sources, sinks, master
 
 Sources are REAPER tracks; each contributes one audio wire (stereo)
-and one MIDI wire. The sink is the master (audio outs, typically one
-stereo). Nodes between sources and sink are FX instances. Built-in
-patches (mid-side, bandsplit, pre/post-emphasis, wire-level gain) are
-implemented by a single dedicated JSFX, the **Continuum Utility**.
+and one MIDI wire. The sink is the **master node** — a singleton in
+every user graph, `kind='master'`, carrying an explicit `audio.ins`
+channel array (typically `{'L','R'}` but scales with REAPER's master
+hardware-output channel count). The master has no audio outs and no
+MIDI; it is the terminal node for any audio chain the user wants
+audible. FX with no outgoing audio wire are simply not routed to
+speakers — explicit beats implicit. Nodes between sources and master
+are FX instances. Built-in patches (mid-side, bandsplit,
+pre/post-emphasis, wire-level gain) are implemented by a single
+dedicated JSFX, the **Continuum Utility**.
 
 The wiring page is design-time only. At compile time the compile
 graph projects onto REAPER tracks, REAPER sends, per-track FX chains,
-and per-FX I/O routing. The compile rule is the partition invariant
-below.
+and per-FX I/O routing. The master's equivalence class does *not*
+spawn a new track — it IS the REAPER master. The compile rule is
+the partition invariant below.
 
 ## The source-set partition
 
@@ -305,7 +312,7 @@ applier yet.
 {
   nodes = {
     [nodeId] = {
-      kind = 'source' | 'fx',
+      kind = 'source' | 'fx' | 'master',
       pos  = { x = number, y = number },  -- wiring-page layout, persisted
       -- source nodes: implicit I/O (one stereo audio pair, one MIDI port).
       trackGuid = '{...}',           -- REAPER track GUID
@@ -320,6 +327,10 @@ applier yet.
                                      -- to a mono connection.
       },
       -- MIDI is implicit on FX: exactly one in, one out, always rendered as ports.
+      -- master nodes: id is the fixed string 'master' (outside the _nextId mint
+      -- domain); singleton; auto-created in fresh graphs; cannot be deleted via
+      -- wm:mutate. Carries audio.ins only (no outs, no MIDI). The ins width
+      -- mirrors REAPER's master track hardware-output channel count.
     },
   },
   edges = {                          -- user-graph wires

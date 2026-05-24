@@ -1057,7 +1057,7 @@ function mm:resolution()
   return reaper.MIDI_GetPPQPosFromProjQN(take, 1) - reaper.MIDI_GetPPQPosFromProjQN(take, 0)
 end
 
--- Source length. setLength truncates the source's EOT explicitly to keep this in sync after a shrink.
+-- Source length. setLength positions the source's EOT explicitly to keep this in sync.
 function mm:length()
   if not take then return end
   local source = reaper.GetMediaItemTake_Source(take)
@@ -1076,8 +1076,11 @@ function mm:setName(name)
   reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
 end
 
--- Assumes events past targetPpq are already deleted upstream (tm:setLength does this).
-local function retractEot(buf, targetPpq)
+-- Rewrite the trailing EOT meta event so it sits exactly at targetPpq.
+-- Handles both shrink (offset reduces) and grow (offset increases).
+-- Assumes events past targetPpq are already deleted upstream on shrink
+-- (tm:setLength does this).
+local function setEot(buf, targetPpq)
   local pos, ppq, lastPpq, lastStart = 1, 0, 0, nil
   while pos + 8 <= #buf do
     local offset, _, msglen = string.unpack('<i4Bi4', buf, pos)
@@ -1095,19 +1098,21 @@ local function retractEot(buf, targetPpq)
       .. string.pack('<i4Bi4', newOffset, flag, msglen) .. msg
 end
 
--- MIDI_SetItemExtents leaves the source's EOT stale on contract; retract it explicitly so the source actually shrinks.
+-- MIDI_SetItemExtents only resizes the item; on grow it leaves source EOT short,
+-- on shrink it leaves source EOT stale. Reposition the source EOT first so the
+-- source is the right size, then bring the item to match.
 -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
 function mm:setLength(qn)
   if not take then return end
   local item     = reaper.GetMediaItemTake_Item(take)
   local startSec = reaper.GetMediaItemInfo_Value(item, 'D_POSITION')
   local startQN  = reaper.TimeMap2_timeToQN(0, startSec)
-  reaper.MIDI_SetItemExtents(item, startQN, startQN + qn)
   local ok, buf = reaper.MIDI_GetAllEvts(take)
   if ok then
-    local newBuf = retractEot(buf, qn * self:resolution())
+    local newBuf = setEot(buf, qn * self:resolution())
     if newBuf ~= buf then reaper.MIDI_SetAllEvts(take, newBuf) end
   end
+  reaper.MIDI_SetItemExtents(item, startQN, startQN + qn)
   self:reload()
 end
 
