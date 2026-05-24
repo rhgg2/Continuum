@@ -1471,9 +1471,5 @@ function tp:focusState()
   }
 end
 
-function tp:handleInput() end
-function tp:save()      end
-function tp:load()      end
-
 return tp
 

@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1479  sha=d4eeb3a  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1475  sha=0190da7  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -165,9 +165,6 @@
       --   transiently, but bound commands should still fire. Anything that
       --   genuinely needs the keys (a focused InputText, an active slider,
       --   a held button) shows up as IsAnyItemActive.
-  @api tp:handleInput()  @ 1474
-  @api tp:save()  @ 1475
-  @api tp:load()  @ 1476
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

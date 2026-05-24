@@ -386,9 +386,9 @@ local function renderGrid(tracks, nTracks)
     local cy    = snap(rowY(curRow))
     local serif = 4
     local col   = chrome.colour('arrangeCursorBorder')
-    ImGui.DrawList_AddLine(dl, cx0 + 1, cy, cx1-1,     cy,        col, 2)
-    ImGui.DrawList_AddLine(dl, cx0 + 1, cy - serif,  cx0 +1, cy + serif, col, 2)
-    ImGui.DrawList_AddLine(dl, cx1, cy - serif,  cx1, cy + serif, col, 2)
+    ImGui.DrawList_AddLine(dl, cx0 + 1, cy, cx1-1,     cy,        col, 1.5)
+    ImGui.DrawList_AddLine(dl, cx0 + 1, cy - serif,  cx0 +1, cy + serif, col, 1.5)
+    ImGui.DrawList_AddLine(dl, cx1, cy - serif,  cx1, cy + serif, col, 1.5)
   end
 
   -- Loop region — the tracker's tail bracket: a stroked `[` down the
@@ -733,9 +733,6 @@ function ap:focusState()
   }
 end
 
-function ap:handleInput() end
-function ap:save()        end
-function ap:load()        end
 
 --invariant: createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture. Slots have no existence apart from items on the grid; the palette's rename / delete buttons act on existing slots.
 -- cmgr:scope is idempotent — same scope av registers into.

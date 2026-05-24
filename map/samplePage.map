@@ -1,4 +1,4 @@
-@module samplePage  src=samplePage.lua  loc=644  sha=fa4a61d  mode=chunk
+@module samplePage  src=samplePage.lua  loc=641  sha=1f0eda3  mode=chunk
 @deps cm, cmgr, chrome, gui, onPickTrack
 
 # Invariants & contracts
@@ -41,7 +41,7 @@
   @state toolbar  @ 395   -- lazy: chrome may be nil at construction in tests
   @state toolbarSegments = {  @ 398
   @state sp = {}  @ 441
-  @state sampler = cmgr:scope('sample')  @ 602
+  @state sampler = cmgr:scope('sample')  @ 599
       @invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])
 
 # Private functions
@@ -90,9 +90,6 @@
       @contract  tick runs every frame regardless of active page — sm needs the tracker take to maintain isTrackerMode and the gmem mailbox; project-path migration runs only on actual change
   @api sp:focusState()  @ 588
       @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
-  @api sp:handleInput()  @ 597
-  @api sp:save()  @ 598
-  @api sp:load()  @ 599
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

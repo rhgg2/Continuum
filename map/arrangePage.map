@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=786  sha=96d6b79  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=783  sha=0190da7  mode=chunk
 @deps cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost
 
 # Invariants & contracts
@@ -46,9 +46,9 @@
   @state HEADER_PAD = 8  @ 128
   @state HEADER_GAP = 4  @ 129
   @state CREATE_DEFAULT_BEATS = 4  @ 546
-  @state arrange = cmgr:scope('arrange')  @ 742
+  @state arrange = cmgr:scope('arrange')  @ 739
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture. Slots have no existence apart from items on the grid; the palette's rename / delete buttons act on existing slots.
-  @state binds = {  @ 753
+  @state binds = {  @ 750
 
 # Private functions
   -- Style + draw helpers
@@ -83,7 +83,7 @@
       -- SpanAllColumns so the entire row is the click target; we paint the
       -- key text on top with SameLine.
   @fn renderPalette(tracks)  @ 636
-  @fn placeKey(slotIdx)  @ 776
+  @fn placeKey(slotIdx)  @ 773
       -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
@@ -103,9 +103,6 @@
   @api ap:renderStatusBar(_)  @ 717
   @api ap:focusState()  @ 725
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
-  @api ap:handleInput()  @ 736
-  @api ap:save()  @ 737
-  @api ap:load()  @ 738
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

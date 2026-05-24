@@ -594,9 +594,6 @@ function sp:focusState()
   }
 end
 
-function sp:handleInput() end
-function sp:save()        end
-function sp:load()        end
 
 --invariant: sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])
 local sampler = cmgr:scope('sample')
