@@ -13,8 +13,8 @@ local wm = util.instantiate('wiringManager', { cm = cm })
 
 local wv = {}
 
-local hoverNodeId     = nil
-local selectionNodeId = nil
+local hoverNodeId = nil
+local selection   = {}  -- set keyed by nodeId → true; replace via setSelection, never mutated in place
 
 ----- Logical projection (viewport-independent)
 
@@ -125,9 +125,16 @@ end
 
 ----- Logical view-state (nodeId only)
 
-function wv:hover()           return hoverNodeId     end
-function wv:setHover(id)      hoverNodeId = id       end
-function wv:selection()       return selectionNodeId end
-function wv:setSelection(id)  selectionNodeId = id   end
+function wv:hover()             return hoverNodeId       end
+function wv:setHover(id)        hoverNodeId = id         end
+
+--contract: returns the live selection set { [id]=true, … }; callers read, never mutate
+function wv:selection()         return selection         end
+--contract: replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
+function wv:setSelection(idSet)
+  local copy = {}
+  for id in pairs(idSet or {}) do copy[id] = true end
+  selection = copy
+end
 
 return wv

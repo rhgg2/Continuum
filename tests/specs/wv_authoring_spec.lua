@@ -73,4 +73,41 @@ return {
       t.deepEq(after.nodes, before.nodes, 'no nodes changed')
     end,
   },
+  {
+    name = 'selection starts empty, setSelection writes the id set',
+    run = function(harness)
+      local _, wv = mkWv(harness)
+      t.deepEq(wv:selection(), {}, 'fresh selection is empty')
+      wv:setSelection{ n1 = true, n2 = true }
+      t.deepEq(wv:selection(), { n1 = true, n2 = true })
+    end,
+  },
+  {
+    name = 'setSelection replaces wholesale (no merge with previous)',
+    run = function(harness)
+      local _, wv = mkWv(harness)
+      wv:setSelection{ n1 = true, n2 = true }
+      wv:setSelection{ n3 = true }
+      t.deepEq(wv:selection(), { n3 = true }, 'previous ids dropped')
+    end,
+  },
+  {
+    name = 'setSelection{} clears',
+    run = function(harness)
+      local _, wv = mkWv(harness)
+      wv:setSelection{ n1 = true }
+      wv:setSelection{}
+      t.deepEq(wv:selection(), {})
+    end,
+  },
+  {
+    name = 'setSelection defensive-copies its argument',
+    run = function(harness)
+      local _, wv = mkWv(harness)
+      local input = { n1 = true }
+      wv:setSelection(input)
+      input.n2 = true                                  -- mutate caller's table after the call
+      t.deepEq(wv:selection(), { n1 = true }, 'wv view not aliased to caller table')
+    end,
+  },
 }

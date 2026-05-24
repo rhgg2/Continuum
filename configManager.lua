@@ -194,6 +194,7 @@ local declarations = {
   { 'colour.wiring.node.master',    'palette.mid'    },
   { 'colour.wiring.node.generator', 'palette.slate'  },
   { 'colour.wiring.node.effect',    'palette.salmon' },
+  { 'colour.wiring.node.selected',  'palette.amber'  },  -- outline stroke for selected nodes / rubber-band
   { 'colour.wiring.port.audio',     'palette.shade'  },
   { 'colour.wiring.port.midi',      'palette.steel'  },
   { 'colour.wiring.tooltip.bg',     'palette.pale'   },  -- pale popup bg so the body's dark text reads
