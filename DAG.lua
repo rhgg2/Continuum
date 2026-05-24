@@ -277,13 +277,13 @@ end
 
 ----- quotientGraph / absorption / capacityErrors
 
---contract: class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryParents ⊆ audioParents, flagged by `primary` wires
+--contract: class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryAudioParents ⊆ audioParents, flagged by `primary` wires
 function M.quotientGraph(compile, classes)
   local classOf, quotient = {}, {}
   for cls, members in pairs(classes) do
     quotient[cls] = { audioParents = {}, midiParents = {},
                       audioChildren = {}, midiChildren = {},
-                      primaryParents = {} }
+                      primaryAudioParents = {} }
     for _, id in ipairs(members) do classOf[id] = cls end
   end
 
@@ -293,7 +293,7 @@ function M.quotientGraph(compile, classes)
       local toQ, fromQ = quotient[toCls], quotient[fromCls]
       if conn.type == 'audio' then
         toQ.audioParents[fromCls] = true
-        if conn.primary then toQ.primaryParents[fromCls] = true end
+        if conn.primary then toQ.primaryAudioParents[fromCls] = true end
         fromQ.audioChildren[toCls] = true
       else
         toQ.midiParents[fromCls] = true
@@ -310,7 +310,7 @@ end
 local function directHost(q)
   local audioParents, primaryParents = {}, {}
   for parent in pairs(q.audioParents)   do util.add(audioParents,   parent) end
-  for parent in pairs(q.primaryParents) do util.add(primaryParents, parent) end
+  for parent in pairs(q.primaryAudioParents) do util.add(primaryParents, parent) end
   if #primaryParents == 1 then return primaryParents[1] end
   if #primaryParents == 0 and #audioParents == 1 then return audioParents[1] end
   return nil

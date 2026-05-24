@@ -94,6 +94,13 @@ local declarations = {
   -- the source's length is the effective cap. See docs/arrangeManager.md.
   { 'arrangeNaturalLenQN', nil },
 
+  -- Wiring page (third rung after tracker and sampler). The user graph
+  -- is one project-tier blob; wiringClass is a per-track marker the
+  -- Stage 2 differ reads to identify tracks the wiring page owns.
+  -- See docs/wiringManager.md and design/wiring.md.
+  { 'wiringGraph', {} },
+  { 'wiringClass', nil },
+
   -- Atoms — parchment palette
   { 'palette.bg',        hex('#dad6c9') },  -- cream paper
   { 'palette.shade',     hex('#303021') },  -- dark ink

@@ -1,0 +1,39 @@
+@module wiringManager  src=wiringManager.lua  loc=85  sha=untracked  mode=chunk
+@deps cm
+
+# Invariants & contracts
+  @invariant  project-wide singleton; the user graph lives in one cm project-tier key (wiringGraph). No per-take or per-track state at Stage 1; wiringClass is declared for the Stage 2 differ but unread here.
+  @invariant  every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
+  @invariant  master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
+
+# Imports
+  @require util = 'util'  @ 8
+  @require DAG = 'DAG'  @ 9
+
+# Private state
+  @state wm = {}  @ 13
+  @state fire = util.installHooks(wm)  @ 14
+  @state _graph = nil  @ 16
+
+# Private functions
+  -- Helpers
+  @fn freshGraph()  @ 20
+  @fn readPersisted()  @ 31
+  @fn ensureLoaded()  @ 37
+
+# Public API (wm:*)
+  @api wm:load()  @ 44
+      @contract  re-reads wiringGraph from cm (rebuilding master via freshGraph if empty) and fires wiringChanged{kind='load'}
+  @api wm:save()  @ 50
+      @contract  persists the current in-memory graph to the project tier; mutate calls this, callers normally don't
+  @api wm:graph()  @ 55
+      @contract  returns a deep copy of the user graph; caller mutations never leak into wm state
+  @api wm:mutate(mutator)  @ 61
+      @contract  clone-validate-swap; on DAG.validate failure returns false,err with no state change and no signal; on success persists and fires wiringChanged{kind='mutate'}
+  @api wm:compile()  @ 74
+      @contract  returns DAG.lower of the current user graph; pure, no caching at Stage 1
+  @api wm:errors()  @ 80
+      @contract  list of intra-class capacity overflows on the lowered compile graph; empty when the user graph is within budget
+
+# Signals emitted (via util.installHooks)
+  @emits wiringChanged

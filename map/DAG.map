@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=366  sha=3748927  mode=namespace
+@module DAG  src=DAG.lua  loc=366  sha=cdc4a61  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module — no state; functions take operands explicitly

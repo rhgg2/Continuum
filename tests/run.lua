@@ -117,6 +117,7 @@ local specs = {
   'dag_quotient_spec',
   'dag_absorption_spec',
   'dag_capacity_spec',
+  'wm_persistence_spec',
 }
 
 local pass, fail, failures = 0, 0, {}
