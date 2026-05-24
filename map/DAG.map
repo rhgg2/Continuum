@@ -1,0 +1,28 @@
+@module DAG  src=DAG.lua  loc=111  sha=untracked  mode=namespace
+
+# Invariants & contracts
+  @invariant  pure module — no state; functions take operands explicitly
+  @invariant  two graph shapes — user (wires, always stereo audio / 16-ch MIDI) and compile (per-channel audio / per-port MIDI); lower() bridges them
+  @invariant  source nodes have implicit I/O (one stereo output pair, one MIDI out port); fx nodes carry explicit audio.ins/outs at channel granularity; MIDI is one implicit port everywhere
+  @invariant  wire pairs derive from adjacent channel indices in audio.ins/outs; trailing odd channel = single-channel pair that lowers to a mono connection
+  @invariant  srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
+
+# Shapes
+  @shape  UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
+  @shape  Node = { kind='source'|'fx', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=string[], outs=string[]} }
+  @shape  Edge = { type='audio'|'midi', from=id, fromPort=nil|pairIdx, to=id, toPort=nil|pairIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
+
+# Module-level constants
+  @const M = {}  @ 15
+
+# Private functions
+  -- Pair shape helpers (user graph)
+  @fn pairWidths(channels)  @ 20
+      -- {'L','R'} -> {2}; {'L','R','L','R'} -> {2,2}; {'L','R','C'} -> {2,1}.
+  @fn audioPairs(node)  @ 30
+      -- Sources have implicit I/O: one stereo output pair, no audio inputs.
+
+# Public API (M.*)
+  -- validate
+  @api M.validate(user)  @ 43
+      @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
