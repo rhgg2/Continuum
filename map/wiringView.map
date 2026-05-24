@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=104  sha=04c4de1  mode=chunk
+@module wiringView  src=wiringView.lua  loc=133  sha=a531dfd  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -44,11 +44,20 @@
   @api wv:graph()  @ 82
   @api wv:save()  @ 83
   @api wv:load()  @ 84
+  -- Authoring (slice 1.3b)
+  @api wv:addFx(x, y)  @ 93
+      -- TESTING-ONLY: no FX picker yet. wiringAddFx (Key_N in the wiring
+      -- scope) calls this so selection / drag / multi-node geometry have
+      -- something to chew on. The hardcoded fxIdent won't resolve in REAPER;
+      -- the whole entry-point gets replaced when 1.3c lands the real flow.
+      @contract  appends an fx node at logical canvas pos (x,y); mints id 'n'<_nextId>; bumps _nextId
+  @api wv:moveNode(id, x, y)  @ 108
+      @contract  writes node.pos for an existing node id in logical canvas units; no-op if id missing
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 90
+  @api wv:nodeViews()  @ 119
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 99
-  @api wv:setHover(id)  @ 100
-  @api wv:selection()  @ 101
-  @api wv:setSelection(id)  @ 102
+  @api wv:hover()  @ 128
+  @api wv:setHover(id)  @ 129
+  @api wv:selection()  @ 130
+  @api wv:setSelection(id)  @ 131

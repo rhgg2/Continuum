@@ -4,7 +4,7 @@
 --invariant: render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
 --invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
---invariant: at Stage 1.3a the page draws only — no editing, no wiring-scope commands, no palette. Hover reveals ports (visual cue, no interaction). Selection / drag arrive in 1.3b.
+--invariant: at Stage 1.3b the page handles add-fx (scope key N, testing-only) and drag-to-move single node. Selection (rubber-band, multi) arrives in the next slice; ports remain hover-only.
 
 local util = require 'util'
 
@@ -38,6 +38,13 @@ local PORT_TOOLTIP_GAP = 4   -- pixels between port top and tooltip bottom edge
 -- hover inflation so the row stays drawn while the mouse is anywhere in
 -- the padded hit area.
 local PORT_REACH = PORT_BAND_OFFSET + PORT_SIZE + PORT_HIT_PAD
+
+----- Drag state (page-local; ephemeral, never persisted)
+
+-- Captured at mousedown-on-node. While IsMouseDown, the node draws at
+-- start + (curMouse - startMouse). On mouseup we commit through
+-- wv:moveNode (one wm:mutate, one wiringChanged signal).
+local drag = nil  -- { id, mx0, my0, x0, y0 }
 
 ----- Pixel geometry (page-owned)
 
@@ -121,6 +128,20 @@ local function drawHoverPorts(dl, nv, ox, oy)
     '##port/' .. nv.id .. '/out')
 end
 
+-- Identify the node whose body the mouse is over (un-inflated rect);
+-- used to start a drag, distinct from the inflated rect that drives
+-- port reveal. Returns nil if the mouse is over empty canvas (or a
+-- port band).
+local function nodeUnderMouse(nodeViews, ox, oy)
+  for _, nv in ipairs(nodeViews) do
+    local lx0, ly0, lx1, ly1 = nodeRect(nv)
+    if ImGui.IsMouseHoveringRect(ctx,
+         ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
+      return nv
+    end
+  end
+end
+
 local function renderCanvas(w, h)
   local dl     = ImGui.GetWindowDrawList(ctx)
   local sx, sy = ImGui.GetCursorScreenPos(ctx)
@@ -129,12 +150,28 @@ local function renderCanvas(w, h)
   -- in the middle, positions extend in all four quadrants from there.
   local ox, oy = sx + math.floor(w / 2), sy + math.floor(h / 2)
 
+  local nodeViews = wv:nodeViews()
+
+  -- Drag projection: while a drag is live, override the dragged node's
+  -- pos in this frame's nodeViews so geometry below (hit test, draw,
+  -- hover band) all see the in-flight position.
+  if drag then
+    for _, nv in ipairs(nodeViews) do
+      if nv.id == drag.id then
+        local mx, my = ImGui.GetMousePos(ctx)
+        nv.pos.x = drag.x0 + (mx - drag.mx0)
+        nv.pos.y = drag.y0 + (my - drag.my0)
+        break
+      end
+    end
+  end
+
   -- Hover region includes the port bands above/below the node (plus
   -- the per-port hit padding) so the mouse can dwell on a port without
   -- the hover dropping and erasing the port mid-aim.
   local hoverInflate = PORT_REACH
   local hoveredNV = nil
-  for _, nv in ipairs(wv:nodeViews()) do
+  for _, nv in ipairs(nodeViews) do
     local lx0, ly0, lx1, ly1 = nodeRect(nv)
     if ImGui.IsMouseHoveringRect(ctx,
          ox + lx0, oy + ly0 - hoverInflate,
@@ -145,6 +182,23 @@ local function renderCanvas(w, h)
   end
   if hoveredNV then drawHoverPorts(dl, hoveredNV, ox, oy) end
   wv:setHover(hoveredNV and hoveredNV.id or nil)
+
+  -- Drag bookkeeping. Drag starts on a click whose body-hit lands on
+  -- a node (not on a port band — port hits are reserved for future
+  -- wire-pull). Drag ends on mouseup, committing the projected pos.
+  if not drag and ImGui.IsMouseClicked(ctx, 0) then
+    local bodyHit = nodeUnderMouse(nodeViews, ox, oy)
+    if bodyHit then
+      local mx, my = ImGui.GetMousePos(ctx)
+      drag = { id = bodyHit.id, mx0 = mx, my0 = my,
+               x0 = bodyHit.pos.x, y0 = bodyHit.pos.y }
+    end
+  elseif drag and not ImGui.IsMouseDown(ctx, 0) then
+    local mx, my = ImGui.GetMousePos(ctx)
+    local fx, fy = drag.x0 + (mx - drag.mx0), drag.y0 + (my - drag.my0)
+    if fx ~= drag.x0 or fy ~= drag.y0 then wv:moveNode(drag.id, fx, fy) end
+    drag = nil
+  end
 
   -- Port InvisibleButtons advance the layout cursor; rewind it so the
   -- canvas-sizing Dummy reserves from the canvas origin, not from
@@ -162,7 +216,7 @@ local function popBodyStyles() ImGui.PopStyleColor(ctx, 1) end
 
 --contract: bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
 function wp:bind() end
-function wp:unbind() end
+function wp:unbind() drag = nil end
 
 function wp:renderToolbarBits(_) end
 
@@ -197,5 +251,11 @@ function wp:focusState()
   }
 end
 
+
+----- Wiring scope (slice 1.3b)
+
+local wiring = cmgr:scope('wiring')
+wiring:registerAll{ wiringAddFx = function() wv:addFx(0, 0) end }
+wiring:bindAll    { wiringAddFx = { ImGui.Key_N } }
 
 return wp

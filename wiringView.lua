@@ -83,6 +83,35 @@ function wv:graph() return wm:graph() end
 function wv:save()  wm:save() end
 function wv:load()  wm:load() end
 
+----- Authoring (slice 1.3b)
+
+-- TESTING-ONLY: no FX picker yet. wiringAddFx (Key_N in the wiring
+-- scope) calls this so selection / drag / multi-node geometry have
+-- something to chew on. The hardcoded fxIdent won't resolve in REAPER;
+-- the whole entry-point gets replaced when 1.3c lands the real flow.
+--contract: appends an fx node at logical canvas pos (x,y); mints id 'n'<_nextId>; bumps _nextId
+function wv:addFx(x, y)
+  return wm:mutate(function(g)
+    local id = 'n' .. g._nextId
+    g._nextId = g._nextId + 1
+    g.nodes[id] = {
+      kind      = 'fx',
+      pos       = { x = x, y = y },
+      fxIdent   = 'JS:placeholder',
+      fxDisplay = 'fx',
+      audio     = { ins = 1, outs = 1 },
+    }
+  end)
+end
+
+--contract: writes node.pos for an existing node id in logical canvas units; no-op if id missing
+function wv:moveNode(id, x, y)
+  return wm:mutate(function(g)
+    local node = g.nodes[id]
+    if node then node.pos.x, node.pos.y = x, y end
+  end)
+end
+
 ----- Render-ready, viewport-independent
 
 --shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}} } — port lists carry names; counts = #list

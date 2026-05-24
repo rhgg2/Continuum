@@ -1,11 +1,11 @@
-@module wiringPage  src=wiringPage.lua  loc=201  sha=a49d259  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=261  sha=a531dfd  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
   @invariant  render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
   @invariant  wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
   @invariant  the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
-  @invariant  at Stage 1.3a the page draws only — no editing, no wiring-scope commands, no palette. Hover reveals ports (visual cue, no interaction). Selection / drag arrive in 1.3b.
+  @invariant  at Stage 1.3b the page handles add-fx (scope key N, testing-only) and drag-to-move single node. Selection (rubber-band, multi) arrives in the next slice; ports remain hover-only.
 
 # Imports
   @require util = 'util'  @ 9
@@ -19,45 +19,53 @@
   @state wireFont = gui and gui.wireFont or nil  @ 21
   @state wireSize = gui and gui.fontSize and gui.fontSize.wire or 14  @ 22
   @state wp = {}  @ 26
-  @state NODE_W = 96  @ 28
-  @state NODE_H = 72  @ 29
-  @state CORNER_R = 4  @ 30
+  @state NODE_W = 90  @ 28
+  @state NODE_H = 60  @ 29
+  @state CORNER_R = 5  @ 30
   @state PORT_SIZE = 8  @ 31
   @state PORT_GAP = 4  @ 32
   @state PORT_BAND_OFFSET = 6  @ 33   -- gap between node edge and the hover-only port row
   @state PORT_HIT_PAD = 4  @ 34   -- hit area extends this far beyond the visual square on each side
-  @state PORT_TOOLTIP_GAP = 2  @ 35   -- pixels between port top and tooltip bottom edge
+  @state PORT_TOOLTIP_GAP = 4  @ 35   -- pixels between port top and tooltip bottom edge
   @state PORT_REACH = PORT_BAND_OFFSET + PORT_SIZE + PORT_HIT_PAD  @ 40
+  @state drag = nil  @ 47   -- { id, mx0, my0, x0, y0 }
+  @state wiring = cmgr:scope('wiring')  @ 257
 
 # Private functions
+  -- Drag state (page-local; ephemeral, never persisted)
   -- Pixel geometry (page-owned)
-  @fn nodeRect(nv)  @ 46
+  @fn nodeRect(nv)  @ 53
       -- pos is the node's centre in canvas-local coordinates (origin = centre
       -- of the viewport, set up in renderCanvas); rect is laid out symmetrically.
   -- Drawing
-  @fn drawNode(dl, nv, ox, oy)  @ 53
-  @fn drawPort(dl, px, y, colour, idStem, name)  @ 72
+  @fn drawNode(dl, nv, ox, oy)  @ 60
+  @fn drawPort(dl, px, y, colour, idStem, name)  @ 79
       -- One port: filled square + invisible button (padded outward so the
       -- hit area is comfortably larger than the 8px visual) and a tooltip
       -- anchored right above the port. The InvisibleButton advances the
       -- layout cursor; caller restores it before reserving canvas area.
-  @fn drawPortBand(dl, x0, x1, y, audio, midi, audioCol, midiCol, idPrefix)  @ 94
+  @fn drawPortBand(dl, x0, x1, y, audio, midi, audioCol, midiCol, idPrefix)  @ 101
       -- Horizontal row of port squares centred over [x0,x1] at vertical `y`.
       -- Audio squares first, then MIDI; either list may be empty.
-  @fn drawHoverPorts(dl, nv, ox, oy)  @ 109
-  @fn renderCanvas(w, h)  @ 124
-  @fn pushBodyStyles()  @ 156
-  @fn popBodyStyles()  @ 159
+  @fn drawHoverPorts(dl, nv, ox, oy)  @ 116
+  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 135
+      -- Identify the node whose body the mouse is over (un-inflated rect);
+      -- used to start a drag, distinct from the inflated rect that drives
+      -- port reveal. Returns nil if the mouse is over empty canvas (or a
+      -- port band).
+  @fn renderCanvas(w, h)  @ 145
+  @fn pushBodyStyles()  @ 210
+  @fn popBodyStyles()  @ 213
 
 # Public API (wp:*)
-  @api wp:bind()  @ 164
+  @api wp:bind()  @ 218
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 165
-  @api wp:renderToolbarBits(_)  @ 167
-  @api wp:renderBody(_, w, h, dispatch)  @ 170
+  @api wp:unbind()  @ 219
+  @api wp:renderToolbarBits(_)  @ 221
+  @api wp:renderBody(_, w, h, dispatch)  @ 224
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 183
-  @api wp:focusState()  @ 189
+  @api wp:renderStatusBar(_)  @ 237
+  @api wp:focusState()  @ 243
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface

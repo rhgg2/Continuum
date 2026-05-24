@@ -119,6 +119,7 @@ local specs = {
   'dag_absorption_spec',
   'dag_capacity_spec',
   'wm_persistence_spec',
+  'wv_authoring_spec',
   'wp_smoke_spec',
 }
 
