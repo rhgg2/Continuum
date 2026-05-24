@@ -21,34 +21,33 @@ MIDI, "mark as primary" — and they're the unit on which routing
 gestures land in the UI.
 
 The **compile graph** is the lowered form that drives the REAPER
-projection. Its edges are **connections** — channel-to-channel for
-audio, port-to-port for MIDI. The lowering inserts a Continuum
-Utility node for every wire-level op (gain becomes a gain node;
-channel-remap becomes a remap node), splits each audio wire into the
-channel connections that make it up, and resolves stereo-to-mono
-input mismatches by inserting an adapter node.
+projection. Its edges are **connections** — port-to-port for audio,
+node-to-node for MIDI. The lowering inserts a Continuum Utility
+node for every wire-level op (gain becomes a gain node;
+channel-remap becomes a remap node) but otherwise preserves the
+shape of the user graph: each wire is one connection.
+
+REAPER tracks are uniformly stereo, so the model carries integer
+stereo-port counts on `audio.ins / outs` rather than channel names.
+The pre-beta "channels vs ports" distinction — mono adapters,
+trailing-odd channels, per-channel splits — dissolved once that
+assumption landed; the model is simpler for it.
 
 The partition invariant below operates on the compile graph. srcSet
 and class equivalence are stable under lowering — every Continuum
 Utility insertion is single-input single-output, so parent srcSets
-flow through unchanged — but capacity is genuinely per-channel, so
-the 64/128 budgets are checked after lowering, not before.
-
-Mono ports are not rejected at the user graph. A stereo wire feeding
-a mono input compiles to a single-channel connection with an
-adapter (sum, L-only, or replicate) inserted on the fly. The choice
-is a compiler heuristic at Stage 1 (default: sum); promoting it to a
-wire-menu option lands when a real case earns the UI.
+flow through unchanged — and capacity counts intra-class wires
+directly (64 stereo audio / 128 MIDI), checked after lowering.
 
 ## Sources, sinks, master
 
 Sources are REAPER tracks; each contributes one audio wire (stereo)
 and one MIDI wire. The sink is the **master node** — a singleton in
-every user graph, `kind='master'`, carrying an explicit `audio.ins`
-channel array (typically `{'L','R'}` but scales with REAPER's master
-hardware-output channel count). The master has no audio outs and no
-MIDI; it is the terminal node for any audio chain the user wants
-audible. FX with no outgoing audio wire are simply not routed to
+every user graph, `kind='master'`, carrying an explicit
+`audio.ins` integer (default `1`, the one stereo bus; scales up if
+the REAPER master exposes more hardware-output pairs). The master
+has no audio outs and no MIDI; it is the terminal node for any
+audio chain the user wants audible. FX with no outgoing audio wire are simply not routed to
 speakers — explicit beats implicit. Nodes between sources and master
 are FX instances. Built-in patches (mid-side, bandsplit,
 pre/post-emphasis, wire-level gain) are implemented by a single
@@ -67,9 +66,9 @@ source tracks reachable as ancestors of N (transitive closure over
 input edges). Two nodes share an equivalence class iff their
 source-sets are equal. Each class compiles to **one REAPER track**:
 
-- intra-class connections become **internal channel routing** on the
-  track (REAPER tracks carry up to 64 audio and 128 MIDI channels,
-  accessed via per-FX I/O routing).
+- intra-class connections become **internal port routing** on the
+  track (REAPER tracks carry up to 64 stereo audio ports and 128
+  MIDI ports, accessed via per-FX I/O routing).
 - intra-class topo order becomes the **per-track FX chain order**.
 - inter-class connections — connections where `srcSet` changes —
   become **sends to a new track**, and *only* those connections do.
@@ -82,8 +81,8 @@ consequences worth naming:
   track, and REAPER's per-track signal summing makes that
   unrepresentable.
 - **The 64/128 budgets are within-class capacity.** A pathological
-  class with >64 distinct intra-class audio connections has to be
-  split manually — exposed as a design-time error on the wiring page
+  class with >64 distinct intra-class audio wires has to be split
+  manually — exposed as a design-time error on the wiring page
   after lowering, not silently routed.
 
 ## Primary-input optimisation
@@ -217,9 +216,6 @@ resolve.
 - **`pdc_midi` on gmem merge.** Verify mechanics with a skeleton;
   decide warn-vs-restrict for foreign FX that don't honor the flag.
   Spike happens at Stage 4 of the implementation plan below.
-- **Mono-adapter choice.** Sum / L-only / replicate is currently a
-  compiler default. Promote to a wire-menu option once a project
-  hits a case where the default is wrong.
 
 ## Implementation plan
 
@@ -314,33 +310,30 @@ applier yet.
     [nodeId] = {
       kind = 'source' | 'fx' | 'master',
       pos  = { x = number, y = number },  -- wiring-page layout, persisted
-      -- source nodes: implicit I/O (one stereo audio pair, one MIDI port).
+      -- source nodes: implicit I/O (one stereo audio out, one MIDI out).
       trackGuid = '{...}',           -- REAPER track GUID
       -- fx nodes:
       fxIdent   = '...',             -- REAPER's stable AddByName ident
       fxDisplay = 'ReaEQ',           -- cached label; renders before any instance exists
-      audio     = {                  -- REAPER channel granularity (the canonical
-        ins  = { 'L', 'R', ... },    -- declaration); the user graph pairs adjacent
-        outs = { 'L', 'R', ... },    -- indices into wires: (1,2) = pair 1,
-                                     -- (3,4) = pair 2, etc. A trailing odd channel
-                                     -- is its own single-channel "pair" and lowers
-                                     -- to a mono connection.
+      audio     = {                  -- integer stereo-port counts (REAPER tracks
+        ins  = number,               -- are always stereo). Defaults: 0 (no audio I/O).
+        outs = number,               -- Edges index ports 1..N.
       },
       -- MIDI is implicit on FX: exactly one in, one out, always rendered as ports.
       -- master nodes: id is the fixed string 'master' (outside the _nextId mint
       -- domain); singleton; auto-created in fresh graphs; cannot be deleted via
-      -- wm:mutate. Carries audio.ins only (no outs, no MIDI). The ins width
-      -- mirrors REAPER's master track hardware-output channel count.
+      -- wm:mutate. Carries audio.ins only (no outs, no MIDI). The ins count
+      -- defaults to 1 (one stereo bus) and scales with the REAPER master's
+      -- hardware-output stereo-pair count.
     },
   },
   edges = {                          -- user-graph wires
     {
       type = 'midi' | 'audio',
-      -- pairIdx: source nodes have only
-      -- pair 1 (the track's stereo); FX nodes have pairs 1..N derived
-      -- from their audio.ins / audio.outs (possibly upgraded mono->stereo).
-      from = nodeId, fromPort = nil | pairIdx,
-      to   = nodeId, toPort   = nil | pairIdx,
+      -- portIdx: source nodes have only port 1 (the track's stereo);
+      -- FX nodes have ports 1..N derived from audio.ins / audio.outs.
+      from = nodeId, fromPort = nil | portIdx,
+      to   = nodeId, toPort   = nil | portIdx,
       ops  = {                       -- wire-level operators
         gain        = number?,       -- audio wires only
         channelMap  = { [1..16] = 1..16 }?,  -- MIDI wires only
@@ -363,10 +356,10 @@ saw.
   consistency (every edge endpoint refers to a port the node
   actually exposes).
 - `DAG.lower(user) -> compile` — materialises a Continuum Utility
-  node for each wire-level op, splits wires into per-channel
-  connections, inserts mono adapters where pair-width mismatches a
-  port. Single-input / single-output for every inserted node so the
-  srcSet calculus is stable under lowering.
+  node for each wire-level op; each wire becomes one port-to-port
+  (audio) or node-to-node (MIDI) connection. Single-input /
+  single-output for every inserted node so the srcSet calculus is
+  stable under lowering.
 - `DAG.srcSet(compile, nodeId) -> set<trackGuid>` (memoised per
   compile-graph instance).
 - `DAG.classes(compile) -> { [classKey] = { nodeId, ... } }` where
@@ -376,8 +369,8 @@ saw.
 - `DAG.absorption(quotient) -> { [classKey] = hostClassKey? }`
   applying the auto rule plus any `primary` overrides.
 - `DAG.capacityErrors(compile, classes) -> [ { classKey, kind,
-  count } ]` for >64 intra-class audio or >128 intra-class MIDI
-  connections.
+  count } ]` for >64 intra-class stereo audio connections or >128
+  intra-class MIDI connections.
 
 **`wiringManager` API (Stage 1 surface):**
 
@@ -422,14 +415,14 @@ saw.
 **Specs (`tests/specs/wiring_*`):**
 
 - `dag_validate_spec.lua` — cycle rejection, port-shape rejection.
-- `dag_lower_spec.lua` — wire-level op materialisation, channel
-  split, mono-adapter insertion.
+- `dag_lower_spec.lua` — wire-level op materialisation; one
+  port-to-port conn per wire.
 - `dag_srcset_spec.lua` — adversarial compile graphs (diamonds,
   fan-in / fan-out).
 - `dag_classes_spec.lua` — equivalence partition correctness.
 - `dag_absorption_spec.lua` — auto-rule plus override interactions.
-- `dag_capacity_spec.lua` — channel-count overflow on the compile
-  graph.
+- `dag_capacity_spec.lua` — intra-class wire-count overflow on the
+  compile graph.
 - `wm_persistence_spec.lua` — round-trip via fake cm.
 
 ### Later stages

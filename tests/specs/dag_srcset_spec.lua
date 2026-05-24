@@ -11,14 +11,14 @@ local function fx(id, opts)
   return id, { kind = 'fx', pos = { x = 0, y = 0 },
                fxIdent   = opts.ident   or 'JS:test',
                fxDisplay = opts.display or 'FX',
-               audio = { ins  = opts.ins  or { 'L', 'R' },
-                         outs = opts.outs or { 'L', 'R' } } }
+               audio = { ins  = opts.ins  or 1,
+                         outs = opts.outs or 1 } }
 end
 
 local function master(opts)
   opts = opts or {}
   return 'master', { kind = 'master', pos = { x = 0, y = 0 },
-                     audio = { ins = opts.ins or { 'L', 'R' } } }
+                     audio = { ins = opts.ins or 1 } }
 end
 
 local function mk(nodes, edges)
@@ -71,7 +71,7 @@ return {
       local ns = {}
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
-      local k3, v3 = fx('mix', { ins = { 'L', 'R', 'L', 'R' } }); ns[k3] = v3
+      local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
       local c = DAG.lower(mk(ns, {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
@@ -87,7 +87,7 @@ return {
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('a');               ns[k2] = v2
       local k3, v3 = fx('b');               ns[k3] = v3
-      local k4, v4 = fx('c', { ins = { 'L', 'R', 'L', 'R' } }); ns[k4] = v4
+      local k4, v4 = fx('c', { ins = 2 }); ns[k4] = v4
       local c = DAG.lower(mk(ns, {
         { type = 'audio', from = 's', to = 'a' },
         { type = 'audio', from = 's', to = 'b' },

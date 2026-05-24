@@ -11,14 +11,14 @@ local function fx(id, opts)
   return id, { kind = 'fx', pos = { x = 0, y = 0 },
                fxIdent   = opts.ident   or 'JS:test',
                fxDisplay = opts.display or 'FX',
-               audio = { ins  = opts.ins  or { 'L', 'R' },
-                         outs = opts.outs or { 'L', 'R' } } }
+               audio = { ins  = opts.ins  or 1,
+                         outs = opts.outs or 1 } }
 end
 
 local function master(opts)
   opts = opts or {}
   return 'master', { kind = 'master', pos = { x = 0, y = 0 },
-                     audio = { ins = opts.ins or { 'L', 'R' } } }
+                     audio = { ins = opts.ins or 1 } }
 end
 
 local function mk(nodes, edges)
@@ -28,7 +28,6 @@ local function mk(nodes, edges)
   return { nodes = nodes, edges = edges or {}, _nextId = 1 }
 end
 
--- conn predicate sugar: ignore unset fields on the spec side.
 local function hasConn(conns, want)
   for _, c in ipairs(conns) do
     local match = true
@@ -40,7 +39,6 @@ local function hasConn(conns, want)
   return false
 end
 
--- Count CU nodes by mode.
 local function cuCount(nodes, mode)
   local n = 0
   for _, node in pairs(nodes) do
@@ -61,7 +59,7 @@ return {
     end,
   },
   {
-    name = 'stereo passthrough: 2 audio conns, no CU nodes',
+    name = 'audio passthrough: one port-to-port conn, no CU nodes',
     run = function()
       local ns = {}
       local k, v   = source('s'); ns[k] = v
@@ -69,14 +67,13 @@ return {
       local c = DAG.lower(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
       }))
-      t.eq(#c.conns, 2)
-      t.truthy(hasConn(c.conns, { from = 's', fromCh = 1, to = 'f', toCh = 1 }))
-      t.truthy(hasConn(c.conns, { from = 's', fromCh = 2, to = 'f', toCh = 2 }))
+      t.eq(#c.conns, 1)
+      t.truthy(hasConn(c.conns, { from = 's', fromPort = 1, to = 'f', toPort = 1 }))
       t.eq(cuCount(c.nodes), 0)
     end,
   },
   {
-    name = 'gain op materialises a stereo CU gain node',
+    name = 'gain op materialises a CU gain node spliced into the wire',
     run = function()
       local ns = {}
       local k, v   = source('s'); ns[k] = v
@@ -85,97 +82,33 @@ return {
         { type = 'audio', from = 's', to = 'f', ops = { gain = 0.5 } },
       }))
       t.eq(cuCount(c.nodes, 'gain'), 1)
-      -- find the gain node id
       local gainId
       for id, node in pairs(c.nodes) do
         if node.cuMode == 'gain' then gainId = id end
       end
-      t.eq(c.nodes[gainId].cuParams.gain,     0.5)
-      t.eq(c.nodes[gainId].cuParams.channels, 2)
-      t.eq(#c.conns, 4)  -- src→gain (2) + gain→fx (2)
-      t.truthy(hasConn(c.conns, { from = 's',    fromCh = 1, to = gainId, toCh = 1 }))
-      t.truthy(hasConn(c.conns, { from = 's',    fromCh = 2, to = gainId, toCh = 2 }))
-      t.truthy(hasConn(c.conns, { from = gainId, fromCh = 1, to = 'f',    toCh = 1 }))
-      t.truthy(hasConn(c.conns, { from = gainId, fromCh = 2, to = 'f',    toCh = 2 }))
+      t.eq(c.nodes[gainId].cuParams.gain, 0.5)
+      t.eq(#c.conns, 2)
+      t.truthy(hasConn(c.conns, { from = 's',    fromPort = 1, to = gainId, toPort = 1 }))
+      t.truthy(hasConn(c.conns, { from = gainId, fromPort = 1, to = 'f',    toPort = 1 }))
     end,
   },
   {
-    name = 'stereo → mono port inserts a monoSum adapter',
+    name = 'gain op preserves toPort routing on a multi-port-in fx',
     run = function()
       local ns = {}
-      local k, v   = source('s');                          ns[k]  = v
-      local k2, v2 = fx('f', { ins = { 'L', 'R', 'C' } }); ns[k2] = v2
-      -- pair 2 on fx is the mono trailing-odd pair (channel 3).
-      local c = DAG.lower(mk(ns, {
-        { type = 'audio', from = 's', to = 'f', toPort = 2 },
-      }))
-      t.eq(cuCount(c.nodes, 'monoSum'), 1)
-      local sumId
-      for id, node in pairs(c.nodes) do
-        if node.cuMode == 'monoSum' then sumId = id end
-      end
-      t.eq(#c.conns, 3)
-      t.truthy(hasConn(c.conns, { from = 's',   fromCh = 1, to = sumId, toCh = 1 }))
-      t.truthy(hasConn(c.conns, { from = 's',   fromCh = 2, to = sumId, toCh = 2 }))
-      t.truthy(hasConn(c.conns, { from = sumId, fromCh = 1, to = 'f',   toCh = 3 }))
-    end,
-  },
-  {
-    name = 'mono → stereo port inserts a monoReplicate adapter',
-    run = function()
-      -- source → fx_a (5-channel outs: {L,R,L,R,C}; pair 3 mono) → fx_b (stereo)
-      local ns = {}
-      local k, v   = source('s'); ns[k] = v
-      local k2, v2 = fx('a', { ins = { 'L', 'R' },
-                               outs = { 'L', 'R', 'L', 'R', 'C' } }); ns[k2] = v2
-      local k3, v3 = fx('b'); ns[k3] = v3
-      local c = DAG.lower(mk(ns, {
-        { type = 'audio', from = 's', to = 'a' },
-        { type = 'audio', from = 'a', to = 'b', fromPort = 3 },
-      }))
-      t.eq(cuCount(c.nodes, 'monoReplicate'), 1)
-      local repId
-      for id, node in pairs(c.nodes) do
-        if node.cuMode == 'monoReplicate' then repId = id end
-      end
-      -- s→a (2) + a→rep (1 from ch 5) + rep→b (2)  = 5
-      t.eq(#c.conns, 5)
-      t.truthy(hasConn(c.conns, { from = 'a',   fromCh = 5, to = repId, toCh = 1 }))
-      t.truthy(hasConn(c.conns, { from = repId, fromCh = 1, to = 'b',   toCh = 1 }))
-      t.truthy(hasConn(c.conns, { from = repId, fromCh = 2, to = 'b',   toCh = 2 }))
-    end,
-  },
-  {
-    name = 'mono → mono needs no adapter',
-    run = function()
-      local ns = {}
-      local k,  v  = fx('a', { ins = { 'L', 'R' },
-                               outs = { 'L', 'R', 'C' } });             ns[k]  = v
-      local k2, v2 = fx('b', { ins = { 'L', 'R', 'C' } });              ns[k2] = v2
-      local k3, v3 = source('s');                                       ns[k3] = v3
-      local c = DAG.lower(mk(ns, {
-        { type = 'audio', from = 's', to = 'a' },
-        -- a's pair 2 mono (ch 3) → b's pair 2 mono (ch 3): no adapter.
-        { type = 'audio', from = 'a', to = 'b', fromPort = 2, toPort = 2 },
-      }))
-      t.eq(cuCount(c.nodes), 0)
-      t.truthy(hasConn(c.conns, { from = 'a', fromCh = 3, to = 'b', toCh = 3 }))
-    end,
-  },
-  {
-    name = 'gain + adapter chain: source → gain CU → monoSum CU → mono fx',
-    run = function()
-      local ns = {}
-      local k,  v  = source('s');                          ns[k]  = v
-      local k2, v2 = fx('f', { ins = { 'L', 'R', 'C' } }); ns[k2] = v2
+      local k, v   = source('s');                  ns[k]  = v
+      local k2, v2 = fx('f', { ins = 2 });         ns[k2] = v2
       local c = DAG.lower(mk(ns, {
         { type = 'audio', from = 's', to = 'f', toPort = 2,
           ops = { gain = 0.25 } },
       }))
-      t.eq(cuCount(c.nodes, 'gain'),    1)
-      t.eq(cuCount(c.nodes, 'monoSum'), 1)
-      -- s→gain (2) + gain→sum (2) + sum→f (1) = 5
-      t.eq(#c.conns, 5)
+      t.eq(cuCount(c.nodes, 'gain'), 1)
+      local gainId
+      for id, node in pairs(c.nodes) do
+        if node.cuMode == 'gain' then gainId = id end
+      end
+      t.eq(#c.conns, 2)
+      t.truthy(hasConn(c.conns, { from = gainId, fromPort = 1, to = 'f', toPort = 2 }))
     end,
   },
   {
@@ -219,7 +152,7 @@ return {
     name = 'user nodes preserved (source trackGuid + fxIdent + master)',
     run = function()
       local ns = {}
-      local k,  v  = source('s', 'guid-aaa');         ns[k]  = v
+      local k,  v  = source('s', 'guid-aaa');          ns[k]  = v
       local k2, v2 = fx('f', { ident = 'VST:thing' }); ns[k2] = v2
       local c = DAG.lower(mk(ns, {}))
       t.eq(c.nodes.s.kind,      'source')
@@ -230,16 +163,15 @@ return {
     end,
   },
   {
-    name = 'audio wire to master lowers to channel conns into master',
+    name = 'audio wire to master lowers to one port-to-port conn',
     run = function()
       local ns = {}
       local k, v = source('s'); ns[k] = v
       local c = DAG.lower(mk(ns, {
         { type = 'audio', from = 's', to = 'master' },
       }))
-      t.eq(#c.conns, 2)
-      t.truthy(hasConn(c.conns, { from = 's', fromCh = 1, to = 'master', toCh = 1 }))
-      t.truthy(hasConn(c.conns, { from = 's', fromCh = 2, to = 'master', toCh = 2 }))
+      t.eq(#c.conns, 1)
+      t.truthy(hasConn(c.conns, { from = 's', fromPort = 1, to = 'master', toPort = 1 }))
     end,
   },
 }

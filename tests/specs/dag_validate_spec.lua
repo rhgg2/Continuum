@@ -11,14 +11,14 @@ local function fx(id, opts)
   return id, { kind = 'fx', pos = { x = 0, y = 0 },
                fxIdent   = opts.ident   or 'JS:test',
                fxDisplay = opts.display or 'FX',
-               audio = { ins  = opts.ins  or { 'L', 'R' },
-                         outs = opts.outs or { 'L', 'R' } } }
+               audio = { ins  = opts.ins  or 1,
+                         outs = opts.outs or 1 } }
 end
 
 local function master(opts)
   opts = opts or {}
   return 'master', { kind = 'master', pos = { x = 0, y = 0 },
-                     audio = { ins = opts.ins or { 'L', 'R' } } }
+                     audio = { ins = opts.ins or 1 } }
 end
 
 -- mk auto-adds a default master (matches production: every graph has one)
@@ -116,7 +116,7 @@ return {
     run = function()
       local ns = {}
       local k, v = source('a'); ns[k] = v
-      local k2, v2 = fx('b', { ins = { 'L', 'R' } }); ns[k2] = v2
+      local k2, v2 = fx('b', { ins = 1 }); ns[k2] = v2
       local err = DAG.validate(mk(ns, {
         { type = 'audio', from = 'a', to = 'b', toPort = 2 },
       }))
@@ -125,11 +125,11 @@ return {
     end,
   },
   {
-    name = 'audio edge to MIDI-only FX (no audio pairs) rejects',
+    name = 'audio edge to MIDI-only FX (no audio ports) rejects',
     run = function()
       local ns = {}
       local k, v = source('a'); ns[k] = v
-      local k2, v2 = fx('b', { ins = {}, outs = {} }); ns[k2] = v2
+      local k2, v2 = fx('b', { ins = 0, outs = 0 }); ns[k2] = v2
       local err = DAG.validate(mk(ns, {
         { type = 'audio', from = 'a', to = 'b' },
       }))
@@ -138,34 +138,22 @@ return {
     end,
   },
   {
-    name = 'audio edge: nil port resolves to pair 1 (single-pair fx)',
+    name = 'audio edge: nil port resolves to port 1 (single-port fx)',
     run = function()
       local ns = {}
       local k, v = source('a'); ns[k] = v
-      local k2, v2 = fx('b', { ins = { 'L', 'R' } }); ns[k2] = v2
+      local k2, v2 = fx('b', { ins = 1 }); ns[k2] = v2
       t.eq(DAG.validate(mk(ns, {
         { type = 'audio', from = 'a', to = 'b' },
       })), nil)
     end,
   },
   {
-    name = 'audio edge: explicit pairIdx=2 valid on 4-channel fx',
+    name = 'audio edge: explicit portIdx=2 valid on 2-port-in fx',
     run = function()
       local ns = {}
       local k, v = source('a'); ns[k] = v
-      local k2, v2 = fx('b', { ins = { 'L', 'R', 'L', 'R' } }); ns[k2] = v2
-      t.eq(DAG.validate(mk(ns, {
-        { type = 'audio', from = 'a', to = 'b', toPort = 2 },
-      })), nil)
-    end,
-  },
-  {
-    name = 'audio edge: trailing odd channel forms a valid mono pair',
-    run = function()
-      local ns = {}
-      local k, v = source('a'); ns[k] = v
-      local k2, v2 = fx('b', { ins = { 'L', 'R', 'C' } }); ns[k2] = v2
-      -- pair 3 = channel 5? no — {L,R,C} has 3 chans => pairs={2,1}, so pair 2 = mono.
+      local k2, v2 = fx('b', { ins = 2 }); ns[k2] = v2
       t.eq(DAG.validate(mk(ns, {
         { type = 'audio', from = 'a', to = 'b', toPort = 2 },
       })), nil)
@@ -230,8 +218,8 @@ return {
       local ns = {}
       local k, v   = source('s1'); ns[k]   = v
       local k2, v2 = source('s2'); ns[k2] = v2
-      local k3, v3 = fx('mix', { ins = { 'L', 'R', 'L', 'R' } }); ns[k3] = v3
-      local k4, v4 = fx('split', { outs = { 'L', 'R', 'L', 'R' } }); ns[k4] = v4
+      local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
+      local k4, v4 = fx('split', { outs = 2 }); ns[k4] = v4
       t.eq(DAG.validate(mk(ns, {
         { type = 'audio', from = 's1',  to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
@@ -253,7 +241,7 @@ return {
       local ns = {}
       local k,  v  = master(); ns[k] = v
       ns.master2 = { kind = 'master', pos = { x = 0, y = 0 },
-                     audio = { ins = { 'L', 'R' } } }
+                     audio = { ins = 1 } }
       local err = DAG.validate({ nodes = ns, edges = {}, _nextId = 1 })
       t.eq(err.code,  'master_singleton')
       t.eq(err.count, 2)
@@ -293,7 +281,7 @@ return {
     end,
   },
   {
-    name = 'audio wire to master with port=2 oob (default ins={L,R}) rejects',
+    name = 'audio wire to master with port=2 oob (default ins=1) rejects',
     run = function()
       local ns = {}
       local k, v = source('a'); ns[k] = v
@@ -305,11 +293,11 @@ return {
     end,
   },
   {
-    name = 'audio wire to master with explicit pair 2 (4-ch master) passes',
+    name = 'audio wire to master with explicit port 2 (2-port master) passes',
     run = function()
       local ns = {}
-      local k,  v  = master({ ins = { 'L', 'R', 'L', 'R' } }); ns[k] = v
-      local k2, v2 = source('a');                              ns[k2] = v2
+      local k,  v  = master({ ins = 2 }); ns[k] = v
+      local k2, v2 = source('a');         ns[k2] = v2
       t.eq(DAG.validate({ nodes = ns, edges = {
         { type = 'audio', from = 'a', to = 'master', toPort = 2 },
       }, _nextId = 1 }), nil)

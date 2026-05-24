@@ -1,45 +1,35 @@
 -- Pure structural calculus for the wiring page: user graph (wires) and
--- compile graph (per-channel / per-port connections), the lowering that
--- bridges them, and the source-set partition that compiles onto REAPER
--- tracks. See design/wiring.md for the model.
+-- compile graph (port-to-port connections), the lowering that bridges
+-- them, and the source-set partition that compiles onto REAPER tracks.
+-- See design/wiring.md for the model.
 -- @noindex
 
 --invariant: pure module — no state; functions take operands explicitly
---invariant: two graph shapes — user (wires, always stereo audio / 16-ch MIDI) and compile (per-channel audio / per-port MIDI); lower() bridges them
---invariant: source nodes have implicit I/O (one stereo output pair, one MIDI out port); fx nodes carry explicit audio.ins/outs at channel granularity; MIDI is one implicit port on sources/fx
---invariant: master is a singleton node (id='master'); audio.ins explicit (mirrors REAPER master hardware-output channel count); no audio outs, no MIDI; terminal-only (never `from`)
---invariant: wire pairs derive from adjacent channel indices in audio.ins/outs; trailing odd channel = single-channel pair that lowers to a mono connection
+--invariant: REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and compile (port-to-port conns); lower() bridges them.
+--invariant: source nodes have implicit I/O (one stereo output port, one MIDI out port); fx nodes carry explicit audio.ins/outs as integer port counts; MIDI is one implicit port on sources/fx
+--invariant: master is a singleton node (id='master'); audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --invariant: srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
 --shape: UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
---shape: Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=string[], outs?=string[]} }
---shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|pairIdx, to=id, toPort=nil|pairIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
+--shape: Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=number, outs?=number} }
+--shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
 --shape: CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
---shape: CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap'|'monoSum'|'monoReplicate', cuParams?=table }
---shape: Conn = { type='audio'|'midi', from=id, to=id, fromCh?=number, toCh?=number, primary?=true }
+--shape: CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap', cuParams?=table }
+--shape: Conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
 local util = require('util')
 
 local M = {}
 
------ Pair shape helpers (user graph)
+----- Port shape helpers (user graph)
 
--- {'L','R'} -> {2}; {'L','R','L','R'} -> {2,2}; {'L','R','C'} -> {2,1}.
-local function pairWidths(channels)
-  local widths = {}
-  local n = channels and #channels or 0
-  for i = 1, n, 2 do
-    widths[#widths + 1] = (i + 1 <= n) and 2 or 1
-  end
-  return widths
+-- Source: one stereo out, no audio in. fx/master: explicit integer counts.
+local function audioPorts(node)
+  if node.kind == 'source' then return { ins = 0, outs = 1 } end
+  return { ins  = (node.audio and node.audio.ins)  or 0,
+           outs = (node.audio and node.audio.outs) or 0 }
 end
 
--- Sources have implicit I/O: one stereo output pair, no audio inputs.
-local function audioPairs(node)
-  if node.kind == 'source' then
-    return { ins = {}, outs = { 2 } }
-  end
-  return { ins  = pairWidths(node.audio and node.audio.ins),
-           outs = pairWidths(node.audio and node.audio.outs) }
-end
+--contract: { ins=N, outs=N } stereo-port counts; sources resolve to implicit (0,1); single source of truth for the port view
+M.audioPorts = audioPorts
 
 ----------- PUBLIC
 
@@ -80,18 +70,18 @@ function M.validate(user)
         return { code = 'midi_port_index', edge = i }
       end
     elseif edge.type == 'audio' then
-      local fromPairs = audioPairs(fromNode).outs
-      local toPairs   = audioPairs(toNode).ins
-      -- nil port = implicit pair 1 (single-port shorthand).
-      local fromIdx = (#fromPairs > 0) and (edge.fromPort or 1) or nil
-      local toIdx   = (#toPairs   > 0) and (edge.toPort   or 1) or nil
-      if not fromIdx or fromIdx < 1 or fromIdx > #fromPairs then
+      local fromOuts = audioPorts(fromNode).outs
+      local toIns    = audioPorts(toNode).ins
+      -- nil port = implicit port 1 (single-port shorthand).
+      local fromIdx = (fromOuts > 0) and (edge.fromPort or 1) or nil
+      local toIdx   = (toIns    > 0) and (edge.toPort   or 1) or nil
+      if not fromIdx or fromIdx < 1 or fromIdx > fromOuts then
         return { code = 'audio_from_port_oob', edge = i,
-                 want = edge.fromPort, have = #fromPairs }
+                 want = edge.fromPort, have = fromOuts }
       end
-      if not toIdx or toIdx < 1 or toIdx > #toPairs then
+      if not toIdx or toIdx < 1 or toIdx > toIns then
         return { code = 'audio_to_port_oob', edge = i,
-                 want = edge.toPort, have = #toPairs }
+                 want = edge.toPort, have = toIns }
       end
     else
       return { code = 'unknown_edge_type', edge = i, type = edge.type }
@@ -128,18 +118,15 @@ end
 
 ----- lower
 
--- pair k starts at channel 2k-1; if stereo it covers 2k-1 and 2k, if mono just 2k-1.
-local function pairStartCh(pair) return 2 * pair - 1 end
-
 -- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
--- the audio shape we've already consumed for pair widths).
+-- the audio shape).
 local function passthroughNode(node)
   return { kind      = node.kind,
            trackGuid = node.trackGuid,
            fxIdent   = node.fxIdent }
 end
 
---contract: assumes M.validate(user)==nil; lowers wires into per-channel/port conns, materialises CU nodes for ops and mono adapters
+--contract: assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
 function M.lower(user)
   local compile = { nodes = {}, conns = {} }
   local cuN = 0
@@ -151,60 +138,36 @@ function M.lower(user)
     return id
   end
 
-  -- Terminate head into (targetId, targetCh0). targetCh0 unused for MIDI.
-  -- head.primary travels with the wire and lands on every conn it produces.
-  local function flush(head, targetId, targetCh0)
+  local function flush(head, targetId, targetPort)
     if head.type == 'audio' then
-      for c = 1, head.width do
-        util.add(compile.conns, {
-          type = 'audio',
-          from = head.id, fromCh = head.ch0 + c - 1,
-          to   = targetId, toCh   = targetCh0 + c - 1,
-          primary = head.primary,
-        })
-      end
+      util.add(compile.conns, {
+        type = 'audio', from = head.id, to = targetId,
+        fromPort = head.port, toPort = targetPort, primary = head.primary,
+      })
     else
       util.add(compile.conns, { type = 'midi', from = head.id, to = targetId,
                                 primary = head.primary })
     end
   end
 
-  -- Splice a CU into the wire between head and whatever target would follow:
-  -- mints the CU, routes head into it (CU inputs always start at ch 1), and
-  -- returns the new head positioned at the CU's output. outWidth = the CU's
-  -- output channel count (audio only; ignored for MIDI).
-  local function splice(head, cuMode, cuParams, outWidth)
+  -- Splice a CU into the wire: mint it, flush head into its port 1, return
+  -- a new head positioned at the CU's port-1 output (audio) / node (MIDI).
+  local function splice(head, cuMode, cuParams)
     local id = mintCu({ kind = 'cu', cuMode = cuMode, cuParams = cuParams })
-    flush(head, id, 1)
+    flush(head, id, head.type == 'audio' and 1 or nil)
     if head.type == 'audio' then
-      return { type = 'audio', id = id, ch0 = 1, width = outWidth,
-               primary = head.primary }
+      return { type = 'audio', id = id, port = 1, primary = head.primary }
     end
     return { type = 'midi', id = id, primary = head.primary }
   end
 
-  local function lowerAudioEdge(edge, fromNode, toNode)
-    local fromPair  = edge.fromPort or 1
-    local toPair    = edge.toPort   or 1
-    local fromWidth = audioPairs(fromNode).outs[fromPair]
-    local toWidth   = audioPairs(toNode).ins[toPair]
-
+  local function lowerAudioEdge(edge)
     local head = { type = 'audio', id = edge.from,
-                   ch0 = pairStartCh(fromPair), width = fromWidth,
-                   primary = edge.primary }
-
+                   port = edge.fromPort or 1, primary = edge.primary }
     if edge.ops and edge.ops.gain then
-      head = splice(head, 'gain',
-                    { gain = edge.ops.gain, channels = head.width },
-                    head.width)
+      head = splice(head, 'gain', { gain = edge.ops.gain })
     end
-
-    if head.width ~= toWidth then
-      local mode = (head.width == 2 and toWidth == 1) and 'monoSum' or 'monoReplicate'
-      head = splice(head, mode, nil, toWidth)
-    end
-
-    flush(head, edge.to, pairStartCh(toPair))
+    flush(head, edge.to, edge.toPort or 1)
   end
 
   local function lowerMidiEdge(edge)
@@ -219,10 +182,8 @@ function M.lower(user)
     compile.nodes[id] = passthroughNode(node)
   end
   for _, edge in ipairs(user.edges or {}) do
-    if edge.type == 'audio' then
-      lowerAudioEdge(edge, user.nodes[edge.from], user.nodes[edge.to])
-    else
-      lowerMidiEdge(edge)
+    if edge.type == 'audio' then lowerAudioEdge(edge)
+    else                          lowerMidiEdge(edge)
     end
   end
   return compile

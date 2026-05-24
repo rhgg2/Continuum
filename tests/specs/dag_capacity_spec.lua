@@ -6,25 +6,19 @@ local function source(id, guid)
                pos = { x = 0, y = 0 } }
 end
 
-local function rep(ch, n)
-  local out = {}
-  for i = 1, n do out[i] = ch end
-  return out
-end
-
 local function fx(id, opts)
   opts = opts or {}
   return id, { kind = 'fx', pos = { x = 0, y = 0 },
                fxIdent   = opts.ident   or 'JS:test',
                fxDisplay = opts.display or 'FX',
-               audio = { ins  = opts.ins  or { 'L', 'R' },
-                         outs = opts.outs or { 'L', 'R' } } }
+               audio = { ins  = opts.ins  or 1,
+                         outs = opts.outs or 1 } }
 end
 
 local function master(opts)
   opts = opts or {}
   return 'master', { kind = 'master', pos = { x = 0, y = 0 },
-                     audio = { ins = opts.ins or { 'L', 'R' } } }
+                     audio = { ins = opts.ins or 1 } }
 end
 
 local function mk(nodes, edges)
@@ -47,7 +41,7 @@ return {
     end,
   },
   {
-    name = 'stereo passthrough chain: 2 intra-class conns, no errors',
+    name = 'audio passthrough chain: 2 intra-class conns, no errors',
     run = function()
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
@@ -61,13 +55,13 @@ return {
   {
     name = 'intra-class audio at 64: no error',
     run = function()
-      -- one class: source (2-ch out) + 31 stereo pairs a -> b = 64 conns.
+      -- one class: source→a (1 conn) + 63 stereo wires a→b (63 conns) = 64.
       local ns = {}
-      local k,  v  = source('s', 'guid-s'); ns[k]  = v
-      local k2, v2 = fx('a', { ins = rep('L', 62), outs = rep('L', 62) }); ns[k2] = v2
-      local k3, v3 = fx('b', { ins = rep('L', 62), outs = rep('L', 62) }); ns[k3] = v3
-      local edges = { { type = 'audio', from = 's', to = 'a' } }  -- 2 conns
-      for p = 1, 31 do                                            -- + 62 conns
+      local k,  v  = source('s', 'guid-s');           ns[k]  = v
+      local k2, v2 = fx('a', { ins = 1, outs = 63 }); ns[k2] = v2
+      local k3, v3 = fx('b', { ins = 63 });           ns[k3] = v3
+      local edges = { { type = 'audio', from = 's', to = 'a' } }
+      for p = 1, 63 do
         edges[#edges+1] = { type = 'audio', from = 'a', to = 'b',
                             fromPort = p, toPort = p }
       end
@@ -77,13 +71,13 @@ return {
   {
     name = 'intra-class audio > 64 raises one error',
     run = function()
-      -- source (2) + 32 stereo pairs a -> b (64) = 66 intra-class audio conns.
+      -- source→a (1) + 64 stereo wires a→b (64) = 65 intra-class audio conns.
       local ns = {}
-      local k,  v  = source('s', 'guid-s'); ns[k]  = v
-      local k2, v2 = fx('a', { ins = rep('L', 64), outs = rep('L', 64) }); ns[k2] = v2
-      local k3, v3 = fx('b', { ins = rep('L', 64), outs = rep('L', 64) }); ns[k3] = v3
+      local k,  v  = source('s', 'guid-s');           ns[k]  = v
+      local k2, v2 = fx('a', { ins = 1, outs = 64 }); ns[k2] = v2
+      local k3, v3 = fx('b', { ins = 64 });           ns[k3] = v3
       local edges = { { type = 'audio', from = 's', to = 'a' } }
-      for p = 1, 32 do
+      for p = 1, 64 do
         edges[#edges+1] = { type = 'audio', from = 'a', to = 'b',
                             fromPort = p, toPort = p }
       end
@@ -91,14 +85,13 @@ return {
       t.eq(#errs, 1)
       t.eq(errs[1].classKey, 'guid-s')
       t.eq(errs[1].kind,     'audio')
-      t.eq(errs[1].count,    66)
+      t.eq(errs[1].count,    65)
     end,
   },
   {
     name = 'intra-class midi > 128 raises one error',
     run = function()
-      -- 129 MIDI wires inside a single class would require 129 distinct
-      -- nodes; use a chain a1 -> a2 -> ... -> a130 in one class.
+      -- 130 MIDI wires in one class via chain s -> f1 -> ... -> f130.
       local ns = {}
       local k, v = source('s', 'guid-s'); ns[k] = v
       local N = 130
@@ -113,19 +106,18 @@ return {
       t.eq(#errs, 1)
       t.eq(errs[1].classKey, 'guid-s')
       t.eq(errs[1].kind,     'midi')
-      t.eq(errs[1].count,    N)  -- 130 midi conns
+      t.eq(errs[1].count,    N)
     end,
   },
   {
     name = 'inter-class conns are not counted (own class only)',
     run = function()
-      -- Two sources, each chained into a wide FX whose outputs merge into a
-      -- big stereo mix. Inter-class conns into the mix don't count against
-      -- the mix's intra-class capacity.
+      -- Two sources, each feeding mix on a different in-port. Inter-class
+      -- conns into mix don't count against mix's intra-class capacity.
       local ns = {}
-      local k,  v  = source('s1', 'guid-a'); ns[k]  = v
-      local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
-      local k3, v3 = fx('mix', { ins = { 'L', 'R', 'L', 'R' } }); ns[k3] = v3
+      local k,  v  = source('s1', 'guid-a');   ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b');   ns[k2] = v2
+      local k3, v3 = fx('mix', { ins = 2 });   ns[k3] = v3
       local errs = errorsOf(mk(ns, {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
@@ -138,15 +130,15 @@ return {
     run = function()
       local ns = {}
       local k, v = source('s', 'guid-s'); ns[k] = v
-      -- 33 stereo pairs intra-class audio.
-      local k2, v2 = fx('a', { ins = rep('L', 64), outs = rep('L', 64) }); ns[k2] = v2
-      local k3, v3 = fx('b', { ins = rep('L', 64), outs = rep('L', 64) }); ns[k3] = v3
+      -- 65 intra-class audio conns: source→a (1) + 64 a→b (64).
+      local k2, v2 = fx('a', { ins = 1, outs = 64 }); ns[k2] = v2
+      local k3, v3 = fx('b', { ins = 64 });           ns[k3] = v3
       local edges = { { type = 'audio', from = 's', to = 'a' } }
-      for p = 1, 32 do
+      for p = 1, 64 do
         edges[#edges+1] = { type = 'audio', from = 'a', to = 'b',
                             fromPort = p, toPort = p }
       end
-      -- 130 MIDI conns intra-class via chain m1 -> m2 -> ... -> m130.
+      -- 130 MIDI wires intra-class via chain m1 -> m2 -> ... -> m130.
       local N = 130
       for i = 1, N do
         local k4, v4 = fx('m' .. i); ns[k4] = v4
@@ -157,7 +149,6 @@ return {
       end
       local errs = errorsOf(mk(ns, edges))
       t.eq(#errs, 2)
-      -- both errors on classKey 'guid-s'; sort puts audio before midi.
       t.eq(errs[1].kind, 'audio')
       t.eq(errs[2].kind, 'midi')
     end,

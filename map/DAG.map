@@ -1,62 +1,58 @@
-@module DAG  src=DAG.lua  loc=366  sha=cdc4a61  mode=namespace
+@module DAG  src=DAG.lua  loc=327  sha=669d30e  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module — no state; functions take operands explicitly
-  @invariant  two graph shapes — user (wires, always stereo audio / 16-ch MIDI) and compile (per-channel audio / per-port MIDI); lower() bridges them
-  @invariant  source nodes have implicit I/O (one stereo output pair, one MIDI out port); fx nodes carry explicit audio.ins/outs at channel granularity; MIDI is one implicit port on sources/fx
-  @invariant  master is a singleton node (id='master'); audio.ins explicit (mirrors REAPER master hardware-output channel count); no audio outs, no MIDI; terminal-only (never `from`)
-  @invariant  wire pairs derive from adjacent channel indices in audio.ins/outs; trailing odd channel = single-channel pair that lowers to a mono connection
+  @invariant  REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and compile (port-to-port conns); lower() bridges them.
+  @invariant  source nodes have implicit I/O (one stereo output port, one MIDI out port); fx nodes carry explicit audio.ins/outs as integer port counts; MIDI is one implicit port on sources/fx
+  @invariant  master is a singleton node (id='master'); audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
   @invariant  srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
+  @contract  { ins=N, outs=N } stereo-port counts; sources resolve to implicit (0,1); single source of truth for the port view
 
 # Shapes
   @shape  UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
-  @shape  Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=string[], outs?=string[]} }
-  @shape  Edge = { type='audio'|'midi', from=id, fromPort=nil|pairIdx, to=id, toPort=nil|pairIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
+  @shape  Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=number, outs?=number} }
+  @shape  Edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
   @shape  CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
-  @shape  CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap'|'monoSum'|'monoReplicate', cuParams?=table }
-  @shape  Conn = { type='audio'|'midi', from=id, to=id, fromCh?=number, toCh?=number, primary?=true }
+  @shape  CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap', cuParams?=table }
+  @shape  Conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
 
 # Imports
-  @const util = 'util'  @ 19
+  @const util = 'util'  @ 18
 
 # Module-level constants
-  @const M = {}  @ 21
+  @const M = {}  @ 20
 
 # Private functions
-  -- Pair shape helpers (user graph)
-  @fn pairWidths(channels)  @ 26
-      -- {'L','R'} -> {2}; {'L','R','L','R'} -> {2,2}; {'L','R','C'} -> {2,1}.
-  @fn audioPairs(node)  @ 36
-      -- Sources have implicit I/O: one stereo output pair, no audio inputs.
+  -- Port shape helpers (user graph)
+  @fn audioPorts(node)  @ 25
+      -- Source: one stereo out, no audio in. fx/master: explicit integer counts.
   -- validate
   -- lower
-  @fn pairStartCh(pair)  @ 132
-      -- pair k starts at channel 2k-1; if stereo it covers 2k-1 and 2k, if mono just 2k-1.
-  @fn passthroughNode(node)  @ 136
+  @fn passthroughNode(node)  @ 123
       -- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
-      -- the audio shape we've already consumed for pair widths).
+      -- the audio shape).
   -- srcSet / classes
-  @fn inboundOf(compile)  @ 235
+  @fn inboundOf(compile)  @ 196
       -- Reverse adjacency: for each node id, the list of input-side node ids.
       -- Stashed on compile so the cost is paid once per graph instance.
   -- quotientGraph / absorption / capacityErrors
-  @fn directHost(q)  @ 310
+  @fn directHost(q)  @ 271
       -- Direct (one-hop) host for cls under the absorption rule. Returns nil if cls
       -- has no eligible host: zero audio parents, ambiguous primaries, or multiple
       -- non-primary audio parents.
 
 # Public API (M.*)
-  @api M.validate(user)  @ 49
+  @api M.validate(user)  @ 39
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.lower(user)  @ 143
-      @contract  assumes M.validate(user)==nil; lowers wires into per-channel/port conns, materialises CU nodes for ops and mono adapters
-  @api M.srcSet(compile, nodeId)  @ 246
+  @api M.lower(user)  @ 130
+      @contract  assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
+  @api M.srcSet(compile, nodeId)  @ 207
       @contract  set<trackGuid> of source ancestors; memoised on compile (stashes _srcSet, _inbound)
-  @api M.classes(compile)  @ 267
+  @api M.classes(compile)  @ 228
       @contract  partitions compile.nodes by srcSet; classKey = sorted trackGuids joined by '|', '' for empty
-  @api M.quotientGraph(compile, classes)  @ 281
+  @api M.quotientGraph(compile, classes)  @ 242
       @contract  class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryAudioParents ⊆ audioParents, flagged by `primary` wires
-  @api M.absorption(quotient)  @ 320
+  @api M.absorption(quotient)  @ 281
       @contract  sparse {[cls]=hostCls}; chains resolved to terminal host; absent = self-hosting; cycle-safe
-  @api M.capacityErrors(compile, classes)  @ 342
+  @api M.capacityErrors(compile, classes)  @ 303
       @contract  list of {classKey, kind='audio'|'midi', count} for intra-class conn counts exceeding 64 audio / 128 midi; sorted by classKey then kind

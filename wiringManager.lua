@@ -21,7 +21,7 @@ local function freshGraph()
   return {
     nodes = {
       master = { kind = 'master', pos = { x = 0, y = 0 },
-                 audio = { ins = { 'L', 'R' } } },
+                 audio = { ins = 1 } },
     },
     edges = {},
     _nextId = 1,
