@@ -223,4 +223,51 @@ function M.lower(user)
   return compile
 end
 
+----- srcSet / classes
+
+-- Reverse adjacency: for each node id, the list of input-side node ids.
+-- Stashed on compile so the cost is paid once per graph instance.
+local function inboundOf(compile)
+  if compile._inbound then return compile._inbound end
+  local inbound = {}
+  for _, conn in ipairs(compile.conns) do
+    util.bucket(inbound, conn.to, conn.from)
+  end
+  compile._inbound = inbound
+  return inbound
+end
+
+--contract: set<trackGuid> of source ancestors; memoised on compile (stashes _srcSet, _inbound)
+function M.srcSet(compile, nodeId)
+  compile._srcSet = compile._srcSet or {}
+  local memo, inbound = compile._srcSet, inboundOf(compile)
+
+  local function visit(id)
+    if memo[id] then return memo[id] end
+    local set = {}
+    local node = compile.nodes[id]
+    if node and node.kind == 'source' and node.trackGuid then
+      set[node.trackGuid] = true
+    end
+    for _, parent in ipairs(inbound[id] or {}) do
+      for guid in pairs(visit(parent)) do set[guid] = true end
+    end
+    memo[id] = set
+    return set
+  end
+  return visit(nodeId)
+end
+
+--contract: partitions compile.nodes by srcSet; classKey = sorted trackGuids joined by '|', '' for empty
+function M.classes(compile)
+  local out = {}
+  for id in pairs(compile.nodes) do
+    local guids = {}
+    for guid in pairs(M.srcSet(compile, id)) do util.add(guids, guid) end
+    table.sort(guids)
+    util.bucket(out, table.concat(guids, '|'), id)
+  end
+  return out
+end
+
 return M

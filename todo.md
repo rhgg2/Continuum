@@ -8,10 +8,7 @@
 - 14bit CCs
 - move to command based key/mouse interactions
 - undo for groups feature / swing / tuning changes
-- page switcher broken
-- are rows integer height in ap?
 - multiselect / copy / paste in ap
-- advanceBy in ap
 - wave previews in ap
 - show take/track name and navigate by track take in tp
 
