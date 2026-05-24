@@ -4,7 +4,7 @@
 --invariant: render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
 --invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
---invariant: at Stage 1.3c the page handles add-fx (scope key N opens an FX-picker modal whose pick lands at canvas centre), drag-to-move (single node, or the whole selection when the grabbed node is selected), and rubber-band selection (replace-only, Esc / empty-click clears). Ports remain hover-only.
+--invariant: at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; ports still hover-only.
 
 local util = require 'util'
 
@@ -90,6 +90,13 @@ local PORT_TOOLTIP_GAP = 4   -- pixels between port top and tooltip bottom edge
 -- hover inflation so the row stays drawn while the mouse is anywhere in
 -- the padded hit area.
 local PORT_REACH = PORT_BAND_OFFSET + PORT_SIZE + PORT_HIT_PAD
+
+local WIRE_GAP        = 10    -- perpendicular pitch between parallel wires in the same pair-group
+local WIRE_THICK      = 1.5
+local WIRE_ARROW_LEN  = 9
+local WIRE_ARROW_WID  = 7
+local WIRE_LABEL_GAP  = 6     -- pixels past the node rect edge for the audio-port-number label
+local WIRE_LABEL_PERP = 6     -- perpendicular displacement of the label off the wire so it doesn't sit on the line
 
 ----- Drag / band state (page-local; ephemeral, never persisted)
 
@@ -199,6 +206,155 @@ local function drawHoverPorts(dl, nv, ox, oy)
     '##port/' .. nv.id .. '/out')
 end
 
+----- Wire drawing
+
+-- Group wires by unordered pair {idA, idB}; sort each group so audio
+-- precedes MIDI (MIDI sits to the right of the canonical-pair line),
+-- then by fromPort then toPort. canonA/canonB record the sorted pair
+-- direction so all wires in the group share one perpendicular axis
+-- regardless of each wire's own direction.
+local function wireGroups(wireViews)
+  local groups, order = {}, {}
+  for _, w in ipairs(wireViews) do
+    local a, b = w.from, w.to
+    if a > b then a, b = b, a end
+    local key = a .. '\0' .. b
+    local g = groups[key]
+    if not g then
+      g = { canonA = a, canonB = b, wires = {} }
+      groups[key] = g
+      order[#order + 1] = key
+    end
+    g.wires[#g.wires + 1] = w
+  end
+  for _, key in ipairs(order) do
+    table.sort(groups[key].wires, function(x, y)
+      if x.type ~= y.type then return x.type == 'audio' end
+      if x.fromPort ~= y.fromPort then return x.fromPort < y.fromPort end
+      return x.toPort < y.toPort
+    end)
+  end
+  return groups, order
+end
+
+-- Perpendicular scalar for slot i (1-based) of n parallel wires:
+-- centred around 0 so a lone wire sits on the centre line.
+local function wireOffset(i, n)
+  return (i - (n + 1) / 2) * WIRE_GAP
+end
+
+-- Distance from a node centre to where a ray in direction (dx,dy)
+-- exits the node rect. Used to place the audio-port label just past
+-- the rounded body so it stays visible. Approximates the parallel-
+-- offset case by NODE_W/H from the centre, which is within WIRE_GAP
+-- of the true intersection — close enough for label placement.
+local function nodeExitDist(dx, dy)
+  local hw, hh = NODE_W / 2, NODE_H / 2
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len < 1 then return 0, 0 end
+  local tx = (dx == 0) and math.huge or hw / math.abs(dx)
+  local ty = (dy == 0) and math.huge or hh / math.abs(dy)
+  return math.min(tx, ty) * len, len
+ end
+
+local function drawWireArrow(dl, sx, sy, ex, ey, col)
+  local dx, dy = ex - sx, ey - sy
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len < WIRE_ARROW_LEN then return end
+  local ux, uy = dx / len, dy / len
+  local px, py = -uy, ux
+  local mx, my = (sx + ex) / 2, (sy + ey) / 2
+  local half   = WIRE_ARROW_LEN / 2
+  local tipx, tipy = mx + ux * half, my + uy * half
+  local b1x = mx - ux * half + px * WIRE_ARROW_WID / 2
+  local b1y = my - uy * half + py * WIRE_ARROW_WID / 2
+  local b2x = mx - ux * half - px * WIRE_ARROW_WID / 2
+  local b2y = my - uy * half - py * WIRE_ARROW_WID / 2
+  ImGui.DrawList_AddTriangleFilled(dl, tipx, tipy, b1x, b1y, b2x, b2y, col)
+end
+
+-- Audio port-number label near (ax,ay), placed along the wire towards
+-- (fx,fy) and perpendicular-displaced by (perpX,perpY) * WIRE_LABEL_PERP.
+-- Hover-tooltip on the digit shows the port name (synthetic 'in N' /
+-- 'out N' until TrackFX_GetIOName lands).
+local function drawWireEndLabel(dl, ax, ay, fx, fy, perpX, perpY, portIdx, portName, idStem, col)
+  local dx, dy = fx - ax, fy - ay
+  local exitD, len = nodeExitDist(dx, dy)
+  if len < 1 then return end
+  local labelDist = math.min(len * 0.45, exitD + WIRE_LABEL_GAP)
+  local t  = labelDist / len
+  local lx = ax + t * dx + perpX * WIRE_LABEL_PERP
+  local ly = ay + t * dy + perpY * WIRE_LABEL_PERP
+  local txt = tostring(portIdx)
+  if wireFont then ImGui.PushFont(ctx, wireFont, wireSize) end
+  local tw, th = ImGui.CalcTextSize(ctx, txt)
+  local tx, ty = math.floor(lx - tw / 2), math.floor(ly - th / 2)
+  ImGui.DrawList_AddText(dl, tx, ty, col, txt)
+  if wireFont then ImGui.PopFont(ctx) end
+  ImGui.SetCursorScreenPos(ctx, tx, ty)
+  ImGui.InvisibleButton(ctx, idStem, math.max(tw, 1), math.max(th, 1))
+  if portName and ImGui.IsItemHovered(ctx, ImGui.HoveredFlags_ForTooltip) then
+    ImGui.SetNextWindowPos(ctx, tx + tw / 2, ty - PORT_TOOLTIP_GAP,
+      ImGui.Cond_Always, 0.5, 1.0)
+    ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg, chrome.colour('wiring.tooltip.bg'))
+    ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 4, 2)
+    if ImGui.BeginTooltip(ctx) then
+      ImGui.Text(ctx, portName)
+      ImGui.EndTooltip(ctx)
+    end
+    ImGui.PopStyleVar(ctx, 1)
+    ImGui.PopStyleColor(ctx, 1)
+  end
+end
+
+local function drawWiresPass(dl, wireViews, nodesById, ox, oy, audioCol, midiCol)
+  local groups, order = wireGroups(wireViews)
+  for _, key in ipairs(order) do
+    local g = groups[key]
+    local na, nb = nodesById[g.canonA], nodesById[g.canonB]
+    if na and nb then
+      local vx, vy = nb.pos.x - na.pos.x, nb.pos.y - na.pos.y
+      local vlen = math.sqrt(vx * vx + vy * vy)
+      if vlen >= 1 then
+        local perpX, perpY = -vy / vlen, vx / vlen
+        local n = #g.wires
+        for i, w in ipairs(g.wires) do
+          local fromNV, toNV = nodesById[w.from], nodesById[w.to]
+          if fromNV and toNV then
+            local s = wireOffset(i, n)
+            local offX, offY = perpX * s, perpY * s
+            local sx = ox + fromNV.pos.x + offX
+            local sy = oy + fromNV.pos.y + offY
+            local ex = ox + toNV.pos.x   + offX
+            local ey = oy + toNV.pos.y   + offY
+            local col = w.type == 'midi' and midiCol or audioCol
+            ImGui.DrawList_AddLine(dl, sx, sy, ex, ey, col, WIRE_THICK)
+            drawWireArrow(dl, sx, sy, ex, ey, col)
+            if w.type == 'audio' then
+              -- Push the label perpendicular to the same side the wire's
+              -- own offset already sits on, so labels of parallel wires
+              -- spread outward rather than collide on the centre line.
+              local lpx, lpy
+              if s >= 0 then lpx, lpy =  perpX,  perpY
+              else            lpx, lpy = -perpX, -perpY end
+              local stem = '##wire/' .. w.from .. ':' .. w.fromPort
+                                .. '->' .. w.to .. ':' .. w.toPort
+              if w.fromPort ~= 1 then
+                drawWireEndLabel(dl, sx, sy, ex, ey, lpx, lpy,
+                  w.fromPort, w.fromPortName, stem .. '/from', col)
+              end
+              if w.toPort ~= 1 then
+                drawWireEndLabel(dl, ex, ey, sx, sy, lpx, lpy,
+                  w.toPort, w.toPortName, stem .. '/to', col)
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
 -- Identify the node whose body the mouse is over (un-inflated rect);
 -- used to start a drag, distinct from the inflated rect that drives
 -- port reveal. Returns nil if the mouse is over empty canvas (or a
@@ -253,8 +409,8 @@ local function renderCanvas(w, h)
   end
 
   -- Drag projection: while a drag is live, override every dragged
-  -- node's pos by (delta) so geometry below (hit test, draw, hover
-  -- band) all see the in-flight positions.
+  -- node's pos by (delta) so geometry below (wire pre-pass, hit test,
+  -- node draw, hover band) all see the in-flight positions.
   if drag then
     local mx, my = ImGui.GetMousePos(ctx)
     local dx, dy = mx - drag.mx0, my - drag.my0
@@ -263,6 +419,16 @@ local function renderCanvas(w, h)
       if s then nv.pos.x, nv.pos.y = s.x + dx, s.y + dy end
     end
   end
+
+  local nodesById = {}
+  for _, nv in ipairs(nodeViews) do nodesById[nv.id] = nv end
+
+  -- Wire pre-pass: lines run centre-to-centre, the rounded node rects
+  -- below overpaint the middle. Wire colour reuses the matching port
+  -- colour role.
+  local audioCol = chrome.colour('wiring.port.audio')
+  local midiCol  = chrome.colour('wiring.port.midi')
+  drawWiresPass(dl, wv:wireViews(), nodesById, ox, oy, audioCol, midiCol)
 
   -- Hover region includes the port bands above/below the node (plus
   -- the per-port hit padding) so the mouse can dwell on a port without

@@ -123,6 +123,34 @@ function wv:nodeViews()
   return out
 end
 
+--shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary } — ports are 1-based and always present; names come from the same source as nodeView's port lists, nil if the referenced port has been trimmed off the node
+--contract: returns the list of wireViews for every edge in the current user graph; order matches graph.edges
+function wv:wireViews()
+  local g = wm:graph()
+  local function portName(nodeId, dir, kind, idx)
+    if kind == 'midi' then return 'midi' end
+    local node = g.nodes[nodeId]
+    if not node then return nil end
+    return audioPorts(node, dir)[idx]
+  end
+  local out = {}
+  for _, e in ipairs(g.edges or {}) do
+    local fromPort = e.fromPort or 1
+    local toPort   = e.toPort   or 1
+    util.add(out, {
+      from         = e.from,
+      to           = e.to,
+      type         = e.type,
+      fromPort     = fromPort,
+      toPort       = toPort,
+      fromPortName = portName(e.from, 'out', e.type, fromPort),
+      toPortName   = portName(e.to,   'in',  e.type, toPort),
+      primary      = e.primary or nil,
+    })
+  end
+  return out
+end
+
 ----- Logical view-state (nodeId only)
 
 function wv:hover()             return hoverNodeId       end

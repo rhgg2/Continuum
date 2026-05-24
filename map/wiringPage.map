@@ -1,11 +1,11 @@
-@module wiringPage  src=wiringPage.lua  loc=422  sha=fb438b9  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=588  sha=de1c2cf  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
   @invariant  render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
   @invariant  wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
   @invariant  the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
-  @invariant  at Stage 1.3c the page handles add-fx (scope key N opens an FX-picker modal whose pick lands at canvas centre), drag-to-move (single node, or the whole selection when the grabbed node is selected), and rubber-band selection (replace-only, Esc / empty-click clears). Ports remain hover-only.
+  @invariant  at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; ports still hover-only.
 
 # Imports
   @require util = 'util'  @ 9
@@ -28,59 +28,88 @@
   @state PORT_HIT_PAD = 4  @ 86   -- hit area extends this far beyond the visual square on each side
   @state PORT_TOOLTIP_GAP = 4  @ 87   -- pixels between port top and tooltip bottom edge
   @state PORT_REACH = PORT_BAND_OFFSET + PORT_SIZE + PORT_HIT_PAD  @ 92
-  @state drag = nil  @ 108   -- { mx0, my0, starts = { [id] = {x,y}, … } }
-  @state band = nil  @ 109   -- { mx0, my0 } — current corner is GetMousePos
-  @state SELECTED_INFLATE = 2  @ 122
-  @state SELECTED_STROKE = 2  @ 123
-  @state wiring = cmgr:scope('wiring')  @ 412
+  @state WIRE_GAP = 10  @ 94   -- perpendicular pitch between parallel wires in the same pair-group
+  @state WIRE_THICK = 1.5  @ 95
+  @state WIRE_ARROW_LEN = 9  @ 96
+  @state WIRE_ARROW_WID = 7  @ 97
+  @state WIRE_LABEL_GAP = 6  @ 98   -- pixels past the node rect edge for the audio-port-number label
+  @state WIRE_LABEL_PERP = 6  @ 99   -- perpendicular displacement of the label off the wire so it doesn't sit on the line
+  @state drag = nil  @ 115   -- { mx0, my0, starts = { [id] = {x,y}, … } }
+  @state band = nil  @ 116   -- { mx0, my0 } — current corner is GetMousePos
+  @state SELECTED_INFLATE = 2  @ 129
+  @state SELECTED_STROKE = 2  @ 130
+  @state wiring = cmgr:scope('wiring')  @ 578
 
 # Private functions
   -- FX-picker modal kind
   -- Drag / band state (page-local; ephemeral, never persisted)
   -- Pixel geometry (page-owned)
-  @fn nodeRect(nv)  @ 115
+  @fn nodeRect(nv)  @ 122
       -- pos is the node's centre in canvas-local coordinates (origin = centre
       -- of the viewport, set up in renderCanvas); rect is laid out symmetrically.
   -- Drawing
-  @fn drawNode(dl, nv, ox, oy, isSelected)  @ 125
-  @fn drawPort(dl, px, y, colour, idStem, name)  @ 150
+  @fn drawNode(dl, nv, ox, oy, isSelected)  @ 132
+  @fn drawPort(dl, px, y, colour, idStem, name)  @ 157
       -- One port: filled square + invisible button (padded outward so the
       -- hit area is comfortably larger than the 8px visual) and a tooltip
       -- anchored right above the port. The InvisibleButton advances the
       -- layout cursor; caller restores it before reserving canvas area.
-  @fn drawPortBand(dl, x0, x1, y, audio, midi, audioCol, midiCol, idPrefix)  @ 172
+  @fn drawPortBand(dl, x0, x1, y, audio, midi, audioCol, midiCol, idPrefix)  @ 179
       -- Horizontal row of port squares centred over [x0,x1] at vertical `y`.
       -- Audio squares first, then MIDI; either list may be empty.
-  @fn drawHoverPorts(dl, nv, ox, oy)  @ 187
-  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 206
+  @fn drawHoverPorts(dl, nv, ox, oy)  @ 194
+  -- Wire drawing
+  @fn wireGroups(wireViews)  @ 216
+      -- Group wires by unordered pair {idA, idB}; sort each group so audio
+      -- precedes MIDI (MIDI sits to the right of the canonical-pair line),
+      -- then by fromPort then toPort. canonA/canonB record the sorted pair
+      -- direction so all wires in the group share one perpendicular axis
+      -- regardless of each wire's own direction.
+  @fn wireOffset(i, n)  @ 242
+      -- Perpendicular scalar for slot i (1-based) of n parallel wires:
+      -- centred around 0 so a lone wire sits on the centre line.
+  @fn nodeExitDist(dx, dy)  @ 251
+      -- Distance from a node centre to where a ray in direction (dx,dy)
+      -- exits the node rect. Used to place the audio-port label just past
+      -- the rounded body so it stays visible. Approximates the parallel-
+      -- offset case by NODE_W/H from the centre, which is within WIRE_GAP
+      -- of the true intersection — close enough for label placement.
+  @fn drawWireArrow(dl, sx, sy, ex, ey, col)  @ 260
+  @fn drawWireEndLabel(dl, ax, ay, fx, fy, perpX, perpY, portIdx, portName, idStem, col)  @ 280
+      -- Audio port-number label near (ax,ay), placed along the wire towards
+      -- (fx,fy) and perpendicular-displaced by (perpX,perpY) * WIRE_LABEL_PERP.
+      -- Hover-tooltip on the digit shows the port name (synthetic 'in N' /
+      -- 'out N' until TrackFX_GetIOName lands).
+  @fn drawWiresPass(dl, wireViews, nodesById, ox, oy, audioCol, midiCol)  @ 310
+  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 362
       -- Identify the node whose body the mouse is over (un-inflated rect);
       -- used to start a drag, distinct from the inflated rect that drives
       -- port reveal. Returns nil if the mouse is over empty canvas (or a
       -- port band).
-  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 219
+  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 375
       -- AABB intersection of a pixel-space band rect against every node's
       -- body rect (un-inflated; port bands aren't selectable). Returns the
       -- set of intersecting ids — empty table if nothing was caught.
-  @fn renderCanvas(w, h)  @ 233
-  @fn pushBodyStyles()  @ 343
-  @fn popBodyStyles()  @ 346
+  @fn renderCanvas(w, h)  @ 389
+  @fn pushBodyStyles()  @ 509
+  @fn popBodyStyles()  @ 512
   -- Wiring scope
-  @fn shortFxName(s)  @ 394
+  @fn shortFxName(s)  @ 560
       -- REAPER hands us "Type: Name (Author)" in EnumInstalledFX. The picker
       -- row shows the full form (the prefix and author disambiguate same-named
       -- plugins from different vendors), but the node label keeps just the bare
       -- name so a 90px box has room to read it. Strip on commit, not in wm.
-  @fn openFxPicker()  @ 400
+  @fn openFxPicker()  @ 566
 
 # Public API (wp:*)
-  @api wp:bind()  @ 351
+  @api wp:bind()  @ 517
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 352
-  @api wp:renderToolbarBits(_)  @ 354
-  @api wp:renderBody(_, w, h, dispatch)  @ 357
+  @api wp:unbind()  @ 518
+  @api wp:renderToolbarBits(_)  @ 520
+  @api wp:renderBody(_, w, h, dispatch)  @ 523
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 370
-  @api wp:focusState()  @ 376
+  @api wp:renderStatusBar(_)  @ 536
+  @api wp:focusState()  @ 542
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface

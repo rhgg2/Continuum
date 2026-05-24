@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=140  sha=fb438b9  mode=chunk
+@module wiringView  src=wiringView.lua  loc=168  sha=de1c2cf  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -8,6 +8,7 @@
 
 # Shapes
   @shape  nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}} } — port lists carry names; counts = #list
+  @shape  wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary } — ports are 1-based and always present; names come from the same source as nodeView's port lists, nil if the referenced port has been trimmed off the node
 
 # Imports
   @require util = 'util'  @ 8
@@ -53,10 +54,12 @@
   -- Render-ready, viewport-independent
   @api wv:nodeViews()  @ 119
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
+  @api wv:wireViews()  @ 128
+      @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 128
-  @api wv:setHover(id)  @ 129
-  @api wv:selection()  @ 132
+  @api wv:hover()  @ 156
+  @api wv:setHover(id)  @ 157
+  @api wv:selection()  @ 160
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 134
+  @api wv:setSelection(idSet)  @ 162
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
