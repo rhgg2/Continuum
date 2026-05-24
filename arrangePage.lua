@@ -119,7 +119,7 @@ local function slotColours(slotIdx, focused)
   return quad[1], quad[2]
 end
 
------ Grid pane (hand-drawn — ImGui tables fight row-spanning shapes)
+----- Grid pane
 
 -- Header band sits at the top of both panes (grid + palette). HEADER_PAD
 -- is the breathing room above the header text; HEADER_GAP is the slim
@@ -136,7 +136,7 @@ local function renderGrid(tracks, nTracks)
   local paneLeft, oy = ImGui.GetCursorScreenPos(ctx)
   local ox           = paneLeft + LOOP_PAD
   local _, availH = ImGui.GetContentRegionAvail(ctx)
-  local rowH     = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
+  local rowH     = math.ceil(math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx)))
   local headerH  = rowH + HEADER_PAD
   local bodyTop  = oy + headerH + HEADER_GAP
   local visRows  = math.max(1, math.floor((oy + availH - bodyTop) / rowH))

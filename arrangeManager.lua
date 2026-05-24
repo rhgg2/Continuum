@@ -212,19 +212,6 @@ function am:tracksTakes(trackIdx)
   return out
 end
 
---contract: take with largest overlap of [boxStartQN, boxEndQN) on trackIdx; accept(t) prefilters; nil if none
-function am:takeAt(trackIdx, boxStartQN, boxEndQN, accept)
-  local best, bestOverlap = nil, 0
-  for _, take in ipairs(am:tracksTakes(trackIdx)) do
-    local overlap = math.min(take.startQN + take.lengthQN, boxEndQN)
-                  - math.max(take.startQN, boxStartQN)
-    if overlap > bestOverlap and (not accept or accept(take)) then
-      best, bestOverlap = take, overlap
-    end
-  end
-  return best
-end
-
 --contract: take-shape (from tracksTakes) wrapping reaperTake on any project track; nil if not found
 function am:findTake(reaperTake)
   if not reaperTake then return end

@@ -134,7 +134,7 @@ local function Main()
     stop        = { ImGui.Key_F8    },
     undo        = { {ImGui.Key_Z, ImGui.Mod_Ctrl} },
     redo        = { {ImGui.Key_Z, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-    togglePage  = { {ImGui.Key_Tab, ImGui.Mod_Super} },
+    togglePage  = { {ImGui.Key_Tab, ImGui.Mod_Alt }},
     quit        = { {ImGui.Key_Q, ImGui.Mod_Ctrl} },
     beginPrefix = { {ImGui.Key_U, ImGui.Mod_Super} },
   }

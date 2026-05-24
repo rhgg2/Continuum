@@ -112,6 +112,11 @@ local specs = {
   'coordinator_spec',
   'dag_validate_spec',
   'dag_lower_spec',
+  'dag_srcset_spec',
+  'dag_classes_spec',
+  'dag_quotient_spec',
+  'dag_absorption_spec',
+  'dag_capacity_spec',
 }
 
 local pass, fail, failures = 0, 0, {}

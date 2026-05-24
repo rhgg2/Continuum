@@ -55,9 +55,36 @@ local function floorTo(v, step) return math.floor(v / step) * step end
 ----- Cursor + focus operations
 
 -- The take under the cursor's one-row box, by largest QN overlap.
+-- Bottom-edge rule: a cursor sitting exactly on a take's end-edge row
+-- (contributes no overlap to the half-open box) still counts as on
+-- that take, unless another take starts at the same QN. Pairs with
+-- advanceCursorPastNewTake so chained drops walk a column.
 local function takeAtCursor()
   local boxTop = av:rowToQN(cursorRow)
-  return am:takeAt(cursorCol, boxTop, boxTop + av:beatPerRow())
+  local boxBot = boxTop + av:beatPerRow()
+  local eps    = 1e-6
+  local best, bestOverlap = nil, 0
+  local bottomEdge, startsHere = nil, false
+  for _, t in ipairs(am:tracksTakes(cursorCol)) do
+    local endQN   = t.startQN + t.lengthQN
+    local overlap = math.min(endQN, boxBot) - math.max(t.startQN, boxTop)
+    if overlap > bestOverlap then best, bestOverlap = t, overlap end
+    if math.abs(t.startQN - boxTop) < eps then startsHere = true end
+    if math.abs(endQN      - boxTop) < eps then bottomEdge = t end
+  end
+  if best then return best end
+  return (not startsHere) and bottomEdge or nil
+end
+
+-- Cursor advance after a fresh take lands: cursorRow += lengthRows. The
+-- bottom-edge rule in takeAtCursor means a chained Super-D / drop-key
+-- still adopts the just-placed take.
+local function advanceCursorPastNewTake(rawTake)
+  if not rawTake then return end
+  local take = am:findTake(rawTake)
+  if not take then return end
+  local rows = math.max(1, math.floor(take.lengthQN / av:beatPerRow() + 0.5))
+  av:setCursor(cursorRow + rows, cursorCol)
 end
 
 -- The stored focus handle resolved to a live take-shape. Self-heals: a
@@ -129,16 +156,19 @@ local function focusedTakeProperties()
   if take and take.kind == 'midi' then onTakeProperties(take.item) end
 end
 
---invariant: arrangeDuplicateBelow drops a pooled clone at the focused take's natural end and shifts focus to the new copy. MIDI-only; silent on collision or audio. The new take keeps the source's pool guid — the "another copy please" gesture.
+--invariant: arrangeDuplicateBelow drops a pooled clone at the focused take's natural end, shifts focus to the new copy, and advances the cursor by the new take's row count. MIDI-only; silent on collision or audio. The new take keeps the source's pool guid — the "another copy please" gesture.
 local function duplicateFocusedBelow()
   adoptCursor()
   local take = focusedTake()
   if not take then return end
   local newTake = am:duplicateBelow(take)
-  if newTake then av:setFocus(newTake) end
+  if newTake then
+    av:setFocus(newTake)
+    advanceCursorPastNewTake(newTake)
+  end
 end
 
---invariant: arrangeDuplicateUnpooledBelow drops a fresh-pool MIDI clone (events copied) at the focused take's natural end, shifts focus to it, and auto-opens take properties so the user can name + size it.
+--invariant: arrangeDuplicateUnpooledBelow drops a fresh-pool MIDI clone (events copied) at the focused take's natural end, shifts focus to it, advances the cursor by the new take's row count, and auto-opens take properties so the user can name + size it.
 local function duplicateUnpooledFocusedBelow()
   adoptCursor()
   local take = focusedTake()
@@ -146,13 +176,15 @@ local function duplicateUnpooledFocusedBelow()
   local newTake = am:duplicateUnpooledBelow(take)
   if newTake then
     av:setFocus(newTake)
+    advanceCursorPastNewTake(newTake)
     onTakeProperties(reaper.GetMediaItemTake_Item(newTake))
   end
 end
 
---invariant: place commands drop0..dropZ — one per base62 slot — drop a fresh instance at the cursor. A key whose slot index is unpopulated is a silent no-op (am:dropInstance returns nil). The drop inherits the slot's existing-instance length.
+--invariant: place commands drop0..dropZ — one per base62 slot — drop a fresh instance at the cursor and advance the cursor by the new take's row count. A key whose slot index is unpopulated is a silent no-op (am:dropInstance returns nil). The drop inherits the slot's existing-instance length.
 local function dropAt(slotIdx)
-  am:dropInstance(cursorCol, slotIdx, av:rowToQN(cursorRow))
+  advanceCursorPastNewTake(
+    am:dropInstance(cursorCol, slotIdx, av:rowToQN(cursorRow)))
 end
 
 ----------- PUBLIC
@@ -289,10 +321,13 @@ function av:renameSlot(trackIdx, slotIdx, name)
   am:renameSlot(trackIdx, slotIdx, name)
 end
 
---contract: mints a MIDI slot via am and focuses it in the palette; nil if am refused.
+--contract: mints a MIDI slot via am, focuses it in the palette, and advances the cursor by the new take's row count; nil if am refused.
 function av:createSlot(trackIdx, qnPos, lengthQN, name)
-  local slotIdx = am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
-  if slotIdx then self:setPaletteSlot(slotIdx) end
+  local slotIdx, take = am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
+  if slotIdx then
+    self:setPaletteSlot(slotIdx)
+    advanceCursorPastNewTake(take)
+  end
   return slotIdx
 end
 

@@ -89,6 +89,57 @@ return {
   },
 
   {
+    name = 'a place-command drop advances the cursor by the dropped take\'s row count',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      -- Sibling instance fixes the drop's length at 3 rows.
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 10, len = 3, srcLen = 3, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      am:tracksTakes(0)               -- materialise {p1} into a slot
+      h.cmgr:invoke('drop0')          -- drops at row 0 with length 3
+      -- ap doesn't surface the cursor; observe the advance via a second
+      -- drop, which must land at row 3 (the first drop's bottom edge).
+      h.cmgr:invoke('drop0')
+      local takes = am:tracksTakes(0)
+      local seconds = 0
+      for _, tk in ipairs(takes) do
+        if math.abs(tk.startQN - 3) < 1e-6 then seconds = seconds + 1 end
+      end
+      t.eq(seconds, 1, 'second drop landed at startQN=3 — cursor advanced past the first drop')
+    end,
+  },
+
+  {
+    name = 'cursor on a take\'s bottom-edge row adopts the take (chained Super-D walks down)',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      -- First Super-D drops a pooled clone at row 2 and advances the cursor
+      -- by 2 rows — cursor lands on row 2, the new clone's start (and also
+      -- the source's bottom-edge row). Second Super-D should adopt the clone.
+      h.cmgr:invoke('arrangeDuplicateBelow')
+      h.cmgr:invoke('arrangeDuplicateBelow')
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 3, 'second duplicate fired — cursor stayed on a take')
+      t.eq(takes[3].startQN, 4, 'second clone at row 4 (natural end of clone-1)')
+    end,
+  },
+
+  {
     name = 'a place-command drop inherits the length of an existing instance',
     run = function(harness)
       local h = harness.mk()
@@ -445,7 +496,10 @@ return {
       local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:seedCursorFromReaper()      -- cursor and focus on t1
       h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeCursorDown')   -- cursor moves to empty row 1
+      -- Row 1 is the take's bottom-edge row (still counts as on it);
+      -- row 2 is genuinely empty.
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeCursorDown')
       h.cmgr:invoke('arrangeDeleteTake')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
       t.eq(#am:tracksTakes(0), 1, 'delete reselected under cursor (empty), so t1 survives')
@@ -464,7 +518,9 @@ return {
       local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeCursorDown')   -- cursor leaves the take's row
+      -- Two rows down clears the take's bottom edge into empty space.
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeCursorDown')
       h.cmgr:invoke('arrangeNudgeForward')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].startQN, 0, 'nudge reselected under empty cursor — no-op')
