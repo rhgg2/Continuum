@@ -85,6 +85,7 @@ local PORT_GAP         = 4
 local PORT_BAND_OFFSET = 6   -- gap between node edge and the hover-only port row
 local PORT_HIT_PAD     = 4   -- hit area extends this far beyond the visual square on each side
 local PORT_TOOLTIP_GAP = 4   -- pixels between port top and tooltip bottom edge
+local KEYBOARD_GAP     = 6   -- gap between node right edge and the midi keyboard icon
 
 -- How far port geometry reaches past a node edge. Drives the node-level
 -- hover inflation so the row stays drawn while the mouse is anywhere in
@@ -185,67 +186,83 @@ local function drawPort(dl, px, y, colour, idStem, name)
   end
 end
 
--- Horizontal row of port squares centred over [x0,x1] at vertical `y`.
--- Audio squares first, then MIDI; either list may be empty.
-local function drawPortBand(dl, x0, x1, y, audio, midi, audioCol, midiCol, idPrefix)
-  local total = #audio + #midi
-  if total == 0 then return end
-  local rowW = total * PORT_SIZE + (total - 1) * PORT_GAP
-  local cx   = math.floor((x0 + x1 - rowW) / 2)
-  for i, name in ipairs(audio) do
-    local px = cx + (i - 1) * (PORT_SIZE + PORT_GAP)
-    drawPort(dl, px, y, audioCol, idPrefix .. '/a/' .. i, name)
-  end
-  for i, name in ipairs(midi) do
-    local px = cx + (#audio + i - 1) * (PORT_SIZE + PORT_GAP)
-    drawPort(dl, px, y, midiCol, idPrefix .. '/m/' .. i, name)
-  end
-end
-
 ----- Wire-creation gesture helpers
 
 local AUDIO_BAND_FRAC = 2/3  -- left 2/3 = audio band, right 1/3 = midi band
-local TINT_ALPHA      = 0.5  -- midi-band tint over the right 1/3
-local HOVER_ALPHA     = 0.4  -- hover overlay tint for either band
-
-local function withAlpha(col, alphaFrac)
-  local r, g, b = ImGui.ColorConvertU32ToDouble4(col)
-  return ImGui.ColorConvertDouble4ToU32(r, g, b, alphaFrac)
-end
 
 local function inRect(px, py, x0, y0, x1, y1)
   return px >= x0 and px <= x1 and py >= y0 and py <= y1
 end
 
--- Per-port hit test for a popped-out audio port row. Mirrors drawPortBand's
--- centred layout. dir='out' for the row below the body, 'in' for above.
-local function audioPortHit(nv, mx, my, ox, oy, dir)
+-- Which side of a body rect the cursor is closest to. Used for the
+-- drop-target popout: the user can approach a target from any direction,
+-- so the port row hangs off whichever edge is nearest the cursor.
+local function nearestSide(mx, my, x0, y0, x1, y1)
+  local dT, dB = math.abs(my - y0), math.abs(my - y1)
+  local dL, dR = math.abs(mx - x0), math.abs(mx - x1)
+  local d = math.min(dT, dB, dL, dR)
+  if     d == dT then return 'top'
+  elseif d == dB then return 'bottom'
+  elseif d == dL then return 'left'
+  else                return 'right' end
+end
+
+-- Pop-out audio port positions. side='bottom'/'top' lays out a horizontal
+-- row centred on the body's x range; 'left'/'right' lays out a vertical
+-- column centred on the y range. Returns the port name list and a parallel
+-- list of {x,y} top-left corners. Shared by hit-test and draw so both stay
+-- in lock-step.
+local function audioPortPositions(nv, ox, oy, dir, side)
+  local lx0, ly0, lx1, ly1 = nodeRect(nv)
+  local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
   local ports = (dir == 'out') and nv.outs.audio or nv.ins.audio
   local count = #ports
-  if count == 0 then return nil end
-  local lx0, ly0, lx1, ly1 = nodeRect(nv)
-  local rowW = count * PORT_SIZE + (count - 1) * PORT_GAP
-  local cx   = math.floor((ox + lx0 + ox + lx1 - rowW) / 2)
-  local y    = (dir == 'out') and (oy + ly1 + PORT_BAND_OFFSET)
-                              or  (oy + ly0 - PORT_BAND_OFFSET - PORT_SIZE)
-  for i = 1, count do
-    local px = cx + (i - 1) * (PORT_SIZE + PORT_GAP)
-    if inRect(mx, my, px - PORT_HIT_PAD, y - PORT_HIT_PAD,
-              px + PORT_SIZE + PORT_HIT_PAD, y + PORT_SIZE + PORT_HIT_PAD) then
+  local positions = {}
+  if count == 0 then return ports, positions end
+  if side == 'top' or side == 'bottom' then
+    local rowW   = count * PORT_SIZE + (count - 1) * PORT_GAP
+    local startX = math.floor((x0 + x1 - rowW) / 2)
+    local y      = (side == 'bottom') and (y1 + PORT_BAND_OFFSET)
+                                      or  (y0 - PORT_BAND_OFFSET - PORT_SIZE)
+    for i = 1, count do
+      positions[i] = { x = startX + (i - 1) * (PORT_SIZE + PORT_GAP), y = y }
+    end
+  else
+    local colH   = count * PORT_SIZE + (count - 1) * PORT_GAP
+    local startY = math.floor((y0 + y1 - colH) / 2)
+    local x      = (side == 'right') and (x1 + PORT_BAND_OFFSET)
+                                     or  (x0 - PORT_BAND_OFFSET - PORT_SIZE)
+    for i = 1, count do
+      positions[i] = { x = x, y = startY + (i - 1) * (PORT_SIZE + PORT_GAP) }
+    end
+  end
+  return ports, positions
+end
+
+local function audioPortHit(nv, mx, my, ox, oy, dir, side)
+  local _, positions = audioPortPositions(nv, ox, oy, dir, side)
+  for i, p in ipairs(positions) do
+    if inRect(mx, my, p.x - PORT_HIT_PAD, p.y - PORT_HIT_PAD,
+              p.x + PORT_SIZE + PORT_HIT_PAD, p.y + PORT_SIZE + PORT_HIT_PAD) then
       return i
     end
   end
 end
 
--- Which sides of the node have outputs (drives whether the split shows and
--- where a body-click lands). master / midi-only generators / audio-only
--- effects all suppress whichever side has nothing to drag from.
+-- Which sides of the node have OUTPUTS (drives the source-side band shape).
 local function sourceSides(nv)
   return { audio = #nv.outs.audio > 0, midi = #nv.outs.midi > 0 }
 end
 
+-- Which sides of the node have INPUTS (drives the target-side band shape).
+local function targetSides(nv)
+  return { audio = #nv.ins.audio > 0, midi = #nv.ins.midi > 0 }
+end
+
 -- Source-side hover (shift held, no draft). Returns {nv, band, portIdx?} or
--- nil. Either band of the body, or a popped-out output port box.
+-- nil. Either band of the body, or a popped-out output port box. Source
+-- popout always hangs below — drag-FROM is stable, no need to chase the
+-- cursor with the row.
 local function shiftHoverHit(nodeViews, mx, my, ox, oy)
   for _, nv in ipairs(nodeViews) do
     local sides = sourceSides(nv)
@@ -263,24 +280,28 @@ local function shiftHoverHit(nodeViews, mx, my, ox, oy)
         return { nv = nv, band = band }
       end
       if sides.audio and #nv.outs.audio > 1 then
-        local i = audioPortHit(nv, mx, my, ox, oy, 'out')
+        local i = audioPortHit(nv, mx, my, ox, oy, 'out', 'bottom')
         if i then return { nv = nv, band = 'audio', portIdx = i } end
       end
     end
   end
 end
 
--- Target-side hover (draft in flight). Returns {nv, portIdx?} or nil. Audio
--- drafts can also land on a popped-out input port above the target.
+-- Target-side hover (draft in flight). Returns {nv, side, portIdx?} or nil.
+-- side is which body edge the cursor is closest to — drives where an audio
+-- draft's input popout shows. Audio drafts also accept a popped-out input
+-- port hanging off that side.
 local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
   for _, nv in ipairs(nodeViews) do
     local lx0, ly0, lx1, ly1 = nodeRect(nv)
-    if inRect(mx, my, ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
-      return { nv = nv }
+    local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
+    if inRect(mx, my, x0, y0, x1, y1) then
+      return { nv = nv, side = nearestSide(mx, my, x0, y0, x1, y1) }
     end
     if draft.type == 'audio' and #nv.ins.audio > 1 then
-      local i = audioPortHit(nv, mx, my, ox, oy, 'in')
-      if i then return { nv = nv, portIdx = i } end
+      local side = nearestSide(mx, my, x0, y0, x1, y1)
+      local i = audioPortHit(nv, mx, my, ox, oy, 'in', side)
+      if i then return { nv = nv, side = side, portIdx = i } end
     end
   end
 end
@@ -296,55 +317,87 @@ local function dropEligible(draft, target)
   return true
 end
 
-local function drawShiftHoverBands(dl, nv, ox, oy, hoveredBand, isPortHit)
+----- Wire-creation overlays
+
+-- Audio-band / midi-band sub-rect of the body. sides tells us whether the
+-- node has both kinds of I/O (in the relevant direction) — if so the band
+-- is half the body; otherwise the band spans the whole body.
+local function bandRect(nv, ox, oy, sides, band)
   local lx0, ly0, lx1, ly1 = nodeRect(nv)
   local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
-  local sides    = sourceSides(nv)
-  local tintCol  = withAlpha(chrome.colour('wiring.port.midi'),     TINT_ALPHA)
-  local hoverCol = withAlpha(chrome.colour('wiring.node.selected'), HOVER_ALPHA)
-
   if sides.audio and sides.midi then
-    local split = x0 + (x1 - x0) * AUDIO_BAND_FRAC
-    ImGui.DrawList_AddRectFilled(dl, split, y0, x1, y1, tintCol,
-      CORNER_R, ImGui.DrawFlags_RoundCornersRight)
-    if not isPortHit then
-      if hoveredBand == 'audio' then
-        ImGui.DrawList_AddRectFilled(dl, x0, y0, split, y1, hoverCol,
-          CORNER_R, ImGui.DrawFlags_RoundCornersLeft)
-      else
-        ImGui.DrawList_AddRectFilled(dl, split, y0, x1, y1, hoverCol,
-          CORNER_R, ImGui.DrawFlags_RoundCornersRight)
-      end
+    local split = math.floor(x0 + (x1 - x0) * AUDIO_BAND_FRAC)
+    if band == 'audio' then return x0, y0, split, y1, 'left' end
+    return split, y0, x1, y1, 'right'
+  end
+  return x0, y0, x1, y1, 'both'
+end
+
+-- Selection-style outline around the band the cursor is on. Only the
+-- outer-body corners round; the split edge between audio and midi stays
+-- sharp.
+local function drawBandOutline(dl, nv, ox, oy, sides, band)
+  local x0, y0, x1, y1, round = bandRect(nv, ox, oy, sides, band)
+  local flags
+  if     round == 'left'  then flags = ImGui.DrawFlags_RoundCornersLeft
+  elseif round == 'right' then flags = ImGui.DrawFlags_RoundCornersRight
+  else                         flags = ImGui.DrawFlags_RoundCornersAll
+  end
+  ImGui.DrawList_AddRect(dl,
+    x0 - SELECTED_INFLATE, y0 - SELECTED_INFLATE,
+    x1 + SELECTED_INFLATE, y1 + SELECTED_INFLATE,
+    chrome.colour('wiring.node.selected'), CORNER_R, flags, SELECTED_STROKE)
+end
+
+-- Anchor point for the midi keyboard icon — just outside the body's
+-- right edge, vertically centred. The icon is a small external marker,
+-- not an in-body overlay.
+local function keyboardAnchor(nv, ox, oy)
+  local _, ly0, lx1, ly1 = nodeRect(nv)
+--  return ox + lx1 + KEYBOARD_GAP, oy + (ly0 + ly1) / 2
+  return ox + lx1 - KEYBOARD_GAP * 1.5 - 8, oy + ly0 + KEYBOARD_GAP * 1.5
+end
+
+-- Small piano-keyboard icon (C, C#, D, D#, E): 3 outlined white keys with
+-- 2 filled black keys overlaying the C-D and D-E boundaries. Drawn with
+-- its left edge at `left` and vertical centre at `vertCenter`. Stand-in
+-- for the midi tint — later this will gain an in/out arrow to distinguish
+-- direction.
+local function drawKeyboardIcon(dl, left, vertCenter)
+  local col    = chrome.colour('text')
+  local kw, kh = 4, 10
+  local bw, bh = 2, 5
+  local ix0    = math.floor(left)
+  local iy0    = math.floor(vertCenter - kh / 2)
+  for i = 0, 2 do
+    local x = ix0 + i * kw
+    ImGui.DrawList_AddRect(dl, x, iy0, x + kw+1, iy0 + kh+1, col, 0, 0, 1)
+  end
+  for _, i in ipairs{1, 2} do
+    local cx  = ix0 + i * kw
+    local bx0 = math.floor(cx - bw / 2)
+    ImGui.DrawList_AddRectFilled(dl, bx0, iy0, bx0 + bw+1, iy0 + bh+1, col)
+  end
+end
+
+-- Pop-out audio port row (or column). Highlights `highlightIdx` with a
+-- selection-style outline — port 1 by default, or the directly-hovered
+-- port. dir='out' for source outputs, 'in' for target inputs; side picks
+-- which body edge the row hangs off.
+local function drawAudioPortRow(dl, nv, ox, oy, dir, side, highlightIdx)
+  local ports, positions = audioPortPositions(nv, ox, oy, dir, side)
+  local audioCol = chrome.colour('wiring.port.audio')
+  local hlCol    = chrome.colour('wiring.node.selected')
+  for i, p in ipairs(positions) do
+    drawPort(dl, p.x, p.y, audioCol,
+      '##port/' .. nv.id .. '/' .. dir .. '/' .. i, ports[i])
+    if i == highlightIdx then
+      ImGui.DrawList_AddRect(dl,
+        p.x - SELECTED_INFLATE, p.y - SELECTED_INFLATE,
+        p.x + PORT_SIZE + SELECTED_INFLATE, p.y + PORT_SIZE + SELECTED_INFLATE,
+        hlCol, 0, 0, SELECTED_STROKE)
     end
-  elseif sides.midi then
-    ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, tintCol, CORNER_R)
-  elseif not isPortHit then
-    ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, hoverCol, CORNER_R)
   end
-end
-
-local function drawDropTargetOverlay(dl, nv, ox, oy, draftType, portIdx)
-  local lx0, ly0, lx1, ly1 = nodeRect(nv)
-  local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
-  local tintCol  = withAlpha(chrome.colour('wiring.port.midi'),     TINT_ALPHA)
-  local hoverCol = withAlpha(chrome.colour('wiring.node.selected'), HOVER_ALPHA)
-  if draftType == 'midi' then
-    ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, tintCol, CORNER_R)
-  elseif not portIdx then
-    ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, hoverCol, CORNER_R)
-  end
-end
-
--- Pop-out audio port rows (outputs below source on shift-hover, inputs above
--- target during an audio draft). MIDI stays implicit on the band itself.
-local function drawAudioPortRow(dl, nv, ox, oy, dir)
-  local lx0, ly0, lx1, ly1 = nodeRect(nv)
-  local ports = (dir == 'out') and nv.outs.audio or nv.ins.audio
-  local y     = (dir == 'out') and (oy + ly1 + PORT_BAND_OFFSET)
-                              or  (oy + ly0 - PORT_BAND_OFFSET - PORT_SIZE)
-  drawPortBand(dl, ox + lx0, ox + lx1, y, ports, {},
-    chrome.colour('wiring.port.audio'), chrome.colour('wiring.port.midi'),
-    '##port/' .. nv.id .. '/' .. dir)
 end
 
 ----- Wire drawing
@@ -591,20 +644,41 @@ local function renderCanvas(w, h)
 
   for _, nv in ipairs(nodeViews) do
     drawNode(dl, nv, ox, oy, selection[nv.id])
-    if sourceHit and sourceHit.nv == nv then
-      drawShiftHoverBands(dl, nv, ox, oy, sourceHit.band, sourceHit.portIdx ~= nil)
-    elseif targetHit and targetHit.nv == nv then
-      drawDropTargetOverlay(dl, nv, ox, oy, wireDraft.type, targetHit.portIdx)
+  end
+
+  -- Source-side overlay: outline the hovered band; keyboard icon over the
+  -- midi region whenever the source has midi outs.
+  if sourceHit then
+    local sides = sourceSides(sourceHit.nv)
+    drawBandOutline(dl, sourceHit.nv, ox, oy, sides, sourceHit.band)
+    if sides.midi then
+      drawKeyboardIcon(dl, keyboardAnchor(sourceHit.nv, ox, oy))
     end
   end
 
-  -- Pop-out audio port rows: outputs below source on shift-hover,
-  -- inputs above target during an audio draft. MIDI port stays implicit.
+  -- Target-side overlay: midi drafts mark the node with the keyboard icon;
+  -- audio drafts have nothing on the body itself — the in-flight wire ending
+  -- at the cursor is the drop cue, and the port popout below is the
+  -- port-picking affordance.
+  if targetHit and wireDraft.type == 'midi' then
+    local sides = targetSides(targetHit.nv)
+    if sides.midi then
+      drawKeyboardIcon(dl, keyboardAnchor(targetHit.nv, ox, oy))
+    end
+  end
+
+  -- Pop-out audio port rows: source outputs hang below the body on
+  -- shift-hover; target inputs hang off whichever body edge is nearest the
+  -- cursor during an audio draft. Default highlight = port 1 (the port the
+  -- wire lands on if mouseup happens on the body); explicit port hover
+  -- moves the highlight.
   if sourceHit and sourceHit.band == 'audio' and #sourceHit.nv.outs.audio > 1 then
-    drawAudioPortRow(dl, sourceHit.nv, ox, oy, 'out')
+    drawAudioPortRow(dl, sourceHit.nv, ox, oy, 'out', 'bottom',
+      sourceHit.portIdx or 1)
   end
   if targetHit and wireDraft.type == 'audio' and #targetHit.nv.ins.audio > 1 then
-    drawAudioPortRow(dl, targetHit.nv, ox, oy, 'in')
+    drawAudioPortRow(dl, targetHit.nv, ox, oy, 'in', targetHit.side,
+      targetHit.portIdx or 1)
   end
 
   -- In-flight wire from source-node centre to the cursor.
