@@ -76,13 +76,43 @@ function M.new()
   end
 
   -- Track FX list (used by probeTrackerMode in continuum.lua).
+  -- Entries are either bare strings (seeded via setTrackFX, legacy sampler
+  -- path) or {ident=...} tables (added via TrackFX_AddByName, wiring path).
   state.fxByTrack = {}
+  state.fxIO      = {}   -- ident → {ins, outs, inPinNames?={..}, outPinNames?={..}}; ports = pins/2
+  local function fxEntry(track, idx) return (state.fxByTrack[track] or {})[idx + 1] end
+  local function fxIdentOf(entry)    return type(entry) == 'table' and entry.ident or entry end
   function r.TrackFX_GetCount(track)
     return #(state.fxByTrack[track] or {})
   end
   function r.TrackFX_GetFXName(track, idx)
-    local names = state.fxByTrack[track] or {}
-    return names[idx + 1] ~= nil, names[idx + 1] or ''
+    local entry = fxEntry(track, idx)
+    return entry ~= nil, fxIdentOf(entry) or ''
+  end
+  function r.TrackFX_AddByName(track, ident, _recFx, _instantiate)
+    local list = state.fxByTrack[track]
+    if not list then list = {}; state.fxByTrack[track] = list end
+    list[#list + 1] = { ident = ident }
+    return #list - 1
+  end
+  function r.TrackFX_Delete(track, idx)
+    table.remove(state.fxByTrack[track] or {}, idx + 1)
+    return true
+  end
+  function r.TrackFX_GetIOSize(track, idx)
+    local io = state.fxIO[fxIdentOf(fxEntry(track, idx))] or { ins = 2, outs = 2 }
+    return 1, io.ins, io.outs
+  end
+  function r.TrackFX_GetNamedConfigParm(track, idx, parm)
+    local io = state.fxIO[fxIdentOf(fxEntry(track, idx))]
+    local dir, pin = parm:match('^(in)_pin_(%d+)$')
+    if not dir then dir, pin = parm:match('^(out)_pin_(%d+)$') end
+    if dir and io then
+      local names = io[dir == 'in' and 'inPinNames' or 'outPinNames']
+      local v = names and names[tonumber(pin) + 1]
+      if v then return true, v end
+    end
+    return false, ''
   end
   state.fxParams = {}
   function r.TrackFX_SetParam(track, fxIdx, paramIdx, value)
@@ -124,8 +154,21 @@ function M.new()
         if tr == track then return i end
       end
     end
-    return 0
+    local k = tostring(track) .. '/' .. parm
+    return state.trackValues and state.trackValues[k] or 0
   end
+  state.trackValues = {}
+  function r.SetMediaTrackInfo_Value(track, parm, value)
+    state.trackValues[tostring(track) .. '/' .. parm] = value
+    return true
+  end
+  local insertedN = 0
+  function r.InsertTrackAtIndex(idx, _wantDefaults)
+    insertedN = insertedN + 1
+    local track = { __track = 'scratch' .. insertedN }
+    table.insert(state.projectTracks, idx + 1, track)
+  end
+  function r.PreventUIRefresh(_) end
 
   -- Track media items (used by arrangeManager). Each track holds an
   -- ordered list of opaque item tokens; each item carries pos/len in
@@ -550,6 +593,9 @@ function M.new()
   end
   function r:setTrackFX(track, names)
     state.fxByTrack[track] = names
+  end
+  function r:setFxIO(ident, io)
+    state.fxIO[ident] = io
   end
   function r:setFxGuid(track, guid)
     state.fxGuids[track] = guid

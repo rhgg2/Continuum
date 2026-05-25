@@ -121,6 +121,7 @@ local specs = {
   'dag_descendants_spec',
   'wm_persistence_spec',
   'wm_installed_fx_spec',
+  'wm_probe_fx_io_spec',
   'wv_authoring_spec',
   'wp_smoke_spec',
 }

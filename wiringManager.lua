@@ -4,6 +4,7 @@
 --invariant: project-wide singleton; the user graph lives in one cm project-tier key (wiringGraph). No per-take or per-track state at Stage 1; wiringClass is declared for the Stage 2 differ but unread here.
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
+--invariant: scratch track is a hidden REAPER track tagged via cm key 'wiringScratch'='1'; wm:load() and wm:probeFxIO() find-or-create it; future use is to host FX nodes with no compile-graph track of their own. Probing-via-instantiate is a Stage-1 bootstrapping affordance — the differ in Stage 2+ will read I/O off the real production FX instance and back-fill the node.
 
 local util = require 'util'
 local DAG  = require 'DAG'
@@ -15,6 +16,10 @@ local fire = util.installHooks(wm)
 
 local _graph = nil
 local _installedFx = nil  -- session cache; reaper's installed-FX set is fixed at runtime
+local _scratchTrack = nil -- hidden host for the probe (and, later, orphan FX nodes); reset by wm:load
+local _fxIO = {}          -- session cache: fxIdent → { ins, outs, inNames, outNames }
+
+local SCRATCH_NAME = 'continuum: wiring scratch'
 
 ----- Helpers
 
@@ -39,11 +44,59 @@ local function ensureLoaded()
   if not _graph then _graph = readPersisted() end
 end
 
+local function findScratchTrack()
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local track = reaper.GetTrack(0, i)
+    if cm:readTrackKey(track, 'wiringScratch') == '1' then return track end
+  end
+end
+
+local function createScratchTrack()
+  reaper.PreventUIRefresh(1)
+  local idx = reaper.CountTracks(0)
+  reaper.InsertTrackAtIndex(idx, false)
+  local track = reaper.GetTrack(0, idx)
+  reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', SCRATCH_NAME, true)
+  reaper.SetMediaTrackInfo_Value(track, 'B_SHOWINMIXER', 0)
+  reaper.SetMediaTrackInfo_Value(track, 'B_SHOWINTCP',   0)
+  cm:writeTrackKey(track, 'wiringScratch', '1')
+  reaper.PreventUIRefresh(-1)
+  return track
+end
+
+local function ensureScratchTrack()
+  if _scratchTrack then return _scratchTrack end
+  _scratchTrack = findScratchTrack() or createScratchTrack()
+  return _scratchTrack
+end
+
+local function pinName(track, fxIdx, dir, pinIdx)
+  local ok, v = reaper.TrackFX_GetNamedConfigParm(track, fxIdx, dir .. '_pin_' .. pinIdx)
+  return ok and v or nil
+end
+
+-- Port P (1-indexed) groups pin 2(P-1) and 2P-1.
+-- "Sidechain L" + "Sidechain R" → "Sidechain"; mismatched pair → left pin name.
+local function portNames(track, fxIdx, dir, pinCount)
+  local out = {}
+  for p = 1, pinCount / 2 do
+    local left  = pinName(track, fxIdx, dir, (p - 1) * 2)     or ''
+    local right = pinName(track, fxIdx, dir, (p - 1) * 2 + 1) or ''
+    local lPre  = left :match('^(.+)%s+L$')
+    local rPre  = right:match('^(.+)%s+R$')
+    if lPre and lPre == rPre then out[p] = lPre
+    else                          out[p] = left ~= '' and left or nil end
+  end
+  return out
+end
+
 ----------- PUBLIC
 
---contract: re-reads wiringGraph from cm (rebuilding master via freshGraph if empty) and fires wiringChanged{kind='load'}
+--contract: re-reads wiringGraph from cm (rebuilding master via freshGraph if empty), ensures the scratch track, fires wiringChanged{kind='load'}; drops the prior scratch handle (project may have changed)
 function wm:load()
   _graph = readPersisted()
+  _scratchTrack = nil
+  ensureScratchTrack()
   fire('wiringChanged', { kind = 'load' })
 end
 
@@ -81,6 +134,31 @@ end
 function wm:errors()
   local compile = self:compile()
   return DAG.capacityErrors(compile, DAG.classes(compile))
+end
+
+--contract: { ins, outs, inNames, outNames } in stereo ports for fxIdent; instantiates on the scratch track, reads TrackFX_GetIOSize + in_pin_X/out_pin_X via TrackFX_GetNamedConfigParm, deletes, caches by ident. Unknown ident → ins=outs=0 with empty name lists.
+function wm:probeFxIO(ident)
+  if _fxIO[ident] then return _fxIO[ident] end
+  ensureScratchTrack()
+  reaper.PreventUIRefresh(1)
+  local fxIdx = reaper.TrackFX_AddByName(_scratchTrack, ident, false, -1)
+  local result
+  if fxIdx < 0 then
+    result = { ins = 0, outs = 0, inNames = {}, outNames = {} }
+  else
+    local _, inPins, outPins = reaper.TrackFX_GetIOSize(_scratchTrack, fxIdx)
+    inPins, outPins = inPins or 0, outPins or 0
+    result = {
+      ins      = inPins  / 2,
+      outs     = outPins / 2,
+      inNames  = portNames(_scratchTrack, fxIdx, 'in',  inPins),
+      outNames = portNames(_scratchTrack, fxIdx, 'out', outPins),
+    }
+    reaper.TrackFX_Delete(_scratchTrack, fxIdx)
+  end
+  reaper.PreventUIRefresh(-1)
+  _fxIO[ident] = result
+  return result
 end
 
 --contract: enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"

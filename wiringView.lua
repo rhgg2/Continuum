@@ -86,8 +86,9 @@ function wv:load()  wm:load() end
 
 ----- Authoring (slice 1.3b)
 
---contract: appends an fx node at logical (x,y); mints id 'n'<_nextId>; fx = {name, ident} from wv:listInstalledFX
+--contract: appends an fx node at logical (x,y); mints id 'n'<_nextId>; fx = {name, ident} from wv:listInstalledFX; audio counts + per-port names come from wm:probeFxIO(ident)
 function wv:addFx(x, y, fx)
+  local io = wm:probeFxIO(fx.ident)
   return wm:mutate(function(g)
     local id = 'n' .. g._nextId
     g._nextId = g._nextId + 1
@@ -96,7 +97,8 @@ function wv:addFx(x, y, fx)
       pos       = { x = x, y = y },
       fxIdent   = fx.ident,
       fxDisplay = fx.name,
-      audio     = { ins = 1, outs = 1 },
+      audio     = { ins      = io.ins,     outs     = io.outs,
+                    inNames  = io.inNames, outNames = io.outNames },
     }
   end)
 end

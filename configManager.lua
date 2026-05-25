@@ -110,8 +110,9 @@ local declarations = {
   -- is one project-tier blob; wiringClass is a per-track marker the
   -- Stage 2 differ reads to identify tracks the wiring page owns.
   -- See docs/wiringManager.md and design/wiring.md.
-  { 'wiringGraph', {} },
-  { 'wiringClass', nil },
+  { 'wiringGraph',   {}  },
+  { 'wiringClass',   nil },
+  { 'wiringScratch', nil },
 
   -- Atoms — parchment palette
   { 'palette.bg',        hex('#dad6c9') },  -- cream paper

@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=188  sha=5802667  mode=chunk
+@module wiringView  src=wiringView.lua  loc=190  sha=a23bf2f  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -48,24 +48,24 @@
   @api wv:load()  @ 85
   -- Authoring (slice 1.3b)
   @api wv:addFx(x, y, fx)  @ 90
-      @contract  appends an fx node at logical (x,y); mints id 'n'<_nextId>; fx = {name, ident} from wv:listInstalledFX
-  @api wv:listInstalledFX()  @ 104
-  @api wv:moveNodes(moves)  @ 107
+      @contract  appends an fx node at logical (x,y); mints id 'n'<_nextId>; fx = {name, ident} from wv:listInstalledFX; audio counts + per-port names come from wm:probeFxIO(ident)
+  @api wv:listInstalledFX()  @ 106
+  @api wv:moveNodes(moves)  @ 109
       @contract  atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
-  @api wv:addWire(spec)  @ 117
+  @api wv:addWire(spec)  @ 119
       @contract  appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
   -- Topology queries
-  @api wv:descendantsOf(sourceId)  @ 131
+  @api wv:descendantsOf(sourceId)  @ 133
       @contract  forward reachability over user.edges; returns { [id]=true } including sourceId
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 139
+  @api wv:nodeViews()  @ 141
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:wireViews()  @ 148
+  @api wv:wireViews()  @ 150
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 176
-  @api wv:setHover(id)  @ 177
-  @api wv:selection()  @ 180
+  @api wv:hover()  @ 178
+  @api wv:setHover(id)  @ 179
+  @api wv:selection()  @ 182
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 182
+  @api wv:setSelection(idSet)  @ 184
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.

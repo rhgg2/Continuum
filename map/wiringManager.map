@@ -1,45 +1,65 @@
-@module wiringManager  src=wiringManager.lua  loc=100  sha=dc12cac  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=178  sha=de1c2cf  mode=chunk
 @deps cm
 
 # Invariants & contracts
   @invariant  project-wide singleton; the user graph lives in one cm project-tier key (wiringGraph). No per-take or per-track state at Stage 1; wiringClass is declared for the Stage 2 differ but unread here.
   @invariant  every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
   @invariant  master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
+  @invariant  scratch track is a hidden REAPER track tagged via cm key 'wiringScratch'='1'; wm:load() and wm:probeFxIO() find-or-create it; future use is to host FX nodes with no compile-graph track of their own. Probing-via-instantiate is a Stage-1 bootstrapping affordance — the differ in Stage 2+ will read I/O off the real production FX instance and back-fill the node.
 
 # Imports
-  @require util = 'util'  @ 8
-  @require DAG = 'DAG'  @ 9
+  @require util = 'util'  @ 9
+  @require DAG = 'DAG'  @ 10
 
 # Private state
-  @state wm = {}  @ 13
-  @state fire = util.installHooks(wm)  @ 14
-  @state _graph = nil  @ 16
-  @state _installedFx = nil  @ 17   -- session cache; reaper's installed-FX set is fixed at runtime
+  @state wm = {}  @ 14
+  @state fire = util.installHooks(wm)  @ 15
+  @state _graph = nil  @ 17
+  @state _installedFx = nil  @ 18   -- session cache; reaper's installed-FX set is fixed at runtime
+  @state _scratchTrack = nil  @ 19   -- hidden host for the probe (and, later, orphan FX nodes); reset by wm:load
+  @state _fxIO = {}  @ 20   -- session cache: fxIdent → { ins, outs, inNames, outNames }
+  @state SCRATCH_NAME = 'continuum: wiring scratch'  @ 22
 
 # Private functions
   -- Helpers
-  @fn freshGraph()  @ 21
-  @fn readPersisted()  @ 32
-  @fn ensureLoaded()  @ 38
+  @fn freshGraph()  @ 26
+  @fn readPersisted()  @ 37
+  @fn ensureLoaded()  @ 43
+  @fn findScratchTrack()  @ 47
+  @fn createScratchTrack()  @ 54
+  @fn ensureScratchTrack()  @ 67
+  @fn pinName(track, fxIdx, dir, pinIdx)  @ 73
+  @fn portNames(track, fxIdx, dir, pinCount)  @ 80
+      -- Port P (1-indexed) groups pin 2(P-1) and 2P-1.
+      -- "Sidechain L" + "Sidechain R" → "Sidechain"; mismatched pair → left pin name.
 
 # Public API (wm:*)
-  @api wm:load()  @ 45
-      @contract  re-reads wiringGraph from cm (rebuilding master via freshGraph if empty) and fires wiringChanged{kind='load'}
-  @api wm:save()  @ 51
+  @api wm:load()  @ 96
+      @contract  re-reads wiringGraph from cm (rebuilding master via freshGraph if empty), ensures the scratch track, fires wiringChanged{kind='load'}; drops the prior scratch handle (project may have changed)
+  @api wm:save()  @ 104
       @contract  persists the current in-memory graph to the project tier; mutate calls this, callers normally don't
-  @api wm:graph()  @ 56
+  @api wm:graph()  @ 109
       @contract  returns a deep copy of the user graph; caller mutations never leak into wm state
-  @api wm:mutate(mutator)  @ 62
+  @api wm:mutate(mutator)  @ 115
       @contract  clone-validate-swap; on DAG.validate failure returns false,err with no state change and no signal; on success persists and fires wiringChanged{kind='mutate'}
-  @api wm:compile()  @ 75
+  @api wm:compile()  @ 128
       @contract  returns DAG.lower of the current user graph; pure, no caching at Stage 1
-  @api wm:errors()  @ 81
+  @api wm:errors()  @ 134
       @contract  list of intra-class capacity overflows on the lowered compile graph; empty when the user graph is within budget
-  @api wm:listInstalledFX()  @ 87
+  @api wm:probeFxIO(ident)  @ 140
+      @contract  { ins, outs, inNames, outNames } in stereo ports for fxIdent; instantiates on the scratch track, reads TrackFX_GetIOSize + in_pin_X/out_pin_X via TrackFX_GetNamedConfigParm, deletes, caches by ident. Unknown ident → ins=outs=0 with empty name lists.
+  @api wm:listInstalledFX()  @ 165
       @contract  enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
 
 # Signals emitted (via util.installHooks)
   @emits wiringChanged
 
 # REAPER API surface
+  @reaper CountTracks
+  @reaper GetTrack
+  @reaper PreventUIRefresh
+  @reaper InsertTrackAtIndex
+  @reaper GetSetMediaTrackInfo_String
+  @reaper SetMediaTrackInfo_Value
+  @reaper TrackFX_GetNamedConfigParm, TrackFX_AddByName, TrackFX_GetIOSize, TrackFX_Delete
   @reaper EnumInstalledFX
