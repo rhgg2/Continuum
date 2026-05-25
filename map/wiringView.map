@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=190  sha=a23bf2f  mode=chunk
+@module wiringView  src=wiringView.lua  loc=190  sha=44d3283  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -55,8 +55,8 @@
   @api wv:addWire(spec)  @ 119
       @contract  appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
   -- Topology queries
-  @api wv:descendantsOf(sourceId)  @ 133
-      @contract  forward reachability over user.edges; returns { [id]=true } including sourceId
+  @api wv:ancestorsOf(sourceId)  @ 133
+      @contract  backward reachability over user.edges; returns { [id]=true } including sourceId
   -- Render-ready, viewport-independent
   @api wv:nodeViews()  @ 141
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)

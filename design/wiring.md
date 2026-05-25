@@ -425,8 +425,9 @@ in-flight wire kind: a MIDI wire tints the whole target in the MIDI
 colour; an audio wire shows only the overlay, and if the target has
 more than one audio input port, pops the input boxes out *above* the
 node. Cycle-forming targets — the source itself and its transitive
-descendants — are ineligible and suppress all of this; the check
-uses each node's child list, walked transitively at drag-start. Drop
+ancestors (nodes that already reach the source) — are ineligible and
+suppress all of this; the check uses each node's parent list, walked
+transitively at drag-start. Drop
 completes the wire — on the node body it lands on port 1 (audio) or
 the sole MIDI port; on a popped-out port box it lands on that port.
 Release over empty canvas cancels.

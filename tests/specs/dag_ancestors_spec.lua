@@ -33,15 +33,15 @@ end
 
 return {
   {
-    name = 'leaf source: descendants = { itself }',
+    name = 'leaf source: ancestors = { itself }',
     run = function()
       local ns = {}
       local k, v = source('s'); ns[k] = v
-      t.deepEq(sortedKeys(DAG.descendants(mk(ns, {}), 's')), { 's' })
+      t.deepEq(sortedKeys(DAG.ancestors(mk(ns, {}), 's')), { 's' })
     end,
   },
   {
-    name = 'audio chain: descendants include everything downstream',
+    name = 'audio chain: ancestors of master include everything upstream',
     run = function()
       local ns = {}
       local k1, v1 = source('s'); ns[k1] = v1
@@ -52,7 +52,7 @@ return {
         { type = 'audio', from = 'a', to = 'b',      fromPort = 1, toPort = 1 },
         { type = 'audio', from = 'b', to = 'master', fromPort = 1, toPort = 1 },
       })
-      t.deepEq(sortedKeys(DAG.descendants(g, 's')),
+      t.deepEq(sortedKeys(DAG.ancestors(g, 'master')),
                { 'a', 'b', 'master', 's' })
     end,
   },
@@ -66,7 +66,7 @@ return {
         { type = 'midi',  from = 's',     to = 'synth' },
         { type = 'audio', from = 'synth', to = 'master', fromPort = 1, toPort = 1 },
       })
-      t.deepEq(sortedKeys(DAG.descendants(g, 's')),
+      t.deepEq(sortedKeys(DAG.ancestors(g, 'master')),
                { 'master', 's', 'synth' })
     end,
   },
@@ -80,18 +80,40 @@ return {
       local g = mk(ns, {
         { type = 'audio', from = 'a', to = 'b', fromPort = 1, toPort = 1 },
       })
-      local d = DAG.descendants(g, 'a')
+      local d = DAG.ancestors(g, 'b')
       t.deepEq(sortedKeys(d), { 'a', 'b' })
       t.eq(d.c, nil)
     end,
   },
   {
-    name = 'isolated node: descendants = { itself }',
+    name = 'isolated node: ancestors = { itself }',
     run = function()
       local ns = {}
       local k1, v1 = fx('iso'); ns[k1] = v1
       local g = mk(ns, {})
-      t.eq(DAG.descendants(g, 'iso').iso, true)
+      t.eq(DAG.ancestors(g, 'iso').iso, true)
+    end,
+  },
+  {
+    -- Pins the wiring-page cycle-rejection contract: a draft from X is
+    -- ineligible to drop on Y when Y→…→X already exists. ancestors(X) is
+    -- exactly that set; crucially it does NOT contain X's downstream
+    -- nodes, which are legitimate drop targets.
+    name = 'cycle-rejection set: ancestors of mid-chain == upstream incl self',
+    run = function()
+      local ns = {}
+      local k1, v1 = source('s'); ns[k1] = v1
+      local k2, v2 = fx('a');     ns[k2] = v2
+      local k3, v3 = fx('b');     ns[k3] = v3
+      local g = mk(ns, {
+        { type = 'audio', from = 's', to = 'a',      fromPort = 1, toPort = 1 },
+        { type = 'audio', from = 'a', to = 'b',      fromPort = 1, toPort = 1 },
+        { type = 'audio', from = 'b', to = 'master', fromPort = 1, toPort = 1 },
+      })
+      local anc = DAG.ancestors(g, 'a')
+      t.deepEq(sortedKeys(anc), { 'a', 's' })
+      t.eq(anc.b, nil)
+      t.eq(anc.master, nil)
     end,
   },
 }

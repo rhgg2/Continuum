@@ -129,9 +129,9 @@ end
 
 ----- Topology queries
 
---contract: forward reachability over user.edges; returns { [id]=true } including sourceId
-function wv:descendantsOf(sourceId)
-  return DAG.descendants(wm:graph(), sourceId)
+--contract: backward reachability over user.edges; returns { [id]=true } including sourceId
+function wv:ancestorsOf(sourceId)
+  return DAG.ancestors(wm:graph(), sourceId)
 end
 
 ----- Render-ready, viewport-independent

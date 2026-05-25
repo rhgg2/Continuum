@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=346  sha=dc12cac  mode=namespace
+@module DAG  src=DAG.lua  loc=347  sha=a23bf2f  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module — no state; functions take operands explicitly
@@ -27,17 +27,17 @@
   @fn audioPorts(node)  @ 25
       -- Source: one stereo out, no audio in. fx/master: explicit integer counts.
   -- validate
-  -- descendants
+  -- ancestors
   -- lower
-  @fn passthroughNode(node)  @ 142
+  @fn passthroughNode(node)  @ 143
       -- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
       -- the audio shape).
   -- srcSet / classes
-  @fn inboundOf(compile)  @ 215
+  @fn inboundOf(compile)  @ 216
       -- Reverse adjacency: for each node id, the list of input-side node ids.
       -- Stashed on compile so the cost is paid once per graph instance.
   -- quotientGraph / absorption / capacityErrors
-  @fn directHost(q)  @ 290
+  @fn directHost(q)  @ 291
       -- Direct (one-hop) host for cls under the absorption rule. Returns nil if cls
       -- has no eligible host: zero audio parents, ambiguous primaries, or multiple
       -- non-primary audio parents.
@@ -45,19 +45,20 @@
 # Public API (M.*)
   @api M.validate(user)  @ 39
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.descendants(user, sourceId)  @ 124
-      -- Forward reachability over the user graph. Used by the wiring page at
-      -- drag-start to disqualify cycle-forming drop targets in one set lookup.
-      @contract  set { [id]=true } incl sourceId; transitive over user.edges; cycle-safe via visited
-  @api M.lower(user)  @ 149
+  @api M.ancestors(user, sourceId)  @ 125
+      -- Backward reachability over the user graph. Used by the wiring page at
+      -- drag-start to disqualify cycle-forming drop targets: a wire from X to
+      -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
+      @contract  set { [id]=true } incl sourceId; backward over user.edges; cycle-safe via visited
+  @api M.lower(user)  @ 150
       @contract  assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
-  @api M.srcSet(compile, nodeId)  @ 226
+  @api M.srcSet(compile, nodeId)  @ 227
       @contract  set<trackGuid> of source ancestors; memoised on compile (stashes _srcSet, _inbound)
-  @api M.classes(compile)  @ 247
+  @api M.classes(compile)  @ 248
       @contract  partitions compile.nodes by srcSet; classKey = sorted trackGuids joined by '|', '' for empty
-  @api M.quotientGraph(compile, classes)  @ 261
+  @api M.quotientGraph(compile, classes)  @ 262
       @contract  class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryAudioParents ⊆ audioParents, flagged by `primary` wires
-  @api M.absorption(quotient)  @ 300
+  @api M.absorption(quotient)  @ 301
       @contract  sparse {[cls]=hostCls}; chains resolved to terminal host; absent = self-hosting; cycle-safe
-  @api M.capacityErrors(compile, classes)  @ 322
+  @api M.capacityErrors(compile, classes)  @ 323
       @contract  list of {classKey, kind='audio'|'midi', count} for intra-class conn counts exceeding 64 audio / 128 midi; sorted by classKey then kind

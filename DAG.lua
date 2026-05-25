@@ -116,15 +116,16 @@ function M.validate(user)
   return nil
 end
 
------ descendants
+----- ancestors
 
--- Forward reachability over the user graph. Used by the wiring page at
--- drag-start to disqualify cycle-forming drop targets in one set lookup.
---contract: set { [id]=true } incl sourceId; transitive over user.edges; cycle-safe via visited
-function M.descendants(user, sourceId)
+-- Backward reachability over the user graph. Used by the wiring page at
+-- drag-start to disqualify cycle-forming drop targets: a wire from X to
+-- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
+--contract: set { [id]=true } incl sourceId; backward over user.edges; cycle-safe via visited
+function M.ancestors(user, sourceId)
   local out, adj = {}, {}
   for _, edge in ipairs(user.edges or {}) do
-    util.bucket(adj, edge.from, edge.to)
+    util.bucket(adj, edge.to, edge.from)
   end
   local function visit(id)
     if out[id] then return end
