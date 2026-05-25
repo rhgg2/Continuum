@@ -80,6 +80,9 @@ end)
 local NODE_W           = 96
 local NODE_H           = 60
 local CORNER_R         = 5
+local LABEL_PAD        = 4   -- inner horizontal padding for the wrapped name
+local LABEL_MAX_LINES  = 2
+local LABEL_ELLIPSIS   = '…'
 local PORT_SIZE        = 8
 local PORT_GAP         = 4
 local PORT_BAND_OFFSET = 6   -- gap between node edge and the hover-only port row
@@ -92,7 +95,7 @@ local KEYBOARD_GAP     = 6   -- gap between node right edge and the midi keyboar
 -- the padded hit area.
 local PORT_REACH = PORT_BAND_OFFSET + PORT_SIZE + PORT_HIT_PAD
 
-local WIRE_GAP        = 10    -- perpendicular pitch between parallel wires in the same pair-group
+local WIRE_GAP        = 14    -- perpendicular pitch between parallel wires in the same pair-group
 local WIRE_THICK      = 1
 local WIRE_ARROW_LEN  = 9
 local WIRE_ARROW_WID  = 8
@@ -143,6 +146,96 @@ end
 local SELECTED_INFLATE = 2
 local SELECTED_STROKE  = 2
 
+-- Split a single whitespace-free word into pieces at CamelCase boundaries
+-- (lowercase byte immediately followed by uppercase byte). Plugin names are
+-- ASCII in practice, so byte-class checks are sufficient.
+local function camelSplit(word)
+  local pieces, last = {}, 1
+  for i = 2, #word do
+    local prev, cur = word:byte(i - 1), word:byte(i)
+    if prev >= 97 and prev <= 122 and cur >= 65 and cur <= 90 then
+      pieces[#pieces + 1] = word:sub(last, i - 1)
+      last = i
+    end
+  end
+  pieces[#pieces + 1] = word:sub(last)
+  return pieces
+end
+
+-- Tokenise into atoms with per-pair separators. Each atom is a string;
+-- seps[k] is the joiner that goes between atoms[k] and atoms[k+1] when
+-- they stay on the same line. ' ' between whitespace-separated words,
+-- '' between CamelCase pieces of one word (so re-joined lines have no
+-- inserted space at the case boundary).
+local function atomise(text)
+  local atoms, seps = {}, {}
+  for word in text:gmatch('%S+') do
+    local pieces = camelSplit(word)
+    for j, piece in ipairs(pieces) do
+      atoms[#atoms + 1] = piece
+      if #atoms > 1 then
+        seps[#atoms - 1] = (j == 1) and ' ' or ''
+      end
+    end
+  end
+  return atoms, seps
+end
+
+-- Greedy word-wrap into at most LABEL_MAX_LINES lines bounded by maxW.
+-- Breaks at whitespace and CamelCase boundaries; the final line ends in
+-- LABEL_ELLIPSIS when the remainder doesn't fit. Assumes the desired font
+-- is already pushed (CalcTextSize uses it).
+local function wrapLabel(text, maxW)
+  local function widthOf(s) return (ImGui.CalcTextSize(ctx, s)) end
+  local function ellipsise(s)
+    for n = #s, 0, -1 do
+      local cand = s:sub(1, n) .. LABEL_ELLIPSIS
+      if widthOf(cand) <= maxW then return cand end
+    end
+    return LABEL_ELLIPSIS
+  end
+
+  local atoms, seps = atomise(text)
+  if #atoms == 0 then return { '' } end
+
+  local lines, lineStart, cur = {}, {}, nil
+  for i, atom in ipairs(atoms) do
+    if widthOf(atom) > maxW then
+      if cur then lines[#lines + 1] = cur; cur = nil end
+      lineStart[#lines + 1] = i
+      lines[#lines + 1] = ellipsise(atom)
+    elseif cur == nil then
+      cur = atom
+      lineStart[#lines + 1] = i
+    else
+      local cand = cur .. (seps[i - 1] or '') .. atom
+      if widthOf(cand) <= maxW then
+        cur = cand
+      else
+        lines[#lines + 1] = cur
+        cur = atom
+        lineStart[#lines + 1] = i
+      end
+    end
+  end
+  if cur then lines[#lines + 1] = cur end
+
+  if #lines <= LABEL_MAX_LINES then return lines end
+
+  -- Overflow: keep the first LABEL_MAX_LINES-1 lines verbatim; pack the
+  -- remaining atoms into the final line with a trailing ellipsis.
+  local out = {}
+  for k = 1, LABEL_MAX_LINES - 1 do out[k] = lines[k] end
+  local startIdx, packed = lineStart[LABEL_MAX_LINES], nil
+  for i = startIdx, #atoms do
+    local sep = (i == startIdx) and '' or (seps[i - 1] or '')
+    local cand = packed and (packed .. sep .. atoms[i]) or atoms[i]
+    if widthOf(cand .. LABEL_ELLIPSIS) <= maxW then packed = cand else break end
+  end
+  out[LABEL_MAX_LINES] = packed and (packed .. LABEL_ELLIPSIS) or ellipsise(atoms[startIdx])
+  return out
+end
+
 local function drawNode(dl, nv, ox, oy, isSelected)
   local lx0, ly0, lx1, ly1 = nodeRect(nv)
   local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
@@ -156,11 +249,17 @@ local function drawNode(dl, nv, ox, oy, isSelected)
       chrome.colour('wiring.node.selected'), CORNER_R, 0, SELECTED_STROKE)
   end
   if wireFont then ImGui.PushFont(ctx, wireFont, wireSize) end
-  local tw, th = ImGui.CalcTextSize(ctx, nv.label)
-  ImGui.DrawList_AddText(dl,
-    x0 + math.floor((NODE_W - tw) / 2),
-    y0 + math.floor((NODE_H - th) / 2),
-    text, nv.label)
+  local lines = wrapLabel(nv.label, NODE_W - 2 * LABEL_PAD)
+  local lineH = select(2, ImGui.CalcTextSize(ctx, 'Mg'))
+  local blockH = lineH * #lines
+  local yTop = y0 + math.floor((NODE_H - blockH) / 2)
+  for i, line in ipairs(lines) do
+    local tw = ImGui.CalcTextSize(ctx, line)
+    ImGui.DrawList_AddText(dl,
+      x0 + math.floor((NODE_W - tw) / 2),
+      yTop + (i - 1) * lineH,
+      text, line)
+  end
   if wireFont then ImGui.PopFont(ctx) end
 end
 
@@ -511,7 +610,7 @@ local function drawWireEndLabel(dl, ax, ay, fx, fy, i, n, portIdx, portName, idS
   -- letting the gap be measured from the projected near edge keeps the
   -- visible LEAD constant whether the wire is horizontal or vertical.
   local proj = (hw * math.abs(dx) + hh * math.abs(dy)) / len
-  local slot = ((i - 1) % 2 == 0) and 0 or (2 * WIRE_GAP)
+  local slot = ((i - 1) % 2 == 0) and 0 or (2 * WIRE_LABEL_LEAD)
   local labelDist = math.min(len * 0.45, exitD + WIRE_LABEL_LEAD + proj + slot)
   local t  = labelDist / len
   local cx = ax + t * dx
@@ -850,13 +949,16 @@ end
 
 ----- Wiring scope
 
--- REAPER hands us "Type: Name (Author)" in EnumInstalledFX. The picker
--- row shows the full form (the prefix and author disambiguate same-named
--- plugins from different vendors), but the node label keeps just the bare
--- name so a 90px box has room to read it. Strip on commit, not in wm.
+-- REAPER hands us "Type: Name (Author)" — or, for multi-out plugins,
+-- "Type: Name (Author) (N outs)" — in EnumInstalledFX, and either
+-- parenthetical may itself contain balanced parens (e.g. a vendor written
+-- "Modartt SAS (France)"). The picker row shows the full form to
+-- disambiguate same-named plugins from different vendors; the node label
+-- drops the prefix and everything from the first balanced () onward.
+-- Strip on commit, not in wm.
 local function shortFxName(s)
   s = s:gsub('^[^:]+:%s*', '')
-  s = s:gsub('%s*%([^()]*%)%s*$', '')
+  s = s:gsub('%s*%b().*$', '')
   return s
 end
 
