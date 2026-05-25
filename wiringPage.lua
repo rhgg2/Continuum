@@ -797,14 +797,21 @@ local function renderCanvas(w, h)
     end
   end
 
-  -- Target-side overlay: midi drafts mark the node with the keyboard icon;
-  -- audio drafts have nothing on the body itself — the in-flight wire ending
-  -- at the cursor is the drop cue, and the port popout below is the
-  -- port-picking affordance.
-  if targetHit and wireDraft.type == 'midi' then
-    local sides = targetSides(targetHit.nv)
-    if sides.midi then
-      drawKeyboardIcon(dl, keyboardAnchor(targetHit.nv, ox, oy))
+  -- Target-side overlay: body gets the selection-style outline as the
+  -- universal drop-target cue; midi drafts additionally show the keyboard
+  -- icon over the midi region. The in-flight wire endpoint and the port
+  -- popout (below) are the further cues for audio drafts.
+  if targetHit then
+    local lx0, ly0, lx1, ly1 = nodeRect(targetHit.nv)
+    ImGui.DrawList_AddRect(dl,
+      ox + lx0 - SELECTED_INFLATE, oy + ly0 - SELECTED_INFLATE,
+      ox + lx1 + SELECTED_INFLATE, oy + ly1 + SELECTED_INFLATE,
+      chrome.colour('wiring.node.selected'), CORNER_R, 0, SELECTED_STROKE)
+    if wireDraft.type == 'midi' then
+      local sides = targetSides(targetHit.nv)
+      if sides.midi then
+        drawKeyboardIcon(dl, keyboardAnchor(targetHit.nv, ox, oy))
+      end
     end
   end
 

@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=987  sha=239d190  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=994  sha=462e2df  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -46,7 +46,7 @@
   @state SELECTED_INFLATE = 2  @ 146
   @state SELECTED_STROKE = 2  @ 147
   @state AUDIO_BAND_FRAC = 2/3  @ 292   -- left 2/3 = audio band, right 1/3 = midi band
-  @state wiring = cmgr:scope('wiring')  @ 977
+  @state wiring = cmgr:scope('wiring')  @ 984
 
 # Private functions
   -- FX-picker modal kind
@@ -170,10 +170,10 @@
       -- body rect (un-inflated; port bands aren't selectable). Returns the
       -- set of intersecting ids — empty table if nothing was caught.
   @fn renderCanvas(w, h)  @ 712
-  @fn pushBodyStyles()  @ 905
-  @fn popBodyStyles()  @ 908
+  @fn pushBodyStyles()  @ 912
+  @fn popBodyStyles()  @ 915
   -- Wiring scope
-  @fn shortFxName(s)  @ 959
+  @fn shortFxName(s)  @ 966
       -- REAPER hands us "Type: Name (Author)" — or, for multi-out plugins,
       -- "Type: Name (Author) (N outs)" — in EnumInstalledFX, and either
       -- parenthetical may itself contain balanced parens (e.g. a vendor written
@@ -181,17 +181,17 @@
       -- disambiguate same-named plugins from different vendors; the node label
       -- drops the prefix and everything from the first balanced () onward.
       -- Strip on commit, not in wm.
-  @fn openFxPicker()  @ 965
+  @fn openFxPicker()  @ 972
 
 # Public API (wp:*)
-  @api wp:bind()  @ 913
+  @api wp:bind()  @ 920
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 914
-  @api wp:renderToolbarBits(_)  @ 916
-  @api wp:renderBody(_, w, h, dispatch)  @ 919
+  @api wp:unbind()  @ 921
+  @api wp:renderToolbarBits(_)  @ 923
+  @api wp:renderBody(_, w, h, dispatch)  @ 926
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 932
-  @api wp:focusState()  @ 938
+  @api wp:renderStatusBar(_)  @ 939
+  @api wp:focusState()  @ 945
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface
