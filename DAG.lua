@@ -1,27 +1,27 @@
 -- Pure structural calculus for the wiring page: user graph (wires) and
--- compile graph (port-to-port connections), the lowering that bridges
+-- lowered graph (port-to-port connections), the lowering that bridges
 -- them, and the source-set partition that compiles onto REAPER tracks.
--- M.compile(user) returns a context closing over the lowered graph
+-- M.compile(userGraph) returns a context closing over the lowered graph
 -- and lazily caching classes / classOf / inbound / srcSet / quotient
 -- / absorption; the user-graph predicates (validate, ancestors,
 -- lower) stay free-standing.
 -- See design/wiring.md for the model.
 -- @noindex
 
---invariant: M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(user), which caches the lowered graph and its derivations lazily
---invariant: REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and compile (port-to-port conns); lower() bridges them.
+--invariant: M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(userGraph), which caches the lowered graph and its derivations lazily
+--invariant: REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and lowered (port-to-port conns); lower() bridges them.
 --invariant: every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --invariant: srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
---shape: UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
---shape: Node = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string }
+--shape: userGraph = { nodes = {[id]=userNode}, edges = edge[], _nextId = number }
+--shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string }
 --invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
---shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, _opFxGuid?=string }
---invariant: when an edge carries ops (gain / channelMap), lower splices one CU bridge per op-bundle into the wire — a kind='fx' compile node with fxIdent=CU_IDENT and a wm-owned params payload ({mode='gain'|'channelRemap', ...}). _opFxGuid is the CU instance's bridge identity in REAPER; lower copies it onto the bridge's fxGuid, and the applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on user-graph fx nodes).
---shape: CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
---shape: CompileNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific})
---shape: Conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
---shape: TargetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
+--shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, _opFxGuid?=string }
+--invariant: when an edge carries ops (gain / channelMap), lower splices one CU bridge per op-bundle into the wire — a kind='fx' lowered node with fxIdent=CU_IDENT and a wm-owned params payload ({mode='gain'|'channelRemap', ...}). _opFxGuid is the CU instance's bridge identity in REAPER; lower copies it onto the bridge's fxGuid, and the applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on user-graph fx nodes).
+--shape: lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
+--shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific})
+--shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
+--shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -33,8 +33,8 @@ local M = {}
 ----- validate
 
 --contract: returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-function M.validate(user)
-  local nodes, edges = user.nodes or {}, user.edges or {}
+function M.validate(userGraph)
+  local nodes, edges = userGraph.nodes or {}, userGraph.edges or {}
 
   local masters = 0
   local seenGuid = {}
@@ -136,10 +136,10 @@ end
 -- Backward reachability over the user graph. Used by the wiring page at
 -- drag-start to disqualify cycle-forming drop targets: a wire from X to
 -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
---contract: set { [id]=true } incl sourceId; backward over user.edges; cycle-safe via visited
-function M.ancestors(user, sourceId)
+--contract: set { [id]=true } incl sourceId; backward over userGraph.edges; cycle-safe via visited
+function M.ancestors(userGraph, sourceId)
   local out, adj = {}, {}
-  for _, edge in ipairs(user.edges or {}) do
+  for _, edge in ipairs(userGraph.edges or {}) do
     util.bucket(adj, edge.to, edge.from)
   end
   local function visit(id)
@@ -153,27 +153,27 @@ end
 
 ----- lower
 
---contract: assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
-function M.lower(user)
-  local compile = { nodes = {}, conns = {} }
+--contract: assumes M.validate(userGraph)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
+function M.lower(userGraph)
+  local lowerGraph = { nodes = {}, conns = {} }
   local cuN = 0
 
   local function mintCu(cuNode)
     cuN = cuN + 1
     local id = '_cu_' .. cuN
-    compile.nodes[id] = cuNode
+    lowerGraph.nodes[id] = cuNode
     return id
   end
 
   local function flush(head, targetId, targetPort)
     if head.type == 'audio' then
-      util.add(compile.conns, {
+      util.add(lowerGraph.conns, {
         type = 'audio', from = head.id, to = targetId,
         fromPort = head.port, toPort = targetPort, primary = head.primary,
       })
     else
-      util.add(compile.conns, { type = 'midi', from = head.id, to = targetId,
-                                primary = head.primary })
+      util.add(lowerGraph.conns, { type = 'midi', from = head.id, to = targetId,
+                                   primary = head.primary })
     end
   end
 
@@ -209,32 +209,32 @@ function M.lower(user)
     flush(head, edge.to)
   end
 
-  for id, node in pairs(user.nodes or {}) do
-    compile.nodes[id] = util.pick(node, 'kind trackGuid fxIdent fxGuid')
+  for id, node in pairs(userGraph.nodes or {}) do
+    lowerGraph.nodes[id] = util.pick(node, 'kind trackGuid fxIdent fxGuid')
   end
-  for _, edge in ipairs(user.edges or {}) do
+  for _, edge in ipairs(userGraph.edges or {}) do
     if edge.type == 'audio' then lowerAudioEdge(edge)
     else                          lowerMidiEdge(edge)
     end
   end
-  return compile
+  return lowerGraph
 end
 
 ----- compile context
 
---contract: assumes M.validate(user)==nil; returns a ctx closing over M.lower(user) with lazy caches for classes, classOf, inbound, srcSet (per-id), quotient, absorption. ctx:srcSet(id) returns the same table across calls (referential cache).
-function M.compile(user)
-  local compile = M.lower(user)
+--contract: assumes M.validate(userGraph)==nil; returns a ctx closing over M.lower(userGraph) with lazy caches for classes, classOf, inbound, srcSet (per-id), quotient, absorption. ctx:srcSet(id) returns the same table across calls (referential cache).
+function M.compile(userGraph)
+  local lowerGraph = M.lower(userGraph)
   local cache = { srcSet = {} }
   local ctx = {}
 
-  function ctx:graph() return compile end
+  function ctx:graph() return lowerGraph end
 
   -- Reverse adjacency: for each node id, the list of input-side node ids.
   function ctx:inbound()
     if cache.inbound then return cache.inbound end
     cache.inbound = {}
-    for _, conn in ipairs(compile.conns) do
+    for _, conn in ipairs(lowerGraph.conns) do
       util.bucket(cache.inbound, conn.to, conn.from)
     end
     return cache.inbound
@@ -243,7 +243,7 @@ function M.compile(user)
   function ctx:srcSet(id)
     if cache.srcSet[id] then return cache.srcSet[id] end
     local set = {}
-    local node = compile.nodes[id]
+    local node = lowerGraph.nodes[id]
     if node and node.kind == 'source' and node.trackGuid then
       set[node.trackGuid] = true
     end
@@ -257,7 +257,7 @@ function M.compile(user)
   function ctx:classes()
     if cache.classes then return cache.classes end
     cache.classes = {}
-    for id in pairs(compile.nodes) do
+    for id in pairs(lowerGraph.nodes) do
       local guids = {}
       for guid in pairs(self:srcSet(id)) do util.add(guids, guid) end
       table.sort(guids)
@@ -284,7 +284,7 @@ function M.compile(user)
                               primaryAudioParents = {} }
     end
     local cOf = self:classOf()
-    for _, conn in ipairs(compile.conns) do
+    for _, conn in ipairs(lowerGraph.conns) do
       local fromCls, toCls = cOf[conn.from], cOf[conn.to]
       if fromCls ~= toCls then
         local toQ, fromQ = cache.quotient[toCls], cache.quotient[fromCls]
@@ -340,7 +340,7 @@ function M.compile(user)
   function ctx:capacityErrors()
     local cOf = self:classOf()
     local counts = {}
-    for _, conn in ipairs(compile.conns) do
+    for _, conn in ipairs(lowerGraph.conns) do
       local cls = cOf[conn.from]
       if cls and cls == cOf[conn.to] then
         counts[cls] = counts[cls] or { audio = 0, midi = 0 }
@@ -366,12 +366,12 @@ function M.compile(user)
     local cOf = ctx:classOf()
     local memberSet = {}
     for _, id in ipairs(members) do
-      local k = compile.nodes[id].kind
+      local k = lowerGraph.nodes[id].kind
       if k ~= 'source' and k ~= 'master' then memberSet[id] = true end
     end
     local indeg, succ = {}, {}
     for id in pairs(memberSet) do indeg[id], succ[id] = 0, {} end
-    for _, conn in ipairs(compile.conns) do
+    for _, conn in ipairs(lowerGraph.conns) do
       if memberSet[conn.from] and memberSet[conn.to]
          and cOf[conn.from] == cls and cOf[conn.to] == cls then
         indeg[conn.to] = indeg[conn.to] + 1
@@ -406,7 +406,7 @@ function M.compile(user)
       if cls == '' then
         local parked = {}
         for _, id in ipairs(members) do
-          local k = compile.nodes[id].kind
+          local k = lowerGraph.nodes[id].kind
           if k ~= 'master' and k ~= 'source' then util.add(parked, id) end
         end
         if #parked > 0 then
@@ -419,7 +419,7 @@ function M.compile(user)
       else
         local hostKind, trackGuid, hasMaster = 'newTrack', nil, false
         for _, id in ipairs(members) do
-          local n = compile.nodes[id]
+          local n = lowerGraph.nodes[id]
           if n.kind == 'source' then hostKind, trackGuid = 'sourceTrack', n.trackGuid end
           if n.kind == 'master' then hasMaster = true end
         end
@@ -435,7 +435,7 @@ function M.compile(user)
     end
 
     local seenSend = {}
-    for _, conn in ipairs(compile.conns) do
+    for _, conn in ipairs(lowerGraph.conns) do
       local fromCls, toCls = cOf[conn.from], cOf[conn.to]
       if fromCls ~= toCls and fromCls ~= '' and toCls ~= '' then
         if masterHosted[toCls] then
