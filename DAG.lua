@@ -13,12 +13,14 @@
 --shape: Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, audio?={ins=number, outs?=number} }
 --invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
 --shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, _opFxGuid?=string }
---invariant: when an edge carries ops (gain / channelMap), lower splices one CU node per op-bundle into the wire. _opFxGuid is the bridge identity of that CU instance in REAPER; lower copies it onto the synthesised cu node's fxGuid. The applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on fx-kind nodes).
+--invariant: when an edge carries ops (gain / channelMap), lower splices one CU bridge per op-bundle into the wire — a kind='fx' compile node with fxIdent=CU_IDENT and a wm-owned params payload ({mode='gain'|'channelRemap', ...}). _opFxGuid is the CU instance's bridge identity in REAPER; lower copies it onto the bridge's fxGuid, and the applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on user-graph fx nodes).
 --shape: CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
---shape: CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, fxGuid?=string, cuMode?='gain'|'channelRemap', cuParams?=table }
+--shape: CompileNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific})
 --shape: Conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
 --shape: TargetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
 local util = require('util')
+
+local CU_IDENT = 'JS:Continuum Utility'
 
 local M = {}
 
@@ -194,13 +196,14 @@ function M.lower(user)
     end
   end
 
-  -- Splice a CU into the wire: mint it, flush head into its port 1, return
-  -- a new head positioned at the CU's port-1 output (audio) / node (MIDI).
-  -- fxGuid (the bridge identity) is copied off the source edge so the
-  -- pipeline can match CU nodes across compiles without index tracking.
-  local function splice(head, cuMode, cuParams, sourceEdge)
-    local id = mintCu({ kind = 'cu', cuMode = cuMode, cuParams = cuParams,
-                        fxGuid = sourceEdge._opFxGuid })
+  -- Splice a CU bridge into the wire: a kind='fx' node carrying
+  -- fxIdent=CU_IDENT and the wm-owned params payload. fxGuid is copied
+  -- off the source edge so the pipeline can match the bridge across
+  -- compiles without index tracking.
+  local function splice(head, params, sourceEdge)
+    local id = mintCu({ kind = 'fx', fxIdent = CU_IDENT,
+                        fxGuid = sourceEdge._opFxGuid,
+                        params = params })
     flush(head, id, head.type == 'audio' and 1 or nil)
     if head.type == 'audio' then
       return { type = 'audio', id = id, port = 1, primary = head.primary }
@@ -212,7 +215,7 @@ function M.lower(user)
     local head = { type = 'audio', id = edge.from,
                    port = edge.fromPort or 1, primary = edge.primary }
     if edge.ops and edge.ops.gain then
-      head = splice(head, 'gain', { gain = edge.ops.gain }, edge)
+      head = splice(head, { mode = 'gain', gain = edge.ops.gain }, edge)
     end
     flush(head, edge.to, edge.toPort or 1)
   end
@@ -220,7 +223,7 @@ function M.lower(user)
   local function lowerMidiEdge(edge)
     local head = { type = 'midi', id = edge.from, primary = edge.primary }
     if edge.ops and edge.ops.channelMap then
-      head = splice(head, 'channelRemap', { map = edge.ops.channelMap }, edge)
+      head = splice(head, { mode = 'channelRemap', map = edge.ops.channelMap }, edge)
     end
     flush(head, edge.to)
   end

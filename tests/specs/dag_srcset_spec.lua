@@ -121,7 +121,7 @@ return {
       }))
       local gainId
       for id, node in pairs(c.nodes) do
-        if node.cuMode == 'gain' then gainId = id end
+        if node.params and node.params.mode == 'gain' then gainId = id end
       end
       t.truthy(gainId)
       t.deepEq(sortedKeys(DAG.srcSet(c, gainId)), { 'guid-s' })

@@ -42,7 +42,8 @@ end
 local function cuCount(nodes, mode)
   local n = 0
   for _, node in pairs(nodes) do
-    if node.kind == 'cu' and (mode == nil or node.cuMode == mode) then
+    if node.fxIdent == 'JS:Continuum Utility'
+       and (mode == nil or (node.params and node.params.mode == mode)) then
       n = n + 1
     end
   end
@@ -84,9 +85,9 @@ return {
       t.eq(cuCount(c.nodes, 'gain'), 1)
       local gainId
       for id, node in pairs(c.nodes) do
-        if node.cuMode == 'gain' then gainId = id end
+        if node.params and node.params.mode == 'gain' then gainId = id end
       end
-      t.eq(c.nodes[gainId].cuParams.gain, 0.5)
+      t.eq(c.nodes[gainId].params.gain, 0.5)
       t.eq(#c.conns, 2)
       t.truthy(hasConn(c.conns, { from = 's',    fromPort = 1, to = gainId, toPort = 1 }))
       t.truthy(hasConn(c.conns, { from = gainId, fromPort = 1, to = 'f',    toPort = 1 }))
@@ -105,7 +106,7 @@ return {
       t.eq(cuCount(c.nodes, 'gain'), 1)
       local gainId
       for id, node in pairs(c.nodes) do
-        if node.cuMode == 'gain' then gainId = id end
+        if node.params and node.params.mode == 'gain' then gainId = id end
       end
       t.eq(#c.conns, 2)
       t.truthy(hasConn(c.conns, { from = gainId, fromPort = 1, to = 'f', toPort = 2 }))
@@ -140,9 +141,9 @@ return {
       t.eq(cuCount(c.nodes, 'channelRemap'), 1)
       local remapId
       for id, node in pairs(c.nodes) do
-        if node.cuMode == 'channelRemap' then remapId = id end
+        if node.params and node.params.mode == 'channelRemap' then remapId = id end
       end
-      t.eq(c.nodes[remapId].cuParams.map, map)
+      t.eq(c.nodes[remapId].params.map, map)
       t.eq(#c.conns, 2)
       t.truthy(hasConn(c.conns, { type = 'midi', from = 's',     to = remapId }))
       t.truthy(hasConn(c.conns, { type = 'midi', from = remapId, to = 'f'     }))

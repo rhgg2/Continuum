@@ -511,23 +511,28 @@ plan when its turn comes.
     + FX (gated by `node.fxGuid` ∈ user graph); `wm:targetState`
     projects `DAG.targetPlan` into the same shape;
     `wm:diff(target, snap)` is a pure WiringOp[] producer. Bridge
-    identity is `fxGuid`, stamped on both fx-kind nodes
+    identity is `fxGuid`, stamped on both user-graph fx nodes
     (`node.fxGuid`) and on edges that carry ops
     (`edge._opFxGuid` → propagated by `DAG.lower` onto the
-    synthesised CU node's `fxGuid`). CU instances flow through
-    snapshot/target/diff uniformly with fx nodes — lowering's whole
-    point. `cuParams` drift triggers `setFXChain` via deep-equal in
-    `fxOrderEq`.
+    synthesised CU bridge's `fxGuid`). CU bridges are ordinary
+    `kind='fx'` compile nodes (`fxIdent='JS:Continuum Utility'`)
+    carrying a `params={ mode='gain'|'channelRemap', ... }`
+    payload — they flow through snapshot/target/diff uniformly
+    with user-graph fx nodes (`kind='cu'` is gone; that's what
+    lowering buys us). `params` drift triggers `setFXChain` via
+    deep-equal in `fxOrderEq`; snapshot never reads params back
+    from REAPER, so a target entry with `params` always drives
+    reconcile until the applier makes the push idempotent.
   - **Left:**
     1. **Applier** (`wm:applyOps(ops, label)`). Walks ops inside
        one `Undo_BeginBlock`; for `setFXChain` entries whose
        `fxGuid=nil` it calls `TrackFX_AddByName`, then
        `wm:mutate`s the user graph to stamp the assigned guid
-       (into `node.fxGuid` for fx nodes, `edge._opFxGuid` for
-       CUs). Op list is full-replace per field; applier reconciles
-       incrementally (delete extras, add missing, move-by-guid)
-       and sets CU params via `TrackFX_SetParam` when cuParams
-       drift.
+       (into `node.fxGuid` for user-graph fx nodes,
+       `edge._opFxGuid` for CU bridges). Op list is full-replace
+       per field; applier reconciles incrementally (delete extras,
+       add missing, move-by-guid) and pushes wm-owned `params`
+       via `TrackFX_SetParam` (resolving slider index by name).
     2. **Live wire-up.** Subscribe to `wiringChanged` →
        `targetState` → `snapshot` → `diff` → `applyOps`. Same path
        reconciles on `wm:load`.

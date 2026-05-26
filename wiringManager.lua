@@ -2,7 +2,7 @@
 -- @noindex
 
 --invariant: every fx-kind node carries fxGuid (nil pre-materialisation, stamped by the applier after TrackFX_AddByName). This is the only stable bridge identity between the user graph and a REAPER FX instance — snapshot and targetState match by it.
---shape: WiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, cuMode?=string, cuParams?=table}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. CU entries appear in fxOrder uniformly with fx entries (ident='JS:Continuum Utility', cuMode/cuParams set) — lower's whole point was to make them ordinary nodes.
+--shape: WiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, params?=table}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. fxOrder entries carrying `params` are wm-owned CU bridges (synthesised kind='fx' nodes from DAG.lower); snapshot never reads params back from REAPER, so any target with `params` drives setFXChain on every reconcile pass.
 --shape: WiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setExtState', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier).
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
@@ -286,21 +286,17 @@ function wm:snapshot()
 end
 
 -- Project the DAG's TargetPlan entry into the WiringSnapshot shape.
--- Compile nodes are either fx-kind (carry fxIdent / fxGuid) or cu-kind
--- (synthetic, carry cuMode / cuParams; ident is the Continuum Utility
--- JSFX). Both flow uniformly into fxOrder — that's what lowering bought
--- us. trackGuid decorated for the hosts we can identify.
+-- Every kind='fx' compile node maps to one fxOrder entry; CU bridges
+-- (also kind='fx', synthesised by lower with `params` set) flow through
+-- uniformly. trackGuid decorated for the hosts we can identify.
 local function projectEntry(planEntry, compileNodes, scratchGuid)
   local fxOrder = {}
   for _, id in ipairs(planEntry.fxOrder) do
     local node = compileNodes[id]
     if node.kind == 'fx' then
-      util.add(fxOrder, { fxGuid = node.fxGuid, ident = node.fxIdent })
-    elseif node.kind == 'cu' then
-      util.add(fxOrder, { fxGuid   = node.fxGuid,
-                          ident    = CU_IDENT,
-                          cuMode   = node.cuMode,
-                          cuParams = util.deepClone(node.cuParams or {}) })
+      local entry = { fxGuid = node.fxGuid, ident = node.fxIdent }
+      if node.params then entry.params = util.deepClone(node.params) end
+      util.add(fxOrder, entry)
     end
   end
   local trackGuid
@@ -315,10 +311,10 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
   }
 end
 
--- CompileNode is a stripped Node (see DAG.copyNodeForCompile). It loses
+-- CompileNode is a stripped Node (see DAG.passthroughNode). It loses
 -- fxGuid; re-attach from the user graph so targetState carries the bridge
--- identity all the way through. CU nodes already carry fxGuid from lower
--- (copied off the source edge's _opFxGuid).
+-- identity all the way through. CU bridges already carry fxGuid from
+-- lower (copied off the source edge's _opFxGuid).
 local function attachFxGuids(compile, graph)
   for id, n in pairs(compile.nodes) do
     if n.kind == 'fx' and graph.nodes[id] then
@@ -347,8 +343,7 @@ local function fxOrderEq(a, b)
   for i = 1, #a do
     local x, y = a[i], b[i]
     if x.fxGuid ~= y.fxGuid or x.ident ~= y.ident then return false end
-    if x.cuMode ~= y.cuMode then return false end
-    if not util.deepEq(x.cuParams or {}, y.cuParams or {}) then return false end
+    if not util.deepEq(x.params or {}, y.params or {}) then return false end
   end
   return true
 end
