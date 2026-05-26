@@ -407,34 +407,61 @@ saw.
 **Wire creation gesture:**
 
 Shift is the wire-creation modifier — pressing it clears any current
-selection. With shift held, hovering a node splits it visually into
-a 2/3-wide audio band (original colour) and a 1/3-wide MIDI band
-(MIDI port colour), with a hover overlay on whichever band the
-cursor is in. If the node has more than one audio output port,
-hovering the audio band also pops out per-port boxes below the node.
+selection. With shift held, hovering a node highlights the whole body
+and pops out a **port band** on whichever of the top or bottom face
+the cursor is nearer (left and right faces are never used).
+
+The band carries three fixed zones, left to right: a chevron **handle ▾**
+on the left body corner, audio **chips** for additional ports centred on
+the body, and the **MIDI keyboard slot** on the right corner. Port 1 is
+not a chip — its wire endpoint is the body itself, so the common path
+("just use Main") needs no aim at a tiny target.
+
+For a node with 2..5 audio ports the band shows chips for ports 2..N
+directly. Past five, the band shows only the handle plus chips for ports
+that already carry a wire ("chip promotion"): unwired ports live
+exclusively in the handle's dropdown, so a 32-out plugin starts as a
+clean body with one handle and grows chips only where wires actually
+land. Chips wrap at five per row, additional rows extending outward from
+the body. Nodes with fewer than two audio ports show no handle and no
+chips; nodes with no MIDI on the relevant side show no keyboard.
+
+The handle, when present, hovers open a **by-name dropdown** anchored
+to it: a vertical list of every audio port including "Main", in port-
+index order, names taken from `nv.outs.audio` / `nv.ins.audio`. The
+list stays open while the cursor is over either the handle or the list
+bounds. Drag from a list row to start a wire anchored at that named
+port; on commit the port promotes to a permanent chip on the body's
+port band. Wired ports stay chipped until the wire is removed.
+
+Cursor-over-body (or anywhere in the band footprint not on a specific
+slot or the handle) highlights audio port 1 as the default; specific
+ports including MIDI are selected by hovering the relevant slot. Each
+slot draws a background patch underneath so any wire passing behind
+doesn't bleed through.
 
 Drag-start fixes the wire kind:
 
-- audio band → audio wire from port 1
-- popped-out port box → audio wire from that port
-- MIDI band → MIDI wire
+- body or audio chip → audio wire from that port (port 1 by default)
+- keyboard slot → MIDI wire
+- dropdown list row → audio wire from the named port, with that port
+  promoted to a chip on commit
 
 Shift may be released once the drag is underway. As the cursor enters
-another node, the target highlights and the feedback depends on the
-in-flight wire kind: a MIDI wire tints the whole target in the MIDI
-colour; an audio wire shows only the overlay, and if the target has
-more than one audio input port, pops the input boxes out *above* the
-node. Cycle-forming targets — the source itself and its transitive
+another node, the target highlights and the feedback uses the same
+band affordance, filtered to the draft's type — an audio draft only
+shows the target's audio zones (chips + handle), a MIDI draft only the
+keyboard. Cycle-forming targets — the source itself and its transitive
 ancestors (nodes that already reach the source) — are ineligible and
 suppress all of this; the check uses each node's parent list, walked
-transitively at drag-start. Drop
-completes the wire — on the node body it lands on port 1 (audio) or
-the sole MIDI port; on a popped-out port box it lands on that port.
-Release over empty canvas cancels.
+transitively at drag-start. Drop completes the wire: on the body it
+lands on the default slot for the draft type (audio port 1, or the
+sole MIDI port); on a specific slot it lands on that port. Release
+over empty canvas cancels.
 
-Nodes with nothing to drag from on a side — the master node's audio
-band (no outs), an FX with zero audio outs, etc. — suppress that
-side's split and hover the full-width node instead.
+Nodes with no matching ports on the relevant side — the master node's
+outputs, an FX with no audio outs and no MIDI, etc. — show no band and
+suppress the hover affordance entirely.
 
 **Coordinator wiring:**
 

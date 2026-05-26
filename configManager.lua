@@ -125,7 +125,8 @@ local declarations = {
   { 'palette.positive',  hex('#568a40') },
   { 'palette.amber',     hex('#dcb432') },
   { 'palette.steel',     hex('#6482a0') },
-  { 'palette.pale',      hex('#f7f7f4') },
+  { 'palette.pale',      hex('#e9e7df') },
+  { 'palette.white',     hex('#f7f7f4') },
   { 'palette.night',     hex('#252936') },
   { 'palette.nightText', hex('#cfcfde') },
   { 'palette.slate',     hex('#79829f') },  -- matches chrome.bg; named for use as a palette atom
@@ -146,13 +147,12 @@ local declarations = {
   { 'colour.shadowed',         'colour.inactive'                  },
   { 'colour.cursor',           'palette.night'                    },
   { 'colour.cursorText',       'palette.nightText'                },
-  { 'colour.arrangeCursor',       {'palette.pale',  0.2}         },  -- cream fill, take shows through
-  { 'colour.arrangeCursorBorder', {'palette.shade'}          },
+  { 'colour.arrangeCursorBorder', 'palette.shade'                 },
   { 'colour.rowNormal',        {'palette.bg',         0   }       },
   { 'colour.rowBeat',          {'palette.highlight',  0.4 }       },
   { 'colour.rowBarStart',      {'palette.mid',        0.4 }       },
   { 'colour.editCursor',       hex('#ffff00')                     },  -- one-off yellow
-  { 'colour.selection',        {'palette.pale',       0.5 }       },
+  { 'colour.selection',        {'palette.white',       0.5 }       },
   { 'colour.scrollHandle',     'colour.text'                      },
   { 'colour.scrollBg',         'colour.bg'                        },
   { 'colour.accent',           'palette.mid'                      },
@@ -201,18 +201,18 @@ local declarations = {
   { 'colour.wiring.node.error',     'palette.caution' },  -- outline stroke for nodes in a capacity-overflowing class
   { 'colour.wiring.port.audio',     'palette.shade'  },
   { 'colour.wiring.port.midi',      'palette.steel'  },
-  { 'colour.wiring.tooltip.bg',     'palette.pale'   },  -- pale popup bg so the body's dark text reads
+  { 'colour.wiring.tooltip.bg',     'palette.pale' },  -- matches toolbar (pale slate); body's dark text reads against it
 
   -- Chrome roles — toolbar (top band) and statusBar (bottom band).
   -- They share the chrome palette today; split aliases let either diverge.
-  { 'colour.toolbar.bg',           {'palette.pale', 0.5}          },
+  { 'colour.toolbar.bg',           'palette.pale'                  },
   { 'colour.toolbar.text',         'palette.shade'                 },
-  { 'colour.toolbar.button',       'palette.pale',                 },
-  { 'colour.toolbar.buttonHover',  {'palette.pale',  0.42 }       },
-  { 'colour.toolbar.buttonActive', {'palette.pale',  0.62 }       },
+  { 'colour.toolbar.button',       'palette.white',                },
+  { 'colour.toolbar.buttonHover',  'palette.pale'                  },
+  { 'colour.toolbar.buttonActive', 'palette.bg',                   },
   { 'colour.toolbar.buttonBorder', {'palette.mid',    0.35  }       },
   { 'colour.toolbar.checkMark',    'palette.shade'                 },
-  { 'colour.toolbar.popupBg',      'palette.pale'                  },
+  { 'colour.toolbar.popupBg',      'palette.white'                  },
   { 'colour.statusBar.bg',         'chrome.bg'                    },
   { 'colour.statusBar.text',       'chrome.highlight'             },
   -- Pre-blended `0.5*pale + 0.5*bg`; a literal alias would render translucent over a different parent.

@@ -4,7 +4,7 @@
 --invariant: render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
 --invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
---invariant: at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; shift-gated split-band hover drives wire creation, see design/wiring.md.
+--invariant: at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; shift-gated port-row hover drives wire creation — per-face layout is [handle ▾][audio chips for ports 2..N centred][midi keyboard], handle pinned to left corner, midi to right corner. body-default = port 1; audio chips render only when 2 ≤ #audio ≤ PORTS_PER_ROW; >PORTS_PER_ROW outs surface via the handle's dropdown (Slice A2). top/bottom faces only. See design/wiring.md.
 
 local util = require 'util'
 
@@ -20,6 +20,8 @@ local cm, cmgr, chrome, gui, modalHost =
 local ctx      = gui and gui.ctx or nil
 local wireFont = gui and gui.wireFont or nil
 local wireSize = gui and gui.fontSize and gui.fontSize.wire or 14
+local uiFont   = gui and gui.uiFont or nil
+local uiSize   = gui and gui.fontSize and gui.fontSize.ui or 12
 
 local wv = util.instantiate('wiringView', { cm = cm, cmgr = cmgr })
 
@@ -84,16 +86,23 @@ local LABEL_PAD        = 4   -- inner horizontal padding for the wrapped name
 local LABEL_MAX_LINES  = 2
 local LABEL_ELLIPSIS   = '…'
 local PORT_SIZE        = 8
-local PORT_GAP         = 4
+local PORT_GAP         = 6
 local PORT_BAND_OFFSET = 6   -- gap between node edge and the hover-only port row
 local PORT_HIT_PAD     = 4   -- hit area extends this far beyond the visual square on each side
 local PORT_TOOLTIP_GAP = 4   -- pixels between port top and tooltip bottom edge
-local KEYBOARD_GAP     = 6   -- gap between node right edge and the midi keyboard icon
-
--- How far port geometry reaches past a node edge. Drives the node-level
--- hover inflation so the row stays drawn while the mouse is anywhere in
--- the padded hit area.
-local PORT_REACH = PORT_BAND_OFFSET + PORT_SIZE + PORT_HIT_PAD
+local PORTS_PER_ROW    = 5   -- audio rows wrap after this many ports
+local MIDI_SLOT_W      = 13  -- keyboard slot is wider/taller than the audio
+local MIDI_SLOT_H      = 11  -- 8×8 square; intrinsic icon dimensions
+local MIDI_INSET       = 3   -- px between midi icon and popup-right rounded corner
+local HANDLE_W         = 13  -- spillover-list chevron, mirrors midi slot envelope
+local HANDLE_H         = 11
+local HANDLE_INSET     = 4   -- slightly more inset than midi so the caret reads as off-edge
+local PORT_ROW_H       = 11  -- tallest slot in the row; defines the shared centreline
+local LIST_GAP         = 4   -- pixel gap between handle and dropdown list; the list.hitRect extends back across this gap so chevron-to-list traversal has no dead zone
+local CLICK_THRESH     = 4   -- mouseup within this many pixels of mousedown counts as a click, not a drag
+local LIST_ROW_PAD_X   = 8
+local LIST_ROW_PAD_Y   = 1
+local LIST_CORNER_R    = 4
 
 local WIRE_GAP        = 14    -- perpendicular pitch between parallel wires in the same pair-group
 local WIRE_THICK      = 1
@@ -129,8 +138,26 @@ local WIRE_LABEL_LEAD = 6     -- gap from node rect edge to label's near edge, m
 -- anywhere else (band). All three are mutually exclusive while live.
 local drag      = nil  -- { mx0, my0, starts = { [id] = {x,y}, … } }
 local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
-local wireDraft = nil  -- { type='audio'|'midi', fromId, fromPort?, ancestors }
+local wireDraft = nil  -- { type='audio'|'midi', fromId, fromPort?, ancestors, mx0, my0, fromList }
 local shiftWas  = false
+-- Per-node set of audio port indices the user has explicitly pinned via
+-- click-without-drag on a list row. Persists across binds but not across
+-- project loads (page-local; future work to lift this into wm so it
+-- round-trips with the graph).
+local pinned     = {}   -- pinned[nodeId][portIdx] = true
+-- Which node's spillover list is currently engaged. Set when the cursor
+-- crosses the chevron; cleared when the cursor leaves chevron + list, or
+-- on any mouseclick. Cursor in list area without prior chevron crossing
+-- does NOT engage — the popup is gated tight on the chevron.
+local listOpenId = nil
+-- After click-pinning a port from the spillover list, the pinned node's
+-- port row stays popped up even when the cursor isn't on it. Cleared on
+-- shift-release, on any mouseclick, or when natural hover engages this
+-- *same* node (the user has come back to it). Hovering some other node
+-- does NOT clear sticky — both overlays render simultaneously. Side is
+-- captured at pin-time so the sticky row doesn't flip top/bottom as the
+-- cursor moves around the canvas.
+local sticky = nil  -- { nodeId, side }
 
 -- Last canvas origin, captured at the top of renderCanvas. Lets openFxPicker
 -- (called from the N-key dispatch path, which runs after renderCanvas exits)
@@ -152,7 +179,7 @@ end
 
 ----- Drawing
 
-local SELECTED_INFLATE = 2
+local SELECTED_INFLATE = 0   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
 local SELECTED_STROKE  = 2
 
 -- Split a single whitespace-free word into pieces at CamelCase boundaries
@@ -272,23 +299,73 @@ local function drawNode(dl, nv, ox, oy, isSelected)
   if wireFont then ImGui.PopFont(ctx) end
 end
 
--- One port: filled square + invisible button (padded outward so the
--- hit area is comfortably larger than the 8px visual) and a tooltip
--- anchored right above the port. The InvisibleButton advances the
--- layout cursor; caller restores it before reserving canvas area.
-local function drawPort(dl, px, y, colour, idStem, name)
-  ImGui.DrawList_AddRectFilled(dl, px, y, px + PORT_SIZE, y + PORT_SIZE, colour)
-  local hit = PORT_SIZE + 2 * PORT_HIT_PAD
-  ImGui.SetCursorScreenPos(ctx, px - PORT_HIT_PAD, y - PORT_HIT_PAD)
-  ImGui.InvisibleButton(ctx, idStem, hit, hit)
-  if ImGui.IsItemHovered(ctx, ImGui.HoveredFlags_ForTooltip) then
+-- Small piano-keyboard icon (C, C#, D, D#, E): 3 outlined white keys with
+-- 2 filled black keys overlaying the C-D and D-E boundaries. Drawn with
+-- its top-left at (x,y), occupying MIDI_SLOT_W × MIDI_SLOT_H. Stand-in
+-- for the midi tint — later this will gain an in/out arrow to distinguish
+-- direction.
+local function drawKeyboardIcon(dl, x, y)
+  local col      = chrome.colour('text')
+  local kw, kh   = 4, 10
+  local bw, bh   = 2, 5
+  local ix0, iy0 = math.floor(x), math.floor(y)
+  for i = 0, 2 do
+    local kx = ix0 + i * kw
+    ImGui.DrawList_AddRect(dl, kx, iy0, kx + kw + 1, iy0 + kh + 1, col, 0, 0, 1)
+  end
+  for _, i in ipairs{ 1, 2 } do
+    local cx  = ix0 + i * kw
+    local bx0 = math.floor(cx - bw / 2)
+    ImGui.DrawList_AddRectFilled(dl, bx0, iy0, bx0 + bw + 1, iy0 + bh + 1, col)
+  end
+end
+
+-- Spillover-list handle: a small chevron pointing outward in the direction
+-- the dropdown will open (down on the bottom face, up on the top face).
+-- Same envelope as the midi keyboard so the two corner chips read as
+-- mirrored. Inert at Slice A1 — A2 wires the hover-dropdown. The band-
+-- level bg rect drawn by drawPortRow handles wire occlusion.
+local function drawHandle(dl, handle, side)
+  local col = chrome.colour('text')
+  local cx, cy = handle.x + handle.w / 2, handle.y + handle.h / 2
+  local hx, hy = 4, 3
+  if side == 'bottom' then
+    ImGui.DrawList_AddTriangleFilled(dl,
+      cx - hx, cy - hy, cx + hx, cy - hy, cx, cy + hy, col)
+  else
+    ImGui.DrawList_AddTriangleFilled(dl,
+      cx - hx, cy + hy, cx + hx, cy + hy, cx, cy - hy, col)
+  end
+end
+
+-- One port-row slot: the filled audio square or keyboard icon, plus an
+-- InvisibleButton (padded outward so the hit area is comfortably larger
+-- than the visual) and a tooltip anchored just above. Wire occlusion is
+-- handled at the band level by drawPortRow's bgRect, so no per-slot patch.
+-- The InvisibleButton advances the layout cursor; renderCanvas's trailing
+-- Dummy restores it.
+local function drawSlot(dl, slot, idStem, audioCol)
+  if slot.kind == 'audio' then
+    ImGui.DrawList_AddRectFilled(dl, slot.x, slot.y,
+      slot.x + slot.w, slot.y + slot.h, audioCol)
+  else
+    drawKeyboardIcon(dl, slot.x, slot.y)
+  end
+  local pad = PORT_HIT_PAD
+  ImGui.SetCursorScreenPos(ctx, slot.x - pad, slot.y - pad)
+  ImGui.InvisibleButton(ctx, idStem, slot.w + 2 * pad, slot.h + 2 * pad)
+  -- AllowWhenBlockedByActiveItem lets target tooltips fire while the
+  -- source chip's InvisibleButton is the active item (mid wire-drag).
+  local hoverFlags = ImGui.HoveredFlags_ForTooltip
+                   | ImGui.HoveredFlags_AllowWhenBlockedByActiveItem
+  if slot.name and ImGui.IsItemHovered(ctx, hoverFlags) then
     ImGui.SetNextWindowPos(ctx,
-      px + PORT_SIZE / 2, y - PORT_TOOLTIP_GAP,
+      slot.x + slot.w / 2, slot.y - PORT_TOOLTIP_GAP,
       ImGui.Cond_Always, 0.5, 1.0)
     ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg, chrome.colour('wiring.tooltip.bg'))
     ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 4, 2)
     if ImGui.BeginTooltip(ctx) then
-      ImGui.Text(ctx, name)
+      ImGui.Text(ctx, slot.name)
       ImGui.EndTooltip(ctx)
     end
     ImGui.PopStyleVar(ctx, 1)
@@ -296,217 +373,454 @@ local function drawPort(dl, px, y, colour, idStem, name)
   end
 end
 
------ Wire-creation gesture helpers
+-- Selection-style outline around the whole body, used for both source-side
+-- and target-side hover — no more split-band shape.
+local function drawBodyOutline(dl, nv, ox, oy)
+  local lx0, ly0, lx1, ly1 = nodeRect(nv)
+  ImGui.DrawList_AddRect(dl,
+    ox + lx0 - SELECTED_INFLATE, oy + ly0 - SELECTED_INFLATE,
+    ox + lx1 + SELECTED_INFLATE, oy + ly1 + SELECTED_INFLATE,
+    chrome.colour('wiring.node.selected'), CORNER_R, 0, SELECTED_STROKE)
+end
 
-local AUDIO_BAND_FRAC = 2/3  -- left 2/3 = audio band, right 1/3 = midi band
+----- Wire-creation gesture helpers
 
 local function inRect(px, py, x0, y0, x1, y1)
   return px >= x0 and px <= x1 and py >= y0 and py <= y1
 end
 
--- Which side of a body rect the cursor is closest to. Used for the
--- drop-target popout: the user can approach a target from any direction,
--- so the port row hangs off whichever edge is nearest the cursor.
-local function nearestSide(mx, my, x0, y0, x1, y1)
-  local dT, dB = math.abs(my - y0), math.abs(my - y1)
-  local dL, dR = math.abs(mx - x0), math.abs(mx - x1)
-  local d = math.min(dT, dB, dL, dR)
-  if     d == dT then return 'top'
-  elseif d == dB then return 'bottom'
-  elseif d == dL then return 'left'
-  else                return 'right' end
+-- By-name dropdown anchored to a node's handle: one row per audio port
+-- (port-index order, names from `audio`). Grows outward from the handle
+-- in the band's direction. Uses the small ui font so a 32-row list stays
+-- a reasonable height. Rows are chunky boxes with tight bounds (no hit
+-- pad), so adjacent-row hit tests don't bleed into each other. The
+-- returned hitRect extends LIST_GAP toward the handle so chevron → list
+-- traversal has no dead zone even with the handle's hit area sized to
+-- the chevron alone.
+local function layoutList(audio, handle, side)
+  if not handle or #audio < 2 then return nil end
+  if uiFont then ImGui.PushFont(ctx, uiFont, uiSize) end
+  local _, lineH = ImGui.CalcTextSize(ctx, 'Mg')
+  local rowH = math.floor(lineH + 2 * LIST_ROW_PAD_Y)
+  local maxW = handle.w
+  for _, name in ipairs(audio) do
+    local w = ImGui.CalcTextSize(ctx, name) + 2 * LIST_ROW_PAD_X
+    if w > maxW then maxW = w end
+  end
+  if uiFont then ImGui.PopFont(ctx) end
+  local n     = #audio
+  local listX = handle.x
+  local listY = (side == 'bottom') and (handle.y + handle.h + LIST_GAP)
+                                    or (handle.y - LIST_GAP - n * rowH)
+  local rows = {}
+  for i, name in ipairs(audio) do
+    rows[i] = { kind = 'audio', portIdx = i, name = name,
+                x = listX, y = listY + (i - 1) * rowH,
+                w = maxW, h = rowH }
+  end
+  local rect    = { listX, listY, listX + maxW, listY + n * rowH }
+  local hitRect = (side == 'bottom')
+                  and { rect[1], rect[2] - LIST_GAP, rect[3], rect[4] }
+                  or  { rect[1], rect[2],            rect[3], rect[4] + LIST_GAP }
+  return { rows = rows, rect = rect, hitRect = hitRect }
 end
 
--- Pop-out audio port positions. side='bottom'/'top' lays out a horizontal
--- row centred on the body's x range; 'left'/'right' lays out a vertical
--- column centred on the y range. Returns the port name list and a parallel
--- list of {x,y} top-left corners. Shared by hit-test and draw so both stay
--- in lock-step.
-local function audioPortPositions(nv, ox, oy, dir, side)
+-- Per-face layout: handle ▾ pinned to the left body corner, audio chips
+-- for ports 2..N centred (port 1 lives on the body itself, no chip), midi
+-- keyboard pinned to the right. Audio chips render only when
+-- 2 ≤ #audio ≤ PORTS_PER_ROW; the >PORTS_PER_ROW case shows chips for
+-- currently-wired ports only (Slice A3). hoverRect = body ∪ slot/handle
+-- hit pads, so cursor traversal between zones keeps the hover live. keep
+-- filters mismatched kinds during target-side hover (audio draft hides
+-- midi and the handle; midi draft hides audio chips and the handle).
+-- forceSide pins the face for sticky overlays (where the cursor isn't
+-- over the node so my can't pick the side); natural hover passes nil.
+local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
   local lx0, ly0, lx1, ly1 = nodeRect(nv)
-  local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
-  local ports = (dir == 'out') and nv.outs.audio or nv.ins.audio
-  local count = #ports
-  local positions = {}
-  if count == 0 then return ports, positions end
-  if side == 'top' or side == 'bottom' then
-    local rowW   = count * PORT_SIZE + (count - 1) * PORT_GAP
-    local startX = math.floor((x0 + x1 - rowW) / 2)
-    local y      = (side == 'bottom') and (y1 + PORT_BAND_OFFSET)
-                                      or  (y0 - PORT_BAND_OFFSET - PORT_SIZE)
-    for i = 1, count do
-      positions[i] = { x = startX + (i - 1) * (PORT_SIZE + PORT_GAP), y = y }
+  local bx0, by0, bx1, by1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
+  local audio = (dir == 'out') and nv.outs.audio or nv.ins.audio
+  local midi  = (dir == 'out') and nv.outs.midi  or nv.ins.midi
+  local nAudio     = #audio
+  local showHandle = (nAudio >= 2) and (keep ~= 'midi')
+  local showMidi   = (#midi >= 1) and (keep ~= 'audio')
+
+  local side  = forceSide
+             or ((my < (by0 + by1) / 2) and 'top' or 'bottom')
+  local sign  = (side == 'bottom') and 1 or -1
+  local edge  = (side == 'bottom') and by1 or by0
+  local depth = edge + sign * PORT_BAND_OFFSET
+
+  -- All slots in a given row share the row's horizontal centreline so the
+  -- chevron, squares and keyboard read as aligned despite differing heights.
+  local function rowCentre(rowIdx)
+    return depth + sign * (rowIdx * (PORT_ROW_H + PORT_BAND_OFFSET)
+                           + PORT_ROW_H / 2)
+  end
+  local function placeOnRow(slot, rowIdx)
+    slot.y = math.floor(rowCentre(rowIdx or 0) - slot.h / 2)
+  end
+
+  -- Chip set: natural ports 2..N when N ≤ PORTS_PER_ROW, plus any pinned
+  -- by the user via click-without-drag on a list row. Sorted ascending
+  -- and wrapped onto outward rows at PORTS_PER_ROW per row.
+  local chipSet = {}
+  if showHandle then
+    if nAudio <= PORTS_PER_ROW then
+      for i = 2, nAudio do chipSet[i] = true end
     end
-  else
-    local colH   = count * PORT_SIZE + (count - 1) * PORT_GAP
-    local startY = math.floor((y0 + y1 - colH) / 2)
-    local x      = (side == 'right') and (x1 + PORT_BAND_OFFSET)
-                                     or  (x0 - PORT_BAND_OFFSET - PORT_SIZE)
-    for i = 1, count do
-      positions[i] = { x = x, y = startY + (i - 1) * (PORT_SIZE + PORT_GAP) }
+    local p = pinned[nv.id]
+    if p then
+      for k in pairs(p) do
+        if k >= 2 and k <= nAudio then chipSet[k] = true end
+      end
     end
   end
-  return ports, positions
+  local chipPorts = {}
+  for k in pairs(chipSet) do chipPorts[#chipPorts + 1] = k end
+  table.sort(chipPorts)
+
+  local handle
+  if showHandle then
+    handle = { kind = 'handle', x = bx0 + HANDLE_INSET,
+               w = HANDLE_W, h = HANDLE_H }
+    placeOnRow(handle)
+  end
+
+  local slots = {}
+  local nChips = #chipPorts
+  if nChips > 0 then
+    local nRows = math.ceil(nChips / PORTS_PER_ROW)
+    for r = 0, nRows - 1 do
+      local first = r * PORTS_PER_ROW + 1
+      local last  = math.min(first + PORTS_PER_ROW - 1, nChips)
+      local rowN  = last - first + 1
+      local rowW  = rowN * PORT_SIZE + (rowN - 1) * PORT_GAP
+      local startX = math.floor((bx0 + bx1 - rowW) / 2)
+      for k = 0, rowN - 1 do
+        local portIdx = chipPorts[first + k]
+        local s = {
+          kind = 'audio', portIdx = portIdx, name = audio[portIdx],
+          x = startX + k * (PORT_SIZE + PORT_GAP),
+          w = PORT_SIZE, h = PORT_SIZE,
+        }
+        placeOnRow(s, r)
+        slots[#slots + 1] = s
+      end
+    end
+  end
+  if showMidi then
+    local s = { kind = 'midi', name = midi[1],
+                x = bx1 - MIDI_SLOT_W - MIDI_INSET,
+                w = MIDI_SLOT_W, h = MIDI_SLOT_H }
+    placeOnRow(s)
+    slots[#slots + 1] = s
+  end
+
+  -- bandRect is the slot/handle bbox (with hit pad); the band-level bg
+  -- rect drawn behind everything occludes wires passing under the row.
+  -- hoverRect = body ∪ bandRect so cursor traversal between zones stays live.
+  local bandRect
+  local function extend(s)
+    if not s then return end
+    local x0, y0 = s.x - PORT_HIT_PAD, s.y - PORT_HIT_PAD
+    local x1, y1 = s.x + s.w + PORT_HIT_PAD, s.y + s.h + PORT_HIT_PAD
+    if not bandRect then bandRect = { x0, y0, x1, y1 }
+    else
+      if x0 < bandRect[1] then bandRect[1] = x0 end
+      if y0 < bandRect[2] then bandRect[2] = y0 end
+      if x1 > bandRect[3] then bandRect[3] = x1 end
+      if y1 > bandRect[4] then bandRect[4] = y1 end
+    end
+  end
+  for _, s in ipairs(slots) do extend(s) end
+  extend(handle)
+
+  -- The handle's by-name dropdown is computed alongside the band so its
+  -- area joins hoverRect; this lets the cursor traverse handle → list
+  -- without losing engagement with the node.
+  local list = layoutList(audio, handle, side)
+
+  local hoverRect = { bx0, by0, bx1, by1 }
+  local function unionInto(r)
+    if not r then return end
+    if r[1] < hoverRect[1] then hoverRect[1] = r[1] end
+    if r[2] < hoverRect[2] then hoverRect[2] = r[2] end
+    if r[3] > hoverRect[3] then hoverRect[3] = r[3] end
+    if r[4] > hoverRect[4] then hoverRect[4] = r[4] end
+  end
+  -- list.hitRect is intentionally NOT unioned here — cursor-in-list does
+  -- not engage the popup. shiftHoverHit / dropTargetHit extend the hover
+  -- area with list.hitRect only after the chevron has been crossed.
+  unionInto(bandRect)
+
+  -- popup: NODE_W-wide rounded rect that overlaps the body's near edge by
+  -- 2*CORNER_R (so the popup's own rounded corners hide inside the body's
+  -- solid region; if overlap were just CORNER_R the popup's corner wedge
+  -- would line up with the body's corner wedge and the canvas would show
+  -- through instead of the popup colour) and extends past the bandRect on
+  -- the far side. Drawn before the node so the body overpaints the overlap.
+  local POPUP_PAD     = 3
+  local POPUP_OVERLAP = 2 * CORNER_R
+  local popup
+  if bandRect then
+    if side == 'bottom' then
+      popup = { bx0, by1 - POPUP_OVERLAP, bx1, bandRect[4] + POPUP_PAD }
+    else
+      popup = { bx0, bandRect[2] - POPUP_PAD, bx1, by0 + POPUP_OVERLAP }
+    end
+  end
+
+  return { slots = slots, handle = handle, bandRect = bandRect, list = list,
+           hoverRect = hoverRect, side = side, popup = popup }
 end
 
-local function audioPortHit(nv, mx, my, ox, oy, dir, side)
-  local _, positions = audioPortPositions(nv, ox, oy, dir, side)
-  for i, p in ipairs(positions) do
-    if inRect(mx, my, p.x - PORT_HIT_PAD, p.y - PORT_HIT_PAD,
-              p.x + PORT_SIZE + PORT_HIT_PAD, p.y + PORT_SIZE + PORT_HIT_PAD) then
-      return i
+local function slotHit(slots, mx, my)
+  for _, s in ipairs(slots) do
+    if inRect(mx, my,
+              s.x - PORT_HIT_PAD, s.y - PORT_HIT_PAD,
+              s.x + s.w + PORT_HIT_PAD, s.y + s.h + PORT_HIT_PAD) then
+      return s
     end
   end
 end
 
--- Which sides of the node have OUTPUTS (drives the source-side band shape).
-local function sourceSides(nv)
-  return { audio = #nv.outs.audio > 0, midi = #nv.outs.midi > 0 }
+-- Tight hit-test for list rows (no pad — rows are full-height boxes
+-- packed back-to-back, so padding would overlap into the neighbour).
+local function rowHit(rows, mx, my)
+  for _, r in ipairs(rows) do
+    if mx >= r.x and mx <= r.x + r.w and my >= r.y and my <= r.y + r.h then
+      return r
+    end
+  end
 end
 
--- Which sides of the node have INPUTS (drives the target-side band shape).
-local function targetSides(nv)
-  return { audio = #nv.ins.audio > 0, midi = #nv.ins.midi > 0 }
+-- Default slot when the cursor is over the body alone (no specific slot
+-- under it). Audio port 1 if any audio in this direction, else the
+-- keyboard. `keep` biases the default for target-side hover: a midi draft
+-- defaults to the keyboard, an audio draft to port 1.
+local function defaultSlot(nv, dir, keep)
+  local audio = (dir == 'out') and nv.outs.audio or nv.ins.audio
+  local midi  = (dir == 'out') and nv.outs.midi  or nv.ins.midi
+  if keep ~= 'midi' and #audio > 0 then
+    return { kind = 'audio', portIdx = 1, name = audio[1] }
+  end
+  if keep ~= 'audio' and #midi > 0 then
+    return { kind = 'midi', name = midi[1] }
+  end
 end
 
--- Source-side hover (shift held, no draft). Returns {nv, band, portIdx?} or
--- nil. Either band of the body, or a popped-out output port box. Source
--- popout always hangs below — drag-FROM is stable, no need to chase the
--- cursor with the row.
+-- Cursor over the chevron's visible bounds (no pad — popup gating is tight).
+local function onChevron(handle, mx, my)
+  return handle
+     and inRect(mx, my, handle.x, handle.y,
+                handle.x + handle.w, handle.y + handle.h)
+end
+
+-- Common hover lookup (body + band only — list engagement is handled by
+-- shiftHoverHit / dropTargetHit). Priority: chip/midi → chevron → body-
+-- default. A non-nil list on the returned pick signals "chevron just hit,
+-- engage this node's list"; the orchestrating caller mutates listOpenId
+-- accordingly. Cursor in the list area without a prior chevron crossing
+-- is rejected here — the engaged-node fast-path adds list.hitRect to the
+-- hover area only after engagement.
+local function pickHovered(nv, layout, mx, my, dir, keep)
+  local r = layout.hoverRect
+  if not inRect(mx, my, r[1], r[2], r[3], r[4]) then return nil end
+  local hit = slotHit(layout.slots, mx, my)
+  if hit then
+    return { nv = nv, layout = layout, slot = hit }
+  end
+  if onChevron(layout.handle, mx, my) then
+    return { nv = nv, layout = layout, slot = nil, list = layout.list }
+  end
+  local def = defaultSlot(nv, dir, keep)
+  if def then
+    return { nv = nv, layout = layout, slot = def }
+  end
+end
+
+-- True when the cursor is still engaged with a node's open spillover —
+-- either on the chevron or anywhere in the list's hit rect.
+local function stillEngaged(layout, mx, my)
+  local list = layout.list
+  if not list then return false end
+  if onChevron(layout.handle, mx, my) then return true end
+  local r = list.hitRect
+  return inRect(mx, my, r[1], r[2], r[3], r[4])
+end
+
+-- Source-side hover (shift held, no draft). Manages listOpenId: if a list
+-- is currently open, that node has priority and its list.hitRect counts
+-- as engagement; otherwise the cursor must hit the chevron to engage.
+-- Side effect: clears sticky if natural hover lands on the sticky node
+-- (the "cursor returned to the pinned node" condition). Hovering some
+-- other node leaves sticky alone — both overlays render simultaneously.
 local function shiftHoverHit(nodeViews, mx, my, ox, oy)
-  for _, nv in ipairs(nodeViews) do
-    local sides = sourceSides(nv)
-    if sides.audio or sides.midi then
-      local lx0, ly0, lx1, ly1 = nodeRect(nv)
-      local bx0, by0 = ox + lx0, oy + ly0
-      local bx1, by1 = ox + lx1, oy + ly1
-      if inRect(mx, my, bx0, by0, bx1, by1) then
-        local band
-        if sides.audio and sides.midi then
-          band = (mx < bx0 + (bx1 - bx0) * AUDIO_BAND_FRAC) and 'audio' or 'midi'
-        else
-          band = sides.audio and 'audio' or 'midi'
+  local function consume(pick)
+    if pick.list then listOpenId = pick.nv.id end
+    if sticky and sticky.nodeId == pick.nv.id then sticky = nil end
+    return pick
+  end
+  if listOpenId then
+    for _, nv in ipairs(nodeViews) do
+      if nv.id == listOpenId then
+        local layout = layoutPortRow(nv, ox, oy, 'out', mx, my, nil)
+        if stillEngaged(layout, mx, my) then
+          return consume{ nv = nv, layout = layout, list = layout.list,
+                          slot = rowHit(layout.list.rows, mx, my) }
         end
-        return { nv = nv, band = band }
-      end
-      if sides.audio and #nv.outs.audio > 1 then
-        local i = audioPortHit(nv, mx, my, ox, oy, 'out', 'bottom')
-        if i then return { nv = nv, band = 'audio', portIdx = i } end
+        break
       end
     end
+    listOpenId = nil
   end
-end
-
--- Target-side hover (draft in flight). Returns {nv, side, portIdx?} or nil.
--- side is which body edge the cursor is closest to — drives where an audio
--- draft's input popout shows. Audio drafts also accept a popped-out input
--- port hanging off that side.
-local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
   for _, nv in ipairs(nodeViews) do
-    local lx0, ly0, lx1, ly1 = nodeRect(nv)
-    local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
-    if inRect(mx, my, x0, y0, x1, y1) then
-      return { nv = nv, side = nearestSide(mx, my, x0, y0, x1, y1) }
-    end
-    if draft.type == 'audio' and #nv.ins.audio > 1 then
-      local side = nearestSide(mx, my, x0, y0, x1, y1)
-      local i = audioPortHit(nv, mx, my, ox, oy, 'in', side)
-      if i then return { nv = nv, side = side, portIdx = i } end
+    if #nv.outs.audio > 0 or #nv.outs.midi > 0 then
+      local layout = layoutPortRow(nv, ox, oy, 'out', mx, my, nil)
+      local pick = pickHovered(nv, layout, mx, my, 'out', nil)
+      if pick then return consume(pick) end
     end
   end
 end
 
--- Refuse self / ancestors (cycle), and any target lacking an input port
--- of the draft's type. DAG.validate would catch them too, but hover-time
--- rejection gives instant visual feedback rather than a silent drop with
--- no edge appearing.
+-- Build a port-row overlay for the sticky node (the one whose list-row
+-- click pinned a port). Cursor-independent: uses the pinned-side stored
+-- at click-time so the overlay doesn't flip top/bottom as the cursor
+-- moves around. Defaults the slot highlight to port 1 / midi keyboard.
+local function stickyHoverHit(nodeViews, ox, oy)
+  if not sticky then return nil end
+  for _, nv in ipairs(nodeViews) do
+    if nv.id == sticky.nodeId
+       and (#nv.outs.audio > 0 or #nv.outs.midi > 0) then
+      local layout = layoutPortRow(nv, ox, oy, 'out', 0, 0, nil, sticky.side)
+      return { nv = nv, layout = layout, slot = defaultSlot(nv, 'out', nil) }
+    end
+  end
+  sticky = nil  -- node no longer exists in the graph
+end
+
+-- Keep the draft's source node's port row visible while the click-hold is
+-- in flight. Without this the popup flashes off the moment wireDraft is
+-- set (mousedown suppresses sourceHit) and back on once sticky is set on
+-- mouseup. Highlights the slot the draft started from when it's findable
+-- in the chip set (chip click / midi); nil otherwise (list-row pin not
+-- yet effective, or body-default port 1).
+local function findLayoutSlot(layout, slotKind, portIdx)
+  for _, s in ipairs(layout.slots) do
+    if s.kind == slotKind
+       and (slotKind ~= 'audio' or s.portIdx == portIdx) then
+      return s
+    end
+  end
+end
+local function draftSourceHoverHit(nodeViews, ox, oy)
+  if not wireDraft then return nil end
+  for _, nv in ipairs(nodeViews) do
+    if nv.id == wireDraft.fromId then
+      local layout = layoutPortRow(nv, ox, oy, 'out', 0, 0, nil,
+                                   wireDraft.fromSide)
+      return { nv = nv, layout = layout,
+               slot = findLayoutSlot(layout, wireDraft.type,
+                                     wireDraft.fromPort) }
+    end
+  end
+end
+
+-- Target-side hover (draft in flight). Same listOpenId state machine,
+-- type-filtered to the draft. Ancestors are skipped so cycle-blocked
+-- targets neither engage nor display.
+local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
+  if listOpenId then
+    for _, nv in ipairs(nodeViews) do
+      if nv.id == listOpenId then
+        if not draft.ancestors[nv.id] then
+          local layout = layoutPortRow(nv, ox, oy, 'in', mx, my, draft.type)
+          if stillEngaged(layout, mx, my) then
+            return { nv = nv, layout = layout, list = layout.list,
+                     slot = rowHit(layout.list.rows, mx, my) }
+          end
+        end
+        break
+      end
+    end
+    listOpenId = nil
+  end
+  for _, nv in ipairs(nodeViews) do
+    if not draft.ancestors[nv.id] then
+      local layout = layoutPortRow(nv, ox, oy, 'in', mx, my, draft.type)
+      local pick = pickHovered(nv, layout, mx, my, 'in', draft.type)
+      if pick then
+        if pick.list then listOpenId = nv.id end
+        return pick
+      end
+    end
+  end
+end
+
+-- Commit-eligibility for a draft against a target hover. The visual
+-- overlay is gated separately on ancestor-only (so the spillover list
+-- still opens during in-transit hover); only the mouseup commit consults
+-- dropEligible, which additionally requires a concrete slot.
 local function dropEligible(draft, target)
-  if not target then return false end
-  if draft.ancestors[target.nv.id] then return false end
-  if draft.type == 'midi'  and #target.nv.ins.midi  == 0 then return false end
-  if draft.type == 'audio' and #target.nv.ins.audio == 0 then return false end
-  return true
+  return target ~= nil
+     and target.slot ~= nil
+     and not draft.ancestors[target.nv.id]
 end
 
------ Wire-creation overlays
-
--- Audio-band / midi-band sub-rect of the body. sides tells us whether the
--- node has both kinds of I/O (in the relevant direction) — if so the band
--- is half the body; otherwise the band spans the whole body.
-local function bandRect(nv, ox, oy, sides, band)
-  local lx0, ly0, lx1, ly1 = nodeRect(nv)
-  local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
-  if sides.audio and sides.midi then
-    local split = math.floor(x0 + (x1 - x0) * AUDIO_BAND_FRAC)
-    if band == 'audio' then return x0, y0, split, y1, 'left' end
-    return split, y0, x1, y1, 'right'
+-- Spillover dropdown popup: filled rounded bg + outline, then row labels
+-- with a hover-highlight under the matching row.
+local function drawList(dl, list, highlight)
+  local r = list.rect
+  ImGui.DrawList_AddRectFilled(dl, r[1], r[2], r[3], r[4],
+    chrome.colour('wiring.tooltip.bg'), LIST_CORNER_R)
+  ImGui.DrawList_AddRect(dl, r[1], r[2], r[3], r[4],
+    chrome.colour('wiring.node.selected'), LIST_CORNER_R, 0, 1)
+  local txtCol = chrome.colour('text')
+  local hlCol  = chrome.colour('wiring.node.selected')
+  if uiFont then ImGui.PushFont(ctx, uiFont, uiSize) end
+  for _, row in ipairs(list.rows) do
+    if row == highlight then
+      ImGui.DrawList_AddRectFilled(dl,
+        row.x + 1, row.y, row.x + row.w - 1, row.y + row.h, hlCol)
+    end
+    ImGui.DrawList_AddText(dl,
+      row.x + LIST_ROW_PAD_X, row.y + LIST_ROW_PAD_Y,
+      txtCol, row.name)
   end
-  return x0, y0, x1, y1, 'both'
+  if uiFont then ImGui.PopFont(ctx) end
 end
 
--- Selection-style outline around the band the cursor is on. Only the
--- outer-body corners round; the split edge between audio and midi stays
--- sharp.
-local function drawBandOutline(dl, nv, ox, oy, sides, band)
-  local x0, y0, x1, y1, round = bandRect(nv, ox, oy, sides, band)
-  local flags
-  if     round == 'left'  then flags = ImGui.DrawFlags_RoundCornersLeft
-  elseif round == 'right' then flags = ImGui.DrawFlags_RoundCornersRight
-  else                         flags = ImGui.DrawFlags_RoundCornersAll
-  end
-  ImGui.DrawList_AddRect(dl,
-    x0 - SELECTED_INFLATE, y0 - SELECTED_INFLATE,
-    x1 + SELECTED_INFLATE, y1 + SELECTED_INFLATE,
-    chrome.colour('wiring.node.selected'), CORNER_R, flags, SELECTED_STROKE)
+-- Popup bg for the port-row overlay: a pale rounded rect (same CORNER_R
+-- as the node body) overlapping the body's near edge so the body's near
+-- rounded corners read as filled rather than canvas-coloured. Drawn
+-- BEFORE the node so the body overpaints the overlap region, then the
+-- port row + chips + list draw on top.
+local function drawPortRowBg(dl, layout)
+  local p = layout.popup
+  if not p then return end
+  ImGui.DrawList_AddRectFilled(dl, p[1], p[2], p[3], p[4],
+    chrome.colour('wiring.tooltip.bg'), CORNER_R)
 end
 
--- Anchor point for the midi keyboard icon — just outside the body's
--- right edge, vertically centred. The icon is a small external marker,
--- not an in-body overlay.
-local function keyboardAnchor(nv, ox, oy)
-  local _, ly0, lx1, ly1 = nodeRect(nv)
---  return ox + lx1 + KEYBOARD_GAP, oy + (ly0 + ly1) / 2
-  return ox + lx1 - KEYBOARD_GAP * 1.5 - 8, oy + ly0 + KEYBOARD_GAP * 1.5
-end
-
--- Small piano-keyboard icon (C, C#, D, D#, E): 3 outlined white keys with
--- 2 filled black keys overlaying the C-D and D-E boundaries. Drawn with
--- its left edge at `left` and vertical centre at `vertCenter`. Stand-in
--- for the midi tint — later this will gain an in/out arrow to distinguish
--- direction.
-local function drawKeyboardIcon(dl, left, vertCenter)
-  local col    = chrome.colour('text')
-  local kw, kh = 4, 10
-  local bw, bh = 2, 5
-  local ix0    = math.floor(left)
-  local iy0    = math.floor(vertCenter - kh / 2)
-  for i = 0, 2 do
-    local x = ix0 + i * kw
-    ImGui.DrawList_AddRect(dl, x, iy0, x + kw+1, iy0 + kh+1, col, 0, 0, 1)
-  end
-  for _, i in ipairs{1, 2} do
-    local cx  = ix0 + i * kw
-    local bx0 = math.floor(cx - bw / 2)
-    ImGui.DrawList_AddRectFilled(dl, bx0, iy0, bx0 + bw+1, iy0 + bh+1, col)
-  end
-end
-
--- Pop-out audio port row (or column). Highlights `highlightIdx` with a
--- selection-style outline — port 1 by default, or the directly-hovered
--- port. dir='out' for source outputs, 'in' for target inputs; side picks
--- which body edge the row hangs off.
-local function drawAudioPortRow(dl, nv, ox, oy, dir, side, highlightIdx)
-  local ports, positions = audioPortPositions(nv, ox, oy, dir, side)
-  local audioCol = chrome.colour('wiring.port.audio')
-  local hlCol    = chrome.colour('wiring.node.selected')
-  for i, p in ipairs(positions) do
-    drawPort(dl, p.x, p.y, audioCol,
-      '##port/' .. nv.id .. '/' .. dir .. '/' .. i, ports[i])
-    if i == highlightIdx then
-      ImGui.DrawList_AddRect(dl,
-        p.x - SELECTED_INFLATE, p.y - SELECTED_INFLATE,
-        p.x + PORT_SIZE + SELECTED_INFLATE, p.y + PORT_SIZE + SELECTED_INFLATE,
-        hlCol, 0, 0, SELECTED_STROKE)
+-- Draw the handle (if any) and every audio/midi slot. Outlines the slot
+-- matching pick.slot (==). When the spillover list is open (pick.list
+-- non-nil), audio chips are suppressed — the list carries the same info
+-- more legibly while the user is browsing by name; the midi slot stays.
+-- The pale popup bg is laid down separately by drawPortRowBg, before nodes.
+local function drawPortRow(dl, pick, audioCol, idPrefix)
+  local layout, highlight, listOpen =
+    pick.layout, pick.slot, pick.list ~= nil
+  if layout.handle then drawHandle(dl, layout.handle, layout.side) end
+  local hlCol = chrome.colour('wiring.node.selected')
+  for i, s in ipairs(layout.slots) do
+    if not (listOpen and s.kind == 'audio') then
+      drawSlot(dl, s, idPrefix .. '/' .. i, audioCol)
+      if s == highlight then
+        ImGui.DrawList_AddRect(dl,
+          s.x - SELECTED_INFLATE, s.y - SELECTED_INFLATE,
+          s.x + s.w + SELECTED_INFLATE, s.y + s.h + SELECTED_INFLATE,
+          hlCol, 0, 0, SELECTED_STROKE)
+      end
     end
   end
 end
@@ -733,7 +1047,10 @@ local function renderCanvas(w, h)
   -- Pressing shift clears the selection so the wire-creation hover
   -- affordance owns the visual layer. Rising edge only — holding shift
   -- doesn't keep wiping selections the user might rebuild mid-frame.
+  -- Releasing shift drops sticky — the pinned port-row overlay only
+  -- lives within a single shift press.
   if shiftHeld and not shiftWas then wv:setSelection{} end
+  if shiftWas and not shiftHeld then sticky = nil end
   shiftWas = shiftHeld
 
   local nodeViews = wv:nodeViews()
@@ -786,16 +1103,46 @@ local function renderCanvas(w, h)
   -- have been released). dropTargetHit returns the under-cursor node;
   -- dropEligible then refuses self / descendants / type-mismatched
   -- targets so the hover gives no visual encouragement to invalid drops.
-  local sourceHit, targetHit
+  -- dropTargetHit already filters ancestors (cycle-blocked targets neither
+  -- engage the spillover nor display). Commit-eligibility (dropEligible)
+  -- additionally requires a concrete slot and is checked at mouseup.
+  local sourceHit, targetHit, stickyHit, draftSourceHit
   if wireDraft then
-    local hit = dropTargetHit(nodeViews, mx, my, ox, oy, wireDraft)
-    if hit and dropEligible(wireDraft, hit) then targetHit = hit end
+    targetHit      = dropTargetHit(nodeViews, mx, my, ox, oy, wireDraft)
+    draftSourceHit = draftSourceHoverHit(nodeViews, ox, oy)
   elseif shiftHeld then
     sourceHit = shiftHoverHit(nodeViews, mx, my, ox, oy)
   end
+  if shiftHeld then
+    stickyHit = stickyHoverHit(nodeViews, ox, oy)
+  end
 
+  -- Assemble overlays, deduped by node id so a node engaged via two paths
+  -- (e.g. sticky=A + a fresh draft from A) renders one overlay with one
+  -- InvisibleButton namespace. Cursor-driven picks win over persistent
+  -- ones: source/target first, then draft-source, then sticky.
+  local overlays  = {}
+  local frontIds  = {}
+  local function add(p)
+    if not p or frontIds[p.nv.id] then return end
+    overlays[#overlays + 1] = p
+    frontIds[p.nv.id] = true
+  end
+  add(sourceHit)
+  add(targetHit)
+  add(draftSourceHit)
+  add(stickyHit)
+
+  -- Draw order: non-front nodes, then popup bgs, then front nodes. The
+  -- popup sits above adjacent nodes that happen to fall under its extent,
+  -- but the focus node still overpaints the popup's overlap region so the
+  -- focus body's near rounded corners read as filled.
   for _, nv in ipairs(nodeViews) do
-    drawNode(dl, nv, ox, oy, selection[nv.id])
+    if not frontIds[nv.id] then drawNode(dl, nv, ox, oy, selection[nv.id]) end
+  end
+  for _, p in ipairs(overlays) do drawPortRowBg(dl, p.layout) end
+  for _, nv in ipairs(nodeViews) do
+    if frontIds[nv.id] then drawNode(dl, nv, ox, oy, selection[nv.id]) end
   end
 
   -- Capacity-overflow overlay: union of node-id sets across every error
@@ -819,46 +1166,16 @@ local function renderCanvas(w, h)
     end
   end
 
-  -- Source-side overlay: outline the hovered band; keyboard icon over the
-  -- midi region whenever the source has midi outs.
-  if sourceHit then
-    local sides = sourceSides(sourceHit.nv)
-    drawBandOutline(dl, sourceHit.nv, ox, oy, sides, sourceHit.band)
-    if sides.midi then
-      drawKeyboardIcon(dl, keyboardAnchor(sourceHit.nv, ox, oy))
-    end
-  end
-
-  -- Target-side overlay: body gets the selection-style outline as the
-  -- universal drop-target cue; midi drafts additionally show the keyboard
-  -- icon over the midi region. The in-flight wire endpoint and the port
-  -- popout (below) are the further cues for audio drafts.
-  if targetHit then
-    local lx0, ly0, lx1, ly1 = nodeRect(targetHit.nv)
-    ImGui.DrawList_AddRect(dl,
-      ox + lx0 - SELECTED_INFLATE, oy + ly0 - SELECTED_INFLATE,
-      ox + lx1 + SELECTED_INFLATE, oy + ly1 + SELECTED_INFLATE,
-      chrome.colour('wiring.node.selected'), CORNER_R, 0, SELECTED_STROKE)
-    if wireDraft.type == 'midi' then
-      local sides = targetSides(targetHit.nv)
-      if sides.midi then
-        drawKeyboardIcon(dl, keyboardAnchor(targetHit.nv, ox, oy))
-      end
-    end
-  end
-
-  -- Pop-out audio port rows: source outputs hang below the body on
-  -- shift-hover; target inputs hang off whichever body edge is nearest the
-  -- cursor during an audio draft. Default highlight = port 1 (the port the
-  -- wire lands on if mouseup happens on the body); explicit port hover
-  -- moves the highlight.
-  if sourceHit and sourceHit.band == 'audio' and #sourceHit.nv.outs.audio > 1 then
-    drawAudioPortRow(dl, sourceHit.nv, ox, oy, 'out', 'bottom',
-      sourceHit.portIdx or 1)
-  end
-  if targetHit and wireDraft.type == 'audio' and #targetHit.nv.ins.audio > 1 then
-    drawAudioPortRow(dl, targetHit.nv, ox, oy, 'in', targetHit.side,
-      targetHit.portIdx or 1)
+  -- Overlay pass: body outline + port row + optional spillover list for
+  -- each engaged node. sourceHit highlights the directly-hovered slot;
+  -- targetHit highlights the draft's drop target (default port 1 / midi
+  -- by draft type); stickyHit shows the persistent pinned overlay with
+  -- its default slot. The nv.id-keyed idPrefix keeps InvisibleButtons
+  -- unique across multiple simultaneous overlays.
+  for _, p in ipairs(overlays) do
+    drawBodyOutline(dl, p.nv, ox, oy)
+    drawPortRow(dl, p, audioCol, '##portSlot/' .. p.nv.id)
+    if p.list then drawList(dl, p.list, p.slot) end
   end
 
   wv:setHover((sourceHit and sourceHit.nv.id)
@@ -874,14 +1191,26 @@ local function renderCanvas(w, h)
   -- hit falls through to drag-to-move; anything else starts a band.
   if not drag and not band and not wireDraft
       and ImGui.IsMouseClicked(ctx, 0) then
+    -- Any click closes the spillover; re-opening requires another chevron
+    -- hover. The pre-click sourceHit (computed above with the still-open
+    -- list) is what drives wire-start / pin dispatch in this branch.
+    listOpenId = nil
     if sourceHit then
-      local anc = wv:ancestorsOf(sourceHit.nv.id)
-      if sourceHit.band == 'midi' then
-        wireDraft = { type = 'midi', fromId = sourceHit.nv.id, ancestors = anc }
-      else
-        wireDraft = { type = 'audio', fromId = sourceHit.nv.id,
-                      fromPort = sourceHit.portIdx or 1, ancestors = anc }
+      local slot = sourceHit.slot
+      if slot then
+        local anc = wv:ancestorsOf(sourceHit.nv.id)
+        local base = { fromId = sourceHit.nv.id, ancestors = anc,
+                       mx0 = mx, my0 = my, fromList = sourceHit.list ~= nil,
+                       fromSide = sourceHit.layout.side }
+        if slot.kind == 'midi' then
+          base.type = 'midi'
+        else
+          base.type, base.fromPort = 'audio', slot.portIdx
+        end
+        wireDraft = base
       end
+      -- slot=nil: cursor on chevron or between list rows; consume the
+      -- click (no wire start, no body-drag fall-through).
     else
       local bodyHit = nodeUnderMouse(nodeViews, ox, oy)
       if bodyHit then
@@ -899,14 +1228,30 @@ local function renderCanvas(w, h)
       end
     end
   elseif wireDraft and not ImGui.IsMouseDown(ctx, 0) then
-    if targetHit then
-      wv:addWire{
-        type = wireDraft.type,
-        from = wireDraft.fromId, fromPort = wireDraft.fromPort,
-        to   = targetHit.nv.id,  toPort   = targetHit.portIdx,
-      }
+    local moved = math.abs(mx - wireDraft.mx0) >= CLICK_THRESH
+               or math.abs(my - wireDraft.my0) >= CLICK_THRESH
+    if moved then
+      if dropEligible(wireDraft, targetHit) then
+        local slot = targetHit.slot
+        wv:addWire{
+          type = wireDraft.type,
+          from = wireDraft.fromId, fromPort = wireDraft.fromPort,
+          to   = targetHit.nv.id,
+          toPort = (slot.kind == 'audio') and slot.portIdx or nil,
+        }
+      end
+    elseif wireDraft.fromList and wireDraft.type == 'audio'
+           and wireDraft.fromPort and wireDraft.fromPort >= 2 then
+      -- Click-without-drag on a list row: pin the port as a chip so the
+      -- user can drag from it like any other chip on subsequent gestures.
+      -- Sticky keeps the source node's port row visible after the click,
+      -- until shift-release or until natural hover returns to this node.
+      pinned[wireDraft.fromId] = pinned[wireDraft.fromId] or {}
+      pinned[wireDraft.fromId][wireDraft.fromPort] = true
+      sticky = { nodeId = wireDraft.fromId, side = wireDraft.fromSide }
     end
-    wireDraft = nil
+    wireDraft  = nil
+    listOpenId = nil   -- close any target-side spillover that was open
   elseif drag and not ImGui.IsMouseDown(ctx, 0) then
     local dx, dy = mx - drag.mx0, my - drag.my0
     if dx ~= 0 or dy ~= 0 then
@@ -957,7 +1302,10 @@ local function popBodyStyles() ImGui.PopStyleColor(ctx, 1) end
 
 --contract: bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
 function wp:bind() end
-function wp:unbind() drag, band, wireDraft, shiftWas = nil, nil, nil, false end
+function wp:unbind()
+  drag, band, wireDraft, shiftWas = nil, nil, nil, false
+  listOpenId, sticky = nil, nil
+end
 
 function wp:renderToolbarBits(_) end
 
@@ -1021,21 +1369,22 @@ local function findMasterPos()
   return 0, 0
 end
 
--- Place an auto-spawned source on the master→cursor ray, pulled back from
--- the generator just far enough that the two body rects don't collide along
--- the ray. Degenerate (cursor on master): fall back to a horizontal offset.
+-- Place an auto-spawned source on the master→cursor ray, pushed past the
+-- generator (away from master) just far enough that the two body rects
+-- don't collide along the ray. Degenerate (cursor on master): fall back to
+-- a horizontal offset.
 local SOURCE_PAD = 24
 local function sourcePosFor(genX, genY)
   local mxp, myp = findMasterPos()
   local dx, dy = genX - mxp, genY - myp
   local len = math.sqrt(dx * dx + dy * dy)
-  if len < 1 then return genX - NODE_W - SOURCE_PAD, genY end
+  if len < 1 then return genX + NODE_W + SOURCE_PAD, genY end
   local ux, uy = dx / len, dy / len
   local tx = (ux == 0) and math.huge or (NODE_W / 2 / math.abs(ux))
   local ty = (uy == 0) and math.huge or (NODE_H / 2 / math.abs(uy))
   local exit = math.min(tx, ty)
   local sep  = 2 * exit + SOURCE_PAD
-  return genX - ux * sep, genY - uy * sep
+  return genX + ux * sep, genY + uy * sep
 end
 
 openFxPicker = function(x, y)
