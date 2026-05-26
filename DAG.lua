@@ -4,17 +4,17 @@
 -- M.compile(user) returns a context closing over the lowered graph
 -- and lazily caching classes / classOf / inbound / srcSet / quotient
 -- / absorption; the user-graph predicates (validate, ancestors,
--- audioPorts, lower) stay free-standing.
+-- lower) stay free-standing.
 -- See design/wiring.md for the model.
 -- @noindex
 
---invariant: M.validate / M.ancestors / M.audioPorts / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(user), which caches the lowered graph and its derivations lazily
+--invariant: M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(user), which caches the lowered graph and its derivations lazily
 --invariant: REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and compile (port-to-port conns); lower() bridges them.
---invariant: source nodes have implicit I/O (one stereo output port, one MIDI out port — no inputs in either layer); fx nodes carry explicit audio.ins/outs as integer port counts; MIDI is one implicit port on fx (both directions) and out-only on sources
+--invariant: every user-graph node carries node.audio={ins, outs?} stamped at construction — sources={ins=0,outs=1}, master={ins=1}, fx from probeFxIO. No implicit shapes; readers index node.audio directly. MIDI stays implicit (one port on fx both ways, out-only on sources, none on master).
 --invariant: master is a singleton node (id='master'); audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --invariant: srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
 --shape: UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
---shape: Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, audio?={ins=number, outs?=number} }
+--shape: Node = { kind='source'|'fx'|'master', pos={x,y}, audio={ins=number, outs?=number}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string }
 --invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
 --shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, _opFxGuid?=string }
 --invariant: when an edge carries ops (gain / channelMap), lower splices one CU bridge per op-bundle into the wire — a kind='fx' compile node with fxIdent=CU_IDENT and a wm-owned params payload ({mode='gain'|'channelRemap', ...}). _opFxGuid is the CU instance's bridge identity in REAPER; lower copies it onto the bridge's fxGuid, and the applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on user-graph fx nodes).
@@ -27,18 +27,6 @@ local util = require('util')
 local CU_IDENT = 'JS:Continuum Utility'
 
 local M = {}
-
------ Port shape helpers (user graph)
-
--- Source: one stereo out, no audio in. fx/master: explicit integer counts.
-local function audioPorts(node)
-  if node.kind == 'source' then return { ins = 0, outs = 1 } end
-  return { ins  = (node.audio and node.audio.ins)  or 0,
-           outs = (node.audio and node.audio.outs) or 0 }
-end
-
---contract: { ins=N, outs=N } stereo-port counts; sources resolve to implicit (0,1); single source of truth for the port view
-M.audioPorts = audioPorts
 
 ----- Strip user-graph fields the compile graph doesn't need (pos,
 -- fxDisplay, the audio shape).
@@ -307,8 +295,8 @@ function M.validate(user)
         return { code = 'midi_port_index', edge = i }
       end
     elseif edge.type == 'audio' then
-      local fromOuts = audioPorts(fromNode).outs
-      local toIns    = audioPorts(toNode).ins
+      local fromOuts = fromNode.audio.outs or 0
+      local toIns    = toNode.audio.ins   or 0
       -- nil port = implicit port 1 (single-port shorthand).
       local fromIdx = (fromOuts > 0) and (edge.fromPort or 1) or nil
       local toIdx   = (toIns    > 0) and (edge.toPort   or 1) or nil

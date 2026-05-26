@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=233  sha=99dda19  mode=chunk
+@module wiringView  src=wiringView.lua  loc=235  sha=a3aca2b  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -21,58 +21,59 @@
   @state wv = {}  @ 15
   @state hoverNodeId = nil  @ 17
   @state selection = {}  @ 18   -- set keyed by nodeId → true; replace via setSelection, never mutated in place
-  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 198
+  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 200
 
 # Private functions
   -- Logical projection (viewport-independent)
   @fn nodeLabel(node)  @ 22
-  @fn audioPorts(node, dir)  @ 39
-      -- audio.ins / audio.outs are integer stereo-port counts; fx/master
-      -- store them directly, source defaults to (0 in, 1 stereo out). The
-      -- view projects each count as a list of names — synthetic 'in 1' /
-      -- 'out 1' baseline today; once wm queries TrackFX_GetIOName it will
-      -- override per-port via node.audio.inNames / outNames.
-  @fn midiPorts(node, dir)  @ 54
+  @fn audioPorts(node, dir)  @ 40
+      -- node.audio.{ins,outs} are integer stereo-port counts stamped at
+      -- node construction (sources={ins=0,outs=1}, master={ins=1}, fx from
+      -- probeFxIO). The view projects each count as a list of names —
+      -- synthetic 'in 1' / 'out 1' baseline today; once wm queries
+      -- TrackFX_GetIOName it will override per-port via node.audio.inNames /
+      -- outNames.
+  @fn midiPorts(node, dir)  @ 55
       -- Per the design doc: master has no MIDI; fx carries exactly one MIDI
       -- port in each direction; source has one MIDI out and no MIDI in (it
       -- is never a MIDI sink — DAG.validate's source_as_sink rule, and the
       -- wiringPage drop-eligibility filter, both rely on this).
-  @fn nodeCategory(kind, ins, outs)  @ 64
+  @fn nodeCategory(kind, ins, outs)  @ 65
       -- Source nodes get their own category (kind-driven, so a track source reads
       -- visually distinct from a synth generator). Other kinds fall out of port
       -- shape: no outputs = master/sink; outputs but no audio in = generator;
       -- audio in = effect. Drives the colour.wiring.node.<category> fill role.
-  @fn nodeView(id, node)  @ 71
+  @fn nodeView(id, node)  @ 72
 
 # Public API (wv:*)
   -- wm pass-through
-  @api wv:graph()  @ 88
-  @api wv:save()  @ 89
-  @api wv:load()  @ 90
+  @api wv:graph()  @ 89
+  @api wv:save()  @ 90
+  @api wv:load()  @ 91
   -- Authoring (slice 1.3b)
-  @api wv:addFx(x, y, fx, opts)  @ 96
+  @api wv:addFx(x, y, fx, opts)  @ 97
       @contract  appends fx at (x,y); audio io from probeFxIO(ident)
       @contract  if generator (ins=0), also spawns source track + node at opts.sourcePos and midi edge from it
-  @api wv:listInstalledFX()  @ 126
-  @api wv:moveNodes(moves)  @ 129
+  @api wv:listInstalledFX()  @ 128
+  @api wv:moveNodes(moves)  @ 131
       @contract  atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
-  @api wv:addWire(spec)  @ 139
+  @api wv:addWire(spec)  @ 141
       @contract  appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
   -- Topology queries
-  @api wv:ancestorsOf(sourceId)  @ 153
+  @api wv:ancestorsOf(sourceId)  @ 155
       @contract  backward reachability over user.edges; returns { [id]=true } including sourceId
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 161
+  @api wv:nodeViews()  @ 163
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:wireViews()  @ 170
+  @api wv:wireViews()  @ 172
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Capacity errors
-  @api wv:errors()  @ 201
+  @api wv:errors()  @ 203
       @contract  list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 221
-  @api wv:setHover(id)  @ 222
-  @api wv:selection()  @ 225
+  @api wv:hover()  @ 223
+  @api wv:setHover(id)  @ 224
+  @api wv:selection()  @ 227
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 227
+  @api wv:setSelection(idSet)  @ 229
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.

@@ -38,7 +38,7 @@ return {
       local _, wm = mkWm(harness)
       wm:load()
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0} }
+        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, audio={ins=0, outs=1} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxGuid='{FX-1}',
                          pos={x=0,y=0}, audio={ins=1, outs=1} }
         util.add(g.edges, { type='audio', from='s', to='f' })
@@ -58,7 +58,7 @@ return {
       local _, wm = mkWm(harness)
       wm:load()
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0} }
+        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, audio={ins=0, outs=1} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo',
                          pos={x=0,y=0}, audio={ins=1, outs=1} }
         util.add(g.edges, { type='audio', from='s', to='f' })
@@ -75,7 +75,7 @@ return {
       local _, wm = mkWm(harness)
       wm:load()
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0} }
+        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, audio={ins=0, outs=1} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxGuid='{FX-1}',
                          pos={x=0,y=0}, audio={ins=1, outs=1} }
         util.add(g.edges, { type='audio', from='s', to='f',
@@ -287,7 +287,7 @@ return {
       h.reaper:setFxGuid(track, fxIdx, '{FX-1}')
       -- Seed user graph to match.
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0} }
+        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, audio={ins=0, outs=1} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxGuid='{FX-1}',
                          pos={x=0,y=0}, audio={ins=1, outs=1} }
         util.add(g.edges, { type='audio', from='s', to='f' })

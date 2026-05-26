@@ -3,7 +3,7 @@ local DAG = require('DAG')
 
 local function source(id, guid)
   return id, { kind = 'source', trackGuid = guid or 'guid-' .. id,
-               pos = { x = 0, y = 0 } }
+               pos = { x = 0, y = 0 }, audio = { ins = 0, outs = 1 } }
 end
 
 local function fx(id, opts)

@@ -25,7 +25,7 @@ return {
       local h, wm = mkWm(harness)
       local ok = wm:mutate(function(g)
         g.nodes['s'] = { kind = 'source', trackGuid = 'guid-s',
-                         pos = { x = 0, y = 0 } }
+                         pos = { x = 0, y = 0 }, audio = { ins = 0, outs = 1 } }
         g._nextId = 2
       end)
       t.truthy(ok, 'mutate succeeded')
@@ -69,7 +69,7 @@ return {
       wm:subscribe('wiringChanged', function(p) seen[#seen+1] = p end)
       local ok = wm:mutate(function(g)
         g.nodes['s'] = { kind = 'source', trackGuid = 'guid-s',
-                         pos = { x = 0, y = 0 } }
+                         pos = { x = 0, y = 0 }, audio = { ins = 0, outs = 1 } }
       end)
       t.truthy(ok)
       t.eq(#seen, 1,           'one broadcast')
