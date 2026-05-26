@@ -1,7 +1,9 @@
 -- See docs/wiringManager.md for the model.
 -- @noindex
 
---invariant: project-wide singleton; the user graph lives in one cm project-tier key (wiringGraph). No per-take or per-track state at Stage 1; wiringClass is declared for the Stage 2 differ but unread here.
+--invariant: every fx-kind node carries fxGuid (nil pre-materialisation, stamped by the applier after TrackFX_AddByName). This is the only stable bridge identity between the user graph and a REAPER FX instance — snapshot and targetState match by it.
+--shape: WiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid=string, ident=string}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. CU entries (JS:Continuum Utility) are excluded from fxOrder — the applier handles CU lifetime.
+--shape: WiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setExtState', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier).
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
 --invariant: scratch track is a hidden REAPER track tagged via cm key 'wiringScratch'='1'; wm:load() and wm:probeFxIO() find-or-create it; future use is to host FX nodes with no compile-graph track of their own. Probing-via-instantiate is a Stage-1 bootstrapping affordance — the differ in Stage 2+ will read I/O off the real production FX instance and back-fill the node.
@@ -20,6 +22,8 @@ local _scratchTrack = nil -- hidden host for the probe (and, later, orphan FX no
 local _fxIO = {}          -- session cache: fxIdent → { ins, outs, inNames, outNames }
 
 local SCRATCH_NAME = 'continuum: wiring scratch'
+local SCRATCH_KEY  = '__scratch__'
+local CU_IDENT     = 'JS:Continuum Utility'
 
 ----- Helpers
 
@@ -177,7 +181,7 @@ function wm:trackName(guid)
   return name
 end
 
---contract: inserts a track just before scratch (named opts.name); returns its GUID; outside mutate
+--contract: inserts a track just before scratch (named opts.name), tags it with wiringHostKind=sourceTrack so wm:snapshot recognises it (classKey is the track's own GUID for source hosts); returns its GUID; outside mutate
 function wm:createSourceTrack(opts)
   ensureScratchTrack()
   reaper.PreventUIRefresh(1)
@@ -187,8 +191,212 @@ function wm:createSourceTrack(opts)
   if opts and opts.name then
     reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', opts.name, true)
   end
+  cm:writeTrackKey(track, 'wiringHostKind', 'sourceTrack')
   reaper.PreventUIRefresh(-1)
   return reaper.GetTrackGUID(track)
+end
+
+----- Snapshot / target / diff (Stage 2)
+
+-- Walk the chain of one track, returning { {fxGuid, ident}, ... } for FX
+-- whose guid appears in ownedGuids; CU instances are filtered out.
+local function ownedChain(track, ownedGuids)
+  local out = {}
+  for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
+    local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
+    if ident ~= CU_IDENT then
+      local guid = reaper.TrackFX_GetFXGUID(track, fxIdx)
+      if ownedGuids[guid] then
+        util.add(out, { fxGuid = guid, ident = ident })
+      end
+    end
+  end
+  return out
+end
+
+-- Audio if I_MIDIFLAGS low-5-bits == 31 (midi disabled); midi if I_SRCCHAN
+-- == -1 (audio disabled). Anything carrying both reads as 'audio' —
+-- defensive; the differ doesn't model dual-stream sends.
+local function sendType(track, sendIdx)
+  local srcChan   = reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'I_SRCCHAN')
+  local midiFlags = reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'I_MIDIFLAGS')
+  local midiOff = (math.floor(midiFlags) % 32) == 31
+  if srcChan == -1 then return 'midi' end
+  if midiOff           then return 'audio' end
+  return 'audio'
+end
+
+local function readSendsClass(track, byTrack)
+  local out = {}
+  for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
+    local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
+    local dstClass = byTrack[dst]
+    if dstClass then
+      util.add(out, { to = dstClass, type = sendType(track, i) })
+    end
+  end
+  return out
+end
+
+--contract: walks every project track, builds a WiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringClass; FX whose guids appear in the user graph; sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
+function wm:snapshot()
+  ensureLoaded()
+  local ownedGuids = {}
+  for _, n in pairs(_graph.nodes) do
+    if n.kind == 'fx' and n.fxGuid then ownedGuids[n.fxGuid] = true end
+  end
+  -- First pass: discover managed tracks + their (classKey, hostKind), so
+  -- the second pass can resolve send destinations by track → classKey.
+  -- sourceTrack hosts derive classKey from their own GUID (singleton class);
+  -- newTrack hosts must carry wiringClass explicitly (multi-guid key).
+  local snap, byTrack, byKind = {}, {}, {}
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local track = reaper.GetTrack(0, i)
+    local hostKind = cm:readTrackKey(track, 'wiringHostKind')
+    local classKey
+    if hostKind == 'sourceTrack' then
+      classKey = reaper.GetTrackGUID(track)
+    elseif hostKind == 'newTrack' then
+      classKey = cm:readTrackKey(track, 'wiringClass')
+    elseif cm:readTrackKey(track, 'wiringScratch') == '1' then
+      classKey, hostKind = SCRATCH_KEY, 'scratch'
+    end
+    if classKey then
+      byTrack[track]   = classKey
+      byKind[classKey] = hostKind
+    end
+  end
+  for track, classKey in pairs(byTrack) do
+    local hostKind  = byKind[classKey]
+    local isScratch = hostKind == 'scratch'
+    snap[classKey] = {
+      hostKind  = hostKind,
+      trackGuid = reaper.GetTrackGUID(track),
+      fxOrder   = ownedChain(track, ownedGuids),
+      mainSend  = not isScratch
+                  and reaper.GetMediaTrackInfo_Value(track, 'B_MAINSEND') ~= 0
+                  or false,
+      sends     = isScratch and {} or readSendsClass(track, byTrack),
+    }
+  end
+  return snap
+end
+
+-- Project the DAG's TargetPlan entry into the WiringSnapshot shape.
+-- nodeId-keyed fxOrder → {fxGuid, ident}-keyed; trackGuid decorated for
+-- the hosts we can identify; CU entries dropped.
+local function projectEntry(classKey, planEntry, compileNodes, scratchGuid)
+  local fxOrder = {}
+  for _, id in ipairs(planEntry.fxOrder) do
+    local node = compileNodes[id]
+    if node.kind == 'fx' and node.fxIdent ~= CU_IDENT then
+      util.add(fxOrder, { fxGuid = node.fxGuid, ident = node.fxIdent })
+    end
+  end
+  local trackGuid
+  if     planEntry.hostKind == 'sourceTrack' then trackGuid = planEntry.trackGuid
+  elseif planEntry.hostKind == 'scratch'     then trackGuid = scratchGuid end
+  return {
+    hostKind  = planEntry.hostKind,
+    trackGuid = trackGuid,
+    fxOrder   = fxOrder,
+    mainSend  = planEntry.mainSend,
+    sends     = util.deepClone(planEntry.sends),
+  }
+end
+
+-- CompileNode is a stripped Node (see DAG.copyNodeForCompile). It loses
+-- fxGuid; we re-attach it here from the user graph so targetState carries
+-- the bridge identity all the way through.
+local function attachFxGuids(compile, graph)
+  for id, n in pairs(compile.nodes) do
+    if n.kind == 'fx' and graph.nodes[id] then
+      n.fxGuid = graph.nodes[id].fxGuid
+    end
+  end
+end
+
+--contract: derives the WiringSnapshot REAPER should look like, by lowering the user graph and projecting DAG.targetPlan into snapshot shape. fxGuid on each fx entry comes from the user graph (nil for unmaterialised nodes). Pure — no REAPER reads except GetTrackGUID on the scratch track.
+function wm:targetState()
+  ensureLoaded()
+  local compile = DAG.lower(_graph)
+  attachFxGuids(compile, _graph)
+  local classes = DAG.classes(compile)
+  local plan    = DAG.targetPlan(compile, classes)
+  local scratchGuid = _scratchTrack and reaper.GetTrackGUID(_scratchTrack)
+  local out = {}
+  for classKey, entry in pairs(plan) do
+    out[classKey] = projectEntry(classKey, entry, compile.nodes, scratchGuid)
+  end
+  return out
+end
+
+local function fxOrderEq(a, b)
+  if #a ~= #b then return false end
+  for i = 1, #a do
+    if a[i].fxGuid ~= b[i].fxGuid or a[i].ident ~= b[i].ident then return false end
+  end
+  return true
+end
+
+local function sendsEq(a, b)
+  if #a ~= #b then return false end
+  -- Order-insensitive: REAPER's send order isn't semantically meaningful.
+  local seen = {}
+  for _, s in ipairs(a) do seen[s.to .. '|' .. s.type] = (seen[s.to .. '|' .. s.type] or 0) + 1 end
+  for _, s in ipairs(b) do
+    local k = s.to .. '|' .. s.type
+    if not seen[k] or seen[k] == 0 then return false end
+    seen[k] = seen[k] - 1
+  end
+  return true
+end
+
+--contract: pure structural diff producing a WiringOp[] that, applied, would carry snap to target. Order: creates first (so subsequent setSends can reference fresh tracks), then setFXChain / setMainSend / setSends / setExtState, then deletes. snap entries absent from target with hostKind='newTrack' are deleted; sourceTrack/scratch are never deleted (project artefacts).
+function wm:diff(target, snap)
+  local ops = {}
+  -- Creates (order before mutates so setSends can reference fresh hosts).
+  for classKey, t_ in pairs(target) do
+    if not snap[classKey] and t_.hostKind == 'newTrack' then
+      util.add(ops, { op = 'createTrack', classKey = classKey, hostKind = 'newTrack' })
+    end
+  end
+  -- Per-class field diffs.
+  for classKey, t_ in pairs(target) do
+    local s = snap[classKey]
+    local exists = s ~= nil
+    if not exists or not fxOrderEq(t_.fxOrder, s.fxOrder) then
+      util.add(ops, { op = 'setFXChain', classKey = classKey,
+                      trackGuid = t_.trackGuid, fxOrder = util.deepClone(t_.fxOrder) })
+    end
+    if (not exists and t_.mainSend) or (exists and t_.mainSend ~= s.mainSend) then
+      util.add(ops, { op = 'setMainSend', classKey = classKey,
+                      trackGuid = t_.trackGuid, value = t_.mainSend })
+    end
+    if not exists or not sendsEq(t_.sends, s.sends) then
+      util.add(ops, { op = 'setSends', classKey = classKey,
+                      trackGuid = t_.trackGuid, sends = util.deepClone(t_.sends) })
+    end
+    -- ExtState writes only on creation. sourceTrack hosts get only
+    -- wiringHostKind (the track's own guid is the classKey already);
+    -- newTrack hosts also need wiringClass to carry the multi-guid key.
+    if not exists and t_.hostKind == 'sourceTrack' then
+      util.add(ops, { op = 'setExtState', classKey = classKey,
+                      key = 'wiringHostKind', value = 'sourceTrack' })
+    elseif not exists and t_.hostKind == 'newTrack' then
+      util.add(ops, { op = 'setExtState', classKey = classKey,
+                      key = 'wiringHostKind', value = 'newTrack' })
+      util.add(ops, { op = 'setExtState', classKey = classKey,
+                      key = 'wiringClass', value = classKey })
+    end
+  end
+  -- Deletes (last so any final reads of going-away tracks have already run).
+  for classKey, s in pairs(snap) do
+    if not target[classKey] and s.hostKind == 'newTrack' then
+      util.add(ops, { op = 'deleteTrack', trackGuid = s.trackGuid })
+    end
+  end
+  return ops
 end
 
 --contract: enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"

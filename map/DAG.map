@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=481  sha=e6d58c2  mode=namespace
+@module DAG  src=DAG.lua  loc=482  sha=ad2806e  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module — no state; functions take operands explicitly
@@ -6,11 +6,12 @@
   @invariant  source nodes have implicit I/O (one stereo output port, one MIDI out port — no inputs in either layer); fx nodes carry explicit audio.ins/outs as integer port counts; MIDI is one implicit port on fx (both directions) and out-only on sources
   @invariant  master is a singleton node (id='master'); audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
   @invariant  srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
+  @invariant  fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
   @contract  { ins=N, outs=N } stereo-port counts; sources resolve to implicit (0,1); single source of truth for the port view
 
 # Shapes
   @shape  UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
-  @shape  Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=number, outs?=number} }
+  @shape  Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, audio?={ins=number, outs?=number} }
   @shape  Edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
   @shape  CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
   @shape  CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap', cuParams?=table }
@@ -18,56 +19,56 @@
   @shape  TargetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
 
 # Imports
-  @const util = 'util'  @ 19
+  @const util = 'util'  @ 20
 
 # Module-level constants
-  @const M = {}  @ 21
+  @const M = {}  @ 22
 
 # Private functions
   -- Port shape helpers (user graph)
-  @fn audioPorts(node)  @ 26
+  @fn audioPorts(node)  @ 27
       -- Source: one stereo out, no audio in. fx/master: explicit integer counts.
   -- validate
   -- ancestors
   -- lower
-  @fn passthroughNode(node)  @ 165
+  @fn passthroughNode(node)  @ 166
       -- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
       -- the audio shape).
   -- srcSet / classes
-  @fn inboundOf(compile)  @ 238
+  @fn inboundOf(compile)  @ 239
       -- Reverse adjacency: for each node id, the list of input-side node ids.
       -- Stashed on compile so the cost is paid once per graph instance.
   -- quotientGraph / absorption / capacityErrors
-  @fn directHost(q)  @ 313
+  @fn directHost(q)  @ 314
       -- Direct (one-hop) host for cls under the absorption rule. Returns nil if cls
       -- has no eligible host: zero audio parents, ambiguous primaries, or multiple
       -- non-primary audio parents.
   -- targetPlan
-  @fn classOfMap(classes)  @ 371
-  @fn topoIntraClass(compile, members, classOf, cls)  @ 382
+  @fn classOfMap(classes)  @ 372
+  @fn topoIntraClass(compile, members, classOf, cls)  @ 383
       -- Topo over intra-class fx/cu members (sources/master excluded — they don't
       -- appear in REAPER FX chains). Kahn's; ties broken by sorted id for spec
       -- determinism.
 
 # Public API (M.*)
-  @api M.validate(user)  @ 40
+  @api M.validate(user)  @ 41
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.ancestors(user, sourceId)  @ 147
+  @api M.ancestors(user, sourceId)  @ 148
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over user.edges; cycle-safe via visited
-  @api M.lower(user)  @ 172
+  @api M.lower(user)  @ 173
       @contract  assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
-  @api M.srcSet(compile, nodeId)  @ 249
+  @api M.srcSet(compile, nodeId)  @ 250
       @contract  set<trackGuid> of source ancestors; memoised on compile (stashes _srcSet, _inbound)
-  @api M.classes(compile)  @ 270
+  @api M.classes(compile)  @ 271
       @contract  partitions compile.nodes by srcSet; classKey = sorted trackGuids joined by '|', '' for empty
-  @api M.quotientGraph(compile, classes)  @ 284
+  @api M.quotientGraph(compile, classes)  @ 285
       @contract  class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryAudioParents ⊆ audioParents, flagged by `primary` wires
-  @api M.absorption(quotient)  @ 323
+  @api M.absorption(quotient)  @ 324
       @contract  sparse {[cls]=hostCls}; chains resolved to terminal host; absent = self-hosting; cycle-safe
-  @api M.capacityErrors(compile, classes)  @ 345
+  @api M.capacityErrors(compile, classes)  @ 346
       @contract  list of {classKey, kind='audio'|'midi', count} for intra-class conn counts exceeding 64 audio / 128 midi; sorted by classKey then kind
-  @api M.targetPlan(compile, classes)  @ 417
+  @api M.targetPlan(compile, classes)  @ 418
       @contract  per-host hosting decision + collapsed inter-class sends; the empty-srcSet class splits (master is implicit on REAPER master with no FX, non-source/non-master members pool on '__scratch__'); audio conns to a master-hosted class fold into mainSend; midi conns to master-hosted and any conn touching the inert pool are dropped.

@@ -10,10 +10,12 @@
 --invariant: master is a singleton node (id='master'); audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --invariant: srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
 --shape: UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
---shape: Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, audio?={ins=number, outs?=number} }
---shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true }
+--shape: Node = { kind='source'|'fx'|'master', pos={x,y}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, audio?={ins=number, outs?=number} }
+--invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
+--shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, _opFxGuid?=string }
+--invariant: when an edge carries ops (gain / channelMap), lower splices one CU node per op-bundle into the wire. _opFxGuid is the bridge identity of that CU instance in REAPER; lower copies it onto the synthesised cu node's fxGuid. The applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on fx-kind nodes).
 --shape: CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
---shape: CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap', cuParams?=table }
+--shape: CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, fxGuid?=string, cuMode?='gain'|'channelRemap', cuParams?=table }
 --shape: Conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
 --shape: TargetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
 local util = require('util')
@@ -194,8 +196,11 @@ function M.lower(user)
 
   -- Splice a CU into the wire: mint it, flush head into its port 1, return
   -- a new head positioned at the CU's port-1 output (audio) / node (MIDI).
-  local function splice(head, cuMode, cuParams)
-    local id = mintCu({ kind = 'cu', cuMode = cuMode, cuParams = cuParams })
+  -- fxGuid (the bridge identity) is copied off the source edge so the
+  -- pipeline can match CU nodes across compiles without index tracking.
+  local function splice(head, cuMode, cuParams, sourceEdge)
+    local id = mintCu({ kind = 'cu', cuMode = cuMode, cuParams = cuParams,
+                        fxGuid = sourceEdge._opFxGuid })
     flush(head, id, head.type == 'audio' and 1 or nil)
     if head.type == 'audio' then
       return { type = 'audio', id = id, port = 1, primary = head.primary }
@@ -207,7 +212,7 @@ function M.lower(user)
     local head = { type = 'audio', id = edge.from,
                    port = edge.fromPort or 1, primary = edge.primary }
     if edge.ops and edge.ops.gain then
-      head = splice(head, 'gain', { gain = edge.ops.gain })
+      head = splice(head, 'gain', { gain = edge.ops.gain }, edge)
     end
     flush(head, edge.to, edge.toPort or 1)
   end
@@ -215,7 +220,7 @@ function M.lower(user)
   local function lowerMidiEdge(edge)
     local head = { type = 'midi', id = edge.from, primary = edge.primary }
     if edge.ops and edge.ops.channelMap then
-      head = splice(head, 'channelRemap', { map = edge.ops.channelMap })
+      head = splice(head, 'channelRemap', { map = edge.ops.channelMap }, edge)
     end
     flush(head, edge.to)
   end

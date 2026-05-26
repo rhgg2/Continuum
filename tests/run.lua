@@ -124,6 +124,8 @@ local specs = {
   'wm_persistence_spec',
   'wm_installed_fx_spec',
   'wm_probe_fx_io_spec',
+  'wm_snapshot_spec',
+  'wm_diff_spec',
   'wv_authoring_spec',
   'wv_errors_spec',
   'wp_smoke_spec',
