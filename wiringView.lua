@@ -47,10 +47,13 @@ local function audioPorts(node, dir)
   return list
 end
 
--- Per the design doc: master has no MIDI; source / fx carry exactly
--- one MIDI port in each direction.
+-- Per the design doc: master has no MIDI; fx carries exactly one MIDI
+-- port in each direction; source has one MIDI out and no MIDI in (it
+-- is never a MIDI sink — DAG.validate's source_as_sink rule, and the
+-- wiringPage drop-eligibility filter, both rely on this).
 local function midiPorts(node, dir)
   if node.kind == 'master' then return {} end
+  if node.kind == 'source' and dir == 'in' then return {} end
   return { 'midi' }
 end
 

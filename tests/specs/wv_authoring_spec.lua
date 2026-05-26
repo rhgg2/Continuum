@@ -217,6 +217,20 @@ return {
     end,
   },
   {
+    name = 'source node exposes midi out but no midi in (never a midi sink)',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
+      wv:addFx(0, 0, { name = 'Massive', ident = 'VST3:Massive' })
+      local sourceView
+      for _, nv in ipairs(wv:nodeViews()) do
+        if nv.id == 'n2' then sourceView = nv end
+      end
+      t.eq(#sourceView.outs.midi, 1, 'source has one midi out')
+      t.eq(#sourceView.ins.midi,  0, 'source has no midi in (no drop-target band)')
+    end,
+  },
+  {
     name = 'setSelection defensive-copies its argument',
     run = function(harness)
       local _, wv = mkWv(harness)

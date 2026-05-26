@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1041  sha=f8ccd0e  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1042  sha=05e5d69  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -48,8 +48,8 @@
   @state SELECTED_INFLATE = 2  @ 155
   @state SELECTED_STROKE = 2  @ 156
   @state AUDIO_BAND_FRAC = 2/3  @ 301   -- left 2/3 = audio band, right 1/3 = midi band
-  @state SOURCE_PAD = 24  @ 999
-  @state wiring = cmgr:scope('wiring')  @ 1031
+  @state SOURCE_PAD = 24  @ 1000
+  @state wiring = cmgr:scope('wiring')  @ 1032
 
 # Private functions
   -- FX-picker modal kind
@@ -107,52 +107,53 @@
       -- side is which body edge the cursor is closest to — drives where an audio
       -- draft's input popout shows. Audio drafts also accept a popped-out input
       -- port hanging off that side.
-  @fn dropEligible(draft, target)  @ 422
-      -- Refuse self / ancestors (cycle), midi→master, audio→audio-less target.
-      -- DAG.validate would catch them too, but hover-time rejection gives instant
-      -- visual feedback rather than a silent drop with no edge appearing.
+  @fn dropEligible(draft, target)  @ 423
+      -- Refuse self / ancestors (cycle), and any target lacking an input port
+      -- of the draft's type. DAG.validate would catch them too, but hover-time
+      -- rejection gives instant visual feedback rather than a silent drop with
+      -- no edge appearing.
   -- Wire-creation overlays
-  @fn bandRect(nv, ox, oy, sides, band)  @ 435
+  @fn bandRect(nv, ox, oy, sides, band)  @ 436
       -- Audio-band / midi-band sub-rect of the body. sides tells us whether the
       -- node has both kinds of I/O (in the relevant direction) — if so the band
       -- is half the body; otherwise the band spans the whole body.
-  @fn drawBandOutline(dl, nv, ox, oy, sides, band)  @ 449
+  @fn drawBandOutline(dl, nv, ox, oy, sides, band)  @ 450
       -- Selection-style outline around the band the cursor is on. Only the
       -- outer-body corners round; the split edge between audio and midi stays
       -- sharp.
-  @fn keyboardAnchor(nv, ox, oy)  @ 465
+  @fn keyboardAnchor(nv, ox, oy)  @ 466
       -- Anchor point for the midi keyboard icon — just outside the body's
       -- right edge, vertically centred. The icon is a small external marker,
       -- not an in-body overlay.
-  @fn drawKeyboardIcon(dl, left, vertCenter)  @ 476
+  @fn drawKeyboardIcon(dl, left, vertCenter)  @ 477
       -- Small piano-keyboard icon (C, C#, D, D#, E): 3 outlined white keys with
       -- 2 filled black keys overlaying the C-D and D-E boundaries. Drawn with
       -- its left edge at `left` and vertical centre at `vertCenter`. Stand-in
       -- for the midi tint — later this will gain an in/out arrow to distinguish
       -- direction.
-  @fn drawAudioPortRow(dl, nv, ox, oy, dir, side, highlightIdx)  @ 497
+  @fn drawAudioPortRow(dl, nv, ox, oy, dir, side, highlightIdx)  @ 498
       -- Pop-out audio port row (or column). Highlights `highlightIdx` with a
       -- selection-style outline — port 1 by default, or the directly-hovered
       -- port. dir='out' for source outputs, 'in' for target inputs; side picks
       -- which body edge the row hangs off.
   -- Wire drawing
-  @fn wireGroups(wireViews)  @ 520
+  @fn wireGroups(wireViews)  @ 521
       -- Group wires by unordered pair {idA, idB}; sort each group so audio
       -- precedes MIDI (MIDI sits to the right of the canonical-pair line),
       -- then by fromPort then toPort. canonA/canonB record the sorted pair
       -- direction so all wires in the group share one perpendicular axis
       -- regardless of each wire's own direction.
-  @fn wireOffset(i, n)  @ 556
+  @fn wireOffset(i, n)  @ 557
       -- Perpendicular scalar for slot i (1-based) of n parallel wires:
       -- centred around 0 so a lone wire sits on the centre line.
-  @fn nodeExitDist(dx, dy)  @ 565
+  @fn nodeExitDist(dx, dy)  @ 566
       -- Distance from a node centre to where a ray in direction (dx,dy)
       -- exits the node rect. Used to place the audio-port label just past
       -- the rounded body so it stays visible. Approximates the parallel-
       -- offset case by NODE_W/H from the centre, which is within WIRE_GAP
       -- of the true intersection — close enough for label placement.
-  @fn drawWireArrow(dl, sx, sy, ex, ey, col)  @ 574
-  @fn drawWireEndLabel(dl, ax, ay, fx, fy, i, n, portIdx, portName, idStem, col)  @ 609
+  @fn drawWireArrow(dl, sx, sy, ex, ey, col)  @ 575
+  @fn drawWireEndLabel(dl, ax, ay, fx, fy, i, n, portIdx, portName, idStem, col)  @ 610
       -- Audio port-number label as a tight bg-filled patch sized to the
       -- digit's bbox, placed up the wire past the node's exit point. The
       -- fill occludes the wire segment behind it so the digit reads cleanly
@@ -162,21 +163,21 @@
       -- rects on adjacent parallel wires never overlap (perp 10 + along 20 vs
       -- a ~10×14 rect). Hover-tooltip shows the port name (synthetic 'in N' /
       -- 'out N' until TrackFX_GetIOName lands).
-  @fn drawWiresPass(dl, wireViews, nodesById, ox, oy, audioCol, midiCol)  @ 648
-  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 694
+  @fn drawWiresPass(dl, wireViews, nodesById, ox, oy, audioCol, midiCol)  @ 649
+  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 695
       -- Identify the node whose body the mouse is over (un-inflated rect);
       -- used to start a drag, distinct from the inflated rect that drives
       -- port reveal. Returns nil if the mouse is over empty canvas (or a
       -- port band).
-  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 707
+  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 708
       -- AABB intersection of a pixel-space band rect against every node's
       -- body rect (un-inflated; port bands aren't selectable). Returns the
       -- set of intersecting ids — empty table if nothing was caught.
-  @fn renderCanvas(w, h)  @ 721
-  @fn pushBodyStyles()  @ 929
-  @fn popBodyStyles()  @ 932
+  @fn renderCanvas(w, h)  @ 722
+  @fn pushBodyStyles()  @ 930
+  @fn popBodyStyles()  @ 933
   -- Wiring scope
-  @fn shortFxName(s)  @ 983
+  @fn shortFxName(s)  @ 984
       -- REAPER hands us "Type: Name (Author)" — or, for multi-out plugins,
       -- "Type: Name (Author) (N outs)" — in EnumInstalledFX, and either
       -- parenthetical may itself contain balanced parens (e.g. a vendor written
@@ -184,18 +185,18 @@
       -- disambiguate same-named plugins from different vendors; the node label
       -- drops the prefix and everything from the first balanced () onward.
       -- Strip on commit, not in wm.
-  @fn findMasterPos()  @ 989
-  @fn sourcePosFor(genX, genY)  @ 1000
+  @fn findMasterPos()  @ 990
+  @fn sourcePosFor(genX, genY)  @ 1001
 
 # Public API (wp:*)
-  @api wp:bind()  @ 937
+  @api wp:bind()  @ 938
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 938
-  @api wp:renderToolbarBits(_)  @ 940
-  @api wp:renderBody(_, w, h, dispatch)  @ 943
+  @api wp:unbind()  @ 939
+  @api wp:renderToolbarBits(_)  @ 941
+  @api wp:renderBody(_, w, h, dispatch)  @ 944
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 956
-  @api wp:focusState()  @ 962
+  @api wp:renderStatusBar(_)  @ 957
+  @api wp:focusState()  @ 963
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface

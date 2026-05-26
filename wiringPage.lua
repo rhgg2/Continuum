@@ -416,13 +416,14 @@ local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
   end
 end
 
--- Refuse self / ancestors (cycle), midi→master, audio→audio-less target.
--- DAG.validate would catch them too, but hover-time rejection gives instant
--- visual feedback rather than a silent drop with no edge appearing.
+-- Refuse self / ancestors (cycle), and any target lacking an input port
+-- of the draft's type. DAG.validate would catch them too, but hover-time
+-- rejection gives instant visual feedback rather than a silent drop with
+-- no edge appearing.
 local function dropEligible(draft, target)
   if not target then return false end
   if draft.ancestors[target.nv.id] then return false end
-  if draft.type == 'midi' and target.nv.id == 'master' then return false end
+  if draft.type == 'midi'  and #target.nv.ins.midi  == 0 then return false end
   if draft.type == 'audio' and #target.nv.ins.audio == 0 then return false end
   return true
 end

@@ -1,9 +1,9 @@
-@module DAG  src=DAG.lua  loc=347  sha=a23bf2f  mode=namespace
+@module DAG  src=DAG.lua  loc=359  sha=239d190  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module — no state; functions take operands explicitly
   @invariant  REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and compile (port-to-port conns); lower() bridges them.
-  @invariant  source nodes have implicit I/O (one stereo output port, one MIDI out port); fx nodes carry explicit audio.ins/outs as integer port counts; MIDI is one implicit port on sources/fx
+  @invariant  source nodes have implicit I/O (one stereo output port, one MIDI out port — no inputs in either layer); fx nodes carry explicit audio.ins/outs as integer port counts; MIDI is one implicit port on fx (both directions) and out-only on sources
   @invariant  master is a singleton node (id='master'); audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
   @invariant  srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
   @contract  { ins=N, outs=N } stereo-port counts; sources resolve to implicit (0,1); single source of truth for the port view
@@ -29,15 +29,15 @@
   -- validate
   -- ancestors
   -- lower
-  @fn passthroughNode(node)  @ 143
+  @fn passthroughNode(node)  @ 155
       -- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
       -- the audio shape).
   -- srcSet / classes
-  @fn inboundOf(compile)  @ 216
+  @fn inboundOf(compile)  @ 228
       -- Reverse adjacency: for each node id, the list of input-side node ids.
       -- Stashed on compile so the cost is paid once per graph instance.
   -- quotientGraph / absorption / capacityErrors
-  @fn directHost(q)  @ 291
+  @fn directHost(q)  @ 303
       -- Direct (one-hop) host for cls under the absorption rule. Returns nil if cls
       -- has no eligible host: zero audio parents, ambiguous primaries, or multiple
       -- non-primary audio parents.
@@ -45,20 +45,20 @@
 # Public API (M.*)
   @api M.validate(user)  @ 39
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.ancestors(user, sourceId)  @ 125
+  @api M.ancestors(user, sourceId)  @ 137
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over user.edges; cycle-safe via visited
-  @api M.lower(user)  @ 150
+  @api M.lower(user)  @ 162
       @contract  assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
-  @api M.srcSet(compile, nodeId)  @ 227
+  @api M.srcSet(compile, nodeId)  @ 239
       @contract  set<trackGuid> of source ancestors; memoised on compile (stashes _srcSet, _inbound)
-  @api M.classes(compile)  @ 248
+  @api M.classes(compile)  @ 260
       @contract  partitions compile.nodes by srcSet; classKey = sorted trackGuids joined by '|', '' for empty
-  @api M.quotientGraph(compile, classes)  @ 262
+  @api M.quotientGraph(compile, classes)  @ 274
       @contract  class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryAudioParents ⊆ audioParents, flagged by `primary` wires
-  @api M.absorption(quotient)  @ 301
+  @api M.absorption(quotient)  @ 313
       @contract  sparse {[cls]=hostCls}; chains resolved to terminal host; absent = self-hosting; cycle-safe
-  @api M.capacityErrors(compile, classes)  @ 323
+  @api M.capacityErrors(compile, classes)  @ 335
       @contract  list of {classKey, kind='audio'|'midi', count} for intra-class conn counts exceeding 64 audio / 128 midi; sorted by classKey then kind

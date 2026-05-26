@@ -304,6 +304,59 @@ return {
     end,
   },
   {
+    name = 'duplicate midi edge rejects (same from, same to)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('a'); ns[k]  = v
+      local k2, v2 = fx('b');     ns[k2] = v2
+      local err = DAG.validate(mk(ns, {
+        { type = 'midi', from = 'a', to = 'b' },
+        { type = 'midi', from = 'a', to = 'b' },
+      }))
+      t.eq(err.code,  'duplicate_edge')
+      t.eq(err.edge,  2)
+      t.eq(err.prior, 1)
+    end,
+  },
+  {
+    name = 'duplicate audio edge rejects (same fromPort/toPort)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('a');               ns[k]  = v
+      local k2, v2 = fx('b', { ins = 2 });      ns[k2] = v2
+      local err = DAG.validate(mk(ns, {
+        { type = 'audio', from = 'a', to = 'b', toPort = 1 },
+        { type = 'audio', from = 'a', to = 'b', toPort = 1 },
+      }))
+      t.eq(err.code, 'duplicate_edge')
+    end,
+  },
+  {
+    name = 'audio edge: nil port collides with explicit port 1 (shorthand)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('a'); ns[k]  = v
+      local k2, v2 = fx('b');     ns[k2] = v2
+      local err = DAG.validate(mk(ns, {
+        { type = 'audio', from = 'a', to = 'b' },
+        { type = 'audio', from = 'a', to = 'b', toPort = 1 },
+      }))
+      t.eq(err.code, 'duplicate_edge')
+    end,
+  },
+  {
+    name = 'audio edges differing only in toPort coexist',
+    run = function()
+      local ns = {}
+      local k,  v  = source('a');               ns[k]  = v
+      local k2, v2 = fx('b', { ins = 2 });      ns[k2] = v2
+      t.eq(DAG.validate(mk(ns, {
+        { type = 'audio', from = 'a', to = 'b', toPort = 1 },
+        { type = 'audio', from = 'a', to = 'b', toPort = 2 },
+      })), nil)
+    end,
+  },
+  {
     name = 'unknown edge type rejects',
     run = function()
       local ns = {}

@@ -6,7 +6,7 @@
 
 --invariant: pure module — no state; functions take operands explicitly
 --invariant: REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and compile (port-to-port conns); lower() bridges them.
---invariant: source nodes have implicit I/O (one stereo output port, one MIDI out port); fx nodes carry explicit audio.ins/outs as integer port counts; MIDI is one implicit port on sources/fx
+--invariant: source nodes have implicit I/O (one stereo output port, one MIDI out port — no inputs in either layer); fx nodes carry explicit audio.ins/outs as integer port counts; MIDI is one implicit port on fx (both directions) and out-only on sources
 --invariant: master is a singleton node (id='master'); audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --invariant: srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
 --shape: UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
@@ -47,6 +47,9 @@ function M.validate(user)
     return { code = 'master_singleton', count = masters }
   end
 
+  -- Dedupe key per edge: (type, from, to, fromPort_or_1, toPort_or_1).
+  -- nil ports resolve to 1 so the shorthand and the explicit form collide.
+  local seen = {}
   for i, edge in ipairs(edges) do
     local fromNode, toNode = nodes[edge.from], nodes[edge.to]
     if not fromNode then
@@ -86,6 +89,15 @@ function M.validate(user)
     else
       return { code = 'unknown_edge_type', edge = i, type = edge.type }
     end
+
+    local fp = edge.type == 'audio' and (edge.fromPort or 1) or 0
+    local tp = edge.type == 'audio' and (edge.toPort   or 1) or 0
+    local key = edge.type .. '|' .. edge.from .. '|' .. edge.to
+                .. '|' .. fp .. '|' .. tp
+    if seen[key] then
+      return { code = 'duplicate_edge', edge = i, prior = seen[key] }
+    end
+    seen[key] = i
   end
 
   -- Cycle detection: directed DFS over the union of audio + midi edges.
