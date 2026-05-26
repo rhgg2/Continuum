@@ -190,8 +190,10 @@ local declarations = {
   { 'colour.laneEnvelope',     'colour.accent'                    },
 
   -- Wiring page node tints + port marker colours. Category drives the
-  -- node fill: master = sink (no outputs), generator = outputs but no
-  -- audio in, effect = has audio in. Port colours distinguish audio vs MIDI.
+  -- node fill: source = REAPER track (kind-driven, distinct from generator),
+  -- master = sink (no outputs), generator = outputs but no audio in,
+  -- effect = has audio in. Port colours distinguish audio vs MIDI.
+  { 'colour.wiring.node.source',    'palette.positive' },
   { 'colour.wiring.node.master',    'palette.mid'    },
   { 'colour.wiring.node.generator', 'palette.slate'  },
   { 'colour.wiring.node.effect',    'palette.salmon' },

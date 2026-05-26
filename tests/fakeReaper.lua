@@ -53,7 +53,11 @@ function M.new()
 
   function r.GetSetMediaTrackInfo_String(track, key, value, setNew)
     local k = tostring(track) .. '/' .. key
-    if setNew then state.trackExt[k] = value; return true, value end
+    if setNew then
+      state.trackExt[k] = value
+      if key == 'P_NAME' then state.trackNames[track] = value end
+      return true, value
+    end
     return true, state.trackExt[k] or ''
   end
 
@@ -163,10 +167,15 @@ function M.new()
     return true
   end
   local insertedN = 0
+  state.trackGuids = {}
   function r.InsertTrackAtIndex(idx, _wantDefaults)
     insertedN = insertedN + 1
     local track = { __track = 'scratch' .. insertedN }
     table.insert(state.projectTracks, idx + 1, track)
+    state.trackGuids[track] = '{TR-' .. insertedN .. '}'
+  end
+  function r.GetTrackGUID(track)
+    return state.trackGuids[track] or ('{TR-anon-' .. tostring(track) .. '}')
   end
   function r.PreventUIRefresh(_) end
 

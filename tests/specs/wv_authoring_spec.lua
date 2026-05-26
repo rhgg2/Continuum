@@ -45,6 +45,71 @@ return {
     end,
   },
   {
+    name = 'addFx on generator (ins=0) auto-spawns source node, midi edge, and REAPER track',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
+      local tracksBefore = reaper.CountTracks(0)
+      t.truthy(wv:addFx(50, -10, { name = 'Massive', ident = 'VST3:Massive' }))
+      local g = wv:graph()
+      t.eq(g.nodes.n1.kind, 'fx',     'fx minted as n1')
+      t.eq(g.nodes.n2.kind, 'source', 'source minted as n2 alongside the fx')
+      t.truthy(g.nodes.n2.trackGuid,  'source bound to a track guid')
+      t.eq(g.nodes.n2.displayName, 'Massive', 'source carries fx-name snapshot for the label')
+      local sourceView
+      for _, nv in ipairs(wv:nodeViews()) do
+        if nv.id == 'n2' then sourceView = nv end
+      end
+      t.eq(sourceView.label, 'Massive', 'source label reads the live REAPER track name')
+      t.eq(sourceView.category, 'source', 'source gets its own colour category')
+    end,
+  },
+  {
+    name = 'source label tracks REAPER renames (live, not snapshotted)',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
+      wv:addFx(0, 0, { name = 'Massive', ident = 'VST3:Massive' })
+      local g = wv:graph()
+      local track = reaper.GetTrack(0, math.floor(reaper.CountTracks(0)) - 2)
+      reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', 'Renamed', true)
+      local sourceView
+      for _, nv in ipairs(wv:nodeViews()) do
+        if nv.id == 'n2' then sourceView = nv end
+      end
+      t.eq(sourceView.label, 'Renamed', 'rename propagates without re-mutating the graph')
+    end,
+  },
+  {
+    name = 'addFx on generator pins fx pos, fallback source pos, and a single midi edge',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
+      local tracksBefore = reaper.CountTracks(0)
+      t.truthy(wv:addFx(50, -10, { name = 'Massive', ident = 'VST3:Massive' }))
+      local g = wv:graph()
+      t.eq(g.nodes.n1.pos.x, 50);  t.eq(g.nodes.n1.pos.y, -10)
+      t.eq(g.nodes.n2.pos.x, -90, 'fallback source pos = (fx.x - 140, fx.y)')
+      t.eq(g.nodes.n2.pos.y, -10)
+      t.eq(#g.edges, 1)
+      t.eq(g.edges[1].type, 'midi')
+      t.eq(g.edges[1].from, 'n2')
+      t.eq(g.edges[1].to,   'n1')
+      t.eq(reaper.CountTracks(0), tracksBefore + 2, 'scratch + new source track')
+    end,
+  },
+  {
+    name = 'addFx on generator honours opts.sourcePos for the spawned source',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
+      t.truthy(wv:addFx(80, 40, { name = 'Massive', ident = 'VST3:Massive' },
+                        { sourcePos = { x = 10, y = -5 } }))
+      local g = wv:graph()
+      t.eq(g.nodes.n2.pos.x, 10); t.eq(g.nodes.n2.pos.y, -5)
+    end,
+  },
+  {
     name = 'successive addFx calls stair-step ids and leave master alone',
     run = function(harness)
       local _, wv = mkWv(harness)

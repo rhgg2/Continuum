@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=178  sha=de1c2cf  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=208  sha=44d3283  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -48,7 +48,13 @@
       @contract  list of intra-class capacity overflows on the lowered compile graph; empty when the user graph is within budget
   @api wm:probeFxIO(ident)  @ 140
       @contract  { ins, outs, inNames, outNames } in stereo ports for fxIdent; instantiates on the scratch track, reads TrackFX_GetIOSize + in_pin_X/out_pin_X via TrackFX_GetNamedConfigParm, deletes, caches by ident. Unknown ident → ins=outs=0 with empty name lists.
-  @api wm:listInstalledFX()  @ 165
+  @api wm:trackByGuid(guid)  @ 165
+      @contract  linear scan; returns the MediaTrack with this GUID, or nil if the project no longer holds one
+  @api wm:trackName(guid)  @ 173
+      @contract  live REAPER track name for guid (renames propagate); nil if the track is gone
+  @api wm:createSourceTrack(opts)  @ 181
+      @contract  inserts a track just before scratch (named opts.name); returns its GUID; outside mutate
+  @api wm:listInstalledFX()  @ 195
       @contract  enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
 
 # Signals emitted (via util.installHooks)
@@ -62,4 +68,7 @@
   @reaper GetSetMediaTrackInfo_String
   @reaper SetMediaTrackInfo_Value
   @reaper TrackFX_GetNamedConfigParm, TrackFX_AddByName, TrackFX_GetIOSize, TrackFX_Delete
+  @reaper GetTrackGUID
+  @reaper GetTrackName
+  @reaper GetMediaTrackInfo_Value
   @reaper EnumInstalledFX

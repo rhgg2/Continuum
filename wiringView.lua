@@ -23,7 +23,8 @@ local function nodeLabel(node)
   if node.kind == 'master' then return 'master' end
   if node.kind == 'fx'     then return node.fxDisplay or 'fx' end
   if node.kind == 'source' then
-    return node.fxDisplay
+    return (node.trackGuid and wm:trackName(node.trackGuid))
+        or node.displayName
         or (node.trackGuid and ('src ' .. node.trackGuid:sub(2, 6)))
         or 'source'
   end
@@ -53,11 +54,12 @@ local function midiPorts(node, dir)
   return { 'midi' }
 end
 
--- Category is a function of port shape, not node.kind: a node with no
--- outputs is a sink (master / hardware send), one with outputs but no
--- audio in is a generator (source / synth), one with audio in is an
--- effect. Drives the colour.wiring.node.<category> fill role.
-local function nodeCategory(ins, outs)
+-- Source nodes get their own category (kind-driven, so a track source reads
+-- visually distinct from a synth generator). Other kinds fall out of port
+-- shape: no outputs = master/sink; outputs but no audio in = generator;
+-- audio in = effect. Drives the colour.wiring.node.<category> fill role.
+local function nodeCategory(kind, ins, outs)
+  if kind == 'source'              then return 'source'    end
   if #outs.audio + #outs.midi == 0 then return 'master'    end
   if #ins.audio == 0               then return 'generator' end
   return 'effect'
@@ -70,7 +72,7 @@ local function nodeView(id, node)
     id       = id,
     pos      = { x = node.pos.x, y = node.pos.y },
     label    = nodeLabel(node),
-    category = nodeCategory(ins, outs),
+    category = nodeCategory(node.kind, ins, outs),
     ins      = ins,
     outs     = outs,
   }
@@ -86,13 +88,16 @@ function wv:load()  wm:load() end
 
 ----- Authoring (slice 1.3b)
 
---contract: appends an fx node at logical (x,y); mints id 'n'<_nextId>; fx = {name, ident} from wv:listInstalledFX; audio counts + per-port names come from wm:probeFxIO(ident)
-function wv:addFx(x, y, fx)
+--contract: appends fx at (x,y); audio io from probeFxIO(ident)
+--contract: if generator (ins=0), also spawns source track + node at opts.sourcePos and midi edge from it
+function wv:addFx(x, y, fx, opts)
   local io = wm:probeFxIO(fx.ident)
+  local isGenerator = (io.ins or 0) == 0
+  local sourceGuid = isGenerator and wm:createSourceTrack{ name = fx.name } or nil
   return wm:mutate(function(g)
-    local id = 'n' .. g._nextId
+    local fxId = 'n' .. g._nextId
     g._nextId = g._nextId + 1
-    g.nodes[id] = {
+    g.nodes[fxId] = {
       kind      = 'fx',
       pos       = { x = x, y = y },
       fxIdent   = fx.ident,
@@ -100,6 +105,18 @@ function wv:addFx(x, y, fx)
       audio     = { ins      = io.ins,     outs     = io.outs,
                     inNames  = io.inNames, outNames = io.outNames },
     }
+    if isGenerator then
+      local sourceId = 'n' .. g._nextId
+      g._nextId = g._nextId + 1
+      local sp = (opts and opts.sourcePos) or { x = x - 140, y = y }
+      g.nodes[sourceId] = {
+        kind        = 'source',
+        pos         = { x = sp.x, y = sp.y },
+        trackGuid   = sourceGuid,
+        displayName = fx.name,
+      }
+      util.add(g.edges, { type = 'midi', from = sourceId, to = fxId })
+    end
   end)
 end
 

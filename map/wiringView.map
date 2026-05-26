@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=190  sha=44d3283  mode=chunk
+@module wiringView  src=wiringView.lua  loc=207  sha=239d190  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -25,47 +25,48 @@
 # Private functions
   -- Logical projection (viewport-independent)
   @fn nodeLabel(node)  @ 22
-  @fn audioPorts(node, dir)  @ 38
+  @fn audioPorts(node, dir)  @ 39
       -- audio.ins / audio.outs are integer stereo-port counts; fx/master
       -- store them directly, source defaults to (0 in, 1 stereo out). The
       -- view projects each count as a list of names — synthetic 'in 1' /
       -- 'out 1' baseline today; once wm queries TrackFX_GetIOName it will
       -- override per-port via node.audio.inNames / outNames.
-  @fn midiPorts(node, dir)  @ 51
+  @fn midiPorts(node, dir)  @ 52
       -- Per the design doc: master has no MIDI; source / fx carry exactly
       -- one MIDI port in each direction.
-  @fn nodeCategory(ins, outs)  @ 60
-      -- Category is a function of port shape, not node.kind: a node with no
-      -- outputs is a sink (master / hardware send), one with outputs but no
-      -- audio in is a generator (source / synth), one with audio in is an
-      -- effect. Drives the colour.wiring.node.<category> fill role.
-  @fn nodeView(id, node)  @ 66
+  @fn nodeCategory(kind, ins, outs)  @ 61
+      -- Source nodes get their own category (kind-driven, so a track source reads
+      -- visually distinct from a synth generator). Other kinds fall out of port
+      -- shape: no outputs = master/sink; outputs but no audio in = generator;
+      -- audio in = effect. Drives the colour.wiring.node.<category> fill role.
+  @fn nodeView(id, node)  @ 68
 
 # Public API (wv:*)
   -- wm pass-through
-  @api wv:graph()  @ 83
-  @api wv:save()  @ 84
-  @api wv:load()  @ 85
+  @api wv:graph()  @ 85
+  @api wv:save()  @ 86
+  @api wv:load()  @ 87
   -- Authoring (slice 1.3b)
-  @api wv:addFx(x, y, fx)  @ 90
-      @contract  appends an fx node at logical (x,y); mints id 'n'<_nextId>; fx = {name, ident} from wv:listInstalledFX; audio counts + per-port names come from wm:probeFxIO(ident)
-  @api wv:listInstalledFX()  @ 106
-  @api wv:moveNodes(moves)  @ 109
+  @api wv:addFx(x, y, fx, opts)  @ 93
+      @contract  appends fx at (x,y); audio io from probeFxIO(ident)
+      @contract  if generator (ins=0), also spawns source track + node at opts.sourcePos and midi edge from it
+  @api wv:listInstalledFX()  @ 123
+  @api wv:moveNodes(moves)  @ 126
       @contract  atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
-  @api wv:addWire(spec)  @ 119
+  @api wv:addWire(spec)  @ 136
       @contract  appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
   -- Topology queries
-  @api wv:ancestorsOf(sourceId)  @ 133
+  @api wv:ancestorsOf(sourceId)  @ 150
       @contract  backward reachability over user.edges; returns { [id]=true } including sourceId
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 141
+  @api wv:nodeViews()  @ 158
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:wireViews()  @ 150
+  @api wv:wireViews()  @ 167
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 178
-  @api wv:setHover(id)  @ 179
-  @api wv:selection()  @ 182
+  @api wv:hover()  @ 195
+  @api wv:setHover(id)  @ 196
+  @api wv:selection()  @ 199
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 184
+  @api wv:setSelection(idSet)  @ 201
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.

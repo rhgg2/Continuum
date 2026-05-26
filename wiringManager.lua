@@ -161,6 +161,36 @@ function wm:probeFxIO(ident)
   return result
 end
 
+--contract: linear scan; returns the MediaTrack with this GUID, or nil if the project no longer holds one
+function wm:trackByGuid(guid)
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local track = reaper.GetTrack(0, i)
+    if reaper.GetTrackGUID(track) == guid then return track end
+  end
+end
+
+--contract: live REAPER track name for guid (renames propagate); nil if the track is gone
+function wm:trackName(guid)
+  local track = self:trackByGuid(guid)
+  if not track then return nil end
+  local _, name = reaper.GetTrackName(track)
+  return name
+end
+
+--contract: inserts a track just before scratch (named opts.name); returns its GUID; outside mutate
+function wm:createSourceTrack(opts)
+  ensureScratchTrack()
+  reaper.PreventUIRefresh(1)
+  local insertIdx = math.floor(reaper.GetMediaTrackInfo_Value(_scratchTrack, 'IP_TRACKNUMBER')) - 1
+  reaper.InsertTrackAtIndex(insertIdx, true)
+  local track = reaper.GetTrack(0, insertIdx)
+  if opts and opts.name then
+    reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', opts.name, true)
+  end
+  reaper.PreventUIRefresh(-1)
+  return reaper.GetTrackGUID(track)
+end
+
 --contract: enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
 function wm:listInstalledFX()
   if _installedFx then return _installedFx end

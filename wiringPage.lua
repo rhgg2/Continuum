@@ -132,6 +132,15 @@ local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
 local wireDraft = nil  -- { type='audio'|'midi', fromId, fromPort?, ancestors }
 local shiftWas  = false
 
+-- Last canvas origin, captured at the top of renderCanvas. Lets openFxPicker
+-- (called from the N-key dispatch path, which runs after renderCanvas exits)
+-- recover logical mouse coords from screen-space GetMousePos.
+local canvasOrigin = { ox = 0, oy = 0 }
+
+-- Forward decl: renderCanvas's RMB handler calls openFxPicker, defined below
+-- the public API alongside the wiring-scope command registrations.
+local openFxPicker
+
 ----- Pixel geometry (page-owned)
 
 -- pos is the node's centre in canvas-local coordinates (origin = centre
@@ -716,6 +725,7 @@ local function renderCanvas(w, h)
   -- Canvas origin is the centre of the viewport: logical (0,0) draws
   -- in the middle, positions extend in all four quadrants from there.
   local ox, oy = sx + math.floor(w / 2), sy + math.floor(h / 2)
+  canvasOrigin.ox, canvasOrigin.oy = ox, oy
 
   local mx, my    = ImGui.GetMousePos(ctx)
   local shiftHeld = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
@@ -893,6 +903,13 @@ local function renderCanvas(w, h)
     band = nil
   end
 
+  -- Right-click anywhere on the canvas opens the FX picker, anchored at the
+  -- cursor — same code path as the N-key shortcut, just with explicit coords.
+  if not drag and not band and not wireDraft
+      and ImGui.IsMouseClicked(ctx, 1) then
+    openFxPicker(mx - ox, my - oy)
+  end
+
   -- Band overlay: drawn last so it floats over nodes and hover affordances.
   if band then
     local bx0, by0, bx1, by1 = band.mx0, band.my0, mx, my
@@ -969,14 +986,44 @@ local function shortFxName(s)
   return s
 end
 
-local function openFxPicker()
+local function findMasterPos()
+  for _, nv in ipairs(wv:nodeViews()) do
+    if nv.id == 'master' then return nv.pos.x, nv.pos.y end
+  end
+  return 0, 0
+end
+
+-- Place an auto-spawned source on the master→cursor ray, pulled back from
+-- the generator just far enough that the two body rects don't collide along
+-- the ray. Degenerate (cursor on master): fall back to a horizontal offset.
+local SOURCE_PAD = 24
+local function sourcePosFor(genX, genY)
+  local mxp, myp = findMasterPos()
+  local dx, dy = genX - mxp, genY - myp
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len < 1 then return genX - NODE_W - SOURCE_PAD, genY end
+  local ux, uy = dx / len, dy / len
+  local tx = (ux == 0) and math.huge or (NODE_W / 2 / math.abs(ux))
+  local ty = (uy == 0) and math.huge or (NODE_H / 2 / math.abs(uy))
+  local exit = math.min(tx, ty)
+  local sep  = 2 * exit + SOURCE_PAD
+  return genX - ux * sep, genY - uy * sep
+end
+
+openFxPicker = function(x, y)
+  if x == nil then
+    local mx, my = ImGui.GetMousePos(ctx)
+    x, y = mx - canvasOrigin.ox, my - canvasOrigin.oy
+  end
+  local sx, sy = sourcePosFor(x, y)
   modalHost:open{
     kind     = 'wiringFxPicker',
     title    = 'Add FX',
     items    = wv:listInstalledFX(),
     flags    = ImGui.WindowFlags_NoNav,
     callback = function(fx)
-      wv:addFx(0, 0, { name = shortFxName(fx.name), ident = fx.ident })
+      wv:addFx(x, y, { name = shortFxName(fx.name), ident = fx.ident },
+               { sourcePos = { x = sx, y = sy } })
     end,
   }
 end
