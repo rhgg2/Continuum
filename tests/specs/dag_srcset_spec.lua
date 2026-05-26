@@ -42,15 +42,15 @@ return {
     run = function()
       local ns = {}
       local k, v = source('s', 'guid-s'); ns[k] = v
-      local c = DAG.lower(mk(ns, {}))
-      t.deepEq(sortedKeys(DAG.srcSet(c, 's')), { 'guid-s' })
+      local c = DAG.compile(mk(ns, {}))
+      t.deepEq(sortedKeys(c:srcSet('s')), { 'guid-s' })
     end,
   },
   {
     name = 'isolated master srcSet is empty',
     run = function()
-      local c = DAG.lower(mk({}))
-      t.deepEq(sortedKeys(DAG.srcSet(c, 'master')), {})
+      local c = DAG.compile(mk({}))
+      t.deepEq(sortedKeys(c:srcSet('master')), {})
     end,
   },
   {
@@ -59,10 +59,10 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local c = DAG.lower(mk(ns, {
+      local c = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
       }))
-      t.deepEq(sortedKeys(DAG.srcSet(c, 'f')), { 'guid-s' })
+      t.deepEq(sortedKeys(c:srcSet('f')), { 'guid-s' })
     end,
   },
   {
@@ -72,11 +72,11 @@ return {
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
       local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
-      local c = DAG.lower(mk(ns, {
+      local c = DAG.compile(mk(ns, {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
       }))
-      t.deepEq(sortedKeys(DAG.srcSet(c, 'mix')), { 'guid-a', 'guid-b' })
+      t.deepEq(sortedKeys(c:srcSet('mix')), { 'guid-a', 'guid-b' })
     end,
   },
   {
@@ -88,13 +88,13 @@ return {
       local k2, v2 = fx('a');               ns[k2] = v2
       local k3, v3 = fx('b');               ns[k3] = v3
       local k4, v4 = fx('c', { ins = 2 }); ns[k4] = v4
-      local c = DAG.lower(mk(ns, {
+      local c = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'a' },
         { type = 'audio', from = 's', to = 'b' },
         { type = 'audio', from = 'a', to = 'c', toPort = 1 },
         { type = 'audio', from = 'b', to = 'c', toPort = 2 },
       }))
-      t.deepEq(sortedKeys(DAG.srcSet(c, 'c')), { 'guid-s' })
+      t.deepEq(sortedKeys(c:srcSet('c')), { 'guid-s' })
     end,
   },
   {
@@ -103,11 +103,11 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local c = DAG.lower(mk(ns, {
+      local c = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
       }))
-      t.deepEq(sortedKeys(DAG.srcSet(c, 'master')), { 'guid-s' })
+      t.deepEq(sortedKeys(c:srcSet('master')), { 'guid-s' })
     end,
   },
   {
@@ -116,16 +116,16 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local c = DAG.lower(mk(ns, {
+      local c = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'f', ops = { gain = 0.5 } },
       }))
       local gainId
-      for id, node in pairs(c.nodes) do
+      for id, node in pairs(c:graph().nodes) do
         if node.params and node.params.mode == 'gain' then gainId = id end
       end
       t.truthy(gainId)
-      t.deepEq(sortedKeys(DAG.srcSet(c, gainId)), { 'guid-s' })
-      t.deepEq(sortedKeys(DAG.srcSet(c, 'f')),    { 'guid-s' })
+      t.deepEq(sortedKeys(c:srcSet(gainId)), { 'guid-s' })
+      t.deepEq(sortedKeys(c:srcSet('f')),    { 'guid-s' })
     end,
   },
   {
@@ -134,11 +134,11 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local c = DAG.lower(mk(ns, {
+      local c = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
       }))
-      local a = DAG.srcSet(c, 'f')
-      local b = DAG.srcSet(c, 'f')
+      local a = c:srcSet('f')
+      local b = c:srcSet('f')
       t.eq(a, b)  -- same table reference, not just deep-equal
     end,
   },

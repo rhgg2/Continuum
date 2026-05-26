@@ -29,9 +29,7 @@ local function mk(nodes, edges)
 end
 
 local function planOf(g)
-  local c  = DAG.lower(g)
-  local cs = DAG.classes(c)
-  return DAG.targetPlan(c, cs), c, cs
+  return DAG.compile(g):targetPlan()
 end
 
 return {

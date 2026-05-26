@@ -200,10 +200,10 @@ local CAPACITY_BUDGET = { audio = 64, midi = 128 }
 --contract: list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
 function wv:errors()
   local g       = wm:graph()
-  local compile = wm:compile()
-  local classes = DAG.classes(compile)
+  local cx      = wm:compile()
+  local classes = cx:classes()
   local out = {}
-  for _, err in ipairs(wm:errors()) do
+  for _, err in ipairs(cx:capacityErrors()) do
     local nodeIds = {}
     for _, id in ipairs(classes[err.classKey] or {}) do
       if g.nodes[id] then nodeIds[id] = true end

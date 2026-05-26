@@ -103,10 +103,10 @@ return {
     name = 'wm:compile()/wm:errors() smoke on a fresh graph',
     run = function(harness)
       local _, wm = mkWm(harness)
-      local c = wm:compile()
-      t.truthy(c.nodes,            'compile returns {nodes,conns}')
-      t.truthy(c.conns,            'compile has conns array')
-      t.eq(#c.conns, 0,            'no edges -> no conns')
+      local g = wm:compile():graph()
+      t.truthy(g.nodes,            'ctx:graph() returns {nodes,conns}')
+      t.truthy(g.conns,            'compile has conns array')
+      t.eq(#g.conns, 0,            'no edges -> no conns')
       t.deepEq(wm:errors(), {},    'no capacity overflow on fresh graph')
     end,
   },

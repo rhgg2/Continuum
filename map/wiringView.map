@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=233  sha=5b36bf6  mode=chunk
+@module wiringView  src=wiringView.lua  loc=233  sha=99dda19  mode=chunk
 @deps cm
 
 # Invariants & contracts

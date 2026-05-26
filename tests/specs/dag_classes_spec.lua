@@ -46,7 +46,7 @@ return {
   {
     name = 'empty graph: only master, one class with key ""',
     run = function()
-      local cs = DAG.classes(DAG.lower(mk({})))
+      local cs = DAG.compile(mk({})):classes()
       t.deepEq(classKeys(cs), { '' })
       t.deepEq(asSet(cs['']), { master = true })
     end,
@@ -56,7 +56,7 @@ return {
     run = function()
       local ns = {}
       local k, v = source('s', 'guid-s'); ns[k] = v
-      local cs = DAG.classes(DAG.lower(mk(ns, {})))
+      local cs = DAG.compile(mk(ns, {})):classes()
       t.deepEq(classKeys(cs), { '', 'guid-s' })
       t.deepEq(asSet(cs['']),        { master = true })
       t.deepEq(asSet(cs['guid-s']), { s = true })
@@ -68,10 +68,10 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local cs = DAG.classes(DAG.lower(mk(ns, {
+      local cs = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
-      })))
+      })):classes()
       t.deepEq(classKeys(cs), { 'guid-s' })
       t.deepEq(asSet(cs['guid-s']),
                { s = true, f = true, master = true })
@@ -84,11 +84,11 @@ return {
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
       local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
-      local cs = DAG.classes(DAG.lower(mk(ns, {
+      local cs = DAG.compile(mk(ns, {
         { type = 'audio', from = 's1',  to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
-      })))
+      })):classes()
       t.deepEq(classKeys(cs), { 'guid-a', 'guid-a|guid-b', 'guid-b' })
       t.deepEq(asSet(cs['guid-a']), { s1 = true })
       t.deepEq(asSet(cs['guid-b']), { s2 = true })
@@ -104,10 +104,10 @@ return {
       local k,  v  = source('sZ', 'guid-z'); ns[k]  = v
       local k2, v2 = source('sA', 'guid-a'); ns[k2] = v2
       local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
-      local cs = DAG.classes(DAG.lower(mk(ns, {
+      local cs = DAG.compile(mk(ns, {
         { type = 'audio', from = 'sZ', to = 'mix', toPort = 1 },
         { type = 'audio', from = 'sA', to = 'mix', toPort = 2 },
-      })))
+      })):classes()
       t.truthy(cs['guid-a|guid-z'])
       t.falsy(cs['guid-z|guid-a'])
     end,
@@ -118,9 +118,9 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local cs = DAG.classes(DAG.lower(mk(ns, {
+      local cs = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'f', ops = { gain = 0.5 } },
-      })))
+      })):classes()
       -- s, gain CU, f all share 'guid-s'; master is empty.
       t.deepEq(classKeys(cs), { '', 'guid-s' })
       t.eq(#cs['guid-s'], 3)

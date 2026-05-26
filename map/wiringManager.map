@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=425  sha=9b68a9b  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=423  sha=936df22  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -39,28 +39,28 @@
       -- Port P (1-indexed) groups pin 2(P-1) and 2P-1.
       -- "Sidechain L" + "Sidechain R" → "Sidechain"; mismatched pair → left pin name.
   -- Snapshot / target / diff (Stage 2)
-  @fn ownedChain(track, ownedGuids)  @ 205
+  @fn ownedChain(track, ownedGuids)  @ 204
       -- Walk the chain of one track, returning { {fxGuid, ident}, ... } for FX
       -- whose guid appears in ownedGuids. CU instances ride the same predicate;
       -- the applier persists their guid on the originating edge so subsequent
       -- snapshots recognise them like any fx node.
-  @fn sendType(track, sendIdx)  @ 220
+  @fn sendType(track, sendIdx)  @ 219
       -- Audio if I_MIDIFLAGS low-5-bits == 31 (midi disabled); midi if I_SRCCHAN
       -- == -1 (audio disabled). Anything carrying both reads as 'audio' —
       -- defensive; the differ doesn't model dual-stream sends.
-  @fn readSendsClass(track, byTrack)  @ 229
-  @fn projectEntry(planEntry, compileNodes, scratchGuid)  @ 292
+  @fn readSendsClass(track, byTrack)  @ 228
+  @fn projectEntry(planEntry, compileNodes, scratchGuid)  @ 291
       -- Project the DAG's TargetPlan entry into the WiringSnapshot shape.
       -- Every kind='fx' compile node maps to one fxOrder entry; CU bridges
       -- (also kind='fx', synthesised by lower with `params` set) flow through
       -- uniformly. trackGuid decorated for the hosts we can identify.
-  @fn attachFxGuids(compile, graph)  @ 318
+  @fn attachFxGuids(compile, graph)  @ 317
       -- CompileNode is a stripped Node (see DAG.passthroughNode). It loses
       -- fxGuid; re-attach from the user graph so targetState carries the bridge
       -- identity all the way through. CU bridges already carry fxGuid from
       -- lower (copied off the source edge's _opFxGuid).
-  @fn fxOrderEq(a, b)  @ 341
-  @fn sendsEq(a, b)  @ 351
+  @fn fxOrderEq(a, b)  @ 339
+  @fn sendsEq(a, b)  @ 349
 
 # Public API (wm:*)
   @api wm:load()  @ 100
@@ -72,24 +72,24 @@
   @api wm:mutate(mutator)  @ 119
       @contract  clone-validate-swap; on DAG.validate failure returns false,err with no state change and no signal; on success persists and fires wiringChanged{kind='mutate'}
   @api wm:compile()  @ 132
-      @contract  returns DAG.lower of the current user graph; pure, no caching at Stage 1
+      @contract  returns DAG.compile context around the current user graph; lazy caches live on the ctx, so reusing it across :classes/:capacityErrors/:targetPlan computes each derivation once
   @api wm:errors()  @ 138
       @contract  list of intra-class capacity overflows on the lowered compile graph; empty when the user graph is within budget
-  @api wm:probeFxIO(ident)  @ 144
+  @api wm:probeFxIO(ident)  @ 143
       @contract  { ins, outs, inNames, outNames } in stereo ports for fxIdent; instantiates on the scratch track, reads TrackFX_GetIOSize + in_pin_X/out_pin_X via TrackFX_GetNamedConfigParm, deletes, caches by ident. Unknown ident → ins=outs=0 with empty name lists.
-  @api wm:trackByGuid(guid)  @ 169
+  @api wm:trackByGuid(guid)  @ 168
       @contract  linear scan; returns the MediaTrack with this GUID, or nil if the project no longer holds one
-  @api wm:trackName(guid)  @ 177
+  @api wm:trackName(guid)  @ 176
       @contract  live REAPER track name for guid (renames propagate); nil if the track is gone
-  @api wm:createSourceTrack(opts)  @ 185
+  @api wm:createSourceTrack(opts)  @ 184
       @contract  inserts a track just before scratch (named opts.name), tags it with wiringHostKind=sourceTrack so wm:snapshot recognises it (classKey is the track's own GUID for source hosts); returns its GUID; outside mutate
-  @api wm:snapshot()  @ 242
+  @api wm:snapshot()  @ 241
       @contract  walks every project track, builds a WiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringHostKind; FX whose guids appear in the user graph (fx nodes) or edge ops (CUs); sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
-  @api wm:targetState()  @ 327
+  @api wm:targetState()  @ 326
       @contract  derives the WiringSnapshot REAPER should look like, by lowering the user graph and projecting DAG.targetPlan into snapshot shape. fxGuid on each fx entry comes from the user graph (nil for unmaterialised nodes). Pure — no REAPER reads except GetTrackGUID on the scratch track.
-  @api wm:diff(target, snap)  @ 365
+  @api wm:diff(target, snap)  @ 363
       @contract  pure structural diff producing a WiringOp[] that, applied, would carry snap to target. Order: creates first (so subsequent setSends can reference fresh tracks), then setFXChain / setMainSend / setSends / setExtState, then deletes. snap entries absent from target with hostKind='newTrack' are deleted; sourceTrack/scratch are never deleted (project artefacts).
-  @api wm:listInstalledFX()  @ 412
+  @api wm:listInstalledFX()  @ 410
       @contract  enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
 
 # Signals emitted (via util.installHooks)

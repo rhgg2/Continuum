@@ -1,7 +1,7 @@
-@module DAG  src=DAG.lua  loc=489  sha=aac888d  mode=namespace
+@module DAG  src=DAG.lua  loc=518  sha=936df22  mode=namespace
 
 # Invariants & contracts
-  @invariant  pure module — no state; functions take operands explicitly
+  @invariant  M.validate / M.ancestors / M.audioPorts / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(user), which caches the lowered graph and its derivations lazily
   @invariant  REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and compile (port-to-port conns); lower() bridges them.
   @invariant  source nodes have implicit I/O (one stereo output port, one MIDI out port — no inputs in either layer); fx nodes carry explicit audio.ins/outs as integer port counts; MIDI is one implicit port on fx (both directions) and out-only on sources
   @invariant  master is a singleton node (id='master'); audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
@@ -20,57 +20,50 @@
   @shape  TargetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
 
 # Imports
-  @const util = 'util'  @ 21
+  @const util = 'util'  @ 25
 
 # Module-level constants
-  @const CU_IDENT = 'JS:Continuum Utility'  @ 23
-  @const M = {}  @ 25
+  @const CU_IDENT = 'JS:Continuum Utility'  @ 27
+  @const M = {}  @ 29
 
 # Private functions
   -- Port shape helpers (user graph)
-  @fn audioPorts(node)  @ 30
+  @fn audioPorts(node)  @ 34
       -- Source: one stereo out, no audio in. fx/master: explicit integer counts.
-  -- validate
-  -- ancestors
-  -- lower
-  @fn passthroughNode(node)  @ 169
-      -- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
-      -- the audio shape).
-  -- srcSet / classes
-  @fn inboundOf(compile)  @ 246
+  -- Strip user-graph fields the compile graph doesn't need (pos,
+  @fn passthroughNode(node)  @ 45
+      -- fxDisplay, the audio shape).
+  -- Private compile-side helpers (consumed by ctx)
+  @fn inboundOf(compile)  @ 54
       -- Reverse adjacency: for each node id, the list of input-side node ids.
-      -- Stashed on compile so the cost is paid once per graph instance.
-  -- quotientGraph / absorption / capacityErrors
-  @fn directHost(q)  @ 321
-      -- Direct (one-hop) host for cls under the absorption rule. Returns nil if cls
-      -- has no eligible host: zero audio parents, ambiguous primaries, or multiple
-      -- non-primary audio parents.
-  -- targetPlan
-  @fn classOfMap(classes)  @ 379
-  @fn topoIntraClass(compile, members, classOf, cls)  @ 390
-      -- Topo over intra-class fx/cu members (sources/master excluded — they don't
-      -- appear in REAPER FX chains). Kahn's; ties broken by sorted id for spec
-      -- determinism.
+  @fn classesOf(compile, srcSetFor)  @ 62
+  @fn classOfMap(classes)  @ 73
+  @fn quotientGraphOf(compile, classOf, classes)  @ 81
+  @fn directHost(q)  @ 108
+      -- Direct (one-hop) host for cls under the absorption rule. Returns nil
+      -- if cls has no eligible host: zero audio parents, ambiguous primaries,
+      -- or multiple non-primary audio parents.
+  @fn absorptionOf(quotient)  @ 117
+  @fn capacityErrorsOf(compile, classOf)  @ 138
+  @fn topoIntraClass(compile, members, classOf, cls)  @ 162
+      -- Topo over intra-class fx/cu members (sources/master excluded — they
+      -- don't appear in REAPER FX chains). Kahn's; ties broken by sorted id
+      -- for spec determinism.
+  @fn targetPlanOf(compile, classes, classOf)  @ 196
 
 # Public API (M.*)
-  @api M.validate(user)  @ 44
+  -- validate
+  @api M.validate(user)  @ 264
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.ancestors(user, sourceId)  @ 151
+  -- ancestors
+  @api M.ancestors(user, sourceId)  @ 371
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over user.edges; cycle-safe via visited
-  @api M.lower(user)  @ 176
+  -- lower
+  @api M.lower(user)  @ 388
       @contract  assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
-  @api M.srcSet(compile, nodeId)  @ 257
-      @contract  set<trackGuid> of source ancestors; memoised on compile (stashes _srcSet, _inbound)
-  @api M.classes(compile)  @ 278
-      @contract  partitions compile.nodes by srcSet; classKey = sorted trackGuids joined by '|', '' for empty
-  @api M.quotientGraph(compile, classes)  @ 292
-      @contract  class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryAudioParents ⊆ audioParents, flagged by `primary` wires
-  @api M.absorption(quotient)  @ 331
-      @contract  sparse {[cls]=hostCls}; chains resolved to terminal host; absent = self-hosting; cycle-safe
-  @api M.capacityErrors(compile, classes)  @ 353
-      @contract  list of {classKey, kind='audio'|'midi', count} for intra-class conn counts exceeding 64 audio / 128 midi; sorted by classKey then kind
-  @api M.targetPlan(compile, classes)  @ 425
-      @contract  per-host hosting decision + collapsed inter-class sends; the empty-srcSet class splits (master is implicit on REAPER master with no FX, non-source/non-master members pool on '__scratch__'); audio conns to a master-hosted class fold into mainSend; midi conns to master-hosted and any conn touching the inert pool are dropped.
+  -- compile context
+  @api M.compile(user)  @ 457
+      @contract  assumes M.validate(user)==nil; returns a ctx closing over M.lower(user) with lazy caches for classes, classOf, inbound, srcSet (per-id), quotient, absorption. ctx:srcSet(id) returns the same table across calls (referential cache).

@@ -29,9 +29,7 @@ local function mk(nodes, edges)
 end
 
 local function absorptionOf(g)
-  local c = DAG.lower(g)
-  local cs = DAG.classes(c)
-  return DAG.absorption(DAG.quotientGraph(c, cs)), cs
+  return DAG.compile(g):absorption()
 end
 
 return {

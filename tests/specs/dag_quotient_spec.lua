@@ -37,8 +37,7 @@ local function sortedKeys(set)
 end
 
 local function quotientOf(g)
-  local c = DAG.lower(g)
-  return DAG.quotientGraph(c, DAG.classes(c))
+  return DAG.compile(g):quotient()
 end
 
 return {

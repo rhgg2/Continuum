@@ -1,10 +1,14 @@
 -- Pure structural calculus for the wiring page: user graph (wires) and
 -- compile graph (port-to-port connections), the lowering that bridges
 -- them, and the source-set partition that compiles onto REAPER tracks.
+-- M.compile(user) returns a context closing over the lowered graph
+-- and lazily caching classes / classOf / inbound / srcSet / quotient
+-- / absorption; the user-graph predicates (validate, ancestors,
+-- audioPorts, lower) stay free-standing.
 -- See design/wiring.md for the model.
 -- @noindex
 
---invariant: pure module — no state; functions take operands explicitly
+--invariant: M.validate / M.ancestors / M.audioPorts / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(user), which caches the lowered graph and its derivations lazily
 --invariant: REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and compile (port-to-port conns); lower() bridges them.
 --invariant: source nodes have implicit I/O (one stereo output port, one MIDI out port — no inputs in either layer); fx nodes carry explicit audio.ins/outs as integer port counts; MIDI is one implicit port on fx (both directions) and out-only on sources
 --invariant: master is a singleton node (id='master'); audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
@@ -35,6 +39,222 @@ end
 
 --contract: { ins=N, outs=N } stereo-port counts; sources resolve to implicit (0,1); single source of truth for the port view
 M.audioPorts = audioPorts
+
+----- Strip user-graph fields the compile graph doesn't need (pos,
+-- fxDisplay, the audio shape).
+local function passthroughNode(node)
+  return { kind      = node.kind,
+           trackGuid = node.trackGuid,
+           fxIdent   = node.fxIdent }
+end
+
+----- Private compile-side helpers (consumed by ctx)
+
+-- Reverse adjacency: for each node id, the list of input-side node ids.
+local function inboundOf(compile)
+  local inbound = {}
+  for _, conn in ipairs(compile.conns) do
+    util.bucket(inbound, conn.to, conn.from)
+  end
+  return inbound
+end
+
+local function classesOf(compile, srcSetFor)
+  local out = {}
+  for id in pairs(compile.nodes) do
+    local guids = {}
+    for guid in pairs(srcSetFor(id)) do util.add(guids, guid) end
+    table.sort(guids)
+    util.bucket(out, table.concat(guids, '|'), id)
+  end
+  return out
+end
+
+local function classOfMap(classes)
+  local out = {}
+  for cls, members in pairs(classes) do
+    for _, id in ipairs(members) do out[id] = cls end
+  end
+  return out
+end
+
+local function quotientGraphOf(compile, classOf, classes)
+  local quotient = {}
+  for cls in pairs(classes) do
+    quotient[cls] = { audioParents = {}, midiParents = {},
+                      audioChildren = {}, midiChildren = {},
+                      primaryAudioParents = {} }
+  end
+  for _, conn in ipairs(compile.conns) do
+    local fromCls, toCls = classOf[conn.from], classOf[conn.to]
+    if fromCls ~= toCls then
+      local toQ, fromQ = quotient[toCls], quotient[fromCls]
+      if conn.type == 'audio' then
+        toQ.audioParents[fromCls] = true
+        if conn.primary then toQ.primaryAudioParents[fromCls] = true end
+        fromQ.audioChildren[toCls] = true
+      else
+        toQ.midiParents[fromCls] = true
+        fromQ.midiChildren[toCls] = true
+      end
+    end
+  end
+  return quotient
+end
+
+-- Direct (one-hop) host for cls under the absorption rule. Returns nil
+-- if cls has no eligible host: zero audio parents, ambiguous primaries,
+-- or multiple non-primary audio parents.
+local function directHost(q)
+  local audioParents, primaryParents = {}, {}
+  for parent in pairs(q.audioParents)        do util.add(audioParents,   parent) end
+  for parent in pairs(q.primaryAudioParents) do util.add(primaryParents, parent) end
+  if #primaryParents == 1 then return primaryParents[1] end
+  if #primaryParents == 0 and #audioParents == 1 then return audioParents[1] end
+  return nil
+end
+
+local function absorptionOf(quotient)
+  local direct = {}
+  for cls, q in pairs(quotient) do direct[cls] = directHost(q) end
+
+  local function terminal(cls, seen)
+    local next_ = direct[cls]
+    if not next_ or seen[next_] then return cls end
+    seen[next_] = true
+    return terminal(next_, seen)
+  end
+
+  local out = {}
+  for cls in pairs(quotient) do
+    if direct[cls] then
+      local seen = { [cls] = true }
+      out[cls] = terminal(direct[cls], seen)
+    end
+  end
+  return out
+end
+
+local function capacityErrorsOf(compile, classOf)
+  local counts = {}
+  for _, conn in ipairs(compile.conns) do
+    local cls = classOf[conn.from]
+    if cls and cls == classOf[conn.to] then
+      counts[cls] = counts[cls] or { audio = 0, midi = 0 }
+      counts[cls][conn.type] = counts[cls][conn.type] + 1
+    end
+  end
+  local out = {}
+  for cls, c in pairs(counts) do
+    if c.audio > 64  then util.add(out, { classKey = cls, kind = 'audio', count = c.audio }) end
+    if c.midi  > 128 then util.add(out, { classKey = cls, kind = 'midi',  count = c.midi  }) end
+  end
+  table.sort(out, function(a, b)
+    if a.classKey ~= b.classKey then return a.classKey < b.classKey end
+    return a.kind < b.kind
+  end)
+  return out
+end
+
+-- Topo over intra-class fx/cu members (sources/master excluded — they
+-- don't appear in REAPER FX chains). Kahn's; ties broken by sorted id
+-- for spec determinism.
+local function topoIntraClass(compile, members, classOf, cls)
+  local memberSet = {}
+  for _, id in ipairs(members) do
+    local k = compile.nodes[id].kind
+    if k ~= 'source' and k ~= 'master' then memberSet[id] = true end
+  end
+  local indeg, succ = {}, {}
+  for id in pairs(memberSet) do indeg[id], succ[id] = 0, {} end
+  for _, conn in ipairs(compile.conns) do
+    if memberSet[conn.from] and memberSet[conn.to]
+       and classOf[conn.from] == cls and classOf[conn.to] == cls then
+      indeg[conn.to] = indeg[conn.to] + 1
+      util.add(succ[conn.from], conn.to)
+    end
+  end
+  local ready = {}
+  for id in pairs(memberSet) do if indeg[id] == 0 then util.add(ready, id) end end
+  table.sort(ready)
+  local out = {}
+  while #ready > 0 do
+    local id = table.remove(ready, 1)
+    util.add(out, id)
+    local children = {}
+    for _, child in ipairs(succ[id]) do util.add(children, child) end
+    table.sort(children)
+    for _, child in ipairs(children) do
+      indeg[child] = indeg[child] - 1
+      if indeg[child] == 0 then util.add(ready, child) end
+    end
+    table.sort(ready)
+  end
+  return out
+end
+
+local function targetPlanOf(compile, classes, classOf)
+  local plan, masterHosted = {}, {}
+
+  for cls, members in pairs(classes) do
+    if cls == '' then
+      local parked = {}
+      for _, id in ipairs(members) do
+        local k = compile.nodes[id].kind
+        if k ~= 'master' and k ~= 'source' then util.add(parked, id) end
+      end
+      if #parked > 0 then
+        table.sort(parked)
+        plan['__scratch__'] = {
+          hostKind = 'scratch', trackGuid = nil, fxOrder = parked,
+          mainSend = false, sends = {},
+        }
+      end
+    else
+      local hostKind, trackGuid, hasMaster = 'newTrack', nil, false
+      for _, id in ipairs(members) do
+        local n = compile.nodes[id]
+        if n.kind == 'source' then hostKind, trackGuid = 'sourceTrack', n.trackGuid end
+        if n.kind == 'master' then hasMaster = true end
+      end
+      if hasMaster and hostKind == 'newTrack' then
+        hostKind = 'master'
+        masterHosted[cls] = true
+      end
+      plan[cls] = {
+        hostKind  = hostKind, trackGuid = trackGuid, fxOrder = nil,
+        mainSend  = hasMaster and hostKind ~= 'master', sends = {},
+      }
+    end
+  end
+
+  local seenSend = {}
+  for _, conn in ipairs(compile.conns) do
+    local fromCls, toCls = classOf[conn.from], classOf[conn.to]
+    if fromCls ~= toCls and fromCls ~= '' and toCls ~= '' then
+      if masterHosted[toCls] then
+        if conn.type == 'audio' then plan[fromCls].mainSend = true end
+      else
+        local key = fromCls .. '|' .. toCls .. '|' .. conn.type
+        if not seenSend[key] then
+          seenSend[key] = true
+          util.add(plan[fromCls].sends, { to = toCls, type = conn.type })
+        end
+      end
+    end
+  end
+
+  for cls, members in pairs(classes) do
+    if cls ~= '' then
+      plan[cls].fxOrder = topoIntraClass(compile, members, classOf, cls)
+      table.sort(plan[cls].sends, function(a, b)
+        if a.to ~= b.to then return a.to < b.to end
+        return a.type < b.type
+      end)
+    end
+  end
+  return plan
+end
 
 ----------- PUBLIC
 
@@ -164,14 +384,6 @@ end
 
 ----- lower
 
--- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
--- the audio shape).
-local function passthroughNode(node)
-  return { kind      = node.kind,
-           trackGuid = node.trackGuid,
-           fxIdent   = node.fxIdent }
-end
-
 --contract: assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
 function M.lower(user)
   local compile = { nodes = {}, conns = {} }
@@ -239,251 +451,68 @@ function M.lower(user)
   return compile
 end
 
------ srcSet / classes
+----- compile context
 
--- Reverse adjacency: for each node id, the list of input-side node ids.
--- Stashed on compile so the cost is paid once per graph instance.
-local function inboundOf(compile)
-  if compile._inbound then return compile._inbound end
-  local inbound = {}
-  for _, conn in ipairs(compile.conns) do
-    util.bucket(inbound, conn.to, conn.from)
+--contract: assumes M.validate(user)==nil; returns a ctx closing over M.lower(user) with lazy caches for classes, classOf, inbound, srcSet (per-id), quotient, absorption. ctx:srcSet(id) returns the same table across calls (referential cache).
+function M.compile(user)
+  local compile = M.lower(user)
+  local classes, classOf, inbound, quotient, absorption
+  local srcSet = {}
+
+  local function inboundCache()
+    inbound = inbound or inboundOf(compile)
+    return inbound
   end
-  compile._inbound = inbound
-  return inbound
-end
 
---contract: set<trackGuid> of source ancestors; memoised on compile (stashes _srcSet, _inbound)
-function M.srcSet(compile, nodeId)
-  compile._srcSet = compile._srcSet or {}
-  local memo, inbound = compile._srcSet, inboundOf(compile)
-
-  local function visit(id)
-    if memo[id] then return memo[id] end
+  local function srcSetOf(id)
+    if srcSet[id] then return srcSet[id] end
     local set = {}
     local node = compile.nodes[id]
     if node and node.kind == 'source' and node.trackGuid then
       set[node.trackGuid] = true
     end
-    for _, parent in ipairs(inbound[id] or {}) do
-      for guid in pairs(visit(parent)) do set[guid] = true end
+    for _, parent in ipairs(inboundCache()[id] or {}) do
+      for guid in pairs(srcSetOf(parent)) do set[guid] = true end
     end
-    memo[id] = set
+    srcSet[id] = set
     return set
   end
-  return visit(nodeId)
-end
 
---contract: partitions compile.nodes by srcSet; classKey = sorted trackGuids joined by '|', '' for empty
-function M.classes(compile)
-  local out = {}
-  for id in pairs(compile.nodes) do
-    local guids = {}
-    for guid in pairs(M.srcSet(compile, id)) do util.add(guids, guid) end
-    table.sort(guids)
-    util.bucket(out, table.concat(guids, '|'), id)
-  end
-  return out
-end
+  local ctx = {}
 
------ quotientGraph / absorption / capacityErrors
+  function ctx:graph()    return compile end
+  function ctx:inbound()  return inboundCache() end
+  function ctx:srcSet(id) return srcSetOf(id) end
 
---contract: class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryAudioParents ⊆ audioParents, flagged by `primary` wires
-function M.quotientGraph(compile, classes)
-  local classOf, quotient = {}, {}
-  for cls, members in pairs(classes) do
-    quotient[cls] = { audioParents = {}, midiParents = {},
-                      audioChildren = {}, midiChildren = {},
-                      primaryAudioParents = {} }
-    for _, id in ipairs(members) do classOf[id] = cls end
+  function ctx:classes()
+    classes = classes or classesOf(compile, srcSetOf)
+    return classes
   end
 
-  for _, conn in ipairs(compile.conns) do
-    local fromCls, toCls = classOf[conn.from], classOf[conn.to]
-    if fromCls ~= toCls then
-      local toQ, fromQ = quotient[toCls], quotient[fromCls]
-      if conn.type == 'audio' then
-        toQ.audioParents[fromCls] = true
-        if conn.primary then toQ.primaryAudioParents[fromCls] = true end
-        fromQ.audioChildren[toCls] = true
-      else
-        toQ.midiParents[fromCls] = true
-        fromQ.midiChildren[toCls] = true
-      end
-    end
-  end
-  return quotient
-end
-
--- Direct (one-hop) host for cls under the absorption rule. Returns nil if cls
--- has no eligible host: zero audio parents, ambiguous primaries, or multiple
--- non-primary audio parents.
-local function directHost(q)
-  local audioParents, primaryParents = {}, {}
-  for parent in pairs(q.audioParents)   do util.add(audioParents,   parent) end
-  for parent in pairs(q.primaryAudioParents) do util.add(primaryParents, parent) end
-  if #primaryParents == 1 then return primaryParents[1] end
-  if #primaryParents == 0 and #audioParents == 1 then return audioParents[1] end
-  return nil
-end
-
---contract: sparse {[cls]=hostCls}; chains resolved to terminal host; absent = self-hosting; cycle-safe
-function M.absorption(quotient)
-  local direct = {}
-  for cls, q in pairs(quotient) do direct[cls] = directHost(q) end
-
-  local function terminal(cls, seen)
-    local next_ = direct[cls]
-    if not next_ or seen[next_] then return cls end
-    seen[next_] = true
-    return terminal(next_, seen)
+  function ctx:classOf()
+    classOf = classOf or classOfMap(self:classes())
+    return classOf
   end
 
-  local out = {}
-  for cls in pairs(quotient) do
-    if direct[cls] then
-      local seen = { [cls] = true }
-      out[cls] = terminal(direct[cls], seen)
-    end
-  end
-  return out
-end
-
---contract: list of {classKey, kind='audio'|'midi', count} for intra-class conn counts exceeding 64 audio / 128 midi; sorted by classKey then kind
-function M.capacityErrors(compile, classes)
-  local classOf, counts = {}, {}
-  for cls, members in pairs(classes) do
-    for _, id in ipairs(members) do classOf[id] = cls end
-  end
-  for _, conn in ipairs(compile.conns) do
-    local cls = classOf[conn.from]
-    if cls and cls == classOf[conn.to] then
-      counts[cls] = counts[cls] or { audio = 0, midi = 0 }
-      counts[cls][conn.type] = counts[cls][conn.type] + 1
-    end
-  end
-  local out = {}
-  for cls, c in pairs(counts) do
-    if c.audio > 64  then util.add(out, { classKey = cls, kind = 'audio', count = c.audio }) end
-    if c.midi  > 128 then util.add(out, { classKey = cls, kind = 'midi',  count = c.midi  }) end
-  end
-  table.sort(out, function(a, b)
-    if a.classKey ~= b.classKey then return a.classKey < b.classKey end
-    return a.kind < b.kind
-  end)
-  return out
-end
-
------ targetPlan
-
-local function classOfMap(classes)
-  local out = {}
-  for cls, members in pairs(classes) do
-    for _, id in ipairs(members) do out[id] = cls end
-  end
-  return out
-end
-
--- Topo over intra-class fx/cu members (sources/master excluded — they don't
--- appear in REAPER FX chains). Kahn's; ties broken by sorted id for spec
--- determinism.
-local function topoIntraClass(compile, members, classOf, cls)
-  local memberSet = {}
-  for _, id in ipairs(members) do
-    local k = compile.nodes[id].kind
-    if k ~= 'source' and k ~= 'master' then memberSet[id] = true end
-  end
-  local indeg, succ = {}, {}
-  for id in pairs(memberSet) do indeg[id], succ[id] = 0, {} end
-  for _, conn in ipairs(compile.conns) do
-    if memberSet[conn.from] and memberSet[conn.to]
-       and classOf[conn.from] == cls and classOf[conn.to] == cls then
-      indeg[conn.to] = indeg[conn.to] + 1
-      util.add(succ[conn.from], conn.to)
-    end
-  end
-  local ready = {}
-  for id in pairs(memberSet) do if indeg[id] == 0 then util.add(ready, id) end end
-  table.sort(ready)
-  local out = {}
-  while #ready > 0 do
-    local id = table.remove(ready, 1)
-    util.add(out, id)
-    local children = {}
-    for _, child in ipairs(succ[id]) do util.add(children, child) end
-    table.sort(children)
-    for _, child in ipairs(children) do
-      indeg[child] = indeg[child] - 1
-      if indeg[child] == 0 then util.add(ready, child) end
-    end
-    table.sort(ready)
-  end
-  return out
-end
-
---contract: per-host hosting decision + collapsed inter-class sends; the empty-srcSet class splits (master is implicit on REAPER master with no FX, non-source/non-master members pool on '__scratch__'); audio conns to a master-hosted class fold into mainSend; midi conns to master-hosted and any conn touching the inert pool are dropped.
-function M.targetPlan(compile, classes)
-  local classOf = classOfMap(classes)
-  local plan, masterHosted = {}, {}
-
-  for cls, members in pairs(classes) do
-    if cls == '' then
-      local parked = {}
-      for _, id in ipairs(members) do
-        local k = compile.nodes[id].kind
-        if k ~= 'master' and k ~= 'source' then util.add(parked, id) end
-      end
-      if #parked > 0 then
-        table.sort(parked)
-        plan['__scratch__'] = {
-          hostKind = 'scratch', trackGuid = nil, fxOrder = parked,
-          mainSend = false, sends = {},
-        }
-      end
-    else
-      local hostKind, trackGuid, hasMaster = 'newTrack', nil, false
-      for _, id in ipairs(members) do
-        local n = compile.nodes[id]
-        if n.kind == 'source' then hostKind, trackGuid = 'sourceTrack', n.trackGuid end
-        if n.kind == 'master' then hasMaster = true end
-      end
-      if hasMaster and hostKind == 'newTrack' then
-        hostKind = 'master'
-        masterHosted[cls] = true
-      end
-      plan[cls] = {
-        hostKind  = hostKind, trackGuid = trackGuid, fxOrder = nil,
-        mainSend  = hasMaster and hostKind ~= 'master', sends = {},
-      }
-    end
+  function ctx:quotient()
+    quotient = quotient or quotientGraphOf(compile, self:classOf(), self:classes())
+    return quotient
   end
 
-  local seenSend = {}
-  for _, conn in ipairs(compile.conns) do
-    local fromCls, toCls = classOf[conn.from], classOf[conn.to]
-    if fromCls ~= toCls and fromCls ~= '' and toCls ~= '' then
-      if masterHosted[toCls] then
-        if conn.type == 'audio' then plan[fromCls].mainSend = true end
-      else
-        local key = fromCls .. '|' .. toCls .. '|' .. conn.type
-        if not seenSend[key] then
-          seenSend[key] = true
-          util.add(plan[fromCls].sends, { to = toCls, type = conn.type })
-        end
-      end
-    end
+  function ctx:absorption()
+    absorption = absorption or absorptionOf(self:quotient())
+    return absorption
   end
 
-  for cls, members in pairs(classes) do
-    if cls ~= '' then
-      plan[cls].fxOrder = topoIntraClass(compile, members, classOf, cls)
-      table.sort(plan[cls].sends, function(a, b)
-        if a.to ~= b.to then return a.to < b.to end
-        return a.type < b.type
-      end)
-    end
+  function ctx:capacityErrors()
+    return capacityErrorsOf(compile, self:classOf())
   end
-  return plan
+
+  function ctx:targetPlan()
+    return targetPlanOf(compile, self:classes(), self:classOf())
+  end
+
+  return ctx
 end
 
 return M

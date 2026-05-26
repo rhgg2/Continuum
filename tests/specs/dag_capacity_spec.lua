@@ -29,8 +29,7 @@ local function mk(nodes, edges)
 end
 
 local function errorsOf(g)
-  local c = DAG.lower(g)
-  return DAG.capacityErrors(c, DAG.classes(c))
+  return DAG.compile(g):capacityErrors()
 end
 
 return {

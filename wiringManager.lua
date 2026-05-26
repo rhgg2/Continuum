@@ -128,16 +128,15 @@ function wm:mutate(mutator)
   return true
 end
 
---contract: returns DAG.lower of the current user graph; pure, no caching at Stage 1
+--contract: returns DAG.compile context around the current user graph; lazy caches live on the ctx, so reusing it across :classes/:capacityErrors/:targetPlan computes each derivation once
 function wm:compile()
   ensureLoaded()
-  return DAG.lower(_graph)
+  return DAG.compile(_graph)
 end
 
 --contract: list of intra-class capacity overflows on the lowered compile graph; empty when the user graph is within budget
 function wm:errors()
-  local compile = self:compile()
-  return DAG.capacityErrors(compile, DAG.classes(compile))
+  return self:compile():capacityErrors()
 end
 
 --contract: { ins, outs, inNames, outNames } in stereo ports for fxIdent; instantiates on the scratch track, reads TrackFX_GetIOSize + in_pin_X/out_pin_X via TrackFX_GetNamedConfigParm, deletes, caches by ident. Unknown ident → ins=outs=0 with empty name lists.
@@ -326,14 +325,13 @@ end
 --contract: derives the WiringSnapshot REAPER should look like, by lowering the user graph and projecting DAG.targetPlan into snapshot shape. fxGuid on each fx entry comes from the user graph (nil for unmaterialised nodes). Pure — no REAPER reads except GetTrackGUID on the scratch track.
 function wm:targetState()
   ensureLoaded()
-  local compile = DAG.lower(_graph)
-  attachFxGuids(compile, _graph)
-  local classes = DAG.classes(compile)
-  local plan    = DAG.targetPlan(compile, classes)
+  local cx = DAG.compile(_graph)
+  attachFxGuids(cx:graph(), _graph)
+  local plan = cx:targetPlan()
   local scratchGuid = _scratchTrack and reaper.GetTrackGUID(_scratchTrack)
   local out = {}
   for classKey, entry in pairs(plan) do
-    out[classKey] = projectEntry(entry, compile.nodes, scratchGuid)
+    out[classKey] = projectEntry(entry, cx:graph().nodes, scratchGuid)
   end
   return out
 end
