@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=506  sha=a3aca2b  mode=namespace
+@module DAG  src=DAG.lua  loc=471  sha=3d7af73  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(user), which caches the lowered graph and its derivations lazily
@@ -25,41 +25,19 @@
   @const CU_IDENT = 'JS:Continuum Utility'  @ 27
   @const M = {}  @ 29
 
-# Private functions
-  -- Strip user-graph fields the compile graph doesn't need (pos,
-  @fn passthroughNode(node)  @ 33
-      -- fxDisplay, the audio shape).
-  -- Private compile-side helpers (consumed by ctx)
-  @fn inboundOf(compile)  @ 42
-      -- Reverse adjacency: for each node id, the list of input-side node ids.
-  @fn classesOf(compile, srcSetFor)  @ 50
-  @fn classOfMap(classes)  @ 61
-  @fn quotientGraphOf(compile, classOf, classes)  @ 69
-  @fn directHost(q)  @ 96
-      -- Direct (one-hop) host for cls under the absorption rule. Returns nil
-      -- if cls has no eligible host: zero audio parents, ambiguous primaries,
-      -- or multiple non-primary audio parents.
-  @fn absorptionOf(quotient)  @ 105
-  @fn capacityErrorsOf(compile, classOf)  @ 126
-  @fn topoIntraClass(compile, members, classOf, cls)  @ 150
-      -- Topo over intra-class fx/cu members (sources/master excluded — they
-      -- don't appear in REAPER FX chains). Kahn's; ties broken by sorted id
-      -- for spec determinism.
-  @fn targetPlanOf(compile, classes, classOf)  @ 184
-
 # Public API (M.*)
   -- validate
-  @api M.validate(user)  @ 252
+  @api M.validate(user)  @ 36
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
   -- ancestors
-  @api M.ancestors(user, sourceId)  @ 359
+  @api M.ancestors(user, sourceId)  @ 143
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over user.edges; cycle-safe via visited
   -- lower
-  @api M.lower(user)  @ 376
+  @api M.lower(user)  @ 160
       @contract  assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
   -- compile context
-  @api M.compile(user)  @ 445
+  @api M.compile(user)  @ 229
       @contract  assumes M.validate(user)==nil; returns a ctx closing over M.lower(user) with lazy caches for classes, classOf, inbound, srcSet (per-id), quotient, absorption. ctx:srcSet(id) returns the same table across calls (referential cache).

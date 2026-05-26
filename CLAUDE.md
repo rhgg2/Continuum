@@ -178,6 +178,15 @@ direct. Compact, but clear.
 - Section banners: `----- Name`.
 - Major section banners: `----------- PUBLIC`.
 
+- No OO conventions imported from class-based languages: no
+  underscore-prefixed "private" names (lexical scope already says
+  private — `_foo` reads as ceremonial), no `setmetatable`-driven
+  inheritance or metatable-as-class (closures + factory tables do the
+  job here), no `ClassName` UpperCamelCase for modules or
+  constructors (module-stem lowerCamel: `trackerManager`, `wm`, `M`).
+  This codebase is closures-over-state, not objects-with-methods;
+  names and shapes should reflect that.
+
 ## Committing
 
 Whenever a change lands — a bugfix, a refactor, a feature slice — and
