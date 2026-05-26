@@ -311,23 +311,10 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
   }
 end
 
--- CompileNode is a stripped Node (see DAG.passthroughNode). It loses
--- fxGuid; re-attach from the user graph so targetState carries the bridge
--- identity all the way through. CU bridges already carry fxGuid from
--- lower (copied off the source edge's _opFxGuid).
-local function attachFxGuids(compile, graph)
-  for id, n in pairs(compile.nodes) do
-    if n.kind == 'fx' and graph.nodes[id] then
-      n.fxGuid = graph.nodes[id].fxGuid
-    end
-  end
-end
-
 --contract: derives the WiringSnapshot REAPER should look like, by lowering the user graph and projecting DAG.targetPlan into snapshot shape. fxGuid on each fx entry comes from the user graph (nil for unmaterialised nodes). Pure — no REAPER reads except GetTrackGUID on the scratch track.
 function wm:targetState()
   ensureLoaded()
   local cx = DAG.compile(_graph)
-  attachFxGuids(cx:graph(), _graph)
   local plan = cx:targetPlan()
   local scratchGuid = _scratchTrack and reaper.GetTrackGUID(_scratchTrack)
   local out = {}

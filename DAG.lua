@@ -210,7 +210,7 @@ function M.lower(user)
   end
 
   for id, node in pairs(user.nodes or {}) do
-    compile.nodes[id] = util.pick(node, 'kind trackGuid fxIdent')
+    compile.nodes[id] = util.pick(node, 'kind trackGuid fxIdent fxGuid')
   end
   for _, edge in ipairs(user.edges or {}) do
     if edge.type == 'audio' then lowerAudioEdge(edge)

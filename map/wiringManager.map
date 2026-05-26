@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=424  sha=a3aca2b  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=411  sha=0a00118  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -54,13 +54,8 @@
       -- Every kind='fx' compile node maps to one fxOrder entry; CU bridges
       -- (also kind='fx', synthesised by lower with `params` set) flow through
       -- uniformly. trackGuid decorated for the hosts we can identify.
-  @fn attachFxGuids(compile, graph)  @ 318
-      -- CompileNode is a stripped Node (see DAG.passthroughNode). It loses
-      -- fxGuid; re-attach from the user graph so targetState carries the bridge
-      -- identity all the way through. CU bridges already carry fxGuid from
-      -- lower (copied off the source edge's _opFxGuid).
-  @fn fxOrderEq(a, b)  @ 340
-  @fn sendsEq(a, b)  @ 350
+  @fn fxOrderEq(a, b)  @ 327
+  @fn sendsEq(a, b)  @ 337
 
 # Public API (wm:*)
   @api wm:load()  @ 101
@@ -85,11 +80,11 @@
       @contract  inserts a track just before scratch (named opts.name), tags it with wiringHostKind=sourceTrack so wm:snapshot recognises it (classKey is the track's own GUID for source hosts); returns its GUID; outside mutate
   @api wm:snapshot()  @ 242
       @contract  walks every project track, builds a WiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringHostKind; FX whose guids appear in the user graph (fx nodes) or edge ops (CUs); sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
-  @api wm:targetState()  @ 327
+  @api wm:targetState()  @ 315
       @contract  derives the WiringSnapshot REAPER should look like, by lowering the user graph and projecting DAG.targetPlan into snapshot shape. fxGuid on each fx entry comes from the user graph (nil for unmaterialised nodes). Pure — no REAPER reads except GetTrackGUID on the scratch track.
-  @api wm:diff(target, snap)  @ 364
+  @api wm:diff(target, snap)  @ 351
       @contract  pure structural diff producing a WiringOp[] that, applied, would carry snap to target. Order: creates first (so subsequent setSends can reference fresh tracks), then setFXChain / setMainSend / setSends / setExtState, then deletes. snap entries absent from target with hostKind='newTrack' are deleted; sourceTrack/scratch are never deleted (project artefacts).
-  @api wm:listInstalledFX()  @ 411
+  @api wm:listInstalledFX()  @ 398
       @contract  enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
 
 # Signals emitted (via util.installHooks)
