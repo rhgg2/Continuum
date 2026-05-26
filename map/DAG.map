@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=359  sha=239d190  mode=namespace
+@module DAG  src=DAG.lua  loc=481  sha=e6d58c2  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module — no state; functions take operands explicitly
@@ -15,50 +15,59 @@
   @shape  CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
   @shape  CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap', cuParams?=table }
   @shape  Conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
+  @shape  TargetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
 
 # Imports
-  @const util = 'util'  @ 18
+  @const util = 'util'  @ 19
 
 # Module-level constants
-  @const M = {}  @ 20
+  @const M = {}  @ 21
 
 # Private functions
   -- Port shape helpers (user graph)
-  @fn audioPorts(node)  @ 25
+  @fn audioPorts(node)  @ 26
       -- Source: one stereo out, no audio in. fx/master: explicit integer counts.
   -- validate
   -- ancestors
   -- lower
-  @fn passthroughNode(node)  @ 155
+  @fn passthroughNode(node)  @ 165
       -- Strip user-graph fields the compile graph doesn't need (pos, fxDisplay,
       -- the audio shape).
   -- srcSet / classes
-  @fn inboundOf(compile)  @ 228
+  @fn inboundOf(compile)  @ 238
       -- Reverse adjacency: for each node id, the list of input-side node ids.
       -- Stashed on compile so the cost is paid once per graph instance.
   -- quotientGraph / absorption / capacityErrors
-  @fn directHost(q)  @ 303
+  @fn directHost(q)  @ 313
       -- Direct (one-hop) host for cls under the absorption rule. Returns nil if cls
       -- has no eligible host: zero audio parents, ambiguous primaries, or multiple
       -- non-primary audio parents.
+  -- targetPlan
+  @fn classOfMap(classes)  @ 371
+  @fn topoIntraClass(compile, members, classOf, cls)  @ 382
+      -- Topo over intra-class fx/cu members (sources/master excluded — they don't
+      -- appear in REAPER FX chains). Kahn's; ties broken by sorted id for spec
+      -- determinism.
 
 # Public API (M.*)
-  @api M.validate(user)  @ 39
+  @api M.validate(user)  @ 40
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.ancestors(user, sourceId)  @ 137
+  @api M.ancestors(user, sourceId)  @ 147
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over user.edges; cycle-safe via visited
-  @api M.lower(user)  @ 162
+  @api M.lower(user)  @ 172
       @contract  assumes M.validate(user)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
-  @api M.srcSet(compile, nodeId)  @ 239
+  @api M.srcSet(compile, nodeId)  @ 249
       @contract  set<trackGuid> of source ancestors; memoised on compile (stashes _srcSet, _inbound)
-  @api M.classes(compile)  @ 260
+  @api M.classes(compile)  @ 270
       @contract  partitions compile.nodes by srcSet; classKey = sorted trackGuids joined by '|', '' for empty
-  @api M.quotientGraph(compile, classes)  @ 274
+  @api M.quotientGraph(compile, classes)  @ 284
       @contract  class DAG view of compile; each class -> {audio,midi}{Parents,Children} sets; primaryAudioParents ⊆ audioParents, flagged by `primary` wires
-  @api M.absorption(quotient)  @ 313
+  @api M.absorption(quotient)  @ 323
       @contract  sparse {[cls]=hostCls}; chains resolved to terminal host; absent = self-hosting; cycle-safe
-  @api M.capacityErrors(compile, classes)  @ 335
+  @api M.capacityErrors(compile, classes)  @ 345
       @contract  list of {classKey, kind='audio'|'midi', count} for intra-class conn counts exceeding 64 audio / 128 midi; sorted by classKey then kind
+  @api M.targetPlan(compile, classes)  @ 417
+      @contract  per-host hosting decision + collapsed inter-class sends; the empty-srcSet class splits (master is implicit on REAPER master with no FX, non-source/non-master members pool on '__scratch__'); audio conns to a master-hosted class fold into mainSend; midi conns to master-hosted and any conn touching the inert pool are dropped.

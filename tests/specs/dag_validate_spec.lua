@@ -357,6 +357,26 @@ return {
     end,
   },
   {
+    name = 'duplicate source trackGuid rejects',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s1', 'guid-dup'); ns[k]  = v
+      local k2, v2 = source('s2', 'guid-dup'); ns[k2] = v2
+      local err = DAG.validate(mk(ns))
+      t.eq(err.code, 'duplicate_source_guid')
+      t.eq(err.guid, 'guid-dup')
+    end,
+  },
+  {
+    name = 'distinct source trackGuids pass',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s1', 'guid-a'); ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
+      t.eq(DAG.validate(mk(ns)), nil)
+    end,
+  },
+  {
     name = 'unknown edge type rejects',
     run = function()
       local ns = {}

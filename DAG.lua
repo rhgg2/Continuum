@@ -15,6 +15,7 @@
 --shape: CompileGraph = { nodes = {[id]=CompileNode}, conns = Conn[] }
 --shape: CompileNode = { kind='source'|'fx'|'master'|'cu', trackGuid?=string, fxIdent?=string, cuMode?='gain'|'channelRemap', cuParams?=table }
 --shape: Conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
+--shape: TargetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
 local util = require('util')
 
 local M = {}
@@ -363,6 +364,118 @@ function M.capacityErrors(compile, classes)
     return a.kind < b.kind
   end)
   return out
+end
+
+----- targetPlan
+
+local function classOfMap(classes)
+  local out = {}
+  for cls, members in pairs(classes) do
+    for _, id in ipairs(members) do out[id] = cls end
+  end
+  return out
+end
+
+-- Topo over intra-class fx/cu members (sources/master excluded — they don't
+-- appear in REAPER FX chains). Kahn's; ties broken by sorted id for spec
+-- determinism.
+local function topoIntraClass(compile, members, classOf, cls)
+  local memberSet = {}
+  for _, id in ipairs(members) do
+    local k = compile.nodes[id].kind
+    if k ~= 'source' and k ~= 'master' then memberSet[id] = true end
+  end
+  local indeg, succ = {}, {}
+  for id in pairs(memberSet) do indeg[id], succ[id] = 0, {} end
+  for _, conn in ipairs(compile.conns) do
+    if memberSet[conn.from] and memberSet[conn.to]
+       and classOf[conn.from] == cls and classOf[conn.to] == cls then
+      indeg[conn.to] = indeg[conn.to] + 1
+      util.add(succ[conn.from], conn.to)
+    end
+  end
+  local ready = {}
+  for id in pairs(memberSet) do if indeg[id] == 0 then util.add(ready, id) end end
+  table.sort(ready)
+  local out = {}
+  while #ready > 0 do
+    local id = table.remove(ready, 1)
+    util.add(out, id)
+    local children = {}
+    for _, child in ipairs(succ[id]) do util.add(children, child) end
+    table.sort(children)
+    for _, child in ipairs(children) do
+      indeg[child] = indeg[child] - 1
+      if indeg[child] == 0 then util.add(ready, child) end
+    end
+    table.sort(ready)
+  end
+  return out
+end
+
+--contract: per-host hosting decision + collapsed inter-class sends; the empty-srcSet class splits (master is implicit on REAPER master with no FX, non-source/non-master members pool on '__scratch__'); audio conns to a master-hosted class fold into mainSend; midi conns to master-hosted and any conn touching the inert pool are dropped.
+function M.targetPlan(compile, classes)
+  local classOf = classOfMap(classes)
+  local plan, masterHosted = {}, {}
+
+  for cls, members in pairs(classes) do
+    if cls == '' then
+      local parked = {}
+      for _, id in ipairs(members) do
+        local k = compile.nodes[id].kind
+        if k ~= 'master' and k ~= 'source' then util.add(parked, id) end
+      end
+      if #parked > 0 then
+        table.sort(parked)
+        plan['__scratch__'] = {
+          hostKind = 'scratch', trackGuid = nil, fxOrder = parked,
+          mainSend = false, sends = {},
+        }
+      end
+    else
+      local hostKind, trackGuid, hasMaster = 'newTrack', nil, false
+      for _, id in ipairs(members) do
+        local n = compile.nodes[id]
+        if n.kind == 'source' then hostKind, trackGuid = 'sourceTrack', n.trackGuid end
+        if n.kind == 'master' then hasMaster = true end
+      end
+      if hasMaster and hostKind == 'newTrack' then
+        hostKind = 'master'
+        masterHosted[cls] = true
+      end
+      plan[cls] = {
+        hostKind  = hostKind, trackGuid = trackGuid, fxOrder = nil,
+        mainSend  = hasMaster and hostKind ~= 'master', sends = {},
+      }
+    end
+  end
+
+  local seenSend = {}
+  for _, conn in ipairs(compile.conns) do
+    local fromCls, toCls = classOf[conn.from], classOf[conn.to]
+    if fromCls ~= toCls and fromCls ~= '' and toCls ~= '' then
+      if masterHosted[toCls] then
+        if conn.type == 'audio' then plan[fromCls].mainSend = true end
+      else
+        local key = fromCls .. '|' .. toCls .. '|' .. conn.type
+        if not seenSend[key] then
+          seenSend[key] = true
+          util.add(plan[fromCls].sends, { to = toCls, type = conn.type })
+        end
+      end
+    end
+  end
+
+  for cls, members in pairs(classes) do
+    if cls ~= '' then
+      plan[cls].fxOrder = topoIntraClass(compile, members, classOf, cls)
+      table.sort(plan[cls].sends, function(a, b)
+        if a.to ~= b.to then return a.to < b.to end
+        return a.type < b.type
+      end)
+    end
+  end
+  return plan
 end
 
 return M
