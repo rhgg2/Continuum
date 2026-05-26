@@ -3,7 +3,9 @@ local DAG = require('DAG')
 
 local function source(id, guid)
   return id, { kind = 'source', trackGuid = guid or 'guid-' .. id,
-               pos = { x = 0, y = 0 }, audio = { ins = 0, outs = 1 } }
+               pos = { x = 0, y = 0 },
+               ports = { audio = { ins = 0, outs = 1 },
+                         midi  = { ins = 0, outs = 1 } } }
 end
 
 local function fx(id, opts)
@@ -11,14 +13,16 @@ local function fx(id, opts)
   return id, { kind = 'fx', pos = { x = 0, y = 0 },
                fxIdent   = opts.ident   or 'JS:test',
                fxDisplay = opts.display or 'FX',
-               audio = { ins  = opts.ins  or 1,
-                         outs = opts.outs or 1 } }
+               ports = { audio = { ins  = opts.ins  or 1,
+                                   outs = opts.outs or 1 },
+                         midi  = { ins = 1, outs = 1 } } }
 end
 
 local function master(opts)
   opts = opts or {}
   return 'master', { kind = 'master', pos = { x = 0, y = 0 },
-                     audio = { ins = opts.ins or 1 } }
+                     ports = { audio = { ins = opts.ins or 1, outs = 0 },
+                               midi  = { ins = 0, outs = 0 } } }
 end
 
 -- mk auto-adds a default master (matches production: every graph has one)
@@ -70,7 +74,8 @@ return {
       local err = DAG.validate(mk(ns, {
         { type = 'audio', from = 'a', to = 'b' },
       }))
-      t.eq(err.code, 'source_as_sink')
+      t.eq(err.code, 'no_in_port')
+      t.eq(err.kind, 'source')
       t.eq(err.id,   'b')
     end,
   },
@@ -83,7 +88,9 @@ return {
       local err = DAG.validate(mk(ns, {
         { type = 'midi', from = 'a', to = 'b' },
       }))
-      t.eq(err.code, 'source_as_sink')
+      t.eq(err.code, 'no_in_port')
+      t.eq(err.kind, 'source')
+      t.eq(err.type, 'midi')
     end,
   },
   {
@@ -133,8 +140,9 @@ return {
       local err = DAG.validate(mk(ns, {
         { type = 'audio', from = 'a', to = 'b' },
       }))
-      t.eq(err.code, 'audio_to_port_oob')
-      t.eq(err.have, 0)
+      t.eq(err.code, 'no_in_port')
+      t.eq(err.kind, 'fx')
+      t.eq(err.type, 'audio')
     end,
   },
   {
@@ -241,7 +249,8 @@ return {
       local ns = {}
       local k,  v  = master(); ns[k] = v
       ns.master2 = { kind = 'master', pos = { x = 0, y = 0 },
-                     audio = { ins = 1 } }
+                     ports = { audio = { ins = 1, outs = 0 },
+                               midi  = { ins = 0, outs = 0 } } }
       local err = DAG.validate({ nodes = ns, edges = {}, _nextId = 1 })
       t.eq(err.code,  'master_singleton')
       t.eq(err.count, 2)
@@ -255,7 +264,9 @@ return {
       local err = DAG.validate(mk(ns, {
         { type = 'audio', from = 'master', to = 'b' },
       }))
-      t.eq(err.code, 'master_as_source')
+      t.eq(err.code, 'no_out_port')
+      t.eq(err.kind, 'master')
+      t.eq(err.type, 'audio')
       t.eq(err.id,   'master')
     end,
   },
@@ -267,7 +278,9 @@ return {
       local err = DAG.validate(mk(ns, {
         { type = 'midi', from = 'a', to = 'master' },
       }))
-      t.eq(err.code, 'midi_to_master')
+      t.eq(err.code, 'no_in_port')
+      t.eq(err.kind, 'master')
+      t.eq(err.type, 'midi')
     end,
   },
   {

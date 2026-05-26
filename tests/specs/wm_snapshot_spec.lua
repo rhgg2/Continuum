@@ -74,9 +74,9 @@ return {
       seedFx(h, track, 'JS:foreign', '{FX-foreign}')
       -- Seed user graph with a node carrying fxGuid='{FX-1}' only.
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, audio={ins=0, outs=1} }
+        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}',
-                         pos={x=0,y=0}, audio={ins=1, outs=1} }
+                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
       end)
       local snap = wm:snapshot()
       t.eq(#snap['guid-A'].fxOrder, 1, 'foreign FX excluded')
@@ -93,9 +93,9 @@ return {
       seedFx(h, track, 'JS:owned',             '{FX-1}')
       seedFx(h, track, 'JS:Continuum Utility', '{CU-1}')
       local ok, err = wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, audio={ins=0, outs=1} }
+        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}',
-                         pos={x=0,y=0}, audio={ins=1, outs=1} }
+                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
         util.add(g.edges, { type='audio', from='s', to='f',
                             ops={gain=0.5}, _opFxGuid='{CU-1}' })
         util.add(g.edges, { type='audio', from='f', to='master' })

@@ -40,8 +40,8 @@ return {
       t.eq(after.nodes.n1.pos.y, -34)
       t.eq(after.nodes.n1.fxIdent,   FX.ident, 'ident from picker record')
       t.eq(after.nodes.n1.fxDisplay, FX.name,  'display name from picker record')
-      t.eq(after.nodes.n1.audio.ins,  1, 'stereo in')
-      t.eq(after.nodes.n1.audio.outs, 1, 'stereo out')
+      t.eq(after.nodes.n1.ports.audio.ins,  1, 'stereo in')
+      t.eq(after.nodes.n1.ports.audio.outs, 1, 'stereo out')
     end,
   },
   {

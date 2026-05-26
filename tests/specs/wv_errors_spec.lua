@@ -10,12 +10,15 @@ end
 
 local function master()
   return 'master', { kind = 'master', pos = { x = 0, y = 0 },
-                     audio = { ins = 1 } }
+                     ports = { audio = { ins = 1, outs = 0 },
+                               midi  = { ins = 0, outs = 0 } } }
 end
 
 local function source(id, guid)
   return id, { kind = 'source', trackGuid = guid or 'guid-' .. id,
-               pos = { x = 0, y = 0 }, audio = { ins = 0, outs = 1 } }
+               pos = { x = 0, y = 0 },
+               ports = { audio = { ins = 0, outs = 1 },
+                         midi  = { ins = 0, outs = 1 } } }
 end
 
 local function fx(id, opts)
@@ -23,7 +26,9 @@ local function fx(id, opts)
   return id, { kind = 'fx', pos = { x = 0, y = 0 },
                fxIdent   = opts.ident   or 'JS:test',
                fxDisplay = opts.display or 'FX',
-               audio = { ins = opts.ins or 1, outs = opts.outs or 1 } }
+               ports = { audio = { ins  = opts.ins  or 1,
+                                   outs = opts.outs or 1 },
+                         midi  = { ins = 1, outs = 1 } } }
 end
 
 local function mk(nodes, edges)

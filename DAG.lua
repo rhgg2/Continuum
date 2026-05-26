@@ -10,11 +10,11 @@
 
 --invariant: M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(user), which caches the lowered graph and its derivations lazily
 --invariant: REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and compile (port-to-port conns); lower() bridges them.
---invariant: every user-graph node carries node.audio={ins, outs?} stamped at construction — sources={ins=0,outs=1}, master={ins=1}, fx from probeFxIO. No implicit shapes; readers index node.audio directly. MIDI stays implicit (one port on fx both ways, out-only on sources, none on master).
---invariant: master is a singleton node (id='master'); audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
+--invariant: every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
+--invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --invariant: srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
 --shape: UserGraph = { nodes = {[id]=Node}, edges = Edge[], _nextId = number }
---shape: Node = { kind='source'|'fx'|'master', pos={x,y}, audio={ins=number, outs?=number}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string }
+--shape: Node = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string }
 --invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
 --shape: Edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, _opFxGuid?=string }
 --invariant: when an edge carries ops (gain / channelMap), lower splices one CU bridge per op-bundle into the wire — a kind='fx' compile node with fxIdent=CU_IDENT and a wm-owned params payload ({mode='gain'|'channelRemap', ...}). _opFxGuid is the CU instance's bridge identity in REAPER; lower copies it onto the bridge's fxGuid, and the applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on user-graph fx nodes).
@@ -57,43 +57,40 @@ function M.validate(user)
   -- nil ports resolve to 1 so the shorthand and the explicit form collide.
   local seen = {}
   for i, edge in ipairs(edges) do
+    local function error(code, adds)
+      return util.assign({ code = code, edge = i }, adds)
+    end
     local fromNode, toNode = nodes[edge.from], nodes[edge.to]
-    if not fromNode then
-      return { code = 'unknown_from', edge = i, id = edge.from }
+    if not fromNode then return error('unknown_from', { id = edge.from }) end
+    if not toNode   then return error('unknown_to',   { id = edge.to   }) end
+    if edge.type ~= 'audio' and edge.type ~= 'midi' then
+      return error('unknown_edge_type', { type = edge.type })
     end
-    if not toNode then
-      return { code = 'unknown_to', edge = i, id = edge.to }
+
+    -- Port existence per (side, edge.type). One symmetric check
+    -- subsumes source-as-sink, master-as-source, midi-to-master,
+    -- and "audio edge to an FX with no audio ports."
+    local fromOuts = (fromNode.ports[edge.type] or {}).outs or 0
+    local toIns    = (toNode.ports[edge.type]   or {}).ins  or 0
+    if fromOuts < 1 then
+      return error('no_out_port', { id = edge.from, kind = fromNode.kind, type = edge.type })
     end
-    if toNode.kind == 'source' then
-      return { code = 'source_as_sink', edge = i, id = edge.to }
-    end
-    if fromNode.kind == 'master' then
-      return { code = 'master_as_source', edge = i, id = edge.from }
-    end
-    if edge.type == 'midi' and toNode.kind == 'master' then
-      return { code = 'midi_to_master', edge = i }
+    if toIns < 1 then
+      return error('no_in_port',  { id = edge.to,   kind = toNode.kind,   type = edge.type })
     end
 
     if edge.type == 'midi' then
-      if edge.fromPort ~= nil or edge.toPort ~= nil then
-        return { code = 'midi_port_index', edge = i }
-      end
-    elseif edge.type == 'audio' then
-      local fromOuts = fromNode.audio.outs or 0
-      local toIns    = toNode.audio.ins   or 0
-      -- nil port = implicit port 1 (single-port shorthand).
-      local fromIdx = (fromOuts > 0) and (edge.fromPort or 1) or nil
-      local toIdx   = (toIns    > 0) and (edge.toPort   or 1) or nil
-      if not fromIdx or fromIdx < 1 or fromIdx > fromOuts then
-        return { code = 'audio_from_port_oob', edge = i,
-                 want = edge.fromPort, have = fromOuts }
-      end
-      if not toIdx or toIdx < 1 or toIdx > toIns then
-        return { code = 'audio_to_port_oob', edge = i,
-                 want = edge.toPort, have = toIns }
-      end
+      if edge.fromPort ~= nil or edge.toPort ~= nil then return error('midi_port_index') end
     else
-      return { code = 'unknown_edge_type', edge = i, type = edge.type }
+      -- nil port = implicit port 1 (single-port shorthand).
+      local fromIdx = edge.fromPort or 1
+      local toIdx   = edge.toPort   or 1
+      if fromIdx < 1 or fromIdx > fromOuts then
+        return error('audio_from_port_oob', { want = edge.fromPort, have = fromOuts })
+      end
+      if toIdx < 1 or toIdx > toIns then
+        return error('audio_to_port_oob', { want = edge.toPort, have = toIns })
+      end
     end
 
     local fp = edge.type == 'audio' and (edge.fromPort or 1) or 0
@@ -101,7 +98,7 @@ function M.validate(user)
     local key = edge.type .. '|' .. edge.from .. '|' .. edge.to
                 .. '|' .. fp .. '|' .. tp
     if seen[key] then
-      return { code = 'duplicate_edge', edge = i, prior = seen[key] }
+      return error('duplicate_edge', { prior = seen[key] })
     end
     seen[key] = i
   end

@@ -31,31 +31,33 @@ local function nodeLabel(node)
   return node.kind or '?'
 end
 
--- node.audio.{ins,outs} are integer stereo-port counts stamped at
--- node construction (sources={ins=0,outs=1}, master={ins=1}, fx from
+-- node.ports.audio.{ins,outs} are integer stereo-port counts stamped
+-- at node construction (source={0,1}, master={1,0}, fx from
 -- probeFxIO). The view projects each count as a list of names —
 -- synthetic 'in 1' / 'out 1' baseline today; once wm queries
--- TrackFX_GetIOName it will override per-port via node.audio.inNames /
--- outNames.
+-- TrackFX_GetIOName it will override per-port via
+-- node.ports.audio.inNames / outNames.
 local function audioPorts(node, dir)
+  local audio      = node.ports.audio
   local countField = dir == 'in' and 'ins'     or 'outs'
   local nameField  = dir == 'in' and 'inNames' or 'outNames'
-  local n      = node.audio[countField] or 0
-  local names  = node.audio[nameField]
-  local prefix = dir == 'in' and 'in' or 'out'
+  local n          = audio[countField] or 0
+  local names      = audio[nameField]
+  local prefix     = dir == 'in' and 'in' or 'out'
   local list = {}
   for i = 1, n do list[i] = (names and names[i]) or (prefix .. ' ' .. i) end
   return list
 end
 
--- Per the design doc: master has no MIDI; fx carries exactly one MIDI
--- port in each direction; source has one MIDI out and no MIDI in (it
--- is never a MIDI sink — DAG.validate's source_as_sink rule, and the
--- wiringPage drop-eligibility filter, both rely on this).
+-- MIDI port counts are stamped on node.ports.midi at construction
+-- (master={0,0}, source={0,1}, fx={1,1} — the fx pair is an optimistic
+-- placeholder until probing can read it). The view projects the count
+-- as a synthetic-name list, the same shape as audioPorts.
 local function midiPorts(node, dir)
-  if node.kind == 'master' then return {} end
-  if node.kind == 'source' and dir == 'in' then return {} end
-  return { 'midi' }
+  local n = node.ports.midi[dir == 'in' and 'ins' or 'outs'] or 0
+  local list = {}
+  for _ = 1, n do util.add(list, 'midi') end
+  return list
 end
 
 -- Source nodes get their own category (kind-driven, so a track source reads
@@ -106,8 +108,11 @@ function wv:addFx(x, y, fx, opts)
       pos       = { x = x, y = y },
       fxIdent   = fx.ident,
       fxDisplay = fx.name,
-      audio     = { ins      = io.ins,     outs     = io.outs,
-                    inNames  = io.inNames, outNames = io.outNames },
+      ports     = {
+        audio = { ins      = io.ins,     outs     = io.outs,
+                  inNames  = io.inNames, outNames = io.outNames },
+        midi  = { ins = 1, outs = 1 },
+      },
     }
     if isGenerator then
       local sourceId = 'n' .. g._nextId
@@ -118,7 +123,8 @@ function wv:addFx(x, y, fx, opts)
         pos         = { x = sp.x, y = sp.y },
         trackGuid   = sourceGuid,
         displayName = fx.name,
-        audio       = { ins = 0, outs = 1 },
+        ports       = { audio = { ins = 0, outs = 1 },
+                        midi  = { ins = 0, outs = 1 } },
       }
       util.add(g.edges, { type = 'midi', from = sourceId, to = fxId })
     end

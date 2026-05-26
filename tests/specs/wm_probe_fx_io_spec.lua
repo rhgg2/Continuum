@@ -94,10 +94,10 @@ return {
       })
       wv:addFx(0, 0, { name = 'Comp', ident = 'VST3:Comp' })
       local n = wv:graph().nodes.n1
-      t.eq(n.audio.ins,  2)
-      t.eq(n.audio.outs, 1)
-      t.deepEq(n.audio.inNames,  { 'Main', 'Sidechain' })
-      t.deepEq(n.audio.outNames, { 'Out' })
+      t.eq(n.ports.audio.ins,  2)
+      t.eq(n.ports.audio.outs, 1)
+      t.deepEq(n.ports.audio.inNames,  { 'Main', 'Sidechain' })
+      t.deepEq(n.ports.audio.outNames, { 'Out' })
     end,
   },
 }
