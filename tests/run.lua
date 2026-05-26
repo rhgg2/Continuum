@@ -15,6 +15,7 @@ local filter = arg[1]
 
 local specs = {
   'harness_sanity_spec',
+  'fake_reaper_sends_spec',
   'command_manager_spec',
   'cmgr_stack_spec',
   'config_schema_spec',

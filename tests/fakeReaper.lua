@@ -131,10 +131,21 @@ function M.new()
   end
 
   -- FX GUID — sm:tick uses change of GUID to detect FX-removed-and-re-added
-  -- so per-instance state can be reset. Tests can re-seat via setFxGuid.
+  -- so per-instance state can be reset. Wiring snapshot keys per-fx P_EXT by
+  -- GUID, so each (track, fxIdx) gets its own stable guid; tests can
+  -- re-seat via setFxGuid(track, idx?, guid).
   state.fxGuids = {}
-  function r.TrackFX_GetFXGUID(track, _fxIdx)
-    return state.fxGuids[track] or ('{guid:' .. tostring(track) .. '}')
+  local fxGuidN = 0
+  function r.TrackFX_GetFXGUID(track, fxIdx)
+    local perTrack = state.fxGuids[track]
+    if not perTrack then perTrack = {}; state.fxGuids[track] = perTrack end
+    local g = perTrack[fxIdx]
+    if not g then
+      fxGuidN = fxGuidN + 1
+      g = '{FX-' .. fxGuidN .. '}'
+      perTrack[fxIdx] = g
+    end
+    return g
   end
 
   -- Project track list (used by listSamplerTracks in continuum.lua).
@@ -159,7 +170,10 @@ function M.new()
       end
     end
     local k = tostring(track) .. '/' .. parm
-    return state.trackValues and state.trackValues[k] or 0
+    local v = state.trackValues and state.trackValues[k]
+    if v ~= nil then return v end
+    if parm == 'B_MAINSEND' then return 1 end
+    return 0
   end
   state.trackValues = {}
   function r.SetMediaTrackInfo_Value(track, parm, value)
@@ -178,6 +192,58 @@ function M.new()
     return state.trackGuids[track] or ('{TR-anon-' .. tostring(track) .. '}')
   end
   function r.PreventUIRefresh(_) end
+
+  -- Track sends. One record per send (category=0); receives (category<0)
+  -- are derived by walking every track's sends. Each send is
+  -- { dst, midiFlags, srcChan, dstChan }. Defaults match REAPER's new-send
+  -- defaults: midiFlags=0 (all-midi enabled), srcChan=0 (stereo from ch 1),
+  -- dstChan=0. Spec helpers shape audio-only / midi-only / both.
+  state.sendsByTrack = {}
+  local function sendsOf(track)
+    local s = state.sendsByTrack[track]
+    if not s then s = {}; state.sendsByTrack[track] = s end
+    return s
+  end
+  function r.GetTrackNumSends(track, category)
+    if category == 0 then return #sendsOf(track) end
+    if category < 0 then
+      local n = 0
+      for _, list in pairs(state.sendsByTrack) do
+        for _, snd in ipairs(list) do
+          if snd.dst == track then n = n + 1 end
+        end
+      end
+      return n
+    end
+    return 0
+  end
+  local function receiveAt(track, idx)
+    local n = 0
+    for src, list in pairs(state.sendsByTrack) do
+      for _, snd in ipairs(list) do
+        if snd.dst == track then
+          if n == idx then return src, snd end
+          n = n + 1
+        end
+      end
+    end
+  end
+  function r.GetTrackSendInfo_Value(track, category, idx, parm)
+    local snd, src
+    if category == 0 then
+      snd = sendsOf(track)[idx + 1]; src = track
+    elseif category < 0 then
+      src, snd = receiveAt(track, idx)
+    end
+    if not snd then return 0 end
+    if parm == 'P_DESTTRACK' then return snd.dst end
+    if parm == 'P_SRCTRACK'  then return src end
+    if parm == 'I_MIDIFLAGS' then return snd.midiFlags or 0 end
+    if parm == 'I_SRCCHAN'   then return snd.srcChan   or 0 end
+    if parm == 'I_DSTCHAN'   then return snd.dstChan   or 0 end
+    if parm == 'B_MUTE'      then return snd.mute and 1 or 0 end
+    return 0
+  end
 
   -- Track media items (used by arrangeManager). Each track holds an
   -- ordered list of opaque item tokens; each item carries pos/len in
@@ -606,11 +672,38 @@ function M.new()
   function r:setFxIO(ident, io)
     state.fxIO[ident] = io
   end
-  function r:setFxGuid(track, guid)
-    state.fxGuids[track] = guid
+  function r:setFxGuid(track, idx, guid)
+    -- Two-arg call (track, guid) is legacy: pins fxIdx 0 to guid.
+    if guid == nil then guid = idx; idx = 0 end
+    local perTrack = state.fxGuids[track]
+    if not perTrack then perTrack = {}; state.fxGuids[track] = perTrack end
+    perTrack[idx] = guid
   end
   function r:setProjectTracks(tracks)
     state.projectTracks = tracks
+  end
+  -- opts = { type='audio'|'midi'|'both' (default 'both'),
+  --          srcChan?, dstChan?, midiFlags?, mute? }
+  function r:addSend(srcTrack, dstTrack, opts)
+    opts = opts or {}
+    local kind = opts.type or 'both'
+    local srcChan   = opts.srcChan
+    local midiFlags = opts.midiFlags
+    if kind == 'audio' then
+      srcChan   = srcChan   or 0
+      midiFlags = midiFlags or 31           -- low 5 bits = 31 → MIDI disabled
+    elseif kind == 'midi' then
+      srcChan   = srcChan   or -1           -- -1 → no audio send
+      midiFlags = midiFlags or 0
+    else
+      srcChan   = srcChan   or 0
+      midiFlags = midiFlags or 0
+    end
+    local list = sendsOf(srcTrack)
+    list[#list + 1] = { dst = dstTrack, srcChan = srcChan,
+                        dstChan = opts.dstChan or 0,
+                        midiFlags = midiFlags, mute = opts.mute }
+    return #list - 1
   end
   function r:setSelectedTracks(tracks)
     state.selectedTracks = tracks
