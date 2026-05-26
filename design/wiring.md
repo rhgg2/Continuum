@@ -500,6 +500,46 @@ plan when its turn comes.
   instances. Spec emphasis: "tiny user edit → tiny diff" — the
   live-recompile premise depends on the differ being surgical, not
   on worked-example coverage of full topologies.
+
+  *Stage 2 — what's landed and what's left:*
+  - **Landed (read path):** `DAG.targetPlan` partitions the compile
+    graph into hosts (`sourceTrack` / `newTrack` / `master` /
+    `scratch`) and emits a per-class entry carrying `fxOrder`,
+    `mainSend`, collapsed `sends`. Inert (`srcSet={}`) FX park on
+    the scratch track under the sentinel hostKey `'__scratch__'`.
+    `wm:snapshot` reads REAPER's current state for wm-owned tracks
+    + FX (gated by `node.fxGuid` ∈ user graph); `wm:targetState`
+    projects `DAG.targetPlan` into the same shape;
+    `wm:diff(target, snap)` is a pure WiringOp[] producer. Bridge
+    identity is `fxGuid`, stamped on both fx-kind nodes
+    (`node.fxGuid`) and on edges that carry ops
+    (`edge._opFxGuid` → propagated by `DAG.lower` onto the
+    synthesised CU node's `fxGuid`). CU instances flow through
+    snapshot/target/diff uniformly with fx nodes — lowering's whole
+    point. `cuParams` drift triggers `setFXChain` via deep-equal in
+    `fxOrderEq`.
+  - **Left:**
+    1. **Applier** (`wm:applyOps(ops, label)`). Walks ops inside
+       one `Undo_BeginBlock`; for `setFXChain` entries whose
+       `fxGuid=nil` it calls `TrackFX_AddByName`, then
+       `wm:mutate`s the user graph to stamp the assigned guid
+       (into `node.fxGuid` for fx nodes, `edge._opFxGuid` for
+       CUs). Op list is full-replace per field; applier reconciles
+       incrementally (delete extras, add missing, move-by-guid)
+       and sets CU params via `TrackFX_SetParam` when cuParams
+       drift.
+    2. **Live wire-up.** Subscribe to `wiringChanged` →
+       `targetState` → `snapshot` → `diff` → `applyOps`. Same path
+       reconciles on `wm:load`.
+    3. **Sub-channel routing (deferred to Stage 3).** Current
+       sends are stereo defaults (`I_SRCCHAN=0`, `I_DSTCHAN=0`).
+       Channel allocation across the 64 audio / 128 MIDI per-track
+       budget is the register-allocation problem we punted to
+       Stage 3.
+
+  *Spec coverage so far:* `dag_target_plan_spec` (12),
+  `wm_snapshot_spec` (7), `wm_diff_spec` (14),
+  `fake_reaper_sends_spec` (10).
 - **Stage 3 — Primary-input optimisation (absorption).** Pure
   addition to the partition step (`DAG.absorption`); the differ
   picks it up unchanged. Wire-menu "mark as primary" override

@@ -85,20 +85,28 @@ return {
     end,
   },
   {
-    name = 'CU instances on a managed track are filtered out of fxOrder',
+    name = 'CU instance whose guid is registered via edge._opFxGuid appears in fxOrder',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       local track = seedSourceTrack(h, 'guid-A')
       seedFx(h, track, 'JS:owned',             '{FX-1}')
       seedFx(h, track, 'JS:Continuum Utility', '{CU-1}')
-      wm:mutate(function(g)
+      local ok, err = wm:mutate(function(g)
+        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}',
                          pos={x=0,y=0}, audio={ins=1, outs=1} }
+        util.add(g.edges, { type='audio', from='s', to='f',
+                            ops={gain=0.5}, _opFxGuid='{CU-1}' })
+        util.add(g.edges, { type='audio', from='f', to='master' })
       end)
+      t.truthy(ok, 'mutate ok: ' .. tostring(err and err.code))
       local snap = wm:snapshot()
-      t.eq(#snap['guid-A'].fxOrder, 1, 'CU excluded even though guid would match')
-      t.eq(snap['guid-A'].fxOrder[1].ident, 'JS:owned')
+      t.eq(#snap['guid-A'].fxOrder, 2, 'fx + CU both surface')
+      local idents = {}
+      for _, e in ipairs(snap['guid-A'].fxOrder) do idents[e.ident] = e.fxGuid end
+      t.eq(idents['JS:owned'],             '{FX-1}')
+      t.eq(idents['JS:Continuum Utility'], '{CU-1}')
     end,
   },
   {

@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=416  sha=05e5d69  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=430  sha=702b896  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -8,7 +8,7 @@
   @invariant  scratch track is a hidden REAPER track tagged via cm key 'wiringScratch'='1'; wm:load() and wm:probeFxIO() find-or-create it; future use is to host FX nodes with no compile-graph track of their own. Probing-via-instantiate is a Stage-1 bootstrapping affordance — the differ in Stage 2+ will read I/O off the real production FX instance and back-fill the node.
 
 # Shapes
-  @shape  WiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid=string, ident=string}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. CU entries (JS:Continuum Utility) are excluded from fxOrder — the applier handles CU lifetime.
+  @shape  WiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, cuMode?=string, cuParams?=table}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. CU entries appear in fxOrder uniformly with fx entries (ident='JS:Continuum Utility', cuMode/cuParams set) — lower's whole point was to make them ordinary nodes.
   @shape  WiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setExtState', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier).
 
 # Imports
@@ -39,24 +39,29 @@
       -- Port P (1-indexed) groups pin 2(P-1) and 2P-1.
       -- "Sidechain L" + "Sidechain R" → "Sidechain"; mismatched pair → left pin name.
   -- Snapshot / target / diff (Stage 2)
-  @fn ownedChain(track, ownedGuids)  @ 203
+  @fn ownedChain(track, ownedGuids)  @ 205
       -- Walk the chain of one track, returning { {fxGuid, ident}, ... } for FX
-      -- whose guid appears in ownedGuids; CU instances are filtered out.
+      -- whose guid appears in ownedGuids. CU instances ride the same predicate;
+      -- the applier persists their guid on the originating edge so subsequent
+      -- snapshots recognise them like any fx node.
   @fn sendType(track, sendIdx)  @ 220
       -- Audio if I_MIDIFLAGS low-5-bits == 31 (midi disabled); midi if I_SRCCHAN
       -- == -1 (audio disabled). Anything carrying both reads as 'audio' —
       -- defensive; the differ doesn't model dual-stream sends.
   @fn readSendsClass(track, byTrack)  @ 229
-  @fn projectEntry(classKey, planEntry, compileNodes, scratchGuid)  @ 288
+  @fn projectEntry(planEntry, compileNodes, scratchGuid)  @ 293
       -- Project the DAG's TargetPlan entry into the WiringSnapshot shape.
-      -- nodeId-keyed fxOrder → {fxGuid, ident}-keyed; trackGuid decorated for
-      -- the hosts we can identify; CU entries dropped.
-  @fn attachFxGuids(compile, graph)  @ 311
+      -- Compile nodes are either fx-kind (carry fxIdent / fxGuid) or cu-kind
+      -- (synthetic, carry cuMode / cuParams; ident is the Continuum Utility
+      -- JSFX). Both flow uniformly into fxOrder — that's what lowering bought
+      -- us. trackGuid decorated for the hosts we can identify.
+  @fn attachFxGuids(compile, graph)  @ 322
       -- CompileNode is a stripped Node (see DAG.copyNodeForCompile). It loses
-      -- fxGuid; we re-attach it here from the user graph so targetState carries
-      -- the bridge identity all the way through.
-  @fn fxOrderEq(a, b)  @ 334
-  @fn sendsEq(a, b)  @ 342
+      -- fxGuid; re-attach from the user graph so targetState carries the bridge
+      -- identity all the way through. CU nodes already carry fxGuid from lower
+      -- (copied off the source edge's _opFxGuid).
+  @fn fxOrderEq(a, b)  @ 345
+  @fn sendsEq(a, b)  @ 356
 
 # Public API (wm:*)
   @api wm:load()  @ 100
@@ -80,12 +85,12 @@
   @api wm:createSourceTrack(opts)  @ 185
       @contract  inserts a track just before scratch (named opts.name), tags it with wiringHostKind=sourceTrack so wm:snapshot recognises it (classKey is the track's own GUID for source hosts); returns its GUID; outside mutate
   @api wm:snapshot()  @ 242
-      @contract  walks every project track, builds a WiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringClass; FX whose guids appear in the user graph; sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
-  @api wm:targetState()  @ 320
+      @contract  walks every project track, builds a WiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringHostKind; FX whose guids appear in the user graph (fx nodes) or edge ops (CUs); sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
+  @api wm:targetState()  @ 331
       @contract  derives the WiringSnapshot REAPER should look like, by lowering the user graph and projecting DAG.targetPlan into snapshot shape. fxGuid on each fx entry comes from the user graph (nil for unmaterialised nodes). Pure — no REAPER reads except GetTrackGUID on the scratch track.
-  @api wm:diff(target, snap)  @ 356
+  @api wm:diff(target, snap)  @ 370
       @contract  pure structural diff producing a WiringOp[] that, applied, would carry snap to target. Order: creates first (so subsequent setSends can reference fresh tracks), then setFXChain / setMainSend / setSends / setExtState, then deletes. snap entries absent from target with hostKind='newTrack' are deleted; sourceTrack/scratch are never deleted (project artefacts).
-  @api wm:listInstalledFX()  @ 403
+  @api wm:listInstalledFX()  @ 417
       @contract  enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
 
 # Signals emitted (via util.installHooks)
@@ -98,7 +103,7 @@
   @reaper InsertTrackAtIndex
   @reaper GetSetMediaTrackInfo_String
   @reaper SetMediaTrackInfo_Value
-  @reaper TrackFX_GetNamedConfigParm, TrackFX_AddByName, TrackFX_GetIOSize, TrackFX_Delete, TrackFX_GetCount, TrackFX_GetFXName, TrackFX_GetFXGUID
+  @reaper TrackFX_GetNamedConfigParm, TrackFX_AddByName, TrackFX_GetIOSize, TrackFX_Delete, TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetFXName
   @reaper GetTrackGUID
   @reaper GetTrackName
   @reaper GetMediaTrackInfo_Value

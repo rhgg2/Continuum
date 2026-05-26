@@ -69,6 +69,62 @@ return {
     end,
   },
 
+  {
+    name = 'targetState: edge ops materialise as CU entries in fxOrder (lower-uniform)',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      wm:load()
+      wm:mutate(function(g)
+        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0} }
+        g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxGuid='{FX-1}',
+                         pos={x=0,y=0}, audio={ins=1, outs=1} }
+        util.add(g.edges, { type='audio', from='s', to='f',
+                            ops={gain=0.5}, _opFxGuid='{CU-7}' })
+        util.add(g.edges, { type='audio', from='f', to='master' })
+      end)
+      local target = wm:targetState()
+      local order = target['guid-A'].fxOrder
+      t.eq(#order, 2, 'CU and fx both surface')
+      -- CU comes first (it sits upstream of fx_a on the source track).
+      t.eq(order[1].ident,  'JS:Continuum Utility')
+      t.eq(order[1].fxGuid, '{CU-7}')
+      t.eq(order[1].cuMode, 'gain')
+      t.eq(order[1].cuParams.gain, 0.5)
+      t.eq(order[2].ident,  'JS:foo')
+      t.eq(order[2].fxGuid, '{FX-1}')
+    end,
+  },
+  {
+    name = 'diff: cuParams change triggers setFXChain (full-replace)',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local mk = function(gain) return {
+        ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                       fxOrder = { { fxGuid='{CU-1}', ident='JS:Continuum Utility',
+                                     cuMode='gain', cuParams={ gain = gain } } },
+                       mainSend = true, sends = {} },
+      } end
+      local ops = wm:diff(mk(0.7), mk(0.5))
+      t.truthy(#ops > 0, 'param drift produces ops')
+      local kinds = {}
+      for _, op in ipairs(ops) do kinds[op.op] = true end
+      t.truthy(kinds.setFXChain, 'setFXChain emitted for cuParams change')
+    end,
+  },
+  {
+    name = 'diff: identical cuParams → no op',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local both = {
+        ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                       fxOrder = { { fxGuid='{CU-1}', ident='JS:Continuum Utility',
+                                     cuMode='gain', cuParams={ gain = 0.5 } } },
+                       mainSend = true, sends = {} },
+      }
+      t.eq(#wm:diff(both, both), 0)
+    end,
+  },
+
   ----- diff: empty in, empty out
 
   {

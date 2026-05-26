@@ -2,7 +2,7 @@
 -- @noindex
 
 --invariant: every fx-kind node carries fxGuid (nil pre-materialisation, stamped by the applier after TrackFX_AddByName). This is the only stable bridge identity between the user graph and a REAPER FX instance — snapshot and targetState match by it.
---shape: WiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid=string, ident=string}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. CU entries (JS:Continuum Utility) are excluded from fxOrder — the applier handles CU lifetime.
+--shape: WiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, cuMode?=string, cuParams?=table}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. CU entries appear in fxOrder uniformly with fx entries (ident='JS:Continuum Utility', cuMode/cuParams set) — lower's whole point was to make them ordinary nodes.
 --shape: WiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setExtState', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier).
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
@@ -199,16 +199,16 @@ end
 ----- Snapshot / target / diff (Stage 2)
 
 -- Walk the chain of one track, returning { {fxGuid, ident}, ... } for FX
--- whose guid appears in ownedGuids; CU instances are filtered out.
+-- whose guid appears in ownedGuids. CU instances ride the same predicate;
+-- the applier persists their guid on the originating edge so subsequent
+-- snapshots recognise them like any fx node.
 local function ownedChain(track, ownedGuids)
   local out = {}
   for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
-    local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
-    if ident ~= CU_IDENT then
-      local guid = reaper.TrackFX_GetFXGUID(track, fxIdx)
-      if ownedGuids[guid] then
-        util.add(out, { fxGuid = guid, ident = ident })
-      end
+    local guid = reaper.TrackFX_GetFXGUID(track, fxIdx)
+    if ownedGuids[guid] then
+      local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
+      util.add(out, { fxGuid = guid, ident = ident })
     end
   end
   return out
@@ -238,12 +238,15 @@ local function readSendsClass(track, byTrack)
   return out
 end
 
---contract: walks every project track, builds a WiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringClass; FX whose guids appear in the user graph; sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
+--contract: walks every project track, builds a WiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringHostKind; FX whose guids appear in the user graph (fx nodes) or edge ops (CUs); sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
 function wm:snapshot()
   ensureLoaded()
   local ownedGuids = {}
   for _, n in pairs(_graph.nodes) do
     if n.kind == 'fx' and n.fxGuid then ownedGuids[n.fxGuid] = true end
+  end
+  for _, e in ipairs(_graph.edges) do
+    if e._opFxGuid then ownedGuids[e._opFxGuid] = true end
   end
   -- First pass: discover managed tracks + their (classKey, hostKind), so
   -- the second pass can resolve send destinations by track → classKey.
@@ -283,14 +286,21 @@ function wm:snapshot()
 end
 
 -- Project the DAG's TargetPlan entry into the WiringSnapshot shape.
--- nodeId-keyed fxOrder → {fxGuid, ident}-keyed; trackGuid decorated for
--- the hosts we can identify; CU entries dropped.
-local function projectEntry(classKey, planEntry, compileNodes, scratchGuid)
+-- Compile nodes are either fx-kind (carry fxIdent / fxGuid) or cu-kind
+-- (synthetic, carry cuMode / cuParams; ident is the Continuum Utility
+-- JSFX). Both flow uniformly into fxOrder — that's what lowering bought
+-- us. trackGuid decorated for the hosts we can identify.
+local function projectEntry(planEntry, compileNodes, scratchGuid)
   local fxOrder = {}
   for _, id in ipairs(planEntry.fxOrder) do
     local node = compileNodes[id]
-    if node.kind == 'fx' and node.fxIdent ~= CU_IDENT then
+    if node.kind == 'fx' then
       util.add(fxOrder, { fxGuid = node.fxGuid, ident = node.fxIdent })
+    elseif node.kind == 'cu' then
+      util.add(fxOrder, { fxGuid   = node.fxGuid,
+                          ident    = CU_IDENT,
+                          cuMode   = node.cuMode,
+                          cuParams = util.deepClone(node.cuParams or {}) })
     end
   end
   local trackGuid
@@ -306,8 +316,9 @@ local function projectEntry(classKey, planEntry, compileNodes, scratchGuid)
 end
 
 -- CompileNode is a stripped Node (see DAG.copyNodeForCompile). It loses
--- fxGuid; we re-attach it here from the user graph so targetState carries
--- the bridge identity all the way through.
+-- fxGuid; re-attach from the user graph so targetState carries the bridge
+-- identity all the way through. CU nodes already carry fxGuid from lower
+-- (copied off the source edge's _opFxGuid).
 local function attachFxGuids(compile, graph)
   for id, n in pairs(compile.nodes) do
     if n.kind == 'fx' and graph.nodes[id] then
@@ -326,7 +337,7 @@ function wm:targetState()
   local scratchGuid = _scratchTrack and reaper.GetTrackGUID(_scratchTrack)
   local out = {}
   for classKey, entry in pairs(plan) do
-    out[classKey] = projectEntry(classKey, entry, compile.nodes, scratchGuid)
+    out[classKey] = projectEntry(entry, compile.nodes, scratchGuid)
   end
   return out
 end
@@ -334,7 +345,10 @@ end
 local function fxOrderEq(a, b)
   if #a ~= #b then return false end
   for i = 1, #a do
-    if a[i].fxGuid ~= b[i].fxGuid or a[i].ident ~= b[i].ident then return false end
+    local x, y = a[i], b[i]
+    if x.fxGuid ~= y.fxGuid or x.ident ~= y.ident then return false end
+    if x.cuMode ~= y.cuMode then return false end
+    if not util.deepEq(x.cuParams or {}, y.cuParams or {}) then return false end
   end
   return true
 end
