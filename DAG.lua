@@ -40,8 +40,17 @@ function M.validate(user)
   local nodes, edges = user.nodes or {}, user.edges or {}
 
   local masters = 0
-  for _, n in pairs(nodes) do
+  local seenGuid = {}
+  for id, n in pairs(nodes) do
     if n.kind == 'master' then masters = masters + 1 end
+    if n.kind == 'source' and n.trackGuid then
+      local prior = seenGuid[n.trackGuid]
+      if prior then
+        return { code = 'duplicate_source_guid', guid = n.trackGuid,
+                 prior = prior, dup = id }
+      end
+      seenGuid[n.trackGuid] = id
+    end
   end
   if masters ~= 1 then
     return { code = 'master_singleton', count = masters }
