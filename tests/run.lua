@@ -123,6 +123,7 @@ local specs = {
   'wm_installed_fx_spec',
   'wm_probe_fx_io_spec',
   'wv_authoring_spec',
+  'wv_errors_spec',
   'wp_smoke_spec',
 }
 

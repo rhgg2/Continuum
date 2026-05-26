@@ -798,6 +798,27 @@ local function renderCanvas(w, h)
     drawNode(dl, nv, ox, oy, selection[nv.id])
   end
 
+  -- Capacity-overflow overlay: union of node-id sets across every error
+  -- entry, stroked after the selection outline so error-and-selected nodes
+  -- read as red (triage colour wins).
+  local errs = wv:errors()
+  if #errs > 0 then
+    local errorIds = {}
+    for _, err in ipairs(errs) do
+      for id in pairs(err.nodeIds) do errorIds[id] = true end
+    end
+    local errCol = chrome.colour('wiring.node.error')
+    for _, nv in ipairs(nodeViews) do
+      if errorIds[nv.id] then
+        local lx0, ly0, lx1, ly1 = nodeRect(nv)
+        ImGui.DrawList_AddRect(dl,
+          ox + lx0 - SELECTED_INFLATE, oy + ly0 - SELECTED_INFLATE,
+          ox + lx1 + SELECTED_INFLATE, oy + ly1 + SELECTED_INFLATE,
+          errCol, CORNER_R, 0, SELECTED_STROKE)
+      end
+    end
+  end
+
   -- Source-side overlay: outline the hovered band; keyboard icon over the
   -- midi region whenever the source has midi outs.
   if sourceHit then
@@ -956,7 +977,13 @@ end
 
 function wp:renderStatusBar(_)
   if not ctx then return end
-  ImGui.Text(ctx, 'wiring')
+  local errs = wv:errors()
+  if #errs == 0 then
+    ImGui.Text(ctx, 'wiring')
+  else
+    ImGui.Text(ctx, ('wiring — %d capacity error%s')
+                    :format(#errs, #errs == 1 and '' or 's'))
+  end
 end
 
 --contract: acceptCmds=false if picker active, any item active, or modal was open at frame start.

@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1042  sha=05e5d69  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1069  sha=5b36bf6  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -48,8 +48,8 @@
   @state SELECTED_INFLATE = 2  @ 155
   @state SELECTED_STROKE = 2  @ 156
   @state AUDIO_BAND_FRAC = 2/3  @ 301   -- left 2/3 = audio band, right 1/3 = midi band
-  @state SOURCE_PAD = 24  @ 1000
-  @state wiring = cmgr:scope('wiring')  @ 1032
+  @state SOURCE_PAD = 24  @ 1027
+  @state wiring = cmgr:scope('wiring')  @ 1059
 
 # Private functions
   -- FX-picker modal kind
@@ -174,10 +174,10 @@
       -- body rect (un-inflated; port bands aren't selectable). Returns the
       -- set of intersecting ids — empty table if nothing was caught.
   @fn renderCanvas(w, h)  @ 722
-  @fn pushBodyStyles()  @ 930
-  @fn popBodyStyles()  @ 933
+  @fn pushBodyStyles()  @ 951
+  @fn popBodyStyles()  @ 954
   -- Wiring scope
-  @fn shortFxName(s)  @ 984
+  @fn shortFxName(s)  @ 1011
       -- REAPER hands us "Type: Name (Author)" — or, for multi-out plugins,
       -- "Type: Name (Author) (N outs)" — in EnumInstalledFX, and either
       -- parenthetical may itself contain balanced parens (e.g. a vendor written
@@ -185,18 +185,18 @@
       -- disambiguate same-named plugins from different vendors; the node label
       -- drops the prefix and everything from the first balanced () onward.
       -- Strip on commit, not in wm.
-  @fn findMasterPos()  @ 990
-  @fn sourcePosFor(genX, genY)  @ 1001
+  @fn findMasterPos()  @ 1017
+  @fn sourcePosFor(genX, genY)  @ 1028
 
 # Public API (wp:*)
-  @api wp:bind()  @ 938
+  @api wp:bind()  @ 959
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 939
-  @api wp:renderToolbarBits(_)  @ 941
-  @api wp:renderBody(_, w, h, dispatch)  @ 944
+  @api wp:unbind()  @ 960
+  @api wp:renderToolbarBits(_)  @ 962
+  @api wp:renderBody(_, w, h, dispatch)  @ 965
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 957
-  @api wp:focusState()  @ 963
+  @api wp:renderStatusBar(_)  @ 978
+  @api wp:focusState()  @ 990
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface

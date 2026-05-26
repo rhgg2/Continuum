@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=210  sha=05e5d69  mode=chunk
+@module wiringView  src=wiringView.lua  loc=233  sha=5b36bf6  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -21,6 +21,7 @@
   @state wv = {}  @ 15
   @state hoverNodeId = nil  @ 17
   @state selection = {}  @ 18   -- set keyed by nodeId → true; replace via setSelection, never mutated in place
+  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 198
 
 # Private functions
   -- Logical projection (viewport-independent)
@@ -65,10 +66,13 @@
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
   @api wv:wireViews()  @ 170
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
+  -- Capacity errors
+  @api wv:errors()  @ 201
+      @contract  list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 198
-  @api wv:setHover(id)  @ 199
-  @api wv:selection()  @ 202
+  @api wv:hover()  @ 221
+  @api wv:setHover(id)  @ 222
+  @api wv:selection()  @ 225
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 204
+  @api wv:setSelection(idSet)  @ 227
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.

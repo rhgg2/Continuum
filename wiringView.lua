@@ -193,6 +193,29 @@ function wv:wireViews()
   return out
 end
 
+----- Capacity errors
+
+local CAPACITY_BUDGET = { audio = 64, midi = 128 }
+
+--contract: list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
+function wv:errors()
+  local g       = wm:graph()
+  local compile = wm:compile()
+  local classes = DAG.classes(compile)
+  local out = {}
+  for _, err in ipairs(wm:errors()) do
+    local nodeIds = {}
+    for _, id in ipairs(classes[err.classKey] or {}) do
+      if g.nodes[id] then nodeIds[id] = true end
+    end
+    util.add(out, { kind    = err.kind,
+                    count   = err.count,
+                    budget  = CAPACITY_BUDGET[err.kind],
+                    nodeIds = nodeIds })
+  end
+  return out
+end
+
 ----- Logical view-state (nodeId only)
 
 function wv:hover()             return hoverNodeId       end
