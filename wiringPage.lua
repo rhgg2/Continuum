@@ -707,6 +707,29 @@ local function shiftHoverHit(nodeViews, mx, my, ox, oy)
     if sticky and sticky.nodeId == pick.nv.id then sticky = nil end
     return pick
   end
+  -- Drop the audio band when the cursor has settled on the midi keyboard:
+  -- a midi-only re-layout has no chips, no handle, no sleeve, leaving the
+  -- in-body keyboard as the sole overlay decoration.
+  local function narrowOnMidi(pick, nv)
+    if pick and pick.slot and pick.slot.kind == 'midi' then
+      pick.layout = layoutPortRow(nv, ox, oy, 'out', mx, my, 'midi')
+    end
+    return pick
+  end
+  -- Cursor in the popout's empty space (in hoverRect but outside the
+  -- body proper) lands on the synthetic body-default slot. Clear it so
+  -- the body outline doesn't read as a hover target; engagement stays
+  -- so the popout remains open while the cursor traverses to a chip.
+  local function clearBandDefault(pick, nv)
+    if pick and pick.slot and not pick.slot.x then
+      local lx0, ly0, lx1, ly1 = nodeRect(nv)
+      if not inRect(mx, my, ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
+        pick.slot = nil
+      end
+    end
+    return pick
+  end
+  local function refine(pick, nv) return clearBandDefault(narrowOnMidi(pick, nv), nv) end
   if engagedId then
     for _, nv in ipairs(nodeViews) do
       if nv.id == engagedId then
@@ -716,7 +739,7 @@ local function shiftHoverHit(nodeViews, mx, my, ox, oy)
                           slot = rowHit(layout.list.rows, mx, my) }
         end
         local pick = pickHovered(nv, layout, mx, my, 'out', nil)
-        if pick then return consume(pick) end
+        if pick then return consume(refine(pick, nv)) end
         break
       end
     end
@@ -726,7 +749,7 @@ local function shiftHoverHit(nodeViews, mx, my, ox, oy)
     if #nv.outs.audio > 0 or #nv.outs.midi > 0 then
       local layout = layoutPortRow(nv, ox, oy, 'out', mx, my, nil)
       local pick = pickHovered(nv, layout, mx, my, 'out', nil)
-      if pick then return consume(pick) end
+      if pick then return consume(refine(pick, nv)) end
     end
   end
 end
@@ -764,13 +787,26 @@ end
 -- Forward-draft only: highlights the kept (source) node's port row so
 -- the user sees where the in-flight wire is coming from. Redrafts skip
 -- this — the wire being dragged is itself the visual cue for the kept
--- end, and the kept-side popout would clutter the gesture.
-local function draftSourceHoverHit(nodeViews, ox, oy)
+-- end, and the kept-side popout would clutter the gesture. When the
+-- cursor sits in the source's own band gap (not on a chip, chevron, or
+-- the body), the kept-slot highlight is cleared to match the target-
+-- side band-gap behaviour: the popout stays, but no highlight reads.
+local function draftSourceHoverHit(nodeViews, mx, my, ox, oy)
   if not wireDraft or wireDraft.edgeIdx then return nil end
   for _, nv in ipairs(nodeViews) do
     if nv.id == wireDraft.keptId then
-      local layout = layoutPortRow(nv, ox, oy, 'out', 0, 0, nil,
-                                   wireDraft.keptSide)
+      local layout = layoutPortRow(nv, ox, oy, 'out', mx, my,
+                                   wireDraft.type, wireDraft.keptSide)
+      local lx0, ly0, lx1, ly1 = nodeRect(nv)
+      local r = layout.hoverRect
+      local inBand = inRect(mx, my, r[1], r[2], r[3], r[4])
+                 and not inRect(mx, my, ox + lx0, oy + ly0,
+                                        ox + lx1, oy + ly1)
+                 and not slotHit(layout.slots, mx, my)
+                 and not onChevron(layout.handle, mx, my)
+      if inBand then
+        return { nv = nv, layout = layout, slot = nil }
+      end
       -- Body-default port 1 has no chip in the layout, so findLayoutSlot
       -- returns nil. Synthesise a default-slot spec so the source node
       -- still reads as engaged (body outline lights up, since no chip
@@ -797,6 +833,21 @@ local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
     engagedId = pick.nv.id
     return pick
   end
+  -- Cursor sitting in the popout band's empty space (not on a chip, not
+  -- on the chevron) returns the synthetic body-default slot from
+  -- pickHovered. During a draft we don't want that to read as a valid
+  -- drop target — the user has clearly moved off the body. Clear the
+  -- slot so the overlay shows no highlight and dropEligible refuses to
+  -- commit; engagement is preserved so the popout stays open.
+  local function clearBandDefault(pick, nv)
+    if pick and pick.slot and not pick.slot.x then
+      local lx0, ly0, lx1, ly1 = nodeRect(nv)
+      if not inRect(mx, my, ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
+        pick.slot = nil
+      end
+    end
+    return pick
+  end
   if engagedId and not draft.forbidden[engagedId] then
     for _, nv in ipairs(nodeViews) do
       if nv.id == engagedId then
@@ -806,7 +857,7 @@ local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
                           slot = rowHit(layout.list.rows, mx, my) }
         end
         local pick = pickHovered(nv, layout, mx, my, dir, draft.type)
-        if pick then return consume(pick) end
+        if pick then return consume(clearBandDefault(pick, nv)) end
         break
       end
     end
@@ -816,7 +867,7 @@ local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
     if not draft.forbidden[nv.id] then
       local layout = layoutPortRow(nv, ox, oy, dir, mx, my, draft.type)
       local pick = pickHovered(nv, layout, mx, my, dir, draft.type)
-      if pick then return consume(pick) end
+      if pick then return consume(clearBandDefault(pick, nv)) end
     end
   end
 end
@@ -1410,7 +1461,7 @@ local function renderCanvas(w, h)
   if wireDraft then
     targetHit      = dropTargetHit(nodeViews, draftCx, draftCy,
                                    ox, oy, wireDraft)
-    draftSourceHit = draftSourceHoverHit(nodeViews, ox, oy)
+    draftSourceHit = draftSourceHoverHit(nodeViews, draftCx, draftCy, ox, oy)
   elseif shiftHeld and not hoverFreeze then
     sourceHit = shiftHoverHit(nodeViews, mx, my, ox, oy)
   end
