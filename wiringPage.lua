@@ -4,7 +4,7 @@
 --invariant: render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
 --invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
---invariant: at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; shift-gated port-row hover drives wire creation — per-face layout is [handle ▾][audio chips for ports 2..N centred][midi keyboard], handle pinned to left corner, midi to right corner. body-default = port 1; audio chips render for ports 2..N when N ≤ PORTS_PER_ROW; past that, chips appear only for currently-wired and user-pinned ports while the rest live in the handle's dropdown. top/bottom faces only. See design/wiring.md.
+--invariant: at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; shift-gated port-row hover drives wire creation — per-face layout is [handle ▾][audio chips for ports 2..N centred], handle pinned to left corner; the midi keyboard lives inside the body at its middle-right edge (appears under shift hover, fills the body colour behind itself to overpaint the label) rather than in the band. The popout band only renders when nAudio ≥ 2 — a 1-audio-port node with midi has no band; the body catches default-port hover and the body-internal kbd catches midi. body-default = port 1; audio chips render for ports 2..N when N ≤ PORTS_PER_ROW; past that, chips appear only for currently-wired and user-pinned ports while the rest live in the handle's dropdown. top/bottom faces only. See design/wiring.md.
 
 local util = require 'util'
 
@@ -90,10 +90,10 @@ local PORT_GAP         = 6
 local PORT_BAND_OFFSET = 6   -- gap between node edge and the hover-only port row
 local PORT_HIT_PAD     = 4   -- hit area extends this far beyond the visual square on each side
 local PORT_TOOLTIP_GAP = 4   -- pixels between port top and tooltip bottom edge
-local PORTS_PER_ROW    = 4   -- audio rows wrap after this many ports
+local PORTS_PER_ROW    = 5   -- audio rows wrap after this many ports
 local MIDI_SLOT_W      = 13  -- keyboard slot is wider/taller than the audio
 local MIDI_SLOT_H      = 11  -- 8×8 square; intrinsic icon dimensions
-local MIDI_INSET       = 3   -- px between midi icon and popup-right rounded corner
+local MIDI_INSET       = 3   -- px between the body-internal midi icon and the node's right edge
 local HANDLE_W         = 13  -- spillover-list chevron, mirrors midi slot envelope
 local HANDLE_H         = 11
 local HANDLE_INSET     = 4   -- slightly more inset than midi so the caret reads as off-edge
@@ -348,9 +348,8 @@ end
 
 -- Spillover-list handle: a small chevron pointing outward in the direction
 -- the dropdown will open (down on the bottom face, up on the top face).
--- Same envelope as the midi keyboard so the two corner chips read as
--- mirrored. Inert at Slice A1 — A2 wires the hover-dropdown. The band-
--- level bg rect drawn by drawPortRow handles wire occlusion.
+-- Sized like a band-row chip so it shares the row centreline cleanly. The
+-- band-level bg rect drawn by drawPortRow handles wire occlusion.
 local function drawHandle(dl, handle, side)
   local col = chrome.colour('text')
   local cx, cy = handle.x + handle.w / 2, handle.y + handle.h / 2
@@ -452,12 +451,13 @@ local function layoutList(audio, handle, side)
 end
 
 -- Per-face layout: handle ▾ pinned to the left body corner, audio chips
--- for ports 2..N centred (port 1 lives on the body itself, no chip), midi
--- keyboard pinned to the right. Audio chips render for ports 2..N when
--- N ≤ PORTS_PER_ROW; past that the band shows only currently-wired and
--- user-pinned ports (chip promotion — design/wiring.md). hoverRect =
--- body ∪ slot/handle hit pads, so cursor traversal between zones keeps
--- the hover live. keep
+-- for ports 2..N centred (port 1 lives on the body itself, no chip). The
+-- midi keyboard is body-internal — placed at the middle-right edge with
+-- inBody=true — not in the band, so a 1-audio-port + midi node yields no
+-- band at all. Audio chips render for ports 2..N when N ≤ PORTS_PER_ROW;
+-- past that the band shows only currently-wired and user-pinned ports
+-- (chip promotion — design/wiring.md). hoverRect = body ∪ slot/handle
+-- hit pads, so cursor traversal between zones keeps the hover live. keep
 -- filters mismatched kinds during target-side hover (audio draft hides
 -- midi and the handle; midi draft hides audio chips and the handle).
 -- forceSide pins the face for sticky overlays (where the cursor isn't
@@ -520,12 +520,17 @@ local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
   local nChips = #chipPorts
   if nChips > 0 then
     local nRows = math.ceil(nChips / PORTS_PER_ROW)
+    -- Chips centred between the handle's right edge and the body's right
+    -- edge. The right corner is free now that midi lives on the body, so
+    -- the chip row's centre sits well right of the body centre.
+    local chipL = handle.x + handle.w + 2
+    local chipR = bx1 - MIDI_INSET
     for r = 0, nRows - 1 do
       local first = r * PORTS_PER_ROW + 1
       local last  = math.min(first + PORTS_PER_ROW - 1, nChips)
       local rowN  = last - first + 1
       local rowW  = rowN * PORT_SIZE + (rowN - 1) * PORT_GAP
-      local startX = math.floor((bx0 + bx1 - rowW) / 2)
+      local startX = math.floor((chipL + chipR - rowW) / 2)
       for k = 0, rowN - 1 do
         local portIdx = chipPorts[first + k]
         local s = {
@@ -539,11 +544,12 @@ local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
     end
   end
   if showMidi then
-    local s = { kind = 'midi', name = midi[1],
-                x = bx1 - MIDI_SLOT_W - MIDI_INSET,
-                w = MIDI_SLOT_W, h = MIDI_SLOT_H }
-    placeOnRow(s)
-    slots[#slots + 1] = s
+    slots[#slots + 1] = {
+      kind = 'midi', name = midi[1], inBody = true,
+      x = bx1 - MIDI_SLOT_W - MIDI_INSET,
+      y = math.floor((by0 + by1 - MIDI_SLOT_H) / 2),
+      w = MIDI_SLOT_W, h = MIDI_SLOT_H,
+    }
   end
 
   -- bandRect is the slot/handle bbox (with hit pad); the band-level bg
@@ -562,7 +568,9 @@ local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
       if y1 > bandRect[4] then bandRect[4] = y1 end
     end
   end
-  for _, s in ipairs(slots) do extend(s) end
+  for _, s in ipairs(slots) do
+    if not s.inBody then extend(s) end
+  end
   extend(handle)
 
   -- The handle's by-name dropdown is computed alongside the band so its
@@ -862,10 +870,21 @@ local function drawPortRow(dl, pick, audioCol, idPrefix)
   local layout, highlight, listOpen =
     pick.layout, pick.slot, pick.list ~= nil
   if layout.handle then drawHandle(dl, layout.handle, layout.side) end
-  local hlCol = chrome.colour('wiring.node.selected')
+  local hlCol    = chrome.colour('wiring.node.selected')
+  local bodyFill = chrome.colour('wiring.node.' .. pick.nv.category)
   for i, s in ipairs(layout.slots) do
     if not (listOpen and s.kind == 'audio') then
-      drawSlot(dl, s, idPrefix .. '/' .. i, audioCol)
+      if s.inBody then
+        -- Body-internal kbd: fill body colour behind to overpaint the
+        -- label while the gesture is live, then draw the icon. No
+        -- InvisibleButton (the body's drag target owns the area) and no
+        -- tooltip — the visible icon already conveys 'midi'.
+        ImGui.DrawList_AddRectFilled(dl,
+          s.x, s.y, s.x + s.w, s.y + s.h, bodyFill)
+        drawKeyboardIcon(dl, s.x, s.y)
+      else
+        drawSlot(dl, s, idPrefix .. '/' .. i, audioCol)
+      end
       -- Match by (kind, portIdx) rather than identity: defaultSlot
       -- returns a synthetic spec, not the layout slot, so identity would
       -- fail to highlight the midi keyboard when the cursor is over the
@@ -1413,11 +1432,14 @@ local function renderCanvas(w, h)
   -- its default slot. The nv.id-keyed idPrefix keeps InvisibleButtons
   -- unique across multiple simultaneous overlays.
   for _, p in ipairs(overlays) do
-    -- Body outline marks "the default port is the selected slot" — i.e.
-    -- the slot is a default-port synthetic (no screen rect) rather than
-    -- a real chip / keyboard. Chip / keyboard hits carry their own
-    -- highlight; chevron hits (slot=nil) leave the body unmarked.
-    if p.slot and not p.slot.x then
+    -- Body outline marks "the default audio port is the selected slot" —
+    -- the slot is a default-port synthetic (no screen rect). Chip hits
+    -- carry their own highlight; chevron hits (slot=nil) leave the body
+    -- unmarked. Midi defaults are excluded: the body-internal kbd carries
+    -- its own highlight (drawPortRow matches by kind), so during a midi
+    -- draft / midi redraft the node body stays unhighlighted and only
+    -- the keyboard lights up.
+    if p.slot and not p.slot.x and p.slot.kind ~= 'midi' then
       drawBodyOutline(dl, p.nv, ox, oy)
     end
     drawPortRow(dl, p, audioCol, '##portSlot/' .. p.nv.id)

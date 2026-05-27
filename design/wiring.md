@@ -411,11 +411,16 @@ selection. With shift held, hovering a node highlights the whole body
 and pops out a **port band** on whichever of the top or bottom face
 the cursor is nearer (left and right faces are never used).
 
-The band carries three fixed zones, left to right: a chevron **handle ▾**
-on the left body corner, audio **chips** for additional ports centred on
-the body, and the **MIDI keyboard slot** on the right corner. Port 1 is
-not a chip — its wire endpoint is the body itself, so the common path
-("just use Main") needs no aim at a tiny target.
+The band carries two fixed zones, left to right: a chevron **handle ▾**
+on the left body corner and audio **chips** for additional ports centred
+on the body. Port 1 is not a chip — its wire endpoint is the body
+itself, so the common path ("just use Main") needs no aim at a tiny
+target. The **MIDI keyboard** lives inside the node body at its middle-
+right edge, not in the band: it appears under shift hover, fills the body
+colour behind itself to overpaint the label, and lights up when the
+gesture targets MIDI. Nodes with one audio port and no chips or handle
+get no band at all — the body itself catches the default-port hover and
+the body-internal keyboard catches MIDI.
 
 For a node with 2..5 audio ports the band shows chips for ports 2..N
 directly. Past five, the band shows only the handle plus chips for ports
