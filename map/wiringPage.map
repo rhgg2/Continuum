@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1464  sha=1a0c0a9  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1469  sha=b93598e  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -65,8 +65,8 @@
   @state openFxPicker  @ 181
   @state SELECTED_INFLATE = 0  @ 194   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 195
-  @state SOURCE_PAD = 24  @ 1422
-  @state wiring = cmgr:scope('wiring')  @ 1454
+  @state SOURCE_PAD = 24  @ 1427
+  @state wiring = cmgr:scope('wiring')  @ 1459
 
 # Private functions
   -- FX-picker modal kind
@@ -206,23 +206,23 @@
       -- more legibly while the user is browsing by name; the midi slot stays.
       -- The pale popup bg is laid down separately by drawPortRowBg, before nodes.
   -- Wire drawing
-  @fn wireGroups(wireViews)  @ 858
+  @fn wireGroups(wireViews)  @ 863
       -- Group wires by unordered pair {idA, idB}; sort each group so audio
       -- precedes MIDI (MIDI sits to the right of the canonical-pair line),
       -- then by fromPort then toPort. canonA/canonB record the sorted pair
       -- direction so all wires in the group share one perpendicular axis
       -- regardless of each wire's own direction.
-  @fn wireOffset(i, n)  @ 894
+  @fn wireOffset(i, n)  @ 899
       -- Perpendicular scalar for slot i (1-based) of n parallel wires:
       -- centred around 0 so a lone wire sits on the centre line.
-  @fn nodeExitDist(dx, dy)  @ 903
+  @fn nodeExitDist(dx, dy)  @ 908
       -- Distance from a node centre to where a ray in direction (dx,dy)
       -- exits the node rect. Used to place the audio-port label just past
       -- the rounded body so it stays visible. Approximates the parallel-
       -- offset case by NODE_W/H from the centre, which is within WIRE_GAP
       -- of the true intersection — close enough for label placement.
-  @fn drawWireArrow(dl, sx, sy, ex, ey, col)  @ 912
-  @fn drawWireEndLabel(dl, ax, ay, fx, fy, i, n, portIdx, portName, idStem, col)  @ 947
+  @fn drawWireArrow(dl, sx, sy, ex, ey, col)  @ 917
+  @fn drawWireEndLabel(dl, ax, ay, fx, fy, i, n, portIdx, portName, idStem, col)  @ 952
       -- Audio port-number label as a tight bg-filled patch sized to the
       -- digit's bbox, placed up the wire past the node's exit point. The
       -- fill occludes the wire segment behind it so the digit reads cleanly
@@ -232,21 +232,21 @@
       -- rects on adjacent parallel wires never overlap (perp 10 + along 20 vs
       -- a ~10×14 rect). Hover-tooltip shows the port name (synthetic 'in N' /
       -- 'out N' until TrackFX_GetIOName lands).
-  @fn drawWiresPass(dl, wireViews, nodesById, ox, oy, audioCol, midiCol)  @ 986
-  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 1032
+  @fn drawWiresPass(dl, wireViews, nodesById, ox, oy, audioCol, midiCol)  @ 991
+  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 1037
       -- Identify the node whose body the mouse is over (un-inflated rect);
       -- used to start a drag, distinct from the inflated rect that drives
       -- port reveal. Returns nil if the mouse is over empty canvas (or a
       -- port band).
-  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 1045
+  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 1050
       -- AABB intersection of a pixel-space band rect against every node's
       -- body rect (un-inflated; port bands aren't selectable). Returns the
       -- set of intersecting ids — empty table if nothing was caught.
-  @fn renderCanvas(w, h)  @ 1059
-  @fn pushBodyStyles()  @ 1336
-  @fn popBodyStyles()  @ 1339
+  @fn renderCanvas(w, h)  @ 1064
+  @fn pushBodyStyles()  @ 1341
+  @fn popBodyStyles()  @ 1344
   -- Wiring scope
-  @fn shortFxName(s)  @ 1405
+  @fn shortFxName(s)  @ 1410
       -- REAPER hands us "Type: Name (Author)" — or, for multi-out plugins,
       -- "Type: Name (Author) (N outs)" — in EnumInstalledFX, and either
       -- parenthetical may itself contain balanced parens (e.g. a vendor written
@@ -254,22 +254,22 @@
       -- disambiguate same-named plugins from different vendors; the node label
       -- drops the prefix and everything from the first balanced () onward.
       -- Strip on commit, not in wm.
-  @fn findMasterPos()  @ 1411
-  @fn sourcePosFor(genX, genY)  @ 1423
+  @fn findMasterPos()  @ 1416
+  @fn sourcePosFor(genX, genY)  @ 1428
 
 # Public API (wp:*)
-  @api wp:bind()  @ 1344
+  @api wp:bind()  @ 1349
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 1345
-  @api wp:enableLive()  @ 1351
+  @api wp:unbind()  @ 1350
+  @api wp:enableLive()  @ 1356
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
-  @api wp:tick()  @ 1354
+  @api wp:tick()  @ 1359
       @contract  per-frame poll; drives wm:pollUndo to detect REAPER undo/redo of wiring gestures (scratch P_EXT divergence) and re-issue wiringChanged{kind='load'}. Called from coordinator.frame regardless of which page is active.
-  @api wp:renderToolbarBits(_)  @ 1356
-  @api wp:renderBody(_, w, h, dispatch)  @ 1359
+  @api wp:renderToolbarBits(_)  @ 1361
+  @api wp:renderBody(_, w, h, dispatch)  @ 1364
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 1372
-  @api wp:focusState()  @ 1384
+  @api wp:renderStatusBar(_)  @ 1377
+  @api wp:focusState()  @ 1389
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface

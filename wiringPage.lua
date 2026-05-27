@@ -838,7 +838,12 @@ local function drawPortRow(dl, pick, audioCol, idPrefix)
   for i, s in ipairs(layout.slots) do
     if not (listOpen and s.kind == 'audio') then
       drawSlot(dl, s, idPrefix .. '/' .. i, audioCol)
-      if s == highlight then
+      -- Match by (kind, portIdx) rather than identity: defaultSlot
+      -- returns a synthetic spec, not the layout slot, so identity would
+      -- fail to highlight the midi keyboard when the cursor is over the
+      -- body during a midi draft.
+      if highlight and s.kind == highlight.kind
+         and (s.kind ~= 'audio' or s.portIdx == highlight.portIdx) then
         ImGui.DrawList_AddRect(dl,
           s.x - SELECTED_INFLATE, s.y - SELECTED_INFLATE,
           s.x + s.w + SELECTED_INFLATE, s.y + s.h + SELECTED_INFLATE,
