@@ -1307,6 +1307,9 @@ function wp:unbind()
   listOpenId, sticky = nil, nil
 end
 
+--contract: turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
+function wp:enableLive() wv:enableLive() end
+
 function wp:renderToolbarBits(_) end
 
 --contract: pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.

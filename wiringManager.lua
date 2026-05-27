@@ -16,11 +16,12 @@ local cm = (...).cm
 local wm = {}
 local fire = util.installHooks(wm)
 
-local _graph = nil
-local _installedFx = nil  -- session cache; reaper's installed-FX set is fixed at runtime
-local _scratchTrack = nil -- hidden host for the probe (and, later, orphan FX nodes); reset by wm:load
-local _fxIO = {}          -- session cache: fxIdent → { ins, outs, inNames, outNames }
+local userGraph = nil
+local installedFx = nil   -- session cache; reaper's installed-FX set is fixed at runtime
+local scratchTrack = nil  -- hidden host for the probe (and, later, orphan FX nodes); reset by wm:load
+local fxIO = {}           -- session cache: fxIdent → { ins, outs, inNames, outNames }
 local realising = false   -- true during applyOps's stamp-back mutate, gating wiringChanged
+local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
 
 local SCRATCH_NAME = 'continuum: wiring scratch'
 local SCRATCH_KEY  = '__scratch__'
@@ -47,7 +48,7 @@ local function readPersisted()
 end
 
 local function ensureLoaded()
-  if not _graph then _graph = readPersisted() end
+  if not userGraph then userGraph = readPersisted() end
 end
 
 local function findScratchTrack()
@@ -71,9 +72,9 @@ local function createScratchTrack()
 end
 
 local function ensureScratchTrack()
-  if _scratchTrack then return _scratchTrack end
-  _scratchTrack = findScratchTrack() or createScratchTrack()
-  return _scratchTrack
+  if scratchTrack then return scratchTrack end
+  scratchTrack = findScratchTrack() or createScratchTrack()
+  return scratchTrack
 end
 
 local function pinName(track, fxIdx, dir, pinIdx)
@@ -100,31 +101,31 @@ end
 
 --contract: re-reads wiringGraph from cm (rebuilding master via freshGraph if empty), ensures the scratch track, fires wiringChanged{kind='load'}; drops the prior scratch handle (project may have changed)
 function wm:load()
-  _graph = readPersisted()
-  _scratchTrack = nil
+  userGraph = readPersisted()
+  scratchTrack = nil
   ensureScratchTrack()
   fire('wiringChanged', { kind = 'load' })
 end
 
 --contract: persists the current in-memory graph to the project tier; mutate calls this, callers normally don't
 function wm:save()
-  cm:set('project', 'wiringGraph', _graph)
+  cm:set('project', 'wiringGraph', userGraph)
 end
 
 --contract: returns a deep copy of the user graph; caller mutations never leak into wm state
 function wm:graph()
   ensureLoaded()
-  return util.deepClone(_graph)
+  return util.deepClone(userGraph)
 end
 
 --contract: clone-validate-swap; on DAG.validate failure returns false,err with no state change and no signal; on success persists and fires wiringChanged{kind='mutate'} unless wm is mid-realisation (the applier's stamp-back path sets `realising` so it doesn't re-enter the live-recompile loop)
 function wm:mutate(mutator)
   ensureLoaded()
-  local draft = util.deepClone(_graph)
+  local draft = util.deepClone(userGraph)
   mutator(draft)
   local err = DAG.validate(draft)
   if err then return false, err end
-  _graph = draft
+  userGraph = draft
   self:save()
   if not realising then fire('wiringChanged', { kind = 'mutate' }) end
   return true
@@ -133,7 +134,7 @@ end
 --contract: returns DAG.compile context around the current user graph; lazy caches live on the ctx, so reusing it across :classes/:capacityErrors/:targetPlan computes each derivation once
 function wm:compile()
   ensureLoaded()
-  return DAG.compile(_graph)
+  return DAG.compile(userGraph)
 end
 
 --contract: list of intra-class capacity overflows on the lowered compile graph; empty when the user graph is within budget
@@ -143,26 +144,26 @@ end
 
 --contract: { ins, outs, inNames, outNames } in stereo ports for fxIdent; instantiates on the scratch track, reads TrackFX_GetIOSize + in_pin_X/out_pin_X via TrackFX_GetNamedConfigParm, deletes, caches by ident. Unknown ident → ins=outs=0 with empty name lists.
 function wm:probeFxIO(ident)
-  if _fxIO[ident] then return _fxIO[ident] end
+  if fxIO[ident] then return fxIO[ident] end
   ensureScratchTrack()
   reaper.PreventUIRefresh(1)
-  local fxIdx = reaper.TrackFX_AddByName(_scratchTrack, ident, false, -1)
+  local fxIdx = reaper.TrackFX_AddByName(scratchTrack, ident, false, -1)
   local result
   if fxIdx < 0 then
     result = { ins = 0, outs = 0, inNames = {}, outNames = {} }
   else
-    local _, inPins, outPins = reaper.TrackFX_GetIOSize(_scratchTrack, fxIdx)
+    local _, inPins, outPins = reaper.TrackFX_GetIOSize(scratchTrack, fxIdx)
     inPins, outPins = inPins or 0, outPins or 0
     result = {
       ins      = inPins  / 2,
       outs     = outPins / 2,
-      inNames  = portNames(_scratchTrack, fxIdx, 'in',  inPins),
-      outNames = portNames(_scratchTrack, fxIdx, 'out', outPins),
+      inNames  = portNames(scratchTrack, fxIdx, 'in',  inPins),
+      outNames = portNames(scratchTrack, fxIdx, 'out', outPins),
     }
-    reaper.TrackFX_Delete(_scratchTrack, fxIdx)
+    reaper.TrackFX_Delete(scratchTrack, fxIdx)
   end
   reaper.PreventUIRefresh(-1)
-  _fxIO[ident] = result
+  fxIO[ident] = result
   return result
 end
 
@@ -186,7 +187,7 @@ end
 function wm:createSourceTrack(opts)
   ensureScratchTrack()
   reaper.PreventUIRefresh(1)
-  local insertIdx = math.floor(reaper.GetMediaTrackInfo_Value(_scratchTrack, 'IP_TRACKNUMBER')) - 1
+  local insertIdx = math.floor(reaper.GetMediaTrackInfo_Value(scratchTrack, 'IP_TRACKNUMBER')) - 1
   reaper.InsertTrackAtIndex(insertIdx, true)
   local track = reaper.GetTrack(0, insertIdx)
   if opts and opts.name then
@@ -248,10 +249,10 @@ function wm:snapshot()
   -- emit the delete op on the next reconcile pass.
   local ownedGuids = {}
   for k in pairs(cm:get('wiringOwnedFx') or {}) do ownedGuids[k] = true end
-  for _, n in pairs(_graph.nodes) do
+  for _, n in pairs(userGraph.nodes) do
     if n.kind == 'fx' and n.fxGuid then ownedGuids[n.fxGuid] = true end
   end
-  for _, e in ipairs(_graph.edges) do
+  for _, e in ipairs(userGraph.edges) do
     if e.opFxGuid then ownedGuids[e.opFxGuid] = true end
   end
   -- First pass: discover managed tracks + their (classKey, hostKind), so
@@ -325,9 +326,9 @@ end
 --contract: derives the wiringSnapshot REAPER should look like, by lowering the user graph and projecting DAG.targetPlan into snapshot shape. fxGuid on each fx entry comes from the user graph (nil for unmaterialised nodes). Pure — no REAPER reads except GetTrackGUID on the scratch track.
 function wm:targetState()
   ensureLoaded()
-  local cx = DAG.compile(_graph)
+  local cx = DAG.compile(userGraph)
   local plan = cx:targetPlan()
-  local scratchGuid = _scratchTrack and reaper.GetTrackGUID(_scratchTrack)
+  local scratchGuid = scratchTrack and reaper.GetTrackGUID(scratchTrack)
   local out = {}
   for classKey, entry in pairs(plan) do
     out[classKey] = projectEntry(entry, cx:graph().nodes, scratchGuid)
@@ -467,6 +468,15 @@ end
 -- block stays contiguous and doesn't interleave with user-managed plugins.
 local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache)
   local current = ownedSubsequence(track, ownedGuids)
+
+  -- Stale-guid sweep: a target entry whose fxGuid isn't live in REAPER (project
+  -- reload, manual delete, drift) is reset to nil so step 2 re-materialises it
+  -- and step 3's stamp-back rewrites the user graph with the fresh guid.
+  local liveGuids = {}
+  for _, c in ipairs(current) do liveGuids[c.fxGuid] = true end
+  for _, t in ipairs(target) do
+    if t.fxGuid and not liveGuids[t.fxGuid] then t.fxGuid = nil end
+  end
 
   -- 1. Drop owned entries absent from target (right-to-left keeps absIdx valid).
   local targetGuids = {}
@@ -628,7 +638,7 @@ function wm:applyOps(ops, label)
   reaper.PreventUIRefresh(1)
 
   local classKeyToTrack = buildClassKeyToTrack()
-  local ownedGuids      = ownedGuidsFrom(_graph, cm:get('wiringOwnedFx'))
+  local ownedGuids      = ownedGuidsFrom(userGraph, cm:get('wiringOwnedFx'))
   local stamps          = {}
   local paramIdxCache   = {}
 
@@ -670,7 +680,7 @@ function wm:applyOps(ops, label)
   -- Persist the post-apply owned-guid set: anything still in the graph is
   -- still in REAPER (orphans got deleted in reconcileFXChain and dropped
   -- out of the graph in the mutator that removed them).
-  cm:set('project', 'wiringOwnedFx', ownedGuidsFrom(_graph))
+  cm:set('project', 'wiringOwnedFx', ownedGuidsFrom(userGraph))
 
   reaper.PreventUIRefresh(-1)
   reaper.Undo_EndBlock2(0, label or 'wiring: apply', -1)
@@ -678,7 +688,7 @@ end
 
 --contract: enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
 function wm:listInstalledFX()
-  if _installedFx then return _installedFx end
+  if installedFx then return installedFx end
   local out, i = {}, 0
   while true do
     local ok, name, ident = reaper.EnumInstalledFX(i)
@@ -686,8 +696,23 @@ function wm:listInstalledFX()
     util.add(out, { name = name, ident = ident })
     i = i + 1
   end
-  _installedFx = out
+  installedFx = out
   return out
+end
+
+--contract: one reconcile pass — diff targetState against snapshot and applyOps the result under the given undo label
+function wm:reconcile(label)
+  self:applyOps(self:diff(self:targetState(), self:snapshot()), label or 'wiring: reconcile')
+end
+
+--contract: idempotent. Subscribes wm to its own wiringChanged so every mutate/load drives wm:reconcile, then runs one immediate pass to put REAPER in sync with the persisted graph.
+function wm:enableLive(label)
+  if liveLabel then return end
+  liveLabel = label or 'wiring: apply'
+  self:subscribe('wiringChanged', function(payload)
+    self:reconcile(payload.kind == 'load' and 'wiring: reconcile (load)' or liveLabel)
+  end)
+  self:reconcile('wiring: reconcile (enable)')
 end
 
 return wm

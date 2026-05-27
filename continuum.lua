@@ -114,6 +114,7 @@ local function Main()
   coord:register('tracker', tp)
   coord:register('sample',  sp)
   coord:register('wiring',  wp)
+  wp:enableLive()
   ap:seedCursorFromReaper()
 
   -- Globals: transport wrappers, page switching, quit. Bound on root

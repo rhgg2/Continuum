@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=241  sha=0a00118  mode=chunk
+@module wiringView  src=wiringView.lua  loc=242  sha=53fd62e  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -21,7 +21,7 @@
   @state wv = {}  @ 15
   @state hoverNodeId = nil  @ 17
   @state selection = {}  @ 18   -- set keyed by nodeId → true; replace via setSelection, never mutated in place
-  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 206
+  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 207
 
 # Private functions
   -- Logical projection (viewport-independent)
@@ -50,30 +50,31 @@
   @api wv:graph()  @ 91
   @api wv:save()  @ 92
   @api wv:load()  @ 93
+  @api wv:enableLive()  @ 94
   -- Authoring (slice 1.3b)
-  @api wv:addFx(x, y, fx, opts)  @ 99
+  @api wv:addFx(x, y, fx, opts)  @ 100
       @contract  appends fx at (x,y); audio io from probeFxIO(ident)
       @contract  if generator (ins=0), also spawns source track + node at opts.sourcePos and midi edge from it
-  @api wv:listInstalledFX()  @ 134
-  @api wv:moveNodes(moves)  @ 137
+  @api wv:listInstalledFX()  @ 135
+  @api wv:moveNodes(moves)  @ 138
       @contract  atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
-  @api wv:addWire(spec)  @ 147
+  @api wv:addWire(spec)  @ 148
       @contract  appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
   -- Topology queries
-  @api wv:ancestorsOf(sourceId)  @ 161
+  @api wv:ancestorsOf(sourceId)  @ 162
       @contract  backward reachability over user.edges; returns { [id]=true } including sourceId
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 169
+  @api wv:nodeViews()  @ 170
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:wireViews()  @ 178
+  @api wv:wireViews()  @ 179
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Capacity errors
-  @api wv:errors()  @ 209
+  @api wv:errors()  @ 210
       @contract  list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 229
-  @api wv:setHover(id)  @ 230
-  @api wv:selection()  @ 233
+  @api wv:hover()  @ 230
+  @api wv:setHover(id)  @ 231
+  @api wv:selection()  @ 234
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 235
+  @api wv:setSelection(idSet)  @ 236
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.

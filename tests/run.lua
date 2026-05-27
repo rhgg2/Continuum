@@ -127,6 +127,7 @@ local specs = {
   'wm_snapshot_spec',
   'wm_diff_spec',
   'wm_apply_ops_spec',
+  'wm_live_spec',
   'wv_authoring_spec',
   'wv_errors_spec',
   'wp_smoke_spec',
