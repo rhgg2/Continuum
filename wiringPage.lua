@@ -740,9 +740,15 @@ local function draftSourceHoverHit(nodeViews, ox, oy)
     if nv.id == wireDraft.fromId then
       local layout = layoutPortRow(nv, ox, oy, 'out', 0, 0, nil,
                                    wireDraft.fromSide)
-      return { nv = nv, layout = layout,
-               slot = findLayoutSlot(layout, wireDraft.type,
-                                     wireDraft.fromPort) }
+      -- Body-default port 1 has no chip in the layout, so findLayoutSlot
+      -- returns nil. Synthesise a default-slot spec so the source node
+      -- still reads as engaged (body outline lights up, since no chip
+      -- can carry the highlight).
+      local slot = findLayoutSlot(layout, wireDraft.type, wireDraft.fromPort)
+      if not slot then
+        slot = { kind = wireDraft.type, portIdx = wireDraft.fromPort }
+      end
+      return { nv = nv, layout = layout, slot = slot }
     end
   end
 end
@@ -1192,7 +1198,13 @@ local function renderCanvas(w, h)
   -- its default slot. The nv.id-keyed idPrefix keeps InvisibleButtons
   -- unique across multiple simultaneous overlays.
   for _, p in ipairs(overlays) do
-    drawBodyOutline(dl, p.nv, ox, oy)
+    -- Body outline marks "the default port is the selected slot" — i.e.
+    -- the slot is a default-port synthetic (no screen rect) rather than
+    -- a real chip / keyboard. Chip / keyboard hits carry their own
+    -- highlight; chevron hits (slot=nil) leave the body unmarked.
+    if p.slot and not p.slot.x then
+      drawBodyOutline(dl, p.nv, ox, oy)
+    end
     drawPortRow(dl, p, audioCol, '##portSlot/' .. p.nv.id)
     if p.list then drawList(dl, p.list, p.slot) end
   end
