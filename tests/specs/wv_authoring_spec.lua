@@ -25,15 +25,15 @@ end
 
 return {
   {
-    name = 'addFx mints id "n"<_nextId>, bumps _nextId, writes logical pos',
+    name = 'addFx mints id "n"<nextId>, bumps nextId, writes logical pos',
     run = function(harness)
       local _, wv = mkWv(harness)
       local before = wv:graph()
-      t.eq(before._nextId, 1, 'fresh _nextId is 1')
+      t.eq(before.nextId, 1, 'fresh nextId is 1')
 
       t.truthy(wv:addFx(12, -34, FX))
       local after = wv:graph()
-      t.eq(after._nextId, 2, '_nextId bumped to 2')
+      t.eq(after.nextId, 2, 'nextId bumped to 2')
       t.truthy(after.nodes.n1,           'id minted as n1')
       t.eq(after.nodes.n1.kind, 'fx')
       t.eq(after.nodes.n1.pos.x, 12)
@@ -117,7 +117,7 @@ return {
       local g = wv:graph()
       t.eq(fxCount(g), 3,                'three fx nodes')
       t.truthy(g.nodes.n1 and g.nodes.n2 and g.nodes.n3, 'ids n1,n2,n3')
-      t.eq(g._nextId, 4,                 '_nextId past last mint')
+      t.eq(g.nextId, 4,                 'nextId past last mint')
       t.eq(g.nodes.master.kind, 'master', 'master untouched')
     end,
   },

@@ -79,7 +79,7 @@ return {
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxGuid='{FX-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
         util.add(g.edges, { type='audio', from='s', to='f',
-                            ops={gain=0.5}, _opFxGuid='{CU-7}' })
+                            ops={gain=0.5}, opFxGuid='{CU-7}' })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)
       local target = wm:targetState()

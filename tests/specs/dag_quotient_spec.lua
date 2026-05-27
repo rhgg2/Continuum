@@ -29,7 +29,7 @@ local function mk(nodes, edges)
   if not nodes.master then
     local k, v = master(); nodes[k] = v
   end
-  return { nodes = nodes, edges = edges or {}, _nextId = 1 }
+  return { nodes = nodes, edges = edges or {}, nextId = 1 }
 end
 
 -- {k1,k2,...} of a set, sorted.

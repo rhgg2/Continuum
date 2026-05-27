@@ -2,8 +2,8 @@
 -- @noindex
 
 --invariant: every fx-kind node carries fxGuid (nil pre-materialisation, stamped by the applier after TrackFX_AddByName). This is the only stable bridge identity between the user graph and a REAPER FX instance — snapshot and targetState match by it.
---shape: WiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, params?=table}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. fxOrder entries carrying `params` are wm-owned CU bridges (synthesised kind='fx' nodes from DAG.lower); snapshot never reads params back from REAPER, so any target with `params` drives setFXChain on every reconcile pass.
---shape: WiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setExtState', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier).
+--shape: wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, params?=table, origin?={kind='node',id=string}|{kind='edge',idx=int}}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. fxOrder entries carrying `params` are wm-owned CU bridges (synthesised kind='fx' nodes from DAG.lower); snapshot never reads params back from REAPER, so any target with `params` drives setFXChain on every reconcile pass. `origin` is stamped on every target-side fxOrder entry by projectEntry so the applier knows where to write minted guids back; snap entries do not carry it and fxOrderEq ignores it.
+--shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setExtState', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier).
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
 --invariant: scratch track is a hidden REAPER track tagged via cm key 'wiringScratch'='1'; wm:load() and wm:probeFxIO() find-or-create it; future use is to host FX nodes with no compile-graph track of their own. Probing-via-instantiate is a Stage-1 bootstrapping affordance — the differ in Stage 2+ will read I/O off the real production FX instance and back-fill the node.
@@ -20,6 +20,7 @@ local _graph = nil
 local _installedFx = nil  -- session cache; reaper's installed-FX set is fixed at runtime
 local _scratchTrack = nil -- hidden host for the probe (and, later, orphan FX nodes); reset by wm:load
 local _fxIO = {}          -- session cache: fxIdent → { ins, outs, inNames, outNames }
+local realising = false   -- true during applyOps's stamp-back mutate, gating wiringChanged
 
 local SCRATCH_NAME = 'continuum: wiring scratch'
 local SCRATCH_KEY  = '__scratch__'
@@ -35,7 +36,7 @@ local function freshGraph()
                            midi  = { ins = 0, outs = 0 } } },
     },
     edges = {},
-    _nextId = 1,
+    nextId = 1,
   }
 end
 
@@ -116,7 +117,7 @@ function wm:graph()
   return util.deepClone(_graph)
 end
 
---contract: clone-validate-swap; on DAG.validate failure returns false,err with no state change and no signal; on success persists and fires wiringChanged{kind='mutate'}
+--contract: clone-validate-swap; on DAG.validate failure returns false,err with no state change and no signal; on success persists and fires wiringChanged{kind='mutate'} unless wm is mid-realisation (the applier's stamp-back path sets `realising` so it doesn't re-enter the live-recompile loop)
 function wm:mutate(mutator)
   ensureLoaded()
   local draft = util.deepClone(_graph)
@@ -125,7 +126,7 @@ function wm:mutate(mutator)
   if err then return false, err end
   _graph = draft
   self:save()
-  fire('wiringChanged', { kind = 'mutate' })
+  if not realising then fire('wiringChanged', { kind = 'mutate' }) end
   return true
 end
 
@@ -238,15 +239,20 @@ local function readSendsClass(track, byTrack)
   return out
 end
 
---contract: walks every project track, builds a WiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringHostKind; FX whose guids appear in the user graph (fx nodes) or edge ops (CUs); sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
+--contract: walks every project track, builds a wiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringHostKind; FX whose guids appear in the user graph (fx nodes) or edge ops (CUs); sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
 function wm:snapshot()
   ensureLoaded()
+  -- Ownership = current-graph guids ∪ persisted wiringOwnedFx set. The
+  -- persisted set keeps previously-realised FX visible to snapshot after
+  -- their owning node has been removed from the graph, so wm:diff can
+  -- emit the delete op on the next reconcile pass.
   local ownedGuids = {}
+  for k in pairs(cm:get('wiringOwnedFx') or {}) do ownedGuids[k] = true end
   for _, n in pairs(_graph.nodes) do
     if n.kind == 'fx' and n.fxGuid then ownedGuids[n.fxGuid] = true end
   end
   for _, e in ipairs(_graph.edges) do
-    if e._opFxGuid then ownedGuids[e._opFxGuid] = true end
+    if e.opFxGuid then ownedGuids[e.opFxGuid] = true end
   end
   -- First pass: discover managed tracks + their (classKey, hostKind), so
   -- the second pass can resolve send destinations by track → classKey.
@@ -285,7 +291,7 @@ function wm:snapshot()
   return snap
 end
 
--- Project the DAG's TargetPlan entry into the WiringSnapshot shape.
+-- Project the DAG's TargetPlan entry into the wiringSnapshot shape.
 -- Every kind='fx' compile node maps to one fxOrder entry; CU bridges
 -- (also kind='fx', synthesised by lower with `params` set) flow through
 -- uniformly. trackGuid decorated for the hosts we can identify.
@@ -295,7 +301,12 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
     local node = compileNodes[id]
     if node.kind == 'fx' then
       local entry = { fxGuid = node.fxGuid, ident = node.fxIdent }
-      if node.params then entry.params = util.deepClone(node.params) end
+      if node.params then
+        entry.params = util.deepClone(node.params)
+        entry.origin = { kind = 'edge', idx = node.originEdgeIdx }
+      else
+        entry.origin = { kind = 'node', id = id }
+      end
       util.add(fxOrder, entry)
     end
   end
@@ -311,7 +322,7 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
   }
 end
 
---contract: derives the WiringSnapshot REAPER should look like, by lowering the user graph and projecting DAG.targetPlan into snapshot shape. fxGuid on each fx entry comes from the user graph (nil for unmaterialised nodes). Pure — no REAPER reads except GetTrackGUID on the scratch track.
+--contract: derives the wiringSnapshot REAPER should look like, by lowering the user graph and projecting DAG.targetPlan into snapshot shape. fxGuid on each fx entry comes from the user graph (nil for unmaterialised nodes). Pure — no REAPER reads except GetTrackGUID on the scratch track.
 function wm:targetState()
   ensureLoaded()
   local cx = DAG.compile(_graph)
@@ -347,7 +358,7 @@ local function sendsEq(a, b)
   return true
 end
 
---contract: pure structural diff producing a WiringOp[] that, applied, would carry snap to target. Order: creates first (so subsequent setSends can reference fresh tracks), then setFXChain / setMainSend / setSends / setExtState, then deletes. snap entries absent from target with hostKind='newTrack' are deleted; sourceTrack/scratch are never deleted (project artefacts).
+--contract: pure structural diff producing a wiringOp[] that, applied, would carry snap to target. Order: creates first (so subsequent setSends can reference fresh tracks), then setFXChain / setMainSend / setSends / setExtState, then deletes. snap entries absent from target with hostKind='newTrack' are deleted; sourceTrack/scratch are never deleted (project artefacts).
 function wm:diff(target, snap)
   local ops = {}
   -- Creates (order before mutates so setSends can reference fresh hosts).
@@ -392,6 +403,277 @@ function wm:diff(target, snap)
     end
   end
   return ops
+end
+
+----- Apply ops (Stage 2)
+
+-- CU JSFX exposes 'mode' as an enum slider; this table is the wm/CU bridge
+-- contract that maps a mode-string in `params` to the slider's float value.
+-- Lives here (not in DAG) because lowering is pure and shouldn't know about
+-- the JSFX's numeric encoding.
+local CU_MODE_TO_FLOAT = { gain = 1, channelRemap = 2 }
+
+local function paramValueAsFloat(name, value)
+  if name == 'mode' and type(value) == 'string' then
+    local f = CU_MODE_TO_FLOAT[value]
+    if not f then error(("unknown CU mode %q"):format(value)) end
+    return f
+  end
+  if type(value) == 'number' then return value end
+  error(("cannot push param %q with non-numeric value %q"):format(name, tostring(value)))
+end
+
+local function resolveParamIdx(track, fxIdx, ident, paramName, cache)
+  cache[ident] = cache[ident] or {}
+  if cache[ident][paramName] ~= nil then return cache[ident][paramName] end
+  for p = 0, 511 do
+    local ok, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
+    if not ok then break end
+    if name == paramName then
+      cache[ident][paramName] = p
+      return p
+    end
+  end
+  error(("FX %q has no param named %q"):format(ident, paramName))
+end
+
+local function pushParams(track, fxIdx, ident, params, cache)
+  for k, v in pairs(params) do
+    -- channelRemap.map is a 16-entry table, not a single slider; deferred
+    -- until the channelRemap mode is exercised end-to-end.
+    if k == 'map' then
+      error('CU channelRemap param push deferred to follow-up slice')
+    end
+    local pIdx = resolveParamIdx(track, fxIdx, ident, k, cache)
+    reaper.TrackFX_SetParam(track, fxIdx, pIdx, paramValueAsFloat(k, v))
+  end
+end
+
+local function ownedSubsequence(track, ownedGuids)
+  local out = {}
+  for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
+    local guid = reaper.TrackFX_GetFXGUID(track, fxIdx)
+    if ownedGuids[guid] then
+      local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
+      util.add(out, { fxGuid = guid, ident = ident, absIdx = fxIdx })
+    end
+  end
+  return out
+end
+
+-- Reconcile the OWNED subsequence of `track`'s FX chain to `target`. Foreign
+-- (non-owned) FX keep their absolute positions; owned FX is treated as a
+-- contiguous block: new owned FX inserts at "just after last owned", so the
+-- block stays contiguous and doesn't interleave with user-managed plugins.
+local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache)
+  local current = ownedSubsequence(track, ownedGuids)
+
+  -- 1. Drop owned entries absent from target (right-to-left keeps absIdx valid).
+  local targetGuids = {}
+  for _, t in ipairs(target) do
+    if t.fxGuid then targetGuids[t.fxGuid] = true end
+  end
+  for i = #current, 1, -1 do
+    if not targetGuids[current[i].fxGuid] then
+      reaper.TrackFX_Delete(track, current[i].absIdx)
+      table.remove(current, i)
+    end
+  end
+
+  -- 2. Materialise unmaterialised targets at the slot just after the last
+  --    owned entry. AddByName appends; CopyToTrack(move=true) moves into place.
+  for _, t in ipairs(target) do
+    if not t.fxGuid then
+      local insertAt = (#current > 0)
+                       and (current[#current].absIdx + 1)
+                       or  reaper.TrackFX_GetCount(track)
+      local addedIdx = reaper.TrackFX_AddByName(track, t.ident, false, -1)
+      if addedIdx < 0 then
+        error('TrackFX_AddByName failed for ' .. tostring(t.ident))
+      end
+      if addedIdx ~= insertAt then
+        reaper.TrackFX_CopyToTrack(track, addedIdx, track, insertAt, true)
+      end
+      local minted = reaper.TrackFX_GetFXGUID(track, insertAt)
+      t.fxGuid = minted
+      ownedGuids[minted] = true
+      util.add(stamps, { origin = t.origin, guid = minted })
+      util.add(current, { fxGuid = minted, ident = t.ident, absIdx = insertAt })
+    end
+  end
+
+  -- 3. Permute the owned subsequence to match target order. Naive selection
+  --    sort via CopyToTrack(move=true); contiguous-block invariant lets us
+  --    re-derive absIdx from firstOwnedAbs after each swap.
+  current = ownedSubsequence(track, ownedGuids)
+  local firstOwnedAbs = current[1] and current[1].absIdx
+  for d = 1, #target do
+    if current[d].fxGuid ~= target[d].fxGuid then
+      local fromIdx
+      for j = d + 1, #current do
+        if current[j].fxGuid == target[d].fxGuid then fromIdx = j; break end
+      end
+      reaper.TrackFX_CopyToTrack(track,
+        current[fromIdx].absIdx, track, current[d].absIdx, true)
+      local moved = current[fromIdx]
+      table.remove(current, fromIdx)
+      table.insert(current, d, moved)
+      for i = 1, #current do current[i].absIdx = firstOwnedAbs + (i - 1) end
+    end
+  end
+
+  -- 4. Push wm-owned params for every target entry that carries them.
+  for d, t in ipairs(target) do
+    if t.params then
+      pushParams(track, current[d].absIdx, t.ident, t.params, paramIdxCache)
+    end
+  end
+end
+
+local function reconcileSends(track, target, classKeyToTrack)
+  local current = {}
+  for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
+    local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
+    local typ = sendType(track, i)
+    current[dst] = current[dst] or {}
+    current[dst][typ] = i
+  end
+  local wanted = {}
+  for _, s in ipairs(target) do
+    local dst = classKeyToTrack[s.to]
+    if dst then
+      wanted[dst] = wanted[dst] or {}
+      wanted[dst][s.type] = true
+    end
+  end
+  local drops = {}
+  for dst, byType in pairs(current) do
+    for typ, idx in pairs(byType) do
+      if not (wanted[dst] and wanted[dst][typ]) then
+        util.add(drops, idx)
+      end
+    end
+  end
+  table.sort(drops, function(a, b) return a > b end)
+  for _, idx in ipairs(drops) do
+    reaper.RemoveTrackSend(track, 0, idx)
+  end
+  for dst, byType in pairs(wanted) do
+    for typ in pairs(byType) do
+      if not (current[dst] and current[dst][typ]) then
+        local idx = reaper.CreateTrackSend(track, dst)
+        if typ == 'midi' then
+          reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', -1)
+        else
+          reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS', 31)
+        end
+      end
+    end
+  end
+end
+
+local function ownedGuidsFrom(graph, persisted)
+  local s = {}
+  if persisted then
+    for k in pairs(persisted) do s[k] = true end
+  end
+  for _, n in pairs(graph.nodes) do
+    if n.kind == 'fx' and n.fxGuid then s[n.fxGuid] = true end
+  end
+  for _, e in ipairs(graph.edges) do
+    if e.opFxGuid then s[e.opFxGuid] = true end
+  end
+  return s
+end
+
+local function buildClassKeyToTrack()
+  local out = {}
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local track = reaper.GetTrack(0, i)
+    local hostKind = cm:readTrackKey(track, 'wiringHostKind')
+    if hostKind == 'sourceTrack' then
+      out[reaper.GetTrackGUID(track)] = track
+    elseif hostKind == 'newTrack' then
+      local k = cm:readTrackKey(track, 'wiringClass')
+      if k then out[k] = track end
+    elseif cm:readTrackKey(track, 'wiringScratch') == '1' then
+      out[SCRATCH_KEY] = track
+    end
+  end
+  if reaper.GetMasterTrack then out.master = reaper.GetMasterTrack(0) end
+  return out
+end
+
+local function scratchIndex()
+  local scratch = ensureScratchTrack()
+  for i = 0, reaper.CountTracks(0) - 1 do
+    if reaper.GetTrack(0, i) == scratch then return i end
+  end
+end
+
+local function createNewTrack(classKey)
+  reaper.PreventUIRefresh(1)
+  local insertAt = scratchIndex() or reaper.CountTracks(0)
+  reaper.InsertTrackAtIndex(insertAt, false)
+  local track = reaper.GetTrack(0, insertAt)
+  reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', 'continuum: ' .. classKey, true)
+  reaper.PreventUIRefresh(-1)
+  return track
+end
+
+--contract: walks ops in their emitted order inside one Undo_BeginBlock. setFXChain materialises nil-fxGuid entries via TrackFX_AddByName and stamps minted guids back into the user graph through a wm:mutate that's gated by `realising` so the live-recompile loop sees no signal. Param push resolves slider index by TrackFX_GetParamName and raises on unknown names.
+function wm:applyOps(ops, label)
+  ensureLoaded()
+  reaper.Undo_BeginBlock()
+  reaper.PreventUIRefresh(1)
+
+  local classKeyToTrack = buildClassKeyToTrack()
+  local ownedGuids      = ownedGuidsFrom(_graph, cm:get('wiringOwnedFx'))
+  local stamps          = {}
+  local paramIdxCache   = {}
+
+  for _, op in ipairs(ops) do
+    if op.op == 'createTrack' then
+      classKeyToTrack[op.classKey] = createNewTrack(op.classKey)
+    elseif op.op == 'deleteTrack' then
+      local t = self:trackByGuid(op.trackGuid)
+      if t then reaper.DeleteTrack(t) end
+    elseif op.op == 'setExtState' then
+      local t = classKeyToTrack[op.classKey]
+      if t then cm:writeTrackKey(t, op.key, op.value) end
+    elseif op.op == 'setMainSend' then
+      local t = classKeyToTrack[op.classKey]
+      if t then reaper.SetMediaTrackInfo_Value(t, 'B_MAINSEND', op.value and 1 or 0) end
+    elseif op.op == 'setFXChain' then
+      local t = classKeyToTrack[op.classKey]
+      if t then reconcileFXChain(t, op.fxOrder, ownedGuids, stamps, paramIdxCache) end
+    elseif op.op == 'setSends' then
+      local t = classKeyToTrack[op.classKey]
+      if t then reconcileSends(t, op.sends, classKeyToTrack) end
+    end
+  end
+
+  if #stamps > 0 then
+    realising = true
+    self:mutate(function(g)
+      for _, st in ipairs(stamps) do
+        if st.origin.kind == 'node' then
+          g.nodes[st.origin.id].fxGuid = st.guid
+        else
+          g.edges[st.origin.idx].opFxGuid = st.guid
+        end
+      end
+    end)
+    realising = false
+  end
+
+  -- Persist the post-apply owned-guid set: anything still in the graph is
+  -- still in REAPER (orphans got deleted in reconcileFXChain and dropped
+  -- out of the graph in the mutator that removed them).
+  cm:set('project', 'wiringOwnedFx', ownedGuidsFrom(_graph))
+
+  reaper.PreventUIRefresh(-1)
+  reaper.Undo_EndBlock2(0, label or 'wiring: apply', -1)
 end
 
 --contract: enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"

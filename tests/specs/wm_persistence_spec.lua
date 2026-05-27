@@ -9,14 +9,14 @@ end
 
 return {
   {
-    name = 'fresh project: graph has master node, empty edges, _nextId=1',
+    name = 'fresh project: graph has master node, empty edges, nextId=1',
     run = function(harness)
       local _, wm = mkWm(harness)
       local g = wm:graph()
       t.truthy(g.nodes.master,             'master auto-materialised')
       t.eq(g.nodes.master.kind, 'master',  'master.kind')
       t.eq(#g.edges, 0,                    'no edges in fresh graph')
-      t.eq(g._nextId, 1,                   'allocator at 1')
+      t.eq(g.nextId, 1,                   'allocator at 1')
     end,
   },
   {
@@ -28,7 +28,7 @@ return {
                          pos = { x = 0, y = 0 },
                          ports = { audio = { ins = 0, outs = 1 },
                                    midi  = { ins = 0, outs = 1 } } }
-        g._nextId = 2
+        g.nextId = 2
       end)
       t.truthy(ok, 'mutate succeeded')
 
@@ -38,7 +38,7 @@ return {
       local g2 = wm2:graph()
       t.truthy(g2.nodes.s,         'source node round-tripped')
       t.eq(g2.nodes.s.trackGuid, 'guid-s')
-      t.eq(g2._nextId, 2,          '_nextId round-tripped')
+      t.eq(g2.nextId, 2,          'nextId round-tripped')
       t.truthy(g2.nodes.master,    'master survives round-trip')
     end,
   },

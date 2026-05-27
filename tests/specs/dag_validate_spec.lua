@@ -33,7 +33,7 @@ local function mk(nodes, edges, opts)
     local k, v = master()
     nodes[k] = v
   end
-  return { nodes = nodes, edges = edges or {}, _nextId = 1 }
+  return { nodes = nodes, edges = edges or {}, nextId = 1 }
 end
 
 return {
@@ -251,7 +251,7 @@ return {
       ns.master2 = { kind = 'master', pos = { x = 0, y = 0 },
                      ports = { audio = { ins = 1, outs = 0 },
                                midi  = { ins = 0, outs = 0 } } }
-      local err = DAG.validate({ nodes = ns, edges = {}, _nextId = 1 })
+      local err = DAG.validate({ nodes = ns, edges = {}, nextId = 1 })
       t.eq(err.code,  'master_singleton')
       t.eq(err.count, 2)
     end,
@@ -313,7 +313,7 @@ return {
       local k2, v2 = source('a');         ns[k2] = v2
       t.eq(DAG.validate({ nodes = ns, edges = {
         { type = 'audio', from = 'a', to = 'master', toPort = 2 },
-      }, _nextId = 1 }), nil)
+      }, nextId = 1 }), nil)
     end,
   },
   {

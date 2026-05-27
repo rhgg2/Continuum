@@ -111,6 +111,7 @@ local declarations = {
   -- Stage 2 differ reads to identify tracks the wiring page owns.
   -- See docs/wiringManager.md and design/wiring.md.
   { 'wiringGraph',    {}  },
+  { 'wiringOwnedFx',  {}  },
   { 'wiringClass',    nil },
   { 'wiringHostKind', nil },
   { 'wiringScratch',  nil },

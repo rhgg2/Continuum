@@ -101,6 +101,50 @@ function M.new()
   end
   function r.TrackFX_Delete(track, idx)
     table.remove(state.fxByTrack[track] or {}, idx + 1)
+    -- Keep per-(track, fxIdx) guid map aligned: delete idx, shift higher down.
+    local g = state.fxGuids[track]
+    if g then
+      local maxK = -1
+      for k in pairs(g) do if k > maxK then maxK = k end end
+      g[idx] = nil
+      for k = idx + 1, maxK do g[k - 1] = g[k]; g[k] = nil end
+    end
+    return true
+  end
+
+  function r.TrackFX_CopyToTrack(srcTr, srcIdx, dstTr, dstIdx, isMove)
+    local srcList = state.fxByTrack[srcTr]
+    if not srcList or not srcList[srcIdx + 1] then return end
+    local entry  = srcList[srcIdx + 1]
+    local sg     = state.fxGuids[srcTr]
+    local guid   = sg and sg[srcIdx] or nil
+    if isMove then
+      table.remove(srcList, srcIdx + 1)
+      if sg then
+        local maxK = -1
+        for k in pairs(sg) do if k > maxK then maxK = k end end
+        sg[srcIdx] = nil
+        for k = srcIdx + 1, maxK do sg[k - 1] = sg[k]; sg[k] = nil end
+      end
+    else
+      entry = type(entry) == 'string' and entry or { ident = entry.ident }
+      guid  = nil
+    end
+    local dstList = state.fxByTrack[dstTr]
+    if not dstList then dstList = {}; state.fxByTrack[dstTr] = dstList end
+    table.insert(dstList, dstIdx + 1, entry)
+    -- For same-track move, srcIdx and dstIdx live in the same list; the
+    -- table.remove above already shifted things, and the table.insert sits
+    -- the entry at dstIdx (1-based dstIdx+1), matching REAPER's contract
+    -- ("destIdx is the target index after the source has been removed").
+    if guid then
+      local dg = state.fxGuids[dstTr]
+      if not dg then dg = {}; state.fxGuids[dstTr] = dg end
+      local maxK = -1
+      for k in pairs(dg) do if k > maxK then maxK = k end end
+      for k = maxK, dstIdx, -1 do dg[k + 1] = dg[k]; dg[k] = nil end
+      dg[dstIdx] = guid
+    end
     return true
   end
   function r.TrackFX_GetIOSize(track, idx)
@@ -128,6 +172,18 @@ function M.new()
   end
   function r.TrackFX_GetParam(track, fxIdx, paramIdx)
     return state.fxParams[tostring(track) .. '/' .. fxIdx .. '/' .. paramIdx] or 0
+  end
+
+  -- Param-name surface for the wiring applier's setParam-by-name path. Tests
+  -- seed via r:setFxParamNames(ident, { 'mode', 'gain', ... }).
+  state.fxParamNames = {}
+  function r.TrackFX_GetParamName(track, fxIdx, paramIdx)
+    local ident = fxIdentOf(fxEntry(track, fxIdx))
+    local names = state.fxParamNames[ident]
+    if not names then return false, '' end
+    local n = names[paramIdx + 1]
+    if n == nil then return false, '' end
+    return true, n
   end
 
   -- FX GUID — sm:tick uses change of GUID to detect FX-removed-and-re-added
@@ -192,6 +248,23 @@ function M.new()
     return state.trackGuids[track] or ('{TR-anon-' .. tostring(track) .. '}')
   end
   function r.PreventUIRefresh(_) end
+  function r.Undo_BeginBlock() end
+  function r.Undo_EndBlock2(_proj, _name, _flags) end
+  state.master = { __track = 'master' }
+  function r.GetMasterTrack(_proj) return state.master end
+  function r.DeleteTrack(track)
+    for i, t in ipairs(state.projectTracks) do
+      if t == track then table.remove(state.projectTracks, i); break end
+    end
+    state.sendsByTrack[track] = nil
+    for _, list in pairs(state.sendsByTrack) do
+      for i = #list, 1, -1 do
+        if list[i].dst == track then table.remove(list, i) end
+      end
+    end
+    state.fxByTrack[track] = nil
+    state.fxGuids[track]   = nil
+  end
 
   -- Track sends. One record per send (category=0); receives (category<0)
   -- are derived by walking every track's sends. Each send is
@@ -227,6 +300,31 @@ function M.new()
         end
       end
     end
+  end
+  function r.CreateTrackSend(srcTrack, dstTrack)
+    local list = sendsOf(srcTrack)
+    table.insert(list, { dst = dstTrack, midiFlags = 0, srcChan = 0, dstChan = 0 })
+    return #list - 1
+  end
+  function r.RemoveTrackSend(track, category, idx)
+    if category ~= 0 then return false end
+    local list = state.sendsByTrack[track]
+    if not list then return false end
+    table.remove(list, idx + 1)
+    return true
+  end
+  function r.SetTrackSendInfo_Value(track, category, idx, parm, value)
+    if category ~= 0 then return false end
+    local list = state.sendsByTrack[track]
+    if not list then return false end
+    local s = list[idx + 1]
+    if not s then return false end
+    if     parm == 'I_MIDIFLAGS' then s.midiFlags = value
+    elseif parm == 'I_SRCCHAN'   then s.srcChan   = value
+    elseif parm == 'I_DSTCHAN'   then s.dstChan   = value
+    elseif parm == 'B_MUTE'      then s.mute      = value == 1
+    end
+    return true
   end
   function r.GetTrackSendInfo_Value(track, category, idx, parm)
     local snd, src
@@ -678,6 +776,9 @@ function M.new()
     local perTrack = state.fxGuids[track]
     if not perTrack then perTrack = {}; state.fxGuids[track] = perTrack end
     perTrack[idx] = guid
+  end
+  function r:setFxParamNames(ident, names)
+    state.fxParamNames[ident] = names
   end
   function r:setProjectTracks(tracks)
     state.projectTracks = tracks

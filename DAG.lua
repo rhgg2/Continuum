@@ -13,13 +13,13 @@
 --invariant: every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --invariant: srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
---shape: userGraph = { nodes = {[id]=userNode}, edges = edge[], _nextId = number }
+--shape: userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
 --shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string }
 --invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
---shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, _opFxGuid?=string }
---invariant: when an edge carries ops (gain / channelMap), lower splices one CU bridge per op-bundle into the wire — a kind='fx' lowered node with fxIdent=CU_IDENT and a wm-owned params payload ({mode='gain'|'channelRemap', ...}). _opFxGuid is the CU instance's bridge identity in REAPER; lower copies it onto the bridge's fxGuid, and the applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on user-graph fx nodes).
+--shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, opFxGuid?=string }
+--invariant: when an edge carries ops (gain / channelMap), lower splices one CU bridge per op-bundle into the wire — a kind='fx' lowered node with fxIdent=CU_IDENT and a wm-owned params payload ({mode='gain'|'channelRemap', ...}). opFxGuid is the CU instance's bridge identity in REAPER; lower copies it onto the bridge's fxGuid, and the applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on user-graph fx nodes).
 --shape: lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
---shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific})
+--shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
 --shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
 local util = require('util')
@@ -181,10 +181,11 @@ function M.lower(userGraph)
   -- fxIdent=CU_IDENT and the wm-owned params payload. fxGuid is copied
   -- off the source edge so the pipeline can match the bridge across
   -- compiles without index tracking.
-  local function splice(head, params, sourceEdge)
+  local function splice(head, params, sourceEdge, edgeIdx)
     local id = mintCu({ kind = 'fx', fxIdent = CU_IDENT,
-                        fxGuid = sourceEdge._opFxGuid,
-                        params = params })
+                        fxGuid = sourceEdge.opFxGuid,
+                        params = params,
+                        originEdgeIdx = edgeIdx })
     flush(head, id, head.type == 'audio' and 1 or nil)
     if head.type == 'audio' then
       return { type = 'audio', id = id, port = 1, primary = head.primary }
@@ -192,19 +193,19 @@ function M.lower(userGraph)
     return { type = 'midi', id = id, primary = head.primary }
   end
 
-  local function lowerAudioEdge(edge)
+  local function lowerAudioEdge(edge, edgeIdx)
     local head = { type = 'audio', id = edge.from,
                    port = edge.fromPort or 1, primary = edge.primary }
     if edge.ops and edge.ops.gain then
-      head = splice(head, { mode = 'gain', gain = edge.ops.gain }, edge)
+      head = splice(head, { mode = 'gain', gain = edge.ops.gain }, edge, edgeIdx)
     end
     flush(head, edge.to, edge.toPort or 1)
   end
 
-  local function lowerMidiEdge(edge)
+  local function lowerMidiEdge(edge, edgeIdx)
     local head = { type = 'midi', id = edge.from, primary = edge.primary }
     if edge.ops and edge.ops.channelMap then
-      head = splice(head, { mode = 'channelRemap', map = edge.ops.channelMap }, edge)
+      head = splice(head, { mode = 'channelRemap', map = edge.ops.channelMap }, edge, edgeIdx)
     end
     flush(head, edge.to)
   end
@@ -212,9 +213,9 @@ function M.lower(userGraph)
   for id, node in pairs(userGraph.nodes or {}) do
     lowerGraph.nodes[id] = util.pick(node, 'kind trackGuid fxIdent fxGuid')
   end
-  for _, edge in ipairs(userGraph.edges or {}) do
-    if edge.type == 'audio' then lowerAudioEdge(edge)
-    else                          lowerMidiEdge(edge)
+  for edgeIdx, edge in ipairs(userGraph.edges or {}) do
+    if edge.type == 'audio' then lowerAudioEdge(edge, edgeIdx)
+    else                          lowerMidiEdge(edge, edgeIdx)
     end
   end
   return lowerGraph

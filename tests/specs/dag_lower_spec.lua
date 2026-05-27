@@ -29,7 +29,7 @@ local function mk(nodes, edges)
   if not nodes.master then
     local k, v = master(); nodes[k] = v
   end
-  return { nodes = nodes, edges = edges or {}, _nextId = 1 }
+  return { nodes = nodes, edges = edges or {}, nextId = 1 }
 end
 
 local function hasConn(conns, want)

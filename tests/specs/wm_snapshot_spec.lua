@@ -85,7 +85,7 @@ return {
     end,
   },
   {
-    name = 'CU instance whose guid is registered via edge._opFxGuid appears in fxOrder',
+    name = 'CU instance whose guid is registered via edge.opFxGuid appears in fxOrder',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
@@ -97,7 +97,7 @@ return {
         g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
         util.add(g.edges, { type='audio', from='s', to='f',
-                            ops={gain=0.5}, _opFxGuid='{CU-1}' })
+                            ops={gain=0.5}, opFxGuid='{CU-1}' })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)
       t.truthy(ok, 'mutate ok: ' .. tostring(err and err.code))

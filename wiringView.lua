@@ -101,8 +101,8 @@ function wv:addFx(x, y, fx, opts)
   local isGenerator = (io.ins or 0) == 0
   local sourceGuid = isGenerator and wm:createSourceTrack{ name = fx.name } or nil
   return wm:mutate(function(g)
-    local fxId = 'n' .. g._nextId
-    g._nextId = g._nextId + 1
+    local fxId = 'n' .. g.nextId
+    g.nextId = g.nextId + 1
     g.nodes[fxId] = {
       kind      = 'fx',
       pos       = { x = x, y = y },
@@ -115,8 +115,8 @@ function wv:addFx(x, y, fx, opts)
       },
     }
     if isGenerator then
-      local sourceId = 'n' .. g._nextId
-      g._nextId = g._nextId + 1
+      local sourceId = 'n' .. g.nextId
+      g.nextId = g.nextId + 1
       local sp = (opts and opts.sourcePos) or { x = x - 140, y = y }
       g.nodes[sourceId] = {
         kind        = 'source',
