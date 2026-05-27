@@ -149,9 +149,12 @@ return {
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       }))
-      local mixCls = 'guid-a|guid-b'
-      t.eq(plan[mixCls].hostKind, 'master')
-      t.deepEq(plan[mixCls].fxOrder, { 'mix' })
+      -- The master-hosted class is keyed by the sentinel '__master__', not
+      -- its merged srcSet — wm:snapshot can't tag the REAPER master with a
+      -- project-scoped class, so both sides agree on a stable host key.
+      t.eq(plan['guid-a|guid-b'], nil, 'merged-srcSet key vacated for sentinel')
+      t.eq(plan['__master__'].hostKind, 'master')
+      t.deepEq(plan['__master__'].fxOrder, { 'mix' })
       -- Sources fold their audio-to-master into mainSend, not regular sends.
       t.eq(plan['guid-a'].mainSend, true)
       t.eq(plan['guid-b'].mainSend, true)

@@ -218,4 +218,108 @@ return {
       t.eq(fires, 0, 'stamp-back does not fire wiringChanged')
     end,
   },
+  {
+    name = 'apply: connecting an existing fan-in fx to master migrates it onto REAPER master',
+    run = function(harness)
+      -- Two-source fan-in into a merge fx (no edge to master): the merge sits
+      -- on its own newTrack; sources audio-send into it. Adding fx→master in
+      -- the user graph collapses fx into master's class (same srcSet), so the
+      -- realiser must move fx onto the REAPER master, delete the abandoned
+      -- newTrack, and fold each source's audio-to-fx send into mainSend.
+      local h, wm = mkWm(harness)
+      local trackA = seedSource(h, 'guid-A')
+      local trackB = seedSource(h, 'guid-B')
+      wm:mutate(function(g)
+        g.nodes.sA  = source('guid-A')
+        g.nodes.sB  = source('guid-B')
+        g.nodes.gA  = fx('JS:gA')
+        g.nodes.gB  = fx('JS:gB')
+        g.nodes.mix = fx('JS:mix', { ins = 2 })
+        util.add(g.edges, audioEdge('sA', 'gA'))
+        util.add(g.edges, audioEdge('sB', 'gB'))
+        util.add(g.edges, audioEdge('gA', 'mix', { toPort = 1 }))
+        util.add(g.edges, audioEdge('gB', 'mix', { toPort = 2 }))
+      end)
+      apply(wm)
+      local mixTrack
+      for i = 0, h.reaper.CountTracks(0) - 1 do
+        local tr = h.reaper.GetTrack(0, i)
+        if h.cm:readTrackKey(tr, 'wiringHostKind') == 'newTrack' then
+          mixTrack = tr; break
+        end
+      end
+      t.truthy(mixTrack, 'pre-state: newTrack hosts the merge fx')
+
+      wm:mutate(function(g) util.add(g.edges, audioEdge('mix', 'master')) end)
+      apply(wm)
+
+      local master = h.reaper.GetMasterTrack(0)
+      local migrated
+      for i = 0, h.reaper.TrackFX_GetCount(master) - 1 do
+        local _, ident = h.reaper.TrackFX_GetFXName(master, i)
+        if ident == 'JS:mix' then migrated = i; break end
+      end
+      t.truthy(migrated, 'merge fx is now on the REAPER master')
+      t.eq(wm:graph().nodes.mix.fxGuid, h.reaper.TrackFX_GetFXGUID(master, migrated),
+           'graph fxGuid rewritten to the master-side instance')
+      local survives
+      for i = 0, h.reaper.CountTracks(0) - 1 do
+        if h.reaper.GetTrack(0, i) == mixTrack then survives = true end
+      end
+      t.eq(survives, nil, 'abandoned newTrack deleted')
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'B_MAINSEND'), 1, 'source A main-sends to master')
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackB, 'B_MAINSEND'), 1, 'source B main-sends to master')
+      t.eq(h.reaper.GetTrackNumSends(trackA, 0), 0, 'source A has no regular sends')
+      t.eq(h.reaper.GetTrackNumSends(trackB, 0), 0, 'source B has no regular sends')
+    end,
+  },
+  {
+    name = 'apply: removing fx→master moves fx back off the master onto a fresh newTrack',
+    run = function(harness)
+      -- Reverse of the migration above: start with the master-hosted state,
+      -- remove the fx→master edge, and assert the realiser drains master,
+      -- creates a newTrack, and reinstates the source→fx sends.
+      local h, wm = mkWm(harness)
+      local trackA = seedSource(h, 'guid-A')
+      local trackB = seedSource(h, 'guid-B')
+      wm:mutate(function(g)
+        g.nodes.sA  = source('guid-A')
+        g.nodes.sB  = source('guid-B')
+        g.nodes.mix = fx('JS:mix', { ins = 2 })
+        util.add(g.edges, audioEdge('sA', 'mix', { toPort = 1 }))
+        util.add(g.edges, audioEdge('sB', 'mix', { toPort = 2 }))
+        util.add(g.edges, audioEdge('mix', 'master'))
+      end)
+      apply(wm)
+      local master = h.reaper.GetMasterTrack(0)
+      t.eq(h.reaper.TrackFX_GetCount(master), 1, 'pre-state: mix lives on master')
+
+      wm:mutate(function(g)
+        local kept = {}
+        for _, e in ipairs(g.edges) do
+          if not (e.from == 'mix' and e.to == 'master') then util.add(kept, e) end
+        end
+        g.edges = kept
+      end)
+      apply(wm)
+
+      t.eq(h.reaper.TrackFX_GetCount(master), 0, 'master drained')
+      local mixTrack
+      for i = 0, h.reaper.CountTracks(0) - 1 do
+        local tr = h.reaper.GetTrack(0, i)
+        if h.cm:readTrackKey(tr, 'wiringHostKind') == 'newTrack' then
+          mixTrack = tr; break
+        end
+      end
+      t.truthy(mixTrack, 'fresh newTrack now hosts mix')
+      t.eq(h.reaper.TrackFX_GetCount(mixTrack), 1)
+      local _, ident = h.reaper.TrackFX_GetFXName(mixTrack, 0)
+      t.eq(ident, 'JS:mix')
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'B_MAINSEND'), 0, 'source A no longer main-sends')
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackB, 'B_MAINSEND'), 0, 'source B no longer main-sends')
+      t.eq(h.reaper.GetTrackNumSends(trackA, 0), 1, 'source A→newTrack restored')
+      t.eq(h.reaper.GetTrackNumSends(trackB, 0), 1, 'source B→newTrack restored')
+      t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'P_DESTTRACK'), mixTrack)
+    end,
+  },
 }

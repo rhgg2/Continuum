@@ -157,11 +157,38 @@ function wv:addWire(spec)
   end)
 end
 
+--contract: removes the edge at g.edges[idx]; no-op if idx is out of range; fires wiringChanged via wm:mutate
+function wv:removeWireAt(idx)
+  return wm:mutate(function(g)
+    if g.edges[idx] then table.remove(g.edges, idx) end
+  end)
+end
+
+--contract: rewrites one end of g.edges[idx] in place; side ∈ {'from','to'}; target = { id, port? }; port ignored for midi edges; single wiringChanged
+function wv:rewireEdgeEnd(idx, side, target)
+  return wm:mutate(function(g)
+    local e = g.edges[idx]
+    if not e then return end
+    if side == 'from' then
+      e.from = target.id
+      if e.type == 'audio' then e.fromPort = target.port or 1 end
+    else
+      e.to = target.id
+      if e.type == 'audio' then e.toPort = target.port or 1 end
+    end
+  end)
+end
+
 ----- Topology queries
 
 --contract: backward reachability over user.edges; returns { [id]=true } including sourceId
 function wv:ancestorsOf(sourceId)
   return DAG.ancestors(wm:graph(), sourceId)
+end
+
+--contract: forward reachability over user.edges; returns { [id]=true } including sourceId
+function wv:descendantsOf(sourceId)
+  return DAG.descendants(wm:graph(), sourceId)
 end
 
 --contract: returns { [portIdx]=true } over audio edges on nodeId for dir ('out'|'in'); midi edges ignored

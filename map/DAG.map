@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=469  sha=6346bc7  mode=namespace
+@module DAG  src=DAG.lua  loc=496  sha=53fd62e  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(userGraph), which caches the lowered graph and its derivations lazily
@@ -16,7 +16,7 @@
   @shape  lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
   @shape  lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
   @shape  conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
-  @shape  targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
+  @shape  targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for sourceTrack/newTrack hosts, '__scratch__' for parked-inert, '__master__' for the master-hosted class (sentinel because the REAPER master can't carry a project-scoped wiringClass tag the way other tracks can)
 
 # Imports
   @const util = 'util'  @ 25
@@ -29,15 +29,21 @@
   -- validate
   @api M.validate(userGraph)  @ 36
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  -- ancestors
+  -- ancestors / descendants
   @api M.ancestors(userGraph, sourceId)  @ 140
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over userGraph.edges; cycle-safe via visited
+  @api M.descendants(userGraph, sourceId)  @ 159
+      -- Forward reachability. Mirror of ancestors; used by wire-redraft to
+      -- forbid cycle-forming new-source candidates when the user drags the
+      -- from-end of an existing wire: the new source X must not be reachable
+      -- from the kept destination B, else X→B closes the cycle B→…→X→B.
+      @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
   -- lower
-  @api M.lower(userGraph)  @ 157
+  @api M.lower(userGraph)  @ 176
       @contract  assumes M.validate(userGraph)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
   -- compile context
-  @api M.compile(userGraph)  @ 227
+  @api M.compile(userGraph)  @ 246
       @contract  assumes M.validate(userGraph)==nil; returns a ctx closing over M.lower(userGraph) with lazy caches for classes, classOf, inbound, srcSet (per-id), quotient, absorption. ctx:srcSet(id) returns the same table across calls (referential cache).

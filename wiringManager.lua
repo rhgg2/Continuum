@@ -290,6 +290,21 @@ function wm:snapshot()
       sends     = isScratch and {} or readSendsClass(track, byTrack),
     }
   end
+
+  -- The REAPER master is a project-wide singleton, not enumerated by
+  -- CountTracks/GetTrack. Synthesise a snap entry under '__master__' when
+  -- any wm-owned FX live on master so wm:diff can detect transitions onto
+  -- or off the master host.
+  if reaper.GetMasterTrack then
+    local master = reaper.GetMasterTrack(0)
+    local masterChain = ownedChain(master, ownedGuids)
+    if #masterChain > 0 then
+      snap['__master__'] = {
+        hostKind = 'master', trackGuid = nil, fxOrder = masterChain,
+        mainSend = false, sends = {},
+      }
+    end
+  end
   return snap
 end
 
@@ -360,50 +375,77 @@ local function sendsEq(a, b)
   return true
 end
 
---contract: pure structural diff producing a wiringOp[] that, applied, would carry snap to target. Order: creates first (so subsequent setSends can reference fresh tracks), then setFXChain / setMainSend / setSends / setExtState, then deletes. snap entries absent from target with hostKind='newTrack' are deleted; sourceTrack/scratch are never deleted (project artefacts).
+--contract: pure structural diff producing a wiringOp[] that, applied, would carry snap to target. Order: creates first (so subsequent setSends can reference fresh tracks), then host-transition drains, then setFXChain / setMainSend / setSends / setExtState, then deletes. snap entries absent from target — or with a changed hostKind — and hostKind='newTrack' are deleted; sourceTrack/scratch/master are never deleted (project artefacts) but get drained on host transition. setFXChain/setMainSend/setSends ops carry hostKind so the applier can resolve master without a classKey tag (the REAPER master can't be tagged like a user track).
 function wm:diff(target, snap)
   local ops = {}
-  -- Creates (order before mutates so setSends can reference fresh hosts).
+
+  local hostChanged = {}
   for classKey, t_ in pairs(target) do
-    if not snap[classKey] and t_.hostKind == 'newTrack' then
+    local s = snap[classKey]
+    if s and s.hostKind ~= t_.hostKind then hostChanged[classKey] = true end
+  end
+
+  -- Creates (order before mutates so setSends can reference fresh hosts).
+  -- Both target-only newTracks and host-transitions-to-newTrack mint a track.
+  for classKey, t_ in pairs(target) do
+    local s = snap[classKey]
+    if (not s or hostChanged[classKey]) and t_.hostKind == 'newTrack' then
       util.add(ops, { op = 'createTrack', classKey = classKey, hostKind = 'newTrack' })
     end
   end
-  -- Per-class field diffs.
+
+  -- Per-class field diffs. A hostKind transition is treated as fresh: every
+  -- field op + setExtState fires unconditionally so the new host gets fully
+  -- populated.
   for classKey, t_ in pairs(target) do
     local s = snap[classKey]
-    local exists = s ~= nil
-    if not exists or not fxOrderEq(t_.fxOrder, s.fxOrder) then
+    local fresh = not s or hostChanged[classKey]
+    if fresh or not fxOrderEq(t_.fxOrder, s.fxOrder) then
       util.add(ops, { op = 'setFXChain', classKey = classKey,
+                      hostKind = t_.hostKind,
                       trackGuid = t_.trackGuid, fxOrder = util.deepClone(t_.fxOrder) })
     end
-    if (not exists and t_.mainSend) or (exists and t_.mainSend ~= s.mainSend) then
+    if (fresh and t_.mainSend) or (not fresh and t_.mainSend ~= s.mainSend) then
       util.add(ops, { op = 'setMainSend', classKey = classKey,
+                      hostKind = t_.hostKind,
                       trackGuid = t_.trackGuid, value = t_.mainSend })
     end
-    if not exists or not sendsEq(t_.sends, s.sends) then
+    if fresh or not sendsEq(t_.sends, s.sends) then
       util.add(ops, { op = 'setSends', classKey = classKey,
+                      hostKind = t_.hostKind,
                       trackGuid = t_.trackGuid, sends = util.deepClone(t_.sends) })
     end
-    -- ExtState writes only on creation. sourceTrack hosts get only
-    -- wiringHostKind (the track's own guid is the classKey already);
+    -- ExtState writes only on creation/host-transition-in. sourceTrack hosts
+    -- get only wiringHostKind (the track's own guid is the classKey already);
     -- newTrack hosts also need wiringClass to carry the multi-guid key.
-    if not exists and t_.hostKind == 'sourceTrack' then
+    if fresh and t_.hostKind == 'sourceTrack' then
       util.add(ops, { op = 'setExtState', classKey = classKey,
                       key = 'wiringHostKind', value = 'sourceTrack' })
-    elseif not exists and t_.hostKind == 'newTrack' then
+    elseif fresh and t_.hostKind == 'newTrack' then
       util.add(ops, { op = 'setExtState', classKey = classKey,
                       key = 'wiringHostKind', value = 'newTrack' })
       util.add(ops, { op = 'setExtState', classKey = classKey,
                       key = 'wiringClass', value = classKey })
     end
   end
-  -- Deletes (last so any final reads of going-away tracks have already run).
+
+  -- Drains/deletes last so any final reads of going-away tracks have already
+  -- run. A snap entry is abandoned if absent from target, or if its host
+  -- changed: newTrack hosts get deleteTrack (which kills any owned FX with the
+  -- track); undeletable hosts (sourceTrack/master/scratch) with surviving
+  -- owned FX need an explicit setFXChain to [] to drain them.
   for classKey, s in pairs(snap) do
-    if not target[classKey] and s.hostKind == 'newTrack' then
-      util.add(ops, { op = 'deleteTrack', trackGuid = s.trackGuid })
+    local abandoned = not target[classKey] or hostChanged[classKey]
+    if abandoned then
+      if s.hostKind == 'newTrack' then
+        util.add(ops, { op = 'deleteTrack', trackGuid = s.trackGuid })
+      elseif #s.fxOrder > 0 then
+        util.add(ops, { op = 'setFXChain', classKey = classKey,
+                        hostKind = s.hostKind, trackGuid = s.trackGuid, fxOrder = {} })
+      end
     end
   end
+
   return ops
 end
 
@@ -611,7 +653,6 @@ local function buildClassKeyToTrack()
       out[SCRATCH_KEY] = track
     end
   end
-  if reaper.GetMasterTrack then out.master = reaper.GetMasterTrack(0) end
   return out
 end
 
@@ -643,6 +684,29 @@ function wm:applyOps(ops, label)
   local stamps          = {}
   local paramIdxCache   = {}
 
+  -- The REAPER master isn't tagged with wiringClass (it's a singleton), so
+  -- classKeyToTrack only learns about it via the ops about to be applied.
+  -- Pre-register under every classKey hosted on master so reconcileSends can
+  -- resolve send destinations targeting a master-hosted class.
+  local masterTrack = reaper.GetMasterTrack and reaper.GetMasterTrack(0) or nil
+  if masterTrack then
+    for _, op in ipairs(ops) do
+      if op.hostKind == 'master' and op.classKey then
+        classKeyToTrack[op.classKey] = masterTrack
+      end
+    end
+  end
+
+  -- Resolve the host track for a per-class op. master uses hostKind;
+  -- snap-derived drain ops carry the snap trackGuid; target newTrack ops
+  -- have trackGuid=nil and resolve via classKeyToTrack (populated by
+  -- createTrack for fresh ones, by wiringClass scan for pre-existing).
+  local function resolveTrack(op)
+    if op.hostKind == 'master' then return masterTrack end
+    if op.trackGuid then return self:trackByGuid(op.trackGuid) end
+    return classKeyToTrack[op.classKey]
+  end
+
   for _, op in ipairs(ops) do
     if op.op == 'createTrack' then
       classKeyToTrack[op.classKey] = createNewTrack(op.classKey)
@@ -653,13 +717,13 @@ function wm:applyOps(ops, label)
       local t = classKeyToTrack[op.classKey]
       if t then cm:writeTrackKey(t, op.key, op.value) end
     elseif op.op == 'setMainSend' then
-      local t = classKeyToTrack[op.classKey]
+      local t = resolveTrack(op)
       if t then reaper.SetMediaTrackInfo_Value(t, 'B_MAINSEND', op.value and 1 or 0) end
     elseif op.op == 'setFXChain' then
-      local t = classKeyToTrack[op.classKey]
+      local t = resolveTrack(op)
       if t then reconcileFXChain(t, op.fxOrder, ownedGuids, stamps, paramIdxCache) end
     elseif op.op == 'setSends' then
-      local t = classKeyToTrack[op.classKey]
+      local t = resolveTrack(op)
       if t then reconcileSends(t, op.sends, classKeyToTrack) end
     end
   end

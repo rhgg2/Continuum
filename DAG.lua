@@ -21,7 +21,7 @@
 --shape: lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
 --shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
---shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for real classes or the sentinel '__scratch__' for the parked-inert pool
+--shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for sourceTrack/newTrack hosts, '__scratch__' for parked-inert, '__master__' for the master-hosted class (sentinel because the REAPER master can't carry a project-scoped wiringClass tag the way other tracks can)
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -131,7 +131,7 @@ function M.validate(userGraph)
   return nil
 end
 
------ ancestors
+----- ancestors / descendants
 
 -- Backward reachability over the user graph. Used by the wiring page at
 -- drag-start to disqualify cycle-forming drop targets: a wire from X to
@@ -141,6 +141,25 @@ function M.ancestors(userGraph, sourceId)
   local out, adj = {}, {}
   for _, edge in ipairs(userGraph.edges or {}) do
     util.bucket(adj, edge.to, edge.from)
+  end
+  local function visit(id)
+    if out[id] then return end
+    out[id] = true
+    for _, nxt in ipairs(adj[id] or {}) do visit(nxt) end
+  end
+  visit(sourceId)
+  return out
+end
+
+-- Forward reachability. Mirror of ancestors; used by wire-redraft to
+-- forbid cycle-forming new-source candidates when the user drags the
+-- from-end of an existing wire: the new source X must not be reachable
+-- from the kept destination B, else X→B closes the cycle B→…→X→B.
+--contract: set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
+function M.descendants(userGraph, sourceId)
+  local out, adj = {}, {}
+  for _, edge in ipairs(userGraph.edges or {}) do
+    util.bucket(adj, edge.from, edge.to)
   end
   local function visit(id)
     if out[id] then return end
@@ -459,6 +478,14 @@ function M.compile(userGraph)
           return a.type < b.type
         end)
       end
+    end
+
+    -- Stable sentinel key for the master-hosted class so wm:snapshot can
+    -- find the matching entry without tagging the REAPER master itself with
+    -- a project-scoped wiringClass. At most one class is master-hosted.
+    for cls in pairs(masterHosted) do
+      plan['__master__'] = plan[cls]
+      plan[cls] = nil
     end
     return plan
   end

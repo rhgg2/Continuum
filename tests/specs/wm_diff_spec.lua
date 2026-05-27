@@ -271,6 +271,62 @@ return {
     end,
   },
 
+  ----- host transitions
+
+  {
+    name = "diff: field ops carry hostKind so applier can resolve master without a class tag",
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local target = { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                      fxOrder={}, mainSend=true, sends={} } }
+      local snap   = { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                      fxOrder={}, mainSend=false, sends={} } }
+      local ops = byOp(wm:diff(target, snap))
+      t.eq(ops.setMainSend[1].hostKind, 'sourceTrack')
+    end,
+  },
+  {
+    name = "diff: newTrack → master transition deletes the old newTrack and installs on master",
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local target = { ['__master__'] = { hostKind='master', trackGuid=nil,
+                                          fxOrder = { { fxGuid='{FX-1}', ident='JS:mix' } },
+                                          mainSend=false, sends={} } }
+      local snap   = { ['guid-A|guid-B'] = { hostKind='newTrack', trackGuid='guid-mix',
+                                              fxOrder = { { fxGuid='{FX-1}', ident='JS:mix' } },
+                                              mainSend=false, sends={} } }
+      local ops = byOp(wm:diff(target, snap))
+      t.eq(ops.createTrack, nil, 'no newTrack to create — target is master')
+      t.eq(#ops.setFXChain, 1, 'install on master (snap newTrack drains via deleteTrack)')
+      t.eq(ops.setFXChain[1].hostKind, 'master')
+      t.eq(#ops.deleteTrack, 1, 'old newTrack deleted')
+      t.eq(ops.deleteTrack[1].trackGuid, 'guid-mix')
+    end,
+  },
+  {
+    name = "diff: master → newTrack transition drains master, creates a newTrack, installs there",
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local target = { ['guid-A|guid-B'] = { hostKind='newTrack', trackGuid=nil,
+                                              fxOrder = { { fxGuid='{FX-1}', ident='JS:mix' } },
+                                              mainSend=false, sends={} } }
+      local snap   = { ['__master__'] = { hostKind='master', trackGuid=nil,
+                                          fxOrder = { { fxGuid='{FX-1}', ident='JS:mix' } },
+                                          mainSend=false, sends={} } }
+      local ops = byOp(wm:diff(target, snap))
+      t.eq(#ops.createTrack, 1)
+      t.eq(ops.createTrack[1].classKey, 'guid-A|guid-B')
+      local installs, drains = 0, 0
+      for _, op in ipairs(ops.setFXChain or {}) do
+        if op.hostKind == 'master' and #op.fxOrder == 0 then drains   = drains   + 1 end
+        if op.hostKind == 'newTrack'                     then installs = installs + 1 end
+      end
+      t.eq(drains,   1, 'master drained')
+      t.eq(installs, 1, 'newTrack populated')
+      t.eq(ops.deleteTrack, nil, 'master is not deletable')
+    end,
+  },
+
   ----- round-trip integration: targetState + snapshot agree after seeding
 
   {

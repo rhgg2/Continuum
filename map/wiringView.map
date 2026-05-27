@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=256  sha=34a1e98  mode=chunk
+@module wiringView  src=wiringView.lua  loc=283  sha=11d0f32  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -21,7 +21,7 @@
   @state wv = {}  @ 15
   @state hoverNodeId = nil  @ 17
   @state selection = {}  @ 18   -- set keyed by nodeId → true; replace via setSelection, never mutated in place
-  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 221
+  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 248
 
 # Private functions
   -- Logical projection (viewport-independent)
@@ -61,23 +61,29 @@
       @contract  atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
   @api wv:addWire(spec)  @ 149
       @contract  appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
+  @api wv:removeWireAt(idx)  @ 161
+      @contract  removes the edge at g.edges[idx]; no-op if idx is out of range; fires wiringChanged via wm:mutate
+  @api wv:rewireEdgeEnd(idx, side, target)  @ 168
+      @contract  rewrites one end of g.edges[idx] in place; side ∈ {'from','to'}; target = { id, port? }; port ignored for midi edges; single wiringChanged
   -- Topology queries
-  @api wv:ancestorsOf(sourceId)  @ 163
+  @api wv:ancestorsOf(sourceId)  @ 185
       @contract  backward reachability over user.edges; returns { [id]=true } including sourceId
-  @api wv:wiredPorts(nodeId, dir)  @ 168
+  @api wv:descendantsOf(sourceId)  @ 190
+      @contract  forward reachability over user.edges; returns { [id]=true } including sourceId
+  @api wv:wiredPorts(nodeId, dir)  @ 195
       @contract  returns { [portIdx]=true } over audio edges on nodeId for dir ('out'|'in'); midi edges ignored
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 184
+  @api wv:nodeViews()  @ 211
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:wireViews()  @ 193
+  @api wv:wireViews()  @ 220
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Capacity errors
-  @api wv:errors()  @ 224
+  @api wv:errors()  @ 251
       @contract  list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 244
-  @api wv:setHover(id)  @ 245
-  @api wv:selection()  @ 248
+  @api wv:hover()  @ 271
+  @api wv:setHover(id)  @ 272
+  @api wv:selection()  @ 275
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 250
+  @api wv:setSelection(idSet)  @ 277
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
