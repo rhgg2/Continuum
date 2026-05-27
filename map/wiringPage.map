@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1772  sha=0f4db20  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1791  sha=749509e  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -69,8 +69,8 @@
   @state openFxPicker  @ 196
   @state SELECTED_INFLATE = 0  @ 209   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 210
-  @state SOURCE_PAD = 24  @ 1730
-  @state wiring = cmgr:scope('wiring')  @ 1762
+  @state SOURCE_PAD = 24  @ 1749
+  @state wiring = cmgr:scope('wiring')  @ 1781
 
 # Private functions
   -- FX-picker modal kind
@@ -227,14 +227,15 @@
   @fn wireOffset(i, n)  @ 945
       -- Perpendicular scalar for slot i (1-based) of n parallel wires:
       -- centred around 0 so a lone wire sits on the centre line.
-  @fn nodeExitDist(dx, dy)  @ 954
-      -- Distance from a node centre to where a ray in direction (dx,dy)
-      -- exits the node rect. Used to place the audio-port label just past
-      -- the rounded body so it stays visible. Approximates the parallel-
-      -- offset case by NODE_W/H from the centre, which is within WIRE_GAP
-      -- of the true intersection — close enough for label placement.
-  @fn drawWireArrow(dl, sx, sy, ex, ey, col)  @ 963
-  @fn drawWireEndLabel(dl, ax, ay, fx, fy, i, n, portIdx, portName, idStem, col)  @ 998
+  @fn wireExits(seg)  @ 955
+      -- Distances along the (offset) segment, measured from (seg.sx, seg.sy),
+      -- at which the visible part begins (exits the source rect) and ends
+      -- (enters the target rect), plus the segment length. For parallel wires
+      -- the two exits are asymmetric: an offset shifting the line toward one
+      -- node's corner lengthens that node's exit and shortens the other's.
+      -- Returns nil for sub-pixel segments.
+  @fn drawWireArrow(dl, sx, sy, ex, ey, col)  @ 978
+  @fn drawWireEndLabel(dl, ax, ay, fx, fy, exitD, i, n, portIdx, portName, idStem, col)  @ 1013
       -- Audio port-number label as a tight bg-filled patch sized to the
       -- digit's bbox, placed up the wire past the node's exit point. The
       -- fill occludes the wire segment behind it so the digit reads cleanly
@@ -244,33 +245,33 @@
       -- rects on adjacent parallel wires never overlap (perp 10 + along 20 vs
       -- a ~10×14 rect). Hover-tooltip shows the port name (synthetic 'in N' /
       -- 'out N' until TrackFX_GetIOName lands).
-  @fn wireSegments(wireViews, nodesById)  @ 1042
+  @fn wireSegments(wireViews, nodesById)  @ 1057
       -- One screen segment per wireView, keyed by wireView index (= g.edges
       -- index). sx/sy/ex/ey are canvas-local (caller adds origin). slotI/slotN
       -- are the within-pair-group slot for parallel-wire offset bookkeeping;
       -- the draw pass and wireEndHit consume the same record so highlight
       -- geometry can't drift from drawn geometry.
-  @fn endRegion(seg, side)  @ 1081
+  @fn endRegion(seg, side)  @ 1097
       -- Endpoints of the end-region for one side of a wire segment, in
       -- canvas-local coordinates. The region starts at the node-rect exit
       -- (where the visible wire begins) and walks WIRE_END_HIT pixels inward
       -- along the wire. Length is capped at 0.4*visible so short wires don't
       -- overlap their two ends. Returns nil for sub-pixel or fully-occluded
       -- wires (two adjacent nodes whose bodies touch).
-  @fn pointToSegmentDist(px, py, ax, ay, bx, by)  @ 1098
-  @fn wireEndHit(segs, mx, my, ox, oy)  @ 1117
+  @fn pointToSegmentDist(px, py, ax, ay, bx, by)  @ 1112
+  @fn wireEndHit(segs, mx, my, ox, oy)  @ 1131
       -- Returns { edgeIdx, side, keptAnchor = {x,y screen} } if the cursor is
       -- within WIRE_END_HIT_PERP of one of the two end-regions across all
       -- wires; nil otherwise. Closest wins on ties. keptAnchor is the screen-
       -- space position of the OTHER end's node-edge endpoint — the redraft
       -- gesture pins the wire there while the cursor drives the grabbed end.
-  @fn drawWiresPass(dl, segs, wireViews, ox, oy, audioCol, midiCol, opts)  @ 1145
+  @fn drawWiresPass(dl, segs, wireViews, ox, oy, audioCol, midiCol, opts)  @ 1159
       -- opts.skipEdgeIdx: don't draw this wire (used when redrafting it, since
       -- the in-flight draft line replaces it). The wire-end highlight is
       -- drawn separately by drawWireEndHighlight after the node pass — nodes
       -- overpaint wires here, so an in-pass highlight would be invisible.
-  @fn drawWireEndHighlight(dl, segs, ox, oy, hover)  @ 1173
-  @fn computeDraftEnd(draft, mx, my)  @ 1191
+  @fn drawWireEndHighlight(dl, segs, ox, oy, hover)  @ 1192
+  @fn computeDraftEnd(draft, mx, my)  @ 1210
       -- Compute the draft wire's cursor-end screen position. Decay ratchets
       -- on furthest travel from the grab point so dragging back toward the
       -- start doesn't re-inflate the offset. Hit-target detection consumes
@@ -278,23 +279,23 @@
       -- target node / port: a redraft started with the wire end on the
       -- original target naturally reads as still pointing there, and
       -- detaches as soon as the decayed end leaves that node.
-  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 1234
+  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 1253
       -- Identify the node whose body the mouse is over (un-inflated rect);
       -- used to start a drag, distinct from the inflated rect that drives
       -- port reveal. Returns nil if the mouse is over empty canvas (or a
       -- port band).
-  @fn nodeAtPoint(nodeViews, px, py, ox, oy)  @ 1246
+  @fn nodeAtPoint(nodeViews, px, py, ox, oy)  @ 1265
       -- nodeUnderMouse keyed to an arbitrary screen point (the decayed draft
       -- wire end, typically) rather than the live cursor.
-  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 1259
+  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 1278
       -- AABB intersection of a pixel-space band rect against every node's
       -- body rect (un-inflated; port bands aren't selectable). Returns the
       -- set of intersecting ids — empty table if nothing was caught.
-  @fn renderCanvas(w, h)  @ 1273
-  @fn pushBodyStyles()  @ 1644
-  @fn popBodyStyles()  @ 1647
+  @fn renderCanvas(w, h)  @ 1292
+  @fn pushBodyStyles()  @ 1663
+  @fn popBodyStyles()  @ 1666
   -- Wiring scope
-  @fn shortFxName(s)  @ 1713
+  @fn shortFxName(s)  @ 1732
       -- REAPER hands us "Type: Name (Author)" — or, for multi-out plugins,
       -- "Type: Name (Author) (N outs)" — in EnumInstalledFX, and either
       -- parenthetical may itself contain balanced parens (e.g. a vendor written
@@ -302,22 +303,22 @@
       -- disambiguate same-named plugins from different vendors; the node label
       -- drops the prefix and everything from the first balanced () onward.
       -- Strip on commit, not in wm.
-  @fn findMasterPos()  @ 1719
-  @fn sourcePosFor(genX, genY)  @ 1731
+  @fn findMasterPos()  @ 1738
+  @fn sourcePosFor(genX, genY)  @ 1750
 
 # Public API (wp:*)
-  @api wp:bind()  @ 1652
+  @api wp:bind()  @ 1671
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 1653
-  @api wp:enableLive()  @ 1659
+  @api wp:unbind()  @ 1672
+  @api wp:enableLive()  @ 1678
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
-  @api wp:tick()  @ 1662
+  @api wp:tick()  @ 1681
       @contract  per-frame poll; drives wm:pollUndo to detect REAPER undo/redo of wiring gestures (scratch P_EXT divergence) and re-issue wiringChanged{kind='load'}. Called from coordinator.frame regardless of which page is active.
-  @api wp:renderToolbarBits(_)  @ 1664
-  @api wp:renderBody(_, w, h, dispatch)  @ 1667
+  @api wp:renderToolbarBits(_)  @ 1683
+  @api wp:renderBody(_, w, h, dispatch)  @ 1686
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 1680
-  @api wp:focusState()  @ 1692
+  @api wp:renderStatusBar(_)  @ 1699
+  @api wp:focusState()  @ 1711
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface

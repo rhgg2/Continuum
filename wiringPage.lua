@@ -946,19 +946,34 @@ local function wireOffset(i, n)
   return (i - (n + 1) / 2) * WIRE_GAP
 end
 
--- Distance from a node centre to where a ray in direction (dx,dy)
--- exits the node rect. Used to place the audio-port label just past
--- the rounded body so it stays visible. Approximates the parallel-
--- offset case by NODE_W/H from the centre, which is within WIRE_GAP
--- of the true intersection — close enough for label placement.
-local function nodeExitDist(dx, dy)
-  local hw, hh = NODE_W / 2, NODE_H / 2
+-- Distances along the (offset) segment, measured from (seg.sx, seg.sy),
+-- at which the visible part begins (exits the source rect) and ends
+-- (enters the target rect), plus the segment length. For parallel wires
+-- the two exits are asymmetric: an offset shifting the line toward one
+-- node's corner lengthens that node's exit and shortens the other's.
+-- Returns nil for sub-pixel segments.
+local function wireExits(seg)
+  local dx, dy = seg.ex - seg.sx, seg.ey - seg.sy
   local len = math.sqrt(dx * dx + dy * dy)
-  if len < 1 then return 0, 0 end
-  local tx = (dx == 0) and math.huge or hw / math.abs(dx)
-  local ty = (dy == 0) and math.huge or hh / math.abs(dy)
-  return math.min(tx, ty) * len, len
- end
+  if len < 1 then return nil end
+  local hw, hh = NODE_W / 2, NODE_H / 2
+  local offX, offY = seg.offX or 0, seg.offY or 0
+  -- Param along the ray (rdx,rdy) from a point (px,py) inside an axis-
+  -- aligned rect centred at the origin at which the ray exits.
+  local function exitParam(rdx, rdy, px, py)
+    local txWall = (rdx > 0) and hw or -hw
+    local tyWall = (rdy > 0) and hh or -hh
+    local tx = (rdx ~= 0) and (txWall - px) / rdx or math.huge
+    local ty = (rdy ~= 0) and (tyWall - py) / rdy or math.huge
+    return math.min(tx, ty)
+  end
+  -- Source rect centred at (sx - offX, sy - offY): at t=0 the segment
+  -- point relative to the centre is (offX, offY). Target rect mirror:
+  -- walk backward from t=1 in direction (-dx,-dy) with the same offset.
+  local tFrom = exitParam(dx, dy, offX, offY)
+  local tTo   = 1 - exitParam(-dx, -dy, offX, offY)
+  return tFrom * len, tTo * len, len
+end
 
 local function drawWireArrow(dl, sx, sy, ex, ey, col)
   local dx, dy = ex - sx, ey - sy
@@ -995,9 +1010,9 @@ end
 -- rects on adjacent parallel wires never overlap (perp 10 + along 20 vs
 -- a ~10×14 rect). Hover-tooltip shows the port name (synthetic 'in N' /
 -- 'out N' until TrackFX_GetIOName lands).
-local function drawWireEndLabel(dl, ax, ay, fx, fy, i, n, portIdx, portName, idStem, col)
+local function drawWireEndLabel(dl, ax, ay, fx, fy, exitD, i, n, portIdx, portName, idStem, col)
   local dx, dy = fx - ax, fy - ay
-  local exitD, len = nodeExitDist(dx, dy)
+  local len = math.sqrt(dx * dx + dy * dy)
   if len < 1 then return end
   local txt = tostring(portIdx)
   if wireFont then ImGui.PushFont(ctx, wireFont, WIRE_LABEL_SIZE) end
@@ -1062,6 +1077,7 @@ local function wireSegments(wireViews, nodesById)
               w     = w,
               sx    = fromNV.pos.x + offX, sy = fromNV.pos.y + offY,
               ex    = toNV.pos.x   + offX, ey = toNV.pos.y   + offY,
+              offX  = offX, offY = offY,
               slotI = slotI, slotN = n,
             }
           end
@@ -1079,19 +1095,17 @@ end
 -- overlap their two ends. Returns nil for sub-pixel or fully-occluded
 -- wires (two adjacent nodes whose bodies touch).
 local function endRegion(seg, side)
-  local dx, dy = seg.ex - seg.sx, seg.ey - seg.sy
-  local len = math.sqrt(dx * dx + dy * dy)
-  if len < 1 then return nil end
-  local exit = nodeExitDist(dx, dy)
-  local visible = len - 2 * exit
+  local fromD, toD, len = wireExits(seg)
+  if not fromD then return nil end
+  local visible = toD - fromD
   if visible < 2 then return nil end
   local L = math.min(WIRE_END_HIT, 0.4 * visible)
-  local ux, uy = dx / len, dy / len
+  local ux, uy = (seg.ex - seg.sx) / len, (seg.ey - seg.sy) / len
   if side == 'from' then
-    local x0, y0 = seg.sx + ux * exit, seg.sy + uy * exit
+    local x0, y0 = seg.sx + ux * fromD, seg.sy + uy * fromD
     return x0, y0, x0 + ux * L, y0 + uy * L
   end
-  local x0, y0 = seg.ex - ux * exit, seg.ey - uy * exit
+  local x0, y0 = seg.sx + ux * toD, seg.sy + uy * toD
   return x0, y0, x0 - ux * L, y0 - uy * L
 end
 
@@ -1155,15 +1169,20 @@ local function drawWiresPass(dl, segs, wireViews, ox, oy, audioCol, midiCol, opt
       ImGui.DrawList_AddLine(dl, sx, sy, ex, ey, col, WIRE_THICK)
       drawWireArrow(dl, sx, sy, ex, ey, col)
       if w.type == 'audio' then
-        local stem = '##wire/' .. w.from .. ':' .. w.fromPort
-                          .. '->' .. w.to   .. ':' .. w.toPort
-        if w.fromPort ~= 1 then
-          drawWireEndLabel(dl, sx, sy, ex, ey, seg.slotI, seg.slotN,
-            w.fromPort, w.fromPortName, stem .. '/from', col)
-        end
-        if w.toPort ~= 1 then
-          drawWireEndLabel(dl, ex, ey, sx, sy, seg.slotI, seg.slotN,
-            w.toPort, w.toPortName, stem .. '/to', col)
+        local fromD, toD, segLen = wireExits(seg)
+        if fromD then
+          local stem = '##wire/' .. w.from .. ':' .. w.fromPort
+                            .. '->' .. w.to   .. ':' .. w.toPort
+          if w.fromPort ~= 1 then
+            drawWireEndLabel(dl, sx, sy, ex, ey, fromD,
+              seg.slotI, seg.slotN,
+              w.fromPort, w.fromPortName, stem .. '/from', col)
+          end
+          if w.toPort ~= 1 then
+            drawWireEndLabel(dl, ex, ey, sx, sy, segLen - toD,
+              seg.slotI, seg.slotN,
+              w.toPort, w.toPortName, stem .. '/to', col)
+          end
         end
       end
     end
