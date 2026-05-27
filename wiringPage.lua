@@ -87,7 +87,7 @@ local LABEL_MAX_LINES  = 2
 local LABEL_ELLIPSIS   = '…'
 local PORT_SIZE        = 8
 local PORT_GAP         = 6
-local PORT_BAND_OFFSET = 6   -- gap between node edge and the hover-only port row
+local PORT_BAND_OFFSET = 4   -- gap between node edge and the hover-only port row
 local PORT_HIT_PAD     = 4   -- hit area extends this far beyond the visual square on each side
 local PORT_TOOLTIP_GAP = 4   -- pixels between port top and tooltip bottom edge
 local PORTS_PER_ROW    = 5   -- audio rows wrap after this many ports
@@ -102,6 +102,7 @@ local LIST_GAP         = 4   -- pixel gap between handle and dropdown list; the 
 local CLICK_THRESH     = 4   -- mouseup within this many pixels of mousedown counts as a click, not a drag
 local LIST_ROW_PAD_X   = 8
 local LIST_ROW_PAD_Y   = 1
+local LIST_PAD_Y       = 6   -- extra slack at the list rect's top + bottom, beyond the first/last row's own LIST_ROW_PAD_Y
 local LIST_CORNER_R    = 4
 
 local WIRE_GAP        = 14    -- perpendicular pitch between parallel wires in the same pair-group
@@ -434,17 +435,20 @@ local function layoutList(audio, handle, side)
     if w > maxW then maxW = w end
   end
   if uiFont then ImGui.PopFont(ctx) end
-  local n     = #audio
-  local listX = handle.x
-  local listY = (side == 'bottom') and (handle.y + handle.h + LIST_GAP)
-                                    or (handle.y - LIST_GAP - n * rowH)
+  local n        = #audio
+  local listX    = handle.x
+  local totalH   = n * rowH + 2 * LIST_PAD_Y
+  local rectY0   = (side == 'bottom') and (handle.y + handle.h + LIST_GAP)
+                                       or (handle.y - LIST_GAP - totalH)
+  local rectY1   = rectY0 + totalH
+  local rowsY0   = rectY0 + LIST_PAD_Y
   local rows = {}
   for i, name in ipairs(audio) do
     rows[i] = { kind = 'audio', portIdx = i, name = name,
-                x = listX, y = listY + (i - 1) * rowH,
+                x = listX, y = rowsY0 + (i - 1) * rowH,
                 w = maxW, h = rowH }
   end
-  local rect    = { listX, listY, listX + maxW, listY + n * rowH }
+  local rect    = { listX, rectY0, listX + maxW, rectY1 }
   local hitRect = (side == 'bottom')
                   and { rect[1], rect[2] - LIST_GAP, rect[3], rect[4] }
                   or  { rect[1], rect[2],            rect[3], rect[4] + LIST_GAP }
@@ -598,7 +602,7 @@ local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
   -- would line up with the body's corner wedge and the canvas would show
   -- through instead of the popup colour) and extends past the bandRect on
   -- the far side. Drawn before the node so the body overpaints the overlap.
-  local POPUP_PAD     = 3
+  local POPUP_PAD     = 1
   local POPUP_OVERLAP = 2 * CORNER_R
   local popup
   if bandRect then
