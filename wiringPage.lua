@@ -138,7 +138,7 @@ local WIRE_LABEL_LEAD = 6     -- gap from node rect edge to label's near edge, m
 -- anywhere else (band). All three are mutually exclusive while live.
 local drag      = nil  -- { mx0, my0, starts = { [id] = {x,y}, … } }
 local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
-local wireDraft = nil  -- { type='audio'|'midi', fromId, fromPort?, ancestors, mx0, my0, fromList }
+local wireDraft = nil  -- { type='audio'|'midi', fromId, fromPort?, ancestors, mx0, my0, fromList, fromAnchor? }
 local shiftWas  = false
 -- Per-node set of audio port indices the user has explicitly pinned via
 -- click-without-drag on a list row. Persists across binds but not across
@@ -1090,18 +1090,6 @@ local function renderCanvas(w, h)
   local midiCol  = chrome.colour('wiring.port.midi')
   drawWiresPass(dl, wv:wireViews(), nodesById, ox, oy, audioCol, midiCol)
 
-  -- In-flight draft wire: drawn in the same pre-pass slot as committed
-  -- wires so the source body (and the target body, when the cursor is
-  -- over one) overpaint it. Endpoint is the raw cursor — body occlusion
-  -- handles the clipping for free.
-  if wireDraft then
-    local src = nodesById[wireDraft.fromId]
-    if src then
-      local col = wireDraft.type == 'midi' and midiCol or audioCol
-      ImGui.DrawList_AddLine(dl, ox + src.pos.x, oy + src.pos.y, mx, my, col, WIRE_THICK)
-    end
-  end
-
   -- Wire-creation hover state: source-side while shift is held with no
   -- draft in flight; target-side while a draft is in flight (shift may
   -- have been released). dropTargetHit returns the under-cursor node;
@@ -1182,6 +1170,24 @@ local function renderCanvas(w, h)
     if p.list then drawList(dl, p.list, p.slot) end
   end
 
+  -- In-flight draft wire: drawn after the overlay pass so the gesture
+  -- floats above any open port-row popout and over body edges. Start
+  -- point is the slot centre captured at mousedown (fromAnchor) when the
+  -- gesture started on a concrete chip / midi keyboard; for body-default
+  -- port 1 there is no chip, so we fall back to the node centre.
+  -- Endpoint is the raw cursor.
+  if wireDraft then
+    local src = nodesById[wireDraft.fromId]
+    if src then
+      local col = wireDraft.type == 'midi' and midiCol or audioCol
+      local a   = wireDraft.fromAnchor
+      local sx  = a and a.x or (ox + src.pos.x)
+      local sy  = a and a.y or (oy + src.pos.y)
+      ImGui.DrawList_AddLine(dl, sx, sy, mx, my, col, WIRE_THICK)
+      drawWireArrow(dl, sx, sy, mx, my, col)
+    end
+  end
+
   wv:setHover((sourceHit and sourceHit.nv.id)
               or (targetHit and targetHit.nv.id) or nil)
 
@@ -1203,9 +1209,16 @@ local function renderCanvas(w, h)
       local slot = sourceHit.slot
       if slot then
         local anc = wv:ancestorsOf(sourceHit.nv.id)
+        -- defaultSlot (body-default port 1) has no screen rect; leave
+        -- fromAnchor nil so the draft falls back to the node centre.
+        local fromAnchor
+        if slot.x then
+          fromAnchor = { x = slot.x + slot.w / 2, y = slot.y + slot.h / 2 }
+        end
         local base = { fromId = sourceHit.nv.id, ancestors = anc,
                        mx0 = mx, my0 = my, fromList = sourceHit.list ~= nil,
-                       fromSide = sourceHit.layout.side }
+                       fromSide = sourceHit.layout.side,
+                       fromAnchor = fromAnchor }
         if slot.kind == 'midi' then
           base.type = 'midi'
         else

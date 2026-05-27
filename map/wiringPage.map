@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1428  sha=34a1e98  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1441  sha=0b53cc3  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -54,7 +54,7 @@
   @state WIRE_LABEL_LEAD = 6  @ 113   -- gap from node rect edge to label's near edge, measured along wire (consistent across wire angles)
   @state drag = nil  @ 139   -- { mx0, my0, starts = { [id] = {x,y}, … } }
   @state band = nil  @ 140   -- { mx0, my0 } — current corner is GetMousePos
-  @state wireDraft = nil  @ 141   -- { type='audio'|'midi', fromId, fromPort?, ancestors, mx0, my0, fromList }
+  @state wireDraft = nil  @ 141   -- { type='audio'|'midi', fromId, fromPort?, ancestors, mx0, my0, fromList, fromAnchor? }
   @state shiftWas = false  @ 142
   @state pinned = {}  @ 147   -- pinned[nodeId][portIdx] = true
   @state listOpenId = nil  @ 152
@@ -63,8 +63,8 @@
   @state openFxPicker  @ 169
   @state SELECTED_INFLATE = 0  @ 182   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 183
-  @state SOURCE_PAD = 24  @ 1386
-  @state wiring = cmgr:scope('wiring')  @ 1418
+  @state SOURCE_PAD = 24  @ 1399
+  @state wiring = cmgr:scope('wiring')  @ 1431
 
 # Private functions
   -- FX-picker modal kind
@@ -239,10 +239,10 @@
       -- body rect (un-inflated; port bands aren't selectable). Returns the
       -- set of intersecting ids — empty table if nothing was caught.
   @fn renderCanvas(w, h)  @ 1040
-  @fn pushBodyStyles()  @ 1300
-  @fn popBodyStyles()  @ 1303
+  @fn pushBodyStyles()  @ 1313
+  @fn popBodyStyles()  @ 1316
   -- Wiring scope
-  @fn shortFxName(s)  @ 1369
+  @fn shortFxName(s)  @ 1382
       -- REAPER hands us "Type: Name (Author)" — or, for multi-out plugins,
       -- "Type: Name (Author) (N outs)" — in EnumInstalledFX, and either
       -- parenthetical may itself contain balanced parens (e.g. a vendor written
@@ -250,22 +250,22 @@
       -- disambiguate same-named plugins from different vendors; the node label
       -- drops the prefix and everything from the first balanced () onward.
       -- Strip on commit, not in wm.
-  @fn findMasterPos()  @ 1375
-  @fn sourcePosFor(genX, genY)  @ 1387
+  @fn findMasterPos()  @ 1388
+  @fn sourcePosFor(genX, genY)  @ 1400
 
 # Public API (wp:*)
-  @api wp:bind()  @ 1308
+  @api wp:bind()  @ 1321
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 1309
-  @api wp:enableLive()  @ 1315
+  @api wp:unbind()  @ 1322
+  @api wp:enableLive()  @ 1328
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
-  @api wp:tick()  @ 1318
+  @api wp:tick()  @ 1331
       @contract  per-frame poll; drives wm:pollUndo to detect REAPER undo/redo of wiring gestures (scratch P_EXT divergence) and re-issue wiringChanged{kind='load'}. Called from coordinator.frame regardless of which page is active.
-  @api wp:renderToolbarBits(_)  @ 1320
-  @api wp:renderBody(_, w, h, dispatch)  @ 1323
+  @api wp:renderToolbarBits(_)  @ 1333
+  @api wp:renderBody(_, w, h, dispatch)  @ 1336
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 1336
-  @api wp:focusState()  @ 1348
+  @api wp:renderStatusBar(_)  @ 1349
+  @api wp:focusState()  @ 1361
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface
