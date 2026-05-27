@@ -150,6 +150,18 @@ local pinned     = {}   -- pinned[nodeId][portIdx] = true
 -- on any mouseclick. Cursor in list area without prior chevron crossing
 -- does NOT engage — the popup is gated tight on the chevron.
 local listOpenId = nil
+-- Node whose port row currently holds hover priority. While set, the
+-- cursor-driven hover funcs probe this node first; only when its hover
+-- area (body + band, extended by list.hitRect when listOpenId matches)
+-- no longer catches the cursor does the per-node scan resume. Stops the
+-- popout from flipping to a nearby node mid-gesture when two bodies'
+-- hoverRects overlap. Cleared lazily in the fast-path and on unbind.
+local engagedId  = nil
+-- After a drag-drop mouseup, suppress shift-hover until the cursor next
+-- moves. Without this the source-side popout snaps onto whatever node
+-- happens to be under the cursor at drop-time, which reads as a flicker.
+-- Captured (x, y) lets us detect the next move without per-frame deltas.
+local hoverFreeze = nil  -- { x, y } | nil
 -- After click-pinning a port from the spillover list, the pinned node's
 -- port row stays popped up even when the cursor isn't on it. Cleared on
 -- shift-release, on any mouseclick, or when natural hover engages this
@@ -653,30 +665,35 @@ local function stillEngaged(layout, mx, my)
   return inRect(mx, my, r[1], r[2], r[3], r[4])
 end
 
--- Source-side hover (shift held, no draft). Manages listOpenId: if a list
--- is currently open, that node has priority and its list.hitRect counts
--- as engagement; otherwise the cursor must hit the chevron to engage.
--- Side effect: clears sticky if natural hover lands on the sticky node
--- (the "cursor returned to the pinned node" condition). Hovering some
--- other node leaves sticky alone — both overlays render simultaneously.
+-- Source-side hover (shift held, no draft). Manages engagedId: while
+-- set, the engaged node has hover priority — its body + band hoverRect
+-- (extended by list.hitRect when listOpenId matches) is probed before
+-- any other node, so a nearby body's overlapping hoverRect can't steal
+-- the popout mid-gesture. Side effect: clears sticky if natural hover
+-- lands on the sticky node (the "cursor returned to the pinned node"
+-- condition). Hovering some other node leaves sticky alone — both
+-- overlays render simultaneously.
 local function shiftHoverHit(nodeViews, mx, my, ox, oy)
   local function consume(pick)
     if pick.list then listOpenId = pick.nv.id end
+    engagedId = pick.nv.id
     if sticky and sticky.nodeId == pick.nv.id then sticky = nil end
     return pick
   end
-  if listOpenId then
+  if engagedId then
     for _, nv in ipairs(nodeViews) do
-      if nv.id == listOpenId then
+      if nv.id == engagedId then
         local layout = layoutPortRow(nv, ox, oy, 'out', mx, my, nil)
-        if stillEngaged(layout, mx, my) then
+        if listOpenId == nv.id and stillEngaged(layout, mx, my) then
           return consume{ nv = nv, layout = layout, list = layout.list,
                           slot = rowHit(layout.list.rows, mx, my) }
         end
+        local pick = pickHovered(nv, layout, mx, my, 'out', nil)
+        if pick then return consume(pick) end
         break
       end
     end
-    listOpenId = nil
+    engagedId, listOpenId = nil, nil
   end
   for _, nv in ipairs(nodeViews) do
     if #nv.outs.audio > 0 or #nv.outs.midi > 0 then
@@ -730,33 +747,35 @@ local function draftSourceHoverHit(nodeViews, ox, oy)
   end
 end
 
--- Target-side hover (draft in flight). Same listOpenId state machine,
--- type-filtered to the draft. Ancestors are skipped so cycle-blocked
--- targets neither engage nor display.
+-- Target-side hover (draft in flight). Same engagedId-priority state
+-- machine as shiftHoverHit, type-filtered to the draft. Ancestors are
+-- skipped so cycle-blocked targets neither engage nor display.
 local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
-  if listOpenId then
+  local function consume(pick)
+    if pick.list then listOpenId = pick.nv.id end
+    engagedId = pick.nv.id
+    return pick
+  end
+  if engagedId and not draft.ancestors[engagedId] then
     for _, nv in ipairs(nodeViews) do
-      if nv.id == listOpenId then
-        if not draft.ancestors[nv.id] then
-          local layout = layoutPortRow(nv, ox, oy, 'in', mx, my, draft.type)
-          if stillEngaged(layout, mx, my) then
-            return { nv = nv, layout = layout, list = layout.list,
-                     slot = rowHit(layout.list.rows, mx, my) }
-          end
+      if nv.id == engagedId then
+        local layout = layoutPortRow(nv, ox, oy, 'in', mx, my, draft.type)
+        if listOpenId == nv.id and stillEngaged(layout, mx, my) then
+          return consume{ nv = nv, layout = layout, list = layout.list,
+                          slot = rowHit(layout.list.rows, mx, my) }
         end
+        local pick = pickHovered(nv, layout, mx, my, 'in', draft.type)
+        if pick then return consume(pick) end
         break
       end
     end
-    listOpenId = nil
+    engagedId, listOpenId = nil, nil
   end
   for _, nv in ipairs(nodeViews) do
     if not draft.ancestors[nv.id] then
       local layout = layoutPortRow(nv, ox, oy, 'in', mx, my, draft.type)
       local pick = pickHovered(nv, layout, mx, my, 'in', draft.type)
-      if pick then
-        if pick.list then listOpenId = nv.id end
-        return pick
-      end
+      if pick then return consume(pick) end
     end
   end
 end
@@ -1056,6 +1075,9 @@ local function renderCanvas(w, h)
   if shiftHeld and not shiftWas then wv:setSelection{} end
   if shiftWas and not shiftHeld then sticky = nil end
   shiftWas = shiftHeld
+  if hoverFreeze and (hoverFreeze.x ~= mx or hoverFreeze.y ~= my) then
+    hoverFreeze = nil
+  end
 
   local nodeViews = wv:nodeViews()
 
@@ -1102,7 +1124,7 @@ local function renderCanvas(w, h)
   if wireDraft then
     targetHit      = dropTargetHit(nodeViews, mx, my, ox, oy, wireDraft)
     draftSourceHit = draftSourceHoverHit(nodeViews, ox, oy)
-  elseif shiftHeld then
+  elseif shiftHeld and not hoverFreeze then
     sourceHit = shiftHoverHit(nodeViews, mx, my, ox, oy)
   end
   if shiftHeld then
@@ -1257,6 +1279,7 @@ local function renderCanvas(w, h)
           toPort = (slot.kind == 'audio') and slot.portIdx or nil,
         }
       end
+      hoverFreeze = { x = mx, y = my }
     elseif wireDraft.fromList and wireDraft.type == 'audio'
            and wireDraft.fromPort and wireDraft.fromPort >= 2 then
       -- Click-without-drag on a list row: pin the port as a chip so the
@@ -1321,7 +1344,7 @@ local function popBodyStyles() ImGui.PopStyleColor(ctx, 1) end
 function wp:bind() end
 function wp:unbind()
   drag, band, wireDraft, shiftWas = nil, nil, nil, false
-  listOpenId, sticky = nil, nil
+  listOpenId, sticky, engagedId, hoverFreeze = nil, nil, nil, nil
 end
 
 --contract: turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
