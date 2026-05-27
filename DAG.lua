@@ -283,9 +283,9 @@ function M.compile(userGraph)
                               audioChildren = {}, midiChildren = {},
                               primaryAudioParents = {} }
     end
-    local cOf = self:classOf()
+    local classOf = self:classOf()
     for _, conn in ipairs(lowerGraph.conns) do
-      local fromCls, toCls = cOf[conn.from], cOf[conn.to]
+      local fromCls, toCls = classOf[conn.from], classOf[conn.to]
       if fromCls ~= toCls then
         local toQ, fromQ = cache.quotient[toCls], cache.quotient[fromCls]
         if conn.type == 'audio' then
@@ -338,11 +338,11 @@ function M.compile(userGraph)
   end
 
   function ctx:capacityErrors()
-    local cOf = self:classOf()
-    local counts = {}
+    local classOf = self:classOf()
+    local counts  = {}
     for _, conn in ipairs(lowerGraph.conns) do
-      local cls = cOf[conn.from]
-      if cls and cls == cOf[conn.to] then
+      local cls = classOf[conn.from]
+      if cls and cls == classOf[conn.to] then
         counts[cls] = counts[cls] or { audio = 0, midi = 0 }
         counts[cls][conn.type] = counts[cls][conn.type] + 1
       end
@@ -363,7 +363,7 @@ function M.compile(userGraph)
   -- they don't appear in REAPER FX chains). Kahn's; ties broken by
   -- sorted id for spec determinism. Private to targetPlan.
   local function topoIntraClass(members, cls)
-    local cOf = ctx:classOf()
+    local classOf = ctx:classOf()
     local memberSet = {}
     for _, id in ipairs(members) do
       local k = lowerGraph.nodes[id].kind
@@ -373,7 +373,7 @@ function M.compile(userGraph)
     for id in pairs(memberSet) do indeg[id], succ[id] = 0, {} end
     for _, conn in ipairs(lowerGraph.conns) do
       if memberSet[conn.from] and memberSet[conn.to]
-         and cOf[conn.from] == cls and cOf[conn.to] == cls then
+         and classOf[conn.from] == cls and classOf[conn.to] == cls then
         indeg[conn.to] = indeg[conn.to] + 1
         util.add(succ[conn.from], conn.to)
       end
@@ -399,7 +399,7 @@ function M.compile(userGraph)
 
   function ctx:targetPlan()
     local allClasses = self:classes()
-    local cOf        = self:classOf()
+    local classOf    = self:classOf()
     local plan, masterHosted = {}, {}
 
     for cls, members in pairs(allClasses) do
@@ -423,20 +423,20 @@ function M.compile(userGraph)
           if n.kind == 'source' then hostKind, trackGuid = 'sourceTrack', n.trackGuid end
           if n.kind == 'master' then hasMaster = true end
         end
-        if hasMaster and hostKind == 'newTrack' then
+        if hasMaster and hostKind ~= 'sourceTrack' then
           hostKind = 'master'
           masterHosted[cls] = true
         end
         plan[cls] = {
           hostKind  = hostKind, trackGuid = trackGuid, fxOrder = nil,
-          mainSend  = hasMaster and hostKind ~= 'master', sends = {},
+          mainSend  = hasMaster and hostKind == 'sourceTrack', sends = {},
         }
       end
     end
 
     local seenSend = {}
     for _, conn in ipairs(lowerGraph.conns) do
-      local fromCls, toCls = cOf[conn.from], cOf[conn.to]
+      local fromCls, toCls = classOf[conn.from], classOf[conn.to]
       if fromCls ~= toCls and fromCls ~= '' and toCls ~= '' then
         if masterHosted[toCls] then
           if conn.type == 'audio' then plan[fromCls].mainSend = true end
