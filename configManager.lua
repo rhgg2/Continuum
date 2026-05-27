@@ -552,6 +552,14 @@ function cm:getAt(level, key)
   return util.deepClone(tbl)
 end
 
+--contract: returns the raw cm-P_EXT blob string on otherTrack (or nil/empty if unset). Stable byte-for-byte across reads — callers can compare against a previously-captured raw to detect external rewrites (REAPER undo/redo), where re-serialising a parsed copy would diverge due to Lua pairs ordering.
+function cm:readTrackRaw(otherTrack)
+  if not otherTrack then return nil end
+  local _, raw = reaper.GetSetMediaTrackInfo_String(
+    otherTrack, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
+  return raw
+end
+
 --contract: bypasses cache and active context; reads otherTrack's P_EXT directly without firing configChanged or disturbing the bound track's cache
 function cm:readTrackKey(otherTrack, key)
   checkKey(key)

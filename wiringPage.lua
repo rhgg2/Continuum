@@ -1310,6 +1310,9 @@ end
 --contract: turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
 function wp:enableLive() wv:enableLive() end
 
+--contract: per-frame poll; drives wm:pollUndo to detect REAPER undo/redo of wiring gestures (scratch P_EXT divergence) and re-issue wiringChanged{kind='load'}. Called from coordinator.frame regardless of which page is active.
+function wp:tick() wv:pollUndo() end
+
 function wp:renderToolbarBits(_) end
 
 --contract: pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.

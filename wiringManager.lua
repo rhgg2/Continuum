@@ -22,6 +22,7 @@ local scratchTrack = nil  -- hidden host for the probe (and, later, orphan FX no
 local fxIO = {}           -- session cache: fxIdent → { ins, outs, inNames, outNames }
 local realising = false   -- true during applyOps's stamp-back mutate, gating wiringChanged
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
+local lastScratchRaw = nil -- serialised graph last mirrored to scratch P_EXT; pollUndo compares against it
 
 local SCRATCH_NAME = 'continuum: wiring scratch'
 local SCRATCH_KEY  = '__scratch__'
@@ -680,7 +681,17 @@ function wm:applyOps(ops, label)
   -- Persist the post-apply owned-guid set: anything still in the graph is
   -- still in REAPER (orphans got deleted in reconcileFXChain and dropped
   -- out of the graph in the mutator that removed them).
-  cm:set('project', 'wiringOwnedFx', ownedGuidsFrom(userGraph))
+  local owned = ownedGuidsFrom(userGraph)
+  cm:set('project', 'wiringOwnedFx', owned)
+
+  -- Mirror to scratch P_EXT inside the same Undo_BeginBlock so REAPER's undo
+  -- captures the graph alongside FX/track ops. SetProjExtState doesn't
+  -- participate in undo, so the project tier alone would leave the persisted
+  -- graph stale after a cmd-Z. pollUndo watches lastScratchRaw for divergence.
+  local scratch = ensureScratchTrack()
+  cm:writeTrackKey(scratch, 'wiringGraph',  userGraph)
+  cm:writeTrackKey(scratch, 'wiringOwnedFx', owned)
+  lastScratchRaw = cm:readTrackRaw(scratch)
 
   reaper.PreventUIRefresh(-1)
   reaper.Undo_EndBlock2(0, label or 'wiring: apply', -1)
@@ -698,6 +709,25 @@ function wm:listInstalledFX()
   end
   installedFx = out
   return out
+end
+
+--contract: detects REAPER undo/redo of a wiring gesture by diffing scratch P_EXT against lastScratchRaw; on diff, mirrors scratch back to project tier, drops the in-memory graph, fires wiringChanged{kind='load'}. If scratch was deleted (manual or undo past its creation), reconciler recreates it on the next reconcile pass — so here we just clear the handle and let the live loop catch up.
+function wm:pollUndo()
+  if not scratchTrack then return end
+  if reaper.ValidatePtr2 and not reaper.ValidatePtr2(0, scratchTrack, 'MediaTrack*') then
+    scratchTrack, lastScratchRaw = nil, nil
+    fire('wiringChanged', { kind = 'load' })
+    return
+  end
+  local raw = cm:readTrackRaw(scratchTrack)
+  if raw == lastScratchRaw then return end
+  local mirrored = cm:readTrackKey(scratchTrack, 'wiringGraph')
+  if not mirrored then return end
+  cm:set('project', 'wiringGraph',  mirrored)
+  cm:set('project', 'wiringOwnedFx', cm:readTrackKey(scratchTrack, 'wiringOwnedFx') or {})
+  userGraph = nil
+  lastScratchRaw = raw
+  fire('wiringChanged', { kind = 'load' })
 end
 
 --contract: one reconcile pass — diff targetState against snapshot and applyOps the result under the given undo label

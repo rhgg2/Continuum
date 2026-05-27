@@ -211,6 +211,13 @@ function M.new()
   state.trackNames    = {}
   function r.CountTracks(_proj)             return #state.projectTracks end
   function r.GetTrack(_proj, i)             return state.projectTracks[i + 1] end
+  function r.ValidatePtr2(_proj, ptr, ctype)
+    if ctype == 'MediaTrack*' then
+      for _, t in ipairs(state.projectTracks) do if t == ptr then return true end end
+      return false
+    end
+    return true
+  end
   function r.GetTrackName(track)
     local n = state.trackNames[track]
     return n ~= nil, n or ''

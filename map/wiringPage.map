@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1421  sha=5203119  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1424  sha=01ba9c8  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -63,8 +63,8 @@
   @state openFxPicker  @ 169
   @state SELECTED_INFLATE = 0  @ 182   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 183
-  @state SOURCE_PAD = 24  @ 1379
-  @state wiring = cmgr:scope('wiring')  @ 1411
+  @state SOURCE_PAD = 24  @ 1382
+  @state wiring = cmgr:scope('wiring')  @ 1414
 
 # Private functions
   -- FX-picker modal kind
@@ -241,7 +241,7 @@
   @fn pushBodyStyles()  @ 1296
   @fn popBodyStyles()  @ 1299
   -- Wiring scope
-  @fn shortFxName(s)  @ 1362
+  @fn shortFxName(s)  @ 1365
       -- REAPER hands us "Type: Name (Author)" — or, for multi-out plugins,
       -- "Type: Name (Author) (N outs)" — in EnumInstalledFX, and either
       -- parenthetical may itself contain balanced parens (e.g. a vendor written
@@ -249,8 +249,8 @@
       -- disambiguate same-named plugins from different vendors; the node label
       -- drops the prefix and everything from the first balanced () onward.
       -- Strip on commit, not in wm.
-  @fn findMasterPos()  @ 1368
-  @fn sourcePosFor(genX, genY)  @ 1380
+  @fn findMasterPos()  @ 1371
+  @fn sourcePosFor(genX, genY)  @ 1383
 
 # Public API (wp:*)
   @api wp:bind()  @ 1304
@@ -258,11 +258,13 @@
   @api wp:unbind()  @ 1305
   @api wp:enableLive()  @ 1311
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
-  @api wp:renderToolbarBits(_)  @ 1313
-  @api wp:renderBody(_, w, h, dispatch)  @ 1316
+  @api wp:tick()  @ 1314
+      @contract  per-frame poll; drives wm:pollUndo to detect REAPER undo/redo of wiring gestures (scratch P_EXT divergence) and re-issue wiringChanged{kind='load'}. Called from coordinator.frame regardless of which page is active.
+  @api wp:renderToolbarBits(_)  @ 1316
+  @api wp:renderBody(_, w, h, dispatch)  @ 1319
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 1329
-  @api wp:focusState()  @ 1341
+  @api wp:renderStatusBar(_)  @ 1332
+  @api wp:focusState()  @ 1344
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface

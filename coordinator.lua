@@ -144,6 +144,7 @@ local function tick()
     end
   end
   if pages.sample and currentTake then pages.sample:tick(currentTake) end
+  if pages.wiring then pages.wiring:tick() end
 end
 
 local function drawSwitcher()
