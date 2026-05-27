@@ -1004,13 +1004,15 @@ end
 -- Audio port-number label as a tight bg-filled patch sized to the
 -- digit's bbox, placed up the wire past the node's exit point. The
 -- fill occludes the wire segment behind it so the digit reads cleanly
--- on top of the line. For parallel wires, slots alternate between two
--- along-wire positions (near and far, separated by 2*WIRE_GAP): odd i
--- sits at LEAD, even i at LEAD+2*WIRE_GAP. That guarantees axis-aligned
--- rects on adjacent parallel wires never overlap (perp 10 + along 20 vs
--- a ~10×14 rect). Hover-tooltip shows the port name (synthetic 'in N' /
--- 'out N' until TrackFX_GetIOName lands).
-local function drawWireEndLabel(dl, ax, ay, fx, fy, exitD, i, n, portIdx, portName, idStem, col)
+-- on top of the line. `placed` accumulates the rects of labels already
+-- drawn this frame; the candidate starts at the minimum distance and
+-- gets pushed outward along the wire until its AABB clears every entry
+-- (capped at len*0.45 — past the midpoint we'd risk colliding with the
+-- other end's label, so we accept the overlap there). This subsumes the
+-- per-wire-group alternation and also separates labels on unrelated
+-- wires sharing a node corner. Hover-tooltip shows the port name
+-- (synthetic 'in N' / 'out N' until TrackFX_GetIOName lands).
+local function drawWireEndLabel(dl, ax, ay, fx, fy, exitD, portIdx, portName, idStem, col, placed)
   local dx, dy = fx - ax, fy - ay
   local len = math.sqrt(dx * dx + dy * dy)
   if len < 1 then return end
@@ -1023,12 +1025,39 @@ local function drawWireEndLabel(dl, ax, ay, fx, fy, exitD, i, n, portIdx, portNa
   -- letting the gap be measured from the projected near edge keeps the
   -- visible LEAD constant whether the wire is horizontal or vertical.
   local proj = (hw * math.abs(dx) + hh * math.abs(dy)) / len
-  local slot = ((i - 1) % 2 == 0) and 0 or (2 * WIRE_LABEL_LEAD)
-  local labelDist = math.min(len * 0.45, exitD + WIRE_LABEL_LEAD + proj + slot)
-  local t  = labelDist / len
-  local cx = ax + t * dx
-  local cy = ay + t * dy
+  local ux, uy = dx / len, dy / len
+  local maxDist = len * 0.45
+  local labelDist = math.min(maxDist, exitD + WIRE_LABEL_LEAD + proj)
+  -- Smallest positive push along (ux,uy) that separates a candidate at
+  -- (cx,cy) from existing rect e on one axis. math.huge if axis-aligned
+  -- separation in that direction is impossible (wire parallel to axis).
+  local function axisPush(c, ec, sumH, u)
+    if u == 0 then return math.huge end
+    local fwd, bwd = (ec + sumH - c) / u, (ec - sumH - c) / u
+    local best = math.huge
+    if fwd > 0 then best = math.min(best, fwd) end
+    if bwd > 0 then best = math.min(best, bwd) end
+    return best
+  end
+  for _ = 1, 64 do
+    local cx, cy = ax + labelDist * ux, ay + labelDist * uy
+    local hit
+    for _, e in ipairs(placed) do
+      if math.abs(cx - e.cx) < hw + e.hw
+         and math.abs(cy - e.cy) < hh + e.hh then
+        hit = e; break
+      end
+    end
+    if not hit then break end
+    local push = math.min(axisPush(cx, hit.cx, hw + hit.hw, ux),
+                          axisPush(cy, hit.cy, hh + hit.hh, uy))
+    if push == math.huge then break end
+    labelDist = labelDist + push + 0.5
+    if labelDist >= maxDist then labelDist = maxDist; break end
+  end
+  local cx, cy = ax + labelDist * ux, ay + labelDist * uy
   local x0, y0, x1, y1 = cx - hw, cy - hh, cx + hw, cy + hh
+  placed[#placed + 1] = { cx = cx, cy = cy, hw = hw, hh = hh }
   ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, chrome.colour('bg'))
   ImGui.DrawList_AddText(dl,
     math.floor(cx - tw / 2), math.floor(cy - th / 2), col, txt)
@@ -1050,10 +1079,10 @@ local function drawWireEndLabel(dl, ax, ay, fx, fy, exitD, i, n, portIdx, portNa
 end
 
 -- One screen segment per wireView, keyed by wireView index (= g.edges
--- index). sx/sy/ex/ey are canvas-local (caller adds origin). slotI/slotN
--- are the within-pair-group slot for parallel-wire offset bookkeeping;
--- the draw pass and wireEndHit consume the same record so highlight
--- geometry can't drift from drawn geometry.
+-- index). sx/sy/ex/ey are canvas-local (caller adds origin). offX/offY
+-- is the perpendicular displacement from the canonical pair centre line,
+-- shared by drawWiresPass and wireExits so highlight geometry and label
+-- placement can't drift from drawn geometry.
 local function wireSegments(wireViews, nodesById)
   local segs = {}
   local idxOf = {}
@@ -1072,13 +1101,13 @@ local function wireSegments(wireViews, nodesById)
           local fromNV, toNV = nodesById[w.from], nodesById[w.to]
           if fromNV and toNV then
             local s = wireOffset(slotI, n)
+
             local offX, offY = perpX * s, perpY * s
             segs[idxOf[w]] = {
-              w     = w,
-              sx    = fromNV.pos.x + offX, sy = fromNV.pos.y + offY,
-              ex    = toNV.pos.x   + offX, ey = toNV.pos.y   + offY,
-              offX  = offX, offY = offY,
-              slotI = slotI, slotN = n,
+              w    = w,
+              sx   = fromNV.pos.x + offX, sy = fromNV.pos.y + offY,
+              ex   = toNV.pos.x   + offX, ey = toNV.pos.y   + offY,
+              offX = offX, offY = offY,
             }
           end
         end
@@ -1159,6 +1188,7 @@ end
 local function drawWiresPass(dl, segs, wireViews, ox, oy, audioCol, midiCol, opts)
   opts = opts or {}
   local skip = opts.skipEdgeIdx
+  local placedLabels = {}
   for i = 1, #wireViews do
     local seg = segs[i]
     if seg and i ~= skip then
@@ -1175,13 +1205,13 @@ local function drawWiresPass(dl, segs, wireViews, ox, oy, audioCol, midiCol, opt
                             .. '->' .. w.to   .. ':' .. w.toPort
           if w.fromPort ~= 1 then
             drawWireEndLabel(dl, sx, sy, ex, ey, fromD,
-              seg.slotI, seg.slotN,
-              w.fromPort, w.fromPortName, stem .. '/from', col)
+              w.fromPort, w.fromPortName, stem .. '/from', col,
+              placedLabels)
           end
           if w.toPort ~= 1 then
             drawWireEndLabel(dl, ex, ey, sx, sy, segLen - toD,
-              seg.slotI, seg.slotN,
-              w.toPort, w.toPortName, stem .. '/to', col)
+              w.toPort, w.toPortName, stem .. '/to', col,
+              placedLabels)
           end
         end
       end
