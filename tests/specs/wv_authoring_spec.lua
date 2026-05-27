@@ -240,4 +240,59 @@ return {
       t.deepEq(wv:selection(), { n1 = true }, 'wv view not aliased to caller table')
     end,
   },
+  {
+    name = 'wiredPorts on fresh graph is empty for either direction',
+    run = function(harness)
+      local _, wv = mkWv(harness)
+      wv:addFx(0, 0, FX)
+      t.deepEq(wv:wiredPorts('n1', 'out'), {})
+      t.deepEq(wv:wiredPorts('n1', 'in'),  {})
+    end,
+  },
+  {
+    name = 'wiredPorts("out") reflects fromPort for audio edges sourced on the node',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Wide', { ins = 20, outs = 20 })  -- 10 stereo ports each (pins/2)
+      local WIDE = { name = 'Wide', ident = 'VST3:Wide' }
+      wv:addFx(0, 0, WIDE); wv:addFx(0, 0, WIDE)
+      t.truthy(wv:addWire{ type = 'audio', from = 'n1', to = 'n2', fromPort = 3, toPort = 1 })
+      t.truthy(wv:addWire{ type = 'audio', from = 'n1', to = 'n2', fromPort = 7, toPort = 2 })
+      t.deepEq(wv:wiredPorts('n1', 'out'), { [3] = true, [7] = true })
+    end,
+  },
+  {
+    name = 'wiredPorts("in") reflects toPort for audio edges sinking into the node',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Wide', { ins = 20, outs = 20 })  -- 10 stereo ports each
+      local WIDE = { name = 'Wide', ident = 'VST3:Wide' }
+      wv:addFx(0, 0, WIDE); wv:addFx(0, 0, WIDE)
+      t.truthy(wv:addWire{ type = 'audio', from = 'n1', to = 'n2', fromPort = 1, toPort = 5 })
+      t.deepEq(wv:wiredPorts('n2', 'in'),  { [5] = true })
+      t.deepEq(wv:wiredPorts('n2', 'out'), {})
+    end,
+  },
+  {
+    name = 'wiredPorts ignores midi edges',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
+      wv:addFx(0, 0, { name = 'Massive', ident = 'VST3:Massive' })  -- spawns n1=fx, n2=source + midi edge n2→n1
+      t.deepEq(wv:wiredPorts('n2', 'out'), {}, 'midi-only edge contributes no audio port')
+      t.deepEq(wv:wiredPorts('n1', 'in'),  {})
+    end,
+  },
+  {
+    name = 'wiredPorts ignores edges incident on other nodes',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Wide', { ins = 20, outs = 20 })  -- 10 stereo ports each
+      local WIDE = { name = 'Wide', ident = 'VST3:Wide' }
+      wv:addFx(0, 0, WIDE); wv:addFx(0, 0, WIDE); wv:addFx(0, 0, WIDE)
+      t.truthy(wv:addWire{ type = 'audio', from = 'n2', to = 'n3', fromPort = 4, toPort = 1 })
+      t.deepEq(wv:wiredPorts('n1', 'out'), {})
+      t.deepEq(wv:wiredPorts('n1', 'in'),  {})
+    end,
+  },
 }

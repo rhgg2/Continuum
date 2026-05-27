@@ -164,6 +164,19 @@ function wv:ancestorsOf(sourceId)
   return DAG.ancestors(wm:graph(), sourceId)
 end
 
+--contract: returns { [portIdx]=true } over audio edges on nodeId for dir ('out'|'in'); midi edges ignored
+function wv:wiredPorts(nodeId, dir)
+  local endField  = (dir == 'out') and 'from'     or 'to'
+  local portField = (dir == 'out') and 'fromPort' or 'toPort'
+  local out = {}
+  for _, e in ipairs(wm:graph().edges or {}) do
+    if e.type == 'audio' and e[endField] == nodeId then
+      out[e[portField] or 1] = true
+    end
+  end
+  return out
+end
+
 ----- Render-ready, viewport-independent
 
 --shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}} } — port lists carry names; counts = #list

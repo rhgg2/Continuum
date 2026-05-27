@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=243  sha=01ba9c8  mode=chunk
+@module wiringView  src=wiringView.lua  loc=256  sha=34a1e98  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -21,7 +21,7 @@
   @state wv = {}  @ 15
   @state hoverNodeId = nil  @ 17
   @state selection = {}  @ 18   -- set keyed by nodeId → true; replace via setSelection, never mutated in place
-  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 208
+  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 221
 
 # Private functions
   -- Logical projection (viewport-independent)
@@ -64,18 +64,20 @@
   -- Topology queries
   @api wv:ancestorsOf(sourceId)  @ 163
       @contract  backward reachability over user.edges; returns { [id]=true } including sourceId
+  @api wv:wiredPorts(nodeId, dir)  @ 168
+      @contract  returns { [portIdx]=true } over audio edges on nodeId for dir ('out'|'in'); midi edges ignored
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 171
+  @api wv:nodeViews()  @ 184
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:wireViews()  @ 180
+  @api wv:wireViews()  @ 193
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Capacity errors
-  @api wv:errors()  @ 211
+  @api wv:errors()  @ 224
       @contract  list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 231
-  @api wv:setHover(id)  @ 232
-  @api wv:selection()  @ 235
+  @api wv:hover()  @ 244
+  @api wv:setHover(id)  @ 245
+  @api wv:selection()  @ 248
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 237
+  @api wv:setSelection(idSet)  @ 250
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.

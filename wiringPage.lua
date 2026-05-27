@@ -4,7 +4,7 @@
 --invariant: render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
 --invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
---invariant: at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; shift-gated port-row hover drives wire creation — per-face layout is [handle ▾][audio chips for ports 2..N centred][midi keyboard], handle pinned to left corner, midi to right corner. body-default = port 1; audio chips render only when 2 ≤ #audio ≤ PORTS_PER_ROW; >PORTS_PER_ROW outs surface via the handle's dropdown (Slice A2). top/bottom faces only. See design/wiring.md.
+--invariant: at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; shift-gated port-row hover drives wire creation — per-face layout is [handle ▾][audio chips for ports 2..N centred][midi keyboard], handle pinned to left corner, midi to right corner. body-default = port 1; audio chips render for ports 2..N when N ≤ PORTS_PER_ROW; past that, chips appear only for currently-wired and user-pinned ports while the rest live in the handle's dropdown. top/bottom faces only. See design/wiring.md.
 
 local util = require 'util'
 
@@ -90,7 +90,7 @@ local PORT_GAP         = 6
 local PORT_BAND_OFFSET = 6   -- gap between node edge and the hover-only port row
 local PORT_HIT_PAD     = 4   -- hit area extends this far beyond the visual square on each side
 local PORT_TOOLTIP_GAP = 4   -- pixels between port top and tooltip bottom edge
-local PORTS_PER_ROW    = 5   -- audio rows wrap after this many ports
+local PORTS_PER_ROW    = 4   -- audio rows wrap after this many ports
 local MIDI_SLOT_W      = 13  -- keyboard slot is wider/taller than the audio
 local MIDI_SLOT_H      = 11  -- 8×8 square; intrinsic icon dimensions
 local MIDI_INSET       = 3   -- px between midi icon and popup-right rounded corner
@@ -427,10 +427,11 @@ end
 
 -- Per-face layout: handle ▾ pinned to the left body corner, audio chips
 -- for ports 2..N centred (port 1 lives on the body itself, no chip), midi
--- keyboard pinned to the right. Audio chips render only when
--- 2 ≤ #audio ≤ PORTS_PER_ROW; the >PORTS_PER_ROW case shows chips for
--- currently-wired ports only (Slice A3). hoverRect = body ∪ slot/handle
--- hit pads, so cursor traversal between zones keeps the hover live. keep
+-- keyboard pinned to the right. Audio chips render for ports 2..N when
+-- N ≤ PORTS_PER_ROW; past that the band shows only currently-wired and
+-- user-pinned ports (chip promotion — design/wiring.md). hoverRect =
+-- body ∪ slot/handle hit pads, so cursor traversal between zones keeps
+-- the hover live. keep
 -- filters mismatched kinds during target-side hover (audio draft hides
 -- midi and the handle; midi draft hides audio chips and the handle).
 -- forceSide pins the face for sticky overlays (where the cursor isn't
@@ -460,20 +461,23 @@ local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
     slot.y = math.floor(rowCentre(rowIdx or 0) - slot.h / 2)
   end
 
-  -- Chip set: natural ports 2..N when N ≤ PORTS_PER_ROW, plus any pinned
-  -- by the user via click-without-drag on a list row. Sorted ascending
-  -- and wrapped onto outward rows at PORTS_PER_ROW per row.
+  -- Chip set: natural ports 2..N when N ≤ PORTS_PER_ROW, plus currently-
+  -- wired ports (chip promotion), plus any pinned by the user via click-
+  -- without-drag on a list row. Sorted ascending and wrapped onto outward
+  -- rows at PORTS_PER_ROW per row.
   local chipSet = {}
   if showHandle then
     if nAudio <= PORTS_PER_ROW then
       for i = 2, nAudio do chipSet[i] = true end
     end
-    local p = pinned[nv.id]
-    if p then
-      for k in pairs(p) do
+    local function union(set)
+      if not set then return end
+      for k in pairs(set) do
         if k >= 2 and k <= nAudio then chipSet[k] = true end
       end
     end
+    union(wv:wiredPorts(nv.id, dir))
+    union(pinned[nv.id])
   end
   local chipPorts = {}
   for k in pairs(chipSet) do chipPorts[#chipPorts + 1] = k end
