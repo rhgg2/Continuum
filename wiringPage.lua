@@ -155,9 +155,10 @@ local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
 local wireDraft = nil  -- { type, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx? }
 local shiftWas  = false
 -- Per-node set of audio port indices the user has explicitly pinned via
--- click-without-drag on a list row. Persists across binds but not across
--- project loads (page-local; future work to lift this into wm so it
--- round-trips with the graph).
+-- click-without-drag on a list row, or implicitly by starting a draft
+-- from a list row (in which case the chip materialises at mousedown).
+-- Persists across binds but not across project loads (page-local;
+-- future work to lift this into wm so it round-trips with the graph).
 local pinned     = {}   -- pinned[nodeId][portIdx] = true
 -- Which node's spillover list is currently engaged. Set when the cursor
 -- crosses the chevron; cleared when the cursor leaves chevron + list, or
@@ -833,7 +834,7 @@ local function drawList(dl, list, highlight)
   ImGui.DrawList_AddRectFilled(dl, r[1], r[2], r[3], r[4],
     chrome.colour('wiring.tooltip.bg'), LIST_CORNER_R)
   ImGui.DrawList_AddRect(dl, r[1], r[2], r[3], r[4],
-    chrome.colour('wiring.node.selected'), LIST_CORNER_R, 0, 1)
+    chrome.colour('separator'), LIST_CORNER_R, 0, 1)
   local txtCol = chrome.colour('text')
   local hlCol  = chrome.colour('wiring.node.selected')
   if uiFont then ImGui.PushFont(ctx, uiFont, uiSize) end
@@ -862,40 +863,38 @@ local function drawPortRowBg(dl, layout)
 end
 
 -- Draw the handle (if any) and every audio/midi slot. Outlines the slot
--- matching pick.slot (==). When the spillover list is open (pick.list
--- non-nil), audio chips are suppressed — the list carries the same info
--- more legibly while the user is browsing by name; the midi slot stays.
--- The pale popup bg is laid down separately by drawPortRowBg, before nodes.
+-- matching pick.slot (==). Chips render whether or not the spillover
+-- list is open; the list extends perpendicular to the chip row so they
+-- don't visually collide, and keeping chips visible preserves the
+-- caller's mental map of which port each row stands for. The pale popup
+-- bg is laid down separately by drawPortRowBg, before nodes.
 local function drawPortRow(dl, pick, audioCol, idPrefix)
-  local layout, highlight, listOpen =
-    pick.layout, pick.slot, pick.list ~= nil
+  local layout, highlight = pick.layout, pick.slot
   if layout.handle then drawHandle(dl, layout.handle, layout.side) end
   local hlCol    = chrome.colour('wiring.node.selected')
   local bodyFill = chrome.colour('wiring.node.' .. pick.nv.category)
   for i, s in ipairs(layout.slots) do
-    if not (listOpen and s.kind == 'audio') then
-      if s.inBody then
-        -- Body-internal kbd: fill body colour behind to overpaint the
-        -- label while the gesture is live, then draw the icon. No
-        -- InvisibleButton (the body's drag target owns the area) and no
-        -- tooltip — the visible icon already conveys 'midi'.
-        ImGui.DrawList_AddRectFilled(dl,
-          s.x, s.y, s.x + s.w, s.y + s.h, bodyFill)
-        drawKeyboardIcon(dl, s.x, s.y)
-      else
-        drawSlot(dl, s, idPrefix .. '/' .. i, audioCol)
-      end
-      -- Match by (kind, portIdx) rather than identity: defaultSlot
-      -- returns a synthetic spec, not the layout slot, so identity would
-      -- fail to highlight the midi keyboard when the cursor is over the
-      -- body during a midi draft.
-      if highlight and s.kind == highlight.kind
-         and (s.kind ~= 'audio' or s.portIdx == highlight.portIdx) then
-        ImGui.DrawList_AddRect(dl,
-          s.x - SELECTED_INFLATE, s.y - SELECTED_INFLATE,
-          s.x + s.w + SELECTED_INFLATE, s.y + s.h + SELECTED_INFLATE,
-          hlCol, 0, 0, SELECTED_STROKE)
-      end
+    if s.inBody then
+      -- Body-internal kbd: fill body colour behind to overpaint the
+      -- label while the gesture is live, then draw the icon. No
+      -- InvisibleButton (the body's drag target owns the area) and no
+      -- tooltip — the visible icon already conveys 'midi'.
+      ImGui.DrawList_AddRectFilled(dl,
+        s.x, s.y, s.x + s.w, s.y + s.h, bodyFill)
+      drawKeyboardIcon(dl, s.x, s.y)
+    else
+      drawSlot(dl, s, idPrefix .. '/' .. i, audioCol)
+    end
+    -- Match by (kind, portIdx) rather than identity: defaultSlot
+    -- returns a synthetic spec, not the layout slot, so identity would
+    -- fail to highlight the midi keyboard when the cursor is over the
+    -- body during a midi draft.
+    if highlight and s.kind == highlight.kind
+       and (s.kind ~= 'audio' or s.portIdx == highlight.portIdx) then
+      ImGui.DrawList_AddRect(dl,
+        s.x - SELECTED_INFLATE, s.y - SELECTED_INFLATE,
+        s.x + s.w + SELECTED_INFLATE, s.y + s.h + SELECTED_INFLATE,
+        hlCol, 0, 0, SELECTED_STROKE)
     end
   end
 end
@@ -1384,14 +1383,17 @@ local function renderCanvas(w, h)
 
   -- Draw order: existing wires first (bottom), then popup sleeves over
   -- them (so the pale sleeve occludes wires entering the engaged node's
-  -- popout area), then ALL nodes (overpainting wires at the rect edge
-  -- and the part of the popout they cover, so the popout reads as
-  -- emerging from behind the engaged node body). Chips/list draw later
-  -- in the overlay pass; the in-flight draft wire is drawn last of all
-  -- so it sits on top of every popout decoration.
+  -- popout area), then the in-flight draft wire (in front of the sleeve
+  -- so the user always sees the wire they're dragging — even when it
+  -- crosses the engaged node's popout area), then ALL nodes (overpainting
+  -- both the wires and the draft at the rect edge, so wires read as
+  -- emerging from behind the node body). Chips/list draw later in the
+  -- overlay pass.
   drawWiresPass(dl, segs, wireViewsList, ox, oy, audioCol, midiCol,
     { skipEdgeIdx = wireDraft and wireDraft.edgeIdx })
   for _, p in ipairs(overlays) do drawPortRowBg(dl, p.layout) end
+  drawDraftWire(dl, wireDraft, nodesById, ox, oy, draftCx, draftCy,
+                audioCol, midiCol)
   for _, nv in ipairs(nodeViews) do
     drawNode(dl, nv, ox, oy, selection[nv.id])
   end
@@ -1444,12 +1446,6 @@ local function renderCanvas(w, h)
     if p.list then drawList(dl, p.list, p.slot) end
   end
 
-  -- Draft wire sits on top of everything (popout sleeve, chips, list)
-  -- so the user always sees the wire they're dragging; existing wires
-  -- went down at the very bottom so the popout cleanly occludes them.
-  drawDraftWire(dl, wireDraft, nodesById, ox, oy, draftCx, draftCy,
-                audioCol, midiCol)
-
   wv:setHover((sourceHit and sourceHit.nv.id)
               or (targetHit and targetHit.nv.id) or nil)
 
@@ -1471,6 +1467,21 @@ local function renderCanvas(w, h)
     if sourceHit then
       local slot = sourceHit.slot
       if slot then
+        -- List-row drag: pin the port so a chip materialises in the
+        -- band, then re-layout and rebind slot to the new chip. The
+        -- wire then anchors at that chip rather than the row (which
+        -- sits in menu-space, often far from the node body); the chip
+        -- persists after the gesture, so subsequent shift-hovers see it
+        -- without needing to reopen the menu.
+
+        if sourceHit.list and slot.kind == 'audio' and slot.portIdx >= 2 then
+          local nv = sourceHit.nv
+          pinned[nv.id] = pinned[nv.id] or {}
+          pinned[nv.id][slot.portIdx] = true
+          local relaid = layoutPortRow(nv, ox, oy, 'out', mx, my, nil,
+                                       sourceHit.layout.side)
+          slot = findLayoutSlot(relaid, 'audio', slot.portIdx) or slot
+        end
         -- defaultSlot (body-default port 1) has no screen rect; leave
         -- keptAnchor nil so the draft falls back to the node centre.
         local keptAnchor
