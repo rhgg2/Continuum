@@ -1198,9 +1198,10 @@ local function computeDraftEnd(draft, mx, my)
   return mx + draft.grabDx * decay, my + draft.grabDy * decay
 end
 
--- In-flight draft wire. Drawn alongside the existing-wires pass (after
--- popout sleeves, before node bodies) so the body caps it cleanly at
--- the rect edge and chips/list rows in the overlay pass sit on top.
+-- In-flight draft wire. Drawn last of all (after chips and spillover
+-- list) so the user always sees the wire they're dragging on top of
+-- every popout decoration — existing wires sit below the popout sleeve
+-- by contrast, so only the draft punches through.
 -- (cx, cy) is the cursor-end position computed by computeDraftEnd
 -- (decayed and possibly pinned to the original endpoint). The kept end
 -- is anchored at keptAnchor (slot centre captured at gesture start, or
@@ -1322,9 +1323,9 @@ local function renderCanvas(w, h)
 
   -- Wire geometry: segs is computed once and shared by the draw pass
   -- and the wire-end hit-test so highlight geometry cannot drift from
-  -- drawn geometry. The draw call itself happens later in the layer
-  -- order (between popout bg and front nodes) so wires sit above the
-  -- popout sleeve but below node bodies.
+  -- drawn geometry. Existing wires draw at the very bottom of the
+  -- canvas stack so popout sleeves cleanly occlude them; the in-flight
+  -- draft wire draws at the very top so it always reads above the popout.
   local audioCol = chrome.colour('wiring.port.audio')
   local midiCol  = chrome.colour('wiring.port.midi')
   local wireViewsList = wv:wireViews()
@@ -1381,19 +1382,16 @@ local function renderCanvas(w, h)
   add(draftSourceHit)
   add(stickyHit)
 
-  -- Draw order: popup bgs, then wires, then ALL nodes. The popout
-  -- sleeve sits at the bottom so the wire can run over its extension,
-  -- and every node body then overpaints the wire (capping it cleanly
-  -- at the rect edge) and the part of the popout it covers (so the
-  -- popout reads as emerging from behind the engaged node body). A
-  -- side effect of placing all nodes above the sleeve: where a popout
-  -- extends over an adjacent unengaged node, that neighbour now
-  -- overpaints the sleeve rather than the reverse.
-  for _, p in ipairs(overlays) do drawPortRowBg(dl, p.layout) end
+  -- Draw order: existing wires first (bottom), then popup sleeves over
+  -- them (so the pale sleeve occludes wires entering the engaged node's
+  -- popout area), then ALL nodes (overpainting wires at the rect edge
+  -- and the part of the popout they cover, so the popout reads as
+  -- emerging from behind the engaged node body). Chips/list draw later
+  -- in the overlay pass; the in-flight draft wire is drawn last of all
+  -- so it sits on top of every popout decoration.
   drawWiresPass(dl, segs, wireViewsList, ox, oy, audioCol, midiCol,
     { skipEdgeIdx = wireDraft and wireDraft.edgeIdx })
-  drawDraftWire(dl, wireDraft, nodesById, ox, oy, draftCx, draftCy,
-                audioCol, midiCol)
+  for _, p in ipairs(overlays) do drawPortRowBg(dl, p.layout) end
   for _, nv in ipairs(nodeViews) do
     drawNode(dl, nv, ox, oy, selection[nv.id])
   end
@@ -1445,6 +1443,12 @@ local function renderCanvas(w, h)
     drawPortRow(dl, p, audioCol, '##portSlot/' .. p.nv.id)
     if p.list then drawList(dl, p.list, p.slot) end
   end
+
+  -- Draft wire sits on top of everything (popout sleeve, chips, list)
+  -- so the user always sees the wire they're dragging; existing wires
+  -- went down at the very bottom so the popout cleanly occludes them.
+  drawDraftWire(dl, wireDraft, nodesById, ox, oy, draftCx, draftCy,
+                audioCol, midiCol)
 
   wv:setHover((sourceHit and sourceHit.nv.id)
               or (targetHit and targetHit.nv.id) or nil)

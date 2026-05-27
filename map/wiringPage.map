@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1757  sha=4c568c6  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1761  sha=d31832b  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -69,8 +69,8 @@
   @state openFxPicker  @ 195
   @state SELECTED_INFLATE = 0  @ 208   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 209
-  @state SOURCE_PAD = 24  @ 1715
-  @state wiring = cmgr:scope('wiring')  @ 1747
+  @state SOURCE_PAD = 24  @ 1719
+  @state wiring = cmgr:scope('wiring')  @ 1751
 
 # Private functions
   -- FX-picker modal kind
@@ -277,23 +277,23 @@
       -- target node / port: a redraft started with the wire end on the
       -- original target naturally reads as still pointing there, and
       -- detaches as soon as the decayed end leaves that node.
-  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 1234
+  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 1235
       -- Identify the node whose body the mouse is over (un-inflated rect);
       -- used to start a drag, distinct from the inflated rect that drives
       -- port reveal. Returns nil if the mouse is over empty canvas (or a
       -- port band).
-  @fn nodeAtPoint(nodeViews, px, py, ox, oy)  @ 1246
+  @fn nodeAtPoint(nodeViews, px, py, ox, oy)  @ 1247
       -- nodeUnderMouse keyed to an arbitrary screen point (the decayed draft
       -- wire end, typically) rather than the live cursor.
-  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 1259
+  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 1260
       -- AABB intersection of a pixel-space band rect against every node's
       -- body rect (un-inflated; port bands aren't selectable). Returns the
       -- set of intersecting ids — empty table if nothing was caught.
-  @fn renderCanvas(w, h)  @ 1273
-  @fn pushBodyStyles()  @ 1629
-  @fn popBodyStyles()  @ 1632
+  @fn renderCanvas(w, h)  @ 1274
+  @fn pushBodyStyles()  @ 1633
+  @fn popBodyStyles()  @ 1636
   -- Wiring scope
-  @fn shortFxName(s)  @ 1698
+  @fn shortFxName(s)  @ 1702
       -- REAPER hands us "Type: Name (Author)" — or, for multi-out plugins,
       -- "Type: Name (Author) (N outs)" — in EnumInstalledFX, and either
       -- parenthetical may itself contain balanced parens (e.g. a vendor written
@@ -301,22 +301,22 @@
       -- disambiguate same-named plugins from different vendors; the node label
       -- drops the prefix and everything from the first balanced () onward.
       -- Strip on commit, not in wm.
-  @fn findMasterPos()  @ 1704
-  @fn sourcePosFor(genX, genY)  @ 1716
+  @fn findMasterPos()  @ 1708
+  @fn sourcePosFor(genX, genY)  @ 1720
 
 # Public API (wp:*)
-  @api wp:bind()  @ 1637
+  @api wp:bind()  @ 1641
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 1638
-  @api wp:enableLive()  @ 1644
+  @api wp:unbind()  @ 1642
+  @api wp:enableLive()  @ 1648
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
-  @api wp:tick()  @ 1647
+  @api wp:tick()  @ 1651
       @contract  per-frame poll; drives wm:pollUndo to detect REAPER undo/redo of wiring gestures (scratch P_EXT divergence) and re-issue wiringChanged{kind='load'}. Called from coordinator.frame regardless of which page is active.
-  @api wp:renderToolbarBits(_)  @ 1649
-  @api wp:renderBody(_, w, h, dispatch)  @ 1652
+  @api wp:renderToolbarBits(_)  @ 1653
+  @api wp:renderBody(_, w, h, dispatch)  @ 1656
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 1665
-  @api wp:focusState()  @ 1677
+  @api wp:renderStatusBar(_)  @ 1669
+  @api wp:focusState()  @ 1681
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface
