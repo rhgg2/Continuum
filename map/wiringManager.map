@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1077  sha=66d0830  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1077  sha=fe39d7e  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -30,7 +30,7 @@
   @state CU_IDENT = 'JS:Continuum Utility'  @ 29
   @state fxRoutingAlpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123...  @ 211
   @state fxRoutingDec = {}  @ 212
-  @state CU_MODE_TO_FLOAT = { gain = 1, channelRemap = 2 }  @ 672
+  @state CU_MODE_TO_FLOAT = { gain = 0, channelRemap = 1 }  @ 672
 
 # Private functions
   -- Helpers

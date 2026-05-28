@@ -157,7 +157,7 @@ return {
           sets[c.paramIdx] = c.value
         end
       end
-      t.eq(sets[0], 1,   'mode slider set to 1 (gain)')
+      t.eq(sets[0], 0,   'mode slider set to 0 (gain)')
       t.eq(sets[1], 0.5, 'gain slider set to 0.5')
       local gainEdge
       for _, e in ipairs(wm:graph().edges) do

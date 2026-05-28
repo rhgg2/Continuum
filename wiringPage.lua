@@ -117,9 +117,10 @@ local WIRE_END_HIT_PERP = 6   -- perpendicular tolerance from the wire centrelin
 local WIRE_END_HIGHLIGHT = 3  -- stroke width for the highlight overpaint
 local WIRE_GRAB_DECAY   = 40  -- redraft start-jump absorber: at mousedown the cursor end of the wire stays at its old position; the gap to the cursor decays linearly over this many pixels of travel
 local WIRE_FADER_HIT     = 8   -- screen-px radius around the mid-wire arrow centroid that opens the fader on hover (audio wires only)
-local WIRE_FADER_W       = 14  -- fader strip width (px)
-local WIRE_FADER_H       = 80  -- fader strip height (px)
-local WIRE_FADER_OFFSET  = 10  -- gap between arrow centroid and strip's left edge (px), strip sits screen-right of the arrow
+local WIRE_FADER_W       = 20  -- strip / knob / hit-rect width (px); centred on the arrow centroid so it covers the triangle
+local WIRE_FADER_H       = 140 -- strip / hit-rect height (px); centred vertically on the arrow centroid
+local WIRE_FADER_KNOB_H  = 20  -- knob slab height (px); spans the full strip width
+local WIRE_FADER_HIT_PAD = 10  -- px to inflate the visibility hit rect on each side, so the fader stays open through small cursor excursions outside the strip
 local WIRE_FADER_TOP_DB  = 18  -- top of strip = +18 dB; 0 dB at 75% of travel; below ~5% snaps to -inf
 
 ----- Drag / band state (page-local; ephemeral, never persisted)
@@ -1355,9 +1356,8 @@ local function arrowMidHit(segs, mx, my, ox, oy)
 end
 
 local function faderRectAt(ax, ay)
-  local x0 = ax + WIRE_FADER_OFFSET
-  local y0 = ay - WIRE_FADER_H / 2
-  return x0, y0, x0 + WIRE_FADER_W, y0 + WIRE_FADER_H
+  local hw, hh = WIRE_FADER_W / 2, WIRE_FADER_H / 2
+  return ax - hw, ay - hh, ax + hw, ay + hh
 end
 
 local function inRectXY(x0, y0, x1, y1, mx, my)
@@ -1371,19 +1371,22 @@ local function pixelYToLin(my, stripY0)
 end
 
 local function drawFader(dl, f)
-  local r       = f.rect
-  local stripCol  = chrome.colour('wiring.port.audio')
-  local indCol    = chrome.colour('wiring.node.selected')
-  ImGui.DrawList_AddRectFilled(dl, r.x0, r.y0, r.x1, r.y1, chrome.colour('bg'))
-  ImGui.DrawList_AddRect(dl, r.x0, r.y0, r.x1, r.y1, stripCol, 0, 0, 1)
+  local r        = f.rect
+  local stripCol = chrome.colour('wiring.port.audio')
+  local indCol   = chrome.colour('wiring.node.selected')
+  local bgCol    = chrome.colour('bg')
+  ImGui.DrawList_AddRectFilled(dl, r.x0, r.y0, r.x1, r.y1, bgCol)
+  ImGui.DrawList_AddRect      (dl, r.x0, r.y0, r.x1, r.y1, stripCol, 1, 0, 1)
   -- Unity tick: faint horizontal line where 0 dB sits on the strip.
   local unityY = r.y0 + (1 - pFromDb(0)) * WIRE_FADER_H
   ImGui.DrawList_AddLine(dl, r.x0, unityY, r.x1, unityY, stripCol, 1)
-  -- Current-value indicator: a 3-px tall bar straddling the strip.
-  local p   = pFromDb(linToDb(f.currentLin))
-  local indY = r.y0 + (1 - p) * WIRE_FADER_H
-  ImGui.DrawList_AddRectFilled(dl, r.x0 - 1, indY - 1, r.x1 + 1, indY + 1, indCol)
-  -- dB readout right of the strip, vertically aligned to the indicator.
+  -- Knob: full strip width, fader-style slab.
+  local p       = pFromDb(linToDb(f.currentLin))
+  local indY    = r.y0 + (1 - p) * WIRE_FADER_H
+  local kHalfH  = WIRE_FADER_KNOB_H / 2
+  ImGui.DrawList_AddRectFilled(dl, r.x0+1, indY - kHalfH, r.x1-1, indY + kHalfH, indCol, 1)
+  ImGui.DrawList_AddRect      (dl, r.x0+1, indY - kHalfH, r.x1-1, indY + kHalfH, bgCol, 1, 0, 1)
+  -- dB readout right of the knob, vertically aligned to it.
   local db  = linToDb(f.currentLin)
   local txt = (db == -math.huge) and '-inf dB' or string.format('%+.1f dB', db)
   if uiFont then ImGui.PushFont(ctx, uiFont, uiSize) end
@@ -1557,8 +1560,8 @@ local function renderCanvas(w, h)
       stillVisible = true
     elseif arrowHitIdx == fader.edgeIdx then
       stillVisible = true
-    elseif inRectXY(fader.rect.x0, fader.rect.y0,
-                    fader.rect.x1, fader.rect.y1, mx, my) then
+    elseif inRectXY(fader.hitRect.x0, fader.hitRect.y0,
+                    fader.hitRect.x1, fader.hitRect.y1, mx, my) then
       stillVisible = true
     end
   end
@@ -1571,9 +1574,11 @@ local function renderCanvas(w, h)
     local ax  = ox + (seg.sx + seg.ex) / 2 + 0.5
     local ay  = oy + (seg.sy + seg.ey) / 2 + 0.5
     local x0, y0, x1, y1 = faderRectAt(ax, ay)
+    local pad = WIRE_FADER_HIT_PAD
     fader = {
       edgeIdx    = arrowHitIdx,
       rect       = { x0 = x0, y0 = y0, x1 = x1, y1 = y1 },
+      hitRect    = { x0 = x0 - pad, y0 = y0 - pad, x1 = x1 + pad, y1 = y1 + pad },
       currentLin = wv:edgeGain(arrowHitIdx),
       dragging   = false,
     }
@@ -1704,11 +1709,23 @@ local function renderCanvas(w, h)
     wireDraft = nil
   end
 
+  -- Fader double-click resets to unity. Checked first because the second
+  -- press of a double-click also raises IsMouseClicked; without this gate
+  -- the click branch would jump the fader to the y-position of the press.
+  local faderDblClicked = fader and not fader.dragging
+    and ImGui.IsMouseDoubleClicked(ctx, 0)
+    and inRectXY(fader.rect.x0, fader.rect.y0,
+                 fader.rect.x1, fader.rect.y1, mx, my)
+  if faderDblClicked then
+    fader.currentLin = 1.0
+    wv:setEdgeGain(fader.edgeIdx, 1.0)
+  end
+
   -- Fader mousedown owns the click: in-strip click jumps the value, starts
   -- a drag, and (if the CU isn't materialised yet) commits via setEdgeGain
   -- to bring it into being. Falls through to the normal chain only if the
   -- click isn't inside the fader strip rect.
-  local faderClicked = fader and not fader.dragging
+  local faderClicked = fader and not fader.dragging and not faderDblClicked
     and ImGui.IsMouseClicked(ctx, 0)
     and inRectXY(fader.rect.x0, fader.rect.y0,
                  fader.rect.x1, fader.rect.y1, mx, my)
@@ -1725,7 +1742,7 @@ local function renderCanvas(w, h)
   -- Mousedown precedence: shift-hover wins (starts a new wire); wire-end
   -- hover next (starts a redraft); body hit falls through to drag-to-move;
   -- anything else starts a band.
-  if not faderClicked and not drag and not band and not wireDraft
+  if not faderClicked and not faderDblClicked and not drag and not band and not wireDraft
       and ImGui.IsMouseClicked(ctx, 0) then
     -- Any click closes the spillover; re-opening requires another chevron
     -- hover. The pre-click sourceHit (computed above with the still-open

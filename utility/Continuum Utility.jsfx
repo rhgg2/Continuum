@@ -1,0 +1,24 @@
+desc:Continuum Utility
+tags: utility continuum
+version: 0.01
+author: Continuum
+license: MIT
+about:
+  Per-edge audio utility spliced by the Continuum wiring system.
+  One instance per op-bundle on an audio wire.
+  - Mode 1 (Gain): linear scalar applied to both channels.
+  - Mode 2 (ChannelRemap): reserved; pass-through in this slice.
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+slider1:mode=0<0,1,1{Gain,ChannelRemap}>mode
+slider2:gain=1<0,8,0.001>gain
+
+@sample
+mode == 0 ? (
+  spl0 *= gain;
+  spl1 *= gain;
+);

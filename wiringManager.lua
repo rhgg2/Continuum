@@ -669,7 +669,7 @@ end
 -- contract that maps a mode-string in `params` to the slider's float value.
 -- Lives here (not in DAG) because lowering is pure and shouldn't know about
 -- the JSFX's numeric encoding.
-local CU_MODE_TO_FLOAT = { gain = 1, channelRemap = 2 }
+local CU_MODE_TO_FLOAT = { gain = 0, channelRemap = 1 }
 
 local function paramValueAsFloat(name, value)
   if name == 'mode' and type(value) == 'string' then
