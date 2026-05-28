@@ -339,25 +339,49 @@ local function setBitInBase64Line(line, byteIdx, mask, on)
   return lead .. b64encode(patched) .. tail
 end
 
+-- Patch the 0x02 bit at a 1-indexed offset in the FX block's
+-- concatenated decoded-base64 stream. Walks the content lines between
+-- firstIdx and lastIdx inclusive, finds the line containing the offset
+-- by accumulating decoded lengths, and mutates that single line.
+-- Returns true if the offset landed inside a line; false otherwise.
+local function patchStreamByte02(lines, firstIdx, lastIdx, streamOffset, on)
+  local cursor = 0
+  for i = firstIdx, lastIdx do
+    local stripped = lines[i]:match('^%s*(.-)%s*$')
+    if stripped:match('^[A-Za-z0-9%+/=]+$') then
+      local n = #b64decode(stripped)
+      if cursor + n >= streamOffset then
+        lines[i] = setBitInBase64Line(lines[i], streamOffset - cursor, 0x02, on)
+        return true
+      end
+      cursor = cursor + n
+    end
+  end
+  return false
+end
+
 -- Drive the "output bus disabled" bit (0x02) on the fxIdx-th non-JS FX
 -- block of an FXCHAIN-bearing track-state chunk: `disabled=true` sets
 -- it, `disabled=false` clears it. Read-modify-write on that single
 -- bit; every other flag bit, in_bus, and out_bus are preserved. The
--- flag is mirrored on the trailer line and the penultimate byte of
--- the first base64 line; both are patched. Idempotent. Pure: no
--- state, no reaper deps — exposed on wm so the spec can drive it
--- through the same module.
-function wm.setFXOutputDisabled(chunk, fxIdx, disabled)
+-- flag lives in two places that REAPER keeps in sync and reads from
+-- separately:
+--   * the trailer line (last base64 content line of the VST block),
+--     byte 3 of the decoded 6-byte trailer;
+--   * a mirror at a fixed offset inside REAPER's wrapper header at the
+--     head of the concatenated decoded stream: 1-indexed offset
+--     `27 + 8 * pinChannels`, where pinChannels = inputPins+outputPins
+--     (mono channels) as reported by TrackFX_GetIOSize. Trailer-only
+--     writes do NOT take effect — the mirror is read by REAPER.
+-- Idempotent. Pure: no state, no reaper deps — pinChannels comes from
+-- the call site, which has the live track + fx index.
+function wm.setFXOutputDisabled(chunk, fxIdx, disabled, pinChannels)
   local lines, hasTrailing = splitChunkLines(chunk)
   local first, trailer     = findFxBlock(lines, fxIdx)
   if not first then return chunk, false end
 
   lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x02, disabled)
-
-  local firstBytes = b64decode(lines[first])
-  if #firstBytes >= 2 then
-    lines[first] = setBitInBase64Line(lines[first], #firstBytes - 1, 0x02, disabled)
-  end
+  patchStreamByte02(lines, first, trailer, 27 + 8 * pinChannels, disabled)
 
   return joinChunkLines(lines, hasTrailing), true
 end
@@ -796,7 +820,10 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
     for _, nt in ipairs(nodeTargets) do
       local rIdx = absToRouting[nt.absIdx]
       if rIdx then
-        chunk = wm.setFXOutputDisabled(chunk, rIdx, not nt.midiOut)
+        local _, inputPins, outputPins =
+          reaper.TrackFX_GetIOSize(track, nt.absIdx)
+        chunk = wm.setFXOutputDisabled(chunk, rIdx, not nt.midiOut,
+                                       inputPins + outputPins)
       end
     end
     reaper.SetTrackStateChunk(track, chunk, false)

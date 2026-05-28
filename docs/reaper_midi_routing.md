@@ -72,20 +72,33 @@ state) decodes to six bytes:
   (`0x00` = bus 1, `0x7F` = bus 128).
 - Bytes 0, 1, and 5: always `0x00` in everything we observed.
 
-**Plugin-state header mirror** (the last 2 bytes of the first base64
-line, i.e. the bytes ending the `eXNlcu...` block):
+**Wrapper-header mirror** (a fixed offset inside REAPER's wrapper at
+the head of the concatenated decoded stream — *not* "the first base64
+line"; that was a ReaEQ-shaped coincidence). REAPER prepends a wrapper
+of `28 + 8 * pinChannels` bytes to plugin state, where `pinChannels =
+inputPins + outputPins` mono channels as reported by
+`TrackFX_GetIOSize`. The wrapper ends with `<flags> 0x00`, so the
+mirror flag sits at 1-indexed decoded-stream offset
+`27 + 8 * pinChannels`:
 
 ```
-<flags>  0x00
+... wrapper fillers ... <flags> 0x00 | <plugin state ...> | <trailer>
+                       ^^^^^^^^
+                       offset = 27 + 8*pinChannels (1-indexed)
 ```
 
-The mirror flag byte is **identical** to the trailer's flag byte
-(including bit `0x40`). The trailing byte is `0x00` in every observed
-configuration, including the `in_disabled=1, out_bus=0, replace`
-corner the original notes flagged as a `0x80` exception — that
-exception did not reproduce on REAPER 7.61 macOS-arm64 and is dropped
-from the spec. Treat the byte as opaque and read-and-preserve when
-patching, in case a future REAPER reintroduces something there.
+Calibration against captured chunks: ReaEQ (2-in/2-out stereo = 4 mono
+channels) → 59; Softube Modular (5 stereo out = 10 mono) → 107;
+UVI Falcon (17 stereo out = 34 mono) → 299. Formula holds exactly.
+
+REAPER reads from the mirror as well as the trailer — a trailer-only
+write does **not** flip the MIDI I/O dialog. The mirror flag byte is
+**identical** to the trailer's flag byte (including bit `0x40`); the
+trailing `0x00` is opaque pad. Because pinChannels can push the
+mirror's byte onto any base64 line (REAPER wraps at 280 chars / 210
+decoded bytes), the surgery has to walk the FX block's content lines
+accumulating decoded lengths, locate the line containing the offset,
+and patch within it — not "patch the first base64 line".
 
 ## Writing the mutator
 
@@ -98,11 +111,13 @@ clobber state we don't model.
 A mutator that sets, say, output-disabled should:
 
 1. Locate the FX's `<VST ...>` block in the FXCHAIN.
-2. Decode the trailer's flag byte (byte 2 of the 6-byte trailer).
+2. Decode the trailer's flag byte (byte 3 of the 6-byte trailer).
    OR in `0x02`. Re-encode the trailer line.
-3. Decode the mirror's flag byte (the penultimate byte of the first
-   base64 line, decoded). OR in `0x02`. Re-encode the affected base64
-   group.
+3. Compute the mirror offset: `27 + 8 * pinChannels`, 1-indexed in the
+   concatenated decoded stream. Walk the FX block's base64 content
+   lines accumulating decoded lengths to find which line contains
+   that offset; decode that line, OR `0x02` into the byte at the
+   within-line index, re-encode just that line.
 4. Leave `in_bus`, `out_bus`, and every other byte untouched.
 
 The encoding is version-sensitive (REAPER's serialisation format is
