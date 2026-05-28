@@ -220,11 +220,29 @@ local function nodeRect(nv)
   return nv.pos.x - hw, nv.pos.y - hh, nv.pos.x + hw, nv.pos.y + hh
 end
 
--- nodeRect shifted into screen space by the canvas origin. Every nodeRect
--- caller adds (ox,oy) immediately, so this is the form they actually want.
+-- Axis-aligned rect as a named struct, so every hit test and fill reads the
+-- same shape. inRect tests containment; boxRect lifts an {x,y,w,h} slot/row
+-- (optionally hit-padded) into a rect; unionRect grows acc to cover r.
+local function rect(x0, y0, x1, y1) return { x0 = x0, y0 = y0, x1 = x1, y1 = y1 } end
+local function inRect(px, py, r)
+  return px >= r.x0 and px <= r.x1 and py >= r.y0 and py <= r.y1
+end
+local function boxRect(b, pad)
+  pad = pad or 0
+  return rect(b.x - pad, b.y - pad, b.x + b.w + pad, b.y + b.h + pad)
+end
+local function unionRect(acc, r)
+  if r.x0 < acc.x0 then acc.x0 = r.x0 end
+  if r.y0 < acc.y0 then acc.y0 = r.y0 end
+  if r.x1 > acc.x1 then acc.x1 = r.x1 end
+  if r.y1 > acc.y1 then acc.y1 = r.y1 end
+end
+
+-- nodeRect shifted into screen space (canvas origin added) as a rect. Every
+-- nodeRect caller wants screen coords, so this is the form they reach for.
 local function nodeScreenRect(nv, ox, oy)
   local lx0, ly0, lx1, ly1 = nodeRect(nv)
-  return ox + lx0, oy + ly0, ox + lx1, oy + ly1
+  return rect(ox + lx0, oy + ly0, ox + lx1, oy + ly1)
 end
 
 ----- Drawing
@@ -235,10 +253,10 @@ local SELECTED_STROKE  = 2
 -- Stroke a node body's accent outline (selection / source-or-target hover /
 -- error). SELECTED_INFLATE widens the rect so a >0 moat lets the popup bg
 -- bleed through; col picks the accent.
-local function strokeNodeRect(dl, x0, y0, x1, y1, col)
+local function strokeNodeRect(dl, r, col)
   ImGui.DrawList_AddRect(dl,
-    x0 - SELECTED_INFLATE, y0 - SELECTED_INFLATE,
-    x1 + SELECTED_INFLATE, y1 + SELECTED_INFLATE,
+    r.x0 - SELECTED_INFLATE, r.y0 - SELECTED_INFLATE,
+    r.x1 + SELECTED_INFLATE, r.y1 + SELECTED_INFLATE,
     col, CORNER_R, 0, SELECTED_STROKE)
 end
 
@@ -333,12 +351,13 @@ local function wrapLabel(text, maxW)
 end
 
 local function drawNode(dl, nv, ox, oy, isSelected)
-  local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
+  local r = nodeScreenRect(nv, ox, oy)
+  local x0, y0, x1, y1 = r.x0, r.y0, r.x1, r.y1
   local fill = chrome.colour('wiring.node.' .. nv.category)
   local text = chrome.colour('text')
   ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, fill, CORNER_R)
   if isSelected then
-    strokeNodeRect(dl, x0, y0, x1, y1, chrome.colour('wiring.node.selected'))
+    strokeNodeRect(dl, r, chrome.colour('wiring.node.selected'))
   end
   if wireFont then ImGui.PushFont(ctx, wireFont, wireSize) end
   local lines = wrapLabel(nv.label, NODE_W - 2 * LABEL_PAD)
@@ -431,15 +450,10 @@ end
 -- Selection-style outline around the whole body, used for both source-side
 -- and target-side hover — no more split-band shape.
 local function drawBodyOutline(dl, nv, ox, oy)
-  local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
-  strokeNodeRect(dl, x0, y0, x1, y1, chrome.colour('wiring.node.selected'))
+  strokeNodeRect(dl, nodeScreenRect(nv, ox, oy), chrome.colour('wiring.node.selected'))
 end
 
 ----- Wire-creation gesture helpers
-
-local function inRect(px, py, x0, y0, x1, y1)
-  return px >= x0 and px <= x1 and py >= y0 and py <= y1
-end
 
 -- By-name dropdown anchored to a node's handle: one row per audio port
 -- (port-index order, names from `audio`). Grows outward from the handle
@@ -473,11 +487,11 @@ local function layoutList(audio, handle, side)
                 x = listX, y = rowsY0 + (i - 1) * rowH,
                 w = maxW, h = rowH }
   end
-  local rect    = { listX, rectY0, listX + maxW, rectY1 }
+  local listRect = rect(listX, rectY0, listX + maxW, rectY1)
   local hitRect = (side == 'bottom')
-                  and { rect[1], rect[2] - LIST_GAP, rect[3], rect[4] }
-                  or  { rect[1], rect[2],            rect[3], rect[4] + LIST_GAP }
-  return { rows = rows, rect = rect, hitRect = hitRect }
+                  and rect(listRect.x0, listRect.y0 - LIST_GAP, listRect.x1, listRect.y1)
+                  or  rect(listRect.x0, listRect.y0,            listRect.x1, listRect.y1 + LIST_GAP)
+  return { rows = rows, rect = listRect, hitRect = hitRect }
 end
 
 -- Per-face layout: handle ▾ pinned to the left body corner, audio chips
@@ -493,7 +507,8 @@ end
 -- forceSide pins the face for sticky overlays (where the cursor isn't
 -- over the node so my can't pick the side); natural hover passes nil.
 local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
-  local bx0, by0, bx1, by1 = nodeScreenRect(nv, ox, oy)
+  local b = nodeScreenRect(nv, ox, oy)
+  local bx0, by0, bx1, by1 = b.x0, b.y0, b.x1, b.y1
   local audio = (dir == 'out') and nv.outs.audio or nv.ins.audio
   local midi  = (dir == 'out') and nv.outs.midi  or nv.ins.midi
   local nAudio     = #audio
@@ -587,15 +602,8 @@ local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
   local bandRect
   local function extend(s)
     if not s then return end
-    local x0, y0 = s.x - PORT_HIT_PAD, s.y - PORT_HIT_PAD
-    local x1, y1 = s.x + s.w + PORT_HIT_PAD, s.y + s.h + PORT_HIT_PAD
-    if not bandRect then bandRect = { x0, y0, x1, y1 }
-    else
-      if x0 < bandRect[1] then bandRect[1] = x0 end
-      if y0 < bandRect[2] then bandRect[2] = y0 end
-      if x1 > bandRect[3] then bandRect[3] = x1 end
-      if y1 > bandRect[4] then bandRect[4] = y1 end
-    end
+    local r = boxRect(s, PORT_HIT_PAD)
+    if not bandRect then bandRect = r else unionRect(bandRect, r) end
   end
   for _, s in ipairs(slots) do
     if not s.inBody then extend(s) end
@@ -607,18 +615,11 @@ local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
   -- without losing engagement with the node.
   local list = layoutList(audio, handle, side)
 
-  local hoverRect = { bx0, by0, bx1, by1 }
-  local function unionInto(r)
-    if not r then return end
-    if r[1] < hoverRect[1] then hoverRect[1] = r[1] end
-    if r[2] < hoverRect[2] then hoverRect[2] = r[2] end
-    if r[3] > hoverRect[3] then hoverRect[3] = r[3] end
-    if r[4] > hoverRect[4] then hoverRect[4] = r[4] end
-  end
+  local hoverRect = rect(bx0, by0, bx1, by1)
   -- list.hitRect is intentionally NOT unioned here — cursor-in-list does
   -- not engage the popup. shiftHoverHit / dropTargetHit extend the hover
   -- area with list.hitRect only after the chevron has been crossed.
-  unionInto(bandRect)
+  if bandRect then unionRect(hoverRect, bandRect) end
 
   -- popup: NODE_W-wide rounded rect that overlaps the body's near edge by
   -- 2*CORNER_R (so the popup's own rounded corners hide inside the body's
@@ -631,9 +632,9 @@ local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
   local popup
   if bandRect then
     if side == 'bottom' then
-      popup = { bx0, by1 - POPUP_OVERLAP, bx1, bandRect[4] + POPUP_PAD }
+      popup = rect(bx0, by1 - POPUP_OVERLAP, bx1, bandRect.y1 + POPUP_PAD)
     else
-      popup = { bx0, bandRect[2] - POPUP_PAD, bx1, by0 + POPUP_OVERLAP }
+      popup = rect(bx0, bandRect.y0 - POPUP_PAD, bx1, by0 + POPUP_OVERLAP)
     end
   end
 
@@ -643,9 +644,7 @@ end
 
 local function slotHit(slots, mx, my)
   for _, s in ipairs(slots) do
-    if inRect(mx, my,
-              s.x - PORT_HIT_PAD, s.y - PORT_HIT_PAD,
-              s.x + s.w + PORT_HIT_PAD, s.y + s.h + PORT_HIT_PAD) then
+    if inRect(mx, my, boxRect(s, PORT_HIT_PAD)) then
       return s
     end
   end
@@ -655,7 +654,7 @@ end
 -- packed back-to-back, so padding would overlap into the neighbour).
 local function rowHit(rows, mx, my)
   for _, r in ipairs(rows) do
-    if mx >= r.x and mx <= r.x + r.w and my >= r.y and my <= r.y + r.h then
+    if inRect(mx, my, boxRect(r)) then
       return r
     end
   end
@@ -678,9 +677,7 @@ end
 
 -- Cursor over the chevron's visible bounds (no pad — popup gating is tight).
 local function onChevron(handle, mx, my)
-  return handle
-     and inRect(mx, my, handle.x, handle.y,
-                handle.x + handle.w, handle.y + handle.h)
+  return handle and inRect(mx, my, boxRect(handle))
 end
 
 -- Common hover lookup (body + band only — list engagement is handled by
@@ -691,8 +688,7 @@ end
 -- is rejected here — the engaged-node fast-path adds list.hitRect to the
 -- hover area only after engagement.
 local function pickHovered(nv, layout, mx, my, dir, keep)
-  local r = layout.hoverRect
-  if not inRect(mx, my, r[1], r[2], r[3], r[4]) then return nil end
+  if not inRect(mx, my, layout.hoverRect) then return nil end
   local hit = slotHit(layout.slots, mx, my)
   if hit then
     return { nv = nv, layout = layout, slot = hit }
@@ -712,8 +708,7 @@ local function stillEngaged(layout, mx, my)
   local list = layout.list
   if not list then return false end
   if onChevron(layout.handle, mx, my) then return true end
-  local r = list.hitRect
-  return inRect(mx, my, r[1], r[2], r[3], r[4])
+  return inRect(mx, my, list.hitRect)
 end
 
 -- Engaged-priority hover scan shared by source-side (shift) and target-side
@@ -733,8 +728,7 @@ local function engagedHover(nodeViews, mx, my, ox, oy, cfg)
     -- space is cleared so the body outline doesn't read as a target;
     -- engagement holds, so the popout stays open.
     if pick and pick.slot and not pick.slot.x then
-      local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
-      if not inRect(mx, my, x0, y0, x1, y1) then
+      if not inRect(mx, my, nodeScreenRect(nv, ox, oy)) then
         pick.slot = nil
       end
     end
@@ -832,10 +826,8 @@ local function draftSourceHoverHit(nodeViews, mx, my, ox, oy)
     if nv.id == wireDraft.keptId then
       local layout = layoutPortRow(nv, ox, oy, 'out', mx, my,
                                    wireDraft.type, wireDraft.keptSide)
-      local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
-      local r = layout.hoverRect
-      local inBand = inRect(mx, my, r[1], r[2], r[3], r[4])
-                 and not inRect(mx, my, x0, y0, x1, y1)
+      local inBand = inRect(mx, my, layout.hoverRect)
+                 and not inRect(mx, my, nodeScreenRect(nv, ox, oy))
                  and not slotHit(layout.slots, mx, my)
                  and not onChevron(layout.handle, mx, my)
       if inBand then
@@ -879,9 +871,9 @@ end
 -- with a hover-highlight under the matching row.
 local function drawList(dl, list, highlight)
   local r = list.rect
-  ImGui.DrawList_AddRectFilled(dl, r[1], r[2], r[3], r[4],
+  ImGui.DrawList_AddRectFilled(dl, r.x0, r.y0, r.x1, r.y1,
     chrome.colour('wiring.tooltip.bg'), LIST_CORNER_R)
-  ImGui.DrawList_AddRect(dl, r[1], r[2], r[3], r[4],
+  ImGui.DrawList_AddRect(dl, r.x0, r.y0, r.x1, r.y1,
     chrome.colour('separator'), LIST_CORNER_R, 0, 1)
   local txtCol = chrome.colour('text')
   local hlCol  = chrome.colour('wiring.node.selected')
@@ -906,7 +898,7 @@ end
 local function drawPortRowBg(dl, layout)
   local p = layout.popup
   if not p then return end
-  ImGui.DrawList_AddRectFilled(dl, p[1], p[2], p[3], p[4],
+  ImGui.DrawList_AddRectFilled(dl, p.x0, p.y0, p.x1, p.y1,
     chrome.colour('wiring.tooltip.bg'), CORNER_R)
 end
 
@@ -1404,8 +1396,8 @@ end
 -- port band).
 local function nodeUnderMouse(nodeViews, ox, oy)
   for _, nv in ipairs(nodeViews) do
-    local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
-    if ImGui.IsMouseHoveringRect(ctx, x0, y0, x1, y1) then
+    local r = nodeScreenRect(nv, ox, oy)
+    if ImGui.IsMouseHoveringRect(ctx, r.x0, r.y0, r.x1, r.y1) then
       return nv
     end
   end
@@ -1429,8 +1421,8 @@ local function nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)
   if by0 > by1 then by0, by1 = by1, by0 end
   local set = {}
   for _, nv in ipairs(nodeViews) do
-    local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
-    if x1 >= bx0 and x0 <= bx1 and y1 >= by0 and y0 <= by1 then
+    local r = nodeScreenRect(nv, ox, oy)
+    if r.x1 >= bx0 and r.x0 <= bx1 and r.y1 >= by0 and r.y0 <= by1 then
       set[nv.id] = true
     end
   end
@@ -1530,8 +1522,7 @@ local function renderCanvas(w, h)
       stillVisible = true
     elseif arrowHitIdx == fader.edgeIdx then
       stillVisible = true
-    elseif inRect(mx, my, fader.hitRect.x0, fader.hitRect.y0,
-                  fader.hitRect.x1, fader.hitRect.y1) then
+    elseif inRect(mx, my, fader.hitRect) then
       stillVisible = true
     end
   end
@@ -1547,8 +1538,8 @@ local function renderCanvas(w, h)
     local pad = WIRE_FADER_HIT_PAD
     fader = {
       edgeIdx    = arrowHitIdx,
-      rect       = { x0 = x0, y0 = y0, x1 = x1, y1 = y1 },
-      hitRect    = { x0 = x0 - pad, y0 = y0 - pad, x1 = x1 + pad, y1 = y1 + pad },
+      rect       = rect(x0, y0, x1, y1),
+      hitRect    = rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad),
       currentLin = wv:edgeGain(arrowHitIdx),
       dragging   = false,
     }
@@ -1640,8 +1631,7 @@ local function renderCanvas(w, h)
     local errCol = chrome.colour('wiring.node.error')
     for _, nv in ipairs(nodeViews) do
       if errorIds[nv.id] then
-        local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
-        strokeNodeRect(dl, x0, y0, x1, y1, errCol)
+        strokeNodeRect(dl, nodeScreenRect(nv, ox, oy), errCol)
       end
     end
   end
@@ -1681,8 +1671,7 @@ local function renderCanvas(w, h)
   -- the click branch would jump the fader to the y-position of the press.
   local faderDblClicked = fader and not fader.dragging
     and ImGui.IsMouseDoubleClicked(ctx, 0)
-    and inRect(mx, my, fader.rect.x0, fader.rect.y0,
-               fader.rect.x1, fader.rect.y1)
+    and inRect(mx, my, fader.rect)
   if faderDblClicked then
     fader.currentLin = 1.0
     wv:setEdgeGain(fader.edgeIdx, 1.0)
@@ -1694,8 +1683,7 @@ local function renderCanvas(w, h)
   -- click isn't inside the fader strip rect.
   local faderClicked = fader and not fader.dragging and not faderDblClicked
     and ImGui.IsMouseClicked(ctx, 0)
-    and inRect(mx, my, fader.rect.x0, fader.rect.y0,
-               fader.rect.x1, fader.rect.y1)
+    and inRect(mx, my, fader.rect)
   if faderClicked then
     local clickLin = pixelYToLin(my, fader.rect.y0)
     fader.valueAtClick = wv:edgeGain(fader.edgeIdx)

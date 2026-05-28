@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=2043  sha=c0dc5e7  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=2031  sha=0daf82a  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -75,10 +75,10 @@
   @state fader = nil  @ 203   -- { edgeIdx, rect={x0,y0,x1,y1}, currentLin, valueAtClick?, dragging? }
   @state canvasOrigin = { ox = 0, oy = 0 }  @ 208
   @state openFxPicker  @ 212
-  @state SELECTED_INFLATE = 0  @ 232   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
-  @state SELECTED_STROKE = 2  @ 233
-  @state SOURCE_PAD = 24  @ 2001
-  @state wiring = cmgr:scope('wiring')  @ 2033
+  @state SELECTED_INFLATE = 0  @ 250   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
+  @state SELECTED_STROKE = 2  @ 251
+  @state SOURCE_PAD = 24  @ 1989
+  @state wiring = cmgr:scope('wiring')  @ 2021
 
 # Private functions
   -- FX-picker modal kind
@@ -87,54 +87,60 @@
   @fn nodeRect(nv)  @ 218
       -- pos is the node's centre in canvas-local coordinates (origin = centre
       -- of the viewport, set up in renderCanvas); rect is laid out symmetrically.
-  @fn nodeScreenRect(nv, ox, oy)  @ 225
-      -- nodeRect shifted into screen space by the canvas origin. Every nodeRect
-      -- caller adds (ox,oy) immediately, so this is the form they actually want.
+  @fn rect(x0, y0, x1, y1)  @ 226
+      -- Axis-aligned rect as a named struct, so every hit test and fill reads the
+      -- same shape. inRect tests containment; boxRect lifts an {x,y,w,h} slot/row
+      -- (optionally hit-padded) into a rect; unionRect grows acc to cover r.
+  @fn inRect(px, py, r)  @ 227
+  @fn boxRect(b, pad)  @ 230
+  @fn unionRect(acc, r)  @ 234
+  @fn nodeScreenRect(nv, ox, oy)  @ 243
+      -- nodeRect shifted into screen space (canvas origin added) as a rect. Every
+      -- nodeRect caller wants screen coords, so this is the form they reach for.
   -- Drawing
-  @fn strokeNodeRect(dl, x0, y0, x1, y1, col)  @ 238
+  @fn strokeNodeRect(dl, r, col)  @ 256
       -- Stroke a node body's accent outline (selection / source-or-target hover /
       -- error). SELECTED_INFLATE widens the rect so a >0 moat lets the popup bg
       -- bleed through; col picks the accent.
-  @fn camelSplit(word)  @ 248
+  @fn camelSplit(word)  @ 266
       -- Split a single whitespace-free word into pieces at CamelCase boundaries
       -- (lowercase byte immediately followed by uppercase byte). Plugin names are
       -- ASCII in practice, so byte-class checks are sufficient.
-  @fn atomise(text)  @ 266
+  @fn atomise(text)  @ 284
       -- Tokenise into atoms with per-pair separators. Each atom is a string;
       -- seps[k] is the joiner that goes between atoms[k] and atoms[k+1] when
       -- they stay on the same line. ' ' between whitespace-separated words,
       -- '' between CamelCase pieces of one word (so re-joined lines have no
       -- inserted space at the case boundary).
-  @fn wrapLabel(text, maxW)  @ 284
+  @fn wrapLabel(text, maxW)  @ 302
       -- Greedy word-wrap into at most LABEL_MAX_LINES lines bounded by maxW.
       -- Breaks at whitespace and CamelCase boundaries; the final line ends in
       -- LABEL_ELLIPSIS when the remainder doesn't fit. Assumes the desired font
       -- is already pushed (CalcTextSize uses it).
-  @fn drawNode(dl, nv, ox, oy, isSelected)  @ 335
-  @fn drawKeyboardIcon(dl, x, y)  @ 363
+  @fn drawNode(dl, nv, ox, oy, isSelected)  @ 353
+  @fn drawKeyboardIcon(dl, x, y)  @ 382
       -- Small piano-keyboard icon (C, C#, D, D#, E): 3 outlined white keys with
       -- 2 filled black keys overlaying the C-D and D-E boundaries. Drawn with
       -- its top-left at (x,y), occupying MIDI_SLOT_W × MIDI_SLOT_H. Stand-in
       -- for the midi tint — later this will gain an in/out arrow to distinguish
       -- direction.
-  @fn drawHandle(dl, handle, side)  @ 383
+  @fn drawHandle(dl, handle, side)  @ 402
       -- Spillover-list handle: a small chevron pointing outward in the direction
       -- the dropdown will open (down on the bottom face, up on the top face).
       -- Sized like a band-row chip so it shares the row centreline cleanly. The
       -- band-level bg rect drawn by drawPortRow handles wire occlusion.
-  @fn drawSlot(dl, slot, idStem, audioCol)  @ 402
+  @fn drawSlot(dl, slot, idStem, audioCol)  @ 421
       -- One port-row slot: the filled audio square or keyboard icon, plus an
       -- InvisibleButton (padded outward so the hit area is comfortably larger
       -- than the visual) and a tooltip anchored just above. Wire occlusion is
       -- handled at the band level by drawPortRow's bgRect, so no per-slot patch.
       -- The InvisibleButton advances the layout cursor; renderCanvas's trailing
       -- Dummy restores it.
-  @fn drawBodyOutline(dl, nv, ox, oy)  @ 433
+  @fn drawBodyOutline(dl, nv, ox, oy)  @ 452
       -- Selection-style outline around the whole body, used for both source-side
       -- and target-side hover — no more split-band shape.
   -- Wire-creation gesture helpers
-  @fn inRect(px, py, x0, y0, x1, y1)  @ 440
-  @fn layoutList(audio, handle, side)  @ 452
+  @fn layoutList(audio, handle, side)  @ 466
       -- By-name dropdown anchored to a node's handle: one row per audio port
       -- (port-index order, names from `audio`). Grows outward from the handle
       -- in the band's direction. Uses the small ui font so a 32-row list stays
@@ -143,7 +149,7 @@
       -- returned hitRect extends LIST_GAP toward the handle so chevron → list
       -- traversal has no dead zone even with the handle's hit area sized to
       -- the chevron alone.
-  @fn layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)  @ 495
+  @fn layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)  @ 509
       -- Per-face layout: handle ▾ pinned to the left body corner, audio chips
       -- for ports 2..N centred (port 1 lives on the body itself, no chip). The
       -- midi keyboard is body-internal — placed at the middle-right edge with
@@ -156,18 +162,18 @@
       -- midi and the handle; midi draft hides audio chips and the handle).
       -- forceSide pins the face for sticky overlays (where the cursor isn't
       -- over the node so my can't pick the side); natural hover passes nil.
-  @fn slotHit(slots, mx, my)  @ 644
-  @fn rowHit(rows, mx, my)  @ 656
+  @fn slotHit(slots, mx, my)  @ 645
+  @fn rowHit(rows, mx, my)  @ 655
       -- Tight hit-test for list rows (no pad — rows are full-height boxes
       -- packed back-to-back, so padding would overlap into the neighbour).
-  @fn defaultSlot(nv, dir, keep)  @ 668
+  @fn defaultSlot(nv, dir, keep)  @ 667
       -- Default slot when the cursor is over the body alone (no specific slot
       -- under it). Audio port 1 if any audio in this direction, else the
       -- keyboard. `keep` biases the default for target-side hover: a midi draft
       -- defaults to the keyboard, an audio draft to port 1.
-  @fn onChevron(handle, mx, my)  @ 680
+  @fn onChevron(handle, mx, my)  @ 679
       -- Cursor over the chevron's visible bounds (no pad — popup gating is tight).
-  @fn pickHovered(nv, layout, mx, my, dir, keep)  @ 693
+  @fn pickHovered(nv, layout, mx, my, dir, keep)  @ 690
       -- Common hover lookup (body + band only — list engagement is handled by
       -- shiftHoverHit / dropTargetHit). Priority: chip/midi → chevron → body-
       -- default. A non-nil list on the returned pick signals "chevron just hit,
@@ -175,32 +181,32 @@
       -- accordingly. Cursor in the list area without a prior chevron crossing
       -- is rejected here — the engaged-node fast-path adds list.hitRect to the
       -- hover area only after engagement.
-  @fn stillEngaged(layout, mx, my)  @ 711
+  @fn stillEngaged(layout, mx, my)  @ 707
       -- True when the cursor is still engaged with a node's open spillover —
       -- either on the chevron or anywhere in the list's hit rect.
-  @fn engagedHover(nodeViews, mx, my, ox, oy, cfg)  @ 722
+  @fn engagedHover(nodeViews, mx, my, ox, oy, cfg)  @ 717
       -- Engaged-priority hover scan shared by source-side (shift) and target-side
       -- (draft) drafting: the engaged node is probed before the forward scan so a
       -- neighbour's overlapping hoverRect can't steal an open popout mid-gesture.
-  @fn shiftHoverHit(nodeViews, mx, my, ox, oy)  @ 775
+  @fn shiftHoverHit(nodeViews, mx, my, ox, oy)  @ 769
       -- Source-side hover (shift, no draft). onConsume clears sticky when hover
       -- returns to the pinned node, so the pinned overlay doesn't double up with
       -- the live one; landing elsewhere leaves sticky set and both render.
       -- narrowOnMidi re-lays-out to a midi-only band so the in-body keyboard
       -- stands alone (no chips/handle/sleeve) once the cursor settles on it.
-  @fn stickyHoverHit(nodeViews, ox, oy)  @ 796
+  @fn stickyHoverHit(nodeViews, ox, oy)  @ 790
       -- Build a port-row overlay for the sticky node (the one whose list-row
       -- click pinned a port). Cursor-independent: uses the pinned-side stored
       -- at click-time so the overlay doesn't flip top/bottom as the cursor
       -- moves around. Defaults the slot highlight to port 1 / midi keyboard.
-  @fn findLayoutSlot(layout, slotKind, portIdx)  @ 814
+  @fn findLayoutSlot(layout, slotKind, portIdx)  @ 808
       -- Keep the draft's source node's port row visible while the click-hold is
       -- in flight. Without this the popup flashes off the moment wireDraft is
       -- set (mousedown suppresses sourceHit) and back on once sticky is set on
       -- mouseup. Highlights the slot the draft started from when it's findable
       -- in the chip set (chip click / midi); nil otherwise (list-row pin not
       -- yet effective, or body-default port 1).
-  @fn draftSourceHoverHit(nodeViews, mx, my, ox, oy)  @ 829
+  @fn draftSourceHoverHit(nodeViews, mx, my, ox, oy)  @ 823
       -- Forward-draft only: highlights the kept (source) node's port row so
       -- the user sees where the in-flight wire is coming from. Redrafts skip
       -- this — the wire being dragged is itself the visual cue for the kept
@@ -208,25 +214,25 @@
       -- cursor sits in the source's own band gap (not on a chip, chevron, or
       -- the body), the kept-slot highlight is cleared to match the target-
       -- side band-gap behaviour: the popout stays, but no highlight reads.
-  @fn dropTargetHit(nodeViews, mx, my, ox, oy, draft)  @ 860
+  @fn dropTargetHit(nodeViews, mx, my, ox, oy, draft)  @ 852
       -- Target-side hover (draft in flight). dir follows cursorEnd ('to' seeks
       -- in-ports on destinations, 'from' out-ports on sources); forbidden
       -- (cycle-blocked) nodes are ineligible, so they neither engage nor display.
-  @fn dropEligible(draft, target)  @ 872
+  @fn dropEligible(draft, target)  @ 864
       -- Commit-eligibility for a draft against a target hover. The visual
       -- overlay is gated separately on forbidden-only (so the spillover list
       -- still opens during in-transit hover); only the mouseup commit consults
       -- dropEligible, which additionally requires a concrete slot.
-  @fn drawList(dl, list, highlight)  @ 880
+  @fn drawList(dl, list, highlight)  @ 872
       -- Spillover dropdown popup: filled rounded bg + outline, then row labels
       -- with a hover-highlight under the matching row.
-  @fn drawPortRowBg(dl, layout)  @ 906
+  @fn drawPortRowBg(dl, layout)  @ 898
       -- Popup bg for the port-row overlay: a pale rounded rect (same CORNER_R
       -- as the node body) overlapping the body's near edge so the body's near
       -- rounded corners read as filled rather than canvas-coloured. Drawn
       -- BEFORE the node so the body overpaints the overlap region, then the
       -- port row + chips + list draw on top.
-  @fn drawPortRow(dl, pick, audioCol, idPrefix)  @ 919
+  @fn drawPortRow(dl, pick, audioCol, idPrefix)  @ 911
       -- Draw the handle (if any) and every audio/midi slot. Outlines the slot
       -- matching pick.slot (==). Chips render whether or not the spillover
       -- list is open; the list extends perpendicular to the chip row so they
@@ -234,24 +240,24 @@
       -- caller's mental map of which port each row stands for. The pale popup
       -- bg is laid down separately by drawPortRowBg, before nodes.
   -- Wire drawing
-  @fn wireGroups(wireViews)  @ 957
+  @fn wireGroups(wireViews)  @ 949
       -- Group wires by unordered pair {idA, idB}; sort each group so audio
       -- precedes MIDI (MIDI sits to the right of the canonical-pair line),
       -- then by fromPort then toPort. canonA/canonB record the sorted pair
       -- direction so all wires in the group share one perpendicular axis
       -- regardless of each wire's own direction.
-  @fn wireOffset(i, n)  @ 993
+  @fn wireOffset(i, n)  @ 985
       -- Perpendicular scalar for slot i (1-based) of n parallel wires:
       -- centred around 0 so a lone wire sits on the centre line.
-  @fn wireExits(seg)  @ 1003
+  @fn wireExits(seg)  @ 995
       -- Distances along the (offset) segment, measured from (seg.sx, seg.sy),
       -- at which the visible part begins (exits the source rect) and ends
       -- (enters the target rect), plus the segment length. For parallel wires
       -- the two exits are asymmetric: an offset shifting the line toward one
       -- node's corner lengthens that node's exit and shortens the other's.
       -- Returns nil for sub-pixel segments.
-  @fn drawWireArrow(dl, sx, sy, ex, ey, col)  @ 1026
-  @fn drawWireEndLabel(dl, ax, ay, fx, fy, exitD, portIdx, portName, idStem, col, placed)  @ 1063
+  @fn drawWireArrow(dl, sx, sy, ex, ey, col)  @ 1018
+  @fn drawWireEndLabel(dl, ax, ay, fx, fy, exitD, portIdx, portName, idStem, col, placed)  @ 1055
       -- Audio port-number label as a tight bg-filled patch sized to the
       -- digit's bbox, placed up the wire past the node's exit point. The
       -- fill occludes the wire segment behind it so the digit reads cleanly
@@ -263,33 +269,33 @@
       -- per-wire-group alternation and also separates labels on unrelated
       -- wires sharing a node corner. Hover-tooltip shows the port name
       -- (synthetic 'in N' / 'out N' until TrackFX_GetIOName lands).
-  @fn wireSegments(wireViews, nodesById)  @ 1134
+  @fn wireSegments(wireViews, nodesById)  @ 1126
       -- One screen segment per wireView, keyed by wireView index (= g.edges
       -- index). sx/sy/ex/ey are canvas-local (caller adds origin). offX/offY
       -- is the perpendicular displacement from the canonical pair centre line,
       -- shared by drawWiresPass and wireExits so highlight geometry and label
       -- placement can't drift from drawn geometry.
-  @fn endRegion(seg, side)  @ 1174
+  @fn endRegion(seg, side)  @ 1166
       -- Endpoints of the end-region for one side of a wire segment, in
       -- canvas-local coordinates. The region starts at the node-rect exit
       -- (where the visible wire begins) and walks WIRE_END_HIT pixels inward
       -- along the wire. Length is capped at 0.4*visible so short wires don't
       -- overlap their two ends. Returns nil for sub-pixel or fully-occluded
       -- wires (two adjacent nodes whose bodies touch).
-  @fn pointToSegmentDist(px, py, ax, ay, bx, by)  @ 1189
-  @fn wireEndHit(segs, mx, my, ox, oy)  @ 1208
+  @fn pointToSegmentDist(px, py, ax, ay, bx, by)  @ 1181
+  @fn wireEndHit(segs, mx, my, ox, oy)  @ 1200
       -- Returns { edgeIdx, side, keptAnchor = {x,y screen} } if the cursor is
       -- within WIRE_END_HIT_PERP of one of the two end-regions across all
       -- wires; nil otherwise. Closest wins on ties. keptAnchor is the screen-
       -- space position of the OTHER end's node-edge endpoint — the redraft
       -- gesture pins the wire there while the cursor drives the grabbed end.
-  @fn drawWiresPass(dl, segs, wireViews, ox, oy, audioCol, midiCol, opts)  @ 1236
+  @fn drawWiresPass(dl, segs, wireViews, ox, oy, audioCol, midiCol, opts)  @ 1228
       -- opts.skipEdgeIdx: don't draw this wire (used when redrafting it, since
       -- the in-flight draft line replaces it). The wire-end highlight is
       -- drawn separately by drawWireEndHighlight after the node pass — nodes
       -- overpaint wires here, so an in-pass highlight would be invisible.
-  @fn drawWireEndHighlight(dl, segs, ox, oy, hover)  @ 1270
-  @fn computeDraftEnd(draft, mx, my)  @ 1288
+  @fn drawWireEndHighlight(dl, segs, ox, oy, hover)  @ 1262
+  @fn computeDraftEnd(draft, mx, my)  @ 1280
       -- Compute the draft wire's cursor-end screen position. Decay ratchets
       -- on furthest travel from the grab point so dragging back toward the
       -- start doesn't re-inflate the offset. Hit-target detection consumes
@@ -298,33 +304,33 @@
       -- original target naturally reads as still pointing there, and
       -- detaches as soon as the decayed end leaves that node.
   -- Mid-wire fader (audio wires only)
-  @fn dbFromP(p)  @ 1304
+  @fn dbFromP(p)  @ 1296
       -- covers ~-60..-40; below p=0.05 snaps to -inf. Industry-shaped: fine
       -- near unity, coarser low, hard floor.
-  @fn pFromDb(db)  @ 1312
-  @fn linToDb(lin)  @ 1320
-  @fn dbToLin(db)  @ 1321
-  @fn arrowMidHit(segs, mx, my, ox, oy)  @ 1323
-  @fn faderRectAt(ax, ay)  @ 1336
-  @fn pixelYToLin(my, stripY0)  @ 1341
-  @fn drawFader(dl, f)  @ 1347
-  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 1405
+  @fn pFromDb(db)  @ 1304
+  @fn linToDb(lin)  @ 1312
+  @fn dbToLin(db)  @ 1313
+  @fn arrowMidHit(segs, mx, my, ox, oy)  @ 1315
+  @fn faderRectAt(ax, ay)  @ 1328
+  @fn pixelYToLin(my, stripY0)  @ 1333
+  @fn drawFader(dl, f)  @ 1339
+  @fn nodeUnderMouse(nodeViews, ox, oy)  @ 1397
       -- Identify the node whose body the mouse is over (un-inflated rect);
       -- used to start a drag, distinct from the inflated rect that drives
       -- port reveal. Returns nil if the mouse is over empty canvas (or a
       -- port band).
-  @fn nodeAtPoint(nodeViews, px, py, ox, oy)  @ 1416
+  @fn nodeAtPoint(nodeViews, px, py, ox, oy)  @ 1408
       -- nodeUnderMouse keyed to an arbitrary screen point (the decayed draft
       -- wire end, typically) rather than the live cursor.
-  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 1427
+  @fn nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)  @ 1419
       -- AABB intersection of a pixel-space band rect against every node's
       -- body rect (un-inflated; port bands aren't selectable). Returns the
       -- set of intersecting ids — empty table if nothing was caught.
-  @fn renderCanvas(w, h)  @ 1440
-  @fn pushBodyStyles()  @ 1915
-  @fn popBodyStyles()  @ 1918
+  @fn renderCanvas(w, h)  @ 1432
+  @fn pushBodyStyles()  @ 1903
+  @fn popBodyStyles()  @ 1906
   -- Wiring scope
-  @fn shortFxName(s)  @ 1984
+  @fn shortFxName(s)  @ 1972
       -- REAPER hands us "Type: Name (Author)" — or, for multi-out plugins,
       -- "Type: Name (Author) (N outs)" — in EnumInstalledFX, and either
       -- parenthetical may itself contain balanced parens (e.g. a vendor written
@@ -332,22 +338,22 @@
       -- disambiguate same-named plugins from different vendors; the node label
       -- drops the prefix and everything from the first balanced () onward.
       -- Strip on commit, not in wm.
-  @fn findMasterPos()  @ 1990
-  @fn sourcePosFor(genX, genY)  @ 2002
+  @fn findMasterPos()  @ 1978
+  @fn sourcePosFor(genX, genY)  @ 1990
 
 # Public API (wp:*)
-  @api wp:bind()  @ 1923
+  @api wp:bind()  @ 1911
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 1924
-  @api wp:enableLive()  @ 1930
+  @api wp:unbind()  @ 1912
+  @api wp:enableLive()  @ 1918
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
-  @api wp:tick()  @ 1933
+  @api wp:tick()  @ 1921
       @contract  per-frame poll; drives wm:pollUndo to detect REAPER undo/redo of wiring gestures (scratch P_EXT divergence) and re-issue wiringChanged{kind='load'}. Called from coordinator.frame regardless of which page is active.
-  @api wp:renderToolbarBits(_)  @ 1935
-  @api wp:renderBody(_, w, h, dispatch)  @ 1938
+  @api wp:renderToolbarBits(_)  @ 1923
+  @api wp:renderBody(_, w, h, dispatch)  @ 1926
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 1951
-  @api wp:focusState()  @ 1963
+  @api wp:renderStatusBar(_)  @ 1939
+  @api wp:focusState()  @ 1951
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface
