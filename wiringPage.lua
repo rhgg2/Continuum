@@ -707,35 +707,22 @@ local function stillEngaged(layout, mx, my)
   return inRect(mx, my, r[1], r[2], r[3], r[4])
 end
 
--- Source-side hover (shift held, no draft). Manages engagedId: while
--- set, the engaged node has hover priority — its body + band hoverRect
--- (extended by list.hitRect when listOpenId matches) is probed before
--- any other node, so a nearby body's overlapping hoverRect can't steal
--- the popout mid-gesture. Side effect: clears sticky if natural hover
--- lands on the sticky node (the "cursor returned to the pinned node"
--- condition). Hovering some other node leaves sticky alone — both
--- overlays render simultaneously.
-local function shiftHoverHit(nodeViews, mx, my, ox, oy)
+-- Engaged-priority hover scan shared by source-side (shift) and target-side
+-- (draft) drafting: the engaged node is probed before the forward scan so a
+-- neighbour's overlapping hoverRect can't steal an open popout mid-gesture.
+local function engagedHover(nodeViews, mx, my, ox, oy, cfg)
+  local dir, keep = cfg.dir, cfg.keep
   local function consume(pick)
     if pick.list then listOpenId = pick.nv.id end
     engagedId = pick.nv.id
-    if sticky and sticky.nodeId == pick.nv.id then sticky = nil end
+    if cfg.onConsume then cfg.onConsume(pick) end
     return pick
   end
-  -- Drop the audio band when the cursor has settled on the midi keyboard:
-  -- a midi-only re-layout has no chips, no handle, no sleeve, leaving the
-  -- in-body keyboard as the sole overlay decoration.
-  local function narrowOnMidi(pick, nv)
-    if pick and pick.slot and pick.slot.kind == 'midi' then
-      pick.layout = layoutPortRow(nv, ox, oy, 'out', mx, my, 'midi')
-    end
-    return pick
-  end
-  -- Cursor in the popout's empty space (in hoverRect but outside the
-  -- body proper) lands on the synthetic body-default slot. Clear it so
-  -- the body outline doesn't read as a hover target; engagement stays
-  -- so the popout remains open while the cursor traverses to a chip.
-  local function clearBandDefault(pick, nv)
+  local function refine(pick, nv)
+    if cfg.refine then pick = cfg.refine(pick, nv) end
+    -- A body-default synthetic slot (no .x) caught in the popout's empty
+    -- space is cleared so the body outline doesn't read as a target;
+    -- engagement holds, so the popout stays open.
     if pick and pick.slot and not pick.slot.x then
       local lx0, ly0, lx1, ly1 = nodeRect(nv)
       if not inRect(mx, my, ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
@@ -744,16 +731,18 @@ local function shiftHoverHit(nodeViews, mx, my, ox, oy)
     end
     return pick
   end
-  local function refine(pick, nv) return clearBandDefault(narrowOnMidi(pick, nv), nv) end
+  -- No eligibility re-check on the engaged node: consume only sets engagedId
+  -- on an eligible node and neither predicate flips mid-gesture (out-port
+  -- counts static, draft.forbidden fixed at creation), so it stays eligible.
   if engagedId then
     for _, nv in ipairs(nodeViews) do
       if nv.id == engagedId then
-        local layout = layoutPortRow(nv, ox, oy, 'out', mx, my, nil)
+        local layout = layoutPortRow(nv, ox, oy, dir, mx, my, keep)
         if listOpenId == nv.id and stillEngaged(layout, mx, my) then
           return consume{ nv = nv, layout = layout, list = layout.list,
                           slot = rowHit(layout.list.rows, mx, my) }
         end
-        local pick = pickHovered(nv, layout, mx, my, 'out', nil)
+        local pick = pickHovered(nv, layout, mx, my, dir, keep)
         if pick then return consume(refine(pick, nv)) end
         break
       end
@@ -761,12 +750,34 @@ local function shiftHoverHit(nodeViews, mx, my, ox, oy)
     engagedId, listOpenId = nil, nil
   end
   for _, nv in ipairs(nodeViews) do
-    if #nv.outs.audio > 0 or #nv.outs.midi > 0 then
-      local layout = layoutPortRow(nv, ox, oy, 'out', mx, my, nil)
-      local pick = pickHovered(nv, layout, mx, my, 'out', nil)
+    if cfg.eligible(nv) then
+      local layout = layoutPortRow(nv, ox, oy, dir, mx, my, keep)
+      local pick = pickHovered(nv, layout, mx, my, dir, keep)
       if pick then return consume(refine(pick, nv)) end
     end
   end
+end
+
+-- Source-side hover (shift, no draft). onConsume clears sticky when hover
+-- returns to the pinned node, so the pinned overlay doesn't double up with
+-- the live one; landing elsewhere leaves sticky set and both render.
+-- narrowOnMidi re-lays-out to a midi-only band so the in-body keyboard
+-- stands alone (no chips/handle/sleeve) once the cursor settles on it.
+local function shiftHoverHit(nodeViews, mx, my, ox, oy)
+  local function narrowOnMidi(pick, nv)
+    if pick and pick.slot and pick.slot.kind == 'midi' then
+      pick.layout = layoutPortRow(nv, ox, oy, 'out', mx, my, 'midi')
+    end
+    return pick
+  end
+  return engagedHover(nodeViews, mx, my, ox, oy, {
+    dir = 'out', keep = nil,
+    eligible = function(nv) return #nv.outs.audio > 0 or #nv.outs.midi > 0 end,
+    refine = narrowOnMidi,
+    onConsume = function(pick)
+      if sticky and sticky.nodeId == pick.nv.id then sticky = nil end
+    end,
+  })
 end
 
 -- Build a port-row overlay for the sticky node (the one whose list-row
@@ -835,56 +846,15 @@ local function draftSourceHoverHit(nodeViews, mx, my, ox, oy)
   end
 end
 
--- Target-side hover (draft in flight). Same engagedId-priority state
--- machine as shiftHoverHit, type-filtered to the draft. forbidden
--- entries are skipped so cycle-blocked targets neither engage nor
--- display. Probe direction follows draft.cursorEnd: forward drafts
--- ('to') hunt for in-ports on candidate destinations; backward redrafts
--- ('from') hunt for out-ports on candidate sources.
+-- Target-side hover (draft in flight). dir follows cursorEnd ('to' seeks
+-- in-ports on destinations, 'from' out-ports on sources); forbidden
+-- (cycle-blocked) nodes are ineligible, so they neither engage nor display.
 local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
-  local dir = (draft.cursorEnd == 'to') and 'in' or 'out'
-  local function consume(pick)
-    if pick.list then listOpenId = pick.nv.id end
-    engagedId = pick.nv.id
-    return pick
-  end
-  -- Cursor sitting in the popout band's empty space (not on a chip, not
-  -- on the chevron) returns the synthetic body-default slot from
-  -- pickHovered. During a draft we don't want that to read as a valid
-  -- drop target — the user has clearly moved off the body. Clear the
-  -- slot so the overlay shows no highlight and dropEligible refuses to
-  -- commit; engagement is preserved so the popout stays open.
-  local function clearBandDefault(pick, nv)
-    if pick and pick.slot and not pick.slot.x then
-      local lx0, ly0, lx1, ly1 = nodeRect(nv)
-      if not inRect(mx, my, ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
-        pick.slot = nil
-      end
-    end
-    return pick
-  end
-  if engagedId and not draft.forbidden[engagedId] then
-    for _, nv in ipairs(nodeViews) do
-      if nv.id == engagedId then
-        local layout = layoutPortRow(nv, ox, oy, dir, mx, my, draft.type)
-        if listOpenId == nv.id and stillEngaged(layout, mx, my) then
-          return consume{ nv = nv, layout = layout, list = layout.list,
-                          slot = rowHit(layout.list.rows, mx, my) }
-        end
-        local pick = pickHovered(nv, layout, mx, my, dir, draft.type)
-        if pick then return consume(clearBandDefault(pick, nv)) end
-        break
-      end
-    end
-    engagedId, listOpenId = nil, nil
-  end
-  for _, nv in ipairs(nodeViews) do
-    if not draft.forbidden[nv.id] then
-      local layout = layoutPortRow(nv, ox, oy, dir, mx, my, draft.type)
-      local pick = pickHovered(nv, layout, mx, my, dir, draft.type)
-      if pick then return consume(clearBandDefault(pick, nv)) end
-    end
-  end
+  return engagedHover(nodeViews, mx, my, ox, oy, {
+    dir = (draft.cursorEnd == 'to') and 'in' or 'out',
+    keep = draft.type,
+    eligible = function(nv) return not draft.forbidden[nv.id] end,
+  })
 end
 
 -- Commit-eligibility for a draft against a target hover. The visual
