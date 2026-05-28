@@ -232,6 +232,16 @@ end
 local SELECTED_INFLATE = 0   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
 local SELECTED_STROKE  = 2
 
+-- Stroke a node body's accent outline (selection / source-or-target hover /
+-- error). SELECTED_INFLATE widens the rect so a >0 moat lets the popup bg
+-- bleed through; col picks the accent.
+local function strokeNodeRect(dl, x0, y0, x1, y1, col)
+  ImGui.DrawList_AddRect(dl,
+    x0 - SELECTED_INFLATE, y0 - SELECTED_INFLATE,
+    x1 + SELECTED_INFLATE, y1 + SELECTED_INFLATE,
+    col, CORNER_R, 0, SELECTED_STROKE)
+end
+
 -- Split a single whitespace-free word into pieces at CamelCase boundaries
 -- (lowercase byte immediately followed by uppercase byte). Plugin names are
 -- ASCII in practice, so byte-class checks are sufficient.
@@ -328,10 +338,7 @@ local function drawNode(dl, nv, ox, oy, isSelected)
   local text = chrome.colour('text')
   ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, fill, CORNER_R)
   if isSelected then
-    ImGui.DrawList_AddRect(dl,
-      x0 - SELECTED_INFLATE, y0 - SELECTED_INFLATE,
-      x1 + SELECTED_INFLATE, y1 + SELECTED_INFLATE,
-      chrome.colour('wiring.node.selected'), CORNER_R, 0, SELECTED_STROKE)
+    strokeNodeRect(dl, x0, y0, x1, y1, chrome.colour('wiring.node.selected'))
   end
   if wireFont then ImGui.PushFont(ctx, wireFont, wireSize) end
   local lines = wrapLabel(nv.label, NODE_W - 2 * LABEL_PAD)
@@ -425,10 +432,7 @@ end
 -- and target-side hover — no more split-band shape.
 local function drawBodyOutline(dl, nv, ox, oy)
   local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
-  ImGui.DrawList_AddRect(dl,
-    x0 - SELECTED_INFLATE, y0 - SELECTED_INFLATE,
-    x1 + SELECTED_INFLATE, y1 + SELECTED_INFLATE,
-    chrome.colour('wiring.node.selected'), CORNER_R, 0, SELECTED_STROKE)
+  strokeNodeRect(dl, x0, y0, x1, y1, chrome.colour('wiring.node.selected'))
 end
 
 ----- Wire-creation gesture helpers
@@ -1637,10 +1641,7 @@ local function renderCanvas(w, h)
     for _, nv in ipairs(nodeViews) do
       if errorIds[nv.id] then
         local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
-        ImGui.DrawList_AddRect(dl,
-          x0 - SELECTED_INFLATE, y0 - SELECTED_INFLATE,
-          x1 + SELECTED_INFLATE, y1 + SELECTED_INFLATE,
-          errCol, CORNER_R, 0, SELECTED_STROKE)
+        strokeNodeRect(dl, x0, y0, x1, y1, errCol)
       end
     end
   end
