@@ -220,6 +220,13 @@ local function nodeRect(nv)
   return nv.pos.x - hw, nv.pos.y - hh, nv.pos.x + hw, nv.pos.y + hh
 end
 
+-- nodeRect shifted into screen space by the canvas origin. Every nodeRect
+-- caller adds (ox,oy) immediately, so this is the form they actually want.
+local function nodeScreenRect(nv, ox, oy)
+  local lx0, ly0, lx1, ly1 = nodeRect(nv)
+  return ox + lx0, oy + ly0, ox + lx1, oy + ly1
+end
+
 ----- Drawing
 
 local SELECTED_INFLATE = 0   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
@@ -316,8 +323,7 @@ local function wrapLabel(text, maxW)
 end
 
 local function drawNode(dl, nv, ox, oy, isSelected)
-  local lx0, ly0, lx1, ly1 = nodeRect(nv)
-  local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
+  local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
   local fill = chrome.colour('wiring.node.' .. nv.category)
   local text = chrome.colour('text')
   ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, fill, CORNER_R)
@@ -418,10 +424,10 @@ end
 -- Selection-style outline around the whole body, used for both source-side
 -- and target-side hover — no more split-band shape.
 local function drawBodyOutline(dl, nv, ox, oy)
-  local lx0, ly0, lx1, ly1 = nodeRect(nv)
+  local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
   ImGui.DrawList_AddRect(dl,
-    ox + lx0 - SELECTED_INFLATE, oy + ly0 - SELECTED_INFLATE,
-    ox + lx1 + SELECTED_INFLATE, oy + ly1 + SELECTED_INFLATE,
+    x0 - SELECTED_INFLATE, y0 - SELECTED_INFLATE,
+    x1 + SELECTED_INFLATE, y1 + SELECTED_INFLATE,
     chrome.colour('wiring.node.selected'), CORNER_R, 0, SELECTED_STROKE)
 end
 
@@ -483,8 +489,7 @@ end
 -- forceSide pins the face for sticky overlays (where the cursor isn't
 -- over the node so my can't pick the side); natural hover passes nil.
 local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
-  local lx0, ly0, lx1, ly1 = nodeRect(nv)
-  local bx0, by0, bx1, by1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
+  local bx0, by0, bx1, by1 = nodeScreenRect(nv, ox, oy)
   local audio = (dir == 'out') and nv.outs.audio or nv.ins.audio
   local midi  = (dir == 'out') and nv.outs.midi  or nv.ins.midi
   local nAudio     = #audio
@@ -724,8 +729,8 @@ local function engagedHover(nodeViews, mx, my, ox, oy, cfg)
     -- space is cleared so the body outline doesn't read as a target;
     -- engagement holds, so the popout stays open.
     if pick and pick.slot and not pick.slot.x then
-      local lx0, ly0, lx1, ly1 = nodeRect(nv)
-      if not inRect(mx, my, ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
+      local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
+      if not inRect(mx, my, x0, y0, x1, y1) then
         pick.slot = nil
       end
     end
@@ -823,11 +828,10 @@ local function draftSourceHoverHit(nodeViews, mx, my, ox, oy)
     if nv.id == wireDraft.keptId then
       local layout = layoutPortRow(nv, ox, oy, 'out', mx, my,
                                    wireDraft.type, wireDraft.keptSide)
-      local lx0, ly0, lx1, ly1 = nodeRect(nv)
+      local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
       local r = layout.hoverRect
       local inBand = inRect(mx, my, r[1], r[2], r[3], r[4])
-                 and not inRect(mx, my, ox + lx0, oy + ly0,
-                                        ox + lx1, oy + ly1)
+                 and not inRect(mx, my, x0, y0, x1, y1)
                  and not slotHit(layout.slots, mx, my)
                  and not onChevron(layout.handle, mx, my)
       if inBand then
@@ -1330,10 +1334,6 @@ local function faderRectAt(ax, ay)
   return ax - hw, ay - hh, ax + hw, ay + hh
 end
 
-local function inRectXY(x0, y0, x1, y1, mx, my)
-  return mx >= x0 and mx <= x1 and my >= y0 and my <= y1
-end
-
 local function pixelYToLin(my, stripY0)
   local p = 1 - (my - stripY0) / WIRE_FADER_H
   if p < 0 then p = 0 elseif p > 1 then p = 1 end
@@ -1400,9 +1400,8 @@ end
 -- port band).
 local function nodeUnderMouse(nodeViews, ox, oy)
   for _, nv in ipairs(nodeViews) do
-    local lx0, ly0, lx1, ly1 = nodeRect(nv)
-    if ImGui.IsMouseHoveringRect(ctx,
-         ox + lx0, oy + ly0, ox + lx1, oy + ly1) then
+    local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
+    if ImGui.IsMouseHoveringRect(ctx, x0, y0, x1, y1) then
       return nv
     end
   end
@@ -1412,9 +1411,7 @@ end
 -- wire end, typically) rather than the live cursor.
 local function nodeAtPoint(nodeViews, px, py, ox, oy)
   for _, nv in ipairs(nodeViews) do
-    local lx0, ly0, lx1, ly1 = nodeRect(nv)
-    if px >= ox + lx0 and px <= ox + lx1
-       and py >= oy + ly0 and py <= oy + ly1 then
+    if inRect(px, py, nodeScreenRect(nv, ox, oy)) then
       return nv
     end
   end
@@ -1428,8 +1425,7 @@ local function nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)
   if by0 > by1 then by0, by1 = by1, by0 end
   local set = {}
   for _, nv in ipairs(nodeViews) do
-    local lx0, ly0, lx1, ly1 = nodeRect(nv)
-    local x0, y0, x1, y1 = ox + lx0, oy + ly0, ox + lx1, oy + ly1
+    local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
     if x1 >= bx0 and x0 <= bx1 and y1 >= by0 and y0 <= by1 then
       set[nv.id] = true
     end
@@ -1530,8 +1526,8 @@ local function renderCanvas(w, h)
       stillVisible = true
     elseif arrowHitIdx == fader.edgeIdx then
       stillVisible = true
-    elseif inRectXY(fader.hitRect.x0, fader.hitRect.y0,
-                    fader.hitRect.x1, fader.hitRect.y1, mx, my) then
+    elseif inRect(mx, my, fader.hitRect.x0, fader.hitRect.y0,
+                  fader.hitRect.x1, fader.hitRect.y1) then
       stillVisible = true
     end
   end
@@ -1640,10 +1636,10 @@ local function renderCanvas(w, h)
     local errCol = chrome.colour('wiring.node.error')
     for _, nv in ipairs(nodeViews) do
       if errorIds[nv.id] then
-        local lx0, ly0, lx1, ly1 = nodeRect(nv)
+        local x0, y0, x1, y1 = nodeScreenRect(nv, ox, oy)
         ImGui.DrawList_AddRect(dl,
-          ox + lx0 - SELECTED_INFLATE, oy + ly0 - SELECTED_INFLATE,
-          ox + lx1 + SELECTED_INFLATE, oy + ly1 + SELECTED_INFLATE,
+          x0 - SELECTED_INFLATE, y0 - SELECTED_INFLATE,
+          x1 + SELECTED_INFLATE, y1 + SELECTED_INFLATE,
           errCol, CORNER_R, 0, SELECTED_STROKE)
       end
     end
@@ -1684,8 +1680,8 @@ local function renderCanvas(w, h)
   -- the click branch would jump the fader to the y-position of the press.
   local faderDblClicked = fader and not fader.dragging
     and ImGui.IsMouseDoubleClicked(ctx, 0)
-    and inRectXY(fader.rect.x0, fader.rect.y0,
-                 fader.rect.x1, fader.rect.y1, mx, my)
+    and inRect(mx, my, fader.rect.x0, fader.rect.y0,
+               fader.rect.x1, fader.rect.y1)
   if faderDblClicked then
     fader.currentLin = 1.0
     wv:setEdgeGain(fader.edgeIdx, 1.0)
@@ -1697,8 +1693,8 @@ local function renderCanvas(w, h)
   -- click isn't inside the fader strip rect.
   local faderClicked = fader and not fader.dragging and not faderDblClicked
     and ImGui.IsMouseClicked(ctx, 0)
-    and inRectXY(fader.rect.x0, fader.rect.y0,
-                 fader.rect.x1, fader.rect.y1, mx, my)
+    and inRect(mx, my, fader.rect.x0, fader.rect.y0,
+               fader.rect.x1, fader.rect.y1)
   if faderClicked then
     local clickLin = pixelYToLin(my, fader.rect.y0)
     fader.valueAtClick = wv:edgeGain(fader.edgeIdx)
