@@ -399,8 +399,17 @@ saw.
   `wm:mutate`. Selection and in-flight drag state stay in-memory
   on the view (mirrors how `trackerView` / `arrangeView` handle
   ephemeral cursor state).
-- Right-click wire menu surfaces wire-level ops (gain spinner,
-  channel-remap LUT editor) and "mark as primary" toggle.
+- Audio wires expose **gain** through a mid-wire fader: hover the
+  arrow midpoint to pop a vertical strip; click anywhere on the strip
+  to jump-set the value; drag to slew; release to commit. Range
+  −∞ … +18 dB, with 0 dB at 75 % of strip travel and the bottom 5 %
+  snapping to −∞. The drag is hot-poked through `wm:pokeEdgeGain`
+  (`TrackFX_SetParam` direct, no mutate per frame, no undo per frame);
+  the bracketing mousedown materialises the CU (if absent) and
+  mouseup commits the final value, both via `wv:setEdgeGain` → one
+  wm:mutate each. (Slice 0: ≤ 2 undo entries per gesture; collapsing
+  into one is follow-up.) Channel-remap and "mark as primary" still
+  need a UI (planned: right-click wire menu).
 - Error overlay renders capacity overflows inline on the
   offending nodes.
 

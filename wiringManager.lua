@@ -1008,6 +1008,24 @@ function wm:applyOps(ops, label)
   reaper.Undo_EndBlock2(0, label or 'wiring: apply', -1)
 end
 
+--contract: writes the CU 'gain' param on edges[idx]'s materialised bridge via TrackFX_SetParam; returns true on success, false if the edge has no opFxGuid or it can't be resolved in any track's chain. No mutate, no signal, no undo block — for the live-drag hot path; caller bracket-commits with wv:setEdgeGain.
+function wm:pokeEdgeGain(edgeIdx, gain)
+  ensureLoaded()
+  local edge = userGraph.edges[edgeIdx]
+  if not edge or not edge.opFxGuid then return false end
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local track = reaper.GetTrack(0, i)
+    for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
+      if reaper.TrackFX_GetFXGUID(track, fxIdx) == edge.opFxGuid then
+        local pIdx = resolveParamIdx(track, fxIdx, CU_IDENT, 'gain', {})
+        reaper.TrackFX_SetParam(track, fxIdx, pIdx, gain)
+        return true
+      end
+    end
+  end
+  return false
+end
+
 --contract: enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
 function wm:listInstalledFX()
   if installedFx then return installedFx end

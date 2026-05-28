@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1059  sha=7fcf50a  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1077  sha=66d0830  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -151,13 +151,15 @@
       @contract  pure structural diff producing a wiringOp[] that, applied, would carry snap to target. Order: creates first (so subsequent setSends can reference fresh tracks), then host-transition drains, then setFXChain / setMainSend / setSends / setExtState, then deletes. snap entries absent from target — or with a changed hostKind — and hostKind='newTrack' are deleted; sourceTrack/scratch/master are never deleted (project artefacts) but get drained on host transition. setFXChain/setMainSend/setSends ops carry hostKind so the applier can resolve master without a classKey tag (the REAPER master can't be tagged like a user track).
   @api wm:applyOps(ops, label)  @ 924
       @contract  walks ops in their emitted order inside one Undo_BeginBlock. setFXChain materialises nil-fxGuid entries via TrackFX_AddByName and stamps minted guids back into the user graph through a wm:mutate that's gated by `realising` so the live-recompile loop sees no signal. Param push resolves slider index by TrackFX_GetParamName and raises on unknown names.
-  @api wm:listInstalledFX()  @ 1012
+  @api wm:pokeEdgeGain(edgeIdx, gain)  @ 1012
+      @contract  writes the CU 'gain' param on edges[idx]'s materialised bridge via TrackFX_SetParam; returns true on success, false if the edge has no opFxGuid or it can't be resolved in any track's chain. No mutate, no signal, no undo block — for the live-drag hot path; caller bracket-commits with wv:setEdgeGain.
+  @api wm:listInstalledFX()  @ 1030
       @contract  enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
-  @api wm:pollUndo()  @ 1026
+  @api wm:pollUndo()  @ 1044
       @contract  detects REAPER undo/redo of a wiring gesture by diffing scratch P_EXT against lastScratchRaw; on diff, mirrors scratch back to project tier, drops the in-memory graph, fires wiringChanged{kind='load'}. If scratch was deleted (manual or undo past its creation), reconciler recreates it on the next reconcile pass — so here we just clear the handle and let the live loop catch up.
-  @api wm:reconcile(label)  @ 1045
+  @api wm:reconcile(label)  @ 1063
       @contract  one reconcile pass — diff targetState against snapshot and applyOps the result under the given undo label
-  @api wm:enableLive(label)  @ 1050
+  @api wm:enableLive(label)  @ 1068
       @contract  idempotent. Subscribes wm to its own wiringChanged so every mutate/load drives wm:reconcile, then runs one immediate pass to put REAPER in sync with the persisted graph.
 
 # Signals emitted (via util.installHooks)

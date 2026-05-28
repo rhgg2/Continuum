@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=283  sha=11d0f32  mode=chunk
+@module wiringView  src=wiringView.lua  loc=303  sha=ad0768f  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -21,7 +21,7 @@
   @state wv = {}  @ 15
   @state hoverNodeId = nil  @ 17
   @state selection = {}  @ 18   -- set keyed by nodeId → true; replace via setSelection, never mutated in place
-  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 248
+  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 268
 
 # Private functions
   -- Logical projection (viewport-independent)
@@ -65,25 +65,31 @@
       @contract  removes the edge at g.edges[idx]; no-op if idx is out of range; fires wiringChanged via wm:mutate
   @api wv:rewireEdgeEnd(idx, side, target)  @ 168
       @contract  rewrites one end of g.edges[idx] in place; side ∈ {'from','to'}; target = { id, port? }; port ignored for midi edges; single wiringChanged
+  @api wv:edgeGain(idx)  @ 183
+      @contract  linear gain scalar on edges[idx]; 1.0 default when ops.gain unset or edge is non-audio / missing. Read-only.
+  @api wv:setEdgeGain(idx, gain)  @ 190
+      @contract  writes ops.gain on audio edges[idx] (creates ops if absent); no-op on non-audio / missing edge. One wm:mutate, one wiringChanged → one reconcile pass → one undo entry. Pair with wv:pokeEdgeGain for live-drag.
+  @api wv:pokeEdgeGain(idx, gain)  @ 200
+      @contract  live pass-through to wm:pokeEdgeGain. Returns true if the CU exists and was poked; false if caller must materialise via setEdgeGain first.
   -- Topology queries
-  @api wv:ancestorsOf(sourceId)  @ 185
+  @api wv:ancestorsOf(sourceId)  @ 205
       @contract  backward reachability over user.edges; returns { [id]=true } including sourceId
-  @api wv:descendantsOf(sourceId)  @ 190
+  @api wv:descendantsOf(sourceId)  @ 210
       @contract  forward reachability over user.edges; returns { [id]=true } including sourceId
-  @api wv:wiredPorts(nodeId, dir)  @ 195
+  @api wv:wiredPorts(nodeId, dir)  @ 215
       @contract  returns { [portIdx]=true } over audio edges on nodeId for dir ('out'|'in'); midi edges ignored
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 211
+  @api wv:nodeViews()  @ 231
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:wireViews()  @ 220
+  @api wv:wireViews()  @ 240
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Capacity errors
-  @api wv:errors()  @ 251
+  @api wv:errors()  @ 271
       @contract  list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 271
-  @api wv:setHover(id)  @ 272
-  @api wv:selection()  @ 275
+  @api wv:hover()  @ 291
+  @api wv:setHover(id)  @ 292
+  @api wv:selection()  @ 295
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 277
+  @api wv:setSelection(idSet)  @ 297
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.

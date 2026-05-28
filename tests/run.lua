@@ -132,6 +132,7 @@ local specs = {
   'wm_live_spec',
   'wm_undo_spec',
   'wv_authoring_spec',
+  'wv_edge_gain_spec',
   'wv_errors_spec',
   'wp_smoke_spec',
 }

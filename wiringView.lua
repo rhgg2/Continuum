@@ -179,6 +179,26 @@ function wv:rewireEdgeEnd(idx, side, target)
   end)
 end
 
+--contract: linear gain scalar on edges[idx]; 1.0 default when ops.gain unset or edge is non-audio / missing. Read-only.
+function wv:edgeGain(idx)
+  local e = wm:graph().edges[idx]
+  if not e or e.type ~= 'audio' then return 1.0 end
+  return (e.ops and e.ops.gain) or 1.0
+end
+
+--contract: writes ops.gain on audio edges[idx] (creates ops if absent); no-op on non-audio / missing edge. One wm:mutate, one wiringChanged → one reconcile pass → one undo entry. Pair with wv:pokeEdgeGain for live-drag.
+function wv:setEdgeGain(idx, gain)
+  return wm:mutate(function(g)
+    local e = g.edges[idx]
+    if not e or e.type ~= 'audio' then return end
+    e.ops = e.ops or {}
+    e.ops.gain = gain
+  end)
+end
+
+--contract: live pass-through to wm:pokeEdgeGain. Returns true if the CU exists and was poked; false if caller must materialise via setEdgeGain first.
+function wv:pokeEdgeGain(idx, gain) return wm:pokeEdgeGain(idx, gain) end
+
 ----- Topology queries
 
 --contract: backward reachability over user.edges; returns { [id]=true } including sourceId
