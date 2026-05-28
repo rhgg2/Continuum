@@ -1615,11 +1615,32 @@ local function renderCanvas(w, h)
       local w        = seg.w
       local keptIsTo = (wireEndHover.side == 'from')
       local keptId   = keptIsTo and w.to or w.from
+      local grabbedId   = keptIsTo and w.from or w.to
+      local grabbedPort = (w.type == 'audio')
+                            and (keptIsTo and w.fromPort or w.toPort) or nil
       -- Cursor-end screen position at the grab moment; grabDx/grabDy is
       -- the gap to the mouse, decayed over WIRE_GRAB_DECAY px of travel
       -- so the wire end doesn't snap to the cursor at gesture start.
+      -- For non-body audio ports anchor at the chip centre in the popout
+      -- rather than the body centre: a release-without-movement leaves
+      -- the decayed cursor end at the anchor, and a body-centre anchor
+      -- reads as cursor-over-body in dropTargetHit, silently retargeting
+      -- the redraft to port 1.
       local endX = ox + (keptIsTo and seg.sx or seg.ex)
       local endY = oy + (keptIsTo and seg.sy or seg.ey)
+      if grabbedPort and grabbedPort > 1 then
+        local grabbedNV = nodesById[grabbedId]
+        if grabbedNV then
+          local layout = layoutPortRow(grabbedNV, ox, oy,
+                                       keptIsTo and 'out' or 'in',
+                                       mx, my, 'audio')
+          local chip = findLayoutSlot(layout, 'audio', grabbedPort)
+          if chip and chip.x then
+            endX = chip.x + chip.w / 2
+            endY = chip.y + chip.h / 2
+          end
+        end
+      end
       wireDraft = {
         type       = w.type,
         cursorEnd  = wireEndHover.side,
@@ -1638,9 +1659,8 @@ local function renderCanvas(w, h)
         -- computeDraftEnd checks whether the (decayed) wire end still
         -- lies inside this node's bbox; while it does, the wire end is
         -- pinned to the original endpoint and mouseup is a no-op.
-        originalTargetId = keptIsTo and w.from or w.to,
-        originalPort     = (w.type == 'audio')
-                             and (keptIsTo and w.fromPort or w.toPort) or nil,
+        originalTargetId = grabbedId,
+        originalPort     = grabbedPort,
       }
     else
       local bodyHit = nodeUnderMouse(nodeViews, ox, oy)
