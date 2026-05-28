@@ -186,6 +186,126 @@ function M.new()
     return true, n
   end
 
+  -- Track state chunk — minimal FXCHAIN round-trip used by the wm applier's
+  -- per-FX MIDI routing surgery. Emits one <VST ...> block per non-JS fx
+  -- (default flag byte 0x10, bus bytes zero) and one <JS ...> block per JS
+  -- fx (no routing trailer). SetTrackStateChunk parses the chunk, picks the
+  -- trailer line from each non-JS block, and stores routingBytes on the
+  -- matching fx entry — what tests read back to verify a routing patch.
+  local B64A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  local B64D = {}
+  for i = 1, #B64A do B64D[B64A:byte(i)] = i - 1 end
+  local function b64encode(s)
+    local out, buf, bits = {}, 0, 0
+    for i = 1, #s do
+      buf  = (buf << 8) | s:byte(i)
+      bits = bits + 8
+      while bits >= 6 do
+        bits = bits - 6
+        local v = (buf >> bits) & 0x3F
+        out[#out + 1] = B64A:sub(v + 1, v + 1)
+        buf = buf & ((1 << bits) - 1)
+      end
+    end
+    return table.concat(out)
+  end
+  local function b64decode(s)
+    local out, buf, bits = {}, 0, 0
+    for i = 1, #s do
+      local v = B64D[s:byte(i)]
+      if v then
+        buf  = (buf << 6) | v
+        bits = bits + 6
+        if bits >= 8 then
+          bits = bits - 8
+          out[#out + 1] = string.char((buf >> bits) & 0xFF)
+          buf = buf & ((1 << bits) - 1)
+        end
+      end
+    end
+    return table.concat(out)
+  end
+  function r.GetTrackStateChunk(track, _, _)
+    local fxs = state.fxByTrack[track] or {}
+    local lines = { '<TRACK', '  <FXCHAIN' }
+    for _, fx in ipairs(fxs) do
+      local ident = fxIdentOf(fx)
+      if ident:sub(1, 3) == 'JS:' then
+        lines[#lines + 1] = '  <JS ' .. ident .. ' ""'
+        lines[#lines + 1] = '    0 0 0 -'
+        lines[#lines + 1] = '  >'
+      else
+        local rb      = (type(fx) == 'table' and fx.routingBytes)
+                        or { flag = 0x10, inBus = 0, outBus = 0 }
+        local first   = b64encode(string.char(0, rb.flag, 0))
+        local trailer = b64encode(string.char(0, 0, rb.flag, rb.inBus, rb.outBus, 0))
+        lines[#lines + 1] = '  <VST "VST: ' .. ident .. '" stub.vst 0 "" 1 ""'
+        lines[#lines + 1] = '    ' .. first
+        lines[#lines + 1] = '    D34dB33f'
+        lines[#lines + 1] = '    ' .. trailer
+        lines[#lines + 1] = '  >'
+      end
+    end
+    lines[#lines + 1] = '  >'
+    lines[#lines + 1] = '>'
+    return true, table.concat(lines, '\n') .. '\n'
+  end
+  function r.SetTrackStateChunk(track, chunk, _isUndo)
+    local fxs = state.fxByTrack[track]
+    if not fxs then return true end
+
+    -- Walk blocks at depth 0, collecting the last base64 line inside each
+    -- non-JS FX block. Mirrors findFxBlock's depth tracking in production.
+    local chunkLines = {}
+    for ln in chunk:gmatch('[^\n]+') do chunkLines[#chunkLines + 1] = ln end
+    local trailers = {}
+    local i = 1
+    while i <= #chunkLines do
+      local ln = chunkLines[i]:match('^%s*(.-)%s*$')
+      local isFx = ln:match('^<VST%s')  or ln:match('^<CLAP%s') or ln:match('^<AU%s')
+      local isJS = ln:match('^<JS%s')   or ln:match('^<JS$')
+      if isFx or isJS then
+        local depth, lastB64 = 1, nil
+        i = i + 1
+        while i <= #chunkLines and depth > 0 do
+          local s = chunkLines[i]:match('^%s*(.-)%s*$')
+          if s == '>' then
+            depth = depth - 1
+          elseif s:sub(1, 1) == '<' then
+            depth = depth + 1
+          elseif depth == 1 and s:match('^[A-Za-z0-9%+/=]+$') then
+            lastB64 = s
+          end
+          i = i + 1
+        end
+        if isFx then trailers[#trailers + 1] = lastB64 end
+      else
+        i = i + 1
+      end
+    end
+
+    -- Zip non-JS trailers with non-JS fxs in order. JS entries pass through.
+    local tIdx = 1
+    for j, fx in ipairs(fxs) do
+      if fxIdentOf(fx):sub(1, 3) ~= 'JS:' then
+        local trailer = trailers[tIdx]
+        if trailer then
+          local bytes = b64decode(trailer)
+          if #bytes >= 6 then
+            if type(fx) == 'string' then fx = { ident = fx }; fxs[j] = fx end
+            fx.routingBytes = {
+              flag   = bytes:byte(3),
+              inBus  = bytes:byte(4),
+              outBus = bytes:byte(5),
+            }
+          end
+        end
+        tIdx = tIdx + 1
+      end
+    end
+    return true
+  end
+
   -- FX GUID — sm:tick uses change of GUID to detect FX-removed-and-re-added
   -- so per-instance state can be reset. Wiring snapshot keys per-fx P_EXT by
   -- GUID, so each (track, fxIdx) gets its own stable guid; tests can

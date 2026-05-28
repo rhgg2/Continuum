@@ -2,7 +2,7 @@
 -- @noindex
 
 --invariant: every fx-kind node carries fxGuid (nil pre-materialisation, stamped by the applier after TrackFX_AddByName). This is the only stable bridge identity between the user graph and a REAPER FX instance — snapshot and targetState match by it.
---shape: wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, params?=table, origin?={kind='node',id=string}|{kind='edge',idx=int}}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. fxOrder entries carrying `params` are wm-owned CU bridges (synthesised kind='fx' nodes from DAG.lower); snapshot never reads params back from REAPER, so any target with `params` drives setFXChain on every reconcile pass. `origin` is stamped on every target-side fxOrder entry by projectEntry so the applier knows where to write minted guids back; snap entries do not carry it and fxOrderEq ignores it.
+--shape: wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, params?=table, origin?={kind='node',id=string}|{kind='edge',idx=int}, midiOut?=bool}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. fxOrder entries carrying `params` are wm-owned CU bridges (synthesised kind='fx' nodes from DAG.lower); snapshot never reads params back from REAPER, so any target with `params` drives setFXChain on every reconcile pass. `origin` is stamped on every target-side fxOrder entry by projectEntry so the applier knows where to write minted guids back; snap entries do not carry it and fxOrderEq ignores it. `midiOut` is set on both sides only for non-JS kind='node' entries — target derives it from the user graph (nodeHasMidiOut), snap from the FXCHAIN routing trailer's 0x02 bit; mismatch drives setFXChain so the applier reconciles the per-FX output-disabled bit.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setExtState', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier).
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
@@ -199,20 +199,206 @@ function wm:createSourceTrack(opts)
   return reaper.GetTrackGUID(track)
 end
 
+----- FX MIDI routing surgery (state chunk)
+--
+-- REAPER has no ReaScript getter or setter for the per-FX MIDI input
+-- bus / output bus / replace-or-merge mode encoded inside each
+-- `<VST ...>` block in an FXCHAIN. The applier patches the chunk
+-- directly when it needs to disable an FX's MIDI output bus. The
+-- encoding is documented in docs/reaper_midi_routing.md; fixtures live
+-- in design/midi-routing-fixtures.md and are pinned by fx_routing_spec.
+
+local fxRoutingAlpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+local fxRoutingDec   = {}
+for i = 1, #fxRoutingAlpha do fxRoutingDec[fxRoutingAlpha:sub(i, i):byte()] = i - 1 end
+
+local function b64decode(s)
+  local bytes, buf, bits = {}, 0, 0
+  for i = 1, #s do
+    local c = s:byte(i)
+    if c == 61 then break end  -- '='
+    local v = fxRoutingDec[c]
+    if v then
+      buf  = buf * 64 + v
+      bits = bits + 6
+      if bits >= 8 then
+        bits = bits - 8
+        local b = buf >> bits
+        buf = buf - (b << bits)
+        bytes[#bytes + 1] = string.char(b)
+      end
+    end
+  end
+  return table.concat(bytes)
+end
+
+local function b64encode(s)
+  local out, buf, bits = {}, 0, 0
+  for i = 1, #s do
+    buf  = buf * 256 + s:byte(i)
+    bits = bits + 8
+    while bits >= 6 do
+      bits = bits - 6
+      local v = (buf >> bits) & 0x3F
+      out[#out + 1] = fxRoutingAlpha:sub(v + 1, v + 1)
+      buf = buf - (v << bits)
+    end
+  end
+  if bits > 0 then
+    local v = (buf << (6 - bits)) & 0x3F
+    out[#out + 1] = fxRoutingAlpha:sub(v + 1, v + 1)
+  end
+  while #out % 4 ~= 0 do out[#out + 1] = '=' end
+  return table.concat(out)
+end
+
+local function splitChunkLines(s)
+  local hasTrailing = s:sub(-1) == '\n'
+  local body  = hasTrailing and s or s .. '\n'
+  local lines = {}
+  for ln in body:gmatch('([^\n]*)\n') do lines[#lines + 1] = ln end
+  return lines, hasTrailing
+end
+
+local function joinChunkLines(lines, hasTrailing)
+  return table.concat(lines, '\n') .. (hasTrailing and '\n' or '')
+end
+
+-- Walk a track-state chunk and return a 0-indexed array of flag bytes,
+-- one per non-JS FX block in chain order (the trailer byte that holds
+-- the routing bits including 0x02 output-disabled). Lets wm:snapshot
+-- read REAPER's view of routing state so wm:diff catches drift.
+local function decodeChainFlags(chunk)
+  local lines = splitChunkLines(chunk)
+  local out, routingIdx = {}, 0
+  local i = 1
+  while i <= #lines do
+    local ln = lines[i]
+    if ln:match('^%s*<VST%s') or ln:match('^%s*<CLAP%s') or ln:match('^%s*<AU%s') then
+      local depth, j, trailer = 1, i + 1, nil
+      while j <= #lines do
+        local s = lines[j]:match('^%s*(.-)%s*$')
+        if s == '>' then
+          depth = depth - 1
+          if depth == 0 then break end
+        elseif s:sub(1, 1) == '<' then
+          depth = depth + 1
+        elseif depth == 1 and s:match('^[A-Za-z0-9%+/=]+$') then
+          trailer = s
+        end
+        j = j + 1
+      end
+      if trailer then
+        local bytes = b64decode(trailer)
+        if #bytes >= 6 then out[routingIdx] = bytes:byte(3) end
+      end
+      routingIdx = routingIdx + 1
+      i = (depth == 0) and (j + 1) or (i + 1)
+    else
+      i = i + 1
+    end
+  end
+  return out
+end
+
+-- Locate the (fxIdx+1)-th non-JS FX block in the chunk (0-indexed).
+-- Returns (firstBase64LineIdx, trailerLineIdx) or nil.
+local function findFxBlock(lines, fxIdx)
+  local seen = 0
+  for i, ln in ipairs(lines) do
+    if ln:match('^%s*<VST%s') or ln:match('^%s*<CLAP%s') or ln:match('^%s*<AU%s') then
+      if seen == fxIdx then
+        local depth = 1
+        for j = i + 1, #lines do
+          local stripped = lines[j]:match('^%s*(.-)%s*$')
+          if stripped == '>' then
+            depth = depth - 1
+            if depth == 0 then return i + 1, j - 1 end
+          elseif stripped:sub(1, 1) == '<' then
+            depth = depth + 1
+          end
+        end
+        return
+      end
+      seen = seen + 1
+    end
+  end
+end
+
+local function setBitInBase64Line(line, byteIdx, mask, on)
+  local lead, content, tail = line:match('^(%s*)(%S*)(%s*)$')
+  if not content or content == '' then return line end
+  local bytes = b64decode(content)
+  if byteIdx < 1 or byteIdx > #bytes then return line end
+  local b = bytes:byte(byteIdx)
+  local newB = on and (b | mask) or (b & ~mask)
+  if newB == b then return line end
+  local patched = bytes:sub(1, byteIdx - 1)
+               .. string.char(newB)
+               .. bytes:sub(byteIdx + 1)
+  return lead .. b64encode(patched) .. tail
+end
+
+-- Drive the "output bus disabled" bit (0x02) on the fxIdx-th non-JS FX
+-- block of an FXCHAIN-bearing track-state chunk: `disabled=true` sets
+-- it, `disabled=false` clears it. Read-modify-write on that single
+-- bit; every other flag bit, in_bus, and out_bus are preserved. The
+-- flag is mirrored on the trailer line and the penultimate byte of
+-- the first base64 line; both are patched. Idempotent. Pure: no
+-- state, no reaper deps — exposed on wm so the spec can drive it
+-- through the same module.
+function wm.setFXOutputDisabled(chunk, fxIdx, disabled)
+  local lines, hasTrailing = splitChunkLines(chunk)
+  local first, trailer     = findFxBlock(lines, fxIdx)
+  if not first then return chunk, false end
+
+  lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x02, disabled)
+
+  local firstBytes = b64decode(lines[first])
+  if #firstBytes >= 2 then
+    lines[first] = setBitInBase64Line(lines[first], #firstBytes - 1, 0x02, disabled)
+  end
+
+  return joinChunkLines(lines, hasTrailing), true
+end
+
+-- True iff `graph` has any edge with type='midi' leaving `nodeId`. The
+-- predicate that drives per-FX MIDI-out reconcile: a fx node with no
+-- outgoing midi edge has its output bus disabled by the applier.
+-- Stamped onto target fxOrder entries; snap reads the chunk for its
+-- mirror, so wm:diff catches predicate drift in either direction.
+local function nodeHasMidiOut(graph, nodeId)
+  for _, e in ipairs(graph.edges) do
+    if e.from == nodeId and e.type == 'midi' then return true end
+  end
+  return false
+end
+
 ----- Snapshot / target / diff (Stage 2)
 
--- Walk the chain of one track, returning { {fxGuid, ident}, ... } for FX
--- whose guid appears in ownedGuids. CU instances ride the same predicate;
--- the applier persists their guid on the originating edge so subsequent
--- snapshots recognise them like any fx node.
+-- Walk the chain of one track, returning { {fxGuid, ident, midiOut?}, ... }
+-- for FX whose guid appears in ownedGuids. midiOut comes from the chunk's
+-- routing trailer (cleared 0x02 ⇒ midiOut=true); only non-JS entries carry
+-- it. CU instances (JS) ride the same ownership predicate; the applier
+-- persists their guid on the originating edge so subsequent snapshots
+-- recognise them like any fx node.
 local function ownedChain(track, ownedGuids)
-  local out = {}
+  local _, chunk = reaper.GetTrackStateChunk(track, '', false)
+  local flagAt   = decodeChainFlags(chunk)
+  local out, routingIdx = {}, 0
   for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
-    local guid = reaper.TrackFX_GetFXGUID(track, fxIdx)
+    local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
+    local guid     = reaper.TrackFX_GetFXGUID(track, fxIdx)
+    local isJS     = ident and ident:sub(1, 3) == 'JS:'
     if ownedGuids[guid] then
-      local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
-      util.add(out, { fxGuid = guid, ident = ident })
+      local entry = { fxGuid = guid, ident = ident }
+      if not isJS then
+        local flag    = flagAt[routingIdx]
+        entry.midiOut = not (flag and (flag & 0x02) ~= 0)
+      end
+      util.add(out, entry)
     end
+    if not isJS then routingIdx = routingIdx + 1 end
   end
   return out
 end
@@ -323,6 +509,9 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
         entry.origin = { kind = 'edge', idx = node.originEdgeIdx }
       else
         entry.origin = { kind = 'node', id = id }
+        if not (node.fxIdent and node.fxIdent:sub(1, 3) == 'JS:') then
+          entry.midiOut = nodeHasMidiOut(userGraph, id)
+        end
       end
       util.add(fxOrder, entry)
     end
@@ -356,7 +545,8 @@ local function fxOrderEq(a, b)
   if #a ~= #b then return false end
   for i = 1, #a do
     local x, y = a[i], b[i]
-    if x.fxGuid ~= y.fxGuid or x.ident ~= y.ident then return false end
+    if x.fxGuid  ~= y.fxGuid  or x.ident ~= y.ident    then return false end
+    if x.midiOut ~= y.midiOut                          then return false end
     if not util.deepEq(x.params or {}, y.params or {}) then return false end
   end
   return true
@@ -447,132 +637,6 @@ function wm:diff(target, snap)
   end
 
   return ops
-end
-
------ FX MIDI routing surgery (state chunk)
---
--- REAPER has no ReaScript getter or setter for the per-FX MIDI input
--- bus / output bus / replace-or-merge mode encoded inside each
--- `<VST ...>` block in an FXCHAIN. The applier patches the chunk
--- directly when it needs to disable an FX's MIDI output bus. The
--- encoding is documented in docs/reaper_midi_routing.md; fixtures live
--- in design/midi-routing-fixtures.md and are pinned by fx_routing_spec.
-
-local fxRoutingAlpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-local fxRoutingDec   = {}
-for i = 1, #fxRoutingAlpha do fxRoutingDec[fxRoutingAlpha:sub(i, i):byte()] = i - 1 end
-
-local function b64decode(s)
-  local bytes, buf, bits = {}, 0, 0
-  for i = 1, #s do
-    local c = s:byte(i)
-    if c == 61 then break end  -- '='
-    local v = fxRoutingDec[c]
-    if v then
-      buf  = buf * 64 + v
-      bits = bits + 6
-      if bits >= 8 then
-        bits = bits - 8
-        local b = buf >> bits
-        buf = buf - (b << bits)
-        bytes[#bytes + 1] = string.char(b)
-      end
-    end
-  end
-  return table.concat(bytes)
-end
-
-local function b64encode(s)
-  local out, buf, bits = {}, 0, 0
-  for i = 1, #s do
-    buf  = buf * 256 + s:byte(i)
-    bits = bits + 8
-    while bits >= 6 do
-      bits = bits - 6
-      local v = (buf >> bits) & 0x3F
-      out[#out + 1] = fxRoutingAlpha:sub(v + 1, v + 1)
-      buf = buf - (v << bits)
-    end
-  end
-  if bits > 0 then
-    local v = (buf << (6 - bits)) & 0x3F
-    out[#out + 1] = fxRoutingAlpha:sub(v + 1, v + 1)
-  end
-  while #out % 4 ~= 0 do out[#out + 1] = '=' end
-  return table.concat(out)
-end
-
-local function splitChunkLines(s)
-  local hasTrailing = s:sub(-1) == '\n'
-  local body  = hasTrailing and s or s .. '\n'
-  local lines = {}
-  for ln in body:gmatch('([^\n]*)\n') do lines[#lines + 1] = ln end
-  return lines, hasTrailing
-end
-
-local function joinChunkLines(lines, hasTrailing)
-  return table.concat(lines, '\n') .. (hasTrailing and '\n' or '')
-end
-
--- Locate the (fxIdx+1)-th non-JS FX block in the chunk (0-indexed).
--- Returns (firstBase64LineIdx, trailerLineIdx) or nil.
-local function findFxBlock(lines, fxIdx)
-  local seen = 0
-  for i, ln in ipairs(lines) do
-    if ln:match('^%s*<VST%s') or ln:match('^%s*<CLAP%s') or ln:match('^%s*<AU%s') then
-      if seen == fxIdx then
-        local depth = 1
-        for j = i + 1, #lines do
-          local stripped = lines[j]:match('^%s*(.-)%s*$')
-          if stripped == '>' then
-            depth = depth - 1
-            if depth == 0 then return i + 1, j - 1 end
-          elseif stripped:sub(1, 1) == '<' then
-            depth = depth + 1
-          end
-        end
-        return
-      end
-      seen = seen + 1
-    end
-  end
-end
-
-local function setBitInBase64Line(line, byteIdx, mask, on)
-  local lead, content, tail = line:match('^(%s*)(%S*)(%s*)$')
-  if not content or content == '' then return line end
-  local bytes = b64decode(content)
-  if byteIdx < 1 or byteIdx > #bytes then return line end
-  local b = bytes:byte(byteIdx)
-  local newB = on and (b | mask) or (b & ~mask)
-  if newB == b then return line end
-  local patched = bytes:sub(1, byteIdx - 1)
-               .. string.char(newB)
-               .. bytes:sub(byteIdx + 1)
-  return lead .. b64encode(patched) .. tail
-end
-
--- Drive the "output bus disabled" bit (0x02) on the fxIdx-th non-JS FX
--- block of an FXCHAIN-bearing track-state chunk: `disabled=true` sets
--- it, `disabled=false` clears it. Read-modify-write on that single
--- bit; every other flag bit, in_bus, and out_bus are preserved. The
--- flag is mirrored on the trailer line and the penultimate byte of
--- the first base64 line; both are patched. Idempotent. Pure: no
--- state, no reaper deps — exposed on wm so the spec can drive it
--- through the same module.
-function wm.setFXOutputDisabled(chunk, fxIdx, disabled)
-  local lines, hasTrailing = splitChunkLines(chunk)
-  local first, trailer     = findFxBlock(lines, fxIdx)
-  if not first then return chunk, false end
-
-  lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x02, disabled)
-
-  local firstBytes = b64decode(lines[first])
-  if #firstBytes >= 2 then
-    lines[first] = setBitInBase64Line(lines[first], #firstBytes - 1, 0x02, disabled)
-  end
-
-  return joinChunkLines(lines, hasTrailing), true
 end
 
 ----- Apply ops (Stage 2)
@@ -706,6 +770,36 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
     if t.params then
       pushParams(track, current[d].absIdx, t.ident, t.params, paramIdxCache)
     end
+  end
+
+  -- 5. Reconcile per-FX "MIDI output disabled" (0x02) against the user
+  --    graph. `midiOut` is stamped on target entries by projectEntry only
+  --    for kind='node' fx; CU bridges and foreign FX have no midiOut and
+  --    no routing trailer, so they're skipped on both sides. One chunk
+  --    round-trip per track per reconcile pass.
+  local nodeTargets = {}
+  for d, tgt in ipairs(target) do
+    if tgt.midiOut ~= nil then
+      util.add(nodeTargets, { absIdx = current[d].absIdx, midiOut = tgt.midiOut })
+    end
+  end
+  if #nodeTargets > 0 then
+    local absToRouting, routingIdx = {}, 0
+    for i = 0, reaper.TrackFX_GetCount(track) - 1 do
+      local _, ident = reaper.TrackFX_GetFXName(track, i)
+      if not (ident and ident:sub(1, 3) == 'JS:') then
+        absToRouting[i] = routingIdx
+        routingIdx = routingIdx + 1
+      end
+    end
+    local _, chunk = reaper.GetTrackStateChunk(track, '', false)
+    for _, nt in ipairs(nodeTargets) do
+      local rIdx = absToRouting[nt.absIdx]
+      if rIdx then
+        chunk = wm.setFXOutputDisabled(chunk, rIdx, not nt.midiOut)
+      end
+    end
+    reaper.SetTrackStateChunk(track, chunk, false)
   end
 end
 
