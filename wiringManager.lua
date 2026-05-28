@@ -449,6 +449,132 @@ function wm:diff(target, snap)
   return ops
 end
 
+----- FX MIDI routing surgery (state chunk)
+--
+-- REAPER has no ReaScript getter or setter for the per-FX MIDI input
+-- bus / output bus / replace-or-merge mode encoded inside each
+-- `<VST ...>` block in an FXCHAIN. The applier patches the chunk
+-- directly when it needs to disable an FX's MIDI output bus. The
+-- encoding is documented in docs/reaper_midi_routing.md; fixtures live
+-- in design/midi-routing-fixtures.md and are pinned by fx_routing_spec.
+
+local fxRoutingAlpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+local fxRoutingDec   = {}
+for i = 1, #fxRoutingAlpha do fxRoutingDec[fxRoutingAlpha:sub(i, i):byte()] = i - 1 end
+
+local function b64decode(s)
+  local bytes, buf, bits = {}, 0, 0
+  for i = 1, #s do
+    local c = s:byte(i)
+    if c == 61 then break end  -- '='
+    local v = fxRoutingDec[c]
+    if v then
+      buf  = buf * 64 + v
+      bits = bits + 6
+      if bits >= 8 then
+        bits = bits - 8
+        local b = buf >> bits
+        buf = buf - (b << bits)
+        bytes[#bytes + 1] = string.char(b)
+      end
+    end
+  end
+  return table.concat(bytes)
+end
+
+local function b64encode(s)
+  local out, buf, bits = {}, 0, 0
+  for i = 1, #s do
+    buf  = buf * 256 + s:byte(i)
+    bits = bits + 8
+    while bits >= 6 do
+      bits = bits - 6
+      local v = (buf >> bits) & 0x3F
+      out[#out + 1] = fxRoutingAlpha:sub(v + 1, v + 1)
+      buf = buf - (v << bits)
+    end
+  end
+  if bits > 0 then
+    local v = (buf << (6 - bits)) & 0x3F
+    out[#out + 1] = fxRoutingAlpha:sub(v + 1, v + 1)
+  end
+  while #out % 4 ~= 0 do out[#out + 1] = '=' end
+  return table.concat(out)
+end
+
+local function splitChunkLines(s)
+  local hasTrailing = s:sub(-1) == '\n'
+  local body  = hasTrailing and s or s .. '\n'
+  local lines = {}
+  for ln in body:gmatch('([^\n]*)\n') do lines[#lines + 1] = ln end
+  return lines, hasTrailing
+end
+
+local function joinChunkLines(lines, hasTrailing)
+  return table.concat(lines, '\n') .. (hasTrailing and '\n' or '')
+end
+
+-- Locate the (fxIdx+1)-th non-JS FX block in the chunk (0-indexed).
+-- Returns (firstBase64LineIdx, trailerLineIdx) or nil.
+local function findFxBlock(lines, fxIdx)
+  local seen = 0
+  for i, ln in ipairs(lines) do
+    if ln:match('^%s*<VST%s') or ln:match('^%s*<CLAP%s') or ln:match('^%s*<AU%s') then
+      if seen == fxIdx then
+        local depth = 1
+        for j = i + 1, #lines do
+          local stripped = lines[j]:match('^%s*(.-)%s*$')
+          if stripped == '>' then
+            depth = depth - 1
+            if depth == 0 then return i + 1, j - 1 end
+          elseif stripped:sub(1, 1) == '<' then
+            depth = depth + 1
+          end
+        end
+        return
+      end
+      seen = seen + 1
+    end
+  end
+end
+
+local function setBitInBase64Line(line, byteIdx, mask, on)
+  local lead, content, tail = line:match('^(%s*)(%S*)(%s*)$')
+  if not content or content == '' then return line end
+  local bytes = b64decode(content)
+  if byteIdx < 1 or byteIdx > #bytes then return line end
+  local b = bytes:byte(byteIdx)
+  local newB = on and (b | mask) or (b & ~mask)
+  if newB == b then return line end
+  local patched = bytes:sub(1, byteIdx - 1)
+               .. string.char(newB)
+               .. bytes:sub(byteIdx + 1)
+  return lead .. b64encode(patched) .. tail
+end
+
+-- Drive the "output bus disabled" bit (0x02) on the fxIdx-th non-JS FX
+-- block of an FXCHAIN-bearing track-state chunk: `disabled=true` sets
+-- it, `disabled=false` clears it. Read-modify-write on that single
+-- bit; every other flag bit, in_bus, and out_bus are preserved. The
+-- flag is mirrored on the trailer line and the penultimate byte of
+-- the first base64 line; both are patched. Idempotent. Pure: no
+-- state, no reaper deps — exposed on wm so the spec can drive it
+-- through the same module.
+function wm.setFXOutputDisabled(chunk, fxIdx, disabled)
+  local lines, hasTrailing = splitChunkLines(chunk)
+  local first, trailer     = findFxBlock(lines, fxIdx)
+  if not first then return chunk, false end
+
+  lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x02, disabled)
+
+  local firstBytes = b64decode(lines[first])
+  if #firstBytes >= 2 then
+    lines[first] = setBitInBase64Line(lines[first], #firstBytes - 1, 0x02, disabled)
+  end
+
+  return joinChunkLines(lines, hasTrailing), true
+end
+
 ----- Apply ops (Stage 2)
 
 -- CU JSFX exposes 'mode' as an enum slider; this table is the wm/CU bridge
