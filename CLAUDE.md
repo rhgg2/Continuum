@@ -105,6 +105,16 @@ Never hand-edit them.
 
 ## How to work
 
+- **Never call an MCP tool from memory.** Every MCP tool — this
+  project's `mcp__readium_docs__*` and `mcp__readium_tests__*`, plus the
+  global `multi_read` / `grep_window` / `apply_patches` — is *deferred*:
+  its schema is not in context by default. Before the first call to one
+  in a session, run `ToolSearch select:<name>`, read the schema, then
+  match every parameter to it. Unconditional, not "when unsure": vibing
+  a param name fails *silently* — unknown keys are ignored, not
+  rejected, so a wrong guess doesn't error, it quietly does the wrong
+  thing.
+
 - Always read `map/<file>.map` before fetching source ranges from
   `<file>.lua`, **including for files you've worked with before**. The
   map gives constructed sub-instances, public API, signals, and
