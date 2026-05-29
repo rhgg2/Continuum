@@ -149,7 +149,22 @@ local declarations = {
   { 'colour.shadowed',         'colour.inactive'                  },
   { 'colour.cursor',           'palette.night'                    },
   { 'colour.cursorText',       'palette.nightText'                },
-  { 'colour.arrangeCursorBorder', 'palette.shade'                 },
+  -- Arrange page: cursor caret, blocked-drag outline, transport rules,
+  -- double-click-drag ghost, and orphan (slot-less item) fills. The 62
+  -- generated slot hues stay computed (golden-ratio rotation); these are the
+  -- fixed colours, named so they live in the palette like every other chrome
+  -- colour rather than as inline ints.
+  { 'colour.arrange.cursorBorder',     'palette.shade'           },
+  { 'colour.arrange.phrase',           {'colour.rowBeat', 1.0}   },  -- bar tint at full alpha
+  { 'colour.arrange.blockedBorder',    {0.80, 0.16, 0.16, 0.95}  },  -- drag would overlap a neighbour
+  { 'colour.arrange.editCursor',       {0.20, 0.20, 0.26, 0.85}  },  -- REAPER edit-cursor rule
+  { 'colour.arrange.playHead',         {1.00, 0.85, 0.10, 0.95}  },  -- transport play-head rule
+  { 'colour.arrange.ghostFill',        {0.95, 0.93, 0.80, 0.35}  },  -- create-preview fill
+  { 'colour.arrange.ghostBorder',      {0.45, 0.42, 0.30, 0.90}  },  -- create-preview border
+  { 'colour.arrange.orphanFill',       {0.50, 0.50, 0.50, 0.35}  },  -- slot-less item, neutral grey
+  { 'colour.arrange.orphanBorder',     {0.30, 0.30, 0.30, 1.0}   },
+  { 'colour.arrange.orphanFocusFill',  {0.85, 0.85, 0.85, 0.55}  },
+  { 'colour.arrange.orphanFocusBorder',{0.97, 0.97, 0.97, 1.0}   },
   { 'colour.rowNormal',        {'palette.bg',         0   }       },
   { 'colour.rowBeat',          {'palette.highlight',  0.4 }       },
   { 'colour.rowBarStart',      {'palette.mid',        0.4 }       },

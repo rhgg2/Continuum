@@ -54,10 +54,6 @@ local openCreateModal
 local press = nil
 local WHEEL_ROWS   = 1   -- cursor rows moved per mouse-wheel notch
 local wheelAccum   = 0   -- fractional wheel carried between frames
-local BLOCKED_BORDER  -- lazy: red border for a drag that would overlap
-local EDIT_LINE       -- lazy: REAPER edit-cursor rule across all tracks
-local PLAY_LINE       -- lazy: yellow play-head rule
-local CREATE_GHOST    -- lazy { fill, border }: double-click-drag take preview
 
 ----- Style + draw helpers
 
@@ -86,34 +82,31 @@ end
 local SLOT_FILL_ALPHA = 0.85
 local SLOT_BORDER_ALPHA = 0.75
 local slotColourCache = {}
-local ORPHAN  -- lazy { fill, border, focusFill, focusBorder }
 local function slotColours(slotIdx, focused)
-  local quad
+  -- Orphans (no slot) read named config; the 62 slot hues are generated,
+  -- not a palette, so they stay computed.
   if slotIdx == nil then
-    ORPHAN = ORPHAN or {
-      ImGui.ColorConvertDouble4ToU32(0.50, 0.50, 0.50, 0.35),
-      ImGui.ColorConvertDouble4ToU32(0.30, 0.30, 0.30, 1.0),
-      ImGui.ColorConvertDouble4ToU32(0.85, 0.85, 0.85, 0.55),
-      ImGui.ColorConvertDouble4ToU32(0.97, 0.97, 0.97, 1.0),
-    }
-    quad = ORPHAN
-  else
-    quad = slotColourCache[slotIdx]
-    if not quad then
-      local PHI = 0.6180339887498949
-      local h   = ((slotIdx + 1) * PHI) % 1.0
-      local function hue(s, v, a)
-        local r, g, b = ImGui.ColorConvertHSVtoRGB(h, s, v)
-        return ImGui.ColorConvertDouble4ToU32(r, g, b, a)
-      end
-      quad = {
-        hue(0.55, 0.78, SLOT_FILL_ALPHA),
-        hue(0.85, 0.55, SLOT_BORDER_ALPHA),
-        hue(0.30, 0.97, SLOT_FILL_ALPHA),
-        hue(0.92, 0.90, 1.0),
-      }
-      slotColourCache[slotIdx] = quad
+    if focused then
+      return chrome.colour('arrange.orphanFocusFill'),
+             chrome.colour('arrange.orphanFocusBorder')
     end
+    return chrome.colour('arrange.orphanFill'), chrome.colour('arrange.orphanBorder')
+  end
+  local quad = slotColourCache[slotIdx]
+  if not quad then
+    local PHI = 0.6180339887498949
+    local h   = ((slotIdx + 1) * PHI) % 1.0
+    local function hue(s, v, a)
+      local r, g, b = ImGui.ColorConvertHSVtoRGB(h, s, v)
+      return ImGui.ColorConvertDouble4ToU32(r, g, b, a)
+    end
+    quad = {
+      hue(0.55, 0.78, SLOT_FILL_ALPHA),
+      hue(0.85, 0.55, SLOT_BORDER_ALPHA),
+      hue(0.30, 0.97, SLOT_FILL_ALPHA),
+      hue(0.92, 0.90, 1.0),
+    }
+    slotColourCache[slotIdx] = quad
   end
   if focused then return quad[3], quad[4] end
   return quad[1], quad[2]
@@ -262,8 +255,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   -- palette.highlight at alpha 0.4) so phrases read stronger than
   -- the bars they contain.
   local barTint    = chrome.colour('rowBeat')
-  local cr, cg, cb = ImGui.ColorConvertU32ToDouble4(barTint)
-  local phraseTint = ImGui.ColorConvertDouble4ToU32(cr, cg, cb, 1.0)
+  local phraseTint = chrome.colour('arrange.phrase')
 
   local function trackLeft(c)  return ox + QN_W + GUTTER_PAD + c * TRACK_W end
   local function trackRight(c) return trackLeft(c) + TRACK_W                end
@@ -330,11 +322,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local ry0 = snap(rowY(math.max(startRow, sr)))
     local ry1 = snap(rowY(math.min(endRow, sr + visRows)))
     local fill, border = slotColours(tk.slotIdx, focused)
-    if blocked then
-      BLOCKED_BORDER = BLOCKED_BORDER
-        or ImGui.ColorConvertDouble4ToU32(0.80, 0.16, 0.16, 0.95)
-      border = BLOCKED_BORDER
-    end
+    if blocked then border = chrome.colour('arrange.blockedBorder') end
     ImGui.DrawList_AddRectFilled(dl, rx0+1, ry0+1, rx1, ry1, fill)
     ImGui.DrawList_AddRect(dl, rx0, ry0, rx1+1, ry1+1, border, 0, 0, 1)
     if tk.name and tk.name ~= '' then
@@ -372,16 +360,12 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local startRow = av:qnToRow(createCand.startQN)
     local endRow   = av:qnToRow(createCand.startQN + createCand.lengthQN)
     if endRow > sr and startRow < sr + visRows then
-      CREATE_GHOST = CREATE_GHOST or {
-        fill   = ImGui.ColorConvertDouble4ToU32(0.95, 0.93, 0.80, 0.35),
-        border = ImGui.ColorConvertDouble4ToU32(0.45, 0.42, 0.30, 0.90),
-      }
       local gx0 = snap(trackLeft(press.col))
       local gx1 = snap(trackRight(press.col))
       local gy0 = snap(rowY(math.max(startRow, sr)))
       local gy1 = snap(rowY(math.min(endRow, sr + visRows)))
-      ImGui.DrawList_AddRectFilled(dl, gx0+1, gy0+1, gx1, gy1, CREATE_GHOST.fill)
-      ImGui.DrawList_AddRect(dl, gx0, gy0, gx1+1, gy1+1, CREATE_GHOST.border, 0, 0, 1)
+      ImGui.DrawList_AddRectFilled(dl, gx0+1, gy0+1, gx1, gy1, chrome.colour('arrange.ghostFill'))
+      ImGui.DrawList_AddRect(dl, gx0, gy0, gx1+1, gy1+1, chrome.colour('arrange.ghostBorder'), 0, 0, 1)
     end
   end
 
@@ -395,7 +379,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local cx1   = snap(trackRight(curCol))
     local cy    = snap(rowY(curRow))
     local serif = 4
-    local col   = chrome.colour('arrangeCursorBorder')
+    local col   = chrome.colour('arrange.cursorBorder')
     ImGui.DrawList_AddLine(dl, cx0 + 1, cy, cx1-1,     cy,        col, 1.5)
     ImGui.DrawList_AddLine(dl, cx0 + 1, cy - serif,  cx0 +1, cy + serif, col, 1.5)
     ImGui.DrawList_AddLine(dl, cx1, cy - serif,  cx1, cy + serif, col, 1.5)
@@ -457,15 +441,9 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local y = snap(rowY(av:qnToRow(qn)))
     ImGui.DrawList_AddLine(dl, ox, y, gridR, y, colour, 1)
   end
-  EDIT_LINE = EDIT_LINE
-    or ImGui.ColorConvertDouble4ToU32(0.20, 0.20, 0.26, 0.85)
-  qnRule(av:editCursorQN(), EDIT_LINE)
+  qnRule(av:editCursorQN(), chrome.colour('arrange.editCursor'))
   local playQN = av:playPositionQN()
-  if playQN then
-    PLAY_LINE = PLAY_LINE
-      or ImGui.ColorConvertDouble4ToU32(1.00, 0.85, 0.10, 0.95)
-    qnRule(playQN, PLAY_LINE)
-  end
+  if playQN then qnRule(playQN, chrome.colour('arrange.playHead')) end
 
   for r = 0, visRows - 1 do
     local label = rowLabel(sr + r)
