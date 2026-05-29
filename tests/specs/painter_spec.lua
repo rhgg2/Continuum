@@ -21,6 +21,10 @@ fakeImGui.CalcTextSize = function(_, s)
   calls[#calls + 1] = { fn = 'CalcTextSize', args = { s } }
   return #s * 7, 13
 end
+-- Pure colour maths for painter.hue: HSV passthrough packed into one int, so a
+-- test can prove hue mints a distinct token per index without a real ImGui.
+fakeImGui.ColorConvertHSVtoRGB    = function(h, s, v)    return h, s, v end
+fakeImGui.ColorConvertDouble4ToU32 = function(r, g, b, a) return r * 1e6 + g * 1e3 + b + a end
 
 package.preload['imgui'] = function() return function(_) return fakeImGui end end
 -- An earlier spec's run loads painter (via wiringPage) and imgui under a
@@ -127,6 +131,37 @@ return {
         { fn = 'CalcTextSize', args = { 'hi' } },
         { fn = 'PopFont',      args = { 'CTX' } },
       })
+    end,
+  },
+  {
+    name = 'a name routes through chrome; a token passes its packed colour straight through',
+    run = function()
+      calls = {}
+      local p = mk()
+      p.fill({ x0 = 1, y0 = 1, x1 = 3, y1 = 4 }, 'bg')
+      t.eq(last().args[6], 'col:bg')
+      p.fill({ x0 = 1, y0 = 1, x1 = 3, y1 = 4 }, { u32 = 999 })
+      t.eq(last().args[6], 999)
+    end,
+  },
+  {
+    name = 'a bare int colour is rejected — the one way to bypass the palette',
+    run = function()
+      local ok, err = pcall(function()
+        mk().fill({ x0 = 1, y0 = 1, x1 = 3, y1 = 4 }, 0xFF00FF00)
+      end)
+      t.falsy(ok, 'a raw int must raise')
+      t.truthy(tostring(err):match('raw int'), 'the error names the offence')
+    end,
+  },
+  {
+    name = 'painter.hue mints an opaque token; golden-ratio rotation makes adjacent indices distinct',
+    run = function()
+      local a = painter.hue(0, 0.5, 0.7, 1.0)
+      local b = painter.hue(1, 0.5, 0.7, 1.0)
+      t.eq(type(a), 'table')
+      t.truthy(a.u32 ~= nil, 'token carries a packed colour')
+      t.truthy(a.u32 ~= b.u32, 'different indices give different hues')
     end,
   },
 }

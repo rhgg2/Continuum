@@ -9,8 +9,11 @@
 -- hit-test resolves clicks through the identical map the draw pass used —
 -- the forward map and its inverse have a single source and cannot drift.
 --
--- Colours are passed by NAME and resolved through chrome.colour: the project
--- keeps colours in named config, never raw ints at the call site. Stroke
+-- A colour is passed by NAME and resolved through chrome.colour: the project
+-- keeps colours in named config. Genuinely computed colours — the golden-
+-- ratio slot hues — have no name, so painter.hue mints them as opaque {u32}
+-- tokens; a draw method takes a name or a token and raises on a bare int, so
+-- the named-colour discipline can't be bypassed by hand-packing one. Stroke
 -- widths, corner radii and font sizes are screen-space and pass through
 -- unconverted; only positions are mapped.
 --
@@ -35,16 +38,26 @@ function M.new(ctx, chrome, transform)
   local p = { ox = ox, oy = oy, sx = sx, sy = sy,
               toScreen = toScreen, fromScreen = fromScreen }
 
+  -- A name resolves through chrome; a {u32} token (minted by painter.hue for
+  -- the rare computed colour) passes its packed value through. A bare int is
+  -- rejected on purpose — it's the one way to smuggle an unnamed colour past
+  -- the palette, the very discipline this binder exists to keep.
+  local function col(c)
+    if type(c) == 'string' then return colour(c) end
+    if type(c) == 'table'  then return c.u32      end
+    error('painter: colour must be a name or a painter token, not a raw int')
+  end
+
   function p.fill(r, name, rounding)
     local x0, y0 = toScreen(r.x0, r.y0)
     local x1, y1 = toScreen(r.x1, r.y1)
-    ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, colour(name), rounding or 0)
+    ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, col(name), rounding or 0)
   end
 
   function p.stroke(r, name, thick, rounding)
     local x0, y0 = toScreen(r.x0, r.y0)
     local x1, y1 = toScreen(r.x1, r.y1)
-    ImGui.DrawList_AddRect(dl, x0, y0, x1, y1, colour(name), rounding or 0, 0, thick or 1)
+    ImGui.DrawList_AddRect(dl, x0, y0, x1, y1, col(name), rounding or 0, 0, thick or 1)
   end
 
   -- A given font draws via AddTextEx (font passed to the draw call, no stack
@@ -52,23 +65,23 @@ function M.new(ctx, chrome, transform)
   function p.text(x, y, name, s, font, size)
     local sx_, sy_ = toScreen(x, y)
     if font then
-      ImGui.DrawList_AddTextEx(dl, font, size, sx_, sy_, colour(name), s)
+      ImGui.DrawList_AddTextEx(dl, font, size, sx_, sy_, col(name), s)
     else
-      ImGui.DrawList_AddText(dl, sx_, sy_, colour(name), s)
+      ImGui.DrawList_AddText(dl, sx_, sy_, col(name), s)
     end
   end
 
   function p.line(x0, y0, x1, y1, name, thick)
     local ax, ay = toScreen(x0, y0)
     local bx, by = toScreen(x1, y1)
-    ImGui.DrawList_AddLine(dl, ax, ay, bx, by, colour(name), thick or 1)
+    ImGui.DrawList_AddLine(dl, ax, ay, bx, by, col(name), thick or 1)
   end
 
   function p.tri(x0, y0, x1, y1, x2, y2, name)
     local ax, ay = toScreen(x0, y0)
     local bx, by = toScreen(x1, y1)
     local cx, cy = toScreen(x2, y2)
-    ImGui.DrawList_AddTriangleFilled(dl, ax, ay, bx, by, cx, cy, colour(name))
+    ImGui.DrawList_AddTriangleFilled(dl, ax, ay, bx, by, cx, cy, col(name))
   end
 
   -- CalcTextSize has no font parameter — it measures in the pushed font — so
@@ -83,6 +96,15 @@ function M.new(ctx, chrome, transform)
   end
 
   return p
+end
+
+--contract: returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
+-- The idx-th visually-distinct hue: golden-ratio rotation throws adjacent
+-- indices to opposite sides of the wheel. sat/val/alpha tone it.
+function M.hue(idx, sat, val, alpha)
+  local h = ((idx + 1) * 0.6180339887498949) % 1.0
+  local r, g, b = ImGui.ColorConvertHSVtoRGB(h, sat, val)
+  return { u32 = ImGui.ColorConvertDouble4ToU32(r, g, b, alpha) }
 end
 
 return M

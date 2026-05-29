@@ -28,6 +28,15 @@ Methods take colour *names* and resolve them through `chrome.colour`.
 The project keeps colours in named config; resolving at the call site
 and passing ints around (as wiring did) is the drift this closes.
 
+The exception is a colour with no name to give it: the arrange grid's 62
+slot fills are a golden-ratio hue *rotation*, a function rather than a
+palette, so freezing them into config would be a lie. `painter.hue(idx,
+sat, val, alpha)` computes one and returns it as an opaque `{u32}` token.
+A draw method's colour argument therefore takes a name *or* such a token;
+a bare int raises. That keeps the one legitimate escape — a genuinely
+computed colour — from widening into "any int goes", which is the very
+discipline the name rule exists to hold.
+
 ## What converts, what doesn't
 
 Only positions pass through the transform. Stroke widths, corner radii

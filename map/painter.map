@@ -1,11 +1,15 @@
-@module painter  src=painter.lua  loc=88  sha=untracked  mode=namespace
+@module painter  src=painter.lua  loc=110  sha=02e1d93  mode=namespace
 
 # Imports
-  @const ImGui = 'imgui'  @ 21
+  @const ImGui = 'imgui'  @ 24
 
 # Module-level constants
-  @const M = {}  @ 23
+  @const M = {}  @ 26
 
 # Public API (M.*)
-  @api M.new(ctx, chrome, transform)  @ 26
+  @api M.new(ctx, chrome, transform)  @ 29
       @contract  transform.sx/sy default 1, ox/oy default 0; scale must be non-zero (fromScreen divides).
+  @api M.hue(idx, sat, val, alpha)  @ 104
+      -- The idx-th visually-distinct hue: golden-ratio rotation throws adjacent
+      -- indices to opposite sides of the wheel. sat/val/alpha tone it.
+      @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
