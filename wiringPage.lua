@@ -214,13 +214,6 @@ local openFxPicker
 
 ----- Pixel geometry (page-owned)
 
--- pos is the node's centre in canvas-local coordinates (origin = centre
--- of the viewport, set up in renderCanvas); rect is laid out symmetrically.
-local function nodeRect(nv)
-  local hw, hh = NODE_W / 2, NODE_H / 2
-  return nv.pos.x - hw, nv.pos.y - hh, nv.pos.x + hw, nv.pos.y + hh
-end
-
 -- Axis-aligned rect as a named struct, so every hit test and fill reads the
 -- same shape. inRect tests containment; boxRect lifts an {x,y,w,h} slot/row
 -- (optionally hit-padded) into a rect; unionRect grows acc to cover r.
@@ -239,11 +232,13 @@ local function unionRect(acc, r)
   if r.y1 > acc.y1 then acc.y1 = r.y1 end
 end
 
--- nodeRect shifted into screen space (canvas origin added) as a rect. Every
--- nodeRect caller wants screen coords, so this is the form they reach for.
-local function nodeScreenRect(nv, ox, oy)
-  local lx0, ly0, lx1, ly1 = nodeRect(nv)
-  return rect(ox + lx0, oy + ly0, ox + lx1, oy + ly1)
+-- The node body as a canvas-local rect: pos is the node's centre (origin =
+-- viewport centre, carried by the painter), so the box is symmetric about it.
+-- The painter adds the origin at draw; hit-tests compare against the canvas-
+-- local mouse — so this one struct serves both and cannot drift between them.
+local function nodeBox(nv)
+  local hw, hh = NODE_W / 2, NODE_H / 2
+  return rect(nv.pos.x - hw, nv.pos.y - hh, nv.pos.x + hw, nv.pos.y + hh)
 end
 
 ----- Drawing
@@ -350,8 +345,8 @@ local function wrapLabel(text, maxW)
   return out
 end
 
-local function drawNode(p, nv, ox, oy, isSelected)
-  local r = nodeScreenRect(nv, ox, oy)
+local function drawNode(p, nv, isSelected)
+  local r = nodeBox(nv)
   p.fill(r, 'wiring.node.' .. nv.category, CORNER_R)
   if isSelected then
     strokeNodeRect(p, r, 'wiring.node.selected')
@@ -417,8 +412,11 @@ local function drawSlot(p, slot, idStem)
   else
     drawKeyboardIcon(p, slot.x, slot.y)
   end
+  -- InvisibleButton + tooltip are screen-space ImGui widgets, so map the
+  -- slot's canvas-local corner back through the painter to anchor them.
+  local ssx, ssy = p.toScreen(slot.x, slot.y)
   local pad = PORT_HIT_PAD
-  ImGui.SetCursorScreenPos(ctx, slot.x - pad, slot.y - pad)
+  ImGui.SetCursorScreenPos(ctx, ssx - pad, ssy - pad)
   ImGui.InvisibleButton(ctx, idStem, slot.w + 2 * pad, slot.h + 2 * pad)
   -- AllowWhenBlockedByActiveItem lets target tooltips fire while the
   -- source chip's InvisibleButton is the active item (mid wire-drag).
@@ -426,7 +424,7 @@ local function drawSlot(p, slot, idStem)
                    | ImGui.HoveredFlags_AllowWhenBlockedByActiveItem
   if slot.name and ImGui.IsItemHovered(ctx, hoverFlags) then
     ImGui.SetNextWindowPos(ctx,
-      slot.x + slot.w / 2, slot.y - PORT_TOOLTIP_GAP,
+      ssx + slot.w / 2, ssy - PORT_TOOLTIP_GAP,
       ImGui.Cond_Always, 0.5, 1.0)
     ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg, chrome.colour('wiring.tooltip.bg'))
     ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 4, 2)
@@ -441,8 +439,8 @@ end
 
 -- Selection-style outline around the whole body, used for both source-side
 -- and target-side hover — no more split-band shape.
-local function drawBodyOutline(p, nv, ox, oy)
-  strokeNodeRect(p, nodeScreenRect(nv, ox, oy), 'wiring.node.selected')
+local function drawBodyOutline(p, nv)
+  strokeNodeRect(p, nodeBox(nv), 'wiring.node.selected')
 end
 
 ----- Wire-creation gesture helpers
@@ -498,8 +496,8 @@ end
 -- midi and the handle; midi draft hides audio chips and the handle).
 -- forceSide pins the face for sticky overlays (where the cursor isn't
 -- over the node so my can't pick the side); natural hover passes nil.
-local function layoutPortRow(nv, ox, oy, dir, mx, my, keep, forceSide)
-  local b = nodeScreenRect(nv, ox, oy)
+local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
+  local b = nodeBox(nv)
   local bx0, by0, bx1, by1 = b.x0, b.y0, b.x1, b.y1
   local audio = (dir == 'out') and nv.outs.audio or nv.ins.audio
   local midi  = (dir == 'out') and nv.outs.midi  or nv.ins.midi
@@ -706,7 +704,7 @@ end
 -- Engaged-priority hover scan shared by source-side (shift) and target-side
 -- (draft) drafting: the engaged node is probed before the forward scan so a
 -- neighbour's overlapping hoverRect can't steal an open popout mid-gesture.
-local function engagedHover(nodeViews, mx, my, ox, oy, cfg)
+local function engagedHover(nodeViews, mx, my, cfg)
   local dir, keep = cfg.dir, cfg.keep
   local function consume(pick)
     if pick.list then listOpenId = pick.nv.id end
@@ -720,7 +718,7 @@ local function engagedHover(nodeViews, mx, my, ox, oy, cfg)
     -- space is cleared so the body outline doesn't read as a target;
     -- engagement holds, so the popout stays open.
     if pick and pick.slot and not pick.slot.x then
-      if not inRect(mx, my, nodeScreenRect(nv, ox, oy)) then
+      if not inRect(mx, my, nodeBox(nv)) then
         pick.slot = nil
       end
     end
@@ -732,7 +730,7 @@ local function engagedHover(nodeViews, mx, my, ox, oy, cfg)
   if engagedId then
     for _, nv in ipairs(nodeViews) do
       if nv.id == engagedId then
-        local layout = layoutPortRow(nv, ox, oy, dir, mx, my, keep)
+        local layout = layoutPortRow(nv, dir, mx, my, keep)
         if listOpenId == nv.id and stillEngaged(layout, mx, my) then
           return consume{ nv = nv, layout = layout, list = layout.list,
                           slot = rowHit(layout.list.rows, mx, my) }
@@ -746,7 +744,7 @@ local function engagedHover(nodeViews, mx, my, ox, oy, cfg)
   end
   for _, nv in ipairs(nodeViews) do
     if cfg.eligible(nv) then
-      local layout = layoutPortRow(nv, ox, oy, dir, mx, my, keep)
+      local layout = layoutPortRow(nv, dir, mx, my, keep)
       local pick = pickHovered(nv, layout, mx, my, dir, keep)
       if pick then return consume(refine(pick, nv)) end
     end
@@ -758,14 +756,14 @@ end
 -- the live one; landing elsewhere leaves sticky set and both render.
 -- narrowOnMidi re-lays-out to a midi-only band so the in-body keyboard
 -- stands alone (no chips/handle/sleeve) once the cursor settles on it.
-local function shiftHoverHit(nodeViews, mx, my, ox, oy)
+local function shiftHoverHit(nodeViews, mx, my)
   local function narrowOnMidi(pick, nv)
     if pick and pick.slot and pick.slot.kind == 'midi' then
-      pick.layout = layoutPortRow(nv, ox, oy, 'out', mx, my, 'midi')
+      pick.layout = layoutPortRow(nv, 'out', mx, my, 'midi')
     end
     return pick
   end
-  return engagedHover(nodeViews, mx, my, ox, oy, {
+  return engagedHover(nodeViews, mx, my, {
     dir = 'out', keep = nil,
     eligible = function(nv) return #nv.outs.audio > 0 or #nv.outs.midi > 0 end,
     refine = narrowOnMidi,
@@ -779,12 +777,12 @@ end
 -- click pinned a port). Cursor-independent: uses the pinned-side stored
 -- at click-time so the overlay doesn't flip top/bottom as the cursor
 -- moves around. Defaults the slot highlight to port 1 / midi keyboard.
-local function stickyHoverHit(nodeViews, ox, oy)
+local function stickyHoverHit(nodeViews)
   if not sticky then return nil end
   for _, nv in ipairs(nodeViews) do
     if nv.id == sticky.nodeId
        and (#nv.outs.audio > 0 or #nv.outs.midi > 0) then
-      local layout = layoutPortRow(nv, ox, oy, 'out', 0, 0, nil, sticky.side)
+      local layout = layoutPortRow(nv, 'out', 0, 0, nil, sticky.side)
       return { nv = nv, layout = layout, slot = defaultSlot(nv, 'out', nil) }
     end
   end
@@ -812,14 +810,14 @@ end
 -- cursor sits in the source's own band gap (not on a chip, chevron, or
 -- the body), the kept-slot highlight is cleared to match the target-
 -- side band-gap behaviour: the popout stays, but no highlight reads.
-local function draftSourceHoverHit(nodeViews, mx, my, ox, oy)
+local function draftSourceHoverHit(nodeViews, mx, my)
   if not wireDraft or wireDraft.edgeIdx then return nil end
   for _, nv in ipairs(nodeViews) do
     if nv.id == wireDraft.keptId then
-      local layout = layoutPortRow(nv, ox, oy, 'out', mx, my,
+      local layout = layoutPortRow(nv, 'out', mx, my,
                                    wireDraft.type, wireDraft.keptSide)
       local inBand = inRect(mx, my, layout.hoverRect)
-                 and not inRect(mx, my, nodeScreenRect(nv, ox, oy))
+                 and not inRect(mx, my, nodeBox(nv))
                  and not slotHit(layout.slots, mx, my)
                  and not onChevron(layout.handle, mx, my)
       if inBand then
@@ -841,8 +839,8 @@ end
 -- Target-side hover (draft in flight). dir follows cursorEnd ('to' seeks
 -- in-ports on destinations, 'from' out-ports on sources); forbidden
 -- (cycle-blocked) nodes are ineligible, so they neither engage nor display.
-local function dropTargetHit(nodeViews, mx, my, ox, oy, draft)
-  return engagedHover(nodeViews, mx, my, ox, oy, {
+local function dropTargetHit(nodeViews, mx, my, draft)
+  return engagedHover(nodeViews, mx, my, {
     dir = (draft.cursorEnd == 'to') and 'in' or 'out',
     keep = draft.type,
     eligible = function(nv) return not draft.forbidden[nv.id] end,
@@ -1081,10 +1079,14 @@ local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idS
   p.fill(rect(x0, y0, x1, y1), 'bg')
   p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2),
          name, txt, wireFont, WIRE_LABEL_SIZE)
-  ImGui.SetCursorScreenPos(ctx, x0, y0)
+  -- InvisibleButton + tooltip are screen-space widgets; map the label's
+  -- canvas-local box back through the painter to anchor them.
+  local btnX, btnY = p.toScreen(x0, y0)
+  local tipX       = p.toScreen(cx, cy)
+  ImGui.SetCursorScreenPos(ctx, btnX, btnY)
   ImGui.InvisibleButton(ctx, idStem, 2 * hw, 2 * hh)
   if portName and ImGui.IsItemHovered(ctx, ImGui.HoveredFlags_ForTooltip) then
-    ImGui.SetNextWindowPos(ctx, cx, y0 - PORT_TOOLTIP_GAP,
+    ImGui.SetNextWindowPos(ctx, tipX, btnY - PORT_TOOLTIP_GAP,
       ImGui.Cond_Always, 0.5, 1.0)
     ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg, chrome.colour('wiring.tooltip.bg'))
     ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 4, 2)
@@ -1098,7 +1100,7 @@ local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idS
 end
 
 -- One screen segment per wireView, keyed by wireView index (= g.edges
--- index). sx/sy/ex/ey are canvas-local (caller adds origin). offX/offY
+-- index). sx/sy/ex/ey are canvas-local (the painter adds the origin). offX/offY
 -- is the perpendicular displacement from the canonical pair centre line,
 -- shared by drawWiresPass and wireExits so highlight geometry and label
 -- placement can't drift from drawn geometry.
@@ -1176,21 +1178,20 @@ end
 -- wires; nil otherwise. Closest wins on ties. keptAnchor is the screen-
 -- space position of the OTHER end's node-edge endpoint — the redraft
 -- gesture pins the wire there while the cursor drives the grabbed end.
-local function wireEndHit(segs, mx, my, ox, oy)
+local function wireEndHit(segs, mx, my)
   local best, bestDist
   for i, seg in pairs(segs) do
     for _, side in ipairs({ 'from', 'to' }) do
       local ax, ay, bx, by = endRegion(seg, side)
       if ax then
-        local d = pointToSegmentDist(mx, my,
-                    ox + ax, oy + ay, ox + bx, oy + by)
+        local d = pointToSegmentDist(mx, my, ax, ay, bx, by)
         if d <= WIRE_END_HIT_PERP and (not bestDist or d < bestDist) then
           best = {
             edgeIdx    = i,
             side       = side,
             keptAnchor = (side == 'from')
-              and { x = ox + seg.ex, y = oy + seg.ey }
-              or  { x = ox + seg.sx, y = oy + seg.sy },
+              and { x = seg.ex, y = seg.ey }
+              or  { x = seg.sx, y = seg.sy },
           }
           bestDist = d
         end
@@ -1204,7 +1205,7 @@ end
 -- the in-flight draft line replaces it). The wire-end highlight is
 -- drawn separately by drawWireEndHighlight after the node pass — nodes
 -- overpaint wires here, so an in-pass highlight would be invisible.
-local function drawWiresPass(p, segs, wireViews, ox, oy, opts)
+local function drawWiresPass(p, segs, wireViews, opts)
   opts = opts or {}
   local skip = opts.skipEdgeIdx
   local placedLabels = {}
@@ -1212,8 +1213,8 @@ local function drawWiresPass(p, segs, wireViews, ox, oy, opts)
     local seg = segs[i]
     if seg and i ~= skip then
       local w  = seg.w
-      local sx, sy = ox + seg.sx, oy + seg.sy
-      local ex, ey = ox + seg.ex, oy + seg.ey
+      local sx, sy = seg.sx, seg.sy
+      local ex, ey = seg.ex, seg.ey
       local name = w.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
       p.line(sx, sy, ex, ey, name, WIRE_THICK)
       drawWireArrow(p, sx, sy, ex, ey, name)
@@ -1238,14 +1239,13 @@ local function drawWiresPass(p, segs, wireViews, ox, oy, opts)
   end
 end
 
-local function drawWireEndHighlight(p, segs, ox, oy, hover)
+local function drawWireEndHighlight(p, segs, hover)
   if not hover then return end
   local seg = segs[hover.edgeIdx]
   if not seg then return end
   local ax, ay, bx, by = endRegion(seg, hover.side)
   if not ax then return end
-  p.line(ox + ax, oy + ay, ox + bx, oy + by,
-         'wiring.node.selected', WIRE_END_HIGHLIGHT)
+  p.line(ax, ay, bx, by, 'wiring.node.selected', WIRE_END_HIGHLIGHT)
 end
 
 -- Compute the draft wire's cursor-end screen position. Decay ratchets
@@ -1290,11 +1290,11 @@ end
 local function linToDb(lin) if lin <= 0 then return -math.huge end; return 20 * math.log(lin, 10) end
 local function dbToLin(db)  if db == -math.huge then return 0 end;  return 10 ^ (db / 20) end
 
-local function arrowMidHit(segs, mx, my, ox, oy)
+local function arrowMidHit(segs, mx, my)
   for i, seg in pairs(segs) do
     if seg.w.type == 'audio' then
-      local cx = ox + (seg.sx + seg.ex) / 2 + 0.5
-      local cy = oy + (seg.sy + seg.ey) / 2 + 0.5
+      local cx = (seg.sx + seg.ex) / 2 + 0.5
+      local cy = (seg.sy + seg.ey) / 2 + 0.5
       local dx, dy = mx - cx, my - cy
       if dx*dx + dy*dy <= WIRE_FADER_HIT * WIRE_FADER_HIT then
         return i, cx, cy
@@ -1344,14 +1344,14 @@ end
 -- forward drafts have no anchor, so we fall back to the node centre.
 -- Arrow direction follows cursorEnd: 'to' draws kept→cursor (forward),
 -- 'from' draws cursor→kept (backward).
-local function drawDraftWire(p, draft, nodesById, ox, oy, cx, cy)
+local function drawDraftWire(p, draft, nodesById, cx, cy)
   if not draft then return end
   local src = nodesById[draft.keptId]
   if not src then return end
   local name = draft.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
   local a   = draft.keptAnchor
-  local ax  = a and a.x or (ox + src.pos.x)
-  local ay  = a and a.y or (oy + src.pos.y)
+  local ax  = a and a.x or src.pos.x
+  local ay  = a and a.y or src.pos.y
   local sx, sy, ex, ey
   if draft.cursorEnd == 'to' then
     sx, sy, ex, ey = ax, ay, cx, cy
@@ -1366,10 +1366,9 @@ end
 -- used to start a drag, distinct from the inflated rect that drives
 -- port reveal. Returns nil if the mouse is over empty canvas (or a
 -- port band).
-local function nodeUnderMouse(nodeViews, ox, oy)
+local function nodeUnderMouse(nodeViews, mx, my)
   for _, nv in ipairs(nodeViews) do
-    local r = nodeScreenRect(nv, ox, oy)
-    if ImGui.IsMouseHoveringRect(ctx, r.x0, r.y0, r.x1, r.y1) then
+    if inRect(mx, my, nodeBox(nv)) then
       return nv
     end
   end
@@ -1377,9 +1376,9 @@ end
 
 -- nodeUnderMouse keyed to an arbitrary screen point (the decayed draft
 -- wire end, typically) rather than the live cursor.
-local function nodeAtPoint(nodeViews, px, py, ox, oy)
+local function nodeAtPoint(nodeViews, px, py)
   for _, nv in ipairs(nodeViews) do
-    if inRect(px, py, nodeScreenRect(nv, ox, oy)) then
+    if inRect(px, py, nodeBox(nv)) then
       return nv
     end
   end
@@ -1388,12 +1387,12 @@ end
 -- AABB intersection of a pixel-space band rect against every node's
 -- body rect (un-inflated; port bands aren't selectable). Returns the
 -- set of intersecting ids — empty table if nothing was caught.
-local function nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)
+local function nodesInBand(nodeViews, bx0, by0, bx1, by1)
   if bx0 > bx1 then bx0, bx1 = bx1, bx0 end
   if by0 > by1 then by0, by1 = by1, by0 end
   local set = {}
   for _, nv in ipairs(nodeViews) do
-    local r = nodeScreenRect(nv, ox, oy)
+    local r = nodeBox(nv)
     if r.x1 >= bx0 and r.x0 <= bx1 and r.y1 >= by0 and r.y0 <= by1 then
       set[nv.id] = true
     end
@@ -1402,18 +1401,20 @@ local function nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)
 end
 
 local function renderCanvas(w, h)
-  -- Identity transform: wiring lays out in screen space today, so the painter
-  -- passes coordinates through unchanged. The centre-origin canvas transform
-  -- lands when node / slot geometry moves to canvas-local.
-  local p      = painter.new(ctx, chrome, {})
+  -- Canvas origin is the centre of the viewport: logical (0,0) sits in the
+  -- middle, positions extend into all four quadrants. The painter carries
+  -- that origin, so every draw helper works in canvas-local coords and the
+  -- same transform maps the mouse back (lmx, lmy) for hit-testing.
   local sx, sy = ImGui.GetCursorScreenPos(ctx)
-  p.fill(rect(sx, sy, sx + w, sy + h), 'bg')
-  -- Canvas origin is the centre of the viewport: logical (0,0) draws
-  -- in the middle, positions extend in all four quadrants from there.
   local ox, oy = sx + math.floor(w / 2), sy + math.floor(h / 2)
   canvasOrigin.ox, canvasOrigin.oy = ox, oy
+  local p = painter.new(ctx, chrome, { ox = ox, oy = oy })
+  local vx0, vy0 = p.fromScreen(sx, sy)
+  local vx1, vy1 = p.fromScreen(sx + w, sy + h)
+  p.fill(rect(vx0, vy0, vx1, vy1), 'bg')
 
-  local mx, my    = ImGui.GetMousePos(ctx)
+  local mx, my   = ImGui.GetMousePos(ctx)
+  local lmx, lmy = p.fromScreen(mx, my)
   local shiftHeld = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
   -- Pressing shift clears the selection so the wire-creation hover
   -- affordance owns the visual layer. Rising edge only — holding shift
@@ -1435,7 +1436,7 @@ local function renderCanvas(w, h)
   -- selection drives the outline.
   local selection
   if band then
-    selection = nodesInBand(nodeViews, ox, oy, band.mx0, band.my0, mx, my)
+    selection = nodesInBand(nodeViews, band.mx0, band.my0, lmx, lmy)
   else
     selection = wv:selection()
   end
@@ -1444,7 +1445,7 @@ local function renderCanvas(w, h)
   -- node's pos by (delta) so geometry below (wire pre-pass, hit test,
   -- node draw, hover band) all see the in-flight positions.
   if drag then
-    local dx, dy = mx - drag.mx0, my - drag.my0
+    local dx, dy = lmx - drag.mx0, lmy - drag.my0
     for _, nv in ipairs(nodeViews) do
       local s = drag.starts[nv.id]
       if s then nv.pos.x, nv.pos.y = s.x + dx, s.y + dy end
@@ -1466,7 +1467,7 @@ local function renderCanvas(w, h)
   -- during any active gesture so the highlight never fires under a drag.
   local wireEndHover
   if not drag and not band and not wireDraft and not shiftHeld then
-    wireEndHover = wireEndHit(segs, mx, my, ox, oy)
+    wireEndHover = wireEndHit(segs, lmx, lmy)
   end
 
   -- Mid-wire fader: tick the live drag (poke param + check release), then
@@ -1474,7 +1475,7 @@ local function renderCanvas(w, h)
   -- gated on no other gesture being live. Suppress wireEndHover on the
   -- fader's wire so the two affordances don't fight on a short wire.
   if fader and fader.dragging then
-    local lin = pixelYToLin(my, fader.rect.y0)
+    local lin = pixelYToLin(lmy, fader.rect.y0)
     fader.currentLin = lin
     wv:pokeEdgeGain(fader.edgeIdx, lin)
     if not ImGui.IsMouseDown(ctx, 0) then
@@ -1487,7 +1488,7 @@ local function renderCanvas(w, h)
   local arrowHitIdx
   if not drag and not band and not wireDraft and not shiftHeld
      and not (fader and fader.dragging) then
-    arrowHitIdx = arrowMidHit(segs, mx, my, ox, oy)
+    arrowHitIdx = arrowMidHit(segs, lmx, lmy)
   end
   local stillVisible = false
   if fader then
@@ -1495,7 +1496,7 @@ local function renderCanvas(w, h)
       stillVisible = true
     elseif arrowHitIdx == fader.edgeIdx then
       stillVisible = true
-    elseif inRect(mx, my, fader.hitRect) then
+    elseif inRect(lmx, lmy, fader.hitRect) then
       stillVisible = true
     end
   end
@@ -1505,8 +1506,8 @@ local function renderCanvas(w, h)
     end
   elseif arrowHitIdx then
     local seg = segs[arrowHitIdx]
-    local ax  = ox + (seg.sx + seg.ex) / 2 + 0.5
-    local ay  = oy + (seg.sy + seg.ey) / 2 + 0.5
+    local ax  = (seg.sx + seg.ex) / 2 + 0.5
+    local ay  = (seg.sy + seg.ey) / 2 + 0.5
     local x0, y0, x1, y1 = faderRectAt(ax, ay)
     local pad = WIRE_FADER_HIT_PAD
     fader = {
@@ -1528,7 +1529,7 @@ local function renderCanvas(w, h)
   -- with the wire end rather than the cursor.
   local draftCx, draftCy
   if wireDraft then
-    draftCx, draftCy = computeDraftEnd(wireDraft, mx, my)
+    draftCx, draftCy = computeDraftEnd(wireDraft, lmx, lmy)
   end
 
   -- Wire-creation hover state: source-side while shift is held with no
@@ -1541,14 +1542,13 @@ local function renderCanvas(w, h)
   -- additionally requires a concrete slot and is checked at mouseup.
   local sourceHit, targetHit, stickyHit, draftSourceHit
   if wireDraft then
-    targetHit      = dropTargetHit(nodeViews, draftCx, draftCy,
-                                   ox, oy, wireDraft)
-    draftSourceHit = draftSourceHoverHit(nodeViews, draftCx, draftCy, ox, oy)
+    targetHit      = dropTargetHit(nodeViews, draftCx, draftCy, wireDraft)
+    draftSourceHit = draftSourceHoverHit(nodeViews, draftCx, draftCy)
   elseif shiftHeld and not hoverFreeze then
-    sourceHit = shiftHoverHit(nodeViews, mx, my, ox, oy)
+    sourceHit = shiftHoverHit(nodeViews, lmx, lmy)
   end
   if shiftHeld then
-    stickyHit = stickyHoverHit(nodeViews, ox, oy)
+    stickyHit = stickyHoverHit(nodeViews)
   end
 
   -- Assemble overlays, deduped by node id so a node engaged via two paths
@@ -1575,19 +1575,19 @@ local function renderCanvas(w, h)
   -- both the wires and the draft at the rect edge, so wires read as
   -- emerging from behind the node body). Chips/list draw later in the
   -- overlay pass.
-  drawWiresPass(p, segs, wireViewsList, ox, oy,
+  drawWiresPass(p, segs, wireViewsList,
     { skipEdgeIdx = wireDraft and wireDraft.edgeIdx })
   for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
-  drawDraftWire(p, wireDraft, nodesById, ox, oy, draftCx, draftCy)
+  drawDraftWire(p, wireDraft, nodesById, draftCx, draftCy)
   for _, nv in ipairs(nodeViews) do
-    drawNode(p, nv, ox, oy, selection[nv.id])
+    drawNode(p, nv, selection[nv.id])
   end
 
   -- Wire-end highlight: drawn after the node pass so the accent stroke
   -- sits on top of the node body's near-edge region (the wire-end region
   -- begins at the node-rect exit, but anti-aliasing can spill onto the
   -- body's corner; we overpaint to keep the highlight crisp).
-  drawWireEndHighlight(p, segs, ox, oy, wireEndHover)
+  drawWireEndHighlight(p, segs, wireEndHover)
 
   if fader then drawFader(p, fader) end
 
@@ -1602,7 +1602,7 @@ local function renderCanvas(w, h)
     end
     for _, nv in ipairs(nodeViews) do
       if errorIds[nv.id] then
-        strokeNodeRect(p, nodeScreenRect(nv, ox, oy), 'wiring.node.error')
+        strokeNodeRect(p, nodeBox(nv), 'wiring.node.error')
       end
     end
   end
@@ -1622,7 +1622,7 @@ local function renderCanvas(w, h)
     -- draft / midi redraft the node body stays unhighlighted and only
     -- the keyboard lights up.
     if pick.slot and not pick.slot.x and pick.slot.kind ~= 'midi' then
-      drawBodyOutline(p, pick.nv, ox, oy)
+      drawBodyOutline(p, pick.nv)
     end
     drawPortRow(p, pick, '##portSlot/' .. pick.nv.id)
     if pick.list then drawList(p, pick.list, pick.slot) end
@@ -1642,7 +1642,7 @@ local function renderCanvas(w, h)
   -- the click branch would jump the fader to the y-position of the press.
   local faderDblClicked = fader and not fader.dragging
     and ImGui.IsMouseDoubleClicked(ctx, 0)
-    and inRect(mx, my, fader.rect)
+    and inRect(lmx, lmy, fader.rect)
   if faderDblClicked then
     fader.currentLin = 1.0
     wv:setEdgeGain(fader.edgeIdx, 1.0)
@@ -1654,9 +1654,9 @@ local function renderCanvas(w, h)
   -- click isn't inside the fader strip rect.
   local faderClicked = fader and not fader.dragging and not faderDblClicked
     and ImGui.IsMouseClicked(ctx, 0)
-    and inRect(mx, my, fader.rect)
+    and inRect(lmx, lmy, fader.rect)
   if faderClicked then
-    local clickLin = pixelYToLin(my, fader.rect.y0)
+    local clickLin = pixelYToLin(lmy, fader.rect.y0)
     fader.valueAtClick = wv:edgeGain(fader.edgeIdx)
     fader.currentLin   = clickLin
     fader.dragging     = true
@@ -1688,7 +1688,7 @@ local function renderCanvas(w, h)
           local nv = sourceHit.nv
           pinned[nv.id] = pinned[nv.id] or {}
           pinned[nv.id][slot.portIdx] = true
-          local relaid = layoutPortRow(nv, ox, oy, 'out', mx, my, nil,
+          local relaid = layoutPortRow(nv, 'out', lmx, lmy, nil,
                                        sourceHit.layout.side)
           slot = findLayoutSlot(relaid, 'audio', slot.portIdx) or slot
         end
@@ -1704,7 +1704,7 @@ local function renderCanvas(w, h)
           keptSide   = sourceHit.layout.side,
           keptAnchor = keptAnchor,
           forbidden  = wv:ancestorsOf(sourceHit.nv.id),
-          mx0 = mx, my0 = my,
+          mx0 = lmx, my0 = lmy,
           fromList   = sourceHit.list ~= nil,
         }
         if slot.kind == 'midi' then
@@ -1732,14 +1732,14 @@ local function renderCanvas(w, h)
       -- the decayed cursor end at the anchor, and a body-centre anchor
       -- reads as cursor-over-body in dropTargetHit, silently retargeting
       -- the redraft to port 1.
-      local endX = ox + (keptIsTo and seg.sx or seg.ex)
-      local endY = oy + (keptIsTo and seg.sy or seg.ey)
+      local endX = keptIsTo and seg.sx or seg.ex
+      local endY = keptIsTo and seg.sy or seg.ey
       if grabbedPort and grabbedPort > 1 then
         local grabbedNV = nodesById[grabbedId]
         if grabbedNV then
-          local layout = layoutPortRow(grabbedNV, ox, oy,
+          local layout = layoutPortRow(grabbedNV,
                                        keptIsTo and 'out' or 'in',
-                                       mx, my, 'audio')
+                                       lmx, lmy, 'audio')
           local chip = findLayoutSlot(layout, 'audio', grabbedPort)
           if chip and chip.x then
             endX = chip.x + chip.w / 2
@@ -1757,8 +1757,8 @@ local function renderCanvas(w, h)
         forbidden  = keptIsTo
                        and wv:descendantsOf(keptId)
                        or  wv:ancestorsOf(keptId),
-        mx0 = mx, my0 = my,
-        grabDx = endX - mx, grabDy = endY - my,
+        mx0 = lmx, my0 = lmy,
+        grabDx = endX - lmx, grabDy = endY - lmy,
         fromList   = false,
         edgeIdx    = wireEndHover.edgeIdx,
         -- The node + port the cursor end was attached to. Each frame
@@ -1769,7 +1769,7 @@ local function renderCanvas(w, h)
         originalPort     = grabbedPort,
       }
     else
-      local bodyHit = nodeUnderMouse(nodeViews, ox, oy)
+      local bodyHit = nodeUnderMouse(nodeViews, lmx, lmy)
       if bodyHit then
         local starts = {}
         if selection[bodyHit.id] then
@@ -1779,14 +1779,14 @@ local function renderCanvas(w, h)
         else
           starts[bodyHit.id] = { x = bodyHit.pos.x, y = bodyHit.pos.y }
         end
-        drag = { mx0 = mx, my0 = my, starts = starts }
+        drag = { mx0 = lmx, my0 = lmy, starts = starts }
       else
-        band = { mx0 = mx, my0 = my }
+        band = { mx0 = lmx, my0 = lmy }
       end
     end
   elseif wireDraft and not ImGui.IsMouseDown(ctx, 0) then
-    local moved = math.abs(mx - wireDraft.mx0) >= CLICK_THRESH
-               or math.abs(my - wireDraft.my0) >= CLICK_THRESH
+    local moved = math.abs(lmx - wireDraft.mx0) >= CLICK_THRESH
+               or math.abs(lmy - wireDraft.my0) >= CLICK_THRESH
     if moved then
       if dropEligible(wireDraft, targetHit) then
         local slot = targetHit.slot
@@ -1810,7 +1810,7 @@ local function renderCanvas(w, h)
           }
         end
       elseif wireDraft.edgeIdx
-             and not nodeAtPoint(nodeViews, draftCx, draftCy, ox, oy) then
+             and not nodeAtPoint(nodeViews, draftCx, draftCy) then
         -- Redraft dropped on empty canvas deletes the wire. Empty-canvas
         -- is judged by the wire end, not the cursor. Ineligible-target
         -- drops (forbidden node, no slot under wire end) fall through to
@@ -1831,7 +1831,7 @@ local function renderCanvas(w, h)
     wireDraft  = nil
     listOpenId = nil   -- close any target-side spillover that was open
   elseif drag and not ImGui.IsMouseDown(ctx, 0) then
-    local dx, dy = mx - drag.mx0, my - drag.my0
+    local dx, dy = lmx - drag.mx0, lmy - drag.my0
     if dx ~= 0 or dy ~= 0 then
       local moves = {}
       for id, s in pairs(drag.starts) do moves[id] = { x = s.x + dx, y = s.y + dy } end
@@ -1839,11 +1839,11 @@ local function renderCanvas(w, h)
     end
     drag = nil
   elseif band and not ImGui.IsMouseDown(ctx, 0) then
-    if mx == band.mx0 and my == band.my0 then
+    if lmx == band.mx0 and lmy == band.my0 then
       wv:setSelection{}                                        -- empty-canvas click
     else
-      wv:setSelection(nodesInBand(nodeViews, ox, oy,
-                                  band.mx0, band.my0, mx, my))
+      wv:setSelection(nodesInBand(nodeViews,
+                                  band.mx0, band.my0, lmx, lmy))
     end
     band = nil
   end
@@ -1852,12 +1852,12 @@ local function renderCanvas(w, h)
   -- cursor — same code path as the N-key shortcut, just with explicit coords.
   if not drag and not band and not wireDraft
       and ImGui.IsMouseClicked(ctx, 1) then
-    openFxPicker(mx - ox, my - oy)
+    openFxPicker(lmx, lmy)
   end
 
   -- Band overlay: drawn last so it floats over nodes and hover affordances.
   if band then
-    local bx0, by0, bx1, by1 = band.mx0, band.my0, mx, my
+    local bx0, by0, bx1, by1 = band.mx0, band.my0, lmx, lmy
     if bx0 > bx1 then bx0, bx1 = bx1, bx0 end
     if by0 > by1 then by0, by1 = by1, by0 end
     p.stroke(rect(bx0, by0, bx1, by1), 'wiring.node.selected', 1, 0)
