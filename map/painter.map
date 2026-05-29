@@ -1,4 +1,7 @@
-@module painter  src=painter.lua  loc=110  sha=02e1d93  mode=namespace
+@module painter  src=painter.lua  loc=140  sha=bd81f2b  mode=namespace
+
+# Invariants & contracts
+  @contract  centre is logical; radius is screen px and angles pass through, so arcs need sx==sy.
 
 # Imports
   @const ImGui = 'imgui'  @ 24
@@ -9,7 +12,7 @@
 # Public API (M.*)
   @api M.new(ctx, chrome, transform)  @ 29
       @contract  transform.sx/sy default 1, ox/oy default 0; scale must be non-zero (fromScreen divides).
-  @api M.hue(idx, sat, val, alpha)  @ 104
+  @api M.hue(idx, sat, val, alpha)  @ 134
       -- The idx-th visually-distinct hue: golden-ratio rotation throws adjacent
       -- indices to opposite sides of the wheel. sat/val/alpha tone it.
       @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.

@@ -14,8 +14,11 @@ local fakeImGui = {}
 for _, n in ipairs{
   'DrawList_AddRectFilled', 'DrawList_AddRect', 'DrawList_AddText',
   'DrawList_AddTextEx', 'DrawList_AddLine', 'DrawList_AddTriangleFilled',
+  'DrawList_PushClipRect', 'DrawList_PopClipRect',
+  'DrawList_PathClear', 'DrawList_PathLineTo', 'DrawList_PathArcTo', 'DrawList_PathStroke',
   'PushFont', 'PopFont',
 } do fakeImGui[n] = rec(n) end
+fakeImGui.DrawFlags_None = 0
 fakeImGui.GetWindowDrawList = function(_) return 'DL' end
 fakeImGui.CalcTextSize = function(_, s)
   calls[#calls + 1] = { fn = 'CalcTextSize', args = { s } }
@@ -162,6 +165,34 @@ return {
       t.eq(type(a), 'table')
       t.truthy(a.u32 ~= nil, 'token carries a packed colour')
       t.truthy(a.u32 ~= b.u32, 'different indices give different hues')
+    end,
+  },
+  {
+    name = 'pushClip converts both corners; intersect defaults true, explicit false respected',
+    run = function()
+      calls = {}
+      local p = mk()
+      p.pushClip({ x0 = 1, y0 = 1, x1 = 3, y1 = 4 })
+      t.deepEq(last(), { fn = 'DrawList_PushClipRect', args = { 'DL', 102, 203, 106, 212, true } })
+      p.pushClip({ x0 = 1, y0 = 1, x1 = 3, y1 = 4 }, false)
+      t.eq(last().args[6], false)
+      p.popClip()
+      t.deepEq(last(), { fn = 'DrawList_PopClipRect', args = { 'DL' } })
+    end,
+  },
+  {
+    name = 'path: points convert, arc keeps screen-px radius and raw angles, stroke resolves colour by name',
+    run = function()
+      calls = {}
+      local p = mk()
+      p.pathClear()
+      t.deepEq(last(), { fn = 'DrawList_PathClear', args = { 'DL' } })
+      p.pathLineTo(3, 4)
+      t.deepEq(last(), { fn = 'DrawList_PathLineTo', args = { 'DL', 106, 212 } })
+      p.pathArcTo(1, 1, 5, 0, 3.14)
+      t.deepEq(last(), { fn = 'DrawList_PathArcTo', args = { 'DL', 102, 203, 5, 0, 3.14 } })
+      p.pathStroke('tail', 1.5)
+      t.deepEq(last(), { fn = 'DrawList_PathStroke', args = { 'DL', 'col:tail', 0, 1.5 } })
     end,
   },
 }

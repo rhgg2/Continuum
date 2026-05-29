@@ -84,6 +84,36 @@ function M.new(ctx, chrome, transform)
     ImGui.DrawList_AddTriangleFilled(dl, ax, ay, bx, by, cx, cy, col(name))
   end
 
+  -- Clip stack: corners convert like any rect; intersect defaults true
+  -- (nest within the current clip), pass false to replace it.
+  function p.pushClip(r, intersect)
+    local x0, y0 = toScreen(r.x0, r.y0)
+    local x1, y1 = toScreen(r.x1, r.y1)
+    ImGui.DrawList_PushClipRect(dl, x0, y0, x1, y1, intersect ~= false)
+  end
+
+  function p.popClip() ImGui.DrawList_PopClipRect(dl) end
+
+  -- Path builder for open polylines with arc corners (the loop/tail
+  -- bracket). Points are logical and convert; a radius is screen px like a
+  -- corner radius and angles pass through, so arcs assume uniform scale.
+  function p.pathClear() ImGui.DrawList_PathClear(dl) end
+
+  function p.pathLineTo(x, y)
+    local px, py = toScreen(x, y)
+    ImGui.DrawList_PathLineTo(dl, px, py)
+  end
+
+  --contract: centre is logical; radius is screen px and angles pass through, so arcs need sx==sy.
+  function p.pathArcTo(cx, cy, r, a0, a1)
+    local x, y = toScreen(cx, cy)
+    ImGui.DrawList_PathArcTo(dl, x, y, r, a0, a1)
+  end
+
+  function p.pathStroke(name, thick)
+    ImGui.DrawList_PathStroke(dl, col(name), ImGui.DrawFlags_None, thick or 1)
+  end
+
   -- CalcTextSize has no font parameter — it measures in the pushed font — so
   -- measuring in a specific font means pushing it for the call. Pass the same
   -- (font, size) used to draw, or the widths drift from the drawn glyphs.

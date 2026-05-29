@@ -43,6 +43,17 @@ Only positions pass through the transform. Stroke widths, corner radii
 and font sizes are screen-space quantities and pass through unchanged —
 a 2px outline is 2px regardless of where the canvas sits.
 
+## Clip and paths
+
+`pushClip`/`popClip` take a rect whose corners convert like any other;
+`intersect` defaults true (nest inside the current clip), pass false to
+replace it. The path builder (`pathClear`, `pathLineTo`, `pathArcTo`,
+`pathStroke`) draws open polylines with arc corners — the loop/tail
+bracket. Points are logical and convert; an arc's radius is a screen-px
+length like a corner radius, and its angles pass through unchanged, so an
+arc is faithful only under uniform scale (`sx == sy`). Both bracket draws
+sit in a screen-space gutter (identity painter), where that holds.
+
 ## Fonts
 
 A font is a per-call argument, not a scoped block: `text` draws through
