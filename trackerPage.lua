@@ -27,6 +27,8 @@ local function print(...)
   return util.print(...)
 end
 
+local painter = require 'painter'
+
 local mm     = util.instantiate('midiManager',    { take = nil })
 local tm     = util.instantiate('trackerManager', { mm = mm, cm = cm })
 local gm     = util.instantiate('groupManager', { tm = tm, cm = cm })
@@ -172,67 +174,61 @@ end
 
 ----- Drawing
 
+-- A cell adapter over the shared painter: methods speak grid CELLS (integer
+-- col/row), the painter maps them to screen through one transform. gX/gY are
+-- odd integers, so an integer cell already lands on a whole pixel; snap rounds
+-- the fractional cases (centred text, the inset cursor box) crisp, the way the
+-- old per-call math.floor did. text is monospace by cell, not by glyph advance.
 local function printer(ctx, gX, gY, x0, y0)
-  local drawList = ImGui.GetWindowDrawList(ctx)
-  local halfW    = math.floor(gX / 2)
-  local halfH    = math.floor(gY / 2)
-
+  local p  = painter.new(ctx, chrome, { ox = x0, oy = y0, sx = gX, sy = gY, snap = true })
   local pt = {}
 
-  local function drawTextAt(xpos, ypos, txt, c)
+  -- One glyph per cell: advance by a whole cell so the grid stays aligned
+  -- regardless of the font's natural glyph advance.
+  local function cellText(lx, ly, txt, colour, font, size)
+    local i = 0
     for char in txt:gmatch(utf8.charpattern) do
-      ImGui.DrawList_AddText(drawList, xpos, ypos+1, chrome.colour(c), char)
-      xpos = xpos + gX
+      p.text(lx + i, ly, colour, char, font, size)
+      i = i + 1
     end
   end
 
-  function pt:text(x, y, txt, c, font)
-    if font then
-      ImGui.PushFont(ctx, font, 15)
-    end
-    drawTextAt(x0 + x * gX, y0 + y * gY - 1, txt, c)
-    if font then
-      ImGui.PopFont(ctx)
-    end
+  -- Logical x that centres txt (measured at font/size) across cells x1..x2.
+  local function centreX(x1, x2, txt, font, size)
+    return x1 + ((x2 - x1 + 1) - p.measure(txt, font, size) / gX) / 2
   end
 
-  function pt:textCentred(x1, x2, y, txt, c)
-    local textWidth = ImGui.CalcTextSize(ctx, txt)
-    local maxWidth  = (x2 - x1 + 1) * gX
-    local offset    = math.floor((maxWidth - textWidth) / 2)
-    drawTextAt(x0 + x1 * gX + offset, y0 + y * gY, txt, c)
+  function pt:text(x, y, txt, colour, font)
+    cellText(x, y, txt, colour, font, font and 15 or nil)
   end
 
-  function pt:textCentredSmall(x1, x2, y, txt, size, c)
-    local scale     = size / 15
-    local textWidth = ImGui.CalcTextSize(ctx, txt) * scale
-    local maxWidth  = (x2 - x1 + 1) * gX
-    local xPos = x0 + x1 * gX + math.floor((maxWidth - textWidth) / 2)
-    ImGui.DrawList_AddTextEx(drawList, font, size, xPos, y0 + y * gY, chrome.colour(c), txt)
+  function pt:textCentred(x1, x2, y, txt, colour)
+    cellText(centreX(x1, x2, txt), y, txt, colour)
   end
 
-  -- Small glyph centred in a single grid cell. Used for the * marker
-  -- that tp drops next to a note's delay field when authored delay
-  -- could not be realised (delay ~= delayC).
-  function pt:smallGlyph(x, y, txt, size, c)
-    local scale     = size / 15
-    local textWidth = ImGui.CalcTextSize(ctx, txt) * scale
-    local xPos = x0 + x * gX + math.floor((gX - textWidth) / 2)
-    local yPos = y0 + y * gY + math.floor((gY - size) / 2)
-    ImGui.DrawList_AddTextEx(drawList, font, size, xPos, yPos, chrome.colour(c), txt)
+  function pt:textCentredSmall(x1, x2, y, txt, size, colour)
+    p.text(centreX(x1, x2, txt, font, size), y, colour, txt, font, size)
   end
 
-  function pt:vLine(x, y1, y2, c)
-    ImGui.DrawList_AddLine(drawList, x0 + x * gX + halfW, y0 + y1 * gY, x0 + x * gX + halfW, y0 + y2 * gY + gY, chrome.colour(c), 1)
+  -- Small glyph centred in a single cell: the * tp drops by a note whose
+  -- authored delay could not be realised (delay ~= delayC).
+  function pt:smallGlyph(x, y, txt, size, colour)
+    local lx = x + (1 - p.measure(txt, font, size) / gX) / 2
+    local ly = y + (1 - size / gY) / 2
+    p.text(lx, ly, colour, txt, font, size)
   end
 
-  function pt:hLine(x1, x2, y, c, yOff)
-    local yPos = y0 + (y + (yOff or 0)) * gY
-    ImGui.DrawList_AddLine(drawList, x0 + x1 * gX, yPos, x0 + x2 * gX + gX, yPos, chrome.colour(c), 1)
+  function pt:vLine(x, y1, y2, colour)
+    p.line(x + 0.5, y1, x + 0.5, y2 + 1, colour)
   end
 
-  function pt:box(x1, x2, y1, y2, c)
-    ImGui.DrawList_AddRectFilled(drawList, x0 + x1 * gX, y0 + y1 * gY, x0 + x2 * gX + gX, y0 + y2 * gY + gY, chrome.colour(c))
+  function pt:hLine(x1, x2, y, colour, yOff)
+    local ly = y + (yOff or 0)
+    p.line(x1, ly, x2 + 1, ly, colour)
+  end
+
+  function pt:box(x1, x2, y1, y2, colour)
+    p.fill({ x0 = x1, y0 = y1, x1 = x2 + 1, y1 = y2 + 1 }, colour)
   end
 
   return pt
@@ -595,7 +591,7 @@ local function drawTracker()
     end
     if col.x then
       local xr = col.x + col.width - 1
-      draw:textCentred(col.x, xr, -2.1, col.label)
+      draw:textCentred(col.x, xr, -2.1, col.label, 'text')
       if sub then
         draw:textCentredSmall(col.x, xr, -1.2, sub, 14, 'accent')
       end

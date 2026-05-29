@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1478  sha=b3ab3fa  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1472  sha=431e44e  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -26,110 +26,116 @@
   @require tuning = 'tuning'  @ 11
   @require groups = 'groups'  @ 12
   @require ImGui = 'imgui'  @ 18
+  @require painter = 'painter'  @ 30
 
 # Constructed sub-instances
-  @construct mm          = util.instantiate('midiManager')  @ 30
-  @construct tm          = util.instantiate('trackerManager')  @ 31
-  @construct gm          = util.instantiate('groupManager')  @ 32
-  @construct tv          = util.instantiate('trackerView')  @ 33
-  @construct am          = util.instantiate('arrangeManager')  @ 34
-  @construct swingEditor = util.instantiate('swingEditor')  @ 72
-  @construct curveEd     = util.instantiate('curveEditor')  @ 74
+  @construct mm          = util.instantiate('midiManager')  @ 32
+  @construct tm          = util.instantiate('trackerManager')  @ 33
+  @construct gm          = util.instantiate('groupManager')  @ 34
+  @construct tv          = util.instantiate('trackerView')  @ 35
+  @construct am          = util.instantiate('arrangeManager')  @ 36
+  @construct swingEditor = util.instantiate('swingEditor')  @ 74
+  @construct curveEd     = util.instantiate('curveEditor')  @ 76
 
 # Private state
-  @state GUTTER = 5  @ 38   -- in grid chars: 3-char row num + spacer + region slot
-  @state HEADER = 3  @ 39   -- in grid rows
-  @state gridX = nil  @ 41
-  @state gridY = nil  @ 42
-  @state gridOriginX = 0  @ 43
-  @state gridOriginY = 0  @ 44
-  @state gridWidth = 0  @ 45
-  @state gridHeight = 0  @ 46
-  @state chanX, chanW, chanOrder, totalWidth = {}, {}, {}, 0  @ 48
-  @state ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont  @ 70
-  @state dragging = false  @ 71   -- tracker-grid selection drag: click → held → release
-  @state laneConsumed = false  @ 75
-  @state toolbar  @ 76   -- lazy: chrome may be nil at construction in tests
-  @state paintLast = nil  @ 81   -- region-paint per-cell debounce
-  @state renderFns = {  @ 151
-  @state pickTemper = util.atomic('Set temper', function(name)  @ 270
-  @state pickSwing = util.atomic('Set swing',        function(name)       tv:s...  @ 277
-  @state pickColSwing = util.atomic('Set column swing', function(chan, name) tv:s...  @ 278
-  @state SWING_PRESET_EXCLUDE = { identity = true }  @ 282
-  @state toolbarSegments = {  @ 316
-  @state laneRenderable = { cc = true, pb = true, at = true }  @ 440
+  @state GUTTER = 5  @ 40   -- in grid chars: 3-char row num + spacer + region slot
+  @state HEADER = 3  @ 41   -- in grid rows
+  @state gridX = nil  @ 43
+  @state gridY = nil  @ 44
+  @state gridOriginX = 0  @ 45
+  @state gridOriginY = 0  @ 46
+  @state gridWidth = 0  @ 47
+  @state gridHeight = 0  @ 48
+  @state chanX, chanW, chanOrder, totalWidth = {}, {}, {}, 0  @ 50
+  @state ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont  @ 72
+  @state dragging = false  @ 73   -- tracker-grid selection drag: click → held → release
+  @state laneConsumed = false  @ 77
+  @state toolbar  @ 78   -- lazy: chrome may be nil at construction in tests
+  @state paintLast = nil  @ 83   -- region-paint per-cell debounce
+  @state renderFns = {  @ 153
+  @state pickTemper = util.atomic('Set temper', function(name)  @ 266
+  @state pickSwing = util.atomic('Set swing',        function(name)       tv:s...  @ 273
+  @state pickColSwing = util.atomic('Set column swing', function(chan, name) tv:s...  @ 274
+  @state SWING_PRESET_EXCLUDE = { identity = true }  @ 278
+  @state toolbarSegments = {  @ 312
+  @state laneRenderable = { cc = true, pb = true, at = true }  @ 436
       @invariant  lane strip renders only cc/pb/at; other types show as tinted background
-  @state LANE_ROW_MIN = 3  @ 442
-  @state LANE_ROW_MAX = 32  @ 443
-  @state tp = {}  @ 1232
-  @state NEW_TAKE_DEFAULT_BEATS = 4  @ 1244
-  @state tracker = cmgr:scope('tracker')  @ 1273
+  @state LANE_ROW_MIN = 3  @ 438
+  @state LANE_ROW_MAX = 32  @ 439
+  @state tp = {}  @ 1228
+  @state NEW_TAKE_DEFAULT_BEATS = 4  @ 1240
+  @state tracker = cmgr:scope('tracker')  @ 1269
 
 # Private functions
   @fn print(...)  @ 26
-  @fn layoutColumns(cols, scrollCol)  @ 51
+  @fn layoutColumns(cols, scrollCol)  @ 53
       @contract  clears col.x on every col before assigning; off-screen cols stay nil
   -- Cell renderers
-  @fn renderNote(evt, col, row)  @ 85
-  @fn renderPB(evt)  @ 139
-  @fn renderCC(evt)  @ 146
-  @fn renderCell(evt, col, row)  @ 160
-  @fn delayMarkerOffset(col)  @ 169
+  @fn renderNote(evt, col, row)  @ 87
+  @fn renderPB(evt)  @ 141
+  @fn renderCC(evt)  @ 148
+  @fn renderCell(evt, col, row)  @ 162
+  @fn delayMarkerOffset(col)  @ 171
       -- Offset (in grid cells) of the gap that sits just before the 3 delay
       -- digits in a note cell. The * marker is dropped here. Layout: pitch(3)
       -- + optional sample(3) + ' ' + vel(2). The next char is the separator
       -- space-before-delay -- our marker slot.
   -- Drawing
-  @fn printer(ctx, gX, gY, x0, y0)  @ 175
-  @fn laneStripRows()  @ 242
+  @fn printer(ctx, gX, gY, x0, y0)  @ 182
+      -- A cell adapter over the shared painter: methods speak grid CELLS (integer
+      -- col/row), the painter maps them to screen through one transform. gX/gY are
+      -- odd integers, so an integer cell already lands on a whole pixel; snap rounds
+      -- the fractional cases (centred text, the inset cursor box) crisp, the way the
+      -- old per-call math.floor did. text is monospace by cell, not by glyph advance.
+  @fn laneStripRows()  @ 238
       @contract  returns 0 when laneStrip.visible is false; layout and draw branch on this
-  @fn libPickerItems(current, lib, presets, excludePresets)  @ 248
+  @fn libPickerItems(current, lib, presets, excludePresets)  @ 244
       -- Off=group 1, saved lib=group 2, unseeded preset (+ prefix)=group 3.
-  @fn drawSampleDropdown()  @ 286
+  @fn drawSampleDropdown()  @ 282
       -- Hex stays visible when unassigned so `<`/`>` advertise their step.
       -- No "Off" row — every slot is real.
-  @fn drawTrackerToolbarBits()  @ 400
+  @fn drawTrackerToolbarBits()  @ 396
       -- While the swing editor is open, the tracker body is replaced and
       -- only swing-related toolbar segments stay live (the picker is how
       -- the user switches what they're editing). Other segments grey out.
-  @fn computeLayout(budgetW, budgetH)  @ 419
+  @fn computeLayout(budgetW, budgetH)  @ 415
       @contract  must run before draws reading chanX/chanW/chanOrder/totalWidth/gridHeight
       @contract  calls tv:setGridSize so tv scroll math sees the live viewport
   -- Lane strip
-  @fn drawLaneStrip()  @ 447
+  @fn drawLaneStrip()  @ 443
       @contract  publishes laneConsumed=true if curve editor claimed input this frame
       @contract  handleMouse short-circuits on laneConsumed
-  @fn drawTracker()  @ 562
+  @fn drawTracker()  @ 558
       @contract  assumes computeLayout ran this frame; reads chanX/W/Order, gridOriginX/Y
-  @fn drawStatusBar()  @ 815
+  @fn drawStatusBar()  @ 811
   -- Input
-  @fn nearestStop(mouseX, mouseY)  @ 926
+  @fn nearestStop(mouseX, mouseY)  @ 922
       @contract  returns (col, stop, fracX) or (nil, nil, fracX)
       @invariant  fracX is separate so callers distinguish 'past last col' from 'inside col N'
-  @fn handleMouse()  @ 948
-  @fn handleKeys(kr)  @ 1090
+  @fn handleMouse()  @ 944
+  @fn handleKeys(kr)  @ 1086
       -- Page-internal raw input. commandHeld gates a held command key from
       -- leaking into the char queue (different auto-repeat timing).
       @contract  no-op when modal open, picker active, or any ImGui item is active
       @contract  drains the input-queue per frame; reads ec/grid fresh (editEvent may rebuild)
   -- Modal-driven commands
-  @fn openPrompt(title, prompt, callback, resolve)  @ 1122
-  @fn openConfirm(title, callback, prompt)  @ 1126
-  @fn scopedAction(title, base)  @ 1194
+  @fn openPrompt(title, prompt, callback, resolve)  @ 1118
+  @fn openConfirm(title, callback, prompt)  @ 1122
+  @fn scopedAction(title, base)  @ 1190
       -- Naming convention <base>Selection / <base>All is the contract.
       @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
-  @fn resolveColType(s)  @ 1204
+  @fn resolveColType(s)  @ 1200
       -- Add-Column type vocabulary. First letter is unique except p (pb/pc):
       -- `p`→pb, a following `c`→pc. Digits ride through (only cc takes an id).
-  @fn addColumn()  @ 1217
-  @fn boundAmTake()  @ 1245
-  @fn newTakeBelow()  @ 1249
-  @fn duplicateUnpooledBelow()  @ 1265
+  @fn addColumn()  @ 1213
+  @fn boundAmTake()  @ 1241
+  @fn newTakeBelow()  @ 1245
+  @fn duplicateUnpooledBelow()  @ 1261
 
 # Public API (tp:*)
   -- Region overlay keymap
   -- Take properties modal helper
-  @api tp:openTakeProperties(args)  @ 1349
+  @api tp:openTakeProperties(args)  @ 1345
       -- onClose fires exactly once, after the whole modal chain — including
       -- any truncate-confirm follow-up. Two sources of "chain done":
       -- the apply path (callback ran, valid input, either direct apply or
@@ -138,23 +144,22 @@
       -- onClose. The `transfer` flag handshake makes these mutually
       -- exclusive: once a valid callback starts the apply chain it claims
       -- ownership, so modalHost's onClose becomes a no-op.
-  @api tp:currentTake()  @ 1388
+  @api tp:currentTake()  @ 1384
   -- Page interface
-  @api tp:renderToolbarBits(_)  @ 1392
-  @api tp:renderBody(_, w, h, dispatch)  @ 1400
+  @api tp:renderToolbarBits(_)  @ 1388
+  @api tp:renderBody(_, w, h, dispatch)  @ 1396
       @contract  calls computeLayout twice
       @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x
       @contract  second pass repopulates layout for drawTracker
-  @api tp:renderStatusBar(_)  @ 1436
-  @api tp:renderFloating(_)  @ 1440
-  @api tp:bind(t)  @ 1443
+  @api tp:renderStatusBar(_)  @ 1432
+  @api tp:bind(t)  @ 1437
       @contract  bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
-  @api tp:unbind()  @ 1447
-  @api tp:dropTake()  @ 1450
+  @api tp:unbind()  @ 1441
+  @api tp:dropTake()  @ 1444
       @contract  take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.
-  @api tp:reloadFromReaper()  @ 1453
+  @api tp:reloadFromReaper()  @ 1447
       @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
-  @api tp:focusState()  @ 1466
+  @api tp:focusState()  @ 1460
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo
