@@ -1,0 +1,11 @@
+@module painter  src=painter.lua  loc=88  sha=untracked  mode=namespace
+
+# Imports
+  @const ImGui = 'imgui'  @ 21
+
+# Module-level constants
+  @const M = {}  @ 23
+
+# Public API (M.*)
+  @api M.new(ctx, chrome, transform)  @ 26
+      @contract  transform.sx/sy default 1, ox/oy default 0; scale must be non-zero (fromScreen divides).

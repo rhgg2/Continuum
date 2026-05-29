@@ -135,6 +135,7 @@ local specs = {
   'wv_edge_gain_spec',
   'wv_errors_spec',
   'wp_smoke_spec',
+  'painter_spec',
 }
 
 local pass, fail, failures = 0, 0, {}
