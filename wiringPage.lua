@@ -13,6 +13,7 @@ if not reaper.ImGui_GetBuiltinPath then
 end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
+local painter = require 'painter'
 
 local cm, cmgr, chrome, gui, modalHost =
   (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost
@@ -252,12 +253,11 @@ local SELECTED_STROKE  = 2
 
 -- Stroke a node body's accent outline (selection / source-or-target hover /
 -- error). SELECTED_INFLATE widens the rect so a >0 moat lets the popup bg
--- bleed through; col picks the accent.
-local function strokeNodeRect(dl, r, col)
-  ImGui.DrawList_AddRect(dl,
-    r.x0 - SELECTED_INFLATE, r.y0 - SELECTED_INFLATE,
-    r.x1 + SELECTED_INFLATE, r.y1 + SELECTED_INFLATE,
-    col, CORNER_R, 0, SELECTED_STROKE)
+-- bleed through; name picks the accent colour.
+local function strokeNodeRect(p, r, name)
+  p.stroke(rect(r.x0 - SELECTED_INFLATE, r.y0 - SELECTED_INFLATE,
+                r.x1 + SELECTED_INFLATE, r.y1 + SELECTED_INFLATE),
+           name, SELECTED_STROKE, CORNER_R)
 end
 
 -- Split a single whitespace-free word into pieces at CamelCase boundaries
@@ -350,26 +350,23 @@ local function wrapLabel(text, maxW)
   return out
 end
 
-local function drawNode(dl, nv, ox, oy, isSelected)
+local function drawNode(p, nv, ox, oy, isSelected)
   local r = nodeScreenRect(nv, ox, oy)
-  local x0, y0, x1, y1 = r.x0, r.y0, r.x1, r.y1
-  local fill = chrome.colour('wiring.node.' .. nv.category)
-  local text = chrome.colour('text')
-  ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, fill, CORNER_R)
+  p.fill(r, 'wiring.node.' .. nv.category, CORNER_R)
   if isSelected then
-    strokeNodeRect(dl, r, chrome.colour('wiring.node.selected'))
+    strokeNodeRect(p, r, 'wiring.node.selected')
   end
+  -- The wrapLabel / CalcTextSize measurements read the pushed font, so the
+  -- block push stays; the per-line draws inherit that current font.
   if wireFont then ImGui.PushFont(ctx, wireFont, wireSize) end
   local lines = wrapLabel(nv.label, NODE_W - 2 * LABEL_PAD)
   local lineH = select(2, ImGui.CalcTextSize(ctx, 'Mg'))
   local blockH = lineH * #lines
-  local yTop = y0 + math.floor((NODE_H - blockH) / 2)
+  local yTop = r.y0 + math.floor((NODE_H - blockH) / 2)
   for i, line in ipairs(lines) do
     local tw = ImGui.CalcTextSize(ctx, line)
-    ImGui.DrawList_AddText(dl,
-      x0 + math.floor((NODE_W - tw) / 2),
-      yTop + (i - 1) * lineH,
-      text, line)
+    p.text(r.x0 + math.floor((NODE_W - tw) / 2),
+           yTop + (i - 1) * lineH, 'text', line)
   end
   if wireFont then ImGui.PopFont(ctx) end
 end
@@ -379,19 +376,18 @@ end
 -- its top-left at (x,y), occupying MIDI_SLOT_W × MIDI_SLOT_H. Stand-in
 -- for the midi tint — later this will gain an in/out arrow to distinguish
 -- direction.
-local function drawKeyboardIcon(dl, x, y)
-  local col      = chrome.colour('text')
+local function drawKeyboardIcon(p, x, y)
   local kw, kh   = 4, 10
   local bw, bh   = 2, 5
   local ix0, iy0 = math.floor(x), math.floor(y)
   for i = 0, 2 do
     local kx = ix0 + i * kw
-    ImGui.DrawList_AddRect(dl, kx, iy0, kx + kw + 1, iy0 + kh + 1, col, 0, 0, 1)
+    p.stroke(rect(kx, iy0, kx + kw + 1, iy0 + kh + 1), 'text', 1, 0)
   end
   for _, i in ipairs{ 1, 2 } do
     local cx  = ix0 + i * kw
     local bx0 = math.floor(cx - bw / 2)
-    ImGui.DrawList_AddRectFilled(dl, bx0, iy0, bx0 + bw + 1, iy0 + bh + 1, col)
+    p.fill(rect(bx0, iy0, bx0 + bw + 1, iy0 + bh + 1), 'text')
   end
 end
 
@@ -399,16 +395,13 @@ end
 -- the dropdown will open (down on the bottom face, up on the top face).
 -- Sized like a band-row chip so it shares the row centreline cleanly. The
 -- band-level bg rect drawn by drawPortRow handles wire occlusion.
-local function drawHandle(dl, handle, side)
-  local col = chrome.colour('text')
+local function drawHandle(p, handle, side)
   local cx, cy = handle.x + handle.w / 2, handle.y + handle.h / 2
   local hx, hy = 4, 3
   if side == 'bottom' then
-    ImGui.DrawList_AddTriangleFilled(dl,
-      cx - hx, cy - hy, cx + hx, cy - hy, cx, cy + hy, col)
+    p.tri(cx - hx, cy - hy, cx + hx, cy - hy, cx, cy + hy, 'text')
   else
-    ImGui.DrawList_AddTriangleFilled(dl,
-      cx - hx, cy + hy, cx + hx, cy + hy, cx, cy - hy, col)
+    p.tri(cx - hx, cy + hy, cx + hx, cy + hy, cx, cy - hy, 'text')
   end
 end
 
@@ -418,12 +411,11 @@ end
 -- handled at the band level by drawPortRow's bgRect, so no per-slot patch.
 -- The InvisibleButton advances the layout cursor; renderCanvas's trailing
 -- Dummy restores it.
-local function drawSlot(dl, slot, idStem, audioCol)
+local function drawSlot(p, slot, idStem)
   if slot.kind == 'audio' then
-    ImGui.DrawList_AddRectFilled(dl, slot.x, slot.y,
-      slot.x + slot.w, slot.y + slot.h, audioCol)
+    p.fill(boxRect(slot), 'wiring.port.audio')
   else
-    drawKeyboardIcon(dl, slot.x, slot.y)
+    drawKeyboardIcon(p, slot.x, slot.y)
   end
   local pad = PORT_HIT_PAD
   ImGui.SetCursorScreenPos(ctx, slot.x - pad, slot.y - pad)
@@ -449,8 +441,8 @@ end
 
 -- Selection-style outline around the whole body, used for both source-side
 -- and target-side hover — no more split-band shape.
-local function drawBodyOutline(dl, nv, ox, oy)
-  strokeNodeRect(dl, nodeScreenRect(nv, ox, oy), chrome.colour('wiring.node.selected'))
+local function drawBodyOutline(p, nv, ox, oy)
+  strokeNodeRect(p, nodeScreenRect(nv, ox, oy), 'wiring.node.selected')
 end
 
 ----- Wire-creation gesture helpers
@@ -869,25 +861,18 @@ end
 
 -- Spillover dropdown popup: filled rounded bg + outline, then row labels
 -- with a hover-highlight under the matching row.
-local function drawList(dl, list, highlight)
+local function drawList(p, list, highlight)
   local r = list.rect
-  ImGui.DrawList_AddRectFilled(dl, r.x0, r.y0, r.x1, r.y1,
-    chrome.colour('wiring.tooltip.bg'), LIST_CORNER_R)
-  ImGui.DrawList_AddRect(dl, r.x0, r.y0, r.x1, r.y1,
-    chrome.colour('separator'), LIST_CORNER_R, 0, 1)
-  local txtCol = chrome.colour('text')
-  local hlCol  = chrome.colour('wiring.node.selected')
-  if uiFont then ImGui.PushFont(ctx, uiFont, uiSize) end
+  p.fill(r, 'wiring.tooltip.bg', LIST_CORNER_R)
+  p.stroke(r, 'separator', 1, LIST_CORNER_R)
   for _, row in ipairs(list.rows) do
     if row == highlight then
-      ImGui.DrawList_AddRectFilled(dl,
-        row.x + 1, row.y, row.x + row.w - 1, row.y + row.h, hlCol)
+      p.fill(rect(row.x + 1, row.y, row.x + row.w - 1, row.y + row.h),
+             'wiring.node.selected')
     end
-    ImGui.DrawList_AddText(dl,
-      row.x + LIST_ROW_PAD_X, row.y + LIST_ROW_PAD_Y,
-      txtCol, row.name)
+    p.text(row.x + LIST_ROW_PAD_X, row.y + LIST_ROW_PAD_Y,
+           'text', row.name, uiFont, uiSize)
   end
-  if uiFont then ImGui.PopFont(ctx) end
 end
 
 -- Popup bg for the port-row overlay: a pale rounded rect (same CORNER_R
@@ -895,11 +880,10 @@ end
 -- rounded corners read as filled rather than canvas-coloured. Drawn
 -- BEFORE the node so the body overpaints the overlap region, then the
 -- port row + chips + list draw on top.
-local function drawPortRowBg(dl, layout)
-  local p = layout.popup
-  if not p then return end
-  ImGui.DrawList_AddRectFilled(dl, p.x0, p.y0, p.x1, p.y1,
-    chrome.colour('wiring.tooltip.bg'), CORNER_R)
+local function drawPortRowBg(p, layout)
+  local popup = layout.popup
+  if not popup then return end
+  p.fill(popup, 'wiring.tooltip.bg', CORNER_R)
 end
 
 -- Draw the handle (if any) and every audio/midi slot. Outlines the slot
@@ -908,22 +892,20 @@ end
 -- don't visually collide, and keeping chips visible preserves the
 -- caller's mental map of which port each row stands for. The pale popup
 -- bg is laid down separately by drawPortRowBg, before nodes.
-local function drawPortRow(dl, pick, audioCol, idPrefix)
+local function drawPortRow(p, pick, idPrefix)
   local layout, highlight = pick.layout, pick.slot
-  if layout.handle then drawHandle(dl, layout.handle, layout.side) end
-  local hlCol    = chrome.colour('wiring.node.selected')
-  local bodyFill = chrome.colour('wiring.node.' .. pick.nv.category)
+  if layout.handle then drawHandle(p, layout.handle, layout.side) end
+  local bodyName = 'wiring.node.' .. pick.nv.category
   for i, s in ipairs(layout.slots) do
     if s.inBody then
       -- Body-internal kbd: fill body colour behind to overpaint the
       -- label while the gesture is live, then draw the icon. No
       -- InvisibleButton (the body's drag target owns the area) and no
       -- tooltip — the visible icon already conveys 'midi'.
-      ImGui.DrawList_AddRectFilled(dl,
-        s.x, s.y, s.x + s.w, s.y + s.h, bodyFill)
-      drawKeyboardIcon(dl, s.x, s.y)
+      p.fill(boxRect(s), bodyName)
+      drawKeyboardIcon(p, s.x, s.y)
     else
-      drawSlot(dl, s, idPrefix .. '/' .. i, audioCol)
+      drawSlot(p, s, idPrefix .. '/' .. i)
     end
     -- Match by (kind, portIdx) rather than identity: defaultSlot
     -- returns a synthetic spec, not the layout slot, so identity would
@@ -931,10 +913,9 @@ local function drawPortRow(dl, pick, audioCol, idPrefix)
     -- body during a midi draft.
     if highlight and s.kind == highlight.kind
        and (s.kind ~= 'audio' or s.portIdx == highlight.portIdx) then
-      ImGui.DrawList_AddRect(dl,
-        s.x - SELECTED_INFLATE, s.y - SELECTED_INFLATE,
-        s.x + s.w + SELECTED_INFLATE, s.y + s.h + SELECTED_INFLATE,
-        hlCol, 0, 0, SELECTED_STROKE)
+      p.stroke(rect(s.x - SELECTED_INFLATE, s.y - SELECTED_INFLATE,
+                    s.x + s.w + SELECTED_INFLATE, s.y + s.h + SELECTED_INFLATE),
+               'wiring.node.selected', SELECTED_STROKE, 0)
     end
   end
 end
@@ -1015,7 +996,7 @@ local function wireExits(seg)
   return tFrom * len, tTo * len, len
 end
 
-local function drawWireArrow(dl, sx, sy, ex, ey, col)
+local function drawWireArrow(p, sx, sy, ex, ey, name)
   local dx, dy = ex - sx, ey - sy
   local len = math.sqrt(dx * dx + dy * dy)
   if len < WIRE_ARROW_LEN then return end
@@ -1038,7 +1019,7 @@ local function drawWireArrow(dl, sx, sy, ex, ey, col)
   local b1y = by + py * halfW
   local b2x = bx - px * halfW
   local b2y = by - py * halfW
-  ImGui.DrawList_AddTriangleFilled(dl, tipx, tipy, b1x, b1y, b2x, b2y, col)
+  p.tri(tipx, tipy, b1x, b1y, b2x, b2y, name)
 end
 
 -- Audio port-number label as a tight bg-filled patch sized to the
@@ -1052,13 +1033,12 @@ end
 -- per-wire-group alternation and also separates labels on unrelated
 -- wires sharing a node corner. Hover-tooltip shows the port name
 -- (synthetic 'in N' / 'out N' until TrackFX_GetIOName lands).
-local function drawWireEndLabel(dl, ax, ay, fx, fy, exitD, portIdx, portName, idStem, col, placed)
+local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idStem, name, placed)
   local dx, dy = fx - ax, fy - ay
   local len = math.sqrt(dx * dx + dy * dy)
   if len < 1 then return end
   local txt = tostring(portIdx)
-  if wireFont then ImGui.PushFont(ctx, wireFont, WIRE_LABEL_SIZE) end
-  local tw, th = ImGui.CalcTextSize(ctx, txt)
+  local tw, th = p.measure(txt, wireFont, WIRE_LABEL_SIZE)
   local hw = math.ceil(tw / 2) + WIRE_LABEL_PAD
   local hh = math.ceil(th / 2) + WIRE_LABEL_PAD
   -- Half-extent of the axis-aligned rect projected onto the wire axis:
@@ -1098,10 +1078,9 @@ local function drawWireEndLabel(dl, ax, ay, fx, fy, exitD, portIdx, portName, id
   local cx, cy = ax + labelDist * ux, ay + labelDist * uy
   local x0, y0, x1, y1 = cx - hw, cy - hh, cx + hw, cy + hh
   placed[#placed + 1] = { cx = cx, cy = cy, hw = hw, hh = hh }
-  ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, chrome.colour('bg'))
-  ImGui.DrawList_AddText(dl,
-    math.floor(cx - tw / 2), math.floor(cy - th / 2), col, txt)
-  if wireFont then ImGui.PopFont(ctx) end
+  p.fill(rect(x0, y0, x1, y1), 'bg')
+  p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2),
+         name, txt, wireFont, WIRE_LABEL_SIZE)
   ImGui.SetCursorScreenPos(ctx, x0, y0)
   ImGui.InvisibleButton(ctx, idStem, 2 * hw, 2 * hh)
   if portName and ImGui.IsItemHovered(ctx, ImGui.HoveredFlags_ForTooltip) then
@@ -1225,7 +1204,7 @@ end
 -- the in-flight draft line replaces it). The wire-end highlight is
 -- drawn separately by drawWireEndHighlight after the node pass — nodes
 -- overpaint wires here, so an in-pass highlight would be invisible.
-local function drawWiresPass(dl, segs, wireViews, ox, oy, audioCol, midiCol, opts)
+local function drawWiresPass(p, segs, wireViews, ox, oy, opts)
   opts = opts or {}
   local skip = opts.skipEdgeIdx
   local placedLabels = {}
@@ -1235,22 +1214,22 @@ local function drawWiresPass(dl, segs, wireViews, ox, oy, audioCol, midiCol, opt
       local w  = seg.w
       local sx, sy = ox + seg.sx, oy + seg.sy
       local ex, ey = ox + seg.ex, oy + seg.ey
-      local col = w.type == 'midi' and midiCol or audioCol
-      ImGui.DrawList_AddLine(dl, sx, sy, ex, ey, col, WIRE_THICK)
-      drawWireArrow(dl, sx, sy, ex, ey, col)
+      local name = w.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
+      p.line(sx, sy, ex, ey, name, WIRE_THICK)
+      drawWireArrow(p, sx, sy, ex, ey, name)
       if w.type == 'audio' then
         local fromD, toD, segLen = wireExits(seg)
         if fromD then
           local stem = '##wire/' .. w.from .. ':' .. w.fromPort
                             .. '->' .. w.to   .. ':' .. w.toPort
           if w.fromPort ~= 1 then
-            drawWireEndLabel(dl, sx, sy, ex, ey, fromD,
-              w.fromPort, w.fromPortName, stem .. '/from', col,
+            drawWireEndLabel(p, sx, sy, ex, ey, fromD,
+              w.fromPort, w.fromPortName, stem .. '/from', name,
               placedLabels)
           end
           if w.toPort ~= 1 then
-            drawWireEndLabel(dl, ex, ey, sx, sy, segLen - toD,
-              w.toPort, w.toPortName, stem .. '/to', col,
+            drawWireEndLabel(p, ex, ey, sx, sy, segLen - toD,
+              w.toPort, w.toPortName, stem .. '/to', name,
               placedLabels)
           end
         end
@@ -1259,15 +1238,14 @@ local function drawWiresPass(dl, segs, wireViews, ox, oy, audioCol, midiCol, opt
   end
 end
 
-local function drawWireEndHighlight(dl, segs, ox, oy, hover)
+local function drawWireEndHighlight(p, segs, ox, oy, hover)
   if not hover then return end
   local seg = segs[hover.edgeIdx]
   if not seg then return end
   local ax, ay, bx, by = endRegion(seg, hover.side)
   if not ax then return end
-  ImGui.DrawList_AddLine(dl,
-    ox + ax, oy + ay, ox + bx, oy + by,
-    chrome.colour('wiring.node.selected'), WIRE_END_HIGHLIGHT)
+  p.line(ox + ax, oy + ay, ox + bx, oy + by,
+         'wiring.node.selected', WIRE_END_HIGHLIGHT)
 end
 
 -- Compute the draft wire's cursor-end screen position. Decay ratchets
@@ -1336,28 +1314,23 @@ local function pixelYToLin(my, stripY0)
   return dbToLin(dbFromP(p))
 end
 
-local function drawFader(dl, f)
-  local r        = f.rect
-  local stripCol = chrome.colour('wiring.port.audio')
-  local indCol   = chrome.colour('wiring.node.selected')
-  local bgCol    = chrome.colour('bg')
-  ImGui.DrawList_AddRectFilled(dl, r.x0, r.y0, r.x1, r.y1, bgCol)
-  ImGui.DrawList_AddRect      (dl, r.x0, r.y0, r.x1, r.y1, stripCol, 1, 0, 1)
+local function drawFader(p, f)
+  local r = f.rect
+  p.fill(r, 'bg')
+  p.stroke(r, 'wiring.port.audio', 1, 1)
   -- Unity tick: faint horizontal line where 0 dB sits on the strip.
   local unityY = r.y0 + (1 - pFromDb(0)) * WIRE_FADER_H
-  ImGui.DrawList_AddLine(dl, r.x0, unityY, r.x1, unityY, stripCol, 1)
+  p.line(r.x0, unityY, r.x1, unityY, 'wiring.port.audio', 1)
   -- Knob: full strip width, fader-style slab.
-  local p       = pFromDb(linToDb(f.currentLin))
-  local indY    = r.y0 + (1 - p) * WIRE_FADER_H
-  local kHalfH  = WIRE_FADER_KNOB_H / 2
-  ImGui.DrawList_AddRectFilled(dl, r.x0+1, indY - kHalfH, r.x1-1, indY + kHalfH, indCol, 1)
-  ImGui.DrawList_AddRect      (dl, r.x0+1, indY - kHalfH, r.x1-1, indY + kHalfH, bgCol, 1, 0, 1)
+  local pos    = pFromDb(linToDb(f.currentLin))
+  local indY   = r.y0 + (1 - pos) * WIRE_FADER_H
+  local kHalfH = WIRE_FADER_KNOB_H / 2
+  p.fill(rect(r.x0+1, indY - kHalfH, r.x1-1, indY + kHalfH), 'wiring.node.selected', 1)
+  p.stroke(rect(r.x0+1, indY - kHalfH, r.x1-1, indY + kHalfH), 'bg', 1, 1)
   -- dB readout right of the knob, vertically aligned to it.
   local db  = linToDb(f.currentLin)
   local txt = (db == -math.huge) and '-inf dB' or string.format('%+.1f dB', db)
-  if uiFont then ImGui.PushFont(ctx, uiFont, uiSize) end
-  ImGui.DrawList_AddText(dl, r.x1 + 4, indY - uiSize / 2, chrome.colour('text'), txt)
-  if uiFont then ImGui.PopFont(ctx) end
+  p.text(r.x1 + 4, indY - uiSize / 2, 'text', txt, uiFont, uiSize)
 end
 
 -- In-flight draft wire. Drawn last of all (after chips and spillover
@@ -1371,12 +1344,11 @@ end
 -- forward drafts have no anchor, so we fall back to the node centre.
 -- Arrow direction follows cursorEnd: 'to' draws kept→cursor (forward),
 -- 'from' draws cursor→kept (backward).
-local function drawDraftWire(dl, draft, nodesById, ox, oy, cx, cy,
-                             audioCol, midiCol)
+local function drawDraftWire(p, draft, nodesById, ox, oy, cx, cy)
   if not draft then return end
   local src = nodesById[draft.keptId]
   if not src then return end
-  local col = draft.type == 'midi' and midiCol or audioCol
+  local name = draft.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
   local a   = draft.keptAnchor
   local ax  = a and a.x or (ox + src.pos.x)
   local ay  = a and a.y or (oy + src.pos.y)
@@ -1386,8 +1358,8 @@ local function drawDraftWire(dl, draft, nodesById, ox, oy, cx, cy,
   else
     sx, sy, ex, ey = cx, cy, ax, ay
   end
-  ImGui.DrawList_AddLine(dl, sx, sy, ex, ey, col, WIRE_THICK)
-  drawWireArrow(dl, sx, sy, ex, ey, col)
+  p.line(sx, sy, ex, ey, name, WIRE_THICK)
+  drawWireArrow(p, sx, sy, ex, ey, name)
 end
 
 -- Identify the node whose body the mouse is over (un-inflated rect);
@@ -1430,9 +1402,12 @@ local function nodesInBand(nodeViews, ox, oy, bx0, by0, bx1, by1)
 end
 
 local function renderCanvas(w, h)
-  local dl     = ImGui.GetWindowDrawList(ctx)
+  -- Identity transform: wiring lays out in screen space today, so the painter
+  -- passes coordinates through unchanged. The centre-origin canvas transform
+  -- lands when node / slot geometry moves to canvas-local.
+  local p      = painter.new(ctx, chrome, {})
   local sx, sy = ImGui.GetCursorScreenPos(ctx)
-  ImGui.DrawList_AddRectFilled(dl, sx, sy, sx + w, sy + h, chrome.colour('bg'))
+  p.fill(rect(sx, sy, sx + w, sy + h), 'bg')
   -- Canvas origin is the centre of the viewport: logical (0,0) draws
   -- in the middle, positions extend in all four quadrants from there.
   local ox, oy = sx + math.floor(w / 2), sy + math.floor(h / 2)
@@ -1484,8 +1459,6 @@ local function renderCanvas(w, h)
   -- drawn geometry. Existing wires draw at the very bottom of the
   -- canvas stack so popout sleeves cleanly occlude them; the in-flight
   -- draft wire draws at the very top so it always reads above the popout.
-  local audioCol = chrome.colour('wiring.port.audio')
-  local midiCol  = chrome.colour('wiring.port.midi')
   local wireViewsList = wv:wireViews()
   local segs = wireSegments(wireViewsList, nodesById)
 
@@ -1584,10 +1557,10 @@ local function renderCanvas(w, h)
   -- ones: source/target first, then draft-source, then sticky.
   local overlays  = {}
   local frontIds  = {}
-  local function add(p)
-    if not p or frontIds[p.nv.id] then return end
-    overlays[#overlays + 1] = p
-    frontIds[p.nv.id] = true
+  local function add(pick)
+    if not pick or frontIds[pick.nv.id] then return end
+    overlays[#overlays + 1] = pick
+    frontIds[pick.nv.id] = true
   end
   add(sourceHit)
   add(targetHit)
@@ -1602,22 +1575,21 @@ local function renderCanvas(w, h)
   -- both the wires and the draft at the rect edge, so wires read as
   -- emerging from behind the node body). Chips/list draw later in the
   -- overlay pass.
-  drawWiresPass(dl, segs, wireViewsList, ox, oy, audioCol, midiCol,
+  drawWiresPass(p, segs, wireViewsList, ox, oy,
     { skipEdgeIdx = wireDraft and wireDraft.edgeIdx })
-  for _, p in ipairs(overlays) do drawPortRowBg(dl, p.layout) end
-  drawDraftWire(dl, wireDraft, nodesById, ox, oy, draftCx, draftCy,
-                audioCol, midiCol)
+  for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
+  drawDraftWire(p, wireDraft, nodesById, ox, oy, draftCx, draftCy)
   for _, nv in ipairs(nodeViews) do
-    drawNode(dl, nv, ox, oy, selection[nv.id])
+    drawNode(p, nv, ox, oy, selection[nv.id])
   end
 
   -- Wire-end highlight: drawn after the node pass so the accent stroke
   -- sits on top of the node body's near-edge region (the wire-end region
   -- begins at the node-rect exit, but anti-aliasing can spill onto the
   -- body's corner; we overpaint to keep the highlight crisp).
-  drawWireEndHighlight(dl, segs, ox, oy, wireEndHover)
+  drawWireEndHighlight(p, segs, ox, oy, wireEndHover)
 
-  if fader then drawFader(dl, fader) end
+  if fader then drawFader(p, fader) end
 
   -- Capacity-overflow overlay: union of node-id sets across every error
   -- entry, stroked after the selection outline so error-and-selected nodes
@@ -1628,10 +1600,9 @@ local function renderCanvas(w, h)
     for _, err in ipairs(errs) do
       for id in pairs(err.nodeIds) do errorIds[id] = true end
     end
-    local errCol = chrome.colour('wiring.node.error')
     for _, nv in ipairs(nodeViews) do
       if errorIds[nv.id] then
-        strokeNodeRect(dl, nodeScreenRect(nv, ox, oy), errCol)
+        strokeNodeRect(p, nodeScreenRect(nv, ox, oy), 'wiring.node.error')
       end
     end
   end
@@ -1642,7 +1613,7 @@ local function renderCanvas(w, h)
   -- by draft type); stickyHit shows the persistent pinned overlay with
   -- its default slot. The nv.id-keyed idPrefix keeps InvisibleButtons
   -- unique across multiple simultaneous overlays.
-  for _, p in ipairs(overlays) do
+  for _, pick in ipairs(overlays) do
     -- Body outline marks "the default audio port is the selected slot" —
     -- the slot is a default-port synthetic (no screen rect). Chip hits
     -- carry their own highlight; chevron hits (slot=nil) leave the body
@@ -1650,11 +1621,11 @@ local function renderCanvas(w, h)
     -- its own highlight (drawPortRow matches by kind), so during a midi
     -- draft / midi redraft the node body stays unhighlighted and only
     -- the keyboard lights up.
-    if p.slot and not p.slot.x and p.slot.kind ~= 'midi' then
-      drawBodyOutline(dl, p.nv, ox, oy)
+    if pick.slot and not pick.slot.x and pick.slot.kind ~= 'midi' then
+      drawBodyOutline(p, pick.nv, ox, oy)
     end
-    drawPortRow(dl, p, audioCol, '##portSlot/' .. p.nv.id)
-    if p.list then drawList(dl, p.list, p.slot) end
+    drawPortRow(p, pick, '##portSlot/' .. pick.nv.id)
+    if pick.list then drawList(p, pick.list, pick.slot) end
   end
 
   wv:setHover((sourceHit and sourceHit.nv.id)
@@ -1889,8 +1860,7 @@ local function renderCanvas(w, h)
     local bx0, by0, bx1, by1 = band.mx0, band.my0, mx, my
     if bx0 > bx1 then bx0, bx1 = bx1, bx0 end
     if by0 > by1 then by0, by1 = by1, by0 end
-    ImGui.DrawList_AddRect(dl, bx0, by0, bx1, by1,
-      chrome.colour('wiring.node.selected'), 0, 0, 1)
+    p.stroke(rect(bx0, by0, bx1, by1), 'wiring.node.selected', 1, 0)
   end
 
   -- Port InvisibleButtons advance the layout cursor; rewind it so the

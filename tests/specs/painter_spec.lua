@@ -23,6 +23,11 @@ fakeImGui.CalcTextSize = function(_, s)
 end
 
 package.preload['imgui'] = function() return function(_) return fakeImGui end end
+-- An earlier spec's run loads painter (via wiringPage) and imgui under a
+-- different fake; drop both from the cache so painter rebinds to the recording
+-- stub above rather than whatever was cached first.
+package.loaded['imgui']   = nil
+package.loaded['painter'] = nil
 
 local painter = require('painter')
 
