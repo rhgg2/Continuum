@@ -46,6 +46,7 @@ local gridOriginX = 0
 local gridOriginY = 0
 local gridWidth   = 0
 local gridHeight  = 0
+local gridPainter = nil   -- cell painter, rebuilt each frame in drawTracker; hit-test reads its fromScreen so draw and hit can't drift
 
 local chanX, chanW, chanOrder, totalWidth = {}, {}, {}, 0
 
@@ -231,7 +232,7 @@ local function printer(ctx, gX, gY, x0, y0)
     p.fill({ x0 = x1, y0 = y1, x1 = x2 + 1, y1 = y2 + 1 }, colour)
   end
 
-  return pt
+  return pt, p   -- p: the raw painter, for cell-edge strokes and the hit-test inverse
 end
 
 --contract: returns 0 when laneStrip.visible is false; layout and draw branch on this
@@ -566,7 +567,12 @@ local function drawTracker()
   gridOriginY  = py + HEADER * gridY
 
   local numRows = grid.numRows or 0
-  local draw = printer(ctx, gridX, gridY, gridOriginX, gridOriginY)
+  local draw, p = printer(ctx, gridX, gridY, gridOriginX, gridOriginY)
+  gridPainter = p
+  -- Screen-space painter (identity transform) for draws sized in pixels, not
+  -- cells: the tail bracket's arc radius and the temperament rule's tick. Colour
+  -- by name like any painter; positions pass straight through unconverted.
+  local screenPainter = painter.new(ctx, chrome, {})
 
   -- Solo (amber) wins over mute (red): audibility semantic.
   draw:text(-GUTTER, -HEADER, 'Row', 'accent')
@@ -624,8 +630,6 @@ local function drawTracker()
     draw:text(-GUTTER, y, string.format('%03d', row), rowNumCol)
   end
 
-  local drawList = ImGui.GetWindowDrawList(ctx)
-
   -- Mirror regions. Before tails/cells so per-cell text reads over the
   -- wash. A per-group hue washes the whole instance area (membership =
   -- selected streams x time span); overridden/conflicted cells
@@ -674,19 +678,16 @@ local function drawTracker()
                                 and rc.instId == inst.instId
         local plainCursorIn = cursorIn and not inRegion
         if conflicted or isCursorInst or plainCursorIn then
-          local outCol = chrome.colour(groups.outlineKey(
-            conflicted and 'conflicted' or 'synced', inst.colour))
-          ImGui.DrawList_AddRect(drawList,
-            gridOriginX + xMin * gridX,       gridOriginY + yLo * gridY,
-            gridOriginX + (xMax + 1) * gridX, gridOriginY + yHi * gridY,
-            outCol, 0, 0, isCursorInst and 2 or 1)
+          local outlineName = groups.outlineKey(
+            conflicted and 'conflicted' or 'synced', inst.colour)
+          p.stroke({ x0 = xMin, y0 = yLo, x1 = xMax + 1, y1 = yHi },
+            outlineName, isCursorInst and 2 or 1)
         end
         if inRegion and cursorIn then draw:box(-1, -1, yLo, yHi - 1, baseTint) end
       end
     end
   end
 
-  local tailCol = chrome.colour('tail')
   local viewTop  = scrollRow
   local viewBot  = scrollRow + gridHeight
   for _, col in ipairs(grid.cols) do
@@ -697,18 +698,13 @@ local function drawTracker()
           local y2 = gridOriginY + math.min(tail.endRow - scrollRow, gridHeight) * gridY
           local x1 = gridOriginX + col.x * gridX
           local r  = 5
-          --  ImGui.DrawList_AddRectFilled(drawList, x1+1, y1-1, x1 + 6, y1+1, tailCol, 1)
-          --  ImGui.DrawList_AddRectFilled(drawList, x1+5, y1, x1+7, y2, tailCol)
-          --  ImGui.DrawList_AddRectFilled(drawList, x1+1, y2-1, x1 + 6, y2+1, tailCol, 1)
-          ImGui.DrawList_PathClear(drawList)
---            ImGui.DrawList_PathLineTo(drawList, x1-1, y1)
-          ImGui.DrawList_PathArcTo( drawList, x1, y1+r, r, 3*math.pi/2, math.pi)
-          ImGui.DrawList_PathLineTo(drawList, x1-r, y1+r+1)
-          ImGui.DrawList_PathLineTo(drawList, x1-r, y2-r-1)
-          ImGui.DrawList_PathArcTo( drawList, x1, y2-r, r, math.pi, math.pi/2)
-          -- ImGui.DrawList_PathLineTo(drawList, x1+1, y2)
-          ImGui.DrawList_PathStroke(drawList, tailCol, ImGui.DrawFlags_None, 1.5)
-          ImGui.DrawList_PathClear(drawList)
+          screenPainter.pathClear()
+          screenPainter.pathArcTo(x1, y1 + r, r, 3 * math.pi / 2, math.pi)
+          screenPainter.pathLineTo(x1 - r, y1 + r + 1)
+          screenPainter.pathLineTo(x1 - r, y2 - r - 1)
+          screenPainter.pathArcTo(x1, y2 - r, r, math.pi, math.pi / 2)
+          screenPainter.pathStroke('tail', 1.5)
+          screenPainter.pathClear()
         end
       end
     end
@@ -752,7 +748,6 @@ local function drawTracker()
   end
 
   if tv:activeTemper() then
-    local barCol = chrome.colour('accent')
     for _, col in ipairs(grid.cols) do
       if col.x and col.type == 'note' and col.cells then
         local x0 = gridOriginX + col.x * gridX
@@ -768,9 +763,9 @@ local function drawTracker()
             if gap and gap ~= 0 and halfGap > 0 then
               local yTop = gridOriginY + y * gridY + 1
               local offset = util.clamp(gap / halfGap, -1, 1) * halfW
-              ImGui.DrawList_AddLine(drawList, x0, yTop, x1, yTop, barCol, 1)
+              screenPainter.line(x0, yTop, x1, yTop, 'accent', 1)
               local tickX = cx + offset
-              ImGui.DrawList_AddLine(drawList, tickX, yTop - 1, tickX, yTop + 2, barCol, 1)
+              screenPainter.line(tickX, yTop - 1, tickX, yTop + 2, 'accent', 1)
             end
           end
         end
@@ -921,7 +916,7 @@ end
 --invariant: fracX is separate so callers distinguish 'past last col' from 'inside col N'
 local function nearestStop(mouseX, mouseY)
   local grid = tv.grid
-  local fracX = (mouseX - gridOriginX) / gridX
+  local fracX = cellAt(mouseX, mouseY)
   local bestCol, bestStop, bestDist = nil, nil, math.huge
   for i, col in ipairs(grid.cols) do
     if col.x then
@@ -936,6 +931,13 @@ local function nearestStop(mouseX, mouseY)
   return bestCol, bestStop, fracX
 end
 
+
+-- Screen point -> (fractional column, integer row) through the grid painter's
+-- inverse, so a click resolves against the exact transform the draw pass used.
+local function cellAt(mouseX, mouseY)
+  local lx, ly = gridPainter.fromScreen(mouseX, mouseY)
+  return lx, math.floor(ly)
+end
 
 --contract: bails if laneConsumed; lane strip wins gestures over the tracker grid
 --contract: right-click on channel-label row toggles mute
@@ -962,7 +964,7 @@ local function handleMouse()
     local sub  = (mods & ImGui.Mod_Alt)   ~= 0
     if add or sub then
       local mouseX, mouseY = ImGui.GetMousePos(ctx)
-      local charY = math.floor((mouseY - gridOriginY) / gridY)
+      local _, charY = cellAt(mouseX, mouseY)
       if charY >= 0 and charY < gridHeight then
         local col  = nearestStop(mouseX, mouseY)
         local cell = col and (col .. (add and '+' or '-'))
@@ -979,7 +981,7 @@ local function handleMouse()
 
   if rightClicked and ImGui.IsWindowHovered(ctx) then
     local mouseX, mouseY = ImGui.GetMousePos(ctx)
-    local charY = math.floor((mouseY - gridOriginY) / gridY)
+    local _, charY = cellAt(mouseX, mouseY)
     local col, _, fracX = nearestStop(mouseX, mouseY)
     if col and charY == -HEADER and fracX >= 0 then
       local last = grid.cols[col]
@@ -992,7 +994,7 @@ local function handleMouse()
 
   if clicked and ImGui.IsWindowHovered(ctx) then
     local mouseX, mouseY = ImGui.GetMousePos(ctx)
-    local charY = math.floor((mouseY - gridOriginY) / gridY)
+    local _, charY = cellAt(mouseX, mouseY)
     local col, stop, fracX = nearestStop(mouseX, mouseY)
     if not col then return end
     if charY < -HEADER or charY >= gridHeight then return end
@@ -1027,9 +1029,8 @@ local function handleMouse()
 
   elseif dragging and held then
     local mouseX, mouseY = ImGui.GetMousePos(ctx)
-    local charY = math.floor((mouseY - gridOriginY) / gridY)
+    local fracX, charY = cellAt(mouseX, mouseY)
     local row = scrollRow + charY
-    local fracX = (mouseX - gridOriginX) / gridX
     local rightEdge = grid.cols[lastVisCol].x + grid.cols[lastVisCol].width
 
     local col, stop
