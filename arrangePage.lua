@@ -13,6 +13,7 @@ if not reaper.ImGui_GetBuiltinPath then
 end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
+local painter = require 'painter'
 
 local cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost =
   (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).onDive, (...).onTakeProperties, (...).modalHost
@@ -83,28 +84,20 @@ local SLOT_FILL_ALPHA = 0.85
 local SLOT_BORDER_ALPHA = 0.75
 local slotColourCache = {}
 local function slotColours(slotIdx, focused)
-  -- Orphans (no slot) read named config; the 62 slot hues are generated,
-  -- not a palette, so they stay computed.
+  -- Orphans (no slot) return named config; the 62 slot hues are generated
+  -- (painter.hue, golden-ratio rotation) and come back as painter colour
+  -- tokens. Both kinds are valid colour args to p.fill / p.stroke.
   if slotIdx == nil then
-    if focused then
-      return chrome.colour('arrange.orphanFocusFill'),
-             chrome.colour('arrange.orphanFocusBorder')
-    end
-    return chrome.colour('arrange.orphanFill'), chrome.colour('arrange.orphanBorder')
+    if focused then return 'arrange.orphanFocusFill', 'arrange.orphanFocusBorder' end
+    return 'arrange.orphanFill', 'arrange.orphanBorder'
   end
   local quad = slotColourCache[slotIdx]
   if not quad then
-    local PHI = 0.6180339887498949
-    local h   = ((slotIdx + 1) * PHI) % 1.0
-    local function hue(s, v, a)
-      local r, g, b = ImGui.ColorConvertHSVtoRGB(h, s, v)
-      return ImGui.ColorConvertDouble4ToU32(r, g, b, a)
-    end
     quad = {
-      hue(0.55, 0.78, SLOT_FILL_ALPHA),
-      hue(0.85, 0.55, SLOT_BORDER_ALPHA),
-      hue(0.30, 0.97, SLOT_FILL_ALPHA),
-      hue(0.92, 0.90, 1.0),
+      painter.hue(slotIdx, 0.55, 0.78, SLOT_FILL_ALPHA),
+      painter.hue(slotIdx, 0.85, 0.55, SLOT_BORDER_ALPHA),
+      painter.hue(slotIdx, 0.30, 0.97, SLOT_FILL_ALPHA),
+      painter.hue(slotIdx, 0.92, 0.90, 1.0),
     }
     slotColourCache[slotIdx] = quad
   end
@@ -234,7 +227,7 @@ local function handleGridMouse(nTracks)
 end
 
 local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
-  local dl       = ImGui.GetWindowDrawList(ctx)
+  local p        = painter.new(ctx, chrome, {})
   local paneLeft, oy = ImGui.GetCursorScreenPos(ctx)
   local ox           = paneLeft + LOOP_PAD
   local _, availH = ImGui.GetContentRegionAvail(ctx)
@@ -248,36 +241,28 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
 
   local sr      = (select(1, av:scroll())) or 0
 
-  local textCol     = chrome.colour('text')
-  local sepCol      = chrome.colour('separator')
-  local dividerCol  = textCol  -- matches the tracker's header divider
-  -- Phrase tint reuses bar tint's hue at full opacity (rowBeat is
-  -- palette.highlight at alpha 0.4) so phrases read stronger than
-  -- the bars they contain.
-  local barTint    = chrome.colour('rowBeat')
-  local phraseTint = chrome.colour('arrange.phrase')
-
   local function trackLeft(c)  return ox + QN_W + GUTTER_PAD + c * TRACK_W end
   local function trackRight(c) return trackLeft(c) + TRACK_W                end
   local function rowY(row)     return bodyTop + (row - sr) * rowH end
+  local function rect(x0, y0, x1, y1) return { x0 = x0, y0 = y0, x1 = x1, y1 = y1 } end
 
   local curRow, curCol = av:cursorRow(), av:cursorCol()
 
   -- The right border (gridline at gridR; rightmost take-rect border a
   -- px beyond) sits on the clip boundary — clip past it or it's chopped.
-  ImGui.DrawList_PushClipRect(dl, paneLeft, oy, gridR + 2, oy + availH, true)
+  p.pushClip(rect(paneLeft, oy, gridR + 2, oy + availH))
 
   -- Row tints (bar / phrase). Row 0 (qn = 0) is the strongest phrase
   -- boundary in the project, so it gets the phrase tint too — no qn > 0
-  -- guard.
+  -- guard. Phrase reuses the bar hue (rowBeat) at full opacity so phrases
+  -- read stronger than the bars they contain.
   for r = 0, visRows - 1 do
-    local qn = math.floor(av:rowToQN(sr + r) + 0.5)
-    local tint = (qn % 64 == 0) and phraseTint
-              or (qn % 16 == 0) and barTint
+    local qn   = math.floor(av:rowToQN(sr + r) + 0.5)
+    local tint = (qn % 64 == 0) and 'arrange.phrase'
+              or (qn % 16 == 0) and 'rowBeat'
               or nil
     if tint then
-      ImGui.DrawList_AddRectFilled(dl,
-        ox, bodyTop + r * rowH, gridR, bodyTop + (r + 1) * rowH, tint)
+      p.fill(rect(ox, bodyTop + r * rowH, gridR, bodyTop + (r + 1) * rowH), tint)
     end
   end
 
@@ -287,13 +272,13 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   -- start at row 0, not the header band, so the header reads as open space.
   for c = 0, nTracks do
     local lx = trackLeft(c)
-    ImGui.DrawList_AddLine(dl, lx, bodyTop, lx, bodyBot, sepCol, 1)
+    p.line(lx, bodyTop, lx, bodyBot, 'separator', 1)
   end
-  ImGui.DrawList_AddLine(dl, gridR, bodyTop, gridR, bodyBot, sepCol, 1)
-  ImGui.DrawList_AddLine(dl, ox, bodyBot,       gridR, bodyBot,       sepCol, 1)
+  p.line(gridR, bodyTop, gridR, bodyBot, 'separator', 1)
+  p.line(ox, bodyBot, gridR, bodyBot, 'separator', 1)
   for r = 1, visRows - 1 do
     local y = bodyTop + r * rowH
-    ImGui.DrawList_AddLine(dl, ox, y, gridR, y, sepCol, 1)
+    p.line(ox, y, gridR, y, 'separator', 1)
   end
 
   -- Take rectangles, drawn on top of gridlines. Fill exactly the column
@@ -322,9 +307,9 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local ry0 = snap(rowY(math.max(startRow, sr)))
     local ry1 = snap(rowY(math.min(endRow, sr + visRows)))
     local fill, border = slotColours(tk.slotIdx, focused)
-    if blocked then border = chrome.colour('arrange.blockedBorder') end
-    ImGui.DrawList_AddRectFilled(dl, rx0+1, ry0+1, rx1, ry1, fill)
-    ImGui.DrawList_AddRect(dl, rx0, ry0, rx1+1, ry1+1, border, 0, 0, 1)
+    if blocked then border = 'arrange.blockedBorder' end
+    p.fill(rect(rx0 + 1, ry0 + 1, rx1, ry1), fill)
+    p.stroke(rect(rx0, ry0, rx1 + 1, ry1 + 1), border, 1)
     if tk.name and tk.name ~= '' then
       nameDraws[#nameDraws + 1] = {
         name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
@@ -364,8 +349,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
       local gx1 = snap(trackRight(press.col))
       local gy0 = snap(rowY(math.max(startRow, sr)))
       local gy1 = snap(rowY(math.min(endRow, sr + visRows)))
-      ImGui.DrawList_AddRectFilled(dl, gx0+1, gy0+1, gx1, gy1, chrome.colour('arrange.ghostFill'))
-      ImGui.DrawList_AddRect(dl, gx0, gy0, gx1+1, gy1+1, chrome.colour('arrange.ghostBorder'), 0, 0, 1)
+      p.fill(rect(gx0 + 1, gy0 + 1, gx1, gy1), 'arrange.ghostFill')
+      p.stroke(rect(gx0, gy0, gx1 + 1, gy1 + 1), 'arrange.ghostBorder', 1)
     end
   end
 
@@ -379,10 +364,10 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local cx1   = snap(trackRight(curCol))
     local cy    = snap(rowY(curRow))
     local serif = 4
-    local col   = chrome.colour('arrange.cursorBorder')
-    ImGui.DrawList_AddLine(dl, cx0 + 1, cy, cx1-1,     cy,        col, 1.5)
-    ImGui.DrawList_AddLine(dl, cx0 + 1, cy - serif,  cx0 +1, cy + serif, col, 1.5)
-    ImGui.DrawList_AddLine(dl, cx1, cy - serif,  cx1, cy + serif, col, 1.5)
+    local caret = 'arrange.cursorBorder'
+    p.line(cx0 + 1, cy,         cx1 - 1, cy,         caret, 1.5)
+    p.line(cx0 + 1, cy - serif, cx0 + 1, cy + serif, caret, 1.5)
+    p.line(cx1,     cy - serif, cx1,     cy + serif, caret, 1.5)
   end
 
   -- Loop region — the tracker's tail bracket: a stroked `[` down the
@@ -401,24 +386,24 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
       local r  = 5
       local x1 = paneLeft + 1 + r
       local y1, y2 = snap(rowY(loTop)), snap(rowY(loBot))
-      ImGui.DrawList_PathClear(dl)
-      ImGui.DrawList_PathArcTo(dl, x1, y1 + r, r, 3 * math.pi / 2, math.pi)
-      ImGui.DrawList_PathLineTo(dl, x1 - r, y1 + r + 1)
-      ImGui.DrawList_PathLineTo(dl, x1 - r, y2 - r - 1)
-      ImGui.DrawList_PathArcTo(dl, x1, y2 - r, r, math.pi, math.pi / 2)
-      ImGui.DrawList_PathStroke(dl, chrome.colour('tail'), ImGui.DrawFlags_None, 1.5)
-      ImGui.DrawList_PathClear(dl)
+      p.pathClear()
+      p.pathArcTo(x1, y1 + r, r, 3 * math.pi / 2, math.pi)
+      p.pathLineTo(x1 - r, y1 + r + 1)
+      p.pathLineTo(x1 - r, y2 - r - 1)
+      p.pathArcTo(x1, y2 - r, r, math.pi, math.pi / 2)
+      p.pathStroke('tail', 1.5)
+      p.pathClear()
     end
   end
 
   -- Take names — last, so they stay crisp over the translucent cursor
   -- fill.
   for _, nd in ipairs(nameDraws) do
-    local tw = ImGui.CalcTextSize(ctx, nd.name)
+    local tw = p.measure(nd.name)
     local tx = nd.rx0 + math.floor((nd.rx1 - nd.rx0 - tw) / 2)
-    ImGui.DrawList_PushClipRect(dl, nd.rx0 + 2, nd.ry0, nd.rx1 - 2, nd.ry1, true)
-    ImGui.DrawList_AddText(dl, tx, nd.ry0 + 1, textCol, nd.name)
-    ImGui.DrawList_PopClipRect(dl)
+    p.pushClip(rect(nd.rx0 + 2, nd.ry0, nd.rx1 - 2, nd.ry1))
+    p.text(tx, nd.ry0 + 1, 'text', nd.name)
+    p.popClip()
   end
 
   -- Truncation ellipsis — bottom-row glyph for items the relayout pass
@@ -426,30 +411,29 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   -- names so it sits over the cursor fill.
   for _, td in ipairs(truncDraws) do
     local ell = '…'
-    local tw  = ImGui.CalcTextSize(ctx, ell)
+    local tw  = p.measure(ell)
     local tx  = td.rx0 + math.floor((td.rx1 - td.rx0 - tw) / 2)
     local ty  = td.ry1 - rowH + 1
-    ImGui.DrawList_PushClipRect(dl, td.rx0 + 2, ty, td.rx1 - 2, td.ry1, true)
-    ImGui.DrawList_AddText(dl, tx, ty, textCol, ell)
-    ImGui.DrawList_PopClipRect(dl)
+    p.pushClip(rect(td.rx0 + 2, ty, td.rx1 - 2, td.ry1))
+    p.text(tx, ty, 'text', ell)
+    p.popClip()
   end
 
   -- Edit cursor + play head — full-width rules on top of takes and
   -- names. The play head is yellow and drawn only while the transport
   -- runs; the grid clip rect already in force trims an off-screen rule.
-  local function qnRule(qn, colour)
+  local function qnRule(qn, name)
     local y = snap(rowY(av:qnToRow(qn)))
-    ImGui.DrawList_AddLine(dl, ox, y, gridR, y, colour, 1)
+    p.line(ox, y, gridR, y, name, 1)
   end
-  qnRule(av:editCursorQN(), chrome.colour('arrange.editCursor'))
+  qnRule(av:editCursorQN(), 'arrange.editCursor')
   local playQN = av:playPositionQN()
-  if playQN then qnRule(playQN, chrome.colour('arrange.playHead')) end
+  if playQN then qnRule(playQN, 'arrange.playHead') end
 
   for r = 0, visRows - 1 do
     local label = rowLabel(sr + r)
-    local tw    = ImGui.CalcTextSize(ctx, label)
-    ImGui.DrawList_AddText(dl,
-      ox + QN_W - tw - 4, bodyTop + r * rowH + 1, textCol, label)
+    local tw    = p.measure(label)
+    p.text(ox + QN_W - tw - 4, bodyTop + r * rowH + 1, 'text', label)
   end
 
   -- Header track names — sit at the bottom of the header band so the
@@ -460,15 +444,14 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local tr   = tracks[c + 1]
     local name = (tr and tr.name and tr.name ~= '')
                  and tr.name or string.format('Track %d', c + 1)
-    local tw   = ImGui.CalcTextSize(ctx, name)
+    local tw   = p.measure(name)
     local lx   = trackLeft(c) + math.floor((TRACK_W - tw) / 2)
-    ImGui.DrawList_PushClipRect(dl,
-      trackLeft(c) + 2, oy, trackRight(c) - 2, oy + headerH, true)
-    ImGui.DrawList_AddText(dl, lx, headerTextY, textCol, name)
-    ImGui.DrawList_PopClipRect(dl)
+    p.pushClip(rect(trackLeft(c) + 2, oy, trackRight(c) - 2, oy + headerH))
+    p.text(lx, headerTextY, 'text', name)
+    p.popClip()
   end
 
-  ImGui.DrawList_PopClipRect(dl)
+  p.popClip()
 
   -- Advance the ImGui layout cursor so subsequent siblings know we
   -- consumed the grid's footprint.
@@ -497,16 +480,15 @@ local function renderPaletteHeader(focusedTrack)
     and (focusedTrack.name ~= '' and focusedTrack.name
          or string.format('Track %d', focusedTrack.idx + 1))
     or '(no track)'
-  local dl       = ImGui.GetWindowDrawList(ctx)
+  local p        = painter.new(ctx, chrome, {})
   local ox, oy   = ImGui.GetCursorScreenPos(ctx)
   local paneW    = (select(1, ImGui.GetContentRegionAvail(ctx)))
   local rowH     = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
   local headerH  = rowH + HEADER_PAD
-  local textCol  = chrome.colour('text')
-  local tw       = ImGui.CalcTextSize(ctx, trackLabel)
+  local tw       = p.measure(trackLabel)
   local lx       = ox + math.floor((paneW - tw) / 2)
-  ImGui.DrawList_AddText(dl, lx, oy + HEADER_PAD, textCol, trackLabel)
-  ImGui.DrawList_AddLine(dl, ox, oy + headerH, ox + paneW, oy + headerH, textCol, 1)
+  p.text(lx, oy + HEADER_PAD, 'text', trackLabel)
+  p.line(ox, oy + headerH, ox + paneW, oy + headerH, 'text', 1)
   ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
 end
 
@@ -687,8 +669,8 @@ function ap:renderBody(_, w, h, dispatch)
   ImGui.SameLine(ctx, 0, 0)
   local sx, sy = ImGui.GetCursorScreenPos(ctx)
   local lineX  = sx + math.floor(PANE_GAP / 2)
-  ImGui.DrawList_AddLine(ImGui.GetWindowDrawList(ctx),
-    lineX, sy, lineX, sy + h, chrome.colour('text'), 1)
+  local p      = painter.new(ctx, chrome, {})
+  p.line(lineX, sy, lineX, sy + h, 'text', 1)
   ImGui.Dummy(ctx, PANE_GAP, h)
   ImGui.SameLine(ctx, 0, 0)
 
