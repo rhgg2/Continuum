@@ -136,6 +136,7 @@ local specs = {
   'wv_errors_spec',
   'wp_smoke_spec',
   'painter_spec',
+  'curveEditor_spec',
 }
 
 local pass, fail, failures = 0, 0, {}

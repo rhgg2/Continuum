@@ -28,6 +28,20 @@ input — otherwise ImGui's empty-area-window-move takes over and
 drags the host window. The `inert` drag kind pins the gesture
 without firing callbacks: pure suppression.
 
+## Coordinate mapping
+
+Both the draw pass and the hit-test go through one `painter` built per
+frame from the lane rect — so a click resolves against the exact map a
+glyph was drawn with, and the two cannot drift (see `painter.md`). Don't
+re-hand-roll `t↔x` / `val↔y`; project through `pt.toScreen` /
+`pt.fromScreen`.
+
+painter's affine is *unclamped*, where the old `valToY` clamped val into
+the lane. So the envelope and active-segment sample loops clamp val to
+`[vMin, vMax]` at the sample site: without it a bezier that overshoots
+its anchors would draw past the lane (the ±4px clip only hides a hair of
+it). Keep the clamp where the samples are built.
+
 ## Snap vs. free move
 
 Two move modes, two callbacks. Snapped (`onMove`) constrains t to

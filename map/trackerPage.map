@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1473  sha=6e5091e  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1472  sha=36a96f3  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -63,9 +63,9 @@
       @invariant  lane strip renders only cc/pb/at; other types show as tinted background
   @state LANE_ROW_MIN = 3  @ 439
   @state LANE_ROW_MAX = 32  @ 440
-  @state tp = {}  @ 1229
-  @state NEW_TAKE_DEFAULT_BEATS = 4  @ 1241
-  @state tracker = cmgr:scope('tracker')  @ 1270
+  @state tp = {}  @ 1228
+  @state NEW_TAKE_DEFAULT_BEATS = 4  @ 1240
+  @state tracker = cmgr:scope('tracker')  @ 1269
 
 # Private functions
   @fn print(...)  @ 26
@@ -106,40 +106,40 @@
   @fn drawLaneStrip()  @ 444
       @contract  publishes laneConsumed=true if curve editor claimed input this frame
       @contract  handleMouse short-circuits on laneConsumed
-  @fn drawTracker()  @ 559
+  @fn drawTracker()  @ 558
       @contract  assumes computeLayout ran this frame; reads chanX/W/Order, gridOriginX/Y
-  @fn drawStatusBar()  @ 806
+  @fn drawStatusBar()  @ 805
   -- Input
-  @fn nearestStop(mouseX, mouseY)  @ 917
+  @fn nearestStop(mouseX, mouseY)  @ 916
       @contract  returns (col, stop, fracX) or (nil, nil, fracX)
       @invariant  fracX is separate so callers distinguish 'past last col' from 'inside col N'
-  @fn cellAt(mouseX, mouseY)  @ 937
+  @fn cellAt(mouseX, mouseY)  @ 936
       -- Screen point -> (fractional column, integer row) through the grid painter's
       -- inverse, so a click resolves against the exact transform the draw pass used.
-  @fn handleMouse()  @ 946
-  @fn handleKeys(kr)  @ 1087
+  @fn handleMouse()  @ 945
+  @fn handleKeys(kr)  @ 1086
       -- Page-internal raw input. commandHeld gates a held command key from
       -- leaking into the char queue (different auto-repeat timing).
       @contract  no-op when modal open, picker active, or any ImGui item is active
       @contract  drains the input-queue per frame; reads ec/grid fresh (editEvent may rebuild)
   -- Modal-driven commands
-  @fn openPrompt(title, prompt, callback, resolve)  @ 1119
-  @fn openConfirm(title, callback, prompt)  @ 1123
-  @fn scopedAction(title, base)  @ 1191
+  @fn openPrompt(title, prompt, callback, resolve)  @ 1118
+  @fn openConfirm(title, callback, prompt)  @ 1122
+  @fn scopedAction(title, base)  @ 1190
       -- Naming convention <base>Selection / <base>All is the contract.
       @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
-  @fn resolveColType(s)  @ 1201
+  @fn resolveColType(s)  @ 1200
       -- Add-Column type vocabulary. First letter is unique except p (pb/pc):
       -- `p`→pb, a following `c`→pc. Digits ride through (only cc takes an id).
-  @fn addColumn()  @ 1214
-  @fn boundAmTake()  @ 1242
-  @fn newTakeBelow()  @ 1246
-  @fn duplicateUnpooledBelow()  @ 1262
+  @fn addColumn()  @ 1213
+  @fn boundAmTake()  @ 1241
+  @fn newTakeBelow()  @ 1245
+  @fn duplicateUnpooledBelow()  @ 1261
 
 # Public API (tp:*)
   -- Region overlay keymap
   -- Take properties modal helper
-  @api tp:openTakeProperties(args)  @ 1346
+  @api tp:openTakeProperties(args)  @ 1345
       -- onClose fires exactly once, after the whole modal chain — including
       -- any truncate-confirm follow-up. Two sources of "chain done":
       -- the apply path (callback ran, valid input, either direct apply or
@@ -148,22 +148,22 @@
       -- onClose. The `transfer` flag handshake makes these mutually
       -- exclusive: once a valid callback starts the apply chain it claims
       -- ownership, so modalHost's onClose becomes a no-op.
-  @api tp:currentTake()  @ 1385
+  @api tp:currentTake()  @ 1384
   -- Page interface
-  @api tp:renderToolbarBits(_)  @ 1389
-  @api tp:renderBody(_, w, h, dispatch)  @ 1397
+  @api tp:renderToolbarBits(_)  @ 1388
+  @api tp:renderBody(_, w, h, dispatch)  @ 1396
       @contract  calls computeLayout twice
       @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x
       @contract  second pass repopulates layout for drawTracker
-  @api tp:renderStatusBar(_)  @ 1433
-  @api tp:bind(t)  @ 1438
+  @api tp:renderStatusBar(_)  @ 1432
+  @api tp:bind(t)  @ 1437
       @contract  bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
-  @api tp:unbind()  @ 1442
-  @api tp:dropTake()  @ 1445
+  @api tp:unbind()  @ 1441
+  @api tp:dropTake()  @ 1444
       @contract  take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.
-  @api tp:reloadFromReaper()  @ 1448
+  @api tp:reloadFromReaper()  @ 1447
       @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
-  @api tp:focusState()  @ 1461
+  @api tp:focusState()  @ 1460
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo

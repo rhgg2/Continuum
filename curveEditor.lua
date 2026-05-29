@@ -16,9 +16,10 @@ if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
 end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
-local ImGui = require 'imgui' '0.10'
+local ImGui   = require 'imgui' '0.10'
+local painter = require 'painter'
 
-local ctx = (...).ctx
+local ctx, chrome = (...).ctx, (...).chrome
 
 local HIT_PX     = 6
 local HIT_PX2    = HIT_PX * HIT_PX
@@ -31,10 +32,10 @@ local hover, segHover, segPin, preview, previewSuppress, drag
 
 local self = {}
 
---shape: FrameArgs = { drawList, rect={x0,yTop,w,h}, vMin, vMax, tMin, tMax, events, tOf=(evt)->t, evalCurve=(A,B,fracT)->val, snap=(t)->snappedT|nil, hovered=bool, dragId, colours={axis,envelope,anchor,anchorActive}, callbacks={onMove(idx,t,val), onMoveFree(idx,t,val), onInsert(t,val)->newIdx, onDelete(idx), onTension(idx,tau), onCycleShape(idx)} }
+--shape: FrameArgs = { rect={x0,yTop,w,h}, vMin, vMax, tMin, tMax, events, tOf=(evt)->t, evalCurve=(A,B,fracT)->val, snap=(t)->snappedT|nil, hovered=bool, dragId, colours=config-names{axis,envelope,anchor,anchorActive}, callbacks={onMove(idx,t,val), onMoveFree(idx,t,val), onInsert(t,val)->newIdx, onDelete(idx), onTension(idx,tau), onCycleShape(idx)} }
 --contract: returns true iff the editor consumed the mouse this frame (host should suppress its own click handling)
 --contract: callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame
---contract: host must call frame() inside a window whose drawList is a.drawList and gate a.hovered on its own IsWindowHovered
+--contract: host must call frame() inside the window whose drawlist the painter binds; gate a.hovered on its own IsWindowHovered
 function self:frame(a)
   local rect      = a.rect
   local x0, yTop  = rect.x0, rect.yTop
@@ -49,24 +50,30 @@ function self:frame(a)
   local evalCurve = a.evalCurve
   local cb        = a.callbacks
   local cols      = a.colours
-  local dl        = a.drawList
-
-  local function tToX(t) return x0 + (t - tMin) / (tMax - tMin) * w end
-  local function valToY(v)
-    local f = util.clamp((v - vMin) / (vMax - vMin), 0, 1)
-    return yBot - f * valSpan
-  end
+  local pt = painter.new(ctx, chrome, {
+    ox = x0 - tMin * (w / (tMax - tMin)),
+    oy = yBot + vMin * (valSpan / (vMax - vMin)),
+    sx = w / (tMax - tMin),
+    sy = -valSpan / (vMax - vMin),
+  })
+  -- Single-axis projections off the one transform (x ignores v, y ignores t)
+  -- so they can't drift from pt.toScreen / pt.fromScreen.
+  local function tToX(tt) local x = pt.toScreen(tt, 0); return x end
+  local function valToY(v) local _, y = pt.toScreen(0, v); return y end
 
   hover, segHover, preview = nil, nil, nil
   if segPin and segPin.id ~= a.dragId then segPin = nil end
   if drag   and drag.id   ~= a.dragId then drag   = nil end
 
   if vMin <= 0 and 0 <= vMax then
-    local ay = valToY(0)
-    ImGui.DrawList_AddLine(dl, x0, ay, x0 + w, ay, cols.axis, 1)
+    pt.line(tMin, 0, tMax, 0, cols.axis, 1)
   end
 
-  ImGui.DrawList_PushClipRect(dl, x0 - 4, yTop - 4, x0 + w + 4, yBot + 4, true)
+  -- the clip is the lane plus a 4px screen gutter; map that screen rect back
+  -- through pt so edge anchors aren't shaved.
+  local clip0x, clip0y = pt.fromScreen(x0 - 4, yTop - 4)
+  local clip1x, clip1y = pt.fromScreen(x0 + w + 4, yBot + 4)
+  pt.pushClip({ x0 = clip0x, y0 = clip0y, x1 = clip1x, y1 = clip1y })
 
   local tArr = {}
   for i = 1, n do tArr[i] = tOf(events[i]) end
@@ -85,20 +92,17 @@ function self:frame(a)
   end
 
   if n > 0 then
-    local pts = {}
-    local pxL = math.floor(x0)
-    local pxR = math.ceil(x0 + w)
-    for px = pxL, pxR do
-      local t = tMin + (px - x0) / w * (tMax - tMin)
-      pts[#pts + 1] = px
-      pts[#pts + 1] = valToY(evalAtT(t))
+    local pts  = {}
+    local span = math.max(1, math.ceil(w))   -- ~one sample per screen px
+    for k = 0, span do
+      local tt = tMin + (tMax - tMin) * k / span
+      pts[#pts + 1] = tt
+      pts[#pts + 1] = util.clamp(evalAtT(tt), vMin, vMax)
     end
-    ImGui.DrawList_AddPolyline(dl, reaper.new_array(pts), cols.envelope, 0, 1.5)
+    pt.polyline(pts, cols.envelope, 1.5)
 
     local ax, ay = {}, {}
-    for i = 1, n do
-      ax[i], ay[i] = tToX(tArr[i]), valToY(events[i].val or 0)
-    end
+    for i = 1, n do ax[i], ay[i] = pt.toScreen(tArr[i], events[i].val or 0) end
 
     if not drag then
       local mx, my = ImGui.GetMousePos(ctx)
@@ -114,11 +118,9 @@ function self:frame(a)
     -- does not promote — the segment polyline carries the active signal.
     local activeIdx = (drag and drag.kind == 'move' and drag.idx) or hover
     for i = 1, n do
-      if i == activeIdx then
-        ImGui.DrawList_AddCircleFilled(dl, ax[i], ay[i], R_ACTIVE, cols.anchorActive)
-      else
-        ImGui.DrawList_AddCircleFilled(dl, ax[i], ay[i], R_PASSIVE, cols.anchor)
-      end
+      local r    = (i == activeIdx) and R_ACTIVE or R_PASSIVE
+      local name = (i == activeIdx) and cols.anchorActive or cols.anchor
+      pt.circle(tArr[i], events[i].val or 0, r, name)
     end
   end
 
@@ -129,7 +131,7 @@ function self:frame(a)
                        and math.abs(my - previewSuppress.y) < 1
     if not suppressed then
       previewSuppress = nil
-      local mouseT = tMin + (mx - x0) / w * (tMax - tMin)
+      local mouseT = pt.fromScreen(mx, my)
       if mouseT >= tMin and mouseT < tMax then
         local snappedT = a.snap and a.snap(mouseT) or nil
         local nearLine = snappedT and math.abs(mx - tToX(snappedT)) <= HIT_PX
@@ -143,8 +145,7 @@ function self:frame(a)
               if a.snap(tArr[i]) == snappedT then occupied = true; break end
             end
             if not occupied then
-              ImGui.DrawList_AddCircleFilled(dl, tToX(snappedT), py,
-                                             R_PREVIEW, cols.anchorActive)
+              pt.circle(snappedT, val, R_PREVIEW, cols.anchorActive)
               preview = { t = snappedT, val = val }
             end
           end
@@ -176,19 +177,18 @@ function self:frame(a)
 
   local activeSeg = (drag and drag.kind == 'tension' and drag.idx) or segHover
   if activeSeg and activeSeg < n then
-    local pxA = math.floor(tToX(tArr[activeSeg]))
-    local pxB = math.ceil (tToX(tArr[activeSeg + 1]))
-    local hpts = {}
-    for px = pxA, pxB do
-      local t = tMin + (px - x0) / w * (tMax - tMin)
-      hpts[#hpts + 1] = px
-      hpts[#hpts + 1] = valToY(evalAtT(t))
+    local a0, a1 = tArr[activeSeg], tArr[activeSeg + 1]
+    local span   = math.max(1, math.ceil(tToX(a1) - tToX(a0)))
+    local hpts   = {}
+    for k = 0, span do
+      local tt = a0 + (a1 - a0) * k / span
+      hpts[#hpts + 1] = tt
+      hpts[#hpts + 1] = util.clamp(evalAtT(tt), vMin, vMax)
     end
-    ImGui.DrawList_AddPolyline(dl, reaper.new_array(hpts),
-                               cols.anchorActive, 0, 2.5)
+    pt.polyline(hpts, cols.anchorActive, 2.5)
   end
 
-  ImGui.DrawList_PopClipRect(dl)
+  pt.popClip()
 
   ----- Mouse handling
 
@@ -216,8 +216,8 @@ function self:frame(a)
   end
 
   local function seedMove(idx)
-    local mx = seedDrag('move', idx)
-    drag.startMouseT = tMin + (mx - x0) / w * (tMax - tMin)
+    local mx, my = seedDrag('move', idx)
+    drag.startMouseT = pt.fromScreen(mx, my)
   end
 
   -- Dbl-click on segment: cycle shape; pin so further dbl-clicks
@@ -289,13 +289,12 @@ function self:frame(a)
   local A = events[i]
   if not A then drag = nil; return true end
 
-  local mouseT = tMin + (mx - x0) / w * (tMax - tMin)
+  local mouseT, rawVal = pt.fromScreen(mx, my)
   local currT  = tArr[i]
   local prevT  = (i > 1) and tArr[i - 1] or -math.huge
   local nextT  = (i < n) and tArr[i + 1] or  math.huge
 
-  local rawVal  = vMin + (yBot - my) / valSpan * (vMax - vMin)
-  local toVal   = util.clamp(util.round(rawVal), vMin, vMax)
+  local toVal = util.clamp(util.round(rawVal), vMin, vMax)
   local shifted = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
 
   if shifted then

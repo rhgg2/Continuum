@@ -74,7 +74,7 @@ local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
 local dragging    = false   -- tracker-grid selection drag: click → held → release
 local swingEditor = util.instantiate('swingEditor',
   { tv = tv, cm = cm, chrome = chrome, ctx = ctx, am = am })
-local curveEd      = util.instantiate('curveEditor', { ctx = ctx })
+local curveEd      = util.instantiate('curveEditor', { ctx = ctx, chrome = chrome })
 local laneConsumed = false
 local toolbar                              -- lazy: chrome may be nil at construction in tests
 
@@ -504,7 +504,6 @@ local function drawLaneStrip()
     end
 
     laneConsumed = curveEd:frame {
-      drawList = drawList,
       rect     = { x0 = x0, yTop = yTop, w = w, h = yBot - yTop },
       vMin = vMin, vMax = vMax,
       tMin = scrollRow, tMax = scrollRow + rowSpan,
@@ -520,10 +519,10 @@ local function drawLaneStrip()
       hovered = stripHovered,
       dragId  = colIdx,
       colours = {
-        axis         = chrome.colour('laneAxis'),
-        envelope     = chrome.colour('laneEnvelope'),
-        anchor       = chrome.colour('laneAnchor'),
-        anchorActive = chrome.colour('laneAnchorActive'),
+        axis         = 'laneAxis',
+        envelope     = 'laneEnvelope',
+        anchor       = 'laneAnchor',
+        anchorActive = 'laneAnchorActive',
       },
       callbacks = {
         onMove     = function(idx, newT, newVal) tv:moveLaneEvent(col, idx, newT, newVal) end,
