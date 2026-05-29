@@ -117,6 +117,35 @@ local HEADER_GAP = 4
 -- Snap a click's QN down to the top edge of the row box it sits in.
 local function floorTo(v, step) return math.floor(v / step) * step end
 
+-- Shared grid geometry for the mouse pass and the paint pass. Both build it
+-- from the same cursor position — handleGridMouse draws nothing, so the ImGui
+-- layout cursor hasn't moved when renderGrid follows — so both get the same
+-- `pg`, the (col, row) → screen transform. A drawn cell and a click on it
+-- therefore resolve through one mapping: snap=true pixel-aligns the draw;
+-- fromScreen, which never snaps, hands the hit-test the true sub-pixel cell.
+local function gridGeom(nTracks)
+  local paneLeft, oy = ImGui.GetCursorScreenPos(ctx)
+  local ox        = paneLeft + LOOP_PAD
+  local _, availH = ImGui.GetContentRegionAvail(ctx)
+  local rowH      = math.ceil(math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx)))
+  local headerH   = rowH + HEADER_PAD
+  local bodyTop   = oy + headerH + HEADER_GAP
+  local visRows   = math.max(1, math.floor((oy + availH - bodyTop) / rowH))
+  local sr        = (select(1, av:scroll())) or 0
+  local pg = painter.new(ctx, chrome, {
+    ox = ox + QN_W + GUTTER_PAD, oy = bodyTop - sr * rowH,
+    sx = TRACK_W, sy = rowH, snap = true,
+  })
+  return {
+    pg = pg, paneLeft = paneLeft, ox = ox, oy = oy, availH = availH,
+    rowH = rowH, headerH = headerH, bodyTop = bodyTop,
+    bodyBot = bodyTop + visRows * rowH, visRows = visRows, sr = sr,
+    gutterR = pg.ox,                      -- column-0 left edge (snapped)
+    gridR   = pg.ox + nTracks * TRACK_W,  -- right edge of the last column
+    gridW   = QN_W + GUTTER_PAD + TRACK_W * nTracks,  -- footprint from ox (Dummy)
+  }
+end
+
 -- Grid mouse pass — runs before renderGrid so the in-flight take, loop
 -- and create candidates are in hand when the paint pass relocates the
 -- dragged take. In a track column, press a take to focus it then drag —
@@ -128,28 +157,22 @@ local function floorTo(v, step) return math.floor(v / step) * step end
 -- pushes the current row/col extent into av (geometric input). Returns
 -- the in-flight drag/loop/create candidates, each nil when not active.
 local function handleGridMouse(nTracks)
-  local paneLeft, oy = ImGui.GetCursorScreenPos(ctx)
-  local ox           = paneLeft + LOOP_PAD
-  local _, availH    = ImGui.GetContentRegionAvail(ctx)
-  local rowH         = math.ceil(math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx)))
-  local headerH      = rowH + HEADER_PAD
-  local bodyTop      = oy + headerH + HEADER_GAP
-  local visRows      = math.max(1, math.floor((oy + availH - bodyTop) / rowH))
-  local bodyBot      = bodyTop + visRows * rowH
-  local sr           = (select(1, av:scroll())) or 0
-  local gutterR      = ox + QN_W + GUTTER_PAD
+  local g  = gridGeom(nTracks)
+  local pg = g.pg
 
-  av:setGridSize(visRows, nTracks)
+  av:setGridSize(g.visRows, nTracks)
   av:setMaxCol(nTracks)
 
-  local mx, my  = ImGui.GetMousePos(ctx)
-  local bpr     = av:beatPerRow()
-  local yToQN   = function(y) return (sr + (y - bodyTop) / rowH) * bpr end
-  local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
+  local mx, my     = ImGui.GetMousePos(ctx)
+  local mcol, mrow = pg.fromScreen(mx, my)
+  local bpr        = av:beatPerRow()
+  local myQN       = av:rowToQN(mrow)
+  local snapped    = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
+  local inBody     = my >= g.bodyTop and my <= g.bodyBot
+  local inGutter   = mx >= g.paneLeft and mx < g.gutterR
 
   if ImGui.IsMouseClicked(ctx, 1) and ImGui.IsWindowHovered(ctx)
-     and my >= bodyTop and my <= bodyBot
-     and mx >= paneLeft and mx < gutterR then
+     and inBody and inGutter then
     av:clearLoopRange()
   end
   -- Wheel scrolls by moving the cursor: a detached viewport scroll
@@ -165,22 +188,20 @@ local function handleGridMouse(nTracks)
       av:setCursor(av:cursorRow() - rows, av:cursorCol())
     end
   end
-  if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx)
-     and my >= bodyTop and my <= bodyBot then
-    if mx >= paneLeft and mx < gutterR then
-      press = { qn = yToQN(my), gutter = true, moved = false }
+  if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx) and inBody then
+    if inGutter then
+      press = { qn = myQN, gutter = true, moved = false }
     else
-      local col = math.floor((mx - gutterR) / TRACK_W)
+      local col = math.floor(mcol)
       if col >= 0 and col < nTracks then
-        local row = math.min(visRows - 1, math.floor((my - bodyTop) / rowH))
-        local qn = yToQN(my)
-        local take, mode = av:hitTake(col, qn, bpr / rowH)
+        local row = math.min(g.sr + g.visRows - 1, math.floor(mrow))
+        local take, mode = av:hitTake(col, myQN, bpr / g.rowH)
         if not take and ImGui.IsMouseDoubleClicked(ctx, 0) then
-          press = { qn = floorTo(qn, bpr), col = col,
+          press = { qn = floorTo(myQN, bpr), col = col,
                     create = true, moved = false }
         else
           press = {
-            qn = qn, row = sr + row, col = col,
+            qn = myQN, row = row, col = col,
             take = take, mode = mode, moved = false,
             duplicate = mode == 'move'
                         and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
@@ -198,11 +219,11 @@ local function handleGridMouse(nTracks)
   end
 
   local dragCand = (press.moved and press.take)
-                   and av:dragCandidate(press, yToQN(my), snapped) or nil
+                   and av:dragCandidate(press, myQN, snapped) or nil
   local loopCand = (press.moved and press.gutter)
-                   and av:gutterLoopCand(press, yToQN(my), snapped) or nil
+                   and av:gutterLoopCand(press, myQN, snapped) or nil
   local createCand = (press.moved and press.create)
-                     and av:createCandidate(press, yToQN(my), snapped) or nil
+                     and av:createCandidate(press, myQN, snapped) or nil
 
   if ImGui.IsMouseReleased(ctx, 0) then
     if dragCand then
@@ -227,30 +248,22 @@ local function handleGridMouse(nTracks)
 end
 
 local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
-  local p        = painter.new(ctx, chrome, {})
-  local paneLeft, oy = ImGui.GetCursorScreenPos(ctx)
-  local ox           = paneLeft + LOOP_PAD
-  local _, availH = ImGui.GetContentRegionAvail(ctx)
-  local rowH     = math.ceil(math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx)))
-  local headerH  = rowH + HEADER_PAD
-  local bodyTop  = oy + headerH + HEADER_GAP
-  local visRows  = math.max(1, math.floor((oy + availH - bodyTop) / rowH))
-  local bodyBot  = bodyTop + visRows * rowH
-  local gridW    = QN_W + GUTTER_PAD + TRACK_W * nTracks
-  local gridR    = ox + gridW
+  local g  = gridGeom(nTracks)
+  local pg = g.pg
+  local ps = painter.new(ctx, chrome, {})   -- screen space: gutter, header, full-width rules
+  local sr, rowH, visRows = g.sr, g.rowH, g.visRows
+  local ox, oy, gridR = g.ox, g.oy, g.gridR
 
-  local sr      = (select(1, av:scroll())) or 0
-
-  local function trackLeft(c)  return ox + QN_W + GUTTER_PAD + c * TRACK_W end
-  local function trackRight(c) return trackLeft(c) + TRACK_W                end
-  local function rowY(row)     return bodyTop + (row - sr) * rowH end
   local function rect(x0, y0, x1, y1) return { x0 = x0, y0 = y0, x1 = x1, y1 = y1 } end
+  -- Snapped screen edges of a column / row, read off the shared grid transform.
+  local function colX(c)  return (pg.toScreen(c, 0)) end
+  local function rowYs(r) return select(2, pg.toScreen(0, r)) end
 
   local curRow, curCol = av:cursorRow(), av:cursorCol()
 
   -- The right border (gridline at gridR; rightmost take-rect border a
   -- px beyond) sits on the clip boundary — clip past it or it's chopped.
-  p.pushClip(rect(paneLeft, oy, gridR + 2, oy + availH))
+  ps.pushClip(rect(g.paneLeft, oy, gridR + 2, oy + g.availH))
 
   -- Row tints (bar / phrase). Row 0 (qn = 0) is the strongest phrase
   -- boundary in the project, so it gets the phrase tint too — no qn > 0
@@ -262,35 +275,33 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
               or (qn % 16 == 0) and 'rowBeat'
               or nil
     if tint then
-      p.fill(rect(ox, bodyTop + r * rowH, gridR, bodyTop + (r + 1) * rowH), tint)
+      ps.fill(rect(ox, rowYs(sr + r), gridR, rowYs(sr + r + 1)), tint)
     end
   end
 
-  -- Gridlines first — take rectangles occlude them within their span,
-  -- and their 1px borders re-state the cell boundary at the take edge.
-  -- Topmost and leftmost outer borders are intentionally omitted; verticals
-  -- start at row 0, not the header band, so the header reads as open space.
+  -- Gridlines, under the take rectangles (whose 1px borders re-state the cell
+  -- boundary at the take edge). Verticals are column edges, drawn in (col, row)
+  -- through the grid painter; horizontals and the bottom border span the gutter
+  -- too, so they're screen-space. Topmost and leftmost outer borders are
+  -- omitted and verticals start at row 0, so the header reads as open space.
   for c = 0, nTracks do
-    local lx = trackLeft(c)
-    p.line(lx, bodyTop, lx, bodyBot, 'separator', 1)
+    pg.line(c, sr, c, sr + visRows, 'separator', 1)
   end
-  p.line(gridR, bodyTop, gridR, bodyBot, 'separator', 1)
-  p.line(ox, bodyBot, gridR, bodyBot, 'separator', 1)
+  ps.line(ox, rowYs(sr + visRows), gridR, rowYs(sr + visRows), 'separator', 1)
   for r = 1, visRows - 1 do
-    local y = bodyTop + r * rowH
-    p.line(ox, y, gridR, y, 'separator', 1)
+    local y = rowYs(sr + r)
+    ps.line(ox, y, gridR, y, 'separator', 1)
   end
 
-  -- Take rectangles, drawn on top of gridlines. Fill exactly the column
-  -- (edges coincide with the gridline), 1px border, centred name. Coords
-  -- snap to integer pixels so adjacent takes' borders land on the same
-  -- pixel row/column and visually coincide — without the snap, fractional
-  -- rowH antialiases the shared edge across two pixel rows.
+  -- Take rectangles, on top of gridlines. Fill exactly the column (edges on
+  -- the gridline), 1px border, centred name. Corners come snapped from the
+  -- grid painter, so adjacent takes' borders land on the same pixel and
+  -- coincide; the ±1px insets are screen-space — a border can't be a
+  -- fraction of a column.
   --
   -- Three passes so the cursor cell can paint between fills and names:
   -- the translucent cursor fill lies over the take fill, and names draw
   -- last so they stay crisp over it.
-  local function snap(v) return math.floor(v + 0.5) end
   local focusHandle = av:focus()
   local nameDraws = {}
   local truncDraws = {}   -- ellipsis decoration for items truncated below natural
@@ -303,13 +314,13 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local startRow = av:qnToRow(startQN)
     local endRow   = av:qnToRow(startQN + lengthQN)
     if endRow <= sr or startRow >= sr + visRows then return end
-    local rx0, rx1 = snap(trackLeft(tk.trackIdx)), snap(trackRight(tk.trackIdx))
-    local ry0 = snap(rowY(math.max(startRow, sr)))
-    local ry1 = snap(rowY(math.min(endRow, sr + visRows)))
+    local rx0, rx1 = colX(tk.trackIdx), colX(tk.trackIdx + 1)
+    local ry0 = rowYs(math.max(startRow, sr))
+    local ry1 = rowYs(math.min(endRow, sr + visRows))
     local fill, border = slotColours(tk.slotIdx, focused)
     if blocked then border = 'arrange.blockedBorder' end
-    p.fill(rect(rx0 + 1, ry0 + 1, rx1, ry1), fill)
-    p.stroke(rect(rx0, ry0, rx1 + 1, ry1 + 1), border, 1)
+    ps.fill(rect(rx0 + 1, ry0 + 1, rx1, ry1), fill)
+    ps.stroke(rect(rx0, ry0, rx1 + 1, ry1 + 1), border, 1)
     if tk.name and tk.name ~= '' then
       nameDraws[#nameDraws + 1] = {
         name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
@@ -345,12 +356,11 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local startRow = av:qnToRow(createCand.startQN)
     local endRow   = av:qnToRow(createCand.startQN + createCand.lengthQN)
     if endRow > sr and startRow < sr + visRows then
-      local gx0 = snap(trackLeft(press.col))
-      local gx1 = snap(trackRight(press.col))
-      local gy0 = snap(rowY(math.max(startRow, sr)))
-      local gy1 = snap(rowY(math.min(endRow, sr + visRows)))
-      p.fill(rect(gx0 + 1, gy0 + 1, gx1, gy1), 'arrange.ghostFill')
-      p.stroke(rect(gx0, gy0, gx1 + 1, gy1 + 1), 'arrange.ghostBorder', 1)
+      local gx0, gx1 = colX(press.col), colX(press.col + 1)
+      local gy0 = rowYs(math.max(startRow, sr))
+      local gy1 = rowYs(math.min(endRow, sr + visRows))
+      ps.fill(rect(gx0 + 1, gy0 + 1, gx1, gy1), 'arrange.ghostFill')
+      ps.stroke(rect(gx0, gy0, gx1 + 1, gy1 + 1), 'arrange.ghostBorder', 1)
     end
   end
 
@@ -360,14 +370,13 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   -- would lie about the model.
   if curRow >= sr and curRow < sr + visRows
      and curCol >= 0 and curCol < nTracks then
-    local cx0   = snap(trackLeft(curCol))
-    local cx1   = snap(trackRight(curCol))
-    local cy    = snap(rowY(curRow))
+    local cx0, cx1 = colX(curCol), colX(curCol + 1)
+    local cy    = rowYs(curRow)
     local serif = 4
     local caret = 'arrange.cursorBorder'
-    p.line(cx0 + 1, cy,         cx1 - 1, cy,         caret, 1.5)
-    p.line(cx0 + 1, cy - serif, cx0 + 1, cy + serif, caret, 1.5)
-    p.line(cx1,     cy - serif, cx1,     cy + serif, caret, 1.5)
+    ps.line(cx0 + 1, cy,         cx1 - 1, cy,         caret, 1.5)
+    ps.line(cx0 + 1, cy - serif, cx0 + 1, cy + serif, caret, 1.5)
+    ps.line(cx1,     cy - serif, cx1,     cy + serif, caret, 1.5)
   end
 
   -- Loop region — the tracker's tail bracket: a stroked `[` down the
@@ -384,26 +393,26 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local loTop, loBot = av:qnToRow(loopLo), av:qnToRow(loopHi)
     if loBot > sr and loTop < sr + visRows then
       local r  = 5
-      local x1 = paneLeft + 1 + r
-      local y1, y2 = snap(rowY(loTop)), snap(rowY(loBot))
-      p.pathClear()
-      p.pathArcTo(x1, y1 + r, r, 3 * math.pi / 2, math.pi)
-      p.pathLineTo(x1 - r, y1 + r + 1)
-      p.pathLineTo(x1 - r, y2 - r - 1)
-      p.pathArcTo(x1, y2 - r, r, math.pi, math.pi / 2)
-      p.pathStroke('tail', 1.5)
-      p.pathClear()
+      local x1 = g.paneLeft + 1 + r
+      local y1, y2 = rowYs(loTop), rowYs(loBot)
+      ps.pathClear()
+      ps.pathArcTo(x1, y1 + r, r, 3 * math.pi / 2, math.pi)
+      ps.pathLineTo(x1 - r, y1 + r + 1)
+      ps.pathLineTo(x1 - r, y2 - r - 1)
+      ps.pathArcTo(x1, y2 - r, r, math.pi, math.pi / 2)
+      ps.pathStroke('tail', 1.5)
+      ps.pathClear()
     end
   end
 
   -- Take names — last, so they stay crisp over the translucent cursor
   -- fill.
   for _, nd in ipairs(nameDraws) do
-    local tw = p.measure(nd.name)
+    local tw = ps.measure(nd.name)
     local tx = nd.rx0 + math.floor((nd.rx1 - nd.rx0 - tw) / 2)
-    p.pushClip(rect(nd.rx0 + 2, nd.ry0, nd.rx1 - 2, nd.ry1))
-    p.text(tx, nd.ry0 + 1, 'text', nd.name)
-    p.popClip()
+    ps.pushClip(rect(nd.rx0 + 2, nd.ry0, nd.rx1 - 2, nd.ry1))
+    ps.text(tx, nd.ry0 + 1, 'text', nd.name)
+    ps.popClip()
   end
 
   -- Truncation ellipsis — bottom-row glyph for items the relayout pass
@@ -411,20 +420,20 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   -- names so it sits over the cursor fill.
   for _, td in ipairs(truncDraws) do
     local ell = '…'
-    local tw  = p.measure(ell)
+    local tw  = ps.measure(ell)
     local tx  = td.rx0 + math.floor((td.rx1 - td.rx0 - tw) / 2)
     local ty  = td.ry1 - rowH + 1
-    p.pushClip(rect(td.rx0 + 2, ty, td.rx1 - 2, td.ry1))
-    p.text(tx, ty, 'text', ell)
-    p.popClip()
+    ps.pushClip(rect(td.rx0 + 2, ty, td.rx1 - 2, td.ry1))
+    ps.text(tx, ty, 'text', ell)
+    ps.popClip()
   end
 
   -- Edit cursor + play head — full-width rules on top of takes and
   -- names. The play head is yellow and drawn only while the transport
   -- runs; the grid clip rect already in force trims an off-screen rule.
   local function qnRule(qn, name)
-    local y = snap(rowY(av:qnToRow(qn)))
-    p.line(ox, y, gridR, y, name, 1)
+    local y = rowYs(av:qnToRow(qn))
+    ps.line(ox, y, gridR, y, name, 1)
   end
   qnRule(av:editCursorQN(), 'arrange.editCursor')
   local playQN = av:playPositionQN()
@@ -432,8 +441,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
 
   for r = 0, visRows - 1 do
     local label = rowLabel(sr + r)
-    local tw    = p.measure(label)
-    p.text(ox + QN_W - tw - 4, bodyTop + r * rowH + 1, 'text', label)
+    local tw    = ps.measure(label)
+    ps.text(ox + QN_W - tw - 4, rowYs(sr + r) + 1, 'text', label)
   end
 
   -- Header track names — sit at the bottom of the header band so the
@@ -444,18 +453,18 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local tr   = tracks[c + 1]
     local name = (tr and tr.name and tr.name ~= '')
                  and tr.name or string.format('Track %d', c + 1)
-    local tw   = p.measure(name)
-    local lx   = trackLeft(c) + math.floor((TRACK_W - tw) / 2)
-    p.pushClip(rect(trackLeft(c) + 2, oy, trackRight(c) - 2, oy + headerH))
-    p.text(lx, headerTextY, 'text', name)
-    p.popClip()
+    local tw   = ps.measure(name)
+    local lx   = colX(c) + math.floor((TRACK_W - tw) / 2)
+    ps.pushClip(rect(colX(c) + 2, oy, colX(c + 1) - 2, oy + g.headerH))
+    ps.text(lx, headerTextY, 'text', name)
+    ps.popClip()
   end
 
-  p.popClip()
+  ps.popClip()
 
   -- Advance the ImGui layout cursor so subsequent siblings know we
   -- consumed the grid's footprint.
-  ImGui.Dummy(ctx, gridW + LOOP_PAD, headerH + HEADER_GAP + visRows * rowH)
+  ImGui.Dummy(ctx, g.gridW + LOOP_PAD, g.headerH + HEADER_GAP + visRows * rowH)
 end
 
 ----- Palette pane

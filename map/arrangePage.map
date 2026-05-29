@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=754  sha=d21a66e  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=763  sha=5feb1fb  mode=chunk
 @deps cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost
 
 # Invariants & contracts
@@ -41,10 +41,10 @@
   @state slotColourCache = {}  @ 85
   @state HEADER_PAD = 8  @ 114
   @state HEADER_GAP = 4  @ 115
-  @state CREATE_DEFAULT_BEATS = 4  @ 516
-  @state arrange = cmgr:scope('arrange')  @ 710
+  @state CREATE_DEFAULT_BEATS = 4  @ 525
+  @state arrange = cmgr:scope('arrange')  @ 719
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture. Slots have no existence apart from items on the grid; the palette's rename / delete buttons act on existing slots.
-  @state binds = {  @ 721
+  @state binds = {  @ 730
 
 # Private functions
   -- Style + draw helpers
@@ -57,7 +57,14 @@
   -- Grid pane
   @fn floorTo(v, step)  @ 118
       -- Snap a click's QN down to the top edge of the row box it sits in.
-  @fn handleGridMouse(nTracks)  @ 130
+  @fn gridGeom(nTracks)  @ 126
+      -- Shared grid geometry for the mouse pass and the paint pass. Both build it
+      -- from the same cursor position — handleGridMouse draws nothing, so the ImGui
+      -- layout cursor hasn't moved when renderGrid follows — so both get the same
+      -- `pg`, the (col, row) → screen transform. A drawn cell and a click on it
+      -- therefore resolve through one mapping: snap=true pixel-aligns the draw;
+      -- fromScreen, which never snaps, hands the hit-test the true sub-pixel cell.
+  @fn handleGridMouse(nTracks)  @ 159
       -- Grid mouse pass — runs before renderGrid so the in-flight take, loop
       -- and create candidates are in hand when the paint pass relocates the
       -- dragged take. In a track column, press a take to focus it then drag —
@@ -68,47 +75,47 @@
       -- ##arrangeGrid child so IsWindowHovered resolves correctly. Also
       -- pushes the current row/col extent into av (geometric input). Returns
       -- the in-flight drag/loop/create candidates, each nil when not active.
-  @fn renderGrid(tracks, nTracks, dragCand, loopCand, createCand)  @ 229
+  @fn renderGrid(tracks, nTracks, dragCand, loopCand, createCand)  @ 250
   -- Palette pane
-  @fn focusedSlotEntry(slots, slotIdx)  @ 466
+  @fn focusedSlotEntry(slots, slotIdx)  @ 475
       -- Locate the slot entry in trackSlots() output (a packed array, not
       -- indexed by slotIdx). Returns nil when no slot is focused or the
       -- focused slot index isn't currently populated.
-  @fn renderPaletteHeader(focusedTrack)  @ 478
+  @fn renderPaletteHeader(focusedTrack)  @ 487
       -- Hand-drawn so the header band height (HEADER_PAD + rowH) and the
       -- divider position match the grid's by construction — both panes start
       -- at the same `oy` (they share the renderBody row), so the divider
       -- lines up across the PANE_GAP without measurement.
-  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 495
-  @fn openDeleteModal(trackIdx, slot)  @ 504
-  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 550
-  @fn renderPaletteList(slots)  @ 573
+  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 504
+  @fn openDeleteModal(trackIdx, slot)  @ 513
+  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 559
+  @fn renderPaletteList(slots)  @ 582
       -- Three columns so the key/kind/name align vertically across rows
       -- without depending on a monospace font for the whole line. The key
       -- cell uses the monospace font (it's a hotkey to press); kind and
       -- name use the default UI font. Selectable lives in col 0 with
       -- SpanAllColumns so the entire row is the click target; we paint the
       -- key text on top with SameLine.
-  @fn renderPalette(tracks)  @ 606
-  @fn placeKey(slotIdx)  @ 744
+  @fn renderPalette(tracks)  @ 615
+  @fn placeKey(slotIdx)  @ 753
       -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
 # Public API (ap:*)
-  @api ap:bind()  @ 626
+  @api ap:bind()  @ 635
       @contract  bind takes no take — arrange is project-wide. coord may call with no args (or a take, ignored).
-  @api ap:unbind()  @ 627
-  @api ap:revealTake(reaperTake)  @ 630
+  @api ap:unbind()  @ 636
+  @api ap:revealTake(reaperTake)  @ 639
       @contract  positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
-  @api ap:seedCursorFromReaper()  @ 633
+  @api ap:seedCursorFromReaper()  @ 642
       @contract  seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
-  @api ap:renderToolbarBits(_)  @ 635
-  @api ap:renderBody(_, w, h, dispatch)  @ 640
+  @api ap:renderToolbarBits(_)  @ 644
+  @api ap:renderBody(_, w, h, dispatch)  @ 649
       @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects per slot, cursor on top.
       @contract  pushes parchment body palette (coord popped chrome before body draw); palette tables below need it.
       @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
-  @api ap:renderStatusBar(_)  @ 688
-  @api ap:focusState()  @ 696
+  @api ap:renderStatusBar(_)  @ 697
+  @api ap:focusState()  @ 705
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # REAPER API surface
