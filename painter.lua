@@ -95,6 +95,23 @@ function M.new(ctx, chrome, transform)
     ImGui.DrawList_AddTriangleFilled(dl, ax, ay, bx, by, cx, cy, col(name))
   end
 
+  --contract: centre is logical; radius is screen px so the dot stays round under non-uniform scale.
+  function p.circle(x, y, r, name, segments)
+    local cx, cy = toScreen(x, y)
+    ImGui.DrawList_AddCircleFilled(dl, cx, cy, r, col(name), segments or 0)
+  end
+
+  -- pts is a flat list of LOGICAL coords {x0,y0,x1,y1,...}; each pair converts.
+  -- closed joins last->first. new_array wants screen coords, so convert first.
+  function p.polyline(pts, name, thick, closed)
+    local screen = {}
+    for i = 1, #pts, 2 do
+      screen[i], screen[i + 1] = toScreen(pts[i], pts[i + 1])
+    end
+    local flags = closed and ImGui.DrawFlags_Closed or ImGui.DrawFlags_None
+    ImGui.DrawList_AddPolyline(dl, reaper.new_array(screen), col(name), flags, thick or 1)
+  end
+
   -- Clip stack: corners convert like any rect; intersect defaults true
   -- (nest within the current clip), pass false to replace it.
   function p.pushClip(r, intersect)

@@ -1,6 +1,7 @@
-@module painter  src=painter.lua  loc=151  sha=65185b2  mode=namespace
+@module painter  src=painter.lua  loc=168  sha=35386ea  mode=namespace
 
 # Invariants & contracts
+  @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.
   @contract  centre is logical; radius is screen px and angles pass through, so arcs need sx==sy.
 
 # Imports
@@ -12,7 +13,10 @@
 # Public API (M.*)
   @api M.new(ctx, chrome, transform)  @ 29
       @contract  sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
-  @api M.hue(idx, sat, val, alpha)  @ 145
+  @api M.hue(idx, sat, val, alpha)  @ 162
       -- The idx-th visually-distinct hue: golden-ratio rotation throws adjacent
       -- indices to opposite sides of the wheel. sat/val/alpha tone it.
       @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
+
+# REAPER API surface
+  @reaper new_array

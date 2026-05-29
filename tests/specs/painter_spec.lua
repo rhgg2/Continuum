@@ -16,9 +16,16 @@ for _, n in ipairs{
   'DrawList_AddTextEx', 'DrawList_AddLine', 'DrawList_AddTriangleFilled',
   'DrawList_PushClipRect', 'DrawList_PopClipRect',
   'DrawList_PathClear', 'DrawList_PathLineTo', 'DrawList_PathArcTo', 'DrawList_PathStroke',
+  'DrawList_AddCircleFilled', 'DrawList_AddPolyline',
   'PushFont', 'PopFont',
 } do fakeImGui[n] = rec(n) end
-fakeImGui.DrawFlags_None = 0
+fakeImGui.DrawFlags_None   = 0
+fakeImGui.DrawFlags_Closed = 1
+-- painter.polyline hands its converted screen coords to reaper.new_array; the
+-- real one returns an FFI buffer, so pass the flat array straight through to
+-- let a test assert on the converted coordinates.
+reaper = reaper or {}
+reaper.new_array = function(a) return a end
 fakeImGui.GetWindowDrawList = function(_) return 'DL' end
 fakeImGui.CalcTextSize = function(_, s)
   calls[#calls + 1] = { fn = 'CalcTextSize', args = { s } }
@@ -93,6 +100,27 @@ return {
       p.tri(1, 1, 3, 1, 2, 4, 'arrow')
       t.deepEq(last(), { fn = 'DrawList_AddTriangleFilled',
         args = { 'DL', 102, 203, 106, 203, 104, 212, 'col:arrow' } })
+    end,
+  },
+  {
+    name = 'circle maps the centre but keeps the radius in screen px',
+    run = function()
+      calls = {}
+      mk().circle(1, 1, 5, 'dot')
+      t.deepEq(last(), { fn = 'DrawList_AddCircleFilled',
+        args = { 'DL', 102, 203, 5, 'col:dot', 0 } })
+    end,
+  },
+  {
+    name = 'polyline converts every logical pair; closed sets the closed flag',
+    run = function()
+      calls = {}
+      local p = mk()
+      p.polyline({ 1, 1, 3, 4 }, 'wire', 1.5)
+      t.deepEq(last(), { fn = 'DrawList_AddPolyline',
+        args = { 'DL', { 102, 203, 106, 212 }, 'col:wire', 0, 1.5 } })
+      p.polyline({ 1, 1, 3, 4 }, 'wire', 1, true)
+      t.eq(last().args[4], 1)
     end,
   },
   {

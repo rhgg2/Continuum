@@ -39,9 +39,14 @@ discipline the name rule exists to hold.
 
 ## What converts, what doesn't
 
-Only positions pass through the transform. Stroke widths, corner radii
-and font sizes are screen-space quantities and pass through unchanged —
-a 2px outline is 2px regardless of where the canvas sits.
+Only positions pass through the transform. Stroke widths, corner radii,
+font sizes and a `circle`'s radius are screen-space quantities and pass
+through unchanged — a 2px outline is 2px regardless of where the canvas
+sits, and a circle stays a true circle even under a non-uniform per-axis
+scale. An *arc* is the exception: its radius is screen-px too, but its
+angles pass through, so it distorts unless `sx == sy` (see Clip and paths).
+`polyline` is an ordinary primitive — a flat list of logical points, each
+converted like a `line` endpoint.
 
 ## Pixel snapping
 
