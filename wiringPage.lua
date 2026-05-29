@@ -4,7 +4,8 @@
 --invariant: render + input only — wiringPage draws the canvas and reads keyboard / mouse. It holds no wm reference: every graph query goes through wv, every mutation will go through wv (the manager-facing surface).
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
 --invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
---invariant: at Stage 1.3d the page draws wires as a pre-pass before nodes — centre-to-centre lines occluded by the rounded rects, midpoint arrow for orientation, parallel wires in the same unordered pair offset perpendicularly with MIDI sorted to the right, non-1 audio ports labelled by number with hover-tooltip names. add-fx / drag / rubber-band unchanged; shift-gated port-row hover drives wire creation — per-face layout is [handle ▾][audio chips for ports 2..N centred], handle pinned to left corner; the midi keyboard lives inside the body at its middle-right edge (appears under shift hover, fills the body colour behind itself to overpaint the label) rather than in the band. The popout band only renders when nAudio ≥ 2 — a 1-audio-port node with midi has no band; the body catches default-port hover and the body-internal kbd catches midi. body-default = port 1; audio chips render for ports 2..N when N ≤ PORTS_PER_ROW; past that, chips appear only for currently-wired and user-pinned ports while the rest live in the handle's dropdown. top/bottom faces only. See design/wiring.md.
+--invariant: wires draw as a pre-pass before nodes — centre-to-centre lines occluded by the bodies; parallel wires in one unordered pair are offset perpendicularly, MIDI sorted to the right.
+--invariant: port rows are per-face (top/bottom only): handle ▾ + audio chips for ports 2..N, midi keyboard body-internal, band only when nAudio ≥ 2, chip promotion past PORTS_PER_ROW. See design/wiring.md.
 
 local util = require 'util'
 
@@ -30,13 +31,9 @@ local wp = {}
 
 ----- FX-picker modal kind
 
--- Typeahead picker, hosted as a modalHost kind so it has no anchor
--- requirement (the wiring page has no toolbar button to hang an inline
--- chrome.drawPicker off). Body mirrors drawPicker's filter+matches+cursor
--- shape but draws inside an active BeginPopupModal; flags=NoNav on open
--- kills ImGui's built-in nav highlight so it doesn't fight our cursor.
--- state = { kind, title, items, buf, cursor, callback }; close(true, fx)
--- delivers one entry from `items`.
+-- Hosted as a modalHost kind, not an inline chrome.drawPicker: the wiring
+-- page has no toolbar button to anchor one against. NoNav on open kills
+-- ImGui's built-in nav highlight so it doesn't fight our own cursor.
 modalHost:registerKind('wiringFxPicker', function(state, close)
   if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
   ImGui.SetNextItemWidth(ctx, 280)
@@ -125,82 +122,18 @@ local WIRE_FADER_HIT_PAD = 10  -- px to inflate the visibility hit rect on each 
 local WIRE_FADER_TOP_DB  = 18  -- top of strip = +18 dB; 0 dB at 75% of travel; below ~5% snaps to -inf
 
 ----- Drag / band state (page-local; ephemeral, never persisted)
-
--- drag: captured at mousedown-on-node-body. starts maps every node
--- under the drag (just the grabbed one if it's unselected, or the
--- whole selection if the grabbed one is in it) to its origin pos.
--- While IsMouseDown each draws at start + (curMouse - startMouse).
--- Mouseup commits the whole set in one wv:moveNodes (one wm:mutate,
--- one wiringChanged signal).
---
--- band: captured at mousedown-on-empty-canvas. While IsMouseDown, drawn
--- as a translucent rect. Mouseup with movement → wv:setSelection of
--- intersected node ids (replace, not additive); mouseup without movement
--- (a click) clears the selection.
---
--- wireDraft: captured at the start of any wire-end-following drag. Two
--- entry paths share the state:
---   • shift-hover on a port: forward draft. cursorEnd='to', keptId/
---     keptPort/keptAnchor pin the source end, cursor floats the dest.
---     forbidden = ancestors(keptId).
---   • unmodified click on a wire's end-region: redraft. cursorEnd matches
---     the grabbed side ('from' moves the source end, 'to' moves the
---     dest end). keptId/keptPort identify the surviving end (the side
---     opposite cursorEnd). forbidden is ancestors(kept) when cursorEnd=
---     'to' (kept = source, new dest must not be its ancestor) and
---     descendants(kept) when cursorEnd='from' (kept = dest, new source
---     must not be its descendant). edgeIdx is the index of the edge in
---     g.edges being redrafted; nil for forward drafts.
--- forbidden is the cycle-blocked node set; consulted at hover-time so
--- invalid targets get no visual encouragement. Cleared on mouseup
--- (commit / delete / cancel) or on Esc (cancel).
---
--- Mousedown precedence: shift-hover (new wire) > wire-end-hover (redraft)
--- > body-hit (drag) > anywhere else (band). All mutually exclusive while
--- live.
+-- The gesture state machine — mousedown precedence, what each table
+-- captures, forbidden-set and sticky/pin semantics — is the model in
+-- docs/wiringPage.md. The shapes below are the only at-site reference.
 local drag      = nil  -- { mx0, my0, starts = { [id] = {x,y}, … } }
 local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
 local wireDraft = nil  -- { type, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx? }
 local shiftWas  = false
--- Per-node set of audio port indices the user has explicitly pinned via
--- click-without-drag on a list row, or implicitly by starting a draft
--- from a list row (in which case the chip materialises at mousedown).
--- Persists across binds but not across project loads (page-local;
--- future work to lift this into wm so it round-trips with the graph).
-local pinned     = {}   -- pinned[nodeId][portIdx] = true
--- Which node's spillover list is currently engaged. Set when the cursor
--- crosses the chevron; cleared when the cursor leaves chevron + list, or
--- on any mouseclick. Cursor in list area without prior chevron crossing
--- does NOT engage — the popup is gated tight on the chevron.
-local listOpenId = nil
--- Node whose port row currently holds hover priority. While set, the
--- cursor-driven hover funcs probe this node first; only when its hover
--- area (body + band, extended by list.hitRect when listOpenId matches)
--- no longer catches the cursor does the per-node scan resume. Stops the
--- popout from flipping to a nearby node mid-gesture when two bodies'
--- hoverRects overlap. Cleared lazily in the fast-path and on unbind.
-local engagedId  = nil
--- After a drag-drop mouseup, suppress shift-hover until the cursor next
--- moves. Without this the source-side popout snaps onto whatever node
--- happens to be under the cursor at drop-time, which reads as a flicker.
--- Captured (x, y) lets us detect the next move without per-frame deltas.
-local hoverFreeze = nil  -- { x, y } | nil
--- After click-pinning a port from the spillover list, the pinned node's
--- port row stays popped up even when the cursor isn't on it. Cleared on
--- shift-release, on any mouseclick, or when natural hover engages this
--- *same* node (the user has come back to it). Hovering some other node
--- does NOT clear sticky — both overlays render simultaneously. Side is
--- captured at pin-time so the sticky row doesn't flip top/bottom as the
--- cursor moves around the canvas.
-local sticky = nil  -- { nodeId, side }
--- Mid-wire fader: visible while cursor sits on an audio wire's arrow
--- midpoint or the strip itself, or while a drag from the strip is live.
--- Click-on-strip jumps to that value and begins a drag (and materialises
--- the CU via wv:setEdgeGain if it doesn't exist yet); drag pokes the CU
--- param directly each frame (no mutate, no undo block per frame);
--- mouseup commits the final value via wv:setEdgeGain only if it differs
--- from valueAtClick. Worst case: 2 undo entries per gesture (materialise
--- + commit) — slice 0 accepts that; collapsing into one is follow-up.
+local pinned     = {}   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
+local listOpenId = nil  -- node whose spillover list is engaged (chevron-gated)
+local engagedId  = nil  -- node holding hover priority, probed before the per-node scan
+local hoverFreeze = nil  -- { x, y } | nil — suppresses shift-hover until the cursor moves
+local sticky = nil  -- { nodeId, side } — pinned node's port row, kept visible post-click
 local fader = nil  -- { edgeIdx, rect={x0,y0,x1,y1}, currentLin, valueAtClick?, dragging? }
 
 -- Last canvas origin, captured at the top of renderCanvas. Lets openFxPicker
@@ -214,9 +147,8 @@ local openFxPicker
 
 ----- Pixel geometry (page-owned)
 
--- Axis-aligned rect as a named struct, so every hit test and fill reads the
--- same shape. inRect tests containment; boxRect lifts an {x,y,w,h} slot/row
--- (optionally hit-padded) into a rect; unionRect grows acc to cover r.
+-- One axis-aligned rect struct shared by every hit test and fill, so the
+-- two can't drift; boxRect lifts an {x,y,w,h} slot/row into one.
 local function rect(x0, y0, x1, y1) return { x0 = x0, y0 = y0, x1 = x1, y1 = y1 } end
 local function inRect(px, py, r)
   return px >= r.x0 and px <= r.x1 and py >= r.y0 and py <= r.y1
@@ -246,18 +178,16 @@ end
 local SELECTED_INFLATE = 0   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
 local SELECTED_STROKE  = 2
 
--- Stroke a node body's accent outline (selection / source-or-target hover /
--- error). SELECTED_INFLATE widens the rect so a >0 moat lets the popup bg
--- bleed through; name picks the accent colour.
+-- Accent outline for a node body (selection / hover / error). SELECTED_INFLATE
+-- widens the rect so a >0 moat lets the popup bg bleed through the stroke.
 local function strokeNodeRect(p, r, name)
   p.stroke(rect(r.x0 - SELECTED_INFLATE, r.y0 - SELECTED_INFLATE,
                 r.x1 + SELECTED_INFLATE, r.y1 + SELECTED_INFLATE),
            name, SELECTED_STROKE, CORNER_R)
 end
 
--- Split a single whitespace-free word into pieces at CamelCase boundaries
--- (lowercase byte immediately followed by uppercase byte). Plugin names are
--- ASCII in practice, so byte-class checks are sufficient.
+-- Split a word at CamelCase boundaries. Plugin names are ASCII in practice,
+-- so raw byte-class checks (no utf8) are sufficient.
 local function camelSplit(word)
   local pieces, last = {}, 1
   for i = 2, #word do
@@ -271,11 +201,9 @@ local function camelSplit(word)
   return pieces
 end
 
--- Tokenise into atoms with per-pair separators. Each atom is a string;
--- seps[k] is the joiner that goes between atoms[k] and atoms[k+1] when
--- they stay on the same line. ' ' between whitespace-separated words,
--- '' between CamelCase pieces of one word (so re-joined lines have no
--- inserted space at the case boundary).
+-- Tokenise into atoms with per-pair separators: seps[k] joins atoms[k..k+1]
+-- when they share a line. ' ' between words, '' between CamelCase pieces of
+-- one word, so a re-joined line has no space at the case boundary.
 local function atomise(text)
   local atoms, seps = {}, {}
   for word in text:gmatch('%S+') do
@@ -290,10 +218,7 @@ local function atomise(text)
   return atoms, seps
 end
 
--- Greedy word-wrap into at most LABEL_MAX_LINES lines bounded by maxW.
--- Breaks at whitespace and CamelCase boundaries; the final line ends in
--- LABEL_ELLIPSIS when the remainder doesn't fit. Assumes the desired font
--- is already pushed (CalcTextSize uses it).
+--contract: caller must have pushed the target font — CalcTextSize measures against the current font.
 local function wrapLabel(text, maxW)
   local function widthOf(s) return (ImGui.CalcTextSize(ctx, s)) end
   local function ellipsise(s)
@@ -331,8 +256,8 @@ local function wrapLabel(text, maxW)
 
   if #lines <= LABEL_MAX_LINES then return lines end
 
-  -- Overflow: keep the first LABEL_MAX_LINES-1 lines verbatim; pack the
-  -- remaining atoms into the final line with a trailing ellipsis.
+  -- Overflow: keep the first LABEL_MAX_LINES-1 lines, pack the rest into
+  -- the final line with a trailing ellipsis.
   local out = {}
   for k = 1, LABEL_MAX_LINES - 1 do out[k] = lines[k] end
   local startIdx, packed = lineStart[LABEL_MAX_LINES], nil
@@ -366,11 +291,8 @@ local function drawNode(p, nv, isSelected)
   if wireFont then ImGui.PopFont(ctx) end
 end
 
--- Small piano-keyboard icon (C, C#, D, D#, E): 3 outlined white keys with
--- 2 filled black keys overlaying the C-D and D-E boundaries. Drawn with
--- its top-left at (x,y), occupying MIDI_SLOT_W × MIDI_SLOT_H. Stand-in
--- for the midi tint — later this will gain an in/out arrow to distinguish
--- direction.
+-- Piano-keyboard icon (C, C#, D, D#, E): 3 outlined white keys, 2 filled
+-- black keys over the C-D and D-E gaps. Hard to read off the geometry alone.
 local function drawKeyboardIcon(p, x, y)
   local kw, kh   = 4, 10
   local bw, bh   = 2, 5
@@ -386,10 +308,8 @@ local function drawKeyboardIcon(p, x, y)
   end
 end
 
--- Spillover-list handle: a small chevron pointing outward in the direction
--- the dropdown will open (down on the bottom face, up on the top face).
--- Sized like a band-row chip so it shares the row centreline cleanly. The
--- band-level bg rect drawn by drawPortRow handles wire occlusion.
+-- Spillover-list chevron, pointing the way the dropdown opens (down on the
+-- bottom face, up on top). Sized like a chip so it shares the row centreline.
 local function drawHandle(p, handle, side)
   local cx, cy = handle.x + handle.w / 2, handle.y + handle.h / 2
   local hx, hy = 4, 3
@@ -400,12 +320,9 @@ local function drawHandle(p, handle, side)
   end
 end
 
--- One port-row slot: the filled audio square or keyboard icon, plus an
--- InvisibleButton (padded outward so the hit area is comfortably larger
--- than the visual) and a tooltip anchored just above. Wire occlusion is
--- handled at the band level by drawPortRow's bgRect, so no per-slot patch.
--- The InvisibleButton advances the layout cursor; renderCanvas's trailing
--- Dummy restores it.
+-- A port-row slot: audio square or keyboard icon, an InvisibleButton (padded
+-- so the hit area beats the visual), and a tooltip. The InvisibleButton
+-- advances the layout cursor; renderCanvas's trailing Dummy restores it.
 local function drawSlot(p, slot, idStem)
   if slot.kind == 'audio' then
     p.fill(boxRect(slot), 'wiring.port.audio')
@@ -437,22 +354,17 @@ local function drawSlot(p, slot, idStem)
   end
 end
 
--- Selection-style outline around the whole body, used for both source-side
--- and target-side hover — no more split-band shape.
 local function drawBodyOutline(p, nv)
   strokeNodeRect(p, nodeBox(nv), 'wiring.node.selected')
 end
 
 ----- Wire-creation gesture helpers
 
--- By-name dropdown anchored to a node's handle: one row per audio port
--- (port-index order, names from `audio`). Grows outward from the handle
--- in the band's direction. Uses the small ui font so a 32-row list stays
--- a reasonable height. Rows are chunky boxes with tight bounds (no hit
--- pad), so adjacent-row hit tests don't bleed into each other. The
--- returned hitRect extends LIST_GAP toward the handle so chevron → list
--- traversal has no dead zone even with the handle's hit area sized to
--- the chevron alone.
+-- By-name dropdown anchored to the handle, one row per audio port, growing
+-- outward in the band's direction. Small ui font so a 32-row list stays a
+-- sane height; rows are tight-bound (no hit pad) so neighbours don't bleed.
+-- hitRect extends LIST_GAP back toward the handle so chevron → list has no
+-- dead zone.
 local function layoutList(audio, handle, side)
   if not handle or #audio < 2 then return nil end
   if uiFont then ImGui.PushFont(ctx, uiFont, uiSize) end
@@ -484,18 +396,8 @@ local function layoutList(audio, handle, side)
   return { rows = rows, rect = listRect, hitRect = hitRect }
 end
 
--- Per-face layout: handle ▾ pinned to the left body corner, audio chips
--- for ports 2..N centred (port 1 lives on the body itself, no chip). The
--- midi keyboard is body-internal — placed at the middle-right edge with
--- inBody=true — not in the band, so a 1-audio-port + midi node yields no
--- band at all. Audio chips render for ports 2..N when N ≤ PORTS_PER_ROW;
--- past that the band shows only currently-wired and user-pinned ports
--- (chip promotion — design/wiring.md). hoverRect = body ∪ slot/handle
--- hit pads, so cursor traversal between zones keeps the hover live. keep
--- filters mismatched kinds during target-side hover (audio draft hides
--- midi and the handle; midi draft hides audio chips and the handle).
--- forceSide pins the face for sticky overlays (where the cursor isn't
--- over the node so my can't pick the side); natural hover passes nil.
+--contract: face = forceSide, else derived from my; keep hides the mismatched kind during target hover.
+--shape: returns { slots, handle, bandRect, list, hoverRect, side, popup } (all canvas-local).
 local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
   local b = nodeBox(nv)
   local bx0, by0, bx1, by1 = b.x0, b.y0, b.x1, b.y1
@@ -521,10 +423,8 @@ local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
     slot.y = math.floor(rowCentre(rowIdx or 0) - slot.h / 2)
   end
 
-  -- Chip set: natural ports 2..N when N ≤ PORTS_PER_ROW, plus currently-
-  -- wired ports (chip promotion), plus any pinned by the user via click-
-  -- without-drag on a list row. Sorted ascending and wrapped onto outward
-  -- rows at PORTS_PER_ROW per row.
+  -- Chip set: ports 2..N when N ≤ PORTS_PER_ROW, plus currently-wired and
+  -- user-pinned ports (chip promotion). Sorted, wrapped at PORTS_PER_ROW/row.
   local chipSet = {}
   if showHandle then
     if nAudio <= PORTS_PER_ROW then
@@ -555,8 +455,7 @@ local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
   if nChips > 0 then
     local nRows = math.ceil(nChips / PORTS_PER_ROW)
     -- Chips centred between the handle's right edge and the body's right
-    -- edge. The right corner is free now that midi lives on the body, so
-    -- the chip row's centre sits well right of the body centre.
+    -- edge — the right corner is free with midi living on the body.
     local chipL = handle.x + handle.w + 2
     local chipR = bx1 - MIDI_INSET
     for r = 0, nRows - 1 do
@@ -650,10 +549,8 @@ local function rowHit(rows, mx, my)
   end
 end
 
--- Default slot when the cursor is over the body alone (no specific slot
--- under it). Audio port 1 if any audio in this direction, else the
--- keyboard. `keep` biases the default for target-side hover: a midi draft
--- defaults to the keyboard, an audio draft to port 1.
+-- Default slot for body-only hover: audio port 1, else the keyboard. `keep`
+-- biases it for target hover — a midi draft defaults to the keyboard.
 local function defaultSlot(nv, dir, keep)
   local audio = (dir == 'out') and nv.outs.audio or nv.ins.audio
   local midi  = (dir == 'out') and nv.outs.midi  or nv.ins.midi
@@ -670,13 +567,10 @@ local function onChevron(handle, mx, my)
   return handle and inRect(mx, my, boxRect(handle))
 end
 
--- Common hover lookup (body + band only — list engagement is handled by
--- shiftHoverHit / dropTargetHit). Priority: chip/midi → chevron → body-
--- default. A non-nil list on the returned pick signals "chevron just hit,
--- engage this node's list"; the orchestrating caller mutates listOpenId
--- accordingly. Cursor in the list area without a prior chevron crossing
--- is rejected here — the engaged-node fast-path adds list.hitRect to the
--- hover area only after engagement.
+-- Hover lookup over body + band (not the list — engagement is gated on a
+-- chevron crossing by engagedHover). Priority chip/midi → chevron → body-
+-- default. A non-nil .list on the pick means "chevron hit, engage the list";
+-- the caller sets listOpenId.
 local function pickHovered(nv, layout, mx, my, dir, keep)
   if not inRect(mx, my, layout.hoverRect) then return nil end
   local hit = slotHit(layout.slots, mx, my)
@@ -692,8 +586,6 @@ local function pickHovered(nv, layout, mx, my, dir, keep)
   end
 end
 
--- True when the cursor is still engaged with a node's open spillover —
--- either on the chevron or anywhere in the list's hit rect.
 local function stillEngaged(layout, mx, my)
   local list = layout.list
   if not list then return false end
@@ -789,12 +681,6 @@ local function stickyHoverHit(nodeViews)
   sticky = nil  -- node no longer exists in the graph
 end
 
--- Keep the draft's source node's port row visible while the click-hold is
--- in flight. Without this the popup flashes off the moment wireDraft is
--- set (mousedown suppresses sourceHit) and back on once sticky is set on
--- mouseup. Highlights the slot the draft started from when it's findable
--- in the chip set (chip click / midi); nil otherwise (list-row pin not
--- yet effective, or body-default port 1).
 local function findLayoutSlot(layout, slotKind, portIdx)
   for _, s in ipairs(layout.slots) do
     if s.kind == slotKind
@@ -803,13 +689,12 @@ local function findLayoutSlot(layout, slotKind, portIdx)
     end
   end
 end
--- Forward-draft only: highlights the kept (source) node's port row so
--- the user sees where the in-flight wire is coming from. Redrafts skip
--- this — the wire being dragged is itself the visual cue for the kept
--- end, and the kept-side popout would clutter the gesture. When the
--- cursor sits in the source's own band gap (not on a chip, chevron, or
--- the body), the kept-slot highlight is cleared to match the target-
--- side band-gap behaviour: the popout stays, but no highlight reads.
+-- Forward-draft only: keeps the kept (source) node's port row visible while
+-- the click-hold is in flight — without it the popout flashes off the moment
+-- wireDraft is set (mousedown suppresses sourceHit) and back on at mouseup.
+-- Redrafts skip this: the dragged wire is itself the cue for the kept end.
+-- In the source's own band gap (no chip/chevron/body under the cursor) the
+-- kept-slot highlight clears, matching target-side band-gap behaviour.
 local function draftSourceHoverHit(nodeViews, mx, my)
   if not wireDraft or wireDraft.edgeIdx then return nil end
   for _, nv in ipairs(nodeViews) do
@@ -857,8 +742,6 @@ local function dropEligible(draft, target)
      and not draft.forbidden[target.nv.id]
 end
 
--- Spillover dropdown popup: filled rounded bg + outline, then row labels
--- with a hover-highlight under the matching row.
 local function drawList(p, list, highlight)
   local r = list.rect
   p.fill(r, 'wiring.tooltip.bg', LIST_CORNER_R)
@@ -873,23 +756,19 @@ local function drawList(p, list, highlight)
   end
 end
 
--- Popup bg for the port-row overlay: a pale rounded rect (same CORNER_R
--- as the node body) overlapping the body's near edge so the body's near
--- rounded corners read as filled rather than canvas-coloured. Drawn
--- BEFORE the node so the body overpaints the overlap region, then the
--- port row + chips + list draw on top.
+-- Pale rounded bg for the port-row overlay, overlapping the body's near edge
+-- so the body's near corners read as filled, not canvas. Drawn BEFORE the
+-- node so the body overpaints the overlap.
 local function drawPortRowBg(p, layout)
   local popup = layout.popup
   if not popup then return end
   p.fill(popup, 'wiring.tooltip.bg', CORNER_R)
 end
 
--- Draw the handle (if any) and every audio/midi slot. Outlines the slot
--- matching pick.slot (==). Chips render whether or not the spillover
--- list is open; the list extends perpendicular to the chip row so they
--- don't visually collide, and keeping chips visible preserves the
--- caller's mental map of which port each row stands for. The pale popup
--- bg is laid down separately by drawPortRowBg, before nodes.
+-- Draws the handle and every slot, outlining the one matching pick.slot.
+-- Chips render whether the list is open or not — the list extends
+-- perpendicular so they don't collide, and standing chips keep the user's
+-- map of which port each row is.
 local function drawPortRow(p, pick, idPrefix)
   local layout, highlight = pick.layout, pick.slot
   if layout.handle then drawHandle(p, layout.handle, layout.side) end
@@ -920,11 +799,9 @@ end
 
 ----- Wire drawing
 
--- Group wires by unordered pair {idA, idB}; sort each group so audio
--- precedes MIDI (MIDI sits to the right of the canonical-pair line),
--- then by fromPort then toPort. canonA/canonB record the sorted pair
--- direction so all wires in the group share one perpendicular axis
--- regardless of each wire's own direction.
+-- Group wires by unordered pair. canonA/canonB fix the sorted pair direction
+-- so every wire in the group shares one perpendicular axis regardless of its
+-- own direction. (Within-group sort order is set below.)
 local function wireGroups(wireViews)
   local groups, order = {}, {}
   for _, w in ipairs(wireViews) do
@@ -965,12 +842,9 @@ local function wireOffset(i, n)
   return (i - (n + 1) / 2) * WIRE_GAP
 end
 
--- Distances along the (offset) segment, measured from (seg.sx, seg.sy),
--- at which the visible part begins (exits the source rect) and ends
--- (enters the target rect), plus the segment length. For parallel wires
--- the two exits are asymmetric: an offset shifting the line toward one
--- node's corner lengthens that node's exit and shortens the other's.
--- Returns nil for sub-pixel segments.
+-- Distances along the (offset) segment where the visible part begins (exits
+-- the source rect) and ends (enters the target), plus length. Parallel-wire
+-- offsets make the two exits asymmetric. nil for sub-pixel segments.
 local function wireExits(seg)
   local dx, dy = seg.ex - seg.sx, seg.ey - seg.sy
   local len = math.sqrt(dx * dx + dy * dy)
@@ -1020,17 +894,12 @@ local function drawWireArrow(p, sx, sy, ex, ey, name)
   p.tri(tipx, tipy, b1x, b1y, b2x, b2y, name)
 end
 
--- Audio port-number label as a tight bg-filled patch sized to the
--- digit's bbox, placed up the wire past the node's exit point. The
--- fill occludes the wire segment behind it so the digit reads cleanly
--- on top of the line. `placed` accumulates the rects of labels already
--- drawn this frame; the candidate starts at the minimum distance and
--- gets pushed outward along the wire until its AABB clears every entry
--- (capped at len*0.45 — past the midpoint we'd risk colliding with the
--- other end's label, so we accept the overlap there). This subsumes the
--- per-wire-group alternation and also separates labels on unrelated
--- wires sharing a node corner. Hover-tooltip shows the port name
--- (synthetic 'in N' / 'out N' until TrackFX_GetIOName lands).
+-- Audio port-number label: a tight bg-filled patch (occludes the wire behind
+-- the digit) placed up the wire past the node's exit. `placed` holds rects
+-- drawn this frame; the candidate is pushed outward until its AABB clears
+-- every one (capped at len*0.45 — past the midpoint risks colliding with the
+-- other end's label, so we accept overlap there). Subsumes the old per-group
+-- alternation and separates labels on unrelated wires sharing a corner.
 local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idStem, name, placed)
   local dx, dy = fx - ax, fy - ay
   local len = math.sqrt(dx * dx + dy * dy)
@@ -1099,11 +968,9 @@ local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idS
   end
 end
 
--- One screen segment per wireView, keyed by wireView index (= g.edges
--- index). sx/sy/ex/ey are canvas-local (the painter adds the origin). offX/offY
--- is the perpendicular displacement from the canonical pair centre line,
--- shared by drawWiresPass and wireExits so highlight geometry and label
--- placement can't drift from drawn geometry.
+-- One canvas-local segment per wireView, keyed by index. offX/offY is the
+-- perpendicular displacement from the pair centre line, shared with wireExits
+-- so highlight + label geometry can't drift from the drawn line.
 local function wireSegments(wireViews, nodesById)
   local segs = {}
   local idxOf = {}
@@ -1138,12 +1005,9 @@ local function wireSegments(wireViews, nodesById)
   return segs
 end
 
--- Endpoints of the end-region for one side of a wire segment, in
--- canvas-local coordinates. The region starts at the node-rect exit
--- (where the visible wire begins) and walks WIRE_END_HIT pixels inward
--- along the wire. Length is capped at 0.4*visible so short wires don't
--- overlap their two ends. Returns nil for sub-pixel or fully-occluded
--- wires (two adjacent nodes whose bodies touch).
+-- End-region endpoints for one side of a wire (canvas-local): from the node-
+-- rect exit, WIRE_END_HIT px inward. Capped at 0.4*visible so a short wire's
+-- two ends don't overlap. nil for sub-pixel / fully-occluded wires.
 local function endRegion(seg, side)
   local fromD, toD, len = wireExits(seg)
   if not fromD then return nil end
@@ -1173,11 +1037,9 @@ local function pointToSegmentDist(px, py, ax, ay, bx, by)
   return math.sqrt(ex * ex + ey * ey)
 end
 
--- Returns { edgeIdx, side, keptAnchor = {x,y screen} } if the cursor is
--- within WIRE_END_HIT_PERP of one of the two end-regions across all
--- wires; nil otherwise. Closest wins on ties. keptAnchor is the screen-
--- space position of the OTHER end's node-edge endpoint — the redraft
--- gesture pins the wire there while the cursor drives the grabbed end.
+-- Nearest end-region within WIRE_END_HIT_PERP of the cursor, or nil. Returns
+-- { edgeIdx, side, keptAnchor }: keptAnchor is the OTHER end's node-edge point
+-- (screen), where the redraft pins the wire while the cursor drives this end.
 local function wireEndHit(segs, mx, my)
   local best, bestDist
   for i, seg in pairs(segs) do
@@ -1248,13 +1110,9 @@ local function drawWireEndHighlight(p, segs, hover)
   p.line(ax, ay, bx, by, 'wiring.node.selected', WIRE_END_HIGHLIGHT)
 end
 
--- Compute the draft wire's cursor-end screen position. Decay ratchets
--- on furthest travel from the grab point so dragging back toward the
--- start doesn't re-inflate the offset. Hit-target detection consumes
--- this point so the wire end (not the cursor) is what activates a
--- target node / port: a redraft started with the wire end on the
--- original target naturally reads as still pointing there, and
--- detaches as soon as the decayed end leaves that node.
+-- Cursor-end position with the grab-offset decayed over WIRE_GRAB_DECAY px,
+-- ratcheting on furthest travel. See docs/wiringPage.md (the wire end leads
+-- the cursor) for why this point, not the cursor, drives hit-testing.
 local function computeDraftEnd(draft, mx, my)
   if not draft.grabDx then return mx, my end
   local tdx, tdy = mx - draft.mx0, my - draft.my0
@@ -1321,29 +1179,21 @@ local function drawFader(p, f)
   -- Unity tick: faint horizontal line where 0 dB sits on the strip.
   local unityY = r.y0 + (1 - pFromDb(0)) * WIRE_FADER_H
   p.line(r.x0, unityY, r.x1, unityY, 'wiring.port.audio', 1)
-  -- Knob: full strip width, fader-style slab.
   local pos    = pFromDb(linToDb(f.currentLin))
   local indY   = r.y0 + (1 - pos) * WIRE_FADER_H
   local kHalfH = WIRE_FADER_KNOB_H / 2
   p.fill(rect(r.x0+1, indY - kHalfH, r.x1-1, indY + kHalfH), 'wiring.node.selected', 1)
   p.stroke(rect(r.x0+1, indY - kHalfH, r.x1-1, indY + kHalfH), 'bg', 1, 1)
-  -- dB readout right of the knob, vertically aligned to it.
   local db  = linToDb(f.currentLin)
   local txt = (db == -math.huge) and '-inf dB' or string.format('%+.1f dB', db)
   p.text(r.x1 + 4, indY - uiSize / 2, 'text', txt, uiFont, uiSize)
 end
 
--- In-flight draft wire. Drawn last of all (after chips and spillover
--- list) so the user always sees the wire they're dragging on top of
--- every popout decoration — existing wires sit below the popout sleeve
--- by contrast, so only the draft punches through.
--- (cx, cy) is the cursor-end position computed by computeDraftEnd
--- (decayed and possibly pinned to the original endpoint). The kept end
--- is anchored at keptAnchor (slot centre captured at gesture start, or
--- the wire's node-edge endpoint for redrafts); body-default port 1
--- forward drafts have no anchor, so we fall back to the node centre.
--- Arrow direction follows cursorEnd: 'to' draws kept→cursor (forward),
--- 'from' draws cursor→kept (backward).
+-- In-flight draft wire (draw order in docs/wiringPage.md). (cx,cy) is the
+-- decayed cursor end; the kept end anchors at keptAnchor (slot centre, or the
+-- node-edge point for redrafts), falling back to the node centre when a body-
+-- default port 1 forward draft has none. Arrow follows cursorEnd: 'to' draws
+-- kept→cursor, 'from' draws cursor→kept.
 local function drawDraftWire(p, draft, nodesById, cx, cy)
   if not draft then return end
   local src = nodesById[draft.keptId]
@@ -1384,9 +1234,8 @@ local function nodeAtPoint(nodeViews, px, py)
   end
 end
 
--- AABB intersection of a pixel-space band rect against every node's
--- body rect (un-inflated; port bands aren't selectable). Returns the
--- set of intersecting ids — empty table if nothing was caught.
+-- Node ids whose body rect (un-inflated — port bands aren't selectable)
+-- intersects the band. Empty set if nothing caught.
 local function nodesInBand(nodeViews, bx0, by0, bx1, by1)
   if bx0 > bx1 then bx0, bx1 = bx1, bx0 end
   if by0 > by1 then by0, by1 = by1, by0 end
@@ -1455,11 +1304,8 @@ local function renderCanvas(w, h)
   local nodesById = {}
   for _, nv in ipairs(nodeViews) do nodesById[nv.id] = nv end
 
-  -- Wire geometry: segs is computed once and shared by the draw pass
-  -- and the wire-end hit-test so highlight geometry cannot drift from
-  -- drawn geometry. Existing wires draw at the very bottom of the
-  -- canvas stack so popout sleeves cleanly occlude them; the in-flight
-  -- draft wire draws at the very top so it always reads above the popout.
+  -- segs is built once, shared by the draw pass and every hit-test so
+  -- geometry can't drift. Draw order is in docs/wiringPage.md.
   local wireViewsList = wv:wireViews()
   local segs = wireSegments(wireViewsList, nodesById)
 
@@ -1524,9 +1370,8 @@ local function renderCanvas(w, h)
     wireEndHover = nil
   end
 
-  -- Decayed wire-end position drives both the draft visual and the
-  -- hit-target / drop-eligibility checks below, so the user can aim
-  -- with the wire end rather than the cursor.
+  -- The decayed wire end (not the cursor) drives the draft visual and the
+  -- hit / eligibility checks below — see docs/wiringPage.md.
   local draftCx, draftCy
   if wireDraft then
     draftCx, draftCy = computeDraftEnd(wireDraft, lmx, lmy)
@@ -1567,14 +1412,9 @@ local function renderCanvas(w, h)
   add(draftSourceHit)
   add(stickyHit)
 
-  -- Draw order: existing wires first (bottom), then popup sleeves over
-  -- them (so the pale sleeve occludes wires entering the engaged node's
-  -- popout area), then the in-flight draft wire (in front of the sleeve
-  -- so the user always sees the wire they're dragging — even when it
-  -- crosses the engaged node's popout area), then ALL nodes (overpainting
-  -- both the wires and the draft at the rect edge, so wires read as
-  -- emerging from behind the node body). Chips/list draw later in the
-  -- overlay pass.
+  -- Draw order (rationale in docs/wiringPage.md): wires, then popup
+  -- sleeves, then the draft wire, then all nodes (overpainting wire and
+  -- draft edges). Chips / list draw later in the overlay pass.
   drawWiresPass(p, segs, wireViewsList,
     { skipEdgeIdx = wireDraft and wireDraft.edgeIdx })
   for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
@@ -1665,9 +1505,8 @@ local function renderCanvas(w, h)
     end
   end
 
-  -- Mousedown precedence: shift-hover wins (starts a new wire); wire-end
-  -- hover next (starts a redraft); body hit falls through to drag-to-move;
-  -- anything else starts a band.
+  -- Mousedown precedence (docs/wiringPage.md): shift-hover > wire-end >
+  -- body-drag > band.
   if not faderClicked and not faderDblClicked and not drag and not band and not wireDraft
       and ImGui.IsMouseClicked(ctx, 0) then
     -- Any click closes the spillover; re-opening requires another chevron
