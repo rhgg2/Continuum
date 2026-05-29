@@ -25,14 +25,25 @@ local ImGui = require 'imgui' '0.10'
 
 local M = {}
 
---contract: transform.sx/sy default 1, ox/oy default 0; scale must be non-zero (fromScreen divides).
+--contract: sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
 function M.new(ctx, chrome, transform)
-  local ox, oy = transform.ox or 0, transform.oy or 0
+  -- ox/oy round to whole pixels so an integer logical coord lands on a pixel
+  -- boundary; sx/sy pass through (a page may scale by a fractional zoom).
+  local ox, oy = math.floor((transform.ox or 0) + 0.5), math.floor((transform.oy or 0) + 0.5)
   local sx, sy = transform.sx or 1, transform.sy or 1
+  local snap   = transform.snap
   local dl     = ImGui.GetWindowDrawList(ctx)
   local colour = chrome.colour
 
-  local function toScreen(lx, ly)   return ox + lx * sx, oy + ly * sy end
+  -- snap=true rounds a converted position to whole pixels — for a pixel-aligned
+  -- grid whose fractional logical coords (an off-row take edge) would otherwise
+  -- land between pixels and blur. fromScreen never snaps: a hit-test wants the
+  -- true sub-pixel logical position, not the drawn cell's rounded one.
+  local function toScreen(lx, ly)
+    local px, py = ox + lx * sx, oy + ly * sy
+    if not snap then return px, py end
+    return math.floor(px + 0.5), math.floor(py + 0.5)
+  end
   local function fromScreen(px, py) return (px - ox) / sx, (py - oy) / sy end
 
   local p = { ox = ox, oy = oy, sx = sx, sy = sy,

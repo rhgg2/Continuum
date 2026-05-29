@@ -43,6 +43,19 @@ Only positions pass through the transform. Stroke widths, corner radii
 and font sizes are screen-space quantities and pass through unchanged —
 a 2px outline is 2px regardless of where the canvas sits.
 
+## Pixel snapping
+
+The canvas origin lands on whole pixels: `ox`/`oy` round at construction, so an
+integer logical coordinate — a column edge, a row boundary — draws on a pixel
+boundary rather than smeared across two. `sx`/`sy` are left alone; a page may
+scale by a fractional zoom (wiring does).
+
+`snap = true` extends that to *every* converted position, rounding `toScreen`
+output. The arrange grid sets it so a take edge at a fractional row — a
+Shift-placed take that doesn't sit on a row boundary — still lands crisp.
+`fromScreen` is never snapped: the hit-test wants the true sub-pixel logical
+position under the cursor, not the rounded cell the draw pass chose.
+
 ## Clip and paths
 
 `pushClip`/`popClip` take a rect whose corners convert like any other;

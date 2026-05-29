@@ -181,6 +181,28 @@ return {
     end,
   },
   {
+    name = 'ox/oy round to whole pixels; sx/sy pass through unrounded',
+    run = function()
+      calls = {}
+      local p = painter.new('CTX', chrome, { ox = 100.4, oy = 200.6, sx = 2, sy = 3 })
+      t.eq(p.ox, 100); t.eq(p.oy, 201)
+      t.eq(p.sx, 2);   t.eq(p.sy, 3)
+      local x, y = p.toScreen(1, 1)
+      t.eq(x, 102); t.eq(y, 204)
+    end,
+  },
+  {
+    name = 'snap rounds toScreen output for fractional logical coords; fromScreen stays exact',
+    run = function()
+      calls = {}
+      local p = painter.new('CTX', chrome, { ox = 0, oy = 0, sx = 2, sy = 3, snap = true })
+      local x, y = p.toScreen(0.5, 0.5)
+      t.eq(x, 1); t.eq(y, 2)
+      local lx, ly = p.fromScreen(1, 2)
+      t.eq(lx, 0.5); t.eq(ly, 2 / 3)
+    end,
+  },
+  {
     name = 'path: points convert, arc keeps screen-px radius and raw angles, stroke resolves colour by name',
     run = function()
       calls = {}
