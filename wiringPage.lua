@@ -120,6 +120,9 @@ local WIRE_FADER_H       = 140 -- strip / hit-rect height (px); centred vertical
 local WIRE_FADER_KNOB_H  = 20  -- knob slab height (px); spans the full strip width
 local WIRE_FADER_HIT_PAD = 10  -- px to inflate the visibility hit rect on each side, so the fader stays open through small cursor excursions outside the strip
 local WIRE_FADER_TOP_DB  = 18  -- top of strip = +18 dB; 0 dB at 75% of travel; below ~5% snaps to -inf
+local WIRE_FADER_WHEEL_DB        = 0.5  -- dB per wheel notch (coarse, default)
+local WIRE_FADER_WHEEL_DB_FINE   = 0.1  -- dB per wheel notch with Shift
+local WIRE_FADER_WHEEL_IDLE_FRAMES = 6  -- commit one setEdgeGain after this many wheel-idle frames so a scroll gesture is one undo entry
 
 ----- Drag / band state (page-local; ephemeral, never persisted)
 -- The gesture state machine — mousedown precedence, what each table
@@ -1296,7 +1299,7 @@ local function renderCanvas(w, h)
     end
   end
   if stillVisible then
-    if not fader.dragging then
+    if not fader.dragging and not fader.wheelPending then
       fader.currentLin = wv:edgeGain(fader.edgeIdx)
     end
   elseif arrowHitIdx then
@@ -1313,6 +1316,9 @@ local function renderCanvas(w, h)
       dragging   = false,
     }
   else
+    if fader and fader.wheelPending then
+      wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
+    end
     fader = nil
   end
   if fader and wireEndHover and wireEndHover.edgeIdx == fader.edgeIdx then
@@ -1425,6 +1431,31 @@ local function renderCanvas(w, h)
     fader.dragging     = true
     if not wv:pokeEdgeGain(fader.edgeIdx, clickLin) then
       wv:setEdgeGain(fader.edgeIdx, clickLin)
+    end
+  end
+
+  -- Debounce to one setEdgeGain per scroll gesture so undo coalesces; the
+  -- close-branch above commits if the cursor leaves before the window elapses.
+  if fader and not fader.dragging then
+    local wheelV = select(1, ImGui.GetMouseWheel(ctx))
+    if wheelV ~= 0 and inRect(lmx, lmy, fader.rect) then
+      local step = shiftHeld and WIRE_FADER_WHEEL_DB_FINE or WIRE_FADER_WHEEL_DB
+      local db   = linToDb(fader.currentLin)
+      if db == -math.huge then db = -60 end
+      db = math.min(WIRE_FADER_TOP_DB, db + wheelV * step)
+      local lin = (db <= -60) and 0 or dbToLin(db)
+      fader.currentLin = lin
+      if not wv:pokeEdgeGain(fader.edgeIdx, lin) then
+        wv:setEdgeGain(fader.edgeIdx, lin)
+      end
+      fader.wheelPending    = true
+      fader.wheelIdleFrames = 0
+    elseif fader.wheelPending then
+      fader.wheelIdleFrames = (fader.wheelIdleFrames or 0) + 1
+      if fader.wheelIdleFrames > WIRE_FADER_WHEEL_IDLE_FRAMES then
+        wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
+        fader.wheelPending = false
+      end
     end
   end
 
