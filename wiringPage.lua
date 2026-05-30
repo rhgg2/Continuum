@@ -114,7 +114,7 @@ local WIRE_END_HIT      = 20  -- length of the rewire/delete hit + highlight ban
 local WIRE_END_HIT_PERP = 6   -- perpendicular tolerance from the wire centreline for the end-hit
 local WIRE_END_HIGHLIGHT = 3  -- stroke width for the highlight overpaint
 local WIRE_GRAB_DECAY   = 40  -- redraft start-jump absorber: at mousedown the cursor end of the wire stays at its old position; the gap to the cursor decays linearly over this many pixels of travel
-local WIRE_FADER_HIT     = 8   -- screen-px radius around the mid-wire arrow centroid that opens the fader on hover (audio wires only)
+local WIRE_FADER_HIT     = 8   -- screen-px radius around the mid-wire arrow centroid for LMB/RMB hit-test (audio wires only)
 local WIRE_FADER_W       = 20  -- strip / knob / hit-rect width (px); centred on the arrow centroid so it covers the triangle
 local WIRE_FADER_H       = 140 -- strip / hit-rect height (px); centred vertically on the arrow centroid
 local WIRE_FADER_KNOB_H  = 20  -- knob slab height (px); spans the full strip width
@@ -137,7 +137,8 @@ local listOpenId = nil  -- node whose spillover list is engaged (chevron-gated)
 local engagedId  = nil  -- node holding hover priority, probed before the per-node scan
 local hoverFreeze = nil  -- { x, y } | nil — suppresses shift-hover until the cursor moves
 local sticky = nil  -- { nodeId, side } — pinned node's port row, kept visible post-click
-local fader = nil  -- { edgeIdx, rect={x0,y0,x1,y1}, currentLin, valueAtClick?, dragging? }
+local fader = nil  -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, dragging?, wheelPending?, wheelIdleFrames? }
+local wireMenu = nil  -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
 
 -- Last canvas origin, captured at the top of renderCanvas. Lets openFxPicker
 -- (called from the N-key dispatch path, which runs after renderCanvas exits)
@@ -1269,9 +1270,8 @@ local function renderCanvas(w, h)
     wireEndHover = wireEndHit(segs, lmx, lmy)
   end
 
-  -- Tick a live fader drag (poke param, check release), then recompute
-  -- visibility. Suppress wireEndHover on the fader's wire so the two don't
-  -- fight on a short wire.
+  -- Tick a live fader drag: poke per frame, commit one setEdgeGain on
+  -- release if the value moved from where the click set it.
   if fader and fader.dragging then
     local lin = pixelYToLin(lmy, fader.rect.y0)
     fader.currentLin = lin
@@ -1288,6 +1288,8 @@ local function renderCanvas(w, h)
      and not (fader and fader.dragging) then
     arrowHitIdx = arrowMidHit(segs, lmx, lmy)
   end
+  -- Fader visibility: drag overrides, triangle anchors, hitRect persists.
+  -- Opening is click-driven (below): this block only keeps / closes.
   local stillVisible = false
   if fader then
     if fader.dragging then
@@ -1302,19 +1304,6 @@ local function renderCanvas(w, h)
     if not fader.dragging and not fader.wheelPending then
       fader.currentLin = wv:edgeGain(fader.edgeIdx)
     end
-  elseif arrowHitIdx then
-    local seg = segs[arrowHitIdx]
-    local ax  = (seg.sx + seg.ex) / 2 + 0.5
-    local ay  = (seg.sy + seg.ey) / 2 + 0.5
-    local x0, y0, x1, y1 = faderRectAt(ax, ay)
-    local pad = WIRE_FADER_HIT_PAD
-    fader = {
-      edgeIdx    = arrowHitIdx,
-      rect       = rect(x0, y0, x1, y1),
-      hitRect    = rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad),
-      currentLin = wv:edgeGain(arrowHitIdx),
-      dragging   = false,
-    }
   else
     if fader and fader.wheelPending then
       wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
@@ -1409,6 +1398,43 @@ local function renderCanvas(w, h)
     wireDraft = nil
   end
 
+  -- LMB on the triangle opens at the current value, warps the OS cursor to
+  -- the knob, and dragging=true suppresses the in-strip jump-set below.
+  local arrowLmbClicked = arrowHitIdx and not fader and not wireMenu
+    and ImGui.IsMouseClicked(ctx, 0)
+  if arrowLmbClicked then
+    local seg = segs[arrowHitIdx]
+    local ax  = (seg.sx + seg.ex) / 2 + 0.5
+    local ay  = (seg.sy + seg.ey) / 2 + 0.5
+    local x0, y0, x1, y1 = faderRectAt(ax, ay)
+    local pad = WIRE_FADER_HIT_PAD
+    local cur = wv:edgeGain(arrowHitIdx)
+    fader = {
+      edgeIdx      = arrowHitIdx,
+      rect         = rect(x0, y0, x1, y1),
+      hitRect      = rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad),
+      currentLin   = cur,
+      valueAtClick = cur,
+      dragging     = true,
+    }
+    if not wv:pokeEdgeGain(arrowHitIdx, cur) then
+      wv:setEdgeGain(arrowHitIdx, cur)
+    end
+    -- Warp the OS cursor onto the knob. The OS↔ImGui delta at the click
+    -- moment converts; macOS's bottom-up screen y needs the vertical flip.
+    if reaper.JS_Mouse_SetPosition then
+      local knobP = pFromDb(linToDb(cur))
+      local knobImX, knobImY = p.toScreen((x0 + x1) / 2,
+                                          y0 + (1 - knobP) * WIRE_FADER_H)
+      local osMx, osMy = reaper.GetMousePosition()
+      local os       = reaper.GetOS()
+      local yFlip    = (os:find('OSX') or os:find('macOS')) and -1 or 1
+      reaper.JS_Mouse_SetPosition(
+        math.floor(osMx + (knobImX - mx) + 0.5),
+        math.floor(osMy + yFlip * (knobImY - my) + 0.5))
+    end
+  end
+
   -- Before the click branch: a double-click also raises IsMouseClicked, which
   -- would otherwise jump the fader to the second press's y.
   local faderDblClicked = fader and not fader.dragging
@@ -1433,6 +1459,7 @@ local function renderCanvas(w, h)
       wv:setEdgeGain(fader.edgeIdx, clickLin)
     end
   end
+  local faderConsumed = arrowLmbClicked or faderClicked or faderDblClicked
 
   -- Debounce to one setEdgeGain per scroll gesture so undo coalesces; the
   -- close-branch above commits if the cursor leaves before the window elapses.
@@ -1461,7 +1488,7 @@ local function renderCanvas(w, h)
 
   -- Mousedown precedence (docs/wiringPage.md): shift-hover > wire-end >
   -- body-drag > band.
-  if not faderClicked and not faderDblClicked and not drag and not band and not wireDraft
+  if not faderConsumed and not drag and not band and not wireDraft
       and ImGui.IsMouseClicked(ctx, 0) then
     -- Any click closes the spillover. The pre-click sourceHit (list still open)
     -- drives dispatch here.
@@ -1626,11 +1653,47 @@ local function renderCanvas(w, h)
     band = nil
   end
 
-  -- Right-click anywhere on the canvas opens the FX picker, anchored at the
-  -- cursor — same code path as the N-key shortcut, just with explicit coords.
+  -- RMB on the triangle opens the per-wire menu; anywhere else opens the
+  -- FX picker (same code path as the N-key shortcut).
   if not drag and not band and not wireDraft
       and ImGui.IsMouseClicked(ctx, 1) then
-    openFxPicker(lmx, lmy)
+    if arrowHitIdx and not wireMenu and not fader then
+      local seg = segs[arrowHitIdx]
+      local ax  = (seg.sx + seg.ex) / 2 + 0.5
+      local ay  = (seg.sy + seg.ey) / 2 + 0.5
+      wireMenu = { edgeIdx = arrowHitIdx, anchorX = ax, anchorY = ay }
+      ImGui.OpenPopup(ctx, '##wiringWireMenu')
+    else
+      openFxPicker(lmx, lmy)
+    end
+  end
+
+  -- Wire menu: ImGui popup centred on the cursor; closes on cursor-leave of
+  -- the window rect (and on click-outside, ImGui's default).
+  if wireMenu then
+    local screenX, screenY = p.toScreen(wireMenu.anchorX, wireMenu.anchorY)
+    ImGui.SetNextWindowPos(ctx, screenX, screenY, ImGui.Cond_Appearing, 0.5, 0.5)
+    chrome.pushChromeWindow()
+    ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('separator'))
+    if ImGui.BeginPopup(ctx, '##wiringWireMenu') then
+      local wire = wireViewsList[wireMenu.edgeIdx]
+      local changed, v = chrome.checkbox('Primary', wire and wire.primary or false)
+      if changed then wv:setEdgePrimary(wireMenu.edgeIdx, v) end
+      -- Skip close-on-leave until the layout has settled, otherwise the
+      -- first-frame default size doesn't yet contain the cursor.
+      if not ImGui.IsWindowAppearing(ctx) then
+        local wx, wy = ImGui.GetWindowPos(ctx)
+        local ww, wh = ImGui.GetWindowSize(ctx)
+        if not (mx >= wx and mx <= wx + ww and my >= wy and my <= wy + wh) then
+          ImGui.CloseCurrentPopup(ctx)
+        end
+      end
+      ImGui.EndPopup(ctx)
+    else
+      wireMenu = nil
+    end
+    ImGui.PopStyleColor(ctx, 1)
+    chrome.popChromeWindow()
   end
 
   -- Band overlay: drawn last so it floats over nodes and hover affordances.
@@ -1659,6 +1722,7 @@ function wp:bind() end
 function wp:unbind()
   drag, band, wireDraft, shiftWas = nil, nil, nil, false
   listOpenId, sticky, engagedId, hoverFreeze = nil, nil, nil, nil
+  fader, wireMenu = nil, nil
 end
 
 --contract: turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.

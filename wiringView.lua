@@ -199,6 +199,15 @@ end
 --contract: live pass-through to wm:pokeEdgeGain. Returns true if the CU exists and was poked; false if caller must materialise via setEdgeGain first.
 function wv:pokeEdgeGain(idx, gain) return wm:pokeEdgeGain(idx, gain) end
 
+--contract: sets edges[idx].primary via wm:mutate; coerced to true/nil (nil-not-false per DAG).
+function wv:setEdgePrimary(idx, primary)
+  return wm:mutate(function(g)
+    local e = g.edges[idx]
+    if not e then return end
+    e.primary = primary and true or nil
+  end)
+end
+
 ----- Topology queries
 
 --contract: backward reachability over user.edges; returns { [id]=true } including sourceId
