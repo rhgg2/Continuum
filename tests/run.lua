@@ -121,6 +121,7 @@ local specs = {
   'dag_capacity_spec',
   'dag_ancestors_spec',
   'dag_target_plan_spec',
+  'dag_allocate_spec',
   'wm_persistence_spec',
   'wm_installed_fx_spec',
   'wm_probe_fx_io_spec',

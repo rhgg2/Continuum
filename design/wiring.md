@@ -620,40 +620,60 @@ plan when its turn comes.
 - **Stage 3c — Channel allocation.** The register-allocation problem
   punted from Stage 2: each track has 64 stereo audio pairs and 128
   MIDI buses; each wire that crosses or terminates inside a track's
-  channel space needs a pair assignment. The current applier uses
-  defaults (`I_SRCCHAN=0`/`I_DSTCHAN=0`) and collapses inter-class
-  wires between the same `(srcTrack, dstTrack)` into a token
-  singleton send, both of which silently break multi-wire topologies.
-  3c replaces both. A class has no "backbone": intra-class wires,
-  incoming sends, and outgoing sends each consume pairs uniformly;
-  the to-master parent send picks one of those pairs via
-  `C_MAINSEND_OFFS`.
+  channel space needs a pair assignment. Post-3c.0 the differ surface
+  is in place — sends are keyed on the 4-tuple
+  `(to, type, srcChan, dstChan)` and emitted one per wire — but the
+  stub allocator assigns `srcChan=dstChan=0` everywhere, so multi-wire
+  topologies between the same `(srcTrack, dstTrack)` still collapse to
+  a single send at chan 1/2. 3c.1+ replaces the stub. A class has no
+  "backbone": intra-class wires, incoming sends, and outgoing sends
+  each consume pairs uniformly; the to-master parent send picks one of
+  those pairs via `C_MAINSEND_OFFS`.
 
-  *3c.0 — Un-collapse sends.* Target-state emits one send per
-  inter-class wire, not per track pair; snapshot reads all sends on
-  owned tracks; differ compares. Send identity is `(srcChan,
-  dstChan)` — REAPER sends carry no `P_EXT`, so the differ matches
-  positionally on channel routing. Two distinct routings between
-  the same track pair can never share both endpoints, so the tuple
-  is sound identity. Allocator determinism (stable ordering keyed
-  on intra-class topo order, then inter-class wire identity) keeps
-  the differ surgical: same graph → same channel assignments → same
-  send list. Default singleton routing still on 1/2 at this point;
-  no allocator yet.
+  *3c.0 — Un-collapse sends; introduce the allocator seam. Landed.*
+  `DAG.targetPlan` now emits one `outWires` entry per inter-class
+  wire (no collapse) carrying `{to, type, gain?}`. The new module-
+  level `DAG.allocate(plan) -> plan'` consumes outWires and emits
+  `sends = [{to, type, gain?, srcChan, dstChan}]` keyed uniquely on
+  the 4-tuple `(to, type, srcChan, dstChan)`. The stub stamps
+  `srcChan=dstChan=0` and first-write-wins on collision; 3c.1 swaps
+  the body for the real channel-pair allocator with no surface
+  change downstream. `wm:targetState` chains
+  `DAG.allocate(cx:targetPlan())`. `wm:snapshot`'s `readSendsClass`
+  reads `I_SRCCHAN`/`I_DSTCHAN` on audio sends (MIDI stays 0/0 until
+  3c.3). `sendsEq` is set-equality on the 4-tuple with gain as the
+  value (drift drives `setSends`). `reconcileSends` keys current and
+  wanted dicts on the 4-tuple, drops unpaired current right-to-left,
+  creates unpaired wanted (writes `I_SRCCHAN`/`I_DSTCHAN` for audio,
+  `I_SRCCHAN=-1` for MIDI, `I_SENDMODE=3` post-FX pre-fader), then
+  pushes `D_VOL` drift by 4-tuple re-locate.
 
-  *3c.1 — Allocator (pure, `DAG.lua`).* `DAG.allocate(plan) ->
-  plan'` annotates each class entry with per-FX input/output pin
-  maps, per-intra-class connection channel pair, per-send src/dst
-  channels, and the track's required `I_NCHAN` (max pair index × 2).
+  *Known interim regression until 3c.1:* multi-wire same-(from,to)
+  still collapses to one send at 0/0 — the stub assigns identical
+  channels to every wire so the dedup catches them. Single-wire
+  cases are unchanged. Specs: `dag_allocate_spec` covers the stub
+  contract; `dag_target_plan_spec` asserts per-wire `outWires`
+  (no collapse); `wm_diff_spec`/`wm_snapshot_spec` updated for the
+  new send shape.
+
+  *3c.1 — Real allocator body.* Replaces the 3c.0 stub body of
+  `DAG.allocate`. Walks each host's fxOrder topologically and
+  assigns channel pairs to: each intra-class connection, each
+  incoming send, each outgoing send, and the parent send
+  (`C_MAINSEND_OFFS`). Annotates the host plan entry with per-FX
+  pin maps and the track's required `I_NCHAN` (max pair index × 2).
+  Deterministic ordering keyed on intra-class topo order then
+  inter-class wire identity: same graph → same channel assignments.
   Pair reuse — free a pair once its last consumer's FX slot passes
   — is an optimisation flag, default off. The 64-pair budget is
-  generous and reuse complicates the differ.
+  generous; reuse complicates the differ.
 
   *3c.2 — Audio apply path.* Extends target-state / snapshot / diff
-  / apply for `I_NCHAN`, per-FX pin maps
-  (`TrackFX_SetPinMappings`), and send channel routing
-  (`I_SRCCHAN`/`I_DSTCHAN`). Subsumes the slot-boundary case from
-  the original 3b.
+  / apply for `I_NCHAN` and per-FX pin maps
+  (`TrackFX_SetPinMappings`). Send channel routing
+  (`I_SRCCHAN`/`I_DSTCHAN`) is already wired by 3c.0; 3c.1 just
+  flows non-zero values through it. Subsumes the slot-boundary case
+  from the original 3b.
 
   *3c.3 — MIDI buses.* Same allocator pattern with bus indices.
 

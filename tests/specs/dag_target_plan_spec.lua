@@ -67,7 +67,7 @@ return {
       t.eq(plan['__scratch__'].hostKind, 'scratch')
       t.deepEq(plan['__scratch__'].fxOrder, { 'orphan' })
       t.eq(plan['__scratch__'].mainSend, false)
-      t.deepEq(plan['__scratch__'].sends, {})
+      t.deepEq(plan['__scratch__'].outWires, {})
     end,
   },
   {
@@ -116,8 +116,8 @@ return {
       -- orphan is in the inert pool, parked on scratch.
       t.deepEq(plan['__scratch__'].fxOrder, { 'orphan' })
       -- The orphan->fx_a wire produces no send entry anywhere.
-      t.deepEq(plan['guid-s'].sends, {})
-      t.deepEq(plan['__scratch__'].sends, {})
+      t.deepEq(plan['guid-s'].outWires, {})
+      t.deepEq(plan['__scratch__'].outWires, {})
     end,
   },
   {
@@ -134,7 +134,7 @@ return {
       t.eq(plan['guid-s'].trackGuid, 'guid-s')
       t.deepEq(plan['guid-s'].fxOrder, { 'f' })
       t.eq(plan['guid-s'].mainSend, true)
-      t.deepEq(plan['guid-s'].sends, {})
+      t.deepEq(plan['guid-s'].outWires, {})
     end,
   },
   {
@@ -158,8 +158,8 @@ return {
       -- Sources fold their audio-to-master into mainSend, not regular sends.
       t.eq(plan['guid-a'].mainSend, true)
       t.eq(plan['guid-b'].mainSend, true)
-      t.deepEq(plan['guid-a'].sends, {})
-      t.deepEq(plan['guid-b'].sends, {})
+      t.deepEq(plan['guid-a'].outWires, {})
+      t.deepEq(plan['guid-b'].outWires, {})
     end,
   },
   {
@@ -184,12 +184,12 @@ return {
       t.deepEq(plan[fxbCls].fxOrder, { 'fx_b' })
       t.eq(plan[fxbCls].mainSend, false)
       -- fx_a's class (guid-a) sends audio into fx_b's class.
-      t.deepEq(plan['guid-a'].sends, { { to = fxbCls, type = 'audio' } })
-      t.deepEq(plan['guid-b'].sends, { { to = fxbCls, type = 'audio' } })
+      t.deepEq(plan['guid-a'].outWires, { { to = fxbCls, type = 'audio' } })
+      t.deepEq(plan['guid-b'].outWires, { { to = fxbCls, type = 'audio' } })
     end,
   },
   {
-    name = 'multiple audio wires to same target class collapse to one send',
+    name = 'multiple audio wires to same target class: outWires has one entry per wire (no collapse)',
     run = function()
       -- s1 -> fx (2 outs, both feed mix)
       -- s2 -> mix (so mix class differs from fx class)
@@ -204,9 +204,11 @@ return {
         { type = 'audio', from = 'splitter', to = 'mix', toPort = 2, fromPort = 1 },
         { type = 'audio', from = 'splitter', to = 'mix', toPort = 2, fromPort = 2 },
       }))
-      -- guid-a sends to mix's class via two audio wires; collapses to one.
-      t.eq(#plan['guid-a'].sends, 1)
-      t.eq(plan['guid-a'].sends[1].type, 'audio')
+      -- splitter's two wires to mix-class surface as two distinct outWires;
+      -- DAG.allocate (next layer) decides whether they collapse by channel assignment.
+      t.eq(#plan['guid-a'].outWires, 2)
+      t.eq(plan['guid-a'].outWires[1].type, 'audio')
+      t.eq(plan['guid-a'].outWires[2].type, 'audio')
     end,
   },
   {
@@ -246,8 +248,8 @@ return {
       local compCls = 'guid-a|guid-b'
       t.eq(plan[compCls].hostKind, 'newTrack')
       t.deepEq(plan[compCls].fxOrder, { 'midiComp' })
-      t.deepEq(plan['guid-a'].sends, { { to = compCls, type = 'midi' } })
-      t.deepEq(plan['guid-b'].sends, { { to = compCls, type = 'midi' } })
+      t.deepEq(plan['guid-a'].outWires, { { to = compCls, type = 'midi' } })
+      t.deepEq(plan['guid-b'].outWires, { { to = compCls, type = 'midi' } })
     end,
   },
   {
@@ -264,7 +266,7 @@ return {
         { type = 'audio', from = 'fx_a', to = 'fx_b', toPort = 2, ops = { gain = 0.5 } },
       }))
       local fxbCls = 'guid-a|guid-b'
-      t.deepEq(plan['guid-a'].sends, { { to = fxbCls, type = 'audio', gain = 0.5 } })
+      t.deepEq(plan['guid-a'].outWires, { { to = fxbCls, type = 'audio', gain = 0.5 } })
       t.deepEq(plan['guid-a'].fxOrder, { 'fx_a' }, 'gain CU folded out of fxOrder')
     end,
   },
@@ -321,7 +323,7 @@ return {
       t.eq(plan['guid-s1|guid-s2'], nil, 'absorbed class has no plan entry')
       t.eq(plan['guid-s1'].hostKind, 'sourceTrack')
       t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
-      t.deepEq(plan['guid-s2'].sends, { { to = 'guid-s1', type = 'midi' } })
+      t.deepEq(plan['guid-s2'].outWires, { { to = 'guid-s1', type = 'midi' } })
     end,
   },
 
@@ -338,7 +340,7 @@ return {
       }))
       t.eq(plan['guid-s1|guid-s2'], nil)
       t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
-      t.deepEq(plan['guid-s2'].sends, { { to = 'guid-s1', type = 'audio' } })
+      t.deepEq(plan['guid-s2'].outWires, { { to = 'guid-s1', type = 'audio' } })
     end,
   },
 
@@ -362,8 +364,8 @@ return {
       t.eq(plan['guid-s|guid-t|guid-u'], nil)
       t.eq(plan['guid-s'].hostKind, 'sourceTrack')
       t.deepEq(plan['guid-s'].fxOrder, { 'mixA', 'mixB' })
-      t.deepEq(plan['guid-t'].sends, { { to = 'guid-s', type = 'audio' } })
-      t.deepEq(plan['guid-u'].sends, { { to = 'guid-s', type = 'audio' } })
+      t.deepEq(plan['guid-t'].outWires, { { to = 'guid-s', type = 'audio' } })
+      t.deepEq(plan['guid-u'].outWires, { { to = 'guid-s', type = 'audio' } })
     end,
   },
 
@@ -405,7 +407,7 @@ return {
       t.eq(plan['guid-s1'].mainSend, true)
       t.eq(plan['guid-s2'].mainSend, true, 'midi to master-hosted lifts parent send')
       t.deepEq(plan['guid-s1'].fxOrder, { 'A' })
-      t.deepEq(plan['guid-s2'].sends, {})
+      t.deepEq(plan['guid-s2'].outWires, {})
     end,
   },
 
@@ -472,8 +474,8 @@ return {
       }))
       t.eq(plan['guid-s1|guid-s2|guid-s3'], nil, 'absorbed class vacated')
       t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
-      t.deepEq(plan['guid-s2'].sends, { { to = 'guid-s1', type = 'midi' } })
-      t.deepEq(plan['guid-s3'].sends, { { to = 'guid-s1', type = 'audio' } })
+      t.deepEq(plan['guid-s2'].outWires, { { to = 'guid-s1', type = 'midi' } })
+      t.deepEq(plan['guid-s3'].outWires, { { to = 'guid-s1', type = 'audio' } })
     end,
   },
 }

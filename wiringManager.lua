@@ -446,10 +446,13 @@ local function readSendsClass(track, byTrack)
     local dstClass = byTrack[dst]
     if dstClass then
       local typ   = sendType(track, i)
-      local entry = { to = dstClass, type = typ }
+      local entry = { to = dstClass, type = typ, srcChan = 0, dstChan = 0 }
       if typ == 'audio' then
-        entry.gain = reaper.GetTrackSendInfo_Value(track, 0, i, 'D_VOL')
+        entry.srcChan = math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_SRCCHAN'))
+        entry.dstChan = math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_DSTCHAN'))
+        entry.gain    = reaper.GetTrackSendInfo_Value(track, 0, i, 'D_VOL')
       end
+      -- MIDI bus routing arrives in 3c.3; srcChan/dstChan stay 0 until then.
       util.add(out, entry)
     end
   end
@@ -565,7 +568,7 @@ end
 function wm:targetState()
   ensureLoaded()
   local cx = DAG.compile(userGraph)
-  local plan = cx:targetPlan()
+  local plan = DAG.allocate(cx:targetPlan())
   local scratchGuid = scratchTrack and reaper.GetTrackGUID(scratchTrack)
   local out = {}
   for classKey, entry in pairs(plan) do
@@ -587,23 +590,16 @@ end
 
 local function sendsEq(a, b)
   if #a ~= #b then return false end
-  -- Order-insensitive: REAPER's send order isn't semantically meaningful.
-  -- gain (audio send D_VOL; nil ⇒ unity) is part of identity, so a volume
-  -- change drives a setSends.
-  local seen = {}
+  -- Set-equality on the 4-tuple identity (to, type, srcChan, dstChan); gain
+  -- rides as the value so D_VOL drift drives a setSends.
+  local byKey = {}
   for _, s in ipairs(a) do
-    local k = s.to .. '|' .. s.type
-    seen[k] = seen[k] or {}
-    table.insert(seen[k], s.gain or 1.0)
+    local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan
+    byKey[k] = s.gain or 1.0
   end
   for _, s in ipairs(b) do
-    local k, g = s.to .. '|' .. s.type, s.gain or 1.0
-    local bucket, hit = seen[k]
-    if bucket then
-      for i = 1, #bucket do if bucket[i] == g then hit = i; break end end
-    end
-    if not hit then return false end
-    table.remove(bucket, hit)
+    local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan
+    if byKey[k] == nil or byKey[k] ~= (s.gain or 1.0) then return false end
   end
   return true
 end
@@ -853,55 +849,60 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
 end
 
 local function reconcileSends(track, target, classKeyToTrack)
+  local function sendKey(dst, typ, src, dstCh)
+    return tostring(dst) .. '|' .. typ .. '|' .. src .. '|' .. dstCh
+  end
+  -- Audio reads I_SRCCHAN/DSTCHAN; midi bus routing waits for 3c.3 (uses 0/0).
+  local function readChans(idx, typ)
+    if typ ~= 'audio' then return 0, 0 end
+    return math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN')),
+           math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_DSTCHAN'))
+  end
   local current = {}
   for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
     local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
     local typ = sendType(track, i)
-    current[dst] = current[dst] or {}
-    current[dst][typ] = i
+    local src, dstCh = readChans(i, typ)
+    current[sendKey(dst, typ, src, dstCh)] = { idx = i }
   end
   local wanted = {}
   for _, s in ipairs(target) do
     local dst = classKeyToTrack[s.to]
     if dst then
-      wanted[dst] = wanted[dst] or {}
-      wanted[dst][s.type] = s.gain or 1.0
+      wanted[sendKey(dst, s.type, s.srcChan, s.dstChan)] =
+        { dst = dst, typ = s.type, srcChan = s.srcChan, dstChan = s.dstChan,
+          gain = s.gain or 1.0 }
     end
   end
-  local drops = {}
-  for dst, byType in pairs(current) do
-    for typ, idx in pairs(byType) do
-      if not (wanted[dst] and wanted[dst][typ]) then
-        util.add(drops, idx)
+  -- Drops right-to-left so REAPER's post-remove index shift stays sane.
+  local dropIdx = {}
+  for key, cur in pairs(current) do
+    if not wanted[key] then util.add(dropIdx, cur.idx) end
+  end
+  table.sort(dropIdx, function(a, b) return a > b end)
+  for _, idx in ipairs(dropIdx) do reaper.RemoveTrackSend(track, 0, idx) end
+  -- Wiring sends are post-FX pre-fader (I_SENDMODE=3); audio writes channels.
+  for key, w in pairs(wanted) do
+    if not current[key] then
+      local idx = reaper.CreateTrackSend(track, w.dst)
+      if w.typ == 'midi' then
+        reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', -1)
+      else
+        reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS', 31)
+        reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', w.srcChan)
+        reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_DSTCHAN', w.dstChan)
       end
+      reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SENDMODE', 3)
     end
   end
-  table.sort(drops, function(a, b) return a > b end)
-  for _, idx in ipairs(drops) do
-    reaper.RemoveTrackSend(track, 0, idx)
-  end
-  -- Wiring sends are post-FX (pre-fader): the from-track's fader is reserved
-  -- for the parent/master-send gain, so a send's level is its own D_VOL alone.
-  for dst, byType in pairs(wanted) do
-    for typ in pairs(byType) do
-      if not (current[dst] and current[dst][typ]) then
-        local idx = reaper.CreateTrackSend(track, dst)
-        if typ == 'midi' then
-          reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', -1)
-        else
-          reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS', 31)
-        end
-        reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SENDMODE', 3)
-      end
-    end
-  end
-  -- D_VOL for audio sends, re-reading post-mutation so indices are stable
-  -- (drops shifted them, creates appended). midi sends carry no gain.
+  -- Gain drift: indices may have shifted; re-locate each by 4-tuple key.
   for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
     local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
-    local g   = wanted[dst] and wanted[dst].audio
-    if g and sendType(track, i) == 'audio' then
-      reaper.SetTrackSendInfo_Value(track, 0, i, 'D_VOL', g)
+    local typ = sendType(track, i)
+    local src, dstCh = readChans(i, typ)
+    local w = wanted[sendKey(dst, typ, src, dstCh)]
+    if w and typ == 'audio' then
+      reaper.SetTrackSendInfo_Value(track, 0, i, 'D_VOL', w.gain)
     end
   end
 end

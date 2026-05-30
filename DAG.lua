@@ -15,7 +15,8 @@
 --shape: lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
 --shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
---shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the resolved host classKey for sourceTrack/newTrack hosts (absorbed classes fold into their host and emit no own entry), '__scratch__' for parked-inert, '__master__' for the master-hosted class (sentinel because the REAPER master can't carry a project-scoped wiringClass tag the way other tracks can)
+--shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, outWires={ {to=hostKey, type='audio'|'midi', gain?=number}, ... } } }; outWires is one entry per inter-class wire (no collapse). M.allocate(targetPlan) turns outWires into sends with per-tuple channel assignment.
+--shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... } } }; output of M.allocate. Invariant from 3c.1 onward: no two sends share (to, type, srcChan, dstChan) within one host. In 3c.0 the stub stamps 0/0 and last-write-wins on collision, so multi-wire same-(from,to) still collapses; correctness restored once the real allocator assigns distinct channels.
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -526,7 +527,7 @@ function M.compile(userGraph)
           table.sort(parked)
           plan['__scratch__'] = {
             hostKind = 'scratch', trackGuid = nil, fxOrder = parked,
-            mainSend = false, sends = {},
+            mainSend = false, outWires = {},
           }
         end
       else
@@ -543,14 +544,13 @@ function M.compile(userGraph)
         plan[hostCls] = {
           hostKind  = hostKind, trackGuid = trackGuid, fxOrder = nil,
           mainSend  = hasMaster and hostKind == 'sourceTrack',
-          mainSendGain = mainGain[hostCls], sends = {},
+          mainSendGain = mainGain[hostCls], outWires = {},
         }
       end
     end
 
-    -- Sends keyed on resolved host. Intra-host conns (continuation wires
-    -- after absorption) are skipped; midi-to-master folds into mainSend too.
-    local seenSend = {}
+    -- One outWires entry per inter-class wire (no collapse); intra-host skipped,
+    -- midi-to-master folds to mainSend. DAG.allocate consumes outWires next.
     for _, conn in ipairs(lowerGraph.conns) do
       local fromCls, toCls = classOf[conn.from], classOf[conn.to]
       if fromCls ~= toCls and fromCls ~= '' and toCls ~= '' then
@@ -560,15 +560,11 @@ function M.compile(userGraph)
           if toHost == masterHostedHost then
             plan[fromHost].mainSend = true
           else
-            local key = fromHost .. '|' .. toHost .. '|' .. conn.type
-            if not seenSend[key] then
-              seenSend[key] = true
-              util.add(plan[fromHost].sends, {
-                to = toHost, type = conn.type,
-                gain = conn.type == 'audio'
-                       and sendGain[fromHost .. '\0' .. toHost] or nil,
-              })
-            end
+            util.add(plan[fromHost].outWires, {
+              to = toHost, type = conn.type,
+              gain = conn.type == 'audio'
+                     and sendGain[fromHost .. '\0' .. toHost] or nil,
+            })
           end
         end
       end
@@ -577,7 +573,7 @@ function M.compile(userGraph)
     for hostCls, members in pairs(hostMembers) do
       if hostCls ~= '' then
         plan[hostCls].fxOrder = topoIntraHost(members, folded)
-        table.sort(plan[hostCls].sends, function(a, b)
+        table.sort(plan[hostCls].outWires, function(a, b)
           if a.to ~= b.to then return a.to < b.to end
           return a.type < b.type
         end)
@@ -594,6 +590,39 @@ function M.compile(userGraph)
   end
 
   return ctx
+end
+
+----- allocate
+
+-- 3c.0 stub: stamps default channels and dedupes by 4-tuple. 3c.1 swaps the
+-- body for the real allocator; surface unchanged for downstream consumers.
+--contract: pure; outWires consumed, sends emitted with srcChan=dstChan=0; dedup on 4-tuple
+function M.allocate(plan)
+  local out = {}
+  for hostCls, entry in pairs(plan) do
+    local sends, seen = {}, {}
+    for _, w in ipairs(entry.outWires or {}) do
+      local key = w.to .. '|' .. w.type .. '|0|0'
+      if not seen[key] then
+        seen[key] = true
+        util.add(sends, { to = w.to, type = w.type, gain = w.gain,
+                          srcChan = 0, dstChan = 0 })
+      end
+    end
+    table.sort(sends, function(a, b)
+      if a.to      ~= b.to      then return a.to      < b.to      end
+      if a.type    ~= b.type    then return a.type    < b.type    end
+      if a.srcChan ~= b.srcChan then return a.srcChan < b.srcChan end
+      return a.dstChan < b.dstChan
+    end)
+    local copy = {}
+    for k, v in pairs(entry) do
+      if k ~= 'outWires' then copy[k] = v end
+    end
+    copy.sends = sends
+    out[hostCls] = copy
+  end
+  return out
 end
 
 return M

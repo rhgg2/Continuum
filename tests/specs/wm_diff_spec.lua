@@ -158,7 +158,7 @@ return {
           hostKind='newTrack', trackGuid=nil,
           fxOrder = { { fxGuid=nil, ident='JS:mix' } },
           mainSend = false,
-          sends    = { { to='guid-X', type='audio' } },
+          sends    = { { to='guid-X', type='audio', srcChan=0, dstChan=0 } },
         },
       }
       local ops = byOp(wm:diff(target, {}))
@@ -226,10 +226,10 @@ return {
       local _, wm = mkWm(harness)
       local mk = function(sends) return { hostKind='sourceTrack', trackGuid='guid-A',
                                           fxOrder={}, mainSend=true, sends=sends } end
-      local target = { ['guid-A'] = mk({ { to='X', type='audio' },
-                                         { to='Y', type='midi'  } }) }
-      local snap   = { ['guid-A'] = mk({ { to='Y', type='midi'  },
-                                         { to='X', type='audio' } }) }
+      local target = { ['guid-A'] = mk({ { to='X', type='audio', srcChan=0, dstChan=0 },
+                                         { to='Y', type='midi',  srcChan=0, dstChan=0 } }) }
+      local snap   = { ['guid-A'] = mk({ { to='Y', type='midi',  srcChan=0, dstChan=0 },
+                                         { to='X', type='audio', srcChan=0, dstChan=0 } }) }
       t.eq(#wm:diff(target, snap), 0)
     end,
   },
@@ -367,7 +367,7 @@ return {
       local mk = function(g) return {
         ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A', fxOrder={},
                        mainSend=false,
-                       sends={ { to='guid-X', type='audio', gain=g } } },
+                       sends={ { to='guid-X', type='audio', gain=g, srcChan=0, dstChan=0 } } },
       } end
       local ops = byOp(wm:diff(mk(0.5), mk(1.0)))
       t.eq(#ops.setSends, 1, 'gain change emits setSends')
@@ -381,7 +381,7 @@ return {
       local mk = function() return {
         ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A', fxOrder={},
                        mainSend=false,
-                       sends={ { to='guid-X', type='audio', gain=0.5 } } },
+                       sends={ { to='guid-X', type='audio', gain=0.5, srcChan=0, dstChan=0 } } },
       } end
       t.eq(#wm:diff(mk(), mk()), 0)
     end,
