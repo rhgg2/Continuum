@@ -1,11 +1,5 @@
--- Pure structural calculus for the wiring page: user graph (wires) and
--- lowered graph (port-to-port connections), the lowering that bridges
--- them, and the source-set partition that compiles onto REAPER tracks.
--- M.compile(userGraph) returns a context closing over the lowered graph
--- and lazily caching classes / classOf / inbound / srcSet / quotient
--- / absorption; the user-graph predicates (validate, ancestors,
--- lower) stay free-standing.
--- See design/wiring.md for the model.
+-- Pure structural calculus for the wiring page. M.compile returns a
+-- lazy-caching ctx; user-graph predicates stay free-standing. See design/wiring.md.
 -- @noindex
 
 --invariant: M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(userGraph), which caches the lowered graph and its derivations lazily
@@ -21,7 +15,7 @@
 --shape: lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
 --shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
---shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for sourceTrack/newTrack hosts, '__scratch__' for parked-inert, '__master__' for the master-hosted class (sentinel because the REAPER master can't carry a project-scoped wiringClass tag the way other tracks can)
+--shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the resolved host classKey for sourceTrack/newTrack hosts (absorbed classes fold into their host and emit no own entry), '__scratch__' for parked-inert, '__master__' for the master-hosted class (sentinel because the REAPER master can't carry a project-scoped wiringClass tag the way other tracks can)
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -242,7 +236,7 @@ end
 
 ----- compile context
 
---contract: assumes M.validate(userGraph)==nil; returns a ctx closing over M.lower(userGraph) with lazy caches for classes, classOf, inbound, srcSet (per-id), quotient, absorption. ctx:srcSet(id) returns the same table across calls (referential cache).
+--contract: assumes M.validate(userGraph)==nil; returns a ctx with lazy-cached derivations
 function M.compile(userGraph)
   local lowerGraph = M.lower(userGraph)
   local cache = { srcSet = {} }
@@ -306,7 +300,8 @@ function M.compile(userGraph)
     local classOf = self:classOf()
     for _, conn in ipairs(lowerGraph.conns) do
       local fromCls, toCls = classOf[conn.from], classOf[conn.to]
-      if fromCls ~= toCls then
+      -- Inert vertices ('' class, empty srcSet) carry no signal — skip.
+      if fromCls ~= toCls and fromCls ~= '' and toCls ~= '' then
         local toQ, fromQ = cache.quotient[toCls], cache.quotient[fromCls]
         if conn.type == 'audio' then
           toQ.audioParents[fromCls] = true
@@ -369,6 +364,27 @@ function M.compile(userGraph)
     return mc
   end
 
+  -- The master-hosted class is exempt: its host is fixed in REAPER.
+  -- Source classes never appear as absorbees (no audio parents in quotient).
+  function ctx:resolveHost(cls)
+    if cls == self:masterHostedClass() then return cls end
+    return self:absorption()[cls] or cls
+  end
+
+  -- {[hostCls] = id[]} pooling members of every class that resolves to hostCls.
+  function ctx:hostMembers()
+    if cache.hostMembers then return cache.hostMembers end
+    cache.hostMembers = {}
+    for cls, members in pairs(self:classes()) do
+      local host   = self:resolveHost(cls)
+      local bucket = cache.hostMembers[host] or {}
+      for _, id in ipairs(members) do util.add(bucket, id) end
+      cache.hostMembers[host] = bucket
+    end
+    for _, bucket in pairs(cache.hostMembers) do table.sort(bucket) end
+    return cache.hostMembers
+  end
+
   -- Where each gained wire's volume lands, keyed by originEdgeIdx. If the
   -- bridge sits on the wire that becomes a send (track→track) or the
   -- parent/master send AND is the sole audio contributor there, the gain folds
@@ -380,6 +396,7 @@ function M.compile(userGraph)
     if cache.gainSinks then return cache.gainSinks end
     local classOf = self:classOf()
     local mhc     = self:masterHostedClass()
+    local function hostOf(id) return self:resolveHost(classOf[id]) end
     local function isMasterDest(conn)
       return conn.to == 'master' or (mhc and classOf[conn.to] == mhc)
     end
@@ -387,12 +404,12 @@ function M.compile(userGraph)
     for _, conn in ipairs(lowerGraph.conns) do
       outConn[conn.from] = outConn[conn.from] or conn
       if conn.type == 'audio' then
-        local fromCls, toCls = classOf[conn.from], classOf[conn.to]
-        if fromCls and fromCls ~= '' then
+        local fromH, toH = hostOf(conn.from), hostOf(conn.to)
+        if fromH and fromH ~= '' then
           if isMasterDest(conn) then
-            masterCount[fromCls] = (masterCount[fromCls] or 0) + 1
-          elseif toCls and toCls ~= '' and fromCls ~= toCls then
-            local k = fromCls .. '\0' .. toCls
+            masterCount[fromH] = (masterCount[fromH] or 0) + 1
+          elseif toH and toH ~= '' and fromH ~= toH then
+            local k = fromH .. '\0' .. toH
             sendCount[k] = (sendCount[k] or 0) + 1
           end
         end
@@ -401,16 +418,16 @@ function M.compile(userGraph)
     local sinks = {}
     for id, node in pairs(lowerGraph.nodes) do
       if node.params and node.params.mode == 'gain' and node.originEdgeIdx then
-        local conn    = outConn[id]
-        local fromCls = classOf[id]
-        local sink    = { kind = 'cu', cuId = id, gain = node.params.gain }
-        if conn and fromCls and fromCls ~= '' then
-          local toCls = classOf[conn.to]
+        local conn  = outConn[id]
+        local fromH = hostOf(id)
+        local sink  = { kind = 'cu', cuId = id, gain = node.params.gain }
+        if conn and fromH and fromH ~= '' then
+          local toH = hostOf(conn.to)
           if isMasterDest(conn) then
-            if masterCount[fromCls] == 1 then sink.kind, sink.cls = 'mainSend', fromCls end
-          elseif toCls and toCls ~= '' and fromCls ~= toCls then
-            if sendCount[fromCls .. '\0' .. toCls] == 1 then
-              sink.kind, sink.from, sink.to = 'send', fromCls, toCls
+            if masterCount[fromH] == 1 then sink.kind, sink.cls = 'mainSend', fromH end
+          elseif toH and toH ~= '' and fromH ~= toH then
+            if sendCount[fromH .. '\0' .. toH] == 1 then
+              sink.kind, sink.from, sink.to = 'send', fromH, toH
             end
           end
         end
@@ -425,16 +442,17 @@ function M.compile(userGraph)
     local classOf = self:classOf()
     local counts  = {}
     for _, conn in ipairs(lowerGraph.conns) do
-      local cls = classOf[conn.from]
-      if cls and cls == classOf[conn.to] then
-        counts[cls] = counts[cls] or { audio = 0, midi = 0 }
-        counts[cls][conn.type] = counts[cls][conn.type] + 1
+      local fromHost = self:resolveHost(classOf[conn.from])
+      local toHost   = self:resolveHost(classOf[conn.to])
+      if fromHost and fromHost ~= '' and fromHost == toHost then
+        counts[fromHost] = counts[fromHost] or { audio = 0, midi = 0 }
+        counts[fromHost][conn.type] = counts[fromHost][conn.type] + 1
       end
     end
     local out = {}
-    for cls, c in pairs(counts) do
-      if c.audio > 64  then util.add(out, { classKey = cls, kind = 'audio', count = c.audio }) end
-      if c.midi  > 128 then util.add(out, { classKey = cls, kind = 'midi',  count = c.midi  }) end
+    for host, c in pairs(counts) do
+      if c.audio > 64  then util.add(out, { classKey = host, kind = 'audio', count = c.audio }) end
+      if c.midi  > 128 then util.add(out, { classKey = host, kind = 'midi',  count = c.midi  }) end
     end
     table.sort(out, function(a, b)
       if a.classKey ~= b.classKey then return a.classKey < b.classKey end
@@ -443,11 +461,9 @@ function M.compile(userGraph)
     return out
   end
 
-  -- Topo over intra-class fx/cu members (sources/master excluded —
-  -- they don't appear in REAPER FX chains). Kahn's; ties broken by
-  -- sorted id for spec determinism. Private to targetPlan.
-  local function topoIntraClass(members, cls, folded)
-    local classOf = ctx:classOf()
+  -- Kahn's over pooled fx/cu members; sources/master/folded excluded.
+  -- Ties broken by sorted id for spec determinism.
+  local function topoIntraHost(members, folded)
     local memberSet = {}
     for _, id in ipairs(members) do
       local k = lowerGraph.nodes[id].kind
@@ -458,8 +474,7 @@ function M.compile(userGraph)
     local indeg, succ = {}, {}
     for id in pairs(memberSet) do indeg[id], succ[id] = 0, {} end
     for _, conn in ipairs(lowerGraph.conns) do
-      if memberSet[conn.from] and memberSet[conn.to]
-         and classOf[conn.from] == cls and classOf[conn.to] == cls then
+      if memberSet[conn.from] and memberSet[conn.to] then
         indeg[conn.to] = indeg[conn.to] + 1
         util.add(succ[conn.from], conn.to)
       end
@@ -484,9 +499,9 @@ function M.compile(userGraph)
   end
 
   function ctx:targetPlan()
-    local allClasses = self:classes()
-    local classOf    = self:classOf()
-    local plan, masterHosted = {}, {}
+    local classOf     = self:classOf()
+    local hostMembers = self:hostMembers()
+    local plan, masterHostedHost = {}, nil
 
     -- Folded bridges (gainSinks) drop from fxOrder; their gain rides the send.
     local folded, sendGain, mainGain = {}, {}, {}
@@ -500,8 +515,8 @@ function M.compile(userGraph)
       end
     end
 
-    for cls, members in pairs(allClasses) do
-      if cls == '' then
+    for hostCls, members in pairs(hostMembers) do
+      if hostCls == '' then
         local parked = {}
         for _, id in ipairs(members) do
           local k = lowerGraph.nodes[id].kind
@@ -523,51 +538,57 @@ function M.compile(userGraph)
         end
         if hasMaster and hostKind ~= 'sourceTrack' then
           hostKind = 'master'
-          masterHosted[cls] = true
+          masterHostedHost = hostCls
         end
-        plan[cls] = {
+        plan[hostCls] = {
           hostKind  = hostKind, trackGuid = trackGuid, fxOrder = nil,
           mainSend  = hasMaster and hostKind == 'sourceTrack',
-          mainSendGain = mainGain[cls], sends = {},
+          mainSendGain = mainGain[hostCls], sends = {},
         }
       end
     end
 
+    -- Sends keyed on resolved host. Intra-host conns (continuation wires
+    -- after absorption) are skipped; midi-to-master folds into mainSend too.
     local seenSend = {}
     for _, conn in ipairs(lowerGraph.conns) do
       local fromCls, toCls = classOf[conn.from], classOf[conn.to]
       if fromCls ~= toCls and fromCls ~= '' and toCls ~= '' then
-        if masterHosted[toCls] then
-          if conn.type == 'audio' then plan[fromCls].mainSend = true end
-        else
-          local key = fromCls .. '|' .. toCls .. '|' .. conn.type
-          if not seenSend[key] then
-            seenSend[key] = true
-            util.add(plan[fromCls].sends, {
-              to = toCls, type = conn.type,
-              gain = conn.type == 'audio' and sendGain[fromCls .. '\0' .. toCls] or nil,
-            })
+        local fromHost = self:resolveHost(fromCls)
+        local toHost   = self:resolveHost(toCls)
+        if fromHost ~= toHost then
+          if toHost == masterHostedHost then
+            plan[fromHost].mainSend = true
+          else
+            local key = fromHost .. '|' .. toHost .. '|' .. conn.type
+            if not seenSend[key] then
+              seenSend[key] = true
+              util.add(plan[fromHost].sends, {
+                to = toHost, type = conn.type,
+                gain = conn.type == 'audio'
+                       and sendGain[fromHost .. '\0' .. toHost] or nil,
+              })
+            end
           end
         end
       end
     end
 
-    for cls, members in pairs(allClasses) do
-      if cls ~= '' then
-        plan[cls].fxOrder = topoIntraClass(members, cls, folded)
-        table.sort(plan[cls].sends, function(a, b)
+    for hostCls, members in pairs(hostMembers) do
+      if hostCls ~= '' then
+        plan[hostCls].fxOrder = topoIntraHost(members, folded)
+        table.sort(plan[hostCls].sends, function(a, b)
           if a.to ~= b.to then return a.to < b.to end
           return a.type < b.type
         end)
       end
     end
 
-    -- Stable sentinel key for the master-hosted class so wm:snapshot can
-    -- find the matching entry without tagging the REAPER master itself with
-    -- a project-scoped wiringClass. At most one class is master-hosted.
-    for cls in pairs(masterHosted) do
-      plan['__master__'] = plan[cls]
-      plan[cls] = nil
+    -- Stable sentinel key for the master-hosted class — wm:snapshot can't
+    -- tag the REAPER master with a project-scoped wiringClass.
+    if masterHostedHost then
+      plan['__master__'] = plan[masterHostedHost]
+      plan[masterHostedHost] = nil
     end
     return plan
   end

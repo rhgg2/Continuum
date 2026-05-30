@@ -549,34 +549,33 @@ plan when its turn comes.
     deep-equal in `fxOrderEq`; snapshot never reads params back
     from REAPER, so a target entry with `params` always drives
     reconcile until the applier makes the push idempotent.
-  - **Left:**
-    1. **Applier** (`wm:applyOps(ops, label)`). Walks ops inside
-       one `Undo_BeginBlock`; for `setFXChain` entries whose
-       `fxGuid=nil` it calls `TrackFX_AddByName`, then
-       `wm:mutate`s the user graph to stamp the assigned guid
-       (into `node.fxGuid` for user-graph fx nodes,
-       `edge._opFxGuid` for CU bridges). Op list is full-replace
-       per field; applier reconciles incrementally (delete extras,
-       add missing, move-by-guid) and pushes wm-owned `params`
-       via `TrackFX_SetParam` (resolving slider index by name).
-    2. **Live wire-up.** Subscribe to `wiringChanged` →
-       `targetState` → `snapshot` → `diff` → `applyOps`. Same path
-       reconciles on `wm:load`.
-    3. **Sub-channel routing (deferred to Stage 3).** Current
-       sends are stereo defaults (`I_SRCCHAN=0`, `I_DSTCHAN=0`).
-       Channel allocation across the 64 audio / 128 MIDI per-track
-       budget is the register-allocation problem we punted to
-       Stage 3.
-
-  *Spec coverage so far:* `dag_target_plan_spec` (12),
-  `wm_snapshot_spec` (7), `wm_diff_spec` (14),
-  `fake_reaper_sends_spec` (10).
-- **Stage 3 — Primary-input optimisation (absorption).** Pure
-  addition to the partition step (`DAG.absorption`); the differ
-  picks it up unchanged. Wire-menu "mark as primary" override
-  already shipped in Stage 1. Slot-boundary send placement
-  (sidechain at FX slot N → send pre/post-FX placement) drops out
-  of the same machinery.
+  - **Landed (apply path):** `wm:applyOps(ops, label)` walks ops
+    inside one `Undo_BeginBlock`; mints fx via `TrackFX_AddByName`
+    and `wm:mutate`s minted guids back into the user graph
+    (`node.fxGuid` for user-graph fx, `edge._opFxGuid` for CU
+    bridges). `wm:enableLive` subscribes `wiringChanged` →
+    `targetState` → `snapshot` → `diff` → `applyOps`; same path
+    reconciles on `wm:load`.
+  - **Left:** sub-channel routing (deferred to Stage 3). Current
+    sends are stereo defaults (`I_SRCCHAN=0`, `I_DSTCHAN=0`).
+    Channel allocation across the 64-audio / 128-MIDI per-track
+    budget is the register-allocation problem we punted to Stage 3.
+- **Stage 3a — Primary-input optimisation (absorption). Landed.**
+  `ctx:resolveHost(cls)` turns the absorption decision computed in
+  Stage 1 into actual targetPlan output: a newTrack class with a
+  sole (or primary-elected) audio-parent class folds onto that
+  parent's host. Source- and master-hosted classes are exempt
+  (their hosts are physical destinations). `targetPlan`, `gainSinks`,
+  and `capacityErrors` all key on the resolved host; the differ and
+  applier picked it up unchanged. Wire-menu "mark as primary"
+  override already shipped in Stage 1. Midi-to-master folded into
+  `mainSend` (REAPER's parent send carries both audio and MIDI), a
+  pre-existing gap exposed by the absorption tests.
+- **Stage 3b — Slot-boundary send placement.** Sidechain at FX
+  slot N → send pre/post-FX placement, dropping out of the same
+  absorption machinery. Pending.
+- **Stage 3c — Sub-channel routing.** Independent of absorption,
+  inherited from Stage 2's deferral. Pending.
 - **Stage 3.5 — Opt-in channel-occupancy diagnostic.** A command
   (or toolbar toggle) that scans all MIDI takes on owned source
   tracks, computes each source's channel-occupancy set, propagates

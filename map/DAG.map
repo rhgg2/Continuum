@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=578  sha=2d8c907  mode=namespace
+@module DAG  src=DAG.lua  loc=599  sha=2d8c907  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(userGraph), which caches the lowered graph and its derivations lazily
@@ -16,41 +16,41 @@
   @shape  lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
   @shape  lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
   @shape  conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
-  @shape  targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the classKey for sourceTrack/newTrack hosts, '__scratch__' for parked-inert, '__master__' for the master-hosted class (sentinel because the REAPER master can't carry a project-scoped wiringClass tag the way other tracks can)
+  @shape  targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, sends={ {to=hostKey, type='audio'|'midi'}, ... } } }; hostKey is the resolved host classKey for sourceTrack/newTrack hosts (absorbed classes fold into their host and emit no own entry), '__scratch__' for parked-inert, '__master__' for the master-hosted class (sentinel because the REAPER master can't carry a project-scoped wiringClass tag the way other tracks can)
 
 # Imports
-  @const util = 'util'  @ 25
+  @const util = 'util'  @ 19
 
 # Module-level constants
-  @const CU_IDENT = 'JS:Continuum Utility'  @ 27
-  @const M = {}  @ 29
+  @const CU_IDENT = 'JS:Continuum Utility'  @ 21
+  @const M = {}  @ 23
 
 # Public API (M.*)
   -- validate
-  @api M.validate(userGraph)  @ 36
+  @api M.validate(userGraph)  @ 30
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
   -- ancestors / descendants
-  @api M.ancestors(userGraph, sourceId)  @ 140
+  @api M.ancestors(userGraph, sourceId)  @ 134
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over userGraph.edges; cycle-safe via visited
-  @api M.descendants(userGraph, sourceId)  @ 159
+  @api M.descendants(userGraph, sourceId)  @ 153
       -- Forward reachability. Mirror of ancestors; used by wire-redraft to
       -- forbid cycle-forming new-source candidates when the user drags the
       -- from-end of an existing wire: the new source X must not be reachable
       -- from the kept destination B, else X→B closes the cycle B→…→X→B.
       @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
   -- lower
-  @api M.lower(userGraph)  @ 176
+  @api M.lower(userGraph)  @ 170
       @contract  assumes M.validate(userGraph)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
   -- compile context
-  @api M.compile(userGraph)  @ 246
-      @contract  assumes M.validate(userGraph)==nil; returns a ctx closing over M.lower(userGraph) with lazy caches for classes, classOf, inbound, srcSet (per-id), quotient, absorption. ctx:srcSet(id) returns the same table across calls (referential cache).
+  @api M.compile(userGraph)  @ 240
+      @contract  assumes M.validate(userGraph)==nil; returns a ctx with lazy-cached derivations
 
 # Uses (outbound edges)
-  @use call    util.add  @ 189, 194, 282, 333, 334, 436, 437, 464, 468, 473, 475, 479, 508, 546
-  @use call    util.assign  @ 61
-  @use call    util.bucket  @ 110, 143, 162, 258, 284
-  @use call    util.pick  @ 233
-  @use require util  @ 25
+  @use call    util.add  @ 183, 188, 276, 328, 329, 381, 454, 455, 479, 483, 488, 490, 494, 523, 566
+  @use call    util.assign  @ 55
+  @use call    util.bucket  @ 104, 137, 156, 252, 278
+  @use call    util.pick  @ 227
+  @use require util  @ 19

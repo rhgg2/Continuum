@@ -305,4 +305,175 @@ return {
       t.truthy(hasCu, 'gain CU retained in fxOrder')
     end,
   },
+
+  {
+    name = 'absorb: single audio parent (extra src via midi) → B hosts on guid-s1, midi send retargets',
+    run = function()
+      -- B terminal (outs=0) keeps its class newTrack-eligible (not master-hosted).
+      local ns = {}
+      local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
+      local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
+      local k3, v3 = fx('B', { ins = 1, outs = 0 }); ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1', to = 'B' },
+        { type = 'midi',  from = 's2', to = 'B' },
+      }))
+      t.eq(plan['guid-s1|guid-s2'], nil, 'absorbed class has no plan entry')
+      t.eq(plan['guid-s1'].hostKind, 'sourceTrack')
+      t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
+      t.deepEq(plan['guid-s2'].sends, { { to = 'guid-s1', type = 'midi' } })
+    end,
+  },
+
+  {
+    name = 'absorb: primary override picks host even with two audio parents',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
+      local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
+      local k3, v3 = fx('B', { ins = 2, outs = 0 }); ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1', to = 'B', toPort = 1, primary = true },
+        { type = 'audio', from = 's2', to = 'B', toPort = 2 },
+      }))
+      t.eq(plan['guid-s1|guid-s2'], nil)
+      t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
+      t.deepEq(plan['guid-s2'].sends, { { to = 'guid-s1', type = 'audio' } })
+    end,
+  },
+
+  {
+    name = 'absorb: chain through two hops lands on terminal source host',
+    run = function()
+      -- mixB terminal (outs=0) keeps the chain's classes newTrack-eligible.
+      local ns = {}
+      local k1, v1 = source('s', 'guid-s'); ns[k1] = v1
+      local k2, v2 = source('t', 'guid-t'); ns[k2] = v2
+      local k3, v3 = source('u', 'guid-u'); ns[k3] = v3
+      local k4, v4 = fx('mixA', { ins = 2, outs = 1 }); ns[k4] = v4
+      local k5, v5 = fx('mixB', { ins = 2, outs = 0 }); ns[k5] = v5
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's',    to = 'mixA', toPort = 1, primary = true },
+        { type = 'audio', from = 't',    to = 'mixA', toPort = 2 },
+        { type = 'audio', from = 'mixA', to = 'mixB', toPort = 1, primary = true },
+        { type = 'audio', from = 'u',    to = 'mixB', toPort = 2 },
+      }))
+      t.eq(plan['guid-s|guid-t'],        nil)
+      t.eq(plan['guid-s|guid-t|guid-u'], nil)
+      t.eq(plan['guid-s'].hostKind, 'sourceTrack')
+      t.deepEq(plan['guid-s'].fxOrder, { 'mixA', 'mixB' })
+      t.deepEq(plan['guid-t'].sends, { { to = 'guid-s', type = 'audio' } })
+      t.deepEq(plan['guid-u'].sends, { { to = 'guid-s', type = 'audio' } })
+    end,
+  },
+
+  {
+    name = 'absorb: gain on now-intra-host wire stays CU (no send to fold onto)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
+      local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
+      local k3, v3 = fx('B', { ins = 2, outs = 0 }); ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1', to = 'B', toPort = 1, primary = true,
+          ops = { gain = 0.5 } },
+        { type = 'audio', from = 's2', to = 'B', toPort = 2 },
+      }))
+      local order = plan['guid-s1'].fxOrder
+      t.eq(#order, 2, 'CU + B')
+      t.eq(order[1], '_cu_1')
+      t.eq(order[2], 'B')
+    end,
+  },
+
+  {
+    name = 'absorb: master-hosted class never absorbed even with single audio parent',
+    run = function()
+      -- master's class has 1 audio parent → absorption() proposes a host, but
+      -- master-hosted classes are exempt and keep the '__master__' entry.
+      local ns = {}
+      local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
+      local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
+      local k3, v3 = fx('A');                 ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1', to = 'A' },
+        { type = 'audio', from = 'A',  to = 'master' },
+        { type = 'midi',  from = 's2', to = 'master' },
+      }))
+      t.eq(plan['__master__'].hostKind, 'master')
+      t.eq(plan['guid-s1|guid-s2'], nil, 'master-hosted vacates merged key for sentinel')
+      t.eq(plan['guid-s1'].mainSend, true)
+      t.eq(plan['guid-s2'].mainSend, true, 'midi to master-hosted lifts parent send')
+      t.deepEq(plan['guid-s1'].fxOrder, { 'A' })
+      t.deepEq(plan['guid-s2'].sends, {})
+    end,
+  },
+
+  {
+    name = 'absorb: source-hosted class is never the absorbee (its host is the source track)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s', 'guid-s'); ns[k]  = v
+      local k2, v2 = fx('f');               ns[k2] = v2
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's', to = 'f' },
+        { type = 'audio', from = 'f', to = 'master' },
+      }))
+      t.eq(plan['guid-s'].hostKind, 'sourceTrack')
+      t.deepEq(plan['guid-s'].fxOrder, { 'f' })
+      t.eq(plan['guid-s'].mainSend, true)
+    end,
+  },
+
+  {
+    name = 'absorb: capacityErrors reports host classKey after intra-host merge',
+    run = function()
+      -- 65 audio wires sit inside the absorbed class {s1,s2}; post-fix they
+      -- belong to host guid-s1, which is what the error must key on.
+      local ns = {}
+      local k1, v1 = source('s1', 'guid-s1');         ns[k1] = v1
+      local k2, v2 = source('s2', 'guid-s2');         ns[k2] = v2
+      local k3, v3 = fx('B', { ins = 1, outs = 1 }); ns[k3] = v3
+      local k4, v4 = fx('D', { ins = 1, outs = 64 }); ns[k4] = v4
+      local k5, v5 = fx('E', { ins = 64, outs = 0 }); ns[k5] = v5
+      local edges = {
+        { type = 'audio', from = 's1', to = 'B' },
+        { type = 'midi',  from = 's2', to = 'B' },
+        { type = 'audio', from = 'B',  to = 'D' },
+      }
+      for p = 1, 64 do
+        edges[#edges+1] = { type = 'audio', from = 'D', to = 'E',
+                            fromPort = p, toPort = p }
+      end
+      local cx   = DAG.compile(mk(ns, edges))
+      local errs = cx:capacityErrors()
+      t.eq(#errs, 1)
+      t.eq(errs[1].classKey, 'guid-s1', 'capacity error keyed by host, not absorbed-class key')
+      t.eq(errs[1].kind, 'audio')
+    end,
+  },
+
+  {
+    name = 'absorb: send from another non-host class retargets to host classKey',
+    run = function()
+      -- midfx (in class {s3}) sends audio into B's absorbed class — must
+      -- retarget to guid-s1 (B's host), not the merged-class key.
+      local ns = {}
+      local k1, v1 = source('s1', 'guid-s1'); ns[k1] = v1
+      local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
+      local k3, v3 = source('s3', 'guid-s3'); ns[k3] = v3
+      local k4, v4 = fx('midfx');                       ns[k4] = v4
+      local k5, v5 = fx('B', { ins = 2, outs = 0 });    ns[k5] = v5
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1',    to = 'B', toPort = 1, primary = true },
+        { type = 'midi',  from = 's2',    to = 'B' },
+        { type = 'audio', from = 's3',    to = 'midfx' },
+        { type = 'audio', from = 'midfx', to = 'B', toPort = 2 },
+      }))
+      t.eq(plan['guid-s1|guid-s2|guid-s3'], nil, 'absorbed class vacated')
+      t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
+      t.deepEq(plan['guid-s2'].sends, { { to = 'guid-s1', type = 'midi' } })
+      t.deepEq(plan['guid-s3'].sends, { { to = 'guid-s1', type = 'audio' } })
+    end,
+  },
 }
