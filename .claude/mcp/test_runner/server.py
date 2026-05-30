@@ -22,6 +22,11 @@ from pathlib import Path
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase
+from pydantic import ConfigDict
+
+# Strict input validation: reject unknown kwargs so silent param-name slips fail loudly.
+ArgModelBase.model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 

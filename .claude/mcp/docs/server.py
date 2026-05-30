@@ -24,6 +24,11 @@ from pathlib import Path
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase
+from pydantic import ConfigDict
+
+# Strict input validation: reject unknown kwargs so silent param-name slips fail loudly.
+ArgModelBase.model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 REASCRIPT_HTML = PROJECT_ROOT / "docs" / "REAPER API functions.html"
@@ -264,7 +269,7 @@ def _entry_kind(raw_kind: str) -> str:
 
 @mcp.tool(structured_output=False)
 def map_query(
-    name: Optional[str] = None,
+    query: Optional[str] = None,
     kind: Optional[str] = None,
     module: Optional[str] = None,
     max_results: int = 60,
@@ -276,18 +281,18 @@ def map_query(
     to the declaration with Read offset/limit.
 
     Args:
-      name: name pattern. Supports `*` and `?` glob wildcards;
-            case-insensitive. Matches bare symbol names for structural
-            entries (`@fn`, `@api`, `@state`, `@const`, `@require`,
-            `@construct`) and full body text for annotations
-            (`@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`).
-            Omit to return everything matching the other filters.
+      query: name pattern. Supports `*` and `?` glob wildcards;
+             case-insensitive. Matches bare symbol names for structural
+             entries (`@fn`, `@api`, `@state`, `@const`, `@require`,
+             `@construct`) and full body text for annotations
+             (`@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`).
+             Omit to return everything matching the other filters.
       kind: filter by entry kind. Accepted (case-insensitive, plurals
             ok): fn, api, state, const, require/import, construct,
             invariant, contract, shape, emits/signal, reaper, deps,
             uses, usedby. `uses` lists a module's outbound edges
             (calls / subs / forwards / requires); `usedby` reverses
-            it — every caller of the symbol(s) matched by `name`.
+            it — every caller of the symbol(s) matched by `query`.
             Omit for any.
       module: restrict to a module by stem (e.g. `trackerManager`) or
               glob (e.g. `tm_*`, `*Manager`). Matches the .map filename
@@ -301,17 +306,17 @@ def map_query(
     if not MAP_DIR.exists():
         return f"--- ERROR: {MAP_DIR} not found ---"
 
-    name_rx: Optional[re.Pattern] = None
-    if name:
-        if "*" in name or "?" in name:
+    query_rx: Optional[re.Pattern] = None
+    if query:
+        if "*" in query or "?" in query:
             parts = []
-            for ch in name:
+            for ch in query:
                 if ch == "*": parts.append(".*")
                 elif ch == "?": parts.append(".")
                 else: parts.append(re.escape(ch))
-            name_rx = re.compile("^" + "".join(parts) + "$", re.IGNORECASE)
+            query_rx = re.compile("^" + "".join(parts) + "$", re.IGNORECASE)
         else:
-            name_rx = re.compile(re.escape(name), re.IGNORECASE)
+            query_rx = re.compile(re.escape(query), re.IGNORECASE)
 
     kind_filter = _normalize_kind(kind) if kind else None
 
@@ -341,7 +346,7 @@ def map_query(
                     continue
                 ukind = mu.group("ukind")
                 target = mu.group("target")
-                if name_rx and not name_rx.search(target):
+                if query_rx and not query_rx.search(target):
                     continue
                 for n in re.findall(r'\d+', mu.group("lines")):
                     if len(results) >= max_results:
@@ -354,7 +359,7 @@ def map_query(
                 break
 
         if not results:
-            return f"(no matches for kind={kind!r}, name={name!r}, module={module!r})"
+            return f"(no matches for kind={kind!r}, query={query!r}, module={module!r})"
         if truncated:
             results.append(f"--- truncated at {max_results}; narrow the query ---")
         if kind_filter == 'usedby':
@@ -386,9 +391,9 @@ def map_query(
 
                 if kind_filter and kind_filter != k:
                     continue
-                if name_rx:
+                if query_rx:
                     bare = _bare_name(k, head)
-                    if not name_rx.search(bare):
+                    if not query_rx.search(bare):
                         continue
 
                 tail = f"  {doc}" if doc else ""
@@ -403,9 +408,9 @@ def map_query(
 
                 if kind_filter and kind_filter != ek:
                     continue
-                if name_rx and not name_rx.search(body):
+                if query_rx and not query_rx.search(body):
                     continue
-                if not kind_filter and not name_rx:
+                if not kind_filter and not query_rx:
                     continue
 
                 if len(results) >= max_results:
@@ -419,7 +424,7 @@ def map_query(
 
     if not results:
         bits = []
-        if name: bits.append(f"name={name!r}")
+        if query: bits.append(f"query={query!r}")
         if kind: bits.append(f"kind={kind!r}")
         if module: bits.append(f"module={module!r}")
         q = ", ".join(bits) if bits else "<no filters>"
