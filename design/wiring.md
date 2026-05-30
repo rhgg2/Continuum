@@ -198,6 +198,33 @@ for foreign plugins the wiring page either warns or refuses the
 merge for that subgraph — narrow design-time restriction as the
 fallback, not the default.
 
+## Master merge
+
+REAPER's parent send is the only mechanism for routing audio to the
+master track — explicit category-0 sends to master aren't allowed —
+and each track has exactly one parent send carrying one contiguous
+`(srcChan → dstChan)` range. Multiple intra-class wires terminating
+at the master can't compile to parallel sends; they have to converge
+to one signal on the class's host track first.
+
+`DAG.lower` materialises a **CU-merge node** for any class with ≥2
+wires to master. The merge consumes one input pair per wire and
+applies per-wire gain via per-input CU parameters — subsuming the
+gain CUs that would otherwise lower upstream from each wire — and
+sums to one output pair. The class's parent send carries that pair
+via `C_MAINSEND_OFFS`. Gain-folding to `D_VOL` composes cleanly: a
+sole-contributor wire still folds onto the parent send, but
+multi-wire cases route all gains through the CU-merge's params
+instead (`D_VOL` can't encode per-wire scaling).
+
+`master.audio.ins > 1` is deferred. A class addressing more than one
+master pair surfaces as a design-time error; REAPER's
+contiguous-range constraint on the parent send
+(`C_MAINSEND_OFFS`/`C_MAINSEND_NCH`) makes multi-pair representable
+only with silent channels padding the unaddressed pairs, and the
+cleaner alternatives (per-pair bus tracks, for instance) want their
+own design pass.
+
 ## FX containers
 
 REAPER's native FX containers are a UI/CPU-affinity affordance, not
@@ -411,17 +438,22 @@ saw.
   `wm:mutate`. Selection and in-flight drag state stay in-memory
   on the view (mirrors how `trackerView` / `arrangeView` handle
   ephemeral cursor state).
-- Audio wires expose **gain** through a mid-wire fader: hover the
-  arrow midpoint to pop a vertical strip; click anywhere on the strip
-  to jump-set the value; drag to slew; release to commit. Range
-  −∞ … +18 dB, with 0 dB at 75 % of strip travel and the bottom 5 %
-  snapping to −∞. The drag is hot-poked through `wm:pokeEdgeGain`
+- Audio wires expose **gain** through a mid-wire fader: **left-click
+  the arrow midpoint** to open a vertical strip; the same click
+  jump-sets the value to the click-y and starts a drag. Drag slews;
+  release commits. Double-click resets to unity. Range −∞ … +18 dB,
+  with 0 dB at 75 % of strip travel and the bottom 5 % snapping to
+  −∞. The drag is hot-poked through `wm:pokeEdgeGain`
   (`TrackFX_SetParam` direct, no mutate per frame, no undo per frame);
   the bracketing mousedown materialises the CU (if absent) and
   mouseup commits the final value, both via `wv:setEdgeGain` → one
-  wm:mutate each. (Slice 0: ≤ 2 undo entries per gesture; collapsing
-  into one is follow-up.) Channel-remap and "mark as primary" still
-  need a UI (planned: right-click wire menu).
+  `wm:mutate` each. (Slice 0: ≤ 2 undo entries per gesture;
+  collapsing into one is follow-up.)
+- **Right-click** the arrow midpoint opens a per-wire menu — an
+  ImGui popup centred on the cursor, populated with chrome
+  checkboxes and dismissed by clicking outside. Stage 1 surface:
+  **Primary** (the absorption override above). Channel-remap will
+  join the same menu later.
 - Error overlay renders capacity overflows inline on the
   offending nodes.
 
@@ -571,11 +603,71 @@ plan when its turn comes.
   override already shipped in Stage 1. Midi-to-master folded into
   `mainSend` (REAPER's parent send carries both audio and MIDI), a
   pre-existing gap exposed by the absorption tests.
-- **Stage 3b — Slot-boundary send placement.** Sidechain at FX
-  slot N → send pre/post-FX placement, dropping out of the same
-  absorption machinery. Pending.
-- **Stage 3c — Sub-channel routing.** Independent of absorption,
-  inherited from Stage 2's deferral. Pending.
+
+  *Caveat surfaced post-landing:* primary-override absorption with
+  multiple audio parents needs 3c's sub-channel routing before it
+  produces correct REAPER output — without channel allocation,
+  secondary parents' sends fall back to 1/2 at the chain top and
+  mix destructively with the absorbed host's intra-chain audio. The
+  default-rule single-audio-parent case (srcSet asymmetry via MIDI
+  fan-in only) works in isolation. Specs and fixups land with 3c.5.
+- **Stage 3b — Slot-boundary send placement. Folded into 3c.**
+  `I_SENDMODE` only distinguishes pre-fader / pre-FX / post-FX at
+  chain boundaries, not arbitrary mid-chain slots. "Send lands at
+  slot N" is actually "send arrives on channel pair K, and slot N's
+  input pin map reads from K" — the same per-FX I/O routing that
+  intra-class connections use. One allocator (3c) covers both.
+- **Stage 3c — Channel allocation.** The register-allocation problem
+  punted from Stage 2: each track has 64 stereo audio pairs and 128
+  MIDI buses; each wire that crosses or terminates inside a track's
+  channel space needs a pair assignment. The current applier uses
+  defaults (`I_SRCCHAN=0`/`I_DSTCHAN=0`) and collapses inter-class
+  wires between the same `(srcTrack, dstTrack)` into a token
+  singleton send, both of which silently break multi-wire topologies.
+  3c replaces both. A class has no "backbone": intra-class wires,
+  incoming sends, and outgoing sends each consume pairs uniformly;
+  the to-master parent send picks one of those pairs via
+  `C_MAINSEND_OFFS`.
+
+  *3c.0 — Un-collapse sends.* Target-state emits one send per
+  inter-class wire, not per track pair; snapshot reads all sends on
+  owned tracks; differ compares. Send identity is `(srcChan,
+  dstChan)` — REAPER sends carry no `P_EXT`, so the differ matches
+  positionally on channel routing. Two distinct routings between
+  the same track pair can never share both endpoints, so the tuple
+  is sound identity. Allocator determinism (stable ordering keyed
+  on intra-class topo order, then inter-class wire identity) keeps
+  the differ surgical: same graph → same channel assignments → same
+  send list. Default singleton routing still on 1/2 at this point;
+  no allocator yet.
+
+  *3c.1 — Allocator (pure, `DAG.lua`).* `DAG.allocate(plan) ->
+  plan'` annotates each class entry with per-FX input/output pin
+  maps, per-intra-class connection channel pair, per-send src/dst
+  channels, and the track's required `I_NCHAN` (max pair index × 2).
+  Pair reuse — free a pair once its last consumer's FX slot passes
+  — is an optimisation flag, default off. The 64-pair budget is
+  generous and reuse complicates the differ.
+
+  *3c.2 — Audio apply path.* Extends target-state / snapshot / diff
+  / apply for `I_NCHAN`, per-FX pin maps
+  (`TrackFX_SetPinMappings`), and send channel routing
+  (`I_SRCCHAN`/`I_DSTCHAN`). Subsumes the slot-boundary case from
+  the original 3b.
+
+  *3c.3 — MIDI buses.* Same allocator pattern with bus indices.
+
+  *3c.4 — Master-merge rule.* `DAG.lower` gains a rule: a class
+  with ≥2 audio wires to master materialises a CU-merge node
+  consuming them all, with per-input gains as CU params (subsuming
+  the per-wire gain CUs that would otherwise lower upstream). See
+  "Master merge" above. `master.audio.ins > 1` surfaces as a
+  design-time error and is deferred to a later stage.
+
+  *3c.5 — Absorption multi-parent.* With channels in place, 3a's
+  primary-override case starts working. Add specs covering the
+  multi-audio-parent topology; fix anything the new coverage
+  exposes.
 - **Stage 3.5 — Opt-in channel-occupancy diagnostic.** A command
   (or toolbar toggle) that scans all MIDI takes on owned source
   tracks, computes each source's channel-occupancy set, propagates
