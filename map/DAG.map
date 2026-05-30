@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=496  sha=53fd62e  mode=namespace
+@module DAG  src=DAG.lua  loc=578  sha=ad0768f  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(userGraph), which caches the lowered graph and its derivations lazily
@@ -7,7 +7,7 @@
   @invariant  master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
   @invariant  srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
   @invariant  fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
-  @invariant  when an edge carries ops (gain / channelMap), lower splices one CU bridge per op-bundle into the wire — a kind='fx' lowered node with fxIdent=CU_IDENT and a wm-owned params payload ({mode='gain'|'channelRemap', ...}). opFxGuid is the CU instance's bridge identity in REAPER; lower copies it onto the bridge's fxGuid, and the applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on user-graph fx nodes).
+  @invariant  an edge's gain/channelMap op lowers to a CU bridge (kind='fx', fxIdent=CU_IDENT, params={mode=...}, originEdgeIdx, fxGuid=opFxGuid). A gain bridge sitting on the SOLE wire realised as a send (track→track) or the parent/master send folds onto that send's native volume (see ctx:gainSinks) and is dropped from fxOrder — no CU materialised; otherwise the bridge is materialised and the applier stamps opFxGuid back via wm:mutate. channelMap bridges never fold (a send carries no remap).
 
 # Shapes
   @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }

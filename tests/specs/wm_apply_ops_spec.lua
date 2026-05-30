@@ -322,4 +322,104 @@ return {
       t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'P_DESTTRACK'), mixTrack)
     end,
   },
+  {
+    name = 'apply: gain on an inter-class wire folds onto the send D_VOL (post-FX), no CU',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local trackA = seedSource(h, 'guid-A')
+      seedSource(h, 'guid-B')
+      wm:mutate(function(g)
+        g.nodes.sA  = source('guid-A')
+        g.nodes.sB  = source('guid-B')
+        g.nodes.fxA = fx('JS:a')
+        g.nodes.fxB = fx('JS:b', { ins = 2 })
+        util.add(g.edges, audioEdge('sA',  'fxA'))
+        util.add(g.edges, audioEdge('fxA', 'fxB', { toPort = 2, ops = { gain = 0.5 } }))
+        util.add(g.edges, audioEdge('sB',  'fxB', { toPort = 1 }))
+      end)
+      apply(wm)
+      t.eq(h.reaper.TrackFX_GetCount(trackA), 1, 'fxA only — gain CU folded away')
+      t.eq(h.reaper.GetTrackNumSends(trackA, 0), 1)
+      t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'D_VOL'), 0.5, 'send carries the gain')
+      t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'I_SENDMODE'), 3, 'post-FX (pre-fader)')
+    end,
+  },
+  {
+    name = 'apply: gain on the sole wire to master folds onto the source-track fader, no CU',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local trackA = seedSource(h, 'guid-A')
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        g.nodes.f = fx('JS:foo')
+        util.add(g.edges, audioEdge('s', 'f'))
+        util.add(g.edges, audioEdge('f', 'master', { ops = { gain = 0.25 } }))
+      end)
+      apply(wm)
+      t.eq(h.reaper.TrackFX_GetCount(trackA), 1, 'fx only — gain CU folded away')
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'B_MAINSEND'), 1)
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'D_VOL'), 0.25, 'fader is the master-send gain')
+    end,
+  },
+  {
+    name = 'apply: gain wire crossing into a new class folds — CU deleted, opFxGuid cleared',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local trackA = seedSource(h, 'guid-A')
+      seedSource(h, 'guid-B')
+      h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain' })
+      wm:mutate(function(g)
+        g.nodes.sA  = source('guid-A')
+        g.nodes.fxA = fx('JS:a')
+        g.nodes.fxB = fx('JS:b', { ins = 2 })
+        util.add(g.edges, audioEdge('sA',  'fxA'))
+        util.add(g.edges, audioEdge('fxA', 'fxB', { toPort = 2, ops = { gain = 0.5 } }))
+      end)
+      apply(wm)
+      t.eq(h.reaper.TrackFX_GetCount(trackA), 3, 'pre: fxA, fxB, and the gain CU on trackA')
+      local pre
+      for _, e in ipairs(wm:graph().edges) do if e.ops and e.ops.gain then pre = e end end
+      t.truthy(pre.opFxGuid, 'pre: CU guid stamped on the edge')
+
+      -- sB→fxB pulls fxB into class {A|B}; fxA→fxB is now an inter-class send,
+      -- so its gain folds onto that send and the CU is no longer needed.
+      wm:mutate(function(g)
+        g.nodes.sB = source('guid-B')
+        util.add(g.edges, audioEdge('sB', 'fxB', { toPort = 1 }))
+      end)
+      apply(wm)
+      t.eq(h.reaper.TrackFX_GetCount(trackA), 1, 'post: only fxA remains; CU deleted')
+      local post
+      for _, e in ipairs(wm:graph().edges) do if e.ops and e.ops.gain then post = e end end
+      t.eq(post.opFxGuid, nil, 'stale CU guid cleared off the edge')
+      local newTrack
+      for i = 0, h.reaper.CountTracks(0) - 1 do
+        local tr = h.reaper.GetTrack(0, i)
+        if h.cm:readTrackKey(tr, 'wiringHostKind') == 'newTrack' then newTrack = tr; break end
+      end
+      t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'P_DESTTRACK'), newTrack)
+      t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'D_VOL'), 0.5, 'gain landed on the send')
+    end,
+  },
+  {
+    name = 'apply: two gained wires to master keep the CU; the fader stays unity',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local trackA = seedSource(h, 'guid-A')
+      h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain' })
+      wm:mutate(function(g)
+        g.nodes.s  = source('guid-A')
+        g.nodes.f1 = fx('JS:f1')
+        g.nodes.f2 = fx('JS:f2')
+        util.add(g.edges, audioEdge('s',  'f1'))
+        util.add(g.edges, audioEdge('s',  'f2'))
+        util.add(g.edges, audioEdge('f1', 'master', { ops = { gain = 0.5 } }))
+        util.add(g.edges, audioEdge('f2', 'master'))
+      end)
+      apply(wm)
+      t.eq(h.reaper.TrackFX_GetCount(trackA), 3, 'f1, f2, and the retained CU')
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'D_VOL'), 1.0, 'multi-path → fader stays unity')
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'B_MAINSEND'), 1)
+    end,
+  },
 }

@@ -357,4 +357,45 @@ return {
       t.eq(#ops, 0, 'steady state: no ops needed')
     end,
   },
+
+  ----- send / master gain
+
+  {
+    name = 'diff: send gain drift drives setSends',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local mk = function(g) return {
+        ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A', fxOrder={},
+                       mainSend=false,
+                       sends={ { to='guid-X', type='audio', gain=g } } },
+      } end
+      local ops = byOp(wm:diff(mk(0.5), mk(1.0)))
+      t.eq(#ops.setSends, 1, 'gain change emits setSends')
+      t.eq(ops.setSends[1].sends[1].gain, 0.5)
+    end,
+  },
+  {
+    name = 'diff: identical send gain → no op',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local mk = function() return {
+        ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A', fxOrder={},
+                       mainSend=false,
+                       sends={ { to='guid-X', type='audio', gain=0.5 } } },
+      } end
+      t.eq(#wm:diff(mk(), mk()), 0)
+    end,
+  },
+  {
+    name = 'diff: mainSendGain drift drives setMainSend carrying the gain',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local entry = function(g) return { hostKind='sourceTrack', trackGuid='guid-A',
+                                         fxOrder={}, mainSend=true, mainSendGain=g, sends={} } end
+      local ops = byOp(wm:diff({ ['guid-A']=entry(0.25) }, { ['guid-A']=entry(1.0) }))
+      t.eq(#ops.setMainSend, 1)
+      t.eq(ops.setMainSend[1].value, true)
+      t.eq(ops.setMainSend[1].gain, 0.25)
+    end,
+  },
 }

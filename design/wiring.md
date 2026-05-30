@@ -123,6 +123,18 @@ different modes. One mechanism doing two jobs: built-in patches
 These are the unit that makes routing decisions surface as UI
 gestures on a wire rather than as new nodes in the user graph.
 
+**Gain folds to native volume when a send can host it.** A gain on a
+wire that compiles to a REAPER send (track→track) or the parent/master
+send needs no Continuum Utility — the send's own `D_VOL` carries it
+(`DAG`'s `gainSinks` names the sink). The fold fires only when that
+send is the *sole* audio contributor (one `D_VOL` can't encode two
+wires' gains) and only for a gain sitting on the boundary wire itself
+(you can't move a gain across an intervening FX without changing the
+sound). Intra-class gain, several wires collapsing onto one send, and
+channel-remap all stay Continuum Utility nodes. Wiring sends are
+post-FX (pre-fader, `I_SENDMODE=3`) so the from-track fader is free to
+be the parent-send gain without also scaling the track→track sends.
+
 ## MIDI merge
 
 REAPER natively merges MIDI when multiple sends land on the same

@@ -114,4 +114,17 @@ return {
       t.eq(r.GetTrackSendInfo_Value(a, 0, 1, 'P_DESTTRACK'), c)
     end,
   },
+  {
+    name = 'send D_VOL defaults to 1.0 and round-trips; I_SENDMODE defaults 0',
+    run = function()
+      local r, a, b = mk()
+      r:addSend(a, b, { type = 'audio' })
+      t.eq(r.GetTrackSendInfo_Value(a, 0, 0, 'D_VOL'), 1.0, 'REAPER-parity unity default')
+      t.eq(r.GetTrackSendInfo_Value(a, 0, 0, 'I_SENDMODE'), 0)
+      r.SetTrackSendInfo_Value(a, 0, 0, 'D_VOL', 0.5)
+      r.SetTrackSendInfo_Value(a, 0, 0, 'I_SENDMODE', 3)
+      t.eq(r.GetTrackSendInfo_Value(a, 0, 0, 'D_VOL'), 0.5)
+      t.eq(r.GetTrackSendInfo_Value(a, 0, 0, 'I_SENDMODE'), 3)
+    end,
+  },
 }

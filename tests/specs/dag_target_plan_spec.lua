@@ -250,4 +250,59 @@ return {
       t.deepEq(plan['guid-b'].sends, { { to = compCls, type = 'midi' } })
     end,
   },
+  {
+    name = 'gain on an inter-class wire folds onto the send (no CU in fxOrder)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s1', 'guid-a');   ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b');   ns[k2] = v2
+      local k3, v3 = fx('fx_a');               ns[k3] = v3
+      local k4, v4 = fx('fx_b', { ins = 2 });  ns[k4] = v4
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1',   to = 'fx_a' },
+        { type = 'audio', from = 's2',   to = 'fx_b', toPort = 1 },
+        { type = 'audio', from = 'fx_a', to = 'fx_b', toPort = 2, ops = { gain = 0.5 } },
+      }))
+      local fxbCls = 'guid-a|guid-b'
+      t.deepEq(plan['guid-a'].sends, { { to = fxbCls, type = 'audio', gain = 0.5 } })
+      t.deepEq(plan['guid-a'].fxOrder, { 'fx_a' }, 'gain CU folded out of fxOrder')
+    end,
+  },
+  {
+    name = 'gain on the sole wire to master folds onto mainSendGain (no CU)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s', 'guid-s'); ns[k]  = v
+      local k2, v2 = fx('fx_a');            ns[k2] = v2
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's',    to = 'fx_a' },
+        { type = 'audio', from = 'fx_a', to = 'master', ops = { gain = 0.25 } },
+      }))
+      t.eq(plan['guid-s'].mainSend, true)
+      t.eq(plan['guid-s'].mainSendGain, 0.25)
+      t.deepEq(plan['guid-s'].fxOrder, { 'fx_a' }, 'gain CU folded out of fxOrder')
+    end,
+  },
+  {
+    name = 'two wires to master from one class keep their CU (one fader, two gains)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s', 'guid-s'); ns[k]  = v
+      local k2, v2 = fx('fx_1');            ns[k2] = v2
+      local k3, v3 = fx('fx_2');            ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's',    to = 'fx_1' },
+        { type = 'audio', from = 's',    to = 'fx_2' },
+        { type = 'audio', from = 'fx_1', to = 'master', ops = { gain = 0.5 } },
+        { type = 'audio', from = 'fx_2', to = 'master' },
+      }))
+      t.eq(plan['guid-s'].mainSend, true)
+      t.eq(plan['guid-s'].mainSendGain, nil, 'multi-path → no native fold')
+      local hasCu = false
+      for _, id in ipairs(plan['guid-s'].fxOrder) do
+        if id:match('^_cu_') then hasCu = true end
+      end
+      t.truthy(hasCu, 'gain CU retained in fxOrder')
+    end,
+  },
 }

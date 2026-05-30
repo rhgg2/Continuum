@@ -17,7 +17,7 @@
 --shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string }
 --invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
 --shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, opFxGuid?=string }
---invariant: when an edge carries ops (gain / channelMap), lower splices one CU bridge per op-bundle into the wire — a kind='fx' lowered node with fxIdent=CU_IDENT and a wm-owned params payload ({mode='gain'|'channelRemap', ...}). opFxGuid is the CU instance's bridge identity in REAPER; lower copies it onto the bridge's fxGuid, and the applier stamps it back via wm:mutate after TrackFX_AddByName (mirrors node.fxGuid on user-graph fx nodes).
+--invariant: an edge's gain/channelMap op lowers to a CU bridge (kind='fx', fxIdent=CU_IDENT, params={mode=...}, originEdgeIdx, fxGuid=opFxGuid). A gain bridge sitting on the SOLE wire realised as a send (track→track) or the parent/master send folds onto that send's native volume (see ctx:gainSinks) and is dropped from fxOrder — no CU materialised; otherwise the bridge is materialised and the applier stamps opFxGuid back via wm:mutate. channelMap bridges never fold (a send carries no remap).
 --shape: lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
 --shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
@@ -357,6 +357,70 @@ function M.compile(userGraph)
     return cache.absorption
   end
 
+  -- The class hosted ON the REAPER master. nil when a lone source shares
+  -- master's class (the source track hosts it, routing via its parent send),
+  -- or when nothing reaches master (master parks in class '').
+  function ctx:masterHostedClass()
+    local mc = self:classOf()['master']
+    if not mc or mc == '' then return nil end
+    for _, id in ipairs(self:classes()[mc]) do
+      if lowerGraph.nodes[id].kind == 'source' then return nil end
+    end
+    return mc
+  end
+
+  -- Where each gained wire's volume lands, keyed by originEdgeIdx. If the
+  -- bridge sits on the wire that becomes a send (track→track) or the
+  -- parent/master send AND is the sole audio contributor there, the gain folds
+  -- onto that send's native volume ({kind='send'|'mainSend'}) and no CU
+  -- materialises; intra-class routing or several wires collapsing onto one
+  -- send keep the CU ({kind='cu'}). targetPlan and wm:pokeEdgeGain share this
+  -- one decision so the fold rule lives in a single place.
+  function ctx:gainSinks()
+    if cache.gainSinks then return cache.gainSinks end
+    local classOf = self:classOf()
+    local mhc     = self:masterHostedClass()
+    local function isMasterDest(conn)
+      return conn.to == 'master' or (mhc and classOf[conn.to] == mhc)
+    end
+    local outConn, masterCount, sendCount = {}, {}, {}
+    for _, conn in ipairs(lowerGraph.conns) do
+      outConn[conn.from] = outConn[conn.from] or conn
+      if conn.type == 'audio' then
+        local fromCls, toCls = classOf[conn.from], classOf[conn.to]
+        if fromCls and fromCls ~= '' then
+          if isMasterDest(conn) then
+            masterCount[fromCls] = (masterCount[fromCls] or 0) + 1
+          elseif toCls and toCls ~= '' and fromCls ~= toCls then
+            local k = fromCls .. '\0' .. toCls
+            sendCount[k] = (sendCount[k] or 0) + 1
+          end
+        end
+      end
+    end
+    local sinks = {}
+    for id, node in pairs(lowerGraph.nodes) do
+      if node.params and node.params.mode == 'gain' and node.originEdgeIdx then
+        local conn    = outConn[id]
+        local fromCls = classOf[id]
+        local sink    = { kind = 'cu', cuId = id, gain = node.params.gain }
+        if conn and fromCls and fromCls ~= '' then
+          local toCls = classOf[conn.to]
+          if isMasterDest(conn) then
+            if masterCount[fromCls] == 1 then sink.kind, sink.cls = 'mainSend', fromCls end
+          elseif toCls and toCls ~= '' and fromCls ~= toCls then
+            if sendCount[fromCls .. '\0' .. toCls] == 1 then
+              sink.kind, sink.from, sink.to = 'send', fromCls, toCls
+            end
+          end
+        end
+        sinks[node.originEdgeIdx] = sink
+      end
+    end
+    cache.gainSinks = sinks
+    return sinks
+  end
+
   function ctx:capacityErrors()
     local classOf = self:classOf()
     local counts  = {}
@@ -382,12 +446,14 @@ function M.compile(userGraph)
   -- Topo over intra-class fx/cu members (sources/master excluded —
   -- they don't appear in REAPER FX chains). Kahn's; ties broken by
   -- sorted id for spec determinism. Private to targetPlan.
-  local function topoIntraClass(members, cls)
+  local function topoIntraClass(members, cls, folded)
     local classOf = ctx:classOf()
     local memberSet = {}
     for _, id in ipairs(members) do
       local k = lowerGraph.nodes[id].kind
-      if k ~= 'source' and k ~= 'master' then memberSet[id] = true end
+      if k ~= 'source' and k ~= 'master' and not (folded and folded[id]) then
+        memberSet[id] = true
+      end
     end
     local indeg, succ = {}, {}
     for id in pairs(memberSet) do indeg[id], succ[id] = 0, {} end
@@ -422,6 +488,18 @@ function M.compile(userGraph)
     local classOf    = self:classOf()
     local plan, masterHosted = {}, {}
 
+    -- Folded bridges (gainSinks) drop from fxOrder; their gain rides the send.
+    local folded, sendGain, mainGain = {}, {}, {}
+    for _, sink in pairs(self:gainSinks()) do
+      if sink.kind == 'send' then
+        folded[sink.cuId] = true
+        sendGain[sink.from .. '\0' .. sink.to] = sink.gain
+      elseif sink.kind == 'mainSend' then
+        folded[sink.cuId] = true
+        mainGain[sink.cls] = sink.gain
+      end
+    end
+
     for cls, members in pairs(allClasses) do
       if cls == '' then
         local parked = {}
@@ -449,7 +527,8 @@ function M.compile(userGraph)
         end
         plan[cls] = {
           hostKind  = hostKind, trackGuid = trackGuid, fxOrder = nil,
-          mainSend  = hasMaster and hostKind == 'sourceTrack', sends = {},
+          mainSend  = hasMaster and hostKind == 'sourceTrack',
+          mainSendGain = mainGain[cls], sends = {},
         }
       end
     end
@@ -464,7 +543,10 @@ function M.compile(userGraph)
           local key = fromCls .. '|' .. toCls .. '|' .. conn.type
           if not seenSend[key] then
             seenSend[key] = true
-            util.add(plan[fromCls].sends, { to = toCls, type = conn.type })
+            util.add(plan[fromCls].sends, {
+              to = toCls, type = conn.type,
+              gain = conn.type == 'audio' and sendGain[fromCls .. '\0' .. toCls] or nil,
+            })
           end
         end
       end
@@ -472,7 +554,7 @@ function M.compile(userGraph)
 
     for cls, members in pairs(allClasses) do
       if cls ~= '' then
-        plan[cls].fxOrder = topoIntraClass(members, cls)
+        plan[cls].fxOrder = topoIntraClass(members, cls, folded)
         table.sort(plan[cls].sends, function(a, b)
           if a.to ~= b.to then return a.to < b.to end
           return a.type < b.type

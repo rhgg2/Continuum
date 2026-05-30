@@ -445,7 +445,12 @@ local function readSendsClass(track, byTrack)
     local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
     local dstClass = byTrack[dst]
     if dstClass then
-      util.add(out, { to = dstClass, type = sendType(track, i) })
+      local typ   = sendType(track, i)
+      local entry = { to = dstClass, type = typ }
+      if typ == 'audio' then
+        entry.gain = reaper.GetTrackSendInfo_Value(track, 0, i, 'D_VOL')
+      end
+      util.add(out, entry)
     end
   end
   return out
@@ -497,6 +502,9 @@ function wm:snapshot()
       mainSend  = not isScratch
                   and reaper.GetMediaTrackInfo_Value(track, 'B_MAINSEND') ~= 0
                   or false,
+      mainSendGain = not isScratch
+                  and reaper.GetMediaTrackInfo_Value(track, 'D_VOL')
+                  or nil,
       sends     = isScratch and {} or readSendsClass(track, byTrack),
     }
   end
@@ -548,6 +556,7 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
     trackGuid = trackGuid,
     fxOrder   = fxOrder,
     mainSend  = planEntry.mainSend,
+    mainSendGain = planEntry.mainSendGain,
     sends     = util.deepClone(planEntry.sends),
   }
 end
@@ -579,12 +588,22 @@ end
 local function sendsEq(a, b)
   if #a ~= #b then return false end
   -- Order-insensitive: REAPER's send order isn't semantically meaningful.
+  -- gain (audio send D_VOL; nil ⇒ unity) is part of identity, so a volume
+  -- change drives a setSends.
   local seen = {}
-  for _, s in ipairs(a) do seen[s.to .. '|' .. s.type] = (seen[s.to .. '|' .. s.type] or 0) + 1 end
-  for _, s in ipairs(b) do
+  for _, s in ipairs(a) do
     local k = s.to .. '|' .. s.type
-    if not seen[k] or seen[k] == 0 then return false end
-    seen[k] = seen[k] - 1
+    seen[k] = seen[k] or {}
+    table.insert(seen[k], s.gain or 1.0)
+  end
+  for _, s in ipairs(b) do
+    local k, g = s.to .. '|' .. s.type, s.gain or 1.0
+    local bucket, hit = seen[k]
+    if bucket then
+      for i = 1, #bucket do if bucket[i] == g then hit = i; break end end
+    end
+    if not hit then return false end
+    table.remove(bucket, hit)
   end
   return true
 end
@@ -619,10 +638,13 @@ function wm:diff(target, snap)
                       hostKind = t_.hostKind,
                       trackGuid = t_.trackGuid, fxOrder = util.deepClone(t_.fxOrder) })
     end
-    if (fresh and t_.mainSend) or (not fresh and t_.mainSend ~= s.mainSend) then
+    local tGain = t_.mainSendGain or 1.0
+    local sGain = (s and s.mainSendGain) or 1.0
+    if (fresh and (t_.mainSend or tGain ~= 1.0))
+       or (not fresh and (t_.mainSend ~= s.mainSend or tGain ~= sGain)) then
       util.add(ops, { op = 'setMainSend', classKey = classKey,
-                      hostKind = t_.hostKind,
-                      trackGuid = t_.trackGuid, value = t_.mainSend })
+                      hostKind = t_.hostKind, trackGuid = t_.trackGuid,
+                      value = t_.mainSend, gain = tGain })
     end
     if fresh or not sendsEq(t_.sends, s.sends) then
       util.add(ops, { op = 'setSends', classKey = classKey,
@@ -843,7 +865,7 @@ local function reconcileSends(track, target, classKeyToTrack)
     local dst = classKeyToTrack[s.to]
     if dst then
       wanted[dst] = wanted[dst] or {}
-      wanted[dst][s.type] = true
+      wanted[dst][s.type] = s.gain or 1.0
     end
   end
   local drops = {}
@@ -858,6 +880,8 @@ local function reconcileSends(track, target, classKeyToTrack)
   for _, idx in ipairs(drops) do
     reaper.RemoveTrackSend(track, 0, idx)
   end
+  -- Wiring sends are post-FX (pre-fader): the from-track's fader is reserved
+  -- for the parent/master-send gain, so a send's level is its own D_VOL alone.
   for dst, byType in pairs(wanted) do
     for typ in pairs(byType) do
       if not (current[dst] and current[dst][typ]) then
@@ -867,7 +891,17 @@ local function reconcileSends(track, target, classKeyToTrack)
         else
           reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS', 31)
         end
+        reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SENDMODE', 3)
       end
+    end
+  end
+  -- D_VOL for audio sends, re-reading post-mutation so indices are stable
+  -- (drops shifted them, creates appended). midi sends carry no gain.
+  for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
+    local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
+    local g   = wanted[dst] and wanted[dst].audio
+    if g and sendType(track, i) == 'audio' then
+      reaper.SetTrackSendInfo_Value(track, 0, i, 'D_VOL', g)
     end
   end
 end
@@ -965,7 +999,10 @@ function wm:applyOps(ops, label)
       if t then cm:writeTrackKey(t, op.key, op.value) end
     elseif op.op == 'setMainSend' then
       local t = resolveTrack(op)
-      if t then reaper.SetMediaTrackInfo_Value(t, 'B_MAINSEND', op.value and 1 or 0) end
+      if t then
+        reaper.SetMediaTrackInfo_Value(t, 'B_MAINSEND', op.value and 1 or 0)
+        reaper.SetMediaTrackInfo_Value(t, 'D_VOL', op.gain or 1.0)
+      end
     elseif op.op == 'setFXChain' then
       local t = resolveTrack(op)
       if t then reconcileFXChain(t, op.fxOrder, ownedGuids, stamps, paramIdxCache) end
@@ -975,7 +1012,16 @@ function wm:applyOps(ops, label)
     end
   end
 
-  if #stamps > 0 then
+  -- A wire whose gain folded to a native send owns no CU bridge; drop any
+  -- stale opFxGuid (left from when the wire was intra-class) so the live-drag
+  -- hot path resolves it as folded, not as a vanished CU.
+  local clearGuid = {}
+  for edgeIdx, sink in pairs(DAG.compile(userGraph):gainSinks()) do
+    local e = userGraph.edges[edgeIdx]
+    if sink.kind ~= 'cu' and e and e.opFxGuid then clearGuid[edgeIdx] = true end
+  end
+
+  if #stamps > 0 or next(clearGuid) then
     realising = true
     self:mutate(function(g)
       for _, st in ipairs(stamps) do
@@ -985,6 +1031,7 @@ function wm:applyOps(ops, label)
           g.edges[st.origin.idx].opFxGuid = st.guid
         end
       end
+      for idx in pairs(clearGuid) do g.edges[idx].opFxGuid = nil end
     end)
     realising = false
   end
@@ -1008,18 +1055,45 @@ function wm:applyOps(ops, label)
   reaper.Undo_EndBlock2(0, label or 'wiring: apply', -1)
 end
 
---contract: writes the CU 'gain' param on edges[idx]'s materialised bridge via TrackFX_SetParam; returns true on success, false if the edge has no opFxGuid or it can't be resolved in any track's chain. No mutate, no signal, no undo block — for the live-drag hot path; caller bracket-commits with wv:setEdgeGain.
+--contract: pokes the live gain for edges[idx] with no mutate/signal/undo block (drag hot path). A materialised CU bridge → TrackFX_SetParam on 'gain'; a folded edge → D_VOL on its native sink (gainSinks: track→track send, or the from-track fader for the parent/master send). false when nothing hosts it yet (caller materialises via wv:setEdgeGain).
 function wm:pokeEdgeGain(edgeIdx, gain)
   ensureLoaded()
   local edge = userGraph.edges[edgeIdx]
-  if not edge or not edge.opFxGuid then return false end
-  for i = 0, reaper.CountTracks(0) - 1 do
-    local track = reaper.GetTrack(0, i)
-    for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
-      if reaper.TrackFX_GetFXGUID(track, fxIdx) == edge.opFxGuid then
-        local pIdx = resolveParamIdx(track, fxIdx, CU_IDENT, 'gain', {})
-        reaper.TrackFX_SetParam(track, fxIdx, pIdx, gain)
-        return true
+  if not edge then return false end
+  -- A materialised CU bridge carries the gain (intra-class routing, or a
+  -- multi-path send where the gain can't fold onto one native volume).
+  if edge.opFxGuid then
+    for i = 0, reaper.CountTracks(0) - 1 do
+      local track = reaper.GetTrack(0, i)
+      for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
+        if reaper.TrackFX_GetFXGUID(track, fxIdx) == edge.opFxGuid then
+          local pIdx = resolveParamIdx(track, fxIdx, CU_IDENT, 'gain', {})
+          reaper.TrackFX_SetParam(track, fxIdx, pIdx, gain)
+          return true
+        end
+      end
+    end
+    return false
+  end
+  -- Folded: the gain lives on a native send. gainSinks names the sink so the
+  -- hot path and targetPlan agree on where it lands.
+  local sink = DAG.compile(userGraph):gainSinks()[edgeIdx]
+  if not sink then return false end
+  local byClass = buildClassKeyToTrack()
+  if sink.kind == 'mainSend' then
+    local track = byClass[sink.cls]
+    if not track then return false end
+    reaper.SetMediaTrackInfo_Value(track, 'D_VOL', gain)
+    return true
+  elseif sink.kind == 'send' then
+    local src, dst = byClass[sink.from], byClass[sink.to]
+    if src and dst then
+      for i = 0, reaper.GetTrackNumSends(src, 0) - 1 do
+        if reaper.GetTrackSendInfo_Value(src, 0, i, 'P_DESTTRACK') == dst
+           and sendType(src, i) == 'audio' then
+          reaper.SetTrackSendInfo_Value(src, 0, i, 'D_VOL', gain)
+          return true
+        end
       end
     end
   end

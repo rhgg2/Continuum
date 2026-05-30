@@ -155,4 +155,31 @@ return {
       t.eq(snap['guid-A'].mainSend, false)
     end,
   },
+  {
+    name = 'audio send D_VOL round-trips as send gain; midi send carries none',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:load()
+      local src = seedSourceTrack(h, 'guid-A')
+      local dst = seedSourceTrack(h, 'guid-B')
+      h.reaper:addSend(src, dst, { type = 'audio', gain = 0.5 })
+      h.reaper:addSend(src, dst, { type = 'midi'  })
+      local snap = wm:snapshot()
+      for _, s in ipairs(snap['guid-A'].sends) do
+        if s.type == 'audio' then t.eq(s.gain, 0.5) end
+        if s.type == 'midi'  then t.eq(s.gain, nil, 'midi send has no gain') end
+      end
+    end,
+  },
+  {
+    name = 'track D_VOL round-trips as mainSendGain',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:load()
+      local track = seedSourceTrack(h, 'guid-A')
+      h.reaper.SetMediaTrackInfo_Value(track, 'D_VOL', 0.25)
+      local snap = wm:snapshot()
+      t.eq(snap['guid-A'].mainSendGain, 0.25)
+    end,
+  },
 }

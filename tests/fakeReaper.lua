@@ -356,6 +356,7 @@ function M.new()
     local v = state.trackValues and state.trackValues[k]
     if v ~= nil then return v end
     if parm == 'B_MAINSEND' then return 1 end
+    if parm == 'D_VOL'      then return 1.0 end
     return 0
   end
   state.trackValues = {}
@@ -449,6 +450,8 @@ function M.new()
     if     parm == 'I_MIDIFLAGS' then s.midiFlags = value
     elseif parm == 'I_SRCCHAN'   then s.srcChan   = value
     elseif parm == 'I_DSTCHAN'   then s.dstChan   = value
+    elseif parm == 'D_VOL'       then s.vol       = value
+    elseif parm == 'I_SENDMODE'  then s.sendMode  = value
     elseif parm == 'B_MUTE'      then s.mute      = value == 1
     end
     return true
@@ -466,6 +469,8 @@ function M.new()
     if parm == 'I_MIDIFLAGS' then return snd.midiFlags or 0 end
     if parm == 'I_SRCCHAN'   then return snd.srcChan   or 0 end
     if parm == 'I_DSTCHAN'   then return snd.dstChan   or 0 end
+    if parm == 'D_VOL'       then return snd.vol       or 1.0 end
+    if parm == 'I_SENDMODE'  then return snd.sendMode  or 0 end
     if parm == 'B_MUTE'      then return snd.mute and 1 or 0 end
     return 0
   end
@@ -930,7 +935,8 @@ function M.new()
     local list = sendsOf(srcTrack)
     list[#list + 1] = { dst = dstTrack, srcChan = srcChan,
                         dstChan = opts.dstChan or 0,
-                        midiFlags = midiFlags, mute = opts.mute }
+                        midiFlags = midiFlags, mute = opts.mute,
+                        vol = opts.gain, sendMode = opts.sendMode }
     return #list - 1
   end
   function r:setSelectedTracks(tracks)
