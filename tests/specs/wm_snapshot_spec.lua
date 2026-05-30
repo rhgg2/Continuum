@@ -92,6 +92,7 @@ return {
       local track = seedSourceTrack(h, 'guid-A')
       seedFx(h, track, 'JS:owned',             '{FX-1}')
       seedFx(h, track, 'JS:Continuum Utility', '{CU-1}')
+      h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain' })
       local ok, err = wm:mutate(function(g)
         g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}',

@@ -186,8 +186,9 @@ function wv:edgeGain(idx)
   return (e.ops and e.ops.gain) or 1.0
 end
 
---contract: writes ops.gain on audio edges[idx] (creates ops if absent); no-op on non-audio / missing edge. One wm:mutate, one wiringChanged → one reconcile pass → one undo entry. Pair with wv:pokeEdgeGain for live-drag.
+--contract: writes ops.gain on audio edges[idx]; fast path when poke hosts, else wm:mutate
 function wv:setEdgeGain(idx, gain)
+  if wm:pokeEdgeGain(idx, gain) then return wm:fastGainCommit(idx, gain) end
   return wm:mutate(function(g)
     local e = g.edges[idx]
     if not e or e.type ~= 'audio' then return end

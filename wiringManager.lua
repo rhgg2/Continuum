@@ -266,6 +266,21 @@ local function joinChunkLines(lines, hasTrailing)
 end
 
 -- Walk a track-state chunk and return a 0-indexed array of flag bytes,
+-- CU params live at stable slider indices; cache the {name=idx} map on
+-- first sight so ownedChain doesn't re-enumerate per snap.
+local cuParamIdxCache = nil
+local function cuParamIdx(track, fxIdx)
+  if cuParamIdxCache then return cuParamIdxCache end
+  local out = {}
+  for p = 0, 31 do
+    local ok, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
+    if not ok then break end
+    out[name] = p
+  end
+  cuParamIdxCache = out
+  return out
+end
+
 -- one per non-JS FX block in chain order (the trailer byte that holds
 -- the routing bits including 0x02 output-disabled). Lets wm:snapshot
 -- read REAPER's view of routing state so wm:diff catches drift.
@@ -408,9 +423,8 @@ end
 -- persists their guid on the originating edge so subsequent snapshots
 -- recognise them like any fx node.
 local function ownedChain(track, ownedGuids)
-  local _, chunk = reaper.GetTrackStateChunk(track, '', false)
-  local flagAt   = decodeChainFlags(chunk)
-  local out, routingIdx = {}, 0
+  local out, routingIdx, needChunk = {}, 0, false
+  local pendingRoutingIdx = {}  -- entry-array-idx → routingIdx, resolved after a single chunk read
   for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
     local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
     local guid     = reaper.TrackFX_GetFXGUID(track, fxIdx)
@@ -418,12 +432,27 @@ local function ownedChain(track, ownedGuids)
     if ownedGuids[guid] then
       local entry = { fxGuid = guid, ident = ident }
       if not isJS then
-        local flag    = flagAt[routingIdx]
-        entry.midiOut = not (flag and (flag & 0x02) ~= 0)
+        pendingRoutingIdx[#out + 1] = routingIdx
+        needChunk = true
+      elseif ident == CU_IDENT then
+        -- Mirror live CU params so fxOrderEq is honest; without it every reconcile spuriously emits setFXChain.
+        local idx   = cuParamIdx(track, fxIdx)
+        local gainV = reaper.TrackFX_GetParam(track, fxIdx, idx.gain)
+        local modeV = reaper.TrackFX_GetParam(track, fxIdx, idx.mode)
+        entry.params = { mode = (modeV < 0.5) and 'gain' or 'channelRemap',
+                         gain = gainV }
       end
       util.add(out, entry)
     end
     if not isJS then routingIdx = routingIdx + 1 end
+  end
+  if needChunk then
+    local _, chunk = reaper.GetTrackStateChunk(track, '', false)
+    local flagAt   = decodeChainFlags(chunk)
+    for entryIdx, rIdx in pairs(pendingRoutingIdx) do
+      local flag = flagAt[rIdx]
+      out[entryIdx].midiOut = not (flag and (flag & 0x02) ~= 0)
+    end
   end
   return out
 end
@@ -1108,6 +1137,23 @@ function wm:pokeEdgeGain(edgeIdx, gain)
   return false
 end
 
+--contract: in-place gain commit + scratch mirror, one Undo block, no wiringChanged/reconcile
+function wm:fastGainCommit(edgeIdx, gain)
+  ensureLoaded()
+  local edge = userGraph.edges[edgeIdx]
+  if not edge or edge.type ~= 'audio' then return false end
+  reaper.Undo_BeginBlock()
+  edge.ops = edge.ops or {}
+  edge.ops.gain = gain
+  self:pokeEdgeGain(edgeIdx, gain)
+  self:save()
+  local scratch = ensureScratchTrack()
+  cm:writeTrackKey(scratch, 'wiringGraph', userGraph)
+  lastScratchRaw = cm:readTrackRaw(scratch)
+  reaper.Undo_EndBlock2(0, 'wiring: edge gain', -1)
+  return true
+end
+
 --contract: enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
 function wm:listInstalledFX()
   if installedFx then return installedFx end
@@ -1143,7 +1189,21 @@ end
 
 --contract: one reconcile pass — diff targetState against snapshot and applyOps the result under the given undo label
 function wm:reconcile(label)
-  self:applyOps(self:diff(self:targetState(), self:snapshot()), label or 'wiring: reconcile')
+  local t0 = reaper.time_precise()
+  local tgt = self:targetState()
+  local t1 = reaper.time_precise()
+  local snap = self:snapshot()
+  local t2 = reaper.time_precise()
+  local ops = self:diff(tgt, snap)
+  local t3 = reaper.time_precise()
+  self:applyOps(ops, label or 'wiring: reconcile')
+  local t4 = reaper.time_precise()
+  local total = (t4 - t0) * 1000
+  if total > 50 then
+    reaper.ShowConsoleMsg(string.format(
+      '[wiring] reconcile %.1fms (target %.1f, snap %.1f, diff %.1f, apply %.1f, #ops=%d)\n',
+      total, (t1-t0)*1000, (t2-t1)*1000, (t3-t2)*1000, (t4-t3)*1000, #ops))
+  end
 end
 
 --contract: idempotent. Subscribes wm to its own wiringChanged so every mutate/load drives wm:reconcile, then runs one immediate pass to put REAPER in sync with the persisted graph.

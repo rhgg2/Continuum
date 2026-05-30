@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=312  sha=fe39d7e  mode=chunk
+@module wiringView  src=wiringView.lua  loc=313  sha=e831531  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -21,7 +21,7 @@
   @state wv = {}  @ 15
   @state hoverNodeId = nil  @ 17
   @state selection = {}  @ 18   -- set keyed by nodeId → true; replace via setSelection, never mutated in place
-  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 277
+  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 278
 
 # Private functions
   -- Logical projection (viewport-independent)
@@ -68,46 +68,47 @@
   @api wv:edgeGain(idx)  @ 183
       @contract  linear gain scalar on edges[idx]; 1.0 default when ops.gain unset or edge is non-audio / missing. Read-only.
   @api wv:setEdgeGain(idx, gain)  @ 190
-      @contract  writes ops.gain on audio edges[idx] (creates ops if absent); no-op on non-audio / missing edge. One wm:mutate, one wiringChanged → one reconcile pass → one undo entry. Pair with wv:pokeEdgeGain for live-drag.
-  @api wv:pokeEdgeGain(idx, gain)  @ 200
+      @contract  writes ops.gain on audio edges[idx]; fast path when poke hosts, else wm:mutate
+  @api wv:pokeEdgeGain(idx, gain)  @ 201
       @contract  live pass-through to wm:pokeEdgeGain. Returns true if the CU exists and was poked; false if caller must materialise via setEdgeGain first.
-  @api wv:setEdgePrimary(idx, primary)  @ 203
+  @api wv:setEdgePrimary(idx, primary)  @ 204
       @contract  sets edges[idx].primary via wm:mutate; coerced to true/nil (nil-not-false per DAG).
   -- Topology queries
-  @api wv:ancestorsOf(sourceId)  @ 214
+  @api wv:ancestorsOf(sourceId)  @ 215
       @contract  backward reachability over user.edges; returns { [id]=true } including sourceId
-  @api wv:descendantsOf(sourceId)  @ 219
+  @api wv:descendantsOf(sourceId)  @ 220
       @contract  forward reachability over user.edges; returns { [id]=true } including sourceId
-  @api wv:wiredPorts(nodeId, dir)  @ 224
+  @api wv:wiredPorts(nodeId, dir)  @ 225
       @contract  returns { [portIdx]=true } over audio edges on nodeId for dir ('out'|'in'); midi edges ignored
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 240
+  @api wv:nodeViews()  @ 241
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:wireViews()  @ 249
+  @api wv:wireViews()  @ 250
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Capacity errors
-  @api wv:errors()  @ 280
+  @api wv:errors()  @ 281
       @contract  list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 300
-  @api wv:setHover(id)  @ 301
-  @api wv:selection()  @ 304
+  @api wv:hover()  @ 301
+  @api wv:setHover(id)  @ 302
+  @api wv:selection()  @ 305
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 306
+  @api wv:setSelection(idSet)  @ 307
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
 
 # Uses (outbound edges)
-  @use call    DAG.ancestors  @ 215
-  @use call    DAG.descendants  @ 220
-  @use call    util.add  @ 59, 131, 156, 243, 261, 290
+  @use call    DAG.ancestors  @ 216
+  @use call    DAG.descendants  @ 221
+  @use call    util.add  @ 59, 131, 156, 244, 262, 291
   @use call    util.instantiate  @ 13
-  @use call    wiringManager.compile  @ 282
+  @use call    wiringManager.compile  @ 283
   @use call    wiringManager.enableLive  @ 94
-  @use call    wiringManager.graph  @ 91, 184, 215, 220, 228, 241, 250, 281
+  @use call    wiringManager.fastGainCommit  @ 191
+  @use call    wiringManager.graph  @ 91, 184, 216, 221, 229, 242, 251, 282
   @use call    wiringManager.listInstalledFX  @ 136
   @use call    wiringManager.load  @ 93
-  @use call    wiringManager.mutate  @ 105, 140, 150, 162, 169, 191, 204
-  @use call    wiringManager.pokeEdgeGain  @ 200
+  @use call    wiringManager.mutate  @ 105, 140, 150, 162, 169, 192, 205
+  @use call    wiringManager.pokeEdgeGain  @ 191, 201
   @use call    wiringManager.pollUndo  @ 95
   @use call    wiringManager.probeFxIO  @ 102
   @use call    wiringManager.save  @ 92
