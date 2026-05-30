@@ -20,6 +20,7 @@ local userGraph = nil
 local installedFx = nil   -- session cache; reaper's installed-FX set is fixed at runtime
 local scratchTrack = nil  -- hidden host for the probe (and, later, orphan FX nodes); reset by wm:load
 local fxIO = {}           -- session cache: fxIdent → { ins, outs, inNames, outNames }
+local pokeParamCache = {} -- persistent paramIdx cache for the pokeEdgeGain hot path
 local realising = false   -- true during applyOps's stamp-back mutate, gating wiringChanged
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
 local lastScratchRaw = nil -- serialised graph last mirrored to scratch P_EXT; pollUndo compares against it
@@ -1064,15 +1065,21 @@ function wm:pokeEdgeGain(edgeIdx, gain)
   -- A materialised CU bridge carries the gain (intra-class routing, or a
   -- multi-path send where the gain can't fold onto one native volume).
   if edge.opFxGuid then
-    for i = 0, reaper.CountTracks(0) - 1 do
-      local track = reaper.GetTrack(0, i)
+    local function probe(track)
+      if not track then return false end
       for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
         if reaper.TrackFX_GetFXGUID(track, fxIdx) == edge.opFxGuid then
-          local pIdx = resolveParamIdx(track, fxIdx, CU_IDENT, 'gain', {})
+          local pIdx = resolveParamIdx(track, fxIdx, CU_IDENT, 'gain', pokeParamCache)
           reaper.TrackFX_SetParam(track, fxIdx, pIdx, gain)
           return true
         end
       end
+      return false
+    end
+    -- Master isn't in CountTracks/GetTrack; without this probe a master-resident CU misses every frame.
+    if probe(reaper.GetMasterTrack(0)) then return true end
+    for i = 0, reaper.CountTracks(0) - 1 do
+      if probe(reaper.GetTrack(0, i)) then return true end
     end
     return false
   end

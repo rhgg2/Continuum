@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1838  sha=4f9041d  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1848  sha=e831531  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -86,8 +86,8 @@
   @state openFxPicker  @ 150
   @state SELECTED_INFLATE = 0  @ 181   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 182
-  @state SOURCE_PAD = 24  @ 1796
-  @state wiring = cmgr:scope('wiring')  @ 1828
+  @state SOURCE_PAD = 24  @ 1806
+  @state wiring = cmgr:scope('wiring')  @ 1838
 
 # Private functions
   -- FX-picker modal kind
@@ -228,113 +228,115 @@
   @fn faderRectAt(ax, ay)  @ 1129
   @fn pixelYToLin(my, stripY0)  @ 1134
   @fn drawFader(p, f)  @ 1140
-  @fn drawDraftWire(p, draft, nodesById, cx, cy)  @ 1159
+  @fn timedSetEdgeGain(label, edgeIdx, lin)  @ 1158
+      -- Probe: logs reconcile-cost spikes from any fader commit path so the laggy site is named.
+  @fn drawDraftWire(p, draft, nodesById, cx, cy)  @ 1169
       -- In-flight draft wire (draw order in docs/wiringPage.md). Kept end anchors at
       -- keptAnchor, or the node centre when a body-default forward draft has none.
-  @fn nodeUnderMouse(nodeViews, mx, my)  @ 1179
+  @fn nodeUnderMouse(nodeViews, mx, my)  @ 1189
       -- Node under the mouse by un-inflated body rect (not the inflated port-reveal
       -- rect) — used to start a drag. nil over empty canvas or a port band.
-  @fn nodeAtPoint(nodeViews, px, py)  @ 1189
+  @fn nodeAtPoint(nodeViews, px, py)  @ 1199
       -- nodeUnderMouse keyed to an arbitrary screen point (the decayed draft
       -- wire end, typically) rather than the live cursor.
-  @fn nodesInBand(nodeViews, bx0, by0, bx1, by1)  @ 1199
+  @fn nodesInBand(nodeViews, bx0, by0, bx1, by1)  @ 1209
       -- Node ids whose body rect (un-inflated — port bands aren't selectable)
       -- intersects the band. Empty set if nothing caught.
-  @fn renderCanvas(w, h)  @ 1212
-  @fn pushBodyStyles()  @ 1713
-  @fn popBodyStyles()  @ 1716
+  @fn renderCanvas(w, h)  @ 1222
+  @fn pushBodyStyles()  @ 1723
+  @fn popBodyStyles()  @ 1726
   -- Wiring scope
-  @fn shortFxName(s)  @ 1780
+  @fn shortFxName(s)  @ 1790
       -- EnumInstalledFX gives "Type: Name (Author)" (or "... (N outs)"), and either
       -- parenthetical may nest balanced parens (e.g. "Modartt SAS (France)") — hence
       -- %b(). The node label drops the prefix and from the first balanced () on; the
       -- picker keeps the full form to disambiguate vendors. Strip on commit.
-  @fn findMasterPos()  @ 1786
-  @fn sourcePosFor(genX, genY)  @ 1797
+  @fn findMasterPos()  @ 1796
+  @fn sourcePosFor(genX, genY)  @ 1807
 
 # Public API (wp:*)
-  @api wp:bind()  @ 1721
+  @api wp:bind()  @ 1731
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 1722
-  @api wp:enableLive()  @ 1729
+  @api wp:unbind()  @ 1732
+  @api wp:enableLive()  @ 1739
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
-  @api wp:tick()  @ 1732
+  @api wp:tick()  @ 1742
       @contract  per-frame poll; drives wm:pollUndo to detect REAPER undo/redo of wiring gestures (scratch P_EXT divergence) and re-issue wiringChanged{kind='load'}. Called from coordinator.frame regardless of which page is active.
-  @api wp:renderToolbarBits(_)  @ 1734
-  @api wp:renderBody(_, w, h, dispatch)  @ 1737
+  @api wp:renderToolbarBits(_)  @ 1744
+  @api wp:renderBody(_, w, h, dispatch)  @ 1747
       @contract  pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
-  @api wp:renderStatusBar(_)  @ 1750
-  @api wp:focusState()  @ 1762
+  @api wp:renderStatusBar(_)  @ 1760
+  @api wp:focusState()  @ 1772
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # Uses (outbound edges)
-  @use call    chrome.checkbox  @ 1680
-  @use call    chrome.colour  @ 349, 929, 1677, 1714
-  @use call    chrome.pickerIsActive  @ 1764
-  @use call    chrome.popChromeWindow  @ 1696
-  @use call    chrome.pushChromeWindow  @ 1676
-  @use call    cmgr.scope  @ 1828
-  @use call    imgui.BeginChild  @ 70, 1740
-  @use call    imgui.BeginPopup  @ 1678
+  @use call    chrome.checkbox  @ 1690
+  @use call    chrome.colour  @ 349, 929, 1687, 1724
+  @use call    chrome.pickerIsActive  @ 1774
+  @use call    chrome.popChromeWindow  @ 1706
+  @use call    chrome.pushChromeWindow  @ 1686
+  @use call    cmgr.scope  @ 1838
+  @use call    imgui.BeginChild  @ 70, 1750
+  @use call    imgui.BeginPopup  @ 1688
   @use call    imgui.BeginTooltip  @ 351, 931
   @use call    imgui.CalcTextSize  @ 226, 286, 290, 371, 375
-  @use call    imgui.CloseCurrentPopup  @ 1688
-  @use call    imgui.Dummy  @ 1710
-  @use call    imgui.EndChild  @ 76, 1745
-  @use call    imgui.EndPopup  @ 1691
+  @use call    imgui.CloseCurrentPopup  @ 1698
+  @use call    imgui.Dummy  @ 1720
+  @use call    imgui.EndChild  @ 76, 1755
+  @use call    imgui.EndPopup  @ 1701
   @use call    imgui.EndTooltip  @ 353, 933
-  @use call    imgui.GetCursorScreenPos  @ 1216
-  @use call    imgui.GetKeyMods  @ 1226
-  @use call    imgui.GetMousePos  @ 1224, 1812
-  @use call    imgui.GetMouseWheel  @ 1467
-  @use call    imgui.GetWindowPos  @ 1685
-  @use call    imgui.GetWindowSize  @ 1686
+  @use call    imgui.GetCursorScreenPos  @ 1226
+  @use call    imgui.GetKeyMods  @ 1236
+  @use call    imgui.GetMousePos  @ 1234, 1822
+  @use call    imgui.GetMouseWheel  @ 1477
+  @use call    imgui.GetWindowPos  @ 1695
+  @use call    imgui.GetWindowSize  @ 1696
   @use call    imgui.InputText  @ 41
   @use call    imgui.InvisibleButton  @ 340, 925
-  @use call    imgui.IsAnyItemActive  @ 1768
+  @use call    imgui.IsAnyItemActive  @ 1778
   @use call    imgui.IsItemHovered  @ 345, 926
-  @use call    imgui.IsKeyPressed  @ 43, 44, 58, 59, 65, 1397
-  @use call    imgui.IsMouseClicked  @ 1404, 1451, 1492, 1659
-  @use call    imgui.IsMouseDoubleClicked  @ 1441
-  @use call    imgui.IsMouseDown  @ 1279, 1596, 1638, 1646
-  @use call    imgui.IsWindowAppearing  @ 38, 54, 1684
-  @use call    imgui.OpenPopup  @ 1665
+  @use call    imgui.IsKeyPressed  @ 43, 44, 58, 59, 65, 1407
+  @use call    imgui.IsMouseClicked  @ 1414, 1461, 1502, 1669
+  @use call    imgui.IsMouseDoubleClicked  @ 1451
+  @use call    imgui.IsMouseDown  @ 1289, 1606, 1648, 1656
+  @use call    imgui.IsWindowAppearing  @ 38, 54, 1694
+  @use call    imgui.OpenPopup  @ 1675
   @use call    imgui.PopFont  @ 294, 378
-  @use call    imgui.PopStyleColor  @ 356, 936, 1695, 1716
+  @use call    imgui.PopStyleColor  @ 356, 936, 1705, 1726
   @use call    imgui.PopStyleVar  @ 355, 935
   @use call    imgui.PushFont  @ 284, 370
-  @use call    imgui.PushStyleColor  @ 349, 929, 1677, 1714
+  @use call    imgui.PushStyleColor  @ 349, 929, 1687, 1724
   @use call    imgui.PushStyleVar  @ 350, 930
   @use call    imgui.Selectable  @ 73
   @use call    imgui.Separator  @ 45
-  @use call    imgui.SetCursorScreenPos  @ 339, 924, 1709
+  @use call    imgui.SetCursorScreenPos  @ 339, 924, 1719
   @use call    imgui.SetKeyboardFocusHere  @ 38
   @use call    imgui.SetNextItemWidth  @ 39
-  @use call    imgui.SetNextWindowPos  @ 346, 927, 1675
-  @use call    imgui.Text  @ 352, 932, 1754, 1756
+  @use call    imgui.SetNextWindowPos  @ 346, 927, 1685
+  @use call    imgui.Text  @ 352, 932, 1764, 1766
   @use call    modalHost.registerKind  @ 37
-  @use call    modalHost.wasOpenAtFrameStart  @ 1769
-  @use call    painter.new  @ 1219
+  @use call    modalHost.wasOpenAtFrameStart  @ 1779
+  @use call    painter.new  @ 1229
   @use call    util.instantiate  @ 28
-  @use call    wiringView.addFx  @ 1822
-  @use call    wiringView.ancestorsOf  @ 1522, 1570
-  @use call    wiringView.descendantsOf  @ 1569
-  @use call    wiringView.edgeGain  @ 1305, 1411, 1455
-  @use call    wiringView.enableLive  @ 1729
-  @use call    wiringView.errors  @ 1367, 1752
-  @use call    wiringView.listInstalledFX  @ 1819
-  @use call    wiringView.moveNodes  @ 1643
-  @use call    wiringView.nodeViews  @ 1237, 1787
-  @use call    wiringView.pokeEdgeGain  @ 1278, 1420, 1458, 1475
-  @use call    wiringView.pollUndo  @ 1732
-  @use call    wiringView.removeWireAt  @ 1625
-  @use call    wiringView.rewireEdgeEnd  @ 1611
-  @use call    wiringView.selection  @ 1245
-  @use call    wiringView.setEdgeGain  @ 1281, 1309, 1421, 1445, 1459, 1476, 1483
-  @use call    wiringView.setEdgePrimary  @ 1681
-  @use call    wiringView.setHover  @ 1392
-  @use call    wiringView.setSelection  @ 1650
-  @use call    wiringView.wireViews  @ 1263
+  @use call    wiringView.addFx  @ 1832
+  @use call    wiringView.ancestorsOf  @ 1532, 1580
+  @use call    wiringView.descendantsOf  @ 1579
+  @use call    wiringView.edgeGain  @ 1315, 1421, 1465
+  @use call    wiringView.enableLive  @ 1739
+  @use call    wiringView.errors  @ 1377, 1762
+  @use call    wiringView.listInstalledFX  @ 1829
+  @use call    wiringView.moveNodes  @ 1653
+  @use call    wiringView.nodeViews  @ 1247, 1797
+  @use call    wiringView.pokeEdgeGain  @ 1288, 1430, 1468, 1485
+  @use call    wiringView.pollUndo  @ 1742
+  @use call    wiringView.removeWireAt  @ 1635
+  @use call    wiringView.rewireEdgeEnd  @ 1621
+  @use call    wiringView.selection  @ 1255
+  @use call    wiringView.setEdgeGain  @ 1160
+  @use call    wiringView.setEdgePrimary  @ 1691
+  @use call    wiringView.setHover  @ 1402
+  @use call    wiringView.setSelection  @ 1660
+  @use call    wiringView.wireViews  @ 1273
   @use call    wiringView.wiredPorts  @ 439
   @use require imgui  @ 16
   @use require painter  @ 17
@@ -344,6 +346,8 @@
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
+  @reaper time_precise
+  @reaper ShowConsoleMsg
   @reaper JS_Mouse_SetPosition
   @reaper GetMousePosition
   @reaper GetOS
