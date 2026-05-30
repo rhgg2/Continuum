@@ -57,6 +57,22 @@ settle every borderline case:
 The boundary is semantic, not a length test. Never split one fact
 across both layers as duplicated prose.
 
+## Length discipline
+
+One line, ≤100 characters, aim for 90. Applies to `--invariant:`,
+`--contract:`, `--emits:`, `--reaper:`. `--shape:` is the exception —
+shapes are allowed the length needed to state the shape; a field list
+legitimately enumerates more than a rule states.
+
+Inline comments cap at **2 lines**. A WHY that needs more belongs in
+`docs/<file>.md` with a one-line pointer at the site (e.g.
+`-- see docs/<file>.md § <section>`).
+
+One test settles every case: if an annotation wants a second line, or
+a comment a third, the constraint is either two of them (split) or a
+model concern (the doc's job). No exceptions. The `.map` is the API
+reference; prose lives in the doc.
+
 ## `--contract:` discipline
 
 A `--contract:` line states **non-trivial pre- and post-conditions** —
@@ -77,10 +93,9 @@ Three rules, applied hard:
    what the name says", there is no contract — drop the annotation.
    A contract earns its line only when something non-obvious binds
    the caller or the result.
-3. **One line, ≤100 characters.** Hard cap at 100; aim for 90. If
-   it won't fit, the constraint is either two contracts (split) or
-   a model concern (move to `docs/<file>.md` and leave a terse
-   `--contract:` pointing at the rule).
+3. **Length per § Length discipline.** One line. If it won't fit,
+   split or move the model concern to `docs/<file>.md` and leave a
+   terse `--contract:` pointing at the rule.
 
 ## Shape of the source file
 
@@ -95,6 +110,7 @@ Three rules, applied hard:
   "rescan: step 3 inserted notation events, so uuidIdx values are stale",
   "Writing an empty string effectively removes the extension data".
   Bad: "update the existing note", "get cc events", "create new note".
+  Length per § Length discipline: 2-line cap, then relocate to the doc.
 - **Section dividers** are fine if they aid navigation in a long file; drop
   them if the function names make them redundant. Use them to label *logical
   groups* of adjacent functions, not to decorate single functions. Two
