@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1151  sha=365d0df  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1151  sha=2d8c907  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -164,6 +164,22 @@
 
 # Signals emitted (via util.installHooks)
   @emits wiringChanged
+
+# Uses (outbound edges)
+  @use call    DAG.compile  @ 138, 567, 1019, 1080
+  @use call    DAG.validate  @ 127
+  @use call    cm.get  @ 46, 467, 964
+  @use call    cm.readTrackKey  @ 58, 481, 486, 487, 927, 931, 933, 1127, 1130
+  @use call    cm.readTrackRaw  @ 1052, 1125
+  @use call    cm.set  @ 113, 1043, 1129, 1130
+  @use call    cm.writeTrackKey  @ 70, 197, 999, 1050, 1051
+  @use call    util.add  @ 423, 453, 548, 626, 637, 645, 650, 658, 661, 663, 677, 679, 738, 789, 790, 829, 875, 1110
+  @use call    util.deepClone  @ 119, 125, 540, 560, 639, 652
+  @use call    util.deepEq  @ 583
+  @use call    util.installHooks  @ 17
+  @use require DAG  @ 12
+  @use require util  @ 11
+  @use sub     wiringManager:wiringChanged  @ 1145
 
 # REAPER API surface
   @reaper CountTracks

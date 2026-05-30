@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=757  sha=1a1393f  mode=chunk
+@module editCursor  src=editCursor.lua  loc=757  sha=0678a54  mode=chunk
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -144,3 +144,20 @@
   @api ec:regionCursor()  @ 477
   -- Commands
   @api ec:registerCommands(scope)  @ 673
+
+# Uses (outbound edges)
+  @use call    cm.get  @ 99, 453
+  @use call    cmgr.pop  @ 491
+  @use call    cmgr.push  @ 499
+  @use call    cmgr.scope  @ 619
+  @use call    groupBridge.clearAt  @ 534
+  @use call    groupBridge.commit  @ 524, 537
+  @use call    groupBridge.cursorAnchor  @ 529
+  @use call    groupBridge.eventsInRect  @ 520
+  @use call    groupBridge.instanceAt  @ 501, 653
+  @use call    groupBridge.instanceSelection  @ 610
+  @use call    groupBridge.paintStream  @ 604
+  @use call    groupBridge.selectionAsRect  @ 518
+  @use call    util.add  @ 721, 722, 723, 744, 745, 746
+  @use call    util.clamp  @ 55, 56, 57, 443, 444, 445, 567, 583
+  @use require util  @ 25

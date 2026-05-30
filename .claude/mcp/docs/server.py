@@ -224,6 +224,10 @@ _ANN = re.compile(
     r'^(?P<indent>\s*)@(?P<kind>\??(?:invariant|contract|shape|emits|reaper|deps))\s+'
     r'(?P<body>.*)$'
 )
+# `@use <kind> <target>  @ <line>[, <line>...]`
+_USE = re.compile(
+    r'^\s*@use\s+(?P<ukind>\w+)\s+(?P<target>\S+)\s+@\s+(?P<lines>[\d,\s]+)\s*$'
+)
 
 
 def _bare_name(kind: str, head: str) -> str:
@@ -249,6 +253,7 @@ def _normalize_kind(k: str) -> str:
         "states": "state", "consts": "const", "constants": "const",
         "requires": "require", "import": "require", "imports": "require",
         "constructs": "construct",
+        "use": "uses", "usedby": "usedby", "used-by": "usedby", "used_by": "usedby",
     }
     return aliases.get(k, k)
 
@@ -279,7 +284,10 @@ def map_query(
             Omit to return everything matching the other filters.
       kind: filter by entry kind. Accepted (case-insensitive, plurals
             ok): fn, api, state, const, require/import, construct,
-            invariant, contract, shape, emits/signal, reaper, deps.
+            invariant, contract, shape, emits/signal, reaper, deps,
+            uses, usedby. `uses` lists a module's outbound edges
+            (calls / subs / forwards / requires); `usedby` reverses
+            it — every caller of the symbol(s) matched by `name`.
             Omit for any.
       module: restrict to a module by stem (e.g. `trackerManager`) or
               glob (e.g. `tm_*`, `*Manager`). Matches the .map filename
@@ -321,6 +329,37 @@ def map_query(
 
     results: list[str] = []
     truncated = False
+
+    # `uses` / `usedby` walk the `@use` lines, not structural entries / annotations.
+    if kind_filter in ('uses', 'usedby'):
+        for mp in module_files:
+            text = mp.read_text(encoding="utf-8", errors="replace")
+            src = mp.stem + ".lua"
+            for raw in text.splitlines():
+                mu = _USE.match(raw)
+                if not mu:
+                    continue
+                ukind = mu.group("ukind")
+                target = mu.group("target")
+                if name_rx and not name_rx.search(target):
+                    continue
+                for n in re.findall(r'\d+', mu.group("lines")):
+                    if len(results) >= max_results:
+                        truncated = True
+                        break
+                    results.append(f"{src}:{n}  @use {ukind} {target}")
+                if truncated:
+                    break
+            if truncated:
+                break
+
+        if not results:
+            return f"(no matches for kind={kind!r}, name={name!r}, module={module!r})"
+        if truncated:
+            results.append(f"--- truncated at {max_results}; narrow the query ---")
+        if kind_filter == 'usedby':
+            results.append("--- note: method calls on runtime receivers (not import/construct/dep aliases) are dropped — recall is incomplete for those ---")
+        return "\n".join(results)
 
     for mp in module_files:
         text = mp.read_text(encoding="utf-8", errors="replace")

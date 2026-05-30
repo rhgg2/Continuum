@@ -1,4 +1,4 @@
-@module fs  src=fs.lua  loc=116  sha=ee85a77  mode=namespace
+@module fs  src=fs.lua  loc=116  sha=fa4a61d  mode=namespace
 
 # Shapes
   @shape  fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }

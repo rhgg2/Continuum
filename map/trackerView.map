@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2551  sha=0190da7  mode=chunk
+@module trackerView  src=trackerView.lua  loc=2551  sha=ffce750  mode=chunk
 @deps tm, cm, cmgr, gm
 
 # Invariants & contracts
@@ -348,6 +348,74 @@
       -- A committed typed edit cancels every cascade and drops the groupPaste
       -- source, exactly as a non-keep cmgr command would -- editEvent is the
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).
+
+# Uses (outbound edges)
+  @use call    cm.assign  @ 263, 315
+  @use call    cm.get  @ 91, 257, 262, 264, 313, 320, 326, 382, 407, 416, 417, 428, 429, 523, 526, 584, 591, 682, 1398, 1533, 1730, 2050, 2083, 2096, 2130, 2201, 2202, 2240, 2241, 2282, 2295, 2296, 2340
+  @use call    cm.getAt  @ 261, 371, 372, 389, 396
+  @use call    cm.set  @ 327, 354, 355, 373, 384, 391, 398, 409, 639, 1264, 1729, 2071, 2088, 2125, 2142, 2201, 2202, 2251
+  @use call    cmgr.doAfter  @ 2455, 2462
+  @use call    cmgr.doBefore  @ 2464, 2486, 2527, 2533, 2534
+  @use call    cmgr.invoke  @ 2186
+  @use call    cmgr.noteChars  @ 583
+  @use call    cmgr.prefixRational  @ 2213, 2220
+  @use call    cmgr.scope  @ 2193
+  @use call    gm.clearActive  @ 2533, 2546
+  @use call    gm.duplicateInto  @ 2166
+  @use call    gm.eachInstance  @ 1989, 2003, 2015
+  @use call    gm.groupRect  @ 2427
+  @use call    gm.localMode  @ 2246
+  @use call    gm.mark  @ 2153
+  @use call    gm.resizeGroup  @ 2038
+  @use call    gm.setLocalMode  @ 2246
+  @use call    gm.stamp  @ 2182
+  @use call    legato.place  @ 522
+  @use call    timing.delayToPPQ  @ 1178
+  @use call    timing.logPerRow  @ 245
+  @use call    timing.ppqToDelay  @ 1179
+  @use call    tm.addEvent  @ 528, 685, 728, 792, 1711
+  @use call    tm.assignEvent  @ 200, 279, 288, 302, 592, 626, 635, 662, 673, 678, 720, 772, 820, 839, 925, 1422, 1429, 1438, 1445, 1525, 1539, 1568
+  @use call    tm.channels  @ 2319
+  @use call    tm.currentTake  @ 2263
+  @use call    tm.deleteEvent  @ 601, 604, 810, 927, 1310, 1353, 1517, 1537, 1548, 1710, 1962
+  @use call    tm.flush  @ 557, 773, 793, 811, 821, 850, 871, 883, 954, 972, 1005, 1054, 1091, 1103, 1154, 1184, 1226, 1366, 1493, 1501, 1569, 1575, 1582, 1713, 2167, 2183, 2432
+  @use call    tm.getChannel  @ 95, 116
+  @use call    tm.interpolate  @ 898, 1837
+  @use call    tm.length  @ 336, 1883, 2179, 2275
+  @use call    tm.name  @ 333, 1829
+  @use call    tm.playFrom  @ 2234, 2237
+  @use call    tm.rescaleLength  @ 338
+  @use call    tm.resolution  @ 2274
+  @use call    tm.setLength  @ 340
+  @use call    tm.setMutedChannels  @ 425
+  @use call    tm.setName  @ 333
+  @use call    tm.tileLength  @ 339
+  @use call    tm.timeSigs  @ 2276
+  @use call    tuning.findTemper  @ 2340
+  @use call    tuning.snap  @ 587
+  @use call    tuning.transposeStep  @ 1417
+  @use call    util.add  @ 138, 149, 225, 536, 760, 943, 1024, 1033, 1118, 1147, 1166, 1216, 1303, 1304, 1348, 1349, 1643, 1937, 2104, 2313, 2326, 2363
+  @use call    util.assign  @ 722, 723
+  @use call    util.atomic  @ 332, 735
+  @use call    util.between  @ 220, 862, 1301, 1347, 1643, 1933, 1962
+  @use call    util.clamp  @ 319, 485, 490, 584, 625, 633, 655, 669, 703, 984, 1419, 1730, 2201, 2202
+  @use call    util.clone  @ 1705
+  @use call    util.gcd  @ 1242
+  @use call    util.instantiate  @ 2334, 2435, 2445
+  @use call    util.isNote  @ 82, 83, 136, 147, 199, 589, 617, 631, 644, 1028, 1084, 1138, 1143, 1146, 1177, 1213, 1286, 1477, 1487, 1647, 1697
+  @use call    util.nudgedScalar  @ 1407, 1409
+  @use call    util.oneOf  @ 701, 756, 779, 807, 817
+  @use call    util.print  @ 33
+  @use call    util.round  @ 896, 899, 984, 1135, 1139, 1211, 1214
+  @use call    util.seek  @ 72, 73, 598, 683, 781, 881, 915, 942, 969, 1320, 1339, 1461
+  @use call    util.setDigit  @ 634, 655, 669, 703, 713
+  @use require legato  @ 28
+  @use require timing  @ 26
+  @use require tuning  @ 27
+  @use require util  @ 25
+  @use sub     cm:configChanged  @ 2406
+  @use sub     tm:rebuild  @ 2398
+  @use sub     tm:takeSwapped  @ 2397
 
 # REAPER API surface
   @reaper time_precise

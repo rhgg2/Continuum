@@ -1,4 +1,4 @@
-@module clipboard  src=clipboard.lua  loc=454  sha=dabb224  mode=chunk
+@module clipboard  src=clipboard.lua  loc=454  sha=b522f9a  mode=chunk
 @deps ec, grid, tm, cm, currentRpb, getCtx, getLength
 
 # Invariants & contracts
@@ -47,6 +47,29 @@
   @api clipboard:pasteClip(clip)  @ 440
   @api clipboard:trimTop(clip, trim)  @ 441
   @api clipboard:registerCommands(scope)  @ 443
+
+# Uses (outbound edges)
+  @use call    cm.get  @ 158, 180, 237
+  @use call    ec.col  @ 202, 294
+  @use call    ec.cursorPart  @ 208
+  @use call    ec.eachSelectedCol  @ 122
+  @use call    ec.isSticky  @ 447
+  @use call    ec.region  @ 57
+  @use call    ec.row  @ 205, 341
+  @use call    ec.selClear  @ 445, 447
+  @use call    tm.addEvent  @ 185, 262, 284, 399
+  @use call    tm.assignEvent  @ 175
+  @use call    tm.deleteEvent  @ 162, 247, 276, 378, 382
+  @use call    tm.flush  @ 196, 264, 286, 403, 409
+  @use call    util.add  @ 110, 141, 143, 146, 224, 233, 364
+  @use call    util.between  @ 109, 139, 161, 167, 231, 246, 275, 377, 381
+  @use call    util.clamp  @ 171, 189, 254
+  @use call    util.clone  @ 72, 81, 216, 356
+  @use call    util.isNote  @ 74
+  @use call    util.seek  @ 157, 182, 236
+  @use call    util.serialise  @ 45
+  @use call    util.unserialise  @ 51
+  @use require util  @ 11
 
 # REAPER API surface
   @reaper SetExtState

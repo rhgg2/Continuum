@@ -1,4 +1,4 @@
-@module sampleView  src=sampleView.lua  loc=117  sha=ee85a77  mode=chunk
+@module sampleView  src=sampleView.lua  loc=117  sha=fa4a61d  mode=chunk
 @deps cm, assignSlot, previewSlot, previewPath, listSamplerTracks, clearSlot, stopPreview
 
 # Invariants & contracts
@@ -56,3 +56,9 @@
       @contract  no-op when clearSlot or cm not injected (test seam)
   @api sv:stopAudition()  @ 112
       @contract  no-op when stopPreview not injected (test seam)
+
+# Uses (outbound edges)
+  @use call cm.get  @ 37, 67, 78, 80, 81, 108
+  @use call cm.remove  @ 30
+  @use call cm.set  @ 43, 84
+  @use call cm.setTrack  @ 29

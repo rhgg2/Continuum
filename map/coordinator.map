@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=350  sha=431e44e  mode=chunk
+@module coordinator  src=coordinator.lua  loc=350  sha=34a1e98  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
@@ -82,6 +82,54 @@
   @api coord:chrome()  @ 346
   @api coord:modalHost()  @ 347
   @api coord:run()  @ 348
+
+# Uses (outbound edges)
+  @use call    chrome.colour  @ 154, 176, 177, 178, 179, 180, 197, 235, 236
+  @use call    chrome.popChromeStyles  @ 210
+  @use call    chrome.pushChromeStyles  @ 202
+  @use call    chrome.verticalSeparator  @ 206
+  @use call    cm.pollUndo  @ 171
+  @use call    cmgr.appendPrefix  @ 55, 59
+  @use call    cmgr.cancelPrefix  @ 62
+  @use call    cmgr.finishPrefix  @ 93
+  @use call    cmgr.invoke  @ 95, 157
+  @use call    cmgr.isPrefixActive  @ 51, 92
+  @use call    cmgr.keySpec  @ 85
+  @use call    cmgr.keychain  @ 81
+  @use call    cmgr.pop  @ 282
+  @use call    cmgr.push  @ 285
+  @use call    cmgr.rootKeymap  @ 81
+  @use call    imgui.Begin  @ 183
+  @use call    imgui.BeginChild  @ 199, 238
+  @use call    imgui.Button  @ 156
+  @use call    imgui.End  @ 252
+  @use call    imgui.EndChild  @ 212, 243
+  @use call    imgui.GetContentRegionAvail  @ 220
+  @use call    imgui.GetCursorPosY  @ 219, 225
+  @use call    imgui.GetFrameHeightWithSpacing  @ 221
+  @use call    imgui.GetKeyMods  @ 52, 89
+  @use call    imgui.Indent  @ 224
+  @use call    imgui.IsKeyDown  @ 86
+  @use call    imgui.IsKeyPressed  @ 54, 58, 61, 89
+  @use call    imgui.PopFont  @ 255
+  @use call    imgui.PopStyleColor  @ 159, 214, 245, 254
+  @use call    imgui.PopStyleVar  @ 189, 209, 213, 244
+  @use call    imgui.PushFont  @ 175
+  @use call    imgui.PushStyleColor  @ 154, 176, 177, 178, 179, 180, 197, 235, 236
+  @use call    imgui.PushStyleVar  @ 182, 198, 203, 237
+  @use call    imgui.SameLine  @ 162, 164, 205, 207
+  @use call    imgui.SetCursorPosY  @ 225, 234
+  @use call    imgui.SetScrollX  @ 193
+  @use call    imgui.SetScrollY  @ 193
+  @use call    imgui.Text  @ 247
+  @use call    imgui.Unindent  @ 230
+  @use call    modalHost.draw  @ 250
+  @use call    modalHost.tick  @ 129
+  @use call    util.instantiate  @ 20, 22
+  @use require chrome  @ 20
+  @use require imgui  @ 14
+  @use require modalHost  @ 22
+  @use require util  @ 7
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

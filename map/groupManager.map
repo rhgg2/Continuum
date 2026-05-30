@@ -1,4 +1,4 @@
-@module groupManager  src=groupManager.lua  loc=922  sha=36ed5a5  mode=chunk
+@module groupManager  src=groupManager.lua  loc=922  sha=dabb224  mode=chunk
 @deps tm, cm
 
 # Invariants & contracts
@@ -198,3 +198,24 @@
       -- mutated, if any instance's new placement collides with another group
       -- or a sibling instance of the same group, or the region would vanish.
       @contract  (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true | nil,reason. gm validates cross-group AND same-group sibling disjointness + non-vanishing region only; take bounds are the caller's, deferred as in gm:newInstance (gm holds no take authority -- takeLen is advisory). Leaving members orphan (concrete kept, unmanaged); gained fold in at the actor anchor.
+
+# Uses (outbound edges)
+  @use call    cm.get  @ 36, 254
+  @use call    cm.set  @ 246
+  @use call    groups.deriveAssign  @ 354, 636
+  @use call    groups.inRect  @ 375, 897
+  @use call    groups.project  @ 264, 481, 552, 579
+  @use call    groups.reconcile  @ 592
+  @use call    groups.resolve  @ 363
+  @use call    groups.streamId  @ 318
+  @use call    tm.addEvent  @ 484, 606
+  @use call    tm.assignEvent  @ 611, 844
+  @use call    tm.byUuid  @ 267, 782
+  @use call    tm.deleteEvent  @ 617, 803
+  @use call    util.assign  @ 640, 726
+  @use call    util.clone  @ 270, 452, 486, 609, 614, 689, 722, 914
+  @use require groups  @ 11
+  @use require util  @ 10
+  @use sub     tm:postflush  @ 759
+  @use sub     tm:preflush  @ 734
+  @use sub     tm:rebuild  @ 776

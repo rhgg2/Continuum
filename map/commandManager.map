@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=322  sha=4a6bfb0  mode=chunk
+@module commandManager  src=commandManager.lua  loc=322  sha=1a1393f  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -87,3 +87,8 @@
   @api mgr:noteChars(char)  @ 318
       -- Re-read noteLayout on each call so a config change takes effect
       -- without rebuilding vm.
+
+# Uses (outbound edges)
+  @use call    cm.get  @ 319
+  @use call    util.atomic  @ 90
+  @use require util  @ 14

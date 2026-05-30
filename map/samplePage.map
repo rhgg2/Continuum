@@ -1,4 +1,4 @@
-@module samplePage  src=samplePage.lua  loc=641  sha=1f0eda3  mode=chunk
+@module samplePage  src=samplePage.lua  loc=641  sha=b3ab3fa  mode=chunk
 @deps cm, cmgr, chrome, gui, onPickTrack
 
 # Invariants & contracts
@@ -90,6 +90,89 @@
       @contract  tick runs every frame regardless of active page — sm needs the tracker take to maintain isTrackerMode and the gmem mailbox; project-path migration runs only on actual change
   @api sp:focusState()  @ 588
       @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
+
+# Uses (outbound edges)
+  @use call    chrome.checkbox  @ 425, 432
+  @use call    chrome.colour  @ 459
+  @use call    chrome.disabledIf  @ 461, 471, 501, 505, 509
+  @use call    chrome.makeToolbar  @ 445
+  @use call    chrome.pickerIsActive  @ 590
+  @use call    chrome.popChromeStyles  @ 547
+  @use call    chrome.pushChromeStyles  @ 458
+  @use call    chrome.resetPickerActive  @ 444
+  @use call    cm.get  @ 68, 229, 239, 240, 302, 303, 426, 433, 498, 499, 538, 557, 558, 616, 620, 624, 626
+  @use call    cm.set  @ 286, 428, 434, 617, 621
+  @use call    cmgr.scope  @ 599
+  @use call    fs.basename  @ 475
+  @use call    fs.join  @ 149, 184, 187
+  @use call    fs.listAudioFiles  @ 186
+  @use call    fs.listDirs  @ 148, 182
+  @use call    fs.parent  @ 169, 470
+  @use call    imgui.BeginChild  @ 468, 485, 495, 519, 526
+  @use call    imgui.BeginTable  @ 242
+  @use call    imgui.Button  @ 392, 502, 506, 510, 513
+  @use call    imgui.CalcTextSize  @ 250
+  @use call    imgui.DrawList_AddLine  @ 349, 354, 355
+  @use call    imgui.DrawList_AddQuadFilled  @ 343
+  @use call    imgui.DrawList_AddRectFilled  @ 328, 353
+  @use call    imgui.EndChild  @ 479, 491, 515, 523, 531
+  @use call    imgui.EndTable  @ 293
+  @use call    imgui.GetContentRegionAvail  @ 251, 496, 528
+  @use call    imgui.GetCursorPosX  @ 252
+  @use call    imgui.GetCursorScreenPos  @ 321
+  @use call    imgui.GetKeyMods  @ 206, 210
+  @use call    imgui.GetMousePos  @ 358
+  @use call    imgui.GetStyleColor  @ 218, 255
+  @use call    imgui.GetWindowDrawList  @ 325
+  @use call    imgui.InputInt  @ 381, 387
+  @use call    imgui.InputText  @ 262
+  @use call    imgui.InvisibleButton  @ 322
+  @use call    imgui.IsAnyItemActive  @ 593
+  @use call    imgui.IsItemActive  @ 265, 323
+  @use call    imgui.IsItemClicked  @ 151
+  @use call    imgui.IsItemHovered  @ 154, 323
+  @use call    imgui.IsKeyPressed  @ 205, 209, 269
+  @use call    imgui.IsMouseClicked  @ 539
+  @use call    imgui.IsMouseDoubleClicked  @ 154, 226, 288
+  @use call    imgui.IsWindowFocused  @ 488
+  @use call    imgui.PopStyleColor  @ 223, 291, 546
+  @use call    imgui.PushStyleColor  @ 219, 220, 256, 257, 459
+  @use call    imgui.SameLine  @ 385, 391, 431, 474, 481, 494, 516
+  @use call    imgui.Selectable  @ 221, 284
+  @use call    imgui.Separator  @ 476
+  @use call    imgui.SetCursorPosX  @ 252
+  @use call    imgui.SetKeyboardFocusHere  @ 260
+  @use call    imgui.SetMouseCursor  @ 376, 545
+  @use call    imgui.SetNextItemWidth  @ 261, 380, 386
+  @use call    imgui.SetScrollHereY  @ 233
+  @use call    imgui.SmallButton  @ 472
+  @use call    imgui.TableNextRow  @ 247
+  @use call    imgui.TableSetColumnIndex  @ 248, 254
+  @use call    imgui.TableSetupColumn  @ 243, 244
+  @use call    imgui.Text  @ 560
+  @use call    imgui.TextDisabled  @ 253, 306, 313, 475
+  @use call    imgui.TreeNode  @ 150
+  @use call    imgui.TreePop  @ 159
+  @use call    sampleManager.assign  @ 37
+  @use call    sampleManager.clearSlot  @ 42
+  @use call    sampleManager.isLive  @ 456
+  @use call    sampleManager.listTracks  @ 41
+  @use call    sampleManager.migrate  @ 581
+  @use call    sampleManager.previewPath  @ 40
+  @use call    sampleManager.previewSlot  @ 39
+  @use call    sampleManager.probeMode  @ 577
+  @use call    sampleManager.setName  @ 267
+  @use call    sampleManager.setPrefix  @ 580
+  @use call    sampleManager.setTrim  @ 372, 383, 389
+  @use call    sampleManager.stageInto  @ 70
+  @use call    sampleManager.stopPreview  @ 43
+  @use call    sampleManager.syncSlot  @ 60
+  @use call    sampleManager.tick  @ 583
+  @use call    util.instantiate  @ 30, 34
+  @use require fs  @ 11
+  @use require imgui  @ 18
+  @use require sampleManager  @ 30
+  @use require util  @ 12
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

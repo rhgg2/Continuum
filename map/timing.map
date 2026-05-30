@@ -1,4 +1,4 @@
-@module timing  src=timing.lua  loc=330  sha=3d00a83  mode=namespace
+@module timing  src=timing.lua  loc=330  sha=4a6bfb0  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module — no module-level state; all functions take operands explicitly
@@ -79,3 +79,9 @@
   @api M.delayToPPQ(d, res)  @ 322
       @contract  d in signed milli-QN, res in PPQ/QN; nil d treated as 0
   @api M.ppqToDelay(p, res)  @ 326
+
+# Uses (outbound edges)
+  @use call    util.gcd  @ 175
+  @use call    util.lcm  @ 174
+  @use call    util.round  @ 323
+  @use require util  @ 16

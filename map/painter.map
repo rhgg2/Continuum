@@ -1,4 +1,4 @@
-@module painter  src=painter.lua  loc=168  sha=35386ea  mode=namespace
+@module painter  src=painter.lua  loc=168  sha=2448706  mode=namespace
 
 # Invariants & contracts
   @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.
@@ -17,6 +17,29 @@
       -- The idx-th visually-distinct hue: golden-ratio rotation throws adjacent
       -- indices to opposite sides of the wheel. sat/val/alpha tone it.
       @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
+
+# Uses (outbound edges)
+  @use call    imgui.CalcTextSize  @ 149, 151
+  @use call    imgui.ColorConvertDouble4ToU32  @ 165
+  @use call    imgui.ColorConvertHSVtoRGB  @ 164
+  @use call    imgui.DrawList_AddCircleFilled  @ 101
+  @use call    imgui.DrawList_AddLine  @ 88
+  @use call    imgui.DrawList_AddPolyline  @ 112
+  @use call    imgui.DrawList_AddRect  @ 71
+  @use call    imgui.DrawList_AddRectFilled  @ 65
+  @use call    imgui.DrawList_AddText  @ 81
+  @use call    imgui.DrawList_AddTextEx  @ 79
+  @use call    imgui.DrawList_AddTriangleFilled  @ 95
+  @use call    imgui.DrawList_PathArcTo  @ 138
+  @use call    imgui.DrawList_PathClear  @ 128
+  @use call    imgui.DrawList_PathLineTo  @ 132
+  @use call    imgui.DrawList_PathStroke  @ 142
+  @use call    imgui.DrawList_PopClipRect  @ 123
+  @use call    imgui.DrawList_PushClipRect  @ 120
+  @use call    imgui.GetWindowDrawList  @ 35
+  @use call    imgui.PopFont  @ 152
+  @use call    imgui.PushFont  @ 150
+  @use require imgui  @ 24
 
 # REAPER API surface
   @reaper new_array

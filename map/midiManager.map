@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1161  sha=0678a54  mode=chunk
+@module midiManager  src=midiManager.lua  loc=1161  sha=e5f5556  mode=chunk
 @deps take
 
 # Invariants & contracts
@@ -170,6 +170,22 @@
   @emits ccsDeduped   -- { events = [{ppq, chan, evType, cc, pitch, droppedCount}, ...] }
   @emits ccsReconciled   -- { events = [reconcileEvent, ...] }  -- 5 kinds in reconcileEvent.*
   @emits reload   -- nil; every load, including after modify()
+
+# Uses (outbound edges)
+  @use call    util.add  @ 229, 304, 319, 321, 328, 330, 360, 368, 371, 391, 396, 398, 414, 426, 430, 437, 462, 463, 540, 546, 547, 557, 765, 913, 1152
+  @use call    util.assign  @ 368, 371, 464, 598, 605, 711, 727, 823, 842, 848
+  @use call    util.bucket  @ 385, 451, 452
+  @use call    util.clamp  @ 70
+  @use call    util.clone  @ 425, 446, 688, 755, 842, 902
+  @use call    util.compact  @ 586, 587, 588
+  @use call    util.fromBase36  @ 123, 178
+  @use call    util.installHooks  @ 272
+  @use call    util.pick  @ 328, 396, 430, 437, 464, 540
+  @use call    util.print  @ 13
+  @use call    util.serialise  @ 212
+  @use call    util.toBase36  @ 117, 148, 203, 227
+  @use call    util.unserialise  @ 183
+  @use require util  @ 8
 
 # REAPER API surface
   @reaper GetSetMediaItemTakeInfo_String

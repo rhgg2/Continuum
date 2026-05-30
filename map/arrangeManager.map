@@ -107,6 +107,16 @@
   @api am:reswingAll(name)  @ 567
       @contract  re-binds each takesUsing(name) take with markSwingStale=true; restores the original bound take at end
 
+# Uses (outbound edges)
+  @use call    cm.readTakeKey  @ 90, 560
+  @use call    cm.readTrackKey  @ 57
+  @use call    cm.writeTakeKey  @ 95, 96
+  @use call    cm.writeTrackKey  @ 61
+  @use call    tm.bindTake  @ 571, 573
+  @use call    tm.currentTake  @ 569, 573
+  @use call    util.toBase62  @ 313
+  @use require util  @ 13
+
 # REAPER API surface
   @reaper TakeIsMIDI
   @reaper GetMediaItemTake_Item, GetMediaItemTake_Source, GetMediaItemTake_Track

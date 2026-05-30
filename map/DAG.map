@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=578  sha=ad0768f  mode=namespace
+@module DAG  src=DAG.lua  loc=578  sha=2d8c907  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(userGraph), which caches the lowered graph and its derivations lazily
@@ -47,3 +47,10 @@
   -- compile context
   @api M.compile(userGraph)  @ 246
       @contract  assumes M.validate(userGraph)==nil; returns a ctx closing over M.lower(userGraph) with lazy caches for classes, classOf, inbound, srcSet (per-id), quotient, absorption. ctx:srcSet(id) returns the same table across calls (referential cache).
+
+# Uses (outbound edges)
+  @use call    util.add  @ 189, 194, 282, 333, 334, 436, 437, 464, 468, 473, 475, 479, 508, 546
+  @use call    util.assign  @ 61
+  @use call    util.bucket  @ 110, 143, 162, 258, 284
+  @use call    util.pick  @ 233
+  @use require util  @ 25

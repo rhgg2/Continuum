@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=303  sha=ad0768f  mode=chunk
+@module wiringView  src=wiringView.lua  loc=303  sha=fe39d7e  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -93,3 +93,23 @@
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
   @api wv:setSelection(idSet)  @ 297
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
+
+# Uses (outbound edges)
+  @use call    DAG.ancestors  @ 206
+  @use call    DAG.descendants  @ 211
+  @use call    util.add  @ 59, 131, 156, 234, 252, 281
+  @use call    util.instantiate  @ 13
+  @use call    wiringManager.compile  @ 273
+  @use call    wiringManager.enableLive  @ 94
+  @use call    wiringManager.graph  @ 91, 184, 206, 211, 219, 232, 241, 272
+  @use call    wiringManager.listInstalledFX  @ 136
+  @use call    wiringManager.load  @ 93
+  @use call    wiringManager.mutate  @ 105, 140, 150, 162, 169, 191
+  @use call    wiringManager.pokeEdgeGain  @ 200
+  @use call    wiringManager.pollUndo  @ 95
+  @use call    wiringManager.probeFxIO  @ 102
+  @use call    wiringManager.save  @ 92
+  @use call    wiringManager.trackName  @ 26
+  @use require DAG  @ 9
+  @use require util  @ 8
+  @use require wiringManager  @ 13

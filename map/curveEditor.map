@@ -1,4 +1,4 @@
-@module curveEditor  src=curveEditor.lua  loc=329  sha=fa4a61d  mode=chunk
+@module curveEditor  src=curveEditor.lua  loc=329  sha=097428b  mode=chunk
 @deps ctx, chrome
 
 # Invariants & contracts
@@ -38,6 +38,19 @@
       @contract  callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame
       @contract  host must call frame() inside the window whose drawlist the painter binds; gate a.hovered on its own IsWindowHovered
       · Mouse handling
+
+# Uses (outbound edges)
+  @use call    imgui.GetKeyMods  @ 298
+  @use call    imgui.GetMousePos  @ 108, 128, 170, 205, 212, 227, 260
+  @use call    imgui.IsMouseClicked  @ 195
+  @use call    imgui.IsMouseDoubleClicked  @ 196
+  @use call    imgui.IsMouseDown  @ 197
+  @use call    painter.new  @ 53
+  @use call    util.clamp  @ 100, 140, 186, 282, 297, 301
+  @use call    util.round  @ 140, 297, 307
+  @use require imgui  @ 19
+  @use require painter  @ 20
+  @use require util  @ 13
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

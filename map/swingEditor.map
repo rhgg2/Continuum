@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=672  sha=5d7d2a2  mode=chunk
+@module swingEditor  src=swingEditor.lua  loc=672  sha=0067830  mode=chunk
 @deps tv, cm, chrome, ctx, am
 
 # Invariants & contracts
@@ -113,6 +113,84 @@
   @api self:close()  @ 666
   @api self:isOpen()  @ 668
   @api self:modalActive()  @ 669
+
+# Uses (outbound edges)
+  @use call    am.reswingAll  @ 50
+  @use call    am.takesUsing  @ 436
+  @use call    chrome.checkbox  @ 566
+  @use call    chrome.colour  @ 136, 143, 628
+  @use call    chrome.disabledIf  @ 269, 412, 431, 437, 445, 534, 577
+  @use call    chrome.libPicker  @ 400
+  @use call    chrome.popChromeStyles  @ 640
+  @use call    chrome.popChromeWindow  @ 519
+  @use call    chrome.pushChromeStyles  @ 627
+  @use call    chrome.pushChromeWindow  @ 475
+  @use call    chrome.verticalSeparator  @ 424, 542, 563, 572
+  @use call    cm.get  @ 172, 377, 380, 499, 656
+  @use call    cm.getAt  @ 347, 348
+  @use call    cm.set  @ 355, 362
+  @use call    imgui.AlignTextToFramePadding  @ 248, 284, 314, 478, 545, 574
+  @use call    imgui.ArrowButton  @ 332, 334
+  @use call    imgui.BeginChild  @ 629
+  @use call    imgui.BeginDisabled  @ 526
+  @use call    imgui.BeginPopup  @ 553
+  @use call    imgui.BeginPopupModal  @ 476
+  @use call    imgui.Button  @ 336, 413, 421, 432, 438, 446, 460, 494, 496, 535, 549, 604
+  @use call    imgui.CalcTextSize  @ 457
+  @use call    imgui.CloseCurrentPopup  @ 477
+  @use call    imgui.Combo  @ 255, 296
+  @use call    imgui.DrawList_AddCircleFilled  @ 165
+  @use call    imgui.DrawList_AddLine  @ 146
+  @use call    imgui.DrawList_AddRectFilled  @ 136
+  @use call    imgui.Dummy  @ 168
+  @use call    imgui.EndChild  @ 638
+  @use call    imgui.EndDisabled  @ 606
+  @use call    imgui.EndPopup  @ 517, 559
+  @use call    imgui.GetContentRegionAvail  @ 593
+  @use call    imgui.GetCursorScreenPos  @ 103
+  @use call    imgui.GetItemRectMax  @ 551
+  @use call    imgui.GetItemRectMin  @ 550
+  @use call    imgui.GetStyleVar  @ 458
+  @use call    imgui.GetWindowDrawList  @ 104
+  @use call    imgui.GetWindowViewport  @ 473
+  @use call    imgui.InputText  @ 489
+  @use call    imgui.IsItemDeactivatedAfterEdit  @ 264, 280, 308, 329, 588
+  @use call    imgui.IsKeyPressed  @ 496, 620
+  @use call    imgui.IsPopupOpen  @ 470
+  @use call    imgui.IsWindowAppearing  @ 481
+  @use call    imgui.OpenPopup  @ 471, 549
+  @use call    imgui.PopID  @ 342, 491
+  @use call    imgui.PopStyleColor  @ 639
+  @use call    imgui.PopStyleVar  @ 461, 591
+  @use call    imgui.PushID  @ 246, 488
+  @use call    imgui.PushStyleColor  @ 628
+  @use call    imgui.PushStyleVar  @ 394, 531
+  @use call    imgui.SameLine  @ 250, 266, 283, 286, 313, 316, 331, 333, 335, 404, 411, 420, 423, 425, 435, 444, 455, 480, 493, 495, 541, 543, 547, 562, 564, 571, 573, 576
+  @use call    imgui.Selectable  @ 555
+  @use call    imgui.Separator  @ 592, 598, 633
+  @use call    imgui.SetCursorPosX  @ 459
+  @use call    imgui.SetKeyboardFocusHere  @ 482
+  @use call    imgui.SetNextItemWidth  @ 254, 270, 287, 317, 485, 580
+  @use call    imgui.SetNextWindowPos  @ 474, 552
+  @use call    imgui.SliderDouble  @ 272, 320, 581
+  @use call    imgui.Text  @ 249, 285, 315, 479, 546, 575
+  @use call    imgui.TextColored  @ 515
+  @use call    imgui.Viewport_GetCenter  @ 473
+  @use call    timing.applyFactors  @ 159
+  @use call    timing.atomTilePeriod  @ 86, 289, 339
+  @use call    timing.compositePeriodQN  @ 578, 595
+  @use call    timing.periodQN  @ 62, 182, 193, 301, 319, 579
+  @use call    timing.resolveFactors  @ 100
+  @use call    tv.cursorAnchor  @ 379
+  @use call    tv.setSwingComposite  @ 204, 508
+  @use call    tv.setSwingSlot  @ 509
+  @use call    tv.timeSig  @ 54
+  @use call    util.assign  @ 218
+  @use call    util.deepClone  @ 210, 354, 536
+  @use call    util.round  @ 106, 121
+  @use require imgui  @ 21
+  @use require timing  @ 15
+  @use require util  @ 14
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

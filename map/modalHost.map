@@ -1,4 +1,4 @@
-@module modalHost  src=modalHost.lua  loc=132  sha=untracked  mode=chunk
+@module modalHost  src=modalHost.lua  loc=132  sha=6362c91  mode=chunk
 @deps ctx, chrome
 
 # Invariants & contracts
@@ -31,6 +31,24 @@
   @api mh:wasOpenAtFrameStart()  @ 50
   @api mh:tick()  @ 52
   @api mh:draw()  @ 54
+
+# Uses (outbound edges)
+  @use call    chrome.popChromeWindow  @ 89
+  @use call    chrome.pushChromeWindow  @ 64
+  @use call    imgui.BeginPopupModal  @ 66
+  @use call    imgui.CloseCurrentPopup  @ 73
+  @use call    imgui.EndPopup  @ 85
+  @use call    imgui.GetWindowViewport  @ 61
+  @use call    imgui.InputText  @ 109, 120
+  @use call    imgui.IsKeyPressed  @ 96, 98, 113, 114, 116, 124
+  @use call    imgui.IsPopupOpen  @ 58
+  @use call    imgui.IsWindowAppearing  @ 104
+  @use call    imgui.OpenPopup  @ 26, 59
+  @use call    imgui.SetKeyboardFocusHere  @ 104
+  @use call    imgui.SetNextWindowPos  @ 62
+  @use call    imgui.Text  @ 95, 105, 112
+  @use call    imgui.Viewport_GetCenter  @ 61
+  @use require imgui  @ 7
 
 # REAPER API surface
   @reaper ShowConsoleMsg

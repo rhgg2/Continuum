@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1743  sha=c9b7c50  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1743  sha=cfa4fcc  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -262,6 +262,69 @@
   @api wp:renderStatusBar(_)  @ 1655
   @api wp:focusState()  @ 1667
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
+
+# Uses (outbound edges)
+  @use call    chrome.colour  @ 345, 925, 1620
+  @use call    chrome.pickerIsActive  @ 1669
+  @use call    cmgr.scope  @ 1733
+  @use call    imgui.BeginChild  @ 70, 1645
+  @use call    imgui.BeginTooltip  @ 347, 927
+  @use call    imgui.CalcTextSize  @ 222, 282, 286, 367, 371
+  @use call    imgui.Dummy  @ 1616
+  @use call    imgui.EndChild  @ 76, 1650
+  @use call    imgui.EndTooltip  @ 349, 929
+  @use call    imgui.GetCursorScreenPos  @ 1212
+  @use call    imgui.GetKeyMods  @ 1222
+  @use call    imgui.GetMousePos  @ 1220, 1717
+  @use call    imgui.InputText  @ 41
+  @use call    imgui.InvisibleButton  @ 336, 921
+  @use call    imgui.IsAnyItemActive  @ 1673
+  @use call    imgui.IsItemHovered  @ 341, 922
+  @use call    imgui.IsKeyPressed  @ 43, 44, 58, 59, 65, 1402
+  @use call    imgui.IsMouseClicked  @ 1419, 1434, 1601
+  @use call    imgui.IsMouseDoubleClicked  @ 1409
+  @use call    imgui.IsMouseDown  @ 1276, 1538, 1580, 1588
+  @use call    imgui.IsWindowAppearing  @ 38, 54
+  @use call    imgui.PopFont  @ 290, 374
+  @use call    imgui.PopStyleColor  @ 352, 932, 1622
+  @use call    imgui.PopStyleVar  @ 351, 931
+  @use call    imgui.PushFont  @ 280, 366
+  @use call    imgui.PushStyleColor  @ 345, 925, 1620
+  @use call    imgui.PushStyleVar  @ 346, 926
+  @use call    imgui.Selectable  @ 73
+  @use call    imgui.Separator  @ 45
+  @use call    imgui.SetCursorScreenPos  @ 335, 920, 1615
+  @use call    imgui.SetKeyboardFocusHere  @ 38
+  @use call    imgui.SetNextItemWidth  @ 39
+  @use call    imgui.SetNextWindowPos  @ 342, 923
+  @use call    imgui.Text  @ 348, 928, 1659, 1661
+  @use call    modalHost.registerKind  @ 37
+  @use call    modalHost.wasOpenAtFrameStart  @ 1674
+  @use call    painter.new  @ 1215
+  @use call    util.instantiate  @ 28
+  @use call    wiringView.addFx  @ 1727
+  @use call    wiringView.ancestorsOf  @ 1464, 1512
+  @use call    wiringView.descendantsOf  @ 1511
+  @use call    wiringView.edgeGain  @ 1300, 1312, 1423
+  @use call    wiringView.enableLive  @ 1634
+  @use call    wiringView.errors  @ 1372, 1657
+  @use call    wiringView.listInstalledFX  @ 1724
+  @use call    wiringView.moveNodes  @ 1585
+  @use call    wiringView.nodeViews  @ 1233, 1692
+  @use call    wiringView.pokeEdgeGain  @ 1275, 1426
+  @use call    wiringView.pollUndo  @ 1637
+  @use call    wiringView.removeWireAt  @ 1567
+  @use call    wiringView.rewireEdgeEnd  @ 1553
+  @use call    wiringView.selection  @ 1241
+  @use call    wiringView.setEdgeGain  @ 1278, 1413, 1427
+  @use call    wiringView.setHover  @ 1397
+  @use call    wiringView.setSelection  @ 1592
+  @use call    wiringView.wireViews  @ 1259
+  @use call    wiringView.wiredPorts  @ 435
+  @use require imgui  @ 16
+  @use require painter  @ 17
+  @use require util  @ 10
+  @use require wiringView  @ 28
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

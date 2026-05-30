@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=763  sha=5feb1fb  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=763  sha=a4fc2bd  mode=chunk
 @deps cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost
 
 # Invariants & contracts
@@ -117,6 +117,91 @@
   @api ap:renderStatusBar(_)  @ 697
   @api ap:focusState()  @ 705
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
+
+# Uses (outbound edges)
+  @use call    arrangeView.beatPerRow  @ 168, 701
+  @use call    arrangeView.clearLoopRange  @ 176
+  @use call    arrangeView.commitDrag  @ 230
+  @use call    arrangeView.createCandidate  @ 226
+  @use call    arrangeView.createSlot  @ 534
+  @use call    arrangeView.cursorCol  @ 188, 262, 617, 701, 723
+  @use call    arrangeView.cursorRow  @ 188, 262, 701, 723
+  @use call    arrangeView.deleteSlot  @ 520
+  @use call    arrangeView.dragCandidate  @ 222
+  @use call    arrangeView.editCursorQN  @ 438
+  @use call    arrangeView.focus  @ 305
+  @use call    arrangeView.gutterLoopCand  @ 224
+  @use call    arrangeView.hitTake  @ 198
+  @use call    arrangeView.keyForSlot  @ 514, 602, 759
+  @use call    arrangeView.loopRangeQN  @ 390
+  @use call    arrangeView.paletteSlot  @ 587, 619
+  @use call    arrangeView.playPositionQN  @ 439
+  @use call    arrangeView.projectTracks  @ 654
+  @use call    arrangeView.qnToRow  @ 314, 315, 356, 357, 393, 435
+  @use call    arrangeView.renameSlot  @ 509
+  @use call    arrangeView.revealTake  @ 639
+  @use call    arrangeView.rowToQN  @ 74, 169, 273, 723
+  @use call    arrangeView.scroll  @ 134
+  @use call    arrangeView.seedCursor  @ 642
+  @use call    arrangeView.setCursor  @ 188, 241
+  @use call    arrangeView.setEditCursorQN  @ 239
+  @use call    arrangeView.setFocus  @ 210, 242
+  @use call    arrangeView.setGridSize  @ 163, 658
+  @use call    arrangeView.setLoopRangeQN  @ 232
+  @use call    arrangeView.setMaxCol  @ 164
+  @use call    arrangeView.setPaletteSlot  @ 598
+  @use call    arrangeView.trackSlots  @ 618
+  @use call    arrangeView.tracksTakes  @ 341
+  @use call    chrome.colour  @ 62, 63, 64, 65, 66, 67
+  @use call    chrome.disabledIf  @ 563, 569
+  @use call    chrome.pickerIsActive  @ 707
+  @use call    chrome.popChromeStyles  @ 629
+  @use call    chrome.pushChromeStyles  @ 624
+  @use call    cmgr.scope  @ 719
+  @use call    imgui.BeginChild  @ 667, 686
+  @use call    imgui.BeginTable  @ 588
+  @use call    imgui.Button  @ 552, 554, 564, 570
+  @use call    imgui.Dummy  @ 467, 501, 683
+  @use call    imgui.EndChild  @ 673, 691
+  @use call    imgui.EndTable  @ 612
+  @use call    imgui.GetContentRegionAvail  @ 129, 494
+  @use call    imgui.GetCursorScreenPos  @ 127, 493, 679
+  @use call    imgui.GetKeyMods  @ 170, 207
+  @use call    imgui.GetMousePos  @ 166
+  @use call    imgui.GetMouseWheel  @ 181
+  @use call    imgui.GetTextLineHeightWithSpacing  @ 130, 495
+  @use call    imgui.InputText  @ 545, 549
+  @use call    imgui.IsAnyItemActive  @ 711
+  @use call    imgui.IsKeyPressed  @ 554
+  @use call    imgui.IsMouseClicked  @ 174, 191
+  @use call    imgui.IsMouseDoubleClicked  @ 199
+  @use call    imgui.IsMouseDragging  @ 217
+  @use call    imgui.IsMouseReleased  @ 228
+  @use call    imgui.IsWindowAppearing  @ 543
+  @use call    imgui.IsWindowHovered  @ 174, 182, 191
+  @use call    imgui.PopFont  @ 603
+  @use call    imgui.PopStyleColor  @ 69
+  @use call    imgui.PushFont  @ 601
+  @use call    imgui.PushStyleColor  @ 62, 63, 64, 65, 66, 67
+  @use call    imgui.SameLine  @ 553, 568, 600, 678, 684
+  @use call    imgui.Selectable  @ 596
+  @use call    imgui.Separator  @ 627
+  @use call    imgui.SetKeyboardFocusHere  @ 543
+  @use call    imgui.TableNextRow  @ 594
+  @use call    imgui.TableSetColumnIndex  @ 595, 605, 608
+  @use call    imgui.TableSetupColumn  @ 589, 590, 591
+  @use call    imgui.Text  @ 544, 548, 602, 606, 609, 657, 699
+  @use call    imgui.TextDisabled  @ 584
+  @use call    modalHost.registerKind  @ 542
+  @use call    modalHost.wasOpenAtFrameStart  @ 712
+  @use call    painter.hue  @ 97, 98, 99, 100
+  @use call    painter.new  @ 135, 253, 492, 681
+  @use call    util.atomic  @ 509, 520, 532
+  @use call    util.instantiate  @ 27
+  @use require arrangeView  @ 27
+  @use require imgui  @ 15
+  @use require painter  @ 16
+  @use require util  @ 9
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

@@ -1,4 +1,4 @@
-@module groups  src=groups.lua  loc=127  sha=c2d297c  mode=namespace
+@module groups  src=groups.lua  loc=127  sha=7dae3ed  mode=namespace
 
 # Invariants & contracts
   @invariant  evType is identity, never merged or overridden; changing type is delete+create upstream
@@ -40,3 +40,9 @@
   @api groups.tintKey(state)  @ 116
   @api groups.regionKey(colour, kind)  @ 119
   @api groups.outlineKey(state, colour)  @ 122
+
+# Uses (outbound edges)
+  @use call    util.add  @ 77, 79, 84
+  @use call    util.clone  @ 20, 43
+  @use call    util.deepEq  @ 78
+  @use require util  @ 14

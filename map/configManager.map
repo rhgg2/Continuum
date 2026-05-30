@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=691  sha=34a1e98  mode=chunk
+@module configManager  src=configManager.lua  loc=691  sha=d21a66e  mode=chunk
 
 # Invariants & contracts
   @invariant  cm is the sole source of truth for valid keys; in-code reads/writes raise on unknown keys, persistence-loaded unknowns are silently pruned
@@ -111,6 +111,15 @@
 
 # Signals emitted (via util.installHooks)
   @emits configChanged   -- configChangedPayload.bulk
+
+# Uses (outbound edges)
+  @use call    util.add  @ 243, 244, 253, 254, 255
+  @use call    util.assign  @ 443
+  @use call    util.deepClone  @ 265, 567
+  @use call    util.installHooks  @ 464
+  @use call    util.print  @ 15
+  @use call    util.serialise  @ 338, 348, 363, 381, 599, 627
+  @use require util  @ 12
 
 # REAPER API surface
   @reaper GetProjExtState

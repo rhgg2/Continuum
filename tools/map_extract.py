@@ -58,6 +58,14 @@ INVERSE_RE    = re.compile(
 )
 EMITS_BODY_RE = re.compile(r"^(\w+)\s*(?:--\s*(.*))?$")
 
+# Outbound edges (Uses pass). Resolved against a per-file alias table built
+# from imports/constructs/self; unresolvable receivers drop.
+CALL_RE       = re.compile(r"\b([A-Za-z_]\w*)([.:])([A-Za-z_]\w*)\s*\(")
+SUB_RE        = re.compile(r"\b([A-Za-z_]\w*):subscribe\(\s*['\"]([^'\"]+)['\"]")
+FORWARD_RE    = re.compile(
+    r"\b[A-Za-z_]\w*:forward\(\s*['\"]([^'\"]+)['\"]\s*,\s*([A-Za-z_]\w*)\s*\)"
+)
+
 ATTACH_GAP = 3   # max line gap from annotation to following structural element
 
 
@@ -111,6 +119,8 @@ class MapFile:
     module_annotations: list[Annotation] = field(default_factory=list)
     shape_annotations: list[tuple[str, str, bool, int]] = field(default_factory=list)
     pending_annotations: list[tuple[int, str, str, bool]] = field(default_factory=list)
+    # Outbound edges: (kind, target, line). kind ∈ {require, call, sub, forward}.
+    uses: list[tuple[str, str, int]] = field(default_factory=list)
 
 
 # ----- Helpers
@@ -328,7 +338,69 @@ def parse(path: Path) -> MapFile:
     cm.consts = [d for d in cm.consts if not (not d.init and d.name in fn_names)]
 
     attach_annotations(cm)
+    extract_uses(cm, lines)
     return cm
+
+
+def extract_uses(cm: MapFile, lines: list[str]) -> None:
+    """Walk lines collecting outbound edges. Resolves receivers through the
+    alias table (imports/constructs/self → module); calls on unresolved
+    receivers are dropped — see docs/map_uses.md for the recall caveat."""
+    aliases: dict[str, str] = {}
+    for d in cm.imports:    aliases[d.name] = d.init   # name → module
+    for d in cm.constructs: aliases[d.name] = d.init
+    # Chunk deps (passed via `(...)`) have no statically-known module identity:
+    # alias them to themselves so `tm:foo` records as `tm.foo`, and let the
+    # querier resolve the short name through project convention.
+    for dep in cm.deps:
+        aliases.setdefault(dep, dep)
+    if cm.return_target:
+        aliases['self'] = cm.module
+        aliases[cm.return_target] = cm.module   # `tm:foo()` from within tm.lua
+
+    # require edges fall out of imports/constructs — same data, no per-line scan.
+    seen: set[tuple[str, str, int]] = set()
+    def add(kind: str, target: str, line: int) -> None:
+        key = (kind, target, line)
+        if key not in seen:
+            seen.add(key)
+            cm.uses.append(key)
+
+    for d in cm.imports:
+        add('require', d.init, d.line)
+    for d in cm.constructs:
+        add('require', d.init, d.line)
+
+    for i, raw in enumerate(lines):
+        line = i + 1
+        # Strip line-comments to avoid harvesting calls quoted in prose.
+        code = raw.split('--', 1)[0] if '--' in raw else raw
+
+        for m in CALL_RE.finditer(code):
+            recv, sep, fn = m.group(1), m.group(2), m.group(3)
+            mod = aliases.get(recv)
+            if not mod or fn in ('subscribe', 'forward', 'unsubscribe'):
+                continue  # sub/forward are their own edge kinds
+            if mod == cm.module and (recv == 'self' or recv == cm.return_target):
+                continue  # intra-module call, not an outbound edge
+            add('call', f'{mod}.{fn}', line)
+
+        for m in SUB_RE.finditer(code):
+            recv, sig = m.group(1), m.group(2)
+            mod = aliases.get(recv)
+            if mod:
+                add('sub', f'{mod}:{sig}', line)
+
+        for m in FORWARD_RE.finditer(code):
+            # forward(signal, source): outbound edge is to the SOURCE's signal —
+            # that's the subscription it establishes. Receiver is the re-fire owner
+            # (this file) and is implied by file ownership.
+            sig, source = m.group(1), m.group(2)
+            mod = aliases.get(source)
+            if mod:
+                add('forward', f'{mod}:{sig}', line)
+
+    cm.uses.sort(key=lambda u: (u[0], u[1], u[2]))
 
 
 def attach_annotations(cm: MapFile) -> None:
@@ -534,6 +606,23 @@ def emit(cm: MapFile) -> str:
         for s in cm.signals:
             payload = cm.signal_payloads.get(s)
             add(f"  @emits {s}   -- {payload}" if payload else f"  @emits {s}")
+        add('')
+
+    if cm.uses:
+        add("# Uses (outbound edges)")
+        # Collapse same (kind, target) into one row with all line numbers.
+        grouped: dict[tuple[str, str], list[int]] = {}
+        order: list[tuple[str, str]] = []
+        for kind, target, line in cm.uses:
+            key = (kind, target)
+            if key not in grouped:
+                grouped[key] = []
+                order.append(key)
+            grouped[key].append(line)
+        width = max(len(k) for k, _ in order)
+        for kind, target in order:
+            lines_str = ', '.join(str(n) for n in grouped[(kind, target)])
+            add(f"  @use {kind:<{width}} {target}  @ {lines_str}")
         add('')
 
     if cm.reaper_calls:

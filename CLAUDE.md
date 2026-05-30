@@ -127,13 +127,28 @@ Never hand-edit them.
   grepping `map/*.map`. It parses every map and returns
   `<src>.lua:<line>  @kind <name>` rows, ready to feed into Read with
   offset/limit. Filter by `kind` (fn, api, factory, state, const,
-  invariant, contract, shape, signal/emits, reaper) and/or
-  `module` (exact stem or glob like `*Manager`, `tm_*`). `name`
-  supports `*` / `?` glob wildcards and is matched as a substring
-  against bare symbol names for structural entries and against
-  body text for annotations. Examples: `kind=signal` lists every
-  emitted signal with its payload doc; `name=rebuild kind=api`
+  invariant, contract, shape, signal/emits, reaper, uses, usedby)
+  and/or `module` (exact stem or glob like `*Manager`, `tm_*`).
+  `name` supports `*` / `?` glob wildcards and is matched as a
+  substring against bare symbol names for structural entries and
+  against body text for annotations. Examples: `kind=signal` lists
+  every emitted signal with its payload doc; `name=rebuild kind=api`
   pinpoints the two `:rebuild` methods (tm and vm).
+
+  Reverse cross-reference lives on the same tool. Each `.map` carries
+  a `# Uses` section listing the file's outbound edges (`require`,
+  `call`, `sub`, `forward`) with receivers resolved through the
+  file's own alias table (imports / constructs / chunk deps / `self`
+  / module return-target). `kind=uses module=X` lists what `X`
+  reaches out to; `kind=usedby name=Y` reverses it — every caller of
+  `Y`. Target shapes: `module.fn` for calls and requires,
+  `receiver:signal` for subs and forwards (where `receiver` is the
+  dep-name from the caller's perspective, e.g. `tm:rebuild`, not
+  `trackerManager:rebuild`). The forward edge points to the
+  **source's** signal, not the receiver's. Method calls on runtime
+  receivers (not in the alias table) are dropped, so `usedby` has a
+  real recall gap on those — the tool footers a one-line caveat
+  when this matters.
 
 - Framework docs: `docs/reaper_imgui_doc.html` (ReaImGui),
   `docs/REAPER API functions.html` (ReaScript). Use the

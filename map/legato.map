@@ -1,4 +1,4 @@
-@module legato  src=legato.lua  loc=27  sha=b27ba28  mode=namespace
+@module legato  src=legato.lua  loc=27  sha=7dae3ed  mode=namespace
 
 # Imports
   @const util = 'util'  @ 11
@@ -14,3 +14,7 @@
       -- nothing follows. The caller decides whether to clip the predecessor
       -- (it does iff `prev.endppq >= ppq`) — that one-liner stays at the call
       -- site in each frame's own mutation idiom.
+
+# Uses (outbound edges)
+  @use call    util.seek  @ 22, 23
+  @use require util  @ 11
