@@ -12,7 +12,7 @@
 - wave previews in ap
 - show take/track name and navigate by track take in tp
 - ap reaper cursor and general bad look weirdness
-- wm - don't spawn CU on track sends, use the send vol instead
+- wm - midi channel filter
 
   Reframing to "what a competent tracker offers that Continuum's
   tracker doesn't" — and discounting what's REAPER's job (transport,
