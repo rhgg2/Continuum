@@ -45,10 +45,16 @@ end
 
 local function apply(wm) wm:applyOps(wm:diff(wm:targetState(), wm:snapshot()), 'test') end
 
+-- Fall back to the fake's default (0x10) for non-JS FX when no write
+-- happened; JS plugins have no routing trailer at all so return nil.
 local function routingFlag(h, track, idx)
   local entry = h.reaper._state.fxByTrack[track] and
                 h.reaper._state.fxByTrack[track][idx + 1]
-  return entry and entry.routingBytes and entry.routingBytes.flag
+  if not entry then return nil end
+  if entry.routingBytes then return entry.routingBytes.flag end
+  local ident = type(entry) == 'table' and entry.ident or entry
+  if ident and ident:sub(1, 3) == 'JS:' then return nil end
+  return 0x10
 end
 
 return {

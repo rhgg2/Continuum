@@ -38,3 +38,33 @@ Not a special parallel field. The singleton constraint is enforced
 by `DAG.validate` — same mechanism that would catch a buggy mutator
 minting a second master, rather than two storage shapes encoding the
 same rule.
+
+## Routing intent record
+
+The per-FX MIDI passthrough bit (`0x02` of the routing trailer; see
+`docs/reaper_midi_routing.md`) has no `TrackFX_*` API — read or write
+goes through `GetTrackStateChunk` / `SetTrackStateChunk`, which parse
+and reserialise the entire track state. A five-FX chain is hundreds
+of milliseconds per roundtrip.
+
+Continuum owns this bit (see contract below), so it knows what value
+it last applied. `appliedMidiOut[fxGuid] = bool` is that record; `nil`
+means "never written" — REAPER's fresh-FX state, which is
+`midiOut=true` (bit clear). Persisted as `wiringMidiOutApplied` in
+the project tier and rehydrated on `wm:load`.
+
+Snap reads `appliedMidiOut[guid]` (with `nil` ⇒ `true`) into
+`fxOrder[i].midiOut` instead of decoding the chunk. `reconcileFXChain`
+step 5 filters target entries to those whose desired `midiOut` differs
+from the applied value; when the filter empties, the chunk is never
+touched. Otherwise one `Get`+`Set` per track and the new values land
+in `appliedMidiOut`, persisted at the `applyOps` tail alongside
+`wiringOwnedFx`.
+
+**User-facing contract:** Continuum owns the MIDI I/O dialog
+("Send all MIDI to plugin" / "Receive MIDI from plugin") on every
+FX that lives in a chain the wiring page manages. Toggling it by
+hand in REAPER is invisible to snap (we no longer read REAPER's
+state); the next graph edit that flips the same bit will overwrite
+the manual change, but until then the chain runs with whatever the
+user set.
