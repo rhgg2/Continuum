@@ -594,6 +594,103 @@ return {
     end,
   },
 
+  -- masterFeed: pins (post-fold) audio producer feeding the parent send for
+  -- non-master hosts whose audio crosses into the master-hosted host.
+
+  {
+    name = 'masterFeed: cross-host source-to-master stamps source on sender',
+    run = function()
+      -- two-source fanin: mix lives in master-hosted host; both sources contribute
+      -- audio that lifts to mainSend. Each sender's masterFeed names its source.
+      local ns = {}
+      local k,  v  = source('s1', 'guid-a'); ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
+      local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1',  to = 'mix', toPort = 1 },
+        { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
+        { type = 'audio', from = 'mix', to = 'master' },
+      }))
+      t.deepEq(plan['guid-a'].masterFeed, { from = 's1', fromPort = 1 })
+      t.deepEq(plan['guid-b'].masterFeed, { from = 's2', fromPort = 1 })
+    end,
+  },
+
+  {
+    name = 'masterFeed: cross-host fx-to-master names the fx producer (post-fold)',
+    run = function()
+      -- fx_pre lives in s1's class; its output crosses into the master-hosted
+      -- host (where mix lives). masterFeed on guid-a names fx_pre.
+      local ns = {}
+      local k,  v  = source('s1', 'guid-a');  ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b');  ns[k2] = v2
+      local k3, v3 = fx('fx_pre');            ns[k3] = v3
+      local k4, v4 = fx('mix', { ins = 2 });  ns[k4] = v4
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1',     to = 'fx_pre' },
+        { type = 'audio', from = 'fx_pre', to = 'mix', toPort = 1 },
+        { type = 'audio', from = 's2',     to = 'mix', toPort = 2 },
+        { type = 'audio', from = 'mix',    to = 'master' },
+      }))
+      t.deepEq(plan['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1 })
+      t.deepEq(plan['guid-b'].masterFeed, { from = 's2',     fromPort = 1 })
+    end,
+  },
+
+  {
+    name = 'masterFeed: folded gain CU on master-bound wire bypassed to real producer',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s1', 'guid-a');  ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b');  ns[k2] = v2
+      local k3, v3 = fx('fx_pre');            ns[k3] = v3
+      local k4, v4 = fx('mix', { ins = 2 });  ns[k4] = v4
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1',     to = 'fx_pre' },
+        { type = 'audio', from = 'fx_pre', to = 'mix', toPort = 1, ops = { gain = 0.5 } },
+        { type = 'audio', from = 's2',     to = 'mix', toPort = 2 },
+        { type = 'audio', from = 'mix',    to = 'master' },
+      }))
+      t.deepEq(plan['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1 })
+      t.eq(plan['guid-a'].mainSendGain, 0.5)
+    end,
+  },
+
+  {
+    name = 'masterFeed: in-class sourceTrack mainSend has no masterFeed (no cross-host wire)',
+    run = function()
+      -- source + master share class; mainSend=true but there's no cross-host
+      -- master-bound wire, so masterFeed stays nil and allocator defaults to 0.
+      local ns = {}
+      local k,  v  = source('s', 'guid-s'); ns[k]  = v
+      local k2, v2 = fx('f');               ns[k2] = v2
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's', to = 'f' },
+        { type = 'audio', from = 'f', to = 'master' },
+      }))
+      t.eq(plan['guid-s'].mainSend, true)
+      t.eq(plan['guid-s'].masterFeed, nil)
+    end,
+  },
+
+  {
+    name = 'masterFeed: midi cross-host to master-hosted does not set masterFeed',
+    run = function()
+      -- s2's midi wire to master lifts mainSend; masterFeed is audio-only.
+      local ns = {}
+      local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
+      local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
+      local k3, v3 = fx('A');                 ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1', to = 'A' },
+        { type = 'audio', from = 'A',  to = 'master' },
+        { type = 'midi',  from = 's2', to = 'master' },
+      }))
+      t.eq(plan['guid-s2'].mainSend, true)
+      t.eq(plan['guid-s2'].masterFeed, nil, 'midi master wire stays bool-only')
+    end,
+  },
+
   {
     name = 'intraConns: un-folded gain CU on intra-host wire is included',
     run = function()

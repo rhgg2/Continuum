@@ -15,8 +15,8 @@
 --shape: lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
 --shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
---shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, outWires={ {from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number}, ... }, intraConns={ {from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi'}, ... } } }; outWires is one entry per inter-class wire (no collapse); intraConns is one entry per intra-host conn (incl. source-from and master-to anchors at track-IO pair 1). from/toNode are post-fold — boundary gain CUs that fold onto a send/mainSend are bypassed so endpoints name real FX in fxOrder (or source/master). M.allocate(targetPlan) turns outWires into sends with per-tuple channel assignment.
---shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, pinMaps={ [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, nchan=int } }; output of M.allocate. Pair 1 anchors source-from / master-to intras and source-out outWires (track-IO convention); other audio wires claim pair=cursor++ on the bearing host; REAPER chan = (pair-1)*2; nchan = max(2, maxPair*2). Pin maps are audio-only — one entry per FX touched by allocation, missing ports default to REAPER identity at apply, multi-pair lists OR'd into one bitmask by 3c.2's pin writer. MIDI keeps srcChan=dstChan=0 until 3c.3; sends dedup on the 4-tuple. mainSendOffs (parent send pair via C_MAINSEND_OFFS) deferred to a follow-up step.
+--shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, outWires={ {from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number}, ... }, intraConns={ {from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi'}, ... } } }; outWires is one entry per inter-class wire (no collapse); intraConns is one entry per intra-host conn (incl. source-from and master-to anchors at track-IO pair 1). masterFeed names the (post-fold) audio producer whose output feeds the host's parent send to the master-hosted host; allocator pins that output and stamps mainSendOffs. from/toNode are post-fold — boundary gain CUs that fold onto a send/mainSend are bypassed so endpoints name real FX in fxOrder (or source/master). M.allocate(targetPlan) turns outWires into sends with per-tuple channel assignment.
+--shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, pinMaps={ [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, nchan=int, mainSendOffs?=int } }; output of M.allocate. Pair 1 anchors source-from / master-to intras and source-out outWires (track-IO convention); other audio wires claim pair=cursor++ on the bearing host; REAPER chan = (pair-1)*2; nchan = max(2, maxPair*2). Pin maps are audio-only — one entry per FX touched by allocation, missing ports default to REAPER identity at apply, multi-pair lists OR'd into one bitmask by 3c.2's pin writer. MIDI keeps srcChan=dstChan=0 until 3c.3; sends dedup on the 4-tuple. mainSendOffs (parent send pair via C_MAINSEND_OFFS) is stamped whenever mainSend=true: 0 when source's own pair feeds master (no masterFeed, or masterFeed.from is the source itself), (pair-1)*2 when masterFeed names an fx (allocator claims a pair and pins that fx output).
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -574,6 +574,14 @@ function M.compile(userGraph)
           end
         elseif toHost == masterHostedHost then
           plan[fromHost].mainSend = true
+          -- Multi-wire to master collapses to last-wins on masterFeed;
+          -- 3c.4's CU-merge lowers ≥2 master wires to a single CU output.
+          if conn.type == 'audio' then
+            local src, srcPort = conn.from, conn.fromPort
+            local upstream = folded[src] and cuInbound[src] or nil
+            if upstream then src, srcPort = upstream.from, upstream.fromPort end
+            plan[fromHost].masterFeed = { from = src, fromPort = srcPort }
+          end
         else
           local src, srcPort = conn.from, conn.fromPort
           local upstream = folded[src] and cuInbound[src] or nil
@@ -630,8 +638,8 @@ end
 ----- allocate
 
 -- Walks fxOrder topologically; claims a stereo audio pair per intra-conn /
--- outgoing send / incoming send. Source/master anchors pin at pair 1.
---contract: outWires/intraConns -> sends+pinMaps+nchan; audio pair-claim, midi 0/0; dedup 4-tuple
+-- outgoing send / incoming send / parent send. Source/master anchors pin at pair 1.
+--contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs
 function M.allocate(plan)
   local fxSetOf, alloc = {}, {}
   for hostKey, entry in pairs(plan) do
@@ -740,6 +748,22 @@ function M.allocate(plan)
     end
   end
 
+  -- Stage 1b -- parent send: claim a pair on each host whose audio feeds master.
+  -- No masterFeed (or source-from) => mainSendOffs=0; fx-from claims a fresh pair.
+  for _, hostKey in ipairs(hostKeys) do
+    local entry, fxSet, state = plan[hostKey], fxSetOf[hostKey], alloc[hostKey]
+    if entry.mainSend then
+      local mf = entry.masterFeed
+      if mf and fxSet[mf.from] then
+        local pair = claim(state)
+        pinAdd(state, mf.from, 'outs', mf.fromPort, pair)
+        state.mainSendOffs = (pair - 1) * 2
+      else
+        state.mainSendOffs = 0
+      end
+    end
+  end
+
   -- Stage 2 -- incoming sends: claim dstChan on receiver, write back into sender.
   for _, hostKey in ipairs(hostKeys) do
     local incList = incoming[hostKey]
@@ -784,9 +808,10 @@ function M.allocate(plan)
     for k, v in pairs(entry) do
       if k ~= 'outWires' and k ~= 'intraConns' then copy[k] = v end
     end
-    copy.sends   = sends
-    copy.pinMaps = state.pinMaps
-    copy.nchan   = math.max(2, (state.cursor - 1) * 2)
+    copy.sends        = sends
+    copy.pinMaps      = state.pinMaps
+    copy.nchan        = math.max(2, (state.cursor - 1) * 2)
+    copy.mainSendOffs = state.mainSendOffs
     out[hostKey] = copy
   end
   return out

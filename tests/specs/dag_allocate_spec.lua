@@ -323,6 +323,103 @@ return {
     end,
   },
   {
+    name = 'mainSendOffs: mainSend=true with no masterFeed defaults to 0',
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          mainSend=true, intraConns={}, outWires={},
+        },
+      }
+      local out = DAG.allocate(plan)
+      t.eq(out['guid-a'].mainSendOffs, 0)
+      t.eq(out['guid-a'].nchan,        2)
+    end,
+  },
+  {
+    name = 'mainSendOffs: masterFeed from source (not in fxSet) stays at 0, no pin',
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          mainSend=true, masterFeed={from='s'},
+          intraConns={}, outWires={},
+        },
+      }
+      local out = DAG.allocate(plan)
+      t.eq(out['guid-a'].mainSendOffs, 0)
+      t.deepEq(out['guid-a'].pinMaps,  {})
+    end,
+  },
+  {
+    name = 'mainSendOffs: masterFeed from fx claims fresh pair, pins fx output',
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          mainSend=true, masterFeed={from='fx1'},
+          intraConns={ {from='s', to='fx1', type='audio'} },
+          outWires={},
+        },
+      }
+      local out = DAG.allocate(plan)
+      t.deepEq(out['guid-a'].pinMaps.fx1.ins[1],  {1})
+      t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {2})
+      t.eq(out['guid-a'].mainSendOffs, 2)
+      t.eq(out['guid-a'].nchan,        4)
+    end,
+  },
+  {
+    name = 'mainSendOffs: masterFeed coexists with outgoing send (pair counting)',
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          mainSend=true, masterFeed={from='fx1'},
+          intraConns={ {from='s', to='fx1', type='audio'} },
+          outWires={ {from='fx1', to='guid-b', toNode='fx_b', type='audio'} },
+        },
+        ['guid-b'] = { hostKind='newTrack', fxOrder={'fx_b'},
+                       mainSend=false, intraConns={}, outWires={} },
+      }
+      local out = DAG.allocate(plan)
+      -- fx_order walk claims pair 2 for the outWire; stage 1b claims pair 3 for
+      -- the master feed. fx1.outs[1] holds both pairs, sorted.
+      t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {2, 3})
+      t.eq(out['guid-a'].sends[1].srcChan, 2)
+      t.eq(out['guid-a'].mainSendOffs,     4)
+      t.eq(out['guid-a'].nchan,            6)
+    end,
+  },
+  {
+    name = 'mainSendOffs: absent on master-hosted host (mainSend=false)',
+    run = function()
+      local plan = {
+        ['__master__'] = {
+          hostKind='master', fxOrder={'mix'},
+          mainSend=false,
+          intraConns={ {from='mix', to='master', type='audio'} },
+          outWires={},
+        },
+      }
+      local out = DAG.allocate(plan)
+      t.eq(out['__master__'].mainSendOffs, nil)
+    end,
+  },
+  {
+    name = 'mainSendOffs: absent on hosts with mainSend=false',
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          mainSend=false, intraConns={}, outWires={},
+        },
+      }
+      local out = DAG.allocate(plan)
+      t.eq(out['guid-a'].mainSendOffs, nil)
+    end,
+  },
+  {
     name = 'allocate: same input -> same output (determinism)',
     run = function()
       local mk = function()
