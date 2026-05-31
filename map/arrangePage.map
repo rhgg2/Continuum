@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=767  sha=e4d0724  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=771  sha=3096d1b  mode=chunk
 @deps cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost
 
 # Invariants & contracts
@@ -97,7 +97,7 @@
       -- SpanAllColumns so the entire row is the click target; we paint the
       -- key text on top with SameLine.
   @fn renderPalette(tracks)  @ 614
-  @fn placeKey(slotIdx)  @ 754
+  @fn placeKey(slotIdx)  @ 758
       -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
@@ -132,7 +132,7 @@
   @use call    arrangeView.focus  @ 297
   @use call    arrangeView.gutterLoopCand  @ 216
   @use call    arrangeView.hitTake  @ 190
-  @use call    arrangeView.keyForSlot  @ 511, 601, 760
+  @use call    arrangeView.keyForSlot  @ 511, 601, 764
   @use call    arrangeView.loopRangeQN  @ 382
   @use call    arrangeView.nextFreeSlot  @ 524
   @use call    arrangeView.paletteSlot  @ 586, 618

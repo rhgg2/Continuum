@@ -328,8 +328,10 @@ function am:editCursorQN()
   return reaper.TimeMap2_timeToQN(0, reaper.GetCursorPositionEx(0))
 end
 
+-- seekplay=true: gutter clicks (and arrangePlayFromCursor's seek) drag
+-- the playhead with them when the transport is running.
 function am:setEditCursorQN(qn)
-  reaper.SetEditCurPos(reaper.TimeMap2_QNToTime(0, qn), false, false)
+  reaper.SetEditCurPos(reaper.TimeMap2_QNToTime(0, qn), false, true)
 end
 
 --contract: (loQN, hiQN) of the project loop range; nil when no loop is set (start == end).
@@ -346,6 +348,12 @@ end
 
 function am:clearLoopRange()
   reaper.GetSet_LoopTimeRange(true, true, 0, 0, false)
+end
+
+--contract: seeks the edit cursor to qn (transport follows if playing); starts playback iff stopped.
+function am:playFromQN(qn)
+  self:setEditCursorQN(qn)
+  if reaper.GetPlayState() & 1 == 0 then reaper.OnPlayButton() end
 end
 
 --contract: QN of the play head; nil when the transport is not playing.

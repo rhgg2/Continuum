@@ -747,6 +747,10 @@ local binds = {
   arrangeTakeProperties         = { { ImGui.Key_Backspace, ImGui.Mod_Super } },
   arrangeDuplicateBelow         = { { ImGui.Key_D, ImGui.Mod_Ctrl } },
   arrangeDuplicateUnpooledBelow = { { ImGui.Key_Enter, ImGui.Mod_Super, ImGui.Mod_Shift } },
+  arrangeSetLoopStart           = { { ImGui.Key_B, ImGui.Mod_Ctrl } },
+  arrangeSetLoopEnd             = { { ImGui.Key_E, ImGui.Mod_Ctrl } },
+  arrangePlayFromCursor         = { ImGui.Key_F6 },
+  arrangeClearLoop              = { ImGui.Key_Escape },
 }
 
 -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →

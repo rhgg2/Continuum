@@ -194,6 +194,30 @@ local function deleteFocusedAndAdvance()
   moveCursorBy(cm:get('arrangeAdvanceBy'), 0)
 end
 
+----- Loop + transport — REAPER loop range and playback, driven from the cursor
+
+--invariant: setLoopStart/End move one loop endpoint to cursorQN; never inverts the range.
+--invariant: with no loop yet, defaults are {qn, projectEnd} (start) and {0, qn} (end).
+local function setLoopStartHere()
+  local qn = av:rowToQN(cursorRow)
+  local _, hi = am:loopRangeQN()
+  if hi and qn >= hi then return end
+  am:setLoopRangeQN(qn, hi or am:projectEndQN())
+end
+
+local function setLoopEndHere()
+  local qn = av:rowToQN(cursorRow)
+  local lo = am:loopRangeQN()
+  if lo and qn <= lo then return end
+  am:setLoopRangeQN(lo or 0, qn)
+end
+
+local function playFromCursor()
+  am:playFromQN(av:rowToQN(cursorRow))
+end
+
+local function clearLoop() am:clearLoopRange() end
+
 ----------- PUBLIC
 
 ----- View state — cursor, scroll, focus, density
@@ -391,6 +415,10 @@ arrange:registerAll {
   arrangeTakeProperties         = focusedTakeProperties,
   arrangeDuplicateBelow         = { duplicateFocusedBelow,          'Duplicate pooled take' },
   arrangeDuplicateUnpooledBelow = { duplicateUnpooledFocusedBelow,  'Duplicate take' },
+  arrangeSetLoopStart           = { setLoopStartHere,               'Set loop start at cursor' },
+  arrangeSetLoopEnd             = { setLoopEndHere,                 'Set loop end at cursor' },
+  arrangePlayFromCursor         = { playFromCursor,                 'Play from cursor' },
+  arrangeClearLoop              = { clearLoop,                      'Clear loop range' },
 }
 
 -- arrangeAdvanceBy is project-wide and distinct from tracker's take-tier
