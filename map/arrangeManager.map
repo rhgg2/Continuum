@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=576  sha=96d6b79  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=593  sha=96d6b79  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts
@@ -56,7 +56,7 @@
   @fn copyMidiEvents(srcTake, dstTake)  @ 462
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 545
+  @fn projectMidiTakes()  @ 562
 
 # Public API (am:*)
   @api am:projectTracks()  @ 172
@@ -90,30 +90,30 @@
   @api am:duplicateBelow(take)  @ 468
       @contract  pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
   @api am:duplicateUnpooledBelow(take)  @ 476
-      @contract  fresh-pool MIDI clone at natural end with copied events; nil iff non-MIDI or start collision.
-  @api am:newTakeBelow(take)  @ 486
+      @contract  unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
+  @api am:newTakeBelow(take)  @ 503
       @contract  empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 497
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 514
       @contract  true iff no other take on trackIdx starts exactly at startQN (item ~= exceptItem). Replaces the old range-overlap gate: under the natural-length model items may share span, but never a start position.
-  @api am:moveTake(take, deltaQN)  @ 507
+  @api am:moveTake(take, deltaQN)  @ 524
       @contract  shifts item start by deltaQN; relayouts the track. Natural length is preserved; D_LENGTH is re-derived. Returns true iff the new start clears existing starts (no-op on collision).
-  @api am:resizeTake(take, newNaturalQN)  @ 520
+  @api am:resizeTake(take, newNaturalQN)  @ 537
       @contract  writes the take's natural length; relayout caps it (source / next-take gap). A value ≥ source is demoted to util.OPEN during relayout.
-  @api am:takeSourceLengthQN(take)  @ 527
+  @api am:takeSourceLengthQN(take)  @ 544
       @contract  source length in QN at the take's position; 0 if source missing.
-  @api am:deleteTake(take)  @ 536
-  @api am:takesUsing(name)  @ 557
+  @api am:deleteTake(take)  @ 553
+  @api am:takesUsing(name)  @ 574
       @contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 567
+  @api am:reswingAll(name)  @ 584
       @contract  re-binds each takesUsing(name) take with markSwingStale=true; restores the original bound take at end
 
 # Uses (outbound edges)
-  @use call    cm.readTakeKey  @ 90, 560
+  @use call    cm.readTakeKey  @ 90, 577
   @use call    cm.readTrackKey  @ 57
   @use call    cm.writeTakeKey  @ 95, 96
   @use call    cm.writeTrackKey  @ 61
-  @use call    tm.bindTake  @ 571, 573
-  @use call    tm.currentTake  @ 569, 573
+  @use call    tm.bindTake  @ 588, 590
+  @use call    tm.currentTake  @ 586, 590
   @use call    util.toBase62  @ 313
   @use require util  @ 13
 

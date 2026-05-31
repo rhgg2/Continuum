@@ -472,13 +472,30 @@ function am:duplicateBelow(take)
   return am:duplicateTake(take, destQN)
 end
 
---contract: fresh-pool MIDI clone at natural end with copied events; nil iff non-MIDI or start collision.
+--contract: unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
 function am:duplicateUnpooledBelow(take)
   if take.kind ~= 'midi' then return end
   local destQN = destBelow(take)
   if not am:startIsClear(take.trackIdx, destQN) then return end
+
   local _, newTake = am:createAndDropMidi(take.trackIdx, destQN, take.naturalLenQN, take.name)
-  if newTake then copyMidiEvents(take.take, newTake) end
+  if not newTake then return end
+
+  local newItem = reaper.GetMediaItemTake_Item(newTake)
+  local newGuid = newItem and harvestPoolGuid(newItem)
+  local ok, srcChunk = reaper.GetItemStateChunk(take.item, '', false)
+  if not (ok and srcChunk and newGuid) then return newTake end
+
+  reaper.SetItemStateChunk(newItem, chunkSetPool(srcChunk, newGuid), false)
+  -- SetItemStateChunk may swap the active take object; refetch.
+  newTake = reaper.GetActiveTake(newItem)
+  -- Chunk re-applies src's POSITION; restore to destQN.
+  reaper.SetMediaItemInfo_Value(newItem, 'D_POSITION', reaper.TimeMap2_QNToTime(0, destQN))
+  -- Chunk's POOLEDEVTS now references the freshly-minted (empty) pool;
+  -- write src's MIDI in so the unpooled clone actually has events.
+  copyMidiEvents(take.take, newTake)
+
+  relayoutTrack(reaper.GetTrack(0, take.trackIdx))
   return newTake
 end
 

@@ -168,7 +168,6 @@ local function duplicateFocusedBelow()
   end
 end
 
---invariant: arrangeDuplicateUnpooledBelow drops a fresh-pool MIDI clone (events copied) at the focused take's natural end, shifts focus to it, advances the cursor by the new take's row count, and auto-opens take properties so the user can name + size it.
 local function duplicateUnpooledFocusedBelow()
   adoptCursor()
   local take = focusedTake()
