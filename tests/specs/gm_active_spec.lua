@@ -26,7 +26,8 @@ end
 local function fakeCm()
   local store = {}
   return { get = function(_, k) return store[k] end,
-           set = function(_, _l, k, v) store[k] = v end }
+           set = function(_, _l, k, v) store[k] = v end,
+           subscribe = function() end }
 end
 
 local function mk()

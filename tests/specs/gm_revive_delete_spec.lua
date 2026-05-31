@@ -33,6 +33,7 @@ local function fakeCm()
   return {
     get = function(_, k) return store[k] end,
     set = function(_, _lvl, k, v) store[k] = v end,
+    subscribe = function() end,
   }
 end
 

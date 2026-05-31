@@ -1,10 +1,11 @@
-@module groupManager  src=groupManager.lua  loc=922  sha=dabb224  mode=chunk
+@module groupManager  src=groupManager.lua  loc=928  sha=dabb224  mode=chunk
 @deps tm, cm
 
 # Invariants & contracts
   @contract  seeds a new group from clipboard-sourced concrete `events` and a
   @contract  the caller (clipboard) has already bounds-checked the target
   @contract  explicit-group duplicate, used by the groupDuplicate
+  @contract  rehydrate on cm reload-shape (REAPER undo); cm:set carries a key and is ignored
 
 # Shapes
   @shape  group = { rect, events = { [vuid]=groupEvt }, nextVuid, instances = { [instId]=instance } }
@@ -171,12 +172,12 @@
       -- mutable state; rect/anchor are by reference (render reads, never
       -- mutates).
   -- INSTANCE / GROUP LIFECYCLE
-  @api gm:deleteInstance(groupId, instId)  @ 795
+  @api gm:deleteInstance(groupId, instId)  @ 801
       -- Stage a tm delete for every projected concrete of one instance, drop
       -- the instance, and -- if it was the group's last -- drop the group,
       -- clearing the active pointer if it named it. Unknown id -> nil, reason.
       @contract  (groupId, instId) -> true | nil,reason; stages tm deletes for the instance's concretes, last instance drops the group + clears active. Unknown id -> nil,reason.
-  @api gm:moveInstance(groupId, instId, anchor)  @ 826
+  @api gm:moveInstance(groupId, instId, anchor)  @ 832
       -- Re-anchor an instance. The group frame is anchor-invariant, so a pure
       -- move is zero group-frame drift and reproject (drift-driven) cannot see
       -- it: re-place every projected concrete through the group->instance dual
@@ -185,7 +186,7 @@
       -- a collision with another group or a sibling -- the moving instance
       -- itself excluded so it cannot self-collide.
       @contract  (groupId, instId, anchor) -> true | nil,reason. Precondition: caller has cleared the destination cells -- gm only re-places its own concretes, never clears foreign ones (as gm:newInstance, take/region bounds are the caller's). gm validates channel range + cross-group/sibling disjointness only.
-  @api gm:resizeGroup(groupId, instId, edits)  @ 866
+  @api gm:resizeGroup(groupId, instId, edits)  @ 872
       -- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
       -- re-origins (Model A: every anchor += startDelta, every group event
       -- ppq -= startDelta) so realised positions hold while the boundary
@@ -203,19 +204,20 @@
   @use call    cm.get  @ 36, 254
   @use call    cm.set  @ 246
   @use call    groups.deriveAssign  @ 354, 636
-  @use call    groups.inRect  @ 375, 897
+  @use call    groups.inRect  @ 375, 903
   @use call    groups.project  @ 264, 481, 552, 579
   @use call    groups.reconcile  @ 592
   @use call    groups.resolve  @ 363
   @use call    groups.streamId  @ 318
   @use call    tm.addEvent  @ 484, 606
-  @use call    tm.assignEvent  @ 611, 844
+  @use call    tm.assignEvent  @ 611, 850
   @use call    tm.byUuid  @ 267, 782
-  @use call    tm.deleteEvent  @ 617, 803
+  @use call    tm.deleteEvent  @ 617, 809
   @use call    util.assign  @ 640, 726
-  @use call    util.clone  @ 270, 452, 486, 609, 614, 689, 722, 914
+  @use call    util.clone  @ 270, 452, 486, 609, 614, 689, 722, 920
   @use require groups  @ 11
   @use require util  @ 10
+  @use sub     cm:configChanged  @ 790
   @use sub     tm:postflush  @ 759
   @use sub     tm:preflush  @ 734
   @use sub     tm:rebuild  @ 776

@@ -786,6 +786,12 @@ tm:subscribe('rebuild', function(takeChanged)
   end
 end)
 
+--contract: rehydrate on cm reload-shape (REAPER undo); cm:set carries a key and is ignored
+cm:subscribe('configChanged', function(change)
+  if change.key then return end
+  rehydrate()
+end)
+
 ----------- INSTANCE / GROUP LIFECYCLE
 
 -- Stage a tm delete for every projected concrete of one instance, drop

@@ -30,10 +30,21 @@ local function fakeTm(uuidMap)
 end
 
 local function fakeCm()
-  local store = {}
+  local store, listeners = {}, {}
   return {
     get = function(_, k) return store[k] end,
-    set = function(_, _lvl, k, v) store[k] = v end,
+    set = function(_, _lvl, k, v)
+      store[k] = v
+      for fn in pairs(listeners.configChanged or {}) do fn{ key = k, level = _lvl } end
+    end,
+    subscribe = function(_, sig, fn)
+      listeners[sig] = listeners[sig] or {}
+      listeners[sig][fn] = true
+    end,
+    _rewind = function(blob)
+      store.groups = blob
+      for fn in pairs(listeners.configChanged or {}) do fn{} end
+    end,
   }
 end
 
@@ -63,6 +74,7 @@ local function serialisingCm()
     set = function(_, _lvl, k, v)
       store[k] = util.unserialise(util.serialise(v))
     end,
+    subscribe = function() end,
   }
 end
 
@@ -139,6 +151,26 @@ return {
       t.eq(bySibling.update.pitch, 72)
       t.truthy(byOrigin and byOrigin.update.pitch == 72,
         'the user-touched origin is round-tripped from the group too')
+    end,
+  },
+  {
+    name = 'REAPER undo: cm reload-shape rehydrates gm from the rewound blob',
+    run = function()
+      -- Ctrl-Z path: cm:pollUndo fires configChanged{} (no key); gm must
+      -- re-read or its `groups` dict still shows pre-undo geometry.
+      local cm = fakeCm()
+      local tmA = fakeTm()
+      local A   = util.instantiate('groupManager', { tm = tmA, cm = cm })
+      local src = note(0, 1, 1)
+      local gid = A:markGroup({ src }, rect(0, 1))
+      A:newInstance(gid, { ppq = 960, chan = 1 })
+      tmA:flush()
+      t.eq(#A:eachInstance(), 2, 'baseline: group + its mirrored instance')
+
+      cm._rewind(nil)
+
+      t.eq(#A:eachInstance(), 0, 'gm rehydrated from rewound cm: no instances')
+      t.eq(A:stateOf(src.uuid), nil, 'origin reverse-lookup cleared')
     end,
   },
 }
