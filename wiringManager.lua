@@ -6,7 +6,7 @@
 --invariant: fxGuid is the stable bridge identity; snapshot/targetState match fxOrder by it
 --invariant: wm deletes an FX instance only when its owning node or CU bridge leaves the graph
 --invariant: host changes are moves; TrackFX_CopyToTrack(is_move=true) preserves plugin state
---shape: wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, params?=table, origin?={kind='node',id=string}|{kind='edge',idx=int}, midiOut?=bool}, ... }, mainSend=bool, mainSendGain?=number, mainSendOffs?=int, sends={ {to=classKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, nchan?=int, pinMaps?={ [fxGuid] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, pinMapsByOrigin?={ [originKey] = { ins=..., outs=... } } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. fxOrder entries carrying `params` are wm-owned CU bridges (synthesised kind='fx' nodes from DAG.lower); snapshot never reads params back from REAPER, so any target with `params` drives setFXChain on every reconcile pass. `origin` is stamped on every target-side fxOrder entry by projectEntry so the applier knows where to write minted guids back; snap entries do not carry it and fxOrderEq ignores it. `midiOut` is set on both sides only for non-JS kind='node' entries — target derives it from the user graph (nodeHasMidiOut), snap from appliedMidiOut[fxGuid] (nil ⇒ REAPER's fresh-FX default of true); mismatch drives setFXChain, and reconcileFXChain step 5 writes the 0x02 bit + records the new applied value. pinMaps carries pair-lists (allocator-touched ports only; absent port ⇒ identity, i.e. port N → pair N); the applier converts pair-lists to REAPER's lo32/hi32 bitmask at the boundary. pinMapsByOrigin carries the same shape for fxs target hasn't materialised yet — applier resolves origin → fxGuid via the stamps populated by the preceding setFXChain. nchan is the host track's I_NCHAN; mainSendOffs is C_MAINSEND_OFFS (only when mainSend=true).
+--shape: wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, params?=table, origin?={kind='node',id=string}|{kind='edge',idx=int}, midiOut?=bool}, ... }, mainSend=bool, mainSendGain?=number, mainSendOffs?=int, sends={ {to=classKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, nchan?=int, pinMaps?={ [fxGuid] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, pinMapsByOrigin?={ [originKey] = { ins=..., outs=... } } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. fxOrder entries carrying `params` are wm-owned CU bridges (synthesised kind='fx' nodes from DAG.lower); snapshot never reads params back from REAPER, so any target with `params` drives setFXChain on every reconcile pass. `origin` is stamped on every target-side fxOrder entry by projectEntry so the applier knows where to write minted guids back; snap entries do not carry it and fxOrderEq ignores it. `midiOut` is set on both sides only for non-JS kind='node' entries — target derives it from the user graph (nodeHasMidiOut), snap from appliedMidiOut[fxGuid] (nil ⇒ REAPER's fresh-FX default of true); mismatch drives setFXChain, and reconcileFXChain step 5 writes the 0x02 bit + records the new applied value. pinMaps carries pair-lists for every port with a route (target: allocator-touched; snap: REAPER non-empty); absent port ⇒ disconnected; the applier converts pair-lists to REAPER's lo32/hi32 bitmask at the boundary. pinMapsByOrigin carries the same shape for fxs target hasn't materialised yet — applier resolves origin → fxGuid via the stamps populated by the preceding setFXChain. nchan is the host track's I_NCHAN; mainSendOffs is C_MAINSEND_OFFS (only when mainSend=true).
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'setExtState'|'moveFxAcrossHosts', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier). moveFxAcrossHosts relocates a live FX from one host to another with TrackFX_CopyToTrack(is_move=true); emitted before per-class setFXChain ops so subsequent per-track reconcile sees the FX already at the destination. setNchan / setPinMaps emit between setFXChain and setMainSend so the applier has fxGuids stamped before pin-map writes and the track has channels allocated before pin maps land. setMainSend carries offs (C_MAINSEND_OFFS) when mainSend=true; setPinMaps carries both fxGuid-keyed and origin-keyed maps so unmaterialised fxs lift through the stamps table.
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
@@ -442,23 +442,22 @@ local function decodePairList(track, fxIdx, isoutput, port)
   return pairs
 end
 
--- ports = pins/2; identity port (routes to its own pair) dropped to match target.
+-- ports = pins/2; disconnected ports (zero mask) dropped — absent ⇒ disconnected.
 local function readPinMapsForFx(track, fxIdx)
   local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
   local function dirMap(isoutput, pinCount)
     local ports, out = math.floor(pinCount / 2), {}
     for port = 1, ports do
       local pairList = decodePairList(track, fxIdx, isoutput, port)
-      local identity = #pairList == 1 and pairList[1] == port
-      if not identity then out[port] = pairList end
+      if #pairList > 0 then out[port] = pairList end
     end
     return out
   end
   return { ins = dirMap(0, ins), outs = dirMap(1, outs) }
 end
 
--- Walk `track`'s chain, returning (fxOrder, pinMaps) for owned fx; identity
--- pin maps are dropped (absent ⇒ port N → pair N). See docs/wiringManager.md.
+-- Walk `track`'s chain, returning (fxOrder, pinMaps) for owned fx; disconnected
+-- pin maps are dropped (absent ⇒ disconnected). See docs/wiringManager.md.
 local function ownedChain(track, ownedGuids)
   local out, pinMaps = {}, {}
   for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
@@ -604,19 +603,6 @@ local function originKey(origin)
   return 'edge:' .. origin.idx
 end
 
--- Drop identity ports (pair-list = {port}) so allocator anchors at pair 1 don't
--- look like drift against the snapshot, which strips identity at the REAPER read.
-local function stripIdentityPorts(pm)
-  local function strip(byPort)
-    local out = {}
-    for port, list in pairs(byPort or {}) do
-      if not (#list == 1 and list[1] == port) then out[port] = list end
-    end
-    return out
-  end
-  return { ins = strip(pm.ins), outs = strip(pm.outs) }
-end
-
 -- pinMaps forks by materialisation: fxGuid-keyed entries land in pinMaps,
 -- unmaterialised ones (no fxGuid yet) in pinMapsByOrigin for the applier.
 local function projectEntry(planEntry, compileNodes, scratchGuid)
@@ -642,12 +628,9 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
   for compileId, pm in pairs(planEntry.pinMaps or {}) do
     local entry = originByCompileId[compileId]
     if entry then
-      local stripped = stripIdentityPorts(pm)
-      if next(stripped.ins) or next(stripped.outs) then
-        local target = entry.fxGuid and pinMaps or pinMapsByOrigin
-        local key    = entry.fxGuid or originKey(entry.origin)
-        target[key]  = util.deepClone(stripped)
-      end
+      local target = entry.fxGuid and pinMaps or pinMapsByOrigin
+      local key    = entry.fxGuid or originKey(entry.origin)
+      target[key]  = util.deepClone(pm)
     end
   end
   local trackGuid
@@ -894,13 +877,13 @@ local function pinMaskFor(pairList, pinOffset)
   return lo, hi
 end
 
--- Full-replace per fx: ports absent from `pm` revert to identity (port N → pair N).
+-- Full-replace per fx: ports absent from `pm` are disconnected (zero mask).
 local function writePinMapsForFx(track, fxIdx, pm)
   local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
   local function dir(isoutput, pinCount, byPort)
     byPort = byPort or {}
     for port = 1, math.floor(pinCount / 2) do
-      local pairList = byPort[port] or { port }
+      local pairList = byPort[port] or {}
       for pinOffset = 0, 1 do
         local lo, hi = pinMaskFor(pairList, pinOffset)
         reaper.TrackFX_SetPinMappings(track, fxIdx, isoutput,

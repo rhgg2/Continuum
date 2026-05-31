@@ -63,16 +63,17 @@ return {
       t.eq(entry.mainSendOffs, 0, 'no masterFeed -> offs 0')
       t.deepEq(entry.pinMaps, {})
       t.deepEq(entry.pinMapsByOrigin['node:fx1'],
-               { ins = {}, outs = { [1] = {1, 2} } })
-      t.eq(entry.pinMapsByOrigin['node:fx2'], nil, 'all-identity fx dropped from projection')
+               { ins = { [1] = {1} }, outs = { [1] = {1, 2} } })
+      t.deepEq(entry.pinMapsByOrigin['node:fx2'],
+               { ins = { [1] = {1} }, outs = { [1] = {1} } })
       t.deepEq(entry.pinMapsByOrigin['node:fx3'],
-               { ins = { [1] = {2} }, outs = {} })
+               { ins = { [1] = {2} }, outs = { [1] = {1} } })
     end,
   },
   {
-    -- Trivial chain: every port is identity. The projection drops all-identity
-    -- fxs from pinMapsByOrigin entirely — same shape as snapshot reads back.
-    name = 'targetState: linear source -> fx -> master drops all-identity fxs',
+    -- Trivial chain: every port routes through pair 1. The projection carries
+    -- explicit entries; unwired ports of the fx default to disconnected at apply.
+    name = 'targetState: linear source -> fx -> master keeps explicit pair-1 routes',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -86,7 +87,8 @@ return {
       local entry  = target['guid-A']
       t.eq(entry.nchan,        2, 'no fresh pair claimed')
       t.eq(entry.mainSendOffs, 0)
-      t.eq(entry.pinMapsByOrigin['node:f'], nil, 'all-identity fx dropped from projection')
+      t.deepEq(entry.pinMapsByOrigin['node:f'],
+               { ins = { [1] = {1} }, outs = { [1] = {1} } })
     end,
   },
 }

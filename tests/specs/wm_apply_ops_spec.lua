@@ -506,7 +506,7 @@ return {
     end,
   },
   {
-    name = 'apply: setPinMaps full-replace — owned ports absent from map reset to identity',
+    name = 'apply: setPinMaps full-replace — owned ports absent from map are disconnected',
     run = function(harness)
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
@@ -519,7 +519,7 @@ return {
       end)
       apply(wm)
       local fxGuid = wm:graph().nodes.f.fxGuid
-      -- Pre-corrupt port 1 → pair 2.
+      -- Pre-corrupt port 1 → pair 2; setPinMaps with empty must wipe it.
       h.reaper.TrackFX_SetPinMappings(track, 0, 0, 0, 1 << 2, 0)
       h.reaper.TrackFX_SetPinMappings(track, 0, 0, 1, 1 << 3, 0)
       wm:applyOps({
@@ -528,8 +528,8 @@ return {
           pinMaps         = { [fxGuid] = { ins={}, outs={} } },
           pinMapsByOrigin = {} },
       }, 'test')
-      t.eq(h.reaper.TrackFX_GetPinMappings(track, 0, 0, 0), 1 << 0, 'pin 0 → identity')
-      t.eq(h.reaper.TrackFX_GetPinMappings(track, 0, 0, 1), 1 << 1, 'pin 1 → identity')
+      t.eq(h.reaper.TrackFX_GetPinMappings(track, 0, 0, 0), 0, 'pin 0 → disconnected')
+      t.eq(h.reaper.TrackFX_GetPinMappings(track, 0, 0, 1), 0, 'pin 1 → disconnected')
     end,
   },
 }

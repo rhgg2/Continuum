@@ -210,17 +210,21 @@ return {
     end,
   },
   {
-    name = 'pin maps round-trip via pinMaps[fxGuid]; identity ports dropped',
+    name = 'pin maps round-trip via pinMaps[fxGuid]; disconnected ports dropped',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       local track = seedSourceTrack(h, 'guid-A')
       h.reaper:setFxIO('JS:owned', { ins = 4, outs = 4 })
       local fxIdx = seedFx(h, track, 'JS:owned', '{FX-1}')
-      -- in port 1 (pins 0,1) → pair 2 (channels 2,3); in port 2 identity.
+      -- in port 1 (pins 0,1) → pair 2 (channels 2,3); in port 2 disconnected.
       h.reaper.TrackFX_SetPinMappings(track, fxIdx, 0, 0, 1 << 2, 0)
       h.reaper.TrackFX_SetPinMappings(track, fxIdx, 0, 1, 1 << 3, 0)
-      -- out port 1 identity; out port 2 → pair 1.
+      h.reaper.TrackFX_SetPinMappings(track, fxIdx, 0, 2, 0, 0)
+      h.reaper.TrackFX_SetPinMappings(track, fxIdx, 0, 3, 0, 0)
+      -- out port 1 disconnected; out port 2 → pair 1.
+      h.reaper.TrackFX_SetPinMappings(track, fxIdx, 1, 0, 0, 0)
+      h.reaper.TrackFX_SetPinMappings(track, fxIdx, 1, 1, 0, 0)
       h.reaper.TrackFX_SetPinMappings(track, fxIdx, 1, 2, 1 << 0, 0)
       h.reaper.TrackFX_SetPinMappings(track, fxIdx, 1, 3, 1 << 1, 0)
       wm:mutate(function(g)
@@ -232,8 +236,8 @@ return {
       local pm = snap['guid-A'].pinMaps['{FX-1}']
       t.truthy(pm,             'pinMaps entry present')
       t.deepEq(pm.ins[1], {2}, 'input port 1 → pair 2')
-      t.eq(pm.ins[2],     nil, 'input port 2 identity dropped')
-      t.eq(pm.outs[1],    nil, 'output port 1 identity dropped')
+      t.eq(pm.ins[2],     nil, 'input port 2 disconnected dropped')
+      t.eq(pm.outs[1],    nil, 'output port 1 disconnected dropped')
       t.deepEq(pm.outs[2], {1}, 'output port 2 → pair 1')
     end,
   },
