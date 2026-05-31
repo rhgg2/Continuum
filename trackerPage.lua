@@ -911,6 +911,13 @@ for i = 0, 9 do
   cmgr:scope('tracker'):bind('advBy' .. i, { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} })
 end
 
+-- Screen point -> (fractional column, integer row) through the grid painter's
+-- inverse, so a click resolves against the exact transform the draw pass used.
+local function cellAt(mouseX, mouseY)
+  local lx, ly = gridPainter.fromScreen(mouseX, mouseY)
+  return lx, math.floor(ly)
+end
+
 --contract: returns (col, stop, fracX) or (nil, nil, fracX)
 --invariant: fracX is separate so callers distinguish 'past last col' from 'inside col N'
 local function nearestStop(mouseX, mouseY)
@@ -928,14 +935,6 @@ local function nearestStop(mouseX, mouseY)
     end
   end
   return bestCol, bestStop, fracX
-end
-
-
--- Screen point -> (fractional column, integer row) through the grid painter's
--- inverse, so a click resolves against the exact transform the draw pass used.
-local function cellAt(mouseX, mouseY)
-  local lx, ly = gridPainter.fromScreen(mouseX, mouseY)
-  return lx, math.floor(ly)
 end
 
 --contract: bails if laneConsumed; lane strip wins gestures over the tracker grid
