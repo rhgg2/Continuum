@@ -675,7 +675,42 @@ plan when its turn comes.
   flows non-zero values through it. Subsumes the slot-boundary case
   from the original 3b.
 
-  *3c.3 — MIDI buses.* Same allocator pattern with bus indices.
+  *3c.3 — MIDI buses.* Same allocator pattern as audio with bus
+  indices, but JSFX bus-awareness shapes the lowering and applier
+  surface. REAPER's per-FX MIDI in/out bus filter is undocumented
+  chunk-only state on VST/AU slots and a JSFX opt-in
+  (`ext_midi_bus`); see `docs/reaper_midi_routing.md` for the
+  encoding. Four user-graph cases, three outcomes:
+
+  - **VST/AU** — allocator assigns an operating bus; applier sets
+    the slot's in/out bus via the documented chunk surgery (trailer
+    flag byte + wrapper-header mirror). Snapshot reads the same
+    bytes.
+  - **Non-bus-aware JSFX on bus 0** — REAPER only exposes bus-0
+    events to the FX; events on other buses pass through the slot
+    untouched. Nothing to do. Allocator prefers bus 0 for these
+    wires to maximise this case.
+  - **Non-bus-aware JSFX on bus N≠0** — `DAG.lower` brackets the FX
+    with pre-park and post-restore CU bridges that rewrite N↔0
+    around it, so the FX sees bus 0 internally while external bus
+    assignment is preserved. Adds two new CU modes (`bus-park`,
+    `bus-restore`).
+  - **`ext_midi_bus` JSFX** — refused at design-time, like capacity
+    overflow. A bus-aware JSFX can mutate `midi_bus` arbitrarily and
+    we can't reason about its routing. First-party CU is bus-aware
+    but never user-placed; the refusal applies only at the user-
+    graph mutation boundary.
+
+  *3c.3a — JSFX path.* Allocator MIDI bus assignment, send-side
+  `I_MIDIFLAGS` src/dst bus bits, CU `bus-park`/`bus-restore` modes,
+  lowering brackets for non-bus-aware JSFX on bus N≠0, design-time
+  refusal of `ext_midi_bus` JSFX via a static
+  `parseJsfxBusAware(ident)` scan of the JSFX desc. JSFX-only chains
+  end-to-end.
+
+  *3c.3b — Native FX path.* VST/AU per-FX in/out bus via chunk
+  surgery; snapshot reads the same bytes via the same chunk walk.
+  Builds on 3c.3a's allocator + send-side.
 
   *3c.4 — Master-merge rule.* `DAG.lower` gains a rule: a class
   with ≥2 audio wires to master materialises a CU-merge node
