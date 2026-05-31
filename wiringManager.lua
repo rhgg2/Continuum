@@ -426,10 +426,41 @@ end
 
 ----- Snapshot / target / diff (Stage 2)
 
--- Walk `track`'s chain, returning { {fxGuid, ident, midiOut?}, ... }
--- for FX whose guid is in ownedGuids. See docs/wiringManager.md.
+-- Adjacent set bits collapse to one pair; lLo|hLo merges the port's two pins.
+local function decodePairList(track, fxIdx, isoutput, port)
+  local lowPin = 2 * (port - 1)
+  local lLo    = reaper.TrackFX_GetPinMappings(track, fxIdx, isoutput, lowPin)
+  local hLo    = reaper.TrackFX_GetPinMappings(track, fxIdx, isoutput, lowPin + 1)
+  local mask   = lLo | hLo
+  local pairs, lastPair = {}, nil
+  for bit = 0, 31 do
+    if ((mask >> bit) & 1) == 1 then
+      local pair = (bit >> 1) + 1
+      if pair ~= lastPair then util.add(pairs, pair); lastPair = pair end
+    end
+  end
+  return pairs
+end
+
+-- ports = pins/2; identity port (routes to its own pair) dropped to match target.
+local function readPinMapsForFx(track, fxIdx)
+  local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
+  local function dirMap(isoutput, pinCount)
+    local ports, out = math.floor(pinCount / 2), {}
+    for port = 1, ports do
+      local pairList = decodePairList(track, fxIdx, isoutput, port)
+      local identity = #pairList == 1 and pairList[1] == port
+      if not identity then out[port] = pairList end
+    end
+    return out
+  end
+  return { ins = dirMap(0, ins), outs = dirMap(1, outs) }
+end
+
+-- Walk `track`'s chain, returning (fxOrder, pinMaps) for owned fx; identity
+-- pin maps are dropped (absent ⇒ port N → pair N). See docs/wiringManager.md.
 local function ownedChain(track, ownedGuids)
-  local out = {}
+  local out, pinMaps = {}, {}
   for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
     local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
     local guid     = reaper.TrackFX_GetFXGUID(track, fxIdx)
@@ -448,9 +479,11 @@ local function ownedChain(track, ownedGuids)
                          gain = gainV }
       end
       util.add(out, entry)
+      local pm = readPinMapsForFx(track, fxIdx)
+      if next(pm.ins) or next(pm.outs) then pinMaps[guid] = pm end
     end
   end
-  return out
+  return out, pinMaps
 end
 
 -- Audio if I_MIDIFLAGS low-5-bits == 31 (midi disabled); midi if I_SRCCHAN
@@ -524,17 +557,24 @@ function wm:snapshot()
   for track, classKey in pairs(byTrack) do
     local hostKind  = byKind[classKey]
     local isScratch = hostKind == 'scratch'
+    local fxOrder, pinMaps = ownedChain(track, ownedGuids)
+    local mainSend = not isScratch
+                     and reaper.GetMediaTrackInfo_Value(track, 'B_MAINSEND') ~= 0
+                     or false
     snap[classKey] = {
-      hostKind  = hostKind,
-      trackGuid = reaper.GetTrackGUID(track),
-      fxOrder   = ownedChain(track, ownedGuids),
-      mainSend  = not isScratch
-                  and reaper.GetMediaTrackInfo_Value(track, 'B_MAINSEND') ~= 0
-                  or false,
+      hostKind     = hostKind,
+      trackGuid    = reaper.GetTrackGUID(track),
+      fxOrder      = fxOrder,
+      mainSend     = mainSend,
       mainSendGain = not isScratch
-                  and reaper.GetMediaTrackInfo_Value(track, 'D_VOL')
-                  or nil,
-      sends     = isScratch and {} or readSendsClass(track, byTrack),
+                     and reaper.GetMediaTrackInfo_Value(track, 'D_VOL')
+                     or nil,
+      mainSendOffs = mainSend
+                     and math.floor(reaper.GetMediaTrackInfo_Value(track, 'C_MAINSEND_OFFS'))
+                     or nil,
+      nchan        = math.floor(reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN')),
+      pinMaps      = pinMaps,
+      sends        = isScratch and {} or readSendsClass(track, byTrack),
     }
   end
 
@@ -544,11 +584,13 @@ function wm:snapshot()
   -- or off the master host.
   if reaper.GetMasterTrack then
     local master = reaper.GetMasterTrack(0)
-    local masterChain = ownedChain(master, ownedGuids)
+    local masterChain, masterPinMaps = ownedChain(master, ownedGuids)
     if #masterChain > 0 then
       snap['__master__'] = {
         hostKind = 'master', trackGuid = nil, fxOrder = masterChain,
         mainSend = false, sends = {},
+        nchan    = math.floor(reaper.GetMediaTrackInfo_Value(master, 'I_NCHAN')),
+        pinMaps  = masterPinMaps,
       }
     end
   end

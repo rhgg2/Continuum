@@ -183,4 +183,58 @@ return {
       t.eq(snap['guid-A'].mainSendGain, 0.25)
     end,
   },
+  {
+    name = 'I_NCHAN round-trips as nchan',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:load()
+      local track = seedSourceTrack(h, 'guid-A')
+      h.reaper.SetMediaTrackInfo_Value(track, 'I_NCHAN', 6)
+      local snap = wm:snapshot()
+      t.eq(snap['guid-A'].nchan, 6)
+    end,
+  },
+  {
+    name = 'C_MAINSEND_OFFS round-trips as mainSendOffs (only when mainSend=true)',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:load()
+      local track = seedSourceTrack(h, 'guid-A')
+      h.reaper.SetMediaTrackInfo_Value(track, 'C_MAINSEND_OFFS', 2)
+      local snap = wm:snapshot()
+      t.eq(snap['guid-A'].mainSendOffs, 2)
+      h.reaper.SetMediaTrackInfo_Value(track, 'B_MAINSEND', 0)
+      snap = wm:snapshot()
+      t.eq(snap['guid-A'].mainSend,     false)
+      t.eq(snap['guid-A'].mainSendOffs, nil, 'absent when mainSend=false')
+    end,
+  },
+  {
+    name = 'pin maps round-trip via pinMaps[fxGuid]; identity ports dropped',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:load()
+      local track = seedSourceTrack(h, 'guid-A')
+      h.reaper:setFxIO('JS:owned', { ins = 4, outs = 4 })
+      local fxIdx = seedFx(h, track, 'JS:owned', '{FX-1}')
+      -- in port 1 (pins 0,1) → pair 2 (channels 2,3); in port 2 identity.
+      h.reaper.TrackFX_SetPinMappings(track, fxIdx, 0, 0, 1 << 2, 0)
+      h.reaper.TrackFX_SetPinMappings(track, fxIdx, 0, 1, 1 << 3, 0)
+      -- out port 1 identity; out port 2 → pair 1.
+      h.reaper.TrackFX_SetPinMappings(track, fxIdx, 1, 2, 1 << 0, 0)
+      h.reaper.TrackFX_SetPinMappings(track, fxIdx, 1, 3, 1 << 1, 0)
+      wm:mutate(function(g)
+        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
+        g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}',
+                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
+      end)
+      local snap = wm:snapshot()
+      local pm = snap['guid-A'].pinMaps['{FX-1}']
+      t.truthy(pm,             'pinMaps entry present')
+      t.deepEq(pm.ins[1], {2}, 'input port 1 → pair 2')
+      t.eq(pm.ins[2],     nil, 'input port 2 identity dropped')
+      t.eq(pm.outs[1],    nil, 'output port 1 identity dropped')
+      t.deepEq(pm.outs[2], {1}, 'output port 2 → pair 1')
+    end,
+  },
 }
