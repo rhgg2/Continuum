@@ -82,4 +82,27 @@ return {
       t.falsy(fired, 'no fire when our P_EXT is still in sync')
     end,
   },
+  {
+    -- Take deleted in REAPER: cm's handle goes stale before coord's tick()
+    -- ValidatePtr2 watcher fires. Without self-validation, pollUndo crashes.
+    name = 'pollUndo drops a stale take handle silently and does not crash',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('take', 'pbRange', 4)
+      bumpState(h.reaper)
+
+      local realValidate = h.reaper.ValidatePtr2
+      h.reaper.ValidatePtr2 = function(_proj, ptr, ctype)
+        if ctype == 'MediaItem_Take*' and ptr == 'take1' then return false end
+        return realValidate(_proj, ptr, ctype)
+      end
+
+      local fired = false
+      h.cm:subscribe('configChanged', function() fired = true end)
+      t.truthy(pcall(function() h.cm:pollUndo() end),
+        'pollUndo must not crash on a stale take pointer')
+      t.falsy(fired,
+        'no fire from cm itself; upstream tick() drives the propagation')
+    end,
+  },
 }

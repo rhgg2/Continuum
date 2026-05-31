@@ -501,12 +501,21 @@ end
 
 --invariant: poll REAPER's project state count once per frame; on a tick, re-read the bound take + track P_EXT strings and refresh the cache + fire reload if either differs from what cm last wrote. Catches REAPER undo / redo, which rewinds P_EXT without notifying us. Project + global tiers live outside REAPER's undo and stay unreversed.
 --contract: no-op when reaper.GetProjectStateChangeCount is absent (test harness without state-count fake); cheap poll otherwise -- one int compare per frame, two string reads + compares only on a state-count tick
+--contract: dead take/track ptrs are dropped before any P_EXT read; tick() drives propagation
 --emits: configChanged -- configChangedPayload.reload (only when an external diff is observed)
 function cm:pollUndo()
   if not reaper.GetProjectStateChangeCount then return end
   local count = reaper.GetProjectStateChangeCount(0)
   if count == lastStateCount then return end
   lastStateCount = count
+  if take and reaper.ValidatePtr2
+     and not reaper.ValidatePtr2(0, take, 'MediaItem_Take*') then
+    take, lastTakeRaw = nil, ''
+  end
+  if track and reaper.ValidatePtr2
+     and not reaper.ValidatePtr2(0, track, 'MediaTrack*') then
+    track, lastTrackRaw = nil, ''
+  end
   local changed = false
   if take then
     local raw = readTakeRaw()
