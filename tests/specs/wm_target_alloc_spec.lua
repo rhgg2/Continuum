@@ -39,8 +39,8 @@ end
 
 return {
   {
-    -- s→fx1→fx2→master + fx1→fx3→master: fan-out forces non-identity outs/ins;
-    -- identity anchors at pair 1 drop in projection. nchan=6, mainSendOffs=0.
+    -- s→fx1→fx2→master + fx1→fx3→master: fx1 reuses pair 1 for fx2's branch,
+    -- claims pair 2 for fx3's; fx2/fx3 both write pair 1 (REAPER sums).
     name = 'targetState: pinMaps + nchan carried for intra fan-out',
     run = function(harness)
       local h, wm = mkWm(harness)
@@ -59,15 +59,14 @@ return {
       local target = wm:targetState()
       local entry  = target['guid-A']
       t.truthy(entry, 'source-track entry present')
-      t.eq(entry.nchan,        6, 'nchan = max(2, cursor*2) after two intra claims')
+      t.eq(entry.nchan,        4, 'one fresh pair for fx3 branch; pair 1 in-place reuse')
       t.eq(entry.mainSendOffs, 0, 'no masterFeed -> offs 0')
       t.deepEq(entry.pinMaps, {})
       t.deepEq(entry.pinMapsByOrigin['node:fx1'],
-               { ins = {}, outs = { [1] = {2, 3} } })
-      t.deepEq(entry.pinMapsByOrigin['node:fx2'],
-               { ins = { [1] = {2} }, outs = {} })
+               { ins = {}, outs = { [1] = {1, 2} } })
+      t.eq(entry.pinMapsByOrigin['node:fx2'], nil, 'all-identity fx dropped from projection')
       t.deepEq(entry.pinMapsByOrigin['node:fx3'],
-               { ins = { [1] = {3} }, outs = {} })
+               { ins = { [1] = {2} }, outs = {} })
     end,
   },
   {
