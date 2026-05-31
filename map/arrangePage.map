@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=762  sha=df7fb33  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=767  sha=e4d0724  mode=chunk
 @deps cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost
 
 # Invariants & contracts
@@ -42,9 +42,9 @@
   @state HEADER_PAD = 8  @ 106
   @state HEADER_GAP = 4  @ 107
   @state CREATE_DEFAULT_BEATS = 8  @ 522
-  @state arrange = cmgr:scope('arrange')  @ 718
+  @state arrange = cmgr:scope('arrange')  @ 719
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture. Slots have no existence apart from items on the grid; the palette's rename / delete buttons act on existing slots.
-  @state binds = {  @ 729
+  @state binds = {  @ 730
 
 # Private functions
   -- Style + draw helpers
@@ -97,7 +97,7 @@
       -- SpanAllColumns so the entire row is the click target; we paint the
       -- key text on top with SameLine.
   @fn renderPalette(tracks)  @ 614
-  @fn placeKey(slotIdx)  @ 752
+  @fn placeKey(slotIdx)  @ 754
       -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
@@ -115,7 +115,7 @@
       @contract  pushes parchment body palette (coord popped chrome before body draw); palette tables below need it.
       @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
   @api ap:renderStatusBar(_)  @ 696
-  @api ap:focusState()  @ 704
+  @api ap:focusState()  @ 705
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # Uses (outbound edges)
@@ -124,15 +124,15 @@
   @use call    arrangeView.commitDrag  @ 222
   @use call    arrangeView.createCandidate  @ 218
   @use call    arrangeView.createSlot  @ 532
-  @use call    arrangeView.cursorCol  @ 180, 254, 616, 700, 722
-  @use call    arrangeView.cursorRow  @ 180, 254, 700, 722
+  @use call    arrangeView.cursorCol  @ 180, 254, 616, 700, 723
+  @use call    arrangeView.cursorRow  @ 180, 254, 700, 723
   @use call    arrangeView.deleteSlot  @ 517
   @use call    arrangeView.dragCandidate  @ 214
   @use call    arrangeView.editCursorQN  @ 435
   @use call    arrangeView.focus  @ 297
   @use call    arrangeView.gutterLoopCand  @ 216
   @use call    arrangeView.hitTake  @ 190
-  @use call    arrangeView.keyForSlot  @ 511, 601, 758
+  @use call    arrangeView.keyForSlot  @ 511, 601, 760
   @use call    arrangeView.loopRangeQN  @ 382
   @use call    arrangeView.nextFreeSlot  @ 524
   @use call    arrangeView.paletteSlot  @ 586, 618
@@ -141,7 +141,7 @@
   @use call    arrangeView.qnToRow  @ 306, 307, 348, 349, 385, 427
   @use call    arrangeView.renameSlot  @ 506
   @use call    arrangeView.revealTake  @ 638
-  @use call    arrangeView.rowToQN  @ 73, 161, 265, 722
+  @use call    arrangeView.rowToQN  @ 73, 161, 265, 723
   @use call    arrangeView.scroll  @ 126
   @use call    arrangeView.seedCursor  @ 641
   @use call    arrangeView.setCursor  @ 180, 233
@@ -155,10 +155,11 @@
   @use call    arrangeView.tracksTakes  @ 333
   @use call    chrome.colour  @ 61, 62, 63, 64, 65, 66
   @use call    chrome.disabledIf  @ 562, 568
-  @use call    chrome.pickerIsActive  @ 706
+  @use call    chrome.pickerIsActive  @ 707
   @use call    chrome.popChromeStyles  @ 628
   @use call    chrome.pushChromeStyles  @ 623
-  @use call    cmgr.scope  @ 718
+  @use call    cm.get  @ 701
+  @use call    cmgr.scope  @ 719
   @use call    imgui.BeginChild  @ 666, 685
   @use call    imgui.BeginTable  @ 587
   @use call    imgui.Button  @ 548, 552, 563, 569
@@ -172,7 +173,7 @@
   @use call    imgui.GetMouseWheel  @ 173
   @use call    imgui.GetTextLineHeightWithSpacing  @ 122, 492
   @use call    imgui.InputText  @ 542, 546
-  @use call    imgui.IsAnyItemActive  @ 710
+  @use call    imgui.IsAnyItemActive  @ 711
   @use call    imgui.IsKeyPressed  @ 549, 550, 553
   @use call    imgui.IsMouseClicked  @ 166, 183
   @use call    imgui.IsMouseDoubleClicked  @ 191
@@ -194,7 +195,7 @@
   @use call    imgui.Text  @ 541, 544, 601, 605, 608, 656, 698
   @use call    imgui.TextDisabled  @ 583
   @use call    modalHost.registerKind  @ 539
-  @use call    modalHost.wasOpenAtFrameStart  @ 711
+  @use call    modalHost.wasOpenAtFrameStart  @ 712
   @use call    painter.hue  @ 89, 90, 91, 92
   @use call    painter.new  @ 127, 245, 489, 680
   @use call    util.atomic  @ 506, 517, 530

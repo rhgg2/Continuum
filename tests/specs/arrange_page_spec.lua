@@ -89,12 +89,12 @@ return {
   },
 
   {
-    name = 'a place-command drop advances the cursor by the dropped take\'s row count',
+    name = 'a place-command drop advances the cursor by cm.arrangeAdvanceBy rows',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.cm:set('project', 'arrangeAdvanceBy', 3)
       h.reaper:setTrackName('tr1', 'Track 1')
-      -- Sibling instance fixes the drop's length at 3 rows.
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 10, len = 3, srcLen = 3, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
@@ -102,16 +102,31 @@ return {
       h.cmgr:push('arrange')
       local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
       am:tracksTakes(0)               -- materialise {p1} into a slot
-      h.cmgr:invoke('drop0')          -- drops at row 0 with length 3
+      h.cmgr:invoke('drop0')          -- drops at row 0
       -- ap doesn't surface the cursor; observe the advance via a second
-      -- drop, which must land at row 3 (the first drop's bottom edge).
+      -- drop, which must land at row 3 (advanceBy past the first).
       h.cmgr:invoke('drop0')
       local takes = am:tracksTakes(0)
       local seconds = 0
       for _, tk in ipairs(takes) do
         if math.abs(tk.startQN - 3) < 1e-6 then seconds = seconds + 1 end
       end
-      t.eq(seconds, 1, 'second drop landed at startQN=3 — cursor advanced past the first drop')
+      t.eq(seconds, 1, 'second drop landed at startQN=3 — cursor advanced by arrangeAdvanceBy=3')
+    end,
+  },
+
+  {
+    name = 'arrangeAdvanceBy0..9 set cm.arrangeAdvanceBy at project tier',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:setProjectTracks{ 'tr1' }
+      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeAdvanceBy5')
+      t.eq(h.cm:get('arrangeAdvanceBy'), 5, 'arrangeAdvanceBy5 set arrangeAdvanceBy=5')
+      h.cmgr:invoke('arrangeAdvanceBy0')
+      t.eq(h.cm:get('arrangeAdvanceBy'), 0, 'arrangeAdvanceBy0 set arrangeAdvanceBy=0')
     end,
   },
 

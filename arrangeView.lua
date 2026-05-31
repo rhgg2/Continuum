@@ -180,10 +180,18 @@ local function duplicateUnpooledFocusedBelow()
   end
 end
 
---invariant: place commands drop0..dropZ — one per base62 slot — drop a fresh instance at the cursor and advance the cursor by the new take's row count. A key whose slot index is unpopulated is a silent no-op (am:dropInstance returns nil). The drop inherits the slot's existing-instance length.
+--invariant: drop0..dropZ place a fresh instance at the cursor and advance cm.arrangeAdvanceBy rows.
+--invariant: arrangeAdvanceBy0..9 (Ctrl+digit) set the advance step.
+--invariant: drop on an empty slot is a no-op; new takes inherit the slot's instance length.
 local function dropAt(slotIdx)
-  advanceCursorPastNewTake(
-    am:dropInstance(cursorCol, slotIdx, av:rowToQN(cursorRow)))
+  if am:dropInstance(cursorCol, slotIdx, av:rowToQN(cursorRow)) then
+    moveCursorBy(cm:get('arrangeAdvanceBy'), 0)
+  end
+end
+
+local function deleteFocusedAndAdvance()
+  deleteFocused()
+  moveCursorBy(cm:get('arrangeAdvanceBy'), 0)
 end
 
 ----------- PUBLIC
@@ -326,12 +334,12 @@ function av:renameSlot(trackIdx, slotIdx, name)
   am:renameSlot(trackIdx, slotIdx, name)
 end
 
---contract: mints a MIDI slot via am, focuses it in the palette, and advances the cursor by the new take's row count; nil if am refused.
+--contract: mints a MIDI slot via am, palette-focuses it, dives into it; nil if am refused.
 function av:createSlot(trackIdx, qnPos, lengthQN, name)
   local slotIdx, take = am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   if slotIdx then
     self:setPaletteSlot(slotIdx)
-    advanceCursorPastNewTake(take)
+    onDive(reaper.GetMediaItemTake_Item(take))
   end
   return slotIdx
 end
@@ -378,11 +386,19 @@ arrange:registerAll {
   arrangeShrinkTake   = { function() resizeFocused(-1) end, 'Shrink take' },
   arrangeGrowTake     = { function() resizeFocused( 1) end, 'Grow take'   },
   arrangeDeleteTake             = { deleteFocused,                  'Delete take' },
+  arrangeDeleteAdvance          = { deleteFocusedAndAdvance,        'Delete take and advance' },
   arrangeDive                   = diveFocused,
   arrangeTakeProperties         = focusedTakeProperties,
   arrangeDuplicateBelow         = { duplicateFocusedBelow,          'Duplicate pooled take' },
   arrangeDuplicateUnpooledBelow = { duplicateUnpooledFocusedBelow,  'Duplicate take' },
 }
+
+-- arrangeAdvanceBy is project-wide and distinct from tracker's take-tier
+-- advanceBy, so the two pages don't shadow each other.
+for i = 0, 9 do
+  arrange:register('arrangeAdvanceBy' .. i,
+    function() cm:set('project', 'arrangeAdvanceBy', i) end)
+end
 
 local placeCmds = {}
 for i = 0, 61 do

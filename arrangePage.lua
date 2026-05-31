@@ -696,8 +696,9 @@ end
 function ap:renderStatusBar(_)
   if not ctx then return end
   ImGui.Text(ctx, string.format(
-    'arrange | row %d  col %d  | %g beats/row',
-    av:cursorRow(), av:cursorCol(), av:beatPerRow()))
+    'arrange | row %d  col %d  | %g beats/row | Advance: %d',
+    av:cursorRow(), av:cursorCol(), av:beatPerRow(),
+    cm:get('arrangeAdvanceBy')))
 end
 
 --contract: acceptCmds=false if picker active, any item active, or modal was open at frame start.
@@ -741,6 +742,7 @@ local binds = {
   arrangeShrinkTake   = { { ImGui.Key_UpArrow,   ImGui.Mod_Super, ImGui.Mod_Shift } },
   arrangeGrowTake     = { { ImGui.Key_DownArrow, ImGui.Mod_Super, ImGui.Mod_Shift } },
   arrangeDeleteTake             = { ImGui.Key_Delete },
+  arrangeDeleteAdvance          = { ImGui.Key_Period },
   arrangeDive                   = { ImGui.Key_Enter },
   arrangeTakeProperties         = { { ImGui.Key_Backspace, ImGui.Mod_Super } },
   arrangeDuplicateBelow         = { { ImGui.Key_D, ImGui.Mod_Ctrl } },
@@ -756,6 +758,9 @@ local function placeKey(slotIdx)
 end
 for i = 0, 61 do
   binds['drop' .. av:keyForSlot(i)] = { placeKey(i) }
+end
+for i = 0, 9 do
+  binds['arrangeAdvanceBy' .. i] = { { ImGui.Key_0 + i, ImGui.Mod_Ctrl } }
 end
 arrange:bindAll(binds)
 

@@ -32,6 +32,7 @@ local declarations = {
   { 'currentOctave',   2     },
   { 'currentSample',   0     },
   { 'advanceBy',       1     },
+  { 'arrangeAdvanceBy', 1     },
 
   -- boolean
   { 'polyAftertouch',  true  },
