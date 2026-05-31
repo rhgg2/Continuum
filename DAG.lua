@@ -16,7 +16,7 @@
 --shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
 --shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, outWires={ {from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number}, ... }, intraConns={ {from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi'}, ... } } }; outWires is one entry per inter-class wire (no collapse); intraConns is one entry per intra-host conn (incl. source-from and master-to anchors at track-IO pair 1). masterFeed names the (post-fold) audio producer whose output feeds the host's parent send to the master-hosted host; allocator pins that output and stamps mainSendOffs. from/toNode are post-fold — boundary gain CUs that fold onto a send/mainSend are bypassed so endpoints name real FX in fxOrder (or source/master). M.allocate(targetPlan) turns outWires into sends with per-tuple channel assignment.
---shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, pinMaps={ [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, nchan=int, mainSendOffs?=int } }; output of M.allocate. Pair 1 anchors source-from / master-to intras and source-out outWires (track-IO convention); other audio wires claim pair=cursor++ on the bearing host; REAPER chan = (pair-1)*2; nchan = max(2, maxPair*2). Pin maps are audio-only — one entry per FX touched by allocation, missing ports default to REAPER identity at apply, multi-pair lists OR'd into one bitmask by 3c.2's pin writer. MIDI keeps srcChan=dstChan=0 until 3c.3; sends dedup on the 4-tuple. mainSendOffs (parent send pair via C_MAINSEND_OFFS) is stamped whenever mainSend=true: 0 when source's own pair feeds master (no masterFeed, or masterFeed.from is the source itself), (pair-1)*2 when masterFeed names an fx (allocator claims a pair and pins that fx output).
+--shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, pinMaps={ [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, nchan=int, mainSendOffs?=int } }; output of M.allocate. Per-host live-range register allocation: each intra / outgoing send / mainSend masterFeed / Stage-2 incoming send is a value with a def slot and a lastUse slot; at the entry to slot S the allocator frees pairs with lastUse ≤ S (the ≤ lets S reuse its own input pairs in-place — REAPER FX read pins before writing them), then claims pull the lowest free pair (cursor++ only when free is empty). Pair 1 is seeded by the track-IO boundary convention (source-from / master-to / source-out): it returns to the free list at its last source-from consumer, or stays claimed forever if a master-to writer pins it. REAPER chan = (pair-1)*2; nchan = max(2, maxPair*2). Pin maps are audio-only — one entry per FX touched by allocation, missing ports default to REAPER identity at apply, multi-pair lists OR'd into one bitmask by 3c.2's pin writer. MIDI keeps srcChan=dstChan=0 until 3c.3; sends dedup on the 4-tuple. mainSendOffs (parent send pair via C_MAINSEND_OFFS): 0 when source's own pair feeds master (no masterFeed, or masterFeed.from is the source), (pair-1)*2 when masterFeed names an fx (allocator claims a pair and pins that fx output).
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -482,7 +482,7 @@ function M.compile(userGraph)
       end
     end
     -- Lower score = drains more pairs than it claims; pick that next to keep
-    -- intra-pair live set small under reusePairs colouring.
+    -- the allocator's live set (and thus nchan) small.
     local function sortReady(r)
       table.sort(r, function(a, b)
         local sa = #succ[a] - inMember[a]
@@ -648,22 +648,19 @@ end
 
 ----- allocate
 
--- Walks fxOrder topo; pair-claims per intra / outgoing send / parent send (anchors at pair 1).
--- opts.reusePairs (default off): intra/outSend pairs return to a per-host free list after consumer.
+-- Per-host live-range register allocation: values track (def, lastUse) slots;
+-- pair 1 is the track-IO boundary register. See allocatedPlan shape for details.
 --contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs
-function M.allocate(plan, opts)
-  opts = opts or {}
-  local reusePairs = opts.reusePairs == true
-
-  local fxSetOf, alloc = {}, {}
+function M.allocate(plan)
+  local fxSetOf, slotOf = {}, {}
   for hostKey, entry in pairs(plan) do
-    fxSetOf[hostKey] = {}
-    for _, id in ipairs(entry.fxOrder or {}) do fxSetOf[hostKey][id] = true end
-    alloc[hostKey] = { cursor = 1, pinMaps = {}, sends = {}, free = {} }
+    fxSetOf[hostKey], slotOf[hostKey] = {}, {}
+    for slot, id in ipairs(entry.fxOrder or {}) do
+      fxSetOf[hostKey][id], slotOf[hostKey][id] = true, slot
+    end
   end
 
-  -- Each sender's outWires reach the receiver as incoming wires; the receiver
-  -- claims dstChan pairs in stage 2 and writes them back into the sender.
+  -- Per-receiver incoming wires (deterministic order) for Stage-2 dstChan claims.
   local incoming = {}
   for senderHost, entry in pairs(plan) do
     for sendIdx, ow in ipairs(entry.outWires or {}) do
@@ -678,149 +675,181 @@ function M.allocate(plan, opts)
     end)
   end
 
-  local function pinAdd(state, fxId, dir, port, pair)
-    local pm = state.pinMaps[fxId]
-    if not pm then pm = { ins = {}, outs = {} }; state.pinMaps[fxId] = pm end
-    local list = pm[dir][port or 1]
-    if not list then list = {}; pm[dir][port or 1] = list end
-    util.add(list, pair)
-  end
-
-  local function claim(state)
-    if state.free[1] then return table.remove(state.free, 1) end
-    local p = state.cursor; state.cursor = p + 1; return p
-  end
-
-  -- Sorted-ascending insert so claim() always returns the lowest free pair
-  -- (deterministic and packs nchan down).
-  local function release(state, pair)
-    local lo, hi = 1, #state.free + 1
-    while lo < hi do
-      local mid = (lo + hi) // 2
-      if state.free[mid] < pair then lo = mid + 1 else hi = mid end
+  -- Pre-init per-host alloc + sends so cross-host Stage-2 write-back has a target.
+  local alloc = {}
+  for hostKey, entry in pairs(plan) do
+    local sends = {}
+    for sendIdx, ow in ipairs(entry.outWires or {}) do
+      sends[sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain, srcChan = 0, dstChan = 0 }
     end
-    table.insert(state.free, lo, pair)
-  end
-
-  local function chanOf(pair, type) return type == 'midi' and 0 or (pair - 1) * 2 end
-
-  local function hasAudioAnchor(entry, fxSet)
-    for _, ic in ipairs(entry.intraConns or {}) do
-      if ic.type == 'audio' and (not fxSet[ic.from] or not fxSet[ic.to]) then return true end
-    end
-    for _, ow in ipairs(entry.outWires or {}) do
-      if ow.type == 'audio' and not fxSet[ow.from] then return true end
-    end
-    return false
+    alloc[hostKey] = { pinMaps = {}, sends = sends, cursor = 1, free = {}, mainSendOffs = nil }
   end
 
   local hostKeys = {}
   for hk in pairs(plan) do util.add(hostKeys, hk) end
   table.sort(hostKeys)
 
-  -- Stage 1 -- anchors plus per-host fxOrder topo walk for outgoing claims.
   for _, hostKey in ipairs(hostKeys) do
-    local entry, fxSet, state = plan[hostKey], fxSetOf[hostKey], alloc[hostKey]
-    if hasAudioAnchor(entry, fxSet) then state.cursor = 2 end
+    local entry, fxSet, slotMap = plan[hostKey], fxSetOf[hostKey], slotOf[hostKey]
+    local state = alloc[hostKey]
+    local N = #(entry.fxOrder or {})
 
-    local outIntras = {}
+    local function pinAdd(fxId, dir, port, pair)
+      local pm = state.pinMaps[fxId]
+      if not pm then pm = { ins = {}, outs = {} }; state.pinMaps[fxId] = pm end
+      local list = pm[dir][port or 1]
+      if not list then list = {}; pm[dir][port or 1] = list end
+      util.add(list, pair)
+    end
+    local function claim()
+      if state.free[1] then return table.remove(state.free, 1) end
+      local p = state.cursor; state.cursor = p + 1; return p
+    end
+    -- Sorted-ascending insert so claim() always returns the lowest free pair.
+    local function release(pair)
+      local lo, hi = 1, #state.free + 1
+      while lo < hi do
+        local mid = (lo + hi) // 2
+        if state.free[mid] < pair then lo = mid + 1 else hi = mid end
+      end
+      table.insert(state.free, lo, pair)
+    end
+
+    -- Build the value list. ord = insertion serial for stable tiebreak.
+    local values, nextOrd = {}, 0
+    local function addValue(v) nextOrd = nextOrd + 1; v.ord = nextOrd; util.add(values, v) end
+
+    -- Pair-1 boundary register: source-from / master-to / source-out /
+    -- mainSend-default unified so they can't free pair 1 from under each other.
+    do
+      local pins, lastUse, boundaryOut = {}, 0, false
+      for _, ic in ipairs(entry.intraConns or {}) do
+        if ic.type == 'audio' then
+          if not fxSet[ic.from] and fxSet[ic.to] then
+            util.add(pins, { fxId = ic.to, dir = 'ins', port = ic.toPort })
+            if slotMap[ic.to] > lastUse then lastUse = slotMap[ic.to] end
+          elseif fxSet[ic.from] and not fxSet[ic.to] then
+            util.add(pins, { fxId = ic.from, dir = 'outs', port = ic.fromPort })
+            boundaryOut = true
+          end
+        end
+      end
+      for _, ow in ipairs(entry.outWires or {}) do
+        if ow.type == 'audio' and not fxSet[ow.from] then boundaryOut = true end
+      end
+      if entry.mainSend then
+        local mf = entry.masterFeed
+        if not (mf and fxSet[mf.from]) then boundaryOut = true end
+      end
+      if boundaryOut then lastUse = N + 1 end
+      if #pins > 0 or boundaryOut then
+        addValue({ def = 0, lastUse = lastUse, pins = pins, assignPair = 1, apply = function() end })
+      end
+    end
+
+    -- fx → fx intras: one value per edge.
     for _, ic in ipairs(entry.intraConns or {}) do
-      if ic.type == 'audio' then
-        if not fxSet[ic.from] or not fxSet[ic.to] then
-          if fxSet[ic.from] then pinAdd(state, ic.from, 'outs', ic.fromPort, 1) end
-          if fxSet[ic.to]   then pinAdd(state, ic.to,   'ins',  ic.toPort,   1) end
-        else
-          outIntras[ic.from] = outIntras[ic.from] or {}
-          util.add(outIntras[ic.from], ic)
-        end
+      if ic.type == 'audio' and fxSet[ic.from] and fxSet[ic.to] then
+        addValue({
+          def = slotMap[ic.from], lastUse = slotMap[ic.to],
+          pins = {
+            { fxId = ic.from, dir = 'outs', port = ic.fromPort },
+            { fxId = ic.to,   dir = 'ins',  port = ic.toPort },
+          },
+          apply = function() end,
+        })
       end
     end
-    local outSends = {}
+
+    -- Outgoing audio sends from an fx: claim on producer, set srcChan.
+    -- Source-out / midi sends keep srcChan=0 from pre-init; no value needed.
     for sendIdx, ow in ipairs(entry.outWires or {}) do
-      if fxSet[ow.from] then
-        outSends[ow.from] = outSends[ow.from] or {}
-        util.add(outSends[ow.from], { ow = ow, sendIdx = sendIdx })
-      else
-        state.sends[sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain,
-                                 srcChan = chanOf(1, ow.type), dstChan = 0 }
+      if ow.type == 'audio' and fxSet[ow.from] then
+        addValue({
+          def = slotMap[ow.from], lastUse = N + 1,
+          pins = { { fxId = ow.from, dir = 'outs', port = ow.fromPort } },
+          apply = function(pair) state.sends[sendIdx].srcChan = (pair - 1) * 2 end,
+        })
       end
     end
 
-    local slotOf, releaseAt = {}, {}
-    for slot, id in ipairs(entry.fxOrder or {}) do slotOf[id] = slot end
-
-    for slot, fxId in ipairs(entry.fxOrder or {}) do
-      -- Free before claim so this slot's own outgoing intras/sends can reuse
-      -- pairs it just consumed (single read-then-write within the FX call).
-      if reusePairs and releaseAt[slot] then
-        for _, p in ipairs(releaseAt[slot]) do release(state, p) end
-      end
-
-      local intras = outIntras[fxId] or {}
-      table.sort(intras, function(a, b)
-        local aT, bT = a.toPort or 1, b.toPort or 1
-        if aT ~= bT then return aT < bT end
-        if a.to ~= b.to then return a.to < b.to end
-        return (a.fromPort or 1) < (b.fromPort or 1)
-      end)
-      for _, ic in ipairs(intras) do
-        local pair = claim(state)
-        pinAdd(state, ic.from, 'outs', ic.fromPort, pair)
-        pinAdd(state, ic.to,   'ins',  ic.toPort,   pair)
-        if reusePairs then
-          local cs = slotOf[ic.to]
-          releaseAt[cs] = releaseAt[cs] or {}; util.add(releaseAt[cs], pair)
-        end
-      end
-      local items = outSends[fxId] or {}
-      table.sort(items, function(a, b)
-        if a.ow.to ~= b.ow.to then return a.ow.to < b.ow.to end
-        return a.sendIdx < b.sendIdx
-      end)
-      for _, item in ipairs(items) do
-        local ow = item.ow
-        local pair = ow.type == 'audio' and claim(state) or 1
-        if ow.type == 'audio' then pinAdd(state, ow.from, 'outs', ow.fromPort, pair) end
-        state.sends[item.sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain,
-                                       srcChan = chanOf(pair, ow.type), dstChan = 0 }
-      end
-    end
-
-    -- Reuse scope is intra/outSend within this fxOrder walk; Stage 1b/2 claim fresh.
-    state.free = {}
-  end
-
-  -- Stage 1b -- parent send: claim a pair on each host whose audio feeds master.
-  -- No masterFeed (or source-from) => mainSendOffs=0; fx-from claims a fresh pair.
-  for _, hostKey in ipairs(hostKeys) do
-    local entry, fxSet, state = plan[hostKey], fxSetOf[hostKey], alloc[hostKey]
+    -- mainSend masterFeed: claim on producer fx, stamp mainSendOffs.
     if entry.mainSend then
       local mf = entry.masterFeed
       if mf and fxSet[mf.from] then
-        local pair = claim(state)
-        pinAdd(state, mf.from, 'outs', mf.fromPort, pair)
-        state.mainSendOffs = (pair - 1) * 2
+        local fromId = mf.from
+        addValue({
+          def = slotMap[fromId], lastUse = N + 1,
+          pins = { { fxId = fromId, dir = 'outs', port = mf.fromPort } },
+          apply = function(pair) state.mainSendOffs = (pair - 1) * 2 end,
+        })
       else
         state.mainSendOffs = 0
       end
     end
-  end
 
-  -- Stage 2 -- incoming sends: claim dstChan on receiver, write back into sender.
-  for _, hostKey in ipairs(hostKeys) do
-    local incList = incoming[hostKey]
-    if incList then
-      local fxSet, state = fxSetOf[hostKey], alloc[hostKey]
-      for _, inc in ipairs(incList) do
+    -- Stage-2 incoming audio sends pinned at the receiver's fx input.
+    -- def=0 (the parent send arrives before any fx runs); released at toNode's slot.
+    if incoming[hostKey] then
+      for _, inc in ipairs(incoming[hostKey]) do
         local ow = inc.wire
-        local pair
         if ow.type == 'audio' and fxSet[ow.toNode] then
-          pair = claim(state)
-          pinAdd(state, ow.toNode, 'ins', ow.toPort, pair)
-        else
-          pair = 1
+          local senderHost, sendIdx = inc.senderHost, inc.sendIdx
+          addValue({
+            def = 0, lastUse = slotMap[ow.toNode],
+            pins = { { fxId = ow.toNode, dir = 'ins', port = ow.toPort } },
+            apply = function(pair) alloc[senderHost].sends[sendIdx].dstChan = (pair - 1) * 2 end,
+          })
         end
-        alloc[inc.senderHost].sends[inc.sendIdx].dstChan = chanOf(pair, ow.type)
+      end
+    end
+
+    -- Bucket by def slot; sort within bucket for determinism.
+    local byDef = {}
+    for _, v in ipairs(values) do
+      byDef[v.def] = byDef[v.def] or {}
+      util.add(byDef[v.def], v)
+    end
+    local function sortBucket(b)
+      table.sort(b, function(a, c)
+        local ap, cp = a.pins[1], c.pins[1]
+        if ap.dir ~= cp.dir                     then return ap.dir < cp.dir                     end
+        if (ap.port or 1) ~= (cp.port or 1)     then return (ap.port or 1) < (cp.port or 1)     end
+        if ap.fxId ~= cp.fxId                   then return ap.fxId < cp.fxId                   end
+        if a.lastUse ~= c.lastUse               then return a.lastUse < c.lastUse               end
+        return a.ord < c.ord
+      end)
+    end
+
+    local releaseAt = {}
+    local function processValue(v)
+      local pair
+      if v.assignPair then
+        pair = v.assignPair
+        if pair >= state.cursor then state.cursor = pair + 1 end
+      else
+        pair = claim()
+      end
+      for _, p in ipairs(v.pins) do pinAdd(p.fxId, p.dir, p.port, pair) end
+      v.apply(pair)
+      if v.lastUse <= N then
+        releaseAt[v.lastUse] = releaseAt[v.lastUse] or {}
+        util.add(releaseAt[v.lastUse], pair)
+      end
+    end
+
+    if byDef[0] then
+      sortBucket(byDef[0])
+      for _, v in ipairs(byDef[0]) do processValue(v) end
+    end
+    for slot = 1, N do
+      if releaseAt[slot] then
+        for _, p in ipairs(releaseAt[slot]) do release(p) end
+        releaseAt[slot] = nil
+      end
+      if byDef[slot] then
+        sortBucket(byDef[slot])
+        for _, v in ipairs(byDef[slot]) do processValue(v) end
       end
     end
   end
