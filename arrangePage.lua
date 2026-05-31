@@ -533,22 +533,23 @@ function openCreateModal(trackIdx, qnPos, beats)
   }
 end
 
--- Two-field create modal: name + length-in-beats. Built-in prompt/confirm
--- don't fit; the renderer hands the raw strings to the page callback,
--- which applies its own defaulting and clamps.
+-- Two-field create modal: name + length-in-beats. OK/Cancel keys are
+-- gated on not-appearing so the Cmd+Enter that opened it doesn't self-dismiss.
 modalHost:registerKind('createSlot', function(s, close)
-  if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
+  local appearing = ImGui.IsWindowAppearing(ctx)
+  if appearing then ImGui.SetKeyboardFocusHere(ctx) end
   ImGui.Text(ctx, 'Name')
-  local commitN, nb = ImGui.InputText(ctx, '##createName', s.nameBuf,
-                                      ImGui.InputTextFlags_EnterReturnsTrue)
-  s.nameBuf = nb
+  local rvN, nb = ImGui.InputText(ctx, '##createName', s.nameBuf)
+  if rvN then s.nameBuf = nb end
   ImGui.Text(ctx, 'Length (beats)')
-  local commitB, bb = ImGui.InputText(ctx, '##createBeats', s.beatsBuf,
-                                      ImGui.InputTextFlags_EnterReturnsTrue)
-  s.beatsBuf = bb
-  local ok     = commitN or commitB or ImGui.Button(ctx, 'OK')
+  local rvB, bb = ImGui.InputText(ctx, '##createBeats', s.beatsBuf)
+  if rvB then s.beatsBuf = bb end
+  local ok = ImGui.Button(ctx, 'OK')
+              or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+                                  or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
   ImGui.SameLine(ctx)
-  local cancel = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
+  local cancel = ImGui.Button(ctx, 'Cancel')
+              or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
   if ok then close(true, s.nameBuf, s.beatsBuf)
   elseif cancel then close(false) end
 end)
