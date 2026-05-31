@@ -1312,6 +1312,8 @@ do
     -- Reads pbs directly from mm; the um cache (chans, byToken) is
     -- rebuilt at the end-of-rebuild reload().
     do
+      local extras = cm:get('extraColumns')
+
       local function detuneAt(events, P)
         local n = util.seek(events, 'at-or-before', P)
         return (n and n.detune) or 0
@@ -1460,7 +1462,8 @@ do
             hidden = hidden,
           }))
         end
-        channels[chan].columns.pb = anyVisible and { events = pbColEvents } or nil
+        local keep = anyVisible or (extras[chan] and extras[chan].pb)
+        channels[chan].columns.pb = keep and { events = pbColEvents } or nil
       end
 
       if #pbAdds > 0 or #pbAssigns > 0 or #pbDeletes > 0 then
