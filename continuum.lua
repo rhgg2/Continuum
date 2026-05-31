@@ -157,7 +157,7 @@ local function Main()
   trackerScope:registerAll{ returnToArrange = function() coord:returnToArrange() end }
   trackerScope:bindAll{ returnToArrange = { ImGui.Key_Enter, ImGui.Key_KeypadEnter } }
 
-  coord:run()
+  coord:run(err_handler)
 end
 
 run(Main)

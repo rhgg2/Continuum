@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1471  sha=097428b  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1471  sha=28f0b75  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -248,8 +248,9 @@
   @use call    swingEditor.modalActive  @ 1461
   @use call    swingEditor.open  @ 1286
   @use call    swingEditor.render  @ 1408
-  @use call    trackerManager.bindTake  @ 1437, 1440, 1443
+  @use call    trackerManager.bindTake  @ 1437, 1440
   @use call    trackerManager.currentTake  @ 1241, 1383
+  @use call    trackerManager.detach  @ 1443
   @use call    trackerManager.reloadFromReaper  @ 1446
   @use call    trackerView.activeTemper  @ 749
   @use call    trackerView.addExtraCol  @ 1220

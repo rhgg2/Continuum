@@ -1440,7 +1440,7 @@ end
 function tp:unbind() swingEditor:close(); tm:bindTake(nil) end
 
 --contract: take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.
-function tp:dropTake() swingEditor:close(); tm:bindTake(nil); tv:dropGrid() end
+function tp:dropTake() swingEditor:close(); tm:detach(); tv:dropGrid() end
 
 --contract: for coord's external-mutation watcher; re-reads the bound take, no swap
 function tp:reloadFromReaper() tm:reloadFromReaper() end

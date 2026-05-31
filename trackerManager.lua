@@ -1710,6 +1710,14 @@ do
     snapshotSwingState()
   end
 
+  --contract: take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam
+  function tm:detach()
+    bindingTake = true
+    cm:setContext(nil)
+    bindingTake = false
+    mm:unload()
+  end
+
   function tm:currentTake() return mm and mm:take() end
 
   --contract: re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild

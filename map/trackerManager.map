@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1721  sha=0678a54  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1729  sha=0678a54  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts
@@ -75,6 +75,7 @@
   @contract  opts.markSwingStale=true rebuilds raw from ppqL under new (cm, mm) (seqMgr:reswingAll)
   @contract  bindTake(nil) is the dormant seam (e.g. samplePage)
   @invariant  bindTake(nil): cm clears under suppression; mm:load(nil) no-op; tm/tv keep last frame
+  @contract  take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam
   @contract  re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild
   @invariant  reloadFromReaper does not swap take; for coord's external-mutation watcher
 
@@ -190,7 +191,7 @@
 # Uses (outbound edges)
   @use call    cm.get  @ 65, 70, 488, 679, 685, 686, 919, 1114, 1171, 1495, 1584, 1586, 1589, 1620, 1622, 1626, 1654, 1658, 1684, 1687
   @use call    cm.set  @ 1133, 1593
-  @use call    cm.setContext  @ 1704
+  @use call    cm.setContext  @ 1704, 1716
   @use call    mm.add  @ 590, 870, 1474, 1512
   @use call    mm.assign  @ 578, 1005, 1107, 1195, 1469
   @use call    mm.ccs  @ 1075, 1338, 1483, 1515
@@ -202,13 +203,14 @@
   @use call    mm.modify  @ 576, 865, 1003, 1106, 1193, 1467, 1510
   @use call    mm.name  @ 663
   @use call    mm.notes  @ 1045
-  @use call    mm.reload  @ 1717
+  @use call    mm.reload  @ 1725
   @use call    mm.resolution  @ 74, 662, 678, 756, 770, 816, 851, 919, 1540
   @use call    mm.setLength  @ 756, 770, 816, 851
   @use call    mm.setName  @ 664
-  @use call    mm.take  @ 656, 658, 879, 880, 1133, 1582, 1713
+  @use call    mm.take  @ 656, 658, 879, 880, 1133, 1582, 1721
   @use call    mm.timeSigs  @ 665
   @use call    mm.tokenOf  @ 1057, 1080, 1085, 1092, 1195, 1196, 1340, 1487, 1517
+  @use call    mm.unload  @ 1718
   @use call    timing.delayToPPQ  @ 74
   @use call    timing.eval  @ 694, 695
   @use call    timing.invert  @ 700, 702

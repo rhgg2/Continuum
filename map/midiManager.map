@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1161  sha=e5f5556  mode=chunk
+@module midiManager  src=midiManager.lua  loc=1167  sha=e5f5556  mode=chunk
 @deps take
 
 # Invariants & contracts
@@ -90,34 +90,34 @@
       · Persist + signals
   -- Load
   -- Locking
-  @fn checkLock()  @ 667
+  @fn checkLock()  @ 673
       @contract  writes (add*, delete*, structural assign*) must run inside mm:modify(fn)
       @contract  modify disables sort, runs fn under lock, re-sorts, then reload→callbacks
   -- Notes
-  @fn cloneOut(evt)  @ 686
-  @fn assignNote(loc, t)  @ 704
+  @fn cloneOut(evt)  @ 692
+  @fn assignNote(loc, t)  @ 710
       @contract  assignNote: lockless write when t touches no structural field
       @invariant  assignNote structural fields = {ppq, endppq, pitch, vel, chan, muted}
-  @fn addNote(t)  @ 745
+  @fn addNote(t)  @ 751
       @contract  addNote always allocates a uuid + inserts a notation event (unlike addCC)
   -- CCs
-  @fn reconstruct(tbl)  @ 785
-  @fn assignCC(loc, t)  @ 809
+  @fn reconstruct(tbl)  @ 791
+  @fn assignCC(loc, t)  @ 815
       @contract  assignCC: lockless iff t touches no structural field and the cc has a uuid
       @contract  first metadata stamp on a plain cc needs lock — inserts a sidecar sysex
-  @fn addCC(t)  @ 882
+  @fn addCC(t)  @ 888
       @contract  addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
   -- Unified token-keyed surface
-  @fn shiftDown(tbl, field, threshold)  @ 974
+  @fn shiftDown(tbl, field, threshold)  @ 980
       -- Mirror REAPER's idx-shift-down after a delete: decrement evt[field] on every
       -- event in tbl whose field > threshold. Guarded by `v and` so uuidIdx (absent
       -- on plain ccs) is safely skipped.
-  @fn deleteSidecarByUuid(uuid)  @ 984
+  @fn deleteSidecarByUuid(uuid)  @ 990
       -- Sidecars (notation type 15, cc/pb type -1) share one TextSysexEvt index
       -- space; a cached uuidIdx desyncs across a mixed multi-delete in one modify
       -- (MIDI_DeleteNote cascades its notation event). Match by content instead.
   -- Take data
-  @fn setEot(buf, targetPpq)  @ 1083
+  @fn setEot(buf, targetPpq)  @ 1089
       -- Rewrite the trailing EOT meta event so it sits exactly at targetPpq.
       -- Handles both shrink (offset reduces) and grow (offset increases).
       -- Assumes events past targetPpq are already deleted upstream on shrink
@@ -126,42 +126,44 @@
 # Public API (mm:*)
   @api mm:load(newTake)  @ 276
   @api mm:reload()  @ 657
-  @api mm:modify(fn)  @ 672
-  @api mm:notes()  @ 693
-  @api mm:ccs()  @ 776
-  @api mm:tokenOf(evt)  @ 936
+  @api mm:unload()  @ 663
+      @contract  clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
+  @api mm:modify(fn)  @ 678
+  @api mm:notes()  @ 699
+  @api mm:ccs()  @ 782
+  @api mm:tokenOf(evt)  @ 942
       @contract  token stable across reload while identity fields don't change
       @invariant  token identity fields = evType, chan, ppq, and pitch|cc as relevant
       @contract  mutating an identity field retires the old token and issues a new one
-  @api mm:byToken(token)  @ 944
+  @api mm:byToken(token)  @ 950
       @contract  returns (loc, evt-clone, kind) for the token, or nil if absent
       @contract  works on every event (including plain ccs with no uuid)
       @invariant  byToken's evt-clone carries .token equal to the input
-  @api mm:add(t)  @ 954
+  @api mm:add(t)  @ 960
       @contract  t.evType='note' routes to addNote; anything else to addCC
       @contract  returns the new token, or nil if t is malformed; inherits inner lock req
-  @api mm:assign(token, t)  @ 963
+  @api mm:assign(token, t)  @ 969
       @contract  dispatches on the resolved event's evType
       @contract  returns the event's token, == input iff no identity field changed (caller re-keys)
       @contract  inherits the inner method's metadata-only lockless carve-out
-  @api mm:delete(token)  @ 1003
-  @api mm:events()  @ 1027
+  @api mm:delete(token)  @ 1009
+  @api mm:events()  @ 1033
       @contract  yields (token, evt-clone) over all live events, notes then ccs
       @invariant  events()'s clone carries .token; loc is intentionally absent
-  @api mm:take()  @ 1042
-  @api mm:interpolate(A, B, ppq)  @ 1047
+  @api mm:take()  @ 1048
+  @api mm:interpolate(A, B, ppq)  @ 1053
       -- REAPER convention: shape on A governs the curve from A to next.
-  @api mm:resolution()  @ 1055
-  @api mm:length()  @ 1061
+  @api mm:resolution()  @ 1061
+  @api mm:length()  @ 1067
       -- Source length. setLength positions the source's EOT explicitly to keep this in sync.
-  @api mm:name()  @ 1068
-  @api mm:setName(name)  @ 1074
-  @api mm:setLength(qn)  @ 1105
+  @api mm:name()  @ 1074
+  @api mm:setName(name)  @ 1080
+  @api mm:setLength(qn)  @ 1111
       -- MIDI_SetItemExtents only resizes the item; on grow it leaves source EOT short,
       -- on shrink it leaves source EOT stale. Reposition the source EOT first so the
       -- source is the right size, then bring the item to match.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1119
+  @api mm:timeSigs()  @ 1125
 
 # Signals emitted (via util.installHooks)
   @emits takeSwapped   -- nil; only when load received a different take
@@ -172,11 +174,11 @@
   @emits reload   -- nil; every load, including after modify()
 
 # Uses (outbound edges)
-  @use call    util.add  @ 229, 304, 319, 321, 328, 330, 360, 368, 371, 391, 396, 398, 414, 426, 430, 437, 462, 463, 540, 546, 547, 557, 765, 913, 1152
-  @use call    util.assign  @ 368, 371, 464, 598, 605, 711, 727, 823, 842, 848
+  @use call    util.add  @ 229, 304, 319, 321, 328, 330, 360, 368, 371, 391, 396, 398, 414, 426, 430, 437, 462, 463, 540, 546, 547, 557, 771, 919, 1158
+  @use call    util.assign  @ 368, 371, 464, 598, 605, 717, 733, 829, 848, 854
   @use call    util.bucket  @ 385, 451, 452
   @use call    util.clamp  @ 70
-  @use call    util.clone  @ 425, 446, 688, 755, 842, 902
+  @use call    util.clone  @ 425, 446, 694, 761, 848, 908
   @use call    util.compact  @ 586, 587, 588
   @use call    util.fromBase36  @ 123, 178
   @use call    util.installHooks  @ 272

@@ -2,7 +2,7 @@
 
 --invariant: owns the active tracker take; polls REAPER's selection each frame while tracker page is active (sticky on no-item or non-MIDI)
 --invariant: no teardown path — quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload
---invariant: errors inside the defer loop surface through the same xpcall frame because each iteration reschedules itself
+--invariant: each deferred frame xpcalls via coord:run's handler; reaper.defer drops the xpcall
 
 local util  = require 'util'
 
@@ -31,6 +31,7 @@ local samplerTrack  = nil
 local currentTake   = nil
 --contract: external-mutation watcher — captured at end of every tracker-active frame; top-of-tick diff triggers tp:reloadFromReaper. Cleared on take swap (bind path is the reload). Nil disables the diff check (one-frame grace after swap/first activation).
 local lastTakeHash  = nil
+local errHandler    = nil
 
 ----- Keyboard router
 
@@ -260,7 +261,7 @@ local function frame()
   -- difference can only have come from outside Continuum.
   if active == 'tracker' and currentTake then lastTakeHash = takeMidiHash() end
 
-  if open and not quitting then reaper.defer(frame) end
+  if open and not quitting then reaper.defer(function() xpcall(frame, errHandler) end) end
 end
 
 ---------- PUBLIC
@@ -345,6 +346,7 @@ end
 function coord:quit()      quitting = true end
 function coord:chrome()    return chrome    end
 function coord:modalHost() return modalHost end
-function coord:run()       frame()          end
+--contract: handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
+function coord:run(handler) errHandler = handler or function(e) error(e) end; frame() end
 
 return coord

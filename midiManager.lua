@@ -659,6 +659,12 @@ function mm:reload()
   self:load(take)
 end
 
+--contract: clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
+function mm:unload()
+  take = nil
+  notes, ccs, eventsByUuid, tokenIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
+end
+
 
 ----- Locking
 

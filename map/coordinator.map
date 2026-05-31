@@ -1,10 +1,10 @@
-@module coordinator  src=coordinator.lua  loc=350  sha=34a1e98  mode=chunk
+@module coordinator  src=coordinator.lua  loc=352  sha=34a1e98  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
   @invariant  owns the active tracker take; polls REAPER's selection each frame while tracker page is active (sticky on no-item or non-MIDI)
   @invariant  no teardown path — quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload
-  @invariant  errors inside the defer loop surface through the same xpcall frame because each iteration reschedules itself
+  @invariant  each deferred frame xpcalls via coord:run's handler; reaper.defer drops the xpcall
   @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
   @contract  state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
   @contract  first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
@@ -34,12 +34,13 @@
       @contract  owns currentTake — refreshTakeFromReaper polls GetSelectedMediaItem→GetActiveTake→TakeIsMIDI, mutates currentTake only on a real MIDI take that differs (sticky on nothing-selected or non-MIDI), and returns true so the caller can rebind
   @state lastTakeHash = nil  @ 33
       @contract  external-mutation watcher — captured at end of every tracker-active frame; top-of-tick diff triggers tp:reloadFromReaper. Cleared on take swap (bind path is the reload). Nil disables the diff check (one-frame grace after swap/first activation).
-  @state coord = {}  @ 270
+  @state errHandler = nil  @ 34
+  @state coord = {}  @ 271
       @contract  pages must be registered via coord:register(name,page); first registered becomes active
 
 # Private functions
   -- Keyboard router
-  @fn isDigitMods(mods)  @ 46
+  @fn isDigitMods(mods)  @ 47
       -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns
       -- 'consumed' if a prefix-accumulating key fired this frame; nil otherwise
       -- (so the normal keychain walk proceeds). The prefix is NOT finished here
@@ -49,82 +50,83 @@
       -- chord open while typing a count is a natural reach, and any Ctrl-N or
       -- Super-N command binding is overridden for the duration of prefix mode.
       -- Shift/Alt still disqualify (Shift-digit emits a different char).
-  @fn handlePrefixCapture(cmgr, ctx)  @ 50
-  @fn dispatchKeys(state, cmgr, ctx)  @ 72
+  @fn handlePrefixCapture(cmgr, ctx)  @ 51
+  @fn dispatchKeys(state, cmgr, ctx)  @ 73
   -- Coordinator
-  @fn refreshTakeFromReaper()  @ 109
-  @fn takeMidiHash()  @ 119
-  @fn tick()  @ 128
+  @fn refreshTakeFromReaper()  @ 110
+  @fn takeMidiHash()  @ 120
+  @fn tick()  @ 129
       @contract  tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
       @contract  tracker-active branch — take swap takes priority (clears the watcher so the post-bind end-of-frame capture is the new baseline); otherwise a hash diff signals an external mutation (REAPER Ctrl-Z, external script) and we reload the bound take
       @contract  currentTake invalidation (item deleted in-app or out) is detected here via ValidatePtr2; on a dead pointer we drop the take so downstream (sample:tick, takeMidiHash, edit commands) stops poking REAPER with garbage
-  @fn drawSwitcher()  @ 150
-  @fn dispatch(state)  @ 168
-  @fn frame()  @ 170
+  @fn drawSwitcher()  @ 151
+  @fn dispatch(state)  @ 169
+  @fn frame()  @ 171
 
 # Public API (coord:*)
-  @api coord:register(name, page)  @ 272
-  @api coord:setActive(name)  @ 278
+  @api coord:register(name, page)  @ 273
+  @api coord:setActive(name)  @ 279
       @contract  setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange/wiring→no-op since project-wide)
-  @api coord:diveToTake(item)  @ 303
+  @api coord:diveToTake(item)  @ 304
       @contract  dive from the arrange page into a MIDI take — selects the item alone in REAPER so refreshTakeFromReaper reads it, then activates the tracker page (whose bind picks it up). Trusts the caller to pass a MIDI item; nil is a no-op.
-  @api coord:returnToArrange()  @ 311
+  @api coord:returnToArrange()  @ 312
       @contract  return from the tracker page to arrange, landing the arrange cursor on the take just edited (coord's currentTake). The inverse of diveToTake; a no-op when arrange isn't registered.
-  @api coord:setSamplerTrack(t)  @ 318
+  @api coord:setSamplerTrack(t)  @ 319
       @contract  stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
-  @api coord:togglePage()  @ 328
+  @api coord:togglePage()  @ 329
       -- Cycle tracker → arrange → sample → wiring → tracker. Pages absent from
       -- the registry are skipped so a partial wiring (e.g. tests with only one
       -- page) still cycles.
-  @api coord:reloadAfterExternalMutation()  @ 339
+  @api coord:reloadAfterExternalMutation()  @ 340
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:quit()  @ 345
-  @api coord:chrome()  @ 346
-  @api coord:modalHost()  @ 347
-  @api coord:run()  @ 348
+  @api coord:quit()  @ 346
+  @api coord:chrome()  @ 347
+  @api coord:modalHost()  @ 348
+  @api coord:run(handler)  @ 350
+      @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 154, 176, 177, 178, 179, 180, 197, 235, 236
-  @use call    chrome.popChromeStyles  @ 210
-  @use call    chrome.pushChromeStyles  @ 202
-  @use call    chrome.verticalSeparator  @ 206
-  @use call    cm.pollUndo  @ 171
-  @use call    cmgr.appendPrefix  @ 55, 59
-  @use call    cmgr.cancelPrefix  @ 62
-  @use call    cmgr.finishPrefix  @ 93
-  @use call    cmgr.invoke  @ 95, 157
-  @use call    cmgr.isPrefixActive  @ 51, 92
-  @use call    cmgr.keySpec  @ 85
-  @use call    cmgr.keychain  @ 81
-  @use call    cmgr.pop  @ 282
-  @use call    cmgr.push  @ 285
-  @use call    cmgr.rootKeymap  @ 81
-  @use call    imgui.Begin  @ 183
-  @use call    imgui.BeginChild  @ 199, 238
-  @use call    imgui.Button  @ 156
-  @use call    imgui.End  @ 252
-  @use call    imgui.EndChild  @ 212, 243
-  @use call    imgui.GetContentRegionAvail  @ 220
-  @use call    imgui.GetCursorPosY  @ 219, 225
-  @use call    imgui.GetFrameHeightWithSpacing  @ 221
-  @use call    imgui.GetKeyMods  @ 52, 89
-  @use call    imgui.Indent  @ 224
-  @use call    imgui.IsKeyDown  @ 86
-  @use call    imgui.IsKeyPressed  @ 54, 58, 61, 89
-  @use call    imgui.PopFont  @ 255
-  @use call    imgui.PopStyleColor  @ 159, 214, 245, 254
-  @use call    imgui.PopStyleVar  @ 189, 209, 213, 244
-  @use call    imgui.PushFont  @ 175
-  @use call    imgui.PushStyleColor  @ 154, 176, 177, 178, 179, 180, 197, 235, 236
-  @use call    imgui.PushStyleVar  @ 182, 198, 203, 237
-  @use call    imgui.SameLine  @ 162, 164, 205, 207
-  @use call    imgui.SetCursorPosY  @ 225, 234
-  @use call    imgui.SetScrollX  @ 193
-  @use call    imgui.SetScrollY  @ 193
-  @use call    imgui.Text  @ 247
-  @use call    imgui.Unindent  @ 230
-  @use call    modalHost.draw  @ 250
-  @use call    modalHost.tick  @ 129
+  @use call    chrome.colour  @ 155, 177, 178, 179, 180, 181, 198, 236, 237
+  @use call    chrome.popChromeStyles  @ 211
+  @use call    chrome.pushChromeStyles  @ 203
+  @use call    chrome.verticalSeparator  @ 207
+  @use call    cm.pollUndo  @ 172
+  @use call    cmgr.appendPrefix  @ 56, 60
+  @use call    cmgr.cancelPrefix  @ 63
+  @use call    cmgr.finishPrefix  @ 94
+  @use call    cmgr.invoke  @ 96, 158
+  @use call    cmgr.isPrefixActive  @ 52, 93
+  @use call    cmgr.keySpec  @ 86
+  @use call    cmgr.keychain  @ 82
+  @use call    cmgr.pop  @ 283
+  @use call    cmgr.push  @ 286
+  @use call    cmgr.rootKeymap  @ 82
+  @use call    imgui.Begin  @ 184
+  @use call    imgui.BeginChild  @ 200, 239
+  @use call    imgui.Button  @ 157
+  @use call    imgui.End  @ 253
+  @use call    imgui.EndChild  @ 213, 244
+  @use call    imgui.GetContentRegionAvail  @ 221
+  @use call    imgui.GetCursorPosY  @ 220, 226
+  @use call    imgui.GetFrameHeightWithSpacing  @ 222
+  @use call    imgui.GetKeyMods  @ 53, 90
+  @use call    imgui.Indent  @ 225
+  @use call    imgui.IsKeyDown  @ 87
+  @use call    imgui.IsKeyPressed  @ 55, 59, 62, 90
+  @use call    imgui.PopFont  @ 256
+  @use call    imgui.PopStyleColor  @ 160, 215, 246, 255
+  @use call    imgui.PopStyleVar  @ 190, 210, 214, 245
+  @use call    imgui.PushFont  @ 176
+  @use call    imgui.PushStyleColor  @ 155, 177, 178, 179, 180, 181, 198, 236, 237
+  @use call    imgui.PushStyleVar  @ 183, 199, 204, 238
+  @use call    imgui.SameLine  @ 163, 165, 206, 208
+  @use call    imgui.SetCursorPosY  @ 226, 235
+  @use call    imgui.SetScrollX  @ 194
+  @use call    imgui.SetScrollY  @ 194
+  @use call    imgui.Text  @ 248
+  @use call    imgui.Unindent  @ 231
+  @use call    modalHost.draw  @ 251
+  @use call    modalHost.tick  @ 130
   @use call    util.instantiate  @ 20, 22
   @use require chrome  @ 20
   @use require imgui  @ 14
