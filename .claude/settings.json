@@ -32,11 +32,6 @@
             "type": "command",
             "command": "jq -r '.tool_input.file_path // empty' | { read -r filepath; if [[ \"$filepath\" == *.lua ]]; then project_root=\"/Users/rgarner/Documents/Code/Readium\"; [[ \"$filepath\" == \"$project_root\"/* ]] && relpath=\"${filepath#$project_root/}\" && [[ \"$relpath\" != */* ]] && cd \"$project_root\" && python3 tools/map_extract.py \"$relpath\" map/ 2>/dev/null || true; fi; }",
             "statusMessage": "Regenerating .map file..."
-          },
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/comment-discipline.sh\"",
-            "statusMessage": "Checking comment discipline..."
           }
         ]
       },
@@ -47,11 +42,6 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/apply-patches-map-regen.sh\"",
             "statusMessage": "Regenerating .map files..."
-          },
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/comment-discipline.sh\"",
-            "statusMessage": "Checking comment discipline..."
           }
         ]
       }
