@@ -2,6 +2,7 @@
 -- @noindex
 
 --invariant: project-wide singleton; reads REAPER items + cm directly, owns no take state of its own
+--invariant: trackIdx is a visible-column index, not a REAPER slot (see docs/arrangeManager.md)
 --invariant: slot palette lives in cm at the track tier under 'arrangeSlots'; foreign-track writes route through cm:writeTrackKey
 --invariant: slot indices are 0..61, base62-keyed via util.toBase62 (62 chars: 0-9, a-z, A-Z); allocation is lowest-free; gaps allowed
 --invariant: every grouped take is a slot — `trackSlots`, `tracksTakes`, `slotForTake` and `projectTracks` route through ensureSlots, which allocates indices for live ids not yet in the dict and prunes dict entries whose id has no live take. A slot has no existence apart from at least one take on the grid carrying its id.
@@ -221,19 +222,46 @@ end
 
 ----- Discovery
 
--- Filters tracks tagged cm 'wiringScratch'='1' (hidden FX host, no items);
--- wm always inserts scratch last, so col index == REAPER track index holds.
+-- see docs/arrangeManager.md § trackIdx
+local function isVisibleTrack(track)
+  return cm:readTrackKey(track, 'wiringScratch') ~= '1'
+end
+
+local function visibleTrackOfCol(col)
+  if not col or col < 0 then return nil end
+  local visIdx = 0
+  for ti = 0, reaper.CountTracks(0) - 1 do
+    local tr = reaper.GetTrack(0, ti)
+    if isVisibleTrack(tr) then
+      if visIdx == col then return tr end
+      visIdx = visIdx + 1
+    end
+  end
+end
+
+local function colOfTrack(track)
+  if not track then return nil end
+  local visIdx = 0
+  for ti = 0, reaper.CountTracks(0) - 1 do
+    local tr = reaper.GetTrack(0, ti)
+    if isVisibleTrack(tr) then
+      if tr == track then return visIdx end
+      visIdx = visIdx + 1
+    end
+  end
+end
+
 function am:projectTracks()
   local out = {}
   for ti = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, ti)
-    if cm:readTrackKey(track, 'wiringScratch') ~= '1' then
+    if isVisibleTrack(track) then
       local _, name = reaper.GetTrackName(track)
       local dict = ensureSlots(track)
       local slotCount = 0
       for _ in pairs(dict) do slotCount = slotCount + 1 end
       out[#out+1] = {
-        idx       = ti,
+        idx       = #out,
         track     = track,
         name      = name or '',
         slotCount = slotCount,
@@ -245,7 +273,7 @@ function am:projectTracks()
 end
 
 function am:tracksTakes(trackIdx)
-  local track = reaper.GetTrack(0, trackIdx)
+  local track = visibleTrackOfCol(trackIdx)
   if not track then return {} end
   local _, slotForId = ensureSlots(track)
   local colourForId  = ensureColours()
@@ -282,17 +310,16 @@ function am:findTake(reaperTake)
   return nil
 end
 
---contract: (trackIdx, qn) boot pos: selected item, else edit-cursor QN + selected track; 0 if no track
+--contract: (col, qn) — selected item, else edit-cursor QN + selected track; col=0 if neither
 function am:initialCursor()
   local item = reaper.GetSelectedMediaItem(0, 0)
   if item then
     local found = am:findTake(reaper.GetActiveTake(item))
     if found then return found.trackIdx, found.startQN end
   end
-  local qn       = reaper.TimeMap2_timeToQN(0, reaper.GetCursorPositionEx(0))
-  local track    = reaper.GetSelectedTrack(0, 0)
-  local trackIdx = track and (reaper.GetMediaTrackInfo_Value(track, 'IP_TRACKNUMBER') - 1) or 0
-  return trackIdx, qn
+  local qn  = reaper.TimeMap2_timeToQN(0, reaper.GetCursorPositionEx(0))
+  local sel = reaper.GetSelectedTrack(0, 0)
+  return colOfTrack(sel) or 0, qn
 end
 
 ----- Transport — project edit cursor, loop range, play head, project end
@@ -341,7 +368,7 @@ function am:projectEndQN()
 end
 
 function am:trackSlots(trackIdx)
-  local track = reaper.GetTrack(0, trackIdx)
+  local track = visibleTrackOfCol(trackIdx)
   if not track then return {} end
   local dict, _, firstName = ensureSlots(track)
   local colourForId        = ensureColours()
@@ -377,7 +404,7 @@ end
 ----- Slot mutation
 
 function am:renameSlot(trackIdx, slotIdx, name)
-  local track = reaper.GetTrack(0, trackIdx)
+  local track = visibleTrackOfCol(trackIdx)
   if not track then return end
   local entry = readSlots(track)[slotIdx]
   if not entry or not entry.id then return end
@@ -390,7 +417,7 @@ end
 
 --contract: deletes every take on trackIdx with this slot's id; returns the removed count
 function am:deleteSlot(trackIdx, slotIdx)
-  local track = reaper.GetTrack(0, trackIdx)
+  local track = visibleTrackOfCol(trackIdx)
   if not track then return 0 end
   local entry = readSlots(track)[slotIdx]
   if not entry or not entry.id then return 0 end
@@ -477,7 +504,7 @@ end
 
 --contract: (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track or no free slot. Natural length defaults to util.OPEN.
 function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
-  local track   = reaper.GetTrack(0, trackIdx)
+  local track   = visibleTrackOfCol(trackIdx)
   local dict    = track and readSlots(track)
   local slotIdx = dict and nextFreeSlot(dict)
   if not slotIdx then return end
@@ -513,7 +540,7 @@ end
 
 --contract: instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
 function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
-  local track = reaper.GetTrack(0, trackIdx)
+  local track = visibleTrackOfCol(trackIdx)
   if not track then return end
   local entry = readSlots(track)[slotIdx]
   if not entry or not entry.id then return end
@@ -535,7 +562,7 @@ end
 
 --contract: clones take at qnPos on its own track (name included, original untouched); nil if track/id missing
 function am:duplicateTake(take, qnPos)
-  local track = reaper.GetTrack(0, take.trackIdx)
+  local track = visibleTrackOfCol(take.trackIdx)
   if not track then return end
   local copy
   if take.kind == 'midi' then
@@ -570,7 +597,7 @@ function am:duplicateUnpooledBelow(take)
   if take.kind ~= 'midi' then return end
   local destQN = destBelow(take)
   if not am:startIsClear(take.trackIdx, destQN) then return end
-  local track = reaper.GetTrack(0, take.trackIdx)
+  local track = visibleTrackOfCol(take.trackIdx)
   local newTake = cloneMidiItem(track, take.item, destQN, take.naturalLenQN, true)
   if not newTake then return end
   setTakeName(newTake, take.name)
@@ -608,7 +635,7 @@ function am:moveTake(take, deltaQN)
   if not am:startIsClear(take.trackIdx, newStart, take.item) then return false end
   local _, lengthQN = itemQNRange(take.item)
   setItemQNRange(take.item, newStart, newStart + lengthQN)
-  local track = reaper.GetTrack(0, take.trackIdx)
+  local track = visibleTrackOfCol(take.trackIdx)
   relayoutTrack(track)
   return true
 end
@@ -616,7 +643,7 @@ end
 --contract: writes the take's natural length; relayout caps it (source / next-take gap). A value ≥ source is demoted to util.OPEN during relayout.
 function am:resizeTake(take, newNaturalQN)
   setNaturalLenOf(take.take, newNaturalQN)
-  local track = reaper.GetTrack(0, take.trackIdx)
+  local track = visibleTrackOfCol(take.trackIdx)
   relayoutTrack(track)
 end
 
@@ -631,7 +658,7 @@ function am:takeSourceLengthQN(take)
 end
 
 function am:deleteTake(take)
-  local track = reaper.GetTrack(0, take.trackIdx)
+  local track = visibleTrackOfCol(take.trackIdx)
   if not track then return end
   reaper.DeleteTrackMediaItem(track, take.item)
   relayoutTrack(track)

@@ -1,8 +1,9 @@
-@module arrangeManager  src=arrangeManager.lua  loc=673  sha=10aa088  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=700  sha=e51ee01  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts
   @invariant  project-wide singleton; reads REAPER items + cm directly, owns no take state of its own
+  @invariant  trackIdx is a visible-column index, not a REAPER slot (see docs/arrangeManager.md)
   @invariant  slot palette lives in cm at the track tier under 'arrangeSlots'; foreign-track writes route through cm:writeTrackKey
   @invariant  slot indices are 0..61, base62-keyed via util.toBase62 (62 chars: 0-9, a-z, A-Z); allocation is lowest-free; gaps allowed
   @invariant  every grouped take is a slot — `trackSlots`, `tracksTakes`, `slotForTake` and `projectTracks` route through ensureSlots, which allocates indices for live ids not yet in the dict and prunes dict entries whose id has no live take. A slot has no existence apart from at least one take on the grid carrying its id.
@@ -16,129 +17,131 @@
   @invariant  painter.hue and painter.hueNative share one hash; freshly-stamped takes match the grid
 
 # Imports
-  @require util = 'util'  @ 17
-  @require painter = 'painter'  @ 18
+  @require util = 'util'  @ 18
+  @require painter = 'painter'  @ 19
 
 # Private state
-  @state am = {}  @ 22
-  @state SLOT_MAX = 61  @ 24   -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
+  @state am = {}  @ 23
+  @state SLOT_MAX = 61  @ 25   -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
 
 # Private functions
   -- Helpers
-  @fn takeIdOf(take)  @ 28
-  @fn itemQNRange(item)  @ 41
-  @fn setItemQNRange(item, startQN, endQN)  @ 49
-  @fn takeKind(take)  @ 56
-  @fn readSlots(track)  @ 60
-  @fn writeSlots(track, dict)  @ 65
-  @fn nextFreeSlot(dict)  @ 69
-  @fn forEachActiveTake(track, fn)  @ 75
+  @fn takeIdOf(take)  @ 29
+  @fn itemQNRange(item)  @ 42
+  @fn setItemQNRange(item, startQN, endQN)  @ 50
+  @fn takeKind(take)  @ 57
+  @fn readSlots(track)  @ 61
+  @fn writeSlots(track, dict)  @ 66
+  @fn nextFreeSlot(dict)  @ 70
+  @fn forEachActiveTake(track, fn)  @ 76
   -- Natural length
-  @fn sourceLenQN(take, item)  @ 85
-  @fn naturalLenOf(take)  @ 94
-  @fn setNaturalLenOf(take, v)  @ 99
-  @fn relayoutTrack(track)  @ 105
+  @fn sourceLenQN(take, item)  @ 86
+  @fn naturalLenOf(take)  @ 95
+  @fn setNaturalLenOf(take, v)  @ 100
+  @fn relayoutTrack(track)  @ 106
       @contract  walks track in startQN order; demotes natural ≥ source to OPEN; sets each item's D_LENGTH = min(effective, gap-to-next, source). Cheap to over-call: idempotent.
-  @fn effectiveNaturalLenQN(take, item)  @ 130
+  @fn effectiveNaturalLenQN(take, item)  @ 131
       -- The effective natural length (post-OPEN-resolution) exposed via tracksTakes.
-  @fn ensureSlots(track)  @ 138
+  @fn ensureSlots(track)  @ 139
       @contract  idempotent within a frame; returns (dict, slotForId, firstName) so callers don't re-walk
   -- Colour palette (project-wide, keyed by takeId)
-  @fn readColours()  @ 175
-  @fn writeColours(d)  @ 176
-  @fn ensureColours()  @ 179
+  @fn readColours()  @ 176
+  @fn writeColours(d)  @ 177
+  @fn ensureColours()  @ 180
       @contract  walks all tracks; prunes dead, allocates lowest-free for new ids. Returns id→idx.
-  @fn stampColour(take, colourIdx)  @ 208
+  @fn stampColour(take, colourIdx)  @ 209
       -- Preserve user override: only stamp when I_CUSTOMCOLOR == 0. A REAPER
       -- recolour on any instance therefore survives every relayout.
-  @fn stampForTake(take)  @ 214
+  @fn stampForTake(take)  @ 215
   -- Discovery
+  @fn isVisibleTrack(track)  @ 226
+      -- see docs/arrangeManager.md § trackIdx
+  @fn visibleTrackOfCol(col)  @ 230
+  @fn colOfTrack(track)  @ 242
   -- Transport — project edit cursor, loop range, play head, project end
   -- Slot mutation
   -- Placement
-  @fn chunkSetPool(chunk, guid)  @ 412
-  @fn harvestPoolGuid(item)  @ 420
-  @fn setTakeName(take, name)  @ 426
-  @fn copyMidiEvents(srcTake, dstTake)  @ 432
-  @fn placeAudio(track, filePath, qnPos, lengthQN)  @ 437
-  @fn cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)  @ 451
+  @fn chunkSetPool(chunk, guid)  @ 439
+  @fn harvestPoolGuid(item)  @ 447
+  @fn setTakeName(take, name)  @ 453
+  @fn copyMidiEvents(srcTake, dstTake)  @ 459
+  @fn placeAudio(track, filePath, qnPos, lengthQN)  @ 464
+  @fn cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)  @ 478
       -- See docs/arrangeManager.md § Subsequent drops for why chunk-clone over POOLEDEVTS swap.
       @contract  MIDI clone of srcItem at qnPos; rePool=true mints a fresh pool; nil if REAPER refuses.
-  @fn siblingInstance(track, id)  @ 502
+  @fn siblingInstance(track, id)  @ 529
       -- First instance matching id: item (chunk source for MIDI clone),
       -- length, name. Dictates what a fresh drop inherits.
-  @fn destBelow(take)  @ 558
+  @fn destBelow(take)  @ 585
       -- Destination for the *-Below trio. Natural end (not rendered) so a
       -- truncated upstream still drops past its downstream neighbour; relayout
       -- handles the symmetric truncation in the other direction.
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 642
+  @fn projectMidiTakes()  @ 669
 
 # Public API (am:*)
-  @api am:projectTracks()  @ 226
-      -- Filters tracks tagged cm 'wiringScratch'='1' (hidden FX host, no items);
-      -- wm always inserts scratch last, so col index == REAPER track index holds.
-  @api am:tracksTakes(trackIdx)  @ 247
-  @api am:findTake(reaperTake)  @ 275
+  @api am:projectTracks()  @ 254
+  @api am:tracksTakes(trackIdx)  @ 275
+  @api am:findTake(reaperTake)  @ 303
       @contract  take-shape (from tracksTakes) wrapping reaperTake on any project track; nil if not found
-  @api am:initialCursor()  @ 286
-      @contract  (trackIdx, qn) boot pos: selected item, else edit-cursor QN + selected track; 0 if no track
-  @api am:editCursorQN()  @ 300
-  @api am:setEditCursorQN(qn)  @ 304
-  @api am:loopRangeQN()  @ 309
+  @api am:initialCursor()  @ 314
+      @contract  (col, qn) — selected item, else edit-cursor QN + selected track; col=0 if neither
+  @api am:editCursorQN()  @ 327
+  @api am:setEditCursorQN(qn)  @ 331
+  @api am:loopRangeQN()  @ 336
       @contract  (loQN, hiQN) of the project loop range; nil when no loop is set (start == end).
-  @api am:setLoopRangeQN(loQN, hiQN)  @ 315
-  @api am:clearLoopRange()  @ 320
-  @api am:playPositionQN()  @ 325
+  @api am:setLoopRangeQN(loQN, hiQN)  @ 342
+  @api am:clearLoopRange()  @ 347
+  @api am:playPositionQN()  @ 352
       @contract  QN of the play head; nil when the transport is not playing.
-  @api am:projectEndQN()  @ 331
+  @api am:projectEndQN()  @ 358
       @contract  largest item-end QN across all tracks; 0 when the project has no items
-  @api am:trackSlots(trackIdx)  @ 343
-  @api am:slotForTake(take)  @ 365
-  @api am:keyForSlot(slotIdx)  @ 373
-  @api am:renameSlot(trackIdx, slotIdx, name)  @ 379
-  @api am:deleteSlot(trackIdx, slotIdx)  @ 392
+  @api am:trackSlots(trackIdx)  @ 370
+  @api am:slotForTake(take)  @ 392
+  @api am:keyForSlot(slotIdx)  @ 400
+  @api am:renameSlot(trackIdx, slotIdx, name)  @ 406
+  @api am:deleteSlot(trackIdx, slotIdx)  @ 419
       @contract  deletes every take on trackIdx with this slot's id; returns the removed count
-  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 479
+  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 506
       @contract  (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track or no free slot. Natural length defaults to util.OPEN.
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 515
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 542
       @contract  instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
-  @api am:duplicateTake(take, qnPos)  @ 537
+  @api am:duplicateTake(take, qnPos)  @ 564
       @contract  clones take at qnPos on its own track (name included, original untouched); nil if track/id missing
-  @api am:duplicateBelow(take)  @ 561
+  @api am:duplicateBelow(take)  @ 588
       @contract  pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:duplicateUnpooledBelow(take)  @ 569
+  @api am:duplicateUnpooledBelow(take)  @ 596
       @contract  unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:newTakeBelow(take)  @ 583
+  @api am:newTakeBelow(take)  @ 610
       @contract  empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 594
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 621
       @contract  true iff no other take on trackIdx starts exactly at startQN (item ~= exceptItem). Replaces the old range-overlap gate: under the natural-length model items may share span, but never a start position.
-  @api am:moveTake(take, deltaQN)  @ 604
+  @api am:moveTake(take, deltaQN)  @ 631
       @contract  shifts item start by deltaQN; relayouts the track. Natural length is preserved; D_LENGTH is re-derived. Returns true iff the new start clears existing starts (no-op on collision).
-  @api am:resizeTake(take, newNaturalQN)  @ 617
+  @api am:resizeTake(take, newNaturalQN)  @ 644
       @contract  writes the take's natural length; relayout caps it (source / next-take gap). A value ≥ source is demoted to util.OPEN during relayout.
-  @api am:takeSourceLengthQN(take)  @ 624
+  @api am:takeSourceLengthQN(take)  @ 651
       @contract  source length in QN at the take's position; 0 if source missing.
-  @api am:deleteTake(take)  @ 633
-  @api am:takesUsing(name)  @ 654
+  @api am:deleteTake(take)  @ 660
+  @api am:takesUsing(name)  @ 681
       @contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 664
+  @api am:reswingAll(name)  @ 691
       @contract  re-binds each takesUsing(name) take with markSwingStale=true; restores the original bound take at end
 
 # Uses (outbound edges)
-  @use call    cm.getAt  @ 175
-  @use call    cm.readTakeKey  @ 95, 657
-  @use call    cm.readTrackKey  @ 62, 230
-  @use call    cm.set  @ 176
-  @use call    cm.writeTakeKey  @ 100, 101
-  @use call    cm.writeTrackKey  @ 66
-  @use call    painter.hueNative  @ 211
-  @use call    tm.bindTake  @ 668, 670
-  @use call    tm.currentTake  @ 666, 670
-  @use call    util.toBase62  @ 374
-  @use require painter  @ 18
-  @use require util  @ 17
+  @use call    cm.getAt  @ 176
+  @use call    cm.readTakeKey  @ 96, 684
+  @use call    cm.readTrackKey  @ 63, 227
+  @use call    cm.set  @ 177
+  @use call    cm.writeTakeKey  @ 101, 102
+  @use call    cm.writeTrackKey  @ 67
+  @use call    painter.hueNative  @ 212
+  @use call    tm.bindTake  @ 695, 697
+  @use call    tm.currentTake  @ 693, 697
+  @use call    util.toBase62  @ 401
+  @use require painter  @ 19
+  @use require util  @ 18
 
 # REAPER API surface
   @reaper TakeIsMIDI
@@ -162,7 +165,6 @@
   @reaper GetSelectedMediaItem
   @reaper GetCursorPositionEx
   @reaper GetSelectedTrack
-  @reaper GetMediaTrackInfo_Value
   @reaper SetEditCurPos
   @reaper GetSet_LoopTimeRange
   @reaper GetPlayState

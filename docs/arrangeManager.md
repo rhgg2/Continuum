@@ -5,6 +5,19 @@ state of its own — every read walks REAPER's track/item lists directly,
 every write goes through cm. The per-track **slot palette** lives in cm
 at the track tier under `arrangeSlots`.
 
+## `trackIdx` is the visible-column index
+
+Every public `trackIdx` (and the `trackIdx` field on take-shapes) is
+the 0-based column index into `am:projectTracks()`, not the raw
+REAPER track slot. Scratch (the wiringManager's hidden FX host,
+tagged cm `wiringScratch='1'`) is filtered out, and `am` translates
+column → REAPER track at the boundary via `visibleTrackOfCol`.
+
+The two indices diverge as soon as REAPER's own "insert new track"
+fires — the new track lands at the absolute end of the project,
+past scratch. Holding the conversion inside `am` keeps the arrange
+page from ever needing to know the difference.
+
 ## Every grouped take is a slot
 
 The palette is not a curated set sitting alongside the project items.
