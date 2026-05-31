@@ -107,13 +107,12 @@ local function Main()
   local sp = util.instantiate('samplePage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
   local wp = util.instantiate('wiringPage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
 
-  -- Arrange registered first so Continuum boots into it (coord:register
-  -- makes the first registered page active). seedCursorFromReaper then
-  -- places the cursor on the selected take / edit-cursor position.
+  -- Wiring registered first so Continuum boots into it (coord:register makes
+  -- the first registered page active). seedCursorFromReaper still seeds arrange.
+  coord:register('wiring',  wp)
   coord:register('arrange', ap)
   coord:register('tracker', tp)
   coord:register('sample',  sp)
-  coord:register('wiring',  wp)
   wp:enableLive()
   ap:seedCursorFromReaper()
 
@@ -135,19 +134,27 @@ local function Main()
       reaper.Main_OnCommand(40029, 0); coord:reloadAfterExternalMutation()
     end,
     redo        = function() reaper.Main_OnCommand(40030, 0); coord:reloadAfterExternalMutation() end,
-    switchPage  = function(_, name) coord:setActive(name)   end,
-    togglePage  = function()     coord:togglePage()         end,
-    quit        = function()     coord:quit()               end,
-    beginPrefix = function()     cmgr:beginPrefix()         end,
+    switchPage      = function(_, name) coord:setActive(name) end,
+    switchToArrange = function() coord:setActive('arrange') end,
+    switchToWiring  = function() coord:setActive('wiring')  end,
+    switchToTracker = function() coord:setActive('tracker') end,
+    switchToSample  = function() coord:setActive('sample')  end,
+    togglePage      = function() coord:togglePage()         end,
+    quit            = function() coord:quit()               end,
+    beginPrefix     = function() cmgr:beginPrefix()         end,
   }
   cmgr:bindAll{
-    playPause   = { ImGui.Key_Space },
-    stop        = { ImGui.Key_F8    },
-    undo        = { {ImGui.Key_Z, ImGui.Mod_Ctrl} },
-    redo        = { {ImGui.Key_Z, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-    togglePage  = { {ImGui.Key_Tab, ImGui.Mod_Alt }},
-    quit        = { {ImGui.Key_Q, ImGui.Mod_Ctrl} },
-    beginPrefix = { {ImGui.Key_U, ImGui.Mod_Super} },
+    playPause       = { ImGui.Key_Space },
+    stop            = { ImGui.Key_F8    },
+    undo            = { {ImGui.Key_Z, ImGui.Mod_Ctrl} },
+    redo            = { {ImGui.Key_Z, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
+    togglePage      = { {ImGui.Key_Tab, ImGui.Mod_Alt }},
+    switchToArrange = { ImGui.Key_F2 },
+    switchToWiring  = { ImGui.Key_F3 },
+    switchToTracker = { ImGui.Key_F4 },
+    switchToSample  = { ImGui.Key_F9 },
+    quit            = { {ImGui.Key_Q, ImGui.Mod_Ctrl} },
+    beginPrefix     = { {ImGui.Key_U, ImGui.Mod_Super} },
   }
 
   -- Enter on the tracker scope returns to the arrange page — the inverse

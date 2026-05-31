@@ -151,17 +151,22 @@ end
 local function drawSwitcher()
   local function pageButton(label, name)
     local isActive = active == name
+    local disabled = name == 'tracker' and not currentTake and not isActive
     if isActive then
       ImGui.PushStyleColor(ctx, ImGui.Col_Button, chrome.colour('toolbar.buttonActive'))
     end
-    if ImGui.Button(ctx, label) and not isActive then
-      cmgr:invoke('switchPage', name)
-    end
+    chrome.disabledIf(disabled, function()
+      if ImGui.Button(ctx, label) and not isActive then
+        cmgr:invoke('switchPage', name)
+      end
+    end)
     if isActive then ImGui.PopStyleColor(ctx, 1) end
   end
-  pageButton('T', 'tracker')
-  ImGui.SameLine(ctx, 0, 4)
   pageButton('A', 'arrange')
+  ImGui.SameLine(ctx, 0, 4)
+  pageButton('W', 'wiring')
+  ImGui.SameLine(ctx, 0, 4)
+  pageButton('T', 'tracker')
   ImGui.SameLine(ctx, 0, 4)
   pageButton('S', 'sample')
 end
@@ -276,8 +281,13 @@ function coord:register(name, page)
 end
 
 --contract: setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange/wiring→no-op since project-wide)
+--contract: returns false when activating tracker with no take, else true; togglePage skips on false
 function coord:setActive(name)
-  if active == name then return end
+  if active == name then return true end
+  if name == 'tracker' then
+    refreshTakeFromReaper()
+    if not currentTake then return false end
+  end
   if active and pages[active] then
     pages[active]:unbind()
     cmgr:pop(active)
@@ -285,7 +295,6 @@ function coord:setActive(name)
   active = name
   cmgr:push(name)
   if name == 'tracker' then
-    refreshTakeFromReaper()
     pages.tracker:bind(currentTake)
   elseif name == 'sample' then
     if samplerTrack == nil then
@@ -298,6 +307,7 @@ function coord:setActive(name)
   elseif name == 'wiring' then
     pages.wiring:bind()
   end
+  return true
 end
 
 --contract: dive from the arrange page into a MIDI take — selects the item alone in REAPER so refreshTakeFromReaper reads it, then activates the tracker page (whose bind picks it up). Trusts the caller to pass a MIDI item; nil is a no-op.
@@ -323,16 +333,15 @@ function coord:setSamplerTrack(t)
   end
 end
 
--- Cycle tracker → arrange → sample → wiring → tracker. Pages absent from
--- the registry are skipped so a partial wiring (e.g. tests with only one
--- page) still cycles.
+-- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
+-- and setActive-refused pages (tracker with no take) are skipped.
 function coord:togglePage()
   local order = { 'tracker', 'arrange', 'sample', 'wiring' }
   local idx
   for i, name in ipairs(order) do if name == active then idx = i; break end end
   for step = 1, #order do
     local next = order[((idx or 0) + step - 1) % #order + 1]
-    if pages[next] then self:setActive(next); return end
+    if pages[next] and self:setActive(next) then return end
   end
 end
 

@@ -628,7 +628,7 @@ sampler:bindAll {
   browserAssign  = { { ImGui.Key_RightArrow, ImGui.Mod_Ctrl  } },
   slotNext       = { { ImGui.Key_Period,     ImGui.Mod_Shift } },
   slotPrev       = { { ImGui.Key_Comma,      ImGui.Mod_Shift } },
-  slotRename     = { { ImGui.Key_F2 } },
+  slotRename     = { ImGui.Key_Enter, ImGui.Key_KeypadEnter },
 }
 
 return sp

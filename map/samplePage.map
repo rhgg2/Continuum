@@ -1,4 +1,4 @@
-@module samplePage  src=samplePage.lua  loc=635  sha=b3ab3fa  mode=chunk
+@module samplePage  src=samplePage.lua  loc=635  sha=d30f817  mode=chunk
 @deps cm, cmgr, chrome, gui, onPickTrack
 
 # Invariants & contracts
