@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1838  sha=17766e5  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1842  sha=3d5968f  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -87,7 +87,7 @@
   @state SELECTED_INFLATE = 0  @ 181   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 182
   @state SOURCE_PAD = 24  @ 1796
-  @state wiring = cmgr:scope('wiring')  @ 1828
+  @state wiring = cmgr:scope('wiring')  @ 1832
 
 # Private functions
   -- FX-picker modal kind
@@ -273,7 +273,7 @@
   @use call    chrome.pickerIsActive  @ 1764
   @use call    chrome.popChromeWindow  @ 1696
   @use call    chrome.pushChromeWindow  @ 1676
-  @use call    cmgr.scope  @ 1828
+  @use call    cmgr.scope  @ 1832
   @use call    imgui.BeginChild  @ 70, 1740
   @use call    imgui.BeginPopup  @ 1678
   @use call    imgui.BeginTooltip  @ 351, 931
@@ -316,7 +316,7 @@
   @use call    modalHost.wasOpenAtFrameStart  @ 1769
   @use call    painter.new  @ 1219
   @use call    util.instantiate  @ 28
-  @use call    wiringView.addFx  @ 1822
+  @use call    wiringView.addFx  @ 1825
   @use call    wiringView.ancestorsOf  @ 1522, 1570
   @use call    wiringView.descendantsOf  @ 1569
   @use call    wiringView.edgeGain  @ 1305, 1411, 1455
@@ -347,3 +347,4 @@
   @reaper JS_Mouse_SetPosition
   @reaper GetMousePosition
   @reaper GetOS
+  @reaper defer

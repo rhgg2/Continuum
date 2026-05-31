@@ -1818,9 +1818,13 @@ openFxPicker = function(x, y)
     title    = 'Add FX',
     items    = wv:listInstalledFX(),
     flags    = ImGui.WindowFlags_NoNav,
+    -- Defer the gesture so the picker's close paints before the live
+    -- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
     callback = function(fx)
-      wv:addFx(x, y, { name = shortFxName(fx.name), ident = fx.ident },
-               { sourcePos = { x = sx, y = sy } })
+      reaper.defer(function()
+        wv:addFx(x, y, { name = shortFxName(fx.name), ident = fx.ident },
+                 { sourcePos = { x = sx, y = sy } })
+      end)
     end,
   }
 end
