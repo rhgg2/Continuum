@@ -401,6 +401,13 @@ function am:keyForSlot(slotIdx)
   return util.toBase62(slotIdx)
 end
 
+--contract: lowest-free slot index on trackIdx; nil if track full or missing.
+function am:nextFreeSlot(trackIdx)
+  local track = visibleTrackOfCol(trackIdx)
+  if not track then return nil end
+  return nextFreeSlot(readSlots(track))
+end
+
 ----- Slot mutation
 
 function am:renameSlot(trackIdx, slotIdx, name)

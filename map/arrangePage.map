@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=761  sha=e51ee01  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=762  sha=df7fb33  mode=chunk
 @deps cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost
 
 # Invariants & contracts
@@ -41,10 +41,10 @@
   @state colourCache = {}  @ 80
   @state HEADER_PAD = 8  @ 106
   @state HEADER_GAP = 4  @ 107
-  @state CREATE_DEFAULT_BEATS = 4  @ 522
-  @state arrange = cmgr:scope('arrange')  @ 717
+  @state CREATE_DEFAULT_BEATS = 8  @ 522
+  @state arrange = cmgr:scope('arrange')  @ 718
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture. Slots have no existence apart from items on the grid; the palette's rename / delete buttons act on existing slots.
-  @state binds = {  @ 728
+  @state binds = {  @ 729
 
 # Private functions
   -- Style + draw helpers
@@ -88,115 +88,116 @@
       -- lines up across the PANE_GAP without measurement.
   @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 501
   @fn openDeleteModal(trackIdx, slot)  @ 510
-  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 557
-  @fn renderPaletteList(slots)  @ 580
+  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 558
+  @fn renderPaletteList(slots)  @ 581
       -- Three columns so the key/kind/name align vertically across rows
       -- without depending on a monospace font for the whole line. The key
       -- cell uses the monospace font (it's a hotkey to press); kind and
       -- name use the default UI font. Selectable lives in col 0 with
       -- SpanAllColumns so the entire row is the click target; we paint the
       -- key text on top with SameLine.
-  @fn renderPalette(tracks)  @ 613
-  @fn placeKey(slotIdx)  @ 751
+  @fn renderPalette(tracks)  @ 614
+  @fn placeKey(slotIdx)  @ 752
       -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
 # Public API (ap:*)
-  @api ap:bind()  @ 633
+  @api ap:bind()  @ 634
       @contract  bind takes no take — arrange is project-wide. coord may call with no args (or a take, ignored).
-  @api ap:unbind()  @ 634
-  @api ap:revealTake(reaperTake)  @ 637
+  @api ap:unbind()  @ 635
+  @api ap:revealTake(reaperTake)  @ 638
       @contract  positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
-  @api ap:seedCursorFromReaper()  @ 640
+  @api ap:seedCursorFromReaper()  @ 641
       @contract  seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
-  @api ap:renderToolbarBits(_)  @ 642
-  @api ap:renderBody(_, w, h, dispatch)  @ 647
+  @api ap:renderToolbarBits(_)  @ 643
+  @api ap:renderBody(_, w, h, dispatch)  @ 648
       @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects per slot, cursor on top.
       @contract  pushes parchment body palette (coord popped chrome before body draw); palette tables below need it.
       @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
-  @api ap:renderStatusBar(_)  @ 695
-  @api ap:focusState()  @ 703
+  @api ap:renderStatusBar(_)  @ 696
+  @api ap:focusState()  @ 704
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # Uses (outbound edges)
-  @use call    arrangeView.beatPerRow  @ 160, 699
+  @use call    arrangeView.beatPerRow  @ 160, 700
   @use call    arrangeView.clearLoopRange  @ 168
   @use call    arrangeView.commitDrag  @ 222
   @use call    arrangeView.createCandidate  @ 218
-  @use call    arrangeView.createSlot  @ 531
-  @use call    arrangeView.cursorCol  @ 180, 254, 615, 699, 721
-  @use call    arrangeView.cursorRow  @ 180, 254, 699, 721
+  @use call    arrangeView.createSlot  @ 532
+  @use call    arrangeView.cursorCol  @ 180, 254, 616, 700, 722
+  @use call    arrangeView.cursorRow  @ 180, 254, 700, 722
   @use call    arrangeView.deleteSlot  @ 517
   @use call    arrangeView.dragCandidate  @ 214
   @use call    arrangeView.editCursorQN  @ 435
   @use call    arrangeView.focus  @ 297
   @use call    arrangeView.gutterLoopCand  @ 216
   @use call    arrangeView.hitTake  @ 190
-  @use call    arrangeView.keyForSlot  @ 511, 600, 757
+  @use call    arrangeView.keyForSlot  @ 511, 601, 758
   @use call    arrangeView.loopRangeQN  @ 382
-  @use call    arrangeView.paletteSlot  @ 585, 617
+  @use call    arrangeView.nextFreeSlot  @ 524
+  @use call    arrangeView.paletteSlot  @ 586, 618
   @use call    arrangeView.playPositionQN  @ 436
-  @use call    arrangeView.projectTracks  @ 652
+  @use call    arrangeView.projectTracks  @ 653
   @use call    arrangeView.qnToRow  @ 306, 307, 348, 349, 385, 427
   @use call    arrangeView.renameSlot  @ 506
-  @use call    arrangeView.revealTake  @ 637
-  @use call    arrangeView.rowToQN  @ 73, 161, 265, 721
+  @use call    arrangeView.revealTake  @ 638
+  @use call    arrangeView.rowToQN  @ 73, 161, 265, 722
   @use call    arrangeView.scroll  @ 126
-  @use call    arrangeView.seedCursor  @ 640
+  @use call    arrangeView.seedCursor  @ 641
   @use call    arrangeView.setCursor  @ 180, 233
   @use call    arrangeView.setEditCursorQN  @ 231
   @use call    arrangeView.setFocus  @ 202, 234
-  @use call    arrangeView.setGridSize  @ 155, 656
+  @use call    arrangeView.setGridSize  @ 155, 657
   @use call    arrangeView.setLoopRangeQN  @ 224
   @use call    arrangeView.setMaxCol  @ 156
-  @use call    arrangeView.setPaletteSlot  @ 596
-  @use call    arrangeView.trackSlots  @ 616
+  @use call    arrangeView.setPaletteSlot  @ 597
+  @use call    arrangeView.trackSlots  @ 617
   @use call    arrangeView.tracksTakes  @ 333
   @use call    chrome.colour  @ 61, 62, 63, 64, 65, 66
-  @use call    chrome.disabledIf  @ 561, 567
-  @use call    chrome.pickerIsActive  @ 705
-  @use call    chrome.popChromeStyles  @ 627
-  @use call    chrome.pushChromeStyles  @ 622
-  @use call    cmgr.scope  @ 717
-  @use call    imgui.BeginChild  @ 665, 684
-  @use call    imgui.BeginTable  @ 586
-  @use call    imgui.Button  @ 547, 551, 562, 568
-  @use call    imgui.Dummy  @ 464, 498, 681
-  @use call    imgui.EndChild  @ 671, 689
-  @use call    imgui.EndTable  @ 610
+  @use call    chrome.disabledIf  @ 562, 568
+  @use call    chrome.pickerIsActive  @ 706
+  @use call    chrome.popChromeStyles  @ 628
+  @use call    chrome.pushChromeStyles  @ 623
+  @use call    cmgr.scope  @ 718
+  @use call    imgui.BeginChild  @ 666, 685
+  @use call    imgui.BeginTable  @ 587
+  @use call    imgui.Button  @ 548, 552, 563, 569
+  @use call    imgui.Dummy  @ 464, 498, 682
+  @use call    imgui.EndChild  @ 672, 690
+  @use call    imgui.EndTable  @ 611
   @use call    imgui.GetContentRegionAvail  @ 121, 491
-  @use call    imgui.GetCursorScreenPos  @ 119, 490, 677
+  @use call    imgui.GetCursorScreenPos  @ 119, 490, 678
   @use call    imgui.GetKeyMods  @ 162, 199
   @use call    imgui.GetMousePos  @ 158
   @use call    imgui.GetMouseWheel  @ 173
   @use call    imgui.GetTextLineHeightWithSpacing  @ 122, 492
-  @use call    imgui.InputText  @ 542, 545
-  @use call    imgui.IsAnyItemActive  @ 709
-  @use call    imgui.IsKeyPressed  @ 548, 549, 552
+  @use call    imgui.InputText  @ 542, 546
+  @use call    imgui.IsAnyItemActive  @ 710
+  @use call    imgui.IsKeyPressed  @ 549, 550, 553
   @use call    imgui.IsMouseClicked  @ 166, 183
   @use call    imgui.IsMouseDoubleClicked  @ 191
   @use call    imgui.IsMouseDragging  @ 209
   @use call    imgui.IsMouseReleased  @ 220
-  @use call    imgui.IsWindowAppearing  @ 539
+  @use call    imgui.IsWindowAppearing  @ 540
   @use call    imgui.IsWindowHovered  @ 166, 174, 183
-  @use call    imgui.PopFont  @ 601
+  @use call    imgui.PopFont  @ 602
   @use call    imgui.PopStyleColor  @ 68
-  @use call    imgui.PushFont  @ 599
+  @use call    imgui.PushFont  @ 600
   @use call    imgui.PushStyleColor  @ 61, 62, 63, 64, 65, 66
-  @use call    imgui.SameLine  @ 550, 566, 598, 676, 682
-  @use call    imgui.Selectable  @ 594
-  @use call    imgui.Separator  @ 625
-  @use call    imgui.SetKeyboardFocusHere  @ 540
-  @use call    imgui.TableNextRow  @ 592
-  @use call    imgui.TableSetColumnIndex  @ 593, 603, 606
-  @use call    imgui.TableSetupColumn  @ 587, 588, 589
-  @use call    imgui.Text  @ 541, 544, 600, 604, 607, 655, 697
-  @use call    imgui.TextDisabled  @ 582
-  @use call    modalHost.registerKind  @ 538
-  @use call    modalHost.wasOpenAtFrameStart  @ 710
+  @use call    imgui.SameLine  @ 551, 567, 599, 677, 683
+  @use call    imgui.Selectable  @ 595
+  @use call    imgui.Separator  @ 626
+  @use call    imgui.SetKeyboardFocusHere  @ 545
+  @use call    imgui.TableNextRow  @ 593
+  @use call    imgui.TableSetColumnIndex  @ 594, 604, 607
+  @use call    imgui.TableSetupColumn  @ 588, 589, 590
+  @use call    imgui.Text  @ 541, 544, 601, 605, 608, 656, 698
+  @use call    imgui.TextDisabled  @ 583
+  @use call    modalHost.registerKind  @ 539
+  @use call    modalHost.wasOpenAtFrameStart  @ 711
   @use call    painter.hue  @ 89, 90, 91, 92
-  @use call    painter.new  @ 127, 245, 489, 679
-  @use call    util.atomic  @ 506, 517, 529
+  @use call    painter.new  @ 127, 245, 489, 680
+  @use call    util.atomic  @ 506, 517, 530
   @use call    util.instantiate  @ 27
   @use require arrangeView  @ 27
   @use require imgui  @ 15

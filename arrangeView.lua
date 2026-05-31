@@ -234,6 +234,7 @@ function av:projectTracks()       return am:projectTracks() end
 function av:tracksTakes(trackIdx) return am:tracksTakes(trackIdx) end
 function av:trackSlots(trackIdx)  return am:trackSlots(trackIdx) end
 function av:keyForSlot(slotIdx)   return am:keyForSlot(slotIdx) end
+function av:nextFreeSlot(trackIdx) return am:nextFreeSlot(trackIdx) end
 function av:editCursorQN()        return am:editCursorQN() end
 function av:playPositionQN()      return am:playPositionQN() end
 function av:loopRangeQN()         return am:loopRangeQN() end
