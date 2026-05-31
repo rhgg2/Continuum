@@ -127,6 +127,7 @@ local specs = {
   'wm_probe_fx_io_spec',
   'wm_host_move_spec',
   'wm_snapshot_spec',
+  'wm_target_alloc_spec',
   'wm_diff_spec',
   'wm_apply_ops_spec',
   'wm_fx_routing_spec',

@@ -6,8 +6,8 @@
 --invariant: fxGuid is the stable bridge identity; snapshot/targetState match fxOrder by it
 --invariant: wm deletes an FX instance only when its owning node or CU bridge leaves the graph
 --invariant: host changes are moves; TrackFX_CopyToTrack(is_move=true) preserves plugin state
---shape: wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, params?=table, origin?={kind='node',id=string}|{kind='edge',idx=int}, midiOut?=bool}, ... }, mainSend=bool, sends={ {to=classKey, type='audio'|'midi'}, ... } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. fxOrder entries carrying `params` are wm-owned CU bridges (synthesised kind='fx' nodes from DAG.lower); snapshot never reads params back from REAPER, so any target with `params` drives setFXChain on every reconcile pass. `origin` is stamped on every target-side fxOrder entry by projectEntry so the applier knows where to write minted guids back; snap entries do not carry it and fxOrderEq ignores it. `midiOut` is set on both sides only for non-JS kind='node' entries — target derives it from the user graph (nodeHasMidiOut), snap from appliedMidiOut[fxGuid] (nil ⇒ REAPER's fresh-FX default of true); mismatch drives setFXChain, and reconcileFXChain step 5 writes the 0x02 bit + records the new applied value.
---shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setExtState'|'moveFxAcrossHosts', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier). moveFxAcrossHosts relocates a live FX from one host to another with TrackFX_CopyToTrack(is_move=true); emitted before per-class setFXChain ops so subsequent per-track reconcile sees the FX already at the destination.
+--shape: wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, params?=table, origin?={kind='node',id=string}|{kind='edge',idx=int}, midiOut?=bool}, ... }, mainSend=bool, mainSendGain?=number, mainSendOffs?=int, sends={ {to=classKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, nchan?=int, pinMaps?={ [fxGuid] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, pinMapsByOrigin?={ [originKey] = { ins=..., outs=... } } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. fxOrder entries carrying `params` are wm-owned CU bridges (synthesised kind='fx' nodes from DAG.lower); snapshot never reads params back from REAPER, so any target with `params` drives setFXChain on every reconcile pass. `origin` is stamped on every target-side fxOrder entry by projectEntry so the applier knows where to write minted guids back; snap entries do not carry it and fxOrderEq ignores it. `midiOut` is set on both sides only for non-JS kind='node' entries — target derives it from the user graph (nodeHasMidiOut), snap from appliedMidiOut[fxGuid] (nil ⇒ REAPER's fresh-FX default of true); mismatch drives setFXChain, and reconcileFXChain step 5 writes the 0x02 bit + records the new applied value. pinMaps carries pair-lists (allocator-touched ports only; absent port ⇒ identity, i.e. port N → pair N); the applier converts pair-lists to REAPER's lo32/hi32 bitmask at the boundary. pinMapsByOrigin carries the same shape for fxs target hasn't materialised yet — applier resolves origin → fxGuid via the stamps populated by the preceding setFXChain. nchan is the host track's I_NCHAN; mainSendOffs is C_MAINSEND_OFFS (only when mainSend=true).
+--shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'setExtState'|'moveFxAcrossHosts', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier). moveFxAcrossHosts relocates a live FX from one host to another with TrackFX_CopyToTrack(is_move=true); emitted before per-class setFXChain ops so subsequent per-track reconcile sees the FX already at the destination. setNchan / setPinMaps emit between setFXChain and setMainSend so the applier has fxGuids stamped before pin-map writes and the track has channels allocated before pin maps land. setMainSend carries offs (C_MAINSEND_OFFS) when mainSend=true; setPinMaps carries both fxGuid-keyed and origin-keyed maps so unmaterialised fxs lift through the stamps table.
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
 --invariant: scratch is a hidden REAPER track tagged cm 'wiringScratch'='1' (find-or-create lazily)
@@ -555,12 +555,17 @@ function wm:snapshot()
   return snap
 end
 
--- Project the DAG's TargetPlan entry into the wiringSnapshot shape.
--- Every kind='fx' compile node maps to one fxOrder entry; CU bridges
--- (also kind='fx', synthesised by lower with `params` set) flow through
--- uniformly. trackGuid decorated for the hosts we can identify.
+-- Same key shape as wm:applyOps stamps, so the pin-map applier can
+-- resolve unmaterialised fxs through stampsByOrigin[originKey].
+local function originKey(origin)
+  if origin.kind == 'node' then return 'node:' .. origin.id end
+  return 'edge:' .. origin.idx
+end
+
+-- pinMaps forks by materialisation: fxGuid-keyed entries land in pinMaps,
+-- unmaterialised ones (no fxGuid yet) in pinMapsByOrigin for the applier.
 local function projectEntry(planEntry, compileNodes, scratchGuid)
-  local fxOrder = {}
+  local fxOrder, originByCompileId = {}, {}
   for _, id in ipairs(planEntry.fxOrder) do
     local node = compileNodes[id]
     if node.kind == 'fx' then
@@ -574,19 +579,33 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
           entry.midiOut = nodeHasMidiOut(userGraph, id)
         end
       end
+      originByCompileId[id] = entry
       util.add(fxOrder, entry)
+    end
+  end
+  local pinMaps, pinMapsByOrigin = {}, {}
+  for compileId, pm in pairs(planEntry.pinMaps or {}) do
+    local entry = originByCompileId[compileId]
+    if entry then
+      local target = entry.fxGuid and pinMaps or pinMapsByOrigin
+      local key    = entry.fxGuid or originKey(entry.origin)
+      target[key]  = util.deepClone(pm)
     end
   end
   local trackGuid
   if     planEntry.hostKind == 'sourceTrack' then trackGuid = planEntry.trackGuid
   elseif planEntry.hostKind == 'scratch'     then trackGuid = scratchGuid end
   return {
-    hostKind  = planEntry.hostKind,
-    trackGuid = trackGuid,
-    fxOrder   = fxOrder,
-    mainSend  = planEntry.mainSend,
-    mainSendGain = planEntry.mainSendGain,
-    sends     = util.deepClone(planEntry.sends),
+    hostKind         = planEntry.hostKind,
+    trackGuid        = trackGuid,
+    fxOrder          = fxOrder,
+    mainSend         = planEntry.mainSend,
+    mainSendGain     = planEntry.mainSendGain,
+    mainSendOffs     = planEntry.mainSendOffs,
+    sends            = util.deepClone(planEntry.sends),
+    nchan            = planEntry.nchan,
+    pinMaps          = pinMaps,
+    pinMapsByOrigin  = pinMapsByOrigin,
   }
 end
 
