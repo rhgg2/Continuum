@@ -1,4 +1,4 @@
-@module sampleManager  src=sampleManager.lua  loc=427  sha=fa4a61d  mode=chunk
+@module sampleManager  src=sampleManager.lua  loc=442  sha=fa4a61d  mode=chunk
 @deps fileOps
 
 # Invariants & contracts
@@ -94,16 +94,20 @@
   @api sm:probeMode(take, cm)  @ 392
       @contract  probeMode flips cm.trackerMode (transient tier) based on whether the take's track has the sampler FX
       @contract  probeMode forces I_PERFFLAGS bit 1 (anticipative FX off) on sampler tracks for tighter timing
-  @api sm:migrate(projectPath, oldProjectPath, cm)  @ 409
-      @contract  migrate moves files when the project root changes; cm rel paths are preserved so no cm rewrite is needed
+  @api sm:migrate(projectPath, oldProjectPath, cm)  @ 410
+      @contract  migrate iterates every sampler track via cm:readTrackKey so non-bound tracks migrate too
+      @contract  cm rel paths are preserved across migrate; only file bytes move
       @contract  migrate is a no-op if oldProjectPath is missing or unchanged
+  @api sm:watchPath(cm)  @ 431
+      @contract  watchPath setPrefixes, migrates, writes cm.lastProjectPath on GetProjectPath change
+      @contract  cm.lastProjectPath persists at project-tier so close-during-save is caught next open
 
 # Uses (outbound edges)
   @use call    fileOps.copy  @ 275, 325
   @use call    fileOps.exists  @ 275, 325
   @use call    fileOps.hash  @ 270, 320
-  @use call    fileOps.mkdir  @ 274, 324, 418
-  @use call    fileOps.move  @ 419
+  @use call    fileOps.mkdir  @ 274, 324, 420
+  @use call    fileOps.move  @ 421
   @use call    fs.basename  @ 272, 276, 322
   @use require fs  @ 17
   @use require util  @ 16
@@ -118,3 +122,4 @@
   @reaper GetMediaItemTake_Track
   @reaper GetMediaTrackInfo_Value
   @reaper SetMediaTrackInfo_Value
+  @reaper GetProjectPath

@@ -606,6 +606,7 @@ return {
     name = 'migrate moves bytes when project path changes',
     run = function(harness)
       local h = harness.mk()
+      bindSamplerTrack(h, 't1')
       h.cm:set('track', 'slotEntries', {
         [0] = { path = 'Continuum/k.wav' },
         [1] = { path = 'Continuum/s.wav' },
@@ -626,12 +627,56 @@ return {
     name = 'migrate is a no-op when paths match or oldPath is nil',
     run = function(harness)
       local h = harness.mk()
+      bindSamplerTrack(h, 't1')
       h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/k.wav' } })
       local ops = mkOps()
       local sm  = newSampleManager(ops)
       t.eq(sm:migrate('/proj', nil,    h.cm), false, 'nil oldPath = no-op')
       t.eq(sm:migrate('/proj', '/proj', h.cm), false, 'same path = no-op')
       t.eq(#ops.moves, 0, 'no moves issued')
+    end,
+  },
+  {
+    name = 'migrate walks every sampler track, not just the bound one',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setTrackFX('t1', { 'Continuum Sampler' })
+      h.reaper:setTrackFX('t2', { 'Continuum Sampler' })
+      h.reaper:setProjectTracks({ 't1', 't2' })
+      h.cm:setTrack('t1')
+      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/a.wav' } })
+      h.cm:setTrack('t2')
+      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/b.wav' } })
+      local ops = mkOps()
+      local moved = newSampleManager(ops):migrate('/new', '/old', h.cm)
+      t.eq(moved, true, 'work happened')
+      t.eq(#ops.moves, 2, 'one move per sampler track')
+      local seen = {}
+      for _, m in ipairs(ops.moves) do seen[m[1]] = m[2] end
+      t.truthy(seen['/old/Continuum/a.wav'], 't1 slot moved')
+      t.truthy(seen['/old/Continuum/b.wav'], 't2 slot moved')
+    end,
+  },
+  {
+    name = 'watchPath sets prefix, writes breadcrumb, fires migrate on change',
+    run = function(harness)
+      local h = harness.mk()
+      bindSamplerTrack(h, 't1')
+      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/k.wav' } })
+      h.reaper:setProjectPath('/old')
+      local ops = mkOps()
+      local sm  = newSampleManager(ops)
+
+      sm:watchPath(h.cm)
+      t.eq(h.cm:get('lastProjectPath'), '/old', 'breadcrumb stored on first run')
+      t.eq(#ops.moves, 0, 'no prior breadcrumb → no migrate')
+
+      h.reaper:setProjectPath('/new')
+      sm:watchPath(h.cm)
+      t.eq(h.cm:get('lastProjectPath'), '/new', 'breadcrumb updated')
+      t.eq(#ops.moves, 1, 'migrate fired on project-path change')
+      t.eq(ops.moves[1][1], '/old/Continuum/k.wav', 'src is old root')
+      t.eq(ops.moves[1][2], '/new/Continuum/k.wav', 'dst is new root')
     end,
   },
 }

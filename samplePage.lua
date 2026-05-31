@@ -28,7 +28,6 @@ local UP = '__up__'   -- sentinel path for the '..' navigation entry
 local ctx    = gui.ctx
 local rename = nil
 local sm     = util.instantiate('sampleManager', { fileOps = fs.fileOps })
-local lastProjectPath = nil
 
 local sv
 sv = util.instantiate('sampleView', {
@@ -572,16 +571,11 @@ function sp:listTracks() return sv:listTracks() end
 --contract: unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
 function sp:unbind() revertPreviewInPlace() end
 
---contract: tick runs every frame regardless of active page — sm needs the tracker take to maintain isTrackerMode and the gmem mailbox; project-path migration runs only on actual change
+--contract: tick runs every frame; watchPath + sm:tick unconditional; probeMode skipped on nil take
 function sp:tick(take)
-  sm:probeMode(take, cm)
-  local pp = reaper.GetProjectPath(0)
-  if lastProjectPath ~= pp then
-    sm:setPrefix(pp)
-    if lastProjectPath then sm:migrate(pp, lastProjectPath, cm) end
-  end
+  if take then sm:probeMode(take, cm) end
+  sm:watchPath(cm)
   sm:tick(cm)
-  lastProjectPath = pp
 end
 
 --contract: acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands

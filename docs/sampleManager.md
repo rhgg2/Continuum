@@ -142,14 +142,22 @@ non-active tracks.
 
 ## Save migration
 
-The project's media folder is empty-pre-save and project-local
-post-save. When the resolved path changes, slot files have to follow.
-`migrate(newPath, oldPath, cm)` moves each entry's bytes from old to
-new. cm `path` strings are relative so they need no rewrite. The
-expected trigger is the empty → saved transition; Save As works
-identically. If `oldPath` is nil or equals `newPath`, migrate is a
-no-op. Migrate runs independently of rehydrate — they target different
-boundaries (project-path change vs. fresh-mem detection).
+The project's media folder is the global REAPER media folder
+pre-save and project-local post-save. When the resolved path
+changes, slot files have to follow. `watchPath(cm)` diffs the live
+`GetProjectPath(0)` against `cm.lastProjectPath` (a project-tier
+breadcrumb) and, on a mismatch, sets the prefix, runs `migrate`,
+and writes the new path back. Because the breadcrumb lives in
+project-tier cm, it serialises into the .RPP — so a save that
+happens while Continuum is closed is still caught the next time
+the project is opened with Continuum running.
+
+`migrate(newPath, oldPath, cm)` walks every sampler track via
+`cm:readTrackKey('slotEntries')` and moves each entry's bytes
+from old root to new. cm `path` strings stay relative so no cm
+rewrite is needed. If `oldPath` is nil or equals `newPath`, migrate
+is a no-op. Migrate runs independently of rehydrate — they target
+different boundaries (project-path change vs. fresh-mem detection).
 
 ## Tick lifecycle
 
@@ -159,10 +167,12 @@ the FX guid, watches the boot token, fires `rehydrateTrack` on a
 token or guid change, and drains at most one pending entry through
 the bundled mailbox.
 
-Coordinator wires `setPrefix` on a project-path change and calls `tick`
-on every frame. The first tick after a fresh project reload thus runs
-with `currentPrefix` already cached; `absFor` composes absolute paths
-from it before the first mailbox push.
+`samplePage:tick` runs every frame regardless of active page or
+take selection. It calls `sm:watchPath(cm)` — which sets the
+prefix on a project-path change — before `sm:tick(cm)`, so the
+first mailbox push after a fresh project load already composes
+against the right `currentPrefix`. `probeMode` is the only
+take-dependent piece and is skipped when no take is bound.
 
 ## Preview
 

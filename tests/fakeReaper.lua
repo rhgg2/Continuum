@@ -51,6 +51,10 @@ function M.new()
     return state.projStateCount
   end
 
+  function r.GetProjectPath(_proj)
+    return state.projectPath or ''
+  end
+
   function r.GetSetMediaTrackInfo_String(track, key, value, setNew)
     local k = tostring(track) .. '/' .. key
     if setNew then
@@ -150,6 +154,21 @@ function M.new()
   function r.TrackFX_GetIOSize(track, idx)
     local io = state.fxIO[fxIdentOf(fxEntry(track, idx))] or { ins = 2, outs = 2 }
     return 1, io.ins, io.outs
+  end
+  -- Per (track, fxIdx, isoutput, pin) → {lo, hi}; default identity = 1 << pin.
+  state.fxPinMaps = {}
+  local function pinKey(track, fxIdx, isoutput, pin)
+    local dir = (isoutput == true or isoutput == 1) and 1 or 0
+    return tostring(track) .. '/' .. fxIdx .. '/' .. dir .. '/' .. pin
+  end
+  function r.TrackFX_GetPinMappings(track, fxIdx, isoutput, pin)
+    local stored = state.fxPinMaps[pinKey(track, fxIdx, isoutput, pin)]
+    if stored then return stored.lo, stored.hi end
+    return (1 << pin), 0
+  end
+  function r.TrackFX_SetPinMappings(track, fxIdx, isoutput, pin, lo, hi)
+    state.fxPinMaps[pinKey(track, fxIdx, isoutput, pin)] = { lo = lo, hi = hi }
+    return true
   end
   function r.TrackFX_GetNamedConfigParm(track, idx, parm)
     local io = state.fxIO[fxIdentOf(fxEntry(track, idx))]
@@ -357,6 +376,7 @@ function M.new()
     if v ~= nil then return v end
     if parm == 'B_MAINSEND' then return 1 end
     if parm == 'D_VOL'      then return 1.0 end
+    if parm == 'I_NCHAN'    then return 2 end
     return 0
   end
   state.trackValues = {}
@@ -941,6 +961,9 @@ function M.new()
   end
   function r:setProjectTracks(tracks)
     state.projectTracks = tracks
+  end
+  function r:setProjectPath(p)
+    state.projectPath = p
   end
   -- opts = { type='audio'|'midi'|'both' (default 'both'),
   --          srcChan?, dstChan?, midiFlags?, mute? }

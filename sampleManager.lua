@@ -404,23 +404,38 @@ function sm:probeMode(take, cm)
   end
 end
 
---contract: migrate moves files when the project root changes; cm rel paths are preserved so no cm rewrite is needed
+--contract: migrate iterates every sampler track via cm:readTrackKey so non-bound tracks migrate too
+--contract: cm rel paths are preserved across migrate; only file bytes move
 --contract: migrate is a no-op if oldProjectPath is missing or unchanged
 function sm:migrate(projectPath, oldProjectPath, cm)
   if not oldProjectPath or oldProjectPath == projectPath then return false end
-  local entries = cm:get('slotEntries')
   local anyMoved = false
-  for _, e in pairs(entries) do
-    if e.path then
-      local oldAbs = oldProjectPath .. '/' .. e.path
-      local newAbs = projectPath    .. '/' .. e.path
-      if oldAbs ~= newAbs then
-        fileOps.mkdir(projectPath .. '/Continuum')
-        if fileOps.move(oldAbs, newAbs) then anyMoved = true end
+  for _, entry in ipairs(self:listTracks()) do
+    local entries = cm:readTrackKey(entry.track, 'slotEntries') or {}
+    for _, e in pairs(entries) do
+      if e.path then
+        local oldAbs = oldProjectPath .. '/' .. e.path
+        local newAbs = projectPath    .. '/' .. e.path
+        if oldAbs ~= newAbs then
+          fileOps.mkdir(projectPath .. '/Continuum')
+          if fileOps.move(oldAbs, newAbs) then anyMoved = true end
+        end
       end
     end
   end
   return anyMoved
+end
+
+--contract: watchPath setPrefixes, migrates, writes cm.lastProjectPath on GetProjectPath change
+--contract: cm.lastProjectPath persists at project-tier so close-during-save is caught next open
+function sm:watchPath(cm)
+  local pp = reaper.GetProjectPath(0)
+  if not pp or pp == '' then return end
+  local last = cm:get('lastProjectPath')
+  if last == pp then return end
+  self:setPrefix(pp)
+  if last then self:migrate(pp, last, cm) end
+  cm:set('project', 'lastProjectPath', pp)
 end
 
 return sm

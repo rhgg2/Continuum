@@ -61,6 +61,9 @@ local declarations = {
 
   -- null-defaulted (declared, no initial value)
   { 'sampleBrowserRoot', nil },
+  -- Project-tier breadcrumb so sampler save-migration survives a
+  -- save that happens while Continuum is closed. See docs/sampleManager.md.
+  { 'lastProjectPath',   nil },
 
   -- table-valued
   { 'colSwing',        {}    },
