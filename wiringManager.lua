@@ -816,7 +816,7 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
         routingIdx = routingIdx + 1
       end
     end
-    local _, chunk = reaper.GetTrackStateChunk(track, '', false)
+    local _, chunk = reaper.GetTrackStateChunk(track, '', true)
     for _, f in ipairs(flips) do
       local rIdx = absToRouting[f.absIdx]
       if rIdx then
@@ -825,7 +825,7 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
                                        inputPins + outputPins)
       end
     end
-    reaper.SetTrackStateChunk(track, chunk, false)
+    reaper.SetTrackStateChunk(track, chunk, true)
     for _, f in ipairs(flips) do appliedMidiOut[f.fxGuid] = f.midiOut end
   end
 end
@@ -1145,22 +1145,7 @@ end
 
 --contract: one reconcile pass — diff targetState against snapshot and applyOps the result under the given undo label
 function wm:reconcile(label)
-  local t0 = reaper.time_precise()
-  local tgt = self:targetState()
-  local t1 = reaper.time_precise()
-  local snap = self:snapshot()
-  local t2 = reaper.time_precise()
-  local ops = self:diff(tgt, snap)
-  local t3 = reaper.time_precise()
-  self:applyOps(ops, label or 'wiring: reconcile')
-  local t4 = reaper.time_precise()
-  local total = (t4 - t0) * 1000
-  if total > 50 then
-    reaper.ShowConsoleMsg(string.format(
-      '[wiring] reconcile %.1fms (target %.1f, snap %.1f, diff %.1f, apply %.1f, #ops=%d)\n',
-      total, (t1 - t0) * 1000, (t2 - t1) * 1000, (t3 - t2) * 1000, (t4 - t3) * 1000, #ops))
-    util.print_r(ops)
-  end
+  self:applyOps(self:diff(self:targetState(), self:snapshot()), label or 'wiring: reconcile')
 end
 
 --contract: idempotent. Subscribes wm to its own wiringChanged so every mutate/load drives wm:reconcile, then runs one immediate pass to put REAPER in sync with the persisted graph.

@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1176  sha=c99443e  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1161  sha=7b29a42  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -153,7 +153,7 @@
       @contract  detects REAPER undo/redo of a wiring gesture by diffing scratch P_EXT against lastScratchRaw; on diff, mirrors scratch back to project tier, drops the in-memory graph, fires wiringChanged{kind='load'}. If scratch was deleted (manual or undo past its creation), reconciler recreates it on the next reconcile pass — so here we just clear the handle and let the live loop catch up.
   @api wm:reconcile(label)  @ 1147
       @contract  one reconcile pass — diff targetState against snapshot and applyOps the result under the given undo label
-  @api wm:enableLive(label)  @ 1167
+  @api wm:enableLive(label)  @ 1152
       @contract  idempotent. Subscribes wm to its own wiringChanged so every mutate/load drives wm:reconcile, then runs one immediate pass to put REAPER in sync with the persisted graph.
 
 # Signals emitted (via util.installHooks)
@@ -172,10 +172,9 @@
   @use call    util.deepClone  @ 122, 128, 521, 541, 613, 626
   @use call    util.deepEq  @ 564
   @use call    util.installHooks  @ 17
-  @use call    util.print_r  @ 1162
   @use require DAG  @ 12
   @use require util  @ 11
-  @use sub     wiringManager:wiringChanged  @ 1170
+  @use sub     wiringManager:wiringChanged  @ 1155
 
 # REAPER API surface
   @reaper CountTracks
@@ -200,5 +199,3 @@
   @reaper DeleteTrack
   @reaper EnumInstalledFX
   @reaper ValidatePtr2
-  @reaper time_precise
-  @reaper ShowConsoleMsg

@@ -1154,16 +1154,6 @@ local function drawFader(p, f)
   p.text(r.x1 + 4, indY - uiSize / 2, 'text', txt, uiFont, uiSize)
 end
 
--- Probe: logs reconcile-cost spikes from any fader commit path so the laggy site is named.
-local function timedSetEdgeGain(label, edgeIdx, lin)
-  local t0 = reaper.time_precise()
-  wv:setEdgeGain(edgeIdx, lin)
-  local dt = (reaper.time_precise() - t0) * 1000
-  if dt > 5 then
-    reaper.ShowConsoleMsg(string.format('[wiring] setEdgeGain(%s) %.1fms\n', label, dt))
-  end
-end
-
 -- In-flight draft wire (draw order in docs/wiringPage.md). Kept end anchors at
 -- keptAnchor, or the node centre when a body-default forward draft has none.
 local function drawDraftWire(p, draft, nodesById, cx, cy)
@@ -1288,7 +1278,7 @@ local function renderCanvas(w, h)
     wv:pokeEdgeGain(fader.edgeIdx, lin)
     if not ImGui.IsMouseDown(ctx, 0) then
       if fader.currentLin ~= fader.valueAtClick then
-        timedSetEdgeGain('drag-release', fader.edgeIdx, fader.currentLin)
+        wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
       end
       fader.dragging = false
     end
@@ -1316,7 +1306,7 @@ local function renderCanvas(w, h)
     end
   else
     if fader and fader.wheelPending then
-      timedSetEdgeGain('close-while-wheel-pending', fader.edgeIdx, fader.currentLin)
+      wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
     end
     fader = nil
   end
@@ -1428,7 +1418,7 @@ local function renderCanvas(w, h)
       dragging     = true,
     }
     if not wv:pokeEdgeGain(arrowHitIdx, cur) then
-      timedSetEdgeGain('triangle-materialise', arrowHitIdx, cur)
+      wv:setEdgeGain(arrowHitIdx, cur)
     end
     -- Warp the OS cursor onto the knob. The OS↔ImGui delta at the click
     -- moment converts; macOS's bottom-up screen y needs the vertical flip.
@@ -1452,7 +1442,7 @@ local function renderCanvas(w, h)
     and inRect(lmx, lmy, fader.rect)
   if faderDblClicked then
     fader.currentLin = 1.0
-    timedSetEdgeGain('dbl-click-unity', fader.edgeIdx, 1.0)
+    wv:setEdgeGain(fader.edgeIdx, 1.0)
   end
 
   -- In-strip click owns the mouse: jump the value, start a drag, and
@@ -1466,7 +1456,7 @@ local function renderCanvas(w, h)
     fader.currentLin   = clickLin
     fader.dragging     = true
     if not wv:pokeEdgeGain(fader.edgeIdx, clickLin) then
-      timedSetEdgeGain('click-materialise', fader.edgeIdx, clickLin)
+      wv:setEdgeGain(fader.edgeIdx, clickLin)
     end
   end
   local faderConsumed = arrowLmbClicked or faderClicked or faderDblClicked
@@ -1483,14 +1473,14 @@ local function renderCanvas(w, h)
       local lin = (db <= -60) and 0 or dbToLin(db)
       fader.currentLin = lin
       if not wv:pokeEdgeGain(fader.edgeIdx, lin) then
-        timedSetEdgeGain('wheel-materialise', fader.edgeIdx, lin)
+        wv:setEdgeGain(fader.edgeIdx, lin)
       end
       fader.wheelPending    = true
       fader.wheelIdleFrames = 0
     elseif fader.wheelPending then
       fader.wheelIdleFrames = (fader.wheelIdleFrames or 0) + 1
       if fader.wheelIdleFrames > WIRE_FADER_WHEEL_IDLE_FRAMES then
-        timedSetEdgeGain('wheel-idle-commit', fader.edgeIdx, fader.currentLin)
+        wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
         fader.wheelPending = false
       end
     end
