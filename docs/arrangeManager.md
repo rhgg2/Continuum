@@ -113,13 +113,28 @@ been dropped yet, and every consumer of the slot dict had to guard
 against it. The current model collapses the state: a slot exists only
 when at least one instance exists, so id is always populated.
 
-## Subsequent drops: pool via POOLEDEVTS swap
+## Subsequent drops: chunk-clone an existing sibling
 
-`dropInstance(trackIdx, slotIdx, qnPos, lengthQN)` creates another
-MIDI item, reads back its fresh chunk, splices the slot's pinned
-`POOLEDEVTS` GUID over the one REAPER assigned, and writes the chunk
-back. REAPER then treats every instance as a single pool, so MIDI
-edits propagate across them.
+`dropInstance(trackIdx, slotIdx, qnPos, lengthQN)` finds a live
+sibling instance of the slot, creates another MIDI item, and writes
+the sibling's full state chunk onto it — events and `POOLEDEVTS`
+guid in one atomic step. REAPER then treats every instance as a
+single pool and propagates MIDI edits across them.
+
+The earlier path — create-empty + splice the slot's pool guid over
+the fresh one REAPER assigned — looked simpler but wiped the pool:
+REAPER syncs the empty events of the freshly-pooled item back across
+the existing instances on the next refresh. The chunk-clone path
+sidesteps this by seeding the new item populated from the start.
+
+`duplicateTake` (pooled) and `duplicateUnpooledBelow` (fresh pool)
+share the same `cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)`
+helper; `rePool=true` rewrites `POOLEDEVTS` to the fresh guid before
+the chunk write, then explicitly copies events into the new pool.
+
+MIDI drops therefore require a live sibling. If a slot somehow
+survives in cm without any live instance — only possible between a
+delete and the next `ensureSlots` — `dropInstance` returns nil.
 
 ## Audio drops are not pooled
 

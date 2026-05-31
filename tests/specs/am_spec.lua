@@ -294,6 +294,35 @@ return {
   },
 
   {
+    name = 'dropInstance carries the sibling MIDI events into the new instance',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local slot, t1 = am:createAndDropMidi(0, 0, 1, 'lead')
+      h.reaper.MIDI_SetAllEvts(t1, 'EVTS-BLOB')
+      local t2 = am:dropInstance(0, slot, 4, 1)
+      t.truthy(t2, 'second instance created')
+      local _, blob = h.reaper.MIDI_GetAllEvts(t2, '')
+      t.eq(blob, 'EVTS-BLOB', 'new pooled instance starts with the pool events, not empty')
+    end,
+  },
+
+  {
+    name = 'duplicateTake carries the source MIDI events into the clone',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      am:createAndDropMidi(0, 0, 2, 'lead')
+      local src = am:tracksTakes(0)[1]
+      h.reaper.MIDI_SetAllEvts(src.take, 'EVTS-BLOB')
+      local clone = am:duplicateTake(src, 6)
+      t.truthy(clone, 'clone created')
+      local _, blob = h.reaper.MIDI_GetAllEvts(clone, '')
+      t.eq(blob, 'EVTS-BLOB', 'pooled clone starts with the source events, not empty')
+    end,
+  },
+
+  {
     name = 'startIsClear only collides on an exact start match (item ~= exceptItem)',
     run = function(harness)
       local h, am = mkAm(harness)

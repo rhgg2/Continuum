@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=593  sha=96d6b79  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=602  sha=9faab5a  mode=chunk
 @deps cm, tm
 
 # Invariants & contracts
@@ -44,19 +44,22 @@
   -- Placement
   @fn chunkSetPool(chunk, guid)  @ 351
   @fn harvestPoolGuid(item)  @ 359
-  @fn poolMidiItem(item, guid)  @ 365
-  @fn placeSource(track, kind, id, qnPos, lengthQN, name)  @ 373
-      @contract  MIDI: pooled clone via POOLEDEVTS swap; audio: sibling on file id; nil if REAPER refuses. Natural length defaults to util.OPEN (caller must not write a numeric natural here — placement is an "open the tap" gesture).
-  @fn siblingInstance(track, id)  @ 423
-      -- What a fresh drop inherits when the caller supplies neither length nor name.
-  @fn destBelow(take)  @ 460
+  @fn setTakeName(take, name)  @ 365
+  @fn copyMidiEvents(srcTake, dstTake)  @ 371
+  @fn placeAudio(track, filePath, qnPos, lengthQN)  @ 376
+  @fn cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)  @ 390
+      -- See docs/arrangeManager.md § Subsequent drops for why chunk-clone over POOLEDEVTS swap.
+      @contract  MIDI clone of srcItem at qnPos; rePool=true mints a fresh pool; nil if REAPER refuses.
+  @fn siblingInstance(track, id)  @ 434
+      -- First instance matching id: item (chunk source for MIDI clone),
+      -- length, name. Dictates what a fresh drop inherits.
+  @fn destBelow(take)  @ 488
       -- Destination for the *-Below trio. Natural end (not rendered) so a
       -- truncated upstream still drops past its downstream neighbour; relayout
       -- handles the symmetric truncation in the other direction.
-  @fn copyMidiEvents(srcTake, dstTake)  @ 462
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 562
+  @fn projectMidiTakes()  @ 571
 
 # Public API (am:*)
   @api am:projectTracks()  @ 172
@@ -81,39 +84,39 @@
   @api am:renameSlot(trackIdx, slotIdx, name)  @ 318
   @api am:deleteSlot(trackIdx, slotIdx)  @ 331
       @contract  deletes every take on trackIdx with this slot's id; returns the removed count
-  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 402
+  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 412
       @contract  (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track or no free slot. Natural length defaults to util.OPEN.
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 435
-      @contract  instance of slot at qnPos; lengthQN <- sibling len or 1; name <- sibling; nil if track/slot missing
-  @api am:duplicateTake(take, qnPos)  @ 448
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 447
+      @contract  instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
+  @api am:duplicateTake(take, qnPos)  @ 468
       @contract  clones take at qnPos on its own track (name included, original untouched); nil if track/id missing
-  @api am:duplicateBelow(take)  @ 468
+  @api am:duplicateBelow(take)  @ 491
       @contract  pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:duplicateUnpooledBelow(take)  @ 476
+  @api am:duplicateUnpooledBelow(take)  @ 499
       @contract  unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:newTakeBelow(take)  @ 503
+  @api am:newTakeBelow(take)  @ 512
       @contract  empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 514
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 523
       @contract  true iff no other take on trackIdx starts exactly at startQN (item ~= exceptItem). Replaces the old range-overlap gate: under the natural-length model items may share span, but never a start position.
-  @api am:moveTake(take, deltaQN)  @ 524
+  @api am:moveTake(take, deltaQN)  @ 533
       @contract  shifts item start by deltaQN; relayouts the track. Natural length is preserved; D_LENGTH is re-derived. Returns true iff the new start clears existing starts (no-op on collision).
-  @api am:resizeTake(take, newNaturalQN)  @ 537
+  @api am:resizeTake(take, newNaturalQN)  @ 546
       @contract  writes the take's natural length; relayout caps it (source / next-take gap). A value ≥ source is demoted to util.OPEN during relayout.
-  @api am:takeSourceLengthQN(take)  @ 544
+  @api am:takeSourceLengthQN(take)  @ 553
       @contract  source length in QN at the take's position; 0 if source missing.
-  @api am:deleteTake(take)  @ 553
-  @api am:takesUsing(name)  @ 574
+  @api am:deleteTake(take)  @ 562
+  @api am:takesUsing(name)  @ 583
       @contract  reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 584
+  @api am:reswingAll(name)  @ 593
       @contract  re-binds each takesUsing(name) take with markSwingStale=true; restores the original bound take at end
 
 # Uses (outbound edges)
-  @use call    cm.readTakeKey  @ 90, 577
+  @use call    cm.readTakeKey  @ 90, 586
   @use call    cm.readTrackKey  @ 57
   @use call    cm.writeTakeKey  @ 95, 96
   @use call    cm.writeTrackKey  @ 61
-  @use call    tm.bindTake  @ 588, 590
-  @use call    tm.currentTake  @ 586, 590
+  @use call    tm.bindTake  @ 597, 599
+  @use call    tm.currentTake  @ 595, 599
   @use call    util.toBase62  @ 313
   @use require util  @ 13
 
@@ -143,10 +146,10 @@
   @reaper GetPlayPosition
   @reaper GetSetMediaItemTakeInfo_String
   @reaper DeleteTrackMediaItem
-  @reaper SetItemStateChunk
-  @reaper CreateNewMIDIItemInProj
+  @reaper MIDI_GetAllEvts, MIDI_SetAllEvts
   @reaper AddMediaItemToTrack
   @reaper AddTakeToMediaItem
   @reaper PCM_Source_CreateFromFile
   @reaper SetMediaItemTake_Source
-  @reaper MIDI_GetAllEvts, MIDI_SetAllEvts
+  @reaper CreateNewMIDIItemInProj
+  @reaper SetItemStateChunk

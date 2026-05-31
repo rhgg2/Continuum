@@ -362,40 +362,50 @@ local function harvestPoolGuid(item)
   return chunk:match('POOLEDEVTS%s+({[^}]+})')
 end
 
-local function poolMidiItem(item, guid)
-  local ok, chunk = reaper.GetItemStateChunk(item, '', false)
-  if ok and chunk then
-    reaper.SetItemStateChunk(item, chunkSetPool(chunk, guid), false)
+local function setTakeName(take, name)
+  if take and name and name ~= '' then
+    reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
   end
 end
 
---contract: MIDI: pooled clone via POOLEDEVTS swap; audio: sibling on file id; nil if REAPER refuses. Natural length defaults to util.OPEN (caller must not write a numeric natural here — placement is an "open the tap" gesture).
-local function placeSource(track, kind, id, qnPos, lengthQN, name)
-  local take
-  if kind == 'midi' then
-    local item = reaper.CreateNewMIDIItemInProj(
-      track, qnPos, qnPos + lengthQN, true)
-    if not item then return end
-    poolMidiItem(item, id)
-    take = reaper.GetActiveTake(item)
-  else
-    local item = reaper.AddMediaItemToTrack(track)
-    if not item then return end
-    local startSec = reaper.TimeMap2_QNToTime(0, qnPos)
-    local endSec   = reaper.TimeMap2_QNToTime(0, qnPos + lengthQN)
-    reaper.SetMediaItemInfo_Value(item, 'D_POSITION', startSec)
-    reaper.SetMediaItemInfo_Value(item, 'D_LENGTH',   endSec - startSec)
-    take = reaper.AddTakeToMediaItem(item)
-    if take then
-      local src = reaper.PCM_Source_CreateFromFile(id)
-      if src then reaper.SetMediaItemTake_Source(take, src) end
-    end
-  end
-  if not take then return end
-  if name and name ~= '' then
-    reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
+local function copyMidiEvents(srcTake, dstTake)
+  local ok, evts = reaper.MIDI_GetAllEvts(srcTake, '')
+  if ok and evts then reaper.MIDI_SetAllEvts(dstTake, evts) end
+end
+
+local function placeAudio(track, filePath, qnPos, lengthQN)
+  local item = reaper.AddMediaItemToTrack(track)
+  if not item then return end
+  setItemQNRange(item, qnPos, qnPos + lengthQN)
+  local take = reaper.AddTakeToMediaItem(item)
+  if take then
+    local src = reaper.PCM_Source_CreateFromFile(filePath)
+    if src then reaper.SetMediaItemTake_Source(take, src) end
   end
   return take
+end
+
+-- See docs/arrangeManager.md § Subsequent drops for why chunk-clone over POOLEDEVTS swap.
+--contract: MIDI clone of srcItem at qnPos; rePool=true mints a fresh pool; nil if REAPER refuses.
+local function cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)
+  local newItem = reaper.CreateNewMIDIItemInProj(track, qnPos, qnPos + lengthQN, true)
+  if not newItem then return end
+  local ok, srcChunk = reaper.GetItemStateChunk(srcItem, '', false)
+  if not (ok and srcChunk) then return reaper.GetActiveTake(newItem) end
+
+  local chunk = srcChunk
+  if rePool then
+    local freshGuid = harvestPoolGuid(newItem)
+    if freshGuid then chunk = chunkSetPool(srcChunk, freshGuid) end
+  end
+  reaper.SetItemStateChunk(newItem, chunk, false)
+  -- Chunk replays src POSITION/LENGTH and may swap the active take; restore + refetch.
+  setItemQNRange(newItem, qnPos, qnPos + lengthQN)
+  local newTake = reaper.GetActiveTake(newItem)
+  -- Pooled: idempotent (chunk already carried events). Unpooled: the only
+  -- step that populates events into the freshly-minted pool.
+  copyMidiEvents(reaper.GetActiveTake(srcItem), newTake)
+  return newTake
 end
 
 --contract: (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track or no free slot. Natural length defaults to util.OPEN.
@@ -419,38 +429,56 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   return slotIdx, take
 end
 
--- What a fresh drop inherits when the caller supplies neither length nor name.
+-- First instance matching id: item (chunk source for MIDI clone),
+-- length, name. Dictates what a fresh drop inherits.
 local function siblingInstance(track, id)
-  local len, name
+  local sibItem, sibLen, sibName
   forEachActiveTake(track, function(take, item)
-    if not len and takeIdOf(take) == id then
-      len  = select(2, itemQNRange(item))
-      name = reaper.GetTakeName(take) or ''
+    if not sibItem and takeIdOf(take) == id then
+      sibItem = item
+      sibLen  = select(2, itemQNRange(item))
+      sibName = reaper.GetTakeName(take) or ''
     end
   end)
-  return len, name
+  return sibItem, sibLen, sibName
 end
 
---contract: instance of slot at qnPos; lengthQN <- sibling len or 1; name <- sibling; nil if track/slot missing
+--contract: instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
 function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return end
   local entry = readSlots(track)[slotIdx]
   if not entry or not entry.id then return end
-  local siblingLen, siblingName = siblingInstance(track, entry.id)
-  local take = placeSource(track, entry.kind, entry.id, qnPos,
-                           lengthQN or siblingLen or 1, siblingName)
-  if take then relayoutTrack(track) end
+  local sibItem, sibLen, sibName = siblingInstance(track, entry.id)
+  local len = lengthQN or sibLen or 1
+  local take
+  if entry.kind == 'midi' then
+    if not sibItem then return end
+    take = cloneMidiItem(track, sibItem, qnPos, len, false)
+  else
+    take = placeAudio(track, entry.id, qnPos, len)
+  end
+  if not take then return end
+  setTakeName(take, sibName)
+  relayoutTrack(track)
   return take
 end
 
 --contract: clones take at qnPos on its own track (name included, original untouched); nil if track/id missing
 function am:duplicateTake(take, qnPos)
   local track = reaper.GetTrack(0, take.trackIdx)
-  local id    = takeIdOf(take.take)
-  if not track or not id then return end
-  local copy = placeSource(track, take.kind, id, qnPos, take.lengthQN, take.name)
-  if copy then relayoutTrack(track) end
+  if not track then return end
+  local copy
+  if take.kind == 'midi' then
+    copy = cloneMidiItem(track, take.item, qnPos, take.lengthQN, false)
+  else
+    local id = takeIdOf(take.take)
+    if not id then return end
+    copy = placeAudio(track, id, qnPos, take.lengthQN)
+  end
+  if not copy then return end
+  setTakeName(copy, take.name)
+  relayoutTrack(track)
   return copy
 end
 
@@ -458,11 +486,6 @@ end
 -- truncated upstream still drops past its downstream neighbour; relayout
 -- handles the symmetric truncation in the other direction.
 local function destBelow(take) return take.startQN + take.naturalLenQN end
-
-local function copyMidiEvents(srcTake, dstTake)
-  local ok, evts = reaper.MIDI_GetAllEvts(srcTake, '')
-  if ok and evts then reaper.MIDI_SetAllEvts(dstTake, evts) end
-end
 
 --contract: pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
 function am:duplicateBelow(take)
@@ -477,25 +500,11 @@ function am:duplicateUnpooledBelow(take)
   if take.kind ~= 'midi' then return end
   local destQN = destBelow(take)
   if not am:startIsClear(take.trackIdx, destQN) then return end
-
-  local _, newTake = am:createAndDropMidi(take.trackIdx, destQN, take.naturalLenQN, take.name)
+  local track = reaper.GetTrack(0, take.trackIdx)
+  local newTake = cloneMidiItem(track, take.item, destQN, take.naturalLenQN, true)
   if not newTake then return end
-
-  local newItem = reaper.GetMediaItemTake_Item(newTake)
-  local newGuid = newItem and harvestPoolGuid(newItem)
-  local ok, srcChunk = reaper.GetItemStateChunk(take.item, '', false)
-  if not (ok and srcChunk and newGuid) then return newTake end
-
-  reaper.SetItemStateChunk(newItem, chunkSetPool(srcChunk, newGuid), false)
-  -- SetItemStateChunk may swap the active take object; refetch.
-  newTake = reaper.GetActiveTake(newItem)
-  -- Chunk re-applies src's POSITION; restore to destQN.
-  reaper.SetMediaItemInfo_Value(newItem, 'D_POSITION', reaper.TimeMap2_QNToTime(0, destQN))
-  -- Chunk's POOLEDEVTS now references the freshly-minted (empty) pool;
-  -- write src's MIDI in so the unpooled clone actually has events.
-  copyMidiEvents(take.take, newTake)
-
-  relayoutTrack(reaper.GetTrack(0, take.trackIdx))
+  setTakeName(newTake, take.name)
+  relayoutTrack(track)
   return newTake
 end
 
