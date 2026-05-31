@@ -183,9 +183,14 @@ return {
       t.eq(plan[fxbCls].hostKind, 'newTrack')
       t.deepEq(plan[fxbCls].fxOrder, { 'fx_b' })
       t.eq(plan[fxbCls].mainSend, false)
-      -- fx_a's class (guid-a) sends audio into fx_b's class.
-      t.deepEq(plan['guid-a'].outWires, { { to = fxbCls, type = 'audio' } })
-      t.deepEq(plan['guid-b'].outWires, { { to = fxbCls, type = 'audio' } })
+      -- outWires carry producer/consumer node ids + ports so the allocator
+      -- can plan channel pairs and pin maps on each side.
+      t.deepEq(plan['guid-a'].outWires,
+               { { from = 'fx_a', fromPort = 1, to = fxbCls,
+                   toNode = 'fx_b', toPort = 2, type = 'audio' } })
+      t.deepEq(plan['guid-b'].outWires,
+               { { from = 's2', fromPort = 1, to = fxbCls,
+                   toNode = 'fx_b', toPort = 1, type = 'audio' } })
     end,
   },
   {
@@ -204,11 +209,14 @@ return {
         { type = 'audio', from = 'splitter', to = 'mix', toPort = 2, fromPort = 1 },
         { type = 'audio', from = 'splitter', to = 'mix', toPort = 2, fromPort = 2 },
       }))
-      -- splitter's two wires to mix-class surface as two distinct outWires;
-      -- DAG.allocate (next layer) decides whether they collapse by channel assignment.
-      t.eq(#plan['guid-a'].outWires, 2)
-      t.eq(plan['guid-a'].outWires[1].type, 'audio')
-      t.eq(plan['guid-a'].outWires[2].type, 'audio')
+      -- splitter's two wires surface as distinct outWires keyed on fromPort;
+      -- DAG.allocate decides collapse via channel assignment.
+      local ws = plan['guid-a'].outWires
+      t.eq(#ws, 2)
+      t.eq(ws[1].from, 'splitter'); t.eq(ws[1].fromPort, 1)
+      t.eq(ws[2].from, 'splitter'); t.eq(ws[2].fromPort, 2)
+      t.eq(ws[1].toNode, 'mix');    t.eq(ws[1].toPort, 2)
+      t.eq(ws[2].toNode, 'mix');    t.eq(ws[2].toPort, 2)
     end,
   },
   {
@@ -248,8 +256,10 @@ return {
       local compCls = 'guid-a|guid-b'
       t.eq(plan[compCls].hostKind, 'newTrack')
       t.deepEq(plan[compCls].fxOrder, { 'midiComp' })
-      t.deepEq(plan['guid-a'].outWires, { { to = compCls, type = 'midi' } })
-      t.deepEq(plan['guid-b'].outWires, { { to = compCls, type = 'midi' } })
+      t.deepEq(plan['guid-a'].outWires,
+               { { from = 'synthA', to = compCls, toNode = 'midiComp', type = 'midi' } })
+      t.deepEq(plan['guid-b'].outWires,
+               { { from = 'synthB', to = compCls, toNode = 'midiComp', type = 'midi' } })
     end,
   },
   {
@@ -266,7 +276,11 @@ return {
         { type = 'audio', from = 'fx_a', to = 'fx_b', toPort = 2, ops = { gain = 0.5 } },
       }))
       local fxbCls = 'guid-a|guid-b'
-      t.deepEq(plan['guid-a'].outWires, { { to = fxbCls, type = 'audio', gain = 0.5 } })
+      -- Folded boundary CU bypassed: outWire.from is fx_a (the real producer
+      -- upstream of the CU), not the folded CU node id.
+      t.deepEq(plan['guid-a'].outWires,
+               { { from = 'fx_a', fromPort = 1, to = fxbCls,
+                   toNode = 'fx_b', toPort = 2, type = 'audio', gain = 0.5 } })
       t.deepEq(plan['guid-a'].fxOrder, { 'fx_a' }, 'gain CU folded out of fxOrder')
     end,
   },
@@ -323,7 +337,8 @@ return {
       t.eq(plan['guid-s1|guid-s2'], nil, 'absorbed class has no plan entry')
       t.eq(plan['guid-s1'].hostKind, 'sourceTrack')
       t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
-      t.deepEq(plan['guid-s2'].outWires, { { to = 'guid-s1', type = 'midi' } })
+      t.deepEq(plan['guid-s2'].outWires,
+               { { from = 's2', to = 'guid-s1', toNode = 'B', type = 'midi' } })
     end,
   },
 
@@ -340,7 +355,9 @@ return {
       }))
       t.eq(plan['guid-s1|guid-s2'], nil)
       t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
-      t.deepEq(plan['guid-s2'].outWires, { { to = 'guid-s1', type = 'audio' } })
+      t.deepEq(plan['guid-s2'].outWires,
+               { { from = 's2', fromPort = 1, to = 'guid-s1',
+                   toNode = 'B', toPort = 2, type = 'audio' } })
     end,
   },
 
@@ -364,8 +381,12 @@ return {
       t.eq(plan['guid-s|guid-t|guid-u'], nil)
       t.eq(plan['guid-s'].hostKind, 'sourceTrack')
       t.deepEq(plan['guid-s'].fxOrder, { 'mixA', 'mixB' })
-      t.deepEq(plan['guid-t'].outWires, { { to = 'guid-s', type = 'audio' } })
-      t.deepEq(plan['guid-u'].outWires, { { to = 'guid-s', type = 'audio' } })
+      t.deepEq(plan['guid-t'].outWires,
+               { { from = 't', fromPort = 1, to = 'guid-s',
+                   toNode = 'mixA', toPort = 2, type = 'audio' } })
+      t.deepEq(plan['guid-u'].outWires,
+               { { from = 'u', fromPort = 1, to = 'guid-s',
+                   toNode = 'mixB', toPort = 2, type = 'audio' } })
     end,
   },
 
@@ -474,8 +495,134 @@ return {
       }))
       t.eq(plan['guid-s1|guid-s2|guid-s3'], nil, 'absorbed class vacated')
       t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
-      t.deepEq(plan['guid-s2'].outWires, { { to = 'guid-s1', type = 'midi' } })
-      t.deepEq(plan['guid-s3'].outWires, { { to = 'guid-s1', type = 'audio' } })
+      t.deepEq(plan['guid-s2'].outWires,
+               { { from = 's2', to = 'guid-s1', toNode = 'B', type = 'midi' } })
+      t.deepEq(plan['guid-s3'].outWires,
+               { { from = 'midfx', fromPort = 1, to = 'guid-s1',
+                   toNode = 'B', toPort = 2, type = 'audio' } })
+    end,
+  },
+
+  -- intraConns: anchors track-IO and per-FX-pin context for the allocator.
+  --   * source -> fx     = track input pair -> fx input pin
+  --   * fx     -> fx     = intra-class chain conn
+  --   * fx     -> master = host's audio output pair -> REAPER master input
+  -- Folded CUs (gain bridges on inter-host wires) never appear; the inter-host
+  -- conn carries the gain via outWires.gain instead.
+
+  {
+    name = 'intraConns: source -> fx and fx -> master both anchor track-IO sides',
+    run = function()
+      -- Lone-source rule: master shares the source's class, so the host is
+      -- source-hosted and both s->f and f->master are intra-host anchors.
+      local ns = {}
+      local k,  v  = source('s', 'guid-s'); ns[k]  = v
+      local k2, v2 = fx('f');               ns[k2] = v2
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's', to = 'f' },
+        { type = 'audio', from = 'f', to = 'master' },
+      }))
+      t.deepEq(plan['guid-s'].intraConns, {
+        { from = 'f', fromPort = 1, to = 'master', toPort = 1, type = 'audio' },
+        { from = 's', fromPort = 1, to = 'f',      toPort = 1, type = 'audio' },
+      })
+    end,
+  },
+
+  {
+    name = 'intraConns: fx -> fx chain conn carries both port indices',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s', 'guid-s');                       ns[k]  = v
+      local k2, v2 = fx('a', { outs = 2 });                       ns[k2] = v2
+      local k3, v3 = fx('b', { ins = 2, outs = 0 });              ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's', to = 'a' },
+        { type = 'audio', from = 'a', to = 'b', fromPort = 1, toPort = 1 },
+        { type = 'audio', from = 'a', to = 'b', fromPort = 2, toPort = 2 },
+      }))
+      local ic = plan['guid-s'].intraConns
+      -- Sort is by (from, fromPort, to, toPort, type) so 'a' precedes 's'.
+      t.eq(#ic, 3, 'a->b(1,1), a->b(2,2), s->a')
+      t.eq(ic[1].from, 'a'); t.eq(ic[1].fromPort, 1); t.eq(ic[1].toPort, 1)
+      t.eq(ic[2].from, 'a'); t.eq(ic[2].fromPort, 2); t.eq(ic[2].toPort, 2)
+      t.eq(ic[3].from, 's'); t.eq(ic[3].to, 'a')
+    end,
+  },
+
+  {
+    name = 'intraConns: fx -> master inside master-hosted class anchors track-output',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s1', 'guid-a');   ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b');   ns[k2] = v2
+      local k3, v3 = fx('mix', { ins = 2 });   ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1',  to = 'mix', toPort = 1 },
+        { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
+        { type = 'audio', from = 'mix', to = 'master' },
+      }))
+      -- Sources s1/s2 are in their own classes; wires to mix lift to mainSend.
+      -- Only mix->master is intra-host on the master-hosted class.
+      t.deepEq(plan['__master__'].intraConns, {
+        { from = 'mix', fromPort = 1, to = 'master', toPort = 1, type = 'audio' },
+      })
+      t.eq(plan['guid-a'].mainSend, true, 'source->mix lifts to mainSend')
+      t.eq(plan['guid-b'].mainSend, true, 'source->mix lifts to mainSend')
+    end,
+  },
+
+  {
+    name = 'intraConns: folded boundary gain CU never appears',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s1', 'guid-a');             ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b');             ns[k2] = v2
+      local k3, v3 = fx('fx_a');                         ns[k3] = v3
+      local k4, v4 = fx('fx_b', { ins = 2 });            ns[k4] = v4
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1',   to = 'fx_a' },
+        { type = 'audio', from = 's2',   to = 'fx_b', toPort = 1 },
+        { type = 'audio', from = 'fx_a', to = 'fx_b', toPort = 2, ops = { gain = 0.5 } },
+      }))
+      for _, c in ipairs(plan['guid-a'].intraConns) do
+        t.eq(c.from:match('^_cu_'), nil, 'no folded CU as intraConn from')
+        t.eq(c.to  :match('^_cu_'), nil, 'no folded CU as intraConn to')
+      end
+      t.deepEq(plan['guid-a'].intraConns,
+               { { from = 's1', fromPort = 1, to = 'fx_a', toPort = 1, type = 'audio' } })
+    end,
+  },
+
+  {
+    name = 'intraConns: un-folded gain CU on intra-host wire is included',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s', 'guid-s'); ns[k]  = v
+      local k2, v2 = fx('fx_1');            ns[k2] = v2
+      local k3, v3 = fx('fx_2');            ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's',    to = 'fx_1', ops = { gain = 0.5 } },
+        { type = 'audio', from = 's',    to = 'fx_2' },
+        { type = 'audio', from = 'fx_1', to = 'master' },
+        { type = 'audio', from = 'fx_2', to = 'master' },
+      }))
+      local cuId = nil
+      for _, id in ipairs(plan['guid-s'].fxOrder) do
+        if id:match('^_cu_') then cuId = id end
+      end
+      t.truthy(cuId, 'gain CU retained in fxOrder (no fold)')
+      local sawSToCu, sawCuToFx1, sawFx1ToMaster, sawFx2ToMaster = false, false, false, false
+      for _, c in ipairs(plan['guid-s'].intraConns) do
+        if c.from == 's'    and c.to == cuId    then sawSToCu = true end
+        if c.from == cuId   and c.to == 'fx_1'  then sawCuToFx1 = true end
+        if c.from == 'fx_1' and c.to == 'master' then sawFx1ToMaster = true end
+        if c.from == 'fx_2' and c.to == 'master' then sawFx2ToMaster = true end
+      end
+      t.truthy(sawSToCu,         's -> CU intraConn present')
+      t.truthy(sawCuToFx1,       'CU -> fx_1 intraConn present')
+      t.truthy(sawFx1ToMaster,   'fx_1 -> master intraConn present')
+      t.truthy(sawFx2ToMaster,   'fx_2 -> master intraConn present')
     end,
   },
 }

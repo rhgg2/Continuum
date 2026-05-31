@@ -15,7 +15,7 @@
 --shape: lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
 --shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
---shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, outWires={ {to=hostKey, type='audio'|'midi', gain?=number}, ... } } }; outWires is one entry per inter-class wire (no collapse). M.allocate(targetPlan) turns outWires into sends with per-tuple channel assignment.
+--shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, outWires={ {from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number}, ... }, intraConns={ {from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi'}, ... } } }; outWires is one entry per inter-class wire (no collapse); intraConns is one entry per intra-host conn (incl. source-from and master-to anchors at track-IO pair 1). from/toNode are post-fold — boundary gain CUs that fold onto a send/mainSend are bypassed so endpoints name real FX in fxOrder (or source/master). M.allocate(targetPlan) turns outWires into sends with per-tuple channel assignment.
 --shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... } } }; output of M.allocate. Invariant from 3c.1 onward: no two sends share (to, type, srcChan, dstChan) within one host. In 3c.0 the stub stamps 0/0 and last-write-wins on collision, so multi-wire same-(from,to) still collapses; correctness restored once the real allocator assigns distinct channels.
 local util = require('util')
 
@@ -527,7 +527,7 @@ function M.compile(userGraph)
           table.sort(parked)
           plan['__scratch__'] = {
             hostKind = 'scratch', trackGuid = nil, fxOrder = parked,
-            mainSend = false, outWires = {},
+            mainSend = false, outWires = {}, intraConns = {},
           }
         end
       else
@@ -544,37 +544,72 @@ function M.compile(userGraph)
         plan[hostCls] = {
           hostKind  = hostKind, trackGuid = trackGuid, fxOrder = nil,
           mainSend  = hasMaster and hostKind == 'sourceTrack',
-          mainSendGain = mainGain[hostCls], outWires = {},
+          mainSendGain = mainGain[hostCls],
+          outWires = {}, intraConns = {},
         }
       end
     end
 
-    -- One outWires entry per inter-class wire (no collapse); intra-host skipped,
-    -- midi-to-master folds to mainSend. DAG.allocate consumes outWires next.
+    -- Folded CUs (1-in 1-out gain bridges on inter-host wires) get bypassed
+    -- on outWires.from — cuInbound names their real upstream producer.
+    local cuInbound = {}
+    for _, conn in ipairs(lowerGraph.conns) do
+      if folded[conn.to] then cuInbound[conn.to] = conn end
+    end
+
+    -- Same-host conn → intraConn; inter-host → outWire (or mainSend lift to
+    -- master-hosted dest). Folded-CU endpoints drop intra-host, resolve inter-host.
     for _, conn in ipairs(lowerGraph.conns) do
       local fromCls, toCls = classOf[conn.from], classOf[conn.to]
-      if fromCls ~= toCls and fromCls ~= '' and toCls ~= '' then
+      if fromCls ~= '' and toCls ~= '' then
         local fromHost = self:resolveHost(fromCls)
         local toHost   = self:resolveHost(toCls)
-        if fromHost ~= toHost then
-          if toHost == masterHostedHost then
-            plan[fromHost].mainSend = true
-          else
-            util.add(plan[fromHost].outWires, {
-              to = toHost, type = conn.type,
-              gain = conn.type == 'audio'
-                     and sendGain[fromHost .. '\0' .. toHost] or nil,
+        if fromHost == toHost then
+          if not (folded[conn.from] or folded[conn.to]) then
+            util.add(plan[fromHost].intraConns, {
+              from = conn.from, fromPort = conn.fromPort,
+              to   = conn.to,   toPort   = conn.toPort,
+              type = conn.type,
             })
           end
+        elseif toHost == masterHostedHost then
+          plan[fromHost].mainSend = true
+        else
+          local src, srcPort = conn.from, conn.fromPort
+          local upstream = folded[src] and cuInbound[src] or nil
+          if upstream then src, srcPort = upstream.from, upstream.fromPort end
+          util.add(plan[fromHost].outWires, {
+            from = src, fromPort = srcPort,
+            to   = toHost,
+            toNode = conn.to, toPort = conn.toPort,
+            type = conn.type,
+            gain = conn.type == 'audio'
+                   and sendGain[fromHost .. '\0' .. toHost] or nil,
+          })
         end
       end
     end
 
+    -- Deterministic ordering for downstream consumers. Sort keys are the
+    -- full identity tuple so order is stable even when (to, type) repeats.
+    local function cmpOpt(a, b) return (a or 0) < (b or 0) end
+    local function neqOpt(a, b) return (a or 0) ~= (b or 0) end
     for hostCls, members in pairs(hostMembers) do
       if hostCls ~= '' then
         plan[hostCls].fxOrder = topoIntraHost(members, folded)
         table.sort(plan[hostCls].outWires, function(a, b)
-          if a.to ~= b.to then return a.to < b.to end
+          if a.to     ~= b.to     then return a.to     < b.to     end
+          if a.type   ~= b.type   then return a.type   < b.type   end
+          if a.from   ~= b.from   then return a.from   < b.from   end
+          if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
+          if a.toNode ~= b.toNode then return a.toNode < b.toNode end
+          return cmpOpt(a.toPort, b.toPort)
+        end)
+        table.sort(plan[hostCls].intraConns, function(a, b)
+          if a.from ~= b.from then return a.from < b.from end
+          if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
+          if a.to   ~= b.to   then return a.to   < b.to   end
+          if neqOpt(a.toPort, b.toPort) then return cmpOpt(a.toPort, b.toPort) end
           return a.type < b.type
         end)
       end
