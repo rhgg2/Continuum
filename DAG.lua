@@ -16,7 +16,7 @@
 --shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
 --shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, outWires={ {from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number}, ... }, intraConns={ {from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi'}, ... } } }; outWires is one entry per inter-class wire (no collapse); intraConns is one entry per intra-host conn (incl. source-from and master-to anchors at track-IO pair 1). from/toNode are post-fold — boundary gain CUs that fold onto a send/mainSend are bypassed so endpoints name real FX in fxOrder (or source/master). M.allocate(targetPlan) turns outWires into sends with per-tuple channel assignment.
---shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... } } }; output of M.allocate. Invariant from 3c.1 onward: no two sends share (to, type, srcChan, dstChan) within one host. In 3c.0 the stub stamps 0/0 and last-write-wins on collision, so multi-wire same-(from,to) still collapses; correctness restored once the real allocator assigns distinct channels.
+--shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, pinMaps={ [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, nchan=int } }; output of M.allocate. Pair 1 anchors source-from / master-to intras and source-out outWires (track-IO convention); other audio wires claim pair=cursor++ on the bearing host; REAPER chan = (pair-1)*2; nchan = max(2, maxPair*2). Pin maps are audio-only — one entry per FX touched by allocation, missing ports default to REAPER identity at apply, multi-pair lists OR'd into one bitmask by 3c.2's pin writer. MIDI keeps srcChan=dstChan=0 until 3c.3; sends dedup on the 4-tuple. mainSendOffs (parent send pair via C_MAINSEND_OFFS) deferred to a follow-up step.
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -629,20 +629,145 @@ end
 
 ----- allocate
 
--- 3c.0 stub: stamps default channels and dedupes by 4-tuple. 3c.1 swaps the
--- body for the real allocator; surface unchanged for downstream consumers.
---contract: pure; outWires consumed, sends emitted with srcChan=dstChan=0; dedup on 4-tuple
+-- Walks fxOrder topologically; claims a stereo audio pair per intra-conn /
+-- outgoing send / incoming send. Source/master anchors pin at pair 1.
+--contract: outWires/intraConns -> sends+pinMaps+nchan; audio pair-claim, midi 0/0; dedup 4-tuple
 function M.allocate(plan)
-  local out = {}
-  for hostCls, entry in pairs(plan) do
-    local sends, seen = {}, {}
-    for _, w in ipairs(entry.outWires or {}) do
-      local key = w.to .. '|' .. w.type .. '|0|0'
-      if not seen[key] then
-        seen[key] = true
-        util.add(sends, { to = w.to, type = w.type, gain = w.gain,
-                          srcChan = 0, dstChan = 0 })
+  local fxSetOf, alloc = {}, {}
+  for hostKey, entry in pairs(plan) do
+    fxSetOf[hostKey] = {}
+    for _, id in ipairs(entry.fxOrder or {}) do fxSetOf[hostKey][id] = true end
+    alloc[hostKey] = { cursor = 1, pinMaps = {}, sends = {} }
+  end
+
+  -- Each sender's outWires reach the receiver as incoming wires; the receiver
+  -- claims dstChan pairs in stage 2 and writes them back into the sender.
+  local incoming = {}
+  for senderHost, entry in pairs(plan) do
+    for sendIdx, ow in ipairs(entry.outWires or {}) do
+      incoming[ow.to] = incoming[ow.to] or {}
+      util.add(incoming[ow.to], { wire = ow, senderHost = senderHost, sendIdx = sendIdx })
+    end
+  end
+  for _, list in pairs(incoming) do
+    table.sort(list, function(a, b)
+      if a.senderHost ~= b.senderHost then return a.senderHost < b.senderHost end
+      return a.sendIdx < b.sendIdx
+    end)
+  end
+
+  local function pinAdd(state, fxId, dir, port, pair)
+    local pm = state.pinMaps[fxId]
+    if not pm then pm = { ins = {}, outs = {} }; state.pinMaps[fxId] = pm end
+    local list = pm[dir][port or 1]
+    if not list then list = {}; pm[dir][port or 1] = list end
+    util.add(list, pair)
+  end
+
+  local function claim(state)
+    local p = state.cursor; state.cursor = p + 1; return p
+  end
+
+  local function chanOf(pair, type) return type == 'midi' and 0 or (pair - 1) * 2 end
+
+  local function hasAudioAnchor(entry, fxSet)
+    for _, ic in ipairs(entry.intraConns or {}) do
+      if ic.type == 'audio' and (not fxSet[ic.from] or not fxSet[ic.to]) then return true end
+    end
+    for _, ow in ipairs(entry.outWires or {}) do
+      if ow.type == 'audio' and not fxSet[ow.from] then return true end
+    end
+    return false
+  end
+
+  local hostKeys = {}
+  for hk in pairs(plan) do util.add(hostKeys, hk) end
+  table.sort(hostKeys)
+
+  -- Stage 1 -- anchors plus per-host fxOrder topo walk for outgoing claims.
+  for _, hostKey in ipairs(hostKeys) do
+    local entry, fxSet, state = plan[hostKey], fxSetOf[hostKey], alloc[hostKey]
+    if hasAudioAnchor(entry, fxSet) then state.cursor = 2 end
+
+    local outIntras = {}
+    for _, ic in ipairs(entry.intraConns or {}) do
+      if ic.type == 'audio' then
+        if not fxSet[ic.from] or not fxSet[ic.to] then
+          if fxSet[ic.from] then pinAdd(state, ic.from, 'outs', ic.fromPort, 1) end
+          if fxSet[ic.to]   then pinAdd(state, ic.to,   'ins',  ic.toPort,   1) end
+        else
+          outIntras[ic.from] = outIntras[ic.from] or {}
+          util.add(outIntras[ic.from], ic)
+        end
       end
+    end
+    local outSends = {}
+    for sendIdx, ow in ipairs(entry.outWires or {}) do
+      if fxSet[ow.from] then
+        outSends[ow.from] = outSends[ow.from] or {}
+        util.add(outSends[ow.from], { ow = ow, sendIdx = sendIdx })
+      else
+        state.sends[sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain,
+                                 srcChan = chanOf(1, ow.type), dstChan = 0 }
+      end
+    end
+
+    for _, fxId in ipairs(entry.fxOrder or {}) do
+      local intras = outIntras[fxId] or {}
+      table.sort(intras, function(a, b)
+        local aT, bT = a.toPort or 1, b.toPort or 1
+        if aT ~= bT then return aT < bT end
+        if a.to ~= b.to then return a.to < b.to end
+        return (a.fromPort or 1) < (b.fromPort or 1)
+      end)
+      for _, ic in ipairs(intras) do
+        local pair = claim(state)
+        pinAdd(state, ic.from, 'outs', ic.fromPort, pair)
+        pinAdd(state, ic.to,   'ins',  ic.toPort,   pair)
+      end
+      local items = outSends[fxId] or {}
+      table.sort(items, function(a, b)
+        if a.ow.to ~= b.ow.to then return a.ow.to < b.ow.to end
+        return a.sendIdx < b.sendIdx
+      end)
+      for _, item in ipairs(items) do
+        local ow = item.ow
+        local pair = ow.type == 'audio' and claim(state) or 1
+        if ow.type == 'audio' then pinAdd(state, ow.from, 'outs', ow.fromPort, pair) end
+        state.sends[item.sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain,
+                                       srcChan = chanOf(pair, ow.type), dstChan = 0 }
+      end
+    end
+  end
+
+  -- Stage 2 -- incoming sends: claim dstChan on receiver, write back into sender.
+  for _, hostKey in ipairs(hostKeys) do
+    local incList = incoming[hostKey]
+    if incList then
+      local fxSet, state = fxSetOf[hostKey], alloc[hostKey]
+      for _, inc in ipairs(incList) do
+        local ow = inc.wire
+        local pair
+        if ow.type == 'audio' and fxSet[ow.toNode] then
+          pair = claim(state)
+          pinAdd(state, ow.toNode, 'ins', ow.toPort, pair)
+        else
+          pair = 1
+        end
+        alloc[inc.senderHost].sends[inc.sendIdx].dstChan = chanOf(pair, ow.type)
+      end
+    end
+  end
+
+  -- Compose: drop intra/out, add sends/pinMaps/nchan. Dedup catches midi sends
+  -- to the same dest (all 0/0 until 3c.3); audio sends are unique by claim.
+  local out = {}
+  for hostKey, entry in pairs(plan) do
+    local state = alloc[hostKey]
+    local sends, seen = {}, {}
+    for _, s in ipairs(state.sends) do
+      local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan
+      if not seen[k] then seen[k] = true; util.add(sends, s) end
     end
     table.sort(sends, function(a, b)
       if a.to      ~= b.to      then return a.to      < b.to      end
@@ -650,12 +775,19 @@ function M.allocate(plan)
       if a.srcChan ~= b.srcChan then return a.srcChan < b.srcChan end
       return a.dstChan < b.dstChan
     end)
+    for _, pm in pairs(state.pinMaps) do
+      for _, dir in ipairs({ 'ins', 'outs' }) do
+        for _, list in pairs(pm[dir]) do table.sort(list) end
+      end
+    end
     local copy = {}
     for k, v in pairs(entry) do
-      if k ~= 'outWires' then copy[k] = v end
+      if k ~= 'outWires' and k ~= 'intraConns' then copy[k] = v end
     end
-    copy.sends = sends
-    out[hostCls] = copy
+    copy.sends   = sends
+    copy.pinMaps = state.pinMaps
+    copy.nchan   = math.max(2, (state.cursor - 1) * 2)
+    out[hostKey] = copy
   end
   return out
 end
