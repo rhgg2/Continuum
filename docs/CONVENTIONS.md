@@ -64,6 +64,14 @@ One line, ≤100 characters, aim for 90. Applies to `--invariant:`,
 shapes are allowed the length needed to state the shape; a field list
 legitimately enumerates more than a rule states.
 
+`--shape:` describes the **shape** of a table: field names, types, and
+nesting. Nothing else. It is not a place to park rationale, examples,
+edge-case notes, or prose that didn't find a home — those go in
+`docs/<file>.md`. The length exemption exists because a 30-field record
+legitimately needs 30 lines, not because shapes are an escape hatch for
+oversized annotations. If a `--shape:` line is doing anything other than
+naming a field and its type/sub-shape, move that content to the doc.
+
 Inline comments cap at **2 lines**. A WHY that needs more belongs in
 `docs/<file>.md` with a one-line pointer at the site (e.g.
 `-- see docs/<file>.md § <section>`).

@@ -2,8 +2,11 @@
 """Check Lua comment-hygiene rules on the current git diff (vs HEAD).
 
 Rules (docs/CONVENTIONS.md § Length discipline):
-- `--invariant:` / `--contract:` / `--emits:` / `--reaper:` cap at 100 chars
-  (`--shape:` exempt).
+- `--invariant:` / `--contract:` / `--emits:` / `--reaper:` cap at 100 chars.
+- `--shape:` is exempt from the 100-char rule but soft-capped at 400 chars
+  per line — a single shape line that long is almost certainly either
+  prose stuffed in alongside the fields, or a dense shape that should be
+  decomposed into named sub-shapes. Both fixes have the same form: split.
 - Contiguous WHY-comment runs (consecutive `--` lines that are not KIND
   annotations) cap at 2 lines.
 
@@ -18,11 +21,13 @@ import sys
 from pathlib import Path
 
 KIND_CAPPED = re.compile(r'^\s*--\??(invariant|contract|emits|reaper):')
+SHAPE       = re.compile(r'^\s*--\??shape:')
 ANY_KIND    = re.compile(r'^\s*--\??(invariant|contract|shape|emits|reaper):')
 COMMENT     = re.compile(r'^\s*--')
 HUNK_HEAD   = re.compile(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@')
-MAX_KIND_LEN = 100
-MAX_RUN      = 2
+MAX_KIND_LEN  = 100
+MAX_SHAPE_LEN = 400
+MAX_RUN       = 2
 
 
 def diff_added_lines():
@@ -78,6 +83,11 @@ def check_file(path, added):
                 out.append((path, str(ln),
                             f'KIND too long ({len(line)} > {MAX_KIND_LEN})',
                             line.strip()))
+            elif SHAPE.match(line) and len(line) > MAX_SHAPE_LEN:
+                out.append((path, str(ln),
+                            f'shape line too long ({len(line)} > {MAX_SHAPE_LEN}) '
+                            f'— split prose to docs/<file>.md or factor sub-shapes',
+                            line.strip()[:120] + '...'))
     for start, end in why_runs(lines):
         n = end - start + 1
         if n <= MAX_RUN:

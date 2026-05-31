@@ -50,9 +50,12 @@ Four places carry information about a module:
 
 **Length caps — hard, mechanical.** `--invariant:` / `--contract:` /
 `--emits:` / `--reaper:` are one line, ≤100 chars (aim 90). `--shape:`
-is exempt — shapes run as long as the shape needs. Inline comments cap
-at **2 lines**; a WHY that needs more goes in `docs/<file>.md` with a
-one-line pointer at the site (`-- see docs/<file>.md § <section>`).
+is exempt from the line cap but only for *describing the shape* (field
+names, types, nesting) — it is not a dumping ground for prose,
+rationale, or examples; those belong in `docs/<file>.md`. Inline
+comments cap at **2 lines**; a WHY that needs more goes in
+`docs/<file>.md` with a one-line pointer at the site
+(`-- see docs/<file>.md § <section>`).
 
 **Before authoring annotations, comments, or docs:** read
 `docs/CONVENTIONS.md` — it carries the contract/annotation/doc
