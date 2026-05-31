@@ -419,6 +419,151 @@ return {
       t.eq(out['guid-a'].mainSendOffs, nil)
     end,
   },
+  -- reusePairs flag: opts.reusePairs returns intra/outSend pairs to a per-host
+  -- free list after the consumer's slot, so the fxOrder walk packs nchan tighter.
+  {
+    name = 'reusePairs: default off (opts=nil) keeps serial chain at one pair per intra',
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2','fx3'},
+          mainSend=false,
+          intraConns={
+            {from='s',   to='fx1', type='audio'},
+            {from='fx1', to='fx2', type='audio'},
+            {from='fx2', to='fx3', type='audio'},
+          },
+          outWires={},
+        },
+      }
+      local out = DAG.allocate(plan)
+      t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {2})
+      t.deepEq(out['guid-a'].pinMaps.fx2.ins[1],  {2})
+      t.deepEq(out['guid-a'].pinMaps.fx2.outs[1], {3})
+      t.deepEq(out['guid-a'].pinMaps.fx3.ins[1],  {3})
+      t.eq(out['guid-a'].nchan, 6)
+    end,
+  },
+  {
+    name = 'reusePairs=true: serial chain reuses freed input pair for next output',
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2','fx3'},
+          mainSend=false,
+          intraConns={
+            {from='s',   to='fx1', type='audio'},
+            {from='fx1', to='fx2', type='audio'},
+            {from='fx2', to='fx3', type='audio'},
+          },
+          outWires={},
+        },
+      }
+      local out = DAG.allocate(plan, {reusePairs=true})
+      -- fx1->fx2 claims pair 2; at fx2 free pair 2; fx2->fx3 reuses pair 2.
+      t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {2})
+      t.deepEq(out['guid-a'].pinMaps.fx2.ins[1],  {2})
+      t.deepEq(out['guid-a'].pinMaps.fx2.outs[1], {2})
+      t.deepEq(out['guid-a'].pinMaps.fx3.ins[1],  {2})
+      t.eq(out['guid-a'].nchan, 4)
+    end,
+  },
+  {
+    name = 'reusePairs=true: outSend at slot S reuses pair freed by intra ending at S',
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
+          mainSend=false,
+          intraConns={
+            {from='s',   to='fx1', type='audio'},
+            {from='fx1', to='fx2', type='audio'},
+          },
+          outWires={ {from='fx2', to='guid-b', toNode='fx_b', type='audio'} },
+        },
+        ['guid-b'] = { hostKind='newTrack', fxOrder={'fx_b'},
+                       mainSend=false, intraConns={}, outWires={} },
+      }
+      local out = DAG.allocate(plan, {reusePairs=true})
+      -- fx1->fx2 pair 2; at fx2 free pair 2; fx2->ext outSend reuses pair 2.
+      t.deepEq(out['guid-a'].pinMaps.fx2.outs[1], {2})
+      t.eq(out['guid-a'].sends[1].srcChan, 2)
+      t.eq(out['guid-a'].nchan, 4)
+    end,
+  },
+  {
+    name = 'reusePairs=true: branching at fx2 -- one output reuses freed input pair',
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2','fx3','fx4'},
+          mainSend=false,
+          intraConns={
+            {from='s',   to='fx1', type='audio'},
+            {from='fx1', to='fx2', type='audio'},
+            {from='fx2', to='fx3', type='audio'},
+            {from='fx2', to='fx4', type='audio'},
+          },
+          outWires={},
+        },
+      }
+      local out = DAG.allocate(plan, {reusePairs=true})
+      -- fx1->fx2 pair 2; at fx2 free pair 2; fx2->fx3 reuses 2; fx2->fx4 claims fresh 3.
+      t.deepEq(out['guid-a'].pinMaps.fx2.outs[1], {2, 3})
+      t.deepEq(out['guid-a'].pinMaps.fx3.ins[1],  {2})
+      t.deepEq(out['guid-a'].pinMaps.fx4.ins[1],  {3})
+      t.eq(out['guid-a'].nchan, 6)
+    end,
+  },
+  {
+    name = "reusePairs=true: Stage 1b mainSend claims fresh, ignores intras' free list",
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2','fx3'},
+          mainSend=true, masterFeed={from='fx3'},
+          intraConns={
+            {from='s',   to='fx1', type='audio'},
+            {from='fx1', to='fx2', type='audio'},
+            {from='fx2', to='fx3', type='audio'},
+          },
+          outWires={},
+        },
+      }
+      local out = DAG.allocate(plan, {reusePairs=true})
+      -- Stage 1b would reuse pair 2 if the free list leaked across stages;
+      -- the safety clear forces a fresh claim at pair 3, so mainSendOffs=4.
+      t.eq(out['guid-a'].mainSendOffs, 4)
+      t.deepEq(out['guid-a'].pinMaps.fx3.outs[1], {3})
+      t.eq(out['guid-a'].nchan, 6)
+    end,
+  },
+  {
+    name = "reusePairs=true: Stage 2 incoming send claims fresh, ignores intras' free list",
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx_a'},
+          mainSend=false,
+          intraConns={ {from='s', to='fx_a', type='audio'} },
+          outWires={ {from='fx_a', to='guid-b', toNode='fx_b3', type='audio'} },
+        },
+        ['guid-b'] = {
+          hostKind='newTrack', fxOrder={'fx_b1','fx_b2','fx_b3'},
+          mainSend=false,
+          intraConns={
+            {from='fx_b1', to='fx_b2', type='audio'},
+            {from='fx_b2', to='fx_b3', type='audio'},
+          },
+          outWires={},
+        },
+      }
+      local out = DAG.allocate(plan, {reusePairs=true})
+      -- Stage 2 would reuse pair 1 if the free list leaked, giving dstChan=0;
+      -- the safety clear forces fresh pair 2 -> dstChan=2.
+      t.eq(out['guid-a'].sends[1].dstChan, 2)
+    end,
+  },
   {
     name = 'allocate: same input -> same output (determinism)',
     run = function()

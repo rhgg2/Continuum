@@ -637,15 +637,18 @@ end
 
 ----- allocate
 
--- Walks fxOrder topologically; claims a stereo audio pair per intra-conn /
--- outgoing send / incoming send / parent send. Source/master anchors pin at pair 1.
+-- Walks fxOrder topo; pair-claims per intra / outgoing send / parent send (anchors at pair 1).
+-- opts.reusePairs (default off): intra/outSend pairs return to a per-host free list after consumer.
 --contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs
-function M.allocate(plan)
+function M.allocate(plan, opts)
+  opts = opts or {}
+  local reusePairs = opts.reusePairs == true
+
   local fxSetOf, alloc = {}, {}
   for hostKey, entry in pairs(plan) do
     fxSetOf[hostKey] = {}
     for _, id in ipairs(entry.fxOrder or {}) do fxSetOf[hostKey][id] = true end
-    alloc[hostKey] = { cursor = 1, pinMaps = {}, sends = {} }
+    alloc[hostKey] = { cursor = 1, pinMaps = {}, sends = {}, free = {} }
   end
 
   -- Each sender's outWires reach the receiver as incoming wires; the receiver
@@ -673,7 +676,19 @@ function M.allocate(plan)
   end
 
   local function claim(state)
+    if state.free[1] then return table.remove(state.free, 1) end
     local p = state.cursor; state.cursor = p + 1; return p
+  end
+
+  -- Sorted-ascending insert so claim() always returns the lowest free pair
+  -- (deterministic and packs nchan down).
+  local function release(state, pair)
+    local lo, hi = 1, #state.free + 1
+    while lo < hi do
+      local mid = (lo + hi) // 2
+      if state.free[mid] < pair then lo = mid + 1 else hi = mid end
+    end
+    table.insert(state.free, lo, pair)
   end
 
   local function chanOf(pair, type) return type == 'midi' and 0 or (pair - 1) * 2 end
@@ -720,7 +735,16 @@ function M.allocate(plan)
       end
     end
 
-    for _, fxId in ipairs(entry.fxOrder or {}) do
+    local slotOf, releaseAt = {}, {}
+    for slot, id in ipairs(entry.fxOrder or {}) do slotOf[id] = slot end
+
+    for slot, fxId in ipairs(entry.fxOrder or {}) do
+      -- Free before claim so this slot's own outgoing intras/sends can reuse
+      -- pairs it just consumed (single read-then-write within the FX call).
+      if reusePairs and releaseAt[slot] then
+        for _, p in ipairs(releaseAt[slot]) do release(state, p) end
+      end
+
       local intras = outIntras[fxId] or {}
       table.sort(intras, function(a, b)
         local aT, bT = a.toPort or 1, b.toPort or 1
@@ -732,6 +756,10 @@ function M.allocate(plan)
         local pair = claim(state)
         pinAdd(state, ic.from, 'outs', ic.fromPort, pair)
         pinAdd(state, ic.to,   'ins',  ic.toPort,   pair)
+        if reusePairs then
+          local cs = slotOf[ic.to]
+          releaseAt[cs] = releaseAt[cs] or {}; util.add(releaseAt[cs], pair)
+        end
       end
       local items = outSends[fxId] or {}
       table.sort(items, function(a, b)
@@ -746,6 +774,9 @@ function M.allocate(plan)
                                        srcChan = chanOf(pair, ow.type), dstChan = 0 }
       end
     end
+
+    -- Reuse scope is intra/outSend within this fxOrder walk; Stage 1b/2 claim fresh.
+    state.free = {}
   end
 
   -- Stage 1b -- parent send: claim a pair on each host whose audio feeds master.

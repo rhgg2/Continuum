@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=820  sha=a017c40  mode=namespace
+@module DAG  src=DAG.lua  loc=851  sha=aa502eb  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(userGraph), which caches the lowered graph and its derivations lazily
@@ -49,13 +49,13 @@
   @api M.compile(userGraph)  @ 241
       @contract  assumes M.validate(userGraph)==nil; returns a ctx with lazy-cached derivations
   -- allocate
-  @api M.allocate(plan)  @ 643
-      -- Walks fxOrder topologically; claims a stereo audio pair per intra-conn /
-      -- outgoing send / incoming send / parent send. Source/master anchors pin at pair 1.
+  @api M.allocate(plan, opts)  @ 643
+      -- Walks fxOrder topo; pair-claims per intra / outgoing send / parent send (anchors at pair 1).
+      -- opts.reusePairs (default off): intra/outSend pairs return to a per-host free list after consumer.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs
 
 # Uses (outbound edges)
-  @use call    util.add  @ 184, 189, 277, 329, 330, 382, 455, 456, 480, 484, 489, 491, 495, 524, 569, 589, 657, 672, 692, 708, 716, 794
+  @use call    util.add  @ 184, 189, 277, 329, 330, 382, 455, 456, 480, 484, 489, 491, 495, 524, 569, 589, 660, 675, 707, 723, 731, 761, 825
   @use call    util.assign  @ 56
   @use call    util.bucket  @ 105, 138, 157, 253, 279
   @use call    util.pick  @ 228
