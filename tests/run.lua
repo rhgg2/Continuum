@@ -125,6 +125,7 @@ local specs = {
   'wm_persistence_spec',
   'wm_installed_fx_spec',
   'wm_probe_fx_io_spec',
+  'wm_host_move_spec',
   'wm_snapshot_spec',
   'wm_diff_spec',
   'wm_apply_ops_spec',

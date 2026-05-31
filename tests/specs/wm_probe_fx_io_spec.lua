@@ -9,17 +9,17 @@ end
 
 return {
   {
-    name = 'probeFxIO returns stereo-port counts (pins/2)',
+    name = 'instantiateFxOnScratch returns stereo-port counts (pins/2)',
     run = function(harness)
       local h, wm = mkWm(harness)
       reaper:setFxIO('VST3:Quad', { ins = 4, outs = 2 })
-      local io = wm:probeFxIO('VST3:Quad')
+      local io = wm:instantiateFxOnScratch('VST3:Quad')
       t.eq(io.ins,  2, 'two stereo input ports from 4 pins')
       t.eq(io.outs, 1, 'one stereo output port from 2 pins')
     end,
   },
   {
-    name = 'probeFxIO reads in_pin_X / out_pin_X via TrackFX_GetNamedConfigParm',
+    name = 'instantiateFxOnScratch reads in_pin_X / out_pin_X via TrackFX_GetNamedConfigParm',
     run = function(harness)
       local h, wm = mkWm(harness)
       reaper:setFxIO('VST3:Comp', {
@@ -27,31 +27,50 @@ return {
         inPinNames  = { 'Main L', 'Main R', 'Sidechain L', 'Sidechain R' },
         outPinNames = { 'Out L',  'Out R' },
       })
-      local io = wm:probeFxIO('VST3:Comp')
+      local io = wm:instantiateFxOnScratch('VST3:Comp')
       t.deepEq(io.inNames,  { 'Main', 'Sidechain' }, 'L/R suffix stripped per stereo pair')
       t.deepEq(io.outNames, { 'Out' })
     end,
   },
   {
-    name = 'probeFxIO caches by ident: second call does not re-instantiate',
+    name = 'instantiateFxOnScratch returns the live fxGuid (matches TrackFX_GetFXGUID on scratch)',
     run = function(harness)
       local h, wm = mkWm(harness)
       reaper:setFxIO('JS:thing', { ins = 2, outs = 2 })
-      wm:probeFxIO('JS:thing')
-
-      local calls = 0
-      local orig = reaper.TrackFX_AddByName
-      reaper.TrackFX_AddByName = function(...) calls = calls + 1; return orig(...) end
-      wm:probeFxIO('JS:thing')
-      t.eq(calls, 0, 'cached probe skips AddByName')
+      local io = wm:instantiateFxOnScratch('JS:thing')
+      local scratch = reaper.GetTrack(0, 0)
+      t.eq(io.fxGuid, reaper.TrackFX_GetFXGUID(scratch, 0), 'returned guid matches the live instance')
     end,
   },
   {
-    name = 'probeFxIO on unknown ident (AddByName returns -1) gives ins=outs=0',
+    name = 'instantiateFxOnScratch KEEPS the instance (no TrackFX_Delete; count stays at 1)',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      reaper:setFxIO('JS:keep', { ins = 2, outs = 2 })
+      wm:instantiateFxOnScratch('JS:keep')
+      local scratch = reaper.GetTrack(0, 0)
+      t.eq(reaper.TrackFX_GetCount(scratch), 1, 'instance persists on scratch')
+    end,
+  },
+  {
+    name = 'instantiateFxOnScratch does not cache: each call mints a fresh instance',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      reaper:setFxIO('JS:thing', { ins = 2, outs = 2 })
+      local io1 = wm:instantiateFxOnScratch('JS:thing')
+      local io2 = wm:instantiateFxOnScratch('JS:thing')
+      local scratch = reaper.GetTrack(0, 0)
+      t.eq(reaper.TrackFX_GetCount(scratch), 2, 'two distinct instances on scratch')
+      t.truthy(io1.fxGuid ~= io2.fxGuid, 'distinct fxGuids')
+    end,
+  },
+  {
+    name = 'instantiateFxOnScratch on unknown ident (AddByName returns -1) gives fxGuid=nil, ins=outs=0',
     run = function(harness)
       local h, wm = mkWm(harness)
       reaper.TrackFX_AddByName = function() return -1 end
-      local io = wm:probeFxIO('VST3:Missing')
+      local io = wm:instantiateFxOnScratch('VST3:Missing')
+      t.eq(io.fxGuid, nil)
       t.eq(io.ins,  0)
       t.eq(io.outs, 0)
       t.deepEq(io.inNames,  {})
@@ -73,13 +92,13 @@ return {
     end,
   },
   {
-    name = 'probeFxIO triggers scratch creation lazily when load was skipped',
+    name = 'instantiateFxOnScratch triggers scratch creation lazily when load was skipped',
     run = function(harness)
       local h, wm = mkWm(harness)
       reaper:setFxIO('JS:lazy', { ins = 2, outs = 2 })
       t.eq(reaper.CountTracks(0), 0)
-      wm:probeFxIO('JS:lazy')
-      t.eq(reaper.CountTracks(0), 1, 'probe created the scratch on demand')
+      wm:instantiateFxOnScratch('JS:lazy')
+      t.eq(reaper.CountTracks(0), 1, 'instantiate created the scratch on demand')
     end,
   },
   {

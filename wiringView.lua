@@ -96,41 +96,9 @@ function wv:pollUndo()   wm:pollUndo() end
 
 ----- Authoring (slice 1.3b)
 
---contract: appends fx at (x,y); audio io from probeFxIO(ident)
---contract: if generator (ins=0), also spawns source track + node at opts.sourcePos and midi edge from it
+--contract: pass-through to wm:addFxNode (Undo block + instantiate + generator there)
 function wv:addFx(x, y, fx, opts)
-  local io = wm:probeFxIO(fx.ident)
-  local isGenerator = (io.ins or 0) == 0
-  local sourceGuid = isGenerator and wm:createSourceTrack{ name = fx.name } or nil
-  return wm:mutate(function(g)
-    local fxId = 'n' .. g.nextId
-    g.nextId = g.nextId + 1
-    g.nodes[fxId] = {
-      kind      = 'fx',
-      pos       = { x = x, y = y },
-      fxIdent   = fx.ident,
-      fxDisplay = fx.name,
-      ports     = {
-        audio = { ins      = io.ins,     outs     = io.outs,
-                  inNames  = io.inNames, outNames = io.outNames },
-        midi  = { ins = 1, outs = 1 },
-      },
-    }
-    if isGenerator then
-      local sourceId = 'n' .. g.nextId
-      g.nextId = g.nextId + 1
-      local sp = (opts and opts.sourcePos) or { x = x - 140, y = y }
-      g.nodes[sourceId] = {
-        kind        = 'source',
-        pos         = { x = sp.x, y = sp.y },
-        trackGuid   = sourceGuid,
-        displayName = fx.name,
-        ports       = { audio = { ins = 0, outs = 1 },
-                        midi  = { ins = 0, outs = 1 } },
-      }
-      util.add(g.edges, { type = 'midi', from = sourceId, to = fxId })
-    end
-  end)
+  return wm:addFxNode(x, y, fx, opts)
 end
 
 function wv:listInstalledFX() return wm:listInstalledFX() end
