@@ -116,7 +116,5 @@ direct. Compact, but clear.
 ## Committing
 
 Whenever a change lands and the suite is green, stop and remind me to
-commit before moving on. Don't offer to commit: just nag, once, and
-propose a message describing what changed and why, in the imperative,
-scoped to the affected area (eg `tv: fix off-by-one in selection rect
-when cursor on last row`).
+commit before moving on. Don't offer to commit: just nag, once. The
+`/commit` skill handles the mechanics.
