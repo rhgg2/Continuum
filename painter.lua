@@ -156,13 +156,43 @@ function M.new(ctx, chrome, transform)
   return p
 end
 
+-- HSV→RGB in pure Lua so hue and hueNative share one (r,g,b) source —
+-- the ImGui pack and the REAPER native pack must agree per idx.
+local function hsvToRgb(h, s, v)
+  local i = math.floor(h * 6)
+  local f = h * 6 - i
+  local p = v * (1 - s)
+  local q = v * (1 - f * s)
+  local t = v * (1 - (1 - f) * s)
+  i = i % 6
+  if i == 0 then return v, t, p end
+  if i == 1 then return q, v, p end
+  if i == 2 then return p, v, t end
+  if i == 3 then return p, q, v end
+  if i == 4 then return t, p, v end
+  return v, p, q
+end
+
+local function hueRGB(idx, sat, val)
+  local h = ((idx + 1) * 0.6180339887498949) % 1.0
+  return hsvToRgb(h, sat, val)
+end
+
 --contract: returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
 -- The idx-th visually-distinct hue: golden-ratio rotation throws adjacent
 -- indices to opposite sides of the wheel. sat/val/alpha tone it.
 function M.hue(idx, sat, val, alpha)
-  local h = ((idx + 1) * 0.6180339887498949) % 1.0
-  local r, g, b = ImGui.ColorConvertHSVtoRGB(h, sat, val)
+  local r, g, b = hueRGB(idx, sat, val)
   return { u32 = ImGui.ColorConvertDouble4ToU32(r, g, b, alpha) }
+end
+
+--contract: REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; (sat,val) match the grid fill hue.
+function M.hueNative(idx)
+  local r, g, b = hueRGB(idx, 0.55, 0.78)
+  return reaper.ColorToNative(
+    math.floor(r * 255 + 0.5),
+    math.floor(g * 255 + 0.5),
+    math.floor(b * 255 + 0.5)) | 0x1000000
 end
 
 return M

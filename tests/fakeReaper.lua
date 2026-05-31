@@ -490,6 +490,8 @@ function M.new()
   state.srcFile         = {}    -- src   → filename string
   state.srcLen          = {}    -- src   → length (QN for MIDI, sec for audio)
   state.srcIsQN         = {}    -- src   → true if MIDI (beat-based)
+  state.itemCustomColor = {}    -- item  → REAPER native int (|0x1000000 set), 0 = unset
+  state.takeCustomColor = {}    -- take  → REAPER native int (|0x1000000 set), 0 = unset
   function r.CountTrackMediaItems(track) return #(state.itemsByTrack[track] or {}) end
   function r.GetTrackMediaItem(track, i) return (state.itemsByTrack[track] or {})[i + 1] end
   function r.GetActiveTake(item)         return state.activeTake[item] end
@@ -506,9 +508,29 @@ function M.new()
     return true, '<ITEM\n  <SOURCE MIDI\n    POOLEDEVTS ' .. guid .. '\n  >\n>'
   end
   function r.GetMediaItemInfo_Value(item, parm)
-    if parm == 'D_POSITION' then return state.itemPos[item] or 0 end
-    if parm == 'D_LENGTH'   then return state.itemLen[item] or 0 end
+    if parm == 'D_POSITION'     then return state.itemPos[item]         or 0 end
+    if parm == 'D_LENGTH'       then return state.itemLen[item]         or 0 end
+    if parm == 'I_CUSTOMCOLOR'  then return state.itemCustomColor[item] or 0 end
     return 0
+  end
+  function r.GetMediaItemTakeInfo_Value(take, parm)
+    if parm == 'I_CUSTOMCOLOR' then return state.takeCustomColor[take] or 0 end
+    return 0
+  end
+  -- Resolution: take override → item override → 0. Real REAPER also
+  -- folds the track default; the arrange code only cares about overrides.
+  function r.GetDisplayedMediaItemColor2(item, take)
+    local tc = state.takeCustomColor[take]
+    if tc and tc ~= 0 then return tc end
+    return state.itemCustomColor[item] or 0
+  end
+  -- Trivial pack for tests; the caller (painter.hueNative) sets the
+  -- |0x1000000 active bit, not here.
+  function r.ColorToNative(rr, gg, bb)
+    return (rr & 0xff) << 16 | (gg & 0xff) << 8 | (bb & 0xff)
+  end
+  function r.ColorFromNative(c)
+    return (c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff
   end
   -- Spec convenience: D_POSITION/D_LENGTH are seconds in REAPER;
   -- the fake treats one second as one QN at 60 BPM so tests can
@@ -583,8 +605,13 @@ function M.new()
     return true
   end
   function r.SetMediaItemInfo_Value(item, parm, value)
-    if parm == 'D_POSITION' then state.itemPos[item] = value
-    elseif parm == 'D_LENGTH' then state.itemLen[item] = value end
+    if parm == 'D_POSITION'        then state.itemPos[item]         = value
+    elseif parm == 'D_LENGTH'      then state.itemLen[item]         = value
+    elseif parm == 'I_CUSTOMCOLOR' then state.itemCustomColor[item] = value end
+    return true
+  end
+  function r.SetMediaItemTakeInfo_Value(take, parm, value)
+    if parm == 'I_CUSTOMCOLOR' then state.takeCustomColor[take] = value end
     return true
   end
   -- Round-trip POOLEDEVTS via the chunk. Only the guid is preserved;

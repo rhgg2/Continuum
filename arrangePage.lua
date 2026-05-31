@@ -74,32 +74,25 @@ local function rowLabel(row)
   return string.format('%4d', math.floor(av:rowToQN(row) + 0.5))
 end
 
--- Per-slot colours. Golden-ratio hue rotation gives 62 visually-distinct
--- hues without a hand-picked palette; pooled instances share a hue
--- because they share slotIdx. Orphans (slotIdx = nil) get neutral grey.
--- Each entry is a quad { fill, border, focusFill, focusBorder }: the
--- focus pair lightens the fill and brightens the border to full opacity
--- so the focused take reads as picked-out without losing its hue.
+-- Per-takeId quad { fill, border, focusFill, focusBorder } off colourIdx;
+-- focus pair brightens to full alpha so picked takes read without losing hue.
 local SLOT_FILL_ALPHA = 0.85
 local SLOT_BORDER_ALPHA = 0.75
-local slotColourCache = {}
-local function slotColours(slotIdx, focused)
-  -- Orphans (no slot) return named config; the 62 slot hues are generated
-  -- (painter.hue, golden-ratio rotation) and come back as painter colour
-  -- tokens. Both kinds are valid colour args to p.fill / p.stroke.
-  if slotIdx == nil then
+local colourCache = {}
+local function slotColours(colourIdx, focused)
+  if colourIdx == nil then
     if focused then return 'arrange.orphanFocusFill', 'arrange.orphanFocusBorder' end
     return 'arrange.orphanFill', 'arrange.orphanBorder'
   end
-  local quad = slotColourCache[slotIdx]
+  local quad = colourCache[colourIdx]
   if not quad then
     quad = {
-      painter.hue(slotIdx, 0.55, 0.78, SLOT_FILL_ALPHA),
-      painter.hue(slotIdx, 0.85, 0.55, SLOT_BORDER_ALPHA),
-      painter.hue(slotIdx, 0.30, 0.97, SLOT_FILL_ALPHA),
-      painter.hue(slotIdx, 0.92, 0.90, 1.0),
+      painter.hue(colourIdx, 0.55, 0.78, SLOT_FILL_ALPHA),
+      painter.hue(colourIdx, 0.85, 0.55, SLOT_BORDER_ALPHA),
+      painter.hue(colourIdx, 0.30, 0.97, SLOT_FILL_ALPHA),
+      painter.hue(colourIdx, 0.92, 0.90, 1.0),
     }
-    slotColourCache[slotIdx] = quad
+    colourCache[colourIdx] = quad
   end
   if focused then return quad[3], quad[4] end
   return quad[1], quad[2]
@@ -317,7 +310,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local rx0, rx1 = colX(tk.trackIdx), colX(tk.trackIdx + 1)
     local ry0 = rowYs(math.max(startRow, sr))
     local ry1 = rowYs(math.min(endRow, sr + visRows))
-    local fill, border = slotColours(tk.slotIdx, focused)
+    local fill, border = slotColours(tk.colourIdx, focused)
     if blocked then border = 'arrange.blockedBorder' end
     ps.fill(rect(rx0 + 1, ry0 + 1, rx1, ry1), fill)
     ps.stroke(rect(rx0, ry0, rx1 + 1, ry1 + 1), border, 1)

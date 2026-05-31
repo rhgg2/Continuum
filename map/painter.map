@@ -1,4 +1,4 @@
-@module painter  src=painter.lua  loc=168  sha=2448706  mode=namespace
+@module painter  src=painter.lua  loc=198  sha=2448706  mode=namespace
 
 # Invariants & contracts
   @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.
@@ -10,18 +10,25 @@
 # Module-level constants
   @const M = {}  @ 26
 
+# Private functions
+  @fn hsvToRgb(h, s, v)  @ 161
+      -- HSV→RGB in pure Lua so hue and hueNative share one (r,g,b) source —
+      -- the ImGui pack and the REAPER native pack must agree per idx.
+  @fn hueRGB(idx, sat, val)  @ 176
+
 # Public API (M.*)
   @api M.new(ctx, chrome, transform)  @ 29
       @contract  sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
-  @api M.hue(idx, sat, val, alpha)  @ 162
+  @api M.hue(idx, sat, val, alpha)  @ 184
       -- The idx-th visually-distinct hue: golden-ratio rotation throws adjacent
       -- indices to opposite sides of the wheel. sat/val/alpha tone it.
       @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
+  @api M.hueNative(idx)  @ 190
+      @contract  REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; (sat,val) match the grid fill hue.
 
 # Uses (outbound edges)
   @use call    imgui.CalcTextSize  @ 149, 151
-  @use call    imgui.ColorConvertDouble4ToU32  @ 165
-  @use call    imgui.ColorConvertHSVtoRGB  @ 164
+  @use call    imgui.ColorConvertDouble4ToU32  @ 186
   @use call    imgui.DrawList_AddCircleFilled  @ 101
   @use call    imgui.DrawList_AddLine  @ 88
   @use call    imgui.DrawList_AddPolyline  @ 112
@@ -43,3 +50,4 @@
 
 # REAPER API surface
   @reaper new_array
+  @reaper ColorToNative

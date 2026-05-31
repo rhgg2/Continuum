@@ -806,4 +806,84 @@ return {
     end,
   },
 
+  -- Palette colour (project-wide, keyed by takeId)
+  {
+    name = 'distinct pool guids on different tracks get distinct colourIdx',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', poolGuid = '{p1}' } } },
+        { items = { { kind = 'midi', poolGuid = '{p2}' } } },
+      })
+      local a = am:tracksTakes(0)[1]
+      local b = am:tracksTakes(1)[1]
+      t.truthy(a.colourIdx ~= nil and b.colourIdx ~= nil, 'both takes get a colourIdx')
+      t.truthy(a.colourIdx ~= b.colourIdx,
+               'cross-track ids do not collide on colour: lowest-free is project-wide')
+      t.eq(a.colourIdx + b.colourIdx, 1, 'two distinct ids consume indices 0 and 1')
+    end,
+  },
+
+  {
+    name = 'pooled instances on different tracks share one colourIdx',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', poolGuid = '{p1}' } } },
+        { items = { { kind = 'midi', poolGuid = '{p1}' } } },
+      })
+      local a = am:tracksTakes(0)[1]
+      local b = am:tracksTakes(1)[1]
+      t.eq(a.colourIdx, b.colourIdx, 'same pool id resolves to one colourIdx project-wide')
+    end,
+  },
+
+  {
+    name = 'createAndDropMidi stamps I_CUSTOMCOLOR on the new take',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local _, take = am:createAndDropMidi(0, 0, 1, 'lead')
+      local stamped = h.reaper.GetMediaItemTakeInfo_Value(take, 'I_CUSTOMCOLOR')
+      t.truthy(stamped ~= 0, 'fresh take carries the minted REAPER stamp')
+      t.truthy(stamped & 0x1000000 ~= 0, 'active-flag bit is set so REAPER honours the colour')
+    end,
+  },
+
+  {
+    name = 'duplicateUnpooledBelow strips the source colour and mints a fresh one',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      local src = am:tracksTakes(0)[1]
+      local srcStamp = h.reaper.GetMediaItemTakeInfo_Value(src.take, 'I_CUSTOMCOLOR')
+      local copy = am:duplicateUnpooledBelow(src)
+      t.truthy(copy, 'clone returned')
+      local copyStamp = h.reaper.GetMediaItemTakeInfo_Value(copy, 'I_CUSTOMCOLOR')
+      t.truthy(copyStamp ~= 0, 'clone carries its own stamp')
+      t.truthy(copyStamp ~= srcStamp,
+               'fresh pool identity gets a separate colour, not the source\'s')
+      t.eq(h.reaper.GetMediaItemTakeInfo_Value(src.take, 'I_CUSTOMCOLOR'), srcStamp,
+           'source stamp untouched: rePool clears the new item only')
+    end,
+  },
+
+  {
+    name = 'placement does not overwrite a pre-existing take colour (preserve override)',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local _, take = am:createAndDropMidi(0, 0, 1, 'lead')
+      -- Simulate a user recolouring the take in REAPER after creation.
+      h.reaper.SetMediaItemTakeInfo_Value(take, 'I_CUSTOMCOLOR', 0xDEADBE | 0x1000000)
+      -- A dropInstance triggers ensureColours + stampForTake for the new
+      -- instance only; the override take must be left alone.
+      am:dropInstance(0, am:slotForTake(take), 4, 1)
+      t.eq(h.reaper.GetMediaItemTakeInfo_Value(take, 'I_CUSTOMCOLOR'), 0xDEADBE | 0x1000000,
+           'override survives -- stampColour only writes when current value is 0')
+    end,
+  },
+
 }

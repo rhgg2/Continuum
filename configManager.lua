@@ -105,6 +105,9 @@ local declarations = {
   -- writeTakeKey (P_EXT). Default (nil at storage) reads as util.OPEN —
   -- the source's length is the effective cap. See docs/arrangeManager.md.
   { 'arrangeNaturalLenQN', nil },
+  -- Arrange palette colour, project-wide, { [takeId] = colourIdx }.
+  -- See docs/arrangeManager.md.
+  { 'arrangeColours', {} },
 
   -- Wiring page (third rung after tracker and sampler). The user graph
   -- is one project-tier blob; wiringClass is a per-track marker the

@@ -9,8 +9,13 @@
 --invariant: takeId derivation is the source-identity chokepoint — MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it); audio: source filename. Takes whose id can't be derived are skipped during ensureSlots — they neither materialise a slot nor pin one.
 --invariant: reswing (reswingAll) is the legacy sequenceManager behaviour folded in and needs the optional tm dependency; pure-discovery callers may omit tm
 --invariant: per-take natural length (cm key 'arrangeNaturalLenQN'). Default nil → util.OPEN. The item's D_LENGTH on each track is derived: min(effective natural, gap to next take, source length). relayoutTrack enforces this after every mutation. A stored natural >= source length is demoted to util.OPEN (= nil) so future source growth widens the cap automatically.
+--invariant: 'arrangeColours' (project tier) maps takeId → colourIdx project-wide
+--invariant: arrangeColours allocates lowest-free across live takeIds; ensureColours prunes dead ids
+--invariant: placement stamps painter.hueNative(idx) on new takes iff I_CUSTOMCOLOR == 0
+--invariant: painter.hue and painter.hueNative share one hash; freshly-stamped takes match the grid
 
-local util = require 'util'
+local util    = require 'util'
+local painter = require 'painter'
 
 local cm, tm = (...).cm, (...).tm
 
@@ -165,6 +170,53 @@ local function ensureSlots(track)
   return dict, slotForId, firstName
 end
 
+----- Colour palette (project-wide, keyed by takeId)
+
+local function readColours()   return cm:getAt('project', 'arrangeColours') or {} end
+local function writeColours(d) cm:set('project', 'arrangeColours', d) end
+
+--contract: walks all tracks; prunes dead, allocates lowest-free for new ids. Returns id→idx.
+local function ensureColours()
+  local live = {}
+  for ti = 0, reaper.CountTracks(0) - 1 do
+    forEachActiveTake(reaper.GetTrack(0, ti), function(take)
+      local id = takeIdOf(take)
+      if id then live[id] = true end
+    end)
+  end
+  local dict = readColours()
+  local used, dirty = {}, false
+  for id, idx in pairs(dict) do
+    if not live[id] then dict[id] = nil; dirty = true
+    else                  used[idx]  = true end
+  end
+  local nextFree = 0
+  for id in pairs(live) do
+    if not dict[id] then
+      while used[nextFree] do nextFree = nextFree + 1 end
+      dict[id]       = nextFree
+      used[nextFree] = true
+      dirty          = true
+    end
+  end
+  if dirty then writeColours(dict) end
+  return dict
+end
+
+-- Preserve user override: only stamp when I_CUSTOMCOLOR == 0. A REAPER
+-- recolour on any instance therefore survives every relayout.
+local function stampColour(take, colourIdx)
+  if not take or not colourIdx then return end
+  if reaper.GetMediaItemTakeInfo_Value(take, 'I_CUSTOMCOLOR') ~= 0 then return end
+  reaper.SetMediaItemTakeInfo_Value(take, 'I_CUSTOMCOLOR', painter.hueNative(colourIdx))
+end
+
+local function stampForTake(take)
+  local id = take and takeIdOf(take)
+  if not id then return end
+  stampColour(take, ensureColours()[id])
+end
+
 ----------- PUBLIC
 
 ----- Discovery
@@ -192,6 +244,7 @@ function am:tracksTakes(trackIdx)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return {} end
   local _, slotForId = ensureSlots(track)
+  local colourForId  = ensureColours()
 
   local out = {}
   forEachActiveTake(track, function(take, item)
@@ -205,7 +258,9 @@ function am:tracksTakes(trackIdx)
       lengthQN       = lengthQN,
       naturalLenQN   = effectiveNaturalLenQN(take, item),
       kind           = takeKind(take),
-      slotIdx        = id and slotForId[id] or nil,
+      slotIdx        = id and slotForId[id]   or nil,
+      colourIdx      = id and colourForId[id] or nil,
+      nativeColour   = reaper.GetDisplayedMediaItemColor2(item, take) or 0,
       name           = reaper.GetTakeName(take) or '',
     }
   end)
@@ -285,16 +340,18 @@ function am:trackSlots(trackIdx)
   local track = reaper.GetTrack(0, trackIdx)
   if not track then return {} end
   local dict, _, firstName = ensureSlots(track)
+  local colourForId        = ensureColours()
 
   local out = {}
   for i = 0, SLOT_MAX do
     local entry = dict[i]
     if entry then
       out[#out+1] = {
-        idx  = i,
-        kind = entry.kind,
-        id   = entry.id,
-        name = firstName[entry.id] or '',
+        idx       = i,
+        kind      = entry.kind,
+        id        = entry.id,
+        colourIdx = colourForId[entry.id],
+        name      = firstName[entry.id] or '',
       }
     end
   end
@@ -402,6 +459,12 @@ local function cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)
   -- Chunk replays src POSITION/LENGTH and may swap the active take; restore + refetch.
   setItemQNRange(newItem, qnPos, qnPos + lengthQN)
   local newTake = reaper.GetActiveTake(newItem)
+  if rePool then
+    -- Fresh pool identity sheds the source's visual identity; the next
+    -- stamp pass mints a hue against the new takeId.
+    reaper.SetMediaItemInfo_Value(newItem, 'I_CUSTOMCOLOR', 0)
+    if newTake then reaper.SetMediaItemTakeInfo_Value(newTake, 'I_CUSTOMCOLOR', 0) end
+  end
   -- Pooled: idempotent (chunk already carried events). Unpooled: the only
   -- step that populates events into the freshly-minted pool.
   copyMidiEvents(reaper.GetActiveTake(srcItem), newTake)
@@ -425,6 +488,7 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   if name and name ~= '' then
     reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
   end
+  stampForTake(take)
   relayoutTrack(track)
   return slotIdx, take
 end
@@ -460,6 +524,7 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   end
   if not take then return end
   setTakeName(take, sibName)
+  stampForTake(take)
   relayoutTrack(track)
   return take
 end
@@ -478,6 +543,7 @@ function am:duplicateTake(take, qnPos)
   end
   if not copy then return end
   setTakeName(copy, take.name)
+  stampForTake(copy)
   relayoutTrack(track)
   return copy
 end
@@ -504,6 +570,7 @@ function am:duplicateUnpooledBelow(take)
   local newTake = cloneMidiItem(track, take.item, destQN, take.naturalLenQN, true)
   if not newTake then return end
   setTakeName(newTake, take.name)
+  stampForTake(newTake)
   relayoutTrack(track)
   return newTake
 end
