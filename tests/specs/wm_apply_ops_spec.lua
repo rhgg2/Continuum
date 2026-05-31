@@ -422,4 +422,114 @@ return {
       t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'B_MAINSEND'), 1)
     end,
   },
+
+  ----- 3c.2: setNchan / setMainSend offs / setPinMaps
+
+  {
+    name = 'apply: setNchan writes I_NCHAN to the resolved track',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local track = seedSource(h, 'guid-A')
+      wm:applyOps({
+        { op='setNchan', classKey='guid-A', hostKind='sourceTrack',
+          trackGuid='guid-A', value=6 },
+      }, 'test')
+      t.eq(h.reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN'), 6)
+    end,
+  },
+  {
+    name = 'apply: setMainSend with value=true writes C_MAINSEND_OFFS',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local trackA = seedSource(h, 'guid-A')
+      wm:applyOps({
+        { op='setMainSend', classKey='guid-A', hostKind='sourceTrack',
+          trackGuid='guid-A', value=true, gain=0.75, offs=2 },
+      }, 'test')
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'B_MAINSEND'), 1)
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'D_VOL'), 0.75)
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'C_MAINSEND_OFFS'), 2)
+    end,
+  },
+  {
+    name = 'apply: setPinMaps fxGuid-keyed → TrackFX_SetPinMappings',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local track = seedSource(h, 'guid-A')
+      h.reaper:setFxIO('JS:foo', { ins=4, outs=4 })
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        g.nodes.f = fx('JS:foo', { ins=2 })
+        util.add(g.edges, audioEdge('s', 'f'))
+        util.add(g.edges, audioEdge('f', 'master'))
+      end)
+      apply(wm)
+      local fxGuid = wm:graph().nodes.f.fxGuid
+      wm:applyOps({
+        { op='setPinMaps', classKey='guid-A', hostKind='sourceTrack',
+          trackGuid='guid-A',
+          pinMaps         = { [fxGuid] = { ins={[1]={2}}, outs={} } },
+          pinMapsByOrigin = {} },
+      }, 'test')
+      -- Port 1 = pins 0,1; routed to pair 2 = bits 2,3.
+      local lo0 = h.reaper.TrackFX_GetPinMappings(track, 0, 0, 0)
+      local lo1 = h.reaper.TrackFX_GetPinMappings(track, 0, 0, 1)
+      t.eq(lo0 | lo1, (1 << 2) | (1 << 3))
+    end,
+  },
+  {
+    name = 'apply: setPinMaps origin-keyed resolves via stamps',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local track = seedSource(h, 'guid-A')
+      h.reaper:setFxIO('JS:foo', { ins=4, outs=4 })
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        g.nodes.f = fx('JS:foo', { ins=2 })
+        util.add(g.edges, audioEdge('s', 'f'))
+        util.add(g.edges, audioEdge('f', 'master'))
+      end)
+      -- setFXChain mints+stamps; setPinMaps then resolves 'node:f' → fxGuid.
+      wm:applyOps({
+        { op='setFXChain', classKey='guid-A', hostKind='sourceTrack',
+          trackGuid='guid-A',
+          fxOrder = { { fxGuid=nil, ident='JS:foo',
+                        origin={ kind='node', id='f' } } } },
+        { op='setPinMaps', classKey='guid-A', hostKind='sourceTrack',
+          trackGuid='guid-A',
+          pinMaps         = {},
+          pinMapsByOrigin = { ['node:f'] = { ins={[1]={2}}, outs={} } } },
+      }, 'test')
+      local lo0 = h.reaper.TrackFX_GetPinMappings(track, 0, 0, 0)
+      local lo1 = h.reaper.TrackFX_GetPinMappings(track, 0, 0, 1)
+      t.eq(lo0 | lo1, (1 << 2) | (1 << 3))
+    end,
+  },
+  {
+    name = 'apply: setPinMaps full-replace — owned ports absent from map reset to identity',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local track = seedSource(h, 'guid-A')
+      h.reaper:setFxIO('JS:foo', { ins=4, outs=4 })
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        g.nodes.f = fx('JS:foo', { ins=2 })
+        util.add(g.edges, audioEdge('s', 'f'))
+        util.add(g.edges, audioEdge('f', 'master'))
+      end)
+      apply(wm)
+      local fxGuid = wm:graph().nodes.f.fxGuid
+      -- Pre-corrupt port 1 → pair 2.
+      h.reaper.TrackFX_SetPinMappings(track, 0, 0, 0, 1 << 2, 0)
+      h.reaper.TrackFX_SetPinMappings(track, 0, 0, 1, 1 << 3, 0)
+      wm:applyOps({
+        { op='setPinMaps', classKey='guid-A', hostKind='sourceTrack',
+          trackGuid='guid-A',
+          pinMaps         = { [fxGuid] = { ins={}, outs={} } },
+          pinMapsByOrigin = {} },
+      }, 'test')
+      t.eq(h.reaper.TrackFX_GetPinMappings(track, 0, 0, 0), 1 << 0, 'pin 0 → identity')
+      t.eq(h.reaper.TrackFX_GetPinMappings(track, 0, 0, 1), 1 << 1, 'pin 1 → identity')
+    end,
+  },
 }

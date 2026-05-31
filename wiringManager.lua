@@ -604,6 +604,19 @@ local function originKey(origin)
   return 'edge:' .. origin.idx
 end
 
+-- Drop identity ports (pair-list = {port}) so allocator anchors at pair 1 don't
+-- look like drift against the snapshot, which strips identity at the REAPER read.
+local function stripIdentityPorts(pm)
+  local function strip(byPort)
+    local out = {}
+    for port, list in pairs(byPort or {}) do
+      if not (#list == 1 and list[1] == port) then out[port] = list end
+    end
+    return out
+  end
+  return { ins = strip(pm.ins), outs = strip(pm.outs) }
+end
+
 -- pinMaps forks by materialisation: fxGuid-keyed entries land in pinMaps,
 -- unmaterialised ones (no fxGuid yet) in pinMapsByOrigin for the applier.
 local function projectEntry(planEntry, compileNodes, scratchGuid)
@@ -629,9 +642,12 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
   for compileId, pm in pairs(planEntry.pinMaps or {}) do
     local entry = originByCompileId[compileId]
     if entry then
-      local target = entry.fxGuid and pinMaps or pinMapsByOrigin
-      local key    = entry.fxGuid or originKey(entry.origin)
-      target[key]  = util.deepClone(pm)
+      local stripped = stripIdentityPorts(pm)
+      if next(stripped.ins) or next(stripped.outs) then
+        local target = entry.fxGuid and pinMaps or pinMapsByOrigin
+        local key    = entry.fxGuid or originKey(entry.origin)
+        target[key]  = util.deepClone(stripped)
+      end
     end
   end
   local trackGuid
@@ -691,6 +707,21 @@ local function sendsEq(a, b)
   return true
 end
 
+-- snap can only key pinMaps by fxGuid, so any target.pinMapsByOrigin
+-- (unmaterialised fxs) is by definition unrepresented in snap and must drift.
+local function pinMapsEq(t_, s)
+  if t_.pinMapsByOrigin and next(t_.pinMapsByOrigin) then return false end
+  local tPM, sPM = t_.pinMaps or {}, (s and s.pinMaps) or {}
+  local keys = {}
+  for k in pairs(tPM) do keys[k] = true end
+  for k in pairs(sPM) do keys[k] = true end
+  for k in pairs(keys) do
+    if not util.deepEq(tPM[k] or { ins = {}, outs = {} },
+                       sPM[k] or { ins = {}, outs = {} }) then return false end
+  end
+  return true
+end
+
 --contract: pure structural diff producing a wiringOp[] that, applied, would carry snap to target. Order: creates first (so subsequent setSends can reference fresh tracks), then host-transition drains, then setFXChain / setMainSend / setSends / setExtState, then deletes. snap entries absent from target — or with a changed hostKind — and hostKind='newTrack' are deleted; sourceTrack/scratch/master are never deleted (project artefacts) but get drained on host transition. setFXChain/setMainSend/setSends ops carry hostKind so the applier can resolve master without a classKey tag (the REAPER master can't be tagged like a user track).
 function wm:diff(target, snap)
   local ops = {}
@@ -743,13 +774,29 @@ function wm:diff(target, snap)
                       hostKind = t_.hostKind,
                       trackGuid = t_.trackGuid, fxOrder = util.deepClone(t_.fxOrder) })
     end
+    local tNchan = t_.nchan or 2
+    local sNchan = (s and s.nchan) or 2
+    if tNchan ~= sNchan then
+      util.add(ops, { op = 'setNchan', classKey = classKey,
+                      hostKind = t_.hostKind, trackGuid = t_.trackGuid,
+                      value = tNchan })
+    end
+    if not pinMapsEq(t_, s) then
+      util.add(ops, { op = 'setPinMaps', classKey = classKey,
+                      hostKind = t_.hostKind, trackGuid = t_.trackGuid,
+                      pinMaps         = util.deepClone(t_.pinMaps         or {}),
+                      pinMapsByOrigin = util.deepClone(t_.pinMapsByOrigin or {}) })
+    end
     local tGain = t_.mainSendGain or 1.0
     local sGain = (s and s.mainSendGain) or 1.0
+    local tOffs = (t_.mainSend and t_.mainSendOffs) or 0
+    local sOffs = (s and s.mainSend and s.mainSendOffs) or 0
     if (fresh and (t_.mainSend or tGain ~= 1.0))
-       or (not fresh and (t_.mainSend ~= s.mainSend or tGain ~= sGain)) then
+       or (not fresh and (t_.mainSend ~= s.mainSend or tGain ~= sGain
+                                                    or tOffs ~= sOffs)) then
       util.add(ops, { op = 'setMainSend', classKey = classKey,
                       hostKind = t_.hostKind, trackGuid = t_.trackGuid,
-                      value = t_.mainSend, gain = tGain })
+                      value = t_.mainSend, gain = tGain, offs = tOffs })
     end
     if fresh or not sendsEq(t_.sends, s.sends) then
       util.add(ops, { op = 'setSends', classKey = classKey,
@@ -832,6 +879,37 @@ local function pushParams(track, fxIdx, ident, params, cache)
     local pIdx = resolveParamIdx(track, fxIdx, ident, k, cache)
     reaper.TrackFX_SetParam(track, fxIdx, pIdx, paramValueAsFloat(k, v))
   end
+end
+
+-- Pair P sits on channels 2(P-1) (left) and 2(P-1)+1 (right); each port's two
+-- pins carry the left- and right-bit masks respectively, ORed across pairs.
+local function pinMaskFor(pairList, pinOffset)
+  local lo, hi = 0, 0
+  for _, pair in ipairs(pairList) do
+    local bit = 2 * (pair - 1) + pinOffset
+    if bit < 32 then lo = lo | (1 << bit)
+    else             hi = hi | (1 << (bit - 32))
+    end
+  end
+  return lo, hi
+end
+
+-- Full-replace per fx: ports absent from `pm` revert to identity (port N → pair N).
+local function writePinMapsForFx(track, fxIdx, pm)
+  local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
+  local function dir(isoutput, pinCount, byPort)
+    byPort = byPort or {}
+    for port = 1, math.floor(pinCount / 2) do
+      local pairList = byPort[port] or { port }
+      for pinOffset = 0, 1 do
+        local lo, hi = pinMaskFor(pairList, pinOffset)
+        reaper.TrackFX_SetPinMappings(track, fxIdx, isoutput,
+                                      2 * (port - 1) + pinOffset, lo, hi)
+      end
+    end
+  end
+  dir(0, ins,  pm.ins)
+  dir(1, outs, pm.outs)
 end
 
 local function ownedSubsequence(track, ownedGuids)
@@ -1116,6 +1194,36 @@ function wm:applyOps(ops, label)
       if t then
         reaper.SetMediaTrackInfo_Value(t, 'B_MAINSEND', op.value and 1 or 0)
         reaper.SetMediaTrackInfo_Value(t, 'D_VOL', op.gain or 1.0)
+        if op.value then
+          reaper.SetMediaTrackInfo_Value(t, 'C_MAINSEND_OFFS', op.offs or 0)
+        end
+      end
+    elseif op.op == 'setNchan' then
+      local t = resolveTrack(op)
+      if t then reaper.SetMediaTrackInfo_Value(t, 'I_NCHAN', op.value) end
+    elseif op.op == 'setPinMaps' then
+      local t = resolveTrack(op)
+      if t then
+        -- Newly stamped guids join ownedPlus so a same-apply setPinMaps lands
+        -- on fxs minted by the preceding setFXChain.
+        local guidByOrigin, ownedPlus = {}, {}
+        for g in pairs(ownedGuids) do ownedPlus[g] = true end
+        for _, st in ipairs(stamps) do
+          guidByOrigin[originKey(st.origin)] = st.guid
+          ownedPlus[st.guid] = true
+        end
+        local merged = {}
+        for fxGuid, pm in pairs(op.pinMaps)         do merged[fxGuid] = pm end
+        for oKey,   pm in pairs(op.pinMapsByOrigin) do
+          local fxGuid = guidByOrigin[oKey]
+          if fxGuid then merged[fxGuid] = pm end
+        end
+        for fxIdx = 0, reaper.TrackFX_GetCount(t) - 1 do
+          local guid = reaper.TrackFX_GetFXGUID(t, fxIdx)
+          if ownedPlus[guid] then
+            writePinMapsForFx(t, fxIdx, merged[guid] or { ins = {}, outs = {} })
+          end
+        end
       end
     elseif op.op == 'setFXChain' then
       local t = resolveTrack(op)

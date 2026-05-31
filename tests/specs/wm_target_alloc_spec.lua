@@ -39,12 +39,8 @@ end
 
 return {
   {
-    -- source -> fx1 -> fx2 -> master  AND  fx1 -> fx3 -> master.
-    -- Intra-class fan-out from fx1 forces non-identity pin maps:
-    -- fx1.outs[1] gets {2,3}, fx2.ins[1]={2}, fx3.ins[1]={3}. Anchors at
-    -- pair 1 for source-from (fx1.ins[1]={1}) and master-to
-    -- (fx2.outs[1]={1}, fx3.outs[1]={1}). nchan=6, mainSendOffs=0
-    -- (master is in the same host, no separate masterFeed).
+    -- s→fx1→fx2→master + fx1→fx3→master: fan-out forces non-identity outs/ins;
+    -- identity anchors at pair 1 drop in projection. nchan=6, mainSendOffs=0.
     name = 'targetState: pinMaps + nchan carried for intra fan-out',
     run = function(harness)
       local h, wm = mkWm(harness)
@@ -65,21 +61,19 @@ return {
       t.truthy(entry, 'source-track entry present')
       t.eq(entry.nchan,        6, 'nchan = max(2, cursor*2) after two intra claims')
       t.eq(entry.mainSendOffs, 0, 'no masterFeed -> offs 0')
-      -- Unmaterialised fxs: everything lives in pinMapsByOrigin under
-      -- node:<id> keys; pinMaps is empty until applyOps stamps guids.
       t.deepEq(entry.pinMaps, {})
       t.deepEq(entry.pinMapsByOrigin['node:fx1'],
-               { ins = { [1] = {1} }, outs = { [1] = {2, 3} } })
+               { ins = {}, outs = { [1] = {2, 3} } })
       t.deepEq(entry.pinMapsByOrigin['node:fx2'],
-               { ins = { [1] = {2} }, outs = { [1] = {1} } })
+               { ins = { [1] = {2} }, outs = {} })
       t.deepEq(entry.pinMapsByOrigin['node:fx3'],
-               { ins = { [1] = {3} }, outs = { [1] = {1} } })
+               { ins = { [1] = {3} }, outs = {} })
     end,
   },
   {
-    -- Trivial chain: identity routing everywhere. mainSendOffs still 0
-    -- (no masterFeed since master is in-class), nchan stays at the floor.
-    name = 'targetState: linear source -> fx -> master is all identity',
+    -- Trivial chain: every port is identity. The projection drops all-identity
+    -- fxs from pinMapsByOrigin entirely — same shape as snapshot reads back.
+    name = 'targetState: linear source -> fx -> master drops all-identity fxs',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -93,8 +87,7 @@ return {
       local entry  = target['guid-A']
       t.eq(entry.nchan,        2, 'no fresh pair claimed')
       t.eq(entry.mainSendOffs, 0)
-      t.deepEq(entry.pinMapsByOrigin['node:f'],
-               { ins = { [1] = {1} }, outs = { [1] = {1} } })
+      t.eq(entry.pinMapsByOrigin['node:f'], nil, 'all-identity fx dropped from projection')
     end,
   },
 }

@@ -398,4 +398,104 @@ return {
       t.eq(ops.setMainSend[1].gain, 0.25)
     end,
   },
+
+  ----- nchan / pinMaps / mainSendOffs
+
+  {
+    name = 'diff: nchan drift drives setNchan',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local mk = function(n) return { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                                      fxOrder={}, mainSend=true, nchan=n, sends={} } } end
+      local ops = byOp(wm:diff(mk(6), mk(2)))
+      t.eq(#ops.setNchan, 1)
+      t.eq(ops.setNchan[1].value, 6)
+      t.eq(ops.setNchan[1].hostKind, 'sourceTrack')
+    end,
+  },
+  {
+    name = 'diff: identical nchan → no setNchan',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local both = { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                    fxOrder={}, mainSend=true, nchan=4, sends={} } }
+      t.eq(byOp(wm:diff(both, both)).setNchan, nil)
+    end,
+  },
+  {
+    name = 'diff: target nchan=2 vs snap with no nchan → no op (REAPER default)',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local target = { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                      fxOrder={}, mainSend=true, nchan=2, sends={} } }
+      local snap   = { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                      fxOrder={}, mainSend=true, sends={} } }
+      t.eq(byOp(wm:diff(target, snap)).setNchan, nil)
+    end,
+  },
+  {
+    name = 'diff: pinMaps drift drives setPinMaps (fxGuid-keyed)',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local mk = function(pm) return { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                                      fxOrder={ { fxGuid='{FX-1}', ident='JS:foo' } },
+                                                      mainSend=true, sends={}, pinMaps=pm } } end
+      local target = mk({ ['{FX-1}'] = { ins={[1]={2}}, outs={} } })
+      local snap   = mk({})
+      local ops = byOp(wm:diff(target, snap))
+      t.eq(#ops.setPinMaps, 1)
+      t.deepEq(ops.setPinMaps[1].pinMaps['{FX-1}'].ins[1], {2})
+      t.eq(ops.setPinMaps[1].hostKind, 'sourceTrack')
+    end,
+  },
+  {
+    name = 'diff: identical pinMaps → no setPinMaps',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local both = { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                    fxOrder={ { fxGuid='{FX-1}', ident='JS:foo' } },
+                                    mainSend=true, sends={},
+                                    pinMaps = { ['{FX-1}'] = { ins={[1]={2}}, outs={} } } } }
+      t.eq(byOp(wm:diff(both, both)).setPinMaps, nil)
+    end,
+  },
+  {
+    name = 'diff: pinMapsByOrigin (non-empty) in target always drives setPinMaps',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local target = { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                      fxOrder={ { fxGuid=nil, ident='JS:foo',
+                                                  origin={kind='node', id='f'} } },
+                                      mainSend=true, sends={}, pinMaps={},
+                                      pinMapsByOrigin = { ['node:f'] = { ins={[1]={2}}, outs={} } } } }
+      local snap   = { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                      fxOrder={}, mainSend=true, sends={}, pinMaps={} } }
+      local ops = byOp(wm:diff(target, snap))
+      t.truthy(ops.setPinMaps and #ops.setPinMaps >= 1, 'setPinMaps emitted')
+      t.deepEq(ops.setPinMaps[1].pinMapsByOrigin['node:f'].ins[1], {2})
+    end,
+  },
+  {
+    name = 'diff: mainSendOffs drift drives setMainSend carrying offs',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local entry = function(o) return { hostKind='sourceTrack', trackGuid='guid-A',
+                                         fxOrder={}, mainSend=true, mainSendOffs=o, sends={} } end
+      local ops = byOp(wm:diff({ ['guid-A']=entry(4) }, { ['guid-A']=entry(0) }))
+      t.eq(#ops.setMainSend, 1)
+      t.eq(ops.setMainSend[1].value, true)
+      t.eq(ops.setMainSend[1].offs, 4)
+    end,
+  },
+  {
+    name = 'diff: fresh class setMainSend carries offs (defaults to 0)',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local target = { ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                                      fxOrder={}, mainSend=true, sends={} } }
+      local ops = byOp(wm:diff(target, {}))
+      t.eq(#ops.setMainSend, 1)
+      t.eq(ops.setMainSend[1].offs, 0)
+    end,
+  },
 }
