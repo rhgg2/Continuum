@@ -161,8 +161,9 @@ local declarations = {
   { 'colour.arrange.cursorBorder',     'palette.shade'           },
   { 'colour.arrange.phrase',           {'colour.rowBeat', 1.0}   },  -- bar tint at full alpha
   { 'colour.arrange.blockedBorder',    {0.80, 0.16, 0.16, 0.95}  },  -- drag would overlap a neighbour
-  { 'colour.arrange.editCursor',       {0.20, 0.20, 0.26, 0.85}  },  -- REAPER edit-cursor rule
-  { 'colour.arrange.playHead',         {1.00, 0.85, 0.10, 0.95}  },  -- transport play-head rule
+  { 'colour.arrange.editCursor',       'palette.shade'           },  -- edit-cursor triangle fill
+  { 'colour.arrange.playHead',         'palette.slate'           },  -- play-head triangle fill
+  { 'colour.arrange.cursorTriBorder',  'palette.mid'             },  -- shared border for both gutter triangles
   { 'colour.arrange.ghostFill',        {0.95, 0.93, 0.80, 0.35}  },  -- create-preview fill
   { 'colour.arrange.ghostBorder',      {0.45, 0.42, 0.30, 0.90}  },  -- create-preview border
   { 'colour.arrange.orphanFill',       {0.50, 0.50, 0.50, 0.35}  },  -- slot-less item, neutral grey

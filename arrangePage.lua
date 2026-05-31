@@ -34,10 +34,9 @@ local PALETTE_W = 200
 -- middle of the gap so neither pane edge touches the line.
 local PANE_GAP  = 11
 local QN_W, TRACK_W = 32, 72
--- Empty band between the gutter numbers and the first vertical
--- gridline. Numbers stay right-aligned at QN_W; the first track
--- column starts QN_W + GUTTER_PAD pixels in.
-local GUTTER_PAD = 8
+-- Empty band between gutter numbers (right-aligned at QN_W) and the first
+-- gridline; wide enough to host the edit-cursor / play-head triangles.
+local GUTTER_PAD = 14
 -- The loop bracket — the tracker's tail `[` — strokes down the left edge
 -- of the grid; the whole grid shifts LOOP_PAD pixels right to clear it.
 -- Must exceed the bracket radius (5) plus its 1.5px stroke.
@@ -421,16 +420,21 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     ps.popClip()
   end
 
-  -- Edit cursor + play head — full-width rules on top of takes and
-  -- names. The play head is yellow and drawn only while the transport
-  -- runs; the grid clip rect already in force trims an off-screen rule.
-  local function qnRule(qn, name)
-    local y = rowYs(av:qnToRow(qn))
-    ps.line(ox, y, gridR, y, name, 1)
+  -- Edit cursor + play head — equilateral triangles in the gutter, apex 2px
+  -- left of the column divider. Play head draws only while the transport runs.
+  local TRI_BASE, TRI_H = 7, 7
+  local function gutterTri(qn, fill)
+    local y    = rowYs(av:qnToRow(qn))
+    local apex = pg.ox - 2
+    local base = apex - TRI_H
+    local half = TRI_BASE / 2
+    ps.tri(apex, y, base, y - half, base, y + half, fill)
+    ps.polyline({ apex, y, base, y - half, base, y + half },
+                'arrange.cursorTriBorder', 1, true)
   end
-  qnRule(av:editCursorQN(), 'arrange.editCursor')
+  gutterTri(av:editCursorQN(), 'arrange.editCursor')
   local playQN = av:playPositionQN()
-  if playQN then qnRule(playQN, 'arrange.playHead') end
+  if playQN then gutterTri(playQN, 'arrange.playHead') end
 
   for r = 0, visRows - 1 do
     local label = rowLabel(sr + r)

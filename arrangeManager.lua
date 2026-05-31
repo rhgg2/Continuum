@@ -221,21 +221,25 @@ end
 
 ----- Discovery
 
+-- Filters tracks tagged cm 'wiringScratch'='1' (hidden FX host, no items);
+-- wm always inserts scratch last, so col index == REAPER track index holds.
 function am:projectTracks()
   local out = {}
   for ti = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, ti)
-    local _, name = reaper.GetTrackName(track)
-    local dict = ensureSlots(track)
-    local slotCount = 0
-    for _ in pairs(dict) do slotCount = slotCount + 1 end
-    out[#out+1] = {
-      idx       = ti,
-      track     = track,
-      name      = name or '',
-      slotCount = slotCount,
-      takeCount = reaper.CountTrackMediaItems(track),
-    }
+    if cm:readTrackKey(track, 'wiringScratch') ~= '1' then
+      local _, name = reaper.GetTrackName(track)
+      local dict = ensureSlots(track)
+      local slotCount = 0
+      for _ in pairs(dict) do slotCount = slotCount + 1 end
+      out[#out+1] = {
+        idx       = ti,
+        track     = track,
+        name      = name or '',
+        slotCount = slotCount,
+        takeCount = reaper.CountTrackMediaItems(track),
+      }
+    end
   end
   return out
 end
