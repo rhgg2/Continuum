@@ -238,6 +238,27 @@ return {
     end,
   },
   {
+    name = 'fxOrder drains ready consumers before sibling producers (GH tiebreak)',
+    run = function()
+      -- After fxA, ready = {fxB, fxC}; GH prefers fxC (drains a live pair) over
+      -- sibling producer fxB. Id-only tiebreak would give [fxA, fxB, fxC, fxD].
+      local ns = {}
+      local k0, v0 = source('s', 'guid-s'); ns[k0] = v0
+      for _, id in ipairs({ 'fxA', 'fxB', 'fxC', 'fxD' }) do
+        local k, v = fx(id); ns[k] = v
+      end
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's',   to = 'fxA' },
+        { type = 'audio', from = 's',   to = 'fxB' },
+        { type = 'audio', from = 'fxA', to = 'fxC' },
+        { type = 'audio', from = 'fxB', to = 'fxD' },
+        { type = 'audio', from = 'fxC', to = 'master' },
+        { type = 'audio', from = 'fxD', to = 'master' },
+      }))
+      t.deepEq(plan['guid-s'].fxOrder, { 'fxA', 'fxC', 'fxB', 'fxD' })
+    end,
+  },
+  {
     name = 'midi inter-class between two managed tracks: regular send',
     run = function()
       -- s1 -> synthA (midi) -> midiCompressor <- synthB <- s2

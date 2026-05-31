@@ -463,7 +463,7 @@ function M.compile(userGraph)
   end
 
   -- Kahn's over pooled fx/cu members; sources/master/folded excluded.
-  -- Ties broken by sorted id for spec determinism.
+  -- Tiebreak by Goodman-Hsu local pressure (outMember - inMember); id final tiebreak.
   local function topoIntraHost(members, folded)
     local memberSet = {}
     for _, id in ipairs(members) do
@@ -472,17 +472,28 @@ function M.compile(userGraph)
         memberSet[id] = true
       end
     end
-    local indeg, succ = {}, {}
-    for id in pairs(memberSet) do indeg[id], succ[id] = 0, {} end
+    local indeg, succ, inMember = {}, {}, {}
+    for id in pairs(memberSet) do indeg[id], succ[id], inMember[id] = 0, {}, 0 end
     for _, conn in ipairs(lowerGraph.conns) do
       if memberSet[conn.from] and memberSet[conn.to] then
         indeg[conn.to] = indeg[conn.to] + 1
+        inMember[conn.to] = inMember[conn.to] + 1
         util.add(succ[conn.from], conn.to)
       end
     end
+    -- Lower score = drains more pairs than it claims; pick that next to keep
+    -- intra-pair live set small under reusePairs colouring.
+    local function sortReady(r)
+      table.sort(r, function(a, b)
+        local sa = #succ[a] - inMember[a]
+        local sb = #succ[b] - inMember[b]
+        if sa ~= sb then return sa < sb end
+        return a < b
+      end)
+    end
     local ready = {}
     for id in pairs(memberSet) do if indeg[id] == 0 then util.add(ready, id) end end
-    table.sort(ready)
+    sortReady(ready)
     local out = {}
     while #ready > 0 do
       local id = table.remove(ready, 1)
@@ -494,7 +505,7 @@ function M.compile(userGraph)
         indeg[child] = indeg[child] - 1
         if indeg[child] == 0 then util.add(ready, child) end
       end
-      table.sort(ready)
+      sortReady(ready)
     end
     return out
   end
