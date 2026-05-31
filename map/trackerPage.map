@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1471  sha=28f0b75  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1471  sha=36027a9  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -261,7 +261,7 @@
   @use call    trackerView.dropGrid  @ 1443
   @use call    trackerView.ec  @ 363, 489, 560, 643, 644, 810, 948, 1089, 1191, 1293
   @use call    trackerView.editEvent  @ 1108
-  @use call    trackerView.endGroupCascade  @ 1011, 1020, 1054
+  @use call    trackerView.endReselectCascades  @ 1011, 1020, 1054
   @use call    trackerView.isChannelEffectivelyMuted  @ 732
   @use call    trackerView.isChannelMuted  @ 581
   @use call    trackerView.isChannelSoloed  @ 580

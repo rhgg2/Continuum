@@ -1008,7 +1008,7 @@ local function handleMouse()
     -- dragging branch). Mirrors cursor-key behaviour.
 
     if charY < 0 then
-      tv:endGroupCascade()   -- label-row select is a re-selection
+      tv:endReselectCascades()   -- label-row select is a re-selection
       if charY == -HEADER then ec:selectChannel(last.midiChan)
       else ec:selectColumn(col) end
       return
@@ -1017,7 +1017,7 @@ local function handleMouse()
     local shift = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
 
     if shift then
-      tv:endGroupCascade()   -- shift-extend is a re-selection
+      tv:endReselectCascades()   -- shift-extend is a re-selection
       ec:extendTo(scrollRow + charY, col, stop)
     else
       ec:selClear()
@@ -1051,7 +1051,7 @@ local function handleMouse()
 
     -- Only start selection once cursor moves to a different position
     if row ~= cursorRow or col ~= cursorCol or stop ~= cursorStop then
-      tv:endGroupCascade()   -- drag-select is a new selection
+      tv:endReselectCascades()   -- drag-select is a new selection
       ec:extendTo(row, col, stop)
     end
 

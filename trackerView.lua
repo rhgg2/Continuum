@@ -1734,11 +1734,8 @@ end
 
 local dupeState = nil
 
--- Group quick-verb lifetimes (moved off trackerPage, which is pure
--- render/UI). groupSrc: last copy/mark source rect for groupPaste, nil
--- once mutated. groupDupState: the groupDuplicate cascade run token (see
--- tv:duplicateCascade). Cleared by tv:wireGroupLifetime's keep-set sweep
--- and the mouse re-selection paths via tv:endGroupCascade.
+-- Group quick-verb tokens: groupSrc (last copy/mark for groupPaste, nil once mutated),
+-- groupDupState (groupDuplicate cascade). Cleared by the keep-set sweep + endReselectCascades.
 local groupSrc, groupDupState
 
 -- Cursor cell as a 1-row mirror rect: the seed-rect fallback for plain
@@ -1880,12 +1877,16 @@ function tv:duplicateCascade(state, collectSource, place, fallbackRect)
       ppq, chan = a.ppq, a.chan        -- moved: at the cursor
     end
   end
-  if ppq + rect.dur > tm:length() then return state end
+  -- End-of-take: paste whatever fits, then end the cascade. Silently
+  -- no-opping here was the "won't fire" symptom near the tail.
+  if ppq >= tm:length() then return nil end
   local anchor = { ppq = ppq, chan = chan }
   payload = place(rect, anchor, payload)
   if fromSel then selectRegionAt(anchor, rect) else ec:selClear() end
+  local nextPpq = ppq + rect.dur
+  if nextPpq >= tm:length() then return nil end
   return { rect = rect, payload = payload, fromSel = fromSel,
-           next = ppq + rect.dur, mark = tv:cursorAnchor() }
+           next = nextPpq, mark = tv:cursorAnchor() }
 end
 
 -- The active selection as a mirror rect: a logical-frame time span x a
@@ -2534,9 +2535,9 @@ function tv:wireGroupLifetime()
   cmgr:doBefore(dupClearOn, function() groupDupState = nil end)
 end
 
--- A mouse re-selection ends the cascade by hand (the mouse bypasses
--- cmgr's keep-set sweep).
-function tv:endGroupCascade() groupDupState = nil end
+-- Mouse re-selection ends both cursor-anchored cascades by hand (cmgr's keep-set
+-- sweep doesn't see the mouse, so the run tokens would outlive a fresh selection).
+function tv:endReselectCascades() dupeState, groupDupState = nil, nil end
 
 -- A committed typed edit cancels every cascade and drops the groupPaste
 -- source, exactly as a non-keep cmgr command would -- editEvent is the
