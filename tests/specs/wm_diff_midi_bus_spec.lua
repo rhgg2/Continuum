@@ -6,6 +6,9 @@ local util = require('util')
 
 local function mkWm(harness)
   local h  = harness.mk()
+  -- Bracket post-pass spawns CU bridges around non-bus-aware JSFX consumers
+  -- on bus N≠0; pushParams resolves these slider names on materialisation.
+  h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain', 'bus' })
   local wm = util.instantiate('wiringManager', { cm = h.cm })
   wm:load()
   return h, wm

@@ -319,6 +319,40 @@ user graph. Default `{}`. Owned-track marker: track-level cm key,
 source-GUIDs of the class). Reconcile uses this to identify "ours"
 without needing parallel bookkeeping.
 
+### wiringSnapshot
+
+`wm:snapshot` (reads REAPER) and `wm:targetState` (lowers + allocates
+the user graph) emit matching shapes so `wm:diff` compares
+element-wise.
+
+- `fxOrder` entries carrying `params` are wm-owned CU bridges —
+  synthesised `kind='fx'` nodes from `DAG.lower` (gain / channelRemap)
+  or from the bracket post-pass (busPark / busRestore). Snapshot
+  mirrors the live params back from the slider so `fxOrderEq` is
+  honest; without it every reconcile would spuriously emit
+  `setFXChain`.
+- `origin` is stamped on every target-side fxOrder entry by
+  `projectEntry` so the applier knows where to write minted guids
+  back: `'node'` → `node.fxGuid`, `'edge'` →
+  `edge.opFxGuid`, `'bracketIn'`/`'bracketOut'` →
+  `node.midiInBracketGuid`/`midiOutBracketGuid`. Snap entries do not
+  carry `origin` and `fxOrderEq` ignores it.
+- `midiOut` is set on both sides only for non-JS `kind='node'`
+  entries — target derives it from the user graph
+  (`nodeHasMidiOut`), snap from `appliedMidiOut[fxGuid]` (`nil` ⇒
+  REAPER's fresh-FX default of true). Mismatch drives `setFXChain`,
+  and `reconcileFXChain` step 5 writes the 0x02 bit + records the
+  new applied value.
+- `pinMaps` carries pair-lists for every port with a route
+  (target: allocator-touched; snap: REAPER non-empty); absent port
+  ⇒ disconnected. The applier converts pair-lists to REAPER's
+  lo32/hi32 bitmask at the boundary.
+- `pinMapsByOrigin` carries the same shape for fxs target hasn't
+  materialised yet — applier resolves origin → fxGuid via the stamps
+  populated by the preceding `setFXChain`.
+- `nchan` is the host track's `I_NCHAN`; `mainSendOffs` is
+  `C_MAINSEND_OFFS` (only when `mainSend=true`).
+
 ### Stage 0 — Continuum Utility JSFX
 
 One file: `wiring/Continuum Utility.jsfx`, mirroring the sampler
@@ -707,6 +741,36 @@ plan when its turn comes.
   refusal of `ext_midi_bus` JSFX via a static
   `parseJsfxBusAware(ident)` scan of the JSFX desc. JSFX-only chains
   end-to-end.
+
+  *Bracket model (3c.3a.2).* The allocator's per-host post-pass walks
+  `fxOrder` and, for each non-bus-aware JSFX consumer (no `busAware`,
+  no outgoing midi this slice) whose `fxInputBus[fxId]` is N≠0,
+  splices two synthesised CU bridges around it:
+  `'bIn:'..fxId` (mode `busPark`, `bus=N`) before, `'bOut:'..fxId`
+  (mode `busRestore`, `bus=N`) after. Both modes implement the same
+  symmetric N↔0 swap at `@block`; the names label intent only. Bracket
+  lowerNodes carry `originNode` (the consumer fx id) + `originSide`
+  (`'in'|'out'`) so the applier stamps the minted guid back to
+  `node.midiInBracketGuid` / `node.midiOutBracketGuid`. They hang
+  under `planEntry.bracketNodes`; `projectEntry` merges that table
+  alongside `compileNodes` to resolve fxOrder ids. Identity pair-1
+  pin maps keep audio passing through the brackets.
+
+  *Why terminal-only this slice.* For a consumer-producer non-bus-aware
+  JSFX, the bracket model requires output bus = input bus = N (so the
+  post-restore lifts the FX's bus-0 output back to N where downstream
+  expects it). The allocator doesn't yet enforce that equality, so we
+  emit brackets only where `hasMidiOut[fxId]` is false — terminal
+  consumers, where output bus is moot.
+
+  *Bracket stamp clearance.* `applyOps` walks the pass's `setFXChain`
+  ops to build a set of `bracketClassed` consumer-node ids (any node
+  named in target's fxOrder via origin `'node'`) and an
+  `aliveBracketGuids` set (target's bracket entries + this pass's
+  stamps). In the stamp-back mutate, any `bracketClassed` node whose
+  `midiInBracketGuid` / `midiOutBracketGuid` isn't in the alive set
+  is cleared — closes the lifecycle when the allocator stops emitting
+  brackets for a consumer (e.g. its input bus dropped to 0).
 
   *3c.3b — Native FX path.* VST/AU per-FX in/out bus via chunk
   surgery; snapshot reads the same bytes via the same chunk walk.

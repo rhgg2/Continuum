@@ -14,10 +14,12 @@
 --shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, opFxGuid?=string }
 --invariant: an edge's gain/channelMap op lowers to a CU bridge (kind='fx', fxIdent=CU_IDENT, params={mode=...}, originEdgeIdx, fxGuid=opFxGuid). A gain bridge sitting on the SOLE wire realised as a send (track→track) or the parent/master send folds onto that send's native volume (see ctx:gainSinks) and is dropped from fxOrder — no CU materialised; otherwise the bridge is materialised and the applier stamps opFxGuid back via wm:mutate. channelMap bridges never fold (a send carries no remap).
 --shape: lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
---shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
+--shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, busAware?=bool, midiInBracketGuid?=string, midiOutBracketGuid?=string, params?=table, originEdgeIdx?=int, originNode?=string, originSide?='in'|'out' }; see design/wiring.md § 3c.3a for the CU-bridge / bracket model.
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
 --shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, outWires={ {from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number}, ... }, intraConns={ {from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi'}, ... } } }; outWires is one entry per inter-class wire (no collapse); intraConns is one entry per intra-host conn (incl. source-from and master-to anchors at track-IO pair 1). masterFeed names the (post-fold) audio producer whose output feeds the host's parent send to the master-hosted host; allocator pins that output and stamps mainSendOffs. from/toNode are post-fold — boundary gain CUs that fold onto a send/mainSend are bypassed so endpoints name real FX in fxOrder (or source/master). M.allocate(targetPlan) turns outWires into sends with per-tuple channel assignment.
---shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, pinMaps={ [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, nchan=int, mainSendOffs?=int } }; audio srcChan/dstChan are (pair-1)*2, midi are bus 0..127. See design/wiring.md § 3c for the allocator model.
+--shape: allocatedSend = { to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
+--shape: allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
+--shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=lowerNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -229,7 +231,8 @@ function M.lower(userGraph)
   end
 
   for id, node in pairs(userGraph.nodes or {}) do
-    lowerGraph.nodes[id] = util.pick(node, 'kind trackGuid fxIdent fxGuid')
+    lowerGraph.nodes[id] = util.pick(node,
+      'kind trackGuid fxIdent fxGuid busAware midiInBracketGuid midiOutBracketGuid')
   end
   for edgeIdx, edge in ipairs(userGraph.edges or {}) do
     if edge.type == 'audio' then lowerAudioEdge(edge, edgeIdx)
@@ -654,8 +657,10 @@ end
 
 -- Per-host live-range allocation, one register file per stream channel:
 -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
---contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs
-function M.allocate(plan)
+--contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
+--contract: nodes=lowerGraph.nodes; allocator reads busAware+fxIdent+bracket stamps post-pass.
+function M.allocate(plan, nodes)
+  nodes = nodes or {}
   -- Fold structurally-identical outwires before alloc — otherwise the
   -- per-receiver allocator gives them distinct dstChans and REAPER doubles events.
   do
@@ -907,13 +912,21 @@ function M.allocate(plan)
     local midiValues, nextMidiOrd = {}, 0
     local function addMidiValue(v) nextMidiOrd = nextMidiOrd + 1; v.ord = nextMidiOrd; util.add(midiValues, v) end
 
+    -- fxInputBus[consumerFxId] = bus the consumer's midi input arrived on; stamped by
+    -- source-midi / per-fx producer / stage-2 incoming as their values are assigned.
+    local fxInputBus = {}
+    local hasMidiOut = {}
+
     -- Source-midi producer pinned to the boundary (bus 0).
-    local sourceMidiLastUse, sourceMidiSends = 0, {}
+    local sourceMidiLastUse, sourceMidiSends, sourceMidiConsumers = 0, {}, {}
     for _, ic in ipairs(entry.intraConns or {}) do
       if ic.type == 'midi' and not fxSet[ic.from] and fxSet[ic.to] then
         if slotMap[ic.to] > sourceMidiLastUse then sourceMidiLastUse = slotMap[ic.to] end
+        util.add(sourceMidiConsumers, ic.to)
       end
     end
+    -- Source-midi is always bus 0 — pre-stamp so per-fx values defined later inherit it.
+    for _, c in ipairs(sourceMidiConsumers) do fxInputBus[c] = 0 end
     for sendIdx, ow in ipairs(entry.outWires or {}) do
       if ow.type == 'midi' and not fxSet[ow.from] then
         util.add(sourceMidiSends, function(bus) state.sends[sendIdx].srcChan = bus end)
@@ -930,19 +943,22 @@ function M.allocate(plan)
     local function fxMidiProducer(fxId)
       local p = fxMidiByProducer[fxId]
       if not p then
-        p = { def = slotMap[fxId], lastUse = slotMap[fxId], applies = {} }
+        p = { def = slotMap[fxId], lastUse = slotMap[fxId], applies = {}, consumers = {} }
         fxMidiByProducer[fxId] = p
       end
       return p
     end
     for _, ic in ipairs(entry.intraConns or {}) do
       if ic.type == 'midi' and fxSet[ic.from] then
+        hasMidiOut[ic.from] = true
         local p = fxMidiProducer(ic.from)
         if slotMap[ic.to] > p.lastUse then p.lastUse = slotMap[ic.to] end
+        util.add(p.consumers, ic.to)
       end
     end
     for sendIdx, ow in ipairs(entry.outWires or {}) do
       if ow.type == 'midi' and fxSet[ow.from] then
+        hasMidiOut[ow.from] = true
         local p = fxMidiProducer(ow.from)
         p.lastUse = N + 1
         util.add(p.applies, function(bus) state.sends[sendIdx].srcChan = bus end)
@@ -953,19 +969,27 @@ function M.allocate(plan)
     table.sort(fxProducerIds)
     for _, fxId in ipairs(fxProducerIds) do
       local p = fxMidiByProducer[fxId]
+      util.add(p.applies, function(bus)
+        for _, c in ipairs(p.consumers) do fxInputBus[c] = bus end
+      end)
       addMidiValue({ def = p.def, lastUse = p.lastUse, applies = p.applies })
     end
 
-    -- Stage-2 incoming midi sends pinned at the receiver; sender's dstChan stamped.
+    -- Stage-2 incoming midi sends pinned at the receiver; sender's dstChan
+    -- stamped, and the receiving fx (if any) inherits the bus as its input.
     if incoming[hostKey] then
       for _, inc in ipairs(incoming[hostKey]) do
         local ow = inc.wire
         if ow.type == 'midi' then
           local senderHost, sendIdx = inc.senderHost, inc.sendIdx
-          local lu = fxSet[ow.toNode] and slotMap[ow.toNode] or (N + 1)
+          local toNode = ow.toNode
+          local lu = fxSet[toNode] and slotMap[toNode] or (N + 1)
           addMidiValue({
             def = 0, lastUse = lu,
-            applies = { function(bus) alloc[senderHost].sends[sendIdx].dstChan = bus end },
+            applies = { function(bus)
+              alloc[senderHost].sends[sendIdx].dstChan = bus
+              if fxSet[toNode] then fxInputBus[toNode] = bus end
+            end },
           })
         end
       end
@@ -1015,6 +1039,38 @@ function M.allocate(plan)
         for _, v in ipairs(midiByDef[slot]) do processMidiValue(v) end
       end
     end
+
+    ----- bracket post-pass — see design/wiring.md § 3c.3a
+    local splicedFxOrder, bracketNodes = {}, nil
+    for _, fxId in ipairs(entry.fxOrder or {}) do
+      local node = nodes[fxId]
+      local inputBus = fxInputBus[fxId]
+      local needs = node and node.kind == 'fx'
+        and node.fxIdent and node.fxIdent:sub(1, 3) == 'JS:'
+        and not node.busAware
+        and not hasMidiOut[fxId]
+        and inputBus and inputBus ~= 0
+      if needs then
+        local bIn, bOut = 'bIn:' .. fxId, 'bOut:' .. fxId
+        bracketNodes = bracketNodes or {}
+        bracketNodes[bIn]  = { kind = 'fx', fxIdent = CU_IDENT,
+                               params = { mode = 'busPark',    bus = inputBus },
+                               originNode = fxId, originSide = 'in' }
+        bracketNodes[bOut] = { kind = 'fx', fxIdent = CU_IDENT,
+                               params = { mode = 'busRestore', bus = inputBus },
+                               originNode = fxId, originSide = 'out' }
+        util.add(splicedFxOrder, bIn)
+        util.add(splicedFxOrder, fxId)
+        util.add(splicedFxOrder, bOut)
+        -- Identity pair-1 pin maps so audio passes through the brackets.
+        state.pinMaps[bIn]  = { ins = { [1] = { 1 } }, outs = { [1] = { 1 } } }
+        state.pinMaps[bOut] = { ins = { [1] = { 1 } }, outs = { [1] = { 1 } } }
+      else
+        util.add(splicedFxOrder, fxId)
+      end
+    end
+    state.fxOrder      = bracketNodes and splicedFxOrder or nil
+    state.bracketNodes = bracketNodes
   end
 
   -- Compose: drop intra/out, add sends/pinMaps/nchan. Dedup catches midi sends
@@ -1046,6 +1102,8 @@ function M.allocate(plan)
     copy.pinMaps      = state.pinMaps
     copy.nchan        = math.max(2, (state.cursor - 1) * 2)
     copy.mainSendOffs = state.mainSendOffs
+    if state.fxOrder      then copy.fxOrder      = state.fxOrder      end
+    if state.bracketNodes then copy.bracketNodes = state.bracketNodes end
     out[hostKey] = copy
   end
   return out

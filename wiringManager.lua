@@ -6,7 +6,11 @@
 --invariant: fxGuid is the stable bridge identity; snapshot/targetState match fxOrder by it
 --invariant: wm deletes an FX instance only when its owning node or CU bridge leaves the graph
 --invariant: host changes are moves; TrackFX_CopyToTrack(is_move=true) preserves plugin state
---shape: wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder={ {fxGuid?=string, ident=string, params?=table, origin?={kind='node',id=string}|{kind='edge',idx=int}, midiOut?=bool}, ... }, mainSend=bool, mainSendGain?=number, mainSendOffs?=int, sends={ {to=classKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, nchan?=int, pinMaps?={ [fxGuid] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, pinMapsByOrigin?={ [originKey] = { ins=..., outs=... } } } }; emitted by wm:snapshot and wm:targetState in matching shape so wm:diff can compare element-wise. fxOrder entries carrying `params` are wm-owned CU bridges (synthesised kind='fx' nodes from DAG.lower); snapshot never reads params back from REAPER, so any target with `params` drives setFXChain on every reconcile pass. `origin` is stamped on every target-side fxOrder entry by projectEntry so the applier knows where to write minted guids back; snap entries do not carry it and fxOrderEq ignores it. `midiOut` is set on both sides only for non-JS kind='node' entries — target derives it from the user graph (nodeHasMidiOut), snap from appliedMidiOut[fxGuid] (nil ⇒ REAPER's fresh-FX default of true); mismatch drives setFXChain, and reconcileFXChain step 5 writes the 0x02 bit + records the new applied value. pinMaps carries pair-lists for every port with a route (target: allocator-touched; snap: REAPER non-empty); absent port ⇒ disconnected; the applier converts pair-lists to REAPER's lo32/hi32 bitmask at the boundary. pinMapsByOrigin carries the same shape for fxs target hasn't materialised yet — applier resolves origin → fxGuid via the stamps populated by the preceding setFXChain. nchan is the host track's I_NCHAN; mainSendOffs is C_MAINSEND_OFFS (only when mainSend=true).
+--shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
+--shape: snapshotSend = { to=classKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }
+--shape: snapshotFxOrigin = {kind='node',id=string}|{kind='edge',idx=int}|{kind='bracketIn'|'bracketOut',id=string}
+--shape: snapshotFxEntry = { fxGuid?=string, ident=string, params?=table, origin?=snapshotFxOrigin, midiOut?=bool }
+--shape: wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=snapshotFxEntry[], mainSend=bool, mainSendGain?=number, mainSendOffs?=int, sends=snapshotSend[], nchan?=int, pinMaps?={ [fxGuid]=snapshotPinMap }, pinMapsByOrigin?={ [originKey]=snapshotPinMap } } }; see design/wiring.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'setExtState'|'moveFxAcrossHosts', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier). moveFxAcrossHosts relocates a live FX from one host to another with TrackFX_CopyToTrack(is_move=true); emitted before per-class setFXChain ops so subsequent per-track reconcile sees the FX already at the destination. setNchan / setPinMaps emit between setFXChain and setMainSend so the applier has fxGuids stamped before pin-map writes and the track has channels allocated before pin maps land. setMainSend carries offs (C_MAINSEND_OFFS) when mainSend=true; setPinMaps carries both fxGuid-keyed and origin-keyed maps so unmaterialised fxs lift through the stamps table.
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
@@ -511,11 +515,17 @@ local function ownedChain(track, ownedGuids)
         entry.midiOut = applied == nil or applied
       elseif ident == CU_IDENT then
         -- Mirror live CU params so fxOrderEq is honest; without it every reconcile spuriously emits setFXChain.
-        local idx   = cuParamIdx(track, fxIdx)
-        local gainV = reaper.TrackFX_GetParam(track, fxIdx, idx.gain)
-        local modeV = reaper.TrackFX_GetParam(track, fxIdx, idx.mode)
-        entry.params = { mode = (modeV < 0.5) and 'gain' or 'channelRemap',
-                         gain = gainV }
+        local idx     = cuParamIdx(track, fxIdx)
+        local modeInt = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.mode) + 0.5)
+        local modeStr = ({ [0] = 'gain', [1] = 'channelRemap',
+                           [2] = 'busPark', [3] = 'busRestore' })[modeInt] or 'gain'
+        if modeStr == 'busPark' or modeStr == 'busRestore' then
+          entry.params = { mode = modeStr,
+                           bus  = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.bus) + 0.5) }
+        else
+          entry.params = { mode = modeStr,
+                           gain = reaper.TrackFX_GetParam(track, fxIdx, idx.gain) }
+        end
       end
       util.add(out, entry)
       local pm = readPinMapsForFx(track, fxIdx)
@@ -570,7 +580,11 @@ function wm:snapshot()
   local ownedGuids = {}
   for k in pairs(cm:get('wiringOwnedFx') or {}) do ownedGuids[k] = true end
   for _, n in pairs(userGraph.nodes) do
-    if n.kind == 'fx' and n.fxGuid then ownedGuids[n.fxGuid] = true end
+    if n.kind == 'fx' then
+      if n.fxGuid              then ownedGuids[n.fxGuid]              = true end
+      if n.midiInBracketGuid   then ownedGuids[n.midiInBracketGuid]   = true end
+      if n.midiOutBracketGuid  then ownedGuids[n.midiOutBracketGuid]  = true end
+    end
   end
   for _, e in ipairs(userGraph.edges) do
     if e.opFxGuid then ownedGuids[e.opFxGuid] = true end
@@ -642,19 +656,32 @@ end
 -- Same key shape as wm:applyOps stamps, so the pin-map applier can
 -- resolve unmaterialised fxs through stampsByOrigin[originKey].
 local function originKey(origin)
-  if origin.kind == 'node' then return 'node:' .. origin.id end
+  if origin.kind == 'node'      then return 'node:' .. origin.id end
+  if origin.kind == 'bracketIn' then return 'bracketIn:'  .. origin.id end
+  if origin.kind == 'bracketOut' then return 'bracketOut:' .. origin.id end
   return 'edge:' .. origin.idx
 end
 
 -- pinMaps forks by materialisation: fxGuid-keyed entries land in pinMaps,
 -- unmaterialised ones (no fxGuid yet) in pinMapsByOrigin for the applier.
 local function projectEntry(planEntry, compileNodes, scratchGuid)
+  local brackets = planEntry.bracketNodes or {}
+  local function resolveNode(id) return compileNodes[id] or brackets[id] end
   local fxOrder, originByCompileId = {}, {}
   for _, id in ipairs(planEntry.fxOrder) do
-    local node = compileNodes[id]
-    if node.kind == 'fx' then
+    local node = resolveNode(id)
+    if node and node.kind == 'fx' then
       local entry = { fxGuid = node.fxGuid, ident = node.fxIdent }
-      if node.params then
+      if node.originSide then
+        local consumer = compileNodes[node.originNode] or {}
+        local stamp = node.originSide == 'in'
+                      and consumer.midiInBracketGuid
+                      or  consumer.midiOutBracketGuid
+        entry.fxGuid = stamp
+        entry.params = util.deepClone(node.params)
+        entry.origin = { kind = node.originSide == 'in' and 'bracketIn' or 'bracketOut',
+                         id = node.originNode }
+      elseif node.params then
         entry.params = util.deepClone(node.params)
         entry.origin = { kind = 'edge', idx = node.originEdgeIdx }
       else
@@ -697,11 +724,12 @@ end
 function wm:targetState()
   ensureLoaded()
   local cx = DAG.compile(userGraph)
-  local plan = DAG.allocate(cx:targetPlan())
+  local nodes = cx:graph().nodes
+  local plan = DAG.allocate(cx:targetPlan(), nodes)
   local scratchGuid = scratchTrack and reaper.GetTrackGUID(scratchTrack)
   local out = {}
   for classKey, entry in pairs(plan) do
-    out[classKey] = projectEntry(entry, cx:graph().nodes, scratchGuid)
+    out[classKey] = projectEntry(entry, nodes, scratchGuid)
   end
   return out
 end
@@ -869,7 +897,7 @@ end
 -- contract that maps a mode-string in `params` to the slider's float value.
 -- Lives here (not in DAG) because lowering is pure and shouldn't know about
 -- the JSFX's numeric encoding.
-local CU_MODE_TO_FLOAT = { gain = 0, channelRemap = 1 }
+local CU_MODE_TO_FLOAT = { gain = 0, channelRemap = 1, busPark = 2, busRestore = 3 }
 
 local function paramValueAsFloat(name, value)
   if name == 'mode' and type(value) == 'string' then
@@ -1138,7 +1166,11 @@ local function ownedGuidsFrom(graph, persisted)
     for k in pairs(persisted) do s[k] = true end
   end
   for _, n in pairs(graph.nodes) do
-    if n.kind == 'fx' and n.fxGuid then s[n.fxGuid] = true end
+    if n.kind == 'fx' then
+      if n.fxGuid              then s[n.fxGuid]              = true end
+      if n.midiInBracketGuid   then s[n.midiInBracketGuid]   = true end
+      if n.midiOutBracketGuid  then s[n.midiOutBracketGuid]  = true end
+    end
   end
   for _, e in ipairs(graph.edges) do
     if e.opFxGuid then s[e.opFxGuid] = true end
@@ -1295,17 +1327,43 @@ function wm:applyOps(ops, label)
     if sink.kind ~= 'cu' and e and e.opFxGuid then clearGuid[edgeIdx] = true end
   end
 
-  if #stamps > 0 or next(clearGuid) then
+  -- Any node whose host fired setFXChain this pass without naming its brackets
+  -- has had them removed from REAPER; clear the stale stamps on the user node.
+  local bracketClassed, aliveBracketGuids = {}, {}
+  for _, st in ipairs(stamps) do
+    if st.origin.kind == 'bracketIn' or st.origin.kind == 'bracketOut' then
+      aliveBracketGuids[st.guid] = true
+    end
+  end
+  for _, op in ipairs(ops) do
+    if op.op == 'setFXChain' then
+      for _, ft in ipairs(op.fxOrder) do
+        if ft.origin and ft.origin.kind == 'node' then bracketClassed[ft.origin.id] = true end
+        if ft.fxGuid and ft.origin and
+           (ft.origin.kind == 'bracketIn' or ft.origin.kind == 'bracketOut') then
+          aliveBracketGuids[ft.fxGuid] = true
+        end
+      end
+    end
+  end
+
+  if #stamps > 0 or next(clearGuid) or next(bracketClassed) then
     realising = true
     self:mutate(function(g)
       for _, st in ipairs(stamps) do
-        if st.origin.kind == 'node' then
-          g.nodes[st.origin.id].fxGuid = st.guid
-        else
-          g.edges[st.origin.idx].opFxGuid = st.guid
-        end
+        if     st.origin.kind == 'node'       then g.nodes[st.origin.id].fxGuid              = st.guid
+        elseif st.origin.kind == 'bracketIn'  then g.nodes[st.origin.id].midiInBracketGuid   = st.guid
+        elseif st.origin.kind == 'bracketOut' then g.nodes[st.origin.id].midiOutBracketGuid  = st.guid
+        else                                       g.edges[st.origin.idx].opFxGuid           = st.guid end
       end
       for idx in pairs(clearGuid) do g.edges[idx].opFxGuid = nil end
+      for nodeId in pairs(bracketClassed) do
+        local n = g.nodes[nodeId]
+        if n then
+          if n.midiInBracketGuid  and not aliveBracketGuids[n.midiInBracketGuid]  then n.midiInBracketGuid  = nil end
+          if n.midiOutBracketGuid and not aliveBracketGuids[n.midiOutBracketGuid] then n.midiOutBracketGuid = nil end
+        end
+      end
     end)
     realising = false
   end
