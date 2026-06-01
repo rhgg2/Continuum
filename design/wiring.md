@@ -210,17 +210,33 @@ the equivalence-class calculus (`srcSet`, `classes`, `quotient`,
 `absorption`) runs directly on the user graph. `DAG.lower` is deleted
 and the "two graph shapes" invariant collapses to one.
 
-**Master is this rule, not a special case.** ≥2 wires to master (audio
-or MIDI) converge through a CU-merge whose single output feeds the
-parent send via `C_MAINSEND_OFFS`; one audio wire to master needs no
-CU — the parent send reads the producer's pair directly. Gain-folding
-to `D_VOL` composes: a sole-contributor wire folds onto the parent
-send, multi-wire cases route gains through the CU-merge params instead.
-`master.audio.ins > 1` stays deferred — REAPER's contiguous-range
-constraint on the parent send makes multi-pair representable only with
-silent padding channels, and the cleaner alternatives (per-pair bus
-tracks) want their own pass; a class addressing more than one master
-pair surfaces as a design-time error.
+**Master is this rule, not a special case.** ≥2 wires from one class to
+the master converge through that class's `audioSum` CU-merge, whose
+single output feeds the parent send via `C_MAINSEND_OFFS`; one audio
+wire needs no CU — the parent send reads the producer's pair directly.
+Gain-folding composes: a sole-contributor wire folds onto the parent
+send's `D_VOL`, multi-wire cases route gains through the merge params.
+
+The parent send is one pair wide, so a master-hosted FX can't pull more
+than one pair from a single upstream class — a cross-boundary sidechain
+would need a second. This is a hosting scope, not an error: a pre-hosting
+**class-split pass** decorates the offending node so the hosting pass
+puts it on its own track, where ordinary multi-pair sends feed it and it
+parent-sends one pair up. The split markers are the master *frontier*;
+the pass moves them inward toward the master to the shallowest cut where
+every upstream class crosses with ≤1 summed pair — the largest still-valid
+master class, i.e. least eviction. Markers move, they don't accumulate.
+With `master.audio.ins = 1` it always converges, since the master node is
+a terminal sum — one pair per contributor by definition. The marker it
+lands on a node is exactly what the later **manual split-at-a-node
+gesture** writes, so the two share one mechanism and the hosting pass
+never special-cases the master.
+
+`master.audio.ins > 1` stays deferred — the contiguous-range parent send
+makes multi-pair representable only with silent padding channels, and the
+cleaner alternatives (per-pair bus tracks) want their own pass; a class
+addressing more than one master pair is the one master case that still
+surfaces as a design-time error.
 
 **Semantic collision stays the user's call.** A CU-merge interleaves
 streams but does not separate events that share a MIDI channel: if
@@ -867,6 +883,16 @@ plan when its turn comes.
     "two graph shapes" and "single-in/single-out CU" invariants
     retire. (Only spec readers of `ctx:graph()`: `dag_srcset_spec`,
     `wm_persistence_spec`.)
+  - **Class-split / master minimization.** A pass between classification
+    and hosting that decorates nodes with a split marker; the hosting
+    pass seeds a separate host from each marked node (the per-node
+    sibling of the per-wire `primary` absorption override). Master-
+    minimization moves these markers — the master frontier — inward to the
+    shallowest cut where every class crosses the one-pair parent send with
+    ≤1 summed pair (least eviction), not by accumulating them; the later
+    manual split-at-a-node gesture writes the identical marker, so hosting
+    stays uniform and the master is never special-cased. Retires the old
+    sidechain-to-master "design-time error" — the resolution is eviction.
   - **Merge nodes at allocate.** Synthesise merge CUs at the
     targetPlan/allocate boundary as host-local `fxOrder` entries (the
     bracket machinery): binary per consuming FX — all-unity ⇒
