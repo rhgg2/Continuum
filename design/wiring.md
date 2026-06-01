@@ -135,95 +135,94 @@ channel-remap all stay Continuum Utility nodes. Wiring sends are
 post-FX (pre-fader, `I_SENDMODE=3`) so the from-track fader is free to
 be the parent-send gain without also scaling the track→track sends.
 
-## MIDI merge
+## Merge and split
 
-REAPER natively merges MIDI when multiple sends land on the same
-track — the FX chain receives one 16-channel stream regardless of
-how many producers fed in. For most cases this is exactly what the
-user wants and the wiring page does nothing special.
+A wire carries one signal occupying one resource: a stereo channel
+pair (audio) or a MIDI bus (midi). Merge — several producers into one
+input — and split — one producer to several consumers — are where
+wires share an endpoint. The compile graph treats audio and MIDI
+identically except at the single point REAPER forces apart.
 
-The case worth knowing is **semantic collision on shared
-channels**: producer A puts the kick on ch 1, producer B puts the
-snare on ch 1, REAPER interleaves both onto ch 1, and the result
-is wrong. The model offers no automatic detection — by default the
-user is trusted to keep their channel layout coherent.
-**Channel-remap on a wire** is the first-class resolution gesture
-when collision does happen or is anticipated: remap B's output to
-free channels, the collision dissolves, and the merge reduces to
-native send-to-bus. An opt-in diagnostic that scans MIDI takes on
-owned source tracks for actual channel usage is available later —
-see Stage 3.5 of the implementation plan.
+**Split is free and uniform.** Every consumer reads the producer's one
+resource — one pair, one bus — and nothing is copied. Source-out,
+fx-out, and MIDI all behave the same.
 
-### gmem merge — stage 2
+**Merge is one node.** Gain, channel-remap, and summation are not three
+mechanisms but one **Continuum Utility merge node** — gain-aware,
+multi-output, bound to a consuming FX's input side:
 
-For cases where remap isn't the right answer — both producers need
-to keep their semantic channels and the user wants programmable
-interleave instead of REAPER's blind one — the model offers a
-compile-time **gmem merge** escape, opt-in per node. Topology:
+- its inputs are the union of every producer resource feeding that FX
+  (pairs for audio, buses for MIDI);
+- it has **one output per used input port** — one pair per audio input
+  pin, one bus per MIDI input — each output being that port's gained,
+  summed subset;
+- downstream routing is then pure identity: the pin matrix maps
+  CU-output-pair-k → fx-pin-k; a MIDI consumer reads the one bus.
 
-- a **slave JSFX** on each non-primary input's track writes
-  `(sample-offset, channel, status, data)` tuples for that input's
-  MIDI block into a per-merge-node gmem ring at `@block`.
-- a **master JSFX** on the host track reads the ring at `@block` and
-  emits via `midisend(offset, …)`, interleaved with its own input.
-- a **silent audio send** from each slave's track to the master's
-  track pins REAPER's processing order — the fake audio dependency
-  is the real execution dependency, which REAPER's scheduling layer
-  is built to honour.
+A single gained wire is this node with one input and one output — gain
+node and merge node have fully collapsed. Audio and MIDI merge are the
+**same CU instance** in different modes (`audioMerge` / `midiMerge`),
+so one node can carry both an FX's audio-pin sums and its MIDI-bus sum.
 
-Cost per merge node: one slave JSFX per non-primary input, one master
-JSFX, one silent audio send per slave, one gmem region. Zero extra
-tracks. The mechanism is the same pattern sampleManager already uses
-for its gmem mailboxes.
+**The audio unity fast-path.** A REAPER FX audio input pin sums every
+pair routed to it for free *and selectively* — `P→A`, `P+Q→B` coexist
+because pins pick subsets. So an FX whose input pins are all unity-gain
+(or whose gain folds onto a send's `D_VOL`) needs **no CU**: the pin
+matrix is the summing point. The choice is **binary per consuming FX** —
+all-unity ⇒ matrix-fed (free, selective); any non-unity gain ⇒ one
+merge CU owning *every* used input port of that FX (unity ports pass
+through at gain 1.0). A pin is fed by the matrix or by the CU, never
+both — selectivity stays simple, at the cost of one CU per gained-input
+FX rather than one per distinct subset (the right pre-beta trade).
 
-### PDC asymmetry
+**No consumer-side matrix ⇒ always a CU.** MIDI (REAPER's per-FX filter
+exposes one input bus) and the master parent send (one contiguous
+channel range) have no free path: any fan-in there is a merge CU. The
+CU is an ordinary `ext_midi_bus` JSFX — it reads the converging buses
+at `@block` and emits one stream; cross-track producers reach it as
+sends arriving on distinct buses on the host track, which REAPER
+delivers to the same `@block`, so no gmem ring and no processing-order
+hack. (This is why the earlier gmem-merge design is gone: a JSFX can
+read every MIDI bus.)
 
-Only relevant under gmem merge. By default REAPER delay-compensates
-audio but not MIDI in JSFX, so if A's chain and B's chain have
-different upstream latencies, MIDI arrives at the master skewed
-relative to audio time.
+**One consequence drives the rest of the compiler:** because every MIDI
+fan-in is a merge node with a single output bus, **every MIDI consumer
+has exactly one input stream.** Bus allocation, the non-bus-aware
+bracket pass, and the differ never meet a multi-input MIDI node.
 
-JSFX exposes `pdc_midi = 1` to opt MIDI into the PDC graph. Set on
-the slaves and the master, it should fold MIDI into the same
-compensation REAPER applies to audio — slaves see aligned events at
-`@block`, master emits with claimable downstream latency. Verify
-with a skeleton (deliberate latency stacked upstream of one slave,
-measure event timing at the master against ground truth) before
-relying on it.
+**There is no lowered graph.** The merge node is the only node the
+compile graph has that the user graph lacks, and it is synthesised at
+the targetPlan/allocate boundary — where the partition reveals whether
+a gain folds to a send, rides the matrix, or needs a CU — exactly as
+the non-bus-aware brackets already are (host-local `fxOrder` entries).
+Wire-level ops are no longer spliced into nodes ahead of time; they
+ride the connection as metadata (`gain`, `channelMap`) and the merge
+node realises them. A CU bridge was always connectivity-inert
+(one-in/one-out, inheriting its parent's class), so with splicing gone
+the equivalence-class calculus (`srcSet`, `classes`, `quotient`,
+`absorption`) runs directly on the user graph. `DAG.lower` is deleted
+and the "two graph shapes" invariant collapses to one.
 
-Residual: PDC propagation is a chain property. A third-party FX
-upstream of a merge that doesn't honor `pdc_midi` breaks alignment
-at that boundary. First-party JSFX set the flag unconditionally;
-for foreign plugins the wiring page either warns or refuses the
-merge for that subgraph — narrow design-time restriction as the
-fallback, not the default.
+**Master is this rule, not a special case.** ≥2 wires to master (audio
+or MIDI) converge through a CU-merge whose single output feeds the
+parent send via `C_MAINSEND_OFFS`; one audio wire to master needs no
+CU — the parent send reads the producer's pair directly. Gain-folding
+to `D_VOL` composes: a sole-contributor wire folds onto the parent
+send, multi-wire cases route gains through the CU-merge params instead.
+`master.audio.ins > 1` stays deferred — REAPER's contiguous-range
+constraint on the parent send makes multi-pair representable only with
+silent padding channels, and the cleaner alternatives (per-pair bus
+tracks) want their own pass; a class addressing more than one master
+pair surfaces as a design-time error.
 
-## Master merge
-
-REAPER's parent send is the only mechanism for routing audio to the
-master track — explicit category-0 sends to master aren't allowed —
-and each track has exactly one parent send carrying one contiguous
-`(srcChan → dstChan)` range. Multiple intra-class wires terminating
-at the master can't compile to parallel sends; they have to converge
-to one signal on the class's host track first.
-
-`DAG.lower` materialises a **CU-merge node** for any class with ≥2
-wires to master. The merge consumes one input pair per wire and
-applies per-wire gain via per-input CU parameters — subsuming the
-gain CUs that would otherwise lower upstream from each wire — and
-sums to one output pair. The class's parent send carries that pair
-via `C_MAINSEND_OFFS`. Gain-folding to `D_VOL` composes cleanly: a
-sole-contributor wire still folds onto the parent send, but
-multi-wire cases route all gains through the CU-merge's params
-instead (`D_VOL` can't encode per-wire scaling).
-
-`master.audio.ins > 1` is deferred. A class addressing more than one
-master pair surfaces as a design-time error; REAPER's
-contiguous-range constraint on the parent send
-(`C_MAINSEND_OFFS`/`C_MAINSEND_NCH`) makes multi-pair representable
-only with silent channels padding the unaddressed pairs, and the
-cleaner alternatives (per-pair bus tracks, for instance) want their
-own design pass.
+**Semantic collision stays the user's call.** A CU-merge interleaves
+streams but does not separate events that share a MIDI channel: if
+producer A puts the kick on ch 1 and B the snare on ch 1, the merged
+result is still wrong. The model offers no automatic detection —
+**channel-remap on a wire** is the first-class resolution (remap B to
+free channels and the collision dissolves). An opt-in diagnostic that
+scans owned source tracks for actual channel usage lands later
+(Stage 3.5).
 
 ## FX containers
 
@@ -249,12 +248,12 @@ one mechanism doing two jobs.
 
 ## Open questions
 
-Load-bearing for the next planning round; the doc commits when these
-resolve.
-
-- **`pdc_midi` on gmem merge.** Verify mechanics with a skeleton;
-  decide warn-vs-restrict for foreign FX that don't honor the flag.
-  Spike happens at Stage 4 of the implementation plan below.
+- **MIDI PDC alignment at a merge.** A CU-merge reading sends whose
+  upstream chains differ in latency may see MIDI skewed against audio,
+  since REAPER doesn't delay-compensate MIDI by default. `pdc_midi=1`
+  on the merge CU is the likely fix; verify with a skeleton if skew
+  shows up in practice. (Not gmem-specific — the gmem machinery this
+  question used to hang on is gone.)
 
 ## Implementation plan
 
@@ -581,7 +580,7 @@ suppress the hover affordance entirely.
 The remaining stages are framed here; each gets its own detailed
 plan when its turn comes.
 
-- **Stage 2 — Compile to REAPER (no gmem, no absorption).** The
+- **Stage 2 — Compile to REAPER (no merge nodes, no absorption).** The
   differ in `wiringManager` produces an operation list
   (createTrack / deleteTrack / setSend / setFXChain /
   setFXIORouting / setExtState); the applier executes it inside
@@ -772,13 +771,12 @@ plan when its turn comes.
   is cleared — closes the lifecycle when the allocator stops emitting
   brackets for a consumer (e.g. its input bus dropped to 0).
 
-  *3c.3a — what's left.* Consumer-producer non-bus-aware JSFX
-  (deferred per "Why terminal-only" above): the bracket model wants
-  output bus = input bus = N, which the allocator does not yet
-  enforce. Slated as 3c.3a.3 — the bracket post-pass's
-  `hasMidiOut[fxId]` guard drops once equality is guaranteed. Lands
-  before 3c.3b's integration tests close out so cross-class JSFX +
-  VST chains aren't gated on it.
+  *3c.3a — what's left.* Consumer-producer non-bus-aware JSFX and the
+  multi-feeder MIDI case are both subsumed by the Merge-and-split
+  slice (3c.4 below): once every MIDI fan-in becomes a merge node,
+  every consumer is single-feeder, so the bracket fold becomes
+  unconditional and the `hasMidiOut[fxId]` guard simply drops. No
+  separate 3c.3a.3.
 
   *3c.3b — Native FX path.* VST/AU per-FX in/out bus via chunk
   surgery; snapshot reads the same bytes via the same chunk walk.
@@ -829,12 +827,56 @@ plan when its turn comes.
   *3c.3b.3 — Design-doc update.* Mirror the landed state into this
   section as each sub-slice lands.
 
-  *3c.4 — Master-merge rule.* `DAG.lower` gains a rule: a class
-  with ≥2 audio wires to master materialises a CU-merge node
-  consuming them all, with per-input gains as CU params (subsuming
-  the per-wire gain CUs that would otherwise lower upstream). See
-  "Master merge" above. `master.audio.ins > 1` surfaces as a
-  design-time error and is deferred to a later stage.
+  *3c.4 — Merge and split.* The unified merge/split model (see
+  "Merge and split" above). Supersedes the old master-merge rule,
+  3c.3a.3, the multi-feeder fallback, and `DAG.lower` itself — one
+  slice, no special cases left. Although listed after 3c.3b, the
+  lower-kill and allocator restructure here land first: 3c.3b.1/.2
+  read the allocator surface they reshape. Steps, each finishing its
+  own concern:
+
+  - **CU modes.** `audioMerge` (sum N gained input pairs → one output
+    pair per used port) and `midiMerge` (N gained buses → one output
+    bus) in `utility/Continuum Utility.jsfx`; one instance serves
+    both. Golden in/out tests per mode, incl. multi-output.
+  - **Kill `DAG.lower`.** Delete the lower phase and the `lowerGraph`
+    / `conn` shapes. Point the compile ctx (`inbound`, `srcSet`,
+    `classes`, `quotient`, `absorption`) and the targetPlan
+    connectivity walks at `userGraph.edges` / `.nodes` directly —
+    edges carry the same `from/to/type/primary`, and the removed
+    splices were connectivity-inert. Ops (`gain`, `channelMap`) ride
+    the connection as metadata. `M.lower` and `ctx:graph()` go; the
+    "two graph shapes" and "single-in/single-out CU" invariants
+    retire. (Only spec readers of `ctx:graph()`: `dag_srcset_spec`,
+    `wm_persistence_spec`.)
+  - **Merge nodes at allocate.** Synthesise merge CUs at the
+    targetPlan/allocate boundary as host-local `fxOrder` entries (the
+    bracket machinery): binary per consuming FX — all-unity ⇒
+    matrix-fed, any non-unity gain ⇒ one CU owning every used input
+    port, gains as per-input params. MIDI and master fan-in are always
+    a CU. The single gained wire is the degenerate one-in/one-out
+    case.
+  - **`DAG.allocate` unification.** One value type per
+    producer-output: split shares the one resource (fx-out and
+    outgoing-send stop replicating pairs); a matrix-fed pin lists the
+    summed pairs at the input; a CU-fed FX routes producer resources →
+    CU inputs and CU outputs → pins/buses by identity. MIDI is always
+    single-feeder, so the non-bus-aware bracket fold is unconditional
+    and `hasMidiOut` drops; the master CU's output drives
+    `mainSendOffs`.
+  - **`wm` snapshot/diff/apply.** Merge CUs ride the existing
+    CU-bridge path (`fxGuid` identity, `params` deep-equal); confirm
+    materialise + guid stamp-back for the master case; new modes diff
+    through `params`. The gain-fold mint-then-retract path (`opFxGuid`
+    on edges, `gainSinks` un-minting) is gone — the merge stage
+    decides once.
+  - **Specs.** Retire `dag_lower_spec`; repoint `dag_srcset_spec` /
+    `wm_persistence_spec` `ctx:graph()` assertions at the user-graph
+    shape; rewrite `wm_apply_ops_spec` gain-CU / `opFxGuid` cases for
+    the merge node. Rewrite the MIDI merge/split and master allocate
+    cases; delete the multi-feeder fallback and the `outWires` dedup
+    band-aid; add audio split-share, multi-output merge, and
+    audio/MIDI/master merge coverage.
 
   *3c.5 — Absorption multi-parent.* With channels in place, 3a's
   primary-override case starts working. Add specs covering the
@@ -848,18 +890,6 @@ plan when its turn comes.
   surfaces a report, never alters the user graph, never runs unless
   invoked. Cheaper than a permanent live check and respects the
   "user knows their channel layout" default.
-- **Stage 4 — gmem-merge skeleton + `pdc_midi` spike.** Research
-  shape, not feature shape. Build the slave/master JSFX pair plus
-  the silent audio send as throwaway JSFX in a test project;
-  stack deliberate upstream latency on one slave; measure event
-  timing at the master against ground truth; confirm silent-send
-  pins processing order under load. Output: decision in this
-  doc's Open questions section (warn vs restrict for foreign FX
-  without `pdc_midi`).
-- **Stage 5 — gmem-merge production path.** Per-merge-node opt-in
-  flag in the user graph; lowering emits slave JSFX per non-primary
-  input, master JSFX on host, silent audio send per slave, gmem
-  region assignment. Reuses the `sampleManager` gmem mailbox idioms.
 - **Stage 6 — Built-in patches.** Continuum Utility grows modes
   (mid-side, bandsplit, pre/post-emphasis); node palette and
   wire-menu surface them. No new compiler work — they're plain FX
