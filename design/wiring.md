@@ -772,9 +772,62 @@ plan when its turn comes.
   is cleared — closes the lifecycle when the allocator stops emitting
   brackets for a consumer (e.g. its input bus dropped to 0).
 
+  *3c.3a — what's left.* Consumer-producer non-bus-aware JSFX
+  (deferred per "Why terminal-only" above): the bracket model wants
+  output bus = input bus = N, which the allocator does not yet
+  enforce. Slated as 3c.3a.3 — the bracket post-pass's
+  `hasMidiOut[fxId]` guard drops once equality is guaranteed. Lands
+  before 3c.3b's integration tests close out so cross-class JSFX +
+  VST chains aren't gated on it.
+
   *3c.3b — Native FX path.* VST/AU per-FX in/out bus via chunk
   surgery; snapshot reads the same bytes via the same chunk walk.
-  Builds on 3c.3a's allocator + send-side.
+  Builds on 3c.3a's allocator + send-side. The 3c.3a bracket
+  post-pass is already gated by `JS:` prefix, so VST/AU falls through
+  it — chunk surgery on each native FX's trailer in/out bus byte
+  replaces the bracket strategy for these slots. Snapshot reads
+  trailer bytes for every owned non-JS FX in `ownedChain` and
+  surfaces `entry.midiBus = { inBus, outBus }` + `entry.midiOut`;
+  this supersedes the `appliedMidiOut` cache in
+  `docs/wiringManager.md § Routing intent record` — REAPER's chunk is
+  ground truth, same as everywhere else in the differ. No brackets
+  are minted for native FX.
+
+  *3c.3b.0 — Generalised chunk mutator. Landed.*
+  `wm.setFXOutputDisabled` →
+  `wm.setFXMidiRouting(chunk, fxIdx, opts, pinChannels)` taking
+  `{ inBus?, outBus?, inDisabled?, outDisabled? }`. Single chunk
+  walk, read-modify-write per field, every other byte preserved. Bit
+  and byte mutations share one `mutateByteInBase64Line` helper.
+  Production caller in `reconcileFXChain`'s routing-trailer tail
+  ports as `{ outDisabled = not f.midiOut }`. See
+  `docs/wiringManager.md § Per-FX MIDI routing`. `wm_fx_routing_spec`
+  keeps the legacy disable cases via a thin `setOutDisabled` adapter
+  and adds in/out bus, combined-opts, no-op, idempotence, and
+  round-trip cases.
+
+  *3c.3b.1 — Allocator surfaces `fxMidiBus`.* Per-host
+  `state.fxMidiBus[fxId] = { inBus, outBus }`, populated for non-JS,
+  non-bracket fx — `inBus` from the existing `fxInputBus[fxId]`,
+  `outBus` lifted from `fxMidiByProducer[fxId].applies` via a
+  parallel closure. Surfaces in `allocatedPlan`. `dag_allocate_*`
+  specs: single VST consumer on bus N (two senders merging), VST
+  producer → VST consumer chain, mixed JS+VST hosts.
+
+  *3c.3b.2 — Snapshot+target+diff+apply.* `wm:snapshot` decodes
+  trailer bytes 3/4/5 per owned non-JS FX in `ownedChain` and
+  attaches `midiBus={inBus,outBus}` plus `midiOut` to the snapshot
+  entry. `projectEntry` stamps `target.midiBus` from
+  `planEntry.fxMidiBus`. Diff drives a unified routing write in
+  `reconcileFXChain`'s tail pass via `wm.setFXMidiRouting`. The
+  `appliedMidiOut` cache (and its `wiringMidiOutApplied` persistence)
+  drops — snapshot is ground truth. Specs touch `wm_diff_spec` /
+  `wm_snapshot_spec` / `wm_apply_ops_spec`;
+  `wm_fx_routing_apply_spec` ports onto the new shape and grows
+  bus-assignment integration cases.
+
+  *3c.3b.3 — Design-doc update.* Mirror the landed state into this
+  section as each sub-slice lands.
 
   *3c.4 — Master-merge rule.* `DAG.lower` gains a rule: a class
   with ≥2 audio wires to master materialises a CU-merge node
