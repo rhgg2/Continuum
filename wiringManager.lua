@@ -295,13 +295,9 @@ function wm:addFxNode(x, y, fx, opts)
 end
 
 ----- FX MIDI routing surgery (state chunk)
---
--- REAPER has no ReaScript getter or setter for the per-FX MIDI input
--- bus / output bus / replace-or-merge mode encoded inside each
--- `<VST ...>` block in an FXCHAIN. The applier patches the chunk
--- directly when it needs to disable an FX's MIDI output bus. The
--- encoding is documented in docs/reaper_midi_routing.md; fixtures live
--- in design/midi-routing-fixtures.md and are pinned by fx_routing_spec.
+
+-- No ReaScript API for per-FX in/out bus + disable bits — patches the
+-- chunk directly. See docs/wiringManager.md § Per-FX MIDI routing.
 
 local fxRoutingAlpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 local fxRoutingDec   = {}
@@ -398,33 +394,41 @@ local function findFxBlock(lines, fxIdx)
   end
 end
 
-local function setBitInBase64Line(line, byteIdx, mask, on)
+-- Decode line → mutate one byte via fn → re-encode iff changed.
+-- No-op preserves the line byte-for-byte (round-trip invariant).
+local function mutateByteInBase64Line(line, byteIdx, fn)
   local lead, content, tail = line:match('^(%s*)(%S*)(%s*)$')
   if not content or content == '' then return line end
   local bytes = b64decode(content)
   if byteIdx < 1 or byteIdx > #bytes then return line end
-  local b = bytes:byte(byteIdx)
-  local newB = on and (b | mask) or (b & ~mask)
+  local b    = bytes:byte(byteIdx)
+  local newB = fn(b)
   if newB == b then return line end
-  local patched = bytes:sub(1, byteIdx - 1)
-               .. string.char(newB)
-               .. bytes:sub(byteIdx + 1)
-  return lead .. b64encode(patched) .. tail
+  return lead .. b64encode(bytes:sub(1, byteIdx - 1)
+                        .. string.char(newB)
+                        .. bytes:sub(byteIdx + 1)) .. tail
 end
 
--- Patch the 0x02 bit at a 1-indexed offset in the FX block's
--- concatenated decoded-base64 stream. Walks the content lines between
--- firstIdx and lastIdx inclusive, finds the line containing the offset
--- by accumulating decoded lengths, and mutates that single line.
--- Returns true if the offset landed inside a line; false otherwise.
-local function patchStreamByte02(lines, firstIdx, lastIdx, streamOffset, on)
+local function setBitInBase64Line(line, byteIdx, mask, on)
+  return mutateByteInBase64Line(line, byteIdx, function(b)
+    return on and (b | mask) or (b & ~mask)
+  end)
+end
+
+local function setByteInBase64Line(line, byteIdx, value)
+  return mutateByteInBase64Line(line, byteIdx, function() return value end)
+end
+
+-- Patch one bit of the wrapper-header mirror at a 1-indexed offset in
+-- the FX block's concatenated decoded-base64 stream.
+local function patchStreamMirrorBit(lines, firstIdx, lastIdx, streamOffset, mask, on)
   local cursor = 0
   for i = firstIdx, lastIdx do
     local stripped = lines[i]:match('^%s*(.-)%s*$')
     if stripped:match('^[A-Za-z0-9%+/=]+$') then
       local n = #b64decode(stripped)
       if cursor + n >= streamOffset then
-        lines[i] = setBitInBase64Line(lines[i], streamOffset - cursor, 0x02, on)
+        lines[i] = setBitInBase64Line(lines[i], streamOffset - cursor, mask, on)
         return true
       end
       cursor = cursor + n
@@ -433,28 +437,24 @@ local function patchStreamByte02(lines, firstIdx, lastIdx, streamOffset, on)
   return false
 end
 
--- Drive the "output bus disabled" bit (0x02) on the fxIdx-th non-JS FX
--- block of an FXCHAIN-bearing track-state chunk: `disabled=true` sets
--- it, `disabled=false` clears it. Read-modify-write on that single
--- bit; every other flag bit, in_bus, and out_bus are preserved. The
--- flag lives in two places that REAPER keeps in sync and reads from
--- separately:
---   * the trailer line (last base64 content line of the VST block),
---     byte 3 of the decoded 6-byte trailer;
---   * a mirror at a fixed offset inside REAPER's wrapper header at the
---     head of the concatenated decoded stream: 1-indexed offset
---     `27 + 8 * pinChannels`, where pinChannels = inputPins+outputPins
---     (mono channels) as reported by TrackFX_GetIOSize. Trailer-only
---     writes do NOT take effect — the mirror is read by REAPER.
--- Idempotent. Pure: no state, no reaper deps — pinChannels comes from
--- the call site, which has the live track + fx index.
-function wm.setFXOutputDisabled(chunk, fxIdx, disabled, pinChannels)
+-- Drive per-FX MIDI routing on the fxIdx-th non-JS FX block. opts =
+-- { inBus?, outBus?, inDisabled?, outDisabled? }; see docs/wiringManager.md § Per-FX MIDI routing.
+function wm.setFXMidiRouting(chunk, fxIdx, opts, pinChannels)
   local lines, hasTrailing = splitChunkLines(chunk)
   local first, trailer     = findFxBlock(lines, fxIdx)
   if not first then return chunk, false end
+  local mirrorOff = 27 + 8 * pinChannels
 
-  lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x02, disabled)
-  patchStreamByte02(lines, first, trailer, 27 + 8 * pinChannels, disabled)
+  if opts.inDisabled ~= nil then
+    lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x01, opts.inDisabled)
+    patchStreamMirrorBit(lines, first, trailer, mirrorOff, 0x01, opts.inDisabled)
+  end
+  if opts.outDisabled ~= nil then
+    lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x02, opts.outDisabled)
+    patchStreamMirrorBit(lines, first, trailer, mirrorOff, 0x02, opts.outDisabled)
+  end
+  if opts.inBus  ~= nil then lines[trailer] = setByteInBase64Line(lines[trailer], 4, opts.inBus)  end
+  if opts.outBus ~= nil then lines[trailer] = setByteInBase64Line(lines[trailer], 5, opts.outBus) end
 
   return joinChunkLines(lines, hasTrailing), true
 end
@@ -1084,8 +1084,8 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
       local rIdx = absToRouting[f.absIdx]
       if rIdx then
         local _, inputPins, outputPins = reaper.TrackFX_GetIOSize(track, f.absIdx)
-        chunk = wm.setFXOutputDisabled(chunk, rIdx, not f.midiOut,
-                                       inputPins + outputPins)
+        chunk = wm.setFXMidiRouting(chunk, rIdx, { outDisabled = not f.midiOut },
+                                    inputPins + outputPins)
       end
     end
     reaper.SetTrackStateChunk(track, chunk, true)

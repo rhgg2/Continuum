@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1510  sha=18a3682  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1510  sha=7938d06  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -39,9 +39,9 @@
   @state SCRATCH_NAME = 'continuum: wiring scratch'  @ 38
   @state SCRATCH_KEY = '__scratch__'  @ 39
   @state CU_IDENT = 'JS:Continuum Utility'  @ 40
-  @state fxRoutingAlpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123...  @ 306
-  @state fxRoutingDec = {}  @ 307
-  @state cuParamIdxCache = nil  @ 364
+  @state fxRoutingAlpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123...  @ 302
+  @state fxRoutingDec = {}  @ 303
+  @state cuParamIdxCache = nil  @ 360
   @state CU_MODE_TO_FLOAT = { gain = 0, channelRemap = 1, busPark = 2, busRestore = 3 }  @ 900
 
 # Private functions
@@ -60,21 +60,22 @@
       -- True iff JSFX desc declares ext_midi_bus=1 (the FX scans midi_bus itself,
       -- escaping our allocator). Skips // comments; frontier prevents `=10` match.
   -- FX MIDI routing surgery (state chunk)
-  @fn b64decode(s)  @ 310
-  @fn b64encode(s)  @ 330
-  @fn splitChunkLines(s)  @ 350
-  @fn joinChunkLines(lines, hasTrailing)  @ 358
-  @fn cuParamIdx(track, fxIdx)  @ 365
-  @fn findFxBlock(lines, fxIdx)  @ 379
+  @fn b64decode(s)  @ 306
+  @fn b64encode(s)  @ 326
+  @fn splitChunkLines(s)  @ 346
+  @fn joinChunkLines(lines, hasTrailing)  @ 354
+  @fn cuParamIdx(track, fxIdx)  @ 361
+  @fn findFxBlock(lines, fxIdx)  @ 375
       -- Locate the (fxIdx+1)-th non-JS FX block in the chunk (0-indexed).
       -- Returns (firstBase64LineIdx, trailerLineIdx) or nil.
-  @fn setBitInBase64Line(line, byteIdx, mask, on)  @ 401
-  @fn patchStreamByte02(lines, firstIdx, lastIdx, streamOffset, on)  @ 420
-      -- Patch the 0x02 bit at a 1-indexed offset in the FX block's
-      -- concatenated decoded-base64 stream. Walks the content lines between
-      -- firstIdx and lastIdx inclusive, finds the line containing the offset
-      -- by accumulating decoded lengths, and mutates that single line.
-      -- Returns true if the offset landed inside a line; false otherwise.
+  @fn mutateByteInBase64Line(line, byteIdx, fn)  @ 399
+      -- Decode line → mutate one byte via fn → re-encode iff changed.
+      -- No-op preserves the line byte-for-byte (round-trip invariant).
+  @fn setBitInBase64Line(line, byteIdx, mask, on)  @ 412
+  @fn setByteInBase64Line(line, byteIdx, value)  @ 418
+  @fn patchStreamMirrorBit(lines, firstIdx, lastIdx, streamOffset, mask, on)  @ 424
+      -- Patch one bit of the wrapper-header mirror at a 1-indexed offset in
+      -- the FX block's concatenated decoded-base64 stream.
   @fn nodeHasMidiOut(graph, nodeId)  @ 464
       -- True iff `graph` has any edge with type='midi' leaving `nodeId`.
       -- Drives target.midiOut for non-JS fx in projectEntry.
@@ -153,22 +154,9 @@
       @contract  one Undo block around instantiate + mutate; stamps fxGuid on the new fx-node
       @contract  generators (io.ins==0) also spawn sourceTrack + source-node + midi edge
       @contract  returns new fx-node id; nil+err on validate failure or ext_midi_bus refusal
-  @api wm.setFXOutputDisabled(chunk, fxIdx, disabled, pinChannels)  @ 451
-      -- Drive the "output bus disabled" bit (0x02) on the fxIdx-th non-JS FX
-      -- block of an FXCHAIN-bearing track-state chunk: `disabled=true` sets
-      -- it, `disabled=false` clears it. Read-modify-write on that single
-      -- bit; every other flag bit, in_bus, and out_bus are preserved. The
-      -- flag lives in two places that REAPER keeps in sync and reads from
-      -- separately:
-      --   * the trailer line (last base64 content line of the VST block),
-      --     byte 3 of the decoded 6-byte trailer;
-      --   * a mirror at a fixed offset inside REAPER's wrapper header at the
-      --     head of the concatenated decoded stream: 1-indexed offset
-      --     `27 + 8 * pinChannels`, where pinChannels = inputPins+outputPins
-      --     (mono channels) as reported by TrackFX_GetIOSize. Trailer-only
-      --     writes do NOT take effect — the mirror is read by REAPER.
-      -- Idempotent. Pure: no state, no reaper deps — pinChannels comes from
-      -- the call site, which has the live track + fx index.
+  @api wm.setFXMidiRouting(chunk, fxIdx, opts, pinChannels)  @ 442
+      -- Drive per-FX MIDI routing on the fxIdx-th non-JS FX block. opts =
+      -- { inBus?, outBus?, inDisabled?, outDisabled? }; see docs/wiringManager.md § Per-FX MIDI routing.
   @api wm:snapshot()  @ 574
       @contract  walks every project track, builds a wiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringHostKind; FX whose guids appear in the user graph (fx nodes) or edge ops (CUs); sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
   @api wm:targetState()  @ 724

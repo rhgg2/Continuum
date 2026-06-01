@@ -20,6 +20,12 @@ local function wm()
   return util.instantiate('wiringManager', { cm = cm })
 end
 
+-- Thin adapter: legacy cases only flip outDisabled; new 3c.3b cases
+-- call wm().setFXMidiRouting directly to cover the full opts surface.
+local function setOutDisabled(chunk, idx, on, pc)
+  return wm().setFXMidiRouting(chunk, idx, { outDisabled = on }, pc)
+end
+
 ----- Local base64 codec for fixture construction (decoded-stream
 ----- aware so we can place a flag byte at any 1-indexed offset).
 
@@ -178,7 +184,7 @@ return {
     name = 'fxRouting: set disables output (default -> out_disabled)',
     run = function()
       local chunk = mkChunk()
-      local new, ok = wm().setFXOutputDisabled(chunk, 0, true, 4)
+      local new, ok = setOutDisabled(chunk, 0, true, 4)
       t.eq(ok, true)
       local m, tf = extractBytes(new, 4)
       t.eq(m,  0x12, 'mirror 0x10 -> 0x12')
@@ -189,7 +195,7 @@ return {
     name = 'fxRouting: clear re-enables output',
     run = function()
       local chunk = mkChunk({ flag = 0x12 })
-      local new, ok = wm().setFXOutputDisabled(chunk, 0, false, 4)
+      local new, ok = setOutDisabled(chunk, 0, false, 4)
       t.eq(ok, true)
       local m, tf = extractBytes(new, 4)
       t.eq(m,  0x10)
@@ -199,7 +205,7 @@ return {
   {
     name = 'fxRouting: idempotent on repeated set',
     run = function()
-      local fn  = wm().setFXOutputDisabled
+      local fn  = setOutDisabled
       local one = (fn(mkChunk(), 0, true, 4))
       local two = (fn(one,       0, true, 4))
       t.eq(two, one, 'second set is a no-op')
@@ -208,7 +214,7 @@ return {
   {
     name = 'fxRouting: idempotent on repeated clear',
     run = function()
-      local fn    = wm().setFXOutputDisabled
+      local fn    = setOutDisabled
       local start = mkChunk({ flag = 0x12 })
       local one   = (fn(start, 0, false, 4))
       local two   = (fn(one,   0, false, 4))
@@ -218,7 +224,7 @@ return {
   {
     name = 'fxRouting: set->clear round-trips to the original chunk',
     run = function()
-      local fn       = wm().setFXOutputDisabled
+      local fn       = setOutDisabled
       local original = mkChunk()
       local disabled = (fn(original, 0, true,  4))
       local restored = (fn(disabled, 0, false, 4))
@@ -232,7 +238,7 @@ return {
     run = function()
       -- 0x51 = sticky | preset-state | in_disabled
       local chunk = mkChunk({ flag = 0x51 })
-      local new   = (wm().setFXOutputDisabled(chunk, 0, true, 4))
+      local new   = (setOutDisabled(chunk, 0, true, 4))
       local m, tf = extractBytes(new, 4)
       t.eq(m,  0x53, 'sticky + preset + in_disabled preserved')
       t.eq(tf, 0x53)
@@ -242,7 +248,7 @@ return {
     name = 'fxRouting: preserves other flag bits on clear (0x53 -> 0x51)',
     run = function()
       local chunk = mkChunk({ flag = 0x53 })
-      local new   = (wm().setFXOutputDisabled(chunk, 0, false, 4))
+      local new   = (setOutDisabled(chunk, 0, false, 4))
       local m, tf = extractBytes(new, 4)
       t.eq(m,  0x51)
       t.eq(tf, 0x51)
@@ -252,7 +258,7 @@ return {
     name = 'fxRouting: preserves in_bus and out_bus',
     run = function()
       local chunk = mkChunk({ inBus = 1, outBus = 2 })
-      local new   = (wm().setFXOutputDisabled(chunk, 0, true, 4))
+      local new   = (setOutDisabled(chunk, 0, true, 4))
       local _, _, inBus, outBus = extractBytes(new, 4)
       t.eq(inBus,  1, 'in_bus survived flag patch')
       t.eq(outBus, 2, 'out_bus survived flag patch')
@@ -264,7 +270,7 @@ return {
     name = 'fxRouting: out-of-range fxIdx returns chunk unchanged + false',
     run = function()
       local chunk   = mkChunk()
-      local new, ok = wm().setFXOutputDisabled(chunk, 7, true, 4)
+      local new, ok = setOutDisabled(chunk, 7, true, 4)
       t.eq(ok, false)
       t.eq(new, chunk, 'chunk preserved byte-for-byte on miss')
     end,
@@ -275,7 +281,7 @@ return {
     name = 'fxRouting: mirror at pinChannels=10 (Softube, offset 107)',
     run = function()
       local chunk = mkChunk({ pinChannels = 10, streamLen = 250 })
-      local new   = (wm().setFXOutputDisabled(chunk, 0, true, 10))
+      local new   = (setOutDisabled(chunk, 0, true, 10))
       local m, tf = extractBytes(new, 10)
       t.eq(m,  0x12, 'mirror at offset 107 patched')
       t.eq(tf, 0x12)
@@ -285,7 +291,7 @@ return {
     name = 'fxRouting: mirror at pinChannels=34 (Falcon, offset 299)',
     run = function()
       local chunk = mkChunk({ pinChannels = 34, streamLen = 600 })
-      local new   = (wm().setFXOutputDisabled(chunk, 0, true, 34))
+      local new   = (setOutDisabled(chunk, 0, true, 34))
       local m, tf = extractBytes(new, 34)
       t.eq(m,  0x12, 'mirror at offset 299 patched')
       t.eq(tf, 0x12)
@@ -299,7 +305,7 @@ return {
       -- pinChannels=4 -> mirror at offset 59. lineSplit=30 -> mirror
       -- falls in the second content line (bytes 31..60), within-byte 29.
       local chunk = mkChunk({ pinChannels = 4, lineSplit = 30 })
-      local new   = (wm().setFXOutputDisabled(chunk, 0, true, 4))
+      local new   = (setOutDisabled(chunk, 0, true, 4))
       local m, tf = extractBytes(new, 4)
       t.eq(m,  0x12, 'walker crossed a b64 line break')
       t.eq(tf, 0x12)
@@ -312,7 +318,7 @@ return {
       -- REAPER's observed wrap (Falcon dump: 210-byte lines), so the
       -- mirror lands on the 2nd content line at within-byte 89.
       local chunk = mkChunk({ pinChannels = 34, streamLen = 1552, lineSplit = 210 })
-      local new   = (wm().setFXOutputDisabled(chunk, 0, true, 34))
+      local new   = (setOutDisabled(chunk, 0, true, 34))
       local m, tf = extractBytes(new, 34)
       t.eq(m,  0x12)
       t.eq(tf, 0x12)
@@ -328,7 +334,7 @@ return {
         { pinChannels = 4 },
         { pinChannels = 4 },
       })
-      local new = (wm().setFXOutputDisabled(chunk, 1, true, 4))
+      local new = (setOutDisabled(chunk, 1, true, 4))
       local m0, t0 = extractBytes(new, 4, 0)
       local m1, t1 = extractBytes(new, 4, 1)
       local m2, t2 = extractBytes(new, 4, 2)
@@ -350,11 +356,89 @@ return {
       }
       local vst = buildFxBlock({ pinChannels = 4 })
       local chunk = wrapTrack({ jsBlock, vst })
-      local new, ok = wm().setFXOutputDisabled(chunk, 0, true, 4)
+      local new, ok = setOutDisabled(chunk, 0, true, 4)
       t.eq(ok, true, 'VST found at routing-index 0 despite JSFX above')
       local m, tf = extractBytes(new, 4)
       t.eq(m,  0x12)
       t.eq(tf, 0x12)
+    end,
+  },
+
+  ----- in_bus / out_bus writes + combined opts (3c.3b)
+  {
+    name = 'fxRouting: setting inBus writes trailer byte 4 only',
+    run = function()
+      local chunk = mkChunk({ inBus = 0, outBus = 5 })
+      local new, ok = wm().setFXMidiRouting(chunk, 0, { inBus = 7 }, 4)
+      t.eq(ok, true)
+      local m, tf, inBus, outBus = extractBytes(new, 4)
+      t.eq(inBus,  7,    'in_bus set')
+      t.eq(outBus, 5,    'out_bus preserved')
+      t.eq(tf,     0x10, 'flag preserved')
+      t.eq(m,      0x10, 'mirror preserved (in_bus has no mirror)')
+    end,
+  },
+  {
+    name = 'fxRouting: setting outBus writes trailer byte 5 only',
+    run = function()
+      local chunk = mkChunk({ inBus = 3, outBus = 0 })
+      local new, ok = wm().setFXMidiRouting(chunk, 0, { outBus = 12 }, 4)
+      t.eq(ok, true)
+      local m, tf, inBus, outBus = extractBytes(new, 4)
+      t.eq(inBus,  3,    'in_bus preserved')
+      t.eq(outBus, 12,   'out_bus set')
+      t.eq(tf,     0x10)
+      t.eq(m,      0x10)
+    end,
+  },
+  {
+    name = 'fxRouting: combined opts (inBus + outBus + outDisabled) one call',
+    run = function()
+      local chunk = mkChunk()
+      local new = (wm().setFXMidiRouting(chunk, 0,
+        { inBus = 2, outBus = 9, outDisabled = true }, 4))
+      local m, tf, inBus, outBus = extractBytes(new, 4)
+      t.eq(inBus,  2)
+      t.eq(outBus, 9)
+      t.eq(tf, 0x12, 'output-disable bit set alongside bus writes')
+      t.eq(m,  0x12, 'mirror tracks the flag')
+    end,
+  },
+  {
+    name = 'fxRouting: inDisabled toggles the 0x01 bit + mirror',
+    run = function()
+      local chunk = mkChunk()
+      local new   = (wm().setFXMidiRouting(chunk, 0, { inDisabled = true }, 4))
+      local m, tf = extractBytes(new, 4)
+      t.eq(tf, 0x11, 'in_disabled bit set in trailer')
+      t.eq(m,  0x11, 'in_disabled bit set in mirror')
+    end,
+  },
+  {
+    name = 'fxRouting: empty opts leaves chunk byte-for-byte',
+    run = function()
+      local chunk   = mkChunk({ inBus = 1, outBus = 2, flag = 0x53 })
+      local new, ok = wm().setFXMidiRouting(chunk, 0, {}, 4)
+      t.eq(ok,  true)
+      t.eq(new, chunk, 'no-op preserves chunk')
+    end,
+  },
+  {
+    name = 'fxRouting: bus write idempotent on repeated set',
+    run = function()
+      local chunk = mkChunk()
+      local one = (wm().setFXMidiRouting(chunk, 0, { inBus = 4 }, 4))
+      local two = (wm().setFXMidiRouting(one,   0, { inBus = 4 }, 4))
+      t.eq(two, one, 'second write is a no-op')
+    end,
+  },
+  {
+    name = 'fxRouting: bus round-trips through zero',
+    run = function()
+      local chunk    = mkChunk({ inBus = 0 })
+      local raised   = (wm().setFXMidiRouting(chunk,  0, { inBus = 9 }, 4))
+      local restored = (wm().setFXMidiRouting(raised, 0, { inBus = 0 }, 4))
+      t.eq(restored, chunk, 'inBus 0 -> 9 -> 0 round-trips')
     end,
   },
 }

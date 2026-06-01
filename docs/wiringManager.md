@@ -68,3 +68,32 @@ hand in REAPER is invisible to snap (we no longer read REAPER's
 state); the next graph edit that flips the same bit will overwrite
 the manual change, but until then the chain runs with whatever the
 user set.
+
+## Per-FX MIDI routing
+
+REAPER exposes no ReaScript getter or setter for the per-FX MIDI input
+bus, output bus, or replace-merge mode encoded inside each `<VST ...>`
+block of an FXCHAIN. `wm.setFXMidiRouting(chunk, fxIdx, opts, pinChannels)`
+patches the chunk directly; encoding is documented in
+`docs/reaper_midi_routing.md` and pinned by `wm_fx_routing_spec`.
+
+`opts` may carry any subset of:
+
+- `inBus` — 0..127, trailer byte 4
+- `outBus` — 0..127, trailer byte 5
+- `inDisabled` — bool, 0x01 of trailer flag byte + wrapper mirror
+- `outDisabled` — bool, 0x02 of trailer flag byte + wrapper mirror
+
+Read-modify-write per field; every byte the caller did not name is
+preserved (including unknown flag bits). The flag byte lives in two
+places REAPER keeps in sync and reads from separately — trailer byte 3
+and a mirror at 1-indexed offset `27 + 8 * pinChannels` inside REAPER's
+wrapper header, where `pinChannels = inputPins + outputPins` (mono
+channels) as reported by `TrackFX_GetIOSize`. Trailer-only writes do
+NOT take effect for the flag byte; `in_bus` / `out_bus` have no mirror,
+so trailer-only suffices for them.
+
+Idempotent: empty opts (or opts whose every value already matches the
+chunk) returns the chunk byte-for-byte. Pure: no module state, no
+`reaper.*` deps — `pinChannels` comes from the call site, which has the
+live track + fx index.
