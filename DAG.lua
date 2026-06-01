@@ -17,7 +17,7 @@
 --shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
 --shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
 --shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, outWires={ {from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number}, ... }, intraConns={ {from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi'}, ... } } }; outWires is one entry per inter-class wire (no collapse); intraConns is one entry per intra-host conn (incl. source-from and master-to anchors at track-IO pair 1). masterFeed names the (post-fold) audio producer whose output feeds the host's parent send to the master-hosted host; allocator pins that output and stamps mainSendOffs. from/toNode are post-fold — boundary gain CUs that fold onto a send/mainSend are bypassed so endpoints name real FX in fxOrder (or source/master). M.allocate(targetPlan) turns outWires into sends with per-tuple channel assignment.
---shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, pinMaps={ [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, nchan=int, mainSendOffs?=int } }; output of M.allocate. Per-host live-range register allocation: each intra / outgoing send / mainSend masterFeed / Stage-2 incoming send is a value with a def slot and a lastUse slot; at the entry to slot S the allocator frees pairs with lastUse ≤ S (the ≤ lets S reuse its own input pairs in-place — REAPER FX read pins before writing them), then claims pull the lowest free pair (cursor++ only when free is empty). Pair 1 is the track-IO boundary register, modelled as two values that share the pair with non-overlapping lifetimes: source-from (def=0, lastUse=last consumer slot — or N+1 when source-out / default-mainSend keeps source data live to end-of-chain) and master-to (def=earliest writer slot, lastUse=N+1). source-from frees pair 1 at its last consumer so an fx → fx intra can reuse it in-place; master-to lifts pair 1 back off the free list at its def slot. REAPER chan = (pair-1)*2; nchan = max(2, maxPair*2). Pin maps are audio-only — one entry per FX touched by allocation, missing ports are disconnected (zero mask) at apply, multi-pair lists OR'd into one bitmask by 3c.2's pin writer. MIDI keeps srcChan=dstChan=0 until 3c.3; sends dedup on the 4-tuple. mainSendOffs (parent send pair via C_MAINSEND_OFFS): 0 when source's own pair feeds master (no masterFeed, or masterFeed.from is the source), (pair-1)*2 when masterFeed names an fx (allocator claims a pair and pins that fx output).
+--shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, pinMaps={ [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, nchan=int, mainSendOffs?=int } }; audio srcChan/dstChan are (pair-1)*2, midi are bus 0..127. See design/wiring.md § 3c for the allocator model.
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -652,10 +652,29 @@ end
 
 ----- allocate
 
--- Per-host live-range register allocation: values track (def, lastUse) slots;
--- pair 1 is the track-IO boundary register. See allocatedPlan shape for details.
+-- Per-host live-range allocation, one register file per stream channel:
+-- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
 --contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs
 function M.allocate(plan)
+  -- Fold structurally-identical outwires before alloc — otherwise the
+  -- per-receiver allocator gives them distinct dstChans and REAPER doubles events.
+  do
+    local deduped = {}
+    for hostKey, entry in pairs(plan) do
+      local seen, out = {}, {}
+      for _, ow in ipairs(entry.outWires or {}) do
+        local k = ow.from .. '|' .. (ow.fromPort or 0) .. '|' .. ow.to .. '|'
+              .. ow.toNode .. '|' .. (ow.toPort or 0) .. '|' .. ow.type
+        if not seen[k] then seen[k] = true; util.add(out, ow) end
+      end
+      local copy = {}
+      for k, v in pairs(entry) do copy[k] = v end
+      copy.outWires = out
+      deduped[hostKey] = copy
+    end
+    plan = deduped
+  end
+
   local fxSetOf, slotOf = {}, {}
   for hostKey, entry in pairs(plan) do
     fxSetOf[hostKey], slotOf[hostKey] = {}, {}
@@ -686,7 +705,8 @@ function M.allocate(plan)
     for sendIdx, ow in ipairs(entry.outWires or {}) do
       sends[sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain, srcChan = 0, dstChan = 0 }
     end
-    alloc[hostKey] = { pinMaps = {}, sends = sends, cursor = 1, free = {}, mainSendOffs = nil }
+    alloc[hostKey] = { pinMaps = {}, sends = sends, cursor = 1, free = {},
+                       midiCursor = 0, midiFree = {}, mainSendOffs = nil }
   end
 
   local hostKeys = {}
@@ -866,6 +886,133 @@ function M.allocate(plan)
       if byDef[slot] then
         sortBucket(byDef[slot])
         for _, v in ipairs(byDef[slot]) do processValue(v) end
+      end
+    end
+
+    ----- midi register file: bus 0 boundary; values are per-producer streams.
+
+    local function midiClaim()
+      if state.midiFree[1] then return table.remove(state.midiFree, 1) end
+      local b = state.midiCursor; state.midiCursor = b + 1; return b
+    end
+    local function midiRelease(bus)
+      local lo, hi = 1, #state.midiFree + 1
+      while lo < hi do
+        local mid = (lo + hi) // 2
+        if state.midiFree[mid] < bus then lo = mid + 1 else hi = mid end
+      end
+      table.insert(state.midiFree, lo, bus)
+    end
+
+    local midiValues, nextMidiOrd = {}, 0
+    local function addMidiValue(v) nextMidiOrd = nextMidiOrd + 1; v.ord = nextMidiOrd; util.add(midiValues, v) end
+
+    -- Source-midi producer pinned to the boundary (bus 0).
+    local sourceMidiLastUse, sourceMidiSends = 0, {}
+    for _, ic in ipairs(entry.intraConns or {}) do
+      if ic.type == 'midi' and not fxSet[ic.from] and fxSet[ic.to] then
+        if slotMap[ic.to] > sourceMidiLastUse then sourceMidiLastUse = slotMap[ic.to] end
+      end
+    end
+    for sendIdx, ow in ipairs(entry.outWires or {}) do
+      if ow.type == 'midi' and not fxSet[ow.from] then
+        util.add(sourceMidiSends, function(bus) state.sends[sendIdx].srcChan = bus end)
+      end
+    end
+    if sourceMidiLastUse > 0 or #sourceMidiSends > 0 then
+      local lu = #sourceMidiSends > 0 and (N + 1) or sourceMidiLastUse
+      addMidiValue({ def = 0, lastUse = lu, assignBus = 0, applies = sourceMidiSends })
+    end
+
+    -- Per-fx producer groups all wires off one fx's midi output: a
+    -- non-bus-aware JSFX emits on a single bus regardless of fan-out.
+    local fxMidiByProducer = {}
+    local function fxMidiProducer(fxId)
+      local p = fxMidiByProducer[fxId]
+      if not p then
+        p = { def = slotMap[fxId], lastUse = slotMap[fxId], applies = {} }
+        fxMidiByProducer[fxId] = p
+      end
+      return p
+    end
+    for _, ic in ipairs(entry.intraConns or {}) do
+      if ic.type == 'midi' and fxSet[ic.from] then
+        local p = fxMidiProducer(ic.from)
+        if slotMap[ic.to] > p.lastUse then p.lastUse = slotMap[ic.to] end
+      end
+    end
+    for sendIdx, ow in ipairs(entry.outWires or {}) do
+      if ow.type == 'midi' and fxSet[ow.from] then
+        local p = fxMidiProducer(ow.from)
+        p.lastUse = N + 1
+        util.add(p.applies, function(bus) state.sends[sendIdx].srcChan = bus end)
+      end
+    end
+    local fxProducerIds = {}
+    for fxId in pairs(fxMidiByProducer) do util.add(fxProducerIds, fxId) end
+    table.sort(fxProducerIds)
+    for _, fxId in ipairs(fxProducerIds) do
+      local p = fxMidiByProducer[fxId]
+      addMidiValue({ def = p.def, lastUse = p.lastUse, applies = p.applies })
+    end
+
+    -- Stage-2 incoming midi sends pinned at the receiver; sender's dstChan stamped.
+    if incoming[hostKey] then
+      for _, inc in ipairs(incoming[hostKey]) do
+        local ow = inc.wire
+        if ow.type == 'midi' then
+          local senderHost, sendIdx = inc.senderHost, inc.sendIdx
+          local lu = fxSet[ow.toNode] and slotMap[ow.toNode] or (N + 1)
+          addMidiValue({
+            def = 0, lastUse = lu,
+            applies = { function(bus) alloc[senderHost].sends[sendIdx].dstChan = bus end },
+          })
+        end
+      end
+    end
+
+    local midiByDef = {}
+    for _, v in ipairs(midiValues) do
+      midiByDef[v.def] = midiByDef[v.def] or {}
+      util.add(midiByDef[v.def], v)
+    end
+    local function midiSortBucket(b)
+      table.sort(b, function(a, c)
+        if a.lastUse ~= c.lastUse then return a.lastUse < c.lastUse end
+        return a.ord < c.ord
+      end)
+    end
+    local midiReleaseAt = {}
+    local function processMidiValue(v)
+      local bus
+      if v.assignBus ~= nil then
+        bus = v.assignBus
+        if bus >= state.midiCursor then state.midiCursor = bus + 1 end
+        for i, b in ipairs(state.midiFree) do
+          if b == bus then table.remove(state.midiFree, i); break end
+        end
+      else
+        bus = midiClaim()
+      end
+      for _, apply in ipairs(v.applies) do apply(bus) end
+      if v.lastUse <= N then
+        midiReleaseAt[v.lastUse] = midiReleaseAt[v.lastUse] or {}
+        util.add(midiReleaseAt[v.lastUse], bus)
+      end
+    end
+
+    if midiByDef[0] then
+      midiSortBucket(midiByDef[0])
+      for _, v in ipairs(midiByDef[0]) do processMidiValue(v) end
+    end
+    for slot = 1, N do
+      if midiReleaseAt[slot] then
+        for _, b in ipairs(midiReleaseAt[slot]) do midiRelease(b) end
+        midiReleaseAt[slot] = nil
+      end
+      if midiByDef[slot] then
+        midiSortBucket(midiByDef[slot])
+        for _, v in ipairs(midiByDef[slot]) do processMidiValue(v) end
       end
     end
   end

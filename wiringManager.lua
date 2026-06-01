@@ -549,8 +549,11 @@ local function readSendsClass(track, byTrack)
         entry.srcChan = math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_SRCCHAN'))
         entry.dstChan = math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_DSTCHAN'))
         entry.gain    = reaper.GetTrackSendInfo_Value(track, 0, i, 'D_VOL')
+      else
+        local mf = math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_MIDIFLAGS'))
+        entry.srcChan = math.max(0, ((mf >> 14) & 0xFF) - 1)
+        entry.dstChan = math.max(0, ((mf >> 22) & 0xFF) - 1)
       end
-      -- MIDI bus routing arrives in 3c.3; srcChan/dstChan stay 0 until then.
       util.add(out, entry)
     end
   end
@@ -1066,11 +1069,14 @@ local function reconcileSends(track, target, classKeyToTrack)
   local function sendKey(dst, typ, src, dstCh)
     return tostring(dst) .. '|' .. typ .. '|' .. src .. '|' .. dstCh
   end
-  -- Audio reads I_SRCCHAN/DSTCHAN; midi bus routing waits for 3c.3 (uses 0/0).
   local function readChans(idx, typ)
-    if typ ~= 'audio' then return 0, 0 end
-    return math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN')),
-           math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_DSTCHAN'))
+    if typ == 'audio' then
+      return math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN')),
+             math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_DSTCHAN'))
+    end
+    local mf = math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS'))
+    return math.max(0, ((mf >> 14) & 0xFF) - 1),
+           math.max(0, ((mf >> 22) & 0xFF) - 1)
   end
   local current = {}
   for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
@@ -1101,6 +1107,11 @@ local function reconcileSends(track, target, classKeyToTrack)
       local idx = reaper.CreateTrackSend(track, w.dst)
       if w.typ == 'midi' then
         reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', -1)
+        if w.srcChan ~= 0 or w.dstChan ~= 0 then
+          local base = math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS'))
+          local flags = (base & 0x3FFF) | ((w.srcChan + 1) << 14) | ((w.dstChan + 1) << 22)
+          reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS', flags)
+        end
       else
         reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS', 31)
         reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', w.srcChan)
