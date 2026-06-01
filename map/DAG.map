@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1081  sha=beaa359  mode=namespace
+@module DAG  src=DAG.lua  loc=1104  sha=3a37253  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -8,10 +8,12 @@
   @invariant  fx nodes carry busAware; wm:addFxNode and M.validate refuse true
   @invariant  fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
   @invariant  edge ops ride as metadata; gain on a sole send-wire folds onto send volume, else CU
+  @invariant  node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
+  @invariant  a split-tagged class never absorbs
 
 # Shapes
   @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
-  @shape  userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool }
+  @shape  userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool, split?=true }
   @shape  edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, opFxGuid?=string }
   @shape  synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originEdgeIdx?=int, originNode?=string, originSide?='in'|'out' }; the CU bridge synthesised for a wire-level op (targetPlan, originEdgeIdx) or a bus-swap bracket (allocate, originNode/originSide). See design/wiring.md § 3c.
   @shape  outWire = { from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
@@ -23,33 +25,33 @@
   @shape  allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
 
 # Imports
-  @const util = 'util'  @ 25
+  @const util = 'util'  @ 27
 
 # Module-level constants
-  @const CU_IDENT = 'JS:Continuum Utility'  @ 27
-  @const M = {}  @ 29
+  @const CU_IDENT = 'JS:Continuum Utility'  @ 29
+  @const M = {}  @ 31
 
 # Public API (M.*)
   -- validate
-  @api M.validate(userGraph)  @ 36
+  @api M.validate(userGraph)  @ 38
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
   -- ancestors / descendants
-  @api M.ancestors(userGraph, sourceId)  @ 143
+  @api M.ancestors(userGraph, sourceId)  @ 148
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over userGraph.edges; cycle-safe via visited
-  @api M.descendants(userGraph, sourceId)  @ 162
+  @api M.descendants(userGraph, sourceId)  @ 167
       -- Forward reachability. Mirror of ancestors; used by wire-redraft to
       -- forbid cycle-forming new-source candidates when the user drags the
       -- from-end of an existing wire: the new source X must not be reachable
       -- from the kept destination B, else X→B closes the cycle B→…→X→B.
       @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
   -- compile context
-  @api M.compile(userGraph)  @ 179
+  @api M.compile(userGraph)  @ 184
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
   -- allocate
-  @api M.allocate(plan, nodes)  @ 631
+  @api M.allocate(plan, nodes)  @ 654
       -- Per-host live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
@@ -58,7 +60,7 @@
       · bracket post-pass — see design/wiring.md § 3c.3a
 
 # Uses (outbound edges)
-  @use call    util.add  @ 214, 266, 267, 319, 388, 389, 409, 423, 428, 430, 434, 461, 482, 483, 488, 502, 510, 521, 556, 569, 642, 665, 687, 701, 719, 729, 732, 817, 847, 882, 894, 901, 925, 933, 937, 941, 970, 993, 1031, 1032, 1033, 1038, 1053
-  @use call    util.assign  @ 64
-  @use call    util.bucket  @ 113, 146, 165, 190, 216
-  @use require util  @ 25
+  @use call    util.add  @ 223, 286, 287, 342, 411, 412, 432, 446, 451, 453, 457, 484, 505, 506, 511, 525, 533, 544, 579, 592, 665, 688, 710, 724, 742, 752, 755, 840, 870, 905, 917, 924, 948, 956, 960, 964, 993, 1016, 1054, 1055, 1056, 1061, 1076
+  @use call    util.assign  @ 69
+  @use call    util.bucket  @ 118, 151, 170, 195, 228
+  @use require util  @ 27

@@ -26,6 +26,23 @@ gains carry their value on `outWires.gain` / `mainSendGain`, not a
 CU. `M.allocate(targetPlan)` turns `outWires` into sends with
 per-tuple channel assignment.
 
+## Split markers — a node as its own source
+
+`node.split` (fx-only; `M.validate` refuses it elsewhere) makes a node
+seed `'split:'..id` into its own `srcSet`. The tag propagates forward
+like any source contribution, so the node and its downstream cone land
+in their own equivalence class — their own REAPER track — and the cut
+edge into the marked node becomes a send. A split-tagged class never
+absorbs (`ctx:absorption`); otherwise its single-parent cone-top would
+fold straight back. This is the per-node sibling of an edge's `primary`
+override and what the (deferred) manual split-at-a-node gesture writes;
+Stage 3b's master-minimization computes the same markers. A cone that
+is the sole contributor to master re-merges into master's class (no
+eviction) — audibly identical, and the correct "least eviction"
+outcome. The split tag rides class keys (and thus the `wiringClass`
+ownership string) as an opaque, stable segment; nothing downstream
+parses it.
+
 ## CU bridge invariant — edge ops and folding
 
 An edge's gain/channelMap op rides the edge as metadata. The CU

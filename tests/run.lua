@@ -120,6 +120,7 @@ local specs = {
   'dag_capacity_spec',
   'dag_ancestors_spec',
   'dag_target_plan_spec',
+  'dag_split_spec',
   'dag_allocate_spec',
   'dag_allocate_midi_spec',
   'dag_allocate_midi_bracket_spec',

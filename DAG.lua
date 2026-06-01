@@ -7,12 +7,14 @@
 --invariant: every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --shape: userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
---shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool }
+--shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool, split?=true }
 --invariant: fx nodes carry busAware; wm:addFxNode and M.validate refuse true
 --invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
 --shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, opFxGuid?=string }
 --invariant: edge ops ride as metadata; gain on a sole send-wire folds onto send volume, else CU
 -- see docs/DAG.md § CU bridge invariant
+--invariant: node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
+--invariant: a split-tagged class never absorbs
 --shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originEdgeIdx?=int, originNode?=string, originSide?='in'|'out' }; the CU bridge synthesised for a wire-level op (targetPlan, originEdgeIdx) or a bus-swap bracket (allocate, originNode/originSide). See design/wiring.md § 3c.
 --shape: outWire = { from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
 --shape: intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
@@ -50,6 +52,9 @@ function M.validate(userGraph)
     end
     if n.kind == 'fx' and n.busAware then
       return { code = 'ext_midi_bus_user_fx', id = id, ident = n.fxIdent }
+    end
+    if n.split and n.kind ~= 'fx' then
+      return { code = 'split_non_fx', id = id, kind = n.kind }
     end
   end
   if masters ~= 1 then
@@ -199,6 +204,9 @@ function M.compile(userGraph)
     if node and node.kind == 'source' and node.trackGuid then
       set[node.trackGuid] = true
     end
+    -- A split marker makes the node its own source: the tag propagates
+    -- forward, evicting the node + its cone into their own class.
+    if node and node.split then set['split:' .. id] = true end
     for _, parent in ipairs(self:inbound()[id] or {}) do
       for guid in pairs(self:srcSet(parent)) do set[guid] = true end
     end
@@ -208,14 +216,26 @@ function M.compile(userGraph)
 
   function ctx:classes()
     if cache.classes then return cache.classes end
-    cache.classes = {}
+    cache.classes, cache.splitClasses = {}, {}
     for id in pairs(nodes) do
-      local guids = {}
-      for guid in pairs(self:srcSet(id)) do util.add(guids, guid) end
+      local guids, split = {}, false
+      for guid in pairs(self:srcSet(id)) do
+        util.add(guids, guid)
+        if guid:sub(1, 6) == 'split:' then split = true end
+      end
       table.sort(guids)
-      util.bucket(cache.classes, table.concat(guids, '|'), id)
+      local key = table.concat(guids, '|')
+      util.bucket(cache.classes, key, id)
+      if split then cache.splitClasses[key] = true end
     end
     return cache.classes
+  end
+
+  -- Class keys carrying a split tag (a node.split node or its cone). They
+  -- never absorb — the split exists to give them their own host.
+  function ctx:splitClasses()
+    self:classes()
+    return cache.splitClasses
   end
 
   function ctx:classOf()
@@ -270,8 +290,11 @@ function M.compile(userGraph)
       return nil
     end
 
+    local splitClasses = self:splitClasses()
     local direct = {}
-    for cls, qEntry in pairs(q) do direct[cls] = directHost(qEntry) end
+    for cls, qEntry in pairs(q) do
+      direct[cls] = not splitClasses[cls] and directHost(qEntry) or nil
+    end
 
     local function terminal(cls, seen)
       local next_ = direct[cls]

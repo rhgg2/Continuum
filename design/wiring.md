@@ -893,6 +893,20 @@ plan when its turn comes.
     manual split-at-a-node gesture writes the identical marker, so hosting
     stays uniform and the master is never special-cased. Retires the old
     sidechain-to-master "design-time error" — the resolution is eviction.
+
+    *3a — split-marker mechanism. Landed.* The marker is realised not by a
+    fake source node (which would become a phantom source track) but by the
+    marked node seeding `'split:'..id` into its own `srcSet`: a split node
+    *is its own source*. The tag propagates forward, so the node + its cone
+    land in their own equivalence class — their own track — through the
+    existing partition, with no `nodeHost`/flood and no `targetPlan` change;
+    the cut edge becomes a send for free. A split-tagged class never absorbs
+    (`ctx:splitClasses` guards `ctx:absorption`), or its single-parent
+    cone-top would fold straight back. `M.validate` refuses `split` off
+    `fx`. A cone that is master's sole contributor re-merges into master's
+    class (no eviction) — audibly identical, and the correct least-eviction
+    outcome. 3b computes the master-minimization markers feeding this same
+    mechanism. Specs: `dag_split_spec`.
   - **Merge nodes at allocate.** Synthesise merge CUs at the
     targetPlan/allocate boundary as host-local `fxOrder` entries (the
     bracket machinery): binary per consuming FX — all-unity ⇒
