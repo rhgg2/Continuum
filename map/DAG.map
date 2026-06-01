@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1104  sha=3a37253  mode=namespace
+@module DAG  src=DAG.lua  loc=1216  sha=b1bb4ec  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -10,6 +10,7 @@
   @invariant  edge ops ride as metadata; gain on a sole send-wire folds onto send volume, else CU
   @invariant  node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
   @invariant  a split-tagged class never absorbs
+  @invariant  srcSet unions node.split with derived master-min split markers (ctx:masterSplits)
 
 # Shapes
   @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
@@ -25,42 +26,49 @@
   @shape  allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
 
 # Imports
-  @const util = 'util'  @ 27
+  @const util = 'util'  @ 28
 
 # Module-level constants
-  @const CU_IDENT = 'JS:Continuum Utility'  @ 29
-  @const M = {}  @ 31
+  @const CU_IDENT = 'JS:Continuum Utility'  @ 30
+  @const M = {}  @ 32
+
+# Private functions
+  -- validate
+  -- ancestors / descendants
+  -- master minimization
+  @fn masterMinMarkers(userGraph)  @ 186
+      -- fx fed >=2 audio ports from one upstream host violates the one-pair-per-send
+      -- limit and is evicted via a derived split at its ipdom toward master. See docs/DAG.md § Master-minimization.
+      · midi register file: bus 0 boundary; values are per-producer streams.
+      · bracket post-pass — see design/wiring.md § 3c.3a
 
 # Public API (M.*)
-  -- validate
-  @api M.validate(userGraph)  @ 38
+  @api M.validate(userGraph)  @ 39
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  -- ancestors / descendants
-  @api M.ancestors(userGraph, sourceId)  @ 148
+  @api M.ancestors(userGraph, sourceId)  @ 149
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over userGraph.edges; cycle-safe via visited
-  @api M.descendants(userGraph, sourceId)  @ 167
+  @api M.descendants(userGraph, sourceId)  @ 168
       -- Forward reachability. Mirror of ancestors; used by wire-redraft to
       -- forbid cycle-forming new-source candidates when the user drags the
       -- from-end of an existing wire: the new source X must not be reachable
       -- from the kept destination B, else X→B closes the cycle B→…→X→B.
       @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
   -- compile context
-  @api M.compile(userGraph)  @ 184
+  @api M.compile(userGraph, derivedSplits)  @ 287
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
+      @contract  derivedSplits is internal (the master-min fixpoint); public callers omit it
   -- allocate
-  @api M.allocate(plan, nodes)  @ 654
+  @api M.allocate(plan, nodes)  @ 766
       -- Per-host live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
-      · midi register file: bus 0 boundary; values are per-producer streams.
-      · bracket post-pass — see design/wiring.md § 3c.3a
 
 # Uses (outbound edges)
-  @use call    util.add  @ 223, 286, 287, 342, 411, 412, 432, 446, 451, 453, 457, 484, 505, 506, 511, 525, 533, 544, 579, 592, 665, 688, 710, 724, 742, 752, 755, 840, 870, 905, 917, 924, 948, 956, 960, 964, 993, 1016, 1054, 1055, 1056, 1061, 1076
-  @use call    util.assign  @ 69
-  @use call    util.bucket  @ 118, 151, 170, 195, 228
-  @use require util  @ 27
+  @use call    util.add  @ 249, 327, 398, 399, 454, 523, 524, 544, 558, 563, 565, 569, 596, 617, 618, 623, 637, 645, 656, 691, 704, 777, 800, 822, 836, 854, 864, 867, 952, 982, 1017, 1029, 1036, 1060, 1068, 1072, 1076, 1105, 1128, 1166, 1167, 1168, 1173, 1188
+  @use call    util.assign  @ 70
+  @use call    util.bucket  @ 119, 152, 171, 192, 193, 299, 332
+  @use require util  @ 28

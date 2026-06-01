@@ -146,4 +146,109 @@ return {
       t.eq(DAG.validate(g).code, 'split_non_fx')
     end,
   },
+
+  ----- master minimization (3c.4.3b)
+  {
+    name = 'multi-class sidechain stays on master (two ports, two hosts)',
+    run = function()
+      -- a (g1) -> f.p1, b (g2) -> f.p2, f -> master. Two different upstream
+      -- hosts feed two ports — one pair each, no violation.
+      local ns = {}
+      local k, v
+      k, v = source('s1', 'g1');   ns[k] = v
+      k, v = source('s2', 'g2');   ns[k] = v
+      k, v = fx('a');              ns[k] = v
+      k, v = fx('b');              ns[k] = v
+      k, v = fx('f', { ins = 2 }); ns[k] = v
+      local cx = DAG.compile(mk(ns, {
+        { type = 'audio', from = 's1', to = 'a' },
+        { type = 'audio', from = 's2', to = 'b' },
+        { type = 'audio', from = 'a',  to = 'f', toPort = 1 },
+        { type = 'audio', from = 'b',  to = 'f', toPort = 2 },
+        { type = 'audio', from = 'f',  to = 'master' },
+      }))
+      t.eq(next(cx:masterSplits()), nil)
+      t.eq(cx:classOf()['f'], cx:classOf()['master'])
+    end,
+  },
+  {
+    name = 'same-host two ports: split at the post-dominator below the violator',
+    run = function()
+      -- u (g1) feeds f.p1 and f.p2 (violation); s2 (g2) feeds f.p3 so f and master both see {g1,g2}.
+      -- f->g->master so f's ipdom is g — the cut lands just below f.
+      local ns = {}
+      local k, v
+      k, v = source('s1', 'g1');   ns[k] = v
+      k, v = source('s2', 'g2');   ns[k] = v
+      k, v = fx('u');              ns[k] = v
+      k, v = fx('f', { ins = 3 }); ns[k] = v
+      k, v = fx('g');              ns[k] = v
+      local cx = DAG.compile(mk(ns, {
+        { type = 'audio', from = 's1', to = 'u' },
+        { type = 'audio', from = 'u',  to = 'f', toPort = 1 },
+        { type = 'audio', from = 'u',  to = 'f', toPort = 2 },
+        { type = 'audio', from = 's2', to = 'f', toPort = 3 },
+        { type = 'audio', from = 'f',  to = 'g' },
+        { type = 'audio', from = 'g',  to = 'master' },
+      }))
+      local splits = cx:masterSplits()
+      t.truthy(splits['g'])
+      t.eq(splits['f'], nil)
+      t.eq(cx:classOf()['g'], cx:classOf()['master'])
+      t.truthy(cx:classOf()['f'] ~= cx:classOf()['master'])
+      t.eq(cx:targetPlan()[cx:classOf()['f']].hostKind, 'newTrack')
+    end,
+  },
+  {
+    name = 'disjoint paths to master: marker lands on the master node',
+    run = function()
+      -- f violates (u feeds p1,p2); two disjoint paths f->x->master and f->y->master
+      -- so the post-dominator is master itself and the master class collapses to {master}.
+      local ns = {}
+      local k, v
+      k, v = source('s1', 'g1');   ns[k] = v
+      k, v = source('s2', 'g2');   ns[k] = v
+      k, v = fx('u');              ns[k] = v
+      k, v = fx('f', { ins = 3 }); ns[k] = v
+      k, v = fx('x');              ns[k] = v
+      k, v = fx('y');              ns[k] = v
+      local cx = DAG.compile(mk(ns, {
+        { type = 'audio', from = 's1', to = 'u' },
+        { type = 'audio', from = 'u',  to = 'f', toPort = 1 },
+        { type = 'audio', from = 'u',  to = 'f', toPort = 2 },
+        { type = 'audio', from = 's2', to = 'f', toPort = 3 },
+        { type = 'audio', from = 'f',  to = 'x' },
+        { type = 'audio', from = 'f',  to = 'y' },
+        { type = 'audio', from = 'x',  to = 'master' },
+        { type = 'audio', from = 'y',  to = 'master' },
+      }))
+      t.truthy(cx:masterSplits()['master'])
+      t.eq(cx:classOf()['master'], 'g1|g2|split:master')
+    end,
+  },
+  {
+    name = 'dead-end violator self-splits (no path to master)',
+    run = function()
+      -- f violates (u feeds p1,p2), is master-hosted, but feeds nothing — no path to master so
+      -- the cut is f itself. z carries {g1,g2} up to master so the master class exists without f.
+      local ns = {}
+      local k, v
+      k, v = source('s1', 'g1');            ns[k] = v
+      k, v = source('s2', 'g2');            ns[k] = v
+      k, v = fx('u');                       ns[k] = v
+      k, v = fx('f', { ins = 3, outs = 0 }); ns[k] = v
+      k, v = fx('z', { ins = 2 });          ns[k] = v
+      local cx = DAG.compile(mk(ns, {
+        { type = 'audio', from = 's1', to = 'u' },
+        { type = 'audio', from = 'u',  to = 'f', toPort = 1 },
+        { type = 'audio', from = 'u',  to = 'f', toPort = 2 },
+        { type = 'audio', from = 's2', to = 'f', toPort = 3 },
+        { type = 'audio', from = 's1', to = 'z', toPort = 1 },
+        { type = 'audio', from = 's2', to = 'z', toPort = 2 },
+        { type = 'audio', from = 'z',  to = 'master' },
+      }))
+      t.truthy(cx:masterSplits()['f'])
+      t.truthy(cx:classOf()['f'] ~= cx:classOf()['master'])
+    end,
+  },
 }

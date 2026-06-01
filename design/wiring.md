@@ -907,6 +907,17 @@ plan when its turn comes.
     class (no eviction) — audibly identical, and the correct least-eviction
     outcome. 3b computes the master-minimization markers feeding this same
     mechanism. Specs: `dag_split_spec`.
+
+    *3b — master-minimization markers. Landed.* `M.compile` runs
+    `ctx:masterSplits` each compile: a fixpoint that finds every master-hosted
+    fx fed ≥2 audio ports by one upstream host (two pairs out of a one-pair
+    parent send) and derives a split marker at the fx's immediate post-dominator
+    toward master — the least-eviction cut. Markers move inward (pruning any
+    subsumed by a downstream marker) until the master class is violation-free;
+    the terminus is a derived split on the master node. `srcSet` unions these
+    with persisted `node.split`, so classification/hosting are unchanged. Two
+    ports from two *different* hosts (main + sidechain) stay on master. Specs:
+    `dag_split_spec`.
   - **Merge nodes at allocate.** Synthesise merge CUs at the
     targetPlan/allocate boundary as host-local `fxOrder` entries (the
     bracket machinery): binary per consuming FX — all-unity ⇒

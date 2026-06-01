@@ -15,6 +15,7 @@
 -- see docs/DAG.md § CU bridge invariant
 --invariant: node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
 --invariant: a split-tagged class never absorbs
+--invariant: srcSet unions node.split with derived master-min split markers (ctx:masterSplits)
 --shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originEdgeIdx?=int, originNode?=string, originSide?='in'|'out' }; the CU bridge synthesised for a wire-level op (targetPlan, originEdgeIdx) or a bus-swap bracket (allocate, originNode/originSide). See design/wiring.md § 3c.
 --shape: outWire = { from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
 --shape: intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
@@ -178,12 +179,115 @@ function M.descendants(userGraph, sourceId)
   return out
 end
 
+----- master minimization
+
+-- fx fed >=2 audio ports from one upstream host violates the one-pair-per-send
+-- limit and is evicted via a derived split at its ipdom toward master. See docs/DAG.md § Master-minimization.
+local function masterMinMarkers(userGraph)
+  local nodes = userGraph.nodes or {}
+  local edges = userGraph.edges or {}
+
+  local fwd, rev = {}, {}
+  for _, e in ipairs(edges) do
+    util.bucket(fwd, e.from, e.to)
+    util.bucket(rev, e.to, e.from)
+  end
+
+  local function reach(start, adj, blocked)
+    local seen, stack = { [start] = true }, { start }
+    while #stack > 0 do
+      for _, nxt in ipairs(adj[table.remove(stack)] or {}) do
+        if not seen[nxt] and not (blocked and blocked[nxt]) then
+          seen[nxt] = true; stack[#stack + 1] = nxt
+        end
+      end
+    end
+    return seen
+  end
+
+  -- Immediate post-dominator of N toward master: nearest node every N->master path crosses.
+  -- If N can't reach master, N splits itself (self-tag is re-merge-safe).
+  local function ipdom(N)
+    local descN = reach(N, fwd, nil)
+    if not descN['master'] then return N end
+    local ancM = reach('master', rev, nil)
+    local best, bestSize = nil, -1
+    for id in pairs(descN) do
+      if id ~= N and ancM[id] and not reach(N, fwd, { [id] = true })['master'] then
+        local size = 0
+        for _ in pairs(reach(id, fwd, nil)) do size = size + 1 end
+        if size > bestSize or (size == bestSize and id < best) then
+          best, bestSize = id, size
+        end
+      end
+    end
+    return best or 'master'
+  end
+
+  -- A master-hosted fx violates iff one upstream host feeds >=2 of its audio
+  -- input ports (two pairs out of a one-pair parent send).
+  local function violatorsOf(ctx)
+    local masterClass = ctx:masterHostedClass()
+    if not masterClass then return {} end
+    local classOf, out = ctx:classOf(), {}
+    for _, fxId in ipairs(ctx:classes()[masterClass]) do
+      if nodes[fxId].kind == 'fx' then
+        local portsByHost = {}
+        for _, e in ipairs(edges) do
+          if e.type == 'audio' and e.to == fxId then
+            local host = ctx:resolveHost(classOf[e.from])
+            if host ~= masterClass and host ~= '' then
+              local ports = portsByHost[host] or {}
+              ports[e.toPort or 1] = true
+              portsByHost[host] = ports
+            end
+          end
+        end
+        for _, ports in pairs(portsByHost) do
+          local n = 0
+          for _ in pairs(ports) do n = n + 1 end
+          if n >= 2 then util.add(out, fxId); break end
+        end
+      end
+    end
+    table.sort(out)
+    return out
+  end
+
+  local markers = {}
+  while true do
+    local violators = violatorsOf(M.compile(userGraph, markers))
+    if #violators == 0 then break end
+    local changed = false
+    for _, v in ipairs(violators) do
+      local d = ipdom(v)
+      if not markers[d] then markers[d] = true; changed = true end
+    end
+    if not changed then break end
+  end
+
+  -- Move, don't accumulate: a marker with another marker downstream of it is
+  -- redundant — the inner cut already evicts everything above it.
+  local redundant = {}
+  for m in pairs(markers) do
+    local desc = reach(m, fwd, nil)
+    for m2 in pairs(markers) do
+      if m2 ~= m and desc[m2] then redundant[m] = true; break end
+    end
+  end
+  for m in pairs(redundant) do markers[m] = nil end
+
+  return markers
+end
+
 ----- compile context
 
 --contract: assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
-function M.compile(userGraph)
+--contract: derivedSplits is internal (the master-min fixpoint); public callers omit it
+function M.compile(userGraph, derivedSplits)
   local nodes = userGraph.nodes or {}
   local edges = userGraph.edges or {}
+  derivedSplits = derivedSplits or masterMinMarkers(userGraph)
   local cache = { srcSet = {} }
   local ctx = {}
 
@@ -206,7 +310,7 @@ function M.compile(userGraph)
     end
     -- A split marker makes the node its own source: the tag propagates
     -- forward, evicting the node + its cone into their own class.
-    if node and node.split then set['split:' .. id] = true end
+    if node and (node.split or derivedSplits[id]) then set['split:' .. id] = true end
     for _, parent in ipairs(self:inbound()[id] or {}) do
       for guid in pairs(self:srcSet(parent)) do set[guid] = true end
     end
@@ -236,6 +340,14 @@ function M.compile(userGraph)
   function ctx:splitClasses()
     self:classes()
     return cache.splitClasses
+  end
+
+  -- The derived master-minimization split markers baked into this compile
+  -- (distinct from persisted node.split). See docs/DAG.md § master-minimization.
+  function ctx:masterSplits()
+    local out = {}
+    for id in pairs(derivedSplits) do out[id] = true end
+    return out
   end
 
   function ctx:classOf()

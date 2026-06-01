@@ -43,6 +43,34 @@ outcome. The split tag rides class keys (and thus the `wiringClass`
 ownership string) as an opaque, stable segment; nothing downstream
 parses it.
 
+## Master-minimization — evicting fx that need two master pairs
+
+`master.audio.ins = 1` means each contributing track reaches the master
+through one parent send: one stereo pair. So a master-hosted fx can pull at
+most one pair from any single upstream host. An fx fed ≥2 audio input ports by
+the *same* host needs two pairs from one parent send — unrepresentable. (Two
+ports from two *different* hosts is fine: main on one parent send, sidechain on
+another.)
+
+`ctx:masterSplits` (run by `M.compile` on every compile, unioned into `srcSet`
+alongside persisted `node.split`) resolves this by eviction. For each violating
+fx it derives a split marker at the fx's **immediate post-dominator toward
+master** — the nearest node every path from the fx to master crosses. Marking
+that node taints master with its `split:` tag while the violator, strictly
+upstream, stays untagged and peels onto its own track, where ordinary
+multi-pair sends feed it and it parent-sends one pair up. The post-dominator is
+the largest single-entry cone that still excludes the violator, so it is the
+least-eviction cut. If the fx reaches no sink, it splits itself (the self-tag
+is re-merge-safe — master never inherits it).
+
+A fixpoint repeats — evicting one fx can expose a fresh violator downstream,
+whose marker lands strictly closer to master — until the master class is
+violation-free. It always converges: the inward terminus is a derived split on
+the master node itself (`C_m = {master}`), reached when a violator's paths to
+master rejoin only at master. Markers move rather than accumulate: a marker
+with another marker downstream is pruned, since the inner cut already evicts
+everything above it.
+
 ## CU bridge invariant — edge ops and folding
 
 An edge's gain/channelMap op rides the edge as metadata. The CU
