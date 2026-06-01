@@ -401,4 +401,23 @@ return {
       t.eq(err.code, 'unknown_edge_type')
     end,
   },
+  {
+    name = 'fx node with busAware=true rejects (safety net for ext_midi_bus JSFX)',
+    run = function()
+      local ns = {}
+      local k, v = fx('b', { ident = 'JS:Foreign' }); v.busAware = true; ns[k] = v
+      local err = DAG.validate(mk(ns))
+      t.eq(err.code,  'ext_midi_bus_user_fx')
+      t.eq(err.id,    'b')
+      t.eq(err.ident, 'JS:Foreign')
+    end,
+  },
+  {
+    name = 'fx node with busAware=false passes',
+    run = function()
+      local ns = {}
+      local k, v = fx('b'); v.busAware = false; ns[k] = v
+      t.eq(DAG.validate(mk(ns)), nil)
+    end,
+  },
 }

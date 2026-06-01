@@ -55,6 +55,10 @@ function M.new()
     return state.projectPath or ''
   end
 
+  function r.GetResourcePath()
+    return state.resourcePath or ''
+  end
+
   function r.GetSetMediaTrackInfo_String(track, key, value, setNew)
     local k = tostring(track) .. '/' .. key
     if setNew then

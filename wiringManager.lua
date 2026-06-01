@@ -15,6 +15,7 @@
 
 local util = require 'util'
 local DAG  = require 'DAG'
+local fs   = require 'fs'
 
 local cm = (...).cm
 
@@ -104,6 +105,20 @@ local function portNames(track, fxIdx, dir, pinCount)
   return out
 end
 
+-- True iff JSFX desc declares ext_midi_bus=1 (the FX scans midi_bus itself,
+-- escaping our allocator). Skips // comments; frontier prevents `=10` match.
+local function parseJsfxBusAware(content)
+  if not content then return false end
+  for line in content:gmatch('[^\r\n]+') do
+    local stripped = line:match('^%s*(.-)%s*$') or ''
+    if stripped:sub(1, 2) ~= '//'
+       and stripped:match('^ext_midi_bus%s*=%s*1%f[%D]') then
+      return true
+    end
+  end
+  return false
+end
+
 ----------- PUBLIC
 
 --contract: re-reads wiringGraph from cm (rebuilding master via freshGraph if empty), ensures the scratch track, fires wiringChanged{kind='load'}; drops the prior scratch handle (project may have changed)
@@ -148,6 +163,28 @@ end
 --contract: list of intra-class capacity overflows on the lowered compile graph; empty when the user graph is within budget
 function wm:errors()
   return self:compile():capacityErrors()
+end
+
+--contract: read JSFX desc file for ident from REAPER's Effects dir; nil if non-JS or read fails
+function wm:readJsfxContent(ident)
+  if not (ident and ident:sub(1, 3) == 'JS:') then return nil end
+  local path = fs.join(reaper.GetResourcePath(), 'Effects/' .. ident:sub(4))
+  local f = io.open(path, 'rb')
+  if not f then return nil end
+  local content = f:read('*a')
+  f:close()
+  return content
+end
+
+-- Exposed for unit tests; production paths use `wm:isUserAddRefused` below.
+wm.parseJsfxBusAware = parseJsfxBusAware
+
+--contract: refuses JSFX whose desc declares ext_midi_bus=1; nil on accept, structured err on refuse
+function wm:checkUserAddable(ident)
+  if not (ident and ident:sub(1, 3) == 'JS:') then return nil end
+  if parseJsfxBusAware(self:readJsfxContent(ident)) then
+    return { code = 'ext_midi_bus_user_fx', ident = ident }
+  end
 end
 
 --contract: AddByName on scratch + keep; returns {fxGuid, ins, outs, inNames, outNames}
@@ -207,9 +244,11 @@ end
 
 --contract: one Undo block around instantiate + mutate; stamps fxGuid on the new fx-node
 --contract: generators (io.ins==0) also spawn sourceTrack + source-node + midi edge
---contract: returns new fx-node id; nil+err on validate failure (Undo recovers)
+--contract: returns new fx-node id; nil+err on validate failure or ext_midi_bus refusal
 function wm:addFxNode(x, y, fx, opts)
   ensureLoaded()
+  local addErr = self:checkUserAddable(fx.ident)
+  if addErr then return nil, addErr end
   reaper.Undo_BeginBlock()
   local io         = self:instantiateFxOnScratch(fx.ident)
   local sourceGuid = (io.ins == 0) and self:createSourceTrack{ name = fx.name } or nil
@@ -224,6 +263,7 @@ function wm:addFxNode(x, y, fx, opts)
       fxIdent   = fx.ident,
       fxDisplay = fx.name,
       fxGuid    = io.fxGuid,
+      busAware  = false,
       ports     = {
         audio = { ins      = io.ins,     outs     = io.outs,
                   inNames  = io.inNames, outNames = io.outNames },

@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=903  sha=6c17c02  mode=namespace
+@module DAG  src=DAG.lua  loc=907  sha=3ac52b5  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(userGraph), which caches the lowered graph and its derivations lazily
@@ -6,12 +6,13 @@
   @invariant  every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
   @invariant  master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
   @invariant  srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
+  @invariant  fx nodes carry busAware; wm:addFxNode and M.validate refuse true
   @invariant  fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
   @invariant  an edge's gain/channelMap op lowers to a CU bridge (kind='fx', fxIdent=CU_IDENT, params={mode=...}, originEdgeIdx, fxGuid=opFxGuid). A gain bridge sitting on the SOLE wire realised as a send (track→track) or the parent/master send folds onto that send's native volume (see ctx:gainSinks) and is dropped from fxOrder — no CU materialised; otherwise the bridge is materialised and the applier stamps opFxGuid back via wm:mutate. channelMap bridges never fold (a send carries no remap).
 
 # Shapes
   @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
-  @shape  userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string }
+  @shape  userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool }
   @shape  edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, opFxGuid?=string }
   @shape  lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
   @shape  lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, params?=table, originEdgeIdx?=int }; params is the wm-owned param payload on synthesised CU bridges ({mode='gain'|'channelRemap', ...mode-specific}); originEdgeIdx is set on synthesised CU bridges (indexing back into userGraph.edges so the applier can stamp the minted opFxGuid onto the originating edge)
@@ -20,43 +21,43 @@
   @shape  allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends={ {to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int}, ... }, pinMaps={ [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }, nchan=int, mainSendOffs?=int } }; output of M.allocate. Per-host live-range register allocation: each intra / outgoing send / mainSend masterFeed / Stage-2 incoming send is a value with a def slot and a lastUse slot; at the entry to slot S the allocator frees pairs with lastUse ≤ S (the ≤ lets S reuse its own input pairs in-place — REAPER FX read pins before writing them), then claims pull the lowest free pair (cursor++ only when free is empty). Pair 1 is the track-IO boundary register, modelled as two values that share the pair with non-overlapping lifetimes: source-from (def=0, lastUse=last consumer slot — or N+1 when source-out / default-mainSend keeps source data live to end-of-chain) and master-to (def=earliest writer slot, lastUse=N+1). source-from frees pair 1 at its last consumer so an fx → fx intra can reuse it in-place; master-to lifts pair 1 back off the free list at its def slot. REAPER chan = (pair-1)*2; nchan = max(2, maxPair*2). Pin maps are audio-only — one entry per FX touched by allocation, missing ports are disconnected (zero mask) at apply, multi-pair lists OR'd into one bitmask by 3c.2's pin writer. MIDI keeps srcChan=dstChan=0 until 3c.3; sends dedup on the 4-tuple. mainSendOffs (parent send pair via C_MAINSEND_OFFS): 0 when source's own pair feeds master (no masterFeed, or masterFeed.from is the source), (pair-1)*2 when masterFeed names an fx (allocator claims a pair and pins that fx output).
 
 # Imports
-  @const util = 'util'  @ 20
+  @const util = 'util'  @ 21
 
 # Module-level constants
-  @const CU_IDENT = 'JS:Continuum Utility'  @ 22
-  @const M = {}  @ 24
+  @const CU_IDENT = 'JS:Continuum Utility'  @ 23
+  @const M = {}  @ 25
 
 # Public API (M.*)
   -- validate
-  @api M.validate(userGraph)  @ 31
+  @api M.validate(userGraph)  @ 32
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
   -- ancestors / descendants
-  @api M.ancestors(userGraph, sourceId)  @ 135
+  @api M.ancestors(userGraph, sourceId)  @ 139
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over userGraph.edges; cycle-safe via visited
-  @api M.descendants(userGraph, sourceId)  @ 154
+  @api M.descendants(userGraph, sourceId)  @ 158
       -- Forward reachability. Mirror of ancestors; used by wire-redraft to
       -- forbid cycle-forming new-source candidates when the user drags the
       -- from-end of an existing wire: the new source X must not be reachable
       -- from the kept destination B, else X→B closes the cycle B→…→X→B.
       @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
   -- lower
-  @api M.lower(userGraph)  @ 171
+  @api M.lower(userGraph)  @ 175
       @contract  assumes M.validate(userGraph)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
   -- compile context
-  @api M.compile(userGraph)  @ 241
+  @api M.compile(userGraph)  @ 245
       @contract  assumes M.validate(userGraph)==nil; returns a ctx with lazy-cached derivations
   -- allocate
-  @api M.allocate(plan)  @ 654
+  @api M.allocate(plan)  @ 658
       -- Per-host live-range register allocation: values track (def, lastUse) slots;
       -- pair 1 is the track-IO boundary register. See allocatedPlan shape for details.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs
 
 # Uses (outbound edges)
-  @use call    util.add  @ 184, 189, 277, 329, 330, 382, 455, 456, 481, 495, 500, 502, 506, 535, 580, 600, 668, 689, 703, 721, 731, 734, 819, 849, 877
-  @use call    util.assign  @ 56
-  @use call    util.bucket  @ 105, 138, 157, 253, 279
-  @use call    util.pick  @ 228
-  @use require util  @ 20
+  @use call    util.add  @ 188, 193, 281, 333, 334, 386, 459, 460, 485, 499, 504, 506, 510, 539, 584, 604, 672, 693, 707, 725, 735, 738, 823, 853, 881
+  @use call    util.assign  @ 60
+  @use call    util.bucket  @ 109, 142, 161, 257, 283
+  @use call    util.pick  @ 232
+  @use require util  @ 21

@@ -1,21 +1,26 @@
 desc:Continuum Utility
 tags: utility continuum
-version: 0.01
+version: 0.02
 author: Continuum
 license: MIT
 about:
-  Per-edge audio utility spliced by the Continuum wiring system.
-  One instance per op-bundle on an audio wire.
-  - Mode 1 (Gain): linear scalar applied to both channels.
-  - Mode 2 (ChannelRemap): reserved; pass-through in this slice.
+  Per-edge utility spliced by the Continuum wiring system. One mechanism
+  doing several jobs — host for wire-level operators and MIDI bus brackets.
+  - Mode 0 (Gain): linear scalar applied to both audio channels.
+  - Mode 1 (ChannelRemap): reserved; pass-through in this slice.
+  - Mode 2 (BusPark): MIDI bus N↔0 swap; reserved for 3c.3a.2.
+  - Mode 3 (BusRestore): MIDI bus 0↔N swap; reserved for 3c.3a.2.
+
+ext_midi_bus = 1;
 
 in_pin:left input
 in_pin:right input
 out_pin:left output
 out_pin:right output
 
-slider1:mode=0<0,1,1{Gain,ChannelRemap}>mode
+slider1:mode=0<0,3,1{Gain,ChannelRemap,BusPark,BusRestore}>mode
 slider2:gain=1<0,8,0.001>gain
+slider3:bus=0<0,127,1>bus
 
 @sample
 mode == 0 ? (
