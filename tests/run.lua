@@ -113,7 +113,6 @@ local specs = {
   'arrange_page_spec',
   'coordinator_spec',
   'dag_validate_spec',
-  'dag_lower_spec',
   'dag_srcset_spec',
   'dag_classes_spec',
   'dag_quotient_spec',

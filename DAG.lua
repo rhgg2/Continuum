@@ -2,24 +2,26 @@
 -- lazy-caching ctx; user-graph predicates stay free-standing. See design/wiring.md.
 -- @noindex
 
---invariant: M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(userGraph), which caches the lowered graph and its derivations lazily
---invariant: REAPER tracks are always stereo; audio I/O is a count of stereo ports, never channels. Two graph shapes — user (wires) and lowered (port-to-port conns); lower() bridges them.
+--invariant: M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
+--invariant: REAPER tracks are always stereo; audio I/O is a count of stereo pairs, never channels
 --invariant: every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
---invariant: srcSet and class equivalence are stable under lowering — every Continuum Utility insertion is single-input single-output
 --shape: userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
 --shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool }
 --invariant: fx nodes carry busAware; wm:addFxNode and M.validate refuse true
 --invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
 --shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, opFxGuid?=string }
---invariant: an edge's gain/channelMap op lowers to a CU bridge (kind='fx', fxIdent=CU_IDENT, params={mode=...}, originEdgeIdx, fxGuid=opFxGuid). A gain bridge sitting on the SOLE wire realised as a send (track→track) or the parent/master send folds onto that send's native volume (see ctx:gainSinks) and is dropped from fxOrder — no CU materialised; otherwise the bridge is materialised and the applier stamps opFxGuid back via wm:mutate. channelMap bridges never fold (a send carries no remap).
---shape: lowerGraph = { nodes = {[id]=lowerNode}, conns = conn[] }
---shape: lowerNode = { kind='source'|'fx'|'master', trackGuid?=string, fxIdent?=string, fxGuid?=string, busAware?=bool, midiInBracketGuid?=string, midiOutBracketGuid?=string, params?=table, originEdgeIdx?=int, originNode?=string, originSide?='in'|'out' }; see design/wiring.md § 3c.3a for the CU-bridge / bracket model.
---shape: conn = { type='audio'|'midi', from=id, to=id, fromPort?=number, toPort?=number, primary?=true }
---shape: targetPlan = { [hostKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, outWires={ {from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number}, ... }, intraConns={ {from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi'}, ... } } }; outWires is one entry per inter-class wire (no collapse); intraConns is one entry per intra-host conn (incl. source-from and master-to anchors at track-IO pair 1). masterFeed names the (post-fold) audio producer whose output feeds the host's parent send to the master-hosted host; allocator pins that output and stamps mainSendOffs. from/toNode are post-fold — boundary gain CUs that fold onto a send/mainSend are bypassed so endpoints name real FX in fxOrder (or source/master). M.allocate(targetPlan) turns outWires into sends with per-tuple channel assignment.
+--invariant: edge ops ride as metadata; gain on a sole send-wire folds onto send volume, else CU
+-- see docs/DAG.md § CU bridge invariant
+--shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originEdgeIdx?=int, originNode?=string, originSide?='in'|'out' }; the CU bridge synthesised for a wire-level op (targetPlan, originEdgeIdx) or a bus-swap bracket (allocate, originNode/originSide). See design/wiring.md § 3c.
+--shape: outWire = { from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
+--shape: intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
+--shape: targetPlanEntry = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
+--shape: targetPlan = { [hostKey] = targetPlanEntry }
+-- see docs/DAG.md § targetPlan shape
 --shape: allocatedSend = { to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
 --shape: allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
---shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=lowerNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
+--shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -171,93 +173,21 @@ function M.descendants(userGraph, sourceId)
   return out
 end
 
------ lower
-
---contract: assumes M.validate(userGraph)==nil; lowers each wire to one port-to-port (audio) or node-to-node (midi) conn, splicing a CU node per wire-level op
-function M.lower(userGraph)
-  local lowerGraph = { nodes = {}, conns = {} }
-  local cuN = 0
-
-  local function mintCu(cuNode)
-    cuN = cuN + 1
-    local id = '_cu_' .. cuN
-    lowerGraph.nodes[id] = cuNode
-    return id
-  end
-
-  local function flush(head, targetId, targetPort)
-    if head.type == 'audio' then
-      util.add(lowerGraph.conns, {
-        type = 'audio', from = head.id, to = targetId,
-        fromPort = head.port, toPort = targetPort, primary = head.primary,
-      })
-    else
-      util.add(lowerGraph.conns, { type = 'midi', from = head.id, to = targetId,
-                                   primary = head.primary })
-    end
-  end
-
-  -- Splice a CU bridge into the wire: a kind='fx' node carrying
-  -- fxIdent=CU_IDENT and the wm-owned params payload. fxGuid is copied
-  -- off the source edge so the pipeline can match the bridge across
-  -- compiles without index tracking.
-  local function splice(head, params, sourceEdge, edgeIdx)
-    local id = mintCu({ kind = 'fx', fxIdent = CU_IDENT,
-                        fxGuid = sourceEdge.opFxGuid,
-                        params = params,
-                        originEdgeIdx = edgeIdx })
-    flush(head, id, head.type == 'audio' and 1 or nil)
-    if head.type == 'audio' then
-      return { type = 'audio', id = id, port = 1, primary = head.primary }
-    end
-    return { type = 'midi', id = id, primary = head.primary }
-  end
-
-  local function lowerAudioEdge(edge, edgeIdx)
-    local head = { type = 'audio', id = edge.from,
-                   port = edge.fromPort or 1, primary = edge.primary }
-    if edge.ops and edge.ops.gain then
-      head = splice(head, { mode = 'gain', gain = edge.ops.gain }, edge, edgeIdx)
-    end
-    flush(head, edge.to, edge.toPort or 1)
-  end
-
-  local function lowerMidiEdge(edge, edgeIdx)
-    local head = { type = 'midi', id = edge.from, primary = edge.primary }
-    if edge.ops and edge.ops.channelMap then
-      head = splice(head, { mode = 'channelRemap', map = edge.ops.channelMap }, edge, edgeIdx)
-    end
-    flush(head, edge.to)
-  end
-
-  for id, node in pairs(userGraph.nodes or {}) do
-    lowerGraph.nodes[id] = util.pick(node,
-      'kind trackGuid fxIdent fxGuid busAware midiInBracketGuid midiOutBracketGuid')
-  end
-  for edgeIdx, edge in ipairs(userGraph.edges or {}) do
-    if edge.type == 'audio' then lowerAudioEdge(edge, edgeIdx)
-    else                          lowerMidiEdge(edge, edgeIdx)
-    end
-  end
-  return lowerGraph
-end
-
 ----- compile context
 
---contract: assumes M.validate(userGraph)==nil; returns a ctx with lazy-cached derivations
+--contract: assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
 function M.compile(userGraph)
-  local lowerGraph = M.lower(userGraph)
+  local nodes = userGraph.nodes or {}
+  local edges = userGraph.edges or {}
   local cache = { srcSet = {} }
   local ctx = {}
-
-  function ctx:graph() return lowerGraph end
 
   -- Reverse adjacency: for each node id, the list of input-side node ids.
   function ctx:inbound()
     if cache.inbound then return cache.inbound end
     cache.inbound = {}
-    for _, conn in ipairs(lowerGraph.conns) do
-      util.bucket(cache.inbound, conn.to, conn.from)
+    for _, edge in ipairs(edges) do
+      util.bucket(cache.inbound, edge.to, edge.from)
     end
     return cache.inbound
   end
@@ -265,7 +195,7 @@ function M.compile(userGraph)
   function ctx:srcSet(id)
     if cache.srcSet[id] then return cache.srcSet[id] end
     local set = {}
-    local node = lowerGraph.nodes[id]
+    local node = nodes[id]
     if node and node.kind == 'source' and node.trackGuid then
       set[node.trackGuid] = true
     end
@@ -279,7 +209,7 @@ function M.compile(userGraph)
   function ctx:classes()
     if cache.classes then return cache.classes end
     cache.classes = {}
-    for id in pairs(lowerGraph.nodes) do
+    for id in pairs(nodes) do
       local guids = {}
       for guid in pairs(self:srcSet(id)) do util.add(guids, guid) end
       table.sort(guids)
@@ -306,14 +236,14 @@ function M.compile(userGraph)
                               primaryAudioParents = {} }
     end
     local classOf = self:classOf()
-    for _, conn in ipairs(lowerGraph.conns) do
-      local fromCls, toCls = classOf[conn.from], classOf[conn.to]
+    for _, edge in ipairs(edges) do
+      local fromCls, toCls = classOf[edge.from], classOf[edge.to]
       -- Inert vertices ('' class, empty srcSet) carry no signal — skip.
       if fromCls ~= toCls and fromCls ~= '' and toCls ~= '' then
         local toQ, fromQ = cache.quotient[toCls], cache.quotient[fromCls]
-        if conn.type == 'audio' then
+        if edge.type == 'audio' then
           toQ.audioParents[fromCls] = true
-          if conn.primary then toQ.primaryAudioParents[fromCls] = true end
+          if edge.primary then toQ.primaryAudioParents[fromCls] = true end
           fromQ.audioChildren[toCls] = true
         else
           toQ.midiParents[fromCls] = true
@@ -367,7 +297,7 @@ function M.compile(userGraph)
     local mc = self:classOf()['master']
     if not mc or mc == '' then return nil end
     for _, id in ipairs(self:classes()[mc]) do
-      if lowerGraph.nodes[id].kind == 'source' then return nil end
+      if nodes[id].kind == 'source' then return nil end
     end
     return mc
   end
@@ -393,45 +323,41 @@ function M.compile(userGraph)
     return cache.hostMembers
   end
 
-  -- Where each gained wire's volume lands, keyed by originEdgeIdx. If the
-  -- bridge sits on the wire that becomes a send (track→track) or the
-  -- parent/master send AND is the sole audio contributor there, the gain folds
-  -- onto that send's native volume ({kind='send'|'mainSend'}) and no CU
-  -- materialises; intra-class routing or several wires collapsing onto one
-  -- send keep the CU ({kind='cu'}). targetPlan and wm:pokeEdgeGain share this
-  -- one decision so the fold rule lives in a single place.
+  -- Fold-vs-CU decision for each gained edge. Shared by targetPlan and
+  -- wm:pokeEdgeGain. See docs/DAG.md § gainSinks.
   function ctx:gainSinks()
     if cache.gainSinks then return cache.gainSinks end
     local classOf = self:classOf()
     local mhc     = self:masterHostedClass()
     local function hostOf(id) return self:resolveHost(classOf[id]) end
-    local function isMasterDest(conn)
-      return conn.to == 'master' or (mhc and classOf[conn.to] == mhc)
+    local function isMasterDest(toId)
+      return toId == 'master' or (mhc and classOf[toId] == mhc)
     end
-    local outConn, masterCount, sendCount = {}, {}, {}
-    for _, conn in ipairs(lowerGraph.conns) do
-      outConn[conn.from] = outConn[conn.from] or conn
-      if conn.type == 'audio' then
-        local fromH, toH = hostOf(conn.from), hostOf(conn.to)
+    local masterCount, sendCount = {}, {}
+    for _, edge in ipairs(edges) do
+      if edge.type == 'audio' then
+        local fromH = hostOf(edge.from)
         if fromH and fromH ~= '' then
-          if isMasterDest(conn) then
+          if isMasterDest(edge.to) then
             masterCount[fromH] = (masterCount[fromH] or 0) + 1
-          elseif toH and toH ~= '' and fromH ~= toH then
-            local k = fromH .. '\0' .. toH
-            sendCount[k] = (sendCount[k] or 0) + 1
+          else
+            local toH = hostOf(edge.to)
+            if toH and toH ~= '' and fromH ~= toH then
+              local k = fromH .. '\0' .. toH
+              sendCount[k] = (sendCount[k] or 0) + 1
+            end
           end
         end
       end
     end
     local sinks = {}
-    for id, node in pairs(lowerGraph.nodes) do
-      if node.params and node.params.mode == 'gain' and node.originEdgeIdx then
-        local conn  = outConn[id]
-        local fromH = hostOf(id)
-        local sink  = { kind = 'cu', cuId = id, gain = node.params.gain }
-        if conn and fromH and fromH ~= '' then
-          local toH = hostOf(conn.to)
-          if isMasterDest(conn) then
+    for edgeIdx, edge in ipairs(edges) do
+      if edge.type == 'audio' and edge.ops and edge.ops.gain then
+        local fromH = hostOf(edge.from)
+        local sink  = { kind = 'cu', gain = edge.ops.gain }
+        if fromH and fromH ~= '' then
+          local toH = hostOf(edge.to)
+          if isMasterDest(edge.to) then
             if masterCount[fromH] == 1 then sink.kind, sink.cls = 'mainSend', fromH end
           elseif toH and toH ~= '' and fromH ~= toH then
             if sendCount[fromH .. '\0' .. toH] == 1 then
@@ -439,7 +365,7 @@ function M.compile(userGraph)
             end
           end
         end
-        sinks[node.originEdgeIdx] = sink
+        sinks[edgeIdx] = sink
       end
     end
     cache.gainSinks = sinks
@@ -449,12 +375,12 @@ function M.compile(userGraph)
   function ctx:capacityErrors()
     local classOf = self:classOf()
     local counts  = {}
-    for _, conn in ipairs(lowerGraph.conns) do
-      local fromHost = self:resolveHost(classOf[conn.from])
-      local toHost   = self:resolveHost(classOf[conn.to])
+    for _, edge in ipairs(edges) do
+      local fromHost = self:resolveHost(classOf[edge.from])
+      local toHost   = self:resolveHost(classOf[edge.to])
       if fromHost and fromHost ~= '' and fromHost == toHost then
         counts[fromHost] = counts[fromHost] or { audio = 0, midi = 0 }
-        counts[fromHost][conn.type] = counts[fromHost][conn.type] + 1
+        counts[fromHost][edge.type] = counts[fromHost][edge.type] + 1
       end
     end
     local out = {}
@@ -469,19 +395,14 @@ function M.compile(userGraph)
     return out
   end
 
-  -- Kahn's over pooled fx/cu members; sources/master/folded excluded.
-  -- Tiebreak by Goodman-Hsu local pressure (outMember - inMember); id final tiebreak.
-  local function topoIntraHost(members, folded)
+  -- Kahn's over a host's chain members (fx + synth CU; source/master excluded).
+  -- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
+  local function topoIntraHost(members, conns)
     local memberSet = {}
-    for _, id in ipairs(members) do
-      local k = lowerGraph.nodes[id].kind
-      if k ~= 'source' and k ~= 'master' and not (folded and folded[id]) then
-        memberSet[id] = true
-      end
-    end
+    for _, id in ipairs(members) do memberSet[id] = true end
     local indeg, succ, inMember = {}, {}, {}
     for id in pairs(memberSet) do indeg[id], succ[id], inMember[id] = 0, {}, 0 end
-    for _, conn in ipairs(lowerGraph.conns) do
+    for _, conn in ipairs(conns) do
       if memberSet[conn.from] and memberSet[conn.to] then
         indeg[conn.to] = indeg[conn.to] + 1
         inMember[conn.to] = inMember[conn.to] + 1
@@ -520,25 +441,83 @@ function M.compile(userGraph)
   function ctx:targetPlan()
     local classOf     = self:classOf()
     local hostMembers = self:hostMembers()
-    local plan, masterHostedHost = {}, nil
 
-    -- Folded bridges (gainSinks) drop from fxOrder; their gain rides the send.
+    -- Folded gains ride a native send (no CU); gainSinks names the sink.
     local folded, sendGain, mainGain = {}, {}, {}
-    for _, sink in pairs(self:gainSinks()) do
+    for edgeIdx, sink in pairs(self:gainSinks()) do
       if sink.kind == 'send' then
-        folded[sink.cuId] = true
+        folded[edgeIdx] = true
         sendGain[sink.from .. '\0' .. sink.to] = sink.gain
       elseif sink.kind == 'mainSend' then
-        folded[sink.cuId] = true
+        folded[edgeIdx] = true
         mainGain[sink.cls] = sink.gain
       end
     end
 
-    for hostCls, members in pairs(hostMembers) do
-      if hostCls == '' then
+    -- Synthesise a CU bridge per realised wire-level op (unfolded gain or channelMap),
+    -- splicing into conns. CU is connectivity-inert (1-in/1-out); inherits producer's host.
+    local synthNodes, cuHost, conns, cuN = {}, {}, {}, 0
+    local function audioConn(from, fp, to, tp)
+      util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
+                        to = to, toPort = tp or 1 })
+    end
+    for edgeIdx, edge in ipairs(edges) do
+      local op = edge.ops
+      local doSplice = (edge.type == 'audio' and op and op.gain and not folded[edgeIdx])
+                    or (edge.type == 'midi'  and op and op.channelMap)
+      if doSplice then
+        cuN = cuN + 1
+        local cuId = '_cu_' .. cuN
+        synthNodes[cuId] = {
+          kind = 'fx', fxIdent = CU_IDENT, fxGuid = edge.opFxGuid,
+          params = edge.type == 'audio' and { mode = 'gain', gain = op.gain }
+                                         or  { mode = 'channelRemap', map = op.channelMap },
+          originEdgeIdx = edgeIdx,
+        }
+        cuHost[cuId] = self:resolveHost(classOf[edge.from])
+        if edge.type == 'audio' then
+          audioConn(edge.from, edge.fromPort, cuId, 1)
+          audioConn(cuId, 1, edge.to, edge.toPort)
+        else
+          util.add(conns, { type = 'midi', from = edge.from, to = cuId })
+          util.add(conns, { type = 'midi', from = cuId, to = edge.to })
+        end
+      elseif edge.type == 'audio' then
+        audioConn(edge.from, edge.fromPort, edge.to, edge.toPort)
+      else
+        util.add(conns, { type = 'midi', from = edge.from, to = edge.to })
+      end
+    end
+
+    local function hostOf(id) return cuHost[id] or self:resolveHost(classOf[id]) end
+
+    -- Per-host chain members to topo-order: real fx + synth CU (source/master
+    -- never appear in fxOrder; they are the track-IO boundary).
+    local chainMembers = {}
+    for host, members in pairs(hostMembers) do
+      if host ~= '' then
+        local list = {}
+        for _, id in ipairs(members) do
+          local k = nodes[id].kind
+          if k ~= 'source' and k ~= 'master' then util.add(list, id) end
+        end
+        chainMembers[host] = list
+      end
+    end
+    for cuId, host in pairs(cuHost) do
+      if host ~= '' then
+        chainMembers[host] = chainMembers[host] or {}
+        util.add(chainMembers[host], cuId)
+      end
+    end
+
+    -- Plan entries: scratch for inert fx, else host topology + mainSend.
+    local plan, masterHostedHost = {}, nil
+    for host, members in pairs(hostMembers) do
+      if host == '' then
         local parked = {}
         for _, id in ipairs(members) do
-          local k = lowerGraph.nodes[id].kind
+          local k = nodes[id].kind
           if k ~= 'master' and k ~= 'source' then util.add(parked, id) end
         end
         if #parked > 0 then
@@ -551,61 +530,44 @@ function M.compile(userGraph)
       else
         local hostKind, trackGuid, hasMaster = 'newTrack', nil, false
         for _, id in ipairs(members) do
-          local n = lowerGraph.nodes[id]
+          local n = nodes[id]
           if n.kind == 'source' then hostKind, trackGuid = 'sourceTrack', n.trackGuid end
           if n.kind == 'master' then hasMaster = true end
         end
         if hasMaster and hostKind ~= 'sourceTrack' then
           hostKind = 'master'
-          masterHostedHost = hostCls
+          masterHostedHost = host
         end
-        plan[hostCls] = {
+        plan[host] = {
           hostKind  = hostKind, trackGuid = trackGuid, fxOrder = nil,
           mainSend  = hasMaster and hostKind == 'sourceTrack',
-          mainSendGain = mainGain[hostCls],
+          mainSendGain = mainGain[host],
           outWires = {}, intraConns = {},
         }
       end
     end
 
-    -- Folded CUs (1-in 1-out gain bridges on inter-host wires) get bypassed
-    -- on outWires.from — cuInbound names their real upstream producer.
-    local cuInbound = {}
-    for _, conn in ipairs(lowerGraph.conns) do
-      if folded[conn.to] then cuInbound[conn.to] = conn end
-    end
-
     -- Same-host conn → intraConn; inter-host → outWire (or mainSend lift to
-    -- master-hosted dest). Folded-CU endpoints drop intra-host, resolve inter-host.
-    for _, conn in ipairs(lowerGraph.conns) do
-      local fromCls, toCls = classOf[conn.from], classOf[conn.to]
-      if fromCls ~= '' and toCls ~= '' then
-        local fromHost = self:resolveHost(fromCls)
-        local toHost   = self:resolveHost(toCls)
+    -- the master-hosted dest). Inert endpoints (host '') carry no signal.
+    for _, conn in ipairs(conns) do
+      local fromHost, toHost = hostOf(conn.from), hostOf(conn.to)
+      if fromHost and fromHost ~= '' and toHost and toHost ~= '' then
         if fromHost == toHost then
-          if not (folded[conn.from] or folded[conn.to]) then
-            util.add(plan[fromHost].intraConns, {
-              from = conn.from, fromPort = conn.fromPort,
-              to   = conn.to,   toPort   = conn.toPort,
-              type = conn.type,
-            })
-          end
+          util.add(plan[fromHost].intraConns, {
+            from = conn.from, fromPort = conn.fromPort,
+            to   = conn.to,   toPort   = conn.toPort,
+            type = conn.type,
+          })
         elseif toHost == masterHostedHost then
           plan[fromHost].mainSend = true
           -- Multi-wire to master collapses to last-wins on masterFeed;
           -- 3c.4's CU-merge lowers ≥2 master wires to a single CU output.
           if conn.type == 'audio' then
-            local src, srcPort = conn.from, conn.fromPort
-            local upstream = folded[src] and cuInbound[src] or nil
-            if upstream then src, srcPort = upstream.from, upstream.fromPort end
-            plan[fromHost].masterFeed = { from = src, fromPort = srcPort }
+            plan[fromHost].masterFeed = { from = conn.from, fromPort = conn.fromPort }
           end
         else
-          local src, srcPort = conn.from, conn.fromPort
-          local upstream = folded[src] and cuInbound[src] or nil
-          if upstream then src, srcPort = upstream.from, upstream.fromPort end
           util.add(plan[fromHost].outWires, {
-            from = src, fromPort = srcPort,
+            from = conn.from, fromPort = conn.fromPort,
             to   = toHost,
             toNode = conn.to, toPort = conn.toPort,
             type = conn.type,
@@ -616,14 +578,21 @@ function M.compile(userGraph)
       end
     end
 
-    -- Deterministic ordering for downstream consumers. Sort keys are the
-    -- full identity tuple so order is stable even when (to, type) repeats.
+    -- Attach synth CU nodes to their host (host '' CUs are inert, dropped).
+    for cuId, host in pairs(cuHost) do
+      if plan[host] then
+        plan[host].synthNodes = plan[host].synthNodes or {}
+        plan[host].synthNodes[cuId] = synthNodes[cuId]
+      end
+    end
+
+    -- Topo order each host's chain; deterministic sorts on the wire lists.
     local function cmpOpt(a, b) return (a or 0) < (b or 0) end
     local function neqOpt(a, b) return (a or 0) ~= (b or 0) end
-    for hostCls, members in pairs(hostMembers) do
-      if hostCls ~= '' then
-        plan[hostCls].fxOrder = topoIntraHost(members, folded)
-        table.sort(plan[hostCls].outWires, function(a, b)
+    for host, entry in pairs(plan) do
+      if entry.hostKind ~= 'scratch' then
+        entry.fxOrder = topoIntraHost(chainMembers[host] or {}, entry.intraConns)
+        table.sort(entry.outWires, function(a, b)
           if a.to     ~= b.to     then return a.to     < b.to     end
           if a.type   ~= b.type   then return a.type   < b.type   end
           if a.from   ~= b.from   then return a.from   < b.from   end
@@ -631,7 +600,7 @@ function M.compile(userGraph)
           if a.toNode ~= b.toNode then return a.toNode < b.toNode end
           return cmpOpt(a.toPort, b.toPort)
         end)
-        table.sort(plan[hostCls].intraConns, function(a, b)
+        table.sort(entry.intraConns, function(a, b)
           if a.from ~= b.from then return a.from < b.from end
           if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
           if a.to   ~= b.to   then return a.to   < b.to   end
@@ -658,7 +627,7 @@ end
 -- Per-host live-range allocation, one register file per stream channel:
 -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
 --contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
---contract: nodes=lowerGraph.nodes; allocator reads busAware+fxIdent+bracket stamps post-pass.
+--contract: nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
 function M.allocate(plan, nodes)
   nodes = nodes or {}
   -- Fold structurally-identical outwires before alloc — otherwise the

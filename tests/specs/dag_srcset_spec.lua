@@ -115,7 +115,7 @@ return {
     end,
   },
   {
-    name = 'inserted CU nodes carry srcSet through (gain on stereo wire)',
+    name = 'gain op on a wire does not alter srcSet propagation (CU is invisible to the partition)',
     run = function()
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
@@ -123,13 +123,7 @@ return {
       local c = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'f', ops = { gain = 0.5 } },
       }))
-      local gainId
-      for id, node in pairs(c:graph().nodes) do
-        if node.params and node.params.mode == 'gain' then gainId = id end
-      end
-      t.truthy(gainId)
-      t.deepEq(sortedKeys(c:srcSet(gainId)), { 'guid-s' })
-      t.deepEq(sortedKeys(c:srcSet('f')),    { 'guid-s' })
+      t.deepEq(sortedKeys(c:srcSet('f')), { 'guid-s' })
     end,
   },
   {

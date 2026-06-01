@@ -117,7 +117,7 @@ return {
     end,
   },
   {
-    name = 'CU nodes inherited by lower share parent class',
+    name = 'gain op adds no class member (CU is invisible to the partition)',
     run = function()
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
@@ -125,9 +125,10 @@ return {
       local cs = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'f', ops = { gain = 0.5 } },
       })):classes()
-      -- s, gain CU, f all share 'guid-s'; master is empty.
+      -- s, f share 'guid-s'; master is empty. The gain CU is synthesised at
+      -- targetPlan, not a graph vertex, so it never appears in a class.
       t.deepEq(classKeys(cs), { '', 'guid-s' })
-      t.eq(#cs['guid-s'], 3)
+      t.eq(#cs['guid-s'], 2)
     end,
   },
 }

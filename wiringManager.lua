@@ -665,8 +665,9 @@ end
 -- pinMaps forks by materialisation: fxGuid-keyed entries land in pinMaps,
 -- unmaterialised ones (no fxGuid yet) in pinMapsByOrigin for the applier.
 local function projectEntry(planEntry, compileNodes, scratchGuid)
+  local synth    = planEntry.synthNodes or {}
   local brackets = planEntry.bracketNodes or {}
-  local function resolveNode(id) return compileNodes[id] or brackets[id] end
+  local function resolveNode(id) return compileNodes[id] or synth[id] or brackets[id] end
   local fxOrder, originByCompileId = {}, {}
   for _, id in ipairs(planEntry.fxOrder) do
     local node = resolveNode(id)
@@ -720,11 +721,12 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
   }
 end
 
---contract: derives the wiringSnapshot REAPER should look like, by lowering the user graph and projecting DAG.targetPlan into snapshot shape. fxGuid on each fx entry comes from the user graph (nil for unmaterialised nodes). Pure — no REAPER reads except GetTrackGUID on the scratch track.
+--contract: pure (reads only GetTrackGUID on scratch); derives wiringSnapshot from DAG.targetPlan
+-- see docs/wiringManager.md
 function wm:targetState()
   ensureLoaded()
   local cx = DAG.compile(userGraph)
-  local nodes = cx:graph().nodes
+  local nodes = userGraph.nodes
   local plan = DAG.allocate(cx:targetPlan(), nodes)
   local scratchGuid = scratchTrack and reaper.GetTrackGUID(scratchTrack)
   local out = {}
