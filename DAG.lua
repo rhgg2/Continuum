@@ -1054,10 +1054,10 @@ function M.allocate(plan, nodes)
         local bIn, bOut = 'bIn:' .. fxId, 'bOut:' .. fxId
         bracketNodes = bracketNodes or {}
         bracketNodes[bIn]  = { kind = 'fx', fxIdent = CU_IDENT,
-                               params = { mode = 'busPark',    bus = inputBus },
+                               params = { mode = 'busSwap', bus = inputBus },
                                originNode = fxId, originSide = 'in' }
         bracketNodes[bOut] = { kind = 'fx', fxIdent = CU_IDENT,
-                               params = { mode = 'busRestore', bus = inputBus },
+                               params = { mode = 'busSwap', bus = inputBus },
                                originNode = fxId, originSide = 'out' }
         util.add(splicedFxOrder, bIn)
         util.add(splicedFxOrder, fxId)

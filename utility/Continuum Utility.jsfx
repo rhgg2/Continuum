@@ -1,37 +1,78 @@
 desc:Continuum Utility
 tags: utility continuum
-version: 0.03
+version: 0.04
 author: Continuum
 license: MIT
 about:
   Per-edge utility spliced by the Continuum wiring system. One mechanism
-  doing several jobs — host for wire-level operators and MIDI bus brackets.
-  - Mode 0 (Gain): linear scalar applied to both audio channels.
+  doing several jobs — host for wire-level operators, MIDI bus brackets,
+  and the merge node that collapses audio/MIDI fan-in.
+  - Mode 0 (Gain): linear scalar applied to both audio channels. Legacy
+    single-wire form; subsumed by Merge (nPairs=1) and removed once the
+    compiler stops emitting it.
   - Mode 1 (ChannelRemap): reserved; pass-through in this slice.
-  - Mode 2 (BusPark): symmetric N↔0 MIDI bus swap. Spliced before a
-    non-bus-aware JSFX whose input arrives on bus N — moves bus-N events
-    to bus 0 so REAPER's per-FX bus filter exposes them, while events
-    that were on bus 0 round-trip onto bus N (untouched by the bracketed
-    FX, restored after).
-  - Mode 3 (BusRestore): same swap on the other side of the bracket.
-    Operationally identical to BusPark; names label intent only.
+  - Mode 2 (BusSwap): symmetric N<->0 MIDI bus swap (`bus`=N). Spliced
+    around a non-bus-aware JSFX whose input arrives on bus N — moves bus-N
+    events to bus 0 so REAPER's per-FX bus filter exposes them, while
+    events on bus 0 round-trip onto bus N. The same swap serves both
+    sides of the bracket; one mode, two instances.
+  - Mode 3 (Merge): the merge node. Audio is a per-pair gain bank —
+    `nPairs` input pairs, `out[i] = in[i] * gain{i}`, strictly 1:1 — and
+    summation/routing is left to the consuming FX's pin matrix (pins sum
+    every pair routed to them for free). The exception is a matrix-less
+    audio sink, the master parent send (one contiguous range): set
+    `audioSum` and the CU sums the gained inputs into pair 0 itself, the
+    way MIDI always does. MIDI is an internal N->1 collapse: every event
+    whose bus is set in the 128-bit input mask is rewritten to `outBus`
+    and re-emitted (no matrix exists on the MIDI side). One instance
+    carries both an FX's audio-pin gains and its MIDI-bus merge. Per-input
+    channel-remap folds in with the channelRemap-push slice.
 
 ext_midi_bus = 1;
 
-in_pin:left input
-in_pin:right input
-out_pin:left output
-out_pin:right output
+<?
+  i = 0;
+  loop(64, printf("in_pin:in%d\n",  i); i += 1; );
+  i = 0;
+  loop(64, printf("out_pin:out%d\n", i); i += 1; );
+?>
 
-slider1:mode=0<0,3,1{Gain,ChannelRemap,BusPark,BusRestore}>mode
+slider1:mode=0<0,3,1{Gain,ChannelRemap,BusSwap,Merge}>mode
 slider2:gain=1<0,8,0.001>gain
 slider3:bus=0<0,127,1>bus
+slider4:nPairs=1<1,32,1>nPairs
+<?
+  i = 1;
+  loop(32, printf("slider%d:gain%d=1<0,8,0.001>gain%d\n", i + 4, i, i); i += 1; );
+?>
+slider37:outBus=0<0,127,1>outBus
+slider38:inMask0=0<0,4294967295,1>inMask0
+slider39:inMask1=0<0,4294967295,1>inMask1
+slider40:inMask2=0<0,4294967295,1>inMask2
+slider41:inMask3=0<0,4294967295,1>inMask3
+slider42:audioSum=0<0,1,1>audioSum
+
+@init
+g = 0;        // mem[0..31]  : per-pair gain bank
+maskbuf = 64; // mem[64..67] : 128-bit MIDI input-bus mask, four 32-bit lanes
+
+@slider
+<? i = 0; loop(32, printf("g[%d] = gain%d;\n", i, i + 1); i += 1; ); ?>
+maskbuf[0] = inMask0;
+maskbuf[1] = inMask1;
+maskbuf[2] = inMask2;
+maskbuf[3] = inMask3;
 
 @block
-mode >= 2 ? (
+mode == 3 ? (
   while (midirecv(offset, msg1, msg23)) (
-    midi_bus == bus ? midi_bus = 0 :
-    midi_bus == 0   ? midi_bus = bus;
+    (maskbuf[midi_bus >> 5] & (1 << (midi_bus & 31))) ? midi_bus = outBus;
+    midisend(offset, msg1, msg23);
+  );
+) :
+mode == 2 ? (
+  while (midirecv(offset, msg1, msg23)) (
+    midi_bus == bus ? midi_bus = 0 : midi_bus == 0 ? midi_bus = bus;
     midisend(offset, msg1, msg23);
   );
 );
@@ -40,4 +81,26 @@ mode >= 2 ? (
 mode == 0 ? (
   spl0 *= gain;
   spl1 *= gain;
+) :
+mode == 3 ? (
+  audioSum ? (
+    // matrix-less sink (master parent send): sum gained inputs into pair 0.
+    acc0 = 0; acc1 = 0; pr = 0;
+    loop(nPairs,
+      acc0 += spl(pr * 2)     * g[pr];
+      acc1 += spl(pr * 2 + 1) * g[pr];
+      pr += 1;
+    );
+    pr = 1;
+    loop(nPairs - 1, spl(pr * 2) = 0; spl(pr * 2 + 1) = 0; pr += 1; );
+    spl0 = acc0; spl1 = acc1;
+  ) : (
+    // gain bank: 1:1, the consuming FX's pin matrix does the summing.
+    pr = 0;
+    loop(nPairs,
+      spl(pr * 2)     *= g[pr];
+      spl(pr * 2 + 1) *= g[pr];
+      pr += 1;
+    );
+  );
 );

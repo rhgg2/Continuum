@@ -147,22 +147,28 @@ identically except at the single point REAPER forces apart.
 resource — one pair, one bus — and nothing is copied. Source-out,
 fx-out, and MIDI all behave the same.
 
-**Merge is one node.** Gain, channel-remap, and summation are not three
-mechanisms but one **Continuum Utility merge node** — gain-aware,
-multi-output, bound to a consuming FX's input side:
+**Merge is one node.** Gain, channel-remap, and summation collapse into
+one **Continuum Utility merge node** bound to a consuming FX's input
+side — a single `Merge` mode carrying both the FX's audio-pin gains and
+its MIDI-bus merge:
 
-- its inputs are the union of every producer resource feeding that FX
-  (pairs for audio, buses for MIDI);
-- it has **one output per used input port** — one pair per audio input
-  pin, one bus per MIDI input — each output being that port's gained,
-  summed subset;
-- downstream routing is then pure identity: the pin matrix maps
-  CU-output-pair-k → fx-pin-k; a MIDI consumer reads the one bus.
+- **audio is a per-wire gain bank** wherever a downstream pin matrix
+  exists (every normal FX consumer): its inputs are every producer pair
+  feeding that FX (unity wires included, at gain 1.0); it scales each
+  1:1 — `out[i] = in[i] × gain[i]` — and leaves summation to the
+  consuming FX's pin matrix, which sums every pair routed to a pin for
+  free. The one matrix-less audio sink, the master parent send (a single
+  contiguous range), has no pins to sum, so there the CU sums internally
+  to one pair (`audioSum`), exactly as MIDI does.
+- **MIDI is an internal N→1 collapse.** No consumer-side matrix exists
+  on the MIDI path (REAPER's per-FX filter exposes one bus), so the CU
+  reads its input buses at `@block` and re-emits them on one output bus.
+  Master MIDI fan-in is this same collapse feeding the parent send.
 
-A single gained wire is this node with one input and one output — gain
-node and merge node have fully collapsed. Audio and MIDI merge are the
-**same CU instance** in different modes (`audioMerge` / `midiMerge`),
-so one node can carry both an FX's audio-pin sums and its MIDI-bus sum.
+A single gained wire is this node with `nPairs=1`. One `Merge` mode does
+both audio and MIDI, so one node carries both an FX's audio-pin gains and
+its MIDI-bus merge; it replaces the legacy `gain` mode and the reserved
+`channelRemap`.
 
 **The audio unity fast-path.** A REAPER FX audio input pin sums every
 pair routed to it for free *and selectively* — `P→A`, `P+Q→B` coexist
@@ -170,10 +176,11 @@ because pins pick subsets. So an FX whose input pins are all unity-gain
 (or whose gain folds onto a send's `D_VOL`) needs **no CU**: the pin
 matrix is the summing point. The choice is **binary per consuming FX** —
 all-unity ⇒ matrix-fed (free, selective); any non-unity gain ⇒ one
-merge CU owning *every* used input port of that FX (unity ports pass
-through at gain 1.0). A pin is fed by the matrix or by the CU, never
-both — selectivity stays simple, at the cost of one CU per gained-input
-FX rather than one per distinct subset (the right pre-beta trade).
+merge CU carrying *every* feeder wire of that FX as a 1:1 gain (unity
+wires at 1.0). The pins still sum, but every feeder now arrives through
+the CU, so no pin mixes a raw producer pair with a gained one —
+selectivity stays simple, at the cost of one CU per gained-input FX
+rather than one per distinct subset (the right pre-beta trade).
 
 **No consumer-side matrix ⇒ always a CU.** MIDI (REAPER's per-FX filter
 exposes one input bus) and the master parent send (one contiguous
@@ -835,10 +842,21 @@ plan when its turn comes.
   read the allocator surface they reshape. Steps, each finishing its
   own concern:
 
-  - **CU modes.** `audioMerge` (sum N gained input pairs → one output
-    pair per used port) and `midiMerge` (N gained buses → one output
-    bus) in `utility/Continuum Utility.jsfx`; one instance serves
-    both. Golden in/out tests per mode, incl. multi-output.
+  - **CU modes (3c.4.1). Landed.** One `Merge` mode in
+    `utility/Continuum Utility.jsfx`: audio is a per-wire gain bank
+    (`nPairs` pairs, `out[i]=in[i]×gain{i}`, 1:1; the FX pin matrix does
+    the summing), MIDI is an N→1 bus collapse (128-bit input mask, four
+    32-bit lanes, → `outBus`). BusPark/BusRestore collapsed to one
+    `BusSwap`; modes are now `0=Gain 1=ChannelRemap 2=BusSwap 3=Merge`
+    (Gain/ChannelRemap retire with `DAG.lower` in 3c.4.2). The 32-pair
+    cap is the JSFX 64-channel ceiling; gained fan-in past it (e.g. a
+    large submix) is an allocate-time call in 3c.4.3/.4 — design-time
+    error or a CU cascade; unity-gain fan-in of any size stays free
+    (pins sum). `config:` dynamic pins are unusable — no
+    `TrackFX_SetNamedConfigParm` write key, chunk-only and loses state.
+    No EEL harness in-repo, so the JSFX is verified at the DAG/wm layer
+    in later steps and needs one in-REAPER compile check (the header
+    preprocessor generates the 64 pins + 32 gain sliders).
   - **Kill `DAG.lower`.** Delete the lower phase and the `lowerGraph`
     / `conn` shapes. Point the compile ctx (`inbound`, `srcSet`,
     `classes`, `quotient`, `absorption`) and the targetPlan

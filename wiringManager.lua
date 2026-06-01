@@ -518,8 +518,8 @@ local function ownedChain(track, ownedGuids)
         local idx     = cuParamIdx(track, fxIdx)
         local modeInt = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.mode) + 0.5)
         local modeStr = ({ [0] = 'gain', [1] = 'channelRemap',
-                           [2] = 'busPark', [3] = 'busRestore' })[modeInt] or 'gain'
-        if modeStr == 'busPark' or modeStr == 'busRestore' then
+                           [2] = 'busSwap', [3] = 'merge' })[modeInt] or 'gain'
+        if modeStr == 'busSwap' then
           entry.params = { mode = modeStr,
                            bus  = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.bus) + 0.5) }
         else
@@ -897,7 +897,7 @@ end
 -- contract that maps a mode-string in `params` to the slider's float value.
 -- Lives here (not in DAG) because lowering is pure and shouldn't know about
 -- the JSFX's numeric encoding.
-local CU_MODE_TO_FLOAT = { gain = 0, channelRemap = 1, busPark = 2, busRestore = 3 }
+local CU_MODE_TO_FLOAT = { gain = 0, channelRemap = 1, busSwap = 2, merge = 3 }
 
 local function paramValueAsFloat(name, value)
   if name == 'mode' and type(value) == 'string' then

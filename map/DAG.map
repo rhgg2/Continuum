@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1112  sha=18a3682  mode=namespace
+@module DAG  src=DAG.lua  loc=1112  sha=7938d06  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate / M.ancestors / M.lower are pure user-graph predicates; every compile-side derivation lives on the ctx returned by M.compile(userGraph), which caches the lowered graph and its derivations lazily

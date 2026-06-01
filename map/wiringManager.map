@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1510  sha=7938d06  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1510  sha=a9f86d7  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -42,7 +42,7 @@
   @state fxRoutingAlpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123...  @ 302
   @state fxRoutingDec = {}  @ 303
   @state cuParamIdxCache = nil  @ 360
-  @state CU_MODE_TO_FLOAT = { gain = 0, channelRemap = 1, busPark = 2, busRestore = 3 }  @ 900
+  @state CU_MODE_TO_FLOAT = { gain = 0, channelRemap = 1, busSwap = 2, merge = 3 }  @ 900
 
 # Private functions
   -- Helpers

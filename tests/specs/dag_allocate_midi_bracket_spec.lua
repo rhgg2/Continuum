@@ -37,7 +37,7 @@ end
 
 return {
   {
-    name = 'midi bracket: terminal consumer on bus N≠0 gets busPark/busRestore CU bridges',
+    name = 'midi bracket: terminal consumer on bus N≠0 gets busSwap CU bridges',
     run = function()
       local plan, nodes = twoSendersOneHost()
       local out = DAG.allocate(plan, nodes)
@@ -46,11 +46,11 @@ return {
       local brackets = out['guid-c'].bracketNodes
       t.truthy(brackets, 'bracketNodes table emitted')
       t.eq(brackets['bIn:fxC2'].fxIdent,       CU_IDENT)
-      t.eq(brackets['bIn:fxC2'].params.mode,   'busPark')
+      t.eq(brackets['bIn:fxC2'].params.mode,   'busSwap')
       t.eq(brackets['bIn:fxC2'].params.bus,    1)
       t.eq(brackets['bIn:fxC2'].originNode,    'fxC2')
       t.eq(brackets['bIn:fxC2'].originSide,    'in')
-      t.eq(brackets['bOut:fxC2'].params.mode,  'busRestore')
+      t.eq(brackets['bOut:fxC2'].params.mode,  'busSwap')
       t.eq(brackets['bOut:fxC2'].params.bus,   1)
       t.eq(brackets['bOut:fxC2'].originSide,   'out')
     end,

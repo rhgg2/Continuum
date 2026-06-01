@@ -65,7 +65,7 @@ end
 
 return {
   {
-    name = 'bracket apply: BusPark + consumer + BusRestore land on the newTrack',
+    name = 'bracket apply: BusSwap + consumer + BusSwap land on the newTrack',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -80,20 +80,20 @@ return {
       apply(wm)
       local track = findNewTrack(h)
       t.truthy(track, 'newTrack created for fxC class')
-      t.eq(h.reaper.TrackFX_GetCount(track), 3, 'BusPark + fxC + BusRestore')
+      t.eq(h.reaper.TrackFX_GetCount(track), 3, 'BusSwap + fxC + BusSwap')
       local in0, gIn   = fxAt(h, track, 0)
       local mid, gMid  = fxAt(h, track, 1)
       local out, gOut  = fxAt(h, track, 2)
-      t.eq(in0, 'JS:Continuum Utility', 'slot 0 = BusPark CU')
+      t.eq(in0, 'JS:Continuum Utility', 'slot 0 = BusSwap CU (in)')
       t.eq(mid, 'JS:c',                  'slot 1 = consumer fx')
-      t.eq(out, 'JS:Continuum Utility', 'slot 2 = BusRestore CU')
-      -- params pushed: mode=2 / mode=3 and bus=1 on the brackets.
+      t.eq(out, 'JS:Continuum Utility', 'slot 2 = BusSwap CU (out)')
+      -- params pushed: mode=2 (busSwap) and bus=1 on both brackets.
       local inSets  = paramSetsOn(h, track, 0)
       local outSets = paramSetsOn(h, track, 2)
-      t.eq(inSets[0],  2, 'BusPark mode')
-      t.eq(inSets[2],  1, 'BusPark bus = 1 (sB receiver claim)')
-      t.eq(outSets[0], 3, 'BusRestore mode')
-      t.eq(outSets[2], 1, 'BusRestore bus = 1')
+      t.eq(inSets[0],  2, 'in bracket: busSwap mode')
+      t.eq(inSets[2],  1, 'in bracket: bus = 1 (sB receiver claim)')
+      t.eq(outSets[0], 2, 'out bracket: busSwap mode')
+      t.eq(outSets[2], 1, 'out bracket: bus = 1')
       local node = wm:graph().nodes.fxC
       t.eq(node.midiInBracketGuid,  gIn,  'bracketIn guid stamped onto consumer')
       t.eq(node.midiOutBracketGuid, gOut, 'bracketOut guid stamped onto consumer')
