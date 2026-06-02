@@ -5,27 +5,16 @@ of FX compiles to a REAPER track topology + send graph. The wiring
 page is the third rung after tracker and sampler — the layer where
 the user composes audio and MIDI processing graphs across a project.
 
-## Two graphs
+## One graph
 
-The model carries two graph shapes that share most of their structure
-but operate at different levels of granularity.
-
-The **user graph** is what the user draws and edits. Its edges are
-**wires**:
+The model carries a single graph: the **user graph**, what the user
+draws and edits. Its edges are **wires**:
 
 - an **audio wire** is uniformly stereo: always present, always full.
 - a **MIDI wire** is 16 channels of data.
 
-Wires carry user-level metadata — gain on audio, channel-remap on
-MIDI, "mark as primary" — and they're the unit on which routing
-gestures land in the UI.
-
-The **compile graph** is the lowered form that drives the REAPER
-projection. Its edges are **connections** — port-to-port for audio,
-node-to-node for MIDI. The lowering inserts a Continuum Utility
-node for every wire-level op (gain becomes a gain node;
-channel-remap becomes a remap node) but otherwise preserves the
-shape of the user graph: each wire is one connection.
+Wires carry user-level metadata — gain on audio, "mark as primary" —
+and they're the unit on which routing gestures land in the UI.
 
 REAPER tracks are uniformly stereo, so the model carries integer
 stereo-port counts on `audio.ins / outs` rather than channel names.
@@ -33,11 +22,13 @@ The pre-beta "channels vs ports" distinction — mono adapters,
 trailing-odd channels, per-channel splits — dissolved once that
 assumption landed; the model is simpler for it.
 
-The partition invariant below operates on the compile graph. srcSet
-and class equivalence are stable under lowering — every Continuum
-Utility insertion is single-input single-output, so parent srcSets
-flow through unchanged — and capacity counts intra-class wires
-directly (64 stereo audio / 128 MIDI), checked after lowering.
+The partition invariant below runs directly on the user graph. The
+only nodes the compiler synthesises are CUs — the **merge** node and
+the non-bus-aware **bracket** — minted at the targetPlan/allocate
+boundary and hosted within a consumer's equivalence class, so they
+never perturb the partition; srcSet and class equivalence are computed
+on the graph the user drew. Capacity counts intra-class wires directly
+(64 stereo audio / 128 MIDI).
 
 ## Sources, sinks, master
 
@@ -49,49 +40,43 @@ the REAPER master exposes more hardware-output pairs). The master
 has no audio outs and no MIDI; it is the terminal node for any
 audio chain the user wants audible. FX with no outgoing audio wire are simply not routed to
 speakers — explicit beats implicit. Nodes between sources and master
-are FX instances. Built-in patches (mid-side, bandsplit,
-pre/post-emphasis, wire-level gain) are implemented by a single
-dedicated JSFX, the **Continuum Utility**.
+are FX instances. The compiler also synthesises a dedicated JSFX, the
+**Continuum Utility**, for merge and bus-routing (see "Merge and
+split").
 
-The wiring page is design-time only. At compile time the compile
-graph projects onto REAPER tracks, REAPER sends, per-track FX chains,
+The wiring page is design-time only. At compile time the user graph
+projects onto REAPER tracks, REAPER sends, per-track FX chains,
 and per-FX I/O routing. The master's equivalence class does *not*
 spawn a new track — it IS the REAPER master. The compile rule is
 the partition invariant below.
 
 ## The source-set partition
 
-For every compile-graph node N, define `srcSet(N)` = the set of
+For every node N, define `srcSet(N)` = the set of
 source tracks reachable as ancestors of N (transitive closure over
 input edges). Two nodes share an equivalence class iff their
 source-sets are equal. Each class compiles to **one REAPER track**:
 
-- intra-class connections become **internal port routing** on the
+- intra-class wires become **internal port routing** on the
   track (REAPER tracks carry up to 64 stereo audio ports and 128
   MIDI ports, accessed via per-FX I/O routing).
 - intra-class topo order becomes the **per-track FX chain order**.
-- inter-class connections — connections where `srcSet` changes —
-  become **sends to a new track**, and *only* those connections do.
+- inter-class wires — wires where `srcSet` changes —
+  become **sends to a new track**, and *only* those wires do.
 
-The partition falls out of the graph; it isn't declared. Two
-consequences worth naming:
-
-- **It's the minimum REAPER track count** given the topology.
-  Anything fewer would have to merge distinct source-sets onto one
-  track, and REAPER's per-track signal summing makes that
-  unrepresentable.
-- **The 64/128 budgets are within-class capacity.** A pathological
-  class with >64 distinct intra-class audio wires has to be split
-  manually — exposed as a design-time error on the wiring page
-  after lowering, not silently routed.
+The partition falls out of the graph; it isn't declared. One
+consequence worth naming: **it's the minimum REAPER track count**
+given the topology. Anything fewer would have to merge distinct
+source-sets onto one track, and REAPER's per-track signal summing
+makes that unrepresentable.
 
 ## Primary-input optimisation
 
 The partition gives the floor on track count. One optimisation lifts
 it slightly: a class C₂ with srcSet A can **absorb** into a class
 C₁ with srcSet A' (A' ⊊ A) by hosting on C₁'s REAPER track rather
-than spawning a new one. Connections from C₁ into C₂ become
-intra-track continuation; connections from other parent classes feed
+than spawning a new one. Wires from C₁ into C₂ become
+intra-track continuation; wires from other parent classes feed
 in as sends.
 
 The default: auto-absorb iff C₂ has exactly one audio-parent class
@@ -110,18 +95,15 @@ slot 5 of A.
 
 ## Wire-level operators
 
-Wire-level operators live on the wire in the user graph and lower
-into Continuum Utility nodes in the compile graph:
+One operator lives on the wire in the user graph:
 
 - **gain** (audio wires)
-- **channel-remap** (MIDI wires, e.g. `{1→3, 5→9, …}`)
 
-The compile-graph node is the same Continuum Utility JSFX in
-different modes. One mechanism doing two jobs: built-in patches
-(below) and wire-level operators share a host.
-
-These are the unit that makes routing decisions surface as UI
-gestures on a wire rather than as new nodes in the user graph.
+Gain is realised at the targetPlan/allocate boundary — folded onto a
+native send's volume where one can host it, otherwise carried into the
+consuming FX's merge CU (see "Merge and split"). It is the unit that
+makes a routing decision surface as a UI gesture on a wire rather than
+as a new node in the user graph.
 
 **Gain folds to native volume when a send can host it.** A gain on a
 wire that compiles to a REAPER send (track→track) or the parent/master
@@ -130,8 +112,8 @@ send needs no Continuum Utility — the send's own `D_VOL` carries it
 send is the *sole* audio contributor (one `D_VOL` can't encode two
 wires' gains) and only for a gain sitting on the boundary wire itself
 (you can't move a gain across an intervening FX without changing the
-sound). Intra-class gain, several wires collapsing onto one send, and
-channel-remap all stay Continuum Utility nodes. Wiring sends are
+sound). Intra-class gain and several wires collapsing onto one send
+stay Continuum Utility merge nodes. Wiring sends are
 post-FX (pre-fader, `I_SENDMODE=3`) so the from-track fader is free to
 be the parent-send gain without also scaling the track→track sends.
 
@@ -140,14 +122,14 @@ be the parent-send gain without also scaling the track→track sends.
 A wire carries one signal occupying one resource: a stereo channel
 pair (audio) or a MIDI bus (midi). Merge — several producers into one
 input — and split — one producer to several consumers — are where
-wires share an endpoint. The compile graph treats audio and MIDI
+wires share an endpoint. The model treats audio and MIDI
 identically except at the single point REAPER forces apart.
 
 **Split is free and uniform.** Every consumer reads the producer's one
 resource — one pair, one bus — and nothing is copied. Source-out,
 fx-out, and MIDI all behave the same.
 
-**Merge is one node.** Gain, channel-remap, and summation collapse into
+**Merge is one node.** Gain and summation collapse into
 one **Continuum Utility merge node** bound to a consuming FX's input
 side — a single `Merge` mode carrying both the FX's audio-pin gains and
 its MIDI-bus merge:
@@ -167,8 +149,7 @@ its MIDI-bus merge:
 
 A single gained wire is this node with `nPairs=1`. One `Merge` mode does
 both audio and MIDI, so one node carries both an FX's audio-pin gains and
-its MIDI-bus merge; it replaces the legacy `gain` mode and the reserved
-`channelRemap`.
+its MIDI-bus merge.
 
 **The audio unity fast-path.** A REAPER FX audio input pin sums every
 pair routed to it for free *and selectively* — `P→A`, `P+Q→B` coexist
@@ -198,17 +179,15 @@ has exactly one input stream.** Bus allocation, the non-bus-aware
 bracket pass, and the differ never meet a multi-input MIDI node.
 
 **There is no lowered graph.** The merge node is the only node the
-compile graph has that the user graph lacks, and it is synthesised at
-the targetPlan/allocate boundary — where the partition reveals whether
-a gain folds to a send, rides the matrix, or needs a CU — exactly as
-the non-bus-aware brackets already are (host-local `fxOrder` entries).
-Wire-level ops are no longer spliced into nodes ahead of time; they
-ride the connection as metadata (`gain`, `channelMap`) and the merge
-node realises them. A CU bridge was always connectivity-inert
-(one-in/one-out, inheriting its parent's class), so with splicing gone
-the equivalence-class calculus (`srcSet`, `classes`, `quotient`,
-`absorption`) runs directly on the user graph. `DAG.lower` is deleted
-and the "two graph shapes" invariant collapses to one.
+compiler synthesises that the user graph lacks, minted at the
+targetPlan/allocate boundary — where the partition reveals whether a
+gain folds to a send, rides the matrix, or needs a CU — exactly as the
+non-bus-aware brackets are (host-local `fxOrder` entries). Wire-level
+ops are not spliced into nodes ahead of time; gain rides the wire as
+metadata and the merge node realises it. A merge CU is connectivity-
+inert (hosted on a consumer, inheriting its class), so the equivalence-
+class calculus (`srcSet`, `classes`, `quotient`, `absorption`) runs
+directly on the user graph.
 
 **Master is this rule, not a special case.** ≥2 wires from one class to
 the master converge through that class's `audioSum` CU-merge, whose
@@ -232,51 +211,12 @@ lands on a node is exactly what the later **manual split-at-a-node
 gesture** writes, so the two share one mechanism and the hosting pass
 never special-cases the master.
 
-`master.audio.ins > 1` stays deferred — the contiguous-range parent send
-makes multi-pair representable only with silent padding channels, and the
-cleaner alternatives (per-pair bus tracks) want their own pass; a class
-addressing more than one master pair is the one master case that still
-surfaces as a design-time error.
-
 **Semantic collision stays the user's call.** A CU-merge interleaves
 streams but does not separate events that share a MIDI channel: if
 producer A puts the kick on ch 1 and B the snare on ch 1, the merged
-result is still wrong. The model offers no automatic detection —
-**channel-remap on a wire** is the first-class resolution (remap B to
-free channels and the collision dissolves). An opt-in diagnostic that
-scans owned source tracks for actual channel usage lands later
-(Stage 3.5).
-
-## FX containers
-
-REAPER's native FX containers are a UI/CPU-affinity affordance, not
-a semantic input to the partition. They compile downstream of the
-DAG-to-tracks projection, never upstream. Deferred until a concrete
-need (CPU bucketing, per-container freeze) earns the bridge.
-
-## Patches
-
-Deferred. When added, a **patch** is a named, reusable sub-DAG of
-FX instances; at wiring time it flattens into the user graph, so
-the partition operates uniformly on flat FX instances rather than
-descending into a hierarchy. Patches don't carry their own
-source-set scope. The same model applies to user-composed chains.
-
-Built-in patches with specific UI affordances — mid-side, bandsplit,
-pre/post-emphasis, level adjustments on wires — are a separate
-construct: not user-composed sub-DAGs but single FX instances of
-Continuum Utility parameterised by mode. The shared host means
-built-in patches and wire-level operators run on the same JSFX,
-one mechanism doing two jobs.
-
-## Open questions
-
-- **MIDI PDC alignment at a merge.** A CU-merge reading sends whose
-  upstream chains differ in latency may see MIDI skewed against audio,
-  since REAPER doesn't delay-compensate MIDI by default. `pdc_midi=1`
-  on the merge CU is the likely fix; verify with a skeleton if skew
-  shows up in practice. (Not gmem-specific — the gmem machinery this
-  question used to hang on is gone.)
+result is still wrong. The model offers no automatic detection and no
+automatic fix — keeping producers on distinct MIDI channels is the
+user's responsibility.
 
 ## Implementation plan
 
@@ -286,10 +226,10 @@ These four shape every stage and don't recur as questions inside
 them.
 
 - **Authority direction: reconcile.** The user graph is the source
-  of truth for the topology *we own*. Compile lowers it, diffs the
-  result against the current REAPER project snapshot, and applies
-  the minimal operation list. Tracks/FX without our ownership mark
-  are untouched.
+  of truth for the topology *we own*. Compile derives the REAPER
+  topology, diffs it against the current REAPER project snapshot, and
+  applies the minimal operation list. Tracks/FX without our ownership
+  mark are untouched.
 - **Compile trigger: live on every change.** Each user gesture
   recompiles and applies. The differ has to be good — minimal
   operation lists, no churn on no-op edits. Every apply is wrapped in
@@ -297,8 +237,7 @@ them.
   reverses the gesture, with the gesture name as the undo label.
 - **Ownership marker: per-track only.** Compiled tracks carry a
   `P_EXT` key identifying their equivalence class; FX inside an
-  owned track are entirely managed by the wiring page. Per-FX
-  ownership is deferred — it's a Stage 6+ refinement if pain emerges.
+  owned track are entirely managed by the wiring page.
 - **Foreign track adoption: opt-in.** The wiring page starts empty
   on an existing project. The user explicitly imports tracks; the
   importer reads existing FX chains, sends, receives, and channel
@@ -310,12 +249,12 @@ them.
 
 ### Module layout
 
-- **`DAG.lua`** — pure structural calculus. No REAPER, no cm, no
-  ImGui. Both graph shapes (user + compile), the `lower` function
-  that produces one from the other, validation (cycles, port-shape
-  consistency), `srcSet`, equivalence-class partition, absorption
-  rule, capacity-overflow checks on the compile graph. Trivially
-  unit-testable.
+- **`DAG.lua`** — pure structural calculus on the user graph. No
+  REAPER, no cm, no ImGui. Validation (cycles, port-shape
+  consistency), `srcSet`, equivalence-class partition, absorption,
+  class-split / master-minimization, capacity-overflow checks, and
+  the targetPlan + allocate passes that synthesise merge and bracket
+  CUs and assign channels. Trivially unit-testable.
 - **`wiringManager.lua`** — persistence (cm project tier), the
   importer (REAPER state → user-graph fragment), the differ (compile
   graph + REAPER snapshot → operation list), and the applier (the
@@ -331,9 +270,9 @@ them.
 
 ### Persistence
 
-Only the user graph persists. The compile graph is derived on every
-mutation; the differ in Stage 2+ decides whether to cache it
-frame-to-frame or re-lower per gesture.
+Only the user graph persists. The target topology is derived on every
+mutation; the differ decides whether to cache it frame-to-frame or
+re-derive per gesture.
 
 Single project-tier cm key, `wiringGraph`, holding the serialised
 user graph. Default `{}`. Owned-track marker: track-level cm key,
@@ -348,17 +287,17 @@ the user graph) emit matching shapes so `wm:diff` compares
 element-wise.
 
 - `fxOrder` entries carrying `params` are wm-owned CU bridges —
-  synthesised `kind='fx'` nodes from `DAG.lower` (gain / channelRemap)
-  or from the bracket post-pass (busPark / busRestore). Snapshot
-  mirrors the live params back from the slider so `fxOrderEq` is
-  honest; without it every reconcile would spuriously emit
-  `setFXChain`.
+  synthesised `kind='fx'` nodes from the targetPlan merge pass or the
+  bracket post-pass (`busRoute`). Snapshot mirrors the live params
+  back from the slider so `fxOrderEq` is honest; without it every
+  reconcile would spuriously emit `setFXChain`.
 - `origin` is stamped on every target-side fxOrder entry by
   `projectEntry` so the applier knows where to write minted guids
-  back: `'node'` → `node.fxGuid`, `'edge'` →
-  `edge.opFxGuid`, `'bracketIn'`/`'bracketOut'` →
-  `node.midiInBracketGuid`/`midiOutBracketGuid`. Snap entries do not
-  carry `origin` and `fxOrderEq` ignores it.
+  back: `{ kind='node' }` → `node.fxGuid`; `{ kind='bracketIn' |
+  'bracketOut' }` → the consumer's `midiInBracketGuid` /
+  `midiOutBracketGuid`; `{ kind='merge', consumer, host }` →
+  `consumer.mergeGuids[host]`. Snap entries do not carry `origin` and
+  `fxOrderEq` ignores it.
 - `midiOut` and `midiBus = { inBus, outBus }` are set on both sides
   only for non-JS `kind='node'` entries — target derives `midiOut`
   from the user graph (`nodeHasMidiOut`) and `midiBus` from the
@@ -377,24 +316,21 @@ element-wise.
 
 ### Stage 0 — Continuum Utility JSFX
 
-One file: `wiring/Continuum Utility.jsfx`, mirroring the sampler
-subdir convention. Single `mode` parameter dispatching to per-mode
-`@sample`/`@block` paths. Stage-1 modes only:
+One file: `utility/Continuum Utility.jsfx`. Single `mode` parameter
+dispatching to per-mode `@sample`/`@block` paths. The compiler-
+synthesised modes are `BusRoute` (bracket bus-routing) and `Merge`
+(per-wire audio gain bank + N→1 MIDI bus collapse); see "Merge and
+split".
 
-- **`gain`** — stereo audio scalar.
-- **`channel-remap`** — MIDI 16→16 LUT applied at `@block`.
-
-Tests: golden buffer in/out per mode via the existing pure-Lua
-harness with a stubbed JSFX surface where needed; or, where the
-behaviour is trivial enough, direct unit verification of the LUT
-transform in isolation. Mid-side / bandsplit / emphasis modes land
-in Stage 6.
+No EEL harness lives in-repo, so the JSFX is verified at the DAG/wm
+layer; each header change needs one in-REAPER compile check (the
+preprocessor generates the pins and gain sliders).
 
 ### Stage 1 — Data model + render-only page
 
 End-to-end testable without touching REAPER topology. The page
 draws, edits the user graph, persists it, and reports capacity errors
-visually (capacity is read from the lowered compile graph). No
+visually (capacity is read from the partition over the user graph). No
 applier yet.
 
 **User-graph schema** (the serialised shape):
@@ -431,7 +367,6 @@ applier yet.
       to   = nodeId, toPort   = nil | portIdx,
       ops  = {                       -- wire-level operators
         gain        = number?,       -- audio wires only
-        channelMap  = { [1..16] = 1..16 }?,  -- MIDI wires only
       },
       primary = true | nil,          -- "mark as primary" override
     },
@@ -450,22 +385,17 @@ saw.
 - `DAG.validate(user) -> nil | err` — cycle rejection, port-shape
   consistency (every edge endpoint refers to a port the node
   actually exposes).
-- `DAG.lower(user) -> compile` — materialises a Continuum Utility
-  node for each wire-level op; each wire becomes one port-to-port
-  (audio) or node-to-node (MIDI) connection. Single-input /
-  single-output for every inserted node so the srcSet calculus is
-  stable under lowering.
-- `DAG.srcSet(compile, nodeId) -> set<trackGuid>` (memoised per
-  compile-graph instance).
-- `DAG.classes(compile) -> { [classKey] = { nodeId, ... } }` where
+- `DAG.srcSet(user, nodeId) -> set<trackGuid>` (memoised per
+  compile context).
+- `DAG.classes(user) -> { [classKey] = { nodeId, ... } }` where
   `classKey = canonical(sortedSrcGuids)`.
-- `DAG.quotientGraph(compile, classes) -> { [classKey] = { parents,
+- `DAG.quotientGraph(user, classes) -> { [classKey] = { parents,
   children } }`.
 - `DAG.absorption(quotient) -> { [classKey] = hostClassKey? }`
   applying the auto rule plus any `primary` overrides.
-- `DAG.capacityErrors(compile, classes) -> [ { classKey, kind,
-  count } ]` for >64 intra-class stereo audio connections or >128
-  intra-class MIDI connections.
+- `DAG.capacityErrors(user, classes) -> [ { classKey, kind,
+  count } ]` for >64 intra-class stereo audio wires or >128
+  intra-class MIDI wires.
 
 **`wiringManager` API (Stage 1 surface):**
 
@@ -476,7 +406,7 @@ saw.
 - `wm:mutate(fn)` — call `fn(graph)`, run `DAG.validate`, persist if
   it passes, fire `wiringChanged` hook. All edits go through here so
   the live recompile (Stage 2+) can subscribe to one signal.
-- `wm:compile()` — derived compile graph from the current user
+- `wm:compile()` — derived target plan from the current user
   graph; pure, no caching at Stage 1.
 - `wm:errors()` — capacity-overflow report; runs `compile` →
   `capacityErrors` end-to-end. View calls per frame; cheap enough at
@@ -508,8 +438,7 @@ saw.
 - **Right-click** the arrow midpoint opens a per-wire menu — an
   ImGui popup centred on the cursor, populated with chrome
   checkboxes and dismissed by clicking outside. Stage 1 surface:
-  **Primary** (the absorption override above). Channel-remap will
-  join the same menu later.
+  **Primary** (the absorption override above).
 - Error overlay renders capacity overflows inline on the
   offending nodes.
 
@@ -588,408 +517,85 @@ suppress the hover affordance entirely.
 **Specs (`tests/specs/wiring_*`):**
 
 - `dag_validate_spec.lua` — cycle rejection, port-shape rejection.
-- `dag_lower_spec.lua` — wire-level op materialisation; one
-  port-to-port conn per wire.
-- `dag_srcset_spec.lua` — adversarial compile graphs (diamonds,
+- `dag_srcset_spec.lua` — adversarial graphs (diamonds,
   fan-in / fan-out).
 - `dag_classes_spec.lua` — equivalence partition correctness.
 - `dag_absorption_spec.lua` — auto-rule plus override interactions.
-- `dag_capacity_spec.lua` — intra-class wire-count overflow on the
-  compile graph.
+- `dag_capacity_spec.lua` — intra-class wire-count overflow over the
+  user graph.
 - `wm_persistence_spec.lua` — round-trip via fake cm.
 
 ### Later stages
 
-The remaining stages are framed here; each gets its own detailed
-plan when its turn comes.
+Stages 2 through 3c have landed; the model sections above describe the
+resulting design. Each entry below states a stage's contribution and the
+implementation surface it left behind. The remaining stages (3c.5, 3.5,
+6) are framed for when their turn comes.
 
-- **Stage 2 — Compile to REAPER (no merge nodes, no absorption).** The
-  differ in `wiringManager` produces an operation list
-  (createTrack / deleteTrack / setSend / setFXChain /
-  setFXIORouting / setExtState); the applier executes it inside
-  one `Undo_BeginBlock`. Intra-class connections → per-FX I/O
-  routing. Inter-class connections → sends with channel mapping.
-  Wire-level ops are already lowered to Continuum Utility nodes by
-  Stage 1's `DAG.lower`, so the differ treats them as ordinary FX
-  instances. Spec emphasis: "tiny user edit → tiny diff" — the
-  live-recompile premise depends on the differ being surgical, not
-  on worked-example coverage of full topologies.
+- **Stage 2 — Compile to REAPER.** `DAG.targetPlan` partitions the user
+  graph into hosts (`sourceTrack` / `newTrack` / `master` / `scratch`,
+  inert `srcSet={}` FX parking on `'__scratch__'`) and emits a per-class
+  entry carrying `fxOrder`, `mainSend`, and `sends`. `wm:snapshot` reads
+  REAPER's current state for owned tracks + FX; `wm:targetState` projects
+  the plan into the same shape; `wm:diff(target, snap)` is a pure
+  `WiringOp[]` producer; `wm:applyOps(ops, label)` executes inside one
+  `Undo_BeginBlock`, minting FX via `TrackFX_AddByName` and stamping
+  minted guids back into the user graph. `wm:enableLive` wires
+  `wiringChanged → targetState → snapshot → diff → applyOps`; `wm:load`
+  reconciles the same way. The differ is surgical — a tiny user edit
+  yields a tiny diff.
+- **Stage 3a — Primary-input optimisation (absorption).**
+  `ctx:resolveHost(cls)` turns the absorption decision into targetPlan
+  output: a newTrack class with a sole (or primary-elected) audio-parent
+  class folds onto that parent's host. Source- and master-hosted classes
+  are exempt (their hosts are physical destinations). `targetPlan`,
+  `gainSinks`, and `capacityErrors` key on the resolved host. The wire-
+  menu "mark as primary" override shipped in Stage 1. MIDI-to-master
+  folds into `mainSend` (REAPER's parent send carries both audio and
+  MIDI).
+- **Stage 3c — Channel allocation.** Each track has 64 stereo audio
+  pairs and 128 MIDI buses; every wire crossing or terminating inside a
+  track's channel space needs a pair (or bus) assignment. `DAG.allocate`
+  walks each host's `fxOrder` topologically and assigns channels to
+  intra-class connections, incoming and outgoing sends, the parent send
+  (`C_MAINSEND_OFFS`), and the merge/bracket CUs — deterministically, so
+  the same graph yields the same assignment. It annotates each host with
+  per-FX pin maps and the required `I_NCHAN`. A class has no "backbone":
+  intra-class wires and inter-class sends consume pairs uniformly.
 
-  *Stage 2 — what's landed and what's left:*
-  - **Landed (read path):** `DAG.targetPlan` partitions the compile
-    graph into hosts (`sourceTrack` / `newTrack` / `master` /
-    `scratch`) and emits a per-class entry carrying `fxOrder`,
-    `mainSend`, collapsed `sends`. Inert (`srcSet={}`) FX park on
-    the scratch track under the sentinel hostKey `'__scratch__'`.
-    `wm:snapshot` reads REAPER's current state for wm-owned tracks
-    + FX (gated by `node.fxGuid` ∈ user graph); `wm:targetState`
-    projects `DAG.targetPlan` into the same shape;
-    `wm:diff(target, snap)` is a pure WiringOp[] producer. Bridge
-    identity is `fxGuid`, stamped on both user-graph fx nodes
-    (`node.fxGuid`) and on edges that carry ops
-    (`edge._opFxGuid` → propagated by `DAG.lower` onto the
-    synthesised CU bridge's `fxGuid`). CU bridges are ordinary
-    `kind='fx'` compile nodes (`fxIdent='JS:Continuum Utility'`)
-    carrying a `params={ mode='gain'|'channelRemap', ... }`
-    payload — they flow through snapshot/target/diff uniformly
-    with user-graph fx nodes (`kind='cu'` is gone; that's what
-    lowering buys us). `params` drift triggers `setFXChain` via
-    deep-equal in `fxOrderEq`; snapshot never reads params back
-    from REAPER, so a target entry with `params` always drives
-    reconcile until the applier makes the push idempotent.
-  - **Landed (apply path):** `wm:applyOps(ops, label)` walks ops
-    inside one `Undo_BeginBlock`; mints fx via `TrackFX_AddByName`
-    and `wm:mutate`s minted guids back into the user graph
-    (`node.fxGuid` for user-graph fx, `edge._opFxGuid` for CU
-    bridges). `wm:enableLive` subscribes `wiringChanged` →
-    `targetState` → `snapshot` → `diff` → `applyOps`; same path
-    reconciles on `wm:load`.
-  - **Left:** sub-channel routing (deferred to Stage 3). Current
-    sends are stereo defaults (`I_SRCCHAN=0`, `I_DSTCHAN=0`).
-    Channel allocation across the 64-audio / 128-MIDI per-track
-    budget is the register-allocation problem we punted to Stage 3.
-- **Stage 3a — Primary-input optimisation (absorption). Landed.**
-  `ctx:resolveHost(cls)` turns the absorption decision computed in
-  Stage 1 into actual targetPlan output: a newTrack class with a
-  sole (or primary-elected) audio-parent class folds onto that
-  parent's host. Source- and master-hosted classes are exempt
-  (their hosts are physical destinations). `targetPlan`, `gainSinks`,
-  and `capacityErrors` all key on the resolved host; the differ and
-  applier picked it up unchanged. Wire-menu "mark as primary"
-  override already shipped in Stage 1. Midi-to-master folded into
-  `mainSend` (REAPER's parent send carries both audio and MIDI), a
-  pre-existing gap exposed by the absorption tests.
+  - **Audio.** `wm:targetState` chains `DAG.allocate(ctx:targetPlan())`;
+    snapshot reads `I_SRCCHAN`/`I_DSTCHAN`; the applier writes them plus
+    `I_NCHAN` and per-FX pin maps (`TrackFX_SetPinMappings`). Sends are
+    keyed on the 4-tuple `(to, type, srcChan, dstChan)`, one per wire,
+    and are post-FX pre-fader (`I_SENDMODE=3`) so a from-track fader is
+    free to be the parent-send gain. This subsumes the old slot-boundary
+    send case: "send lands at slot N" is just an input-pin map reading
+    the pair the send arrives on.
+  - **MIDI.** Same allocator pattern with bus indices. REAPER's per-FX
+    in/out bus filter is undocumented chunk-only state on VST/AU slots
+    and a JSFX opt-in (`ext_midi_bus`); see `docs/reaper_midi_routing.md`.
+    A non-bus-aware JSFX on bus N≠0 is bracketed by `BusRoute` CUs that
+    swap N↔0 around it (see "Merge and split"); VST/AU slots take chunk
+    surgery on the trailer in/out bus bytes instead, via
+    `wm.setFXMidiRouting(chunk, fxIdx, opts, pinChannels)` — snapshot
+    reads the same bytes, REAPER's chunk is ground truth. The allocator
+    surfaces `state.fxMidiBus[fxId] = { inBus, outBus }` for native FX; a
+    bus-aware JSFX other than the first-party CU is refused at design-time.
+  - **Merge and split (3c.4).** The unified merge/split model — the
+    "Merge and split" section above is the reference. `DAG.lower` and the
+    two-graph model were removed here: the equivalence-class calculus
+    runs on the user graph directly, wire-level gain rides the wire as
+    metadata, and `ctx:targetPlan` synthesises a per-consumer merge CU
+    (`node.mergeGuids[hostKey]`) only where a non-unity gain or a MIDI/
+    master fan-in needs one. A class-split pass (`node.split` plus derived
+    master-minimization markers) seeds a marked node into its own srcSet
+    so it lands on its own track — the per-node sibling of the per-wire
+    `primary` override, and how the master frontier is kept to ≤1 summed
+    pair per contributor. `DAG.allocate` fills each merge CU's audio gain
+    bank and, for MIDI, its `inMask`/`outBus`; `wm` pushes those params
+    and reads them back in snapshot so reconciles stay idempotent.
 
-  *Caveat surfaced post-landing:* primary-override absorption with
-  multiple audio parents needs 3c's sub-channel routing before it
-  produces correct REAPER output — without channel allocation,
-  secondary parents' sends fall back to 1/2 at the chain top and
-  mix destructively with the absorbed host's intra-chain audio. The
-  default-rule single-audio-parent case (srcSet asymmetry via MIDI
-  fan-in only) works in isolation. Specs and fixups land with 3c.5.
-- **Stage 3b — Slot-boundary send placement. Folded into 3c.**
-  `I_SENDMODE` only distinguishes pre-fader / pre-FX / post-FX at
-  chain boundaries, not arbitrary mid-chain slots. "Send lands at
-  slot N" is actually "send arrives on channel pair K, and slot N's
-  input pin map reads from K" — the same per-FX I/O routing that
-  intra-class connections use. One allocator (3c) covers both.
-- **Stage 3c — Channel allocation.** The register-allocation problem
-  punted from Stage 2: each track has 64 stereo audio pairs and 128
-  MIDI buses; each wire that crosses or terminates inside a track's
-  channel space needs a pair assignment. Post-3c.0 the differ surface
-  is in place — sends are keyed on the 4-tuple
-  `(to, type, srcChan, dstChan)` and emitted one per wire — but the
-  stub allocator assigns `srcChan=dstChan=0` everywhere, so multi-wire
-  topologies between the same `(srcTrack, dstTrack)` still collapse to
-  a single send at chan 1/2. 3c.1+ replaces the stub. A class has no
-  "backbone": intra-class wires, incoming sends, and outgoing sends
-  each consume pairs uniformly; the to-master parent send picks one of
-  those pairs via `C_MAINSEND_OFFS`.
-
-  *3c.0 — Un-collapse sends; introduce the allocator seam. Landed.*
-  `DAG.targetPlan` now emits one `outWires` entry per inter-class
-  wire (no collapse) carrying `{to, type, gain?}`. The new module-
-  level `DAG.allocate(plan) -> plan'` consumes outWires and emits
-  `sends = [{to, type, gain?, srcChan, dstChan}]` keyed uniquely on
-  the 4-tuple `(to, type, srcChan, dstChan)`. The stub stamps
-  `srcChan=dstChan=0` and first-write-wins on collision; 3c.1 swaps
-  the body for the real channel-pair allocator with no surface
-  change downstream. `wm:targetState` chains
-  `DAG.allocate(cx:targetPlan())`. `wm:snapshot`'s `readSendsClass`
-  reads `I_SRCCHAN`/`I_DSTCHAN` on audio sends (MIDI stays 0/0 until
-  3c.3). `sendsEq` is set-equality on the 4-tuple with gain as the
-  value (drift drives `setSends`). `reconcileSends` keys current and
-  wanted dicts on the 4-tuple, drops unpaired current right-to-left,
-  creates unpaired wanted (writes `I_SRCCHAN`/`I_DSTCHAN` for audio,
-  `I_SRCCHAN=-1` for MIDI, `I_SENDMODE=3` post-FX pre-fader), then
-  pushes `D_VOL` drift by 4-tuple re-locate.
-
-  *Known interim regression until 3c.1:* multi-wire same-(from,to)
-  still collapses to one send at 0/0 — the stub assigns identical
-  channels to every wire so the dedup catches them. Single-wire
-  cases are unchanged. Specs: `dag_allocate_spec` covers the stub
-  contract; `dag_target_plan_spec` asserts per-wire `outWires`
-  (no collapse); `wm_diff_spec`/`wm_snapshot_spec` updated for the
-  new send shape.
-
-  *3c.1 — Real allocator body.* Replaces the 3c.0 stub body of
-  `DAG.allocate`. Walks each host's fxOrder topologically and
-  assigns channel pairs to: each intra-class connection, each
-  incoming send, each outgoing send, and the parent send
-  (`C_MAINSEND_OFFS`). Annotates the host plan entry with per-FX
-  pin maps and the track's required `I_NCHAN` (max pair index × 2).
-  Deterministic ordering keyed on intra-class topo order then
-  inter-class wire identity: same graph → same channel assignments.
-  Pair reuse — free a pair once its last consumer's FX slot passes
-  — is an optimisation flag, default off. The 64-pair budget is
-  generous; reuse complicates the differ.
-
-  *3c.2 — Audio apply path.* Extends target-state / snapshot / diff
-  / apply for `I_NCHAN` and per-FX pin maps
-  (`TrackFX_SetPinMappings`). Send channel routing
-  (`I_SRCCHAN`/`I_DSTCHAN`) is already wired by 3c.0; 3c.1 just
-  flows non-zero values through it. Subsumes the slot-boundary case
-  from the original 3b.
-
-  *3c.3 — MIDI buses.* Same allocator pattern as audio with bus
-  indices, but JSFX bus-awareness shapes the lowering and applier
-  surface. REAPER's per-FX MIDI in/out bus filter is undocumented
-  chunk-only state on VST/AU slots and a JSFX opt-in
-  (`ext_midi_bus`); see `docs/reaper_midi_routing.md` for the
-  encoding. Four user-graph cases, three outcomes:
-
-  - **VST/AU** — allocator assigns an operating bus; applier sets
-    the slot's in/out bus via the documented chunk surgery (trailer
-    flag byte + wrapper-header mirror). Snapshot reads the same
-    bytes.
-  - **Non-bus-aware JSFX on bus 0** — REAPER only exposes bus-0
-    events to the FX; events on other buses pass through the slot
-    untouched. Nothing to do. Allocator prefers bus 0 for these
-    wires to maximise this case.
-  - **Non-bus-aware JSFX on bus N≠0** — `DAG.lower` brackets the FX
-    with pre-park and post-restore CU bridges that rewrite N↔0
-    around it, so the FX sees bus 0 internally while external bus
-    assignment is preserved. Adds two new CU modes (`bus-park`,
-    `bus-restore`).
-  - **`ext_midi_bus` JSFX** — refused at design-time, like capacity
-    overflow. A bus-aware JSFX can mutate `midi_bus` arbitrarily and
-    we can't reason about its routing. First-party CU is bus-aware
-    but never user-placed; the refusal applies only at the user-
-    graph mutation boundary.
-
-  *3c.3a — JSFX path.* Allocator MIDI bus assignment, send-side
-  `I_MIDIFLAGS` src/dst bus bits, CU `bus-park`/`bus-restore` modes,
-  lowering brackets for non-bus-aware JSFX on bus N≠0, design-time
-  refusal of `ext_midi_bus` JSFX via a static
-  `parseJsfxBusAware(ident)` scan of the JSFX desc. JSFX-only chains
-  end-to-end.
-
-  *Bracket model (3c.3a.2).* The allocator's per-host post-pass walks
-  `fxOrder` and, for each non-bus-aware JSFX consumer (no `busAware`,
-  no outgoing midi this slice) whose `fxInputBus[fxId]` is N≠0,
-  splices two synthesised CU bridges around it:
-  `'bIn:'..fxId` (mode `busPark`, `bus=N`) before, `'bOut:'..fxId`
-  (mode `busRestore`, `bus=N`) after. Both modes implement the same
-  symmetric N↔0 swap at `@block`; the names label intent only. Bracket
-  lowerNodes carry `originNode` (the consumer fx id) + `originSide`
-  (`'in'|'out'`) so the applier stamps the minted guid back to
-  `node.midiInBracketGuid` / `node.midiOutBracketGuid`. They hang
-  under `planEntry.bracketNodes`; `projectEntry` merges that table
-  alongside `compileNodes` to resolve fxOrder ids. Identity pair-1
-  pin maps keep audio passing through the brackets.
-
-  *Bracket bus routing (3c.4.5).* The bracket CU is `BusRoute(from, to)`:
-  events on `from`->0, events on 0->`to`, others pass through. in-park uses
-  `from`=inBus, `to`=outBus (the FX's allocated output bus M) — input lands on
-  bus 0 for REAPER's filter, bus-0 transients park on M; out-park uses
-  `from`=`to`=M, swapping the FX's bus-0 output up to M. This decouples output
-  bus from input bus, so a consumer-producer non-bus-aware JSFX no longer needs
-  `outBus == inBus`. When `from`!=`to`, in-park also retains the original
-  `from` events on `from`, keeping a fanned-out producer's bus intact for later
-  siblings. Terminal consumers have no output, so M=inBus and both sides
-  degenerate to the old symmetric swap.
-
-  *Bracket stamp clearance.* `applyOps` walks the pass's `setFXChain`
-  ops to build a set of `bracketClassed` consumer-node ids (any node
-  named in target's fxOrder via origin `'node'`) and an
-  `aliveBracketGuids` set (target's bracket entries + this pass's
-  stamps). In the stamp-back mutate, any `bracketClassed` node whose
-  `midiInBracketGuid` / `midiOutBracketGuid` isn't in the alive set
-  is cleared — closes the lifecycle when the allocator stops emitting
-  brackets for a consumer (e.g. its input bus dropped to 0).
-
-  *3c.3a — landed.* Consumer-producer non-bus-aware JSFX now brackets
-  unconditionally (the `hasMidiOut[fxId]` guard dropped) via the decoupled
-  `BusRoute` CU above; every MIDI fan-in is already a merge node, so every
-  consumer is single-feeder. No separate 3c.3a.3.
-
-  *3c.3b — Native FX path.* VST/AU per-FX in/out bus via chunk
-  surgery; snapshot reads the same bytes via the same chunk walk.
-  Builds on 3c.3a's allocator + send-side. The 3c.3a bracket
-  post-pass is already gated by `JS:` prefix, so VST/AU falls through
-  it — chunk surgery on each native FX's trailer in/out bus byte
-  replaces the bracket strategy for these slots. Snapshot reads
-  trailer bytes for every owned non-JS FX in `ownedChain` and
-  surfaces `entry.midiBus = { inBus, outBus }` + `entry.midiOut`;
-  this supersedes the `appliedMidiOut` cache in
-  `docs/wiringManager.md § Routing intent record` — REAPER's chunk is
-  ground truth, same as everywhere else in the differ. No brackets
-  are minted for native FX.
-
-  *3c.3b.0 — Generalised chunk mutator. Landed.*
-  `wm.setFXOutputDisabled` →
-  `wm.setFXMidiRouting(chunk, fxIdx, opts, pinChannels)` taking
-  `{ inBus?, outBus?, inDisabled?, outDisabled? }`. Single chunk
-  walk, read-modify-write per field, every other byte preserved. Bit
-  and byte mutations share one `mutateByteInBase64Line` helper.
-  Production caller in `reconcileFXChain`'s routing-trailer tail
-  ports as `{ outDisabled = not f.midiOut }`. See
-  `docs/wiringManager.md § Per-FX MIDI routing`. `wm_fx_routing_spec`
-  keeps the legacy disable cases via a thin `setOutDisabled` adapter
-  and adds in/out bus, combined-opts, no-op, idempotence, and
-  round-trip cases.
-
-  *3c.3b.1 — Allocator surfaces `fxMidiBus`.* Per-host
-  `state.fxMidiBus[fxId] = { inBus, outBus }`, populated for non-JS,
-  non-bracket fx — `inBus` from the existing `fxInputBus[fxId]`,
-  `outBus` lifted from `fxMidiByProducer[fxId].applies` via a
-  parallel closure. Surfaces in `allocatedPlan`. `dag_allocate_*`
-  specs: single VST consumer on bus N (two senders merging), VST
-  producer → VST consumer chain, mixed JS+VST hosts.
-
-  *3c.3b.2 — Snapshot+target+diff+apply.* `wm:snapshot` decodes
-  trailer bytes 3/4/5 per owned non-JS FX in `ownedChain` and
-  attaches `midiBus={inBus,outBus}` plus `midiOut` to the snapshot
-  entry. `projectEntry` stamps `target.midiBus` from
-  `planEntry.fxMidiBus`. Diff drives a unified routing write in
-  `reconcileFXChain`'s tail pass via `wm.setFXMidiRouting`. The
-  `appliedMidiOut` cache (and its `wiringMidiOutApplied` persistence)
-  drops — snapshot is ground truth. Specs touch `wm_diff_spec` /
-  `wm_snapshot_spec` / `wm_apply_ops_spec`;
-  `wm_fx_routing_apply_spec` ports onto the new shape and grows
-  bus-assignment integration cases.
-
-  *3c.3b.3 — Design-doc update.* Mirror the landed state into this
-  section as each sub-slice lands.
-
-  *3c.4 — Merge and split.* The unified merge/split model (see
-  "Merge and split" above). Supersedes the old master-merge rule,
-  3c.3a.3, the multi-feeder fallback, and `DAG.lower` itself — one
-  slice, no special cases left. Although listed after 3c.3b, the
-  lower-kill and allocator restructure here land first: 3c.3b.1/.2
-  read the allocator surface they reshape. Steps, each finishing its
-  own concern:
-
-  - **CU modes (3c.4.1). Landed.** One `Merge` mode in
-    `utility/Continuum Utility.jsfx`: audio is a per-wire gain bank
-    (`nPairs` pairs, `out[i]=in[i]×gain{i}`, 1:1; the FX pin matrix does
-    the summing), MIDI is an N→1 bus collapse (128-bit input mask, four
-    32-bit lanes, → `outBus`). BusPark/BusRestore collapsed to one
-    `BusSwap` (generalised to `BusRoute(from,to)` in 3c.4.5); modes are now
-    `0=Gain 1=ChannelRemap 2=BusRoute 3=Merge`
-    (Gain/ChannelRemap retire with `DAG.lower` in 3c.4.2). The 32-pair
-    cap is the JSFX 64-channel ceiling; gained fan-in past it (e.g. a
-    large submix) is an allocate-time call in 3c.4.3/.4 — design-time
-    error or a CU cascade; unity-gain fan-in of any size stays free
-    (pins sum). `config:` dynamic pins are unusable — no
-    `TrackFX_SetNamedConfigParm` write key, chunk-only and loses state.
-    No EEL harness in-repo, so the JSFX is verified at the DAG/wm layer
-    in later steps and needs one in-REAPER compile check (the header
-    preprocessor generates the 64 pins + 32 gain sliders).
-  - **Kill `DAG.lower` (3c.4.2). Landed.** Delete the lower phase and the `lowerGraph`
-    / `conn` shapes. Point the compile ctx (`inbound`, `srcSet`,
-    `classes`, `quotient`, `absorption`) and the targetPlan
-    connectivity walks at `userGraph.edges` / `.nodes` directly —
-    edges carry the same `from/to/type/primary`, and the removed
-    splices were connectivity-inert. Ops (`gain`, `channelMap`) ride
-    the connection as metadata. `M.lower` and `ctx:graph()` go; the
-    "two graph shapes" and "single-in/single-out CU" invariants
-    retire. (Only spec readers of `ctx:graph()`: `dag_srcset_spec`,
-    `wm_persistence_spec`.)
-  - **Class-split / master minimization (3c.4.3). Landed.** A pass between classification
-    and hosting that decorates nodes with a split marker; the hosting
-    pass seeds a separate host from each marked node (the per-node
-    sibling of the per-wire `primary` absorption override). Master-
-    minimization moves these markers — the master frontier — inward to the
-    shallowest cut where every class crosses the one-pair parent send with
-    ≤1 summed pair (least eviction), not by accumulating them; the later
-    manual split-at-a-node gesture writes the identical marker, so hosting
-    stays uniform and the master is never special-cased. Retires the old
-    sidechain-to-master "design-time error" — the resolution is eviction.
-
-    *3a — split-marker mechanism. Landed.* The marker is realised not by a
-    fake source node (which would become a phantom source track) but by the
-    marked node seeding `'split:'..id` into its own `srcSet`: a split node
-    *is its own source*. The tag propagates forward, so the node + its cone
-    land in their own equivalence class — their own track — through the
-    existing partition, with no `nodeHost`/flood and no `targetPlan` change;
-    the cut edge becomes a send for free. A split-tagged class never absorbs
-    (`ctx:splitClasses` guards `ctx:absorption`), or its single-parent
-    cone-top would fold straight back. `M.validate` refuses `split` off
-    `fx`. A cone that is master's sole contributor re-merges into master's
-    class (no eviction) — audibly identical, and the correct least-eviction
-    outcome. 3b computes the master-minimization markers feeding this same
-    mechanism. Specs: `dag_split_spec`.
-
-    *3b — master-minimization markers. Landed.* `M.compile` runs
-    `ctx:masterSplits` each compile: a fixpoint that finds every master-hosted
-    fx fed ≥2 audio ports by one upstream host (two pairs out of a one-pair
-    parent send) and derives a split marker at the fx's immediate post-dominator
-    toward master — the least-eviction cut. Markers move inward (pruning any
-    subsumed by a downstream marker) until the master class is violation-free;
-    the terminus is a derived split on the master node. `srcSet` unions these
-    with persisted `node.split`, so classification/hosting are unchanged. Two
-    ports from two *different* hosts (main + sidechain) stay on master. Specs:
-    `dag_split_spec`.
-  - **Merge nodes at allocate (3c.4.4). Landed (targetPlan side).**
-    `ctx:targetPlan` synthesises merge CUs per consuming FX: all-unity
-    feeders ⇒ matrix-fed (no CU), any non-unity gain ⇒ one Merge CU
-    spanning every feeder (unity at 1.0), the single gained wire being
-    the degenerate `nPairs=1`. MIDI and master fan-in always merge;
-    master uses `audioSum` (matrix-less sink, fixes the last-wins
-    `masterFeed`). Identity is **per-consumer**
-    (`node.mergeGuids[hostKey]`, host-keyed so master's several
-    feeding hosts don't collide), not per-edge — `mode='gain'` is gone.
-    `wm` pushes the gain bank (`gain1..N`), stamps/sweeps the
-    per-consumer guids, and `pokeEdgeGain` resolves the live CU via the
-    plan's `inputEdges`. Cross-host gain still kept a per-edge `opFxGuid`
-    CU here — 3c.4.5 (below) folds it into the consumer merge. >16
-    feeders into one FX exceeds the 16-wide CU — a deferred capacity
-    check. Specs: `dag_target_plan_spec` merge cases, `wm_apply_ops_spec`.
-  - **Consumer-side merge unification (3c.4.5). Landed.** Phase A of
-    `ctx:targetPlan` emits gain as conn metadata (folded to a send
-    `D_VOL`, or carried to the consumer merge); Phase B buckets every
-    conn into a per-`(consumer, host)` reduction unit and mints one
-    Merge CU each. The per-edge `opFxGuid` cross-host gain CU is retired:
-    a cross-host gained wire folds into the destination's consumer merge.
-    A MIDI fan-in (≥2 feeders to one consumer) collapses to a Merge CU on
-    the consumer host — the matrix-less one-bus sink; `DAG.allocate` fills
-    its `inMask` (union of feeder buses) and `outBus` (its own output
-    bus), symmetric with send `srcChan`/`dstChan`, and `wm` pushes
-    `inMask0..3`/`outBus` and reads them back in snapshot so reconciles
-    stay idempotent. The gain-fold mint-then-retract path on `opFxGuid` is
-    gone — `pokeEdgeGain` resolves audio gain through `mergeGuids` or the
-    folded `gainSinks` sink, never a per-edge gain CU. Specs:
-    `dag_target_plan_spec`, `dag_allocate_midi_spec`,
-    `dag_allocate_midi_bracket_spec`, `wm_diff_midi_bus_spec`,
-    `wm_apply_midi_merge_spec`, `wm_apply_ops_spec`.
-  - **Deferred from 3c.4.5.** *Done:* the >16-feeder CU-width cascade
-    (parallel chunks / parent-send sum-tree), and audio split-share —
-    one value per producer-output, so an fx-out shares a single pair
-    across its intra consumers, outgoing sends, and master feed instead
-    of replicating. Split-share required modelling the in-class master
-    feed as a serial parent send (sum fan-in to one pair via a merge CU)
-    rather than a summing matrix, so an in-chain master write can never
-    clobber a still-live shared producer pair. The unconditional
-    non-bus-aware bracket also landed: the `hasMidiOut` guard is gone, so
-    any non-bus-aware JSFX on bus ≠ 0 brackets. Instead of enforcing
-    `outBus == inBus`, the bracket CU (`BusRoute(from, to)`) decouples them —
-    in-park routes `from`=inBus→0 and parks bus-0 transients on the output
-    bus M, out-park swaps 0↔M; when in≠out the input bus is retained for
-    fan-out siblings, so no scratch bus and no equality constraint. The
-    `outWires` dedup band-aid is also retired: merge unification (3c.4)
-    routes every fan-out to a co-host consumer through that consumer's own
-    merge CU, so cross-host outWires always differ in `toNode` — `targetPlan`
-    can't emit structurally-identical ones, and `DAG.allocate` no longer
-    folds. The invariant is pinned in `dag_target_plan_spec`. *Nothing left
-    standing.*
-
-  *3c.5 — Absorption multi-parent.* With channels in place, 3a's
-  primary-override case starts working. Add specs covering the
-  multi-audio-parent topology; fix anything the new coverage
-  exposes.
-- **Stage 3.5 — Opt-in channel-occupancy diagnostic.** A command
-  (or toolbar toggle) that scans all MIDI takes on owned source
-  tracks, computes each source's channel-occupancy set, propagates
-  it through wire `channelMap` ops, and reports edges where two
-  MIDI streams share channels at a merge. Diagnostic only —
-  surfaces a report, never alters the user graph, never runs unless
-  invoked. Cheaper than a permanent live check and respects the
-  "user knows their channel layout" default.
-- **Stage 6 — Built-in patches.** Continuum Utility grows modes
-  (mid-side, bandsplit, pre/post-emphasis); node palette and
-  wire-menu surface them. No new compiler work — they're plain FX
-  instances of the existing host.
-
-Deferred entirely (per the model sections above): FX containers,
-user-composed sub-DAG patches.
+- **Stage 3c.5 — Absorption multi-parent.** With channels in place,
+  3a's primary-override case across multiple audio parents can be
+  exercised. Add specs covering the multi-audio-parent topology and fix
+  anything they expose. This is the next real work stage.

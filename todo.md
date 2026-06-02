@@ -8,13 +8,27 @@
 - 14bit CCs
 - automation items
 - move to command based key/mouse interactions
+- keyboard mapping editor
 - multiselect / copy / paste in ap
 - wave previews in ap
 - show take/track name and navigate by track take in tp
 - ap reaper cursor and general bad look weirdness
 - wm - midi channel filter
+- wm - master multi-outs / deal with restriction on single audio feed
+  to master
+- MIDI PDC alignment at a merge — verify pdc_midi=1 if MIDI-vs-audio skew shows up.  
+  
 
-  Reframing to "what a competent tracker offers that Continuum's
+- **Stage 6 — Built-in patches.** Continuum Utility grows modes
+  (mid-side, bandsplit, pre/post-emphasis); node palette and
+  wire-menu surface them. No new compiler work — they're plain FX
+  instances of the existing host.
+
+Deferred entirely (per the model sections above): FX containers,
+user-composed sub-DAG patches.
+
+
+Reframing to "what a competent tracker offers that Continuum's
   tracker doesn't" — and discounting what's REAPER's job (transport,
   mixing, FX hosting, song arrangement, undo via util.atomic) and
   what's already there (mute and solo, quantize incl. keep-realised,
