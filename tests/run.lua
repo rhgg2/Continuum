@@ -129,7 +129,7 @@ local specs = {
   'wm_probe_fx_io_spec',
   'wm_jsfx_bus_aware_spec',
   'wm_diff_midi_bus_spec',
-  'wm_apply_midi_bracket_spec',
+  'wm_apply_midi_merge_spec',
   'wm_host_move_spec',
   'wm_snapshot_spec',
   'wm_target_alloc_spec',

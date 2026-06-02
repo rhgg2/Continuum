@@ -1,14 +1,20 @@
 local t    = require('support')
 local util = require('util')
 
--- 3c.3a.2 apply round-trip: non-bus-aware JSFX whose midi input arrives on
--- bus N≠0 has BusPark + BusRestore CU bridges spliced around it on the host
--- track, with their guids stamped back onto the consumer node so subsequent
--- reconciles read them as target.fxGuid (idempotent).
+-- 3c.4.5 apply round-trip: a midi fan-in to one consumer collapses to a Merge
+-- CU on the consumer host. The CU reads the feeder buses (inMask) and rewrites
+-- them to a single outBus the consumer reads; its guid is stamped onto the
+-- consumer node so reconciles are idempotent and the CU retracts when the
+-- fan-in drops back to a single feeder.
+
+local CU_PARAMS = { 'mode', 'gain', 'bus', 'nPairs',
+  'gain1', 'gain2', 'gain3', 'gain4', 'gain5', 'gain6', 'gain7', 'gain8',
+  'gain9', 'gain10', 'gain11', 'gain12', 'gain13', 'gain14', 'gain15', 'gain16',
+  'outBus', 'inMask0', 'inMask1', 'inMask2', 'inMask3', 'audioSum' }
 
 local function mkWm(harness)
   local h  = harness.mk()
-  h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain', 'bus' })
+  h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
   local wm = util.instantiate('wiringManager', { cm = h.cm })
   wm:load()
   return h, wm
@@ -63,9 +69,13 @@ local function paramSetsOn(h, track, fxIdx)
   return out
 end
 
+local function mergeStamp(wm)
+  for _, guid in pairs(wm:graph().nodes.fxC.audioMergeGuids or {}) do return guid end
+end
+
 return {
   {
-    name = 'bracket apply: BusSwap + consumer + BusSwap land on the newTrack',
+    name = 'merge apply: Merge CU + consumer land on the newTrack',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -80,28 +90,24 @@ return {
       apply(wm)
       local track = findNewTrack(h)
       t.truthy(track, 'newTrack created for fxC class')
-      t.eq(h.reaper.TrackFX_GetCount(track), 3, 'BusSwap + fxC + BusSwap')
-      local in0, gIn   = fxAt(h, track, 0)
-      local mid, gMid  = fxAt(h, track, 1)
-      local out, gOut  = fxAt(h, track, 2)
-      t.eq(in0, 'JS:Continuum Utility', 'slot 0 = BusSwap CU (in)')
-      t.eq(mid, 'JS:c',                  'slot 1 = consumer fx')
-      t.eq(out, 'JS:Continuum Utility', 'slot 2 = BusSwap CU (out)')
-      -- params pushed: mode=2 (busSwap) and bus=1 on both brackets.
-      local inSets  = paramSetsOn(h, track, 0)
-      local outSets = paramSetsOn(h, track, 2)
-      t.eq(inSets[0],  2, 'in bracket: busSwap mode')
-      t.eq(inSets[2],  1, 'in bracket: bus = 1 (sB receiver claim)')
-      t.eq(outSets[0], 2, 'out bracket: busSwap mode')
-      t.eq(outSets[2], 1, 'out bracket: bus = 1')
-      local node = wm:graph().nodes.fxC
-      t.eq(node.midiInBracketGuid,  gIn,  'bracketIn guid stamped onto consumer')
-      t.eq(node.midiOutBracketGuid, gOut, 'bracketOut guid stamped onto consumer')
-      t.eq(node.fxGuid, gMid, 'consumer node guid still the mid slot')
+      t.eq(h.reaper.TrackFX_GetCount(track), 2, 'Merge CU + fxC')
+      local cu,  gCU  = fxAt(h, track, 0)
+      local mid, gMid = fxAt(h, track, 1)
+      t.eq(cu,  'JS:Continuum Utility', 'slot 0 = Merge CU')
+      t.eq(mid, 'JS:c',                 'slot 1 = consumer fx')
+      -- slider layout: mode=0, nPairs=3, outBus=20, inMask0=21, audioSum=25.
+      local sets = paramSetsOn(h, track, 0)
+      t.eq(sets[0],  3, 'merge mode')
+      t.eq(sets[3],  1, 'nPairs = 1 (one midi bus)')
+      t.eq(sets[21], 3, 'inMask0 covers feeder buses 0 and 1')
+      t.eq(sets[20], 0, 'outBus = 0 (consumer reads the boundary bus)')
+      t.eq(sets[25], 0, 'audioSum off — matrix-less collapse is midi-only')
+      t.eq(mergeStamp(wm), gCU, 'CU guid stamped onto consumer audioMergeGuids')
+      t.eq(wm:graph().nodes.fxC.fxGuid, gMid, 'consumer node guid is the mid slot')
     end,
   },
   {
-    name = 'bracket apply: idempotent — second reconcile drops no setFXChain op',
+    name = 'merge apply: idempotent — second reconcile drops no setFXChain op',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -122,7 +128,7 @@ return {
     end,
   },
   {
-    name = 'bracket apply: dropping one sender removes the brackets on re-apply',
+    name = 'merge apply: dropping one feeder retracts the Merge CU on re-apply',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -136,8 +142,9 @@ return {
       end)
       apply(wm)
       local track = findNewTrack(h)
-      t.eq(h.reaper.TrackFX_GetCount(track), 3, 'brackets present after first apply')
-      -- Drop the sB feeder so fxC's only input is sA on bus 0 → bracket no longer needed.
+      t.eq(h.reaper.TrackFX_GetCount(track), 2, 'Merge CU present after first apply')
+      -- Drop the sB feeder: fxC's srcSet shrinks to {sA} so it migrates onto
+      -- sA's sourceTrack, fed by source midi on bus 0 — no fan-in, no merge.
       wm:mutate(function(g)
         local newEdges = {}
         for _, e in ipairs(g.edges) do
@@ -146,8 +153,6 @@ return {
         g.edges = newEdges
       end)
       apply(wm)
-      -- fxC's srcSet shrinks to {sA} so it migrates onto sA's sourceTrack;
-      -- count total CU + fxC instances across the project to assert structurally.
       local cuTotal, fxCTotal = 0, 0
       for i = 0, h.reaper.CountTracks(0) - 1 do
         local tr = h.reaper.GetTrack(0, i)
@@ -157,10 +162,9 @@ return {
           if ident == 'JS:c'                 then fxCTotal = fxCTotal + 1 end
         end
       end
-      t.eq(cuTotal,  0, 'brackets gone after sB removed')
+      t.eq(cuTotal,  0, 'merge CU gone after sB removed')
       t.eq(fxCTotal, 1, 'consumer fx still live (moved hosts)')
-      t.eq(wm:graph().nodes.fxC.midiInBracketGuid,  nil, 'bracketIn stamp cleared')
-      t.eq(wm:graph().nodes.fxC.midiOutBracketGuid, nil, 'bracketOut stamp cleared')
+      t.eq(mergeStamp(wm), nil, 'merge stamp cleared')
     end,
   },
 }

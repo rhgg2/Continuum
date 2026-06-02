@@ -4,11 +4,16 @@ local util = require('util')
 -- 3c.3a.1 send-side encode/decode of MIDI bus indices through I_MIDIFLAGS
 -- bits 14..21 (src bus) / 22..29 (dst bus). N+1 encoding; 0 reads as bus 0.
 
+-- Full CU slider set: a midi fan-in to one consumer materialises a merge CU,
+-- whose params (nPairs/gains/inMask0..3/outBus/audioSum) pushParams resolves.
+local CU_PARAMS = { 'mode', 'gain', 'bus', 'nPairs',
+  'gain1', 'gain2', 'gain3', 'gain4', 'gain5', 'gain6', 'gain7', 'gain8',
+  'gain9', 'gain10', 'gain11', 'gain12', 'gain13', 'gain14', 'gain15', 'gain16',
+  'outBus', 'inMask0', 'inMask1', 'inMask2', 'inMask3', 'audioSum' }
+
 local function mkWm(harness)
   local h  = harness.mk()
-  -- Bracket post-pass spawns CU bridges around non-bus-aware JSFX consumers
-  -- on bus N≠0; pushParams resolves these slider names on materialisation.
-  h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain', 'bus' })
+  h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
   local wm = util.instantiate('wiringManager', { cm = h.cm })
   wm:load()
   return h, wm

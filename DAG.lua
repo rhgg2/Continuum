@@ -1105,6 +1105,20 @@ function M.allocate(plan, nodes)
     local fxInputBus = {}
     local hasMidiOut = {}
 
+    -- Merge CU midi sink/source tracking: cuIn = union of feeder buses (→ inMask),
+    -- cuOut = the CU's own output bus (→ outBus). Stamped alongside fxInputBus.
+    local cuIn, cuOut = {}, {}
+    local function isMergeCU(id)
+      local sn = entry.synthNodes and entry.synthNodes[id]
+      return sn ~= nil and sn.params.mode == 'merge'
+    end
+    local function noteCuIn(consumer, bus)
+      if isMergeCU(consumer) then
+        local m = cuIn[consumer]; if not m then m = {}; cuIn[consumer] = m end
+        m[bus] = true
+      end
+    end
+
     -- Source-midi producer pinned to the boundary (bus 0).
     local sourceMidiLastUse, sourceMidiSends, sourceMidiConsumers = 0, {}, {}
     for _, ic in ipairs(entry.intraConns or {}) do
@@ -1114,7 +1128,7 @@ function M.allocate(plan, nodes)
       end
     end
     -- Source-midi is always bus 0 — pre-stamp so per-fx values defined later inherit it.
-    for _, c in ipairs(sourceMidiConsumers) do fxInputBus[c] = 0 end
+    for _, c in ipairs(sourceMidiConsumers) do fxInputBus[c] = 0; noteCuIn(c, 0) end
     for sendIdx, ow in ipairs(entry.outWires or {}) do
       if ow.type == 'midi' and not fxSet[ow.from] then
         util.add(sourceMidiSends, function(bus) state.sends[sendIdx].srcChan = bus end)
@@ -1158,7 +1172,8 @@ function M.allocate(plan, nodes)
     for _, fxId in ipairs(fxProducerIds) do
       local p = fxMidiByProducer[fxId]
       util.add(p.applies, function(bus)
-        for _, c in ipairs(p.consumers) do fxInputBus[c] = bus end
+        if isMergeCU(fxId) then cuOut[fxId] = bus end
+        for _, c in ipairs(p.consumers) do fxInputBus[c] = bus; noteCuIn(c, bus) end
       end)
       addMidiValue({ def = p.def, lastUse = p.lastUse, applies = p.applies })
     end
@@ -1176,7 +1191,7 @@ function M.allocate(plan, nodes)
             def = 0, lastUse = lu,
             applies = { function(bus)
               alloc[senderHost].sends[sendIdx].dstChan = bus
-              if fxSet[toNode] then fxInputBus[toNode] = bus end
+              if fxSet[toNode] then fxInputBus[toNode] = bus; noteCuIn(toNode, bus) end
             end },
           })
         end
@@ -1225,6 +1240,19 @@ function M.allocate(plan, nodes)
       if midiByDef[slot] then
         midiSortBucket(midiByDef[slot])
         for _, v in ipairs(midiByDef[slot]) do processMidiValue(v) end
+      end
+    end
+
+    -- Merge CU midi params: inMask = union of feeder buses, outBus = its output bus.
+    state.cuMidi = {}
+    for _, fxId in ipairs(entry.fxOrder or {}) do
+      if isMergeCU(fxId) then
+        local lanes = { 0, 0, 0, 0 }
+        for bus in pairs(cuIn[fxId] or {}) do
+          local lane = (bus >> 5) + 1
+          lanes[lane] = lanes[lane] | (1 << (bus & 31))
+        end
+        state.cuMidi[fxId] = { inMask = lanes, outBus = cuOut[fxId] or 0 }
       end
     end
 
@@ -1285,6 +1313,21 @@ function M.allocate(plan, nodes)
     local copy = {}
     for k, v in pairs(entry) do
       if k ~= 'outWires' and k ~= 'intraConns' then copy[k] = v end
+    end
+    if entry.synthNodes then
+      local sn = {}
+      for cuId, node in pairs(entry.synthNodes) do
+        local cm = state.cuMidi and state.cuMidi[cuId]
+        if cm then
+          sn[cuId] = util.assign({}, node)
+          sn[cuId].params = util.assign({}, node.params)
+          sn[cuId].params.outBus = cm.outBus
+          sn[cuId].params.inMask = cm.inMask
+        else
+          sn[cuId] = node
+        end
+      end
+      copy.synthNodes = sn
     end
     copy.sends        = sends
     copy.pinMaps      = state.pinMaps

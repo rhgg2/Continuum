@@ -524,10 +524,13 @@ local function ownedChain(track, ownedGuids)
                            bus  = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.bus) + 0.5) }
         elseif modeStr == 'merge' then
           local nPairs = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.nPairs) + 0.5)
-          local gains = {}
+          local gains, inMask = {}, {}
           for i = 1, nPairs do gains[i] = reaper.TrackFX_GetParam(track, fxIdx, idx['gain' .. i]) end
+          for i = 0, 3 do inMask[i + 1] = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx['inMask' .. i]) + 0.5) end
           entry.params = { mode = modeStr, nPairs = nPairs, gains = gains,
-                           audioSum = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.audioSum) + 0.5) }
+                           audioSum = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.audioSum) + 0.5),
+                           outBus   = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.outBus) + 0.5),
+                           inMask   = inMask }
         else
           entry.params = { mode = modeStr,
                            gain = reaper.TrackFX_GetParam(track, fxIdx, idx.gain) }
@@ -951,6 +954,12 @@ local function pushParams(track, fxIdx, ident, params, cache)
       for i, g in ipairs(v) do
         local pIdx = resolveParamIdx(track, fxIdx, ident, 'gain' .. i, cache)
         reaper.TrackFX_SetParam(track, fxIdx, pIdx, g)
+      end
+    elseif k == 'inMask' then
+      -- Merge midi input-bus mask: four 32-bit lanes inMask0..inMask3.
+      for i, lane in ipairs(v) do
+        local pIdx = resolveParamIdx(track, fxIdx, ident, 'inMask' .. (i - 1), cache)
+        reaper.TrackFX_SetParam(track, fxIdx, pIdx, lane)
       end
     else
     local pIdx = resolveParamIdx(track, fxIdx, ident, k, cache)
