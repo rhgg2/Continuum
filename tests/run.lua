@@ -117,6 +117,7 @@ local specs = {
   'dag_classes_spec',
   'dag_quotient_spec',
   'dag_absorption_spec',
+  'dag_absorb_alloc_spec',
   'dag_capacity_spec',
   'dag_ancestors_spec',
   'dag_target_plan_spec',

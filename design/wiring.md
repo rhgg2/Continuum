@@ -527,10 +527,9 @@ suppress the hover affordance entirely.
 
 ### Later stages
 
-Stages 2 through 3c have landed; the model sections above describe the
-resulting design. Each entry below states a stage's contribution and the
-implementation surface it left behind. The remaining stages (3c.5, 3.5,
-6) are framed for when their turn comes.
+Every stage has landed; the model sections above describe the resulting
+design. Each entry below states a stage's contribution and the
+implementation surface it left behind.
 
 - **Stage 2 — Compile to REAPER.** `DAG.targetPlan` partitions the user
   graph into hosts (`sourceTrack` / `newTrack` / `master` / `scratch`,
@@ -595,7 +594,11 @@ implementation surface it left behind. The remaining stages (3c.5, 3.5,
     bank and, for MIDI, its `inMask`/`outBus`; `wm` pushes those params
     and reads them back in snapshot so reconciles stay idempotent.
 
-- **Stage 3c.5 — Absorption multi-parent.** With channels in place,
-  3a's primary-override case across multiple audio parents can be
-  exercised. Add specs covering the multi-audio-parent topology and fix
-  anything they expose. This is the next real work stage.
+- **Stage 3c.5 — Absorption multi-parent.** With channels in place, 3a's
+  primary-override case across multiple audio parents is exercised end to
+  end (compile → targetPlan → allocate): the primary-elected parent hosts
+  the absorbed FX, its primary input reads the host's intra pair, and every
+  other audio parent arrives as a channel-allocated send on a distinct
+  destination pair — composing with master feed, send-folded gain, and
+  multi-hop chains. The allocator needed no change; `dag_absorb_alloc_spec`
+  pins the behaviour.
