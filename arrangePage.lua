@@ -1,10 +1,10 @@
 -- See docs/arrangePage.md for the model.
 -- @noindex
 
---invariant: render + input only — arrangePage draws the grid and palette and reads keyboard / mouse. It holds no am reference: every project query and every state mutation goes through av.
---invariant: arrange page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from arrange.
---invariant: the arrange scope's key bindings live here; the command bodies live in av. coord pushes the scope on activation. Names overlap the tracker scope's arrow commands but scopes don't stack — only one is active at a time. createSlot is registered here too — it drives this page's modal.
---invariant: body splits horizontally into a grid pane (variable width) and a fixed-width palette pane (PALETTE_W). The palette shows slots for the focused track, i.e. the track under av:cursorCol() — no separate "focused track" pointer.
+--invariant: render + input only — no am reference; all project queries and mutations go through av.
+--invariant: arrange page is project-wide — bind() takes no take and never re-keys cm.
+--invariant: key bindings here; command bodies in av; coord pushes the scope on activation.
+--shape: body = grid pane (variable width) | PALETTE_W palette; palette shows slots for the track under av:cursorCol().
 
 local util = require 'util'
 
@@ -37,8 +37,7 @@ local QN_W, TRACK_W = 32, 72
 -- Empty band between gutter numbers (right-aligned at QN_W) and the first
 -- gridline; wide enough to host the edit-cursor / play-head triangles.
 local GUTTER_PAD = 14
--- The loop bracket — the tracker's tail `[` — strokes down the left edge
--- of the grid; the whole grid shifts LOOP_PAD pixels right to clear it.
+-- The loop bracket strokes down the left edge; the grid shifts LOOP_PAD right to clear it.
 -- Must exceed the bracket radius (5) plus its 1.5px stroke.
 local LOOP_PAD = 7
 -- Palette row column widths: monospace key, kind glyph, name fills.
@@ -47,10 +46,10 @@ local SLOT_KEY_W, SLOT_KIND_W = 18, 16
 -- Forward decl: runGridMouse (in renderGrid below) calls openCreateModal, defined further down.
 local openCreateModal
 
---shape: press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — mouse-down snapshot, nil when no button is down over the grid. A track-column press carries `take`/`row`/`col`/`mode`; a QN-gutter press carries `qn` and `gutter = true` only; an empty-space double-click carries `qn`/`col` and `create = true`. `row`/`col` is the pressed cell, applied to the cursor on a no-drag grid release; `moved` flips once ImGui's drag threshold is crossed.
---invariant: mouse drag relocates a take freely — the candidate is validated by am:startIsClear, so a drag may carry a take past a neighbour into any space whose start position is not already claimed. The moved edge snaps to a row box unless Shift is held; Alt at mouse-down duplicates instead of moving. Pressing a take focuses it. The cursor moves only on release, and only when no take was dragged — it then lands on the pressed cell; a drag (even one blocked by a start collision) leaves the cursor put. An empty-space press with no drag also clears focus.
---invariant: a press in the QN gutter drives the REAPER transport, not the grid — a no-drag release sets the edit cursor, a drag sets the loop range; both endpoints snap to row boxes unless Shift is held. The arrange grid cursor and take focus are untouched. A right-click in the gutter clears the loop range.
---invariant: a double-click on empty grid space starts a create press — the drag previews a ghost take, release opens the create modal seeded with the swept column / start row / row count. A bare double-click opens it with the default row count.
+--shape: press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — nil when no button down. Track-col: take/row/col/mode; gutter: qn+gutter=true; dbl-click: qn/col+create=true. moved flips at drag threshold.
+--invariant: drag relocates via am:startIsClear; cursor moves only on clean (no-drag) release.
+--invariant: gutter press drives REAPER transport — release sets edit cursor, drag sets loop range.
+--invariant: double-click on empty space starts a create press; release opens create modal.
 local press = nil
 local WHEEL_ROWS   = 1   -- cursor rows moved per mouse-wheel notch
 local wheelAccum   = 0   -- fractional wheel carried between frames
@@ -99,22 +98,16 @@ end
 
 ----- Grid pane
 
--- Header band sits at the top of both panes (grid + palette). HEADER_PAD
--- is the breathing room above the header text; HEADER_GAP is the slim
--- band of empty space between the header divider and row 0 of the body.
--- Both panes use these constants so the dividers line up across the gap.
+-- HEADER_PAD: breathing room above header text; HEADER_GAP: space between divider and row 0.
+-- Both panes share these so the dividers line up across PANE_GAP.
 local HEADER_PAD = 8
 local HEADER_GAP = 4
 
 -- Snap a click's QN down to the top edge of the row box it sits in.
 local function floorTo(v, step) return math.floor(v / step) * step end
 
--- Shared grid geometry for the mouse pass and the paint pass. Both build it
--- from the same cursor position — handleGridMouse draws nothing, so the ImGui
--- layout cursor hasn't moved when renderGrid follows — so both get the same
--- `pg`, the (col, row) → screen transform. A drawn cell and a click on it
--- therefore resolve through one mapping: snap=true pixel-aligns the draw;
--- fromScreen, which never snaps, hands the hit-test the true sub-pixel cell.
+-- Shared (col,row)→screen transform for mouse pass and paint pass: both call gridGeom at the
+-- same layout-cursor position, so hit-test and draw resolve through one mapping.
 local function gridGeom(nTracks)
   local paneLeft, oy = ImGui.GetCursorScreenPos(ctx)
   local ox        = paneLeft + LOOP_PAD
@@ -138,16 +131,8 @@ local function gridGeom(nTracks)
   }
 end
 
--- Grid mouse pass — runs before renderGrid so the in-flight take, loop
--- and create candidates are in hand when the paint pass relocates the
--- dragged take. In a track column, press a take to focus it then drag —
--- the take rides the cursor; Alt-drag duplicates. In the QN gutter, a
--- no-drag press sets the REAPER edit cursor and a drag sets the loop
--- range. A grid release that dragged no take moves the cursor to the
--- pressed cell; an empty-space press clears focus. Must run inside the
--- ##arrangeGrid child so IsWindowHovered resolves correctly. Also
--- pushes the current row/col extent into av (geometric input). Returns
--- the in-flight drag/loop/create candidates, each nil when not active.
+-- Runs before renderGrid so in-flight drag/loop/create candidates are ready for the paint pass.
+-- Must run inside ##arrangeGrid so IsWindowHovered resolves correctly.
 local function handleGridMouse(nTracks)
   local g  = gridGeom(nTracks)
   local pg = g.pg
@@ -167,8 +152,7 @@ local function handleGridMouse(nTracks)
      and inBody and inGutter then
     av:clearLoopRange()
   end
-  -- Wheel scrolls by moving the cursor: a detached viewport scroll
-  -- would be pulled back to the cursor by followViewport next frame.
+  -- Wheel moves the cursor (a detached scroll would be snapped back by followViewport).
   -- Fractional trackpad deltas accumulate; whole rows drain off.
   local wheel = ImGui.GetMouseWheel(ctx)
   if wheel ~= 0 and ImGui.IsWindowHovered(ctx) then
@@ -257,10 +241,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   -- px beyond) sits on the clip boundary — clip past it or it's chopped.
   ps.pushClip(rect(g.paneLeft, oy, gridR + 2, oy + g.availH))
 
-  -- Row tints (bar / phrase). Row 0 (qn = 0) is the strongest phrase
-  -- boundary in the project, so it gets the phrase tint too — no qn > 0
-  -- guard. Phrase reuses the bar hue (rowBeat) at full opacity so phrases
-  -- read stronger than the bars they contain.
+  -- Row tints: phrase (every 64 QN) > bar (every 16 QN). Row 0 gets phrase tint unconditionally.
+  -- Phrase reuses rowBeat hue at full opacity so it reads stronger.
   for r = 0, visRows - 1 do
     local qn   = math.floor(av:rowToQN(sr + r) + 0.5)
     local tint = (qn % 64 == 0) and 'arrange.phrase'
@@ -271,11 +253,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     end
   end
 
-  -- Gridlines, under the take rectangles (whose 1px borders re-state the cell
-  -- boundary at the take edge). Verticals are column edges, drawn in (col, row)
-  -- through the grid painter; horizontals and the bottom border span the gutter
-  -- too, so they're screen-space. Topmost and leftmost outer borders are
-  -- omitted and verticals start at row 0, so the header reads as open space.
+  -- Verticals via grid painter; horizontals and bottom border are screen-space (span the gutter).
+  -- Topmost/leftmost outer borders omitted so the header reads as open space.
   for c = 0, nTracks do
     pg.line(c, sr, c, sr + visRows, 'separator', 1)
   end
@@ -285,23 +264,14 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     ps.line(ox, y, gridR, y, 'separator', 1)
   end
 
-  -- Take rectangles, on top of gridlines. Fill exactly the column (edges on
-  -- the gridline), 1px border, centred name. Corners come snapped from the
-  -- grid painter, so adjacent takes' borders land on the same pixel and
-  -- coincide; the ±1px insets are screen-space — a border can't be a
-  -- fraction of a column.
-  --
-  -- Three passes so the cursor cell can paint between fills and names:
-  -- the translucent cursor fill lies over the take fill, and names draw
-  -- last so they stay crisp over it.
+  -- Take rects: snapped corners so adjacent borders coincide; ±1px insets are screen-space.
+  -- Three passes (fills → cursor fill → names) so names stay crisp over the cursor tint.
   local focusHandle = av:focus()
   local nameDraws = {}
   local truncDraws = {}   -- ellipsis decoration for items truncated below natural
 
-  -- One take rectangle at an arbitrary QN range: fill, 1px border,
-  -- name queued for the final pass. Focus reads as the slot's focus
-  -- colours, not a thicker border. `blocked` paints the border red —
-  -- a drag whose candidate range overlaps another take.
+  -- Fill + 1px border; name queued for final pass. Focus = slot focus colours, not thicker border.
+  -- blocked paints border red: drag candidate overlaps another take.
   local function drawTakeRect(tk, startQN, lengthQN, focused, blocked)
     local startRow = av:qnToRow(startQN)
     local endRow   = av:qnToRow(startQN + lengthQN)
@@ -318,17 +288,15 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
         name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
       }
     end
-    -- Truncation indicator: a downstream take is cutting this one short of
-    -- its natural extent. Show only when the box is tall enough to spare a
-    -- bottom row — a single-row box would lose its name to the ellipsis.
+    -- Truncation indicator: downstream take cuts this one short. Show only when box > 1 row
+    -- so the ellipsis doesn't displace the name.
     if lengthQN + 1e-6 < tk.naturalLenQN and endRow - startRow > 1 then
       truncDraws[#truncDraws + 1] = { rx0 = rx0, rx1 = rx1, ry1 = ry1 }
     end
   end
 
-  -- Settled takes; the dragged take is held back (a move would draw it
-  -- twice) and painted last, on top, at its candidate range. A
-  -- duplicate keeps its original here and adds the copy after.
+  -- Settled takes; dragged take is held back and painted last at its candidate range.
+  -- Duplicate keeps original here and adds the copy after.
   for c = 0, nTracks - 1 do
     for _, tk in ipairs(av:tracksTakes(c)) do
       local relocating = dragCand and not press.duplicate
@@ -356,10 +324,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     end
   end
 
-  -- Cursor caret — a horizontal I-beam on the top edge of the cursor
-  -- row, spanning the column. Cursor position is a line, not a cell:
-  -- mere movement doesn't pick a take, so a cell-shaped highlight
-  -- would lie about the model.
+  -- Cursor caret: horizontal I-beam on the top edge of the cursor row.
+  -- A cell-shaped highlight would lie about the model — cursor is a line, not a cell.
   if curRow >= sr and curRow < sr + visRows
      and curCol >= 0 and curCol < nTracks then
     local cx0, cx1 = colX(curCol), colX(curCol + 1)
@@ -371,10 +337,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     ps.line(cx1,     cy - serif, cx1,     cy + serif, caret, 1.5)
   end
 
-  -- Loop region — the tracker's tail bracket: a stroked `[` down the
-  -- left of the gutter, chrome 'tail' colour, no fill. An in-flight
-  -- gutter drag preempts the committed range so the bracket tracks the
-  -- mouse before release.
+  -- Loop region: stroked `[` down the gutter left edge, 'tail' colour, no fill.
+  -- In-flight gutter drag preempts the committed range so the bracket tracks the mouse.
   local loopLo, loopHi
   if loopCand then
     loopLo, loopHi = loopCand.loQN, loopCand.hiQN
@@ -407,9 +371,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     ps.popClip()
   end
 
-  -- Truncation ellipsis — bottom-row glyph for items the relayout pass
-  -- shortened below their natural length. Same final-pass treatment as
-  -- names so it sits over the cursor fill.
+  -- Truncation ellipsis: bottom-row glyph for items shortened below natural length.
+  -- Final-pass draw so it sits over the cursor fill.
   for _, td in ipairs(truncDraws) do
     local ell = '…'
     local tw  = ps.measure(ell)
@@ -442,9 +405,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     ps.text(ox + QN_W - tw - 4, rowYs(sr + r) + 1, 'text', label)
   end
 
-  -- Header track names — sit at the bottom of the header band so the
-  -- HEADER_PAD breathing room reads as space above them. Clipped at
-  -- cell edges so long names ellipsise into nothing rather than spill.
+  -- Header track names at the bottom of the header band (HEADER_PAD reads as space above).
+  -- Clipped at cell edges so long names ellipsise rather than spill.
   local headerTextY = oy + HEADER_PAD
   for c = 0, nTracks - 1 do
     local tr   = tracks[c + 1]
@@ -466,9 +428,8 @@ end
 
 ----- Palette pane
 
--- Locate the slot entry in trackSlots() output (a packed array, not
--- indexed by slotIdx). Returns nil when no slot is focused or the
--- focused slot index isn't currently populated.
+-- Locate slot in trackSlots() output (packed array, not indexed by slotIdx).
+-- Returns nil when no slot is focused or the focused slot index isn't populated.
 local function focusedSlotEntry(slots, slotIdx)
   if slotIdx == nil then return nil end
   for _, s in ipairs(slots) do
@@ -477,10 +438,8 @@ local function focusedSlotEntry(slots, slotIdx)
   return nil
 end
 
--- Hand-drawn so the header band height (HEADER_PAD + rowH) and the
--- divider position match the grid's by construction — both panes start
--- at the same `oy` (they share the renderBody row), so the divider
--- lines up across the PANE_GAP without measurement.
+-- Hand-drawn so the header height and divider position match the grid's by construction —
+-- both panes share the renderBody `oy`, so the divider aligns across PANE_GAP without measurement.
 local function renderPaletteHeader(focusedTrack)
   local trackLabel = focusedTrack
     and (focusedTrack.name ~= '' and focusedTrack.name
@@ -572,12 +531,8 @@ local function renderPaletteActions(focusedTrack, focusedSlot)
   end)
 end
 
--- Three columns so the key/kind/name align vertically across rows
--- without depending on a monospace font for the whole line. The key
--- cell uses the monospace font (it's a hotkey to press); kind and
--- name use the default UI font. Selectable lives in col 0 with
--- SpanAllColumns so the entire row is the click target; we paint the
--- key text on top with SameLine.
+-- Three columns: key (monospace — hotkey), kind glyph, name (UI font).
+-- Selectable in col 0 with SpanAllColumns; key text painted on top via SameLine.
 local function renderPaletteList(slots)
   if #slots == 0 then
     ImGui.TextDisabled(ctx, '(no slots)')
@@ -617,9 +572,8 @@ local function renderPalette(tracks)
   local slots        = focusedTrack and av:trackSlots(focusedTrack.idx) or {}
   local focusedSlot  = focusedSlotEntry(slots, av:paletteSlot())
 
-  -- Push chrome styles inside the palette child so buttons get
-  -- toolbar colours, FrameBorderSize, etc. Body styles (parchment
-  -- text + tables) already in effect from the renderBody-level push.
+  -- Push chrome styles here so buttons get toolbar colours; body styles already in effect
+  -- from the renderBody-level push.
   chrome.pushChromeStyles()
   renderPaletteHeader(focusedTrack)
   renderPaletteActions(focusedTrack, focusedSlot)
@@ -630,7 +584,7 @@ end
 
 ----------- PUBLIC
 
---contract: bind takes no take — arrange is project-wide. coord may call with no args (or a take, ignored).
+--contract: bind takes no take — arrange is project-wide; coord may call with nil or a take.
 function ap:bind() end
 function ap:unbind() end
 
@@ -642,8 +596,8 @@ function ap:seedCursorFromReaper() av:seedCursor() end
 
 function ap:renderToolbarBits(_) end
 
---invariant: grid is hand-drawn (no ImGui table) — tints, gridlines, take rects per slot, cursor on top.
---contract: pushes parchment body palette (coord popped chrome before body draw); palette tables below need it.
+--invariant: grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.
+--contract: pushes parchment body palette (coord popped chrome before); palette tables need it.
 --contract: invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
 function ap:renderBody(_, w, h, dispatch)
   if not ctx then return end
@@ -671,9 +625,8 @@ function ap:renderBody(_, w, h, dispatch)
   end
   ImGui.EndChild(ctx)
 
-  -- 1 px vertical rule centred in PANE_GAP so neither pane edge
-  -- touches the line. Darkest parchment shade (colour.text =
-  -- palette.shade) ties it to the body palette instead of pure black.
+  -- 1px vertical rule centred in PANE_GAP so neither pane edge touches it.
+  -- Uses 'text' colour (darkest parchment shade) to tie it to the body palette.
   ImGui.SameLine(ctx, 0, 0)
   local sx, sy = ImGui.GetCursorScreenPos(ctx)
   local lineX  = sx + math.floor(PANE_GAP / 2)
@@ -714,7 +667,7 @@ function ap:focusState()
 end
 
 
---invariant: createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture. Slots have no existence apart from items on the grid; the palette's rename / delete buttons act on existing slots.
+--invariant: createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.
 -- cmgr:scope is idempotent — same scope av registers into.
 local arrange = cmgr:scope('arrange')
 
@@ -724,9 +677,8 @@ arrange:registerAll {
   end,
 }
 
--- The cursor-nav and take-edit commands reuse the tracker scope's keys
--- but not its names: cmgr.commands is flat, so a shared name would
--- overwrite the other scope's gate (see reference_commandmanager_limits).
+-- Cursor-nav and take-edit commands reuse the tracker scope's keys but not its names:
+-- cmgr.commands is flat, so a shared name would overwrite the other scope's gate.
 local binds = {
   arrangeCursorUp     = { ImGui.Key_UpArrow   },
   arrangeCursorDown   = { ImGui.Key_DownArrow },
