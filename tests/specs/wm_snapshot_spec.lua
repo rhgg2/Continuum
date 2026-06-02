@@ -85,20 +85,19 @@ return {
     end,
   },
   {
-    name = 'CU instance whose guid is registered via edge.opFxGuid appears in fxOrder',
+    name = 'CU instance registered via node.midiInBracketGuid appears in fxOrder',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       local track = seedSourceTrack(h, 'guid-A')
       seedFx(h, track, 'JS:owned',             '{FX-1}')
       seedFx(h, track, 'JS:Continuum Utility', '{CU-1}')
-      h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain' })
+      h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'from', 'to' })
       local ok, err = wm:mutate(function(g)
         g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
-        g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}',
+        g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}', midiInBracketGuid='{CU-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
-        util.add(g.edges, { type='audio', from='s', to='f',
-                            ops={gain=0.5}, opFxGuid='{CU-1}' })
+        util.add(g.edges, { type='audio', from='s', to='f', ops={gain=0.5} })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)
       t.truthy(ok, 'mutate ok: ' .. tostring(err and err.code))

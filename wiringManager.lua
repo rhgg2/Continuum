@@ -535,8 +535,7 @@ local function ownedChain(track, ownedGuids)
         -- Mirror live CU params so fxOrderEq is honest; without it every reconcile spuriously emits setFXChain.
         local idx     = cuParamIdx(track, fxIdx)
         local modeInt = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.mode) + 0.5)
-        local modeStr = ({ [0] = 'gain', [1] = 'channelRemap',
-                           [2] = 'busRoute', [3] = 'merge' })[modeInt] or 'gain'
+        local modeStr = ({ [0] = 'busRoute', [1] = 'merge' })[modeInt] or 'merge'
         if modeStr == 'busRoute' then
           entry.params = { mode = modeStr,
                            from = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.from) + 0.5),
@@ -550,9 +549,6 @@ local function ownedChain(track, ownedGuids)
                            audioSum = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.audioSum) + 0.5),
                            outBus   = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.outBus) + 0.5),
                            inMask   = inMask }
-        else
-          entry.params = { mode = modeStr,
-                           gain = reaper.TrackFX_GetParam(track, fxIdx, idx.gain) }
         end
       end
       util.add(out, entry)
@@ -617,9 +613,6 @@ function wm:snapshot()
     if n.mergeGuids then
       for _, g in pairs(n.mergeGuids) do ownedGuids[g] = true end
     end
-  end
-  for _, e in ipairs(userGraph.edges) do
-    if e.opFxGuid then ownedGuids[e.opFxGuid] = true end
   end
   -- First pass: discover managed tracks + their (classKey, hostKind), so
   -- the second pass can resolve send destinations by track → classKey.
@@ -720,9 +713,6 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
         entry.fxGuid = consumer.mergeGuids and consumer.mergeGuids[node.originHost]
         entry.params = util.deepClone(node.params)
         entry.origin = { kind = 'merge', consumer = node.originConsumer, host = node.originHost }
-      elseif node.params then
-        entry.params = util.deepClone(node.params)
-        entry.origin = { kind = 'edge', idx = node.originEdgeIdx }
       else
         entry.origin = { kind = 'node', id = id }
         if not (node.fxIdent and node.fxIdent:sub(1, 3) == 'JS:') then
@@ -940,7 +930,7 @@ end
 -- contract that maps a mode-string in `params` to the slider's float value.
 -- Lives here (not in DAG) because lowering is pure and shouldn't know about
 -- the JSFX's numeric encoding.
-local CU_MODE_TO_FLOAT = { gain = 0, channelRemap = 1, busRoute = 2, merge = 3 }
+local CU_MODE_TO_FLOAT = { busRoute = 0, merge = 1 }
 
 local function paramValueAsFloat(name, value)
   if name == 'mode' and type(value) == 'string' then
@@ -968,11 +958,7 @@ end
 
 local function pushParams(track, fxIdx, ident, params, cache)
   for k, v in pairs(params) do
-    -- channelRemap.map is a 16-entry table, not a single slider; deferred
-    -- until the channelRemap mode is exercised end-to-end.
-    if k == 'map' then
-      error('CU channelRemap param push deferred to follow-up slice')
-    elseif k == 'gains' then
+    if k == 'gains' then
       -- Merge gain bank: one slider per pair (gain1..gainN).
       for i, g in ipairs(v) do
         local pIdx = resolveParamIdx(track, fxIdx, ident, 'gain' .. i, cache)
@@ -1235,9 +1221,6 @@ local function ownedGuidsFrom(graph, persisted)
       for _, g in pairs(n.mergeGuids) do s[g] = true end
     end
   end
-  for _, e in ipairs(graph.edges) do
-    if e.opFxGuid then s[e.opFxGuid] = true end
-  end
   return s
 end
 
@@ -1381,15 +1364,7 @@ function wm:applyOps(ops, label)
     end
   end
 
-  -- A wire whose gain folded to a native send owns no CU bridge; drop any
-  -- stale opFxGuid (left from when the wire was intra-class) so the live-drag
-  -- hot path resolves it as folded, not as a vanished CU.
   local ctx = DAG.compile(userGraph)
-  local clearGuid = {}
-  for edgeIdx, sink in pairs(ctx:gainSinks()) do
-    local e = userGraph.edges[edgeIdx]
-    if sink.kind ~= 'cu' and e and e.opFxGuid then clearGuid[edgeIdx] = true end
-  end
 
   -- Per-consumer merge guids dangle when gain folds to a native send or fan-in
   -- drops to one. wantedMerge names still-active (consumer,host) pairs; rest swept.
@@ -1423,7 +1398,7 @@ function wm:applyOps(ops, label)
     end
   end
 
-  if #stamps > 0 or next(clearGuid) or next(bracketClassed) then
+  if #stamps > 0 or next(bracketClassed) then
     realising = true
     self:mutate(function(g)
       for _, st in ipairs(stamps) do
@@ -1434,9 +1409,8 @@ function wm:applyOps(ops, label)
           local n = g.nodes[st.origin.consumer]
           n.mergeGuids = n.mergeGuids or {}
           n.mergeGuids[st.origin.host] = st.guid
-        else                                       g.edges[st.origin.idx].opFxGuid           = st.guid end
+        end
       end
-      for idx in pairs(clearGuid) do g.edges[idx].opFxGuid = nil end
       for id, n in pairs(g.nodes) do
         if n.mergeGuids then
           for host in pairs(n.mergeGuids) do

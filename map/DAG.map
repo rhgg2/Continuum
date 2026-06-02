@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1395  sha=a062e7d  mode=namespace
+@module DAG  src=DAG.lua  loc=1387  sha=210c1ed  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -15,8 +15,8 @@
 # Shapes
   @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
   @shape  userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool, split?=true }
-  @shape  edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, opFxGuid?=string }
-  @shape  synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originEdgeIdx?=int, originNode?=string, originSide?='in'|'out', originConsumer?=string, originHost?=string, inputEdges?=int[] }
+  @shape  edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number}, primary?=true }
+  @shape  synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originHost?=string, inputEdges?=int[] }
   @shape  outWire = { from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
   @shape  intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
   @shape  targetPlanEntry = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
@@ -62,14 +62,14 @@
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
       @contract  derivedSplits is internal (the master-min fixpoint); public callers omit it
   -- allocate
-  @api M.allocate(plan, nodes)  @ 901
+  @api M.allocate(plan, nodes)  @ 893
       -- Per-host live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 253, 331, 402, 403, 458, 527, 528, 548, 562, 567, 569, 573, 603, 620, 621, 623, 627, 642, 658, 696, 705, 723, 734, 740, 750, 756, 757, 772, 780, 791, 826, 839, 916, 938, 952, 970, 980, 983, 1017, 1025, 1034, 1042, 1073, 1103, 1138, 1165, 1172, 1196, 1204, 1208, 1212, 1243, 1266, 1329, 1330, 1331, 1336, 1351
-  @use call    util.assign  @ 74, 609, 1373, 1374
+  @use call    util.add  @ 253, 331, 402, 403, 458, 527, 528, 548, 562, 567, 569, 573, 603, 616, 619, 634, 650, 688, 697, 715, 726, 732, 742, 748, 749, 764, 772, 783, 818, 831, 908, 930, 944, 962, 972, 975, 1009, 1017, 1026, 1034, 1065, 1095, 1130, 1157, 1164, 1188, 1196, 1200, 1204, 1235, 1258, 1321, 1322, 1323, 1328, 1343
+  @use call    util.assign  @ 74, 609, 1365, 1366
   @use call    util.bucket  @ 123, 156, 175, 196, 197, 303, 336
   @use require util  @ 29

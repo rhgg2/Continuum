@@ -143,7 +143,7 @@ return {
     end,
   },
   {
-    name = 'apply: CU bridge — params pushed, stamp lands on edge.opFxGuid',
+    name = 'apply: gain CU — params pushed, stamp lands on consumer mergeGuids',
     run = function(harness)
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
@@ -164,7 +164,7 @@ return {
           sets[c.paramIdx] = c.value
         end
       end
-      t.eq(sets[0], 3,   'mode slider set to 3 (merge)')
+      t.eq(sets[0], 1,   'mode slider set to 1 (merge)')
       t.eq(sets[3], 1,   'nPairs slider set to 1')
       t.eq(sets[4], 0.5, 'gain1 slider set to 0.5')
       local stamped

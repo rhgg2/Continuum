@@ -97,7 +97,7 @@ return {
       t.eq(mid, 'JS:c',                 'slot 1 = consumer fx')
       -- slider layout: mode=0, nPairs=3, outBus=20, inMask0=21, audioSum=25.
       local sets = paramSetsOn(h, track, 0)
-      t.eq(sets[0],  3, 'merge mode')
+      t.eq(sets[0],  1, 'merge mode')
       t.eq(sets[3],  1, 'nPairs = 1 (one midi bus)')
       t.eq(sets[21], 3, 'inMask0 covers feeder buses 0 and 1')
       t.eq(sets[20], 0, 'outBus = 0 (consumer reads the boundary bus)')

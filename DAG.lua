@@ -10,13 +10,13 @@
 --shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool, split?=true }
 --invariant: fx nodes carry busAware; wm:addFxNode and M.validate refuse true
 --invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
---shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number, channelMap?={[1..16]=1..16}}, primary?=true, opFxGuid?=string }
+--shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number}, primary?=true }
 --invariant: edge ops ride as metadata; gain on a sole send-wire folds onto send volume, else CU
 -- see docs/DAG.md § CU bridge invariant
 --invariant: node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
 --invariant: a split-tagged class never absorbs
 --invariant: srcSet unions node.split with derived master-min split markers (ctx:masterSplits)
---shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originEdgeIdx?=int, originNode?=string, originSide?='in'|'out', originConsumer?=string, originHost?=string, inputEdges?=int[] }
+--shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originHost?=string, inputEdges?=int[] }
 -- see docs/DAG.md § synthNode field roles
 --shape: outWire = { from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
 --shape: intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
@@ -593,8 +593,8 @@ function M.compile(userGraph, derivedSplits)
       end
     end
 
-    -- Phase A — edges → conns. MIDI channelMap mints a per-edge channelRemap CU;
-    -- audio gain rides the conn as metadata (stripped to D_VOL when folded).
+    -- Phase A — edges → conns. Audio gain rides the conn as metadata
+    -- (stripped to D_VOL when folded); MIDI passes through unchanged.
     local synthNodes, cuHost, conns, cuN = {}, {}, {}, 0
     local mhc = self:masterHostedClass()
     local function realHost(id) return self:resolveHost(classOf[id]) end
@@ -613,15 +613,7 @@ function M.compile(userGraph, derivedSplits)
     for edgeIdx, edge in ipairs(edges) do
       local op = edge.ops
       if edge.type == 'midi' then
-        if op and op.channelMap then
-          local cuId = mintCU(realHost(edge.from),
-            { mode = 'channelRemap', map = op.channelMap },
-            { fxGuid = edge.opFxGuid, originEdgeIdx = edgeIdx })
-          util.add(conns, { type = 'midi', from = edge.from, to = cuId })
-          util.add(conns, { type = 'midi', from = cuId, to = edge.to })
-        else
-          util.add(conns, { type = 'midi', from = edge.from, to = edge.to })
-        end
+        util.add(conns, { type = 'midi', from = edge.from, to = edge.to })
       else
         local g = (not folded[edgeIdx]) and op and op.gain or nil
         util.add(conns, { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,

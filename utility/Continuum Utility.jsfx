@@ -1,17 +1,13 @@
 desc:Continuum Utility
 tags: utility continuum
-version: 0.06
+version: 0.07
 author: Continuum
 license: MIT
 about:
-  Per-edge utility spliced by the Continuum wiring system. One mechanism
-  doing several jobs — host for wire-level operators, MIDI bus brackets,
-  and the merge node that collapses audio/MIDI fan-in.
-  - Mode 0 (Gain): linear scalar applied to both audio channels. Legacy
-    single-wire form; subsumed by Merge (nPairs=1) and removed once the
-    compiler stops emitting it.
-  - Mode 1 (ChannelRemap): reserved; pass-through in this slice.
-  - Mode 2 (BusRoute): asymmetric route — events on `from`->0, on 0->`to`,
+  Compiler-synthesised utility spliced by the Continuum wiring system —
+  never user-placed. Two modes: the MIDI bus bracket and the merge node
+  that collapses audio/MIDI fan-in.
+  - Mode 0 (BusRoute): asymmetric route — events on `from`->0, on 0->`to`,
     others pass through. Spliced around a non-bus-aware JSFX whose input
     arrives on bus N. in-park sets `from`=N, `to`=M (the FX's output bus):
     input lands on bus 0 where REAPER's per-FX filter exposes it, bus-0
@@ -20,7 +16,7 @@ about:
     `from`!=`to`, in-park also retains the original `from` events on `from`,
     so a producer fanning out to this FX and a later sibling keeps its bus.
     The symmetric swap (terminal consumer, M=N) is the `from`==`to` case.
-  - Mode 3 (Merge): the merge node. Audio is a per-pair gain bank —
+  - Mode 1 (Merge): the merge node. Audio is a per-pair gain bank —
     `nPairs` input pairs, `out[i] = in[i] * gain{i}`, strictly 1:1 — and
     summation/routing is left to the consuming FX's pin matrix (pins sum
     every pair routed to them for free). The exception is a matrix-less
@@ -29,8 +25,7 @@ about:
     way MIDI always does. MIDI is an internal N->1 collapse: every event
     whose bus is set in the 128-bit input mask is rewritten to `outBus`
     and re-emitted (no matrix exists on the MIDI side). One instance
-    carries both an FX's audio-pin gains and its MIDI-bus merge. Per-input
-    channel-remap folds in with the channelRemap-push slice.
+    carries both an FX's audio-pin gains and its MIDI-bus merge.
 
 ext_midi_bus = 1;
 
@@ -41,8 +36,7 @@ ext_midi_bus = 1;
   loop(32, printf("out_pin:out%d\n", i); i += 1; );
 ?>
 
-slider1:mode=0<0,3,1{Gain,ChannelRemap,BusRoute,Merge}>mode
-slider2:gain=1<0,8,0.001>gain
+slider1:mode=0<0,1,1{BusRoute,Merge}>mode
 slider3:from=0<0,127,1>from
 slider4:nPairs=1<1,16,1>nPairs
 <?
@@ -69,13 +63,13 @@ maskbuf[2] = inMask2;
 maskbuf[3] = inMask3;
 
 @block
-mode == 3 ? (
+mode == 1 ? (
   while (midirecv(offset, msg1, msg23)) (
     (maskbuf[midi_bus >> 5] & (1 << (midi_bus & 31))) ? midi_bus = outBus;
     midisend(offset, msg1, msg23);
   );
 ) :
-mode == 2 ? (
+mode == 0 ? (
   while (midirecv(offset, msg1, msg23)) (
     midi_bus == from ? (
       from != to ? midisend(offset, msg1, msg23);  // retain `from` for fan-out siblings
@@ -86,11 +80,7 @@ mode == 2 ? (
 );
 
 @sample
-mode == 0 ? (
-  spl0 *= gain;
-  spl1 *= gain;
-) :
-mode == 3 ? (
+mode == 1 ? (
   audioSum ? (
     // matrix-less sink (master parent send): sum gained inputs into pair 0.
     acc0 = 0; acc1 = 0; pr = 0;
