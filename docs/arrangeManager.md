@@ -171,6 +171,22 @@ snap, and the minimum-length floor are owned by the caller.
 decide what placement is legal before invoking a mutator. Abutting
 items are legal under the half-open ranges used throughout.
 
+## Natural length and `D_LENGTH`
+
+Each take carries a **natural length** in the cm key
+`arrangeNaturalLenQN`; `nil` means `util.OPEN` (grow to fill). What
+REAPER actually plays — the item's `D_LENGTH` — is *derived*, never
+the natural length verbatim: `D_LENGTH = min(natural, gap-to-next,
+source)`. `relayoutTrack` walks the track in `startQN` order and
+re-derives `D_LENGTH` for every take after any mutation, so the cap is
+always current; the mutators (`moveTake`, `resizeTake`, …) preserve
+natural length and lean on relayout to re-derive the playing length.
+
+A stored natural that is **≥ the source length** is demoted to
+`util.OPEN` on relayout. Pinning a finite cap at-or-above the source
+would freeze the take at today's source length; demoting to OPEN lets
+future source growth widen the cap automatically.
+
 ## Surface
 
 Discovery: `am:projectTracks`, `am:tracksTakes`, `am:trackSlots`,

@@ -3,13 +3,14 @@
 
 --invariant: project-wide singleton; reads REAPER items + cm directly, owns no take state of its own
 --invariant: trackIdx is a visible-column index, not a REAPER slot (see docs/arrangeManager.md)
---invariant: slot palette lives in cm at the track tier under 'arrangeSlots'; foreign-track writes route through cm:writeTrackKey
---invariant: slot indices are 0..61, base62-keyed via util.toBase62 (62 chars: 0-9, a-z, A-Z); allocation is lowest-free; gaps allowed
---invariant: every grouped take is a slot — `trackSlots`, `tracksTakes`, `slotForTake` and `projectTracks` route through ensureSlots, which allocates indices for live ids not yet in the dict and prunes dict entries whose id has no live take. A slot has no existence apart from at least one take on the grid carrying its id.
---invariant: createAndDropMidi is the only path that mints a slot; everything else either inherits one from existing items (auto-materialisation) or drops another instance into one that already exists
---invariant: takeId derivation is the source-identity chokepoint — MIDI: POOLEDEVTS guid from item state chunk (pooled takes share it); audio: source filename. Takes whose id can't be derived are skipped during ensureSlots — they neither materialise a slot nor pin one.
---invariant: reswing (reswingAll) is the legacy sequenceManager behaviour folded in and needs the optional tm dependency; pure-discovery callers may omit tm
---invariant: per-take natural length (cm key 'arrangeNaturalLenQN'). Default nil → util.OPEN. The item's D_LENGTH on each track is derived: min(effective natural, gap to next take, source length). relayoutTrack enforces this after every mutation. A stored natural >= source length is demoted to util.OPEN (= nil) so future source growth widens the cap automatically.
+--invariant: slot palette in cm at track tier under key 'arrangeSlots'; writes via cm:writeTrackKey
+--invariant: slot indices 0..61, base62-keyed (util.toBase62); lowest-free, gaps allowed
+--invariant: every grouped take is a slot; all four discovery reads route through ensureSlots
+--invariant: createAndDropMidi alone mints a slot; all else inherits or drops into an existing one
+--invariant: takeId is the source-identity chokepoint; takes with no derivable id are skipped
+--invariant: reswingAll is sequenceManager folded in; tm optional, omitted by discovery callers
+--invariant: natural length in cm 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
+--invariant: a stored natural ≥ source demotes to util.OPEN; see docs § Natural length
 --invariant: 'arrangeColours' (project tier) maps takeId → colourIdx project-wide
 --invariant: arrangeColours allocates lowest-free across live takeIds; ensureColours prunes dead ids
 --invariant: placement stamps painter.hueNative(idx) on new takes iff I_CUSTOMCOLOR == 0
@@ -102,7 +103,7 @@ local function setNaturalLenOf(take, v)
   else                   cm:writeTakeKey(take, 'arrangeNaturalLenQN', v) end
 end
 
---contract: walks track in startQN order; demotes natural ≥ source to OPEN; sets each item's D_LENGTH = min(effective, gap-to-next, source). Cheap to over-call: idempotent.
+--contract: re-derives each D_LENGTH walking startQN order; idempotent. See docs § Natural length
 local function relayoutTrack(track)
   if not track then return end
   local rows = {}
@@ -517,7 +518,7 @@ local function cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)
   return newTake
 end
 
---contract: (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track or no free slot. Natural length defaults to util.OPEN.
+--contract: (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track/free slot
 function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   local track   = visibleTrackOfCol(trackIdx)
   local dict    = track and readSlots(track)
@@ -575,7 +576,7 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   return take
 end
 
---contract: clones take at qnPos on its own track (name included, original untouched); nil if track/id missing
+--contract: clones take at qnPos on its own track, original untouched; nil if track/id missing
 function am:duplicateTake(take, qnPos)
   local track = visibleTrackOfCol(take.trackIdx)
   if not track then return end
@@ -594,9 +595,8 @@ function am:duplicateTake(take, qnPos)
   return copy
 end
 
--- Destination for the *-Below trio. Natural end (not rendered) so a
--- truncated upstream still drops past its downstream neighbour; relayout
--- handles the symmetric truncation in the other direction.
+-- Destination for the *-Below trio: natural end (not rendered), so a truncated upstream still
+-- drops past its downstream neighbour; relayout handles the symmetric truncation.
 local function destBelow(take) return take.startQN + take.naturalLenQN end
 
 --contract: pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
@@ -632,7 +632,7 @@ end
 
 ----- Per-take edits
 
---contract: true iff no other take on trackIdx starts exactly at startQN (item ~= exceptItem). Replaces the old range-overlap gate: under the natural-length model items may share span, but never a start position.
+--contract: true iff no take on trackIdx (≠ exceptItem) starts exactly at startQN (shared spans OK)
 function am:startIsClear(trackIdx, startQN, exceptItem)
   for _, other in ipairs(am:tracksTakes(trackIdx)) do
     if other.item ~= exceptItem and other.startQN == startQN then
@@ -642,7 +642,7 @@ function am:startIsClear(trackIdx, startQN, exceptItem)
   return true
 end
 
---contract: shifts item start by deltaQN; relayouts the track. Natural length is preserved; D_LENGTH is re-derived. Returns true iff the new start clears existing starts (no-op on collision).
+--contract: shifts start by deltaQN, relayouts (natural kept); true iff start clear, else no-op
 function am:moveTake(take, deltaQN)
   local startQN  = itemQNRange(take.item)
   local newStart = startQN + deltaQN
@@ -655,7 +655,7 @@ function am:moveTake(take, deltaQN)
   return true
 end
 
---contract: writes the take's natural length; relayout caps it (source / next-take gap). A value ≥ source is demoted to util.OPEN during relayout.
+--contract: writes the take's natural length; relayout caps it. See docs § Natural length.
 function am:resizeTake(take, newNaturalQN)
   setNaturalLenOf(take.take, newNaturalQN)
   local track = visibleTrackOfCol(take.trackIdx)
@@ -692,7 +692,7 @@ local function projectMidiTakes()
   return takes
 end
 
---contract: reads each take's persisted usedSwings table via cm:readTakeKey; no mm/cm context disturbance
+--contract: reads each take's persisted usedSwings via cm:readTakeKey; no mm/cm context disturbance
 function am:takesUsing(name)
   local hits = {}
   for _, take in ipairs(projectMidiTakes()) do
@@ -702,7 +702,7 @@ function am:takesUsing(name)
   return hits
 end
 
---contract: re-binds each takesUsing(name) take with markSwingStale=true; restores the original bound take at end
+--contract: re-binds each takesUsing(name) take (markSwingStale); restores the bound take after
 function am:reswingAll(name)
   assert(tm, 'arrangeManager: reswingAll requires the tm dependency')
   local origTake = tm:currentTake()
