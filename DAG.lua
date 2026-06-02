@@ -16,7 +16,8 @@
 --invariant: node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
 --invariant: a split-tagged class never absorbs
 --invariant: srcSet unions node.split with derived master-min split markers (ctx:masterSplits)
---shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originEdgeIdx?=int, originNode?=string, originSide?='in'|'out' }; the CU bridge synthesised for a wire-level op (targetPlan, originEdgeIdx) or a bus-swap bracket (allocate, originNode/originSide). See design/wiring.md § 3c.
+--shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originEdgeIdx?=int, originNode?=string, originSide?='in'|'out', originConsumer?=string, originHost?=string, inputEdges?=int[] }
+-- see docs/DAG.md § synthNode field roles
 --shape: outWire = { from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
 --shape: intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
 --shape: targetPlanEntry = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
@@ -589,38 +590,131 @@ function M.compile(userGraph, derivedSplits)
       end
     end
 
-    -- Synthesise a CU bridge per realised wire-level op (unfolded gain or channelMap),
-    -- splicing into conns. CU is connectivity-inert (1-in/1-out); inherits producer's host.
+    -- Realised wire-level ops become CU bridges: per-edge for MIDI channelMap and
+    -- cross-host gain; intra-host/master fan-in defers to the merge pass below.
     local synthNodes, cuHost, conns, cuN = {}, {}, {}, 0
-    local function audioConn(from, fp, to, tp)
+    local mhc = self:masterHostedClass()
+    local function realHost(id) return self:resolveHost(classOf[id]) end
+    local function audioConn(from, fp, to, tp, gain)
       util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
-                        to = to, toPort = tp or 1 })
+                        to = to, toPort = tp or 1, gain = gain })
+    end
+    local function mintCU(host, params, origin)
+      cuN = cuN + 1
+      local cuId = '_cu_' .. cuN
+      synthNodes[cuId] = util.assign({ kind = 'fx', fxIdent = CU_IDENT, params = params }, origin)
+      cuHost[cuId] = host
+      return cuId
     end
     for edgeIdx, edge in ipairs(edges) do
       local op = edge.ops
-      local doSplice = (edge.type == 'audio' and op and op.gain and not folded[edgeIdx])
-                    or (edge.type == 'midi'  and op and op.channelMap)
-      if doSplice then
-        cuN = cuN + 1
-        local cuId = '_cu_' .. cuN
-        synthNodes[cuId] = {
-          kind = 'fx', fxIdent = CU_IDENT, fxGuid = edge.opFxGuid,
-          params = edge.type == 'audio' and { mode = 'gain', gain = op.gain }
-                                         or  { mode = 'channelRemap', map = op.channelMap },
-          originEdgeIdx = edgeIdx,
-        }
-        cuHost[cuId] = self:resolveHost(classOf[edge.from])
-        if edge.type == 'audio' then
-          audioConn(edge.from, edge.fromPort, cuId, 1)
-          audioConn(cuId, 1, edge.to, edge.toPort)
-        else
+      if edge.type == 'midi' then
+        if op and op.channelMap then
+          local cuId = mintCU(realHost(edge.from),
+            { mode = 'channelRemap', map = op.channelMap },
+            { fxGuid = edge.opFxGuid, originEdgeIdx = edgeIdx })
           util.add(conns, { type = 'midi', from = edge.from, to = cuId })
           util.add(conns, { type = 'midi', from = cuId, to = edge.to })
+        else
+          util.add(conns, { type = 'midi', from = edge.from, to = edge.to })
         end
-      elseif edge.type == 'audio' then
-        audioConn(edge.from, edge.fromPort, edge.to, edge.toPort)
       else
-        util.add(conns, { type = 'midi', from = edge.from, to = edge.to })
+        local g = op and op.gain
+        if g and not folded[edgeIdx] then
+          local fH, tH = realHost(edge.from), realHost(edge.to)
+          local toMaster = mhc and tH == mhc and fH ~= mhc
+          local intra    = fH ~= '' and tH == fH and nodes[edge.to].kind == 'fx'
+          if toMaster or intra then
+            util.add(conns, { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,
+                              to = edge.to, toPort = edge.toPort or 1,
+                              gain = g, edgeIdx = edgeIdx, opFxGuid = edge.opFxGuid })
+          else
+            -- Cross-host collapse (≥2 wires to one send): per-edge degenerate
+            -- merge CU (nPairs=1) on the producer host; folds into 3c.4.5.
+            local cuId = mintCU(fH, { mode = 'merge', nPairs = 1, gains = { g }, audioSum = 0 },
+              { fxGuid = edge.opFxGuid, originEdgeIdx = edgeIdx })
+            audioConn(edge.from, edge.fromPort, cuId, 1)
+            audioConn(cuId, 1, edge.to, edge.toPort)
+          end
+        else
+          audioConn(edge.from, edge.fromPort, edge.to, edge.toPort)
+        end
+      end
+    end
+
+    -- Per-consumer audio merge: all-unity ⇒ matrix-fed (no CU), any non-unity
+    -- gain ⇒ one Merge CU over all feeders. See docs/DAG.md § per-consumer merge.
+    do
+      local intraBuckets, intraKeys = {}, {}
+      local masterBuckets, masterKeys = {}, {}
+      local kept = {}
+      for _, c in ipairs(conns) do
+        local fH = c.type == 'audio' and realHost(c.from) or nil
+        if fH and fH ~= '' and mhc and realHost(c.to) == mhc and fH ~= mhc then
+          if not masterBuckets[fH] then masterBuckets[fH] = {}; util.add(masterKeys, fH) end
+          util.add(masterBuckets[fH], c)
+        elseif fH and fH ~= '' and realHost(c.to) == fH
+               and nodes[c.to] and nodes[c.to].kind == 'fx' then
+          local k = fH .. '\0' .. c.to
+          if not intraBuckets[k] then
+            intraBuckets[k] = { host = fH, consumer = c.to, feeders = {} }
+            util.add(intraKeys, k)
+          end
+          util.add(intraBuckets[k].feeders, c)
+        else
+          util.add(kept, c)
+        end
+      end
+      conns = kept
+
+      local function sortFeeders(fs)
+        table.sort(fs, function(a, b)
+          if a.from ~= b.from then return a.from < b.from end
+          if (a.fromPort or 1) ~= (b.fromPort or 1) then return (a.fromPort or 1) < (b.fromPort or 1) end
+          return (a.toPort or 1) < (b.toPort or 1)
+        end)
+      end
+      local function anyGained(fs)
+        for _, f in ipairs(fs) do if f.gain and f.gain ~= 1 then return true end end
+        return false
+      end
+      local function mergeCU(host, feeders, consumer, audioSum)
+        local gains, inputEdges = {}, {}
+        for _, f in ipairs(feeders) do
+          util.add(gains, f.gain or 1)
+          util.add(inputEdges, f.edgeIdx)
+        end
+        return mintCU(host,
+          { mode = 'merge', nPairs = #feeders, gains = gains, audioSum = audioSum },
+          { originConsumer = consumer, originHost = host, inputEdges = inputEdges })
+      end
+
+      table.sort(intraKeys)
+      for _, k in ipairs(intraKeys) do
+        local b = intraBuckets[k]
+        sortFeeders(b.feeders)
+        if anyGained(b.feeders) then
+          local cuId = mergeCU(b.host, b.feeders, b.consumer, 0)
+          for i, f in ipairs(b.feeders) do
+            audioConn(f.from, f.fromPort, cuId, i)
+            audioConn(cuId, i, b.consumer, f.toPort)
+          end
+        else
+          for _, f in ipairs(b.feeders) do util.add(conns, f) end
+        end
+      end
+
+      table.sort(masterKeys)
+      for _, host in ipairs(masterKeys) do
+        local feeders = masterBuckets[host]
+        sortFeeders(feeders)
+        if #feeders == 1 then
+          util.add(conns, feeders[1])
+        else
+          local cuId = mergeCU(host, feeders, 'master', 1)
+          for i, f in ipairs(feeders) do audioConn(f.from, f.fromPort, cuId, i) end
+          audioConn(cuId, 1, feeders[1].to, feeders[1].toPort)
+        end
       end
     end
 
@@ -695,8 +789,8 @@ function M.compile(userGraph, derivedSplits)
           })
         elseif toHost == masterHostedHost then
           plan[fromHost].mainSend = true
-          -- Multi-wire to master collapses to last-wins on masterFeed;
-          -- 3c.4's CU-merge lowers ≥2 master wires to a single CU output.
+          -- Audio master fan-in arrives pre-merged (≥2 wires → one audioSum CU
+          -- output), so masterFeed carries a single producer.
           if conn.type == 'audio' then
             plan[fromHost].masterFeed = { from = conn.from, fromPort = conn.fromPort }
           end

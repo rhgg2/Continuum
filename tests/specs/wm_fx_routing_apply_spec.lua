@@ -7,6 +7,11 @@
 local t    = require('support')
 local util = require('util')
 
+local CU_PARAMS = { 'mode', 'gain', 'bus', 'nPairs',
+  'gain1', 'gain2', 'gain3', 'gain4', 'gain5', 'gain6', 'gain7', 'gain8',
+  'gain9', 'gain10', 'gain11', 'gain12', 'gain13', 'gain14', 'gain15', 'gain16',
+  'outBus', 'inMask0', 'inMask1', 'inMask2', 'inMask3', 'audioSum' }
+
 local function mkWm(harness)
   local h  = harness.mk()
   local wm = util.instantiate('wiringManager', { cm = h.cm })
@@ -146,7 +151,7 @@ return {
       -- VST fx is routing-index 0 and gets patched; CU has no routingBytes.
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
-      h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain' })
+      h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
         g.nodes.f = fx('VST:Foo', nil)

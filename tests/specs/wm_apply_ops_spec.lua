@@ -1,6 +1,13 @@
 local t    = require('support')
 local util = require('util')
 
+-- Full CU slider list in JSFX order, so resolveParamIdx finds the gain bank
+-- and merge-param indices match production (mode=0, nPairs=3, gain1=4, ...).
+local CU_PARAMS = { 'mode', 'gain', 'bus', 'nPairs',
+  'gain1', 'gain2', 'gain3', 'gain4', 'gain5', 'gain6', 'gain7', 'gain8',
+  'gain9', 'gain10', 'gain11', 'gain12', 'gain13', 'gain14', 'gain15', 'gain16',
+  'outBus', 'inMask0', 'inMask1', 'inMask2', 'inMask3', 'audioSum' }
+
 local function mkWm(harness)
   local h  = harness.mk()
   local wm = util.instantiate('wiringManager', { cm = h.cm })
@@ -140,7 +147,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
-      h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain' })
+      h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
         g.nodes.f = fx('JS:foo', nil)
@@ -157,14 +164,13 @@ return {
           sets[c.paramIdx] = c.value
         end
       end
-      t.eq(sets[0], 0,   'mode slider set to 0 (gain)')
-      t.eq(sets[1], 0.5, 'gain slider set to 0.5')
-      local gainEdge
-      for _, e in ipairs(wm:graph().edges) do
-        if e.ops and e.ops.gain then gainEdge = e end
-      end
-      t.eq(gainEdge.opFxGuid, h.reaper.TrackFX_GetFXGUID(track, 0),
-           'guid stamped onto originating edge')
+      t.eq(sets[0], 3,   'mode slider set to 3 (merge)')
+      t.eq(sets[3], 1,   'nPairs slider set to 1')
+      t.eq(sets[4], 0.5, 'gain1 slider set to 0.5')
+      local stamped
+      for _, guid in pairs(wm:graph().nodes.f.audioMergeGuids or {}) do stamped = guid end
+      t.eq(stamped, h.reaper.TrackFX_GetFXGUID(track, 0),
+           'guid stamped onto the consumer node audioMergeGuids')
     end,
   },
   {
@@ -362,12 +368,12 @@ return {
     end,
   },
   {
-    name = 'apply: gain wire crossing into a new class folds — CU deleted, opFxGuid cleared',
+    name = 'apply: gain wire crossing into a new class folds — merge CU deleted, audioMergeGuids cleared',
     run = function(harness)
       local h, wm = mkWm(harness)
       local trackA = seedSource(h, 'guid-A')
       seedSource(h, 'guid-B')
-      h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain' })
+      h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
         g.nodes.fxA = fx('JS:a')
@@ -376,10 +382,9 @@ return {
         util.add(g.edges, audioEdge('fxA', 'fxB', { toPort = 2, ops = { gain = 0.5 } }))
       end)
       apply(wm)
-      t.eq(h.reaper.TrackFX_GetCount(trackA), 3, 'pre: fxA, fxB, and the gain CU on trackA')
-      local pre
-      for _, e in ipairs(wm:graph().edges) do if e.ops and e.ops.gain then pre = e end end
-      t.truthy(pre.opFxGuid, 'pre: CU guid stamped on the edge')
+      t.eq(h.reaper.TrackFX_GetCount(trackA), 3, 'pre: fxA, fxB, and the merge CU on trackA')
+      local pre = wm:graph().nodes.fxB.audioMergeGuids
+      t.truthy(pre and next(pre), 'pre: merge guid stamped on the consumer node')
 
       -- sB→fxB pulls fxB into class {A|B}; fxA→fxB is now an inter-class send,
       -- so its gain folds onto that send and the CU is no longer needed.
@@ -389,9 +394,8 @@ return {
       end)
       apply(wm)
       t.eq(h.reaper.TrackFX_GetCount(trackA), 1, 'post: only fxA remains; CU deleted')
-      local post
-      for _, e in ipairs(wm:graph().edges) do if e.ops and e.ops.gain then post = e end end
-      t.eq(post.opFxGuid, nil, 'stale CU guid cleared off the edge')
+      local post = wm:graph().nodes.fxB.audioMergeGuids
+      t.truthy(post == nil or not next(post), 'stale merge guid cleared off the consumer')
       local newTrack
       for i = 0, h.reaper.CountTracks(0) - 1 do
         local tr = h.reaper.GetTrack(0, i)
@@ -406,7 +410,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       local trackA = seedSource(h, 'guid-A')
-      h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'gain' })
+      h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.s  = source('guid-A')
         g.nodes.f1 = fx('JS:f1')

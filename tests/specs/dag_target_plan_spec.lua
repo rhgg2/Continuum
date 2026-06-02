@@ -36,6 +36,13 @@ local function planOf(g)
   return DAG.compile(g):targetPlan()
 end
 
+-- The merge CUs of a plan entry as {id, node} pairs (synthNodes is cuId-keyed).
+local function cuEntries(entry)
+  local out = {}
+  for id, sn in pairs(entry.synthNodes or {}) do out[#out + 1] = { id = id, node = sn } end
+  return out
+end
+
 return {
   {
     name = 'empty graph: only master, plan is empty (master implicit, no scratch needed)',
@@ -741,6 +748,85 @@ return {
       t.truthy(sawCuToFx1,       'CU -> fx_1 intraConn present')
       t.truthy(sawFx1ToMaster,   'fx_1 -> master intraConn present')
       t.truthy(sawFx2ToMaster,   'fx_2 -> master intraConn present')
+    end,
+  },
+
+  ----- 3c.4.4: per-consumer merge nodes
+
+  {
+    name = 'merge: intra gain is a per-consumer merge CU (nPairs=1, audioSum=0)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s', 'guid-s'); ns[k]  = v
+      local k2, v2 = fx('fx_a');            ns[k2] = v2
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's',    to = 'fx_a', ops = { gain = 0.5 } },
+        { type = 'audio', from = 'fx_a', to = 'master' },
+      }))
+      local list = cuEntries(plan['guid-s'])
+      t.eq(#list, 1, 'one merge CU synthesised')
+      local cu = list[1].node
+      t.eq(cu.fxIdent,         'JS:Continuum Utility')
+      t.eq(cu.params.mode,     'merge')
+      t.eq(cu.params.nPairs,   1)
+      t.deepEq(cu.params.gains, { 0.5 })
+      t.eq(cu.params.audioSum, 0, 'matrix-fed sink, no internal sum')
+      t.eq(cu.originConsumer,  'fx_a')
+      t.eq(cu.originHost,      'guid-s')
+      t.deepEq(cu.inputEdges,  { 1 }, 'maps pair 1 back to the gained edge')
+    end,
+  },
+  {
+    name = 'merge: two gained wires to master collapse to one audioSum CU (last-wins fix)',
+    run = function()
+      -- Master gets its own track (two source classes feed it), so host guid-a's
+      -- two wires to master would last-wins on masterFeed without the merge.
+      local ns = {}
+      local k,  v  = source('s1', 'guid-a'); ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
+      local k3, v3 = fx('fx_1');             ns[k3] = v3
+      local k4, v4 = fx('fx_2');             ns[k4] = v4
+      local k5, v5 = fx('fx_3');             ns[k5] = v5
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's1',   to = 'fx_1' },
+        { type = 'audio', from = 's1',   to = 'fx_2' },
+        { type = 'audio', from = 's2',   to = 'fx_3' },
+        { type = 'audio', from = 'fx_1', to = 'master', ops = { gain = 0.5 } },
+        { type = 'audio', from = 'fx_2', to = 'master', ops = { gain = 0.8 } },
+        { type = 'audio', from = 'fx_3', to = 'master' },
+      }))
+      local list = cuEntries(plan['guid-a'])
+      t.eq(#list, 1, 'fan-in collapses to a single merge CU')
+      local cu = list[1].node
+      t.eq(cu.params.mode,     'merge')
+      t.eq(cu.params.nPairs,   2)
+      t.eq(cu.params.audioSum, 1, 'matrix-less master sink sums internally')
+      t.deepEq(cu.params.gains, { 0.5, 0.8 })
+      t.eq(cu.originConsumer,  'master')
+      t.eq(cu.originHost,      'guid-a')
+      t.deepEq(cu.inputEdges,  { 4, 5 })
+      -- The parent send sees ONE producer (the CU), not two competing feeds.
+      t.eq(plan['guid-a'].masterFeed.from, list[1].id, 'masterFeed points at the merge CU')
+    end,
+  },
+  {
+    name = 'merge: distinct consumers get distinct merge CUs (per-consumer identity)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s', 'guid-s'); ns[k]  = v
+      local k2, v2 = fx('fx_a');            ns[k2] = v2
+      local k3, v3 = fx('fx_b');            ns[k3] = v3
+      local plan = planOf(mk(ns, {
+        { type = 'audio', from = 's',    to = 'fx_a', ops = { gain = 0.5 } },
+        { type = 'audio', from = 's',    to = 'fx_b', ops = { gain = 0.7 } },
+        { type = 'audio', from = 'fx_a', to = 'master' },
+        { type = 'audio', from = 'fx_b', to = 'master' },
+      }))
+      local byConsumer = {}
+      for _, e in ipairs(cuEntries(plan['guid-s'])) do byConsumer[e.node.originConsumer] = e.node end
+      t.truthy(byConsumer.fx_a and byConsumer.fx_b, 'one merge CU per consumer')
+      t.deepEq(byConsumer.fx_a.params.gains, { 0.5 })
+      t.deepEq(byConsumer.fx_b.params.gains, { 0.7 })
     end,
   },
 }

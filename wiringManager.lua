@@ -522,6 +522,12 @@ local function ownedChain(track, ownedGuids)
         if modeStr == 'busSwap' then
           entry.params = { mode = modeStr,
                            bus  = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.bus) + 0.5) }
+        elseif modeStr == 'merge' then
+          local nPairs = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.nPairs) + 0.5)
+          local gains = {}
+          for i = 1, nPairs do gains[i] = reaper.TrackFX_GetParam(track, fxIdx, idx['gain' .. i]) end
+          entry.params = { mode = modeStr, nPairs = nPairs, gains = gains,
+                           audioSum = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.audioSum) + 0.5) }
         else
           entry.params = { mode = modeStr,
                            gain = reaper.TrackFX_GetParam(track, fxIdx, idx.gain) }
@@ -584,6 +590,9 @@ function wm:snapshot()
       if n.fxGuid              then ownedGuids[n.fxGuid]              = true end
       if n.midiInBracketGuid   then ownedGuids[n.midiInBracketGuid]   = true end
       if n.midiOutBracketGuid  then ownedGuids[n.midiOutBracketGuid]  = true end
+    end
+    if n.audioMergeGuids then
+      for _, g in pairs(n.audioMergeGuids) do ownedGuids[g] = true end
     end
   end
   for _, e in ipairs(userGraph.edges) do
@@ -659,6 +668,7 @@ local function originKey(origin)
   if origin.kind == 'node'      then return 'node:' .. origin.id end
   if origin.kind == 'bracketIn' then return 'bracketIn:'  .. origin.id end
   if origin.kind == 'bracketOut' then return 'bracketOut:' .. origin.id end
+  if origin.kind == 'audioMerge' then return 'audioMerge:' .. origin.consumer .. '\0' .. origin.host end
   return 'edge:' .. origin.idx
 end
 
@@ -682,6 +692,11 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
         entry.params = util.deepClone(node.params)
         entry.origin = { kind = node.originSide == 'in' and 'bracketIn' or 'bracketOut',
                          id = node.originNode }
+      elseif node.originConsumer then
+        local consumer = compileNodes[node.originConsumer] or {}
+        entry.fxGuid = consumer.audioMergeGuids and consumer.audioMergeGuids[node.originHost]
+        entry.params = util.deepClone(node.params)
+        entry.origin = { kind = 'audioMerge', consumer = node.originConsumer, host = node.originHost }
       elseif node.params then
         entry.params = util.deepClone(node.params)
         entry.origin = { kind = 'edge', idx = node.originEdgeIdx }
@@ -931,9 +946,16 @@ local function pushParams(track, fxIdx, ident, params, cache)
     -- until the channelRemap mode is exercised end-to-end.
     if k == 'map' then
       error('CU channelRemap param push deferred to follow-up slice')
-    end
+    elseif k == 'gains' then
+      -- Merge gain bank: one slider per pair (gain1..gainN).
+      for i, g in ipairs(v) do
+        local pIdx = resolveParamIdx(track, fxIdx, ident, 'gain' .. i, cache)
+        reaper.TrackFX_SetParam(track, fxIdx, pIdx, g)
+      end
+    else
     local pIdx = resolveParamIdx(track, fxIdx, ident, k, cache)
     reaper.TrackFX_SetParam(track, fxIdx, pIdx, paramValueAsFloat(k, v))
+    end
   end
 end
 
@@ -1173,6 +1195,9 @@ local function ownedGuidsFrom(graph, persisted)
       if n.midiInBracketGuid   then s[n.midiInBracketGuid]   = true end
       if n.midiOutBracketGuid  then s[n.midiOutBracketGuid]  = true end
     end
+    if n.audioMergeGuids then
+      for _, g in pairs(n.audioMergeGuids) do s[g] = true end
+    end
   end
   for _, e in ipairs(graph.edges) do
     if e.opFxGuid then s[e.opFxGuid] = true end
@@ -1323,10 +1348,23 @@ function wm:applyOps(ops, label)
   -- A wire whose gain folded to a native send owns no CU bridge; drop any
   -- stale opFxGuid (left from when the wire was intra-class) so the live-drag
   -- hot path resolves it as folded, not as a vanished CU.
+  local ctx = DAG.compile(userGraph)
   local clearGuid = {}
-  for edgeIdx, sink in pairs(DAG.compile(userGraph):gainSinks()) do
+  for edgeIdx, sink in pairs(ctx:gainSinks()) do
     local e = userGraph.edges[edgeIdx]
     if sink.kind ~= 'cu' and e and e.opFxGuid then clearGuid[edgeIdx] = true end
+  end
+
+  -- Per-consumer merge guids dangle when gain folds to a native send or fan-in
+  -- drops to one. wantedMerge names still-active (consumer,host) pairs; rest swept.
+  local wantedMerge = {}
+  for _, hostEntry in pairs(ctx:targetPlan()) do
+    for _, sn in pairs(hostEntry.synthNodes or {}) do
+      if sn.originConsumer then
+        wantedMerge[sn.originConsumer] = wantedMerge[sn.originConsumer] or {}
+        wantedMerge[sn.originConsumer][sn.originHost] = true
+      end
+    end
   end
 
   -- Any node whose host fired setFXChain this pass without naming its brackets
@@ -1356,9 +1394,21 @@ function wm:applyOps(ops, label)
         if     st.origin.kind == 'node'       then g.nodes[st.origin.id].fxGuid              = st.guid
         elseif st.origin.kind == 'bracketIn'  then g.nodes[st.origin.id].midiInBracketGuid   = st.guid
         elseif st.origin.kind == 'bracketOut' then g.nodes[st.origin.id].midiOutBracketGuid  = st.guid
+        elseif st.origin.kind == 'audioMerge' then
+          local n = g.nodes[st.origin.consumer]
+          n.audioMergeGuids = n.audioMergeGuids or {}
+          n.audioMergeGuids[st.origin.host] = st.guid
         else                                       g.edges[st.origin.idx].opFxGuid           = st.guid end
       end
       for idx in pairs(clearGuid) do g.edges[idx].opFxGuid = nil end
+      for id, n in pairs(g.nodes) do
+        if n.audioMergeGuids then
+          for host in pairs(n.audioMergeGuids) do
+            if not (wantedMerge[id] and wantedMerge[id][host]) then n.audioMergeGuids[host] = nil end
+          end
+          if not next(n.audioMergeGuids) then n.audioMergeGuids = nil end
+        end
+      end
       for nodeId in pairs(bracketClassed) do
         local n = g.nodes[nodeId]
         if n then
@@ -1398,30 +1448,51 @@ function wm:pokeEdgeGain(edgeIdx, gain)
   ensureLoaded()
   local edge = userGraph.edges[edgeIdx]
   if not edge then return false end
-  -- A materialised CU bridge carries the gain (intra-class routing, or a
-  -- multi-path send where the gain can't fold onto one native volume).
-  if edge.opFxGuid then
+  local function probeAndSet(guid, paramName, value)
     local function probe(track)
       if not track then return false end
       for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
-        if reaper.TrackFX_GetFXGUID(track, fxIdx) == edge.opFxGuid then
-          local pIdx = resolveParamIdx(track, fxIdx, CU_IDENT, 'gain', pokeParamCache)
-          reaper.TrackFX_SetParam(track, fxIdx, pIdx, gain)
+        if reaper.TrackFX_GetFXGUID(track, fxIdx) == guid then
+          local pIdx = resolveParamIdx(track, fxIdx, CU_IDENT, paramName, pokeParamCache)
+          reaper.TrackFX_SetParam(track, fxIdx, pIdx, value)
           return true
         end
       end
       return false
     end
-    -- Master isn't in CountTracks/GetTrack; without this probe a master-resident CU misses every frame.
+    -- Master isn't in CountTracks/GetTrack; probe it first or a master-resident CU misses every frame.
     if probe(reaper.GetMasterTrack(0)) then return true end
     for i = 0, reaper.CountTracks(0) - 1 do
       if probe(reaper.GetTrack(0, i)) then return true end
     end
     return false
   end
+
+  -- Cross-host CU carries the edge's own guid (degenerate merge, slider gain1).
+  if edge.opFxGuid then return probeAndSet(edge.opFxGuid, 'gain1', gain) end
+
+  local ctx = DAG.compile(userGraph)
+
+  -- Intra/master merge CU: no per-edge guid. Resolve the consumer + this edge's
+  -- slot from the compiled plan, then poke gain{slot} on the per-consumer guid.
+  if edge.type == 'audio' then
+    for _, hostEntry in pairs(ctx:targetPlan()) do
+      for _, sn in pairs(hostEntry.synthNodes or {}) do
+        for slot, e in ipairs(sn.inputEdges or {}) do
+          if e == edgeIdx then
+            local consumer = userGraph.nodes[sn.originConsumer]
+            local guid = consumer and consumer.audioMergeGuids
+                         and consumer.audioMergeGuids[sn.originHost]
+            return guid ~= nil and probeAndSet(guid, 'gain' .. slot, gain) or false
+          end
+        end
+      end
+    end
+  end
+
   -- Folded: the gain lives on a native send. gainSinks names the sink so the
   -- hot path and targetPlan agree on where it lands.
-  local sink = DAG.compile(userGraph):gainSinks()[edgeIdx]
+  local sink = ctx:gainSinks()[edgeIdx]
   if not sink then return false end
   local byClass = buildClassKeyToTrack()
   if sink.kind == 'mainSend' then

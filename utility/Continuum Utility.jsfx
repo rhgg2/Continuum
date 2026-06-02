@@ -1,6 +1,6 @@
 desc:Continuum Utility
 tags: utility continuum
-version: 0.04
+version: 0.05
 author: Continuum
 license: MIT
 about:
@@ -32,32 +32,32 @@ ext_midi_bus = 1;
 
 <?
   i = 0;
-  loop(64, printf("in_pin:in%d\n",  i); i += 1; );
+  loop(32, printf("in_pin:in%d\n",  i); i += 1; );
   i = 0;
-  loop(64, printf("out_pin:out%d\n", i); i += 1; );
+  loop(32, printf("out_pin:out%d\n", i); i += 1; );
 ?>
 
 slider1:mode=0<0,3,1{Gain,ChannelRemap,BusSwap,Merge}>mode
 slider2:gain=1<0,8,0.001>gain
 slider3:bus=0<0,127,1>bus
-slider4:nPairs=1<1,32,1>nPairs
+slider4:nPairs=1<1,16,1>nPairs
 <?
   i = 1;
-  loop(32, printf("slider%d:gain%d=1<0,8,0.001>gain%d\n", i + 4, i, i); i += 1; );
+  loop(16, printf("slider%d:gain%d=1<0,8,0.001>gain%d\n", i + 4, i, i); i += 1; );
 ?>
-slider37:outBus=0<0,127,1>outBus
-slider38:inMask0=0<0,4294967295,1>inMask0
-slider39:inMask1=0<0,4294967295,1>inMask1
-slider40:inMask2=0<0,4294967295,1>inMask2
-slider41:inMask3=0<0,4294967295,1>inMask3
-slider42:audioSum=0<0,1,1>audioSum
+slider21:outBus=0<0,127,1>outBus
+slider22:inMask0=0<0,4294967295,1>inMask0
+slider23:inMask1=0<0,4294967295,1>inMask1
+slider24:inMask2=0<0,4294967295,1>inMask2
+slider25:inMask3=0<0,4294967295,1>inMask3
+slider26:audioSum=0<0,1,1>audioSum
 
 @init
-g = 0;        // mem[0..31]  : per-pair gain bank
-maskbuf = 64; // mem[64..67] : 128-bit MIDI input-bus mask, four 32-bit lanes
+g = 0;        // mem[0..15]  : per-pair gain bank
+maskbuf = 16; // mem[16..19] : 128-bit MIDI input-bus mask, four 32-bit lanes
 
 @slider
-<? i = 0; loop(32, printf("g[%d] = gain%d;\n", i, i + 1); i += 1; ); ?>
+<? i = 0; loop(16, printf("g[%d] = gain%d;\n", i, i + 1); i += 1; ); ?>
 maskbuf[0] = inMask0;
 maskbuf[1] = inMask1;
 maskbuf[2] = inMask2;

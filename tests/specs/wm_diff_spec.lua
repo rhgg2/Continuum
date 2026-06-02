@@ -70,26 +70,27 @@ return {
   },
 
   {
-    name = 'targetState: edge ops materialise as CU entries in fxOrder (lower-uniform)',
+    name = 'targetState: intra gain materialises as a per-consumer merge CU in fxOrder',
     run = function(harness)
       local _, wm = mkWm(harness)
       wm:load()
       wm:mutate(function(g)
         g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxGuid='{FX-1}',
+                         audioMergeGuids = { ['guid-A'] = '{CU-7}' },
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
-        util.add(g.edges, { type='audio', from='s', to='f',
-                            ops={gain=0.5}, opFxGuid='{CU-7}' })
+        util.add(g.edges, { type='audio', from='s', to='f', ops={gain=0.5} })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)
       local target = wm:targetState()
       local order = target['guid-A'].fxOrder
       t.eq(#order, 2, 'CU and fx both surface')
-      -- CU comes first (it sits upstream of fx_a on the source track).
+      -- CU comes first (it sits upstream of fx on the source track).
       t.eq(order[1].ident,  'JS:Continuum Utility')
-      t.eq(order[1].fxGuid, '{CU-7}')
-      t.eq(order[1].params.mode, 'gain')
-      t.eq(order[1].params.gain, 0.5)
+      t.eq(order[1].fxGuid, '{CU-7}', 'guid resolved from consumer.audioMergeGuids[host]')
+      t.eq(order[1].params.mode,    'merge')
+      t.eq(order[1].params.nPairs,  1)
+      t.eq(order[1].params.gains[1], 0.5)
       t.eq(order[2].ident,  'JS:foo')
       t.eq(order[2].fxGuid, '{FX-1}')
     end,

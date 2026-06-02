@@ -1,25 +1,24 @@
 # DAG
 
-Pure structural calculus for the wiring page. `M.compile` returns a
-lazy-caching ctx; user-graph predicates are free-standing. For the
-full wiring model see `design/wiring.md`.
-
 ## gainSinks — where a gained wire's volume lands
 
-`ctx:gainSinks` maps each edge index to the sink where its volume is
-applied. A gain on the sole wire realised as a send (track→track) or
-the parent/master send folds onto that send's native volume
-(`{kind='send'|'mainSend'}`); intra-class routing or several wires
-collapsing onto one send keep a CU (`{kind='cu'}`). `targetPlan` and
-`wm:pokeEdgeGain` share this one decision so the two code paths stay
-consistent.
+A folded gain on an audio wire lands either on the REAPER send that
+carries it (as `mainSendGain`) or on a CU bridge synthesised for
+unfoldable cases (cross-host, multi-pair). `ctx:gainSinks` is the
+authoritative fold decision: it is computed once and shared by
+`targetPlan` (which writes `outWires.gain` / `mainSendGain`) and
+`wm:pokeEdgeGain` (which pokes the live value without a full
+recompile).
 
 ## targetPlan shape — outWires, intraConns, masterFeed semantics
 
-`outWires` carries one entry per inter-class wire (no collapse).
-`intraConns` carries one entry per intra-host connection, including
-source-from and master-to anchors at track-IO pair 1, and synth-CU
-splices. `masterFeed` names the (post-fold) audio producer whose
+`outWires` are sends that leave a host. Each carries `from`, `to`,
+`type`, and optionally `gain` (folded boundary gain) and `srcChan` /
+`dstChan` (assigned by `M.allocate`). `intraConns` are FX-to-FX
+connections within the same host: same fields but no channel
+assignment. `masterFeed` is the single outWire entry that feeds the
+master-hosted class; its `from` / `fromPort` identify the last node
+before the boundary. When a master-hosted fx exists, its host's plan
 output feeds the host's parent send to the master-hosted host; the
 allocator pins that output and stamps `mainSendOffs`. Folded boundary
 gains carry their value on `outWires.gain` / `mainSendGain`, not a
@@ -80,3 +79,27 @@ applier can stamp `opFxGuid` back via `wm:mutate` after
 because sends carry no remap capability. `ctx:gainSinks` is the
 authoritative fold decision shared by `targetPlan` and
 `wm:pokeEdgeGain`.
+
+## synthNode field roles
+
+Each `synthNode` is a CU bridge synthesised for one of three cases:
+
+- **Wire-level op** (`originEdgeIdx` set): cross-host audio gain or MIDI
+  `channelMap` that cannot fold onto a send. The edge index lets the applier
+  write `opFxGuid` back after `TrackFX_AddByName`.
+- **Bus-swap bracket** (`originNode` / `originSide` set): a CU inserted at the
+  in- or out-side of a node to reorder bus pairs. See `design/wiring.md § 3c`.
+- **Per-consumer audio merge** (`originConsumer` / `originHost` / `inputEdges`
+  set): one Merge CU per (consumer, host) pair; `inputEdges` maps each input
+  pair back to its edge for live-gain pokes.
+
+## per-consumer merge
+
+For each FX, intra-host audio feeders are gathered; for each host, master-bound
+feeders are gathered. All-unity ⇒ matrix-fed directly (no CU needed). Any
+non-unity gain ⇒ one Merge CU spanning every feeder, with the unity ones at
+1.0 and the gained ones at their value; a single gained feeder is the degenerate
+`nPairs=1` case. Identity is per `(consumer, host)` via `node.audioMergeGuids`;
+`inputEdges` maps each pair index back to its originating edge for
+`wm:pokeEdgeGain`. (>16 feeders into one FX exceeds CU channel width — a
+deferred capacity concern. See `design/wiring.md § Merge` for the format.)

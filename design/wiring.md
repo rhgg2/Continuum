@@ -873,7 +873,7 @@ plan when its turn comes.
     No EEL harness in-repo, so the JSFX is verified at the DAG/wm layer
     in later steps and needs one in-REAPER compile check (the header
     preprocessor generates the 64 pins + 32 gain sliders).
-  - **Kill `DAG.lower`.** Delete the lower phase and the `lowerGraph`
+  - **Kill `DAG.lower` (3c.4.2). Landed.** Delete the lower phase and the `lowerGraph`
     / `conn` shapes. Point the compile ctx (`inbound`, `srcSet`,
     `classes`, `quotient`, `absorption`) and the targetPlan
     connectivity walks at `userGraph.edges` / `.nodes` directly —
@@ -883,7 +883,7 @@ plan when its turn comes.
     "two graph shapes" and "single-in/single-out CU" invariants
     retire. (Only spec readers of `ctx:graph()`: `dag_srcset_spec`,
     `wm_persistence_spec`.)
-  - **Class-split / master minimization.** A pass between classification
+  - **Class-split / master minimization (3c.4.3). Landed.** A pass between classification
     and hosting that decorates nodes with a split marker; the hosting
     pass seeds a separate host from each marked node (the per-node
     sibling of the per-wire `primary` absorption override). Master-
@@ -918,13 +918,21 @@ plan when its turn comes.
     with persisted `node.split`, so classification/hosting are unchanged. Two
     ports from two *different* hosts (main + sidechain) stay on master. Specs:
     `dag_split_spec`.
-  - **Merge nodes at allocate.** Synthesise merge CUs at the
-    targetPlan/allocate boundary as host-local `fxOrder` entries (the
-    bracket machinery): binary per consuming FX — all-unity ⇒
-    matrix-fed, any non-unity gain ⇒ one CU owning every used input
-    port, gains as per-input params. MIDI and master fan-in are always
-    a CU. The single gained wire is the degenerate one-in/one-out
-    case.
+  - **Merge nodes at allocate (3c.4.4). Landed (targetPlan side).**
+    `ctx:targetPlan` synthesises merge CUs per consuming FX: all-unity
+    feeders ⇒ matrix-fed (no CU), any non-unity gain ⇒ one Merge CU
+    spanning every feeder (unity at 1.0), the single gained wire being
+    the degenerate `nPairs=1`. MIDI and master fan-in always merge;
+    master uses `audioSum` (matrix-less sink, fixes the last-wins
+    `masterFeed`). Identity is **per-consumer**
+    (`node.audioMergeGuids[hostKey]`, host-keyed so master's several
+    feeding hosts don't collide), not per-edge — `mode='gain'` is gone.
+    `wm` pushes the gain bank (`gain1..N`), stamps/sweeps the
+    per-consumer guids, and `pokeEdgeGain` resolves the live CU via the
+    plan's `inputEdges`. Cross-host gain keeps its per-edge `opFxGuid`
+    CU (now `merge nPairs=1`) until 3c.4.5 folds it in. >16 feeders into
+    one FX exceeds the 16-wide CU — a deferred capacity check. Specs:
+    `dag_target_plan_spec` merge cases, `wm_apply_ops_spec`.
   - **`DAG.allocate` unification.** One value type per
     producer-output: split shares the one resource (fx-out and
     outgoing-send stop replicating pairs); a matrix-fed pin lists the
