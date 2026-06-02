@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1384  sha=73ef2d7  mode=namespace
+@module DAG  src=DAG.lua  loc=1395  sha=a062e7d  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -23,7 +23,7 @@
   @shape  targetPlan = { [hostKey] = targetPlanEntry }
   @shape  allocatedSend = { to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
   @shape  allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
-  @shape  allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
+  @shape  allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
 
 # Imports
   @const util = 'util'  @ 29
@@ -69,7 +69,7 @@
       @contract  nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 253, 331, 402, 403, 458, 527, 528, 548, 562, 567, 569, 573, 603, 620, 621, 623, 627, 642, 658, 696, 705, 723, 734, 740, 750, 756, 757, 772, 780, 791, 826, 839, 916, 938, 952, 970, 980, 983, 1017, 1025, 1034, 1042, 1073, 1103, 1138, 1165, 1172, 1196, 1204, 1208, 1212, 1243, 1266, 1319, 1320, 1321, 1326, 1341
-  @use call    util.assign  @ 74, 609, 1363, 1364
+  @use call    util.add  @ 253, 331, 402, 403, 458, 527, 528, 548, 562, 567, 569, 573, 603, 620, 621, 623, 627, 642, 658, 696, 705, 723, 734, 740, 750, 756, 757, 772, 780, 791, 826, 839, 916, 938, 952, 970, 980, 983, 1017, 1025, 1034, 1042, 1073, 1103, 1138, 1165, 1172, 1196, 1204, 1208, 1212, 1243, 1266, 1329, 1330, 1331, 1336, 1351
+  @use call    util.assign  @ 74, 609, 1373, 1374
   @use call    util.bucket  @ 123, 156, 175, 196, 197, 303, 336
   @use require util  @ 29

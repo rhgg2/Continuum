@@ -25,7 +25,7 @@
 -- see docs/DAG.md § targetPlan shape
 --shape: allocatedSend = { to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
 --shape: allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
---shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
+--shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -1295,6 +1295,16 @@ function M.allocate(plan, nodes)
       end
     end
 
+    -- Native (non-JS) fx surface their resolved in/out bus for 3c.3b's chunk
+    -- surgery; brackets handle JS, merge CUs carry their own params.
+    state.fxMidiBus = {}
+    for _, fxId in ipairs(entry.fxOrder or {}) do
+      local node = nodes[fxId]
+      if node and node.kind == 'fx' and node.fxIdent and node.fxIdent:sub(1, 3) ~= 'JS:' then
+        state.fxMidiBus[fxId] = { inBus = fxInputBus[fxId] or 0, outBus = fxOutputBus[fxId] or 0 }
+      end
+    end
+
     ----- bracket post-pass — see design/wiring.md § 3c.3a
     local splicedFxOrder, bracketNodes = {}, nil
     for _, fxId in ipairs(entry.fxOrder or {}) do
@@ -1371,6 +1381,7 @@ function M.allocate(plan, nodes)
       copy.synthNodes = sn
     end
     copy.sends        = sends
+    copy.fxMidiBus    = state.fxMidiBus
     copy.pinMaps      = state.pinMaps
     copy.nchan        = math.max(2, (state.cursor - 1) * 2)
     copy.mainSendOffs = state.mainSendOffs
