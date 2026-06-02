@@ -822,6 +822,68 @@ return {
     end,
   },
   {
+    name = 'merge: matrix-fed audio fan-in past 16 fans out to a CU cascade',
+    run = function()
+      -- 17 gained wires into one fx consumer exceed the 16-wide gain bank, so the
+      -- merge fans out to two parallel CUs (16+1); cascade CUs take a '#N' suffix.
+      local ns = {}
+      local k,  v  = source('s', 'guid-s');             ns[k]  = v
+      local k2, v2 = fx('fxP', { ins = 1, outs = 17 }); ns[k2] = v2
+      local k3, v3 = fx('C',   { ins = 1, outs = 0 });  ns[k3] = v3
+      local edges = { { type = 'audio', from = 's', to = 'fxP' } }
+      for p = 1, 17 do
+        edges[#edges+1] = { type = 'audio', from = 'fxP', to = 'C',
+                            fromPort = p, toPort = 1, ops = { gain = 0.5 } }
+      end
+      local plan = planOf(mk(ns, edges))
+      local list = cuEntries(plan['guid-s'])
+      t.eq(#list, 2, 'two merge CUs for 17 feeders')
+      local byKey = {}
+      for _, e in ipairs(list) do byKey[e.node.originHost] = e.node end
+      t.truthy(byKey['guid-s'] and byKey['guid-s#2'], 'identity suffixed per cascade CU')
+      t.eq(byKey['guid-s'].params.nPairs,    16)
+      t.eq(byKey['guid-s#2'].params.nPairs,  1)
+      t.eq(byKey['guid-s'].params.audioSum,  0, 'matrix-fed, no internal sum')
+      t.eq(byKey['guid-s#2'].params.audioSum, 0)
+      t.eq(byKey['guid-s'].originConsumer,   'C')
+      t.eq(byKey['guid-s#2'].originConsumer, 'C')
+      t.eq(#byKey['guid-s'].inputEdges,   16)
+      t.eq(#byKey['guid-s#2'].inputEdges, 1)
+    end,
+  },
+  {
+    name = 'merge: parent-send audio fan-in past 16 builds a sum-tree of CUs',
+    run = function()
+      -- 17 audio wires from one class to the master-hosted track exceed the 16-wide
+      -- bank; the matrix-less parent send sums them through a sum-tree to masterFeed.
+      local ns = {}
+      local k,  v  = source('s1', 'guid-a');            ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b');            ns[k2] = v2
+      local k3, v3 = fx('fxP', { ins = 1, outs = 17 }); ns[k3] = v3
+      local k4, v4 = fx('fxQ', { ins = 1, outs = 1 });  ns[k4] = v4
+      local edges = {
+        { type = 'audio', from = 's1',  to = 'fxP' },
+        { type = 'audio', from = 's2',  to = 'fxQ' },
+        { type = 'audio', from = 'fxQ', to = 'master' },
+      }
+      for p = 1, 17 do
+        edges[#edges+1] = { type = 'audio', from = 'fxP', to = 'master', fromPort = p }
+      end
+      local plan = planOf(mk(ns, edges))
+      local cus = cuEntries(plan['guid-a'])
+      t.eq(#cus, 3, '2 leaf CUs + 1 root')
+      local leaves, root = {}, nil
+      for _, e in ipairs(cus) do
+        t.eq(e.node.params.audioSum,  1, 'sum-tree CU sums internally')
+        t.eq(e.node.originConsumer, 'master')
+        if e.node.inputEdges then leaves[#leaves+1] = e else root = e end
+      end
+      t.eq(#leaves, 2, 'two leaves carry the user edges')
+      t.truthy(root, 'one internal root CU (no user edges)')
+      t.eq(plan['guid-a'].masterFeed.from, root.id, 'masterFeed is the tree root')
+    end,
+  },
+  {
     name = 'merge: distinct consumers get distinct merge CUs (per-consumer identity)',
     run = function()
       local ns = {}

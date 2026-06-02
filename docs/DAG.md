@@ -101,8 +101,10 @@ non-unity gain ⇒ one Merge CU spanning every feeder, with the unity ones at
 1.0 and the gained ones at their value; a single gained feeder is the degenerate
 `nPairs=1` case. Identity is per `(consumer, host)` via `node.mergeGuids`;
 `inputEdges` maps each pair index back to its originating edge for
-`wm:pokeEdgeGain`. (>16 feeders into one FX exceeds CU channel width — a
-deferred capacity concern. See `design/wiring.md § Merge` for the format.)
+`wm:pokeEdgeGain`. When fan-in exceeds 16 (the CU gain-bank width), the merge
+cascades into parallel CUs for a matrix consumer, or a sum-tree of `audioSum`
+CUs for a matrix-less parent send; CUs past the first carry a `#N` key suffix
+so each holds a stable `mergeGuids` slot. See `design/wiring.md § Merge`.
 
 Feeders reduce to fit the summing model. A *unit* groups one consumer's feeders
 on one host. Normal FX (and intra-master) consumers reduce at the consumer host.

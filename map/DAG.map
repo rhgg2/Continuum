@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1343  sha=fbdb543  mode=namespace
+@module DAG  src=DAG.lua  loc=1394  sha=140c570  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -30,45 +30,46 @@
 
 # Module-level constants
   @const CU_IDENT = 'JS:Continuum Utility'  @ 31
-  @const M = {}  @ 33
+  @const MERGE_WIDTH = 16  @ 34
+  @const M = {}  @ 36
 
 # Private functions
   -- validate
   -- ancestors / descendants
   -- master minimization
-  @fn masterMinMarkers(userGraph)  @ 187
+  @fn masterMinMarkers(userGraph)  @ 190
       -- fx fed >=2 audio ports from one upstream host violates the one-pair-per-send
       -- limit and is evicted via a derived split at its ipdom toward master. See docs/DAG.md § Master-minimization.
       · midi register file: bus 0 boundary; values are per-producer streams.
       · bracket post-pass — see design/wiring.md § 3c.3a
 
 # Public API (M.*)
-  @api M.validate(userGraph)  @ 40
+  @api M.validate(userGraph)  @ 43
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.ancestors(userGraph, sourceId)  @ 150
+  @api M.ancestors(userGraph, sourceId)  @ 153
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over userGraph.edges; cycle-safe via visited
-  @api M.descendants(userGraph, sourceId)  @ 169
+  @api M.descendants(userGraph, sourceId)  @ 172
       -- Forward reachability. Mirror of ancestors; used by wire-redraft to
       -- forbid cycle-forming new-source candidates when the user drags the
       -- from-end of an existing wire: the new source X must not be reachable
       -- from the kept destination B, else X→B closes the cycle B→…→X→B.
       @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
   -- compile context
-  @api M.compile(userGraph, derivedSplits)  @ 288
+  @api M.compile(userGraph, derivedSplits)  @ 291
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
       @contract  derivedSplits is internal (the master-min fixpoint); public callers omit it
   -- allocate
-  @api M.allocate(plan, nodes)  @ 850
+  @api M.allocate(plan, nodes)  @ 901
       -- Per-host live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 250, 328, 399, 400, 455, 524, 525, 545, 559, 564, 566, 570, 600, 617, 618, 620, 624, 639, 655, 684, 699, 703, 704, 706, 721, 729, 740, 775, 788, 861, 884, 906, 920, 938, 948, 951, 1036, 1066, 1101, 1127, 1134, 1158, 1166, 1170, 1174, 1204, 1227, 1278, 1279, 1280, 1285, 1300
-  @use call    util.assign  @ 71, 606, 1322, 1323
-  @use call    util.bucket  @ 120, 153, 172, 193, 194, 300, 333
+  @use call    util.add  @ 253, 331, 402, 403, 458, 527, 528, 548, 562, 567, 569, 573, 603, 620, 621, 623, 627, 642, 658, 696, 705, 723, 734, 740, 750, 756, 757, 772, 780, 791, 826, 839, 912, 935, 957, 971, 989, 999, 1002, 1087, 1117, 1152, 1178, 1185, 1209, 1217, 1221, 1225, 1255, 1278, 1329, 1330, 1331, 1336, 1351
+  @use call    util.assign  @ 74, 609, 1373, 1374
+  @use call    util.bucket  @ 123, 156, 175, 196, 197, 303, 336
   @use require util  @ 29
