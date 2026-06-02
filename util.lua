@@ -94,6 +94,12 @@ function util.bucket(buckets, key, val)
   return b
 end
 
+function util.keys(t)
+  local out = {}
+  for k in pairs(t) do out[#out+1] = k end
+  return out
+end
+
 -- Sparse → dense; n is the pre-sparse length.
 function util.compact(t, n)
   local out = {}

@@ -289,9 +289,8 @@ local function buildCtx(userGraph, derivedSplits)
     -- nil if cls has no eligible track: zero audio parents, ambiguous
     -- primaries, or multiple non-primary audio parents.
     local function directTrackKey(qEntry)
-      local audioParents, primaryParents = {}, {}
-      for parent in pairs(qEntry.audioParents)        do util.add(audioParents,   parent) end
-      for parent in pairs(qEntry.primaryAudioParents) do util.add(primaryParents, parent) end
+      local audioParents   = util.keys(qEntry.audioParents)
+      local primaryParents = util.keys(qEntry.primaryAudioParents)
       if #primaryParents == 1 then return primaryParents[1] end
       if #primaryParents == 0 and #audioParents == 1 then return audioParents[1] end
       return nil
@@ -904,8 +903,7 @@ function M.allocate(tracks, nodes)
   local incoming = {}
   for senderTrackKey, entry in pairs(tracks) do
     for sendIdx, ow in ipairs(entry.outWires or {}) do
-      incoming[ow.to] = incoming[ow.to] or {}
-      util.add(incoming[ow.to], { wire = ow, senderTrackKey = senderTrackKey, sendIdx = sendIdx })
+      util.bucket(incoming, ow.to, { wire = ow, senderTrackKey = senderTrackKey, sendIdx = sendIdx })
     end
   end
   for _, list in pairs(incoming) do
@@ -926,8 +924,7 @@ function M.allocate(tracks, nodes)
                        midiCursor = 0, midiFree = {}, mainSendOffs = nil }
   end
 
-  local trackKeys = {}
-  for hk in pairs(tracks) do util.add(trackKeys, hk) end
+  local trackKeys = util.keys(tracks)
   table.sort(trackKeys)
 
   for _, trackKey in ipairs(trackKeys) do
@@ -1060,10 +1057,7 @@ function M.allocate(tracks, nodes)
 
     -- Bucket by def slot; sort within bucket for determinism.
     local byDef = {}
-    for _, v in ipairs(values) do
-      byDef[v.def] = byDef[v.def] or {}
-      util.add(byDef[v.def], v)
-    end
+    for _, v in ipairs(values) do util.bucket(byDef, v.def, v) end
     local function sortBucket(b)
       table.sort(b, function(a, c)
         local ap, cp = a.pins[1], c.pins[1]
@@ -1090,10 +1084,7 @@ function M.allocate(tracks, nodes)
       end
       for _, p in ipairs(v.pins) do pinAdd(p.fxId, p.dir, p.port, pair) end
       v.apply(pair)
-      if v.lastUse <= N then
-        releaseAt[v.lastUse] = releaseAt[v.lastUse] or {}
-        util.add(releaseAt[v.lastUse], pair)
-      end
+      if v.lastUse <= N then util.bucket(releaseAt, v.lastUse, pair) end
     end
 
     if byDef[0] then
@@ -1196,8 +1187,7 @@ function M.allocate(tracks, nodes)
         util.add(p.applies, function(bus) state.sends[sendIdx].srcChan = bus end)
       end
     end
-    local fxProducerIds = {}
-    for fxId in pairs(fxMidiByProducer) do util.add(fxProducerIds, fxId) end
+    local fxProducerIds = util.keys(fxMidiByProducer)
     table.sort(fxProducerIds)
     for _, fxId in ipairs(fxProducerIds) do
       local p = fxMidiByProducer[fxId]
@@ -1230,10 +1220,7 @@ function M.allocate(tracks, nodes)
     end
 
     local midiByDef = {}
-    for _, v in ipairs(midiValues) do
-      midiByDef[v.def] = midiByDef[v.def] or {}
-      util.add(midiByDef[v.def], v)
-    end
+    for _, v in ipairs(midiValues) do util.bucket(midiByDef, v.def, v) end
     local function midiSortBucket(b)
       table.sort(b, function(a, c)
         if a.lastUse ~= c.lastUse then return a.lastUse < c.lastUse end
@@ -1253,10 +1240,7 @@ function M.allocate(tracks, nodes)
         bus = midiClaim()
       end
       for _, apply in ipairs(v.applies) do apply(bus) end
-      if v.lastUse <= N then
-        midiReleaseAt[v.lastUse] = midiReleaseAt[v.lastUse] or {}
-        util.add(midiReleaseAt[v.lastUse], bus)
-      end
+      if v.lastUse <= N then util.bucket(midiReleaseAt, v.lastUse, bus) end
     end
 
     if midiByDef[0] then

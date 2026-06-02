@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1387  sha=3ce5aab  mode=namespace
+@module DAG  src=DAG.lua  loc=1371  sha=8875410  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -42,7 +42,7 @@
       -- derivedSplits arrives already settled (from deriveMasterSplit); ctx just folds it into srcSet.
       · PUBLIC SURFACE
   -- master minimization
-  @fn deriveMasterSplit(userGraph)  @ 791
+  @fn deriveMasterSplit(userGraph)  @ 790
       -- master class = cone of master's largest dominator whose entry pulls <=1 audio
       -- pair per upstream track; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
       · midi register file: bus 0 boundary; values are per-producer streams.
@@ -62,17 +62,18 @@
       -- from-end of an existing wire: the new source X must not be reachable
       -- from the kept destination B, else X→B closes the cycle B→…→X→B.
       @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
-  @api M.compile(userGraph)  @ 883
+  @api M.compile(userGraph)  @ 882
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
   -- allocate
-  @api M.allocate(tracks, nodes)  @ 893
+  @api M.allocate(tracks, nodes)  @ 892
       -- Per-track live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedTracks shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 230, 293, 294, 349, 418, 419, 439, 453, 458, 460, 464, 494, 507, 510, 525, 541, 579, 588, 606, 617, 623, 633, 639, 640, 655, 663, 674, 709, 722, 823, 908, 930, 944, 962, 972, 975, 1009, 1017, 1026, 1034, 1065, 1095, 1130, 1157, 1164, 1188, 1196, 1200, 1204, 1235, 1258, 1321, 1322, 1323, 1328, 1343
-  @use call    util.assign  @ 75, 500, 1365, 1366
-  @use call    util.bucket  @ 124, 157, 176, 202, 235, 797, 798
+  @use call    util.add  @ 230, 348, 417, 418, 438, 452, 457, 459, 463, 493, 506, 509, 524, 540, 578, 587, 605, 616, 622, 632, 638, 639, 654, 662, 673, 708, 721, 822, 941, 959, 969, 972, 1006, 1014, 1023, 1031, 1121, 1148, 1155, 1179, 1187, 1194, 1305, 1306, 1307, 1312, 1327
+  @use call    util.assign  @ 75, 499, 1349, 1350
+  @use call    util.bucket  @ 124, 157, 176, 202, 235, 796, 797, 906, 1060, 1087, 1223, 1243
+  @use call    util.keys  @ 292, 293, 927, 1190
   @use require util  @ 30
