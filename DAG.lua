@@ -422,352 +422,358 @@ local function buildCtx(userGraph, derivedSplits)
     return out
   end
 
-  -- Kahn's over a track's chain members (fx + synth CU; source/master excluded).
-  -- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
-  local function topoIntraTrack(members, conns)
-    local memberSet = {}
-    for _, id in ipairs(members) do memberSet[id] = true end
-    local indeg, succ, inMember = {}, {}, {}
-    for id in pairs(memberSet) do indeg[id], succ[id], inMember[id] = 0, {}, 0 end
-    for _, conn in ipairs(conns) do
-      if memberSet[conn.from] and memberSet[conn.to] then
-        indeg[conn.to] = indeg[conn.to] + 1
-        inMember[conn.to] = inMember[conn.to] + 1
-        util.add(succ[conn.from], conn.to)
-      end
-    end
-    -- Lower score = drains more pairs than it claims; pick that next to keep
-    -- the allocator's live set (and thus nchan) small.
-    local function sortReady(r)
-      table.sort(r, function(a, b)
-        local sa = #succ[a] - inMember[a]
-        local sb = #succ[b] - inMember[b]
-        if sa ~= sb then return sa < sb end
-        return a < b
-      end)
-    end
-    local ready = {}
-    for id in pairs(memberSet) do if indeg[id] == 0 then util.add(ready, id) end end
-    sortReady(ready)
-    local out = {}
-    while #ready > 0 do
-      local id = table.remove(ready, 1)
-      util.add(out, id)
-      local children = {}
-      for _, child in ipairs(succ[id]) do util.add(children, child) end
-      table.sort(children)
-      for _, child in ipairs(children) do
-        indeg[child] = indeg[child] - 1
-        if indeg[child] == 0 then util.add(ready, child) end
-      end
-      sortReady(ready)
-    end
-    return out
-  end
-
-  local function targetTracks()
-    local trackMembers = trackMembers()
-
-    -- Folded gains ride a native send (no CU); gainFold names the sink.
-    local folded, sendGain, mainGain = {}, {}, {}
-    for edgeIdx, sink in pairs(gainFold()) do
-      if sink.kind == 'send' then
-        folded[edgeIdx] = true
-        sendGain[sink.from .. '\0' .. sink.to] = sink.gain
-      elseif sink.kind == 'mainSend' then
-        folded[edgeIdx] = true
-        mainGain[sink.cls] = sink.gain
-      end
-    end
-
-    local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
-    local mhc = masterTrackClass()
-    local function nodeTrackKey(id) return cuTrackKey[id] or trackKeyOf(id) end
-    local function audioConn(from, fp, to, tp, gain)
-      util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
-                        to = to, toPort = tp or 1, gain = gain })
-    end
-    local function mintCU(trackKey, params, origin)
-      cuN = cuN + 1
-      local cuId = '_cu_' .. cuN
-      synthNodes[cuId] = util.assign({ kind = 'fx', fxIdent = CU_IDENT, params = params }, origin)
-      cuTrackKey[cuId] = trackKey
-      return cuId
-    end
-    -- Each edge becomes a conn partitioned per-consumer (audio gain as metadata
-    -- → D_VOL on fold; MIDI passes through). See docs/DAG.md § per-consumer merge.
-    do
-      local units, unitKeys, kept = {}, {}, {}
-      local function unitFor(trackKey, consumer, isParentSend)
-        local key = trackKey .. '\0' .. consumer
-        local unit = units[key]
-        if not unit then
-          unit = { trackKey = trackKey, consumer = consumer, isParentSend = isParentSend,
-                   audio = {}, midi = {} }
-          units[key] = unit; util.add(unitKeys, key)
-        end
-        return unit
-      end
-      for edgeIdx, edge in ipairs(edges) do
-        local conn
-        if edge.type == 'midi' then
-          conn = { type = 'midi', from = edge.from, to = edge.to }
-        else
-          local g = (not folded[edgeIdx]) and edge.ops and edge.ops.gain or nil
-          conn = { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,
-                   to = edge.to, toPort = edge.toPort or 1, gain = g, edgeIdx = edgeIdx }
-        end
-        local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
-        local unit
-        if fromTrackKey ~= '' and toTrackKey ~= '' then
-          if mhc and toTrackKey == mhc and fromTrackKey ~= mhc then
-            unit = unitFor(fromTrackKey, 'master', true)  -- width-1 parent send: pre-sum per producer
-          elseif conn.to == 'master' then
-            unit = unitFor(toTrackKey, 'master', true)    -- in-class master: serial parent send, sum fan-in to one pair
-          elseif nodes[conn.to] and nodes[conn.to].kind == 'fx' then
-            unit = unitFor(toTrackKey, conn.to, false)    -- fx consumer: merge at the consumer trackKey
-          end
-        end
-        if unit then util.add(unit[conn.type], conn) else util.add(kept, conn) end
-      end
-      conns = kept
-
-      local function sortFeeders(feeders)
-        table.sort(feeders, function(a, b)
-          if a.from ~= b.from then return a.from < b.from end
-          if (a.fromPort or 1) ~= (b.fromPort or 1) then return (a.fromPort or 1) < (b.fromPort or 1) end
-          return (a.toPort or 1) < (b.toPort or 1)
-        end)
-      end
-      local function anyGained(feeders)
-        for _, f in ipairs(feeders) do if f.gain and f.gain ~= 1 then return true end end
-        return false
-      end
-
-      table.sort(unitKeys)
-      for _, unitKey in ipairs(unitKeys) do
-        local unit = units[unitKey]
-        sortFeeders(unit.audio); sortFeeders(unit.midi)
-        -- Audio: matrix sinks merge only when gained; internal sinks (parent
-        -- send) sum on any fan-in ≥2. MIDI: one bus ⇒ merge on any fan-in ≥2.
-        local audioCU = unit.isParentSend and #unit.audio >= 2 or
-                        (not unit.isParentSend and anyGained(unit.audio))
-        local midiCU  = #unit.midi >= 2
-
-        -- A merge CU is identified by (consumer, track). Fan-in past MERGE_WIDTH
-        -- cascades into parallel CUs; each past the first gets a '#N' key suffix.
-        local mergeN = 0
-        local function mintMerge(params, inputEdges)
-          mergeN = mergeN + 1
-          local key = mergeN == 1 and unit.trackKey or (unit.trackKey .. '#' .. mergeN)
-          return mintCU(unit.trackKey, params,
-            { originConsumer = unit.consumer, originTrackKey = key, inputEdges = inputEdges })
-        end
-        -- One merge CU over feeders[lo..hi]: window gains (unity default), collect
-        -- any edgeIdx for live-gain pokes. audioSum 0 = matrix fan-out, 1 = sum-tree.
-        local function chunkCU(feeders, lo, hi, audioSum)
-          local gains, inputEdges = {}, {}
-          for i = lo, hi do
-            gains[i - lo + 1] = feeders[i].gain or 1
-            if feeders[i].edgeIdx then util.add(inputEdges, feeders[i].edgeIdx) end
-          end
-          return mintMerge({ mode = 'merge', nPairs = hi - lo + 1, gains = gains, audioSum = audioSum },
-                           #inputEdges > 0 and inputEdges or nil)
-        end
-
-        local firstAudioCu  -- carries the MIDI merge too, in the single-CU case
-        if not audioCU then
-          for _, f in ipairs(unit.audio) do util.add(conns, f) end
-        elseif not unit.isParentSend then
-          -- Matrix-fed: parallel chunk CUs, each ≤MERGE_WIDTH wide. Every
-          -- chunk's outputs route to the consumer's pins, which sum the lot.
-          for lo = 1, #unit.audio, MERGE_WIDTH do
-            local hi = math.min(lo + MERGE_WIDTH - 1, #unit.audio)
-            local cuId = chunkCU(unit.audio, lo, hi, 0)
-            firstAudioCu = firstAudioCu or cuId
-            for i = lo, hi do
-              local f = unit.audio[i]
-              audioConn(f.from, f.fromPort, cuId, i - lo + 1)
-              audioConn(cuId, i - lo + 1, unit.consumer, f.toPort)
-            end
-          end
-        else
-          -- Parent send (matrix-less): a sum-tree of audioSum CUs reduces fan-in
-          -- to one pair. Gains apply at leaves; the root feeds masterFeed.
-          local toPort = unit.audio[1].toPort
-          local level = {}
-          for _, f in ipairs(unit.audio) do
-            util.add(level, { from = f.from, fromPort = f.fromPort,
-                              gain = f.gain, edgeIdx = f.edgeIdx })
-          end
-          local rootCu
-          while true do
-            local nextLevel = {}
-            for lo = 1, #level, MERGE_WIDTH do
-              local hi = math.min(lo + MERGE_WIDTH - 1, #level)
-              local cuId = chunkCU(level, lo, hi, 1)
-              for i = lo, hi do audioConn(level[i].from, level[i].fromPort, cuId, i - lo + 1) end
-              util.add(nextLevel, { from = cuId, fromPort = 1 })  -- summed to pair 1
-            end
-            if #nextLevel == 1 then rootCu = nextLevel[1].from; break end
-            level = nextLevel
-          end
-          audioConn(rootCu, 1, unit.consumer, toPort)
-          if mergeN == 1 then firstAudioCu = rootCu end  -- lone CU carries MIDI too
-        end
-
-        if not midiCU then
-          for _, f in ipairs(unit.midi) do util.add(conns, f) end
-        else
-          -- One N→1 collapse (no width cap — 128-bit mask). Rides the audio CU
-          -- only when there's exactly one; a cascade gives MIDI its own CU.
-          local cuId = mergeN == 1 and firstAudioCu
-                       or mintMerge({ mode = 'merge', nPairs = 1, gains = { 1 }, audioSum = 0 }, nil)
-          for _, f in ipairs(unit.midi) do util.add(conns, { type = 'midi', from = f.from, to = cuId }) end
-          util.add(conns, { type = 'midi', from = cuId, to = unit.consumer })
-        end
-      end
-    end
-
-    -- Per-track chain members to topo-order: real fx + synth CU (source/master
-    -- never appear in fxOrder; they are the track-IO boundary).
-    local chainMembers = {}
-    for trackKey, members in pairs(trackMembers) do
-      if trackKey ~= '' then
-        local list = {}
-        for _, id in ipairs(members) do
-          local k = nodes[id].kind
-          if k ~= 'source' and k ~= 'master' then util.add(list, id) end
-        end
-        chainMembers[trackKey] = list
-      end
-    end
-    for cuId, trackKey in pairs(cuTrackKey) do
-      if trackKey ~= '' then
-        chainMembers[trackKey] = chainMembers[trackKey] or {}
-        util.add(chainMembers[trackKey], cuId)
-      end
-    end
-
-    -- Track entries: scratch for inert fx, else track topology + mainSend.
-    local tracks, masterTrackKey = {}, nil
-    for trackKey, members in pairs(trackMembers) do
-      if trackKey == '' then
-        local parked = {}
-        for _, id in ipairs(members) do
-          local k = nodes[id].kind
-          if k ~= 'master' and k ~= 'source' then util.add(parked, id) end
-        end
-        if #parked > 0 then
-          table.sort(parked)
-          tracks['__scratch__'] = {
-            trackKind = 'scratch', trackGuid = nil, fxOrder = parked,
-            mainSend = false, outWires = {}, intraConns = {},
-          }
-        end
-      else
-        local trackKind, trackGuid, hasMaster = 'newTrack', nil, false
-        for _, id in ipairs(members) do
-          local n = nodes[id]
-          if n.kind == 'source' then trackKind, trackGuid = 'sourceTrack', n.trackGuid end
-          if n.kind == 'master' then hasMaster = true end
-        end
-        if hasMaster and trackKind ~= 'sourceTrack' then
-          trackKind = 'master'
-          masterTrackKey = trackKey
-        end
-        tracks[trackKey] = {
-          trackKind  = trackKind, trackGuid = trackGuid, fxOrder = nil,
-          mainSend  = hasMaster and trackKind == 'sourceTrack',
-          mainSendGain = mainGain[trackKey],
-          outWires = {}, intraConns = {},
-        }
-      end
-    end
-
-    -- Same-track conn → intraConn; inter-track → outWire (or mainSend lift to
-    -- the master-hosted dest). Inert endpoints (track '') carry no signal.
-    for _, conn in ipairs(conns) do
-      local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
-      if fromTrackKey and fromTrackKey ~= '' and toTrackKey and toTrackKey ~= '' then
-        if fromTrackKey == toTrackKey then
-          util.add(tracks[fromTrackKey].intraConns, {
-            from = conn.from, fromPort = conn.fromPort,
-            to   = conn.to,   toPort   = conn.toPort,
-            type = conn.type,
-          })
-        elseif toTrackKey == masterTrackKey then
-          tracks[fromTrackKey].mainSend = true
-          -- Audio master fan-in arrives pre-merged (≥2 wires → one audioSum CU
-          -- output), so masterFeed carries a single producer.
-          if conn.type == 'audio' then
-            tracks[fromTrackKey].masterFeed = { from = conn.from, fromPort = conn.fromPort }
-          end
-        else
-          util.add(tracks[fromTrackKey].outWires, {
-            from = conn.from, fromPort = conn.fromPort,
-            to   = toTrackKey,
-            toNode = conn.to, toPort = conn.toPort,
-            type = conn.type,
-            gain = conn.type == 'audio'
-                   and sendGain[fromTrackKey .. '\0' .. toTrackKey] or nil,
-          })
-        end
-      end
-    end
-
-    -- Attach synth CU nodes to their track (track '' CUs are inert, dropped).
-    for cuId, trackKey in pairs(cuTrackKey) do
-      if tracks[trackKey] then
-        tracks[trackKey].synthNodes = tracks[trackKey].synthNodes or {}
-        tracks[trackKey].synthNodes[cuId] = synthNodes[cuId]
-      end
-    end
-
-    -- Topo order each track's chain; deterministic sorts on the wire lists.
-    local function cmpOpt(a, b) return (a or 0) < (b or 0) end
-    local function neqOpt(a, b) return (a or 0) ~= (b or 0) end
-    for trackKey, entry in pairs(tracks) do
-      if entry.trackKind ~= 'scratch' then
-        entry.fxOrder = topoIntraTrack(chainMembers[trackKey] or {}, entry.intraConns)
-        table.sort(entry.outWires, function(a, b)
-          if a.to     ~= b.to     then return a.to     < b.to     end
-          if a.type   ~= b.type   then return a.type   < b.type   end
-          if a.from   ~= b.from   then return a.from   < b.from   end
-          if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
-          if a.toNode ~= b.toNode then return a.toNode < b.toNode end
-          return cmpOpt(a.toPort, b.toPort)
-        end)
-        table.sort(entry.intraConns, function(a, b)
-          if a.from ~= b.from then return a.from < b.from end
-          if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
-          if a.to   ~= b.to   then return a.to   < b.to   end
-          if neqOpt(a.toPort, b.toPort) then return cmpOpt(a.toPort, b.toPort) end
-          return a.type < b.type
-        end)
-      end
-    end
-
-    -- Stable sentinel key for the master-hosted class — wm:snapshot can't
-    -- tag the REAPER master with a project-scoped wiringClass.
-    if masterTrackKey then
-      tracks['__master__'] = tracks[masterTrackKey]
-      tracks[masterTrackKey] = nil
-    end
-    return tracks
-  end
-
   ----------- PUBLIC SURFACE
-  function ctx:classes()           return classes()           end
-  function ctx:classOf()           return classOf()           end
-  function ctx:masterTrackClass() return masterTrackClass() end
-  function ctx:classTrackKey(cls)  return classTrackKey(cls)  end
-  function ctx:trackKeyOf(id)      return trackKeyOf(id)      end
-  function ctx:gainFold()          return gainFold()          end
-  function ctx:capacityErrors()    return capacityErrors()    end
-  function ctx:targetTracks()        return targetTracks()        end
+  ctx.userGraph = userGraph
+  function ctx:classes()           return classes()          end
+  function ctx:classOf()           return classOf()          end
+  function ctx:masterTrackClass()  return masterTrackClass() end
+  function ctx:classTrackKey(cls)  return classTrackKey(cls) end
+  function ctx:trackKeyOf(id)      return trackKeyOf(id)     end
+  function ctx:trackMembers()      return trackMembers()     end
+  function ctx:gainFold()          return gainFold()         end
+  function ctx:capacityErrors()    return capacityErrors()   end
 
   return ctx
+end
+
+----- realisation
+
+-- Kahn's over a track's chain members (fx + synth CU; source/master excluded).
+-- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
+local function topoIntraTrack(members, conns)
+  local memberSet = {}
+  for _, id in ipairs(members) do memberSet[id] = true end
+  local indeg, succ, inMember = {}, {}, {}
+  for id in pairs(memberSet) do indeg[id], succ[id], inMember[id] = 0, {}, 0 end
+  for _, conn in ipairs(conns) do
+    if memberSet[conn.from] and memberSet[conn.to] then
+      indeg[conn.to] = indeg[conn.to] + 1
+      inMember[conn.to] = inMember[conn.to] + 1
+      util.add(succ[conn.from], conn.to)
+    end
+  end
+  -- Lower score = drains more pairs than it claims; pick that next to keep
+  -- the allocator's live set (and thus nchan) small.
+  local function sortReady(r)
+    table.sort(r, function(a, b)
+      local sa = #succ[a] - inMember[a]
+      local sb = #succ[b] - inMember[b]
+      if sa ~= sb then return sa < sb end
+      return a < b
+    end)
+  end
+  local ready = {}
+  for id in pairs(memberSet) do if indeg[id] == 0 then util.add(ready, id) end end
+  sortReady(ready)
+  local out = {}
+  while #ready > 0 do
+    local id = table.remove(ready, 1)
+    util.add(out, id)
+    local children = {}
+    for _, child in ipairs(succ[id]) do util.add(children, child) end
+    table.sort(children)
+    for _, child in ipairs(children) do
+      indeg[child] = indeg[child] - 1
+      if indeg[child] == 0 then util.add(ready, child) end
+    end
+    sortReady(ready)
+  end
+  return out
+end
+
+-- Realisation pass: lowers the structural ctx into per-track specs (fxOrder,
+-- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
+local function targetTracks(ctx)
+  local nodes, edges = ctx.userGraph.nodes, ctx.userGraph.edges
+  local trackMembers = ctx:trackMembers()
+
+  -- Folded gains ride a native send (no CU); gainFold names the sink.
+  local folded, sendGain, mainGain = {}, {}, {}
+  for edgeIdx, sink in pairs(ctx:gainFold()) do
+    if sink.kind == 'send' then
+      folded[edgeIdx] = true
+      sendGain[sink.from .. '\0' .. sink.to] = sink.gain
+    elseif sink.kind == 'mainSend' then
+      folded[edgeIdx] = true
+      mainGain[sink.cls] = sink.gain
+    end
+  end
+
+  local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
+  local mhc = ctx:masterTrackClass()
+  local function nodeTrackKey(id) return cuTrackKey[id] or ctx:trackKeyOf(id) end
+  local function audioConn(from, fp, to, tp, gain)
+    util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
+                      to = to, toPort = tp or 1, gain = gain })
+  end
+  local function mintCU(trackKey, params, origin)
+    cuN = cuN + 1
+    local cuId = '_cu_' .. cuN
+    synthNodes[cuId] = util.assign({ kind = 'fx', fxIdent = CU_IDENT, params = params }, origin)
+    cuTrackKey[cuId] = trackKey
+    return cuId
+  end
+  -- Each edge becomes a conn partitioned per-consumer (audio gain as metadata
+  -- → D_VOL on fold; MIDI passes through). See docs/DAG.md § per-consumer merge.
+  do
+    local units, unitKeys, kept = {}, {}, {}
+    local function unitFor(trackKey, consumer, isParentSend)
+      local key = trackKey .. '\0' .. consumer
+      local unit = units[key]
+      if not unit then
+        unit = { trackKey = trackKey, consumer = consumer, isParentSend = isParentSend,
+                 audio = {}, midi = {} }
+        units[key] = unit; util.add(unitKeys, key)
+      end
+      return unit
+    end
+    for edgeIdx, edge in ipairs(edges) do
+      local conn
+      if edge.type == 'midi' then
+        conn = { type = 'midi', from = edge.from, to = edge.to }
+      else
+        local g = (not folded[edgeIdx]) and edge.ops and edge.ops.gain or nil
+        conn = { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,
+                 to = edge.to, toPort = edge.toPort or 1, gain = g, edgeIdx = edgeIdx }
+      end
+      local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
+      local unit
+      if fromTrackKey ~= '' and toTrackKey ~= '' then
+        if mhc and toTrackKey == mhc and fromTrackKey ~= mhc then
+          unit = unitFor(fromTrackKey, 'master', true)  -- width-1 parent send: pre-sum per producer
+        elseif conn.to == 'master' then
+          unit = unitFor(toTrackKey, 'master', true)    -- in-class master: serial parent send, sum fan-in to one pair
+        elseif nodes[conn.to] and nodes[conn.to].kind == 'fx' then
+          unit = unitFor(toTrackKey, conn.to, false)    -- fx consumer: merge at the consumer trackKey
+        end
+      end
+      if unit then util.add(unit[conn.type], conn) else util.add(kept, conn) end
+    end
+    conns = kept
+
+    local function sortFeeders(feeders)
+      table.sort(feeders, function(a, b)
+        if a.from ~= b.from then return a.from < b.from end
+        if (a.fromPort or 1) ~= (b.fromPort or 1) then return (a.fromPort or 1) < (b.fromPort or 1) end
+        return (a.toPort or 1) < (b.toPort or 1)
+      end)
+    end
+    local function anyGained(feeders)
+      for _, f in ipairs(feeders) do if f.gain and f.gain ~= 1 then return true end end
+      return false
+    end
+
+    table.sort(unitKeys)
+    for _, unitKey in ipairs(unitKeys) do
+      local unit = units[unitKey]
+      sortFeeders(unit.audio); sortFeeders(unit.midi)
+      -- Audio: matrix sinks merge only when gained; internal sinks (parent
+      -- send) sum on any fan-in ≥2. MIDI: one bus ⇒ merge on any fan-in ≥2.
+      local audioCU = unit.isParentSend and #unit.audio >= 2 or
+                      (not unit.isParentSend and anyGained(unit.audio))
+      local midiCU  = #unit.midi >= 2
+
+      -- A merge CU is identified by (consumer, track). Fan-in past MERGE_WIDTH
+      -- cascades into parallel CUs; each past the first gets a '#N' key suffix.
+      local mergeN = 0
+      local function mintMerge(params, inputEdges)
+        mergeN = mergeN + 1
+        local key = mergeN == 1 and unit.trackKey or (unit.trackKey .. '#' .. mergeN)
+        return mintCU(unit.trackKey, params,
+          { originConsumer = unit.consumer, originTrackKey = key, inputEdges = inputEdges })
+      end
+      -- One merge CU over feeders[lo..hi]: window gains (unity default), collect
+      -- any edgeIdx for live-gain pokes. audioSum 0 = matrix fan-out, 1 = sum-tree.
+      local function chunkCU(feeders, lo, hi, audioSum)
+        local gains, inputEdges = {}, {}
+        for i = lo, hi do
+          gains[i - lo + 1] = feeders[i].gain or 1
+          if feeders[i].edgeIdx then util.add(inputEdges, feeders[i].edgeIdx) end
+        end
+        return mintMerge({ mode = 'merge', nPairs = hi - lo + 1, gains = gains, audioSum = audioSum },
+                         #inputEdges > 0 and inputEdges or nil)
+      end
+
+      local firstAudioCu  -- carries the MIDI merge too, in the single-CU case
+      if not audioCU then
+        for _, f in ipairs(unit.audio) do util.add(conns, f) end
+      elseif not unit.isParentSend then
+        -- Matrix-fed: parallel chunk CUs, each ≤MERGE_WIDTH wide. Every
+        -- chunk's outputs route to the consumer's pins, which sum the lot.
+        for lo = 1, #unit.audio, MERGE_WIDTH do
+          local hi = math.min(lo + MERGE_WIDTH - 1, #unit.audio)
+          local cuId = chunkCU(unit.audio, lo, hi, 0)
+          firstAudioCu = firstAudioCu or cuId
+          for i = lo, hi do
+            local f = unit.audio[i]
+            audioConn(f.from, f.fromPort, cuId, i - lo + 1)
+            audioConn(cuId, i - lo + 1, unit.consumer, f.toPort)
+          end
+        end
+      else
+        -- Parent send (matrix-less): a sum-tree of audioSum CUs reduces fan-in
+        -- to one pair. Gains apply at leaves; the root feeds masterFeed.
+        local toPort = unit.audio[1].toPort
+        local level = {}
+        for _, f in ipairs(unit.audio) do
+          util.add(level, { from = f.from, fromPort = f.fromPort,
+                            gain = f.gain, edgeIdx = f.edgeIdx })
+        end
+        local rootCu
+        while true do
+          local nextLevel = {}
+          for lo = 1, #level, MERGE_WIDTH do
+            local hi = math.min(lo + MERGE_WIDTH - 1, #level)
+            local cuId = chunkCU(level, lo, hi, 1)
+            for i = lo, hi do audioConn(level[i].from, level[i].fromPort, cuId, i - lo + 1) end
+            util.add(nextLevel, { from = cuId, fromPort = 1 })  -- summed to pair 1
+          end
+          if #nextLevel == 1 then rootCu = nextLevel[1].from; break end
+          level = nextLevel
+        end
+        audioConn(rootCu, 1, unit.consumer, toPort)
+        if mergeN == 1 then firstAudioCu = rootCu end  -- lone CU carries MIDI too
+      end
+
+      if not midiCU then
+        for _, f in ipairs(unit.midi) do util.add(conns, f) end
+      else
+        -- One N→1 collapse (no width cap — 128-bit mask). Rides the audio CU
+        -- only when there's exactly one; a cascade gives MIDI its own CU.
+        local cuId = mergeN == 1 and firstAudioCu
+                     or mintMerge({ mode = 'merge', nPairs = 1, gains = { 1 }, audioSum = 0 }, nil)
+        for _, f in ipairs(unit.midi) do util.add(conns, { type = 'midi', from = f.from, to = cuId }) end
+        util.add(conns, { type = 'midi', from = cuId, to = unit.consumer })
+      end
+    end
+  end
+
+  -- Per-track chain members to topo-order: real fx + synth CU (source/master
+  -- never appear in fxOrder; they are the track-IO boundary).
+  local chainMembers = {}
+  for trackKey, members in pairs(trackMembers) do
+    if trackKey ~= '' then
+      local list = {}
+      for _, id in ipairs(members) do
+        local k = nodes[id].kind
+        if k ~= 'source' and k ~= 'master' then util.add(list, id) end
+      end
+      chainMembers[trackKey] = list
+    end
+  end
+  for cuId, trackKey in pairs(cuTrackKey) do
+    if trackKey ~= '' then
+      chainMembers[trackKey] = chainMembers[trackKey] or {}
+      util.add(chainMembers[trackKey], cuId)
+    end
+  end
+
+  -- Track entries: scratch for inert fx, else track topology + mainSend.
+  local tracks, masterTrackKey = {}, nil
+  for trackKey, members in pairs(trackMembers) do
+    if trackKey == '' then
+      local parked = {}
+      for _, id in ipairs(members) do
+        local k = nodes[id].kind
+        if k ~= 'master' and k ~= 'source' then util.add(parked, id) end
+      end
+      if #parked > 0 then
+        table.sort(parked)
+        tracks['__scratch__'] = {
+          trackKind = 'scratch', trackGuid = nil, fxOrder = parked,
+          mainSend = false, outWires = {}, intraConns = {},
+        }
+      end
+    else
+      local trackKind, trackGuid, hasMaster = 'newTrack', nil, false
+      for _, id in ipairs(members) do
+        local n = nodes[id]
+        if n.kind == 'source' then trackKind, trackGuid = 'sourceTrack', n.trackGuid end
+        if n.kind == 'master' then hasMaster = true end
+      end
+      if hasMaster and trackKind ~= 'sourceTrack' then
+        trackKind = 'master'
+        masterTrackKey = trackKey
+      end
+      tracks[trackKey] = {
+        trackKind  = trackKind, trackGuid = trackGuid, fxOrder = nil,
+        mainSend  = hasMaster and trackKind == 'sourceTrack',
+        mainSendGain = mainGain[trackKey],
+        outWires = {}, intraConns = {},
+      }
+    end
+  end
+
+  -- Same-track conn → intraConn; inter-track → outWire (or mainSend lift to
+  -- the master-hosted dest). Inert endpoints (track '') carry no signal.
+  for _, conn in ipairs(conns) do
+    local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
+    if fromTrackKey and fromTrackKey ~= '' and toTrackKey and toTrackKey ~= '' then
+      if fromTrackKey == toTrackKey then
+        util.add(tracks[fromTrackKey].intraConns, {
+          from = conn.from, fromPort = conn.fromPort,
+          to   = conn.to,   toPort   = conn.toPort,
+          type = conn.type,
+        })
+      elseif toTrackKey == masterTrackKey then
+        tracks[fromTrackKey].mainSend = true
+        -- Audio master fan-in arrives pre-merged (≥2 wires → one audioSum CU
+        -- output), so masterFeed carries a single producer.
+        if conn.type == 'audio' then
+          tracks[fromTrackKey].masterFeed = { from = conn.from, fromPort = conn.fromPort }
+        end
+      else
+        util.add(tracks[fromTrackKey].outWires, {
+          from = conn.from, fromPort = conn.fromPort,
+          to   = toTrackKey,
+          toNode = conn.to, toPort = conn.toPort,
+          type = conn.type,
+          gain = conn.type == 'audio'
+                 and sendGain[fromTrackKey .. '\0' .. toTrackKey] or nil,
+        })
+      end
+    end
+  end
+
+  -- Attach synth CU nodes to their track (track '' CUs are inert, dropped).
+  for cuId, trackKey in pairs(cuTrackKey) do
+    if tracks[trackKey] then
+      tracks[trackKey].synthNodes = tracks[trackKey].synthNodes or {}
+      tracks[trackKey].synthNodes[cuId] = synthNodes[cuId]
+    end
+  end
+
+  -- Topo order each track's chain; deterministic sorts on the wire lists.
+  local function cmpOpt(a, b) return (a or 0) < (b or 0) end
+  local function neqOpt(a, b) return (a or 0) ~= (b or 0) end
+  for trackKey, entry in pairs(tracks) do
+    if entry.trackKind ~= 'scratch' then
+      entry.fxOrder = topoIntraTrack(chainMembers[trackKey] or {}, entry.intraConns)
+      table.sort(entry.outWires, function(a, b)
+        if a.to     ~= b.to     then return a.to     < b.to     end
+        if a.type   ~= b.type   then return a.type   < b.type   end
+        if a.from   ~= b.from   then return a.from   < b.from   end
+        if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
+        if a.toNode ~= b.toNode then return a.toNode < b.toNode end
+        return cmpOpt(a.toPort, b.toPort)
+      end)
+      table.sort(entry.intraConns, function(a, b)
+        if a.from ~= b.from then return a.from < b.from end
+        if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
+        if a.to   ~= b.to   then return a.to   < b.to   end
+        if neqOpt(a.toPort, b.toPort) then return cmpOpt(a.toPort, b.toPort) end
+        return a.type < b.type
+      end)
+    end
+  end
+
+  -- Stable sentinel key for the master-hosted class — wm:snapshot can't
+  -- tag the REAPER master with a project-scoped wiringClass.
+  if masterTrackKey then
+    tracks['__master__'] = tracks[masterTrackKey]
+    tracks[masterTrackKey] = nil
+  end
+  return tracks
 end
 
 ----- master minimization
@@ -868,6 +874,11 @@ end
 --contract: assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
 function M.compile(userGraph)
   return buildCtx(userGraph, deriveMasterSplit(userGraph))
+end
+
+--contract: realisation pass over a compile ctx; returns the targetTracks shape (not cached)
+function M.targetTracks(ctx)
+  return targetTracks(ctx)
 end
 
 ----- allocate

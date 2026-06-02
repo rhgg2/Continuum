@@ -33,7 +33,7 @@ local function mk(nodes, edges)
 end
 
 local function tracksOf(g)
-  return DAG.compile(g):targetTracks()
+  return DAG.targetTracks(DAG.compile(g))
 end
 
 -- The merge CUs of a tracks entry as {id, node} pairs (synthNodes is cuId-keyed).

@@ -91,7 +91,7 @@ return {
   {
     name = 'targetTracks: cut edge is a send, cone is its own newTrack',
     run = function()
-      local tracks = DAG.compile(twoSourceChain(true)):targetTracks()
+      local tracks = DAG.targetTracks(DAG.compile(twoSourceChain(true)))
       t.eq(tracks['g1|split:b'].trackKind, 'newTrack')
       t.truthy(hasOutWire(tracks['g1'], 'g1|split:b', 'a'))
       t.truthy(tracks['g1|split:b'].mainSend)
@@ -100,7 +100,7 @@ return {
   {
     name = 'unmarked: a->b is intra-trackKey, no eviction',
     run = function()
-      local tracks = DAG.compile(twoSourceChain(false)):targetTracks()
+      local tracks = DAG.targetTracks(DAG.compile(twoSourceChain(false)))
       t.falsy(tracks['g1|split:b'])
       local intra = false
       for _, c in ipairs(tracks['g1'].intraConns) do
@@ -123,7 +123,7 @@ return {
       }))
       local cls = cx:classOf()
       t.eq(cls['a'], cls['master'])
-      t.truthy(inList(cx:targetTracks()['__master__'].fxOrder, 'a'))
+      t.truthy(inList(DAG.targetTracks(cx)['__master__'].fxOrder, 'a'))
     end,
   },
   {
@@ -191,7 +191,7 @@ return {
       }))
       t.eq(cx:classOf()['g'], cx:classOf()['master'])
       t.truthy(cx:classOf()['f'] ~= cx:classOf()['master'])
-      t.eq(cx:targetTracks()[cx:classOf()['f']].trackKind, 'newTrack')
+      t.eq(DAG.targetTracks(cx)[cx:classOf()['f']].trackKind, 'newTrack')
     end,
   },
   {
@@ -264,7 +264,7 @@ return {
       }))
       t.eq(cx:classOf()['master'], 'g1|g2|split:master')
       t.truthy(cx:classOf()['y'] ~= cx:classOf()['master'])
-      t.eq(cx:targetTracks()[cx:classOf()['y']].trackKind, 'newTrack')
+      t.eq(DAG.targetTracks(cx)[cx:classOf()['y']].trackKind, 'newTrack')
     end,
   },
 }

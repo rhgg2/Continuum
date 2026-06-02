@@ -156,7 +156,7 @@ function wm:mutate(mutator)
   return true
 end
 
---contract: returns DAG.compile context around the current user graph; lazy caches live on the ctx, so reusing it across :classes/:capacityErrors/:targetTracks computes each derivation once
+--contract: DAG.compile ctx for the user graph; reuse across :classes/:capacityErrors to share cache
 function wm:compile()
   ensureLoaded()
   return DAG.compile(userGraph)
@@ -757,7 +757,7 @@ function wm:targetState()
   ensureLoaded()
   local cx = DAG.compile(userGraph)
   local nodes = userGraph.nodes
-  local tracks = DAG.allocate(cx:targetTracks(), nodes)
+  local tracks = DAG.allocate(DAG.targetTracks(cx), nodes)
   local scratchGuid = scratchTrack and reaper.GetTrackGUID(scratchTrack)
   local out = {}
   for classKey, entry in pairs(tracks) do
@@ -1369,7 +1369,7 @@ function wm:applyOps(ops, label)
   -- Per-consumer merge guids dangle when gain folds to a native send or fan-in
   -- drops to one. wantedMerge names still-active (consumer,track) pairs; rest swept.
   local wantedMerge = {}
-  for _, spec in pairs(ctx:targetTracks()) do
+  for _, spec in pairs(DAG.targetTracks(ctx)) do
     for _, sn in pairs(spec.synthNodes or {}) do
       if sn.originConsumer then
         wantedMerge[sn.originConsumer] = wantedMerge[sn.originConsumer] or {}
@@ -1480,7 +1480,7 @@ function wm:pokeEdgeGain(edgeIdx, gain)
   -- Intra/master merge CU: no per-edge guid. Resolve the consumer + this edge's
   -- slot from the compiled tracks, then poke gain{slot} on the per-consumer guid.
   if edge.type == 'audio' then
-    for _, spec in pairs(ctx:targetTracks()) do
+    for _, spec in pairs(DAG.targetTracks(ctx)) do
       for _, sn in pairs(spec.synthNodes or {}) do
         for slot, e in ipairs(sn.inputEdges or {}) do
           if e == edgeIdx then

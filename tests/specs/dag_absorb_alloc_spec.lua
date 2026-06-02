@@ -41,7 +41,7 @@ end
 local function allocOf(g)
   local g0  = mk(g.nodes, g.edges)
   local ctx = DAG.compile(g0)
-  return DAG.allocate(ctx:targetTracks(), g0.nodes)
+  return DAG.allocate(DAG.targetTracks(ctx), g0.nodes)
 end
 
 return {

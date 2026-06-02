@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1587  sha=8875410  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1587  sha=7183971  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -136,7 +136,7 @@
   @api wm:mutate(mutator)  @ 147
       @contract  clone-validate-swap; on DAG.validate failure returns false,err with no state change and no signal; on success persists and fires wiringChanged{kind='mutate'} unless wm is mid-realisation (the applier's stamp-back path sets `realising` so it doesn't re-enter the live-recompile loop)
   @api wm:compile()  @ 160
-      @contract  returns DAG.compile context around the current user graph; lazy caches live on the ctx, so reusing it across :classes/:capacityErrors/:targetTracks computes each derivation once
+      @contract  DAG.compile ctx for the user graph; reuse across :classes/:capacityErrors to share cache
   @api wm:errors()  @ 166
       @contract  list of intra-class capacity overflows on the lowered compile graph; empty when the user graph is within budget
   @api wm:readJsfxContent(ident)  @ 171
@@ -188,6 +188,7 @@
 # Uses (outbound edges)
   @use call    DAG.allocate  @ 760
   @use call    DAG.compile  @ 162, 758, 1367, 1478
+  @use call    DAG.targetTracks  @ 760, 1372, 1483
   @use call    DAG.validate  @ 151
   @use call    cm.get  @ 56, 606, 1268
   @use call    cm.readTrackKey  @ 68, 624, 629, 630, 1231, 1235, 1237, 1563, 1566
