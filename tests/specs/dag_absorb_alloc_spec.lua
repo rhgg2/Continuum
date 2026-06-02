@@ -2,11 +2,11 @@ local t   = require('support')
 local DAG = require('DAG')
 
 -- Stage 3c.5 — multi-audio-parent absorption, end to end (compile →
--- targetPlan → allocate). The pure :absorption() map is covered in
+-- targetTracks → allocate). The pure :absorption() map is covered in
 -- dag_absorption_spec; here a primary-elected parent hosts the absorbed
 -- FX while every other audio parent feeds in as a channel-allocated send.
 -- This is the path absorption opens only once channels exist: the absorbed
--- FX's primary input reads the host's intra signal, the rest arrive on
+-- FX's primary input reads the trackKey's intra signal, the rest arrive on
 -- distinct destination pairs.
 
 local function source(id, guid)
@@ -37,11 +37,11 @@ local function mk(nodes, edges)
   return { nodes = nodes, edges = edges or {}, nextId = 1 }
 end
 
--- The whole compile pipeline a live recompile runs: plan + channel alloc.
+-- The whole compile pipeline a live recompile runs: tracks + channel alloc.
 local function allocOf(g)
   local g0  = mk(g.nodes, g.edges)
   local ctx = DAG.compile(g0)
-  return DAG.allocate(ctx:targetPlan(), g0.nodes)
+  return DAG.allocate(ctx:targetTracks(), g0.nodes)
 end
 
 return {
@@ -56,7 +56,7 @@ return {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1, primary = true },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
       } })
-      -- mix hosts on guid-s1: primary pin reads the host's track pair,
+      -- mix hosts on guid-s1: primary pin reads the trackKey's track pair,
       -- the non-primary parent arrives as a send on a fresh pair.
       t.deepEq(out['guid-s1'].pinMaps.mix.ins, { [1] = {1}, [2] = {2} })
       t.eq(out['guid-s1'].nchan, 4)
@@ -90,7 +90,7 @@ return {
     end,
   },
   {
-    name = 'absorbed node feeds master: masterFeed on host, non-primary parent sends in',
+    name = 'absorbed node feeds master: masterFeed on trackKey, non-primary parent sends in',
     run = function()
       -- s3 → master keeps master's class a strict superset of mix's, so mix
       -- stays newTrack-eligible and absorbs into guid-s1 rather than going
@@ -121,7 +121,7 @@ return {
     end,
   },
   {
-    name = 'gain on a non-primary parent folds onto the send (D_VOL), no host CU',
+    name = 'gain on a non-primary parent folds onto the send (D_VOL), no trackKey CU',
     run = function()
       local ns = {}
       local k1, v1 = source('s1', 'guid-s1'); ns[k1] = v1
@@ -132,11 +132,11 @@ return {
         { type = 'audio', from = 's2', to = 'mix', toPort = 2, ops = { gain = 0.5 } },
       } })
       t.eq(out['guid-s2'].sends[1].gain, 0.5, 'gain rides the send, not a CU')
-      t.deepEq(out['guid-s1'].fxOrder, { 'mix' }, 'no merge CU on the host chain')
+      t.deepEq(out['guid-s1'].fxOrder, { 'mix' }, 'no merge CU on the trackKey chain')
     end,
   },
   {
-    name = 'two-hop primary chain: both FX collapse to the terminal host, sends retarget',
+    name = 'two-hop primary chain: both FX collapse to the terminal trackKey, sends retarget',
     run = function()
       -- s primary into mixA, t the non-primary; mixA primary into mixB, u the
       -- non-primary. Both hops absorb, so mixA+mixB land on guid-s and t/u

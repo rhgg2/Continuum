@@ -32,11 +32,11 @@ local function mk(nodes, edges)
   return { nodes = nodes, edges = edges or {}, nextId = 1 }
 end
 
-local function planOf(g)
-  return DAG.compile(g):targetPlan()
+local function tracksOf(g)
+  return DAG.compile(g):targetTracks()
 end
 
--- The merge CUs of a plan entry as {id, node} pairs (synthNodes is cuId-keyed).
+-- The merge CUs of a tracks entry as {id, node} pairs (synthNodes is cuId-keyed).
 local function cuEntries(entry)
   local out = {}
   for id, sn in pairs(entry.synthNodes or {}) do out[#out + 1] = { id = id, node = sn } end
@@ -45,10 +45,10 @@ end
 
 return {
   {
-    name = 'empty graph: only master, plan is empty (master implicit, no scratch needed)',
+    name = 'empty graph: only master, tracks is empty (master implicit, no scratch needed)',
     run = function()
-      local plan = planOf(mk({}))
-      t.eq(next(plan), nil)
+      local tracks = tracksOf(mk({}))
+      t.eq(next(tracks), nil)
     end,
   },
   {
@@ -56,13 +56,13 @@ return {
     run = function()
       local ns = {}
       local k, v = source('s', 'guid-s'); ns[k] = v
-      local plan = planOf(mk(ns))
-      t.eq(plan['guid-s'].hostKind,  'sourceTrack')
-      t.eq(plan['guid-s'].trackGuid, 'guid-s')
-      t.deepEq(plan['guid-s'].fxOrder, {})
-      t.eq(plan['guid-s'].mainSend, false)
-      t.eq(plan[''],          nil)
-      t.eq(plan['__scratch__'], nil)
+      local tracks = tracksOf(mk(ns))
+      t.eq(tracks['guid-s'].trackKind,  'sourceTrack')
+      t.eq(tracks['guid-s'].trackGuid, 'guid-s')
+      t.deepEq(tracks['guid-s'].fxOrder, {})
+      t.eq(tracks['guid-s'].mainSend, false)
+      t.eq(tracks[''],          nil)
+      t.eq(tracks['__scratch__'], nil)
     end,
   },
   {
@@ -70,11 +70,11 @@ return {
     run = function()
       local ns = {}
       local k, v = fx('orphan'); ns[k] = v
-      local plan = planOf(mk(ns))
-      t.eq(plan['__scratch__'].hostKind, 'scratch')
-      t.deepEq(plan['__scratch__'].fxOrder, { 'orphan' })
-      t.eq(plan['__scratch__'].mainSend, false)
-      t.deepEq(plan['__scratch__'].outWires, {})
+      local tracks = tracksOf(mk(ns))
+      t.eq(tracks['__scratch__'].trackKind, 'scratch')
+      t.deepEq(tracks['__scratch__'].fxOrder, { 'orphan' })
+      t.eq(tracks['__scratch__'].mainSend, false)
+      t.deepEq(tracks['__scratch__'].outWires, {})
     end,
   },
   {
@@ -84,8 +84,8 @@ return {
       local k,  v  = fx('b'); ns[k]  = v
       local k2, v2 = fx('a'); ns[k2] = v2
       local k3, v3 = fx('c'); ns[k3] = v3
-      local plan = planOf(mk(ns))
-      t.deepEq(plan['__scratch__'].fxOrder, { 'a', 'b', 'c' })
+      local tracks = tracksOf(mk(ns))
+      t.deepEq(tracks['__scratch__'].fxOrder, { 'a', 'b', 'c' })
     end,
   },
   {
@@ -95,15 +95,15 @@ return {
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
       local k3, v3 = fx('orphan');          ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
       }))
-      t.eq(plan['guid-s'].hostKind, 'sourceTrack')
-      t.deepEq(plan['guid-s'].fxOrder, { 'f' })
-      t.eq(plan['guid-s'].mainSend, true)
-      t.eq(plan['__scratch__'].hostKind, 'scratch')
-      t.deepEq(plan['__scratch__'].fxOrder, { 'orphan' })
+      t.eq(tracks['guid-s'].trackKind, 'sourceTrack')
+      t.deepEq(tracks['guid-s'].fxOrder, { 'f' })
+      t.eq(tracks['guid-s'].mainSend, true)
+      t.eq(tracks['__scratch__'].trackKind, 'scratch')
+      t.deepEq(tracks['__scratch__'].fxOrder, { 'orphan' })
     end,
   },
   {
@@ -115,16 +115,16 @@ return {
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('fx_a', { ins = 2 }); ns[k2] = v2
       local k3, v3 = fx('orphan'); ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's',      to = 'fx_a', toPort = 1 },
         { type = 'audio', from = 'orphan', to = 'fx_a', toPort = 2 },
         { type = 'audio', from = 'fx_a',   to = 'master' },
       }))
       -- orphan is in the inert pool, parked on scratch.
-      t.deepEq(plan['__scratch__'].fxOrder, { 'orphan' })
+      t.deepEq(tracks['__scratch__'].fxOrder, { 'orphan' })
       -- The orphan->fx_a wire produces no send entry anywhere.
-      t.deepEq(plan['guid-s'].outWires, {})
-      t.deepEq(plan['__scratch__'].outWires, {})
+      t.deepEq(tracks['guid-s'].outWires, {})
+      t.deepEq(tracks['__scratch__'].outWires, {})
     end,
   },
   {
@@ -133,15 +133,15 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
       }))
-      t.eq(plan['guid-s'].hostKind,  'sourceTrack')
-      t.eq(plan['guid-s'].trackGuid, 'guid-s')
-      t.deepEq(plan['guid-s'].fxOrder, { 'f' })
-      t.eq(plan['guid-s'].mainSend, true)
-      t.deepEq(plan['guid-s'].outWires, {})
+      t.eq(tracks['guid-s'].trackKind,  'sourceTrack')
+      t.eq(tracks['guid-s'].trackGuid, 'guid-s')
+      t.deepEq(tracks['guid-s'].fxOrder, { 'f' })
+      t.eq(tracks['guid-s'].mainSend, true)
+      t.deepEq(tracks['guid-s'].outWires, {})
     end,
   },
   {
@@ -151,28 +151,28 @@ return {
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
       local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',  to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       }))
       -- The master-hosted class is keyed by the sentinel '__master__', not
       -- its merged srcSet — wm:snapshot can't tag the REAPER master with a
-      -- project-scoped class, so both sides agree on a stable host key.
-      t.eq(plan['guid-a|guid-b'], nil, 'merged-srcSet key vacated for sentinel')
-      t.eq(plan['__master__'].hostKind, 'master')
-      t.deepEq(plan['__master__'].fxOrder, { 'mix' })
+      -- project-scoped class, so both sides agree on a stable trackKey key.
+      t.eq(tracks['guid-a|guid-b'], nil, 'merged-srcSet key vacated for sentinel')
+      t.eq(tracks['__master__'].trackKind, 'master')
+      t.deepEq(tracks['__master__'].fxOrder, { 'mix' })
       -- Sources fold their audio-to-master into mainSend, not regular sends.
-      t.eq(plan['guid-a'].mainSend, true)
-      t.eq(plan['guid-b'].mainSend, true)
-      t.deepEq(plan['guid-a'].outWires, {})
-      t.deepEq(plan['guid-b'].outWires, {})
+      t.eq(tracks['guid-a'].mainSend, true)
+      t.eq(tracks['guid-b'].mainSend, true)
+      t.deepEq(tracks['guid-a'].outWires, {})
+      t.deepEq(tracks['guid-b'].outWires, {})
     end,
   },
   {
     name = 'inter-class send between two managed tracks (non-master target)',
     run = function()
-      -- s1 -> fx_a (own class with s1, host=sourceTrack)
+      -- s1 -> fx_a (own class with s1, trackKey=sourceTrack)
       -- s2 -> fx_b (own class with s2)
       -- fx_a -> fx_b means class(fx_a)={g1}, class(fx_b)={g1,g2}; inter-class
       -- audio. fx_b's class has no master -> newTrack. So {g1} sends to {g1|g2}.
@@ -181,21 +181,21 @@ return {
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
       local k3, v3 = fx('fx_a');             ns[k3] = v3
       local k4, v4 = fx('fx_b', { ins = 2 }); ns[k4] = v4
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',   to = 'fx_a' },
         { type = 'audio', from = 's2',   to = 'fx_b', toPort = 1 },
         { type = 'audio', from = 'fx_a', to = 'fx_b', toPort = 2 },
       }))
       local fxbCls = 'guid-a|guid-b'
-      t.eq(plan[fxbCls].hostKind, 'newTrack')
-      t.deepEq(plan[fxbCls].fxOrder, { 'fx_b' })
-      t.eq(plan[fxbCls].mainSend, false)
+      t.eq(tracks[fxbCls].trackKind, 'newTrack')
+      t.deepEq(tracks[fxbCls].fxOrder, { 'fx_b' })
+      t.eq(tracks[fxbCls].mainSend, false)
       -- outWires carry producer/consumer node ids + ports so the allocator
-      -- can plan channel pairs and pin maps on each side.
-      t.deepEq(plan['guid-a'].outWires,
+      -- can tracks channel pairs and pin maps on each side.
+      t.deepEq(tracks['guid-a'].outWires,
                { { from = 'fx_a', fromPort = 1, to = fxbCls,
                    toNode = 'fx_b', toPort = 2, type = 'audio' } })
-      t.deepEq(plan['guid-b'].outWires,
+      t.deepEq(tracks['guid-b'].outWires,
                { { from = 's2', fromPort = 1, to = fxbCls,
                    toNode = 'fx_b', toPort = 1, type = 'audio' } })
     end,
@@ -210,7 +210,7 @@ return {
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
       local k3, v3 = fx('splitter', { outs = 2 }); ns[k3] = v3
       local k4, v4 = fx('mix', { ins = { 'L','R','L','R' } }); ns[k4] = v4
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',       to = 'splitter' },
         { type = 'audio', from = 's2',       to = 'mix', toPort = 1 },
         { type = 'audio', from = 'splitter', to = 'mix', toPort = 2, fromPort = 1 },
@@ -218,7 +218,7 @@ return {
       }))
       -- splitter's two wires surface as distinct outWires keyed on fromPort;
       -- DAG.allocate decides collapse via channel assignment.
-      local ws = plan['guid-a'].outWires
+      local ws = tracks['guid-a'].outWires
       t.eq(#ws, 2)
       t.eq(ws[1].from, 'splitter'); t.eq(ws[1].fromPort, 1)
       t.eq(ws[2].from, 'splitter'); t.eq(ws[2].fromPort, 2)
@@ -227,9 +227,9 @@ return {
     end,
   },
   {
-    -- A producer fanning to two co-host consumers reaches each via that consumer's
-    -- own merge CU, so the cross-host outWires differ in toNode — never identical.
-    name = 'fan-out to co-host consumers: outWires stay distinct (no identical sends)',
+    -- A producer fanning to two co-trackKey consumers reaches each via that consumer's
+    -- own merge CU, so the cross-trackKey outWires differ in toNode — never identical.
+    name = 'fan-out to co-trackKey consumers: outWires stay distinct (no identical sends)',
     run = function()
       local ns = {}
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
@@ -237,7 +237,7 @@ return {
       local k3, v3 = fx('p');  ns[k3] = v3   -- producer on s1's class
       local k4, v4 = fx('c1'); ns[k4] = v4   -- c1/c2 form their own class via s2 fan-in
       local k5, v5 = fx('c2'); ns[k5] = v5
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'midi', from = 's1', to = 'p'  },
         { type = 'midi', from = 'p',  to = 'c1' },
         { type = 'midi', from = 'p',  to = 'c2' },
@@ -245,7 +245,7 @@ return {
         { type = 'midi', from = 's2', to = 'c2' },
       }))
       local seen = {}
-      for _, ow in ipairs(plan['guid-a'].outWires) do
+      for _, ow in ipairs(tracks['guid-a'].outWires) do
         local key = ow.from .. '|' .. (ow.fromPort or 0) .. '|' .. ow.to
                   .. '|' .. ow.toNode .. '|' .. (ow.toPort or 0) .. '|' .. ow.type
         t.eq(seen[key], nil, 'duplicate outWire: ' .. key)
@@ -261,11 +261,11 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('fx_a');            ns[k2] = v2
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's',    to = 'fx_a', ops = { gain = 0.5 } },
         { type = 'audio', from = 'fx_a', to = 'master' },
       }))
-      local order = plan['guid-s'].fxOrder
+      local order = tracks['guid-s'].fxOrder
       t.eq(#order, 2)
       t.eq(order[1], '_cu_1')
       t.eq(order[2], 'fx_a')
@@ -281,7 +281,7 @@ return {
       for _, id in ipairs({ 'fxA', 'fxB', 'fxC', 'fxD' }) do
         local k, v = fx(id); ns[k] = v
       end
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's',   to = 'fxA' },
         { type = 'audio', from = 's',   to = 'fxB' },
         { type = 'audio', from = 'fxA', to = 'fxC' },
@@ -289,44 +289,44 @@ return {
         { type = 'audio', from = 'fxC', to = 'master' },
         { type = 'audio', from = 'fxD', to = 'master' },
       }))
-      t.deepEq(plan['guid-s'].fxOrder, { 'fxA', 'fxC', 'fxB', 'fxD', '_cu_1' })
+      t.deepEq(tracks['guid-s'].fxOrder, { 'fxA', 'fxC', 'fxB', 'fxD', '_cu_1' })
     end,
   },
   {
-    name = 'midi fan-in to one consumer collapses to a merge CU on the consumer host',
+    name = 'midi fan-in to one consumer collapses to a merge CU on the consumer trackKey',
     run = function()
       -- s1 -> synthA (midi) -> midiComp <- synthB <- s2: two MIDI feeders
-      -- ⇒ one N→1 merge CU on the consumer host; CU -> midiComp is intra-host.
+      -- ⇒ one N→1 merge CU on the consumer trackKey; CU -> midiComp is intra-trackKey.
       local ns = {}
       local k,  v  = source('s1', 'guid-a');               ns[k]  = v
       local k2, v2 = source('s2', 'guid-b');               ns[k2] = v2
       local k3, v3 = fx('synthA', { ins = 0, outs = 1 }); ns[k3] = v3
       local k4, v4 = fx('synthB', { ins = 0, outs = 1 }); ns[k4] = v4
       local k5, v5 = fx('midiComp', { ins = 0, outs = 0 }); ns[k5] = v5
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'midi',  from = 's1',     to = 'synthA' },
         { type = 'midi',  from = 's2',     to = 'synthB' },
         { type = 'midi',  from = 'synthA', to = 'midiComp' },
         { type = 'midi',  from = 'synthB', to = 'midiComp' },
       }))
       local compCls = 'guid-a|guid-b'
-      t.eq(plan[compCls].hostKind, 'newTrack')
-      local list = cuEntries(plan[compCls])
+      t.eq(tracks[compCls].trackKind, 'newTrack')
+      local list = cuEntries(tracks[compCls])
       t.eq(#list, 1, 'one merge CU collapses the two MIDI feeders')
       local cuId, cu = list[1].id, list[1].node
       t.eq(cu.params.mode,    'merge')
       t.eq(cu.originConsumer, 'midiComp')
-      t.eq(cu.originHost,     compCls)
-      t.deepEq(plan[compCls].fxOrder, { cuId, 'midiComp' })
-      t.deepEq(plan['guid-a'].outWires,
+      t.eq(cu.originTrackKey,     compCls)
+      t.deepEq(tracks[compCls].fxOrder, { cuId, 'midiComp' })
+      t.deepEq(tracks['guid-a'].outWires,
                { { from = 'synthA', to = compCls, toNode = cuId, type = 'midi' } })
-      t.deepEq(plan['guid-b'].outWires,
+      t.deepEq(tracks['guid-b'].outWires,
                { { from = 'synthB', to = compCls, toNode = cuId, type = 'midi' } })
       local sawCuToComp = false
-      for _, c in ipairs(plan[compCls].intraConns) do
+      for _, c in ipairs(tracks[compCls].intraConns) do
         if c.from == cuId and c.to == 'midiComp' and c.type == 'midi' then sawCuToComp = true end
       end
-      t.truthy(sawCuToComp, 'CU -> midiComp is an intra-host midi wire')
+      t.truthy(sawCuToComp, 'CU -> midiComp is an intra-trackKey midi wire')
     end,
   },
   {
@@ -337,7 +337,7 @@ return {
       local k2, v2 = source('s2', 'guid-b');   ns[k2] = v2
       local k3, v3 = fx('fx_a');               ns[k3] = v3
       local k4, v4 = fx('fx_b', { ins = 2 });  ns[k4] = v4
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',   to = 'fx_a' },
         { type = 'audio', from = 's2',   to = 'fx_b', toPort = 1 },
         { type = 'audio', from = 'fx_a', to = 'fx_b', toPort = 2, ops = { gain = 0.5 } },
@@ -345,10 +345,10 @@ return {
       local fxbCls = 'guid-a|guid-b'
       -- Folded boundary CU bypassed: outWire.from is fx_a (the real producer
       -- upstream of the CU), not the folded CU node id.
-      t.deepEq(plan['guid-a'].outWires,
+      t.deepEq(tracks['guid-a'].outWires,
                { { from = 'fx_a', fromPort = 1, to = fxbCls,
                    toNode = 'fx_b', toPort = 2, type = 'audio', gain = 0.5 } })
-      t.deepEq(plan['guid-a'].fxOrder, { 'fx_a' }, 'gain CU folded out of fxOrder')
+      t.deepEq(tracks['guid-a'].fxOrder, { 'fx_a' }, 'gain CU folded out of fxOrder')
     end,
   },
   {
@@ -357,13 +357,13 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('fx_a');            ns[k2] = v2
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's',    to = 'fx_a' },
         { type = 'audio', from = 'fx_a', to = 'master', ops = { gain = 0.25 } },
       }))
-      t.eq(plan['guid-s'].mainSend, true)
-      t.eq(plan['guid-s'].mainSendGain, 0.25)
-      t.deepEq(plan['guid-s'].fxOrder, { 'fx_a' }, 'gain CU folded out of fxOrder')
+      t.eq(tracks['guid-s'].mainSend, true)
+      t.eq(tracks['guid-s'].mainSendGain, 0.25)
+      t.deepEq(tracks['guid-s'].fxOrder, { 'fx_a' }, 'gain CU folded out of fxOrder')
     end,
   },
   {
@@ -373,16 +373,16 @@ return {
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('fx_1');            ns[k2] = v2
       local k3, v3 = fx('fx_2');            ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's',    to = 'fx_1' },
         { type = 'audio', from = 's',    to = 'fx_2' },
         { type = 'audio', from = 'fx_1', to = 'master', ops = { gain = 0.5 } },
         { type = 'audio', from = 'fx_2', to = 'master' },
       }))
-      t.eq(plan['guid-s'].mainSend, true)
-      t.eq(plan['guid-s'].mainSendGain, nil, 'multi-path → no native fold')
+      t.eq(tracks['guid-s'].mainSend, true)
+      t.eq(tracks['guid-s'].mainSendGain, nil, 'multi-path → no native fold')
       local hasCu = false
-      for _, id in ipairs(plan['guid-s'].fxOrder) do
+      for _, id in ipairs(tracks['guid-s'].fxOrder) do
         if id:match('^_cu_') then hasCu = true end
       end
       t.truthy(hasCu, 'gain CU retained in fxOrder')
@@ -397,39 +397,39 @@ return {
       local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
       local k3, v3 = fx('B', { ins = 1, outs = 0 }); ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1', to = 'B' },
         { type = 'midi',  from = 's2', to = 'B' },
       }))
-      t.eq(plan['guid-s1|guid-s2'], nil, 'absorbed class has no plan entry')
-      t.eq(plan['guid-s1'].hostKind, 'sourceTrack')
-      t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
-      t.deepEq(plan['guid-s2'].outWires,
+      t.eq(tracks['guid-s1|guid-s2'], nil, 'absorbed class has no tracks entry')
+      t.eq(tracks['guid-s1'].trackKind, 'sourceTrack')
+      t.deepEq(tracks['guid-s1'].fxOrder, { 'B' })
+      t.deepEq(tracks['guid-s2'].outWires,
                { { from = 's2', to = 'guid-s1', toNode = 'B', type = 'midi' } })
     end,
   },
 
   {
-    name = 'absorb: primary override picks host even with two audio parents',
+    name = 'absorb: primary override picks trackKey even with two audio parents',
     run = function()
       local ns = {}
       local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
       local k3, v3 = fx('B', { ins = 2, outs = 0 }); ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1', to = 'B', toPort = 1, primary = true },
         { type = 'audio', from = 's2', to = 'B', toPort = 2 },
       }))
-      t.eq(plan['guid-s1|guid-s2'], nil)
-      t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
-      t.deepEq(plan['guid-s2'].outWires,
+      t.eq(tracks['guid-s1|guid-s2'], nil)
+      t.deepEq(tracks['guid-s1'].fxOrder, { 'B' })
+      t.deepEq(tracks['guid-s2'].outWires,
                { { from = 's2', fromPort = 1, to = 'guid-s1',
                    toNode = 'B', toPort = 2, type = 'audio' } })
     end,
   },
 
   {
-    name = 'absorb: chain through two hops lands on terminal source host',
+    name = 'absorb: chain through two hops lands on terminal source trackKey',
     run = function()
       -- mixB terminal (outs=0) keeps the chain's classes newTrack-eligible.
       local ns = {}
@@ -438,38 +438,38 @@ return {
       local k3, v3 = source('u', 'guid-u'); ns[k3] = v3
       local k4, v4 = fx('mixA', { ins = 2, outs = 1 }); ns[k4] = v4
       local k5, v5 = fx('mixB', { ins = 2, outs = 0 }); ns[k5] = v5
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's',    to = 'mixA', toPort = 1, primary = true },
         { type = 'audio', from = 't',    to = 'mixA', toPort = 2 },
         { type = 'audio', from = 'mixA', to = 'mixB', toPort = 1, primary = true },
         { type = 'audio', from = 'u',    to = 'mixB', toPort = 2 },
       }))
-      t.eq(plan['guid-s|guid-t'],        nil)
-      t.eq(plan['guid-s|guid-t|guid-u'], nil)
-      t.eq(plan['guid-s'].hostKind, 'sourceTrack')
-      t.deepEq(plan['guid-s'].fxOrder, { 'mixA', 'mixB' })
-      t.deepEq(plan['guid-t'].outWires,
+      t.eq(tracks['guid-s|guid-t'],        nil)
+      t.eq(tracks['guid-s|guid-t|guid-u'], nil)
+      t.eq(tracks['guid-s'].trackKind, 'sourceTrack')
+      t.deepEq(tracks['guid-s'].fxOrder, { 'mixA', 'mixB' })
+      t.deepEq(tracks['guid-t'].outWires,
                { { from = 't', fromPort = 1, to = 'guid-s',
                    toNode = 'mixA', toPort = 2, type = 'audio' } })
-      t.deepEq(plan['guid-u'].outWires,
+      t.deepEq(tracks['guid-u'].outWires,
                { { from = 'u', fromPort = 1, to = 'guid-s',
                    toNode = 'mixB', toPort = 2, type = 'audio' } })
     end,
   },
 
   {
-    name = 'absorb: gain on now-intra-host wire stays CU (no send to fold onto)',
+    name = 'absorb: gain on now-intra-trackKey wire stays CU (no send to fold onto)',
     run = function()
       local ns = {}
       local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
       local k3, v3 = fx('B', { ins = 2, outs = 0 }); ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1', to = 'B', toPort = 1, primary = true,
           ops = { gain = 0.5 } },
         { type = 'audio', from = 's2', to = 'B', toPort = 2 },
       }))
-      local order = plan['guid-s1'].fxOrder
+      local order = tracks['guid-s1'].fxOrder
       t.eq(#order, 2, 'CU + B')
       t.eq(order[1], '_cu_1')
       t.eq(order[2], 'B')
@@ -479,47 +479,47 @@ return {
   {
     name = 'absorb: master-hosted class never absorbed even with single audio parent',
     run = function()
-      -- master's class has 1 audio parent → absorption() proposes a host, but
+      -- master's class has 1 audio parent → absorption() proposes a trackKey, but
       -- master-hosted classes are exempt and keep the '__master__' entry.
       local ns = {}
       local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
       local k3, v3 = fx('A');                 ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1', to = 'A' },
         { type = 'audio', from = 'A',  to = 'master' },
         { type = 'midi',  from = 's2', to = 'master' },
       }))
-      t.eq(plan['__master__'].hostKind, 'master')
-      t.eq(plan['guid-s1|guid-s2'], nil, 'master-hosted vacates merged key for sentinel')
-      t.eq(plan['guid-s1'].mainSend, true)
-      t.eq(plan['guid-s2'].mainSend, true, 'midi to master-hosted lifts parent send')
-      t.deepEq(plan['guid-s1'].fxOrder, { 'A' })
-      t.deepEq(plan['guid-s2'].outWires, {})
+      t.eq(tracks['__master__'].trackKind, 'master')
+      t.eq(tracks['guid-s1|guid-s2'], nil, 'master-hosted vacates merged key for sentinel')
+      t.eq(tracks['guid-s1'].mainSend, true)
+      t.eq(tracks['guid-s2'].mainSend, true, 'midi to master-hosted lifts parent send')
+      t.deepEq(tracks['guid-s1'].fxOrder, { 'A' })
+      t.deepEq(tracks['guid-s2'].outWires, {})
     end,
   },
 
   {
-    name = 'absorb: source-hosted class is never the absorbee (its host is the source track)',
+    name = 'absorb: source-hosted class is never the absorbee (its trackKey is the source track)',
     run = function()
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
       }))
-      t.eq(plan['guid-s'].hostKind, 'sourceTrack')
-      t.deepEq(plan['guid-s'].fxOrder, { 'f' })
-      t.eq(plan['guid-s'].mainSend, true)
+      t.eq(tracks['guid-s'].trackKind, 'sourceTrack')
+      t.deepEq(tracks['guid-s'].fxOrder, { 'f' })
+      t.eq(tracks['guid-s'].mainSend, true)
     end,
   },
 
   {
-    name = 'absorb: capacityErrors reports host classKey after intra-host merge',
+    name = 'absorb: capacityErrors reports trackKey classKey after intra-trackKey merge',
     run = function()
       -- 65 audio wires sit inside the absorbed class {s1,s2}; post-fix they
-      -- belong to host guid-s1, which is what the error must key on.
+      -- belong to trackKey guid-s1, which is what the error must key on.
       local ns = {}
       local k1, v1 = source('s1', 'guid-s1');         ns[k1] = v1
       local k2, v2 = source('s2', 'guid-s2');         ns[k2] = v2
@@ -538,33 +538,33 @@ return {
       local cx   = DAG.compile(mk(ns, edges))
       local errs = cx:capacityErrors()
       t.eq(#errs, 1)
-      t.eq(errs[1].classKey, 'guid-s1', 'capacity error keyed by host, not absorbed-class key')
+      t.eq(errs[1].classKey, 'guid-s1', 'capacity error keyed by trackKey, not absorbed-class key')
       t.eq(errs[1].kind, 'audio')
     end,
   },
 
   {
-    name = 'absorb: send from another non-host class retargets to host classKey',
+    name = 'absorb: send from another non-trackKey class retargets to trackKey classKey',
     run = function()
       -- midfx (in class {s3}) sends audio into B's absorbed class — must
-      -- retarget to guid-s1 (B's host), not the merged-class key.
+      -- retarget to guid-s1 (B's trackKey), not the merged-class key.
       local ns = {}
       local k1, v1 = source('s1', 'guid-s1'); ns[k1] = v1
       local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
       local k3, v3 = source('s3', 'guid-s3'); ns[k3] = v3
       local k4, v4 = fx('midfx');                       ns[k4] = v4
       local k5, v5 = fx('B', { ins = 2, outs = 0 });    ns[k5] = v5
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',    to = 'B', toPort = 1, primary = true },
         { type = 'midi',  from = 's2',    to = 'B' },
         { type = 'audio', from = 's3',    to = 'midfx' },
         { type = 'audio', from = 'midfx', to = 'B', toPort = 2 },
       }))
-      t.eq(plan['guid-s1|guid-s2|guid-s3'], nil, 'absorbed class vacated')
-      t.deepEq(plan['guid-s1'].fxOrder, { 'B' })
-      t.deepEq(plan['guid-s2'].outWires,
+      t.eq(tracks['guid-s1|guid-s2|guid-s3'], nil, 'absorbed class vacated')
+      t.deepEq(tracks['guid-s1'].fxOrder, { 'B' })
+      t.deepEq(tracks['guid-s2'].outWires,
                { { from = 's2', to = 'guid-s1', toNode = 'B', type = 'midi' } })
-      t.deepEq(plan['guid-s3'].outWires,
+      t.deepEq(tracks['guid-s3'].outWires,
                { { from = 'midfx', fromPort = 1, to = 'guid-s1',
                    toNode = 'B', toPort = 2, type = 'audio' } })
     end,
@@ -573,23 +573,23 @@ return {
   -- intraConns: anchors track-IO and per-FX-pin context for the allocator.
   --   * source -> fx     = track input pair -> fx input pin
   --   * fx     -> fx     = intra-class chain conn
-  --   * fx     -> master = host's audio output pair -> REAPER master input
-  -- Folded CUs (gain bridges on inter-host wires) never appear; the inter-host
+  --   * fx     -> master = trackKey's audio output pair -> REAPER master input
+  -- Folded CUs (gain bridges on inter-trackKey wires) never appear; the inter-trackKey
   -- conn carries the gain via outWires.gain instead.
 
   {
     name = 'intraConns: source -> fx and fx -> master both anchor track-IO sides',
     run = function()
-      -- Lone-source rule: master shares the source's class, so the host is
-      -- source-hosted and both s->f and f->master are intra-host anchors.
+      -- Lone-source rule: master shares the source's class, so the trackKey is
+      -- source-hosted and both s->f and f->master are intra-trackKey anchors.
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
       }))
-      t.deepEq(plan['guid-s'].intraConns, {
+      t.deepEq(tracks['guid-s'].intraConns, {
         { from = 'f', fromPort = 1, to = 'master', toPort = 1, type = 'audio' },
         { from = 's', fromPort = 1, to = 'f',      toPort = 1, type = 'audio' },
       })
@@ -603,12 +603,12 @@ return {
       local k,  v  = source('s', 'guid-s');                       ns[k]  = v
       local k2, v2 = fx('a', { outs = 2 });                       ns[k2] = v2
       local k3, v3 = fx('b', { ins = 2, outs = 0 });              ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's', to = 'a' },
         { type = 'audio', from = 'a', to = 'b', fromPort = 1, toPort = 1 },
         { type = 'audio', from = 'a', to = 'b', fromPort = 2, toPort = 2 },
       }))
-      local ic = plan['guid-s'].intraConns
+      local ic = tracks['guid-s'].intraConns
       -- Sort is by (from, fromPort, to, toPort, type) so 'a' precedes 's'.
       t.eq(#ic, 3, 'a->b(1,1), a->b(2,2), s->a')
       t.eq(ic[1].from, 'a'); t.eq(ic[1].fromPort, 1); t.eq(ic[1].toPort, 1)
@@ -624,18 +624,18 @@ return {
       local k,  v  = source('s1', 'guid-a');   ns[k]  = v
       local k2, v2 = source('s2', 'guid-b');   ns[k2] = v2
       local k3, v3 = fx('mix', { ins = 2 });   ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',  to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       }))
       -- Sources s1/s2 are in their own classes; wires to mix lift to mainSend.
-      -- Only mix->master is intra-host on the master-hosted class.
-      t.deepEq(plan['__master__'].intraConns, {
+      -- Only mix->master is intra-trackKey on the master-hosted class.
+      t.deepEq(tracks['__master__'].intraConns, {
         { from = 'mix', fromPort = 1, to = 'master', toPort = 1, type = 'audio' },
       })
-      t.eq(plan['guid-a'].mainSend, true, 'source->mix lifts to mainSend')
-      t.eq(plan['guid-b'].mainSend, true, 'source->mix lifts to mainSend')
+      t.eq(tracks['guid-a'].mainSend, true, 'source->mix lifts to mainSend')
+      t.eq(tracks['guid-b'].mainSend, true, 'source->mix lifts to mainSend')
     end,
   },
 
@@ -647,60 +647,60 @@ return {
       local k2, v2 = source('s2', 'guid-b');             ns[k2] = v2
       local k3, v3 = fx('fx_a');                         ns[k3] = v3
       local k4, v4 = fx('fx_b', { ins = 2 });            ns[k4] = v4
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',   to = 'fx_a' },
         { type = 'audio', from = 's2',   to = 'fx_b', toPort = 1 },
         { type = 'audio', from = 'fx_a', to = 'fx_b', toPort = 2, ops = { gain = 0.5 } },
       }))
-      for _, c in ipairs(plan['guid-a'].intraConns) do
+      for _, c in ipairs(tracks['guid-a'].intraConns) do
         t.eq(c.from:match('^_cu_'), nil, 'no folded CU as intraConn from')
         t.eq(c.to  :match('^_cu_'), nil, 'no folded CU as intraConn to')
       end
-      t.deepEq(plan['guid-a'].intraConns,
+      t.deepEq(tracks['guid-a'].intraConns,
                { { from = 's1', fromPort = 1, to = 'fx_a', toPort = 1, type = 'audio' } })
     end,
   },
 
   -- masterFeed: pins (post-fold) audio producer feeding the parent send for
-  -- non-master hosts whose audio crosses into the master-hosted host.
+  -- non-master hosts whose audio crosses into the master-hosted trackKey.
 
   {
-    name = 'masterFeed: cross-host source-to-master stamps source on sender',
+    name = 'masterFeed: cross-trackKey source-to-master stamps source on sender',
     run = function()
-      -- two-source fanin: mix lives in master-hosted host; both sources contribute
+      -- two-source fanin: mix lives in master-hosted trackKey; both sources contribute
       -- audio that lifts to mainSend. Each sender's masterFeed names its source.
       local ns = {}
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
       local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',  to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       }))
-      t.deepEq(plan['guid-a'].masterFeed, { from = 's1', fromPort = 1 })
-      t.deepEq(plan['guid-b'].masterFeed, { from = 's2', fromPort = 1 })
+      t.deepEq(tracks['guid-a'].masterFeed, { from = 's1', fromPort = 1 })
+      t.deepEq(tracks['guid-b'].masterFeed, { from = 's2', fromPort = 1 })
     end,
   },
 
   {
-    name = 'masterFeed: cross-host fx-to-master names the fx producer (post-fold)',
+    name = 'masterFeed: cross-trackKey fx-to-master names the fx producer (post-fold)',
     run = function()
       -- fx_pre lives in s1's class; its output crosses into the master-hosted
-      -- host (where mix lives). masterFeed on guid-a names fx_pre.
+      -- trackKey (where mix lives). masterFeed on guid-a names fx_pre.
       local ns = {}
       local k,  v  = source('s1', 'guid-a');  ns[k]  = v
       local k2, v2 = source('s2', 'guid-b');  ns[k2] = v2
       local k3, v3 = fx('fx_pre');            ns[k3] = v3
       local k4, v4 = fx('mix', { ins = 2 });  ns[k4] = v4
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',     to = 'fx_pre' },
         { type = 'audio', from = 'fx_pre', to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2',     to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix',    to = 'master' },
       }))
-      t.deepEq(plan['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1 })
-      t.deepEq(plan['guid-b'].masterFeed, { from = 's2',     fromPort = 1 })
+      t.deepEq(tracks['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1 })
+      t.deepEq(tracks['guid-b'].masterFeed, { from = 's2',     fromPort = 1 })
     end,
   },
 
@@ -712,60 +712,60 @@ return {
       local k2, v2 = source('s2', 'guid-b');  ns[k2] = v2
       local k3, v3 = fx('fx_pre');            ns[k3] = v3
       local k4, v4 = fx('mix', { ins = 2 });  ns[k4] = v4
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',     to = 'fx_pre' },
         { type = 'audio', from = 'fx_pre', to = 'mix', toPort = 1, ops = { gain = 0.5 } },
         { type = 'audio', from = 's2',     to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix',    to = 'master' },
       }))
-      t.deepEq(plan['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1 })
-      t.eq(plan['guid-a'].mainSendGain, 0.5)
+      t.deepEq(tracks['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1 })
+      t.eq(tracks['guid-a'].mainSendGain, 0.5)
     end,
   },
 
   {
-    name = 'masterFeed: in-class sourceTrack mainSend has no masterFeed (no cross-host wire)',
+    name = 'masterFeed: in-class sourceTrack mainSend has no masterFeed (no cross-trackKey wire)',
     run = function()
-      -- source + master share class; mainSend=true but there's no cross-host
+      -- source + master share class; mainSend=true but there's no cross-trackKey
       -- master-bound wire, so masterFeed stays nil and allocator defaults to 0.
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
       }))
-      t.eq(plan['guid-s'].mainSend, true)
-      t.eq(plan['guid-s'].masterFeed, nil)
+      t.eq(tracks['guid-s'].mainSend, true)
+      t.eq(tracks['guid-s'].masterFeed, nil)
     end,
   },
 
   {
-    name = 'masterFeed: midi cross-host to master-hosted does not set masterFeed',
+    name = 'masterFeed: midi cross-trackKey to master-hosted does not set masterFeed',
     run = function()
       -- s2's midi wire to master lifts mainSend; masterFeed is audio-only.
       local ns = {}
       local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
       local k3, v3 = fx('A');                 ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1', to = 'A' },
         { type = 'audio', from = 'A',  to = 'master' },
         { type = 'midi',  from = 's2', to = 'master' },
       }))
-      t.eq(plan['guid-s2'].mainSend, true)
-      t.eq(plan['guid-s2'].masterFeed, nil, 'midi master wire stays bool-only')
+      t.eq(tracks['guid-s2'].mainSend, true)
+      t.eq(tracks['guid-s2'].masterFeed, nil, 'midi master wire stays bool-only')
     end,
   },
 
   {
-    name = 'intraConns: un-folded gain CU on intra-host wire is included',
+    name = 'intraConns: un-folded gain CU on intra-trackKey wire is included',
     run = function()
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('fx_1');            ns[k2] = v2
       local k3, v3 = fx('fx_2');            ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's',    to = 'fx_1', ops = { gain = 0.5 } },
         { type = 'audio', from = 's',    to = 'fx_2' },
         { type = 'audio', from = 'fx_1', to = 'master' },
@@ -774,12 +774,12 @@ return {
       -- The gain CU is the one the source feeds; the master fan-in adds a
       -- separate sum CU, so identify by the s -> CU wire, not "last _cu_".
       local gainCu = nil
-      for _, c in ipairs(plan['guid-s'].intraConns) do
+      for _, c in ipairs(tracks['guid-s'].intraConns) do
         if c.from == 's' and c.to:match('^_cu_') then gainCu = c.to end
       end
       t.truthy(gainCu, 'gain CU fed by source retained (no fold)')
       local sawSToCu, sawCuToFx1 = false, false
-      for _, c in ipairs(plan['guid-s'].intraConns) do
+      for _, c in ipairs(tracks['guid-s'].intraConns) do
         if c.from == 's'      and c.to == gainCu then sawSToCu = true end
         if c.from == gainCu   and c.to == 'fx_1' then sawCuToFx1 = true end
       end
@@ -796,11 +796,11 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('fx_a');            ns[k2] = v2
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's',    to = 'fx_a', ops = { gain = 0.5 } },
         { type = 'audio', from = 'fx_a', to = 'master' },
       }))
-      local list = cuEntries(plan['guid-s'])
+      local list = cuEntries(tracks['guid-s'])
       t.eq(#list, 1, 'one merge CU synthesised')
       local cu = list[1].node
       t.eq(cu.fxIdent,         'JS:Continuum Utility')
@@ -809,14 +809,14 @@ return {
       t.deepEq(cu.params.gains, { 0.5 })
       t.eq(cu.params.audioSum, 0, 'matrix-fed sink, no internal sum')
       t.eq(cu.originConsumer,  'fx_a')
-      t.eq(cu.originHost,      'guid-s')
+      t.eq(cu.originTrackKey,      'guid-s')
       t.deepEq(cu.inputEdges,  { 1 }, 'maps pair 1 back to the gained edge')
     end,
   },
   {
     name = 'merge: two gained wires to master collapse to one audioSum CU (last-wins fix)',
     run = function()
-      -- Master gets its own track (two source classes feed it), so host guid-a's
+      -- Master gets its own track (two source classes feed it), so trackKey guid-a's
       -- two wires to master would last-wins on masterFeed without the merge.
       local ns = {}
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
@@ -824,7 +824,7 @@ return {
       local k3, v3 = fx('fx_1');             ns[k3] = v3
       local k4, v4 = fx('fx_2');             ns[k4] = v4
       local k5, v5 = fx('fx_3');             ns[k5] = v5
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's1',   to = 'fx_1' },
         { type = 'audio', from = 's1',   to = 'fx_2' },
         { type = 'audio', from = 's2',   to = 'fx_3' },
@@ -832,7 +832,7 @@ return {
         { type = 'audio', from = 'fx_2', to = 'master', ops = { gain = 0.8 } },
         { type = 'audio', from = 'fx_3', to = 'master' },
       }))
-      local list = cuEntries(plan['guid-a'])
+      local list = cuEntries(tracks['guid-a'])
       t.eq(#list, 1, 'fan-in collapses to a single merge CU')
       local cu = list[1].node
       t.eq(cu.params.mode,     'merge')
@@ -840,10 +840,10 @@ return {
       t.eq(cu.params.audioSum, 1, 'matrix-less master sink sums internally')
       t.deepEq(cu.params.gains, { 0.5, 0.8 })
       t.eq(cu.originConsumer,  'master')
-      t.eq(cu.originHost,      'guid-a')
+      t.eq(cu.originTrackKey,      'guid-a')
       t.deepEq(cu.inputEdges,  { 4, 5 })
       -- The parent send sees ONE producer (the CU), not two competing feeds.
-      t.eq(plan['guid-a'].masterFeed.from, list[1].id, 'masterFeed points at the merge CU')
+      t.eq(tracks['guid-a'].masterFeed.from, list[1].id, 'masterFeed points at the merge CU')
     end,
   },
   {
@@ -860,11 +860,11 @@ return {
         edges[#edges+1] = { type = 'audio', from = 'fxP', to = 'C',
                             fromPort = p, toPort = 1, ops = { gain = 0.5 } }
       end
-      local plan = planOf(mk(ns, edges))
-      local list = cuEntries(plan['guid-s'])
+      local tracks = tracksOf(mk(ns, edges))
+      local list = cuEntries(tracks['guid-s'])
       t.eq(#list, 2, 'two merge CUs for 17 feeders')
       local byKey = {}
-      for _, e in ipairs(list) do byKey[e.node.originHost] = e.node end
+      for _, e in ipairs(list) do byKey[e.node.originTrackKey] = e.node end
       t.truthy(byKey['guid-s'] and byKey['guid-s#2'], 'identity suffixed per cascade CU')
       t.eq(byKey['guid-s'].params.nPairs,    16)
       t.eq(byKey['guid-s#2'].params.nPairs,  1)
@@ -894,8 +894,8 @@ return {
       for p = 1, 17 do
         edges[#edges+1] = { type = 'audio', from = 'fxP', to = 'master', fromPort = p }
       end
-      local plan = planOf(mk(ns, edges))
-      local cus = cuEntries(plan['guid-a'])
+      local tracks = tracksOf(mk(ns, edges))
+      local cus = cuEntries(tracks['guid-a'])
       t.eq(#cus, 3, '2 leaf CUs + 1 root')
       local leaves, root = {}, nil
       for _, e in ipairs(cus) do
@@ -905,7 +905,7 @@ return {
       end
       t.eq(#leaves, 2, 'two leaves carry the user edges')
       t.truthy(root, 'one internal root CU (no user edges)')
-      t.eq(plan['guid-a'].masterFeed.from, root.id, 'masterFeed is the tree root')
+      t.eq(tracks['guid-a'].masterFeed.from, root.id, 'masterFeed is the tree root')
     end,
   },
   {
@@ -915,14 +915,14 @@ return {
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('fx_a');            ns[k2] = v2
       local k3, v3 = fx('fx_b');            ns[k3] = v3
-      local plan = planOf(mk(ns, {
+      local tracks = tracksOf(mk(ns, {
         { type = 'audio', from = 's',    to = 'fx_a', ops = { gain = 0.5 } },
         { type = 'audio', from = 's',    to = 'fx_b', ops = { gain = 0.7 } },
         { type = 'audio', from = 'fx_a', to = 'master' },
         { type = 'audio', from = 'fx_b', to = 'master' },
       }))
       local byConsumer = {}
-      for _, e in ipairs(cuEntries(plan['guid-s'])) do byConsumer[e.node.originConsumer] = e.node end
+      for _, e in ipairs(cuEntries(tracks['guid-s'])) do byConsumer[e.node.originConsumer] = e.node end
       t.truthy(byConsumer.fx_a and byConsumer.fx_b, 'one merge CU per consumer')
       t.deepEq(byConsumer.fx_a.params.gains, { 0.5 })
       t.deepEq(byConsumer.fx_b.params.gains, { 0.7 })

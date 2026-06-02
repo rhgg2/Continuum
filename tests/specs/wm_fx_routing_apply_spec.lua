@@ -20,7 +20,7 @@ local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringHostKind', 'sourceTrack')
+  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
   return track
 end
 

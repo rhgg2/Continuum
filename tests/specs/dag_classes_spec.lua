@@ -126,7 +126,7 @@ return {
         { type = 'audio', from = 's', to = 'f', ops = { gain = 0.5 } },
       })):classes()
       -- s, f share 'guid-s'; master is empty. The gain CU is synthesised at
-      -- targetPlan, not a graph vertex, so it never appears in a class.
+      -- targetTracks, not a graph vertex, so it never appears in a class.
       t.deepEq(classKeys(cs), { '', 'guid-s' })
       t.eq(#cs['guid-s'], 2)
     end,

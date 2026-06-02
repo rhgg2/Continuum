@@ -23,7 +23,7 @@ local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringHostKind', 'sourceTrack')
+  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
   return track
 end
 
@@ -105,7 +105,7 @@ return {
       local snap = wm:snapshot()
       local newTrackKey
       for k, e in pairs(snap) do
-        if e.hostKind == 'newTrack' then newTrackKey = k end
+        if e.trackKind == 'newTrack' then newTrackKey = k end
       end
       t.truthy(newTrackKey, 'newTrack class present')
       local sendA = snap['guid-A'].sends[1]

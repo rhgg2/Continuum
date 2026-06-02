@@ -1,26 +1,26 @@
 local t   = require('support')
 local DAG = require('DAG')
 
--- 3c.1 allocator. Per-host live-range register allocation;
--- see DAG.lua's allocatedPlan shape for the model. MIDI stays 0/0.
+-- 3c.1 allocator. Per-trackKey live-range register allocation;
+-- see DAG.lua's allocatedTracks shape for the model. MIDI stays 0/0.
 
 return {
   {
-    name = 'allocate: empty plan returns empty',
+    name = 'allocate: empty tracks returns empty',
     run = function()
       t.deepEq(DAG.allocate({}), {})
     end,
   },
   {
-    name = 'allocate: empty host yields no sends, empty pinMaps, nchan=2, intra/out fields stripped',
+    name = 'allocate: empty trackKey yields no sends, empty pinMaps, nchan=2, intra/out fields stripped',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
           mainSend=false, intraConns={}, outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.deepEq(out['guid-a'].sends,   {})
       t.deepEq(out['guid-a'].pinMaps, {})
       t.eq(out['guid-a'].nchan,       2)
@@ -29,17 +29,17 @@ return {
     end,
   },
   {
-    name = 'allocate: passes through hostKind / trackGuid / fxOrder / mainSend / mainSendGain',
+    name = 'allocate: passes through trackKind / trackGuid / fxOrder / mainSend / mainSendGain',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a',
+          trackKind='sourceTrack', trackGuid='guid-a',
           fxOrder={'f1','f2'}, mainSend=true, mainSendGain=0.5,
           intraConns={}, outWires={},
         },
       }
-      local out = DAG.allocate(plan)
-      t.eq(out['guid-a'].hostKind,     'sourceTrack')
+      local out = DAG.allocate(tracks)
+      t.eq(out['guid-a'].trackKind,     'sourceTrack')
       t.eq(out['guid-a'].trackGuid,    'guid-a')
       t.deepEq(out['guid-a'].fxOrder,  { 'f1', 'f2' })
       t.eq(out['guid-a'].mainSend,     true)
@@ -49,15 +49,15 @@ return {
   {
     name = 'allocate: source-from intra seeds fx input pin on pair 1',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
           mainSend=false,
           intraConns={ {from='s', to='fx1', type='audio'} },
           outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.deepEq(out['guid-a'].pinMaps, { fx1 = { ins = { [1] = {1} }, outs = {} } })
       t.eq(out['guid-a'].nchan, 2)
     end,
@@ -65,9 +65,9 @@ return {
   {
     name = 'allocate: serial chain fx1->fx2 collapses to pair 1 (in-place reuse)',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
           mainSend=false,
           intraConns={
             {from='s',   to='fx1', type='audio'},
@@ -76,7 +76,7 @@ return {
           outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       -- source-from value (pair 1) freed at fx1's slot, claimed back for fx1's own output.
       t.deepEq(out['guid-a'].pinMaps, {
         fx1 = { ins = { [1] = {1} }, outs = { [1] = {1} } },
@@ -88,9 +88,9 @@ return {
   {
     name = 'allocate: serial chain s->fx1->fx2->fx3 collapses to one pair, nchan=2',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2','fx3'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2','fx3'},
           mainSend=false,
           intraConns={
             {from='s',   to='fx1', type='audio'},
@@ -100,7 +100,7 @@ return {
           outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})
       t.deepEq(out['guid-a'].pinMaps.fx2.ins[1],  {1})
       t.deepEq(out['guid-a'].pinMaps.fx2.outs[1], {1})
@@ -111,9 +111,9 @@ return {
   {
     name = 'allocate: branching producer shares one output pair across both branches',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2','fx3'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2','fx3'},
           mainSend=false,
           intraConns={
             {from='s',   to='fx1', type='audio'},
@@ -123,7 +123,7 @@ return {
           outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       -- fx1's single output drives both branches off one pair; each consumer
       -- reads it in place, so nchan stays at 2.
       t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})
@@ -135,9 +135,9 @@ return {
   {
     name = 'allocate: directed square A->B, A->C, B->D, C->D fits in 2 pairs (nchan=4)',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'A','B','C','D'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'A','B','C','D'},
           mainSend=false,
           intraConns={
             {from='s', to='A', type='audio'},
@@ -149,7 +149,7 @@ return {
           outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       -- A's one output pair feeds both B and C in place. B and C run live at
       -- once (pairs 2 and 1), so D sums both at its input; nchan=4.
       t.deepEq(out['guid-a'].pinMaps.A.ins[1],  {1})
@@ -165,9 +165,9 @@ return {
   {
     name = 'allocate: multi-port intra-conns each claim their own pair',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
           mainSend=false,
           intraConns={
             {from='s',   to='fx1', type='audio'},
@@ -177,7 +177,7 @@ return {
           outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       -- port-1 intra takes freed pair 1 in-place; port-2 intra claims pair 2.
       t.deepEq(out['guid-a'].pinMaps.fx1.outs, { [1]={1}, [2]={2} })
       t.deepEq(out['guid-a'].pinMaps.fx2.ins,  { [1]={1}, [2]={2} })
@@ -187,18 +187,18 @@ return {
   {
     name = 'allocate: source-out outWire anchors srcChan to 0; receiver assigns dstChan',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s', to='guid-b', toNode='fx_b', type='audio'} },
         },
         ['guid-b'] = {
-          hostKind='newTrack', fxOrder={'fx_b'},
+          trackKind='newTrack', fxOrder={'fx_b'},
           mainSend=false, intraConns={}, outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.eq(#out['guid-a'].sends,           1)
       t.eq(out['guid-a'].sends[1].to,      'guid-b')
       t.eq(out['guid-a'].sends[1].srcChan, 0)
@@ -209,19 +209,19 @@ return {
   {
     name = 'allocate: fx-out outWire reuses fx input pair in-place (srcChan=0)',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
           mainSend=false,
           intraConns={ {from='s', to='fx1', type='audio'} },
           outWires={ {from='fx1', to='guid-b', toNode='fx_b', type='audio'} },
         },
         ['guid-b'] = {
-          hostKind='newTrack', fxOrder={'fx_b'},
+          trackKind='newTrack', fxOrder={'fx_b'},
           mainSend=false, intraConns={}, outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})
       t.eq(out['guid-a'].sends[1].srcChan, 0)
       t.eq(out['guid-a'].nchan, 2)
@@ -230,23 +230,23 @@ return {
   {
     name = 'allocate: incoming sends to same receiver get distinct dstChans',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s', to='guid-c', toNode='fx_c', toPort=1, type='audio'} },
         },
         ['guid-b'] = {
-          hostKind='sourceTrack', trackGuid='guid-b', fxOrder={},
+          trackKind='sourceTrack', trackGuid='guid-b', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s', to='guid-c', toNode='fx_c', toPort=2, type='audio'} },
         },
         ['guid-c'] = {
-          hostKind='newTrack', fxOrder={'fx_c'},
+          trackKind='newTrack', fxOrder={'fx_c'},
           mainSend=false, intraConns={}, outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.eq(out['guid-a'].sends[1].dstChan, 0)
       t.eq(out['guid-b'].sends[1].dstChan, 2)
       t.deepEq(out['guid-c'].pinMaps.fx_c.ins[1], {1})
@@ -257,19 +257,19 @@ return {
   {
     name = 'allocate: midi conns keep srcChan/dstChan = 0, no audio pin map',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
           mainSend=false,
           intraConns={ {from='s', to='fx1', type='midi'} },
           outWires={ {from='fx1', to='guid-b', toNode='fx_b', type='midi'} },
         },
         ['guid-b'] = {
-          hostKind='newTrack', fxOrder={'fx_b'},
+          trackKind='newTrack', fxOrder={'fx_b'},
           mainSend=false, intraConns={}, outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.eq(out['guid-a'].sends[1].type,    'midi')
       t.eq(out['guid-a'].sends[1].srcChan, 0)
       t.eq(out['guid-a'].sends[1].dstChan, 0)
@@ -280,27 +280,27 @@ return {
   {
     name = 'allocate: gain on outWire flows through to its send',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s', to='guid-b', toNode='fx_b', type='audio', gain=0.25} },
         },
         ['guid-b'] = {
-          hostKind='newTrack', fxOrder={'fx_b'},
+          trackKind='newTrack', fxOrder={'fx_b'},
           mainSend=false, intraConns={}, outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.eq(out['guid-a'].sends[1].gain, 0.25)
     end,
   },
   {
     name = 'allocate: sends sorted by (to, type, srcChan, dstChan)',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
           mainSend=false,
           intraConns={ {from='s', to='fx1', type='audio'} },
           outWires={
@@ -309,12 +309,12 @@ return {
             {from='fx1', to='guid-b', toNode='fx_b2', type='audio'},
           },
         },
-        ['guid-b'] = { hostKind='newTrack', fxOrder={'fx_b','fx_b2'},
+        ['guid-b'] = { trackKind='newTrack', fxOrder={'fx_b','fx_b2'},
                        mainSend=false, intraConns={}, outWires={} },
-        ['guid-c'] = { hostKind='newTrack', fxOrder={'fx_c'},
+        ['guid-c'] = { trackKind='newTrack', fxOrder={'fx_c'},
                        mainSend=false, intraConns={}, outWires={} },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.eq(out['guid-a'].sends[1].to,   'guid-b')
       t.eq(out['guid-a'].sends[1].type, 'audio')
       t.eq(out['guid-a'].sends[2].to,   'guid-b')
@@ -323,36 +323,36 @@ return {
     end,
   },
   {
-    name = 'allocate: does not mutate input plan',
+    name = 'allocate: does not mutate input tracks',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s', to='guid-b', toNode='fx_b', type='audio'} },
         },
-        ['guid-b'] = { hostKind='newTrack', fxOrder={'fx_b'},
+        ['guid-b'] = { trackKind='newTrack', fxOrder={'fx_b'},
                        mainSend=false, intraConns={}, outWires={} },
       }
-      DAG.allocate(plan)
-      t.eq(plan['guid-a'].outWires[1].to, 'guid-b')
-      t.eq(plan['guid-a'].sends,          nil)
-      t.eq(plan['guid-a'].pinMaps,        nil)
-      t.eq(plan['guid-a'].nchan,          nil)
+      DAG.allocate(tracks)
+      t.eq(tracks['guid-a'].outWires[1].to, 'guid-b')
+      t.eq(tracks['guid-a'].sends,          nil)
+      t.eq(tracks['guid-a'].pinMaps,        nil)
+      t.eq(tracks['guid-a'].nchan,          nil)
     end,
   },
   {
-    name = 'allocate: master-to intra (master-hosted host) anchors fx output to pair 1',
+    name = 'allocate: master-to intra (master-hosted trackKey) anchors fx output to pair 1',
     run = function()
-      local plan = {
+      local tracks = {
         ['__master__'] = {
-          hostKind='master', fxOrder={'mix'},
+          trackKind='master', fxOrder={'mix'},
           mainSend=false,
           intraConns={ {from='mix', to='master', type='audio'} },
           outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.deepEq(out['__master__'].pinMaps.mix.outs[1], {1})
       t.eq(out['__master__'].nchan, 2)
     end,
@@ -360,13 +360,13 @@ return {
   {
     name = 'mainSendOffs: mainSend=true with no masterFeed defaults to 0',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
           mainSend=true, intraConns={}, outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.eq(out['guid-a'].mainSendOffs, 0)
       t.eq(out['guid-a'].nchan,        2)
     end,
@@ -374,14 +374,14 @@ return {
   {
     name = 'mainSendOffs: masterFeed from source (not in fxSet) stays at 0, no pin',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
           mainSend=true, masterFeed={from='s'},
           intraConns={}, outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.eq(out['guid-a'].mainSendOffs, 0)
       t.deepEq(out['guid-a'].pinMaps,  {})
     end,
@@ -389,15 +389,15 @@ return {
   {
     name = 'mainSendOffs: masterFeed reuses fx input pair in-place (offs=0)',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
           mainSend=true, masterFeed={from='fx1'},
           intraConns={ {from='s', to='fx1', type='audio'} },
           outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.deepEq(out['guid-a'].pinMaps.fx1.ins[1],  {1})
       t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})
       t.eq(out['guid-a'].mainSendOffs, 0)
@@ -407,9 +407,9 @@ return {
   {
     name = 'mainSendOffs: chain ending in masterFeed collapses to one pair',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2','fx3'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2','fx3'},
           mainSend=true, masterFeed={from='fx3'},
           intraConns={
             {from='s',   to='fx1', type='audio'},
@@ -419,7 +419,7 @@ return {
           outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.deepEq(out['guid-a'].pinMaps.fx3.outs[1], {1})
       t.eq(out['guid-a'].mainSendOffs, 0)
       t.eq(out['guid-a'].nchan,        2)
@@ -428,17 +428,17 @@ return {
   {
     name = 'mainSendOffs: masterFeed shares its pair with the outgoing send (split-share)',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
           mainSend=true, masterFeed={from='fx1'},
           intraConns={ {from='s', to='fx1', type='audio'} },
           outWires={ {from='fx1', to='guid-b', toNode='fx_b', type='audio'} },
         },
-        ['guid-b'] = { hostKind='newTrack', fxOrder={'fx_b'},
+        ['guid-b'] = { trackKind='newTrack', fxOrder={'fx_b'},
                        mainSend=false, intraConns={}, outWires={} },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       -- fx1's one output pair feeds both readers: send (srcChan=0) and
       -- masterFeed (mainSendOffs=0) read it in place, no replica.
       t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})
@@ -450,9 +450,9 @@ return {
   {
     name = 'split-share: fx output feeding an intra consumer and a send shares one pair',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
           mainSend=false,
           intraConns={
             {from='s',   to='fx1', type='audio'},
@@ -460,10 +460,10 @@ return {
           },
           outWires={ {from='fx1', to='guid-b', toNode='fx_b', type='audio'} },
         },
-        ['guid-b'] = { hostKind='newTrack', fxOrder={'fx_b'},
+        ['guid-b'] = { trackKind='newTrack', fxOrder={'fx_b'},
                        mainSend=false, intraConns={}, outWires={} },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       -- fx1's output pair is read by fx2's input and the send alike.
       t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})
       t.deepEq(out['guid-a'].pinMaps.fx2.ins[1],  {1})
@@ -472,30 +472,30 @@ return {
     end,
   },
   {
-    name = 'mainSendOffs: absent on master-hosted host (mainSend=false)',
+    name = 'mainSendOffs: absent on master-hosted trackKey (mainSend=false)',
     run = function()
-      local plan = {
+      local tracks = {
         ['__master__'] = {
-          hostKind='master', fxOrder={'mix'},
+          trackKind='master', fxOrder={'mix'},
           mainSend=false,
           intraConns={ {from='mix', to='master', type='audio'} },
           outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.eq(out['__master__'].mainSendOffs, nil)
     end,
   },
   {
     name = 'mainSendOffs: absent on hosts with mainSend=false',
     run = function()
-      local plan = {
+      local tracks = {
         ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
           mainSend=false, intraConns={}, outWires={},
         },
       }
-      local out = DAG.allocate(plan)
+      local out = DAG.allocate(tracks)
       t.eq(out['guid-a'].mainSendOffs, nil)
     end,
   },
@@ -505,7 +505,7 @@ return {
       local mk = function()
         return {
           ['guid-a'] = {
-            hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
+            trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
             mainSend=false,
             intraConns={
               {from='s',   to='fx1', type='audio'},
@@ -513,7 +513,7 @@ return {
             },
             outWires={ {from='fx2', to='guid-b', toNode='fx_b', type='audio'} },
           },
-          ['guid-b'] = { hostKind='newTrack', fxOrder={'fx_b'},
+          ['guid-b'] = { trackKind='newTrack', fxOrder={'fx_b'},
                          mainSend=false, intraConns={}, outWires={} },
         }
       end

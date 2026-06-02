@@ -14,7 +14,7 @@ local function seedSourceTrack(h, guid)
   local list  = h.reaper._state.projectTracks
   list[#list+1] = track
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringHostKind', 'sourceTrack')
+  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
   return track
 end
 
@@ -23,7 +23,7 @@ local function seedNewTrack(h, guid, classKey)
   local list  = h.reaper._state.projectTracks
   list[#list+1] = track
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringHostKind', 'newTrack')
+  h.cm:writeTrackKey(track, 'wiringTrackKind', 'newTrack')
   h.cm:writeTrackKey(track, 'wiringClass',    classKey)
   return track
 end
@@ -43,7 +43,7 @@ return {
       wm:load()  -- creates the scratch track
       local snap = wm:snapshot()
       t.truthy(snap['__scratch__'],            'scratch entry present')
-      t.eq(snap['__scratch__'].hostKind, 'scratch')
+      t.eq(snap['__scratch__'].trackKind, 'scratch')
       t.deepEq(snap['__scratch__'].fxOrder, {})
       t.eq(snap['__scratch__'].mainSend, false)
       t.deepEq(snap['__scratch__'].sends, {})
@@ -57,7 +57,7 @@ return {
       local track = seedSourceTrack(h, 'guid-A')
       local snap  = wm:snapshot()
       t.truthy(snap['guid-A'],            'entry under track-guid classKey')
-      t.eq(snap['guid-A'].hostKind, 'sourceTrack')
+      t.eq(snap['guid-A'].trackKind, 'sourceTrack')
       t.eq(snap['guid-A'].trackGuid, 'guid-A')
       t.eq(snap['guid-A'].mainSend, true)
       t.deepEq(snap['guid-A'].fxOrder, {})
@@ -133,14 +133,14 @@ return {
     end,
   },
   {
-    name = 'newTrack host: classKey comes from wiringClass key (multi-guid)',
+    name = 'newTrack trackKey: classKey comes from wiringClass key (multi-guid)',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       seedNewTrack(h, 'guid-mix', 'guid-A|guid-B')
       local snap = wm:snapshot()
       t.truthy(snap['guid-A|guid-B'],            'entry under multi-guid classKey')
-      t.eq(snap['guid-A|guid-B'].hostKind, 'newTrack')
+      t.eq(snap['guid-A|guid-B'].trackKind, 'newTrack')
       t.eq(snap['guid-A|guid-B'].trackGuid, 'guid-mix')
     end,
   },

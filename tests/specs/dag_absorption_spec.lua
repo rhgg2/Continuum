@@ -1,8 +1,8 @@
 local t   = require('support')
 local DAG = require('DAG')
 
--- absorption is a closure-local; its decision surfaces through resolveHost.
--- No absorbing host → resolves to self; absorbed class → resolves to host class.
+-- absorption is a closure-local; its decision surfaces through trackOf.
+-- No absorbing trackKey → resolves to self; absorbed class → resolves to trackKey class.
 
 local function source(id, guid)
   return id, { kind = 'source', trackGuid = guid or 'guid-' .. id,
@@ -35,8 +35,8 @@ local function mk(nodes, edges)
   return { nodes = nodes, edges = edges or {}, nextId = 1 }
 end
 
-local function hostOf(g, cls)
-  return DAG.compile(g):resolveHost(cls)
+local function trackOf(g, cls)
+  return DAG.compile(g):trackOf(cls)
 end
 
 return {
@@ -50,7 +50,7 @@ return {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
       })
-      t.eq(hostOf(g, 'guid-s'), 'guid-s')
+      t.eq(trackOf(g, 'guid-s'), 'guid-s')
     end,
   },
   {
@@ -65,7 +65,7 @@ return {
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       })
-      t.eq(hostOf(g, 'guid-a|guid-b'), 'guid-a|guid-b')
+      t.eq(trackOf(g, 'guid-a|guid-b'), 'guid-a|guid-b')
     end,
   },
   {
@@ -79,13 +79,13 @@ return {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1, primary = true },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
       })
-      t.eq(hostOf(g, 'guid-a|guid-b'), 'guid-a')
+      t.eq(trackOf(g, 'guid-a|guid-b'), 'guid-a')
     end,
   },
   {
     name = 'primary survives an inserted gain CU: still absorbs into the primary parent',
     run = function()
-      -- the gain CU is synthesised at plan time and is invisible to the
+      -- the gain CU is synthesised at tracks time and is invisible to the
       -- partition, so the primary flag still drives absorption.
       local ns = {}
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
@@ -96,7 +96,7 @@ return {
           primary = true, ops = { gain = 0.5 } },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
       })
-      t.eq(hostOf(g, 'guid-a|guid-b'), 'guid-a')
+      t.eq(trackOf(g, 'guid-a|guid-b'), 'guid-a')
     end,
   },
   {
@@ -111,11 +111,11 @@ return {
         { type = 'audio', from = 'f', to = 'master' },
         { type = 'audio', from = 't', to = 'master' },
       })
-      t.eq(hostOf(g, 'guid-s|guid-t'), 'guid-s|guid-t')
+      t.eq(trackOf(g, 'guid-s|guid-t'), 'guid-s|guid-t')
     end,
   },
   {
-    name = 'chain absorption resolves to the terminal host',
+    name = 'chain absorption resolves to the terminal trackKey',
     run = function()
       -- mixA {s,t} absorbs into its primary {s}; mixB {s,t,u} absorbs into its
       -- primary {s,t}, which itself resolves to {s}. So both land on guid-s.
@@ -131,8 +131,8 @@ return {
         { type = 'audio', from = 'mixA', to = 'mixB', toPort = 1, primary = true },
         { type = 'audio', from = 'u',    to = 'mixB', toPort = 2 },
       })
-      t.eq(hostOf(g, 'guid-s|guid-t'),        'guid-s')
-      t.eq(hostOf(g, 'guid-s|guid-t|guid-u'), 'guid-s')
+      t.eq(trackOf(g, 'guid-s|guid-t'),        'guid-s')
+      t.eq(trackOf(g, 'guid-s|guid-t|guid-u'), 'guid-s')
     end,
   },
   {
@@ -146,7 +146,7 @@ return {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1, primary = true },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2, primary = true },
       })
-      t.eq(hostOf(g, 'guid-a|guid-b'), 'guid-a|guid-b')
+      t.eq(trackOf(g, 'guid-a|guid-b'), 'guid-a|guid-b')
     end,
   },
   {
@@ -160,7 +160,7 @@ return {
         { type = 'midi', from = 's', to = 'm' },
         { type = 'midi', from = 't', to = 'm' },
       })
-      t.eq(hostOf(g, 'guid-s|guid-t'), 'guid-s|guid-t')
+      t.eq(trackOf(g, 'guid-s|guid-t'), 'guid-s|guid-t')
     end,
   },
 }

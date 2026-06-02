@@ -19,7 +19,7 @@ local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringHostKind', 'sourceTrack')
+  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
   return track
 end
 
@@ -189,18 +189,18 @@ return {
         util.add(g.edges, audioEdge('sA',  'fxA'))
         util.add(g.edges, audioEdge('fxA', 'fxB', { toPort = 2 }))
         util.add(g.edges, audioEdge('sB',  'fxB', { toPort = 1 }))
-        -- No fxB→master — wiring it would put fxB in master's class and host
+        -- No fxB→master — wiring it would put fxB in master's class and trackKey
         -- it on REAPER's master, so no newTrack/sends would be emitted.
       end)
       apply(wm)
       local newTrack
       for i = 0, h.reaper.CountTracks(0) - 1 do
         local tr = h.reaper.GetTrack(0, i)
-        if h.cm:readTrackKey(tr, 'wiringHostKind') == 'newTrack' then
+        if h.cm:readTrackKey(tr, 'wiringTrackKind') == 'newTrack' then
           newTrack = tr; break
         end
       end
-      t.truthy(newTrack, 'newTrack created to host fxB')
+      t.truthy(newTrack, 'newTrack created to trackKey fxB')
       t.eq(h.reaper.GetTrackNumSends(trackA, 0), 1, 'trackA→newTrack send')
       t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'P_DESTTRACK'), newTrack)
       local mf = h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'I_MIDIFLAGS')
@@ -250,7 +250,7 @@ return {
       local mixTrack
       for i = 0, h.reaper.CountTracks(0) - 1 do
         local tr = h.reaper.GetTrack(0, i)
-        if h.cm:readTrackKey(tr, 'wiringHostKind') == 'newTrack' then
+        if h.cm:readTrackKey(tr, 'wiringTrackKind') == 'newTrack' then
           mixTrack = tr; break
         end
       end
@@ -313,7 +313,7 @@ return {
       local mixTrack
       for i = 0, h.reaper.CountTracks(0) - 1 do
         local tr = h.reaper.GetTrack(0, i)
-        if h.cm:readTrackKey(tr, 'wiringHostKind') == 'newTrack' then
+        if h.cm:readTrackKey(tr, 'wiringTrackKind') == 'newTrack' then
           mixTrack = tr; break
         end
       end
@@ -399,7 +399,7 @@ return {
       local newTrack
       for i = 0, h.reaper.CountTracks(0) - 1 do
         local tr = h.reaper.GetTrack(0, i)
-        if h.cm:readTrackKey(tr, 'wiringHostKind') == 'newTrack' then newTrack = tr; break end
+        if h.cm:readTrackKey(tr, 'wiringTrackKind') == 'newTrack' then newTrack = tr; break end
       end
       t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'P_DESTTRACK'), newTrack)
       t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'D_VOL'), 0.5, 'gain landed on the send')
@@ -435,7 +435,7 @@ return {
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
       wm:applyOps({
-        { op='setNchan', classKey='guid-A', hostKind='sourceTrack',
+        { op='setNchan', classKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A', value=6 },
       }, 'test')
       t.eq(h.reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN'), 6)
@@ -447,7 +447,7 @@ return {
       local h, wm = mkWm(harness)
       local trackA = seedSource(h, 'guid-A')
       wm:applyOps({
-        { op='setMainSend', classKey='guid-A', hostKind='sourceTrack',
+        { op='setMainSend', classKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A', value=true, gain=0.75, offs=2 },
       }, 'test')
       t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'B_MAINSEND'), 1)
@@ -470,7 +470,7 @@ return {
       apply(wm)
       local fxGuid = wm:graph().nodes.f.fxGuid
       wm:applyOps({
-        { op='setPinMaps', classKey='guid-A', hostKind='sourceTrack',
+        { op='setPinMaps', classKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
           pinMaps         = { [fxGuid] = { ins={[1]={2}}, outs={} } },
           pinMapsByOrigin = {} },
@@ -495,11 +495,11 @@ return {
       end)
       -- setFXChain mints+stamps; setPinMaps then resolves 'node:f' → fxGuid.
       wm:applyOps({
-        { op='setFXChain', classKey='guid-A', hostKind='sourceTrack',
+        { op='setFXChain', classKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
           fxOrder = { { fxGuid=nil, ident='JS:foo',
                         origin={ kind='node', id='f' } } } },
-        { op='setPinMaps', classKey='guid-A', hostKind='sourceTrack',
+        { op='setPinMaps', classKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
           pinMaps         = {},
           pinMapsByOrigin = { ['node:f'] = { ins={[1]={2}}, outs={} } } },
@@ -527,7 +527,7 @@ return {
       h.reaper.TrackFX_SetPinMappings(track, 0, 0, 0, 1 << 2, 0)
       h.reaper.TrackFX_SetPinMappings(track, 0, 0, 1, 1 << 3, 0)
       wm:applyOps({
-        { op='setPinMaps', classKey='guid-A', hostKind='sourceTrack',
+        { op='setPinMaps', classKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
           pinMaps         = { [fxGuid] = { ins={}, outs={} } },
           pinMapsByOrigin = {} },

@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1387  sha=ba08f55  mode=namespace
+@module DAG  src=DAG.lua  loc=1387  sha=3ce5aab  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -16,14 +16,14 @@
   @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
   @shape  userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool, split?=true }
   @shape  edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number}, primary?=true }
-  @shape  synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originHost?=string, inputEdges?=int[] }
-  @shape  outWire = { from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
+  @shape  synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }
+  @shape  outWire = { from=id, fromPort?=int, to=trackKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
   @shape  intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
-  @shape  targetPlanEntry = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
-  @shape  targetPlan = { [hostKey] = targetPlanEntry }
-  @shape  allocatedSend = { to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
+  @shape  trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
+  @shape  targetTracks = { [trackKey] = trackSpec }
+  @shape  allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
   @shape  allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
-  @shape  allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
+  @shape  allocatedTracks = { [trackKey] = { trackKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
 
 # Imports
   @const util = 'util'  @ 30
@@ -44,7 +44,7 @@
   -- master minimization
   @fn deriveMasterSplit(userGraph)  @ 791
       -- master class = cone of master's largest dominator whose entry pulls <=1 audio
-      -- pair per upstream host; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
+      -- pair per upstream track; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
       · midi register file: bus 0 boundary; values are per-producer streams.
       · bracket post-pass — see docs/DAG.md § allocate
 
@@ -65,11 +65,11 @@
   @api M.compile(userGraph)  @ 883
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
   -- allocate
-  @api M.allocate(plan, nodes)  @ 893
-      -- Per-host live-range allocation, one register file per stream channel:
-      -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
+  @api M.allocate(tracks, nodes)  @ 893
+      -- Per-track live-range allocation, one register file per stream channel:
+      -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedTracks shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
-      @contract  nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
+      @contract  nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
 
 # Uses (outbound edges)
   @use call    util.add  @ 230, 293, 294, 349, 418, 419, 439, 453, 458, 460, 464, 494, 507, 510, 525, 541, 579, 588, 606, 617, 623, 633, 639, 640, 655, 663, 674, 709, 722, 823, 908, 930, 944, 962, 972, 975, 1009, 1017, 1026, 1034, 1065, 1095, 1130, 1157, 1164, 1188, 1196, 1200, 1204, 1235, 1258, 1321, 1322, 1323, 1328, 1343

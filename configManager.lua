@@ -118,7 +118,7 @@ local declarations = {
   { 'wiringGraph',    {}  },
   { 'wiringOwnedFx',  {}  },
   { 'wiringClass',    nil },
-  { 'wiringHostKind', nil },
+  { 'wiringTrackKind', nil },
   { 'wiringScratch',  nil },
 
   -- Atoms — parchment palette

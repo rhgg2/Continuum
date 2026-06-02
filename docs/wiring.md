@@ -30,7 +30,7 @@ assumption landed; the model is simpler for it.
 
 The partition invariant below runs directly on the user graph. The
 only nodes the compiler synthesises are CUs — the **merge** node and
-the non-bus-aware **bracket** — minted at the targetPlan/allocate
+the non-bus-aware **bracket** — minted at the targetTracks/allocate
 boundary and hosted within a consumer's equivalence class, so they
 never perturb the partition; srcSet and class equivalence are computed
 on the graph the user drew. Capacity counts intra-class wires directly
@@ -91,7 +91,7 @@ preemptive graph marker is needed.
 The hosting mechanism is REAPER's receive: a track sums its own signal
 with incoming sends at the top of its chain — or at a specific FX-slot
 boundary via the send's pre/post-FX placement. So "primary passes
-through" really means "the host track's chain runs around the merge
+through" really means "the track's chain runs around the merge
 point", which generalises cleanly: a midstream sidechain on FX slot 5
 of A's chain compiles to a send landing at slot 5 of A.
 
@@ -101,7 +101,7 @@ One operator lives on the wire in the user graph: **gain** (audio
 wires). It is the unit that makes a routing decision surface as a UI
 gesture on a wire rather than as a new node in the user graph.
 
-Gain is realised at the targetPlan/allocate boundary — folded onto a
+Gain is realised at the targetTracks/allocate boundary — folded onto a
 native send's volume where one can host it, otherwise carried into the
 consuming FX's merge CU (see Merge and split).
 
@@ -168,7 +168,7 @@ exposes one input bus) and the master parent send (one contiguous
 channel range) have no free path: any fan-in there is a merge CU. The
 CU is an ordinary `ext_midi_bus` JSFX — it reads the converging buses at
 `@block` and emits one stream; cross-track producers reach it as sends
-arriving on distinct buses on the host track, which REAPER delivers to
+arriving on distinct buses on the track, which REAPER delivers to
 the same `@block`, so no gmem ring and no processing-order hack. (This
 is why the earlier gmem-merge design is gone: a JSFX can read every MIDI
 bus.)
@@ -180,9 +180,9 @@ bracket pass, and the differ never meet a multi-input MIDI node.
 
 **There is no lowered graph.** The merge node is the only node the
 compiler synthesises that the user graph lacks, minted at the
-targetPlan/allocate boundary — where the partition reveals whether a
+targetTracks/allocate boundary — where the partition reveals whether a
 gain folds to a send, rides the matrix, or needs a CU — exactly as the
-non-bus-aware brackets are (host-local `fxOrder` entries). Wire-level
+non-bus-aware brackets are (track-local `fxOrder` entries). Wire-level
 ops are not spliced into nodes ahead of time; gain rides the wire as
 metadata and the merge node realises it. A merge CU is
 connectivity-inert (hosted on a consumer, inheriting its class), so the

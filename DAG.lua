@@ -17,16 +17,16 @@
 --invariant: node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
 --invariant: a split-tagged class never absorbs
 --invariant: srcSet unions node.split with derived master-min split markers
---shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originHost?=string, inputEdges?=int[] }
+--shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }
 -- see docs/DAG.md § synthNode field roles
---shape: outWire = { from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
+--shape: outWire = { from=id, fromPort?=int, to=trackKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
 --shape: intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
---shape: targetPlanEntry = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
---shape: targetPlan = { [hostKey] = targetPlanEntry }
--- see docs/DAG.md § targetPlan shape
---shape: allocatedSend = { to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
+--shape: trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
+--shape: targetTracks = { [trackKey] = trackSpec }
+-- see docs/DAG.md § targetTracks shape
+--shape: allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
 --shape: allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
---shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
+--shape: allocatedTracks = { [trackKey] = { trackKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -239,7 +239,7 @@ local function buildCtx(userGraph, derivedSplits)
   end
 
   -- Class keys carrying a split tag (a node.split node or its cone). They
-  -- never absorb — the split exists to give them their own host.
+  -- never absorb — the split exists to give them their own track.
   local function splitClasses()
     classes()
     return cache.splitClasses
@@ -285,10 +285,10 @@ local function buildCtx(userGraph, derivedSplits)
     if cache.absorption then return cache.absorption end
     local q = quotient()
 
-    -- Direct (one-hop) host for cls under the absorption rule. Returns
-    -- nil if cls has no eligible host: zero audio parents, ambiguous
+    -- Direct (one-hop) track for cls under the absorption rule. Returns
+    -- nil if cls has no eligible track: zero audio parents, ambiguous
     -- primaries, or multiple non-primary audio parents.
-    local function directHost(qEntry)
+    local function directTrackKey(qEntry)
       local audioParents, primaryParents = {}, {}
       for parent in pairs(qEntry.audioParents)        do util.add(audioParents,   parent) end
       for parent in pairs(qEntry.primaryAudioParents) do util.add(primaryParents, parent) end
@@ -300,7 +300,7 @@ local function buildCtx(userGraph, derivedSplits)
     local splitClasses = splitClasses()
     local direct = {}
     for cls, qEntry in pairs(q) do
-      direct[cls] = not splitClasses[cls] and directHost(qEntry) or nil
+      direct[cls] = not splitClasses[cls] and directTrackKey(qEntry) or nil
     end
 
     local function terminal(cls, seen)
@@ -323,7 +323,7 @@ local function buildCtx(userGraph, derivedSplits)
   -- The class hosted ON the REAPER master. nil when a lone source shares
   -- master's class (the source track hosts it, routing via its parent send),
   -- or when nothing reaches master (master parks in class '').
-  local function masterHostedClass()
+  local function masterTrackClass()
     local mc = classOf()['master']
     if not mc or mc == '' then return nil end
     for _, id in ipairs(classes()[mc]) do
@@ -332,46 +332,46 @@ local function buildCtx(userGraph, derivedSplits)
     return mc
   end
 
-  -- The master-hosted class is exempt: its host is fixed in REAPER.
+  -- The master-hosted class is exempt: its track is fixed in REAPER.
   -- Source classes never appear as absorbees (no audio parents in quotient).
-  local function resolveHost(cls)
-    if cls == masterHostedClass() then return cls end
+  local function trackOf(cls)
+    if cls == masterTrackClass() then return cls end
     return absorption()[cls] or cls
   end
 
-  -- {[hostCls] = id[]} pooling members of every class that resolves to hostCls.
-  local function hostMembers()
-    if cache.hostMembers then return cache.hostMembers end
-    cache.hostMembers = {}
+  -- {[trackKey] = id[]} pooling members of every class that resolves to it.
+  local function trackMembers()
+    if cache.trackMembers then return cache.trackMembers end
+    cache.trackMembers = {}
     for cls, members in pairs(classes()) do
-      local host   = resolveHost(cls)
-      local bucket = cache.hostMembers[host] or {}
+      local trackKey   = trackOf(cls)
+      local bucket = cache.trackMembers[trackKey] or {}
       for _, id in ipairs(members) do util.add(bucket, id) end
-      cache.hostMembers[host] = bucket
+      cache.trackMembers[trackKey] = bucket
     end
-    for _, bucket in pairs(cache.hostMembers) do table.sort(bucket) end
-    return cache.hostMembers
+    for _, bucket in pairs(cache.trackMembers) do table.sort(bucket) end
+    return cache.trackMembers
   end
 
-  -- Fold-vs-CU decision for each gained edge. Shared by targetPlan and
+  -- Fold-vs-CU decision for each gained edge. Shared by targetTracks and
   -- wm:pokeEdgeGain. See docs/DAG.md § gainSinks.
   local function gainSinks()
     if cache.gainSinks then return cache.gainSinks end
     local classOf = classOf()
-    local mhc     = masterHostedClass()
-    local function hostOf(id) return resolveHost(classOf[id]) end
+    local mhc     = masterTrackClass()
+    local function nodeTrackKey(id) return trackOf(classOf[id]) end
     local function isMasterDest(toId)
       return toId == 'master' or (mhc and classOf[toId] == mhc)
     end
     local masterCount, sendCount = {}, {}
     for _, edge in ipairs(edges) do
       if edge.type == 'audio' then
-        local fromH = hostOf(edge.from)
+        local fromH = nodeTrackKey(edge.from)
         if fromH and fromH ~= '' then
           if isMasterDest(edge.to) then
             masterCount[fromH] = (masterCount[fromH] or 0) + 1
           else
-            local toH = hostOf(edge.to)
+            local toH = nodeTrackKey(edge.to)
             if toH and toH ~= '' and fromH ~= toH then
               local k = fromH .. '\0' .. toH
               sendCount[k] = (sendCount[k] or 0) + 1
@@ -383,10 +383,10 @@ local function buildCtx(userGraph, derivedSplits)
     local sinks = {}
     for edgeIdx, edge in ipairs(edges) do
       if edge.type == 'audio' and edge.ops and edge.ops.gain then
-        local fromH = hostOf(edge.from)
+        local fromH = nodeTrackKey(edge.from)
         local sink  = { kind = 'cu', gain = edge.ops.gain }
         if fromH and fromH ~= '' then
-          local toH = hostOf(edge.to)
+          local toH = nodeTrackKey(edge.to)
           if isMasterDest(edge.to) then
             if masterCount[fromH] == 1 then sink.kind, sink.cls = 'mainSend', fromH end
           elseif toH and toH ~= '' and fromH ~= toH then
@@ -406,17 +406,17 @@ local function buildCtx(userGraph, derivedSplits)
     local classOf = classOf()
     local counts  = {}
     for _, edge in ipairs(edges) do
-      local fromHost = resolveHost(classOf[edge.from])
-      local toHost   = resolveHost(classOf[edge.to])
-      if fromHost and fromHost ~= '' and fromHost == toHost then
-        counts[fromHost] = counts[fromHost] or { audio = 0, midi = 0 }
-        counts[fromHost][edge.type] = counts[fromHost][edge.type] + 1
+      local fromTrackKey = trackOf(classOf[edge.from])
+      local toTrackKey   = trackOf(classOf[edge.to])
+      if fromTrackKey and fromTrackKey ~= '' and fromTrackKey == toTrackKey then
+        counts[fromTrackKey] = counts[fromTrackKey] or { audio = 0, midi = 0 }
+        counts[fromTrackKey][edge.type] = counts[fromTrackKey][edge.type] + 1
       end
     end
     local out = {}
-    for host, c in pairs(counts) do
-      if c.audio > 64  then util.add(out, { classKey = host, kind = 'audio', count = c.audio }) end
-      if c.midi  > 128 then util.add(out, { classKey = host, kind = 'midi',  count = c.midi  }) end
+    for trackKey, c in pairs(counts) do
+      if c.audio > 64  then util.add(out, { classKey = trackKey, kind = 'audio', count = c.audio }) end
+      if c.midi  > 128 then util.add(out, { classKey = trackKey, kind = 'midi',  count = c.midi  }) end
     end
     table.sort(out, function(a, b)
       if a.classKey ~= b.classKey then return a.classKey < b.classKey end
@@ -425,9 +425,9 @@ local function buildCtx(userGraph, derivedSplits)
     return out
   end
 
-  -- Kahn's over a host's chain members (fx + synth CU; source/master excluded).
+  -- Kahn's over a track's chain members (fx + synth CU; source/master excluded).
   -- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
-  local function topoIntraHost(members, conns)
+  local function topoIntraTrack(members, conns)
     local memberSet = {}
     for _, id in ipairs(members) do memberSet[id] = true end
     local indeg, succ, inMember = {}, {}, {}
@@ -468,9 +468,9 @@ local function buildCtx(userGraph, derivedSplits)
     return out
   end
 
-  local function targetPlan()
+  local function targetTracks()
     local classOf     = classOf()
-    local hostMembers = hostMembers()
+    local trackMembers = trackMembers()
 
     -- Folded gains ride a native send (no CU); gainSinks names the sink.
     local folded, sendGain, mainGain = {}, {}, {}
@@ -486,19 +486,19 @@ local function buildCtx(userGraph, derivedSplits)
 
     -- Phase A — edges → conns. Audio gain rides the conn as metadata
     -- (stripped to D_VOL when folded); MIDI passes through unchanged.
-    local synthNodes, cuHost, conns, cuN = {}, {}, {}, 0
-    local mhc = masterHostedClass()
-    local function realHost(id) return resolveHost(classOf[id]) end
-    local function hostB(id) return cuHost[id] or realHost(id) end
+    local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
+    local mhc = masterTrackClass()
+    local function realTrackOf(id) return trackOf(classOf[id]) end
+    local function nodeTrackKey(id) return cuTrackKey[id] or realTrackOf(id) end
     local function audioConn(from, fp, to, tp, gain)
       util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
                         to = to, toPort = tp or 1, gain = gain })
     end
-    local function mintCU(host, params, origin)
+    local function mintCU(trackKey, params, origin)
       cuN = cuN + 1
       local cuId = '_cu_' .. cuN
       synthNodes[cuId] = util.assign({ kind = 'fx', fxIdent = CU_IDENT, params = params }, origin)
-      cuHost[cuId] = host
+      cuTrackKey[cuId] = trackKey
       return cuId
     end
     for edgeIdx, edge in ipairs(edges) do
@@ -516,18 +516,18 @@ local function buildCtx(userGraph, derivedSplits)
     -- or internal (MIDI/width-1 send — CU must sum). See docs/DAG.md § same.
     do
       local units, unitKeys, kept = {}, {}, {}
-      local function unit(host, consumer, isParentSend)
-        local k = host .. '\0' .. consumer
+      local function unit(trackKey, consumer, isParentSend)
+        local k = trackKey .. '\0' .. consumer
         local u = units[k]
         if not u then
-          u = { host = host, consumer = consumer, isParentSend = isParentSend,
+          u = { trackKey = trackKey, consumer = consumer, isParentSend = isParentSend,
                 audio = {}, midi = {} }
           units[k] = u; util.add(unitKeys, k)
         end
         return u
       end
       for _, c in ipairs(conns) do
-        local fH, tH = hostB(c.from), hostB(c.to)
+        local fH, tH = nodeTrackKey(c.from), nodeTrackKey(c.to)
         local u
         if fH ~= '' and tH ~= '' then
           if mhc and tH == mhc and fH ~= mhc then
@@ -535,7 +535,7 @@ local function buildCtx(userGraph, derivedSplits)
           elseif c.to == 'master' then
             u = unit(tH, 'master', true)         -- in-class master: parent send is serial, sum fan-in to one pair
           elseif nodes[c.to] and nodes[c.to].kind == 'fx' then
-            u = unit(tH, c.to, false)            -- fx consumer: merge at the consumer host
+            u = unit(tH, c.to, false)            -- fx consumer: merge at the consumer trackKey
           end
         end
         if u then util.add(u[c.type], c) else util.add(kept, c) end
@@ -564,14 +564,14 @@ local function buildCtx(userGraph, derivedSplits)
                         (not u.isParentSend and anyGained(u.audio))
         local midiCU  = #u.midi >= 2
 
-        -- A merge CU is identified by (consumer, host). Fan-in past MERGE_WIDTH
+        -- A merge CU is identified by (consumer, track). Fan-in past MERGE_WIDTH
         -- cascades into parallel CUs; each past the first gets a '#N' key suffix.
         local mergeN = 0
         local function mintMerge(params, inputEdges)
           mergeN = mergeN + 1
-          local key = mergeN == 1 and u.host or (u.host .. '#' .. mergeN)
-          return mintCU(u.host, params,
-            { originConsumer = u.consumer, originHost = key, inputEdges = inputEdges })
+          local key = mergeN == 1 and u.trackKey or (u.trackKey .. '#' .. mergeN)
+          return mintCU(u.trackKey, params,
+            { originConsumer = u.consumer, originTrackKey = key, inputEdges = inputEdges })
         end
 
         local firstAudioCu  -- carries the MIDI merge too, in the single-CU case
@@ -642,32 +642,32 @@ local function buildCtx(userGraph, derivedSplits)
       end
     end
 
-    local function hostOf(id) return cuHost[id] or resolveHost(classOf[id]) end
+    local function nodeTrackKey(id) return cuTrackKey[id] or trackOf(classOf[id]) end
 
-    -- Per-host chain members to topo-order: real fx + synth CU (source/master
+    -- Per-track chain members to topo-order: real fx + synth CU (source/master
     -- never appear in fxOrder; they are the track-IO boundary).
     local chainMembers = {}
-    for host, members in pairs(hostMembers) do
-      if host ~= '' then
+    for trackKey, members in pairs(trackMembers) do
+      if trackKey ~= '' then
         local list = {}
         for _, id in ipairs(members) do
           local k = nodes[id].kind
           if k ~= 'source' and k ~= 'master' then util.add(list, id) end
         end
-        chainMembers[host] = list
+        chainMembers[trackKey] = list
       end
     end
-    for cuId, host in pairs(cuHost) do
-      if host ~= '' then
-        chainMembers[host] = chainMembers[host] or {}
-        util.add(chainMembers[host], cuId)
+    for cuId, trackKey in pairs(cuTrackKey) do
+      if trackKey ~= '' then
+        chainMembers[trackKey] = chainMembers[trackKey] or {}
+        util.add(chainMembers[trackKey], cuId)
       end
     end
 
-    -- Plan entries: scratch for inert fx, else host topology + mainSend.
-    local plan, masterHostedHost = {}, nil
-    for host, members in pairs(hostMembers) do
-      if host == '' then
+    -- Track entries: scratch for inert fx, else track topology + mainSend.
+    local tracks, masterTrackKey = {}, nil
+    for trackKey, members in pairs(trackMembers) do
+      if trackKey == '' then
         local parked = {}
         for _, id in ipairs(members) do
           local k = nodes[id].kind
@@ -675,76 +675,76 @@ local function buildCtx(userGraph, derivedSplits)
         end
         if #parked > 0 then
           table.sort(parked)
-          plan['__scratch__'] = {
-            hostKind = 'scratch', trackGuid = nil, fxOrder = parked,
+          tracks['__scratch__'] = {
+            trackKind = 'scratch', trackGuid = nil, fxOrder = parked,
             mainSend = false, outWires = {}, intraConns = {},
           }
         end
       else
-        local hostKind, trackGuid, hasMaster = 'newTrack', nil, false
+        local trackKind, trackGuid, hasMaster = 'newTrack', nil, false
         for _, id in ipairs(members) do
           local n = nodes[id]
-          if n.kind == 'source' then hostKind, trackGuid = 'sourceTrack', n.trackGuid end
+          if n.kind == 'source' then trackKind, trackGuid = 'sourceTrack', n.trackGuid end
           if n.kind == 'master' then hasMaster = true end
         end
-        if hasMaster and hostKind ~= 'sourceTrack' then
-          hostKind = 'master'
-          masterHostedHost = host
+        if hasMaster and trackKind ~= 'sourceTrack' then
+          trackKind = 'master'
+          masterTrackKey = trackKey
         end
-        plan[host] = {
-          hostKind  = hostKind, trackGuid = trackGuid, fxOrder = nil,
-          mainSend  = hasMaster and hostKind == 'sourceTrack',
-          mainSendGain = mainGain[host],
+        tracks[trackKey] = {
+          trackKind  = trackKind, trackGuid = trackGuid, fxOrder = nil,
+          mainSend  = hasMaster and trackKind == 'sourceTrack',
+          mainSendGain = mainGain[trackKey],
           outWires = {}, intraConns = {},
         }
       end
     end
 
-    -- Same-host conn → intraConn; inter-host → outWire (or mainSend lift to
-    -- the master-hosted dest). Inert endpoints (host '') carry no signal.
+    -- Same-track conn → intraConn; inter-track → outWire (or mainSend lift to
+    -- the master-hosted dest). Inert endpoints (track '') carry no signal.
     for _, conn in ipairs(conns) do
-      local fromHost, toHost = hostOf(conn.from), hostOf(conn.to)
-      if fromHost and fromHost ~= '' and toHost and toHost ~= '' then
-        if fromHost == toHost then
-          util.add(plan[fromHost].intraConns, {
+      local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
+      if fromTrackKey and fromTrackKey ~= '' and toTrackKey and toTrackKey ~= '' then
+        if fromTrackKey == toTrackKey then
+          util.add(tracks[fromTrackKey].intraConns, {
             from = conn.from, fromPort = conn.fromPort,
             to   = conn.to,   toPort   = conn.toPort,
             type = conn.type,
           })
-        elseif toHost == masterHostedHost then
-          plan[fromHost].mainSend = true
+        elseif toTrackKey == masterTrackKey then
+          tracks[fromTrackKey].mainSend = true
           -- Audio master fan-in arrives pre-merged (≥2 wires → one audioSum CU
           -- output), so masterFeed carries a single producer.
           if conn.type == 'audio' then
-            plan[fromHost].masterFeed = { from = conn.from, fromPort = conn.fromPort }
+            tracks[fromTrackKey].masterFeed = { from = conn.from, fromPort = conn.fromPort }
           end
         else
-          util.add(plan[fromHost].outWires, {
+          util.add(tracks[fromTrackKey].outWires, {
             from = conn.from, fromPort = conn.fromPort,
-            to   = toHost,
+            to   = toTrackKey,
             toNode = conn.to, toPort = conn.toPort,
             type = conn.type,
             gain = conn.type == 'audio'
-                   and sendGain[fromHost .. '\0' .. toHost] or nil,
+                   and sendGain[fromTrackKey .. '\0' .. toTrackKey] or nil,
           })
         end
       end
     end
 
-    -- Attach synth CU nodes to their host (host '' CUs are inert, dropped).
-    for cuId, host in pairs(cuHost) do
-      if plan[host] then
-        plan[host].synthNodes = plan[host].synthNodes or {}
-        plan[host].synthNodes[cuId] = synthNodes[cuId]
+    -- Attach synth CU nodes to their track (track '' CUs are inert, dropped).
+    for cuId, trackKey in pairs(cuTrackKey) do
+      if tracks[trackKey] then
+        tracks[trackKey].synthNodes = tracks[trackKey].synthNodes or {}
+        tracks[trackKey].synthNodes[cuId] = synthNodes[cuId]
       end
     end
 
-    -- Topo order each host's chain; deterministic sorts on the wire lists.
+    -- Topo order each track's chain; deterministic sorts on the wire lists.
     local function cmpOpt(a, b) return (a or 0) < (b or 0) end
     local function neqOpt(a, b) return (a or 0) ~= (b or 0) end
-    for host, entry in pairs(plan) do
-      if entry.hostKind ~= 'scratch' then
-        entry.fxOrder = topoIntraHost(chainMembers[host] or {}, entry.intraConns)
+    for trackKey, entry in pairs(tracks) do
+      if entry.trackKind ~= 'scratch' then
+        entry.fxOrder = topoIntraTrack(chainMembers[trackKey] or {}, entry.intraConns)
         table.sort(entry.outWires, function(a, b)
           if a.to     ~= b.to     then return a.to     < b.to     end
           if a.type   ~= b.type   then return a.type   < b.type   end
@@ -765,21 +765,21 @@ local function buildCtx(userGraph, derivedSplits)
 
     -- Stable sentinel key for the master-hosted class — wm:snapshot can't
     -- tag the REAPER master with a project-scoped wiringClass.
-    if masterHostedHost then
-      plan['__master__'] = plan[masterHostedHost]
-      plan[masterHostedHost] = nil
+    if masterTrackKey then
+      tracks['__master__'] = tracks[masterTrackKey]
+      tracks[masterTrackKey] = nil
     end
-    return plan
+    return tracks
   end
 
   ----------- PUBLIC SURFACE
   function ctx:classes()           return classes()           end
   function ctx:classOf()           return classOf()           end
-  function ctx:masterHostedClass() return masterHostedClass() end
-  function ctx:resolveHost(cls)    return resolveHost(cls)    end
+  function ctx:masterTrackClass() return masterTrackClass() end
+  function ctx:trackOf(cls)    return trackOf(cls)    end
   function ctx:gainSinks()         return gainSinks()         end
   function ctx:capacityErrors()    return capacityErrors()    end
-  function ctx:targetPlan()        return targetPlan()        end
+  function ctx:targetTracks()        return targetTracks()        end
 
   return ctx
 end
@@ -787,7 +787,7 @@ end
 ----- master minimization
 
 -- master class = cone of master's largest dominator whose entry pulls <=1 audio
--- pair per upstream host; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
+-- pair per upstream track; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
 local function deriveMasterSplit(userGraph)
   local nodes = userGraph.nodes or {}
   local edges = userGraph.edges or {}
@@ -839,21 +839,21 @@ local function deriveMasterSplit(userGraph)
   local base = buildCtx(userGraph, {})
 
   -- d is the single entry of its cone, so it alone can pull >=2 audio pairs
-  -- from one upstream host. see docs/DAG.md § Master-minimization
+  -- from one upstream track. see docs/DAG.md § Master-minimization
   local function dirty(d)
     local cone, classOf = reach(d, fwd, nil), base:classOf()
-    local portsByHost = {}
+    local portsByTrack = {}
     for _, e in ipairs(edges) do
       if e.type == 'audio' and e.to == d and not cone[e.from] then
-        local host = base:resolveHost(classOf[e.from])
-        if host ~= '' then
-          local ports = portsByHost[host] or {}
+        local trackKey = base:trackOf(classOf[e.from])
+        if trackKey ~= '' then
+          local ports = portsByTrack[trackKey] or {}
           ports[e.toPort or 1] = true
-          portsByHost[host] = ports
+          portsByTrack[trackKey] = ports
         end
       end
     end
-    for _, ports in pairs(portsByHost) do
+    for _, ports in pairs(portsByTrack) do
       local n = 0
       for _ in pairs(ports) do n = n + 1 end
       if n >= 2 then return true end
@@ -870,7 +870,7 @@ local function deriveMasterSplit(userGraph)
 
   -- Emit the marker only when the cone is strictly smaller than master's natural
   -- srcSet class — something needs evicting. One marker peels them all.
-  local natural = base:masterHostedClass()
+  local natural = base:masterTrackClass()
   if not natural then return {} end
   local cone = reach(cut, fwd, nil)
   for _, id in ipairs(base:classes()[natural]) do
@@ -886,53 +886,53 @@ end
 
 ----- allocate
 
--- Per-host live-range allocation, one register file per stream channel:
--- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
+-- Per-track live-range allocation, one register file per stream channel:
+-- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedTracks shape.
 --contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
---contract: nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
-function M.allocate(plan, nodes)
+--contract: nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
+function M.allocate(tracks, nodes)
   nodes = nodes or {}
   local fxSetOf, slotOf = {}, {}
-  for hostKey, entry in pairs(plan) do
-    fxSetOf[hostKey], slotOf[hostKey] = {}, {}
+  for trackKey, entry in pairs(tracks) do
+    fxSetOf[trackKey], slotOf[trackKey] = {}, {}
     for slot, id in ipairs(entry.fxOrder or {}) do
-      fxSetOf[hostKey][id], slotOf[hostKey][id] = true, slot
+      fxSetOf[trackKey][id], slotOf[trackKey][id] = true, slot
     end
   end
 
   -- Per-receiver incoming wires (deterministic order) for Stage-2 dstChan claims.
   local incoming = {}
-  for senderHost, entry in pairs(plan) do
+  for senderTrackKey, entry in pairs(tracks) do
     for sendIdx, ow in ipairs(entry.outWires or {}) do
       incoming[ow.to] = incoming[ow.to] or {}
-      util.add(incoming[ow.to], { wire = ow, senderHost = senderHost, sendIdx = sendIdx })
+      util.add(incoming[ow.to], { wire = ow, senderTrackKey = senderTrackKey, sendIdx = sendIdx })
     end
   end
   for _, list in pairs(incoming) do
     table.sort(list, function(a, b)
-      if a.senderHost ~= b.senderHost then return a.senderHost < b.senderHost end
+      if a.senderTrackKey ~= b.senderTrackKey then return a.senderTrackKey < b.senderTrackKey end
       return a.sendIdx < b.sendIdx
     end)
   end
 
-  -- Pre-init per-host alloc + sends so cross-host Stage-2 write-back has a target.
+  -- Pre-init per-track alloc + sends so cross-track Stage-2 write-back has a target.
   local alloc = {}
-  for hostKey, entry in pairs(plan) do
+  for trackKey, entry in pairs(tracks) do
     local sends = {}
     for sendIdx, ow in ipairs(entry.outWires or {}) do
       sends[sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain, srcChan = 0, dstChan = 0 }
     end
-    alloc[hostKey] = { pinMaps = {}, sends = sends, cursor = 1, free = {},
+    alloc[trackKey] = { pinMaps = {}, sends = sends, cursor = 1, free = {},
                        midiCursor = 0, midiFree = {}, mainSendOffs = nil }
   end
 
-  local hostKeys = {}
-  for hk in pairs(plan) do util.add(hostKeys, hk) end
-  table.sort(hostKeys)
+  local trackKeys = {}
+  for hk in pairs(tracks) do util.add(trackKeys, hk) end
+  table.sort(trackKeys)
 
-  for _, hostKey in ipairs(hostKeys) do
-    local entry, fxSet, slotMap = plan[hostKey], fxSetOf[hostKey], slotOf[hostKey]
-    local state = alloc[hostKey]
+  for _, trackKey in ipairs(trackKeys) do
+    local entry, fxSet, slotMap = tracks[trackKey], fxSetOf[trackKey], slotOf[trackKey]
+    local state = alloc[trackKey]
     local N = #(entry.fxOrder or {})
 
     local function pinAdd(fxId, dir, port, pair)
@@ -962,7 +962,7 @@ function M.allocate(plan, nodes)
     local function addValue(v) nextOrd = nextOrd + 1; v.ord = nextOrd; util.add(values, v) end
 
     -- Pair-1 boundary register: source-from (input) and master-to (output)
-    -- share pair 1 with non-overlapping lifetimes. See allocatedPlan shape.
+    -- share pair 1 with non-overlapping lifetimes. See allocatedTracks shape.
     do
       local sfPins, sfLastUse = {}, 0
       local mtPins, mtDef     = {}, math.huge
@@ -1044,15 +1044,15 @@ function M.allocate(plan, nodes)
 
     -- Stage-2 incoming audio sends pinned at the receiver's fx input.
     -- def=0 (the parent send arrives before any fx runs); released at toNode's slot.
-    if incoming[hostKey] then
-      for _, inc in ipairs(incoming[hostKey]) do
+    if incoming[trackKey] then
+      for _, inc in ipairs(incoming[trackKey]) do
         local ow = inc.wire
         if ow.type == 'audio' and fxSet[ow.toNode] then
-          local senderHost, sendIdx = inc.senderHost, inc.sendIdx
+          local senderTrackKey, sendIdx = inc.senderTrackKey, inc.sendIdx
           addValue({
             def = 0, lastUse = slotMap[ow.toNode],
             pins = { { fxId = ow.toNode, dir = 'ins', port = ow.toPort } },
-            apply = function(pair) alloc[senderHost].sends[sendIdx].dstChan = (pair - 1) * 2 end,
+            apply = function(pair) alloc[senderTrackKey].sends[sendIdx].dstChan = (pair - 1) * 2 end,
           })
         end
       end
@@ -1211,17 +1211,17 @@ function M.allocate(plan, nodes)
 
     -- Stage-2 incoming midi sends pinned at the receiver; sender's dstChan
     -- stamped, and the receiving fx (if any) inherits the bus as its input.
-    if incoming[hostKey] then
-      for _, inc in ipairs(incoming[hostKey]) do
+    if incoming[trackKey] then
+      for _, inc in ipairs(incoming[trackKey]) do
         local ow = inc.wire
         if ow.type == 'midi' then
-          local senderHost, sendIdx = inc.senderHost, inc.sendIdx
+          local senderTrackKey, sendIdx = inc.senderTrackKey, inc.sendIdx
           local toNode = ow.toNode
           local lu = fxSet[toNode] and slotMap[toNode] or (N + 1)
           addMidiValue({
             def = 0, lastUse = lu,
             applies = { function(bus)
-              alloc[senderHost].sends[sendIdx].dstChan = bus
+              alloc[senderTrackKey].sends[sendIdx].dstChan = bus
               if fxSet[toNode] then fxInputBus[toNode] = bus; noteCuIn(toNode, bus) end
             end },
           })
@@ -1335,8 +1335,8 @@ function M.allocate(plan, nodes)
   -- Compose: drop intra/out, add sends/pinMaps/nchan. Dedup catches midi sends
   -- to the same dest (all 0/0 until 3c.3); audio sends are unique by claim.
   local out = {}
-  for hostKey, entry in pairs(plan) do
-    local state = alloc[hostKey]
+  for trackKey, entry in pairs(tracks) do
+    local state = alloc[trackKey]
     local sends, seen = {}, {}
     for _, s in ipairs(state.sends) do
       local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan
@@ -1379,7 +1379,7 @@ function M.allocate(plan, nodes)
     copy.mainSendOffs = state.mainSendOffs
     if state.fxOrder      then copy.fxOrder      = state.fxOrder      end
     if state.bracketNodes then copy.bracketNodes = state.bracketNodes end
-    out[hostKey] = copy
+    out[trackKey] = copy
   end
   return out
 end

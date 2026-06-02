@@ -1,4 +1,4 @@
--- Pins the no-delete-on-host-move invariant: addFxNode parks on scratch, then
+-- Pins the no-delete-on-trackKey-move invariant: addFxNode parks on scratch, then
 -- CopyToTrack(is_move=true) relocates. Node delete is the one TrackFX_Delete trigger.
 local t    = require('support')
 local util = require('util')
@@ -14,7 +14,7 @@ local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringHostKind', 'sourceTrack')
+  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
   return track
 end
 

@@ -83,27 +83,27 @@ return {
     name = 'split-tagged class never absorbs into its single audio parent',
     run = function()
       -- b has exactly one audio parent (a); absent the guard it would auto-absorb
-      -- back onto a's host, undoing the split. resolveHost unchanged → hosts itself.
-      local rh = DAG.compile(twoSourceChain(true)):resolveHost('g1|split:b')
+      -- back onto a's trackKey, undoing the split. trackOf unchanged → hosts itself.
+      local rh = DAG.compile(twoSourceChain(true)):trackOf('g1|split:b')
       t.eq(rh, 'g1|split:b')
     end,
   },
   {
-    name = 'targetPlan: cut edge is a send, cone is its own newTrack',
+    name = 'targetTracks: cut edge is a send, cone is its own newTrack',
     run = function()
-      local plan = DAG.compile(twoSourceChain(true)):targetPlan()
-      t.eq(plan['g1|split:b'].hostKind, 'newTrack')
-      t.truthy(hasOutWire(plan['g1'], 'g1|split:b', 'a'))
-      t.truthy(plan['g1|split:b'].mainSend)
+      local tracks = DAG.compile(twoSourceChain(true)):targetTracks()
+      t.eq(tracks['g1|split:b'].trackKind, 'newTrack')
+      t.truthy(hasOutWire(tracks['g1'], 'g1|split:b', 'a'))
+      t.truthy(tracks['g1|split:b'].mainSend)
     end,
   },
   {
-    name = 'unmarked: a->b is intra-host, no eviction',
+    name = 'unmarked: a->b is intra-trackKey, no eviction',
     run = function()
-      local plan = DAG.compile(twoSourceChain(false)):targetPlan()
-      t.falsy(plan['g1|split:b'])
+      local tracks = DAG.compile(twoSourceChain(false)):targetTracks()
+      t.falsy(tracks['g1|split:b'])
       local intra = false
-      for _, c in ipairs(plan['g1'].intraConns) do
+      for _, c in ipairs(tracks['g1'].intraConns) do
         if c.from == 'a' and c.to == 'b' then intra = true end
       end
       t.truthy(intra)
@@ -123,7 +123,7 @@ return {
       }))
       local cls = cx:classOf()
       t.eq(cls['a'], cls['master'])
-      t.truthy(inList(cx:targetPlan()['__master__'].fxOrder, 'a'))
+      t.truthy(inList(cx:targetTracks()['__master__'].fxOrder, 'a'))
     end,
   },
   {
@@ -170,7 +170,7 @@ return {
     end,
   },
   {
-    name = 'same-host two ports: split at the post-dominator below the violator',
+    name = 'same-trackKey two ports: split at the post-dominator below the violator',
     run = function()
       -- u (g1) feeds f.p1 and f.p2 (violation); s2 (g2) feeds f.p3 so f and master both see {g1,g2}.
       -- f->g->master so f's ipdom is g — the cut lands just below f.
@@ -191,7 +191,7 @@ return {
       }))
       t.eq(cx:classOf()['g'], cx:classOf()['master'])
       t.truthy(cx:classOf()['f'] ~= cx:classOf()['master'])
-      t.eq(cx:targetPlan()[cx:classOf()['f']].hostKind, 'newTrack')
+      t.eq(cx:targetTracks()[cx:classOf()['f']].trackKind, 'newTrack')
     end,
   },
   {
@@ -264,7 +264,7 @@ return {
       }))
       t.eq(cx:classOf()['master'], 'g1|g2|split:master')
       t.truthy(cx:classOf()['y'] ~= cx:classOf()['master'])
-      t.eq(cx:targetPlan()[cx:classOf()['y']].hostKind, 'newTrack')
+      t.eq(cx:targetTracks()[cx:classOf()['y']].trackKind, 'newTrack')
     end,
   },
 }

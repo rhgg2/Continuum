@@ -39,8 +39,8 @@ passed.
 separate, separately-testable function:
 
 1. **`wm:targetState`** — projects the user graph into the desired
-   REAPER shape: `DAG.allocate(ctx:targetPlan())`, then `projectEntry`
-   per host. The *target* side.
+   REAPER shape: `DAG.allocate(ctx:targetTracks())`, then `projectEntry`
+   per track. The *target* side.
 2. **`wm:snapshot`** — reads the current REAPER project for owned tracks
    + FX into the **same shape**. The *actual* side.
 3. **`wm:diff(target, snap)`** — a pure `WiringOp[]` producer comparing
@@ -76,7 +76,7 @@ graph nodes. Three rules keep instance churn minimal and state-preserving:
   lazily; it also parks FX whose `srcSet` is empty (disconnected, or
   inert `__scratch__` nodes) so they exist without polluting the audible
   topology.
-- **Host change is a move, not a re-create.** When the partition
+- **Track change is a move, not a re-create.** When the partition
   reassigns a node to a different track, the applier uses
   `TrackFX_CopyToTrack(is_move=true)` — plugin state (params, presets,
   internal buffers) survives the move; a delete + re-add would lose it.
@@ -153,15 +153,15 @@ purpose, per *The reconcile pipeline*; the non-obvious parts are *why*
 certain fields exist and which side fills them:
 
 - **`fxOrder` entries carrying `params`** are wm-owned CU bridges —
-  synthesised `kind='fx'` nodes from the targetPlan merge pass or the
+  synthesised `kind='fx'` nodes from the targetTracks merge pass or the
   bracket post-pass. Snapshot mirrors the live params back from the
   slider so `fxOrderEq` is honest; without that mirror every reconcile
   would spuriously emit `setFXChain`.
 - **`origin`** is stamped on every *target*-side entry by `projectEntry`
   so the applier knows where to write minted guids back: `{kind='node'}`
   → `node.fxGuid`; `bracketIn`/`bracketOut` → the consumer's
-  `midiInBracketGuid`/`midiOutBracketGuid`; `{kind='merge',consumer,host}`
-  → `consumer.mergeGuids[host]`. Snapshot entries carry no `origin` and
+  `midiInBracketGuid`/`midiOutBracketGuid`; `{kind='merge',consumer,trackKey}`
+  → `consumer.mergeGuids[trackKey]`. Snapshot entries carry no `origin` and
   `fxOrderEq` ignores it — it's a write-back address, not state to
   compare.
 - **`midiOut` and `midiBus`** are set on both sides only for non-JS
@@ -176,5 +176,5 @@ certain fields exist and which side fills them:
   target hasn't materialised yet — the applier resolves `origin` →
   `fxGuid` via stamps from the preceding `setFXChain`. The applier
   converts pair-lists to REAPER's lo32/hi32 bitmask at the boundary.
-- **`nchan`** is the host track's `I_NCHAN`; **`mainSendOffs`** is
+- **`nchan`** is the track's `I_NCHAN`; **`mainSendOffs`** is
   `C_MAINSEND_OFFS`, present only when `mainSend=true`.

@@ -2,7 +2,7 @@ local t    = require('support')
 local util = require('util')
 
 -- 3c.4.5 apply round-trip: a midi fan-in to one consumer collapses to a Merge
--- CU on the consumer host. The CU reads the feeder buses (inMask) and rewrites
+-- CU on the consumer trackKey. The CU reads the feeder buses (inMask) and rewrites
 -- them to a single outBus the consumer reads; its guid is stamped onto the
 -- consumer node so reconciles are idempotent and the CU retracts when the
 -- fan-in drops back to a single feeder.
@@ -24,7 +24,7 @@ local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringHostKind', 'sourceTrack')
+  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
   return track
 end
 
@@ -50,7 +50,7 @@ end
 local function findNewTrack(h)
   for i = 0, h.reaper.CountTracks(0) - 1 do
     local tr = h.reaper.GetTrack(0, i)
-    if h.cm:readTrackKey(tr, 'wiringHostKind') == 'newTrack' then return tr end
+    if h.cm:readTrackKey(tr, 'wiringTrackKind') == 'newTrack' then return tr end
   end
 end
 
