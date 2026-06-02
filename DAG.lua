@@ -16,7 +16,7 @@
 -- see docs/DAG.md § CU bridge invariant
 --invariant: node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
 --invariant: a split-tagged class never absorbs
---invariant: srcSet unions node.split with derived master-min split markers (ctx:masterSplits)
+--invariant: srcSet unions node.split with derived master-min split markers
 --shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originHost?=string, inputEdges?=int[] }
 -- see docs/DAG.md § synthNode field roles
 --shape: outWire = { from=id, fromPort?=int, to=hostKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
@@ -186,6 +186,10 @@ end
 
 ----- master minimization
 
+-- buildCtx (defined below) is the lazy ctx factory; the master-min fixpoint
+-- recompiles trial contexts through it, then M.compile feeds it the settled markers.
+local buildCtx
+
 -- fx fed >=2 audio ports from one upstream host violates the one-pair-per-send
 -- limit and is evicted via a derived split at its ipdom toward master. See docs/DAG.md § Master-minimization.
 local function masterMinMarkers(userGraph)
@@ -261,7 +265,7 @@ local function masterMinMarkers(userGraph)
 
   local markers = {}
   while true do
-    local violators = violatorsOf(M.compile(userGraph, markers))
+    local violators = violatorsOf(buildCtx(userGraph, markers))
     if #violators == 0 then break end
     local changed = false
     for _, v in ipairs(violators) do
@@ -287,17 +291,16 @@ end
 
 ----- compile context
 
---contract: assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
---contract: derivedSplits is internal (the master-min fixpoint); public callers omit it
-function M.compile(userGraph, derivedSplits)
+-- Lazy ctx factory; derivations memoise into closure-local `cache`.
+-- ctx exposes only what callers read: wiring stack, master-min fixpoint, settled derivedSplits.
+function buildCtx(userGraph, derivedSplits)
   local nodes = userGraph.nodes or {}
   local edges = userGraph.edges or {}
-  derivedSplits = derivedSplits or masterMinMarkers(userGraph)
   local cache = { srcSet = {} }
   local ctx = {}
 
   -- Reverse adjacency: for each node id, the list of input-side node ids.
-  function ctx:inbound()
+  local function inbound()
     if cache.inbound then return cache.inbound end
     cache.inbound = {}
     for _, edge in ipairs(edges) do
@@ -306,7 +309,7 @@ function M.compile(userGraph, derivedSplits)
     return cache.inbound
   end
 
-  function ctx:srcSet(id)
+  local function srcSet(id)
     if cache.srcSet[id] then return cache.srcSet[id] end
     local set = {}
     local node = nodes[id]
@@ -316,19 +319,19 @@ function M.compile(userGraph, derivedSplits)
     -- A split marker makes the node its own source: the tag propagates
     -- forward, evicting the node + its cone into their own class.
     if node and (node.split or derivedSplits[id]) then set['split:' .. id] = true end
-    for _, parent in ipairs(self:inbound()[id] or {}) do
-      for guid in pairs(self:srcSet(parent)) do set[guid] = true end
+    for _, parent in ipairs(inbound()[id] or {}) do
+      for guid in pairs(srcSet(parent)) do set[guid] = true end
     end
     cache.srcSet[id] = set
     return set
   end
 
-  function ctx:classes()
+  local function classes()
     if cache.classes then return cache.classes end
     cache.classes, cache.splitClasses = {}, {}
     for id in pairs(nodes) do
       local guids, split = {}, false
-      for guid in pairs(self:srcSet(id)) do
+      for guid in pairs(srcSet(id)) do
         util.add(guids, guid)
         if guid:sub(1, 6) == 'split:' then split = true end
       end
@@ -342,37 +345,29 @@ function M.compile(userGraph, derivedSplits)
 
   -- Class keys carrying a split tag (a node.split node or its cone). They
   -- never absorb — the split exists to give them their own host.
-  function ctx:splitClasses()
-    self:classes()
+  local function splitClasses()
+    classes()
     return cache.splitClasses
   end
 
-  -- The derived master-minimization split markers baked into this compile
-  -- (distinct from persisted node.split). See docs/DAG.md § master-minimization.
-  function ctx:masterSplits()
-    local out = {}
-    for id in pairs(derivedSplits) do out[id] = true end
-    return out
-  end
-
-  function ctx:classOf()
+  local function classOf()
     if cache.classOf then return cache.classOf end
     cache.classOf = {}
-    for cls, members in pairs(self:classes()) do
+    for cls, members in pairs(classes()) do
       for _, id in ipairs(members) do cache.classOf[id] = cls end
     end
     return cache.classOf
   end
 
-  function ctx:quotient()
+  local function quotient()
     if cache.quotient then return cache.quotient end
     cache.quotient = {}
-    for cls in pairs(self:classes()) do
+    for cls in pairs(classes()) do
       cache.quotient[cls] = { audioParents = {}, midiParents = {},
                               audioChildren = {}, midiChildren = {},
                               primaryAudioParents = {} }
     end
-    local classOf = self:classOf()
+    local classOf = classOf()
     for _, edge in ipairs(edges) do
       local fromCls, toCls = classOf[edge.from], classOf[edge.to]
       -- Inert vertices ('' class, empty srcSet) carry no signal — skip.
@@ -391,9 +386,9 @@ function M.compile(userGraph, derivedSplits)
     return cache.quotient
   end
 
-  function ctx:absorption()
+  local function absorption()
     if cache.absorption then return cache.absorption end
-    local q = self:quotient()
+    local q = quotient()
 
     -- Direct (one-hop) host for cls under the absorption rule. Returns
     -- nil if cls has no eligible host: zero audio parents, ambiguous
@@ -407,7 +402,7 @@ function M.compile(userGraph, derivedSplits)
       return nil
     end
 
-    local splitClasses = self:splitClasses()
+    local splitClasses = splitClasses()
     local direct = {}
     for cls, qEntry in pairs(q) do
       direct[cls] = not splitClasses[cls] and directHost(qEntry) or nil
@@ -433,10 +428,10 @@ function M.compile(userGraph, derivedSplits)
   -- The class hosted ON the REAPER master. nil when a lone source shares
   -- master's class (the source track hosts it, routing via its parent send),
   -- or when nothing reaches master (master parks in class '').
-  function ctx:masterHostedClass()
-    local mc = self:classOf()['master']
+  local function masterHostedClass()
+    local mc = classOf()['master']
     if not mc or mc == '' then return nil end
-    for _, id in ipairs(self:classes()[mc]) do
+    for _, id in ipairs(classes()[mc]) do
       if nodes[id].kind == 'source' then return nil end
     end
     return mc
@@ -444,17 +439,17 @@ function M.compile(userGraph, derivedSplits)
 
   -- The master-hosted class is exempt: its host is fixed in REAPER.
   -- Source classes never appear as absorbees (no audio parents in quotient).
-  function ctx:resolveHost(cls)
-    if cls == self:masterHostedClass() then return cls end
-    return self:absorption()[cls] or cls
+  local function resolveHost(cls)
+    if cls == masterHostedClass() then return cls end
+    return absorption()[cls] or cls
   end
 
   -- {[hostCls] = id[]} pooling members of every class that resolves to hostCls.
-  function ctx:hostMembers()
+  local function hostMembers()
     if cache.hostMembers then return cache.hostMembers end
     cache.hostMembers = {}
-    for cls, members in pairs(self:classes()) do
-      local host   = self:resolveHost(cls)
+    for cls, members in pairs(classes()) do
+      local host   = resolveHost(cls)
       local bucket = cache.hostMembers[host] or {}
       for _, id in ipairs(members) do util.add(bucket, id) end
       cache.hostMembers[host] = bucket
@@ -465,11 +460,11 @@ function M.compile(userGraph, derivedSplits)
 
   -- Fold-vs-CU decision for each gained edge. Shared by targetPlan and
   -- wm:pokeEdgeGain. See docs/DAG.md § gainSinks.
-  function ctx:gainSinks()
+  local function gainSinks()
     if cache.gainSinks then return cache.gainSinks end
-    local classOf = self:classOf()
-    local mhc     = self:masterHostedClass()
-    local function hostOf(id) return self:resolveHost(classOf[id]) end
+    local classOf = classOf()
+    local mhc     = masterHostedClass()
+    local function hostOf(id) return resolveHost(classOf[id]) end
     local function isMasterDest(toId)
       return toId == 'master' or (mhc and classOf[toId] == mhc)
     end
@@ -512,12 +507,12 @@ function M.compile(userGraph, derivedSplits)
     return sinks
   end
 
-  function ctx:capacityErrors()
-    local classOf = self:classOf()
+  local function capacityErrors()
+    local classOf = classOf()
     local counts  = {}
     for _, edge in ipairs(edges) do
-      local fromHost = self:resolveHost(classOf[edge.from])
-      local toHost   = self:resolveHost(classOf[edge.to])
+      local fromHost = resolveHost(classOf[edge.from])
+      local toHost   = resolveHost(classOf[edge.to])
       if fromHost and fromHost ~= '' and fromHost == toHost then
         counts[fromHost] = counts[fromHost] or { audio = 0, midi = 0 }
         counts[fromHost][edge.type] = counts[fromHost][edge.type] + 1
@@ -578,13 +573,13 @@ function M.compile(userGraph, derivedSplits)
     return out
   end
 
-  function ctx:targetPlan()
-    local classOf     = self:classOf()
-    local hostMembers = self:hostMembers()
+  local function targetPlan()
+    local classOf     = classOf()
+    local hostMembers = hostMembers()
 
     -- Folded gains ride a native send (no CU); gainSinks names the sink.
     local folded, sendGain, mainGain = {}, {}, {}
-    for edgeIdx, sink in pairs(self:gainSinks()) do
+    for edgeIdx, sink in pairs(gainSinks()) do
       if sink.kind == 'send' then
         folded[edgeIdx] = true
         sendGain[sink.from .. '\0' .. sink.to] = sink.gain
@@ -597,8 +592,8 @@ function M.compile(userGraph, derivedSplits)
     -- Phase A — edges → conns. Audio gain rides the conn as metadata
     -- (stripped to D_VOL when folded); MIDI passes through unchanged.
     local synthNodes, cuHost, conns, cuN = {}, {}, {}, 0
-    local mhc = self:masterHostedClass()
-    local function realHost(id) return self:resolveHost(classOf[id]) end
+    local mhc = masterHostedClass()
+    local function realHost(id) return resolveHost(classOf[id]) end
     local function hostB(id) return cuHost[id] or realHost(id) end
     local function audioConn(from, fp, to, tp, gain)
       util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
@@ -752,7 +747,7 @@ function M.compile(userGraph, derivedSplits)
       end
     end
 
-    local function hostOf(id) return cuHost[id] or self:resolveHost(classOf[id]) end
+    local function hostOf(id) return cuHost[id] or resolveHost(classOf[id]) end
 
     -- Per-host chain members to topo-order: real fx + synth CU (source/master
     -- never appear in fxOrder; they are the track-IO boundary).
@@ -882,7 +877,21 @@ function M.compile(userGraph, derivedSplits)
     return plan
   end
 
+  ----------- PUBLIC SURFACE
+  function ctx:classes()           return classes()           end
+  function ctx:classOf()           return classOf()           end
+  function ctx:masterHostedClass() return masterHostedClass() end
+  function ctx:resolveHost(cls)    return resolveHost(cls)    end
+  function ctx:gainSinks()         return gainSinks()         end
+  function ctx:capacityErrors()    return capacityErrors()    end
+  function ctx:targetPlan()        return targetPlan()        end
+
   return ctx
+end
+
+--contract: assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
+function M.compile(userGraph)
+  return buildCtx(userGraph, masterMinMarkers(userGraph))
 end
 
 ----- allocate

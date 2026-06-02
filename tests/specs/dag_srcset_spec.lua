@@ -1,6 +1,9 @@
 local t   = require('support')
 local DAG = require('DAG')
 
+-- srcSet is a closure-local; we observe it through the public partition.
+-- A node's class key IS its sorted srcSet guids joined by '|', so classOf pins srcSet.
+
 local function source(id, guid)
   return id, { kind = 'source', trackGuid = guid or 'guid-' .. id,
                pos = { x = 0, y = 0 },
@@ -32,12 +35,8 @@ local function mk(nodes, edges)
   return { nodes = nodes, edges = edges or {}, nextId = 1 }
 end
 
--- {trackGuid=true,...} → sorted array, for stable comparison.
-local function sortedKeys(set)
-  local out = {}
-  for k in pairs(set) do out[#out+1] = k end
-  table.sort(out)
-  return out
+local function classKey(nodes, edges, id)
+  return DAG.compile(mk(nodes, edges)):classOf()[id]
 end
 
 return {
@@ -46,15 +45,13 @@ return {
     run = function()
       local ns = {}
       local k, v = source('s', 'guid-s'); ns[k] = v
-      local c = DAG.compile(mk(ns, {}))
-      t.deepEq(sortedKeys(c:srcSet('s')), { 'guid-s' })
+      t.eq(classKey(ns, {}, 's'), 'guid-s')
     end,
   },
   {
     name = 'isolated master srcSet is empty',
     run = function()
-      local c = DAG.compile(mk({}))
-      t.deepEq(sortedKeys(c:srcSet('master')), {})
+      t.eq(classKey({}, {}, 'master'), '')
     end,
   },
   {
@@ -63,10 +60,9 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local c = DAG.compile(mk(ns, {
+      t.eq(classKey(ns, {
         { type = 'audio', from = 's', to = 'f' },
-      }))
-      t.deepEq(sortedKeys(c:srcSet('f')), { 'guid-s' })
+      }, 'f'), 'guid-s')
     end,
   },
   {
@@ -76,11 +72,10 @@ return {
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
       local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
-      local c = DAG.compile(mk(ns, {
+      t.eq(classKey(ns, {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
-      }))
-      t.deepEq(sortedKeys(c:srcSet('mix')), { 'guid-a', 'guid-b' })
+      }, 'mix'), 'guid-a|guid-b')
     end,
   },
   {
@@ -91,14 +86,13 @@ return {
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('a');               ns[k2] = v2
       local k3, v3 = fx('b');               ns[k3] = v3
-      local k4, v4 = fx('c', { ins = 2 }); ns[k4] = v4
-      local c = DAG.compile(mk(ns, {
+      local k4, v4 = fx('c', { ins = 2 });  ns[k4] = v4
+      t.eq(classKey(ns, {
         { type = 'audio', from = 's', to = 'a' },
         { type = 'audio', from = 's', to = 'b' },
         { type = 'audio', from = 'a', to = 'c', toPort = 1 },
         { type = 'audio', from = 'b', to = 'c', toPort = 2 },
-      }))
-      t.deepEq(sortedKeys(c:srcSet('c')), { 'guid-s' })
+      }, 'c'), 'guid-s')
     end,
   },
   {
@@ -107,11 +101,10 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local c = DAG.compile(mk(ns, {
+      t.eq(classKey(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
-      }))
-      t.deepEq(sortedKeys(c:srcSet('master')), { 'guid-s' })
+      }, 'master'), 'guid-s')
     end,
   },
   {
@@ -120,14 +113,13 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local c = DAG.compile(mk(ns, {
+      t.eq(classKey(ns, {
         { type = 'audio', from = 's', to = 'f', ops = { gain = 0.5 } },
-      }))
-      t.deepEq(sortedKeys(c:srcSet('f')), { 'guid-s' })
+      }, 'f'), 'guid-s')
     end,
   },
   {
-    name = 'memoisation returns identical set on repeat call',
+    name = 'memoisation returns the identical partition table on repeat call',
     run = function()
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
@@ -135,9 +127,7 @@ return {
       local c = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
       }))
-      local a = c:srcSet('f')
-      local b = c:srcSet('f')
-      t.eq(a, b)  -- same table reference, not just deep-equal
+      t.eq(c:classOf(), c:classOf())  -- same table reference, not just deep-equal
     end,
   },
 }

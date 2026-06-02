@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1388  sha=89ff64b  mode=namespace
+@module DAG  src=DAG.lua  loc=1397  sha=984c0e3  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -10,7 +10,7 @@
   @invariant  edge ops ride as metadata; gain on a sole send-wire folds onto send volume, else CU
   @invariant  node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
   @invariant  a split-tagged class never absorbs
-  @invariant  srcSet unions node.split with derived master-min split markers (ctx:masterSplits)
+  @invariant  srcSet unions node.split with derived master-min split markers
 
 # Shapes
   @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
@@ -32,14 +32,16 @@
   @const CU_IDENT = 'JS:Continuum Utility'  @ 32
   @const MERGE_WIDTH = 16  @ 35
   @const M = {}  @ 37
+  @const buildCtx  @ 191
 
 # Private functions
   -- validate
   -- ancestors / descendants
   -- master minimization
-  @fn masterMinMarkers(userGraph)  @ 191
+  @fn masterMinMarkers(userGraph)  @ 195
       -- fx fed >=2 audio ports from one upstream host violates the one-pair-per-send
       -- limit and is evicted via a derived split at its ipdom toward master. See docs/DAG.md § Master-minimization.
+      · PUBLIC SURFACE
       · midi register file: bus 0 boundary; values are per-producer streams.
       · bracket post-pass — see docs/DAG.md § allocate
 
@@ -58,18 +60,17 @@
       -- from the kept destination B, else X→B closes the cycle B→…→X→B.
       @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
   -- compile context
-  @api M.compile(userGraph, derivedSplits)  @ 292
+  @api M.compile(userGraph)  @ 893
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
-      @contract  derivedSplits is internal (the master-min fixpoint); public callers omit it
   -- allocate
-  @api M.allocate(plan, nodes)  @ 894
+  @api M.allocate(plan, nodes)  @ 903
       -- Per-host live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 254, 332, 403, 404, 459, 528, 529, 549, 563, 568, 570, 574, 604, 617, 620, 635, 651, 689, 698, 716, 727, 733, 743, 749, 750, 765, 773, 784, 819, 832, 909, 931, 945, 963, 973, 976, 1010, 1018, 1027, 1035, 1066, 1096, 1131, 1158, 1165, 1189, 1197, 1201, 1205, 1236, 1259, 1322, 1323, 1324, 1329, 1344
-  @use call    util.assign  @ 75, 610, 1366, 1367
-  @use call    util.bucket  @ 124, 157, 176, 197, 198, 304, 337
+  @use call    util.add  @ 258, 335, 398, 399, 454, 523, 524, 544, 558, 563, 565, 569, 599, 612, 615, 630, 646, 684, 693, 711, 722, 728, 738, 744, 745, 760, 768, 779, 814, 827, 918, 940, 954, 972, 982, 985, 1019, 1027, 1036, 1044, 1075, 1105, 1140, 1167, 1174, 1198, 1206, 1210, 1214, 1245, 1268, 1331, 1332, 1333, 1338, 1353
+  @use call    util.assign  @ 75, 605, 1375, 1376
+  @use call    util.bucket  @ 124, 157, 176, 201, 202, 307, 340
   @use require util  @ 30

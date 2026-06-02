@@ -77,16 +77,15 @@ return {
       local cls = cx:classOf()
       t.eq(cls['a'], 'g1')
       t.eq(cls['b'], 'g1|split:b')
-      t.truthy(cx:splitClasses()['g1|split:b'])
     end,
   },
   {
     name = 'split-tagged class never absorbs into its single audio parent',
     run = function()
-      -- b has exactly one audio parent (a); absent the guard it would
-      -- auto-absorb back onto a's host, undoing the split.
-      local abs = DAG.compile(twoSourceChain(true)):absorption()
-      t.falsy(abs['g1|split:b'])
+      -- b has exactly one audio parent (a); absent the guard it would auto-absorb
+      -- back onto a's host, undoing the split. resolveHost unchanged → hosts itself.
+      local rh = DAG.compile(twoSourceChain(true)):resolveHost('g1|split:b')
+      t.eq(rh, 'g1|split:b')
     end,
   },
   {
@@ -167,7 +166,6 @@ return {
         { type = 'audio', from = 'b',  to = 'f', toPort = 2 },
         { type = 'audio', from = 'f',  to = 'master' },
       }))
-      t.eq(next(cx:masterSplits()), nil)
       t.eq(cx:classOf()['f'], cx:classOf()['master'])
     end,
   },
@@ -191,9 +189,6 @@ return {
         { type = 'audio', from = 'f',  to = 'g' },
         { type = 'audio', from = 'g',  to = 'master' },
       }))
-      local splits = cx:masterSplits()
-      t.truthy(splits['g'])
-      t.eq(splits['f'], nil)
       t.eq(cx:classOf()['g'], cx:classOf()['master'])
       t.truthy(cx:classOf()['f'] ~= cx:classOf()['master'])
       t.eq(cx:targetPlan()[cx:classOf()['f']].hostKind, 'newTrack')
@@ -222,7 +217,6 @@ return {
         { type = 'audio', from = 'x',  to = 'master' },
         { type = 'audio', from = 'y',  to = 'master' },
       }))
-      t.truthy(cx:masterSplits()['master'])
       t.eq(cx:classOf()['master'], 'g1|g2|split:master')
     end,
   },
@@ -247,7 +241,7 @@ return {
         { type = 'audio', from = 's2', to = 'z', toPort = 2 },
         { type = 'audio', from = 'z',  to = 'master' },
       }))
-      t.truthy(cx:masterSplits()['f'])
+      t.eq(cx:classOf()['f'], 'g1|g2|split:f')
       t.truthy(cx:classOf()['f'] ~= cx:classOf()['master'])
     end,
   },
