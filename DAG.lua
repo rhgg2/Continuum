@@ -480,8 +480,6 @@ local function buildCtx(userGraph, derivedSplits)
       end
     end
 
-    -- Phase A — edges → conns. Audio gain rides the conn as metadata
-    -- (stripped to D_VOL when folded); MIDI passes through unchanged.
     local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
     local mhc = masterTrackClass()
     local function nodeTrackKey(id) return cuTrackKey[id] or trackKeyOf(id) end
@@ -496,19 +494,8 @@ local function buildCtx(userGraph, derivedSplits)
       cuTrackKey[cuId] = trackKey
       return cuId
     end
-    for edgeIdx, edge in ipairs(edges) do
-      local op = edge.ops
-      if edge.type == 'midi' then
-        util.add(conns, { type = 'midi', from = edge.from, to = edge.to })
-      else
-        local g = (not folded[edgeIdx]) and op and op.gain or nil
-        util.add(conns, { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,
-                          to = edge.to, toPort = edge.toPort or 1, gain = g, edgeIdx = edgeIdx })
-      end
-    end
-
-    -- Phase B — per-consumer merge. Summing model: matrix (REAPER pins sum free)
-    -- or internal (MIDI/width-1 send — CU must sum). See docs/DAG.md § same.
+    -- Each edge becomes a conn partitioned per-consumer (audio gain as metadata
+    -- → D_VOL on fold; MIDI passes through). See docs/DAG.md § per-consumer merge.
     do
       local units, unitKeys, kept = {}, {}, {}
       local function unitFor(trackKey, consumer, isParentSend)
@@ -521,7 +508,15 @@ local function buildCtx(userGraph, derivedSplits)
         end
         return unit
       end
-      for _, conn in ipairs(conns) do
+      for edgeIdx, edge in ipairs(edges) do
+        local conn
+        if edge.type == 'midi' then
+          conn = { type = 'midi', from = edge.from, to = edge.to }
+        else
+          local g = (not folded[edgeIdx]) and edge.ops and edge.ops.gain or nil
+          conn = { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,
+                   to = edge.to, toPort = edge.toPort or 1, gain = g, edgeIdx = edgeIdx }
+        end
         local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
         local unit
         if fromTrackKey ~= '' and toTrackKey ~= '' then
