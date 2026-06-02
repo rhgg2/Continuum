@@ -1,8 +1,5 @@
--- Integration: wm:applyOps reconciles the per-FX "MIDI output disabled"
--- bit (0x02) against the user graph. An fx node with no outgoing midi
--- edge has the bit set; with an outgoing midi edge, cleared. CU bridges
--- and foreign JSFX are skipped (no routing trailer, and not counted in
--- the routing-index walk). See docs/reaper_midi_routing.md.
+-- Integration: wm:applyOps reconciles per-FX MIDI routing against the user graph;
+-- wm:snapshot decodes it back. See docs/wiringManager.md § Routing as ground truth.
 
 local t    = require('support')
 local util = require('util')
@@ -165,6 +162,33 @@ return {
       local fxFlag = routingFlag(h, track, 1)
       t.truthy(fxFlag, 'VST fx routing bytes captured')
       t.eq(fxFlag & 0x02, 0x02, 'VST fx (routing-index 0) patched as output-disabled')
+    end,
+  },
+  {
+    name = 'fxRouting/apply: snapshot decodes routing back; re-apply emits no setFXChain',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      seedSource(h, 'guid-A')
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        g.nodes.f = fx('VST:Foo', nil)
+        util.add(g.edges, audioEdge('s', 'f'))
+        util.add(g.edges, audioEdge('f', 'master'))
+      end)
+      apply(wm)
+      -- snapshot decodes the chunk the apply wrote; it must agree with the
+      -- target intent so fxOrderEq sees no drift on the next reconcile.
+      local snap   = wm:snapshot()
+      local target = wm:targetState()
+      local sEntry = snap['guid-A'].fxOrder[1]
+      local tEntry = target['guid-A'].fxOrder[1]
+      t.eq(sEntry.ident, 'VST:Foo')
+      t.eq(sEntry.midiOut, false, 'audio-only fx decoded as output-disabled')
+      t.deepEq(sEntry.midiBus, tEntry.midiBus, 'decoded bus matches target')
+      t.eq(sEntry.midiOut, tEntry.midiOut, 'decoded passthrough matches target')
+      for _, op in ipairs(wm:diff(target, snap)) do
+        t.eq(op.op == 'setFXChain', false, 'routing roundtripped; got op=' .. op.op)
+      end
     end,
   },
 }

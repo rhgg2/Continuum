@@ -39,35 +39,27 @@ by `DAG.validate` — same mechanism that would catch a buggy mutator
 minting a second master, rather than two storage shapes encoding the
 same rule.
 
-## Routing intent record
+## Routing as ground truth
 
-The per-FX MIDI passthrough bit (`0x02` of the routing trailer; see
-`docs/reaper_midi_routing.md`) has no `TrackFX_*` API — read or write
-goes through `GetTrackStateChunk` / `SetTrackStateChunk`, which parse
-and reserialise the entire track state. A five-FX chain is hundreds
-of milliseconds per roundtrip.
-
-Continuum owns this bit (see contract below), so it knows what value
-it last applied. `appliedMidiOut[fxGuid] = bool` is that record; `nil`
-means "never written" — REAPER's fresh-FX state, which is
-`midiOut=true` (bit clear). Persisted as `wiringMidiOutApplied` in
-the project tier and rehydrated on `wm:load`.
-
-Snap reads `appliedMidiOut[guid]` (with `nil` ⇒ `true`) into
-`fxOrder[i].midiOut` instead of decoding the chunk. `reconcileFXChain`
-step 5 filters target entries to those whose desired `midiOut` differs
-from the applied value; when the filter empties, the chunk is never
-touched. Otherwise one `Get`+`Set` per track and the new values land
-in `appliedMidiOut`, persisted at the `applyOps` tail alongside
-`wiringOwnedFx`.
+The per-FX MIDI passthrough bit (`0x02` of the routing trailer) and
+the in/out bus bytes (4/5) have no `TrackFX_*` API — read or write
+goes through `GetTrackStateChunk` / `SetTrackStateChunk` (see
+`docs/reaper_midi_routing.md`). `wm:snapshot` decodes the trailer of
+every owned non-JS FX via `readFXMidiRouting` into
+`fxOrder[i].midiBus = { inBus, outBus }` and `midiOut`; `projectEntry`
+stamps the target's `midiBus` from the allocator's `fxMidiBus` and
+`midiOut` from `nodeHasMidiOut`. `fxOrderEq` compares both, so a bus or
+passthrough change drives a `setFXChain`, and `reconcileFXChain`'s tail
+decodes the live trailer and writes only the bytes that differ. There
+is no applied-value cache — REAPER's chunk is ground truth, same as
+everywhere else in the differ.
 
 **User-facing contract:** Continuum owns the MIDI I/O dialog
-("Send all MIDI to plugin" / "Receive MIDI from plugin") on every
-FX that lives in a chain the wiring page manages. Toggling it by
-hand in REAPER is invisible to snap (we no longer read REAPER's
-state); the next graph edit that flips the same bit will overwrite
-the manual change, but until then the chain runs with whatever the
-user set.
+("Send all MIDI to plugin" / "Receive MIDI from plugin") and the
+input/output bus on every FX in a chain the wiring page manages.
+Toggling either by hand in REAPER is reverted to graph intent on the
+next reconcile: snapshot reads REAPER's state, so the differ sees the
+drift and rewrites it.
 
 ## Per-FX MIDI routing
 

@@ -9,7 +9,7 @@
 --shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
 --shape: snapshotSend = { to=classKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }
 --shape: snapshotFxOrigin = {kind='node',id=string}|{kind='edge',idx=int}|{kind='bracketIn'|'bracketOut',id=string}
---shape: snapshotFxEntry = { fxGuid?=string, ident=string, params?=table, origin?=snapshotFxOrigin, midiOut?=bool }
+--shape: snapshotFxEntry = { fxGuid?=string, ident=string, params?=table, origin?=snapshotFxOrigin, midiOut?=bool, midiBus?={inBus=int,outBus=int} }
 --shape: wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=snapshotFxEntry[], mainSend=bool, mainSendGain?=number, mainSendOffs?=int, sends=snapshotSend[], nchan?=int, pinMaps?={ [fxGuid]=snapshotPinMap }, pinMapsByOrigin?={ [originKey]=snapshotPinMap } } }; see design/wiring.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'setExtState'|'moveFxAcrossHosts', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier). moveFxAcrossHosts relocates a live FX from one host to another with TrackFX_CopyToTrack(is_move=true); emitted before per-class setFXChain ops so subsequent per-track reconcile sees the FX already at the destination. setNchan / setPinMaps emit between setFXChain and setMainSend so the applier has fxGuids stamped before pin-map writes and the track has channels allocated before pin maps land. setMainSend carries offs (C_MAINSEND_OFFS) when mainSend=true; setPinMaps carries both fxGuid-keyed and origin-keyed maps so unmaterialised fxs lift through the stamps table.
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
@@ -30,7 +30,6 @@ local userGraph = nil
 local installedFx = nil   -- session cache; reaper's installed-FX set is fixed at runtime
 local scratchTrack = nil  -- hidden host for disconnected/orphan FX nodes; reset by wm:load
 local pokeParamCache = {} -- persistent paramIdx cache for the pokeEdgeGain hot path
-local appliedMidiOut = {} -- [fxGuid] = bool, last value we wrote (nil = never) — see docs/wiringManager.md § Routing intent record
 local realising = false   -- true during applyOps's stamp-back mutate, gating wiringChanged
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
 local lastScratchRaw = nil -- serialised graph last mirrored to scratch P_EXT; pollUndo compares against it
@@ -128,7 +127,6 @@ end
 --contract: re-reads wiringGraph from cm (rebuilding master via freshGraph if empty), ensures the scratch track, fires wiringChanged{kind='load'}; drops the prior scratch handle (project may have changed)
 function wm:load()
   userGraph      = readPersisted()
-  appliedMidiOut = cm:get('wiringMidiOutApplied') or {}
   scratchTrack   = nil
   ensureScratchTrack()
   fire('wiringChanged', { kind = 'load' })
@@ -459,6 +457,22 @@ function wm.setFXMidiRouting(chunk, fxIdx, opts, pinChannels)
   return joinChunkLines(lines, hasTrailing), true
 end
 
+-- Decode the fxIdx-th non-JS FX block's routing trailer (read counterpart to
+-- setFXMidiRouting). Returns { inBus, outBus, inDisabled, outDisabled } or nil.
+local function readFXMidiRouting(chunk, fxIdx)
+  local lines          = splitChunkLines(chunk)
+  local first, trailer = findFxBlock(lines, fxIdx)
+  if not first then return nil end
+  local content = lines[trailer]:match('^%s*(%S*)%s*$')
+  if not content or content == '' then return nil end
+  local bytes = b64decode(content)
+  local flags = bytes:byte(3) or 0
+  return { inBus       = bytes:byte(4) or 0,
+           outBus      = bytes:byte(5) or 0,
+           inDisabled  = (flags & 0x01) ~= 0,
+           outDisabled = (flags & 0x02) ~= 0 }
+end
+
 -- True iff `graph` has any edge with type='midi' leaving `nodeId`.
 -- Drives target.midiOut for non-JS fx in projectEntry.
 local function nodeHasMidiOut(graph, nodeId)
@@ -504,6 +518,8 @@ end
 -- pin maps are dropped (absent ⇒ disconnected). See docs/wiringManager.md.
 local function ownedChain(track, ownedGuids)
   local out, pinMaps = {}, {}
+  local _, chunk     = reaper.GetTrackStateChunk(track, '', true)
+  local routingIdx   = 0
   for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
     local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
     local guid     = reaper.TrackFX_GetFXGUID(track, fxIdx)
@@ -511,8 +527,10 @@ local function ownedChain(track, ownedGuids)
     if ownedGuids[guid] then
       local entry = { fxGuid = guid, ident = ident }
       if not isJS then
-        local applied = appliedMidiOut[guid]
-        entry.midiOut = applied == nil or applied
+        local r = readFXMidiRouting(chunk, routingIdx)
+                  or { inBus = 0, outBus = 0, outDisabled = false }
+        entry.midiBus = { inBus = r.inBus, outBus = r.outBus }
+        entry.midiOut = not r.outDisabled
       elseif ident == CU_IDENT then
         -- Mirror live CU params so fxOrderEq is honest; without it every reconcile spuriously emits setFXChain.
         local idx     = cuParamIdx(track, fxIdx)
@@ -541,6 +559,7 @@ local function ownedChain(track, ownedGuids)
       local pm = readPinMapsForFx(track, fxIdx)
       if next(pm.ins) or next(pm.outs) then pinMaps[guid] = pm end
     end
+    if not isJS then routingIdx = routingIdx + 1 end
   end
   return out, pinMaps
 end
@@ -708,6 +727,8 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
         entry.origin = { kind = 'node', id = id }
         if not (node.fxIdent and node.fxIdent:sub(1, 3) == 'JS:') then
           entry.midiOut = nodeHasMidiOut(userGraph, id)
+          local bus = planEntry.fxMidiBus and planEntry.fxMidiBus[id]
+          if bus then entry.midiBus = util.deepClone(bus) end
         end
       end
       originByCompileId[id] = entry
@@ -759,9 +780,10 @@ local function fxOrderEq(a, b)
   if #a ~= #b then return false end
   for i = 1, #a do
     local x, y = a[i], b[i]
-    if x.fxGuid  ~= y.fxGuid  or x.ident ~= y.ident    then return false end
-    if x.midiOut ~= y.midiOut                          then return false end
-    if not util.deepEq(x.params or {}, y.params or {}) then return false end
+    if x.fxGuid  ~= y.fxGuid  or x.ident ~= y.ident      then return false end
+    if x.midiOut ~= y.midiOut                            then return false end
+    if not util.deepEq(x.midiBus or {}, y.midiBus or {}) then return false end
+    if not util.deepEq(x.params  or {}, y.params  or {}) then return false end
   end
   return true
 end
@@ -1089,22 +1111,15 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
     end
   end
 
-  -- 5. Reconcile per-FX MIDI passthrough (0x02) via the intent record.
-  --    See docs/wiringManager.md § Routing intent record.
-  local flips = {}
+  -- 5. Reconcile per-FX MIDI routing (in/out bus + passthrough) against the live
+  --    chunk; decode only our trailer bytes and write once iff a byte moved. See docs/wiringManager.md § Routing as ground truth.
+  local routed = {}
   for d, tgt in ipairs(target) do
-    local guid = current[d].fxGuid
-    if tgt.midiOut ~= nil and guid then
-      local applied   = appliedMidiOut[guid]
-      local effective = applied == nil or applied
-      if tgt.midiOut ~= effective then
-        flips[#flips + 1] = { fxGuid  = guid,
-                              absIdx  = current[d].absIdx,
-                              midiOut = tgt.midiOut }
-      end
+    if (tgt.midiBus or tgt.midiOut ~= nil) and current[d].fxGuid then
+      util.add(routed, { absIdx = current[d].absIdx, target = tgt })
     end
   end
-  if #flips > 0 then
+  if #routed > 0 then
     local absToRouting, routingIdx = {}, 0
     for i = 0, reaper.TrackFX_GetCount(track) - 1 do
       local _, ident = reaper.TrackFX_GetFXName(track, i)
@@ -1114,16 +1129,27 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
       end
     end
     local _, chunk = reaper.GetTrackStateChunk(track, '', true)
-    for _, f in ipairs(flips) do
-      local rIdx = absToRouting[f.absIdx]
-      if rIdx then
-        local _, inputPins, outputPins = reaper.TrackFX_GetIOSize(track, f.absIdx)
-        chunk = wm.setFXMidiRouting(chunk, rIdx, { outDisabled = not f.midiOut },
-                                    inputPins + outputPins)
+    local dirty = false
+    for _, r in ipairs(routed) do
+      local rIdx = absToRouting[r.absIdx]
+      local cur  = rIdx and readFXMidiRouting(chunk, rIdx)
+      if cur then
+        local tgt, opts = r.target, {}
+        if tgt.midiBus then
+          if tgt.midiBus.inBus  ~= cur.inBus  then opts.inBus  = tgt.midiBus.inBus  end
+          if tgt.midiBus.outBus ~= cur.outBus then opts.outBus = tgt.midiBus.outBus end
+        end
+        if tgt.midiOut ~= nil and (not tgt.midiOut) ~= cur.outDisabled then
+          opts.outDisabled = not tgt.midiOut
+        end
+        if next(opts) then
+          local _, inputPins, outputPins = reaper.TrackFX_GetIOSize(track, r.absIdx)
+          chunk = wm.setFXMidiRouting(chunk, rIdx, opts, inputPins + outputPins)
+          dirty = true
+        end
       end
     end
-    reaper.SetTrackStateChunk(track, chunk, true)
-    for _, f in ipairs(flips) do appliedMidiOut[f.fxGuid] = f.midiOut end
+    if dirty then reaper.SetTrackStateChunk(track, chunk, true) end
   end
 end
 
@@ -1435,10 +1461,6 @@ function wm:applyOps(ops, label)
   -- out of the graph in the mutator that removed them).
   local owned = ownedGuidsFrom(userGraph)
   cm:set('project', 'wiringOwnedFx', owned)
-  for guid in pairs(appliedMidiOut) do
-    if not owned[guid] then appliedMidiOut[guid] = nil end
-  end
-  cm:set('project', 'wiringMidiOutApplied', appliedMidiOut)
 
   -- Mirror to scratch P_EXT inside the same Undo_BeginBlock so REAPER's undo
   -- captures the graph alongside FX/track ops. SetProjExtState doesn't

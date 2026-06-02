@@ -359,12 +359,12 @@ element-wise.
   `edge.opFxGuid`, `'bracketIn'`/`'bracketOut'` →
   `node.midiInBracketGuid`/`midiOutBracketGuid`. Snap entries do not
   carry `origin` and `fxOrderEq` ignores it.
-- `midiOut` is set on both sides only for non-JS `kind='node'`
-  entries — target derives it from the user graph
-  (`nodeHasMidiOut`), snap from `appliedMidiOut[fxGuid]` (`nil` ⇒
-  REAPER's fresh-FX default of true). Mismatch drives `setFXChain`,
-  and `reconcileFXChain` step 5 writes the 0x02 bit + records the
-  new applied value.
+- `midiOut` and `midiBus = { inBus, outBus }` are set on both sides
+  only for non-JS `kind='node'` entries — target derives `midiOut`
+  from the user graph (`nodeHasMidiOut`) and `midiBus` from the
+  allocator's `fxMidiBus`; snap decodes both from the FX chunk trailer
+  (`readFXMidiRouting`). Mismatch drives `setFXChain`, and
+  `reconcileFXChain` step 5 writes only the trailer bytes that differ.
 - `pinMaps` carries pair-lists for every port with a route
   (target: allocator-touched; snap: REAPER non-empty); absent port
   ⇒ disconnected. The applier converts pair-lists to REAPER's

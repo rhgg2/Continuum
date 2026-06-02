@@ -122,7 +122,6 @@ local declarations = {
   { 'wiringClass',    nil },
   { 'wiringHostKind', nil },
   { 'wiringScratch',  nil },
-  { 'wiringMidiOutApplied', {} },
 
   -- Atoms — parchment palette
   { 'palette.bg',        hex('#dad6c9') },  -- cream paper

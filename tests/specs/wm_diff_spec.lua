@@ -126,6 +126,35 @@ return {
     end,
   },
 
+  {
+    name = 'diff: midiBus change triggers setFXChain',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local mk = function(inBus) return {
+        ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                       fxOrder = { { fxGuid='{FX-1}', ident='VST:Foo',
+                                     midiOut=true, midiBus={ inBus=inBus, outBus=0 } } },
+                       mainSend = true, sends = {} },
+      } end
+      local kinds = {}
+      for _, op in ipairs(wm:diff(mk(1), mk(0))) do kinds[op.op] = true end
+      t.truthy(kinds.setFXChain, 'inBus drift produces setFXChain')
+    end,
+  },
+  {
+    name = 'diff: identical midiBus → no op',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local both = {
+        ['guid-A'] = { hostKind='sourceTrack', trackGuid='guid-A',
+                       fxOrder = { { fxGuid='{FX-1}', ident='VST:Foo',
+                                     midiOut=false, midiBus={ inBus=1, outBus=2 } } },
+                       mainSend = true, sends = {} },
+      }
+      t.eq(#wm:diff(both, both), 0)
+    end,
+  },
+
   ----- diff: empty in, empty out
 
   {
