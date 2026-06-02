@@ -201,16 +201,16 @@ than one pair from a single upstream class — a cross-boundary sidechain
 would need a second. This is a hosting scope, not an error: a
 pre-hosting **class-split pass** decorates the offending node so the
 hosting pass puts it on its own track, where ordinary multi-pair sends
-feed it and it parent-sends one pair up. The split markers are the
-master *frontier*; the pass moves them inward toward the master to the
-shallowest cut where every upstream class crosses with ≤1 summed pair —
-the largest still-valid master class, i.e. least eviction. Markers move,
-they don't accumulate. With `master.audio.ins = 1` it always converges,
-since the master node is a terminal sum — one pair per contributor by
-definition. The marker it lands on a node is exactly what the later
-**manual split-at-a-node gesture** writes, so the two share one
-mechanism and the hosting pass never special-cases the master. (See
-`docs/DAG.md` for the post-dominator algorithm and the fixpoint.)
+feed it and it parent-sends one pair up. The master class is the cone of
+master's largest dominator whose entry crosses with ≤1 summed pair per
+upstream class — the largest still-valid master class, i.e. least
+eviction. A single marker on that dominator peels everything above it
+(and any off-cone sibling) at once. With `master.audio.ins = 1` a clean
+cone always exists, since the master node is a terminal sum — one pair
+per contributor by definition. The marker it lands on a node is exactly
+what the later **manual split-at-a-node gesture** writes, so the two
+share one mechanism and the hosting pass never special-cases the master.
+(See `docs/DAG.md § Master-minimization` for the dominator-cone rule.)
 
 **Semantic collision stays the user's call.** A CU-merge interleaves
 streams but does not separate events that share a MIDI channel: if

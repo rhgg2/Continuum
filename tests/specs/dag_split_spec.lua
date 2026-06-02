@@ -221,10 +221,10 @@ return {
     end,
   },
   {
-    name = 'dead-end violator self-splits (no path to master)',
+    name = 'dead-end violator off the cone lands on its own track',
     run = function()
-      -- f violates (u feeds p1,p2), is master-hosted, but feeds nothing — no path to master so
-      -- the cut is f itself. z carries {g1,g2} up to master so the master class exists without f.
+      -- f violates (u feeds p1,p2), is master-hosted, but feeds nothing. The cut
+      -- rides master's dominator z; f, off the cone, peels onto its own 'g1|g2' track.
       local ns = {}
       local k, v
       k, v = source('s1', 'g1');            ns[k] = v
@@ -241,8 +241,30 @@ return {
         { type = 'audio', from = 's2', to = 'z', toPort = 2 },
         { type = 'audio', from = 'z',  to = 'master' },
       }))
-      t.eq(cx:classOf()['f'], 'g1|g2|split:f')
+      t.eq(cx:classOf()['f'], 'g1|g2')
       t.truthy(cx:classOf()['f'] ~= cx:classOf()['master'])
+    end,
+  },
+  {
+    name = 'off-cone parallel mixer is evicted (not a single-entry cone)',
+    run = function()
+      -- s1,s2 feed master directly AND via y; neither path crosses y, so master
+      -- has no fx dominator. y shares master's srcSet yet peels onto its own track.
+      local ns = {}
+      local k, v
+      k, v = source('s1', 'g1');   ns[k] = v
+      k, v = source('s2', 'g2');   ns[k] = v
+      k, v = fx('y', { ins = 2 }); ns[k] = v
+      local cx = DAG.compile(mk(ns, {
+        { type = 'audio', from = 's1', to = 'master' },
+        { type = 'audio', from = 's2', to = 'master' },
+        { type = 'audio', from = 's1', to = 'y', toPort = 1 },
+        { type = 'audio', from = 's2', to = 'y', toPort = 2 },
+        { type = 'audio', from = 'y',  to = 'master' },
+      }))
+      t.eq(cx:classOf()['master'], 'g1|g2|split:master')
+      t.truthy(cx:classOf()['y'] ~= cx:classOf()['master'])
+      t.eq(cx:targetPlan()[cx:classOf()['y']].hostKind, 'newTrack')
     end,
   },
 }

@@ -186,12 +186,12 @@ end
 
 ----- master minimization
 
--- buildCtx (defined below) is the lazy ctx factory; the master-min fixpoint
--- recompiles trial contexts through it, then M.compile feeds it the settled markers.
+-- buildCtx (defined below) is the lazy ctx factory; masterMinMarkers builds one
+-- marker-free ctx to site the cut, then M.compile rebuilds it with the markers.
 local buildCtx
 
--- fx fed >=2 audio ports from one upstream host violates the one-pair-per-send
--- limit and is evicted via a derived split at its ipdom toward master. See docs/DAG.md § Master-minimization.
+-- master class = cone of master's largest dominator whose entry pulls <=1 audio
+-- pair per upstream host; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
 local function masterMinMarkers(userGraph)
   local nodes = userGraph.nodes or {}
   local edges = userGraph.edges or {}
@@ -214,79 +214,73 @@ local function masterMinMarkers(userGraph)
     return seen
   end
 
-  -- Immediate post-dominator of N toward master: nearest node every N->master path crosses.
-  -- If N can't reach master, N splits itself (self-tag is re-merge-safe).
-  local function ipdom(N)
-    local descN = reach(N, fwd, nil)
-    if not descN['master'] then return N end
-    local ancM = reach('master', rev, nil)
-    local best, bestSize = nil, -1
-    for id in pairs(descN) do
-      if id ~= N and ancM[id] and not reach(N, fwd, { [id] = true })['master'] then
-        local size = 0
-        for _ in pairs(reach(id, fwd, nil)) do size = size + 1 end
-        if size > bestSize or (size == bestSize and id < best) then
-          best, bestSize = id, size
+  -- fx dominators of master (every source->master path crosses them), largest
+  -- cone first. d dominates master iff, with d cut, no source still reaches it.
+  local function masterDominators()
+    local doms = {}
+    for id, node in pairs(nodes) do
+      if id ~= 'master' and node.kind == 'fx' and reach(id, fwd, nil)['master'] then
+        local back, dominates = reach('master', rev, { [id] = true }), true
+        for up in pairs(back) do
+          if nodes[up].kind == 'source' then dominates = false; break end
+        end
+        if dominates then util.add(doms, id) end
+      end
+    end
+    local coneSize = {}
+    for _, id in ipairs(doms) do
+      local n = 0
+      for _ in pairs(reach(id, fwd, nil)) do n = n + 1 end
+      coneSize[id] = n
+    end
+    table.sort(doms, function(a, b)
+      if coneSize[a] ~= coneSize[b] then return coneSize[a] > coneSize[b] end
+      return a < b
+    end)
+    return doms
+  end
+
+  local base = buildCtx(userGraph, {})
+
+  -- d is the single entry of its cone, so it alone can pull >=2 audio pairs
+  -- from one upstream host. see docs/DAG.md § Master-minimization
+  local function dirty(d)
+    local cone, classOf = reach(d, fwd, nil), base:classOf()
+    local portsByHost = {}
+    for _, e in ipairs(edges) do
+      if e.type == 'audio' and e.to == d and not cone[e.from] then
+        local host = base:resolveHost(classOf[e.from])
+        if host ~= '' then
+          local ports = portsByHost[host] or {}
+          ports[e.toPort or 1] = true
+          portsByHost[host] = ports
         end
       end
     end
-    return best or 'master'
-  end
-
-  -- A master-hosted fx violates iff one upstream host feeds >=2 of its audio
-  -- input ports (two pairs out of a one-pair parent send).
-  local function violatorsOf(ctx)
-    local masterClass = ctx:masterHostedClass()
-    if not masterClass then return {} end
-    local classOf, out = ctx:classOf(), {}
-    for _, fxId in ipairs(ctx:classes()[masterClass]) do
-      if nodes[fxId].kind == 'fx' then
-        local portsByHost = {}
-        for _, e in ipairs(edges) do
-          if e.type == 'audio' and e.to == fxId then
-            local host = ctx:resolveHost(classOf[e.from])
-            if host ~= masterClass and host ~= '' then
-              local ports = portsByHost[host] or {}
-              ports[e.toPort or 1] = true
-              portsByHost[host] = ports
-            end
-          end
-        end
-        for _, ports in pairs(portsByHost) do
-          local n = 0
-          for _ in pairs(ports) do n = n + 1 end
-          if n >= 2 then util.add(out, fxId); break end
-        end
-      end
+    for _, ports in pairs(portsByHost) do
+      local n = 0
+      for _ in pairs(ports) do n = n + 1 end
+      if n >= 2 then return true end
     end
-    table.sort(out)
-    return out
+    return false
   end
 
-  local markers = {}
-  while true do
-    local violators = violatorsOf(buildCtx(userGraph, markers))
-    if #violators == 0 then break end
-    local changed = false
-    for _, v in ipairs(violators) do
-      local d = ipdom(v)
-      if not markers[d] then markers[d] = true; changed = true end
-    end
-    if not changed then break end
+  -- The master class is the cone of the largest dominator with a clean entry;
+  -- the master node itself (always single-port) when none qualifies.
+  local cut = 'master'
+  for _, d in ipairs(masterDominators()) do
+    if not dirty(d) then cut = d; break end
   end
 
-  -- Move, don't accumulate: a marker with another marker downstream of it is
-  -- redundant — the inner cut already evicts everything above it.
-  local redundant = {}
-  for m in pairs(markers) do
-    local desc = reach(m, fwd, nil)
-    for m2 in pairs(markers) do
-      if m2 ~= m and desc[m2] then redundant[m] = true; break end
-    end
+  -- Emit the marker only when the cone is strictly smaller than master's natural
+  -- srcSet class — something needs evicting. One marker peels them all.
+  local natural = base:masterHostedClass()
+  if not natural then return {} end
+  local cone = reach(cut, fwd, nil)
+  for _, id in ipairs(base:classes()[natural]) do
+    if not cone[id] then return { [cut] = true } end
   end
-  for m in pairs(redundant) do markers[m] = nil end
-
-  return markers
+  return {}
 end
 
 ----- compile context

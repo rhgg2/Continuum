@@ -56,7 +56,7 @@ outcome. The split tag rides class keys (and thus the `wiringClass`
 ownership string) as an opaque, stable segment; nothing downstream
 parses it.
 
-## Master-minimization — evicting fx that need two master pairs
+## Master-minimization — the master class is a dominator cone
 
 `master.audio.ins = 1` means each contributing track reaches the master
 through one parent send: one stereo pair. So a master-hosted fx can pull at
@@ -65,24 +65,28 @@ the *same* host needs two pairs from one parent send — unrepresentable. (Two
 ports from two *different* hosts is fine: main on one parent send, sidechain on
 another.)
 
-`ctx:masterSplits` (run by `M.compile` on every compile, unioned into `srcSet`
-alongside persisted `node.split`) resolves this by eviction. For each violating
-fx it derives a split marker at the fx's **immediate post-dominator toward
-master** — the nearest node every path from the fx to master crosses. Marking
-that node taints master with its `split:` tag while the violator, strictly
-upstream, stays untagged and peels onto its own track, where ordinary
-multi-pair sends feed it and it parent-sends one pair up. The post-dominator is
-the largest single-entry cone that still excludes the violator, so it is the
-least-eviction cut. If the fx reaches no sink, it splits itself (the self-tag
-is re-merge-safe — master never inherits it).
+The master class is defined structurally: the **cone of master's largest
+dominator whose entry draws ≤1 pair per upstream host**. Master's dominators —
+the nodes every source→master path crosses — form a chain, and each shares
+master's `srcSet`. A dominator cone is single-entry for external signal (any
+source reaching a cone member must cross the entry), so the *only* member that
+can pull two pairs from one host is the entry itself — counting its cross-cone
+feeders by host decides a cone, read from one marker-free ctx (hosts above the
+cut are marker-independent). `masterMinMarkers` (run by `M.compile`, unioned
+into `srcSet` via `derivedSplits` alongside persisted `node.split`) walks the
+chain largest-cone-first and takes the first capacity-clean cone, falling back
+to `{master}` when none qualifies.
 
-A fixpoint repeats — evicting one fx can expose a fresh violator downstream,
-whose marker lands strictly closer to master — until the master class is
-violation-free. It always converges: the inward terminus is a derived split on
-the master node itself (`C_m = {master}`), reached when a violator's paths to
-master rejoin only at master. Markers move rather than accumulate: a marker
-with another marker downstream is pruned, since the inner cut already evicts
-everything above it.
+A single derived split marks the chosen dominator — and only when its cone is
+strictly smaller than master's natural `srcSet` class, i.e. something needs
+evicting. That one marker peels everything at once: nodes above the cut, *and*
+any off-cone sibling that happens to share master's `srcSet`. The eviction of
+off-cone siblings is by design — the master track does linear work, optionally
+with single-entry parallel (a diamond from one cone entry), never a re-entrant
+merge of disjoint sources. A violator that reaches no sink contributes no
+dominator, so the chain stays short and the class collapses toward `{master}`
+(`C_m = {master}` is the inward terminus), leaving the violator on its own
+`srcSet` track.
 
 ## CU bridge invariant — edge ops and folding
 
