@@ -25,7 +25,6 @@
 local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
-local legato  = require 'legato'
 
 local tm, cm, cmgr, gm = (...).tm, (...).cm, (...).cmgr, (...).gm
 
@@ -519,7 +518,7 @@ do
   -- pass derives the real tail (next onset / take length) every
   -- rebuild.
   local function placeNewNote(col, update)
-    local prev    = legato.place(col.events, update.ppq, length)
+    local prev    = util.seek(col.events, 'before', update.ppq, util.isNote)
     update.vel    = prev and prev.vel or cm:get('defaultVelocity')
     update.endppq = util.OPEN
     update.lane   = col.lane

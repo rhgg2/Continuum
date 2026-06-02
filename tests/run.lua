@@ -47,7 +47,6 @@ local specs = {
   'tm_unified_projection_spec',
   'tm_rescale_conform_spec',
   'tm_pc_synthesis_spec',
-  'legato_spec',
   'groups_core_spec',
   'gm_propagate_spec',
   'gm_realisation_spec',
