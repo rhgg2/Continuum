@@ -511,93 +511,97 @@ local function buildCtx(userGraph, derivedSplits)
     -- or internal (MIDI/width-1 send — CU must sum). See docs/DAG.md § same.
     do
       local units, unitKeys, kept = {}, {}, {}
-      local function unit(trackKey, consumer, isParentSend)
-        local k = trackKey .. '\0' .. consumer
-        local u = units[k]
-        if not u then
-          u = { trackKey = trackKey, consumer = consumer, isParentSend = isParentSend,
-                audio = {}, midi = {} }
-          units[k] = u; util.add(unitKeys, k)
+      local function unitFor(trackKey, consumer, isParentSend)
+        local key = trackKey .. '\0' .. consumer
+        local unit = units[key]
+        if not unit then
+          unit = { trackKey = trackKey, consumer = consumer, isParentSend = isParentSend,
+                   audio = {}, midi = {} }
+          units[key] = unit; util.add(unitKeys, key)
         end
-        return u
+        return unit
       end
-      for _, c in ipairs(conns) do
-        local fH, tH = nodeTrackKey(c.from), nodeTrackKey(c.to)
-        local u
-        if fH ~= '' and tH ~= '' then
-          if mhc and tH == mhc and fH ~= mhc then
-            u = unit(fH, 'master', true)         -- width-1 parent send: pre-sum per producer
-          elseif c.to == 'master' then
-            u = unit(tH, 'master', true)         -- in-class master: parent send is serial, sum fan-in to one pair
-          elseif nodes[c.to] and nodes[c.to].kind == 'fx' then
-            u = unit(tH, c.to, false)            -- fx consumer: merge at the consumer trackKey
+      for _, conn in ipairs(conns) do
+        local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
+        local unit
+        if fromTrackKey ~= '' and toTrackKey ~= '' then
+          if mhc and toTrackKey == mhc and fromTrackKey ~= mhc then
+            unit = unitFor(fromTrackKey, 'master', true)  -- width-1 parent send: pre-sum per producer
+          elseif conn.to == 'master' then
+            unit = unitFor(toTrackKey, 'master', true)    -- in-class master: serial parent send, sum fan-in to one pair
+          elseif nodes[conn.to] and nodes[conn.to].kind == 'fx' then
+            unit = unitFor(toTrackKey, conn.to, false)    -- fx consumer: merge at the consumer trackKey
           end
         end
-        if u then util.add(u[c.type], c) else util.add(kept, c) end
+        if unit then util.add(unit[conn.type], conn) else util.add(kept, conn) end
       end
       conns = kept
 
-      local function sortFeeders(fs)
-        table.sort(fs, function(a, b)
+      local function sortFeeders(feeders)
+        table.sort(feeders, function(a, b)
           if a.from ~= b.from then return a.from < b.from end
           if (a.fromPort or 1) ~= (b.fromPort or 1) then return (a.fromPort or 1) < (b.fromPort or 1) end
           return (a.toPort or 1) < (b.toPort or 1)
         end)
       end
-      local function anyGained(fs)
-        for _, f in ipairs(fs) do if f.gain and f.gain ~= 1 then return true end end
+      local function anyGained(feeders)
+        for _, f in ipairs(feeders) do if f.gain and f.gain ~= 1 then return true end end
         return false
       end
 
       table.sort(unitKeys)
-      for _, k in ipairs(unitKeys) do
-        local u = units[k]
-        sortFeeders(u.audio); sortFeeders(u.midi)
+      for _, unitKey in ipairs(unitKeys) do
+        local unit = units[unitKey]
+        sortFeeders(unit.audio); sortFeeders(unit.midi)
         -- Audio: matrix sinks merge only when gained; internal sinks (parent
         -- send) sum on any fan-in ≥2. MIDI: one bus ⇒ merge on any fan-in ≥2.
-        local audioCU = u.isParentSend and #u.audio >= 2 or
-                        (not u.isParentSend and anyGained(u.audio))
-        local midiCU  = #u.midi >= 2
+        local audioCU = unit.isParentSend and #unit.audio >= 2 or
+                        (not unit.isParentSend and anyGained(unit.audio))
+        local midiCU  = #unit.midi >= 2
 
         -- A merge CU is identified by (consumer, track). Fan-in past MERGE_WIDTH
         -- cascades into parallel CUs; each past the first gets a '#N' key suffix.
         local mergeN = 0
         local function mintMerge(params, inputEdges)
           mergeN = mergeN + 1
-          local key = mergeN == 1 and u.trackKey or (u.trackKey .. '#' .. mergeN)
-          return mintCU(u.trackKey, params,
-            { originConsumer = u.consumer, originTrackKey = key, inputEdges = inputEdges })
+          local key = mergeN == 1 and unit.trackKey or (unit.trackKey .. '#' .. mergeN)
+          return mintCU(unit.trackKey, params,
+            { originConsumer = unit.consumer, originTrackKey = key, inputEdges = inputEdges })
+        end
+        -- One merge CU over feeders[lo..hi]: window gains (unity default), collect
+        -- any edgeIdx for live-gain pokes. audioSum 0 = matrix fan-out, 1 = sum-tree.
+        local function chunkCU(feeders, lo, hi, audioSum)
+          local gains, inputEdges = {}, {}
+          for i = lo, hi do
+            gains[i - lo + 1] = feeders[i].gain or 1
+            if feeders[i].edgeIdx then util.add(inputEdges, feeders[i].edgeIdx) end
+          end
+          return mintMerge({ mode = 'merge', nPairs = hi - lo + 1, gains = gains, audioSum = audioSum },
+                           #inputEdges > 0 and inputEdges or nil)
         end
 
         local firstAudioCu  -- carries the MIDI merge too, in the single-CU case
         if not audioCU then
-          for _, f in ipairs(u.audio) do util.add(conns, f) end
-        elseif not u.isParentSend then
+          for _, f in ipairs(unit.audio) do util.add(conns, f) end
+        elseif not unit.isParentSend then
           -- Matrix-fed: parallel chunk CUs, each ≤MERGE_WIDTH wide. Every
           -- chunk's outputs route to the consumer's pins, which sum the lot.
-          for lo = 1, #u.audio, MERGE_WIDTH do
-            local hi = math.min(lo + MERGE_WIDTH - 1, #u.audio)
-            local gains, inputEdges = {}, {}
-            for i = lo, hi do
-              gains[i - lo + 1] = u.audio[i].gain or 1
-              util.add(inputEdges, u.audio[i].edgeIdx)
-            end
-            local cuId = mintMerge(
-              { mode = 'merge', nPairs = hi - lo + 1, gains = gains, audioSum = 0 },
-              inputEdges)
+          for lo = 1, #unit.audio, MERGE_WIDTH do
+            local hi = math.min(lo + MERGE_WIDTH - 1, #unit.audio)
+            local cuId = chunkCU(unit.audio, lo, hi, 0)
             firstAudioCu = firstAudioCu or cuId
             for i = lo, hi do
-              local f = u.audio[i]
+              local f = unit.audio[i]
               audioConn(f.from, f.fromPort, cuId, i - lo + 1)
-              audioConn(cuId, i - lo + 1, u.consumer, f.toPort)
+              audioConn(cuId, i - lo + 1, unit.consumer, f.toPort)
             end
           end
         else
           -- Parent send (matrix-less): a sum-tree of audioSum CUs reduces fan-in
           -- to one pair. Gains apply at leaves; the root feeds masterFeed.
-          local toPort = u.audio[1].toPort
+          local toPort = unit.audio[1].toPort
           local level = {}
-          for _, f in ipairs(u.audio) do
+          for _, f in ipairs(unit.audio) do
             util.add(level, { from = f.from, fromPort = f.fromPort,
                               gain = f.gain, edgeIdx = f.edgeIdx })
           end
@@ -606,33 +610,26 @@ local function buildCtx(userGraph, derivedSplits)
             local nextLevel = {}
             for lo = 1, #level, MERGE_WIDTH do
               local hi = math.min(lo + MERGE_WIDTH - 1, #level)
-              local gains, inputEdges = {}, {}
-              for i = lo, hi do
-                gains[i - lo + 1] = level[i].gain or 1
-                if level[i].edgeIdx then util.add(inputEdges, level[i].edgeIdx) end
-              end
-              local cuId = mintMerge(
-                { mode = 'merge', nPairs = hi - lo + 1, gains = gains, audioSum = 1 },
-                #inputEdges > 0 and inputEdges or nil)
+              local cuId = chunkCU(level, lo, hi, 1)
               for i = lo, hi do audioConn(level[i].from, level[i].fromPort, cuId, i - lo + 1) end
               util.add(nextLevel, { from = cuId, fromPort = 1 })  -- summed to pair 1
             end
             if #nextLevel == 1 then rootCu = nextLevel[1].from; break end
             level = nextLevel
           end
-          audioConn(rootCu, 1, u.consumer, toPort)
+          audioConn(rootCu, 1, unit.consumer, toPort)
           if mergeN == 1 then firstAudioCu = rootCu end  -- lone CU carries MIDI too
         end
 
         if not midiCU then
-          for _, f in ipairs(u.midi) do util.add(conns, f) end
+          for _, f in ipairs(unit.midi) do util.add(conns, f) end
         else
           -- One N→1 collapse (no width cap — 128-bit mask). Rides the audio CU
           -- only when there's exactly one; a cascade gives MIDI its own CU.
           local cuId = mergeN == 1 and firstAudioCu
                        or mintMerge({ mode = 'merge', nPairs = 1, gains = { 1 }, audioSum = 0 }, nil)
-          for _, f in ipairs(u.midi) do util.add(conns, { type = 'midi', from = f.from, to = cuId }) end
-          util.add(conns, { type = 'midi', from = cuId, to = u.consumer })
+          for _, f in ipairs(unit.midi) do util.add(conns, { type = 'midi', from = f.from, to = cuId }) end
+          util.add(conns, { type = 'midi', from = cuId, to = unit.consumer })
         end
       end
     end
