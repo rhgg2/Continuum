@@ -650,7 +650,7 @@ function M.compile(userGraph, derivedSplits)
           if mhc and tH == mhc and fH ~= mhc then
             u = unit(fH, 'master', true)         -- width-1 parent send: pre-sum per producer
           elseif c.to == 'master' then
-            u = unit(tH, 'master', false)        -- master node on its own track: matrix sink (output pin sums)
+            u = unit(tH, 'master', true)         -- in-class master: parent send is serial, sum fan-in to one pair
           elseif nodes[c.to] and nodes[c.to].kind == 'fx' then
             u = unit(tH, c.to, false)            -- fx consumer: merge at the consumer host
           end
@@ -1023,45 +1023,50 @@ function M.allocate(plan, nodes)
       end
     end
 
-    -- fx → fx intras: one value per edge.
-    for _, ic in ipairs(entry.intraConns or {}) do
-      if ic.type == 'audio' and fxSet[ic.from] and fxSet[ic.to] then
-        addValue({
-          def = slotMap[ic.from], lastUse = slotMap[ic.to],
-          pins = {
-            { fxId = ic.from, dir = 'outs', port = ic.fromPort },
-            { fxId = ic.to,   dir = 'ins',  port = ic.toPort },
-          },
-          apply = function() end,
-        })
+    -- One value per fx audio output (fxId, fromPort): the producer writes one
+    -- pair, shared by every reader — intra consumers, sends, masterFeed.
+    local producerOuts, producerOrder = {}, {}
+    local function producerOut(fxId, fromPort)
+      local key = fxId .. '\0' .. (fromPort or 1)
+      local g = producerOuts[key]
+      if not g then
+        g = { def = slotMap[fxId], lastUse = slotMap[fxId], applies = {},
+              pins = { { fxId = fxId, dir = 'outs', port = fromPort } } }
+        producerOuts[key] = g
+        util.add(producerOrder, key)
       end
+      return g
     end
 
-    -- Outgoing audio sends from an fx: claim on producer, set srcChan.
+    for _, ic in ipairs(entry.intraConns or {}) do
+      if ic.type == 'audio' and fxSet[ic.from] and fxSet[ic.to] then
+        local g = producerOut(ic.from, ic.fromPort)
+        util.add(g.pins, { fxId = ic.to, dir = 'ins', port = ic.toPort })
+        if slotMap[ic.to] > g.lastUse then g.lastUse = slotMap[ic.to] end
+      end
+    end
     -- Source-out / midi sends keep srcChan=0 from pre-init; no value needed.
     for sendIdx, ow in ipairs(entry.outWires or {}) do
       if ow.type == 'audio' and fxSet[ow.from] then
-        addValue({
-          def = slotMap[ow.from], lastUse = N + 1,
-          pins = { { fxId = ow.from, dir = 'outs', port = ow.fromPort } },
-          apply = function(pair) state.sends[sendIdx].srcChan = (pair - 1) * 2 end,
-        })
+        local g = producerOut(ow.from, ow.fromPort)
+        g.lastUse = N + 1
+        util.add(g.applies, function(pair) state.sends[sendIdx].srcChan = (pair - 1) * 2 end)
       end
     end
-
-    -- mainSend masterFeed: claim on producer fx, stamp mainSendOffs.
     if entry.mainSend then
       local mf = entry.masterFeed
       if mf and fxSet[mf.from] then
-        local fromId = mf.from
-        addValue({
-          def = slotMap[fromId], lastUse = N + 1,
-          pins = { { fxId = fromId, dir = 'outs', port = mf.fromPort } },
-          apply = function(pair) state.mainSendOffs = (pair - 1) * 2 end,
-        })
+        local g = producerOut(mf.from, mf.fromPort)
+        g.lastUse = N + 1
+        util.add(g.applies, function(pair) state.mainSendOffs = (pair - 1) * 2 end)
       else
         state.mainSendOffs = 0
       end
+    end
+    for _, key in ipairs(producerOrder) do
+      local g = producerOuts[key]
+      addValue({ def = g.def, lastUse = g.lastUse, pins = g.pins,
+                 apply = function(pair) for _, f in ipairs(g.applies) do f(pair) end end })
     end
 
     -- Stage-2 incoming audio sends pinned at the receiver's fx input.

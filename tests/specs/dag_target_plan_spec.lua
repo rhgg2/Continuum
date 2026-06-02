@@ -247,8 +247,8 @@ return {
   {
     name = 'fxOrder drains ready consumers before sibling producers (GH tiebreak)',
     run = function()
-      -- After fxA, ready = {fxB, fxC}; GH prefers fxC (drains a live pair) over
-      -- sibling producer fxB. Id-only tiebreak would give [fxA, fxB, fxC, fxD].
+      -- After fxA, ready={fxB,fxC}; GH drains fxC over producer fxB (id-only
+      -- would give fxA,fxB,fxC,fxD). fxC/fxD→master add a sum CU at chain end.
       local ns = {}
       local k0, v0 = source('s', 'guid-s'); ns[k0] = v0
       for _, id in ipairs({ 'fxA', 'fxB', 'fxC', 'fxD' }) do
@@ -262,7 +262,7 @@ return {
         { type = 'audio', from = 'fxC', to = 'master' },
         { type = 'audio', from = 'fxD', to = 'master' },
       }))
-      t.deepEq(plan['guid-s'].fxOrder, { 'fxA', 'fxC', 'fxB', 'fxD' })
+      t.deepEq(plan['guid-s'].fxOrder, { 'fxA', 'fxC', 'fxB', 'fxD', '_cu_1' })
     end,
   },
   {
@@ -744,22 +744,20 @@ return {
         { type = 'audio', from = 'fx_1', to = 'master' },
         { type = 'audio', from = 'fx_2', to = 'master' },
       }))
-      local cuId = nil
-      for _, id in ipairs(plan['guid-s'].fxOrder) do
-        if id:match('^_cu_') then cuId = id end
-      end
-      t.truthy(cuId, 'gain CU retained in fxOrder (no fold)')
-      local sawSToCu, sawCuToFx1, sawFx1ToMaster, sawFx2ToMaster = false, false, false, false
+      -- The gain CU is the one the source feeds; the master fan-in adds a
+      -- separate sum CU, so identify by the s -> CU wire, not "last _cu_".
+      local gainCu = nil
       for _, c in ipairs(plan['guid-s'].intraConns) do
-        if c.from == 's'    and c.to == cuId    then sawSToCu = true end
-        if c.from == cuId   and c.to == 'fx_1'  then sawCuToFx1 = true end
-        if c.from == 'fx_1' and c.to == 'master' then sawFx1ToMaster = true end
-        if c.from == 'fx_2' and c.to == 'master' then sawFx2ToMaster = true end
+        if c.from == 's' and c.to:match('^_cu_') then gainCu = c.to end
       end
-      t.truthy(sawSToCu,         's -> CU intraConn present')
-      t.truthy(sawCuToFx1,       'CU -> fx_1 intraConn present')
-      t.truthy(sawFx1ToMaster,   'fx_1 -> master intraConn present')
-      t.truthy(sawFx2ToMaster,   'fx_2 -> master intraConn present')
+      t.truthy(gainCu, 'gain CU fed by source retained (no fold)')
+      local sawSToCu, sawCuToFx1 = false, false
+      for _, c in ipairs(plan['guid-s'].intraConns) do
+        if c.from == 's'      and c.to == gainCu then sawSToCu = true end
+        if c.from == gainCu   and c.to == 'fx_1' then sawCuToFx1 = true end
+      end
+      t.truthy(sawSToCu,   's -> gain CU intraConn present')
+      t.truthy(sawCuToFx1, 'gain CU -> fx_1 intraConn present')
     end,
   },
 

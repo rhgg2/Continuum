@@ -39,8 +39,8 @@ end
 
 return {
   {
-    -- s→fx1→fx2→master + fx1→fx3→master: fx1 reuses pair 1 for fx2's branch,
-    -- claims pair 2 for fx3's; fx2/fx3 both write pair 1 (REAPER sums).
+    -- s→fx1→fx2→master + fx1→fx3→master: fx1's one output pair feeds both
+    -- branches (split-share); fx2/fx3 sum to master via a merge CU at chain end.
     name = 'targetState: pinMaps + nchan carried for intra fan-out',
     run = function(harness)
       local h, wm = mkWm(harness)
@@ -59,15 +59,17 @@ return {
       local target = wm:targetState()
       local entry  = target['guid-A']
       t.truthy(entry, 'source-track entry present')
-      t.eq(entry.nchan,        4, 'one fresh pair for fx3 branch; pair 1 in-place reuse')
-      t.eq(entry.mainSendOffs, 0, 'no masterFeed -> offs 0')
+      t.eq(entry.nchan,        4, 'fx2/fx3 run live into the merge CU -> 2 pairs')
+      t.eq(entry.mainSendOffs, 0, 'parent send reads the merge CU pair (offs 0)')
       t.deepEq(entry.pinMaps, {})
       t.deepEq(entry.pinMapsByOrigin['node:fx1'],
-               { ins = { [1] = {1} }, outs = { [1] = {1, 2} } })
+               { ins = { [1] = {1} }, outs = { [1] = {1} } })   -- one shared pair
       t.deepEq(entry.pinMapsByOrigin['node:fx2'],
-               { ins = { [1] = {1} }, outs = { [1] = {1} } })
+               { ins = { [1] = {1} }, outs = { [1] = {2} } })
       t.deepEq(entry.pinMapsByOrigin['node:fx3'],
-               { ins = { [1] = {2} }, outs = { [1] = {1} } })
+               { ins = { [1] = {1} }, outs = { [1] = {1} } })
+      t.deepEq(entry.pinMapsByOrigin['merge:master\0guid-A'],
+               { ins = { [1] = {2}, [2] = {1} }, outs = { [1] = {1} } })
     end,
   },
   {

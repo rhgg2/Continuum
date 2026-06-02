@@ -109,7 +109,7 @@ return {
     end,
   },
   {
-    name = 'allocate: branching producer reuses freed input pair for one branch, claims fresh for the other',
+    name = 'allocate: branching producer shares one output pair across both branches',
     run = function()
       local plan = {
         ['guid-a'] = {
@@ -124,12 +124,12 @@ return {
         },
       }
       local out = DAG.allocate(plan)
-      -- shorter-range branch (fx1->fx2, dies at slot 2) takes the freed pair 1;
-      -- longer-range branch (fx1->fx3, dies at slot 3) claims fresh pair 2.
-      t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1, 2})
+      -- fx1's single output drives both branches off one pair; each consumer
+      -- reads it in place, so nchan stays at 2.
+      t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})
       t.deepEq(out['guid-a'].pinMaps.fx2.ins[1],  {1})
-      t.deepEq(out['guid-a'].pinMaps.fx3.ins[1],  {2})
-      t.eq(out['guid-a'].nchan, 4)
+      t.deepEq(out['guid-a'].pinMaps.fx3.ins[1],  {1})
+      t.eq(out['guid-a'].nchan, 2)
     end,
   },
   {
@@ -150,14 +150,14 @@ return {
         },
       }
       local out = DAG.allocate(plan)
-      -- Source seeds pair 1 (A reads), freed at A then split into A->B (pair 1)
-      -- and A->C (pair 2). Each branch reuses its own input pair through to D.
+      -- A's one output pair feeds both B and C in place. B and C run live at
+      -- once (pairs 2 and 1), so D sums both at its input; nchan=4.
       t.deepEq(out['guid-a'].pinMaps.A.ins[1],  {1})
-      t.deepEq(out['guid-a'].pinMaps.A.outs[1], {1, 2})
+      t.deepEq(out['guid-a'].pinMaps.A.outs[1], {1})
       t.deepEq(out['guid-a'].pinMaps.B.ins[1],  {1})
-      t.deepEq(out['guid-a'].pinMaps.B.outs[1], {1})
-      t.deepEq(out['guid-a'].pinMaps.C.ins[1],  {2})
-      t.deepEq(out['guid-a'].pinMaps.C.outs[1], {2})
+      t.deepEq(out['guid-a'].pinMaps.B.outs[1], {2})
+      t.deepEq(out['guid-a'].pinMaps.C.ins[1],  {1})
+      t.deepEq(out['guid-a'].pinMaps.C.outs[1], {1})
       t.deepEq(out['guid-a'].pinMaps.D.ins[1],  {1, 2})
       t.eq(out['guid-a'].nchan, 4)
     end,
@@ -448,7 +448,7 @@ return {
     end,
   },
   {
-    name = 'mainSendOffs: masterFeed coexists with outgoing send (pair counting)',
+    name = 'mainSendOffs: masterFeed shares its pair with the outgoing send (split-share)',
     run = function()
       local plan = {
         ['guid-a'] = {
@@ -461,12 +461,36 @@ return {
                        mainSend=false, intraConns={}, outWires={} },
       }
       local out = DAG.allocate(plan)
-      -- Two outputs from fx1 contend for pair 1 (freed at fx1's slot). Outgoing
-      -- send takes it (srcChan=0); masterFeed claims pair 2 (mainSendOffs=2).
-      t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1, 2})
+      -- fx1's one output pair feeds both readers: send (srcChan=0) and
+      -- masterFeed (mainSendOffs=0) read it in place, no replica.
+      t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})
       t.eq(out['guid-a'].sends[1].srcChan, 0)
-      t.eq(out['guid-a'].mainSendOffs,     2)
-      t.eq(out['guid-a'].nchan,            4)
+      t.eq(out['guid-a'].mainSendOffs,     0)
+      t.eq(out['guid-a'].nchan,            2)
+    end,
+  },
+  {
+    name = 'split-share: fx output feeding an intra consumer and a send shares one pair',
+    run = function()
+      local plan = {
+        ['guid-a'] = {
+          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
+          mainSend=false,
+          intraConns={
+            {from='s',   to='fx1', type='audio'},
+            {from='fx1', to='fx2', type='audio'},
+          },
+          outWires={ {from='fx1', to='guid-b', toNode='fx_b', type='audio'} },
+        },
+        ['guid-b'] = { hostKind='newTrack', fxOrder={'fx_b'},
+                       mainSend=false, intraConns={}, outWires={} },
+      }
+      local out = DAG.allocate(plan)
+      -- fx1's output pair is read by fx2's input and the send alike.
+      t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})
+      t.deepEq(out['guid-a'].pinMaps.fx2.ins[1],  {1})
+      t.eq(out['guid-a'].sends[1].srcChan, 0)
+      t.eq(out['guid-a'].nchan,            2)
     end,
   },
   {

@@ -950,13 +950,17 @@ plan when its turn comes.
     `dag_target_plan_spec`, `dag_allocate_midi_spec`,
     `dag_allocate_midi_bracket_spec`, `wm_diff_midi_bus_spec`,
     `wm_apply_midi_merge_spec`, `wm_apply_ops_spec`.
-  - **Deferred from 3c.4.5.** Audio split-share — one value per
-    producer-output so an fx-out and its outgoing send stop replicating
-    pairs (an allocator optimisation). Unconditional non-bus-aware
-    bracket — drop the `hasMidiOut` guard so any JSFX on bus ≠ 0
-    brackets, which needs the allocator to enforce `outBus == inBus`
-    first. The `outWires` dedup band-aid and the >16-feeder CU-width
-    capacity check both still stand.
+  - **Deferred from 3c.4.5.** *Done:* the >16-feeder CU-width cascade
+    (parallel chunks / parent-send sum-tree), and audio split-share —
+    one value per producer-output, so an fx-out shares a single pair
+    across its intra consumers, outgoing sends, and master feed instead
+    of replicating. Split-share required modelling the in-class master
+    feed as a serial parent send (sum fan-in to one pair via a merge CU)
+    rather than a summing matrix, so an in-chain master write can never
+    clobber a still-live shared producer pair. *Still standing:* the
+    unconditional non-bus-aware bracket — drop the `hasMidiOut` guard so
+    any JSFX on bus ≠ 0 brackets, which needs the allocator to enforce
+    `outBus == inBus` first; and the `outWires` dedup band-aid.
 
   *3c.5 — Absorption multi-parent.* With channels in place, 3a's
   primary-override case starts working. Add specs covering the
