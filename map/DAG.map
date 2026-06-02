@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1391  sha=1a1c3e2  mode=namespace
+@module DAG  src=DAG.lua  loc=1387  sha=ba08f55  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -32,16 +32,19 @@
   @const CU_IDENT = 'JS:Continuum Utility'  @ 32
   @const MERGE_WIDTH = 16  @ 35
   @const M = {}  @ 37
-  @const buildCtx  @ 191
 
 # Private functions
   -- validate
   -- ancestors / descendants
+  -- compile context
+  @fn buildCtx(userGraph, derivedSplits)  @ 191
+      -- Lazy ctx factory; derivations memoise into closure-local `cache`.
+      -- derivedSplits arrives already settled (from deriveMasterSplit); ctx just folds it into srcSet.
+      · PUBLIC SURFACE
   -- master minimization
-  @fn masterMinMarkers(userGraph)  @ 195
+  @fn deriveMasterSplit(userGraph)  @ 791
       -- master class = cone of master's largest dominator whose entry pulls <=1 audio
       -- pair per upstream host; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
-      · PUBLIC SURFACE
       · midi register file: bus 0 boundary; values are per-producer streams.
       · bracket post-pass — see docs/DAG.md § allocate
 
@@ -59,18 +62,17 @@
       -- from-end of an existing wire: the new source X must not be reachable
       -- from the kept destination B, else X→B closes the cycle B→…→X→B.
       @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
-  -- compile context
-  @api M.compile(userGraph)  @ 887
+  @api M.compile(userGraph)  @ 883
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
   -- allocate
-  @api M.allocate(plan, nodes)  @ 897
+  @api M.allocate(plan, nodes)  @ 893
       -- Per-host live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 227, 329, 392, 393, 448, 517, 518, 538, 552, 557, 559, 563, 593, 606, 609, 624, 640, 678, 687, 705, 716, 722, 732, 738, 739, 754, 762, 773, 808, 821, 912, 934, 948, 966, 976, 979, 1013, 1021, 1030, 1038, 1069, 1099, 1134, 1161, 1168, 1192, 1200, 1204, 1208, 1239, 1262, 1325, 1326, 1327, 1332, 1347
-  @use call    util.assign  @ 75, 599, 1369, 1370
-  @use call    util.bucket  @ 124, 157, 176, 201, 202, 301, 334
+  @use call    util.add  @ 230, 293, 294, 349, 418, 419, 439, 453, 458, 460, 464, 494, 507, 510, 525, 541, 579, 588, 606, 617, 623, 633, 639, 640, 655, 663, 674, 709, 722, 823, 908, 930, 944, 962, 972, 975, 1009, 1017, 1026, 1034, 1065, 1095, 1130, 1157, 1164, 1188, 1196, 1200, 1204, 1235, 1258, 1321, 1322, 1323, 1328, 1343
+  @use call    util.assign  @ 75, 500, 1365, 1366
+  @use call    util.bucket  @ 124, 157, 176, 202, 235, 797, 798
   @use require util  @ 30
