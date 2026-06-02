@@ -84,6 +84,50 @@ collapses both directions into one expression: if the cursor leaves
 the band on either side, scroll snaps just enough to bring it back —
 otherwise it sits where the user left it.
 
+## Cursor nav: no upper bound, clamped on negatives only
+
+Cursor nav steps by whole rows and columns — arrows ±1, PageUp/Down
+±`PAGE_ROWS`, Home to row 0, End to the row of `am:projectEndQN`. Only
+negative coordinates clamp (in `setCursor`), so PageDown, End, and the
+wheel may park the cursor on empty rows past the last take.
+
+## Nudge and resize
+
+Nudge steps one row at a time. The only block is a head-on collision:
+destination start == another take's start on the same track. Later
+takes truncate earlier ones in the rendered frame, so passing through a
+neighbour is fine — `am:moveTake` handles the relayout.
+
+Resize writes a numeric natural length (±1 bpr from the current rendered
+length, floored at 1 bpr). The relayout pass caps it against the source
+duration and the next take, and demotes any natural ≥ source back to
+`util.OPEN`. This means grow-past-source is a self-healing no-op, and
+grow-past-neighbour stores intent that takes effect when the neighbour
+moves away.
+
+## Bottom-edge rule in takeAtCursor
+
+A cursor sitting exactly on a take's end-edge row contributes zero
+overlap (the box is half-open), but still resolves to that take unless
+another take starts at the same QN. This ensures a chained drop
+(Super-D or drop-key) immediately after placing a take still adopts
+the just-placed take — `advanceCursorPastNewTake` lands the cursor on
+that boundary row on purpose.
+
+## Drag geometry: ghost length and fits
+
+During a move or duplicate drag the ghost length equals
+`take.naturalLenQN` — the take's full intended extent, ignoring
+downstream truncation by a neighbour — so the in-flight preview shows
+what the take would render to once dropped. During a resize drag the
+ghost grows or shrinks from the current rendered length.
+
+`fits` is false iff another take on the same track starts at the
+candidate `startQN`. Under the natural-length model the only forbidden
+configuration is two takes sharing a start. `exceptItem` excludes the
+dragged take itself (or nothing on `press.duplicate`, where the
+original stays put).
+
 ## beatPerRow as the only QN bridge
 
 `qnToRow` and `rowToQN` are the only places QN meets row units, and

@@ -1,15 +1,15 @@
 -- See docs/arrangeView.md for the model.
 -- @noindex
 
---invariant: arrangeView owns the arrange page's state and every operation on it — cursor, scroll, focus, paletteSlot, plus the operations that mutate them (cursor nav with focus adoption, drag commit, the take edits). arrangePage renders and reads input; it holds none of this state.
---invariant: av builds and owns am, and is the only module that speaks to am — arrangePage runs every project query and every mutation through av, never am directly.
---invariant: av speaks no ImGui — input modifiers (the Shift snap) arrive as plain booleans from the page; av deals only in QN / row numbers.
---invariant: mirrors trackerView's viewport pattern. Cursor (row, col) and scroll (row, col) are in-memory module-locals; only beatPerRow persists via cm. Re-opening a project lands cursor at (0, 0); density is restored.
---invariant: row/col addressing — cursorRow is integer rows; cursorCol is the project track index (0-based). One row spans `beatPerRow` beats of QN, so qn ↔ row is `qn / beatPerRow` ↔ `row * beatPerRow`.
---invariant: gridRows / gridCols are visible cell counts set by the page each frame via setGridSize; followViewport runs on every cursor mutation so the cursor stays in the visible band.
---invariant: av registers the arrange-scope command bodies in cmgr:scope('arrange'); the page owns the key bindings (it holds the ImGui key constants) and the createSlot command (it drives the page's modal).
---invariant: focus is a per-session module-local — the REAPER take handle the edit commands act on. av resolves it through am (focusedTake self-heals to nil when the take is gone). Cursor nav never changes focus; each kb mutation reselects the take under the cursor (adoptCursor), so an empty cell is a no-op. Mouse press on a take sets focus directly.
---invariant: paletteSlot is a per-session module-local pointer (0..61 or nil) — the slot the palette has focused for rename/delete; doesn't persist, nothing to do with cursorCol.
+--invariant: av owns arrange-page state — cursor, scroll, focus, paletteSlot; arrangePage renders.
+--invariant: av builds/owns am; all arrangePage queries and mutations go through av, never am.
+--invariant: av speaks no ImGui — modifiers arrive as plain booleans; av works in QN/rows only.
+--invariant: cursor/scroll are in-memory module-locals; only beatPerRow persists via cm.
+--invariant: cursorRow is integer rows; cursorCol is 0-based track index. qn = row * beatPerRow.
+--invariant: gridRows/gridCols set by the page each frame; followViewport runs on every cursor move.
+--invariant: av registers arrange-scope command bodies; page owns key bindings and createSlot.
+--invariant: focus is a per-session module-local (REAPER take handle). See docs/arrangeView.md.
+--invariant: paletteSlot is per-session (0..61 or nil) — palette rename/delete; not cursorCol.
 
 local util = require 'util'
 
@@ -55,10 +55,7 @@ local function floorTo(v, step) return math.floor(v / step) * step end
 ----- Cursor + focus operations
 
 -- The take under the cursor's one-row box, by largest QN overlap.
--- Bottom-edge rule: a cursor sitting exactly on a take's end-edge row
--- (contributes no overlap to the half-open box) still counts as on
--- that take, unless another take starts at the same QN. Pairs with
--- advanceCursorPastNewTake so chained drops walk a column.
+-- Bottom-edge rule: end-edge row counts as on the take unless another starts there. See docs/arrangeView.md.
 local function takeAtCursor()
   local boxTop = av:rowToQN(cursorRow)
   local boxBot = boxTop + av:beatPerRow()
@@ -76,9 +73,8 @@ local function takeAtCursor()
   return (not startsHere) and bottomEdge or nil
 end
 
--- Cursor advance after a fresh take lands: cursorRow += lengthRows. The
--- bottom-edge rule in takeAtCursor means a chained Super-D / drop-key
--- still adopts the just-placed take.
+-- Cursor advance after a fresh take lands: cursorRow += lengthRows.
+-- The bottom-edge rule in takeAtCursor means a chained drop still adopts the just-placed take.
 local function advanceCursorPastNewTake(rawTake)
   if not rawTake then return end
   local take = am:findTake(rawTake)
@@ -103,14 +99,14 @@ local function adoptCursor()
   focus = under and under.take or nil
 end
 
---invariant: arrange-scope cursor-nav steps by whole rows/cols — arrows ±1, PageUp/Down ±PAGE_ROWS, Home to row 0, End to the row of the project's last take end (am:projectEndQN). Only negative coords clamp (in setCursor), so PageDown / End / the wheel may sit the cursor on empty rows past the last take.
+--invariant: cursor-nav steps whole rows/cols; only negative coords clamp. See docs/arrangeView.md.
 local function moveCursorBy(dRow, dCol)
   av:setCursor(cursorRow + dRow, cursorCol + dCol)
 end
 
 ----- Take edits — move / resize / delete / dive the focused take
 
---invariant: nudge steps by one row; blocked only when the destination start coincides with another take's start. Later takes truncate earlier ones in the rendered frame (see arrangeManager's natural-length model), so passing through a neighbour is allowed — am:moveTake handles the relayout.
+--invariant: nudge steps one row; blocked only when dest start == another take start on the track.
 local function nudgeFocused(direction)
   adoptCursor()
   local take = focusedTake()
@@ -120,7 +116,7 @@ local function nudgeFocused(direction)
   end
 end
 
---invariant: resize writes a numeric natural length (±1 bpr from the current rendered length, floored at 1 bpr). The relayout pass caps it against source and the next take, and demotes any natural ≥ source back to util.OPEN — so grow past the source cap is a self-healing no-op, and grow past a neighbour stores intent that takes effect when the neighbour moves away.
+--invariant: resize writes natural length (±1 bpr, floored 1 bpr). See docs/arrangeView.md § Resize.
 local function resizeFocused(direction)
   adoptCursor()
   local take = focusedTake()
@@ -142,21 +138,21 @@ local function deleteFocused()
   if take then am:deleteTake(take) end
 end
 
---invariant: arrangeDive acts on the focused take and is MIDI-only — audio takes have no tracker representation, so dive over an audio take is a silent no-op, as is dive with nothing focused. Routes through the onDive callback so coord owns the page swap.
+--invariant: arrangeDive is MIDI-only — audio/nil focus is a silent no-op. Routes via onDive.
 local function diveFocused()
   adoptCursor()
   local take = focusedTake()
   if take and take.kind == 'midi' then onDive(take.item) end
 end
 
---invariant: arrangeTakeProperties opens the takeProps modal on the focused take. MIDI-only — audio takes have no editable name/beats here. Routes through onTakeProperties so continuum can do the tm-bind-and-restore dance.
+--invariant: arrangeTakeProperties is MIDI-only. Routes via onTakeProperties for tm-bind-restore.
 local function focusedTakeProperties()
   adoptCursor()
   local take = focusedTake()
   if take and take.kind == 'midi' then onTakeProperties(take.item) end
 end
 
---invariant: arrangeDuplicateBelow drops a pooled clone at the focused take's natural end, shifts focus to the new copy, and advances the cursor by the new take's row count. MIDI-only; silent on collision or audio. The new take keeps the source's pool guid — the "another copy please" gesture.
+--invariant: duplicateBelow: pooled clone at natural end; focus+cursor advance to copy. MIDI-only.
 local function duplicateFocusedBelow()
   adoptCursor()
   local take = focusedTake()
@@ -250,7 +246,7 @@ function av:setBeatPerRow(v) cm:set('project', 'arrangeBeatPerRow', math.max(1/4
 function av:qnToRow(qn)  return qn / self:beatPerRow() end
 function av:rowToQN(row) return row * self:beatPerRow() end
 
---contract: the page hands over the visible cell counts each frame so followViewport has live bounds.
+--contract: page hands over visible cell counts each frame so followViewport has live bounds.
 function av:setGridSize(rows, cols)
   gridRows = math.max(0, math.floor(rows))
   gridCols = math.max(0, math.floor(cols))
@@ -279,7 +275,7 @@ function av:clearLoopRange()       am:clearLoopRange() end
 
 ----- Grid mouse — hit-test, in-flight drag geometry, commit
 
---contract: returns take, mode='resizeEnd' within DRAG_EDGE_PX of the end edge, else 'move'. nil if no hit.
+--contract: returns take, mode='resizeEnd' within DRAG_EDGE_PX of end, else 'move'; nil if no hit.
 --contract: end-edge band clamps to half the take so short takes stay movable; qnPerPx scales px→QN.
 function av:hitTake(trackIdx, qn, qnPerPx)
   for _, take in ipairs(am:tracksTakes(trackIdx)) do
@@ -293,8 +289,8 @@ function av:hitTake(trackIdx, qn, qnPerPx)
 end
 
 --contract: returns { startQN, lengthQN, fits }; moved edge snaps to a row box unless snapped=false.
---contract: fits is false iff another take on this track starts at startQN — under the natural-length model, the only forbidden configuration is two takes sharing a start. exceptItem excludes the dragged take itself (or nothing on press.duplicate, where the original stays put).
---contract: move/duplicate ghost length = take.naturalLenQN (the take's full extent, ignoring downstream truncation) so the in-flight preview shows what the take would render to once dropped. Resize ghost length grows/shrinks from the current rendered length.
+--contract: fits false iff another take starts at startQN; exceptItem excludes the dragged take.
+--contract: move/dup ghost = naturalLenQN; resize ghost grows/shrinks from current rendered length.
 function av:dragCandidate(press, mouseQN, snapped)
   local take = press.take
   local bpr  = self:beatPerRow()
@@ -326,7 +322,7 @@ function av:gutterLoopCand(press, mouseQN, snapped)
   return { loQN = loQN, hiQN = hiQN }
 end
 
---contract: returns { startQN=press.qn, lengthQN }; end floors to a row box unless snapped=false; ≥1 row.
+--contract: returns {startQN=press.qn, lengthQN}; end floors to row box if snapped; >=1 row.
 function av:createCandidate(press, mouseQN, snapped)
   local bpr   = self:beatPerRow()
   local endQN = math.max(press.qn, mouseQN)
@@ -334,7 +330,7 @@ function av:createCandidate(press, mouseQN, snapped)
   return { startQN = press.qn, lengthQN = math.max(bpr, endQN - press.qn) }
 end
 
---contract: move/resize preserves the focus handle; duplicate shifts focus to the new copy. Resize writes natural length — the relayout pass caps the rendered length.
+--contract: move/resize preserves focus; dup shifts focus to new copy. Resize writes natural length.
 function av:commitDrag(press, cand)
   local label = press.mode == 'resizeEnd' and 'Resize take'
              or press.duplicate          and 'Duplicate take'
