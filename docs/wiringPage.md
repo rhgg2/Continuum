@@ -80,6 +80,34 @@ onto whatever node sits under the cursor at drop time, reading as a
 flicker. `hoverFreeze` captures the drop position and suppresses
 shift-hover until the cursor next moves.
 
+## The port band
+
+Wire creation is a shift-held gesture: with shift down, hovering a node pops a
+**port band** on whichever of the top/bottom face is nearer the cursor (the
+left/right faces are never used — wires run vertically). The band's layout
+encodes two ergonomic bets:
+
+- **Port 1 is the body, not a chip.** Its wire endpoint is the node body itself,
+  so the overwhelmingly common path ("just use Main") needs no aim at a small
+  target. Chips appear only for ports 2..N; the MIDI keyboard lives *inside* the
+  body at its middle-right edge (painting over the label when active), not in
+  the band. A node with one audio port and no MIDI gets no band at all — the
+  body catches the default-port hover directly.
+- **Chip promotion bounds the band.** For 2..5 audio ports the band shows a chip
+  per port. Past five (`PORTS_PER_ROW`) it shows only the chevron **handle** and
+  chips for ports that *already carry a wire*; unwired ports live in the
+  handle's by-name dropdown. So a 32-out plugin starts as a clean body + one
+  handle and grows chips only where wires actually land — the band never blows
+  up to fit the worst-case plugin.
+
+Drag-start fixes the wire kind (body/chip → audio from that port; keyboard →
+MIDI; dropdown row → audio from the named port, promoted to a chip on commit).
+**Cycle-forming targets are suppressed**: the source node and its transitive
+ancestors get no hover affordance, since a wire to any of them would close a
+loop — the same `forbidden` set the redraft gesture uses (see *The gesture
+state machine*). The flicker-free engagement and port-pinning mechanics are
+under *Spillover engagement and pinning*.
+
 ## Canvas draw order
 
 The canvas is a strict z-stack, and several effects depend on the order:

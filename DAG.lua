@@ -1,5 +1,6 @@
 -- Pure structural calculus for the wiring page. M.compile returns a
--- lazy-caching ctx; user-graph predicates stay free-standing. See design/wiring.md.
+-- lazy-caching ctx; user-graph predicates stay free-standing. See docs/DAG.md.
+
 -- @noindex
 
 --invariant: M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -25,7 +26,7 @@
 -- see docs/DAG.md § targetPlan shape
 --shape: allocatedSend = { to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
 --shape: allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
---shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
+--shape: allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -1297,7 +1298,7 @@ function M.allocate(plan, nodes)
       end
     end
 
-    ----- bracket post-pass — see design/wiring.md § 3c.3a
+    ----- bracket post-pass — see docs/DAG.md § allocate
     local splicedFxOrder, bracketNodes = {}, nil
     for _, fxId in ipairs(entry.fxOrder or {}) do
       local node = nodes[fxId]

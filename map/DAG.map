@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1387  sha=210c1ed  mode=namespace
+@module DAG  src=DAG.lua  loc=1388  sha=89ff64b  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -23,53 +23,53 @@
   @shape  targetPlan = { [hostKey] = targetPlanEntry }
   @shape  allocatedSend = { to=hostKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
   @shape  allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
-  @shape  allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see design/wiring.md § 3c for the allocator + bracket model.
+  @shape  allocatedPlan = { [hostKey] = { hostKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
 
 # Imports
-  @const util = 'util'  @ 29
+  @const util = 'util'  @ 30
 
 # Module-level constants
-  @const CU_IDENT = 'JS:Continuum Utility'  @ 31
-  @const MERGE_WIDTH = 16  @ 34
-  @const M = {}  @ 36
+  @const CU_IDENT = 'JS:Continuum Utility'  @ 32
+  @const MERGE_WIDTH = 16  @ 35
+  @const M = {}  @ 37
 
 # Private functions
   -- validate
   -- ancestors / descendants
   -- master minimization
-  @fn masterMinMarkers(userGraph)  @ 190
+  @fn masterMinMarkers(userGraph)  @ 191
       -- fx fed >=2 audio ports from one upstream host violates the one-pair-per-send
       -- limit and is evicted via a derived split at its ipdom toward master. See docs/DAG.md § Master-minimization.
       · midi register file: bus 0 boundary; values are per-producer streams.
-      · bracket post-pass — see design/wiring.md § 3c.3a
+      · bracket post-pass — see docs/DAG.md § allocate
 
 # Public API (M.*)
-  @api M.validate(userGraph)  @ 43
+  @api M.validate(userGraph)  @ 44
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.ancestors(userGraph, sourceId)  @ 153
+  @api M.ancestors(userGraph, sourceId)  @ 154
       -- Backward reachability over the user graph. Used by the wiring page at
       -- drag-start to disqualify cycle-forming drop targets: a wire from X to
       -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
       @contract  set { [id]=true } incl sourceId; backward over userGraph.edges; cycle-safe via visited
-  @api M.descendants(userGraph, sourceId)  @ 172
+  @api M.descendants(userGraph, sourceId)  @ 173
       -- Forward reachability. Mirror of ancestors; used by wire-redraft to
       -- forbid cycle-forming new-source candidates when the user drags the
       -- from-end of an existing wire: the new source X must not be reachable
       -- from the kept destination B, else X→B closes the cycle B→…→X→B.
       @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
   -- compile context
-  @api M.compile(userGraph, derivedSplits)  @ 291
+  @api M.compile(userGraph, derivedSplits)  @ 292
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
       @contract  derivedSplits is internal (the master-min fixpoint); public callers omit it
   -- allocate
-  @api M.allocate(plan, nodes)  @ 893
+  @api M.allocate(plan, nodes)  @ 894
       -- Per-host live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 253, 331, 402, 403, 458, 527, 528, 548, 562, 567, 569, 573, 603, 616, 619, 634, 650, 688, 697, 715, 726, 732, 742, 748, 749, 764, 772, 783, 818, 831, 908, 930, 944, 962, 972, 975, 1009, 1017, 1026, 1034, 1065, 1095, 1130, 1157, 1164, 1188, 1196, 1200, 1204, 1235, 1258, 1321, 1322, 1323, 1328, 1343
-  @use call    util.assign  @ 74, 609, 1365, 1366
-  @use call    util.bucket  @ 123, 156, 175, 196, 197, 303, 336
-  @use require util  @ 29
+  @use call    util.add  @ 254, 332, 403, 404, 459, 528, 529, 549, 563, 568, 570, 574, 604, 617, 620, 635, 651, 689, 698, 716, 727, 733, 743, 749, 750, 765, 773, 784, 819, 832, 909, 931, 945, 963, 973, 976, 1010, 1018, 1027, 1035, 1066, 1096, 1131, 1158, 1165, 1189, 1197, 1201, 1205, 1236, 1259, 1322, 1323, 1324, 1329, 1344
+  @use call    util.assign  @ 75, 610, 1366, 1367
+  @use call    util.bucket  @ 124, 157, 176, 197, 198, 304, 337
+  @use require util  @ 30

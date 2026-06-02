@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1842  sha=3d5968f  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1842  sha=71fb147  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -6,7 +6,7 @@
   @invariant  wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
   @invariant  the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
   @invariant  wires draw as a pre-pass before nodes — centre-to-centre lines occluded by the bodies; parallel wires in one unordered pair are offset perpendicularly, MIDI sorted to the right.
-  @invariant  port rows are per-face (top/bottom only): handle ▾ + audio chips for ports 2..N, midi keyboard body-internal, band only when nAudio ≥ 2, chip promotion past PORTS_PER_ROW. See design/wiring.md.
+  @invariant  port rows are top/bottom only. See docs/wiringPage.md § The port band.
 
 # Shapes
   @shape  returns { slots, handle, bandRect, list, hoverRect, side, popup } (all canvas-local).

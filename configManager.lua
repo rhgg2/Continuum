@@ -113,10 +113,8 @@ local declarations = {
   -- See docs/arrangeManager.md.
   { 'arrangeColours', {} },
 
-  -- Wiring page (third rung after tracker and sampler). The user graph
-  -- is one project-tier blob; wiringClass is a per-track marker the
-  -- Stage 2 differ reads to identify tracks the wiring page owns.
-  -- See docs/wiringManager.md and design/wiring.md.
+  -- Wiring page keys: wiringGraph is a project-tier blob; wiringClass is a
+  -- per-track marker the Stage 2 differ uses. See docs/wiringManager.md.
   { 'wiringGraph',    {}  },
   { 'wiringOwnedFx',  {}  },
   { 'wiringClass',    nil },

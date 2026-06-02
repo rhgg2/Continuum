@@ -5,7 +5,7 @@
 --invariant: wiring page is project-wide — bind() takes no take and never re-keys cm; the tracker take and the sampler track are unaffected by switching to / from wiring.
 --invariant: the page owns every pixel — node-box geometry, port slot layout, hit-test boxes are all derived here from wv's viewport-independent nodeViews. wv carries label + category + audio/MIDI counts; the page turns those into rects and tints.
 --invariant: wires draw as a pre-pass before nodes — centre-to-centre lines occluded by the bodies; parallel wires in one unordered pair are offset perpendicularly, MIDI sorted to the right.
---invariant: port rows are per-face (top/bottom only): handle ▾ + audio chips for ports 2..N, midi keyboard body-internal, band only when nAudio ≥ 2, chip promotion past PORTS_PER_ROW. See design/wiring.md.
+--invariant: port rows are top/bottom only. See docs/wiringPage.md § The port band.
 
 local util = require 'util'
 

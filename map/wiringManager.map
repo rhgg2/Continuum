@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1586  sha=8b82c5e  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1586  sha=89ff64b  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -17,7 +17,7 @@
   @shape  snapshotSend = { to=classKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }
   @shape  snapshotFxOrigin = {kind='node',id=string}|{kind='edge',idx=int}|{kind='bracketIn'|'bracketOut',id=string}
   @shape  snapshotFxEntry = { fxGuid?=string, ident=string, params?=table, origin?=snapshotFxOrigin, midiOut?=bool, midiBus?={inBus=int,outBus=int} }
-  @shape  wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=snapshotFxEntry[], mainSend=bool, mainSendGain?=number, mainSendOffs?=int, sends=snapshotSend[], nchan?=int, pinMaps?={ [fxGuid]=snapshotPinMap }, pinMapsByOrigin?={ [originKey]=snapshotPinMap } } }; see design/wiring.md § wiringSnapshot.
+  @shape  wiringSnapshot = { [classKey] = { hostKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=snapshotFxEntry[], mainSend=bool, mainSendGain?=number, mainSendOffs?=int, sends=snapshotSend[], nchan?=int, pinMaps?={ [fxGuid]=snapshotPinMap }, pinMapsByOrigin?={ [originKey]=snapshotPinMap } } }; see docs/wiringManager.md § wiringSnapshot.
   @shape  wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'setExtState'|'moveFxAcrossHosts', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier). moveFxAcrossHosts relocates a live FX from one host to another with TrackFX_CopyToTrack(is_move=true); emitted before per-class setFXChain ops so subsequent per-track reconcile sees the FX already at the destination. setNchan / setPinMaps emit between setFXChain and setMainSend so the applier has fxGuids stamped before pin-map writes and the track has channels allocated before pin maps land. setMainSend carries offs (C_MAINSEND_OFFS) when mainSend=true; setPinMaps carries both fxGuid-keyed and origin-keyed maps so unmaterialised fxs lift through the stamps table.
 
 # Imports

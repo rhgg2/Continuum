@@ -1,5 +1,19 @@
 # DAG
 
+The pure structural calculus on the user graph — no REAPER, no cm, no
+ImGui. Validation, `srcSet`, the equivalence-class partition,
+absorption, class-split / master-minimization, capacity checks, and the
+`targetPlan` + `allocate` passes that synthesise the merge/bracket CUs
+and assign channels. The graph model it implements — the source-set
+partition, absorption, merge/split — lives in `docs/wiring.md`; this doc
+carries the WHYs of the synthesis and allocation end, the parts the
+model section states only in outline.
+
+`M.validate`, `M.ancestors`, `M.descendants` are free-standing pure
+predicates; everything derived (srcSet, classes, quotient, absorption,
+splits, gainSinks, the plan) hangs off `M.compile`'s lazy-caching `ctx`,
+computed once per compile and shared across passes.
+
 ## gainSinks — where a gained wire's volume lands
 
 A folded gain on an audio wire lands either on the REAPER send that
@@ -89,7 +103,8 @@ Each `synthNode` is a CU bridge synthesised for one of three cases:
   write `opFxGuid` back after `TrackFX_AddByName`.
 - **Bus-route bracket** (`originNode` / `originSide` set): a CU inserted at the
   in- or out-side of a node to route MIDI buses around a non-bus-aware JSFX
-  (`from`->0, 0->`to`). See `design/wiring.md § 3c`.
+  (`from`->0, 0->`to`). See `docs/wiring.md § Merge and split` and the
+  *allocate* section below.
 - **Per-consumer audio merge** (`originConsumer` / `originHost` / `inputEdges`
   set): one Merge CU per (consumer, host) pair; `inputEdges` maps each input
   pair back to its edge for live-gain pokes.
@@ -110,9 +125,40 @@ clobbering a still-live shared producer pair (see split-share). Identity is per
 `wm:pokeEdgeGain`. When fan-in exceeds 16 (the CU gain-bank width), the merge
 cascades into parallel CUs for a matrix consumer, or a sum-tree of `audioSum`
 CUs for a matrix-less parent send; CUs past the first carry a `#N` key suffix
-so each holds a stable `mergeGuids` slot. See `design/wiring.md § Merge`.
+so each holds a stable `mergeGuids` slot. See `docs/wiring.md § Merge and split`.
 
 Feeders reduce to fit the summing model. A *unit* groups one consumer's feeders
 on one host. FX consumers reduce at the consumer host. Master consumers are
 parent sends: an in-class master sums on its own host, and a producer on a
 different host pre-sums on the producer host with its output as the send source.
+
+## allocate — deterministic channel assignment
+
+`M.allocate(targetPlan)` is the last DAG pass: it walks each host's `fxOrder`
+topologically and assigns a stereo pair (audio) or a bus (MIDI) to every
+connection that crosses or terminates in the track's channel space — intra-class
+FX-to-FX wires, incoming and outgoing sends, the parent send
+(`C_MAINSEND_OFFS`), and the merge/bracket CUs. It annotates each host with
+per-FX pin maps and the required `I_NCHAN`.
+
+**Determinism is the contract.** The same user graph must yield the same
+assignment on every compile, or the differ would see channel churn on an
+unrelated edit and rewrite pin maps that hadn't changed. The walk is ordered
+(topological over `fxOrder`, stable iteration) so the assignment is a pure
+function of graph structure, not of allocation history.
+
+A class has **no backbone** — intra-class wires and inter-class sends consume
+pairs uniformly out of one space. Sends are keyed on the 4-tuple `(to, type,
+srcChan, dstChan)`, one per wire, post-FX pre-fader (`I_SENDMODE=3`) so a
+from-track fader stays free as the parent-send gain. This subsumes the old
+slot-boundary send case: "a send lands at slot N" is just an input-pin map
+reading the pair the send arrives on.
+
+**MIDI is the same walk over bus indices**, with one REAPER wrinkle: a
+non-bus-aware JSFX on bus N≠0 is wrapped by `BusRoute` bracket CUs that swap
+N↔0 around it (the bracket post-pass), while VST/AU slots take chunk surgery on
+their trailer in/out bus bytes instead (see `docs/wiringManager.md § Per-FX MIDI
+routing`). The allocator surfaces `state.fxMidiBus[fxId] = { inBus, outBus }` for
+native FX; a bus-aware JSFX other than the first-party CU is refused at
+design-time, since the allocator can't reason about a third party's bus
+behaviour.

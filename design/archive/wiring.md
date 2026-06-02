@@ -1,4 +1,9 @@
-# wiring
+# wiring (archived)
+
+> Archived planning doc. The live model now lives in `docs/wiring.md`
+> (cross-cut model) and the per-file docs `docs/DAG.md`,
+> `docs/wiringManager.md`, `docs/wiringView.md`, `docs/wiringPage.md`.
+> Kept for the staged implementation history below.
 
 Cross-cutting reference for the wiring page: how a user-drawn graph
 of FX compiles to a REAPER track topology + send graph. The wiring
