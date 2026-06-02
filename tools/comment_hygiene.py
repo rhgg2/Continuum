@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Check Lua comment-hygiene rules on the current git diff (vs HEAD).
+"""Check Lua comment-hygiene rules — on the git diff (vs HEAD) by default,
+or on whole files named as arguments (cleanup mode).
 
 Rules (docs/CONVENTIONS.md § Length discipline):
 - `--invariant:` / `--contract:` / `--emits:` / `--reaper:` cap at 100 chars.
@@ -10,7 +11,8 @@ Rules (docs/CONVENTIONS.md § Length discipline):
 - Contiguous WHY-comment runs (consecutive `--` lines that are not KIND
   annotations) cap at 2 lines.
 
-A violation is only flagged when an added/modified line participates in it;
+A violation is only flagged when a participating line is in scope: the
+added/modified lines in diff mode, every line in cleanup mode. In diff mode
 pre-existing offences in untouched code are left alone.
 
 Exit code: 0 = clean, 1 = violations.
@@ -100,9 +102,24 @@ def check_file(path, added):
     return out
 
 
+def whole_file_lines(paths):
+    """{file: every line number} — cleanup mode over explicit paths."""
+    targets = {}
+    for path in paths:
+        try:
+            n = len(Path(path).read_text().splitlines())
+        except FileNotFoundError:
+            print(f'{path}: not found', file=sys.stderr)
+            continue
+        targets[path] = set(range(1, n + 1))
+    return targets
+
+
 def main():
+    paths = sys.argv[1:]
+    targets = whole_file_lines(paths) if paths else diff_added_lines()
     violations = []
-    for path, added in sorted(diff_added_lines().items()):
+    for path, added in sorted(targets.items()):
         violations.extend(check_file(path, added))
     if not violations:
         print('clean')
