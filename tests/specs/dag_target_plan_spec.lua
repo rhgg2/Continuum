@@ -227,6 +227,33 @@ return {
     end,
   },
   {
+    -- A producer fanning to two co-host consumers reaches each via that consumer's
+    -- own merge CU, so the cross-host outWires differ in toNode — never identical.
+    name = 'fan-out to co-host consumers: outWires stay distinct (no identical sends)',
+    run = function()
+      local ns = {}
+      local k,  v  = source('s1', 'guid-a'); ns[k]  = v
+      local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
+      local k3, v3 = fx('p');  ns[k3] = v3   -- producer on s1's class
+      local k4, v4 = fx('c1'); ns[k4] = v4   -- c1/c2 form their own class via s2 fan-in
+      local k5, v5 = fx('c2'); ns[k5] = v5
+      local plan = planOf(mk(ns, {
+        { type = 'midi', from = 's1', to = 'p'  },
+        { type = 'midi', from = 'p',  to = 'c1' },
+        { type = 'midi', from = 'p',  to = 'c2' },
+        { type = 'midi', from = 's2', to = 'c1' },
+        { type = 'midi', from = 's2', to = 'c2' },
+      }))
+      local seen = {}
+      for _, ow in ipairs(plan['guid-a'].outWires) do
+        local key = ow.from .. '|' .. (ow.fromPort or 0) .. '|' .. ow.to
+                  .. '|' .. ow.toNode .. '|' .. (ow.toPort or 0) .. '|' .. ow.type
+        t.eq(seen[key], nil, 'duplicate outWire: ' .. key)
+        seen[key] = true
+      end
+    end,
+  },
+  {
     name = 'intra-class fxOrder is topological (CU then downstream fx)',
     run = function()
       -- source -> fx_a with gain op; lower inserts CU between them.

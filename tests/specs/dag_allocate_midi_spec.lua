@@ -143,26 +143,6 @@ return {
     end,
   },
   {
-    name = 'midi: structurally-identical outwires fold to one send (no event doubling)',
-    run = function()
-      local plan = {
-        ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
-          mainSend=false,
-          intraConns={ {from='s', to='fx1', type='midi'} },
-          outWires={
-            {from='fx1', to='guid-b', toNode='fx_b', type='midi'},
-            {from='fx1', to='guid-b', toNode='fx_b', type='midi'},
-          },
-        },
-        ['guid-b'] = { hostKind='newTrack', fxOrder={'fx_b'},
-                       mainSend=false, intraConns={}, outWires={} },
-      }
-      local out = DAG.allocate(plan)
-      t.eq(#out['guid-a'].sends, 1)
-    end,
-  },
-  {
     name = 'midi: pure midi chain leaves audio side untouched (nchan=2, no pinMaps)',
     run = function()
       local plan = {

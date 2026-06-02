@@ -900,25 +900,6 @@ end
 --contract: nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
 function M.allocate(plan, nodes)
   nodes = nodes or {}
-  -- Fold structurally-identical outwires before alloc — otherwise the
-  -- per-receiver allocator gives them distinct dstChans and REAPER doubles events.
-  do
-    local deduped = {}
-    for hostKey, entry in pairs(plan) do
-      local seen, out = {}, {}
-      for _, ow in ipairs(entry.outWires or {}) do
-        local k = ow.from .. '|' .. (ow.fromPort or 0) .. '|' .. ow.to .. '|'
-              .. ow.toNode .. '|' .. (ow.toPort or 0) .. '|' .. ow.type
-        if not seen[k] then seen[k] = true; util.add(out, ow) end
-      end
-      local copy = {}
-      for k, v in pairs(entry) do copy[k] = v end
-      copy.outWires = out
-      deduped[hostKey] = copy
-    end
-    plan = deduped
-  end
-
   local fxSetOf, slotOf = {}, {}
   for hostKey, entry in pairs(plan) do
     fxSetOf[hostKey], slotOf[hostKey] = {}, {}

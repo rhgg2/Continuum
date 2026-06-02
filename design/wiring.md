@@ -966,8 +966,13 @@ plan when its turn comes.
     `outBus == inBus`, the bracket CU (`BusRoute(from, to)`) decouples them —
     in-park routes `from`=inBus→0 and parks bus-0 transients on the output
     bus M, out-park swaps 0↔M; when in≠out the input bus is retained for
-    fan-out siblings, so no scratch bus and no equality constraint. *Still
-    standing:* the `outWires` dedup band-aid.
+    fan-out siblings, so no scratch bus and no equality constraint. The
+    `outWires` dedup band-aid is also retired: merge unification (3c.4)
+    routes every fan-out to a co-host consumer through that consumer's own
+    merge CU, so cross-host outWires always differ in `toNode` — `targetPlan`
+    can't emit structurally-identical ones, and `DAG.allocate` no longer
+    folds. The invariant is pinned in `dag_target_plan_spec`. *Nothing left
+    standing.*
 
   *3c.5 — Absorption multi-parent.* With channels in place, 3a's
   primary-override case starts working. Add specs covering the

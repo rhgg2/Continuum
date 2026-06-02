@@ -278,28 +278,6 @@ return {
     end,
   },
   {
-    name = 'allocate: midi sends to same dest dedup on 4-tuple (all 0/0 until 3c.3)',
-    run = function()
-      local plan = {
-        ['guid-a'] = {
-          hostKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
-          mainSend=false,
-          intraConns={ {from='s', to='fx1', type='midi'} },
-          outWires={
-            {from='fx1', to='guid-b', toNode='fx_b', type='midi'},
-            {from='fx1', to='guid-b', toNode='fx_b', type='midi'},
-          },
-        },
-        ['guid-b'] = {
-          hostKind='newTrack', fxOrder={'fx_b'},
-          mainSend=false, intraConns={}, outWires={},
-        },
-      }
-      local out = DAG.allocate(plan)
-      t.eq(#out['guid-a'].sends, 1)
-    end,
-  },
-  {
     name = 'allocate: gain on outWire flows through to its send',
     run = function()
       local plan = {

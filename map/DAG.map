@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1403  sha=0506cf0  mode=namespace
+@module DAG  src=DAG.lua  loc=1384  sha=73ef2d7  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -69,7 +69,7 @@
       @contract  nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 253, 331, 402, 403, 458, 527, 528, 548, 562, 567, 569, 573, 603, 620, 621, 623, 627, 642, 658, 696, 705, 723, 734, 740, 750, 756, 757, 772, 780, 791, 826, 839, 912, 935, 957, 971, 989, 999, 1002, 1036, 1044, 1053, 1061, 1092, 1122, 1157, 1184, 1191, 1215, 1223, 1227, 1231, 1262, 1285, 1338, 1339, 1340, 1345, 1360
-  @use call    util.assign  @ 74, 609, 1382, 1383
+  @use call    util.add  @ 253, 331, 402, 403, 458, 527, 528, 548, 562, 567, 569, 573, 603, 620, 621, 623, 627, 642, 658, 696, 705, 723, 734, 740, 750, 756, 757, 772, 780, 791, 826, 839, 916, 938, 952, 970, 980, 983, 1017, 1025, 1034, 1042, 1073, 1103, 1138, 1165, 1172, 1196, 1204, 1208, 1212, 1243, 1266, 1319, 1320, 1321, 1326, 1341
+  @use call    util.assign  @ 74, 609, 1363, 1364
   @use call    util.bucket  @ 123, 156, 175, 196, 197, 303, 336
   @use require util  @ 29
