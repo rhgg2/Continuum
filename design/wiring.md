@@ -925,35 +925,38 @@ plan when its turn comes.
     the degenerate `nPairs=1`. MIDI and master fan-in always merge;
     master uses `audioSum` (matrix-less sink, fixes the last-wins
     `masterFeed`). Identity is **per-consumer**
-    (`node.audioMergeGuids[hostKey]`, host-keyed so master's several
+    (`node.mergeGuids[hostKey]`, host-keyed so master's several
     feeding hosts don't collide), not per-edge — `mode='gain'` is gone.
     `wm` pushes the gain bank (`gain1..N`), stamps/sweeps the
     per-consumer guids, and `pokeEdgeGain` resolves the live CU via the
-    plan's `inputEdges`. Cross-host gain keeps its per-edge `opFxGuid`
-    CU (now `merge nPairs=1`) until 3c.4.5 folds it in. >16 feeders into
-    one FX exceeds the 16-wide CU — a deferred capacity check. Specs:
-    `dag_target_plan_spec` merge cases, `wm_apply_ops_spec`.
-  - **`DAG.allocate` unification.** One value type per
-    producer-output: split shares the one resource (fx-out and
-    outgoing-send stop replicating pairs); a matrix-fed pin lists the
-    summed pairs at the input; a CU-fed FX routes producer resources →
-    CU inputs and CU outputs → pins/buses by identity. MIDI is always
-    single-feeder, so the non-bus-aware bracket fold is unconditional
-    and `hasMidiOut` drops; the master CU's output drives
-    `mainSendOffs`.
-  - **`wm` snapshot/diff/apply.** Merge CUs ride the existing
-    CU-bridge path (`fxGuid` identity, `params` deep-equal); confirm
-    materialise + guid stamp-back for the master case; new modes diff
-    through `params`. The gain-fold mint-then-retract path (`opFxGuid`
-    on edges, `gainSinks` un-minting) is gone — the merge stage
-    decides once.
-  - **Specs.** Retire `dag_lower_spec`; repoint `dag_srcset_spec` /
-    `wm_persistence_spec` `ctx:graph()` assertions at the user-graph
-    shape; rewrite `wm_apply_ops_spec` gain-CU / `opFxGuid` cases for
-    the merge node. Rewrite the MIDI merge/split and master allocate
-    cases; delete the multi-feeder fallback and the `outWires` dedup
-    band-aid; add audio split-share, multi-output merge, and
-    audio/MIDI/master merge coverage.
+    plan's `inputEdges`. Cross-host gain still kept a per-edge `opFxGuid`
+    CU here — 3c.4.5 (below) folds it into the consumer merge. >16
+    feeders into one FX exceeds the 16-wide CU — a deferred capacity
+    check. Specs: `dag_target_plan_spec` merge cases, `wm_apply_ops_spec`.
+  - **Consumer-side merge unification (3c.4.5). Landed.** Phase A of
+    `ctx:targetPlan` emits gain as conn metadata (folded to a send
+    `D_VOL`, or carried to the consumer merge); Phase B buckets every
+    conn into a per-`(consumer, host)` reduction unit and mints one
+    Merge CU each. The per-edge `opFxGuid` cross-host gain CU is retired:
+    a cross-host gained wire folds into the destination's consumer merge.
+    A MIDI fan-in (≥2 feeders to one consumer) collapses to a Merge CU on
+    the consumer host — the matrix-less one-bus sink; `DAG.allocate` fills
+    its `inMask` (union of feeder buses) and `outBus` (its own output
+    bus), symmetric with send `srcChan`/`dstChan`, and `wm` pushes
+    `inMask0..3`/`outBus` and reads them back in snapshot so reconciles
+    stay idempotent. The gain-fold mint-then-retract path on `opFxGuid` is
+    gone — `pokeEdgeGain` resolves audio gain through `mergeGuids` or the
+    folded `gainSinks` sink, never a per-edge gain CU. Specs:
+    `dag_target_plan_spec`, `dag_allocate_midi_spec`,
+    `dag_allocate_midi_bracket_spec`, `wm_diff_midi_bus_spec`,
+    `wm_apply_midi_merge_spec`, `wm_apply_ops_spec`.
+  - **Deferred from 3c.4.5.** Audio split-share — one value per
+    producer-output so an fx-out and its outgoing send stop replicating
+    pairs (an allocator optimisation). Unconditional non-bus-aware
+    bracket — drop the `hasMidiOut` guard so any JSFX on bus ≠ 0
+    brackets, which needs the allocator to enforce `outBus == inBus`
+    first. The `outWires` dedup band-aid and the >16-feeder CU-width
+    capacity check both still stand.
 
   *3c.5 — Absorption multi-parent.* With channels in place, 3a's
   primary-override case starts working. Add specs covering the

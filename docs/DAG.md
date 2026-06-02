@@ -99,7 +99,7 @@ For each FX, intra-host audio feeders are gathered; for each host, master-bound
 feeders are gathered. All-unity ⇒ matrix-fed directly (no CU needed). Any
 non-unity gain ⇒ one Merge CU spanning every feeder, with the unity ones at
 1.0 and the gained ones at their value; a single gained feeder is the degenerate
-`nPairs=1` case. Identity is per `(consumer, host)` via `node.audioMergeGuids`;
+`nPairs=1` case. Identity is per `(consumer, host)` via `node.mergeGuids`;
 `inputEdges` maps each pair index back to its originating edge for
 `wm:pokeEdgeGain`. (>16 feeders into one FX exceeds CU channel width — a
 deferred capacity concern. See `design/wiring.md § Merge` for the format.)

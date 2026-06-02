@@ -77,7 +77,7 @@ return {
       wm:mutate(function(g)
         g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxGuid='{FX-1}',
-                         audioMergeGuids = { ['guid-A'] = '{CU-7}' },
+                         mergeGuids = { ['guid-A'] = '{CU-7}' },
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
         util.add(g.edges, { type='audio', from='s', to='f', ops={gain=0.5} })
         util.add(g.edges, { type='audio', from='f', to='master' })
@@ -87,7 +87,7 @@ return {
       t.eq(#order, 2, 'CU and fx both surface')
       -- CU comes first (it sits upstream of fx on the source track).
       t.eq(order[1].ident,  'JS:Continuum Utility')
-      t.eq(order[1].fxGuid, '{CU-7}', 'guid resolved from consumer.audioMergeGuids[host]')
+      t.eq(order[1].fxGuid, '{CU-7}', 'guid resolved from consumer.mergeGuids[host]')
       t.eq(order[1].params.mode,    'merge')
       t.eq(order[1].params.nPairs,  1)
       t.eq(order[1].params.gains[1], 0.5)

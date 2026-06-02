@@ -70,7 +70,7 @@ local function paramSetsOn(h, track, fxIdx)
 end
 
 local function mergeStamp(wm)
-  for _, guid in pairs(wm:graph().nodes.fxC.audioMergeGuids or {}) do return guid end
+  for _, guid in pairs(wm:graph().nodes.fxC.mergeGuids or {}) do return guid end
 end
 
 return {
@@ -102,7 +102,7 @@ return {
       t.eq(sets[21], 3, 'inMask0 covers feeder buses 0 and 1')
       t.eq(sets[20], 0, 'outBus = 0 (consumer reads the boundary bus)')
       t.eq(sets[25], 0, 'audioSum off — matrix-less collapse is midi-only')
-      t.eq(mergeStamp(wm), gCU, 'CU guid stamped onto consumer audioMergeGuids')
+      t.eq(mergeStamp(wm), gCU, 'CU guid stamped onto consumer mergeGuids')
       t.eq(wm:graph().nodes.fxC.fxGuid, gMid, 'consumer node guid is the mid slot')
     end,
   },

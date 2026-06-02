@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1592  sha=c7f7f1e  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1589  sha=140c570  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -168,15 +168,15 @@
       @contract  walks ops in their emitted order inside one Undo_BeginBlock. setFXChain materialises nil-fxGuid entries via TrackFX_AddByName and stamps minted guids back into the user graph through a wm:mutate that's gated by `realising` so the live-recompile loop sees no signal. Param push resolves slider index by TrackFX_GetParamName and raises on unknown names.
   @api wm:pokeEdgeGain(edgeIdx, gain)  @ 1456
       @contract  pokes the live gain for edges[idx] with no mutate/signal/undo block (drag hot path). A materialised CU bridge → TrackFX_SetParam on 'gain'; a folded edge → D_VOL on its native sink (gainSinks: track→track send, or the from-track fader for the parent/master send). false when nothing hosts it yet (caller materialises via wv:setEdgeGain).
-  @api wm:fastGainCommit(edgeIdx, gain)  @ 1528
+  @api wm:fastGainCommit(edgeIdx, gain)  @ 1525
       @contract  in-place gain commit + scratch mirror, one Undo block, no wiringChanged/reconcile
-  @api wm:listInstalledFX()  @ 1545
+  @api wm:listInstalledFX()  @ 1542
       @contract  enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
-  @api wm:pollUndo()  @ 1559
+  @api wm:pollUndo()  @ 1556
       @contract  detects REAPER undo/redo of a wiring gesture by diffing scratch P_EXT against lastScratchRaw; on diff, mirrors scratch back to project tier, drops the in-memory graph, fires wiringChanged{kind='load'}. If scratch was deleted (manual or undo past its creation), reconciler recreates it on the next reconcile pass — so here we just clear the handle and let the live loop catch up.
-  @api wm:reconcile(label)  @ 1578
+  @api wm:reconcile(label)  @ 1575
       @contract  one reconcile pass — diff targetState against snapshot and applyOps the result under the given undo label
-  @api wm:enableLive(label)  @ 1583
+  @api wm:enableLive(label)  @ 1580
       @contract  idempotent. Subscribes wm to its own wiringChanged so every mutate/load drives wm:reconcile, then runs one immediate pass to put REAPER in sync with the persisted graph.
 
 # Signals emitted (via util.installHooks)
@@ -184,22 +184,22 @@
 
 # Uses (outbound edges)
   @use call    DAG.allocate  @ 748
-  @use call    DAG.compile  @ 164, 746, 1360, 1483
+  @use call    DAG.compile  @ 164, 746, 1360, 1480
   @use call    DAG.validate  @ 153
   @use call    cm.get  @ 57, 131, 590, 1258
-  @use call    cm.readTrackKey  @ 69, 611, 616, 617, 1221, 1225, 1227, 1568, 1571
-  @use call    cm.readTrackRaw  @ 1449, 1539, 1566
-  @use call    cm.set  @ 139, 1436, 1440, 1570, 1571
-  @use call    cm.writeTrackKey  @ 81, 244, 1293, 1447, 1448, 1538
+  @use call    cm.readTrackKey  @ 69, 611, 616, 617, 1221, 1225, 1227, 1565, 1568
+  @use call    cm.readTrackRaw  @ 1449, 1536, 1563
+  @use call    cm.set  @ 139, 1436, 1440, 1567, 1568
+  @use call    cm.writeTrackKey  @ 81, 244, 1293, 1447, 1448, 1535
   @use call    fs.join  @ 175
-  @use call    util.add  @ 289, 483, 539, 576, 713, 814, 831, 847, 854, 859, 871, 876, 884, 887, 889, 903, 905, 1008, 1059, 1060, 1161, 1551
+  @use call    util.add  @ 289, 483, 539, 576, 713, 814, 831, 847, 854, 859, 871, 876, 884, 887, 889, 903, 905, 1008, 1059, 1060, 1161, 1548
   @use call    util.deepClone  @ 145, 151, 695, 701, 704, 722, 735, 849, 861, 862, 878
   @use call    util.deepEq  @ 763, 793
   @use call    util.installHooks  @ 27
   @use require DAG  @ 21
   @use require fs  @ 22
   @use require util  @ 20
-  @use sub     wiringManager:wiringChanged  @ 1586
+  @use sub     wiringManager:wiringChanged  @ 1583
 
 # REAPER API surface
   @reaper CountTracks

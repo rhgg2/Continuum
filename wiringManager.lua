@@ -594,8 +594,8 @@ function wm:snapshot()
       if n.midiInBracketGuid   then ownedGuids[n.midiInBracketGuid]   = true end
       if n.midiOutBracketGuid  then ownedGuids[n.midiOutBracketGuid]  = true end
     end
-    if n.audioMergeGuids then
-      for _, g in pairs(n.audioMergeGuids) do ownedGuids[g] = true end
+    if n.mergeGuids then
+      for _, g in pairs(n.mergeGuids) do ownedGuids[g] = true end
     end
   end
   for _, e in ipairs(userGraph.edges) do
@@ -671,7 +671,7 @@ local function originKey(origin)
   if origin.kind == 'node'      then return 'node:' .. origin.id end
   if origin.kind == 'bracketIn' then return 'bracketIn:'  .. origin.id end
   if origin.kind == 'bracketOut' then return 'bracketOut:' .. origin.id end
-  if origin.kind == 'audioMerge' then return 'audioMerge:' .. origin.consumer .. '\0' .. origin.host end
+  if origin.kind == 'merge' then return 'merge:' .. origin.consumer .. '\0' .. origin.host end
   return 'edge:' .. origin.idx
 end
 
@@ -697,9 +697,9 @@ local function projectEntry(planEntry, compileNodes, scratchGuid)
                          id = node.originNode }
       elseif node.originConsumer then
         local consumer = compileNodes[node.originConsumer] or {}
-        entry.fxGuid = consumer.audioMergeGuids and consumer.audioMergeGuids[node.originHost]
+        entry.fxGuid = consumer.mergeGuids and consumer.mergeGuids[node.originHost]
         entry.params = util.deepClone(node.params)
-        entry.origin = { kind = 'audioMerge', consumer = node.originConsumer, host = node.originHost }
+        entry.origin = { kind = 'merge', consumer = node.originConsumer, host = node.originHost }
       elseif node.params then
         entry.params = util.deepClone(node.params)
         entry.origin = { kind = 'edge', idx = node.originEdgeIdx }
@@ -1204,8 +1204,8 @@ local function ownedGuidsFrom(graph, persisted)
       if n.midiInBracketGuid   then s[n.midiInBracketGuid]   = true end
       if n.midiOutBracketGuid  then s[n.midiOutBracketGuid]  = true end
     end
-    if n.audioMergeGuids then
-      for _, g in pairs(n.audioMergeGuids) do s[g] = true end
+    if n.mergeGuids then
+      for _, g in pairs(n.mergeGuids) do s[g] = true end
     end
   end
   for _, e in ipairs(graph.edges) do
@@ -1403,19 +1403,19 @@ function wm:applyOps(ops, label)
         if     st.origin.kind == 'node'       then g.nodes[st.origin.id].fxGuid              = st.guid
         elseif st.origin.kind == 'bracketIn'  then g.nodes[st.origin.id].midiInBracketGuid   = st.guid
         elseif st.origin.kind == 'bracketOut' then g.nodes[st.origin.id].midiOutBracketGuid  = st.guid
-        elseif st.origin.kind == 'audioMerge' then
+        elseif st.origin.kind == 'merge' then
           local n = g.nodes[st.origin.consumer]
-          n.audioMergeGuids = n.audioMergeGuids or {}
-          n.audioMergeGuids[st.origin.host] = st.guid
+          n.mergeGuids = n.mergeGuids or {}
+          n.mergeGuids[st.origin.host] = st.guid
         else                                       g.edges[st.origin.idx].opFxGuid           = st.guid end
       end
       for idx in pairs(clearGuid) do g.edges[idx].opFxGuid = nil end
       for id, n in pairs(g.nodes) do
-        if n.audioMergeGuids then
-          for host in pairs(n.audioMergeGuids) do
-            if not (wantedMerge[id] and wantedMerge[id][host]) then n.audioMergeGuids[host] = nil end
+        if n.mergeGuids then
+          for host in pairs(n.mergeGuids) do
+            if not (wantedMerge[id] and wantedMerge[id][host]) then n.mergeGuids[host] = nil end
           end
-          if not next(n.audioMergeGuids) then n.audioMergeGuids = nil end
+          if not next(n.mergeGuids) then n.mergeGuids = nil end
         end
       end
       for nodeId in pairs(bracketClassed) do
@@ -1477,9 +1477,6 @@ function wm:pokeEdgeGain(edgeIdx, gain)
     return false
   end
 
-  -- Cross-host CU carries the edge's own guid (degenerate merge, slider gain1).
-  if edge.opFxGuid then return probeAndSet(edge.opFxGuid, 'gain1', gain) end
-
   local ctx = DAG.compile(userGraph)
 
   -- Intra/master merge CU: no per-edge guid. Resolve the consumer + this edge's
@@ -1490,8 +1487,8 @@ function wm:pokeEdgeGain(edgeIdx, gain)
         for slot, e in ipairs(sn.inputEdges or {}) do
           if e == edgeIdx then
             local consumer = userGraph.nodes[sn.originConsumer]
-            local guid = consumer and consumer.audioMergeGuids
-                         and consumer.audioMergeGuids[sn.originHost]
+            local guid = consumer and consumer.mergeGuids
+                         and consumer.mergeGuids[sn.originHost]
             return guid ~= nil and probeAndSet(guid, 'gain' .. slot, gain) or false
           end
         end
