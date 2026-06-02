@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1327  sha=7330ae5  mode=namespace
+@module DAG  src=DAG.lua  loc=1327  sha=32ec800  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx

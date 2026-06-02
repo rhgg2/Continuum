@@ -1449,7 +1449,8 @@ function wm:applyOps(ops, label)
   reaper.Undo_EndBlock2(0, label or 'wiring: apply', -1)
 end
 
---contract: pokes the live gain for edges[idx] with no mutate/signal/undo block (drag hot path). A materialised CU bridge → TrackFX_SetParam on 'gain'; a folded edge → D_VOL on its native sink (gainSinks: track→track send, or the from-track fader for the parent/master send). false when nothing hosts it yet (caller materialises via wv:setEdgeGain).
+--contract: pokes the live gain for an edge; no mutate/signal/undo. false when unhosted.
+-- see docs/wiringManager.md § pokeEdgeGain routing
 function wm:pokeEdgeGain(edgeIdx, gain)
   ensureLoaded()
   local edge = userGraph.edges[edgeIdx]
@@ -1493,9 +1494,9 @@ function wm:pokeEdgeGain(edgeIdx, gain)
     end
   end
 
-  -- Folded: the gain lives on a native send. gainSinks names the sink so the
+  -- Folded: the gain lives on a native send. gainFold names the sink so the
   -- hot path and targetTracks agree on where it lands.
-  local sink = ctx:gainSinks()[edgeIdx]
+  local sink = ctx:gainFold()[edgeIdx]
   if not sink then return false end
   local byClass = buildClassKeyToTrack()
   if sink.kind == 'mainSend' then

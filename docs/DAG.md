@@ -11,14 +11,14 @@ model section states only in outline.
 
 `M.validate`, `M.ancestors`, `M.descendants` are free-standing pure
 predicates; everything derived (srcSet, classes, quotient, absorption,
-splits, gainSinks, the plan) hangs off `M.compile`'s lazy-caching `ctx`,
+splits, gainFold, the plan) hangs off `M.compile`'s lazy-caching `ctx`,
 computed once per compile and shared across passes.
 
-## gainSinks — where a gained wire's volume lands
+## gainFold — where a gained wire's volume lands
 
 A folded gain on an audio wire lands either on the REAPER send that
 carries it (as `mainSendGain`) or on a CU bridge synthesised for
-unfoldable cases (cross-track, multi-pair). `ctx:gainSinks` is the
+unfoldable cases (cross-track, multi-pair). `ctx:gainFold` is the
 authoritative fold decision: it is computed once and shared by
 `targetTracks` (which writes `outWires.gain` / `mainSendGain`) and
 `wm:pokeEdgeGain` (which pokes the live value without a full
@@ -94,7 +94,7 @@ An edge's gain/channelMap op rides the edge as metadata. The CU
 bridge synthesised for an unfolded gain carries `originEdgeIdx` so the
 applier can stamp `opFxGuid` back via `wm:mutate` after
 `TrackFX_AddByName` succeeds. `channelMap` never folds onto a send
-because sends carry no remap capability. `ctx:gainSinks` is the
+because sends carry no remap capability. `ctx:gainFold` is the
 authoritative fold decision shared by `targetTracks` and
 `wm:pokeEdgeGain`.
 

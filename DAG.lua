@@ -353,51 +353,48 @@ local function buildCtx(userGraph, derivedSplits)
   end
 
   -- Fold-vs-CU decision for each gained edge. Shared by targetTracks and
-  -- wm:pokeEdgeGain. See docs/DAG.md § gainSinks.
-  local function gainSinks()
-    if cache.gainSinks then return cache.gainSinks end
+  -- wm:pokeEdgeGain. See docs/DAG.md § gainFold.
+  local function gainFold()
+    if cache.gainFold then return cache.gainFold end
     local classOf = classOf()
     local mhc     = masterTrackClass()
     local function nodeTrackKey(id) return trackOf(classOf[id]) end
     local function isMasterDest(toId)
       return toId == 'master' or (mhc and classOf[toId] == mhc)
     end
-    local masterCount, sendCount = {}, {}
+    -- The native sink a gained edge could fold onto, with the count key that
+    -- decides solubility; nil for untracked-source or same-track edges.
+    local function routeOf(edge)
+      local fromH = nodeTrackKey(edge.from)
+      if not fromH or fromH == '' then return nil end
+      if isMasterDest(edge.to) then
+        return { kind = 'mainSend', key = 'main\0' .. fromH, cls = fromH }
+      end
+      local toH = nodeTrackKey(edge.to)
+      if toH and toH ~= '' and fromH ~= toH then
+        return { kind = 'send', key = 'send\0' .. fromH .. '\0' .. toH, from = fromH, to = toH }
+      end
+      return nil
+    end
+    -- A fold fires only when its sink carries exactly one audio edge, so count
+    -- every audio edge (gained or not) before deciding any.
+    local count = {}
     for _, edge in ipairs(edges) do
       if edge.type == 'audio' then
-        local fromH = nodeTrackKey(edge.from)
-        if fromH and fromH ~= '' then
-          if isMasterDest(edge.to) then
-            masterCount[fromH] = (masterCount[fromH] or 0) + 1
-          else
-            local toH = nodeTrackKey(edge.to)
-            if toH and toH ~= '' and fromH ~= toH then
-              local k = fromH .. '\0' .. toH
-              sendCount[k] = (sendCount[k] or 0) + 1
-            end
-          end
-        end
+        local route = routeOf(edge)
+        if route then count[route.key] = (count[route.key] or 0) + 1 end
       end
     end
     local sinks = {}
     for edgeIdx, edge in ipairs(edges) do
       if edge.type == 'audio' and edge.ops and edge.ops.gain then
-        local fromH = nodeTrackKey(edge.from)
         local sink  = { kind = 'cu', gain = edge.ops.gain }
-        if fromH and fromH ~= '' then
-          local toH = nodeTrackKey(edge.to)
-          if isMasterDest(edge.to) then
-            if masterCount[fromH] == 1 then sink.kind, sink.cls = 'mainSend', fromH end
-          elseif toH and toH ~= '' and fromH ~= toH then
-            if sendCount[fromH .. '\0' .. toH] == 1 then
-              sink.kind, sink.from, sink.to = 'send', fromH, toH
-            end
-          end
-        end
+        local route = routeOf(edge)
+        if route and count[route.key] == 1 then util.assign(sink, util.pick(route, 'kind cls from to')) end
         sinks[edgeIdx] = sink
       end
     end
-    cache.gainSinks = sinks
+    cache.gainFold = sinks
     return sinks
   end
 
@@ -471,9 +468,9 @@ local function buildCtx(userGraph, derivedSplits)
     local classOf     = classOf()
     local trackMembers = trackMembers()
 
-    -- Folded gains ride a native send (no CU); gainSinks names the sink.
+    -- Folded gains ride a native send (no CU); gainFold names the sink.
     local folded, sendGain, mainGain = {}, {}, {}
-    for edgeIdx, sink in pairs(gainSinks()) do
+    for edgeIdx, sink in pairs(gainFold()) do
       if sink.kind == 'send' then
         folded[edgeIdx] = true
         sendGain[sink.from .. '\0' .. sink.to] = sink.gain
@@ -776,7 +773,7 @@ local function buildCtx(userGraph, derivedSplits)
   function ctx:classOf()           return classOf()           end
   function ctx:masterTrackClass() return masterTrackClass() end
   function ctx:trackOf(cls)    return trackOf(cls)    end
-  function ctx:gainSinks()         return gainSinks()         end
+  function ctx:gainFold()          return gainFold()          end
   function ctx:capacityErrors()    return capacityErrors()    end
   function ctx:targetTracks()        return targetTracks()        end
 

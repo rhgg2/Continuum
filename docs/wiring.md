@@ -108,7 +108,7 @@ consuming FX's merge CU (see Merge and split).
 **Gain folds to native volume when a send can host it.** A gain on a
 wire that compiles to a REAPER send (track→track) or the parent/master
 send needs no Continuum Utility — the send's own `D_VOL` carries it
-(`DAG`'s `gainSinks` names the sink). The fold fires only when that
+(`DAG`'s `gainFold` names the sink). The fold fires only when that
 send is the *sole* audio contributor (one `D_VOL` can't encode two
 wires' gains) and only for a gain sitting on the boundary wire itself
 (you can't move a gain across an intervening FX without changing the

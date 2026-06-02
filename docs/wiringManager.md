@@ -178,3 +178,17 @@ certain fields exist and which side fills them:
   converts pair-lists to REAPER's lo32/hi32 bitmask at the boundary.
 - **`nchan`** is the track's `I_NCHAN`; **`mainSendOffs`** is
   `C_MAINSEND_OFFS`, present only when `mainSend=true`.
+
+## pokeEdgeGain routing
+
+`wm:pokeEdgeGain` writes the gain for a single edge on the drag hot path —
+no mutate/signal/undo block. The dispatch depends on edge kind:
+
+- **CU bridge** (edge has a materialised `cuGuid`): calls `TrackFX_SetParam`
+  on the `'gain'` parameter of the CU FX instance.
+- **Folded edge** (`gainFold` path): writes `D_VOL` on the edge's native
+  sink — a track-to-track send for ordinary edges, or the from-track fader
+  for the parent/master send.
+
+Returns `false` when nothing hosts the edge yet; the caller
+(`wv:setEdgeGain`) is responsible for materialising before the next poke.
