@@ -192,7 +192,7 @@ local function buildCtx(userGraph, derivedSplits)
   local nodes = userGraph.nodes or {}
   local edges = userGraph.edges or {}
   local cache = { srcSet = {} }
-  local ctx = {}
+  local ctx = { userGraph = userGraph }
 
   -- Reverse adjacency: for each node id, the list of input-side node ids.
   local function inbound()
@@ -221,7 +221,7 @@ local function buildCtx(userGraph, derivedSplits)
     return set
   end
 
-  local function classes()
+  function ctx:classes()
     if cache.classes then return cache.classes end
     cache.classes, cache.splitClasses = {}, {}
     for id in pairs(nodes) do
@@ -241,14 +241,14 @@ local function buildCtx(userGraph, derivedSplits)
   -- Class keys carrying a split tag (a node.split node or its cone). They
   -- never absorb — the split exists to give them their own track.
   local function splitClasses()
-    classes()
+    ctx:classes()
     return cache.splitClasses
   end
 
-  local function classOf()
+  function ctx:classOf()
     if cache.classOf then return cache.classOf end
     cache.classOf = {}
-    for cls, members in pairs(classes()) do
+    for cls, members in pairs(self:classes()) do
       for _, id in ipairs(members) do cache.classOf[id] = cls end
     end
     return cache.classOf
@@ -257,12 +257,12 @@ local function buildCtx(userGraph, derivedSplits)
   local function quotient()
     if cache.quotient then return cache.quotient end
     cache.quotient = {}
-    for cls in pairs(classes()) do
+    for cls in pairs(ctx:classes()) do
       cache.quotient[cls] = { audioParents = {}, midiParents = {},
                               audioChildren = {}, midiChildren = {},
                               primaryAudioParents = {} }
     end
-    local classOf = classOf()
+    local classOf = ctx:classOf()
     for _, edge in ipairs(edges) do
       local fromCls, toCls = classOf[edge.from], classOf[edge.to]
       -- Inert vertices ('' class, empty srcSet) carry no signal — skip.
@@ -322,10 +322,10 @@ local function buildCtx(userGraph, derivedSplits)
   -- The class hosted ON the REAPER master. nil when a lone source shares
   -- master's class (the source track hosts it, routing via its parent send),
   -- or when nothing reaches master (master parks in class '').
-  local function masterTrackClass()
-    local mc = classOf()['master']
+  function ctx:masterTrackClass()
+    local mc = self:classOf()['master']
     if not mc or mc == '' then return nil end
-    for _, id in ipairs(classes()[mc]) do
+    for _, id in ipairs(self:classes()[mc]) do
       if nodes[id].kind == 'source' then return nil end
     end
     return mc
@@ -333,20 +333,20 @@ local function buildCtx(userGraph, derivedSplits)
 
   -- The master-hosted class is exempt: its track is fixed in REAPER.
   -- Source classes never appear as absorbees (no audio parents in quotient).
-  local function classTrackKey(cls)
-    if cls == masterTrackClass() then return cls end
+  function ctx:classTrackKey(cls)
+    if cls == self:masterTrackClass() then return cls end
     return absorption()[cls] or cls
   end
 
   -- Track key a node id lands on: its class, resolved through absorption.
-  local function trackKeyOf(id) return classTrackKey(classOf()[id]) end
+  function ctx:trackKeyOf(id) return self:classTrackKey(self:classOf()[id]) end
 
   -- {[trackKey] = id[]} pooling members of every class that resolves to it.
-  local function trackMembers()
+  function ctx:trackMembers()
     if cache.trackMembers then return cache.trackMembers end
     cache.trackMembers = {}
-    for cls, members in pairs(classes()) do
-      local trackKey   = classTrackKey(cls)
+    for cls, members in pairs(self:classes()) do
+      local trackKey   = self:classTrackKey(cls)
       local bucket = cache.trackMembers[trackKey] or {}
       for _, id in ipairs(members) do util.add(bucket, id) end
       cache.trackMembers[trackKey] = bucket
@@ -357,22 +357,22 @@ local function buildCtx(userGraph, derivedSplits)
 
   -- Fold-vs-CU decision for each gained edge. Shared by targetTracks and
   -- wm:pokeEdgeGain. See docs/DAG.md § gainFold.
-  local function gainFold()
+  function ctx:gainFold()
     if cache.gainFold then return cache.gainFold end
-    local classOf = classOf()
-    local mhc     = masterTrackClass()
+    local classOf = self:classOf()
+    local mhc     = self:masterTrackClass()
     local function isMasterDest(toId)
       return toId == 'master' or (mhc and classOf[toId] == mhc)
     end
     -- The native sink a gained edge could fold onto, with the count key that
     -- decides solubility; nil for untracked-source or same-track edges.
     local function routeOf(edge)
-      local fromH = trackKeyOf(edge.from)
+      local fromH = self:trackKeyOf(edge.from)
       if not fromH or fromH == '' then return nil end
       if isMasterDest(edge.to) then
         return { kind = 'mainSend', key = 'main\0' .. fromH, cls = fromH }
       end
-      local toH = trackKeyOf(edge.to)
+      local toH = self:trackKeyOf(edge.to)
       if toH and toH ~= '' and fromH ~= toH then
         return { kind = 'send', key = 'send\0' .. fromH .. '\0' .. toH, from = fromH, to = toH }
       end
@@ -400,11 +400,11 @@ local function buildCtx(userGraph, derivedSplits)
     return sinks
   end
 
-  local function capacityErrors()
+  function ctx:capacityErrors()
     local counts  = {}
     for _, edge in ipairs(edges) do
-      local fromTrackKey = trackKeyOf(edge.from)
-      local toTrackKey   = trackKeyOf(edge.to)
+      local fromTrackKey = self:trackKeyOf(edge.from)
+      local toTrackKey   = self:trackKeyOf(edge.to)
       if fromTrackKey and fromTrackKey ~= '' and fromTrackKey == toTrackKey then
         counts[fromTrackKey] = counts[fromTrackKey] or { audio = 0, midi = 0 }
         counts[fromTrackKey][edge.type] = counts[fromTrackKey][edge.type] + 1
@@ -421,17 +421,6 @@ local function buildCtx(userGraph, derivedSplits)
     end)
     return out
   end
-
-  ----------- PUBLIC SURFACE
-  ctx.userGraph = userGraph
-  function ctx:classes()           return classes()          end
-  function ctx:classOf()           return classOf()          end
-  function ctx:masterTrackClass()  return masterTrackClass() end
-  function ctx:classTrackKey(cls)  return classTrackKey(cls) end
-  function ctx:trackKeyOf(id)      return trackKeyOf(id)     end
-  function ctx:trackMembers()      return trackMembers()     end
-  function ctx:gainFold()          return gainFold()         end
-  function ctx:capacityErrors()    return capacityErrors()   end
 
   return ctx
 end
@@ -483,7 +472,8 @@ end
 
 -- Realisation pass: lowers the structural ctx into per-track specs (fxOrder,
 -- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
-local function targetTracks(ctx)
+--contract: realisation pass over a compile ctx; returns the targetTracks shape (not cached)
+function M.targetTracks(ctx)
   local nodes, edges = ctx.userGraph.nodes, ctx.userGraph.edges
   local trackMembers = ctx:trackMembers()
 
@@ -874,11 +864,6 @@ end
 --contract: assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
 function M.compile(userGraph)
   return buildCtx(userGraph, deriveMasterSplit(userGraph))
-end
-
---contract: realisation pass over a compile ctx; returns the targetTracks shape (not cached)
-function M.targetTracks(ctx)
-  return targetTracks(ctx)
 end
 
 ----- allocate
