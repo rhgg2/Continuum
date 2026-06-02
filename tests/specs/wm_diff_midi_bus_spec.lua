@@ -6,10 +6,10 @@ local util = require('util')
 
 -- Full CU slider set: a midi fan-in to one consumer materialises a merge CU,
 -- whose params (nPairs/gains/inMask0..3/outBus/audioSum) pushParams resolves.
-local CU_PARAMS = { 'mode', 'gain', 'bus', 'nPairs',
+local CU_PARAMS = { 'mode', 'gain', 'from', 'nPairs',
   'gain1', 'gain2', 'gain3', 'gain4', 'gain5', 'gain6', 'gain7', 'gain8',
   'gain9', 'gain10', 'gain11', 'gain12', 'gain13', 'gain14', 'gain15', 'gain16',
-  'outBus', 'inMask0', 'inMask1', 'inMask2', 'inMask3', 'audioSum' }
+  'outBus', 'inMask0', 'inMask1', 'inMask2', 'inMask3', 'audioSum', 'to' }
 
 local function mkWm(harness)
   local h  = harness.mk()

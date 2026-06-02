@@ -778,12 +778,16 @@ plan when its turn comes.
   alongside `compileNodes` to resolve fxOrder ids. Identity pair-1
   pin maps keep audio passing through the brackets.
 
-  *Why terminal-only this slice.* For a consumer-producer non-bus-aware
-  JSFX, the bracket model requires output bus = input bus = N (so the
-  post-restore lifts the FX's bus-0 output back to N where downstream
-  expects it). The allocator doesn't yet enforce that equality, so we
-  emit brackets only where `hasMidiOut[fxId]` is false — terminal
-  consumers, where output bus is moot.
+  *Bracket bus routing (3c.4.5).* The bracket CU is `BusRoute(from, to)`:
+  events on `from`->0, events on 0->`to`, others pass through. in-park uses
+  `from`=inBus, `to`=outBus (the FX's allocated output bus M) — input lands on
+  bus 0 for REAPER's filter, bus-0 transients park on M; out-park uses
+  `from`=`to`=M, swapping the FX's bus-0 output up to M. This decouples output
+  bus from input bus, so a consumer-producer non-bus-aware JSFX no longer needs
+  `outBus == inBus`. When `from`!=`to`, in-park also retains the original
+  `from` events on `from`, keeping a fanned-out producer's bus intact for later
+  siblings. Terminal consumers have no output, so M=inBus and both sides
+  degenerate to the old symmetric swap.
 
   *Bracket stamp clearance.* `applyOps` walks the pass's `setFXChain`
   ops to build a set of `bracketClassed` consumer-node ids (any node
@@ -794,12 +798,10 @@ plan when its turn comes.
   is cleared — closes the lifecycle when the allocator stops emitting
   brackets for a consumer (e.g. its input bus dropped to 0).
 
-  *3c.3a — what's left.* Consumer-producer non-bus-aware JSFX and the
-  multi-feeder MIDI case are both subsumed by the Merge-and-split
-  slice (3c.4 below): once every MIDI fan-in becomes a merge node,
-  every consumer is single-feeder, so the bracket fold becomes
-  unconditional and the `hasMidiOut[fxId]` guard simply drops. No
-  separate 3c.3a.3.
+  *3c.3a — landed.* Consumer-producer non-bus-aware JSFX now brackets
+  unconditionally (the `hasMidiOut[fxId]` guard dropped) via the decoupled
+  `BusRoute` CU above; every MIDI fan-in is already a merge node, so every
+  consumer is single-feeder. No separate 3c.3a.3.
 
   *3c.3b — Native FX path.* VST/AU per-FX in/out bus via chunk
   surgery; snapshot reads the same bytes via the same chunk walk.
@@ -863,7 +865,8 @@ plan when its turn comes.
     (`nPairs` pairs, `out[i]=in[i]×gain{i}`, 1:1; the FX pin matrix does
     the summing), MIDI is an N→1 bus collapse (128-bit input mask, four
     32-bit lanes, → `outBus`). BusPark/BusRestore collapsed to one
-    `BusSwap`; modes are now `0=Gain 1=ChannelRemap 2=BusSwap 3=Merge`
+    `BusSwap` (generalised to `BusRoute(from,to)` in 3c.4.5); modes are now
+    `0=Gain 1=ChannelRemap 2=BusRoute 3=Merge`
     (Gain/ChannelRemap retire with `DAG.lower` in 3c.4.2). The 32-pair
     cap is the JSFX 64-channel ceiling; gained fan-in past it (e.g. a
     large submix) is an allocate-time call in 3c.4.3/.4 — design-time
@@ -957,10 +960,14 @@ plan when its turn comes.
     of replicating. Split-share required modelling the in-class master
     feed as a serial parent send (sum fan-in to one pair via a merge CU)
     rather than a summing matrix, so an in-chain master write can never
-    clobber a still-live shared producer pair. *Still standing:* the
-    unconditional non-bus-aware bracket — drop the `hasMidiOut` guard so
-    any JSFX on bus ≠ 0 brackets, which needs the allocator to enforce
-    `outBus == inBus` first; and the `outWires` dedup band-aid.
+    clobber a still-live shared producer pair. The unconditional
+    non-bus-aware bracket also landed: the `hasMidiOut` guard is gone, so
+    any non-bus-aware JSFX on bus ≠ 0 brackets. Instead of enforcing
+    `outBus == inBus`, the bracket CU (`BusRoute(from, to)`) decouples them —
+    in-park routes `from`=inBus→0 and parks bus-0 transients on the output
+    bus M, out-park swaps 0↔M; when in≠out the input bus is retained for
+    fan-out siblings, so no scratch bus and no equality constraint. *Still
+    standing:* the `outWires` dedup band-aid.
 
   *3c.5 — Absorption multi-parent.* With channels in place, 3a's
   primary-override case starts working. Add specs covering the

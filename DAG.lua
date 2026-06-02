@@ -1160,6 +1160,7 @@ function M.allocate(plan, nodes)
     -- source-midi / per-fx producer / stage-2 incoming as their values are assigned.
     local fxInputBus = {}
     local hasMidiOut = {}
+    local fxOutputBus = {}
 
     -- Merge CU midi sink/source tracking: cuIn = union of feeder buses (→ inMask),
     -- cuOut = the CU's own output bus (→ outBus). Stamped alongside fxInputBus.
@@ -1228,6 +1229,7 @@ function M.allocate(plan, nodes)
     for _, fxId in ipairs(fxProducerIds) do
       local p = fxMidiByProducer[fxId]
       util.add(p.applies, function(bus)
+        fxOutputBus[fxId] = bus
         if isMergeCU(fxId) then cuOut[fxId] = bus end
         for _, c in ipairs(p.consumers) do fxInputBus[c] = bus; noteCuIn(c, bus) end
       end)
@@ -1320,16 +1322,18 @@ function M.allocate(plan, nodes)
       local needs = node and node.kind == 'fx'
         and node.fxIdent and node.fxIdent:sub(1, 3) == 'JS:'
         and not node.busAware
-        and not hasMidiOut[fxId]
         and inputBus and inputBus ~= 0
       if needs then
+        -- in-park routes N→0, parking bus-0 transients on output bus M; out-park swaps 0↔M.
+        -- Terminal consumers have no output, so M=N and both sides are the symmetric swap.
+        local outputBus = (hasMidiOut[fxId] and fxOutputBus[fxId]) or inputBus
         local bIn, bOut = 'bIn:' .. fxId, 'bOut:' .. fxId
         bracketNodes = bracketNodes or {}
         bracketNodes[bIn]  = { kind = 'fx', fxIdent = CU_IDENT,
-                               params = { mode = 'busSwap', bus = inputBus },
+                               params = { mode = 'busRoute', from = inputBus, to = outputBus },
                                originNode = fxId, originSide = 'in' }
         bracketNodes[bOut] = { kind = 'fx', fxIdent = CU_IDENT,
-                               params = { mode = 'busSwap', bus = inputBus },
+                               params = { mode = 'busRoute', from = outputBus, to = outputBus },
                                originNode = fxId, originSide = 'out' }
         util.add(splicedFxOrder, bIn)
         util.add(splicedFxOrder, fxId)

@@ -1,6 +1,6 @@
 desc:Continuum Utility
 tags: utility continuum
-version: 0.05
+version: 0.06
 author: Continuum
 license: MIT
 about:
@@ -11,11 +11,15 @@ about:
     single-wire form; subsumed by Merge (nPairs=1) and removed once the
     compiler stops emitting it.
   - Mode 1 (ChannelRemap): reserved; pass-through in this slice.
-  - Mode 2 (BusSwap): symmetric N<->0 MIDI bus swap (`bus`=N). Spliced
-    around a non-bus-aware JSFX whose input arrives on bus N — moves bus-N
-    events to bus 0 so REAPER's per-FX bus filter exposes them, while
-    events on bus 0 round-trip onto bus N. The same swap serves both
-    sides of the bracket; one mode, two instances.
+  - Mode 2 (BusRoute): asymmetric route — events on `from`->0, on 0->`to`,
+    others pass through. Spliced around a non-bus-aware JSFX whose input
+    arrives on bus N. in-park sets `from`=N, `to`=M (the FX's output bus):
+    input lands on bus 0 where REAPER's per-FX filter exposes it, bus-0
+    transients park on M. out-park sets `from`=`to`=M, swapping the FX's
+    bus-0 output up to M and restoring the parked transients. When
+    `from`!=`to`, in-park also retains the original `from` events on `from`,
+    so a producer fanning out to this FX and a later sibling keeps its bus.
+    The symmetric swap (terminal consumer, M=N) is the `from`==`to` case.
   - Mode 3 (Merge): the merge node. Audio is a per-pair gain bank —
     `nPairs` input pairs, `out[i] = in[i] * gain{i}`, strictly 1:1 — and
     summation/routing is left to the consuming FX's pin matrix (pins sum
@@ -37,9 +41,9 @@ ext_midi_bus = 1;
   loop(32, printf("out_pin:out%d\n", i); i += 1; );
 ?>
 
-slider1:mode=0<0,3,1{Gain,ChannelRemap,BusSwap,Merge}>mode
+slider1:mode=0<0,3,1{Gain,ChannelRemap,BusRoute,Merge}>mode
 slider2:gain=1<0,8,0.001>gain
-slider3:bus=0<0,127,1>bus
+slider3:from=0<0,127,1>from
 slider4:nPairs=1<1,16,1>nPairs
 <?
   i = 1;
@@ -51,6 +55,7 @@ slider23:inMask1=0<0,4294967295,1>inMask1
 slider24:inMask2=0<0,4294967295,1>inMask2
 slider25:inMask3=0<0,4294967295,1>inMask3
 slider26:audioSum=0<0,1,1>audioSum
+slider27:to=0<0,127,1>to
 
 @init
 g = 0;        // mem[0..15]  : per-pair gain bank
@@ -72,7 +77,10 @@ mode == 3 ? (
 ) :
 mode == 2 ? (
   while (midirecv(offset, msg1, msg23)) (
-    midi_bus == bus ? midi_bus = 0 : midi_bus == 0 ? midi_bus = bus;
+    midi_bus == from ? (
+      from != to ? midisend(offset, msg1, msg23);  // retain `from` for fan-out siblings
+      midi_bus = 0;
+    ) : midi_bus == 0 ? midi_bus = to;
     midisend(offset, msg1, msg23);
   );
 );

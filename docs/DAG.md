@@ -87,8 +87,9 @@ Each `synthNode` is a CU bridge synthesised for one of three cases:
 - **Wire-level op** (`originEdgeIdx` set): cross-host audio gain or MIDI
   `channelMap` that cannot fold onto a send. The edge index lets the applier
   write `opFxGuid` back after `TrackFX_AddByName`.
-- **Bus-swap bracket** (`originNode` / `originSide` set): a CU inserted at the
-  in- or out-side of a node to reorder bus pairs. See `design/wiring.md § 3c`.
+- **Bus-route bracket** (`originNode` / `originSide` set): a CU inserted at the
+  in- or out-side of a node to route MIDI buses around a non-bus-aware JSFX
+  (`from`->0, 0->`to`). See `design/wiring.md § 3c`.
 - **Per-consumer audio merge** (`originConsumer` / `originHost` / `inputEdges`
   set): one Merge CU per (consumer, host) pair; `inputEdges` maps each input
   pair back to its edge for live-gain pokes.

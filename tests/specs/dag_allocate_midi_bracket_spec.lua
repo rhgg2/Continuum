@@ -1,9 +1,8 @@
 local t   = require('support')
 local DAG = require('DAG')
 
--- 3c.3a.2 bracket post-pass: park N→0 before a non-bus-aware JSFX terminal
--- consumer whose input arrived on bus N≠0, restore 0→N after. Consumer-
--- producers (hasMidiOut) are skipped until the input==output bus rule lands.
+-- Bracket post-pass: BusRoute CU bridges around a non-bus-aware JSFX on bus N≠0.
+-- in-park routes N→0 (parking bus-0 transients on output M); out-park swaps 0↔M. Terminal: M=N.
 
 local CU_IDENT = 'JS:Continuum Utility'
 
@@ -37,7 +36,7 @@ end
 
 return {
   {
-    name = 'midi bracket: terminal consumer on bus N≠0 gets busSwap CU bridges',
+    name = 'midi bracket: terminal consumer on bus N≠0 gets busRoute CU bridges (from==to==N)',
     run = function()
       local plan, nodes = twoSendersOneHost()
       local out = DAG.allocate(plan, nodes)
@@ -46,12 +45,14 @@ return {
       local brackets = out['guid-c'].bracketNodes
       t.truthy(brackets, 'bracketNodes table emitted')
       t.eq(brackets['bIn:fxC2'].fxIdent,       CU_IDENT)
-      t.eq(brackets['bIn:fxC2'].params.mode,   'busSwap')
-      t.eq(brackets['bIn:fxC2'].params.bus,    1)
+      t.eq(brackets['bIn:fxC2'].params.mode,   'busRoute')
+      t.eq(brackets['bIn:fxC2'].params.from,   1)
+      t.eq(brackets['bIn:fxC2'].params.to,     1)
       t.eq(brackets['bIn:fxC2'].originNode,    'fxC2')
       t.eq(brackets['bIn:fxC2'].originSide,    'in')
-      t.eq(brackets['bOut:fxC2'].params.mode,  'busSwap')
-      t.eq(brackets['bOut:fxC2'].params.bus,   1)
+      t.eq(brackets['bOut:fxC2'].params.mode,  'busRoute')
+      t.eq(brackets['bOut:fxC2'].params.from,  1)
+      t.eq(brackets['bOut:fxC2'].params.to,    1)
       t.eq(brackets['bOut:fxC2'].originSide,   'out')
     end,
   },
@@ -90,7 +91,7 @@ return {
     end,
   },
   {
-    name = 'midi bracket: consumer-producer (hasMidiOut) skips bracket in this slice',
+    name = 'midi bracket: consumer-producer non-bus-aware JSFX brackets (from→0, 0→to)',
     run = function()
       -- fxC2 has both midi input (from host B's send) AND outgoing midi to host D.
       local plan = {
@@ -118,7 +119,25 @@ return {
         fxD  = { kind='fx', fxIdent='JS:Baz' },
       }
       local out = DAG.allocate(plan, nodes)
-      t.eq(out['guid-c'].bracketNodes, nil, 'consumer-producer skipped')
+      local brackets = out['guid-c'].bracketNodes
+      t.truthy(brackets, 'consumer-producer now brackets')
+      t.deepEq(out['guid-c'].fxOrder, { 'fxC1', 'bIn:fxC2', 'fxC2', 'bOut:fxC2' })
+
+      local inBus  = brackets['bIn:fxC2'].params.from
+      local outBus = brackets['bIn:fxC2'].params.to
+      t.eq(inBus, 1, 'input arrived on bus 1 (fxC1 holds bus 0)')
+      t.eq(brackets['bIn:fxC2'].params.mode, 'busRoute')
+      -- out-park is the 0↔M swap: from==to==output bus.
+      t.eq(brackets['bOut:fxC2'].params.from, outBus)
+      t.eq(brackets['bOut:fxC2'].params.to,   outBus)
+
+      -- fxC2's outgoing midi send to host-d carries that same output bus.
+      local toD
+      for _, s in ipairs(out['guid-c'].sends) do
+        if s.to == 'guid-d' and s.type == 'midi' then toD = s end
+      end
+      t.truthy(toD, 'midi send to guid-d present')
+      t.eq(toD.srcChan, outBus, 'send src bus == bracket output bus')
     end,
   },
   {
