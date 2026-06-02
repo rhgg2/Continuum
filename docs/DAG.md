@@ -166,3 +166,11 @@ routing`). The allocator surfaces `state.fxMidiBus[fxId] = { inBus, outBus }` fo
 native FX; a bus-aware JSFX other than the first-party CU is refused at
 design-time, since the allocator can't reason about a third party's bus
 behaviour.
+
+### allocStream internals
+
+`allocStream(values, startCursor, N, compare, pinAdd)` is the shared helper for
+both audio and MIDI allocation. Each value is `{ def, lastUse, pins?, applies,
+assignReg? }` where `def`/`lastUse` are fx-chain slots (0 = boundary, N+1 = past
+end). `assignReg` forces a specific register; `pins` entries flow to `pinAdd`;
+`applies` entries receive the assigned register. Returns the cursor's end.

@@ -885,6 +885,73 @@ end
 
 ----- allocate
 
+-- Linear-scan allocator over one stream's value list (audio pair or MIDI bus).
+-- see docs/DAG.md § allocStream internals
+local function allocStream(values, startCursor, N, compare, pinAdd)
+  local cursor, free = startCursor, {}
+  local function claim()
+    if free[1] then return table.remove(free, 1) end
+    local r = cursor; cursor = r + 1; return r
+  end
+  -- Sorted-ascending insert so claim() always returns the lowest free register.
+  local function release(reg)
+    local lo, hi = 1, #free + 1
+    while lo < hi do
+      local mid = (lo + hi) // 2
+      if free[mid] < reg then lo = mid + 1 else hi = mid end
+    end
+    table.insert(free, lo, reg)
+  end
+  local releaseAt = {}
+  local function process(v)
+    local reg
+    if v.assignReg ~= nil then
+      reg = v.assignReg
+      if reg >= cursor then cursor = reg + 1 end
+      for i, r in ipairs(free) do if r == reg then table.remove(free, i); break end end
+    else
+      reg = claim()
+    end
+    for _, p in ipairs(v.pins or {}) do pinAdd(p.fxId, p.dir, p.port, reg) end
+    for _, apply in ipairs(v.applies) do apply(reg) end
+    if v.lastUse <= N then util.bucket(releaseAt, v.lastUse, reg) end
+  end
+
+  local byDef = {}
+  for _, v in ipairs(values) do util.bucket(byDef, v.def, v) end
+  local function flush(slot)
+    if byDef[slot] then
+      table.sort(byDef[slot], compare)
+      for _, v in ipairs(byDef[slot]) do process(v) end
+    end
+  end
+  flush(0)
+  for slot = 1, N do
+    if releaseAt[slot] then
+      for _, r in ipairs(releaseAt[slot]) do release(r) end
+      releaseAt[slot] = nil
+    end
+    flush(slot)
+  end
+  return cursor
+end
+
+-- Audio packs by pin shape (dir, port, fx) so co-defined values land
+-- deterministically; midi has no pins, so lastUse then insertion serial.
+local function audioValueCompare(a, c)
+  local ap, cp = a.pins[1], c.pins[1]
+  if ap.dir ~= cp.dir                 then return ap.dir < cp.dir                 end
+  if (ap.port or 1) ~= (cp.port or 1) then return (ap.port or 1) < (cp.port or 1) end
+  if ap.fxId ~= cp.fxId               then return ap.fxId < cp.fxId               end
+  if a.lastUse ~= c.lastUse           then return a.lastUse < c.lastUse           end
+  return a.ord < c.ord
+end
+
+local function midiValueCompare(a, c)
+  if a.lastUse ~= c.lastUse then return a.lastUse < c.lastUse end
+  return a.ord < c.ord
+end
+
 -- Per-track live-range allocation, one register file per stream channel:
 -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedTracks shape.
 --contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
@@ -920,8 +987,7 @@ function M.allocate(tracks, nodes)
     for sendIdx, ow in ipairs(entry.outWires or {}) do
       sends[sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain, srcChan = 0, dstChan = 0 }
     end
-    alloc[trackKey] = { pinMaps = {}, sends = sends, cursor = 1, free = {},
-                       midiCursor = 0, midiFree = {}, mainSendOffs = nil }
+    alloc[trackKey] = { pinMaps = {}, sends = sends, mainSendOffs = nil }
   end
 
   local trackKeys = util.keys(tracks)
@@ -940,20 +1006,6 @@ function M.allocate(tracks, nodes)
       for _, existing in ipairs(list) do if existing == pair then return end end
       util.add(list, pair)
     end
-    local function claim()
-      if state.free[1] then return table.remove(state.free, 1) end
-      local p = state.cursor; state.cursor = p + 1; return p
-    end
-    -- Sorted-ascending insert so claim() always returns the lowest free pair.
-    local function release(pair)
-      local lo, hi = 1, #state.free + 1
-      while lo < hi do
-        local mid = (lo + hi) // 2
-        if state.free[mid] < pair then lo = mid + 1 else hi = mid end
-      end
-      table.insert(state.free, lo, pair)
-    end
-
     -- Build the value list. ord = insertion serial for stable tiebreak.
     local values, nextOrd = {}, 0
     local function addValue(v) nextOrd = nextOrd + 1; v.ord = nextOrd; util.add(values, v) end
@@ -986,10 +1038,10 @@ function M.allocate(tracks, nodes)
       local srcToMaster   = entry.mainSend and not hasMasterTo and not fxMasterFeed
       if hasSourceOut or srcToMaster then sfLastUse = N + 1 end
       if #sfPins > 0 or hasSourceOut or srcToMaster then
-        addValue({ def = 0, lastUse = sfLastUse, pins = sfPins, assignPair = 1, apply = function() end })
+        addValue({ def = 0, lastUse = sfLastUse, pins = sfPins, assignReg = 1, applies = {} })
       end
       if hasMasterTo then
-        addValue({ def = mtDef, lastUse = N + 1, pins = mtPins, assignPair = 1, apply = function() end })
+        addValue({ def = mtDef, lastUse = N + 1, pins = mtPins, assignReg = 1, applies = {} })
       end
     end
 
@@ -1035,8 +1087,7 @@ function M.allocate(tracks, nodes)
     end
     for _, key in ipairs(producerOrder) do
       local g = producerOuts[key]
-      addValue({ def = g.def, lastUse = g.lastUse, pins = g.pins,
-                 apply = function(pair) for _, f in ipairs(g.applies) do f(pair) end end })
+      addValue({ def = g.def, lastUse = g.lastUse, pins = g.pins, applies = g.applies })
     end
 
     -- Stage-2 incoming audio sends pinned at the receiver's fx input.
@@ -1049,73 +1100,15 @@ function M.allocate(tracks, nodes)
           addValue({
             def = 0, lastUse = slotMap[ow.toNode],
             pins = { { fxId = ow.toNode, dir = 'ins', port = ow.toPort } },
-            apply = function(pair) alloc[senderTrackKey].sends[sendIdx].dstChan = (pair - 1) * 2 end,
+            applies = { function(pair) alloc[senderTrackKey].sends[sendIdx].dstChan = (pair - 1) * 2 end },
           })
         end
       end
     end
 
-    -- Bucket by def slot; sort within bucket for determinism.
-    local byDef = {}
-    for _, v in ipairs(values) do util.bucket(byDef, v.def, v) end
-    local function sortBucket(b)
-      table.sort(b, function(a, c)
-        local ap, cp = a.pins[1], c.pins[1]
-        if ap.dir ~= cp.dir                     then return ap.dir < cp.dir                     end
-        if (ap.port or 1) ~= (cp.port or 1)     then return (ap.port or 1) < (cp.port or 1)     end
-        if ap.fxId ~= cp.fxId                   then return ap.fxId < cp.fxId                   end
-        if a.lastUse ~= c.lastUse               then return a.lastUse < c.lastUse               end
-        return a.ord < c.ord
-      end)
-    end
-
-    local releaseAt = {}
-    local function processValue(v)
-      local pair
-      if v.assignPair then
-        pair = v.assignPair
-        if pair >= state.cursor then state.cursor = pair + 1 end
-        -- Source-from may have released pair 1 already; lift it back.
-        for i, p in ipairs(state.free) do
-          if p == pair then table.remove(state.free, i); break end
-        end
-      else
-        pair = claim()
-      end
-      for _, p in ipairs(v.pins) do pinAdd(p.fxId, p.dir, p.port, pair) end
-      v.apply(pair)
-      if v.lastUse <= N then util.bucket(releaseAt, v.lastUse, pair) end
-    end
-
-    if byDef[0] then
-      sortBucket(byDef[0])
-      for _, v in ipairs(byDef[0]) do processValue(v) end
-    end
-    for slot = 1, N do
-      if releaseAt[slot] then
-        for _, p in ipairs(releaseAt[slot]) do release(p) end
-        releaseAt[slot] = nil
-      end
-      if byDef[slot] then
-        sortBucket(byDef[slot])
-        for _, v in ipairs(byDef[slot]) do processValue(v) end
-      end
-    end
+    state.cursor = allocStream(values, 1, N, audioValueCompare, pinAdd)
 
     ----- midi register file: bus 0 boundary; values are per-producer streams.
-
-    local function midiClaim()
-      if state.midiFree[1] then return table.remove(state.midiFree, 1) end
-      local b = state.midiCursor; state.midiCursor = b + 1; return b
-    end
-    local function midiRelease(bus)
-      local lo, hi = 1, #state.midiFree + 1
-      while lo < hi do
-        local mid = (lo + hi) // 2
-        if state.midiFree[mid] < bus then lo = mid + 1 else hi = mid end
-      end
-      table.insert(state.midiFree, lo, bus)
-    end
 
     local midiValues, nextMidiOrd = {}, 0
     local function addMidiValue(v) nextMidiOrd = nextMidiOrd + 1; v.ord = nextMidiOrd; util.add(midiValues, v) end
@@ -1157,7 +1150,7 @@ function M.allocate(tracks, nodes)
     end
     if sourceMidiLastUse > 0 or #sourceMidiSends > 0 then
       local lu = #sourceMidiSends > 0 and (N + 1) or sourceMidiLastUse
-      addMidiValue({ def = 0, lastUse = lu, assignBus = 0, applies = sourceMidiSends })
+      addMidiValue({ def = 0, lastUse = lu, assignReg = 0, applies = sourceMidiSends })
     end
 
     -- Per-fx producer groups all wires off one fx's midi output: a
@@ -1219,44 +1212,7 @@ function M.allocate(tracks, nodes)
       end
     end
 
-    local midiByDef = {}
-    for _, v in ipairs(midiValues) do util.bucket(midiByDef, v.def, v) end
-    local function midiSortBucket(b)
-      table.sort(b, function(a, c)
-        if a.lastUse ~= c.lastUse then return a.lastUse < c.lastUse end
-        return a.ord < c.ord
-      end)
-    end
-    local midiReleaseAt = {}
-    local function processMidiValue(v)
-      local bus
-      if v.assignBus ~= nil then
-        bus = v.assignBus
-        if bus >= state.midiCursor then state.midiCursor = bus + 1 end
-        for i, b in ipairs(state.midiFree) do
-          if b == bus then table.remove(state.midiFree, i); break end
-        end
-      else
-        bus = midiClaim()
-      end
-      for _, apply in ipairs(v.applies) do apply(bus) end
-      if v.lastUse <= N then util.bucket(midiReleaseAt, v.lastUse, bus) end
-    end
-
-    if midiByDef[0] then
-      midiSortBucket(midiByDef[0])
-      for _, v in ipairs(midiByDef[0]) do processMidiValue(v) end
-    end
-    for slot = 1, N do
-      if midiReleaseAt[slot] then
-        for _, b in ipairs(midiReleaseAt[slot]) do midiRelease(b) end
-        midiReleaseAt[slot] = nil
-      end
-      if midiByDef[slot] then
-        midiSortBucket(midiByDef[slot])
-        for _, v in ipairs(midiByDef[slot]) do processMidiValue(v) end
-      end
-    end
+    allocStream(midiValues, 0, N, midiValueCompare, nil)
 
     -- Merge CU midi params: inMask = union of feeder buses, outBus = its output bus.
     state.cuMidi = {}
