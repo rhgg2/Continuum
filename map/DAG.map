@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1310  sha=f21b6d7  mode=namespace
+@module DAG  src=DAG.lua  loc=1300  sha=c7f7f1e  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -61,14 +61,14 @@
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
       @contract  derivedSplits is internal (the master-min fixpoint); public callers omit it
   -- allocate
-  @api M.allocate(plan, nodes)  @ 860
+  @api M.allocate(plan, nodes)  @ 850
       -- Per-host live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedPlan shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride planEntry.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 250, 328, 399, 400, 455, 524, 525, 545, 559, 564, 566, 570, 599, 616, 617, 619, 628, 654, 655, 661, 663, 665, 684, 685, 703, 712, 731, 739, 750, 785, 798, 871, 894, 916, 930, 948, 958, 961, 1046, 1076, 1111, 1123, 1130, 1154, 1162, 1166, 1170, 1199, 1222, 1260, 1261, 1262, 1267, 1282
-  @use call    util.assign  @ 71, 605
+  @use call    util.add  @ 250, 328, 399, 400, 455, 524, 525, 545, 559, 564, 566, 570, 600, 617, 618, 620, 624, 639, 655, 684, 699, 703, 704, 706, 721, 729, 740, 775, 788, 861, 884, 906, 920, 938, 948, 951, 1036, 1066, 1101, 1113, 1120, 1144, 1152, 1156, 1160, 1189, 1212, 1250, 1251, 1252, 1257, 1272
+  @use call    util.assign  @ 71, 606
   @use call    util.bucket  @ 120, 153, 172, 193, 194, 300, 333
   @use require util  @ 29

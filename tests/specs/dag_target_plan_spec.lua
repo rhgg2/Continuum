@@ -266,9 +266,10 @@ return {
     end,
   },
   {
-    name = 'midi inter-class between two managed tracks: regular send',
+    name = 'midi fan-in to one consumer collapses to a merge CU on the consumer host',
     run = function()
-      -- s1 -> synthA (midi) -> midiCompressor <- synthB <- s2
+      -- s1 -> synthA (midi) -> midiComp <- synthB <- s2: two MIDI feeders
+      -- ⇒ one N→1 merge CU on the consumer host; CU -> midiComp is intra-host.
       local ns = {}
       local k,  v  = source('s1', 'guid-a');               ns[k]  = v
       local k2, v2 = source('s2', 'guid-b');               ns[k2] = v2
@@ -283,11 +284,22 @@ return {
       }))
       local compCls = 'guid-a|guid-b'
       t.eq(plan[compCls].hostKind, 'newTrack')
-      t.deepEq(plan[compCls].fxOrder, { 'midiComp' })
+      local list = cuEntries(plan[compCls])
+      t.eq(#list, 1, 'one merge CU collapses the two MIDI feeders')
+      local cuId, cu = list[1].id, list[1].node
+      t.eq(cu.params.mode,    'merge')
+      t.eq(cu.originConsumer, 'midiComp')
+      t.eq(cu.originHost,     compCls)
+      t.deepEq(plan[compCls].fxOrder, { cuId, 'midiComp' })
       t.deepEq(plan['guid-a'].outWires,
-               { { from = 'synthA', to = compCls, toNode = 'midiComp', type = 'midi' } })
+               { { from = 'synthA', to = compCls, toNode = cuId, type = 'midi' } })
       t.deepEq(plan['guid-b'].outWires,
-               { { from = 'synthB', to = compCls, toNode = 'midiComp', type = 'midi' } })
+               { { from = 'synthB', to = compCls, toNode = cuId, type = 'midi' } })
+      local sawCuToComp = false
+      for _, c in ipairs(plan[compCls].intraConns) do
+        if c.from == cuId and c.to == 'midiComp' and c.type == 'midi' then sawCuToComp = true end
+      end
+      t.truthy(sawCuToComp, 'CU -> midiComp is an intra-host midi wire')
     end,
   },
   {

@@ -103,3 +103,8 @@ non-unity gain ⇒ one Merge CU spanning every feeder, with the unity ones at
 `inputEdges` maps each pair index back to its originating edge for
 `wm:pokeEdgeGain`. (>16 feeders into one FX exceeds CU channel width — a
 deferred capacity concern. See `design/wiring.md § Merge` for the format.)
+
+Feeders reduce to fit the summing model. A *unit* groups one consumer's feeders
+on one host. Normal FX (and intra-master) consumers reduce at the consumer host.
+For a producer on a different host, the width-1 parent send forces a pre-sum, so
+the Merge CU sits on the producer host and its output is the send source.

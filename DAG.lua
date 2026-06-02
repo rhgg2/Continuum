@@ -590,11 +590,12 @@ function M.compile(userGraph, derivedSplits)
       end
     end
 
-    -- Realised wire-level ops become CU bridges: per-edge for MIDI channelMap and
-    -- cross-host gain; intra-host/master fan-in defers to the merge pass below.
+    -- Phase A — edges → conns. MIDI channelMap mints a per-edge channelRemap CU;
+    -- audio gain rides the conn as metadata (stripped to D_VOL when folded).
     local synthNodes, cuHost, conns, cuN = {}, {}, {}, 0
     local mhc = self:masterHostedClass()
     local function realHost(id) return self:resolveHost(classOf[id]) end
+    local function hostB(id) return cuHost[id] or realHost(id) end
     local function audioConn(from, fp, to, tp, gain)
       util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
                         to = to, toPort = tp or 1, gain = gain })
@@ -619,51 +620,39 @@ function M.compile(userGraph, derivedSplits)
           util.add(conns, { type = 'midi', from = edge.from, to = edge.to })
         end
       else
-        local g = op and op.gain
-        if g and not folded[edgeIdx] then
-          local fH, tH = realHost(edge.from), realHost(edge.to)
-          local toMaster = mhc and tH == mhc and fH ~= mhc
-          local intra    = fH ~= '' and tH == fH and nodes[edge.to].kind == 'fx'
-          if toMaster or intra then
-            util.add(conns, { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,
-                              to = edge.to, toPort = edge.toPort or 1,
-                              gain = g, edgeIdx = edgeIdx, opFxGuid = edge.opFxGuid })
-          else
-            -- Cross-host collapse (≥2 wires to one send): per-edge degenerate
-            -- merge CU (nPairs=1) on the producer host; folds into 3c.4.5.
-            local cuId = mintCU(fH, { mode = 'merge', nPairs = 1, gains = { g }, audioSum = 0 },
-              { fxGuid = edge.opFxGuid, originEdgeIdx = edgeIdx })
-            audioConn(edge.from, edge.fromPort, cuId, 1)
-            audioConn(cuId, 1, edge.to, edge.toPort)
-          end
-        else
-          audioConn(edge.from, edge.fromPort, edge.to, edge.toPort)
-        end
+        local g = (not folded[edgeIdx]) and op and op.gain or nil
+        util.add(conns, { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,
+                          to = edge.to, toPort = edge.toPort or 1, gain = g, edgeIdx = edgeIdx })
       end
     end
 
-    -- Per-consumer audio merge: all-unity ⇒ matrix-fed (no CU), any non-unity
-    -- gain ⇒ one Merge CU over all feeders. See docs/DAG.md § per-consumer merge.
+    -- Phase B — per-consumer merge. Summing model: matrix (REAPER pins sum free)
+    -- or internal (MIDI/width-1 send — CU must sum). See docs/DAG.md § same.
     do
-      local intraBuckets, intraKeys = {}, {}
-      local masterBuckets, masterKeys = {}, {}
-      local kept = {}
-      for _, c in ipairs(conns) do
-        local fH = c.type == 'audio' and realHost(c.from) or nil
-        if fH and fH ~= '' and mhc and realHost(c.to) == mhc and fH ~= mhc then
-          if not masterBuckets[fH] then masterBuckets[fH] = {}; util.add(masterKeys, fH) end
-          util.add(masterBuckets[fH], c)
-        elseif fH and fH ~= '' and realHost(c.to) == fH
-               and nodes[c.to] and nodes[c.to].kind == 'fx' then
-          local k = fH .. '\0' .. c.to
-          if not intraBuckets[k] then
-            intraBuckets[k] = { host = fH, consumer = c.to, feeders = {} }
-            util.add(intraKeys, k)
-          end
-          util.add(intraBuckets[k].feeders, c)
-        else
-          util.add(kept, c)
+      local units, unitKeys, kept = {}, {}, {}
+      local function unit(host, consumer, isParentSend)
+        local k = host .. '\0' .. consumer
+        local u = units[k]
+        if not u then
+          u = { host = host, consumer = consumer, isParentSend = isParentSend,
+                audio = {}, midi = {} }
+          units[k] = u; util.add(unitKeys, k)
         end
+        return u
+      end
+      for _, c in ipairs(conns) do
+        local fH, tH = hostB(c.from), hostB(c.to)
+        local u
+        if fH ~= '' and tH ~= '' then
+          if mhc and tH == mhc and fH ~= mhc then
+            u = unit(fH, 'master', true)         -- width-1 parent send: pre-sum per producer
+          elseif c.to == 'master' then
+            u = unit(tH, 'master', false)        -- master node on its own track: matrix sink (output pin sums)
+          elseif nodes[c.to] and nodes[c.to].kind == 'fx' then
+            u = unit(tH, c.to, false)            -- fx consumer: merge at the consumer host
+          end
+        end
+        if u then util.add(u[c.type], c) else util.add(kept, c) end
       end
       conns = kept
 
@@ -678,42 +667,43 @@ function M.compile(userGraph, derivedSplits)
         for _, f in ipairs(fs) do if f.gain and f.gain ~= 1 then return true end end
         return false
       end
-      local function mergeCU(host, feeders, consumer, audioSum)
-        local gains, inputEdges = {}, {}
-        for _, f in ipairs(feeders) do
-          util.add(gains, f.gain or 1)
-          util.add(inputEdges, f.edgeIdx)
-        end
-        return mintCU(host,
-          { mode = 'merge', nPairs = #feeders, gains = gains, audioSum = audioSum },
-          { originConsumer = consumer, originHost = host, inputEdges = inputEdges })
-      end
 
-      table.sort(intraKeys)
-      for _, k in ipairs(intraKeys) do
-        local b = intraBuckets[k]
-        sortFeeders(b.feeders)
-        if anyGained(b.feeders) then
-          local cuId = mergeCU(b.host, b.feeders, b.consumer, 0)
-          for i, f in ipairs(b.feeders) do
-            audioConn(f.from, f.fromPort, cuId, i)
-            audioConn(cuId, i, b.consumer, f.toPort)
+      table.sort(unitKeys)
+      for _, k in ipairs(unitKeys) do
+        local u = units[k]
+        sortFeeders(u.audio); sortFeeders(u.midi)
+        -- Audio: matrix sinks merge only when gained; internal sinks (parent
+        -- send) sum on any fan-in ≥2. MIDI: one bus ⇒ merge on any fan-in ≥2.
+        local audioCU = u.isParentSend and #u.audio >= 2 or
+                        (not u.isParentSend and anyGained(u.audio))
+        local midiCU  = #u.midi >= 2
+        local cuId
+        if audioCU or midiCU then
+          local nPairs, gains, inputEdges = audioCU and #u.audio or 1, {}, {}
+          for i = 1, nPairs do gains[i] = audioCU and (u.audio[i].gain or 1) or 1 end
+          if audioCU then for _, f in ipairs(u.audio) do util.add(inputEdges, f.edgeIdx) end end
+          cuId = mintCU(u.host,
+            { mode = 'merge', nPairs = nPairs, gains = gains,
+              audioSum = u.isParentSend and 1 or 0 },
+            { originConsumer = u.consumer, originHost = u.host, inputEdges = inputEdges })
+        end
+
+        if audioCU then
+          for i, f in ipairs(u.audio) do audioConn(f.from, f.fromPort, cuId, i) end
+          if u.isParentSend then
+            audioConn(cuId, 1, u.consumer, u.audio[1].toPort)  -- summed to pair 1
+          else
+            for i, f in ipairs(u.audio) do audioConn(cuId, i, u.consumer, f.toPort) end
           end
         else
-          for _, f in ipairs(b.feeders) do util.add(conns, f) end
+          for _, f in ipairs(u.audio) do util.add(conns, f) end
         end
-      end
 
-      table.sort(masterKeys)
-      for _, host in ipairs(masterKeys) do
-        local feeders = masterBuckets[host]
-        sortFeeders(feeders)
-        if #feeders == 1 then
-          util.add(conns, feeders[1])
+        if midiCU then
+          for _, f in ipairs(u.midi) do util.add(conns, { type = 'midi', from = f.from, to = cuId }) end
+          util.add(conns, { type = 'midi', from = cuId, to = u.consumer })
         else
-          local cuId = mergeCU(host, feeders, 'master', 1)
-          for i, f in ipairs(feeders) do audioConn(f.from, f.fromPort, cuId, i) end
-          audioConn(cuId, 1, feeders[1].to, feeders[1].toPort)
+          for _, f in ipairs(u.midi) do util.add(conns, f) end
         end
       end
     end
