@@ -83,8 +83,8 @@ return {
     name = 'split-tagged class never absorbs into its single audio parent',
     run = function()
       -- b has exactly one audio parent (a); absent the guard it would auto-absorb
-      -- back onto a's trackKey, undoing the split. trackOf unchanged → hosts itself.
-      local rh = DAG.compile(twoSourceChain(true)):trackOf('g1|split:b')
+      -- back onto a's trackKey, undoing the split. classTrackKey unchanged → hosts itself.
+      local rh = DAG.compile(twoSourceChain(true)):classTrackKey('g1|split:b')
       t.eq(rh, 'g1|split:b')
     end,
   },

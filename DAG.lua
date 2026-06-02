@@ -333,17 +333,20 @@ local function buildCtx(userGraph, derivedSplits)
 
   -- The master-hosted class is exempt: its track is fixed in REAPER.
   -- Source classes never appear as absorbees (no audio parents in quotient).
-  local function trackOf(cls)
+  local function classTrackKey(cls)
     if cls == masterTrackClass() then return cls end
     return absorption()[cls] or cls
   end
+
+  -- Track key a node id lands on: its class, resolved through absorption.
+  local function trackKeyOf(id) return classTrackKey(classOf()[id]) end
 
   -- {[trackKey] = id[]} pooling members of every class that resolves to it.
   local function trackMembers()
     if cache.trackMembers then return cache.trackMembers end
     cache.trackMembers = {}
     for cls, members in pairs(classes()) do
-      local trackKey   = trackOf(cls)
+      local trackKey   = classTrackKey(cls)
       local bucket = cache.trackMembers[trackKey] or {}
       for _, id in ipairs(members) do util.add(bucket, id) end
       cache.trackMembers[trackKey] = bucket
@@ -358,19 +361,18 @@ local function buildCtx(userGraph, derivedSplits)
     if cache.gainFold then return cache.gainFold end
     local classOf = classOf()
     local mhc     = masterTrackClass()
-    local function nodeTrackKey(id) return trackOf(classOf[id]) end
     local function isMasterDest(toId)
       return toId == 'master' or (mhc and classOf[toId] == mhc)
     end
     -- The native sink a gained edge could fold onto, with the count key that
     -- decides solubility; nil for untracked-source or same-track edges.
     local function routeOf(edge)
-      local fromH = nodeTrackKey(edge.from)
+      local fromH = trackKeyOf(edge.from)
       if not fromH or fromH == '' then return nil end
       if isMasterDest(edge.to) then
         return { kind = 'mainSend', key = 'main\0' .. fromH, cls = fromH }
       end
-      local toH = nodeTrackKey(edge.to)
+      local toH = trackKeyOf(edge.to)
       if toH and toH ~= '' and fromH ~= toH then
         return { kind = 'send', key = 'send\0' .. fromH .. '\0' .. toH, from = fromH, to = toH }
       end
@@ -399,11 +401,10 @@ local function buildCtx(userGraph, derivedSplits)
   end
 
   local function capacityErrors()
-    local classOf = classOf()
     local counts  = {}
     for _, edge in ipairs(edges) do
-      local fromTrackKey = trackOf(classOf[edge.from])
-      local toTrackKey   = trackOf(classOf[edge.to])
+      local fromTrackKey = trackKeyOf(edge.from)
+      local toTrackKey   = trackKeyOf(edge.to)
       if fromTrackKey and fromTrackKey ~= '' and fromTrackKey == toTrackKey then
         counts[fromTrackKey] = counts[fromTrackKey] or { audio = 0, midi = 0 }
         counts[fromTrackKey][edge.type] = counts[fromTrackKey][edge.type] + 1
@@ -465,7 +466,6 @@ local function buildCtx(userGraph, derivedSplits)
   end
 
   local function targetTracks()
-    local classOf     = classOf()
     local trackMembers = trackMembers()
 
     -- Folded gains ride a native send (no CU); gainFold names the sink.
@@ -484,8 +484,7 @@ local function buildCtx(userGraph, derivedSplits)
     -- (stripped to D_VOL when folded); MIDI passes through unchanged.
     local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
     local mhc = masterTrackClass()
-    local function realTrackOf(id) return trackOf(classOf[id]) end
-    local function nodeTrackKey(id) return cuTrackKey[id] or realTrackOf(id) end
+    local function nodeTrackKey(id) return cuTrackKey[id] or trackKeyOf(id) end
     local function audioConn(from, fp, to, tp, gain)
       util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
                         to = to, toPort = tp or 1, gain = gain })
@@ -638,8 +637,6 @@ local function buildCtx(userGraph, derivedSplits)
       end
     end
 
-    local function nodeTrackKey(id) return cuTrackKey[id] or trackOf(classOf[id]) end
-
     -- Per-track chain members to topo-order: real fx + synth CU (source/master
     -- never appear in fxOrder; they are the track-IO boundary).
     local chainMembers = {}
@@ -772,7 +769,8 @@ local function buildCtx(userGraph, derivedSplits)
   function ctx:classes()           return classes()           end
   function ctx:classOf()           return classOf()           end
   function ctx:masterTrackClass() return masterTrackClass() end
-  function ctx:trackOf(cls)    return trackOf(cls)    end
+  function ctx:classTrackKey(cls)  return classTrackKey(cls)  end
+  function ctx:trackKeyOf(id)      return trackKeyOf(id)      end
   function ctx:gainFold()          return gainFold()          end
   function ctx:capacityErrors()    return capacityErrors()    end
   function ctx:targetTracks()        return targetTracks()        end
@@ -837,11 +835,11 @@ local function deriveMasterSplit(userGraph)
   -- d is the single entry of its cone, so it alone can pull >=2 audio pairs
   -- from one upstream track. see docs/DAG.md § Master-minimization
   local function dirty(d)
-    local cone, classOf = reach(d, fwd, nil), base:classOf()
+    local cone = reach(d, fwd, nil)
     local portsByTrack = {}
     for _, e in ipairs(edges) do
       if e.type == 'audio' and e.to == d and not cone[e.from] then
-        local trackKey = base:trackOf(classOf[e.from])
+        local trackKey = base:trackKeyOf(e.from)
         if trackKey ~= '' then
           local ports = portsByTrack[trackKey] or {}
           ports[e.toPort or 1] = true

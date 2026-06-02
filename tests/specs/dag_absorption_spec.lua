@@ -1,7 +1,7 @@
 local t   = require('support')
 local DAG = require('DAG')
 
--- absorption is a closure-local; its decision surfaces through trackOf.
+-- absorption is a closure-local; its decision surfaces through classTrackKey.
 -- No absorbing trackKey → resolves to self; absorbed class → resolves to trackKey class.
 
 local function source(id, guid)
@@ -35,8 +35,8 @@ local function mk(nodes, edges)
   return { nodes = nodes, edges = edges or {}, nextId = 1 }
 end
 
-local function trackOf(g, cls)
-  return DAG.compile(g):trackOf(cls)
+local function classTrackKey(g, cls)
+  return DAG.compile(g):classTrackKey(cls)
 end
 
 return {
@@ -50,7 +50,7 @@ return {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
       })
-      t.eq(trackOf(g, 'guid-s'), 'guid-s')
+      t.eq(classTrackKey(g, 'guid-s'), 'guid-s')
     end,
   },
   {
@@ -65,7 +65,7 @@ return {
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       })
-      t.eq(trackOf(g, 'guid-a|guid-b'), 'guid-a|guid-b')
+      t.eq(classTrackKey(g, 'guid-a|guid-b'), 'guid-a|guid-b')
     end,
   },
   {
@@ -79,7 +79,7 @@ return {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1, primary = true },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
       })
-      t.eq(trackOf(g, 'guid-a|guid-b'), 'guid-a')
+      t.eq(classTrackKey(g, 'guid-a|guid-b'), 'guid-a')
     end,
   },
   {
@@ -96,7 +96,7 @@ return {
           primary = true, ops = { gain = 0.5 } },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
       })
-      t.eq(trackOf(g, 'guid-a|guid-b'), 'guid-a')
+      t.eq(classTrackKey(g, 'guid-a|guid-b'), 'guid-a')
     end,
   },
   {
@@ -111,7 +111,7 @@ return {
         { type = 'audio', from = 'f', to = 'master' },
         { type = 'audio', from = 't', to = 'master' },
       })
-      t.eq(trackOf(g, 'guid-s|guid-t'), 'guid-s|guid-t')
+      t.eq(classTrackKey(g, 'guid-s|guid-t'), 'guid-s|guid-t')
     end,
   },
   {
@@ -131,8 +131,8 @@ return {
         { type = 'audio', from = 'mixA', to = 'mixB', toPort = 1, primary = true },
         { type = 'audio', from = 'u',    to = 'mixB', toPort = 2 },
       })
-      t.eq(trackOf(g, 'guid-s|guid-t'),        'guid-s')
-      t.eq(trackOf(g, 'guid-s|guid-t|guid-u'), 'guid-s')
+      t.eq(classTrackKey(g, 'guid-s|guid-t'),        'guid-s')
+      t.eq(classTrackKey(g, 'guid-s|guid-t|guid-u'), 'guid-s')
     end,
   },
   {
@@ -146,7 +146,7 @@ return {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1, primary = true },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2, primary = true },
       })
-      t.eq(trackOf(g, 'guid-a|guid-b'), 'guid-a|guid-b')
+      t.eq(classTrackKey(g, 'guid-a|guid-b'), 'guid-a|guid-b')
     end,
   },
   {
@@ -160,7 +160,7 @@ return {
         { type = 'midi', from = 's', to = 'm' },
         { type = 'midi', from = 't', to = 'm' },
       })
-      t.eq(trackOf(g, 'guid-s|guid-t'), 'guid-s|guid-t')
+      t.eq(classTrackKey(g, 'guid-s|guid-t'), 'guid-s|guid-t')
     end,
   },
 }
