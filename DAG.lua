@@ -1093,22 +1093,32 @@ function M.allocate(tracks, nodes)
                  applies = g.applies, assignReg = g.assignReg })
     end
 
-    -- Stage-2 incoming audio sends pinned at the receiver's fx input.
-    -- def=0 (the parent send arrives before any fx runs); released at toNode's slot.
+    -- Stage-2 incoming audio sends: def=0 (parent send pre-fx), released at toNode's slot.
+    -- Same-pin sends share one dest pair — REAPER sums at the pin; see docs/DAG.md § incoming-send coalescing.
     if incoming[trackKey] then
+      local byPin, pinOrder = {}, {}
       for _, inc in ipairs(incoming[trackKey]) do
         local ow = inc.wire
         if ow.type == 'audio' and fxSet[ow.toNode] then
+          local key = ow.toNode .. '\0' .. (ow.toPort or 1)
+          local g = byPin[key]
+          if not g then
+            g = { toNode = ow.toNode, toPort = ow.toPort, applies = {} }
+            byPin[key] = g; util.add(pinOrder, key)
+          end
           local senderTrackKey, sendIdx = inc.senderTrackKey, inc.sendIdx
-          local writeBack = inc.isMaster
+          util.add(g.applies, inc.isMaster
             and function(pair) alloc[senderTrackKey].mainSendOffs = (pair - 1) * 2 end
-            or  function(pair) alloc[senderTrackKey].sends[sendIdx].dstChan = (pair - 1) * 2 end
-          addValue({
-            def = 0, lastUse = slotMap[ow.toNode],
-            pins = { { fxId = ow.toNode, dir = 'ins', port = ow.toPort } },
-            applies = { writeBack },
-          })
+            or  function(pair) alloc[senderTrackKey].sends[sendIdx].dstChan = (pair - 1) * 2 end)
         end
+      end
+      for _, key in ipairs(pinOrder) do
+        local g = byPin[key]
+        addValue({
+          def = 0, lastUse = slotMap[g.toNode],
+          pins = { { fxId = g.toNode, dir = 'ins', port = g.toPort } },
+          applies = g.applies,
+        })
       end
     end
 

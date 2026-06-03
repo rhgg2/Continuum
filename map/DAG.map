@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1333  sha=a66f812  mode=namespace
+@module DAG  src=DAG.lua  loc=1343  sha=e018631  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -88,9 +88,9 @@
       @contract  nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 239, 363, 424, 451, 465, 470, 472, 476, 505, 525, 549, 590, 598, 618, 628, 638, 644, 645, 658, 666, 678, 713, 728, 811, 1014, 1018, 1028, 1031, 1061, 1069, 1078, 1120, 1147, 1154, 1178, 1186, 1193, 1267, 1268, 1269, 1274, 1289
-  @use call    util.assign  @ 82, 402, 511, 1311, 1312
+  @use call    util.add  @ 239, 363, 424, 451, 465, 470, 472, 476, 505, 525, 549, 590, 598, 618, 628, 638, 644, 645, 658, 666, 678, 713, 728, 811, 1014, 1018, 1028, 1031, 1061, 1069, 1078, 1107, 1110, 1130, 1157, 1164, 1188, 1196, 1203, 1277, 1278, 1279, 1284, 1299
+  @use call    util.assign  @ 82, 402, 511, 1321, 1322
   @use call    util.bucket  @ 131, 164, 183, 209, 244, 785, 786, 909, 913, 965, 973
-  @use call    util.keys  @ 301, 302, 1000, 1189
+  @use call    util.keys  @ 301, 302, 1000, 1199
   @use call    util.pick  @ 402
   @use require util  @ 30

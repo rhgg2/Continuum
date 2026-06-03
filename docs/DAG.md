@@ -190,6 +190,15 @@ native FX; a bus-aware JSFX other than the first-party CU is refused at
 design-time, since the allocator can't reason about a third party's bus
 behaviour.
 
+### incoming-send coalescing
+
+Incoming audio sends are pinned at the receiver's fx input: `def=0` because the
+parent send arrives before any fx runs; `lastUse` is the `toNode`'s slot. All
+sends landing on the same input pin coalesce onto a single dest pair — REAPER
+sums at the pin, so a shared pair mixes the senders together instead of widening
+the receiver's channel count. Each unique `toNode` pin therefore gets exactly one
+register, regardless of how many senders feed it.
+
 ### allocStream internals
 
 `allocStream(values, startCursor, N, compare, pinAdd)` is the shared helper for

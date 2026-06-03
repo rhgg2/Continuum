@@ -255,6 +255,32 @@ return {
     end,
   },
   {
+    name = 'allocate: incoming sends to the same input pin coalesce onto one dest pair',
+    run = function()
+      local tracks = {
+        ['guid-a'] = {
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          mainSend=false, intraConns={},
+          outWires={ {from='s', to='guid-c', toNode='fx_c', toPort=1, type='audio'} },
+        },
+        ['guid-b'] = {
+          trackKind='sourceTrack', trackGuid='guid-b', fxOrder={},
+          mainSend=false, intraConns={},
+          outWires={ {from='s', to='guid-c', toNode='fx_c', toPort=1, type='audio'} },
+        },
+        ['guid-c'] = {
+          trackKind='newTrack', fxOrder={'fx_c'},
+          mainSend=false, intraConns={}, outWires={},
+        },
+      }
+      local out = DAG.allocate(tracks)
+      t.eq(out['guid-a'].sends[1].dstChan, 0)
+      t.eq(out['guid-b'].sends[1].dstChan, 0)
+      t.deepEq(out['guid-c'].pinMaps.fx_c.ins[1], {1})
+      t.eq(out['guid-c'].nchan, 2)
+    end,
+  },
+  {
     name = 'allocate: midi conns keep srcChan/dstChan = 0, no audio pin map',
     run = function()
       local tracks = {
