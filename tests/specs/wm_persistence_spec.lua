@@ -104,12 +104,10 @@ return {
     end,
   },
   {
-    name = 'wm:compile()/wm:errors() smoke on a fresh graph',
+    name = 'wm:errors() smoke on a fresh graph',
     run = function(harness)
       local _, wm = mkWm(harness)
-      local cx = wm:compile()
-      t.deepEq(cx:capacityErrors(), {}, 'fresh ctx reports no capacity errors')
-      t.deepEq(wm:errors(), {},         'no capacity overflow on fresh graph')
+      t.deepEq(wm:errors(), {}, 'no capacity overflow on fresh graph')
     end,
   },
 }

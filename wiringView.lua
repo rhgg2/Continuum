@@ -243,25 +243,9 @@ end
 
 ----- Capacity errors
 
-local CAPACITY_BUDGET = { audio = 64, midi = 128 }
-
---contract: list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
+--contract: pass-through of wm:errors; { kind, count, budget, nodeIds }[] per overflowing class
 function wv:errors()
-  local g       = wm:graph()
-  local cx      = wm:compile()
-  local classes = cx:classes()
-  local out = {}
-  for _, err in ipairs(cx:capacityErrors()) do
-    local nodeIds = {}
-    for _, id in ipairs(classes[err.classKey] or {}) do
-      if g.nodes[id] then nodeIds[id] = true end
-    end
-    util.add(out, { kind    = err.kind,
-                    count   = err.count,
-                    budget  = CAPACITY_BUDGET[err.kind],
-                    nodeIds = nodeIds })
-  end
-  return out
+  return wm:errors()
 end
 
 ----- Logical view-state (nodeId only)

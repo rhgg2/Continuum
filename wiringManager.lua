@@ -156,15 +156,27 @@ function wm:mutate(mutator)
   return true
 end
 
---contract: DAG.compile ctx for the user graph; reuse across :classes/:capacityErrors to share cache
-function wm:compile()
+-- One DAG ctx for the loaded graph, shared across :classes/:capacityErrors.
+local function compile()
   ensureLoaded()
   return DAG.compile(userGraph)
 end
 
---contract: list of intra-class capacity overflows on the lowered compile graph; empty when the user graph is within budget
+--contract: capacity overflows joined to user-graph node ids
+--shape: {kind,count,budget,nodeIds={[id]=true}}[]
+--invariant: synthesised CU ids filtered; returns {} within budget
 function wm:errors()
-  return self:compile():capacityErrors()
+  local ctx     = compile()
+  local classes = ctx:classes()
+  local out = {}
+  for _, err in ipairs(ctx:capacityErrors()) do
+    local nodeIds = {}
+    for _, id in ipairs(classes[err.classKey] or {}) do
+      if userGraph.nodes[id] then nodeIds[id] = true end
+    end
+    util.add(out, { kind = err.kind, count = err.count, budget = err.budget, nodeIds = nodeIds })
+  end
+  return out
 end
 
 --contract: read JSFX desc file for ident from REAPER's Effects dir; nil if non-JS or read fails

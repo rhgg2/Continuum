@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=281  sha=c99443e  mode=chunk
+@module wiringView  src=wiringView.lua  loc=265  sha=85a21e3  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -21,7 +21,6 @@
   @state wv = {}  @ 15
   @state hoverNodeId = nil  @ 17
   @state selection = {}  @ 18   -- set keyed by nodeId → true; replace via setSelection, never mutated in place
-  @state CAPACITY_BUDGET = { audio = 64, midi = 128 }  @ 246
 
 # Private functions
   -- Logical projection (viewport-independent)
@@ -85,26 +84,26 @@
   @api wv:wireViews()  @ 218
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Capacity errors
-  @api wv:errors()  @ 249
-      @contract  list of { kind, count, budget, nodeIds={[id]=true} } for each capacity-overflowing class; nodeIds are user-graph ids only (CU nodes synthesised by lowering are filtered out)
+  @api wv:errors()  @ 247
+      @contract  pass-through of wm:errors; { kind, count, budget, nodeIds }[] per overflowing class
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 269
-  @api wv:setHover(id)  @ 270
-  @api wv:selection()  @ 273
+  @api wv:hover()  @ 253
+  @api wv:setHover(id)  @ 254
+  @api wv:selection()  @ 257
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 275
+  @api wv:setSelection(idSet)  @ 259
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
 
 # Uses (outbound edges)
   @use call    DAG.ancestors  @ 184
   @use call    DAG.descendants  @ 189
-  @use call    util.add  @ 59, 124, 212, 230, 259
+  @use call    util.add  @ 59, 124, 212, 230
   @use call    util.instantiate  @ 13
   @use call    wiringManager.addFxNode  @ 101
-  @use call    wiringManager.compile  @ 251
   @use call    wiringManager.enableLive  @ 94
+  @use call    wiringManager.errors  @ 248
   @use call    wiringManager.fastGainCommit  @ 159
-  @use call    wiringManager.graph  @ 91, 152, 184, 189, 197, 210, 219, 250
+  @use call    wiringManager.graph  @ 91, 152, 184, 189, 197, 210, 219
   @use call    wiringManager.listInstalledFX  @ 104
   @use call    wiringManager.load  @ 93
   @use call    wiringManager.mutate  @ 108, 118, 130, 137, 160, 173

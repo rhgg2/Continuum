@@ -34,6 +34,9 @@ local CU_IDENT = 'JS:Continuum Utility'
 -- fans out to a CU cascade; see docs/DAG.md § per-consumer merge.
 local MERGE_WIDTH = 16
 
+-- Per-track stream capacity: 64 audio pairs, 128 MIDI buses (REAPER ceilings).
+local CAPACITY = { audio = 64, midi = 128 }
+
 local M = {}
 
 ----------- PUBLIC
@@ -412,8 +415,11 @@ local function buildCtx(userGraph, derivedSplits)
     end
     local out = {}
     for trackKey, c in pairs(counts) do
-      if c.audio > 64  then util.add(out, { classKey = trackKey, kind = 'audio', count = c.audio }) end
-      if c.midi  > 128 then util.add(out, { classKey = trackKey, kind = 'midi',  count = c.midi  }) end
+      for _, kind in ipairs({ 'audio', 'midi' }) do
+        if c[kind] > CAPACITY[kind] then
+          util.add(out, { classKey = trackKey, kind = kind, count = c[kind], budget = CAPACITY[kind] })
+        end
+      end
     end
     table.sort(out, function(a, b)
       if a.classKey ~= b.classKey then return a.classKey < b.classKey end
