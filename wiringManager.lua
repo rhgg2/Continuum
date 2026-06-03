@@ -167,11 +167,11 @@ end
 --invariant: synthesised CU ids filtered; returns {} within budget
 function wm:errors()
   local ctx     = compile()
-  local classes = ctx:classes()
+  local members = ctx:trackMembers()
   local out = {}
   for _, err in ipairs(ctx:capacityErrors()) do
     local nodeIds = {}
-    for _, id in ipairs(classes[err.classKey] or {}) do
+    for _, id in ipairs(members[err.trackKey] or {}) do
       if userGraph.nodes[id] then nodeIds[id] = true end
     end
     util.add(out, { kind = err.kind, count = err.count, budget = err.budget, nodeIds = nodeIds })

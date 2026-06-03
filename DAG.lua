@@ -228,7 +228,9 @@ local function buildCtx(userGraph, derivedSplits)
     return set
   end
 
-  function ctx:classes()
+  -- Private: the source-set partition {classKey -> id[]}. Exposed only through
+  -- ctx:classOf() and the track-keyed derivations below; never a public seam.
+  local function classes()
     if cache.classes then return cache.classes end
     cache.classes, cache.splitClasses = {}, {}
     for id in pairs(nodes) do
@@ -248,14 +250,14 @@ local function buildCtx(userGraph, derivedSplits)
   -- Class keys carrying a split tag (a node.split node or its cone). They
   -- never absorb — the split exists to give them their own track.
   local function splitClasses()
-    ctx:classes()
+    classes()
     return cache.splitClasses
   end
 
   function ctx:classOf()
     if cache.classOf then return cache.classOf end
     cache.classOf = {}
-    for cls, members in pairs(self:classes()) do
+    for cls, members in pairs(classes()) do
       for _, id in ipairs(members) do cache.classOf[id] = cls end
     end
     return cache.classOf
@@ -264,7 +266,7 @@ local function buildCtx(userGraph, derivedSplits)
   local function quotient()
     if cache.quotient then return cache.quotient end
     cache.quotient = {}
-    for cls in pairs(ctx:classes()) do
+    for cls in pairs(classes()) do
       cache.quotient[cls] = { audioParents = {}, midiParents = {},
                               audioChildren = {}, midiChildren = {},
                               primaryAudioParents = {} }
@@ -333,7 +335,7 @@ local function buildCtx(userGraph, derivedSplits)
     local mc = self:classOf()['master']
     local result = mc ~= '' and mc or nil
     if result then
-      for _, id in ipairs(self:classes()[mc]) do
+      for _, id in ipairs(classes()[mc]) do
         if nodes[id].kind == 'source' then result = nil; break end
       end
     end
@@ -355,7 +357,7 @@ local function buildCtx(userGraph, derivedSplits)
   function ctx:trackMembers()
     if cache.trackMembers then return cache.trackMembers end
     cache.trackMembers = {}
-    for cls, members in pairs(self:classes()) do
+    for cls, members in pairs(classes()) do
       local trackKey   = self:classTrackKey(cls)
       local bucket = cache.trackMembers[trackKey] or {}
       for _, id in ipairs(members) do util.add(bucket, id) end
@@ -419,12 +421,12 @@ local function buildCtx(userGraph, derivedSplits)
     for trackKey, c in pairs(counts) do
       for _, kind in ipairs({ 'audio', 'midi' }) do
         if c[kind] > CAPACITY[kind] then
-          util.add(out, { classKey = trackKey, kind = kind, count = c[kind], budget = CAPACITY[kind] })
+          util.add(out, { trackKey = trackKey, kind = kind, count = c[kind], budget = CAPACITY[kind] })
         end
       end
     end
     table.sort(out, function(a, b)
-      if a.classKey ~= b.classKey then return a.classKey < b.classKey end
+      if a.trackKey ~= b.trackKey then return a.trackKey < b.trackKey end
       return a.kind < b.kind
     end)
     return out
@@ -860,8 +862,8 @@ local function deriveMasterSplit(userGraph)
   -- Emit the cone marker only when the cone is strictly smaller than master's
   -- natural srcSet class — something needs evicting. One marker peels them all.
   local cone = reach(cut, fwd, nil)
-  for _, id in ipairs(base:classes()[natural]) do
-    if not cone[id] then return { [cut] = true } end
+  for id, cls in pairs(base:classOf()) do
+    if cls == natural and not cone[id] then return { [cut] = true } end
   end
   return {}
 end

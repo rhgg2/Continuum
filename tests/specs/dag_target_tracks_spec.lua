@@ -517,7 +517,7 @@ return {
   },
 
   {
-    name = 'absorb: capacityErrors reports trackKey classKey after intra-trackKey merge',
+    name = 'absorb: capacityErrors keys on trackKey after intra-trackKey merge',
     run = function()
       -- 65 audio wires sit inside the absorbed class {s1,s2}; post-fix they
       -- belong to trackKey guid-s1, which is what the error must key on.
@@ -539,7 +539,7 @@ return {
       local cx   = DAG.compile(mk(ns, edges))
       local errs = cx:capacityErrors()
       t.eq(#errs, 1)
-      t.eq(errs[1].classKey, 'guid-s1', 'capacity error keyed by trackKey, not absorbed-class key')
+      t.eq(errs[1].trackKey, 'guid-s1', 'capacity error keyed by trackKey, not absorbed-class key')
       t.eq(errs[1].kind, 'audio')
     end,
   },

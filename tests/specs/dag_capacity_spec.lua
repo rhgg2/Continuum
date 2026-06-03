@@ -86,7 +86,7 @@ return {
       end
       local errs = errorsOf(mk(ns, edges))
       t.eq(#errs, 1)
-      t.eq(errs[1].classKey, 'guid-s')
+      t.eq(errs[1].trackKey, 'guid-s')
       t.eq(errs[1].kind,     'audio')
       t.eq(errs[1].count,    65)
     end,
@@ -107,7 +107,7 @@ return {
       end
       local errs = errorsOf(mk(ns, edges))
       t.eq(#errs, 1)
-      t.eq(errs[1].classKey, 'guid-s')
+      t.eq(errs[1].trackKey, 'guid-s')
       t.eq(errs[1].kind,     'midi')
       t.eq(errs[1].count,    N)
     end,

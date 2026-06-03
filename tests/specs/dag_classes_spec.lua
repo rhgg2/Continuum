@@ -32,16 +32,20 @@ local function mk(nodes, edges)
   return { nodes = nodes, edges = edges or {}, nextId = 1 }
 end
 
--- {nodeId,...} → set for unordered comparison.
-local function asSet(list)
-  local s = {}
-  for _, id in ipairs(list) do s[id] = true end
-  return s
+-- {classKey → {id=true}} reconstructed via classOf(); classes() is private to
+-- DAG so this validates it only through its public inverse.
+local function partition(graph)
+  local byKey = {}
+  for id, key in pairs(DAG.compile(graph):classOf()) do
+    byKey[key] = byKey[key] or {}
+    byKey[key][id] = true
+  end
+  return byKey
 end
 
-local function classKeys(classes)
+local function keysOf(byKey)
   local out = {}
-  for k in pairs(classes) do out[#out+1] = k end
+  for k in pairs(byKey) do out[#out+1] = k end
   table.sort(out)
   return out
 end
@@ -50,9 +54,9 @@ return {
   {
     name = 'empty graph: master splits into its own class',
     run = function()
-      local cs = DAG.compile(mk({})):classes()
-      t.deepEq(classKeys(cs), { 'split:master' })
-      t.deepEq(asSet(cs['split:master']), { master = true })
+      local p = partition(mk({}))
+      t.deepEq(keysOf(p), { 'split:master' })
+      t.deepEq(p['split:master'], { master = true })
     end,
   },
   {
@@ -60,10 +64,10 @@ return {
     run = function()
       local ns = {}
       local k, v = source('s', 'guid-s'); ns[k] = v
-      local cs = DAG.compile(mk(ns, {})):classes()
-      t.deepEq(classKeys(cs), { 'guid-s', 'split:master' })
-      t.deepEq(asSet(cs['split:master']), { master = true })
-      t.deepEq(asSet(cs['guid-s']),       { s = true })
+      local p = partition(mk(ns, {}))
+      t.deepEq(keysOf(p), { 'guid-s', 'split:master' })
+      t.deepEq(p['split:master'], { master = true })
+      t.deepEq(p['guid-s'],       { s = true })
     end,
   },
   {
@@ -72,13 +76,13 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local cs = DAG.compile(mk(ns, {
+      local p = partition(mk(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
-      })):classes()
-      t.deepEq(classKeys(cs), { 'guid-s', 'guid-s|split:master' })
-      t.deepEq(asSet(cs['guid-s']), { s = true, f = true })
-      t.deepEq(asSet(cs['guid-s|split:master']), { master = true })
+      }))
+      t.deepEq(keysOf(p), { 'guid-s', 'guid-s|split:master' })
+      t.deepEq(p['guid-s'], { s = true, f = true })
+      t.deepEq(p['guid-s|split:master'], { master = true })
     end,
   },
   {
@@ -88,16 +92,15 @@ return {
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
       local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
-      local cs = DAG.compile(mk(ns, {
+      local p = partition(mk(ns, {
         { type = 'audio', from = 's1',  to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
-      })):classes()
-      t.deepEq(classKeys(cs), { 'guid-a', 'guid-a|guid-b', 'guid-b' })
-      t.deepEq(asSet(cs['guid-a']), { s1 = true })
-      t.deepEq(asSet(cs['guid-b']), { s2 = true })
-      t.deepEq(asSet(cs['guid-a|guid-b']),
-               { mix = true, master = true })
+      }))
+      t.deepEq(keysOf(p), { 'guid-a', 'guid-a|guid-b', 'guid-b' })
+      t.deepEq(p['guid-a'], { s1 = true })
+      t.deepEq(p['guid-b'], { s2 = true })
+      t.deepEq(p['guid-a|guid-b'], { mix = true, master = true })
     end,
   },
   {
@@ -108,12 +111,12 @@ return {
       local k,  v  = source('sZ', 'guid-z'); ns[k]  = v
       local k2, v2 = source('sA', 'guid-a'); ns[k2] = v2
       local k3, v3 = fx('mix', { ins = 2 }); ns[k3] = v3
-      local cs = DAG.compile(mk(ns, {
+      local p = partition(mk(ns, {
         { type = 'audio', from = 'sZ', to = 'mix', toPort = 1 },
         { type = 'audio', from = 'sA', to = 'mix', toPort = 2 },
-      })):classes()
-      t.truthy(cs['guid-a|guid-z'])
-      t.falsy(cs['guid-z|guid-a'])
+      }))
+      t.truthy(p['guid-a|guid-z'])
+      t.falsy(p['guid-z|guid-a'])
     end,
   },
   {
@@ -122,13 +125,13 @@ return {
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
-      local cs = DAG.compile(mk(ns, {
+      local p = partition(mk(ns, {
         { type = 'audio', from = 's', to = 'f', ops = { gain = 0.5 } },
-      })):classes()
+      }))
       -- s, f share 'guid-s'; master splits into its own class. The gain CU is
       -- synthesised at targetTracks, not a graph vertex, so it never appears.
-      t.deepEq(classKeys(cs), { 'guid-s', 'split:master' })
-      t.eq(#cs['guid-s'], 2)
+      t.deepEq(keysOf(p), { 'guid-s', 'split:master' })
+      t.deepEq(p['guid-s'], { s = true, f = true })
     end,
   },
 }
