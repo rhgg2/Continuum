@@ -453,6 +453,7 @@ return {
       t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'B_MAINSEND'), 1)
       t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'D_VOL'), 0.75)
       t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'C_MAINSEND_OFFS'), 2)
+      t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'C_MAINSEND_NCH'), 2)
     end,
   },
   {

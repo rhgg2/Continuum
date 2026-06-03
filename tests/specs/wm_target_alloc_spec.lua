@@ -61,6 +61,7 @@ return {
       t.truthy(entry, 'source-track entry present')
       t.eq(entry.nchan,        4, 'fx2/fx3 run live into the merge CU -> 2 pairs')
       t.eq(entry.mainSendOffs, 0, 'parent send reads the merge CU pair (offs 0)')
+      t.eq(entry.mainSendNch,  2, 'parent send to master is stereo')
       t.deepEq(entry.pinMaps, {})
       t.deepEq(entry.pinMapsByOrigin['node:fx1'],
                { ins = { [1] = {1} }, outs = { [1] = {1} } })   -- one shared pair
@@ -89,6 +90,7 @@ return {
       local entry  = target['guid-A']
       t.eq(entry.nchan,        2, 'no fresh pair claimed')
       t.eq(entry.mainSendOffs, 0)
+      t.eq(entry.mainSendNch,  2)
       t.deepEq(entry.pinMapsByOrigin['node:f'],
                { ins = { [1] = {1} }, outs = { [1] = {1} } })
     end,

@@ -368,6 +368,7 @@ return {
       local track = { __label = 'src' }
       h.reaper._state.projectTracks[#h.reaper._state.projectTracks+1] = track
       h.reaper._state.trackGuids[track] = 'guid-A'
+      h.reaper.SetMediaTrackInfo_Value(track, 'C_MAINSEND_NCH', 2)  -- Continuum-managed parent send
       h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
       local fxIdx = h.reaper.TrackFX_AddByName(track, 'JS:foo', false, -1)
       h.reaper:setFxGuid(track, fxIdx, '{FX-1}')
@@ -515,6 +516,18 @@ return {
       t.eq(#ops.setMainSend, 1)
       t.eq(ops.setMainSend[1].value, true)
       t.eq(ops.setMainSend[1].offs, 4)
+    end,
+  },
+  {
+    name = 'diff: mainSendNch drift drives setMainSend carrying nch',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local entry = function(n) return { trackKind='sourceTrack', trackGuid='guid-A',
+                                         fxOrder={}, mainSend=true, mainSendNch=n, sends={} } end
+      local ops = byOp(wm:diff({ ['guid-A']=entry(2) }, { ['guid-A']=entry(0) }))
+      t.eq(#ops.setMainSend, 1)
+      t.eq(ops.setMainSend[1].value, true)
+      t.eq(ops.setMainSend[1].nch, 2)
     end,
   },
   {

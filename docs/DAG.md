@@ -32,12 +32,17 @@ recompile).
 connections within the same track: same fields but no channel
 assignment. `masterFeed` is the single outWire entry that feeds the
 master-hosted class; its `from` / `fromPort` identify the last node
-before the boundary. When a master-hosted fx exists, its track's plan
-output feeds the track's parent send to the master-hosted track; the
-allocator pins that output and stamps `mainSendOffs`. Folded boundary
-gains carry their value on `outWires.gain` / `mainSendGain`, not a
-CU. `M.allocate(targetTracks)` turns `outWires` into sends with
-per-tuple channel assignment.
+before the boundary, `toNode` / `toPort` the consumer pin it lands on.
+The parent send reads the source track's pair 1 (`C_MAINSEND_NCH = 2`,
+no source-side offset), so the allocator pins that producer to pair 1.
+`C_MAINSEND_OFFS` is the *receiver's* call: the master track allocates
+the consumer pin and writes the destination pair back onto the sender's
+`mainSendOffs`, exactly the handshake an ordinary send uses for
+`dstChan` — 0 for an FX-less master, non-zero when the pin sits on a
+higher pair (a compressor sidechain, say). Folded boundary gains carry
+their value on `outWires.gain` / `mainSendGain`, not a CU.
+`M.allocate(targetTracks)` turns `outWires` into sends with per-tuple
+channel assignment.
 
 ## Split markers — a node as its own source
 

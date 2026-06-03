@@ -493,7 +493,7 @@ return {
       t.eq(tracks['__master__'], nil, 'FX-less master stays implicit')
       t.eq(tracks['guid-s1|guid-s2'], nil, 'master-hosted vacates merged key for sentinel')
       t.eq(tracks['guid-s1'].mainSend, true)
-      t.deepEq(tracks['guid-s1'].masterFeed, { from = 'A', fromPort = 1 }, 'not absorbed: A->master is a parent send')
+      t.deepEq(tracks['guid-s1'].masterFeed, { from = 'A', fromPort = 1, toNode = 'master', toPort = 1 }, 'not absorbed: A->master is a parent send')
       t.eq(tracks['guid-s2'].mainSend, true, 'midi to master-hosted lifts parent send')
       t.deepEq(tracks['guid-s1'].fxOrder, { 'A' })
       t.deepEq(tracks['guid-s2'].outWires, {})
@@ -594,7 +594,7 @@ return {
         { from = 's', fromPort = 1, to = 'f', toPort = 1, type = 'audio' },
       })
       t.eq(tracks['guid-s'].mainSend, true)
-      t.deepEq(tracks['guid-s'].masterFeed, { from = 'f', fromPort = 1 })
+      t.deepEq(tracks['guid-s'].masterFeed, { from = 'f', fromPort = 1, toNode = 'master', toPort = 1 })
     end,
   },
 
@@ -680,8 +680,8 @@ return {
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       }))
-      t.deepEq(tracks['guid-a'].masterFeed, { from = 's1', fromPort = 1 })
-      t.deepEq(tracks['guid-b'].masterFeed, { from = 's2', fromPort = 1 })
+      t.deepEq(tracks['guid-a'].masterFeed, { from = 's1', fromPort = 1, toNode = 'mix', toPort = 1 })
+      t.deepEq(tracks['guid-b'].masterFeed, { from = 's2', fromPort = 1, toNode = 'mix', toPort = 2 })
     end,
   },
 
@@ -701,8 +701,8 @@ return {
         { type = 'audio', from = 's2',     to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix',    to = 'master' },
       }))
-      t.deepEq(tracks['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1 })
-      t.deepEq(tracks['guid-b'].masterFeed, { from = 's2',     fromPort = 1 })
+      t.deepEq(tracks['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1, toNode = 'mix', toPort = 1 })
+      t.deepEq(tracks['guid-b'].masterFeed, { from = 's2',     fromPort = 1, toNode = 'mix', toPort = 2 })
     end,
   },
 
@@ -720,7 +720,7 @@ return {
         { type = 'audio', from = 's2',     to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix',    to = 'master' },
       }))
-      t.deepEq(tracks['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1 })
+      t.deepEq(tracks['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1, toNode = 'mix', toPort = 1 })
       t.eq(tracks['guid-a'].mainSendGain, 0.5)
     end,
   },

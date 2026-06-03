@@ -209,6 +209,20 @@ return {
     end,
   },
   {
+    name = 'C_MAINSEND_NCH round-trips as mainSendNch (only when mainSend=true)',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:load()
+      local track = seedSourceTrack(h, 'guid-A')
+      h.reaper.SetMediaTrackInfo_Value(track, 'C_MAINSEND_NCH', 2)
+      local snap = wm:snapshot()
+      t.eq(snap['guid-A'].mainSendNch, 2)
+      h.reaper.SetMediaTrackInfo_Value(track, 'B_MAINSEND', 0)
+      snap = wm:snapshot()
+      t.eq(snap['guid-A'].mainSendNch, nil, 'absent when mainSend=false')
+    end,
+  },
+  {
     name = 'pin maps round-trip via pinMaps[fxGuid]; disconnected ports dropped',
     run = function(harness)
       local h, wm = mkWm(harness)

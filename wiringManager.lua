@@ -10,8 +10,9 @@
 --shape: snapshotSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }
 --shape: snapshotFxOrigin = {kind='node',id=string}|{kind='edge',idx=int}|{kind='bracketIn'|'bracketOut',id=string}
 --shape: snapshotFxEntry = { fxGuid?=string, ident=string, params?=table, origin?=snapshotFxOrigin, midiOut?=bool, midiBus?={inBus=int,outBus=int} }
---shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=snapshotFxEntry[], mainSend=bool, mainSendGain?=number, mainSendOffs?=int, sends=snapshotSend[], nchan?=int, pinMaps?={ [fxGuid]=snapshotPinMap }, pinMapsByOrigin?={ [originKey]=snapshotPinMap } } }; see docs/wiringManager.md § wiringSnapshot.
---shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'setExtState'|'moveFxAcrossTracks', ... }; full-replace ops, not incremental. setFXChain entries with fxGuid=nil mean 'instantiate ident, stamp guid back to graph' (interpreted by the applier). moveFxAcrossTracks relocates a live FX from one trackKey to another with TrackFX_CopyToTrack(is_move=true); emitted before per-class setFXChain ops so subsequent per-track reconcile sees the FX already at the destination. setNchan / setPinMaps emit between setFXChain and setMainSend so the applier has fxGuids stamped before pin-map writes and the track has channels allocated before pin maps land. setMainSend carries offs (C_MAINSEND_OFFS) when mainSend=true; setPinMaps carries both fxGuid-keyed and origin-keyed maps so unmaterialised fxs lift through the stamps table.
+--shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=snapshotFxEntry[], mainSend=bool, mainSendGain?=number, mainSendOffs?=int, mainSendNch?=int, sends=snapshotSend[], nchan?=int, pinMaps?={ [fxGuid]=snapshotPinMap }, pinMapsByOrigin?={ [originKey]=snapshotPinMap } } }; see docs/wiringManager.md § wiringSnapshot.
+--shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'setExtState'|'moveFxAcrossTracks', ... }
+-- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
 --invariant: scratch is a hidden REAPER track tagged cm 'wiringScratch'='1' (find-or-create lazily)
@@ -664,6 +665,9 @@ function wm:snapshot()
       mainSendOffs = mainSend
                      and math.floor(reaper.GetMediaTrackInfo_Value(track, 'C_MAINSEND_OFFS'))
                      or nil,
+      mainSendNch  = mainSend
+                     and math.floor(reaper.GetMediaTrackInfo_Value(track, 'C_MAINSEND_NCH'))
+                     or nil,
       nchan        = math.floor(reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN')),
       pinMaps      = pinMaps,
       sends        = isScratch and {} or readSendsClass(track, byTrack),
@@ -755,6 +759,7 @@ local function projectEntry(spec, compileNodes, scratchGuid)
     mainSend         = spec.mainSend,
     mainSendGain     = spec.mainSendGain,
     mainSendOffs     = spec.mainSendOffs,
+    mainSendNch      = spec.mainSend and 2 or nil,   -- parent send to master is always stereo
     sends            = util.deepClone(spec.sends),
     nchan            = spec.nchan,
     pinMaps          = pinMaps,
@@ -890,12 +895,14 @@ function wm:diff(target, snap)
     local sGain = (s and s.mainSendGain) or 1.0
     local tOffs = (t_.mainSend and t_.mainSendOffs) or 0
     local sOffs = (s and s.mainSend and s.mainSendOffs) or 0
+    local tNch  = (t_.mainSend and t_.mainSendNch) or 0
+    local sNch  = (s and s.mainSend and s.mainSendNch) or 0
     if (fresh and (t_.mainSend or tGain ~= 1.0))
        or (not fresh and (t_.mainSend ~= s.mainSend or tGain ~= sGain
-                                                    or tOffs ~= sOffs)) then
+                                                    or tOffs ~= sOffs or tNch ~= sNch)) then
       util.add(ops, { op = 'setMainSend', trackKey = trackKey,
                       trackKind = t_.trackKind, trackGuid = t_.trackGuid,
-                      value = t_.mainSend, gain = tGain, offs = tOffs })
+                      value = t_.mainSend, gain = tGain, offs = tOffs, nch = tNch })
     end
     if fresh or not sendsEq(t_.sends, s.sends) then
       util.add(ops, { op = 'setSends', trackKey = trackKey,
@@ -1315,6 +1322,7 @@ function wm:applyOps(ops, label)
         reaper.SetMediaTrackInfo_Value(t, 'D_VOL', op.gain or 1.0)
         if op.value then
           reaper.SetMediaTrackInfo_Value(t, 'C_MAINSEND_OFFS', op.offs or 0)
+          reaper.SetMediaTrackInfo_Value(t, 'C_MAINSEND_NCH', op.nch or 2)
         end
       end
     elseif op.op == 'setNchan' then

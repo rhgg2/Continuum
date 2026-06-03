@@ -21,7 +21,7 @@
 -- see docs/DAG.md § synthNode field roles
 --shape: outWire = { from=id, fromPort?=int, to=trackKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
 --shape: intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
---shape: trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
+--shape: trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int, toNode=id, toPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
 --shape: targetTracks = { [trackKey] = trackSpec }
 -- see docs/DAG.md § targetTracks shape
 --shape: allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
@@ -720,7 +720,9 @@ function M.targetTracks(ctx)
         -- Audio master fan-in arrives pre-merged (≥2 wires → one audioSum CU
         -- output), so masterFeed carries a single producer.
         if conn.type == 'audio' then
-          tracks[fromTrackKey].masterFeed = { from = conn.from, fromPort = conn.fromPort }
+          tracks[fromTrackKey].masterFeed =
+            { from = conn.from, fromPort = conn.fromPort,
+              toNode = conn.to, toPort = conn.toPort }
         end
       else
         util.add(tracks[fromTrackKey].outWires, {
@@ -963,10 +965,21 @@ function M.allocate(tracks, nodes)
       util.bucket(incoming, ow.to, { wire = ow, senderTrackKey = senderTrackKey, sendIdx = sendIdx })
     end
   end
+  -- Parent sends ride the same receiver-decides handshake as ordinary sends but
+  -- write OFFS; allocate last so real inputs claim dest pairs first.
+  for senderTrackKey, entry in pairs(tracks) do
+    local mf = entry.masterFeed
+    if entry.mainSend and mf then
+      util.bucket(incoming, MASTER, {
+        wire = { toNode = mf.toNode, toPort = mf.toPort, type = 'audio' },
+        senderTrackKey = senderTrackKey, isMaster = true })
+    end
+  end
   for _, list in pairs(incoming) do
     table.sort(list, function(a, b)
+      if a.isMaster ~= b.isMaster then return not a.isMaster end
       if a.senderTrackKey ~= b.senderTrackKey then return a.senderTrackKey < b.senderTrackKey end
-      return a.sendIdx < b.sendIdx
+      return (a.sendIdx or 0) < (b.sendIdx or 0)
     end)
   end
 
@@ -977,7 +990,7 @@ function M.allocate(tracks, nodes)
     for sendIdx, ow in ipairs(entry.outWires or {}) do
       sends[sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain, srcChan = 0, dstChan = 0 }
     end
-    alloc[trackKey] = { pinMaps = {}, sends = sends, mainSendOffs = nil }
+    alloc[trackKey] = { pinMaps = {}, sends = sends, mainSendOffs = entry.mainSend and 0 or nil }
   end
 
   local trackKeys = util.keys(tracks)
@@ -1065,19 +1078,19 @@ function M.allocate(tracks, nodes)
         util.add(g.applies, function(pair) state.sends[sendIdx].srcChan = (pair - 1) * 2 end)
       end
     end
+    -- Parent send reads source pair 1 (NCH=2, no offset), so pin the master-feed
+    -- producer there; OFFS is written back when the master track allocates its pin.
     if entry.mainSend then
       local mf = entry.masterFeed
       if mf and fxSet[mf.from] then
         local g = producerOut(mf.from, mf.fromPort)
-        g.lastUse = N + 1
-        util.add(g.applies, function(pair) state.mainSendOffs = (pair - 1) * 2 end)
-      else
-        state.mainSendOffs = 0
+        g.lastUse, g.assignReg = N + 1, 1
       end
     end
     for _, key in ipairs(producerOrder) do
       local g = producerOuts[key]
-      addValue({ def = g.def, lastUse = g.lastUse, pins = g.pins, applies = g.applies })
+      addValue({ def = g.def, lastUse = g.lastUse, pins = g.pins,
+                 applies = g.applies, assignReg = g.assignReg })
     end
 
     -- Stage-2 incoming audio sends pinned at the receiver's fx input.
@@ -1087,10 +1100,13 @@ function M.allocate(tracks, nodes)
         local ow = inc.wire
         if ow.type == 'audio' and fxSet[ow.toNode] then
           local senderTrackKey, sendIdx = inc.senderTrackKey, inc.sendIdx
+          local writeBack = inc.isMaster
+            and function(pair) alloc[senderTrackKey].mainSendOffs = (pair - 1) * 2 end
+            or  function(pair) alloc[senderTrackKey].sends[sendIdx].dstChan = (pair - 1) * 2 end
           addValue({
             def = 0, lastUse = slotMap[ow.toNode],
             pins = { { fxId = ow.toNode, dir = 'ins', port = ow.toPort } },
-            applies = { function(pair) alloc[senderTrackKey].sends[sendIdx].dstChan = (pair - 1) * 2 end },
+            applies = { writeBack },
           })
         end
       end

@@ -500,6 +500,34 @@ return {
     end,
   },
   {
+    name = 'mainSendOffs: master-hosted fx, parent-send OFFS = receiver dest pair (sidechain)',
+    run = function()
+      local tracks = {
+        ['__master__'] = {
+          trackKind='master', fxOrder={'comp'},
+          mainSend=false,
+          intraConns={ {from='comp', to='master', type='audio'} },
+          outWires={},
+        },
+        ['guid-a'] = {
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          mainSend=true, masterFeed={from='sa', toNode='comp', toPort=1},
+          intraConns={}, outWires={},
+        },
+        ['guid-b'] = {
+          trackKind='sourceTrack', trackGuid='guid-b', fxOrder={},
+          mainSend=true, masterFeed={from='sb', toNode='comp', toPort=2},
+          intraConns={}, outWires={},
+        },
+      }
+      local out = DAG.allocate(tracks)
+      t.deepEq(out['__master__'].pinMaps.comp.ins[1], {1})
+      t.deepEq(out['__master__'].pinMaps.comp.ins[2], {2})
+      t.eq(out['guid-a'].mainSendOffs, 0)  -- main input → master pair 1
+      t.eq(out['guid-b'].mainSendOffs, 2)  -- sidechain → master pair 2
+    end,
+  },
+  {
     name = 'allocate: same input -> same output (determinism)',
     run = function()
       local mk = function()

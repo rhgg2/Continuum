@@ -220,3 +220,24 @@ no mutate/signal/undo block. The dispatch depends on edge kind:
 
 Returns `false` when nothing hosts the edge yet; the caller
 (`wv:setEdgeGain`) is responsible for materialising before the next poke.
+
+## wiringOp
+
+`wiringOp` records are full-replace ops emitted by the compiler and consumed
+by the applier. Each has an `op` field and additional keys depending on kind:
+
+- **`createTrack`** / **`deleteTrack`** — carry `trackKey` and `trackKuid`.
+- **`setFXChain`** — carries `fxChain` (array of `snapshotFxEntry`). Entries
+  with `fxGuid=nil` mean "instantiate `ident`, stamp GUID back to graph"
+  (handled by the applier).
+- **`moveFxAcrossTracks`** — relocates a live FX with
+  `TrackFX_CopyToTrack(is_move=true)`. Emitted before per-track `setFXChain`
+  ops so subsequent reconcile sees the FX already at the destination.
+- **`setNchan`** / **`setPinMaps`** — emitted between `setFXChain` and
+  `setMainSend` so fxGuids are stamped before pin-map writes and channels are
+  allocated before pin maps land. `setPinMaps` carries both fxGuid-keyed and
+  origin-keyed maps so unmaterialised FXs lift through the stamps table.
+- **`setMainSend`** — carries `mainSend` bool, plus `offs` (C_MAINSEND_OFFS)
+  and `nch=2` (C_MAINSEND_NCH) when `mainSend=true`.
+- **`setSends`** — carries `sends` (array of `snapshotSend`).
+- **`setExtState`** — carries `key` and `value` for track ExtState writes.
