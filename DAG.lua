@@ -37,6 +37,10 @@ local MERGE_WIDTH = 16
 -- Per-track stream capacity: 64 audio pairs, 128 MIDI buses (REAPER ceilings).
 local CAPACITY = { audio = 64, midi = 128 }
 
+-- Stable trackKey for the master-hosted class: wm:snapshot can't tag the REAPER
+-- master with a project-scoped wiringClass, so target and snapshot agree on this.
+local MASTER = '__master__'
+
 local M = {}
 
 ----------- PUBLIC
@@ -325,18 +329,22 @@ local function buildCtx(userGraph, derivedSplits)
   -- The class hosted ON the REAPER master; nil only on a marker-free base ctx.
   -- M.compile marks master split in those cases, so compiled ctx is total. See docs/DAG.md § Master-minimization.
   function ctx:masterTrackClass()
+    if cache.masterTrackClass ~= nil then return cache.masterTrackClass or nil end
     local mc = self:classOf()['master']
-    if not mc or mc == '' then return nil end
-    for _, id in ipairs(self:classes()[mc]) do
-      if nodes[id].kind == 'source' then return nil end
+    local result = mc ~= '' and mc or nil
+    if result then
+      for _, id in ipairs(self:classes()[mc]) do
+        if nodes[id].kind == 'source' then result = nil; break end
+      end
     end
-    return mc
+    cache.masterTrackClass = result or false
+    return result
   end
 
-  -- The master-hosted class is exempt: its track is fixed in REAPER.
-  -- Source classes never appear as absorbees (no audio parents in quotient).
+  -- The master-hosted class keys to the MASTER sentinel: its track is fixed in
+  -- REAPER. Source classes never appear as absorbees (no audio parents).
   function ctx:classTrackKey(cls)
-    if cls == self:masterTrackClass() then return cls end
+    if cls == self:masterTrackClass() then return MASTER end
     return absorption()[cls] or cls
   end
 
@@ -361,20 +369,15 @@ local function buildCtx(userGraph, derivedSplits)
   -- wm:pokeEdgeGain. See docs/DAG.md § gainFold.
   function ctx:gainFold()
     if cache.gainFold then return cache.gainFold end
-    local classOf = self:classOf()
-    local masterTrackClass     = self:masterTrackClass()
-    local function isMasterDest(toId)
-      return toId == 'master' or (masterTrackClass and classOf[toId] == masterTrackClass)
-    end
     -- The native sink a gained edge could fold onto, with the count key that
     -- decides solubility; nil for untracked-source or same-track edges.
     local function routeOf(edge)
       local fromH = self:trackKeyOf(edge.from)
       if not fromH or fromH == '' then return nil end
-      if isMasterDest(edge.to) then
+      local toH = self:trackKeyOf(edge.to)
+      if toH == MASTER then
         return { kind = 'mainSend', key = 'main\0' .. fromH, cls = fromH }
       end
-      local toH = self:trackKeyOf(edge.to)
       if toH and toH ~= '' and fromH ~= toH then
         return { kind = 'send', key = 'send\0' .. fromH .. '\0' .. toH, from = fromH, to = toH }
       end
@@ -495,7 +498,6 @@ function M.targetTracks(ctx)
   end
 
   local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
-  local masterTrackClass = ctx:masterTrackClass()
   local function nodeTrackKey(id) return cuTrackKey[id] or ctx:trackKeyOf(id) end
   local function audioConn(from, fp, to, tp, gain)
     util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
@@ -534,7 +536,7 @@ function M.targetTracks(ctx)
       local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
       local unit
       if fromTrackKey ~= '' and toTrackKey ~= '' then
-        if masterTrackClass and toTrackKey == masterTrackClass and fromTrackKey ~= masterTrackClass then
+        if toTrackKey == MASTER and fromTrackKey ~= MASTER then
           unit = unitFor(fromTrackKey, 'master', true)  -- width-1 parent send: pre-sum per producer
         elseif conn.to == 'master' then
           unit = unitFor(toTrackKey, 'master', true)    -- in-class master: serial parent send, sum fan-in to one pair
@@ -663,8 +665,9 @@ function M.targetTracks(ctx)
     end
   end
 
-  -- Track entries: scratch for inert fx, else track topology + mainSend.
-  local tracks, masterTrackKey = {}, nil
+  -- Track entries: scratch for inert fx, else track topology. mainSend is set by
+  -- the conn loop; master always splits off its sources, so no sourceTrack hosts it.
+  local tracks = {}
   for trackKey, members in pairs(trackMembers) do
     if trackKey == '' then
       local parked = {}
@@ -680,22 +683,18 @@ function M.targetTracks(ctx)
         }
       end
     else
-      local trackKind, trackGuid, hasMaster = 'newTrack', nil, false
+      local trackKind, trackGuid = 'newTrack', nil
       for _, id in ipairs(members) do
         local n = nodes[id]
         if n.kind == 'source' then trackKind, trackGuid = 'sourceTrack', n.trackGuid end
-        if n.kind == 'master' then hasMaster = true end
-      end
-      if hasMaster and trackKind ~= 'sourceTrack' then
-        trackKind = 'master'
-        masterTrackKey = trackKey
+        if n.kind == 'master' then trackKind = 'master' end
       end
       -- Emit master only when it hosts FX: keeps target/snapshot symmetric.
       -- See docs/DAG.md § Master-minimization for the FX-less-master invariant.
       if trackKind ~= 'master' or #(chainMembers[trackKey] or {}) > 0 then
         tracks[trackKey] = {
           trackKind  = trackKind, trackGuid = trackGuid, fxOrder = nil,
-          mainSend  = hasMaster and trackKind == 'sourceTrack',
+          mainSend  = false,
           mainSendGain = mainGain[trackKey],
           outWires = {}, intraConns = {},
         }
@@ -714,7 +713,7 @@ function M.targetTracks(ctx)
           to   = conn.to,   toPort   = conn.toPort,
           type = conn.type,
         })
-      elseif toTrackKey == masterTrackKey then
+      elseif toTrackKey == MASTER then
         tracks[fromTrackKey].mainSend = true
         -- Audio master fan-in arrives pre-merged (≥2 wires → one audioSum CU
         -- output), so masterFeed carries a single producer.
@@ -766,12 +765,6 @@ function M.targetTracks(ctx)
     end
   end
 
-  -- Stable sentinel key for the master-hosted class — wm:snapshot can't
-  -- tag the REAPER master with a project-scoped wiringClass.
-  if masterTrackKey then
-    tracks['__master__'] = tracks[masterTrackKey]
-    tracks[masterTrackKey] = nil
-  end
   return tracks
 end
 

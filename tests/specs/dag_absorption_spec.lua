@@ -54,7 +54,7 @@ return {
     end,
   },
   {
-    name = 'two parents: target class hosts itself (no auto-absorb)',
+    name = 'two parents both reach master: class keys to the master sentinel',
     run = function()
       local ns = {}
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
@@ -65,7 +65,7 @@ return {
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       })
-      t.eq(classTrackKey(g, 'guid-a|guid-b'), 'guid-a|guid-b')
+      t.eq(classTrackKey(g, 'guid-a|guid-b'), '__master__')
     end,
   },
   {
@@ -100,7 +100,7 @@ return {
     end,
   },
   {
-    name = 'master class with two audio parents hosts itself',
+    name = 'master class with two audio parents keys to the master sentinel',
     run = function()
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
@@ -111,7 +111,7 @@ return {
         { type = 'audio', from = 'f', to = 'master' },
         { type = 'audio', from = 't', to = 'master' },
       })
-      t.eq(classTrackKey(g, 'guid-s|guid-t'), 'guid-s|guid-t')
+      t.eq(classTrackKey(g, 'guid-s|guid-t'), '__master__')
     end,
   },
   {
