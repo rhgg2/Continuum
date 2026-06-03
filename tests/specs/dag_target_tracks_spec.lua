@@ -479,8 +479,8 @@ return {
   {
     name = 'absorb: master-hosted class never absorbed even with single audio parent',
     run = function()
-      -- master's class has 1 audio parent → absorption() proposes a trackKey, but
-      -- master-hosted classes are exempt and keep the '__master__' entry.
+      -- master-hosted classes are exempt from absorption: A->master stays a parent
+      -- send (mainSend + masterFeed on guid-s1), never folded intra.
       local ns = {}
       local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
@@ -490,9 +490,10 @@ return {
         { type = 'audio', from = 'A',  to = 'master' },
         { type = 'midi',  from = 's2', to = 'master' },
       }))
-      t.eq(tracks['__master__'].trackKind, 'master')
+      t.eq(tracks['__master__'], nil, 'FX-less master stays implicit')
       t.eq(tracks['guid-s1|guid-s2'], nil, 'master-hosted vacates merged key for sentinel')
       t.eq(tracks['guid-s1'].mainSend, true)
+      t.deepEq(tracks['guid-s1'].masterFeed, { from = 'A', fromPort = 1 }, 'not absorbed: A->master is a parent send')
       t.eq(tracks['guid-s2'].mainSend, true, 'midi to master-hosted lifts parent send')
       t.deepEq(tracks['guid-s1'].fxOrder, { 'A' })
       t.deepEq(tracks['guid-s2'].outWires, {})
@@ -578,10 +579,10 @@ return {
   -- conn carries the gain via outWires.gain instead.
 
   {
-    name = 'intraConns: source -> fx and fx -> master both anchor track-IO sides',
+    name = 'intraConns: source -> fx is the only intra wire; fx -> master is a parent send',
     run = function()
-      -- Lone-source rule: master shares the source's class, so the trackKey is
-      -- source-hosted and both s->f and f->master are intra-trackKey anchors.
+      -- master owns its own class, so f->master crosses to the REAPER master as a
+      -- parent send (mainSend + masterFeed), not an intra-trackKey anchor.
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
@@ -590,9 +591,10 @@ return {
         { type = 'audio', from = 'f', to = 'master' },
       }))
       t.deepEq(tracks['guid-s'].intraConns, {
-        { from = 'f', fromPort = 1, to = 'master', toPort = 1, type = 'audio' },
-        { from = 's', fromPort = 1, to = 'f',      toPort = 1, type = 'audio' },
+        { from = 's', fromPort = 1, to = 'f', toPort = 1, type = 'audio' },
       })
+      t.eq(tracks['guid-s'].mainSend, true)
+      t.deepEq(tracks['guid-s'].masterFeed, { from = 'f', fromPort = 1 })
     end,
   },
 
@@ -723,22 +725,6 @@ return {
     end,
   },
 
-  {
-    name = 'masterFeed: in-class sourceTrack mainSend has no masterFeed (no cross-trackKey wire)',
-    run = function()
-      -- source + master share class; mainSend=true but there's no cross-trackKey
-      -- master-bound wire, so masterFeed stays nil and allocator defaults to 0.
-      local ns = {}
-      local k,  v  = source('s', 'guid-s'); ns[k]  = v
-      local k2, v2 = fx('f');               ns[k2] = v2
-      local tracks = tracksOf(mk(ns, {
-        { type = 'audio', from = 's', to = 'f' },
-        { type = 'audio', from = 'f', to = 'master' },
-      }))
-      t.eq(tracks['guid-s'].mainSend, true)
-      t.eq(tracks['guid-s'].masterFeed, nil)
-    end,
-  },
 
   {
     name = 'masterFeed: midi cross-trackKey to master-hosted does not set masterFeed',

@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1316  sha=7955d69  mode=namespace
+@module DAG  src=DAG.lua  loc=1322  sha=dad58b1  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -42,21 +42,21 @@
       -- Lazy ctx factory; derivations memoise into closure-local `cache`.
       -- derivedSplits arrives already settled (from deriveMasterSplit); ctx just folds it into srcSet.
   -- realisation
-  @fn topoIntraTrack(members, conns)  @ 438
+  @fn topoIntraTrack(members, conns)  @ 437
       -- Kahn's over a track's chain members (fx + synth CU; source/master excluded).
       -- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
   -- master minimization
-  @fn deriveMasterSplit(userGraph)  @ 779
+  @fn deriveMasterSplit(userGraph)  @ 782
       -- master class = cone of master's largest dominator whose entry pulls <=1 audio
       -- pair per upstream track; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
   -- allocate
-  @fn allocStream(values, startCursor, N, compare, pinAdd)  @ 879
+  @fn allocStream(values, startCursor, N, compare, pinAdd)  @ 885
       -- Linear-scan allocator over one stream's value list (audio pair or MIDI bus).
       -- see docs/DAG.md § allocStream internals
-  @fn audioValueCompare(a, c)  @ 930
+  @fn audioValueCompare(a, c)  @ 936
       -- Audio packs by pin shape (dir, port, fx) so co-defined values land
       -- deterministically; midi has no pins, so lastUse then insertion serial.
-  @fn midiValueCompare(a, c)  @ 939
+  @fn midiValueCompare(a, c)  @ 945
       · midi register file: bus 0 boundary; values are per-producer streams.
       · bracket post-pass — see docs/DAG.md § allocate
 
@@ -74,22 +74,22 @@
       -- from-end of an existing wire: the new source X must not be reachable
       -- from the kept destination B, else X→B closes the cycle B→…→X→B.
       @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
-  @api M.targetTracks(ctx)  @ 482
+  @api M.targetTracks(ctx)  @ 481
       -- Realisation pass: lowers the structural ctx into per-track specs (fxOrder,
       -- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
       @contract  realisation pass over a compile ctx; returns the targetTracks shape (not cached)
-  @api M.compile(userGraph)  @ 871
+  @api M.compile(userGraph)  @ 877
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
-  @api M.allocate(tracks, nodes)  @ 948
+  @api M.allocate(tracks, nodes)  @ 954
       -- Per-track live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedTracks shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 233, 354, 420, 447, 461, 466, 468, 472, 502, 522, 546, 587, 595, 615, 625, 635, 641, 642, 655, 663, 674, 709, 722, 811, 996, 1000, 1010, 1013, 1047, 1055, 1064, 1072, 1103, 1130, 1137, 1161, 1169, 1176, 1250, 1251, 1252, 1257, 1272
-  @use call    util.assign  @ 78, 398, 508, 1294, 1295
-  @use call    util.bucket  @ 127, 160, 179, 205, 238, 785, 786, 906, 910, 962
-  @use call    util.keys  @ 295, 296, 982, 1172
-  @use call    util.pick  @ 398
+  @use call    util.add  @ 233, 353, 419, 446, 460, 465, 467, 471, 501, 521, 545, 586, 594, 614, 624, 634, 640, 641, 654, 662, 673, 712, 725, 814, 1002, 1006, 1016, 1019, 1053, 1061, 1070, 1078, 1109, 1136, 1143, 1167, 1175, 1182, 1256, 1257, 1258, 1263, 1278
+  @use call    util.assign  @ 78, 397, 507, 1300, 1301
+  @use call    util.bucket  @ 127, 160, 179, 205, 238, 788, 789, 912, 916, 968
+  @use call    util.keys  @ 295, 296, 988, 1178
+  @use call    util.pick  @ 397
   @use require util  @ 30

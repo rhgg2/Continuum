@@ -49,9 +49,9 @@ return {
     end,
   },
   {
-    name = 'isolated master srcSet is empty',
+    name = 'isolated master carries its own split marker',
     run = function()
-      t.eq(classKey({}, {}, 'master'), '')
+      t.eq(classKey({}, {}, 'master'), 'split:master')
     end,
   },
   {
@@ -96,7 +96,7 @@ return {
     end,
   },
   {
-    name = 'master receiving from chain has chain-rooted srcSet',
+    name = 'master receiving from chain: chain-rooted srcSet plus its split marker',
     run = function()
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
@@ -104,7 +104,7 @@ return {
       t.eq(classKey(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
-      }, 'master'), 'guid-s')
+      }, 'master'), 'guid-s|split:master')
     end,
   },
   {

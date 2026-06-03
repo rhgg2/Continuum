@@ -48,8 +48,7 @@ return {
     name = 'intra-class audio > 64: one entry with budget, count, and class node ids',
     run = function(harness)
       -- source→a (1 conn) + 64 wires a→b (64 conns) = 65 intra-class audio.
-      -- One source-set → one class containing s, a, b (and the master is
-      -- in its own class with empty src-set since nothing reaches it).
+      -- One class: s, a, b; master split out (nothing reaches it).
       local ns = {}
       local sk, sv = source('s', 'guid-s');           ns[sk] = sv
       local ak, av = fx('a', { ins = 1, outs = 64 }); ns[ak] = av

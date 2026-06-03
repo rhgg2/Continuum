@@ -88,6 +88,18 @@ dominator, so the chain stays short and the class collapses toward `{master}`
 (`C_m = {master}` is the inward terminus), leaving the violator on its own
 `srcSet` track.
 
+When there is no natural master class at all — a lone source shares it (the
+chain re-merges, master in the source's `srcSet`), or nothing reaches master —
+the marker lands on **master itself**. So `master` always owns a dedicated
+class, and `ctx:masterTrackClass` is total on the compiled ctx (it returns nil
+only on the marker-free base ctx, which is how `deriveMasterSplit` detects the
+case). That class is usually FX-less: the cone fx stay on the source track and
+feed the REAPER master through a parent send (`mainSend` + `masterFeed`), same
+as a multi-source fan-in. `targetTracks` emits a `__master__` track entry only
+when FX actually live on master, mirroring `wm:snapshot` — an FX-less master is
+implicit (the REAPER master always exists), keeping target and snapshot
+symmetric so a master-less graph diffs to zero ops.
+
 ## CU bridge invariant — edge ops and folding
 
 An edge's gain/channelMap op rides the edge as metadata. The CU

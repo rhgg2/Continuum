@@ -322,9 +322,8 @@ local function buildCtx(userGraph, derivedSplits)
     return cache.absorption
   end
 
-  -- The class hosted ON the REAPER master. nil when a lone source shares
-  -- master's class (the source track hosts it, routing via its parent send),
-  -- or when nothing reaches master (master parks in class '').
+  -- The class hosted ON the REAPER master; nil only on a marker-free base ctx.
+  -- M.compile marks master split in those cases, so compiled ctx is total. See docs/DAG.md § Master-minimization.
   function ctx:masterTrackClass()
     local mc = self:classOf()['master']
     if not mc or mc == '' then return nil end
@@ -363,9 +362,9 @@ local function buildCtx(userGraph, derivedSplits)
   function ctx:gainFold()
     if cache.gainFold then return cache.gainFold end
     local classOf = self:classOf()
-    local mhc     = self:masterTrackClass()
+    local masterTrackClass     = self:masterTrackClass()
     local function isMasterDest(toId)
-      return toId == 'master' or (mhc and classOf[toId] == mhc)
+      return toId == 'master' or (masterTrackClass and classOf[toId] == masterTrackClass)
     end
     -- The native sink a gained edge could fold onto, with the count key that
     -- decides solubility; nil for untracked-source or same-track edges.
@@ -496,7 +495,7 @@ function M.targetTracks(ctx)
   end
 
   local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
-  local mhc = ctx:masterTrackClass()
+  local masterTrackClass = ctx:masterTrackClass()
   local function nodeTrackKey(id) return cuTrackKey[id] or ctx:trackKeyOf(id) end
   local function audioConn(from, fp, to, tp, gain)
     util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
@@ -535,7 +534,7 @@ function M.targetTracks(ctx)
       local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
       local unit
       if fromTrackKey ~= '' and toTrackKey ~= '' then
-        if mhc and toTrackKey == mhc and fromTrackKey ~= mhc then
+        if masterTrackClass and toTrackKey == masterTrackClass and fromTrackKey ~= masterTrackClass then
           unit = unitFor(fromTrackKey, 'master', true)  -- width-1 parent send: pre-sum per producer
         elseif conn.to == 'master' then
           unit = unitFor(toTrackKey, 'master', true)    -- in-class master: serial parent send, sum fan-in to one pair
@@ -691,12 +690,16 @@ function M.targetTracks(ctx)
         trackKind = 'master'
         masterTrackKey = trackKey
       end
-      tracks[trackKey] = {
-        trackKind  = trackKind, trackGuid = trackGuid, fxOrder = nil,
-        mainSend  = hasMaster and trackKind == 'sourceTrack',
-        mainSendGain = mainGain[trackKey],
-        outWires = {}, intraConns = {},
-      }
+      -- Emit master only when it hosts FX: keeps target/snapshot symmetric.
+      -- See docs/DAG.md § Master-minimization for the FX-less-master invariant.
+      if trackKind ~= 'master' or #(chainMembers[trackKey] or {}) > 0 then
+        tracks[trackKey] = {
+          trackKind  = trackKind, trackGuid = trackGuid, fxOrder = nil,
+          mainSend  = hasMaster and trackKind == 'sourceTrack',
+          mainSendGain = mainGain[trackKey],
+          outWires = {}, intraConns = {},
+        }
+      end
     end
   end
 
@@ -856,10 +859,13 @@ local function deriveMasterSplit(userGraph)
     if not dirty(d) then cut = d; break end
   end
 
-  -- Emit the marker only when the cone is strictly smaller than master's natural
-  -- srcSet class — something needs evicting. One marker peels them all.
+  -- No natural master class — a lone source shares it, or nothing reaches
+  -- master. Mark master itself so it always owns a dedicated, FX-less class.
   local natural = base:masterTrackClass()
-  if not natural then return {} end
+  if not natural then return { master = true } end
+
+  -- Emit the cone marker only when the cone is strictly smaller than master's
+  -- natural srcSet class — something needs evicting. One marker peels them all.
   local cone = reach(cut, fwd, nil)
   for _, id in ipairs(base:classes()[natural]) do
     if not cone[id] then return { [cut] = true } end

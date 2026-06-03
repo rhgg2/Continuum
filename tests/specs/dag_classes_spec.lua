@@ -48,11 +48,11 @@ end
 
 return {
   {
-    name = 'empty graph: only master, one class with key ""',
+    name = 'empty graph: master splits into its own class',
     run = function()
       local cs = DAG.compile(mk({})):classes()
-      t.deepEq(classKeys(cs), { '' })
-      t.deepEq(asSet(cs['']), { master = true })
+      t.deepEq(classKeys(cs), { 'split:master' })
+      t.deepEq(asSet(cs['split:master']), { master = true })
     end,
   },
   {
@@ -61,13 +61,13 @@ return {
       local ns = {}
       local k, v = source('s', 'guid-s'); ns[k] = v
       local cs = DAG.compile(mk(ns, {})):classes()
-      t.deepEq(classKeys(cs), { '', 'guid-s' })
-      t.deepEq(asSet(cs['']),        { master = true })
-      t.deepEq(asSet(cs['guid-s']), { s = true })
+      t.deepEq(classKeys(cs), { 'guid-s', 'split:master' })
+      t.deepEq(asSet(cs['split:master']), { master = true })
+      t.deepEq(asSet(cs['guid-s']),       { s = true })
     end,
   },
   {
-    name = 'chain s → f → master: one class (all three nodes)',
+    name = 'chain s → f → master: master splits, s+f share a class',
     run = function()
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
@@ -76,9 +76,9 @@ return {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
       })):classes()
-      t.deepEq(classKeys(cs), { 'guid-s' })
-      t.deepEq(asSet(cs['guid-s']),
-               { s = true, f = true, master = true })
+      t.deepEq(classKeys(cs), { 'guid-s', 'guid-s|split:master' })
+      t.deepEq(asSet(cs['guid-s']), { s = true, f = true })
+      t.deepEq(asSet(cs['guid-s|split:master']), { master = true })
     end,
   },
   {
@@ -125,9 +125,9 @@ return {
       local cs = DAG.compile(mk(ns, {
         { type = 'audio', from = 's', to = 'f', ops = { gain = 0.5 } },
       })):classes()
-      -- s, f share 'guid-s'; master is empty. The gain CU is synthesised at
-      -- targetTracks, not a graph vertex, so it never appears in a class.
-      t.deepEq(classKeys(cs), { '', 'guid-s' })
+      -- s, f share 'guid-s'; master splits into its own class. The gain CU is
+      -- synthesised at targetTracks, not a graph vertex, so it never appears.
+      t.deepEq(classKeys(cs), { 'guid-s', 'split:master' })
       t.eq(#cs['guid-s'], 2)
     end,
   },
