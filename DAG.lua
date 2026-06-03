@@ -24,7 +24,7 @@
 --shape: trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int, toNode=id, toPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
 --shape: targetTracks = { [trackKey] = trackSpec }
 -- see docs/DAG.md § targetTracks shape
---shape: allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
+--shape: allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int, preFx?=true }; audio src/dstChan are (pair-1)*2, midi are bus 0..127; preFx marks a raw-source-origin (pre-FX) send
 --shape: allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
 --shape: allocatedTracks = { [trackKey] = { trackKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
 local util = require('util')
@@ -988,7 +988,11 @@ function M.allocate(tracks, nodes)
   for trackKey, entry in pairs(tracks) do
     local sends = {}
     for sendIdx, ow in ipairs(entry.outWires or {}) do
-      sends[sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain, srcChan = 0, dstChan = 0 }
+      -- Source-origin audio sends tap raw input pre-FX, freeing pair 1 for the FX
+      -- chain's master write; fx-origin sends stay post-FX (read the producer pair).
+      local preFx = (ow.type == 'audio' and not fxSetOf[trackKey][ow.from]) or nil
+      sends[sendIdx] = { to = ow.to, type = ow.type, gain = ow.gain,
+                         srcChan = 0, dstChan = 0, preFx = preFx }
     end
     alloc[trackKey] = { pinMaps = {}, sends = sends, mainSendOffs = entry.mainSend and 0 or nil }
   end
@@ -1029,18 +1033,14 @@ function M.allocate(tracks, nodes)
           end
         end
       end
-      local hasSourceOut = false
-      for _, ow in ipairs(entry.outWires or {}) do
-        if ow.type == 'audio' and not fxSet[ow.from] then hasSourceOut = true; break end
-      end
       local mf            = entry.masterFeed
       local fxMasterFeed  = entry.mainSend and mf and fxSet[mf.from]
       local hasMasterTo   = #mtPins > 0
-      -- Source data persists on pair 1 to end-of-chain when nothing
-      -- downstream overwrites it (default mainSend with no fx writer).
+      -- Raw source persists on pair 1 to end-of-chain only to feed the parent send
+      -- itself (no fx writer); source-out sends tap pre-FX, so they don't reserve it.
       local srcToMaster   = entry.mainSend and not hasMasterTo and not fxMasterFeed
-      if hasSourceOut or srcToMaster then sfLastUse = N + 1 end
-      if #sfPins > 0 or hasSourceOut or srcToMaster then
+      if srcToMaster then sfLastUse = N + 1 end
+      if #sfPins > 0 or srcToMaster then
         addValue({ def = 0, lastUse = sfLastUse, pins = sfPins, assignReg = 1, applies = {} })
       end
       if hasMasterTo then
@@ -1285,7 +1285,7 @@ function M.allocate(tracks, nodes)
     local state = alloc[trackKey]
     local sends, seen = {}, {}
     for _, s in ipairs(state.sends) do
-      local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan
+      local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan .. '|' .. tostring(s.preFx)
       if not seen[k] then seen[k] = true; util.add(sends, s) end
     end
     table.sort(sends, function(a, b)

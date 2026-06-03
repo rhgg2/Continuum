@@ -351,6 +351,24 @@ return {
     end,
   },
   {
+    name = 'apply: raw-source-origin send is pre-FX (I_SENDMODE=1)',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local trackA = seedSource(h, 'guid-A')
+      seedSource(h, 'guid-B')
+      wm:mutate(function(g)
+        g.nodes.sA  = source('guid-A')
+        g.nodes.sB  = source('guid-B')
+        g.nodes.fxM = fx('JS:m', { ins = 2 })
+        util.add(g.edges, audioEdge('sA', 'fxM', { toPort = 1 }))
+        util.add(g.edges, audioEdge('sB', 'fxM', { toPort = 2 }))
+      end)
+      apply(wm)
+      t.eq(h.reaper.GetTrackNumSends(trackA, 0), 1)
+      t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'I_SENDMODE'), 1, 'raw source tapped pre-FX')
+    end,
+  },
+  {
     name = 'apply: gain on the sole wire to master folds onto the source-track fader, no CU',
     run = function(harness)
       local h, wm = mkWm(harness)

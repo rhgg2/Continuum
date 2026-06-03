@@ -169,11 +169,17 @@ unrelated edit and rewrite pin maps that hadn't changed. The walk is ordered
 function of graph structure, not of allocation history.
 
 A class has **no backbone** — intra-class wires and inter-class sends consume
-pairs uniformly out of one space. Sends are keyed on the 4-tuple `(to, type,
-srcChan, dstChan)`, one per wire, post-FX pre-fader (`I_SENDMODE=3`) so a
-from-track fader stays free as the parent-send gain. This subsumes the old
-slot-boundary send case: "a send lands at slot N" is just an input-pin map
-reading the pair the send arrives on.
+pairs uniformly out of one space. Sends are keyed on `(to, type, srcChan,
+dstChan, preFx)`, one per wire. FX-origin sends are post-FX pre-fader
+(`I_SENDMODE=3`) so a from-track fader stays free as the parent-send gain;
+raw-source-origin sends are pre-FX (`I_SENDMODE=1`), tapping the track input
+before the chain. Pre-FX is what lets a source feed master through an FX *and*
+send its raw signal elsewhere without contending for pair 1: the FX chain owns
+pair 1 for the master write while the raw send reads the input directly. `preFx`
+is part of send identity because a pre-FX and a post-FX send on the same channels
+are distinct sends that coexist. This subsumes the old slot-boundary send case:
+"a send lands at slot N" is just an input-pin map reading the pair the send
+arrives on.
 
 **MIDI is the same walk over bus indices**, with one REAPER wrinkle: a
 non-bus-aware JSFX on bus N≠0 is wrapped by `BusRoute` bracket CUs that swap

@@ -172,6 +172,25 @@ return {
     end,
   },
   {
+    name = 'send I_SENDMODE=1 round-trips as preFx; pre/post-FX coexist on same channels',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:load()
+      local src = seedSourceTrack(h, 'guid-A')
+      local dst = seedSourceTrack(h, 'guid-B')
+      h.reaper:addSend(src, dst, { type = 'audio' })
+      h.reaper:addSend(src, dst, { type = 'audio' })
+      h.reaper.SetTrackSendInfo_Value(src, 0, 0, 'I_SENDMODE', 1)
+      h.reaper.SetTrackSendInfo_Value(src, 0, 1, 'I_SENDMODE', 3)
+      local byMode = {}
+      for _, s in ipairs(wm:snapshot()['guid-A'].sends) do
+        byMode[s.preFx and 'pre' or 'post'] = true
+      end
+      t.truthy(byMode.pre,  'pre-FX send surfaces preFx=true')
+      t.truthy(byMode.post, 'post-FX send carries no preFx')
+    end,
+  },
+  {
     name = 'track D_VOL round-trips as mainSendGain',
     run = function(harness)
       local h, wm = mkWm(harness)

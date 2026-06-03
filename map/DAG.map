@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1333  sha=19bf243  mode=namespace
+@module DAG  src=DAG.lua  loc=1333  sha=a66f812  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
@@ -21,7 +21,7 @@
   @shape  intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
   @shape  trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int, toNode=id, toPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
   @shape  targetTracks = { [trackKey] = trackSpec }
-  @shape  allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }; audio src/dstChan are (pair-1)*2, midi are bus 0..127
+  @shape  allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int, preFx?=true }; audio src/dstChan are (pair-1)*2, midi are bus 0..127; preFx marks a raw-source-origin (pre-FX) send
   @shape  allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
   @shape  allocatedTracks = { [trackKey] = { trackKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
 
@@ -88,9 +88,9 @@
       @contract  nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 239, 363, 424, 451, 465, 470, 472, 476, 505, 525, 549, 590, 598, 618, 628, 638, 644, 645, 658, 666, 678, 713, 728, 811, 1010, 1014, 1024, 1027, 1061, 1069, 1078, 1120, 1147, 1154, 1178, 1186, 1193, 1267, 1268, 1269, 1274, 1289
+  @use call    util.add  @ 239, 363, 424, 451, 465, 470, 472, 476, 505, 525, 549, 590, 598, 618, 628, 638, 644, 645, 658, 666, 678, 713, 728, 811, 1014, 1018, 1028, 1031, 1061, 1069, 1078, 1120, 1147, 1154, 1178, 1186, 1193, 1267, 1268, 1269, 1274, 1289
   @use call    util.assign  @ 82, 402, 511, 1311, 1312
   @use call    util.bucket  @ 131, 164, 183, 209, 244, 785, 786, 909, 913, 965, 973
-  @use call    util.keys  @ 301, 302, 996, 1189
+  @use call    util.keys  @ 301, 302, 1000, 1189
   @use call    util.pick  @ 402
   @use require util  @ 30

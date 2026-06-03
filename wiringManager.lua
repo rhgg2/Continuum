@@ -7,7 +7,7 @@
 --invariant: wm deletes an FX instance only when its owning node or CU bridge leaves the graph
 --invariant: trackKey changes are moves; TrackFX_CopyToTrack(is_move=true) preserves plugin state
 --shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
---shape: snapshotSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int }
+--shape: snapshotSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int, preFx?=true }
 --shape: snapshotFxOrigin = {kind='node',id=string}|{kind='edge',idx=int}|{kind='bracketIn'|'bracketOut',id=string}
 --shape: snapshotFxEntry = { fxGuid?=string, ident=string, params?=table, origin?=snapshotFxOrigin, midiOut?=bool, midiBus?={inBus=int,outBus=int} }
 --shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=snapshotFxEntry[], mainSend=bool, mainSendGain?=number, mainSendOffs?=int, mainSendNch?=int, sends=snapshotSend[], nchan?=int, pinMaps?={ [fxGuid]=snapshotPinMap }, pinMapsByOrigin?={ [originKey]=snapshotPinMap } } }; see docs/wiringManager.md § wiringSnapshot.
@@ -594,6 +594,9 @@ local function readSendsClass(track, byTrack)
     if dstClass then
       local typ   = sendType(track, i)
       local entry = { to = dstClass, type = typ, srcChan = 0, dstChan = 0 }
+      if math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_SENDMODE')) == 1 then
+        entry.preFx = true
+      end
       if typ == 'audio' then
         entry.srcChan = math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_SRCCHAN'))
         entry.dstChan = math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_DSTCHAN'))
@@ -796,15 +799,15 @@ end
 
 local function sendsEq(a, b)
   if #a ~= #b then return false end
-  -- Set-equality on the 4-tuple identity (to, type, srcChan, dstChan); gain
-  -- rides as the value so D_VOL drift drives a setSends.
+  -- Set-equality on the identity (to, type, srcChan, dstChan, preFx); gain is the
+  -- value so D_VOL drift drives setSends. preFx lets pre- and post-FX sends coexist.
   local byKey = {}
   for _, s in ipairs(a) do
-    local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan
+    local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan .. '|' .. tostring(s.preFx)
     byKey[k] = s.gain or 1.0
   end
   for _, s in ipairs(b) do
-    local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan
+    local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan .. '|' .. tostring(s.preFx)
     if byKey[k] == nil or byKey[k] ~= (s.gain or 1.0) then return false end
   end
   return true
@@ -1158,8 +1161,8 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
 end
 
 local function reconcileSends(track, target, trackKeyToTrack)
-  local function sendKey(dst, typ, src, dstCh)
-    return tostring(dst) .. '|' .. typ .. '|' .. src .. '|' .. dstCh
+  local function sendKey(dst, typ, src, dstCh, preFx)
+    return tostring(dst) .. '|' .. typ .. '|' .. src .. '|' .. dstCh .. '|' .. tostring(preFx)
   end
   local function readChans(idx, typ)
     if typ == 'audio' then
@@ -1175,15 +1178,16 @@ local function reconcileSends(track, target, trackKeyToTrack)
     local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
     local typ = sendType(track, i)
     local src, dstCh = readChans(i, typ)
-    current[sendKey(dst, typ, src, dstCh)] = { idx = i }
+    local preFx = reaper.GetTrackSendInfo_Value(track, 0, i, 'I_SENDMODE') == 1 or nil
+    current[sendKey(dst, typ, src, dstCh, preFx)] = { idx = i }
   end
   local wanted = {}
   for _, s in ipairs(target) do
     local dst = trackKeyToTrack[s.to]
     if dst then
-      wanted[sendKey(dst, s.type, s.srcChan, s.dstChan)] =
+      wanted[sendKey(dst, s.type, s.srcChan, s.dstChan, s.preFx)] =
         { dst = dst, typ = s.type, srcChan = s.srcChan, dstChan = s.dstChan,
-          gain = s.gain or 1.0 }
+          gain = s.gain or 1.0, preFx = s.preFx }
     end
   end
   -- Drops right-to-left so REAPER's post-remove index shift stays sane.
@@ -1193,7 +1197,8 @@ local function reconcileSends(track, target, trackKeyToTrack)
   end
   table.sort(dropIdx, function(a, b) return a > b end)
   for _, idx in ipairs(dropIdx) do reaper.RemoveTrackSend(track, 0, idx) end
-  -- Wiring sends are post-FX pre-fader (I_SENDMODE=3); audio writes channels.
+  -- Wiring sends are post-FX pre-fader (I_SENDMODE=3), save raw-source sends,
+  -- which tap pre-FX (1) so the FX chain can own pair 1; audio writes channels.
   for key, w in pairs(wanted) do
     if not current[key] then
       local idx = reaper.CreateTrackSend(track, w.dst)
@@ -1209,7 +1214,7 @@ local function reconcileSends(track, target, trackKeyToTrack)
         reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', w.srcChan)
         reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_DSTCHAN', w.dstChan)
       end
-      reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SENDMODE', 3)
+      reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SENDMODE', w.preFx and 1 or 3)
     end
   end
   -- Gain drift: indices may have shifted; re-locate each by 4-tuple key.
@@ -1217,7 +1222,8 @@ local function reconcileSends(track, target, trackKeyToTrack)
     local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
     local typ = sendType(track, i)
     local src, dstCh = readChans(i, typ)
-    local w = wanted[sendKey(dst, typ, src, dstCh)]
+    local preFx = reaper.GetTrackSendInfo_Value(track, 0, i, 'I_SENDMODE') == 1 or nil
+    local w = wanted[sendKey(dst, typ, src, dstCh, preFx)]
     if w and typ == 'audio' then
       reaper.SetTrackSendInfo_Value(track, 0, i, 'D_VOL', w.gain)
     end

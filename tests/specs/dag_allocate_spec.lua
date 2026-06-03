@@ -500,6 +500,43 @@ return {
     end,
   },
   {
+    name = 'preFx: source-out send taps raw input, coexists with fx master feed',
+    run = function()
+      local tracks = {
+        ['guid-a'] = {
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          mainSend=true, masterFeed={from='fx1', toNode='master', toPort=1},
+          intraConns={ {from='s', to='fx1', type='audio'} },
+          outWires={ {from='s', to='guid-b', toNode='fx_b', type='audio'} },
+        },
+        ['guid-b'] = { trackKind='newTrack', fxOrder={'fx_b'},
+                       mainSend=false, intraConns={}, outWires={} },
+      }
+      local out = DAG.allocate(tracks)
+      t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})  -- master feed in place on pair 1
+      t.eq(out['guid-a'].mainSendOffs, 0)
+      t.eq(out['guid-a'].sends[1].srcChan, 0)            -- raw input, tapped pre-fx
+      t.eq(out['guid-a'].sends[1].preFx,   true)
+    end,
+  },
+  {
+    name = 'preFx: fx-origin send stays post-fx (no preFx flag)',
+    run = function()
+      local tracks = {
+        ['guid-a'] = {
+          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          mainSend=false,
+          intraConns={ {from='s', to='fx1', type='audio'} },
+          outWires={ {from='fx1', to='guid-b', toNode='fx_b', type='audio'} },
+        },
+        ['guid-b'] = { trackKind='newTrack', fxOrder={'fx_b'},
+                       mainSend=false, intraConns={}, outWires={} },
+      }
+      local out = DAG.allocate(tracks)
+      t.eq(out['guid-a'].sends[1].preFx, nil)
+    end,
+  },
+  {
     name = 'mainSendOffs: master-hosted fx, parent-send OFFS = receiver dest pair (sidechain)',
     run = function()
       local tracks = {
