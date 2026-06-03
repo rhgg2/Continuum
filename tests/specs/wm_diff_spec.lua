@@ -193,22 +193,22 @@ return {
       }
       local ops = byOp(wm:diff(target, {}))
       t.eq(#ops.createTrack, 1)
-      t.eq(ops.createTrack[1].classKey, 'guid-A|guid-B')
+      t.eq(ops.createTrack[1].trackKey, 'guid-A|guid-B')
       t.eq(ops.createTrack[1].trackKind, 'newTrack')
       t.eq(#ops.setFXChain, 1)
       t.eq(ops.setFXChain[1].fxOrder[1].ident, 'JS:mix')
       t.eq(ops.setFXChain[1].fxOrder[1].fxGuid, nil, 'unmaterialised → nil guid')
       t.eq(#ops.setSends, 1)
       t.eq(ops.setSends[1].sends[1].to, 'guid-X')
-      -- setExtState: wiringTrackKind + wiringClass (newTrack writes both).
+      -- setExtState: wiringTrackKind + wiringTrack (newTrack writes both).
       local extKeys = {}
       for _, op in ipairs(ops.setExtState or {}) do extKeys[op.key] = op.value end
       t.eq(extKeys.wiringTrackKind, 'newTrack')
-      t.eq(extKeys.wiringClass,    'guid-A|guid-B')
+      t.eq(extKeys.wiringTrack,    'guid-A|guid-B')
     end,
   },
   {
-    name = "diff: target-only sourceTrack trackKey writes only wiringTrackKind (classKey ≡ trackGuid)",
+    name = "diff: target-only sourceTrack trackKey writes only wiringTrackKind (trackKey ≡ trackGuid)",
     run = function(harness)
       local _, wm = mkWm(harness)
       local target = {
@@ -220,7 +220,7 @@ return {
       local extKeys = {}
       for _, op in ipairs(ops.setExtState or {}) do extKeys[op.key] = op.value end
       t.eq(extKeys.wiringTrackKind, 'sourceTrack')
-      t.eq(extKeys.wiringClass,    nil,           'no redundant wiringClass write')
+      t.eq(extKeys.wiringTrack,    nil,           'no redundant wiringTrack write')
     end,
   },
   {
@@ -345,7 +345,7 @@ return {
                                           mainSend=false, sends={} } }
       local ops = byOp(wm:diff(target, snap))
       t.eq(#ops.createTrack, 1)
-      t.eq(ops.createTrack[1].classKey, 'guid-A|guid-B')
+      t.eq(ops.createTrack[1].trackKey, 'guid-A|guid-B')
       local installs, drains = 0, 0
       for _, op in ipairs(ops.setFXChain or {}) do
         if op.trackKind == 'master' and #op.fxOrder == 0 then drains   = drains   + 1 end

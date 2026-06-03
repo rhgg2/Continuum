@@ -38,7 +38,7 @@ local MERGE_WIDTH = 16
 local CAPACITY = { audio = 64, midi = 128 }
 
 -- Stable trackKey for the master-hosted class: wm:snapshot can't tag the REAPER
--- master with a project-scoped wiringClass, so target and snapshot agree on this.
+-- master with a project-scoped wiringTrack, so target and snapshot agree on this.
 local MASTER = '__master__'
 
 local M = {}

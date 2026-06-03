@@ -179,6 +179,34 @@ certain fields exist and which side fills them:
 - **`nchan`** is the track's `I_NCHAN`; **`mainSendOffs`** is
   `C_MAINSEND_OFFS`, present only when `mainSend=true`.
 
+## createSourceTrack
+
+`wm:createSourceTrack` is called outside the `mutate` transaction — it
+inserts a raw REAPER track immediately, bypassing clone/validate/swap.
+The trackKey for source hosts is the track's own GUID (a singleton class:
+one physical track per source node), so no separate `wiringTrack` ExtState
+key is needed to carry it; `wm:snapshot`'s first pass derives the trackKey
+directly from `GetTrackGUID`.
+
+## diff op ordering
+
+`wm:diff` emits ops in a fixed order so the applier can apply them
+without look-ahead:
+
+1. **creates** — fresh tracks exist before any `setSends` references them.
+2. **trackKey-transition drains** — old extstate cleared before the key
+   moves to a new track.
+3. **setFXChain / setMainSend / setSends / setExtState** — per-track state
+   written after identity is stable.
+4. **deletes** — tracks removed last, after sends pointing at them are gone.
+
+snap entries absent from target, entries whose `trackKind` changed, and
+`trackKind='newTrack'` entries are deleted. `sourceTrack`, `scratch`, and
+`master` are project artefacts — never deleted, but drained on a trackKey
+transition. `setFXChain`/`setMainSend`/`setSends` ops carry `trackKind` so
+the applier can resolve master (which has no `wiringTrack` ExtState tag)
+without a tagged GUID.
+
 ## pokeEdgeGain routing
 
 `wm:pokeEdgeGain` writes the gain for a single edge on the drag hot path —

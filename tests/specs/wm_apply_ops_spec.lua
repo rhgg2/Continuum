@@ -435,7 +435,7 @@ return {
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
       wm:applyOps({
-        { op='setNchan', classKey='guid-A', trackKind='sourceTrack',
+        { op='setNchan', trackKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A', value=6 },
       }, 'test')
       t.eq(h.reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN'), 6)
@@ -447,7 +447,7 @@ return {
       local h, wm = mkWm(harness)
       local trackA = seedSource(h, 'guid-A')
       wm:applyOps({
-        { op='setMainSend', classKey='guid-A', trackKind='sourceTrack',
+        { op='setMainSend', trackKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A', value=true, gain=0.75, offs=2 },
       }, 'test')
       t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'B_MAINSEND'), 1)
@@ -470,7 +470,7 @@ return {
       apply(wm)
       local fxGuid = wm:graph().nodes.f.fxGuid
       wm:applyOps({
-        { op='setPinMaps', classKey='guid-A', trackKind='sourceTrack',
+        { op='setPinMaps', trackKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
           pinMaps         = { [fxGuid] = { ins={[1]={2}}, outs={} } },
           pinMapsByOrigin = {} },
@@ -495,11 +495,11 @@ return {
       end)
       -- setFXChain mints+stamps; setPinMaps then resolves 'node:f' → fxGuid.
       wm:applyOps({
-        { op='setFXChain', classKey='guid-A', trackKind='sourceTrack',
+        { op='setFXChain', trackKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
           fxOrder = { { fxGuid=nil, ident='JS:foo',
                         origin={ kind='node', id='f' } } } },
-        { op='setPinMaps', classKey='guid-A', trackKind='sourceTrack',
+        { op='setPinMaps', trackKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
           pinMaps         = {},
           pinMapsByOrigin = { ['node:f'] = { ins={[1]={2}}, outs={} } } },
@@ -527,7 +527,7 @@ return {
       h.reaper.TrackFX_SetPinMappings(track, 0, 0, 0, 1 << 2, 0)
       h.reaper.TrackFX_SetPinMappings(track, 0, 0, 1, 1 << 3, 0)
       wm:applyOps({
-        { op='setPinMaps', classKey='guid-A', trackKind='sourceTrack',
+        { op='setPinMaps', trackKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
           pinMaps         = { [fxGuid] = { ins={}, outs={} } },
           pinMapsByOrigin = {} },

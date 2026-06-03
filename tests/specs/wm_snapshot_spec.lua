@@ -18,13 +18,13 @@ local function seedSourceTrack(h, guid)
   return track
 end
 
-local function seedNewTrack(h, guid, classKey)
+local function seedNewTrack(h, guid, trackKey)
   local track = { __label = 'new:' .. guid }
   local list  = h.reaper._state.projectTracks
   list[#list+1] = track
   h.reaper._state.trackGuids[track] = guid
   h.cm:writeTrackKey(track, 'wiringTrackKind', 'newTrack')
-  h.cm:writeTrackKey(track, 'wiringClass',    classKey)
+  h.cm:writeTrackKey(track, 'wiringTrack',    trackKey)
   return track
 end
 
@@ -50,13 +50,13 @@ return {
     end,
   },
   {
-    name = 'sourceTrack: classKey is the track guid, mainSend defaults true (REAPER parity)',
+    name = 'sourceTrack: trackKey is the track guid, mainSend defaults true (REAPER parity)',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       local track = seedSourceTrack(h, 'guid-A')
       local snap  = wm:snapshot()
-      t.truthy(snap['guid-A'],            'entry under track-guid classKey')
+      t.truthy(snap['guid-A'],            'entry under track-guid trackKey')
       t.eq(snap['guid-A'].trackKind, 'sourceTrack')
       t.eq(snap['guid-A'].trackGuid, 'guid-A')
       t.eq(snap['guid-A'].mainSend, true)
@@ -110,7 +110,7 @@ return {
     end,
   },
   {
-    name = 'sends to a managed dst surface as {to=classKey, type=audio|midi}; foreign dst dropped',
+    name = 'sends to a managed dst surface as {to=trackKey, type=audio|midi}; foreign dst dropped',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
@@ -133,13 +133,13 @@ return {
     end,
   },
   {
-    name = 'newTrack trackKey: classKey comes from wiringClass key (multi-guid)',
+    name = 'newTrack trackKey: trackKey comes from wiringTrack key (multi-guid)',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       seedNewTrack(h, 'guid-mix', 'guid-A|guid-B')
       local snap = wm:snapshot()
-      t.truthy(snap['guid-A|guid-B'],            'entry under multi-guid classKey')
+      t.truthy(snap['guid-A|guid-B'],            'entry under multi-guid trackKey')
       t.eq(snap['guid-A|guid-B'].trackKind, 'newTrack')
       t.eq(snap['guid-A|guid-B'].trackGuid, 'guid-mix')
     end,

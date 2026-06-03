@@ -113,11 +113,11 @@ local declarations = {
   -- See docs/arrangeManager.md.
   { 'arrangeColours', {} },
 
-  -- Wiring page keys: wiringGraph is a project-tier blob; wiringClass is a
+  -- Wiring page keys: wiringGraph is a project-tier blob; wiringTrack is a
   -- per-track marker the Stage 2 differ uses. See docs/wiringManager.md.
   { 'wiringGraph',    {}  },
   { 'wiringOwnedFx',  {}  },
-  { 'wiringClass',    nil },
+  { 'wiringTrack',    nil },
   { 'wiringTrackKind', nil },
   { 'wiringScratch',  nil },
 
