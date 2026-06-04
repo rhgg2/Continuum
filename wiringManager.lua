@@ -242,6 +242,24 @@ function wm:trackName(guid)
   return name
 end
 
+--contract: linear scan over project FX for the instance guid; returns track, fxIdx or nil
+function wm:locateFx(fxGuid)
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local track = reaper.GetTrack(0, i)
+    for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
+      if reaper.TrackFX_GetFXGUID(track, fxIdx) == fxGuid then return track, fxIdx end
+    end
+  end
+end
+
+--contract: floats the FX window for the instance guid; false if the guid is no longer live
+function wm:showFxWindow(fxGuid)
+  local track, fxIdx = self:locateFx(fxGuid)
+  if not track then return false end
+  reaper.TrackFX_Show(track, fxIdx, 3)
+  return true
+end
+
 --contract: inserts a source track before scratch, tags wiringTrackKind=sourceTrack, returns GUID.
 -- Called outside mutate. see docs/wiringManager.md § createSourceTrack
 function wm:createSourceTrack(opts)

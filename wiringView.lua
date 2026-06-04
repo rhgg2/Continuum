@@ -103,6 +103,25 @@ end
 
 function wv:listInstalledFX() return wm:listInstalledFX() end
 
+----- Navigation (page double-click targets)
+
+--contract: floats the node's FX window; false for non-fx nodes or a stale guid
+function wv:openFxWindow(nodeId)
+  local node = wm:graph().nodes[nodeId]
+  return (node and node.fxGuid and wm:showFxWindow(node.fxGuid)) or false
+end
+
+--contract: live MediaTrack for a Continuum Sampler fx node (matched on fxDisplay), else nil
+-- see docs/wiringView.md § samplerTrackForNode
+function wv:samplerTrackForNode(nodeId)
+  local node = wm:graph().nodes[nodeId]
+  if not (node and node.fxGuid and node.fxDisplay
+          and node.fxDisplay:find('Continuum Sampler', 1, true)) then
+    return nil
+  end
+  return (wm:locateFx(node.fxGuid))
+end
+
 --contract: atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
 function wv:moveNodes(moves)
   return wm:mutate(function(g)
@@ -129,6 +148,18 @@ end
 function wv:removeWireAt(idx)
   return wm:mutate(function(g)
     if g.edges[idx] then table.remove(g.edges, idx) end
+  end)
+end
+
+--contract: removes node and incident edges atomically; no-op if id absent; fires wiringChanged
+function wv:deleteNode(nodeId)
+  return wm:mutate(function(g)
+    g.nodes[nodeId] = nil
+    local kept = {}
+    for _, e in ipairs(g.edges) do
+      if e.from ~= nodeId and e.to ~= nodeId then util.add(kept, e) end
+    end
+    g.edges = kept
   end)
 end
 

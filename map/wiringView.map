@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=265  sha=85a21e3  mode=chunk
+@module wiringView  src=wiringView.lua  loc=296  sha=dad58b1  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -55,61 +55,71 @@
   @api wv:addFx(x, y, fx, opts)  @ 100
       @contract  pass-through to wm:addFxNode (Undo block + instantiate + generator there)
   @api wv:listInstalledFX()  @ 104
-  @api wv:moveNodes(moves)  @ 107
+  -- Navigation (page double-click targets)
+  @api wv:openFxWindow(nodeId)  @ 109
+      @contract  floats the node's FX window; false for non-fx nodes or a stale guid
+  @api wv:samplerTrackForNode(nodeId)  @ 116
+      -- see docs/wiringView.md § samplerTrackForNode
+      @contract  live MediaTrack for a Continuum Sampler fx node (matched on fxDisplay), else nil
+  @api wv:moveNodes(moves)  @ 126
       @contract  atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
-  @api wv:addWire(spec)  @ 117
+  @api wv:addWire(spec)  @ 136
       @contract  appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
-  @api wv:removeWireAt(idx)  @ 129
+  @api wv:removeWireAt(idx)  @ 148
       @contract  removes the edge at g.edges[idx]; no-op if idx is out of range; fires wiringChanged via wm:mutate
-  @api wv:rewireEdgeEnd(idx, side, target)  @ 136
+  @api wv:deleteNode(nodeId)  @ 155
+      @contract  removes node and incident edges atomically; no-op if id absent; fires wiringChanged
+  @api wv:rewireEdgeEnd(idx, side, target)  @ 167
       @contract  rewrites one end of g.edges[idx] in place; side ∈ {'from','to'}; target = { id, port? }; port ignored for midi edges; single wiringChanged
-  @api wv:edgeGain(idx)  @ 151
+  @api wv:edgeGain(idx)  @ 182
       @contract  linear gain scalar on edges[idx]; 1.0 default when ops.gain unset or edge is non-audio / missing. Read-only.
-  @api wv:setEdgeGain(idx, gain)  @ 158
+  @api wv:setEdgeGain(idx, gain)  @ 189
       @contract  writes ops.gain on audio edges[idx]; fast path when poke hosts, else wm:mutate
-  @api wv:pokeEdgeGain(idx, gain)  @ 169
+  @api wv:pokeEdgeGain(idx, gain)  @ 200
       @contract  live pass-through to wm:pokeEdgeGain. Returns true if the CU exists and was poked; false if caller must materialise via setEdgeGain first.
-  @api wv:setEdgePrimary(idx, primary)  @ 172
+  @api wv:setEdgePrimary(idx, primary)  @ 203
       @contract  sets edges[idx].primary via wm:mutate; coerced to true/nil (nil-not-false per DAG).
   -- Topology queries
-  @api wv:ancestorsOf(sourceId)  @ 183
+  @api wv:ancestorsOf(sourceId)  @ 214
       @contract  backward reachability over user.edges; returns { [id]=true } including sourceId
-  @api wv:descendantsOf(sourceId)  @ 188
+  @api wv:descendantsOf(sourceId)  @ 219
       @contract  forward reachability over user.edges; returns { [id]=true } including sourceId
-  @api wv:wiredPorts(nodeId, dir)  @ 193
+  @api wv:wiredPorts(nodeId, dir)  @ 224
       @contract  returns { [portIdx]=true } over audio edges on nodeId for dir ('out'|'in'); midi edges ignored
   -- Render-ready, viewport-independent
-  @api wv:nodeViews()  @ 209
+  @api wv:nodeViews()  @ 240
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:wireViews()  @ 218
+  @api wv:wireViews()  @ 249
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Capacity errors
-  @api wv:errors()  @ 247
+  @api wv:errors()  @ 278
       @contract  pass-through of wm:errors; { kind, count, budget, nodeIds }[] per overflowing class
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 253
-  @api wv:setHover(id)  @ 254
-  @api wv:selection()  @ 257
+  @api wv:hover()  @ 284
+  @api wv:setHover(id)  @ 285
+  @api wv:selection()  @ 288
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 259
+  @api wv:setSelection(idSet)  @ 290
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
 
 # Uses (outbound edges)
-  @use call    DAG.ancestors  @ 184
-  @use call    DAG.descendants  @ 189
-  @use call    util.add  @ 59, 124, 212, 230
+  @use call    DAG.ancestors  @ 215
+  @use call    DAG.descendants  @ 220
+  @use call    util.add  @ 59, 143, 160, 243, 261
   @use call    util.instantiate  @ 13
   @use call    wiringManager.addFxNode  @ 101
   @use call    wiringManager.enableLive  @ 94
-  @use call    wiringManager.errors  @ 248
-  @use call    wiringManager.fastGainCommit  @ 159
-  @use call    wiringManager.graph  @ 91, 152, 184, 189, 197, 210, 219
+  @use call    wiringManager.errors  @ 279
+  @use call    wiringManager.fastGainCommit  @ 190
+  @use call    wiringManager.graph  @ 91, 110, 117, 183, 215, 220, 228, 241, 250
   @use call    wiringManager.listInstalledFX  @ 104
   @use call    wiringManager.load  @ 93
-  @use call    wiringManager.mutate  @ 108, 118, 130, 137, 160, 173
-  @use call    wiringManager.pokeEdgeGain  @ 159, 169
+  @use call    wiringManager.locateFx  @ 122
+  @use call    wiringManager.mutate  @ 127, 137, 149, 156, 168, 191, 204
+  @use call    wiringManager.pokeEdgeGain  @ 190, 200
   @use call    wiringManager.pollUndo  @ 95
   @use call    wiringManager.save  @ 92
+  @use call    wiringManager.showFxWindow  @ 111
   @use call    wiringManager.trackName  @ 26
   @use require DAG  @ 9
   @use require util  @ 8

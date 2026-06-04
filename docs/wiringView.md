@@ -17,6 +17,12 @@ projection is viewport-independent: the page needs port counts to
 size a box but does not need to recompute "master has zero MIDI" per
 frame, and the rule lives with the graph model, not with the renderer.
 
+## samplerTrackForNode
+
+The sampler page binds to a MediaTrack (not an fx GUID), so `samplerTrackForNode`
+resolves the node's GUID to a live track via `wm:locateFx`. The page then dives
+directly to that track rather than passing a GUID across the page boundary.
+
 ## What does not live here
 
 No ImGui. No pixel geometry. No hit-testing. The page owns the

@@ -139,6 +139,7 @@ local hoverFreeze = nil  -- { x, y } | nil — suppresses shift-hover until the 
 local sticky = nil  -- { nodeId, side } — pinned node's port row, kept visible post-click
 local fader = nil  -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, dragging?, wheelPending?, wheelIdleFrames? }
 local wireMenu = nil  -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
+local nodeMenu = nil  -- { nodeId, anchorX, anchorY } — set on RMB-on-body; cleared when BeginPopup returns false
 
 -- Last canvas origin, captured at the top of renderCanvas. Lets openFxPicker
 -- (called from the N-key dispatch path, which runs after renderCanvas exits)
@@ -1233,6 +1234,9 @@ local function renderCanvas(w, h)
   if hoverFreeze and (hoverFreeze.x ~= mx or hoverFreeze.y ~= my) then
     hoverFreeze = nil
   end
+  -- A deliberate click cancels the post-commit freeze, so a shift-click can
+  -- start the next wire from the just-dropped node without first jiggling.
+  if hoverFreeze and ImGui.IsMouseClicked(ctx, 0) then hoverFreeze = nil end
 
   local nodeViews = wv:nodeViews()
 
@@ -1486,10 +1490,27 @@ local function renderCanvas(w, h)
     end
   end
 
+  -- Double-click a node body: sampler dives to sample page, other fx floats
+  -- its FX window. dblConsumed blocks this press from starting a drag.
+  local dblConsumed = false
+  if not shiftHeld and not wireDraft and not fader
+     and ImGui.IsMouseDoubleClicked(ctx, 0) then
+    local hit = nodeUnderMouse(nodeViews, lmx, lmy)
+    if hit then
+      dblConsumed = true
+      local samplerTrack = wv:samplerTrackForNode(hit.id)
+      if samplerTrack then
+        cmgr:invoke('diveToSampler', samplerTrack)
+      else
+        wv:openFxWindow(hit.id)
+      end
+    end
+  end
+
   -- Mousedown precedence (docs/wiringPage.md): shift-hover > wire-end >
   -- body-drag > band.
-  if not faderConsumed and not drag and not band and not wireDraft
-      and ImGui.IsMouseClicked(ctx, 0) then
+  if not faderConsumed and not dblConsumed and not drag and not band
+      and not wireDraft and ImGui.IsMouseClicked(ctx, 0) then
     -- Any click closes the spillover. The pre-click sourceHit (list still open)
     -- drives dispatch here.
     listOpenId = nil
@@ -1653,8 +1674,8 @@ local function renderCanvas(w, h)
     band = nil
   end
 
-  -- RMB on the triangle opens the per-wire menu; anywhere else opens the
-  -- FX picker (same code path as the N-key shortcut).
+  -- RMB precedence: triangle → per-wire menu; node body → node menu; empty
+  -- canvas → FX picker (same code path as the N-key shortcut).
   if not drag and not band and not wireDraft
       and ImGui.IsMouseClicked(ctx, 1) then
     if arrowHitIdx and not wireMenu and not fader then
@@ -1664,7 +1685,13 @@ local function renderCanvas(w, h)
       wireMenu = { edgeIdx = arrowHitIdx, anchorX = ax, anchorY = ay }
       ImGui.OpenPopup(ctx, '##wiringWireMenu')
     else
-      openFxPicker(lmx, lmy)
+      local bodyHit = nodeUnderMouse(nodeViews, lmx, lmy)
+      if bodyHit and not nodeMenu then
+        nodeMenu = { nodeId = bodyHit.id, anchorX = lmx, anchorY = lmy }
+        ImGui.OpenPopup(ctx, '##wiringNodeMenu')
+      else
+        openFxPicker(lmx, lmy)
+      end
     end
   end
 
@@ -1691,6 +1718,33 @@ local function renderCanvas(w, h)
       ImGui.EndPopup(ctx)
     else
       wireMenu = nil
+    end
+    ImGui.PopStyleColor(ctx, 1)
+    chrome.popChromeWindow()
+  end
+
+  -- Node menu: mirrors the wire menu — cursor-anchored popup, closes on
+  -- cursor-leave of the window rect (and click-outside, ImGui's default).
+  if nodeMenu then
+    local screenX, screenY = p.toScreen(nodeMenu.anchorX, nodeMenu.anchorY)
+    ImGui.SetNextWindowPos(ctx, screenX, screenY, ImGui.Cond_Appearing, 0, 0)
+    chrome.pushChromeWindow()
+    ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('separator'))
+    if ImGui.BeginPopup(ctx, '##wiringNodeMenu') then
+      if ImGui.Selectable(ctx, 'Delete node') then
+        wv:deleteNode(nodeMenu.nodeId)
+        ImGui.CloseCurrentPopup(ctx)
+      end
+      if not ImGui.IsWindowAppearing(ctx) then
+        local wx, wy = ImGui.GetWindowPos(ctx)
+        local ww, wh = ImGui.GetWindowSize(ctx)
+        if not (mx >= wx and mx <= wx + ww and my >= wy and my <= wy + wh) then
+          ImGui.CloseCurrentPopup(ctx)
+        end
+      end
+      ImGui.EndPopup(ctx)
+    else
+      nodeMenu = nil
     end
     ImGui.PopStyleColor(ctx, 1)
     chrome.popChromeWindow()

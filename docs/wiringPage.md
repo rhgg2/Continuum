@@ -47,6 +47,16 @@ them in a fixed precedence:
   visual encouragement) and again at the mouseup commit. Cleared on
   commit / delete / cancel / Esc.
 
+Two non-drag gestures sit outside the precedence chain:
+
+- **Double-click a node body** dives: a Continuum Sampler node opens the
+  sample page bound to its track (via `diveToSampler`); any other fx node
+  floats its REAPER FX window. The first click's no-op body-drag has
+  already committed, so a `dblConsumed` flag stops the second press from
+  re-arming a drag.
+- **Right-click** resolves triangle → wire menu, node body → node menu
+  (Delete node), empty canvas → FX picker.
+
 ### The wire end leads the cursor
 
 A redraft grabs a wire's end-region, not its endpoint, so snapping the
@@ -78,7 +88,9 @@ that node. Both survive binds but not project loads — lifting them into
 After a drag-drop mouseup the source-side popout would otherwise snap
 onto whatever node sits under the cursor at drop time, reading as a
 flicker. `hoverFreeze` captures the drop position and suppresses
-shift-hover until the cursor next moves.
+shift-hover until the cursor next moves — *or* until the next click,
+which is deliberate enough to mean "start the next wire here": chaining
+wire after wire from the just-dropped node needs no jiggle between them.
 
 ## The port band
 

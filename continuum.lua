@@ -139,6 +139,7 @@ local function Main()
     switchToWiring  = function() coord:setActive('wiring')  end,
     switchToTracker = function() coord:setActive('tracker') end,
     switchToSample  = function() coord:setActive('sample')  end,
+    diveToSampler   = function(_, track) coord:setSamplerTrack(track); coord:setActive('sample') end,
     togglePage      = function() coord:togglePage()         end,
     quit            = function() coord:quit()               end,
     beginPrefix     = function() cmgr:beginPrefix()         end,
