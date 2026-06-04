@@ -1,5 +1,5 @@
-@module trackerPage  src=trackerPage.lua  loc=1486  sha=a5ecb79  mode=chunk
-@deps cm, cmgr, chrome, gui, modalHost
+@module trackerPage  src=trackerPage.lua  loc=1623  sha=bfb91d6  mode=chunk
+@deps cm, cmgr, chrome, gui, modalHost, selectTake
 
 # Invariants & contracts
   @invariant  page is render + input only; tracker state lives in tv/ec/tm, never cached
@@ -58,16 +58,17 @@
   @state pickSwing = util.atomic('Set swing',        function(name)       tv:s...  @ 274
   @state pickColSwing = util.atomic('Set column swing', function(chan, name) tv:s...  @ 275
   @state SWING_PRESET_EXCLUDE = { identity = true }  @ 279
-  @state toolbarSegments = {  @ 313
-  @state laneRenderable = { cc = true, pb = true, at = true }  @ 437
+  @state toolbarBound = nil  @ 314   -- bound am-take for the current toolbar frame; shared by both pickers
+  @state toolbarSegments = {  @ 393
+  @state laneRenderable = { cc = true, pb = true, at = true }  @ 561
       @invariant  lane strip renders only cc/pb/at; other types show as tinted background
-  @state LANE_ROW_MIN = 3  @ 439
-  @state LANE_ROW_MAX = 32  @ 440
-  @state editKeys = {}  @ 1083
-  @state lastEditKey  @ 1101
-  @state tp = {}  @ 1242
-  @state NEW_TAKE_DEFAULT_BEATS = 4  @ 1254
-  @state tracker = cmgr:scope('tracker')  @ 1283
+  @state LANE_ROW_MIN = 3  @ 563
+  @state LANE_ROW_MAX = 32  @ 564
+  @state editKeys = {}  @ 1211
+  @state lastEditKey  @ 1229
+  @state tp = {}  @ 1370
+  @state NEW_TAKE_DEFAULT_BEATS = 4  @ 1382
+  @state tracker = cmgr:scope('tracker')  @ 1415
 
 # Private functions
   @fn print(...)  @ 26
@@ -97,52 +98,66 @@
   @fn drawSampleDropdown()  @ 283
       -- Hex stays visible when unassigned so `<`/`>` advertise their step.
       -- No "Off" row — every slot is real.
-  @fn drawTrackerToolbarBits()  @ 397
+  -- Palette navigation
+  @fn boundAmTake()  @ 316
+  @fn midiInstances(trackIdx, slotIdx)  @ 321
+  @fn midiSlots(trackIdx)  @ 331
+  @fn nearest(instances, fromQN, dir)  @ 340
+      -- dir +1: nearest instance at/after fromQN; dir -1: nearest at/before.
+  @fn resolveInstance(instances, fromQN, dir)  @ 352
+      -- Prefer the travel direction; fall back to the opposite when nothing lies ahead.
+  @fn selectInstance(instances, fromQN, dir)  @ 356
+  @fn gotoTrackDelta(dir)  @ 361
+  @fn gotoSlotDelta(dir)  @ 372
+  @fn pickTrack(trackIdx)  @ 381
+  @fn pickSlot(slotIdx)  @ 385
+  @fn drawTrackerToolbarBits()  @ 520
       -- While the swing editor is open, the tracker body is replaced and
       -- only swing-related toolbar segments stay live (the picker is how
       -- the user switches what they're editing). Other segments grey out.
-  @fn computeLayout(budgetW, budgetH)  @ 416
+  @fn computeLayout(budgetW, budgetH)  @ 540
       @contract  must run before draws reading chanX/chanW/chanOrder/totalWidth/gridHeight
       @contract  calls tv:setGridSize so tv scroll math sees the live viewport
   -- Lane strip
-  @fn drawLaneStrip()  @ 444
+  @fn drawLaneStrip()  @ 568
       @contract  publishes laneConsumed=true if curve editor claimed input this frame
       @contract  handleMouse short-circuits on laneConsumed
-  @fn drawTracker()  @ 558
+  @fn drawTracker()  @ 682
       @contract  assumes computeLayout ran this frame; reads chanX/W/Order, gridOriginX/Y
-  @fn drawStatusBar()  @ 805
+  @fn drawStatusBar()  @ 929
   -- Input
-  @fn cellAt(mouseX, mouseY)  @ 916
+  @fn cellAt(mouseX, mouseY)  @ 1044
       -- Screen point -> (fractional column, integer row) through the grid painter's
       -- inverse, so a click resolves against the exact transform the draw pass used.
-  @fn nearestStop(mouseX, mouseY)  @ 923
+  @fn nearestStop(mouseX, mouseY)  @ 1051
       @contract  returns (col, stop, fracX) or (nil, nil, fracX)
       @invariant  fracX is separate so callers distinguish 'past last col' from 'inside col N'
-  @fn handleMouse()  @ 944
-  @fn handleKeys(kr)  @ 1108
+  @fn handleMouse()  @ 1072
+  @fn handleKeys(kr)  @ 1236
       -- commandHeld gates note entry off while a command key is held, so a key
       -- bound to both (e.g. '.' = delete) fires the command, not a note.
       @contract  no-op when modal open, picker active, or any ImGui item is active
       @contract  every fresh press enters; only lastEditKey autorepeats
       @contract  scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
   -- Modal-driven commands
-  @fn openPrompt(title, prompt, callback, resolve)  @ 1132
-  @fn openConfirm(title, callback, prompt)  @ 1136
-  @fn scopedAction(title, base)  @ 1204
+  @fn openPrompt(title, prompt, callback, resolve)  @ 1260
+  @fn openConfirm(title, callback, prompt)  @ 1264
+  @fn scopedAction(title, base)  @ 1332
       -- Naming convention <base>Selection / <base>All is the contract.
       @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
-  @fn resolveColType(s)  @ 1214
+  @fn resolveColType(s)  @ 1342
       -- Add-Column type vocabulary. First letter is unique except p (pb/pc):
       -- `p`→pb, a following `c`→pc. Digits ride through (only cc takes an id).
-  @fn addColumn()  @ 1227
-  @fn boundAmTake()  @ 1255
-  @fn newTakeBelow()  @ 1259
-  @fn duplicateUnpooledBelow()  @ 1275
+  @fn addColumn()  @ 1355
+  @fn adoptNewTake(newTake)  @ 1385
+      -- Bind + re-select so coord's poll adopts the new take; see docs/trackerPage.md § adoptNewTake.
+  @fn newTakeBelow()  @ 1391
+  @fn duplicateUnpooledBelow()  @ 1407
 
 # Public API (tp:*)
   -- Region overlay keymap
   -- Take properties modal helper
-  @api tp:openTakeProperties(args)  @ 1359
+  @api tp:openTakeProperties(args)  @ 1496
       -- onClose fires exactly once, after the whole modal chain — including
       -- any truncate-confirm follow-up. Two sources of "chain done":
       -- the apply path (callback ran, valid input, either direct apply or
@@ -151,22 +166,22 @@
       -- onClose. The `transfer` flag handshake makes these mutually
       -- exclusive: once a valid callback starts the apply chain it claims
       -- ownership, so modalHost's onClose becomes a no-op.
-  @api tp:currentTake()  @ 1398
+  @api tp:currentTake()  @ 1535
   -- Page interface
-  @api tp:renderToolbarBits(_)  @ 1402
-  @api tp:renderBody(_, w, h, dispatch)  @ 1410
+  @api tp:renderToolbarBits(_)  @ 1539
+  @api tp:renderBody(_, w, h, dispatch)  @ 1547
       @contract  calls computeLayout twice
       @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x
       @contract  second pass repopulates layout for drawTracker
-  @api tp:renderStatusBar(_)  @ 1446
-  @api tp:bind(t)  @ 1451
+  @api tp:renderStatusBar(_)  @ 1583
+  @api tp:bind(t)  @ 1588
       @contract  bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
-  @api tp:unbind()  @ 1455
-  @api tp:dropTake()  @ 1458
+  @api tp:unbind()  @ 1592
+  @api tp:dropTake()  @ 1595
       @contract  take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.
-  @api tp:reloadFromReaper()  @ 1461
+  @api tp:reloadFromReaper()  @ 1598
       @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
-  @api tp:focusState()  @ 1474
+  @api tp:focusState()  @ 1611
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo
@@ -179,124 +194,128 @@
       --   a held button) shows up as IsAnyItemActive.
 
 # Uses (outbound edges)
-  @use call    arrangeManager.createAndDropMidi  @ 1270
-  @use call    arrangeManager.duplicateUnpooledBelow  @ 1277
-  @use call    arrangeManager.findTake  @ 1257
-  @use call    arrangeManager.startIsClear  @ 1262
-  @use call    chrome.checkbox  @ 388
-  @use call    chrome.colour  @ 467, 539
-  @use call    chrome.disabledIf  @ 366, 407
-  @use call    chrome.headingLabel  @ 319, 335, 350, 386
-  @use call    chrome.libPicker  @ 358, 372
-  @use call    chrome.makeToolbar  @ 398
-  @use call    chrome.pickerIsActive  @ 1109, 1476
-  @use call    chrome.requestPickerOpen  @ 1303, 1304
-  @use call    chrome.resetPickerActive  @ 1403
-  @use call    cm.get  @ 240, 241, 268, 284, 285, 317, 337, 342, 353, 367, 380, 388, 500, 545, 812, 813, 814, 816, 817, 818, 1150, 1361
-  @use call    cm.set  @ 307, 389, 548, 552
-  @use call    cmgr.doAfter  @ 1307
-  @use call    cmgr.invoke  @ 1068, 1075
-  @use call    cmgr.isPrefixActive  @ 1115
-  @use call    cmgr.keySpec  @ 1158
-  @use call    cmgr.keysFor  @ 1164, 1165
-  @use call    cmgr.scope  @ 839, 911, 1283, 1315
-  @use call    groupManager.eachInstance  @ 645
-  @use call    groupManager.stateOf  @ 664
-  @use call    groups.outlineKey  @ 680
-  @use call    groups.regionKey  @ 652
-  @use call    groups.tintKey  @ 666
-  @use call    imgui.AlignTextToFramePadding  @ 318
-  @use call    imgui.Button  @ 1184, 1185, 1192, 1196
-  @use call    imgui.CalcTextSize  @ 321, 421
-  @use call    imgui.DrawList_AddLine  @ 475
-  @use call    imgui.DrawList_AddRect  @ 539
-  @use call    imgui.DrawList_AddRectFilled  @ 473
-  @use call    imgui.Dummy  @ 542, 802
-  @use call    imgui.GetCursorScreenPos  @ 449, 482, 544, 564
-  @use call    imgui.GetFrameHeight  @ 322
-  @use call    imgui.GetKeyMods  @ 960, 1017, 1114, 1159
-  @use call    imgui.GetMousePos  @ 964, 981, 994, 1029
-  @use call    imgui.GetMouseWheel  @ 1063
-  @use call    imgui.GetWindowDrawList  @ 454
-  @use call    imgui.InputInt  @ 327
-  @use call    imgui.InputText  @ 1168, 1181
-  @use call    imgui.InvisibleButton  @ 484
-  @use call    imgui.IsAnyItemActive  @ 1110, 1481
-  @use call    imgui.IsItemActive  @ 485
-  @use call    imgui.IsItemHovered  @ 485
-  @use call    imgui.IsKeyPressed  @ 1117, 1118, 1159, 1193, 1194, 1197
-  @use call    imgui.IsMouseClicked  @ 952, 953
-  @use call    imgui.IsMouseDown  @ 954
-  @use call    imgui.IsWindowAppearing  @ 1175
-  @use call    imgui.IsWindowHovered  @ 959, 980, 993, 1062
-  @use call    imgui.PopFont  @ 1424, 1437
-  @use call    imgui.PopID  @ 1182
-  @use call    imgui.PopStyleVar  @ 328
-  @use call    imgui.PushFont  @ 1422, 1431
-  @use call    imgui.PushID  @ 1180
-  @use call    imgui.PushStyleVar  @ 326
-  @use call    imgui.RadioButton  @ 1189
-  @use call    imgui.SameLine  @ 320, 336, 351, 365, 387, 550, 1184, 1185, 1188, 1195
-  @use call    imgui.SetCursorScreenPos  @ 483, 486, 546, 554
-  @use call    imgui.SetKeyboardFocusHere  @ 1177
-  @use call    imgui.SetNextItemWidth  @ 323
-  @use call    imgui.SmallButton  @ 547, 551
-  @use call    imgui.Text  @ 829, 1167, 1171, 1428
-  @use call    modalHost.isOpen  @ 1109, 1476
-  @use call    modalHost.registerKind  @ 1146
-  @use call    painter.new  @ 184, 574
-  @use call    swingEditor.close  @ 1455, 1458
-  @use call    swingEditor.isOpen  @ 399, 1417, 1477
-  @use call    swingEditor.modalActive  @ 1476
-  @use call    swingEditor.open  @ 1301
-  @use call    swingEditor.render  @ 1423
-  @use call    trackerManager.bindTake  @ 1452, 1455
-  @use call    trackerManager.currentTake  @ 1256, 1398
-  @use call    trackerManager.detach  @ 1458
-  @use call    trackerManager.reloadFromReaper  @ 1461
-  @use call    trackerView.activeTemper  @ 749
-  @use call    trackerView.addExtraCol  @ 1235
-  @use call    trackerView.addLaneEvent  @ 530
-  @use call    trackerView.barBeatSub  @ 824
-  @use call    trackerView.cycleLaneShape  @ 533
-  @use call    trackerView.deleteLaneEvent  @ 531
-  @use call    trackerView.dropGrid  @ 1458
-  @use call    trackerView.ec  @ 363, 489, 560, 643, 644, 810, 948, 1111, 1206, 1308
-  @use call    trackerView.editEvent  @ 1124
-  @use call    trackerView.endReselectCascades  @ 1011, 1020, 1054
-  @use call    trackerView.isChannelEffectivelyMuted  @ 732
-  @use call    trackerView.isChannelMuted  @ 581
-  @use call    trackerView.isChannelSoloed  @ 580
-  @use call    trackerView.logPerRow  @ 641
-  @use call    trackerView.moveLaneEvent  @ 528, 529
-  @use call    trackerView.noteProjection  @ 107, 761
-  @use call    trackerView.paintRegionStream  @ 971
-  @use call    trackerView.ppqToRow  @ 511
-  @use call    trackerView.rowBeatInfo  @ 470, 617
-  @use call    trackerView.rowToPPQ  @ 530
-  @use call    trackerView.sampleCurve  @ 516
-  @use call    trackerView.scroll  @ 418, 455, 562, 950
-  @use call    trackerView.seedSharedSlots  @ 1453
+  @use call    arrangeManager.createAndDropMidi  @ 1402
+  @use call    arrangeManager.duplicateUnpooledBelow  @ 1409
+  @use call    arrangeManager.findTake  @ 318, 1387
+  @use call    arrangeManager.keyForSlot  @ 424
+  @use call    arrangeManager.projectTracks  @ 363, 400
+  @use call    arrangeManager.startIsClear  @ 1394
+  @use call    arrangeManager.trackSlots  @ 333
+  @use call    arrangeManager.tracksTakes  @ 323
+  @use call    chrome.checkbox  @ 511
+  @use call    chrome.colour  @ 591, 663
+  @use call    chrome.disabledIf  @ 428, 489, 531
+  @use call    chrome.headingLabel  @ 397, 419, 442, 458, 473, 509
+  @use call    chrome.libPicker  @ 481, 495
+  @use call    chrome.makeToolbar  @ 522
+  @use call    chrome.pickerIsActive  @ 1237, 1613
+  @use call    chrome.requestPickerOpen  @ 1440, 1441
+  @use call    chrome.resetPickerActive  @ 1540
+  @use call    cm.get  @ 240, 241, 268, 284, 285, 440, 460, 465, 476, 490, 503, 511, 624, 669, 936, 937, 938, 940, 941, 942, 1278, 1498
+  @use call    cm.set  @ 307, 512, 672, 676
+  @use call    cmgr.doAfter  @ 1444
+  @use call    cmgr.invoke  @ 1196, 1203
+  @use call    cmgr.isPrefixActive  @ 1243
+  @use call    cmgr.keySpec  @ 1286
+  @use call    cmgr.keysFor  @ 1292, 1293
+  @use call    cmgr.scope  @ 963, 1039, 1415, 1452
+  @use call    groupManager.eachInstance  @ 769
+  @use call    groupManager.stateOf  @ 788
+  @use call    groups.outlineKey  @ 804
+  @use call    groups.regionKey  @ 776
+  @use call    groups.tintKey  @ 790
+  @use call    imgui.AlignTextToFramePadding  @ 441
+  @use call    imgui.Button  @ 1312, 1313, 1320, 1324
+  @use call    imgui.CalcTextSize  @ 444, 545
+  @use call    imgui.DrawList_AddLine  @ 599
+  @use call    imgui.DrawList_AddRect  @ 663
+  @use call    imgui.DrawList_AddRectFilled  @ 597
+  @use call    imgui.Dummy  @ 666, 926
+  @use call    imgui.GetCursorScreenPos  @ 573, 606, 668, 688
+  @use call    imgui.GetFrameHeight  @ 445
+  @use call    imgui.GetKeyMods  @ 1088, 1145, 1242, 1287
+  @use call    imgui.GetMousePos  @ 1092, 1109, 1122, 1157
+  @use call    imgui.GetMouseWheel  @ 1191
+  @use call    imgui.GetWindowDrawList  @ 578
+  @use call    imgui.InputInt  @ 450
+  @use call    imgui.InputText  @ 1296, 1309
+  @use call    imgui.InvisibleButton  @ 608
+  @use call    imgui.IsAnyItemActive  @ 1238, 1618
+  @use call    imgui.IsItemActive  @ 609
+  @use call    imgui.IsItemHovered  @ 609
+  @use call    imgui.IsKeyPressed  @ 1245, 1246, 1287, 1321, 1322, 1325
+  @use call    imgui.IsMouseClicked  @ 1080, 1081
+  @use call    imgui.IsMouseDown  @ 1082
+  @use call    imgui.IsWindowAppearing  @ 1303
+  @use call    imgui.IsWindowHovered  @ 1087, 1108, 1121, 1190
+  @use call    imgui.PopFont  @ 1561, 1574
+  @use call    imgui.PopID  @ 1310
+  @use call    imgui.PopStyleVar  @ 451
+  @use call    imgui.PushFont  @ 1559, 1568
+  @use call    imgui.PushID  @ 1308
+  @use call    imgui.PushStyleVar  @ 449
+  @use call    imgui.RadioButton  @ 1317
+  @use call    imgui.SameLine  @ 398, 420, 443, 459, 474, 488, 510, 674, 1312, 1313, 1316, 1323
+  @use call    imgui.SetCursorScreenPos  @ 607, 610, 670, 678
+  @use call    imgui.SetKeyboardFocusHere  @ 1305
+  @use call    imgui.SetNextItemWidth  @ 446
+  @use call    imgui.SmallButton  @ 671, 675
+  @use call    imgui.Text  @ 953, 1295, 1299, 1565
+  @use call    modalHost.isOpen  @ 1237, 1613
+  @use call    modalHost.registerKind  @ 1274
+  @use call    painter.new  @ 184, 698
+  @use call    swingEditor.close  @ 1592, 1595
+  @use call    swingEditor.isOpen  @ 523, 1554, 1614
+  @use call    swingEditor.modalActive  @ 1613
+  @use call    swingEditor.open  @ 1438
+  @use call    swingEditor.render  @ 1560
+  @use call    trackerManager.bindTake  @ 1589, 1592
+  @use call    trackerManager.currentTake  @ 317, 1535
+  @use call    trackerManager.detach  @ 1595
+  @use call    trackerManager.reloadFromReaper  @ 1598
+  @use call    trackerView.activeTemper  @ 873
+  @use call    trackerView.addExtraCol  @ 1363
+  @use call    trackerView.addLaneEvent  @ 654
+  @use call    trackerView.barBeatSub  @ 948
+  @use call    trackerView.cycleLaneShape  @ 657
+  @use call    trackerView.deleteLaneEvent  @ 655
+  @use call    trackerView.dropGrid  @ 1595
+  @use call    trackerView.ec  @ 486, 613, 684, 767, 768, 934, 1076, 1239, 1334, 1445
+  @use call    trackerView.editEvent  @ 1252
+  @use call    trackerView.endReselectCascades  @ 1139, 1148, 1182
+  @use call    trackerView.isChannelEffectivelyMuted  @ 856
+  @use call    trackerView.isChannelMuted  @ 705
+  @use call    trackerView.isChannelSoloed  @ 704
+  @use call    trackerView.logPerRow  @ 765
+  @use call    trackerView.moveLaneEvent  @ 652, 653
+  @use call    trackerView.noteProjection  @ 107, 885
+  @use call    trackerView.paintRegionStream  @ 1099
+  @use call    trackerView.ppqToRow  @ 635
+  @use call    trackerView.rowBeatInfo  @ 594, 741
+  @use call    trackerView.rowToPPQ  @ 654
+  @use call    trackerView.sampleCurve  @ 640
+  @use call    trackerView.scroll  @ 542, 579, 686, 1078
+  @use call    trackerView.seedSharedSlots  @ 1590
   @use call    trackerView.setColSwingSlot  @ 275
-  @use call    trackerView.setGridSize  @ 429
-  @use call    trackerView.setLaneTension  @ 532
-  @use call    trackerView.setRowPerBeat  @ 329, 1288
+  @use call    trackerView.setGridSize  @ 553
+  @use call    trackerView.setLaneTension  @ 656
+  @use call    trackerView.setRowPerBeat  @ 452, 1420
   @use call    trackerView.setSwingSlot  @ 274
   @use call    trackerView.setTemper  @ 269
   @use call    trackerView.setTemperSlot  @ 271
-  @use call    trackerView.showDelay  @ 1232
-  @use call    trackerView.streamRefAt  @ 656
-  @use call    trackerView.takeName  @ 1372
-  @use call    trackerView.tick  @ 1443
-  @use call    trackerView.toggleChannelMute  @ 987
-  @use call    trackerView.wireGroupLifetime  @ 1338
-  @use call    util.add  @ 65, 495
-  @use call    util.atomic  @ 267, 274, 275, 307, 1268
-  @use call    util.clamp  @ 329, 764
+  @use call    trackerView.showDelay  @ 1360
+  @use call    trackerView.streamRefAt  @ 780
+  @use call    trackerView.takeName  @ 1509
+  @use call    trackerView.tick  @ 1580
+  @use call    trackerView.toggleChannelMute  @ 1115
+  @use call    trackerView.wireGroupLifetime  @ 1475
+  @use call    util.add  @ 65, 619
+  @use call    util.atomic  @ 267, 274, 275, 307, 1400
+  @use call    util.clamp  @ 452, 888
   @use call    util.instantiate  @ 32, 33, 34, 35, 36, 75, 77
-  @use call    util.oneOf  @ 1233
+  @use call    util.oneOf  @ 1361
   @use call    util.print  @ 27
-  @use call    util.round  @ 518, 1065, 1072
+  @use call    util.round  @ 642, 1193, 1200
   @use require arrangeManager  @ 36
   @use require curveEditor  @ 77
   @use require groupManager  @ 34

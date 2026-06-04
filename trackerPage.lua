@@ -20,8 +20,8 @@ local ImGui = require 'imgui' '0.10'
 --contract: owns and constructs the tracker substack (mm/tm/tv/am)
 --contract: coord hands primitives, never the substack
 --contract: take arrives later via tp:bind from coord's poll loop
-local cm, cmgr, chrome, gui, modalHost =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost
+local cm, cmgr, chrome, gui, modalHost, selectTake =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).selectTake
 
 local function print(...)
   return util.print(...)
@@ -308,9 +308,132 @@ local function drawSampleDropdown()
   }
 end
 
+----- Palette navigation
+-- Slot vs instance, scan direction, track skip rules: see docs/trackerPage.md § Palette navigation.
+
+local toolbarBound = nil   -- bound am-take for the current toolbar frame; shared by both pickers
+
+local function boundAmTake()
+  local reaperTake = tm:currentTake(); if not reaperTake then return end
+  return am:findTake(reaperTake)
+end
+
+local function midiInstances(trackIdx, slotIdx)
+  local out = {}
+  for _, take in ipairs(am:tracksTakes(trackIdx)) do
+    if take.kind == 'midi' and (not slotIdx or take.slotIdx == slotIdx) then
+      out[#out + 1] = take
+    end
+  end
+  return out
+end
+
+local function midiSlots(trackIdx)
+  local out = {}
+  for _, slot in ipairs(am:trackSlots(trackIdx)) do
+    if slot.kind == 'midi' then out[#out + 1] = slot end
+  end
+  return out
+end
+
+-- dir +1: nearest instance at/after fromQN; dir -1: nearest at/before.
+local function nearest(instances, fromQN, dir)
+  local best
+  for _, take in ipairs(instances) do
+    local inDir  = (dir > 0 and take.startQN >= fromQN) or (dir < 0 and take.startQN <= fromQN)
+    local closer = not best or (dir > 0 and take.startQN < best.startQN)
+                            or (dir < 0 and take.startQN > best.startQN)
+    if inDir and closer then best = take end
+  end
+  return best
+end
+
+-- Prefer the travel direction; fall back to the opposite when nothing lies ahead.
+local function resolveInstance(instances, fromQN, dir)
+  return nearest(instances, fromQN, dir) or nearest(instances, fromQN, -dir)
+end
+
+local function selectInstance(instances, fromQN, dir)
+  local inst = resolveInstance(instances, fromQN, dir)
+  if inst then selectTake(inst.item) end
+end
+
+local function gotoTrackDelta(dir)
+  local bound = boundAmTake(); if not bound then return end
+  local tracks = am:projectTracks()
+  local i = bound.trackIdx + 1 + dir
+  while tracks[i] do
+    local instances = midiInstances(tracks[i].idx)
+    if #instances > 0 then return selectInstance(instances, bound.startQN, dir) end
+    i = i + dir
+  end
+end
+
+local function gotoSlotDelta(dir)
+  local bound = boundAmTake(); if not bound or not bound.slotIdx then return end
+  local slots = midiSlots(bound.trackIdx)
+  local cur
+  for i, slot in ipairs(slots) do if slot.idx == bound.slotIdx then cur = i end end
+  local target = cur and slots[cur + dir]
+  if target then selectInstance(midiInstances(bound.trackIdx, target.idx), bound.startQN, dir) end
+end
+
+local function pickTrack(trackIdx)
+  selectInstance(midiInstances(trackIdx), toolbarBound and toolbarBound.startQN or 0, 1)
+end
+
+local function pickSlot(slotIdx)
+  if toolbarBound then
+    selectInstance(midiInstances(toolbarBound.trackIdx, slotIdx), toolbarBound.startQN, 1)
+  end
+end
+
 -- Each render closure reads cm/tv fresh; segments declared once, reused per frame.
 --shape: ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
 local toolbarSegments = {
+  {
+    id = 'track',
+    render = function()
+      chrome.headingLabel('Track')
+      ImGui.SameLine(ctx, 0, 8)
+      local items, curName = {}, nil
+      for _, tr in ipairs(am:projectTracks()) do
+        local isCur = toolbarBound and tr.idx == toolbarBound.trackIdx or false
+        if isCur then curName = tr.name end
+        items[#items + 1] = {
+          label   = tr.name ~= '' and tr.name or ('Track ' .. (tr.idx + 1)),
+          key     = tr.idx, group = 1, current = isCur,
+        }
+      end
+      chrome.drawPicker {
+        kind        = 'track',
+        buttonLabel = (curName and curName ~= '' and curName)
+                      or (toolbarBound and ('Track ' .. (toolbarBound.trackIdx + 1))) or 'None',
+        width       = 160, items = items, onPick = pickTrack,
+      }
+    end,
+  },
+  {
+    id = 'take',
+    render = function()
+      chrome.headingLabel('Take')
+      ImGui.SameLine(ctx, 0, 8)
+      local items = {}
+      for _, slot in ipairs(toolbarBound and midiSlots(toolbarBound.trackIdx) or {}) do
+        items[#items + 1] = {
+          label   = slot.name ~= '' and slot.name or am:keyForSlot(slot.idx),
+          key     = slot.idx, group = 1, current = slot.idx == toolbarBound.slotIdx,
+        }
+      end
+      chrome.disabledIf(not toolbarBound, function()
+        chrome.drawPicker {
+          kind        = 'take',
+          buttonLabel = (toolbarBound and toolbarBound.name ~= '' and toolbarBound.name) or '\xe2\x80\x94',
+          width       = 160, items = items, onPick = pickSlot,
+        }
+      end)
+    end,
+  },
   {
     id = 'rowsPerBeat',
     render = function()
@@ -395,6 +518,7 @@ local toolbarSegments = {
 -- only swing-related toolbar segments stay live (the picker is how
 -- the user switches what they're editing). Other segments grey out.
 local function drawTrackerToolbarBits()
+  toolbarBound = boundAmTake()
   toolbar = toolbar or chrome.makeToolbar()
   if not swingEditor:isOpen() then return toolbar(toolbarSegments) end
   local wrapped = {}
@@ -841,6 +965,10 @@ cmgr:scope('tracker'):bindAll{
   cursorDown     = { ImGui.Key_DownArrow,  {ImGui.Key_N, ImGui.Mod_Super} },
   cursorLeft     = { ImGui.Key_LeftArrow,  {ImGui.Key_B, ImGui.Mod_Super} },
   cursorRight    = { ImGui.Key_RightArrow, {ImGui.Key_F, ImGui.Mod_Super} },
+  prevTrack      = { {ImGui.Key_LeftArrow,  ImGui.Mod_Alt} },
+  nextTrack      = { {ImGui.Key_RightArrow, ImGui.Mod_Alt} },
+  prevTake       = { {ImGui.Key_UpArrow,    ImGui.Mod_Alt} },
+  nextTake       = { {ImGui.Key_DownArrow,  ImGui.Mod_Alt} },
   goTop          = { ImGui.Key_Home,       {ImGui.Key_Comma,  ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   goBottom       = { ImGui.Key_End,        {ImGui.Key_Period, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   pageUp         = { ImGui.Key_PageUp },
@@ -1252,10 +1380,14 @@ local tp = {}
 -- copied, fresh pool, naturalLenQN-sized) and then opens take-properties
 -- on the new take so the user can rename / truncate / extend it.
 local NEW_TAKE_DEFAULT_BEATS = 4
-local function boundAmTake()
-  local reaperTake = tm:currentTake();        if not reaperTake then return end
-  return am:findTake(reaperTake)
+
+-- Bind + re-select so coord's poll adopts the new take; see docs/trackerPage.md § adoptNewTake.
+local function adoptNewTake(newTake)
+  tp:bind(newTake)
+  local shape = am:findTake(newTake)
+  if shape then selectTake(shape.item) end
 end
+
 local function newTakeBelow()
   local amTake = boundAmTake(); if not amTake then return end
   local destQN = amTake.startQN + amTake.naturalLenQN
@@ -1268,7 +1400,7 @@ local function newTakeBelow()
     callback = util.atomic('Create take', function(name, beatsBuf)
       local b = math.max(1e-3, tonumber(beatsBuf) or NEW_TAKE_DEFAULT_BEATS)
       local _, newTake = am:createAndDropMidi(amTake.trackIdx, destQN, b, name)
-      if newTake then tp:bind(newTake) end
+      if newTake then adoptNewTake(newTake) end
     end),
   }
 end
@@ -1276,7 +1408,7 @@ local function duplicateUnpooledBelow()
   local amTake = boundAmTake(); if not amTake then return end
   local newTake = am:duplicateUnpooledBelow(amTake)
   if not newTake then return end
-  tp:bind(newTake)
+  adoptNewTake(newTake)
   tp:openTakeProperties{}
 end
 
@@ -1292,6 +1424,11 @@ tracker:registerAll{
   takeProperties         = { function() tp:openTakeProperties{} end, 'Take properties' },
   newTakeBelow           = newTakeBelow,
   duplicateUnpooledBelow = { duplicateUnpooledBelow, 'Duplicate take (unpooled) below' },
+
+  prevTrack = { function() gotoTrackDelta(-1) end, 'Previous track' },
+  nextTrack = { function() gotoTrackDelta(1)  end, 'Next track' },
+  prevTake  = { function() gotoSlotDelta(-1)  end, 'Previous take' },
+  nextTake  = { function() gotoSlotDelta(1)   end, 'Next take' },
 
   addTypedCol = addColumn,
 

@@ -33,10 +33,16 @@ local fakeModalHost = {
   wasOpenAtFrameStart = function() return false end,
   reset               = function(self) self.last = nil end,
 }
+-- Captures the item handed to coord's diveToTake — the channel by which a
+-- tracker-minted take becomes coord's currentTake (see adoptNewTake).
+local fakeSelect = { last = nil, reset = function(self) self.last = nil end }
+
 local function newTrackerPage(cm, cmgr, chrome, gui)
   fakeModalHost:reset()
+  fakeSelect:reset()
   return util.instantiate('trackerPage',
-    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = fakeModalHost })
+    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = fakeModalHost,
+      selectTake = function(item) fakeSelect.last = item end })
 end
 
 return {
@@ -103,6 +109,7 @@ return {
       t.eq(takes[2].startQN, 2,         'sibling starts at the source take\'s natural end')
       t.eq(takes[2].naturalLenQN, 3,    'sibling honours the user\'s 3 beats')
       t.eq(tp:currentTake(), takes[2].take, 'tm now bound to the new sibling')
+      t.eq(fakeSelect.last, takes[2].item, 'new item re-selected so coord adopts it as currentTake')
     end,
   },
 
@@ -123,6 +130,7 @@ return {
       t.eq(#takes, 2,                       'fresh clone added below')
       t.eq(takes[2].startQN, 2,             'clone starts at the source take\'s natural end')
       t.eq(tp:currentTake(), takes[2].take, 'tm now bound to the clone')
+      t.eq(fakeSelect.last, takes[2].item, 'clone item re-selected so coord adopts it as currentTake')
       local s = fakeModalHost.last
       t.truthy(s,                           'take-properties opened on the clone')
       t.eq(s.kind, 'takeProps',             'takeProps kind')

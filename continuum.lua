@@ -84,7 +84,7 @@ local function Main()
   local modalHost = coord:modalHost()
   local function onPickTrack(t) coord:setSamplerTrack(t) end
   local function onDive(item)   coord:diveToTake(item)    end
-  local tp = util.instantiate('trackerPage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
+  local tp = util.instantiate('trackerPage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, selectTake = onDive })
   -- Arrange's takeProperties + dup-unpooled-below commands open the
   -- tracker page's takeProps modal on a take that may not be the
   -- tracker page's current bind. We snapshot tp's bind, point tp at

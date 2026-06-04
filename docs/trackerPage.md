@@ -397,3 +397,38 @@ are derived on the first frame and held.
   dragWinY)` so ImGui doesn't reposition mid-drag.
 - **Dots are `inactive` at the character level**, no matter what
   colour the renderer asked for on the rest of the cell.
+
+## adoptNewTake
+
+When a new take is minted (new-below or dup-below), the page calls `tp:bind`
+immediately — the dup path opens a modal on it this same frame. But
+`coord` still owns `currentTake` and hasn't polled yet. Without an explicit
+re-selection, the first navigation back to the prior take calls
+`coord:diveToTake`, which no-ops on its identity guard because coord
+never moved. `adoptNewTake` calls `selectTake` (which triggers the REAPER
+item selection) so the coordinator's next poll sees the new item and
+updates `currentTake`, keeping the two in sync.
+
+## Palette navigation
+
+The toolbar's **Track** and **Take** pickers, and the `Alt`+arrow
+commands, move the bound take across the arrange palette without
+leaving the page. Selection is the only channel: each move re-selects a
+media item in REAPER and the coordinator's poll loop rebinds the
+tracker next frame — the same path arrange's dive uses. `selectTake`
+(`coord:diveToTake`) is injected for exactly this, so the coordinator
+stays the sole owner of `currentTake`.
+
+A palette **slot** is a pooled source (one row per `POOLEDEVTS` id); a
+slot may have many timeline **instances**. We navigate by slot
+(`Alt`-Up/Down, clamped to the track's MIDI slots in palette order) or
+by track (`Alt`-Left/Right, clamped, skipping tracks with no MIDI), but
+must bind a concrete instance. `resolveInstance` scans the candidates
+from the current take's start position — the travel direction first
+(forward for Down/Right, backward for Up/Left), falling back to the
+opposite when nothing lies ahead. The pickers resolve forward-first.
+
+Everything reads through the page's own `am`; only the bind crosses
+back to the coordinator. A take with no pooled id (raw imported MIDI,
+`slotIdx == nil`) can't be slot-navigated, but track navigation still
+works — it's position-only.
