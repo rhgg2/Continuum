@@ -111,6 +111,16 @@ function wv:addFx(x, y, fx, opts)
   return wm:addFxNode(x, y, fx, opts)
 end
 
+--contract: pass-through to wm:addSourceNode (standalone source track + node); returns node id
+function wv:addSource(opts)
+  return wm:addSourceNode(opts)
+end
+
+--contract: pass-through to wm:deleteSource; false+takeCount when track has takes and force is false
+function wv:deleteSource(nodeId, force)
+  return wm:deleteSource(nodeId, force)
+end
+
 function wv:listInstalledFX() return wm:listInstalledFX() end
 
 ----- Navigation (page double-click targets)

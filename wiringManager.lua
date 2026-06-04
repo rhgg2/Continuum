@@ -328,7 +328,8 @@ function wm:addFxNode(x, y, fx, opts)
   local display    = fx.name and shortFxName(fx.name) or fx.ident
   reaper.Undo_BeginBlock()
   local io         = self:instantiateFxOnScratch(fx.ident)
-  local sourceGuid = (io.ins == 0) and self:createSourceTrack{ name = display } or nil
+  local autoSource = io.ins == 0 and not (opts and opts.autoSource == false)
+  local sourceGuid = autoSource and self:createSourceTrack{ name = display } or nil
   local newId
   local ok, err = self:mutate(function(g)
     local fxId = 'n' .. g.nextId
@@ -363,6 +364,55 @@ function wm:addFxNode(x, y, fx, opts)
     end
   end)
   reaper.Undo_EndBlock2(0, 'wiring: add ' .. display, -1)
+  if not ok then return nil, err end
+  return newId
+end
+
+--contract: deletes a source node + incident edges and its REAPER track in one Undo block.
+-- Reconcile never deletes sourceTracks (protects authored takes), so deletion is explicit
+-- here. Refuses with false, takeCount when the track holds takes unless force is set.
+function wm:deleteSource(nodeId, force)
+  ensureLoaded()
+  local node = userGraph.nodes[nodeId]
+  if not node or node.kind ~= 'source' then return false end
+  local track = node.trackGuid and self:trackByGuid(node.trackGuid)
+  local takes = track and reaper.CountTrackMediaItems(track) or 0
+  if takes > 0 and not force then return false, takes end
+  reaper.Undo_BeginBlock()
+  self:mutate(function(g)
+    g.nodes[nodeId] = nil
+    local kept = {}
+    for _, e in ipairs(g.edges) do
+      if e.from ~= nodeId and e.to ~= nodeId then util.add(kept, e) end
+    end
+    g.edges = kept
+  end)
+  if track then reaper.DeleteTrack(track) end
+  reaper.Undo_EndBlock2(0, 'wiring: delete source', -1)
+  return true
+end
+
+--contract: creates source track + node at opts.pos in one Undo block; returns node id or nil+err
+function wm:addSourceNode(opts)
+  ensureLoaded()
+  opts = opts or {}
+  reaper.Undo_BeginBlock()
+  local guid = self:createSourceTrack{ name = opts.name }
+  local newId
+  local ok, err = self:mutate(function(g)
+    newId = 'n' .. g.nextId
+    g.nextId = g.nextId + 1
+    local pos = opts.pos or { x = 0, y = 0 }
+    g.nodes[newId] = {
+      kind        = 'source',
+      pos         = { x = pos.x, y = pos.y },
+      trackGuid   = guid,
+      displayName = opts.name,
+      ports       = { audio = { ins = 0, outs = 1 },
+                      midi  = { ins = 0, outs = 1 } },
+    }
+  end)
+  reaper.Undo_EndBlock2(0, 'wiring: add source', -1)
   if not ok then return nil, err end
   return newId
 end
