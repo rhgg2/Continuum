@@ -80,6 +80,12 @@ local STUB_LEN  = 40    -- canvas px from the consumer rect edge to the stub's f
 local TAG_GAP   = 3     -- visual gap from the stub's far end to the track-name tag's nearest edge
 local TAG_VIS_H = 0.62  -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
 
+-- Palette pane geometry, mirroring arrangePage's body split.
+local PALETTE_W  = 200
+local PANE_GAP   = 11   -- 1px vrule sits centred here; neither pane edge touches it
+local HEADER_PAD = 8    -- breathing room above the palette header text
+local HEADER_GAP = 4    -- space between the header divider and the first row
+
 ----- Drag / band state (page-local; ephemeral, never persisted)
 -- The gesture state machine — mousedown precedence, what each table
 -- captures, forbidden-set and sticky/pin semantics — is the model in
@@ -96,6 +102,7 @@ local sticky = nil  -- { nodeId, side } — pinned node's port row, kept visible
 local fader = nil  -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, dragging?, wheelPending?, wheelIdleFrames? }
 local wireMenu = nil  -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
 local nodeMenu = nil  -- { nodeId, anchorX, anchorY } — set on RMB-on-body; cleared when BeginPopup returns false
+local paletteSource = nil  -- nodeId the palette del button acts on; cleared when the row vanishes
 local fxPicker = nil  -- { x, y, sx, sy, anchorSX?, anchorSY?, buf, cursor, items } — RMB/N-key add-FX popup; cleared when BeginPopup returns false
 
 -- Last canvas origin, captured at the top of renderCanvas. Lets openFxPicker
@@ -1807,6 +1814,89 @@ local function pushBodyStyles()
 end
 local function popBodyStyles() ImGui.PopStyleColor(ctx, 1) end
 
+----- Palette pane
+
+-- Hand-drawn header so its band matches the canvas's by construction: both panes
+-- share renderBody's `oy`, so the divider aligns across PANE_GAP without measuring.
+local function renderPaletteHeader()
+  local p       = painter.new(ctx, chrome, {})
+  local ox, oy  = ImGui.GetCursorScreenPos(ctx)
+  local paneW   = (select(1, ImGui.GetContentRegionAvail(ctx)))
+  local rowH    = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
+  local headerH = rowH + HEADER_PAD
+  local label   = 'sources'
+  local tw      = p.measure(label)
+  p.text(ox + math.floor((paneW - tw) / 2), oy + HEADER_PAD, 'text', label)
+  p.line(ox, oy + headerH, ox + paneW, oy + headerH, 'text', 1)
+  ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
+end
+
+local function openAddSourceModal()
+  modalHost:openPrompt{
+    title    = 'New source',
+    prompt   = 'Track name',
+    buf      = '',
+    callback = function(name)
+      if name and name ~= '' then wv:addSource{ name = name } end
+    end,
+  }
+end
+
+-- Delete tries unforced first; a take-bearing track comes back refused with a
+-- count, which opens a confirm that re-issues the delete with force.
+local function deleteSourceGuarded(nodeId, label)
+  local ok, takes = wv:deleteSource(nodeId)
+  if ok then return end
+  modalHost:openConfirm{
+    title    = 'Delete source',
+    prompt   = string.format('"%s" has %d take%s. Delete the track anyway? (y/n)',
+                             label, takes, takes == 1 and '' or 's'),
+    callback = function(yes) if yes then wv:deleteSource(nodeId, true) end end,
+  }
+end
+
+local function renderPaletteActions(focused)
+  if ImGui.Button(ctx, 'add##source') then openAddSourceModal() end
+  ImGui.SameLine(ctx, 0, 4)
+  chrome.disabledIf(focused == nil, function()
+    if ImGui.Button(ctx, 'del##source') then
+      deleteSourceGuarded(focused.id, focused.label)
+    end
+  end)
+end
+
+local function renderPaletteList(sources)
+  if #sources == 0 then
+    ImGui.TextDisabled(ctx, '(no sources)')
+    return
+  end
+  for _, src in ipairs(sources) do
+    if ImGui.Selectable(ctx, src.label .. '##src' .. src.id, paletteSource == src.id) then
+      paletteSource = src.id
+    end
+  end
+end
+
+local function renderPalette()
+  local sources, focused = {}, nil
+  for _, nv in ipairs(wv:nodeViews()) do
+    if nv.category == 'source' then
+      util.add(sources, nv)
+      if nv.id == paletteSource then focused = nv end
+    end
+  end
+  -- Stale focus (row deleted, or never set) greys out del.
+  if not focused then paletteSource = nil end
+
+  -- Buttons want toolbar colours; body styles are already pushed at renderBody level.
+  chrome.pushChromeStyles()
+  renderPaletteHeader()
+  renderPaletteActions(focused)
+  ImGui.Separator(ctx)
+  renderPaletteList(sources)
+  chrome.popChromeStyles()
+end
+
 ----------- PUBLIC
 
 --contract: bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
@@ -1825,16 +1915,36 @@ function wp:tick() wv:pollUndo() end
 
 function wp:renderToolbarBits(_) end
 
---contract: pushes body palette, draws the canvas, invokes dispatch at end-of-body so wiring-scope keys (when 1.3b adds them) reach the dispatcher.
+--contract: body = wiring canvas | source palette; dispatch at end-of-body routes wiring-scope keys.
 function wp:renderBody(_, w, h, dispatch)
   if not ctx then return end
   pushBodyStyles()
-  if ImGui.BeginChild(ctx, '##wiringCanvas', w, h,
+
+  local canvasW = math.max(120, w - PALETTE_W - PANE_GAP)
+  if ImGui.BeginChild(ctx, '##wiringCanvas', canvasW, h,
                       ImGui.ChildFlags_None,
                       ImGui.WindowFlags_NoNav) then
-    renderCanvas(w, h)
+    renderCanvas(canvasW, h)
   end
   ImGui.EndChild(ctx)
+
+  -- 1px vrule centred in PANE_GAP so neither pane edge touches it; 'text' ties it
+  -- to the body palette, matching arrangePage.
+  ImGui.SameLine(ctx, 0, 0)
+  local sx, sy = ImGui.GetCursorScreenPos(ctx)
+  local lineX  = sx + math.floor(PANE_GAP / 2)
+  local p      = painter.new(ctx, chrome, {})
+  p.line(lineX, sy, lineX, sy + h, 'text', 1)
+  ImGui.Dummy(ctx, PANE_GAP, h)
+  ImGui.SameLine(ctx, 0, 0)
+
+  if ImGui.BeginChild(ctx, '##wiringPalette', PALETTE_W, h,
+                      ImGui.ChildFlags_None,
+                      ImGui.WindowFlags_NoNav) then
+    renderPalette()
+  end
+  ImGui.EndChild(ctx)
+
   popBodyStyles()
   if dispatch then dispatch(self:focusState()) end
 end
