@@ -42,3 +42,12 @@ cursor" — and reads viewport-independent inputs from wv.
 This split mirrors `arrangeView` / `arrangePage` and `trackerView` /
 `trackerPage`: the page is the render + input surface; the view is
 the manager-facing state.
+
+## wireView fromKind/fromLabel
+
+`fromKind` and `fromLabel` mirror the from-node's kind and label onto
+the wireView so the page can render source-origin edges as stubs
+without needing to hold or look up the full source nodeView. Port
+names are sourced identically to nodeView's port lists; a name is nil
+if the referenced port has been trimmed off the node since the edge
+was recorded.

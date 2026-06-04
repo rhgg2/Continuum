@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=320  sha=4f72dcc  mode=chunk
+@module wiringView  src=wiringView.lua  loc=324  sha=b8cbdde  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -8,7 +8,7 @@
 
 # Shapes
   @shape  nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', activate='sampler'|'fx'|nil, ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}} } — port lists carry names; counts = #list; activate is the double-click intent
-  @shape  wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary } — ports are 1-based and always present; names come from the same source as nodeView's port lists, nil if the referenced port has been trimmed off the node
+  @shape  wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'fx'|'master', fromLabel } — ports are 1-based and always present; names nil if the referenced port has been trimmed off the node
 
 # Imports
   @require util = 'util'  @ 8
@@ -97,31 +97,32 @@
   -- Render-ready, viewport-independent
   @api wv:nodeViews()  @ 264
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:wireViews()  @ 273
+  @api wv:wireViews()  @ 274
+      -- see docs/wiringView.md § wireView fromKind/fromLabel
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Capacity errors
-  @api wv:errors()  @ 302
+  @api wv:errors()  @ 306
       @contract  pass-through of wm:errors; { kind, count, budget, nodeIds }[] per overflowing class
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 308
-  @api wv:setHover(id)  @ 309
-  @api wv:selection()  @ 312
+  @api wv:hover()  @ 312
+  @api wv:setHover(id)  @ 313
+  @api wv:selection()  @ 316
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 314
+  @api wv:setSelection(idSet)  @ 318
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
 
 # Uses (outbound edges)
   @use call    DAG.ancestors  @ 232
   @use call    DAG.descendants  @ 237
-  @use call    util.add  @ 59, 160, 177, 267, 285
+  @use call    util.add  @ 59, 160, 177, 267, 287
   @use call    util.instantiate  @ 13
   @use call    wiringManager.addFxNode  @ 111
   @use call    wiringManager.addSourceNode  @ 116
   @use call    wiringManager.deleteSource  @ 121
   @use call    wiringManager.enableLive  @ 104
-  @use call    wiringManager.errors  @ 303
+  @use call    wiringManager.errors  @ 307
   @use call    wiringManager.fastGainCommit  @ 207
-  @use call    wiringManager.graph  @ 101, 130, 137, 200, 232, 237, 245, 255, 265, 274
+  @use call    wiringManager.graph  @ 101, 130, 137, 200, 232, 237, 245, 255, 265, 275
   @use call    wiringManager.listInstalledFX  @ 124
   @use call    wiringManager.load  @ 103
   @use call    wiringManager.locateFx  @ 139

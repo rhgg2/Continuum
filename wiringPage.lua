@@ -76,6 +76,10 @@ local WIRE_FADER_WHEEL_DB        = 0.5  -- dB per wheel notch (coarse, default)
 local WIRE_FADER_WHEEL_DB_FINE   = 0.1  -- dB per wheel notch with Shift
 local WIRE_FADER_WHEEL_IDLE_FRAMES = 6  -- commit one setEdgeGain after this many wheel-idle frames so a scroll gesture is one undo entry
 
+local STUB_LEN  = 40    -- canvas px from the consumer rect edge to the stub's far end, along the away-from-master axis
+local TAG_GAP   = 3     -- visual gap from the stub's far end to the track-name tag's nearest edge
+local TAG_VIS_H = 0.62  -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
+
 ----- Drag / band state (page-local; ephemeral, never persisted)
 -- The gesture state machine — mousedown precedence, what each table
 -- captures, forbidden-set and sticky/pin semantics — is the model in
@@ -1128,6 +1132,59 @@ local function drawDraftWire(p, draft, nodesById, cx, cy)
   drawWireArrow(p, sx, sy, ex, ey, name)
 end
 
+-- Track name at a source stub's far end: neutral, tiny wire-label font, set a
+-- fixed gap from where the stub wire crosses the (visible) text box.
+local function drawSourceTag(p, ax, ay, ux, uy, label)
+  local tw, th = p.measure(label, wireFont, WIRE_LABEL_SIZE)
+  local hw, hh = tw / 2, th * TAG_VIS_H / 2
+  -- Centre-to-edge distance along the wire where it crosses the box (ray/box
+  -- intersection, not the axis projection), so the gap holds at every angle.
+  local tx     = (ux ~= 0) and hw / math.abs(ux) or math.huge
+  local ty     = (uy ~= 0) and hh / math.abs(uy) or math.huge
+  local cross  = math.min(tx, ty)
+  local cx, cy = ax + ux * (TAG_GAP + cross), ay + uy * (TAG_GAP + cross)
+  p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2), 'wiring.source.label',
+         label, wireFont, WIRE_LABEL_SIZE)
+end
+
+-- Source-origin edges render as labelled stubs, not wires: a short lead off the
+-- consumer rect away from master, tag at the far end. Fan-out offsets via wireOffset.
+local function drawSourceStubs(p, wireViews, nodesById)
+  local byConsumer, order = {}, {}
+  for _, w in ipairs(wireViews) do
+    if w.fromKind == 'source' then
+      local stubs = byConsumer[w.to]
+      if not stubs then stubs = {}; byConsumer[w.to] = stubs; util.add(order, w.to) end
+      util.add(stubs, w)
+    end
+  end
+  local mxp, myp = wv:masterPos()
+  local hw, hh   = NODE_W / 2, NODE_H / 2
+  for _, consumerId in ipairs(order) do
+    local consumer = nodesById[consumerId]
+    if consumer then
+      local stubs  = byConsumer[consumerId]
+      local dx, dy = consumer.pos.x - mxp, consumer.pos.y - myp
+      local len    = math.sqrt(dx * dx + dy * dy)
+      local ux, uy = 1, 0
+      if len >= 1 then ux, uy = dx / len, dy / len end
+      local perpX, perpY = -uy, ux
+      local exitDist = math.min((ux ~= 0) and hw / math.abs(ux) or math.huge,
+                                (uy ~= 0) and hh / math.abs(uy) or math.huge)
+      for i, w in ipairs(stubs) do
+        local s = wireOffset(i, #stubs)
+        local nearX = consumer.pos.x + perpX * s + ux * exitDist
+        local nearY = consumer.pos.y + perpY * s + uy * exitDist
+        local farX, farY = nearX + ux * STUB_LEN, nearY + uy * STUB_LEN
+        local name = w.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
+        p.line(farX, farY, nearX, nearY, name, WIRE_THICK)
+        drawWireArrow(p, farX, farY, nearX, nearY, name)
+        drawSourceTag(p, farX, farY, ux, uy, w.fromLabel or 'source')
+      end
+    end
+  end
+end
+
 -- Node under the mouse by un-inflated body rect (not the inflated port-reveal
 -- rect) — used to start a drag. nil over empty canvas or a port band.
 local function nodeUnderMouse(nodeViews, mx, my)
@@ -1191,7 +1248,12 @@ local function renderCanvas(w, h)
   -- start the next wire from the just-dropped node without first jiggling.
   if hoverFreeze and ImGui.IsMouseClicked(ctx, 0) then hoverFreeze = nil end
 
-  local nodeViews = wv:nodeViews()
+  -- Sources render as labelled stubs (drawSourceStubs), never as bodies — drop
+  -- them from every body pass: draw, drag, band, hit-test, errors.
+  local nodeViews = {}
+  for _, nv in ipairs(wv:nodeViews()) do
+    if nv.category ~= 'source' then util.add(nodeViews, nv) end
+  end
 
   -- While a band is live, preview the selection: nodes its rect intersects
   -- render selected already, matching what mouseup commits.
@@ -1308,6 +1370,7 @@ local function renderCanvas(w, h)
   -- z-stack (docs/wiringPage.md): wires < sleeves < draft < nodes.
   drawWiresPass(p, segs, wireViewsList,
     { skipEdgeIdx = wireDraft and wireDraft.edgeIdx })
+  drawSourceStubs(p, wireViewsList, nodesById)
   for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
   drawDraftWire(p, wireDraft, nodesById, draftCx, draftCy)
   for _, nv in ipairs(nodeViews) do

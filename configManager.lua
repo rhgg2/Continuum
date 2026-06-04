@@ -224,6 +224,7 @@ local declarations = {
   { 'colour.wiring.node.error',     'palette.caution' },  -- outline stroke for nodes in a capacity-overflowing class
   { 'colour.wiring.port.audio',     'palette.shade'  },
   { 'colour.wiring.port.midi',      'palette.steel'  },
+  { 'colour.wiring.source.label',   'palette.mid'    },  -- de-emphasised track-name on a source stub (neutral, not bold)
   { 'colour.wiring.tooltip.bg',     'palette.pale' },  -- matches toolbar (pale slate); body's dark text reads against it
 
   -- Chrome roles — toolbar (top band) and statusBar (bottom band).

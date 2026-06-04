@@ -268,7 +268,8 @@ function wv:nodeViews()
   return out
 end
 
---shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary } — ports are 1-based and always present; names come from the same source as nodeView's port lists, nil if the referenced port has been trimmed off the node
+--shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'fx'|'master', fromLabel } — ports are 1-based and always present; names nil if the referenced port has been trimmed off the node
+-- see docs/wiringView.md § wireView fromKind/fromLabel
 --contract: returns the list of wireViews for every edge in the current user graph; order matches graph.edges
 function wv:wireViews()
   local g = wm:graph()
@@ -282,6 +283,7 @@ function wv:wireViews()
   for _, e in ipairs(g.edges or {}) do
     local fromPort = e.fromPort or 1
     local toPort   = e.toPort   or 1
+    local fromNode = g.nodes[e.from]
     util.add(out, {
       from         = e.from,
       to           = e.to,
@@ -291,6 +293,8 @@ function wv:wireViews()
       fromPortName = portName(e.from, 'out', e.type, fromPort),
       toPortName   = portName(e.to,   'in',  e.type, toPort),
       primary      = e.primary or nil,
+      fromKind     = fromNode and fromNode.kind,
+      fromLabel    = fromNode and nodeLabel(fromNode),
     })
   end
   return out

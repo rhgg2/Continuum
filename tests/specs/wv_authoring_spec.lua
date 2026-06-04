@@ -295,4 +295,24 @@ return {
       t.deepEq(wv:wiredPorts('n1', 'in'),  {})
     end,
   },
+  {
+    name = 'wireViews stamps fromKind / fromLabel from the from-node',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
+      wv:addFx(0, 0, { name = 'Massive', ident = 'VST3:Massive' })  -- n1=fx, n2=source, midi n2->n1
+      wv:addFx(60, 0, FX)                                           -- n3=fx (audio in)
+      t.truthy(wv:addWire{ type = 'audio', from = 'n1', to = 'n3' })
+      local byPair = {}
+      for _, w in ipairs(wv:wireViews()) do byPair[w.from .. '->' .. w.to] = w end
+
+      local srcWire = byPair['n2->n1']
+      t.eq(srcWire.fromKind,  'source',  'source-origin edge stamped fromKind=source')
+      t.eq(srcWire.fromLabel, 'Massive', 'fromLabel is the live source track name')
+
+      local fxWire = byPair['n1->n3']
+      t.eq(fxWire.fromKind,  'fx',       'fx-origin edge stamped fromKind=fx')
+      t.eq(fxWire.fromLabel, 'Massive',  'fromLabel mirrors the n1 fx display name')
+    end,
+  },
 }
