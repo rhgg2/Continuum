@@ -92,7 +92,7 @@ local HEADER_GAP = 4    -- space between the header divider and the first row
 -- docs/wiringPage.md. The shapes below are the only at-site reference.
 local drag      = nil  -- { mx0, my0, starts = { [id] = {x,y}, … } }
 local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
-local wireDraft = nil  -- { type, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx? }
+local wireDraft = nil  -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? }
 local shiftWas  = false
 local pinned     = {}   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
 local listOpenId = nil  -- node whose spillover list is engaged (chevron-gated)
@@ -1139,6 +1139,12 @@ local function drawDraftWire(p, draft, nodesById, cx, cy)
   drawWireArrow(p, sx, sy, ex, ey, name)
 end
 
+local function drawTagAt(p, cx, cy, label)
+  local tw, th = p.measure(label, wireFont, WIRE_LABEL_SIZE)
+  p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2), 'wiring.source.label',
+         label, wireFont, WIRE_LABEL_SIZE)
+end
+
 -- Track name at a source stub's far end: neutral, tiny wire-label font, set a
 -- fixed gap from where the stub wire crosses the (visible) text box.
 local function drawSourceTag(p, ax, ay, ux, uy, label)
@@ -1150,8 +1156,7 @@ local function drawSourceTag(p, ax, ay, ux, uy, label)
   local ty     = (uy ~= 0) and hh / math.abs(uy) or math.huge
   local cross  = math.min(tx, ty)
   local cx, cy = ax + ux * (TAG_GAP + cross), ay + uy * (TAG_GAP + cross)
-  p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2), 'wiring.source.label',
-         label, wireFont, WIRE_LABEL_SIZE)
+  drawTagAt(p, cx, cy, label)
 end
 
 -- Source-origin edges render as labelled stubs, not wires: a short lead off the
@@ -1241,6 +1246,9 @@ local function renderCanvas(w, h)
 
   local mx, my   = ImGui.GetMousePos(ctx)
   local lmx, lmy = p.fromScreen(mx, my)
+  -- Body split added a palette child; gate every press-start on canvas hover
+  -- so a palette click can't begin a canvas band/drag/menu. Mouseup stays open.
+  local overCanvas = ImGui.IsWindowHovered(ctx)
   local shiftHeld = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
   -- Shift clears the selection (rising edge only) so the wire-creation hover
   -- owns the visual layer; releasing shift drops sticky (a pinned overlay
@@ -1384,6 +1392,12 @@ local function renderCanvas(w, h)
     drawNode(p, nv, selection[nv.id])
   end
 
+  -- A palette drag carries a floating source tag at the cursor (on top of
+  -- nodes) — it commits to a stub on drop. The wire-type is undecided here.
+  if wireDraft and wireDraft.fromPalette then
+    drawTagAt(p, draftCx, draftCy, wireDraft.keptLabel)
+  end
+
   -- After the node pass: nodes overpaint wires, so an in-pass highlight (and
   -- its AA spill onto the body corner) would be clipped.
   drawWireEndHighlight(p, segs, wireEndHover)
@@ -1516,7 +1530,7 @@ local function renderCanvas(w, h)
   -- Double-click a node body: sampler dives to sample page, other fx floats
   -- its FX window. dblConsumed blocks this press from starting a drag.
   local dblConsumed = false
-  if not shiftHeld and not wireDraft and not fader
+  if not shiftHeld and not wireDraft and not fader and overCanvas
      and ImGui.IsMouseDoubleClicked(ctx, 0) then
     local hit = nodeUnderMouse(nodeViews, lmx, lmy)
     if hit then
@@ -1533,7 +1547,7 @@ local function renderCanvas(w, h)
   -- Mousedown precedence (docs/wiringPage.md): shift-hover > wire-end >
   -- body-drag > band.
   if not faderConsumed and not dblConsumed and not drag and not band
-      and not wireDraft and ImGui.IsMouseClicked(ctx, 0) then
+      and not wireDraft and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
     -- Any click closes the spillover. The pre-click sourceHit (list still open)
     -- drives dispatch here.
     listOpenId = nil
@@ -1638,7 +1652,8 @@ local function renderCanvas(w, h)
       end
     end
   elseif wireDraft and not ImGui.IsMouseDown(ctx, 0) then
-    local moved = math.abs(lmx - wireDraft.mx0) >= CLICK_THRESH
+    local moved = wireDraft.fromPalette
+               or math.abs(lmx - wireDraft.mx0) >= CLICK_THRESH
                or math.abs(lmy - wireDraft.my0) >= CLICK_THRESH
     if moved then
       if dropEligible(wireDraft, targetHit) then
@@ -1656,7 +1671,7 @@ local function renderCanvas(w, h)
                            { id = targetHit.nv.id, port = port })
         else
           wv:addWire{
-            type = wireDraft.type,
+            type = wireDraft.type or slot.kind,
             from = wireDraft.keptId, fromPort = wireDraft.keptPort,
             to   = targetHit.nv.id,
             toPort = port,
@@ -1700,7 +1715,7 @@ local function renderCanvas(w, h)
   -- RMB precedence: triangle → per-wire menu; node body → node menu; empty
   -- canvas → FX picker (same code path as the N-key shortcut).
   if not drag and not band and not wireDraft
-      and ImGui.IsMouseClicked(ctx, 1) then
+      and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
     if arrowHitIdx and not wireMenu and not fader then
       local seg = segs[arrowHitIdx]
       local ax  = (seg.sx + seg.ex) / 2 + 0.5
@@ -1873,6 +1888,18 @@ local function renderPaletteList(sources)
   for _, src in ipairs(sources) do
     if ImGui.Selectable(ctx, src.label .. '##src' .. src.id, paletteSource == src.id) then
       paletteSource = src.id
+    end
+    -- Drag a palette row to start a type-agnostic forward draft; the drop
+    -- port's kind (audio|midi) decides the edge type. See docs/wiringPage.md.
+    if not wireDraft and ImGui.IsItemActive(ctx)
+       and ImGui.IsMouseDragging(ctx, 0) then
+      wireDraft = {
+        cursorEnd   = 'to',
+        keptId      = src.id,
+        forbidden   = wv:ancestorsOf(src.id),
+        fromPalette = true,
+        keptLabel   = src.label,
+      }
     end
   end
 end

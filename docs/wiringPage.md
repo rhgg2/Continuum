@@ -36,6 +36,10 @@ them in a fixed precedence:
   - *shift-hover on a port* → **forward draft**: `cursorEnd='to'`, the
     kept end pins the source, the cursor floats the destination,
     `forbidden = ancestors(keptId)`.
+  - *drag a source-palette row* → **forward draft** with `fromPalette=true`:
+    type-agnostic (the drop port's kind decides the edge); `forbidden` is
+    empty because a source has no ancestors. The row is the drag handle —
+    sources have no canvas body.
   - *unmodified click on a wire's end-region* → **redraft**: `cursorEnd`
     matches the grabbed side, the kept end is the opposite one, and
     `edgeIdx` indexes the edge being moved. `forbidden` is
