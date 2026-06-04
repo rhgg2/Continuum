@@ -66,7 +66,7 @@ return {
     end,
   },
   {
-    name = 'midi bus: two sources merging into one fx encode distinct dstBus into I_MIDIFLAGS',
+    name = 'midi bus: two sources into one fx share one receiver bus (coalesced)',
     run = function(harness)
       local h, wm = mkWm(harness)
       local trackA = seedSource(h, 'guid-A')
@@ -83,7 +83,7 @@ return {
       local mfB = h.reaper.GetTrackSendInfo_Value(trackB, 0, 0, 'I_MIDIFLAGS')
       local dstChans = { decodeBus(mfA, 22), decodeBus(mfB, 22) }
       table.sort(dstChans)
-      t.deepEq(dstChans, { 0, 1 }, 'distinct receiver buses')
+      t.deepEq(dstChans, { 0, 0 }, 'coalesced onto a shared receiver bus')
       t.eq(decodeBus(mfA, 14), 0, 'srcA on boundary bus 0')
       t.eq(decodeBus(mfB, 14), 0, 'srcB on boundary bus 0')
     end,
@@ -114,7 +114,7 @@ return {
       t.eq(sendA.to,   newTrackKey)
       local dstChans = { sendA.dstChan, sendB.dstChan }
       table.sort(dstChans)
-      t.deepEq(dstChans, { 0, 1 })
+      t.deepEq(dstChans, { 0, 0 }, 'both sends coalesce onto one receiver bus')
     end,
   },
   {

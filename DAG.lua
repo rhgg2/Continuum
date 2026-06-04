@@ -566,11 +566,15 @@ function M.targetTracks(ctx)
     for _, unitKey in ipairs(unitKeys) do
       local unit = units[unitKey]
       sortFeeders(unit.audio); sortFeeders(unit.midi)
-      -- Audio: matrix sinks merge only when gained; internal sinks (parent
-      -- send) sum on any fan-in ≥2. MIDI: one bus ⇒ merge on any fan-in ≥2.
+      -- Audio: matrix sinks merge only when gained; parent sends sum on fan-in ≥2.
+      -- MIDI: only same-track producers force a CU (cross-track sends coalesce a bus).
       local audioCU = unit.isParentSend and #unit.audio >= 2 or
                       (not unit.isParentSend and anyGained(unit.audio))
-      local midiCU  = #unit.midi >= 2
+      local nIntraMidi = 0
+      for _, f in ipairs(unit.midi) do
+        if nodeTrackKey(f.from) == unit.trackKey then nIntraMidi = nIntraMidi + 1 end
+      end
+      local midiCU = #unit.midi >= 2 and nIntraMidi >= 1
 
       -- A merge CU is identified by (consumer, track). Fan-in past MERGE_WIDTH
       -- cascades into parallel CUs; each past the first gets a '#N' key suffix.
@@ -1208,23 +1212,32 @@ function M.allocate(tracks, nodes)
       addMidiValue({ def = p.def, lastUse = p.lastUse, applies = p.applies })
     end
 
-    -- Stage-2 incoming midi sends pinned at the receiver; sender's dstChan
-    -- stamped, and the receiving fx (if any) inherits the bus as its input.
+    -- Stage-2 incoming midi sends pinned at the receiver. Sends to one node coalesce
+    -- onto a single bus (REAPER merges midi on a bus); the receiving fx inherits it.
     if incoming[trackKey] then
+      local byNode, nodeOrder = {}, {}
       for _, inc in ipairs(incoming[trackKey]) do
         local ow = inc.wire
         if ow.type == 'midi' then
-          local senderTrackKey, sendIdx = inc.senderTrackKey, inc.sendIdx
           local toNode = ow.toNode
-          local lu = fxSet[toNode] and slotMap[toNode] or (N + 1)
-          addMidiValue({
-            def = 0, lastUse = lu,
-            applies = { function(bus)
-              alloc[senderTrackKey].sends[sendIdx].dstChan = bus
-              if fxSet[toNode] then fxInputBus[toNode] = bus; noteCuIn(toNode, bus) end
-            end },
-          })
+          local g = byNode[toNode]
+          if not g then
+            g = { toNode = toNode, applies = {} }
+            byNode[toNode] = g; util.add(nodeOrder, toNode)
+          end
+          local senderTrackKey, sendIdx = inc.senderTrackKey, inc.sendIdx
+          util.add(g.applies, function(bus) alloc[senderTrackKey].sends[sendIdx].dstChan = bus end)
         end
+      end
+      for _, toNode in ipairs(nodeOrder) do
+        local g = byNode[toNode]
+        util.add(g.applies, function(bus)
+          if fxSet[toNode] then fxInputBus[toNode] = bus; noteCuIn(toNode, bus) end
+        end)
+        addMidiValue({
+          def = 0, lastUse = fxSet[toNode] and slotMap[toNode] or (N + 1),
+          applies = g.applies,
+        })
       end
     end
 

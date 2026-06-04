@@ -199,6 +199,14 @@ sums at the pin, so a shared pair mixes the senders together instead of widening
 the receiver's channel count. Each unique `toNode` pin therefore gets exactly one
 register, regardless of how many senders feed it.
 
+MIDI coalesces the same way, onto one bus per `toNode` (MIDI has no port index).
+The asymmetry is upstream: a MIDI consumer reads a single input bus, so two
+*same-track* producers — each emitting its own fixed bus — still need a merge CU
+to union them (`nIntraMidi >= 1` in the per-consumer merge). *Cross-track* feeders
+are sends with a freely-assignable `dstChan`, so any number of them share the
+consumer's bus and never mint a CU. (Audio needs no such CU because input pins
+sum multiple pairs; a MIDI bus cannot be multi-read.)
+
 ### allocStream internals
 
 `allocStream(values, startCursor, N, compare, pinAdd)` is the shared helper for

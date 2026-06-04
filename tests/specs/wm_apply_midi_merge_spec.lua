@@ -1,11 +1,7 @@
 local t    = require('support')
 local util = require('util')
 
--- 3c.4.5 apply round-trip: a midi fan-in to one consumer collapses to a Merge
--- CU on the consumer trackKey. The CU reads the feeder buses (inMask) and rewrites
--- them to a single outBus the consumer reads; its guid is stamped onto the
--- consumer node so reconciles are idempotent and the CU retracts when the
--- fan-in drops back to a single feeder.
+-- 3c.4.5 apply round-trip: midi fan-in from two same-track producers. see docs/wiringManager.md § Merge CU
 
 local CU_PARAMS = { 'mode', 'gain', 'from', 'nPairs',
   'gain1', 'gain2', 'gain3', 'gain4', 'gain5', 'gain6', 'gain7', 'gain8',
@@ -46,11 +42,10 @@ local function apply(wm)
   wm:applyOps(wm:diff(wm:targetState(), wm:snapshot()))
 end
 
--- Walks REAPER's tracks for the wiring newTrack that hosts the merged class.
-local function findNewTrack(h)
-  for i = 0, h.reaper.CountTracks(0) - 1 do
-    local tr = h.reaper.GetTrack(0, i)
-    if h.cm:readTrackKey(tr, 'wiringTrackKind') == 'newTrack' then return tr end
+-- First slot on `track` whose fx ident matches, or nil.
+local function slotOf(h, track, ident)
+  for s = 0, h.reaper.TrackFX_GetCount(track) - 1 do
+    if (select(2, h.reaper.TrackFX_GetFXName(track, s))) == ident then return s end
   end
 end
 
@@ -75,35 +70,38 @@ end
 
 return {
   {
-    name = 'merge apply: Merge CU + consumer land on the newTrack',
+    name = 'merge apply: two same-track producers into one consumer mint a Merge CU',
     run = function(harness)
       local h, wm = mkWm(harness)
-      seedSource(h, 'guid-A')
-      seedSource(h, 'guid-B')
+      local trackA = seedSource(h, 'guid-A')
       wm:mutate(function(g)
-        g.nodes.sA  = source('guid-A')
-        g.nodes.sB  = source('guid-B')
-        g.nodes.fxC = fx('JS:c')
-        util.add(g.edges, midiEdge('sA', 'fxC'))
-        util.add(g.edges, midiEdge('sB', 'fxC'))
+        g.nodes.sA   = source('guid-A')
+        g.nodes.fxP1 = fx('JS:p1')
+        g.nodes.fxP2 = fx('JS:p2')
+        g.nodes.fxC  = fx('JS:c')
+        util.add(g.edges, midiEdge('sA',   'fxP1'))
+        util.add(g.edges, midiEdge('sA',   'fxP2'))
+        util.add(g.edges, midiEdge('fxP1', 'fxC'))
+        util.add(g.edges, midiEdge('fxP2', 'fxC'))
       end)
       apply(wm)
-      local track = findNewTrack(h)
-      t.truthy(track, 'newTrack created for fxC class')
-      t.eq(h.reaper.TrackFX_GetCount(track), 2, 'Merge CU + fxC')
-      local cu,  gCU  = fxAt(h, track, 0)
-      local mid, gMid = fxAt(h, track, 1)
-      t.eq(cu,  'JS:Continuum Utility', 'slot 0 = Merge CU')
-      t.eq(mid, 'JS:c',                 'slot 1 = consumer fx')
+      -- Two intra producers, the Merge CU unioning them, then the consumer.
+      t.eq(h.reaper.TrackFX_GetCount(trackA), 4, 'fxP1 + fxP2 + Merge CU + fxC')
+      local cuSlot  = slotOf(h, trackA, 'JS:Continuum Utility')
+      local fxCSlot = slotOf(h, trackA, 'JS:c')
+      t.truthy(cuSlot and fxCSlot, 'CU and consumer present')
+      t.truthy(cuSlot < fxCSlot, 'CU precedes the consumer')
+      local _, gCU  = fxAt(h, trackA, cuSlot)
+      local _, gMid = fxAt(h, trackA, fxCSlot)
       -- slider layout: mode=0, nPairs=3, outBus=20, inMask0=21, audioSum=25.
-      local sets = paramSetsOn(h, track, 0)
+      local sets = paramSetsOn(h, trackA, cuSlot)
       t.eq(sets[0],  1, 'merge mode')
       t.eq(sets[3],  1, 'nPairs = 1 (one midi bus)')
-      t.eq(sets[21], 3, 'inMask0 covers feeder buses 0 and 1')
+      t.eq(sets[21], 3, 'inMask0 covers the two producer buses')
       t.eq(sets[20], 0, 'outBus = 0 (consumer reads the boundary bus)')
       t.eq(sets[25], 0, 'audioSum off — matrix-less collapse is midi-only')
       t.eq(mergeStamp(wm), gCU, 'CU guid stamped onto consumer mergeGuids')
-      t.eq(wm:graph().nodes.fxC.fxGuid, gMid, 'consumer node guid is the mid slot')
+      t.eq(wm:graph().nodes.fxC.fxGuid, gMid, 'consumer node guid is the consumer slot')
     end,
   },
   {
@@ -113,11 +111,14 @@ return {
       seedSource(h, 'guid-A')
       seedSource(h, 'guid-B')
       wm:mutate(function(g)
-        g.nodes.sA  = source('guid-A')
-        g.nodes.sB  = source('guid-B')
-        g.nodes.fxC = fx('JS:c')
-        util.add(g.edges, midiEdge('sA', 'fxC'))
-        util.add(g.edges, midiEdge('sB', 'fxC'))
+        g.nodes.sA   = source('guid-A')
+        g.nodes.fxP1 = fx('JS:p1')
+        g.nodes.fxP2 = fx('JS:p2')
+        g.nodes.fxC  = fx('JS:c')
+        util.add(g.edges, midiEdge('sA',   'fxP1'))
+        util.add(g.edges, midiEdge('sA',   'fxP2'))
+        util.add(g.edges, midiEdge('fxP1', 'fxC'))
+        util.add(g.edges, midiEdge('fxP2', 'fxC'))
       end)
       apply(wm)
       local ops = wm:diff(wm:targetState(), wm:snapshot())
@@ -128,42 +129,39 @@ return {
     end,
   },
   {
-    name = 'merge apply: dropping one feeder retracts the Merge CU on re-apply',
+    name = 'merge apply: dropping a feeder retracts the Merge CU on re-apply',
     run = function(harness)
       local h, wm = mkWm(harness)
-      seedSource(h, 'guid-A')
-      seedSource(h, 'guid-B')
+      local trackA = seedSource(h, 'guid-A')
       wm:mutate(function(g)
-        g.nodes.sA  = source('guid-A')
-        g.nodes.sB  = source('guid-B')
-        g.nodes.fxC = fx('JS:c')
-        util.add(g.edges, midiEdge('sA', 'fxC'))
-        util.add(g.edges, midiEdge('sB', 'fxC'))
+        g.nodes.sA   = source('guid-A')
+        g.nodes.fxP1 = fx('JS:p1')
+        g.nodes.fxP2 = fx('JS:p2')
+        g.nodes.fxC  = fx('JS:c')
+        util.add(g.edges, midiEdge('sA',   'fxP1'))
+        util.add(g.edges, midiEdge('sA',   'fxP2'))
+        util.add(g.edges, midiEdge('fxP1', 'fxC'))
+        util.add(g.edges, midiEdge('fxP2', 'fxC'))
       end)
       apply(wm)
-      local track = findNewTrack(h)
-      t.eq(h.reaper.TrackFX_GetCount(track), 2, 'Merge CU present after first apply')
-      -- Drop the sB feeder: fxC's srcSet shrinks to {sA} so it migrates onto
-      -- sA's sourceTrack, fed by source midi on bus 0 — no fan-in, no merge.
+      t.truthy(slotOf(h, trackA, 'JS:Continuum Utility'), 'Merge CU present after first apply')
+      -- Drop fxP2's feed: fxC keeps a single feeder, so the union CU retracts.
       wm:mutate(function(g)
         local newEdges = {}
         for _, e in ipairs(g.edges) do
-          if not (e.from == 'sB' and e.to == 'fxC') then util.add(newEdges, e) end
+          if not (e.from == 'fxP2' and e.to == 'fxC') then util.add(newEdges, e) end
         end
         g.edges = newEdges
       end)
       apply(wm)
-      local cuTotal, fxCTotal = 0, 0
-      for i = 0, h.reaper.CountTracks(0) - 1 do
-        local tr = h.reaper.GetTrack(0, i)
-        for s = 0, h.reaper.TrackFX_GetCount(tr) - 1 do
-          local _, ident = h.reaper.TrackFX_GetFXName(tr, s)
-          if ident == 'JS:Continuum Utility' then cuTotal = cuTotal + 1 end
-          if ident == 'JS:c'                 then fxCTotal = fxCTotal + 1 end
+      local cuTotal = 0
+      for s = 0, h.reaper.TrackFX_GetCount(trackA) - 1 do
+        if (select(2, h.reaper.TrackFX_GetFXName(trackA, s))) == 'JS:Continuum Utility' then
+          cuTotal = cuTotal + 1
         end
       end
-      t.eq(cuTotal,  0, 'merge CU gone after sB removed')
-      t.eq(fxCTotal, 1, 'consumer fx still live (moved hosts)')
+      t.eq(cuTotal, 0, 'merge CU gone after the feeder dropped')
+      t.truthy(slotOf(h, trackA, 'JS:c'), 'consumer fx still live')
       t.eq(mergeStamp(wm), nil, 'merge stamp cleared')
     end,
   },

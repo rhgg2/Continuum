@@ -119,7 +119,7 @@ return {
     end,
   },
   {
-    name = 'midi: two incoming sends to same receiver get distinct dstChans',
+    name = 'midi: incoming sends to the same receiver node coalesce onto one bus',
     run = function()
       local tracks = {
         ['guid-a'] = {
@@ -136,10 +136,8 @@ return {
                        mainSend=false, intraConns={}, outWires={} },
       }
       local out = DAG.allocate(tracks)
-      local dstChans = { out['guid-a'].sends[1].dstChan,
-                         out['guid-b'].sends[1].dstChan }
-      table.sort(dstChans)
-      t.deepEq(dstChans, { 0, 1 })
+      t.eq(out['guid-a'].sends[1].dstChan, 0)
+      t.eq(out['guid-b'].sends[1].dstChan, 0)
     end,
   },
   {

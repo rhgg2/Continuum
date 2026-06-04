@@ -293,10 +293,10 @@ return {
     end,
   },
   {
-    name = 'midi fan-in to one consumer collapses to a merge CU on the consumer trackKey',
+    name = 'cross-track midi fan-in coalesces onto one bus, no merge CU',
     run = function()
-      -- s1 -> synthA (midi) -> midiComp <- synthB <- s2: two MIDI feeders
-      -- ⇒ one N→1 merge CU on the consumer trackKey; CU -> midiComp is intra-trackKey.
+      -- s1 -> synthA -> midiComp <- synthB <- s2: cross-track feeders coalesce onto
+      -- one dest bus; no same-track producer, so no merge CU. see docs/DAG.md § MIDI
       local ns = {}
       local k,  v  = source('s1', 'guid-a');               ns[k]  = v
       local k2, v2 = source('s2', 'guid-b');               ns[k2] = v2
@@ -311,22 +311,12 @@ return {
       }))
       local compCls = 'guid-a|guid-b'
       t.eq(tracks[compCls].trackKind, 'newTrack')
-      local list = cuEntries(tracks[compCls])
-      t.eq(#list, 1, 'one merge CU collapses the two MIDI feeders')
-      local cuId, cu = list[1].id, list[1].node
-      t.eq(cu.params.mode,    'merge')
-      t.eq(cu.originConsumer, 'midiComp')
-      t.eq(cu.originTrackKey,     compCls)
-      t.deepEq(tracks[compCls].fxOrder, { cuId, 'midiComp' })
+      t.eq(#cuEntries(tracks[compCls]), 0, 'no merge CU for cross-track fan-in')
+      t.deepEq(tracks[compCls].fxOrder, { 'midiComp' })
       t.deepEq(tracks['guid-a'].outWires,
-               { { from = 'synthA', to = compCls, toNode = cuId, type = 'midi' } })
+               { { from = 'synthA', to = compCls, toNode = 'midiComp', type = 'midi' } })
       t.deepEq(tracks['guid-b'].outWires,
-               { { from = 'synthB', to = compCls, toNode = cuId, type = 'midi' } })
-      local sawCuToComp = false
-      for _, c in ipairs(tracks[compCls].intraConns) do
-        if c.from == cuId and c.to == 'midiComp' and c.type == 'midi' then sawCuToComp = true end
-      end
-      t.truthy(sawCuToComp, 'CU -> midiComp is an intra-trackKey midi wire')
+               { { from = 'synthB', to = compCls, toNode = 'midiComp', type = 'midi' } })
     end,
   },
   {

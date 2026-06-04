@@ -221,6 +221,15 @@ no mutate/signal/undo block. The dispatch depends on edge kind:
 Returns `false` when nothing hosts the edge yet; the caller
 (`wv:setEdgeGain`) is responsible for materialising before the next poke.
 
+## Merge CU
+
+When two same-track MIDI producers fan into one consumer, the applier collapses
+them to a Merge CU on the consumer's track. The CU reads the feeder buses
+(`inMask`) and rewrites them to a single `outBus` the consumer reads. Its guid
+is stamped onto the consumer node so reconciles are idempotent, and the CU
+retracts when the fan-in drops back to a single feeder. Cross-track MIDI sends
+instead coalesce onto one dest bus with no CU (see `docs/DAG.md § MIDI`).
+
 ## wiringOp
 
 `wiringOp` records are full-replace ops emitted by the compiler and consumed
