@@ -242,6 +242,17 @@ Strictly ordered, one pass per frame:
    a dedicated edit path rather than a character-queue entry because
    it needs the modifier state.
 
+**Why KEY stream, not char queue, for `editKeys`.**
+`ImGui.Key_*` is physical and `IsKeyPressed(repeat)` fires on ImGui's
+own repeat timer, so every key autorepeats uniformly. The OS char queue
+silently suppressed repeats for keys with a macOS press-and-hold accent
+menu (e.g. `a`–`z`), making held-key entry unreliable.
+
+Only the newest held edit key autorepeats (`lastEditKey`). Without this
+guard, a held chord would re-enter all its keys interleaved on each
+repeat tick — the OS char queue only ever repeated the last key, but
+`IsKeyPressed` fires for every key still held.
+
 Modal is a hard gate: `handleKeys` returns immediately if `modalState`
 is set, so the popup owns the keyboard until dismissed.
 

@@ -1078,38 +1078,53 @@ local function handleMouse()
   end
 end
 
--- Page-internal raw input. commandHeld gates a held command key from
--- leaking into the char queue (different auto-repeat timing).
+-- Cell edits use the KEY stream (not the OS char queue): IsKeyPressed(repeat)
+-- autorepeats every key uniformly; the char queue dropped repeats under macOS.
+local editKeys = {}
+do
+  local function add(key, byte) editKeys[#editKeys + 1] = { key = key, char = byte } end
+  for i = 0, 25 do add(ImGui.Key_A + i, string.byte('a') + i) end
+  for d = 0, 9 do
+    add(ImGui.Key_0 + d,      string.byte('0') + d)
+    add(ImGui.Key_Keypad0 + d, string.byte('0') + d)
+  end
+  add(ImGui.Key_Minus,     string.byte('-'))
+  add(ImGui.Key_KeypadSubtract, string.byte('-'))
+  add(ImGui.Key_Comma,     string.byte(','))
+  add(ImGui.Key_Period,    string.byte('.'))
+  add(ImGui.Key_Semicolon, string.byte(';'))
+  add(ImGui.Key_Apostrophe, string.byte("'"))
+end
+
+-- Only the newest held edit key autorepeats; without this a held chord would
+-- re-enter all its keys interleaved (the OS char queue only repeated the last).
+local lastEditKey
+
+-- commandHeld gates note entry off while a command key is held, so a key
+-- bound to both (e.g. '.' = delete) fires the command, not a note.
 --contract: no-op when modal open, picker active, or any ImGui item is active
---contract: drains the input-queue per frame; reads ec/grid fresh (editEvent may rebuild)
+--contract: every fresh press enters; only lastEditKey autorepeats
+--contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
 local function handleKeys(kr)
   if modalHost:isOpen() or chrome.pickerIsActive() then return end
   if ImGui.IsAnyItemActive(ctx) then return end
-  local grid = tv.grid
   local ec = tv:ec()
   local commandHeld = kr.commandHeld
 
   if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_None
      and not cmgr:isPrefixActive() and not ec:isInRegionMode() then
-      -- Drain the queue: ImGui buffers all chars typed within a frame, so
-      -- reading only index 0 drops the rest under fast typing / rollover.
-      -- Re-fetch grid + cursor each step: editEvent flushes and may rebuild.
-      local i = 0
-      while true do
-        local rv, char = ImGui.GetInputQueueCharacter(ctx, i)
-        if not rv then break end
-        if ec:isSticky() then
-          ec:selClear()
-          break
-        end
+    for _, entry in ipairs(editKeys) do
+      local fresh  = ImGui.IsKeyPressed(ctx, entry.key, false)
+      local repeated = ImGui.IsKeyPressed(ctx, entry.key, true)
+      if fresh or (repeated and entry.key == lastEditKey) then
+        if ec:isSticky() then ec:selClear(); break end
+        if fresh then lastEditKey = entry.key end
         local row, colIdx, stop = ec:pos()
         local c = tv.grid.cols[colIdx]
-        if c then
-          tv:editEvent(c, c.cells and c.cells[row], stop, char)
-        end
-        i = i + 1
+        if c then tv:editEvent(c, c.cells and c.cells[row], stop, entry.char) end
       end
     end
+  end
 end
 
 ----- Modal-driven commands
