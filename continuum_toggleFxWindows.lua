@@ -1,0 +1,11 @@
+-- Continuum companion action: toggle FX windows.
+--
+-- Standalone REAPER action, not a Continuum module. Load it via Actions →
+-- New action → Load ReaScript, then bind F11 to it in the Main keymap.
+--
+-- It signals the running Continuum instance, which polls this flag each
+-- frame and runs its toggleFxWindows command. Needed because REAPER's
+-- accelerator reaches Continuum even while a floating FX window holds OS
+-- focus, whereas Continuum's own ImGui window only receives keys when it
+-- is itself focused.
+reaper.SetExtState('Continuum', 'toggleFxWindows', '1', false)

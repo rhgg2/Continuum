@@ -125,6 +125,46 @@ local function Main()
   -- Ctrl-Z) bypass this guard by design.
   local undoFence = reaper.Undo_CanUndo2(0)
 
+  -- F11 toggles FX windows: first press stashes+closes all floating FX;
+  -- next press re-floats exactly that set. Master included; FX chain only.
+  local hiddenFxFloats = nil   -- list of fxGUIDs we closed, awaiting restore
+  local function toggleAllFxWindows()
+    local function eachFx(fn)
+      fn(reaper.GetMasterTrack(0))
+      for i = 0, reaper.CountTracks(0) - 1 do fn(reaper.GetTrack(0, i)) end
+    end
+    -- "Hide what's open" always wins: only restore when nothing is floating,
+    -- so a live window can't be mistaken for hidden state (desync → no-op).
+    local open = {}
+    eachFx(function(track)
+      for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
+        if reaper.TrackFX_GetFloatingWindow(track, fxIdx) then
+          open[#open + 1] = { track = track, fxIdx = fxIdx,
+                              guid = reaper.TrackFX_GetFXGUID(track, fxIdx) }
+        end
+      end
+    end)
+    if #open > 0 then
+      local stash = {}
+      for _, fx in ipairs(open) do
+        stash[#stash + 1] = fx.guid
+        reaper.TrackFX_Show(fx.track, fx.fxIdx, 2)   -- 2 = hide floating
+      end
+      hiddenFxFloats = stash
+    elseif hiddenFxFloats then
+      local want = {}
+      for _, fxGuid in ipairs(hiddenFxFloats) do want[fxGuid] = true end
+      eachFx(function(track)
+        for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
+          if want[reaper.TrackFX_GetFXGUID(track, fxIdx)] then
+            reaper.TrackFX_Show(track, fxIdx, 3)     -- 3 = show floating
+          end
+        end
+      end)
+      hiddenFxFloats = nil
+    end
+  end
+
   cmgr:registerAll{
     play        = function() reaper.Main_OnCommand(1007,  0) end,
     playPause   = function() reaper.Main_OnCommand(40073, 0) end,
@@ -143,6 +183,7 @@ local function Main()
     togglePage      = function() coord:togglePage()         end,
     quit            = function() coord:quit()               end,
     beginPrefix     = function() cmgr:beginPrefix()         end,
+    toggleFxWindows = toggleAllFxWindows,
   }
   cmgr:bindAll{
     playPause       = { ImGui.Key_Space },
@@ -156,7 +197,12 @@ local function Main()
     switchToSample  = { ImGui.Key_F9 },
     quit            = { {ImGui.Key_Q, ImGui.Mod_Ctrl} },
     beginPrefix     = { {ImGui.Key_U, ImGui.Mod_Super} },
+    toggleFxWindows = { ImGui.Key_F11 },
   }
+
+  -- ImGui only delivers keys while Continuum holds focus; the REAPER-keymap
+  -- bridge (see coordinator § External commands) covers the floating-FX case.
+  coord:onExternalCommand('toggleFxWindows', 'toggleFxWindows')
 
   -- Enter on the tracker scope returns to the arrange page — the inverse
   -- of arrange's Tab/Enter dive. Tracker-scoped, not root: each page owns

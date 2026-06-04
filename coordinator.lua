@@ -173,8 +173,24 @@ end
 
 local function dispatch(state) return dispatchKeys(state, cmgr, ctx) end
 
+----- External commands (REAPER-keymap bridge)
+
+-- Companion REAPER actions set ExtState('Continuum', key); consumed each frame
+-- to fire commands, bridging REAPER-keymap keys (reachable over focused FX).
+local externalCommands = {}   -- list of { extKey, command }
+
+local function pollExternalCommands()
+  for _, ec in ipairs(externalCommands) do
+    if reaper.GetExtState('Continuum', ec.extKey) ~= '' then
+      reaper.DeleteExtState('Continuum', ec.extKey, false)
+      cmgr:invoke(ec.command)
+    end
+  end
+end
+
 local function frame()
   cm:pollUndo()
+  pollExternalCommands()
   tick()
   local page = pages[active]
 
@@ -350,6 +366,11 @@ function coord:reloadAfterExternalMutation()
   if active == 'tracker' and pages.tracker and currentTake then
     pages.tracker:reloadFromReaper()
   end
+end
+
+--contract: registers an ExtState key→command bridge polled each frame to fire Continuum commands
+function coord:onExternalCommand(extKey, command)
+  externalCommands[#externalCommands + 1] = { extKey = extKey, command = command }
 end
 
 function coord:quit()      quitting = true end
