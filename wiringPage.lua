@@ -29,54 +29,6 @@ local wv = util.instantiate('wiringView', { cm = cm, cmgr = cmgr })
 
 local wp = {}
 
------ FX-picker modal kind
-
--- Hosted as a modalHost kind, not an inline chrome.drawPicker: the wiring
--- page has no toolbar button to anchor one against. NoNav on open kills
--- ImGui's built-in nav highlight so it doesn't fight our own cursor.
-modalHost:registerKind('wiringFxPicker', function(state, close)
-  if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
-  ImGui.SetNextItemWidth(ctx, 280)
-  local prev = state.buf or ''
-  local _, buf = ImGui.InputText(ctx, '##fxFilter', prev)
-  state.buf = buf
-  local entered = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-               or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
-  ImGui.Separator(ctx)
-
-  local lf = buf:lower()
-  local matches = {}
-  for _, fx in ipairs(state.items) do
-    if buf == '' or fx.name:lower():find(lf, 1, true) then
-      matches[#matches + 1] = fx
-    end
-  end
-  if ImGui.IsWindowAppearing(ctx) or buf ~= prev then state.cursor = 1 end
-  local n = #matches
-  local cursor = state.cursor or 1
-  if n > 0 then
-    if     ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow) then cursor = cursor % n + 1
-    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow)   then cursor = (cursor - 2) % n + 1
-    end
-  end
-  cursor = math.min(math.max(cursor, 1), math.max(n, 1))
-  state.cursor = cursor
-
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-    close(false)
-  elseif entered and matches[cursor] then
-    close(true, matches[cursor])
-  else
-    if ImGui.BeginChild(ctx, '##fxList', 280, 240,
-                        ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
-      for i, fx in ipairs(matches) do
-        if ImGui.Selectable(ctx, fx.name, i == cursor) then close(true, fx) end
-      end
-    end
-    ImGui.EndChild(ctx)
-  end
-end)
-
 local NODE_W           = 96
 local NODE_H           = 60
 local CORNER_R         = 5
@@ -140,15 +92,16 @@ local sticky = nil  -- { nodeId, side } — pinned node's port row, kept visible
 local fader = nil  -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, dragging?, wheelPending?, wheelIdleFrames? }
 local wireMenu = nil  -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
 local nodeMenu = nil  -- { nodeId, anchorX, anchorY } — set on RMB-on-body; cleared when BeginPopup returns false
+local fxPicker = nil  -- { x, y, sx, sy, anchorSX?, anchorSY?, buf, cursor, items } — RMB/N-key add-FX popup; cleared when BeginPopup returns false
 
 -- Last canvas origin, captured at the top of renderCanvas. Lets openFxPicker
 -- (called from the N-key dispatch path, which runs after renderCanvas exits)
 -- recover logical mouse coords from screen-space GetMousePos.
 local canvasOrigin = { ox = 0, oy = 0 }
 
--- Forward decl: renderCanvas's RMB handler calls openFxPicker, defined below
--- the public API alongside the wiring-scope command registrations.
-local openFxPicker
+-- Forward decls: renderCanvas's RMB handler opens the FX picker and its render
+-- block draws it; both are defined below alongside the wiring-scope commands.
+local openFxPicker, renderFxPicker
 
 ----- Pixel geometry (page-owned)
 
@@ -1690,7 +1643,7 @@ local function renderCanvas(w, h)
         nodeMenu = { nodeId = bodyHit.id, anchorX = lmx, anchorY = lmy }
         ImGui.OpenPopup(ctx, '##wiringNodeMenu')
       else
-        openFxPicker(lmx, lmy)
+        openFxPicker(lmx, lmy, { x = mx, y = my })
       end
     end
   end
@@ -1745,6 +1698,28 @@ local function renderCanvas(w, h)
       ImGui.EndPopup(ctx)
     else
       nodeMenu = nil
+    end
+    ImGui.PopStyleColor(ctx, 1)
+    chrome.popChromeWindow()
+  end
+
+  -- FX picker: cursor-anchored (RMB) or viewport-centred (N-key) non-modal
+  -- popup. Non-modal means no background dim and click-outside closes it.
+  if fxPicker then
+    if fxPicker.anchorSX then
+      ImGui.SetNextWindowPos(ctx, fxPicker.anchorSX, fxPicker.anchorSY,
+                             ImGui.Cond_Appearing, 0, 0)
+    else
+      local cx, cy = ImGui.Viewport_GetCenter(ImGui.GetWindowViewport(ctx))
+      ImGui.SetNextWindowPos(ctx, cx, cy, ImGui.Cond_Appearing, 0.5, 0.5)
+    end
+    chrome.pushChromeWindow()
+    ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('separator'))
+    if ImGui.BeginPopup(ctx, '##wiringFxPicker', ImGui.WindowFlags_NoNav) then
+      renderFxPicker(fxPicker)
+      ImGui.EndPopup(ctx)
+    else
+      fxPicker = nil
     end
     ImGui.PopStyleColor(ctx, 1)
     chrome.popChromeWindow()
@@ -1812,7 +1787,7 @@ function wp:renderStatusBar(_)
   end
 end
 
---contract: acceptCmds=false if picker active, any item active, or modal was open at frame start.
+--contract: acceptCmds=false if any picker active, any item active, or modal open at frame start.
 function wp:focusState()
   if not ctx then return { suppressKbd = false, acceptCmds = false } end
   local pa = chrome and chrome.pickerIsActive() or false
@@ -1820,6 +1795,7 @@ function wp:focusState()
     suppressKbd = pa,
     acceptCmds  = (not pa)
                   and not ImGui.IsAnyItemActive(ctx)
+                  and not fxPicker
                   and not modalHost:wasOpenAtFrameStart(),
   }
 end
@@ -1861,26 +1837,74 @@ local function sourcePosFor(genX, genY)
   return genX + ux * sep, genY + uy * sep
 end
 
-openFxPicker = function(x, y)
+-- anchor (optional) = { x, y } screen coords for the popup; nil → viewport-centred.
+openFxPicker = function(x, y, anchor)
   if x == nil then
     local mx, my = ImGui.GetMousePos(ctx)
     x, y = mx - canvasOrigin.ox, my - canvasOrigin.oy
   end
   local sx, sy = sourcePosFor(x, y)
-  modalHost:open{
-    kind     = 'wiringFxPicker',
-    title    = 'Add FX',
-    items    = wv:listInstalledFX(),
-    flags    = ImGui.WindowFlags_NoNav,
-    -- Defer the gesture so the picker's close paints before the live
-    -- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
-    callback = function(fx)
-      reaper.defer(function()
-        wv:addFx(x, y, { name = shortFxName(fx.name), ident = fx.ident },
-                 { sourcePos = { x = sx, y = sy } })
-      end)
-    end,
+  fxPicker = {
+    x = x, y = y, sx = sx, sy = sy,
+    anchorSX = anchor and anchor.x, anchorSY = anchor and anchor.y,
+    buf = '', cursor = 1, items = wv:listInstalledFX(),
   }
+  ImGui.OpenPopup(ctx, '##wiringFxPicker')
+end
+
+-- Defer the gesture so the picker's close paints before the live
+-- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
+local function commitFx(pck, fx)
+  ImGui.CloseCurrentPopup(ctx)
+  fxPicker = nil
+  reaper.defer(function()
+    wv:addFx(pck.x, pck.y, { name = shortFxName(fx.name), ident = fx.ident },
+             { sourcePos = { x = pck.sx, y = pck.sy } })
+  end)
+end
+
+renderFxPicker = function(pck)
+  if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
+  ImGui.SetNextItemWidth(ctx, 280)
+  local prev = pck.buf
+  local _, buf = ImGui.InputText(ctx, '##fxFilter', prev)
+  pck.buf = buf
+  local entered = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+               or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
+  ImGui.Separator(ctx)
+
+  local lf = buf:lower()
+  local matches = {}
+  for _, fx in ipairs(pck.items) do
+    if buf == '' or fx.name:lower():find(lf, 1, true) then
+      matches[#matches + 1] = fx
+    end
+  end
+  if ImGui.IsWindowAppearing(ctx) or buf ~= prev then pck.cursor = 1 end
+  local n = #matches
+  local cursor = pck.cursor or 1
+  if n > 0 then
+    if     ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow) then cursor = cursor % n + 1
+    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow)   then cursor = (cursor - 2) % n + 1
+    end
+  end
+  cursor = math.min(math.max(cursor, 1), math.max(n, 1))
+  pck.cursor = cursor
+
+  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+    ImGui.CloseCurrentPopup(ctx)
+    fxPicker = nil
+  elseif entered and matches[cursor] then
+    commitFx(pck, matches[cursor])
+  else
+    if ImGui.BeginChild(ctx, '##fxList', 280, 240,
+                        ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
+      for i, fx in ipairs(matches) do
+        if ImGui.Selectable(ctx, fx.name, i == cursor) then commitFx(pck, fx) end
+      end
+    end
+    ImGui.EndChild(ctx)
+  end
 end
 
 local wiring = cmgr:scope('wiring')
