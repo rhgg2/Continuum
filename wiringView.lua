@@ -71,6 +71,15 @@ local function nodeCategory(kind, ins, outs)
   return 'effect'
 end
 
+-- see docs/wiringView.md § Double-click intent
+local function activation(node)
+  if node.kind ~= 'fx' or not node.fxGuid then return nil end
+  if node.fxDisplay and node.fxDisplay:find('Continuum Sampler', 1, true) then
+    return 'sampler'
+  end
+  return 'fx'
+end
+
 local function nodeView(id, node)
   local ins  = { audio = audioPorts(node, 'in'),  midi = midiPorts(node, 'in')  }
   local outs = { audio = audioPorts(node, 'out'), midi = midiPorts(node, 'out') }
@@ -79,6 +88,7 @@ local function nodeView(id, node)
     pos      = { x = node.pos.x, y = node.pos.y },
     label    = nodeLabel(node),
     category = nodeCategory(node.kind, ins, outs),
+    activate = activation(node),
     ins      = ins,
     outs     = outs,
   }
@@ -111,14 +121,11 @@ function wv:openFxWindow(nodeId)
   return (node and node.fxGuid and wm:showFxWindow(node.fxGuid)) or false
 end
 
---contract: live MediaTrack for a Continuum Sampler fx node (matched on fxDisplay), else nil
--- see docs/wiringView.md § samplerTrackForNode
-function wv:samplerTrackForNode(nodeId)
+--contract: live MediaTrack hosting nodeId's fx instance, or nil if the guid isn't live.
+--contract: caller gates on nodeView.activate=='sampler'.
+function wv:samplerTrack(nodeId)
   local node = wm:graph().nodes[nodeId]
-  if not (node and node.fxGuid and node.fxDisplay
-          and node.fxDisplay:find('Continuum Sampler', 1, true)) then
-    return nil
-  end
+  if not (node and node.fxGuid) then return nil end
   return (wm:locateFx(node.fxGuid))
 end
 
@@ -233,9 +240,16 @@ function wv:wiredPorts(nodeId, dir)
   return out
 end
 
+--contract: logical canvas position of the master node as x, y; 0,0 if master is somehow absent
+function wv:masterPos()
+  local m = wm:graph().nodes.master
+  if not m then return 0, 0 end
+  return m.pos.x, m.pos.y
+end
+
 ----- Render-ready, viewport-independent
 
---shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}} } — port lists carry names; counts = #list
+--shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', activate='sampler'|'fx'|nil, ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}} } — port lists carry names; counts = #list; activate is the double-click intent
 --contract: returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
 function wv:nodeViews()
   local g = wm:graph()

@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=1920  sha=b0d0c62  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=1903  sha=377763d  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -88,8 +88,8 @@
   @state openFxPicker, renderFxPicker  @ 104
   @state SELECTED_INFLATE = 0  @ 135   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 136
-  @state SOURCE_PAD = 24  @ 1826
-  @state wiring = cmgr:scope('wiring')  @ 1910
+  @state SOURCE_PAD = 24  @ 1809
+  @state wiring = cmgr:scope('wiring')  @ 1893
 
 # Private functions
   -- Drag / band state (page-local; ephemeral, never persisted)
@@ -245,14 +245,8 @@
   @fn pushBodyStyles()  @ 1742
   @fn popBodyStyles()  @ 1745
   -- Wiring scope
-  @fn shortFxName(s)  @ 1810
-      -- EnumInstalledFX gives "Type: Name (Author)" (or "... (N outs)"), and either
-      -- parenthetical may nest balanced parens (e.g. "Modartt SAS (France)") — hence
-      -- %b(). The node label drops the prefix and from the first balanced () on; the
-      -- picker keeps the full form to disambiguate vendors. Strip on commit.
-  @fn findMasterPos()  @ 1816
-  @fn sourcePosFor(genX, genY)  @ 1827
-  @fn commitFx(pck, fx)  @ 1857
+  @fn sourcePosFor(genX, genY)  @ 1810
+  @fn commitFx(pck, fx)  @ 1840
       -- Defer the gesture so the picker's close paints before the live
       -- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
 
@@ -278,66 +272,67 @@
   @use call    chrome.popChromeWindow  @ 1676, 1703, 1725
   @use call    chrome.pushChromeWindow  @ 1656, 1684, 1716
   @use call    cmgr.invoke  @ 1456
-  @use call    cmgr.scope  @ 1910
-  @use call    imgui.BeginChild  @ 1769, 1900
+  @use call    cmgr.scope  @ 1893
+  @use call    imgui.BeginChild  @ 1769, 1883
   @use call    imgui.BeginPopup  @ 1658, 1686, 1718
   @use call    imgui.BeginTooltip  @ 305, 885
   @use call    imgui.CalcTextSize  @ 180, 240, 244, 325, 329
-  @use call    imgui.CloseCurrentPopup  @ 1668, 1689, 1695, 1858, 1895
+  @use call    imgui.CloseCurrentPopup  @ 1668, 1689, 1695, 1841, 1878
   @use call    imgui.Dummy  @ 1739
-  @use call    imgui.EndChild  @ 1774, 1906
+  @use call    imgui.EndChild  @ 1774, 1889
   @use call    imgui.EndPopup  @ 1671, 1698, 1720
   @use call    imgui.EndTooltip  @ 307, 887
   @use call    imgui.GetCursorScreenPos  @ 1170
   @use call    imgui.GetKeyMods  @ 1180
-  @use call    imgui.GetMousePos  @ 1178, 1843
+  @use call    imgui.GetMousePos  @ 1178, 1826
   @use call    imgui.GetMouseWheel  @ 1424
   @use call    imgui.GetWindowPos  @ 1665, 1692
   @use call    imgui.GetWindowSize  @ 1666, 1693
   @use call    imgui.GetWindowViewport  @ 1713
-  @use call    imgui.InputText  @ 1870
+  @use call    imgui.InputText  @ 1853
   @use call    imgui.InvisibleButton  @ 294, 879
   @use call    imgui.IsAnyItemActive  @ 1797
   @use call    imgui.IsItemHovered  @ 299, 880
-  @use call    imgui.IsKeyPressed  @ 1354, 1872, 1873, 1887, 1888, 1894
+  @use call    imgui.IsKeyPressed  @ 1354, 1855, 1856, 1870, 1871, 1877
   @use call    imgui.IsMouseClicked  @ 1192, 1361, 1408, 1466, 1633
   @use call    imgui.IsMouseDoubleClicked  @ 1398, 1450
   @use call    imgui.IsMouseDown  @ 1236, 1570, 1612, 1620
-  @use call    imgui.IsWindowAppearing  @ 1664, 1691, 1867, 1883
-  @use call    imgui.OpenPopup  @ 1639, 1644, 1852
+  @use call    imgui.IsWindowAppearing  @ 1664, 1691, 1850, 1866
+  @use call    imgui.OpenPopup  @ 1639, 1644, 1835
   @use call    imgui.PopFont  @ 248, 332
   @use call    imgui.PopStyleColor  @ 310, 890, 1675, 1702, 1724, 1745
   @use call    imgui.PopStyleVar  @ 309, 889
   @use call    imgui.PushFont  @ 238, 324
   @use call    imgui.PushStyleColor  @ 303, 883, 1657, 1685, 1717, 1743
   @use call    imgui.PushStyleVar  @ 304, 884
-  @use call    imgui.Selectable  @ 1687, 1903
-  @use call    imgui.Separator  @ 1874
+  @use call    imgui.Selectable  @ 1687, 1886
+  @use call    imgui.Separator  @ 1857
   @use call    imgui.SetCursorScreenPos  @ 293, 878, 1738
-  @use call    imgui.SetKeyboardFocusHere  @ 1867
-  @use call    imgui.SetNextItemWidth  @ 1868
+  @use call    imgui.SetKeyboardFocusHere  @ 1850
+  @use call    imgui.SetNextItemWidth  @ 1851
   @use call    imgui.SetNextWindowPos  @ 300, 881, 1655, 1683, 1710, 1714
   @use call    imgui.Text  @ 306, 886, 1783, 1785
   @use call    imgui.Viewport_GetCenter  @ 1713
   @use call    modalHost.wasOpenAtFrameStart  @ 1799
   @use call    painter.new  @ 1173
   @use call    util.instantiate  @ 28
-  @use call    wiringView.addFx  @ 1861
+  @use call    wiringView.addFx  @ 1844
   @use call    wiringView.ancestorsOf  @ 1496, 1544
   @use call    wiringView.deleteNode  @ 1688
   @use call    wiringView.descendantsOf  @ 1543
   @use call    wiringView.edgeGain  @ 1262, 1368, 1412
   @use call    wiringView.enableLive  @ 1758
   @use call    wiringView.errors  @ 1324, 1781
-  @use call    wiringView.listInstalledFX  @ 1850
+  @use call    wiringView.listInstalledFX  @ 1833
+  @use call    wiringView.masterPos  @ 1811
   @use call    wiringView.moveNodes  @ 1617
-  @use call    wiringView.nodeViews  @ 1194, 1817
+  @use call    wiringView.nodeViews  @ 1194
   @use call    wiringView.openFxWindow  @ 1458
   @use call    wiringView.pokeEdgeGain  @ 1235, 1377, 1415, 1432
   @use call    wiringView.pollUndo  @ 1761
   @use call    wiringView.removeWireAt  @ 1599
   @use call    wiringView.rewireEdgeEnd  @ 1585
-  @use call    wiringView.samplerTrackForNode  @ 1454
+  @use call    wiringView.samplerTrack  @ 1455
   @use call    wiringView.selection  @ 1202
   @use call    wiringView.setEdgeGain  @ 1238, 1266, 1378, 1402, 1416, 1433, 1440
   @use call    wiringView.setEdgePrimary  @ 1661

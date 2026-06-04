@@ -1450,11 +1450,11 @@ local function renderCanvas(w, h)
      and ImGui.IsMouseDoubleClicked(ctx, 0) then
     local hit = nodeUnderMouse(nodeViews, lmx, lmy)
     if hit then
-      dblConsumed = true
-      local samplerTrack = wv:samplerTrackForNode(hit.id)
-      if samplerTrack then
-        cmgr:invoke('diveToSampler', samplerTrack)
-      else
+      dblConsumed = true  -- a node was hit: never fall through to a body-drag
+      if hit.activate == 'sampler' then
+        local track = wv:samplerTrack(hit.id)
+        if track then cmgr:invoke('diveToSampler', track) end
+      elseif hit.activate == 'fx' then
         wv:openFxWindow(hit.id)
       end
     end
@@ -1803,29 +1803,12 @@ end
 
 ----- Wiring scope
 
--- EnumInstalledFX gives "Type: Name (Author)" (or "... (N outs)"), and either
--- parenthetical may nest balanced parens (e.g. "Modartt SAS (France)") — hence
--- %b(). The node label drops the prefix and from the first balanced () on; the
--- picker keeps the full form to disambiguate vendors. Strip on commit.
-local function shortFxName(s)
-  s = s:gsub('^[^:]+:%s*', '')
-  s = s:gsub('%s*%b().*$', '')
-  return s
-end
-
-local function findMasterPos()
-  for _, nv in ipairs(wv:nodeViews()) do
-    if nv.id == 'master' then return nv.pos.x, nv.pos.y end
-  end
-  return 0, 0
-end
-
 -- Place an auto-spawned source on the master→cursor ray, pushed past the
 -- generator far enough that the two body rects don't collide. Degenerate
 -- (cursor on master): horizontal offset.
 local SOURCE_PAD = 24
 local function sourcePosFor(genX, genY)
-  local mxp, myp = findMasterPos()
+  local mxp, myp = wv:masterPos()
   local dx, dy = genX - mxp, genY - myp
   local len = math.sqrt(dx * dx + dy * dy)
   if len < 1 then return genX + NODE_W + SOURCE_PAD, genY end
@@ -1858,7 +1841,7 @@ local function commitFx(pck, fx)
   ImGui.CloseCurrentPopup(ctx)
   fxPicker = nil
   reaper.defer(function()
-    wv:addFx(pck.x, pck.y, { name = shortFxName(fx.name), ident = fx.ident },
+    wv:addFx(pck.x, pck.y, { name = fx.name, ident = fx.ident },
              { sourcePos = { x = pck.sx, y = pck.sy } })
   end)
 end

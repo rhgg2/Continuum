@@ -17,11 +17,21 @@ projection is viewport-independent: the page needs port counts to
 size a box but does not need to recompute "master has zero MIDI" per
 frame, and the rule lives with the graph model, not with the renderer.
 
-## samplerTrackForNode
+## Double-click intent
 
-The sampler page binds to a MediaTrack (not an fx GUID), so `samplerTrackForNode`
-resolves the node's GUID to a live track via `wm:locateFx`. The page then dives
-directly to that track rather than passing a GUID across the page boundary.
+What a node does when double-clicked — dive to the sampler page, float an
+fx window, or nothing — is a static property of the node, not of the cursor.
+So it is classified once during projection (`nodeView.activate`) and the page
+branches on that field directly, instead of probing wv twice per click to
+discover it. This keeps the decision (logical, wv's) separate from the act
+(side-effecting, wm's): the page reads `activate`, then calls the matching
+action.
+
+The sampler act binds to a MediaTrack, not an fx GUID, so `samplerTrack`
+resolves the node's GUID to a live track via `wm:locateFx`. The page dives to
+that track rather than carrying a GUID across the page boundary. `locateFx`
+itself reads an index restamped each `applyOps` (see `docs/wiringManager.md`),
+so neither the classification nor the resolution sweeps the project.
 
 ## What does not live here
 

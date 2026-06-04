@@ -85,6 +85,15 @@ graph nodes. Three rules keep instance churn minimal and state-preserving:
   CU bridges arrive at the applier with a nil `fxGuid` and are minted by
   `reconcileFXChain`, the same path as user FX.
 
+Where a `fxGuid` *currently lives* — its `(track, fxIdx)` — is derived, not
+intent: the reconcile pass migrates and reorders instances, so the slot is
+only authoritative right after `applyOps`. That is exactly where the
+`fxLocations` index is restamped. `wm:locateFx` reads it (validating the
+cached slot still holds the guid, sweeping once and repopulating on
+miss/drift) so on-demand callers like `showFxWindow` never scan the project.
+The index is volatile realisation state — kept in memory, never persisted onto
+the graph, and rebuilt from REAPER on the next reconcile.
+
 ## Master is a regular node
 
 The master sits in `graph.nodes['master']` with `kind='master'`,

@@ -34,6 +34,7 @@ local pokeParamCache = {} -- persistent paramIdx cache for the pokeEdgeGain hot 
 local realising = false   -- true during applyOps's stamp-back mutate, gating wiringChanged
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
 local lastScratchRaw = nil -- serialised graph last mirrored to scratch P_EXT; pollUndo compares against it
+local fxLocations = {}     -- fxGuid → {track, fxIdx}; restamped each applyOps so locateFx needn't sweep the project
 
 local SCRATCH_NAME = 'continuum: wiring scratch'
 local SCRATCH_KEY  = '__scratch__'
@@ -129,6 +130,7 @@ end
 function wm:load()
   userGraph      = readPersisted()
   scratchTrack   = nil
+  fxLocations    = {}
   ensureScratchTrack()
   fire('wiringChanged', { kind = 'load' })
 end
@@ -242,14 +244,46 @@ function wm:trackName(guid)
   return name
 end
 
---contract: linear scan over project FX for the instance guid; returns track, fxIdx or nil
-function wm:locateFx(fxGuid)
+-- Visit every (track, fxIdx) in the project, master chain last; stops early
+-- when visit returns truthy.
+local function eachProjectFx(visit)
   for i = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, i)
     for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
-      if reaper.TrackFX_GetFXGUID(track, fxIdx) == fxGuid then return track, fxIdx end
+      if visit(track, fxIdx) then return end
     end
   end
+  local master = reaper.GetMasterTrack(0)
+  for fxIdx = 0, reaper.TrackFX_GetCount(master) - 1 do
+    if visit(master, fxIdx) then return end
+  end
+end
+
+-- applyOps is the authoritative moment a guid's slot is known, so the index is
+-- restamped there and locateFx reads it instead of sweeping on every call.
+local function rebuildFxLocations()
+  fxLocations = {}
+  eachProjectFx(function(track, fxIdx)
+    fxLocations[reaper.TrackFX_GetFXGUID(track, fxIdx)] = { track = track, fxIdx = fxIdx }
+  end)
+end
+
+--contract: returns track, fxIdx for the instance guid or nil.
+--contract: index-first (restamped at applyOps); sweeps once on miss/drift, repopulating.
+function wm:locateFx(fxGuid)
+  local hit = fxLocations[fxGuid]
+  if hit and reaper.TrackFX_GetFXGUID(hit.track, hit.fxIdx) == fxGuid then
+    return hit.track, hit.fxIdx
+  end
+  local foundTrack, foundIdx
+  eachProjectFx(function(track, fxIdx)
+    if reaper.TrackFX_GetFXGUID(track, fxIdx) == fxGuid then
+      foundTrack, foundIdx = track, fxIdx
+      return true
+    end
+  end)
+  fxLocations[fxGuid] = foundTrack and { track = foundTrack, fxIdx = foundIdx } or nil
+  return foundTrack, foundIdx
 end
 
 --contract: floats the FX window for the instance guid; false if the guid is no longer live
@@ -276,6 +310,14 @@ function wm:createSourceTrack(opts)
   return reaper.GetTrackGUID(track)
 end
 
+-- Strips the "Type: " prefix and a trailing balanced-paren author / out-count
+-- ("... (Cockos)", "... (2 outs)"); %b() so a nested paren can't end it early.
+local function shortFxName(s)
+  s = s:gsub('^[^:]+:%s*', '')
+  s = s:gsub('%s*%b().*$', '')
+  return s
+end
+
 --contract: one Undo block around instantiate + mutate; stamps fxGuid on the new fx-node
 --contract: generators (io.ins==0) also spawn sourceTrack + source-node + midi edge
 --contract: returns new fx-node id; nil+err on validate failure or ext_midi_bus refusal
@@ -283,9 +325,10 @@ function wm:addFxNode(x, y, fx, opts)
   ensureLoaded()
   local addErr = self:checkUserAddable(fx.ident)
   if addErr then return nil, addErr end
+  local display    = fx.name and shortFxName(fx.name) or fx.ident
   reaper.Undo_BeginBlock()
   local io         = self:instantiateFxOnScratch(fx.ident)
-  local sourceGuid = (io.ins == 0) and self:createSourceTrack{ name = fx.name } or nil
+  local sourceGuid = (io.ins == 0) and self:createSourceTrack{ name = display } or nil
   local newId
   local ok, err = self:mutate(function(g)
     local fxId = 'n' .. g.nextId
@@ -295,7 +338,7 @@ function wm:addFxNode(x, y, fx, opts)
       kind      = 'fx',
       pos       = { x = x, y = y },
       fxIdent   = fx.ident,
-      fxDisplay = fx.name,
+      fxDisplay = display,
       fxGuid    = io.fxGuid,
       busAware  = false,
       ports     = {
@@ -312,14 +355,14 @@ function wm:addFxNode(x, y, fx, opts)
         kind        = 'source',
         pos         = { x = sp.x, y = sp.y },
         trackGuid   = sourceGuid,
-        displayName = fx.name,
+        displayName = display,
         ports       = { audio = { ins = 0, outs = 1 },
                         midi  = { ins = 0, outs = 1 } },
       }
       util.add(g.edges, { type = 'midi', from = sourceId, to = fxId })
     end
   end)
-  reaper.Undo_EndBlock2(0, 'wiring: add ' .. (fx.name or fx.ident), -1)
+  reaper.Undo_EndBlock2(0, 'wiring: add ' .. display, -1)
   if not ok then return nil, err end
   return newId
 end
@@ -1474,6 +1517,7 @@ function wm:applyOps(ops, label)
   -- out of the graph in the mutator that removed them).
   local owned = ownedGuidsFrom(userGraph)
   cm:set('project', 'wiringOwnedFx', owned)
+  rebuildFxLocations()
 
   -- Mirror to scratch P_EXT inside the same Undo_BeginBlock so REAPER's undo
   -- captures the graph alongside FX/track ops. SetProjExtState doesn't
