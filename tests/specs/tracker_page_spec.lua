@@ -8,7 +8,9 @@ local t = require('support')
 local fs = require('fs')
 
 local n = 0
-local fakeImGui = setmetatable({ Mod_None = 0 }, {
+local fakeImGui = setmetatable({ Mod_None = 0,
+  PushFont = function() end, PopFont = function() end,
+  PushStyleColor = function() end, PopStyleColor = function() end }, {
   __index = function(tbl, k) n = n + 1; rawset(tbl, k, n); return n end,
 })
 package.preload['imgui'] = function()
@@ -144,13 +146,14 @@ return {
     end,
   },
 
-  -- The empty grid renders before any font push, so only ImGui.Text fires —
-  -- capture it to pin which of the two empty messages the cursor situation picks.
+  -- The empty grid pushes uiFont and draws one ImGui.Text — capture it to pin
+  -- which of the two empty messages the cursor situation picks.
   {
     name = 'empty grid picks its message from whether the track has takes',
     run = function(harness)
       local h = harness.mk()
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      local fakeChrome = { colour = function() return 0 end }
+      local tp = newTrackerPage(h.cm, h.cmgr, fakeChrome, { fontSize = { ui = 13 } })
       local origText, shown = rawget(fakeImGui, 'Text')
       fakeImGui.Text = function(_, s) shown = s end
 

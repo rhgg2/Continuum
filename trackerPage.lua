@@ -1476,11 +1476,16 @@ function tp:renderBody(_, w, h, dispatch)
     lastHash = takeMidiHash()
     return
   end
-  -- No bound take ⇒ empty grid. Two reasons, two messages: the cursor's
-  -- track has no MIDI takes at all, or it has takes but none under the row.
+  -- No bound take ⇒ empty grid. Body pushes no Col_Text, so push uiFont +
+  -- grid text colour explicitly; still dispatch so global keys fire.
   if #tv.grid.cols == 0 then
+    if dispatch then dispatch(self:focusState()) end
+    ImGui.PushFont(ctx, uiFont, gui.fontSize.ui)
+    ImGui.PushStyleColor(ctx, ImGui.Col_Text, chrome.colour('text'))
     ImGui.Text(ctx, arrange().currentTrackHasTakes()
       and 'No take at the cursor.' or 'No MIDI takes on this track.')
+    ImGui.PopStyleColor(ctx)
+    ImGui.PopFont(ctx)
     lastHash = nil
     return
   end
