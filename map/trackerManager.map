@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1732  sha=36027a9  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1737  sha=458f8e7  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts
@@ -121,46 +121,46 @@
       · PC reconciliation (trackerMode mutation hook)
       · Public interface
   -- UPDATE MANAGER
-  @fn deleteEvent(evtOrToken)  @ 357
-  @fn assignEvent(evtOrToken, update)  @ 435
-  @fn addEvent(evt)  @ 459
+  @fn deleteEvent(evtOrToken)  @ 362
+  @fn assignEvent(evtOrToken, update)  @ 440
+  @fn addEvent(evt)  @ 464
       · Flush: commit accumulated ops to mm.
-  @fn flush()  @ 486
+  @fn flush()  @ 491
       @contract  preflush fires before the no-op check so a subscriber can stage peer ops
       @contract  postflush fires after mm:modify; subscribers read mm-stamped uuids on staged adds
       · Init / reload: (re)load local cache from mm.
-  @fn reload()  @ 605
+  @fn reload()  @ 610
       -- Also clears staging buffers: a rebuild must not carry un-flushed ops
       -- across (their tokens may be stale for newly-added events), matching the
       -- prior "fresh um per rebuild" semantics now that the um itself persists.
   -- Accessors
-  @fn clearSwing()  @ 718
+  @fn clearSwing()  @ 723
       · Column allocation
       · CC projection
       · Rebuild
 
 # Public API (tm:*)
-  @api tm:getChannel(chan)  @ 642
-  @api tm:channels()  @ 644
-  @api tm:editCursor()  @ 655
-  @api tm:length()  @ 661
-  @api tm:resolution()  @ 662
-  @api tm:name()  @ 663
-  @api tm:setName(name)  @ 664
-  @api tm:timeSigs()  @ 665
-  @api tm:interpolate(A, B, ppq)  @ 666
-  @api tm:markSwingStale(chan)  @ 725
+  @api tm:getChannel(chan)  @ 647
+  @api tm:channels()  @ 649
+  @api tm:editCursor()  @ 660
+  @api tm:length()  @ 666
+  @api tm:resolution()  @ 667
+  @api tm:name()  @ 668
+  @api tm:setName(name)  @ 669
+  @api tm:timeSigs()  @ 670
+  @api tm:interpolate(A, B, ppq)  @ 671
+  @api tm:markSwingStale(chan)  @ 730
       @contract  chan==nil marks all 16 channels stale; otherwise just the named channel
       @contract  consumed by the next tm:rebuild, then cleared
   -- Mutation
-  @api tm:deleteEvent(evt)  @ 732
-  @api tm:addEvent(evt)  @ 733
-  @api tm:assignEvent(evt, update)  @ 734
-  @api tm:flush()  @ 735
+  @api tm:deleteEvent(evt)  @ 737
+  @api tm:addEvent(evt)  @ 738
+  @api tm:assignEvent(evt, update)  @ 739
+  @api tm:flush()  @ 740
   -- Length
-  @api tm:setLength(newPpq)  @ 740
+  @api tm:setLength(newPpq)  @ 745
       -- On shrink, notes spanning the boundary keep their onset and have endppq clamped.
-  @api tm:rescaleLength(newPpq)  @ 766
+  @api tm:rescaleLength(newPpq)  @ 771
       -- Stretch the take to `newPpq` by linearly remapping the logical
       -- frame: each event on logical row r ends up on row f·r where
       -- f = newPpq/oldPpq. ppqL stamps scale by f; raw ppqs are
@@ -168,17 +168,17 @@
       -- ppqs are not linearly scaled (rows are preserved instead, which
       -- keeps reswing well-defined). Note delays scale by f. Frame stamps
       -- (rpb, swing slot names) are untouched. No events are deleted.
-  @api tm:tileLength(newPpq)  @ 834
+  @api tm:tileLength(newPpq)  @ 839
       -- Because oldPpq sits on a swing-period boundary (take length aligns
       -- to QN), shifting by k·oldPpq is identical in logical and realised
       -- frames; one delta serves both ppq and ppqL paths.
   -- Transport
-  @api tm:playFrom(ppq)  @ 878
-  @api tm:play()  @ 884
-  @api tm:stop()  @ 885
-  @api tm:playPause()  @ 886
+  @api tm:playFrom(ppq)  @ 883
+  @api tm:play()  @ 889
+  @api tm:stop()  @ 890
+  @api tm:playPause()  @ 891
   -- Mute
-  @api tm:setMutedChannels(set)  @ 893
+  @api tm:setMutedChannels(set)  @ 898
       @contract  idempotent: emits an assign only when n.muted differs from desired
       @invariant  lastMuteSet also tags later-added notes
       @invariant  PA events ride along in note columns but carry no mute state — skipped
@@ -189,55 +189,55 @@
   @emits rebuild   -- takeChanged:boolean
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 65, 70, 488, 679, 685, 686, 919, 1114, 1171, 1315, 1498, 1587, 1589, 1592, 1623, 1625, 1629, 1657, 1661, 1687, 1690
-  @use call    cm.set  @ 1133, 1596
-  @use call    cm.setContext  @ 1707, 1719
-  @use call    mm.add  @ 590, 870, 1477, 1515
-  @use call    mm.assign  @ 578, 1005, 1107, 1195, 1472
-  @use call    mm.ccs  @ 1075, 1340, 1486, 1518
-  @use call    mm.delete  @ 586, 1471, 1514
-  @use call    mm.events  @ 612, 849
-  @use call    mm.interpolate  @ 666
-  @use call    mm.length  @ 661, 678, 742, 768, 836
-  @use call    mm.load  @ 1712
-  @use call    mm.modify  @ 576, 865, 1003, 1106, 1193, 1470, 1513
-  @use call    mm.name  @ 663
-  @use call    mm.notes  @ 1045
-  @use call    mm.reload  @ 1728
-  @use call    mm.resolution  @ 74, 662, 678, 756, 770, 816, 851, 919, 1543
-  @use call    mm.setLength  @ 756, 770, 816, 851
-  @use call    mm.setName  @ 664
-  @use call    mm.take  @ 656, 658, 879, 880, 1133, 1585, 1724
-  @use call    mm.timeSigs  @ 665
-  @use call    mm.tokenOf  @ 1057, 1080, 1085, 1092, 1195, 1196, 1342, 1490, 1520
-  @use call    mm.unload  @ 1721
+  @use call    cm.get  @ 65, 70, 493, 684, 690, 691, 924, 1119, 1176, 1320, 1503, 1592, 1594, 1597, 1628, 1630, 1634, 1662, 1666, 1692, 1695
+  @use call    cm.set  @ 1138, 1601
+  @use call    cm.setContext  @ 1712, 1724
+  @use call    mm.add  @ 595, 875, 1482, 1520
+  @use call    mm.assign  @ 583, 1010, 1112, 1200, 1477
+  @use call    mm.ccs  @ 1080, 1345, 1491, 1523
+  @use call    mm.delete  @ 591, 1476, 1519
+  @use call    mm.events  @ 617, 854
+  @use call    mm.interpolate  @ 671
+  @use call    mm.length  @ 666, 683, 747, 773, 841
+  @use call    mm.load  @ 1717
+  @use call    mm.modify  @ 581, 870, 1008, 1111, 1198, 1475, 1518
+  @use call    mm.name  @ 668
+  @use call    mm.notes  @ 1050
+  @use call    mm.reload  @ 1733
+  @use call    mm.resolution  @ 74, 667, 683, 761, 775, 821, 856, 924, 1548
+  @use call    mm.setLength  @ 761, 775, 821, 856
+  @use call    mm.setName  @ 669
+  @use call    mm.take  @ 661, 663, 884, 885, 1138, 1590, 1729
+  @use call    mm.timeSigs  @ 670
+  @use call    mm.tokenOf  @ 1062, 1085, 1090, 1097, 1200, 1201, 1347, 1495, 1525
+  @use call    mm.unload  @ 1726
   @use call    timing.delayToPPQ  @ 74
-  @use call    timing.eval  @ 694, 695
-  @use call    timing.invert  @ 700, 702
-  @use call    timing.isIdentity  @ 682
-  @use call    timing.ppqToDelay  @ 1552
-  @use call    timing.resolveComposite  @ 683
-  @use call    util.add  @ 124, 132, 181, 185, 187, 209, 222, 247, 327, 334, 527, 529, 534, 542, 621, 626, 747, 749, 800, 844, 912, 1046, 1047, 1058, 1080, 1085, 1101, 1151, 1190, 1191, 1230, 1257, 1286, 1329, 1388, 1412, 1416, 1417, 1423, 1449, 1459, 1490, 1504, 1508, 1509, 1520
-  @use call    util.assign  @ 194, 552, 986, 1188
-  @use call    util.bucket  @ 114, 510, 513, 1231, 1232, 1343
+  @use call    timing.eval  @ 699, 700
+  @use call    timing.invert  @ 705, 707
+  @use call    timing.isIdentity  @ 687
+  @use call    timing.ppqToDelay  @ 1557
+  @use call    timing.resolveComposite  @ 688
+  @use call    util.add  @ 124, 132, 181, 185, 187, 209, 222, 247, 332, 339, 532, 534, 539, 547, 626, 631, 752, 754, 805, 849, 917, 1051, 1052, 1063, 1085, 1090, 1106, 1156, 1195, 1196, 1235, 1262, 1291, 1334, 1393, 1417, 1421, 1422, 1428, 1454, 1464, 1495, 1509, 1513, 1514, 1525
+  @use call    util.assign  @ 194, 557, 991, 1193
+  @use call    util.bucket  @ 114, 515, 518, 1236, 1237, 1348
   @use call    util.clamp  @ 66
-  @use call    util.clone  @ 843, 869, 894, 984, 1056, 1187, 1475
-  @use call    util.deepClone  @ 1624, 1625, 1628, 1629, 1690, 1696
-  @use call    util.deepEq  @ 1645
+  @use call    util.clone  @ 848, 874, 899, 989, 1061, 1192, 1480
+  @use call    util.deepClone  @ 1629, 1630, 1633, 1634, 1695, 1701
+  @use call    util.deepEq  @ 1650
   @use call    util.installHooks  @ 41
-  @use call    util.pick  @ 619
+  @use call    util.pick  @ 624
   @use call    util.print  @ 35
-  @use call    util.round  @ 66, 71, 711, 787, 794, 1284, 1552
-  @use call    util.seek  @ 158, 1318
-  @use forward mm:notesDeduped  @ 1673
-  @use forward mm:takeSwapped  @ 1675
-  @use forward mm:uuidsReassigned  @ 1674
+  @use call    util.round  @ 66, 71, 716, 792, 799, 1289, 1557
+  @use call    util.seek  @ 158, 1323
+  @use forward mm:notesDeduped  @ 1678
+  @use forward mm:takeSwapped  @ 1680
+  @use forward mm:uuidsReassigned  @ 1679
   @use require timing  @ 31
   @use require tuning  @ 32
   @use require util  @ 30
-  @use sub     cm:configChanged  @ 1681
-  @use sub     mm:reload  @ 1677
-  @use sub     mm:takeSwapped  @ 1676
+  @use sub     cm:configChanged  @ 1686
+  @use sub     mm:reload  @ 1682
+  @use sub     mm:takeSwapped  @ 1681
 
 # REAPER API surface
   @reaper GetCursorPosition

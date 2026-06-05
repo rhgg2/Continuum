@@ -277,7 +277,10 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     deleteLowlevel(n)
   end
 
-  local function resizeNote(n, P1, P2)
+  -- cullEnd is the span ceiling PAs are tested against; for an open tail
+  -- it must be passed explicitly — see docs/trackerManager.md § Update manager.
+  local function resizeNote(n, P1, P2, cullEnd)
+    cullEnd = cullEnd or P2
     local shift = P1 - n.ppq
     if shift ~= 0 and P2 - n.endppq == shift then
       forEachAttachedPA(n, function(evt)
@@ -286,7 +289,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     else
       local lastPA
       forEachAttachedPA(n, function(evt)
-        if evt.ppq <= P1 or evt.ppq >= P2 then
+        if evt.ppq <= P1 or evt.ppq >= cullEnd then
           if evt.ppq <= P1 and (not lastPA or evt.ppq > lastPA.ppq) then lastPA = evt end
           deleteLowlevel(evt)
         end
@@ -309,7 +312,9 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     if update.chan and update.chan ~= n.chan then dirtyPc(n.chan); dirtyPc(update.chan) end
 
     if update.ppq ~= nil or update.endppq ~= nil then
-      resizeNote(n, update.ppq or n.ppq, update.endppq or n.endppq)
+      local endppqL = update.endppqL ~= nil and update.endppqL or n.endppqL
+      local cullEnd = endppqL == util.OPEN and util.OPEN or (update.endppq or n.endppq)
+      resizeNote(n, update.ppq or n.ppq, update.endppq or n.endppq, cullEnd)
       update.ppq, update.endppq = nil, nil
     end
     if update.pitch then

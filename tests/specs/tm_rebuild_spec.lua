@@ -334,4 +334,32 @@ return {
       t.eventsMatch(dump.notes, { { ppq = 480, endppq = 720, pitch = 62, vel = 90 } })
     end,
   },
+
+  {
+    -- Regression: opening a tail (endppq → util.OPEN) must keep attached PAs.
+    -- stampEndppq's provisional ppq+1 must not flow into resizeNote as cullEnd.
+    name = 'opening a note tail (util.OPEN) keeps its attached PAs',
+    run = function(harness)
+      local util = require('util')
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100 } },
+          ccs = {
+            { ppq = 100, chan = 1, evType = 'pa', pitch = 60, vel = 90 },
+            { ppq = 200, chan = 1, evType = 'pa', pitch = 60, vel = 80 },
+            { ppq = 300, chan = 1, evType = 'pa', pitch = 60, vel = 70 },
+          },
+        },
+      }
+      local note = h.tm:getChannel(1).columns.notes[1].events[1]
+      h.tm:assignEvent(note, { endppq = util.OPEN })
+      h.tm:flush()
+
+      local pas = 0
+      for _, cc in ipairs(h.fm:dump().ccs) do
+        if cc.evType == 'pa' then pas = pas + 1 end
+      end
+      t.eq(pas, 3, 'all three PAs survive the open-tail edit')
+    end,
+  },
 }

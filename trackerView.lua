@@ -969,6 +969,7 @@ local noteOff, adjustDuration, adjustPosition do
     if not last then return end
     applyNoteOff(col, last, cursorppq, last.endppqC == cursorppq)
     tm:flush()
+    ec:advance()
   end
 
   -- The user grows/shrinks from the ceiling they SEE — the clipped

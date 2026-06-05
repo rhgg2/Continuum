@@ -186,7 +186,10 @@ Semantics:
 - **PA follows host.** Resizing or moving a note shifts attached PAs
   with it when the shift preserves the window; otherwise PAs outside
   the new window are deleted and the last trimmed PA's value becomes
-  the note's `vel`.
+  the note's `vel`. `resizeNote` accepts an explicit `cullEnd` ceiling
+  distinct from `P2`: for an open tail `stampEndppq` plants a provisional
+  raw note-off (`ppq+1`) that the tail pass later overwrites, so culling
+  against `P2` would drop every PA past the onset.
 - **Fake-pb housekeeping.** Adding a pb unmarks fake on the affected
   boundary; deleting one either really deletes or re-marks fake
   depending on whether detune and neighbour detune agree.
