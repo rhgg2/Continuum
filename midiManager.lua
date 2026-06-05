@@ -844,7 +844,7 @@ local function assignCC(loc, t)
         return
       end
       msg2, msg3 = reconstruct(t)
-    elseif t.val or t.cc or t.pitch then
+    elseif t.val or t.cc or t.pitch or t.vel then
       msg2, msg3 = reconstruct(util.assign(util.clone(msg), t))
     end
     local chan = t.chan and t.chan - 1
