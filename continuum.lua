@@ -80,17 +80,10 @@ local function Main()
   local cmgr  = util.instantiate('commandManager', { cm = cm })
   local coord = util.instantiate('coordinator', { cm = cm, cmgr = cmgr, gui = gui })
 
-  local chrome    = coord:chrome()
-  local modalHost = coord:modalHost()
   local function onPickTrack(t) coord:setSamplerTrack(t) end
   local function onDive(item)   coord:diveToTake(item)    end
-  local tp = util.instantiate('trackerPage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, selectTake = onDive })
-  -- Arrange's takeProperties + dup-unpooled-below commands open the
-  -- tracker page's takeProps modal on a take that may not be the
-  -- tracker page's current bind. We snapshot tp's bind, point tp at
-  -- the target take just for the modal's lifetime, then restore on
-  -- close. tp:openTakeProperties fires onClose exactly once after the
-  -- whole modal chain (incl. truncate-confirm).
+  -- see docs/continuum.md § Arrange → takeProperties delegation
+  local tp
   local function onTakeProperties(item)
     if not item then return end
     local newTake = reaper.GetActiveTake(item)
@@ -103,16 +96,13 @@ local function Main()
     tp:bind(newTake)
     tp:openTakeProperties{ onClose = function() tp:bind(prior) end }
   end
-  local ap = util.instantiate('arrangePage', { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, onDive = onDive, onTakeProperties = onTakeProperties })
-  local sp = util.instantiate('samplePage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, onPickTrack = onPickTrack })
-  local wp = util.instantiate('wiringPage',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
 
   -- Wiring registered first so Continuum boots into it (coord:register makes
   -- the first registered page active). seedCursorFromReaper still seeds arrange.
-  coord:register('wiring',  wp)
-  coord:register('arrange', ap)
-  coord:register('tracker', tp)
-  coord:register('sample',  sp)
+  local wp = coord:register('wiring',  'wiringPage')
+  local ap = coord:register('arrange', 'arrangePage', { onDive = onDive, onTakeProperties = onTakeProperties })
+  tp       = coord:register('tracker', 'trackerPage', { selectTake = onDive })
+  coord:register('sample',  'samplePage', { onPickTrack = onPickTrack })
   wp:enableLive()
   ap:seedCursorFromReaper()
 

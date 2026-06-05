@@ -114,3 +114,15 @@ each iteration schedules itself via `reaper.defer(frame)`.
 - **No teardown.** `coord:quit()` sets a flag that the defer loop
   reads at end of frame and uses to stop scheduling further frames.
   REAPER reclaims state on script unload.
+
+## Arrange → takeProperties delegation
+
+Arrange's `takeProperties` and `dup-unpooled-below` commands open
+the tracker page's takeProps modal on a take that may not be
+tp's current bind. The handler snapshots tp's current take, points
+tp at the target take for the modal's lifetime, then restores on
+close. `tp:openTakeProperties` fires `onClose` exactly once after
+the whole modal chain (including any truncate-confirm). `tp` is
+forward-declared: coord constructs it when `'tracker'` is
+registered, and `onTakeProperties` only fires at command time, by
+which point `tp` is bound.

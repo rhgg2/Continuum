@@ -1,4 +1,4 @@
-@module continuum  src=continuum.lua  loc=217  sha=9e28da0  mode=chunk
+@module continuum  src=continuum.lua  loc=207  sha=b6dc5b4  mode=chunk
 
 # Invariants & contracts
   @invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer
@@ -22,7 +22,7 @@
   @use call    imgui.CreateFont  @ 42, 47, 51, 56
   @use call    imgui.CreateFontFromFile  @ 46, 50, 55
   @use call    imgui.SetConfigVar  @ 38, 39
-  @use call    util.instantiate  @ 79, 80, 81, 87, 106, 107, 108
+  @use call    util.instantiate  @ 79, 80, 81
   @use call    util.print  @ 22
   @use require imgui  @ 17
   @use require util  @ 16

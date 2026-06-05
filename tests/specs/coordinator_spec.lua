@@ -35,10 +35,16 @@ local function lastCall(page)
   return page.calls[#page.calls]
 end
 
+-- see docs/coordinator.md § Test wiring for newCoord
 local function newCoord(h, registrations)
   local gui = { ctx = {}, uiFont = {}, uiFontBold = {}, fontSize = { ui = 12 } }
   local coord = util.instantiate('coordinator', { cm = h.cm, cmgr = h.cmgr, gui = gui })
-  for _, reg in ipairs(registrations) do coord:register(reg[1], reg[2]) end
+  for _, reg in ipairs(registrations) do
+    local name, page = reg[1], reg[2]
+    util._stubs[name] = function() return page end
+    coord:register(name, name)
+    util._stubs[name] = nil
+  end
   return coord
 end
 

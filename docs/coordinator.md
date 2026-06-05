@@ -17,3 +17,18 @@ The loop is a bare `reaper.defer` chain. Each frame reschedules itself before re
 ## Error surface
 
 Errors in the defer loop propagate to the same `xpcall` frame in `continuum.lua` that started the loop, because each iteration is a new closure passed to `defer` rather than a tail call. The handler in `continuum.lua` prints the traceback and schedules a no-op defer to cleanly exit the loop.
+
+## Façade registry
+
+`coord` owns the wiring between pages: each page publishes its own
+domain-state interface and reads peers via the injected façade.
+`STD` is the affordance set every page is constructed with;
+per-page extras merge over it in `register()`. See `docs/pageFacade.md`
+for the full façade contract.
+
+## Test wiring for newCoord
+
+`register` instantiates the page by module name. In specs, stub each
+module name to the fake page via `util._stubs` (the `instantiate` test
+seam) so `register` exercises its real path. Stubs are cleared
+immediately after the pages are constructed.

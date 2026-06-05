@@ -21,6 +21,14 @@ local chrome = util.instantiate('chrome',
   { cm = cm, ctx = ctx, uiFontBold = gui.uiFontBold, uiSize = uiSize })
 local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 
+-- see docs/coordinator.md § Façade registry
+local facades = {}
+local facade  = {
+  publish = function(name, iface) facades[name] = iface end,
+  get     = function(name) return facades[name] or error('no facade: ' .. name) end,
+}
+local STD = { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, facade = facade }
+
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 
 local pages, active = {}, nil
@@ -288,12 +296,14 @@ end
 ---------- PUBLIC
 
 --shape: page = { renderToolbarBits(ctx), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind() }
---contract: pages must be registered via coord:register(name,page); first registered becomes active
+--contract: register instantiates page; first registered becomes active; returns page handle
 local coord = {}
 
-function coord:register(name, page)
+function coord:register(name, moduleName, extra)
+  local page = util.instantiate(moduleName, util.assign(util.assign({}, STD), extra))
   pages[name] = page
   if not active then self:setActive(name) end
+  return page
 end
 
 --contract: setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange/wiring→no-op since project-wide)
@@ -374,8 +384,6 @@ function coord:onExternalCommand(extKey, command)
 end
 
 function coord:quit()      quitting = true end
-function coord:chrome()    return chrome    end
-function coord:modalHost() return modalHost end
 --contract: handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
 function coord:run(handler) errHandler = handler or function(e) error(e) end; frame() end
 
