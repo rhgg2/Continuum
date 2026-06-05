@@ -398,37 +398,36 @@ are derived on the first frame and held.
 - **Dots are `inactive` at the character level**, no matter what
   colour the renderer asked for on the rest of the cell.
 
-## adoptNewTake
+## Bind from the cursor
 
-When a new take is minted (new-below or dup-below), the page calls `tp:bind`
-immediately — the dup path opens a modal on it this same frame. But
-`coord` still owns `currentTake` and hasn't polled yet. Without an explicit
-re-selection, the first navigation back to the prior take calls
-`coord:diveToTake`, which no-ops on its identity guard because coord
-never moved. `adoptNewTake` calls `selectTake` (which triggers the REAPER
-item selection) so the coordinator's next poll sees the new item and
-updates `currentTake`, keeping the two in sync.
+The arrange cursor is the single source of truth for which take the
+tracker edits (see docs/pageFacade.md for the migration). `renderBody`
+opens by calling `bindFromCursor`: it reads `arrange():currentTake()` and,
+on change, rebinds the stack (`bind`/`dropTake`); when unchanged it
+hash-diffs the bound take for external edits. There is no REAPER selection
+and no `coord`-owned `currentTake` — moving the cursor on either page
+changes what the tracker shows, next frame.
 
-## Palette navigation
+Navigation (Track/Take pickers, `Alt`+arrows, new-below, dup-below) all
+delegate to the arrange façade, which moves the cursor; the rebind falls
+out of `bindFromCursor`. The nav algorithm itself lives in `av` (see
+docs/arrangeView.md § Palette nav).
 
-The toolbar's **Track** and **Take** pickers, and the `Alt`+arrow
-commands, move the bound take across the arrange palette without
-leaving the page. Selection is the only channel: each move re-selects a
-media item in REAPER and the coordinator's poll loop rebinds the
-tracker next frame — the same path arrange's dive uses. `selectTake`
-(`coord:diveToTake`) is injected for exactly this, so the coordinator
-stays the sole owner of `currentTake`.
+### Empty grid: two states, never auto-seek
 
-A palette **slot** is a pooled source (one row per `POOLEDEVTS` id); a
-slot may have many timeline **instances**. We navigate by slot
-(`Alt`-Up/Down, clamped to the track's MIDI slots in palette order) or
-by track (`Alt`-Left/Right, clamped, skipping tracks with no MIDI), but
-must bind a concrete instance. `resolveInstance` scans the candidates
-from the current take's start position — the travel direction first
-(forward for Down/Right, backward for Up/Left), falling back to the
-opposite when nothing lies ahead. The pickers resolve forward-first.
+No bound take ⇒ `tv.grid.cols` is empty ⇒ the grid is replaced by a
+message, chosen from the cursor's track:
 
-Everything reads through the page's own `am`; only the bind crosses
-back to the coordinator. A take with no pooled id (raw imported MIDI,
-`slotIdx == nil`) can't be slot-navigated, but track navigation still
-works — it's position-only.
+| Cursor situation | Message |
+|---|---|
+| Track has zero MIDI takes | `No MIDI takes on this track.` |
+| Track has takes, none under the row | `No take at the cursor.` |
+
+Forward-first nav never produces the middle state on a non-empty track; it
+arises only from free arrange-grid cursor movement onto a gap, or from a
+**disappearance** — the bound take deleted under you. On a disappearance
+the cursor stays put and the grid goes empty; the tracker **never**
+relocates the edit target in reaction, since silently jumping onto a
+neighbour risks editing the wrong take unnoticed. Relocation happens only
+through explicit navigation. This is free: it is the natural consequence
+of `currentTake = takeAtCursor` returning nil.

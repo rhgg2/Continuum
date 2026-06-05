@@ -1,8 +1,10 @@
 # Page façade & cross-page state ownership
 
-**Status: planned, not yet implemented.** This is a design + migration plan,
-not a description of current code. When a phase lands, fold its WHY into the
-relevant module doc and trim the plan here.
+**Status: implemented (all three phases landed).** This records the design
+and migration history. The live WHY now lives in the module docs:
+`docs/trackerPage.md` § Bind from the cursor (bind-from-cursor + the two
+empty render states), `docs/arrangeView.md` § Palette nav (forward-first,
+land-empty nav), and `docs/coordinator.md` (registry + slimming).
 
 ## The problem
 

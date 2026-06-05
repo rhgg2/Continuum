@@ -513,6 +513,7 @@ facade.publish('arrange', {
   currentTake     = function()        return av:currentTake()     end,
   currentTrackIdx = function()        return av:cursorCol()       end,
   currentSlotIdx  = function()        return av:currentSlotIdx()  end,
+  currentTrackHasTakes = function()   return av:currentTrackHasTakes() end,
   tracks          = function()        return av:projectTracks()   end,
   midiSlots       = function(trackIdx) return av:midiSlots(trackIdx) end,
   keyForSlot      = function(slotIdx)  return av:keyForSlot(slotIdx) end,

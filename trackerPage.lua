@@ -1476,8 +1476,11 @@ function tp:renderBody(_, w, h, dispatch)
     lastHash = takeMidiHash()
     return
   end
+  -- No bound take ⇒ empty grid. Two reasons, two messages: the cursor's
+  -- track has no MIDI takes at all, or it has takes but none under the row.
   if #tv.grid.cols == 0 then
-    ImGui.Text(ctx, 'Select a MIDI item to begin.')
+    ImGui.Text(ctx, arrange().currentTrackHasTakes()
+      and 'No take at the cursor.' or 'No MIDI takes on this track.')
     lastHash = nil
     return
   end

@@ -323,18 +323,19 @@ function av:reswingAll(name)      return am:reswingAll(name) end
 
 function av:currentTake()      local t = takeAtCursor(); return t and t.take    or nil end
 function av:currentSlotIdx()   local t = takeAtCursor(); return t and t.slotIdx or nil end
+function av:currentTrackHasTakes() return #midiInstances(cursorCol) > 0 end
 function av:midiSlots(trackIdx) return midiSlots(trackIdx) end
 
---contract: step ±1 track (skipping empties), landing the cursor on the nearest take by QN.
+--contract: step ±1 track (no skip; may land empty), forward-first resolve onto a take by QN.
 function av:gotoTrack(dir)
   self:setMaxCol(#am:projectTracks())
-  local tracks = am:projectTracks()
-  local fromQN = navFromQN()
-  local i = cursorCol + 1 + dir
-  while tracks[i] do
-    local instances = midiInstances(tracks[i].idx)
-    if #instances > 0 then return gotoInstance(resolveInstance(instances, fromQN, dir)) end
-    i = i + dir
+  local track = am:projectTracks()[cursorCol + 1 + dir]
+  if not track then return end
+  local instances = midiInstances(track.idx)
+  if #instances > 0 then
+    gotoInstance(resolveInstance(instances, navFromQN(), 1))
+  else
+    self:setCursor(cursorRow, track.idx)
   end
 end
 

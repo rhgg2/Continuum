@@ -230,8 +230,6 @@ local function frame()
     ImGui.EndChild(ctx)
     ImGui.PopStyleVar(ctx)
     ImGui.PopStyleColor(ctx, 2)
-  elseif visible then
-    ImGui.Text(ctx, 'Select a MIDI item to begin.')
   end
 
   if visible then modalHost:draw() end

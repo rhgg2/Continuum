@@ -795,6 +795,27 @@ return {
       captured.facades.arrange.gotoTrack(1)
       t.eq(captured.facades.arrange.currentTrackIdx(), 1, 'cursor moved to track 2')
       t.eq(captured.facades.arrange.currentTake(), 'tr2/t1', 'landed on the nearest take')
+      t.eq(captured.facades.arrange.currentTrackHasTakes(), true, 'track 2 reports its take')
+    end,
+  },
+
+  {
+    name = 'gotoTrack no longer skips an empty track — lands on it with no take',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:setTrackName('tr2', 'Track 2')
+      h.reaper:setTrackName('tr3', 'Track 3')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:addItem('tr3', { take = 'tr3/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p3}' })
+      h.reaper:setProjectTracks{ 'tr1', 'tr2', 'tr3' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      captured.facades.arrange.gotoTrack(1)
+      t.eq(captured.facades.arrange.currentTrackIdx(), 1, 'landed on the empty middle track, not skipped to track 3')
+      t.eq(captured.facades.arrange.currentTake(), nil, 'empty track has no take under the cursor')
+      t.eq(captured.facades.arrange.currentTrackHasTakes(), false, 'empty track reports no takes')
     end,
   },
 }

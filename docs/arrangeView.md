@@ -128,6 +128,28 @@ configuration is two takes sharing a start. `exceptItem` excludes the
 dragged take itself (or nothing on `press.duplicate`, where the
 original stays put).
 
+## Palette nav: forward-first, land-empty
+
+`gotoTrack`/`gotoTake`/`pickTrack`/`pickTake` move the cursor across the
+arrange palette. The arrange façade exposes them; the tracker drives them
+by delegation. They set the cursor — there is no REAPER selection.
+
+A palette **slot** is a pooled source (one row per `POOLEDEVTS` id) with
+many timeline **instances**; nav steps by slot or track but must land the
+cursor on a concrete instance. `resolveInstance` scans candidates from a
+reference QN: the nearest at/after it, else the nearest before
+(`nearest(_, _, 1) or nearest(_, _, -1)`). On a track *landing* this is
+**forward-first and fixed** — independent of the travel direction — so
+stepping right then left is not hysteretic; both resolve the same instance
+for a given QN. (`gotoTake` keeps travel-relative resolve within its slot
+axis, where ordering, not position, is the user's intent.)
+
+`gotoTrack` steps **exactly one** track and does **not** skip empties:
+landing on a track with no MIDI takes keeps the cursor row and leaves
+`currentTake()` nil, so the tracker renders an empty grid. A take with no
+pooled id (raw imported MIDI, `slotIdx == nil`) can't be slot-navigated,
+but track navigation still works — it is position-only.
+
 ## beatPerRow as the only QN bridge
 
 `qnToRow` and `rowToQN` are the only places QN meets row units, and

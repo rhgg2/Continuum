@@ -43,6 +43,7 @@ local function resetArrange()
   fakeArrange.tracks          = function() return {} end
   fakeArrange.midiSlots       = function() return {} end
   fakeArrange.keyForSlot      = function() return '' end
+  fakeArrange.currentTrackHasTakes = function() return false end
   fakeArrange.newTakeBelow           = function() fakeArrange.calls.newTakeBelow = true end
   fakeArrange.duplicateUnpooledBelow = function() fakeArrange.calls.dup          = true end
   fakeArrange.gotoTrack = function(d) fakeArrange.calls.gotoTrack = d end
@@ -140,6 +141,28 @@ return {
       h.cmgr:invoke('prevTrack'); t.eq(fakeArrange.calls.gotoTrack, -1, 'prevTrack -> gotoTrack(-1)')
       h.cmgr:invoke('nextTake');  t.eq(fakeArrange.calls.gotoTake,   1, 'nextTake -> gotoTake(1)')
       h.cmgr:invoke('prevTake');  t.eq(fakeArrange.calls.gotoTake,  -1, 'prevTake -> gotoTake(-1)')
+    end,
+  },
+
+  -- The empty grid renders before any font push, so only ImGui.Text fires —
+  -- capture it to pin which of the two empty messages the cursor situation picks.
+  {
+    name = 'empty grid picks its message from whether the track has takes',
+    run = function(harness)
+      local h = harness.mk()
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      local origText, shown = rawget(fakeImGui, 'Text')
+      fakeImGui.Text = function(_, s) shown = s end
+
+      fakeArrange.currentTrackHasTakes = function() return false end
+      tp:renderBody(nil, 100, 100, nil)
+      t.eq(shown, 'No MIDI takes on this track.', 'no takes on the track')
+
+      fakeArrange.currentTrackHasTakes = function() return true end
+      tp:renderBody(nil, 100, 100, nil)
+      t.eq(shown, 'No take at the cursor.', 'takes exist, none under the cursor')
+
+      fakeImGui.Text = origText
     end,
   },
 }
