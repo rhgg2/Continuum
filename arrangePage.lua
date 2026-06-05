@@ -15,8 +15,8 @@ package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 
-local cm, cmgr, chrome, gui, onDive, onTakeProperties, modalHost =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).onDive, (...).onTakeProperties, (...).modalHost
+local cm, cmgr, chrome, gui, modalHost, facade =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
 
 local ctx = gui and gui.ctx or nil
 -- gui.font is monospace (Source Code Pro) attached at context create;
@@ -24,8 +24,7 @@ local ctx = gui and gui.ctx or nil
 local monoFont = gui and gui.font or nil
 local uiSize   = gui and gui.fontSize and gui.fontSize.ui or 12
 
-local av = util.instantiate('arrangeView',
-  { cm = cm, cmgr = cmgr, onDive = onDive, onTakeProperties = onTakeProperties })
+local av = util.instantiate('arrangeView', { cm = cm, cmgr = cmgr, facade = facade })
 
 local ap = {}
 
@@ -492,6 +491,40 @@ function openCreateModal(trackIdx, qnPos, beats)
     end),
   }
 end
+
+-- The tracker's "new take below" gesture, owned here so it shares the
+-- createSlot modal; the cursor lands on the new take and the tracker rebinds.
+local NEW_TAKE_DEFAULT_BEATS = 4
+local function arrangeNewTakeBelow()
+  local params = av:newTakeBelowParams(); if not params then return end
+  modalHost:open{
+    kind     = 'createSlot',
+    title    = 'New take',
+    nameBuf  = '',
+    beatsBuf = tostring(NEW_TAKE_DEFAULT_BEATS),
+    callback = util.atomic('Create take', function(nameBuf, beatsBuf)
+      local b = math.max(1e-3, tonumber(beatsBuf) or NEW_TAKE_DEFAULT_BEATS)
+      av:createTakeBelow(params.trackIdx, params.destQN, b, nameBuf)
+    end),
+  }
+end
+
+facade.publish('arrange', {
+  currentTake     = function()        return av:currentTake()     end,
+  currentTrackIdx = function()        return av:cursorCol()       end,
+  currentSlotIdx  = function()        return av:currentSlotIdx()  end,
+  tracks          = function()        return av:projectTracks()   end,
+  midiSlots       = function(trackIdx) return av:midiSlots(trackIdx) end,
+  keyForSlot      = function(slotIdx)  return av:keyForSlot(slotIdx) end,
+  gotoTrack       = function(dir)      av:gotoTrack(dir) end,
+  gotoTake        = function(dir)      av:gotoTake(dir)  end,
+  pickTrack       = function(trackIdx) av:pickTrack(trackIdx) end,
+  pickTake        = function(slotIdx)  av:pickTake(slotIdx)   end,
+  newTakeBelow           = function() arrangeNewTakeBelow() end,
+  duplicateUnpooledBelow = function() av:duplicateUnpooledFocusedBelow() end,
+  reswingAll             = function(name) av:reswingAll(name) end,
+  takesUsing             = function(name) return av:takesUsing(name) end,
+})
 
 -- Two-field create modal: name + length-in-beats. OK/Cancel keys are
 -- gated on not-appearing so the Cmd+Enter that opened it doesn't self-dismiss.

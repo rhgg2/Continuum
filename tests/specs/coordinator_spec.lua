@@ -1,9 +1,8 @@
--- Pin-tests for the coordinator's page-routing surface. Render (frame/run)
--- pulls in ImGui and is exercised manually in REAPER; these cover the pure
--- routing: diveToTake (arrange -> tracker) and returnToArrange.
---
--- coordinator requires ImGui at module scope; stub via package.preload
--- before the first require so the module loads in the pure-Lua harness.
+-- Pin-tests for the coordinator's page-routing surface: setActive scope-swap and returnToArrange.
+-- Render (frame/run) pulls in ImGui and is exercised manually in REAPER.
+
+-- coordinator requires ImGui at module scope; stub via package.preload before
+-- the first require so the module loads in the pure-Lua harness.
 
 local t = require('support')
 
@@ -50,59 +49,32 @@ end
 
 return {
   {
-    name = 'diveToTake selects the item alone and binds it on the tracker page',
+    name = 'setActive swaps scope, unbinds the outgoing page, and never binds the tracker',
     run = function(harness)
       local h = harness.mk()
-      h.reaper:setProjectTracks{ 'tr1' }
-      local other = h.reaper:addItem('tr1', { take = 'mtX', isMidi = true, pos = 0, len = 1 })
-      local item  = h.reaper:addItem('tr1', { take = 'mt1', isMidi = true, pos = 1, len = 1 })
-      h.reaper.SetMediaItemSelected(other, true)   -- a stale selection to clear
-
       local tracker, arrange = fakePage(), fakePage()
+      -- arrange registered first, so it boots active and was bound once.
       local coord = newCoord(h, { { 'arrange', arrange }, { 'tracker', tracker } })
 
-      coord:diveToTake(item)
+      coord:setActive('tracker')
 
-      t.eq(h.reaper.GetSelectedMediaItem(0, 0), item, 'dived item is the sole selection')
-      t.eq(h.reaper.GetSelectedMediaItem(0, 1), nil,  'no other item left selected')
-      local bind = lastCall(tracker)
-      t.eq(bind[1], 'bind', 'tracker page was bound')
-      t.eq(bind[2], 'mt1',  'tracker bound to the dived take')
+      t.eq(lastCall(arrange)[1], 'unbind', 'outgoing arrange page unbound')
+      t.eq(#tracker.calls, 0, 'tracker binds itself from the cursor — coord never binds it')
     end,
   },
 
   {
-    name = 'diveToTake on nil is a no-op',
+    name = 'returnToArrange unbinds the tracker and rebinds arrange (no reveal)',
     run = function(harness)
       local h = harness.mk()
       local tracker, arrange = fakePage(), fakePage()
       local coord = newCoord(h, { { 'arrange', arrange }, { 'tracker', tracker } })
-      local arrangeCallsBefore = #arrange.calls
 
-      coord:diveToTake(nil)
+      coord:setActive('tracker')
+      coord:returnToArrange()
 
-      t.eq(#arrange.calls, arrangeCallsBefore, 'no page churn')
-      t.eq(#tracker.calls, 0, 'tracker never touched')
-    end,
-  },
-
-  {
-    name = 'returnToArrange activates arrange and reveals the take just edited',
-    run = function(harness)
-      local h = harness.mk()
-      h.reaper:setProjectTracks{ 'tr1' }
-      local item = h.reaper:addItem('tr1', { take = 'mt1', isMidi = true, pos = 0, len = 1 })
-
-      local tracker, arrange = fakePage(), fakePage()
-      local coord = newCoord(h, { { 'arrange', arrange }, { 'tracker', tracker } })
-
-      coord:diveToTake(item)      -- arrange -> tracker, currentTake = mt1
-      coord:returnToArrange()     -- tracker -> arrange
-
-      t.eq(lastCall(tracker)[1], 'unbind', 'tracker page unbound on the way out')
-      local reveal = lastCall(arrange)
-      t.eq(reveal[1], 'revealTake', 'arrange page asked to reveal a take')
-      t.eq(reveal[2], 'mt1',        'revealed the take just edited')
+      t.eq(lastCall(tracker)[1], 'unbind', 'tracker unbound on the way out')
+      t.eq(lastCall(arrange)[1], 'bind',   'arrange rebound — cursor never left, so no revealTake')
     end,
   },
 

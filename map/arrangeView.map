@@ -1,5 +1,5 @@
-@module arrangeView  src=arrangeView.lua  loc=433  sha=588f8f3  mode=chunk
-@deps cm, cmgr, onDive, onTakeProperties
+@module arrangeView  src=arrangeView.lua  loc=542  sha=950f9d1  mode=chunk
+@deps cm, cmgr, facade
 
 # Invariants & contracts
   @invariant  av owns arrange-page state — cursor, scroll, focus, paletteSlot; arrangePage renders.
@@ -16,163 +16,196 @@
   @require util = 'util'  @ 14
 
 # Constructed sub-instances
-  @construct am = util.instantiate('arrangeManager')  @ 19
+  @construct am = util.instantiate('arrangeManager')  @ 21
 
 # Private state
-  @state av = {}  @ 21
-  @state cursorRow, cursorCol = 0, 0  @ 23
-  @state scrollRow, scrollCol = 0, 0  @ 24
-  @state gridRows, gridCols = 0, 0  @ 25
-  @state maxCol = nil  @ 28
-  @state paletteSlot = nil  @ 29
-  @state focus = nil  @ 30
-  @state DRAG_EDGE_PX = 5  @ 32   -- end-edge grab band for a resize hit-test
-  @state PAGE_ROWS = 16  @ 33   -- PageUp / PageDown cursor step
-  @state arrange = cmgr:scope('arrange')  @ 393
-  @state placeCmds = {}  @ 427
+  @state av = {}  @ 23
+  @state cursorRow, cursorCol = 0, 0  @ 25
+  @state scrollRow, scrollCol = 0, 0  @ 26
+  @state gridRows, gridCols = 0, 0  @ 27
+  @state maxCol = nil  @ 30
+  @state paletteSlot = nil  @ 31
+  @state focus = nil  @ 32
+  @state DRAG_EDGE_PX = 5  @ 34   -- end-edge grab band for a resize hit-test
+  @state PAGE_ROWS = 16  @ 35   -- PageUp / PageDown cursor step
+  @state arrange = cmgr:scope('arrange')  @ 502
+  @state placeCmds = {}  @ 536
 
 # Private functions
+  @fn tracker()  @ 19
   -- Viewport follow
-  @fn followViewport()  @ 39
+  @fn followViewport()  @ 41
       -- Keep the cursor in the visible band, biased to the leading edge: if the
       -- cursor leaves on either side, scroll just enough to bring it back in.
   -- Geometry
-  @fn roundTo(v, step)  @ 52
-  @fn floorTo(v, step)  @ 53
+  @fn roundTo(v, step)  @ 54
+  @fn floorTo(v, step)  @ 55
   -- Cursor + focus operations
-  @fn takeAtCursor()  @ 59
+  @fn takeAtCursor()  @ 61
       -- The take under the cursor's one-row box, by largest QN overlap.
       -- Bottom-edge rule: end-edge row counts as on the take unless another starts there. See docs/arrangeView.md.
-  @fn advanceCursorPastNewTake(rawTake)  @ 78
+  @fn advanceCursorPastNewTake(rawTake)  @ 80
       -- Cursor advance after a fresh take lands: cursorRow += lengthRows.
       -- The bottom-edge rule in takeAtCursor means a chained drop still adopts the just-placed take.
-  @fn focusedTake()  @ 88
+  @fn focusedTake()  @ 90
       -- The stored focus handle resolved to a live take-shape. Self-heals: a
       -- handle whose take is gone (deleted here or in REAPER) clears focus.
-  @fn adoptCursor()  @ 97
+  @fn adoptCursor()  @ 99
       -- Reselect the take under the cursor as focus — the kb-mutation entry
       -- gesture. An empty cell clears focus, so the mutation no-ops.
-  @fn moveCursorBy(dRow, dCol)  @ 103
+  @fn moveCursorBy(dRow, dCol)  @ 105
       @invariant  cursor-nav steps whole rows/cols; only negative coords clamp. See docs/arrangeView.md.
+  -- Palette navigation — cursor-stepping across tracks/takes
+  @fn midiInstances(trackIdx, slotIdx)  @ 112
+  @fn midiSlots(trackIdx)  @ 122
+  @fn nearest(instances, fromQN, dir)  @ 131
+      -- dir +1: nearest instance at/after fromQN; dir -1: nearest at/before.
+  @fn resolveInstance(instances, fromQN, dir)  @ 143
+      -- Prefer the travel direction; fall back to the opposite when nothing lies ahead.
+  @fn gotoInstance(inst)  @ 147
+  @fn navFromQN()  @ 152
+      -- QN the nav steps from: the cursor take's start, else the bare cursor row.
   -- Take edits — move / resize / delete / dive the focused take
-  @fn nudgeFocused(direction)  @ 110
+  @fn nudgeFocused(direction)  @ 160
       @invariant  nudge steps one row; blocked only when dest start == another take start on the track.
-  @fn resizeFocused(direction)  @ 120
+  @fn resizeFocused(direction)  @ 170
       @invariant  resize writes natural length (±1 bpr, floored 1 bpr). See docs/arrangeView.md § Resize.
-  @fn deleteFocused()  @ 135
-  @fn diveFocused()  @ 142
-      @invariant  arrangeDive is MIDI-only — audio/nil focus is a silent no-op. Routes via onDive.
-  @fn focusedTakeProperties()  @ 149
-      @invariant  arrangeTakeProperties is MIDI-only. Routes via onTakeProperties for tm-bind-restore.
-  @fn duplicateFocusedBelow()  @ 156
+  @fn deleteFocused()  @ 185
+  @fn diveFocused()  @ 192
+      @invariant  arrangeDive is MIDI-only; audio/nil focus silently no-ops; dives via switchPage.
+  @fn focusedTakeProperties()  @ 199
+      @invariant  arrangeTakeProperties is MIDI-only; routes the item through the tracker façade.
+  @fn duplicateFocusedBelow()  @ 206
       @invariant  duplicateBelow: pooled clone at natural end; focus+cursor advance to copy. MIDI-only.
-  @fn duplicateUnpooledFocusedBelow()  @ 167
-  @fn dropAt(slotIdx)  @ 182
+  @fn duplicateUnpooledFocusedBelow()  @ 217
+  @fn dropAt(slotIdx)  @ 232
       @invariant  drop0..dropZ place a fresh instance at the cursor and advance cm.arrangeAdvanceBy rows.
       @invariant  arrangeAdvanceBy0..9 (Ctrl+digit) set the advance step.
       @invariant  drop on an empty slot is a no-op; new takes inherit the slot's instance length.
-  @fn deleteFocusedAndAdvance()  @ 188
+  @fn deleteFocusedAndAdvance()  @ 238
   -- Loop + transport — REAPER loop range and playback, driven from the cursor
-  @fn setLoopStartHere()  @ 197
+  @fn setLoopStartHere()  @ 247
       @invariant  setLoopStart/End move one loop endpoint to cursorQN; never inverts the range.
       @invariant  with no loop yet, defaults are {qn, projectEnd} (start) and {0, qn} (end).
-  @fn setLoopEndHere()  @ 204
-  @fn playFromCursor()  @ 211
-  @fn clearLoop()  @ 215
+  @fn setLoopEndHere()  @ 254
+  @fn playFromCursor()  @ 261
+  @fn clearLoop()  @ 265
 
 # Public API (av:*)
   -- View state — cursor, scroll, focus, density
-  @api av:cursorRow()  @ 221
-  @api av:cursorCol()  @ 222
-  @api av:scroll()  @ 223
-  @api av:focus()  @ 224
-  @api av:paletteSlot()  @ 225
-  @api av:setCursor(row, col)  @ 228
+  @api av:cursorRow()  @ 271
+  @api av:cursorCol()  @ 272
+  @api av:scroll()  @ 273
+  @api av:focus()  @ 274
+  @api av:paletteSlot()  @ 275
+  @api av:setCursor(row, col)  @ 278
       @contract  clamps negative coords to 0; clamps cursorCol to maxCol if set; no row upper bound.
-  @api av:setFocus(handle)  @ 237
+  @api av:setFocus(handle)  @ 287
       @contract  stores an opaque take handle or nil; av resolves it via am at edit-command time.
-  @api av:setPaletteSlot(idx)  @ 240
+  @api av:setPaletteSlot(idx)  @ 290
       @contract  setPaletteSlot(nil) clears; numeric values clamp into 0..61 (the base62 slot range).
-  @api av:beatPerRow()  @ 244
-  @api av:setBeatPerRow(v)  @ 245
-  @api av:qnToRow(qn)  @ 246
-  @api av:rowToQN(row)  @ 247
-  @api av:setGridSize(rows, cols)  @ 250
+  @api av:beatPerRow()  @ 294
+  @api av:setBeatPerRow(v)  @ 295
+  @api av:qnToRow(qn)  @ 296
+  @api av:rowToQN(row)  @ 297
+  @api av:setGridSize(rows, cols)  @ 300
       @contract  page hands over visible cell counts each frame so followViewport has live bounds.
-  @api av:setMaxCol(n)  @ 257
+  @api av:setMaxCol(n)  @ 307
       @contract  page pushes live track count each frame; setCursor clamps cursorCol to it.
   -- Project data — proxied from am so the page holds no am reference
-  @api av:projectTracks()  @ 261
-  @api av:tracksTakes(trackIdx)  @ 262
-  @api av:trackSlots(trackIdx)  @ 263
-  @api av:keyForSlot(slotIdx)  @ 264
-  @api av:nextFreeSlot(trackIdx)  @ 265
-  @api av:editCursorQN()  @ 266
-  @api av:playPositionQN()  @ 267
-  @api av:loopRangeQN()  @ 268
+  @api av:projectTracks()  @ 311
+  @api av:tracksTakes(trackIdx)  @ 312
+  @api av:trackSlots(trackIdx)  @ 313
+  @api av:keyForSlot(slotIdx)  @ 314
+  @api av:nextFreeSlot(trackIdx)  @ 315
+  @api av:editCursorQN()  @ 316
+  @api av:playPositionQN()  @ 317
+  @api av:loopRangeQN()  @ 318
+  @api av:takesUsing(name)  @ 319
+  @api av:reswingAll(name)  @ 320
+  -- Palette navigation — façade-backed cursor stepping
+  @api av:currentTake()  @ 324
+  @api av:currentSlotIdx()  @ 325
+  @api av:midiSlots(trackIdx)  @ 326
+  @api av:gotoTrack(dir)  @ 329
+      @contract  step ±1 track (skipping empties), landing the cursor on the nearest take by QN.
+  @api av:gotoTake(dir)  @ 342
+      @contract  step ±1 slot on the current track; no-op without a cursor take or its slot.
+  @api av:pickTrack(trackIdx)  @ 352
+      @contract  jump to a track, forward-first resolve from the cursor QN.
+  @api av:pickTake(slotIdx)  @ 358
+      @contract  jump to a slot on the current track, forward-first resolve.
+  @api av:newTakeBelowParams()  @ 364
+      @contract  dest for a new take below the cursor take; nil if no cursor take or start unclear.
+  @api av:createTakeBelow(trackIdx, destQN, beats, name)  @ 372
+      @contract  mint a MIDI take at (trackIdx,destQN) and land the cursor on it; nil if am refused.
   -- Transport — gutter mouse drives the REAPER edit cursor / loop range
-  @api av:setEditCursorQN(qn)  @ 272
-  @api av:setLoopRangeQN(lo, hi)  @ 273
-  @api av:clearLoopRange()  @ 274
+  @api av:setEditCursorQN(qn)  @ 380
+  @api av:setLoopRangeQN(lo, hi)  @ 381
+  @api av:clearLoopRange()  @ 382
   -- Grid mouse — hit-test, in-flight drag geometry, commit
-  @api av:hitTake(trackIdx, qn, qnPerPx)  @ 280
+  @api av:hitTake(trackIdx, qn, qnPerPx)  @ 388
       @contract  returns take, mode='resizeEnd' within DRAG_EDGE_PX of end, else 'move'; nil if no hit.
       @contract  end-edge band clamps to half the take so short takes stay movable; qnPerPx scales px→QN.
-  @api av:dragCandidate(press, mouseQN, snapped)  @ 294
+  @api av:dragCandidate(press, mouseQN, snapped)  @ 402
       @contract  returns { startQN, lengthQN, fits }; moved edge snaps to a row box unless snapped=false.
       @contract  fits false iff another take starts at startQN; exceptItem excludes the dragged take.
       @contract  move/dup ghost = naturalLenQN; resize ghost grows/shrinks from current rendered length.
-  @api av:gutterLoopCand(press, mouseQN, snapped)  @ 316
+  @api av:gutterLoopCand(press, mouseQN, snapped)  @ 424
       @contract  returns { loQN, hiQN } floored to row boxes unless snapped=false; widens to ≥1 row.
-  @api av:createCandidate(press, mouseQN, snapped)  @ 326
+  @api av:createCandidate(press, mouseQN, snapped)  @ 434
       @contract  returns {startQN=press.qn, lengthQN}; end floors to row box if snapped; >=1 row.
-  @api av:commitDrag(press, cand)  @ 334
+  @api av:commitDrag(press, cand)  @ 442
       @contract  move/resize preserves focus; dup shifts focus to new copy. Resize writes natural length.
   -- Slot operations — the page's modal commits these
-  @api av:renameSlot(trackIdx, slotIdx, name)  @ 353
-  @api av:createSlot(trackIdx, qnPos, lengthQN, name)  @ 358
+  @api av:renameSlot(trackIdx, slotIdx, name)  @ 461
+  @api av:createSlot(trackIdx, qnPos, lengthQN, name)  @ 466
       @contract  mints a MIDI slot via am, palette-focuses it, dives into it; nil if am refused.
-  @api av:deleteSlot(trackIdx, slotIdx)  @ 367
+  @api av:deleteSlot(trackIdx, slotIdx)  @ 476
   -- Boot + reveal — the page interface delegates here
-  @api av:revealTake(reaperTake)  @ 375
+  @api av:revealTake(reaperTake)  @ 484
       @contract  positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
-  @api av:seedCursor()  @ 384
+  @api av:seedCursor()  @ 493
       @contract  seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
 
 # Uses (outbound edges)
-  @use call    arrangeManager.clearLoopRange  @ 215, 274
-  @use call    arrangeManager.createAndDropMidi  @ 359
-  @use call    arrangeManager.deleteSlot  @ 368
-  @use call    arrangeManager.deleteTake  @ 138
-  @use call    arrangeManager.dropInstance  @ 183
-  @use call    arrangeManager.duplicateBelow  @ 160
-  @use call    arrangeManager.duplicateTake  @ 343
-  @use call    arrangeManager.duplicateUnpooledBelow  @ 171
-  @use call    arrangeManager.editCursorQN  @ 266
-  @use call    arrangeManager.findTake  @ 80, 90, 376
-  @use call    arrangeManager.initialCursor  @ 385
-  @use call    arrangeManager.keyForSlot  @ 264, 429
-  @use call    arrangeManager.loopRangeQN  @ 199, 206, 268
-  @use call    arrangeManager.moveTake  @ 114, 346
-  @use call    arrangeManager.nextFreeSlot  @ 265
-  @use call    arrangeManager.playFromQN  @ 212
-  @use call    arrangeManager.playPositionQN  @ 267
-  @use call    arrangeManager.projectEndQN  @ 201, 403
-  @use call    arrangeManager.projectTracks  @ 261
-  @use call    arrangeManager.renameSlot  @ 354
-  @use call    arrangeManager.resizeTake  @ 126, 341
-  @use call    arrangeManager.setEditCursorQN  @ 272
-  @use call    arrangeManager.setLoopRangeQN  @ 201, 208, 273
-  @use call    arrangeManager.startIsClear  @ 311
-  @use call    arrangeManager.trackSlots  @ 263
-  @use call    arrangeManager.tracksTakes  @ 65, 262, 281
-  @use call    cm.get  @ 184, 190, 244
-  @use call    cm.set  @ 245, 424
-  @use call    cmgr.scope  @ 393
-  @use call    util.atomic  @ 338
-  @use call    util.clamp  @ 41, 45
-  @use call    util.instantiate  @ 19
-  @use require arrangeManager  @ 19
+  @use call    arrangeManager.clearLoopRange  @ 265, 382
+  @use call    arrangeManager.createAndDropMidi  @ 373, 467
+  @use call    arrangeManager.deleteSlot  @ 477
+  @use call    arrangeManager.deleteTake  @ 188
+  @use call    arrangeManager.dropInstance  @ 233
+  @use call    arrangeManager.duplicateBelow  @ 210
+  @use call    arrangeManager.duplicateTake  @ 451
+  @use call    arrangeManager.duplicateUnpooledBelow  @ 221
+  @use call    arrangeManager.editCursorQN  @ 316
+  @use call    arrangeManager.findTake  @ 82, 92, 485
+  @use call    arrangeManager.initialCursor  @ 494
+  @use call    arrangeManager.keyForSlot  @ 314, 538
+  @use call    arrangeManager.loopRangeQN  @ 249, 256, 318
+  @use call    arrangeManager.moveTake  @ 164, 454
+  @use call    arrangeManager.nextFreeSlot  @ 315
+  @use call    arrangeManager.playFromQN  @ 262
+  @use call    arrangeManager.playPositionQN  @ 317
+  @use call    arrangeManager.projectEndQN  @ 251, 512
+  @use call    arrangeManager.projectTracks  @ 311, 330, 331, 353
+  @use call    arrangeManager.renameSlot  @ 462
+  @use call    arrangeManager.resizeTake  @ 176, 449
+  @use call    arrangeManager.reswingAll  @ 320
+  @use call    arrangeManager.setEditCursorQN  @ 380
+  @use call    arrangeManager.setLoopRangeQN  @ 251, 258, 381
+  @use call    arrangeManager.startIsClear  @ 367, 419
+  @use call    arrangeManager.takesUsing  @ 319
+  @use call    arrangeManager.trackSlots  @ 124, 313
+  @use call    arrangeManager.tracksTakes  @ 67, 114, 312, 389
+  @use call    cm.get  @ 234, 240, 294
+  @use call    cm.set  @ 295, 533
+  @use call    cmgr.invoke  @ 195, 471
+  @use call    cmgr.scope  @ 502
+  @use call    facade.get  @ 19
+  @use call    util.atomic  @ 446
+  @use call    util.clamp  @ 43, 47
+  @use call    util.instantiate  @ 21
+  @use require arrangeManager  @ 21
   @use require util  @ 14
 
 # REAPER API surface

@@ -95,6 +95,10 @@ function newMidiManager(opts)
     fire('reload', nil)
   end
 
+  function mm:unload()
+    take = nil
+  end
+
   -- TEST-ONLY HELPERS
 
   function mm:seed(seed)

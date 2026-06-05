@@ -1,10 +1,8 @@
--- Pin-tests for trackerPage's Page interface (bind / unbind / focusState).
--- render / handleInput / save / load are stubs wired in step 3 and
--- verified in REAPER rather than here.
---
--- trackerPage requires ImGui at module scope.  We stub it via
--- package.preload before the first require so the module loads cleanly
--- in the pure-Lua harness.
+-- Pin-tests for trackerPage's Page interface (bind / unbind / focusState / bind-from-cursor).
+-- render / handleInput are stubs wired in step 3 and verified in REAPER, not here.
+
+-- trackerPage requires ImGui at module scope; stub via package.preload before
+-- the first require so the module loads cleanly in the pure-Lua harness.
 
 local t = require('support')
 local fs = require('fs')
@@ -33,16 +31,36 @@ local fakeModalHost = {
   wasOpenAtFrameStart = function() return false end,
   reset               = function(self) self.last = nil end,
 }
--- Captures the item handed to coord's diveToTake — the channel by which a
--- tracker-minted take becomes coord's currentTake (see adoptNewTake).
-local fakeSelect = { last = nil, reset = function(self) self.last = nil end }
+
+-- The tracker reaches arrange data through this facade. fakeArrange records
+-- the nav/CRUD delegations and serves a settable currentTake for bindFromCursor.
+local fakeArrange = {}
+local function resetArrange()
+  fakeArrange.calls = {}
+  fakeArrange.currentTake     = function() return nil end
+  fakeArrange.currentTrackIdx = function() return 0 end
+  fakeArrange.currentSlotIdx  = function() return nil end
+  fakeArrange.tracks          = function() return {} end
+  fakeArrange.midiSlots       = function() return {} end
+  fakeArrange.keyForSlot      = function() return '' end
+  fakeArrange.newTakeBelow           = function() fakeArrange.calls.newTakeBelow = true end
+  fakeArrange.duplicateUnpooledBelow = function() fakeArrange.calls.dup          = true end
+  fakeArrange.gotoTrack = function(d) fakeArrange.calls.gotoTrack = d end
+  fakeArrange.gotoTake  = function(d) fakeArrange.calls.gotoTake  = d end
+  fakeArrange.pickTrack = function(i) fakeArrange.calls.pickTrack = i end
+  fakeArrange.pickTake  = function(i) fakeArrange.calls.pickTake  = i end
+end
+local fakeFacade = {
+  publish = function() end,
+  get = function(name) if name == 'arrange' then return fakeArrange end return {} end,
+}
 
 local function newTrackerPage(cm, cmgr, chrome, gui)
   fakeModalHost:reset()
-  fakeSelect:reset()
+  resetArrange()
   return util.instantiate('trackerPage',
-    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = fakeModalHost,
-      selectTake = function(item) fakeSelect.last = item end })
+    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui,
+      modalHost = fakeModalHost, facade = fakeFacade })
 end
 
 return {
@@ -80,83 +98,48 @@ return {
     end,
   },
 
-  -- newTakeBelow / duplicateUnpooledBelow: tracker back-ports of arrange's
-  -- dup-below trio. newTakeBelow opens the createSlot modal (name + beats);
-  -- on commit it mints at the bound take's natural end and rebinds tm.
-  -- duplicateUnpooledBelow clones first, rebinds tm, then opens take-properties
-  -- on the new take so the user can rename / truncate / extend. The pooled
-  -- variant is intentionally absent — instancing belongs to arrange's palette.
+  -- In Model B the tracker no longer owns am: the bound take follows the arrange cursor, and
+  -- newTakeBelow / dup / nav all delegate to the arrange facade (minting pinned in arrange_page_spec).
   {
-    name = 'newTakeBelow opens createSlot modal; commit mints at natural end and rebinds tm',
+    name = 'bindFromCursor binds tm to the arrange cursor take and drops on nil',
     run = function(harness)
       local h = harness.mk()
-      h.reaper:setTrackName('tr1', 'Track 1')
-      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
       local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
-      tp:bind('tr1/t1')
-      h.cmgr:push('tracker')
-      h.cmgr:invoke('newTakeBelow')
-      local s = fakeModalHost.last
-      t.truthy(s,                       'modal opened')
-      t.eq(s.kind,    'createSlot',     'createSlot kind')
-      t.eq(s.beatsBuf, '4',             'default 4 beats')
-      s.callback('Verse', '3')
-      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
-      local takes = am:tracksTakes(0)
-      t.eq(#takes, 2,                   'sibling minted on commit')
-      t.eq(takes[2].startQN, 2,         'sibling starts at the source take\'s natural end')
-      t.eq(takes[2].naturalLenQN, 3,    'sibling honours the user\'s 3 beats')
-      t.eq(tp:currentTake(), takes[2].take, 'tm now bound to the new sibling')
-      t.eq(fakeSelect.last, takes[2].item, 'new item re-selected so coord adopts it as currentTake')
+      fakeArrange.currentTake = function() return 'tr1/t1' end
+      tp:bindFromCursor()
+      t.eq(tp:currentTake(), 'tr1/t1', 'bound to the cursor take on change')
+      fakeArrange.currentTake = function() return nil end
+      tp:bindFromCursor()
+      t.eq(tp:currentTake(), nil, 'dropped when the cursor has no take')
     end,
   },
 
   {
-    name = 'duplicateUnpooledBelow mints a clone, rebinds tm, then opens take-properties',
+    name = 'newTakeBelow + duplicateUnpooledBelow delegate to the arrange facade',
     run = function(harness)
       local h = harness.mk()
-      h.reaper:setTrackName('tr1', 'Track 1')
-      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
-      h.reaper:setProjectTracks{ 'tr1' }
       local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
-      tp:bind('tr1/t1')
       h.cmgr:push('tracker')
+      h.cmgr:invoke('newTakeBelow')
+      t.truthy(fakeArrange.calls.newTakeBelow, 'newTakeBelow routed to arrange')
       h.cmgr:invoke('duplicateUnpooledBelow')
-      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
-      local takes = am:tracksTakes(0)
-      t.eq(#takes, 2,                       'fresh clone added below')
-      t.eq(takes[2].startQN, 2,             'clone starts at the source take\'s natural end')
-      t.eq(tp:currentTake(), takes[2].take, 'tm now bound to the clone')
-      t.eq(fakeSelect.last, takes[2].item, 'clone item re-selected so coord adopts it as currentTake')
-      local s = fakeModalHost.last
-      t.truthy(s,                           'take-properties opened on the clone')
-      t.eq(s.kind, 'takeProps',             'takeProps kind')
+      t.truthy(fakeArrange.calls.dup, 'duplicateUnpooledBelow routed to arrange')
     end,
   },
 
   {
-    name = 'newTakeBelow + duplicateUnpooledBelow no-op silently on start-collision',
+    name = 'prev/next track + take delegate to arrange cursor nav',
     run = function(harness)
       local h = harness.mk()
-      h.reaper:setTrackName('tr1', 'Track 1')
-      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
-      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
-                                pos = 2, len = 1, srcLen = 1, poolGuid = '{p2}' })
-      h.reaper:setProjectTracks{ 'tr1' }
       local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
-      tp:bind('tr1/t1')
       h.cmgr:push('tracker')
-      fakeModalHost:reset()
-      h.cmgr:invoke('newTakeBelow')
-      h.cmgr:invoke('duplicateUnpooledBelow')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
-      t.eq(#am:tracksTakes(0), 2,           'destination collided — no take added')
-      t.eq(tp:currentTake(), 'tr1/t1',      'tm stays on the source take')
-      t.eq(fakeModalHost.last, nil,         'no modal opened')
+      h.cmgr:invoke('nextTrack'); t.eq(fakeArrange.calls.gotoTrack,  1, 'nextTrack -> gotoTrack(1)')
+      h.cmgr:invoke('prevTrack'); t.eq(fakeArrange.calls.gotoTrack, -1, 'prevTrack -> gotoTrack(-1)')
+      h.cmgr:invoke('nextTake');  t.eq(fakeArrange.calls.gotoTake,   1, 'nextTake -> gotoTake(1)')
+      h.cmgr:invoke('prevTake');  t.eq(fakeArrange.calls.gotoTake,  -1, 'prevTake -> gotoTake(-1)')
     end,
   },
 }

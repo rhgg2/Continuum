@@ -1,4 +1,4 @@
-@module continuum  src=continuum.lua  loc=207  sha=b6dc5b4  mode=chunk
+@module continuum  src=continuum.lua  loc=191  sha=85d5962  mode=chunk
 
 # Invariants & contracts
   @invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer
@@ -13,8 +13,9 @@
   @fn err_handler(err)  @ 25
   @fn run(fn)  @ 31
   @fn createImGui()  @ 36
-  @fn Main()  @ 77
-      @contract  Main builds the manager stack bottom-up with no take, then enters the defer loop via coord:run(); the coordinator picks up the user's MIDI selection on its first tracker-page tick
+  @fn Main()  @ 78
+      @contract  Main builds the manager stack bottom-up, then enters the defer loop via coord:run()
+      @contract  each page owns its cross-page state, exposed through the facade registry coord wires
 
 # Uses (outbound edges)
   @use call    imgui.Attach  @ 57, 58, 59, 60
@@ -22,7 +23,7 @@
   @use call    imgui.CreateFont  @ 42, 47, 51, 56
   @use call    imgui.CreateFontFromFile  @ 46, 50, 55
   @use call    imgui.SetConfigVar  @ 38, 39
-  @use call    util.instantiate  @ 79, 80, 81
+  @use call    util.instantiate  @ 80, 81, 82
   @use call    util.print  @ 22
   @use require imgui  @ 17
   @use require util  @ 16
@@ -34,7 +35,6 @@
   @reaper defer
   @reaper ClearConsole
   @reaper GetOS
-  @reaper GetActiveTake
   @reaper Undo_CanUndo2
   @reaper GetMasterTrack
   @reaper CountTracks

@@ -33,12 +33,6 @@ local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 
 local pages, active = {}, nil
 local quitting      = false
---contract: owns the active sampler track — the picker on samplePage delegates here, and first sample-page activation seeds the default from pages.sample:listTracks()
-local samplerTrack  = nil
---contract: owns currentTake — refreshTakeFromReaper polls GetSelectedMediaItem→GetActiveTake→TakeIsMIDI, mutates currentTake only on a real MIDI take that differs (sticky on nothing-selected or non-MIDI), and returns true so the caller can rebind
-local currentTake   = nil
---contract: external-mutation watcher — captured at end of every tracker-active frame; top-of-tick diff triggers tp:reloadFromReaper. Cleared on take swap (bind path is the reload). Nil disables the diff check (one-frame grace after swap/first activation).
-local lastTakeHash  = nil
 local errHandler    = nil
 
 ----- Keyboard router
@@ -115,59 +109,22 @@ end
 
 ----- Coordinator
 
-local function refreshTakeFromReaper()
-  local item = reaper.GetSelectedMediaItem(0, 0)
-  if not item then return false end
-  local t = reaper.GetActiveTake(item)
-  if not t or not reaper.TakeIsMIDI(t) then return false end
-  if t == currentTake then return false end
-  currentTake = t
-  return true
-end
-
-local function takeMidiHash()
-  if not currentTake then return nil end
-  local ok, h = reaper.MIDI_GetHash(currentTake, false)
-  return ok and h or nil
-end
-
---contract: tick() runs once per frame before the page draws; setPrefix is republished only when the project path changes (one mailbox cell shared across instances)
---contract: tracker-active branch — take swap takes priority (clears the watcher so the post-bind end-of-frame capture is the new baseline); otherwise a hash diff signals an external mutation (REAPER Ctrl-Z, external script) and we reload the bound take
---contract: currentTake invalidation (item deleted in-app or out) is detected here via ValidatePtr2; on a dead pointer we drop the take so downstream (sample:tick, takeMidiHash, edit commands) stops poking REAPER with garbage
+--contract: tick() runs once per frame before the page draws; no selection bus here
 local function tick()
   modalHost:tick()
-  if currentTake and not reaper.ValidatePtr2(0, currentTake, 'MediaItem_Take*') then
-    currentTake, lastTakeHash = nil, nil
-    if pages.tracker then pages.tracker:dropTake() end
-  end
-  if active == 'tracker' and pages.tracker then
-    if refreshTakeFromReaper() then
-      pages.tracker:bind(currentTake)
-      lastTakeHash = nil
-    elseif lastTakeHash then
-      local h = takeMidiHash()
-      if h and h ~= lastTakeHash then
-        pages.tracker:reloadFromReaper()
-        lastTakeHash = takeMidiHash()
-      end
-    end
-  end
-  if pages.sample then pages.sample:tick(currentTake) end
+  if pages.sample then pages.sample:tick() end
   if pages.wiring then pages.wiring:tick() end
 end
 
 local function drawSwitcher()
   local function pageButton(label, name)
     local isActive = active == name
-    local disabled = name == 'tracker' and not currentTake and not isActive
     if isActive then
       ImGui.PushStyleColor(ctx, ImGui.Col_Button, chrome.colour('toolbar.buttonActive'))
     end
-    chrome.disabledIf(disabled, function()
-      if ImGui.Button(ctx, label) and not isActive then
-        cmgr:invoke('switchPage', name)
-      end
-    end)
+    if ImGui.Button(ctx, label) and not isActive then
+      cmgr:invoke('switchPage', name)
+    end
     if isActive then ImGui.PopStyleColor(ctx, 1) end
   end
   pageButton('A', 'arrange')
@@ -284,12 +241,6 @@ local function frame()
   ImGui.PopStyleColor(ctx, 5)
   ImGui.PopFont(ctx)
 
-  -- End-of-frame baseline for the external-mutation watcher: by now any
-  -- user-triggered mutation this frame has flushed through mm:modify, so the
-  -- hash reflects truth. Next frame's tick() diffs against this value; a
-  -- difference can only have come from outside Continuum.
-  if active == 'tracker' and currentTake then lastTakeHash = takeMidiHash() end
-
   if open and not quitting then reaper.defer(function() xpcall(frame, errHandler) end) end
 end
 
@@ -306,61 +257,31 @@ function coord:register(name, moduleName, extra)
   return page
 end
 
---contract: setActive(name) is a no-op when name == active; otherwise unbinds the outgoing page, swaps cmgr scope, and binds the incoming page (tracker→currentTake, sample→samplerTrack, arrange/wiring→no-op since project-wide)
---contract: returns false when activating tracker with no take, else true; togglePage skips on false
+--contract: setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming
+--contract: tracker self-binds from the cursor in renderBody; activation binds nothing for it
 function coord:setActive(name)
   if active == name then return true end
-  if name == 'tracker' then
-    refreshTakeFromReaper()
-    if not currentTake then return false end
-  end
   if active and pages[active] then
     pages[active]:unbind()
     cmgr:pop(active)
   end
   active = name
   cmgr:push(name)
-  if name == 'tracker' then
-    pages.tracker:bind(currentTake)
-  elseif name == 'sample' then
-    if samplerTrack == nil then
-      local tracks = pages.sample:listTracks()
-      samplerTrack = tracks[1] and tracks[1].track or nil
-    end
-    pages.sample:bind(samplerTrack)
-  elseif name == 'arrange' then
-    pages.arrange:bind()
-  elseif name == 'wiring' then
-    pages.wiring:bind()
-  end
+  if name ~= 'tracker' then pages[name]:bind() end
   return true
 end
 
---contract: dive from the arrange page into a MIDI take — selects the item alone in REAPER so refreshTakeFromReaper reads it, then activates the tracker page (whose bind picks it up). Trusts the caller to pass a MIDI item; nil is a no-op.
-function coord:diveToTake(item)
-  if not item then return end
-  reaper.SelectAllMediaItems(0, false)
-  reaper.SetMediaItemSelected(item, true)
-  self:setActive('tracker')
-end
-
---contract: return from the tracker page to arrange, landing the arrange cursor on the take just edited (coord's currentTake). The inverse of diveToTake; a no-op when arrange isn't registered.
+--contract: tracker back to arrange; no reveal (cursor never left). No-op if arrange unregistered.
 function coord:returnToArrange()
   if not pages.arrange then return end
   self:setActive('arrange')
-  pages.arrange:revealTake(currentTake)
 end
 
---contract: stores the active sampler track and re-binds the sample page if currently active; safe to call before sample page is registered (state stashes; bind happens on next activation)
-function coord:setSamplerTrack(t)
-  samplerTrack = t
-  if active == 'sample' and pages.sample then
-    pages.sample:bind(t)
-  end
-end
+--contract: resolve a published page facade by name; the contents are owned by the publishing page
+function coord:getFacade(name) return facade.get(name) end
 
 -- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
--- and setActive-refused pages (tracker with no take) are skipped.
+-- are skipped; with ≥1 track every page activates.
 function coord:togglePage()
   local order = { 'tracker', 'arrange', 'sample', 'wiring' }
   local idx
@@ -373,7 +294,7 @@ end
 
 --contract: invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
 function coord:reloadAfterExternalMutation()
-  if active == 'tracker' and pages.tracker and currentTake then
+  if active == 'tracker' and pages.tracker then
     pages.tracker:reloadFromReaper()
   end
 end

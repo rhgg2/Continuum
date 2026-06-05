@@ -22,18 +22,33 @@ _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 local util = require('util')
 
 local fakeModalHost = {
-  open                = function() end,
-  openPrompt          = function() end,
-  openConfirm         = function() end,
+  last                = nil,
+  open                = function(self, state) self.last = state end,
+  openPrompt          = function(self, state) self.last = state end,
+  openConfirm         = function(self, state) self.last = state end,
   registerKind        = function() end,
   isOpen              = function() return false end,
   wasOpenAtFrameStart = function() return false end,
 }
-local function newArrangePage(cm, cmgr, chrome, gui, onDive, onTakeProperties)
+-- captured.nav = switchPage target (dive seam); captured.props = item handed to the tracker facade.
+-- captured.facades holds the page's published facades so tests can drive arrange's own capabilities.
+local captured = { facades = {} }
+local fakeFacade = {
+  publish = function(name, iface) captured.facades[name] = iface end,
+  get = function(name)
+    if name == 'tracker' then
+      return { openTakeProperties = function(item) captured.props = item end }
+    end
+    return {}
+  end,
+}
+local function newArrangePage(cm, cmgr, chrome, gui)
+  captured.nav, captured.props, captured.facades = nil, nil, {}
+  fakeModalHost.last = nil
+  cmgr:registerAll{ switchPage = function(_, name) captured.nav = name end }
   return util.instantiate('arrangePage',
     { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui,
-      onDive = onDive, onTakeProperties = onTakeProperties,
-      modalHost = fakeModalHost })
+      modalHost = fakeModalHost, facade = fakeFacade })
 end
 
 return {
@@ -426,20 +441,19 @@ return {
   },
 
   {
-    name = 'arrangeDive routes the focused MIDI take through onDive',
+    name = 'arrangeDive switches to the tracker for a focused MIDI take',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
-      local item = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                             pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local dived
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, item, 'onDive received the focused take item')
+      t.eq(captured.nav, 'tracker', 'dive switched to the tracker page')
     end,
   },
 
@@ -452,12 +466,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/a1', isMidi = false,
                                 pos = 0, len = 1, srcFile = '/snd/a.wav' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local dived = false
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function() dived = true end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, false, 'audio take does not dive')
+      t.eq(captured.nav, nil, 'audio take does not dive')
     end,
   },
 
@@ -468,12 +481,11 @@ return {
       h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:setProjectTracks{ 'tr1' }
-      local dived = false
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function() dived = true end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, false, 'empty grid focuses nothing — dive is a no-op')
+      t.eq(captured.nav, nil, 'empty grid focuses nothing — dive is a no-op')
     end,
   },
 
@@ -596,12 +608,11 @@ return {
                                               pos = 5, len = 1, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1', 'tr2' }
       h.reaper.SetMediaItemSelected(item2, true)
-      local dived
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, item2, 'focus seeded on the selected take — dive lands on it')
+      t.eq(captured.nav, 'tracker', 'focus seeded on the selected take — dive fires')
     end,
   },
 
@@ -611,16 +622,15 @@ return {
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
-      local item = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                             pos = 7, len = 1, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 7, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
       h.reaper:setCursor(7)
-      local dived
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, item, 'focus seeded at the edit-cursor row — dive lands on the take there')
+      t.eq(captured.nav, 'tracker', 'focus seeded at the edit-cursor row — dive fires')
     end,
   },
 
@@ -638,12 +648,11 @@ return {
       local item = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                              pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local opened
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, nil, function(it) opened = it end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeTakeProperties')
-      t.eq(opened, item, 'onTakeProperties received the focused take item')
+      t.eq(captured.props, item, 'take item routed to the tracker facade')
     end,
   },
 
@@ -656,12 +665,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/a1', isMidi = false,
                                 pos = 0, len = 1, srcFile = '/snd/a.wav' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local opened = false
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, nil, function() opened = true end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeTakeProperties')
-      t.eq(opened, false, 'audio take is silently skipped')
+      t.eq(captured.props, nil, 'audio take is silently skipped')
     end,
   },
 
@@ -716,8 +724,7 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local opened
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, nil, function(it) opened = it end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDuplicateUnpooledBelow')
@@ -725,8 +732,8 @@ return {
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2, 'fresh clone added below')
       t.eq(takes[2].startQN, 2, 'clone starts at the source take\'s natural end')
-      t.truthy(opened, 'onTakeProperties fired with the new item')
-      t.truthy(opened ~= takes[1].item, 'auto-open targets the new take, not the source')
+      t.truthy(captured.props, 'take properties opened on the new item')
+      t.truthy(captured.props ~= takes[1].item, 'auto-open targets the new take, not the source')
     end,
   },
 
@@ -736,15 +743,58 @@ return {
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
-      local item = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                             pos = 3, len = 1, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 3, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local dived
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {}, function(it) dived = it end)
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
       ap:revealTake('tr1/t1')
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(dived, item, 'take revealed and focused — dive lands on it')
+      t.eq(captured.nav, 'tracker', 'take revealed and focused — dive fires')
+    end,
+  },
+
+  -- The arrange facade now owns the tracker's old new-take-below / nav flows.
+  {
+    name = 'newTakeBelow facade mints a sibling at the natural end and lands the cursor on it',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      captured.facades.arrange.newTakeBelow()
+      local s = fakeModalHost.last
+      t.truthy(s,             'createSlot modal opened')
+      t.eq(s.beatsBuf, '4',   'default 4 beats')
+      s.callback('Verse', '3')
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2,                'sibling minted on commit')
+      t.eq(takes[2].startQN, 2,      'sibling at the source take\'s natural end')
+      t.eq(takes[2].naturalLenQN, 3, 'honours the user\'s 3 beats')
+      t.eq(captured.facades.arrange.currentTake(), takes[2].take, 'cursor landed on the new take')
+    end,
+  },
+
+  {
+    name = 'gotoTrack steps to the nearest take on the adjacent track, moving the cursor',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:setTrackName('tr2', 'Track 2')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:addItem('tr2', { take = 'tr2/t1', isMidi = true, pos = 3, len = 1, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1', 'tr2' }
+      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      captured.facades.arrange.gotoTrack(1)
+      t.eq(captured.facades.arrange.currentTrackIdx(), 1, 'cursor moved to track 2')
+      t.eq(captured.facades.arrange.currentTake(), 'tr2/t1', 'landed on the nearest take')
     end,
   },
 }

@@ -17,11 +17,11 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
---contract: owns and constructs the tracker substack (mm/tm/tv/am)
+--contract: owns and constructs the tracker substack (mm/tm/tv)
 --contract: coord hands primitives, never the substack
---contract: take arrives later via tp:bind from coord's poll loop
-local cm, cmgr, chrome, gui, modalHost, selectTake =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).selectTake
+--contract: the bound take follows the arrange cursor; renderBody rebinds on change
+local cm, cmgr, chrome, gui, modalHost, facade =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
 
 local function print(...)
   return util.print(...)
@@ -33,7 +33,18 @@ local mm     = util.instantiate('midiManager',    { take = nil })
 local tm     = util.instantiate('trackerManager', { mm = mm, cm = cm })
 local gm     = util.instantiate('groupManager', { tm = tm, cm = cm })
 local tv     = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr, gm = gm })
-local am     = util.instantiate('arrangeManager', { cm = cm, tm = tm })
+
+-- The tracker reaches arrange data only through this facade; the arrange
+-- cursor is the source of truth for the bound take. See docs/trackerPage.md.
+local function arrange() return facade.get('arrange') end
+
+local lastHash = nil   -- bound take's last-seen MIDI hash; external-mutation watcher baseline
+
+local function takeMidiHash()
+  local take = tm:currentTake(); if not take then return nil end
+  local ok, h = reaper.MIDI_GetHash(take, false)
+  return ok and h or nil
+end
 
 ---------- PRIVATE
 
@@ -73,7 +84,7 @@ end
 local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
 local dragging    = false   -- tracker-grid selection drag: click → held → release
 local swingEditor = util.instantiate('swingEditor',
-  { tv = tv, cm = cm, chrome = chrome, ctx = ctx, am = am })
+  { tv = tv, cm = cm, chrome = chrome, ctx = ctx, facade = facade })
 local curveEd      = util.instantiate('curveEditor', { ctx = ctx, chrome = chrome })
 local laneConsumed = false
 local toolbar                              -- lazy: chrome may be nil at construction in tests
@@ -308,86 +319,6 @@ local function drawSampleDropdown()
   }
 end
 
------ Palette navigation
--- Slot vs instance, scan direction, track skip rules: see docs/trackerPage.md § Palette navigation.
-
-local toolbarBound = nil   -- bound am-take for the current toolbar frame; shared by both pickers
-
-local function boundAmTake()
-  local reaperTake = tm:currentTake(); if not reaperTake then return end
-  return am:findTake(reaperTake)
-end
-
-local function midiInstances(trackIdx, slotIdx)
-  local out = {}
-  for _, take in ipairs(am:tracksTakes(trackIdx)) do
-    if take.kind == 'midi' and (not slotIdx or take.slotIdx == slotIdx) then
-      out[#out + 1] = take
-    end
-  end
-  return out
-end
-
-local function midiSlots(trackIdx)
-  local out = {}
-  for _, slot in ipairs(am:trackSlots(trackIdx)) do
-    if slot.kind == 'midi' then out[#out + 1] = slot end
-  end
-  return out
-end
-
--- dir +1: nearest instance at/after fromQN; dir -1: nearest at/before.
-local function nearest(instances, fromQN, dir)
-  local best
-  for _, take in ipairs(instances) do
-    local inDir  = (dir > 0 and take.startQN >= fromQN) or (dir < 0 and take.startQN <= fromQN)
-    local closer = not best or (dir > 0 and take.startQN < best.startQN)
-                            or (dir < 0 and take.startQN > best.startQN)
-    if inDir and closer then best = take end
-  end
-  return best
-end
-
--- Prefer the travel direction; fall back to the opposite when nothing lies ahead.
-local function resolveInstance(instances, fromQN, dir)
-  return nearest(instances, fromQN, dir) or nearest(instances, fromQN, -dir)
-end
-
-local function selectInstance(instances, fromQN, dir)
-  local inst = resolveInstance(instances, fromQN, dir)
-  if inst then selectTake(inst.item) end
-end
-
-local function gotoTrackDelta(dir)
-  local bound = boundAmTake(); if not bound then return end
-  local tracks = am:projectTracks()
-  local i = bound.trackIdx + 1 + dir
-  while tracks[i] do
-    local instances = midiInstances(tracks[i].idx)
-    if #instances > 0 then return selectInstance(instances, bound.startQN, dir) end
-    i = i + dir
-  end
-end
-
-local function gotoSlotDelta(dir)
-  local bound = boundAmTake(); if not bound or not bound.slotIdx then return end
-  local slots = midiSlots(bound.trackIdx)
-  local cur
-  for i, slot in ipairs(slots) do if slot.idx == bound.slotIdx then cur = i end end
-  local target = cur and slots[cur + dir]
-  if target then selectInstance(midiInstances(bound.trackIdx, target.idx), bound.startQN, dir) end
-end
-
-local function pickTrack(trackIdx)
-  selectInstance(midiInstances(trackIdx), toolbarBound and toolbarBound.startQN or 0, 1)
-end
-
-local function pickSlot(slotIdx)
-  if toolbarBound then
-    selectInstance(midiInstances(toolbarBound.trackIdx, slotIdx), toolbarBound.startQN, 1)
-  end
-end
-
 -- Each render closure reads cm/tv fresh; segments declared once, reused per frame.
 --shape: ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
 local toolbarSegments = {
@@ -396,9 +327,10 @@ local toolbarSegments = {
     render = function()
       chrome.headingLabel('Track')
       ImGui.SameLine(ctx, 0, 8)
+      local curIdx = arrange().currentTrackIdx()
       local items, curName = {}, nil
-      for _, tr in ipairs(am:projectTracks()) do
-        local isCur = toolbarBound and tr.idx == toolbarBound.trackIdx or false
+      for _, tr in ipairs(arrange().tracks()) do
+        local isCur = tr.idx == curIdx
         if isCur then curName = tr.name end
         items[#items + 1] = {
           label   = tr.name ~= '' and tr.name or ('Track ' .. (tr.idx + 1)),
@@ -407,9 +339,8 @@ local toolbarSegments = {
       end
       chrome.drawPicker {
         kind        = 'track',
-        buttonLabel = (curName and curName ~= '' and curName)
-                      or (toolbarBound and ('Track ' .. (toolbarBound.trackIdx + 1))) or 'None',
-        width       = 160, items = items, onPick = pickTrack,
+        buttonLabel = (curName and curName ~= '' and curName) or ('Track ' .. (curIdx + 1)),
+        width       = 160, items = items, onPick = function(idx) arrange().pickTrack(idx) end,
       }
     end,
   },
@@ -418,20 +349,19 @@ local toolbarSegments = {
     render = function()
       chrome.headingLabel('Take')
       ImGui.SameLine(ctx, 0, 8)
-      local items = {}
-      for _, slot in ipairs(toolbarBound and midiSlots(toolbarBound.trackIdx) or {}) do
-        items[#items + 1] = {
-          label   = slot.name ~= '' and slot.name or am:keyForSlot(slot.idx),
-          key     = slot.idx, group = 1, current = slot.idx == toolbarBound.slotIdx,
-        }
+      local trackIdx = arrange().currentTrackIdx()
+      local curSlot  = arrange().currentSlotIdx()
+      local items, curName = {}, nil
+      for _, slot in ipairs(arrange().midiSlots(trackIdx)) do
+        local name = slot.name ~= '' and slot.name or arrange().keyForSlot(slot.idx)
+        if slot.idx == curSlot then curName = name end
+        items[#items + 1] = { label = name, key = slot.idx, group = 1, current = slot.idx == curSlot }
       end
-      chrome.disabledIf(not toolbarBound, function()
-        chrome.drawPicker {
-          kind        = 'take',
-          buttonLabel = (toolbarBound and toolbarBound.name ~= '' and toolbarBound.name) or '\xe2\x80\x94',
-          width       = 160, items = items, onPick = pickSlot,
-        }
-      end)
+      chrome.drawPicker {
+        kind        = 'take',
+        buttonLabel = curName or '\xe2\x80\x94',
+        width       = 160, items = items, onPick = function(idx) arrange().pickTake(idx) end,
+      }
     end,
   },
   {
@@ -518,7 +448,6 @@ local toolbarSegments = {
 -- only swing-related toolbar segments stay live (the picker is how
 -- the user switches what they're editing). Other segments grey out.
 local function drawTrackerToolbarBits()
-  toolbarBound = boundAmTake()
   toolbar = toolbar or chrome.makeToolbar()
   if not swingEditor:isOpen() then return toolbar(toolbarSegments) end
   local wrapped = {}
@@ -1369,48 +1298,6 @@ end
 -- below, captures the same table the helper installs methods on.
 local tp = {}
 
--- Tracker back-ports of arrange's dup-unpooled / new-take below. Both
--- target the bound take's natural end; arrange does the same off its
--- focused take. The pooled variant isn't back-ported — instancing
--- belongs to the arrange palette, not the tracker canvas.
---
--- newTakeBelow opens the same createSlot modal arrange's Cmd-Enter
--- uses: the user supplies name + length-in-beats first, then we mint
--- there. duplicateUnpooledBelow clones the bound take first (events
--- copied, fresh pool, naturalLenQN-sized) and then opens take-properties
--- on the new take so the user can rename / truncate / extend it.
-local NEW_TAKE_DEFAULT_BEATS = 4
-
--- Bind + re-select so coord's poll adopts the new take; see docs/trackerPage.md § adoptNewTake.
-local function adoptNewTake(newTake)
-  tp:bind(newTake)
-  local shape = am:findTake(newTake)
-  if shape then selectTake(shape.item) end
-end
-
-local function newTakeBelow()
-  local amTake = boundAmTake(); if not amTake then return end
-  local destQN = amTake.startQN + amTake.naturalLenQN
-  if not am:startIsClear(amTake.trackIdx, destQN) then return end
-  modalHost:open{
-    kind     = 'createSlot',
-    title    = 'New take',
-    nameBuf  = '',
-    beatsBuf = tostring(NEW_TAKE_DEFAULT_BEATS),
-    callback = util.atomic('Create take', function(name, beatsBuf)
-      local b = math.max(1e-3, tonumber(beatsBuf) or NEW_TAKE_DEFAULT_BEATS)
-      local _, newTake = am:createAndDropMidi(amTake.trackIdx, destQN, b, name)
-      if newTake then adoptNewTake(newTake) end
-    end),
-  }
-end
-local function duplicateUnpooledBelow()
-  local amTake = boundAmTake(); if not amTake then return end
-  local newTake = am:duplicateUnpooledBelow(amTake)
-  if not newTake then return end
-  adoptNewTake(newTake)
-  tp:openTakeProperties{}
-end
 
 local tracker = cmgr:scope('tracker')
 
@@ -1422,13 +1309,13 @@ tracker:registerAll{
   end,
 
   takeProperties         = { function() tp:openTakeProperties{} end, 'Take properties' },
-  newTakeBelow           = newTakeBelow,
-  duplicateUnpooledBelow = { duplicateUnpooledBelow, 'Duplicate take (unpooled) below' },
+  newTakeBelow           = function() arrange().newTakeBelow() end,
+  duplicateUnpooledBelow = { function() arrange().duplicateUnpooledBelow() end, 'Duplicate take (unpooled) below' },
 
-  prevTrack = { function() gotoTrackDelta(-1) end, 'Previous track' },
-  nextTrack = { function() gotoTrackDelta(1)  end, 'Next track' },
-  prevTake  = { function() gotoSlotDelta(-1)  end, 'Previous take' },
-  nextTake  = { function() gotoSlotDelta(1)   end, 'Next take' },
+  prevTrack = { function() arrange().gotoTrack(-1) end, 'Previous track' },
+  nextTrack = { function() arrange().gotoTrack(1)  end, 'Next track' },
+  prevTake  = { function() arrange().gotoTake(-1)  end, 'Previous take' },
+  nextTake  = { function() arrange().gotoTake(1)   end, 'Next take' },
 
   addTypedCol = addColumn,
 
@@ -1534,6 +1421,17 @@ end
 
 function tp:currentTake() return tm:currentTake() end
 
+-- Arrange opens take properties without diving: bind tm to it (so tv reads its model), then open the modal.
+-- When the tracker is active the cursor drives the bind back, so no restore is needed.
+facade.publish('tracker', {
+  openTakeProperties = function(item)
+    local take = item and reaper.GetActiveTake(item)
+    if not take then return end
+    if take ~= tp:currentTake() then tp:bind(take) end
+    tp:openTakeProperties{}
+  end,
+})
+
 ----- Page interface
 
 function tp:renderToolbarBits(_)
@@ -1541,10 +1439,26 @@ function tp:renderToolbarBits(_)
   drawTrackerToolbarBits()
 end
 
+--contract: rebind the tracker stack to the cursor take on change, then hash-diff for external edits
+function tp:bindFromCursor()
+  local cur = arrange().currentTake()
+  if cur ~= tm:currentTake() then
+    if cur then self:bind(cur) else self:dropTake() end
+    lastHash = nil
+  elseif cur and lastHash then
+    local h = takeMidiHash()
+    if h and h ~= lastHash then tm:reloadFromReaper() end
+  end
+end
+
 --contract: calls computeLayout twice
 --invariant: lane-strip drag callbacks may flush tv.grid.cols and clear col.x
 --contract: second pass repopulates layout for drawTracker
 function tp:renderBody(_, w, h, dispatch)
+  -- Bind-from-cursor first: the arrange cursor decides which take the
+  -- tracker edits. See docs/trackerPage.md § Bind from the cursor.
+  self:bindFromCursor()
+
   -- Swing editor commandeers the body region. The editor draws in
   -- chrome/UI register, not the tracker monospace — push uiFont
   -- explicitly so it doesn't inherit the (yet-to-be-pushed) tracker
@@ -1559,10 +1473,12 @@ function tp:renderBody(_, w, h, dispatch)
     ImGui.PushFont(ctx, uiFont, gui.fontSize.ui)
     swingEditor:render(w, h)
     ImGui.PopFont(ctx)
+    lastHash = takeMidiHash()
     return
   end
   if #tv.grid.cols == 0 then
     ImGui.Text(ctx, 'Select a MIDI item to begin.')
+    lastHash = nil
     return
   end
   ImGui.PushFont(ctx, font, 15)
@@ -1578,6 +1494,7 @@ function tp:renderBody(_, w, h, dispatch)
   handleKeys(kr)
 
   tv:tick()
+  lastHash = takeMidiHash()
 end
 
 function tp:renderStatusBar(_)

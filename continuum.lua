@@ -73,36 +73,20 @@ local function createImGui()
   }
 end
 
---contract: Main builds the manager stack bottom-up with no take, then enters the defer loop via coord:run(); the coordinator picks up the user's MIDI selection on its first tracker-page tick
+--contract: Main builds the manager stack bottom-up, then enters the defer loop via coord:run()
+--contract: each page owns its cross-page state, exposed through the facade registry coord wires
 local function Main()
   local gui   = createImGui()
   local cm    = util.instantiate('configManager')
   local cmgr  = util.instantiate('commandManager', { cm = cm })
   local coord = util.instantiate('coordinator', { cm = cm, cmgr = cmgr, gui = gui })
 
-  local function onPickTrack(t) coord:setSamplerTrack(t) end
-  local function onDive(item)   coord:diveToTake(item)    end
-  -- see docs/continuum.md § Arrange → takeProperties delegation
-  local tp
-  local function onTakeProperties(item)
-    if not item then return end
-    local newTake = reaper.GetActiveTake(item)
-    if not newTake then return end
-    local prior = tp:currentTake()
-    if newTake == prior then
-      tp:openTakeProperties{}
-      return
-    end
-    tp:bind(newTake)
-    tp:openTakeProperties{ onClose = function() tp:bind(prior) end }
-  end
-
   -- Wiring registered first so Continuum boots into it (coord:register makes
   -- the first registered page active). seedCursorFromReaper still seeds arrange.
   local wp = coord:register('wiring',  'wiringPage')
-  local ap = coord:register('arrange', 'arrangePage', { onDive = onDive, onTakeProperties = onTakeProperties })
-  tp       = coord:register('tracker', 'trackerPage', { selectTake = onDive })
-  coord:register('sample',  'samplePage', { onPickTrack = onPickTrack })
+  local ap = coord:register('arrange', 'arrangePage')
+  coord:register('tracker', 'trackerPage')
+  coord:register('sample',  'samplePage')
   wp:enableLive()
   ap:seedCursorFromReaper()
 
@@ -169,7 +153,7 @@ local function Main()
     switchToWiring  = function() coord:setActive('wiring')  end,
     switchToTracker = function() coord:setActive('tracker') end,
     switchToSample  = function() coord:setActive('sample')  end,
-    diveToSampler   = function(_, track) coord:setSamplerTrack(track); coord:setActive('sample') end,
+    diveToSampler   = function(_, track) coord:getFacade('sample').setTrack(track); coord:setActive('sample') end,
     togglePage      = function() coord:togglePage()         end,
     quit            = function() coord:quit()               end,
     beginPrefix     = function() cmgr:beginPrefix()         end,
