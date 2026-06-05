@@ -67,27 +67,27 @@ local function handlePrefixCapture(cmgr, ctx)
   return nil
 end
 
---shape: dispatchResult = { consumed: bool, commandHeld: bool }
+--shape: dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds only keys that are command-bound AND down
 --contract: returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
 --contract: state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
---contract: first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
+--contract: first-hit wins; false declines, releases the key, and lets the page char queue see it
 --contract: while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
 local function dispatchKeys(state, cmgr, ctx)
   if state.suppressKbd or not state.acceptCmds then
-    return { consumed = false, commandHeld = false }
+    return { consumed = false, commandHeld = {} }
   end
   local cap = handlePrefixCapture(cmgr, ctx)
   if cap == 'consumed' then
-    return { consumed = true, commandHeld = false }
+    return { consumed = true, commandHeld = {} }
   end
-  local commandHeld = false
+  local commandHeld = {}
   local keychain = state.pageSuppressed and { cmgr:rootKeymap() } or cmgr:keychain()
   for _, keymap in ipairs(keychain) do
     for command, keys in pairs(keymap) do
       for _, spec in ipairs(keys) do
         local key, mods = cmgr:keySpec(spec, ImGui)
         if ImGui.IsKeyDown(ctx, key) and mods == ImGui.Mod_None then
-          commandHeld = true
+          commandHeld[key] = true
         end
         if ImGui.IsKeyPressed(ctx, key) and ImGui.GetKeyMods(ctx) == mods then
           -- Freeze the prefix buffer immediately before invoke so
@@ -96,7 +96,7 @@ local function dispatchKeys(state, cmgr, ctx)
             cmgr:finishPrefix()
           end
           if cmgr:invoke(command) == false then
-            commandHeld = false
+            commandHeld[key] = nil
           else
             return { consumed = true, commandHeld = commandHeld }
           end

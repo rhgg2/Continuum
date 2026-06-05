@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=1548  sha=f86a2a8  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=1550  sha=783ef12  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, facade
 
 # Invariants & contracts
@@ -65,8 +65,8 @@
   @state LANE_ROW_MAX = 32  @ 493
   @state editKeys = {}  @ 1140
   @state lastEditKey  @ 1158
-  @state tp = {}  @ 1299
-  @state tracker = cmgr:scope('tracker')  @ 1302
+  @state tp = {}  @ 1301
+  @state tracker = cmgr:scope('tracker')  @ 1304
 
 # Private functions
   @fn print(...)  @ 26
@@ -123,26 +123,26 @@
       @invariant  fracX is separate so callers distinguish 'past last col' from 'inside col N'
   @fn handleMouse()  @ 1001
   @fn handleKeys(kr)  @ 1165
-      -- commandHeld gates note entry off while a command key is held, so a key
-      -- bound to both (e.g. '.' = delete) fires the command, not a note.
+      -- commandHeld gates note entry per key: a key bound to both a command and note
+      -- entry (e.g. '.' = delete) fires the command; unrelated keys still enter.
       @contract  no-op when modal open, picker active, or any ImGui item is active
       @contract  every fresh press enters; only lastEditKey autorepeats
       @contract  scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
   -- Modal-driven commands
-  @fn openPrompt(title, prompt, callback, resolve)  @ 1189
-  @fn openConfirm(title, callback, prompt)  @ 1193
-  @fn scopedAction(title, base)  @ 1261
+  @fn openPrompt(title, prompt, callback, resolve)  @ 1191
+  @fn openConfirm(title, callback, prompt)  @ 1195
+  @fn scopedAction(title, base)  @ 1263
       -- Naming convention <base>Selection / <base>All is the contract.
       @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
-  @fn resolveColType(s)  @ 1271
+  @fn resolveColType(s)  @ 1273
       -- Add-Column type vocabulary. First letter is unique except p (pb/pc):
       -- `p`→pb, a following `c`→pc. Digits ride through (only cc takes an id).
-  @fn addColumn()  @ 1284
+  @fn addColumn()  @ 1286
 
 # Public API (tp:*)
   -- Region overlay keymap
   -- Take properties modal helper
-  @api tp:openTakeProperties(args)  @ 1383
+  @api tp:openTakeProperties(args)  @ 1385
       -- onClose fires exactly once, after the whole modal chain — including
       -- any truncate-confirm follow-up. Two sources of "chain done":
       -- the apply path (callback ran, valid input, either direct apply or
@@ -151,24 +151,24 @@
       -- onClose. The `transfer` flag handshake makes these mutually
       -- exclusive: once a valid callback starts the apply chain it claims
       -- ownership, so modalHost's onClose becomes a no-op.
-  @api tp:currentTake()  @ 1422
+  @api tp:currentTake()  @ 1424
   -- Page interface
-  @api tp:renderToolbarBits(_)  @ 1437
-  @api tp:bindFromCursor()  @ 1443
+  @api tp:renderToolbarBits(_)  @ 1439
+  @api tp:bindFromCursor()  @ 1445
       @contract  rebind the tracker stack to the cursor take on change, then hash-diff for external edits
-  @api tp:renderBody(_, w, h, dispatch)  @ 1457
+  @api tp:renderBody(_, w, h, dispatch)  @ 1459
       @contract  calls computeLayout twice
       @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x
       @contract  second pass repopulates layout for drawTracker
-  @api tp:renderStatusBar(_)  @ 1508
-  @api tp:bind(t)  @ 1513
+  @api tp:renderStatusBar(_)  @ 1510
+  @api tp:bind(t)  @ 1515
       @contract  bind/unbind drive tm:bindTake; page owns the cm/mm swap for its stack
-  @api tp:unbind()  @ 1517
-  @api tp:dropTake()  @ 1520
+  @api tp:unbind()  @ 1519
+  @api tp:dropTake()  @ 1522
       @contract  take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.
-  @api tp:reloadFromReaper()  @ 1523
+  @api tp:reloadFromReaper()  @ 1525
       @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
-  @api tp:focusState()  @ 1536
+  @api tp:focusState()  @ 1538
       -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
       -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
       --   page — dispatcher walks root bindings only, so playPause/quit/undo
@@ -182,31 +182,31 @@
 
 # Uses (outbound edges)
   @use call    chrome.checkbox  @ 441
-  @use call    chrome.colour  @ 520, 592, 1484
+  @use call    chrome.colour  @ 520, 592, 1486
   @use call    chrome.disabledIf  @ 419, 460
   @use call    chrome.headingLabel  @ 328, 350, 372, 388, 403, 439
   @use call    chrome.libPicker  @ 411, 425
   @use call    chrome.makeToolbar  @ 451
-  @use call    chrome.pickerIsActive  @ 1166, 1538
-  @use call    chrome.requestPickerOpen  @ 1327, 1328
-  @use call    chrome.resetPickerActive  @ 1438
-  @use call    cm.get  @ 251, 252, 279, 295, 296, 370, 390, 395, 406, 420, 433, 441, 553, 598, 865, 866, 867, 869, 870, 871, 1207, 1385
+  @use call    chrome.pickerIsActive  @ 1166, 1540
+  @use call    chrome.requestPickerOpen  @ 1329, 1330
+  @use call    chrome.resetPickerActive  @ 1440
+  @use call    cm.get  @ 251, 252, 279, 295, 296, 370, 390, 395, 406, 420, 433, 441, 553, 598, 865, 866, 867, 869, 870, 871, 1209, 1387
   @use call    cm.set  @ 318, 442, 601, 605
-  @use call    cmgr.doAfter  @ 1331
+  @use call    cmgr.doAfter  @ 1333
   @use call    cmgr.invoke  @ 1125, 1132
   @use call    cmgr.isPrefixActive  @ 1172
-  @use call    cmgr.keySpec  @ 1215
-  @use call    cmgr.keysFor  @ 1221, 1222
-  @use call    cmgr.scope  @ 892, 968, 1302, 1339
+  @use call    cmgr.keySpec  @ 1217
+  @use call    cmgr.keysFor  @ 1223, 1224
+  @use call    cmgr.scope  @ 892, 968, 1304, 1341
   @use call    facade.get  @ 39
-  @use call    facade.publish  @ 1426
+  @use call    facade.publish  @ 1428
   @use call    groupManager.eachInstance  @ 698
   @use call    groupManager.stateOf  @ 717
   @use call    groups.outlineKey  @ 733
   @use call    groups.regionKey  @ 705
   @use call    groups.tintKey  @ 719
   @use call    imgui.AlignTextToFramePadding  @ 371
-  @use call    imgui.Button  @ 1241, 1242, 1249, 1253
+  @use call    imgui.Button  @ 1243, 1244, 1251, 1255
   @use call    imgui.CalcTextSize  @ 374, 474
   @use call    imgui.DrawList_AddLine  @ 528
   @use call    imgui.DrawList_AddRect  @ 592
@@ -214,57 +214,57 @@
   @use call    imgui.Dummy  @ 595, 855
   @use call    imgui.GetCursorScreenPos  @ 502, 535, 597, 617
   @use call    imgui.GetFrameHeight  @ 375
-  @use call    imgui.GetKeyMods  @ 1017, 1074, 1171, 1216
+  @use call    imgui.GetKeyMods  @ 1017, 1074, 1171, 1218
   @use call    imgui.GetMousePos  @ 1021, 1038, 1051, 1086
   @use call    imgui.GetMouseWheel  @ 1120
   @use call    imgui.GetWindowDrawList  @ 507
   @use call    imgui.InputInt  @ 380
-  @use call    imgui.InputText  @ 1225, 1238
+  @use call    imgui.InputText  @ 1227, 1240
   @use call    imgui.InvisibleButton  @ 537
-  @use call    imgui.IsAnyItemActive  @ 1167, 1543
+  @use call    imgui.IsAnyItemActive  @ 1167, 1545
   @use call    imgui.IsItemActive  @ 538
   @use call    imgui.IsItemHovered  @ 538
-  @use call    imgui.IsKeyPressed  @ 1174, 1175, 1216, 1250, 1251, 1254
+  @use call    imgui.IsKeyPressed  @ 1175, 1176, 1218, 1252, 1253, 1256
   @use call    imgui.IsMouseClicked  @ 1009, 1010
   @use call    imgui.IsMouseDown  @ 1011
-  @use call    imgui.IsWindowAppearing  @ 1232
+  @use call    imgui.IsWindowAppearing  @ 1234
   @use call    imgui.IsWindowHovered  @ 1016, 1037, 1050, 1119
-  @use call    imgui.PopFont  @ 1475, 1488, 1498
-  @use call    imgui.PopID  @ 1239
-  @use call    imgui.PopStyleColor  @ 1487
+  @use call    imgui.PopFont  @ 1477, 1490, 1500
+  @use call    imgui.PopID  @ 1241
+  @use call    imgui.PopStyleColor  @ 1489
   @use call    imgui.PopStyleVar  @ 381
-  @use call    imgui.PushFont  @ 1473, 1483, 1492
-  @use call    imgui.PushID  @ 1237
-  @use call    imgui.PushStyleColor  @ 1484
+  @use call    imgui.PushFont  @ 1475, 1485, 1494
+  @use call    imgui.PushID  @ 1239
+  @use call    imgui.PushStyleColor  @ 1486
   @use call    imgui.PushStyleVar  @ 379
-  @use call    imgui.RadioButton  @ 1246
-  @use call    imgui.SameLine  @ 329, 351, 373, 389, 404, 418, 440, 603, 1241, 1242, 1245, 1252
+  @use call    imgui.RadioButton  @ 1248
+  @use call    imgui.SameLine  @ 329, 351, 373, 389, 404, 418, 440, 603, 1243, 1244, 1247, 1254
   @use call    imgui.SetCursorScreenPos  @ 536, 539, 599, 607
-  @use call    imgui.SetKeyboardFocusHere  @ 1234
+  @use call    imgui.SetKeyboardFocusHere  @ 1236
   @use call    imgui.SetNextItemWidth  @ 376
   @use call    imgui.SmallButton  @ 600, 604
-  @use call    imgui.Text  @ 882, 1224, 1228, 1485
-  @use call    modalHost.isOpen  @ 1166, 1538
-  @use call    modalHost.registerKind  @ 1203
+  @use call    imgui.Text  @ 882, 1226, 1230, 1487
+  @use call    modalHost.isOpen  @ 1166, 1540
+  @use call    modalHost.registerKind  @ 1205
   @use call    painter.new  @ 195, 627
-  @use call    swingEditor.close  @ 1517, 1520
-  @use call    swingEditor.isOpen  @ 452, 1468, 1539
-  @use call    swingEditor.modalActive  @ 1538
-  @use call    swingEditor.open  @ 1325
-  @use call    swingEditor.render  @ 1474
-  @use call    trackerManager.bindTake  @ 1514, 1517
-  @use call    trackerManager.currentTake  @ 44, 1422, 1445
-  @use call    trackerManager.detach  @ 1520
-  @use call    trackerManager.reloadFromReaper  @ 1450, 1523
+  @use call    swingEditor.close  @ 1519, 1522
+  @use call    swingEditor.isOpen  @ 452, 1470, 1541
+  @use call    swingEditor.modalActive  @ 1540
+  @use call    swingEditor.open  @ 1327
+  @use call    swingEditor.render  @ 1476
+  @use call    trackerManager.bindTake  @ 1516, 1519
+  @use call    trackerManager.currentTake  @ 44, 1424, 1447
+  @use call    trackerManager.detach  @ 1522
+  @use call    trackerManager.reloadFromReaper  @ 1452, 1525
   @use call    trackerView.activeTemper  @ 802
-  @use call    trackerView.addExtraCol  @ 1292
+  @use call    trackerView.addExtraCol  @ 1294
   @use call    trackerView.addLaneEvent  @ 583
   @use call    trackerView.barBeatSub  @ 877
   @use call    trackerView.cycleLaneShape  @ 586
   @use call    trackerView.deleteLaneEvent  @ 584
-  @use call    trackerView.dropGrid  @ 1520
-  @use call    trackerView.ec  @ 416, 542, 613, 696, 697, 863, 1005, 1168, 1263, 1332
-  @use call    trackerView.editEvent  @ 1181
+  @use call    trackerView.dropGrid  @ 1522
+  @use call    trackerView.ec  @ 416, 542, 613, 696, 697, 863, 1005, 1168, 1265, 1334
+  @use call    trackerView.editEvent  @ 1182
   @use call    trackerView.endReselectCascades  @ 1068, 1077, 1111
   @use call    trackerView.isChannelEffectivelyMuted  @ 785
   @use call    trackerView.isChannelMuted  @ 634
@@ -278,25 +278,25 @@
   @use call    trackerView.rowToPPQ  @ 583
   @use call    trackerView.sampleCurve  @ 569
   @use call    trackerView.scroll  @ 471, 508, 615, 1007
-  @use call    trackerView.seedSharedSlots  @ 1515
+  @use call    trackerView.seedSharedSlots  @ 1517
   @use call    trackerView.setColSwingSlot  @ 286
   @use call    trackerView.setGridSize  @ 482
   @use call    trackerView.setLaneTension  @ 585
-  @use call    trackerView.setRowPerBeat  @ 382, 1307
+  @use call    trackerView.setRowPerBeat  @ 382, 1309
   @use call    trackerView.setSwingSlot  @ 285
   @use call    trackerView.setTemper  @ 280
   @use call    trackerView.setTemperSlot  @ 282
-  @use call    trackerView.showDelay  @ 1289
+  @use call    trackerView.showDelay  @ 1291
   @use call    trackerView.streamRefAt  @ 709
-  @use call    trackerView.takeName  @ 1396
-  @use call    trackerView.tick  @ 1504
+  @use call    trackerView.takeName  @ 1398
+  @use call    trackerView.tick  @ 1506
   @use call    trackerView.toggleChannelMute  @ 1044
-  @use call    trackerView.wireGroupLifetime  @ 1362
+  @use call    trackerView.wireGroupLifetime  @ 1364
   @use call    util.add  @ 76, 548
   @use call    util.atomic  @ 278, 285, 286, 318
   @use call    util.clamp  @ 382, 817
   @use call    util.instantiate  @ 32, 33, 34, 35, 86, 88
-  @use call    util.oneOf  @ 1290
+  @use call    util.oneOf  @ 1292
   @use call    util.print  @ 27
   @use call    util.round  @ 571, 1122, 1129
   @use require curveEditor  @ 88

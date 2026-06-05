@@ -1157,8 +1157,8 @@ end
 -- re-enter all its keys interleaved (the OS char queue only repeated the last).
 local lastEditKey
 
--- commandHeld gates note entry off while a command key is held, so a key
--- bound to both (e.g. '.' = delete) fires the command, not a note.
+-- commandHeld gates note entry per key: a key bound to both a command and note
+-- entry (e.g. '.' = delete) fires the command; unrelated keys still enter.
 --contract: no-op when modal open, picker active, or any ImGui item is active
 --contract: every fresh press enters; only lastEditKey autorepeats
 --contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
@@ -1168,17 +1168,19 @@ local function handleKeys(kr)
   local ec = tv:ec()
   local commandHeld = kr.commandHeld
 
-  if not commandHeld and ImGui.GetKeyMods(ctx) == ImGui.Mod_None
+  if ImGui.GetKeyMods(ctx) == ImGui.Mod_None
      and not cmgr:isPrefixActive() and not ec:isInRegionMode() then
     for _, entry in ipairs(editKeys) do
-      local fresh  = ImGui.IsKeyPressed(ctx, entry.key, false)
-      local repeated = ImGui.IsKeyPressed(ctx, entry.key, true)
-      if fresh or (repeated and entry.key == lastEditKey) then
-        if ec:isSticky() then ec:selClear(); break end
-        if fresh then lastEditKey = entry.key end
-        local row, colIdx, stop = ec:pos()
-        local c = tv.grid.cols[colIdx]
-        if c then tv:editEvent(c, c.cells and c.cells[row], stop, entry.char) end
+      if not commandHeld[entry.key] then
+        local fresh  = ImGui.IsKeyPressed(ctx, entry.key, false)
+        local repeated = ImGui.IsKeyPressed(ctx, entry.key, true)
+        if fresh or (repeated and entry.key == lastEditKey) then
+          if ec:isSticky() then ec:selClear(); break end
+          if fresh then lastEditKey = entry.key end
+          local row, colIdx, stop = ec:pos()
+          local c = tv.grid.cols[colIdx]
+          if c then tv:editEvent(c, c.cells and c.cells[row], stop, entry.char) end
+        end
       end
     end
   end
@@ -1498,7 +1500,7 @@ function tp:renderBody(_, w, h, dispatch)
   ImGui.PopFont(ctx)
 
   handleMouse()
-  local kr = dispatch and dispatch(self:focusState()) or { commandHeld = false }
+  local kr = dispatch and dispatch(self:focusState()) or { commandHeld = {} }
   handleKeys(kr)
 
   tv:tick()

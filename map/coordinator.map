@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=309  sha=500b678  mode=chunk
+@module coordinator  src=coordinator.lua  loc=309  sha=f86a2a8  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
@@ -7,11 +7,11 @@
   @invariant  each deferred frame xpcalls via coord:run's handler; reaper.defer drops the xpcall
   @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
   @contract  state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
-  @contract  first-hit wins across the keychain; a command returning false declines and releases the key (clearing commandHeld) so the page char queue sees it
+  @contract  first-hit wins; false declines, releases the key, and lets the page char queue see it
   @contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
 
 # Shapes
-  @shape  dispatchResult = { consumed: bool, commandHeld: bool }
+  @shape  dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds only keys that are command-bound AND down
   @shape  page = { renderToolbarBits(ctx), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind() }
 
 # Imports
