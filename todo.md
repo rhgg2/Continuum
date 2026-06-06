@@ -6,7 +6,6 @@
   - arpeggio
 - CC smoothing
 - 14bit CCs
-- automation items
 - move to command based key/mouse interactions
 - keyboard mapping editor
 - multiselect / copy / paste in ap

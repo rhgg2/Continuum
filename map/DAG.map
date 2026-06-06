@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1347  sha=be76e3d  mode=namespace
+@module DAG  src=DAG.lua  loc=1333  sha=cf78621  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate is pure; derivations live on M.compile's ctx
@@ -47,36 +47,36 @@
       -- Kahn's over a track's chain members (fx + synth CU; source/master excluded).
       -- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
   -- master minimization
-  @fn deriveMasterSplit(userGraph)  @ 774
+  @fn deriveMasterSplit(userGraph)  @ 760
       -- master class = cone of master's largest dominator whose entry pulls <=1 audio
       -- pair per upstream track; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
   -- allocate
-  @fn allocStream(values, startCursor, N, compare, pinAdd)  @ 877
+  @fn allocStream(values, startCursor, N, compare, pinAdd)  @ 863
       -- Linear-scan allocator over one stream's value list (audio pair or MIDI bus).
       -- see docs/DAG.md § allocStream internals
-  @fn audioValueCompare(a, c)  @ 928
+  @fn audioValueCompare(a, c)  @ 914
       -- Audio packs by pin shape (dir, port, fx) so co-defined values land
       -- deterministically; midi has no pins, so lastUse then insertion serial.
-  @fn midiValueCompare(a, c)  @ 937
+  @fn midiValueCompare(a, c)  @ 923
       · midi register file: bus 0 boundary; values are per-producer streams.
       · bracket post-pass — see docs/DAG.md § allocate
 
 # Public API (M.*)
   @api M.validate(userGraph)  @ 51
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.compile(userGraph)  @ 869
+  @api M.compile(userGraph)  @ 855
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
-  @api M.allocate(tracks, nodes)  @ 946
+  @api M.allocate(tracks, nodes)  @ 932
       -- Per-track live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedTracks shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 199, 323, 384, 411, 425, 430, 432, 436, 470, 490, 514, 559, 567, 587, 597, 607, 613, 614, 629, 637, 651, 689, 704, 806, 1009, 1013, 1023, 1026, 1056, 1064, 1073, 1102, 1105, 1125, 1152, 1159, 1183, 1191, 1198, 1217, 1220, 1225, 1281, 1282, 1283, 1288, 1303
-  @use call    util.assign  @ 82, 362, 476, 1325, 1326
-  @use call    util.bucket  @ 130, 169, 204, 780, 781, 904, 908, 960, 968
-  @use call    util.key  @ 119, 203, 341, 344, 454, 485, 1050, 1098, 1302
-  @use call    util.keys  @ 261, 262, 995, 1194
+  @use call    util.add  @ 199, 323, 384, 411, 425, 430, 432, 436, 470, 490, 514, 559, 567, 587, 597, 607, 613, 614, 662, 675, 696, 698, 792, 995, 999, 1009, 1012, 1042, 1050, 1059, 1088, 1091, 1111, 1138, 1145, 1169, 1177, 1184, 1203, 1206, 1211, 1267, 1268, 1269, 1274, 1289
+  @use call    util.assign  @ 82, 362, 476, 1311, 1312
+  @use call    util.bucket  @ 130, 169, 204, 691, 766, 767, 890, 894, 946, 954
+  @use call    util.key  @ 119, 203, 341, 344, 454, 485, 678, 1036, 1084, 1288
+  @use call    util.keys  @ 261, 262, 981, 1180
   @use call    util.pick  @ 362
   @use require util  @ 30
