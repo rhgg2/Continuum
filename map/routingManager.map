@@ -1,7 +1,7 @@
-@module routingManager  src=routingManager.lua  loc=222  sha=6f8008f  mode=chunk
+@module routingManager  src=routingManager.lua  loc=287  sha=7658376  mode=chunk
 
 # Shapes
-  @shape  fx = { id=guid, ident=string, name=string, inPins=int, outPins=int }  -- pins are mono channels; params/pinMaps/midi join later
+  @shape  fx = { id=guid, ident=string, name=string, inPins=int, outPins=int, pinMaps={ins={[port]={pair,...}}, outs=...} }  -- params/midi join later
 
 # Imports
   @require util = 'util'  @ 6
@@ -11,7 +11,7 @@
 # Private state
   @state PROJ = 0  @ 8
   @state rm = {}  @ 10
-  @state paramIdxByIdent = {}  @ 117
+  @state paramIdxByIdent = {}  @ 180
 
 # Private functions
   -- track resolution
@@ -20,34 +20,42 @@
       -- from the project-track list.
   -- fx resolution
   @fn locateFx(id)  @ 27
+  -- pin maps
+  @fn decodePairList(track, fxIdx, isoutput, port)  @ 48
+      -- Adjacent set bits collapse to one pair; lLo|hLo merges the port's two pins.
+  @fn readPinMaps(track, fxIdx)  @ 63
+      -- ports = pins/2; disconnected ports (zero mask) dropped — absent ⇒ disconnected.
+  @fn pinMaskFor(pairList, pinOffset)  @ 76
+  @fn writePinMaps(track, fxIdx, pm)  @ 88
+      -- Full-replace per fx: ports absent from `pm` are disconnected (zero mask).
   -- fx read
-  @fn fxName(track, idx)  @ 47
+  @fn fxName(track, idx)  @ 109
       -- Display name: a user instance rename wins, else the plugin's own name.
-  @fn readFx(track, idx)  @ 54
-  @fn readFxChain(track)  @ 66
+  @fn readFx(track, idx)  @ 116
+  @fn readFxChain(track)  @ 129
   -- read
-  @fn trackName(track)  @ 76
-  @fn readMainSend(track)  @ 81
-  @fn readTrack(track, isMaster)  @ 91
+  @fn trackName(track)  @ 139
+  @fn readMainSend(track)  @ 144
+  @fn readTrack(track, isMaster)  @ 154
   -- write
-  @fn writeMainSend(track, ms)  @ 105
-  @fn paramIndices(track, fxIdx)  @ 119
-  @fn writeParams(track, fxIdx, params)  @ 134
+  @fn writeMainSend(track, ms)  @ 168
+  @fn paramsByName(track, fxIdx)  @ 182
+  @fn writeParams(track, fxIdx, params)  @ 198
       @contract  params keyed by display name; an unknown name raises
-  @fn writeTrackFields(track, t)  @ 143
+  @fn writeTrackFields(track, t)  @ 207
 
 # Public API (rm:*)
-  @api rm:tracks()  @ 151
-  @api rm:addTrack(t)  @ 161
-  @api rm:assignTrack(id, t)  @ 170
-  @api rm:deleteTrack(id)  @ 175
-  @api rm:addFx(trackId, t)  @ 180
-  @api rm:assignFx(id, t)  @ 193
-  @api rm:deleteFx(id)  @ 209
-  @api rm:transaction(label, fn)  @ 214
+  @api rm:tracks()  @ 215
+  @api rm:addTrack(t)  @ 225
+  @api rm:assignTrack(id, t)  @ 234
+  @api rm:deleteTrack(id)  @ 239
+  @api rm:addFx(trackId, t)  @ 244
+  @api rm:assignFx(id, t)  @ 257
+  @api rm:deleteFx(id)  @ 274
+  @api rm:transaction(label, fn)  @ 279
 
 # Uses (outbound edges)
-  @use call    util.add  @ 69, 154, 157
+  @use call    util.add  @ 56, 132, 218, 221
   @use require util  @ 6
 
 # REAPER API surface
@@ -55,7 +63,7 @@
   @reaper GetTrackGUID
   @reaper CountTracks
   @reaper GetTrack
-  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetNamedConfigParm, TrackFX_GetIOSize, TrackFX_GetParamName, TrackFX_SetParam, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete
+  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetPinMappings, TrackFX_GetIOSize, TrackFX_SetPinMappings, TrackFX_GetNamedConfigParm, TrackFX_GetParamName, TrackFX_SetParam, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete
   @reaper GetSetMediaTrackInfo_String
   @reaper GetMediaTrackInfo_Value
   @reaper SetMediaTrackInfo_Value

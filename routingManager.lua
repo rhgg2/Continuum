@@ -39,9 +39,71 @@ local function locateFx(id)
   end
 end
 
+----------- pin maps
+
+-- Pair P occupies channels 2(P-1)/2(P-1)+1. A port owns two pins (left/right bit
+-- masks); a pair is connected when its bit is set across both pins.
+
+-- Adjacent set bits collapse to one pair; lLo|hLo merges the port's two pins.
+local function decodePairList(track, fxIdx, isoutput, port)
+  local lowPin = 2 * (port - 1)
+  local mask   = reaper.TrackFX_GetPinMappings(track, fxIdx, isoutput, lowPin)
+               | reaper.TrackFX_GetPinMappings(track, fxIdx, isoutput, lowPin + 1)
+  local pairs, lastPair = {}, nil
+  for bit = 0, 31 do
+    if ((mask >> bit) & 1) == 1 then
+      local pair = (bit >> 1) + 1
+      if pair ~= lastPair then util.add(pairs, pair); lastPair = pair end
+    end
+  end
+  return pairs
+end
+
+-- ports = pins/2; disconnected ports (zero mask) dropped — absent ⇒ disconnected.
+local function readPinMaps(track, fxIdx)
+  local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
+  local function dirMap(isoutput, pinCount)
+    local out = {}
+    for port = 1, math.floor(pinCount / 2) do
+      local pairList = decodePairList(track, fxIdx, isoutput, port)
+      if #pairList > 0 then out[port] = pairList end
+    end
+    return out
+  end
+  return { ins = dirMap(0, ins), outs = dirMap(1, outs) }
+end
+
+local function pinMaskFor(pairList, pinOffset)
+  local lo, hi = 0, 0
+  for _, pair in ipairs(pairList) do
+    local bit = 2 * (pair - 1) + pinOffset
+    if bit < 32 then lo = lo | (1 << bit)
+    else             hi = hi | (1 << (bit - 32))
+    end
+  end
+  return lo, hi
+end
+
+-- Full-replace per fx: ports absent from `pm` are disconnected (zero mask).
+local function writePinMaps(track, fxIdx, pm)
+  local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
+  local function dir(isoutput, pinCount, byPort)
+    byPort = byPort or {}
+    for port = 1, math.floor(pinCount / 2) do
+      local pairList = byPort[port] or {}
+      for pinOffset = 0, 1 do
+        reaper.TrackFX_SetPinMappings(track, fxIdx, isoutput,
+                                      2 * (port - 1) + pinOffset, pinMaskFor(pairList, pinOffset))
+      end
+    end
+  end
+  dir(0, ins,  pm.ins)
+  dir(1, outs, pm.outs)
+end
+
 ----------- fx read
 
---shape: fx = { id=guid, ident=string, name=string, inPins=int, outPins=int }  -- pins are mono channels; params/pinMaps/midi join later
+--shape: fx = { id=guid, ident=string, name=string, inPins=int, outPins=int, pinMaps={ins={[port]={pair,...}}, outs=...} }  -- params/midi join later
 
 -- Display name: a user instance rename wins, else the plugin's own name.
 local function fxName(track, idx)
@@ -60,6 +122,7 @@ local function readFx(track, idx)
     name    = fxName(track, idx),
     inPins  = inPins,
     outPins = outPins,
+    pinMaps = readPinMaps(track, idx),
   }
 end
 
@@ -204,7 +267,8 @@ function rm:assignFx(id, t)
     reaper.TrackFX_CopyToTrack(track, idx, track, t.index, true)
     idx = t.index
   end
-  if t.params then writeParams(track, idx, t.params) end
+  if t.params  then writeParams(track, idx, t.params)  end
+  if t.pinMaps then writePinMaps(track, idx, t.pinMaps) end
 end
 
 function rm:deleteFx(id)

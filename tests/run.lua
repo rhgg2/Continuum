@@ -145,6 +145,7 @@ local specs = {
   'rm_tracks_spec',
   'rm_fx_read_spec',
   'rm_fx_write_spec',
+  'rm_pinmaps_spec',
   'wv_authoring_spec',
   'wv_activate_spec',
   'wv_edge_gain_spec',
