@@ -144,6 +144,7 @@ local specs = {
   'wm_fx_locations_spec',
   'rm_tracks_spec',
   'rm_fx_read_spec',
+  'rm_fx_write_spec',
   'wv_authoring_spec',
   'wv_activate_spec',
   'wv_edge_gain_spec',

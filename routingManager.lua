@@ -22,6 +22,23 @@ local function locateTrack(id)
   end
 end
 
+----------- fx resolution
+
+local function locateFx(id)
+  local function indexIn(track)
+    for idx = 0, reaper.TrackFX_GetCount(track) - 1 do
+      if reaper.TrackFX_GetFXGUID(track, idx) == id then return idx end
+    end
+  end
+  local master = reaper.GetMasterTrack(PROJ)
+  if master then local idx = indexIn(master); if idx then return master, idx end end
+  for i = 0, reaper.CountTracks(PROJ) - 1 do
+    local track = reaper.GetTrack(PROJ, i)
+    local idx = indexIn(track)
+    if idx then return track, idx end
+  end
+end
+
 ----------- fx read
 
 --shape: fx = { id=guid, ident=string, name=string, inPins=int, outPins=int }  -- pins are mono channels; params/pinMaps/midi join later
@@ -95,6 +112,21 @@ local function writeMainSend(track, ms)
   set('C_MAINSEND_NCH',   ms.nchan)
 end
 
+--contract: params keyed by display name; an unknown name raises
+local function writeParams(track, fxIdx, params)
+  local idxByName = {}
+  for p = 0, 511 do
+    local ok, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
+    if not ok then break end
+    idxByName[name] = p
+  end
+  for name, value in pairs(params) do
+    local idx = idxByName[name]
+    if not idx then error(("routingManager: fx has no param named %q"):format(name)) end
+    reaper.TrackFX_SetParam(track, fxIdx, idx, value)
+  end
+end
+
 local function writeTrackFields(track, t)
   if t.name  then reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', t.name, true) end
   if t.nchan then reaper.SetMediaTrackInfo_Value(track, 'I_NCHAN', t.nchan) end
@@ -130,6 +162,40 @@ end
 function rm:deleteTrack(id)
   local track = locateTrack(id)
   if track then reaper.DeleteTrack(track) end
+end
+
+function rm:addFx(trackId, t)
+  local track = locateTrack(trackId)
+  if not track then return end
+  local idx = reaper.TrackFX_AddByName(track, t.ident, false, -1)
+  local id  = reaper.TrackFX_GetFXGUID(track, idx)
+  if t.index and t.index ~= idx then
+    reaper.TrackFX_CopyToTrack(track, idx, track, t.index, true)
+    idx = t.index
+  end
+  if t.params then writeParams(track, idx, t.params) end
+  return id
+end
+
+function rm:assignFx(id, t)
+  local track, idx = locateFx(id)
+  if not track then return end
+  if t.track then
+    local dst = locateTrack(t.track)
+    if dst then
+      reaper.TrackFX_CopyToTrack(track, idx, dst, t.index or reaper.TrackFX_GetCount(dst), true)
+      track, idx = locateFx(id)
+    end
+  elseif t.index and t.index ~= idx then
+    reaper.TrackFX_CopyToTrack(track, idx, track, t.index, true)
+    idx = t.index
+  end
+  if t.params then writeParams(track, idx, t.params) end
+end
+
+function rm:deleteFx(id)
+  local track, idx = locateFx(id)
+  if track then reaper.TrackFX_Delete(track, idx) end
 end
 
 function rm:transaction(label, fn)

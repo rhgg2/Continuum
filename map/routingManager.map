@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=143  sha=f1c8110  mode=chunk
+@module routingManager  src=routingManager.lua  loc=209  sha=b3eff63  mode=chunk
 
 # Shapes
   @shape  fx = { id=guid, ident=string, name=string, inPins=int, outPins=int }  -- pins are mono channels; params/pinMaps/midi join later
@@ -17,28 +17,35 @@
   @fn locateTrack(id)  @ 16
       -- Stable under reordering. Master matched first since it is absent
       -- from the project-track list.
+  -- fx resolution
+  @fn locateFx(id)  @ 27
   -- fx read
-  @fn fxName(track, idx)  @ 30
+  @fn fxName(track, idx)  @ 47
       -- Display name: a user instance rename wins, else the plugin's own name.
-  @fn readFx(track, idx)  @ 37
-  @fn readFxChain(track)  @ 49
+  @fn readFx(track, idx)  @ 54
+  @fn readFxChain(track)  @ 66
   -- read
-  @fn trackName(track)  @ 59
-  @fn readMainSend(track)  @ 64
-  @fn readTrack(track, isMaster)  @ 74
+  @fn trackName(track)  @ 76
+  @fn readMainSend(track)  @ 81
+  @fn readTrack(track, isMaster)  @ 91
   -- write
-  @fn writeMainSend(track, ms)  @ 88
-  @fn writeTrackFields(track, t)  @ 98
+  @fn writeMainSend(track, ms)  @ 105
+  @fn writeParams(track, fxIdx, params)  @ 116
+      @contract  params keyed by display name; an unknown name raises
+  @fn writeTrackFields(track, t)  @ 130
 
 # Public API (rm:*)
-  @api rm:tracks()  @ 106
-  @api rm:addTrack(t)  @ 116
-  @api rm:assignTrack(id, t)  @ 125
-  @api rm:deleteTrack(id)  @ 130
-  @api rm:transaction(label, fn)  @ 135
+  @api rm:tracks()  @ 138
+  @api rm:addTrack(t)  @ 148
+  @api rm:assignTrack(id, t)  @ 157
+  @api rm:deleteTrack(id)  @ 162
+  @api rm:addFx(trackId, t)  @ 167
+  @api rm:assignFx(id, t)  @ 180
+  @api rm:deleteFx(id)  @ 196
+  @api rm:transaction(label, fn)  @ 201
 
 # Uses (outbound edges)
-  @use call    util.add  @ 52, 109, 112
+  @use call    util.add  @ 69, 141, 144
   @use require util  @ 6
 
 # REAPER API surface
@@ -46,7 +53,7 @@
   @reaper GetTrackGUID
   @reaper CountTracks
   @reaper GetTrack
-  @reaper TrackFX_GetNamedConfigParm, TrackFX_GetIOSize, TrackFX_GetFXGUID, TrackFX_GetCount
+  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetNamedConfigParm, TrackFX_GetIOSize, TrackFX_GetParamName, TrackFX_SetParam, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete
   @reaper GetSetMediaTrackInfo_String
   @reaper GetMediaTrackInfo_Value
   @reaper SetMediaTrackInfo_Value
