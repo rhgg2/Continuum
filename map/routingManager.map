@@ -1,7 +1,7 @@
-@module routingManager  src=routingManager.lua  loc=287  sha=7658376  mode=chunk
+@module routingManager  src=routingManager.lua  loc=495  sha=41ef2ce  mode=chunk
 
 # Shapes
-  @shape  fx = { id=guid, ident=string, name=string, inPins=int, outPins=int, pinMaps={ins={[port]={pair,...}}, outs=...} }  -- params/midi join later
+  @shape  fx = { id=guid, ident=string, name=string, inPins=int, outPins=int, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus=int, outBus=int, outDisabled=bool} }  -- midi nil for JS fx
 
 # Imports
   @require util = 'util'  @ 6
@@ -11,7 +11,9 @@
 # Private state
   @state PROJ = 0  @ 8
   @state rm = {}  @ 10
-  @state paramIdxByIdent = {}  @ 180
+  @state b64alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123...  @ 109
+  @state b64dec = {}  @ 110
+  @state paramIdxByIdent = {}  @ 364
 
 # Private functions
   -- track resolution
@@ -28,34 +30,64 @@
   @fn pinMaskFor(pairList, pinOffset)  @ 76
   @fn writePinMaps(track, fxIdx, pm)  @ 88
       -- Full-replace per fx: ports absent from `pm` are disconnected (zero mask).
+  -- per-fx midi routing
+  @fn b64decode(s)  @ 113
+  @fn b64encode(s)  @ 133
+  @fn splitChunkLines(s)  @ 153
+  @fn joinChunkLines(lines, hasTrailing)  @ 161
+  @fn findFxBlock(lines, fxIdx)  @ 167
+      -- Locate the (fxIdx+1)-th non-JS FX block (0-indexed). Returns
+      -- (firstBase64LineIdx, trailerLineIdx) or nil.
+  @fn mutateByteInBase64Line(line, byteIdx, fn)  @ 191
+      -- Decode line → mutate one byte via fn → re-encode iff changed.
+      -- No-op preserves the line byte-for-byte (round-trip invariant).
+  @fn setBitInBase64Line(line, byteIdx, mask, on)  @ 204
+  @fn setByteInBase64Line(line, byteIdx, value)  @ 210
+  @fn patchStreamMirrorBit(lines, firstIdx, lastIdx, streamOffset, mask, on)  @ 216
+      -- Patch one bit of the wrapper-header mirror at a 1-indexed offset in
+      -- the FX block's concatenated decoded-base64 stream.
+  @fn setFXMidiRouting(chunk, fxIdx, opts, pinChannels)  @ 234
+      -- Drive per-FX MIDI routing on the fxIdx-th non-JS FX block. opts =
+      -- { inBus?, outBus?, inDisabled?, outDisabled? }.
+  @fn readFXMidiRouting(chunk, fxIdx)  @ 256
+      -- Decode the fxIdx-th non-JS FX block's routing trailer (read counterpart).
+      -- Returns { inBus, outBus, inDisabled, outDisabled } or nil.
   -- fx read
-  @fn fxName(track, idx)  @ 109
+  @fn fxName(track, idx)  @ 275
       -- Display name: a user instance rename wins, else the plugin's own name.
-  @fn readFx(track, idx)  @ 116
-  @fn readFxChain(track)  @ 129
+  @fn readFx(track, idx)  @ 282
+  @fn isJsFx(ident)  @ 295
+  @fn readMidiRouting(chunk, routingIdx)  @ 301
+      -- Absent trailer ⇒ passthrough defaults; the field is present for every non-JS
+      -- fx so callers can read routing without a JS-vs-not branch.
+  @fn readFxChain(track)  @ 307
   -- read
-  @fn trackName(track)  @ 139
-  @fn readMainSend(track)  @ 144
-  @fn readTrack(track, isMaster)  @ 154
+  @fn trackName(track)  @ 323
+  @fn readMainSend(track)  @ 328
+  @fn readTrack(track, isMaster)  @ 338
   -- write
-  @fn writeMainSend(track, ms)  @ 168
-  @fn paramsByName(track, fxIdx)  @ 182
-  @fn writeParams(track, fxIdx, params)  @ 198
+  @fn writeMainSend(track, ms)  @ 352
+  @fn paramsByName(track, fxIdx)  @ 366
+  @fn writeParams(track, fxIdx, params)  @ 382
       @contract  params keyed by display name; an unknown name raises
-  @fn writeTrackFields(track, t)  @ 207
+  @fn routingIdxOf(track, fxIdx)  @ 393
+      -- Absolute fx index → chunk routing index (non-JS blocks only); nil for a JS
+      -- fx, which has no routing trailer — writing midi to one is a no-op.
+  @fn writeMidiRouting(track, fxIdx, midi)  @ 404
+  @fn writeTrackFields(track, t)  @ 414
 
 # Public API (rm:*)
-  @api rm:tracks()  @ 215
-  @api rm:addTrack(t)  @ 225
-  @api rm:assignTrack(id, t)  @ 234
-  @api rm:deleteTrack(id)  @ 239
-  @api rm:addFx(trackId, t)  @ 244
-  @api rm:assignFx(id, t)  @ 257
-  @api rm:deleteFx(id)  @ 274
-  @api rm:transaction(label, fn)  @ 279
+  @api rm:tracks()  @ 422
+  @api rm:addTrack(t)  @ 432
+  @api rm:assignTrack(id, t)  @ 441
+  @api rm:deleteTrack(id)  @ 446
+  @api rm:addFx(trackId, t)  @ 451
+  @api rm:assignFx(id, t)  @ 464
+  @api rm:deleteFx(id)  @ 482
+  @api rm:transaction(label, fn)  @ 487
 
 # Uses (outbound edges)
-  @use call    util.add  @ 56, 132, 218, 221
+  @use call    util.add  @ 56, 316, 425, 428
   @use require util  @ 6
 
 # REAPER API surface
@@ -64,9 +96,11 @@
   @reaper CountTracks
   @reaper GetTrack
   @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetPinMappings, TrackFX_GetIOSize, TrackFX_SetPinMappings, TrackFX_GetNamedConfigParm, TrackFX_GetParamName, TrackFX_SetParam, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete
+  @reaper GetTrackStateChunk
   @reaper GetSetMediaTrackInfo_String
   @reaper GetMediaTrackInfo_Value
   @reaper SetMediaTrackInfo_Value
+  @reaper SetTrackStateChunk
   @reaper InsertTrackAtIndex
   @reaper DeleteTrack
   @reaper Undo_BeginBlock, Undo_EndBlock2

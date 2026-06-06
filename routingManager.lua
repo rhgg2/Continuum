@@ -101,9 +101,175 @@ local function writePinMaps(track, fxIdx, pm)
   dir(1, outs, pm.outs)
 end
 
+----------- per-fx midi routing
+
+-- No ReaScript API for per-FX in/out bus + output-passthrough; patch the track
+-- state chunk directly. See docs/wiringManager.md § Per-FX MIDI routing.
+
+local b64alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+local b64dec   = {}
+for i = 1, #b64alpha do b64dec[b64alpha:sub(i, i):byte()] = i - 1 end
+
+local function b64decode(s)
+  local bytes, buf, bits = {}, 0, 0
+  for i = 1, #s do
+    local c = s:byte(i)
+    if c == 61 then break end  -- '='
+    local v = b64dec[c]
+    if v then
+      buf  = buf * 64 + v
+      bits = bits + 6
+      if bits >= 8 then
+        bits = bits - 8
+        local b = buf >> bits
+        buf = buf - (b << bits)
+        bytes[#bytes + 1] = string.char(b)
+      end
+    end
+  end
+  return table.concat(bytes)
+end
+
+local function b64encode(s)
+  local out, buf, bits = {}, 0, 0
+  for i = 1, #s do
+    buf  = buf * 256 + s:byte(i)
+    bits = bits + 8
+    while bits >= 6 do
+      bits = bits - 6
+      local v = (buf >> bits) & 0x3F
+      out[#out + 1] = b64alpha:sub(v + 1, v + 1)
+      buf = buf - (v << bits)
+    end
+  end
+  if bits > 0 then
+    local v = (buf << (6 - bits)) & 0x3F
+    out[#out + 1] = b64alpha:sub(v + 1, v + 1)
+  end
+  while #out % 4 ~= 0 do out[#out + 1] = '=' end
+  return table.concat(out)
+end
+
+local function splitChunkLines(s)
+  local hasTrailing = s:sub(-1) == '\n'
+  local body  = hasTrailing and s or s .. '\n'
+  local lines = {}
+  for ln in body:gmatch('([^\n]*)\n') do lines[#lines + 1] = ln end
+  return lines, hasTrailing
+end
+
+local function joinChunkLines(lines, hasTrailing)
+  return table.concat(lines, '\n') .. (hasTrailing and '\n' or '')
+end
+
+-- Locate the (fxIdx+1)-th non-JS FX block (0-indexed). Returns
+-- (firstBase64LineIdx, trailerLineIdx) or nil.
+local function findFxBlock(lines, fxIdx)
+  local seen = 0
+  for i, ln in ipairs(lines) do
+    if ln:match('^%s*<VST%s') or ln:match('^%s*<CLAP%s') or ln:match('^%s*<AU%s') then
+      if seen == fxIdx then
+        local depth = 1
+        for j = i + 1, #lines do
+          local stripped = lines[j]:match('^%s*(.-)%s*$')
+          if stripped == '>' then
+            depth = depth - 1
+            if depth == 0 then return i + 1, j - 1 end
+          elseif stripped:sub(1, 1) == '<' then
+            depth = depth + 1
+          end
+        end
+        return
+      end
+      seen = seen + 1
+    end
+  end
+end
+
+-- Decode line → mutate one byte via fn → re-encode iff changed.
+-- No-op preserves the line byte-for-byte (round-trip invariant).
+local function mutateByteInBase64Line(line, byteIdx, fn)
+  local lead, content, tail = line:match('^(%s*)(%S*)(%s*)$')
+  if not content or content == '' then return line end
+  local bytes = b64decode(content)
+  if byteIdx < 1 or byteIdx > #bytes then return line end
+  local b    = bytes:byte(byteIdx)
+  local newB = fn(b)
+  if newB == b then return line end
+  return lead .. b64encode(bytes:sub(1, byteIdx - 1)
+                        .. string.char(newB)
+                        .. bytes:sub(byteIdx + 1)) .. tail
+end
+
+local function setBitInBase64Line(line, byteIdx, mask, on)
+  return mutateByteInBase64Line(line, byteIdx, function(b)
+    return on and (b | mask) or (b & ~mask)
+  end)
+end
+
+local function setByteInBase64Line(line, byteIdx, value)
+  return mutateByteInBase64Line(line, byteIdx, function() return value end)
+end
+
+-- Patch one bit of the wrapper-header mirror at a 1-indexed offset in
+-- the FX block's concatenated decoded-base64 stream.
+local function patchStreamMirrorBit(lines, firstIdx, lastIdx, streamOffset, mask, on)
+  local cursor = 0
+  for i = firstIdx, lastIdx do
+    local stripped = lines[i]:match('^%s*(.-)%s*$')
+    if stripped:match('^[A-Za-z0-9%+/=]+$') then
+      local n = #b64decode(stripped)
+      if cursor + n >= streamOffset then
+        lines[i] = setBitInBase64Line(lines[i], streamOffset - cursor, mask, on)
+        return true
+      end
+      cursor = cursor + n
+    end
+  end
+  return false
+end
+
+-- Drive per-FX MIDI routing on the fxIdx-th non-JS FX block. opts =
+-- { inBus?, outBus?, inDisabled?, outDisabled? }.
+local function setFXMidiRouting(chunk, fxIdx, opts, pinChannels)
+  local lines, hasTrailing = splitChunkLines(chunk)
+  local first, trailer     = findFxBlock(lines, fxIdx)
+  if not first then return chunk, false end
+  local mirrorOff = 27 + 8 * pinChannels
+
+  if opts.inDisabled ~= nil then
+    lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x01, opts.inDisabled)
+    patchStreamMirrorBit(lines, first, trailer, mirrorOff, 0x01, opts.inDisabled)
+  end
+  if opts.outDisabled ~= nil then
+    lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x02, opts.outDisabled)
+    patchStreamMirrorBit(lines, first, trailer, mirrorOff, 0x02, opts.outDisabled)
+  end
+  if opts.inBus  ~= nil then lines[trailer] = setByteInBase64Line(lines[trailer], 4, opts.inBus)  end
+  if opts.outBus ~= nil then lines[trailer] = setByteInBase64Line(lines[trailer], 5, opts.outBus) end
+
+  return joinChunkLines(lines, hasTrailing), true
+end
+
+-- Decode the fxIdx-th non-JS FX block's routing trailer (read counterpart).
+-- Returns { inBus, outBus, inDisabled, outDisabled } or nil.
+local function readFXMidiRouting(chunk, fxIdx)
+  local lines          = splitChunkLines(chunk)
+  local first, trailer = findFxBlock(lines, fxIdx)
+  if not first then return nil end
+  local content = lines[trailer]:match('^%s*(%S*)%s*$')
+  if not content or content == '' then return nil end
+  local bytes = b64decode(content)
+  local flags = bytes:byte(3) or 0
+  return { inBus       = bytes:byte(4) or 0,
+           outBus      = bytes:byte(5) or 0,
+           inDisabled  = (flags & 0x01) ~= 0,
+           outDisabled = (flags & 0x02) ~= 0 }
+end
+
 ----------- fx read
 
---shape: fx = { id=guid, ident=string, name=string, inPins=int, outPins=int, pinMaps={ins={[port]={pair,...}}, outs=...} }  -- params/midi join later
+--shape: fx = { id=guid, ident=string, name=string, inPins=int, outPins=int, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus=int, outBus=int, outDisabled=bool} }  -- midi nil for JS fx
 
 -- Display name: a user instance rename wins, else the plugin's own name.
 local function fxName(track, idx)
@@ -126,10 +292,28 @@ local function readFx(track, idx)
   }
 end
 
+local function isJSFX(ident)
+  return ident ~= nil and ident:sub(1, 3) == 'JS:'
+end
+
+-- Absent trailer ⇒ passthrough defaults; the field is present for every non-JS
+-- fx so callers can read routing without a JS-vs-not branch.
+local function readMidiRouting(chunk, routingIdx)
+  local r = readFXMidiRouting(chunk, routingIdx)
+            or { inBus = 0, outBus = 0, outDisabled = false }
+  return { inBus = r.inBus, outBus = r.outBus, outDisabled = r.outDisabled }
+end
+
 local function readFxChain(track)
-  local out = {}
+  local _, chunk     = reaper.GetTrackStateChunk(track, '', true)
+  local out, routing = {}, 0
   for idx = 0, reaper.TrackFX_GetCount(track) - 1 do
-    util.add(out, readFx(track, idx))
+    local fx = readFx(track, idx)
+    if not isJSFX(fx.ident) then
+      fx.midi = readMidiRouting(chunk, routing)
+      routing = routing + 1
+    end
+    util.add(out, fx)
   end
   return out
 end
@@ -204,6 +388,29 @@ local function writeParams(track, fxIdx, params)
   end
 end
 
+-- Absolute fx index → chunk routing index (non-JS blocks only); nil for a JS
+-- fx, which has no routing trailer — writing midi to one is a no-op.
+local function routingIdxOf(track, fxIdx)
+  local _, ident = reaper.TrackFX_GetNamedConfigParm(track, fxIdx, 'fx_ident')
+  if isJSFX(ident) then return nil end
+  local routing = 0
+  for i = 0, fxIdx - 1 do
+    local _, prior = reaper.TrackFX_GetNamedConfigParm(track, i, 'fx_ident')
+    if not isJSFX(prior) then routing = routing + 1 end
+  end
+  return routing
+end
+
+local function writeMidiRouting(track, fxIdx, midi)
+  local routingIdx = routingIdxOf(track, fxIdx)
+  if not routingIdx then return end
+  local opts = { inBus = midi.inBus, outBus = midi.outBus, outDisabled = midi.outDisabled }
+  if next(opts) == nil then return end
+  local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
+  local _, chunk     = reaper.GetTrackStateChunk(track, '', true)
+  reaper.SetTrackStateChunk(track, setFXMidiRouting(chunk, routingIdx, opts, ins + outs), true)
+end
+
 local function writeTrackFields(track, t)
   if t.name  then reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', t.name, true) end
   if t.nchan then reaper.SetMediaTrackInfo_Value(track, 'I_NCHAN', t.nchan) end
@@ -269,6 +476,7 @@ function rm:assignFx(id, t)
   end
   if t.params  then writeParams(track, idx, t.params)  end
   if t.pinMaps then writePinMaps(track, idx, t.pinMaps) end
+  if t.midi    then writeMidiRouting(track, idx, t.midi) end
 end
 
 function rm:deleteFx(id)
