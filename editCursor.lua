@@ -7,7 +7,7 @@
 --invariant: sel == nil iff no selection
 --invariant: region()'s cursor-degenerate fallback is callsite policy, not stored
 --invariant: hBlockScope ∈ {0=free, 1=col, 2=channel, 3=all-cols}
---invariant: vBlockScope ∈ {0=free, 1=beat, 2=bar, 3=all-rows}; scopes are orthogonal
+--invariant: vBlockScope ∈ {0=free, 1=beat, 2=bar×vBlockBars, 3=all-rows}; scopes are orthogonal
 --invariant: sticky == any nonzero scope; moves under sticky update sel, never clear
 --invariant: hBlock=2/3 use part1=part2='*'; selectionStopSpan falls through to whole-col
 --invariant: parts within a col order by col.partStart, not stop (parts may be multi-stop)
@@ -38,6 +38,7 @@ local groupBridge = deps.groupBridge
 
 local cursorRow, cursorCol, cursorStop = 0, 1, 1
 local hBlockScope, vBlockScope         = 0, 0
+local vBlockBars                       = 1   -- bars spanned when vBlockScope == 2
 local sel, selAnchor
 
 -- Region authoring mode: a modal cmgr overlay. ec owns only the
@@ -97,8 +98,9 @@ local function selUpdate()
   local r1, r2
   if vBlockScope == 1 or vBlockScope == 2 then
     local unit = vBlockScope == 1 and cm:get('rowPerBeat') or getRPBar()
+    local bars = vBlockScope == 2 and vBlockBars or 1
     r1 = math.floor(cursorRow / unit) * unit
-    r2 = math.min(r1 + unit - 1, numRows - 1)
+    r2 = math.min(r1 + bars * unit - 1, numRows - 1)
   elseif vBlockScope == 3 then
     r1, r2 = 0, numRows - 1
   else
@@ -135,25 +137,33 @@ local function selClear()
   hBlockScope = 0; vBlockScope = 0
 end
 
---contract: first call seeds anchor at scope=1 (col); cycles col→channel→all-cols
+--contract: seeds anchor on first engage; cycles channel→all-cols→col
 local function cycleHBlock()
   if not isSticky() then
-    selAnchor   = { row = cursorRow, col = cursorCol, stop = cursorStop }
-    hBlockScope = 1
+    selAnchor = { row = cursorRow, col = cursorCol, stop = cursorStop }
+  end
+  if hBlockScope == 2 then
+    hBlockScope = 3   -- channel → all columns
+  elseif hBlockScope == 3 then
+    hBlockScope = 1   -- all columns → single column
   else
-    hBlockScope = (hBlockScope % 3) + 1
+    hBlockScope = 2   -- free/col → channel
   end
   selUpdate()
 end
 
---contract: seeds anchor at scope=1; cycles beat→bar→all-rows; no-op on empty grid
+--contract: seeds anchor on first engage; beat→bar, each press grows by a bar; no-op on empty grid
 local function cycleVBlock()
   if (grid.numRows or 0) == 0 then return end
   if not isSticky() then
-    selAnchor   = { row = cursorRow, col = cursorCol, stop = cursorStop }
-    vBlockScope = 1
+    selAnchor = { row = cursorRow, col = cursorCol, stop = cursorStop }
+  end
+  if vBlockScope == 1 then
+    vBlockScope, vBlockBars = 2, 1   -- beat → one bar
+  elseif vBlockScope == 2 then
+    vBlockBars = vBlockBars + 1      -- grow by a bar
   else
-    vBlockScope = (vBlockScope % 3) + 1
+    vBlockScope = 1                  -- free/all-rows → beat
   end
   selUpdate()
 end
