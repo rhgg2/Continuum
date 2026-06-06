@@ -475,38 +475,40 @@ function M.targetTracks(ctx)
   -- Each edge becomes a conn partitioned per-consumer (audio gain as metadata
   -- → D_VOL on fold; MIDI passes through). See docs/DAG.md § per-consumer merge.
   do
-    local units, unitKeys, kept = {}, {}, {}
-    local function unitFor(trackKey, consumer, isParentSend)
+    -- A feeder group gathers every conn converging on one (trackKey, consumer)
+    -- sink, so the merge logic below can reduce them together.
+    local feederGroups, groupKeys, kept = {}, {}, {}
+    local function groupFor(trackKey, consumer, isParentSend)
       local key = util.key(trackKey, consumer)
-      local unit = units[key]
-      if not unit then
-        unit = { trackKey = trackKey, consumer = consumer, isParentSend = isParentSend,
+      local group = feederGroups[key]
+      if not group then
+        group = { trackKey = trackKey, consumer = consumer, isParentSend = isParentSend,
                  audio = {}, midi = {} }
-        units[key] = unit; util.add(unitKeys, key)
+        feederGroups[key] = group; util.add(groupKeys, key)
       end
-      return unit
+      return group
     end
     for edgeIdx, edge in ipairs(edges) do
       local conn
       if edge.type == 'midi' then
         conn = { type = 'midi', from = edge.from, to = edge.to }
       else
-        local g = (not hostedNatively[edgeIdx]) and edge.ops and edge.ops.gain or nil
+        local gain = (not hostedNatively[edgeIdx]) and edge.ops and edge.ops.gain or nil
         conn = { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,
-                 to = edge.to, toPort = edge.toPort or 1, gain = g, edgeIdx = edgeIdx }
+                 to = edge.to, toPort = edge.toPort or 1, gain = gain, edgeIdx = edgeIdx }
       end
       local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
-      local unit
+      local group
       if fromTrackKey ~= '' and toTrackKey ~= '' then
         if toTrackKey == MASTER and fromTrackKey ~= MASTER then
-          unit = unitFor(fromTrackKey, 'master', true)  -- width-1 parent send: pre-sum per producer
+          group = groupFor(fromTrackKey, 'master', true)  -- width-1 parent send: pre-sum per producer
         elseif conn.to == 'master' then
-          unit = unitFor(toTrackKey, 'master', true)    -- in-class master: serial parent send, sum fan-in to one pair
+          group = groupFor(toTrackKey, 'master', true)    -- in-class master: serial parent send, sum fan-in to one pair
         elseif nodes[conn.to] and nodes[conn.to].kind == 'fx' then
-          unit = unitFor(toTrackKey, conn.to, false)    -- fx consumer: merge at the consumer trackKey
+          group = groupFor(toTrackKey, conn.to, false)    -- fx consumer: merge at the consumer trackKey
         end
       end
-      if unit then util.add(unit[conn.type], conn) else util.add(kept, conn) end
+      if group then util.add(group[conn.type], conn) else util.add(kept, conn) end
     end
     conns = kept
 
@@ -522,28 +524,28 @@ function M.targetTracks(ctx)
       return false
     end
 
-    table.sort(unitKeys)
-    for _, unitKey in ipairs(unitKeys) do
-      local unit = units[unitKey]
-      sortFeeders(unit.audio); sortFeeders(unit.midi)
+    table.sort(groupKeys)
+    for _, groupKey in ipairs(groupKeys) do
+      local group = feederGroups[groupKey]
+      sortFeeders(group.audio); sortFeeders(group.midi)
       -- Audio: matrix sinks merge only when gained; parent sends sum on fan-in ≥2.
       -- MIDI: only same-track producers force a CU (cross-track sends coalesce a bus).
-      local audioCU = unit.isParentSend and #unit.audio >= 2 or
-                      (not unit.isParentSend and anyGained(unit.audio))
+      local audioCU = group.isParentSend and #group.audio >= 2 or
+                      (not group.isParentSend and anyGained(group.audio))
       local nIntraMidi = 0
-      for _, f in ipairs(unit.midi) do
-        if nodeTrackKey(f.from) == unit.trackKey then nIntraMidi = nIntraMidi + 1 end
+      for _, f in ipairs(group.midi) do
+        if nodeTrackKey(f.from) == group.trackKey then nIntraMidi = nIntraMidi + 1 end
       end
-      local midiCU = #unit.midi >= 2 and nIntraMidi >= 1
+      local midiCU = #group.midi >= 2 and nIntraMidi >= 1
 
       -- A merge CU is identified by (consumer, track). Fan-in past MERGE_WIDTH
       -- cascades into parallel CUs; each past the first gets a '#N' key suffix.
       local mergeN = 0
       local function mintMerge(params, inputEdges)
         mergeN = mergeN + 1
-        local key = mergeN == 1 and unit.trackKey or (unit.trackKey .. '#' .. mergeN)
-        return mintCU(unit.trackKey, params,
-          { originConsumer = unit.consumer, originTrackKey = key, inputEdges = inputEdges })
+        local key = mergeN == 1 and group.trackKey or (group.trackKey .. '#' .. mergeN)
+        return mintCU(group.trackKey, params,
+          { originConsumer = group.consumer, originTrackKey = key, inputEdges = inputEdges })
       end
       -- One merge CU over feeders[lo..hi]: window gains (unity default), collect
       -- any edgeIdx for live-gain pokes. audioSum 0 = matrix fan-out, 1 = sum-tree.
@@ -559,26 +561,26 @@ function M.targetTracks(ctx)
 
       local firstAudioCu  -- carries the MIDI merge too, in the single-CU case
       if not audioCU then
-        for _, f in ipairs(unit.audio) do util.add(conns, f) end
-      elseif not unit.isParentSend then
+        for _, f in ipairs(group.audio) do util.add(conns, f) end
+      elseif not group.isParentSend then
         -- Matrix-fed: parallel chunk CUs, each ≤MERGE_WIDTH wide. Every
         -- chunk's outputs route to the consumer's pins, which sum the lot.
-        for lo = 1, #unit.audio, MERGE_WIDTH do
-          local hi = math.min(lo + MERGE_WIDTH - 1, #unit.audio)
-          local cuId = chunkCU(unit.audio, lo, hi, 0)
+        for lo = 1, #group.audio, MERGE_WIDTH do
+          local hi = math.min(lo + MERGE_WIDTH - 1, #group.audio)
+          local cuId = chunkCU(group.audio, lo, hi, 0)
           firstAudioCu = firstAudioCu or cuId
           for i = lo, hi do
-            local f = unit.audio[i]
+            local f = group.audio[i]
             audioConn(f.from, f.fromPort, cuId, i - lo + 1)
-            audioConn(cuId, i - lo + 1, unit.consumer, f.toPort)
+            audioConn(cuId, i - lo + 1, group.consumer, f.toPort)
           end
         end
       else
         -- Parent send (matrix-less): a sum-tree of audioSum CUs reduces fan-in
         -- to one pair. Gains apply at leaves; the root feeds masterFeed.
-        local toPort = unit.audio[1].toPort
+        local toPort = group.audio[1].toPort
         local level = {}
-        for _, f in ipairs(unit.audio) do
+        for _, f in ipairs(group.audio) do
           util.add(level, { from = f.from, fromPort = f.fromPort,
                             gain = f.gain, edgeIdx = f.edgeIdx })
         end
@@ -594,19 +596,19 @@ function M.targetTracks(ctx)
           if #nextLevel == 1 then rootCu = nextLevel[1].from; break end
           level = nextLevel
         end
-        audioConn(rootCu, 1, unit.consumer, toPort)
+        audioConn(rootCu, 1, group.consumer, toPort)
         if mergeN == 1 then firstAudioCu = rootCu end  -- lone CU carries MIDI too
       end
 
       if not midiCU then
-        for _, f in ipairs(unit.midi) do util.add(conns, f) end
+        for _, f in ipairs(group.midi) do util.add(conns, f) end
       else
         -- One N→1 collapse (no width cap — 128-bit mask). Rides the audio CU
         -- only when there's exactly one; a cascade gives MIDI its own CU.
         local cuId = mergeN == 1 and firstAudioCu
                      or mintMerge({ mode = 'merge', nPairs = 1, gains = { 1 }, audioSum = 0 }, nil)
-        for _, f in ipairs(unit.midi) do util.add(conns, { type = 'midi', from = f.from, to = cuId }) end
-        util.add(conns, { type = 'midi', from = cuId, to = unit.consumer })
+        for _, f in ipairs(group.midi) do util.add(conns, { type = 'midi', from = f.from, to = cuId }) end
+        util.add(conns, { type = 'midi', from = cuId, to = group.consumer })
       end
     end
   end
