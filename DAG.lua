@@ -440,41 +440,44 @@ local function topoIntraTrack(members, conns)
   return out
 end
 
--- Realisation pass: lowers the structural ctx into per-track specs (fxOrder,
--- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
---contract: realisation pass over a compile ctx; returns the targetTracks shape (not cached)
-function M.targetTracks(ctx)
-  local nodes, edges = ctx.userGraph.nodes, ctx.userGraph.edges
-  local trackMembers = ctx:trackMembers()
+do
+  -- source/master are the track-IO boundary; only chain members get an fxOrder.
+  local function isChainMember(node) return node.kind ~= 'source' and node.kind ~= 'master' end
 
-  -- A gain hosted on a native send/main volume needs no CU; gainHost names it.
-  local hostedNatively, sendGain, mainGain = {}, {}, {}
-  for edgeIdx, host in pairs(ctx:gainHost()) do
-    if host.kind == 'send' then
-      hostedNatively[edgeIdx] = true
-      sendGain[util.key(host.from, host.to)] = host.gain
-    elseif host.kind == 'mainSend' then
-      hostedNatively[edgeIdx] = true
-      mainGain[host.cls] = host.gain
+  -- Partition gained edges: those a native send/main-volume can host (no CU)
+  -- from those needing one. Returns the host-marker set + parked native gains.
+  local function partitionGains(ctx)
+    local hostedNatively, sendGain, mainGain = {}, {}, {}
+    for edgeIdx, host in pairs(ctx:gainHost()) do
+      if host.kind == 'send' then
+        hostedNatively[edgeIdx] = true
+        sendGain[util.key(host.from, host.to)] = host.gain
+      elseif host.kind == 'mainSend' then
+        hostedNatively[edgeIdx] = true
+        mainGain[host.cls] = host.gain
+      end
     end
+    return hostedNatively, sendGain, mainGain
   end
 
-  local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
-  local function nodeTrackKey(id) return cuTrackKey[id] or ctx:trackKeyOf(id) end
-  local function audioConn(from, fp, to, tp, gain)
-    util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
-                      to = to, toPort = tp or 1, gain = gain })
-  end
-  local function mintCU(trackKey, params, origin)
-    cuN = cuN + 1
-    local cuId = '_cu_' .. cuN
-    synthNodes[cuId] = util.assign({ kind = 'fx', fxIdent = CU_IDENT, params = params }, origin)
-    cuTrackKey[cuId] = trackKey
-    return cuId
-  end
-  -- Each edge becomes a conn partitioned per-consumer (audio gain as metadata
-  -- → D_VOL on fold; MIDI passes through). See docs/DAG.md § per-consumer merge.
-  do
+  -- Lower edges into realised conns + synth merge CUs; audio gain as metadata,
+  -- MIDI passes through. See docs/DAG.md § per-consumer merge.
+  local function buildConns(ctx, hostedNatively)
+    local nodes, edges = ctx.userGraph.nodes, ctx.userGraph.edges
+    local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
+    local function nodeTrackKey(id) return cuTrackKey[id] or ctx:trackKeyOf(id) end
+    local function audioConn(from, fp, to, tp, gain)
+      util.add(conns, { type = 'audio', from = from, fromPort = fp or 1,
+                        to = to, toPort = tp or 1, gain = gain })
+    end
+    local function mintCU(trackKey, params, origin)
+      cuN = cuN + 1
+      local cuId = '_cu_' .. cuN
+      synthNodes[cuId] = util.assign({ kind = 'fx', fxIdent = CU_IDENT, params = params }, origin)
+      cuTrackKey[cuId] = trackKey
+      return cuId
+    end
+
     -- A feeder group gathers every conn converging on one (trackKey, consumer)
     -- sink, so the merge logic below can reduce them together.
     local feederGroups, groupKeys, kept = {}, {}, {}
@@ -611,131 +614,157 @@ function M.targetTracks(ctx)
         util.add(conns, { type = 'midi', from = cuId, to = group.consumer })
       end
     end
+
+    return conns, synthNodes, cuTrackKey, nodeTrackKey
   end
 
   -- Per-track chain members to topo-order: real fx + synth CU (source/master
   -- never appear in fxOrder; they are the track-IO boundary).
-  local chainMembers = {}
-  for trackKey, members in pairs(trackMembers) do
-    if trackKey ~= '' then
-      local list = {}
-      for _, id in ipairs(members) do
-        local k = nodes[id].kind
-        if k ~= 'source' and k ~= 'master' then util.add(list, id) end
+  local function chainMembersByTrack(trackMembers, nodes, cuTrackKey)
+    local chainMembers = {}
+    for trackKey, members in pairs(trackMembers) do
+      if trackKey ~= '' then
+        local list = {}
+        for _, id in ipairs(members) do
+          if isChainMember(nodes[id]) then util.add(list, id) end
+        end
+        chainMembers[trackKey] = list
       end
-      chainMembers[trackKey] = list
     end
-  end
-  for cuId, trackKey in pairs(cuTrackKey) do
-    if trackKey ~= '' then
-      chainMembers[trackKey] = chainMembers[trackKey] or {}
-      util.add(chainMembers[trackKey], cuId)
+    for cuId, trackKey in pairs(cuTrackKey) do
+      if trackKey ~= '' then
+        chainMembers[trackKey] = chainMembers[trackKey] or {}
+        util.add(chainMembers[trackKey], cuId)
+      end
     end
+    return chainMembers
   end
 
   -- Track entries: scratch for inert fx, else track topology. mainSend is set by
-  -- the conn loop; master always splits off its sources, so no sourceTrack hosts it.
-  local tracks = {}
-  for trackKey, members in pairs(trackMembers) do
-    if trackKey == '' then
-      local parked = {}
-      for _, id in ipairs(members) do
-        local k = nodes[id].kind
-        if k ~= 'master' and k ~= 'source' then util.add(parked, id) end
-      end
-      if #parked > 0 then
-        table.sort(parked)
-        tracks['__scratch__'] = {
-          trackKind = 'scratch', trackGuid = nil, fxOrder = parked,
-          mainSend = false, outWires = {}, intraConns = {},
-        }
-      end
-    else
-      local trackKind, trackGuid = 'newTrack', nil
-      for _, id in ipairs(members) do
-        local n = nodes[id]
-        if n.kind == 'source' then trackKind, trackGuid = 'sourceTrack', n.trackGuid end
-        if n.kind == 'master' then trackKind = 'master' end
-      end
-      -- Emit master only when it hosts FX: keeps target/snapshot symmetric.
-      -- See docs/DAG.md § Master-minimization for the FX-less-master invariant.
-      if trackKind ~= 'master' or #(chainMembers[trackKey] or {}) > 0 then
-        tracks[trackKey] = {
-          trackKind  = trackKind, trackGuid = trackGuid, fxOrder = nil,
-          mainSend  = false,
-          mainSendGain = mainGain[trackKey],
-          outWires = {}, intraConns = {},
-        }
-      end
-    end
-  end
-
-  -- Same-track conn → intraConn; inter-track → outWire (or mainSend lift to
-  -- the master-hosted dest). Inert endpoints (track '') carry no signal.
-  for _, conn in ipairs(conns) do
-    local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
-    if fromTrackKey and fromTrackKey ~= '' and toTrackKey and toTrackKey ~= '' then
-      if fromTrackKey == toTrackKey then
-        util.add(tracks[fromTrackKey].intraConns, {
-          from = conn.from, fromPort = conn.fromPort,
-          to   = conn.to,   toPort   = conn.toPort,
-          type = conn.type,
-        })
-      elseif toTrackKey == MASTER then
-        tracks[fromTrackKey].mainSend = true
-        -- Audio master fan-in arrives pre-merged (≥2 wires → one audioSum CU
-        -- output), so masterFeed carries a single producer.
-        if conn.type == 'audio' then
-          tracks[fromTrackKey].masterFeed =
-            { from = conn.from, fromPort = conn.fromPort,
-              toNode = conn.to, toPort = conn.toPort }
+  -- routeConns; master always splits off its sources, so no sourceTrack hosts it.
+  local function trackEntries(trackMembers, nodes, chainMembers, mainGain)
+    local tracks = {}
+    for trackKey, members in pairs(trackMembers) do
+      if trackKey == '' then
+        local parked = {}
+        for _, id in ipairs(members) do
+          if isChainMember(nodes[id]) then util.add(parked, id) end
+        end
+        if #parked > 0 then
+          table.sort(parked)
+          tracks['__scratch__'] = {
+            trackKind = 'scratch', trackGuid = nil, fxOrder = parked,
+            mainSend = false, outWires = {}, intraConns = {},
+          }
         end
       else
-        util.add(tracks[fromTrackKey].outWires, {
-          from = conn.from, fromPort = conn.fromPort,
-          to   = toTrackKey,
-          toNode = conn.to, toPort = conn.toPort,
-          type = conn.type,
-          gain = conn.type == 'audio'
-                 and sendGain[fromTrackKey .. '\0' .. toTrackKey] or nil,
-        })
+        local trackKind, trackGuid = 'newTrack', nil
+        for _, id in ipairs(members) do
+          local n = nodes[id]
+          if n.kind == 'source' then trackKind, trackGuid = 'sourceTrack', n.trackGuid end
+          if n.kind == 'master' then trackKind = 'master' end
+        end
+        -- Emit master only when it hosts FX: keeps target/snapshot symmetric.
+        -- See docs/DAG.md § Master-minimization for the FX-less-master invariant.
+        if trackKind ~= 'master' or #(chainMembers[trackKey] or {}) > 0 then
+          tracks[trackKey] = {
+            trackKind  = trackKind, trackGuid = trackGuid, fxOrder = nil,
+            mainSend  = false,
+            mainSendGain = mainGain[trackKey],
+            outWires = {}, intraConns = {},
+          }
+        end
+      end
+    end
+    return tracks
+  end
+
+  -- Route each conn onto its track: same-track → intraConn; inter-track → outWire
+  -- (or mainSend lift to the master-hosted dest). Inert endpoints carry no signal.
+  local function routeConns(conns, tracks, nodeTrackKey, sendGain)
+    for _, conn in ipairs(conns) do
+      local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
+      if fromTrackKey and fromTrackKey ~= '' and toTrackKey and toTrackKey ~= '' then
+        if fromTrackKey == toTrackKey then
+          util.add(tracks[fromTrackKey].intraConns, {
+            from = conn.from, fromPort = conn.fromPort,
+            to   = conn.to,   toPort   = conn.toPort,
+            type = conn.type,
+          })
+        elseif toTrackKey == MASTER then
+          tracks[fromTrackKey].mainSend = true
+          -- Audio master fan-in arrives pre-merged (≥2 wires → one audioSum CU
+          -- output), so masterFeed carries a single producer.
+          if conn.type == 'audio' then
+            tracks[fromTrackKey].masterFeed =
+              { from = conn.from, fromPort = conn.fromPort,
+                toNode = conn.to, toPort = conn.toPort }
+          end
+        else
+          util.add(tracks[fromTrackKey].outWires, {
+            from = conn.from, fromPort = conn.fromPort,
+            to   = toTrackKey,
+            toNode = conn.to, toPort = conn.toPort,
+            type = conn.type,
+            gain = conn.type == 'audio'
+                   and sendGain[fromTrackKey .. '\0' .. toTrackKey] or nil,
+          })
+        end
       end
     end
   end
 
   -- Attach synth CU nodes to their track (track '' CUs are inert, dropped).
-  for cuId, trackKey in pairs(cuTrackKey) do
-    if tracks[trackKey] then
-      tracks[trackKey].synthNodes = tracks[trackKey].synthNodes or {}
-      tracks[trackKey].synthNodes[cuId] = synthNodes[cuId]
+  local function attachSynthNodes(tracks, cuTrackKey, synthNodes)
+    for cuId, trackKey in pairs(cuTrackKey) do
+      if tracks[trackKey] then
+        tracks[trackKey].synthNodes = tracks[trackKey].synthNodes or {}
+        tracks[trackKey].synthNodes[cuId] = synthNodes[cuId]
+      end
     end
   end
 
-  -- Topo order each track's chain; deterministic sorts on the wire lists.
-  local function cmpOpt(a, b) return (a or 0) < (b or 0) end
-  local function neqOpt(a, b) return (a or 0) ~= (b or 0) end
-  for trackKey, entry in pairs(tracks) do
-    if entry.trackKind ~= 'scratch' then
-      entry.fxOrder = topoIntraTrack(chainMembers[trackKey] or {}, entry.intraConns)
-      table.sort(entry.outWires, function(a, b)
-        if a.to     ~= b.to     then return a.to     < b.to     end
-        if a.type   ~= b.type   then return a.type   < b.type   end
-        if a.from   ~= b.from   then return a.from   < b.from   end
-        if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
-        if a.toNode ~= b.toNode then return a.toNode < b.toNode end
-        return cmpOpt(a.toPort, b.toPort)
-      end)
-      table.sort(entry.intraConns, function(a, b)
-        if a.from ~= b.from then return a.from < b.from end
-        if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
-        if a.to   ~= b.to   then return a.to   < b.to   end
-        if neqOpt(a.toPort, b.toPort) then return cmpOpt(a.toPort, b.toPort) end
-        return a.type < b.type
-      end)
+  -- Topo-order each track's chain; deterministic sorts on the wire lists.
+  local function finaliseTracks(tracks, chainMembers)
+    local function cmpOpt(a, b) return (a or 0) < (b or 0) end
+    local function neqOpt(a, b) return (a or 0) ~= (b or 0) end
+    for trackKey, entry in pairs(tracks) do
+      if entry.trackKind ~= 'scratch' then
+        entry.fxOrder = topoIntraTrack(chainMembers[trackKey] or {}, entry.intraConns)
+        table.sort(entry.outWires, function(a, b)
+          if a.to     ~= b.to     then return a.to     < b.to     end
+          if a.type   ~= b.type   then return a.type   < b.type   end
+          if a.from   ~= b.from   then return a.from   < b.from   end
+          if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
+          if a.toNode ~= b.toNode then return a.toNode < b.toNode end
+          return cmpOpt(a.toPort, b.toPort)
+        end)
+        table.sort(entry.intraConns, function(a, b)
+          if a.from ~= b.from then return a.from < b.from end
+          if neqOpt(a.fromPort, b.fromPort) then return cmpOpt(a.fromPort, b.fromPort) end
+          if a.to   ~= b.to   then return a.to   < b.to   end
+          if neqOpt(a.toPort, b.toPort) then return cmpOpt(a.toPort, b.toPort) end
+          return a.type < b.type
+        end)
+      end
     end
   end
 
-  return tracks
+  -- Realisation pass: lowers the structural ctx into per-track specs (fxOrder,
+  -- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
+  --contract: realisation pass over a compile ctx; returns the targetTracks shape (not cached)
+  function M.targetTracks(ctx)
+    local nodes = ctx.userGraph.nodes
+    local trackMembers = ctx:trackMembers()
+    local hostedNatively, sendGain, mainGain = partitionGains(ctx)
+    local conns, synthNodes, cuTrackKey, nodeTrackKey = buildConns(ctx, hostedNatively)
+    local chainMembers = chainMembersByTrack(trackMembers, nodes, cuTrackKey)
+    local tracks = trackEntries(trackMembers, nodes, chainMembers, mainGain)
+    routeConns(conns, tracks, nodeTrackKey, sendGain)
+    attachSynthNodes(tracks, cuTrackKey, synthNodes)
+    finaliseTracks(tracks, chainMembers)
+    return tracks
+  end
 end
 
 ----- master minimization
@@ -1218,7 +1247,7 @@ function M.allocate(tracks, nodes)
       end
     end
 
-    -- Native (non-JS) fx surface their resolved in/out bus for 3c.3b's chunk
+    -- Native (non-JS) fx surface their resolved in/out bus for chunk
     -- surgery; brackets handle JS, merge CUs carry their own params.
     state.fxMidiBus = {}
     for _, fxId in ipairs(entry.fxOrder or {}) do
@@ -1264,7 +1293,7 @@ function M.allocate(tracks, nodes)
   end
 
   -- Compose: drop intra/out, add sends/pinMaps/nchan. Dedup catches midi sends
-  -- to the same dest (all 0/0 until 3c.3); audio sends are unique by claim.
+  -- to the same dest; audio sends are unique by claim.
   local out = {}
   for trackKey, entry in pairs(tracks) do
     local state = alloc[trackKey]
