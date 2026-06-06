@@ -1,39 +1,52 @@
-@module routingManager  src=routingManager.lua  loc=113  sha=untracked  mode=chunk
+@module routingManager  src=routingManager.lua  loc=143  sha=f1c8110  mode=chunk
 
-# Private state
-  @state PROJ = 0  @ 7
+# Shapes
+  @shape  fx = { id=guid, ident=string, name=string, inPins=int, outPins=int }  -- pins are mono channels; params/pinMaps/midi join later
+
+# Imports
+  @require util = 'util'  @ 6
       @invariant  id is a track/fx GUID string — opaque to callers, stable across reload
       @invariant  stateless — ids are guid-backed, so nothing is minted or reset
-  @state rm = {}  @ 9
+
+# Private state
+  @state PROJ = 0  @ 8
+  @state rm = {}  @ 10
 
 # Private functions
   -- track resolution
   @fn locateTrack(id)  @ 16
-      -- id (GUID) → live MediaTrack, by sweep. Master matched first since it is
-      -- absent from the project-track list. The sweep is the self-healing wart:
-      -- a guid always re-resolves to the current MediaTrack after a reorder.
+      -- Stable under reordering. Master matched first since it is absent
+      -- from the project-track list.
+  -- fx read
+  @fn fxName(track, idx)  @ 30
+      -- Display name: a user instance rename wins, else the plugin's own name.
+  @fn readFx(track, idx)  @ 37
+  @fn readFxChain(track)  @ 49
   -- read
-  @fn trackName(track)  @ 27
-  @fn readMainSend(track)  @ 32
-  @fn readTrack(track, isMaster)  @ 42
+  @fn trackName(track)  @ 59
+  @fn readMainSend(track)  @ 64
+  @fn readTrack(track, isMaster)  @ 74
   -- write
-  @fn writeMainSend(track, ms)  @ 56
-  @fn writeTrackFields(track, t)  @ 68
-      -- Shared by addTrack and assignTrack: apply whichever of name/nchan/mainSend
-      -- the record carries. (sends reconciliation lands in a later phase.)
+  @fn writeMainSend(track, ms)  @ 88
+  @fn writeTrackFields(track, t)  @ 98
 
 # Public API (rm:*)
-  @api rm:tracks()  @ 76
-  @api rm:addTrack(t)  @ 86
-  @api rm:assignTrack(id, t)  @ 95
-  @api rm:deleteTrack(id)  @ 100
-  @api rm:transaction(label, fn)  @ 105
+  @api rm:tracks()  @ 106
+  @api rm:addTrack(t)  @ 116
+  @api rm:assignTrack(id, t)  @ 125
+  @api rm:deleteTrack(id)  @ 130
+  @api rm:transaction(label, fn)  @ 135
+
+# Uses (outbound edges)
+  @use call    util.add  @ 52, 109, 112
+  @use require util  @ 6
 
 # REAPER API surface
   @reaper GetMasterTrack
   @reaper GetTrackGUID
   @reaper CountTracks
   @reaper GetTrack
+  @reaper TrackFX_GetNamedConfigParm, TrackFX_GetIOSize, TrackFX_GetFXGUID, TrackFX_GetCount
   @reaper GetSetMediaTrackInfo_String
   @reaper GetMediaTrackInfo_Value
   @reaper SetMediaTrackInfo_Value

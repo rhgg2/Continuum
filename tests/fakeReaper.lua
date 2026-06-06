@@ -175,13 +175,25 @@ function M.new()
     return true
   end
   function r.TrackFX_GetNamedConfigParm(track, idx, parm)
-    local io = state.fxIO[fxIdentOf(fxEntry(track, idx))]
+    local entry = fxEntry(track, idx)
+    local io = state.fxIO[fxIdentOf(entry)]
     local dir, pin = parm:match('^(in)_pin_(%d+)$')
     if not dir then dir, pin = parm:match('^(out)_pin_(%d+)$') end
     if dir and io then
       local names = io[dir == 'in' and 'inPinNames' or 'outPinNames']
       local v = names and names[tonumber(pin) + 1]
       if v then return true, v end
+    end
+    -- Identity/name surface for rm's fx read. Table entries may carry .name
+    -- (display) and .renamed (user instance rename); bare strings are ident only.
+    if entry == nil then return false, '' end
+    if parm == 'fx_ident' then return true, fxIdentOf(entry) end
+    if parm == 'fx_name' or parm == 'original_name' then
+      local name = type(entry) == 'table' and entry.name
+      return true, name or fxIdentOf(entry)
+    end
+    if parm == 'renamed_name' then
+      return true, (type(entry) == 'table' and entry.renamed) or ''
     end
     return false, ''
   end

@@ -3,6 +3,8 @@
 --invariant: id is a track/fx GUID string — opaque to callers, stable across reload
 --invariant: stateless — ids are guid-backed, so nothing is minted or reset
 
+local util = require('util')
+
 local PROJ = 0
 
 local rm = {}
@@ -18,6 +20,38 @@ local function locateTrack(id)
     local track = reaper.GetTrack(PROJ, i)
     if reaper.GetTrackGUID(track) == id then return track end
   end
+end
+
+----------- fx read
+
+--shape: fx = { id=guid, ident=string, name=string, inPins=int, outPins=int }  -- pins are mono channels; params/pinMaps/midi join later
+
+-- Display name: a user instance rename wins, else the plugin's own name.
+local function fxName(track, idx)
+  local renamed, value = reaper.TrackFX_GetNamedConfigParm(track, idx, 'renamed_name')
+  if renamed and value ~= '' then return value end
+  local _, name = reaper.TrackFX_GetNamedConfigParm(track, idx, 'fx_name')
+  return name
+end
+
+local function readFx(track, idx)
+  local _, ident = reaper.TrackFX_GetNamedConfigParm(track, idx, 'fx_ident')
+  local _, inPins, outPins = reaper.TrackFX_GetIOSize(track, idx)
+  return {
+    id      = reaper.TrackFX_GetFXGUID(track, idx),
+    ident   = ident,
+    name    = fxName(track, idx),
+    inPins  = inPins,
+    outPins = outPins,
+  }
+end
+
+local function readFxChain(track)
+  local out = {}
+  for idx = 0, reaper.TrackFX_GetCount(track) - 1 do
+    util.add(out, readFx(track, idx))
+  end
+  return out
 end
 
 ----------- read
@@ -44,7 +78,7 @@ local function readTrack(track, isMaster)
     isMaster = isMaster or nil,
     nchan    = reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN'),
     mainSend = readMainSend(track),
-    fx       = {},
+    fx       = readFxChain(track),
     sends    = {},
   }
 end
@@ -72,10 +106,10 @@ end
 function rm:tracks()
   local out = {}
   for i = 0, reaper.CountTracks(PROJ) - 1 do
-    out[#out+1] = readTrack(reaper.GetTrack(PROJ, i), false)
+    util.add(out, readTrack(reaper.GetTrack(PROJ, i), false))
   end
   local master = reaper.GetMasterTrack(PROJ)
-  if master then out[#out+1] = readTrack(master, true) end
+  if master then util.add(out, readTrack(master, true)) end
   return out
 end
 
