@@ -174,9 +174,6 @@ end
 --contract: cached deep clone of the user graph; one clone per structural change, read-only
 function wm:viewGraph() return ensureCompiled().graph end
 
---contract: cached DAG ctx over viewGraph; lazy passes; pulled by wv on wiringChanged
-function wm:compiled()  return ensureCompiled().ctx   end
-
 --contract: cached { forward, reverse } adjacency over viewGraph.edges for reachability walks
 function wm:reach()     return ensureCompiled().reach end
 
@@ -1626,63 +1623,68 @@ function wm:applyOps(ops, label)
   reaper.Undo_EndBlock2(0, label or 'wiring: apply', -1)
 end
 
---contract: pokes the live gain for an edge; no mutate/signal/undo. false when unhosted.
--- see docs/wiringManager.md § pokeEdgeGain routing
-function wm:pokeEdgeGain(edgeIdx, gain)
-  ensureLoaded()
-  local edge = userGraph.edges[edgeIdx]
-  if not edge then return false end
-  local function probeAndSet(guid, paramName, value)
-    local function probe(track)
-      if not track then return false end
-      for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
-        if reaper.TrackFX_GetFXGUID(track, fxIdx) == guid then
-          local pIdx = resolveParamIdx(track, fxIdx, CU_IDENT, paramName, pokeParamCache)
-          reaper.TrackFX_SetParam(track, fxIdx, pIdx, value)
-          return true
-        end
+-- Gain routing derived once per structural change from the cached ctx.
+-- Merge-CU entries carry consumerId/trackKey (not a guid); mergeGuids are stamped live by applyOps.
+--shape: routing[edgeIdx] = {kind='mergeCU',consumerId,trackKey,slot} | {kind='mainSend',cls} | {kind='send',from,to}
+local function gainRouting()
+  local cache = ensureCompiled()
+  if cache.routing then return cache.routing end
+  local ctx, routing = cache.ctx, {}
+  for _, spec in pairs(DAG.targetTracks(ctx)) do
+    for _, sn in pairs(spec.synthNodes or {}) do
+      for slot, edgeIdx in ipairs(sn.inputEdges or {}) do
+        routing[edgeIdx] = { kind = 'mergeCU', consumerId = sn.originConsumer,
+                             trackKey = sn.originTrackKey, slot = slot }
       end
-      return false
     end
-    -- Master isn't in CountTracks/GetTrack; probe it first or a master-resident CU misses every frame.
-    if probe(reaper.GetMasterTrack(0)) then return true end
-    for i = 0, reaper.CountTracks(0) - 1 do
-      if probe(reaper.GetTrack(0, i)) then return true end
+  end
+  for edgeIdx, sink in pairs(ctx:gainFold()) do
+    if not routing[edgeIdx] then
+      if sink.kind == 'mainSend' then
+        routing[edgeIdx] = { kind = 'mainSend', cls = sink.cls }
+      elseif sink.kind == 'send' then
+        routing[edgeIdx] = { kind = 'send', from = sink.from, to = sink.to }
+      end
+    end
+  end
+  cache.routing = routing
+  return routing
+end
+
+-- Master isn't in CountTracks/GetTrack; probe it first or a master-resident CU misses every frame.
+local function pokeCuParam(guid, paramName, value)
+  local function probe(track)
+    if not track then return false end
+    for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
+      if reaper.TrackFX_GetFXGUID(track, fxIdx) == guid then
+        local pIdx = resolveParamIdx(track, fxIdx, CU_IDENT, paramName, pokeParamCache)
+        reaper.TrackFX_SetParam(track, fxIdx, pIdx, value)
+        return true
+      end
     end
     return false
   end
-
-  local ctx = DAG.compile(userGraph)
-
-  -- Intra/master merge CU: no per-edge guid. Resolve the consumer + this edge's
-  -- slot from the compiled tracks, then poke gain{slot} on the per-consumer guid.
-  if edge.type == 'audio' then
-    for _, spec in pairs(DAG.targetTracks(ctx)) do
-      for _, sn in pairs(spec.synthNodes or {}) do
-        for slot, e in ipairs(sn.inputEdges or {}) do
-          if e == edgeIdx then
-            local consumer = userGraph.nodes[sn.originConsumer]
-            local guid = consumer and consumer.mergeGuids
-                         and consumer.mergeGuids[sn.originTrackKey]
-            return guid ~= nil and probeAndSet(guid, 'gain' .. slot, gain) or false
-          end
-        end
-      end
-    end
+  if probe(reaper.GetMasterTrack(0)) then return true end
+  for i = 0, reaper.CountTracks(0) - 1 do
+    if probe(reaper.GetTrack(0, i)) then return true end
   end
+  return false
+end
 
-  -- Folded: the gain lives on a native send. gainFold names the sink so the
-  -- hot path and targetTracks agree on where it lands.
-  local sink = ctx:gainFold()[edgeIdx]
-  if not sink then return false end
+local function pokeGainTarget(target, gain)
+  if target.kind == 'mergeCU' then
+    local consumer = userGraph.nodes[target.consumerId]
+    local guid = consumer and consumer.mergeGuids and consumer.mergeGuids[target.trackKey]
+    return guid ~= nil and pokeCuParam(guid, 'gain' .. target.slot, gain) or false
+  end
   local byTrackKey = buildTrackKeyToTrack()
-  if sink.kind == 'mainSend' then
-    local track = byTrackKey[sink.cls]
+  if target.kind == 'mainSend' then
+    local track = byTrackKey[target.cls]
     if not track then return false end
     reaper.SetMediaTrackInfo_Value(track, 'D_VOL', gain)
     return true
-  elseif sink.kind == 'send' then
-    local src, dst = byTrackKey[sink.from], byTrackKey[sink.to]
+  elseif target.kind == 'send' then
+    local src, dst = byTrackKey[target.from], byTrackKey[target.to]
     if src and dst then
       for i = 0, reaper.GetTrackNumSends(src, 0) - 1 do
         if reaper.GetTrackSendInfo_Value(src, 0, i, 'P_DESTTRACK') == dst
@@ -1694,6 +1696,13 @@ function wm:pokeEdgeGain(edgeIdx, gain)
     end
   end
   return false
+end
+
+--contract: pokes the live gain for an edge via cached routing; no mutate/signal/undo.
+-- see docs/wiringManager.md § pokeEdgeGain routing
+function wm:pokeEdgeGain(edgeIdx, gain)
+  local target = gainRouting()[edgeIdx]
+  return target ~= nil and pokeGainTarget(target, gain) or false
 end
 
 --contract: in-place gain commit + scratch mirror, one Undo block, no wiringChanged/reconcile
