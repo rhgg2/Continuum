@@ -112,16 +112,30 @@ local function writeMainSend(track, ms)
   set('C_MAINSEND_NCH',   ms.nchan)
 end
 
+-- ident → { [name] = sliderIdx }. Param layout is a property of the plugin
+-- type, not the instance, and is session-fixed — a memo, not slot state.
+local paramIdxByIdent = {}
+
+local function paramsByName(track, fxIdx)
+  local _, ident = reaper.TrackFX_GetNamedConfigParm(track, fxIdx, 'fx_ident')
+  local byName = paramIdxByIdent[ident]
+  if not byName then
+    byName = {}
+    for p = 0, 511 do
+      local ok, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
+      if not ok then break end
+      byName[name] = p
+    end
+    paramIdxByIdent[ident] = byName
+  end
+  return byName
+end
+
 --contract: params keyed by display name; an unknown name raises
 local function writeParams(track, fxIdx, params)
-  local idxByName = {}
-  for p = 0, 511 do
-    local ok, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
-    if not ok then break end
-    idxByName[name] = p
-  end
+  local byName = paramsByName(track, fxIdx)
   for name, value in pairs(params) do
-    local idx = idxByName[name]
+    local idx = byName[name]
     if not idx then error(("routingManager: fx has no param named %q"):format(name)) end
     reaper.TrackFX_SetParam(track, fxIdx, idx, value)
   end

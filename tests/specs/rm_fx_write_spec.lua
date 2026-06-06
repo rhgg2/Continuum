@@ -131,4 +131,27 @@ return {
       t.falsy(ok, 'unknown param name raises')
     end,
   },
+  {
+    name = 'param-name resolution is memoised per ident across instances',
+    run = function()
+      local reaper, rm = mkRm()
+      reaper:setFxParamNames('FX:comp', { 'thresh', 'gain' })
+      seedTrack(reaper, 'A', { { ident = 'FX:comp' } })
+      seedTrack(reaper, 'B', { { ident = 'FX:comp' } })
+
+      local scans = 0
+      local realGetParamName = reaper.TrackFX_GetParamName
+      reaper.TrackFX_GetParamName = function(track, fxIdx, p)
+        if p == 0 then scans = scans + 1 end
+        return realGetParamName(track, fxIdx, p)
+      end
+
+      local id1 = rm:tracks()[1].fx[1].id
+      local id2 = rm:tracks()[2].fx[1].id
+      rm:assignFx(id1, { params = { gain = 0.5 } })
+      rm:assignFx(id2, { params = { gain = 0.6 } })
+
+      t.eq(scans, 1, 'param layout scanned once, reused for the second instance')
+    end,
+  },
 }
