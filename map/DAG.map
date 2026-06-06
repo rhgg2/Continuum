@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1316  sha=8bc2e05  mode=namespace
+@module DAG  src=DAG.lua  loc=1316  sha=1e84a76  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate is pure; derivations live on M.compile's ctx

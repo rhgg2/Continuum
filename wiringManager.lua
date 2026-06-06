@@ -1638,12 +1638,12 @@ local function gainRouting()
       end
     end
   end
-  for edgeIdx, sink in pairs(ctx:gainFold()) do
+  for edgeIdx, host in pairs(ctx:gainHost()) do
     if not routing[edgeIdx] then
-      if sink.kind == 'mainSend' then
-        routing[edgeIdx] = { kind = 'mainSend', cls = sink.cls }
-      elseif sink.kind == 'send' then
-        routing[edgeIdx] = { kind = 'send', from = sink.from, to = sink.to }
+      if host.kind == 'mainSend' then
+        routing[edgeIdx] = { kind = 'mainSend', cls = host.cls }
+      elseif host.kind == 'send' then
+        routing[edgeIdx] = { kind = 'send', from = host.from, to = host.to }
       end
     end
   end

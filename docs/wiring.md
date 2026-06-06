@@ -101,14 +101,14 @@ One operator lives on the wire in the user graph: **gain** (audio
 wires). It is the unit that makes a routing decision surface as a UI
 gesture on a wire rather than as a new node in the user graph.
 
-Gain is realised at the targetTracks/allocate boundary — folded onto a
+Gain is realised at the targetTracks/allocate boundary — placed on a
 native send's volume where one can host it, otherwise carried into the
 consuming FX's merge CU (see Merge and split).
 
-**Gain folds to native volume when a send can host it.** A gain on a
+**Gain lives on native volume when a send can host it.** A gain on a
 wire that compiles to a REAPER send (track→track) or the parent/master
 send needs no Continuum Utility — the send's own `D_VOL` carries it
-(`DAG`'s `gainFold` names the sink). The fold fires only when that
+(`DAG`'s `gainHost` names the host). This applies only when that
 send is the *sole* audio contributor (one `D_VOL` can't encode two
 wires' gains) and only for a gain sitting on the boundary wire itself
 (you can't move a gain across an intervening FX without changing the
@@ -154,7 +154,7 @@ and its MIDI-bus merge.
 **The audio unity fast-path.** A REAPER FX audio input pin sums every
 pair routed to it for free *and selectively* — `P→A`, `P+Q→B` coexist
 because pins pick subsets. So an FX whose input pins are all unity-gain
-(or whose gain folds onto a send's `D_VOL`) needs **no CU**: the pin
+(or whose gain lands on a send's `D_VOL`) needs **no CU**: the pin
 matrix is the summing point. The choice is **binary per consuming FX** —
 all-unity ⇒ matrix-fed (free, selective); any non-unity gain ⇒ one merge
 CU carrying *every* feeder wire of that FX as a 1:1 gain (unity wires at
@@ -181,7 +181,7 @@ bracket pass, and the differ never meet a multi-input MIDI node.
 **There is no lowered graph.** The merge node is the only node the
 compiler synthesises that the user graph lacks, minted at the
 targetTracks/allocate boundary — where the partition reveals whether a
-gain folds to a send, rides the matrix, or needs a CU — exactly as the
+gain lands on a send, rides the matrix, or needs a CU — exactly as the
 non-bus-aware brackets are (track-local `fxOrder` entries). Wire-level
 ops are not spliced into nodes ahead of time; gain rides the wire as
 metadata and the merge node realises it. A merge CU is
@@ -193,7 +193,7 @@ equivalence-class calculus (`srcSet`, `classes`, `quotient`,
 the master converge through that class's `audioSum` CU-merge, whose
 single output feeds the parent send via `C_MAINSEND_OFFS`; one audio
 wire needs no CU — the parent send reads the producer's pair directly.
-Gain-folding composes: a sole-contributor wire folds onto the parent
+Gain-hosting composes: a sole-contributor wire lands on the parent
 send's `D_VOL`, multi-wire cases route gains through the merge params.
 
 The parent send is one pair wide, so a master-hosted FX can't pull more

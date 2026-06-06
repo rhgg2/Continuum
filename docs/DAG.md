@@ -10,17 +10,18 @@ carries the WHYs of the synthesis and allocation end, the parts the
 model section states only in outline.
 
 `M.validate` is a free-standing pure predicate; everything derived
-(srcSet, classes, quotient, absorption, splits, gainFold, the plan)
+(srcSet, classes, quotient, absorption, splits, gainHost, the plan)
 hangs off `M.compile`'s lazy-caching `ctx`, computed once per compile
 and shared across passes. (Graph reachability now lives in `wiringView`
 — `ancestorsOf`/`descendantsOf` over `wm:reach`'s cached adjacency.)
 
-## gainFold — where a gained wire's volume lands
+## gainHost — where a gained wire's volume lives
 
-A folded gain on an audio wire lands either on the REAPER send that
-carries it (as `mainSendGain`) or on a CU bridge synthesised for
-unfoldable cases (cross-track, multi-pair). `ctx:gainFold` is the
-authoritative fold decision: it is computed once and shared by
+A gain on an audio wire lives on the REAPER send that carries it (as
+`mainSendGain` for the master/parent send) or on a CU bridge synthesised
+for cases no native control can host (cross-track, multi-pair).
+`ctx:gainHost` is the authoritative placement: it is computed once and
+shared by
 `targetTracks` (which writes `outWires.gain` / `mainSendGain`) and
 `wm:pokeEdgeGain` (which pokes the live value without a full
 recompile).
@@ -28,7 +29,7 @@ recompile).
 ## targetTracks shape — outWires, intraConns, masterFeed semantics
 
 `outWires` are sends that leave a track. Each carries `from`, `to`,
-`type`, and optionally `gain` (folded boundary gain) and `srcChan` /
+`type`, and optionally `gain` (boundary gain) and `srcChan` /
 `dstChan` (assigned by `M.allocate`). `intraConns` are FX-to-FX
 connections within the same track: same fields but no channel
 assignment. `masterFeed` is the single outWire entry that feeds the
@@ -106,22 +107,21 @@ when FX actually live on master, mirroring `wm:snapshot` — an FX-less master i
 implicit (the REAPER master always exists), keeping target and snapshot
 symmetric so a master-less graph diffs to zero ops.
 
-## CU bridge invariant — edge ops and folding
+## CU bridge invariant — edge ops and hosting
 
 An edge's gain/channelMap op rides the edge as metadata. The CU
-bridge synthesised for an unfolded gain carries `originEdgeIdx` so the
-applier can stamp `opFxGuid` back via `wm:mutate` after
-`TrackFX_AddByName` succeeds. `channelMap` never folds onto a send
-because sends carry no remap capability. `ctx:gainFold` is the
-authoritative fold decision shared by `targetTracks` and
-`wm:pokeEdgeGain`.
+bridge synthesised for a gain no native control can host carries
+`originEdgeIdx` so the applier can stamp `opFxGuid` back via `wm:mutate`
+after `TrackFX_AddByName` succeeds. `channelMap` never lands on a send
+because sends carry no remap capability. `ctx:gainHost` is the
+authoritative placement shared by `targetTracks` and `wm:pokeEdgeGain`.
 
 ## synthNode field roles
 
 Each `synthNode` is a CU bridge synthesised for one of three cases:
 
 - **Wire-level op** (`originEdgeIdx` set): cross-track audio gain or MIDI
-  `channelMap` that cannot fold onto a send. The edge index lets the applier
+  `channelMap` that cannot land on a send. The edge index lets the applier
   write `opFxGuid` back after `TrackFX_AddByName`.
 - **Bus-route bracket** (`originNode` / `originSide` set): a CU inserted at the
   in- or out-side of a node to route MIDI buses around a non-bus-aware JSFX

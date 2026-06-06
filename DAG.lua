@@ -78,14 +78,14 @@ function M.validate(userGraph)
   -- nil ports resolve to 1 so the shorthand and the explicit form collide.
   local seen = {}
   for i, edge in ipairs(edges) do
-    local function error(code, adds)
+    local function fail(code, adds)
       return util.assign({ code = code, edge = i }, adds)
     end
     local fromNode, toNode = nodes[edge.from], nodes[edge.to]
-    if not fromNode then return error('unknown_from', { id = edge.from }) end
-    if not toNode   then return error('unknown_to',   { id = edge.to   }) end
+    if not fromNode then return fail('unknown_from', { id = edge.from }) end
+    if not toNode   then return fail('unknown_to',   { id = edge.to   }) end
     if edge.type ~= 'audio' and edge.type ~= 'midi' then
-      return error('unknown_edge_type', { type = edge.type })
+      return fail('unknown_edge_type', { type = edge.type })
     end
 
     -- Port existence per (side, edge.type). One symmetric check
@@ -94,23 +94,23 @@ function M.validate(userGraph)
     local fromOuts = (fromNode.ports[edge.type] or {}).outs or 0
     local toIns    = (toNode.ports[edge.type]   or {}).ins  or 0
     if fromOuts < 1 then
-      return error('no_out_port', { id = edge.from, kind = fromNode.kind, type = edge.type })
+      return fail('no_out_port', { id = edge.from, kind = fromNode.kind, type = edge.type })
     end
     if toIns < 1 then
-      return error('no_in_port',  { id = edge.to,   kind = toNode.kind,   type = edge.type })
+      return fail('no_in_port',  { id = edge.to,   kind = toNode.kind,   type = edge.type })
     end
 
     if edge.type == 'midi' then
-      if edge.fromPort ~= nil or edge.toPort ~= nil then return error('midi_port_index') end
+      if edge.fromPort ~= nil or edge.toPort ~= nil then return fail('midi_port_index') end
     else
       -- nil port = implicit port 1 (single-port shorthand).
       local fromIdx = edge.fromPort or 1
       local toIdx   = edge.toPort   or 1
       if fromIdx < 1 or fromIdx > fromOuts then
-        return error('audio_from_port_oob', { want = edge.fromPort, have = fromOuts })
+        return fail('audio_from_port_oob', { want = edge.fromPort, have = fromOuts })
       end
       if toIdx < 1 or toIdx > toIns then
-        return error('audio_to_port_oob', { want = edge.toPort, have = toIns })
+        return fail('audio_to_port_oob', { want = edge.toPort, have = toIns })
       end
     end
 
@@ -118,7 +118,7 @@ function M.validate(userGraph)
     local tp = edge.type == 'audio' and (edge.toPort   or 1) or 0
     local key = util.key(edge.type, edge.from, edge.to, fp, tp)
     if seen[key] then
-      return error('duplicate_edge', { prior = seen[key] })
+      return fail('duplicate_edge', { prior = seen[key] })
     end
     seen[key] = i
   end
@@ -271,18 +271,18 @@ local function buildCtx(userGraph, derivedSplits)
       direct[cls] = not splitClasses[cls] and directTrackKey(qEntry) or nil
     end
 
-    local function terminal(cls, seen)
-      local next_ = direct[cls]
-      if not next_ or seen[next_] then return cls end
-      seen[next_] = true
-      return terminal(next_, seen)
+    local function chainEnd(cls, seen)
+      local nextCls = direct[cls]
+      if not nextCls or seen[nextCls] then return cls end
+      seen[nextCls] = true
+      return chainEnd(nextCls, seen)
     end
 
     cache.absorption = {}
     for cls in pairs(q) do
       if direct[cls] then
         local seen = { [cls] = true }
-        cache.absorption[cls] = terminal(direct[cls], seen)
+        cache.absorption[cls] = chainEnd(direct[cls], seen)
       end
     end
     return cache.absorption
@@ -327,11 +327,11 @@ local function buildCtx(userGraph, derivedSplits)
     return cache.trackMembers
   end
 
-  -- Fold-vs-CU decision for each gained edge. Shared by targetTracks and
-  -- wm:pokeEdgeGain. See docs/DAG.md § gainFold.
-  function ctx:gainFold()
-    if cache.gainFold then return cache.gainFold end
-    -- The native sink a gained edge could fold onto, with the count key that
+  -- Per gained edge, the volume host (native send/main vol, or kind 'cu');
+  -- shared by targetTracks and wm:pokeEdgeGain. See docs/DAG.md § gainHost.
+  function ctx:gainHost()
+    if cache.gainHost then return cache.gainHost end
+    -- The native host a gained edge could land on, with the count key that
     -- decides solubility; nil for untracked-source or same-track edges.
     local function routeOf(edge)
       local from = self:trackKeyOf(edge.from)
@@ -345,8 +345,8 @@ local function buildCtx(userGraph, derivedSplits)
       end
       return nil
     end
-    -- A fold fires only when its sink carries exactly one audio edge, so count
-    -- every audio edge (gained or not) before deciding any.
+    -- A gain lands on a native host only when that host carries exactly one
+    -- audio edge, so count every audio edge (gained or not) before deciding any.
     local count = {}
     for _, edge in ipairs(edges) do
       if edge.type == 'audio' then
@@ -354,17 +354,17 @@ local function buildCtx(userGraph, derivedSplits)
         if route then count[route.key] = (count[route.key] or 0) + 1 end
       end
     end
-    local sinks = {}
+    local hosts = {}
     for edgeIdx, edge in ipairs(edges) do
       if edge.type == 'audio' and edge.ops and edge.ops.gain then
-        local sink  = { kind = 'cu', gain = edge.ops.gain }
+        local host  = { kind = 'cu', gain = edge.ops.gain }
         local route = routeOf(edge)
-        if route and count[route.key] == 1 then util.assign(sink, util.pick(route, 'kind cls from to')) end
-        sinks[edgeIdx] = sink
+        if route and count[route.key] == 1 then util.assign(host, util.pick(route, 'kind cls from to')) end
+        hosts[edgeIdx] = host
       end
     end
-    cache.gainFold = sinks
-    return sinks
+    cache.gainHost = hosts
+    return hosts
   end
 
   function ctx:capacityErrors()
@@ -447,15 +447,15 @@ function M.targetTracks(ctx)
   local nodes, edges = ctx.userGraph.nodes, ctx.userGraph.edges
   local trackMembers = ctx:trackMembers()
 
-  -- Folded gains ride a native send (no CU); gainFold names the sink.
-  local folded, sendGain, mainGain = {}, {}, {}
-  for edgeIdx, sink in pairs(ctx:gainFold()) do
-    if sink.kind == 'send' then
-      folded[edgeIdx] = true
-      sendGain[util.key(sink.from, sink.to)] = sink.gain
-    elseif sink.kind == 'mainSend' then
-      folded[edgeIdx] = true
-      mainGain[sink.cls] = sink.gain
+  -- A gain hosted on a native send/main volume needs no CU; gainHost names it.
+  local hostedNatively, sendGain, mainGain = {}, {}, {}
+  for edgeIdx, host in pairs(ctx:gainHost()) do
+    if host.kind == 'send' then
+      hostedNatively[edgeIdx] = true
+      sendGain[util.key(host.from, host.to)] = host.gain
+    elseif host.kind == 'mainSend' then
+      hostedNatively[edgeIdx] = true
+      mainGain[host.cls] = host.gain
     end
   end
 
@@ -491,7 +491,7 @@ function M.targetTracks(ctx)
       if edge.type == 'midi' then
         conn = { type = 'midi', from = edge.from, to = edge.to }
       else
-        local g = (not folded[edgeIdx]) and edge.ops and edge.ops.gain or nil
+        local g = (not hostedNatively[edgeIdx]) and edge.ops and edge.ops.gain or nil
         conn = { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,
                  to = edge.to, toPort = edge.toPort or 1, gain = g, edgeIdx = edgeIdx }
       end
@@ -790,13 +790,13 @@ local function deriveMasterSplit(userGraph)
 
   local base = buildCtx(userGraph, {})
 
-  -- d is the single entry of its cone, so it alone can pull >=2 audio pairs
+  -- dom is the single entry of its cone, so it alone can pull >=2 audio pairs
   -- from one upstream track. see docs/DAG.md § Master-minimization
-  local function dirty(d)
-    local cone = reach(d, fwd, nil)
+  local function pullsMultiPair(dom)
+    local cone = reach(dom, fwd, nil)
     local portsByTrack = {}
     for _, e in ipairs(edges) do
-      if e.type == 'audio' and e.to == d and not cone[e.from] then
+      if e.type == 'audio' and e.to == dom and not cone[e.from] then
         local trackKey = base:trackKeyOf(e.from)
         if trackKey ~= '' then
           local ports = portsByTrack[trackKey] or {}
@@ -816,8 +816,8 @@ local function deriveMasterSplit(userGraph)
   -- The master class is the cone of the largest dominator with a clean entry;
   -- the master node itself (always single-port) when none qualifies.
   local cut = 'master'
-  for _, d in ipairs(masterDominators()) do
-    if not dirty(d) then cut = d; break end
+  for _, dom in ipairs(masterDominators()) do
+    if not pullsMultiPair(dom) then cut = dom; break end
   end
 
   -- No natural master class — a lone source shares it, or nothing reaches
@@ -859,7 +859,7 @@ local function allocStream(values, startCursor, N, compare, pinAdd)
     table.insert(free, lo, reg)
   end
   local releaseAt = {}
-  local function process(v)
+  local function placeValue(v)
     local reg
     if v.assignReg ~= nil then
       reg = v.assignReg
@@ -875,19 +875,19 @@ local function allocStream(values, startCursor, N, compare, pinAdd)
 
   local byDef = {}
   for _, v in ipairs(values) do util.bucket(byDef, v.def, v) end
-  local function flush(slot)
+  local function placeDefinedAt(slot)
     if byDef[slot] then
       table.sort(byDef[slot], compare)
-      for _, v in ipairs(byDef[slot]) do process(v) end
+      for _, v in ipairs(byDef[slot]) do placeValue(v) end
     end
   end
-  flush(0)
+  placeDefinedAt(0)
   for slot = 1, N do
     if releaseAt[slot] then
       for _, r in ipairs(releaseAt[slot]) do release(r) end
       releaseAt[slot] = nil
     end
-    flush(slot)
+    placeDefinedAt(slot)
   end
   return cursor
 end
