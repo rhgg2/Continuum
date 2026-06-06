@@ -1,0 +1,43 @@
+@module routingManager  src=routingManager.lua  loc=113  sha=untracked  mode=chunk
+
+# Private state
+  @state PROJ = 0  @ 7
+      @invariant  id is a track/fx GUID string — opaque to callers, stable across reload
+      @invariant  stateless — ids are guid-backed, so nothing is minted or reset
+  @state rm = {}  @ 9
+
+# Private functions
+  -- track resolution
+  @fn locateTrack(id)  @ 16
+      -- id (GUID) → live MediaTrack, by sweep. Master matched first since it is
+      -- absent from the project-track list. The sweep is the self-healing wart:
+      -- a guid always re-resolves to the current MediaTrack after a reorder.
+  -- read
+  @fn trackName(track)  @ 27
+  @fn readMainSend(track)  @ 32
+  @fn readTrack(track, isMaster)  @ 42
+  -- write
+  @fn writeMainSend(track, ms)  @ 56
+  @fn writeTrackFields(track, t)  @ 68
+      -- Shared by addTrack and assignTrack: apply whichever of name/nchan/mainSend
+      -- the record carries. (sends reconciliation lands in a later phase.)
+
+# Public API (rm:*)
+  @api rm:tracks()  @ 76
+  @api rm:addTrack(t)  @ 86
+  @api rm:assignTrack(id, t)  @ 95
+  @api rm:deleteTrack(id)  @ 100
+  @api rm:transaction(label, fn)  @ 105
+
+# REAPER API surface
+  @reaper GetMasterTrack
+  @reaper GetTrackGUID
+  @reaper CountTracks
+  @reaper GetTrack
+  @reaper GetSetMediaTrackInfo_String
+  @reaper GetMediaTrackInfo_Value
+  @reaper SetMediaTrackInfo_Value
+  @reaper InsertTrackAtIndex
+  @reaper DeleteTrack
+  @reaper Undo_BeginBlock, Undo_EndBlock2
+  @reaper PreventUIRefresh
