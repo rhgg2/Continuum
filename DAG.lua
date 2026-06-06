@@ -116,8 +116,7 @@ function M.validate(userGraph)
 
     local fp = edge.type == 'audio' and (edge.fromPort or 1) or 0
     local tp = edge.type == 'audio' and (edge.toPort   or 1) or 0
-    local key = edge.type .. '|' .. edge.from .. '|' .. edge.to
-                .. '|' .. fp .. '|' .. tp
+    local key = util.key(edge.type, edge.from, edge.to, fp, tp)
     if seen[key] then
       return error('duplicate_edge', { prior = seen[key] })
     end
@@ -240,7 +239,7 @@ local function buildCtx(userGraph, derivedSplits)
         if guid:sub(1, 6) == 'split:' then split = true end
       end
       table.sort(guids)
-      local key = table.concat(guids, '|')
+      local key = util.key(table.unpack(guids))
       util.bucket(cache.classes, key, id)
       if split then cache.splitClasses[key] = true end
     end
@@ -374,14 +373,14 @@ local function buildCtx(userGraph, derivedSplits)
     -- The native sink a gained edge could fold onto, with the count key that
     -- decides solubility; nil for untracked-source or same-track edges.
     local function routeOf(edge)
-      local fromH = self:trackKeyOf(edge.from)
-      if not fromH or fromH == '' then return nil end
-      local toH = self:trackKeyOf(edge.to)
-      if toH == MASTER then
-        return { kind = 'mainSend', key = 'main\0' .. fromH, cls = fromH }
+      local from = self:trackKeyOf(edge.from)
+      if not from or from == '' then return nil end
+      local to = self:trackKeyOf(edge.to)
+      if to == MASTER then
+        return { kind = 'mainSend', key = util.key('main', from), cls = from }
       end
-      if toH and toH ~= '' and fromH ~= toH then
-        return { kind = 'send', key = 'send\0' .. fromH .. '\0' .. toH, from = fromH, to = toH }
+      if to and to ~= '' and from ~= to then
+        return { kind = 'send', key = util.key('send', from, to), from = from, to = to }
       end
       return nil
     end
@@ -492,7 +491,7 @@ function M.targetTracks(ctx)
   for edgeIdx, sink in pairs(ctx:gainFold()) do
     if sink.kind == 'send' then
       folded[edgeIdx] = true
-      sendGain[sink.from .. '\0' .. sink.to] = sink.gain
+      sendGain[util.key(sink.from, sink.to)] = sink.gain
     elseif sink.kind == 'mainSend' then
       folded[edgeIdx] = true
       mainGain[sink.cls] = sink.gain
@@ -517,7 +516,7 @@ function M.targetTracks(ctx)
   do
     local units, unitKeys, kept = {}, {}, {}
     local function unitFor(trackKey, consumer, isParentSend)
-      local key = trackKey .. '\0' .. consumer
+      local key = util.key(trackKey, consumer)
       local unit = units[key]
       if not unit then
         unit = { trackKey = trackKey, consumer = consumer, isParentSend = isParentSend,
@@ -1056,7 +1055,7 @@ function M.allocate(tracks, nodes)
     -- pair, shared by every reader — intra consumers, sends, masterFeed.
     local producerOuts, producerOrder = {}, {}
     local function producerOut(fxId, fromPort)
-      local key = fxId .. '\0' .. (fromPort or 1)
+      local key = util.key(fxId, fromPort or 1)
       local g = producerOuts[key]
       if not g then
         g = { def = slotMap[fxId], lastUse = slotMap[fxId], applies = {},
@@ -1104,7 +1103,7 @@ function M.allocate(tracks, nodes)
       for _, inc in ipairs(incoming[trackKey]) do
         local ow = inc.wire
         if ow.type == 'audio' and fxSet[ow.toNode] then
-          local key = ow.toNode .. '\0' .. (ow.toPort or 1)
+          local key = util.key(ow.toNode, ow.toPort or 1)
           local g = byPin[key]
           if not g then
             g = { toNode = ow.toNode, toPort = ow.toPort, applies = {} }
@@ -1308,7 +1307,7 @@ function M.allocate(tracks, nodes)
     local state = alloc[trackKey]
     local sends, seen = {}, {}
     for _, s in ipairs(state.sends) do
-      local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan .. '|' .. tostring(s.preFx)
+      local k = util.key(s.to, s.type, s.srcChan, s.dstChan, s.preFx)
       if not seen[k] then seen[k] = true; util.add(sends, s) end
     end
     table.sort(sends, function(a, b)

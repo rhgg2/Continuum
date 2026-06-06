@@ -750,7 +750,7 @@ local function wireGroups(wireViews)
   for _, w in ipairs(wireViews) do
     local a, b = w.from, w.to
     if a > b then a, b = b, a end
-    local key = a .. '\0' .. b
+    local key = util.key(a, b)
     local g = groups[key]
     if not g then
       g = { canonA = a, canonB = b, wires = {} }

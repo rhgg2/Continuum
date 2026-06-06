@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1167  sha=36027a9  mode=chunk
+@module midiManager  src=midiManager.lua  loc=1167  sha=1ac9618  mode=chunk
 @deps take
 
 # Invariants & contracts
@@ -182,6 +182,7 @@
   @use call    util.compact  @ 586, 587, 588
   @use call    util.fromBase36  @ 123, 178
   @use call    util.installHooks  @ 272
+  @use call    util.key  @ 38, 39, 40, 41, 291, 293, 294, 295
   @use call    util.pick  @ 328, 396, 430, 437, 464, 540
   @use call    util.print  @ 13
   @use call    util.serialise  @ 212

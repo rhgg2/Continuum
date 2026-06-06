@@ -76,7 +76,7 @@ return {
       local cx  = DAG.compile(twoSourceChain(true))
       local cls = cx:classOf()
       t.eq(cls['a'], 'g1')
-      t.eq(cls['b'], 'g1|split:b')
+      t.eq(cls['b'], t.key('g1', 'split:b'))
     end,
   },
   {
@@ -84,24 +84,24 @@ return {
     run = function()
       -- b has exactly one audio parent (a); absent the guard it would auto-absorb
       -- back onto a's trackKey, undoing the split. classTrackKey unchanged → hosts itself.
-      local rh = DAG.compile(twoSourceChain(true)):classTrackKey('g1|split:b')
-      t.eq(rh, 'g1|split:b')
+      local rh = DAG.compile(twoSourceChain(true)):classTrackKey(t.key('g1', 'split:b'))
+      t.eq(rh, t.key('g1', 'split:b'))
     end,
   },
   {
     name = 'targetTracks: cut edge is a send, cone is its own newTrack',
     run = function()
       local tracks = DAG.targetTracks(DAG.compile(twoSourceChain(true)))
-      t.eq(tracks['g1|split:b'].trackKind, 'newTrack')
-      t.truthy(hasOutWire(tracks['g1'], 'g1|split:b', 'a'))
-      t.truthy(tracks['g1|split:b'].mainSend)
+      t.eq(tracks[t.key('g1', 'split:b')].trackKind, 'newTrack')
+      t.truthy(hasOutWire(tracks['g1'], t.key('g1', 'split:b'), 'a'))
+      t.truthy(tracks[t.key('g1', 'split:b')].mainSend)
     end,
   },
   {
     name = 'unmarked: a->b is intra-trackKey, no eviction',
     run = function()
       local tracks = DAG.targetTracks(DAG.compile(twoSourceChain(false)))
-      t.falsy(tracks['g1|split:b'])
+      t.falsy(tracks[t.key('g1', 'split:b')])
       local intra = false
       for _, c in ipairs(tracks['g1'].intraConns) do
         if c.from == 'a' and c.to == 'b' then intra = true end
@@ -217,7 +217,7 @@ return {
         { type = 'audio', from = 'x',  to = 'master' },
         { type = 'audio', from = 'y',  to = 'master' },
       }))
-      t.eq(cx:classOf()['master'], 'g1|g2|split:master')
+      t.eq(cx:classOf()['master'], t.key('g1', 'g2', 'split:master'))
     end,
   },
   {
@@ -241,7 +241,7 @@ return {
         { type = 'audio', from = 's2', to = 'z', toPort = 2 },
         { type = 'audio', from = 'z',  to = 'master' },
       }))
-      t.eq(cx:classOf()['f'], 'g1|g2')
+      t.eq(cx:classOf()['f'], t.key('g1', 'g2'))
       t.truthy(cx:classOf()['f'] ~= cx:classOf()['master'])
     end,
   },
@@ -262,7 +262,7 @@ return {
         { type = 'audio', from = 's2', to = 'y', toPort = 2 },
         { type = 'audio', from = 'y',  to = 'master' },
       }))
-      t.eq(cx:classOf()['master'], 'g1|g2|split:master')
+      t.eq(cx:classOf()['master'], t.key('g1', 'g2', 'split:master'))
       t.truthy(cx:classOf()['y'] ~= cx:classOf()['master'])
       t.eq(DAG.targetTracks(cx)[cx:classOf()['y']].trackKind, 'newTrack')
     end,

@@ -2,7 +2,7 @@ local t   = require('support')
 local DAG = require('DAG')
 
 -- srcSet is a closure-local; we observe it through the public partition.
--- A node's class key IS its sorted srcSet guids joined by '|', so classOf pins srcSet.
+-- A node's class key IS its sorted srcSet guids joined by util.key, so classOf pins srcSet.
 
 local function source(id, guid)
   return id, { kind = 'source', trackGuid = guid or 'guid-' .. id,
@@ -75,7 +75,7 @@ return {
       t.eq(classKey(ns, {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1 },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
-      }, 'mix'), 'guid-a|guid-b')
+      }, 'mix'), t.key('guid-a', 'guid-b'))
     end,
   },
   {
@@ -104,7 +104,7 @@ return {
       t.eq(classKey(ns, {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
-      }, 'master'), 'guid-s|split:master')
+      }, 'master'), t.key('guid-s', 'split:master'))
     end,
   },
   {

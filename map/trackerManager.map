@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1737  sha=458f8e7  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1737  sha=0066d6b  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts
@@ -225,6 +225,7 @@
   @use call    util.deepClone  @ 1629, 1630, 1633, 1634, 1695, 1701
   @use call    util.deepEq  @ 1650
   @use call    util.installHooks  @ 41
+  @use call    util.key  @ 515, 518
   @use call    util.pick  @ 624
   @use call    util.print  @ 35
   @use call    util.round  @ 66, 71, 716, 792, 799, 1289, 1557

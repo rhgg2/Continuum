@@ -813,7 +813,7 @@ local function originKey(origin)
   if origin.kind == 'node'      then return 'node:' .. origin.id end
   if origin.kind == 'bracketIn' then return 'bracketIn:'  .. origin.id end
   if origin.kind == 'bracketOut' then return 'bracketOut:' .. origin.id end
-  if origin.kind == 'merge' then return 'merge:' .. origin.consumer .. '\0' .. origin.trackKey end
+  if origin.kind == 'merge' then return 'merge:' .. util.key(origin.consumer, origin.trackKey) end
   return 'edge:' .. origin.idx
 end
 
@@ -914,11 +914,11 @@ local function sendsEq(a, b)
   -- value so D_VOL drift drives setSends. preFx lets pre- and post-FX sends coexist.
   local byKey = {}
   for _, s in ipairs(a) do
-    local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan .. '|' .. tostring(s.preFx)
+    local k = util.key(s.to, s.type, s.srcChan, s.dstChan, s.preFx)
     byKey[k] = s.gain or 1.0
   end
   for _, s in ipairs(b) do
-    local k = s.to .. '|' .. s.type .. '|' .. s.srcChan .. '|' .. s.dstChan .. '|' .. tostring(s.preFx)
+    local k = util.key(s.to, s.type, s.srcChan, s.dstChan, s.preFx)
     if byKey[k] == nil or byKey[k] ~= (s.gain or 1.0) then return false end
   end
   return true
@@ -1273,7 +1273,7 @@ end
 
 local function reconcileSends(track, target, trackKeyToTrack)
   local function sendKey(dst, typ, src, dstCh, preFx)
-    return tostring(dst) .. '|' .. typ .. '|' .. src .. '|' .. dstCh .. '|' .. tostring(preFx)
+    return util.key(dst, typ, src, dstCh, preFx)
   end
   local function readChans(idx, typ)
     if typ == 'audio' then

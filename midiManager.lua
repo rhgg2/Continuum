@@ -35,10 +35,10 @@ local lock       = false
 -- evType space. Rebuilt fresh in mm:load alongside eventsByUuid.
 local function tokenOf(evt)
   local et = evt.evType
-  if et == 'note' then return 'note|' .. evt.chan .. '|' .. evt.pitch .. '|' .. evt.ppq end
-  if et == 'pa'   then return 'pa|'   .. evt.chan .. '|' .. evt.pitch .. '|' .. evt.ppq end
-  if et == 'cc'   then return 'cc|'   .. evt.chan .. '|' .. evt.cc    .. '|' .. evt.ppq end
-  return et .. '|' .. evt.chan .. '|' .. evt.ppq
+  if et == 'note' then return util.key('note', evt.chan, evt.pitch, evt.ppq) end
+  if et == 'pa'   then return util.key('pa',   evt.chan, evt.pitch, evt.ppq) end
+  if et == 'cc'   then return util.key('cc',   evt.chan, evt.cc,    evt.ppq) end
+  return util.key(et, evt.chan, evt.ppq)
 end
 
 --contract: INTERNALS fields (idx, uuidIdx) stripped from clones returned to callers
@@ -288,11 +288,11 @@ function mm:load(newTake)
   for uuid in pairs(metadata) do if uuid > maxUUID then maxUUID = uuid end end
 
   ----- Helper functions
-  local function noteKey(n)   return n.ppq .. '|' .. n.chan .. '|' .. n.pitch end
+  local function noteKey(n)   return util.key(n.ppq, n.chan, n.pitch) end
   local function idOf(cc)     return cc.cc or cc.pitch or 0 end
-  local function ccIdKey(e)   return e.evType .. '|' .. e.chan .. '|' .. idOf(e) end
-  local function ccPPQKey(e)  return ccIdKey(e)  .. '|' .. e.ppq end
-  local function ccFullKey(e) return ccPPQKey(e) .. '|' .. (e.val or 0) end
+  local function ccIdKey(e)   return util.key(e.evType, e.chan, idOf(e)) end
+  local function ccPPQKey(e)  return util.key(ccIdKey(e), e.ppq) end
+  local function ccFullKey(e) return util.key(ccPPQKey(e), e.val or 0) end
 
   ----- Read notes
   local _, noteCount = reaper.MIDI_CountEvts(take)

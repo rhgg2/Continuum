@@ -1,4 +1,4 @@
-@module util  src=util.lua  loc=475  sha=2ec885c  mode=namespace
+@module util  src=util.lua  loc=483  sha=7330ae5  mode=namespace
 
 # Invariants & contracts
   @invariant  util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. It is math.huge, so arithmetic on an open tail just works (inf + finite = inf, inf > finite = true) — callers no longer special-case the sentinel except to communicate intent. util.serialise/unserialise round-trip the non-finite floats via explicit inf/-inf/nan literals so the on-disk form is stable. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL.
@@ -7,13 +7,13 @@
   @const util = {}  @ 5
       @invariant  stateless module: pure helpers, no module-level mutable state beyond the REMOVE/OPEN sentinels
       @invariant  util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
-  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 256
-  @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 275
+  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 264
+  @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 283
 
 # Private functions
   @fn print(...)  @ 15
-  @fn escape_string(s)  @ 156
-  @fn parseValue()  @ 448
+  @fn escape_string(s)  @ 164
+  @fn parseValue()  @ 456
 
 # Public API (util.*)
   @api util.print(...)  @ 7
@@ -28,40 +28,43 @@
       -- absent (test harness).
   @api util.pick(src, keys, adds)  @ 79
   @api util.bucket(buckets, key, val)  @ 90
-  @api util.keys(t)  @ 97
-  @api util.compact(t, n)  @ 104
+  @api util.key(...)  @ 99
+      -- Opaque compound key: join identity fields with NUL, which can't appear
+      -- in a guid, track-key, or stringified scalar. Never split back apart.
+  @api util.keys(t)  @ 105
+  @api util.compact(t, n)  @ 112
       -- Sparse → dense; n is the pre-sparse length.
-  @api util.seek(items, mode, key, filter, keyFn)  @ 111
+  @api util.seek(items, mode, key, filter, keyFn)  @ 119
       @contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
-  @api util.clone(src, exclude, deep)  @ 135
+  @api util.clone(src, exclude, deep)  @ 143
       @contract  exclude applies only to the outermost table; deep recursion drops the exclude set
-  @api util.deepClone(src)  @ 146
-  @api util.deepEq(a, b)  @ 148
-  @api util.installHooks(owner)  @ 171
+  @api util.deepClone(src)  @ 154
+  @api util.deepEq(a, b)  @ 156
+  @api util.installHooks(owner)  @ 179
       @contract  listeners filter by signal name at registration; forward requires source itself ran installHooks
-  @api util.isNote(e)  @ 190
-  @api util.between(events, lo, hi, filter)  @ 193
+  @api util.isNote(e)  @ 198
+  @api util.between(events, lo, hi, filter)  @ 201
       @contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap
-  @api util.clamp(val,min,max)  @ 206
-  @api util.setDigit(val, d, pos, base, half)  @ 216
-  @api util.snapTo(v, dir, interval)  @ 223
+  @api util.clamp(val,min,max)  @ 214
+  @api util.setDigit(val, d, pos, base, half)  @ 224
+  @api util.snapTo(v, dir, interval)  @ 231
       @contract  advances at least one full interval; values already on a boundary do not no-op
-  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 228
-  @api util.oneOf(choices, txt)  @ 233
-  @api util.round(n, to)  @ 240
-  @api util.gcd(a, b)  @ 248
-  @api util.lcm(a, b)  @ 254
-  @api util.toBase36(n)  @ 258
-  @api util.fromBase36(txt)  @ 269
-  @api util.toBase62(n)  @ 277
-  @api util.fromBase62(txt)  @ 288
-  @api util.dotimes(n, v)  @ 300
+  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 236
+  @api util.oneOf(choices, txt)  @ 241
+  @api util.round(n, to)  @ 248
+  @api util.gcd(a, b)  @ 256
+  @api util.lcm(a, b)  @ 262
+  @api util.toBase36(n)  @ 266
+  @api util.fromBase36(txt)  @ 277
+  @api util.toBase62(n)  @ 285
+  @api util.fromBase62(txt)  @ 296
+  @api util.dotimes(n, v)  @ 308
       @contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v
-  @api util.serialise(value, exclude, seen)  @ 311
+  @api util.serialise(value, exclude, seen)  @ 319
       @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
-  @api util.unserialise(input)  @ 354
+  @api util.unserialise(input)  @ 362
       @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
-  @api util.instantiate(name, deps)  @ 467
+  @api util.instantiate(name, deps)  @ 475
       @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
 
 # REAPER API surface

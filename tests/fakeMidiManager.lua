@@ -65,10 +65,10 @@ function newMidiManager(opts)
   -- addressing built from the event's identity fields.
   local function tokenOf(evt)
     local et = evt.evType
-    if et == 'note' then return 'note|' .. evt.chan .. '|' .. evt.pitch .. '|' .. evt.ppq end
-    if et == 'pa'   then return 'pa|'   .. evt.chan .. '|' .. evt.pitch .. '|' .. evt.ppq end
-    if et == 'cc'   then return 'cc|'   .. evt.chan .. '|' .. evt.cc    .. '|' .. evt.ppq end
-    return et .. '|' .. evt.chan .. '|' .. evt.ppq
+    if et == 'note' then return util.key('note', evt.chan, evt.pitch, evt.ppq) end
+    if et == 'pa'   then return util.key('pa',   evt.chan, evt.pitch, evt.ppq) end
+    if et == 'cc'   then return util.key('cc',   evt.chan, evt.cc,    evt.ppq) end
+    return util.key(et, evt.chan, evt.ppq)
   end
 
   local function reindex()

@@ -65,7 +65,7 @@ return {
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       })
-      t.eq(classTrackKey(g, 'guid-a|guid-b'), '__master__')
+      t.eq(classTrackKey(g, t.key('guid-a', 'guid-b')), '__master__')
     end,
   },
   {
@@ -79,7 +79,7 @@ return {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1, primary = true },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
       })
-      t.eq(classTrackKey(g, 'guid-a|guid-b'), 'guid-a')
+      t.eq(classTrackKey(g, t.key('guid-a', 'guid-b')), 'guid-a')
     end,
   },
   {
@@ -96,7 +96,7 @@ return {
           primary = true, ops = { gain = 0.5 } },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2 },
       })
-      t.eq(classTrackKey(g, 'guid-a|guid-b'), 'guid-a')
+      t.eq(classTrackKey(g, t.key('guid-a', 'guid-b')), 'guid-a')
     end,
   },
   {
@@ -111,7 +111,7 @@ return {
         { type = 'audio', from = 'f', to = 'master' },
         { type = 'audio', from = 't', to = 'master' },
       })
-      t.eq(classTrackKey(g, 'guid-s|guid-t'), '__master__')
+      t.eq(classTrackKey(g, t.key('guid-s', 'guid-t')), '__master__')
     end,
   },
   {
@@ -131,8 +131,8 @@ return {
         { type = 'audio', from = 'mixA', to = 'mixB', toPort = 1, primary = true },
         { type = 'audio', from = 'u',    to = 'mixB', toPort = 2 },
       })
-      t.eq(classTrackKey(g, 'guid-s|guid-t'),        'guid-s')
-      t.eq(classTrackKey(g, 'guid-s|guid-t|guid-u'), 'guid-s')
+      t.eq(classTrackKey(g, t.key('guid-s', 'guid-t')),            'guid-s')
+      t.eq(classTrackKey(g, t.key('guid-s', 'guid-t', 'guid-u')), 'guid-s')
     end,
   },
   {
@@ -146,7 +146,7 @@ return {
         { type = 'audio', from = 's1', to = 'mix', toPort = 1, primary = true },
         { type = 'audio', from = 's2', to = 'mix', toPort = 2, primary = true },
       })
-      t.eq(classTrackKey(g, 'guid-a|guid-b'), 'guid-a|guid-b')
+      t.eq(classTrackKey(g, t.key('guid-a', 'guid-b')), t.key('guid-a', 'guid-b'))
     end,
   },
   {
@@ -160,7 +160,7 @@ return {
         { type = 'midi', from = 's', to = 'm' },
         { type = 'midi', from = 't', to = 'm' },
       })
-      t.eq(classTrackKey(g, 'guid-s|guid-t'), 'guid-s|guid-t')
+      t.eq(classTrackKey(g, t.key('guid-s', 'guid-t')), t.key('guid-s', 'guid-t'))
     end,
   },
 }

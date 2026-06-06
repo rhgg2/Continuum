@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=2103  sha=c5cef43  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=2103  sha=732b999  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -354,6 +354,7 @@
   @use call    painter.new  @ 1242, 1837, 1963
   @use call    util.add  @ 1169, 1170, 1270, 1911
   @use call    util.instantiate  @ 28
+  @use call    util.key  @ 753
   @use call    wiringView.addFx  @ 2044
   @use call    wiringView.ancestorsOf  @ 1580, 1628, 1899
   @use call    wiringView.deleteNode  @ 1773

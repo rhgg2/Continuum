@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1720  sha=4f72dcc  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1720  sha=b8cbdde  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -225,6 +225,7 @@
   @use call    util.deepClone  @ 146, 152, 837, 843, 850, 863, 877, 993, 1005, 1006, 1024
   @use call    util.deepEq  @ 905, 906, 936
   @use call    util.installHooks  @ 28
+  @use call    util.key  @ 816, 917, 921, 1276
   @use require DAG  @ 22
   @use require fs  @ 23
   @use require util  @ 21

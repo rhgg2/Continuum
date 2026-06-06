@@ -512,10 +512,10 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       local takeLen = tm:length()
       local byKey   = {}
       for _, n in pairs(byToken) do
-        if n.evType == 'note' then util.bucket(byKey, n.chan .. '|' .. n.pitch, n) end
+        if n.evType == 'note' then util.bucket(byKey, util.key(n.chan, n.pitch), n) end
       end
       for _, o in ipairs(adds) do
-        if o.evt.evType == 'note' then util.bucket(byKey, o.evt.chan .. '|' .. o.evt.pitch, o.evt) end
+        if o.evt.evType == 'note' then util.bucket(byKey, util.key(o.evt.chan, o.evt.pitch), o.evt) end
       end
 
       local clips, kills = {}, {}

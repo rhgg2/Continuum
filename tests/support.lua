@@ -2,6 +2,10 @@
 
 local M = {}
 
+-- Same opaque compound-key join prod uses, so specs assert against the
+-- real class-key shape without hardcoding the separator.
+M.key = require('util').key
+
 local function repr(v, depth)
   depth = depth or 0
   if depth > 4 then return '...' end

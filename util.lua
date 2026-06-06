@@ -94,6 +94,14 @@ function util.bucket(buckets, key, val)
   return b
 end
 
+-- Opaque compound key: join identity fields with NUL, which can't appear
+-- in a guid, track-key, or stringified scalar. Never split back apart.
+function util.key(...)
+  local parts = {}
+  for i = 1, select('#', ...) do parts[i] = tostring((select(i, ...))) end
+  return table.concat(parts, '\0')
+end
+
 function util.keys(t)
   local out = {}
   for k in pairs(t) do out[#out+1] = k end

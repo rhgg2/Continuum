@@ -159,7 +159,7 @@ return {
       -- The master-hosted class is keyed by the sentinel '__master__', not
       -- its merged srcSet — wm:snapshot can't tag the REAPER master with a
       -- project-scoped class, so both sides agree on a stable trackKey key.
-      t.eq(tracks['guid-a|guid-b'], nil, 'merged-srcSet key vacated for sentinel')
+      t.eq(tracks[t.key('guid-a', 'guid-b')], nil, 'merged-srcSet key vacated for sentinel')
       t.eq(tracks['__master__'].trackKind, 'master')
       t.deepEq(tracks['__master__'].fxOrder, { 'mix' })
       -- Sources fold their audio-to-master into mainSend, not regular sends.
@@ -186,7 +186,7 @@ return {
         { type = 'audio', from = 's2',   to = 'fx_b', toPort = 1 },
         { type = 'audio', from = 'fx_a', to = 'fx_b', toPort = 2 },
       }))
-      local fxbCls = 'guid-a|guid-b'
+      local fxbCls = t.key('guid-a', 'guid-b')
       t.eq(tracks[fxbCls].trackKind, 'newTrack')
       t.deepEq(tracks[fxbCls].fxOrder, { 'fx_b' })
       t.eq(tracks[fxbCls].mainSend, false)
@@ -309,7 +309,7 @@ return {
         { type = 'midi',  from = 'synthA', to = 'midiComp' },
         { type = 'midi',  from = 'synthB', to = 'midiComp' },
       }))
-      local compCls = 'guid-a|guid-b'
+      local compCls = t.key('guid-a', 'guid-b')
       t.eq(tracks[compCls].trackKind, 'newTrack')
       t.eq(#cuEntries(tracks[compCls]), 0, 'no merge CU for cross-track fan-in')
       t.deepEq(tracks[compCls].fxOrder, { 'midiComp' })
@@ -332,7 +332,7 @@ return {
         { type = 'audio', from = 's2',   to = 'fx_b', toPort = 1 },
         { type = 'audio', from = 'fx_a', to = 'fx_b', toPort = 2, ops = { gain = 0.5 } },
       }))
-      local fxbCls = 'guid-a|guid-b'
+      local fxbCls = t.key('guid-a', 'guid-b')
       -- Folded boundary CU bypassed: outWire.from is fx_a (the real producer
       -- upstream of the CU), not the folded CU node id.
       t.deepEq(tracks['guid-a'].outWires,
@@ -434,8 +434,8 @@ return {
         { type = 'audio', from = 'mixA', to = 'mixB', toPort = 1, primary = true },
         { type = 'audio', from = 'u',    to = 'mixB', toPort = 2 },
       }))
-      t.eq(tracks['guid-s|guid-t'],        nil)
-      t.eq(tracks['guid-s|guid-t|guid-u'], nil)
+      t.eq(tracks[t.key('guid-s', 'guid-t')],             nil)
+      t.eq(tracks[t.key('guid-s', 'guid-t', 'guid-u')], nil)
       t.eq(tracks['guid-s'].trackKind, 'sourceTrack')
       t.deepEq(tracks['guid-s'].fxOrder, { 'mixA', 'mixB' })
       t.deepEq(tracks['guid-t'].outWires,

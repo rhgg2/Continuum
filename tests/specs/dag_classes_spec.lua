@@ -80,9 +80,9 @@ return {
         { type = 'audio', from = 's', to = 'f' },
         { type = 'audio', from = 'f', to = 'master' },
       }))
-      t.deepEq(keysOf(p), { 'guid-s', 'guid-s|split:master' })
+      t.deepEq(keysOf(p), { 'guid-s', t.key('guid-s', 'split:master') })
       t.deepEq(p['guid-s'], { s = true, f = true })
-      t.deepEq(p['guid-s|split:master'], { master = true })
+      t.deepEq(p[t.key('guid-s', 'split:master')], { master = true })
     end,
   },
   {
@@ -97,10 +97,10 @@ return {
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       }))
-      t.deepEq(keysOf(p), { 'guid-a', 'guid-a|guid-b', 'guid-b' })
+      t.deepEq(keysOf(p), { 'guid-a', t.key('guid-a', 'guid-b'), 'guid-b' })
       t.deepEq(p['guid-a'], { s1 = true })
       t.deepEq(p['guid-b'], { s2 = true })
-      t.deepEq(p['guid-a|guid-b'], { mix = true, master = true })
+      t.deepEq(p[t.key('guid-a', 'guid-b')], { mix = true, master = true })
     end,
   },
   {
@@ -115,8 +115,8 @@ return {
         { type = 'audio', from = 'sZ', to = 'mix', toPort = 1 },
         { type = 'audio', from = 'sA', to = 'mix', toPort = 2 },
       }))
-      t.truthy(p['guid-a|guid-z'])
-      t.falsy(p['guid-z|guid-a'])
+      t.truthy(p[t.key('guid-a', 'guid-z')])
+      t.falsy(p[t.key('guid-z', 'guid-a')])
     end,
   },
   {
