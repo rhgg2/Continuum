@@ -60,8 +60,33 @@ local function readPersisted()
   return freshGraph()
 end
 
+local compiledCache = nil  -- { graph, ctx, reach } | nil; cleared on every graph swap
+
+local function setGraph(g) userGraph = g; compiledCache = nil end
+
 local function ensureLoaded()
-  if not userGraph then userGraph = readPersisted() end
+  if not userGraph then setGraph(readPersisted()) end
+end
+
+----- compiled-graph cache: one clone+compile per structural change, pulled by wv
+
+local function buildReach(g)
+  local forward, reverse = {}, {}
+  for _, edge in ipairs(g.edges or {}) do
+    util.bucket(forward, edge.from, edge.to)
+    util.bucket(reverse, edge.to,   edge.from)
+  end
+  return { forward = forward, reverse = reverse }
+end
+
+-- Lazy past ensureLoaded so the nil reload-sentinel resolves before any compile.
+local function ensureCompiled()
+  ensureLoaded()
+  if not compiledCache then
+    local snap = util.deepClone(userGraph)
+    compiledCache = { graph = snap, ctx = DAG.compile(snap), reach = buildReach(snap) }
+  end
+  return compiledCache
 end
 
 local function findScratchTrack()
@@ -128,7 +153,7 @@ end
 
 --contract: re-reads wiringGraph from cm (rebuilding master via freshGraph if empty), ensures the scratch track, fires wiringChanged{kind='load'}; drops the prior scratch handle (project may have changed)
 function wm:load()
-  userGraph      = readPersisted()
+  setGraph(readPersisted())
   scratchTrack   = nil
   fxLocations    = {}
   ensureScratchTrack()
@@ -146,6 +171,15 @@ function wm:graph()
   return util.deepClone(userGraph)
 end
 
+--contract: cached deep clone of the user graph; one clone per structural change, read-only
+function wm:viewGraph() return ensureCompiled().graph end
+
+--contract: cached DAG ctx over viewGraph; lazy passes; pulled by wv on wiringChanged
+function wm:compiled()  return ensureCompiled().ctx   end
+
+--contract: cached { forward, reverse } adjacency over viewGraph.edges for reachability walks
+function wm:reach()     return ensureCompiled().reach end
+
 --contract: clone-validate-swap; on DAG.validate failure returns false,err with no state change and no signal; on success persists and fires wiringChanged{kind='mutate'} unless wm is mid-realisation (the applier's stamp-back path sets `realising` so it doesn't re-enter the live-recompile loop)
 function wm:mutate(mutator)
   ensureLoaded()
@@ -153,7 +187,7 @@ function wm:mutate(mutator)
   mutator(draft)
   local err = DAG.validate(draft)
   if err then return false, err end
-  userGraph = draft
+  setGraph(draft)
   self:save()
   if not realising then fire('wiringChanged', { kind = 'mutate' }) end
   return true
@@ -1697,7 +1731,7 @@ function wm:pollUndo()
   if not mirrored then return end
   cm:set('project', 'wiringGraph',  mirrored)
   cm:set('project', 'wiringOwnedFx', cm:readTrackKey(scratchTrack, 'wiringOwnedFx') or {})
-  userGraph = nil
+  setGraph(nil)
   lastScratchRaw = raw
   fire('wiringChanged', { kind = 'load' })
 end

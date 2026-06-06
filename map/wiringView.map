@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=324  sha=b8cbdde  mode=chunk
+@module wiringView  src=wiringView.lua  loc=338  sha=3c907bb  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -21,6 +21,7 @@
   @state wv = {}  @ 15
   @state hoverNodeId = nil  @ 17
   @state selection = {}  @ 18   -- set keyed by nodeId → true; replace via setSelection, never mutated in place
+  @state viewGraph, viewCtx, viewReach = nil, nil, nil  @ 327
 
 # Private functions
   -- Logical projection (viewport-independent)
@@ -110,6 +111,9 @@
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
   @api wv:setSelection(idSet)  @ 318
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
+  -- Lifecycle: cached compile, pulled on every structural change
+  @api wv:rebuild()  @ 330
+      @contract  refreshes view-local compile cache from wm; called by wiringChanged. Mirrors tv:rebuild.
 
 # Uses (outbound edges)
   @use call    DAG.ancestors  @ 232
@@ -118,6 +122,7 @@
   @use call    util.instantiate  @ 13
   @use call    wiringManager.addFxNode  @ 111
   @use call    wiringManager.addSourceNode  @ 116
+  @use call    wiringManager.compiled  @ 332
   @use call    wiringManager.deleteSource  @ 121
   @use call    wiringManager.enableLive  @ 104
   @use call    wiringManager.errors  @ 307
@@ -129,9 +134,12 @@
   @use call    wiringManager.mutate  @ 144, 154, 166, 173, 185, 208, 221
   @use call    wiringManager.pokeEdgeGain  @ 207, 217
   @use call    wiringManager.pollUndo  @ 105
+  @use call    wiringManager.reach  @ 333
   @use call    wiringManager.save  @ 102
   @use call    wiringManager.showFxWindow  @ 131
   @use call    wiringManager.trackName  @ 26
+  @use call    wiringManager.viewGraph  @ 331
   @use require DAG  @ 9
   @use require util  @ 8
   @use require wiringManager  @ 13
+  @use sub     wiringManager:wiringChanged  @ 336

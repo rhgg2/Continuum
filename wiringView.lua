@@ -321,4 +321,18 @@ function wv:setSelection(idSet)
   selection = copy
 end
 
+----- Lifecycle: cached compile, pulled on every structural change
+
+-- wv's cached projection of wm's compiled graph; refreshed on every wiringChanged.
+local viewGraph, viewCtx, viewReach = nil, nil, nil
+
+--contract: refreshes view-local compile cache from wm; called by wiringChanged. Mirrors tv:rebuild.
+function wv:rebuild()
+  viewGraph = wm:viewGraph()
+  viewCtx   = wm:compiled()
+  viewReach = wm:reach()
+end
+
+wm:subscribe('wiringChanged', function() wv:rebuild() end)
+
 return wv
