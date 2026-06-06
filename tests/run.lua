@@ -118,7 +118,7 @@ local specs = {
   'dag_absorption_spec',
   'dag_absorb_alloc_spec',
   'dag_capacity_spec',
-  'dag_ancestors_spec',
+  'wv_reachability_spec',
   'dag_target_tracks_spec',
   'dag_split_spec',
   'dag_allocate_spec',

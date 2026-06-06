@@ -180,6 +180,16 @@ function wm:compiled()  return ensureCompiled().ctx   end
 --contract: cached { forward, reverse } adjacency over viewGraph.edges for reachability walks
 function wm:reach()     return ensureCompiled().reach end
 
+-- Live, uncloned: fastGainCommit writes ops.gain without a wiringChanged,
+-- so the cached viewGraph would lag a fader drag.
+--contract: live gain on audio edges[idx]; 1.0 if unset/non-audio/absent; reads userGraph uncloned
+function wm:edgeGain(idx)
+  ensureLoaded()
+  local e = userGraph.edges[idx]
+  if not e or e.type ~= 'audio' then return 1.0 end
+  return (e.ops and e.ops.gain) or 1.0
+end
+
 --contract: clone-validate-swap; on DAG.validate failure returns false,err with no state change and no signal; on success persists and fires wiringChanged{kind='mutate'} unless wm is mid-realisation (the applier's stamp-back path sets `realising` so it doesn't re-enter the live-recompile loop)
 function wm:mutate(mutator)
   ensureLoaded()

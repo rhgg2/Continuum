@@ -3,7 +3,7 @@
 
 -- @noindex
 
---invariant: M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
+--invariant: M.validate is pure; derivations live on M.compile's ctx
 --invariant: REAPER tracks are always stereo; audio I/O is a count of stereo pairs, never channels
 --invariant: every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
@@ -149,45 +149,6 @@ function M.validate(userGraph)
   end
 
   return nil
-end
-
------ ancestors / descendants
-
--- Backward reachability over the user graph. Used by the wiring page at
--- drag-start to disqualify cycle-forming drop targets: a wire from X to
--- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
---contract: set { [id]=true } incl sourceId; backward over userGraph.edges; cycle-safe via visited
-function M.ancestors(userGraph, sourceId)
-  local out, adj = {}, {}
-  for _, edge in ipairs(userGraph.edges or {}) do
-    util.bucket(adj, edge.to, edge.from)
-  end
-  local function visit(id)
-    if out[id] then return end
-    out[id] = true
-    for _, nxt in ipairs(adj[id] or {}) do visit(nxt) end
-  end
-  visit(sourceId)
-  return out
-end
-
--- Forward reachability. Mirror of ancestors; used by wire-redraft to
--- forbid cycle-forming new-source candidates when the user drags the
--- from-end of an existing wire: the new source X must not be reachable
--- from the kept destination B, else X→B closes the cycle B→…→X→B.
---contract: set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
-function M.descendants(userGraph, sourceId)
-  local out, adj = {}, {}
-  for _, edge in ipairs(userGraph.edges or {}) do
-    util.bucket(adj, edge.from, edge.to)
-  end
-  local function visit(id)
-    if out[id] then return end
-    out[id] = true
-    for _, nxt in ipairs(adj[id] or {}) do visit(nxt) end
-  end
-  visit(sourceId)
-  return out
 end
 
 ----- compile context

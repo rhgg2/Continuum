@@ -1,7 +1,7 @@
-@module DAG  src=DAG.lua  loc=1355  sha=cc70a6f  mode=namespace
+@module DAG  src=DAG.lua  loc=1316  sha=8bc2e05  mode=namespace
 
 # Invariants & contracts
-  @invariant  M.validate/M.ancestors/M.descendants are pure; derivations live on M.compile's ctx
+  @invariant  M.validate is pure; derivations live on M.compile's ctx
   @invariant  REAPER tracks are always stereo; audio I/O is a count of stereo pairs, never channels
   @invariant  every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
   @invariant  master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
@@ -37,61 +37,49 @@
 
 # Private functions
   -- validate
-  -- ancestors / descendants
   -- compile context
-  @fn buildCtx(userGraph, derivedSplits)  @ 197
+  @fn buildCtx(userGraph, derivedSplits)  @ 158
       -- Lazy ctx factory; derivations memoise into closure-local `cache`.
       -- derivedSplits arrives already settled (from deriveMasterSplit); ctx just folds it into srcSet.
   -- realisation
-  @fn topoIntraTrack(members, conns)  @ 441
+  @fn topoIntraTrack(members, conns)  @ 402
       -- Kahn's over a track's chain members (fx + synth CU; source/master excluded).
       -- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
   -- master minimization
-  @fn deriveMasterSplit(userGraph)  @ 782
+  @fn deriveMasterSplit(userGraph)  @ 743
       -- master class = cone of master's largest dominator whose entry pulls <=1 audio
       -- pair per upstream track; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
   -- allocate
-  @fn allocStream(values, startCursor, N, compare, pinAdd)  @ 885
+  @fn allocStream(values, startCursor, N, compare, pinAdd)  @ 846
       -- Linear-scan allocator over one stream's value list (audio pair or MIDI bus).
       -- see docs/DAG.md § allocStream internals
-  @fn audioValueCompare(a, c)  @ 936
+  @fn audioValueCompare(a, c)  @ 897
       -- Audio packs by pin shape (dir, port, fx) so co-defined values land
       -- deterministically; midi has no pins, so lastUse then insertion serial.
-  @fn midiValueCompare(a, c)  @ 945
+  @fn midiValueCompare(a, c)  @ 906
       · midi register file: bus 0 boundary; values are per-producer streams.
       · bracket post-pass — see docs/DAG.md § allocate
 
 # Public API (M.*)
   @api M.validate(userGraph)  @ 51
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.ancestors(userGraph, sourceId)  @ 160
-      -- Backward reachability over the user graph. Used by the wiring page at
-      -- drag-start to disqualify cycle-forming drop targets: a wire from X to
-      -- Y closes a cycle iff Y already reaches X — i.e. Y is an ancestor of X.
-      @contract  set { [id]=true } incl sourceId; backward over userGraph.edges; cycle-safe via visited
-  @api M.descendants(userGraph, sourceId)  @ 179
-      -- Forward reachability. Mirror of ancestors; used by wire-redraft to
-      -- forbid cycle-forming new-source candidates when the user drags the
-      -- from-end of an existing wire: the new source X must not be reachable
-      -- from the kept destination B, else X→B closes the cycle B→…→X→B.
-      @contract  set { [id]=true } incl sourceId; forward over userGraph.edges; cycle-safe via visited
-  @api M.targetTracks(ctx)  @ 485
+  @api M.targetTracks(ctx)  @ 446
       -- Realisation pass: lowers the structural ctx into per-track specs (fxOrder,
       -- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
       @contract  realisation pass over a compile ctx; returns the targetTracks shape (not cached)
-  @api M.compile(userGraph)  @ 877
+  @api M.compile(userGraph)  @ 838
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
-  @api M.allocate(tracks, nodes)  @ 954
+  @api M.allocate(tracks, nodes)  @ 915
       -- Per-track live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedTracks shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 238, 362, 423, 450, 464, 469, 471, 475, 504, 524, 548, 593, 601, 621, 631, 641, 647, 648, 661, 669, 681, 716, 731, 814, 1017, 1021, 1031, 1034, 1064, 1072, 1081, 1110, 1113, 1133, 1160, 1167, 1191, 1199, 1206, 1225, 1228, 1233, 1289, 1290, 1291, 1296, 1311
-  @use call    util.assign  @ 82, 401, 510, 1333, 1334
-  @use call    util.bucket  @ 130, 163, 182, 208, 243, 788, 789, 912, 916, 968, 976
-  @use call    util.key  @ 119, 242, 380, 383, 494, 519, 1058, 1106, 1310
-  @use call    util.keys  @ 300, 301, 1003, 1202
-  @use call    util.pick  @ 401
+  @use call    util.add  @ 199, 323, 384, 411, 425, 430, 432, 436, 465, 485, 509, 554, 562, 582, 592, 602, 608, 609, 622, 630, 642, 677, 692, 775, 978, 982, 992, 995, 1025, 1033, 1042, 1071, 1074, 1094, 1121, 1128, 1152, 1160, 1167, 1186, 1189, 1194, 1250, 1251, 1252, 1257, 1272
+  @use call    util.assign  @ 82, 362, 471, 1294, 1295
+  @use call    util.bucket  @ 130, 169, 204, 749, 750, 873, 877, 929, 937
+  @use call    util.key  @ 119, 203, 341, 344, 455, 480, 1019, 1067, 1271
+  @use call    util.keys  @ 261, 262, 964, 1163
+  @use call    util.pick  @ 362
   @use require util  @ 30

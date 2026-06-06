@@ -6,7 +6,6 @@
 --invariant: hover / selection are nodeId-only and per-session; they don't persist. Camera (pan/zoom) lands here when 1.3b adds the drag UX.
 
 local util = require 'util'
-local DAG  = require 'DAG'
 
 local cm = (...).cm
 
@@ -16,6 +15,30 @@ local wv = {}
 
 local hoverNodeId = nil
 local selection   = {}  -- set keyed by nodeId → true; replace via setSelection, never mutated in place
+
+-- wv's structural projection of wm's compiled graph, pulled lazily after a
+-- structural change. Live gain stays out -- edgeGain reads wm uncloned.
+local viewGraph, viewReach
+
+local function ensureView()
+  if not viewGraph then
+    viewGraph = wm:viewGraph()
+    viewReach = wm:reach()
+  end
+  return viewGraph
+end
+
+-- Breadth-first set { [id]=true } over an adjacency table, seed included.
+local function reachSet(adj, sourceId)
+  local out = {}
+  local function visit(id)
+    if out[id] then return end
+    out[id] = true
+    for _, nxt in ipairs(adj[id] or {}) do visit(nxt) end
+  end
+  visit(sourceId)
+  return out
+end
 
 ----- Logical projection (viewport-independent)
 
@@ -127,14 +150,14 @@ function wv:listInstalledFX() return wm:listInstalledFX() end
 
 --contract: floats the node's FX window; false for non-fx nodes or a stale guid
 function wv:openFxWindow(nodeId)
-  local node = wm:graph().nodes[nodeId]
+  local node = ensureView().nodes[nodeId]
   return (node and node.fxGuid and wm:showFxWindow(node.fxGuid)) or false
 end
 
 --contract: live MediaTrack hosting nodeId's fx instance, or nil if the guid isn't live.
 --contract: caller gates on nodeView.activate=='sampler'.
 function wv:samplerTrack(nodeId)
-  local node = wm:graph().nodes[nodeId]
+  local node = ensureView().nodes[nodeId]
   if not (node and node.fxGuid) then return nil end
   return (wm:locateFx(node.fxGuid))
 end
@@ -195,11 +218,9 @@ function wv:rewireEdgeEnd(idx, side, target)
   end)
 end
 
---contract: linear gain scalar on edges[idx]; 1.0 default when ops.gain unset or edge is non-audio / missing. Read-only.
+--contract: live pass-through to wm:edgeGain; 1.0 when ops.gain unset or edge non-audio/missing.
 function wv:edgeGain(idx)
-  local e = wm:graph().edges[idx]
-  if not e or e.type ~= 'audio' then return 1.0 end
-  return (e.ops and e.ops.gain) or 1.0
+  return wm:edgeGain(idx)
 end
 
 --contract: writes ops.gain on audio edges[idx]; fast path when poke hosts, else wm:mutate
@@ -229,12 +250,14 @@ end
 
 --contract: backward reachability over user.edges; returns { [id]=true } including sourceId
 function wv:ancestorsOf(sourceId)
-  return DAG.ancestors(wm:graph(), sourceId)
+  ensureView()
+  return reachSet(viewReach.reverse, sourceId)
 end
 
 --contract: forward reachability over user.edges; returns { [id]=true } including sourceId
 function wv:descendantsOf(sourceId)
-  return DAG.descendants(wm:graph(), sourceId)
+  ensureView()
+  return reachSet(viewReach.forward, sourceId)
 end
 
 --contract: returns { [portIdx]=true } over audio edges on nodeId for dir ('out'|'in'); midi edges ignored
@@ -242,7 +265,7 @@ function wv:wiredPorts(nodeId, dir)
   local endField  = (dir == 'out') and 'from'     or 'to'
   local portField = (dir == 'out') and 'fromPort' or 'toPort'
   local out = {}
-  for _, e in ipairs(wm:graph().edges or {}) do
+  for _, e in ipairs(ensureView().edges or {}) do
     if e.type == 'audio' and e[endField] == nodeId then
       out[e[portField] or 1] = true
     end
@@ -252,7 +275,7 @@ end
 
 --contract: logical canvas position of the master node as x, y; 0,0 if master is somehow absent
 function wv:masterPos()
-  local m = wm:graph().nodes.master
+  local m = ensureView().nodes.master
   if not m then return 0, 0 end
   return m.pos.x, m.pos.y
 end
@@ -262,7 +285,7 @@ end
 --shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', activate='sampler'|'fx'|nil, ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}} } — port lists carry names; counts = #list; activate is the double-click intent
 --contract: returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
 function wv:nodeViews()
-  local g = wm:graph()
+  local g = ensureView()
   local out = {}
   for id, node in pairs(g.nodes) do util.add(out, nodeView(id, node)) end
   return out
@@ -272,7 +295,7 @@ end
 -- see docs/wiringView.md § wireView fromKind/fromLabel
 --contract: returns the list of wireViews for every edge in the current user graph; order matches graph.edges
 function wv:wireViews()
-  local g = wm:graph()
+  local g = ensureView()
   local function portName(nodeId, dir, kind, idx)
     if kind == 'midi' then return 'midi' end
     local node = g.nodes[nodeId]
@@ -321,16 +344,13 @@ function wv:setSelection(idSet)
   selection = copy
 end
 
------ Lifecycle: cached compile, pulled on every structural change
+----- Lifecycle: cache pulled on every structural change
 
--- wv's cached projection of wm's compiled graph; refreshed on every wiringChanged.
-local viewGraph, viewCtx, viewReach = nil, nil, nil
-
---contract: refreshes view-local compile cache from wm; called by wiringChanged. Mirrors tv:rebuild.
+-- Lazy sibling of tv:rebuild: invalidate, don't re-pull. The next render
+-- read repopulates via ensureView, so a signal without a render compiles nothing.
+--contract: drops the view cache; next read re-pulls from wm. Driven by wiringChanged.
 function wv:rebuild()
-  viewGraph = wm:viewGraph()
-  viewCtx   = wm:compiled()
-  viewReach = wm:reach()
+  viewGraph, viewReach = nil, nil
 end
 
 wm:subscribe('wiringChanged', function() wv:rebuild() end)

@@ -9,10 +9,11 @@ partition, absorption, merge/split — lives in `docs/wiring.md`; this doc
 carries the WHYs of the synthesis and allocation end, the parts the
 model section states only in outline.
 
-`M.validate`, `M.ancestors`, `M.descendants` are free-standing pure
-predicates; everything derived (srcSet, classes, quotient, absorption,
-splits, gainFold, the plan) hangs off `M.compile`'s lazy-caching `ctx`,
-computed once per compile and shared across passes.
+`M.validate` is a free-standing pure predicate; everything derived
+(srcSet, classes, quotient, absorption, splits, gainFold, the plan)
+hangs off `M.compile`'s lazy-caching `ctx`, computed once per compile
+and shared across passes. (Graph reachability now lives in `wiringView`
+— `ancestorsOf`/`descendantsOf` over `wm:reach`'s cached adjacency.)
 
 ## gainFold — where a gained wire's volume lands
 
