@@ -1,3 +1,5 @@
+-- wm:fxTrack resolves an fx guid to its host MediaTrack via rm:fx + rm:reaperTrack.
+-- No wm-side cache: re-resolves through rm on every call, so chain reorders never go stale.
 local t    = require('support')
 local util = require('util')
 
@@ -51,30 +53,17 @@ end
 
 return {
   {
-    name = 'locateFx resolves each fx to (track, fxIdx) after recompile',
+    name = 'fxTrack resolves each fx guid to its host MediaTrack',
     run = function(harness)
       local _, wm, track, g = twoFxChain(harness)
-      local tr1, idx1 = wm:locateFx(g.nodes.f1.fxId)
-      t.eq(tr1, track, 'f1 on the source track'); t.eq(idx1, 0, 'f1 at idx 0')
-      local tr2, idx2 = wm:locateFx(g.nodes.f2.fxId)
-      t.eq(tr2, track, 'f2 on the source track'); t.eq(idx2, 1, 'f2 at idx 1')
+      t.eq(wm:fxTrack(g.nodes.f1.fxId), track, 'f1 on the source track')
+      t.eq(wm:fxTrack(g.nodes.f2.fxId), track, 'f2 on the source track')
     end,
   },
   {
-    name = 'warm index hit validates one slot — no full-chain scan',
+    name = 'fxTrack re-resolves after the chain grows (no stale host)',
     run = function(harness)
-      local _, wm, _, g = twoFxChain(harness)
-      local real, calls = reaper.TrackFX_GetFXGUID, 0
-      reaper.TrackFX_GetFXGUID = function(a, b) calls = calls + 1; return real(a, b) end
-      wm:locateFx(g.nodes.f2.fxId)
-      reaper.TrackFX_GetFXGUID = real
-      t.eq(calls, 1, 'recompile-stamped index — locate is a single validating read')
-    end,
-  },
-  {
-    name = 'recompile re-stamps fxIdx when the chain grows (no stale index)',
-    run = function(harness)
-      local _, wm = twoFxChain(harness)
+      local _, wm, track = twoFxChain(harness)
       wm:mutate(function(g)
         g.nodes.f0 = fx('JS:zero')
         g.edges = {}
@@ -85,8 +74,15 @@ return {
       end)
       apply(wm)
       local g2 = wm:graph()
-      t.eq(select(2, wm:locateFx(g2.nodes.f1.fxId)), 1, 'f1 shifted to idx 1')
-      t.eq(select(2, wm:locateFx(g2.nodes.f2.fxId)), 2, 'f2 shifted to idx 2')
+      t.eq(wm:fxTrack(g2.nodes.f0.fxId), track, 'new fx still on the source track')
+      t.eq(wm:fxTrack(g2.nodes.f2.fxId), track)
+    end,
+  },
+  {
+    name = 'fxTrack returns nil for an unknown guid',
+    run = function(harness)
+      local _, wm = twoFxChain(harness)
+      t.eq(wm:fxTrack('{nope}'), nil)
     end,
   },
 }

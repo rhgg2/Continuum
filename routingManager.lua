@@ -289,7 +289,7 @@ end
 
 ----------- fx read
 
---shape: fx = { id=guid, ident=string, name=string, inPins=int, outPins=int, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus=int, outBus=int, outDisabled=bool} }  -- midi nil for JS fx
+--shape: fx = { id=guid, ident=string, name=string, ins=int, outs=int, inNames={str,...}, outNames={str,...}, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus,outBus,outDisabled} }  -- midi nil for JS; rm:fx adds trackId
 
 -- Display name: a user instance rename wins, else the plugin's own name.
 local function fxName(track, idx)
@@ -302,13 +302,16 @@ end
 local function readFx(track, idx)
   local _, ident = reaper.TrackFX_GetNamedConfigParm(track, idx, 'fx_ident')
   local _, inPins, outPins = reaper.TrackFX_GetIOSize(track, idx)
+  inPins, outPins = inPins or 0, outPins or 0
   return {
-    id      = reaper.TrackFX_GetFXGUID(track, idx),
-    ident   = ident,
-    name    = fxName(track, idx),
-    inPins  = inPins,
-    outPins = outPins,
-    pinMaps = readPinMaps(track, idx),
+    id       = reaper.TrackFX_GetFXGUID(track, idx),
+    ident    = ident,
+    name     = fxName(track, idx),
+    ins      = inPins  / 2,
+    outs     = outPins / 2,
+    inNames  = portNames(track, idx, 'in',  inPins),
+    outNames = portNames(track, idx, 'out', outPins),
+    pinMaps  = readPinMaps(track, idx),
   }
 end
 
@@ -516,6 +519,15 @@ local function writeParams(track, fxIdx, params)
   end
 end
 
+-- Live { [name] = value } for every named param — the read counterpart to writeParams.
+local function readParams(track, fxIdx)
+  local out = {}
+  for name, idx in pairs(paramsByName(track, fxIdx)) do
+    out[name] = reaper.TrackFX_GetParam(track, fxIdx, idx)
+  end
+  return out
+end
+
 -- Absolute fx index → chunk routing index (non-JS blocks only); nil for a JS
 -- fx, which has no routing trailer — writing midi to one is a no-op.
 local function routingIdxOf(track, fxIdx)
@@ -599,6 +611,21 @@ function rm:deleteTrack(id)
   if track then reaper.DeleteTrack(track) end
 end
 
+--contract: targeted live D_VOL on the audio send srcId→dstId; false if no such send is live.
+--contract: the partial write assignTrack{sends} (full-replace) can't serve — for live gain pokes.
+function rm:setSendGain(srcId, dstId, gain)
+  local src, dst = locateTrack(srcId), locateTrack(dstId)
+  if not (src and dst) then return false end
+  for i = 0, reaper.GetTrackNumSends(src, 0) - 1 do
+    if reaper.GetTrackSendInfo_Value(src, 0, i, 'P_DESTTRACK') == dst
+       and sendKind(src, i) == 'audio' then
+      reaper.SetTrackSendInfo_Value(src, 0, i, 'D_VOL', gain)
+      return true
+    end
+  end
+  return false
+end
+
 function rm:addFx(trackId, t)
   local track = locateTrack(trackId)
   if not track then return end
@@ -636,18 +663,24 @@ function rm:deleteFx(id)
   if track then reaper.TrackFX_Delete(track, idx) end
 end
 
---contract: ports = pins/2; names L/R-collapsed. {ins,outs,inNames,outNames}; empty if id is gone
-function rm:fxPorts(id)
+--contract: fx record by id (ports, names, pinMaps, midi, trackId); nil if gone. Params separate.
+function rm:fx(id)
   local track, idx = locateFx(id)
-  if not track then return { ins = 0, outs = 0, inNames = {}, outNames = {} } end
-  local _, inPins, outPins = reaper.TrackFX_GetIOSize(track, idx)
-  inPins, outPins = inPins or 0, outPins or 0
-  return {
-    ins      = inPins  / 2,
-    outs     = outPins / 2,
-    inNames  = portNames(track, idx, 'in',  inPins),
-    outNames = portNames(track, idx, 'out', outPins),
-  }
+  if not track then return nil end
+  local fx = readFx(track, idx)
+  fx.trackId = reaper.GetTrackGUID(track)
+  if not isJSFX(fx.ident) then
+    local _, chunk = reaper.GetTrackStateChunk(track, '', true)
+    fx.midi = readMidiRouting(chunk, routingIdxOf(track, idx))
+  end
+  return fx
+end
+
+--contract: live { [name] = value } param values for the fx by id; nil if gone.
+--contract: the mutable control-state counterpart to the structural rm:fx record.
+function rm:params(id)
+  local track, idx = locateFx(id)
+  return track and readParams(track, idx) or nil
 end
 
 --contract: floats the fx window for id; false if the fx is no longer live

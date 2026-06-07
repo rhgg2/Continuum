@@ -86,14 +86,14 @@ Three rules keep instance churn minimal and state-preserving:
   CU bridges arrive at the applier with a nil `fxId` and are minted by
   `reconcileFXChain`, the same path as user FX.
 
-Where a `fxId` *currently lives* — its `(track, fxIdx)` — is derived, not
-intent: the reconcile pass migrates and reorders instances, so the slot is
-only authoritative right after `applyOps`. That is exactly where the
-`fxLocations` index is restamped. `wm:locateFx` reads it (validating the
-cached slot still holds the guid, sweeping once and repopulating on
-miss/drift) so on-demand callers like `showFxWindow` never scan the project.
-The index is volatile realisation state — kept in memory, never persisted onto
-the graph, and rebuilt from REAPER on the next reconcile.
+Where a `fxId` *currently lives* — its host track and slot — is derived, not
+intent: the reconcile pass migrates and reorders instances. wm keeps no index
+of its own; it asks rm. `rm:fx(id)` re-resolves the guid each call (the
+single-fx counterpart to `rm:track`), returning ports, live params, midi, and
+the host `trackId`. On-demand callers read through it: `wm:fxTrack` (the
+sampler dive) bridges `rm:fx(id).trackId` to a handle via `rm:reaperTrack`, and
+`snapFx` reads a CU bridge's live params from `rm:fx(id).params`. Nothing is
+cached or persisted — realisation lives in REAPER, re-read on demand.
 
 ## Master is a regular node
 
@@ -198,16 +198,20 @@ a host id.
 ## pokeEdgeGain routing
 
 `wm:pokeEdgeGain` writes the gain for a single edge on the drag hot path —
-no mutate/signal/undo block. The dispatch depends on edge kind:
+no mutate/signal/undo block. `gainRouting` resolves the edge to a target;
+`pokeGainTarget` dispatches by kind, each through a targeted rm write:
 
-- **CU bridge** (edge has a materialised `cuGuid`): calls `TrackFX_SetParam`
-  on the `'gain'` parameter of the CU FX instance.
-- **Hosted edge** (`gainHost` path): writes `D_VOL` on the edge's native
-  host — a track-to-track send for ordinary edges, or the from-track fader
-  for the parent/master send.
+- **Merge CU** (`mergeCU`): `rm:assignFx(guid, {params={['gain'..slot]=gain}})`
+  on the consumer's CU instance.
+- **Main send** (`mainSend`): `rm:assignTrack(id, {mainSend={gain}})` — a
+  partial scalar write (`assignTrack` patches the fields given; only `sends`
+  is full-replace).
+- **Send** (`send`): `rm:setSendGain(from, to, gain)`, the targeted send-`D_VOL`
+  write reconcile's collection-replace can't serve per-frame.
 
-Returns `false` when nothing hosts the edge yet; the caller
-(`wv:setEdgeGain`) is responsible for materialising before the next poke.
+Each returns `false` when nothing hosts the edge yet (no guid, dead track, or
+no matching send); the caller materialises before the next poke. `fastGainCommit`
+wraps the same poke plus the scratch mirror in one `rm:transaction`.
 
 ## Merge CU
 
@@ -237,28 +241,25 @@ DAG before any track exists). `wiringTracks` is the bridge: a project-tier
 The map is written only by `applyOps`, inside the `rm:transaction`, so the
 REAPER undo that captures the FX/track ops also captures the addressing — and
 it is mirrored to the scratch track's P_EXT for the same reason (project-tier
-`SetProjExtState` does not reverse with native undo; see `pollUndo`). The
-id→handle bridge for the few raw ops below is `rm:reaperTrack(id)`.
+`SetProjExtState` does not reverse with native undo; see `pollUndo`). Where wm
+must hand a raw track to cm's P_EXT writers, the id→handle bridge is
+`rm:reaperTrack(id)`.
 
 ## The reaper seam
 
-The reconcile pipeline routes every topology read and write through rm, so
-wm names tracks and FX by record `id`, never a handle. What raw `reaper.*`
-remains is a small, deliberate residue — the things rm's record vocabulary
-cannot express because they are wm-private:
+The reconcile pipeline *and* the live poke path route every topology read and
+write through rm, so wm names tracks and FX by record `id`, never a handle.
+Two raw `reaper.*` calls remain — neither a routing op:
 
-- **Scratch liveness** — `pollUndo` checks `rm:track(scratchId)` to detect an
-  undo past the scratch's creation. An id liveness check, not a routing op.
-- **The live poke path** (`pokeEdgeGain`/`fastGainCommit`/`pokeCuParam`) —
-  a fader drag writes one param or `D_VOL` per frame, too hot for the
-  wholesale `rm:assignTrack{sends}` diff. It resolves the host via
-  `rm:reaperTrack(idForKey(...))` then writes `TrackFX_SetParam`/
-  `SetTrackSendInfo` directly, until the cost proves it needs a targeted rm
-  primitive (see `docs/routingManager.md § Eager reads`).
-- **`readCuParams`** — the CU's slider layout is wm/CU-private; rm reads
-  generic params but not this app-specific encoding.
-- **`readJsfxContent`** — reads a JSFX file off disk (via `fs`), not the
-  project graph.
+- **`readJSFXContent`** — reads a JSFX file off disk (`fs.join` +
+  `GetResourcePath`) to parse its bus-aware desc. A filesystem read.
+- **Take guard** — `wm:deleteSource` counts a source track's media items
+  (`CountTrackMediaItems`) to refuse deleting authored takes. An item-count
+  query rm's track/FX vocabulary doesn't model.
+
+Everything else goes through rm: scratch liveness (`rm:track(scratchId)` in
+`pollUndo`), the live gain poke (above, via `assignFx`/`assignTrack`/
+`setSendGain`), and CU param reads (`rm:fx(id).params`).
 
 ## wiringOp
 

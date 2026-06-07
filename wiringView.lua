@@ -167,7 +167,7 @@ end
 function wv:samplerTrack(nodeId)
   local node = ensureView().nodes[nodeId]
   if not (node and node.fxId) then return nil end
-  return (wm:locateFx(node.fxId))
+  return wm:fxTrack(node.fxId)
 end
 
 --contract: atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped

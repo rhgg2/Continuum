@@ -80,14 +80,19 @@ arithmetic is the only reason this isn't a one-liner.
 
 ## Eager reads, with a lazy escape hatch
 
-`rm:tracks()` reads `params`, `pinMaps`, and `midi` for every fx eagerly,
-and `midi` decodes a state chunk per track. This is deliberate: clean first.
-If a reconcile-loop hotspot ever makes the per-fx decode cost real, those
-three fields are the ones to make lazy — and a single targeted
-`setSendGain(fromId, toId, gain)` primitive (addressed by the stable
-relationship, not a forged send id) is the planned answer for live
-fader-drag gain, which is too hot for the wholesale `assignTrack{sends}`
-diff. Neither is built until the hot path is concrete.
+`rm:tracks()` reads `pinMaps` and `midi` for every fx eagerly, and `midi`
+decodes a state chunk per track. `rm:fx(id)` is the single-fx counterpart —
+the same record for one guid, plus live `params` and the host `trackId` — for
+callers that hold a guid, not a track (wm's snapshot CU read, the sampler
+dive). Bulk reads stay params-free on purpose: reading every fx's params on
+every `tracks()` would be wasteful for fat plugins, so params are a per-fx,
+on-demand cost.
+
+Live fader-drag gain is too hot for the wholesale `assignTrack{sends}` diff,
+so `setSendGain(fromId, toId, gain)` writes one send's `D_VOL` directly,
+addressed by the stable relationship rather than a forged send id. The
+main-send drag rides `assignTrack{mainSend={gain}}` (a partial scalar write),
+and a CU edge rides `assignFx{params}`.
 
 ## Relationship to wiringManager
 

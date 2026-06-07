@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=366  sha=7b1dd64  mode=chunk
+@module wiringView  src=wiringView.lua  loc=366  sha=1694e27  mode=chunk
 @deps cm, wm
 
 # Invariants & contracts
@@ -125,10 +125,10 @@
   @use call    wm.enableLive  @ 135
   @use call    wm.errors  @ 338
   @use call    wm.fastGainCommit  @ 236
+  @use call    wm.fxTrack  @ 170
   @use call    wm.graph  @ 132
   @use call    wm.listInstalledFX  @ 155
   @use call    wm.load  @ 134
-  @use call    wm.locateFx  @ 170
   @use call    wm.mutate  @ 175, 185, 197, 204, 216, 237, 250
   @use call    wm.pokeEdgeGain  @ 236, 246
   @use call    wm.pollUndo  @ 136

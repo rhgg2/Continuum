@@ -32,7 +32,6 @@ local userGraph = nil
 local scratchId = nil     -- id of the hidden scratch track (wiringTracks['__scratch__']); reset by wm:load
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
 local lastScratchRaw = nil -- serialised graph last mirrored to scratch P_EXT; pollUndo compares against it
-local fxLocations = {}     -- fxId → {track, fxIdx}; restamped each applyOps so locateFx needn't sweep the project
 
 local SCRATCH_NAME = 'continuum: wiring scratch'
 local SCRATCH_KEY  = '__scratch__'
@@ -108,7 +107,7 @@ end
 
 -- True iff JSFX desc declares ext_midi_bus=1 (the FX scans midi_bus itself,
 -- escaping our allocator). Skips // comments; frontier prevents `=10` match.
-local function parseJsfxBusAware(content)
+local function parseJSFXBusAware(content)
   if not content then return false end
   for line in content:gmatch('[^\r\n]+') do
     local stripped = line:match('^%s*(.-)%s*$') or ''
@@ -126,7 +125,6 @@ end
 function wm:load()
   setGraph(readPersisted())
   scratchId      = nil
-  fxLocations    = {}
   ensureScratchTrack()
   fire('wiringChanged', { kind = 'load' })
 end
@@ -196,7 +194,7 @@ function wm:errors()
 end
 
 --contract: read JSFX desc file for ident from REAPER's Effects dir; nil if non-JS or read fails
-function wm:readJsfxContent(ident)
+function wm:readJSFXContent(ident)
   if not (ident and ident:sub(1, 3) == 'JS:') then return nil end
   local path = fs.join(reaper.GetResourcePath(), 'Effects/' .. ident:sub(4))
   local f = io.open(path, 'rb')
@@ -207,12 +205,12 @@ function wm:readJsfxContent(ident)
 end
 
 -- Exposed for unit tests; production paths use `wm:isUserAddRefused` below.
-wm.parseJsfxBusAware = parseJsfxBusAware
+wm.parseJSFXBusAware = parseJSFXBusAware
 
 --contract: refuses JSFX whose desc declares ext_midi_bus=1; nil on accept, structured err on refuse
 function wm:checkUserAddable(ident)
   if not (ident and ident:sub(1, 3) == 'JS:') then return nil end
-  if parseJsfxBusAware(self:readJsfxContent(ident)) then
+  if parseJSFXBusAware(self:readJSFXContent(ident)) then
     return { code = 'ext_midi_bus_user_fx', ident = ident }
   end
 end
@@ -223,9 +221,9 @@ function wm:instantiateFxOnScratch(ident)
   ensureScratchTrack()
   local fxId = rm:addFx(scratchId, { ident = ident })
   if not fxId then return { fxId = nil, ins = 0, outs = 0, inNames = {}, outNames = {} } end
-  local ports = rm:fxPorts(fxId)
-  ports.fxId = fxId
-  return ports
+  local rec = rm:fx(fxId)
+  return { fxId = fxId, ins = rec.ins, outs = rec.outs,
+           inNames = rec.inNames, outNames = rec.outNames }
 end
 
 --contract: id of the wiring scratch track without forcing creation; nil if none persisted yet
@@ -246,46 +244,10 @@ function wm:trackNames()
   return out
 end
 
--- Visit every (track, fxIdx) in the project, master chain last; stops early
--- when visit returns truthy.
-local function eachProjectFx(visit)
-  for i = 0, reaper.CountTracks(0) - 1 do
-    local track = reaper.GetTrack(0, i)
-    for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
-      if visit(track, fxIdx) then return end
-    end
-  end
-  local master = reaper.GetMasterTrack(0)
-  for fxIdx = 0, reaper.TrackFX_GetCount(master) - 1 do
-    if visit(master, fxIdx) then return end
-  end
-end
-
--- applyOps is the authoritative moment a guid's slot is known, so the index is
--- restamped there and locateFx reads it instead of sweeping on every call.
-local function rebuildFxLocations()
-  fxLocations = {}
-  eachProjectFx(function(track, fxIdx)
-    fxLocations[reaper.TrackFX_GetFXGUID(track, fxIdx)] = { track = track, fxIdx = fxIdx }
-  end)
-end
-
---contract: returns track, fxIdx for the instance guid or nil.
---contract: index-first (restamped at applyOps); sweeps once on miss/drift, repopulating.
-function wm:locateFx(fxId)
-  local hit = fxLocations[fxId]
-  if hit and reaper.TrackFX_GetFXGUID(hit.track, hit.fxIdx) == fxId then
-    return hit.track, hit.fxIdx
-  end
-  local foundTrack, foundIdx
-  eachProjectFx(function(track, fxIdx)
-    if reaper.TrackFX_GetFXGUID(track, fxIdx) == fxId then
-      foundTrack, foundIdx = track, fxIdx
-      return true
-    end
-  end)
-  fxLocations[fxId] = foundTrack and { track = foundTrack, fxIdx = foundIdx } or nil
-  return foundTrack, foundIdx
+--contract: raw MediaTrack hosting the fx instance guid, or nil if the guid isn't live.
+function wm:fxTrack(fxId)
+  local rec = rm:fx(fxId)
+  return rec and rm:reaperTrack(rec.trackId) or nil
 end
 
 --contract: floats the FX window for the instance guid; false if the guid is no longer live
@@ -417,51 +379,23 @@ end
 
 ----- Snapshot / target / diff (Stage 2)
 
--- Audio if I_MIDIFLAGS low-5-bits == 31 (midi disabled); midi if I_SRCCHAN
--- == -1 (audio disabled). Anything carrying both reads as 'audio' —
--- defensive; the differ doesn't model dual-stream sends.
-local function sendType(track, sendIdx)
-  local srcChan   = reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'I_SRCCHAN')
-  local midiFlags = reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'I_MIDIFLAGS')
-  local midiOff = (math.floor(midiFlags) % 32) == 31
-  if srcChan == -1 then return 'midi' end
-  if midiOff           then return 'audio' end
-  return 'audio'
-end
-
--- CU params live at stable slider indices; cache the {name=idx} map on
--- first sight so readCuParams doesn't re-enumerate per snap.
-local cuParamIdxCache = nil
-local function cuParamIdx(track, fxIdx)
-  if cuParamIdxCache then return cuParamIdxCache end
-  local out = {}
-  for p = 0, 31 do
-    local ok, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
-    if not ok then break end
-    out[name] = p
-  end
-  cuParamIdxCache = out
-  return out
-end
-
--- Live CU param mirror so fxOrderEq is honest (mode/bank drift drives reconcile,
--- not noise). rm:tracks() doesn't read params — the CU encoding is wm/CU-private.
-local function readCuParams(track, fxIdx)
-  local idx     = cuParamIdx(track, fxIdx)
-  local modeInt = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.mode) + 0.5)
+-- Decode CU slider floats (rm:fx params, by display name) into wm/CU vocabulary;
+-- only the meaningful subset per mode, so the snapshot diff ignores stale lanes.
+local function readCuParams(params)
+  local modeInt = math.floor(params.mode + 0.5)
   local modeStr = ({ [0] = 'busRoute', [1] = 'merge' })[modeInt] or 'merge'
   if modeStr == 'busRoute' then
     return { mode = modeStr,
-             from = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.from) + 0.5),
-             to   = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.to) + 0.5) }
+             from = math.floor(params.from + 0.5),
+             to   = math.floor(params.to + 0.5) }
   end
-  local nPairs = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.nPairs) + 0.5)
+  local nPairs = math.floor(params.nPairs + 0.5)
   local gains, inMask = {}, {}
-  for i = 1, nPairs do gains[i] = reaper.TrackFX_GetParam(track, fxIdx, idx['gain' .. i]) end
-  for i = 0, 3 do inMask[i + 1] = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx['inMask' .. i]) + 0.5) end
+  for i = 1, nPairs do gains[i] = params['gain' .. i] end
+  for i = 0, 3 do inMask[i + 1] = math.floor(params['inMask' .. i] + 0.5) end
   return { mode = modeStr, nPairs = nPairs, gains = gains,
-           audioSum = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.audioSum) + 0.5),
-           outBus   = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.outBus) + 0.5),
+           audioSum = math.floor(params.audioSum + 0.5),
+           outBus   = math.floor(params.outBus + 0.5),
            inMask   = inMask }
 end
 
@@ -529,8 +463,8 @@ function wm:snapshot()
     end
     if isJS(fx.ident) then
       if fx.ident == CU_IDENT then
-        local track, fxIdx = self:locateFx(fx.id)
-        if track then entry.params = flattenCuParams(readCuParams(track, fxIdx)) end
+        local params = rm:params(fx.id)
+        if params then entry.params = flattenCuParams(readCuParams(params)) end
       end
     else
       entry.midi = fx.midi
@@ -1072,7 +1006,6 @@ function wm:applyOps(ops, label)
     -- in REAPER (orphans were deleted in reconcileFXChain and dropped from graph).
     local owned = ownedGuidsFrom(userGraph)
     cm:set('project', 'wiringOwnedFx', owned)
-    rebuildFxLocations()
 
     -- wiringTracks now reflects this pass's create/delete; stamp the scratch entry
     -- and persist so trackKey→id addressing survives reload.
@@ -1118,26 +1051,6 @@ local function gainRouting()
   return routing
 end
 
--- Master isn't in CountTracks/GetTrack; probe it first or a master-resident CU misses every frame.
-local function pokeCuParam(guid, paramName, value)
-  local function probe(track)
-    if not track then return false end
-    for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
-      if reaper.TrackFX_GetFXGUID(track, fxIdx) == guid then
-        local pIdx = cuParamIdx(track, fxIdx)[paramName]
-        reaper.TrackFX_SetParam(track, fxIdx, pIdx, value)
-        return true
-      end
-    end
-    return false
-  end
-  if probe(reaper.GetMasterTrack(0)) then return true end
-  for i = 0, reaper.CountTracks(0) - 1 do
-    if probe(reaper.GetTrack(0, i)) then return true end
-  end
-  return false
-end
-
 -- trackKey → opaque id for the live-poke path: a source is self-keyed, newTracks/scratch
 -- resolve through wiringTracks, master through rm.
 local function idForKey(trackKey)
@@ -1150,25 +1063,16 @@ local function pokeGainTarget(target, gain)
   if target.kind == 'mergeCU' then
     local consumer = userGraph.nodes[target.consumerId]
     local guid = consumer and consumer.mergeGuids and consumer.mergeGuids[target.trackKey]
-    return guid ~= nil and pokeCuParam(guid, 'gain' .. target.slot, gain) or false
-  end
-  if target.kind == 'mainSend' then
-    local track = rm:reaperTrack(idForKey(target.cls))
-    if not track then return false end
-    reaper.SetMediaTrackInfo_Value(track, 'D_VOL', gain)
+    if not guid then return false end
+    rm:assignFx(guid, { params = { ['gain' .. target.slot] = gain } })
+    return true
+  elseif target.kind == 'mainSend' then
+    local id = idForKey(target.cls)
+    if not rm:reaperTrack(id) then return false end
+    rm:assignTrack(id, { mainSend = { gain = gain } })
     return true
   elseif target.kind == 'send' then
-    local src = rm:reaperTrack(idForKey(target.from))
-    local dst = rm:reaperTrack(idForKey(target.to))
-    if src and dst then
-      for i = 0, reaper.GetTrackNumSends(src, 0) - 1 do
-        if reaper.GetTrackSendInfo_Value(src, 0, i, 'P_DESTTRACK') == dst
-           and sendType(src, i) == 'audio' then
-          reaper.SetTrackSendInfo_Value(src, 0, i, 'D_VOL', gain)
-          return true
-        end
-      end
-    end
+    return rm:setSendGain(idForKey(target.from), idForKey(target.to), gain)
   end
   return false
 end
@@ -1185,16 +1089,16 @@ function wm:fastGainCommit(edgeIdx, gain)
   ensureLoaded()
   local edge = userGraph.edges[edgeIdx]
   if not edge or edge.type ~= 'audio' then return false end
-  reaper.Undo_BeginBlock()
-  edge.ops = edge.ops or {}
-  edge.ops.gain = gain
-  self:pokeEdgeGain(edgeIdx, gain)
-  self:save()
-  ensureScratchTrack()
-  local scratch = rm:reaperTrack(scratchId)
-  cm:writeTrackKey(scratch, 'wiringGraph', userGraph)
-  lastScratchRaw = cm:readTrackRaw(scratch)
-  reaper.Undo_EndBlock2(0, 'wiring: edge gain', -1)
+  rm:transaction('wiring: edge gain', function()
+    edge.ops = edge.ops or {}
+    edge.ops.gain = gain
+    self:pokeEdgeGain(edgeIdx, gain)
+    self:save()
+    ensureScratchTrack()
+    local scratch = rm:reaperTrack(scratchId)
+    cm:writeTrackKey(scratch, 'wiringGraph', userGraph)
+    lastScratchRaw = cm:readTrackRaw(scratch)
+  end)
   return true
 end
 

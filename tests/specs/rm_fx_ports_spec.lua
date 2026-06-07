@@ -1,6 +1,5 @@
--- routingManager scratch primitives: fxPorts (port-grouped IO + L/R-collapsed
--- names), addTrack{hidden}, and addFx's unknown-ident guard. These back wm's
--- scratch path (instantiate-to-probe, hidden scratch track).
+-- routingManager scratch + live-poke primitives: rm:fx, setSendGain, addTrack{hidden,defaults},
+-- addFx ident guard. Backs wm's scratch path and live gain poke.
 local t       = require('support')
 local harness = require('harness')
 local util    = require('util')
@@ -19,9 +18,13 @@ local function seedTrack(reaper, name)
   return track, reaper.GetTrackGUID(track)
 end
 
+local function sendGain(rm, id, to)
+  for _, s in ipairs(rm:track(id).sends) do if s.to == to then return s.gain end end
+end
+
 return {
   {
-    name = 'fxPorts reports ports (pins/2) and collapses L/R pin names to one port name',
+    name = 'fx() reports ports (pins/2), collapses L/R pin names, carries host trackId',
     run = function()
       local reaper, rm = mkRm()
       reaper:setFxIO('FX:comp', {
@@ -32,20 +35,51 @@ return {
       local _, tid = seedTrack(reaper, 'Bus')
       local id = rm:addFx(tid, { ident = 'FX:comp' })
 
-      local p = rm:fxPorts(id)
-      t.eq(p.ins, 2, 'two input ports from four pins')
-      t.eq(p.outs, 1, 'one output port from two pins')
-      t.deepEq(p.inNames,  { 'Main', 'Sidechain' }, 'L/R pairs collapse to the shared prefix')
-      t.deepEq(p.outNames, { 'Out' })
+      local fx = rm:fx(id)
+      t.eq(fx.id, id, 'record carries the fx guid')
+      t.eq(fx.ins, 2, 'two input ports from four pins')
+      t.eq(fx.outs, 1, 'one output port from two pins')
+      t.deepEq(fx.inNames,  { 'Main', 'Sidechain' }, 'L/R pairs collapse to the shared prefix')
+      t.deepEq(fx.outNames, { 'Out' })
+      t.eq(fx.trackId, tid, 'host trackId is the owning track')
+      t.eq(fx.params, nil, 'structural record carries no param values')
     end,
   },
   {
-    name = 'fxPorts on a gone id returns an empty shape',
+    name = 'params() reads live param values keyed by display name; unset reads 0',
+    run = function()
+      local reaper, rm = mkRm()
+      reaper:setFxIO('FX:cu', { ins = 2, outs = 2 })
+      reaper:setFxParamNames('FX:cu', { 'mode', 'gain1' })
+      local _, tid = seedTrack(reaper, 'Bus')
+      local id = rm:addFx(tid, { ident = 'FX:cu' })
+
+      rm:assignFx(id, { params = { gain1 = 0.25 } })
+      local params = rm:params(id)
+      t.eq(params.gain1, 0.25, 'written param reads back')
+      t.eq(params.mode, 0, 'unset param reads 0')
+    end,
+  },
+  {
+    name = 'fx() on a gone id returns nil',
     run = function()
       local _, rm = mkRm()
-      local p = rm:fxPorts('{NOPE}')
-      t.eq(p.ins, 0); t.eq(p.outs, 0)
-      t.deepEq(p.inNames, {}); t.deepEq(p.outNames, {})
+      t.eq(rm:fx('{NOPE}'), nil)
+      t.eq(rm:params('{NOPE}'), nil, 'params on a gone id is nil too')
+    end,
+  },
+  {
+    name = 'setSendGain sets the audio send D_VOL; false when no such send is live',
+    run = function()
+      local reaper, rm = mkRm()
+      local a, idA = seedTrack(reaper, 'Src')
+      local b, idB = seedTrack(reaper, 'Dst')
+      local _, idC = seedTrack(reaper, 'Unsent')
+      reaper:addSend(a, b, { type = 'audio', gain = 1.0 })
+
+      t.eq(rm:setSendGain(idA, idB, 0.3), true, 'found and set')
+      t.eq(sendGain(rm, idA, idB), 0.3, 'D_VOL updated')
+      t.eq(rm:setSendGain(idA, idC, 0.3), false, 'no send to idC → false')
     end,
   },
   {

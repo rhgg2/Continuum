@@ -11,15 +11,15 @@ local function mkWm(harness)
   return h, wm
  end
 
--- Test override of wm:readJsfxContent: maps ident → desc string. Production
+-- Test override of wm:readJSFXContent: maps ident → desc string. Production
 -- reads from REAPER's Effects dir; tests bypass io.
 local function seedJsfx(wm, byIdent)
-  wm.readJsfxContent = function(_, ident) return byIdent[ident] end
+  wm.readJSFXContent = function(_, ident) return byIdent[ident] end
 end
 
 local function parser()
   return util.instantiate('wiringManager', { cm = require('harness').mk().cm })
-           .parseJsfxBusAware
+           .parseJSFXBusAware
 end
 
 return {
@@ -126,11 +126,11 @@ spl0 *= 1;
     end,
   },
   {
-    name = 'addFxNode does not probe non-JSFX idents (no readJsfxContent call)',
+    name = 'addFxNode does not probe non-JSFX idents (no readJSFXContent call)',
     run = function(harness)
       local h, wm = mkWm(harness)
       local probed = false
-      wm.readJsfxContent = function() probed = true; return nil end
+      wm.readJSFXContent = function() probed = true; return nil end
       reaper:setFxIO('VST3:Comp', { ins = 2, outs = 2 })
       local id = wm:addFxNode(0, 0, { name = 'Comp', ident = 'VST3:Comp' })
       t.truthy(id)
@@ -142,7 +142,7 @@ spl0 *= 1;
     name = 'addFxNode accepts JSFX whose desc file is missing (read returns nil)',
     run = function(harness)
       local h, wm = mkWm(harness)
-      wm.readJsfxContent = function() return nil end
+      wm.readJSFXContent = function() return nil end
       reaper:setFxIO('JS:NoFile', { ins = 2, outs = 2 })
       local id, err = wm:addFxNode(0, 0, { name = 'NoFile', ident = 'JS:NoFile' })
       t.truthy(id, 'missing desc treated as non-bus-aware (accept)')

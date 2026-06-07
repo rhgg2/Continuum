@@ -1,5 +1,5 @@
 -- routingManager Phase 2: fx read. tracks() nests each track's fx chain as
--- records — id (fx guid), ident, display name, and pin counts.
+-- records — id (fx guid), ident, display name, and port counts (pins/2).
 local t       = require('support')
 local harness = require('harness')
 local util    = require('util')
@@ -24,7 +24,7 @@ end
 
 return {
   {
-    name = 'tracks() nests the fx chain: id, ident, name, pin counts',
+    name = 'tracks() nests the fx chain: id, ident, name, port counts',
     run = function()
       local reaper, rm = mkRm()
       local track = seedTrack(reaper, 'Synth')
@@ -43,13 +43,13 @@ return {
       t.eq(fx[1].id, '{FX-eq}', 'id is the fx guid')
       t.eq(fx[1].ident, 'VST3:ReaEQ', 'ident from fx_ident')
       t.eq(fx[1].name, 'VST3: ReaEQ (Cockos)', 'name from fx_name')
-      t.eq(fx[1].inPins, 2)
-      t.eq(fx[1].outPins, 2)
+      t.eq(fx[1].ins, 1)
+      t.eq(fx[1].outs, 1)
 
       t.eq(fx[2].id, '{FX-vol}')
       t.eq(fx[2].ident, 'JS:utility/volume')
-      t.eq(fx[2].inPins, 4)
-      t.eq(fx[2].outPins, 6)
+      t.eq(fx[2].ins, 2)
+      t.eq(fx[2].outs, 3)
     end,
   },
   {
