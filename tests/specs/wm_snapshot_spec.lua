@@ -8,24 +8,29 @@ local function mkWm(harness)
   return h, wm
 end
 
--- Seed a tagged source track on the project; returns the track + its GUID.
--- guid arg is the literal guid string fakeReaper will report for the track.
-local function seedSourceTrack(h, guid)
+-- Seed a source track + its graph node (production pairs them 1:1, so snapshot derives
+-- source identity from the node). guid is the literal guid fakeReaper reports.
+local function seedSourceTrack(h, wm, guid)
   local track = { __label = 'src:' .. guid }
   local list  = h.reaper._state.projectTracks
   list[#list+1] = track
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
+  wm:mutate(function(g)
+    g.nodes['src::' .. guid] = { kind='source', trackId=guid, pos={x=0,y=0},
+                                 ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
+  end)
   return track
 end
 
+-- newTracks have no graph node — their id lives in the wiringTracks map under trackKey.
 local function seedNewTrack(h, guid, trackKey)
   local track = { __label = 'new:' .. guid }
   local list  = h.reaper._state.projectTracks
   list[#list+1] = track
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringTrackKind', 'newTrack')
-  h.cm:writeTrackKey(track, 'wiringTrack',    trackKey)
+  local wt = h.cm:get('wiringTracks') or {}
+  wt[trackKey] = guid
+  h.cm:set('project', 'wiringTracks', wt)
   return track
 end
 
@@ -55,7 +60,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local track = seedSourceTrack(h, 'guid-A')
+      local track = seedSourceTrack(h, wm, 'guid-A')
       local snap  = wm:snapshot()
       t.truthy(snap['guid-A'],            'entry under track-guid trackKey')
       t.eq(snap['guid-A'].trackKind, 'sourceTrack')
@@ -70,12 +75,11 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local track = seedSourceTrack(h, 'guid-A')
+      local track = seedSourceTrack(h, wm, 'guid-A')
       seedFx(h, track, 'JS:owned',   '{FX-1}')
       seedFx(h, track, 'JS:foreign', '{FX-foreign}')
       -- Seed user graph with a node carrying fxId='{FX-1}' only.
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxId='{FX-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
       end)
@@ -90,15 +94,14 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local track = seedSourceTrack(h, 'guid-A')
+      local track = seedSourceTrack(h, wm, 'guid-A')
       seedFx(h, track, 'JS:owned',             '{FX-1}')
       seedFx(h, track, 'JS:Continuum Utility', '{CU-1}')
       h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'from', 'to' })
       local ok, err = wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxId='{FX-1}', midiInBracketGuid='{CU-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
-        util.add(g.edges, { type='audio', from='s', to='f', ops={gain=0.5} })
+        util.add(g.edges, { type='audio', from='src::guid-A', to='f', ops={gain=0.5} })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)
       t.truthy(ok, 'mutate ok: ' .. tostring(err and err.code))
@@ -115,8 +118,8 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local src = seedSourceTrack(h, 'guid-A')
-      local dst = seedSourceTrack(h, 'guid-B')
+      local src = seedSourceTrack(h, wm, 'guid-A')
+      local dst = seedSourceTrack(h, wm, 'guid-B')
       local foreign = { __label = 'foreign' }
       h.reaper._state.projectTracks[#h.reaper._state.projectTracks+1] = foreign
       h.reaper._state.trackGuids[foreign] = 'guid-foreign'
@@ -150,7 +153,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local track = seedSourceTrack(h, 'guid-A')
+      local track = seedSourceTrack(h, wm, 'guid-A')
       h.reaper.SetMediaTrackInfo_Value(track, 'B_MAINSEND', 0)
       local snap = wm:snapshot()
       t.eq(snap['guid-A'].mainSend.on, false)
@@ -161,8 +164,8 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local src = seedSourceTrack(h, 'guid-A')
-      local dst = seedSourceTrack(h, 'guid-B')
+      local src = seedSourceTrack(h, wm, 'guid-A')
+      local dst = seedSourceTrack(h, wm, 'guid-B')
       h.reaper:addSend(src, dst, { type = 'audio', gain = 0.5 })
       h.reaper:addSend(src, dst, { type = 'midi'  })
       local snap = wm:snapshot()
@@ -177,8 +180,8 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local src = seedSourceTrack(h, 'guid-A')
-      local dst = seedSourceTrack(h, 'guid-B')
+      local src = seedSourceTrack(h, wm, 'guid-A')
+      local dst = seedSourceTrack(h, wm, 'guid-B')
       h.reaper:addSend(src, dst, { type = 'audio' })
       h.reaper:addSend(src, dst, { type = 'audio' })
       h.reaper.SetTrackSendInfo_Value(src, 0, 0, 'I_SENDMODE', 1)
@@ -196,7 +199,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local track = seedSourceTrack(h, 'guid-A')
+      local track = seedSourceTrack(h, wm, 'guid-A')
       h.reaper.SetMediaTrackInfo_Value(track, 'D_VOL', 0.25)
       local snap = wm:snapshot()
       t.eq(snap['guid-A'].mainSend.gain, 0.25)
@@ -207,7 +210,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local track = seedSourceTrack(h, 'guid-A')
+      local track = seedSourceTrack(h, wm, 'guid-A')
       h.reaper.SetMediaTrackInfo_Value(track, 'I_NCHAN', 6)
       local snap = wm:snapshot()
       t.eq(snap['guid-A'].nchan, 6)
@@ -218,7 +221,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local track = seedSourceTrack(h, 'guid-A')
+      local track = seedSourceTrack(h, wm, 'guid-A')
       h.reaper.SetMediaTrackInfo_Value(track, 'C_MAINSEND_OFFS', 2)
       local snap = wm:snapshot()
       t.eq(snap['guid-A'].mainSend.tgtOffset, 2)
@@ -232,7 +235,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local track = seedSourceTrack(h, 'guid-A')
+      local track = seedSourceTrack(h, wm, 'guid-A')
       h.reaper.SetMediaTrackInfo_Value(track, 'C_MAINSEND_NCH', 2)
       local snap = wm:snapshot()
       t.eq(snap['guid-A'].mainSend.nchan, 2)
@@ -246,7 +249,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local track = seedSourceTrack(h, 'guid-A')
+      local track = seedSourceTrack(h, wm, 'guid-A')
       h.reaper:setFxIO('JS:owned', { ins = 4, outs = 4 })
       local fxIdx = seedFx(h, track, 'JS:owned', '{FX-1}')
       -- in port 1 (pins 0,1) → pair 2 (channels 2,3); in port 2 disconnected.
@@ -260,7 +263,6 @@ return {
       h.reaper.TrackFX_SetPinMappings(track, fxIdx, 1, 2, 1 << 0, 0)
       h.reaper.TrackFX_SetPinMappings(track, fxIdx, 1, 3, 1 << 1, 0)
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxId='{FX-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
       end)

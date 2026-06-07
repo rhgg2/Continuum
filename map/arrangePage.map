@@ -1,62 +1,59 @@
-@module arrangePage  src=arrangePage.lua  loc=70  sha=8c6a3ba  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=65  sha=accbcb5  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, facade
 
 # Imports
   @require util = 'util'  @ 12
       @contract  constructs the substack (am local, only av leaves); the renderer is handed av, never am
       @contract  arrange is project-wide — bind() takes no take and never re-keys cm
-      @contract  render hooks delegate to arrangeRender; revealTake/seedCursor drive av directly
+      @contract  render hooks delegate to arrangeRender; seedCursor drive av directly
 
 # Constructed sub-instances
   @construct am = util.instantiate('arrangeManager')  @ 23
   @construct av = util.instantiate('arrangeView')  @ 24
-  @construct ar = util.instantiate('arrangeRender')  @ 26
+  @construct ar = util.instantiate('arrangeRender')  @ 25
 
 # Private state
-  @state ap = {}  @ 29
+  @state ap = {}  @ 27
 
 # Public API (ap:*)
   -- Page lifecycle — arrange is project-wide, so bind takes no take
-  @api ap:bind()  @ 36
+  @api ap:bind()  @ 34
       @contract  bind takes no take — arrange is project-wide; coord may call with nil or a take.
-  @api ap:unbind()  @ 37
-  @api ap:revealTake(reaperTake)  @ 40
-      @contract  positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
-  @api ap:seedCursorFromReaper()  @ 43
+  @api ap:unbind()  @ 35
+  @api ap:seedCursorFromReaper()  @ 38
       @contract  seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
   -- Arrange service surface — av passthroughs; newTakeBelow opens a modal in the renderer
   -- Page interface — render delegates to the renderer
-  @api ap:renderToolbarBits(ctx)  @ 65
-  @api ap:renderBody(_, w, h, dispatch)  @ 66
-  @api ap:renderStatusBar(ctx)  @ 67
-  @api ap:focusState()  @ 68
+  @api ap:renderToolbarBits(ctx)  @ 60
+  @api ap:renderBody(_, w, h, dispatch)  @ 61
+  @api ap:renderStatusBar(ctx)  @ 62
+  @api ap:focusState()  @ 63
 
 # Uses (outbound edges)
-  @use call    arrangeRender.focusState  @ 68
-  @use call    arrangeRender.newTakeBelow  @ 58
-  @use call    arrangeRender.renderBody  @ 66
-  @use call    arrangeRender.renderStatusBar  @ 67
-  @use call    arrangeRender.renderToolbarBits  @ 65
-  @use call    arrangeView.currentSlotIdx  @ 49
-  @use call    arrangeView.currentTake  @ 47
-  @use call    arrangeView.currentTrackHasTakes  @ 50
-  @use call    arrangeView.cursorCol  @ 48
-  @use call    arrangeView.duplicateUnpooledFocusedBelow  @ 59
-  @use call    arrangeView.gotoTake  @ 55
-  @use call    arrangeView.gotoTrack  @ 54
-  @use call    arrangeView.keyForSlot  @ 53
-  @use call    arrangeView.midiSlots  @ 52
-  @use call    arrangeView.pickTake  @ 57
-  @use call    arrangeView.pickTrack  @ 56
-  @use call    arrangeView.projectTracks  @ 51
-  @use call    arrangeView.reswingAll  @ 60
-  @use call    arrangeView.revealTake  @ 40
-  @use call    arrangeView.seedCursor  @ 43
-  @use call    arrangeView.takesUsing  @ 61
-  @use call    facade.publish  @ 46
-  @use call    util.instantiate  @ 23, 24, 26
+  @use call    arrangeRender.focusState  @ 63
+  @use call    arrangeRender.newTakeBelow  @ 53
+  @use call    arrangeRender.renderBody  @ 61
+  @use call    arrangeRender.renderStatusBar  @ 62
+  @use call    arrangeRender.renderToolbarBits  @ 60
+  @use call    arrangeView.currentSlotIdx  @ 44
+  @use call    arrangeView.currentTake  @ 42
+  @use call    arrangeView.currentTrackHasTakes  @ 45
+  @use call    arrangeView.cursorCol  @ 43
+  @use call    arrangeView.duplicateUnpooledFocusedBelow  @ 54
+  @use call    arrangeView.gotoTake  @ 50
+  @use call    arrangeView.gotoTrack  @ 49
+  @use call    arrangeView.keyForSlot  @ 48
+  @use call    arrangeView.midiSlots  @ 47
+  @use call    arrangeView.pickTake  @ 52
+  @use call    arrangeView.pickTrack  @ 51
+  @use call    arrangeView.projectTracks  @ 46
+  @use call    arrangeView.reswingAll  @ 55
+  @use call    arrangeView.seedCursor  @ 38
+  @use call    arrangeView.takesUsing  @ 56
+  @use call    facade.publish  @ 41
+  @use call    util.instantiate  @ 23, 24, 25
   @use require arrangeManager  @ 23
-  @use require arrangeRender  @ 26
+  @use require arrangeRender  @ 25
   @use require arrangeView  @ 24
   @use require util  @ 12
 

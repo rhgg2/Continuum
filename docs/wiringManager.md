@@ -73,10 +73,10 @@ Three rules keep instance churn minimal and state-preserving:
 - **Mint on a scratch track.** `wm:addFxNode` instantiates the FX
   immediately via `instantiateFxOnScratch`, so the node has a real
   `fxId` (and probed I/O) before it is ever hosted. The scratch track
-  is a hidden REAPER track tagged `wiringScratch='1'`, found-or-created
-  lazily; it also parks FX whose `srcSet` is empty (disconnected, or
-  inert `__scratch__` nodes) so they exist without polluting the audible
-  topology.
+  is a hidden REAPER track whose id is persisted in
+  `wiringTracks['__scratch__']`, found-or-created lazily; it also parks
+  FX whose `srcSet` is empty (disconnected, or inert `__scratch__`
+  nodes) so they exist without polluting the audible topology.
 - **Track change is a move, not a re-create.** When the partition
   reassigns a node to a different track, the applier issues
   `rm:assignFx{track}` (a move, not delete+add) — plugin state (params,
@@ -169,30 +169,31 @@ certain fields exist and which side fills them:
 ## createSourceTrack
 
 `wm:createSourceTrack` is called outside the `mutate` transaction — it
-inserts a raw REAPER track immediately, bypassing clone/validate/swap.
-The trackKey for source hosts is the track's own GUID (a singleton class:
-one physical track per source node), so no separate `wiringTrack` ExtState
-key is needed to carry it; `wm:snapshot` derives the trackKey directly
-from the track's rm `id` (which is its guid).
+inserts a track via `rm:addTrack` immediately, bypassing
+clone/validate/swap, and returns its id. The trackKey for a source host
+is the track's own id (a singleton class: one physical track per source
+node), so it needs no `wiringTracks` entry; `wm:snapshot` derives the
+trackKey from the graph's `source` nodes (`node.trackId`), which is that id.
 
 ## diff op ordering
 
 `wm:diff` emits ops in a fixed order so the applier can apply them
 without look-ahead:
 
-1. **creates** — fresh tracks exist before any `setSends` references them.
-2. **trackKey-transition drains** — old extstate cleared before the key
-   moves to a new track.
-3. **setFXChain / setMainSend / setSends / setExtState** — per-track state
-   written after identity is stable.
-4. **deletes** — tracks removed last, after sends pointing at them are gone.
+1. **creates** — fresh tracks exist before any `setSends` references them;
+   the applier records each new track's id in `wiringTracks[trackKey]`.
+2. **cross-track FX moves** — relocated before per-track `setFXChain`.
+3. **setFXChain / setMainSend / setSends** — per-track state written after
+   identity is stable.
+4. **deletes** — tracks removed last (clearing their `wiringTracks` entry),
+   after sends pointing at them are gone.
 
 snap entries absent from target, entries whose `trackKind` changed, and
 `trackKind='newTrack'` entries are deleted. `sourceTrack`, `scratch`, and
 `master` are project artefacts — never deleted, but drained on a trackKey
 transition. `setFXChain`/`setMainSend`/`setSends` ops carry `trackKind` so
-the applier can resolve master (which has no `wiringTrack` ExtState tag)
-without a tagged GUID.
+the applier can resolve master (which has no `wiringTracks` entry) without
+a host id.
 
 ## pokeEdgeGain routing
 
@@ -217,6 +218,28 @@ is stamped onto the consumer node so reconciles are idempotent, and the CU
 retracts when the fan-in drops back to a single feeder. Cross-track MIDI sends
 instead coalesce onto one dest bus with no CU (see `docs/DAG.md § MIDI`).
 
+## The addressing map
+
+wm and rm speak different names for a track. rm hands out an opaque `id`;
+wm thinks in `trackKey` (the partition class a node belongs to, computed by
+DAG before any track exists). `wiringTracks` is the bridge: a project-tier
+`{ trackKey → id }` map persisted alongside `wiringGraph`/`wiringOwnedFx`.
+
+- **Sources** are *not* in the map. A source is a singleton class, so its
+  trackKey *is* its id; an unmapped key resolves to itself. snapshot recovers
+  source identity from the graph's `source` nodes (`node.trackId`).
+- **newTracks** are emergent merge classes with no 1:1 graph node, so the
+  applier stamps `wiringTracks[trackKey] = id` when it mints the track and
+  clears it on delete.
+- **Scratch** rides the map under `wiringTracks['__scratch__']`.
+- **Master** is absent; resolvers special-case it to `rm:masterId()`.
+
+The map is written only by `applyOps`, inside the `rm:transaction`, so the
+REAPER undo that captures the FX/track ops also captures the addressing — and
+it is mirrored to the scratch track's P_EXT for the same reason (project-tier
+`SetProjExtState` does not reverse with native undo; see `pollUndo`). The
+id→handle bridge for the few raw ops below is `rm:reaperTrack(id)`.
+
 ## The reaper seam
 
 The reconcile pipeline routes every topology read and write through rm, so
@@ -224,19 +247,14 @@ wm names tracks and FX by record `id`, never a handle. What raw `reaper.*`
 remains is a small, deliberate residue — the things rm's record vocabulary
 cannot express because they are wm-private:
 
-- **`eachTrack`** — one `CountTracks`/`GetTrack`/`GetTrackGUID` scan. wm's
-  trackKey↔guid↔handle addressing and the scratch/source ext-state tags
-  hang off a raw `MediaTrack` handle, which rm refuses to expose, so the
-  scan that resolves them stays wm's. Every other reaper enumeration folded
-  into this one.
-- **Scratch handle + `ValidatePtr2`** — `pollUndo` watches the scratch
-  track's liveness to detect an undo past its creation. That is a handle
-  identity check, not a routing op.
+- **Scratch liveness** — `pollUndo` checks `rm:track(scratchId)` to detect an
+  undo past the scratch's creation. An id liveness check, not a routing op.
 - **The live poke path** (`pokeEdgeGain`/`fastGainCommit`/`pokeCuParam`) —
   a fader drag writes one param or `D_VOL` per frame, too hot for the
-  wholesale `rm:assignTrack{sends}` diff. It stays a direct
-  `TrackFX_SetParam`/`SetTrackSendInfo` until the cost proves it needs a
-  targeted rm primitive (see `docs/routingManager.md § Eager reads`).
+  wholesale `rm:assignTrack{sends}` diff. It resolves the host via
+  `rm:reaperTrack(idForKey(...))` then writes `TrackFX_SetParam`/
+  `SetTrackSendInfo` directly, until the cost proves it needs a targeted rm
+  primitive (see `docs/routingManager.md § Eager reads`).
 - **`readCuParams`** — the CU's slider layout is wm/CU-private; rm reads
   generic params but not this app-specific encoding.
 - **`readJsfxContent`** — reads a JSFX file off disk (via `fs`), not the
@@ -247,7 +265,8 @@ cannot express because they are wm-private:
 `wiringOp` records are full-replace ops emitted by the compiler and consumed
 by the applier. Each has an `op` field and additional keys depending on kind:
 
-- **`createTrack`** / **`deleteTrack`** — carry `trackKey` and `trackKuid`.
+- **`createTrack`** carries `trackKey`; **`deleteTrack`** carries `trackId`
+  and `trackKey` (to clear its `wiringTracks` entry).
 - **`setFXChain`** — carries `fxChain` (array of `snapshotFxEntry`). Entries
   with `fxId=nil` mean "instantiate `ident`, stamp GUID back to graph"
   (handled by the applier).
@@ -261,4 +280,3 @@ by the applier. Each has an `op` field and additional keys depending on kind:
 - **`setMainSend`** — carries `mainSend` bool, plus `offs` (C_MAINSEND_OFFS)
   and `nch=2` (C_MAINSEND_NCH) when `mainSend=true`.
 - **`setSends`** — carries `sends` (array of `snapshotSend`).
-- **`setExtState`** — carries `key` and `value` for track ExtState writes.

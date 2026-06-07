@@ -38,8 +38,8 @@ local MERGE_WIDTH = 16
 -- Per-track stream capacity: 64 audio pairs, 128 MIDI buses (REAPER ceilings).
 local CAPACITY = { audio = 64, midi = 128 }
 
--- Stable trackKey for the master-hosted class: wm:snapshot can't tag the REAPER
--- master with a project-scoped wiringTrack, so target and snapshot agree on this.
+-- Stable trackKey for the master-hosted class: the REAPER master carries no
+-- wiringTracks entry, so target and snapshot agree on this synthetic key.
 local MASTER = '__master__'
 
 local M = {}

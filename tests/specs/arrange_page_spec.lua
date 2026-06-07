@@ -39,6 +39,9 @@ local fakeFacade = {
     if name == 'tracker' then
       return { openTakeProperties = function(item) captured.props = item end }
     end
+    if name == 'wiring' then
+      return { isScratchTrack = function() return false end }
+    end
     return {}
   end,
 }

@@ -17,7 +17,6 @@ local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
   return track
 end
 
@@ -88,16 +87,20 @@ return {
     end,
   },
   {
-    name = 'addSourceNode mints a standalone source node backed by a tagged sourceTrack',
+    name = 'addSourceNode mints a standalone source node backed by a real source track',
     run = function(harness)
       local h, wm = mkWm(harness)
       local id    = wm:addSourceNode{ name = 'Bass', pos = { x = 7, y = 9 } }
       local node  = wm:graph().nodes[id]
       t.eq(node.kind, 'source', 'node is a source')
       t.eq(node.displayName, 'Bass')
-      local track = wm:trackByGuid(node.trackId)
-      t.eq(track ~= nil, true, 'source track exists for the node guid')
-      t.eq(h.cm:readTrackKey(track, 'wiringTrackKind'), 'sourceTrack', 'track tagged sourceTrack')
+      local track
+      for i = 0, h.reaper.CountTracks(0) - 1 do
+        local tr = h.reaper.GetTrack(0, i)
+        if h.reaper.GetTrackGUID(tr) == node.trackId then track = tr end
+      end
+      t.truthy(track, 'source track exists for the node id')
+      t.eq(wm:isScratchTrack(track), false, 'and it is not the scratch track')
     end,
   },
   {

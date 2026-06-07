@@ -181,7 +181,7 @@ return {
   ----- diff: creation path
 
   {
-    name = "diff: target-only newTrack trackKey emits createTrack + setFXChain + setSends + setExtState writes",
+    name = "diff: target-only newTrack trackKey emits createTrack + setFXChain + setSends (id lives in wiringTracks)",
     run = function(harness)
       local _, wm = mkWm(harness)
       local target = {
@@ -201,15 +201,11 @@ return {
       t.eq(ops.setFXChain[1].fx[1].id, nil, 'unmaterialised → nil id')
       t.eq(#ops.setSends, 1)
       t.eq(ops.setSends[1].sends[1].to, 'guid-X')
-      -- setExtState: wiringTrackKind + wiringTrack (newTrack writes both).
-      local extKeys = {}
-      for _, op in ipairs(ops.setExtState or {}) do extKeys[op.key] = op.value end
-      t.eq(extKeys.wiringTrackKind, 'newTrack')
-      t.eq(extKeys.wiringTrack,    'guid-A|guid-B')
+      t.eq(ops.setExtState, nil, 'no ext-state op — addressing is the wiringTracks map')
     end,
   },
   {
-    name = "diff: target-only sourceTrack trackKey writes only wiringTrackKind (trackKey ≡ id)",
+    name = "diff: target-only sourceTrack trackKey emits no createTrack and no ext-state op (trackKey ≡ id)",
     run = function(harness)
       local _, wm = mkWm(harness)
       local target = {
@@ -218,10 +214,7 @@ return {
       }
       local ops = byOp(wm:diff(target, {}))
       t.eq(ops.createTrack, nil, 'source tracks pre-exist; no createTrack')
-      local extKeys = {}
-      for _, op in ipairs(ops.setExtState or {}) do extKeys[op.key] = op.value end
-      t.eq(extKeys.wiringTrackKind, 'sourceTrack')
-      t.eq(extKeys.wiringTrack,    nil,           'no redundant wiringTrack write')
+      t.eq(ops.setExtState, nil, 'source identity is its own id; no marker op')
     end,
   },
   {
@@ -370,7 +363,6 @@ return {
       h.reaper._state.projectTracks[#h.reaper._state.projectTracks+1] = track
       h.reaper._state.trackGuids[track] = 'guid-A'
       h.reaper.SetMediaTrackInfo_Value(track, 'C_MAINSEND_NCH', 2)  -- Continuum-managed parent send
-      h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
       local fxIdx = h.reaper.TrackFX_AddByName(track, 'JS:foo', false, -1)
       h.reaper:setFxGuid(track, fxIdx, '{FX-1}')
       -- Seed user graph to match.

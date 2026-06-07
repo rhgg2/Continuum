@@ -15,7 +15,6 @@ local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
   return track
 end
 
@@ -68,13 +67,12 @@ return {
                             fromPort = 1, toPort = 1 })
       end)
 
-      local scratch = h.reaper.findScratchTrack and h.reaper.findScratchTrack()
-                      or reaper.GetTrack(0, 0)
-      -- After seeding the source track, scratch may sit at a different
-      -- project index. Locate it by the wiringScratch cm tag.
+      -- After seeding the source track, scratch may sit at a different project
+      -- index. Locate it by its persisted id (wm:scratchId), not position.
+      local scratch
       for i = 0, reaper.CountTracks(0) - 1 do
         local tr = reaper.GetTrack(0, i)
-        if h.cm:readTrackKey(tr, 'wiringScratch') == '1' then scratch = tr; break end
+        if wm:isScratchTrack(tr) then scratch = tr; break end
       end
       t.eq(reaper.TrackFX_GetCount(scratch),     0, 'scratch drained — instance moved off')
       t.eq(reaper.TrackFX_GetCount(sourceTrack), 1, 'source track now hosts the fx')

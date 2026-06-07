@@ -79,14 +79,14 @@ return {
     end,
   },
   {
-    name = 'wm:load() creates the scratch track; second load reuses it (cm wiringScratch tag)',
+    name = 'wm:load() creates the scratch track; second load reuses it (id in wiringTracks)',
     run = function(harness)
       local h, wm = mkWm(harness)
       t.eq(reaper.CountTracks(0), 0, 'no tracks before load')
       wm:load()
       t.eq(reaper.CountTracks(0), 1, 'scratch track created')
       local first = reaper.GetTrack(0, 0)
-      t.eq(h.cm:readTrackKey(first, 'wiringScratch'), '1', 'tagged via cm')
+      t.eq(wm:isScratchTrack(first), true, 'recognised as the scratch track')
 
       wm:load()
       t.eq(reaper.CountTracks(0), 1, 'second load found the existing scratch')

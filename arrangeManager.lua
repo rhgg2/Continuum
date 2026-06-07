@@ -19,7 +19,7 @@
 local util    = require 'util'
 local painter = require 'painter'
 
-local cm, tm = (...).cm, (...).tm
+local cm, tm, facade = (...).cm, (...).tm, (...).facade
 
 local am = {}
 
@@ -223,9 +223,11 @@ end
 
 ----- Discovery
 
--- see docs/arrangeManager.md § trackIdx
+-- The wiring scratch track is a hidden FX-park track; arrange hides it by asking the
+-- wiring facade (wm owns the id→track bridge). see docs/arrangeManager.md § trackIdx
 local function isVisibleTrack(track)
-  return cm:readTrackKey(track, 'wiringScratch') ~= '1'
+  local wiring = facade and facade.get('wiring')
+  return not (wiring and wiring.isScratchTrack(track))
 end
 
 local function visibleTrackOfCol(col)

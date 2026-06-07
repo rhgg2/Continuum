@@ -1,5 +1,5 @@
-@module wiringPage  src=wiringPage.lua  loc=52  sha=7b1dd64  mode=chunk
-@deps cm, cmgr, chrome, gui, modalHost
+@module wiringPage  src=wiringPage.lua  loc=56  sha=242c273  mode=chunk
+@deps cm, cmgr, chrome, gui, modalHost, facade
 
 # Imports
   @require util = 'util'  @ 12
@@ -14,32 +14,34 @@
   @construct wr = util.instantiate('wiringRender')  @ 27
 
 # Private state
-  @state wp = {}  @ 30
+  @state wp = {}  @ 34
 
 # Public API (wp:*)
   -- Page lifecycle — wiring is project-wide, so bind takes no take
-  @api wp:bind()  @ 37
+  @api wp:bind()  @ 41
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 38
-  @api wp:enableLive()  @ 41
+  @api wp:unbind()  @ 42
+  @api wp:enableLive()  @ 45
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
-  @api wp:tick()  @ 44
+  @api wp:tick()  @ 48
       @contract  per-frame poll; drives wm:pollUndo to detect REAPER undo/redo of wiring gestures (scratch P_EXT divergence) and re-issue wiringChanged{kind='load'}. Called from coordinator.frame regardless of which page is active.
   -- Page interface — render delegates to the renderer
-  @api wp:renderToolbarBits(ctx)  @ 47
-  @api wp:renderBody(ctx, w, h, dispatch)  @ 48
-  @api wp:renderStatusBar(ctx)  @ 49
-  @api wp:focusState()  @ 50
+  @api wp:renderToolbarBits(ctx)  @ 51
+  @api wp:renderBody(ctx, w, h, dispatch)  @ 52
+  @api wp:renderStatusBar(ctx)  @ 53
+  @api wp:focusState()  @ 54
 
 # Uses (outbound edges)
+  @use call    facade.publish  @ 32
   @use call    util.instantiate  @ 23, 24, 25, 27
-  @use call    wiringRender.closeTransients  @ 38
-  @use call    wiringRender.focusState  @ 50
-  @use call    wiringRender.renderBody  @ 48
-  @use call    wiringRender.renderStatusBar  @ 49
-  @use call    wiringRender.renderToolbarBits  @ 47
-  @use call    wiringView.enableLive  @ 41
-  @use call    wiringView.pollUndo  @ 44
+  @use call    wiringManager.isScratchTrack  @ 32
+  @use call    wiringRender.closeTransients  @ 42
+  @use call    wiringRender.focusState  @ 54
+  @use call    wiringRender.renderBody  @ 52
+  @use call    wiringRender.renderStatusBar  @ 53
+  @use call    wiringRender.renderToolbarBits  @ 51
+  @use call    wiringView.enableLive  @ 45
+  @use call    wiringView.pollUndo  @ 48
   @use require routingManager  @ 23
   @use require util  @ 12
   @use require wiringManager  @ 24

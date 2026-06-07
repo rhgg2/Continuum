@@ -13,7 +13,6 @@ local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
   return track
 end
 
@@ -31,9 +30,10 @@ local function audioEdge(from, to)
   return { type='audio', from=from, to=to }
 end
 
-local function scratchOf(h)
+local function scratchOf(h, wm)
+  local id = wm:scratchId()
   for _, tr in ipairs(h.reaper._state.projectTracks) do
-    if h.cm:readTrackKey(tr, 'wiringScratch') == '1' then return tr end
+    if h.reaper.GetTrackGUID(tr) == id then return tr end
   end
 end
 
@@ -50,7 +50,7 @@ return {
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
-      local mirrored = h.cm:readTrackKey(scratchOf(h), 'wiringGraph')
+      local mirrored = h.cm:readTrackKey(scratchOf(h, wm), 'wiringGraph')
       t.truthy(mirrored, 'scratch P_EXT carries wiringGraph')
       t.truthy(mirrored.nodes.f, 'mirror has the fx node')
       t.truthy(mirrored.nodes.f.fxId, 'mirror includes stamped fxId')
@@ -64,7 +64,7 @@ return {
       wm:enableLive()
       -- Pre-undo state: graph has just source.
       wm:mutate(function(g) g.nodes.s = source('guid-A') end)
-      local preUndoGraph = util.deepClone(h.cm:readTrackKey(scratchOf(h), 'wiringGraph'))
+      local preUndoGraph = util.deepClone(h.cm:readTrackKey(scratchOf(h, wm), 'wiringGraph'))
 
       -- Extend the graph (this is the "gesture" the user will then undo).
       wm:mutate(function(g)
@@ -77,7 +77,7 @@ return {
       -- Simulate REAPER undo: scratch P_EXT rewinds to its pre-gesture content.
       -- (In production, Undo_BeginBlock captures the P_EXT change inside the
       -- applyOps block, and cmd-Z rewinds it.)
-      h.cm:writeTrackKey(scratchOf(h), 'wiringGraph', preUndoGraph)
+      h.cm:writeTrackKey(scratchOf(h, wm), 'wiringGraph', preUndoGraph)
 
       local loadFires = 0
       wm:subscribe('wiringChanged', function(payload)
@@ -112,7 +112,7 @@ return {
       seedSource(h, 'guid-A')
       wm:enableLive()
       wm:mutate(function(g) g.nodes.s = source('guid-A') end)
-      local scratch = scratchOf(h)
+      local scratch = scratchOf(h, wm)
       t.truthy(scratch, 'scratch exists post-apply')
 
       -- External deletion (manual delete in REAPER, or undo past scratch creation).

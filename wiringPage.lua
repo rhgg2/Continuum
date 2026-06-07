@@ -15,8 +15,8 @@ if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
 end
 
-local cm, cmgr, chrome, gui, modalHost =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost
+local cm, cmgr, chrome, gui, modalHost, facade =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
 
 -- rm/wm stay local to this chunk; only wv leaves, handed to the renderer, so the
 -- renderer can't reach wm/rm — every graph query and mutation flows through wv.
@@ -26,6 +26,10 @@ local wv = util.instantiate('wiringView',    { cm = cm, cmgr = cmgr, wm = wm })
 
 local wr = util.instantiate('wiringRender',
   { wv = wv, cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
+
+-- Published for arrange (and any page) to hide the hidden scratch track without
+-- reaching into wm/rm — wm owns the id→track bridge.
+facade.publish('wiring', { isScratchTrack = function(track) return wm:isScratchTrack(track) end })
 
 local wp = {}
 

@@ -20,8 +20,19 @@ local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
   h.reaper._state.trackGuids[track] = guid
-  h.cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
   return track
+end
+
+-- Locate the realised newTrack by its wiringTracks entry (non-scratch key).
+local function findNewTrack(h)
+  for key, id in pairs(h.cm:get('wiringTracks') or {}) do
+    if key ~= '__scratch__' then
+      for i = 0, h.reaper.CountTracks(0) - 1 do
+        local tr = h.reaper.GetTrack(0, i)
+        if h.reaper.GetTrackGUID(tr) == id then return tr end
+      end
+    end
+  end
 end
 
 local function source(guid)
@@ -194,13 +205,7 @@ return {
         -- it on REAPER's master, so no newTrack/sends would be emitted.
       end)
       apply(wm)
-      local newTrack
-      for i = 0, h.reaper.CountTracks(0) - 1 do
-        local tr = h.reaper.GetTrack(0, i)
-        if h.cm:readTrackKey(tr, 'wiringTrackKind') == 'newTrack' then
-          newTrack = tr; break
-        end
-      end
+      local newTrack = findNewTrack(h)
       t.truthy(newTrack, 'newTrack created to trackKey fxB')
       t.eq(h.reaper.GetTrackNumSends(trackA, 0), 1, 'trackA→newTrack send')
       t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'P_DESTTRACK'), newTrack)
@@ -248,13 +253,7 @@ return {
         util.add(g.edges, audioEdge('gB', 'mix', { toPort = 2 }))
       end)
       apply(wm)
-      local mixTrack
-      for i = 0, h.reaper.CountTracks(0) - 1 do
-        local tr = h.reaper.GetTrack(0, i)
-        if h.cm:readTrackKey(tr, 'wiringTrackKind') == 'newTrack' then
-          mixTrack = tr; break
-        end
-      end
+      local mixTrack = findNewTrack(h)
       t.truthy(mixTrack, 'pre-state: newTrack hosts the merge fx')
 
       wm:mutate(function(g) util.add(g.edges, audioEdge('mix', 'master')) end)
@@ -311,13 +310,7 @@ return {
       apply(wm)
 
       t.eq(h.reaper.TrackFX_GetCount(master), 0, 'master drained')
-      local mixTrack
-      for i = 0, h.reaper.CountTracks(0) - 1 do
-        local tr = h.reaper.GetTrack(0, i)
-        if h.cm:readTrackKey(tr, 'wiringTrackKind') == 'newTrack' then
-          mixTrack = tr; break
-        end
-      end
+      local mixTrack = findNewTrack(h)
       t.truthy(mixTrack, 'fresh newTrack now hosts mix')
       t.eq(h.reaper.TrackFX_GetCount(mixTrack), 1)
       local _, ident = h.reaper.TrackFX_GetFXName(mixTrack, 0)
@@ -415,11 +408,7 @@ return {
       t.eq(h.reaper.TrackFX_GetCount(trackA), 1, 'post: only fxA remains; CU deleted')
       local post = wm:graph().nodes.fxB.mergeGuids
       t.truthy(post == nil or not next(post), 'stale merge guid cleared off the consumer')
-      local newTrack
-      for i = 0, h.reaper.CountTracks(0) - 1 do
-        local tr = h.reaper.GetTrack(0, i)
-        if h.cm:readTrackKey(tr, 'wiringTrackKind') == 'newTrack' then newTrack = tr; break end
-      end
+      local newTrack = findNewTrack(h)
       t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'P_DESTTRACK'), newTrack)
       t.eq(h.reaper.GetTrackSendInfo_Value(trackA, 0, 0, 'D_VOL'), 0.5, 'gain landed on the send')
     end,
