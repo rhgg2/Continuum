@@ -26,7 +26,7 @@ local function seedSource(h, guid)
 end
 
 local function source(guid)
-  return { kind='source', trackGuid=guid, pos={x=0,y=0},
+  return { kind='source', trackId=guid, pos={x=0,y=0},
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
@@ -102,7 +102,7 @@ return {
       t.eq(sets[20], 0, 'outBus = 0 (consumer reads the boundary bus)')
       t.eq(sets[25], 0, 'audioSum off — matrix-less collapse is midi-only')
       t.eq(mergeStamp(wm), gCU, 'CU guid stamped onto consumer mergeGuids')
-      t.eq(wm:graph().nodes.fxC.fxGuid, gMid, 'consumer node guid is the consumer slot')
+      t.eq(wm:graph().nodes.fxC.fxId, gMid, 'consumer node guid is the consumer slot')
     end,
   },
   {

@@ -2,7 +2,7 @@ local t   = require('support')
 local DAG = require('DAG')
 
 local function source(id, guid)
-  return id, { kind = 'source', trackGuid = guid or 'guid-' .. id,
+  return id, { kind = 'source', trackId = guid or 'guid-' .. id,
                pos = { x = 0, y = 0 },
                ports = { audio = { ins = 0, outs = 1 },
                          midi  = { ins = 0, outs = 1 } } }

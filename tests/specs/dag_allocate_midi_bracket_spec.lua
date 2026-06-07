@@ -12,12 +12,12 @@ local function twoSendersOneTrack(opts)
   opts = opts or {}
   local tracks = {
     ['guid-a'] = {
-      trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+      trackKind='sourceTrack', trackId='guid-a', fxOrder={},
       mainSend=false, intraConns={},
       outWires={ {from='s_a', to='guid-c', toNode='fxC1', type='midi'} },
     },
     ['guid-b'] = {
-      trackKind='sourceTrack', trackGuid='guid-b', fxOrder={},
+      trackKind='sourceTrack', trackId='guid-b', fxOrder={},
       mainSend=false, intraConns={},
       outWires={ {from='s_b', to='guid-c', toNode='fxC2', type='midi'} },
     },
@@ -61,7 +61,7 @@ return {
     run = function()
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fxC1'},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={'fxC1'},
           mainSend=false,
           intraConns={ {from='s', to='fxC1', type='midi'} },
           outWires={},
@@ -96,12 +96,12 @@ return {
       -- fxC2 has both midi input (from trackKey B's send) AND outgoing midi to trackKey D.
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s_a', to='guid-c', toNode='fxC1', type='midi'} },
         },
         ['guid-b'] = {
-          trackKind='sourceTrack', trackGuid='guid-b', fxOrder={},
+          trackKind='sourceTrack', trackId='guid-b', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s_b', to='guid-c', toNode='fxC2', type='midi'} },
         },

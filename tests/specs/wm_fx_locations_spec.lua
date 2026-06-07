@@ -18,7 +18,7 @@ local function seedSource(h, guid)
 end
 
 local function source(guid)
-  return { kind='source', trackGuid=guid, pos={x=0,y=0},
+  return { kind='source', trackId=guid, pos={x=0,y=0},
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
@@ -55,9 +55,9 @@ return {
     name = 'locateFx resolves each fx to (track, fxIdx) after recompile',
     run = function(harness)
       local _, wm, track, g = twoFxChain(harness)
-      local tr1, idx1 = wm:locateFx(g.nodes.f1.fxGuid)
+      local tr1, idx1 = wm:locateFx(g.nodes.f1.fxId)
       t.eq(tr1, track, 'f1 on the source track'); t.eq(idx1, 0, 'f1 at idx 0')
-      local tr2, idx2 = wm:locateFx(g.nodes.f2.fxGuid)
+      local tr2, idx2 = wm:locateFx(g.nodes.f2.fxId)
       t.eq(tr2, track, 'f2 on the source track'); t.eq(idx2, 1, 'f2 at idx 1')
     end,
   },
@@ -67,7 +67,7 @@ return {
       local _, wm, _, g = twoFxChain(harness)
       local real, calls = reaper.TrackFX_GetFXGUID, 0
       reaper.TrackFX_GetFXGUID = function(a, b) calls = calls + 1; return real(a, b) end
-      wm:locateFx(g.nodes.f2.fxGuid)
+      wm:locateFx(g.nodes.f2.fxId)
       reaper.TrackFX_GetFXGUID = real
       t.eq(calls, 1, 'recompile-stamped index — locate is a single validating read')
     end,
@@ -86,8 +86,8 @@ return {
       end)
       apply(wm)
       local g2 = wm:graph()
-      t.eq(select(2, wm:locateFx(g2.nodes.f1.fxGuid)), 1, 'f1 shifted to idx 1')
-      t.eq(select(2, wm:locateFx(g2.nodes.f2.fxGuid)), 2, 'f2 shifted to idx 2')
+      t.eq(select(2, wm:locateFx(g2.nodes.f1.fxId)), 1, 'f1 shifted to idx 1')
+      t.eq(select(2, wm:locateFx(g2.nodes.f2.fxId)), 2, 'f2 shifted to idx 2')
     end,
   },
 }

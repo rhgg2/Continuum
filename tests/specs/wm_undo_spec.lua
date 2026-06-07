@@ -18,7 +18,7 @@ local function seedSource(h, guid)
 end
 
 local function source(guid)
-  return { kind='source', trackGuid=guid, pos={x=0,y=0},
+  return { kind='source', trackId=guid, pos={x=0,y=0},
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
@@ -53,7 +53,7 @@ return {
       local mirrored = h.cm:readTrackKey(scratchOf(h), 'wiringGraph')
       t.truthy(mirrored, 'scratch P_EXT carries wiringGraph')
       t.truthy(mirrored.nodes.f, 'mirror has the fx node')
-      t.truthy(mirrored.nodes.f.fxGuid, 'mirror includes stamped fxGuid')
+      t.truthy(mirrored.nodes.f.fxId, 'mirror includes stamped fxId')
     end,
   },
   {

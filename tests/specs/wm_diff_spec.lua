@@ -34,13 +34,13 @@ return {
     end,
   },
   {
-    name = 'targetState carries fxGuid from user-graph nodes through to fx',
+    name = 'targetState carries fxId from user-graph nodes through to fx',
     run = function(harness)
       local _, wm = mkWm(harness)
       wm:load()
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
-        g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxGuid='{FX-1}',
+        g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
+        g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxId='{FX-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
         util.add(g.edges, { type='audio', from='s', to='f' })
         util.add(g.edges, { type='audio', from='f', to='master' })
@@ -59,7 +59,7 @@ return {
       local _, wm = mkWm(harness)
       wm:load()
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
+        g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
         util.add(g.edges, { type='audio', from='s', to='f' })
@@ -76,8 +76,8 @@ return {
       local _, wm = mkWm(harness)
       wm:load()
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
-        g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxGuid='{FX-1}',
+        g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
+        g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxId='{FX-1}',
                          mergeGuids = { ['guid-A'] = '{CU-7}' },
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
         util.add(g.edges, { type='audio', from='s', to='f', ops={gain=0.5} })
@@ -274,7 +274,7 @@ return {
       }
       local ops = byOp(wm:diff({}, snap))
       t.eq(#ops.deleteTrack, 1)
-      t.eq(ops.deleteTrack[1].trackGuid, 'guid-mix')
+      t.eq(ops.deleteTrack[1].trackId, 'guid-mix')
     end,
   },
   {
@@ -331,7 +331,7 @@ return {
       t.eq(#ops.setFXChain, 1, 'install on master (snap newTrack drains via deleteTrack)')
       t.eq(ops.setFXChain[1].trackKind, 'master')
       t.eq(#ops.deleteTrack, 1, 'old newTrack deleted')
-      t.eq(ops.deleteTrack[1].trackGuid, 'guid-mix')
+      t.eq(ops.deleteTrack[1].trackId, 'guid-mix')
     end,
   },
   {
@@ -375,8 +375,8 @@ return {
       h.reaper:setFxGuid(track, fxIdx, '{FX-1}')
       -- Seed user graph to match.
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
-        g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxGuid='{FX-1}',
+        g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
+        g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxId='{FX-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
         util.add(g.edges, { type='audio', from='s', to='f' })
         util.add(g.edges, { type='audio', from='f', to='master' })
@@ -466,7 +466,7 @@ return {
     end,
   },
   {
-    name = 'diff: pinMaps drift drives setPinMaps (fxGuid-keyed)',
+    name = 'diff: pinMaps drift drives setPinMaps (fxId-keyed)',
     run = function(harness)
       local _, wm = mkWm(harness)
       local mk = function(pm) return { ['guid-A'] = { trackKind='sourceTrack', id='guid-A',

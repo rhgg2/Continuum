@@ -15,12 +15,12 @@ return {
       -- Two senders into one trackKey; fxC1 (JS) holds bus 0, so fxC2 (VST) lands on 1.
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s_a', to='guid-c', toNode='fxC1', type='midi'} },
         },
         ['guid-b'] = {
-          trackKind='sourceTrack', trackGuid='guid-b', fxOrder={},
+          trackKind='sourceTrack', trackId='guid-b', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s_b', to='guid-c', toNode='fxC2', type='midi'} },
         },
@@ -45,7 +45,7 @@ return {
       -- source-midi out keeps bus 0 live, so fxP claims bus 1; fxC inherits it.
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fxP', 'fxC'},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={'fxP', 'fxC'},
           mainSend=false,
           intraConns={
             {from='s',   to='fxP', type='midi'},
@@ -73,12 +73,12 @@ return {
       -- Two sources merge through a CU into a native consumer on one trackKey.
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s_a', to='guid-c', toNode='cu', type='midi'} },
         },
         ['guid-b'] = {
-          trackKind='sourceTrack', trackGuid='guid-b', fxOrder={},
+          trackKind='sourceTrack', trackId='guid-b', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s_b', to='guid-c', toNode='cu', type='midi'} },
         },

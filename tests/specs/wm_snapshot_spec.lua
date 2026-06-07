@@ -30,9 +30,9 @@ local function seedNewTrack(h, guid, trackKey)
 end
 
 -- Add an fx with a known guid to a track. Returns the fxIdx.
-local function seedFx(h, track, ident, fxGuid)
+local function seedFx(h, track, ident, fxId)
   local idx = h.reaper.TrackFX_AddByName(track, ident, false, -1)
-  h.reaper:setFxGuid(track, idx, fxGuid)
+  h.reaper:setFxGuid(track, idx, fxId)
   return idx
 end
 
@@ -73,10 +73,10 @@ return {
       local track = seedSourceTrack(h, 'guid-A')
       seedFx(h, track, 'JS:owned',   '{FX-1}')
       seedFx(h, track, 'JS:foreign', '{FX-foreign}')
-      -- Seed user graph with a node carrying fxGuid='{FX-1}' only.
+      -- Seed user graph with a node carrying fxId='{FX-1}' only.
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
-        g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}',
+        g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
+        g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxId='{FX-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
       end)
       local snap = wm:snapshot()
@@ -95,8 +95,8 @@ return {
       seedFx(h, track, 'JS:Continuum Utility', '{CU-1}')
       h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'from', 'to' })
       local ok, err = wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
-        g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}', midiInBracketGuid='{CU-1}',
+        g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
+        g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxId='{FX-1}', midiInBracketGuid='{CU-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
         util.add(g.edges, { type='audio', from='s', to='f', ops={gain=0.5} })
         util.add(g.edges, { type='audio', from='f', to='master' })
@@ -260,8 +260,8 @@ return {
       h.reaper.TrackFX_SetPinMappings(track, fxIdx, 1, 2, 1 << 0, 0)
       h.reaper.TrackFX_SetPinMappings(track, fxIdx, 1, 3, 1 << 1, 0)
       wm:mutate(function(g)
-        g.nodes['s'] = { kind='source', trackGuid='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
-        g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxGuid='{FX-1}',
+        g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
+        g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxId='{FX-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
       end)
       local snap = wm:snapshot()

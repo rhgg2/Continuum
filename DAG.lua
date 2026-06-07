@@ -8,25 +8,26 @@
 --invariant: every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --shape: userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
---shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool, split?=true }
+--shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true }
 --invariant: fx nodes carry busAware; wm:addFxNode and M.validate refuse true
---invariant: fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
+--invariant: fxId is nil until materialised; stamped into the node after TrackFX_AddByName succeeds
+-- see docs/DAG.md § fxId as incarnation handle
 --shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number}, primary?=true }
 --invariant: edge ops ride as metadata; gain on a sole send-wire folds onto send volume, else CU
 -- see docs/DAG.md § CU bridge invariant
 --invariant: node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
 --invariant: a split-tagged class never absorbs
 --invariant: srcSet unions node.split with derived master-min split markers
---shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }
+--shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxId?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }
 -- see docs/DAG.md § synthNode field roles
 --shape: outWire = { from=id, fromPort?=int, to=trackKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
 --shape: intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
---shape: trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int, toNode=id, toPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
+--shape: trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackId?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int, toNode=id, toPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
 --shape: targetTracks = { [trackKey] = trackSpec }
 -- see docs/DAG.md § targetTracks shape
 --shape: allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int, preFx?=true }; audio src/dstChan are (pair-1)*2, midi are bus 0..127; preFx marks a raw-source-origin (pre-FX) send
 --shape: allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
---shape: allocatedTracks = { [trackKey] = { trackKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
+--shape: allocatedTracks = { [trackKey] = { trackKind=..., trackId?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -55,13 +56,13 @@ function M.validate(userGraph)
   local seenGuid = {}
   for id, n in pairs(nodes) do
     if n.kind == 'master' then masters = masters + 1 end
-    if n.kind == 'source' and n.trackGuid then
-      local prior = seenGuid[n.trackGuid]
+    if n.kind == 'source' and n.trackId then
+      local prior = seenGuid[n.trackId]
       if prior then
-        return { code = 'duplicate_source_guid', guid = n.trackGuid,
+        return { code = 'duplicate_source_guid', guid = n.trackId,
                  prior = prior, dup = id }
       end
-      seenGuid[n.trackGuid] = id
+      seenGuid[n.trackId] = id
     end
     if n.kind == 'fx' and n.busAware then
       return { code = 'ext_midi_bus_user_fx', id = id, ident = n.fxIdent }
@@ -175,8 +176,8 @@ local function buildCtx(userGraph, derivedSplits)
     if cache.srcSet[id] then return cache.srcSet[id] end
     local set = {}
     local node = nodes[id]
-    if node and node.kind == 'source' and node.trackGuid then
-      set[node.trackGuid] = true
+    if node and node.kind == 'source' and node.trackId then
+      set[node.trackId] = true
     end
     -- A split marker makes the node its own source: the tag propagates
     -- forward, evicting the node + its cone into their own class.
@@ -706,16 +707,16 @@ do
         if #parked > 0 then
           table.sort(parked)
           tracks['__scratch__'] = {
-            trackKind = 'scratch', trackGuid = nil, fxOrder = parked,
+            trackKind = 'scratch', trackId = nil, fxOrder = parked,
             mainSend = false, outWires = {}, intraConns = {},
           }
         end
       else
         local chain = chainOf(members, trackKey)
-        local trackKind, trackGuid = 'newTrack', nil
+        local trackKind, trackId = 'newTrack', nil
         for _, id in ipairs(members) do
           local node = nodes[id]
-          if node.kind == 'source' then trackKind, trackGuid = 'sourceTrack', node.trackGuid end
+          if node.kind == 'source' then trackKind, trackId = 'sourceTrack', node.trackId end
           if node.kind == 'master' then trackKind = 'master' end
         end
         if trackKind ~= 'master' or #chain > 0 then
@@ -728,7 +729,7 @@ do
           sortOutWires(route.outWires)
           sortIntraConns(route.intraConns)
           tracks[trackKey] = {
-            trackKind = trackKind, trackGuid = trackGuid,
+            trackKind = trackKind, trackId = trackId,
             fxOrder = topoIntraTrack(chain, route.intraConns),
             mainSend = route.mainSend, mainSendGain = mainGain[trackKey],
             masterFeed = route.masterFeed,

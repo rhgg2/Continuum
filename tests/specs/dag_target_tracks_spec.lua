@@ -2,7 +2,7 @@ local t   = require('support')
 local DAG = require('DAG')
 
 local function source(id, guid)
-  return id, { kind = 'source', trackGuid = guid or 'guid-' .. id,
+  return id, { kind = 'source', trackId = guid or 'guid-' .. id,
                pos = { x = 0, y = 0 },
                ports = { audio = { ins = 0, outs = 1 },
                          midi  = { ins = 0, outs = 1 } } }
@@ -58,7 +58,7 @@ return {
       local k, v = source('s', 'guid-s'); ns[k] = v
       local tracks = tracksOf(mk(ns))
       t.eq(tracks['guid-s'].trackKind,  'sourceTrack')
-      t.eq(tracks['guid-s'].trackGuid, 'guid-s')
+      t.eq(tracks['guid-s'].trackId, 'guid-s')
       t.deepEq(tracks['guid-s'].fxOrder, {})
       t.eq(tracks['guid-s'].mainSend, false)
       t.eq(tracks[''],          nil)
@@ -138,7 +138,7 @@ return {
         { type = 'audio', from = 'f', to = 'master' },
       }))
       t.eq(tracks['guid-s'].trackKind,  'sourceTrack')
-      t.eq(tracks['guid-s'].trackGuid, 'guid-s')
+      t.eq(tracks['guid-s'].trackId, 'guid-s')
       t.deepEq(tracks['guid-s'].fxOrder, { 'f' })
       t.eq(tracks['guid-s'].mainSend, true)
       t.deepEq(tracks['guid-s'].outWires, {})

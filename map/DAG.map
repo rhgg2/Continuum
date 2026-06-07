@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1333  sha=cf78621  mode=namespace
+@module DAG  src=DAG.lua  loc=1334  sha=5e88c5d  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate is pure; derivations live on M.compile's ctx
@@ -6,7 +6,7 @@
   @invariant  every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
   @invariant  master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
   @invariant  fx nodes carry busAware; wm:addFxNode and M.validate refuse true
-  @invariant  fxGuid is the node's REAPER incarnation handle on fx-kind nodes (mirrors trackGuid on source-kind). nil until first materialised by the wiring applier; stamped into the node after TrackFX_AddByName succeeds. wm:snapshot and wm:targetState bridge user-graph nodes to REAPER FX instances by this guid.
+  @invariant  fxId is nil until materialised; stamped into the node after TrackFX_AddByName succeeds
   @invariant  edge ops ride as metadata; gain on a sole send-wire folds onto send volume, else CU
   @invariant  node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
   @invariant  a split-tagged class never absorbs
@@ -15,68 +15,68 @@
 
 # Shapes
   @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
-  @shape  userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackGuid?=string, fxIdent?=string, fxDisplay?=string, fxGuid?=string, busAware?=bool, split?=true }
+  @shape  userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true }
   @shape  edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number}, primary?=true }
-  @shape  synthNode = { kind='fx', fxIdent=CU_IDENT, fxGuid?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }
+  @shape  synthNode = { kind='fx', fxIdent=CU_IDENT, fxId?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }
   @shape  outWire = { from=id, fromPort?=int, to=trackKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
   @shape  intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
-  @shape  trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int, toNode=id, toPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
+  @shape  trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackId?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int, toNode=id, toPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
   @shape  targetTracks = { [trackKey] = trackSpec }
   @shape  allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int, preFx?=true }; audio src/dstChan are (pair-1)*2, midi are bus 0..127; preFx marks a raw-source-origin (pre-FX) send
   @shape  allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
-  @shape  allocatedTracks = { [trackKey] = { trackKind=..., trackGuid?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
+  @shape  allocatedTracks = { [trackKey] = { trackKind=..., trackId?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
 
 # Imports
-  @const util = 'util'  @ 30
+  @const util = 'util'  @ 31
 
 # Module-level constants
-  @const CU_IDENT = 'JS:Continuum Utility'  @ 32
-  @const MERGE_WIDTH = 16  @ 35
-  @const CAPACITY = { audio = 64, midi = 128 }  @ 38
-  @const MASTER = '__master__'  @ 42
-  @const M = {}  @ 44
+  @const CU_IDENT = 'JS:Continuum Utility'  @ 33
+  @const MERGE_WIDTH = 16  @ 36
+  @const CAPACITY = { audio = 64, midi = 128 }  @ 39
+  @const MASTER = '__master__'  @ 43
+  @const M = {}  @ 45
 
 # Private functions
   -- validate
   -- compile context
-  @fn buildCtx(userGraph, derivedSplits)  @ 158
+  @fn buildCtx(userGraph, derivedSplits)  @ 159
       -- Lazy ctx factory; derivations memoise into closure-local `cache`.
       -- derivedSplits arrives already settled (from deriveMasterSplit); ctx just folds it into srcSet.
   -- realisation
-  @fn topoIntraTrack(members, conns)  @ 402
+  @fn topoIntraTrack(members, conns)  @ 403
       -- Kahn's over a track's chain members (fx + synth CU; source/master excluded).
       -- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
   -- master minimization
-  @fn deriveMasterSplit(userGraph)  @ 760
+  @fn deriveMasterSplit(userGraph)  @ 761
       -- master class = cone of master's largest dominator whose entry pulls <=1 audio
       -- pair per upstream track; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
   -- allocate
-  @fn allocStream(values, startCursor, N, compare, pinAdd)  @ 863
+  @fn allocStream(values, startCursor, N, compare, pinAdd)  @ 864
       -- Linear-scan allocator over one stream's value list (audio pair or MIDI bus).
       -- see docs/DAG.md § allocStream internals
-  @fn audioValueCompare(a, c)  @ 914
+  @fn audioValueCompare(a, c)  @ 915
       -- Audio packs by pin shape (dir, port, fx) so co-defined values land
       -- deterministically; midi has no pins, so lastUse then insertion serial.
-  @fn midiValueCompare(a, c)  @ 923
+  @fn midiValueCompare(a, c)  @ 924
       · midi register file: bus 0 boundary; values are per-producer streams.
       · bracket post-pass — see docs/DAG.md § allocate
 
 # Public API (M.*)
-  @api M.validate(userGraph)  @ 51
+  @api M.validate(userGraph)  @ 52
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.compile(userGraph)  @ 855
+  @api M.compile(userGraph)  @ 856
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
-  @api M.allocate(tracks, nodes)  @ 932
+  @api M.allocate(tracks, nodes)  @ 933
       -- Per-track live-range allocation, one register file per stream channel:
       -- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedTracks shape.
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
       @contract  nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
 
 # Uses (outbound edges)
-  @use call    util.add  @ 199, 323, 384, 411, 425, 430, 432, 436, 470, 490, 514, 559, 567, 587, 597, 607, 613, 614, 662, 675, 696, 698, 792, 995, 999, 1009, 1012, 1042, 1050, 1059, 1088, 1091, 1111, 1138, 1145, 1169, 1177, 1184, 1203, 1206, 1211, 1267, 1268, 1269, 1274, 1289
-  @use call    util.assign  @ 82, 362, 476, 1311, 1312
-  @use call    util.bucket  @ 130, 169, 204, 691, 766, 767, 890, 894, 946, 954
-  @use call    util.key  @ 119, 203, 341, 344, 454, 485, 678, 1036, 1084, 1288
-  @use call    util.keys  @ 261, 262, 981, 1180
-  @use call    util.pick  @ 362
-  @use require util  @ 30
+  @use call    util.add  @ 200, 324, 385, 412, 426, 431, 433, 437, 471, 491, 515, 560, 568, 588, 598, 608, 614, 615, 663, 676, 697, 699, 793, 996, 1000, 1010, 1013, 1043, 1051, 1060, 1089, 1092, 1112, 1139, 1146, 1170, 1178, 1185, 1204, 1207, 1212, 1268, 1269, 1270, 1275, 1290
+  @use call    util.assign  @ 83, 363, 477, 1312, 1313
+  @use call    util.bucket  @ 131, 170, 205, 692, 767, 768, 891, 895, 947, 955
+  @use call    util.key  @ 120, 204, 342, 345, 455, 486, 679, 1037, 1085, 1289
+  @use call    util.keys  @ 262, 263, 982, 1181
+  @use call    util.pick  @ 363
+  @use require util  @ 31

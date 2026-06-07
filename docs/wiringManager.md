@@ -64,15 +64,15 @@ below.
 
 ## FX-instance lifecycle
 
-The user graph holds *intent*; REAPER holds *instances*. `fxGuid` (on
-fx-kind nodes, mirroring `trackGuid` on sources) is the bridge — nil
+The user graph holds *intent*; REAPER holds *instances*. `fxId` (on
+fx-kind nodes, mirroring `trackId` on sources) is the bridge — nil
 until first materialised, stamped into the node after rm mints the FX,
 and thereafter how snapshot/target match `fx` entries to graph nodes.
 Three rules keep instance churn minimal and state-preserving:
 
 - **Mint on a scratch track.** `wm:addFxNode` instantiates the FX
   immediately via `instantiateFxOnScratch`, so the node has a real
-  `fxGuid` (and probed I/O) before it is ever hosted. The scratch track
+  `fxId` (and probed I/O) before it is ever hosted. The scratch track
   is a hidden REAPER track tagged `wiringScratch='1'`, found-or-created
   lazily; it also parks FX whose `srcSet` is empty (disconnected, or
   inert `__scratch__` nodes) so they exist without polluting the audible
@@ -83,10 +83,10 @@ Three rules keep instance churn minimal and state-preserving:
   presets, internal buffers) survives; a delete + re-add would lose it.
 - **Delete only on departure.** wm deletes a REAPER FX instance only
   when its owning node — or the CU bridge it backs — leaves the graph.
-  CU bridges arrive at the applier with a nil `fxGuid` and are minted by
+  CU bridges arrive at the applier with a nil `fxId` and are minted by
   `reconcileFXChain`, the same path as user FX.
 
-Where a `fxGuid` *currently lives* — its `(track, fxIdx)` — is derived, not
+Where a `fxId` *currently lives* — its `(track, fxIdx)` — is derived, not
 intent: the reconcile pass migrates and reorders instances, so the slot is
 only authoritative right after `applyOps`. That is exactly where the
 `fxLocations` index is restamped. `wm:locateFx` reads it (validating the
@@ -147,7 +147,7 @@ certain fields exist and which side fills them:
   would spuriously emit `setFXChain`.
 - **`origin`** is stamped on every *target*-side entry by `projectEntry`
   so the applier knows where to write minted guids back: `{kind='node'}`
-  → `node.fxGuid`; `bracketIn`/`bracketOut` → the consumer's
+  → `node.fxId`; `bracketIn`/`bracketOut` → the consumer's
   `midiInBracketGuid`/`midiOutBracketGuid`; `{kind='merge',consumer,trackKey}`
   → `consumer.mergeGuids[trackKey]`. Snapshot entries carry no `origin` and
   `fxOrderEq` ignores it — it's a write-back address, not state to
@@ -161,7 +161,7 @@ certain fields exist and which side fills them:
   allocator-touched; snap: REAPER non-empty); an absent port means
   disconnected. It rides inline on each `fx` entry — including FX the
   target hasn't materialised yet, whose id-less `setPinMaps` entry the
-  applier resolves through `origin` → `fxGuid` via the stamps from the
+  applier resolves through `origin` → `fxId` via the stamps from the
   preceding `setFXChain`. rm converts pair-lists to the lo32/hi32 bitmask.
 - **`nchan`** is the track's channel count; the main-send target offset
   rides on `mainSend.tgtOffset`, present only when `mainSend.on`.
@@ -249,14 +249,14 @@ by the applier. Each has an `op` field and additional keys depending on kind:
 
 - **`createTrack`** / **`deleteTrack`** — carry `trackKey` and `trackKuid`.
 - **`setFXChain`** — carries `fxChain` (array of `snapshotFxEntry`). Entries
-  with `fxGuid=nil` mean "instantiate `ident`, stamp GUID back to graph"
+  with `fxId=nil` mean "instantiate `ident`, stamp GUID back to graph"
   (handled by the applier).
 - **`moveFxAcrossTracks`** — relocates a live FX via `rm:assignFx{track}`
   (a move, not delete+add). Emitted before per-track `setFXChain` ops so
   subsequent reconcile sees the FX already at the destination.
 - **`setNchan`** / **`setPinMaps`** — emitted between `setFXChain` and
   `setMainSend` so fxGuids are stamped before pin-map writes and channels are
-  allocated before pin maps land. `setPinMaps` carries both fxGuid-keyed and
+  allocated before pin maps land. `setPinMaps` carries both fxId-keyed and
   origin-keyed maps so unmaterialised FXs lift through the stamps table.
 - **`setMainSend`** — carries `mainSend` bool, plus `offs` (C_MAINSEND_OFFS)
   and `nch=2` (C_MAINSEND_NCH) when `mainSend=true`.

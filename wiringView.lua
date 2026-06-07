@@ -28,8 +28,8 @@ local function ensureView()
     sourceLabels = {}
     local names = wm:trackNames()
     for id, node in pairs(viewGraph.nodes) do
-      if node.kind == 'source' and node.trackGuid then
-        sourceLabels[id] = names[node.trackGuid]
+      if node.kind == 'source' and node.trackId then
+        sourceLabels[id] = names[node.trackId]
       end
     end
   end
@@ -56,7 +56,7 @@ local function nodeLabel(id, node)
   if node.kind == 'source' then
     return sourceLabels[id]
         or node.displayName
-        or (node.trackGuid and ('src ' .. node.trackGuid:sub(2, 6)))
+        or (node.trackId and ('src ' .. node.trackId:sub(2, 6)))
         or 'source'
   end
   return node.kind or '?'
@@ -104,7 +104,7 @@ end
 
 -- see docs/wiringView.md § Double-click intent
 local function activation(node)
-  if node.kind ~= 'fx' or not node.fxGuid then return nil end
+  if node.kind ~= 'fx' or not node.fxId then return nil end
   if node.fxDisplay and node.fxDisplay:find('Continuum Sampler', 1, true) then
     return 'sampler'
   end
@@ -159,15 +159,15 @@ function wv:listInstalledFX() return wm:listInstalledFX() end
 --contract: floats the node's FX window; false for non-fx nodes or a stale guid
 function wv:openFxWindow(nodeId)
   local node = ensureView().nodes[nodeId]
-  return (node and node.fxGuid and wm:showFxWindow(node.fxGuid)) or false
+  return (node and node.fxId and wm:showFxWindow(node.fxId)) or false
 end
 
 --contract: live MediaTrack hosting nodeId's fx instance, or nil if the guid isn't live.
 --contract: caller gates on nodeView.activate=='sampler'.
 function wv:samplerTrack(nodeId)
   local node = ensureView().nodes[nodeId]
-  if not (node and node.fxGuid) then return nil end
-  return (wm:locateFx(node.fxGuid))
+  if not (node and node.fxId) then return nil end
+  return (wm:locateFx(node.fxId))
 end
 
 --contract: atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped

@@ -30,13 +30,13 @@ local function instrumentAddByName()
 end
 
 local function sourceNode(guid)
-  return { kind = 'source', trackGuid = guid, pos = { x = 0, y = 0 },
+  return { kind = 'source', trackId = guid, pos = { x = 0, y = 0 },
            ports = { audio = { ins = 0, outs = 1 }, midi = { ins = 0, outs = 1 } } }
 end
 
 return {
   {
-    name = 'addFxNode parks the FX on scratch with its fxGuid stamped into the node',
+    name = 'addFxNode parks the FX on scratch with its fxId stamped into the node',
     run = function(harness)
       local h, wm = mkWm(harness)
       reaper:setFxIO('JS:plain', { ins = 2, outs = 2 })  -- 1 stereo port each (pins)
@@ -45,12 +45,12 @@ return {
       local scratch = reaper.GetTrack(0, 0)
       t.eq(reaper.TrackFX_GetCount(scratch), 1, 'fx parked on scratch')
       local fxNode = wm:graph().nodes.n1
-      t.eq(fxNode.fxGuid, reaper.TrackFX_GetFXGUID(scratch, 0),
-           'node fxGuid matches the live scratch instance')
+      t.eq(fxNode.fxId, reaper.TrackFX_GetFXGUID(scratch, 0),
+           'node fxId matches the live scratch instance')
     end,
   },
   {
-    name = 'wiring source->fx MOVES the live instance; fxGuid stable, AddByName fires once total',
+    name = 'wiring source->fx MOVES the live instance; fxId stable, AddByName fires once total',
     run = function(harness)
       local h, wm = mkWm(harness)
       reaper:setFxIO('JS:plain', { ins = 2, outs = 2 })  -- 1 stereo port each (pins)
@@ -59,7 +59,7 @@ return {
 
       wm:enableLive()
       wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
-      local originalGuid = wm:graph().nodes.n1.fxGuid
+      local originalGuid = wm:graph().nodes.n1.fxId
       t.eq(countCalls(), 1, 'addFxNode mints exactly one instance')
 
       wm:mutate(function(g)
@@ -79,7 +79,7 @@ return {
       t.eq(reaper.TrackFX_GetCount(scratch),     0, 'scratch drained — instance moved off')
       t.eq(reaper.TrackFX_GetCount(sourceTrack), 1, 'source track now hosts the fx')
       t.eq(reaper.TrackFX_GetFXGUID(sourceTrack, 0), originalGuid,
-           'same fxGuid — instance was moved, not re-instantiated')
+           'same fxId — instance was moved, not re-instantiated')
       t.eq(countCalls(), 1, 'no second AddByName; CopyToTrack(is_move=true) did the work')
     end,
   },

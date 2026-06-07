@@ -12,7 +12,7 @@ return {
     run = function()
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s', to='guid-b', toNode='fx_b', type='midi'} },
         },
@@ -31,7 +31,7 @@ return {
     run = function()
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={'fx1'},
           mainSend=false,
           intraConns={ {from='s', to='fx1', type='midi'} },
           outWires={ {from='fx1', to='guid-b', toNode='fx_b', type='midi'} },
@@ -49,7 +49,7 @@ return {
     run = function()
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={'fx1'},
           mainSend=false,
           intraConns={ {from='s', to='fx1', type='midi'} },
           outWires={
@@ -77,7 +77,7 @@ return {
     run = function()
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={'fx1','fx2'},
           mainSend=false,
           intraConns={
             {from='s',   to='fx1', type='midi'},
@@ -98,7 +98,7 @@ return {
     run = function()
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={'fx1'},
           mainSend=false,
           intraConns={ {from='s', to='fx1', type='midi'} },
           outWires={
@@ -123,12 +123,12 @@ return {
     run = function()
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s', to='guid-c', toNode='fx_c', type='midi'} },
         },
         ['guid-b'] = {
-          trackKind='sourceTrack', trackGuid='guid-b', fxOrder={},
+          trackKind='sourceTrack', trackId='guid-b', fxOrder={},
           mainSend=false, intraConns={},
           outWires={ {from='s', to='guid-c', toNode='fx_c', type='midi'} },
         },
@@ -145,7 +145,7 @@ return {
     run = function()
       local tracks = {
         ['guid-a'] = {
-          trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1'},
+          trackKind='sourceTrack', trackId='guid-a', fxOrder={'fx1'},
           mainSend=false,
           intraConns={ {from='s', to='fx1', type='midi'} },
           outWires={ {from='fx1', to='guid-b', toNode='fx_b', type='midi'} },
@@ -164,7 +164,7 @@ return {
       local mk = function()
         return {
           ['guid-a'] = {
-            trackKind='sourceTrack', trackGuid='guid-a', fxOrder={'fx1','fx2'},
+            trackKind='sourceTrack', trackId='guid-a', fxOrder={'fx1','fx2'},
             mainSend=false,
             intraConns={
               {from='s',   to='fx1', type='midi'},

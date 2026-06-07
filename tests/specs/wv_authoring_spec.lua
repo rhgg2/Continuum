@@ -56,7 +56,7 @@ return {
       local g = wv:graph()
       t.eq(g.nodes.n1.kind, 'fx',     'fx minted as n1')
       t.eq(g.nodes.n2.kind, 'source', 'source minted as n2 alongside the fx')
-      t.truthy(g.nodes.n2.trackGuid,  'source bound to a track guid')
+      t.truthy(g.nodes.n2.trackId,  'source bound to a track guid')
       t.eq(g.nodes.n2.displayName, 'Massive', 'source carries fx-name snapshot for the label')
       local sourceView
       for _, nv in ipairs(wv:nodeViews()) do
@@ -72,7 +72,7 @@ return {
       local h, wv = mkWv(harness)
       h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
       wv:addFx(0, 0, { name = 'Massive', ident = 'VST3:Massive' })
-      local guid = wv:graph().nodes.n2.trackGuid
+      local guid = wv:graph().nodes.n2.trackId
       local track
       for i = 0, math.floor(reaper.CountTracks(0)) - 1 do
         local tr = reaper.GetTrack(0, i)

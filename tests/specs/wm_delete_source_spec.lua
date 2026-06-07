@@ -27,7 +27,7 @@ local function seedGraph(wm, guid)
   reaper:setFxIO('JS:plain', { ins = 2, outs = 2 })
   wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
   wm:mutate(function(g)
-    g.nodes.src = { kind = 'source', trackGuid = guid, pos = { x = 0, y = 0 },
+    g.nodes.src = { kind = 'source', trackId = guid, pos = { x = 0, y = 0 },
                     ports = { audio = { ins = 0, outs = 1 },
                               midi  = { ins = 0, outs = 1 } } }
     util.add(g.edges, { type = 'midi', from = 'src', to = 'n1' })
@@ -95,7 +95,7 @@ return {
       local node  = wm:graph().nodes[id]
       t.eq(node.kind, 'source', 'node is a source')
       t.eq(node.displayName, 'Bass')
-      local track = wm:trackByGuid(node.trackGuid)
+      local track = wm:trackByGuid(node.trackId)
       t.eq(track ~= nil, true, 'source track exists for the node guid')
       t.eq(h.cm:readTrackKey(track, 'wiringTrackKind'), 'sourceTrack', 'track tagged sourceTrack')
     end,

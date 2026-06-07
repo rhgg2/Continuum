@@ -107,6 +107,16 @@ when FX actually live on master, mirroring `wm:snapshot` — an FX-less master i
 implicit (the REAPER master always exists), keeping target and snapshot
 symmetric so a master-less graph diffs to zero ops.
 
+## fxId as incarnation handle
+
+`fxId` on an fx-kind node is nil until the wiring applier materialises the FX;
+it is stamped after `TrackFX_AddByName` succeeds. `wm:snapshot` and
+`wm:targetState` both bridge user-graph nodes to live REAPER FX instances by
+this id — snapshot reads it to key the current state, targetState reads it to
+identify which FX to diff against. It mirrors `trackId` on source-kind nodes:
+each kind carries exactly one REAPER handle that ties the abstract node to its
+concrete incarnation.
+
 ## CU bridge invariant — edge ops and hosting
 
 An edge's gain/channelMap op rides the edge as metadata. The CU

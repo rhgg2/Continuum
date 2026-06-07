@@ -18,13 +18,13 @@ local function seedSource(h, guid)
 end
 
 local function source(guid)
-  return { kind='source', trackGuid=guid, pos={x=0,y=0},
+  return { kind='source', trackId=guid, pos={x=0,y=0},
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
 local function fx(ident, opts)
   opts = opts or {}
-  return { kind='fx', fxIdent=ident, fxGuid=opts.fxGuid, pos={x=0,y=0},
+  return { kind='fx', fxIdent=ident, fxId=opts.fxId, pos={x=0,y=0},
            ports={audio={ins=opts.ins or 1, outs=opts.outs or 1},
                   midi={ins=1, outs=1}} }
 end
@@ -47,7 +47,7 @@ return {
         util.add(g.edges, audioEdge('f', 'master'))
       end)
       t.eq(h.reaper.TrackFX_GetCount(track), 1, 'fx materialised by live reconcile')
-      t.truthy(wm:graph().nodes.f.fxGuid, 'fxGuid stamped back into graph')
+      t.truthy(wm:graph().nodes.f.fxId, 'fxId stamped back into graph')
       t.eq(#wm:diff(wm:targetState(), wm:snapshot()), 0,
            'steady state after live apply')
     end,
@@ -102,16 +102,16 @@ return {
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
-      local guidAfterMutate = wm:graph().nodes.f.fxGuid
+      local guidAfterMutate = wm:graph().nodes.f.fxId
       -- Wipe the FX out of REAPER behind wm's back; load + auto-reconcile
       -- should detect the drift and re-materialise.
       h.reaper.TrackFX_Delete(track, 0)
       t.eq(h.reaper.TrackFX_GetCount(track), 0, 'cleared')
       wm:load()
       t.eq(h.reaper.TrackFX_GetCount(track), 1, 'load drove reconcile, fx re-added')
-      t.truthy(wm:graph().nodes.f.fxGuid ~= guidAfterMutate
-            or wm:graph().nodes.f.fxGuid == h.reaper.TrackFX_GetFXGUID(track, 0),
-           'graph fxGuid tracks the live FX')
+      t.truthy(wm:graph().nodes.f.fxId ~= guidAfterMutate
+            or wm:graph().nodes.f.fxId == h.reaper.TrackFX_GetFXGUID(track, 0),
+           'graph fxId tracks the live FX')
     end,
   },
 }

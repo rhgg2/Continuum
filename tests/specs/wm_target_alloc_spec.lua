@@ -23,13 +23,13 @@ local function seedSource(h, guid)
 end
 
 local function source(guid)
-  return { kind='source', trackGuid=guid, pos={x=0,y=0},
+  return { kind='source', trackId=guid, pos={x=0,y=0},
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
 local function fx(ident, opts)
   opts = opts or {}
-  return { kind='fx', fxIdent=ident, fxGuid=opts.fxGuid, pos={x=0,y=0},
+  return { kind='fx', fxIdent=ident, fxId=opts.fxId, pos={x=0,y=0},
            ports={audio={ins=opts.ins or 1, outs=opts.outs or 1},
                   midi={ins=1, outs=1}} }
 end

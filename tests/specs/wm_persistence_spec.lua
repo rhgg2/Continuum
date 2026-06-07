@@ -25,7 +25,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       local ok = wm:mutate(function(g)
-        g.nodes['s'] = { kind = 'source', trackGuid = 'guid-s',
+        g.nodes['s'] = { kind = 'source', trackId = 'guid-s',
                          pos = { x = 0, y = 0 },
                          ports = { audio = { ins = 0, outs = 1 },
                                    midi  = { ins = 0, outs = 1 } } }
@@ -38,7 +38,7 @@ return {
       local wm2 = util.instantiate('wiringManager', { cm = cm2 })
       local g2 = wm2:graph()
       t.truthy(g2.nodes.s,         'source node round-tripped')
-      t.eq(g2.nodes.s.trackGuid, 'guid-s')
+      t.eq(g2.nodes.s.trackId, 'guid-s')
       t.eq(g2.nextId, 2,          'nextId round-tripped')
       t.truthy(g2.nodes.master,    'master survives round-trip')
     end,
@@ -71,7 +71,7 @@ return {
       local seen = {}
       wm:subscribe('wiringChanged', function(p) seen[#seen+1] = p end)
       local ok = wm:mutate(function(g)
-        g.nodes['s'] = { kind = 'source', trackGuid = 'guid-s',
+        g.nodes['s'] = { kind = 'source', trackId = 'guid-s',
                          pos = { x = 0, y = 0 },
                          ports = { audio = { ins = 0, outs = 1 },
                                    midi  = { ins = 0, outs = 1 } } }

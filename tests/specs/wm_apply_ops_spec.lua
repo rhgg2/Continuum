@@ -25,13 +25,13 @@ local function seedSource(h, guid)
 end
 
 local function source(guid)
-  return { kind='source', trackGuid=guid, pos={x=0,y=0},
+  return { kind='source', trackId=guid, pos={x=0,y=0},
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
 local function fx(ident, opts)
   opts = opts or {}
-  return { kind='fx', fxIdent=ident, fxGuid=opts.fxGuid, pos={x=0,y=0},
+  return { kind='fx', fxIdent=ident, fxId=opts.fxId, pos={x=0,y=0},
            ports={audio={ins=opts.ins or 1, outs=opts.outs or 1},
                   midi={ins=1, outs=1}} }
 end
@@ -48,7 +48,7 @@ end
 
 return {
   {
-    name = 'apply: bare materialise — AddByName, stamp fxGuid onto user node',
+    name = 'apply: bare materialise — AddByName, stamp fxId onto user node',
     run = function(harness)
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
@@ -62,7 +62,7 @@ return {
       t.eq(h.reaper.TrackFX_GetCount(track), 1)
       local _, ident = h.reaper.TrackFX_GetFXName(track, 0)
       t.eq(ident, 'JS:foo')
-      t.eq(wm:graph().nodes.f.fxGuid, h.reaper.TrackFX_GetFXGUID(track, 0),
+      t.eq(wm:graph().nodes.f.fxId, h.reaper.TrackFX_GetFXGUID(track, 0),
            'minted guid stamped onto user node')
     end,
   },
@@ -97,7 +97,7 @@ return {
       end)
       apply(wm)
       t.eq(h.reaper.TrackFX_GetCount(track), 2, 'both FX added')
-      local aGuid = wm:graph().nodes.a.fxGuid
+      local aGuid = wm:graph().nodes.a.fxId
 
       wm:mutate(function(g)
         g.nodes.b = nil
@@ -127,8 +127,8 @@ return {
         util.add(g.edges, audioEdge('b', 'master'))
       end)
       apply(wm)
-      local aGuid = wm:graph().nodes.a.fxGuid
-      local bGuid = wm:graph().nodes.b.fxGuid
+      local aGuid = wm:graph().nodes.a.fxId
+      local bGuid = wm:graph().nodes.b.fxId
 
       wm:mutate(function(g)
         g.edges = {
@@ -267,8 +267,8 @@ return {
         if ident == 'JS:mix' then migrated = i; break end
       end
       t.truthy(migrated, 'merge fx is now on the REAPER master')
-      t.eq(wm:graph().nodes.mix.fxGuid, h.reaper.TrackFX_GetFXGUID(master, migrated),
-           'graph fxGuid rewritten to the master-side instance')
+      t.eq(wm:graph().nodes.mix.fxId, h.reaper.TrackFX_GetFXGUID(master, migrated),
+           'graph fxId rewritten to the master-side instance')
       local survives
       for i = 0, h.reaper.CountTracks(0) - 1 do
         if h.reaper.GetTrack(0, i) == mixTrack then survives = true end
@@ -455,7 +455,7 @@ return {
       local track = seedSource(h, 'guid-A')
       wm:applyOps({
         { op='setNchan', trackKey='guid-A', trackKind='sourceTrack',
-          trackGuid='guid-A', value=6 },
+          trackId='guid-A', value=6 },
       }, 'test')
       t.eq(h.reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN'), 6)
     end,
@@ -467,7 +467,7 @@ return {
       local trackA = seedSource(h, 'guid-A')
       wm:applyOps({
         { op='setMainSend', trackKey='guid-A', trackKind='sourceTrack',
-          trackGuid='guid-A', value=true, gain=0.75, offs=2 },
+          trackId='guid-A', value=true, gain=0.75, offs=2 },
       }, 'test')
       t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'B_MAINSEND'), 1)
       t.eq(h.reaper.GetMediaTrackInfo_Value(trackA, 'D_VOL'), 0.75)
@@ -476,7 +476,7 @@ return {
     end,
   },
   {
-    name = 'apply: setPinMaps fxGuid-keyed → TrackFX_SetPinMappings',
+    name = 'apply: setPinMaps fxId-keyed → TrackFX_SetPinMappings',
     run = function(harness)
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
@@ -488,11 +488,11 @@ return {
         util.add(g.edges, audioEdge('f', 'master'))
       end)
       apply(wm)
-      local fxGuid = wm:graph().nodes.f.fxGuid
+      local fxId = wm:graph().nodes.f.fxId
       wm:applyOps({
         { op='setPinMaps', trackKey='guid-A', trackKind='sourceTrack',
-          trackGuid='guid-A',
-          fx = { { id=fxGuid, ident='JS:foo',
+          trackId='guid-A',
+          fx = { { id=fxId, ident='JS:foo',
                    pinMaps = { ins={[1]={2}}, outs={} } } } },
       }, 'test')
       -- Port 1 = pins 0,1; routed to pair 2 = bits 2,3.
@@ -516,11 +516,11 @@ return {
       -- setFXChain mints+stamps node f; setPinMaps then resolves its origin → guid.
       wm:applyOps({
         { op='setFXChain', trackKey='guid-A', trackKind='sourceTrack',
-          trackGuid='guid-A',
+          trackId='guid-A',
           fx = { { id=nil, ident='JS:foo',
                    origin={ kind='node', id='f' } } } },
         { op='setPinMaps', trackKey='guid-A', trackKind='sourceTrack',
-          trackGuid='guid-A',
+          trackId='guid-A',
           fx = { { id=nil, ident='JS:foo', origin={ kind='node', id='f' },
                    pinMaps = { ins={[1]={2}}, outs={} } } } },
       }, 'test')
@@ -542,14 +542,14 @@ return {
         util.add(g.edges, audioEdge('f', 'master'))
       end)
       apply(wm)
-      local fxGuid = wm:graph().nodes.f.fxGuid
+      local fxId = wm:graph().nodes.f.fxId
       -- Pre-corrupt port 1 → pair 2; setPinMaps with empty must wipe it.
       h.reaper.TrackFX_SetPinMappings(track, 0, 0, 0, 1 << 2, 0)
       h.reaper.TrackFX_SetPinMappings(track, 0, 0, 1, 1 << 3, 0)
       wm:applyOps({
         { op='setPinMaps', trackKey='guid-A', trackKind='sourceTrack',
-          trackGuid='guid-A',
-          fx = { { id=fxGuid, ident='JS:foo', pinMaps = { ins={}, outs={} } } } },
+          trackId='guid-A',
+          fx = { { id=fxId, ident='JS:foo', pinMaps = { ins={}, outs={} } } } },
       }, 'test')
       t.eq(h.reaper.TrackFX_GetPinMappings(track, 0, 0, 0), 0, 'pin 0 → disconnected')
       t.eq(h.reaper.TrackFX_GetPinMappings(track, 0, 0, 1), 0, 'pin 1 → disconnected')
