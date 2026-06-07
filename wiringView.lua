@@ -17,12 +17,21 @@ local selection   = {}  -- set keyed by nodeId → true; replace via setSelectio
 
 -- wv's structural projection of wm's compiled graph, pulled lazily after a
 -- structural change. Live gain stays out -- edgeGain reads wm uncloned.
-local viewGraph, viewReach
+local viewGraph, viewReach, sourceLabels
 
 local function ensureView()
   if not viewGraph then
     viewGraph = wm:viewGraph()
     viewReach = wm:reach()
+    -- Resolve live source-track names once per structural pull; nodeLabel reads this
+    -- map so per-frame projection never hits REAPER. Renames land on the next rebuild.
+    sourceLabels = {}
+    local names = wm:trackNames()
+    for id, node in pairs(viewGraph.nodes) do
+      if node.kind == 'source' and node.trackGuid then
+        sourceLabels[id] = names[node.trackGuid]
+      end
+    end
   end
   return viewGraph
 end
@@ -41,11 +50,11 @@ end
 
 ----- Logical projection (viewport-independent)
 
-local function nodeLabel(node)
+local function nodeLabel(id, node)
   if node.kind == 'master' then return 'master' end
   if node.kind == 'fx'     then return node.fxDisplay or 'fx' end
   if node.kind == 'source' then
-    return (node.trackGuid and wm:trackName(node.trackGuid))
+    return sourceLabels[id]
         or node.displayName
         or (node.trackGuid and ('src ' .. node.trackGuid:sub(2, 6)))
         or 'source'
@@ -108,7 +117,7 @@ local function nodeView(id, node)
   return {
     id       = id,
     pos      = { x = node.pos.x, y = node.pos.y },
-    label    = nodeLabel(node),
+    label    = nodeLabel(id, node),
     category = nodeCategory(node.kind, ins, outs),
     activate = activation(node),
     ins      = ins,
@@ -316,7 +325,7 @@ function wv:wireViews()
       toPortName   = portName(e.to,   'in',  e.type, toPort),
       primary      = e.primary or nil,
       fromKind     = fromNode and fromNode.kind,
-      fromLabel    = fromNode and nodeLabel(fromNode),
+      fromLabel    = fromNode and nodeLabel(e.from, fromNode),
     })
   end
   return out
@@ -349,7 +358,7 @@ end
 -- read repopulates via ensureView, so a signal without a render compiles nothing.
 --contract: drops the view cache; next read re-pulls from wm. Driven by wiringChanged.
 function wv:rebuild()
-  viewGraph, viewReach = nil, nil
+  viewGraph, viewReach, sourceLabels = nil, nil, nil
 end
 
 wm:subscribe('wiringChanged', function() wv:rebuild() end)

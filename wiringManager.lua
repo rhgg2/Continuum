@@ -281,12 +281,11 @@ function wm:trackByGuid(guid)
   end
 end
 
---contract: live REAPER track name for guid (renames propagate); nil if the track is gone
-function wm:trackName(guid)
-  local track = self:trackByGuid(guid)
-  if not track then return nil end
-  local _, name = reaper.GetTrackName(track)
-  return name
+--contract: { [trackGuid] = name } for every project track + master; one rm:tracks() pass
+function wm:trackNames()
+  local out = {}
+  for _, tr in ipairs(rm:tracks()) do out[tr.id] = tr.name end
+  return out
 end
 
 -- Visit every (track, fxIdx) in the project, master chain last; stops early
@@ -367,45 +366,45 @@ function wm:addFxNode(x, y, fx, opts)
   ensureLoaded()
   local addErr = self:checkUserAddable(fx.ident)
   if addErr then return nil, addErr end
-  local display    = fx.name and shortFxName(fx.name) or fx.ident
-  reaper.Undo_BeginBlock()
-  local io         = self:instantiateFxOnScratch(fx.ident)
-  local autoSource = io.ins == 0 and not (opts and opts.autoSource == false)
-  local sourceGuid = autoSource and self:createSourceTrack{ name = display } or nil
-  local newId
-  local ok, err = self:mutate(function(g)
-    local fxId = 'n' .. g.nextId
-    g.nextId = g.nextId + 1
-    newId = fxId
-    g.nodes[fxId] = {
-      kind      = 'fx',
-      pos       = { x = x, y = y },
-      fxIdent   = fx.ident,
-      fxDisplay = display,
-      fxGuid    = io.fxGuid,
-      busAware  = false,
-      ports     = {
-        audio = { ins      = io.ins,     outs     = io.outs,
-                  inNames  = io.inNames, outNames = io.outNames },
-        midi  = { ins = 1, outs = 1 },
-      },
-    }
-    if sourceGuid then
-      local sourceId = 'n' .. g.nextId
+  local display = fx.name and shortFxName(fx.name) or fx.ident
+  local newId, ok, err
+  rm:transaction('wiring: add ' .. display, function()
+    local io         = self:instantiateFxOnScratch(fx.ident)
+    local autoSource = io.ins == 0 and not (opts and opts.autoSource == false)
+    local sourceGuid = autoSource and self:createSourceTrack{ name = display } or nil
+    ok, err = self:mutate(function(g)
+      local fxId = 'n' .. g.nextId
       g.nextId = g.nextId + 1
-      local sp = (opts and opts.sourcePos) or { x = x - 140, y = y }
-      g.nodes[sourceId] = {
-        kind        = 'source',
-        pos         = { x = sp.x, y = sp.y },
-        trackGuid   = sourceGuid,
-        displayName = display,
-        ports       = { audio = { ins = 0, outs = 1 },
-                        midi  = { ins = 0, outs = 1 } },
+      newId = fxId
+      g.nodes[fxId] = {
+        kind      = 'fx',
+        pos       = { x = x, y = y },
+        fxIdent   = fx.ident,
+        fxDisplay = display,
+        fxGuid    = io.fxGuid,
+        busAware  = false,
+        ports     = {
+          audio = { ins      = io.ins,     outs     = io.outs,
+                    inNames  = io.inNames, outNames = io.outNames },
+          midi  = { ins = 1, outs = 1 },
+        },
       }
-      util.add(g.edges, { type = 'midi', from = sourceId, to = fxId })
-    end
+      if sourceGuid then
+        local sourceId = 'n' .. g.nextId
+        g.nextId = g.nextId + 1
+        local sp = (opts and opts.sourcePos) or { x = x - 140, y = y }
+        g.nodes[sourceId] = {
+          kind        = 'source',
+          pos         = { x = sp.x, y = sp.y },
+          trackGuid   = sourceGuid,
+          displayName = display,
+          ports       = { audio = { ins = 0, outs = 1 },
+                          midi  = { ins = 0, outs = 1 } },
+        }
+        util.add(g.edges, { type = 'midi', from = sourceId, to = fxId })
+      end
+    end)
   end)
-  reaper.Undo_EndBlock2(0, 'wiring: add ' .. display, -1)
   if not ok then return nil, err end
   return newId
 end
@@ -420,17 +419,17 @@ function wm:deleteSource(nodeId, force)
   local track = node.trackGuid and self:trackByGuid(node.trackGuid)
   local takes = track and reaper.CountTrackMediaItems(track) or 0
   if takes > 0 and not force then return false, takes end
-  reaper.Undo_BeginBlock()
-  self:mutate(function(g)
-    g.nodes[nodeId] = nil
-    local kept = {}
-    for _, e in ipairs(g.edges) do
-      if e.from ~= nodeId and e.to ~= nodeId then util.add(kept, e) end
-    end
-    g.edges = kept
+  rm:transaction('wiring: delete source', function()
+    self:mutate(function(g)
+      g.nodes[nodeId] = nil
+      local kept = {}
+      for _, e in ipairs(g.edges) do
+        if e.from ~= nodeId and e.to ~= nodeId then util.add(kept, e) end
+      end
+      g.edges = kept
+    end)
+    if node.trackGuid then rm:deleteTrack(node.trackGuid) end
   end)
-  if track then reaper.DeleteTrack(track) end
-  reaper.Undo_EndBlock2(0, 'wiring: delete source', -1)
   return true
 end
 
@@ -438,23 +437,23 @@ end
 function wm:addSourceNode(opts)
   ensureLoaded()
   opts = opts or {}
-  reaper.Undo_BeginBlock()
-  local guid = self:createSourceTrack{ name = opts.name }
-  local newId
-  local ok, err = self:mutate(function(g)
-    newId = 'n' .. g.nextId
-    g.nextId = g.nextId + 1
-    local pos = opts.pos or { x = 0, y = 0 }
-    g.nodes[newId] = {
-      kind        = 'source',
-      pos         = { x = pos.x, y = pos.y },
-      trackGuid   = guid,
-      displayName = opts.name,
-      ports       = { audio = { ins = 0, outs = 1 },
-                      midi  = { ins = 0, outs = 1 } },
-    }
+  local newId, ok, err
+  rm:transaction('wiring: add source', function()
+    local guid = self:createSourceTrack{ name = opts.name }
+    ok, err = self:mutate(function(g)
+      newId = 'n' .. g.nextId
+      g.nextId = g.nextId + 1
+      local pos = opts.pos or { x = 0, y = 0 }
+      g.nodes[newId] = {
+        kind        = 'source',
+        pos         = { x = pos.x, y = pos.y },
+        trackGuid   = guid,
+        displayName = opts.name,
+        ports       = { audio = { ins = 0, outs = 1 },
+                        midi  = { ins = 0, outs = 1 } },
+      }
+    end)
   end)
-  reaper.Undo_EndBlock2(0, 'wiring: add source', -1)
   if not ok then return nil, err end
   return newId
 end
@@ -890,13 +889,11 @@ end
 
 ----- Apply ops (Stage 2)
 
-local function ownedSubsequence(track, ownedGuids)
+local function ownedSubsequence(fxChain, ownedGuids)
   local out = {}
-  for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
-    local guid = reaper.TrackFX_GetFXGUID(track, fxIdx)
-    if ownedGuids[guid] then
-      local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
-      util.add(out, { fxGuid = guid, ident = ident, absIdx = fxIdx })
+  for i, fx in ipairs(fxChain) do
+    if ownedGuids[fx.id] then
+      util.add(out, { fxGuid = fx.id, ident = fx.ident, absIdx = i - 1 })
     end
   end
   return out
@@ -958,11 +955,13 @@ local function clearOwner(owners, guid)
   return true
 end
 
--- Reconcile the owned FX subsequence of `track` to `target` via rm. Owned FX stay
+-- Reconcile the owned FX subsequence of `trackId` to `target` via rm. Owned FX stay
 -- contiguous (new FX inserts just after last owned); mints stamp the graph inline.
-local function reconcileFXChain(trackId, track, target, ownedGuids, owners)
-  local dirty   = false
-  local current = ownedSubsequence(track, ownedGuids)
+local function reconcileFXChain(trackId, target, ownedGuids, owners)
+  local dirty = false
+  local function liveChain() local r = rm:track(trackId); return r and r.fx or {} end
+  local chain   = liveChain()
+  local current = ownedSubsequence(chain, ownedGuids)
 
   -- Stale-guid sweep: a target entry whose id isn't live in REAPER (reload,
   -- manual delete, drift) drops to nil so it re-materialises and re-stamps.
@@ -990,7 +989,7 @@ local function reconcileFXChain(trackId, track, target, ownedGuids, owners)
   for _, t in ipairs(target) do
     if not t.id then
       local insertAt = (#current > 0) and (current[#current].absIdx + 1)
-                       or reaper.TrackFX_GetCount(track)
+                       or #chain
       local guid = rm:addFx(trackId, { ident = t.ident, index = insertAt })
       t.id = guid
       ownedGuids[guid] = true
@@ -1002,7 +1001,7 @@ local function reconcileFXChain(trackId, track, target, ownedGuids, owners)
 
   -- 3. Permute the owned subsequence to target order via rm:assignFx{index};
   --    the contiguous-block invariant fixes each target slot at firstOwnedAbs+(d-1).
-  current = ownedSubsequence(track, ownedGuids)
+  current = ownedSubsequence(liveChain(), ownedGuids)
   local firstOwnedAbs = current[1] and current[1].absIdx
   for d = 1, #target do
     if current[d].fxGuid ~= target[d].id then
@@ -1075,29 +1074,18 @@ function wm:applyOps(ops, label)
     local owners          = buildGuidOwners()
     local graphDirty      = false
 
-    -- Master has no wiringTrack tag, so pre-register it under every master-hosted trackKey
-    -- now — send-destination resolution (rm:assignTrack{sends}) must map it before any ops run.
-    local masterTrack = reaper.GetMasterTrack and reaper.GetMasterTrack(0) or nil
-    local masterGuid  = masterTrack and reaper.GetTrackGUID(masterTrack)
-    if masterTrack then
-      for _, op in ipairs(ops) do
-        if op.trackKind == 'master' and op.trackKey then
-          trackKeyToTrack[op.trackKey] = masterTrack
-        end
-      end
+    -- Master is absent from the project-track scan, so resolve its guid via rm and note
+    -- which trackKeys it hosts; send-destination resolution maps those to it below.
+    local masterGuid = rm:masterId()
+    local masterKeys = {}
+    for _, op in ipairs(ops) do
+      if op.trackKind == 'master' and op.trackKey then masterKeys[op.trackKey] = true end
     end
 
-    -- master resolves via trackKind; snap drain ops carry trackGuid directly;
-    -- target newTrack ops (trackGuid=nil) resolve via trackKeyToTrack.
-    local function resolveTrack(op)
-      if op.trackKind == 'master' then return masterTrack end
-      if op.trackGuid then return self:trackByGuid(op.trackGuid) end
-      return trackKeyToTrack[op.trackKey]
-    end
-
-    -- Addressing seam: rm speaks guid ids, wm speaks trackKey/trackGuid. keyToId
-    -- maps a send destination's trackKey → guid; resolveId an op's host track.
+    -- Addressing seam: rm speaks guid ids, wm speaks trackKey/trackGuid. keyToId maps a
+    -- send destination's trackKey → guid (master via masterKeys); resolveId an op's host.
     local function keyToId(trackKey)
+      if masterKeys[trackKey] then return masterGuid end
       local track = trackKeyToTrack[trackKey]
       return track and reaper.GetTrackGUID(track)
     end
@@ -1130,25 +1118,17 @@ function wm:applyOps(ops, label)
         local id = resolveId(op.trackKind, op.trackGuid, op.trackKey)
         if id then rm:assignTrack(id, { nchan = op.value }) end
       elseif op.op == 'setPinMaps' then
-        local t = resolveTrack(op)
-        if t then
-          -- setFXChain has already stamped the graph, so id-less entries resolve
-          -- through their origin. Full-replace: a port absent from the map is disconnected.
-          local pmByGuid = {}
-          for _, e in ipairs(op.fx) do
-            local guid = e.id or originGuid(e.origin)
-            if guid and e.pinMaps then pmByGuid[guid] = e.pinMaps end
-          end
-          for fxIdx = 0, reaper.TrackFX_GetCount(t) - 1 do
-            local guid = reaper.TrackFX_GetFXGUID(t, fxIdx)
-            if ownedGuids[guid] then
-              rm:assignFx(guid, { pinMaps = pmByGuid[guid] or { ins = {}, outs = {} } })
-            end
+        -- setFXChain has stamped+pruned the graph, so op.fx is the live owned set.
+        -- Full-replace: a port absent from an entry's map is disconnected.
+        for _, e in ipairs(op.fx) do
+          local guid = e.id or originGuid(e.origin)
+          if guid then
+            rm:assignFx(guid, { pinMaps = e.pinMaps or { ins = {}, outs = {} } })
           end
         end
       elseif op.op == 'setFXChain' then
-        local t = resolveTrack(op)
-        if t and reconcileFXChain(reaper.GetTrackGUID(t), t, op.fx, ownedGuids, owners) then
+        local guid = resolveId(op.trackKind, op.trackGuid, op.trackKey)
+        if guid and reconcileFXChain(guid, op.fx, ownedGuids, owners) then
           graphDirty = true
         end
       elseif op.op == 'moveFxAcrossTracks' then

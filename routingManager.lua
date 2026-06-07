@@ -562,6 +562,19 @@ function rm:tracks()
   return out
 end
 
+--contract: full record for one track by id (single-track rm:tracks()); nil if the id is gone
+function rm:track(id)
+  local track = locateTrack(id)
+  if not track then return nil end
+  return readTrack(track, track == reaper.GetMasterTrack(PROJ))
+end
+
+--contract: the master track's guid; resolves master without an rm:tracks() scan
+function rm:masterId()
+  local master = reaper.GetMasterTrack(PROJ)
+  return master and reaper.GetTrackGUID(master) or nil
+end
+
 function rm:addTrack(t)
   t = t or {}
   local idx = reaper.CountTracks(PROJ)

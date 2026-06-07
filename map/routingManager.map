@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=665  sha=55f7aae  mode=chunk
+@module routingManager  src=routingManager.lua  loc=678  sha=0e6966c  mode=chunk
 
 # Shapes
   @shape  fx = { id=guid, ident=string, name=string, inPins=int, outPins=int, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus=int, outBus=int, outDisabled=bool} }  -- midi nil for JS fx
@@ -102,22 +102,26 @@
 
 # Public API (rm:*)
   @api rm:tracks()  @ 555
-  @api rm:addTrack(t)  @ 565
-  @api rm:assignTrack(id, t)  @ 574
-  @api rm:deleteTrack(id)  @ 579
-  @api rm:addFx(trackId, t)  @ 584
-  @api rm:assignFx(id, t)  @ 598
-  @api rm:deleteFx(id)  @ 616
-  @api rm:fxPorts(id)  @ 622
+  @api rm:track(id)  @ 566
+      @contract  full record for one track by id (single-track rm:tracks()); nil if the id is gone
+  @api rm:masterId()  @ 573
+      @contract  the master track's guid; resolves master without an rm:tracks() scan
+  @api rm:addTrack(t)  @ 578
+  @api rm:assignTrack(id, t)  @ 587
+  @api rm:deleteTrack(id)  @ 592
+  @api rm:addFx(trackId, t)  @ 597
+  @api rm:assignFx(id, t)  @ 611
+  @api rm:deleteFx(id)  @ 629
+  @api rm:fxPorts(id)  @ 635
       @contract  ports = pins/2; names L/R-collapsed. {ins,outs,inNames,outNames}; empty if id is gone
-  @api rm:showFx(id)  @ 636
+  @api rm:showFx(id)  @ 649
       @contract  floats the fx window for id; false if the fx is no longer live
-  @api rm:installedFx()  @ 644
+  @api rm:installedFx()  @ 657
       @contract  enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
-  @api rm:transaction(label, fn)  @ 657
+  @api rm:transaction(label, fn)  @ 670
 
 # Uses (outbound edges)
-  @use call    util.add  @ 57, 336, 389, 436, 558, 561, 650
+  @use call    util.add  @ 57, 336, 389, 436, 558, 561, 663
   @use call    util.key  @ 396
   @use require util  @ 6
 
