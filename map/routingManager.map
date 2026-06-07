@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=627  sha=99bda25  mode=chunk
+@module routingManager  src=routingManager.lua  loc=665  sha=55f7aae  mode=chunk
 
 # Shapes
   @shape  fx = { id=guid, ident=string, name=string, inPins=int, outPins=int, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus=int, outBus=int, outDisabled=bool} }  -- midi nil for JS fx
@@ -13,11 +13,11 @@
   @state PROJ = 0  @ 8
   @state rm = {}  @ 10
   @state installedFxCache = nil  @ 11   -- reaper's installed-FX set is fixed at runtime
-  @state b64alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123...  @ 110
-  @state b64dec = {}  @ 111
-  @state SENDMODE_TO_POS = { [0] = 'postFader', [1] = 'preFx', [3] = 'preFader' }  @ 328
-  @state POS_TO_SENDMODE = { postFader = 0, preFx = 1, preFader = 3 }  @ 329
-  @state paramIdxByIdent = {}  @ 473
+  @state b64alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123...  @ 129
+  @state b64dec = {}  @ 130
+  @state SENDMODE_TO_POS = { [0] = 'postFader', [1] = 'preFx', [3] = 'preFader' }  @ 347
+  @state POS_TO_SENDMODE = { postFader = 0, preFx = 1, preFader = 3 }  @ 348
+  @state paramIdxByIdent = {}  @ 492
 
 # Private functions
   -- track resolution
@@ -31,88 +31,94 @@
       -- Adjacent set bits collapse to one pair; lLo|hLo merges the port's two pins.
   @fn readPinMaps(track, fxIdx)  @ 64
       -- ports = pins/2; disconnected ports (zero mask) dropped — absent ⇒ disconnected.
-  @fn pinMaskFor(pairList, pinOffset)  @ 77
-  @fn writePinMaps(track, fxIdx, pm)  @ 89
+  @fn pinName(track, fxIdx, dir, pin)  @ 77
+  @fn portNames(track, fxIdx, dir, pinCount)  @ 84
+      -- Port P (1-indexed) groups pins 2(P-1) and 2P-1. "Sidechain L" + "Sidechain R"
+      -- collapse to "Sidechain"; a mismatched pair keeps the left pin's name.
+  @fn pinMaskFor(pairList, pinOffset)  @ 96
+  @fn writePinMaps(track, fxIdx, pm)  @ 108
       -- Full-replace per fx: ports absent from `pm` are disconnected (zero mask).
   -- per-fx midi routing
-  @fn b64decode(s)  @ 114
-  @fn b64encode(s)  @ 134
-  @fn splitChunkLines(s)  @ 154
-  @fn joinChunkLines(lines, hasTrailing)  @ 162
-  @fn findFxBlock(lines, fxIdx)  @ 168
+  @fn b64decode(s)  @ 133
+  @fn b64encode(s)  @ 153
+  @fn splitChunkLines(s)  @ 173
+  @fn joinChunkLines(lines, hasTrailing)  @ 181
+  @fn findFxBlock(lines, fxIdx)  @ 187
       -- Locate the (fxIdx+1)-th non-JS FX block (0-indexed). Returns
       -- (firstBase64LineIdx, trailerLineIdx) or nil.
-  @fn mutateByteInBase64Line(line, byteIdx, fn)  @ 192
+  @fn mutateByteInBase64Line(line, byteIdx, fn)  @ 211
       -- Decode line → mutate one byte via fn → re-encode iff changed.
       -- No-op preserves the line byte-for-byte (round-trip invariant).
-  @fn setBitInBase64Line(line, byteIdx, mask, on)  @ 205
-  @fn setByteInBase64Line(line, byteIdx, value)  @ 211
-  @fn patchStreamMirrorBit(lines, firstIdx, lastIdx, streamOffset, mask, on)  @ 217
+  @fn setBitInBase64Line(line, byteIdx, mask, on)  @ 224
+  @fn setByteInBase64Line(line, byteIdx, value)  @ 230
+  @fn patchStreamMirrorBit(lines, firstIdx, lastIdx, streamOffset, mask, on)  @ 236
       -- Patch one bit of the wrapper-header mirror at a 1-indexed offset in
       -- the FX block's concatenated decoded-base64 stream.
-  @fn setFXMidiRouting(chunk, fxIdx, opts, pinChannels)  @ 235
+  @fn setFXMidiRouting(chunk, fxIdx, opts, pinChannels)  @ 254
       -- Drive per-FX MIDI routing on the fxIdx-th non-JS FX block. opts =
       -- { inBus?, outBus?, inDisabled?, outDisabled? }.
-  @fn readFXMidiRouting(chunk, fxIdx)  @ 257
+  @fn readFXMidiRouting(chunk, fxIdx)  @ 276
       -- Decode the fxIdx-th non-JS FX block's routing trailer (read counterpart).
       -- Returns { inBus, outBus, inDisabled, outDisabled } or nil.
   -- fx read
-  @fn fxName(track, idx)  @ 276
+  @fn fxName(track, idx)  @ 295
       -- Display name: a user instance rename wins, else the plugin's own name.
-  @fn readFx(track, idx)  @ 283
-  @fn isJSFX(ident)  @ 296
-  @fn readMidiRouting(chunk, routingIdx)  @ 302
+  @fn readFx(track, idx)  @ 302
+  @fn isJSFX(ident)  @ 315
+  @fn readMidiRouting(chunk, routingIdx)  @ 321
       -- Absent trailer ⇒ passthrough defaults; the field is present for every non-JS
       -- fx so callers can read routing without a JS-vs-not branch.
-  @fn readFxChain(track)  @ 308
+  @fn readFxChain(track)  @ 327
   -- sends
-  @fn sendKind(track, sendIdx)  @ 333
+  @fn sendKind(track, sendIdx)  @ 352
       -- A send is midi-only iff its audio source is disabled (I_SRCCHAN == -1);
       -- anything else (audio-only, or a dual-stream send) reads as 'audio'.
-  @fn readSendChans(track, sendIdx, kind)  @ 340
+  @fn readSendChans(track, sendIdx, kind)  @ 359
       -- Audio sends carry channels in I_SRCCHAN/I_DSTCHAN; midi sends pack them into
       -- I_MIDIFLAGS (bits 14/22, +1-biased — 0 means all channels).
-  @fn readSend(track, sendIdx)  @ 351
+  @fn readSend(track, sendIdx)  @ 370
       -- One decoder behind read, the reconcile diff, and the gain-drift pass.
-  @fn readSends(track)  @ 367
-  @fn sendKey(s)  @ 376
+  @fn readSends(track)  @ 386
+  @fn sendKey(s)  @ 395
       -- Identity tuple — gain is the mutable value, deliberately absent.
-  @fn createSend(track, w)  @ 380
-  @fn reconcileSends(track, sends)  @ 399
+  @fn createSend(track, w)  @ 399
+  @fn reconcileSends(track, sends)  @ 418
       -- Full-replace: drop/create by sendKey identity, then a separate gain pass
       -- because REAPER indices shift under deletion and gains move with the key.
   -- read
-  @fn trackName(track)  @ 432
-  @fn readMainSend(track)  @ 437
-  @fn readTrack(track, isMaster)  @ 447
+  @fn trackName(track)  @ 451
+  @fn readMainSend(track)  @ 456
+  @fn readTrack(track, isMaster)  @ 466
   -- write
-  @fn writeMainSend(track, ms)  @ 461
-  @fn paramsByName(track, fxIdx)  @ 475
-  @fn writeParams(track, fxIdx, params)  @ 491
+  @fn writeMainSend(track, ms)  @ 480
+  @fn paramsByName(track, fxIdx)  @ 494
+  @fn writeParams(track, fxIdx, params)  @ 510
       @contract  params keyed by display name; an unknown name raises
-  @fn routingIdxOf(track, fxIdx)  @ 502
+  @fn routingIdxOf(track, fxIdx)  @ 521
       -- Absolute fx index → chunk routing index (non-JS blocks only); nil for a JS
       -- fx, which has no routing trailer — writing midi to one is a no-op.
-  @fn writeMidiRouting(track, fxIdx, midi)  @ 513
-  @fn writeTrackFields(track, t)  @ 523
+  @fn writeMidiRouting(track, fxIdx, midi)  @ 532
+  @fn writeTrackFields(track, t)  @ 542
 
 # Public API (rm:*)
-  @api rm:tracks()  @ 532
-  @api rm:addTrack(t)  @ 542
-  @api rm:assignTrack(id, t)  @ 551
-  @api rm:deleteTrack(id)  @ 556
-  @api rm:addFx(trackId, t)  @ 561
-  @api rm:assignFx(id, t)  @ 574
-  @api rm:deleteFx(id)  @ 592
-  @api rm:showFx(id)  @ 598
+  @api rm:tracks()  @ 555
+  @api rm:addTrack(t)  @ 565
+  @api rm:assignTrack(id, t)  @ 574
+  @api rm:deleteTrack(id)  @ 579
+  @api rm:addFx(trackId, t)  @ 584
+  @api rm:assignFx(id, t)  @ 598
+  @api rm:deleteFx(id)  @ 616
+  @api rm:fxPorts(id)  @ 622
+      @contract  ports = pins/2; names L/R-collapsed. {ins,outs,inNames,outNames}; empty if id is gone
+  @api rm:showFx(id)  @ 636
       @contract  floats the fx window for id; false if the fx is no longer live
-  @api rm:installedFx()  @ 606
+  @api rm:installedFx()  @ 644
       @contract  enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
-  @api rm:transaction(label, fn)  @ 619
+  @api rm:transaction(label, fn)  @ 657
 
 # Uses (outbound edges)
-  @use call    util.add  @ 57, 317, 370, 417, 535, 538, 612
-  @use call    util.key  @ 377
+  @use call    util.add  @ 57, 336, 389, 436, 558, 561, 650
+  @use call    util.key  @ 396
   @use require util  @ 6
 
 # REAPER API surface
@@ -120,7 +126,7 @@
   @reaper GetTrackGUID
   @reaper CountTracks
   @reaper GetTrack
-  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetPinMappings, TrackFX_GetIOSize, TrackFX_SetPinMappings, TrackFX_GetNamedConfigParm, TrackFX_GetParamName, TrackFX_SetParam, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete, TrackFX_Show
+  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetPinMappings, TrackFX_GetIOSize, TrackFX_GetNamedConfigParm, TrackFX_SetPinMappings, TrackFX_GetParamName, TrackFX_SetParam, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete, TrackFX_Show
   @reaper GetTrackStateChunk
   @reaper GetTrackSendInfo_Value
   @reaper GetTrackNumSends

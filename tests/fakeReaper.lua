@@ -102,7 +102,9 @@ function M.new()
     local entry = fxEntry(track, idx)
     return entry ~= nil, fxIdentOf(entry) or ''
   end
+  state.missingFx = {}
   function r.TrackFX_AddByName(track, ident, _recFx, _instantiate)
+    if state.missingFx[ident] then return -1 end
     local list = state.fxByTrack[track]
     if not list then list = {}; state.fxByTrack[track] = list end
     list[#list + 1] = { ident = ident }
@@ -415,11 +417,13 @@ function M.new()
   end
   local insertedN = 0
   state.trackGuids = {}
-  function r.InsertTrackAtIndex(idx, _wantDefaults)
+  state.wantDefaults = {}
+  function r.InsertTrackAtIndex(idx, wantDefaults)
     insertedN = insertedN + 1
     local track = { __track = 'scratch' .. insertedN }
     table.insert(state.projectTracks, idx + 1, track)
     state.trackGuids[track] = '{TR-' .. insertedN .. '}'
+    state.wantDefaults[track] = wantDefaults and true or false
   end
   function r.GetTrackGUID(track)
     return state.trackGuids[track] or ('{TR-anon-' .. tostring(track) .. '}')
@@ -977,6 +981,12 @@ function M.new()
   end
   function r:setFxIO(ident, io)
     state.fxIO[ident] = io
+  end
+  function r:setMissingFx(ident)
+    state.missingFx[ident] = true
+  end
+  function r:wantDefaultsOf(guid)
+    for tr, g in pairs(state.trackGuids) do if g == guid then return state.wantDefaults[tr] end end
   end
   function r:setInstalledFx(list)
     state.installedFx = list

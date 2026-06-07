@@ -74,6 +74,25 @@ local function readPinMaps(track, fxIdx)
   return { ins = dirMap(0, ins), outs = dirMap(1, outs) }
 end
 
+local function pinName(track, fxIdx, dir, pin)
+  local ok, v = reaper.TrackFX_GetNamedConfigParm(track, fxIdx, dir .. '_pin_' .. pin)
+  return ok and v ~= '' and v or nil
+end
+
+-- Port P (1-indexed) groups pins 2(P-1) and 2P-1. "Sidechain L" + "Sidechain R"
+-- collapse to "Sidechain"; a mismatched pair keeps the left pin's name.
+local function portNames(track, fxIdx, dir, pinCount)
+  local out = {}
+  for port = 1, math.floor(pinCount / 2) do
+    local left  = pinName(track, fxIdx, dir, 2 * (port - 1))     or ''
+    local right = pinName(track, fxIdx, dir, 2 * (port - 1) + 1) or ''
+    local lPre, rPre = left:match('^(.+)%s+L$'), right:match('^(.+)%s+R$')
+    if lPre and lPre == rPre then out[port] = lPre
+    else                          out[port] = left ~= '' and left or nil end
+  end
+  return out
+end
+
 local function pinMaskFor(pairList, pinOffset)
   local lo, hi = 0, 0
   for _, pair in ipairs(pairList) do
@@ -523,6 +542,10 @@ end
 local function writeTrackFields(track, t)
   if t.name  then reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', t.name, true) end
   if t.nchan then reaper.SetMediaTrackInfo_Value(track, 'I_NCHAN', t.nchan) end
+  if t.hidden then
+    reaper.SetMediaTrackInfo_Value(track, 'B_SHOWINMIXER', 0)
+    reaper.SetMediaTrackInfo_Value(track, 'B_SHOWINTCP',   0)
+  end
   if t.mainSend then writeMainSend(track, t.mainSend) end
   if t.sends    then reconcileSends(track, t.sends) end
 end
@@ -542,7 +565,7 @@ end
 function rm:addTrack(t)
   t = t or {}
   local idx = reaper.CountTracks(PROJ)
-  reaper.InsertTrackAtIndex(idx, false)
+  reaper.InsertTrackAtIndex(idx, t.defaults or false)
   local track = reaper.GetTrack(PROJ, idx)
   writeTrackFields(track, t)
   return reaper.GetTrackGUID(track)
@@ -562,6 +585,7 @@ function rm:addFx(trackId, t)
   local track = locateTrack(trackId)
   if not track then return end
   local idx = reaper.TrackFX_AddByName(track, t.ident, false, -1)
+  if idx < 0 then return end
   local id  = reaper.TrackFX_GetFXGUID(track, idx)
   if t.index and t.index ~= idx then
     reaper.TrackFX_CopyToTrack(track, idx, track, t.index, true)
@@ -592,6 +616,20 @@ end
 function rm:deleteFx(id)
   local track, idx = locateFx(id)
   if track then reaper.TrackFX_Delete(track, idx) end
+end
+
+--contract: ports = pins/2; names L/R-collapsed. {ins,outs,inNames,outNames}; empty if id is gone
+function rm:fxPorts(id)
+  local track, idx = locateFx(id)
+  if not track then return { ins = 0, outs = 0, inNames = {}, outNames = {} } end
+  local _, inPins, outPins = reaper.TrackFX_GetIOSize(track, idx)
+  inPins, outPins = inPins or 0, outPins or 0
+  return {
+    ins      = inPins  / 2,
+    outs     = outPins / 2,
+    inNames  = portNames(track, idx, 'in',  inPins),
+    outNames = portNames(track, idx, 'out', outPins),
+  }
 end
 
 --contract: floats the fx window for id; false if the fx is no longer live
