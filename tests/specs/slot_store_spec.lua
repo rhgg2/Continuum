@@ -194,8 +194,9 @@ return {
       local ops = mkOps()
       local sm  = newSampleManager(ops)
       sm:setPrefix('/proj')
+      h.reaper:setProjectPath('/proj')
 
-      local ok = sm:assign('t1', 5, '/disk/kick.wav', '/proj', h.cm)
+      local ok = sm:assign('t1', 5, '/disk/kick.wav', h.cm)
       t.truthy(ok, 'returns true on success')
 
       t.eq(#ops.mkdirs, 1, 'one mkdir')
@@ -234,7 +235,7 @@ return {
       local sm = newSampleManager(ops)
       sm:setPrefix('/proj')
 
-      t.eq(sm:assign('t1', 2, '/disk/missing.wav', '/proj', h.cm), false, 'returns false')
+      t.eq(sm:assign('t1', 2, '/disk/missing.wav', h.cm), false, 'returns false')
       t.eq(h.cm:get('slotEntries')[2], nil, 'no cm entry written')
       sm:tick(h.cm)
       t.eq(readMailbox(h, 0).seq, 0, 'mailbox not bumped')
@@ -250,7 +251,7 @@ return {
       local sm = newSampleManager(mkOps())
       sm:setPrefix('/proj')
 
-      sm:assign('t1', 4, '/disk/new.wav', '/proj', h.cm)
+      sm:assign('t1', 4, '/disk/new.wav', h.cm)
       local entry = h.cm:get('slotEntries')[4]
       t.eq(entry.shStart, 100, 'shStart survived re-assign')
       t.truthy(entry.path:match('^Continuum/new%-'), 'path was overwritten')
@@ -268,7 +269,7 @@ return {
       local sm = newSampleManager(mkOps())
       sm:setPrefix('/proj')
 
-      sm:assign('t1', 4, '/disk/new.wav', '/proj', h.cm)
+      sm:assign('t1', 4, '/disk/new.wav', h.cm)
       local entry = h.cm:get('slotEntries')[4]
       t.eq(entry.start,   nil, 'start cleared')
       t.eq(entry['end'],  nil, 'end cleared')
@@ -284,8 +285,9 @@ return {
       local ops = mkOps()
       local sm  = newSampleManager(ops)
       sm:setPrefix('/proj')
+      h.reaper:setProjectPath('/proj')
 
-      local rel = sm:stageInto('t1', 7, '/disk/snare.wav', '/proj')
+      local rel = sm:stageInto('t1', 7, '/disk/snare.wav')
       t.truthy(rel and rel:match('^Continuum/snare%-%x+%.wav$'),
         'returned rel path, got ' .. tostring(rel))
       t.eq(#ops.copies, 1, 'one copy issued')
@@ -309,7 +311,7 @@ return {
       ops.copyResult = false
       local sm = newSampleManager(ops)
       sm:setPrefix('/proj')
-      t.eq(sm:stageInto('t1', 2, '/disk/x.wav', '/proj'), nil, 'returned nil')
+      t.eq(sm:stageInto('t1', 2, '/disk/x.wav'), nil, 'returned nil')
       sm:tick(h.cm)
       t.eq(readMailbox(h, 0).seq, 0, 'mailbox not bumped')
     end,

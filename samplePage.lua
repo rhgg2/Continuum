@@ -31,18 +31,7 @@ local ctx    = gui.ctx
 local rename = nil
 local sm     = util.instantiate('sampleManager', { fileOps = fs.fileOps })
 
-local sv
-sv = util.instantiate('sampleView', {
-  cm = cm,
-  assignSlot = function(slot, srcPath)
-    return sm:assign(sv:getTrack(), slot, srcPath, reaper.GetProjectPath(0), cm)
-  end,
-  previewSlot       = function(slot, bounds) return sm:previewSlot(sv:getTrack(), slot, bounds) end,
-  previewPath       = function(path)         return sm:previewPath(sv:getTrack(), path)         end,
-  listSamplerTracks = function()             return sm:listTracks()                             end,
-  clearSlot         = function(slot)         return sm:clearSlot(sv:getTrack(), slot, cm)       end,
-  stopPreview       = function()             return sm:stopPreview(sv:getTrack())               end,
-})
+local sv = util.instantiate('sampleView', { cm = cm, sm = sm })
 
 --shape: peakCacheEntry = { src?=PCM_Source, cols=int, fs=number, nch=int, frames=int, lenSec=number, building=bool, amps?={number,...} } | false
 --shape: durCacheEntry  = number | false
@@ -68,7 +57,7 @@ end
 local function triggerPreviewInPlace(srcPath)
   local slot  = cm:get('currentSample')
   local track = sv:getTrack()
-  if not sm:stageInto(track, slot, srcPath, reaper.GetProjectPath(0)) then return end
+  if not sm:stageInto(track, slot, srcPath) then return end
   pip.slot             = slot
   pip.track            = track
   pip.browserAtTrigger = sv:getBrowserPath()

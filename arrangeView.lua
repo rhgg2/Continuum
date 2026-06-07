@@ -2,7 +2,7 @@
 -- @noindex
 
 --invariant: av owns arrange-page state — cursor, scroll, focus, paletteSlot; arrangePage renders.
---invariant: av builds/owns am; all arrangePage queries and mutations go through av, never am.
+--invariant: page builds am and injects it; av owns the ref — all mutations route through av.
 --invariant: av speaks no ImGui — modifiers arrive as plain booleans; av works in QN/rows only.
 --invariant: cursor/scroll are in-memory module-locals; only beatPerRow persists via cm.
 --invariant: cursorRow is integer rows; cursorCol is 0-based track index. qn = row * beatPerRow.
@@ -13,12 +13,10 @@
 
 local util = require 'util'
 
-local cm, cmgr, facade =
-  (...).cm, (...).cmgr, (...).facade
+local cm, cmgr, facade, am =
+  (...).cm, (...).cmgr, (...).facade, (...).am
 
 local function tracker() return facade.get('tracker') end
-
-local am = util.instantiate('arrangeManager', { cm = cm })
 
 local av = {}
 

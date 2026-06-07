@@ -8,12 +8,11 @@ sampler JSFX (driven via gmem mailboxes).
 ## Identity model
 
 Sample mode keys against a **REAPER track**, not a take. The track is
-chosen explicitly through the toolbar picker drawn by `trackerPage`,
-which lists tracks carrying the Continuum Sampler FX (supplied by the
-`listSamplerTracks` injection from `continuum.lua`). On entry to
-sample mode `continuum.lua` defaults the picked track to the parent
-track of the last-active take, then `cm:clearTake()` drops the take
-context so take-tier reads stop resolving against it.
+chosen explicitly through the toolbar picker, whose list comes from
+`sv:listTracks()` → `sm:listTracks()` (tracks carrying the Continuum
+Sampler FX). `samplePage:bind` seeds a default track on first entry —
+the parent track of the last-active take — then drops the take context
+so take-tier reads stop resolving against it.
 
 `sv:setTrack(track)` is the single rebind path. It calls
 `cm:setTrack(track)` and clears the transient `currentSample` override
@@ -23,18 +22,15 @@ the local field only.
 
 ## gmem boundary
 
-The view never speaks gmem directly. Three writer functions are injected
-at construction and live in `continuum.lua`:
-
-- `loadSlot(slot, path)`     → write the path into slot 0..N-1.
-- `previewSlot(slot, bounds)` → audition slot N (bounds=1 honours
-  SH_START/SH_END, bounds=0 plays the full file).
-- `previewPath(path)`         → load the file into the hidden preview
-  slot (idx N_SAMPLES) and audition it. Used to scrub through files in
-  the browser without consuming a real slot.
-
-Injection keeps `sampleView` testable in the pure-Lua harness; tests
-substitute call-recording stubs.
+The view never speaks gmem or REAPER directly — it holds `sm` (the
+`sampleManager`, built and injected by `samplePage`) and routes every
+side-effect through it: `sm:assign`, `sm:previewSlot`, `sm:previewPath`,
+`sm:clearSlot`, `sm:stopPreview`, `sm:listTracks`. The view passes its
+own bound track into each call, so the manager's track-first signatures
+stay uniform. Holding the manager (rather than a bag of injected
+closures) keeps sv testable in the pure-Lua harness, where a
+call-recording fake `sm` stands in. Preview semantics — slot vs.
+hidden-path audition, the `bounds` flag — live on `sampleManager`.
 
 ## Layout
 

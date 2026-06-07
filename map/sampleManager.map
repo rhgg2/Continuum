@@ -1,4 +1,4 @@
-@module sampleManager  src=sampleManager.lua  loc=442  sha=fa4a61d  mode=chunk
+@module sampleManager  src=sampleManager.lua  loc=444  sha=d30f817  mode=chunk
 @deps fileOps
 
 # Invariants & contracts
@@ -72,43 +72,43 @@
       @contract  tick reaps trackStates entries for tracks whose sampler FX has been removed (else closed-over state leaks)
       @contract  first-sight FX-GUID binding does NOT reset state (lastBootToken=0 still triggers rehydrate via the boot-token branch)
   -- cm-authoritative slot operations
-  @api sm:assign(track, idx, srcPath, projectPath, cm)  @ 269
+  @api sm:assign(track, idx, srcPath, cm)  @ 269
       @contract  assign hashes srcPath, copies into projectPath/Continuum/<stem>-<hash>.<ext> if missing, writes cm rel path, queues mailbox push; returns false if hash or copy fails
-  @api sm:loadSlot(track, slot, relPath)  @ 291
-  @api sm:clearSlot(track, slot, cm)  @ 298
-  @api sm:setTrim(track, slot, startFrames, endFrames, cm)  @ 305
+  @api sm:loadSlot(track, slot, relPath)  @ 292
+  @api sm:clearSlot(track, slot, cm)  @ 299
+  @api sm:setTrim(track, slot, startFrames, endFrames, cm)  @ 306
       @contract  setTrim sends start/end without path/name; pathLen=0/nameLen=0 in the wire payload means "leave alone" on the JSFX side
-  @api sm:setName(track, slot, name, cm)  @ 313
-  @api sm:stageInto(track, idx, srcPath, projectPath)  @ 319
+  @api sm:setName(track, slot, name, cm)  @ 314
+  @api sm:stageInto(track, idx, srcPath)  @ 320
   -- Preview + prefix
-  @api sm:setPrefix(prefix)  @ 332
-  @api sm:previewSlot(track, slot, bounds)  @ 339
+  @api sm:setPrefix(prefix)  @ 334
+  @api sm:previewSlot(track, slot, bounds)  @ 341
       @contract  preview writes are silently dropped if the magic word at PREVIEW_BASE is non-zero (JSFX hasn't consumed the prior preview command)
       @contract  preview header order: payload words first, magic last — JSFX dispatches on the MAGIC write
-  @api sm:stopPreview(track)  @ 351
+  @api sm:stopPreview(track)  @ 353
       @contract  stopPreview encodes "stop" as slot=-1 in the same preview mailbox; same magic-gate as previewSlot
-  @api sm:previewPath(track, path)  @ 362
+  @api sm:previewPath(track, path)  @ 364
       @contract  previewPath uses the dedicated PREVIEW_SLOT_IDX (=N_SAMPLES) so the JSFX side knows to load from the inline path bytes rather than a slot
   -- Track surface
-  @api sm:listTracks()  @ 376
-  @api sm:probeMode(take, cm)  @ 392
+  @api sm:listTracks()  @ 378
+  @api sm:probeMode(take, cm)  @ 394
       @contract  probeMode flips cm.trackerMode (transient tier) based on whether the take's track has the sampler FX
       @contract  probeMode forces I_PERFFLAGS bit 1 (anticipative FX off) on sampler tracks for tighter timing
-  @api sm:migrate(projectPath, oldProjectPath, cm)  @ 410
+  @api sm:migrate(projectPath, oldProjectPath, cm)  @ 412
       @contract  migrate iterates every sampler track via cm:readTrackKey so non-bound tracks migrate too
       @contract  cm rel paths are preserved across migrate; only file bytes move
       @contract  migrate is a no-op if oldProjectPath is missing or unchanged
-  @api sm:watchPath(cm)  @ 431
+  @api sm:watchPath(cm)  @ 433
       @contract  watchPath setPrefixes, migrates, writes cm.lastProjectPath on GetProjectPath change
       @contract  cm.lastProjectPath persists at project-tier so close-during-save is caught next open
 
 # Uses (outbound edges)
-  @use call    fileOps.copy  @ 275, 325
-  @use call    fileOps.exists  @ 275, 325
-  @use call    fileOps.hash  @ 270, 320
-  @use call    fileOps.mkdir  @ 274, 324, 420
-  @use call    fileOps.move  @ 421
-  @use call    fs.basename  @ 272, 276, 322
+  @use call    fileOps.copy  @ 276, 327
+  @use call    fileOps.exists  @ 276, 327
+  @use call    fileOps.hash  @ 271, 322
+  @use call    fileOps.mkdir  @ 275, 326, 422
+  @use call    fileOps.move  @ 423
+  @use call    fs.basename  @ 273, 277, 324
   @use require fs  @ 17
   @use require util  @ 16
 
@@ -118,8 +118,8 @@
   @reaper GetSetMediaTrackInfo_String
   @reaper CountTracks
   @reaper GetTrack
+  @reaper GetProjectPath
   @reaper GetTrackName
   @reaper GetMediaItemTake_Track
   @reaper GetMediaTrackInfo_Value
   @reaper SetMediaTrackInfo_Value
-  @reaper GetProjectPath

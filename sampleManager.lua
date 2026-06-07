@@ -266,7 +266,8 @@ end
 ----- cm-authoritative slot operations
 
 --contract: assign hashes srcPath, copies into projectPath/Continuum/<stem>-<hash>.<ext> if missing, writes cm rel path, queues mailbox push; returns false if hash or copy fails
-function sm:assign(track, idx, srcPath, projectPath, cm)
+function sm:assign(track, idx, srcPath, cm)
+  local projectPath = reaper.GetProjectPath(0)
   local hash = fileOps.hash(srcPath)
   if not hash then return false end
   local rel  = relForSrc(fs.basename(srcPath), hash)
@@ -316,7 +317,8 @@ function sm:setName(track, slot, name, cm)
   return true
 end
 
-function sm:stageInto(track, idx, srcPath, projectPath)
+function sm:stageInto(track, idx, srcPath)
+  local projectPath = reaper.GetProjectPath(0)
   local hash = fileOps.hash(srcPath)
   if not hash then return nil end
   local rel = relForSrc(fs.basename(srcPath), hash)

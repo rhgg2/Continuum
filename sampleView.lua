@@ -3,14 +3,14 @@
 
 --invariant: sv keys against a REAPER track (not a take); cm is rebound only via sv:setTrack
 --invariant: sv emits no signals — it is a passive state holder polled by samplePage each frame
---invariant: sv never speaks REAPER, gmem, or ImGui directly; all side-effects route through injected callbacks
+--invariant: sv never speaks REAPER, gmem, or ImGui directly; all side-effects route through sm
 --invariant: browserPath/selectedFile/previewSource are transient locals; nothing in sv is persisted (cm owns persistence)
 --invariant: selectedFile mirrors browserPath only when the highlighted item is a file (folders null it)
 --invariant: previewSource gates auditionCurrent dispatch: 'file' → path branch, 'slot' → currentSample branch
 --invariant: slot index space is 0..63 (advanceOnLoad scan upper bound)
 --shape: browserState = { track, currentFolder, browserPath, browserIsFolder, selectedFile, previewSource = 'file'|'slot'|nil }
---shape: trackEntry = { track, name }   -- listSamplerTracks() element
-local cm, assignSlot, previewSlot, previewPath, listSamplerTracks, clearSlot, stopPreview = (...).cm, (...).assignSlot, (...).previewSlot, (...).previewPath, (...).listSamplerTracks, (...).clearSlot, (...).stopPreview
+--shape: trackEntry = { track, name }   -- sm:listTracks() element
+local cm, sm = (...).cm, (...).sm
 
 local sv = {}
 local track           = nil
@@ -19,8 +19,6 @@ local selectedFile    = nil
 local browserPath     = nil
 local browserIsFolder = false
 local previewSource   = nil
-
-listSamplerTracks = listSamplerTracks or function() return {} end
 
 --contract: idempotent rebind: always re-primes cm.track tier so cache survives a prior cm:setContext(nil) (e.g. tm:bindTake(nil) on page switch)
 function sv:setTrack(t)
@@ -31,7 +29,7 @@ function sv:setTrack(t)
   end
 end
 function sv:getTrack()              return track          end
-function sv:listTracks()            return listSamplerTracks() end
+function sv:listTracks()            return sm:listTracks() end
 --contract: resolution order: cm:sampleBrowserRoot → $HOME → '/'; never returns nil
 function sv:browseRoot()
   return (cm and cm:get('sampleBrowserRoot')) or os.getenv('HOME') or '/'
@@ -71,12 +69,12 @@ end
 function sv:setSelectedFile(p)      selectedFile  = p     end
 function sv:getSelectedFile()       return selectedFile   end
 
---contract: returns false on no selection or assignSlot failure; on success, optionally advances currentSample to the next empty slot in [slot+1, 63]
+--contract: returns false on no selection or sm:assign failure; on success may advance currentSample
 --contract: advance is a no-op when no empty slot exists in range (currentSample left unchanged)
 function sv:loadSelectedIntoCurrent()
   if not selectedFile then return false end
   local slot = cm and cm:get('currentSample')
-  if not assignSlot(slot, selectedFile) then return false end
+  if not sm:assign(track, slot, selectedFile, cm) then return false end
   if cm and cm:get('advanceOnLoad') then
     local entries = cm:get('slotEntries')
     for idx = slot + 1, 63 do
@@ -89,28 +87,27 @@ function sv:loadSelectedIntoCurrent()
   return true
 end
 
---contract: requires both path and track; returns false otherwise without invoking previewPath
+--contract: requires both path and track; returns false otherwise without invoking sm:previewPath
 function sv:auditionPath(path)
   if not path or not track then return false end
-  previewPath(path)
+  sm:previewPath(track, path)
   return true
 end
 
 --contract: requires track; bounds=1 (honours SH_START/SH_END trim)
 function sv:auditionSlot(idx)
   if not track then return end
-  previewSlot(idx, 1)
+  sm:previewSlot(track, idx, 1)
 end
 
---contract: no-op when clearSlot or cm not injected (test seam)
+--contract: no-op when cm is unbound
 function sv:clearCurrentSlot()
-  if not (clearSlot and cm) then return end
-  clearSlot(cm:get('currentSample'))
+  if not cm then return end
+  sm:clearSlot(track, cm:get('currentSample'), cm)
 end
 
---contract: no-op when stopPreview not injected (test seam)
 function sv:stopAudition()
-  if stopPreview then stopPreview() end
+  sm:stopPreview(track)
 end
 
 return sv

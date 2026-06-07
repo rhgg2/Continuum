@@ -24,7 +24,8 @@ local ctx = gui and gui.ctx or nil
 local monoFont = gui and gui.font or nil
 local uiSize   = gui and gui.fontSize and gui.fontSize.ui or 12
 
-local av = util.instantiate('arrangeView', { cm = cm, cmgr = cmgr, facade = facade })
+local am = util.instantiate('arrangeManager', { cm = cm })
+local av = util.instantiate('arrangeView', { cm = cm, cmgr = cmgr, facade = facade, am = am })
 
 local ap = {}
 
