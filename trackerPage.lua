@@ -5,7 +5,7 @@
 -- to trackerRender. The two roles — manage the stack vs. draw it — live in
 -- separate modules; the renderer is handed only tv and never reaches below it.
 
---contract: constructs the substack (mm/tm/gm local, only tv leaves); tm is touched solely through tv
+--contract: mm/tm/gm local, only tv leaves; take lifecycle drives tm, view-state drives tv
 --contract: the bound take follows the arrange cursor; renderBody rebinds, then arms the external-mutation watcher
 --contract: render hooks delegate to trackerRender; lifecycle (bind/unbind/dropTake/reload) is native here
 local util = require 'util'
@@ -20,8 +20,7 @@ local cm, cmgr, chrome, gui, modalHost, facade =
 local function arrange() return facade.get('arrange') end
 
 -- mm/tm/gm stay local to this chunk; only tv leaves, handed to the renderer.
--- Lifecycle drives the stack through tv's passthroughs, so tm is owned by one
--- layer (tv) and reached by nobody above it.
+-- coord drives the take lifecycle on tm directly; tv owns only its own view-state seams.
 local mm = util.instantiate('midiManager',    { take = nil })
 local tm = util.instantiate('trackerManager', { mm = mm, cm = cm })
 local gm = util.instantiate('groupManager',   { tm = tm, cm = cm })
@@ -34,34 +33,41 @@ local tr = util.instantiate('trackerRender',
 local tp = {}
 local lastHash = nil   -- bound take's last-seen MIDI hash; external-mutation watcher baseline
 
+--reaper: MIDI_GetHash on the bound take — the external-mutation watcher baseline
+local function takeHash()
+  local take = tm:currentTake(); if not take then return nil end
+  local ok, h = reaper.MIDI_GetHash(take, false)
+  return ok and h or nil
+end
+
 ----------- PUBLIC
 
------ Take lifecycle (drives the stack through tv)
+----- Take lifecycle (take ops on tm, view-state on tv)
 
-function tp:currentTake() return tv:currentTake() end
+function tp:currentTake() return tm:currentTake() end
 
---contract: bind/unbind drive the take via tv; the page owns the cm/mm swap for its stack
+--contract: bind/unbind drive the take on tm; bind also seeds tv's take-tier slots
 function tp:bind(t)
-  tv:bindTake(t)
+  tm:bindTake(t)
   if t then tv:seedSharedSlots() end
 end
-function tp:unbind() tr:closeTransients(); tv:bindTake(nil) end
+function tp:unbind() tr:closeTransients(); tm:bindTake(nil) end
 
---contract: take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.
-function tp:dropTake() tr:closeTransients(); tv:detach(); tv:dropGrid() end
+--contract: if take is destroyed, detach tm and blank the grid. Distinct from unbind.
+function tp:dropTake() tr:closeTransients(); tm:detach(); tv:dropGrid() end
 
 --contract: for coord's external-mutation watcher; re-reads the bound take, no swap
-function tp:reloadFromReaper() tv:reloadFromReaper() end
+function tp:reloadFromReaper() tm:reloadFromReaper() end
 
 --contract: rebind to the cursor take on change, then hash-diff for external edits. See docs/trackerPage.md § Bind from the cursor.
 function tp:bindFromCursor()
   local cur = arrange().currentTake()
-  if cur ~= tv:currentTake() then
+  if cur ~= tm:currentTake() then
     if cur then self:bind(cur) else self:dropTake() end
     lastHash = nil
   elseif cur and lastHash then
-    local h = tv:takeHash()
-    if h and h ~= lastHash then tv:reloadFromReaper() end
+    local h = takeHash()
+    if h and h ~= lastHash then tm:reloadFromReaper() end
   end
 end
 
@@ -86,7 +92,7 @@ function tp:focusState()           return tr:focusState() end
 function tp:renderBody(ctx, w, h, dispatch)
   self:bindFromCursor()
   tr:renderBody(ctx, w, h, dispatch)
-  lastHash = tv:takeHash()
+  lastHash = takeHash()
 end
 
 return tp

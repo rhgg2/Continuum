@@ -1824,16 +1824,6 @@ function tv:clipboard() return clipboard end
 
 function tv:rowPerBar()      return rowPerBar end
 function tv:takeName()       return tm:name() end
-function tv:currentTake()      return tm:currentTake() end
-function tv:bindTake(take)     return tm:bindTake(take) end
-function tv:detach()           return tm:detach() end
-function tv:reloadFromReaper() return tm:reloadFromReaper() end
---reaper: MIDI_GetHash on the bound take — the controller's external-mutation baseline
-function tv:takeHash()
-  local take = tm:currentTake(); if not take then return nil end
-  local ok, h = reaper.MIDI_GetHash(take, false)
-  return ok and h or nil
-end
 function tv:activeTemper()   return ctx:activeTemper() end
 function tv:noteProjection(evt) return ctx:noteProjection(evt) end
 function tv:rowBeatInfo(row) return ctx:rowBeatInfo(row) end
