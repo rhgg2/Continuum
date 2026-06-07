@@ -23,12 +23,12 @@ local DAG  = require 'DAG'
 local fs   = require 'fs'
 
 local cm = (...).cm
+local rm = (...).rm
 
 local wm = {}
 local fire = util.installHooks(wm)
 
 local userGraph = nil
-local installedFx = nil   -- session cache; reaper's installed-FX set is fixed at runtime
 local scratchTrack = nil  -- hidden trackKey for disconnected/orphan FX nodes; reset by wm:load
 local pokeParamCache = {} -- persistent paramIdx cache for the pokeEdgeGain hot path
 local realising = false   -- true during applyOps's stamp-back mutate, gating wiringChanged
@@ -329,10 +329,7 @@ end
 
 --contract: floats the FX window for the instance guid; false if the guid is no longer live
 function wm:showFxWindow(fxGuid)
-  local track, fxIdx = self:locateFx(fxGuid)
-  if not track then return false end
-  reaper.TrackFX_Show(track, fxIdx, 3)
-  return true
+  return rm:showFx(fxGuid)
 end
 
 --contract: inserts a source track before scratch, tags wiringTrackKind=sourceTrack, returns GUID.
@@ -1722,18 +1719,9 @@ function wm:fastGainCommit(edgeIdx, gain)
   return true
 end
 
---contract: enumerates reaper.EnumInstalledFX once per wm instance; name is raw REAPER "Type: Name (Author)"
+--contract: delegates to rm:installedFx — raw REAPER "Type: Name (Author)" rows, memoised there
 function wm:listInstalledFX()
-  if installedFx then return installedFx end
-  local out, i = {}, 0
-  while true do
-    local ok, name, ident = reaper.EnumInstalledFX(i)
-    if not ok then break end
-    util.add(out, { name = name, ident = ident })
-    i = i + 1
-  end
-  installedFx = out
-  return out
+  return rm:installedFx()
 end
 
 --contract: detects REAPER undo/redo of a wiring gesture by diffing scratch P_EXT against lastScratchRaw; on diff, mirrors scratch back to project tier, drops the in-memory graph, fires wiringChanged{kind='load'}. If scratch was deleted (manual or undo past its creation), reconciler recreates it on the next reconcile pass — so here we just clear the handle and let the live loop catch up.

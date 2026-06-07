@@ -25,7 +25,9 @@ local wireSize = gui and gui.fontSize and gui.fontSize.wire or 14
 local uiFont   = gui and gui.uiFont or nil
 local uiSize   = gui and gui.fontSize and gui.fontSize.ui or 12
 
-local wv = util.instantiate('wiringView', { cm = cm, cmgr = cmgr })
+local rm = util.instantiate('routingManager')
+local wm = util.instantiate('wiringManager', { cm = cm, rm = rm })
+local wv = util.instantiate('wiringView', { cm = cm, cmgr = cmgr, wm = wm })
 
 local wp = {}
 

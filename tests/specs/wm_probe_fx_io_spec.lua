@@ -105,7 +105,9 @@ return {
     name = 'addFx writes probed ins/outs + per-port names onto the node',
     run = function(harness)
       local h = harness.mk()
-      local wv = util.instantiate('wiringView', { cm = h.cm })
+      local rm = util.instantiate('routingManager')
+      local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
+      local wv = util.instantiate('wiringView', { cm = h.cm, wm = wm })
       reaper:setFxIO('VST3:Comp', {
         ins  = 4, outs = 2,
         inPinNames  = { 'Main L', 'Main R', 'Sidechain L', 'Sidechain R' },

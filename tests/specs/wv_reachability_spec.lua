@@ -9,7 +9,9 @@ local FX = { name = 'ReaEQ', ident = 'VST3:ReaEQ (Cockos)' }
 
 local function mkWv(harness)
   local h  = harness.mk()
-  local wv = util.instantiate('wiringView', { cm = h.cm })
+  local rm = util.instantiate('routingManager')
+  local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
+  local wv = util.instantiate('wiringView', { cm = h.cm, wm = wm })
   return h, wv
 end
 

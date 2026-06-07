@@ -1,15 +1,14 @@
 -- See docs/wiringView.md for the model.
 -- @noindex
 
---invariant: wiringView owns wm and is the only module that speaks to it — wiringPage runs every graph query and every mutation through wv. Mirrors av→am, vm→tm.
+--invariant: wv is the sole speaker to wm (injected by wiringPage); all graph ops route through wv.
 --invariant: wv is the logical view layer — it projects the raw graph into render-ready descriptors (label, port counts split into audio/MIDI) and carries per-session pointers (hover, selection by nodeId). Viewport geometry, screen coordinates, hit-testing, and every ImGui call live in wiringPage. wv never speaks ImGui.
 --invariant: hover / selection are nodeId-only and per-session; they don't persist. Camera (pan/zoom) lands here when 1.3b adds the drag UX.
 
 local util = require 'util'
 
 local cm = (...).cm
-
-local wm = util.instantiate('wiringManager', { cm = cm })
+local wm = (...).wm
 
 local wv = {}
 

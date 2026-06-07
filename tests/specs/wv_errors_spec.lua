@@ -4,7 +4,9 @@ local util = require('util')
 local function mkWv(harness, graph)
   local h = harness.mk()
   if graph then h.cm:set('project', 'wiringGraph', graph) end
-  local wv = util.instantiate('wiringView', { cm = h.cm })
+  local rm = util.instantiate('routingManager')
+  local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
+  local wv = util.instantiate('wiringView', { cm = h.cm, wm = wm })
   return h, wv
 end
 
