@@ -72,8 +72,12 @@ return {
       local h, wv = mkWv(harness)
       h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
       wv:addFx(0, 0, { name = 'Massive', ident = 'VST3:Massive' })
-      local g = wv:graph()
-      local track = reaper.GetTrack(0, math.floor(reaper.CountTracks(0)) - 2)
+      local guid = wv:graph().nodes.n2.trackGuid
+      local track
+      for i = 0, math.floor(reaper.CountTracks(0)) - 1 do
+        local tr = reaper.GetTrack(0, i)
+        if reaper.GetTrackGUID(tr) == guid then track = tr end
+      end
       reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', 'Renamed', true)
       local sourceView
       for _, nv in ipairs(wv:nodeViews()) do

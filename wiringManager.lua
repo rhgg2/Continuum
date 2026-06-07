@@ -92,23 +92,25 @@ local function ensureCompiled()
   return compiledCache
 end
 
-local function findScratchTrack()
+-- The single project-track scan wm is allowed: handle↔guid↔trackKey addressing
+-- rides on cm ext-state tags rm won't expose. see docs/wiringManager.md § the addressing seam
+local function eachTrack(visit)
   for i = 0, reaper.CountTracks(0) - 1 do
-    local track = reaper.GetTrack(0, i)
-    if cm:readTrackKey(track, 'wiringScratch') == '1' then return track end
+    if visit(reaper.GetTrack(0, i)) then return end
   end
 end
 
+local function findScratchTrack()
+  local found
+  eachTrack(function(track)
+    if cm:readTrackKey(track, 'wiringScratch') == '1' then found = track; return true end
+  end)
+  return found
+end
+
 local function createScratchTrack()
-  reaper.PreventUIRefresh(1)
-  local idx = reaper.CountTracks(0)
-  reaper.InsertTrackAtIndex(idx, false)
-  local track = reaper.GetTrack(0, idx)
-  reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', SCRATCH_NAME, true)
-  reaper.SetMediaTrackInfo_Value(track, 'B_SHOWINMIXER', 0)
-  reaper.SetMediaTrackInfo_Value(track, 'B_SHOWINTCP',   0)
-  cm:writeTrackKey(track, 'wiringScratch', '1')
-  reaper.PreventUIRefresh(-1)
+  local track = wm:trackByGuid(rm:addTrack{ name = SCRATCH_NAME, hidden = true })
+  cm:writeTrackKey(track, 'wiringScratch', '1')  -- tag via the seam: cm needs a live handle
   return track
 end
 
@@ -116,26 +118,6 @@ local function ensureScratchTrack()
   if scratchTrack then return scratchTrack end
   scratchTrack = findScratchTrack() or createScratchTrack()
   return scratchTrack
-end
-
-local function pinName(track, fxIdx, dir, pinIdx)
-  local ok, v = reaper.TrackFX_GetNamedConfigParm(track, fxIdx, dir .. '_pin_' .. pinIdx)
-  return ok and v or nil
-end
-
--- Port P (1-indexed) groups pin 2(P-1) and 2P-1.
--- "Sidechain L" + "Sidechain R" → "Sidechain"; mismatched pair → left pin name.
-local function portNames(track, fxIdx, dir, pinCount)
-  local out = {}
-  for p = 1, pinCount / 2 do
-    local left  = pinName(track, fxIdx, dir, (p - 1) * 2)     or ''
-    local right = pinName(track, fxIdx, dir, (p - 1) * 2 + 1) or ''
-    local lPre  = left :match('^(.+)%s+L$')
-    local rPre  = right:match('^(.+)%s+R$')
-    if lPre and lPre == rPre then out[p] = lPre
-    else                          out[p] = left ~= '' and left or nil end
-  end
-  return out
 end
 
 -- True iff JSFX desc declares ext_midi_bus=1 (the FX scans midi_bus itself,
@@ -253,32 +235,20 @@ end
 --contract: unknown ident → fxGuid=nil, ins=outs=0, empty name lists
 function wm:instantiateFxOnScratch(ident)
   ensureScratchTrack()
-  reaper.PreventUIRefresh(1)
-  local fxIdx = reaper.TrackFX_AddByName(scratchTrack, ident, false, -1)
-  local result
-  if fxIdx < 0 then
-    result = { fxGuid = nil, ins = 0, outs = 0, inNames = {}, outNames = {} }
-  else
-    local _, inPins, outPins = reaper.TrackFX_GetIOSize(scratchTrack, fxIdx)
-    inPins, outPins = inPins or 0, outPins or 0
-    result = {
-      fxGuid   = reaper.TrackFX_GetFXGUID(scratchTrack, fxIdx),
-      ins      = inPins  / 2,
-      outs     = outPins / 2,
-      inNames  = portNames(scratchTrack, fxIdx, 'in',  inPins),
-      outNames = portNames(scratchTrack, fxIdx, 'out', outPins),
-    }
-  end
-  reaper.PreventUIRefresh(-1)
-  return result
+  local fxGuid = rm:addFx(reaper.GetTrackGUID(scratchTrack), { ident = ident })
+  if not fxGuid then return { fxGuid = nil, ins = 0, outs = 0, inNames = {}, outNames = {} } end
+  local ports = rm:fxPorts(fxGuid)
+  ports.fxGuid = fxGuid
+  return ports
 end
 
 --contract: linear scan; returns the MediaTrack with this GUID, or nil if the project no longer holds one
 function wm:trackByGuid(guid)
-  for i = 0, reaper.CountTracks(0) - 1 do
-    local track = reaper.GetTrack(0, i)
-    if reaper.GetTrackGUID(track) == guid then return track end
-  end
+  local found
+  eachTrack(function(track)
+    if reaper.GetTrackGUID(track) == guid then found = track; return true end
+  end)
+  return found
 end
 
 --contract: { [trackGuid] = name } for every project track + master; one rm:tracks() pass
@@ -335,20 +305,13 @@ function wm:showFxWindow(fxGuid)
   return rm:showFx(fxGuid)
 end
 
---contract: inserts a source track before scratch, tags wiringTrackKind=sourceTrack, returns GUID.
+--contract: appends a source track via rm, tags wiringTrackKind=sourceTrack, returns GUID.
 -- Called outside mutate. see docs/wiringManager.md § createSourceTrack
 function wm:createSourceTrack(opts)
-  ensureScratchTrack()
-  reaper.PreventUIRefresh(1)
-  local insertIdx = math.floor(reaper.GetMediaTrackInfo_Value(scratchTrack, 'IP_TRACKNUMBER')) - 1
-  reaper.InsertTrackAtIndex(insertIdx, true)
-  local track = reaper.GetTrack(0, insertIdx)
-  if opts and opts.name then
-    reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', opts.name, true)
-  end
-  cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')
-  reaper.PreventUIRefresh(-1)
-  return reaper.GetTrackGUID(track)
+  local guid  = rm:addTrack{ name = opts and opts.name, defaults = true }
+  local track = self:trackByGuid(guid)
+  cm:writeTrackKey(track, 'wiringTrackKind', 'sourceTrack')  -- tag via the seam
+  return guid
 end
 
 -- Strips the "Type: " prefix and a trailing balanced-paren author / out-count
@@ -560,8 +523,7 @@ function wm:snapshot()
   -- (guid → trackKey/trackKind) from ext-state tags; needs live MediaTrack
   -- handles. sourceTrack keys on guid, newTrack on wiringTrack tag, scratch on singleton key.
   local keyByGuid, kindByKey = {}, {}
-  for i = 0, reaper.CountTracks(0) - 1 do
-    local track     = reaper.GetTrack(0, i)
+  eachTrack(function(track)
     local guid      = reaper.GetTrackGUID(track)
     local trackKind = cm:readTrackKey(track, 'wiringTrackKind')
     local trackKey
@@ -573,7 +535,7 @@ function wm:snapshot()
       trackKey, trackKind = SCRATCH_KEY, 'scratch'
     end
     if trackKey then keyByGuid[guid] = trackKey; kindByKey[trackKey] = trackKind end
-  end
+  end)
 
   local function snapFx(fx)
     local entry = { id = fx.id, ident = fx.ident }
@@ -1049,8 +1011,7 @@ end
 
 local function buildTrackKeyToTrack()
   local out = {}
-  for i = 0, reaper.CountTracks(0) - 1 do
-    local track = reaper.GetTrack(0, i)
+  eachTrack(function(track)
     local trackKind = cm:readTrackKey(track, 'wiringTrackKind')
     if trackKind == 'sourceTrack' then
       out[reaper.GetTrackGUID(track)] = track
@@ -1060,7 +1021,7 @@ local function buildTrackKeyToTrack()
     elseif cm:readTrackKey(track, 'wiringScratch') == '1' then
       out[SCRATCH_KEY] = track
     end
-  end
+  end)
   return out
 end
 
