@@ -148,6 +148,7 @@ local specs = {
   'rm_pinmaps_spec',
   'rm_midi_routing_spec',
   'rm_sends_spec',
+  'rm_installed_fx_spec',
   'wv_authoring_spec',
   'wv_activate_spec',
   'wv_edge_gain_spec',

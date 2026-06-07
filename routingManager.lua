@@ -8,6 +8,7 @@ local util = require('util')
 local PROJ = 0
 
 local rm = {}
+local installedFxCache = nil  -- reaper's installed-FX set is fixed at runtime
 
 ----------- track resolution
 
@@ -591,6 +592,28 @@ end
 function rm:deleteFx(id)
   local track, idx = locateFx(id)
   if track then reaper.TrackFX_Delete(track, idx) end
+end
+
+--contract: floats the fx window for id; false if the fx is no longer live
+function rm:showFx(id)
+  local track, idx = locateFx(id)
+  if not track then return false end
+  reaper.TrackFX_Show(track, idx, 3)
+  return true
+end
+
+--contract: enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
+function rm:installedFx()
+  if installedFxCache then return installedFxCache end
+  local out, i = {}, 0
+  while true do
+    local ok, name, ident = reaper.EnumInstalledFX(i)
+    if not ok then break end
+    util.add(out, { ident = ident, name = name })
+    i = i + 1
+  end
+  installedFxCache = out
+  return out
 end
 
 function rm:transaction(label, fn)

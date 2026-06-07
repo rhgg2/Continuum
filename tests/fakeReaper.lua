@@ -23,6 +23,7 @@ function M.new()
     loopStart    = 0,
     loopEnd      = 0,
     calls        = {},
+    installedFx  = {},
     console      = {},
     messages     = {},
     gmem         = {},
@@ -357,6 +358,18 @@ function M.new()
       perTrack[fxIdx] = g
     end
     return g
+  end
+
+  function r.TrackFX_Show(track, fxIdx, showFlag)
+    state.calls[#state.calls + 1] =
+      { fn = 'TrackFX_Show', track = track, fxIdx = fxIdx, showFlag = showFlag }
+  end
+
+  -- Installed-FX enumeration (runtime-fixed set). Seed via r:setInstalledFx.
+  function r.EnumInstalledFX(i)
+    local entry = state.installedFx[i + 1]
+    if not entry then return false end
+    return true, entry.name, entry.ident
   end
 
   -- Project track list (used by listSamplerTracks in continuum.lua).
@@ -964,6 +977,9 @@ function M.new()
   end
   function r:setFxIO(ident, io)
     state.fxIO[ident] = io
+  end
+  function r:setInstalledFx(list)
+    state.installedFx = list
   end
   function r:setFxGuid(track, idx, guid)
     -- Two-arg call (track, guid) is legacy: pins fxIdx 0 to guid.
