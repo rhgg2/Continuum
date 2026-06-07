@@ -1,7 +1,11 @@
 # routingManager — design & build plan
 
-> Design document; the durable WHY lands in `docs/routingManager.md`
+> Design document; the durable WHY now lives in `docs/routingManager.md`
 > (rationale only, no API dump — per CONVENTIONS).
+>
+> **Status: all build phases (1–7) landed and green.** routingManager is
+> standalone. Remaining: the wiringManager rewiring below. Kept (not
+> deleted) until that lands.
 
 ## Goal
 
@@ -74,37 +78,108 @@ Each phase: red-first spec, then green, before the next. New specs registered
 in `tests/run.lua`; run via `mcp__readium_tests__lua_test_run`. All specs
 inject `tests/fakeReaper.lua` as the `reaper` global (existing pattern).
 
-1. **Skeleton + track read/write.** `rm:tracks()` (tracks, names, nchan,
+1. ✅ **Skeleton + track read/write.** `rm:tracks()` (tracks, names, nchan,
    mainSend; empty fx/sends), `addTrack`/`assignTrack`/`deleteTrack`,
    `transaction`. Spec: `rm_tracks_spec.lua`.
-2. **FX read.** Populate `track.fx` (ident, name, io→pin counts) in `tracks()`;
+2. ✅ **FX read.** Populate `track.fx` (ident, name, io→pin counts) in `tracks()`;
    `locateFx` resolution private. Spec: `rm_fx_read_spec.lua`.
-3. **FX write.** `addFx`/`deleteFx`/`assignFx{index, track, params}` incl. the
+3. ✅ **FX write.** `addFx`/`deleteFx`/`assignFx{index, track, params}` incl. the
    append-then-CopyToTrack(move) reorder. Spec: `rm_fx_write_spec.lua`.
-4. **Pin maps.** `pinMaps` in read + `assignFx{pinMaps}`; bit math private.
+4. ✅ **Pin maps.** `pinMaps` in read + `assignFx{pinMaps}`; bit math private.
    Spec: `rm_pinmaps_spec.lua`.
-5. **MIDI routing.** `fx.midi` in read + `assignFx{midi}`; port the base64 /
+5. ✅ **MIDI routing.** `fx.midi` in read + `assignFx{midi}`; port the base64 /
    state-chunk surgery in as private. Spec: `rm_midi_routing_spec.lua`.
-6. **Sends.** `track.sends` in read + `assignTrack{sends}` reconcile (internal
+6. ✅ **Sends.** `track.sends` in read + `assignTrack{sends}` reconcile (internal
    `Create`/`Remove`/`SetTrackSendInfo`), audio/midi detection. Spec:
    `rm_sends_spec.lua`.
-7. **installedFx / showFx.** Spec: fold into `rm_tracks_spec` or small own spec.
+7. ✅ **installedFx / showFx.** Spec: `rm_installed_fx_spec.lua`.
 
 routingManager is fully green and standalone at the end of step 7. wm is
 untouched so far.
 
-## wiringManager rewiring (after rm is green)
+## wiringManager rewiring (after rm is green) — NEXT PHASE
+
+### Principles
 
 - `wm:snapshot()` → `rm:tracks()` + wm's ownership filter + trackKey re-keying.
 - `wm:applyOps()` → one `rm:transaction(label, fn)`; each op dispatches to
   `rm:addFx`/`assignFx`/`deleteFx`/`assignTrack`/etc. `addFx` returns
   the new id synchronously, so the minted-guid stamp-back is a direct call —
-  the `origin`/tag/`within`-callback machinery is **deleted**, not ported.
-- `reconcileFXChain`/`reconcileSends` stay in wm as pure policy (owned-block
-  contiguity, CU concepts), expressed over rm methods.
-- Pure `diff` and `targetState` largely unchanged.
-- Delete the now-dead `reaper.*` cluster from wm; existing `wm_*` specs are the
-  regression net for the rewiring.
+  the `origin`/tag/`within`-callback machinery (`stamps[]`, the post-loop
+  `realising` mutate, `originKey`, the bracket/merge sweep) is **deleted**, not
+  ported.
+- `reconcileFXChain`'s *policy* stays in wm (owned-block contiguity: foreign FX
+  hold their slots, owned FX is a contiguous block), re-expressed over rm
+  methods. `reconcileSends` is **deleted** — `rm:assignTrack{sends}` already
+  owns the full send reconcile (phase 6); wm only computes the desired set.
+- Pure `diff` / `targetState` / `projectEntry` / `DAG.*` unchanged.
+- **The addressing seam is wm's job throughout.** rm speaks guid `id`s; wm
+  speaks `trackKey` (a `sourceTrack` key *is* a guid, a `newTrack` key is a
+  synthetic ext-state tag) and `fxGuid`. Every op must translate trackKey→id
+  (via `buildTrackKeyToTrack`, kept) before calling rm — including remapping
+  each `send.to` from trackKey to the destination guid.
+- **Scratch, `fxLocations`, live mode, `pollUndo`, ext-state tags
+  (`wiringTrack*`, `wiringGraph`, `wiringOwnedFx`) stay wm-native** — rm is
+  stateless and knows nothing of wm's scratch/persistence concepts.
+- The shared base64 / pin-bit / send helpers are exercised by *both* snapshot
+  (read) and applyOps (write), so the dead-`reaper.*` sweep is a single final
+  chunk — earlier chunks let orphaned helpers sit until both paths are off them.
+
+### Commit chunks
+
+Each chunk lands green against the existing `wm_*` specs (the regression net);
+no chunk needs new specs unless it exposes a gap.
+
+1. **Wire rm in + leaf swaps.** Inject `rm` into wm (continuum wiring +
+   harness). Repoint `wm:listInstalledFX` → `rm:installedFx()` and
+   `wm:showFxWindow` → `rm:showFx`; drop wm's `installedFx` cache and its
+   `EnumInstalledFX`/`TrackFX_Show` calls. Smallest possible diff — proves rm
+   is reachable from the wm stack before anything load-bearing moves.
+
+2. **snapshot read → `rm:tracks()`.** Rebuild `wm:snapshot()` on rm records:
+   rm yields every project track (id, name, nchan, mainSend, fx[], pinMaps,
+   midi, sends[]); wm overlays the ownership filter on the fx list, the
+   trackKey re-keying, the `__master__` synth entry, and maps rm field names →
+   snapshot field names. Orphans the read-only helpers (`ownedChain`,
+   `readSendsClass`, the pin-map readers) — leave them for the sweep.
+   Net: `wm_snapshot_spec`.
+
+3. **Simple write ops → rm.** In the applyOps loop, convert the non-fx-chain
+   ops: `createTrack` → `rm:addTrack` (returns guid; map trackKey→guid
+   directly, drop `createNewTrack`); `deleteTrack` → `rm:deleteTrack`;
+   `setMainSend`/`setNchan` → `rm:assignTrack{mainSend,nchan}`; `setSends` →
+   `rm:assignTrack{sends}` after remapping `.to` trackKey→guid (deletes wm
+   `reconcileSends`); `setPinMaps` → `rm:assignFx{pinMaps}` per fx;
+   `moveFxAcrossTracks` → `rm:assignFx{track}`. `setExtState` stays wm
+   (cm:writeTrackKey). Net: `wm_apply_spec`, `wm_sends_spec`.
+
+4. **setFXChain → rm + kill the stamp-back.** The heart. Re-express
+   `reconcileFXChain` over `rm:addFx`/`assignFx{index}`/`deleteFx`/
+   `assignFx{params}`/`assignFx{midi}`, keeping only the contiguity policy.
+   Because `rm:addFx` returns the guid synchronously, stamp the user graph
+   *inline* as each fx materialises — deleting `stamps[]`, the deferred
+   `realising` mutate, `originKey`, `pushParams`/`resolveParamIdx`, and the
+   wm-side midi/param writers. The merge/bracket-guid sweep folds into the same
+   inline path. Net: `wm_apply_spec`, `wm_fx_routing_spec`, `wm_merge_spec`.
+
+5. **transaction + dead-code sweep.** Wrap applyOps' body in
+   `rm:transaction(label, fn)` (Undo/PreventUIRefresh now rm's); the ownedFx
+   persist + scratch mirror stay inside `fn` as wm concepts. Delete the now-dead
+   `reaper.*` cluster from wm — base64 (`b64*`, chunk split/join, `findFxBlock`,
+   the byte/bit patchers, `setFXMidiRouting`, `readFXMidiRouting`), pin-bit math
+   (`decodePairList`, `pinMaskFor`, `writePinMapsForFx`), send read/write
+   (`sendType`, `readSendsClass`), and the `TrackFX_*`/`GetSet*Info` writers rm
+   now owns. Confirm the only `reaper.*` left in wm are scratch/live/pollUndo
+   infra. Full `wm_*` suite green.
+
+6. **Docs + closeout.** Update `docs/wiringManager.md` (the surgery moved to rm;
+   point its Per-FX MIDI routing § at `docs/routingManager.md` +
+   `docs/reaper_midi_routing.md`); archive this plan.
+
+**`pokeEdgeGain` / `fastGainCommit` stay wm-native** through all six chunks —
+they are the concrete hot path the Open knob below anticipates. Only if the
+wholesale `assignTrack{sends}` diff proves too slow under a live fader drag do
+we add `rm:setSendGain`; don't pre-build it.
 
 ## Open knob (don't pre-optimise)
 
@@ -119,7 +194,9 @@ send id — only when the hot path is concrete during wm rewiring.
 
 ## Closeout
 
-Move `--KIND:` annotations with their code; let the post-edit hook generate
-`map/routingManager.map`; write `docs/routingManager.md` (WHY: the boundary,
-the id-as-handle choice, the stateless decision); update `docs/wiringManager.md`;
-delete this plan.
+- ✅ `--KIND:` annotations moved with their code; `map/routingManager.map`
+  regenerated by the post-edit hook.
+- ✅ `docs/routingManager.md` written (the boundary, the id-as-handle choice,
+  the stateless decision, the wire-format corners).
+- ⬜ Update `docs/wiringManager.md` once the rewiring lands.
+- ⬜ Archive this plan once the rewiring lands.
