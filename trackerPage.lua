@@ -27,7 +27,7 @@ local tm = util.instantiate('trackerManager', { mm = mm, cm = cm })
 local gm = util.instantiate('groupManager',   { tm = tm, cm = cm })
 local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, cmgr = cmgr, gm = gm })
 
-local renderer = util.instantiate('trackerRender',
+local tr = util.instantiate('trackerRender',
   { tv = tv, cm = cm, cmgr = cmgr, chrome = chrome,
     gui = gui, modalHost = modalHost, facade = facade })
 
@@ -45,10 +45,10 @@ function tp:bind(t)
   tv:bindTake(t)
   if t then tv:seedSharedSlots() end
 end
-function tp:unbind() renderer:closeTransients(); tv:bindTake(nil) end
+function tp:unbind() tr:closeTransients(); tv:bindTake(nil) end
 
 --contract: take destroyed under us (coord's ValidatePtr2 watcher) — unbind and blank the grid so the placeholder reappears. Distinct from unbind, which is the dormant seam.
-function tp:dropTake() renderer:closeTransients(); tv:detach(); tv:dropGrid() end
+function tp:dropTake() tr:closeTransients(); tv:detach(); tv:dropGrid() end
 
 --contract: for coord's external-mutation watcher; re-reads the bound take, no swap
 function tp:reloadFromReaper() tv:reloadFromReaper() end
@@ -72,20 +72,20 @@ facade.publish('tracker', {
     local take = item and reaper.GetActiveTake(item)
     if not take then return end
     if take ~= tp:currentTake() then tp:bind(take) end
-    renderer:openTakeProperties{}
+    tr:openTakeProperties{}
   end,
 })
 
 ----- Page interface — render delegates to the renderer; the watcher brackets the frame
 
-function tp:renderToolbarBits(ctx) return renderer:renderToolbarBits(ctx) end
-function tp:renderStatusBar(ctx)   return renderer:renderStatusBar(ctx) end
-function tp:focusState()           return renderer:focusState() end
+function tp:renderToolbarBits(ctx) return tr:renderToolbarBits(ctx) end
+function tp:renderStatusBar(ctx)   return tr:renderStatusBar(ctx) end
+function tp:focusState()           return tr:focusState() end
 
 --contract: follow the cursor, draw, then snapshot the take hash as next frame's watcher baseline
 function tp:renderBody(ctx, w, h, dispatch)
   self:bindFromCursor()
-  renderer:renderBody(ctx, w, h, dispatch)
+  tr:renderBody(ctx, w, h, dispatch)
   lastHash = tv:takeHash()
 end
 

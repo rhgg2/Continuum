@@ -1,10 +1,20 @@
-# arrangePage
+# arrangePage / arrangeRender
 
-Page wrapper for the arrange view: render and input only. It draws the
-grid and palette, reads keyboard and mouse, and exposes the standard
-Page interface to `coordinator`. It constructs `av` (which builds
-`am`), holds no persistent state, and keeps no am reference — all
-project data and all state operations go through av.
+The arrange page is split in two, mirroring the tracker stack:
+
+- **arrangePage** is the controller — the object `coordinator` drives.
+  It constructs the stack (`am` stays local, only `av` leaves), owns the
+  page lifecycle (`bind`/`unbind`/`revealTake`/`seedCursorFromReaper`),
+  publishes the `arrange` facade, and delegates every render call to the
+  renderer.
+- **arrangeRender** draws the grid and palette, reads keyboard and
+  mouse, and owns the arrange command scope and the
+  create/rename/delete modals. It is handed `av` only and never reaches
+  `am` — what was a discipline (the page kept no am reference) is now
+  structural: am isn't in the renderer's scope.
+
+Neither holds persistent tracker state; all project data and all state
+operations go through `av`, which builds `am` beneath it.
 
 ## Project-wide, so bind is a no-op
 
@@ -34,16 +44,16 @@ is flat: a shared name would overwrite the other scope's gate. Reuse
 the keys, not the names.
 
 Registration is split along the render/operation line. av registers
-the command *bodies* — it owns what they do. The page registers the
-*key bindings*: it holds the ImGui key constants, and mapping a key to
-a command name is an input concern. The page also registers
+the command *bodies* — it owns what they do. The renderer registers
+the *key bindings*: it holds the ImGui key constants, and mapping a key
+to a command name is an input concern. The renderer also registers
 `createSlot`, the one command whose body belongs here because it opens
-the page's modal.
+the renderer's modal.
 
 ## Render + input only
 
-Every cell the page paints is derived per-frame, and all of it comes
-from `av` — the page holds no am reference:
+Every cell the renderer paints is derived per-frame, and all of it comes
+from `av` — the renderer holds no am reference:
 
 - track list and slot palette come through `av`'s am proxies, which
   read cm and REAPER on each query;

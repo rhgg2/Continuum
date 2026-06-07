@@ -1,0 +1,184 @@
+@module arrangeRender  src=arrangeRender.lua  loc=727  sha=untracked  mode=chunk
+@deps cm, cmgr, chrome, gui, modalHost, av
+
+# Invariants & contracts
+  @invariant  render + input only — holds av only, never am; all queries/mutations go through av.
+  @invariant  key bindings here; command bodies in av; coord pushes the scope on activation.
+  @contract  arrangePage (the controller) owns the stack (am/av) and hands this renderer av only
+
+# Shapes
+  @shape  body = grid pane (variable width) | PALETTE_W palette; palette shows slots for the track under av:cursorCol().
+  @shape  press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — nil when no button down. Track-col: take/row/col/mode; gutter: qn+gutter=true; dbl-click: qn/col+create=true. moved flips at drag threshold.
+
+# Imports
+  @require util = 'util'  @ 7
+  @require ImGui = 'imgui'  @ 13
+  @require painter = 'painter'  @ 14
+
+# Private state
+  @state ctx = gui and gui.ctx or nil  @ 20
+  @state monoFont = gui and gui.font or nil  @ 23
+  @state uiSize = gui and gui.fontSize and gui.fontSize.ui or 12  @ 24
+  @state ar = {}  @ 26
+  @state PALETTE_W = 200  @ 28
+  @state PANE_GAP = 11  @ 31
+  @state QN_W, TRACK_W = 32, 72  @ 32
+  @state GUTTER_PAD = 14  @ 35
+  @state LOOP_PAD = 7  @ 38
+  @state SLOT_KEY_W, SLOT_KIND_W = 18, 16  @ 40
+  @state openCreateModal  @ 43
+  @state press = nil  @ 49
+      @invariant  drag relocates via am:startIsClear; cursor moves only on clean (no-drag) release.
+      @invariant  gutter press drives REAPER transport — release sets edit cursor, drag sets loop range.
+      @invariant  double-click on empty space starts a create press; release opens create modal.
+  @state WHEEL_ROWS = 1  @ 50   -- cursor rows moved per mouse-wheel notch
+  @state wheelAccum = 0  @ 51   -- fractional wheel carried between frames
+  @state SLOT_FILL_ALPHA = 0.85  @ 73
+  @state colourCache = {}  @ 74
+  @state HEADER_PAD = 8  @ 94
+  @state HEADER_GAP = 4  @ 95
+  @state CREATE_DEFAULT_BEATS = 8  @ 474
+  @state NEW_TAKE_DEFAULT_BEATS = 4  @ 491
+  @state arrange = cmgr:scope('arrange')  @ 676
+      @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.
+  @state binds = {  @ 686
+
+# Private functions
+  -- Style + draw helpers
+  @fn pushBodyStyles()  @ 55
+  @fn popBodyStyles()  @ 63
+  @fn rowLabel(row)  @ 67
+      -- Row label = QN at the row's top edge. beatPerRow is integer-valued
+      -- in normal use (1, 4, 8, 16); show the QN as an integer.
+  @fn slotFill(colourIdx, focused)  @ 75
+  -- Grid pane
+  @fn floorTo(v, step)  @ 98
+      -- Snap a click's QN down to the top edge of the row box it sits in.
+  @fn gridGeom(nTracks)  @ 102
+      -- Shared (col,row)→screen transform for mouse pass and paint pass: both call gridGeom at the
+      -- same layout-cursor position, so hit-test and draw resolve through one mapping.
+  @fn handleGridMouse(nTracks)  @ 127
+      -- Runs before renderGrid so in-flight drag/loop/create candidates are ready for the paint pass.
+      -- Must run inside ##arrangeGrid so IsWindowHovered resolves correctly.
+  @fn renderGrid(tracks, nTracks, dragCand, loopCand, createCand)  @ 217
+  -- Palette pane
+  @fn focusedSlotEntry(slots, slotIdx)  @ 426
+      -- Locate slot in trackSlots() output (packed array, not indexed by slotIdx).
+      -- Returns nil when no slot is focused or the focused slot index isn't populated.
+  @fn renderPaletteHeader(focusedTrack)  @ 436
+      -- Hand-drawn so the header height and divider position match the grid's by construction —
+      -- both panes share the renderBody `oy`, so the divider aligns across PANE_GAP without measurement.
+  @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 453
+  @fn openDeleteModal(trackIdx, slot)  @ 462
+  @fn arrangeNewTakeBelow()  @ 492
+  @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 527
+  @fn renderPaletteList(slots)  @ 546
+      -- Three columns: key (monospace — hotkey), kind glyph, name (UI font).
+      -- Selectable in col 0 with SpanAllColumns; key text painted on top via SameLine.
+  @fn renderPalette(tracks)  @ 579
+  @fn placeKey(slotIdx)  @ 714
+      -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
+      -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
+
+# Public API (ar:*)
+  @api ar:newTakeBelow()  @ 599
+      -- The controller's 'arrange' facade routes its newTakeBelow entry here so the
+      -- gesture shares the createSlot modal that lives with the rest of the renderer.
+  @api ar:renderToolbarBits(_)  @ 601
+  @api ar:renderBody(_, w, h, dispatch)  @ 606
+      @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.
+      @contract  pushes parchment body palette (coord popped chrome before); palette tables need it.
+      @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
+  @api ar:renderStatusBar(_)  @ 653
+  @api ar:focusState()  @ 662
+      @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
+
+# Uses (outbound edges)
+  @use call    av.beatPerRow  @ 136, 657
+  @use call    av.clearLoopRange  @ 144
+  @use call    av.commitDrag  @ 197
+  @use call    av.createCandidate  @ 193
+  @use call    av.createSlot  @ 484
+  @use call    av.createTakeBelow  @ 501
+  @use call    av.cursorCol  @ 155, 229, 581, 657, 680
+  @use call    av.cursorRow  @ 155, 229, 657, 680
+  @use call    av.deleteSlot  @ 469
+  @use call    av.dragCandidate  @ 189
+  @use call    av.editCursorQN  @ 391
+  @use call    av.focus  @ 260
+  @use call    av.gutterLoopCand  @ 191
+  @use call    av.hitTake  @ 165
+  @use call    av.keyForSlot  @ 463, 566, 720
+  @use call    av.loopRangeQN  @ 339
+  @use call    av.newTakeBelowParams  @ 493
+  @use call    av.nextFreeSlot  @ 476
+  @use call    av.paletteSlot  @ 551, 583
+  @use call    av.playPositionQN  @ 392
+  @use call    av.projectTracks  @ 611
+  @use call    av.qnToRow  @ 267, 268, 307, 308, 342, 383
+  @use call    av.renameSlot  @ 458
+  @use call    av.rowToQN  @ 68, 137, 238, 680
+  @use call    av.scroll  @ 110
+  @use call    av.setCursor  @ 155, 208
+  @use call    av.setEditCursorQN  @ 206
+  @use call    av.setFocus  @ 177, 209
+  @use call    av.setGridSize  @ 131, 615
+  @use call    av.setLoopRangeQN  @ 199
+  @use call    av.setMaxCol  @ 132
+  @use call    av.setPaletteSlot  @ 562
+  @use call    av.trackSlots  @ 582
+  @use call    av.tracksTakes  @ 292
+  @use call    chrome.colour  @ 56, 57, 58, 59, 60, 61
+  @use call    chrome.disabledIf  @ 531, 537
+  @use call    chrome.pickerIsActive  @ 664
+  @use call    chrome.popChromeStyles  @ 592
+  @use call    chrome.pushChromeStyles  @ 587
+  @use call    cm.get  @ 658
+  @use call    cmgr.scope  @ 676
+  @use call    imgui.BeginChild  @ 624, 642
+  @use call    imgui.BeginTable  @ 552
+  @use call    imgui.Button  @ 517, 521, 532, 538
+  @use call    imgui.Dummy  @ 419, 450, 639
+  @use call    imgui.EndChild  @ 630, 647
+  @use call    imgui.EndTable  @ 576
+  @use call    imgui.GetContentRegionAvail  @ 105, 443
+  @use call    imgui.GetCursorScreenPos  @ 103, 442, 635
+  @use call    imgui.GetKeyMods  @ 138, 174
+  @use call    imgui.GetMousePos  @ 134
+  @use call    imgui.GetMouseWheel  @ 148
+  @use call    imgui.GetTextLineHeightWithSpacing  @ 106, 444
+  @use call    imgui.InputText  @ 511, 515
+  @use call    imgui.IsAnyItemActive  @ 668
+  @use call    imgui.IsKeyPressed  @ 518, 519, 522
+  @use call    imgui.IsMouseClicked  @ 142, 158
+  @use call    imgui.IsMouseDoubleClicked  @ 166
+  @use call    imgui.IsMouseDragging  @ 184
+  @use call    imgui.IsMouseReleased  @ 195
+  @use call    imgui.IsWindowAppearing  @ 509
+  @use call    imgui.IsWindowHovered  @ 142, 149, 158
+  @use call    imgui.PopFont  @ 567
+  @use call    imgui.PopStyleColor  @ 63
+  @use call    imgui.PushFont  @ 565
+  @use call    imgui.PushStyleColor  @ 56, 57, 58, 59, 60, 61
+  @use call    imgui.SameLine  @ 520, 536, 564, 634, 640
+  @use call    imgui.Selectable  @ 560
+  @use call    imgui.Separator  @ 590
+  @use call    imgui.SetKeyboardFocusHere  @ 514
+  @use call    imgui.TableNextRow  @ 558
+  @use call    imgui.TableSetColumnIndex  @ 559, 569, 572
+  @use call    imgui.TableSetupColumn  @ 553, 554, 555
+  @use call    imgui.Text  @ 510, 513, 566, 570, 573, 614, 655
+  @use call    imgui.TextDisabled  @ 548
+  @use call    modalHost.registerKind  @ 508
+  @use call    modalHost.wasOpenAtFrameStart  @ 669
+  @use call    painter.hue  @ 82, 83
+  @use call    painter.new  @ 111, 220, 441, 637
+  @use call    util.atomic  @ 458, 469, 482, 499
+  @use require imgui  @ 13
+  @use require painter  @ 14
+  @use require util  @ 7
+
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB
+  @reaper time_precise
