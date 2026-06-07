@@ -137,7 +137,6 @@ local specs = {
   'wm_target_alloc_spec',
   'wm_diff_spec',
   'wm_apply_ops_spec',
-  'wm_fx_routing_spec',
   'wm_fx_routing_apply_spec',
   'wm_live_spec',
   'wm_undo_spec',

@@ -459,187 +459,6 @@ function wm:addSourceNode(opts)
   return newId
 end
 
------ FX MIDI routing surgery (state chunk)
-
--- No ReaScript API for per-FX in/out bus + disable bits — patches the
--- chunk directly. See docs/wiringManager.md § Per-FX MIDI routing.
-
-local fxRoutingAlpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-local fxRoutingDec   = {}
-for i = 1, #fxRoutingAlpha do fxRoutingDec[fxRoutingAlpha:sub(i, i):byte()] = i - 1 end
-
-local function b64decode(s)
-  local bytes, buf, bits = {}, 0, 0
-  for i = 1, #s do
-    local c = s:byte(i)
-    if c == 61 then break end  -- '='
-    local v = fxRoutingDec[c]
-    if v then
-      buf  = buf * 64 + v
-      bits = bits + 6
-      if bits >= 8 then
-        bits = bits - 8
-        local b = buf >> bits
-        buf = buf - (b << bits)
-        bytes[#bytes + 1] = string.char(b)
-      end
-    end
-  end
-  return table.concat(bytes)
-end
-
-local function b64encode(s)
-  local out, buf, bits = {}, 0, 0
-  for i = 1, #s do
-    buf  = buf * 256 + s:byte(i)
-    bits = bits + 8
-    while bits >= 6 do
-      bits = bits - 6
-      local v = (buf >> bits) & 0x3F
-      out[#out + 1] = fxRoutingAlpha:sub(v + 1, v + 1)
-      buf = buf - (v << bits)
-    end
-  end
-  if bits > 0 then
-    local v = (buf << (6 - bits)) & 0x3F
-    out[#out + 1] = fxRoutingAlpha:sub(v + 1, v + 1)
-  end
-  while #out % 4 ~= 0 do out[#out + 1] = '=' end
-  return table.concat(out)
-end
-
-local function splitChunkLines(s)
-  local hasTrailing = s:sub(-1) == '\n'
-  local body  = hasTrailing and s or s .. '\n'
-  local lines = {}
-  for ln in body:gmatch('([^\n]*)\n') do lines[#lines + 1] = ln end
-  return lines, hasTrailing
-end
-
-local function joinChunkLines(lines, hasTrailing)
-  return table.concat(lines, '\n') .. (hasTrailing and '\n' or '')
-end
-
--- CU params live at stable slider indices; cache the {name=idx} map on
--- first sight so ownedChain doesn't re-enumerate per snap.
-local cuParamIdxCache = nil
-local function cuParamIdx(track, fxIdx)
-  if cuParamIdxCache then return cuParamIdxCache end
-  local out = {}
-  for p = 0, 31 do
-    local ok, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
-    if not ok then break end
-    out[name] = p
-  end
-  cuParamIdxCache = out
-  return out
-end
-
--- Locate the (fxIdx+1)-th non-JS FX block in the chunk (0-indexed).
--- Returns (firstBase64LineIdx, trailerLineIdx) or nil.
-local function findFxBlock(lines, fxIdx)
-  local seen = 0
-  for i, ln in ipairs(lines) do
-    if ln:match('^%s*<VST%s') or ln:match('^%s*<CLAP%s') or ln:match('^%s*<AU%s') then
-      if seen == fxIdx then
-        local depth = 1
-        for j = i + 1, #lines do
-          local stripped = lines[j]:match('^%s*(.-)%s*$')
-          if stripped == '>' then
-            depth = depth - 1
-            if depth == 0 then return i + 1, j - 1 end
-          elseif stripped:sub(1, 1) == '<' then
-            depth = depth + 1
-          end
-        end
-        return
-      end
-      seen = seen + 1
-    end
-  end
-end
-
--- Decode line → mutate one byte via fn → re-encode iff changed.
--- No-op preserves the line byte-for-byte (round-trip invariant).
-local function mutateByteInBase64Line(line, byteIdx, fn)
-  local lead, content, tail = line:match('^(%s*)(%S*)(%s*)$')
-  if not content or content == '' then return line end
-  local bytes = b64decode(content)
-  if byteIdx < 1 or byteIdx > #bytes then return line end
-  local b    = bytes:byte(byteIdx)
-  local newB = fn(b)
-  if newB == b then return line end
-  return lead .. b64encode(bytes:sub(1, byteIdx - 1)
-                        .. string.char(newB)
-                        .. bytes:sub(byteIdx + 1)) .. tail
-end
-
-local function setBitInBase64Line(line, byteIdx, mask, on)
-  return mutateByteInBase64Line(line, byteIdx, function(b)
-    return on and (b | mask) or (b & ~mask)
-  end)
-end
-
-local function setByteInBase64Line(line, byteIdx, value)
-  return mutateByteInBase64Line(line, byteIdx, function() return value end)
-end
-
--- Patch one bit of the wrapper-header mirror at a 1-indexed offset in
--- the FX block's concatenated decoded-base64 stream.
-local function patchStreamMirrorBit(lines, firstIdx, lastIdx, streamOffset, mask, on)
-  local cursor = 0
-  for i = firstIdx, lastIdx do
-    local stripped = lines[i]:match('^%s*(.-)%s*$')
-    if stripped:match('^[A-Za-z0-9%+/=]+$') then
-      local n = #b64decode(stripped)
-      if cursor + n >= streamOffset then
-        lines[i] = setBitInBase64Line(lines[i], streamOffset - cursor, mask, on)
-        return true
-      end
-      cursor = cursor + n
-    end
-  end
-  return false
-end
-
--- Drive per-FX MIDI routing on the fxIdx-th non-JS FX block. opts =
--- { inBus?, outBus?, inDisabled?, outDisabled? }; see docs/wiringManager.md § Per-FX MIDI routing.
-function wm.setFXMidiRouting(chunk, fxIdx, opts, pinChannels)
-  local lines, hasTrailing = splitChunkLines(chunk)
-  local first, trailer     = findFxBlock(lines, fxIdx)
-  if not first then return chunk, false end
-  local mirrorOff = 27 + 8 * pinChannels
-
-  if opts.inDisabled ~= nil then
-    lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x01, opts.inDisabled)
-    patchStreamMirrorBit(lines, first, trailer, mirrorOff, 0x01, opts.inDisabled)
-  end
-  if opts.outDisabled ~= nil then
-    lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x02, opts.outDisabled)
-    patchStreamMirrorBit(lines, first, trailer, mirrorOff, 0x02, opts.outDisabled)
-  end
-  if opts.inBus  ~= nil then lines[trailer] = setByteInBase64Line(lines[trailer], 4, opts.inBus)  end
-  if opts.outBus ~= nil then lines[trailer] = setByteInBase64Line(lines[trailer], 5, opts.outBus) end
-
-  return joinChunkLines(lines, hasTrailing), true
-end
-
--- Decode the fxIdx-th non-JS FX block's routing trailer (read counterpart to
--- setFXMidiRouting). Returns { inBus, outBus, inDisabled, outDisabled } or nil.
-local function readFXMidiRouting(chunk, fxIdx)
-  local lines          = splitChunkLines(chunk)
-  local first, trailer = findFxBlock(lines, fxIdx)
-  if not first then return nil end
-  local content = lines[trailer]:match('^%s*(%S*)%s*$')
-  if not content or content == '' then return nil end
-  local bytes = b64decode(content)
-  local flags = bytes:byte(3) or 0
-  return { inBus       = bytes:byte(4) or 0,
-           outBus      = bytes:byte(5) or 0,
-           inDisabled  = (flags & 0x01) ~= 0,
-           outDisabled = (flags & 0x02) ~= 0 }
-end
-
 -- True iff `graph` has any edge with type='midi' leaving `nodeId`.
 -- Drives target.midiOut for non-JS fx in projectEntry.
 local function nodeHasMidiOut(graph, nodeId)
@@ -650,82 +469,6 @@ local function nodeHasMidiOut(graph, nodeId)
 end
 
 ----- Snapshot / target / diff (Stage 2)
-
--- Adjacent set bits collapse to one pair; lLo|hLo merges the port's two pins.
-local function decodePairList(track, fxIdx, isoutput, port)
-  local lowPin = 2 * (port - 1)
-  local lLo    = reaper.TrackFX_GetPinMappings(track, fxIdx, isoutput, lowPin)
-  local hLo    = reaper.TrackFX_GetPinMappings(track, fxIdx, isoutput, lowPin + 1)
-  local mask   = lLo | hLo
-  local pairs, lastPair = {}, nil
-  for bit = 0, 31 do
-    if ((mask >> bit) & 1) == 1 then
-      local pair = (bit >> 1) + 1
-      if pair ~= lastPair then util.add(pairs, pair); lastPair = pair end
-    end
-  end
-  return pairs
-end
-
--- ports = pins/2; disconnected ports (zero mask) dropped — absent ⇒ disconnected.
-local function readPinMapsForFx(track, fxIdx)
-  local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
-  local function dirMap(isoutput, pinCount)
-    local ports, out = math.floor(pinCount / 2), {}
-    for port = 1, ports do
-      local pairList = decodePairList(track, fxIdx, isoutput, port)
-      if #pairList > 0 then out[port] = pairList end
-    end
-    return out
-  end
-  return { ins = dirMap(0, ins), outs = dirMap(1, outs) }
-end
-
--- Walk `track`'s chain, returning (fxOrder, pinMaps) for owned fx; disconnected
--- pin maps are dropped (absent ⇒ disconnected). See docs/wiringManager.md.
-local function ownedChain(track, ownedGuids)
-  local out, pinMaps = {}, {}
-  local _, chunk     = reaper.GetTrackStateChunk(track, '', true)
-  local routingIdx   = 0
-  for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
-    local _, ident = reaper.TrackFX_GetFXName(track, fxIdx)
-    local guid     = reaper.TrackFX_GetFXGUID(track, fxIdx)
-    local isJS     = ident and ident:sub(1, 3) == 'JS:'
-    if ownedGuids[guid] then
-      local entry = { fxGuid = guid, ident = ident }
-      if not isJS then
-        local r = readFXMidiRouting(chunk, routingIdx)
-                  or { inBus = 0, outBus = 0, outDisabled = false }
-        entry.midiBus = { inBus = r.inBus, outBus = r.outBus }
-        entry.midiOut = not r.outDisabled
-      elseif ident == CU_IDENT then
-        -- Mirror live CU params so fxOrderEq is honest; without it every reconcile spuriously emits setFXChain.
-        local idx     = cuParamIdx(track, fxIdx)
-        local modeInt = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.mode) + 0.5)
-        local modeStr = ({ [0] = 'busRoute', [1] = 'merge' })[modeInt] or 'merge'
-        if modeStr == 'busRoute' then
-          entry.params = { mode = modeStr,
-                           from = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.from) + 0.5),
-                           to   = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.to) + 0.5) }
-        elseif modeStr == 'merge' then
-          local nPairs = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.nPairs) + 0.5)
-          local gains, inMask = {}, {}
-          for i = 1, nPairs do gains[i] = reaper.TrackFX_GetParam(track, fxIdx, idx['gain' .. i]) end
-          for i = 0, 3 do inMask[i + 1] = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx['inMask' .. i]) + 0.5) end
-          entry.params = { mode = modeStr, nPairs = nPairs, gains = gains,
-                           audioSum = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.audioSum) + 0.5),
-                           outBus   = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.outBus) + 0.5),
-                           inMask   = inMask }
-        end
-      end
-      util.add(out, entry)
-      local pm = readPinMapsForFx(track, fxIdx)
-      if next(pm.ins) or next(pm.outs) then pinMaps[guid] = pm end
-    end
-    if not isJS then routingIdx = routingIdx + 1 end
-  end
-  return out, pinMaps
-end
 
 -- Audio if I_MIDIFLAGS low-5-bits == 31 (midi disabled); midi if I_SRCCHAN
 -- == -1 (audio disabled). Anything carrying both reads as 'audio' —
@@ -739,29 +482,18 @@ local function sendType(track, sendIdx)
   return 'audio'
 end
 
-local function readSendsClass(track, byTrack)
+-- CU params live at stable slider indices; cache the {name=idx} map on
+-- first sight so readCuParams doesn't re-enumerate per snap.
+local cuParamIdxCache = nil
+local function cuParamIdx(track, fxIdx)
+  if cuParamIdxCache then return cuParamIdxCache end
   local out = {}
-  for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
-    local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
-    local dstClass = byTrack[dst]
-    if dstClass then
-      local typ   = sendType(track, i)
-      local entry = { to = dstClass, type = typ, srcChan = 0, dstChan = 0 }
-      if math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_SENDMODE')) == 1 then
-        entry.preFx = true
-      end
-      if typ == 'audio' then
-        entry.srcChan = math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_SRCCHAN'))
-        entry.dstChan = math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_DSTCHAN'))
-        entry.gain    = reaper.GetTrackSendInfo_Value(track, 0, i, 'D_VOL')
-      else
-        local mf = math.floor(reaper.GetTrackSendInfo_Value(track, 0, i, 'I_MIDIFLAGS'))
-        entry.srcChan = math.max(0, ((mf >> 14) & 0xFF) - 1)
-        entry.dstChan = math.max(0, ((mf >> 22) & 0xFF) - 1)
-      end
-      util.add(out, entry)
-    end
+  for p = 0, 31 do
+    local ok, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
+    if not ok then break end
+    out[name] = p
   end
+  cuParamIdxCache = out
   return out
 end
 
@@ -1158,37 +890,6 @@ end
 
 ----- Apply ops (Stage 2)
 
--- Pair P sits on channels 2(P-1) (left) and 2(P-1)+1 (right); each port's two
--- pins carry the left- and right-bit masks respectively, ORed across pairs.
-local function pinMaskFor(pairList, pinOffset)
-  local lo, hi = 0, 0
-  for _, pair in ipairs(pairList) do
-    local bit = 2 * (pair - 1) + pinOffset
-    if bit < 32 then lo = lo | (1 << bit)
-    else             hi = hi | (1 << (bit - 32))
-    end
-  end
-  return lo, hi
-end
-
--- Full-replace per fx: ports absent from `pm` are disconnected (zero mask).
-local function writePinMapsForFx(track, fxIdx, pm)
-  local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
-  local function dir(isoutput, pinCount, byPort)
-    byPort = byPort or {}
-    for port = 1, math.floor(pinCount / 2) do
-      local pairList = byPort[port] or {}
-      for pinOffset = 0, 1 do
-        local lo, hi = pinMaskFor(pairList, pinOffset)
-        reaper.TrackFX_SetPinMappings(track, fxIdx, isoutput,
-                                      2 * (port - 1) + pinOffset, lo, hi)
-      end
-    end
-  end
-  dir(0, ins,  pm.ins)
-  dir(1, outs, pm.outs)
-end
-
 local function ownedSubsequence(track, ownedGuids)
   local out = {}
   for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
@@ -1364,135 +1065,128 @@ local function buildTrackKeyToTrack()
   return out
 end
 
---contract: walks ops in order inside one Undo_BeginBlock; setFXChain mints guids via rm:addFx
+--contract: walks ops in order inside one rm:transaction; setFXChain mints guids via rm:addFx
 --contract: stamps them inline without firing wiringChanged; params/midi/pinMaps write through rm
 function wm:applyOps(ops, label)
   ensureLoaded()
-  reaper.Undo_BeginBlock()
-  reaper.PreventUIRefresh(1)
+  rm:transaction(label or 'wiring: apply', function()
+    local trackKeyToTrack = buildTrackKeyToTrack()
+    local ownedGuids      = ownedGuidsFrom(userGraph, cm:get('wiringOwnedFx'))
+    local owners          = buildGuidOwners()
+    local graphDirty      = false
 
-  local trackKeyToTrack = buildTrackKeyToTrack()
-  local ownedGuids      = ownedGuidsFrom(userGraph, cm:get('wiringOwnedFx'))
-  local owners          = buildGuidOwners()
-  local graphDirty      = false
+    -- Master has no wiringTrack tag, so pre-register it under every master-hosted trackKey
+    -- now — send-destination resolution (rm:assignTrack{sends}) must map it before any ops run.
+    local masterTrack = reaper.GetMasterTrack and reaper.GetMasterTrack(0) or nil
+    local masterGuid  = masterTrack and reaper.GetTrackGUID(masterTrack)
+    if masterTrack then
+      for _, op in ipairs(ops) do
+        if op.trackKind == 'master' and op.trackKey then
+          trackKeyToTrack[op.trackKey] = masterTrack
+        end
+      end
+    end
 
-  -- Master has no wiringTrack tag, so pre-register it under every master-hosted trackKey
-  -- now — send-destination resolution (rm:assignTrack{sends}) must map it before any ops run.
-  local masterTrack = reaper.GetMasterTrack and reaper.GetMasterTrack(0) or nil
-  local masterGuid  = masterTrack and reaper.GetTrackGUID(masterTrack)
-  if masterTrack then
+    -- master resolves via trackKind; snap drain ops carry trackGuid directly;
+    -- target newTrack ops (trackGuid=nil) resolve via trackKeyToTrack.
+    local function resolveTrack(op)
+      if op.trackKind == 'master' then return masterTrack end
+      if op.trackGuid then return self:trackByGuid(op.trackGuid) end
+      return trackKeyToTrack[op.trackKey]
+    end
+
+    -- Addressing seam: rm speaks guid ids, wm speaks trackKey/trackGuid. keyToId
+    -- maps a send destination's trackKey → guid; resolveId an op's host track.
+    local function keyToId(trackKey)
+      local track = trackKeyToTrack[trackKey]
+      return track and reaper.GetTrackGUID(track)
+    end
+    local function resolveId(kind, guid, trackKey)
+      if guid then return guid end
+      if kind == 'master' then return masterGuid end
+      return keyToId(trackKey)
+    end
+
     for _, op in ipairs(ops) do
-      if op.trackKind == 'master' and op.trackKey then
-        trackKeyToTrack[op.trackKey] = masterTrack
-      end
-    end
-  end
-
-  -- master resolves via trackKind; snap drain ops carry trackGuid directly;
-  -- target newTrack ops (trackGuid=nil) resolve via trackKeyToTrack.
-  local function resolveTrack(op)
-    if op.trackKind == 'master' then return masterTrack end
-    if op.trackGuid then return self:trackByGuid(op.trackGuid) end
-    return trackKeyToTrack[op.trackKey]
-  end
-
-  -- Addressing seam: rm speaks guid ids, wm speaks trackKey/trackGuid. keyToId
-  -- maps a send destination's trackKey → guid; resolveId an op's host track.
-  local function keyToId(trackKey)
-    local track = trackKeyToTrack[trackKey]
-    return track and reaper.GetTrackGUID(track)
-  end
-  local function resolveId(kind, guid, trackKey)
-    if guid then return guid end
-    if kind == 'master' then return masterGuid end
-    return keyToId(trackKey)
-  end
-
-  for _, op in ipairs(ops) do
-    if op.op == 'createTrack' then
-      local id = rm:addTrack({ name = 'continuum: ' .. op.trackKey })
-      trackKeyToTrack[op.trackKey] = self:trackByGuid(id)
-    elseif op.op == 'deleteTrack' then
-      rm:deleteTrack(op.trackGuid)
-    elseif op.op == 'setExtState' then
-      local t = trackKeyToTrack[op.trackKey]
-      if t then cm:writeTrackKey(t, op.key, op.value) end
-    elseif op.op == 'setMainSend' then
-      local id = resolveId(op.trackKind, op.trackGuid, op.trackKey)
-      if id then
-        local mainSend = { on = op.value, gain = op.gain or 1.0 }
-        if op.value then
-          mainSend.tgtOffset = op.offs or 0
-          mainSend.nchan     = op.nch or 2
+      if op.op == 'createTrack' then
+        local id = rm:addTrack({ name = 'continuum: ' .. op.trackKey })
+        trackKeyToTrack[op.trackKey] = self:trackByGuid(id)
+      elseif op.op == 'deleteTrack' then
+        rm:deleteTrack(op.trackGuid)
+      elseif op.op == 'setExtState' then
+        local t = trackKeyToTrack[op.trackKey]
+        if t then cm:writeTrackKey(t, op.key, op.value) end
+      elseif op.op == 'setMainSend' then
+        local id = resolveId(op.trackKind, op.trackGuid, op.trackKey)
+        if id then
+          local mainSend = { on = op.value, gain = op.gain or 1.0 }
+          if op.value then
+            mainSend.tgtOffset = op.offs or 0
+            mainSend.nchan     = op.nch or 2
+          end
+          rm:assignTrack(id, { mainSend = mainSend })
         end
-        rm:assignTrack(id, { mainSend = mainSend })
-      end
-    elseif op.op == 'setNchan' then
-      local id = resolveId(op.trackKind, op.trackGuid, op.trackKey)
-      if id then rm:assignTrack(id, { nchan = op.value }) end
-    elseif op.op == 'setPinMaps' then
-      local t = resolveTrack(op)
-      if t then
-        -- setFXChain has already stamped the graph, so id-less entries resolve
-        -- through their origin. Full-replace: a port absent from the map is disconnected.
-        local pmByGuid = {}
-        for _, e in ipairs(op.fx) do
-          local guid = e.id or originGuid(e.origin)
-          if guid and e.pinMaps then pmByGuid[guid] = e.pinMaps end
-        end
-        for fxIdx = 0, reaper.TrackFX_GetCount(t) - 1 do
-          local guid = reaper.TrackFX_GetFXGUID(t, fxIdx)
-          if ownedGuids[guid] then
-            rm:assignFx(guid, { pinMaps = pmByGuid[guid] or { ins = {}, outs = {} } })
+      elseif op.op == 'setNchan' then
+        local id = resolveId(op.trackKind, op.trackGuid, op.trackKey)
+        if id then rm:assignTrack(id, { nchan = op.value }) end
+      elseif op.op == 'setPinMaps' then
+        local t = resolveTrack(op)
+        if t then
+          -- setFXChain has already stamped the graph, so id-less entries resolve
+          -- through their origin. Full-replace: a port absent from the map is disconnected.
+          local pmByGuid = {}
+          for _, e in ipairs(op.fx) do
+            local guid = e.id or originGuid(e.origin)
+            if guid and e.pinMaps then pmByGuid[guid] = e.pinMaps end
+          end
+          for fxIdx = 0, reaper.TrackFX_GetCount(t) - 1 do
+            local guid = reaper.TrackFX_GetFXGUID(t, fxIdx)
+            if ownedGuids[guid] then
+              rm:assignFx(guid, { pinMaps = pmByGuid[guid] or { ins = {}, outs = {} } })
+            end
           end
         end
-      end
-    elseif op.op == 'setFXChain' then
-      local t = resolveTrack(op)
-      if t and reconcileFXChain(reaper.GetTrackGUID(t), t, op.fx, ownedGuids, owners) then
-        graphDirty = true
-      end
-    elseif op.op == 'moveFxAcrossTracks' then
-      local toId = resolveId(op.toTrackKind, op.toTrackGuid, op.toTrackKey)
-      if toId then rm:assignFx(op.fxGuid, { track = toId }) end
-    elseif op.op == 'setSends' then
-      local id = resolveId(op.trackKind, op.trackGuid, op.trackKey)
-      if id then
-        local sends = {}
-        for _, s in ipairs(op.sends) do
-          local toId = keyToId(s.to)
-          if toId then
-            util.add(sends, { to = toId, kind = s.kind, gain = s.gain,
-                              srcChan = s.srcChan, dstChan = s.dstChan, pos = s.pos })
-          end
+      elseif op.op == 'setFXChain' then
+        local t = resolveTrack(op)
+        if t and reconcileFXChain(reaper.GetTrackGUID(t), t, op.fx, ownedGuids, owners) then
+          graphDirty = true
         end
-        rm:assignTrack(id, { sends = sends })
+      elseif op.op == 'moveFxAcrossTracks' then
+        local toId = resolveId(op.toTrackKind, op.toTrackGuid, op.toTrackKey)
+        if toId then rm:assignFx(op.fxGuid, { track = toId }) end
+      elseif op.op == 'setSends' then
+        local id = resolveId(op.trackKind, op.trackGuid, op.trackKey)
+        if id then
+          local sends = {}
+          for _, s in ipairs(op.sends) do
+            local toId = keyToId(s.to)
+            if toId then
+              util.add(sends, { to = toId, kind = s.kind, gain = s.gain,
+                                srcChan = s.srcChan, dstChan = s.dstChan, pos = s.pos })
+            end
+          end
+          rm:assignTrack(id, { sends = sends })
+        end
       end
     end
-  end
 
-  -- Stamps/clears mutated userGraph in place; persist + invalidate the compiled
-  -- cache without firing (no structural change, no reconcile re-entry).
-  if graphDirty then setGraph(userGraph); self:save() end
+    -- Stamps/clears mutated userGraph in place; persist + invalidate the compiled
+    -- cache without firing (no structural change, no reconcile re-entry).
+    if graphDirty then setGraph(userGraph); self:save() end
 
-  -- Persist the post-apply owned-guid set: anything still in the graph is
-  -- still in REAPER (orphans got deleted in reconcileFXChain and dropped
-  -- out of the graph in the mutator that removed them).
-  local owned = ownedGuidsFrom(userGraph)
-  cm:set('project', 'wiringOwnedFx', owned)
-  rebuildFxLocations()
+    -- Persist the post-apply owned-guid set: anything in the graph is still
+    -- in REAPER (orphans were deleted in reconcileFXChain and dropped from graph).
+    local owned = ownedGuidsFrom(userGraph)
+    cm:set('project', 'wiringOwnedFx', owned)
+    rebuildFxLocations()
 
-  -- Mirror to scratch P_EXT inside the same Undo_BeginBlock so REAPER's undo
-  -- captures the graph alongside FX/track ops. SetProjExtState doesn't
-  -- participate in undo, so the project tier alone would leave the persisted
-  -- graph stale after a cmd-Z. pollUndo watches lastScratchRaw for divergence.
-  local scratch = ensureScratchTrack()
-  cm:writeTrackKey(scratch, 'wiringGraph',  userGraph)
-  cm:writeTrackKey(scratch, 'wiringOwnedFx', owned)
-  lastScratchRaw = cm:readTrackRaw(scratch)
-
-  reaper.PreventUIRefresh(-1)
-  reaper.Undo_EndBlock2(0, label or 'wiring: apply', -1)
+    -- Mirror to scratch P_EXT inside the transaction so REAPER's undo captures
+    -- the graph alongside FX/track ops; pollUndo watches lastScratchRaw for divergence.
+    local scratch = ensureScratchTrack()
+    cm:writeTrackKey(scratch, 'wiringGraph',  userGraph)
+    cm:writeTrackKey(scratch, 'wiringOwnedFx', owned)
+    lastScratchRaw = cm:readTrackRaw(scratch)
+  end)
 end
 
 -- Gain routing derived once per structural change from the cached ctx.
