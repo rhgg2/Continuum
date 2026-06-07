@@ -8,7 +8,7 @@
 
 --contract: constructs the substack (am local, only av leaves); the renderer is handed av, never am
 --contract: arrange is project-wide — bind() takes no take and never re-keys cm
---contract: render hooks delegate to arrangeRender; revealTake/seedCursor drive av directly
+--contract: render hooks delegate to arrangeRender; seedCursor drive av directly
 local util = require 'util'
 
 if not reaper.ImGui_GetBuiltinPath then
@@ -21,10 +21,8 @@ local cm, cmgr, chrome, gui, modalHost, facade =
 -- am stays local to this chunk; only av leaves, handed to the renderer, so the
 -- renderer can't reach am — every project query and mutation flows through av.
 local am = util.instantiate('arrangeManager', { cm = cm })
-local av = util.instantiate('arrangeView', { cm = cm, cmgr = cmgr, facade = facade, am = am })
-
-local ar = util.instantiate('arrangeRender',
-  { av = av, cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
+local av = util.instantiate('arrangeView',    { cm = cm, cmgr = cmgr, facade = facade, am = am })
+local ar = util.instantiate('arrangeRender',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, av = av })
 
 local ap = {}
 
@@ -35,9 +33,6 @@ local ap = {}
 --contract: bind takes no take — arrange is project-wide; coord may call with nil or a take.
 function ap:bind() end
 function ap:unbind() end
-
---contract: positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
-function ap:revealTake(reaperTake) av:revealTake(reaperTake) end
 
 --contract: seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
 function ap:seedCursorFromReaper() av:seedCursor() end

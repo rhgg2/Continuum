@@ -737,23 +737,6 @@ return {
     end,
   },
 
-  {
-    name = 'revealTake focuses the take wrapping a REAPER take handle',
-    run = function(harness)
-      local h = harness.mk()
-      h.cm:set('project', 'arrangeBeatPerRow', 1)
-      h.reaper:setTrackName('tr1', 'Track 1')
-      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                pos = 3, len = 1, poolGuid = '{p1}' })
-      h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
-      ap:revealTake('tr1/t1')
-      h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeDive')
-      t.eq(captured.nav, 'tracker', 'take revealed and focused — dive fires')
-    end,
-  },
-
   -- The arrange facade now owns the tracker's old new-take-below / nav flows.
   {
     name = 'newTakeBelow facade mints a sibling at the natural end and lands the cursor on it',

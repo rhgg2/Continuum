@@ -13,8 +13,7 @@
 
 local util = require 'util'
 
-local cm, cmgr, facade, am =
-  (...).cm, (...).cmgr, (...).facade, (...).am
+local cm, cmgr, facade, am = (...).cm, (...).cmgr, (...).facade, (...).am
 
 local function tracker() return facade.get('tracker') end
 
@@ -478,15 +477,6 @@ function av:deleteSlot(trackIdx, slotIdx)
 end
 
 ----- Boot + reveal — the page interface delegates here
-
---contract: positions cursor on the take wrapping `reaperTake` and focuses it; no-op if not on grid.
-function av:revealTake(reaperTake)
-  local take = am:findTake(reaperTake)
-  if take then
-    focus = reaperTake
-    self:setCursor(self:qnToRow(take.startQN), take.trackIdx)
-  end
-end
 
 --contract: seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
 function av:seedCursor()
