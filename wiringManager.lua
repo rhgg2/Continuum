@@ -8,7 +8,7 @@
 --invariant: trackKey changes are moves; TrackFX_CopyToTrack(is_move=true) preserves plugin state
 --shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
 --shape: snapshotSend = { to=trackKey, kind='audio'|'midi', gain?=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }
---shape: snapshotFxOrigin = {kind='node',id=string}|{kind='edge',idx=int}|{kind='bracketIn'|'bracketOut',id=string}
+--shape: snapshotFxOrigin = {kind='node',id=string}|{kind='bracketIn'|'bracketOut',id=string}|{kind='merge',consumer=string,trackKey=trackKey}
 --shape: snapshotFxEntry = { id?=string, ident=string, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,outDisabled=bool}, pinMaps?=snapshotPinMap }
 --shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + wm ownership/trackKey overlay. see docs/wiringManager.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'setExtState'|'moveFxAcrossTracks', ... }
@@ -30,7 +30,6 @@ local fire = util.installHooks(wm)
 
 local userGraph = nil
 local scratchTrack = nil  -- hidden trackKey for disconnected/orphan FX nodes; reset by wm:load
-local pokeParamCache = {} -- persistent paramIdx cache for the pokeEdgeGain hot path
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
 local lastScratchRaw = nil -- serialised graph last mirrored to scratch P_EXT; pollUndo compares against it
 local fxLocations = {}     -- fxGuid → {track, fxIdx}; restamped each applyOps so locateFx needn't sweep the project
@@ -1164,7 +1163,7 @@ local function pokeCuParam(guid, paramName, value)
     if not track then return false end
     for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
       if reaper.TrackFX_GetFXGUID(track, fxIdx) == guid then
-        local pIdx = resolveParamIdx(track, fxIdx, CU_IDENT, paramName, pokeParamCache)
+        local pIdx = cuParamIdx(track, fxIdx)[paramName]
         reaper.TrackFX_SetParam(track, fxIdx, pIdx, value)
         return true
       end

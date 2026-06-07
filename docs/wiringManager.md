@@ -45,9 +45,10 @@ separate, separately-testable function:
    + FX into the **same shape**. The *actual* side.
 3. **`wm:diff(target, snap)`** — a pure `WiringOp[]` producer comparing
    the two element-wise.
-4. **`wm:applyOps(ops, label)`** — executes the op list inside one
-   `Undo_BeginBlock`, minting FX via `TrackFX_AddByName` and stamping
-   minted guids back into the user graph.
+4. **`wm:applyOps(ops, label)`** — dispatches the op list to rm
+   (`rm:addFx`/`assignFx`/`assignTrack`/…) inside one `rm:transaction`.
+   `rm:addFx` returns the minted guid synchronously, so wm stamps it into
+   the user graph inline — no deferred stamp-back pass.
 
 The load-bearing design choice is that **target and snapshot emit
 matching shapes**, so `diff` is a structural comparison rather than two
@@ -65,9 +66,9 @@ below.
 
 The user graph holds *intent*; REAPER holds *instances*. `fxGuid` (on
 fx-kind nodes, mirroring `trackGuid` on sources) is the bridge — nil
-until first materialised, stamped into the node after `TrackFX_AddByName`
-succeeds, and thereafter how snapshot/target match `fxOrder` entries to
-graph nodes. Three rules keep instance churn minimal and state-preserving:
+until first materialised, stamped into the node after rm mints the FX,
+and thereafter how snapshot/target match `fx` entries to graph nodes.
+Three rules keep instance churn minimal and state-preserving:
 
 - **Mint on a scratch track.** `wm:addFxNode` instantiates the FX
   immediately via `instantiateFxOnScratch`, so the node has a real
@@ -77,9 +78,9 @@ graph nodes. Three rules keep instance churn minimal and state-preserving:
   inert `__scratch__` nodes) so they exist without polluting the audible
   topology.
 - **Track change is a move, not a re-create.** When the partition
-  reassigns a node to a different track, the applier uses
-  `TrackFX_CopyToTrack(is_move=true)` — plugin state (params, presets,
-  internal buffers) survives the move; a delete + re-add would lose it.
+  reassigns a node to a different track, the applier issues
+  `rm:assignFx{track}` (a move, not delete+add) — plugin state (params,
+  presets, internal buffers) survives; a delete + re-add would lose it.
 - **Delete only on departure.** wm deletes a REAPER FX instance only
   when its owning node — or the CU bridge it backs — leaves the graph.
   CU bridges arrive at the applier with a nil `fxGuid` and are minted by
@@ -105,18 +106,16 @@ same rule.
 
 ## Routing as ground truth
 
-The per-FX MIDI passthrough bit (`0x02` of the routing trailer) and
-the in/out bus bytes (4/5) have no `TrackFX_*` API — read or write
-goes through `GetTrackStateChunk` / `SetTrackStateChunk` (see
-`docs/reaper_midi_routing.md`). `wm:snapshot` decodes the trailer of
-every owned non-JS FX via `readFXMidiRouting` into
-`fxOrder[i].midiBus = { inBus, outBus }` and `midiOut`; `projectEntry`
-stamps the target's `midiBus` from the allocator's `fxMidiBus` and
-`midiOut` from `nodeHasMidiOut`. `fxOrderEq` compares both, so a bus or
-passthrough change drives a `setFXChain`, and `reconcileFXChain`'s tail
-decodes the live trailer and writes only the bytes that differ. There
-is no applied-value cache — REAPER's chunk is ground truth, same as
-everywhere else in the differ.
+The per-FX MIDI passthrough flag and the in/out bus bytes have no
+`TrackFX_*` API — the state-chunk surgery that reads and writes them now
+lives in rm, surfaced as the `fx.midi` record (see `docs/routingManager.md`
+and `docs/reaper_midi_routing.md`). wm deals only in records: `wm:snapshot`
+carries `fx.midi` straight from `rm:tracks()`, `projectEntry` derives the
+target's `midi` from the allocator (`fxMidiBus`) and `nodeHasMidiOut`, and
+`fxOrderEq` compares both. A bus or passthrough change drives a
+`setFXChain` whose `reconcileFXChain` issues `rm:assignFx{midi}`. There is
+no applied-value cache — REAPER's chunk is ground truth, re-decoded by rm
+on every snapshot, same as everywhere else in the differ.
 
 **User-facing contract:** Continuum owns the MIDI I/O dialog
 ("Send all MIDI to plugin" / "Receive MIDI from plugin") and the
@@ -127,32 +126,12 @@ drift and rewrites it.
 
 ## Per-FX MIDI routing
 
-REAPER exposes no ReaScript getter or setter for the per-FX MIDI input
-bus, output bus, or replace-merge mode encoded inside each `<VST ...>`
-block of an FXCHAIN. `wm.setFXMidiRouting(chunk, fxIdx, opts, pinChannels)`
-patches the chunk directly; encoding is documented in
-`docs/reaper_midi_routing.md` and pinned by `wm_fx_routing_spec`.
-
-`opts` may carry any subset of:
-
-- `inBus` — 0..127, trailer byte 4
-- `outBus` — 0..127, trailer byte 5
-- `inDisabled` — bool, 0x01 of trailer flag byte + wrapper mirror
-- `outDisabled` — bool, 0x02 of trailer flag byte + wrapper mirror
-
-Read-modify-write per field; every byte the caller did not name is
-preserved (including unknown flag bits). The flag byte lives in two
-places REAPER keeps in sync and reads from separately — trailer byte 3
-and a mirror at 1-indexed offset `27 + 8 * pinChannels` inside REAPER's
-wrapper header, where `pinChannels = inputPins + outputPins` (mono
-channels) as reported by `TrackFX_GetIOSize`. Trailer-only writes do
-NOT take effect for the flag byte; `in_bus` / `out_bus` have no mirror,
-so trailer-only suffices for them.
-
-Idempotent: empty opts (or opts whose every value already matches the
-chunk) returns the chunk byte-for-byte. Pure: no module state, no
-`reaper.*` deps — `pinChannels` comes from the call site, which has the
-live track + fx index.
+The chunk-level encoding of per-FX MIDI routing — input/output bus,
+replace-merge mode, and the output-disable flag REAPER keeps in two
+mirrored places — moved into rm when the reconcile surgery did. wm no
+longer patches FXCHAIN state chunks; it reads/writes the `fx.midi` record.
+See `docs/routingManager.md § Wire-format surgery worth knowing` and the
+byte-level reference in `docs/reaper_midi_routing.md`.
 
 ## wiringSnapshot
 
@@ -161,7 +140,7 @@ the source `--shape wiringSnapshot`). The shape is symmetric on
 purpose, per *The reconcile pipeline*; the non-obvious parts are *why*
 certain fields exist and which side fills them:
 
-- **`fxOrder` entries carrying `params`** are wm-owned CU bridges —
+- **`fx` entries carrying `params`** are wm-owned CU bridges —
   synthesised `kind='fx'` nodes from the targetTracks merge pass or the
   bracket post-pass. Snapshot mirrors the live params back from the
   slider so `fxOrderEq` is honest; without that mirror every reconcile
@@ -173,20 +152,19 @@ certain fields exist and which side fills them:
   → `consumer.mergeGuids[trackKey]`. Snapshot entries carry no `origin` and
   `fxOrderEq` ignores it — it's a write-back address, not state to
   compare.
-- **`midiOut` and `midiBus`** are set on both sides only for non-JS
-  `kind='node'` entries: target derives them from the user graph
-  (`nodeHasMidiOut`) and the allocator (`fxMidiBus`); snap decodes them
-  from the FX chunk trailer (`readFXMidiRouting`). Mismatch drives
-  `setFXChain`; `reconcileFXChain` writes only the trailer bytes that
-  differ.
+- **`midi`** (`{inBus,outBus,outDisabled}`) is set on both sides only for
+  non-JS `kind='node'` entries: target derives it from the user graph
+  (`nodeHasMidiOut`) and the allocator (`fxMidiBus`); snap reads it from
+  the rm record. Mismatch drives `setFXChain`; `reconcileFXChain` issues
+  `rm:assignFx{midi}`, which writes only the bytes that differ.
 - **`pinMaps`** carries pair-lists for every port with a route (target:
   allocator-touched; snap: REAPER non-empty); an absent port means
-  disconnected. **`pinMapsByOrigin`** is the same shape for FX the
-  target hasn't materialised yet — the applier resolves `origin` →
-  `fxGuid` via stamps from the preceding `setFXChain`. The applier
-  converts pair-lists to REAPER's lo32/hi32 bitmask at the boundary.
-- **`nchan`** is the track's `I_NCHAN`; **`mainSendOffs`** is
-  `C_MAINSEND_OFFS`, present only when `mainSend=true`.
+  disconnected. It rides inline on each `fx` entry — including FX the
+  target hasn't materialised yet, whose id-less `setPinMaps` entry the
+  applier resolves through `origin` → `fxGuid` via the stamps from the
+  preceding `setFXChain`. rm converts pair-lists to the lo32/hi32 bitmask.
+- **`nchan`** is the track's channel count; the main-send target offset
+  rides on `mainSend.tgtOffset`, present only when `mainSend.on`.
 
 ## createSourceTrack
 
@@ -194,8 +172,8 @@ certain fields exist and which side fills them:
 inserts a raw REAPER track immediately, bypassing clone/validate/swap.
 The trackKey for source hosts is the track's own GUID (a singleton class:
 one physical track per source node), so no separate `wiringTrack` ExtState
-key is needed to carry it; `wm:snapshot`'s first pass derives the trackKey
-directly from `GetTrackGUID`.
+key is needed to carry it; `wm:snapshot` derives the trackKey directly
+from the track's rm `id` (which is its guid).
 
 ## diff op ordering
 
@@ -239,6 +217,31 @@ is stamped onto the consumer node so reconciles are idempotent, and the CU
 retracts when the fan-in drops back to a single feeder. Cross-track MIDI sends
 instead coalesce onto one dest bus with no CU (see `docs/DAG.md § MIDI`).
 
+## The reaper seam
+
+The reconcile pipeline routes every topology read and write through rm, so
+wm names tracks and FX by record `id`, never a handle. What raw `reaper.*`
+remains is a small, deliberate residue — the things rm's record vocabulary
+cannot express because they are wm-private:
+
+- **`eachTrack`** — one `CountTracks`/`GetTrack`/`GetTrackGUID` scan. wm's
+  trackKey↔guid↔handle addressing and the scratch/source ext-state tags
+  hang off a raw `MediaTrack` handle, which rm refuses to expose, so the
+  scan that resolves them stays wm's. Every other reaper enumeration folded
+  into this one.
+- **Scratch handle + `ValidatePtr2`** — `pollUndo` watches the scratch
+  track's liveness to detect an undo past its creation. That is a handle
+  identity check, not a routing op.
+- **The live poke path** (`pokeEdgeGain`/`fastGainCommit`/`pokeCuParam`) —
+  a fader drag writes one param or `D_VOL` per frame, too hot for the
+  wholesale `rm:assignTrack{sends}` diff. It stays a direct
+  `TrackFX_SetParam`/`SetTrackSendInfo` until the cost proves it needs a
+  targeted rm primitive (see `docs/routingManager.md § Eager reads`).
+- **`readCuParams`** — the CU's slider layout is wm/CU-private; rm reads
+  generic params but not this app-specific encoding.
+- **`readJsfxContent`** — reads a JSFX file off disk (via `fs`), not the
+  project graph.
+
 ## wiringOp
 
 `wiringOp` records are full-replace ops emitted by the compiler and consumed
@@ -248,9 +251,9 @@ by the applier. Each has an `op` field and additional keys depending on kind:
 - **`setFXChain`** — carries `fxChain` (array of `snapshotFxEntry`). Entries
   with `fxGuid=nil` mean "instantiate `ident`, stamp GUID back to graph"
   (handled by the applier).
-- **`moveFxAcrossTracks`** — relocates a live FX with
-  `TrackFX_CopyToTrack(is_move=true)`. Emitted before per-track `setFXChain`
-  ops so subsequent reconcile sees the FX already at the destination.
+- **`moveFxAcrossTracks`** — relocates a live FX via `rm:assignFx{track}`
+  (a move, not delete+add). Emitted before per-track `setFXChain` ops so
+  subsequent reconcile sees the FX already at the destination.
 - **`setNchan`** / **`setPinMaps`** — emitted between `setFXChain` and
   `setMainSend` so fxGuids are stamped before pin-map writes and channels are
   allocated before pin maps land. `setPinMaps` carries both fxGuid-keyed and

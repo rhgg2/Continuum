@@ -91,11 +91,11 @@ diff. Neither is built until the hot path is concrete.
 
 ## Relationship to wiringManager
 
-routingManager is standalone and fully tested; wiringManager still carries
-its own copy of the graph-mutation code. The next phase rewires wm onto rm:
-`wm:snapshot()` becomes `rm:tracks()` plus wm's ownership filter,
-`wm:applyOps()` becomes one `rm:transaction` dispatching to rm's add/assign/
-delete methods, and the dead `reaper.*` cluster leaves wm. The owned-block
-contiguity and CU policy stay in wm, expressed over rm methods. Until that
-lands, the per-FX MIDI routing detail is documented in both places; the
-canonical encoding reference is `docs/reaper_midi_routing.md`.
+The wm rewire has landed. `wm:snapshot()` is `rm:tracks()` plus wm's
+ownership/trackKey overlay; `wm:applyOps()` is one `rm:transaction`
+dispatching to rm's add/assign/delete methods; the graph-mutation
+`reaper.*` cluster (state-chunk surgery, pin-bit math, send read/write) now
+lives only here. The owned-block contiguity and CU policy stay in wm,
+expressed over rm methods (see `docs/wiringManager.md § The reaper seam`
+for the small reaper residue wm keeps). The canonical encoding reference
+for per-FX MIDI routing is `docs/reaper_midi_routing.md`.
