@@ -14,7 +14,8 @@ local CU_PARAMS = { 'mode', 'gain', 'from', 'nPairs',
 local function mkWm(harness)
   local h  = harness.mk()
   h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
-  local wm = util.instantiate('wiringManager', { cm = h.cm })
+  local rm = util.instantiate('routingManager')
+  local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
   wm:load()
   return h, wm
  end
@@ -110,7 +111,7 @@ return {
       t.truthy(newTrackKey, 'newTrack class present')
       local sendA = snap['guid-A'].sends[1]
       local sendB = snap['guid-B'].sends[1]
-      t.eq(sendA.type, 'midi')
+      t.eq(sendA.kind, 'midi')
       t.eq(sendA.to,   newTrackKey)
       local dstChans = { sendA.dstChan, sendB.dstChan }
       table.sort(dstChans)

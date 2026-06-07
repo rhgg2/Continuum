@@ -11,7 +11,8 @@ local CU_PARAMS = { 'mode', 'gain', 'from', 'nPairs',
 local function mkWm(harness)
   local h  = harness.mk()
   h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
-  local wm = util.instantiate('wiringManager', { cm = h.cm })
+  local rm = util.instantiate('routingManager')
+  local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
   wm:load()
   return h, wm
 end

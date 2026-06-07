@@ -11,7 +11,8 @@ local CU_PARAMS = { 'mode', 'gain', 'bus', 'nPairs',
 
 local function mkWm(harness)
   local h  = harness.mk()
-  local wm = util.instantiate('wiringManager', { cm = h.cm })
+  local rm = util.instantiate('routingManager')
+  local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
   wm:load()
   return h, wm
 end
@@ -180,12 +181,11 @@ return {
       -- target intent so fxOrderEq sees no drift on the next reconcile.
       local snap   = wm:snapshot()
       local target = wm:targetState()
-      local sEntry = snap['guid-A'].fxOrder[1]
-      local tEntry = target['guid-A'].fxOrder[1]
+      local sEntry = snap['guid-A'].fx[1]
+      local tEntry = target['guid-A'].fx[1]
       t.eq(sEntry.ident, 'VST:Foo')
-      t.eq(sEntry.midiOut, false, 'audio-only fx decoded as output-disabled')
-      t.deepEq(sEntry.midiBus, tEntry.midiBus, 'decoded bus matches target')
-      t.eq(sEntry.midiOut, tEntry.midiOut, 'decoded passthrough matches target')
+      t.eq(sEntry.midi.outDisabled, true, 'audio-only fx decoded as output-disabled')
+      t.deepEq(sEntry.midi, tEntry.midi, 'decoded routing matches target')
       for _, op in ipairs(wm:diff(target, snap)) do
         t.eq(op.op == 'setFXChain', false, 'routing roundtripped; got op=' .. op.op)
       end

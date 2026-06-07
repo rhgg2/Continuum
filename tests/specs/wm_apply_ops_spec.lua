@@ -10,7 +10,8 @@ local CU_PARAMS = { 'mode', 'gain', 'bus', 'nPairs',
 
 local function mkWm(harness)
   local h  = harness.mk()
-  local wm = util.instantiate('wiringManager', { cm = h.cm })
+  local rm = util.instantiate('routingManager')
+  local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
   wm:load()
   return h, wm
 end

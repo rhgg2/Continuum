@@ -3,7 +3,8 @@ local util = require('util')
 
 local function mkWm(harness)
   local h  = harness.mk()
-  local wm = util.instantiate('wiringManager', { cm = h.cm })
+  local rm = util.instantiate('routingManager')
+  local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
   return h, wm
 end
 
@@ -44,13 +45,13 @@ return {
       local snap = wm:snapshot()
       t.truthy(snap['__scratch__'],            'scratch entry present')
       t.eq(snap['__scratch__'].trackKind, 'scratch')
-      t.deepEq(snap['__scratch__'].fxOrder, {})
-      t.eq(snap['__scratch__'].mainSend, false)
+      t.deepEq(snap['__scratch__'].fx, {})
+      t.eq(snap['__scratch__'].mainSend.on, false)
       t.deepEq(snap['__scratch__'].sends, {})
     end,
   },
   {
-    name = 'sourceTrack: trackKey is the track guid, mainSend defaults true (REAPER parity)',
+    name = 'sourceTrack: trackKey is the track guid, mainSend defaults on (REAPER parity)',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
@@ -58,14 +59,14 @@ return {
       local snap  = wm:snapshot()
       t.truthy(snap['guid-A'],            'entry under track-guid trackKey')
       t.eq(snap['guid-A'].trackKind, 'sourceTrack')
-      t.eq(snap['guid-A'].trackGuid, 'guid-A')
-      t.eq(snap['guid-A'].mainSend, true)
-      t.deepEq(snap['guid-A'].fxOrder, {})
+      t.eq(snap['guid-A'].id, 'guid-A')
+      t.eq(snap['guid-A'].mainSend.on, true)
+      t.deepEq(snap['guid-A'].fx, {})
       t.deepEq(snap['guid-A'].sends, {})
     end,
   },
   {
-    name = 'fxOrder only includes FX whose guid is in the user graph',
+    name = 'fx only includes FX whose guid is in the user graph',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
@@ -79,13 +80,13 @@ return {
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
       end)
       local snap = wm:snapshot()
-      t.eq(#snap['guid-A'].fxOrder, 1, 'foreign FX excluded')
-      t.eq(snap['guid-A'].fxOrder[1].fxGuid, '{FX-1}')
-      t.eq(snap['guid-A'].fxOrder[1].ident,  'JS:owned')
+      t.eq(#snap['guid-A'].fx, 1, 'foreign FX excluded')
+      t.eq(snap['guid-A'].fx[1].id,    '{FX-1}')
+      t.eq(snap['guid-A'].fx[1].ident, 'JS:owned')
     end,
   },
   {
-    name = 'CU instance registered via node.midiInBracketGuid appears in fxOrder',
+    name = 'CU instance registered via node.midiInBracketGuid appears in fx',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
@@ -102,15 +103,15 @@ return {
       end)
       t.truthy(ok, 'mutate ok: ' .. tostring(err and err.code))
       local snap = wm:snapshot()
-      t.eq(#snap['guid-A'].fxOrder, 2, 'fx + CU both surface')
+      t.eq(#snap['guid-A'].fx, 2, 'fx + CU both surface')
       local idents = {}
-      for _, e in ipairs(snap['guid-A'].fxOrder) do idents[e.ident] = e.fxGuid end
+      for _, e in ipairs(snap['guid-A'].fx) do idents[e.ident] = e.id end
       t.eq(idents['JS:owned'],             '{FX-1}')
       t.eq(idents['JS:Continuum Utility'], '{CU-1}')
     end,
   },
   {
-    name = 'sends to a managed dst surface as {to=trackKey, type=audio|midi}; foreign dst dropped',
+    name = 'sends to a managed dst surface as {to=trackKey, kind=audio|midi}; foreign dst dropped',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
@@ -127,9 +128,9 @@ return {
       local kinds = {}
       for _, s in ipairs(snap['guid-A'].sends) do
         t.eq(s.to, 'guid-B')
-        kinds[s.type] = true
+        kinds[s.kind] = true
       end
-      t.truthy(kinds.audio and kinds.midi, 'both send types preserved')
+      t.truthy(kinds.audio and kinds.midi, 'both send kinds preserved')
     end,
   },
   {
@@ -141,18 +142,18 @@ return {
       local snap = wm:snapshot()
       t.truthy(snap['guid-A|guid-B'],            'entry under multi-guid trackKey')
       t.eq(snap['guid-A|guid-B'].trackKind, 'newTrack')
-      t.eq(snap['guid-A|guid-B'].trackGuid, 'guid-mix')
+      t.eq(snap['guid-A|guid-B'].id, 'guid-mix')
     end,
   },
   {
-    name = 'B_MAINSEND=0 round-trips as mainSend=false',
+    name = 'B_MAINSEND=0 round-trips as mainSend.on=false',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       local track = seedSourceTrack(h, 'guid-A')
       h.reaper.SetMediaTrackInfo_Value(track, 'B_MAINSEND', 0)
       local snap = wm:snapshot()
-      t.eq(snap['guid-A'].mainSend, false)
+      t.eq(snap['guid-A'].mainSend.on, false)
     end,
   },
   {
@@ -166,13 +167,13 @@ return {
       h.reaper:addSend(src, dst, { type = 'midi'  })
       local snap = wm:snapshot()
       for _, s in ipairs(snap['guid-A'].sends) do
-        if s.type == 'audio' then t.eq(s.gain, 0.5) end
-        if s.type == 'midi'  then t.eq(s.gain, nil, 'midi send has no gain') end
+        if s.kind == 'audio' then t.eq(s.gain, 0.5) end
+        if s.kind == 'midi'  then t.eq(s.gain, nil, 'midi send has no gain') end
       end
     end,
   },
   {
-    name = 'send I_SENDMODE=1 round-trips as preFx; pre/post-FX coexist on same channels',
+    name = 'send I_SENDMODE=1 round-trips as pos=preFx; pre/post-FX coexist on same channels',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
@@ -182,23 +183,23 @@ return {
       h.reaper:addSend(src, dst, { type = 'audio' })
       h.reaper.SetTrackSendInfo_Value(src, 0, 0, 'I_SENDMODE', 1)
       h.reaper.SetTrackSendInfo_Value(src, 0, 1, 'I_SENDMODE', 3)
-      local byMode = {}
+      local byPos = {}
       for _, s in ipairs(wm:snapshot()['guid-A'].sends) do
-        byMode[s.preFx and 'pre' or 'post'] = true
+        byPos[s.pos] = true
       end
-      t.truthy(byMode.pre,  'pre-FX send surfaces preFx=true')
-      t.truthy(byMode.post, 'post-FX send carries no preFx')
+      t.truthy(byPos.preFx,    'pre-FX send surfaces pos=preFx')
+      t.truthy(byPos.preFader, 'post-FX send surfaces pos=preFader')
     end,
   },
   {
-    name = 'track D_VOL round-trips as mainSendGain',
+    name = 'track D_VOL round-trips as mainSend.gain',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       local track = seedSourceTrack(h, 'guid-A')
       h.reaper.SetMediaTrackInfo_Value(track, 'D_VOL', 0.25)
       local snap = wm:snapshot()
-      t.eq(snap['guid-A'].mainSendGain, 0.25)
+      t.eq(snap['guid-A'].mainSend.gain, 0.25)
     end,
   },
   {
@@ -213,36 +214,35 @@ return {
     end,
   },
   {
-    name = 'C_MAINSEND_OFFS round-trips as mainSendOffs (only when mainSend=true)',
+    name = 'C_MAINSEND_OFFS round-trips as mainSend.tgtOffset',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       local track = seedSourceTrack(h, 'guid-A')
       h.reaper.SetMediaTrackInfo_Value(track, 'C_MAINSEND_OFFS', 2)
       local snap = wm:snapshot()
-      t.eq(snap['guid-A'].mainSendOffs, 2)
+      t.eq(snap['guid-A'].mainSend.tgtOffset, 2)
       h.reaper.SetMediaTrackInfo_Value(track, 'B_MAINSEND', 0)
       snap = wm:snapshot()
-      t.eq(snap['guid-A'].mainSend,     false)
-      t.eq(snap['guid-A'].mainSendOffs, nil, 'absent when mainSend=false')
+      t.eq(snap['guid-A'].mainSend.on, false)
     end,
   },
   {
-    name = 'C_MAINSEND_NCH round-trips as mainSendNch (only when mainSend=true)',
+    name = 'C_MAINSEND_NCH round-trips as mainSend.nchan',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       local track = seedSourceTrack(h, 'guid-A')
       h.reaper.SetMediaTrackInfo_Value(track, 'C_MAINSEND_NCH', 2)
       local snap = wm:snapshot()
-      t.eq(snap['guid-A'].mainSendNch, 2)
+      t.eq(snap['guid-A'].mainSend.nchan, 2)
       h.reaper.SetMediaTrackInfo_Value(track, 'B_MAINSEND', 0)
       snap = wm:snapshot()
-      t.eq(snap['guid-A'].mainSendNch, nil, 'absent when mainSend=false')
+      t.eq(snap['guid-A'].mainSend.on, false)
     end,
   },
   {
-    name = 'pin maps round-trip via pinMaps[fxGuid]; disconnected ports dropped',
+    name = 'pin maps round-trip nested on fx[i].pinMaps; disconnected ports dropped',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
@@ -265,7 +265,7 @@ return {
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
       end)
       local snap = wm:snapshot()
-      local pm = snap['guid-A'].pinMaps['{FX-1}']
+      local pm = snap['guid-A'].fx[1].pinMaps
       t.truthy(pm,             'pinMaps entry present')
       t.deepEq(pm.ins[1], {2}, 'input port 1 → pair 2')
       t.eq(pm.ins[2],     nil, 'input port 2 disconnected dropped')

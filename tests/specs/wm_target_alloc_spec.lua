@@ -8,7 +8,8 @@ local util = require('util')
 
 local function mkWm(harness)
   local h  = harness.mk()
-  local wm = util.instantiate('wiringManager', { cm = h.cm })
+  local rm = util.instantiate('routingManager')
+  local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
   wm:load()
   return h, wm
  end
@@ -37,6 +38,19 @@ local function audioEdge(from, to)
   return { type='audio', from=from, to=to }
 end
 
+-- pinMaps nest on fx entries now; find one by its compile origin.
+local function pinmapByNode(entry, id)
+  for _, e in ipairs(entry.fx) do
+    if e.origin and e.origin.kind == 'node' and e.origin.id == id then return e.pinMaps end
+  end
+end
+local function pinmapByMerge(entry, consumer, trackKey)
+  for _, e in ipairs(entry.fx) do
+    if e.origin and e.origin.kind == 'merge'
+       and e.origin.consumer == consumer and e.origin.trackKey == trackKey then return e.pinMaps end
+  end
+end
+
 return {
   {
     -- s→fx1→fx2→master + fx1→fx3→master: fx1's one output pair feeds both
@@ -59,17 +73,16 @@ return {
       local target = wm:targetState()
       local entry  = target['guid-A']
       t.truthy(entry, 'source-track entry present')
-      t.eq(entry.nchan,        4, 'fx2/fx3 run live into the merge CU -> 2 pairs')
-      t.eq(entry.mainSendOffs, 0, 'parent send reads the merge CU pair (offs 0)')
-      t.eq(entry.mainSendNch,  2, 'parent send to master is stereo')
-      t.deepEq(entry.pinMaps, {})
-      t.deepEq(entry.pinMapsByOrigin['node:fx1'],
+      t.eq(entry.nchan,              4, 'fx2/fx3 run live into the merge CU -> 2 pairs')
+      t.eq(entry.mainSend.tgtOffset, 0, 'parent send reads the merge CU pair (offs 0)')
+      t.eq(entry.mainSend.nchan,     2, 'parent send to master is stereo')
+      t.deepEq(pinmapByNode(entry, 'fx1'),
                { ins = { [1] = {1} }, outs = { [1] = {1} } })   -- one shared pair
-      t.deepEq(entry.pinMapsByOrigin['node:fx2'],
+      t.deepEq(pinmapByNode(entry, 'fx2'),
                { ins = { [1] = {1} }, outs = { [1] = {2} } })
-      t.deepEq(entry.pinMapsByOrigin['node:fx3'],
+      t.deepEq(pinmapByNode(entry, 'fx3'),
                { ins = { [1] = {1} }, outs = { [1] = {1} } })
-      t.deepEq(entry.pinMapsByOrigin['merge:master\0guid-A'],
+      t.deepEq(pinmapByMerge(entry, 'master', 'guid-A'),
                { ins = { [1] = {2}, [2] = {1} }, outs = { [1] = {1} } })
     end,
   },
@@ -88,10 +101,10 @@ return {
       end)
       local target = wm:targetState()
       local entry  = target['guid-A']
-      t.eq(entry.nchan,        2, 'no fresh pair claimed')
-      t.eq(entry.mainSendOffs, 0)
-      t.eq(entry.mainSendNch,  2)
-      t.deepEq(entry.pinMapsByOrigin['node:f'],
+      t.eq(entry.nchan,              2, 'no fresh pair claimed')
+      t.eq(entry.mainSend.tgtOffset, 0)
+      t.eq(entry.mainSend.nchan,     2)
+      t.deepEq(pinmapByNode(entry, 'f'),
                { ins = { [1] = {1} }, outs = { [1] = {1} } })
     end,
   },

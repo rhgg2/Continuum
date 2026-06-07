@@ -7,10 +7,10 @@
 --invariant: wm deletes an FX instance only when its owning node or CU bridge leaves the graph
 --invariant: trackKey changes are moves; TrackFX_CopyToTrack(is_move=true) preserves plugin state
 --shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
---shape: snapshotSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int, preFx?=true }
+--shape: snapshotSend = { to=trackKey, kind='audio'|'midi', gain?=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }
 --shape: snapshotFxOrigin = {kind='node',id=string}|{kind='edge',idx=int}|{kind='bracketIn'|'bracketOut',id=string}
---shape: snapshotFxEntry = { fxGuid?=string, ident=string, params?=table, origin?=snapshotFxOrigin, midiOut?=bool, midiBus?={inBus=int,outBus=int} }
---shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackGuid?=string, fxOrder=snapshotFxEntry[], mainSend=bool, mainSendGain?=number, mainSendOffs?=int, mainSendNch?=int, sends=snapshotSend[], nchan?=int, pinMaps?={ [fxGuid]=snapshotPinMap }, pinMapsByOrigin?={ [originKey]=snapshotPinMap } } }; see docs/wiringManager.md § wiringSnapshot.
+--shape: snapshotFxEntry = { id?=string, ident=string, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,outDisabled=bool}, pinMaps?=snapshotPinMap }
+--shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + wm ownership/trackKey overlay. see docs/wiringManager.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'setExtState'|'moveFxAcrossTracks', ... }
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
@@ -39,6 +39,10 @@ local fxLocations = {}     -- fxGuid → {track, fxIdx}; restamped each applyOps
 local SCRATCH_NAME = 'continuum: wiring scratch'
 local SCRATCH_KEY  = '__scratch__'
 local CU_IDENT     = 'JS:Continuum Utility'
+
+local function isJS(ident)
+  return ident ~= nil and ident:sub(1, 3) == 'JS:'
+end
 
 ----- Helpers
 
@@ -761,85 +765,122 @@ local function readSendsClass(track, byTrack)
   return out
 end
 
---contract: walks every project track, builds a wiringSnapshot of REAPER's current state restricted to wm-owned things (tracks tagged wiringTrackKind; FX whose guids appear in the user graph (fx nodes) or edge ops (CUs); sends whose dst is itself a managed track). Foreign tracks/FX/sends are invisible. Read-only.
+-- Live CU param mirror so fxOrderEq is honest (mode/bank drift drives reconcile,
+-- not noise). rm:tracks() doesn't read params — the CU encoding is wm/CU-private.
+local function readCuParams(track, fxIdx)
+  local idx     = cuParamIdx(track, fxIdx)
+  local modeInt = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.mode) + 0.5)
+  local modeStr = ({ [0] = 'busRoute', [1] = 'merge' })[modeInt] or 'merge'
+  if modeStr == 'busRoute' then
+    return { mode = modeStr,
+             from = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.from) + 0.5),
+             to   = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.to) + 0.5) }
+  end
+  local nPairs = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.nPairs) + 0.5)
+  local gains, inMask = {}, {}
+  for i = 1, nPairs do gains[i] = reaper.TrackFX_GetParam(track, fxIdx, idx['gain' .. i]) end
+  for i = 0, 3 do inMask[i + 1] = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx['inMask' .. i]) + 0.5) end
+  return { mode = modeStr, nPairs = nPairs, gains = gains,
+           audioSum = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.audioSum) + 0.5),
+           outBus   = math.floor(reaper.TrackFX_GetParam(track, fxIdx, idx.outBus) + 0.5),
+           inMask   = inMask }
+end
+
+--contract: rm:tracks() overlaid with wm ownership — owned fx only, re-keyed by
+-- trackKey, send dsts remapped guid→trackKey; foreign tracks/fx/sends invisible. Read-only.
 function wm:snapshot()
   ensureLoaded()
-  -- Ownership = current-graph guids ∪ persisted wiringOwnedFx set. The
-  -- persisted set keeps previously-realised FX visible to snapshot after
-  -- their owning node has been removed from the graph, so wm:diff can
-  -- emit the delete op on the next reconcile pass.
+  -- Ownership = current-graph guids ∪ persisted wiringOwnedFx set, so an fx
+  -- whose node was removed stays visible until wm:diff emits its delete.
   local ownedGuids = {}
   for k in pairs(cm:get('wiringOwnedFx') or {}) do ownedGuids[k] = true end
   for _, n in pairs(userGraph.nodes) do
     if n.kind == 'fx' then
-      if n.fxGuid              then ownedGuids[n.fxGuid]              = true end
-      if n.midiInBracketGuid   then ownedGuids[n.midiInBracketGuid]   = true end
-      if n.midiOutBracketGuid  then ownedGuids[n.midiOutBracketGuid]  = true end
+      if n.fxGuid             then ownedGuids[n.fxGuid]             = true end
+      if n.midiInBracketGuid  then ownedGuids[n.midiInBracketGuid]  = true end
+      if n.midiOutBracketGuid then ownedGuids[n.midiOutBracketGuid] = true end
     end
     if n.mergeGuids then
       for _, g in pairs(n.mergeGuids) do ownedGuids[g] = true end
     end
   end
-  -- First pass: discover (trackKey, trackKind) so the second pass can resolve
-  -- send destinations. sourceTrack derives trackKey from its own GUID; newTrack carries it explicitly.
-  local snap, byTrack, byKind = {}, {}, {}
+
+  -- (guid → trackKey/trackKind) from ext-state tags; needs live MediaTrack
+  -- handles. sourceTrack keys on guid, newTrack on wiringTrack tag, scratch on singleton key.
+  local keyByGuid, kindByKey = {}, {}
   for i = 0, reaper.CountTracks(0) - 1 do
-    local track = reaper.GetTrack(0, i)
+    local track     = reaper.GetTrack(0, i)
+    local guid      = reaper.GetTrackGUID(track)
     local trackKind = cm:readTrackKey(track, 'wiringTrackKind')
     local trackKey
     if trackKind == 'sourceTrack' then
-      trackKey = reaper.GetTrackGUID(track)
+      trackKey = guid
     elseif trackKind == 'newTrack' then
       trackKey = cm:readTrackKey(track, 'wiringTrack')
     elseif cm:readTrackKey(track, 'wiringScratch') == '1' then
       trackKey, trackKind = SCRATCH_KEY, 'scratch'
     end
-    if trackKey then
-      byTrack[track]   = trackKey
-      byKind[trackKey] = trackKind
-    end
-  end
-  for track, trackKey in pairs(byTrack) do
-    local trackKind  = byKind[trackKey]
-    local isScratch = trackKind == 'scratch'
-    local fxOrder, pinMaps = ownedChain(track, ownedGuids)
-    local mainSend = not isScratch
-                     and reaper.GetMediaTrackInfo_Value(track, 'B_MAINSEND') ~= 0
-                     or false
-    snap[trackKey] = {
-      trackKind     = trackKind,
-      trackGuid    = reaper.GetTrackGUID(track),
-      fxOrder      = fxOrder,
-      mainSend     = mainSend,
-      mainSendGain = not isScratch
-                     and reaper.GetMediaTrackInfo_Value(track, 'D_VOL')
-                     or nil,
-      mainSendOffs = mainSend
-                     and math.floor(reaper.GetMediaTrackInfo_Value(track, 'C_MAINSEND_OFFS'))
-                     or nil,
-      mainSendNch  = mainSend
-                     and math.floor(reaper.GetMediaTrackInfo_Value(track, 'C_MAINSEND_NCH'))
-                     or nil,
-      nchan        = math.floor(reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN')),
-      pinMaps      = pinMaps,
-      sends        = isScratch and {} or readSendsClass(track, byTrack),
-    }
+    if trackKey then keyByGuid[guid] = trackKey; kindByKey[trackKey] = trackKind end
   end
 
-  -- The REAPER master is a project-wide singleton, not enumerated by
-  -- CountTracks/GetTrack. Synthesise a snap entry under '__master__' when
-  -- any wm-owned FX live on master so wm:diff can detect transitions onto
-  -- or off the master track.
-  if reaper.GetMasterTrack then
-    local master = reaper.GetMasterTrack(0)
-    local masterChain, masterPinMaps = ownedChain(master, ownedGuids)
-    if #masterChain > 0 then
-      snap['__master__'] = {
-        trackKind = 'master', trackGuid = nil, fxOrder = masterChain,
-        mainSend = false, sends = {},
-        nchan    = math.floor(reaper.GetMediaTrackInfo_Value(master, 'I_NCHAN')),
-        pinMaps  = masterPinMaps,
+  local function snapFx(fx)
+    local entry = { id = fx.id, ident = fx.ident }
+    if fx.pinMaps and (next(fx.pinMaps.ins) or next(fx.pinMaps.outs)) then
+      entry.pinMaps = fx.pinMaps
+    end
+    if isJS(fx.ident) then
+      if fx.ident == CU_IDENT then
+        local track, fxIdx = self:locateFx(fx.id)
+        if track then entry.params = readCuParams(track, fxIdx) end
+      end
+    else
+      entry.midi = fx.midi
+    end
+    return entry
+  end
+  local function ownedFx(fxList)
+    local out = {}
+    for _, fx in ipairs(fxList) do
+      if ownedGuids[fx.id] then util.add(out, snapFx(fx)) end
+    end
+    return out
+  end
+  -- Sends to a managed dst only; re-key .to guid→trackKey, drop midi gain
+  -- (only audio sends carry a written D_VOL).
+  local function ownedSends(sendList)
+    local out = {}
+    for _, s in ipairs(sendList) do
+      local key = keyByGuid[s.to]
+      if key then
+        util.add(out, { to = key, kind = s.kind,
+                        gain = s.kind == 'audio' and s.gain or nil,
+                        srcChan = s.srcChan, dstChan = s.dstChan, pos = s.pos })
+      end
+    end
+    return out
+  end
+
+  local snap = {}
+  for _, tr in ipairs(rm:tracks()) do
+    local trackKey = keyByGuid[tr.id]
+    if trackKey then
+      local isScratch = kindByKey[trackKey] == 'scratch'
+      snap[trackKey] = {
+        trackKind = kindByKey[trackKey],
+        id        = tr.id,
+        nchan     = tr.nchan,
+        mainSend  = isScratch and { on = false } or tr.mainSend,
+        fx        = ownedFx(tr.fx),
+        sends     = isScratch and {} or ownedSends(tr.sends),
       }
+    elseif tr.isMaster then
+      -- Master is a singleton with no ext-state tag; surface it only when it
+      -- hosts owned fx, so wm:diff can see transitions on/off master.
+      local masterFx = ownedFx(tr.fx)
+      if #masterFx > 0 then
+        snap['__master__'] = { trackKind = 'master', nchan = tr.nchan,
+                               mainSend = { on = false }, fx = masterFx, sends = {} }
+      end
     end
   end
   return snap
@@ -861,61 +902,58 @@ local function projectEntry(spec, compileNodes, scratchGuid)
   local synth    = spec.synthNodes or {}
   local brackets = spec.bracketNodes or {}
   local function resolveNode(id) return compileNodes[id] or synth[id] or brackets[id] end
-  local fxOrder, originByCompileId = {}, {}
+  local fx, entryByCompileId = {}, {}
   for _, id in ipairs(spec.fxOrder) do
     local node = resolveNode(id)
     if node and node.kind == 'fx' then
-      local entry = { fxGuid = node.fxGuid, ident = node.fxIdent }
+      local entry = { id = node.fxGuid, ident = node.fxIdent }
       if node.originSide then
         local consumer = compileNodes[node.originNode] or {}
-        local stamp = node.originSide == 'in'
-                      and consumer.midiInBracketGuid
-                      or  consumer.midiOutBracketGuid
-        entry.fxGuid = stamp
+        entry.id = node.originSide == 'in'
+                   and consumer.midiInBracketGuid
+                   or  consumer.midiOutBracketGuid
         entry.params = util.deepClone(node.params)
         entry.origin = { kind = node.originSide == 'in' and 'bracketIn' or 'bracketOut',
                          id = node.originNode }
       elseif node.originConsumer then
         local consumer = compileNodes[node.originConsumer] or {}
-        entry.fxGuid = consumer.mergeGuids and consumer.mergeGuids[node.originTrackKey]
+        entry.id = consumer.mergeGuids and consumer.mergeGuids[node.originTrackKey]
         entry.params = util.deepClone(node.params)
         entry.origin = { kind = 'merge', consumer = node.originConsumer, trackKey = node.originTrackKey }
       else
         entry.origin = { kind = 'node', id = id }
-        if not (node.fxIdent and node.fxIdent:sub(1, 3) == 'JS:') then
-          entry.midiOut = nodeHasMidiOut(userGraph, id)
+        if not isJS(node.fxIdent) then
           local bus = spec.fxMidiBus and spec.fxMidiBus[id]
-          if bus then entry.midiBus = util.deepClone(bus) end
+          entry.midi = { inBus = bus and bus.inBus or 0, outBus = bus and bus.outBus or 0,
+                         outDisabled = not nodeHasMidiOut(userGraph, id) }
         end
       end
-      originByCompileId[id] = entry
-      util.add(fxOrder, entry)
+      entryByCompileId[id] = entry
+      util.add(fx, entry)
     end
   end
-  local pinMaps, pinMapsByOrigin = {}, {}
   for compileId, pm in pairs(spec.pinMaps or {}) do
-    local entry = originByCompileId[compileId]
-    if entry then
-      local target = entry.fxGuid and pinMaps or pinMapsByOrigin
-      local key    = entry.fxGuid or originKey(entry.origin)
-      target[key]  = util.deepClone(pm)
-    end
+    local entry = entryByCompileId[compileId]
+    if entry then entry.pinMaps = util.deepClone(pm) end
   end
-  local trackGuid
-  if     spec.trackKind == 'sourceTrack' then trackGuid = spec.trackGuid
-  elseif spec.trackKind == 'scratch'     then trackGuid = scratchGuid end
+  local sends = {}
+  for _, s in ipairs(spec.sends or {}) do
+    util.add(sends, { to = s.to, kind = s.type, gain = s.gain,
+                      srcChan = s.srcChan, dstChan = s.dstChan,
+                      pos = s.preFx and 'preFx' or 'preFader' })
+  end
+  local id
+  if     spec.trackKind == 'sourceTrack' then id = spec.trackGuid
+  elseif spec.trackKind == 'scratch'     then id = scratchGuid end
   return {
-    trackKind         = spec.trackKind,
-    trackGuid        = trackGuid,
-    fxOrder          = fxOrder,
-    mainSend         = spec.mainSend,
-    mainSendGain     = spec.mainSendGain,
-    mainSendOffs     = spec.mainSendOffs,
-    mainSendNch      = spec.mainSend and 2 or nil,   -- parent send to master is always stereo
-    sends            = util.deepClone(spec.sends),
-    nchan            = spec.nchan,
-    pinMaps          = pinMaps,
-    pinMapsByOrigin  = pinMapsByOrigin,
+    trackKind = spec.trackKind,
+    id        = id,
+    fx        = fx,
+    mainSend  = { on = not not spec.mainSend, gain = spec.mainSendGain,
+                  tgtOffset = spec.mainSendOffs,
+                  nchan = spec.mainSend and 2 or nil },   -- parent send to master is always stereo
+    sends     = sends,
+    nchan     = spec.nchan,
   }
 end
 
@@ -934,39 +972,49 @@ function wm:targetState()
   return out
 end
 
+local function sendKey(s)
+  return util.key(s.to, s.kind, s.srcChan, s.dstChan, s.pos)
+end
+
 local function fxOrderEq(a, b)
   if #a ~= #b then return false end
   for i = 1, #a do
     local x, y = a[i], b[i]
-    if x.fxGuid  ~= y.fxGuid  or x.ident ~= y.ident      then return false end
-    if x.midiOut ~= y.midiOut                            then return false end
-    if not util.deepEq(x.midiBus or {}, y.midiBus or {}) then return false end
-    if not util.deepEq(x.params  or {}, y.params  or {}) then return false end
+    if x.id ~= y.id or x.ident ~= y.ident             then return false end
+    if not util.deepEq(x.midi   or {}, y.midi   or {}) then return false end
+    if not util.deepEq(x.params or {}, y.params or {}) then return false end
   end
   return true
 end
 
 local function sendsEq(a, b)
   if #a ~= #b then return false end
-  -- Set-equality on the identity (to, type, srcChan, dstChan, preFx); gain is the
-  -- value so D_VOL drift drives setSends. preFx lets pre- and post-FX sends coexist.
+  -- Set-equality on the identity (to, kind, srcChan, dstChan, pos); gain is the
+  -- value so D_VOL drift drives setSends. pos lets pre-/post-FX sends coexist.
   local byKey = {}
-  for _, s in ipairs(a) do
-    local k = util.key(s.to, s.type, s.srcChan, s.dstChan, s.preFx)
-    byKey[k] = s.gain or 1.0
-  end
+  for _, s in ipairs(a) do byKey[sendKey(s)] = s.gain or 1.0 end
   for _, s in ipairs(b) do
-    local k = util.key(s.to, s.type, s.srcChan, s.dstChan, s.preFx)
+    local k = sendKey(s)
     if byKey[k] == nil or byKey[k] ~= (s.gain or 1.0) then return false end
   end
   return true
 end
 
--- snap can only key pinMaps by fxGuid, so any target.pinMapsByOrigin
--- (unmaterialised fxs) is by definition unrepresented in snap and must drift.
+-- pinMaps live on fx entries now; an unmaterialised target fx (no id) can't be
+-- represented in snap (snap fx are all live) so any pinMap it carries must drift.
 local function pinMapsEq(t_, s)
-  if t_.pinMapsByOrigin and next(t_.pinMapsByOrigin) then return false end
-  local tPM, sPM = t_.pinMaps or {}, (s and s.pinMaps) or {}
+  local function byGuid(entry)
+    local out, unrepresentable = {}, false
+    for _, fx in ipairs(entry.fx) do
+      if fx.pinMaps and (next(fx.pinMaps.ins) or next(fx.pinMaps.outs)) then
+        if fx.id then out[fx.id] = fx.pinMaps else unrepresentable = true end
+      end
+    end
+    return out, unrepresentable
+  end
+  local tPM, tUnrep = byGuid(t_)
+  if tUnrep then return false end
+  local sPM = s and (byGuid(s)) or {}
   local keys = {}
   for k in pairs(tPM) do keys[k] = true end
   for k in pairs(sPM) do keys[k] = true end
@@ -975,6 +1023,44 @@ local function pinMapsEq(t_, s)
                        sPM[k] or { ins = {}, outs = {} }) then return false end
   end
   return true
+end
+
+-- new→old op-payload bridges. wm:diff reads rm-shaped records but emits ops in
+-- the pre-rm shape; chunks 3–4 delete these as consumers move to rm.
+local function opFxOrder(fx)
+  local out = {}
+  for _, e in ipairs(fx) do
+    local old = { fxGuid = e.id, ident = e.ident, origin = e.origin,
+                  params = e.params and util.deepClone(e.params) }
+    if e.midi then
+      old.midiBus = { inBus = e.midi.inBus, outBus = e.midi.outBus }
+      old.midiOut = not e.midi.outDisabled
+    end
+    util.add(out, old)
+  end
+  return out
+end
+
+local function opSends(sends)
+  local out = {}
+  for _, s in ipairs(sends) do
+    util.add(out, { to = s.to, type = s.kind, gain = s.gain, srcChan = s.srcChan,
+                    dstChan = s.dstChan, preFx = s.pos == 'preFx' or nil })
+  end
+  return out
+end
+
+-- Split nested fx.pinMaps back into the track-level {[fxGuid]=pm} + by-origin
+-- maps the setPinMaps op carries until chunk 4 applies pinmaps inline.
+local function opPinMaps(fx)
+  local byGuid, byOrigin = {}, {}
+  for _, e in ipairs(fx) do
+    if e.pinMaps and (next(e.pinMaps.ins) or next(e.pinMaps.outs)) then
+      if e.id then byGuid[e.id]                 = util.deepClone(e.pinMaps)
+      else        byOrigin[originKey(e.origin)] = util.deepClone(e.pinMaps) end
+    end
+  end
+  return byGuid, byOrigin
 end
 
 --contract: pure structural diff → wiringOp[] that carries snap to target.
@@ -1001,20 +1087,20 @@ function wm:diff(target, snap)
   -- emitted before per-class setFXChain (see --shape wiringOp above for WHY).
   local snapGuidToTrack = {}
   for trackKey, s in pairs(snap) do
-    for _, e in ipairs(s.fxOrder) do
-      if e.fxGuid then snapGuidToTrack[e.fxGuid] = trackKey end
+    for _, e in ipairs(s.fx) do
+      if e.id then snapGuidToTrack[e.id] = trackKey end
     end
   end
   for trackKey, t_ in pairs(target) do
-    for _, e in ipairs(t_.fxOrder) do
-      local fromKey = e.fxGuid and snapGuidToTrack[e.fxGuid]
+    for _, e in ipairs(t_.fx) do
+      local fromKey = e.id and snapGuidToTrack[e.id]
       if fromKey and fromKey ~= trackKey then
         local s = snap[fromKey]
         util.add(ops, { op = 'moveFxAcrossTracks',
-                        fxGuid        = e.fxGuid,
-                        fromTrackKind  = s.trackKind, fromTrackGuid = s.trackGuid,
-                        toTrackKind    = t_.trackKind, toTrackGuid  = t_.trackGuid,
-                        toTrackKey    = trackKey })
+                        fxGuid         = e.id,
+                        fromTrackKind  = s.trackKind, fromTrackGuid = s.id,
+                        toTrackKind    = t_.trackKind, toTrackGuid   = t_.id,
+                        toTrackKey     = trackKey })
       end
     end
   end
@@ -1025,41 +1111,45 @@ function wm:diff(target, snap)
   for trackKey, t_ in pairs(target) do
     local s = snap[trackKey]
     local fresh = not s or trackChanged[trackKey]
-    if fresh or not fxOrderEq(t_.fxOrder, s.fxOrder) then
+    if fresh or not fxOrderEq(t_.fx, s.fx) then
       util.add(ops, { op = 'setFXChain', trackKey = trackKey,
                       trackKind = t_.trackKind,
-                      trackGuid = t_.trackGuid, fxOrder = util.deepClone(t_.fxOrder) })
+                      trackGuid = t_.id, fxOrder = opFxOrder(t_.fx) })
     end
     local tNchan = t_.nchan or 2
     local sNchan = (s and s.nchan) or 2
     if tNchan ~= sNchan then
       util.add(ops, { op = 'setNchan', trackKey = trackKey,
-                      trackKind = t_.trackKind, trackGuid = t_.trackGuid,
+                      trackKind = t_.trackKind, trackGuid = t_.id,
                       value = tNchan })
     end
     if not pinMapsEq(t_, s) then
+      local byGuid, byOrigin = opPinMaps(t_.fx)
       util.add(ops, { op = 'setPinMaps', trackKey = trackKey,
-                      trackKind = t_.trackKind, trackGuid = t_.trackGuid,
-                      pinMaps         = util.deepClone(t_.pinMaps         or {}),
-                      pinMapsByOrigin = util.deepClone(t_.pinMapsByOrigin or {}) })
+                      trackKind = t_.trackKind, trackGuid = t_.id,
+                      pinMaps = byGuid, pinMapsByOrigin = byOrigin })
     end
-    local tGain = t_.mainSendGain or 1.0
-    local sGain = (s and s.mainSendGain) or 1.0
-    local tOffs = (t_.mainSend and t_.mainSendOffs) or 0
-    local sOffs = (s and s.mainSend and s.mainSendOffs) or 0
-    local tNch  = (t_.mainSend and t_.mainSendNch) or 0
-    local sNch  = (s and s.mainSend and s.mainSendNch) or 0
-    if (fresh and (t_.mainSend or tGain ~= 1.0))
-       or (not fresh and (t_.mainSend ~= s.mainSend or tGain ~= sGain
-                                                    or tOffs ~= sOffs or tNch ~= sNch)) then
+    local tm = t_.mainSend or {}
+    local sm = (s and s.mainSend) or {}
+    local tOn   = tm.on and true or false
+    local sOn   = sm.on and true or false
+    local tGain = tm.gain or 1.0
+    local sGain = sm.gain or 1.0
+    local tOffs = (tOn and tm.tgtOffset) or 0
+    local sOffs = (sOn and sm.tgtOffset) or 0
+    local tNch  = (tOn and tm.nchan) or 0
+    local sNch  = (sOn and sm.nchan) or 0
+    if (fresh and (tOn or tGain ~= 1.0))
+       or (not fresh and (tOn ~= sOn or tGain ~= sGain
+                                     or tOffs ~= sOffs or tNch ~= sNch)) then
       util.add(ops, { op = 'setMainSend', trackKey = trackKey,
-                      trackKind = t_.trackKind, trackGuid = t_.trackGuid,
-                      value = t_.mainSend, gain = tGain, offs = tOffs, nch = tNch })
+                      trackKind = t_.trackKind, trackGuid = t_.id,
+                      value = tOn, gain = tGain, offs = tOffs, nch = tNch })
     end
     if fresh or not sendsEq(t_.sends, s.sends) then
       util.add(ops, { op = 'setSends', trackKey = trackKey,
                       trackKind = t_.trackKind,
-                      trackGuid = t_.trackGuid, sends = util.deepClone(t_.sends) })
+                      trackGuid = t_.id, sends = opSends(t_.sends) })
     end
     -- ExtState writes only on creation/track-transition-in: sourceTrack gets wiringTrackKind only
     -- (own guid is already the key); newTrack also needs wiringTrack for its multi-guid key.
@@ -1083,10 +1173,10 @@ function wm:diff(target, snap)
     local abandoned = not target[trackKey] or trackChanged[trackKey]
     if abandoned then
       if s.trackKind == 'newTrack' then
-        util.add(ops, { op = 'deleteTrack', trackGuid = s.trackGuid })
-      elseif #s.fxOrder > 0 then
+        util.add(ops, { op = 'deleteTrack', trackGuid = s.id })
+      elseif #s.fx > 0 then
         util.add(ops, { op = 'setFXChain', trackKey = trackKey,
-                        trackKind = s.trackKind, trackGuid = s.trackGuid, fxOrder = {} })
+                        trackKind = s.trackKind, trackGuid = s.id, fxOrder = {} })
       end
     end
   end
