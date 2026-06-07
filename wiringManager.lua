@@ -31,7 +31,6 @@ local fire = util.installHooks(wm)
 local userGraph = nil
 local scratchTrack = nil  -- hidden trackKey for disconnected/orphan FX nodes; reset by wm:load
 local pokeParamCache = {} -- persistent paramIdx cache for the pokeEdgeGain hot path
-local realising = false   -- true during applyOps's stamp-back mutate, gating wiringChanged
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
 local lastScratchRaw = nil -- serialised graph last mirrored to scratch P_EXT; pollUndo compares against it
 local fxLocations = {}     -- fxGuid → {track, fxIdx}; restamped each applyOps so locateFx needn't sweep the project
@@ -191,7 +190,8 @@ function wm:edgeGain(idx)
   return (e.ops and e.ops.gain) or 1.0
 end
 
---contract: clone-validate-swap; on DAG.validate failure returns false,err with no state change and no signal; on success persists and fires wiringChanged{kind='mutate'} unless wm is mid-realisation (the applier's stamp-back path sets `realising` so it doesn't re-enter the live-recompile loop)
+--contract: clone-validate-swap; DAG.validate failure returns false,err with no state change;
+--contract: on success persists and fires wiringChanged{kind='mutate'}
 function wm:mutate(mutator)
   ensureLoaded()
   local draft = util.deepClone(userGraph)
@@ -200,7 +200,7 @@ function wm:mutate(mutator)
   if err then return false, err end
   setGraph(draft)
   self:save()
-  if not realising then fire('wiringChanged', { kind = 'mutate' }) end
+  fire('wiringChanged', { kind = 'mutate' })
   return true
 end
 
@@ -786,6 +786,27 @@ local function readCuParams(track, fxIdx)
            inMask   = inMask }
 end
 
+-- CU bridge params arrive in wm/CU vocabulary; rm:writeParams wants flat {sliderName=number}.
+-- Flatten at the read/derive boundary so op payload and rm speak one shape.
+local CU_MODE_TO_FLOAT = { busRoute = 0, merge = 1 }
+local function flattenCuParams(params)
+  local flat = {}
+  for k, v in pairs(params) do
+    if k == 'gains' then
+      for i, g in ipairs(v) do flat['gain' .. i] = g end
+    elseif k == 'inMask' then
+      for i, lane in ipairs(v) do flat['inMask' .. (i - 1)] = lane end
+    elseif k == 'mode' and type(v) == 'string' then
+      local f = CU_MODE_TO_FLOAT[v]
+      if not f then error(("unknown CU mode %q"):format(v)) end
+      flat.mode = f
+    else
+      flat[k] = v
+    end
+  end
+  return flat
+end
+
 --contract: rm:tracks() overlaid with wm ownership — owned fx only, re-keyed by
 -- trackKey, send dsts remapped guid→trackKey; foreign tracks/fx/sends invisible. Read-only.
 function wm:snapshot()
@@ -831,7 +852,7 @@ function wm:snapshot()
     if isJS(fx.ident) then
       if fx.ident == CU_IDENT then
         local track, fxIdx = self:locateFx(fx.id)
-        if track then entry.params = readCuParams(track, fxIdx) end
+        if track then entry.params = flattenCuParams(readCuParams(track, fxIdx)) end
       end
     else
       entry.midi = fx.midi
@@ -886,18 +907,8 @@ function wm:snapshot()
   return snap
 end
 
--- Same key shape as wm:applyOps stamps, so the pin-map applier can
--- resolve unmaterialised fxs through stampsByOrigin[originKey].
-local function originKey(origin)
-  if origin.kind == 'node'      then return 'node:' .. origin.id end
-  if origin.kind == 'bracketIn' then return 'bracketIn:'  .. origin.id end
-  if origin.kind == 'bracketOut' then return 'bracketOut:' .. origin.id end
-  if origin.kind == 'merge' then return 'merge:' .. util.key(origin.consumer, origin.trackKey) end
-  return 'edge:' .. origin.idx
-end
-
--- pinMaps forks by materialisation: fxGuid-keyed entries land in pinMaps,
--- unmaterialised ones (no fxGuid yet) in pinMapsByOrigin for the applier.
+-- pinMaps nest inline on each fx entry; an unmaterialised entry (id=nil) carries
+-- them too, and the applier resolves its guid through the freshly-stamped graph.
 local function projectEntry(spec, compileNodes, scratchGuid)
   local synth    = spec.synthNodes or {}
   local brackets = spec.bracketNodes or {}
@@ -912,13 +923,13 @@ local function projectEntry(spec, compileNodes, scratchGuid)
         entry.id = node.originSide == 'in'
                    and consumer.midiInBracketGuid
                    or  consumer.midiOutBracketGuid
-        entry.params = util.deepClone(node.params)
+        entry.params = flattenCuParams(node.params)
         entry.origin = { kind = node.originSide == 'in' and 'bracketIn' or 'bracketOut',
                          id = node.originNode }
       elseif node.originConsumer then
         local consumer = compileNodes[node.originConsumer] or {}
         entry.id = consumer.mergeGuids and consumer.mergeGuids[node.originTrackKey]
-        entry.params = util.deepClone(node.params)
+        entry.params = flattenCuParams(node.params)
         entry.origin = { kind = 'merge', consumer = node.originConsumer, trackKey = node.originTrackKey }
       else
         entry.origin = { kind = 'node', id = id }
@@ -1025,35 +1036,6 @@ local function pinMapsEq(t_, s)
   return true
 end
 
--- new→old op-payload bridges. wm:diff reads rm-shaped records but emits ops in
--- the pre-rm shape; chunks 3–4 delete these as consumers move to rm.
-local function opFxOrder(fx)
-  local out = {}
-  for _, e in ipairs(fx) do
-    local old = { fxGuid = e.id, ident = e.ident, origin = e.origin,
-                  params = e.params and util.deepClone(e.params) }
-    if e.midi then
-      old.midiBus = { inBus = e.midi.inBus, outBus = e.midi.outBus }
-      old.midiOut = not e.midi.outDisabled
-    end
-    util.add(out, old)
-  end
-  return out
-end
-
--- Split nested fx.pinMaps back into the track-level {[fxGuid]=pm} + by-origin
--- maps the setPinMaps op carries until chunk 4 applies pinmaps inline.
-local function opPinMaps(fx)
-  local byGuid, byOrigin = {}, {}
-  for _, e in ipairs(fx) do
-    if e.pinMaps and (next(e.pinMaps.ins) or next(e.pinMaps.outs)) then
-      if e.id then byGuid[e.id]                 = util.deepClone(e.pinMaps)
-      else        byOrigin[originKey(e.origin)] = util.deepClone(e.pinMaps) end
-    end
-  end
-  return byGuid, byOrigin
-end
-
 --contract: pure structural diff → wiringOp[] that carries snap to target.
 -- Op order and deletion rules: see docs/wiringManager.md § diff op ordering
 function wm:diff(target, snap)
@@ -1105,7 +1087,7 @@ function wm:diff(target, snap)
     if fresh or not fxOrderEq(t_.fx, s.fx) then
       util.add(ops, { op = 'setFXChain', trackKey = trackKey,
                       trackKind = t_.trackKind,
-                      trackGuid = t_.id, fxOrder = opFxOrder(t_.fx) })
+                      trackGuid = t_.id, fx = t_.fx })
     end
     local tNchan = t_.nchan or 2
     local sNchan = (s and s.nchan) or 2
@@ -1115,10 +1097,9 @@ function wm:diff(target, snap)
                       value = tNchan })
     end
     if not pinMapsEq(t_, s) then
-      local byGuid, byOrigin = opPinMaps(t_.fx)
       util.add(ops, { op = 'setPinMaps', trackKey = trackKey,
                       trackKind = t_.trackKind, trackGuid = t_.id,
-                      pinMaps = byGuid, pinMapsByOrigin = byOrigin })
+                      fx = t_.fx })
     end
     local tm = t_.mainSend or {}
     local sm = (s and s.mainSend) or {}
@@ -1167,7 +1148,7 @@ function wm:diff(target, snap)
         util.add(ops, { op = 'deleteTrack', trackGuid = s.id })
       elseif #s.fx > 0 then
         util.add(ops, { op = 'setFXChain', trackKey = trackKey,
-                        trackKind = s.trackKind, trackGuid = s.id, fxOrder = {} })
+                        trackKind = s.trackKind, trackGuid = s.id, fx = {} })
       end
     end
   end
@@ -1176,57 +1157,6 @@ function wm:diff(target, snap)
 end
 
 ----- Apply ops (Stage 2)
-
--- CU JSFX exposes 'mode' as an enum slider; this table is the wm/CU bridge
--- contract that maps a mode-string in `params` to the slider's float value.
--- Lives here (not in DAG) because lowering is pure and shouldn't know about
--- the JSFX's numeric encoding.
-local CU_MODE_TO_FLOAT = { busRoute = 0, merge = 1 }
-
-local function paramValueAsFloat(name, value)
-  if name == 'mode' and type(value) == 'string' then
-    local f = CU_MODE_TO_FLOAT[value]
-    if not f then error(("unknown CU mode %q"):format(value)) end
-    return f
-  end
-  if type(value) == 'number' then return value end
-  error(("cannot push param %q with non-numeric value %q"):format(name, tostring(value)))
-end
-
-local function resolveParamIdx(track, fxIdx, ident, paramName, cache)
-  cache[ident] = cache[ident] or {}
-  if cache[ident][paramName] ~= nil then return cache[ident][paramName] end
-  for p = 0, 511 do
-    local ok, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
-    if not ok then break end
-    if name == paramName then
-      cache[ident][paramName] = p
-      return p
-    end
-  end
-  error(("FX %q has no param named %q"):format(ident, paramName))
-end
-
-local function pushParams(track, fxIdx, ident, params, cache)
-  for k, v in pairs(params) do
-    if k == 'gains' then
-      -- Merge gain bank: one slider per pair (gain1..gainN).
-      for i, g in ipairs(v) do
-        local pIdx = resolveParamIdx(track, fxIdx, ident, 'gain' .. i, cache)
-        reaper.TrackFX_SetParam(track, fxIdx, pIdx, g)
-      end
-    elseif k == 'inMask' then
-      -- Merge midi input-bus mask: four 32-bit lanes inMask0..inMask3.
-      for i, lane in ipairs(v) do
-        local pIdx = resolveParamIdx(track, fxIdx, ident, 'inMask' .. (i - 1), cache)
-        reaper.TrackFX_SetParam(track, fxIdx, pIdx, lane)
-      end
-    else
-    local pIdx = resolveParamIdx(track, fxIdx, ident, k, cache)
-    reaper.TrackFX_SetParam(track, fxIdx, pIdx, paramValueAsFloat(k, v))
-    end
-  end
-end
 
 -- Pair P sits on channels 2(P-1) (left) and 2(P-1)+1 (right); each port's two
 -- pins carry the left- and right-bit masks respectively, ORed across pairs.
@@ -1271,69 +1201,115 @@ local function ownedSubsequence(track, ownedGuids)
   return out
 end
 
--- Reconcile the OWNED subsequence of `track`'s FX chain to `target`. Foreign
--- (non-owned) FX keep their absolute positions; owned FX is treated as a
--- contiguous block: new owned FX inserts at "just after last owned", so the
--- block stays contiguous and doesn't interleave with user-managed plugins.
-local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache)
+-- Inline stamp/clear of minted/retracted fx guids onto userGraph (no mutate transaction):
+-- stamping a guid never changes structure, so validation and wiringChanged are skipped.
+local function stampOrigin(origin, guid)
+  local nodes = userGraph.nodes
+  if     origin.kind == 'node'       then nodes[origin.id].fxGuid             = guid
+  elseif origin.kind == 'bracketIn'  then nodes[origin.id].midiInBracketGuid  = guid
+  elseif origin.kind == 'bracketOut' then nodes[origin.id].midiOutBracketGuid = guid
+  elseif origin.kind == 'merge' then
+    local n = nodes[origin.consumer]
+    n.mergeGuids = n.mergeGuids or {}
+    n.mergeGuids[origin.trackKey] = guid
+  end
+end
+
+-- Read-side inverse of stampOrigin: the guid an origin resolves to once
+-- setFXChain has stamped it, so setPinMaps can address an id-less entry.
+local function originGuid(origin)
+  local nodes = userGraph.nodes
+  if origin.kind == 'node'       then return nodes[origin.id] and nodes[origin.id].fxGuid end
+  if origin.kind == 'bracketIn'  then return nodes[origin.id] and nodes[origin.id].midiInBracketGuid end
+  if origin.kind == 'bracketOut' then return nodes[origin.id] and nodes[origin.id].midiOutBracketGuid end
+  if origin.kind == 'merge' then
+    local n = nodes[origin.consumer]
+    return n and n.mergeGuids and n.mergeGuids[origin.trackKey]
+  end
+end
+
+-- guid → the user-graph field carrying it, so a retracted fx clears its stamp.
+local function buildGuidOwners()
+  local owners = {}
+  for _, n in pairs(userGraph.nodes) do
+    if n.kind == 'fx' then
+      if n.fxGuid             then owners[n.fxGuid]             = { node = n, field = 'fxGuid' } end
+      if n.midiInBracketGuid  then owners[n.midiInBracketGuid]  = { node = n, field = 'midiInBracketGuid' } end
+      if n.midiOutBracketGuid then owners[n.midiOutBracketGuid] = { node = n, field = 'midiOutBracketGuid' } end
+    end
+    if n.mergeGuids then
+      for trackKey, g in pairs(n.mergeGuids) do owners[g] = { node = n, mergeKey = trackKey } end
+    end
+  end
+  return owners
+end
+
+-- Clear a retracted guid's stamp; returns true iff a field was actually cleared.
+local function clearOwner(owners, guid)
+  local o = owners[guid]
+  if not o then return false end
+  if o.mergeKey then
+    o.node.mergeGuids[o.mergeKey] = nil
+    if not next(o.node.mergeGuids) then o.node.mergeGuids = nil end
+  else
+    o.node[o.field] = nil
+  end
+  return true
+end
+
+-- Reconcile the owned FX subsequence of `track` to `target` via rm. Owned FX stay
+-- contiguous (new FX inserts just after last owned); mints stamp the graph inline.
+local function reconcileFXChain(trackId, track, target, ownedGuids, owners)
+  local dirty   = false
   local current = ownedSubsequence(track, ownedGuids)
 
-  -- Stale-guid sweep: a target entry whose fxGuid isn't live in REAPER (project
-  -- reload, manual delete, drift) is reset to nil so step 2 re-materialises it
-  -- and step 3's stamp-back rewrites the user graph with the fresh guid.
+  -- Stale-guid sweep: a target entry whose id isn't live in REAPER (reload,
+  -- manual delete, drift) drops to nil so it re-materialises and re-stamps.
   local liveGuids = {}
   for _, c in ipairs(current) do liveGuids[c.fxGuid] = true end
   for _, t in ipairs(target) do
-    if t.fxGuid and not liveGuids[t.fxGuid] then t.fxGuid = nil end
+    if t.id and not liveGuids[t.id] then t.id = nil end
   end
 
   -- 1. Drop owned entries absent from target (right-to-left keeps absIdx valid).
   local targetGuids = {}
-  for _, t in ipairs(target) do
-    if t.fxGuid then targetGuids[t.fxGuid] = true end
-  end
+  for _, t in ipairs(target) do if t.id then targetGuids[t.id] = true end end
   for i = #current, 1, -1 do
-    if not targetGuids[current[i].fxGuid] then
-      reaper.TrackFX_Delete(track, current[i].absIdx)
+    local guid = current[i].fxGuid
+    if not targetGuids[guid] then
+      rm:deleteFx(guid)
+      ownedGuids[guid] = nil
+      if clearOwner(owners, guid) then dirty = true end
       table.remove(current, i)
     end
   end
 
-  -- 2. Materialise unmaterialised targets at the slot just after the last
-  --    owned entry. AddByName appends; CopyToTrack(move=true) moves into place.
+  -- 2. Materialise id-less targets at the slot just after the last owned entry;
+  --    rm:addFx appends, moves into place, and returns the minted guid.
   for _, t in ipairs(target) do
-    if not t.fxGuid then
-      local insertAt = (#current > 0)
-                       and (current[#current].absIdx + 1)
-                       or  reaper.TrackFX_GetCount(track)
-      local addedIdx = reaper.TrackFX_AddByName(track, t.ident, false, -1)
-      if addedIdx < 0 then
-        error('TrackFX_AddByName failed for ' .. tostring(t.ident))
-      end
-      if addedIdx ~= insertAt then
-        reaper.TrackFX_CopyToTrack(track, addedIdx, track, insertAt, true)
-      end
-      local minted = reaper.TrackFX_GetFXGUID(track, insertAt)
-      t.fxGuid = minted
-      ownedGuids[minted] = true
-      util.add(stamps, { origin = t.origin, guid = minted })
-      util.add(current, { fxGuid = minted, ident = t.ident, absIdx = insertAt })
+    if not t.id then
+      local insertAt = (#current > 0) and (current[#current].absIdx + 1)
+                       or reaper.TrackFX_GetCount(track)
+      local guid = rm:addFx(trackId, { ident = t.ident, index = insertAt })
+      t.id = guid
+      ownedGuids[guid] = true
+      stampOrigin(t.origin, guid)
+      dirty = true
+      util.add(current, { fxGuid = guid, ident = t.ident, absIdx = insertAt })
     end
   end
 
-  -- 3. Permute the owned subsequence to match target order. Naive selection
-  --    sort via CopyToTrack(move=true); contiguous-block invariant lets us
-  --    re-derive absIdx from firstOwnedAbs after each swap.
+  -- 3. Permute the owned subsequence to target order via rm:assignFx{index};
+  --    the contiguous-block invariant fixes each target slot at firstOwnedAbs+(d-1).
   current = ownedSubsequence(track, ownedGuids)
   local firstOwnedAbs = current[1] and current[1].absIdx
   for d = 1, #target do
-    if current[d].fxGuid ~= target[d].fxGuid then
+    if current[d].fxGuid ~= target[d].id then
       local fromIdx
       for j = d + 1, #current do
-        if current[j].fxGuid == target[d].fxGuid then fromIdx = j; break end
+        if current[j].fxGuid == target[d].id then fromIdx = j; break end
       end
-      reaper.TrackFX_CopyToTrack(track,
-        current[fromIdx].absIdx, track, current[d].absIdx, true)
+      rm:assignFx(target[d].id, { index = firstOwnedAbs + (d - 1) })
       local moved = current[fromIdx]
       table.remove(current, fromIdx)
       table.insert(current, d, moved)
@@ -1341,53 +1317,16 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
     end
   end
 
-  -- 4. Push wm-owned params for every target entry that carries them.
-  for d, t in ipairs(target) do
-    if t.params then
-      pushParams(track, current[d].absIdx, t.ident, t.params, paramIdxCache)
-    end
+  -- 4. Push params (flat sliders) and per-FX MIDI routing now the chain is in
+  --    final order; rm resolves both by guid and owns the chunk surgery.
+  for _, t in ipairs(target) do
+    local assign = {}
+    if t.params then assign.params = t.params end
+    if t.midi   then assign.midi   = t.midi   end
+    if next(assign) then rm:assignFx(t.id, assign) end
   end
 
-  -- 5. Reconcile per-FX MIDI routing (in/out bus + passthrough) against the live
-  --    chunk; decode only our trailer bytes and write once iff a byte moved. See docs/wiringManager.md § Routing as ground truth.
-  local routed = {}
-  for d, tgt in ipairs(target) do
-    if (tgt.midiBus or tgt.midiOut ~= nil) and current[d].fxGuid then
-      util.add(routed, { absIdx = current[d].absIdx, target = tgt })
-    end
-  end
-  if #routed > 0 then
-    local absToRouting, routingIdx = {}, 0
-    for i = 0, reaper.TrackFX_GetCount(track) - 1 do
-      local _, ident = reaper.TrackFX_GetFXName(track, i)
-      if not (ident and ident:sub(1, 3) == 'JS:') then
-        absToRouting[i] = routingIdx
-        routingIdx = routingIdx + 1
-      end
-    end
-    local _, chunk = reaper.GetTrackStateChunk(track, '', true)
-    local dirty = false
-    for _, r in ipairs(routed) do
-      local rIdx = absToRouting[r.absIdx]
-      local cur  = rIdx and readFXMidiRouting(chunk, rIdx)
-      if cur then
-        local tgt, opts = r.target, {}
-        if tgt.midiBus then
-          if tgt.midiBus.inBus  ~= cur.inBus  then opts.inBus  = tgt.midiBus.inBus  end
-          if tgt.midiBus.outBus ~= cur.outBus then opts.outBus = tgt.midiBus.outBus end
-        end
-        if tgt.midiOut ~= nil and (not tgt.midiOut) ~= cur.outDisabled then
-          opts.outDisabled = not tgt.midiOut
-        end
-        if next(opts) then
-          local _, inputPins, outputPins = reaper.TrackFX_GetIOSize(track, r.absIdx)
-          chunk = wm.setFXMidiRouting(chunk, rIdx, opts, inputPins + outputPins)
-          dirty = true
-        end
-      end
-    end
-    if dirty then reaper.SetTrackStateChunk(track, chunk, true) end
-  end
+  return dirty
 end
 
 local function ownedGuidsFrom(graph, persisted)
@@ -1425,7 +1364,8 @@ local function buildTrackKeyToTrack()
   return out
 end
 
---contract: walks ops in their emitted order inside one Undo_BeginBlock. setFXChain materialises nil-fxGuid entries via TrackFX_AddByName and stamps minted guids back into the user graph through a wm:mutate that's gated by `realising` so the live-recompile loop sees no signal. Param push resolves slider index by TrackFX_GetParamName and raises on unknown names.
+--contract: walks ops in order inside one Undo_BeginBlock; setFXChain mints guids via rm:addFx
+--contract: stamps them inline without firing wiringChanged; params/midi/pinMaps write through rm
 function wm:applyOps(ops, label)
   ensureLoaded()
   reaper.Undo_BeginBlock()
@@ -1433,8 +1373,8 @@ function wm:applyOps(ops, label)
 
   local trackKeyToTrack = buildTrackKeyToTrack()
   local ownedGuids      = ownedGuidsFrom(userGraph, cm:get('wiringOwnedFx'))
-  local stamps          = {}
-  local paramIdxCache   = {}
+  local owners          = buildGuidOwners()
+  local graphDirty      = false
 
   -- Master has no wiringTrack tag, so pre-register it under every master-hosted trackKey
   -- now — send-destination resolution (rm:assignTrack{sends}) must map it before any ops run.
@@ -1493,30 +1433,25 @@ function wm:applyOps(ops, label)
     elseif op.op == 'setPinMaps' then
       local t = resolveTrack(op)
       if t then
-        -- Newly stamped guids join ownedPlus so a same-apply setPinMaps lands
-        -- on fxs minted by the preceding setFXChain.
-        local guidByOrigin, ownedPlus = {}, {}
-        for g in pairs(ownedGuids) do ownedPlus[g] = true end
-        for _, st in ipairs(stamps) do
-          guidByOrigin[originKey(st.origin)] = st.guid
-          ownedPlus[st.guid] = true
-        end
-        local merged = {}
-        for fxGuid, pm in pairs(op.pinMaps)         do merged[fxGuid] = pm end
-        for oKey,   pm in pairs(op.pinMapsByOrigin) do
-          local fxGuid = guidByOrigin[oKey]
-          if fxGuid then merged[fxGuid] = pm end
+        -- setFXChain has already stamped the graph, so id-less entries resolve
+        -- through their origin. Full-replace: a port absent from the map is disconnected.
+        local pmByGuid = {}
+        for _, e in ipairs(op.fx) do
+          local guid = e.id or originGuid(e.origin)
+          if guid and e.pinMaps then pmByGuid[guid] = e.pinMaps end
         end
         for fxIdx = 0, reaper.TrackFX_GetCount(t) - 1 do
           local guid = reaper.TrackFX_GetFXGUID(t, fxIdx)
-          if ownedPlus[guid] then
-            rm:assignFx(guid, { pinMaps = merged[guid] or { ins = {}, outs = {} } })
+          if ownedGuids[guid] then
+            rm:assignFx(guid, { pinMaps = pmByGuid[guid] or { ins = {}, outs = {} } })
           end
         end
       end
     elseif op.op == 'setFXChain' then
       local t = resolveTrack(op)
-      if t then reconcileFXChain(t, op.fxOrder, ownedGuids, stamps, paramIdxCache) end
+      if t and reconcileFXChain(reaper.GetTrackGUID(t), t, op.fx, ownedGuids, owners) then
+        graphDirty = true
+      end
     elseif op.op == 'moveFxAcrossTracks' then
       local toId = resolveId(op.toTrackKind, op.toTrackGuid, op.toTrackKey)
       if toId then rm:assignFx(op.fxGuid, { track = toId }) end
@@ -1536,71 +1471,9 @@ function wm:applyOps(ops, label)
     end
   end
 
-  local ctx = DAG.compile(userGraph)
-
-  -- Per-consumer merge guids dangle when gain folds to a native send or fan-in
-  -- drops to one. wantedMerge names still-active (consumer,track) pairs; rest swept.
-  local wantedMerge = {}
-  for _, spec in pairs(DAG.targetTracks(ctx)) do
-    for _, sn in pairs(spec.synthNodes or {}) do
-      if sn.originConsumer then
-        wantedMerge[sn.originConsumer] = wantedMerge[sn.originConsumer] or {}
-        wantedMerge[sn.originConsumer][sn.originTrackKey] = true
-      end
-    end
-  end
-
-  -- Any node whose track fired setFXChain this pass without naming its brackets
-  -- has had them removed from REAPER; clear the stale stamps on the user node.
-  local bracketClassed, aliveBracketGuids = {}, {}
-  for _, st in ipairs(stamps) do
-    if st.origin.kind == 'bracketIn' or st.origin.kind == 'bracketOut' then
-      aliveBracketGuids[st.guid] = true
-    end
-  end
-  for _, op in ipairs(ops) do
-    if op.op == 'setFXChain' then
-      for _, ft in ipairs(op.fxOrder) do
-        if ft.origin and ft.origin.kind == 'node' then bracketClassed[ft.origin.id] = true end
-        if ft.fxGuid and ft.origin and
-           (ft.origin.kind == 'bracketIn' or ft.origin.kind == 'bracketOut') then
-          aliveBracketGuids[ft.fxGuid] = true
-        end
-      end
-    end
-  end
-
-  if #stamps > 0 or next(bracketClassed) then
-    realising = true
-    self:mutate(function(g)
-      for _, st in ipairs(stamps) do
-        if     st.origin.kind == 'node'       then g.nodes[st.origin.id].fxGuid              = st.guid
-        elseif st.origin.kind == 'bracketIn'  then g.nodes[st.origin.id].midiInBracketGuid   = st.guid
-        elseif st.origin.kind == 'bracketOut' then g.nodes[st.origin.id].midiOutBracketGuid  = st.guid
-        elseif st.origin.kind == 'merge' then
-          local n = g.nodes[st.origin.consumer]
-          n.mergeGuids = n.mergeGuids or {}
-          n.mergeGuids[st.origin.trackKey] = st.guid
-        end
-      end
-      for id, n in pairs(g.nodes) do
-        if n.mergeGuids then
-          for trackKey in pairs(n.mergeGuids) do
-            if not (wantedMerge[id] and wantedMerge[id][trackKey]) then n.mergeGuids[trackKey] = nil end
-          end
-          if not next(n.mergeGuids) then n.mergeGuids = nil end
-        end
-      end
-      for nodeId in pairs(bracketClassed) do
-        local n = g.nodes[nodeId]
-        if n then
-          if n.midiInBracketGuid  and not aliveBracketGuids[n.midiInBracketGuid]  then n.midiInBracketGuid  = nil end
-          if n.midiOutBracketGuid and not aliveBracketGuids[n.midiOutBracketGuid] then n.midiOutBracketGuid = nil end
-        end
-      end
-    end)
-    realising = false
-  end
+  -- Stamps/clears mutated userGraph in place; persist + invalidate the compiled
+  -- cache without firing (no structural change, no reconcile re-entry).
+  if graphDirty then setGraph(userGraph); self:save() end
 
   -- Persist the post-apply owned-guid set: anything still in the graph is
   -- still in REAPER (orphans got deleted in reconcileFXChain and dropped

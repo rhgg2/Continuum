@@ -209,7 +209,7 @@ return {
     end,
   },
   {
-    name = 'apply: realising flag suppresses wiringChanged during stamp-back',
+    name = 'apply: inline stamp-back does not fire wiringChanged',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -492,8 +492,8 @@ return {
       wm:applyOps({
         { op='setPinMaps', trackKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
-          pinMaps         = { [fxGuid] = { ins={[1]={2}}, outs={} } },
-          pinMapsByOrigin = {} },
+          fx = { { id=fxGuid, ident='JS:foo',
+                   pinMaps = { ins={[1]={2}}, outs={} } } } },
       }, 'test')
       -- Port 1 = pins 0,1; routed to pair 2 = bits 2,3.
       local lo0 = h.reaper.TrackFX_GetPinMappings(track, 0, 0, 0)
@@ -502,7 +502,7 @@ return {
     end,
   },
   {
-    name = 'apply: setPinMaps origin-keyed resolves via stamps',
+    name = 'apply: setPinMaps id-less entry resolves via the stamped graph',
     run = function(harness)
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
@@ -513,16 +513,16 @@ return {
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
-      -- setFXChain mints+stamps; setPinMaps then resolves 'node:f' → fxGuid.
+      -- setFXChain mints+stamps node f; setPinMaps then resolves its origin → guid.
       wm:applyOps({
         { op='setFXChain', trackKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
-          fxOrder = { { fxGuid=nil, ident='JS:foo',
-                        origin={ kind='node', id='f' } } } },
+          fx = { { id=nil, ident='JS:foo',
+                   origin={ kind='node', id='f' } } } },
         { op='setPinMaps', trackKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
-          pinMaps         = {},
-          pinMapsByOrigin = { ['node:f'] = { ins={[1]={2}}, outs={} } } },
+          fx = { { id=nil, ident='JS:foo', origin={ kind='node', id='f' },
+                   pinMaps = { ins={[1]={2}}, outs={} } } } },
       }, 'test')
       local lo0 = h.reaper.TrackFX_GetPinMappings(track, 0, 0, 0)
       local lo1 = h.reaper.TrackFX_GetPinMappings(track, 0, 0, 1)
@@ -549,8 +549,7 @@ return {
       wm:applyOps({
         { op='setPinMaps', trackKey='guid-A', trackKind='sourceTrack',
           trackGuid='guid-A',
-          pinMaps         = { [fxGuid] = { ins={}, outs={} } },
-          pinMapsByOrigin = {} },
+          fx = { { id=fxGuid, ident='JS:foo', pinMaps = { ins={}, outs={} } } } },
       }, 'test')
       t.eq(h.reaper.TrackFX_GetPinMappings(track, 0, 0, 0), 0, 'pin 0 → disconnected')
       t.eq(h.reaper.TrackFX_GetPinMappings(track, 0, 0, 1), 0, 'pin 1 → disconnected')

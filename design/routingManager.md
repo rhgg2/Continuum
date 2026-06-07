@@ -4,9 +4,10 @@
 > (rationale only, no API dump — per CONVENTIONS).
 >
 > **Status: all build phases (1–7) landed and green.** routingManager is
-> standalone. wiringManager rewiring: chunks 1–3 landed (rm wired in; snapshot
-> read on `rm:tracks()`; simple write ops routed through rm). Remaining: chunks
-> 4–6 below. Kept (not deleted) until that lands.
+> standalone. wiringManager rewiring: chunks 1–4 landed (rm wired in; snapshot
+> read on `rm:tracks()`; simple write ops routed through rm; setFXChain over rm
+> with inline stamp-back). Remaining: chunks 5–6 below. Kept (not deleted) until
+> that lands.
 
 ## Goal
 
@@ -180,16 +181,25 @@ no chunk needs new specs unless it exposes a gap.
    `pinMaskFor` — left for the chunk-5 sweep. Green against the full `wm_*`
    suite (`wm_apply_ops_spec` covers the converted ops).
 
-4. **setFXChain → rm + kill the stamp-back.** The heart. Re-express
-   `reconcileFXChain` over `rm:addFx`/`assignFx{index}`/`deleteFx`/
-   `assignFx{params}`/`assignFx{midi}`, keeping only the contiguity policy.
-   Because `rm:addFx` returns the guid synchronously, stamp the user graph
-   *inline* as each fx materialises — deleting `stamps[]`, the deferred
-   `realising` mutate, `originKey`, `pushParams`/`resolveParamIdx`, and the
-   wm-side midi/param writers. The merge/bracket-guid sweep folds into the same
-   inline path. Deletes the `opFxOrder`/`opPinMaps` bridges — the op carries
-   rm-shaped fx entries directly. Net: `wm_apply_spec`, `wm_fx_routing_spec`,
-   `wm_merge_spec`.
+4. ✅ **setFXChain → rm + kill the stamp-back.** `reconcileFXChain` re-expressed
+   over `rm:addFx`/`assignFx{index}`/`deleteFx`/`assignFx{params}`/`assignFx{midi}`,
+   keeping only the contiguity policy; `track` reads (owned-subsequence/index math)
+   stay wm-native. `rm:addFx` returns the guid synchronously, so the graph is
+   stamped *inline* on mint and cleared on retract via a pre-built guid→owner
+   map — deleting `stamps[]`, the deferred `realising` mutate (and `realising`
+   itself; `wm:mutate` now always fires), `originKey`, `pushParams`/
+   `resolveParamIdx`/`paramValueAsFloat`. applyOps mutates `userGraph` in place
+   and persists once (`setGraph`+`save`, no fire). The `opFxOrder`/`opPinMaps`
+   bridges are gone — `setFXChain`/`setPinMaps` carry rm-shaped `fx` entries;
+   setPinMaps resolves an id-less entry through the freshly-stamped graph
+   (`originGuid`). **Shape made uniform:** CU params flatten to flat slider
+   numbers at the read/derive boundary (`projectEntry` + `snapFx` via
+   `flattenCuParams`), so the op payload and rm speak one shape with no apply-time
+   translation. One accepted tradeoff: a merge/bracket guid already dead in REAPER
+   (manual delete) and absent from target is no longer eagerly cleared — it
+   self-heals next reconcile, harmless. Orphans `setFXMidiRouting`/
+   `readFXMidiRouting` for the chunk-5 sweep. Green: full `wm_*` suite
+   (`wm_apply_ops`, `wm_apply_midi_merge`, `wm_fx_routing_apply`, `wm_diff`).
 
 5. **transaction + dead-code sweep.** Wrap applyOps' body in
    `rm:transaction(label, fn)` (Undo/PreventUIRefresh now rm's); the ownedFx

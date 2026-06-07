@@ -89,9 +89,9 @@ return {
       -- CU comes first (it sits upstream of fx on the source track).
       t.eq(order[1].ident, 'JS:Continuum Utility')
       t.eq(order[1].id,    '{CU-7}', 'guid resolved from consumer.mergeGuids[trackKey]')
-      t.eq(order[1].params.mode,    'merge')
-      t.eq(order[1].params.nPairs,  1)
-      t.eq(order[1].params.gains[1], 0.5)
+      t.eq(order[1].params.mode,   1, 'merge mode flattened to its slider float')
+      t.eq(order[1].params.nPairs, 1)
+      t.eq(order[1].params.gain1,  0.5, 'gain bank flattened to gain1..N')
       t.eq(order[2].ident, 'JS:foo')
       t.eq(order[2].id,    '{FX-1}')
     end,
@@ -197,8 +197,8 @@ return {
       t.eq(ops.createTrack[1].trackKey, 'guid-A|guid-B')
       t.eq(ops.createTrack[1].trackKind, 'newTrack')
       t.eq(#ops.setFXChain, 1)
-      t.eq(ops.setFXChain[1].fxOrder[1].ident, 'JS:mix')
-      t.eq(ops.setFXChain[1].fxOrder[1].fxGuid, nil, 'unmaterialised → nil guid')
+      t.eq(ops.setFXChain[1].fx[1].ident, 'JS:mix')
+      t.eq(ops.setFXChain[1].fx[1].id, nil, 'unmaterialised → nil id')
       t.eq(#ops.setSends, 1)
       t.eq(ops.setSends[1].sends[1].to, 'guid-X')
       -- setExtState: wiringTrackKind + wiringTrack (newTrack writes both).
@@ -349,7 +349,7 @@ return {
       t.eq(ops.createTrack[1].trackKey, 'guid-A|guid-B')
       local installs, drains = 0, 0
       for _, op in ipairs(ops.setFXChain or {}) do
-        if op.trackKind == 'master' and #op.fxOrder == 0 then drains   = drains   + 1 end
+        if op.trackKind == 'master' and #op.fx == 0 then drains   = drains   + 1 end
         if op.trackKind == 'newTrack'                     then installs = installs + 1 end
       end
       t.eq(drains,   1, 'master drained')
@@ -476,7 +476,8 @@ return {
       local snap   = mk(nil)
       local ops = byOp(wm:diff(target, snap))
       t.eq(#ops.setPinMaps, 1)
-      t.deepEq(ops.setPinMaps[1].pinMaps['{FX-1}'].ins[1], {2})
+      t.deepEq(ops.setPinMaps[1].fx[1].pinMaps.ins[1], {2})
+      t.eq(ops.setPinMaps[1].fx[1].id, '{FX-1}')
       t.eq(ops.setPinMaps[1].trackKind, 'sourceTrack')
     end,
   },
@@ -504,7 +505,9 @@ return {
                                       fx={}, mainSend={on=true}, sends={} } }
       local ops = byOp(wm:diff(target, snap))
       t.truthy(ops.setPinMaps and #ops.setPinMaps >= 1, 'setPinMaps emitted')
-      t.deepEq(ops.setPinMaps[1].pinMapsByOrigin['node:f'].ins[1], {2})
+      t.eq(ops.setPinMaps[1].fx[1].id, nil, 'unmaterialised entry carries no id')
+      t.eq(ops.setPinMaps[1].fx[1].origin.id, 'f', 'resolves through its origin')
+      t.deepEq(ops.setPinMaps[1].fx[1].pinMaps.ins[1], {2})
     end,
   },
   {
