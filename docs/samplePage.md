@@ -1,17 +1,27 @@
-# samplePage
+# samplePage / sampleRender
 
-Sample-mode page: track picker, three-pane browser+slots, status line.
-Owns rendering and input dispatch; holds no persistent state of its own.
+The sample page is split in two, mirroring the tracker, arrange, and
+wiring stacks:
+
+- **samplePage** is the controller — the object `coordinator` drives. It
+  constructs the stack (`sm` stays local, only `sv` leaves), owns the
+  page lifecycle (`bind`/`setTrack`/`unbind`/`tick`), publishes the
+  `sample` facade, and delegates every render call to the renderer.
+- **sampleRender** draws the three-pane browser+slots and the trim
+  strip, reads keyboard and mouse, and owns the `sample` command scope.
+  It is handed `sv` only and never reaches `sm` — slot mutations route
+  through `sv` (`setTrim`/`setName`/`stageInto`/`syncSlot`/`isLive`), so
+  what was a discipline is now structural.
 
 ## Where state lives
 
-samplePage is render-only. Every persistent fact lives elsewhere:
+sampleRender is render-only. Every persistent fact lives elsewhere:
 
 - **sampleView** — browser selection, current folder, bound track.
 - **configManager** — `slotEntries`, `currentSample`, `previewInPlace`.
 - **sampleManager** — JSFX-side slot truth, audio bytes.
 
-samplePage holds only frame-local caches (peaks, durations) and
+sampleRender holds only frame-local caches (peaks, durations) and
 ephemeral interaction state (drag handle, in-flight rename, preview-in-
 place breadcrumb). All of it is reconstructible from the layers below;
 none of it survives a reload.

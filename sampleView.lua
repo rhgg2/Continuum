@@ -2,7 +2,7 @@
 -- @noindex
 
 --invariant: sv keys against a REAPER track (not a take); cm is rebound only via sv:setTrack
---invariant: sv emits no signals — it is a passive state holder polled by samplePage each frame
+--invariant: sv emits no signals — passive state holder polled by the renderer each frame
 --invariant: sv never speaks REAPER, gmem, or ImGui directly; all side-effects route through sm
 --invariant: browserPath/selectedFile/previewSource are transient locals; nothing in sv is persisted (cm owns persistence)
 --invariant: selectedFile mirrors browserPath only when the highlighted item is a file (folders null it)
@@ -108,6 +108,31 @@ end
 
 function sv:stopAudition()
   sm:stopPreview(track)
+end
+
+----- Slot mutations — the renderer routes JSFX-side edits through here, never sm
+
+--contract: live only when a track is bound and it carries the sampler FX
+function sv:isLive()
+  return track ~= nil and sm:isLive(track)
+end
+
+function sv:setTrim(slot, startFrames, endFrames)
+  sm:setTrim(track, slot, startFrames, endFrames, cm)
+end
+
+function sv:setName(slot, name)
+  sm:setName(track, slot, name, cm)
+end
+
+--contract: stages srcPath into the slot's JSFX mailbox without touching cm; false on failure
+function sv:stageInto(slot, srcPath)
+  return sm:stageInto(track, slot, srcPath)
+end
+
+--contract: takes a track arg; PIP revert restores track captured at trigger, not sv's current one
+function sv:syncSlot(stagedTrack, slot)
+  sm:syncSlot(stagedTrack, slot, cm)
 end
 
 return sv

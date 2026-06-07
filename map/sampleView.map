@@ -1,9 +1,9 @@
-@module sampleView  src=sampleView.lua  loc=114  sha=fa4a61d  mode=chunk
+@module sampleView  src=sampleView.lua  loc=139  sha=fa87f15  mode=chunk
 @deps cm, sm
 
 # Invariants & contracts
   @invariant  sv keys against a REAPER track (not a take); cm is rebound only via sv:setTrack
-  @invariant  sv emits no signals — it is a passive state holder polled by samplePage each frame
+  @invariant  sv emits no signals — passive state holder polled by the renderer each frame
   @invariant  sv never speaks REAPER, gmem, or ImGui directly; all side-effects route through sm
   @invariant  browserPath/selectedFile/previewSource are transient locals; nothing in sv is persisted (cm owns persistence)
   @invariant  selectedFile mirrors browserPath only when the highlighted item is a file (folders null it)
@@ -55,6 +55,15 @@
   @api sv:clearCurrentSlot()  @ 104
       @contract  no-op when cm is unbound
   @api sv:stopAudition()  @ 109
+  -- Slot mutations — the renderer routes JSFX-side edits through here, never sm
+  @api sv:isLive()  @ 116
+      @contract  live only when a track is bound and it carries the sampler FX
+  @api sv:setTrim(slot, startFrames, endFrames)  @ 120
+  @api sv:setName(slot, name)  @ 124
+  @api sv:stageInto(slot, srcPath)  @ 129
+      @contract  stages srcPath into the slot's JSFX mailbox without touching cm; false on failure
+  @api sv:syncSlot(stagedTrack, slot)  @ 134
+      @contract  takes a track arg; PIP revert restores track captured at trigger, not sv's current one
 
 # Uses (outbound edges)
   @use call cm.get  @ 35, 65, 76, 78, 79, 106
@@ -63,7 +72,12 @@
   @use call cm.setTrack  @ 27
   @use call sm.assign  @ 77
   @use call sm.clearSlot  @ 106
+  @use call sm.isLive  @ 117
   @use call sm.listTracks  @ 32
   @use call sm.previewPath  @ 93
   @use call sm.previewSlot  @ 100
+  @use call sm.setName  @ 125
+  @use call sm.setTrim  @ 121
+  @use call sm.stageInto  @ 130
   @use call sm.stopPreview  @ 110
+  @use call sm.syncSlot  @ 135
