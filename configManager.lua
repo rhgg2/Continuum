@@ -160,6 +160,7 @@ local declarations = {
   -- fixed colours, named so they live in the palette like every other chrome
   -- colour rather than as inline ints.
   { 'colour.arrange.cursorBorder',     'palette.shade'           },
+  { 'colour.arrange.itemBorder',       'palette.inactive'        },  -- solid neutral box outline (one shade darker than mid)
   { 'colour.arrange.phrase',           {'colour.rowBeat', 1.0}   },  -- bar tint at full alpha
   { 'colour.arrange.blockedBorder',    {0.80, 0.16, 0.16, 0.95}  },  -- drag would overlap a neighbour
   { 'colour.arrange.editCursor',       'palette.shade'           },  -- edit-cursor triangle fill
@@ -168,9 +169,7 @@ local declarations = {
   { 'colour.arrange.ghostFill',        {0.95, 0.93, 0.80, 0.35}  },  -- create-preview fill
   { 'colour.arrange.ghostBorder',      {0.45, 0.42, 0.30, 0.90}  },  -- create-preview border
   { 'colour.arrange.orphanFill',       {0.50, 0.50, 0.50, 0.35}  },  -- slot-less item, neutral grey
-  { 'colour.arrange.orphanBorder',     {0.30, 0.30, 0.30, 1.0}   },
   { 'colour.arrange.orphanFocusFill',  {0.85, 0.85, 0.85, 0.55}  },
-  { 'colour.arrange.orphanFocusBorder',{0.97, 0.97, 0.97, 1.0}   },
   { 'colour.rowNormal',        {'palette.bg',         0   }       },
   { 'colour.rowBeat',          {'palette.highlight',  0.4 }       },
   { 'colour.rowBarStart',      {'palette.mid',        0.4 }       },

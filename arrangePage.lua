@@ -72,28 +72,23 @@ local function rowLabel(row)
   return string.format('%4d', math.floor(av:rowToQN(row) + 0.5))
 end
 
--- Per-takeId quad { fill, border, focusFill, focusBorder } off colourIdx;
--- focus pair brightens to full alpha so picked takes read without losing hue.
+-- Per-takeId fill pair { fill, focusFill } off colourIdx; focus brightens to read
+-- without losing hue. Borders are a uniform neutral, drawn by renderGrid.
 local SLOT_FILL_ALPHA = 0.85
-local SLOT_BORDER_ALPHA = 0.75
 local colourCache = {}
-local function slotColours(colourIdx, focused)
+local function slotFill(colourIdx, focused)
   if colourIdx == nil then
-    if focused then return 'arrange.orphanFocusFill', 'arrange.orphanFocusBorder' end
-    return 'arrange.orphanFill', 'arrange.orphanBorder'
+    return focused and 'arrange.orphanFocusFill' or 'arrange.orphanFill'
   end
-  local quad = colourCache[colourIdx]
-  if not quad then
-    quad = {
+  local pair = colourCache[colourIdx]
+  if not pair then
+    pair = {
       painter.hue(colourIdx, 0.55, 0.78, SLOT_FILL_ALPHA),
-      painter.hue(colourIdx, 0.85, 0.55, SLOT_BORDER_ALPHA),
       painter.hue(colourIdx, 0.30, 0.97, SLOT_FILL_ALPHA),
-      painter.hue(colourIdx, 0.92, 0.90, 1.0),
     }
-    colourCache[colourIdx] = quad
+    colourCache[colourIdx] = pair
   end
-  if focused then return quad[3], quad[4] end
-  return quad[1], quad[2]
+  return focused and pair[2] or pair[1]
 end
 
 ----- Grid pane
@@ -279,8 +274,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local rx0, rx1 = colX(tk.trackIdx), colX(tk.trackIdx + 1)
     local ry0 = rowYs(math.max(startRow, sr))
     local ry1 = rowYs(math.min(endRow, sr + visRows))
-    local fill, border = slotColours(tk.colourIdx, focused)
-    if blocked then border = 'arrange.blockedBorder' end
+    local fill   = slotFill(tk.colourIdx, focused)
+    local border = blocked and 'arrange.blockedBorder' or 'arrange.itemBorder'
     ps.fill(rect(rx0 + 1, ry0 + 1, rx1, ry1), fill)
     ps.stroke(rect(rx0, ry0, rx1 + 1, ry1 + 1), border, 1)
     if tk.name and tk.name ~= '' then
@@ -325,8 +320,10 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   end
 
   -- Cursor caret: horizontal I-beam on the top edge of the cursor row.
-  -- A cell-shaped highlight would lie about the model — cursor is a line, not a cell.
-  if curRow >= sr and curRow < sr + visRows
+  -- Cell-shaped highlight would lie about the model; blinks ~1s so it stays findable.
+  local CARET_BLINK = 0.5   -- seconds per on/off half-cycle
+  local caretOn = (reaper.time_precise() % (2 * CARET_BLINK)) < CARET_BLINK
+  if caretOn and curRow >= sr and curRow < sr + visRows
      and curCol >= 0 and curCol < nTracks then
     local cx0, cx1 = colX(curCol), colX(curCol + 1)
     local cy    = rowYs(curRow)
