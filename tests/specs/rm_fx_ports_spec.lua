@@ -83,4 +83,14 @@ return {
       t.eq(reaper.GetMediaTrackInfo_Value(track, 'B_SHOWINTCP'),   0)
     end,
   },
+  {
+    name = 'reaperTrack returns the live MediaTrack handle for an id; nil once gone',
+    run = function()
+      local reaper, rm = mkRm()
+      local id = rm:addTrack({ name = 'src' })
+      t.eq(rm:reaperTrack(id), reaper.GetTrack(0, 0), 'handle matches the project track for the id')
+      rm:deleteTrack(id)
+      t.eq(rm:reaperTrack(id), nil, 'gone id resolves to nil')
+    end,
+  },
 }

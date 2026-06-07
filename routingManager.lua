@@ -569,6 +569,11 @@ function rm:track(id)
   return readTrack(track, track == reaper.GetMasterTrack(PROJ))
 end
 
+--contract: raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone
+function rm:reaperTrack(id)
+  return locateTrack(id)
+end
+
 --contract: the master track's guid; resolves master without an rm:tracks() scan
 function rm:masterId()
   local master = reaper.GetMasterTrack(PROJ)
