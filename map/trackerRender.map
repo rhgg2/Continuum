@@ -1,0 +1,292 @@
+@module trackerRender  src=trackerRender.lua  loc=1495  sha=untracked  mode=chunk
+@deps cm, cmgr, chrome, gui, modalHost, facade, tv
+
+# Invariants & contracts
+  @invariant  page is render + input only; tracker state lives in tv/ec/tm, never cached
+  @invariant  cm/tv read fresh each frame; only ephemeral UI state persists across frames
+  @invariant  page-persistent state: gridX/Y, dragging, picker*, laneConsumed (modal state lives on modalHost)
+  @invariant  col.x == nil is the visibility predicate; per-column draws must gate on it
+  @invariant  cell coords 0-indexed; header rows at -HEADER, row-num gutter at -GUTTER
+  @invariant  writes go through tv or cmgr commands; page never reaches into tm
+  @contract  trackerPage (the controller) owns the stack + take lifecycle and drives this renderer
+  @contract  the renderer holds only tv (injected); it never reaches mm/tm/gm
+  @contract  bails if laneConsumed; lane strip wins gestures over the tracker grid
+  @contract  right-click on channel-label row toggles mute
+  @contract  click on label rows selects channel/column
+  @contract  body click moves cursor and arms drag
+
+# Shapes
+  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
+  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
+
+# Imports
+  @require util = 'util'  @ 9
+  @require timing = 'timing'  @ 10
+  @require tuning = 'tuning'  @ 11
+  @require groups = 'groups'  @ 12
+  @require ImGui = 'imgui'  @ 18
+  @require painter = 'painter'  @ 29
+
+# Constructed sub-instances
+  @construct swingEditor = util.instantiate('swingEditor')  @ 72
+  @construct curveEd     = util.instantiate('curveEditor')  @ 74
+
+# Private state
+  @state GUTTER = 5  @ 37   -- in grid chars: 3-char row num + spacer + region slot
+  @state HEADER = 3  @ 38   -- in grid rows
+  @state gridX = nil  @ 40
+  @state gridY = nil  @ 41
+  @state gridOriginX = 0  @ 42
+  @state gridOriginY = 0  @ 43
+  @state gridWidth = 0  @ 44
+  @state gridHeight = 0  @ 45
+  @state gridPainter = nil  @ 46   -- cell painter, rebuilt each frame in drawTracker; hit-test reads its fromScreen so draw and hit can't drift
+  @state chanX, chanW, chanOrder, totalWidth = {}, {}, {}, 0  @ 48
+  @state ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont  @ 70
+  @state dragging = false  @ 71   -- tracker-grid selection drag: click → held → release
+  @state laneConsumed = false  @ 75
+  @state toolbar  @ 76   -- lazy: chrome may be nil at construction in tests
+  @state paintLast = nil  @ 81   -- region-paint per-cell debounce
+  @state renderFns = {  @ 151
+  @state pickTemper = util.atomic('Set temper', function(name)  @ 264
+  @state pickSwing = util.atomic('Set swing',        function(name)       tv:s...  @ 271
+  @state pickColSwing = util.atomic('Set column swing', function(chan, name) tv:s...  @ 272
+  @state SWING_PRESET_EXCLUDE = { identity = true }  @ 276
+  @state toolbarSegments = {  @ 310
+  @state laneRenderable = { cc = true, pb = true, at = true }  @ 476
+      @invariant  lane strip renders only cc/pb/at; other types show as tinted background
+  @state LANE_ROW_MIN = 3  @ 478
+  @state LANE_ROW_MAX = 32  @ 479
+  @state editKeys = {}  @ 1126
+  @state lastEditKey  @ 1144
+  @state renderer = {}  @ 1287
+  @state tracker = cmgr:scope('tracker')  @ 1290
+
+# Private functions
+  @fn print(...)  @ 25
+  @fn arrange()  @ 33
+      -- The renderer reads arrange (the empty-grid message, nav commands) through
+      -- this facade; the controller owns the cursor-follow + bind. See docs/trackerPage.md.
+  @fn layoutColumns(cols, scrollCol)  @ 51
+      @contract  clears col.x on every col before assigning; off-screen cols stay nil
+  -- Cell renderers
+  @fn renderNote(evt, col, row)  @ 85
+  @fn renderPB(evt)  @ 139
+  @fn renderCC(evt)  @ 146
+  @fn renderCell(evt, col, row)  @ 160
+  @fn delayMarkerOffset(col)  @ 169
+      -- Offset (in grid cells) of the gap that sits just before the 3 delay
+      -- digits in a note cell. The * marker is dropped here. Layout: pitch(3)
+      -- + optional sample(3) + ' ' + vel(2). The next char is the separator
+      -- space-before-delay -- our marker slot.
+  -- Drawing
+  @fn printer(ctx, gX, gY, x0, y0)  @ 180
+      -- A cell adapter over the shared painter: methods speak grid CELLS (integer
+      -- col/row), the painter maps them to screen through one transform. gX/gY are
+      -- odd integers, so an integer cell already lands on a whole pixel; snap rounds
+      -- the fractional cases (centred text, the inset cursor box) crisp, the way the
+      -- old per-call math.floor did. text is monospace by cell, not by glyph advance.
+  @fn laneStripRows()  @ 236
+      @contract  returns 0 when laneStrip.visible is false; layout and draw branch on this
+  @fn libPickerItems(current, lib, presets, excludePresets)  @ 242
+      -- Off=group 1, saved lib=group 2, unseeded preset (+ prefix)=group 3.
+  @fn drawSampleDropdown()  @ 280
+      -- Hex stays visible when unassigned so `<`/`>` advertise their step.
+      -- No "Off" row — every slot is real.
+  @fn drawTrackerToolbarBits()  @ 436
+      -- While the swing editor is open, the tracker body is replaced and
+      -- only swing-related toolbar segments stay live (the picker is how
+      -- the user switches what they're editing). Other segments grey out.
+  @fn computeLayout(budgetW, budgetH)  @ 455
+      @contract  must run before draws reading chanX/chanW/chanOrder/totalWidth/gridHeight
+      @contract  calls tv:setGridSize so tv scroll math sees the live viewport
+  -- Lane strip
+  @fn drawLaneStrip()  @ 483
+      @contract  publishes laneConsumed=true if curve editor claimed input this frame
+      @contract  handleMouse short-circuits on laneConsumed
+  @fn drawTracker()  @ 597
+      @contract  assumes computeLayout ran this frame; reads chanX/W/Order, gridOriginX/Y
+  @fn drawStatusBar()  @ 844
+  -- Input
+  @fn cellAt(mouseX, mouseY)  @ 959
+      -- Screen point -> (fractional column, integer row) through the grid painter's
+      -- inverse, so a click resolves against the exact transform the draw pass used.
+  @fn nearestStop(mouseX, mouseY)  @ 966
+      @contract  returns (col, stop, fracX) or (nil, nil, fracX)
+      @invariant  fracX is separate so callers distinguish 'past last col' from 'inside col N'
+  @fn handleMouse()  @ 987
+  @fn handleKeys(kr)  @ 1151
+      -- commandHeld gates note entry per key: a key bound to both a command and note
+      -- entry (e.g. '.' = delete) fires the command; unrelated keys still enter.
+      @contract  no-op when modal open, picker active, or any ImGui item is active
+      @contract  every fresh press enters; only lastEditKey autorepeats
+      @contract  scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
+  -- Modal-driven commands
+  @fn openPrompt(title, prompt, callback, resolve)  @ 1177
+  @fn openConfirm(title, callback, prompt)  @ 1181
+  @fn scopedAction(title, base)  @ 1249
+      -- Naming convention <base>Selection / <base>All is the contract.
+      @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
+  @fn resolveColType(s)  @ 1259
+      -- Add-Column type vocabulary. First letter is unique except p (pb/pc):
+      -- `p`→pb, a following `c`→pc. Digits ride through (only cc takes an id).
+  @fn addColumn()  @ 1272
+
+# Public API (renderer:*)
+  -- Region overlay keymap
+  -- Take properties modal helper
+  @api renderer:openTakeProperties(args)  @ 1371
+      -- onClose fires exactly once, after the whole modal chain — including
+      -- any truncate-confirm follow-up. Two sources of "chain done":
+      -- the apply path (callback ran, valid input, either direct apply or
+      -- truncate-confirm resolution) fires onClose at the leaf; the cancel
+      -- path (modal cancel, or invalid input) fires it via modalHost's own
+      -- onClose. The `transfer` flag handshake makes these mutually
+      -- exclusive: once a valid callback starts the apply chain it claims
+      -- ownership, so modalHost's onClose becomes a no-op.
+  -- Page interface (rendering only; trackerPage drives lifecycle and the dispatch)
+  @api renderer:renderToolbarBits(_)  @ 1412
+  @api renderer:renderBody(_, w, h, dispatch)  @ 1420
+      @contract  calls computeLayout twice
+      @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x
+      @contract  second pass repopulates layout for drawTracker
+  @api renderer:renderStatusBar(_)  @ 1464
+  @api renderer:focusState()  @ 1479
+      -- suppressKbd: a popup or modal owns input — dispatcher does nothing.
+      -- pageSuppressed: a body-region editor (swing, tuning) commandeers the
+      --   page — dispatcher walks root bindings only, so playPause/quit/undo
+      --   still fire while page-scoped commands stay quiet.
+      -- acceptCmds:  the page is visible and nothing inside it is currently
+      --   consuming a keystroke. We deliberately don't gate on which child
+      --   window holds focus: a toolbar click leaves the chrome focused
+      --   transiently, but bound commands should still fire. Anything that
+      --   genuinely needs the keys (a focused InputText, an active slider,
+      --   a held button) shows up as IsAnyItemActive.
+  @api renderer:closeTransients()  @ 1492
+      -- The controller closes these take-scoped editors on unbind/dropTake; they
+      -- live render-side but their lifetime follows the bound take.
+
+# Uses (outbound edges)
+  @use call    chrome.checkbox  @ 427
+  @use call    chrome.colour  @ 506, 578, 1442
+  @use call    chrome.disabledIf  @ 405, 446
+  @use call    chrome.headingLabel  @ 314, 336, 358, 374, 389, 425
+  @use call    chrome.libPicker  @ 397, 411
+  @use call    chrome.makeToolbar  @ 437
+  @use call    chrome.pickerIsActive  @ 1152, 1481
+  @use call    chrome.requestPickerOpen  @ 1315, 1316
+  @use call    chrome.resetPickerActive  @ 1413
+  @use call    cm.get  @ 237, 238, 265, 281, 282, 356, 376, 381, 392, 406, 419, 427, 539, 584, 851, 852, 853, 855, 856, 857, 1195, 1373
+  @use call    cm.set  @ 304, 428, 587, 591
+  @use call    cmgr.doAfter  @ 1319
+  @use call    cmgr.invoke  @ 1111, 1118
+  @use call    cmgr.isPrefixActive  @ 1158
+  @use call    cmgr.keySpec  @ 1203
+  @use call    cmgr.keysFor  @ 1209, 1210
+  @use call    cmgr.scope  @ 878, 954, 1290, 1327
+  @use call    facade.get  @ 33
+  @use call    groups.outlineKey  @ 719
+  @use call    groups.regionKey  @ 691
+  @use call    groups.tintKey  @ 705
+  @use call    imgui.AlignTextToFramePadding  @ 357
+  @use call    imgui.Button  @ 1229, 1230, 1237, 1241
+  @use call    imgui.CalcTextSize  @ 360, 460
+  @use call    imgui.DrawList_AddLine  @ 514
+  @use call    imgui.DrawList_AddRect  @ 578
+  @use call    imgui.DrawList_AddRectFilled  @ 512
+  @use call    imgui.Dummy  @ 581, 841
+  @use call    imgui.GetCursorScreenPos  @ 488, 521, 583, 603
+  @use call    imgui.GetFrameHeight  @ 361
+  @use call    imgui.GetKeyMods  @ 1003, 1060, 1157, 1204
+  @use call    imgui.GetMousePos  @ 1007, 1024, 1037, 1072
+  @use call    imgui.GetMouseWheel  @ 1106
+  @use call    imgui.GetWindowDrawList  @ 493
+  @use call    imgui.InputInt  @ 366
+  @use call    imgui.InputText  @ 1213, 1226
+  @use call    imgui.InvisibleButton  @ 523
+  @use call    imgui.IsAnyItemActive  @ 1153, 1486
+  @use call    imgui.IsItemActive  @ 524
+  @use call    imgui.IsItemHovered  @ 524
+  @use call    imgui.IsKeyPressed  @ 1161, 1162, 1204, 1238, 1239, 1242
+  @use call    imgui.IsMouseClicked  @ 995, 996
+  @use call    imgui.IsMouseDown  @ 997
+  @use call    imgui.IsWindowAppearing  @ 1220
+  @use call    imgui.IsWindowHovered  @ 1002, 1023, 1036, 1105
+  @use call    imgui.PopFont  @ 1434, 1446, 1455
+  @use call    imgui.PopID  @ 1227
+  @use call    imgui.PopStyleColor  @ 1445
+  @use call    imgui.PopStyleVar  @ 367
+  @use call    imgui.PushFont  @ 1432, 1441, 1449
+  @use call    imgui.PushID  @ 1225
+  @use call    imgui.PushStyleColor  @ 1442
+  @use call    imgui.PushStyleVar  @ 365
+  @use call    imgui.RadioButton  @ 1234
+  @use call    imgui.SameLine  @ 315, 337, 359, 375, 390, 404, 426, 589, 1229, 1230, 1233, 1240
+  @use call    imgui.SetCursorScreenPos  @ 522, 525, 585, 593
+  @use call    imgui.SetKeyboardFocusHere  @ 1222
+  @use call    imgui.SetNextItemWidth  @ 362
+  @use call    imgui.SmallButton  @ 586, 590
+  @use call    imgui.Text  @ 868, 1212, 1216, 1443
+  @use call    modalHost.isOpen  @ 1152, 1481
+  @use call    modalHost.registerKind  @ 1191
+  @use call    painter.new  @ 181, 613
+  @use call    swingEditor.close  @ 1492
+  @use call    swingEditor.isOpen  @ 438, 1427, 1482
+  @use call    swingEditor.modalActive  @ 1481
+  @use call    swingEditor.open  @ 1313
+  @use call    swingEditor.render  @ 1433
+  @use call    tv.activeTemper  @ 788
+  @use call    tv.addExtraCol  @ 1280
+  @use call    tv.addLaneEvent  @ 569
+  @use call    tv.barBeatSub  @ 863
+  @use call    tv.cycleLaneShape  @ 572
+  @use call    tv.deleteLaneEvent  @ 570
+  @use call    tv.eachInstance  @ 684
+  @use call    tv.ec  @ 402, 528, 599, 682, 683, 849, 991, 1154, 1251, 1320
+  @use call    tv.editEvent  @ 1168
+  @use call    tv.endReselectCascades  @ 1054, 1063, 1097
+  @use call    tv.isChannelEffectivelyMuted  @ 771
+  @use call    tv.isChannelMuted  @ 620
+  @use call    tv.isChannelSoloed  @ 619
+  @use call    tv.logPerRow  @ 680
+  @use call    tv.moveLaneEvent  @ 567, 568
+  @use call    tv.noteProjection  @ 104, 800
+  @use call    tv.paintRegionStream  @ 1014
+  @use call    tv.ppqToRow  @ 550
+  @use call    tv.rowBeatInfo  @ 509, 656
+  @use call    tv.rowToPPQ  @ 569
+  @use call    tv.sampleCurve  @ 555
+  @use call    tv.scroll  @ 457, 494, 601, 993
+  @use call    tv.setColSwingSlot  @ 272
+  @use call    tv.setGridSize  @ 468
+  @use call    tv.setLaneTension  @ 571
+  @use call    tv.setRowPerBeat  @ 368, 1295
+  @use call    tv.setSwingSlot  @ 271
+  @use call    tv.setTemper  @ 266
+  @use call    tv.setTemperSlot  @ 268
+  @use call    tv.showDelay  @ 1277
+  @use call    tv.stateOf  @ 703
+  @use call    tv.streamRefAt  @ 695
+  @use call    tv.takeName  @ 1384
+  @use call    tv.tick  @ 1461
+  @use call    tv.toggleChannelMute  @ 1030
+  @use call    tv.wireGroupLifetime  @ 1350
+  @use call    util.add  @ 62, 534
+  @use call    util.atomic  @ 264, 271, 272, 304
+  @use call    util.clamp  @ 368, 803
+  @use call    util.instantiate  @ 72, 74
+  @use call    util.oneOf  @ 1278
+  @use call    util.print  @ 26
+  @use call    util.round  @ 557, 1108, 1115
+  @use require curveEditor  @ 74
+  @use require groups  @ 12
+  @use require imgui  @ 18
+  @use require painter  @ 29
+  @use require swingEditor  @ 72
+  @use require timing  @ 10
+  @use require tuning  @ 11
+  @use require util  @ 9
+
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB

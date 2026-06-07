@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=309  sha=f86a2a8  mode=chunk
+@module coordinator  src=coordinator.lua  loc=309  sha=5c46ec5  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
