@@ -318,6 +318,114 @@ local function readFxChain(track)
   return out
 end
 
+----------- sends
+
+--shape: send = { to=guid, kind='audio'|'midi', gain=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }  -- track output routing; no id
+
+-- I_SENDMODE: 0 post-fader (post-pan), 1 pre-fx, 3 post-fx pre-fader. 2 is a
+-- deprecated post-fader variant, folded to 'postFader'.
+local SENDMODE_TO_POS = { [0] = 'postFader', [1] = 'preFx', [3] = 'preFader' }
+local POS_TO_SENDMODE = { postFader = 0, preFx = 1, preFader = 3 }
+
+-- A send is midi-only iff its audio source is disabled (I_SRCCHAN == -1);
+-- anything else (audio-only, or a dual-stream send) reads as 'audio'.
+local function sendKind(track, sendIdx)
+  return reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'I_SRCCHAN') == -1
+         and 'midi' or 'audio'
+end
+
+-- Audio sends carry channels in I_SRCCHAN/I_DSTCHAN; midi sends pack them into
+-- I_MIDIFLAGS (bits 14/22, +1-biased — 0 means all channels).
+local function readSendChans(track, sendIdx, kind)
+  if kind == 'audio' then
+    return math.floor(reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'I_SRCCHAN')),
+           math.floor(reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'I_DSTCHAN'))
+  end
+  local mf = math.floor(reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'I_MIDIFLAGS'))
+  return math.max(0, ((mf >> 14) & 0xFF) - 1),
+         math.max(0, ((mf >> 22) & 0xFF) - 1)
+end
+
+-- One decoder behind read, the reconcile diff, and the gain-drift pass.
+local function readSend(track, sendIdx)
+  local dst = reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'P_DESTTRACK')
+  local kind = sendKind(track, sendIdx)
+  local srcChan, dstChan = readSendChans(track, sendIdx, kind)
+  return {
+    to      = reaper.GetTrackGUID(dst),
+    kind    = kind,
+    gain    = reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'D_VOL'),
+    srcChan = srcChan,
+    dstChan = dstChan,
+    pos     = SENDMODE_TO_POS[math.floor(
+                reaper.GetTrackSendInfo_Value(track, 0, sendIdx, 'I_SENDMODE'))]
+              or 'postFader',
+  }
+end
+
+local function readSends(track)
+  local out = {}
+  for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
+    util.add(out, readSend(track, i))
+  end
+  return out
+end
+
+-- Identity tuple — gain is the mutable value, deliberately absent.
+local function sendKey(s)
+  return util.key(s.to, s.kind, s.srcChan, s.dstChan, s.pos)
+end
+
+local function createSend(track, w)
+  local idx = reaper.CreateTrackSend(track, w.dst)
+  if w.kind == 'midi' then
+    reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', -1)
+    if w.srcChan ~= 0 or w.dstChan ~= 0 then
+      local base  = math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS'))
+      local flags = (base & 0x3FFF) | ((w.srcChan + 1) << 14) | ((w.dstChan + 1) << 22)
+      reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS', flags)
+    end
+  else
+    reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS', 31)
+    reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', w.srcChan)
+    reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_DSTCHAN', w.dstChan)
+  end
+  reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SENDMODE', POS_TO_SENDMODE[w.pos] or 3)
+end
+
+-- Full-replace: drop/create by sendKey identity, then a separate gain pass
+-- because REAPER indices shift under deletion and gains move with the key.
+local function reconcileSends(track, sends)
+  local current = {}
+  for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
+    current[sendKey(readSend(track, i))] = i
+  end
+  local wanted = {}
+  for _, s in ipairs(sends) do
+    local dst = locateTrack(s.to)
+    if dst then
+      local w = { dst = dst, to = s.to, kind = s.kind, gain = s.gain or 1.0,
+                  srcChan = s.srcChan or 0, dstChan = s.dstChan or 0,
+                  pos = s.pos or 'preFader' }
+      wanted[sendKey(w)] = w
+    end
+  end
+  -- Drops right-to-left so REAPER's post-remove index shift stays sane.
+  local dropIdx = {}
+  for key, idx in pairs(current) do
+    if not wanted[key] then util.add(dropIdx, idx) end
+  end
+  table.sort(dropIdx, function(a, b) return a > b end)
+  for _, idx in ipairs(dropIdx) do reaper.RemoveTrackSend(track, 0, idx) end
+  for key, w in pairs(wanted) do
+    if not current[key] then createSend(track, w) end
+  end
+  for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
+    local w = wanted[sendKey(readSend(track, i))]
+    if w then reaper.SetTrackSendInfo_Value(track, 0, i, 'D_VOL', w.gain) end
+  end
+end
+
 ----------- read
 
 local function trackName(track)
@@ -343,7 +451,7 @@ local function readTrack(track, isMaster)
     nchan    = reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN'),
     mainSend = readMainSend(track),
     fx       = readFxChain(track),
-    sends    = {},
+    sends    = readSends(track),
   }
 end
 
@@ -415,6 +523,7 @@ local function writeTrackFields(track, t)
   if t.name  then reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', t.name, true) end
   if t.nchan then reaper.SetMediaTrackInfo_Value(track, 'I_NCHAN', t.nchan) end
   if t.mainSend then writeMainSend(track, t.mainSend) end
+  if t.sends    then reconcileSends(track, t.sends) end
 end
 
 ----------------- PUBLIC

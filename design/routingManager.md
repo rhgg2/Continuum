@@ -31,7 +31,7 @@ fx    = { id, ident, name,
           pinMaps = { ins = {...}, outs = {...} },
           midi    = { inBus, outBus, outDisabled } }   -- nil for JS fx
 
-send  = { to, type='audio'|'midi', gain, srcChan, dstChan, pos='preFx'|'preFader'|'postFader' }   -- no id; a value on the track
+send  = { to, kind='audio'|'midi', gain, srcChan, dstChan, pos='preFx'|'preFader'|'postFader' }   -- no id; a value on the track
 ```
 
 `id` is opaque (guid-backed), stable across reload, never parsed by callers.
