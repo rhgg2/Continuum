@@ -1041,15 +1041,6 @@ local function opFxOrder(fx)
   return out
 end
 
-local function opSends(sends)
-  local out = {}
-  for _, s in ipairs(sends) do
-    util.add(out, { to = s.to, type = s.kind, gain = s.gain, srcChan = s.srcChan,
-                    dstChan = s.dstChan, preFx = s.pos == 'preFx' or nil })
-  end
-  return out
-end
-
 -- Split nested fx.pinMaps back into the track-level {[fxGuid]=pm} + by-origin
 -- maps the setPinMaps op carries until chunk 4 applies pinmaps inline.
 local function opPinMaps(fx)
@@ -1149,7 +1140,7 @@ function wm:diff(target, snap)
     if fresh or not sendsEq(t_.sends, s.sends) then
       util.add(ops, { op = 'setSends', trackKey = trackKey,
                       trackKind = t_.trackKind,
-                      trackGuid = t_.id, sends = opSends(t_.sends) })
+                      trackGuid = t_.id, sends = t_.sends })
     end
     -- ExtState writes only on creation/track-transition-in: sourceTrack gets wiringTrackKind only
     -- (own guid is already the key); newTrack also needs wiringTrack for its multi-guid key.
@@ -1399,76 +1390,6 @@ local function reconcileFXChain(track, target, ownedGuids, stamps, paramIdxCache
   end
 end
 
-local function reconcileSends(track, target, trackKeyToTrack)
-  local function sendKey(dst, typ, src, dstCh, preFx)
-    return util.key(dst, typ, src, dstCh, preFx)
-  end
-  local function readChans(idx, typ)
-    if typ == 'audio' then
-      return math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN')),
-             math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_DSTCHAN'))
-    end
-    local mf = math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS'))
-    return math.max(0, ((mf >> 14) & 0xFF) - 1),
-           math.max(0, ((mf >> 22) & 0xFF) - 1)
-  end
-  local current = {}
-  for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
-    local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
-    local typ = sendType(track, i)
-    local src, dstCh = readChans(i, typ)
-    local preFx = reaper.GetTrackSendInfo_Value(track, 0, i, 'I_SENDMODE') == 1 or nil
-    current[sendKey(dst, typ, src, dstCh, preFx)] = { idx = i }
-  end
-  local wanted = {}
-  for _, s in ipairs(target) do
-    local dst = trackKeyToTrack[s.to]
-    if dst then
-      wanted[sendKey(dst, s.type, s.srcChan, s.dstChan, s.preFx)] =
-        { dst = dst, typ = s.type, srcChan = s.srcChan, dstChan = s.dstChan,
-          gain = s.gain or 1.0, preFx = s.preFx }
-    end
-  end
-  -- Drops right-to-left so REAPER's post-remove index shift stays sane.
-  local dropIdx = {}
-  for key, cur in pairs(current) do
-    if not wanted[key] then util.add(dropIdx, cur.idx) end
-  end
-  table.sort(dropIdx, function(a, b) return a > b end)
-  for _, idx in ipairs(dropIdx) do reaper.RemoveTrackSend(track, 0, idx) end
-  -- Wiring sends are post-FX pre-fader (I_SENDMODE=3), save raw-source sends,
-  -- which tap pre-FX (1) so the FX chain can own pair 1; audio writes channels.
-  for key, w in pairs(wanted) do
-    if not current[key] then
-      local idx = reaper.CreateTrackSend(track, w.dst)
-      if w.typ == 'midi' then
-        reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', -1)
-        if w.srcChan ~= 0 or w.dstChan ~= 0 then
-          local base = math.floor(reaper.GetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS'))
-          local flags = (base & 0x3FFF) | ((w.srcChan + 1) << 14) | ((w.dstChan + 1) << 22)
-          reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS', flags)
-        end
-      else
-        reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_MIDIFLAGS', 31)
-        reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SRCCHAN', w.srcChan)
-        reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_DSTCHAN', w.dstChan)
-      end
-      reaper.SetTrackSendInfo_Value(track, 0, idx, 'I_SENDMODE', w.preFx and 1 or 3)
-    end
-  end
-  -- Gain drift: indices may have shifted; re-locate each by 4-tuple key.
-  for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
-    local dst = reaper.GetTrackSendInfo_Value(track, 0, i, 'P_DESTTRACK')
-    local typ = sendType(track, i)
-    local src, dstCh = readChans(i, typ)
-    local preFx = reaper.GetTrackSendInfo_Value(track, 0, i, 'I_SENDMODE') == 1 or nil
-    local w = wanted[sendKey(dst, typ, src, dstCh, preFx)]
-    if w and typ == 'audio' then
-      reaper.SetTrackSendInfo_Value(track, 0, i, 'D_VOL', w.gain)
-    end
-  end
-end
-
 local function ownedGuidsFrom(graph, persisted)
   local s = {}
   if persisted then
@@ -1504,23 +1425,6 @@ local function buildTrackKeyToTrack()
   return out
 end
 
-local function scratchIndex()
-  local scratch = ensureScratchTrack()
-  for i = 0, reaper.CountTracks(0) - 1 do
-    if reaper.GetTrack(0, i) == scratch then return i end
-  end
-end
-
-local function createNewTrack(trackKey)
-  reaper.PreventUIRefresh(1)
-  local insertAt = scratchIndex() or reaper.CountTracks(0)
-  reaper.InsertTrackAtIndex(insertAt, false)
-  local track = reaper.GetTrack(0, insertAt)
-  reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', 'continuum: ' .. trackKey, true)
-  reaper.PreventUIRefresh(-1)
-  return track
-end
-
 --contract: walks ops in their emitted order inside one Undo_BeginBlock. setFXChain materialises nil-fxGuid entries via TrackFX_AddByName and stamps minted guids back into the user graph through a wm:mutate that's gated by `realising` so the live-recompile loop sees no signal. Param push resolves slider index by TrackFX_GetParamName and raises on unknown names.
 function wm:applyOps(ops, label)
   ensureLoaded()
@@ -1533,8 +1437,9 @@ function wm:applyOps(ops, label)
   local paramIdxCache   = {}
 
   -- Master has no wiringTrack tag, so pre-register it under every master-hosted trackKey
-  -- now — reconcileSends needs to resolve send destinations before any ops run.
+  -- now — send-destination resolution (rm:assignTrack{sends}) must map it before any ops run.
   local masterTrack = reaper.GetMasterTrack and reaper.GetMasterTrack(0) or nil
+  local masterGuid  = masterTrack and reaper.GetTrackGUID(masterTrack)
   if masterTrack then
     for _, op in ipairs(ops) do
       if op.trackKind == 'master' and op.trackKey then
@@ -1551,28 +1456,40 @@ function wm:applyOps(ops, label)
     return trackKeyToTrack[op.trackKey]
   end
 
+  -- Addressing seam: rm speaks guid ids, wm speaks trackKey/trackGuid. keyToId
+  -- maps a send destination's trackKey → guid; resolveId an op's host track.
+  local function keyToId(trackKey)
+    local track = trackKeyToTrack[trackKey]
+    return track and reaper.GetTrackGUID(track)
+  end
+  local function resolveId(kind, guid, trackKey)
+    if guid then return guid end
+    if kind == 'master' then return masterGuid end
+    return keyToId(trackKey)
+  end
+
   for _, op in ipairs(ops) do
     if op.op == 'createTrack' then
-      trackKeyToTrack[op.trackKey] = createNewTrack(op.trackKey)
+      local id = rm:addTrack({ name = 'continuum: ' .. op.trackKey })
+      trackKeyToTrack[op.trackKey] = self:trackByGuid(id)
     elseif op.op == 'deleteTrack' then
-      local t = self:trackByGuid(op.trackGuid)
-      if t then reaper.DeleteTrack(t) end
+      rm:deleteTrack(op.trackGuid)
     elseif op.op == 'setExtState' then
       local t = trackKeyToTrack[op.trackKey]
       if t then cm:writeTrackKey(t, op.key, op.value) end
     elseif op.op == 'setMainSend' then
-      local t = resolveTrack(op)
-      if t then
-        reaper.SetMediaTrackInfo_Value(t, 'B_MAINSEND', op.value and 1 or 0)
-        reaper.SetMediaTrackInfo_Value(t, 'D_VOL', op.gain or 1.0)
+      local id = resolveId(op.trackKind, op.trackGuid, op.trackKey)
+      if id then
+        local mainSend = { on = op.value, gain = op.gain or 1.0 }
         if op.value then
-          reaper.SetMediaTrackInfo_Value(t, 'C_MAINSEND_OFFS', op.offs or 0)
-          reaper.SetMediaTrackInfo_Value(t, 'C_MAINSEND_NCH', op.nch or 2)
+          mainSend.tgtOffset = op.offs or 0
+          mainSend.nchan     = op.nch or 2
         end
+        rm:assignTrack(id, { mainSend = mainSend })
       end
     elseif op.op == 'setNchan' then
-      local t = resolveTrack(op)
-      if t then reaper.SetMediaTrackInfo_Value(t, 'I_NCHAN', op.value) end
+      local id = resolveId(op.trackKind, op.trackGuid, op.trackKey)
+      if id then rm:assignTrack(id, { nchan = op.value }) end
     elseif op.op == 'setPinMaps' then
       local t = resolveTrack(op)
       if t then
@@ -1593,7 +1510,7 @@ function wm:applyOps(ops, label)
         for fxIdx = 0, reaper.TrackFX_GetCount(t) - 1 do
           local guid = reaper.TrackFX_GetFXGUID(t, fxIdx)
           if ownedPlus[guid] then
-            writePinMapsForFx(t, fxIdx, merged[guid] or { ins = {}, outs = {} })
+            rm:assignFx(guid, { pinMaps = merged[guid] or { ins = {}, outs = {} } })
           end
         end
       end
@@ -1601,26 +1518,21 @@ function wm:applyOps(ops, label)
       local t = resolveTrack(op)
       if t then reconcileFXChain(t, op.fxOrder, ownedGuids, stamps, paramIdxCache) end
     elseif op.op == 'moveFxAcrossTracks' then
-      local fromTrack = (op.fromTrackKind == 'master') and masterTrack
-                        or self:trackByGuid(op.fromTrackGuid)
-      local toTrack   = (op.toTrackKind   == 'master') and masterTrack
-                        or (op.toTrackGuid and self:trackByGuid(op.toTrackGuid))
-                        or trackKeyToTrack[op.toTrackKey]
-      if fromTrack and toTrack then
-        local srcIdx
-        for fxIdx = 0, reaper.TrackFX_GetCount(fromTrack) - 1 do
-          if reaper.TrackFX_GetFXGUID(fromTrack, fxIdx) == op.fxGuid then
-            srcIdx = fxIdx; break
+      local toId = resolveId(op.toTrackKind, op.toTrackGuid, op.toTrackKey)
+      if toId then rm:assignFx(op.fxGuid, { track = toId }) end
+    elseif op.op == 'setSends' then
+      local id = resolveId(op.trackKind, op.trackGuid, op.trackKey)
+      if id then
+        local sends = {}
+        for _, s in ipairs(op.sends) do
+          local toId = keyToId(s.to)
+          if toId then
+            util.add(sends, { to = toId, kind = s.kind, gain = s.gain,
+                              srcChan = s.srcChan, dstChan = s.dstChan, pos = s.pos })
           end
         end
-        if srcIdx then
-          local dstIdx = reaper.TrackFX_GetCount(toTrack)
-          reaper.TrackFX_CopyToTrack(fromTrack, srcIdx, toTrack, dstIdx, true)
-        end
+        rm:assignTrack(id, { sends = sends })
       end
-    elseif op.op == 'setSends' then
-      local t = resolveTrack(op)
-      if t then reconcileSends(t, op.sends, trackKeyToTrack) end
     end
   end
 

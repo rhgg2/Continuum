@@ -4,8 +4,9 @@
 > (rationale only, no API dump — per CONVENTIONS).
 >
 > **Status: all build phases (1–7) landed and green.** routingManager is
-> standalone. Remaining: the wiringManager rewiring below. Kept (not
-> deleted) until that lands.
+> standalone. wiringManager rewiring: chunks 1–3 landed (rm wired in; snapshot
+> read on `rm:tracks()`; simple write ops routed through rm). Remaining: chunks
+> 4–6 below. Kept (not deleted) until that lands.
 
 ## Goal
 
@@ -101,7 +102,23 @@ untouched so far.
 
 ### Principles
 
+- **The snapshot/target/diff vocabulary agrees with rm's record shape.** This
+  was the load-bearing call in chunk 2: rather than a name-mapping shim over
+  `rm:tracks()`, `wm:snapshot()` *is* an rm record + a thin overlay, so the
+  shapes nest the same way (`mainSend={on,gain,tgtOffset,nchan}`, per-fx
+  `pinMaps`/`midi`, sends `{kind,pos}`, `id` not `trackGuid`, `fx` not
+  `fxOrder`). Because `wm:diff` compares snapshot and target symmetrically,
+  `projectEntry`/`targetState` and the eq-helpers moved to the same shape in
+  lockstep — they are **not** "unchanged". `pinMapsByOrigin` is gone:
+  an unmaterialised target fx carries its `pinMaps` inline.
+- **The op payloads stay pre-rm; `wm:diff` bridges new→old at op construction.**
+  Three small mappers (`opFxOrder`/`opSends`/`opPinMaps`) emit the old op shape
+  so `applyOps`/`reconcileFXChain`/`reconcileSends` are untouched by chunk 2.
+  The bridges are the temporary seam: chunks 3–4 delete each one alongside the
+  consumer it feeds (`opSends`+`reconcileSends` in 3, `opFxOrder`/`opPinMaps`+
+  `reconcileFXChain` in 4).
 - `wm:snapshot()` → `rm:tracks()` + wm's ownership filter + trackKey re-keying.
+  Master falls out of `rm:tracks()` (no special `GetMasterTrack` branch).
 - `wm:applyOps()` → one `rm:transaction(label, fn)`; each op dispatches to
   `rm:addFx`/`assignFx`/`deleteFx`/`assignTrack`/etc. `addFx` returns
   the new id synchronously, so the minted-guid stamp-back is a direct call —
@@ -112,7 +129,8 @@ untouched so far.
   hold their slots, owned FX is a contiguous block), re-expressed over rm
   methods. `reconcileSends` is **deleted** — `rm:assignTrack{sends}` already
   owns the full send reconcile (phase 6); wm only computes the desired set.
-- Pure `diff` / `targetState` / `projectEntry` / `DAG.*` unchanged.
+- `DAG.*` unchanged (the allocator still speaks the wm spec vocabulary —
+  `type`/`preFx`/`fxOrder`; `projectEntry` translates spec → rm record).
 - **The addressing seam is wm's job throughout.** rm speaks guid `id`s; wm
   speaks `trackKey` (a `sourceTrack` key *is* a guid, a `newTrack` key is a
   synthetic ext-state tag) and `fxGuid`. Every op must translate trackKey→id
@@ -130,28 +148,37 @@ untouched so far.
 Each chunk lands green against the existing `wm_*` specs (the regression net);
 no chunk needs new specs unless it exposes a gap.
 
-1. **Wire rm in + leaf swaps.** Inject `rm` into wm (continuum wiring +
+1. ✅ **Wire rm in + leaf swaps.** Inject `rm` into wm (continuum wiring +
    harness). Repoint `wm:listInstalledFX` → `rm:installedFx()` and
    `wm:showFxWindow` → `rm:showFx`; drop wm's `installedFx` cache and its
    `EnumInstalledFX`/`TrackFX_Show` calls. Smallest possible diff — proves rm
    is reachable from the wm stack before anything load-bearing moves.
 
-2. **snapshot read → `rm:tracks()`.** Rebuild `wm:snapshot()` on rm records:
-   rm yields every project track (id, name, nchan, mainSend, fx[], pinMaps,
-   midi, sends[]); wm overlays the ownership filter on the fx list, the
-   trackKey re-keying, the `__master__` synth entry, and maps rm field names →
-   snapshot field names. Orphans the read-only helpers (`ownedChain`,
-   `readSendsClass`, the pin-map readers) — leave them for the sweep.
-   Net: `wm_snapshot_spec`.
+2. ✅ **snapshot read → `rm:tracks()`, reshaped to rm records.** `wm:snapshot()`
+   is now an rm record + ownership/trackKey/`__master__` overlay. Went further
+   than a field-name map (see Principles): the whole snapshot/target/diff
+   vocabulary adopts rm's nesting, so `projectEntry`/`targetState`/the
+   eq-helpers moved too, and `pinMapsByOrigin` was eliminated. Op payloads keep
+   the pre-rm shape via the `opFxOrder`/`opSends`/`opPinMaps` bridges, so
+   `applyOps` is untouched. Orphans the read-only helpers (`ownedChain`,
+   `readSendsClass`, `readPinMapsForFx`, `decodePairList`) — left for the
+   chunk-5 sweep. Net: `wm_snapshot_spec` + reshaped `wm_diff_spec`,
+   `wm_target_alloc_spec`, `wm_diff_midi_bus_spec`, `wm_fx_routing_apply_spec`.
 
-3. **Simple write ops → rm.** In the applyOps loop, convert the non-fx-chain
+3. ✅ **Simple write ops → rm.** In the applyOps loop, convert the non-fx-chain
    ops: `createTrack` → `rm:addTrack` (returns guid; map trackKey→guid
-   directly, drop `createNewTrack`); `deleteTrack` → `rm:deleteTrack`;
-   `setMainSend`/`setNchan` → `rm:assignTrack{mainSend,nchan}`; `setSends` →
-   `rm:assignTrack{sends}` after remapping `.to` trackKey→guid (deletes wm
-   `reconcileSends`); `setPinMaps` → `rm:assignFx{pinMaps}` per fx;
-   `moveFxAcrossTracks` → `rm:assignFx{track}`. `setExtState` stays wm
-   (cm:writeTrackKey). Net: `wm_apply_spec`, `wm_sends_spec`.
+   directly, dropped `createNewTrack`+`scratchIndex`); `deleteTrack` →
+   `rm:deleteTrack`; `setMainSend`/`setNchan` → `rm:assignTrack{mainSend,nchan}`;
+   `setSends` → `rm:assignTrack{sends}` after remapping `.to` trackKey→guid
+   (deleted wm `reconcileSends` **and the `opSends` bridge** — the op carries
+   rm-shaped sends directly); `setPinMaps` → `rm:assignFx{pinMaps}` per fx (op
+   still carries byGuid/byOrigin via `opPinMaps`; only the write moved);
+   `moveFxAcrossTracks` → `rm:assignFx{track}` (rm locates the fx by guid, so
+   the fromTrack scan is gone). `setExtState` stays wm (cm:writeTrackKey).
+   Addressing seam added inside applyOps: `keyToId`/`resolveId` translate
+   trackKey/trackGuid → rm guid id. Orphans `sendType`, `writePinMapsForFx`,
+   `pinMaskFor` — left for the chunk-5 sweep. Green against the full `wm_*`
+   suite (`wm_apply_ops_spec` covers the converted ops).
 
 4. **setFXChain → rm + kill the stamp-back.** The heart. Re-express
    `reconcileFXChain` over `rm:addFx`/`assignFx{index}`/`deleteFx`/
@@ -160,7 +187,9 @@ no chunk needs new specs unless it exposes a gap.
    *inline* as each fx materialises — deleting `stamps[]`, the deferred
    `realising` mutate, `originKey`, `pushParams`/`resolveParamIdx`, and the
    wm-side midi/param writers. The merge/bracket-guid sweep folds into the same
-   inline path. Net: `wm_apply_spec`, `wm_fx_routing_spec`, `wm_merge_spec`.
+   inline path. Deletes the `opFxOrder`/`opPinMaps` bridges — the op carries
+   rm-shaped fx entries directly. Net: `wm_apply_spec`, `wm_fx_routing_spec`,
+   `wm_merge_spec`.
 
 5. **transaction + dead-code sweep.** Wrap applyOps' body in
    `rm:transaction(label, fn)` (Undo/PreventUIRefresh now rm's); the ownedFx
