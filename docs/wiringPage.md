@@ -1,11 +1,23 @@
-# wiringPage
+# wiringPage / wiringRender
 
-The coordinator citizen for the node graph: renders the canvas, reads
-keyboard / mouse, and talks only to `wiringView` for graph state. Three
-source `--invariant:` lines fix its boundaries — render+input only (no
-`wm` reference), project-wide (`bind()` takes no take), the page owns
-every pixel. This doc carries the *why* those don't: the gesture state
-machine and the canvas draw order.
+The wiring page is split in two, mirroring the tracker and arrange
+stacks:
+
+- **wiringPage** is the controller — the object `coordinator` drives. It
+  constructs the stack (`rm`/`wm` stay local, only `wv` leaves), owns the
+  page lifecycle (`bind`/`unbind`/`enableLive`/`tick`), and delegates
+  every render call to the renderer.
+- **wiringRender** renders the canvas, reads keyboard / mouse, and owns
+  the `wiring` command scope and the add-FX picker. It is handed `wv`
+  only and never reaches `wm`/`rm` — what was a discipline (the page kept
+  no `wm` reference) is now structural: `wm` isn't in the renderer's
+  scope.
+
+Source `--invariant:` lines fix the renderer's boundaries — render+input
+only (no `wm` reference), the renderer owns every pixel — and the
+controller's (project-wide, `bind()` takes no take). This doc carries
+the *why* those don't: the gesture state machine and the canvas draw
+order.
 
 ## Project-wide
 
