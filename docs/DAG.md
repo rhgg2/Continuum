@@ -220,8 +220,41 @@ sum multiple pairs; a MIDI bus cannot be multi-read.)
 
 ### allocStream internals
 
-`allocStream(values, startCursor, N, compare, pinAdd)` is the shared helper for
-both audio and MIDI allocation. Each value is `{ def, lastUse, pins?, applies,
-assignReg? }` where `def`/`lastUse` are fx-chain slots (0 = boundary, N+1 = past
-end). `assignReg` forces a specific register; `pins` entries flow to `pinAdd`;
-`applies` entries receive the assigned register. Returns the cursor's end.
+`allocStream(values, startCursor, N, compare, pinAdd, profile?)` is the shared
+helper for both audio and MIDI allocation. Each value is `{ def, lastUse, pins?,
+applies, assignReg? }` where `def`/`lastUse` are fx-chain slots (0 = boundary,
+N+1 = past end). `assignReg` forces a specific register; `pins` entries flow to
+`pinAdd`; `applies` entries receive the assigned register. Returns the cursor's
+end. The optional `profile` records the live-register count across each gap — the
+crossing weight a capacity bisection would carry at that cut.
+
+## Capacity bisection — over-cap classes split across tracks
+
+REAPER caps a track at 128 channels (64 stereo pairs) and 128 MIDI buses. A class
+whose allocated stream peaks past a ceiling cannot live on one track, so
+`M.allocate` resolves it rather than reporting it: `allocateOnce` assigns and
+returns each track's high-water (`audioUsed`/`midiUsed`) plus the per-gap live
+profile; `splitOverCap` bisects every over-cap track at its minimum-crossing gap;
+re-allocate; repeat to a fixpoint. (`M.allocate` is the only entry point;
+`allocateOnce` is the inner single pass.)
+
+The cut is a *topological* one: `fxOrder` is already a topo order, so a gap-cut is
+a forward cut. The upstream segment keeps the track's identity, the downstream
+segment is an emergent `newTrack`, and the conns crossing the gap become one
+forward send — no back-edge, no cycle. The gap profile is exactly `allocStream`'s
+live count, so "min-crossing" reuses the allocator's own numbers, not a second
+estimator. Ties break to the lowest slot — the determinism pin, without which an
+unrelated edit could re-pick the cut and churn the partition.
+
+**Termination is by node count, not pressure.** Each cut strictly shrinks the
+over-cap track's `fxOrder`, and a single FX never exceeds a ceiling (REAPER caps
+an FX at 64 pairs), so the recursion bottoms out at one-FX-per-track — always
+feasible. The split track is invisible to `read` (like a merge `newTrack`), so
+`read ∘ compile = id` is unaffected.
+
+Worth knowing: overflow is *rarer* than it looks, because the allocator
+compresses. A master fan-in builds a progressively-consumed `audioSum` tree and a
+matrix consumer cascades past 16 — both let `topoIntraTrack` release each batch
+before the next, so peak pressure stays low. The non-compressible shape is many
+producers that all stay live to chain-end (e.g. each leaving via a send to a
+different track). That is what actually overflows, and what the split is for.

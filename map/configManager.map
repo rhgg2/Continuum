@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=704  sha=8c6a3ba  mode=chunk
+@module configManager  src=configManager.lua  loc=704  sha=4cee518  mode=chunk
 
 # Invariants & contracts
   @invariant  cm is the sole source of truth for valid keys; in-code reads/writes raise on unknown keys, persistence-loaded unknowns are silently pruned

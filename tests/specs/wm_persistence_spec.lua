@@ -104,11 +104,4 @@ return {
       t.eq(g2.nodes.injected, nil,         'outer key untouched')
     end,
   },
-  {
-    name = 'wm:errors() smoke on a fresh graph',
-    run = function(harness)
-      local _, wm = mkWm(harness)
-      t.deepEq(wm:errors(), {}, 'no capacity overflow on fresh graph')
-    end,
-  },
 }

@@ -421,31 +421,6 @@ local function buildCtx(userGraph, derivedSplits)
     return hosts
   end
 
-  function ctx:capacityErrors()
-    local counts  = {}
-    for _, edge in ipairs(edges) do
-      local fromTrackKey = self:trackKeyOf(edge.from)
-      local toTrackKey   = self:trackKeyOf(edge.to)
-      if fromTrackKey and fromTrackKey ~= '' and fromTrackKey == toTrackKey then
-        counts[fromTrackKey] = counts[fromTrackKey] or { audio = 0, midi = 0 }
-        counts[fromTrackKey][edge.type] = counts[fromTrackKey][edge.type] + 1
-      end
-    end
-    local out = {}
-    for trackKey, c in pairs(counts) do
-      for _, kind in ipairs({ 'audio', 'midi' }) do
-        if c[kind] > CAPACITY[kind] then
-          util.add(out, { trackKey = trackKey, kind = kind, count = c[kind], budget = CAPACITY[kind] })
-        end
-      end
-    end
-    table.sort(out, function(a, b)
-      if a.trackKey ~= b.trackKey then return a.trackKey < b.trackKey end
-      return a.kind < b.kind
-    end)
-    return out
-  end
-
   return ctx
 end
 
@@ -923,9 +898,9 @@ end
 ----- allocate
 
 -- Linear-scan allocator over one stream's value list (audio pair or MIDI bus).
--- see docs/DAG.md § allocStream internals
-local function allocStream(values, startCursor, N, compare, pinAdd)
-  local cursor, free = startCursor, {}
+-- see docs/DAG.md § allocStream internals; profile[g] = live count at gap g (capacity crossing weight).
+local function allocStream(values, startCursor, N, compare, pinAdd, profile)
+  local cursor, free, live = startCursor, {}, 0
   local function claim()
     if free[1] then return table.remove(free, 1) end
     local r = cursor; cursor = r + 1; return r
@@ -949,6 +924,7 @@ local function allocStream(values, startCursor, N, compare, pinAdd)
     else
       reg = claim()
     end
+    live = live + 1
     for _, p in ipairs(v.pins or {}) do pinAdd(p.fxId, p.dir, p.port, reg) end
     for _, apply in ipairs(v.applies) do apply(reg) end
     if v.lastUse <= N then util.bucket(releaseAt, v.lastUse, reg) end
@@ -963,12 +939,14 @@ local function allocStream(values, startCursor, N, compare, pinAdd)
     end
   end
   placeDefinedAt(0)
+  if profile then profile[0] = live end
   for slot = 1, N do
     if releaseAt[slot] then
-      for _, r in ipairs(releaseAt[slot]) do release(r) end
+      for _, r in ipairs(releaseAt[slot]) do release(r); live = live - 1 end
       releaseAt[slot] = nil
     end
     placeDefinedAt(slot)
+    if profile then profile[slot] = live end
   end
   return cursor
 end
@@ -989,11 +967,11 @@ local function midiValueCompare(a, c)
   return a.ord < c.ord
 end
 
--- Per-track live-range allocation, one register file per stream channel:
--- audio pairs (boundary pair 1), midi buses (boundary bus 0). See allocatedTracks shape.
+-- One assignment pass over a fixed partition; returns allocatedTracks + per-track capacity meta.
+-- Per-track live-range allocation, one register file per stream (audio pairs b1, midi buses b0).
 --contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
 --contract: nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
-function M.allocate(tracks, nodes)
+local function allocateOnce(tracks, nodes)
   nodes = nodes or {}
   local fxSetOf, slotOf = {}, {}
   for trackKey, entry in pairs(tracks) do
@@ -1042,6 +1020,7 @@ function M.allocate(tracks, nodes)
     alloc[trackKey] = { pinMaps = {}, sends = sends, mainSendOffs = entry.mainSend and 0 or nil }
   end
 
+  local meta = {}
   local trackKeys = util.keys(tracks)
   table.sort(trackKeys)
 
@@ -1167,7 +1146,8 @@ function M.allocate(tracks, nodes)
       end
     end
 
-    state.cursor = allocStream(values, 1, N, audioValueCompare, pinAdd)
+    local audioProfile = {}
+    state.cursor = allocStream(values, 1, N, audioValueCompare, pinAdd, audioProfile)
 
     ----- midi register file: bus 0 boundary; values are per-producer streams.
 
@@ -1282,7 +1262,12 @@ function M.allocate(tracks, nodes)
       end
     end
 
-    allocStream(midiValues, 0, N, midiValueCompare, nil)
+    local midiProfile = {}
+    local midiCursor = allocStream(midiValues, 0, N, midiValueCompare, nil, midiProfile)
+
+    meta[trackKey] = { N = N,
+      audioUsed = state.cursor - 1, midiUsed = midiCursor,
+      audioProfile = audioProfile, midiProfile = midiProfile }
 
     -- Merge CU midi params: inMask = union of feeder buses, outBus = its output bus.
     state.cuMidi = {}
@@ -1290,8 +1275,12 @@ function M.allocate(tracks, nodes)
       if isMergeCU(fxId) then
         local lanes = { 0, 0, 0, 0 }
         for bus in pairs(cuIn[fxId] or {}) do
-          local lane = (bus >> 5) + 1
-          lanes[lane] = lanes[lane] | (1 << (bus & 31))
+          -- Tolerate a transient over-128 bus: an overflowing class may push past lane 4 before
+          -- bisection resolves it; this pass is discarded. The final allocation never exceeds 128.
+          if bus < 128 then
+            local lane = (bus >> 5) + 1
+            lanes[lane] = lanes[lane] | (1 << (bus & 31))
+          end
         end
         state.cuMidi[fxId] = { inMask = lanes, outBus = cuOut[fxId] or 0 }
       end
@@ -1390,6 +1379,114 @@ function M.allocate(tracks, nodes)
     if state.fxOrder      then copy.fxOrder      = state.fxOrder      end
     if state.bracketNodes then copy.bracketNodes = state.bracketNodes end
     out[trackKey] = copy
+  end
+  return out, meta
+end
+
+----- capacity bisection — design/wiring-implicit-graph.md § Capacity
+
+-- Over-cap classes are bisected along their topo chain at the min-crossing gap (lowest-slot tie-break).
+-- Resource-triggered / bandwidth objective; distinct from split-at-node. see docs/DAG.md § Capacity bisection.
+
+local SPLIT_SEP = '#cap#'
+
+-- Cut spec at gap g: fxOrder[1..g] keeps identity; [g+1..] becomes an emergent newTrack.
+-- Conns crossing the cut become a forward send; master feed / mainSend follow their producer.
+local function bisect(trackKey, spec, g)
+  local downSet, upOrder, downOrder = {}, {}, {}
+  for i, id in ipairs(spec.fxOrder) do
+    if i <= g then util.add(upOrder, id)
+    else util.add(downOrder, id); downSet[id] = true end
+  end
+  local downKey = trackKey .. SPLIT_SEP .. downOrder[1]
+
+  local upIntra, downIntra, upOut, downOut = {}, {}, {}, {}
+  for _, ic in ipairs(spec.intraConns or {}) do
+    if downSet[ic.to] then
+      if downSet[ic.from] then util.add(downIntra, ic)
+      else util.add(upOut, { from = ic.from, fromPort = ic.fromPort, to = downKey,
+                             toNode = ic.to, toPort = ic.toPort, type = ic.type }) end
+    else
+      util.add(upIntra, ic)  -- to is up, so from is up too
+    end
+  end
+  for _, ow in ipairs(spec.outWires or {}) do
+    util.add(downSet[ow.from] and downOut or upOut, ow)
+  end
+
+  local mf = spec.masterFeed
+  local masterDown = mf ~= nil and downSet[mf.from] or false
+  local upMain  = (mf and not masterDown) or (not mf and spec.mainSend) or false
+  local downMain = masterDown
+
+  local upSynth, downSynth
+  for cuId, node in pairs(spec.synthNodes or {}) do
+    if downSet[cuId] then downSynth = downSynth or {}; downSynth[cuId] = node
+    else upSynth = upSynth or {}; upSynth[cuId] = node end
+  end
+
+  local upSpec = {
+    trackKind = spec.trackKind, trackId = spec.trackId, fxOrder = upOrder,
+    mainSend = upMain, mainSendGain = upMain and spec.mainSendGain or nil,
+    masterFeed = upMain and mf or nil,
+    outWires = upOut, intraConns = upIntra, synthNodes = upSynth,
+  }
+  local downSpec = {
+    trackKind = 'newTrack', trackId = nil, fxOrder = downOrder,
+    mainSend = downMain, mainSendGain = downMain and spec.mainSendGain or nil,
+    masterFeed = downMain and mf or nil,
+    outWires = downOut, intraConns = downIntra, synthNodes = downSynth,
+  }
+  return upSpec, downSpec, downKey, downSet
+end
+
+-- One bisection round: cut every over-ceiling track at its min-crossing gap; nil at fixpoint.
+-- Sends whose toNode moved downstream are re-pointed to the new segment's key.
+local function splitOverCap(tracks, meta)
+  local cuts = {}
+  for trackKey, m in pairs(meta) do
+    local profile
+    if m.audioUsed > CAPACITY.audio then profile = m.audioProfile
+    elseif m.midiUsed > CAPACITY.midi then profile = m.midiProfile end
+    if profile and m.N >= 2 then
+      local bestGap, bestLive
+      for gap = 1, m.N - 1 do
+        if not bestLive or profile[gap] < bestLive then bestGap, bestLive = gap, profile[gap] end
+      end
+      cuts[trackKey] = bestGap
+    end
+  end
+  if not next(cuts) then return nil end
+
+  local out, downByKey = {}, {}
+  for trackKey, spec in pairs(tracks) do
+    if cuts[trackKey] then
+      local upSpec, downSpec, downKey, downSet = bisect(trackKey, spec, cuts[trackKey])
+      out[trackKey], out[downKey] = upSpec, downSpec
+      downByKey[trackKey] = { key = downKey, set = downSet }
+    else
+      out[trackKey] = spec
+    end
+  end
+  for _, spec in pairs(out) do
+    for _, ow in ipairs(spec.outWires or {}) do
+      local d = downByKey[ow.to]
+      if d and d.set[ow.toNode] then ow.to = d.key end
+    end
+  end
+  return out
+end
+
+-- Capacity-resolving allocation: assign, bisect any over-ceiling class, re-assign
+-- until every track fits. The only entry point; allocateOnce is the inner pass.
+function M.allocate(tracks, nodes)
+  nodes = nodes or {}
+  local out, meta = allocateOnce(tracks, nodes)
+  local split = splitOverCap(tracks, meta)
+  while split do
+    tracks = split
+    out, meta = allocateOnce(tracks, nodes)
+    split = splitOverCap(tracks, meta)
   end
   return out
 end

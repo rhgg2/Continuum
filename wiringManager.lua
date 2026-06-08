@@ -151,29 +151,6 @@ function wm:mutate(mutator)
   return true
 end
 
--- One DAG ctx for the loaded graph, shared across :classes/:capacityErrors.
-local function compile()
-  ensureLoaded()
-  return DAG.compile(userGraph)
-end
-
---contract: capacity overflows joined to user-graph node ids
---shape: {kind,count,budget,nodeIds={[id]=true}}[]
---invariant: synthesised CU ids filtered; returns {} within budget
-function wm:errors()
-  local ctx     = compile()
-  local members = ctx:trackMembers()
-  local out = {}
-  for _, err in ipairs(ctx:capacityErrors()) do
-    local nodeIds = {}
-    for _, id in ipairs(members[err.trackKey] or {}) do
-      if userGraph.nodes[id] then nodeIds[id] = true end
-    end
-    util.add(out, { kind = err.kind, count = err.count, budget = err.budget, nodeIds = nodeIds })
-  end
-  return out
-end
-
 --contract: read JSFX desc file for ident from REAPER's Effects dir; nil if non-JS or read fails
 function wm:readJSFXContent(ident)
   if not (ident and ident:sub(1, 3) == 'JS:') then return nil end
@@ -678,10 +655,12 @@ local function readGraph(snap)
     for _, s in ipairs(entry.sends or {}) do
       if s.kind == 'audio' then
         addIncoming(s.to, { from = fromKey, srcPair = s.srcChan // 2 + 1,
-                            dstPair = s.dstChan // 2 + 1, gain = s.gain })
+                            dstPair = s.dstChan // 2 + 1, gain = s.gain,
+                            preFx = s.pos == 'preFx' or nil })
       elseif s.kind == 'midi' then
         addIncoming(s.to, { from = fromKey, midi = true,
-                            srcBus = s.srcChan, dstBus = s.dstChan })
+                            srcBus = s.srcChan, dstBus = s.dstChan,
+                            preFx = s.pos == 'preFx' or nil })
       end
     end
     if entry.mainSend and entry.mainSend.on then
@@ -727,6 +706,7 @@ local function readGraph(snap)
   end
 
   local tails = {}  -- trackKey -> { audio={[pair]=ref[]}, midi={[bus]=ref[]} }; ref = { node, port?, gain? }
+  local preTails = {}  -- pre-fx tap (track input) for preFx sends; source raw on pair 1 / bus 0
   local feedbackSeeds = {}  -- node ids on cyclic (Kahn-leftover) tracks; classify tags their component
   local function walkTrack(trackKey, entry, isCyclic)
     local liveAudio, liveMidi = {}, {}
@@ -742,7 +722,7 @@ local function readGraph(snap)
     local inc = incoming[trackKey]
     if inc then
       for _, i in ipairs(inc) do
-        local tail = tails[i.from] or {}
+        local tail = (i.preFx and preTails or tails)[i.from] or {}
         if i.midi then
           for _, ref in ipairs((tail.midi or {})[i.srcBus] or {}) do feedMidi(i.dstBus, ref) end
         else
@@ -787,6 +767,13 @@ local function readGraph(snap)
       if cu.mode == 'merge' then mergeMidi(liveMidi, cu)
       else liveMidi = busRouteMidi(liveMidi, cu.from, cu.to) end
     end
+
+    -- Snapshot the track input (pre-fx) so a preFx source send taps the raw signal,
+    -- not the post-fx tail an on-track fx would otherwise leave on the pair.
+    local preAudio, preMidi = {}, {}
+    for pair, list in pairs(liveAudio) do preAudio[pair] = list end
+    for bus,  list in pairs(liveMidi)  do preMidi[bus]   = list end
+    preTails[trackKey] = { audio = preAudio, midi = preMidi }
 
     for _, fxe in ipairs(entry.fx or {}) do
       if fxe.ident == CU_IDENT then

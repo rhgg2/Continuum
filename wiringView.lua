@@ -331,13 +331,6 @@ function wv:wireViews()
   return out
 end
 
------ Capacity errors
-
---contract: pass-through of wm:errors; { kind, count, budget, nodeIds }[] per overflowing class
-function wv:errors()
-  return wm:errors()
-end
-
 ----- Logical view-state (nodeId only)
 
 function wv:hover()             return hoverNodeId       end

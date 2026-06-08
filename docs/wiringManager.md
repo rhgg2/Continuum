@@ -124,6 +124,17 @@ Toggling either by hand in REAPER is reverted to graph intent on the
 next reconcile: snapshot reads REAPER's state, so the differ sees the
 drift and rewrites it.
 
+## Pre-FX source sends on read
+
+A capacity bisection (and the "source feeds an FX *and* sends its raw
+signal elsewhere" case) leaves a source track carrying both an on-track
+FX output *and* a pre-FX raw-source send on the same pair. `readGraph`
+tracks only the post-FX tail per pair, so a pre-FX send read off the tail
+would mis-attribute to the FX (every peeled `source→fx` send round-trips
+as `fx→fx`). Read therefore snapshots each track's input (pre-FX) into
+`preTails` and routes a `preFx`-flagged send from that tap — the source's
+raw pair 1 / bus 0 — instead of the tail.
+
 ## Per-FX MIDI routing
 
 The chunk-level encoding of per-FX MIDI routing — input/output bus,

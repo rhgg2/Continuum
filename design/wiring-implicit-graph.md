@@ -108,8 +108,8 @@ Notes:
   capacitated bisection, not plain min-cut — but class node counts are
   tiny, so exact search is cheap.
 - A split materialises as an emergent `newTrack` + cross-track send: the
-  *same shape* as a merge newTrack, which `read` already ignores. So it
-  costs nothing on the read side.
+  *same shape* as a merge newTrack, which `read` already ignores — modulo
+  one read fix the split forced, the pre-FX source tap (§ Status, step 3).
 - **Net-new allocator capability.** Distinct from the existing
   *split-at-node* (a semantic boundary): this is *resource*-triggered
   with a *bandwidth* objective. Today the allocator only **reports**
@@ -211,7 +211,7 @@ never ahead of it.
    — no rendering. **Landed (invariant-1) — see § Status; the
    capacity-split case waits on step 3.**
 3. **Capacity min-cut pass** in the allocator (deterministic tie-break),
-   distinct from split-at-node.
+   distinct from split-at-node. **Landed — see § Status.**
 4. **Retire** the cm blob, the ownership machinery, and — if the
    decoration substrate holds — the scratch/`pollUndo` apparatus. With the
    blob goes the reconcile churn, so `nextId`, the `n`-prefixed ids, and
@@ -251,6 +251,28 @@ view-state" now has test evidence, not a bare prediction. Capacity-split is left
 for step 3 (no compile image yet); quarantine is off-image (invariant 2, owned
 by `wm_read_spec`).
 
+**Step 3 is landed** (`DAG.allocate` capacity loop; `dag_capacity_split_spec` +
+the `wm_roundtrip_spec` 65-wide fan fixture). An over-cap class is bisected across
+emergent newTracks at its minimum-crossing gap (lowest-slot tie-break), re-allocated
+to a fixpoint — `allocateOnce` returns the per-gap live profile the cut reads, so
+min-crossing is the allocator's own numbers. Termination is by node count (each cut
+shrinks the over-cap `fxOrder`; a lone FX never over-caps), so one-FX-per-track is
+the always-feasible floor — capacity needs no quarantine. The split forced two
+findings:
+
+- **Overflow is compression-limited.** A master fan-in (`audioSum` tree) or a matrix
+  consumer (cascade past 16) is progressively consumed, so `topoIntraTrack` keeps
+  peak pressure low and *never* overflows. The shape that does is many producers
+  live to chain-end — each leaving via a send to a different track. The fixtures use
+  that shape; a sum-tree fan-in would silently not exercise the split.
+- **`read` had a pre-FX gap.** A split leaves a source track with both an FX output
+  and a raw-source pre-FX send on one pair; `read` tracked only the post-FX tail and
+  mis-read the send as `fx→fx`. Fixed by tapping each track's pre-FX input
+  (`preTails`) for `preFx`-flagged sends — also fixes the latent
+  "source-through-fx + raw send elsewhere" case. The error machinery (`capacityErrors`,
+  `wm:errors`, `wv:errors`, the view's error outline) retires: overflow is now always
+  resolved, never reported.
+
 **Two `compile` non-injectivities surfaced** in the process — real bugs,
 reflected faithfully by read (not read workarounds). **Both are now fixed**
 in `compile`:
@@ -278,7 +300,9 @@ in `compile`:
   and positions are the only non-graph residue. The corpus is hand-picked, not
   exhaustive, and the capacity-split case can't be swept until step 3 gives it
   a compile image.
-- **Capacity bisection** is genuinely new allocator work and the bulk of
-  the risk; everything else is `read` + deletions.
+- ~~**Capacity bisection** is genuinely new allocator work and the bulk of
+  the risk~~ — *landed* (§ Status, step 3). The surprise was not the cut but
+  that overflow is compression-limited, so the test had to force a
+  non-cascading shape; and a latent `read` pre-FX gap the split exposed.
 - **Quarantine UX** — how a darkened component signals its cause and
   recovery path in the wiring view.

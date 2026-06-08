@@ -193,6 +193,25 @@ local corpus = {
       util.add(g.edges, { type='audio', from='c',  to='master' })
     end,
   },
+  {
+    -- 65 producers fi each feed a distinct di: 65 pairs live at once, past the 64-pair ceiling.
+    -- s2 anchors each di into its own class; compile bisects into emergent newTracks (read-invisible).
+    name = 'capacity: 65-wide audio fan forces a bisection (read-invisible)',
+    seed = function(h) seedSource(h, 'guid-A'); seedSource(h, 'guid-B') end,
+    build = function(g)
+      g.nodes.s  = source('guid-A')
+      g.nodes.s2 = source('guid-B')
+      for i = 1, 65 do
+        local fi, di = 'f' .. i, 'd' .. i
+        g.nodes[fi] = fx('VST:F' .. i, { fxId = 'g-f' .. i })
+        g.nodes[di] = fx('VST:D' .. i, { fxId = 'g-d' .. i, ins = 2 })
+        util.add(g.edges, { type='audio', from='s',  to=fi })
+        util.add(g.edges, { type='audio', from=fi,  to=di, toPort=1 })
+        util.add(g.edges, { type='audio', from='s2', to=di, toPort=2 })
+        util.add(g.edges, { type='audio', from=di,  to='master' })
+      end
+    end,
+  },
 }
 
 local tests = {}

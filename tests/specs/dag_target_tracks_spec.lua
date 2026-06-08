@@ -507,34 +507,6 @@ return {
   },
 
   {
-    name = 'absorb: capacityErrors keys on trackKey after intra-trackKey merge',
-    run = function()
-      -- 65 audio wires sit inside the absorbed class {s1,s2}; post-fix they
-      -- belong to trackKey guid-s1, which is what the error must key on.
-      local ns = {}
-      local k1, v1 = source('s1', 'guid-s1');         ns[k1] = v1
-      local k2, v2 = source('s2', 'guid-s2');         ns[k2] = v2
-      local k3, v3 = fx('B', { ins = 1, outs = 1 }); ns[k3] = v3
-      local k4, v4 = fx('D', { ins = 1, outs = 64 }); ns[k4] = v4
-      local k5, v5 = fx('E', { ins = 64, outs = 0 }); ns[k5] = v5
-      local edges = {
-        { type = 'audio', from = 's1', to = 'B' },
-        { type = 'midi',  from = 's2', to = 'B' },
-        { type = 'audio', from = 'B',  to = 'D' },
-      }
-      for p = 1, 64 do
-        edges[#edges+1] = { type = 'audio', from = 'D', to = 'E',
-                            fromPort = p, toPort = p }
-      end
-      local cx   = DAG.compile(mk(ns, edges))
-      local errs = cx:capacityErrors()
-      t.eq(#errs, 1)
-      t.eq(errs[1].trackKey, 'guid-s1', 'capacity error keyed by trackKey, not absorbed-class key')
-      t.eq(errs[1].kind, 'audio')
-    end,
-  },
-
-  {
     name = 'absorb: send from another non-trackKey class retargets to trackKey classKey',
     run = function()
       -- midfx (in class {s3}) sends audio into B's absorbed class — must

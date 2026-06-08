@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=366  sha=1694e27  mode=chunk
+@module wiringView  src=wiringView.lua  loc=359  sha=e848a59  mode=chunk
 @deps cm, wm
 
 # Invariants & contracts
@@ -100,18 +100,15 @@
   @api wv:wireViews()  @ 305
       -- see docs/wiringView.md § wireView fromKind/fromLabel
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
-  -- Capacity errors
-  @api wv:errors()  @ 337
-      @contract  pass-through of wm:errors; { kind, count, budget, nodeIds }[] per overflowing class
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 343
-  @api wv:setHover(id)  @ 344
-  @api wv:selection()  @ 347
+  @api wv:hover()  @ 336
+  @api wv:setHover(id)  @ 337
+  @api wv:selection()  @ 340
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 349
+  @api wv:setSelection(idSet)  @ 342
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
   -- Lifecycle: cache pulled on every structural change
-  @api wv:rebuild()  @ 360
+  @api wv:rebuild()  @ 353
       -- Lazy sibling of tv:rebuild: invalidate, don't re-pull. The next render
       -- read repopulates via ensureView, so a signal without a render compiles nothing.
       @contract  drops the view cache; next read re-pulls from wm. Driven by wiringChanged.
@@ -123,7 +120,6 @@
   @use call    wm.deleteSource  @ 152
   @use call    wm.edgeGain  @ 231
   @use call    wm.enableLive  @ 135
-  @use call    wm.errors  @ 338
   @use call    wm.fastGainCommit  @ 236
   @use call    wm.fxTrack  @ 170
   @use call    wm.graph  @ 132
@@ -138,4 +134,4 @@
   @use call    wm.trackNames  @ 29
   @use call    wm.viewGraph  @ 24
   @use require util  @ 8
-  @use sub     wm:wiringChanged  @ 364
+  @use sub     wm:wiringChanged  @ 357

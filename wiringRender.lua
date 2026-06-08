@@ -1402,20 +1402,6 @@ local function renderCanvas(w, h)
 
   if fader then drawFader(p, fader) end
 
-  -- Error outline stroked after selection so error-and-selected reads red.
-  local errs = wv:errors()
-  if #errs > 0 then
-    local errorIds = {}
-    for _, err in ipairs(errs) do
-      for id in pairs(err.nodeIds) do errorIds[id] = true end
-    end
-    for _, nv in ipairs(nodeViews) do
-      if errorIds[nv.id] then
-        strokeNodeRect(p, nodeBox(nv), 'wiring.node.error')
-      end
-    end
-  end
-
   -- Overlay pass per engaged node. idPrefix is nv.id-keyed so InvisibleButtons
   -- stay unique across simultaneous overlays.
   for _, pick in ipairs(overlays) do
@@ -1969,13 +1955,7 @@ end
 
 function wr:renderStatusBar(_)
   if not ctx then return end
-  local errs = wv:errors()
-  if #errs == 0 then
-    ImGui.Text(ctx, 'wiring')
-  else
-    ImGui.Text(ctx, ('wiring — %d capacity error%s')
-                    :format(#errs, #errs == 1 and '' or 's'))
-  end
+  ImGui.Text(ctx, 'wiring')
 end
 
 --contract: acceptCmds=false if any picker active, any item active, or modal open at frame start.
