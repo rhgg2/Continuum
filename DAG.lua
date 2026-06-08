@@ -7,7 +7,7 @@
 --invariant: REAPER tracks are always stereo; audio I/O is a count of stereo pairs, never channels
 --invariant: every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
---shape: userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
+--shape: userGraph = { nodes = {[id]=userNode}, edges = edge[] }  -- node ids are rm guids (read era)
 --shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true }
 --invariant: fx nodes carry busAware; wm:addFxNode and M.validate refuse true
 --invariant: fxId is nil until materialised; stamped into the node after TrackFX_AddByName succeeds

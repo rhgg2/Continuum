@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1505  sha=e3c39a1  mode=namespace
+@module DAG  src=DAG.lua  loc=1505  sha=555004b  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate is pure; derivations live on M.compile's ctx
@@ -14,7 +14,7 @@
   @contract  realisation pass over a compile ctx; returns the targetTracks shape (not cached)
 
 # Shapes
-  @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[], nextId = number }
+  @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[] }  -- node ids are rm guids (read era)
   @shape  userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true }
   @shape  edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number}, primary?=true }
   @shape  synthNode = { kind='fx', fxIdent=CU_IDENT, fxId?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }

@@ -130,7 +130,6 @@ end
 ----- wm pass-through
 
 function wv:graph()      return wm:graph() end
-function wv:save()       wm:save() end
 function wv:load()       wm:load() end
 function wv:enableLive() wm:enableLive() end
 function wv:pollUndo()   wm:pollUndo() end

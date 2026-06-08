@@ -113,9 +113,8 @@ local declarations = {
   -- See docs/arrangeManager.md.
   { 'arrangeColours', {} },
 
-  -- Wiring page keys: project-tier blobs, also mirrored to the scratch track's P_EXT
-  -- for undo coherence. wiringTracks maps trackKey → opaque track id. See docs/wiringManager.md.
-  { 'wiringGraph',    {}  },
+  -- Wiring addressing keys, mirrored to scratch P_EXT for undo coherence.
+  -- wiringTracks maps trackKey → opaque track id; no graph blob (read era). See docs/wiringManager.md.
   { 'wiringOwnedFx',  {}  },
   { 'wiringTracks',   {}  },
 

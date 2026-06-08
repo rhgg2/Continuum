@@ -39,7 +39,7 @@ end
 
 return {
   {
-    name = 'undo: applyOps mirrors wiringGraph onto scratch P_EXT',
+    name = 'undo: applyOps mirrors the owned-fx addressing onto scratch P_EXT',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -50,43 +50,38 @@ return {
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
-      local mirrored = h.cm:readTrackKey(scratchOf(h, wm), 'wiringGraph')
-      t.truthy(mirrored, 'scratch P_EXT carries wiringGraph')
-      t.truthy(mirrored.nodes.f, 'mirror has the fx node')
-      t.truthy(mirrored.nodes.f.fxId, 'mirror includes stamped fxId')
+      -- The graph lives in REAPER routing now; only the addressing mirror rides scratch P_EXT.
+      local owned = h.cm:readTrackKey(scratchOf(h, wm), 'wiringOwnedFx')
+      t.truthy(owned, 'scratch P_EXT carries the owned-fx mirror')
+      local count = 0
+      for _ in pairs(owned) do count = count + 1 end
+      t.truthy(count >= 1, 'mirror lists the materialised fx guid')
     end,
   },
   {
-    name = 'undo: scratch P_EXT rewinds → pollUndo restores project tier and fires load',
+    name = 'undo: scratch P_EXT diverges → pollUndo re-reads REAPER and fires load',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
       wm:enableLive()
-      -- Pre-undo state: graph has just source.
-      wm:mutate(function(g) g.nodes.s = source('guid-A') end)
-      local preUndoGraph = util.deepClone(h.cm:readTrackKey(scratchOf(h, wm), 'wiringGraph'))
-
-      -- Extend the graph (this is the "gesture" the user will then undo).
       wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
         g.nodes.f = fx('JS:foo')
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
-      t.truthy(wm:graph().nodes.f, 'gesture landed')
 
-      -- Simulate REAPER undo: scratch P_EXT rewinds to its pre-gesture content.
-      -- (In production, Undo_BeginBlock captures the P_EXT change inside the
-      -- applyOps block, and cmd-Z rewinds it.)
-      h.cm:writeTrackKey(scratchOf(h, wm), 'wiringGraph', preUndoGraph)
+      -- Simulate REAPER undo: scratch P_EXT rewinds to empty (captured in the applyOps block).
+      -- The non-empty→empty change is what pollUndo detects.
+      h.cm:writeTrackKey(scratchOf(h, wm), 'wiringOwnedFx', {})
 
       local loadFires = 0
       wm:subscribe('wiringChanged', function(payload)
         if payload.kind == 'load' then loadFires = loadFires + 1 end
       end)
       wm:pollUndo()
-      t.eq(loadFires, 1, 'pollUndo fired wiringChanged{kind=load}')
-      t.eq(wm:graph().nodes.f, nil, 'graph no longer carries the undone fx node')
-      t.truthy(wm:graph().nodes.s,   'graph still carries pre-gesture source')
+      t.eq(loadFires, 1, 'pollUndo fired wiringChanged{kind=load} on divergence')
+      t.truthy(wm:graph().nodes['guid-A'], 'graph re-read from REAPER carries the source track')
     end,
   },
   {

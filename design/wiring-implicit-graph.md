@@ -124,7 +124,9 @@ Since routing is fully inferred, the *only* thing that needs storing is
 state `compile` never realises: **node positions** (and names/colours).
 This is the entire scope of any metadata facility added to rm — it
 carries "where the dot sits," never routing semantics. (Or positions
-auto-layout and nothing is decorated at all.)
+auto-layout and nothing is decorated at all.) **Until auto-layout lands,
+a node with no stored position — an adopted foreign track, a never-placed
+read-derived source — defaults to `(0,0)` and stacks at the origin.**
 
 - **CUs need positions too**, but ride their existing special lifecycle:
   a CU is synthesised and ephemeral (minted/retracted by reconcile as a
@@ -320,6 +322,28 @@ a pos-only move changes no routing, so it skips reconcile and writes straight th
 API). `wm:moveNodes` is the sole position writer (wv delegates to it); `wm:read` stamps positions
 back after the pure routing read, sharing one `rm:tracks()` scan with the snapshot. The blob stays
 authoritative — A only proves decoration survives `read`, de-risking the B cutover that drops it.
+
+**Commit B (read authoritative; blob retired; identity flip) is landed.** `wm:load`/`ensureLoaded`
+now source the graph from `wm:read`, not a cm blob; `wm:save`, the `wiringGraph` cm key, and its
+scratch mirror are gone, and `wm:pollUndo` re-reads REAPER on divergence instead of restoring a blob.
+The identity flip lands *with* the cutover (as § Identity flips requires): `addFxNode`/`addSourceNode`
+key new nodes by their rm guid (scratch `fxId` / source-track guid), `nextId` and the `n`-prefixed ids
+retire, and the create paths persist initial positions to meta.
+
+The decomposition shifted from the original plan: **B necessarily absorbed C's snapshot slice.** The
+`wiringGraph` blob was the *only* persistent anchor for source-track identity, so retiring it forced
+`wm:snapshot` to identify sources structurally — every non-scratch/newTrack/master project track is a
+source keyed by its guid, and `readGraph`'s existing no-incoming-sends rule mints the node. That also
+dissolved a `read → snapshot → ensureLoaded` recursion (snapshot no longer forces a load) and made
+foreign adoption real (a bare project track is adopted, not dropped). What stays for **C** is the
+*ownership* machinery proper — `wiringOwnedFx`, `ownedSubsequence` splicing, and the
+`origin={kind='node'}` stamp-back, which B deliberately left intact: it is dead-in-practice (a node
+fx always carries its guid before compile, and `pollUndo` catches manual deletes before any
+re-materialise) but removing it belongs with the `reconcileFXChain` rework. **D** remains the
+`wiringTracks` mirror + the `wm:pollUndo` collapse.
+
+*Deferred:* read-derived nodes with no stored position (adopted tracks, never-placed sources) default
+to `(0,0)` — they stack at the origin until auto-layout lands (§ Decoration).
 
 ## Open questions / risks
 

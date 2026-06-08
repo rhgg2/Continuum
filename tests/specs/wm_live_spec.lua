@@ -90,7 +90,7 @@ return {
     end,
   },
   {
-    name = 'enableLive: wm:load fires reconcile too',
+    name = 'wm:load re-reads REAPER; a behind-the-back FX delete drops from the graph',
     run = function(harness)
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
@@ -102,15 +102,16 @@ return {
         util.add(g.edges, audioEdge('f', 'master'))
       end)
       local guidAfterMutate = wm:graph().nodes.f.fxId
-      -- Wipe the FX out of REAPER behind wm's back; load + auto-reconcile
-      -- should detect the drift and re-materialise.
+      t.truthy(guidAfterMutate, 'fx materialised')
+      -- Wipe the FX out of REAPER behind wm's back. read is the store, so load reflects
+      -- REAPER truthfully: the vanished fx is simply not read back (no re-materialise churn).
       h.reaper.TrackFX_Delete(track, 0)
       t.eq(h.reaper.TrackFX_GetCount(track), 0, 'cleared')
       wm:load()
-      t.eq(h.reaper.TrackFX_GetCount(track), 1, 'load drove reconcile, fx re-added')
-      t.truthy(wm:graph().nodes.f.fxId ~= guidAfterMutate
-            or wm:graph().nodes.f.fxId == h.reaper.TrackFX_GetFXGUID(track, 0),
-           'graph fxId tracks the live FX')
+      t.eq(h.reaper.TrackFX_GetCount(track), 0, 'load did not re-add the deleted fx')
+      local hasFx = false
+      for _, n in pairs(wm:graph().nodes) do if n.kind == 'fx' then hasFx = true end end
+      t.falsy(hasFx, 'graph no longer carries the vanished fx')
     end,
   },
 }

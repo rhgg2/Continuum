@@ -40,10 +40,10 @@ return {
       local h, wm = mkWm(harness)
       reaper:setFxIO('JS:plain', { ins = 2, outs = 2 })  -- 1 stereo port each (pins)
       wm:enableLive()
-      wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
+      local fxId = wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
       local scratch = reaper.GetTrack(0, 0)
       t.eq(reaper.TrackFX_GetCount(scratch), 1, 'fx parked on scratch')
-      local fxNode = wm:graph().nodes.n1
+      local fxNode = wm:graph().nodes[fxId]
       t.eq(fxNode.fxId, reaper.TrackFX_GetFXGUID(scratch, 0),
            'node fxId matches the live scratch instance')
     end,
@@ -57,13 +57,13 @@ return {
       local countCalls  = instrumentAddByName()
 
       wm:enableLive()
-      wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
-      local originalGuid = wm:graph().nodes.n1.fxId
+      local fxId = wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
+      local originalGuid = wm:graph().nodes[fxId].fxId
       t.eq(countCalls(), 1, 'addFxNode mints exactly one instance')
 
       wm:mutate(function(g)
         g.nodes.src = sourceNode('guid-A')
-        util.add(g.edges, { type = 'audio', from = 'src', to = 'n1',
+        util.add(g.edges, { type = 'audio', from = 'src', to = fxId,
                             fromPort = 1, toPort = 1 })
       end)
 
@@ -87,11 +87,11 @@ return {
       local h, wm = mkWm(harness)
       reaper:setFxIO('JS:plain', { ins = 2, outs = 2 })  -- 1 stereo port each (pins)
       wm:enableLive()
-      wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
+      local fxId = wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
       local scratch = reaper.GetTrack(0, 0)
       t.eq(reaper.TrackFX_GetCount(scratch), 1, 'fx on scratch pre-delete')
 
-      wm:mutate(function(g) g.nodes.n1 = nil end)
+      wm:mutate(function(g) g.nodes[fxId] = nil end)
 
       t.eq(reaper.TrackFX_GetCount(scratch), 0,
            'node removed → applier deletes the orphaned instance')

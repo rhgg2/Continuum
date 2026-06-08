@@ -114,8 +114,8 @@ return {
         inPinNames  = { 'Main L', 'Main R', 'Sidechain L', 'Sidechain R' },
         outPinNames = { 'Out L',  'Out R' },
       })
-      wv:addFx(0, 0, { name = 'Comp', ident = 'VST3:Comp' })
-      local n = wv:graph().nodes.n1
+      local id = wv:addFx(0, 0, { name = 'Comp', ident = 'VST3:Comp' })
+      local n = wv:graph().nodes[id]
       t.eq(n.ports.audio.ins,  2)
       t.eq(n.ports.audio.outs, 1)
       t.deepEq(n.ports.audio.inNames,  { 'Main', 'Sidechain' })

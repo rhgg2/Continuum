@@ -27,45 +27,45 @@ return {
     name = 'isolated node: ancestors = { itself }',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0, 0, FX)
-      t.deepEq(sortedKeys(wv:ancestorsOf('n1')), { 'n1' })
+      local a = wv:addFx(0, 0, FX)
+      t.deepEq(sortedKeys(wv:ancestorsOf(a)), { a })
     end,
   },
   {
     name = 'audio chain: ancestors of master include everything upstream',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0,   0, FX)
-      wv:addFx(100, 0, FX)
-      wv:addWire{ type = 'audio', from = 'n1', to = 'n2' }
-      wv:addWire{ type = 'audio', from = 'n2', to = 'master' }
+      local a = wv:addFx(0,   0, FX)
+      local b = wv:addFx(100, 0, FX)
+      wv:addWire{ type = 'audio', from = a, to = b }
+      wv:addWire{ type = 'audio', from = b, to = 'master' }
       t.deepEq(sortedKeys(wv:ancestorsOf('master')),
-               { 'master', 'n1', 'n2' })
+               sortedKeys({ master = true, [a] = true, [b] = true }))
     end,
   },
   {
     name = 'reachability follows midi edges too (edge type ignored)',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0,   0, FX)
-      wv:addFx(100, 0, FX)
-      wv:addWire{ type = 'midi',  from = 'n1', to = 'n2' }
-      wv:addWire{ type = 'audio', from = 'n2', to = 'master' }
+      local a = wv:addFx(0,   0, FX)
+      local b = wv:addFx(100, 0, FX)
+      wv:addWire{ type = 'midi',  from = a, to = b }
+      wv:addWire{ type = 'audio', from = b, to = 'master' }
       t.deepEq(sortedKeys(wv:ancestorsOf('master')),
-               { 'master', 'n1', 'n2' })
+               sortedKeys({ master = true, [a] = true, [b] = true }))
     end,
   },
   {
     name = 'unrelated branches are excluded',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0,   0, FX)
-      wv:addFx(100, 0, FX)
-      wv:addFx(200, 0, FX)
-      wv:addWire{ type = 'audio', from = 'n1', to = 'n2' }
-      local anc = wv:ancestorsOf('n2')
-      t.deepEq(sortedKeys(anc), { 'n1', 'n2' })
-      t.eq(anc.n3, nil)
+      local a = wv:addFx(0,   0, FX)
+      local b = wv:addFx(100, 0, FX)
+      local c = wv:addFx(200, 0, FX)
+      wv:addWire{ type = 'audio', from = a, to = b }
+      local anc = wv:ancestorsOf(b)
+      t.deepEq(sortedKeys(anc), sortedKeys({ [a] = true, [b] = true }))
+      t.eq(anc[c], nil)
     end,
   },
   {
@@ -75,15 +75,15 @@ return {
     name = 'cycle-rejection set: ancestors of mid-chain == upstream incl self',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0,   0, FX)
-      wv:addFx(100, 0, FX)
-      wv:addFx(200, 0, FX)
-      wv:addWire{ type = 'audio', from = 'n1', to = 'n2' }
-      wv:addWire{ type = 'audio', from = 'n2', to = 'n3' }
-      wv:addWire{ type = 'audio', from = 'n3', to = 'master' }
-      local anc = wv:ancestorsOf('n2')
-      t.deepEq(sortedKeys(anc), { 'n1', 'n2' })
-      t.eq(anc.n3,     nil)
+      local a = wv:addFx(0,   0, FX)
+      local b = wv:addFx(100, 0, FX)
+      local c = wv:addFx(200, 0, FX)
+      wv:addWire{ type = 'audio', from = a, to = b }
+      wv:addWire{ type = 'audio', from = b, to = c }
+      wv:addWire{ type = 'audio', from = c, to = 'master' }
+      local anc = wv:ancestorsOf(b)
+      t.deepEq(sortedKeys(anc), sortedKeys({ [a] = true, [b] = true }))
+      t.eq(anc[c],     nil)
       t.eq(anc.master, nil)
     end,
   },
@@ -93,15 +93,15 @@ return {
     name = 'descendants of mid-chain == downstream incl self',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0,   0, FX)
-      wv:addFx(100, 0, FX)
-      wv:addFx(200, 0, FX)
-      wv:addWire{ type = 'audio', from = 'n1', to = 'n2' }
-      wv:addWire{ type = 'audio', from = 'n2', to = 'n3' }
-      wv:addWire{ type = 'audio', from = 'n3', to = 'master' }
-      local desc = wv:descendantsOf('n2')
-      t.deepEq(sortedKeys(desc), { 'master', 'n2', 'n3' })
-      t.eq(desc.n1, nil)
+      local a = wv:addFx(0,   0, FX)
+      local b = wv:addFx(100, 0, FX)
+      local c = wv:addFx(200, 0, FX)
+      wv:addWire{ type = 'audio', from = a, to = b }
+      wv:addWire{ type = 'audio', from = b, to = c }
+      wv:addWire{ type = 'audio', from = c, to = 'master' }
+      local desc = wv:descendantsOf(b)
+      t.deepEq(sortedKeys(desc), sortedKeys({ master = true, [b] = true, [c] = true }))
+      t.eq(desc[a], nil)
     end,
   },
 }

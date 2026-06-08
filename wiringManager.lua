@@ -1,7 +1,7 @@
 -- See docs/wiringManager.md for the model.
 -- @noindex
 
---invariant: fx-kind nodes carry fxId; addFxNode mints it via instantiateFxOnScratch
+--invariant: fx node id == its fxId (from instantiateFxOnScratch); source node id == track guid
 --invariant: CU bridges arrive at the applier with nil fxId; reconcileFXChain mints them
 --invariant: fxId is the stable bridge identity; snapshot/targetState match fxOrder by it
 --invariant: wm deletes an FX instance only when its owning node or CU bridge leaves the graph
@@ -13,9 +13,9 @@
 --shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + wm ownership/trackKey overlay. see docs/wiringManager.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'moveFxAcrossTracks', ... }
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
---invariant: authoring via wm:mutate — validate+swap+persist+fire; graph+wiringChanged always pass.
---invariant: master is graph.nodes['master']; freshGraph seeds it; DAG.validate enforces singleton.
---invariant: scratch is rm-owned (rm:scratchId/Track); wm parks fx + mirrors the undo blob there
+--invariant: authoring via wm:mutate — validate+swap+fire; REAPER realises via reconcile.
+--invariant: master is graph.nodes['master']; readGraph seeds it; DAG.validate enforces singleton.
+--invariant: scratch is rm-owned (rm:scratchId/Track); wm parks fx + mirrors addressing for undo
 --invariant: scratch hosts FX with no compile-graph track — disconnected or lowered-parked
 
 local util = require 'util'
@@ -41,30 +41,13 @@ end
 
 ----- Helpers
 
-local function freshGraph()
-  return {
-    nodes = {
-      master = { kind = 'master', pos = { x = 0, y = 0 },
-                 ports = { audio = { ins = 1, outs = 0 },
-                           midi  = { ins = 0, outs = 0 } } },
-    },
-    edges = {},
-    nextId = 1,
-  }
-end
-
-local function readPersisted()
-  local g = cm:get('wiringGraph')
-  if g and g.nodes then return g end
-  return freshGraph()
-end
-
 local compiledCache = nil  -- { graph, ctx, reach } | nil; cleared on every graph swap
 
 local function setGraph(g) userGraph = g; compiledCache = nil end
 
+-- read() drives snapshot, so this seeds userGraph from REAPER without forcing a load there.
 local function ensureLoaded()
-  if not userGraph then setGraph(readPersisted()) end
+  if not userGraph then setGraph(wm:read()) end
 end
 
 ----- compiled-graph cache: one clone+compile per structural change, pulled by wv
@@ -104,15 +87,10 @@ end
 
 ----------- PUBLIC
 
---contract: re-reads the persisted graph, fires wiringChanged{kind='load'}; scratch is rm-owned
+--contract: reconstructs the graph from REAPER via read, fires wiringChanged{kind='load'}
 function wm:load()
-  setGraph(readPersisted())
+  setGraph(self:read())
   fire('wiringChanged', { kind = 'load' })
-end
-
---contract: persists in-memory graph to project tier; mutate calls this, callers don't
-function wm:save()
-  cm:set('project', 'wiringGraph', userGraph)
 end
 
 --contract: returns a deep copy of the user graph; caller mutations never leak into wm state
@@ -138,7 +116,7 @@ function wm:edgeGain(idx)
 end
 
 --contract: clone-validate-swap; DAG.validate failure returns false,err with no state change;
---contract: on success persists and fires wiringChanged{kind='mutate'}
+--contract: on success swaps + fires wiringChanged{kind='mutate'}; REAPER realises via reconcile
 function wm:mutate(mutator)
   ensureLoaded()
   local draft = util.deepClone(userGraph)
@@ -146,7 +124,6 @@ function wm:mutate(mutator)
   local err = DAG.validate(draft)
   if err then return false, err end
   setGraph(draft)
-  self:save()
   fire('wiringChanged', { kind = 'mutate' })
   return true
 end
@@ -277,13 +254,12 @@ function wm:addFxNode(x, y, fx, opts)
   local newId, ok, err
   rm:transaction('wiring: add ' .. display, function()
     local io         = self:instantiateFxOnScratch(fx.ident)
+    if not io.fxId then ok, err = false, { code = 'fx_instantiate_failed', ident = fx.ident }; return end
     local autoSource = io.ins == 0 and not (opts and opts.autoSource == false)
     local sourceGuid = autoSource and self:createSourceTrack{ name = display } or nil
     ok, err = self:mutate(function(g)
-      local fxId = 'n' .. g.nextId
-      g.nextId = g.nextId + 1
-      newId = fxId
-      g.nodes[fxId] = {
+      newId = io.fxId
+      g.nodes[io.fxId] = {
         kind      = 'fx',
         pos       = { x = x, y = y },
         fxIdent   = fx.ident,
@@ -297,10 +273,8 @@ function wm:addFxNode(x, y, fx, opts)
         },
       }
       if sourceGuid then
-        local sourceId = 'n' .. g.nextId
-        g.nextId = g.nextId + 1
         local sp = (opts and opts.sourcePos) or { x = x - 140, y = y }
-        g.nodes[sourceId] = {
+        g.nodes[sourceGuid] = {
           kind        = 'source',
           pos         = { x = sp.x, y = sp.y },
           trackId   = sourceGuid,
@@ -308,9 +282,13 @@ function wm:addFxNode(x, y, fx, opts)
           ports       = { audio = { ins = 0, outs = 1 },
                           midi  = { ins = 0, outs = 1 } },
         }
-        util.add(g.edges, { type = 'midi', from = sourceId, to = fxId })
+        util.add(g.edges, { type = 'midi', from = sourceGuid, to = io.fxId })
       end
     end)
+    if ok then
+      persistNodePos(userGraph.nodes[io.fxId])
+      if sourceGuid then persistNodePos(userGraph.nodes[sourceGuid]) end
+    end
   end)
   if not ok then return nil, err end
   return newId
@@ -348,10 +326,9 @@ function wm:addSourceNode(opts)
   rm:transaction('wiring: add source', function()
     local guid = self:createSourceTrack{ name = opts.name }
     ok, err = self:mutate(function(g)
-      newId = 'n' .. g.nextId
-      g.nextId = g.nextId + 1
+      newId = guid
       local pos = opts.pos or { x = 0, y = 0 }
-      g.nodes[newId] = {
+      g.nodes[guid] = {
         kind        = 'source',
         pos         = { x = pos.x, y = pos.y },
         trackId   = guid,
@@ -360,6 +337,7 @@ function wm:addSourceNode(opts)
                         midi  = { ins = 0, outs = 1 } },
       }
     end)
+    if ok then persistNodePos(userGraph.nodes[guid]) end
   end)
   if not ok then return nil, err end
   return newId
@@ -429,31 +407,26 @@ end
 --contract: rm:tracks() overlaid with wm ownership — owned fx only, re-keyed by
 -- trackKey, send dsts remapped guid→trackKey; foreign tracks/fx/sends invisible. Read-only.
 function wm:snapshot(tracks)
-  ensureLoaded()
-  -- Ownership = current-graph guids ∪ persisted wiringOwnedFx set, so an fx
-  -- whose node was removed stays visible until wm:diff emits its delete.
+  -- No ensureLoaded: read() calls snapshot, recursion guard.
+  -- Ownership = persisted wiringOwnedFx ∪ current-graph guids; removed nodes stay visible until wm:diff deletes them.
   local ownedGuids = {}
   for k in pairs(cm:get('wiringOwnedFx') or {}) do ownedGuids[k] = true end
-  for _, n in pairs(userGraph.nodes) do
-    if n.kind == 'fx' then
-      if n.fxId             then ownedGuids[n.fxId]             = true end
-      if n.midiInBracketGuid  then ownedGuids[n.midiInBracketGuid]  = true end
-      if n.midiOutBracketGuid then ownedGuids[n.midiOutBracketGuid] = true end
-    end
-    if n.mergeGuids then
-      for _, g in pairs(n.mergeGuids) do ownedGuids[g] = true end
+  if userGraph then
+    for _, n in pairs(userGraph.nodes) do
+      if n.kind == 'fx' then
+        if n.fxId             then ownedGuids[n.fxId]             = true end
+        if n.midiInBracketGuid  then ownedGuids[n.midiInBracketGuid]  = true end
+        if n.midiOutBracketGuid then ownedGuids[n.midiOutBracketGuid] = true end
+      end
+      if n.mergeGuids then
+        for _, g in pairs(n.mergeGuids) do ownedGuids[g] = true end
+      end
     end
   end
 
-  -- (id → trackKey/trackKind) from wm state, not tags: source nodes carry their
-  -- track's id (== its trackKey); newTracks resolve through wiringTracks, scratch via rm.
+  -- (id → trackKey/trackKind): newTracks resolve through wiringTracks, scratch via rm.
+  -- Source tracks are inferred structurally below (no stored tag) — design § What read does.
   local keyByGuid, kindByKey = {}, {}
-  for _, n in pairs(userGraph.nodes) do
-    if n.kind == 'source' and n.trackId then
-      keyByGuid[n.trackId] = n.trackId
-      kindByKey[n.trackId] = 'sourceTrack'
-    end
-  end
   for trackKey, id in pairs(cm:get('wiringTracks') or {}) do
     keyByGuid[id], kindByKey[trackKey] = trackKey, 'newTrack'
   end
@@ -506,8 +479,18 @@ function wm:snapshot(tracks)
     return out
   end
 
+  local trackList = tracks or rm:tracks()
+  -- Pre-pass: assign trackKeys before building entries so send dsts resolve regardless of order.
+  -- Non-scratch/newTrack/master tracks are sources; read mints a source node only without incoming sends.
+  for _, tr in ipairs(trackList) do
+    if not keyByGuid[tr.id] and not tr.isMaster then
+      keyByGuid[tr.id] = tr.id
+      kindByKey[tr.id] = 'sourceTrack'
+    end
+  end
+
   local snap = {}
-  for _, tr in ipairs(tracks or rm:tracks()) do
+  for _, tr in ipairs(trackList) do
     local trackKey = keyByGuid[tr.id]
     if trackKey then
       local isScratch = kindByKey[trackKey] == 'scratch'
@@ -852,7 +835,7 @@ local function readGraph(snap)
   -- The master node is the master track's output (pair 1).
   for _, ref in ipairs((tails[MASTER_KEY].audio or {})[1] or {}) do addAudioEdge(ref, 'master', nil) end
 
-  local graph = { nodes = nodes, edges = edges, nextId = 1 }
+  local graph = { nodes = nodes, edges = edges }
   graph.components = DAG.classify(graph, feedbackSeeds)
   return graph
 end
@@ -1286,9 +1269,9 @@ function wm:applyOps(ops, label)
       end
     end
 
-    -- Stamps/clears mutated userGraph in place; persist + invalidate the compiled
-    -- cache without firing (no structural change, no reconcile re-entry).
-    if graphDirty then setGraph(userGraph); self:save() end
+    -- Stamps/clears mutated userGraph in place; invalidate the compiled cache
+    -- without firing (no structural change, no reconcile re-entry).
+    if graphDirty then setGraph(userGraph) end
 
     -- Persist the post-apply owned-guid set: anything in the graph is still
     -- in REAPER (orphans were deleted in reconcileFXChain and dropped from graph).
@@ -1298,10 +1281,9 @@ function wm:applyOps(ops, label)
     -- wiringTracks now reflects this pass's create/delete (scratch is rm-owned, not keyed here).
     cm:set('project', 'wiringTracks', wiringTracks)
 
-    -- Mirror to scratch P_EXT inside the transaction so REAPER's undo captures the
-    -- graph + addressing alongside FX/track ops; pollUndo watches lastScratchRaw.
+    -- Mirror addressing to scratch P_EXT inside the transaction so REAPER's undo captures
+    -- it alongside FX/track ops; pollUndo watches lastScratchRaw for divergence.
     local scratch = rm:scratchTrack()
-    cm:writeTrackKey(scratch, 'wiringGraph',   userGraph)
     cm:writeTrackKey(scratch, 'wiringOwnedFx', owned)
     cm:writeTrackKey(scratch, 'wiringTracks',  wiringTracks)
     lastScratchRaw = cm:readTrackRaw(scratch)
@@ -1378,10 +1360,6 @@ function wm:fastGainCommit(edgeIdx, gain)
     edge.ops = edge.ops or {}
     edge.ops.gain = gain
     self:pokeEdgeGain(edgeIdx, gain)
-    self:save()
-    local scratch = rm:scratchTrack()
-    cm:writeTrackKey(scratch, 'wiringGraph', userGraph)
-    lastScratchRaw = cm:readTrackRaw(scratch)
   end)
   return true
 end
@@ -1391,23 +1369,14 @@ function wm:listInstalledFX()
   return rm:installedFx()
 end
 
---contract: on scratch-chunk divergence, restores the cm project tier and fires load
+--contract: on scratch-chunk divergence, restores addressing + re-reads from REAPER, fires load
 -- see docs/wiringManager.md § pollUndo
 function wm:pollUndo()
   local scratch = rm:scratchTrack()   -- handle from rm; the heartbeat lives in rm:pollUndo
   local raw = cm:readTrackRaw(scratch)
   if raw == lastScratchRaw then return end
-  local mirrored = cm:readTrackKey(scratch, 'wiringGraph')
-  if not mirrored then
-    -- Fresh/empty scratch. If we had mirrored before, it was lost (manual delete or
-    -- undo past creation) and rm re-minted it — reconcile to rebuild + re-park fx.
-    if lastScratchRaw then
-      lastScratchRaw = nil
-      fire('wiringChanged', { kind = 'load' })
-    end
-    return
-  end
-  cm:set('project', 'wiringGraph',  mirrored)
+  -- REAPER routing changed under us (undo/redo/manual edit). The graph lives in the
+  -- routing now, so restore only the addressing mirror and re-read; load rebuilds the graph.
   cm:set('project', 'wiringOwnedFx', cm:readTrackKey(scratch, 'wiringOwnedFx') or {})
   cm:set('project', 'wiringTracks',  cm:readTrackKey(scratch, 'wiringTracks') or {})
   setGraph(nil)

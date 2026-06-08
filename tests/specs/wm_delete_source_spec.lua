@@ -24,12 +24,12 @@ end
 -- well-formed graph. JS:plain has ins=2, so addFxNode spawns no auto-source.
 local function seedGraph(wm, guid)
   reaper:setFxIO('JS:plain', { ins = 2, outs = 2 })
-  wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
+  local fxId = wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
   wm:mutate(function(g)
     g.nodes.src = { kind = 'source', trackId = guid, pos = { x = 0, y = 0 },
                     ports = { audio = { ins = 0, outs = 1 },
                               midi  = { ins = 0, outs = 1 } } }
-    util.add(g.edges, { type = 'midi', from = 'src', to = 'n1' })
+    util.add(g.edges, { type = 'midi', from = 'src', to = fxId })
   end)
 end
 

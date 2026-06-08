@@ -1,20 +1,27 @@
 # wiringManager
 
-Persistence + validation seam *and* the compile pipeline for the
-wiring page. The page edits through wm, wm gates writes through
-`DAG.validate` and persists to cm; on every change wm reconciles the
-derived REAPER topology against the live project. For the graph model
-and the four anchor decisions (reconcile authority, live compile,
-ownership marker, foreign adoption) see `docs/wiring.md`.
+Validation seam *and* the compile pipeline for the wiring page. The
+page edits through wm, wm gates writes through `DAG.validate`; on every
+change wm reconciles the derived REAPER topology against the live
+project. **REAPER routing is the store** — `wm:read` reconstructs the
+graph from it on load, so there is no persisted graph blob (see *Read is
+the store*). For the graph model and the anchor decisions (reconcile
+authority, live compile, foreign adoption) see `docs/wiring.md` and the
+implicit-graph design `design/wiring-implicit-graph.md`.
 
-## One project-tier cm key
+## Read is the store
 
-The user graph is `{ nodes, edges, _nextId }` — a small structured
-value with internal cross-references. Storing nodes and edges in
-separate cm keys would open a window where a partial load can yield
-an edge pointing at a node that hasn't been read in yet, and where
-the `_nextId` allocator can desync with the node table. One blob,
-one load, one write — `wiringGraph` is welded.
+There is no persisted user-graph blob. REAPER routing *is* the graph;
+`wm:read` reconstructs `{ nodes, edges }` from it (channel/pin maps,
+MIDI buses, CU collapse — see `design/wiring-implicit-graph.md`), and
+`wm:load`/`ensureLoaded` source the in-memory graph from that read.
+Node identity follows: an fx node is keyed by its rm `fxId`, a source
+by its track guid, so the id survives a reload (the read re-derives it,
+so there is no allocator and no `nextId`). What REAPER cannot store is
+**decoration** (node positions) — that rides the rm meta store, keyed by
+the same guids; absent meta defaults to `(0,0)`. The only project-tier
+cm keys left are *addressing* (`wiringOwnedFx`, `wiringTracks`), never
+the graph itself.
 
 ## The mutate transaction
 
@@ -23,9 +30,11 @@ Every authoring gesture funnels through `wm:mutate(fn)`:
 1. clone the current graph into a draft
 2. caller mutates the draft
 3. `DAG.validate` checks the result
-4. on pass — swap, persist via cm, emit `wiringChanged`
-5. on fail — return `false, err`; in-memory state and on-disk state
-   are both untouched, no signal fired
+4. on pass — swap and emit `wiringChanged`; REAPER realises via the
+   reconcile the signal drives (no graph is persisted — the routing
+   write *is* the persistence)
+5. on fail — return `false, err`; in-memory state is untouched and no
+   signal fires, so nothing reaches REAPER
 
 Clone-then-validate-then-swap means a bad mutator (or a logically
 inconsistent intermediate state during a multi-step edit) never lands
@@ -98,8 +107,8 @@ cached or persisted — realisation lives in REAPER, re-read on demand.
 ## Master is a regular node
 
 The master sits in `graph.nodes['master']` with `kind='master'`,
-materialised by `freshGraph()` on first load of an empty project.
-Not a special parallel field. The singleton constraint is enforced
+materialised by `readGraph` on every load — an empty project reads back
+a lone master node. Not a special parallel field. The singleton constraint is enforced
 by `DAG.validate` — same mechanism that would catch a buggy mutator
 minting a second master, rather than two storage shapes encoding the
 same rule.
@@ -183,8 +192,11 @@ certain fields exist and which side fills them:
 inserts a track via `rm:addTrack` immediately, bypassing
 clone/validate/swap, and returns its id. The trackKey for a source host
 is the track's own id (a singleton class: one physical track per source
-node), so it needs no `wiringTracks` entry; `wm:snapshot` derives the
-trackKey from the graph's `source` nodes (`node.trackId`), which is that id.
+node), so it needs no `wiringTracks` entry. Source identity is *not*
+stored: `wm:snapshot` treats every non-scratch/newTrack/master project
+track as a source keyed by its guid, and `readGraph` mints a source node
+only for one with no incoming sends — so a hand-added track is adopted,
+not foreign.
 
 ## diff op ordering
 
@@ -222,7 +234,8 @@ no mutate/signal/undo block. `gainRouting` resolves the edge to a target;
 
 Each returns `false` when nothing hosts the edge yet (no guid, dead track, or
 no matching send); the caller materialises before the next poke. `fastGainCommit`
-wraps the same poke plus the scratch mirror in one `rm:transaction`.
+wraps the same poke in one `rm:transaction` — the send's `D_VOL` write is the
+store, recovered by `read` (there is no graph to persist alongside it).
 
 ## Merge CU
 
@@ -238,11 +251,13 @@ instead coalesce onto one dest bus with no CU (see `docs/DAG.md § MIDI`).
 wm and rm speak different names for a track. rm hands out an opaque `id`;
 wm thinks in `trackKey` (the partition class a node belongs to, computed by
 DAG before any track exists). `wiringTracks` is the bridge: a project-tier
-`{ trackKey → id }` map persisted alongside `wiringGraph`/`wiringOwnedFx`.
+`{ trackKey → id }` map persisted alongside `wiringOwnedFx` (the graph itself
+is not persisted — see *Read is the store*).
 
 - **Sources** are *not* in the map. A source is a singleton class, so its
-  trackKey *is* its id; an unmapped key resolves to itself. snapshot recovers
-  source identity from the graph's `source` nodes (`node.trackId`).
+  trackKey *is* its id; an unmapped key resolves to itself. snapshot infers
+  source identity structurally — any non-scratch/newTrack/master track is a
+  source keyed by its guid — so no stored tag is needed.
 - **newTracks** are emergent merge classes with no 1:1 graph node, so the
   applier stamps `wiringTracks[trackKey] = id` when it mints the track and
   clears it on delete.
@@ -268,15 +283,16 @@ back when REAPER rewinds. Two stores need this, split by owner:
   scratch exists and, when its fx-meta mirror diverges from rm's watermark,
   pulls it back into projext via `rm:resyncFxMeta`. This is the permanent
   job — the `primary`/`split` metadata is not recoverable from routing.
-- **`wm:pollUndo`** mirrors the `wiringGraph`/`wiringOwnedFx`/`wiringTracks`
-  blob (inside the apply transaction) and, when the scratch chunk diverges
-  from `lastScratchRaw`, restores the cm project tier and fires
-  `wiringChanged{kind='load'}`. A scratch lost to a manual delete or
-  undo-past-creation is re-minted empty by the heartbeat; wm then sees the
-  missing mirror and fires `load` once so reconcile rebuilds it and re-parks
-  fx. This job is transitory: once the implicit-graph work retires the cm
-  blob (the graph reverses natively as REAPER routing), `wm:pollUndo`
-  collapses and only `rm:pollUndo` remains.
+- **`wm:pollUndo`** mirrors the `wiringOwnedFx`/`wiringTracks` addressing
+  (inside the apply transaction) and, when the scratch chunk diverges from
+  `lastScratchRaw`, restores those keys and fires `wiringChanged{kind='load'}`
+  — which re-reads the graph straight from REAPER routing. There is no blob
+  to restore: the routing itself already reversed natively under the undo, so
+  the re-read picks up the rewound state. A scratch lost to a manual delete or
+  undo-past-creation is re-minted empty by the heartbeat, diverging the chunk,
+  so the same `load` fires and reconcile re-parks fx. With the graph blob
+  retired this is now only the addressing mirror; once `wiringTracks` follows,
+  `wm:pollUndo` collapses into `rm:pollUndo` entirely.
 
 ## The reaper seam
 

@@ -10,37 +10,30 @@ end
 
 return {
   {
-    name = 'fresh project: graph has master node, empty edges, nextId=1',
+    name = 'fresh project: graph has master node, empty edges',
     run = function(harness)
       local _, wm = mkWm(harness)
       local g = wm:graph()
       t.truthy(g.nodes.master,             'master auto-materialised')
       t.eq(g.nodes.master.kind, 'master',  'master.kind')
       t.eq(#g.edges, 0,                    'no edges in fresh graph')
-      t.eq(g.nextId, 1,                   'allocator at 1')
     end,
   },
   {
-    name = 'mutate persists via cm; fresh wm instance reads it back',
+    name = 'load reconstructs the graph from REAPER routing (read is the store)',
     run = function(harness)
       local h, wm = mkWm(harness)
-      local ok = wm:mutate(function(g)
-        g.nodes['s'] = { kind = 'source', trackId = 'guid-s',
-                         pos = { x = 0, y = 0 },
-                         ports = { audio = { ins = 0, outs = 1 },
-                                   midi  = { ins = 0, outs = 1 } } }
-        g.nextId = 2
-      end)
-      t.truthy(ok, 'mutate succeeded')
+      -- A bare project track with no incoming sends is a source node, keyed by its guid.
+      local track = { __label = 'src' }
+      table.insert(h.reaper._state.projectTracks, track)
+      h.reaper._state.trackGuids[track] = 'guid-s'
 
-      local cm2 = util.instantiate('configManager')
-      cm2:setContext('take1')
-      local wm2 = util.instantiate('wiringManager', { cm = cm2 })
-      local g2 = wm2:graph()
-      t.truthy(g2.nodes.s,         'source node round-tripped')
-      t.eq(g2.nodes.s.trackId, 'guid-s')
-      t.eq(g2.nextId, 2,          'nextId round-tripped')
-      t.truthy(g2.nodes.master,    'master survives round-trip')
+      wm:load()
+      local g = wm:graph()
+      t.truthy(g.nodes['guid-s'],         'source recovered from REAPER, keyed by track guid')
+      t.eq(g.nodes['guid-s'].kind, 'source')
+      t.eq(g.nodes['guid-s'].trackId, 'guid-s')
+      t.truthy(g.nodes.master,            'master present')
     end,
   },
   {

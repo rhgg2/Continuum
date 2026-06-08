@@ -138,26 +138,27 @@ return {
     end,
   },
   {
-    name = 'sends to a managed dst surface as {to=trackKey, kind=audio|midi}; foreign dst dropped',
+    name = 'sends surface as {to=trackKey, kind=audio|midi}; a bare project track is adopted as a dst',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       local src = seedSourceTrack(h, wm, 'guid-A')
       local dst = seedSourceTrack(h, wm, 'guid-B')
-      local foreign = { __label = 'foreign' }
-      h.reaper._state.projectTracks[#h.reaper._state.projectTracks+1] = foreign
-      h.reaper._state.trackGuids[foreign] = 'guid-foreign'
+      -- A bare project track (no graph node, no wiringTracks entry) is no longer foreign:
+      -- read adopts it as a source, so sends to it are kept. design § What read does.
+      local adopted = { __label = 'adopted' }
+      h.reaper._state.projectTracks[#h.reaper._state.projectTracks+1] = adopted
+      h.reaper._state.trackGuids[adopted] = 'guid-adopted'
       h.reaper:addSend(src, dst,     { type = 'audio' })
-      h.reaper:addSend(src, foreign, { type = 'audio' })
+      h.reaper:addSend(src, adopted, { type = 'audio' })
       h.reaper:addSend(src, dst,     { type = 'midi'  })
       local snap = wm:snapshot()
-      t.eq(#snap['guid-A'].sends, 2, 'foreign-dst send dropped')
-      local kinds = {}
-      for _, s in ipairs(snap['guid-A'].sends) do
-        t.eq(s.to, 'guid-B')
-        kinds[s.kind] = true
-      end
-      t.truthy(kinds.audio and kinds.midi, 'both send kinds preserved')
+      t.eq(#snap['guid-A'].sends, 3, 'all sends kept — the bare track is adopted, not dropped')
+      local toCount = {}
+      for _, s in ipairs(snap['guid-A'].sends) do toCount[s.to] = (toCount[s.to] or 0) + 1 end
+      t.eq(toCount['guid-B'], 2,        'two sends to guid-B (audio + midi)')
+      t.eq(toCount['guid-adopted'], 1,  'send to the adopted track kept')
+      t.eq(snap['guid-adopted'].trackKind, 'sourceTrack', 'bare track adopted as a source')
     end,
   },
   {

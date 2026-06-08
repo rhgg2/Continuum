@@ -12,9 +12,10 @@ local function mkWv(harness)
 end
 
 local function mkAudioWire(wv)
-  wv:addFx(0,   0, FX)
-  wv:addFx(100, 0, FX)
-  wv:addWire{ type = 'audio', from = 'n1', to = 'n2' }
+  local a = wv:addFx(0,   0, FX)
+  local b = wv:addFx(100, 0, FX)
+  wv:addWire{ type = 'audio', from = a, to = b }
+  return a, b
 end
 
 return {
@@ -50,9 +51,9 @@ return {
     name = 'setEdgeGain is a no-op on a non-audio edge',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0,   0, FX)
-      wv:addFx(100, 0, FX)
-      wv:addWire{ type = 'midi', from = 'n1', to = 'n2' }
+      local a = wv:addFx(0,   0, FX)
+      local b = wv:addFx(100, 0, FX)
+      wv:addWire{ type = 'midi', from = a, to = b }
       wv:setEdgeGain(1, 0.5)
       t.eq(wv:edgeGain(1), 1.0, 'midi reads as unity (non-audio default)')
       t.eq(wv:graph().edges[1].ops, nil, 'no ops written to midi edge')
@@ -70,9 +71,9 @@ return {
     name = 'edgeGain returns 1.0 for non-audio edge regardless of ops',
     run = function(harness)
       local _, wv = mkWv(harness)
-      wv:addFx(0,   0, FX)
-      wv:addFx(100, 0, FX)
-      wv:addWire{ type = 'midi', from = 'n1', to = 'n2' }
+      local a = wv:addFx(0,   0, FX)
+      local b = wv:addFx(100, 0, FX)
+      wv:addWire{ type = 'midi', from = a, to = b }
       -- Manually plant ops.gain through the graph; getter still ignores it
       -- because the edge is non-audio (defensive — design says gain is
       -- audio-only). This pins that contract.
