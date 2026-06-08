@@ -143,6 +143,7 @@ local specs = {
   'wm_live_spec',
   'wm_undo_spec',
   'wm_fx_locations_spec',
+  'wm_read_spec',
   'rm_tracks_spec',
   'rm_fx_read_spec',
   'rm_fx_write_spec',

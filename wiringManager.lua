@@ -9,12 +9,12 @@
 --shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
 --shape: snapshotSend = { to=trackKey, kind='audio'|'midi', gain?=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }
 --shape: snapshotFxOrigin = {kind='node',id=string}|{kind='bracketIn'|'bracketOut',id=string}|{kind='merge',consumer=string,trackKey=trackKey}
---shape: snapshotFxEntry = { id?=string, ident=string, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,outDisabled=bool}, pinMaps?=snapshotPinMap }
+--shape: snapshotFxEntry = { id?=string, ident=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,outDisabled=bool}, pinMaps?=snapshotPinMap }  -- ins/outs are audio pair counts, for read
 --shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + wm ownership/trackKey overlay. see docs/wiringManager.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'moveFxAcrossTracks', ... }
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
---invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
---invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
+--invariant: authoring via wm:mutate — validate+swap+persist+fire; graph+wiringChanged always pass.
+--invariant: master is graph.nodes['master']; freshGraph seeds it; DAG.validate enforces singleton.
 --invariant: scratch is rm-owned (rm:scratchId/Track); wm parks fx + mirrors the undo blob there
 --invariant: scratch hosts FX with no compile-graph track — disconnected or lowered-parked
 
@@ -110,7 +110,7 @@ function wm:load()
   fire('wiringChanged', { kind = 'load' })
 end
 
---contract: persists the current in-memory graph to the project tier; mutate calls this, callers normally don't
+--contract: persists in-memory graph to project tier; mutate calls this, callers don't
 function wm:save()
   cm:set('project', 'wiringGraph', userGraph)
 end
@@ -446,7 +446,7 @@ function wm:snapshot()
   keyByGuid[scratch], kindByKey[SCRATCH_KEY] = SCRATCH_KEY, 'scratch'
 
   local function snapFx(fx)
-    local entry = { id = fx.id, ident = fx.ident }
+    local entry = { id = fx.id, ident = fx.ident, ins = fx.ins, outs = fx.outs }
     if fx.pinMaps and (next(fx.pinMaps.ins) or next(fx.pinMaps.outs)) then
       entry.pinMaps = fx.pinMaps
     end
@@ -534,6 +534,7 @@ local function projectEntry(spec, compileNodes, scratchGuid)
         entry.origin = { kind = 'merge', consumer = node.originConsumer, trackKey = node.originTrackKey }
       else
         entry.origin = { kind = 'node', id = id }
+        entry.ins, entry.outs = node.ports.audio.ins, node.ports.audio.outs
         if not isJS(node.fxIdent) then
           local bus = spec.fxMidiBus and spec.fxMidiBus[id]
           entry.midi = { inBus = bus and bus.inBus or 0, outBus = bus and bus.outBus or 0,
@@ -582,6 +583,138 @@ function wm:targetState()
     out[trackKey] = projectEntry(entry, nodes, scratchGuid)
   end
   return out
+end
+
+----- read : wiringSnapshot -> userGraph (design/wiring-implicit-graph.md § Plan)
+
+-- Passes 1-2: audio routing (chain + sends + parent send) + source->fx midi relay.
+-- Node ids are rm ids. CU collapse, midi-bus chains, gain recovery: TODO. Pure.
+local MASTER_KEY = '__master__'
+local function readGraph(snap)
+  local nodes = {
+    master = { kind = 'master',
+               ports = { audio = { ins = 1, outs = 0 }, midi = { ins = 0, outs = 0 } } },
+  }
+  local edges = {}
+
+  -- Incoming routing per track: explicit audio sends + the parent send. REAPER
+  -- pins the parent send to channels 1-2, so its source is always pair 1.
+  local incoming = {}
+  local function addIncoming(toKey, inc)
+    incoming[toKey] = incoming[toKey] or {}
+    util.add(incoming[toKey], inc)
+  end
+  for fromKey, entry in pairs(snap) do
+    for _, s in ipairs(entry.sends or {}) do
+      if s.kind == 'audio' then
+        addIncoming(s.to, { from = fromKey, srcPair = s.srcChan // 2 + 1, dstPair = s.dstChan // 2 + 1 })
+      end
+    end
+    if entry.mainSend and entry.mainSend.on then
+      addIncoming(MASTER_KEY, { from = fromKey, toMaster = true, srcPair = 1,
+                                dstPair = (entry.mainSend.tgtOffset or 0) // 2 + 1 })
+    end
+  end
+
+  -- Non-master tracks in sender-before-receiver order (Kahn over explicit
+  -- sends); the master track walks last, fed by every parent send.
+  local function nonMasterOrder()
+    local indeg, children, keys = {}, {}, {}
+    for k, e in pairs(snap) do
+      if e.trackKind ~= 'master' and e.trackKind ~= 'scratch' then
+        keys[#keys + 1] = k; indeg[k] = 0; children[k] = {}
+      end
+    end
+    for _, k in ipairs(keys) do
+      for _, inc in ipairs(incoming[k] or {}) do
+        if not inc.toMaster and indeg[inc.from] ~= nil then
+          indeg[k] = indeg[k] + 1
+          util.add(children[inc.from], k)
+        end
+      end
+    end
+    local ready, out = {}, {}
+    for _, k in ipairs(keys) do if indeg[k] == 0 then util.add(ready, k) end end
+    local placed = {}
+    while #ready > 0 do
+      table.sort(ready)
+      local k = table.remove(ready, 1)
+      util.add(out, k); placed[k] = true
+      for _, c in ipairs(children[k]) do
+        indeg[c] = indeg[c] - 1
+        if indeg[c] == 0 then util.add(ready, c) end
+      end
+    end
+    return out
+  end
+
+  local tails = {}  -- trackKey -> liveAudio { [pair] = producerRef[] }; ref = { node, port? }
+  local function walkTrack(trackKey, entry)
+    local liveAudio, midiProducer = {}, nil
+    local function feed(pair, ref)
+      liveAudio[pair] = liveAudio[pair] or {}
+      util.add(liveAudio[pair], ref)
+    end
+
+    local inc = incoming[trackKey]
+    if inc then
+      for _, i in ipairs(inc) do
+        for _, ref in ipairs((tails[i.from] or {})[i.srcPair] or {}) do feed(i.dstPair, ref) end
+      end
+    elseif entry.trackKind ~= 'master' then
+      -- No inputs => a source: emits audio on pair 1 and owns the track's midi.
+      local sid = entry.id
+      nodes[sid] = { kind = 'source', trackId = entry.id,
+                     ports = { audio = { ins = 0, outs = 1 }, midi = { ins = 0, outs = 1 } } }
+      feed(1, { node = sid, port = 1 })
+      midiProducer = { node = sid }
+    end
+
+    for _, fxe in ipairs(entry.fx or {}) do
+      local id, isCu = fxe.id, fxe.ident == CU_IDENT
+      nodes[id] = { kind = 'fx', fxIdent = fxe.ident, fxId = id, isCU = isCu or nil,
+                    ports = { audio = { ins = fxe.ins or 0, outs = fxe.outs or 0 },
+                              midi = { ins = 1, outs = 1 } } }
+      local pinMaps = fxe.pinMaps or { ins = {}, outs = {} }
+      for port, prs in pairs(pinMaps.ins or {}) do
+        for _, pair in ipairs(prs) do
+          for _, ref in ipairs(liveAudio[pair] or {}) do
+            util.add(edges, { type = 'audio', from = ref.node, fromPort = ref.port, to = id, toPort = port })
+          end
+        end
+      end
+      -- Single MIDI stream relay; CU midi routing is recovered at collapse (pass 3).
+      if midiProducer and not isCu then
+        util.add(edges, { type = 'midi', from = midiProducer.node, to = id })
+      end
+      for port, prs in pairs(pinMaps.outs or {}) do
+        for _, pair in ipairs(prs) do liveAudio[pair] = { { node = id, port = port } } end
+      end
+      if not isCu then
+        midiProducer = (fxe.midi and not fxe.midi.outDisabled) and { node = id } or nil
+      end
+    end
+
+    tails[trackKey] = liveAudio
+  end
+
+  for _, k in ipairs(nonMasterOrder()) do walkTrack(k, snap[k]) end
+  walkTrack(MASTER_KEY, snap[MASTER_KEY] or { trackKind = 'master', fx = {} })
+
+  -- The master node is the master track's output (pair 1).
+  for _, ref in ipairs(tails[MASTER_KEY][1] or {}) do
+    util.add(edges, { type = 'audio', from = ref.node, fromPort = ref.port, to = 'master' })
+  end
+
+  return { nodes = nodes, edges = edges, nextId = 1 }
+end
+
+wm.readGraph = readGraph  -- exposed for unit tests; wm:read drives it from the live snapshot
+
+--contract: reconstructs the user graph from REAPER routing; node ids are rm ids
+-- (passes 1-2: audio routing + source->fx midi relay; CU collapse + quarantine TODO)
+function wm:read()
+  return readGraph(self:snapshot())
 end
 
 local function sendKey(s)
@@ -725,11 +858,8 @@ function wm:diff(target, snap)
     end
   end
 
-  -- Drains/deletes last so any final reads of going-away tracks have already
-  -- run. A snap entry is abandoned if absent from target, or if its track
-  -- changed: newTrack hosts get deleteTrack (which kills any owned FX with the
-  -- track); undeletable hosts (sourceTrack/master/scratch) with surviving
-  -- owned FX need an explicit setFXChain to [] to drain them.
+  -- Drain/delete last so final reads of going-away tracks have run first.
+  -- newTrack hosts get deleteTrack; undeletable hosts (source/master/scratch) need setFXChain [] to drain.
   for trackKey, s in pairs(snap) do
     local abandoned = not target[trackKey] or trackChanged[trackKey]
     if abandoned then
@@ -1116,12 +1246,12 @@ function wm:pollUndo()
   fire('wiringChanged', { kind = 'load' })
 end
 
---contract: one reconcile pass — diff targetState against snapshot and applyOps the result under the given undo label
+--contract: one reconcile pass — diff targetState vs snapshot, applyOps under the given undo label
 function wm:reconcile(label)
   self:applyOps(self:diff(self:targetState(), self:snapshot()), label or 'wiring: reconcile')
 end
 
---contract: idempotent. Subscribes wm to its own wiringChanged so every mutate/load drives wm:reconcile, then runs one immediate pass to put REAPER in sync with the persisted graph.
+--contract: idempotent; hooks wiringChanged so mutate/load reconciles + one immediate sync pass.
 function wm:enableLive(label)
   if liveLabel then return end
   liveLabel = label or 'wiring: apply'
