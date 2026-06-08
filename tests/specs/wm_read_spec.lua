@@ -307,4 +307,28 @@ return {
       t.deepEq(byNodes, { ['fp,fq'] = 'feedback' })
     end,
   },
+  {
+    -- Positions live in the rm meta store (fx GUID for fx-nodes, track GUID for source/master) —
+    -- orthogonal to routing; wm:read stamps them back after the pure routing read.
+    name = 'read: node positions round-trip through the decoration store',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:enableLive()
+      seedSource(h, 'guid-A')
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        g.nodes.f = fx('VST:F', { fxId='g-f' })
+        util.add(g.edges, { type='audio', from='s', to='f' })
+        util.add(g.edges, { type='audio', from='f', to='master' })
+      end)
+      wm:moveNodes({ s = { x=10, y=20 }, f = { x=30, y=40 }, master = { x=50, y=60 } })
+
+      local rg = wm:read()
+      local fxId
+      for id, n in pairs(rg.nodes) do if n.kind == 'fx' then fxId = id end end
+      t.deepEq(rg.nodes['guid-A'].pos, { x=10, y=20 }, 'source pos from track meta')
+      t.deepEq(rg.nodes[fxId].pos,     { x=30, y=40 }, 'fx pos from fx meta')
+      t.deepEq(rg.nodes.master.pos,    { x=50, y=60 }, 'master pos from master track meta')
+    end,
+  },
 }

@@ -151,6 +151,35 @@ function wm:mutate(mutator)
   return true
 end
 
+-- Positions are decoration, not routing: persist to the rm meta store (fx GUID for fx-nodes,
+-- track GUID for source/master) — orthogonal to the differ, so a pos-only move skips reconcile.
+local function persistNodePos(node)
+  if node.kind == 'fx' then
+    if node.fxId then rm:assignFx(node.fxId, { pos = node.pos }) end
+  elseif node.kind == 'master' then
+    local masterId = rm:masterId()
+    if masterId then rm:assignTrack(masterId, { pos = node.pos }) end
+  elseif node.trackId then
+    rm:assignTrack(node.trackId, { pos = node.pos })
+  end
+end
+
+--contract: writes node.pos per {[id]={x,y}} + persists to the rm meta store; missing ids skipped
+function wm:moveNodes(moves)
+  local ok, err = self:mutate(function(g)
+    for id, p in pairs(moves) do
+      local node = g.nodes[id]
+      if node then node.pos.x, node.pos.y = p.x, p.y end
+    end
+  end)
+  if not ok then return false, err end
+  for id in pairs(moves) do
+    local node = userGraph.nodes[id]
+    if node then persistNodePos(node) end
+  end
+  return true
+end
+
 --contract: read JSFX desc file for ident from REAPER's Effects dir; nil if non-JS or read fails
 function wm:readJSFXContent(ident)
   if not (ident and ident:sub(1, 3) == 'JS:') then return nil end
@@ -399,7 +428,7 @@ end
 
 --contract: rm:tracks() overlaid with wm ownership — owned fx only, re-keyed by
 -- trackKey, send dsts remapped guid→trackKey; foreign tracks/fx/sends invisible. Read-only.
-function wm:snapshot()
+function wm:snapshot(tracks)
   ensureLoaded()
   -- Ownership = current-graph guids ∪ persisted wiringOwnedFx set, so an fx
   -- whose node was removed stays visible until wm:diff emits its delete.
@@ -478,7 +507,7 @@ function wm:snapshot()
   end
 
   local snap = {}
-  for _, tr in ipairs(rm:tracks()) do
+  for _, tr in ipairs(tracks or rm:tracks()) do
     local trackKey = keyByGuid[tr.id]
     if trackKey then
       local isScratch = kindByKey[trackKey] == 'scratch'
@@ -830,10 +859,31 @@ end
 
 wm.readGraph = readGraph  -- exposed for unit tests; wm:read drives it from the live snapshot
 
+-- Decoration is orthogonal to routing: positions live in the rm meta store, never the routing
+-- snapshot. Stamp them back after the pure read; absent meta (never-placed) defaults to origin.
+local function stampPositions(g, tracks)
+  local trackPos, fxPos = {}, {}
+  for _, tr in ipairs(tracks) do
+    if tr.pos then trackPos[tr.id] = tr.pos end
+    for _, f in ipairs(tr.fx) do if f.pos then fxPos[f.id] = f.pos end end
+  end
+  local masterId = rm:masterId()
+  for id, node in pairs(g.nodes) do
+    local pos
+    if     node.kind == 'fx'     then pos = fxPos[id]
+    elseif node.kind == 'master' then pos = masterId and trackPos[masterId]
+    else                              pos = trackPos[id] end
+    node.pos = pos or { x = 0, y = 0 }
+  end
+end
+
 --contract: reconstructs the user graph from REAPER routing; node ids are rm ids
--- (3c: + component classification — bus-aware + feedback quarantine)
+-- (3c: + component classification — bus-aware + feedback quarantine; decoration stamped from meta)
 function wm:read()
-  return readGraph(self:snapshot())
+  local tracks = rm:tracks()
+  local g = readGraph(self:snapshot(tracks))
+  stampPositions(g, tracks)
+  return g
 end
 
 local function sendKey(s)

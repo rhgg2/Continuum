@@ -170,14 +170,9 @@ function wv:samplerTrack(nodeId)
   return wm:fxTrack(node.fxId)
 end
 
---contract: atomically writes node.pos for each {[id]={x,y}} in logical canvas units; missing ids skipped
+--contract: writes + persists node.pos for {[id]={x,y}} via wm:moveNodes; missing ids skipped
 function wv:moveNodes(moves)
-  return wm:mutate(function(g)
-    for id, p in pairs(moves) do
-      local node = g.nodes[id]
-      if node then node.pos.x, node.pos.y = p.x, p.y end
-    end
-  end)
+  return wm:moveNodes(moves)
 end
 
 --contract: appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate

@@ -312,6 +312,15 @@ reading it back:
 This makes `read ∘ compile = id` total over sourceless islands — the prerequisite that lets
 step 4 retire the blob without losing a half-built, not-yet-connected patch.
 
+**Step 4 is underway. Commit A (decoration round-trips through read) is landed**
+(`wm_read_spec` pos round-trip). Node positions persist to the rm meta store the spike already
+built — fx GUID for fx-nodes, track GUID for source/master — orthogonal to the routing differ:
+a pos-only move changes no routing, so it skips reconcile and writes straight through
+`rm:assignFx`/`assignTrack` (any non-native field rides `util.clone` to meta for free, no new
+API). `wm:moveNodes` is the sole position writer (wv delegates to it); `wm:read` stamps positions
+back after the pure routing read, sharing one `rm:tracks()` scan with the snapshot. The blob stays
+authoritative — A only proves decoration survives `read`, de-risking the B cutover that drops it.
+
 ## Open questions / risks
 
 - ~~**Per-FX metadata channel**~~ — *resolved* (`design/fx-metadata-spike.md`):
