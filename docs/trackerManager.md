@@ -211,7 +211,13 @@ tm also forwards the reconciliation signals it receives from mm
 (`takeSwapped`, `notesDeduped`, `uuidsReassigned`) to its own subscribers,
 so layers above tm needn't reach into mm.
 
-Reentrancy-guarded by `rebuilding`. Steps:
+Reentrancy-guarded by `rebuilding`. Also guarded against a dead take: if
+`mm:take()` is nil (take deleted under us) `rebuild` returns immediately,
+retaining tv's last rendered frame. This is the same liveTake guard every
+other mm consumer applies; without it a foreign-track `configChanged` fired
+during arrange's take-delete sequence would crash on a nil resolution.
+
+Steps:
 
 1. **Seed + normalise notes.** Walk mm notes once. Any note lacking
    `detune`/`delay` is seeded with `0` via metadata-only `assignNote`

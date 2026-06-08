@@ -338,6 +338,31 @@ return {
   {
     -- Regression: opening a tail (endppq → util.OPEN) must keep attached PAs.
     -- stampEndppq's provisional ppq+1 must not flow into resizeNote as cullEnd.
+    name = 'dormant tracker (dead take) ignores a foreign configChanged instead of rebuilding',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                       delay = 0, ppqL = 0, endppqL = 240 } },
+        },
+      }
+      t.eq(#h.tm:getChannel(1).columns.notes[1].events, 1, 'note present before take death')
+
+      -- Take deleted under us: mm self-heals take() to nil but keeps stale
+      -- notes (the dangling-take seam). resolution() now reads nil.
+      h.fm:unload()
+      t.falsy(h.tm:currentTake(), 'take is dead')
+
+      -- Arrange writes a foreign-track config key on take-delete, firing
+      -- configChanged through tm's real subscriber. Must not rebuild.
+      h.cm:writeTrackKey('take1/track', 'arrangeSlots', {})
+
+      t.eq(#h.tm:getChannel(1).columns.notes[1].events, 1,
+        'last frame retained, no crash on dead-take rebuild')
+    end,
+  },
+
+  {
     name = 'opening a note tail (util.OPEN) keeps its attached PAs',
     run = function(harness)
       local util = require('util')

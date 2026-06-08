@@ -358,7 +358,7 @@ function newMidiManager(opts)
   -- TAKE DATA
 
   function mm:take()       return take end
-  function mm:resolution() return resolution end
+  function mm:resolution() if not take then return end; return resolution end
   function mm:length()     return length end
   function mm:timeSigs()   return util.clone(timeSigs, nil, true) or {} end
   function mm:name()       return takeName end

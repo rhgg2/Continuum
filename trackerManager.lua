@@ -998,8 +998,11 @@ do
 
   --contract: reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'
   --contract: takeChanged forwarded to subscribers via the captured pendingTakeSwap
+  --contract: dead take (mm:take() nil) is a no-op; tv retains its last frame
+  -- see docs/trackerManager.md § Rebuild
   function tm:rebuild(takeChanged)
     if rebuilding then return end
+    if not mm:take() then return end
     rebuilding = true
     takeChanged = takeChanged or false
 
