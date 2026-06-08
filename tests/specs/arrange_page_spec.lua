@@ -40,7 +40,7 @@ local fakeFacade = {
       return { openTakeProperties = function(item) captured.props = item end }
     end
     if name == 'wiring' then
-      return { isScratchTrack = function() return false end }
+      return { isWiringOwnedTrack = function() return false end }
     end
     return {}
   end,

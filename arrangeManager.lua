@@ -223,11 +223,11 @@ end
 
 ----- Discovery
 
--- The wiring scratch track is a hidden FX-park track; arrange hides it by asking the
--- wiring facade (wm owns the id→track bridge). see docs/arrangeManager.md § trackIdx
+-- Wiring owns hidden tracks arrange must skip (scratch FX-park + spawned newTrack hosts).
+-- see docs/arrangeManager.md § trackIdx
 local function isVisibleTrack(track)
   local wiring = facade and facade.get('wiring')
-  return not (wiring and wiring.isScratchTrack(track))
+  return not (wiring and wiring.isWiringOwnedTrack(track))
 end
 
 local function visibleTrackOfCol(col)

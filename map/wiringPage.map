@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=56  sha=cd92365  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=56  sha=d3cdb57  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -35,7 +35,7 @@
   @use call    facade.publish  @ 32
   @use call    routingManager.pollUndo  @ 48
   @use call    util.instantiate  @ 23, 24, 25, 27
-  @use call    wiringManager.isScratchTrack  @ 32
+  @use call    wiringManager.isWiringOwnedTrack  @ 32
   @use call    wiringRender.closeTransients  @ 42
   @use call    wiringRender.focusState  @ 54
   @use call    wiringRender.renderBody  @ 52

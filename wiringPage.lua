@@ -27,9 +27,9 @@ local wv = util.instantiate('wiringView',    { cm = cm, cmgr = cmgr, wm = wm })
 local wr = util.instantiate('wiringRender',
   { wv = wv, cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
 
--- Published for arrange (and any page) to hide the hidden scratch track without
--- reaching into wm/rm — wm owns the id→track bridge.
-facade.publish('wiring', { isScratchTrack = function(track) return wm:isScratchTrack(track) end })
+-- Published for arrange (and any page) to hide wiring-owned tracks — the scratch
+-- FX-park and the spawned newTrack FX hosts — without reaching into wm/rm.
+facade.publish('wiring', { isWiringOwnedTrack = function(track) return wm:isWiringOwnedTrack(track) end })
 
 local wp = {}
 

@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=717  sha=d445541  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=717  sha=cd92365  mode=chunk
 @deps cm, tm, facade
 
 # Invariants & contracts
@@ -56,8 +56,8 @@
   @fn stampForTake(take)  @ 216
   -- Discovery
   @fn isVisibleTrack(track)  @ 228
-      -- The wiring scratch track is a hidden FX-park track; arrange hides it by asking the
-      -- wiring facade (wm owns the id→track bridge). see docs/arrangeManager.md § trackIdx
+      -- Wiring owns hidden tracks arrange must skip (scratch FX-park + spawned newTrack hosts).
+      -- see docs/arrangeManager.md § trackIdx
   @fn visibleTrackOfCol(col)  @ 233
   @fn colOfTrack(track)  @ 245
   -- Transport — project edit cursor, loop range, play head, project end

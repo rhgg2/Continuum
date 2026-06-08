@@ -211,10 +211,21 @@ function wm:scratchId()
   return rm:scratchId()
 end
 
---contract: true iff `track` is the live scratch track; arrange hides it via the wiring facade
+--contract: true iff `track` is the live scratch track
 function wm:isScratchTrack(track)
   local id = self:scratchId()
   return id ~= nil and rm:reaperTrack(id) == track
+end
+
+--contract: true iff `track` is wiring-owned (scratch/spawned newTrack); arrange hides these
+function wm:isWiringOwnedTrack(track)
+  if self:isScratchTrack(track) then return true end
+  local guid = track and reaper.GetTrackGUID(track)
+  if not guid then return false end
+  for _, id in pairs(cm:get('wiringTracks') or {}) do
+    if id == guid then return true end
+  end
+  return false
 end
 
 --contract: { [trackId] = name } for every project track + master; one rm:tracks() pass

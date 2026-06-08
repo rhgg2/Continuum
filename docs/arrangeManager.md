@@ -9,14 +9,17 @@ at the track tier under `arrangeSlots`.
 
 Every public `trackIdx` (and the `trackIdx` field on take-shapes) is
 the 0-based column index into `am:projectTracks()`, not the raw
-REAPER track slot. Scratch (the wiringManager's hidden FX host,
-tagged cm `wiringScratch='1'`) is filtered out, and `am` translates
-column → REAPER track at the boundary via `visibleTrackOfCol`.
+REAPER track slot. Wiring-owned tracks are filtered out — the
+scratch FX-park and the spawned `newTrack` FX hosts — via the wiring
+facade's `isWiringOwnedTrack` (wm owns the id→track bridge: scratch
+by its rm guid, newTracks by membership in cm `wiringTracks`). `am`
+translates column → REAPER track at the boundary via
+`visibleTrackOfCol`.
 
 The two indices diverge as soon as REAPER's own "insert new track"
 fires — the new track lands at the absolute end of the project,
-past scratch. Holding the conversion inside `am` keeps the arrange
-page from ever needing to know the difference.
+past the hidden wiring tracks. Holding the conversion inside `am`
+keeps the arrange page from ever needing to know the difference.
 
 ## Every grouped take is a slot
 
