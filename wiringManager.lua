@@ -587,8 +587,8 @@ end
 
 ----- read : wiringSnapshot -> userGraph (design/wiring-implicit-graph.md § Plan)
 
--- Pass 3a: audio routing + merge/bracket CU collapse + gain (CU/send) recovery
--- onto edge.ops.gain; node ids are rm ids; midi still a single relay (3b). Pure.
+-- Pass 3b: audio + CU collapse + gain + full midi-bus walk (fan-in, merge, brackets)
+-- onto edge.ops.gain; node ids are rm ids. Pure.
 local MASTER_KEY = '__master__'
 local function readGraph(snap)
   local nodes = {
@@ -609,6 +609,45 @@ local function readGraph(snap)
     util.add(edges, e)
   end
 
+  -- MIDI merge CU (utility/Continuum Utility.jsfx @block mode 1): every producer on a
+  -- masked input bus is rewritten onto outBus; masked buses clear, others pass through.
+  local function mergeMidi(live, cu)
+    local outBus, masked = cu.outBus, {}
+    for lane = 1, 4 do
+      local bits = cu.inMask[lane] or 0
+      for bit = 0, 31 do
+        if (bits >> bit) & 1 == 1 then masked[(lane - 1) * 32 + bit] = true end
+      end
+    end
+    local unioned = {}
+    for bus in pairs(masked) do
+      for _, ref in ipairs(live[bus] or {}) do util.add(unioned, ref) end
+      if bus ~= outBus then live[bus] = nil end
+    end
+    if not masked[outBus] then
+      for _, ref in ipairs(live[outBus] or {}) do util.add(unioned, ref) end
+    end
+    live[outBus] = #unioned > 0 and unioned or nil
+  end
+
+  -- BusRoute CU (Continuum Utility @block mode 0): from->0, 0->to, others pass; from!=to
+  -- retains `from`. Wrapped JSFX reads bus 0, so brackets are midi-transparent on read.
+  local function busRouteMidi(live, from, to)
+    local out = {}
+    for bus, list in pairs(live) do out[bus] = list end
+    out[0] = live[from]
+    if from == to then
+      out[to] = live[0]
+    else
+      out[from] = live[from]
+      local joined = {}
+      for _, r in ipairs(live[0] or {}) do util.add(joined, r) end
+      for _, r in ipairs(live[to] or {}) do util.add(joined, r) end
+      out[to] = #joined > 0 and joined or nil
+    end
+    return out
+  end
+
   -- Incoming routing per track: explicit audio sends + the parent send. REAPER
   -- pins the parent send to channels 1-2, so its source is always pair 1.
   local incoming = {}
@@ -621,6 +660,9 @@ local function readGraph(snap)
       if s.kind == 'audio' then
         addIncoming(s.to, { from = fromKey, srcPair = s.srcChan // 2 + 1,
                             dstPair = s.dstChan // 2 + 1, gain = s.gain })
+      elseif s.kind == 'midi' then
+        addIncoming(s.to, { from = fromKey, midi = true,
+                            srcBus = s.srcChan, dstBus = s.dstChan })
       end
     end
     if entry.mainSend and entry.mainSend.on then
@@ -662,30 +704,39 @@ local function readGraph(snap)
     return out
   end
 
-  local tails = {}  -- trackKey -> liveAudio { [pair] = producerRef[] }; ref = { node, port? }
+  local tails = {}  -- trackKey -> { audio={[pair]=ref[]}, midi={[bus]=ref[]} }; ref = { node, port?, gain? }
   local function walkTrack(trackKey, entry)
-    local liveAudio, midiProducer = {}, nil
+    local liveAudio, liveMidi = {}, {}
     local function feed(pair, ref)
       liveAudio[pair] = liveAudio[pair] or {}
       util.add(liveAudio[pair], ref)
+    end
+    local function feedMidi(bus, ref)
+      liveMidi[bus] = liveMidi[bus] or {}
+      util.add(liveMidi[bus], ref)
     end
 
     local inc = incoming[trackKey]
     if inc then
       for _, i in ipairs(inc) do
-        for _, ref in ipairs((tails[i.from] or {})[i.srcPair] or {}) do feed(i.dstPair, foldGain(ref, i.gain)) end
+        local tail = tails[i.from] or {}
+        if i.midi then
+          for _, ref in ipairs((tail.midi or {})[i.srcBus] or {}) do feedMidi(i.dstBus, ref) end
+        else
+          for _, ref in ipairs((tail.audio or {})[i.srcPair] or {}) do feed(i.dstPair, foldGain(ref, i.gain)) end
+        end
       end
     elseif entry.trackKind ~= 'master' then
-      -- No inputs => a source: emits audio on pair 1 and owns the track's midi.
+      -- No inputs => a source: emits audio on pair 1 and midi on bus 0.
       local sid = entry.id
       nodes[sid] = { kind = 'source', trackId = entry.id,
                      ports = { audio = { ins = 0, outs = 1 }, midi = { ins = 0, outs = 1 } } }
       feed(1, { node = sid, port = 1 })
-      midiProducer = { node = sid }
+      feedMidi(0, { node = sid })
     end
 
-    -- A merge/bracket CU mints no node: outputs carry upstream producers gain-folded,
-    -- so producer->CU->consumer reads as a direct edge. See design/wiring-implicit-graph.md § What read does.
+    -- A merge/bracket CU mints no node: audio outputs carry upstream producers (gain-
+    -- folded), midi remap moves producers between buses. See design § What read does.
     local function collapseCu(fxe)
       local cu = readCuParams(fxe.params or {})
       local pinMaps = fxe.pinMaps or { ins = {}, outs = {} }
@@ -708,6 +759,9 @@ local function readGraph(snap)
       for port, prs in pairs(pinMaps.outs or {}) do
         for _, pair in ipairs(prs) do liveAudio[pair] = outProducers[port] or {} end
       end
+      -- MIDI: merge unions masked input buses onto outBus; busRoute swaps from/0/to.
+      if cu.mode == 'merge' then mergeMidi(liveMidi, cu)
+      else liveMidi = busRouteMidi(liveMidi, cu.from, cu.to) end
     end
 
     for _, fxe in ipairs(entry.fx or {}) do
@@ -724,22 +778,28 @@ local function readGraph(snap)
             for _, ref in ipairs(liveAudio[pair] or {}) do addAudioEdge(ref, id, port) end
           end
         end
-        if midiProducer then util.add(edges, { type = 'midi', from = midiProducer.node, to = id }) end
+        -- MIDI: read inBus -> edges; an fx drives its outBus when midi-out is enabled,
+        -- else clears it (bus stops here). Plain JSFX has no stored midi -> bus 0, relays.
+        local m = fxe.midi
+        local inBus, outBus = m and m.inBus or 0, m and m.outBus or 0
+        for _, ref in ipairs(liveMidi[inBus] or {}) do
+          util.add(edges, { type = 'midi', from = ref.node, to = id })
+        end
         for port, prs in pairs(pinMaps.outs or {}) do
           for _, pair in ipairs(prs) do liveAudio[pair] = { { node = id, port = port } } end
         end
-        midiProducer = (fxe.midi and not fxe.midi.outDisabled) and { node = id } or nil
+        liveMidi[outBus] = not (m and m.outDisabled) and { { node = id } } or nil
       end
     end
 
-    tails[trackKey] = liveAudio
+    tails[trackKey] = { audio = liveAudio, midi = liveMidi }
   end
 
   for _, k in ipairs(nonMasterOrder()) do walkTrack(k, snap[k]) end
   walkTrack(MASTER_KEY, snap[MASTER_KEY] or { trackKind = 'master', fx = {} })
 
   -- The master node is the master track's output (pair 1).
-  for _, ref in ipairs(tails[MASTER_KEY][1] or {}) do addAudioEdge(ref, 'master', nil) end
+  for _, ref in ipairs((tails[MASTER_KEY].audio or {})[1] or {}) do addAudioEdge(ref, 'master', nil) end
 
   return { nodes = nodes, edges = edges, nextId = 1 }
 end
@@ -747,7 +807,7 @@ end
 wm.readGraph = readGraph  -- exposed for unit tests; wm:read drives it from the live snapshot
 
 --contract: reconstructs the user graph from REAPER routing; node ids are rm ids
--- (3a: audio + CU collapse + gain; full midi-bus walk + quarantine TODO)
+-- (3b: audio + CU collapse + gain + full midi-bus walk; quarantine TODO)
 function wm:read()
   return readGraph(self:snapshot())
 end

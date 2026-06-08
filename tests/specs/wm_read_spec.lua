@@ -1,7 +1,9 @@
--- read : wiringSnapshot -> userGraph, passes 1-2 (audio routing + source->fx midi relay).
--- Drives wm.readGraph via wm:targetState -- the pure read(compile(g)) round-trip.
+-- read : wiringSnapshot -> userGraph. Audio routing + CU collapse + gain + full midi-bus
+-- walk (fan-in, merge, brackets). Drives wm.readGraph, via wm:targetState or a built snapshot.
 local t    = require('support')
 local util = require('util')
+
+local CU_IDENT = 'JS:Continuum Utility'
 
 local function mkWm(harness)
   local h  = harness.mk()
@@ -171,6 +173,96 @@ return {
         'audio guid-A.1->g-f1.1',
         'audio guid-A.1->g-f2.1',
         'midi guid-A.-->g-f1.-',   -- phantom bus-0 midi; f1 has no midi-out so no relay onward
+      })
+    end,
+  },
+  {
+    -- Cross-track MIDI fan-in: two source tracks midi-send into one consumer, coalescing on
+    -- bus 0 (no CU). Hand-built: a consumer fed only by source MIDI collapses onto master.
+    name = 'read: two midi sends into one fx recover cross-track fan-in',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local midiSend = function() return { to='guid-C', kind='midi', srcChan=0, dstChan=0, pos='preFader' } end
+      local snap = {
+        ['guid-A'] = { trackKind='sourceTrack', id='guid-A', nchan=2, mainSend={on=false},
+                       fx={}, sends={ midiSend() } },
+        ['guid-B'] = { trackKind='sourceTrack', id='guid-B', nchan=2, mainSend={on=false},
+                       fx={}, sends={ midiSend() } },
+        ['guid-C'] = { trackKind='newTrack', id='guid-C', nchan=2, mainSend={on=false}, sends={},
+          fx = { { id='g-m', ident='VST:M', ins=0, outs=1, midi={ inBus=0, outBus=0, outDisabled=true } } } },
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(nodeKinds(rg),
+               { master='master', ['guid-A']='source', ['guid-B']='source', ['g-m']='fx' })
+      t.deepEq(edgeSet(rg), {
+        'midi guid-A.-->g-m.-',
+        'midi guid-B.-->g-m.-',
+      })
+    end,
+  },
+  {
+    -- Same-track MIDI fan-in: a merge CU unions producer buses 1,2 onto bus 3; collapse
+    -- splices it out so read recovers A->C and B->C. Hand-built (compile won't force it).
+    name = 'read: same-track merge CU unions two midi producer buses',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local mask12 = (1 << 1) | (1 << 2)
+      local snap = {
+        ['guid-A'] = {
+          trackKind = 'sourceTrack', id = 'guid-A', nchan = 8,
+          mainSend = { on = false }, sends = {},
+          fx = {
+            { id='g-A', ident='VST:A', ins=1, outs=1, midi={ inBus=0, outBus=1, outDisabled=false } },
+            { id='g-B', ident='VST:B', ins=1, outs=1, midi={ inBus=0, outBus=2, outDisabled=false } },
+            { id='cu',  ident=CU_IDENT, ins=32, outs=32,
+              params = { mode=1, nPairs=1, gain1=1, audioSum=0, outBus=3,
+                         inMask0=mask12, inMask1=0, inMask2=0, inMask3=0 } },
+            { id='g-C', ident='VST:C', ins=1, outs=1, midi={ inBus=3, outBus=3, outDisabled=true } },
+          },
+        },
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(nodeKinds(rg),
+               { master='master', ['guid-A']='source', ['g-A']='fx', ['g-B']='fx', ['g-C']='fx' })
+      t.deepEq(edgeSet(rg), {
+        'midi g-A.-->g-C.-',
+        'midi g-B.-->g-C.-',
+        'midi guid-A.-->g-A.-',
+        'midi guid-A.-->g-B.-',
+      })
+    end,
+  },
+  {
+    -- BusRoute brackets around a non-bus-aware JSFX (bus N≠0) are midi-transparent: read
+    -- recovers producer->JSFX through the from/0/to swap. Hand-built (mirrors the DAG spec).
+    name = 'read: busRoute brackets are transparent, recover the wrapped JSFX edges',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local bracket = function() return { ins=32, outs=32, ident=CU_IDENT,
+        pinMaps = { ins={[1]={1}}, outs={[1]={1}} } } end
+      local bIn, bOut = bracket(), bracket()
+      bIn.id,  bIn.params  = 'bIn',  { mode=0, from=1, to=1 }
+      bOut.id, bOut.params = 'bOut', { mode=0, from=1, to=1 }
+      local snap = {
+        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, fx={},
+                       sends={ { to='guid-c', kind='midi', srcChan=0, dstChan=0, pos='preFader' } } },
+        ['guid-b'] = { trackKind='sourceTrack', id='guid-b', nchan=2, mainSend={on=false}, fx={},
+                       sends={ { to='guid-c', kind='midi', srcChan=0, dstChan=1, pos='preFader' } } },
+        ['guid-c'] = { trackKind='newTrack', id='guid-c', nchan=2, mainSend={on=false}, sends={},
+          fx = {
+            { id='fxC1', ident='JS:Foo', ins=1, outs=1 },
+            bIn,
+            { id='fxC2', ident='JS:Bar', ins=1, outs=1 },
+            bOut,
+          } },
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(nodeKinds(rg),
+               { master='master', ['guid-a']='source', ['guid-b']='source',
+                 fxC1='fx', fxC2='fx' })
+      t.deepEq(edgeSet(rg), {
+        'midi guid-a.-->fxC1.-',
+        'midi guid-b.-->fxC2.-',
       })
     end,
   },
