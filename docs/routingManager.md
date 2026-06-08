@@ -94,6 +94,27 @@ addressed by the stable relationship rather than a forged send id. The
 main-send drag rides `assignTrack{mainSend={gain}}` (a partial scalar write),
 and a CU edge rides `assignFx{params}`.
 
+## Metadata and the scratch track
+
+Every record field REAPER itself backs is *native*; any other key on a
+record is metadata rm persists on the caller's behalf, told apart by a
+per-record-kind native-key set. The two kinds store differently:
+
+- **Track-meta** rides the track's own `P_EXT` blob — it reverses with
+  native undo for free, so source/master node decoration (`pos`, …) needs
+  nothing more.
+- **Fx-meta** has no per-fx channel (see `design/fx-metadata-spike.md`), so
+  it lives in a project-extstate blob keyed by fx guid, mirrored to the
+  scratch track's `P_EXT` so native undo captures it. `resyncFxMeta` pulls
+  that mirror back into projext after an undo/redo, since projext alone
+  does not reverse.
+
+Writes patch-merge (a partial write never wipes a sibling; `util.REMOVE`
+clears a field), and an all-native write touches no extstate at all — the
+reconcile hot path stays clean. rm owns the scratch track itself
+(`scratchId` mints it lazily, guid persisted in projext): it both carries
+the fx-meta mirror and parks orphan fx.
+
 ## Relationship to wiringManager
 
 The wm rewire has landed. `wm:snapshot()` is `rm:tracks()` plus wm's

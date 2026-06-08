@@ -1,7 +1,8 @@
 -- See docs/routingManager.md for the model. A thin record abstraction over
 -- REAPER's audio/MIDI graph.
 --invariant: id is a track/fx GUID string — opaque to callers, stable across reload
---invariant: stateless — ids are guid-backed, so nothing is minted or reset
+--invariant: stateless but for the scratch track it owns (guid in projext); re-read per call
+--invariant: non-native record fields are metadata; rm persists them (see docs/routingManager.md)
 
 local util = require('util')
 
@@ -449,6 +450,58 @@ local function reconcileSends(track, sends)
   end
 end
 
+----------- metadata
+
+-- Native = REAPER-backed; any other record key is metadata rm persists.
+-- See docs/routingManager.md § Metadata and the scratch track.
+local TRACK_NATIVE = {
+  id = true, name = true, isMaster = true, nchan = true,
+  mainSend = true, fx = true, sends = true, hidden = true, defaults = true,
+}
+local FX_NATIVE = {
+  id = true, ident = true, name = true, ins = true, outs = true,
+  inNames = true, outNames = true, pinMaps = true, midi = true,
+  trackId = true, params = true, index = true, track = true,
+}
+
+local EXT_SECTION  = 'continuum_wiring'
+local FXMETA_KEY   = 'fxMeta'
+local SCRATCH_GUID = 'scratch'
+local META_PEXT    = 'P_EXT:ctm_meta'    -- per-track metadata blob
+local MIRROR_PEXT  = 'P_EXT:ctm_fxMeta'  -- scratch mirror of the fx-meta blob
+
+local function decodeBlob(raw)
+  return (raw and raw ~= '') and util.unserialise(raw) or nil
+end
+
+local function readTrackMeta(track)
+  local _, raw = reaper.GetSetMediaTrackInfo_String(track, META_PEXT, '', false)
+  return decodeBlob(raw)
+end
+
+-- Patch-merge so a partial write (just pos) never wipes a sibling (split);
+-- util.REMOVE clears a field.
+local function writeTrackMeta(track, meta)
+  local cur = readTrackMeta(track) or {}
+  util.assign(cur, meta)
+  reaper.GetSetMediaTrackInfo_String(track, META_PEXT, util.serialise(cur), true)
+end
+
+local function readFxMeta()
+  local _, raw = reaper.GetProjExtState(PROJ, EXT_SECTION, FXMETA_KEY)
+  return decodeBlob(raw) or {}
+end
+
+local function writeFxMeta(guid, meta)
+  local blob = readFxMeta()
+  blob[guid] = blob[guid] or {}
+  util.assign(blob[guid], meta)
+  if not next(blob[guid]) then blob[guid] = nil end
+  local raw = util.serialise(blob)
+  reaper.SetProjExtState(PROJ, EXT_SECTION, FXMETA_KEY, raw)
+  reaper.GetSetMediaTrackInfo_String(rm:scratchTrack(), MIRROR_PEXT, raw, true)
+end
+
 ----------- read
 
 local function trackName(track)
@@ -467,7 +520,7 @@ local function readMainSend(track)
 end
 
 local function readTrack(track, isMaster)
-  return {
+  local rec = {
     id       = reaper.GetTrackGUID(track),
     name     = trackName(track),
     isMaster = isMaster or nil,
@@ -476,6 +529,8 @@ local function readTrack(track, isMaster)
     fx       = readFxChain(track),
     sends    = readSends(track),
   }
+  util.assign(rec, readTrackMeta(track))
+  return rec
 end
 
 ----------- write
@@ -571,6 +626,10 @@ function rm:tracks()
   end
   local master = reaper.GetMasterTrack(PROJ)
   if master then util.add(out, readTrack(master, true)) end
+  local meta = readFxMeta()
+  for _, tr in ipairs(out) do
+    for _, fx in ipairs(tr.fx) do util.assign(fx, meta[fx.id]) end
+  end
   return out
 end
 
@@ -578,7 +637,10 @@ end
 function rm:track(id)
   local track = locateTrack(id)
   if not track then return nil end
-  return readTrack(track, track == reaper.GetMasterTrack(PROJ))
+  local rec  = readTrack(track, track == reaper.GetMasterTrack(PROJ))
+  local meta = readFxMeta()
+  for _, fx in ipairs(rec.fx) do util.assign(fx, meta[fx.id]) end
+  return rec
 end
 
 --contract: raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone
@@ -592,18 +654,48 @@ function rm:masterId()
   return master and reaper.GetTrackGUID(master) or nil
 end
 
+--contract: the scratch track's guid, minted on first use; persisted in projext.
+--contract: rm owns scratch — it parks orphan fx and carries the fx-meta undo mirror.
+function rm:scratchId()
+  local _, guid = reaper.GetProjExtState(PROJ, EXT_SECTION, SCRATCH_GUID)
+  if guid ~= '' and locateTrack(guid) then return guid end
+  guid = rm:addTrack{ name = 'continuum: wiring scratch', hidden = true }
+  reaper.SetProjExtState(PROJ, EXT_SECTION, SCRATCH_GUID, guid)
+  return guid
+end
+
+--contract: raw scratch MediaTrack handle (for P_EXT writes); mints on first use
+function rm:scratchTrack()
+  return self:reaperTrack(self:scratchId())
+end
+
+--contract: pull the scratch P_EXT fx-meta mirror back into projext after a REAPER
+--contract: undo/redo — projext doesn't reverse natively, the scratch chunk does
+function rm:resyncFxMeta()
+  local _, guid = reaper.GetProjExtState(PROJ, EXT_SECTION, SCRATCH_GUID)
+  local scratch = guid ~= '' and locateTrack(guid)
+  if not scratch then return end
+  local _, raw = reaper.GetSetMediaTrackInfo_String(scratch, MIRROR_PEXT, '', false)
+  reaper.SetProjExtState(PROJ, EXT_SECTION, FXMETA_KEY, raw)
+end
+
 function rm:addTrack(t)
   t = t or {}
   local idx = reaper.CountTracks(PROJ)
   reaper.InsertTrackAtIndex(idx, t.defaults or false)
   local track = reaper.GetTrack(PROJ, idx)
   writeTrackFields(track, t)
+  local meta = util.clone(t, TRACK_NATIVE)
+  if next(meta) then writeTrackMeta(track, meta) end
   return reaper.GetTrackGUID(track)
 end
 
 function rm:assignTrack(id, t)
   local track = locateTrack(id)
-  if track then writeTrackFields(track, t) end
+  if not track then return end
+  writeTrackFields(track, t)
+  local meta = util.clone(t, TRACK_NATIVE)
+  if next(meta) then writeTrackMeta(track, meta) end
 end
 
 function rm:deleteTrack(id)
@@ -637,6 +729,8 @@ function rm:addFx(trackId, t)
     idx = t.index
   end
   if t.params then writeParams(track, idx, t.params) end
+  local meta = util.clone(t, FX_NATIVE)
+  if next(meta) then writeFxMeta(id, meta) end
   return id
 end
 
@@ -656,6 +750,8 @@ function rm:assignFx(id, t)
   if t.params  then writeParams(track, idx, t.params)  end
   if t.pinMaps then writePinMaps(track, idx, t.pinMaps) end
   if t.midi    then writeMidiRouting(track, idx, t.midi) end
+  local meta = util.clone(t, FX_NATIVE)
+  if next(meta) then writeFxMeta(id, meta) end
 end
 
 function rm:deleteFx(id)
@@ -673,6 +769,7 @@ function rm:fx(id)
     local _, chunk = reaper.GetTrackStateChunk(track, '', true)
     fx.midi = readMidiRouting(chunk, routingIdxOf(track, idx))
   end
+  util.assign(fx, readFxMeta()[id])
   return fx
 end
 

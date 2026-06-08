@@ -151,6 +151,7 @@ local specs = {
   'rm_sends_spec',
   'rm_installed_fx_spec',
   'rm_fx_ports_spec',
+  'rm_metadata_spec',
   'wv_authoring_spec',
   'wv_activate_spec',
   'wv_edge_gain_spec',
