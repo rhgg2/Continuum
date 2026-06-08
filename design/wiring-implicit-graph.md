@@ -139,7 +139,7 @@ auto-layout and nothing is decorated at all.)
   save/reload), and compile relocates a resident FX by *move*
   (`moveFxAcrossTracks`), never delete+add, so the GUID is stable across
   recompiles and **no `nodeId → guid` ledger is needed** — the GUID is the
-  key. Positions needn't be undoable, so project ext (not the scratch
+  key (in the read era; see § Identity flips with read). Positions needn't be undoable, so project ext (not the scratch
   track) is the home. Position is orthogonal to routing, so it never
   touches `read ∘ compile = id`.
 
@@ -168,12 +168,40 @@ REAPER → draft → `validate` → write the delta). You don't escape the
 graph *type*, only its *persistence*; UI gestures must not scribble raw
 routing past the gate.
 
+## Identity flips with `read`, not before it
+
+A node's id and the rm id of the FX (or track) it realises are **the same
+thing only in the read era.** Today they are deliberately decoupled: the
+node id is a stable graph key, the rm id mutable. Reconcile can
+re-materialise an FX with a *fresh* rm id — on the first compile after a
+blob load, or after a manual REAPER delete — and the stable node id means
+no incident edge has to be rewritten when it does. The stamp-back
+(`origin={kind='node'}`) exists exactly to carry that fresh rm id onto the
+node. Pinned by `wm_apply_ops` (bare materialise) and `wm_live`
+(manual-delete → re-add).
+
+`read` dissolves the decoupling rather than fighting it. It keys each node
+by its rm id natively — there is nothing else to key on — and it removes
+the churn that made decoupling necessary: a deleted FX simply isn't read,
+and nothing re-materialises against an authoritative blob. So `nodeId ==
+rm id` becomes consistent precisely when `read` is authoritative.
+
+The consequence for sequencing: **the identity flip is part of the read
+cutover, not a precursor to it.** Flipping ids while the blob still drives
+reconcile buys an inconsistent intermediate — an id-less node has no rm id
+to be keyed by yet, and re-materialisation would have to re-key the node
+and rewrite its edges. `nextId`, the `n`-prefixed ids, and the
+`origin={kind='node'}` stamp therefore retire *with* read (steps 1→4),
+never ahead of it.
+
 ## Plan (rough)
 
 1. **`read : snapshot → graph` by pure routing inference** — source by
    no-inputs, CU/bracket strip by ident, edges from channel/pin routing,
    splits/merges ignored, components classified for quarantine. Positions
-   left as a TODO.
+   left as a TODO. Read-derived nodes are keyed by their rm id — the
+   identity flip begins here (§ Identity flips with read), not as a
+   separate precursor step.
 2. **`read ∘ compile = id` fixture sweep** over existing graphs (incl.
    the merge-CU and capacity-split cases). Any missing routing-decoration
    surfaces as a fibre collapse; the prediction is it returns clean and
@@ -183,7 +211,10 @@ routing past the gate.
 3. **Capacity min-cut pass** in the allocator (deterministic tie-break),
    distinct from split-at-node.
 4. **Retire** the cm blob, the ownership machinery, and — if the
-   decoration substrate holds — the scratch/`pollUndo` apparatus.
+   decoration substrate holds — the scratch/`pollUndo` apparatus. With the
+   blob goes the reconcile churn, so `nextId`, the `n`-prefixed ids, and
+   the `origin={kind='node'}` stamp retire here too — the identity flip
+   completes (§ Identity flips with read).
 
 ## Open questions / risks
 
