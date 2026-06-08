@@ -79,17 +79,17 @@ return {
     end,
   },
   {
-    name = 'wm:load() creates the scratch track; second load reuses it (id in wiringTracks)',
+    name = 'pollUndo heartbeat ensures the scratch track; reused, not re-minted',
     run = function(harness)
       local h, wm = mkWm(harness)
-      t.eq(reaper.CountTracks(0), 0, 'no tracks before load')
-      wm:load()
-      t.eq(reaper.CountTracks(0), 1, 'scratch track created')
+      t.eq(reaper.CountTracks(0), 0, 'no tracks before the heartbeat')
+      wm:pollUndo()
+      t.eq(reaper.CountTracks(0), 1, 'heartbeat minted the scratch')
       local first = reaper.GetTrack(0, 0)
       t.eq(wm:isScratchTrack(first), true, 'recognised as the scratch track')
 
-      wm:load()
-      t.eq(reaper.CountTracks(0), 1, 'second load found the existing scratch')
+      wm:pollUndo()
+      t.eq(reaper.CountTracks(0), 1, 'second heartbeat reused the existing scratch')
     end,
   },
   {

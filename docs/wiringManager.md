@@ -73,10 +73,10 @@ Three rules keep instance churn minimal and state-preserving:
 - **Mint on a scratch track.** `wm:addFxNode` instantiates the FX
   immediately via `instantiateFxOnScratch`, so the node has a real
   `fxId` (and probed I/O) before it is ever hosted. The scratch track
-  is a hidden REAPER track whose id is persisted in
-  `wiringTracks['__scratch__']`, found-or-created lazily; it also parks
-  FX whose `srcSet` is empty (disconnected, or inert `__scratch__`
-  nodes) so they exist without polluting the audible topology.
+  is rm-owned (`rm:scratchId`/`scratchTrack`) — a hidden REAPER track
+  minted lazily, its guid persisted in projext; it also parks FX whose
+  `srcSet` is empty (disconnected, or inert `__scratch__` nodes) so they
+  exist without polluting the audible topology.
 - **Track change is a move, not a re-create.** When the partition
   reassigns a node to a different track, the applier issues
   `rm:assignFx{track}` (a move, not delete+add) — plugin state (params,
@@ -235,7 +235,8 @@ DAG before any track exists). `wiringTracks` is the bridge: a project-tier
 - **newTracks** are emergent merge classes with no 1:1 graph node, so the
   applier stamps `wiringTracks[trackKey] = id` when it mints the track and
   clears it on delete.
-- **Scratch** rides the map under `wiringTracks['__scratch__']`.
+- **Scratch** is rm-owned and *not* in the map; its guid rides each scratch
+  op as `op.trackId`, and every caller reads it via `rm:scratchId()`.
 - **Master** is absent; resolvers special-case it to `rm:masterId()`.
 
 The map is written only by `applyOps`, inside the `rm:transaction`, so the
@@ -244,6 +245,27 @@ it is mirrored to the scratch track's P_EXT for the same reason (project-tier
 `SetProjExtState` does not reverse with native undo; see `pollUndo`). Where wm
 must hand a raw track to cm's P_EXT writers, the id→handle bridge is
 `rm:reaperTrack(id)`.
+
+## pollUndo
+
+Project-tier `SetProjExtState` does not reverse with native undo, but a
+track's P_EXT chunk does — so undo-coherence for any durable-but-non-
+reversing store means mirroring it onto the scratch chunk and pulling it
+back when REAPER rewinds. Two stores need this, split by owner:
+
+- **`rm:pollUndo`** (the frame heartbeat, driven by `wp:tick`) ensures the
+  scratch exists and, when its fx-meta mirror diverges from rm's watermark,
+  pulls it back into projext via `rm:resyncFxMeta`. This is the permanent
+  job — the `primary`/`split` metadata is not recoverable from routing.
+- **`wm:pollUndo`** mirrors the `wiringGraph`/`wiringOwnedFx`/`wiringTracks`
+  blob (inside the apply transaction) and, when the scratch chunk diverges
+  from `lastScratchRaw`, restores the cm project tier and fires
+  `wiringChanged{kind='load'}`. A scratch lost to a manual delete or
+  undo-past-creation is re-minted empty by the heartbeat; wm then sees the
+  missing mirror and fires `load` once so reconcile rebuilds it and re-parks
+  fx. This job is transitory: once the implicit-graph work retires the cm
+  blob (the graph reverses natively as REAPER routing), `wm:pollUndo`
+  collapses and only `rm:pollUndo` remains.
 
 ## The reaper seam
 
@@ -257,9 +279,10 @@ Two raw `reaper.*` calls remain — neither a routing op:
   (`CountTrackMediaItems`) to refuse deleting authored takes. An item-count
   query rm's track/FX vocabulary doesn't model.
 
-Everything else goes through rm: scratch liveness (`rm:track(scratchId)` in
-`pollUndo`), the live gain poke (above, via `assignFx`/`assignTrack`/
-`setSendGain`), and CU param reads (`rm:fx(id).params`).
+Everything else goes through rm: scratch ownership
+(`rm:scratchId`/`scratchTrack`), the live gain poke (above, via
+`assignFx`/`assignTrack`/`setSendGain`), and CU param reads
+(`rm:fx(id).params`).
 
 ## wiringOp
 

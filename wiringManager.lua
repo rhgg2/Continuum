@@ -15,7 +15,7 @@
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
 --invariant: every authoring gesture goes through wm:mutate — clone draft, mutate, validate via DAG.validate, swap + persist + fire on success, return false+err on failure. The on-disk graph and the wiringChanged broadcast have therefore always passed validation.
 --invariant: master node is a regular entry in graph.nodes under the fixed id 'master'; freshGraph materialises it on first load of an empty project; DAG.validate enforces the singleton.
---invariant: scratch id in wiringTracks['__scratch__']; minted lazily via rm:addTrack{hidden}
+--invariant: scratch is rm-owned (rm:scratchId/Track); wm parks fx + mirrors the undo blob there
 --invariant: scratch hosts FX with no compile-graph track — disconnected or lowered-parked
 
 local util = require 'util'
@@ -29,13 +29,11 @@ local wm = {}
 local fire = util.installHooks(wm)
 
 local userGraph = nil
-local scratchId = nil     -- id of the hidden scratch track (wiringTracks['__scratch__']); reset by wm:load
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
 local lastScratchRaw = nil -- serialised graph last mirrored to scratch P_EXT; pollUndo compares against it
 
-local SCRATCH_NAME = 'continuum: wiring scratch'
-local SCRATCH_KEY  = '__scratch__'
-local CU_IDENT     = 'JS:Continuum Utility'
+local SCRATCH_KEY = '__scratch__'  -- scratch's logical trackKey; its guid is rm-owned
+local CU_IDENT    = 'JS:Continuum Utility'
 
 local function isJS(ident)
   return ident ~= nil and ident:sub(1, 3) == 'JS:'
@@ -90,21 +88,6 @@ local function ensureCompiled()
   return compiledCache
 end
 
--- Scratch is addressed by opaque rm id, persisted in wiringTracks['__scratch__'] so it
--- survives reload; the id rides the undo mirror via applyOps. No project scan, no tag.
-local function ensureScratchTrack()
-  if scratchId and rm:track(scratchId) then return scratchId end
-  local tracks = cm:get('wiringTracks') or {}
-  if tracks[SCRATCH_KEY] and rm:track(tracks[SCRATCH_KEY]) then
-    scratchId = tracks[SCRATCH_KEY]
-    return scratchId
-  end
-  scratchId = rm:addTrack{ name = SCRATCH_NAME, hidden = true }
-  tracks[SCRATCH_KEY] = scratchId
-  cm:set('project', 'wiringTracks', tracks)
-  return scratchId
-end
-
 -- True iff JSFX desc declares ext_midi_bus=1 (the FX scans midi_bus itself,
 -- escaping our allocator). Skips // comments; frontier prevents `=10` match.
 local function parseJSFXBusAware(content)
@@ -121,11 +104,9 @@ end
 
 ----------- PUBLIC
 
---contract: re-reads wiringGraph from cm (rebuilding master via freshGraph if empty), ensures the scratch track, fires wiringChanged{kind='load'}; drops the prior scratch handle (project may have changed)
+--contract: re-reads the persisted graph, fires wiringChanged{kind='load'}; scratch is rm-owned
 function wm:load()
   setGraph(readPersisted())
-  scratchId      = nil
-  ensureScratchTrack()
   fire('wiringChanged', { kind = 'load' })
 end
 
@@ -218,17 +199,16 @@ end
 --contract: AddByName on scratch + keep; returns {fxId, ins, outs, inNames, outNames}
 --contract: unknown ident → fxId=nil, ins=outs=0, empty name lists
 function wm:instantiateFxOnScratch(ident)
-  ensureScratchTrack()
-  local fxId = rm:addFx(scratchId, { ident = ident })
+  local fxId = rm:addFx(rm:scratchId(), { ident = ident })
   if not fxId then return { fxId = nil, ins = 0, outs = 0, inNames = {}, outNames = {} } end
   local rec = rm:fx(fxId)
   return { fxId = fxId, ins = rec.ins, outs = rec.outs,
            inNames = rec.inNames, outNames = rec.outNames }
 end
 
---contract: id of the wiring scratch track without forcing creation; nil if none persisted yet
+--contract: the scratch track id (rm-owned, ensured on first use)
 function wm:scratchId()
-  return scratchId or (cm:get('wiringTracks') or {})[SCRATCH_KEY]
+  return rm:scratchId()
 end
 
 --contract: true iff `track` is the live scratch track; arrange hides it via the wiring facade
@@ -440,7 +420,7 @@ function wm:snapshot()
   end
 
   -- (id → trackKey/trackKind) from wm state, not tags: source nodes carry their
-  -- track's id (== its trackKey); newTracks + scratch resolve through wiringTracks.
+  -- track's id (== its trackKey); newTracks resolve through wiringTracks, scratch via rm.
   local keyByGuid, kindByKey = {}, {}
   for _, n in pairs(userGraph.nodes) do
     if n.kind == 'source' and n.trackId then
@@ -449,12 +429,10 @@ function wm:snapshot()
     end
   end
   for trackKey, id in pairs(cm:get('wiringTracks') or {}) do
-    if trackKey == SCRATCH_KEY then
-      keyByGuid[id], kindByKey[SCRATCH_KEY] = SCRATCH_KEY, 'scratch'
-    else
-      keyByGuid[id], kindByKey[trackKey] = trackKey, 'newTrack'
-    end
+    keyByGuid[id], kindByKey[trackKey] = trackKey, 'newTrack'
   end
+  local scratch = rm:scratchId()
+  keyByGuid[scratch], kindByKey[SCRATCH_KEY] = SCRATCH_KEY, 'scratch'
 
   local function snapFx(fx)
     local entry = { id = fx.id, ident = fx.ident }
@@ -580,14 +558,14 @@ local function projectEntry(spec, compileNodes, scratchGuid)
   }
 end
 
---contract: pure; scratch id read from in-memory state; derives wiringSnapshot from DAG.targetTracks
+--contract: pure; scratch id via rm; derives wiringSnapshot from DAG.targetTracks
 -- see docs/wiringManager.md
 function wm:targetState()
   ensureLoaded()
   local cx = DAG.compile(userGraph)
   local nodes = userGraph.nodes
   local tracks = DAG.allocate(DAG.targetTracks(cx), nodes)
-  local scratchGuid = scratchId
+  local scratchGuid = rm:scratchId()
   local out = {}
   for trackKey, entry in pairs(tracks) do
     out[trackKey] = projectEntry(entry, nodes, scratchGuid)
@@ -935,7 +913,7 @@ function wm:applyOps(ops, label)
     end
 
     -- Addressing: source is self-keyed (trackKey == id), so unmapped keys resolve to themselves;
-    -- newTracks/scratch via wiringTracks, master via masterKeys.
+    -- newTracks via wiringTracks, master via masterKeys. Scratch ops carry their guid in op.trackId.
     local function keyToId(trackKey)
       if masterKeys[trackKey] then return masterGuid end
       return wiringTracks[trackKey] or trackKey
@@ -1007,15 +985,12 @@ function wm:applyOps(ops, label)
     local owned = ownedGuidsFrom(userGraph)
     cm:set('project', 'wiringOwnedFx', owned)
 
-    -- wiringTracks now reflects this pass's create/delete; stamp the scratch entry
-    -- and persist so trackKey→id addressing survives reload.
-    ensureScratchTrack()
-    wiringTracks[SCRATCH_KEY] = scratchId
+    -- wiringTracks now reflects this pass's create/delete (scratch is rm-owned, not keyed here).
     cm:set('project', 'wiringTracks', wiringTracks)
 
     -- Mirror to scratch P_EXT inside the transaction so REAPER's undo captures the
     -- graph + addressing alongside FX/track ops; pollUndo watches lastScratchRaw.
-    local scratch = rm:reaperTrack(scratchId)
+    local scratch = rm:scratchTrack()
     cm:writeTrackKey(scratch, 'wiringGraph',   userGraph)
     cm:writeTrackKey(scratch, 'wiringOwnedFx', owned)
     cm:writeTrackKey(scratch, 'wiringTracks',  wiringTracks)
@@ -1051,10 +1026,10 @@ local function gainRouting()
   return routing
 end
 
--- trackKey → opaque id for the live-poke path: a source is self-keyed, newTracks/scratch
--- resolve through wiringTracks, master through rm.
+-- trackKey → opaque id for the live-poke path: a source is self-keyed, newTracks resolve
+-- through wiringTracks, scratch + master through rm.
 local function idForKey(trackKey)
-  if trackKey == SCRATCH_KEY  then return scratchId end
+  if trackKey == SCRATCH_KEY  then return rm:scratchId() end
   if trackKey == '__master__' then return rm:masterId() end
   return (cm:get('wiringTracks') or {})[trackKey] or trackKey
 end
@@ -1094,8 +1069,7 @@ function wm:fastGainCommit(edgeIdx, gain)
     edge.ops.gain = gain
     self:pokeEdgeGain(edgeIdx, gain)
     self:save()
-    ensureScratchTrack()
-    local scratch = rm:reaperTrack(scratchId)
+    local scratch = rm:scratchTrack()
     cm:writeTrackKey(scratch, 'wiringGraph', userGraph)
     lastScratchRaw = cm:readTrackRaw(scratch)
   end)
@@ -1107,19 +1081,22 @@ function wm:listInstalledFX()
   return rm:installedFx()
 end
 
---contract: detects REAPER undo/redo of a wiring gesture by diffing scratch P_EXT against lastScratchRaw; on diff, mirrors scratch back to project tier, drops the in-memory graph, fires wiringChanged{kind='load'}. If scratch was deleted (manual or undo past its creation), reconciler recreates it on the next reconcile pass — so here we just clear the handle and let the live loop catch up.
+--contract: on scratch-chunk divergence, restores the cm project tier and fires load
+-- see docs/wiringManager.md § pollUndo
 function wm:pollUndo()
-  if not scratchId then return end
-  local scratch = rm:reaperTrack(scratchId)
-  if not scratch then
-    scratchId, lastScratchRaw = nil, nil
-    fire('wiringChanged', { kind = 'load' })
-    return
-  end
+  local scratch = rm:scratchTrack()   -- handle from rm; the heartbeat lives in rm:pollUndo
   local raw = cm:readTrackRaw(scratch)
   if raw == lastScratchRaw then return end
   local mirrored = cm:readTrackKey(scratch, 'wiringGraph')
-  if not mirrored then return end
+  if not mirrored then
+    -- Fresh/empty scratch. If we had mirrored before, it was lost (manual delete or
+    -- undo past creation) and rm re-minted it — reconcile to rebuild + re-park fx.
+    if lastScratchRaw then
+      lastScratchRaw = nil
+      fire('wiringChanged', { kind = 'load' })
+    end
+    return
+  end
   cm:set('project', 'wiringGraph',  mirrored)
   cm:set('project', 'wiringOwnedFx', cm:readTrackKey(scratch, 'wiringOwnedFx') or {})
   cm:set('project', 'wiringTracks',  cm:readTrackKey(scratch, 'wiringTracks') or {})

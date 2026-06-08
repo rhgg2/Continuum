@@ -111,4 +111,32 @@ return {
       t.eq(reaper.GetTrackGUID(rm:scratchTrack()), g1, 'scratchTrack is the handle for that guid')
     end,
   },
+  {
+    name = 'pollUndo is the scratch heartbeat: mints once, idempotent',
+    run = function()
+      local reaper, rm = mkRm()
+      local before = reaper.CountTracks(0)
+      rm:pollUndo()
+      t.eq(reaper.CountTracks(0), before + 1, 'heartbeat minted the scratch')
+      rm:pollUndo()
+      t.eq(reaper.CountTracks(0), before + 1, 'second beat reused it — no duplicate')
+    end,
+  },
+  {
+    name = 'pollUndo resyncs fx-meta when the scratch mirror diverges from its watermark',
+    run = function()
+      local reaper, rm = mkRm()
+      local _, tid = seedTrack(reaper, 'Bus')
+      local fxId = addFx(reaper, rm, tid, 'FX:comp')
+      rm:assignFx(fxId, { split = true })          -- watermark = {split=true}
+      rm:assignFx(fxId, { split = util.REMOVE })    -- watermark = {} ; projext = {}
+
+      -- REAPER undo rewinds the scratch chunk to the pre-removal state; projext
+      -- (which does not reverse) stays empty until the heartbeat pulls it back.
+      reaper.GetSetMediaTrackInfo_String(rm:scratchTrack(), 'P_EXT:ctm_fxMeta',
+        util.serialise({ [fxId] = { split = true } }), true)
+      rm:pollUndo()
+      t.eq(rm:fx(fxId).split, true, 'mirror diverged → resync restored projext')
+    end,
+  },
 }

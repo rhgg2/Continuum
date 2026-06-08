@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=56  sha=242c273  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=56  sha=cd92365  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -24,7 +24,7 @@
   @api wp:enableLive()  @ 45
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
   @api wp:tick()  @ 48
-      @contract  per-frame poll; drives wm:pollUndo to detect REAPER undo/redo of wiring gestures (scratch P_EXT divergence) and re-issue wiringChanged{kind='load'}. Called from coordinator.frame regardless of which page is active.
+      @contract  per-frame heartbeat — rm:pollUndo (scratch + fx-meta), wv:pollUndo (graph blob)
   -- Page interface — render delegates to the renderer
   @api wp:renderToolbarBits(ctx)  @ 51
   @api wp:renderBody(ctx, w, h, dispatch)  @ 52
@@ -33,6 +33,7 @@
 
 # Uses (outbound edges)
   @use call    facade.publish  @ 32
+  @use call    routingManager.pollUndo  @ 48
   @use call    util.instantiate  @ 23, 24, 25, 27
   @use call    wiringManager.isScratchTrack  @ 32
   @use call    wiringRender.closeTransients  @ 42

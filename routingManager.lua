@@ -1,7 +1,7 @@
 -- See docs/routingManager.md for the model. A thin record abstraction over
 -- REAPER's audio/MIDI graph.
 --invariant: id is a track/fx GUID string — opaque to callers, stable across reload
---invariant: stateless but for the scratch track it owns (guid in projext); re-read per call
+--invariant: stateless but for the scratch it owns (guid in projext) + the fx-meta undo watermark
 --invariant: non-native record fields are metadata; rm persists them (see docs/routingManager.md)
 
 local util = require('util')
@@ -10,6 +10,7 @@ local PROJ = 0
 
 local rm = {}
 local installedFxCache = nil  -- reaper's installed-FX set is fixed at runtime
+local lastFxMetaRaw   = nil  -- scratch fx-meta mirror last seen; rm:pollUndo resyncs only on change
 
 ----------- track resolution
 
@@ -500,6 +501,7 @@ local function writeFxMeta(guid, meta)
   local raw = util.serialise(blob)
   reaper.SetProjExtState(PROJ, EXT_SECTION, FXMETA_KEY, raw)
   reaper.GetSetMediaTrackInfo_String(rm:scratchTrack(), MIRROR_PEXT, raw, true)
+  lastFxMetaRaw = raw
 end
 
 ----------- read
@@ -654,11 +656,19 @@ function rm:masterId()
   return master and reaper.GetTrackGUID(master) or nil
 end
 
+-- The persisted scratch guid + live handle, or nil if none minted yet. Never mints.
+local function liveScratch()
+  local _, guid = reaper.GetProjExtState(PROJ, EXT_SECTION, SCRATCH_GUID)
+  if guid == '' then return nil end
+  local track = locateTrack(guid)
+  if track then return guid, track end
+end
+
 --contract: the scratch track's guid, minted on first use; persisted in projext.
 --contract: rm owns scratch — it parks orphan fx and carries the fx-meta undo mirror.
 function rm:scratchId()
-  local _, guid = reaper.GetProjExtState(PROJ, EXT_SECTION, SCRATCH_GUID)
-  if guid ~= '' and locateTrack(guid) then return guid end
+  local guid = liveScratch()
+  if guid then return guid end
   guid = rm:addTrack{ name = 'continuum: wiring scratch', hidden = true }
   reaper.SetProjExtState(PROJ, EXT_SECTION, SCRATCH_GUID, guid)
   return guid
@@ -672,11 +682,20 @@ end
 --contract: pull the scratch P_EXT fx-meta mirror back into projext after a REAPER
 --contract: undo/redo — projext doesn't reverse natively, the scratch chunk does
 function rm:resyncFxMeta()
-  local _, guid = reaper.GetProjExtState(PROJ, EXT_SECTION, SCRATCH_GUID)
-  local scratch = guid ~= '' and locateTrack(guid)
+  local _, scratch = liveScratch()
   if not scratch then return end
   local _, raw = reaper.GetSetMediaTrackInfo_String(scratch, MIRROR_PEXT, '', false)
   reaper.SetProjExtState(PROJ, EXT_SECTION, FXMETA_KEY, raw)
+end
+
+--contract: per-frame heartbeat — ensures the scratch exists, and on a scratch-chunk
+--contract: rewind (REAPER undo/redo) pulls the fx-meta mirror back into projext
+function rm:pollUndo()
+  local scratch = self:scratchTrack()
+  local _, raw = reaper.GetSetMediaTrackInfo_String(scratch, MIRROR_PEXT, '', false)
+  if raw == lastFxMetaRaw then return end
+  self:resyncFxMeta()
+  lastFxMetaRaw = raw
 end
 
 function rm:addTrack(t)
