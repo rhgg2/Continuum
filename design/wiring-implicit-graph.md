@@ -208,7 +208,8 @@ never ahead of it.
    beyond them the prediction is that positions are the only diff. Assert
    via an audio-semantic projection (FX-by-order, stream edges with
    gain/channels, bus resolved away) plus "quarantined bytes unchanged"
-   — no rendering.
+   — no rendering. **Landed (invariant-1) — see § Status; the
+   capacity-split case waits on step 3.**
 3. **Capacity min-cut pass** in the allocator (deterministic tie-break),
    distinct from split-at-node.
 4. **Retire** the cm blob, the ownership machinery, and — if the
@@ -239,8 +240,18 @@ graph` by pure routing inference.
 Nodes key by rm id — the identity flip (§ Identity flips with read) has
 begun. Positions stay a TODO.
 
+**Step 2 (invariant-1) is landed** (`tests/specs/wm_roundtrip_spec.lua`):
+an eight-fixture `read ∘ compile = id` sweep where the expected is *derived
+from* each authored graph via a normal form (the rm-id renaming + read's
+port conventions), so it can't be hand-fudged — five clean bijections plus
+three declared collapses. **No third non-injectivity surfaced:** across the
+corpus the only diffs from a clean bijection are the two known bugs, so
+"routing is fully inferred up to view-state" now has test evidence, not a
+bare prediction. Capacity-split is left for step 3 (no compile image yet);
+quarantine is off-image (invariant 2, owned by `wm_read_spec`).
+
 **Two `compile` non-injectivities surfaced** in the process — real bugs,
-reflected faithfully by read, for the step-2 sweep to confirm (not read
+confirmed by the step-2 sweep, reflected faithfully by read (not read
 workarounds):
 
 - **bus-0 phantom** — the first fx on a source track receives source MIDI
@@ -255,12 +266,11 @@ workarounds):
 - ~~**Per-FX metadata channel**~~ — *resolved* (`design/fx-metadata-spike.md`):
   no arbitrary FX named-config ext exists, and none is needed — see
   § Decoration.
-- **Does the sweep come back clean?** The whole "routing is fully
-  inferred" claim rests on `compile` being injective up to view-state.
-  Two non-injectivities are already known (§ Status); the live question is
-  whether *more* lurk, or whether those two plus positions are the whole
-  story. The fixture sweep is the proof; until it runs, decoration scope
-  is a prediction.
+- **Does the sweep come back clean?** Answered for the current corpus
+  (§ Status): the eight-fixture sweep surfaces *no* collapse beyond the two
+  known bugs — those two plus positions are the whole story so far. Residue:
+  the corpus is hand-picked, not exhaustive, and the capacity-split case
+  can't be swept until step 3 gives it a compile image.
 - **Capacity bisection** is genuinely new allocator work and the bulk of
   the risk; everything else is `read` + deletions.
 - **Quarantine UX** — how a darkened component signals its cause and
