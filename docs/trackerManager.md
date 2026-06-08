@@ -270,6 +270,15 @@ Steps:
 Then `um = createUpdateManager()` and tm fires the `'rebuild'` signal
 (no payload).
 
+### Dormant guard
+
+When the tracker page is not active, `bindTake(nil)` clears cm's take context
+while mm still holds the last take. The shared cm fires `configChanged` every
+frame regardless of which page is active (e.g. samplePage probeMode). A rebuild
+fired in this state would resolve swing/trackerMode off empty take tiers, causing
+a mm/cm mismatch. The `configChanged` subscriber therefore returns early if
+`cm:boundTake()` is nil; the next real `bindTake` call fires a coherent rebuild.
+
 ## PC synthesis under trackerMode
 
 `note.sample` is per-note authoring intent (which sample the note

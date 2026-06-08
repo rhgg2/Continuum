@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=704  sha=4cee518  mode=chunk
+@module configManager  src=configManager.lua  loc=707  sha=e3c39a1  mode=chunk
 
 # Invariants & contracts
   @invariant  cm is the sole source of truth for valid keys; in-code reads/writes raise on unknown keys, persistence-loaded unknowns are silently pruned
@@ -72,7 +72,7 @@
   @fn checkKey(key)  @ 459
   -- PUBLIC INTERFACE
   -- Reading
-  @fn mergedKey(key)  @ 548
+  @fn mergedKey(key)  @ 551
       -- Per-subkey union of a single key's tables across defaults→tiers,
       -- most-specific tier wins on name collision. Non-table contributions
       -- (including a scalar default) are skipped, so the result is always
@@ -83,31 +83,33 @@
       @contract  setContext(nil) clears both take and track; setContext(take) derives track via GetMediaItemTrack
       @contract  refreshes all four persisted caches (transient resets to {}) and fires configChanged with empty payload
   @api cm:clearTake()  @ 489
-  @api cm:setTrack(newTrack)  @ 497
-  @api cm:pollUndo()  @ 509
-  @api cm:get(key, opts)  @ 565
+  @api cm:boundTake()  @ 498
+      @contract  bound take pointer; nil when context is cleared (take/track tiers resolve off empty)
+  @api cm:setTrack(newTrack)  @ 500
+  @api cm:pollUndo()  @ 512
+  @api cm:get(key, opts)  @ 568
       @contract  returns deep copy of merged value (defaults overlaid by all five tiers); raises on unknown key
       @contract  opts.mergeTiers=true switches to per-subkey union across defaults+tiers (most-specific wins on collision) — only meaningful for table-valued keys
-  @api cm:getAt(level, key)  @ 572
+  @api cm:getAt(level, key)  @ 575
       @contract  reads single tier only (no merge, no defaults); key omitted returns whole-cache deep clone; raises on unknown level/key
-  @api cm:readTrackRaw(otherTrack)  @ 584
+  @api cm:readTrackRaw(otherTrack)  @ 587
       @contract  returns the raw cm-P_EXT blob string on otherTrack (or nil/empty if unset). Stable byte-for-byte across reads — callers can compare against a previously-captured raw to detect external rewrites (REAPER undo/redo), where re-serialising a parsed copy would diverge due to Lua pairs ordering.
-  @api cm:readTrackKey(otherTrack, key)  @ 592
+  @api cm:readTrackKey(otherTrack, key)  @ 595
       @contract  bypasses cache and active context; reads otherTrack's P_EXT directly without firing configChanged or disturbing the bound track's cache
-  @api cm:writeTrackKey(otherTrack, key, value)  @ 603
+  @api cm:writeTrackKey(otherTrack, key, value)  @ 606
       @contract  bypasses cache and active context; updates a single key on otherTrack's P_EXT (read-modify-write the parsed table). Fires targeted configChanged with .track set so subscribers of the bound track can ignore foreign-track edits.
-  @api cm:readTakeKey(otherTake, key)  @ 620
+  @api cm:readTakeKey(otherTake, key)  @ 623
       @contract  bypasses cache and active context; reads otherTake's P_EXT directly without firing configChanged or disturbing the bound take's cache
-  @api cm:writeTakeKey(otherTake, key, value)  @ 631
+  @api cm:writeTakeKey(otherTake, key, value)  @ 634
       @contract  bypasses cache and active context; updates a single key on otherTake's P_EXT (read-modify-write). util.REMOVE clears. No signal fired — read/write helpers are silent seams for foreign-take state.
-  @api cm:getLevel(key)  @ 645
+  @api cm:getLevel(key)  @ 648
       @contract  walks tiers most-specific to least, returning the first level whose cache defines the key (matches merge resolution); nil if no tier sets it
   -- Writing
-  @api cm:set(level, key, value)  @ 660
+  @api cm:set(level, key, value)  @ 663
       @contract  deep-copies value into the target tier's cache, persists that tier, fires targeted configChanged
-  @api cm:remove(level, key)  @ 673
+  @api cm:remove(level, key)  @ 676
       @contract  removes key from the named tier only; no-op (and no signal) if that tier's cache is unloaded
-  @api cm:assign(level, updates)  @ 687
+  @api cm:assign(level, updates)  @ 690
       @contract  validates every key in updates before any write (all-or-nothing); util.REMOVE sentinel deletes that key; fires keyless configChanged
 
 # Signals emitted (via util.installHooks)
@@ -116,10 +118,10 @@
 # Uses (outbound edges)
   @use call    util.add  @ 247, 248, 257, 258, 259
   @use call    util.assign  @ 447
-  @use call    util.deepClone  @ 269, 580
+  @use call    util.deepClone  @ 269, 583
   @use call    util.installHooks  @ 468
   @use call    util.print  @ 15
-  @use call    util.serialise  @ 342, 352, 367, 385, 612, 640
+  @use call    util.serialise  @ 342, 352, 367, 385, 615, 643
   @use require util  @ 12
 
 # REAPER API surface

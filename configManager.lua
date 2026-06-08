@@ -494,6 +494,9 @@ function cm:clearTake()
   fire('configChanged', {})
 end
 
+--contract: bound take pointer; nil when context is cleared (take/track tiers resolve off empty)
+function cm:boundTake() return take end
+
 function cm:setTrack(newTrack)
   track = newTrack
   cache.track = loaders.track()

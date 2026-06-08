@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1740  sha=8bc2e05  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1742  sha=08e5b60  mode=chunk
 @deps mm, cm
 
 # Invariants & contracts
@@ -190,9 +190,10 @@
   @emits rebuild   -- takeChanged:boolean
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 65, 70, 493, 684, 690, 691, 924, 1122, 1179, 1323, 1506, 1595, 1597, 1600, 1631, 1633, 1637, 1665, 1669, 1695, 1698
+  @use call    cm.boundTake  @ 1692
+  @use call    cm.get  @ 65, 70, 493, 684, 690, 691, 924, 1122, 1179, 1323, 1506, 1595, 1597, 1600, 1631, 1633, 1637, 1665, 1669, 1697, 1700
   @use call    cm.set  @ 1141, 1604
-  @use call    cm.setContext  @ 1715, 1727
+  @use call    cm.setContext  @ 1717, 1729
   @use call    mm.add  @ 595, 875, 1485, 1523
   @use call    mm.assign  @ 583, 1013, 1115, 1203, 1480
   @use call    mm.ccs  @ 1083, 1348, 1494, 1526
@@ -200,18 +201,18 @@
   @use call    mm.events  @ 617, 854
   @use call    mm.interpolate  @ 671
   @use call    mm.length  @ 666, 683, 747, 773, 841
-  @use call    mm.load  @ 1720
+  @use call    mm.load  @ 1722
   @use call    mm.modify  @ 581, 870, 1011, 1114, 1201, 1478, 1521
   @use call    mm.name  @ 668
   @use call    mm.notes  @ 1053
-  @use call    mm.reload  @ 1736
+  @use call    mm.reload  @ 1738
   @use call    mm.resolution  @ 74, 667, 683, 761, 775, 821, 856, 924, 1551
   @use call    mm.setLength  @ 761, 775, 821, 856
   @use call    mm.setName  @ 669
-  @use call    mm.take  @ 661, 663, 884, 885, 1005, 1141, 1593, 1732
+  @use call    mm.take  @ 661, 663, 884, 885, 1005, 1141, 1593, 1734
   @use call    mm.timeSigs  @ 670
   @use call    mm.tokenOf  @ 1065, 1088, 1093, 1100, 1203, 1204, 1350, 1498, 1528
-  @use call    mm.unload  @ 1729
+  @use call    mm.unload  @ 1731
   @use call    timing.delayToPPQ  @ 74
   @use call    timing.eval  @ 699, 700
   @use call    timing.invert  @ 705, 707
@@ -223,7 +224,7 @@
   @use call    util.bucket  @ 114, 515, 518, 1239, 1240, 1351
   @use call    util.clamp  @ 66
   @use call    util.clone  @ 848, 874, 899, 989, 1064, 1195, 1483
-  @use call    util.deepClone  @ 1632, 1633, 1636, 1637, 1698, 1704
+  @use call    util.deepClone  @ 1632, 1633, 1636, 1637, 1700, 1706
   @use call    util.deepEq  @ 1653
   @use call    util.installHooks  @ 41
   @use call    util.key  @ 515, 518
@@ -237,7 +238,7 @@
   @use require timing  @ 31
   @use require tuning  @ 32
   @use require util  @ 30
-  @use sub     cm:configChanged  @ 1689
+  @use sub     cm:configChanged  @ 1691
   @use sub     mm:reload  @ 1685
   @use sub     mm:takeSwapped  @ 1684
 

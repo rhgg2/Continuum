@@ -1686,8 +1686,10 @@ do
     tm:rebuild(pendingTakeSwap)
     pendingTakeSwap = false
   end)
+  -- Skip configChanged while dormant (cm unbound, mm/cm mismatch).
+  -- see docs/trackerManager.md § Dormant guard
   cm:subscribe('configChanged', function(change)
-    if bindingTake then return end
+    if bindingTake or not cm:boundTake() then return end
     local key = change.key
     if key == 'swing' then
       tm:markSwingStale(nil)
