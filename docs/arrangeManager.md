@@ -99,9 +99,13 @@ unchanged in semantics; the swing editor was migrated. The
 `docs/sequenceManager.md` history is preserved in git
 (`git log -- docs/sequenceManager.md`).
 
-The tm dependency is **optional**: pure discovery callers (the
-arrange page in phases 2-5) construct am with `cm` only; the swing
-editor's wiring passes both because it needs reswing.
+The reswing rebind needs the tracker's `tm`, which arrangeManager does
+not own (and the lone `am` instance lives on the arrange page, which has
+no `tm`). So `reswingAll` does the project walk (`takesUsing`) itself
+and hands the affected takes to the **`tracker` facade**'s
+`reswingTakes`, which transient-rebinds each through `tm`
+(markSwingStale) and restores the bound take. Pure discovery callers
+never touch the facade.
 
 ## Track ordering — deferred to phase 2
 

@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=102  sha=54569bd  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=111  sha=3848a7b  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -37,24 +37,24 @@
   @api tp:bindFromCursor()  @ 66
       @contract  rebind to the cursor take on change, then hash-diff for external edits. See docs/trackerPage.md § Bind from the cursor.
   -- Page interface — render delegates to the renderer; the watcher brackets the frame
-  @api tp:renderToolbarBits(ctx)  @ 91
-  @api tp:renderStatusBar(ctx)  @ 92
-  @api tp:focusState()  @ 93
-  @api tp:renderBody(ctx, w, h, dispatch)  @ 96
+  @api tp:renderToolbarBits(ctx)  @ 100
+  @api tp:renderStatusBar(ctx)  @ 101
+  @api tp:focusState()  @ 102
+  @api tp:renderBody(ctx, w, h, dispatch)  @ 105
       @contract  follow the cursor, draw, then snapshot the take hash as next frame's watcher baseline
 
 # Uses (outbound edges)
   @use call    facade.get  @ 20
   @use call    facade.publish  @ 80
-  @use call    trackerManager.bindTake  @ 54, 57
-  @use call    trackerManager.currentTake  @ 41, 50, 68
+  @use call    trackerManager.bindTake  @ 54, 57, 92, 94
+  @use call    trackerManager.currentTake  @ 41, 50, 68, 90, 94
   @use call    trackerManager.detach  @ 60
   @use call    trackerManager.reloadFromReaper  @ 63, 74
   @use call    trackerRender.closeTransients  @ 57, 60
-  @use call    trackerRender.focusState  @ 93
-  @use call    trackerRender.renderBody  @ 98
-  @use call    trackerRender.renderStatusBar  @ 92
-  @use call    trackerRender.renderToolbarBits  @ 91
+  @use call    trackerRender.focusState  @ 102
+  @use call    trackerRender.renderBody  @ 107
+  @use call    trackerRender.renderStatusBar  @ 101
+  @use call    trackerRender.renderToolbarBits  @ 100
   @use call    trackerView.dropGrid  @ 60
   @use call    trackerView.seedSharedSlots  @ 55
   @use call    util.instantiate  @ 24, 25, 26, 27, 29

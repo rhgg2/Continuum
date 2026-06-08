@@ -8,7 +8,7 @@
 --invariant: every grouped take is a slot; all four discovery reads route through ensureSlots
 --invariant: createAndDropMidi alone mints a slot; all else inherits or drops into an existing one
 --invariant: takeId is the source-identity chokepoint; takes with no derivable id are skipped
---invariant: reswingAll is sequenceManager folded in; tm optional, omitted by discovery callers
+--invariant: reswingAll is sequenceManager folded in; bind loop lives behind the 'tracker' facade
 --invariant: natural length in cm 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
 --invariant: a stored natural ≥ source demotes to util.OPEN; see docs § Natural length
 --invariant: 'arrangeColours' (project tier) maps takeId → colourIdx project-wide
@@ -19,7 +19,7 @@
 local util    = require 'util'
 local painter = require 'painter'
 
-local cm, tm, facade = (...).cm, (...).tm, (...).facade
+local cm, facade = (...).cm, (...).facade
 
 local am = {}
 
@@ -704,14 +704,9 @@ function am:takesUsing(name)
   return hits
 end
 
---contract: re-binds each takesUsing(name) take (markSwingStale); restores the bound take after
+--contract: hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 function am:reswingAll(name)
-  assert(tm, 'arrangeManager: reswingAll requires the tm dependency')
-  local origTake = tm:currentTake()
-  for _, take in ipairs(am:takesUsing(name)) do
-    if take ~= origTake then tm:bindTake(take, {markSwingStale=true}) end
-  end
-  if tm:currentTake() ~= origTake then tm:bindTake(origTake) end
+  facade.get('tracker').reswingTakes(am:takesUsing(name))
 end
 
 return am

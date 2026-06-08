@@ -84,6 +84,15 @@ facade.publish('tracker', {
     if take ~= tp:currentTake() then tp:bind(take) end
     tr:openTakeProperties{}
   end,
+  -- Swing edits: bind each affected take through tm (markSwingStale) to re-realise, restore after.
+  -- am owns the walk; tm owns the bind.
+  reswingTakes = function(takes)
+    local origTake = tm:currentTake()
+    for _, take in ipairs(takes) do
+      if take ~= origTake then tm:bindTake(take, { markSwingStale = true }) end
+    end
+    if tm:currentTake() ~= origTake then tm:bindTake(origTake) end
+  end,
 })
 
 ----- Page interface — render delegates to the renderer; the watcher brackets the frame

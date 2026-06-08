@@ -1,5 +1,5 @@
-@module arrangeManager  src=arrangeManager.lua  loc=717  sha=cd92365  mode=chunk
-@deps cm, tm, facade
+@module arrangeManager  src=arrangeManager.lua  loc=712  sha=faad93e  mode=chunk
+@deps cm, facade
 
 # Invariants & contracts
   @invariant  project-wide singleton; reads REAPER items + cm directly, owns no take state of its own
@@ -9,7 +9,7 @@
   @invariant  every grouped take is a slot; all four discovery reads route through ensureSlots
   @invariant  createAndDropMidi alone mints a slot; all else inherits or drops into an existing one
   @invariant  takeId is the source-identity chokepoint; takes with no derivable id are skipped
-  @invariant  reswingAll is sequenceManager folded in; tm optional, omitted by discovery callers
+  @invariant  reswingAll is sequenceManager folded in; bind loop lives behind the 'tracker' facade
   @invariant  natural length in cm 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
   @invariant  a stored natural ≥ source demotes to util.OPEN; see docs § Natural length
   @invariant  'arrangeColours' (project tier) maps takeId → colourIdx project-wide
@@ -134,7 +134,7 @@
   @api am:takesUsing(name)  @ 698
       @contract  reads each take's persisted usedSwings via cm:readTakeKey; no mm/cm context disturbance
   @api am:reswingAll(name)  @ 708
-      @contract  re-binds each takesUsing(name) take (markSwingStale); restores the bound take after
+      @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 
 # Uses (outbound edges)
   @use call    cm.getAt  @ 177
@@ -143,10 +143,8 @@
   @use call    cm.set  @ 178
   @use call    cm.writeTakeKey  @ 102, 103
   @use call    cm.writeTrackKey  @ 68
-  @use call    facade.get  @ 229
+  @use call    facade.get  @ 229, 709
   @use call    painter.hueNative  @ 213
-  @use call    tm.bindTake  @ 712, 714
-  @use call    tm.currentTake  @ 710, 714
   @use call    util.toBase62  @ 412
   @use require painter  @ 20
   @use require util  @ 19
