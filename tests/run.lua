@@ -132,6 +132,7 @@ local specs = {
   'wm_diff_midi_bus_spec',
   'wm_apply_midi_merge_spec',
   'wm_track_move_spec',
+  'wm_repartition_move_spec',
   'wm_delete_source_spec',
   'wm_snapshot_spec',
   'wm_target_alloc_spec',

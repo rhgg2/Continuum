@@ -1,0 +1,200 @@
+# wiring: implicit graph (working design)
+
+> Pre-design, exploratory. A direction for the wiring stack, not a
+> committed plan. Sibling of `design/archive/wiring.md` and `design/cv.md`
+> — read the former first; this leans on its vocabulary (user graph,
+> `compile` = `targetTracks`/`allocate`, `snapshot → diff → applyOps`,
+> merge CU, normal forms) and states only the delta. Implementation
+> reference: `docs/wiringManager.md`.
+
+## The one decision
+
+**REAPER is the only store. The graph is read back from it.**
+
+Today there are *two* persistent representations of the same logical
+graph: the `wiringGraph` blob in cm (intent) and the REAPER project
+(realisation). The whole reconcile loop exists to keep those two stores
+from drifting. The proposal collapses them: REAPER holds the graph, and
+`read : REAPER → Graph` recovers it on demand. Mutating the graph means
+mutating REAPER routing (gated through a validated draft). The cm blob
+retires; the desync bug-class it creates goes with it, and foreign
+adoption becomes free — what's in REAPER *is* the graph.
+
+This is the prize of **one store, not one pipeline.** The
+`target/snapshot/diff/applyOps` engine survives; `snapshot` and `load`
+simply collapse into the same read. (The tempting "beta-reduce
+`applyOps(diff(...))`" simplification is explicitly *rejected*: the op
+list is the pure-test seam and the gather→compute→mutate split, and a
+richer single store needs that auditable plan *more*, not less.)
+
+## The algebra
+
+Two maps: `compile : Graph → REAPER` and `read : REAPER → Graph`. Let
+`N = image(compile)` — the **normal forms** the allocator chooses.
+`compile` is only a *section* of `read`; `read` is total on a far larger
+domain than `N`. Two invariants govern correctness:
+
+1. **`read ∘ compile = id`** (exact, on graphs). What you author is what
+   you read back — editor fidelity. This forces `compile` injective, so
+   the design question is purely *where `compile` collapses distinct
+   graphs* and whether inference or a stored tag separates them.
+
+2. **`compile ∘ read` preserves sound** (off `N`). For a hand-edited,
+   non-normal project, reading then recompiling produces an audibly
+   identical routing — the retraction that snaps REAPER back onto `N`
+   and self-heals manual edits. Its non-identity off `N` *is* the
+   self-healing.
+
+No-churn needs nothing extra: from (1), `compile ∘ read ∘ compile =
+compile`, so `compile ∘ read` is already the identity *on* `N`. Byte
+idempotence is a corollary, not a separate condition.
+
+## What `read` does
+
+`read` operates at the **node/edge level**; the track *partition* is not
+part of graph identity:
+
+- **Track splits, merges, and emergent tracks are invisible** — pure
+  realisation, discarded like bus numbers. A cross-track send merely
+  realises an edge that already exists *between two nodes*; `read`
+  recovers node→node edges from channel/pin routing and never asks which
+  track a node sits on.
+- **One track-level inference:** a track with no inputs is a source.
+  Robust precisely because every emergent track (merge or split) *has*
+  inputs, so the rule only ever fires on genuine sources.
+- **Synthesised FX stripped by ident** (`CU_IDENT`, brackets). A merge
+  CU's edges are recovered from its own params (`inMask`/`outBus`) plus
+  the surrounding bus assignments — no stored provenance.
+- **Component classification** for quarantine (below).
+
+The consequence worth stating plainly: **routing is fully inferred.**
+Nothing about the topology needs a stored tag.
+
+## Quarantine — the only irreducible rejects
+
+Two states the DAG model genuinely *cannot express*, quarantined at
+**whole-track-set** granularity (the connected/bus-sharing component):
+
+- **Feedback loops** — not a DAG; `compile` needs a topological order.
+- **Bus-aware JSFX in a feeder cone** — it scans `midi_bus` itself,
+  escaping the allocator, so it corrupts the bus space of the whole
+  upstream MIDI cone, not just its own track.
+
+Whole-track-set granularity is load-bearing: no track is ever
+half-managed, so `compile`'s full-replace writes stay safe and there is
+no surgical-splice case. "Left alone by compile" then falls out of the
+**existing diff for free** — make a quarantined component invisible to
+*both* target and snapshot, and the diff emits zero ops for it. (snapshot
+already hides foreign whole-tracks; re-drive that filter by component
+classification.)
+
+A quarantined component **vanishes from the wiring view** and is fixable
+only in raw REAPER — so the view must say *why* a region went dark
+("feedback loop", "bus-aware FX") rather than silently omit it.
+
+## Capacity is compile's job, not a quarantine
+
+REAPER's 64-channel / 16-bus caps are a *resource*, not an
+expressiveness limit. An over-cap partition class is **bisected across
+tracks along a min-cut** — cut where the crossing stream traffic is
+smallest, carry the boundary on an inter-track send, recurse until each
+side fits. Always feasible (in the limit one FX per track); containers
+are opaque and bounded, so there is no atomic-overflow residue. Capacity
+leaves the quarantine list entirely.
+
+Notes:
+
+- The cut is min-crossing-weight **subject to each side fitting** —
+  capacitated bisection, not plain min-cut — but class node counts are
+  tiny, so exact search is cheap.
+- A split materialises as an emergent `newTrack` + cross-track send: the
+  *same shape* as a merge newTrack, which `read` already ignores. So it
+  costs nothing on the read side.
+- **Net-new allocator capability.** Distinct from the existing
+  *split-at-node* (a semantic boundary): this is *resource*-triggered
+  with a *bandwidth* objective. Today the allocator only **reports**
+  overflow (`wm:errors`); it must learn to resolve it.
+- **Deterministic tie-break** required — min-cut ties picked differently
+  across passes would reintroduce churn. The one concrete place
+  determinism must be enforced.
+
+## Decoration — view-state only
+
+Since routing is fully inferred, the *only* thing that needs storing is
+state `compile` never realises: **node positions** (and names/colours).
+This is the entire scope of any metadata facility added to rm — it
+carries "where the dot sits," never routing semantics. (Or positions
+auto-layout and nothing is decorated at all.)
+
+- **CUs need positions too**, but ride their existing special lifecycle:
+  a CU is synthesised and ephemeral (minted/retracted by reconcile as a
+  fan-in crosses one feeder), so its position lives and dies with it,
+  stored on the instance reconcile owns rather than on a user node.
+- **Substrate — one central GUID-keyed store in project ext.** The spike
+  (`design/fx-metadata-spike.md`) closed the per-FX-channel question:
+  REAPER has no arbitrary `SetNamedConfigParm` ext key, so positions
+  cannot live *on* the FX. Instead one store maps node identity →
+  `{pos, name, colour}` — FX GUID for fx-nodes, track GUID for
+  source/master. The FX GUID is a durable per-node identity (survives
+  save/reload), and compile relocates a resident FX by *move*
+  (`moveFxAcrossTracks`), never delete+add, so the GUID is stable across
+  recompiles and **no `nodeId → guid` ledger is needed** — the GUID is the
+  key. Positions needn't be undoable, so project ext (not the scratch
+  track) is the home. Position is orthogonal to routing, so it never
+  touches `read ∘ compile = id`.
+
+## What retires
+
+- **`wiringGraph` cm blob** — the graph is implicit.
+- **`wiringOwnedFx` + `ownedSubsequence` splicing** — whole-track-set
+  quarantine means no half-managed track, so the ownership-subset marker
+  has no job; full-replace writes are always safe.
+- **The scratch track + `pollUndo` + P_EXT mirror — on the decoration
+  axis.** The spike confirmed node positions needn't be undoable, so they
+  live in plain project ext and the mirror is not needed *for decoration*.
+  (It may still carry an undo-coherence job elsewhere — out of scope here.)
+
+## Validation shifts meaning
+
+`validate` stops being a pre-commit gate (in the store model the commit
+already happened in REAPER) and becomes a **post-hoc classifier** on
+`read`'s domain: managed vs quarantine. Its rule count stays tiny, but
+its input domain explodes from "graphs the authoring UI can build" to
+"anything REAPER allows" — so the loop and bus-aware checks go from
+near-vacuous belt-and-braces to the *actual* boundary of the system.
+
+A mutation still routes through a validated in-memory **draft** (read
+REAPER → draft → `validate` → write the delta). You don't escape the
+graph *type*, only its *persistence*; UI gestures must not scribble raw
+routing past the gate.
+
+## Plan (rough)
+
+1. **`read : snapshot → graph` by pure routing inference** — source by
+   no-inputs, CU/bracket strip by ident, edges from channel/pin routing,
+   splits/merges ignored, components classified for quarantine. Positions
+   left as a TODO.
+2. **`read ∘ compile = id` fixture sweep** over existing graphs (incl.
+   the merge-CU and capacity-split cases). Any missing routing-decoration
+   surfaces as a fibre collapse; the prediction is it returns clean and
+   the only diff is positions. Assert via an audio-semantic projection
+   (FX-by-order, stream edges with gain/channels, bus resolved away) plus
+   "quarantined bytes unchanged" — no rendering.
+3. **Capacity min-cut pass** in the allocator (deterministic tie-break),
+   distinct from split-at-node.
+4. **Retire** the cm blob, the ownership machinery, and — if the
+   decoration substrate holds — the scratch/`pollUndo` apparatus.
+
+## Open questions / risks
+
+- ~~**Per-FX metadata channel**~~ — *resolved* (`design/fx-metadata-spike.md`):
+  no arbitrary FX named-config ext exists, and none is needed — see
+  § Decoration.
+- **Does the sweep come back clean?** The whole "routing is fully
+  inferred" claim rests on `compile` being injective up to view-state.
+  The fixture sweep is the proof; until it runs, decoration scope is a
+  prediction.
+- **Capacity bisection** is genuinely new allocator work and the bulk of
+  the risk; everything else is `read` + deletions.
+- **Quarantine UX** — how a darkened component signals its cause and
+  recovery path in the wiring view.
