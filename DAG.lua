@@ -152,6 +152,51 @@ function M.validate(userGraph)
   return nil
 end
 
+----- classify
+
+-- Post-hoc component classifier over read's domain (design/wiring-implicit-graph.md
+-- § Quarantine): validate's successor on the graphs REAPER allows, not just authorable ones.
+--contract: groups non-master nodes into components; reason tags quarantined ones (busAware)
+--shape: component = { nodes=id[] (sorted), reason=nil|'busAware' }
+function M.classify(userGraph)
+  local nodes, edges = userGraph.nodes or {}, userGraph.edges or {}
+
+  -- Union over non-master-incident edges only: master is a shared terminal sink bridging no
+  -- two track-sets, so excluding it keeps every track whole within a single component.
+  local parent = {}
+  local function find(x)
+    while parent[x] ~= x do parent[x] = parent[parent[x]]; x = parent[x] end
+    return x
+  end
+  for id, n in pairs(nodes) do
+    if n.kind ~= 'master' then parent[id] = id end
+  end
+  for _, e in ipairs(edges) do
+    if parent[e.from] and parent[e.to] then parent[find(e.from)] = find(e.to) end
+  end
+
+  local byRoot = {}
+  for id in pairs(parent) do
+    local root = find(id)
+    byRoot[root] = byRoot[root] or { nodes = {} }
+    util.add(byRoot[root].nodes, id)
+  end
+
+  -- A bus-aware fx scans midi_bus itself, corrupting its whole component's bus space, so the
+  -- entire track-set is quarantined (design § Quarantine), not just its own track.
+  for id, n in pairs(nodes) do
+    if n.busAware and byRoot[find(id)] then byRoot[find(id)].reason = 'busAware' end
+  end
+
+  local components = {}
+  for _, comp in pairs(byRoot) do
+    table.sort(comp.nodes)
+    util.add(components, comp)
+  end
+  table.sort(components, function(a, b) return a.nodes[1] < b.nodes[1] end)
+  return components
+end
+
 ----- compile context
 
 -- Lazy ctx factory; derivations memoise into closure-local `cache`.

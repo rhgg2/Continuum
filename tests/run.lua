@@ -126,6 +126,7 @@ local specs = {
   'dag_allocate_midi_spec',
   'dag_allocate_midi_bracket_spec',
   'dag_allocate_midi_native_spec',
+  'dag_classify_spec',
   'wm_persistence_spec',
   'wm_installed_fx_spec',
   'wm_probe_fx_io_spec',

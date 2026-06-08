@@ -71,6 +71,30 @@ return {
     end,
   },
   {
+    -- snapshot probes JSFX descs so read can quarantine a bus-aware fx; only true is stamped.
+    name = 'fx: a bus-aware JSFX is stamped busAware, a plain one is not',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:load()
+      local track = seedSourceTrack(h, wm, 'guid-A')
+      seedFx(h, track, 'JS:BusAware', '{FX-b}')
+      seedFx(h, track, 'JS:Plain',    '{FX-p}')
+      wm:mutate(function(g)
+        g.nodes['fb'] = { kind='fx', fxIdent='JS:BusAware', fxId='{FX-b}',
+                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
+        g.nodes['fp'] = { kind='fx', fxIdent='JS:Plain', fxId='{FX-p}',
+                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
+      end)
+      wm.readJSFXContent = function(_, ident)
+        return ident == 'JS:BusAware' and 'desc:B\next_midi_bus = 1\n' or 'desc:P\n@sample\n'
+      end
+      local fxBy = {}
+      for _, e in ipairs(wm:snapshot()['guid-A'].fx) do fxBy[e.id] = e end
+      t.eq(fxBy['{FX-b}'].busAware, true, 'bus-aware fx stamped')
+      t.eq(fxBy['{FX-p}'].busAware, nil,  'plain fx left unstamped')
+    end,
+  },
+  {
     name = 'fx only includes FX whose guid is in the user graph',
     run = function(harness)
       local h, wm = mkWm(harness)

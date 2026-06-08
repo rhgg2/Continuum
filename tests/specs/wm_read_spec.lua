@@ -266,4 +266,24 @@ return {
       })
     end,
   },
+  {
+    -- A bus-aware JSFX (ext_midi_bus) escapes the allocator, corrupting its track-set's bus
+    -- space; read groups the component and tags it busAware (design § Quarantine). Hand-built.
+    name = 'read: a bus-aware fx quarantines its whole component',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local snap = {
+        ['guid-A'] = { trackKind='sourceTrack', id='guid-A', nchan=2, mainSend={on=false}, sends={},
+          fx = {
+            { id='g-f', ident='JS:Plain',    ins=1, outs=1 },
+            { id='g-b', ident='JS:BusAware', ins=1, outs=1, busAware=true },
+          } },
+      }
+      local rg = wm.readGraph(snap)
+      t.eq(rg.nodes['g-b'].busAware, true, 'busAware copied onto the node')
+      local byNodes = {}
+      for _, c in ipairs(rg.components) do byNodes[table.concat(c.nodes, ',')] = c.reason or false end
+      t.deepEq(byNodes, { ['g-b,g-f,guid-A'] = 'busAware' })
+    end,
+  },
 }

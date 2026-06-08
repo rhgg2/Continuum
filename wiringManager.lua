@@ -9,7 +9,7 @@
 --shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
 --shape: snapshotSend = { to=trackKey, kind='audio'|'midi', gain?=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }
 --shape: snapshotFxOrigin = {kind='node',id=string}|{kind='bracketIn'|'bracketOut',id=string}|{kind='merge',consumer=string,trackKey=trackKey}
---shape: snapshotFxEntry = { id?=string, ident=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,outDisabled=bool}, pinMaps?=snapshotPinMap }  -- ins/outs are audio pair counts, for read
+--shape: snapshotFxEntry = { id?=string, ident=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,outDisabled=bool}, pinMaps?=snapshotPinMap, busAware?=bool }  -- ins/outs are audio pair counts, for read
 --shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + wm ownership/trackKey overlay. see docs/wiringManager.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'moveFxAcrossTracks', ... }
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
@@ -69,7 +69,7 @@ end
 
 ----- compiled-graph cache: one clone+compile per structural change, pulled by wv
 
-local function buildReach(g)
+local function adjacencies(g)
   local forward, reverse = {}, {}
   for _, edge in ipairs(g.edges or {}) do
     util.bucket(forward, edge.from, edge.to)
@@ -83,7 +83,7 @@ local function ensureCompiled()
   ensureLoaded()
   if not compiledCache then
     local snap = util.deepClone(userGraph)
-    compiledCache = { graph = snap, ctx = DAG.compile(snap), reach = buildReach(snap) }
+    compiledCache = { graph = snap, ctx = DAG.compile(snap), reach = adjacencies(snap) }
   end
   return compiledCache
 end
@@ -445,16 +445,25 @@ function wm:snapshot()
   local scratch = rm:scratchId()
   keyByGuid[scratch], kindByKey[SCRATCH_KEY] = SCRATCH_KEY, 'scratch'
 
+  -- Bus-aware JSFX (ext_midi_bus=1) escapes the allocator; flag it so read quarantines its
+  -- component. One disk read per ident, memoised across this snapshot.
+  local busAwareByIdent = {}
+  local function busAware(ident)
+    if busAwareByIdent[ident] == nil then
+      busAwareByIdent[ident] = parseJSFXBusAware(self:readJSFXContent(ident))
+    end
+    return busAwareByIdent[ident]
+  end
   local function snapFx(fx)
     local entry = { id = fx.id, ident = fx.ident, ins = fx.ins, outs = fx.outs }
     if fx.pinMaps and (next(fx.pinMaps.ins) or next(fx.pinMaps.outs)) then
       entry.pinMaps = fx.pinMaps
     end
-    if isJS(fx.ident) then
-      if fx.ident == CU_IDENT then
-        local params = rm:params(fx.id)
-        if params then entry.params = flattenCuParams(readCuParams(params)) end
-      end
+    if fx.ident == CU_IDENT then
+      local params = rm:params(fx.id)
+      if params then entry.params = flattenCuParams(readCuParams(params)) end
+    elseif isJS(fx.ident) then
+      if busAware(fx.ident) then entry.busAware = true end
     else
       entry.midi = fx.midi
     end
@@ -587,8 +596,8 @@ end
 
 ----- read : wiringSnapshot -> userGraph (design/wiring-implicit-graph.md § Plan)
 
--- Pass 3b: audio + CU collapse + gain + full midi-bus walk (fan-in, merge, brackets)
--- onto edge.ops.gain; node ids are rm ids. Pure.
+-- Pass 3c: audio + CU collapse + gain + full midi-bus walk (fan-in, merge, brackets), then
+-- component classification (bus-aware quarantine). Node ids are rm ids. Pure.
 local MASTER_KEY = '__master__'
 local function readGraph(snap)
   local nodes = {
@@ -769,7 +778,7 @@ local function readGraph(snap)
         collapseCu(fxe)
       else
         local id = fxe.id
-        nodes[id] = { kind = 'fx', fxIdent = fxe.ident, fxId = id,
+        nodes[id] = { kind = 'fx', fxIdent = fxe.ident, fxId = id, busAware = fxe.busAware or nil,
                       ports = { audio = { ins = fxe.ins or 0, outs = fxe.outs or 0 },
                                 midi = { ins = 1, outs = 1 } } }
         local pinMaps = fxe.pinMaps or { ins = {}, outs = {} }
@@ -801,13 +810,15 @@ local function readGraph(snap)
   -- The master node is the master track's output (pair 1).
   for _, ref in ipairs((tails[MASTER_KEY].audio or {})[1] or {}) do addAudioEdge(ref, 'master', nil) end
 
-  return { nodes = nodes, edges = edges, nextId = 1 }
+  local graph = { nodes = nodes, edges = edges, nextId = 1 }
+  graph.components = DAG.classify(graph)
+  return graph
 end
 
 wm.readGraph = readGraph  -- exposed for unit tests; wm:read drives it from the live snapshot
 
 --contract: reconstructs the user graph from REAPER routing; node ids are rm ids
--- (3b: audio + CU collapse + gain + full midi-bus walk; quarantine TODO)
+-- (3c: + component classification — bus-aware quarantine; feedback deferred)
 function wm:read()
   return readGraph(self:snapshot())
 end
