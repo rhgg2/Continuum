@@ -1,4 +1,4 @@
-@module samplePage  src=samplePage.lua  loc=71  sha=fa87f15  mode=chunk
+@module samplePage  src=samplePage.lua  loc=75  sha=77d117a  mode=chunk
 @deps cm, cmgr, chrome, gui, facade
 
 # Imports
@@ -21,36 +21,38 @@
 
 # Public API (sp:*)
   -- Page lifecycle (track ops on sv, JSFX poll on sm)
-  @api sp:bind()  @ 37
-      @contract  bind seeds a default track on first activation; the page owns its track thereafter
-  @api sp:setTrack(track)  @ 45
+  @api sp:bind()  @ 39
+      -- The shared cm is re-keyed by whichever page is active, so re-assert ours each
+      -- time even when sv already remembers a track -- a prior tracker unbind nulled it.
+      @contract  bind re-keys cm to the page's track on every activation (seeds a default on the first)
+  @api sp:setTrack(track)  @ 49
       @contract  setTrack re-keys cm to the given track via sv; the sample facade and the picker drive it
-  @api sp:listTracks()  @ 50
+  @api sp:listTracks()  @ 54
       @contract  listTracks proxies sm:listTracks via sv — coord queries this to seed its active sampler track on first activation
-  @api sp:unbind()  @ 53
+  @api sp:unbind()  @ 57
       @contract  unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
-  @api sp:tick()  @ 56
+  @api sp:tick()  @ 60
       @contract  tick runs every frame; watchPath + sm:tick always; probeMode skipped if no current take
   -- Page interface — render delegates to the renderer
-  @api sp:renderToolbarBits(ctx)  @ 66
-  @api sp:renderBody(ctx, w, h, dispatch)  @ 67
-  @api sp:renderStatusBar(ctx)  @ 68
-  @api sp:focusState()  @ 69
+  @api sp:renderToolbarBits(ctx)  @ 70
+  @api sp:renderBody(ctx, w, h, dispatch)  @ 71
+  @api sp:renderStatusBar(ctx)  @ 72
+  @api sp:focusState()  @ 73
 
 # Uses (outbound edges)
   @use call    facade.get  @ 21
-  @use call    facade.publish  @ 63
-  @use call    sampleManager.probeMode  @ 58
-  @use call    sampleManager.tick  @ 60
-  @use call    sampleManager.watchPath  @ 59
-  @use call    sampleRender.closeTransients  @ 53
-  @use call    sampleRender.focusState  @ 69
-  @use call    sampleRender.renderBody  @ 67
-  @use call    sampleRender.renderStatusBar  @ 68
-  @use call    sampleRender.renderToolbarBits  @ 66
-  @use call    sampleView.getTrack  @ 38
-  @use call    sampleView.listTracks  @ 39, 50
-  @use call    sampleView.setTrack  @ 40, 46
+  @use call    facade.publish  @ 67
+  @use call    sampleManager.probeMode  @ 62
+  @use call    sampleManager.tick  @ 64
+  @use call    sampleManager.watchPath  @ 63
+  @use call    sampleRender.closeTransients  @ 57
+  @use call    sampleRender.focusState  @ 73
+  @use call    sampleRender.renderBody  @ 71
+  @use call    sampleRender.renderStatusBar  @ 72
+  @use call    sampleRender.renderToolbarBits  @ 70
+  @use call    sampleView.getTrack  @ 40
+  @use call    sampleView.listTracks  @ 42, 54
+  @use call    sampleView.setTrack  @ 45, 50
   @use call    util.instantiate  @ 25, 26, 27
   @use require fs  @ 11
   @use require sampleManager  @ 25

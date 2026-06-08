@@ -168,4 +168,22 @@ return {
       fakeImGui.Text = origText
     end,
   },
+
+  {
+    name = 'bindFromCursor re-keys cm on return from dormancy even when the take is unchanged',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      fakeArrange.currentTake = function() return 'tr1/t1' end
+      tp:bindFromCursor()                   -- initial bind to the cursor take
+      tp:unbind()                           -- switch away: page goes dormant
+      local got = {}
+      h.cm.setContext = function(_, take) got[#got+1] = take end
+      tp:bindFromCursor()                   -- return: cursor take unchanged
+      t.eq(got[#got], 'tr1/t1', 're-asserts cm context despite the unchanged take')
+    end,
+  },
 }

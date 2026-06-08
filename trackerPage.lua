@@ -32,6 +32,9 @@ local tr = util.instantiate('trackerRender',
 
 local tp = {}
 local lastHash = nil   -- bound take's last-seen MIDI hash; external-mutation watcher baseline
+-- Set on unbind: forces the next bindFromCursor to re-key the shared cm even if
+-- the cursor take is unchanged, since another page may have re-keyed it meanwhile.
+local wasDormant = false
 
 --reaper: MIDI_GetHash on the bound take — the external-mutation watcher baseline
 local function takeHash()
@@ -51,7 +54,7 @@ function tp:bind(t)
   tm:bindTake(t)
   if t then tv:seedSharedSlots() end
 end
-function tp:unbind() tr:closeTransients(); tm:bindTake(nil) end
+function tp:unbind() tr:closeTransients(); tm:bindTake(nil); wasDormant = true end
 
 --contract: if take is destroyed, detach tm and blank the grid. Distinct from unbind.
 function tp:dropTake() tr:closeTransients(); tm:detach(); tv:dropGrid() end
@@ -62,7 +65,8 @@ function tp:reloadFromReaper() tm:reloadFromReaper() end
 --contract: rebind to the cursor take on change, then hash-diff for external edits. See docs/trackerPage.md § Bind from the cursor.
 function tp:bindFromCursor()
   local cur = arrange().currentTake()
-  if cur ~= tm:currentTake() then
+  if wasDormant or cur ~= tm:currentTake() then
+    wasDormant = false
     if cur then self:bind(cur) else self:dropTake() end
     lastHash = nil
   elseif cur and lastHash then

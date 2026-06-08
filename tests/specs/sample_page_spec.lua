@@ -59,4 +59,16 @@ return {
       t.eq(fs.acceptCmds,  false, "no acceptance without a context")
     end,
   },
+  {
+    name = "bind re-keys cm to the page track on every activation, not just the first",
+    run = function(harness)
+      local h  = harness.mk()
+      local sp = newSamplePage(h.cm, h.cmgr, nil, {})
+      sp:setTrack('trackZ')                 -- first activation seeds the page's track
+      local got = 'sentinel'
+      h.cm.setTrack = function(_, track) got = track end
+      sp:bind()                             -- re-activation: sv already remembers trackZ
+      t.eq(got, 'trackZ', "bind re-asserts cm:setTrack even when sv already has a track")
+    end,
+  },
 }

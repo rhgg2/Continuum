@@ -33,12 +33,16 @@ local sp = {}
 
 ----- Page lifecycle (track ops on sv, JSFX poll on sm)
 
---contract: bind seeds a default track on first activation; the page owns its track thereafter
+--contract: bind re-keys cm to the page's track on every activation (seeds a default on the first)
+-- The shared cm is re-keyed by whichever page is active, so re-assert ours each
+-- time even when sv already remembers a track -- a prior tracker unbind nulled it.
 function sp:bind()
-  if not sv:getTrack() then
+  local track = sv:getTrack()
+  if not track then
     local tracks = sv:listTracks()
-    sv:setTrack(tracks[1] and tracks[1].track or nil)
+    track = tracks[1] and tracks[1].track or nil
   end
+  if track then sv:setTrack(track) end
 end
 
 --contract: setTrack re-keys cm to the given track via sv; the sample facade and the picker drive it
