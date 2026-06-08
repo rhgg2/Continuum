@@ -597,7 +597,7 @@ end
 ----- read : wiringSnapshot -> userGraph (design/wiring-implicit-graph.md § Plan)
 
 -- Pass 3c: audio + CU collapse + gain + full midi-bus walk (fan-in, merge, brackets), then
--- component classification (bus-aware quarantine). Node ids are rm ids. Pure.
+-- component classification (bus-aware + feedback quarantine). Node ids are rm ids. Pure.
 local MASTER_KEY = '__master__'
 local function readGraph(snap)
   local nodes = {
@@ -710,11 +710,15 @@ local function readGraph(snap)
         if indeg[c] == 0 then util.add(ready, c) end
       end
     end
-    return out
+    local cyclic = {}
+    for _, k in ipairs(keys) do if not placed[k] then util.add(cyclic, k) end end
+    table.sort(cyclic)
+    return out, cyclic
   end
 
   local tails = {}  -- trackKey -> { audio={[pair]=ref[]}, midi={[bus]=ref[]} }; ref = { node, port?, gain? }
-  local function walkTrack(trackKey, entry)
+  local feedbackSeeds = {}  -- node ids on cyclic (Kahn-leftover) tracks; classify tags their component
+  local function walkTrack(trackKey, entry, isCyclic)
     local liveAudio, liveMidi = {}, {}
     local function feed(pair, ref)
       liveAudio[pair] = liveAudio[pair] or {}
@@ -740,6 +744,7 @@ local function readGraph(snap)
       local sid = entry.id
       nodes[sid] = { kind = 'source', trackId = entry.id,
                      ports = { audio = { ins = 0, outs = 1 }, midi = { ins = 0, outs = 1 } } }
+      if isCyclic then feedbackSeeds[sid] = true end
       feed(1, { node = sid, port = 1 })
       feedMidi(0, { node = sid })
     end
@@ -781,6 +786,7 @@ local function readGraph(snap)
         nodes[id] = { kind = 'fx', fxIdent = fxe.ident, fxId = id, busAware = fxe.busAware or nil,
                       ports = { audio = { ins = fxe.ins or 0, outs = fxe.outs or 0 },
                                 midi = { ins = 1, outs = 1 } } }
+        if isCyclic then feedbackSeeds[id] = true end
         local pinMaps = fxe.pinMaps or { ins = {}, outs = {} }
         for port, prs in pairs(pinMaps.ins or {}) do
           for _, pair in ipairs(prs) do
@@ -804,21 +810,25 @@ local function readGraph(snap)
     tails[trackKey] = { audio = liveAudio, midi = liveMidi }
   end
 
-  for _, k in ipairs(nonMasterOrder()) do walkTrack(k, snap[k]) end
+  local placedOrder, cyclicOrder = nonMasterOrder()
+  for _, k in ipairs(placedOrder) do walkTrack(k, snap[k]) end
+  -- Feedback-loop tracks (Kahn leftovers) are walked too so their nodes surface for the view;
+  -- their emitted forward edges keep the component connected and feedbackSeeds tags it.
+  for _, k in ipairs(cyclicOrder) do walkTrack(k, snap[k], true) end
   walkTrack(MASTER_KEY, snap[MASTER_KEY] or { trackKind = 'master', fx = {} })
 
   -- The master node is the master track's output (pair 1).
   for _, ref in ipairs((tails[MASTER_KEY].audio or {})[1] or {}) do addAudioEdge(ref, 'master', nil) end
 
   local graph = { nodes = nodes, edges = edges, nextId = 1 }
-  graph.components = DAG.classify(graph)
+  graph.components = DAG.classify(graph, feedbackSeeds)
   return graph
 end
 
 wm.readGraph = readGraph  -- exposed for unit tests; wm:read drives it from the live snapshot
 
 --contract: reconstructs the user graph from REAPER routing; node ids are rm ids
--- (3c: + component classification — bus-aware quarantine; feedback deferred)
+-- (3c: + component classification — bus-aware + feedback quarantine)
 function wm:read()
   return readGraph(self:snapshot())
 end

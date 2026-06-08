@@ -286,4 +286,28 @@ return {
       t.deepEq(byNodes, { ['g-b,g-f,guid-A'] = 'busAware' })
     end,
   },
+  {
+    -- A send cycle (P->Q->P) can't be topo-ordered; read still surfaces both tracks' fx (so the
+    -- view can darken them) and classify tags the whole component feedback. Hand-built.
+    name = 'read: a send cycle is surfaced and quarantined as feedback',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local function looper(to)
+        return { trackKind='newTrack', nchan=2, mainSend={on=false},
+                 sends={ { to=to, kind='audio', srcChan=0, dstChan=0, pos='postFader' } } }
+      end
+      local snap = {
+        ['guid-P'] = looper('guid-Q'),
+        ['guid-Q'] = looper('guid-P'),
+      }
+      snap['guid-P'].id, snap['guid-Q'].id = 'guid-P', 'guid-Q'
+      snap['guid-P'].fx = { { id='fp', ident='VST:F', ins=1, outs=1, pinMaps={ins={[1]={1}}, outs={[1]={1}} } } }
+      snap['guid-Q'].fx = { { id='fq', ident='VST:F', ins=1, outs=1, pinMaps={ins={[1]={1}}, outs={[1]={1}} } } }
+      local rg = wm.readGraph(snap)
+      t.deepEq(nodeKinds(rg), { master='master', fp='fx', fq='fx' })
+      local byNodes = {}
+      for _, c in ipairs(rg.components) do byNodes[table.concat(c.nodes, ',')] = c.reason or false end
+      t.deepEq(byNodes, { ['fp,fq'] = 'feedback' })
+    end,
+  },
 }

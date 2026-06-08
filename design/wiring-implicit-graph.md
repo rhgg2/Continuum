@@ -201,13 +201,14 @@ never ahead of it.
    splits/merges ignored, components classified for quarantine. Positions
    left as a TODO. Read-derived nodes are keyed by their rm id — the
    identity flip begins here (§ Identity flips with read), not as a
-   separate precursor step.
+   separate precursor step. **Landed — see § Status.**
 2. **`read ∘ compile = id` fixture sweep** over existing graphs (incl.
    the merge-CU and capacity-split cases). Any missing routing-decoration
-   surfaces as a fibre collapse; the prediction is it returns clean and
-   the only diff is positions. Assert via an audio-semantic projection
-   (FX-by-order, stream edges with gain/channels, bus resolved away) plus
-   "quarantined bytes unchanged" — no rendering.
+   surfaces as a fibre collapse; two are already known (§ Status), and
+   beyond them the prediction is that positions are the only diff. Assert
+   via an audio-semantic projection (FX-by-order, stream edges with
+   gain/channels, bus resolved away) plus "quarantined bytes unchanged"
+   — no rendering.
 3. **Capacity min-cut pass** in the allocator (deterministic tie-break),
    distinct from split-at-node.
 4. **Retire** the cm blob, the ownership machinery, and — if the
@@ -216,6 +217,39 @@ never ahead of it.
    the `origin={kind='node'}` stamp retire here too — the identity flip
    completes (§ Identity flips with read).
 
+## Status (2026-06-08)
+
+**Step 1 is landed** (through commit `625f787`): `read : snapshot →
+graph` by pure routing inference.
+
+- Audio recovered from channel/pin maps; CU bridges (merge + bracket)
+  stripped by ident and collapsed back to node→node edges, gain folded
+  onto `edge.ops.gain`.
+- Full MIDI bus walk: native `inBus`/`outBus`, merge-CU mask→`outBus`
+  union (fan-in), brackets transparent (the wrapped JSFX reads bus 0). An
+  fx drives its *output* bus when midi-out is enabled, else clears it.
+- Component classification (`DAG.classify`) at whole-track-set
+  granularity, master excluded as the shared sink. Both reasons:
+  `'busAware'` (snapshot stamps the `ext_midi_bus` flag; read propagates)
+  and `'feedback'`.
+- Feedback first needed a read-completeness fix: `readGraph`'s Kahn sort
+  was *dropping* cyclic tracks. It now surfaces them (leftovers walked +
+  seeded), so a loop is darkened-with-cause, not silently missing.
+
+Nodes key by rm id — the identity flip (§ Identity flips with read) has
+begun. Positions stay a TODO.
+
+**Two `compile` non-injectivities surfaced** in the process — real bugs,
+reflected faithfully by read, for the step-2 sweep to confirm (not read
+workarounds):
+
+- **bus-0 phantom** — the first fx on a source track receives source MIDI
+  on bus 0 even for an audio-only edge (default `inBus=0` trailer), so
+  audio-only and audio+midi sources collapse to the same REAPER state.
+- **master-resident midi drop** — a midi-fed fx whose only output is
+  master collapses onto the master track; sources reach it by audio
+  parent-send alone, so the `source→fx` midi edge vanishes.
+
 ## Open questions / risks
 
 - ~~**Per-FX metadata channel**~~ — *resolved* (`design/fx-metadata-spike.md`):
@@ -223,8 +257,10 @@ never ahead of it.
   § Decoration.
 - **Does the sweep come back clean?** The whole "routing is fully
   inferred" claim rests on `compile` being injective up to view-state.
-  The fixture sweep is the proof; until it runs, decoration scope is a
-  prediction.
+  Two non-injectivities are already known (§ Status); the live question is
+  whether *more* lurk, or whether those two plus positions are the whole
+  story. The fixture sweep is the proof; until it runs, decoration scope
+  is a prediction.
 - **Capacity bisection** is genuinely new allocator work and the bulk of
   the risk; everything else is `read` + deletions.
 - **Quarantine UX** — how a darkened component signals its cause and

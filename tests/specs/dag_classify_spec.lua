@@ -70,4 +70,24 @@ return {
       t.deepEq(byNodes(comps), { ['lone'] = false })
     end,
   },
+  {
+    name = 'classify: a seeded feedback component is tagged feedback',
+    run = function()
+      local comps = DAG.classify(g(
+        { master = master, p = fx(), q = fx() },
+        { { type='audio', from='p', to='q' } }),
+        { p = true, q = true })
+      t.deepEq(byNodes(comps), { ['p,q'] = 'feedback' })
+    end,
+  },
+  {
+    name = 'classify: feedback outranks bus-aware on the same component',
+    run = function()
+      local comps = DAG.classify(g(
+        { master = master, p = fx{ busAware = true }, q = fx() },
+        { { type='audio', from='p', to='q' } }),
+        { p = true, q = true })
+      t.deepEq(byNodes(comps), { ['p,q'] = 'feedback' })
+    end,
+  },
 }

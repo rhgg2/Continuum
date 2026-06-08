@@ -156,10 +156,11 @@ end
 
 -- Post-hoc component classifier over read's domain (design/wiring-implicit-graph.md
 -- § Quarantine): validate's successor on the graphs REAPER allows, not just authorable ones.
---contract: groups non-master nodes into components; reason tags quarantined ones (busAware)
---shape: component = { nodes=id[] (sorted), reason=nil|'busAware' }
-function M.classify(userGraph)
+--contract: groups non-master nodes into components; feedbackSeeds + busAware tag quarantined ones
+--shape: component = { nodes=id[] (sorted), reason=nil|'feedback'|'busAware' }
+function M.classify(userGraph, feedbackSeeds)
   local nodes, edges = userGraph.nodes or {}, userGraph.edges or {}
+  feedbackSeeds = feedbackSeeds or {}
 
   -- Union over non-master-incident edges only: master is a shared terminal sink bridging no
   -- two track-sets, so excluding it keeps every track whole within a single component.
@@ -186,6 +187,13 @@ function M.classify(userGraph)
   -- entire track-set is quarantined (design § Quarantine), not just its own track.
   for id, n in pairs(nodes) do
     if n.busAware and byRoot[find(id)] then byRoot[find(id)].reason = 'busAware' end
+  end
+
+  -- Feedback-loop tracks (read's Kahn leftovers, seeded by the caller) can't be topo-ordered, so
+  -- compile rejects the component; feedback outranks bus-aware where both apply.
+  for id in pairs(feedbackSeeds) do
+    local root = parent[id] and find(id)
+    if root and byRoot[root] then byRoot[root].reason = 'feedback' end
   end
 
   local components = {}
