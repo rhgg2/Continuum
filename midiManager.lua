@@ -9,6 +9,16 @@ local util = require 'util'
 
 local take = (...).take
 
+-- A deleted take leaves `take` dangling (the dormant bindTake(nil) seam keeps
+-- it for tm's last frame); like cm:pollUndo, a dead ptr self-heals to nil here.
+local function liveTake()
+  if take and reaper.ValidatePtr2
+     and not reaper.ValidatePtr2(0, take, 'MediaItem_Take*') then
+    take = nil
+  end
+  return take
+end
+
 local function print(...)
   return util.print(...)
 end
@@ -655,7 +665,7 @@ function mm:load(newTake)
 end
 
 function mm:reload()
-  if not take then return end
+  if not liveTake() then return end
   self:load(take)
 end
 
@@ -676,7 +686,7 @@ local function checkLock()
 end
 
 function mm:modify(fn)
-  if not take then return end
+  if not liveTake() then return end
 
   lock = true
   reaper.MIDI_DisableSort(take)
@@ -1046,7 +1056,7 @@ end
 ----- Take data
 
 function mm:take()
-  return take
+  return liveTake()
 end
 
 -- REAPER convention: shape on A governs the curve from A to next.
@@ -1059,26 +1069,26 @@ function mm:interpolate(A, B, ppq)
 end
 
 function mm:resolution()
-  if not take then return end
+  if not liveTake() then return end
   return reaper.MIDI_GetPPQPosFromProjQN(take, 1) - reaper.MIDI_GetPPQPosFromProjQN(take, 0)
 end
 
 -- Source length. setLength positions the source's EOT explicitly to keep this in sync.
 function mm:length()
-  if not take then return end
+  if not liveTake() then return end
   local source = reaper.GetMediaItemTake_Source(take)
   local lenQN  = reaper.GetMediaSourceLength(source)
   return lenQN * self:resolution()
 end
 
 function mm:name()
-  if not take then return end
+  if not liveTake() then return end
   local _, name = reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', '', false)
   return name
 end
 
 function mm:setName(name)
-  if not take then return end
+  if not liveTake() then return end
   reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
 end
 
@@ -1109,7 +1119,7 @@ end
 -- source is the right size, then bring the item to match.
 -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
 function mm:setLength(qn)
-  if not take then return end
+  if not liveTake() then return end
   local item     = reaper.GetMediaItemTake_Item(take)
   local startSec = reaper.GetMediaItemInfo_Value(item, 'D_POSITION')
   local startQN  = reaper.TimeMap2_timeToQN(0, startSec)
@@ -1123,7 +1133,7 @@ function mm:setLength(qn)
 end
 
 function mm:timeSigs()
-  if not take then return {} end
+  if not liveTake() then return {} end
 
   local item = reaper.GetMediaItemTake_Item(take)
   local startTime = reaper.GetMediaItemInfo_Value(item, 'D_POSITION')
