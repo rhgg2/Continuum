@@ -113,79 +113,86 @@ local declarations = {
   -- See docs/arrangeManager.md.
   { 'arrangeColours', {} },
 
-  -- Wiring addressing keys, mirrored to scratch P_EXT for undo coherence.
+  -- Wiring addressing key, mirrored to scratch P_EXT for undo coherence.
   -- wiringTracks maps trackKey → opaque track id; no graph blob (read era). See docs/wiringManager.md.
-  { 'wiringOwnedFx',  {}  },
   { 'wiringTracks',   {}  },
 
-  -- Atoms — parchment palette
-  { 'palette.bg',        hex('#dad6c9') },  -- cream paper
-  { 'palette.shade',     hex('#303021') },  -- dark ink
-  { 'palette.mid',       hex('#9f9373') },  -- warm tan (accents, separators, bar markers)
-  { 'palette.highlight', hex('#b5b39e') },  -- lighter tan (beat-row tone)
-  { 'palette.inactive',  hex('#8a8679') },  -- muted olive-grey
-  { 'palette.danger',    hex('#da3021') },
-  { 'palette.caution',   hex('#d25a23') },
-  { 'palette.positive',  hex('#568a40') },
-  { 'palette.amber',     hex('#dcb432') },
-  { 'palette.steel',     hex('#6482a0') },
-  { 'palette.pale',      hex('#e9e7df') },
-  { 'palette.white',     hex('#f7f7f4') },
-  { 'palette.night',     hex('#252936') },
-  { 'palette.nightText', hex('#cfcfde') },
-  { 'palette.slate',     hex('#79829f') },  -- matches chrome.bg; named for use as a palette atom
-  { 'palette.salmon',    hex('#e89282') },  -- muted pink-orange (wiring effect-node tint)
-
-  -- Atoms — chrome palette
-  { 'chrome.bg',        hex('#79829f') },              -- slate
-  { 'chrome.shade',     hex('#5e6678') },              -- deeper slate
-  { 'chrome.highlight', hex('#d6d9df') },              -- warm fog on slate
+  -- Palette atoms — role-named swatches the colour editor edits; base/alt are
+  -- tonal ramps (zoneN at lightness N/10, ends pure black/white).
+  { 'palette.base.zone0',  hex('#000000') },  -- base: warm neutral (paper / ink)
+  { 'palette.base.zone1',  hex('#1e1e15') },
+  { 'palette.base.zone2',  hex('#3c3b2a') },
+  { 'palette.base.zone3',  hex('#575542') },
+  { 'palette.base.zone4',  hex('#716d5b') },
+  { 'palette.base.zone5',  hex('#888477') },
+  { 'palette.base.zone6',  hex('#a9a389') },
+  { 'palette.base.zone7',  hex('#bebba7') },
+  { 'palette.base.zone8',  hex('#d5d1c3') },
+  { 'palette.base.zone9',  hex('#eae8e1') },
+  { 'palette.base.zone10', hex('#ffffff') },
+  { 'palette.alt.zone0',   hex('#000000') },  -- alt: cool blue (cursor / chrome / wiring)
+  { 'palette.alt.zone1',   hex('#15171e') },
+  { 'palette.alt.zone2',   hex('#2a2e3c') },
+  { 'palette.alt.zone3',   hex('#414758') },
+  { 'palette.alt.zone4',   hex('#596173') },
+  { 'palette.alt.zone5',   hex('#637e9c') },
+  { 'palette.alt.zone6',   hex('#888faa') },
+  { 'palette.alt.zone7',   hex('#a5a8c0') },
+  { 'palette.alt.zone8',   hex('#c3c3d5') },
+  { 'palette.alt.zone9',   hex('#e2e4e9') },
+  { 'palette.alt.zone10',  hex('#ffffff') },
+  -- single-swatch roles
+  { 'palette.alt2',     hex('#e89282') },  -- warm pink (wiring effect node)
+  { 'palette.mark',     hex('#dcb432') },  -- amber attention marker (solo, selected node)
+  { 'palette.alert',    hex('#da3021') },
+  { 'palette.caution',  hex('#d25a23') },
+  { 'palette.positive', hex('#568a40') },
 
   -- Grid roles
-  { 'colour.bg',               'palette.bg'                       },
-  { 'colour.text',             'palette.shade'                    },
+  { 'colour.bg',               'palette.base.zone8'               },
+  { 'colour.text',             'palette.base.zone2'               },
   { 'colour.offGrid',          'palette.positive'                 },
   { 'colour.overflow',         'palette.caution'                  },
-  { 'colour.negative',         'palette.danger'                   },
-  { 'colour.inactive',         'palette.inactive'                 },
+  { 'colour.negative',         'palette.alert'                    },
+  { 'colour.inactive',         'palette.base.zone5'               },
   { 'colour.shadowed',         'colour.inactive'                  },
-  { 'colour.cursor',           'palette.night'                    },
-  { 'colour.cursorText',       'palette.nightText'                },
+  { 'colour.cursor',           'palette.alt.zone2'                },
+  { 'colour.cursorText',       'palette.alt.zone8'                },
   -- Arrange page: cursor caret, blocked-drag outline, transport rules,
   -- double-click-drag ghost, and orphan (slot-less item) fills. The 62
   -- generated slot hues stay computed (golden-ratio rotation); these are the
   -- fixed colours, named so they live in the palette like every other chrome
   -- colour rather than as inline ints.
-  { 'colour.arrange.cursorOn',     'palette.shade'           },
-  { 'colour.arrange.cursorOff',     'palette.mid'           },
-  { 'colour.arrange.itemBorder',       'palette.inactive'        },  -- solid neutral box outline (one shade darker than mid)
+  { 'colour.arrange.cursorOn',     'palette.base.zone2'      },
+  { 'colour.arrange.cursorOff',     'palette.base.zone6'    },
+  { 'colour.arrange.itemBorder',       'palette.base.zone5'      },  -- solid neutral box outline (one zone below cursorOff)
   { 'colour.arrange.phrase',           {'colour.rowBeat', 1.0}   },  -- bar tint at full alpha
   { 'colour.arrange.blockedBorder',    {0.80, 0.16, 0.16, 0.95}  },  -- drag would overlap a neighbour
-  { 'colour.arrange.editCursor',       'palette.shade'           },  -- edit-cursor triangle fill
-  { 'colour.arrange.playHead',         'palette.slate'           },  -- play-head triangle fill
-  { 'colour.arrange.cursorTriBorder',  'palette.mid'             },  -- shared border for both gutter triangles
+  { 'colour.arrange.editCursor',       'palette.base.zone2'      },  -- edit-cursor triangle fill
+  { 'colour.arrange.playHead',         'palette.alt.zone5'       },  -- play-head triangle fill
+  { 'colour.arrange.cursorTriBorder',  'palette.base.zone6'      },  -- shared border for both gutter triangles
   { 'colour.arrange.ghostFill',        {0.95, 0.93, 0.80, 0.35}  },  -- create-preview fill
   { 'colour.arrange.ghostBorder',      {0.45, 0.42, 0.30, 0.90}  },  -- create-preview border
   { 'colour.arrange.orphanFill',       {0.50, 0.50, 0.50, 0.35}  },  -- slot-less item, neutral grey
   { 'colour.arrange.orphanFocusFill',  {0.85, 0.85, 0.85, 0.55}  },
-  { 'colour.rowNormal',        {'palette.bg',         0   }       },
-  { 'colour.rowBeat',          {'palette.highlight',  0.4 }       },
-  { 'colour.rowBarStart',      {'palette.mid',        0.4 }       },
+  { 'colour.rowNormal',        {'palette.base.zone8',  0   }      },
+  { 'colour.rowBeat',          {'palette.base.zone7',  0.4 }      },
+  { 'colour.rowBarStart',      {'palette.base.zone6',  0.4 }      },
   { 'colour.editCursor',       hex('#ffff00')                     },  -- one-off yellow
-  { 'colour.selection',        {'palette.white',       0.5 }       },
+  { 'colour.selection',        {'palette.base.zone10', 0.5 }      },
   { 'colour.scrollHandle',     'colour.text'                      },
   { 'colour.scrollBg',         'colour.bg'                        },
-  { 'colour.accent',           'palette.mid'                      },
+  { 'colour.accent',           'palette.base.zone6'               },
   { 'colour.mute',             'colour.negative'                  },
-  { 'colour.solo',             'palette.amber'                    },
-  { 'colour.separator',        {'palette.mid',        0.3 }       },
+  { 'colour.solo',             'palette.mark'                     },
+  { 'colour.separator',        {'palette.base.zone6',  0.3 }      },
 --  { 'colour.tail',             {'palette.steel',      0.3}       },
   { 'colour.tail',             hex('#8caac8')                     },  -- one-off lighter steel
   { 'colour.tailBord',         {'colour.tail', 0.4}               },  -- blend for corner
-  { 'colour.ghost',            {'palette.steel',      0.9 }       },
+  { 'colour.ghost',            {'palette.alt.zone5',   0.9 }      },
   { 'colour.ghostNegative',    hex('#da8278', 0.9)                },  -- one-off faded red
-  { 'colour.alias',            {'palette.steel',      0.22}       },  -- materialised-alias cell tint
-  { 'colour.aliasFocus',       {'palette.steel',      0.40}       },  -- transient family-highlight tint (alias-nav cursor)
+  { 'colour.alias',            {'palette.alt.zone5',   0.22}      },  -- materialised-alias cell tint
+  { 'colour.aliasFocus',       {'palette.alt.zone5',   0.40}      },  -- transient family-highlight tint (alias-nav cursor)
   -- Region palette: 8 muted hues. tint = pale wash; outline = full-sat border on the active region.
   { 'palette.region.1', hex('#d2a52a') },
   { 'palette.region.2', hex('#d27158') },
@@ -203,8 +210,8 @@ local declarations = {
   { 'palette.mirror.conflicted', hex('#d83a3a') },  -- alarming red
   { 'palette.mirror.local',      hex('#8a6bb1') },  -- violet: instance-only stream
   -- Lane strip (CC/PB/AT envelope visualiser above the tracker grid).
-  { 'colour.laneAxis',         {'palette.inactive',   0.6 }       },
-  { 'colour.laneRowDivider',   {'palette.inactive',   0.15}       },
+  { 'colour.laneAxis',         {'palette.base.zone5',  0.6 }      },
+  { 'colour.laneRowDivider',   {'palette.base.zone5',  0.15}      },
   { 'colour.laneAnchor',       'colour.text'                      },
   { 'colour.laneAnchorActive', 'colour.negative'                  },
   { 'colour.laneEnvelope',     'colour.accent'                    },
@@ -214,27 +221,27 @@ local declarations = {
   -- master = sink (no outputs), generator = outputs but no audio in,
   -- effect = has audio in. Port colours distinguish audio vs MIDI.
   { 'colour.wiring.node.source',    'palette.positive' },
-  { 'colour.wiring.node.master',    'palette.mid'    },
-  { 'colour.wiring.node.generator', 'palette.slate'  },
-  { 'colour.wiring.node.effect',    'palette.salmon' },
-  { 'colour.wiring.node.selected',  'palette.amber'  },  -- outline stroke for selected nodes / rubber-band
-  { 'colour.wiring.port.audio',     'palette.shade'  },
-  { 'colour.wiring.port.midi',      'palette.steel'  },
-  { 'colour.wiring.source.label',   'palette.mid'    },  -- de-emphasised track-name on a source stub (neutral, not bold)
-  { 'colour.wiring.tooltip.bg',     'palette.pale' },  -- matches toolbar (pale slate); body's dark text reads against it
+  { 'colour.wiring.node.master',    'palette.base.zone6' },
+  { 'colour.wiring.node.generator', 'palette.alt.zone5'  },
+  { 'colour.wiring.node.effect',    'palette.alt2'       },
+  { 'colour.wiring.node.selected',  'palette.mark'       },  -- outline stroke for selected nodes / rubber-band
+  { 'colour.wiring.port.audio',     'palette.base.zone2' },
+  { 'colour.wiring.port.midi',      'palette.alt.zone5'  },
+  { 'colour.wiring.source.label',   'palette.base.zone6' },  -- de-emphasised track-name on a source stub (neutral, not bold)
+  { 'colour.wiring.tooltip.bg',     'palette.base.zone9' },  -- matches toolbar; body's dark text reads against it
 
   -- Chrome roles — toolbar (top band) and statusBar (bottom band).
-  -- They share the chrome palette today; split aliases let either diverge.
-  { 'colour.toolbar.bg',           'palette.pale'                  },
-  { 'colour.toolbar.text',         'palette.shade'                 },
-  { 'colour.toolbar.button',       'palette.white',                },
-  { 'colour.toolbar.buttonHover',  'palette.pale'                  },
-  { 'colour.toolbar.buttonActive', 'palette.bg',                   },
-  { 'colour.toolbar.buttonBorder', {'palette.mid',    0.35  }       },
-  { 'colour.toolbar.checkMark',    'palette.shade'                 },
-  { 'colour.toolbar.popupBg',      'palette.white'                  },
-  { 'colour.statusBar.bg',         'chrome.bg'                    },
-  { 'colour.statusBar.text',       'chrome.highlight'             },
+  -- Toolbar rides the parchment (base) ramp; statusBar the blue (alt) ramp.
+  { 'colour.toolbar.bg',           'palette.base.zone9'            },
+  { 'colour.toolbar.text',         'palette.base.zone2'            },
+  { 'colour.toolbar.button',       'palette.base.zone10',          },
+  { 'colour.toolbar.buttonHover',  'palette.base.zone9'            },
+  { 'colour.toolbar.buttonActive', 'palette.base.zone8',           },
+  { 'colour.toolbar.buttonBorder', {'palette.base.zone6', 0.35 }    },
+  { 'colour.toolbar.checkMark',    'palette.base.zone2'            },
+  { 'colour.toolbar.popupBg',      'palette.base.zone10'           },
+  { 'colour.statusBar.bg',         'palette.alt.zone5'            },
+  { 'colour.statusBar.text',       'palette.alt.zone9'            },
   -- Pre-blended `0.5*pale + 0.5*bg`; a literal alias would render translucent over a different parent.
   { 'colour.editor.bg',            hex('#e9e7df')                 },
   { 'laneStrip.rows',      4    },
