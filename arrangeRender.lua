@@ -317,17 +317,17 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
 
   -- Cursor caret: horizontal I-beam on the top edge of the cursor row.
   -- Cell-shaped highlight would lie about the model; blinks ~1s so it stays findable.
-  local CARET_BLINK = 0.5   -- seconds per on/off half-cycle
+  local CARET_BLINK = 0.75   -- seconds per on/off half-cycle
   local caretOn = (reaper.time_precise() % (2 * CARET_BLINK)) < CARET_BLINK
-  if caretOn and curRow >= sr and curRow < sr + visRows
+  if curRow >= sr and curRow < sr + visRows
      and curCol >= 0 and curCol < nTracks then
     local cx0, cx1 = colX(curCol), colX(curCol + 1)
     local cy    = rowYs(curRow)
-    local serif = 4
-    local caret = 'arrange.cursorBorder'
-    ps.line(cx0 + 1, cy,         cx1 - 1, cy,         caret, 1.5)
-    ps.line(cx0 + 1, cy - serif, cx0 + 1, cy + serif, caret, 1.5)
-    ps.line(cx1,     cy - serif, cx1,     cy + serif, caret, 1.5)
+    local serif = 2
+    local caret = caretOn and 'arrange.cursorOn' or 'arrange.cursorOff'
+    ps.line(cx0, cy,         cx1, cy,         caret, 0.5)
+    ps.line(cx0, cy - serif, cx0, cy + serif, caret, 0.5)
+    ps.line(cx1,     cy - serif, cx1,     cy + serif, caret, 0.5)
   end
 
   -- Loop region: stroked `[` down the gutter left edge, 'tail' colour, no fill.

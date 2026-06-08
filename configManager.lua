@@ -157,7 +157,8 @@ local declarations = {
   -- generated slot hues stay computed (golden-ratio rotation); these are the
   -- fixed colours, named so they live in the palette like every other chrome
   -- colour rather than as inline ints.
-  { 'colour.arrange.cursorBorder',     'palette.shade'           },
+  { 'colour.arrange.cursorOn',     'palette.shade'           },
+  { 'colour.arrange.cursorOff',     'palette.mid'           },
   { 'colour.arrange.itemBorder',       'palette.inactive'        },  -- solid neutral box outline (one shade darker than mid)
   { 'colour.arrange.phrase',           {'colour.rowBeat', 1.0}   },  -- bar tint at full alpha
   { 'colour.arrange.blockedBorder',    {0.80, 0.16, 0.16, 0.95}  },  -- drag would overlap a neighbour
