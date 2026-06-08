@@ -291,7 +291,7 @@ end
 
 ----------- fx read
 
---shape: fx = { id=guid, ident=string, name=string, ins=int, outs=int, inNames={str,...}, outNames={str,...}, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus,outBus,outDisabled} }  -- midi nil for JS; rm:fx adds trackId
+--shape: fx = { id=guid, ident=string, name=string, ins=int, outs=int, inNames={str,...}, outNames={str,...}, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus,outBus,inDisabled,outDisabled} }  -- midi nil for JS; rm:fx adds trackId
 
 -- Display name: a user instance rename wins, else the plugin's own name.
 local function fxName(track, idx)
@@ -325,8 +325,9 @@ end
 -- fx so callers can read routing without a JS-vs-not branch.
 local function readMidiRouting(chunk, routingIdx)
   local r = readFXMidiRouting(chunk, routingIdx)
-            or { inBus = 0, outBus = 0, outDisabled = false }
-  return { inBus = r.inBus, outBus = r.outBus, outDisabled = r.outDisabled }
+            or { inBus = 0, outBus = 0, inDisabled = false, outDisabled = false }
+  return { inBus = r.inBus, outBus = r.outBus,
+           inDisabled = r.inDisabled, outDisabled = r.outDisabled }
 end
 
 local function readFxChain(track)
@@ -601,7 +602,8 @@ end
 local function writeMidiRouting(track, fxIdx, midi)
   local routingIdx = routingIdxOf(track, fxIdx)
   if not routingIdx then return end
-  local opts = { inBus = midi.inBus, outBus = midi.outBus, outDisabled = midi.outDisabled }
+  local opts = { inBus = midi.inBus, outBus = midi.outBus,
+                 inDisabled = midi.inDisabled, outDisabled = midi.outDisabled }
   if next(opts) == nil then return end
   local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
   local _, chunk     = reaper.GetTrackStateChunk(track, '', true)

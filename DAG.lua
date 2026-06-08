@@ -884,11 +884,21 @@ local function deriveMasterSplit(userGraph)
     return false
   end
 
+  -- A master-resident node is reachable only via audio parent-send; cross-cone midi can't be
+  -- delivered there, so such a dom is ineligible as the cut and gets its own newTrack.
+  local function receivesCrossConeMidi(dom)
+    local cone = reach(dom, fwd, nil)
+    for _, e in ipairs(edges) do
+      if e.type == 'midi' and cone[e.to] and not cone[e.from] then return true end
+    end
+    return false
+  end
+
   -- The master class is the cone of the largest dominator with a clean entry;
   -- the master node itself (always single-port) when none qualifies.
   local cut = 'master'
   for _, dom in ipairs(masterDominators()) do
-    if not pullsMultiPair(dom) then cut = dom; break end
+    if not pullsMultiPair(dom) and not receivesCrossConeMidi(dom) then cut = dom; break end
   end
 
   -- No natural master class — a lone source shares it, or nothing reaches

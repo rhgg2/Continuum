@@ -107,9 +107,9 @@ return {
     end,
   },
   {
-    -- KNOWN BUG (design § open Q2, [[project_wiring_read_bus0_bug]]): audio-only source
-    -- still realises MIDI via bus 0; read faithfully surfaces the phantom edge (compile bug).
-    name = 'read: audio source -> fx also recovers the phantom bus-0 midi',
+    -- Bus-0 phantom fixed ([[project_wiring_read_bus0_bug]]): an audio-only fx compiles with its
+    -- midi input disabled (inDisabled), so read recovers no spurious source->fx midi edge.
+    name = 'read: audio source -> fx recovers no phantom bus-0 midi',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -123,7 +123,6 @@ return {
       t.deepEq(edgeSet(rg), {
         'audio g-f.1->master.-',
         'audio guid-A.1->g-f.1',
-        'midi guid-A.-->g-f.-',   -- phantom: compile over-connected bus 0
       })
     end,
   },
@@ -146,7 +145,6 @@ return {
       t.deepEq(edgeSet(rg), {
         'audio g-f.1->master.-',
         'audio guid-A.1->g-f.1 @0.5',
-        'midi guid-A.-->g-f.-',   -- phantom bus-0 midi (known compile bug)
       })
     end,
   },
@@ -172,7 +170,6 @@ return {
         'audio g-f2.1->master.-',
         'audio guid-A.1->g-f1.1',
         'audio guid-A.1->g-f2.1',
-        'midi guid-A.-->g-f1.-',   -- phantom bus-0 midi; f1 has no midi-out so no relay onward
       })
     end,
   },

@@ -1,9 +1,5 @@
--- read ∘ compile = id (invariant 1, design/wiring-implicit-graph.md § The algebra). For each
--- authored graph g, read(compile(g)) is g up to the rm-id renaming — a graph bijection. The
--- expected is *derived from g* via normalForm (the witnessing vertex map + read's port
--- conventions), so the assertion can't be hand-fudged: a clean fixture is an exact bijection,
--- and the two known compile non-injectivities (bus-0 phantom, master-resident drop) ride as
--- declared diffs. Quarantine (feedback/bus-aware) is off image(compile) — invariant 2, not here.
+-- read ∘ compile = id (invariant 1, design/wiring-implicit-graph.md § The algebra): for each authored graph g,
+-- read(compile(g)) = g (rm-id rename). Both former non-injectivities fixed; quarantine is off image(compile) — invariant 2.
 local t    = require('support')
 local util = require('util')
 
@@ -130,7 +126,6 @@ local corpus = {
       util.add(g.edges, { type='audio', from='s', to='f' })
       util.add(g.edges, { type='audio', from='f', to='master' })
     end,
-    expectExtra = { 'midi guid-A->g-f' },   -- bus-0 phantom [[project_wiring_read_bus0_bug]]
   },
   {
     name = 'gained source -> fx, CU collapsed',
@@ -141,7 +136,6 @@ local corpus = {
       util.add(g.edges, { type='audio', from='s', to='f', ops={gain=0.5} })
       util.add(g.edges, { type='audio', from='f', to='master' })
     end,
-    expectExtra = { 'midi guid-A->g-f' },
   },
   {
     name = 'sum-tree master fan-in, leaf gain',
@@ -155,7 +149,6 @@ local corpus = {
       util.add(g.edges, { type='audio', from='f1', to='master', ops={gain=0.7} })
       util.add(g.edges, { type='audio', from='f2', to='master' })
     end,
-    expectExtra = { 'midi guid-A->g-f1' },  -- phantom on the source's first fx only
   },
   {
     name = 'same-track midi fan-in: s -> {A,B} -> C -> master',
@@ -187,10 +180,8 @@ local corpus = {
     end,
   },
   {
-    -- Master-resident drop ([[project_wiring_master_resident_midi_drop]]): two sources sharing
-    -- one consumer force C off both source tracks onto master, where it is reached by audio
-    -- parent-send alone — the source→C midi sends drop. The 2nd known compile non-injectivity,
-    -- reflected faithfully by read, declared as expectMissing.
+    -- Master-resident drop fixed ([[project_wiring_master_resident_midi_drop]]): receivesCrossConeMidi
+    -- evicts C to its own newTrack so source→C midi survives; round-trip is now an exact bijection.
     name = 'master-resident: two midi sources -> shared C -> master',
     seed = function(h) seedSource(h, 'guid-A'); seedSource(h, 'guid-B') end,
     build = function(g)
@@ -201,7 +192,6 @@ local corpus = {
       util.add(g.edges, { type='midi',  from='sb', to='c' })
       util.add(g.edges, { type='audio', from='c',  to='master' })
     end,
-    expectMissing = { 'midi guid-A->g-C', 'midi guid-B->g-C' },
   },
 }
 

@@ -243,34 +243,41 @@ begun. Positions stay a TODO.
 **Step 2 (invariant-1) is landed** (`tests/specs/wm_roundtrip_spec.lua`):
 an eight-fixture `read ∘ compile = id` sweep where the expected is *derived
 from* each authored graph via a normal form (the rm-id renaming + read's
-port conventions), so it can't be hand-fudged — five clean bijections plus
-three declared collapses. **No third non-injectivity surfaced:** across the
-corpus the only diffs from a clean bijection are the two known bugs, so
-"routing is fully inferred up to view-state" now has test evidence, not a
-bare prediction. Capacity-split is left for step 3 (no compile image yet);
-quarantine is off-image (invariant 2, owned by `wm_read_spec`).
+port conventions), so it can't be hand-fudged. The sweep first surfaced the
+two compile non-injectivities below as declared diffs; **both are now fixed**
+(see below), so every fixture is an exact bijection and the corpus stands as
+regression coverage that no collapse returns. "Routing is fully inferred up to
+view-state" now has test evidence, not a bare prediction. Capacity-split is left
+for step 3 (no compile image yet); quarantine is off-image (invariant 2, owned
+by `wm_read_spec`).
 
 **Two `compile` non-injectivities surfaced** in the process — real bugs,
-confirmed by the step-2 sweep, reflected faithfully by read (not read
-workarounds):
+reflected faithfully by read (not read workarounds). **Both are now fixed**
+in `compile`:
 
-- **bus-0 phantom** — the first fx on a source track receives source MIDI
+- **bus-0 phantom** — the first fx on a source track received source MIDI
   on bus 0 even for an audio-only edge (default `inBus=0` trailer), so
-  audio-only and audio+midi sources collapse to the same REAPER state.
+  audio-only and audio+midi sources collapsed to the same REAPER state.
+  *Fixed:* a symmetric `inDisabled` (mirroring `outDisabled`), threaded
+  through `wiringManager`/`routingManager` — an fx with no midi-in edge
+  compiles with midi input disabled, so read emits no edge.
 - **master-resident midi drop** — a midi-fed fx whose only output is
-  master collapses onto the master track; sources reach it by audio
-  parent-send alone, so the `source→fx` midi edge vanishes.
+  master collapsed onto the master track; sources reached it by audio
+  parent-send alone, so the `source→fx` midi edge vanished. *Fixed:*
+  `deriveMasterSplit` refuses the master cut for a cone that receives
+  cross-cone midi (`receivesCrossConeMidi`), evicting the fx to its own
+  newTrack where the source midi realises as real sends.
 
 ## Open questions / risks
 
 - ~~**Per-FX metadata channel**~~ — *resolved* (`design/fx-metadata-spike.md`):
   no arbitrary FX named-config ext exists, and none is needed — see
   § Decoration.
-- **Does the sweep come back clean?** Answered for the current corpus
-  (§ Status): the eight-fixture sweep surfaces *no* collapse beyond the two
-  known bugs — those two plus positions are the whole story so far. Residue:
-  the corpus is hand-picked, not exhaustive, and the capacity-split case
-  can't be swept until step 3 gives it a compile image.
+- **Does the sweep come back clean?** Yes — for the current corpus (§ Status)
+  every fixture is now an exact bijection: the two former collapses are fixed
+  and positions are the only non-graph residue. The corpus is hand-picked, not
+  exhaustive, and the capacity-split case can't be swept until step 3 gives it
+  a compile image.
 - **Capacity bisection** is genuinely new allocator work and the bulk of
   the risk; everything else is `read` + deletions.
 - **Quarantine UX** — how a darkened component signals its cause and

@@ -30,8 +30,8 @@ return {
       seedTrack(reaper, 'Synth', { { ident = 'a' } })
 
       local midi = rm:tracks()[1].fx[1].midi
-      t.deepEq(midi, { inBus = 0, outBus = 0, outDisabled = false },
-               'default routing: bus 0/0, output passthrough on')
+      t.deepEq(midi, { inBus = 0, outBus = 0, inDisabled = false, outDisabled = false },
+               'default routing: bus 0/0, in/out passthrough on')
     end,
   },
   {

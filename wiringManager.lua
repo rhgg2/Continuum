@@ -9,7 +9,7 @@
 --shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
 --shape: snapshotSend = { to=trackKey, kind='audio'|'midi', gain?=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }
 --shape: snapshotFxOrigin = {kind='node',id=string}|{kind='bracketIn'|'bracketOut',id=string}|{kind='merge',consumer=string,trackKey=trackKey}
---shape: snapshotFxEntry = { id?=string, ident=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,outDisabled=bool}, pinMaps?=snapshotPinMap, busAware?=bool }  -- ins/outs are audio pair counts, for read
+--shape: snapshotFxEntry = { id?=string, ident=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,inDisabled=bool,outDisabled=bool}, pinMaps?=snapshotPinMap, busAware?=bool }  -- ins/outs are audio pair counts, for read
 --shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + wm ownership/trackKey overlay. see docs/wiringManager.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'moveFxAcrossTracks', ... }
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
@@ -368,6 +368,15 @@ local function nodeHasMidiOut(graph, nodeId)
   return false
 end
 
+-- True iff `graph` has any edge with type='midi' entering `nodeId`. Drives midi
+-- inDisabled: an fx with no midi-in must not inherit source bus 0 (the phantom).
+local function nodeHasMidiIn(graph, nodeId)
+  for _, e in ipairs(graph.edges) do
+    if e.to == nodeId and e.type == 'midi' then return true end
+  end
+  return false
+end
+
 ----- Snapshot / target / diff (Stage 2)
 
 -- Decode CU slider floats (rm:fx params, by display name) into wm/CU vocabulary;
@@ -547,6 +556,7 @@ local function projectEntry(spec, compileNodes, scratchGuid)
         if not isJS(node.fxIdent) then
           local bus = spec.fxMidiBus and spec.fxMidiBus[id]
           entry.midi = { inBus = bus and bus.inBus or 0, outBus = bus and bus.outBus or 0,
+                         inDisabled  = not nodeHasMidiIn(userGraph, id),
                          outDisabled = not nodeHasMidiOut(userGraph, id) }
         end
       end
@@ -797,8 +807,10 @@ local function readGraph(snap)
         -- else clears it (bus stops here). Plain JSFX has no stored midi -> bus 0, relays.
         local m = fxe.midi
         local inBus, outBus = m and m.inBus or 0, m and m.outBus or 0
-        for _, ref in ipairs(liveMidi[inBus] or {}) do
-          util.add(edges, { type = 'midi', from = ref.node, to = id })
+        if not (m and m.inDisabled) then
+          for _, ref in ipairs(liveMidi[inBus] or {}) do
+            util.add(edges, { type = 'midi', from = ref.node, to = id })
+          end
         end
         for port, prs in pairs(pinMaps.outs or {}) do
           for _, pair in ipairs(prs) do liveAudio[pair] = { { node = id, port = port } } end
