@@ -212,6 +212,49 @@ local corpus = {
       end
     end,
   },
+  {
+    -- Floating island (option 3): srcSet-empty, lands on scratch; compile realises the intra edge
+    -- there and read walks scratch as a bin (no source rule), so the island round-trips exactly.
+    name = 'floating island: fa -audio-> fb (scratch-resident, sourceless)',
+    build = function(g)
+      g.nodes.fa = fx('VST:A', { fxId='g-A' })
+      g.nodes.fb = fx('VST:B', { fxId='g-B' })
+      util.add(g.edges, { type='audio', from='fa', to='fb' })
+    end,
+  },
+  {
+    -- Two disjoint islands co-resident on scratch must not cross-wire: lone fc stays edge-free
+    -- even though it shares the scratch chain with the fa->fb island.
+    name = 'two scratch islands: fa->fb and lone fc (isolation)',
+    build = function(g)
+      g.nodes.fa = fx('VST:A', { fxId='g-A' })
+      g.nodes.fb = fx('VST:B', { fxId='g-B' })
+      g.nodes.fc = fx('VST:C', { fxId='g-C' })
+      util.add(g.edges, { type='audio', from='fa', to='fb' })
+    end,
+  },
+  {
+    -- MIDI floating island: read recovers the intra midi edge. The head (no midi-in) must have
+    -- its input bus cleared so it never picks up a co-resident island's bus.
+    name = 'floating midi island: fa -midi-> fb (scratch-resident)',
+    build = function(g)
+      g.nodes.fa = fx('VST:A', { fxId='g-A' })
+      g.nodes.fb = fx('VST:B', { fxId='g-B' })
+      util.add(g.edges, { type='midi', from='fa', to='fb' })
+    end,
+  },
+  {
+    -- Two midi islands co-resident on scratch must not cross-wire down the shared chain's buses.
+    name = 'two scratch midi islands: fa->fb and fc->fd (bus isolation)',
+    build = function(g)
+      g.nodes.fa = fx('VST:A', { fxId='g-A' })
+      g.nodes.fb = fx('VST:B', { fxId='g-B' })
+      g.nodes.fc = fx('VST:C', { fxId='g-C' })
+      g.nodes.fd = fx('VST:D', { fxId='g-D' })
+      util.add(g.edges, { type='midi', from='fa', to='fb' })
+      util.add(g.edges, { type='midi', from='fc', to='fd' })
+    end,
+  },
 }
 
 local tests = {}

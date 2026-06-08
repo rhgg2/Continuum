@@ -290,6 +290,28 @@ in `compile`:
   cross-cone midi (`receivesCrossConeMidi`), evicting the fx to its own
   newTrack where the source midi realises as real sends.
 
+**Step 3.5 (floating islands) is landed** (`wm_roundtrip_spec` + the four island fixtures).
+A sourceless connected component (`{A→B}` wired before any source/master) has empty
+`srcSet`, so it parks on scratch — but compile emitted `intraConns={}` there and `read`
+excluded scratch from its walk, so the island's edges lived *only* in the blob and would
+evaporate the moment step 4 retires it. Fixed by realising the island on scratch and
+reading it back:
+
+- **compile** — `routeByTrack` now routes a fully scratch-internal (`''`→`''`) conn as a
+  scratch `intraConn` (the one `''` conn that carries signal); `assembleTracks` topo-orders
+  the scratch `fxOrder` and carries those `intraConns`, so the existing per-track allocator
+  produces real pin maps / midi buses for island wiring.
+- **read** — walks the scratch track as a *source-less fx bin*, exempt from the no-inputs⇒
+  source rule (scratch is known by identity, not inferred), recovering island fx + intra
+  edges. No stored discriminator needed.
+- **isolation of co-resident islands** falls out of existing machinery, not new code: audio
+  via `setPinMaps` full-replace (an unmapped fx → `{ins={},outs={}}`, pins cleared,
+  `wiringManager.lua`); midi via `inDisabled`/`outDisabled` stamped from `nodeHasMidiIn`/
+  `nodeHasMidiOut` in `projectEntry`, persisted by rm's chunk surgery and decoded by `read`.
+
+This makes `read ∘ compile = id` total over sourceless islands — the prerequisite that lets
+step 4 retire the blob without losing a half-built, not-yet-connected patch.
+
 ## Open questions / risks
 
 - ~~**Per-FX metadata channel**~~ — *resolved* (`design/fx-metadata-spike.md`):

@@ -729,8 +729,9 @@ local function readGraph(snap)
           for _, ref in ipairs((tail.audio or {})[i.srcPair] or {}) do feed(i.dstPair, foldGain(ref, i.gain)) end
         end
       end
-    elseif entry.trackKind ~= 'master' then
-      -- No inputs => a source: emits audio on pair 1 and midi on bus 0.
+    elseif entry.trackKind ~= 'master' and entry.trackKind ~= 'scratch' then
+      -- No inputs => a source (scratch excepted: a known fx bin, walked as floating islands).
+      -- Emits audio on pair 1 and midi on bus 0.
       local sid = entry.id
       nodes[sid] = { kind = 'source', trackId = entry.id,
                      ports = { audio = { ins = 0, outs = 1 }, midi = { ins = 0, outs = 1 } } }
@@ -814,6 +815,9 @@ local function readGraph(snap)
   -- Feedback-loop tracks (Kahn leftovers) are walked too so their nodes surface for the view;
   -- their emitted forward edges keep the component connected and feedbackSeeds tags it.
   for _, k in ipairs(cyclicOrder) do walkTrack(k, snap[k], true) end
+  -- Floating islands live on scratch: walk it as a pure fx bin (no source rule), recovering
+  -- its fx + intra edges. design/wiring-implicit-graph.md § floating islands (option 3).
+  if snap[SCRATCH_KEY] then walkTrack(SCRATCH_KEY, snap[SCRATCH_KEY]) end
   walkTrack(MASTER_KEY, snap[MASTER_KEY] or { trackKind = 'master', fx = {} })
 
   -- The master node is the master track's output (pair 1).

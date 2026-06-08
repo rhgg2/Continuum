@@ -707,6 +707,13 @@ do
             gain = conn.type == 'audio' and sendGain[util.key(fromTrackKey, toTrackKey)] or nil,
           })
         end
+      elseif fromTrackKey == '' and toTrackKey == '' then
+        -- A fully scratch-internal edge is the one '' conn that realises: a floating
+        -- island's intra wire, kept so read can recover it (design § floating islands).
+        util.add(routeOf('').intraConns, {
+          from = conn.from, fromPort = conn.fromPort,
+          to   = conn.to,   toPort   = conn.toPort, type = conn.type,
+        })
       end
     end
     return routing
@@ -731,12 +738,16 @@ do
     local tracks = {}
     for trackKey, members in pairs(trackMembers) do
       if trackKey == '' then
-        local parked = chainOf(members, '')  -- '' never carries CUs: sorted, not topo'd
+        local parked = chainOf(members, '')
         if #parked > 0 then
-          table.sort(parked)
+          -- Floating islands co-resident on scratch: realise each one's intra wiring so read
+          -- recovers it; disjoint islands share the chain but never cross (no inter-island conn).
+          local route = routing[''] or { intraConns = {} }
+          sortIntraConns(route.intraConns)
           tracks['__scratch__'] = {
-            trackKind = 'scratch', trackId = nil, fxOrder = parked,
-            mainSend = false, outWires = {}, intraConns = {},
+            trackKind = 'scratch', trackId = nil,
+            fxOrder = topoIntraTrack(parked, route.intraConns),
+            mainSend = false, outWires = {}, intraConns = route.intraConns,
           }
         end
       else
