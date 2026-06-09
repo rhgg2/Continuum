@@ -37,7 +37,7 @@ local function wireSimple(wm)
   end)
 end
 
--- Count rm:tracks() calls — the ~80ms decode the cache exists to elide.
+-- Count rm:tracks() calls — the ~80ms decode the model exists to elide.
 local function trackReadSpy(rm)
   local n, real = 0, rm.tracks
   rm.tracks = function(self, ...) n = n + 1; return real(self, ...) end
@@ -55,12 +55,23 @@ return {
     end,
   },
   {
-    name = 'warm self-driven re-wire reads tracks zero times',
+    name = 'minting an FX warms the model, not invalidates it: add-FX takes no full read',
+    run = function(harness)
+      local h, wm, rm = mkWm(harness)
+      seedSource(h, 'guid-A')
+      local reads = trackReadSpy(rm)
+      wm:enableLive()           -- one cold full read
+      wireSimple(wm)            -- mint refreshes one track; the reconcile diffs the model
+      t.eq(reads(), 1, 'the mint spliced the scratch entry in; no whole-project re-read')
+    end,
+  },
+  {
+    name = 'warm pure re-wire reads tracks zero times',
     run = function(harness)
       local h, wm, rm = mkWm(harness)
       seedSource(h, 'guid-A')
       wm:enableLive()
-      wireSimple(wm)            -- materialises f (a mint — this reconcile reads)
+      wireSimple(wm)            -- materialises f
       local reads = trackReadSpy(rm)
       local ok = wm:mutate(function(g)   -- pure gain edit: no mint, no track change
         for _, e in ipairs(g.edges) do
@@ -68,22 +79,40 @@ return {
         end
       end)
       t.truthy(ok, 'gain re-wire applied')
-      t.eq(reads(), 0, 'no REAPER read on a pure self-driven re-wire (served from the cache)')
+      t.eq(reads(), 0, 'no REAPER read on a pure self-driven re-wire (served from the model)')
     end,
   },
   {
-    name = 'cache stays truthful: a fresh snapshot still equals target after a cached apply',
+    name = 'model stays truthful: a fresh snapshot still equals target after a mint+apply',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
       wm:enableLive()
       wireSimple(wm)
       t.eq(#wm:diff(wm:targetState(), wm:snapshot()), 0,
-           'REAPER actually reached target via the cache path')
+           'REAPER actually reached target via the model path')
     end,
   },
   {
-    name = 'syncExternal invalidates the cache → next reconcile reads',
+    name = 'fastGainCommit mirrors into the model: a follow-up reconcile re-issues no gain write',
+    run = function(harness)
+      local h, wm, rm = mkWm(harness)
+      seedSource(h, 'guid-A')
+      wm:enableLive()
+      wireSimple(wm)
+      local idx
+      for i, e in ipairs(wm:graph().edges) do
+        if e.from == 'f' and e.to == 'master' then idx = i end
+      end
+      t.truthy(wm:fastGainCommit(idx, 0.5), 'gain committed')
+      local writes, real = 0, rm.assignTrack
+      rm.assignTrack = function(self, ...) writes = writes + 1; return real(self, ...) end
+      wm:reconcile()
+      t.eq(writes, 0, 'model already carries the gain; reconcile rewrote nothing')
+    end,
+  },
+  {
+    name = 'syncExternal invalidates the model → next reconcile reads',
     run = function(harness)
       local h, wm, rm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -96,7 +125,7 @@ return {
     end,
   },
   {
-    name = 'load invalidates the cache → reconcile reads REAPER, not stale intent',
+    name = 'load invalidates the model → reconcile reads REAPER, not stale intent',
     run = function(harness)
       local h, wm, rm = mkWm(harness)
       seedSource(h, 'guid-A')

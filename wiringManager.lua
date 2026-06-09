@@ -32,8 +32,9 @@ local userGraph = nil
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
 local lastStateCount = nil -- REAPER project state count at our last write; syncExternal rereads when it moves
 local newTrackIds = {}    -- { trackKey → id }; newTrack addressing, refreshed by snapshot/applyOps
-local lastApplied = nil   -- cached actual-side (post-apply target + realised ids); a self-driven
-                          -- reconcile diffs against it, skipping snapshot's read. nil after load/syncExternal
+local actualState = nil   -- in-memory model of REAPER's actual side (the diff's "actual"); local writes
+                          -- keep it truthful, external writes nil it. see docs § actual-state model
+local refreshStateTrack   -- assigned below; used by createSourceTrack/instantiateFxOnScratch (defined late)
 
 local SCRATCH_KEY = '__scratch__'  -- scratch's logical trackKey; its guid is rm-owned
 local CU_IDENT    = 'JS:Continuum Utility'
@@ -53,11 +54,10 @@ local function ensureLoaded()
   if not userGraph then setGraph(wm:read()) end
 end
 
--- Out-of-band REAPER writes (mint, track add/delete, gain poke, applyOps) call this: it rebaselines
--- the state count (syncExternal won't reread our edit) and drops the cache. see docs § external sync
+-- Out-of-band REAPER writes call this to rebaseline the state count, so syncExternal won't reread our
+-- own edit. The actualState model stays truthful via each write site, not by dropping it here.
 local function markState()
   if reaper.GetProjectStateChangeCount then lastStateCount = reaper.GetProjectStateChangeCount(0) end
-  lastApplied = nil
 end
 
 ----- compiled-graph cache: one clone+compile per structural change, pulled by wv
@@ -102,7 +102,7 @@ end
 --contract: reconstructs the graph from REAPER via read, fires wiringChanged{kind='load'}
 function wm:load()
   setGraph(self:read())
-  lastApplied = nil  -- REAPER is ground truth on load; the reconcile it fires must read, not trust the cache
+  actualState = nil  -- REAPER is ground truth on load; the reconcile it fires must read, not the model
   fire('wiringChanged', { kind = 'load' })
 end
 
@@ -197,7 +197,10 @@ end
 function wm:instantiateFxOnScratch(ident)
   local fxId = rm:addFx(rm:scratchId(), { ident = ident })
   if not fxId then return { fxId = nil, ins = 0, outs = 0, inNames = {}, outNames = {} } end
-  markState()  -- minted on scratch out of band; drop the cache so the next reconcile reads the instance
+  markState()
+  -- minted on scratch out of band; splice the scratch entry back so the model stays truthful and the
+  -- next reconcile's diff relocates the instance onto its real track.
+  refreshStateTrack(rm:scratchId(), SCRATCH_KEY, 'scratch')
   local rec = rm:fx(fxId)
   return { fxId = fxId, ins = rec.ins, outs = rec.outs,
            inNames = rec.inNames, outNames = rec.outNames }
@@ -254,6 +257,7 @@ end
 function wm:createSourceTrack(opts)
   local id = rm:addTrack{ name = opts and opts.name, defaults = true }
   markState()
+  refreshStateTrack(id, id, 'sourceTrack')  -- source trackKey == its guid; keep the model truthful
   return id
 end
 
@@ -338,6 +342,7 @@ function wm:deleteSource(nodeId, force)
     if node.trackId then rm:deleteTrack(node.trackId) end
   end)
   markState()
+  if actualState and node.trackId then actualState[node.trackId] = nil end
   return true
 end
 
@@ -427,6 +432,90 @@ local function flattenCuParams(params)
   return flat
 end
 
+-- Bus-aware JSFX (ext_midi_bus=1) escapes the allocator; flag it so read quarantines its component.
+-- One disk read per ident, memoised for the session (an ident's bus-awareness is static).
+local busAwareMemo = {}
+local function busAware(ident)
+  if busAwareMemo[ident] == nil then
+    busAwareMemo[ident] = parseJSFXBusAware(wm:readJSFXContent(ident)) or false
+  end
+  return busAwareMemo[ident]
+end
+
+-- One rm fx record → snapshotFxEntry: CU bridges carry decoded params, JSFX a busAware flag, the
+-- rest their midi routing; fxId is the identity the differ matches fxOrder by.
+local function snapFx(fx)
+  local entry = { id = fx.id, ident = fx.ident, name = fx.name, ins = fx.ins, outs = fx.outs }
+  if fx.pinMaps and (next(fx.pinMaps.ins) or next(fx.pinMaps.outs)) then
+    entry.pinMaps = fx.pinMaps
+  end
+  if fx.ident == CU_IDENT then
+    local params = rm:params(fx.id)
+    if params then entry.params = flattenCuParams(readCuParams(params)) end
+  elseif isJS(fx.ident) then
+    if busAware(fx.ident) then entry.busAware = true end
+  else
+    entry.midi = fx.midi
+  end
+  return entry
+end
+
+-- Every fx on a managed track is wm's (whole-track-set quarantine), so surface the full chain —
+-- the differ's full-replace removes any the graph no longer wants.
+local function snapFxList(fxList)
+  local out = {}
+  for _, fx in ipairs(fxList) do util.add(out, snapFx(fx)) end
+  return out
+end
+
+-- Sends to a managed dst only, re-keyed .to guid→trackKey via the caller's map; midi gain dropped
+-- (only audio sends carry a written D_VOL).
+local function ownedSends(sendList, keyByGuid)
+  local out = {}
+  for _, s in ipairs(sendList) do
+    local key = keyByGuid[s.to]
+    if key then
+      util.add(out, { to = key, kind = s.kind,
+                      gain = s.kind == 'audio' and s.gain or nil,
+                      srcChan = s.srcChan, dstChan = s.dstChan, pos = s.pos })
+    end
+  end
+  return out
+end
+
+-- One rm track record → wiringSnapshot entry. Scratch is forced main-off/sendless (it only parks
+-- fx); other tracks re-key their sends via keyByGuid. Shared by snapshot's loop and state refreshes.
+local function stateEntry(rec, trackKey, kind, keyByGuid)
+  local isScratch = kind == 'scratch'
+  return {
+    trackKind = kind,
+    id        = rec.id,
+    nchan     = rec.nchan,
+    mainSend  = isScratch and { on = false } or rec.mainSend,
+    fx        = snapFxList(rec.fx),
+    sends     = isScratch and {} or ownedSends(rec.sends, keyByGuid),
+  }
+end
+
+-- guid→trackKey over the current model, for re-keying a refreshed track's sends.
+local function keyByGuidFromState()
+  local out = {}
+  if actualState then
+    for key, entry in pairs(actualState) do
+      if entry.id then out[entry.id] = key end
+    end
+  end
+  return out
+end
+
+-- Re-read one live track into the model after a local write (cheap: one track, not the whole
+-- project). No-op when the model is cold — the next reconcile takes a full snapshot.
+function refreshStateTrack(id, trackKey, kind)
+  if not actualState then return end
+  local rec = rm:track(id)
+  if rec then actualState[trackKey] = stateEntry(rec, trackKey, kind, keyByGuidFromState()) end
+end
+
 --contract: rm:tracks() re-keyed by trackKey, send dsts remapped guid→trackKey; every fx on a
 -- managed track surfaces (full chain — adoption is free, no ownership filter). Read-only.
 function wm:snapshot(tracks)
@@ -437,52 +526,6 @@ function wm:snapshot(tracks)
   local keyByGuid, kindByKey = {}, {}
   local scratch = rm:scratchId()
   keyByGuid[scratch], kindByKey[SCRATCH_KEY] = SCRATCH_KEY, 'scratch'
-
-  -- Bus-aware JSFX (ext_midi_bus=1) escapes the allocator; flag it so read quarantines its
-  -- component. One disk read per ident, memoised across this snapshot.
-  local busAwareByIdent = {}
-  local function busAware(ident)
-    if busAwareByIdent[ident] == nil then
-      busAwareByIdent[ident] = parseJSFXBusAware(self:readJSFXContent(ident))
-    end
-    return busAwareByIdent[ident]
-  end
-  local function snapFx(fx)
-    local entry = { id = fx.id, ident = fx.ident, name = fx.name, ins = fx.ins, outs = fx.outs }
-    if fx.pinMaps and (next(fx.pinMaps.ins) or next(fx.pinMaps.outs)) then
-      entry.pinMaps = fx.pinMaps
-    end
-    if fx.ident == CU_IDENT then
-      local params = rm:params(fx.id)
-      if params then entry.params = flattenCuParams(readCuParams(params)) end
-    elseif isJS(fx.ident) then
-      if busAware(fx.ident) then entry.busAware = true end
-    else
-      entry.midi = fx.midi
-    end
-    return entry
-  end
-  -- Every fx on a managed track is wm's (whole-track-set quarantine), so surface the
-  -- full chain — the differ's full-replace removes any the graph no longer wants.
-  local function trackFx(fxList)
-    local out = {}
-    for _, fx in ipairs(fxList) do util.add(out, snapFx(fx)) end
-    return out
-  end
-  -- Sends to a managed dst only; re-key .to guid→trackKey, drop midi gain
-  -- (only audio sends carry a written D_VOL).
-  local function ownedSends(sendList)
-    local out = {}
-    for _, s in ipairs(sendList) do
-      local key = keyByGuid[s.to]
-      if key then
-        util.add(out, { to = key, kind = s.kind,
-                        gain = s.kind == 'audio' and s.gain or nil,
-                        srcChan = s.srcChan, dstChan = s.dstChan, pos = s.pos })
-      end
-    end
-    return out
-  end
 
   local trackList = tracks or rm:tracks()
   -- Pre-pass: assign trackKeys before building entries so send dsts resolve regardless of order.
@@ -507,19 +550,11 @@ function wm:snapshot(tracks)
   for _, tr in ipairs(trackList) do
     local trackKey = keyByGuid[tr.id]
     if trackKey then
-      local isScratch = kindByKey[trackKey] == 'scratch'
-      snap[trackKey] = {
-        trackKind = kindByKey[trackKey],
-        id        = tr.id,
-        nchan     = tr.nchan,
-        mainSend  = isScratch and { on = false } or tr.mainSend,
-        fx        = trackFx(tr.fx),
-        sends     = isScratch and {} or ownedSends(tr.sends),
-      }
+      snap[trackKey] = stateEntry(tr, trackKey, kindByKey[trackKey], keyByGuid)
     elseif tr.isMaster then
       -- Master is a singleton with no ext-state tag; surface it only when it
       -- hosts fx, so wm:diff can see transitions on/off master.
-      local masterFx = trackFx(tr.fx)
+      local masterFx = snapFxList(tr.fx)
       if #masterFx > 0 then
         snap['__master__'] = { trackKind = 'master', nchan = tr.nchan,
                                mainSend = { on = false }, fx = masterFx, sends = {} }
@@ -1315,12 +1350,34 @@ local function pokeGainTarget(target, gain)
   return false
 end
 
+-- Mirror a live gain poke into the model so the next reconcile sees no spurious change.
+local function setStateGain(target, gain)
+  if not actualState then return end
+  if target.kind == 'mergeCU' then
+    local consumer = userGraph.nodes[target.consumerId]
+    local guid = consumer and consumer.mergeGuids and consumer.mergeGuids[target.trackKey]
+    for _, entry in pairs(actualState) do
+      for _, fx in ipairs(entry.fx) do
+        if fx.id == guid then fx.params = fx.params or {}; fx.params['gain' .. target.slot] = gain end
+      end
+    end
+  elseif target.kind == 'mainSend' then
+    local entry = actualState[target.cls]
+    if entry and entry.mainSend then entry.mainSend.gain = gain end
+  elseif target.kind == 'send' then
+    local entry = actualState[target.from]
+    for _, s in ipairs(entry and entry.sends or {}) do
+      if s.to == target.to and s.kind == 'audio' then s.gain = gain end
+    end
+  end
+end
+
 --contract: pokes the live gain for an edge via cached routing; no mutate/signal/undo.
 -- see docs/wiringManager.md § pokeEdgeGain routing
 function wm:pokeEdgeGain(edgeIdx, gain)
   local target = gainRouting()[edgeIdx]
   local ok = target ~= nil and pokeGainTarget(target, gain) or false
-  if ok then markState() end
+  if ok then markState(); setStateGain(target, gain) end
   return ok
 end
 
@@ -1351,12 +1408,12 @@ function wm:syncExternal()
   if not count or count == lastStateCount then return end
   lastStateCount = count
   setGraph(nil)
-  lastApplied = nil  -- an external mutation moved REAPER under us; the cache is now a lie
+  actualState = nil  -- an external mutation moved REAPER under us; the model is now a lie
   fire('wiringChanged', { kind = 'load' })
 end
 
--- After a self-driven apply REAPER equals the applied target; overlay realised track ids to
--- stand in for a fresh snapshot on the next reconcile. see docs/wiringManager.md § actual-side cache
+-- After a self-driven apply REAPER equals the applied target; overlay realised track ids so the
+-- model stands in for a fresh snapshot on the next reconcile. see docs/wiringManager.md § actual-state model
 local function rememberApplied()
   local snap       = wm:targetState()
   local masterGuid = rm:masterId()
@@ -1367,14 +1424,14 @@ local function rememberApplied()
   return snap
 end
 
---contract: one reconcile pass — diff targetState vs the actual side (lastApplied cache or a fresh
---contract: snapshot), applyOps, then cache the applied state for the next self-driven reconcile
+--contract: one reconcile pass — diff targetState vs the actual side (the actualState model or a
+--contract: fresh snapshot), applyOps, then refresh the model for the next self-driven reconcile
 function wm:reconcile(label)
   local target = self:targetState()
-  local snap   = lastApplied or self:snapshot()
+  local snap   = actualState or self:snapshot()
   local ops    = self:diff(target, snap)
   self:applyOps(ops, label or 'wiring: reconcile')
-  lastApplied  = rememberApplied()
+  actualState  = rememberApplied()
 end
 
 --contract: idempotent; hooks wiringChanged so mutate/load reconciles + one immediate sync pass.

@@ -60,7 +60,7 @@ separate, separately-testable function:
    the user graph inline — no deferred stamp-back pass.
 
 On a pure in-memory re-wire the `snapshot` read is skipped — see
-*actual-side cache* below.
+*actual-state model* below.
 
 The load-bearing design choice is that **target and snapshot emit
 matching shapes**, so `diff` is a structural comparison rather than two
@@ -311,46 +311,52 @@ back into projext after an undo — the `primary`/`split` metadata isn't
 recoverable from routing, so it still needs the scratch-chunk mirror that
 addressing no longer does.
 
-## actual-side cache
+## actual-state model
 
 `rm:tracks()` — decoding every FX chain and MIDI state-chunk — is the
 reconcile's dominant cost (~80ms). A self-driven reconcile paid it
 *twice*: once in `snapshot`, once again in `applyOps` (which re-read the
 whole project only to rebuild the `{trackKey→id}` addressing `snapshot`
-had already computed into `newTrackIds`). Both reads are now elided on
-the self-driven path:
+had already computed into `newTrackIds`). Both reads are gone from the
+self-driven path:
 
 - **`applyOps` never reads.** It seeds its `wiringTracks` from
   `newTrackIds` (set by the preceding `snapshot`, or the previous
   `applyOps`), then mutates that map as it creates/deletes tracks.
-- **`reconcile` caches the actual side.** After a successful apply,
-  REAPER *equals* the target we applied (the `read ∘ compile = id`
-  idempotency invariant — the same one that makes a second reconcile a
-  no-op). So `reconcile` stores that applied state in `lastApplied` and
-  diffs the next target against it instead of re-reading. `lastApplied`
-  is a post-apply `targetState()` (which recovers the CU-bridge guids
-  `applyOps` stamped) with the realised `newTrack`/`master` track ids
-  overlaid — the only fields a fresh snapshot carries that intent does
-  not.
+- **`reconcile` diffs against an in-memory model of REAPER's actual
+  side.** After a successful apply, REAPER *equals* the target we
+  applied (the `read ∘ compile = id` idempotency invariant — the same
+  one that makes a second reconcile a no-op). `reconcile` stores that
+  applied state in `actualState` and diffs the next target against it
+  instead of re-reading. `actualState` is a post-apply `targetState()`
+  (which recovers the CU-bridge guids `applyOps` stamped) with the
+  realised `newTrack`/`master` track ids overlaid.
 
-The cache trades the per-reconcile self-heal for the saved read, and is
-sound exactly insofar as idempotency holds. It is dropped whenever
-REAPER moves outside the reconcile loop, by two routes:
+`actualState` is the diff's *actual* side, so it must stay byte-equal to
+what a fresh `snapshot()` would return — otherwise `diff` emits spurious
+ops. The shift from the earlier cache is that wm's own out-of-band writes
+**update** the model to keep it truthful rather than dropping it. Each
+does so by the cheapest faithful means:
 
-- **wm's own out-of-band writes** — minting an FX on scratch, adding or
-  deleting a source track, a live gain poke — all call `markState`,
-  which clears `lastApplied`. This is load-bearing: a freshly-minted FX
-  physically sits on the scratch track, invisible to a cache built from
-  intent, so an add-FX gesture *must* take a real snapshot — the one
-  that sees the scratch chain and relocates the instance onto its track.
-  `applyOps` calls `markState` too, but `reconcile` re-sets the cache
-  immediately after, so its drop is transient.
-- **external edits** — `syncExternal` (undo/redo/manual mixer edit) and
-  `wm:load` clear it directly; REAPER is ground truth there.
+- **mint on scratch / create source track** re-read *that one track*
+  (`rm:track(id)`, the same `readTrack` path `snapshot` uses) and splice
+  the entry in. A freshly-minted FX physically sits on scratch; splicing
+  the scratch entry back means the next reconcile's diff sees it there
+  and emits the `moveFxAcrossTracks` op that relocates it onto its real
+  track — with no whole-project read. (This is the case that used to
+  force a full snapshot.)
+- **delete source** drops the track's entry.
+- **gain poke** (`pokeEdgeGain`/`fastGainCommit`) patches the single
+  gain field at the routing target — a CU param, a main-send gain, or a
+  track-send gain.
 
-So the cache is trusted only for a pure in-memory re-wire — connect,
-disconnect, repartition, move — where REAPER has not been touched since
-the last apply.
+These updates are sound exactly insofar as idempotency holds and the
+write's effect on REAPER is local and known — which is what separates
+them from a graph move, whose effect may be non-local and is therefore
+left to the full diff. Only an *external* move invalidates the model
+outright (`actualState = nil`): `syncExternal` (undo/redo/manual mixer
+edit) and `wm:load`. There REAPER is ground truth and the next reconcile
+takes a fresh snapshot.
 
 ## The reaper seam
 
