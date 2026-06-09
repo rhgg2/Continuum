@@ -810,16 +810,25 @@ local function wireExits(seg)
   return tFrom * len, tTo * len, len
 end
 
-local function drawWireArrow(p, sx, sy, ex, ey, name)
+-- Centre of the visible span (between the two node exits), where the arrow,
+-- fader, and menu anchor. Asymmetric extents shift it off the geometric centre.
+local function wireMid(seg)
+  local fromD, toD, len = wireExits(seg)
+  if not fromD then return (seg.sx + seg.ex) / 2, (seg.sy + seg.ey) / 2 end
+  local t = (fromD + toD) / (2 * len)
+  return seg.sx + (seg.ex - seg.sx) * t, seg.sy + (seg.ey - seg.sy) * t
+end
+
+local function drawWireArrow(p, sx, sy, ex, ey, name, cx, cy)
   local dx, dy = ex - sx, ey - sy
   local len = math.sqrt(dx * dx + dy * dy)
   if len < WIRE_ARROW_LEN then return end
   local ux, uy = dx / len, dy / len
   local px, py = -uy, ux
-  -- Anchor the centroid (not the tip) on the wire midpoint, else the arrow
-  -- looks biased forward by L/6. The +0.5 offset lands vertices on pixel
-  -- centres, fixing the top-left fill rule dropping the bottom-right diagonal.
-  local mx, my   = (sx + ex) / 2 + 0.5, (sy + ey) / 2 + 0.5
+  -- Centroid (not tip) on the visible midpoint cx/cy, else the arrow reads
+  -- biased forward by L/6; +0.5 lands vertices on pixel centres for the fill rule.
+  local mx     = (cx or (sx + ex) / 2) + 0.5
+  local my     = (cy or (sy + ey) / 2) + 0.5
   local tipDist  = WIRE_ARROW_LEN * 2 / 3
   local baseDist = WIRE_ARROW_LEN / 3
   local halfW    = WIRE_ARROW_WID / 2
@@ -1017,7 +1026,7 @@ local function drawWiresPass(p, segs, wireViews, opts)
       local ex, ey = seg.ex, seg.ey
       local name = w.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
       p.line(sx, sy, ex, ey, name, WIRE_THICK)
-      drawWireArrow(p, sx, sy, ex, ey, name)
+      drawWireArrow(p, sx, sy, ex, ey, name, seg.cx, seg.cy)
       if w.type == 'audio' then
         local fromD, toD, segLen = wireExits(seg)
         if fromD then
@@ -1086,8 +1095,7 @@ local function dbToLin(db)  if db == -math.huge then return 0 end;  return 10 ^ 
 local function arrowMidHit(segs, mx, my)
   for i, seg in pairs(segs) do
     if seg.w.type == 'audio' then
-      local cx = (seg.sx + seg.ex) / 2 + 0.5
-      local cy = (seg.sy + seg.ey) / 2 + 0.5
+      local cx, cy = seg.cx, seg.cy
       local dx, dy = mx - cx, my - cy
       if dx*dx + dy*dy <= WIRE_FADER_HIT * WIRE_FADER_HIT then
         return i, cx, cy
@@ -1302,6 +1310,9 @@ local function renderCanvas(w, h)
   local wireViewsList = wv:wireViews()
   local segs = wireSegments(wireViewsList, nodesById)
   sourceSegments(wireViewsList, nodesById, segs)
+  -- Stamp each seg's visible midpoint once: the arrow, fader, and RMB menu all
+  -- anchor here, so a single source keeps draw and hit-test from drifting.
+  for _, seg in pairs(segs) do seg.cx, seg.cy = wireMid(seg) end
 
   -- Wire-end hover: unmodified mouse near a wire's end-region. Suppressed
   -- during any active gesture so the highlight never fires under a drag.
@@ -1442,9 +1453,7 @@ local function renderCanvas(w, h)
     and ImGui.IsMouseClicked(ctx, 0)
   if arrowLmbClicked then
     local seg = segs[arrowHitIdx]
-    local ax  = (seg.sx + seg.ex) / 2 + 0.5
-    local ay  = (seg.sy + seg.ey) / 2 + 0.5
-    local x0, y0, x1, y1 = faderRectAt(ax, ay)
+    local x0, y0, x1, y1 = faderRectAt(seg.cx, seg.cy)
     local pad = WIRE_FADER_HIT_PAD
     local cur = wv:edgeGain(arrowHitIdx)
     fader = {
@@ -1715,9 +1724,7 @@ local function renderCanvas(w, h)
       and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
     if arrowHitIdx and not wireMenu and not fader then
       local seg = segs[arrowHitIdx]
-      local ax  = (seg.sx + seg.ex) / 2 + 0.5
-      local ay  = (seg.sy + seg.ey) / 2 + 0.5
-      wireMenu = { edgeIdx = arrowHitIdx, anchorX = ax, anchorY = ay }
+      wireMenu = { edgeIdx = arrowHitIdx, anchorX = seg.cx, anchorY = seg.cy }
       ImGui.OpenPopup(ctx, '##wiringWireMenu')
     else
       local bodyHit = nodeUnderMouse(nodeViews, lmx, lmy)
