@@ -74,8 +74,9 @@ local WIRE_FADER_WHEEL_DB        = 0.5  -- dB per wheel notch (coarse, default)
 local WIRE_FADER_WHEEL_DB_FINE   = 0.1  -- dB per wheel notch with Shift
 local WIRE_FADER_WHEEL_IDLE_FRAMES = 6  -- commit one setEdgeGain after this many wheel-idle frames so a scroll gesture is one undo entry
 
-local STUB_LEN  = 40    -- canvas px from the consumer rect edge to the source tag's centre, along the away-from-master axis
+local STUB_LEN  = 40    -- visible stub length: consumer rect edge to the tag patch's near edge (tag sits further out the bigger its patch)
 local TAG_VIS_H = 0.62  -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
+local TAG_MAX_W = (NODE_W - 2 * LABEL_PAD) * WIRE_LABEL_SIZE / wireSize  -- node label width scaled by the font ratio: the tag is a shrunk node box
 local SOURCE_TAG_PAD = 3  -- bg-patch padding around the source tag's glyphs (the patch occludes the wire behind them)
 
 -- Palette pane geometry, mirroring arrangePage's body split.
@@ -185,9 +186,9 @@ local function atomise(text)
   return atoms, seps
 end
 
---contract: caller must have pushed the target font — CalcTextSize measures against the current font.
-local function wrapLabel(text, maxW)
-  local function widthOf(s) return (ImGui.CalcTextSize(ctx, s)) end
+--contract: with no widthOf supplied, the caller must have pushed the measuring font.
+local function wrapLabel(text, maxW, widthOf)
+  widthOf = widthOf or function(s) return (ImGui.CalcTextSize(ctx, s)) end
   local function ellipsise(s)
     for n = #s, 0, -1 do
       local cand = s:sub(1, n) .. LABEL_ELLIPSIS
@@ -1159,20 +1160,30 @@ local function drawTagAt(p, cx, cy, label)
          label, wireFont, WIRE_LABEL_SIZE)
 end
 
--- Half-extents of a source tag's bg patch (shared by draw + grab-hit). TAG_VIS_H
--- trims to the visible glyph band so the box hugs the digits.
-local function sourceTagExtents(p, label)
-  local tw, th = p.measure(label, wireFont, WIRE_LABEL_SIZE)
-  return math.ceil(tw / 2) + SOURCE_TAG_PAD, math.ceil(th * TAG_VIS_H / 2) + SOURCE_TAG_PAD
+-- Wrapped label + patch half-extents at the wire-label font. One source of truth
+-- for draw, wire-trim, and grab-hit. TAG_VIS_H trims ascent/descent so the box hugs the glyphs.
+local function sourceTagLayout(p, label)
+  local function widthOf(s) return (p.measure(s, wireFont, WIRE_LABEL_SIZE)) end
+  local lines  = wrapLabel(label, TAG_MAX_W, widthOf)
+  local lineH  = select(2, p.measure('Mg', wireFont, WIRE_LABEL_SIZE))
+  local maxW   = 0
+  for _, ln in ipairs(lines) do maxW = math.max(maxW, widthOf(ln)) end
+  local blockH = lineH * #lines
+  local hw = math.ceil(maxW / 2) + SOURCE_TAG_PAD
+  local hh = math.ceil((blockH - lineH * (1 - TAG_VIS_H)) / 2) + SOURCE_TAG_PAD
+  return lines, hw, hh, lineH
 end
 
 -- Track name at a source edge's source end; bg patch occludes the wire behind it.
 local function drawSourceTag(p, cx, cy, label)
-  local tw, th = p.measure(label, wireFont, WIRE_LABEL_SIZE)
-  local hw, hh = sourceTagExtents(p, label)
+  local lines, hw, hh, lineH = sourceTagLayout(p, label)
   p.fill(rect(cx - hw, cy - hh, cx + hw, cy + hh), 'bg')
-  p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2),
-         'wiring.source.label', label, wireFont, WIRE_LABEL_SIZE)
+  local yTop = cy - lineH * #lines / 2
+  for i, ln in ipairs(lines) do
+    local tw = p.measure(ln, wireFont, WIRE_LABEL_SIZE)
+    p.text(math.floor(cx - tw / 2), math.floor(yTop + (i - 1) * lineH),
+           'wiring.source.label', ln, wireFont, WIRE_LABEL_SIZE)
+  end
 end
 
 -- Unit direction toward the consumer-boundary sector least crowded by incident wires,
@@ -1209,8 +1220,7 @@ end
 
 -- Source-origin edges have no body: synthesise their from-endpoint as a fanned stub
 -- off the consumer, into the least-occupied boundary sector, written as normal wires.
-local SOURCE_TAG_TRIM = 6  -- from-end half-extent for the trim math; the drawn line is occluded by the tag's bg patch
-local function sourceSegments(wireViews, nodesById, segs)
+local function sourceSegments(p, wireViews, nodesById, segs)
   local idxOf, byConsumer, order = {}, {}, {}
   for i, w in ipairs(wireViews) do idxOf[w] = i end
   for _, w in ipairs(wireViews) do
@@ -1231,21 +1241,27 @@ local function sourceSegments(wireViews, nodesById, segs)
       local exitDist = math.min((ux ~= 0) and hw / math.abs(ux) or math.huge,
                                 (uy ~= 0) and hh / math.abs(uy) or math.huge)
       for i, w in ipairs(grp) do
+        local _, tagHW, tagHH = sourceTagLayout(p, w.fromLabel or 'source')
         local fx, fy
         if w.fromOffset then
           -- Custom tag pos is consumer-relative, so it rides node moves for free.
           fx = consumer.pos.x + w.fromOffset.x
           fy = consumer.pos.y + w.fromOffset.y
         else
+          -- Push the tag out past its own patch, so the visible stub (consumer
+          -- edge to patch edge) is STUB_LEN whatever the label's size.
+          local tagExit = math.min((ux ~= 0) and tagHW / math.abs(ux) or math.huge,
+                                   (uy ~= 0) and tagHH / math.abs(uy) or math.huge)
+          local radial = exitDist + STUB_LEN + tagExit
           local s = wireOffset(i, #grp)
-          fx = consumer.pos.x + perpX * s + ux * (exitDist + STUB_LEN)
-          fy = consumer.pos.y + perpY * s + uy * (exitDist + STUB_LEN)
+          fx = consumer.pos.x + perpX * s + ux * radial
+          fy = consumer.pos.y + perpY * s + uy * radial
         end
         segs[idxOf[w]] = {
           w  = w,
           sx = fx,             sy = fy,
           ex = consumer.pos.x, ey = consumer.pos.y,
-          fromHW = SOURCE_TAG_TRIM, fromHH = SOURCE_TAG_TRIM,
+          fromHW = tagHW, fromHH = tagHH,
         }
       end
     end
@@ -1257,7 +1273,7 @@ local function sourceTagHit(p, segs, wireViews, mx, my)
   for i = 1, #wireViews do
     local seg = segs[i]
     if seg and seg.w.fromKind == 'source' then
-      local hw, hh = sourceTagExtents(p, seg.w.fromLabel or 'source')
+      local _, hw, hh = sourceTagLayout(p, seg.w.fromLabel or 'source')
       if inRect(mx, my, rect(seg.sx - hw, seg.sy - hh, seg.sx + hw, seg.sy + hh)) then
         return i
       end
@@ -1364,7 +1380,7 @@ local function renderCanvas(w, h)
   -- geometry can't drift. Draw order is in docs/wiringPage.md.
   local wireViewsList = wv:wireViews()
   local segs = wireSegments(wireViewsList, nodesById)
-  sourceSegments(wireViewsList, nodesById, segs)
+  sourceSegments(p, wireViewsList, nodesById, segs)
   -- A live tag drag overrides its seg's source end so geometry below (and the
   -- stamped midpoint) follow the cursor; mouseup commits the pos.
   if tagDrag and segs[tagDrag.edgeIdx] then
