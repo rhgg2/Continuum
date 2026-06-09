@@ -59,6 +59,9 @@ separate, separately-testable function:
    `rm:addFx` returns the minted guid synchronously, so wm stamps it into
    the user graph inline — no deferred stamp-back pass.
 
+On a pure in-memory re-wire the `snapshot` read is skipped — see
+*actual-side cache* below.
+
 The load-bearing design choice is that **target and snapshot emit
 matching shapes**, so `diff` is a structural comparison rather than two
 bespoke readers reconciled by hand. Every place the two sides could
@@ -307,6 +310,47 @@ by `wp:tick`) ensures the scratch track exists and pulls its fx-meta mirror
 back into projext after an undo — the `primary`/`split` metadata isn't
 recoverable from routing, so it still needs the scratch-chunk mirror that
 addressing no longer does.
+
+## actual-side cache
+
+`rm:tracks()` — decoding every FX chain and MIDI state-chunk — is the
+reconcile's dominant cost (~80ms). A self-driven reconcile paid it
+*twice*: once in `snapshot`, once again in `applyOps` (which re-read the
+whole project only to rebuild the `{trackKey→id}` addressing `snapshot`
+had already computed into `newTrackIds`). Both reads are now elided on
+the self-driven path:
+
+- **`applyOps` never reads.** It seeds its `wiringTracks` from
+  `newTrackIds` (set by the preceding `snapshot`, or the previous
+  `applyOps`), then mutates that map as it creates/deletes tracks.
+- **`reconcile` caches the actual side.** After a successful apply,
+  REAPER *equals* the target we applied (the `read ∘ compile = id`
+  idempotency invariant — the same one that makes a second reconcile a
+  no-op). So `reconcile` stores that applied state in `lastApplied` and
+  diffs the next target against it instead of re-reading. `lastApplied`
+  is a post-apply `targetState()` (which recovers the CU-bridge guids
+  `applyOps` stamped) with the realised `newTrack`/`master` track ids
+  overlaid — the only fields a fresh snapshot carries that intent does
+  not.
+
+The cache trades the per-reconcile self-heal for the saved read, and is
+sound exactly insofar as idempotency holds. It is dropped whenever
+REAPER moves outside the reconcile loop, by two routes:
+
+- **wm's own out-of-band writes** — minting an FX on scratch, adding or
+  deleting a source track, a live gain poke — all call `markState`,
+  which clears `lastApplied`. This is load-bearing: a freshly-minted FX
+  physically sits on the scratch track, invisible to a cache built from
+  intent, so an add-FX gesture *must* take a real snapshot — the one
+  that sees the scratch chain and relocates the instance onto its track.
+  `applyOps` calls `markState` too, but `reconcile` re-sets the cache
+  immediately after, so its drop is transient.
+- **external edits** — `syncExternal` (undo/redo/manual mixer edit) and
+  `wm:load` clear it directly; REAPER is ground truth there.
+
+So the cache is trusted only for a pure in-memory re-wire — connect,
+disconnect, repartition, move — where REAPER has not been touched since
+the last apply.
 
 ## The reaper seam
 

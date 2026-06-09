@@ -32,6 +32,8 @@ local userGraph = nil
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
 local lastStateCount = nil -- REAPER project state count at our last write; syncExternal rereads when it moves
 local newTrackIds = {}    -- { trackKey → id }; newTrack addressing, refreshed by snapshot/applyOps
+local lastApplied = nil   -- cached actual-side (post-apply target + realised ids); a self-driven
+                          -- reconcile diffs against it, skipping snapshot's read. nil after load/syncExternal
 
 local SCRATCH_KEY = '__scratch__'  -- scratch's logical trackKey; its guid is rm-owned
 local CU_IDENT    = 'JS:Continuum Utility'
@@ -51,10 +53,11 @@ local function ensureLoaded()
   if not userGraph then setGraph(wm:read()) end
 end
 
--- syncExternal rereads when REAPER's project state moves without us; every wm write rebaselines
--- here so our own edits never trigger one. see docs/wiringManager.md § external sync
+-- Out-of-band REAPER writes (mint, track add/delete, gain poke, applyOps) call this: it rebaselines
+-- the state count (syncExternal won't reread our edit) and drops the cache. see docs § external sync
 local function markState()
   if reaper.GetProjectStateChangeCount then lastStateCount = reaper.GetProjectStateChangeCount(0) end
+  lastApplied = nil
 end
 
 ----- compiled-graph cache: one clone+compile per structural change, pulled by wv
@@ -99,6 +102,7 @@ end
 --contract: reconstructs the graph from REAPER via read, fires wiringChanged{kind='load'}
 function wm:load()
   setGraph(self:read())
+  lastApplied = nil  -- REAPER is ground truth on load; the reconcile it fires must read, not trust the cache
   fire('wiringChanged', { kind = 'load' })
 end
 
@@ -193,6 +197,7 @@ end
 function wm:instantiateFxOnScratch(ident)
   local fxId = rm:addFx(rm:scratchId(), { ident = ident })
   if not fxId then return { fxId = nil, ins = 0, outs = 0, inNames = {}, outNames = {} } end
+  markState()  -- minted on scratch out of band; drop the cache so the next reconcile reads the instance
   local rec = rm:fx(fxId)
   return { fxId = fxId, ins = rec.ins, outs = rec.outs,
            inNames = rec.inNames, outNames = rec.outNames }
@@ -1167,11 +1172,9 @@ end
 function wm:applyOps(ops, label)
   ensureLoaded()
   rm:transaction(label or 'wiring: apply', function()
-    -- newTrack addressing rebuilt from each newTrack's own meta trackKey; no central map.
-    local wiringTracks = {}
-    for _, tr in ipairs(rm:tracks()) do
-      if tr.trackKey then wiringTracks[tr.trackKey] = tr.id end
-    end
+    -- newTrack addressing carries over from the preceding snapshot/apply (newTrackIds); no re-read.
+    -- An external mutation would bump the state count → syncExternal reloads → newTrackIds refreshes.
+    local wiringTracks = util.clone(newTrackIds)
     local owners       = buildGuidOwners()
     local graphDirty   = false
 
@@ -1348,15 +1351,30 @@ function wm:syncExternal()
   if not count or count == lastStateCount then return end
   lastStateCount = count
   setGraph(nil)
+  lastApplied = nil  -- an external mutation moved REAPER under us; the cache is now a lie
   fire('wiringChanged', { kind = 'load' })
 end
 
---contract: one reconcile pass — diff targetState vs snapshot, applyOps under the given undo label
+-- After a self-driven apply REAPER equals the applied target; overlay realised track ids to
+-- stand in for a fresh snapshot on the next reconcile. see docs/wiringManager.md § actual-side cache
+local function rememberApplied()
+  local snap       = wm:targetState()
+  local masterGuid = rm:masterId()
+  for trackKey, entry in pairs(snap) do
+    if     entry.trackKind == 'newTrack' then entry.id = newTrackIds[trackKey]
+    elseif entry.trackKind == 'master'   then entry.id = masterGuid end
+  end
+  return snap
+end
+
+--contract: one reconcile pass — diff targetState vs the actual side (lastApplied cache or a fresh
+--contract: snapshot), applyOps, then cache the applied state for the next self-driven reconcile
 function wm:reconcile(label)
   local target = self:targetState()
-  local snap   = self:snapshot()
+  local snap   = lastApplied or self:snapshot()
   local ops    = self:diff(target, snap)
   self:applyOps(ops, label or 'wiring: reconcile')
+  lastApplied  = rememberApplied()
 end
 
 --contract: idempotent; hooks wiringChanged so mutate/load reconciles + one immediate sync pass.
