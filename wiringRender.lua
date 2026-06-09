@@ -1175,8 +1175,40 @@ local function drawSourceTag(p, cx, cy, label)
          'wiring.source.label', label, wireFont, WIRE_LABEL_SIZE)
 end
 
--- Source-origin edges have no body: synthesise their from-endpoint as a fanned
--- stub off the consumer (away from master), written into segs as normal wires.
+-- Unit direction toward the consumer-boundary sector least crowded by incident wires,
+-- so the default source-tag fan lands in open space. Away-from-master when nothing touches it.
+local function leastOccupiedDir(consumer, consumerId, wireViews, nodesById, mxp, myp)
+  local angles = {}
+  local function occupy(dx, dy)
+    if dx * dx + dy * dy >= 1 then util.add(angles, math.atan(dy, dx)) end
+  end
+  for _, w in ipairs(wireViews) do
+    local other = (w.to == consumerId and nodesById[w.from])
+               or (w.from == consumerId and nodesById[w.to]) or nil
+    if other then
+      occupy(other.pos.x - consumer.pos.x, other.pos.y - consumer.pos.y)
+    elseif w.to == consumerId and w.fromOffset then
+      occupy(w.fromOffset.x, w.fromOffset.y)
+    end
+  end
+  if #angles == 0 then
+    local dx, dy = consumer.pos.x - mxp, consumer.pos.y - myp
+    local len = math.sqrt(dx * dx + dy * dy)
+    if len < 1 then return 1, 0 end
+    return dx / len, dy / len
+  end
+  table.sort(angles)
+  local bestMid, bestGap = angles[1] + math.pi, -1
+  for i = 1, #angles do
+    local a = angles[i]
+    local b = (i < #angles) and angles[i + 1] or (angles[1] + 2 * math.pi)
+    if b - a > bestGap then bestGap = b - a; bestMid = (a + b) / 2 end
+  end
+  return math.cos(bestMid), math.sin(bestMid)
+end
+
+-- Source-origin edges have no body: synthesise their from-endpoint as a fanned stub
+-- off the consumer, into the least-occupied boundary sector, written as normal wires.
 local SOURCE_TAG_TRIM = 6  -- from-end half-extent for the trim math; the drawn line is occluded by the tag's bg patch
 local function sourceSegments(wireViews, nodesById, segs)
   local idxOf, byConsumer, order = {}, {}, {}
@@ -1194,10 +1226,7 @@ local function sourceSegments(wireViews, nodesById, segs)
     local consumer = nodesById[consumerId]
     if consumer then
       local grp    = byConsumer[consumerId]
-      local dx, dy = consumer.pos.x - mxp, consumer.pos.y - myp
-      local len    = math.sqrt(dx * dx + dy * dy)
-      local ux, uy = 1, 0
-      if len >= 1 then ux, uy = dx / len, dy / len end
+      local ux, uy = leastOccupiedDir(consumer, consumerId, wireViews, nodesById, mxp, myp)
       local perpX, perpY = -uy, ux
       local exitDist = math.min((ux ~= 0) and hw / math.abs(ux) or math.huge,
                                 (uy ~= 0) and hh / math.abs(uy) or math.huge)

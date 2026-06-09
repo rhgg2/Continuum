@@ -128,6 +128,8 @@ function wm:edgeGain(idx)
   return (e.ops and e.ops.gain) or 1.0
 end
 
+local pruneSourceTags  -- defined below persistNodeMeta; GCs orphaned source-tag keys on routing mutates
+
 --contract: clone-validate-swap; DAG.validate failure returns false,err with no state change;
 --contract: on success swaps + fires wiringChanged{kind}; REAPER realises via reconcile
 function wm:mutate(mutator, kind)
@@ -137,6 +139,7 @@ function wm:mutate(mutator, kind)
   local err = DAG.validate(draft)
   if err then return false, err end
   setGraph(draft)
+  if kind ~= 'move' and kind ~= 'bus' then pruneSourceTags(userGraph) end
   fire('wiringChanged', { kind = kind or 'mutate' })
   return true
 end
@@ -151,6 +154,34 @@ local function persistNodeMeta(node, meta)
     if masterId then rm:assignTrack(masterId, meta) end
   elseif node.trackId then
     rm:assignTrack(node.trackId, meta)
+  end
+end
+
+-- Source-tag offsets key by out-edge identity (type + consumer + port): one source
+-- fans to many consumers, each tag its own; wiringView writes through this same key.
+local function srcTagKey(e)
+  return e.type .. '/' .. e.to .. '/' .. (e.toPort or 1)
+end
+wm.srcTagKey = srcTagKey
+
+-- A deleted or retargeted out-edge orphans its source-tag key; recreating that edge
+-- would otherwise resurrect the stale offset. Drop keys with no live edge, persist.
+function pruneSourceTags(g)
+  for id, node in pairs(g.nodes) do
+    if node.tagPos then
+      local live = {}
+      for _, e in ipairs(g.edges) do
+        if e.from == id then live[srcTagKey(e)] = true end
+      end
+      local dropped
+      for key in pairs(node.tagPos) do
+        if not live[key] then node.tagPos[key] = nil; dropped = true end
+      end
+      if dropped then
+        if next(node.tagPos) == nil then node.tagPos = nil end
+        persistNodeMeta(node, { tagPos = node.tagPos or util.REMOVE })
+      end
+    end
   end
 end
 

@@ -399,6 +399,26 @@ return {
     end,
   },
   {
+    -- Stale-key prune: a removed out-edge orphans its source-tag key. The routing mutate
+    -- drops it — so recreating the same edge starts fresh, no stale offset resurrects.
+    name = 'setSourceTagPos: removing a source edge prunes its orphaned tag key',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      seedSource(h, 'guid-A')
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        util.add(g.edges, { type='audio', from='s', to='master' })
+      end)
+      wm:setSourceTagPos('s', 'audio/master/1', { x = 12, y = -7 })
+      t.deepEq(wm:graph().nodes.s.tagPos, { ['audio/master/1'] = { x = 12, y = -7 } },
+               'offset stored live before the edge goes')
+      wm:mutate(function(g) g.edges = {} end)
+      t.falsy(wm:graph().nodes.s.tagPos, 'removing the edge pruned the orphaned key, live')
+      local reread = wm:read().nodes['guid-A']
+      t.falsy(reread and reread.tagPos, 'and the prune persisted to the store')
+    end,
+  },
+  {
     -- The view labels fx nodes by fxDisplay; readGraph derives it from the plugin name
     -- (shortFxName strips the "Type: " prefix and trailing author), else the node reads 'fx'.
     name = 'read: fx node carries a short display name from the plugin name',

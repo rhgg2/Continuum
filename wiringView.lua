@@ -111,12 +111,6 @@ local function activation(node)
   return 'fx'
 end
 
--- Per-out-edge key for a source node's tagPos store: type+consumer+port make
--- each out-edge distinct (one source fans to many consumers/ports).
-local function srcEdgeKey(e)
-  return e.type .. '/' .. e.to .. '/' .. (e.toPort or 1)
-end
-
 local function nodeView(id, node)
   local ins  = { audio = audioPorts(node, 'in'),  midi = midiPorts(node, 'in')  }
   local outs = { audio = audioPorts(node, 'out'), midi = midiPorts(node, 'out') }
@@ -188,7 +182,7 @@ function wv:addBus(nodeId, bus) return wm:addBus(nodeId, bus) end
 function wv:removeBus(nodeId, idx) return wm:removeBus(nodeId, idx) end
 
 --contract: stashes wireView w's source-tag offset {x,y} (consumer-relative) via wm; decoration only
-function wv:setSourceTagPos(w, offset) return wm:setSourceTagPos(w.from, srcEdgeKey(w), offset) end
+function wv:setSourceTagPos(w, offset) return wm:setSourceTagPos(w.from, wm.srcTagKey(w), offset) end
 
 --contract: appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
 function wv:addWire(spec)
@@ -326,7 +320,7 @@ function wv:wireViews()
     local toPort   = e.toPort   or 1
     local fromNode = g.nodes[e.from]
     local fromOffset = fromNode and fromNode.kind == 'source' and fromNode.tagPos
-                         and fromNode.tagPos[srcEdgeKey(e)] or nil
+                         and fromNode.tagPos[wm.srcTagKey(e)] or nil
     util.add(out, {
       from         = e.from,
       to           = e.to,
