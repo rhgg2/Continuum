@@ -46,4 +46,21 @@ return {
       t.eq(roundtrip('inf-ish'), 'inf-ish')
     end,
   },
+  {
+    name = 'serialise: control bytes hex-escape so the wire form is NUL-free (REAPER ext-state transport)',
+    run = function()
+      -- util.key joins parts with \0; REAPER's ext-state API is C-string and
+      -- truncates at the first NUL, so the wire form must carry no raw control bytes.
+      local composite = util.key('{GUID-A}', '{GUID-B}')
+      t.eq(roundtrip(composite), composite, 'NUL-joined composite key survives')
+      t.eq(util.serialise(composite):find('\0'), nil, 'no raw NUL in wire form')
+
+      local ctrl = '\0\1\9\13\31\127'
+      t.eq(roundtrip(ctrl), ctrl, 'all control bytes round-trip')
+      t.eq(util.serialise(ctrl):find('%c'), nil, 'no raw control byte in wire form')
+
+      -- A literal backslash-x sequence must not collide with the \xHH escape.
+      t.eq(roundtrip('\\x41'), '\\x41')
+    end,
+  },
 }

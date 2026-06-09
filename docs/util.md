@@ -45,6 +45,11 @@ Not JSON, not Lua syntax:
 - strings/numbers/booleans are unquoted; scalars decode back to their
   original type (numbers via `tonumber`, literals `true`/`false`).
 - the four delimiter chars `{ } , =` plus `\` itself are backslash-escaped.
+- control bytes (`< 0x20` and `0x7F`) are `\xHH` hex-escaped. The wire form
+  is persisted via REAPER's C-string ext-state API, which truncates at the
+  first NUL — and `util.key` joins composite keys with `\0`, so such a key
+  would silently lose its tail without this. The format carries no raw
+  control byte.
 - cycles raise.
 - trailing characters after a complete value raise.
 

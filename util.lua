@@ -162,7 +162,10 @@ function util.deepEq(a, b)
 end
 
 local function escape_string(s)
-  local out = (s:gsub('[\\{},=]', function(c)
+  -- Control bytes hex-escape to `\xHH`; structural chars stay backslash-escaped.
+  -- see docs/util.md § Serialisation format
+  local out = (s:gsub('[%c\\{},=]', function(c)
+    if c:find('%c') then return string.format('\\x%02X', string.byte(c)) end
     return '\\' .. c
   end))
   -- Disambiguate from numbers/booleans: prepend `\e` (empty marker, decodes
@@ -388,6 +391,12 @@ function util.unserialise(input)
           hadEscape = true
         elseif n == 'e' then
           -- empty marker: forces string interpretation downstream
+          hadEscape = true
+        elseif n == 'x' then
+          local byte = tonumber(input:sub(pos, pos + 1), 16)
+          if not byte then error('invalid hex escape') end
+          pos = pos + 2
+          buf[#buf+1] = string.char(byte)
           hadEscape = true
         else
           error('invalid escape: \\' .. tostring(n))
