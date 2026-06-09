@@ -116,15 +116,15 @@ function wm:edgeGain(idx)
 end
 
 --contract: clone-validate-swap; DAG.validate failure returns false,err with no state change;
---contract: on success swaps + fires wiringChanged{kind='mutate'}; REAPER realises via reconcile
-function wm:mutate(mutator)
+--contract: on success swaps + fires wiringChanged{kind}; REAPER realises via reconcile
+function wm:mutate(mutator, kind)
   ensureLoaded()
   local draft = util.deepClone(userGraph)
   mutator(draft)
   local err = DAG.validate(draft)
   if err then return false, err end
   setGraph(draft)
-  fire('wiringChanged', { kind = 'mutate' })
+  fire('wiringChanged', { kind = kind or 'mutate' })
   return true
 end
 
@@ -148,7 +148,7 @@ function wm:moveNodes(moves)
       local node = g.nodes[id]
       if node then node.pos.x, node.pos.y = p.x, p.y end
     end
-  end)
+  end, 'move')
   if not ok then return false, err end
   for id in pairs(moves) do
     local node = userGraph.nodes[id]
@@ -1337,7 +1337,10 @@ end
 function wm:enableLive(label)
   if liveLabel then return end
   liveLabel = label or 'wiring: apply'
+  -- Positions are decoration (persisted to the rm meta store, orthogonal to the
+  -- differ): a pos-only move yields zero diff ops, so skip the reconcile entirely.
   self:subscribe('wiringChanged', function(payload)
+    if payload.kind == 'move' then return end
     self:reconcile(payload.kind == 'load' and 'wiring: reconcile (load)' or liveLabel)
   end)
   self:reconcile('wiring: reconcile (enable)')

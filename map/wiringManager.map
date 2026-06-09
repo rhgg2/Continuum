@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1346  sha=a565510  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1349  sha=546bf5d  mode=chunk
 @deps cm, rm
 
 # Invariants & contracts
@@ -117,9 +117,9 @@
       -- Live, uncloned: fastGainCommit writes ops.gain without a wiringChanged,
       -- so the cached viewGraph would lag a fader drag.
       @contract  live gain on audio edges[idx]; 1.0 if unset/non-audio/absent; reads userGraph uncloned
-  @api wm:mutate(mutator)  @ 120
+  @api wm:mutate(mutator, kind)  @ 120
       @contract  clone-validate-swap; DAG.validate failure returns false,err with no state change;
-      @contract  on success swaps + fires wiringChanged{kind='mutate'}; REAPER realises via reconcile
+      @contract  on success swaps + fires wiringChanged{kind}; REAPER realises via reconcile
   @api wm:moveNodes(moves)  @ 145
       @contract  writes node.pos per {[id]={x,y}} + persists to the rm meta store; missing ids skipped
   @api wm:readJSFXContent(ident)  @ 161
@@ -227,7 +227,7 @@
   @use require DAG  @ 22
   @use require fs  @ 23
   @use require util  @ 21
-  @use sub     wiringManager:wiringChanged  @ 1340
+  @use sub     wiringManager:wiringChanged  @ 1342
 
 # REAPER API surface
   @reaper GetResourcePath

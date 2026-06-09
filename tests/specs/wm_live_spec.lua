@@ -54,6 +54,25 @@ return {
     end,
   },
   {
+    name = 'enableLive: a pos-only moveNodes skips reconcile',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      seedSource(h, 'guid-A')
+      wm:enableLive()
+      wm:mutate(function(g) g.nodes.s = source('guid-A') end)
+
+      -- reconcile always computes targetState; spy on it to witness whether the move
+      -- triggers one. Positions are decoration (persisted separately), so it must not.
+      local reconciles = 0
+      local realTargetState = wm.targetState
+      wm.targetState = function(self) reconciles = reconciles + 1; return realTargetState(self) end
+
+      t.truthy(wm:moveNodes({ s = { x = 99, y = 42 } }), 'move succeeded')
+      t.eq(reconciles, 0, 'pos-only move fired no reconcile')
+      t.eq(wm:graph().nodes.s.pos.x, 99, 'position written to the graph')
+    end,
+  },
+  {
     name = 'enableLive: initial reconcile syncs REAPER to already-persisted graph',
     run = function(harness)
       local h, wm = mkWm(harness)
