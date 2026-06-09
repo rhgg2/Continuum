@@ -18,7 +18,16 @@
 - basic automation palette in trackerView
   
 
-- **Stage 6 — Built-in patches.** Continuum Utility grows modes
+1. Quarantine UX (Open questions) — a darkened component still needs
+   to signal why it went dark (feedback loop / bus-aware FX) and its
+   recovery path in the wiring view.
+   
+2. Auto-layout (Deferred) — read-derived nodes with no stored position
+   stack at (0,0) until auto-layout lands.
+   
+   
+   
+   - **Stage 6 — Built-in patches.** Continuum Utility grows modes
   (mid-side, bandsplit, pre/post-emphasis); node palette and
   wire-menu surface them. No new compiler work — they're plain FX
   instances of the existing host.
