@@ -122,6 +122,7 @@ local function nodeView(id, node)
     activate = activation(node),
     ins      = ins,
     outs     = outs,
+    busses   = node.busses,
   }
 end
 
@@ -173,6 +174,12 @@ end
 function wv:moveNodes(moves)
   return wm:moveNodes(moves)
 end
+
+--contract: appends a bus {dir,ports,side} to the node + persists via wm:addBus; decoration only
+function wv:addBus(nodeId, bus) return wm:addBus(nodeId, bus) end
+
+--contract: removes node.busses[idx] via wm:removeBus; edges revert to a star when the list empties
+function wv:removeBus(nodeId, idx) return wm:removeBus(nodeId, idx) end
 
 --contract: appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
 function wv:addWire(spec)
@@ -284,7 +291,7 @@ end
 
 ----- Render-ready, viewport-independent
 
---shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', activate='sampler'|'fx'|nil, ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}} } — port lists carry names; counts = #list; activate is the double-click intent
+--shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', activate='sampler'|'fx'|nil, ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}}, busses={bus,…}? } — port lists carry names; counts = #list; activate is the double-click intent
 --contract: returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
 function wv:nodeViews()
   local g = ensureView()

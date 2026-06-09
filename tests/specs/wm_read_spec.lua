@@ -341,6 +341,47 @@ return {
     end,
   },
   {
+    -- Busses are decoration like pos: same meta store, same read-stamp. One per node kind.
+    name = 'read: node busses round-trip through the decoration store',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:enableLive()
+      seedSource(h, 'guid-A')
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        g.nodes.f = mintFx(wm, 'VST:F')
+        util.add(g.edges, { type='audio', from='s', to='f' })
+        util.add(g.edges, { type='audio', from='f', to='master' })
+      end)
+      wm:addBus('s',      { dir='out', ports={1}, side='R' })
+      wm:addBus('f',      { dir='in',  ports={1}, side='L' })
+      wm:addBus('master', { dir='in',  ports={1}, side='L' })
+
+      local rg = wm:read()
+      local fxId
+      for id, n in pairs(rg.nodes) do if n.kind == 'fx' then fxId = id end end
+      t.deepEq(rg.nodes['guid-A'].busses, { { dir='out', ports={1}, side='R' } }, 'source bus from track meta')
+      t.deepEq(rg.nodes[fxId].busses,     { { dir='in',  ports={1}, side='L' } }, 'fx bus from fx meta')
+      t.deepEq(rg.nodes.master.busses,    { { dir='in',  ports={1}, side='L' } }, 'master bus from master track meta')
+    end,
+  },
+  {
+    -- removeBus emptying the list clears the meta key, so a re-read carries no busses.
+    name = 'removeBus: emptying the list drops the decoration',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:enableLive()
+      seedSource(h, 'guid-A')
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        util.add(g.edges, { type='audio', from='s', to='master' })
+      end)
+      wm:addBus('s', { dir='out', ports={1}, side='R' })
+      wm:removeBus('s', 1)
+      t.falsy(wm:read().nodes['guid-A'].busses, 'busses gone after removing the last bus')
+    end,
+  },
+  {
     -- The view labels fx nodes by fxDisplay; readGraph derives it from the plugin name
     -- (shortFxName strips the "Type: " prefix and trailing author), else the node reads 'fx'.
     name = 'read: fx node carries a short display name from the plugin name',

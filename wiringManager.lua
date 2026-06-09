@@ -141,16 +141,16 @@ function wm:mutate(mutator, kind)
   return true
 end
 
--- Positions are decoration, not routing: persist to the rm meta store (fx GUID for fx-nodes,
--- track GUID for source/master) — orthogonal to the differ, so a pos-only move skips reconcile.
-local function persistNodePos(node)
+-- Decoration (pos, busses) is not routing: persist to the rm meta store (fx GUID for fx-nodes,
+-- track GUID for source/master) — orthogonal to the differ, so a decoration-only change skips reconcile.
+local function persistNodeMeta(node, meta)
   if node.kind == 'fx' then
-    if node.fxId then rm:assignFx(node.fxId, { pos = node.pos }) end
+    if node.fxId then rm:assignFx(node.fxId, meta) end
   elseif node.kind == 'master' then
     local masterId = rm:masterId()
-    if masterId then rm:assignTrack(masterId, { pos = node.pos }) end
+    if masterId then rm:assignTrack(masterId, meta) end
   elseif node.trackId then
-    rm:assignTrack(node.trackId, { pos = node.pos })
+    rm:assignTrack(node.trackId, meta)
   end
 end
 
@@ -165,8 +165,39 @@ function wm:moveNodes(moves)
   if not ok then return false, err end
   for id in pairs(moves) do
     local node = userGraph.nodes[id]
-    if node then persistNodePos(node) end
+    if node then persistNodeMeta(node, { pos = node.pos }) end
   end
+  return true
+end
+
+--shape: bus = { dir='in'|'out', ports={portIdx,…}, side='L'|'R'|'T'|'B' } — decoration on node.busses; in-bus claims edges where node is `to`, out-bus where `from`; audio (v1)
+--contract: appends bus {dir,ports,side} to node.busses + persists; decoration only, no reconcile
+function wm:addBus(nodeId, bus)
+  local ok = self:mutate(function(g)
+    local node = g.nodes[nodeId]
+    if node then
+      node.busses = node.busses or {}
+      util.add(node.busses, bus)
+    end
+  end, 'bus')
+  if not ok then return false end
+  local node = userGraph.nodes[nodeId]
+  if node then persistNodeMeta(node, { busses = node.busses }) end
+  return true
+end
+
+--contract: removes node.busses[idx] + persists; empty list clears meta key (edges revert to star)
+function wm:removeBus(nodeId, idx)
+  local ok = self:mutate(function(g)
+    local node = g.nodes[nodeId]
+    if node and node.busses then
+      table.remove(node.busses, idx)
+      if #node.busses == 0 then node.busses = nil end
+    end
+  end, 'bus')
+  if not ok then return false end
+  local node = userGraph.nodes[nodeId]
+  if node then persistNodeMeta(node, { busses = node.busses or util.REMOVE }) end
   return true
 end
 
@@ -312,8 +343,12 @@ function wm:addFxNode(x, y, fx, opts)
       end
     end)
     if ok then
-      persistNodePos(userGraph.nodes[io.fxId])
-      if sourceGuid then persistNodePos(userGraph.nodes[sourceGuid]) end
+      local fxNode = userGraph.nodes[io.fxId]
+      persistNodeMeta(fxNode, { pos = fxNode.pos })
+      if sourceGuid then
+        local srcNode = userGraph.nodes[sourceGuid]
+        persistNodeMeta(srcNode, { pos = srcNode.pos })
+      end
     end
   end)
   if not ok then return nil, err end
@@ -365,7 +400,10 @@ function wm:addSourceNode(opts)
                         midi  = { ins = 0, outs = 1 } },
       }
     end)
-    if ok then persistNodePos(userGraph.nodes[guid]) end
+    if ok then
+      local node = userGraph.nodes[guid]
+      persistNodeMeta(node, { pos = node.pos })
+    end
   end)
   if not ok then return nil, err end
   return newId
@@ -893,19 +931,20 @@ wm.readGraph = readGraph  -- exposed for unit tests; wm:read drives it from the 
 
 -- Decoration is orthogonal to routing: positions live in the rm meta store, never the routing
 -- snapshot. Stamp them back after the pure read; absent meta (never-placed) defaults to origin.
-local function stampPositions(g, tracks)
-  local trackPos, fxPos = {}, {}
+local function stampDecoration(g, tracks)
+  local trackRec, fxRec = {}, {}
   for _, tr in ipairs(tracks) do
-    if tr.pos then trackPos[tr.id] = tr.pos end
-    for _, f in ipairs(tr.fx) do if f.pos then fxPos[f.id] = f.pos end end
+    trackRec[tr.id] = tr
+    for _, f in ipairs(tr.fx) do fxRec[f.id] = f end
   end
   local masterId = rm:masterId()
   for id, node in pairs(g.nodes) do
-    local pos
-    if     node.kind == 'fx'     then pos = fxPos[id]
-    elseif node.kind == 'master' then pos = masterId and trackPos[masterId]
-    else                              pos = trackPos[id] end
-    node.pos = pos or { x = 0, y = 0 }
+    local rec
+    if     node.kind == 'fx'     then rec = fxRec[id]
+    elseif node.kind == 'master' then rec = masterId and trackRec[masterId]
+    else                              rec = trackRec[id] end
+    node.pos    = (rec and rec.pos) and { x = rec.pos.x, y = rec.pos.y } or { x = 0, y = 0 }
+    node.busses = rec and rec.busses and util.deepClone(rec.busses) or nil
   end
 end
 
@@ -914,7 +953,7 @@ end
 function wm:read()
   local tracks = rm:tracks()
   local g = readGraph(self:snapshot(tracks))
-  stampPositions(g, tracks)
+  stampDecoration(g, tracks)
   return g
 end
 

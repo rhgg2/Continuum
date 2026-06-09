@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=1450  sha=ec8dc80  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=1489  sha=529038e  mode=chunk
 @deps rm
 
 # Invariants & contracts
@@ -20,6 +20,7 @@
   @shape  snapshotFxEntry = { id?=string, ident=string, name?=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,inDisabled=bool,outDisabled=bool}, pinMaps?=snapshotPinMap, busAware?=bool }  -- ins/outs are audio pair counts, for read; name feeds fxDisplay
   @shape  wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + trackKey overlay (full chain, no ownership filter). see docs/wiringManager.md § wiringSnapshot.
   @shape  wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'moveFxAcrossTracks', ... }
+  @shape  bus = { dir='in'|'out', ports={portIdx,…}, side='L'|'R'|'T'|'B' } — decoration on node.busses; in-bus claims edges where node is `to`, out-bus where `from`; audio (v1)
   @shape  routing[edgeIdx] = {kind='mergeCU',consumerId,trackKey,slot} | {kind='mainSend',cls} | {kind='send',from,to}
 
 # Imports
@@ -39,9 +40,9 @@
   @state SCRATCH_KEY = '__scratch__'  @ 39
   @state CU_IDENT = 'JS:Continuum Utility'  @ 40
   @state compiledCache = nil  @ 48   -- { graph, ctx, reach } | nil; cleared on every graph swap
-  @state CU_MODE_TO_FLOAT = { busRoute = 0, merge = 1 }  @ 416
-  @state busAwareMemo = {}  @ 437
-  @state MASTER_KEY = '__master__'  @ 648
+  @state CU_MODE_TO_FLOAT = { busRoute = 0, merge = 1 }  @ 454
+  @state busAwareMemo = {}  @ 475
+  @state MASTER_KEY = '__master__'  @ 686
 
 # Private functions
   @fn isJS(ident)  @ 42
@@ -59,76 +60,76 @@
   @fn parseJSFXBusAware(content)  @ 88
       -- True iff JSFX desc declares ext_midi_bus=1 (the FX scans midi_bus itself,
       -- escaping our allocator). Skips // comments; frontier prevents `=10` match.
-  @fn persistNodePos(node)  @ 146
-      -- Positions are decoration, not routing: persist to the rm meta store (fx GUID for fx-nodes,
-      -- track GUID for source/master) — orthogonal to the differ, so a pos-only move skips reconcile.
-  @fn shortFxName(s)  @ 266
+  @fn persistNodeMeta(node, meta)  @ 146
+      -- Decoration (pos, busses) is not routing: persist to the rm meta store (fx GUID for fx-nodes,
+      -- track GUID for source/master) — orthogonal to the differ, so a decoration-only change skips reconcile.
+  @fn shortFxName(s)  @ 297
       -- Strips the "Type: " prefix and a trailing balanced-paren author / out-count
       -- ("... (Cockos)", "... (2 outs)"); %b() so a nested paren can't end it early.
-  @fn nodeHasMidiOut(graph, nodeId)  @ 376
+  @fn nodeHasMidiOut(graph, nodeId)  @ 414
       -- True iff `graph` has any edge with type='midi' leaving `nodeId`.
       -- Drives target.midiOut for non-JS fx in projectEntry.
-  @fn nodeHasMidiIn(graph, nodeId)  @ 385
+  @fn nodeHasMidiIn(graph, nodeId)  @ 423
       -- True iff `graph` has any edge with type='midi' entering `nodeId`. Drives midi
       -- inDisabled: an fx with no midi-in must not inherit source bus 0 (the phantom).
   -- Snapshot / target / diff (Stage 2)
-  @fn readCuParams(params)  @ 396
+  @fn readCuParams(params)  @ 434
       -- Decode CU slider floats (rm:fx params, by display name) into wm/CU vocabulary;
       -- only the meaningful subset per mode, so the snapshot diff ignores stale lanes.
-  @fn flattenCuParams(params)  @ 417
-  @fn busAware(ident)  @ 438
-  @fn snapFx(fx)  @ 447
+  @fn flattenCuParams(params)  @ 455
+  @fn busAware(ident)  @ 476
+  @fn snapFx(fx)  @ 485
       -- One rm fx record → snapshotFxEntry: CU bridges carry decoded params, JSFX a busAware flag, the
       -- rest their midi routing; fxId is the identity the differ matches fxOrder by.
-  @fn snapFxList(fxList)  @ 465
+  @fn snapFxList(fxList)  @ 503
       -- Every fx on a managed track is wm's (whole-track-set quarantine), so surface the full chain —
       -- the differ's full-replace removes any the graph no longer wants.
-  @fn ownedSends(sendList, keyByGuid)  @ 473
+  @fn ownedSends(sendList, keyByGuid)  @ 511
       -- Sends to a managed dst only, re-keyed .to guid→trackKey via the caller's map; midi gain dropped
       -- (only audio sends carry a written D_VOL).
-  @fn stateEntry(rec, trackKey, kind, keyByGuid)  @ 488
+  @fn stateEntry(rec, trackKey, kind, keyByGuid)  @ 526
       -- One rm track record → wiringSnapshot entry. Scratch is forced main-off/sendless (it only parks
       -- fx); other tracks re-key their sends via keyByGuid. Shared by snapshot's loop and state refreshes.
-  @fn keyByGuidFromState()  @ 501
+  @fn keyByGuidFromState()  @ 539
       -- guid→trackKey over the current model, for re-keying a refreshed track's sends.
-  @fn projectEntry(spec, compileNodes, scratchGuid)  @ 569
+  @fn projectEntry(spec, compileNodes, scratchGuid)  @ 607
       -- pinMaps nest inline on each fx entry; an unmaterialised entry (id=nil) carries
       -- them too, and the applier resolves its guid through the freshly-stamped graph.
   -- read : wiringSnapshot -> userGraph (design/wiring-implicit-graph.md § Plan)
-  @fn readGraph(snap)  @ 649
-  @fn stampPositions(g, tracks)  @ 896
+  @fn readGraph(snap)  @ 687
+  @fn stampDecoration(g, tracks)  @ 934
       -- Decoration is orthogonal to routing: positions live in the rm meta store, never the routing
       -- snapshot. Stamp them back after the pure read; absent meta (never-placed) defaults to origin.
-  @fn sendKey(s)  @ 921
-  @fn fxOrderEq(a, b)  @ 925
-  @fn sendsEq(a, b)  @ 936
-  @fn pinMapsEq(t_, s)  @ 951
+  @fn sendKey(s)  @ 960
+  @fn fxOrderEq(a, b)  @ 964
+  @fn sendsEq(a, b)  @ 975
+  @fn pinMapsEq(t_, s)  @ 990
       -- pinMaps live on fx entries now; an unmaterialised target fx (no id) can't be
       -- represented in snap (snap fx are all live) so any pinMap it carries must drift.
   -- Apply ops (Stage 2)
-  @fn stampOrigin(origin, guid)  @ 1083
+  @fn stampOrigin(origin, guid)  @ 1122
       -- Inline stamp/clear of CU-bridge guids onto userGraph: stamping never changes structure,
       -- so it skips the mutate transaction. Node fx already carry their guid, so only bridges stamp.
-  @fn originGuid(origin)  @ 1096
+  @fn originGuid(origin)  @ 1135
       -- Read-side inverse of stampOrigin: the guid a CU-bridge origin resolves to once
       -- setFXChain has stamped it, so setPinMaps can address an id-less entry.
-  @fn buildGuidOwners()  @ 1107
+  @fn buildGuidOwners()  @ 1146
       -- guid → the user-graph field carrying it, so a retracted CU bridge clears its stamp.
-  @fn clearOwner(owners, guid)  @ 1122
+  @fn clearOwner(owners, guid)  @ 1161
       -- Clear a retracted guid's stamp; returns true iff a field was actually cleared.
-  @fn reconcileFXChain(trackId, target, owners)  @ 1136
+  @fn reconcileFXChain(trackId, target, owners)  @ 1175
       -- Full-replace `trackId`'s FX chain to `target` via rm. Whole-track-set quarantine means the
       -- live chain is wm's working set: live fx absent from target are deleted, id-less bridges minted.
-  @fn gainRouting()  @ 1302
+  @fn gainRouting()  @ 1341
       -- Gain routing derived once per structural change from the cached ctx.
       -- Merge-CU entries carry consumerId/trackKey (not a guid); mergeGuids are stamped live by applyOps.
-  @fn idForKey(trackKey)  @ 1329
+  @fn idForKey(trackKey)  @ 1368
       -- trackKey → opaque id for the live-poke path: a source is self-keyed, newTracks resolve
       -- through the in-memory addressing map (refreshed by snapshot/applyOps), scratch + master via rm.
-  @fn pokeGainTarget(target, gain)  @ 1335
-  @fn setStateGain(target, gain)  @ 1354
+  @fn pokeGainTarget(target, gain)  @ 1374
+  @fn setStateGain(target, gain)  @ 1393
       -- Mirror a live gain poke into the model so the next reconcile sees no spurious change.
-  @fn rememberApplied()  @ 1417
+  @fn rememberApplied()  @ 1456
       -- After a self-driven apply REAPER equals the applied target; overlay realised track ids so the
       -- model stands in for a fresh snapshot on the next reconcile. see docs/wiringManager.md § actual-state model
 
@@ -150,112 +151,116 @@
       @contract  on success swaps + fires wiringChanged{kind}; REAPER realises via reconcile
   @api wm:moveNodes(moves)  @ 158
       @contract  writes node.pos per {[id]={x,y}} + persists to the rm meta store; missing ids skipped
-  @api wm:readJSFXContent(ident)  @ 174
+  @api wm:addBus(nodeId, bus)  @ 175
+      @contract  appends bus {dir,ports,side} to node.busses + persists; decoration only, no reconcile
+  @api wm:removeBus(nodeId, idx)  @ 190
+      @contract  removes node.busses[idx] + persists; empty list clears meta key (edges revert to star)
+  @api wm:readJSFXContent(ident)  @ 205
       @contract  read JSFX desc file for ident from REAPER's Effects dir; nil if non-JS or read fails
-  @api wm:checkUserAddable(ident)  @ 188
+  @api wm:checkUserAddable(ident)  @ 219
       @contract  refuses JSFX whose desc declares ext_midi_bus=1; nil on accept, structured err on refuse
-  @api wm:instantiateFxOnScratch(ident)  @ 197
+  @api wm:instantiateFxOnScratch(ident)  @ 228
       @contract  AddByName on scratch + keep; returns {fxId, ins, outs, inNames, outNames}
       @contract  unknown ident → fxId=nil, ins=outs=0, empty name lists
-  @api wm:scratchId()  @ 210
+  @api wm:scratchId()  @ 241
       @contract  the scratch track id (rm-owned, ensured on first use)
-  @api wm:isScratchTrack(track)  @ 215
+  @api wm:isScratchTrack(track)  @ 246
       @contract  true iff `track` is the live scratch track
-  @api wm:isWiringOwnedTrack(track)  @ 221
+  @api wm:isWiringOwnedTrack(track)  @ 252
       @contract  true iff `track` is wiring-owned (scratch/spawned newTrack); arrange hides these
-  @api wm:trackNames()  @ 233
+  @api wm:trackNames()  @ 264
       -- An unnamed track falls back to its REAPER number ("Track 3") — a label only, no real rename.
       @contract  { [trackId] = name } for every project track + master; one rm:trackLabels() pass
-  @api wm:fxTrack(fxId)  @ 245
+  @api wm:fxTrack(fxId)  @ 276
       @contract  raw MediaTrack hosting the fx instance guid, or nil if the guid isn't live.
-  @api wm:showFxWindow(fxId)  @ 251
+  @api wm:showFxWindow(fxId)  @ 282
       @contract  floats the FX window for the instance guid; false if the guid is no longer live
-  @api wm:createSourceTrack(opts)  @ 257
+  @api wm:createSourceTrack(opts)  @ 288
       -- snapshot derives source identity from graph source nodes, not a tag. see docs/wiringManager.md § createSourceTrack
       @contract  appends a source track via rm and returns its id; called outside mutate.
-  @api wm:addFxNode(x, y, fx, opts)  @ 275
+  @api wm:addFxNode(x, y, fx, opts)  @ 306
       @contract  one Undo block around instantiate + mutate; stamps fxId on the new fx-node
       @contract  generators (io.ins==0) also spawn sourceTrack + source-node + midi edge
       @contract  returns new fx-node id; nil+err on validate failure or ext_midi_bus refusal
-  @api wm:deleteSource(nodeId, force)  @ 326
+  @api wm:deleteSource(nodeId, force)  @ 361
       -- Reconcile never deletes sourceTracks (protects authored takes), so deletion is explicit
       -- here. Refuses with false, takeCount when the track holds takes unless force is set.
       @contract  deletes a source node + incident edges and its REAPER track in one Undo block.
-  @api wm:addSourceNode(opts)  @ 350
+  @api wm:addSourceNode(opts)  @ 385
       @contract  creates source track + node at opts.pos in one Undo block; returns node id or nil+err
-  @api wm:snapshot(tracks)  @ 521
+  @api wm:snapshot(tracks)  @ 559
       -- managed track surfaces (full chain — adoption is free, no ownership filter). Read-only.
       @contract  rm:tracks() re-keyed by trackKey, send dsts remapped guid→trackKey; every fx on a
-  @api wm:targetState()  @ 631
+  @api wm:targetState()  @ 669
       -- see docs/wiringManager.md
       @contract  pure; scratch id via rm; derives wiringSnapshot from DAG.targetTracks
-  @api wm:read()  @ 914
+  @api wm:read()  @ 953
       -- (3c: + component classification — bus-aware + feedback quarantine; decoration stamped from meta)
       @contract  reconstructs the user graph from REAPER routing; node ids are rm ids
-  @api wm:diff(target, snap)  @ 976
+  @api wm:diff(target, snap)  @ 1015
       -- Op order and deletion rules: see docs/wiringManager.md § diff op ordering
       @contract  pure structural diff → wiringOp[] that carries snap to target.
-  @api wm:applyOps(ops, label)  @ 1207
+  @api wm:applyOps(ops, label)  @ 1246
       @contract  walks ops in order inside one rm:transaction; setFXChain mints guids via rm:addFx
       @contract  stamps them inline without firing wiringChanged; params/midi/pinMaps write through rm
-  @api wm:pokeEdgeGain(edgeIdx, gain)  @ 1377
+  @api wm:pokeEdgeGain(edgeIdx, gain)  @ 1416
       -- see docs/wiringManager.md § pokeEdgeGain routing
       @contract  pokes the live gain for an edge via cached routing; no mutate/signal/undo.
-  @api wm:fastGainCommit(edgeIdx, gain)  @ 1385
+  @api wm:fastGainCommit(edgeIdx, gain)  @ 1424
       @contract  in-place gain commit + scratch mirror, one Undo block, no wiringChanged/reconcile
-  @api wm:listInstalledFX()  @ 1399
+  @api wm:listInstalledFX()  @ 1438
       @contract  delegates to rm:installedFx — raw REAPER "Type: Name (Author)" rows, memoised there
-  @api wm:syncExternal()  @ 1406
+  @api wm:syncExternal()  @ 1445
       -- see docs/wiringManager.md § external sync
       @contract  rereads the graph from routing when REAPER's project state moved without us — undo/redo
       @contract  or a manual routing edit. Our own writes rebaseline (markState), so they never trigger.
-  @api wm:reconcile(label)  @ 1429
+  @api wm:reconcile(label)  @ 1468
       @contract  one reconcile pass — diff targetState vs the actual side (the actualState model or a
       @contract  fresh snapshot), applyOps, then refresh the model for the next self-driven reconcile
-  @api wm:enableLive(label)  @ 1438
+  @api wm:enableLive(label)  @ 1477
       @contract  idempotent; hooks wiringChanged so mutate/load reconciles + one immediate sync pass.
 
 # Signals emitted (via util.installHooks)
   @emits wiringChanged
 
 # Uses (outbound edges)
-  @use call    DAG.allocate  @ 635
-  @use call    DAG.classify  @ 888
-  @use call    DAG.compile  @ 79, 633
-  @use call    DAG.targetTracks  @ 635, 1306
+  @use call    DAG.allocate  @ 673
+  @use call    DAG.classify  @ 926
+  @use call    DAG.compile  @ 79, 671
+  @use call    DAG.targetTracks  @ 673, 1345
   @use call    DAG.validate  @ 137
-  @use call    fs.join  @ 176
-  @use call    rm.addFx  @ 198, 1167
-  @use call    rm.addTrack  @ 1238
-  @use call    rm.assignFx  @ 148, 1184, 1194, 1262, 1272, 1340
-  @use call    rm.assignTrack  @ 151, 153, 1251, 1255, 1284, 1345
-  @use call    rm.deleteFx  @ 1157
-  @use call    rm.deleteTrack  @ 342, 1241
-  @use call    rm.fx  @ 204, 246
-  @use call    rm.fxIds  @ 1140
-  @use call    rm.installedFx  @ 1400
-  @use call    rm.masterId  @ 150, 902, 1218, 1331, 1419
-  @use call    rm.params  @ 453
-  @use call    rm.reaperTrack  @ 217, 247, 330, 1344
-  @use call    rm.scratchId  @ 198, 203, 211, 527, 636, 1330
-  @use call    rm.setSendGain  @ 1348
-  @use call    rm.showFx  @ 252
-  @use call    rm.track  @ 515
-  @use call    rm.trackLabels  @ 235
-  @use call    rm.tracks  @ 530, 915
-  @use call    rm.transaction  @ 281, 333, 354, 1209, 1389
-  @use call    rm.writeChainMidi  @ 1200
-  @use call    util.add  @ 311, 338, 467, 478, 601, 610, 665, 680, 684, 700, 701, 712, 746, 751, 756, 759, 763, 775, 779, 812, 821, 861, 990, 1007, 1022, 1029, 1034, 1051, 1056, 1068, 1070, 1171, 1198, 1280
+  @use call    fs.join  @ 207
+  @use call    rm.addFx  @ 229, 1206
+  @use call    rm.addTrack  @ 1277
+  @use call    rm.assignFx  @ 148, 1223, 1233, 1301, 1311, 1379
+  @use call    rm.assignTrack  @ 151, 153, 1290, 1294, 1323, 1384
+  @use call    rm.deleteFx  @ 1196
+  @use call    rm.deleteTrack  @ 377, 1280
+  @use call    rm.fx  @ 235, 277
+  @use call    rm.fxIds  @ 1179
+  @use call    rm.installedFx  @ 1439
+  @use call    rm.masterId  @ 150, 940, 1257, 1370, 1458
+  @use call    rm.params  @ 491
+  @use call    rm.reaperTrack  @ 248, 278, 365, 1383
+  @use call    rm.scratchId  @ 229, 234, 242, 565, 674, 1369
+  @use call    rm.setSendGain  @ 1387
+  @use call    rm.showFx  @ 283
+  @use call    rm.track  @ 553
+  @use call    rm.trackLabels  @ 266
+  @use call    rm.tracks  @ 568, 954
+  @use call    rm.transaction  @ 312, 368, 389, 1248, 1428
+  @use call    rm.writeChainMidi  @ 1239
+  @use call    util.add  @ 180, 342, 373, 505, 516, 639, 648, 703, 718, 722, 738, 739, 750, 784, 789, 794, 797, 801, 813, 817, 850, 859, 899, 1029, 1046, 1061, 1068, 1073, 1090, 1095, 1107, 1109, 1210, 1237, 1319
   @use call    util.bucket  @ 68, 69
-  @use call    util.clone  @ 1212
-  @use call    util.deepClone  @ 78, 112, 135, 606
-  @use call    util.deepEq  @ 930, 931, 968
+  @use call    util.clone  @ 1251
+  @use call    util.deepClone  @ 78, 112, 135, 644, 947
+  @use call    util.deepEq  @ 969, 970, 1007
   @use call    util.installHooks  @ 29
-  @use call    util.key  @ 922
+  @use call    util.key  @ 961
   @use require DAG  @ 23
   @use require fs  @ 24
   @use require util  @ 22
-  @use sub     wiringManager:wiringChanged  @ 1443
+  @use sub     wiringManager:wiringChanged  @ 1482
 
 # REAPER API surface
   @reaper GetProjectStateChangeCount
