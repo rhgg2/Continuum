@@ -134,4 +134,23 @@ return {
       t.eq(midi.inDisabled, false, 'flags untouched')
     end,
   },
+  {
+    name = 'writeChainMidi patches several fx in one chunk pass; later patch keeps the earlier',
+    run = function()
+      local reaper, rm = mkRm()
+      local _, guid = seedTrack(reaper, 'Chain', { { ident = 'a' }, { ident = 'b' }, { ident = 'c' } })
+      local fx = rm:tracks()[1].fx
+
+      rm:writeChainMidi(guid, {
+        { id = fx[1].id, midi = { inBus = 1, outBus = 0, inDisabled = false, outDisabled = false } },
+        { id = fx[3].id, midi = { inBus = 0, outBus = 4, inDisabled = false, outDisabled = true  } },
+      })
+
+      local after = rm:tracks()[1].fx
+      t.eq(after[1].midi.inBus,       1,     'fx1 in bus landed')
+      t.eq(after[2].midi.outDisabled, false, 'fx2 untouched')
+      t.eq(after[3].midi.outBus,      4,     'fx3 out bus landed')
+      t.eq(after[3].midi.outDisabled, true,  'fx3 patch survives the fx1 patch in one Set')
+    end,
+  },
 }

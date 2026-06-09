@@ -65,8 +65,10 @@ end
 local function ensureCompiled()
   ensureLoaded()
   if not compiledCache then
-    local snap = util.deepClone(userGraph)
-    compiledCache = { graph = snap, ctx = DAG.compile(snap), reach = adjacencies(snap) }
+    local snap  = util.deepClone(userGraph)
+    local ctx   = DAG.compile(snap)
+    local reach = adjacencies(snap)
+    compiledCache = { graph = snap, ctx = ctx, reach = reach }
   end
   return compiledCache
 end
@@ -211,11 +213,12 @@ function wm:isWiringOwnedTrack(track)
   return false
 end
 
---contract: { [trackId] = name } for every project track + master; one rm:tracks() pass
+--contract: { [trackId] = name } for every project track + master; one rm:trackLabels() pass
 -- An unnamed track falls back to its REAPER number ("Track 3") — a label only, no real rename.
 function wm:trackNames()
   local out = {}
-  for _, tr in ipairs(rm:tracks()) do
+  local tracks = rm:trackLabels()
+  for _, tr in ipairs(tracks) do
     out[tr.id] = tr.name ~= '' and tr.name
       or (not tr.isMaster and tr.number and ('Track ' .. math.floor(tr.number)))
       or tr.name
@@ -1076,38 +1079,40 @@ end
 -- live chain is wm's working set: live fx absent from target are deleted, id-less bridges minted.
 local function reconcileFXChain(trackId, target, owners)
   local dirty = false
-  local function liveChain() local r = rm:track(trackId); return r and r.fx or {} end
+  -- Structural reasoning needs only the ordered live fx ids, not the chunk — rm:fxIds reads
+  -- them via TrackFX, no GetTrackStateChunk to parse and discard.
+  local function liveChain() return rm:fxIds(trackId) or {} end
   local chain = liveChain()
 
-  -- Stale-guid sweep: a target entry whose id isn't live in REAPER (a retracted CU
+  -- Stale-id sweep: a target entry whose id isn't live in REAPER (a retracted CU
   -- bridge, reload, drift) drops to nil so it re-materialises and re-stamps.
-  local liveGuids = {}
-  for _, c in ipairs(chain) do liveGuids[c.id] = true end
+  local liveIds = {}
+  for _, fxId in ipairs(chain) do liveIds[fxId] = true end
   for _, t in ipairs(target) do
-    if t.id and not liveGuids[t.id] then t.id = nil end
+    if t.id and not liveIds[t.id] then t.id = nil end
   end
 
   -- 1. Delete live fx absent from target (right-to-left keeps indices valid).
-  local targetGuids = {}
-  for _, t in ipairs(target) do if t.id then targetGuids[t.id] = true end end
+  local targetIds = {}
+  for _, t in ipairs(target) do if t.id then targetIds[t.id] = true end end
   for i = #chain, 1, -1 do
-    local guid = chain[i].id
-    if not targetGuids[guid] then
-      rm:deleteFx(guid)
-      if clearOwner(owners, guid) then dirty = true end
+    local fxId = chain[i]
+    if not targetIds[fxId] then
+      rm:deleteFx(fxId)
+      if clearOwner(owners, fxId) then dirty = true end
       table.remove(chain, i)
     end
   end
 
   -- 2. Materialise id-less targets (CU bridges) appended at the chain end;
-  --    rm:addFx appends and returns the minted guid.
+  --    rm:addFx appends and returns the minted id.
   for _, t in ipairs(target) do
     if not t.id then
-      local guid = rm:addFx(trackId, { ident = t.ident, index = #chain })
-      t.id = guid
-      stampOrigin(t.origin, guid)
+      local fxId = rm:addFx(trackId, { ident = t.ident, index = #chain })
+      t.id = fxId
+      stampOrigin(t.origin, fxId)
       dirty = true
-      util.add(chain, { id = guid, ident = t.ident })
+      util.add(chain, fxId)
     end
   end
 
@@ -1115,10 +1120,10 @@ local function reconcileFXChain(trackId, target, owners)
   --    contiguous from slot 0, so target slot d fixes at abs idx d-1.
   chain = liveChain()
   for d = 1, #target do
-    if chain[d].id ~= target[d].id then
+    if chain[d] ~= target[d].id then
       local fromIdx
       for j = d + 1, #chain do
-        if chain[j].id == target[d].id then fromIdx = j; break end
+        if chain[j] == target[d].id then fromIdx = j; break end
       end
       rm:assignFx(target[d].id, { index = d - 1 })
       local moved = chain[fromIdx]
@@ -1127,14 +1132,16 @@ local function reconcileFXChain(trackId, target, owners)
     end
   end
 
-  -- 4. Push params (flat sliders) and per-FX MIDI routing now the chain is in
-  --    final order; rm resolves both by guid and owns the chunk surgery.
+  -- 4. Push params (flat sliders) and per-FX MIDI routing now the chain is in final
+  --    order; midi batches into one chunk surgery, params write through per fx.
   for _, t in ipairs(target) do
-    local assign = {}
-    if t.params then assign.params = t.params end
-    if t.midi   then assign.midi   = t.midi   end
-    if next(assign) then rm:assignFx(t.id, assign) end
+    if t.params then rm:assignFx(t.id, { params = t.params }) end
   end
+  local writes = {}
+  for _, t in ipairs(target) do
+    if t.midi then util.add(writes, { id = t.id, midi = t.midi }) end
+  end
+  if #writes > 0 then rm:writeChainMidi(trackId, writes) end
 
   return dirty
 end
@@ -1330,7 +1337,10 @@ end
 
 --contract: one reconcile pass — diff targetState vs snapshot, applyOps under the given undo label
 function wm:reconcile(label)
-  self:applyOps(self:diff(self:targetState(), self:snapshot()), label or 'wiring: reconcile')
+  local target = self:targetState()
+  local snap   = self:snapshot()
+  local ops    = self:diff(target, snap)
+  self:applyOps(ops, label or 'wiring: reconcile')
 end
 
 --contract: idempotent; hooks wiringChanged so mutate/load reconciles + one immediate sync pass.

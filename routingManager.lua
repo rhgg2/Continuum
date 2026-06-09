@@ -645,6 +645,21 @@ end
 
 ----------------- PUBLIC
 
+--contract: lightweight {id, name, number, isMaster} per project track + master; no fx/sends/chunk reads.
+function rm:trackLabels()
+  local function label(track, isMaster)
+    return { id       = reaper.GetTrackGUID(track),
+             name     = trackName(track),
+             number   = reaper.GetMediaTrackInfo_Value(track, 'IP_TRACKNUMBER'),
+             isMaster = isMaster or nil }
+  end
+  local out = {}
+  for i = 0, reaper.CountTracks(PROJ) - 1 do util.add(out, label(reaper.GetTrack(PROJ, i), false)) end
+  local master = reaper.GetMasterTrack(PROJ)
+  if master then util.add(out, label(master, true)) end
+  return out
+end
+
 function rm:tracks()
   local out = {}
   for i = 0, reaper.CountTracks(PROJ) - 1 do
@@ -667,6 +682,17 @@ function rm:track(id)
   local meta = readFxMeta()
   for _, fx in ipairs(rec.fx) do util.assign(fx, meta[fx.id]) end
   return rec
+end
+
+--contract: ordered live fx ids for a track via TrackFX — no chunk read; nil if the id is gone
+function rm:fxIds(id)
+  local track = locateTrack(id)
+  if not track then return nil end
+  local out = {}
+  for i = 0, reaper.TrackFX_GetCount(track) - 1 do
+    util.add(out, reaper.TrackFX_GetFXGUID(track, i))
+  end
+  return out
 end
 
 --contract: raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone
@@ -795,6 +821,26 @@ function rm:assignFx(id, t)
   if t.midi    then writeMidiRouting(track, idx, t.midi) end
   local meta = util.clone(t, FX_NATIVE)
   if next(meta) then writeFxMeta(id, meta) end
+end
+
+--contract: batch per-FX MIDI routing for one track in a single chunk Get+Set; writes={{id,midi},...}
+function rm:writeChainMidi(trackId, writes)
+  local track = locateTrack(trackId)
+  if not track then return end
+  local _, chunk = reaper.GetTrackStateChunk(track, '', false)
+  local changed  = false
+  for _, w in ipairs(writes) do
+    local _, idx     = locateFx(w.id)
+    local routingIdx = idx and routingIdxOf(track, idx)
+    if routingIdx then
+      local _, ins, outs = reaper.TrackFX_GetIOSize(track, idx)
+      local newChunk, ok = setFXMidiRouting(chunk, routingIdx,
+        { inBus = w.midi.inBus, outBus = w.midi.outBus,
+          inDisabled = w.midi.inDisabled, outDisabled = w.midi.outDisabled }, ins + outs)
+      if ok then chunk, changed = newChunk, true end
+    end
+  end
+  if changed then reaper.SetTrackStateChunk(track, chunk, false) end
 end
 
 function rm:deleteFx(id)
