@@ -245,6 +245,11 @@ function M.new()
         buf = buf & ((1 << bits) - 1)
       end
     end
+    if bits > 0 then
+      local v = (buf << (6 - bits)) & 0x3F
+      out[#out + 1] = B64A:sub(v + 1, v + 1)
+    end
+    while #out % 4 ~= 0 do out[#out + 1] = '=' end
     return table.concat(out)
   end
   local function b64decode(s)
@@ -275,8 +280,12 @@ function M.new()
       else
         local rb      = (type(fx) == 'table' and fx.routingBytes)
                         or { flag = 0x10, inBus = 0, outBus = 0 }
+        local record  = string.char(rb.flag, rb.inBus, rb.outBus, 0)
+        local preset  = type(fx) == 'table' and fx.preset
+        -- Routing record is the stream's last 4 bytes; REAPER stores a loaded
+        -- preset's name immediately before it, so model <name>\0<record>.
         local first   = b64encode(string.char(0, rb.flag, 0))
-        local trailer = b64encode(string.char(0, 0, rb.flag, rb.inBus, rb.outBus, 0))
+        local trailer = b64encode((preset and preset .. '\0' or '\0\0') .. record)
         lines[#lines + 1] = '  <VST "VST: ' .. ident .. '" stub.vst 0 "" 1 ""'
         lines[#lines + 1] = '    ' .. first
         lines[#lines + 1] = '    D34dB33f'
@@ -329,12 +338,13 @@ function M.new()
         local trailer = trailers[tIdx]
         if trailer then
           local bytes = b64decode(trailer)
-          if #bytes >= 6 then
+          if #bytes >= 4 then
             if type(fx) == 'string' then fx = { ident = fx }; fxs[j] = fx end
+            local L = #bytes
             fx.routingBytes = {
-              flag   = bytes:byte(3),
-              inBus  = bytes:byte(4),
-              outBus = bytes:byte(5),
+              flag   = bytes:byte(L - 3),
+              inBus  = bytes:byte(L - 2),
+              outBus = bytes:byte(L - 1),
             }
           end
         end

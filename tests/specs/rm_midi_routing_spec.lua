@@ -85,4 +85,32 @@ return {
       t.eq(after[3].midi.inBus, 5, 'second non-JS fx got the bus')
     end,
   },
+  {
+    name = 'reads routing from the stream tail past a preset name',
+    run = function()
+      local reaper, rm = mkRm()
+      seedTrack(reaper, 'Synth', { { ident = 'a', preset = 'Program 0',
+                                     routingBytes = { flag = 0, inBus = 2, outBus = 3 } } })
+
+      local midi = rm:tracks()[1].fx[1].midi
+      t.eq(midi.inBus,  2, 'in bus read from the last 4 bytes, not the preset name')
+      t.eq(midi.outBus, 3, 'out bus read from the last 4 bytes')
+    end,
+  },
+  {
+    name = 'routing write on a preset-bearing fx targets the record, not the name',
+    run = function()
+      local reaper, rm = mkRm()
+      seedTrack(reaper, 'Synth', { { ident = 'a', preset = 'Program 0',
+                                     routingBytes = { flag = 0, inBus = 0, outBus = 0 } } })
+      local id = rm:tracks()[1].fx[1].id
+
+      rm:assignFx(id, { midi = { inBus = 4 } })
+
+      local midi = rm:tracks()[1].fx[1].midi
+      t.eq(midi.inBus,      4,     'in bus written into the record')
+      t.eq(midi.outBus,     0,     'out bus untouched')
+      t.eq(midi.inDisabled, false, 'flags untouched')
+    end,
+  },
 }

@@ -50,12 +50,23 @@ in two places that REAPER keeps in sync. Ground-truth captures live
 in `design/midi-routing-fixtures.md`; the spike that produced them is
 `tests/spike_midi_routing.lua`.
 
-**Trailer line** (the last base64 line, after the plugin's own
-state) decodes to six bytes:
+**Routing record** — the **last 4 bytes of the FX block's concatenated
+decoded stream** (all base64 content lines joined, then decoded):
 
 ```
-00 00 <flags> <in_bus> <out_bus> 00
+<flags> <in_bus> <out_bus> 00
 ```
+
+The record is *always* the stream tail. When a preset is loaded, REAPER
+stores its name immediately before the record as `<name>\0`, so the last
+base64 *line* is `… <name>\0 <flags> <in_bus> <out_bus> 00` — not a clean
+record. Index from the **end of the decoded stream** (`flags =
+stream[n-3]`, `in_bus = stream[n-2]`, `out_bus = stream[n-1]`), never
+"byte 3/4/5 of the last line". The spike (`tests/spike_midi_routing.lua`)
+only tested ReaEQ with no preset, whose empty name (`\0\0`) left the
+record at the line's start and made it look like a clean 6-byte
+`00 00 <flags> <in> <out> 00` line — a no-preset coincidence, the same
+class of trap as the mirror's "first base64 line".
 
 - `flags` byte (bits observed):
   - `0x01` — input disabled.
@@ -70,7 +81,7 @@ state) decodes to six bytes:
   - Other bits unobserved; treat as opaque.
 - `in_bus`, `out_bus`: 0-indexed bus number, range 0..127
   (`0x00` = bus 1, `0x7F` = bus 128).
-- Bytes 0, 1, and 5: always `0x00` in everything we observed.
+- The record's trailing 4th byte: always `0x00` in everything observed.
 
 **Wrapper-header mirror** (a fixed offset inside REAPER's wrapper at
 the head of the concatenated decoded stream — *not* "the first base64
@@ -111,14 +122,15 @@ clobber state we don't model.
 A mutator that sets, say, output-disabled should:
 
 1. Locate the FX's `<VST ...>` block in the FXCHAIN.
-2. Decode the trailer's flag byte (byte 3 of the 6-byte trailer).
-   OR in `0x02`. Re-encode the trailer line.
+2. Decode the flag byte at stream offset `n-3` (`n` = decoded stream
+   length). OR in `0x02`. Re-encode just the base64 line it falls in.
 3. Compute the mirror offset: `27 + 8 * pinChannels`, 1-indexed in the
    concatenated decoded stream. Walk the FX block's base64 content
    lines accumulating decoded lengths to find which line contains
    that offset; decode that line, OR `0x02` into the byte at the
    within-line index, re-encode just that line.
-4. Leave `in_bus`, `out_bus`, and every other byte untouched.
+4. Bus numbers live at stream offsets `n-2` / `n-1`; leave every other
+   byte untouched.
 
 The encoding is version-sensitive (REAPER's serialisation format is
 not contractual). Re-run the spike against new REAPER versions; the

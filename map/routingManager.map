@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=834  sha=d3cdb57  mode=chunk
+@module routingManager  src=routingManager.lua  loc=837  sha=61f22b6  mode=chunk
 
 # Invariants & contracts
   @invariant  id is a track/fx GUID string — opaque to callers, stable across reload
@@ -19,16 +19,16 @@
   @state lastFxMetaRaw = nil  @ 13   -- scratch fx-meta mirror last seen; rm:pollUndo resyncs only on change
   @state b64alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123...  @ 131
   @state b64dec = {}  @ 132
-  @state SENDMODE_TO_POS = { [0] = 'postFader', [1] = 'preFx', [3] = 'preFader' }  @ 353
-  @state POS_TO_SENDMODE = { postFader = 0, preFx = 1, preFader = 3 }  @ 354
-  @state TRACK_NATIVE = {  @ 459
-  @state FX_NATIVE = {  @ 463
-  @state EXT_SECTION = 'continuum_wiring'  @ 469
-  @state FXMETA_KEY = 'fxMeta'  @ 470
-  @state SCRATCH_GUID = 'scratch'  @ 471
-  @state META_PEXT = 'P_EXT:ctm_meta'  @ 472
-  @state MIRROR_PEXT = 'P_EXT:ctm_fxMeta'  @ 473
-  @state paramIdxByIdent = {}  @ 553
+  @state SENDMODE_TO_POS = { [0] = 'postFader', [1] = 'preFx', [3] = 'preFader' }  @ 356
+  @state POS_TO_SENDMODE = { postFader = 0, preFx = 1, preFader = 3 }  @ 357
+  @state TRACK_NATIVE = {  @ 462
+  @state FX_NATIVE = {  @ 466
+  @state EXT_SECTION = 'continuum_wiring'  @ 472
+  @state FXMETA_KEY = 'fxMeta'  @ 473
+  @state SCRATCH_GUID = 'scratch'  @ 474
+  @state META_PEXT = 'P_EXT:ctm_meta'  @ 475
+  @state MIRROR_PEXT = 'P_EXT:ctm_fxMeta'  @ 476
+  @state paramIdxByIdent = {}  @ 556
 
 # Private functions
   -- track resolution
@@ -60,115 +60,116 @@
   @fn mutateByteInBase64Line(line, byteIdx, fn)  @ 213
       -- Decode line → mutate one byte via fn → re-encode iff changed.
       -- No-op preserves the line byte-for-byte (round-trip invariant).
-  @fn setBitInBase64Line(line, byteIdx, mask, on)  @ 226
-  @fn setByteInBase64Line(line, byteIdx, value)  @ 232
-  @fn patchStreamMirrorBit(lines, firstIdx, lastIdx, streamOffset, mask, on)  @ 238
-      -- Patch one bit of the wrapper-header mirror at a 1-indexed offset in
-      -- the FX block's concatenated decoded-base64 stream.
-  @fn setFXMidiRouting(chunk, fxIdx, opts, pinChannels)  @ 256
-      -- Drive per-FX MIDI routing on the fxIdx-th non-JS FX block. opts =
-      -- { inBus?, outBus?, inDisabled?, outDisabled? }.
-  @fn readFXMidiRouting(chunk, fxIdx)  @ 278
-      -- Decode the fxIdx-th non-JS FX block's routing trailer (read counterpart).
-      -- Returns { inBus, outBus, inDisabled, outDisabled } or nil.
+  @fn fxBlockStream(lines, firstIdx, lastIdx)  @ 228
+      -- Concatenate the FX block's base64 content lines into the decoded stream;
+      -- nested <...> elements and non-base64 lines are skipped.
+  @fn patchStreamByte(lines, firstIdx, lastIdx, off, fn)  @ 241
+      -- Patch the byte at 1-indexed stream offset `off` via `fn`, re-encoding only
+      -- the base64 line it falls in. Returns true if the offset was in range.
+  @fn setFXMidiRouting(chunk, fxIdx, opts, pinChannels)  @ 259
+      -- Per-FX MIDI routing = the decoded stream's last 4 bytes <flags><inBus><outBus>00;
+      -- flags are mirrored at head offset 27+8*pinChannels too. See docs/reaper_midi_routing.md.
+  @fn readFXMidiRouting(chunk, fxIdx)  @ 281
+      -- Read the fxIdx-th non-JS FX block's routing from the stream's last 4 bytes.
+      -- Returns { inBus, outBus, inDisabled, outDisabled } or nil if absent.
   -- fx read
-  @fn fxName(track, idx)  @ 297
+  @fn fxName(track, idx)  @ 300
       -- Display name: a user instance rename wins, else the plugin's own name.
-  @fn readFx(track, idx)  @ 304
-  @fn isJSFX(ident)  @ 320
-  @fn readMidiRouting(chunk, routingIdx)  @ 326
+  @fn readFx(track, idx)  @ 307
+  @fn isJSFX(ident)  @ 323
+  @fn readMidiRouting(chunk, routingIdx)  @ 329
       -- Absent trailer ⇒ passthrough defaults; the field is present for every non-JS
       -- fx so callers can read routing without a JS-vs-not branch.
-  @fn readFxChain(track)  @ 333
+  @fn readFxChain(track)  @ 336
   -- sends
-  @fn sendKind(track, sendIdx)  @ 358
+  @fn sendKind(track, sendIdx)  @ 361
       -- A send is midi-only iff its audio source is disabled (I_SRCCHAN == -1);
       -- anything else (audio-only, or a dual-stream send) reads as 'audio'.
-  @fn readSendChans(track, sendIdx, kind)  @ 365
+  @fn readSendChans(track, sendIdx, kind)  @ 368
       -- Audio sends carry channels in I_SRCCHAN/I_DSTCHAN; midi sends pack them into
       -- I_MIDIFLAGS (bits 14/22, +1-biased — 0 means all channels).
-  @fn readSend(track, sendIdx)  @ 376
+  @fn readSend(track, sendIdx)  @ 379
       -- One decoder behind read, the reconcile diff, and the gain-drift pass.
-  @fn readSends(track)  @ 392
-  @fn sendKey(s)  @ 401
+  @fn readSends(track)  @ 395
+  @fn sendKey(s)  @ 404
       -- Identity tuple — gain is the mutable value, deliberately absent.
-  @fn createSend(track, w)  @ 405
-  @fn reconcileSends(track, sends)  @ 424
+  @fn createSend(track, w)  @ 408
+  @fn reconcileSends(track, sends)  @ 427
       -- Full-replace: drop/create by sendKey identity, then a separate gain pass
       -- because REAPER indices shift under deletion and gains move with the key.
   -- metadata
-  @fn decodeBlob(raw)  @ 475
-  @fn readTrackMeta(track)  @ 479
-  @fn writeTrackMeta(track, meta)  @ 486
+  @fn decodeBlob(raw)  @ 478
+  @fn readTrackMeta(track)  @ 482
+  @fn writeTrackMeta(track, meta)  @ 489
       -- Patch-merge so a partial write (just pos) never wipes a sibling (split);
       -- util.REMOVE clears a field.
-  @fn readFxMeta()  @ 492
-  @fn writeFxMeta(guid, meta)  @ 497
+  @fn readFxMeta()  @ 495
+  @fn writeFxMeta(guid, meta)  @ 500
   -- read
-  @fn trackName(track)  @ 510
-  @fn readMainSend(track)  @ 515
-  @fn readTrack(track, isMaster)  @ 525
+  @fn trackName(track)  @ 513
+  @fn readMainSend(track)  @ 518
+  @fn readTrack(track, isMaster)  @ 528
   -- write
-  @fn writeMainSend(track, ms)  @ 541
-  @fn paramsByName(track, fxIdx)  @ 555
-  @fn writeParams(track, fxIdx, params)  @ 571
+  @fn writeMainSend(track, ms)  @ 544
+  @fn paramsByName(track, fxIdx)  @ 558
+  @fn writeParams(track, fxIdx, params)  @ 574
       @contract  params keyed by display name; an unknown name raises
-  @fn readParams(track, fxIdx)  @ 581
+  @fn readParams(track, fxIdx)  @ 584
       -- Live { [name] = value } for every named param — the read counterpart to writeParams.
-  @fn routingIdxOf(track, fxIdx)  @ 591
+  @fn routingIdxOf(track, fxIdx)  @ 594
       -- Absolute fx index → chunk routing index (non-JS blocks only); nil for a JS
       -- fx, which has no routing trailer — writing midi to one is a no-op.
-  @fn writeMidiRouting(track, fxIdx, midi)  @ 602
-  @fn writeTrackFields(track, t)  @ 613
-  @fn liveScratch()  @ 662
+  @fn writeMidiRouting(track, fxIdx, midi)  @ 605
+  @fn writeTrackFields(track, t)  @ 616
+  @fn liveScratch()  @ 665
       -- The persisted scratch guid + live handle, or nil if none minted yet. Never mints.
 
 # Public API (rm:*)
-  @api rm:tracks()  @ 626
-  @api rm:track(id)  @ 641
+  @api rm:tracks()  @ 629
+  @api rm:track(id)  @ 644
       @contract  full record for one track by id (single-track rm:tracks()); nil if the id is gone
-  @api rm:reaperTrack(id)  @ 651
+  @api rm:reaperTrack(id)  @ 654
       @contract  raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone
-  @api rm:masterId()  @ 656
+  @api rm:masterId()  @ 659
       @contract  the master track's guid; resolves master without an rm:tracks() scan
-  @api rm:scratchId()  @ 671
+  @api rm:scratchId()  @ 674
       @contract  the scratch track's guid, minted on first use; persisted in projext.
       @contract  rm owns scratch — it parks orphan fx and carries the fx-meta undo mirror.
-  @api rm:scratchTrack()  @ 680
+  @api rm:scratchTrack()  @ 683
       @contract  raw scratch MediaTrack handle (for P_EXT writes); mints on first use
-  @api rm:resyncFxMeta()  @ 686
+  @api rm:resyncFxMeta()  @ 689
       @contract  pull the scratch P_EXT fx-meta mirror back into projext after a REAPER
       @contract  undo/redo — projext doesn't reverse natively, the scratch chunk does
-  @api rm:pollUndo()  @ 695
+  @api rm:pollUndo()  @ 698
       @contract  per-frame heartbeat — ensures the scratch exists, and on a scratch-chunk
       @contract  rewind (REAPER undo/redo) pulls the fx-meta mirror back into projext
-  @api rm:addTrack(t)  @ 703
-  @api rm:assignTrack(id, t)  @ 714
-  @api rm:deleteTrack(id)  @ 722
-  @api rm:setSendGain(srcId, dstId, gain)  @ 729
+  @api rm:addTrack(t)  @ 706
+  @api rm:assignTrack(id, t)  @ 717
+  @api rm:deleteTrack(id)  @ 725
+  @api rm:setSendGain(srcId, dstId, gain)  @ 732
       @contract  targeted live D_VOL on the audio send srcId→dstId; false if no such send is live.
       @contract  the partial write assignTrack{sends} (full-replace) can't serve — for live gain pokes.
-  @api rm:addFx(trackId, t)  @ 742
-  @api rm:assignFx(id, t)  @ 758
-  @api rm:deleteFx(id)  @ 778
-  @api rm:fx(id)  @ 784
+  @api rm:addFx(trackId, t)  @ 745
+  @api rm:assignFx(id, t)  @ 761
+  @api rm:deleteFx(id)  @ 781
+  @api rm:fx(id)  @ 787
       @contract  fx record by id (ports, names, pinMaps, midi, trackId); nil if gone. Params separate.
-  @api rm:params(id)  @ 799
+  @api rm:params(id)  @ 802
       @contract  live { [name] = value } param values for the fx by id; nil if gone.
       @contract  the mutable control-state counterpart to the structural rm:fx record.
-  @api rm:showFx(id)  @ 805
+  @api rm:showFx(id)  @ 808
       @contract  floats the fx window for id; false if the fx is no longer live
-  @api rm:installedFx()  @ 813
+  @api rm:installedFx()  @ 816
       @contract  enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
-  @api rm:transaction(label, fn)  @ 826
+  @api rm:transaction(label, fn)  @ 829
 
 # Uses (outbound edges)
-  @use call    util.add  @ 59, 342, 395, 442, 629, 632, 819
-  @use call    util.assign  @ 488, 500, 535, 635, 646, 793
-  @use call    util.clone  @ 709, 718, 753, 774
-  @use call    util.key  @ 402
-  @use call    util.serialise  @ 489, 502
-  @use call    util.unserialise  @ 476
+  @use call    util.add  @ 59, 345, 398, 445, 632, 635, 822
+  @use call    util.assign  @ 491, 503, 538, 638, 649, 796
+  @use call    util.clone  @ 712, 721, 756, 777
+  @use call    util.key  @ 405
+  @use call    util.serialise  @ 492, 505
+  @use call    util.unserialise  @ 479
   @use require util  @ 7
 
 # REAPER API surface

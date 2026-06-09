@@ -223,26 +223,29 @@ local function mutateByteInBase64Line(line, byteIdx, fn)
                         .. bytes:sub(byteIdx + 1)) .. tail
 end
 
-local function setBitInBase64Line(line, byteIdx, mask, on)
-  return mutateByteInBase64Line(line, byteIdx, function(b)
-    return on and (b | mask) or (b & ~mask)
-  end)
+-- Concatenate the FX block's base64 content lines into the decoded stream;
+-- nested <...> elements and non-base64 lines are skipped.
+local function fxBlockStream(lines, firstIdx, lastIdx)
+  local parts = {}
+  for i = firstIdx, lastIdx do
+    local content = lines[i]:match('^%s*(%S*)%s*$')
+    if content and content:match('^[A-Za-z0-9%+/=]+$') then
+      parts[#parts + 1] = b64decode(content)
+    end
+  end
+  return table.concat(parts)
 end
 
-local function setByteInBase64Line(line, byteIdx, value)
-  return mutateByteInBase64Line(line, byteIdx, function() return value end)
-end
-
--- Patch one bit of the wrapper-header mirror at a 1-indexed offset in
--- the FX block's concatenated decoded-base64 stream.
-local function patchStreamMirrorBit(lines, firstIdx, lastIdx, streamOffset, mask, on)
+-- Patch the byte at 1-indexed stream offset `off` via `fn`, re-encoding only
+-- the base64 line it falls in. Returns true if the offset was in range.
+local function patchStreamByte(lines, firstIdx, lastIdx, off, fn)
   local cursor = 0
   for i = firstIdx, lastIdx do
-    local stripped = lines[i]:match('^%s*(.-)%s*$')
-    if stripped:match('^[A-Za-z0-9%+/=]+$') then
-      local n = #b64decode(stripped)
-      if cursor + n >= streamOffset then
-        lines[i] = setBitInBase64Line(lines[i], streamOffset - cursor, mask, on)
+    local content = lines[i]:match('^%s*(%S*)%s*$')
+    if content and content:match('^[A-Za-z0-9%+/=]+$') then
+      local n = #b64decode(content)
+      if cursor + n >= off then
+        lines[i] = mutateByteInBase64Line(lines[i], off - cursor, fn)
         return true
       end
       cursor = cursor + n
@@ -251,40 +254,40 @@ local function patchStreamMirrorBit(lines, firstIdx, lastIdx, streamOffset, mask
   return false
 end
 
--- Drive per-FX MIDI routing on the fxIdx-th non-JS FX block. opts =
--- { inBus?, outBus?, inDisabled?, outDisabled? }.
+-- Per-FX MIDI routing = the decoded stream's last 4 bytes <flags><inBus><outBus>00;
+-- flags are mirrored at head offset 27+8*pinChannels too. See docs/reaper_midi_routing.md.
 local function setFXMidiRouting(chunk, fxIdx, opts, pinChannels)
   local lines, hasTrailing = splitChunkLines(chunk)
   local first, trailer     = findFxBlock(lines, fxIdx)
   if not first then return chunk, false end
-  local mirrorOff = 27 + 8 * pinChannels
+  local n = #fxBlockStream(lines, first, trailer)
+  if n < 4 then return chunk, false end
 
-  if opts.inDisabled ~= nil then
-    lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x01, opts.inDisabled)
-    patchStreamMirrorBit(lines, first, trailer, mirrorOff, 0x01, opts.inDisabled)
+  local function setFlag(mask, on)
+    local function flip(b) return on and (b | mask) or (b & ~mask) end
+    patchStreamByte(lines, first, trailer, n - 3,                flip)
+    patchStreamByte(lines, first, trailer, 27 + 8 * pinChannels, flip)
   end
-  if opts.outDisabled ~= nil then
-    lines[trailer] = setBitInBase64Line(lines[trailer], 3, 0x02, opts.outDisabled)
-    patchStreamMirrorBit(lines, first, trailer, mirrorOff, 0x02, opts.outDisabled)
-  end
-  if opts.inBus  ~= nil then lines[trailer] = setByteInBase64Line(lines[trailer], 4, opts.inBus)  end
-  if opts.outBus ~= nil then lines[trailer] = setByteInBase64Line(lines[trailer], 5, opts.outBus) end
+  if opts.inDisabled  ~= nil then setFlag(0x01, opts.inDisabled)  end
+  if opts.outDisabled ~= nil then setFlag(0x02, opts.outDisabled) end
+  if opts.inBus  ~= nil then patchStreamByte(lines, first, trailer, n - 2, function() return opts.inBus  end) end
+  if opts.outBus ~= nil then patchStreamByte(lines, first, trailer, n - 1, function() return opts.outBus end) end
 
   return joinChunkLines(lines, hasTrailing), true
 end
 
--- Decode the fxIdx-th non-JS FX block's routing trailer (read counterpart).
--- Returns { inBus, outBus, inDisabled, outDisabled } or nil.
+-- Read the fxIdx-th non-JS FX block's routing from the stream's last 4 bytes.
+-- Returns { inBus, outBus, inDisabled, outDisabled } or nil if absent.
 local function readFXMidiRouting(chunk, fxIdx)
   local lines          = splitChunkLines(chunk)
   local first, trailer = findFxBlock(lines, fxIdx)
   if not first then return nil end
-  local content = lines[trailer]:match('^%s*(%S*)%s*$')
-  if not content or content == '' then return nil end
-  local bytes = b64decode(content)
-  local flags = bytes:byte(3) or 0
-  return { inBus       = bytes:byte(4) or 0,
-           outBus      = bytes:byte(5) or 0,
+  local stream = fxBlockStream(lines, first, trailer)
+  local n = #stream
+  if n < 4 then return nil end
+  local flags = stream:byte(n - 3)
+  return { inBus       = stream:byte(n - 2),
+           outBus      = stream:byte(n - 1),
            inDisabled  = (flags & 0x01) ~= 0,
            outDisabled = (flags & 0x02) ~= 0 }
 end
