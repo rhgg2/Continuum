@@ -74,9 +74,9 @@ local WIRE_FADER_WHEEL_DB        = 0.5  -- dB per wheel notch (coarse, default)
 local WIRE_FADER_WHEEL_DB_FINE   = 0.1  -- dB per wheel notch with Shift
 local WIRE_FADER_WHEEL_IDLE_FRAMES = 6  -- commit one setEdgeGain after this many wheel-idle frames so a scroll gesture is one undo entry
 
-local STUB_LEN  = 40    -- canvas px from the consumer rect edge to the stub's far end, along the away-from-master axis
-local TAG_GAP   = 3     -- visual gap from the stub's far end to the track-name tag's nearest edge
+local STUB_LEN  = 40    -- canvas px from the consumer rect edge to the source tag's centre, along the away-from-master axis
 local TAG_VIS_H = 0.62  -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
+local SOURCE_TAG_PAD = 3  -- bg-patch padding around the source tag's glyphs (the patch occludes the wire behind them)
 
 -- Palette pane geometry, mirroring arrangePage's body split.
 local PALETTE_W  = 200
@@ -788,11 +788,14 @@ local function wireExits(seg)
   local dx, dy = seg.ex - seg.sx, seg.ey - seg.sy
   local len = math.sqrt(dx * dx + dy * dy)
   if len < 1 then return nil end
-  local hw, hh = NODE_W / 2, NODE_H / 2
   local offX, offY = seg.offX or 0, seg.offY or 0
+  -- Per-end half-extents: tag-ended wires trim to the glyph box, not the full
+  -- node rect. Both default to the node body when unset.
+  local fHW, fHH = seg.fromHW or NODE_W / 2, seg.fromHH or NODE_H / 2
+  local tHW, tHH = seg.toHW   or NODE_W / 2, seg.toHH   or NODE_H / 2
   -- Param along the ray (rdx,rdy) from a point (px,py) inside an axis-
-  -- aligned rect centred at the origin at which the ray exits.
-  local function exitParam(rdx, rdy, px, py)
+  -- aligned (hw,hh) rect centred at the origin at which the ray exits.
+  local function exitParam(rdx, rdy, px, py, hw, hh)
     local txWall = (rdx > 0) and hw or -hw
     local tyWall = (rdy > 0) and hh or -hh
     local tx = (rdx ~= 0) and (txWall - px) / rdx or math.huge
@@ -802,8 +805,8 @@ local function wireExits(seg)
   -- Source rect centred at (sx - offX, sy - offY): at t=0 the segment
   -- point relative to the centre is (offX, offY). Target rect mirror:
   -- walk backward from t=1 in direction (-dx,-dy) with the same offset.
-  local tFrom = exitParam(dx, dy, offX, offY)
-  local tTo   = 1 - exitParam(-dx, -dy, offX, offY)
+  local tFrom = exitParam(dx, dy, offX, offY, fHW, fHH)
+  local tTo   = 1 - exitParam(-dx, -dy, offX, offY, tHW, tHH)
   return tFrom * len, tTo * len, len
 end
 
@@ -976,18 +979,22 @@ local function wireEndHit(segs, mx, my)
   local best, bestDist
   for i, seg in pairs(segs) do
     for _, side in ipairs({ 'from', 'to' }) do
-      local ax, ay, bx, by = endRegion(seg, side)
-      if ax then
-        local d = pointToSegmentDist(mx, my, ax, ay, bx, by)
-        if d <= WIRE_END_HIT_PERP and (not bestDist or d < bestDist) then
-          best = {
-            edgeIdx    = i,
-            side       = side,
-            keptAnchor = (side == 'from')
-              and { x = seg.ex, y = seg.ey }
-              or  { x = seg.sx, y = seg.sy },
-          }
-          bestDist = d
+      -- A source edge's from-end is a free tag (repositioned, not re-targeted),
+      -- so it's skipped here; only its consumer end redrafts.
+      if not (side == 'from' and seg.w.fromKind == 'source') then
+        local ax, ay, bx, by = endRegion(seg, side)
+        if ax then
+          local d = pointToSegmentDist(mx, my, ax, ay, bx, by)
+          if d <= WIRE_END_HIT_PERP and (not bestDist or d < bestDist) then
+            best = {
+              edgeIdx    = i,
+              side       = side,
+              keptAnchor = (side == 'from')
+                and { x = seg.ex, y = seg.ey }
+                or  { x = seg.sx, y = seg.sy },
+            }
+            bestDist = d
+          end
         end
       end
     end
@@ -1118,13 +1125,13 @@ local function drawFader(p, f)
 end
 
 -- In-flight draft wire (draw order in docs/wiringPage.md). Kept end anchors at
--- keptAnchor, or the node centre when a body-default forward draft has none.
+-- keptAnchor; for source edges (no body) keptAnchor is the only anchor.
 local function drawDraftWire(p, draft, nodesById, cx, cy)
   if not draft then return end
-  local src = nodesById[draft.keptId]
-  if not src then return end
-  local name = draft.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
   local a   = draft.keptAnchor
+  local src = nodesById[draft.keptId]
+  if not (a or src) then return end
+  local name = draft.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
   local ax  = a and a.x or src.pos.x
   local ay  = a and a.y or src.pos.y
   local sx, sy, ex, ey
@@ -1143,29 +1150,28 @@ local function drawTagAt(p, cx, cy, label)
          label, wireFont, WIRE_LABEL_SIZE)
 end
 
--- Track name at a source stub's far end: neutral, tiny wire-label font, set a
--- fixed gap from where the stub wire crosses the (visible) text box.
-local function drawSourceTag(p, ax, ay, ux, uy, label)
+-- Track name at a source edge's source end; bg patch occludes the wire behind
+-- the glyphs. TAG_VIS_H trims to the visible glyph band.
+local function drawSourceTag(p, cx, cy, label)
   local tw, th = p.measure(label, wireFont, WIRE_LABEL_SIZE)
-  local hw, hh = tw / 2, th * TAG_VIS_H / 2
-  -- Centre-to-edge distance along the wire where it crosses the box (ray/box
-  -- intersection, not the axis projection), so the gap holds at every angle.
-  local tx     = (ux ~= 0) and hw / math.abs(ux) or math.huge
-  local ty     = (uy ~= 0) and hh / math.abs(uy) or math.huge
-  local cross  = math.min(tx, ty)
-  local cx, cy = ax + ux * (TAG_GAP + cross), ay + uy * (TAG_GAP + cross)
-  drawTagAt(p, cx, cy, label)
+  local hw = math.ceil(tw / 2) + SOURCE_TAG_PAD
+  local hh = math.ceil(th * TAG_VIS_H / 2) + SOURCE_TAG_PAD
+  p.fill(rect(cx - hw, cy - hh, cx + hw, cy + hh), 'bg')
+  p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2),
+         'wiring.source.label', label, wireFont, WIRE_LABEL_SIZE)
 end
 
--- Source-origin edges render as labelled stubs, not wires: a short lead off the
--- consumer rect away from master, tag at the far end. Fan-out offsets via wireOffset.
-local function drawSourceStubs(p, wireViews, nodesById)
-  local byConsumer, order = {}, {}
+-- Source-origin edges have no body: synthesise their from-endpoint as a fanned
+-- stub off the consumer (away from master), written into segs as normal wires.
+local SOURCE_TAG_TRIM = 6  -- from-end half-extent for the trim math; the drawn line is occluded by the tag's bg patch
+local function sourceSegments(wireViews, nodesById, segs)
+  local idxOf, byConsumer, order = {}, {}, {}
+  for i, w in ipairs(wireViews) do idxOf[w] = i end
   for _, w in ipairs(wireViews) do
     if w.fromKind == 'source' then
-      local stubs = byConsumer[w.to]
-      if not stubs then stubs = {}; byConsumer[w.to] = stubs; util.add(order, w.to) end
-      util.add(stubs, w)
+      local g = byConsumer[w.to]
+      if not g then g = {}; byConsumer[w.to] = g; util.add(order, w.to) end
+      util.add(g, w)
     end
   end
   local mxp, myp = wv:masterPos()
@@ -1173,7 +1179,7 @@ local function drawSourceStubs(p, wireViews, nodesById)
   for _, consumerId in ipairs(order) do
     local consumer = nodesById[consumerId]
     if consumer then
-      local stubs  = byConsumer[consumerId]
+      local grp    = byConsumer[consumerId]
       local dx, dy = consumer.pos.x - mxp, consumer.pos.y - myp
       local len    = math.sqrt(dx * dx + dy * dy)
       local ux, uy = 1, 0
@@ -1181,15 +1187,16 @@ local function drawSourceStubs(p, wireViews, nodesById)
       local perpX, perpY = -uy, ux
       local exitDist = math.min((ux ~= 0) and hw / math.abs(ux) or math.huge,
                                 (uy ~= 0) and hh / math.abs(uy) or math.huge)
-      for i, w in ipairs(stubs) do
-        local s = wireOffset(i, #stubs)
-        local nearX = consumer.pos.x + perpX * s + ux * exitDist
-        local nearY = consumer.pos.y + perpY * s + uy * exitDist
-        local farX, farY = nearX + ux * STUB_LEN, nearY + uy * STUB_LEN
-        local name = w.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
-        p.line(farX, farY, nearX, nearY, name, WIRE_THICK)
-        drawWireArrow(p, farX, farY, nearX, nearY, name)
-        drawSourceTag(p, farX, farY, ux, uy, w.fromLabel or 'source')
+      for i, w in ipairs(grp) do
+        local s  = wireOffset(i, #grp)
+        local fx = consumer.pos.x + perpX * s + ux * (exitDist + STUB_LEN)
+        local fy = consumer.pos.y + perpY * s + uy * (exitDist + STUB_LEN)
+        segs[idxOf[w]] = {
+          w  = w,
+          sx = fx,             sy = fy,
+          ex = consumer.pos.x, ey = consumer.pos.y,
+          fromHW = SOURCE_TAG_TRIM, fromHH = SOURCE_TAG_TRIM,
+        }
       end
     end
   end
@@ -1261,8 +1268,8 @@ local function renderCanvas(w, h)
   -- start the next wire from the just-dropped node without first jiggling.
   if hoverFreeze and ImGui.IsMouseClicked(ctx, 0) then hoverFreeze = nil end
 
-  -- Sources render as labelled stubs (drawSourceStubs), never as bodies — drop
-  -- them from every body pass: draw, drag, band, hit-test, errors.
+  -- Sources have no body (sourceSegments renders each out-edge as a normal
+  -- wire). Drop source nodes from every body pass: draw, drag, band, hit-test.
   local nodeViews = {}
   for _, nv in ipairs(wv:nodeViews()) do
     if nv.category ~= 'source' then util.add(nodeViews, nv) end
@@ -1294,6 +1301,7 @@ local function renderCanvas(w, h)
   -- geometry can't drift. Draw order is in docs/wiringPage.md.
   local wireViewsList = wv:wireViews()
   local segs = wireSegments(wireViewsList, nodesById)
+  sourceSegments(wireViewsList, nodesById, segs)
 
   -- Wire-end hover: unmodified mouse near a wire's end-region. Suppressed
   -- during any active gesture so the highlight never fires under a drag.
@@ -1380,10 +1388,15 @@ local function renderCanvas(w, h)
   add(draftSourceHit)
   add(stickyHit)
 
-  -- z-stack (docs/wiringPage.md): wires < sleeves < draft < nodes.
+  -- z-stack (docs/wiringPage.md): wires < source tags < sleeves < draft < nodes.
   drawWiresPass(p, segs, wireViewsList,
     { skipEdgeIdx = wireDraft and wireDraft.edgeIdx })
-  drawSourceStubs(p, wireViewsList, nodesById)
+  for i = 1, #wireViewsList do
+    local seg = segs[i]
+    if seg and seg.w.fromKind == 'source' then
+      drawSourceTag(p, seg.sx, seg.sy, seg.w.fromLabel or 'source')
+    end
+  end
   for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
   drawDraftWire(p, wireDraft, nodesById, draftCx, draftCy)
   for _, nv in ipairs(nodeViews) do
