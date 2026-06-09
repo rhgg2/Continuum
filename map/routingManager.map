@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=837  sha=61f22b6  mode=chunk
+@module routingManager  src=routingManager.lua  loc=838  sha=41f4c8b  mode=chunk
 
 # Invariants & contracts
   @invariant  id is a track/fx GUID string — opaque to callers, stable across reload
@@ -28,7 +28,7 @@
   @state SCRATCH_GUID = 'scratch'  @ 474
   @state META_PEXT = 'P_EXT:ctm_meta'  @ 475
   @state MIRROR_PEXT = 'P_EXT:ctm_fxMeta'  @ 476
-  @state paramIdxByIdent = {}  @ 556
+  @state paramIdxByIdent = {}  @ 557
 
 # Private functions
   -- track resolution
@@ -110,63 +110,63 @@
   @fn readMainSend(track)  @ 518
   @fn readTrack(track, isMaster)  @ 528
   -- write
-  @fn writeMainSend(track, ms)  @ 544
-  @fn paramsByName(track, fxIdx)  @ 558
-  @fn writeParams(track, fxIdx, params)  @ 574
+  @fn writeMainSend(track, ms)  @ 545
+  @fn paramsByName(track, fxIdx)  @ 559
+  @fn writeParams(track, fxIdx, params)  @ 575
       @contract  params keyed by display name; an unknown name raises
-  @fn readParams(track, fxIdx)  @ 584
+  @fn readParams(track, fxIdx)  @ 585
       -- Live { [name] = value } for every named param — the read counterpart to writeParams.
-  @fn routingIdxOf(track, fxIdx)  @ 594
+  @fn routingIdxOf(track, fxIdx)  @ 595
       -- Absolute fx index → chunk routing index (non-JS blocks only); nil for a JS
       -- fx, which has no routing trailer — writing midi to one is a no-op.
-  @fn writeMidiRouting(track, fxIdx, midi)  @ 605
-  @fn writeTrackFields(track, t)  @ 616
-  @fn liveScratch()  @ 665
+  @fn writeMidiRouting(track, fxIdx, midi)  @ 606
+  @fn writeTrackFields(track, t)  @ 617
+  @fn liveScratch()  @ 666
       -- The persisted scratch guid + live handle, or nil if none minted yet. Never mints.
 
 # Public API (rm:*)
-  @api rm:tracks()  @ 629
-  @api rm:track(id)  @ 644
+  @api rm:tracks()  @ 630
+  @api rm:track(id)  @ 645
       @contract  full record for one track by id (single-track rm:tracks()); nil if the id is gone
-  @api rm:reaperTrack(id)  @ 654
+  @api rm:reaperTrack(id)  @ 655
       @contract  raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone
-  @api rm:masterId()  @ 659
+  @api rm:masterId()  @ 660
       @contract  the master track's guid; resolves master without an rm:tracks() scan
-  @api rm:scratchId()  @ 674
+  @api rm:scratchId()  @ 675
       @contract  the scratch track's guid, minted on first use; persisted in projext.
       @contract  rm owns scratch — it parks orphan fx and carries the fx-meta undo mirror.
-  @api rm:scratchTrack()  @ 683
+  @api rm:scratchTrack()  @ 684
       @contract  raw scratch MediaTrack handle (for P_EXT writes); mints on first use
-  @api rm:resyncFxMeta()  @ 689
+  @api rm:resyncFxMeta()  @ 690
       @contract  pull the scratch P_EXT fx-meta mirror back into projext after a REAPER
       @contract  undo/redo — projext doesn't reverse natively, the scratch chunk does
-  @api rm:pollUndo()  @ 698
+  @api rm:pollUndo()  @ 699
       @contract  per-frame heartbeat — ensures the scratch exists, and on a scratch-chunk
       @contract  rewind (REAPER undo/redo) pulls the fx-meta mirror back into projext
-  @api rm:addTrack(t)  @ 706
-  @api rm:assignTrack(id, t)  @ 717
-  @api rm:deleteTrack(id)  @ 725
-  @api rm:setSendGain(srcId, dstId, gain)  @ 732
+  @api rm:addTrack(t)  @ 707
+  @api rm:assignTrack(id, t)  @ 718
+  @api rm:deleteTrack(id)  @ 726
+  @api rm:setSendGain(srcId, dstId, gain)  @ 733
       @contract  targeted live D_VOL on the audio send srcId→dstId; false if no such send is live.
       @contract  the partial write assignTrack{sends} (full-replace) can't serve — for live gain pokes.
-  @api rm:addFx(trackId, t)  @ 745
-  @api rm:assignFx(id, t)  @ 761
-  @api rm:deleteFx(id)  @ 781
-  @api rm:fx(id)  @ 787
+  @api rm:addFx(trackId, t)  @ 746
+  @api rm:assignFx(id, t)  @ 762
+  @api rm:deleteFx(id)  @ 782
+  @api rm:fx(id)  @ 788
       @contract  fx record by id (ports, names, pinMaps, midi, trackId); nil if gone. Params separate.
-  @api rm:params(id)  @ 802
+  @api rm:params(id)  @ 803
       @contract  live { [name] = value } param values for the fx by id; nil if gone.
       @contract  the mutable control-state counterpart to the structural rm:fx record.
-  @api rm:showFx(id)  @ 808
+  @api rm:showFx(id)  @ 809
       @contract  floats the fx window for id; false if the fx is no longer live
-  @api rm:installedFx()  @ 816
+  @api rm:installedFx()  @ 817
       @contract  enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
-  @api rm:transaction(label, fn)  @ 829
+  @api rm:transaction(label, fn)  @ 830
 
 # Uses (outbound edges)
-  @use call    util.add  @ 59, 345, 398, 445, 632, 635, 822
-  @use call    util.assign  @ 491, 503, 538, 638, 649, 796
-  @use call    util.clone  @ 712, 721, 756, 777
+  @use call    util.add  @ 59, 345, 398, 445, 633, 636, 823
+  @use call    util.assign  @ 491, 503, 539, 639, 650, 797
+  @use call    util.clone  @ 713, 722, 757, 778
   @use call    util.key  @ 405
   @use call    util.serialise  @ 492, 505
   @use call    util.unserialise  @ 479

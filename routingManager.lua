@@ -529,6 +529,7 @@ local function readTrack(track, isMaster)
   local rec = {
     id       = reaper.GetTrackGUID(track),
     name     = trackName(track),
+    number   = reaper.GetMediaTrackInfo_Value(track, 'IP_TRACKNUMBER'),
     isMaster = isMaster or nil,
     nchan    = reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN'),
     mainSend = readMainSend(track),

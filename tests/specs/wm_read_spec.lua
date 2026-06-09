@@ -340,4 +340,33 @@ return {
       t.deepEq(rg.nodes.master.pos,    { x=50, y=60 }, 'master pos from master track meta')
     end,
   },
+  {
+    -- The view labels fx nodes by fxDisplay; readGraph derives it from the plugin name
+    -- (shortFxName strips the "Type: " prefix and trailing author), else the node reads 'fx'.
+    name = 'read: fx node carries a short display name from the plugin name',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local snap = {
+        ['guid-A'] = { trackKind='sourceTrack', id='guid-A', nchan=2, mainSend={on=false}, sends={},
+          fx = { { id='g-eq', ident='VST3:ReaEQ', name='VST3: ReaEQ (Cockos)', ins=1, outs=1 } } },
+      }
+      local rg = wm.readGraph(snap)
+      t.eq(rg.nodes['g-eq'].fxDisplay, 'ReaEQ', 'short name strips type prefix and author')
+    end,
+  },
+  {
+    -- Source labels (source list + wire labels) come from wm:trackNames; an unnamed REAPER
+    -- track shows its number ("Track 1") rather than an empty string, without a real rename.
+    name = 'trackNames: an unnamed track falls back to "Track n"',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local plain = seedSource(h, 'guid-A')
+      local named = seedSource(h, 'guid-B')
+      h.reaper.GetSetMediaTrackInfo_String(named, 'P_NAME', 'Drums', true)
+      local n = math.floor(h.reaper.GetMediaTrackInfo_Value(plain, 'IP_TRACKNUMBER'))
+      local names = wm:trackNames()
+      t.eq(names['guid-A'], 'Track ' .. n, 'unnamed source labelled by its REAPER track number')
+      t.eq(names['guid-B'], 'Drums',       'named source keeps its name')
+    end,
+  },
 }

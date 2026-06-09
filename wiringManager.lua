@@ -9,7 +9,7 @@
 --shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
 --shape: snapshotSend = { to=trackKey, kind='audio'|'midi', gain?=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }
 --shape: snapshotFxOrigin = {kind='bracketIn'|'bracketOut',id=string}|{kind='merge',consumer=string,trackKey=trackKey}  -- CU bridges only; node fx carry their fxId as id
---shape: snapshotFxEntry = { id?=string, ident=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,inDisabled=bool,outDisabled=bool}, pinMaps?=snapshotPinMap, busAware?=bool }  -- ins/outs are audio pair counts, for read
+--shape: snapshotFxEntry = { id?=string, ident=string, name?=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,inDisabled=bool,outDisabled=bool}, pinMaps?=snapshotPinMap, busAware?=bool }  -- ins/outs are audio pair counts, for read; name feeds fxDisplay
 --shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + trackKey overlay (full chain, no ownership filter). see docs/wiringManager.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'moveFxAcrossTracks', ... }
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
@@ -212,9 +212,14 @@ function wm:isWiringOwnedTrack(track)
 end
 
 --contract: { [trackId] = name } for every project track + master; one rm:tracks() pass
+-- An unnamed track falls back to its REAPER number ("Track 3") — a label only, no real rename.
 function wm:trackNames()
   local out = {}
-  for _, tr in ipairs(rm:tracks()) do out[tr.id] = tr.name end
+  for _, tr in ipairs(rm:tracks()) do
+    out[tr.id] = tr.name ~= '' and tr.name
+      or (not tr.isMaster and tr.number and ('Track ' .. math.floor(tr.number)))
+      or tr.name
+  end
   return out
 end
 
@@ -428,7 +433,7 @@ function wm:snapshot(tracks)
     return busAwareByIdent[ident]
   end
   local function snapFx(fx)
-    local entry = { id = fx.id, ident = fx.ident, ins = fx.ins, outs = fx.outs }
+    local entry = { id = fx.id, ident = fx.ident, name = fx.name, ins = fx.ins, outs = fx.outs }
     if fx.pinMaps and (next(fx.pinMaps.ins) or next(fx.pinMaps.outs)) then
       entry.pinMaps = fx.pinMaps
     end
@@ -778,6 +783,7 @@ local function readGraph(snap)
       else
         local id = fxe.id
         nodes[id] = { kind = 'fx', fxIdent = fxe.ident, fxId = id, busAware = fxe.busAware or nil,
+                      fxDisplay = fxe.name and shortFxName(fxe.name) or nil,
                       ports = { audio = { ins = fxe.ins or 0, outs = fxe.outs or 0 },
                                 midi = { ins = 1, outs = 1 } } }
         if isCyclic then feedbackSeeds[id] = true end
