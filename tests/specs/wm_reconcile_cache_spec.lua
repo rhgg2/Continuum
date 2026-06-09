@@ -46,12 +46,12 @@ end
 
 return {
   {
-    name = 'cold reconcile reads tracks once — applyOps no longer re-reads',
+    name = 'enableLive after load takes no read — the load snapshot seeded the model',
     run = function(harness)
       local h, wm, rm = mkWm(harness)
       local reads = trackReadSpy(rm)
-      wm:enableLive()  -- one cold reconcile: snapshot reads, applyOps seeds from newTrackIds
-      t.eq(reads(), 1, 'snapshot read once; applyOps did not re-read')
+      wm:enableLive()  -- reconcile diffs the model load seeded; applyOps seeds from newTrackIds
+      t.eq(reads(), 0, 'no fresh read: load\'s snapshot is the model; applyOps did not re-read')
     end,
   },
   {
@@ -60,9 +60,9 @@ return {
       local h, wm, rm = mkWm(harness)
       seedSource(h, 'guid-A')
       local reads = trackReadSpy(rm)
-      wm:enableLive()           -- one cold full read
+      wm:enableLive()           -- model already seeded by load
       wireSimple(wm)            -- mint refreshes one track; the reconcile diffs the model
-      t.eq(reads(), 1, 'the mint spliced the scratch entry in; no whole-project re-read')
+      t.eq(reads(), 0, 'the mint spliced the scratch entry in; no whole-project re-read')
     end,
   },
   {
@@ -121,7 +121,7 @@ return {
       local reads = trackReadSpy(rm)
       h.reaper._state.projStateCount = h.reaper._state.projStateCount + 1
       wm:syncExternal()                    -- external move → drop cache, fire load → reconcile
-      t.truthy(reads() >= 1, 'a real snapshot was taken after external invalidation')
+      t.eq(reads(), 1, 'one real snapshot after external invalidation, shared by read + reconcile')
     end,
   },
   {
@@ -133,7 +133,7 @@ return {
       wireSimple(wm)                       -- cache warm
       local reads = trackReadSpy(rm)
       wm:load()                            -- fires load → reconcile; must not trust the cache
-      t.truthy(reads() >= 1, 'load forced a fresh read')
+      t.eq(reads(), 1, 'load forced exactly one fresh read, shared by read + reconcile')
     end,
   },
 }

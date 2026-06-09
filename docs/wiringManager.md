@@ -355,8 +355,10 @@ write's effect on REAPER is local and known — which is what separates
 them from a graph move, whose effect may be non-local and is therefore
 left to the full diff. Only an *external* move invalidates the model
 outright (`actualState = nil`): `syncExternal` (undo/redo/manual mixer
-edit) and `wm:load`. There REAPER is ground truth and the next reconcile
-takes a fresh snapshot.
+edit) and `wm:load`. There REAPER is ground truth — but the `read` that
+rebuilds the graph re-seeds the model with the very snapshot it consumed,
+so even the resync reconcile diffs against the model rather than taking a
+second `rm:tracks()` pass.
 
 ## The reaper seam
 

@@ -49,9 +49,14 @@ local compiledCache = nil  -- { graph, ctx, reach } | nil; cleared on every grap
 
 local function setGraph(g) userGraph = g; compiledCache = nil end
 
--- read() drives snapshot, so this seeds userGraph from REAPER without forcing a load there.
+-- Seeds userGraph from REAPER without a load; seeds actualState from read's snapshot too,
+-- so the reconcile diffs against the model instead of paying a second rm:tracks() pass.
 local function ensureLoaded()
-  if not userGraph then setGraph(wm:read()) end
+  if not userGraph then
+    local graph, snap = wm:read()
+    setGraph(graph)
+    actualState = snap
+  end
 end
 
 -- Out-of-band REAPER writes call this to rebaseline the state count, so syncExternal won't reread our
@@ -101,8 +106,8 @@ end
 
 --contract: reconstructs the graph from REAPER via read, fires wiringChanged{kind='load'}
 function wm:load()
-  setGraph(self:read())
-  actualState = nil  -- REAPER is ground truth on load; the reconcile it fires must read, not the model
+  setGraph(nil)
+  ensureLoaded()
   fire('wiringChanged', { kind = 'load' })
 end
 
@@ -996,12 +1001,15 @@ local function stampDecoration(g, tracks)
 end
 
 --contract: reconstructs the user graph from REAPER routing; node ids are rm ids
+--contract: second return is the wiringSnapshot it consumed — callers seed the actual-state model
 -- (3c: + component classification — bus-aware + feedback quarantine; decoration stamped from meta)
 function wm:read()
+  rm:scratchId()  -- ensure scratch before listing, so the snapshot matches a fresh one
   local tracks = rm:tracks()
-  local g = readGraph(self:snapshot(tracks))
+  local snap = self:snapshot(tracks)
+  local g = readGraph(snap)
   stampDecoration(g, tracks)
-  return g
+  return g, snap
 end
 
 local function sendKey(s)
