@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=309  sha=5c46ec5  mode=chunk
+@module coordinator  src=coordinator.lua  loc=312  sha=5c46ec5  mode=chunk
 @deps cm, cmgr, gui
 
 # Invariants & contracts
@@ -32,8 +32,8 @@
   @state pages, active = {}, nil  @ 34
   @state quitting = false  @ 35
   @state errHandler = nil  @ 36
-  @state externalCommands = {}  @ 145   -- list of { extKey, command }
-  @state coord = {}  @ 249
+  @state externalCommands = {}  @ 148   -- list of { extKey, command }
+  @state coord = {}  @ 252
       @contract  register instantiates page; first registered becomes active; returns page handle
 
 # Private functions
@@ -53,75 +53,75 @@
   -- Coordinator
   @fn tick()  @ 113
       @contract  tick() runs once per frame before the page draws; no selection bus here
-  @fn drawSwitcher()  @ 119
-  @fn dispatch(state)  @ 139
+  @fn drawSwitcher()  @ 122
+  @fn dispatch(state)  @ 142
   -- External commands (REAPER-keymap bridge)
-  @fn pollExternalCommands()  @ 147
-  @fn frame()  @ 156
+  @fn pollExternalCommands()  @ 150
+  @fn frame()  @ 159
 
 # Public API (coord:*)
-  @api coord:register(name, moduleName, extra)  @ 251
-  @api coord:setActive(name)  @ 260
+  @api coord:register(name, moduleName, extra)  @ 254
+  @api coord:setActive(name)  @ 263
       @contract  setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming
       @contract  tracker self-binds from the cursor in renderBody; activation binds nothing for it
-  @api coord:returnToArrange()  @ 273
+  @api coord:returnToArrange()  @ 276
       @contract  tracker back to arrange; no reveal (cursor never left). No-op if arrange unregistered.
-  @api coord:getFacade(name)  @ 279
+  @api coord:getFacade(name)  @ 282
       @contract  resolve a published page facade by name; the contents are owned by the publishing page
-  @api coord:togglePage()  @ 283
+  @api coord:togglePage()  @ 286
       -- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
       -- are skipped; with ≥1 track every page activates.
-  @api coord:reloadAfterExternalMutation()  @ 294
+  @api coord:reloadAfterExternalMutation()  @ 297
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:onExternalCommand(extKey, command)  @ 301
+  @api coord:onExternalCommand(extKey, command)  @ 304
       @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands
-  @api coord:quit()  @ 305
-  @api coord:run(handler)  @ 307
+  @api coord:quit()  @ 308
+  @api coord:run(handler)  @ 310
       @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 123, 163, 164, 165, 166, 167, 184, 222, 223
-  @use call    chrome.popChromeStyles  @ 197
-  @use call    chrome.pushChromeStyles  @ 189
-  @use call    chrome.verticalSeparator  @ 193
-  @use call    cm.pollUndo  @ 157
+  @use call    chrome.colour  @ 126, 166, 167, 168, 169, 170, 187, 225, 226
+  @use call    chrome.popChromeStyles  @ 200
+  @use call    chrome.pushChromeStyles  @ 192
+  @use call    chrome.verticalSeparator  @ 196
+  @use call    cm.pollUndo  @ 160
   @use call    cmgr.appendPrefix  @ 58, 62
   @use call    cmgr.cancelPrefix  @ 65
   @use call    cmgr.finishPrefix  @ 96
-  @use call    cmgr.invoke  @ 98, 126, 151
+  @use call    cmgr.invoke  @ 98, 129, 154
   @use call    cmgr.isPrefixActive  @ 54, 95
   @use call    cmgr.keySpec  @ 88
   @use call    cmgr.keychain  @ 84
-  @use call    cmgr.pop  @ 264
-  @use call    cmgr.push  @ 267
+  @use call    cmgr.pop  @ 267
+  @use call    cmgr.push  @ 270
   @use call    cmgr.rootKeymap  @ 84
-  @use call    imgui.Begin  @ 170
-  @use call    imgui.BeginChild  @ 186, 225
-  @use call    imgui.Button  @ 125
-  @use call    imgui.End  @ 237
-  @use call    imgui.EndChild  @ 199, 230
-  @use call    imgui.GetContentRegionAvail  @ 207
-  @use call    imgui.GetCursorPosY  @ 206, 212
-  @use call    imgui.GetFrameHeightWithSpacing  @ 208
+  @use call    imgui.Begin  @ 173
+  @use call    imgui.BeginChild  @ 189, 228
+  @use call    imgui.Button  @ 128
+  @use call    imgui.End  @ 240
+  @use call    imgui.EndChild  @ 202, 233
+  @use call    imgui.GetContentRegionAvail  @ 210
+  @use call    imgui.GetCursorPosY  @ 209, 215
+  @use call    imgui.GetFrameHeightWithSpacing  @ 211
   @use call    imgui.GetKeyMods  @ 55, 92
-  @use call    imgui.Indent  @ 211
+  @use call    imgui.Indent  @ 214
   @use call    imgui.IsKeyDown  @ 89
   @use call    imgui.IsKeyPressed  @ 57, 61, 64, 92
-  @use call    imgui.PopFont  @ 240
-  @use call    imgui.PopStyleColor  @ 128, 201, 232, 239
-  @use call    imgui.PopStyleVar  @ 176, 196, 200, 231
-  @use call    imgui.PushFont  @ 162
-  @use call    imgui.PushStyleColor  @ 123, 163, 164, 165, 166, 167, 184, 222, 223
-  @use call    imgui.PushStyleVar  @ 169, 185, 190, 224
-  @use call    imgui.SameLine  @ 131, 133, 135, 192, 194
-  @use call    imgui.SetCursorPosY  @ 212, 221
-  @use call    imgui.SetScrollX  @ 180
-  @use call    imgui.SetScrollY  @ 180
-  @use call    imgui.Unindent  @ 217
-  @use call    modalHost.draw  @ 235
+  @use call    imgui.PopFont  @ 243
+  @use call    imgui.PopStyleColor  @ 131, 204, 235, 242
+  @use call    imgui.PopStyleVar  @ 179, 199, 203, 234
+  @use call    imgui.PushFont  @ 165
+  @use call    imgui.PushStyleColor  @ 126, 166, 167, 168, 169, 170, 187, 225, 226
+  @use call    imgui.PushStyleVar  @ 172, 188, 193, 227
+  @use call    imgui.SameLine  @ 134, 136, 138, 195, 197
+  @use call    imgui.SetCursorPosY  @ 215, 224
+  @use call    imgui.SetScrollX  @ 183
+  @use call    imgui.SetScrollY  @ 183
+  @use call    imgui.Unindent  @ 220
+  @use call    modalHost.draw  @ 238
   @use call    modalHost.tick  @ 114
-  @use call    util.assign  @ 252
-  @use call    util.instantiate  @ 20, 22, 252
+  @use call    util.assign  @ 255
+  @use call    util.instantiate  @ 20, 22, 255
   @use require chrome  @ 20
   @use require imgui  @ 14
   @use require modalHost  @ 22

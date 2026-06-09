@@ -15,14 +15,14 @@
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
 --invariant: authoring via wm:mutate — validate+swap+fire; REAPER realises via reconcile.
 --invariant: master is graph.nodes['master']; readGraph seeds it; DAG.validate enforces singleton.
---invariant: scratch is rm-owned (rm:scratchId/Track); wm parks fx + mirrors addressing for undo
+--invariant: scratch is rm-owned (rm:scratchId/Track); wm parks fx there
+--invariant: a newTrack carries its trackKey in its metadata; snapshot recovers addressing
 --invariant: scratch hosts FX with no compile-graph track — disconnected or lowered-parked
 
 local util = require 'util'
 local DAG  = require 'DAG'
 local fs   = require 'fs'
 
-local cm = (...).cm
 local rm = (...).rm
 
 local wm = {}
@@ -30,7 +30,8 @@ local fire = util.installHooks(wm)
 
 local userGraph = nil
 local liveLabel = nil     -- non-nil iff live mode is on; carries the default undo label
-local lastScratchRaw = nil -- serialised graph last mirrored to scratch P_EXT; pollUndo compares against it
+local lastStateCount = nil -- REAPER project state count at our last write; syncExternal rereads when it moves
+local newTrackIds = {}    -- { trackKey → id }; newTrack addressing, refreshed by snapshot/applyOps
 
 local SCRATCH_KEY = '__scratch__'  -- scratch's logical trackKey; its guid is rm-owned
 local CU_IDENT    = 'JS:Continuum Utility'
@@ -48,6 +49,12 @@ local function setGraph(g) userGraph = g; compiledCache = nil end
 -- read() drives snapshot, so this seeds userGraph from REAPER without forcing a load there.
 local function ensureLoaded()
   if not userGraph then setGraph(wm:read()) end
+end
+
+-- syncExternal rereads when REAPER's project state moves without us; every wm write rebaselines
+-- here so our own edits never trigger one. see docs/wiringManager.md § external sync
+local function markState()
+  if reaper.GetProjectStateChangeCount then lastStateCount = reaper.GetProjectStateChangeCount(0) end
 end
 
 ----- compiled-graph cache: one clone+compile per structural change, pulled by wv
@@ -207,7 +214,7 @@ function wm:isWiringOwnedTrack(track)
   if self:isScratchTrack(track) then return true end
   local guid = track and reaper.GetTrackGUID(track)
   if not guid then return false end
-  for _, id in pairs(cm:get('wiringTracks') or {}) do
+  for _, id in pairs(newTrackIds) do
     if id == guid then return true end
   end
   return false
@@ -240,7 +247,9 @@ end
 --contract: appends a source track via rm and returns its id; called outside mutate.
 -- snapshot derives source identity from graph source nodes, not a tag. see docs/wiringManager.md § createSourceTrack
 function wm:createSourceTrack(opts)
-  return rm:addTrack{ name = opts and opts.name, defaults = true }
+  local id = rm:addTrack{ name = opts and opts.name, defaults = true }
+  markState()
+  return id
 end
 
 -- Strips the "Type: " prefix and a trailing balanced-paren author / out-count
@@ -323,6 +332,7 @@ function wm:deleteSource(nodeId, force)
     end)
     if node.trackId then rm:deleteTrack(node.trackId) end
   end)
+  markState()
   return true
 end
 
@@ -417,12 +427,9 @@ end
 function wm:snapshot(tracks)
   -- No ensureLoaded: read() calls snapshot, recursion guard.
 
-  -- (id → trackKey/trackKind): newTracks resolve through wiringTracks, scratch via rm.
-  -- Source tracks are inferred structurally below (no stored tag) — design § What read does.
+  -- (id → trackKey/trackKind). newTracks carry their own trackKey on meta (recovered in the
+  -- pre-pass below); scratch is rm-owned; sources are inferred structurally — design § What read does.
   local keyByGuid, kindByKey = {}, {}
-  for trackKey, id in pairs(cm:get('wiringTracks') or {}) do
-    keyByGuid[id], kindByKey[trackKey] = trackKey, 'newTrack'
-  end
   local scratch = rm:scratchId()
   keyByGuid[scratch], kindByKey[SCRATCH_KEY] = SCRATCH_KEY, 'scratch'
 
@@ -474,11 +481,20 @@ function wm:snapshot(tracks)
 
   local trackList = tracks or rm:tracks()
   -- Pre-pass: assign trackKeys before building entries so send dsts resolve regardless of order.
-  -- Non-scratch/newTrack/master tracks are sources; read mints a source node only without incoming sends.
+  -- A newTrack carries its own meta trackKey; refresh the addressing map idForKey reads.
+  local nt = {}
+  for _, tr in ipairs(trackList) do
+    if tr.trackKey and not keyByGuid[tr.id] then
+      keyByGuid[tr.id], kindByKey[tr.trackKey] = tr.trackKey, 'newTrack'
+      nt[tr.trackKey] = tr.id
+    end
+  end
+  newTrackIds = nt
+  -- Everything else managed (non-scratch/newTrack/master) is a source; read mints a source
+  -- node only without incoming sends.
   for _, tr in ipairs(trackList) do
     if not keyByGuid[tr.id] and not tr.isMaster then
-      keyByGuid[tr.id] = tr.id
-      kindByKey[tr.id] = 'sourceTrack'
+      keyByGuid[tr.id], kindByKey[tr.id] = tr.id, 'sourceTrack'
     end
   end
 
@@ -1151,7 +1167,11 @@ end
 function wm:applyOps(ops, label)
   ensureLoaded()
   rm:transaction(label or 'wiring: apply', function()
-    local wiringTracks = cm:get('wiringTracks') or {}
+    -- newTrack addressing rebuilt from each newTrack's own meta trackKey; no central map.
+    local wiringTracks = {}
+    for _, tr in ipairs(rm:tracks()) do
+      if tr.trackKey then wiringTracks[tr.trackKey] = tr.id end
+    end
     local owners       = buildGuidOwners()
     local graphDirty   = false
 
@@ -1164,7 +1184,7 @@ function wm:applyOps(ops, label)
     end
 
     -- Addressing: source is self-keyed (trackKey == id), so unmapped keys resolve to themselves;
-    -- newTracks via wiringTracks, master via masterKeys. Scratch ops carry their guid in op.trackId.
+    -- newTracks via the rebuilt map, master via masterKeys. Scratch ops carry their guid in op.trackId.
     local function keyToId(trackKey)
       if masterKeys[trackKey] then return masterGuid end
       return wiringTracks[trackKey] or trackKey
@@ -1177,7 +1197,8 @@ function wm:applyOps(ops, label)
 
     for _, op in ipairs(ops) do
       if op.op == 'createTrack' then
-        wiringTracks[op.trackKey] = rm:addTrack({ name = 'continuum: ' .. op.trackKey })
+        wiringTracks[op.trackKey] = rm:addTrack({ name = 'continuum: ' .. op.trackKey,
+                                                  trackKey = op.trackKey })
       elseif op.op == 'deleteTrack' then
         rm:deleteTrack(op.trackId)
         wiringTracks[op.trackKey] = nil
@@ -1231,15 +1252,10 @@ function wm:applyOps(ops, label)
     -- without firing (no structural change, no reconcile re-entry).
     if graphDirty then setGraph(userGraph) end
 
-    -- wiringTracks now reflects this pass's create/delete (scratch is rm-owned, not keyed here).
-    cm:set('project', 'wiringTracks', wiringTracks)
-
-    -- Mirror addressing to scratch P_EXT inside the transaction so REAPER's undo captures
-    -- it alongside FX/track ops; pollUndo watches lastScratchRaw for divergence.
-    local scratch = rm:scratchTrack()
-    cm:writeTrackKey(scratch, 'wiringTracks', wiringTracks)
-    lastScratchRaw = cm:readTrackRaw(scratch)
+    -- This pass's create/delete is the live newTrack addressing; idForKey reads it on the poke path.
+    newTrackIds = wiringTracks
   end)
+  markState()  -- our own write; don't let syncExternal reread it
 end
 
 -- Gain routing derived once per structural change from the cached ctx.
@@ -1271,11 +1287,11 @@ local function gainRouting()
 end
 
 -- trackKey → opaque id for the live-poke path: a source is self-keyed, newTracks resolve
--- through wiringTracks, scratch + master through rm.
+-- through the in-memory addressing map (refreshed by snapshot/applyOps), scratch + master via rm.
 local function idForKey(trackKey)
   if trackKey == SCRATCH_KEY  then return rm:scratchId() end
   if trackKey == '__master__' then return rm:masterId() end
-  return (cm:get('wiringTracks') or {})[trackKey] or trackKey
+  return newTrackIds[trackKey] or trackKey
 end
 
 local function pokeGainTarget(target, gain)
@@ -1300,7 +1316,9 @@ end
 -- see docs/wiringManager.md § pokeEdgeGain routing
 function wm:pokeEdgeGain(edgeIdx, gain)
   local target = gainRouting()[edgeIdx]
-  return target ~= nil and pokeGainTarget(target, gain) or false
+  local ok = target ~= nil and pokeGainTarget(target, gain) or false
+  if ok then markState() end
+  return ok
 end
 
 --contract: in-place gain commit + scratch mirror, one Undo block, no wiringChanged/reconcile
@@ -1313,6 +1331,7 @@ function wm:fastGainCommit(edgeIdx, gain)
     edge.ops.gain = gain
     self:pokeEdgeGain(edgeIdx, gain)
   end)
+  markState()
   return true
 end
 
@@ -1321,17 +1340,14 @@ function wm:listInstalledFX()
   return rm:installedFx()
 end
 
---contract: on scratch-chunk divergence, restores addressing + re-reads from REAPER, fires load
--- see docs/wiringManager.md § pollUndo
-function wm:pollUndo()
-  local scratch = rm:scratchTrack()   -- handle from rm; the heartbeat lives in rm:pollUndo
-  local raw = cm:readTrackRaw(scratch)
-  if raw == lastScratchRaw then return end
-  -- REAPER routing changed under us (undo/redo/manual edit). The graph lives in the
-  -- routing now, so restore only the addressing mirror and re-read; load rebuilds the graph.
-  cm:set('project', 'wiringTracks', cm:readTrackKey(scratch, 'wiringTracks') or {})
+--contract: rereads the graph from routing when REAPER's project state moved without us — undo/redo
+--contract: or a manual routing edit. Our own writes rebaseline (markState), so they never trigger.
+-- see docs/wiringManager.md § external sync
+function wm:syncExternal()
+  local count = reaper.GetProjectStateChangeCount and reaper.GetProjectStateChangeCount(0)
+  if not count or count == lastStateCount then return end
+  lastStateCount = count
   setGraph(nil)
-  lastScratchRaw = raw
   fire('wiringChanged', { kind = 'load' })
 end
 

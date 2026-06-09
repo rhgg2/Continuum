@@ -353,8 +353,21 @@ carry an `origin`: they enter the graph already holding their scratch-minted gui
 so reconcile never mints a node fx — only CU bridges do. `stampOrigin`/`originGuid`/`buildGuidOwners`
 keep only the bracket/merge cases. The test fixtures shifted with the production shape: an fx node
 is now minted on scratch (`mintFx` → `instantiateFxOnScratch`) before it enters the graph, and the
-first reconcile *moves* it onto its track — the same path `addFxNode` drives. **D** remains the
-`wiringTracks` mirror + the `wm:pollUndo` collapse.
+first reconcile *moves* it onto its track — the same path `addFxNode` drives.
+
+**Commit D (addressing distributed; pollUndo collapsed) is landed.** The central `wiringTracks` cm key
+and its scratch P_EXT mirror are gone; each newTrack now carries its own `trackKey` on its track meta
+(`rm:addTrack{trackKey}`), recovered by scanning `rm:tracks()` in `wm:snapshot`/`wm:applyOps` and cached
+in the module-local `newTrackIds` for the live-poke path. Per-track P_EXT reverses with native undo, so the
+mirror's undo-coherence job vanishes. Addressing must stay *some* stored class-identity (not the track guid):
+target computes the `trackKey` from the graph *before any track exists*, so the guid — a realisation artefact
+— can't be the join key; the source-set composite `trackKey` is the one identity target and snapshot compute
+independently. `wm:pollUndo` is replaced by `wm:syncExternal`: a project-state-count watcher (gated to the
+active wiring page) that rereads the graph from routing on *any* external mutation — undo/redo or a manual
+mixer edit, not just an undone apply — while every wm write rebaselines the count so our own edits never
+trigger it. The scratch fx-meta heartbeat stays on `rm:pollUndo`. This closes step 4: cm blob, ownership
+machinery, central addressing map, and scratch addressing-mirror are all retired; only the rm-owned scratch
++ its fx-meta mirror remain.
 
 *Deferred:* read-derived nodes with no stored position (adopted tracks, never-placed sources) default
 to `(0,0)` — they stack at the origin until auto-layout lands (§ Decoration).

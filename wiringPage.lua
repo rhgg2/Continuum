@@ -44,8 +44,11 @@ function wp:unbind() wr:closeTransients() end
 --contract: turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
 function wp:enableLive() wv:enableLive() end
 
---contract: per-frame heartbeat — rm:pollUndo (scratch + fx-meta), wv:pollUndo (graph blob)
-function wp:tick() rm:pollUndo(); wv:pollUndo() end
+--contract: per-frame heartbeat — rm:pollUndo (scratch + fx-meta). Always-on, any active page.
+function wp:tick() rm:pollUndo() end
+
+--contract: reread the graph when REAPER routing changed under us; active page only (coord-gated)
+function wp:syncExternal() wv:syncExternal() end
 
 ----- Page interface — render delegates to the renderer
 function wp:renderToolbarBits(ctx)          return wr:renderToolbarBits(ctx) end

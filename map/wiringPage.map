@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=56  sha=d3cdb57  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=59  sha=faad93e  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -24,12 +24,14 @@
   @api wp:enableLive()  @ 45
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
   @api wp:tick()  @ 48
-      @contract  per-frame heartbeat — rm:pollUndo (scratch + fx-meta), wv:pollUndo (graph blob)
+      @contract  per-frame heartbeat — rm:pollUndo (scratch + fx-meta). Always-on, any active page.
+  @api wp:syncExternal()  @ 51
+      @contract  reread the graph when REAPER routing changed under us; active page only (coord-gated)
   -- Page interface — render delegates to the renderer
-  @api wp:renderToolbarBits(ctx)  @ 51
-  @api wp:renderBody(ctx, w, h, dispatch)  @ 52
-  @api wp:renderStatusBar(ctx)  @ 53
-  @api wp:focusState()  @ 54
+  @api wp:renderToolbarBits(ctx)  @ 54
+  @api wp:renderBody(ctx, w, h, dispatch)  @ 55
+  @api wp:renderStatusBar(ctx)  @ 56
+  @api wp:focusState()  @ 57
 
 # Uses (outbound edges)
   @use call    facade.publish  @ 32
@@ -37,12 +39,12 @@
   @use call    util.instantiate  @ 23, 24, 25, 27
   @use call    wiringManager.isWiringOwnedTrack  @ 32
   @use call    wiringRender.closeTransients  @ 42
-  @use call    wiringRender.focusState  @ 54
-  @use call    wiringRender.renderBody  @ 52
-  @use call    wiringRender.renderStatusBar  @ 53
-  @use call    wiringRender.renderToolbarBits  @ 51
+  @use call    wiringRender.focusState  @ 57
+  @use call    wiringRender.renderBody  @ 55
+  @use call    wiringRender.renderStatusBar  @ 56
+  @use call    wiringRender.renderToolbarBits  @ 54
   @use call    wiringView.enableLive  @ 45
-  @use call    wiringView.pollUndo  @ 48
+  @use call    wiringView.syncExternal  @ 51
   @use require routingManager  @ 23
   @use require util  @ 12
   @use require wiringManager  @ 24

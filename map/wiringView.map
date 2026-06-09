@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=353  sha=a361326  mode=chunk
+@module wiringView  src=wiringView.lua  loc=353  sha=f49c39b  mode=chunk
 @deps cm, wm
 
 # Invariants & contracts
@@ -51,7 +51,7 @@
   @api wv:graph()  @ 132
   @api wv:load()  @ 133
   @api wv:enableLive()  @ 134
-  @api wv:pollUndo()  @ 135
+  @api wv:syncExternal()  @ 135
   -- Authoring (slice 1.3b)
   @api wv:addFx(x, y, fx, opts)  @ 140
       @contract  pass-through to wm:addFxNode (Undo block + instantiate + generator there)
@@ -127,9 +127,9 @@
   @use call    wm.moveNodes  @ 174
   @use call    wm.mutate  @ 179, 191, 198, 210, 231, 244
   @use call    wm.pokeEdgeGain  @ 230, 240
-  @use call    wm.pollUndo  @ 135
   @use call    wm.reach  @ 25
   @use call    wm.showFxWindow  @ 161
+  @use call    wm.syncExternal  @ 135
   @use call    wm.trackNames  @ 29
   @use call    wm.viewGraph  @ 24
   @use require util  @ 8

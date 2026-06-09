@@ -34,16 +34,9 @@ local function audioEdge(from, to)
   return { type='audio', from=from, to=to }
 end
 
-local function scratchOf(h, wm)
-  local id = wm:scratchId()
-  for _, tr in ipairs(h.reaper._state.projectTracks) do
-    if h.reaper.GetTrackGUID(tr) == id then return tr end
-  end
-end
-
 return {
   {
-    name = 'undo: applyOps mirrors the wiringTracks addressing onto scratch P_EXT',
+    name = 'addressing: each newTrack carries its trackKey on its own meta (recovered by snapshot)',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -56,35 +49,36 @@ return {
         util.add(g.edges, { type='audio', from='sA', to='f', toPort=1 })
         util.add(g.edges, { type='audio', from='sB', to='f', toPort=2 })
       end)
-      -- The graph lives in REAPER routing; only the trackKey→id addressing rides scratch P_EXT.
-      -- The two-source fan-in parks f on a newTrack, so wiringTracks carries that key.
-      local tracks = h.cm:readTrackKey(scratchOf(h, wm), 'wiringTracks')
-      t.truthy(tracks and next(tracks), 'scratch P_EXT carries the wiringTracks mirror')
+      -- The two-source fan-in parks f on a newTrack. Its trackKey rides the track's own meta
+      -- (no central map, no scratch mirror); snapshot reads it back to re-key the entry.
+      local newTrackKey
+      for key, entry in pairs(wm:snapshot()) do
+        if entry.trackKind == 'newTrack' then newTrackKey = key end
+      end
+      t.truthy(newTrackKey, 'snapshot recovered a newTrack keyed from its own meta trackKey')
     end,
   },
   {
-    name = 'undo: scratch P_EXT diverges → pollUndo re-reads REAPER and fires load',
+    name = 'syncExternal: project state moved under us → reread + fire load',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
       wm:enableLive()
       wm:mutate(function(g) g.nodes.s = source('guid-A') end)
 
-      -- Simulate REAPER undo rewinding the addressing mirror: the scratch chunk changes,
-      -- which is what pollUndo detects.
-      h.cm:writeTrackKey(scratchOf(h, wm), 'wiringTracks', { ['x|y'] = 'guid-z' })
-
       local loadFires = 0
       wm:subscribe('wiringChanged', function(payload)
         if payload.kind == 'load' then loadFires = loadFires + 1 end
       end)
-      wm:pollUndo()
-      t.eq(loadFires, 1, 'pollUndo fired wiringChanged{kind=load} on divergence')
+      -- Any external edit (undo/redo or a manual mixer change) moves the project state count.
+      h.reaper._state.projStateCount = h.reaper._state.projStateCount + 1
+      wm:syncExternal()
+      t.eq(loadFires, 1, 'syncExternal fired wiringChanged{kind=load} on the external change')
       t.truthy(wm:graph().nodes['guid-A'], 'graph re-read from REAPER carries the source track')
     end,
   },
   {
-    name = 'undo: pollUndo is no-op when scratch matches lastScratchRaw',
+    name = 'syncExternal: no-op when the state count has not moved (our writes are baselined)',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
@@ -94,32 +88,9 @@ return {
       wm:subscribe('wiringChanged', function(payload)
         if payload.kind == 'load' then loadFires = loadFires + 1 end
       end)
-      wm:pollUndo()
-      wm:pollUndo()
-      t.eq(loadFires, 0, 'steady state: no spurious load fires')
-    end,
-  },
-  {
-    name = 'undo: scratch track deletion → pollUndo clears handle + fires load',
-    run = function(harness)
-      local h, wm = mkWm(harness)
-      seedSource(h, 'guid-A')
-      wm:enableLive()
-      wm:mutate(function(g) g.nodes.s = source('guid-A') end)
-      local scratch = scratchOf(h, wm)
-      t.truthy(scratch, 'scratch exists post-apply')
-
-      -- External deletion (manual delete in REAPER, or undo past scratch creation).
-      for i, tr in ipairs(h.reaper._state.projectTracks) do
-        if tr == scratch then table.remove(h.reaper._state.projectTracks, i); break end
-      end
-
-      local loadFires = 0
-      wm:subscribe('wiringChanged', function(payload)
-        if payload.kind == 'load' then loadFires = loadFires + 1 end
-      end)
-      wm:pollUndo()
-      t.eq(loadFires, 1, 'fired load on scratch loss so live mode reconciles + recreates scratch')
+      wm:syncExternal()
+      wm:syncExternal()
+      t.eq(loadFires, 0, 'our own apply rebaselined the count; no spurious reread')
     end,
   },
 }

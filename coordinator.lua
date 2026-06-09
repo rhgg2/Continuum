@@ -113,7 +113,10 @@ end
 local function tick()
   modalHost:tick()
   if pages.sample then pages.sample:tick() end
-  if pages.wiring then pages.wiring:tick() end
+  if pages.wiring then
+    pages.wiring:tick()
+    if active == 'wiring' then pages.wiring:syncExternal() end
+  end
 end
 
 local function drawSwitcher()

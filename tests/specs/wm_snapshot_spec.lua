@@ -22,15 +22,15 @@ local function seedSourceTrack(h, wm, guid)
   return track
 end
 
--- newTracks have no graph node — their id lives in the wiringTracks map under trackKey.
+-- newTracks have no graph node — each carries its own trackKey on its track meta
+-- (production: rm:addTrack{trackKey}), recovered by snapshot's rm:tracks() scan.
 local function seedNewTrack(h, guid, trackKey)
   local track = { __label = 'new:' .. guid }
   local list  = h.reaper._state.projectTracks
   list[#list+1] = track
   h.reaper._state.trackGuids[track] = guid
-  local wt = h.cm:get('wiringTracks') or {}
-  wt[trackKey] = guid
-  h.cm:set('project', 'wiringTracks', wt)
+  h.reaper.GetSetMediaTrackInfo_String(track, 'P_EXT:ctm_meta',
+    util.serialise({ trackKey = trackKey }), true)
   return track
 end
 
@@ -161,7 +161,7 @@ return {
     end,
   },
   {
-    name = 'newTrack trackKey: trackKey comes from wiringTrack key (multi-guid)',
+    name = 'newTrack trackKey: recovered from the newTrack meta (multi-guid)',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()

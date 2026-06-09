@@ -23,15 +23,13 @@ local function seedSource(h, guid)
   return track
 end
 
--- Locate the realised newTrack by its wiringTracks entry (non-scratch key).
+-- Locate the realised newTrack by the trackKey on its own meta (no central map).
 local function findNewTrack(h)
-  for key, id in pairs(h.cm:get('wiringTracks') or {}) do
-    if key ~= '__scratch__' then
-      for i = 0, h.reaper.CountTracks(0) - 1 do
-        local tr = h.reaper.GetTrack(0, i)
-        if h.reaper.GetTrackGUID(tr) == id then return tr end
-      end
-    end
+  for i = 0, h.reaper.CountTracks(0) - 1 do
+    local tr = h.reaper.GetTrack(0, i)
+    local _, raw = h.reaper.GetSetMediaTrackInfo_String(tr, 'P_EXT:ctm_meta', '', false)
+    local meta = raw and raw ~= '' and util.unserialise(raw)
+    if meta and meta.trackKey then return tr end
   end
 end
 

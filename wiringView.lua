@@ -132,7 +132,7 @@ end
 function wv:graph()      return wm:graph() end
 function wv:load()       wm:load() end
 function wv:enableLive() wm:enableLive() end
-function wv:pollUndo()   wm:pollUndo() end
+function wv:syncExternal() wm:syncExternal() end
 
 ----- Authoring (slice 1.3b)
 

@@ -79,20 +79,6 @@ return {
     end,
   },
   {
-    name = 'pollUndo heartbeat ensures the scratch track; reused, not re-minted',
-    run = function(harness)
-      local h, wm = mkWm(harness)
-      t.eq(reaper.CountTracks(0), 0, 'no tracks before the heartbeat')
-      wm:pollUndo()
-      t.eq(reaper.CountTracks(0), 1, 'heartbeat minted the scratch')
-      local first = reaper.GetTrack(0, 0)
-      t.eq(wm:isScratchTrack(first), true, 'recognised as the scratch track')
-
-      wm:pollUndo()
-      t.eq(reaper.CountTracks(0), 1, 'second heartbeat reused the existing scratch')
-    end,
-  },
-  {
     name = 'instantiateFxOnScratch triggers scratch creation lazily when load was skipped',
     run = function(harness)
       local h, wm = mkWm(harness)

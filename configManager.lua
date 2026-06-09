@@ -113,10 +113,6 @@ local declarations = {
   -- See docs/arrangeManager.md.
   { 'arrangeColours', {} },
 
-  -- Wiring addressing key, mirrored to scratch P_EXT for undo coherence.
-  -- wiringTracks maps trackKey → opaque track id; no graph blob (read era). See docs/wiringManager.md.
-  { 'wiringTracks',   {}  },
-
   -- Palette atoms — role-named swatches the colour editor edits; base/alt are
   -- tonal ramps (zoneN at lightness N/10, ends pure black/white).
   { 'palette.base.zone0',  hex('#000000') },  -- base: warm neutral (paper / ink)

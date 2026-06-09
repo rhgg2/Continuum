@@ -19,8 +19,9 @@ Node identity follows: an fx node is keyed by its rm `fxId`, a source
 by its track guid, so the id survives a reload (the read re-derives it,
 so there is no allocator and no `nextId`). What REAPER cannot store is
 **decoration** (node positions) — that rides the rm meta store, keyed by
-the same guids; absent meta defaults to `(0,0)`. The only project-tier
-cm key left is *addressing* (`wiringTracks`), never the graph itself.
+the same guids; absent meta defaults to `(0,0)`. The only durable wiring
+addressing left is each newTrack's `trackKey`, carried on its own track
+meta (recovered on read) — no central cm key, no graph blob.
 
 ## The mutate transaction
 
@@ -253,49 +254,59 @@ instead coalesce onto one dest bus with no CU (see `docs/DAG.md § MIDI`).
 
 wm and rm speak different names for a track. rm hands out an opaque `id`;
 wm thinks in `trackKey` (the partition class a node belongs to, computed by
-DAG before any track exists). `wiringTracks` is the bridge: a project-tier
-`{ trackKey → id }` map — the only persisted wiring state (the graph itself
-is not persisted — see *Read is the store*).
+DAG before any track exists). The bridge is a `{ trackKey → id }` map — but
+nothing central persists it: **each newTrack carries its own `trackKey` on its
+track meta**, and the map is recovered by scanning `rm:tracks()`. The graph
+itself is not persisted either (see *Read is the store*); a newTrack's meta
+`trackKey` is the only durable wiring addressing, and it reverses with native
+undo because per-track P_EXT does.
 
-- **Sources** are *not* in the map. A source is a singleton class, so its
-  trackKey *is* its id; an unmapped key resolves to itself. snapshot infers
-  source identity structurally — any non-scratch/newTrack/master track is a
-  source keyed by its guid — so no stored tag is needed.
-- **newTracks** are emergent merge classes with no 1:1 graph node, so the
-  applier stamps `wiringTracks[trackKey] = id` when it mints the track and
-  clears it on delete.
-- **Scratch** is rm-owned and *not* in the map; its guid rides each scratch
+- **Sources** are *not* keyed. A source is a singleton class, so its trackKey
+  *is* its id; an unmapped key resolves to itself. snapshot infers source
+  identity structurally — any non-scratch/newTrack/master track is a source
+  keyed by its guid.
+- **newTracks** are emergent merge classes with no 1:1 graph node. `applyOps`
+  stamps `op.trackKey` onto the track's meta when it mints it (`rm:addTrack`);
+  `snapshot`/`applyOps` recover `{ trackKey → id }` by reading that meta back.
+  Why the trackKey and not the guid: target computes the trackKey from the
+  graph *before any track exists*, so the guid — a realisation artefact — can't
+  be the join key; the source-set composite trackKey is the one identity both
+  sides compute independently. See `design/wiring-implicit-graph.md`.
+- **Scratch** is rm-owned and carries no trackKey; its guid rides each scratch
   op as `op.trackId`, and every caller reads it via `rm:scratchId()`.
 - **Master** is absent; resolvers special-case it to `rm:masterId()`.
 
-The map is written only by `applyOps`, inside the `rm:transaction`, so the
-REAPER undo that captures the FX/track ops also captures the addressing — and
-it is mirrored to the scratch track's P_EXT for the same reason (project-tier
-`SetProjExtState` does not reverse with native undo; see `pollUndo`). Where wm
-must hand a raw track to cm's P_EXT writers, the id→handle bridge is
-`rm:reaperTrack(id)`.
+The live-poke path reads the map through the module-local `newTrackIds`,
+refreshed on every `snapshot`/`applyOps`. Where wm must hand a raw track to a
+P_EXT writer, the id→handle bridge is `rm:reaperTrack(id)`.
 
-## pollUndo
+## external sync
 
-Project-tier `SetProjExtState` does not reverse with native undo, but a
-track's P_EXT chunk does — so undo-coherence for any durable-but-non-
-reversing store means mirroring it onto the scratch chunk and pulling it
-back when REAPER rewinds. Two stores need this, split by owner:
+REAPER routing is the store, so anything that mutates it *outside* wm — a
+Ctrl-Z, a redo, a hand edit in the mixer — must pull a fresh read.
+`wm:syncExternal` watches the project state change count
+(`GetProjectStateChangeCount`): when it moves and the move wasn't ours, it
+drops the in-memory graph and fires `wiringChanged{kind='load'}`, which
+re-reads the graph straight from routing (the routing already reversed
+natively under an undo, so the read picks up the rewound state) and the live
+subscriber reconciles — snapping any non-normal hand edit back onto a normal
+form.
 
-- **`rm:pollUndo`** (the frame heartbeat, driven by `wp:tick`) ensures the
-  scratch exists and, when its fx-meta mirror diverges from rm's watermark,
-  pulls it back into projext via `rm:resyncFxMeta`. This is the permanent
-  job — the `primary`/`split` metadata is not recoverable from routing.
-- **`wm:pollUndo`** mirrors the `wiringTracks` addressing (inside the apply
-  transaction) and, when the scratch chunk diverges from
-  `lastScratchRaw`, restores that key and fires `wiringChanged{kind='load'}`
-  — which re-reads the graph straight from REAPER routing. There is no blob
-  to restore: the routing itself already reversed natively under the undo, so
-  the re-read picks up the rewound state. A scratch lost to a manual delete or
-  undo-past-creation is re-minted empty by the heartbeat, diverging the chunk,
-  so the same `load` fires and reconcile re-parks fx. With the graph blob
-  retired this is now only the addressing mirror; once `wiringTracks` follows,
-  `wm:pollUndo` collapses into `rm:pollUndo` entirely.
+Every wm write to REAPER (`applyOps`, `fastGainCommit`, `pokeEdgeGain`,
+`createSourceTrack`, `deleteSource`) calls `markState` to rebaseline the
+count, so our *own* edits never trigger a reread. The watcher is gated to
+when the wiring page is active (coordinator only calls `wp:syncExternal` for
+the active page), so unrelated edits on another page don't churn the graph;
+switching back to the wiring page after editing routing elsewhere rereads on
+entry. The cost is benign: an unrelated project change while the wiring page
+is active triggers one no-op reconcile (empty diff) plus a view rebuild
+(layout survives via the meta store).
+
+The scratch heartbeat is a separate, always-on job: **`rm:pollUndo`** (driven
+by `wp:tick`) ensures the scratch track exists and pulls its fx-meta mirror
+back into projext after an undo — the `primary`/`split` metadata isn't
+recoverable from routing, so it still needs the scratch-chunk mirror that
+addressing no longer does.
 
 ## The reaper seam
 
