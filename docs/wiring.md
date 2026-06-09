@@ -1,19 +1,20 @@
 # wiring
 
-Cross-cutting model for the wiring page: how a user-drawn graph of FX
-compiles to a REAPER track topology + send graph. The wiring page is
-the third rung after tracker and sampler — the layer where the user
-composes audio and MIDI processing graphs across a project.
+Cross-cutting model for the wiring page: how a graph of FX the user
+draws maps to a REAPER track topology + send graph, and how it is read
+back out again. The wiring page is the third rung after tracker and
+sampler — the layer where the user composes audio and MIDI processing
+graphs across a project.
 
 This doc carries the *model* the four wiring files share. File-specific
-WHYs live with their file: `docs/DAG.md` (the structural calculus +
-allocator), `docs/wiringManager.md` (reconcile, persistence, the
-applier), `docs/wiringPage.md` (the canvas + gestures), `docs/wiringView.md`
-(the logical projection).
+WHYs live with their file: `docs/DAG.md` (the structural calculus,
+allocator, and capacity cut), `docs/wiringManager.md` (read, the differ,
+the applier, REAPER-as-store), `docs/wiringPage.md` (the canvas +
+gestures), `docs/wiringView.md` (the logical projection).
 
-## One graph
+## One graph, one store
 
-The model carries a single graph: the **user graph**, what the user
+The model carries a single **user graph**: nodes and wires the user
 draws and edits. Its edges are **wires**:
 
 - an **audio wire** is uniformly stereo: always present, always full.
@@ -28,13 +29,69 @@ The pre-beta "channels vs ports" distinction — mono adapters,
 trailing-odd channels, per-channel splits — dissolved once that
 assumption landed; the model is simpler for it.
 
-The partition invariant below runs directly on the user graph. The
-only nodes the compiler synthesises are CUs — the **merge** node and
+**There is no separate store for the graph.** REAPER *is* the store: the
+track topology, FX chains, sends, and per-FX routing hold the graph, and
+`read : REAPER → Graph` recovers it on demand. There is no `wiringGraph`
+blob and no parallel bookkeeping to keep in sync — what's in REAPER is
+the graph. A mutation reads REAPER into an in-memory draft, validates it,
+and writes back the minimal delta; UI gestures never scribble raw routing
+past that gate.
+
+## The algebra
+
+Two maps: `compile : Graph → REAPER` (what `wiringManager`'s
+target/diff/apply pipeline realises) and `read : REAPER → Graph`. Let
+`N = image(compile)` — the **normal forms** the allocator chooses.
+`read` is total on a far larger domain than `N`: it accepts anything
+REAPER allows, not just graphs the authoring UI can build. Two
+invariants govern correctness:
+
+1. **`read ∘ compile = id`** (exact, on graphs). What you author is what
+   you read back — editor fidelity. This forces `compile` injective:
+   the design question is purely *where `compile` would collapse distinct
+   graphs*, and the model is shaped so it never does (up to view-state).
+
+2. **`compile ∘ read` preserves sound** (off `N`). For a hand-edited,
+   non-normal project, reading then recompiling produces an audibly
+   identical routing — the retraction that snaps REAPER back onto `N`
+   and self-heals manual edits. Its non-identity off `N` *is* the
+   self-healing; a manual mixer edit is absorbed, not fought.
+
+No-churn falls out for free: from (1), `compile ∘ read ∘ compile =
+compile`, so `compile ∘ read` is already the identity *on* `N`. Byte
+idempotence on our own output is a corollary, not a separate condition.
+
+The only nodes the compiler synthesises are CUs — the **merge** node and
 the non-bus-aware **bracket** — minted at the targetTracks/allocate
-boundary and hosted within a consumer's equivalence class, so they
-never perturb the partition; srcSet and class equivalence are computed
-on the graph the user drew. Capacity counts intra-class wires directly
-(64 stereo audio / 128 MIDI).
+boundary and hosted within a consumer's equivalence class, so they never
+perturb the partition. `read` strips them back out by ident, recovering
+the node→node edges they bridged from their own params plus the
+surrounding bus assignments. The partition invariant below runs directly
+on the user graph; srcSet and class equivalence are computed on the graph
+the user drew.
+
+## What read recovers
+
+`read` operates at the **node/edge level**; the track *partition* is not
+part of graph identity:
+
+- **Track splits, merges, and emergent tracks are invisible** — pure
+  realisation, discarded like bus numbers. A cross-track send merely
+  realises an edge that already exists *between two nodes*; `read`
+  recovers node→node edges from channel/pin/bus routing and never asks
+  which track a node sits on.
+- **One track-level inference: a track with no inputs is a source.**
+  Robust precisely because every emergent track (merge, split, bracket
+  host) *has* inputs, so the rule only ever fires on genuine sources.
+  The scratch track is the one exception — known by identity, walked as a
+  source-less FX bin so a not-yet-connected island survives.
+- **Synthesised FX stripped by ident** (`CU_IDENT`, brackets), their
+  edges reconstructed from params — no stored provenance.
+
+The consequence worth stating plainly: **routing is fully inferred.**
+Nothing about the topology needs a stored tag. Identity follows from
+this — a node is keyed by the rm id of the FX (or track) it realises,
+because there is nothing else to key on; `read` *is* the authority.
 
 ## Sources, sinks, master
 
@@ -48,18 +105,19 @@ wants audible. FX with no outgoing audio wire are simply not routed to
 speakers — explicit beats implicit. Nodes between sources and master
 are FX instances.
 
-The wiring page is design-time only. At compile time the user graph
-projects onto REAPER tracks, REAPER sends, per-track FX chains, and
-per-FX I/O routing. The master's equivalence class does *not* spawn a
-new track — it IS the REAPER master. The compile rule is the partition
-invariant below.
+The wiring page is the design surface; the graph it shows is `read`
+back from REAPER, and every edit `compile`s forward onto REAPER tracks,
+sends, per-track FX chains, and per-FX I/O routing. The master's
+equivalence class does *not* spawn a new track — it IS the REAPER
+master. The compile rule is the partition invariant below.
 
 ## The source-set partition
 
 For every node N, define `srcSet(N)` = the set of source tracks
 reachable as ancestors of N (transitive closure over input edges). Two
 nodes share an equivalence class iff their source-sets are equal. Each
-class compiles to **one REAPER track**:
+class compiles to **one REAPER track** (modulo capacity bisection,
+below):
 
 - intra-class wires become **internal port routing** on the track
   (REAPER tracks carry up to 64 stereo audio ports and 128 MIDI ports,
@@ -72,7 +130,9 @@ The partition falls out of the graph; it isn't declared. One
 consequence worth naming: **it's the minimum REAPER track count** given
 the topology. Anything fewer would have to merge distinct source-sets
 onto one track, and REAPER's per-track signal summing makes that
-unrepresentable.
+unrepresentable. The partition is realisation, not graph identity —
+`read` recovers the same nodes and edges regardless of how they were
+spread across tracks.
 
 ## Absorption — the primary-input optimisation
 
@@ -94,6 +154,19 @@ boundary via the send's pre/post-FX placement. So "primary passes
 through" really means "the track's chain runs around the merge
 point", which generalises cleanly: a midstream sidechain on FX slot 5
 of A's chain compiles to a send landing at slot 5 of A.
+
+## Capacity — compile's job, not a quarantine
+
+REAPER's 64-channel / 16-bus caps are a *resource*, not an
+expressiveness limit. An over-cap partition class is **bisected across
+tracks along a min-cut** — cut where the crossing stream traffic is
+smallest, carry the boundary on an inter-track send, recurse until each
+side fits. Always feasible (in the limit one FX per track), so capacity
+never reaches the quarantine list. The cut is min-crossing-weight
+*subject to each side fitting*, with a deterministic tie-break so ties
+don't reintroduce churn across passes. The emergent split track is the
+same shape as a merge newTrack — which `read` already ignores. Mechanism
+and the cut objective live in `docs/DAG.md § Capacity`.
 
 ## Wire-level gain
 
@@ -178,17 +251,6 @@ fan-in is a merge node with a single output bus, **every MIDI consumer
 has exactly one input stream.** Bus allocation, the non-bus-aware
 bracket pass, and the differ never meet a multi-input MIDI node.
 
-**There is no lowered graph.** The merge node is the only node the
-compiler synthesises that the user graph lacks, minted at the
-targetTracks/allocate boundary — where the partition reveals whether a
-gain lands on a send, rides the matrix, or needs a CU — exactly as the
-non-bus-aware brackets are (track-local `fxOrder` entries). Wire-level
-ops are not spliced into nodes ahead of time; gain rides the wire as
-metadata and the merge node realises it. A merge CU is
-connectivity-inert (hosted on a consumer, inheriting its class), so the
-equivalence-class calculus (`srcSet`, `classes`, `quotient`,
-`absorption`) runs directly on the user graph.
-
 **Master is this rule, not a special case.** ≥2 wires from one class to
 the master converge through that class's `audioSum` CU-merge, whose
 single output feeds the parent send via `C_MAINSEND_OFFS`; one audio
@@ -219,42 +281,86 @@ result is still wrong. The model offers no automatic detection and no
 automatic fix — keeping producers on distinct MIDI channels is the
 user's responsibility.
 
-## The compile model — four anchor decisions
+## Quarantine
 
-These shape every stage of the compiler and don't recur as questions
-inside it.
+Two states the DAG model genuinely *cannot express* are quarantined at
+**whole-track-set** granularity (the connected, bus-sharing component):
 
-- **Authority direction: reconcile.** The user graph is the source of
-  truth for the topology *we own*. Compile derives the REAPER topology,
-  diffs it against the current REAPER project snapshot, and applies the
-  minimal operation list. Tracks/FX without our ownership mark are
-  untouched. (`wiringManager` owns the snapshot/target/diff/apply
-  pipeline — see `docs/wiringManager.md`.)
-- **Compile trigger: live on every change.** Each user gesture
-  recompiles and applies. The differ has to be good — minimal operation
-  lists, no churn on no-op edits. Every apply is wrapped in one
-  `Undo_BeginBlock`/`Undo_EndBlock` so a single REAPER undo step
-  reverses the gesture, with the gesture name as the undo label.
-- **Ownership marker: per-track only.** Compiled tracks carry a `P_EXT`
-  key (`wiringClass`, the class key) identifying their equivalence
-  class; FX inside an owned track are entirely managed by the wiring
-  page. Reconcile uses this to identify "ours" without parallel
-  bookkeeping.
-- **Foreign track adoption: opt-in.** The wiring page starts empty on an
-  existing project. The user explicitly imports tracks; the importer
-  reads existing FX chains, sends, receives, and channel routing into a
-  user-graph fragment, marks the tracks as ours, and the live recompile
-  rewires them into canonical form in the same gesture. Sources are
-  referenced by GUID; deletion of a referenced source surfaces as a
-  design-time error, never silent.
+- **Feedback loops** — not a DAG; `compile` needs a topological order.
+- **Bus-aware JSFX in a feeder cone** — it scans `midi_bus` itself,
+  escaping the allocator, so it corrupts the bus space of the whole
+  upstream MIDI cone, not just its own track.
+
+Whole-track-set granularity is load-bearing: no track is ever
+half-managed, so `compile`'s full-replace writes stay safe and there is
+no surgical-splice case. "Left alone by compile" then falls out of the
+differ for free — a quarantined component is invisible to *both* target
+and snapshot, so the diff emits zero ops for it. A quarantined component
+**vanishes from the wiring view** and is fixable only in raw REAPER, so
+the view must say *why* a region went dark ("feedback loop", "bus-aware
+FX") rather than silently omit it.
+
+This is what `validate` became. It is no longer a pre-commit gate (in
+the store model the commit already happened in REAPER) but a **post-hoc
+classifier** on `read`'s domain: managed vs quarantine. Its rule count
+stays tiny, but its input domain is now "anything REAPER allows", so the
+loop and bus-aware checks are the actual boundary of the system.
+
+## Decoration — positions only
+
+Because routing is fully inferred, the *only* thing that needs storing
+is state `compile` never realises: **node positions** (and names,
+colours). That is the entire scope of metadata: where the dot sits,
+never routing semantics. The substrate is one GUID-keyed store in
+project ext — FX GUID for fx-nodes, track GUID for source/master, the
+durable per-node identity that survives save/reload (compile *moves* a
+resident FX rather than delete+add, so its GUID is stable across
+recompiles). Position is orthogonal to routing, so a pos-only move
+changes no routing, skips reconcile entirely, and never touches
+`read ∘ compile = id`. A read-derived node with no stored position — an
+adopted foreign track, a never-placed source — defaults to `(0,0)` and
+stacks at the origin until auto-layout lands. (See
+`design/fx-metadata-spike.md` for why positions can't live on the FX.)
+
+## Compile lifecycle
+
+Three facts shape every stage and don't recur as questions inside it:
+
+- **Live on every change.** Each user gesture recompiles and applies.
+  The differ has to be good — minimal operation lists, no churn on no-op
+  edits. Every apply is wrapped in one `Undo_BeginBlock`/`Undo_EndBlock`
+  so a single REAPER undo step reverses the gesture, with the gesture
+  name as the undo label.
+- **External mutations re-read.** A project-state-count watcher (gated to
+  the active wiring page) rereads the graph from routing on *any*
+  external mutation — undo/redo or a manual mixer edit — while every wm
+  write rebaselines the count so our own edits never trigger it. This is
+  invariant 2 in practice: a hand edit is read in, then snapped back onto
+  `N` on the next compile.
+- **Adoption is free.** The wiring page does not import. A bare project
+  track simply *is* a source the moment `read` sees it (no inputs ⇒
+  source); there is no opt-in step, no ownership tag, and no parallel
+  ledger. The live recompile rewrites adopted routing into canonical
+  form in the same breath. Sources are referenced by GUID; deletion of a
+  referenced source surfaces as a design-time error, never silent.
 
 ## History
 
-This model landed in stages; the staged implementation plan and the
-per-stage notes are archived at `design/archive/wiring.md`. Two earlier
-designs it replaced, worth knowing so they aren't reinvented: a
-**lowered two-graph model** (`DAG.lower`) — removed once the
-equivalence-class calculus was shown to run directly on the user graph
-with CUs hosted inertly inside a consumer's class — and a **gmem-ring
-MIDI merge** — removed once it was clear a single JSFX can read every
-converging MIDI bus at `@block`.
+This model landed in stages. The committed two-map redesign — **REAPER
+as the only store**, the `read`/`compile` algebra, free adoption,
+quarantine, and capacity-by-min-cut — is recorded with its per-step
+status in `design/archive/wiring-implicit-graph.md`; the earlier staged
+compile plan is in `design/archive/wiring.md`.
+
+Three designs it replaced, worth knowing so they aren't reinvented:
+
+- the **two-store reconcile** — a `wiringGraph` cm blob (intent) kept in
+  sync with REAPER (realisation) by a per-track `P_EXT` ownership marker
+  and an `ownedSubsequence` splice. Collapsed once `read` was shown to
+  recover the whole graph from routing: one store, no desync bug-class,
+  no ownership bookkeeping.
+- the **lowered two-graph model** (`DAG.lower`) — removed once the
+  equivalence-class calculus was shown to run directly on the user graph
+  with CUs hosted inertly inside a consumer's class.
+- the **gmem-ring MIDI merge** — removed once it was clear a single JSFX
+  can read every converging MIDI bus at `@block`.
