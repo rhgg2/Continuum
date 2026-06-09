@@ -40,11 +40,13 @@ local function source(guid)
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
-local function fx(ident, opts)
+-- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the graph
+-- with a live guid; reconcile MOVES it (commit C retired reconcile's fxId stamp-back).
+local function mintFx(wm, ident, opts)
   opts = opts or {}
-  return { kind='fx', fxIdent=ident, fxId=opts.fxId, pos={x=0,y=0},
-           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1},
-                  midi={ins=1, outs=1}} }
+  local r = wm:instantiateFxOnScratch(ident)
+  return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
 end
 
 local function audioEdge(from, to, extra)
@@ -59,13 +61,13 @@ end
 
 return {
   {
-    name = 'apply: bare materialise — AddByName, stamp fxId onto user node',
+    name = 'apply: scratch-minted fx moves onto its track, guid stable',
     run = function(harness)
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', nil)
+        g.nodes.f = mintFx(wm, 'JS:foo', nil)
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
@@ -84,7 +86,7 @@ return {
       seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', nil)
+        g.nodes.f = mintFx(wm, 'JS:foo', nil)
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
@@ -100,8 +102,8 @@ return {
       local track = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.a = fx('JS:a', nil)
-        g.nodes.b = fx('JS:b', nil)
+        g.nodes.a = mintFx(wm, 'JS:a', nil)
+        g.nodes.b = mintFx(wm, 'JS:b', nil)
         util.add(g.edges, audioEdge('s', 'a'))
         util.add(g.edges, audioEdge('a', 'b'))
         util.add(g.edges, audioEdge('b', 'master'))
@@ -131,8 +133,8 @@ return {
       local track = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.a = fx('JS:a', nil)
-        g.nodes.b = fx('JS:b', nil)
+        g.nodes.a = mintFx(wm, 'JS:a', nil)
+        g.nodes.b = mintFx(wm, 'JS:b', nil)
         util.add(g.edges, audioEdge('s', 'a'))
         util.add(g.edges, audioEdge('a', 'b'))
         util.add(g.edges, audioEdge('b', 'master'))
@@ -162,7 +164,7 @@ return {
       h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', nil)
+        g.nodes.f = mintFx(wm, 'JS:foo', nil)
         util.add(g.edges, audioEdge('s', 'f', { ops = { gain = 0.5 } }))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
@@ -196,8 +198,8 @@ return {
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
         g.nodes.sB  = source('guid-B')
-        g.nodes.fxA = fx('JS:a')
-        g.nodes.fxB = fx('JS:b', { ins = 2 })
+        g.nodes.fxA = mintFx(wm, 'JS:a')
+        g.nodes.fxB = mintFx(wm, 'JS:b', { ins = 2 })
         util.add(g.edges, audioEdge('sA',  'fxA'))
         util.add(g.edges, audioEdge('fxA', 'fxB', { toPort = 2 }))
         util.add(g.edges, audioEdge('sB',  'fxB', { toPort = 1 }))
@@ -214,13 +216,13 @@ return {
     end,
   },
   {
-    name = 'apply: inline stamp-back does not fire wiringChanged',
+    name = 'apply: does not fire wiringChanged',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', nil)
+        g.nodes.f = mintFx(wm, 'JS:foo', nil)
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
@@ -244,9 +246,9 @@ return {
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
         g.nodes.sB  = source('guid-B')
-        g.nodes.gA  = fx('JS:gA')
-        g.nodes.gB  = fx('JS:gB')
-        g.nodes.mix = fx('JS:mix', { ins = 2 })
+        g.nodes.gA  = mintFx(wm, 'JS:gA')
+        g.nodes.gB  = mintFx(wm, 'JS:gB')
+        g.nodes.mix = mintFx(wm, 'JS:mix', { ins = 2 })
         util.add(g.edges, audioEdge('sA', 'gA'))
         util.add(g.edges, audioEdge('sB', 'gB'))
         util.add(g.edges, audioEdge('gA', 'mix', { toPort = 1 }))
@@ -291,7 +293,7 @@ return {
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
         g.nodes.sB  = source('guid-B')
-        g.nodes.mix = fx('JS:mix', { ins = 2 })
+        g.nodes.mix = mintFx(wm, 'JS:mix', { ins = 2 })
         util.add(g.edges, audioEdge('sA', 'mix', { toPort = 1 }))
         util.add(g.edges, audioEdge('sB', 'mix', { toPort = 2 }))
         util.add(g.edges, audioEdge('mix', 'master'))
@@ -331,8 +333,8 @@ return {
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
         g.nodes.sB  = source('guid-B')
-        g.nodes.fxA = fx('JS:a')
-        g.nodes.fxB = fx('JS:b', { ins = 2 })
+        g.nodes.fxA = mintFx(wm, 'JS:a')
+        g.nodes.fxB = mintFx(wm, 'JS:b', { ins = 2 })
         util.add(g.edges, audioEdge('sA',  'fxA'))
         util.add(g.edges, audioEdge('fxA', 'fxB', { toPort = 2, ops = { gain = 0.5 } }))
         util.add(g.edges, audioEdge('sB',  'fxB', { toPort = 1 }))
@@ -353,7 +355,7 @@ return {
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
         g.nodes.sB  = source('guid-B')
-        g.nodes.fxM = fx('JS:m', { ins = 2 })
+        g.nodes.fxM = mintFx(wm, 'JS:m', { ins = 2 })
         util.add(g.edges, audioEdge('sA', 'fxM', { toPort = 1 }))
         util.add(g.edges, audioEdge('sB', 'fxM', { toPort = 2 }))
       end)
@@ -369,7 +371,7 @@ return {
       local trackA = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo')
+        g.nodes.f = mintFx(wm, 'JS:foo')
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master', { ops = { gain = 0.25 } }))
       end)
@@ -388,8 +390,8 @@ return {
       h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
-        g.nodes.fxA = fx('JS:a')
-        g.nodes.fxB = fx('JS:b', { ins = 2 })
+        g.nodes.fxA = mintFx(wm, 'JS:a')
+        g.nodes.fxB = mintFx(wm, 'JS:b', { ins = 2 })
         util.add(g.edges, audioEdge('sA',  'fxA'))
         util.add(g.edges, audioEdge('fxA', 'fxB', { toPort = 2, ops = { gain = 0.5 } }))
       end)
@@ -421,8 +423,8 @@ return {
       h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.s  = source('guid-A')
-        g.nodes.f1 = fx('JS:f1')
-        g.nodes.f2 = fx('JS:f2')
+        g.nodes.f1 = mintFx(wm, 'JS:f1')
+        g.nodes.f2 = mintFx(wm, 'JS:f2')
         util.add(g.edges, audioEdge('s',  'f1'))
         util.add(g.edges, audioEdge('s',  'f2'))
         util.add(g.edges, audioEdge('f1', 'master', { ops = { gain = 0.5 } }))
@@ -472,7 +474,7 @@ return {
       h.reaper:setFxIO('JS:foo', { ins=4, outs=4 })
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', { ins=2 })
+        g.nodes.f = mintFx(wm, 'JS:foo', { ins=2 })
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
@@ -491,34 +493,6 @@ return {
     end,
   },
   {
-    name = 'apply: setPinMaps id-less entry resolves via the stamped graph',
-    run = function(harness)
-      local h, wm = mkWm(harness)
-      local track = seedSource(h, 'guid-A')
-      h.reaper:setFxIO('JS:foo', { ins=4, outs=4 })
-      wm:mutate(function(g)
-        g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', { ins=2 })
-        util.add(g.edges, audioEdge('s', 'f'))
-        util.add(g.edges, audioEdge('f', 'master'))
-      end)
-      -- setFXChain mints+stamps node f; setPinMaps then resolves its origin → guid.
-      wm:applyOps({
-        { op='setFXChain', trackKey='guid-A', trackKind='sourceTrack',
-          trackId='guid-A',
-          fx = { { id=nil, ident='JS:foo',
-                   origin={ kind='node', id='f' } } } },
-        { op='setPinMaps', trackKey='guid-A', trackKind='sourceTrack',
-          trackId='guid-A',
-          fx = { { id=nil, ident='JS:foo', origin={ kind='node', id='f' },
-                   pinMaps = { ins={[1]={2}}, outs={} } } } },
-      }, 'test')
-      local lo0 = h.reaper.TrackFX_GetPinMappings(track, 0, 0, 0)
-      local lo1 = h.reaper.TrackFX_GetPinMappings(track, 0, 0, 1)
-      t.eq(lo0 | lo1, (1 << 2) | (1 << 3))
-    end,
-  },
-  {
     name = 'apply: setPinMaps full-replace — owned ports absent from map are disconnected',
     run = function(harness)
       local h, wm = mkWm(harness)
@@ -526,7 +500,7 @@ return {
       h.reaper:setFxIO('JS:foo', { ins=4, outs=4 })
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', { ins=2 })
+        g.nodes.f = mintFx(wm, 'JS:foo', { ins=2 })
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)

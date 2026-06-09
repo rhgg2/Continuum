@@ -21,11 +21,13 @@ local function source(guid)
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
-local function fx(ident, opts)
+-- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+-- graph carrying a live guid; reconcile then MOVES it onto its track.
+local function mintFx(wm, ident, opts)
   opts = opts or {}
-  return { kind='fx', fxIdent=ident, fxId=opts.fxId, pos={x=0,y=0},
-           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1},
-                  midi={ins=1, outs=1}} }
+  local r = wm:instantiateFxOnScratch(ident)
+  return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
 end
 
 local function audioEdge(from, to)
@@ -41,12 +43,12 @@ return {
       wm:enableLive()
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', nil)
+        g.nodes.f = mintFx(wm, 'JS:foo', nil)
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
       t.eq(h.reaper.TrackFX_GetCount(track), 1, 'fx materialised by live reconcile')
-      t.truthy(wm:graph().nodes.f.fxId, 'fxId stamped back into graph')
+      t.truthy(wm:graph().nodes.f.fxId, 'fx carries its scratch-minted guid')
       t.eq(#wm:diff(wm:targetState(), wm:snapshot()), 0,
            'steady state after live apply')
     end,
@@ -58,7 +60,7 @@ return {
       local track = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', nil)
+        g.nodes.f = mintFx(wm, 'JS:foo', nil)
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
@@ -79,7 +81,7 @@ return {
       wm:enableLive()        -- no-op
       wm:mutate(function(g)  -- wiringChanged → exactly one reconcile (+1)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', nil)
+        g.nodes.f = mintFx(wm, 'JS:foo', nil)
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
@@ -97,7 +99,7 @@ return {
       wm:enableLive()
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo', nil)
+        g.nodes.f = mintFx(wm, 'JS:foo', nil)
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)

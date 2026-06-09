@@ -8,9 +8,9 @@
 --invariant: trackKey changes are moves; TrackFX_CopyToTrack(is_move=true) preserves plugin state
 --shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
 --shape: snapshotSend = { to=trackKey, kind='audio'|'midi', gain?=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }
---shape: snapshotFxOrigin = {kind='node',id=string}|{kind='bracketIn'|'bracketOut',id=string}|{kind='merge',consumer=string,trackKey=trackKey}
+--shape: snapshotFxOrigin = {kind='bracketIn'|'bracketOut',id=string}|{kind='merge',consumer=string,trackKey=trackKey}  -- CU bridges only; node fx carry their fxId as id
 --shape: snapshotFxEntry = { id?=string, ident=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,inDisabled=bool,outDisabled=bool}, pinMaps?=snapshotPinMap, busAware?=bool }  -- ins/outs are audio pair counts, for read
---shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + wm ownership/trackKey overlay. see docs/wiringManager.md § wiringSnapshot.
+--shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + trackKey overlay (full chain, no ownership filter). see docs/wiringManager.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'moveFxAcrossTracks', ... }
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
 --invariant: authoring via wm:mutate — validate+swap+fire; REAPER realises via reconcile.
@@ -404,25 +404,10 @@ local function flattenCuParams(params)
   return flat
 end
 
---contract: rm:tracks() overlaid with wm ownership — owned fx only, re-keyed by
--- trackKey, send dsts remapped guid→trackKey; foreign tracks/fx/sends invisible. Read-only.
+--contract: rm:tracks() re-keyed by trackKey, send dsts remapped guid→trackKey; every fx on a
+-- managed track surfaces (full chain — adoption is free, no ownership filter). Read-only.
 function wm:snapshot(tracks)
   -- No ensureLoaded: read() calls snapshot, recursion guard.
-  -- Ownership = persisted wiringOwnedFx ∪ current-graph guids; removed nodes stay visible until wm:diff deletes them.
-  local ownedGuids = {}
-  for k in pairs(cm:get('wiringOwnedFx') or {}) do ownedGuids[k] = true end
-  if userGraph then
-    for _, n in pairs(userGraph.nodes) do
-      if n.kind == 'fx' then
-        if n.fxId             then ownedGuids[n.fxId]             = true end
-        if n.midiInBracketGuid  then ownedGuids[n.midiInBracketGuid]  = true end
-        if n.midiOutBracketGuid then ownedGuids[n.midiOutBracketGuid] = true end
-      end
-      if n.mergeGuids then
-        for _, g in pairs(n.mergeGuids) do ownedGuids[g] = true end
-      end
-    end
-  end
 
   -- (id → trackKey/trackKind): newTracks resolve through wiringTracks, scratch via rm.
   -- Source tracks are inferred structurally below (no stored tag) — design § What read does.
@@ -457,11 +442,11 @@ function wm:snapshot(tracks)
     end
     return entry
   end
-  local function ownedFx(fxList)
+  -- Every fx on a managed track is wm's (whole-track-set quarantine), so surface the
+  -- full chain — the differ's full-replace removes any the graph no longer wants.
+  local function trackFx(fxList)
     local out = {}
-    for _, fx in ipairs(fxList) do
-      if ownedGuids[fx.id] then util.add(out, snapFx(fx)) end
-    end
+    for _, fx in ipairs(fxList) do util.add(out, snapFx(fx)) end
     return out
   end
   -- Sends to a managed dst only; re-key .to guid→trackKey, drop midi gain
@@ -499,13 +484,13 @@ function wm:snapshot(tracks)
         id        = tr.id,
         nchan     = tr.nchan,
         mainSend  = isScratch and { on = false } or tr.mainSend,
-        fx        = ownedFx(tr.fx),
+        fx        = trackFx(tr.fx),
         sends     = isScratch and {} or ownedSends(tr.sends),
       }
     elseif tr.isMaster then
       -- Master is a singleton with no ext-state tag; surface it only when it
-      -- hosts owned fx, so wm:diff can see transitions on/off master.
-      local masterFx = ownedFx(tr.fx)
+      -- hosts fx, so wm:diff can see transitions on/off master.
+      local masterFx = trackFx(tr.fx)
       if #masterFx > 0 then
         snap['__master__'] = { trackKind = 'master', nchan = tr.nchan,
                                mainSend = { on = false }, fx = masterFx, sends = {} }
@@ -540,7 +525,6 @@ local function projectEntry(spec, compileNodes, scratchGuid)
         entry.params = flattenCuParams(node.params)
         entry.origin = { kind = 'merge', consumer = node.originConsumer, trackKey = node.originTrackKey }
       else
-        entry.origin = { kind = 'node', id = id }
         entry.ins, entry.outs = node.ports.audio.ins, node.ports.audio.outs
         if not isJS(node.fxIdent) then
           local bus = spec.fxMidiBus and spec.fxMidiBus[id]
@@ -1029,22 +1013,11 @@ end
 
 ----- Apply ops (Stage 2)
 
-local function ownedSubsequence(fxChain, ownedGuids)
-  local out = {}
-  for i, fx in ipairs(fxChain) do
-    if ownedGuids[fx.id] then
-      util.add(out, { fxId = fx.id, ident = fx.ident, absIdx = i - 1 })
-    end
-  end
-  return out
-end
-
--- Inline stamp/clear of minted/retracted fx guids onto userGraph (no mutate transaction):
--- stamping a guid never changes structure, so validation and wiringChanged are skipped.
+-- Inline stamp/clear of CU-bridge guids onto userGraph: stamping never changes structure,
+-- so it skips the mutate transaction. Node fx already carry their guid, so only bridges stamp.
 local function stampOrigin(origin, guid)
   local nodes = userGraph.nodes
-  if     origin.kind == 'node'       then nodes[origin.id].fxId             = guid
-  elseif origin.kind == 'bracketIn'  then nodes[origin.id].midiInBracketGuid  = guid
+  if     origin.kind == 'bracketIn'  then nodes[origin.id].midiInBracketGuid  = guid
   elseif origin.kind == 'bracketOut' then nodes[origin.id].midiOutBracketGuid = guid
   elseif origin.kind == 'merge' then
     local n = nodes[origin.consumer]
@@ -1053,11 +1026,10 @@ local function stampOrigin(origin, guid)
   end
 end
 
--- Read-side inverse of stampOrigin: the guid an origin resolves to once
+-- Read-side inverse of stampOrigin: the guid a CU-bridge origin resolves to once
 -- setFXChain has stamped it, so setPinMaps can address an id-less entry.
 local function originGuid(origin)
   local nodes = userGraph.nodes
-  if origin.kind == 'node'       then return nodes[origin.id] and nodes[origin.id].fxId end
   if origin.kind == 'bracketIn'  then return nodes[origin.id] and nodes[origin.id].midiInBracketGuid end
   if origin.kind == 'bracketOut' then return nodes[origin.id] and nodes[origin.id].midiOutBracketGuid end
   if origin.kind == 'merge' then
@@ -1066,12 +1038,11 @@ local function originGuid(origin)
   end
 end
 
--- guid → the user-graph field carrying it, so a retracted fx clears its stamp.
+-- guid → the user-graph field carrying it, so a retracted CU bridge clears its stamp.
 local function buildGuidOwners()
   local owners = {}
   for _, n in pairs(userGraph.nodes) do
     if n.kind == 'fx' then
-      if n.fxId             then owners[n.fxId]             = { node = n, field = 'fxId' } end
       if n.midiInBracketGuid  then owners[n.midiInBracketGuid]  = { node = n, field = 'midiInBracketGuid' } end
       if n.midiOutBracketGuid then owners[n.midiOutBracketGuid] = { node = n, field = 'midiOutBracketGuid' } end
     end
@@ -1095,65 +1066,58 @@ local function clearOwner(owners, guid)
   return true
 end
 
--- Reconcile the owned FX subsequence of `trackId` to `target` via rm. Owned FX stay
--- contiguous (new FX inserts just after last owned); mints stamp the graph inline.
-local function reconcileFXChain(trackId, target, ownedGuids, owners)
+-- Full-replace `trackId`'s FX chain to `target` via rm. Whole-track-set quarantine means the
+-- live chain is wm's working set: live fx absent from target are deleted, id-less bridges minted.
+local function reconcileFXChain(trackId, target, owners)
   local dirty = false
   local function liveChain() local r = rm:track(trackId); return r and r.fx or {} end
-  local chain   = liveChain()
-  local current = ownedSubsequence(chain, ownedGuids)
+  local chain = liveChain()
 
-  -- Stale-guid sweep: a target entry whose id isn't live in REAPER (reload,
-  -- manual delete, drift) drops to nil so it re-materialises and re-stamps.
+  -- Stale-guid sweep: a target entry whose id isn't live in REAPER (a retracted CU
+  -- bridge, reload, drift) drops to nil so it re-materialises and re-stamps.
   local liveGuids = {}
-  for _, c in ipairs(current) do liveGuids[c.fxId] = true end
+  for _, c in ipairs(chain) do liveGuids[c.id] = true end
   for _, t in ipairs(target) do
     if t.id and not liveGuids[t.id] then t.id = nil end
   end
 
-  -- 1. Drop owned entries absent from target (right-to-left keeps absIdx valid).
+  -- 1. Delete live fx absent from target (right-to-left keeps indices valid).
   local targetGuids = {}
   for _, t in ipairs(target) do if t.id then targetGuids[t.id] = true end end
-  for i = #current, 1, -1 do
-    local guid = current[i].fxId
+  for i = #chain, 1, -1 do
+    local guid = chain[i].id
     if not targetGuids[guid] then
       rm:deleteFx(guid)
-      ownedGuids[guid] = nil
       if clearOwner(owners, guid) then dirty = true end
-      table.remove(current, i)
+      table.remove(chain, i)
     end
   end
 
-  -- 2. Materialise id-less targets at the slot just after the last owned entry;
-  --    rm:addFx appends, moves into place, and returns the minted guid.
+  -- 2. Materialise id-less targets (CU bridges) appended at the chain end;
+  --    rm:addFx appends and returns the minted guid.
   for _, t in ipairs(target) do
     if not t.id then
-      local insertAt = (#current > 0) and (current[#current].absIdx + 1)
-                       or #chain
-      local guid = rm:addFx(trackId, { ident = t.ident, index = insertAt })
+      local guid = rm:addFx(trackId, { ident = t.ident, index = #chain })
       t.id = guid
-      ownedGuids[guid] = true
       stampOrigin(t.origin, guid)
       dirty = true
-      util.add(current, { fxId = guid, ident = t.ident, absIdx = insertAt })
+      util.add(chain, { id = guid, ident = t.ident })
     end
   end
 
-  -- 3. Permute the owned subsequence to target order via rm:assignFx{index};
-  --    the contiguous-block invariant fixes each target slot at firstOwnedAbs+(d-1).
-  current = ownedSubsequence(liveChain(), ownedGuids)
-  local firstOwnedAbs = current[1] and current[1].absIdx
+  -- 3. Permute to target order via rm:assignFx{index}; the whole chain is owned and
+  --    contiguous from slot 0, so target slot d fixes at abs idx d-1.
+  chain = liveChain()
   for d = 1, #target do
-    if current[d].fxId ~= target[d].id then
+    if chain[d].id ~= target[d].id then
       local fromIdx
-      for j = d + 1, #current do
-        if current[j].fxId == target[d].id then fromIdx = j; break end
+      for j = d + 1, #chain do
+        if chain[j].id == target[d].id then fromIdx = j; break end
       end
-      rm:assignFx(target[d].id, { index = firstOwnedAbs + (d - 1) })
-      local moved = current[fromIdx]
-      table.remove(current, fromIdx)
-      table.insert(current, d, moved)
-      for i = 1, #current do current[i].absIdx = firstOwnedAbs + (i - 1) end
+      rm:assignFx(target[d].id, { index = d - 1 })
+      local moved = chain[fromIdx]
+      table.remove(chain, fromIdx)
+      table.insert(chain, d, moved)
     end
   end
 
@@ -1169,31 +1133,12 @@ local function reconcileFXChain(trackId, target, ownedGuids, owners)
   return dirty
 end
 
-local function ownedGuidsFrom(graph, persisted)
-  local s = {}
-  if persisted then
-    for k in pairs(persisted) do s[k] = true end
-  end
-  for _, n in pairs(graph.nodes) do
-    if n.kind == 'fx' then
-      if n.fxId              then s[n.fxId]              = true end
-      if n.midiInBracketGuid   then s[n.midiInBracketGuid]   = true end
-      if n.midiOutBracketGuid  then s[n.midiOutBracketGuid]  = true end
-    end
-    if n.mergeGuids then
-      for _, g in pairs(n.mergeGuids) do s[g] = true end
-    end
-  end
-  return s
-end
-
 --contract: walks ops in order inside one rm:transaction; setFXChain mints guids via rm:addFx
 --contract: stamps them inline without firing wiringChanged; params/midi/pinMaps write through rm
 function wm:applyOps(ops, label)
   ensureLoaded()
   rm:transaction(label or 'wiring: apply', function()
     local wiringTracks = cm:get('wiringTracks') or {}
-    local ownedGuids   = ownedGuidsFrom(userGraph, cm:get('wiringOwnedFx'))
     local owners       = buildGuidOwners()
     local graphDirty   = false
 
@@ -1247,7 +1192,7 @@ function wm:applyOps(ops, label)
         end
       elseif op.op == 'setFXChain' then
         local guid = resolveId(op.trackKind, op.trackId, op.trackKey)
-        if guid and reconcileFXChain(guid, op.fx, ownedGuids, owners) then
+        if guid and reconcileFXChain(guid, op.fx, owners) then
           graphDirty = true
         end
       elseif op.op == 'moveFxAcrossTracks' then
@@ -1273,19 +1218,13 @@ function wm:applyOps(ops, label)
     -- without firing (no structural change, no reconcile re-entry).
     if graphDirty then setGraph(userGraph) end
 
-    -- Persist the post-apply owned-guid set: anything in the graph is still
-    -- in REAPER (orphans were deleted in reconcileFXChain and dropped from graph).
-    local owned = ownedGuidsFrom(userGraph)
-    cm:set('project', 'wiringOwnedFx', owned)
-
     -- wiringTracks now reflects this pass's create/delete (scratch is rm-owned, not keyed here).
     cm:set('project', 'wiringTracks', wiringTracks)
 
     -- Mirror addressing to scratch P_EXT inside the transaction so REAPER's undo captures
     -- it alongside FX/track ops; pollUndo watches lastScratchRaw for divergence.
     local scratch = rm:scratchTrack()
-    cm:writeTrackKey(scratch, 'wiringOwnedFx', owned)
-    cm:writeTrackKey(scratch, 'wiringTracks',  wiringTracks)
+    cm:writeTrackKey(scratch, 'wiringTracks', wiringTracks)
     lastScratchRaw = cm:readTrackRaw(scratch)
   end)
 end
@@ -1377,8 +1316,7 @@ function wm:pollUndo()
   if raw == lastScratchRaw then return end
   -- REAPER routing changed under us (undo/redo/manual edit). The graph lives in the
   -- routing now, so restore only the addressing mirror and re-read; load rebuilds the graph.
-  cm:set('project', 'wiringOwnedFx', cm:readTrackKey(scratch, 'wiringOwnedFx') or {})
-  cm:set('project', 'wiringTracks',  cm:readTrackKey(scratch, 'wiringTracks') or {})
+  cm:set('project', 'wiringTracks', cm:readTrackKey(scratch, 'wiringTracks') or {})
   setGraph(nil)
   lastScratchRaw = raw
   fire('wiringChanged', { kind = 'load' })

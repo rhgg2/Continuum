@@ -20,8 +20,7 @@ by its track guid, so the id survives a reload (the read re-derives it,
 so there is no allocator and no `nextId`). What REAPER cannot store is
 **decoration** (node positions) — that rides the rm meta store, keyed by
 the same guids; absent meta defaults to `(0,0)`. The only project-tier
-cm keys left are *addressing* (`wiringOwnedFx`, `wiringTracks`), never
-the graph itself.
+cm key left is *addressing* (`wiringTracks`), never the graph itself.
 
 ## The mutate transaction
 
@@ -74,8 +73,8 @@ below.
 ## FX-instance lifecycle
 
 The user graph holds *intent*; REAPER holds *instances*. `fxId` (on
-fx-kind nodes, mirroring `trackId` on sources) is the bridge — nil
-until first materialised, stamped into the node after rm mints the FX,
+fx-kind nodes, mirroring `trackId` on sources) is the bridge — set when
+`addFxNode` mints the instance on scratch (never nil for a graph fx node),
 and thereafter how snapshot/target match `fx` entries to graph nodes.
 Three rules keep instance churn minimal and state-preserving:
 
@@ -90,10 +89,13 @@ Three rules keep instance churn minimal and state-preserving:
   reassigns a node to a different track, the applier issues
   `rm:assignFx{track}` (a move, not delete+add) — plugin state (params,
   presets, internal buffers) survives; a delete + re-add would lose it.
-- **Delete only on departure.** wm deletes a REAPER FX instance only
-  when its owning node — or the CU bridge it backs — leaves the graph.
-  CU bridges arrive at the applier with a nil `fxId` and are minted by
-  `reconcileFXChain`, the same path as user FX.
+- **Delete only on departure.** wm deletes a REAPER FX instance only when
+  its owning node — or the CU bridge it backs — leaves the graph: the
+  full-replace `reconcileFXChain` drops any live fx absent from target (a
+  managed track holds only wm fx, so the whole chain is safe to replace).
+  CU bridges are the only entries that arrive with a nil `fxId`;
+  `reconcileFXChain` mints them. A user fx is already minted on scratch, so
+  reconcile only moves and reorders it — it never mints a node fx.
 
 Where a `fxId` *currently lives* — its host track and slot — is derived, not
 intent: the reconcile pass migrates and reorders instances. wm keeps no index
@@ -165,15 +167,16 @@ certain fields exist and which side fills them:
   bracket post-pass. Snapshot mirrors the live params back from the
   slider so `fxOrderEq` is honest; without that mirror every reconcile
   would spuriously emit `setFXChain`.
-- **`origin`** is stamped on every *target*-side entry by `projectEntry`
-  so the applier knows where to write minted guids back: `{kind='node'}`
-  → `node.fxId`; `bracketIn`/`bracketOut` → the consumer's
+- **`origin`** is stamped only on CU-bridge *target* entries (brackets and
+  merge CUs — the only fx minted by reconcile) so the applier knows where to
+  write the minted guid back: `bracketIn`/`bracketOut` → the consumer's
   `midiInBracketGuid`/`midiOutBracketGuid`; `{kind='merge',consumer,trackKey}`
-  → `consumer.mergeGuids[trackKey]`. Snapshot entries carry no `origin` and
-  `fxOrderEq` ignores it — it's a write-back address, not state to
-  compare.
+  → `consumer.mergeGuids[trackKey]`. A node entry carries its `fxId` as `id`
+  (minted on scratch before compile), so it needs no origin. Snapshot entries
+  carry no `origin` and `fxOrderEq` ignores it — it's a write-back address,
+  not state to compare.
 - **`midi`** (`{inBus,outBus,outDisabled}`) is set on both sides only for
-  non-JS `kind='node'` entries: target derives it from the user graph
+  non-JS fx-node entries (graph fx, not CU bridges): target derives it from the user graph
   (`nodeHasMidiOut`) and the allocator (`fxMidiBus`); snap reads it from
   the rm record. Mismatch drives `setFXChain`; `reconcileFXChain` issues
   `rm:assignFx{midi}`, which writes only the bytes that differ.
@@ -251,7 +254,7 @@ instead coalesce onto one dest bus with no CU (see `docs/DAG.md § MIDI`).
 wm and rm speak different names for a track. rm hands out an opaque `id`;
 wm thinks in `trackKey` (the partition class a node belongs to, computed by
 DAG before any track exists). `wiringTracks` is the bridge: a project-tier
-`{ trackKey → id }` map persisted alongside `wiringOwnedFx` (the graph itself
+`{ trackKey → id }` map — the only persisted wiring state (the graph itself
 is not persisted — see *Read is the store*).
 
 - **Sources** are *not* in the map. A source is a singleton class, so its
@@ -283,9 +286,9 @@ back when REAPER rewinds. Two stores need this, split by owner:
   scratch exists and, when its fx-meta mirror diverges from rm's watermark,
   pulls it back into projext via `rm:resyncFxMeta`. This is the permanent
   job — the `primary`/`split` metadata is not recoverable from routing.
-- **`wm:pollUndo`** mirrors the `wiringOwnedFx`/`wiringTracks` addressing
-  (inside the apply transaction) and, when the scratch chunk diverges from
-  `lastScratchRaw`, restores those keys and fires `wiringChanged{kind='load'}`
+- **`wm:pollUndo`** mirrors the `wiringTracks` addressing (inside the apply
+  transaction) and, when the scratch chunk diverges from
+  `lastScratchRaw`, restores that key and fires `wiringChanged{kind='load'}`
   — which re-reads the graph straight from REAPER routing. There is no blob
   to restore: the routing itself already reversed natively under the undo, so
   the re-read picks up the rewound state. A scratch lost to a manual delete or

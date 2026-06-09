@@ -342,6 +342,20 @@ fx always carries its guid before compile, and `pollUndo` catches manual deletes
 re-materialise) but removing it belongs with the `reconcileFXChain` rework. **D** remains the
 `wiringTracks` mirror + the `wm:pollUndo` collapse.
 
+**Commit C (ownership machinery retired) is landed.** `wiringOwnedFx` (cm key, schema row, and
+scratch mirror), `ownedSubsequence`/`ownedGuidsFrom` splicing, and the `origin={kind='node'}`
+stamp-back are gone. `reconcileFXChain` now full-replaces a managed track's whole chain —
+whole-track-set quarantine guarantees no foreign fx there, so live fx absent from target are
+deleted, id-less CU bridges minted and stamped inline, the rest moved and reordered. `wm:snapshot`
+drops its ownership filter and surfaces *every* fx on a managed track, so orphan deletion falls
+out of the full-replace for free and a hand-added fx is adopted, not filtered. Node fx no longer
+carry an `origin`: they enter the graph already holding their scratch-minted guid (`addFxNode`),
+so reconcile never mints a node fx — only CU bridges do. `stampOrigin`/`originGuid`/`buildGuidOwners`
+keep only the bracket/merge cases. The test fixtures shifted with the production shape: an fx node
+is now minted on scratch (`mintFx` → `instantiateFxOnScratch`) before it enters the graph, and the
+first reconcile *moves* it onto its track — the same path `addFxNode` drives. **D** remains the
+`wiringTracks` mirror + the `wm:pollUndo` collapse.
+
 *Deferred:* read-derived nodes with no stored position (adopted tracks, never-placed sources) default
 to `(0,0)` — they stack at the origin until auto-layout lands (§ Decoration).
 

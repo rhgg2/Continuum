@@ -37,10 +37,10 @@ local function audioEdge(from, to)
   return { type='audio', from=from, to=to }
 end
 
--- pinMaps nest on fx entries now; find one by its compile origin.
+-- pinMaps nest on fx entries; node entries carry their fxId (no origin), so find by id.
 local function pinmapByNode(entry, id)
   for _, e in ipairs(entry.fx) do
-    if e.origin and e.origin.kind == 'node' and e.origin.id == id then return e.pinMaps end
+    if e.id == id then return e.pinMaps end
   end
 end
 local function pinmapByMerge(entry, consumer, trackKey)
@@ -60,9 +60,9 @@ return {
       seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s   = source('guid-A')
-        g.nodes.fx1 = fx('VST:Fan',    { ins=1, outs=1 })
-        g.nodes.fx2 = fx('VST:LegA',   { ins=1, outs=1 })
-        g.nodes.fx3 = fx('VST:LegB',   { ins=1, outs=1 })
+        g.nodes.fx1 = fx('VST:Fan',    { ins=1, outs=1, fxId='fx1' })
+        g.nodes.fx2 = fx('VST:LegA',   { ins=1, outs=1, fxId='fx2' })
+        g.nodes.fx3 = fx('VST:LegB',   { ins=1, outs=1, fxId='fx3' })
         util.add(g.edges, audioEdge('s',   'fx1'))
         util.add(g.edges, audioEdge('fx1', 'fx2'))
         util.add(g.edges, audioEdge('fx1', 'fx3'))
@@ -94,7 +94,7 @@ return {
       seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('VST:Lin')
+        g.nodes.f = fx('VST:Lin', { fxId='f' })
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)

@@ -23,9 +23,13 @@ local function source(guid)
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
-local function fx(ident)
-  return { kind='fx', fxIdent=ident, pos={x=0,y=0},
-           ports={audio={ins=1,outs=1}, midi={ins=1,outs=1}} }
+-- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+-- graph carrying a live guid; reconcile then MOVES it onto its track.
+local function mintFx(wm, ident, opts)
+  opts = opts or {}
+  local r = wm:instantiateFxOnScratch(ident)
+  return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
 end
 
 local function audioEdge(from, to)
@@ -41,8 +45,8 @@ local function twoFxChain(harness)
   local track = seedSource(h, 'guid-A')
   wm:mutate(function(g)
     g.nodes.s  = source('guid-A')
-    g.nodes.f1 = fx('JS:foo')
-    g.nodes.f2 = fx('JS:bar')
+    g.nodes.f1 = mintFx(wm, 'JS:foo')
+    g.nodes.f2 = mintFx(wm, 'JS:bar')
     util.add(g.edges, audioEdge('s',  'f1'))
     util.add(g.edges, audioEdge('f1', 'f2'))
     util.add(g.edges, audioEdge('f2', 'master'))
@@ -65,7 +69,7 @@ return {
     run = function(harness)
       local _, wm, track = twoFxChain(harness)
       wm:mutate(function(g)
-        g.nodes.f0 = fx('JS:zero')
+        g.nodes.f0 = mintFx(wm, 'JS:zero')
         g.edges = {}
         util.add(g.edges, audioEdge('s',  'f0'))
         util.add(g.edges, audioEdge('f0', 'f1'))

@@ -32,6 +32,15 @@ local function fx(ident, opts)
                   midi={ins=1, outs=1}} }
 end
 
+-- Mint an fx on scratch (as wm:addFxNode does) so a reconcile-path node carries a live guid;
+-- the readGraph(snap) tests above build nodes directly with fx() and never reconcile.
+local function mintFx(wm, ident, opts)
+  opts = opts or {}
+  local r = wm:instantiateFxOnScratch(ident)
+  return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
+end
+
 -- Compare graph shape without depending on edge order or node table identity.
 local function edgeSet(g)
   local out = {}
@@ -317,7 +326,7 @@ return {
       seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('VST:F', { fxId='g-f' })
+        g.nodes.f = mintFx(wm, 'VST:F')
         util.add(g.edges, { type='audio', from='s', to='f' })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)

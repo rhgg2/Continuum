@@ -29,11 +29,13 @@ local function source(guid)
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
-local function fx(ident, opts)
+-- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+-- graph carrying a live guid; reconcile then MOVES it onto its track.
+local function mintFx(wm, ident, opts)
   opts = opts or {}
-  return { kind='fx', fxIdent=ident, fxId=opts.fxId, pos={x=0,y=0},
-           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1},
-                  midi={ins=1, outs=1}} }
+  local r = wm:instantiateFxOnScratch(ident)
+  return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
 end
 
 local function audioEdge(from, to, extra)
@@ -67,7 +69,7 @@ return {
       local track = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('VST:Foo', nil)
+        g.nodes.f = mintFx(wm, 'VST:Foo', nil)
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
@@ -87,8 +89,8 @@ return {
       local track = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s  = source('guid-A')
-        g.nodes.f1 = fx('VST:Filter', nil)
-        g.nodes.f2 = fx('VST:Synth',  nil)
+        g.nodes.f1 = mintFx(wm, 'VST:Filter', nil)
+        g.nodes.f2 = mintFx(wm, 'VST:Synth',  nil)
         util.add(g.edges, audioEdge('s',  'f1'))
         util.add(g.edges, midiEdge ('f1', 'f2'))
         util.add(g.edges, audioEdge('f2', 'master'))
@@ -114,8 +116,8 @@ return {
       local track = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s  = source('guid-A')
-        g.nodes.f1 = fx('VST:Filter', nil)
-        g.nodes.f2 = fx('VST:Synth',  nil)
+        g.nodes.f1 = mintFx(wm, 'VST:Filter', nil)
+        g.nodes.f2 = mintFx(wm, 'VST:Synth',  nil)
         util.add(g.edges, audioEdge('s',  'f1'))
         util.add(g.edges, midiEdge ('f1', 'f2'))
         util.add(g.edges, audioEdge('f2', 'master'))
@@ -151,7 +153,7 @@ return {
       h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('VST:Foo', nil)
+        g.nodes.f = mintFx(wm, 'VST:Foo', nil)
         util.add(g.edges, audioEdge('s', 'f', { ops = { gain = 0.5 } }))
         util.add(g.edges, audioEdge('f', 'master'))
       end)
@@ -171,7 +173,7 @@ return {
       seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
-        g.nodes.f = fx('VST:Foo', nil)
+        g.nodes.f = mintFx(wm, 'VST:Foo', nil)
         util.add(g.edges, audioEdge('s', 'f'))
         util.add(g.edges, audioEdge('f', 'master'))
       end)

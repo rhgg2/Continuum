@@ -21,9 +21,13 @@ local function source(guid)
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
-local function fx(ident)
-  return { kind='fx', fxIdent=ident, pos={x=0,y=0},
-           ports={audio={ins=1,outs=1}, midi={ins=1,outs=1}} }
+-- Mint an fx on scratch (as wm:addFxNode does) so the node enters the graph with a live
+-- guid; reconcile then MOVES it onto its track. Called inside the mutator.
+local function mintFx(wm, ident, opts)
+  opts = opts or {}
+  local r = wm:instantiateFxOnScratch(ident)
+  return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
 end
 
 local function audioEdge(from, to)
@@ -39,23 +43,23 @@ end
 
 return {
   {
-    name = 'undo: applyOps mirrors the owned-fx addressing onto scratch P_EXT',
+    name = 'undo: applyOps mirrors the wiringTracks addressing onto scratch P_EXT',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
+      seedSource(h, 'guid-B')
       wm:enableLive()
       wm:mutate(function(g)
-        g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo')
-        util.add(g.edges, audioEdge('s', 'f'))
-        util.add(g.edges, audioEdge('f', 'master'))
+        g.nodes.sA = source('guid-A')
+        g.nodes.sB = source('guid-B')
+        g.nodes.f  = mintFx(wm, 'JS:foo', { ins=2 })
+        util.add(g.edges, { type='audio', from='sA', to='f', toPort=1 })
+        util.add(g.edges, { type='audio', from='sB', to='f', toPort=2 })
       end)
-      -- The graph lives in REAPER routing now; only the addressing mirror rides scratch P_EXT.
-      local owned = h.cm:readTrackKey(scratchOf(h, wm), 'wiringOwnedFx')
-      t.truthy(owned, 'scratch P_EXT carries the owned-fx mirror')
-      local count = 0
-      for _ in pairs(owned) do count = count + 1 end
-      t.truthy(count >= 1, 'mirror lists the materialised fx guid')
+      -- The graph lives in REAPER routing; only the trackKey→id addressing rides scratch P_EXT.
+      -- The two-source fan-in parks f on a newTrack, so wiringTracks carries that key.
+      local tracks = h.cm:readTrackKey(scratchOf(h, wm), 'wiringTracks')
+      t.truthy(tracks and next(tracks), 'scratch P_EXT carries the wiringTracks mirror')
     end,
   },
   {
@@ -64,16 +68,11 @@ return {
       local h, wm = mkWm(harness)
       seedSource(h, 'guid-A')
       wm:enableLive()
-      wm:mutate(function(g)
-        g.nodes.s = source('guid-A')
-        g.nodes.f = fx('JS:foo')
-        util.add(g.edges, audioEdge('s', 'f'))
-        util.add(g.edges, audioEdge('f', 'master'))
-      end)
+      wm:mutate(function(g) g.nodes.s = source('guid-A') end)
 
-      -- Simulate REAPER undo: scratch P_EXT rewinds to empty (captured in the applyOps block).
-      -- The non-empty→empty change is what pollUndo detects.
-      h.cm:writeTrackKey(scratchOf(h, wm), 'wiringOwnedFx', {})
+      -- Simulate REAPER undo rewinding the addressing mirror: the scratch chunk changes,
+      -- which is what pollUndo detects.
+      h.cm:writeTrackKey(scratchOf(h, wm), 'wiringTracks', { ['x|y'] = 'guid-z' })
 
       local loadFires = 0
       wm:subscribe('wiringChanged', function(payload)

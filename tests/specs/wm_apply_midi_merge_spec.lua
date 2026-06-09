@@ -29,9 +29,13 @@ local function source(guid)
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
-local function fx(ident)
-  return { kind='fx', fxIdent=ident, pos={x=0,y=0},
-           ports={audio={ins=1,outs=1}, midi={ins=1,outs=1}} }
+-- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+-- graph carrying a live guid; reconcile then MOVES it onto its track.
+local function mintFx(wm, ident, opts)
+  opts = opts or {}
+  local r = wm:instantiateFxOnScratch(ident)
+  return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
 end
 
 local function midiEdge(from, to)
@@ -76,9 +80,9 @@ return {
       local trackA = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.sA   = source('guid-A')
-        g.nodes.fxP1 = fx('JS:p1')
-        g.nodes.fxP2 = fx('JS:p2')
-        g.nodes.fxC  = fx('JS:c')
+        g.nodes.fxP1 = mintFx(wm, 'JS:p1')
+        g.nodes.fxP2 = mintFx(wm, 'JS:p2')
+        g.nodes.fxC  = mintFx(wm, 'JS:c')
         util.add(g.edges, midiEdge('sA',   'fxP1'))
         util.add(g.edges, midiEdge('sA',   'fxP2'))
         util.add(g.edges, midiEdge('fxP1', 'fxC'))
@@ -112,9 +116,9 @@ return {
       seedSource(h, 'guid-B')
       wm:mutate(function(g)
         g.nodes.sA   = source('guid-A')
-        g.nodes.fxP1 = fx('JS:p1')
-        g.nodes.fxP2 = fx('JS:p2')
-        g.nodes.fxC  = fx('JS:c')
+        g.nodes.fxP1 = mintFx(wm, 'JS:p1')
+        g.nodes.fxP2 = mintFx(wm, 'JS:p2')
+        g.nodes.fxC  = mintFx(wm, 'JS:c')
         util.add(g.edges, midiEdge('sA',   'fxP1'))
         util.add(g.edges, midiEdge('sA',   'fxP2'))
         util.add(g.edges, midiEdge('fxP1', 'fxC'))
@@ -135,9 +139,9 @@ return {
       local trackA = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.sA   = source('guid-A')
-        g.nodes.fxP1 = fx('JS:p1')
-        g.nodes.fxP2 = fx('JS:p2')
-        g.nodes.fxC  = fx('JS:c')
+        g.nodes.fxP1 = mintFx(wm, 'JS:p1')
+        g.nodes.fxP2 = mintFx(wm, 'JS:p2')
+        g.nodes.fxC  = mintFx(wm, 'JS:c')
         util.add(g.edges, midiEdge('sA',   'fxP1'))
         util.add(g.edges, midiEdge('sA',   'fxP2'))
         util.add(g.edges, midiEdge('fxP1', 'fxC'))

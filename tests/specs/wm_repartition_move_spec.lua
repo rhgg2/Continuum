@@ -26,9 +26,13 @@ local function source(guid)
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
-local function fx(ident)
-  return { kind='fx', fxIdent=ident, pos={x=0,y=0},
-           ports={audio={ins=1,outs=1}, midi={ins=1,outs=1}} }
+-- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+-- graph carrying a live guid; reconcile then MOVES it onto its track.
+local function mintFx(wm, ident, opts)
+  opts = opts or {}
+  local r = wm:instantiateFxOnScratch(ident)
+  return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
 end
 
 local function audioEdge(from, to) return { type='audio', from=from, to=to } end
@@ -44,7 +48,7 @@ return {
 
       wm:mutate(function(g)
         g.nodes.a = source('guid-A')
-        g.nodes.b = fx('JS:foo')
+        g.nodes.b = mintFx(wm, 'JS:foo')
         util.add(g.edges, audioEdge('a', 'b'))
         util.add(g.edges, audioEdge('b', 'master'))
       end)

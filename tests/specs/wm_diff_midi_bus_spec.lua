@@ -32,9 +32,13 @@ local function source(guid)
            ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
 end
 
-local function fx(ident)
-  return { kind='fx', fxIdent=ident, pos={x=0,y=0},
-           ports={audio={ins=1,outs=1}, midi={ins=1,outs=1}} }
+-- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+-- graph carrying a live guid; reconcile then MOVES it onto its track.
+local function mintFx(wm, ident, opts)
+  opts = opts or {}
+  local r = wm:instantiateFxOnScratch(ident)
+  return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
 end
 
 local function midiEdge(from, to)
@@ -57,7 +61,7 @@ return {
       local trackA = seedSource(h, 'guid-A')
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
-        g.nodes.fxB = fx('JS:b')
+        g.nodes.fxB = mintFx(wm, 'JS:b')
         util.add(g.edges, midiEdge('sA', 'fxB'))
       end)
       apply(wm)
@@ -74,7 +78,7 @@ return {
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
         g.nodes.sB  = source('guid-B')
-        g.nodes.fxB = fx('JS:b')
+        g.nodes.fxB = mintFx(wm, 'JS:b')
         util.add(g.edges, midiEdge('sA', 'fxB'))
         util.add(g.edges, midiEdge('sB', 'fxB'))
       end)
@@ -97,7 +101,7 @@ return {
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
         g.nodes.sB  = source('guid-B')
-        g.nodes.fxB = fx('JS:b')
+        g.nodes.fxB = mintFx(wm, 'JS:b')
         util.add(g.edges, midiEdge('sA', 'fxB'))
         util.add(g.edges, midiEdge('sB', 'fxB'))
       end)
@@ -126,7 +130,7 @@ return {
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
         g.nodes.sB  = source('guid-B')
-        g.nodes.fxB = fx('JS:b')
+        g.nodes.fxB = mintFx(wm, 'JS:b')
         util.add(g.edges, midiEdge('sA', 'fxB'))
         util.add(g.edges, midiEdge('sB', 'fxB'))
       end)

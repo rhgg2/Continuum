@@ -95,22 +95,21 @@ return {
     end,
   },
   {
-    name = 'fx only includes FX whose guid is in the user graph',
+    name = 'fx surfaces the whole managed chain (foreign FX adopted, not filtered)',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
       local track = seedSourceTrack(h, wm, 'guid-A')
       seedFx(h, track, 'JS:owned',   '{FX-1}')
       seedFx(h, track, 'JS:foreign', '{FX-foreign}')
-      -- Seed user graph with a node carrying fxId='{FX-1}' only.
-      wm:mutate(function(g)
-        g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxId='{FX-1}',
-                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
-      end)
+      -- No ownership filter: every fx on a managed track surfaces, so a hand-added fx
+      -- is adopted (design § What read does), not dropped.
       local snap = wm:snapshot()
-      t.eq(#snap['guid-A'].fx, 1, 'foreign FX excluded')
-      t.eq(snap['guid-A'].fx[1].id,    '{FX-1}')
-      t.eq(snap['guid-A'].fx[1].ident, 'JS:owned')
+      t.eq(#snap['guid-A'].fx, 2, 'both fx surface')
+      local idents = {}
+      for _, e in ipairs(snap['guid-A'].fx) do idents[e.id] = e.ident end
+      t.eq(idents['{FX-1}'],       'JS:owned')
+      t.eq(idents['{FX-foreign}'], 'JS:foreign')
     end,
   },
   {
