@@ -91,6 +91,7 @@ local HEADER_GAP = 4    -- space between the header divider and the first row
 local drag      = nil  -- { mx0, my0, starts = { [id] = {x,y}, … } }
 local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
 local wireDraft = nil  -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? }
+local tagDrag   = nil  -- { edgeIdx, mx0, my0, sx0, sy0 } — dragging a source edge's tag to a custom canvas pos
 local shiftWas  = false
 local pinned     = {}   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
 local listOpenId = nil  -- node whose spillover list is engaged (chevron-gated)
@@ -1158,12 +1159,17 @@ local function drawTagAt(p, cx, cy, label)
          label, wireFont, WIRE_LABEL_SIZE)
 end
 
--- Track name at a source edge's source end; bg patch occludes the wire behind
--- the glyphs. TAG_VIS_H trims to the visible glyph band.
+-- Half-extents of a source tag's bg patch (shared by draw + grab-hit). TAG_VIS_H
+-- trims to the visible glyph band so the box hugs the digits.
+local function sourceTagExtents(p, label)
+  local tw, th = p.measure(label, wireFont, WIRE_LABEL_SIZE)
+  return math.ceil(tw / 2) + SOURCE_TAG_PAD, math.ceil(th * TAG_VIS_H / 2) + SOURCE_TAG_PAD
+end
+
+-- Track name at a source edge's source end; bg patch occludes the wire behind it.
 local function drawSourceTag(p, cx, cy, label)
   local tw, th = p.measure(label, wireFont, WIRE_LABEL_SIZE)
-  local hw = math.ceil(tw / 2) + SOURCE_TAG_PAD
-  local hh = math.ceil(th * TAG_VIS_H / 2) + SOURCE_TAG_PAD
+  local hw, hh = sourceTagExtents(p, label)
   p.fill(rect(cx - hw, cy - hh, cx + hw, cy + hh), 'bg')
   p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2),
          'wiring.source.label', label, wireFont, WIRE_LABEL_SIZE)
@@ -1196,15 +1202,35 @@ local function sourceSegments(wireViews, nodesById, segs)
       local exitDist = math.min((ux ~= 0) and hw / math.abs(ux) or math.huge,
                                 (uy ~= 0) and hh / math.abs(uy) or math.huge)
       for i, w in ipairs(grp) do
-        local s  = wireOffset(i, #grp)
-        local fx = consumer.pos.x + perpX * s + ux * (exitDist + STUB_LEN)
-        local fy = consumer.pos.y + perpY * s + uy * (exitDist + STUB_LEN)
+        local fx, fy
+        if w.fromOffset then
+          -- Custom tag pos is consumer-relative, so it rides node moves for free.
+          fx = consumer.pos.x + w.fromOffset.x
+          fy = consumer.pos.y + w.fromOffset.y
+        else
+          local s = wireOffset(i, #grp)
+          fx = consumer.pos.x + perpX * s + ux * (exitDist + STUB_LEN)
+          fy = consumer.pos.y + perpY * s + uy * (exitDist + STUB_LEN)
+        end
         segs[idxOf[w]] = {
           w  = w,
           sx = fx,             sy = fy,
           ex = consumer.pos.x, ey = consumer.pos.y,
           fromHW = SOURCE_TAG_TRIM, fromHH = SOURCE_TAG_TRIM,
         }
+      end
+    end
+  end
+end
+
+-- The source tag's grab box: cursor inside the bg-patch rect at its centre.
+local function sourceTagHit(p, segs, wireViews, mx, my)
+  for i = 1, #wireViews do
+    local seg = segs[i]
+    if seg and seg.w.fromKind == 'source' then
+      local hw, hh = sourceTagExtents(p, seg.w.fromLabel or 'source')
+      if inRect(mx, my, rect(seg.sx - hw, seg.sy - hh, seg.sx + hw, seg.sy + hh)) then
+        return i
       end
     end
   end
@@ -1310,15 +1336,23 @@ local function renderCanvas(w, h)
   local wireViewsList = wv:wireViews()
   local segs = wireSegments(wireViewsList, nodesById)
   sourceSegments(wireViewsList, nodesById, segs)
+  -- A live tag drag overrides its seg's source end so geometry below (and the
+  -- stamped midpoint) follow the cursor; mouseup commits the pos.
+  if tagDrag and segs[tagDrag.edgeIdx] then
+    local seg = segs[tagDrag.edgeIdx]
+    seg.sx = tagDrag.sx0 + (lmx - tagDrag.mx0)
+    seg.sy = tagDrag.sy0 + (lmy - tagDrag.my0)
+  end
   -- Stamp each seg's visible midpoint once: the arrow, fader, and RMB menu all
   -- anchor here, so a single source keeps draw and hit-test from drifting.
   for _, seg in pairs(segs) do seg.cx, seg.cy = wireMid(seg) end
 
-  -- Wire-end hover: unmodified mouse near a wire's end-region. Suppressed
-  -- during any active gesture so the highlight never fires under a drag.
-  local wireEndHover
-  if not drag and not band and not wireDraft and not shiftHeld then
+  -- Wire-end + source-tag hover: mouse near a wire's end-region or a source tag.
+  -- Suppressed during any active gesture so neither fires under a drag.
+  local wireEndHover, tagHover
+  if not drag and not band and not wireDraft and not shiftHeld and not tagDrag then
     wireEndHover = wireEndHit(segs, lmx, lmy)
+    tagHover     = sourceTagHit(p, segs, wireViewsList, lmx, lmy)
   end
 
   -- Tick a live fader drag: poke per frame, commit one setEdgeGain on
@@ -1336,7 +1370,7 @@ local function renderCanvas(w, h)
   end
   local arrowHitIdx
   if not drag and not band and not wireDraft and not shiftHeld
-     and not (fader and fader.dragging) then
+     and not tagDrag and not (fader and fader.dragging) then
     arrowHitIdx = arrowMidHit(segs, lmx, lmy)
   end
   -- Fader visibility: drag overrides, triangle anchors, hitRect persists.
@@ -1553,7 +1587,7 @@ local function renderCanvas(w, h)
   -- Mousedown precedence (docs/wiringPage.md): shift-hover > wire-end >
   -- body-drag > band.
   if not faderConsumed and not dblConsumed and not drag and not band
-      and not wireDraft and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
+      and not wireDraft and not tagDrag and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
     -- Any click closes the spillover. The pre-click sourceHit (list still open)
     -- drives dispatch here.
     listOpenId = nil
@@ -1641,6 +1675,9 @@ local function renderCanvas(w, h)
         originalTargetId = grabbedId,
         originalPort     = grabbedPort,
       }
+    elseif tagHover then
+      local seg = segs[tagHover]
+      tagDrag = { edgeIdx = tagHover, mx0 = lmx, my0 = lmy, sx0 = seg.sx, sy0 = seg.sy }
     else
       local bodyHit = nodeUnderMouse(nodeViews, lmx, lmy)
       if bodyHit then
@@ -1700,6 +1737,16 @@ local function renderCanvas(w, h)
     end
     wireDraft  = nil
     listOpenId = nil   -- close any target-side spillover that was open
+  elseif tagDrag and not ImGui.IsMouseDown(ctx, 0) then
+    local seg      = segs[tagDrag.edgeIdx]
+    local consumer = seg and nodesById[seg.w.to]
+    local moved = math.abs(lmx - tagDrag.mx0) >= CLICK_THRESH
+               or math.abs(lmy - tagDrag.my0) >= CLICK_THRESH
+    if moved and consumer then
+      wv:setSourceTagPos(seg.w,
+        { x = seg.sx - consumer.pos.x, y = seg.sy - consumer.pos.y })
+    end
+    tagDrag = nil
   elseif drag and not ImGui.IsMouseDown(ctx, 0) then
     local dx, dy = lmx - drag.mx0, lmy - drag.my0
     if dx ~= 0 or dy ~= 0 then
@@ -1720,7 +1767,7 @@ local function renderCanvas(w, h)
 
   -- RMB precedence: triangle → per-wire menu; node body → node menu; empty
   -- canvas → FX picker (same code path as the N-key shortcut).
-  if not drag and not band and not wireDraft
+  if not drag and not band and not wireDraft and not tagDrag
       and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
     if arrowHitIdx and not wireMenu and not fader then
       local seg = segs[arrowHitIdx]
@@ -1934,7 +1981,7 @@ function wr:renderToolbarBits(_) end
 
 --contract: clear ephemeral gesture/hover state; the controller calls this on unbind.
 function wr:closeTransients()
-  drag, band, wireDraft, shiftWas = nil, nil, nil, false
+  drag, band, wireDraft, tagDrag, shiftWas = nil, nil, nil, nil, false
   listOpenId, sticky, engagedId, hoverFreeze = nil, nil, nil, nil
   fader, wireMenu = nil, nil
 end

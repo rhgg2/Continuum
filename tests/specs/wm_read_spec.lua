@@ -382,6 +382,23 @@ return {
     end,
   },
   {
+    -- A source tag's custom offset is decoration like pos/busses: same meta store,
+    -- same read-stamp, keyed per out-edge so one source's fans stay distinct.
+    name = 'read: source tag offsets round-trip through the decoration store',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm:enableLive()
+      seedSource(h, 'guid-A')
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        util.add(g.edges, { type='audio', from='s', to='master' })
+      end)
+      wm:setSourceTagPos('s', 'audio/master/1', { x = 12, y = -7 })
+      t.deepEq(wm:read().nodes['guid-A'].tagPos,
+               { ['audio/master/1'] = { x = 12, y = -7 } }, 'tag offset from track meta')
+    end,
+  },
+  {
     -- The view labels fx nodes by fxDisplay; readGraph derives it from the plugin name
     -- (shortFxName strips the "Type: " prefix and trailing author), else the node reads 'fx'.
     name = 'read: fx node carries a short display name from the plugin name',

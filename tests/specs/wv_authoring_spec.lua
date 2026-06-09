@@ -335,4 +335,22 @@ return {
       t.eq(fxWire.fromLabel, 'Massive',  'fromLabel mirrors the gen fx display name')
     end,
   },
+  {
+    name = 'setSourceTagPos round-trips as wireView.fromOffset on the same edge',
+    run = function(harness)
+      local h, wv = mkWv(harness)
+      h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
+      local genFx = wv:addFx(0, 0, { name = 'Massive', ident = 'VST3:Massive' })
+      local srcId = sourceId(wv)
+      local function srcWire()
+        for _, w in ipairs(wv:wireViews()) do
+          if w.from == srcId and w.to == genFx then return w end
+        end
+      end
+      t.falsy(srcWire().fromOffset, 'no offset before a tag drag')
+      t.truthy(wv:setSourceTagPos(srcWire(), { x = 18, y = -9 }))
+      t.deepEq(srcWire().fromOffset, { x = 18, y = -9 },
+               'the dragged offset surfaces on the same source edge')
+    end,
+  },
 }

@@ -201,6 +201,21 @@ function wm:removeBus(nodeId, idx)
   return true
 end
 
+--contract: persists pos to node.tagPos[key] (consumer-relative); source tag decoration only
+function wm:setSourceTagPos(nodeId, key, pos)
+  local ok = self:mutate(function(g)
+    local node = g.nodes[nodeId]
+    if node then
+      node.tagPos = node.tagPos or {}
+      node.tagPos[key] = pos
+    end
+  end, 'move')
+  if not ok then return false end
+  local node = userGraph.nodes[nodeId]
+  if node then persistNodeMeta(node, { tagPos = node.tagPos }) end
+  return true
+end
+
 --contract: read JSFX desc file for ident from REAPER's Effects dir; nil if non-JS or read fails
 function wm:readJSFXContent(ident)
   if not (ident and ident:sub(1, 3) == 'JS:') then return nil end
@@ -945,6 +960,7 @@ local function stampDecoration(g, tracks)
     else                              rec = trackRec[id] end
     node.pos    = (rec and rec.pos) and { x = rec.pos.x, y = rec.pos.y } or { x = 0, y = 0 }
     node.busses = rec and rec.busses and util.deepClone(rec.busses) or nil
+    node.tagPos = rec and rec.tagPos and util.deepClone(rec.tagPos) or nil
   end
 end
 

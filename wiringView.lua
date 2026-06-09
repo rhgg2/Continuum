@@ -111,6 +111,12 @@ local function activation(node)
   return 'fx'
 end
 
+-- Per-out-edge key for a source node's tagPos store: type+consumer+port make
+-- each out-edge distinct (one source fans to many consumers/ports).
+local function srcEdgeKey(e)
+  return e.type .. '/' .. e.to .. '/' .. (e.toPort or 1)
+end
+
 local function nodeView(id, node)
   local ins  = { audio = audioPorts(node, 'in'),  midi = midiPorts(node, 'in')  }
   local outs = { audio = audioPorts(node, 'out'), midi = midiPorts(node, 'out') }
@@ -180,6 +186,9 @@ function wv:addBus(nodeId, bus) return wm:addBus(nodeId, bus) end
 
 --contract: removes node.busses[idx] via wm:removeBus; edges revert to a star when the list empties
 function wv:removeBus(nodeId, idx) return wm:removeBus(nodeId, idx) end
+
+--contract: stashes wireView w's source-tag offset {x,y} (consumer-relative) via wm; decoration only
+function wv:setSourceTagPos(w, offset) return wm:setSourceTagPos(w.from, srcEdgeKey(w), offset) end
 
 --contract: appends wire; midi: ports nil; audio: ports default to 1; fires wiringChanged via wm:mutate
 function wv:addWire(spec)
@@ -300,7 +309,7 @@ function wv:nodeViews()
   return out
 end
 
---shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'fx'|'master', fromLabel } — ports are 1-based and always present; names nil if the referenced port has been trimmed off the node
+--shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'fx'|'master', fromLabel, fromOffset={x,y}? } — ports 1-based, always present; names nil if the port was trimmed; fromOffset is a custom-dragged source tag's pos relative to its consumer (so it rides node moves)
 -- see docs/wiringView.md § wireView fromKind/fromLabel
 --contract: returns the list of wireViews for every edge in the current user graph; order matches graph.edges
 function wv:wireViews()
@@ -316,6 +325,8 @@ function wv:wireViews()
     local fromPort = e.fromPort or 1
     local toPort   = e.toPort   or 1
     local fromNode = g.nodes[e.from]
+    local fromOffset = fromNode and fromNode.kind == 'source' and fromNode.tagPos
+                         and fromNode.tagPos[srcEdgeKey(e)] or nil
     util.add(out, {
       from         = e.from,
       to           = e.to,
@@ -327,6 +338,7 @@ function wv:wireViews()
       primary      = e.primary or nil,
       fromKind     = fromNode and fromNode.kind,
       fromLabel    = fromNode and nodeLabel(e.from, fromNode),
+      fromOffset   = fromOffset,
     })
   end
   return out
