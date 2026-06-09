@@ -86,6 +86,27 @@ return {
     end,
   },
   {
+    name = 'midi block index skips a bare-ident JS fx (real fx_ident has no JS: prefix)',
+    run = function()
+      local reaper, rm = mkRm()
+      -- Real REAPER returns a bare path for a JSFX's fx_ident and fx_type='JS'
+      -- (e.g. the stock 'utility/volume' gain insert), never a 'JS:' prefix. It
+      -- carries no routing block, so it must not consume a routing-index slot.
+      seedTrack(reaper, 'Mixed', {
+        { ident = 'utility/volume', fxType = 'JS' },
+        { ident = 'b',              fxType = 'VST3' },
+      })
+      local fx = rm:tracks()[1].fx
+      t.eq(fx[1].midi, nil, 'bare-ident JS fx decodes no midi routing')
+      local idVst = fx[2].id
+
+      rm:assignFx(idVst, { midi = { outDisabled = true } })
+
+      t.eq(rm:tracks()[1].fx[2].midi.outDisabled, true,
+           'routing write lands on the VST, not shifted off the chain end by the JS')
+    end,
+  },
+  {
     name = 'reads routing from the stream tail past a preset name',
     run = function()
       local reaper, rm = mkRm()

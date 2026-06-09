@@ -294,7 +294,7 @@ end
 
 ----------- fx read
 
---shape: fx = { id=guid, ident=string, name=string, ins=int, outs=int, inNames={str,...}, outNames={str,...}, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus,outBus,inDisabled,outDisabled} }  -- midi nil for JS; rm:fx adds trackId
+--shape: fx = { id=guid, ident=string, fxType=string, name=string, ins=int, outs=int, inNames={str,...}, outNames={str,...}, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus,outBus,inDisabled,outDisabled} }  -- ident JS-normalised; midi only for VST/AU/CLAP; rm:fx adds trackId
 
 -- Display name: a user instance rename wins, else the plugin's own name.
 local function fxName(track, idx)
@@ -304,13 +304,34 @@ local function fxName(track, idx)
   return name
 end
 
-local function readFx(track, idx)
+local function fxTypeAt(track, idx)
+  local _, fxType = reaper.TrackFX_GetNamedConfigParm(track, idx, 'fx_type')
+  return fxType
+end
+
+-- fx_ident for a JSFX is a bare path ('utility/volume'); the system keys JS on a
+-- 'JS:' prefix (CU_IDENT, isJS, readJSFXContent), so restore it via fx_type on read.
+local function fxIdentAt(track, idx, fxType)
   local _, ident = reaper.TrackFX_GetNamedConfigParm(track, idx, 'fx_ident')
+  if fxType == 'JS' and ident ~= '' and ident:sub(1, 3) ~= 'JS:' then ident = 'JS:' .. ident end
+  return ident
+end
+
+-- A routing-bearing FX carries a per-FX MIDI routing record in the chunk — exactly
+-- the <VST>/<CLAP>/<AU> blocks findFxBlock walks. JS, containers, video have none.
+local function isRoutingFx(fxType)
+  return fxType ~= nil
+     and (fxType:find('^VST') or fxType:find('^AU') or fxType:find('^CLAP')) ~= nil
+end
+
+local function readFx(track, idx)
+  local fxType = fxTypeAt(track, idx)
   local _, inPins, outPins = reaper.TrackFX_GetIOSize(track, idx)
   inPins, outPins = inPins or 0, outPins or 0
   return {
     id       = reaper.TrackFX_GetFXGUID(track, idx),
-    ident    = ident,
+    ident    = fxIdentAt(track, idx, fxType),
+    fxType   = fxType,
     name     = fxName(track, idx),
     ins      = inPins  / 2,
     outs     = outPins / 2,
@@ -318,10 +339,6 @@ local function readFx(track, idx)
     outNames = portNames(track, idx, 'out', outPins),
     pinMaps  = readPinMaps(track, idx),
   }
-end
-
-local function isJSFX(ident)
-  return ident ~= nil and ident:sub(1, 3) == 'JS:'
 end
 
 -- Absent trailer ⇒ passthrough defaults; the field is present for every non-JS
@@ -334,11 +351,11 @@ local function readMidiRouting(chunk, routingIdx)
 end
 
 local function readFxChain(track)
-  local _, chunk     = reaper.GetTrackStateChunk(track, '', true)
+  local _, chunk     = reaper.GetTrackStateChunk(track, '', false)
   local out, routing = {}, 0
   for idx = 0, reaper.TrackFX_GetCount(track) - 1 do
     local fx = readFx(track, idx)
-    if not isJSFX(fx.ident) then
+    if isRoutingFx(fx.fxType) then
       fx.midi = readMidiRouting(chunk, routing)
       routing = routing + 1
     end
@@ -590,15 +607,13 @@ local function readParams(track, fxIdx)
   return out
 end
 
--- Absolute fx index → chunk routing index (non-JS blocks only); nil for a JS
--- fx, which has no routing trailer — writing midi to one is a no-op.
+-- Absolute fx index → chunk routing index (routing-bearing blocks only); nil for a
+-- JS/container fx, which has no routing trailer — writing midi to one is a no-op.
 local function routingIdxOf(track, fxIdx)
-  local _, ident = reaper.TrackFX_GetNamedConfigParm(track, fxIdx, 'fx_ident')
-  if isJSFX(ident) then return nil end
+  if not isRoutingFx(fxTypeAt(track, fxIdx)) then return nil end
   local routing = 0
   for i = 0, fxIdx - 1 do
-    local _, prior = reaper.TrackFX_GetNamedConfigParm(track, i, 'fx_ident')
-    if not isJSFX(prior) then routing = routing + 1 end
+    if isRoutingFx(fxTypeAt(track, i)) then routing = routing + 1 end
   end
   return routing
 end
@@ -610,8 +625,11 @@ local function writeMidiRouting(track, fxIdx, midi)
                  inDisabled = midi.inDisabled, outDisabled = midi.outDisabled }
   if next(opts) == nil then return end
   local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
-  local _, chunk     = reaper.GetTrackStateChunk(track, '', true)
-  reaper.SetTrackStateChunk(track, setFXMidiRouting(chunk, routingIdx, opts, ins + outs), true)
+  -- isundo=false throughout: applyOps brackets an Undo block, so chunk RMW needs no
+  -- per-call undo caching. All rm chunk reads/writes share the flag so caches agree.
+  local _, chunk     = reaper.GetTrackStateChunk(track, '', false)
+  local newChunk = setFXMidiRouting(chunk, routingIdx, opts, ins + outs)
+  reaper.SetTrackStateChunk(track, newChunk, false)
 end
 
 local function writeTrackFields(track, t)
@@ -790,8 +808,8 @@ function rm:fx(id)
   if not track then return nil end
   local fx = readFx(track, idx)
   fx.trackId = reaper.GetTrackGUID(track)
-  if not isJSFX(fx.ident) then
-    local _, chunk = reaper.GetTrackStateChunk(track, '', true)
+  if isRoutingFx(fx.fxType) then
+    local _, chunk = reaper.GetTrackStateChunk(track, '', false)
     fx.midi = readMidiRouting(chunk, routingIdxOf(track, idx))
   end
   util.assign(fx, readFxMeta()[id])

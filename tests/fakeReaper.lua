@@ -95,6 +95,13 @@ function M.new()
   state.fxIO      = {}   -- ident → {ins, outs, inPinNames?={..}, outPinNames?={..}}; ports = pins/2
   local function fxEntry(track, idx) return (state.fxByTrack[track] or {})[idx + 1] end
   local function fxIdentOf(entry)    return type(entry) == 'table' and entry.ident or entry end
+  -- Real REAPER reports fx_type ('JS','VST3','AU',...) independently of fx_ident,
+  -- whose JS form is a bare path. Honour an explicit entry.fxType; else infer from
+  -- the legacy 'JS:'-prefixed ident so older fixtures keep working.
+  local function fxTypeOf(entry)
+    if type(entry) == 'table' and entry.fxType then return entry.fxType end
+    return (fxIdentOf(entry) or ''):sub(1, 3) == 'JS:' and 'JS' or 'VST3'
+  end
   function r.TrackFX_GetCount(track)
     return #(state.fxByTrack[track] or {})
   end
@@ -191,6 +198,7 @@ function M.new()
     -- (display) and .renamed (user instance rename); bare strings are ident only.
     if entry == nil then return false, '' end
     if parm == 'fx_ident' then return true, fxIdentOf(entry) end
+    if parm == 'fx_type'  then return true, fxTypeOf(entry)  end
     if parm == 'fx_name' or parm == 'original_name' then
       local name = type(entry) == 'table' and entry.name
       return true, name or fxIdentOf(entry)
@@ -273,7 +281,7 @@ function M.new()
     local lines = { '<TRACK', '  <FXCHAIN' }
     for _, fx in ipairs(fxs) do
       local ident = fxIdentOf(fx)
-      if ident:sub(1, 3) == 'JS:' then
+      if fxTypeOf(fx) == 'JS' then
         lines[#lines + 1] = '  <JS ' .. ident .. ' ""'
         lines[#lines + 1] = '    0 0 0 -'
         lines[#lines + 1] = '  >'
@@ -334,7 +342,7 @@ function M.new()
     -- Zip non-JS trailers with non-JS fxs in order. JS entries pass through.
     local tIdx = 1
     for j, fx in ipairs(fxs) do
-      if fxIdentOf(fx):sub(1, 3) ~= 'JS:' then
+      if fxTypeOf(fx) ~= 'JS' then
         local trailer = trailers[tIdx]
         if trailer then
           local bytes = b64decode(trailer)
