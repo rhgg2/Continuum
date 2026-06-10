@@ -1,0 +1,97 @@
+@module paramAutomation  src=paramAutomation.lua  loc=358  sha=untracked  mode=chunk
+@deps cm, facade
+
+# Invariants & contracts
+  @invariant  automation bus is 126 — 127 is wiring's parking bus, wiring allocates 0..125
+  @invariant  authored (chan,lane) codes are track-unique across takes; bus codes project-unique
+
+# Shapes
+  @shape  binding = { busCode=int, trackGuid=str, fxGuid=str, param=int, scale=num, offset=num, label=str }
+  @shape  trackSpec = { filter={ {src=code,dst=code},... }, listen={ {code,fxGuid,param,scale,offset},... }, sends={dstGuid,...} }
+
+# Imports
+  @require util = 'util'  @ 16
+      @contract  apply() is a full-project idempotent reconcile; mirror-matching tracks are untouched
+
+# Private state
+  @state AUTO_BUS = 126  @ 19
+  @state CC_IDENT = 'JS:Continuum CC'  @ 20
+  @state SLOTS = 16  @ 21
+  @state META_PEXT = 'P_EXT:ctm_paramAuto'  @ 22
+  @state TOP_LANE = 119  @ 23   -- 120..127 are channel-mode messages
+  @state P_VALUE, P_SRC, P_DST, P_LISTEN = 0, 16, 32, 48  @ 26
+  @state pa = {}  @ 28
+
+# Private functions
+  -- REAPER lookups
+  @fn trackByGuid(guid)  @ 32
+  @fn fxIndexByGuid(track, guid)  @ 39
+  @fn ccNodeIndex(track)  @ 46
+      -- fx_ident for a JSFX is the bare Effects-relative path (cf. routingManager fxIdentAt)
+  @fn eachTake(visit)  @ 56
+  @fn boundTrack()  @ 66
+  -- Gather + desired specs
+  @fn gatherBindings()  @ 73
+  -- Apply
+  @fn readMirror(track)  @ 130
+  @fn writeMirror(track, spec)  @ 137
+  @fn setPlink(track, fxIdx, param, ccIdx, slot, scale, offset)  @ 141
+  @fn clearPlink(track, fxIdx, param)  @ 153
+  @fn writeBanks(track, ccIdx, spec)  @ 159
+  @fn reconcileAutoSends(track, dstGuids)  @ 173
+      -- Ours by signature: midi-only send whose src bus is the automation bus.
+      -- Encoding mirrors routingManager createSend/readSendChans (bits 14/22, +1-biased).
+  @fn applyTrack(track, spec, mirror)  @ 202
+  -- Allocation
+  @fn usedLanes(srcTrack, chan)  @ 246
+      -- Authored lanes are track-unique across takes (the filter bank is shared per
+      -- track): used = bound lanes, user cc columns, and event-bearing ccs on the
+      -- channel, across every take on the track.
+  @fn allocLane(srcTrack, chan)  @ 265
+  @fn allocBusCode()  @ 272
+
+# Public API (pa:*)
+  @api pa.computeDesired(bindings)  @ 94
+      -- Pure: bindings -> { [trackGuid] = trackSpec }. Pooled duplicates collapse
+      -- via the seen-keys; slot order is sorted for a stable REAPER image.
+  @api pa:apply()  @ 288
+      @contract  no-op (and no undo point) when every track's mirror already matches
+  @api pa:automate(chan, target)  @ 305
+      @contract  chan is the tracker's 1-based channel; returns the allocated cc lane, or nil + reason
+  @api pa:unautomate(chan, lane)  @ 324
+  @api pa:binding(chan, lane)  @ 333
+  @api pa:targets()  @ 339
+      @contract  palette rows from the wiring facade's cone walk; {} without a take or wiring
+  @api pa:params(trackGuid, fxGuid)  @ 346
+
+# Uses (outbound edges)
+  @use call    cm.boundTake  @ 67
+  @use call    cm.get  @ 312, 325, 334
+  @use call    cm.readTakeKey  @ 76, 250, 252, 275
+  @use call    cm.set  @ 319, 329
+  @use call    facade.get  @ 341
+  @use call    util.atomic  @ 299
+  @use call    util.deepEq  @ 294
+  @use call    util.key  @ 101, 224, 226
+  @use call    util.print  @ 161
+  @use call    util.serialise  @ 138
+  @use require util  @ 16
+
+# REAPER API surface
+  @reaper CountTracks
+  @reaper GetTrack
+  @reaper GetTrackGUID
+  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetNamedConfigParm, TrackFX_SetNamedConfigParm, TrackFX_SetParam, TrackFX_Delete, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_GetNumParams, TrackFX_GetParamName
+  @reaper CountMediaItems
+  @reaper GetMediaItem
+  @reaper CountTakes
+  @reaper GetTake
+  @reaper GetMediaItemTake_Track
+  @reaper GetSetMediaTrackInfo_String
+  @reaper GetTrackNumSends
+  @reaper GetTrackSendInfo_Value
+  @reaper RemoveTrackSend
+  @reaper CreateTrackSend
+  @reaper SetTrackSendInfo_Value
+  @reaper TakeIsMIDI
+  @reaper MIDI_CountEvts, MIDI_GetCC

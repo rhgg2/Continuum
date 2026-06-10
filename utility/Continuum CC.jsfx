@@ -1,0 +1,74 @@
+desc:Continuum CC
+tags: utility continuum
+version: 0.01
+author: Continuum
+license: MIT
+about:
+  Compiler-managed param-automation node, pinned at chain head — never
+  user-placed. Two independent 16-slot banks, all codes chan*128+cc, -1
+  off:
+  - Filter bank (src -> dst): authored automation CCs must not reach the
+    performance stream. A bus-0 CC matching a src code is rewritten to
+    its project-unique dst address and moved to the reserved automation
+    bus; instruments hear only bus 0, so the move is the strip.
+  - Listen bank: value sliders 1..16 (params 0..15) are the plink
+    sources for this track's bound FX params. A CC on the automation bus
+    matching a listen code drives its slot's value slider.
+  Filtering precedes listening per event, so a same-track binding works
+  in one instance. Everything is passed through: the automation bus is
+  invisible to instruments, so nothing else needs stripping.
+
+ext_midi_bus = 1;
+
+in_pin:none
+out_pin:none
+
+<?
+  i = 1;
+  loop(16, printf("slider%d:val%d=0<0,1,0.0001>value %d\n", i, i, i); i += 1; );
+  i = 1;
+  loop(16, printf("slider%d:src%d=-1<-1,2047,1>-src %d\n", i + 16, i, i); i += 1; );
+  i = 1;
+  loop(16, printf("slider%d:dst%d=-1<-1,2047,1>-dst %d\n", i + 32, i, i); i += 1; );
+  i = 1;
+  loop(16, printf("slider%d:listen%d=-1<-1,2047,1>-listen %d\n", i + 48, i, i); i += 1; );
+?>
+
+@init
+autobus = 126; // 127 is wiring's parking bus; the wiring allocator hands out 0..125
+src = 0;     // mem[0..15]  : filter bank, authored codes
+dst = 16;    // mem[16..31] : filter bank, bus-address codes
+listen = 32; // mem[32..47] : listen bank, bus-address codes
+
+@slider
+<? i = 0; loop(16, printf("src[%d] = src%d; dst[%d] = dst%d; listen[%d] = listen%d;\n", i, i + 1, i, i + 1, i, i + 1); i += 1; ); ?>
+
+@block
+changed = 0;
+while (midirecv(ofs, m1, m2, m3)) (
+  iscc = (m1 & 0xF0) == 0xB0;
+  iscc && midi_bus == 0 ? (
+    code = (m1 & 0x0F) * 128 + m2;
+    hit = -1;
+    s = 0;
+    loop(16, src[s] == code ? hit = s; s += 1; );
+    hit >= 0 ? (
+      m1 = 0xB0 | (dst[hit] >> 7);
+      m2 = dst[hit] & 127;
+      midi_bus = autobus;
+    );
+  );
+  iscc && midi_bus == autobus ? (
+    code = (m1 & 0x0F) * 128 + m2;
+    s = 0;
+    loop(16,
+      listen[s] == code ? (
+        slider(s + 1) = m3 / 127;
+        changed |= 1 << s;
+      );
+      s += 1;
+    );
+  );
+  midisend(ofs, m1, m2, m3);
+);
+changed ? sliderchange(changed);

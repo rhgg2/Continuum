@@ -399,6 +399,14 @@ function M.new()
   state.trackNames    = {}
   function r.CountTracks(_proj)             return #state.projectTracks end
   function r.GetTrack(_proj, i)             return state.projectTracks[i + 1] end
+
+  -- Project item/take list (paramAutomation's project-wide binding scan).
+  -- Tests seed entries shaped { takes = { take, ... } }.
+  state.projectItems = {}
+  function r.CountMediaItems(_proj) return #state.projectItems end
+  function r.GetMediaItem(_proj, i) return state.projectItems[i + 1] end
+  function r.CountTakes(item)       return #(item.takes or {}) end
+  function r.GetTake(item, t)       return (item.takes or {})[t + 1] end
   function r.ValidatePtr2(_proj, ptr, ctype)
     if ctype == 'MediaTrack*' then
       for _, t in ipairs(state.projectTracks) do if t == ptr then return true end end

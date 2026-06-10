@@ -24,7 +24,8 @@ local function arrange() return facade.get('arrange') end
 local mm = util.instantiate('midiManager',    { take = nil })
 local tm = util.instantiate('trackerManager', { mm = mm, cm = cm })
 local gm = util.instantiate('groupManager',   { tm = tm, cm = cm })
-local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, cmgr = cmgr, gm = gm })
+local pa = util.instantiate('paramAutomation', { cm = cm, facade = facade })
+local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, cmgr = cmgr, gm = gm, pa = pa })
 
 local tr = util.instantiate('trackerRender',
   { tv = tv, cm = cm, cmgr = cmgr, chrome = chrome,
@@ -52,7 +53,10 @@ function tp:currentTake() return tm:currentTake() end
 --contract: bind/unbind drive the take on tm; bind also seeds tv's take-tier slots
 function tp:bind(t)
   tm:bindTake(t)
-  if t then tv:seedSharedSlots() end
+  if t then
+    tv:seedSharedSlots()
+    pa:apply()
+  end
 end
 function tp:unbind() tr:closeTransients(); tm:bindTake(nil); wasDormant = true end
 

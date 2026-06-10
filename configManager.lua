@@ -90,6 +90,9 @@ local declarations = {
   { 'mutedChannels',   {}    },
   { 'soloedChannels',  {}    },
   { 'extraColumns',    {}    },
+  -- Param-automation bindings, take tier: [chan][lane] = binding.
+  -- See design/cv.md § simple layer for the binding shape.
+  { 'paramAutomation', {}    },
   { 'noteDelay',       {}    },
   { 'slotEntries',     {}    },
   -- Mirror groups, persisted at the take tier. See docs/groupManager.md.
