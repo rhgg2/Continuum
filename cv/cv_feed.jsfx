@@ -1,0 +1,36 @@
+desc:Continuum CV spike - cc feed (strip designated lane, expose as slider)
+
+slider1:20<0,31,1>MSB lane
+slider2:0<0,1,0.0001>value (plink source)
+slider3:0<0,10000,1>max gap (ms)
+slider4:0<0,1000000,1>cc count
+
+in_pin:none
+out_pin:none
+
+@init
+// refires at play start and loop points (globals preserved): resetting
+// lastpos here confines gap measurement to within one play pass
+lastpos = -1;
+
+@block
+blk = totalspl;
+totalspl += samplesblock;
+while (midirecv(ofs, m1, m2, m3)) (
+  iscc = (m1 & 0xF0) == 0xB0;
+  ours = iscc && (m2 == slider1 || m2 == slider1 + 32);
+  ours ? (
+    m2 == slider1 ? (
+      slider2 = m3 / 127;
+      slider4 += 1;
+      pos = blk + ofs;
+      lastpos >= 0 ? (
+        gapms = (pos - lastpos) * 1000 / srate;
+        gapms > slider3 ? slider3 = gapms;
+      );
+      lastpos = pos;
+    );
+    // designated lane is consumed: never reaches receivers
+  ) : midisend(ofs, m1, m2, m3);
+);
+sliderchange(slider2);

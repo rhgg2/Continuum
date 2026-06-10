@@ -1,0 +1,18 @@
+desc:Continuum CV spike - CC to audio CV converter (take FX)
+
+slider1:21<0,31,1>MSB lane
+slider2:0<0,1,0.0001>value (monitor)
+
+in_pin:none
+out_pin:cv out
+
+@block
+while (midirecv(ofs, m1, m2, m3)) (
+  ours = ((m1 & 0xF0) == 0xB0) && (m2 == slider1 || m2 == slider1 + 32);
+  ours ? (
+    m2 == slider1 ? slider2 = m3 / 127;
+  ) : midisend(ofs, m1, m2, m3);
+);
+
+@sample
+spl0 = slider2;

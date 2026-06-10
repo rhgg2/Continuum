@@ -1,0 +1,23 @@
+desc:Continuum CV spike - downstream MIDI meter
+
+slider1:20<0,127,1>watched lane
+slider2:0<0,1000000,1>watched count (expect 0 after strip)
+slider3:0<0,1000000,1>bank select count (cc0+cc32)
+slider4:0<0,1000000,1>other cc count
+slider5:0<0,1000000,1>note-on count
+
+in_pin:none
+out_pin:none
+
+@block
+while (midirecv(ofs, m1, m2, m3)) (
+  st = m1 & 0xF0;
+  st == 0xB0 ? (
+    (m2 == slider1 || m2 == slider1 + 32) ? slider2 += 1 :
+    (m2 == 0 || m2 == 32)                 ? slider3 += 1 :
+                                            slider4 += 1;
+  ) : (
+    (st == 0x90 && m3 > 0) ? slider5 += 1;
+  );
+  midisend(ofs, m1, m2, m3);
+);

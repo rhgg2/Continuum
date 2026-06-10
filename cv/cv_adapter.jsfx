@@ -1,0 +1,14 @@
+desc:Continuum CV spike - CV audio to slider (plink source)
+
+slider1:0<0,1,0.0001>value (plink source)
+
+in_pin:cv in
+out_pin:none
+
+@sample
+cur = spl0;
+
+@block
+// @block runs before @sample within a block: slider lags one block by design
+slider1 = cur;
+sliderchange(slider1);

@@ -7,7 +7,9 @@
 > applier, live recompile, merge CU) and only states the deltas.
 
 Cross-cutting reference for the **cv page**: a node graph, parallel to
-wiring, whose subject is modulation rather than audio routing. The
+wiring, whose subject is modulation rather than audio routing. Also
+carries the **simple layer** — direct parameter automation with no
+graph — which lands first and degenerates cleanly into cv. The
 fourth page rung. Where wiring composes the audio/MIDI signal path, cv
 composes a **control-voltage graph** — sources of modulation flow
 through signal processors and land on parameters.
@@ -108,6 +110,69 @@ Two REAPER facts shape this:
   to these adapters via sends. **This assumption gates the topology and
   is the first thing the spike verifies** (see below).
 
+## The simple layer: direct parameter automation
+
+cv's graph is overkill for "this column drives that cutoff". The
+simple layer covers **same-track, performance-bound** parameter
+automation with no graph, no routing, and no audio-rate CV — and it
+lands before any cv code exists.
+
+**Model.** Automation is authored as CC events inline in the
+performance take — same grid as the notes, so swing, copy/paste, and
+pooling come free, and the data is performance-bound by construction.
+A fixed utility JSFX at the head of the track's chain (the **cc
+feed**) consumes the designated lanes — strips them from the MIDI
+stream — and exposes each as a slider; each binding is an ordinary
+same-track plink from that slider to the target parameter.
+
+**Why stripped, why not plink-from-MIDI.** Inline CC flows into the
+instrument and every MIDI receiver on the channel, and which lanes a
+given synth responds to is unknowable from outside. Stripping
+dissolves the collision instead of managing it: a lane that never
+reaches a receiver is free by definition, so allocation is purely
+internal (14-bit pairs included). It also avoids the underdocumented
+`plink.midi_*` path — slider→param plink is the exact mechanism the
+cv sinks already bank on.
+
+**Degenerate cv.** The cc feed is cv's converter + adapter fused into
+one same-track FX, minus the audio-rate leg. Promoting a binding to
+the cv graph replaces "strip to slider" with "strip to CV channel";
+the authored data does not move. Standing and cross-track automation
+are out of scope here — they are cv's.
+
+**Binding shape** (cm take tier, sibling of `extraColumns`):
+
+```lua
+paramAutomation = {
+  [chan] = {
+    [lane] = {
+      fxGuid = '{...}',  -- target FX; resolved to plink.effect index at apply
+      param  = number,   -- target parameter index
+      scale  = number,
+      offset = number,
+      label  = 'Cutoff', -- column header
+    },
+  },
+}
+```
+
+**Applier.** A small idempotent driver — no graph, no realizer: on
+take bind and on binding change, ensure the cc feed sits at chain
+head, assign feed sliders, resolve `fxGuid` → FX index, and write the
+plink config parms. When the shared realizer later grows
+`setParamLink`, this folds into the same op so one code path writes
+links.
+
+**Tracker view.** The gesture is parameter-first: an "automate
+parameter" command opens a picker over the track's FX chain
+parameters; the manager allocates an internal lane, adds a CC column
+(existing extraColumns machinery, unchanged), and writes the binding.
+The column header shows the parameter label, never the lane number.
+
+**Arrange view.** Nothing. Inline data moves, duplicates, and dies
+with the clip — performance-bound semantics fall out of the data
+location.
+
 ## Relationship to wiring: the shared realizer
 
 cv and wiring are the same machine above a seam, and different machines
@@ -162,23 +227,56 @@ without breaking PDC. Not in the first build.
 
 ### Phases (strict order)
 
-1. **Spike — verify the two REAPER unknowns before committing any
+1. **Spike — verify the REAPER unknowns before committing any
    architecture.** Hand-build a one-track chain: a 14-bit-CC MIDI item
    → converter take FX (CC → audio CV) → send → a processor JSFX →
    send → adapter slider → `plink` → a real parameter. Confirm:
    - `plink` is same-track-only (decides per-destination adapters);
    - the live chain works end to end at acceptable block-rate latency.
-   If either fails, the architecture shifts. Cheapest possible learning;
+   Plus the simple layer's unknowns, on the same bench:
+   - slider plink keying: `plink.effect` is an index — does the link
+     survive FX reordering, or does the applier re-point via guid?
+   - CC shape curves reach a JSFX as a usefully dense event stream
+     during playback, not just at authored points;
+   - a head-of-chain JSFX stripping lanes leaves the rest of the
+     stream intact (bank select, NRPN neighbours, running status).
+   If any fails, the architecture shifts. Cheapest possible learning;
    no code architecture is committed until it passes.
 
-2. **Wiring refactor toward the shared realizer.** Extract the realizer
+   **Results (2026-06-10; `tests/spike_cv.lua` + `cv/*.jsfx`) — all
+   green, architecture stands:**
+   - same-track-only confirmed at API-shape level: `param.X.plink.*`
+     has no track addressing (`effect` = same-chain index, −100 =
+     MIDI). Per-destination adapters stand.
+   - both legs live and responsive by ear: inline (feed slider →
+     plink) and cv (CC take FX → send → adapter → plink). A plink
+     source *later* in the chain than its target works. (Processor
+     leg omitted — JSFX-processes-audio is not an unknown.)
+   - a JSFX slider assigned in `@block` is a valid plink source; no
+     `slider_automate` needed.
+   - strip: designated lane fully consumed; bank select, other CC,
+     and notes pass untouched.
+   - density: REAPER renders interpolated CC between shaped points at
+     ~25 ms grain; constant-value spans emit nothing (plink holds the
+     last value).
+   - reorder: REAPER's plink remap is unreliable — it followed one
+     move, then read stale after the reverse, leaving the link
+     pointing at the wrong FX. Treat `plink.effect` as index-keyed:
+     store bindings by FX GUID and re-point on every reconcile.
+
+2. **Simple layer.** The cc feed JSFX, the `paramAutomation` binding
+   store, the applier, and the tracker "automate parameter" gesture.
+   No realizer dependency — lands before the wiring refactor and
+   ships user value while the refactor is in flight.
+
+3. **Wiring refactor toward the shared realizer.** Extract the realizer
    beneath the `targetTracks` seam; lift master/source/`ext_midi_bus`
    specifics into a wiring-only compiler; add `setParamLink` to the
    shared op vocabulary. Wiring behaviour is unchanged and its specs
    stay green — this is pure concern-separation, and it is the bulk of
    the risk, so it lands and is verified before any cv code exists.
 
-3. **Build the cv page on the realizer.** `cvManager` / `cvView` /
+4. **Build the cv page on the realizer.** `cvManager` / `cvView` /
    `cvPage` plus the cv compiler. Node taxonomy, plink sinks
    (per-destination adapters), CC-take sources with the two homes, and
    the central graph host.
@@ -249,12 +347,19 @@ destination track, carrying the `plink` source slider.
 
 ### Open questions / risks
 
-- **plink same-track-only** — gates per-destination adapters (spike).
-- **Live-chain latency** — whether CC→CV→processors→adapter→plink is
-  responsive enough to play to (spike).
 - **Exact seam shape** — the `targetTracks` carve is the intended seam,
   but the precise division (does `allocate` move below it untouched? does
   master-feed normalize to an out-wire?) settles while doing the wiring
   refactor, informed by what the spike validated.
 - **CC sink mechanics** — writing 14-bit CC back into a lane from a graph
   terminal is sketched but not designed; lowest-priority sink.
+- **Simple-layer resolution** — source stream is ~25 ms grain at 7-bit
+  (spike); judge zipper at the parameter by ear on slow sweeps.
+  Internal lanes are free, so escalating to 14-bit MSB/LSB pairs is
+  cheap if it's audible.
+- **Internal lane allocation** — designated lanes must dodge lanes the
+  user authors deliberately for external receivers (plain CC columns in
+  the same take); the binding map is the registry.
+- **Promote-to-CV mechanics** — the gesture that lifts a binding into a
+  source→sink node pair on the cv page; data stays put, only the
+  realization changes.
