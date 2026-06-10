@@ -36,9 +36,9 @@ local CU_IDENT = 'JS:Continuum Utility'
 -- fans out to a CU cascade; see docs/DAG.md § per-consumer merge.
 local MERGE_WIDTH = 16
 
--- Per-track stream capacity: 64 audio pairs, 127 MIDI buses — REAPER's 128
--- minus bus 127, reserved as the bracket parking bus (see docs/DAG.md § allocate).
-local CAPACITY = { audio = 64, midi = 127 }
+-- Per-track stream capacity: 64 audio pairs, 126 MIDI buses — REAPER's 128 minus bus 127
+-- (bracket parking, docs/DAG.md § allocate) and bus 126 (param-automation CC propagation).
+local CAPACITY = { audio = 64, midi = 126 }
 local PARK_BUS = 127
 
 -- Stable trackKey for the master-hosted class: the REAPER master carries no

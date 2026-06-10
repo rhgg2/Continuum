@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=59  sha=faad93e  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=62  sha=72da7bd  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -14,37 +14,38 @@
   @construct wr = util.instantiate('wiringRender')  @ 27
 
 # Private state
-  @state wp = {}  @ 34
+  @state wp = {}  @ 37
 
 # Public API (wp:*)
   -- Page lifecycle — wiring is project-wide, so bind takes no take
-  @api wp:bind()  @ 41
+  @api wp:bind()  @ 44
       @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
-  @api wp:unbind()  @ 42
-  @api wp:enableLive()  @ 45
+  @api wp:unbind()  @ 45
+  @api wp:enableLive()  @ 48
       @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
-  @api wp:tick()  @ 48
+  @api wp:tick()  @ 51
       @contract  per-frame heartbeat — rm:pollUndo (scratch + fx-meta). Always-on, any active page.
-  @api wp:syncExternal()  @ 51
+  @api wp:syncExternal()  @ 54
       @contract  reread the graph when REAPER routing changed under us; active page only (coord-gated)
   -- Page interface — render delegates to the renderer
-  @api wp:renderToolbarBits(ctx)  @ 54
-  @api wp:renderBody(ctx, w, h, dispatch)  @ 55
-  @api wp:renderStatusBar(ctx)  @ 56
-  @api wp:focusState()  @ 57
+  @api wp:renderToolbarBits(ctx)  @ 57
+  @api wp:renderBody(ctx, w, h, dispatch)  @ 58
+  @api wp:renderStatusBar(ctx)  @ 59
+  @api wp:focusState()  @ 60
 
 # Uses (outbound edges)
   @use call    facade.publish  @ 32
-  @use call    routingManager.pollUndo  @ 48
+  @use call    routingManager.pollUndo  @ 51
   @use call    util.instantiate  @ 23, 24, 25, 27
-  @use call    wiringManager.isWiringOwnedTrack  @ 32
-  @use call    wiringRender.closeTransients  @ 42
-  @use call    wiringRender.focusState  @ 57
-  @use call    wiringRender.renderBody  @ 55
-  @use call    wiringRender.renderStatusBar  @ 56
-  @use call    wiringRender.renderToolbarBits  @ 54
-  @use call    wiringView.enableLive  @ 45
-  @use call    wiringView.syncExternal  @ 51
+  @use call    wiringManager.isWiringOwnedTrack  @ 33
+  @use call    wiringManager.paramTargets  @ 34
+  @use call    wiringRender.closeTransients  @ 45
+  @use call    wiringRender.focusState  @ 60
+  @use call    wiringRender.renderBody  @ 58
+  @use call    wiringRender.renderStatusBar  @ 59
+  @use call    wiringRender.renderToolbarBits  @ 57
+  @use call    wiringView.enableLive  @ 48
+  @use call    wiringView.syncExternal  @ 54
   @use require routingManager  @ 23
   @use require util  @ 12
   @use require wiringManager  @ 24

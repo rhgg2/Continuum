@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1525  sha=f49c39b  mode=namespace
+@module DAG  src=DAG.lua  loc=1525  sha=986bc78  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate is pure; derivations live on M.compile's ctx
@@ -34,7 +34,7 @@
 # Module-level constants
   @const CU_IDENT = 'JS:Continuum Utility'  @ 34
   @const MERGE_WIDTH = 16  @ 37
-  @const CAPACITY = { audio = 64, midi = 127 }  @ 41
+  @const CAPACITY = { audio = 64, midi = 126 }  @ 41
   @const PARK_BUS = 127  @ 42
   @const MASTER = '__master__'  @ 46
   @const M = {}  @ 48

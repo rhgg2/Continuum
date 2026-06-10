@@ -38,6 +38,8 @@ local refreshStateTrack   -- assigned below; used by createSourceTrack/instantia
 
 local SCRATCH_KEY = '__scratch__'  -- scratch's logical trackKey; its guid is rm-owned
 local CU_IDENT    = 'JS:Continuum Utility'
+local CC_IDENT    = 'JS:Continuum CC'  -- paramAutomation's node — invisible to read/diff/apply
+local AUTO_BUS    = 126                -- its CC-propagation bus; sends on it aren't wiring's
 
 local function isJS(ident)
   return ident ~= nil and ident:sub(1, 3) == 'JS:'
@@ -356,6 +358,69 @@ function wm:showFxWindow(fxId)
   return rm:showFx(fxId)
 end
 
+--contract: fx rows in sourceTrack's cone, flow order: midi-cone (generator=true) first, then audio
+--contract: row = { fxGuid, name, trackGuid, generator? }; {} when sourceTrack isn't a graph node
+function wm:paramTargets(sourceTrack)
+  local sourceId = sourceTrack and reaper.GetTrackGUID(sourceTrack)
+  local g = self:viewGraph()
+  if not (sourceId and g.nodes[sourceId]) then return {} end
+
+  local forward, forwardMidi = {}, {}
+  for _, e in ipairs(g.edges) do
+    util.bucket(forward, e.from, e.to)
+    if e.type == 'midi' then util.bucket(forwardMidi, e.from, e.to) end
+  end
+
+  local function reachable(adj)
+    local seen, queue, i = { [sourceId] = true }, { sourceId }, 1
+    while queue[i] do
+      for _, to in ipairs(adj[queue[i]] or {}) do
+        if not seen[to] then seen[to] = true; util.add(queue, to) end
+      end
+      i = i + 1
+    end
+    return seen
+  end
+  local cone, midiCone = reachable(forward), reachable(forwardMidi)
+
+  -- Kahn restricted to the cone for flow order; sorted ready keeps parallel branches deterministic.
+  -- Feedback-quarantined members never drain to indegree 0 and drop out — they aren't bindable.
+  local indeg = {}
+  for id in pairs(cone) do indeg[id] = 0 end
+  for _, e in ipairs(g.edges) do
+    if cone[e.from] and cone[e.to] then indeg[e.to] = indeg[e.to] + 1 end
+  end
+  local ready, order = {}, {}
+  for id in pairs(cone) do if indeg[id] == 0 then util.add(ready, id) end end
+  while #ready > 0 do
+    table.sort(ready)
+    local id = table.remove(ready, 1)
+    util.add(order, id)
+    for _, to in ipairs(forward[id] or {}) do
+      if cone[to] then
+        indeg[to] = indeg[to] - 1
+        if indeg[to] == 0 then util.add(ready, to) end
+      end
+    end
+  end
+
+  local generators, audioFx = {}, {}
+  for _, id in ipairs(order) do
+    local node = g.nodes[id]
+    if node.kind == 'fx' then
+      local track = self:fxTrack(id)
+      if track then
+        local row = { fxGuid = id, name = node.fxDisplay or node.fxIdent,
+                      trackGuid = reaper.GetTrackGUID(track) }
+        if midiCone[id] then row.generator = true; util.add(generators, row)
+        else util.add(audioFx, row) end
+      end
+    end
+  end
+  for _, row in ipairs(audioFx) do util.add(generators, row) end
+  return generators
+end
+
 --contract: appends a source track via rm and returns its id; called outside mutate.
 -- snapshot derives source identity from graph source nodes, not a tag. see docs/wiringManager.md § createSourceTrack
 function wm:createSourceTrack(opts)
@@ -564,21 +629,24 @@ local function snapFx(fx)
   return entry
 end
 
--- Every fx on a managed track is wm's (whole-track-set quarantine), so surface the full chain —
--- the differ's full-replace removes any the graph no longer wants.
+-- Every fx on a managed track is wm's (whole-track-set quarantine): surface the full chain so the
+-- differ's full-replace can prune — except paramAutomation's CC node, hidden from read and diff.
 local function snapFxList(fxList)
   local out = {}
-  for _, fx in ipairs(fxList) do util.add(out, snapFx(fx)) end
+  for _, fx in ipairs(fxList) do
+    if fx.ident ~= CC_IDENT then util.add(out, snapFx(fx)) end
+  end
   return out
 end
 
 -- Sends to a managed dst only, re-keyed .to guid→trackKey via the caller's map; midi gain dropped
--- (only audio sends carry a written D_VOL).
+-- (only audio sends carry a written D_VOL). paramAutomation's bus-126 sends aren't wiring's: hidden.
 local function ownedSends(sendList, keyByGuid)
   local out = {}
   for _, s in ipairs(sendList) do
     local key = keyByGuid[s.to]
-    if key then
+    local automation = s.kind == 'midi' and s.srcChan == AUTO_BUS
+    if key and not automation then
       util.add(out, { to = key, kind = s.kind,
                       gain = s.kind == 'audio' and s.gain or nil,
                       srcChan = s.srcChan, dstChan = s.dstChan, pos = s.pos })
@@ -1256,9 +1324,19 @@ end
 -- live chain is wm's working set: live fx absent from target are deleted, id-less bridges minted.
 local function reconcileFXChain(trackId, target, owners)
   local dirty = false
-  -- Structural reasoning needs only the ordered live fx ids, not the chunk — rm:fxIds reads
-  -- them via TrackFX, no GetTrackStateChunk to parse and discard.
-  local function liveChain() return rm:fxIds(trackId) or {} end
+  -- Structural reasoning needs only ordered live fx ids — no chunk read. paramAutomation's
+  -- head-pinned CC node is filtered out; `pinned` offsets absolute indices past it below.
+  local pinned = 0
+  local function liveChain()
+    local ids, identById = rm:fxIds(trackId)
+    local out = {}
+    pinned = 0
+    for _, fxId in ipairs(ids or {}) do
+      if identById[fxId] == CC_IDENT then pinned = pinned + 1
+      else util.add(out, fxId) end
+    end
+    return out
+  end
   local chain = liveChain()
 
   -- Stale-id sweep: a target entry whose id isn't live in REAPER (a retracted CU
@@ -1285,7 +1363,7 @@ local function reconcileFXChain(trackId, target, owners)
   --    rm:addFx appends and returns the minted id.
   for _, t in ipairs(target) do
     if not t.id then
-      local fxId = rm:addFx(trackId, { ident = t.ident, index = #chain })
+      local fxId = rm:addFx(trackId, { ident = t.ident, index = #chain + pinned })
       t.id = fxId
       stampOrigin(t.origin, fxId)
       dirty = true
@@ -1293,8 +1371,8 @@ local function reconcileFXChain(trackId, target, owners)
     end
   end
 
-  -- 3. Permute to target order via rm:assignFx{index}; the whole chain is owned and
-  --    contiguous from slot 0, so target slot d fixes at abs idx d-1.
+  -- 3. Permute to target order via rm:assignFx{index}; the owned chain is contiguous
+  --    past the pinned CC head, so target slot d fixes at abs idx d-1+pinned.
   chain = liveChain()
   for d = 1, #target do
     if chain[d] ~= target[d].id then
@@ -1302,7 +1380,7 @@ local function reconcileFXChain(trackId, target, owners)
       for j = d + 1, #chain do
         if chain[j] == target[d].id then fromIdx = j; break end
       end
-      rm:assignFx(target[d].id, { index = d - 1 })
+      rm:assignFx(target[d].id, { index = d - 1 + pinned })
       local moved = chain[fromIdx]
       table.remove(chain, fromIdx)
       table.insert(chain, d, moved)

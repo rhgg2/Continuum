@@ -373,6 +373,10 @@ end
 local SENDMODE_TO_POS = { [0] = 'postFader', [1] = 'preFx', [3] = 'preFader' }
 local POS_TO_SENDMODE = { postFader = 0, preFx = 1, preFader = 3 }
 
+-- paramAutomation's CC-propagation bus; its midi sends (src bus 126) are not wiring's
+-- to manage — reconcileSends must never drop them.
+local AUTO_BUS = 126
+
 -- A send is midi-only iff its audio source is disabled (I_SRCCHAN == -1);
 -- anything else (audio-only, or a dual-stream send) reads as 'audio'.
 local function sendKind(track, sendIdx)
@@ -444,7 +448,12 @@ end
 local function reconcileSends(track, sends)
   local current = {}
   for i = 0, reaper.GetTrackNumSends(track, 0) - 1 do
-    current[sendKey(readSend(track, i))] = i
+    local send = readSend(track, i)
+    -- Automation sends stay out of `current`: absent from `wanted` but present here,
+    -- the full-replace would otherwise drop them.
+    if not (send.kind == 'midi' and send.srcChan == AUTO_BUS) then
+      current[sendKey(send)] = i
+    end
   end
   local wanted = {}
   for _, s in ipairs(sends) do
@@ -685,14 +694,17 @@ function rm:track(id)
 end
 
 --contract: ordered live fx ids for a track via TrackFX — no chunk read; nil if the id is gone
+--contract: second return: { [id] = ident } over the same chain
 function rm:fxIds(id)
   local track = locateTrack(id)
   if not track then return nil end
-  local out = {}
+  local ids, identById = {}, {}
   for i = 0, reaper.TrackFX_GetCount(track) - 1 do
-    util.add(out, reaper.TrackFX_GetFXGUID(track, i))
+    local fxId = reaper.TrackFX_GetFXGUID(track, i)
+    util.add(ids, fxId)
+    identById[fxId] = fxIdentAt(track, i, fxTypeAt(track, i))
   end
-  return out
+  return ids, identById
 end
 
 --contract: raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone
