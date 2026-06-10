@@ -195,3 +195,22 @@ along-bar axis `a`; the bar is ⟂ the normal):
 v1 warts: dragging a bussed source tag is inert (the copy's slot is derived, not
 `fromOffset`); a node pair carrying both a bussed and a non-bussed wire gets a
 small slot-offset gap. Both are noted for the deferred reposition work.
+
+### Bus creation
+
+The *Add input/output bus* node-menu items arm `busOverlay = {nodeId, dir}` — a
+modal port-selector that, while live, owns the mouse (the normal mousedown
+precedence chain is gated off). It draws the node's audio ports for that
+direction as grab handles on a fixed face (in→top, out→bottom — the grab spot,
+*not* the eventual side); ports already on a same-direction bus render
+stroke-only and inert. Pressing a free handle arms `busDraft`; the side is then
+the **quadrant of the cursor from the node centre**, recomputed each frame, so
+swinging around the node continuously re-sides the rail.
+
+The live comb preview reuses the Phase-2 render untouched: each frame a
+synthetic bus is appended to the transient `nodeView.busses` (a copy — the alias
+points at the cached clone) and the wires it would claim get their `.bus` stamped,
+so `busSegments`/`drawBusPass` draw the real rail before commit. Release calls
+`wv:addBus` and the next frame renders it from the graph; the preview and
+committed frames are geometrically identical, so there's no flicker. Esc or a
+backdrop click (overlay only) cancels.
