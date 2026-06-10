@@ -160,6 +160,7 @@ local specs = {
   'wv_authoring_spec',
   'wv_activate_spec',
   'wv_edge_gain_spec',
+  'wv_bus_spec',
   'wp_smoke_spec',
   'painter_spec',
   'curveEditor_spec',

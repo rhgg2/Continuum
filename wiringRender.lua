@@ -78,6 +78,19 @@ local STUB_LEN  = 40    -- visible stub length: consumer rect edge to the tag pa
 local TAG_VIS_H = 0.62  -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
 local TAG_MAX_W = (NODE_W - 2 * LABEL_PAD) * WIRE_LABEL_SIZE / wireSize  -- node label width scaled by the font ratio: the tag is a shrunk node box
 local SOURCE_TAG_PAD = 3  -- bg-patch padding around the source tag's glyphs (the patch occludes the wire behind them)
+local BUS_BASE      = 44   -- gap from node rect edge to the rail bar (first bus on a side)
+local BUS_STACK_GAP = 28   -- extra gap per additional same-side bus, so stacked rails don't overlap
+local BUS_TAP_LEN   = 34   -- visible length of a source copy's orthogonal tap off the bar
+local BUS_TAP_GAP   = 22   -- spacing between source-copy taps along the bar
+local BUS_BAR_PAD   = 8    -- bar overhang past its outermost tap
+local BUS_BAR_THICK = 4    -- rail bar stroke width
+-- side → outward normal (n) + along-bar axis (a); the bar is ⟂ the normal.
+local SIDE_VEC = {
+  L = { nx = -1, ny = 0, ax = 0, ay = 1 },
+  R = { nx =  1, ny = 0, ax = 0, ay = 1 },
+  T = { nx =  0, ny = -1, ax = 1, ay = 0 },
+  B = { nx =  0, ny =  1, ax = 1, ay = 0 },
+}
 
 -- Palette pane geometry, mirroring arrangePage's body split.
 local PALETTE_W  = 200
@@ -933,7 +946,7 @@ local function wireSegments(wireViews, nodesById)
         local n = #g.wires
         for slotI, w in ipairs(g.wires) do
           local fromNV, toNV = nodesById[w.from], nodesById[w.to]
-          if fromNV and toNV then
+          if fromNV and toNV and not w.bus then
             local s = wireOffset(slotI, n)
 
             local offX, offY = perpX * s, perpY * s
@@ -1028,7 +1041,7 @@ local function drawWiresPass(p, segs, wireViews, opts)
       local ex, ey = seg.ex, seg.ey
       local name = w.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
       p.line(sx, sy, ex, ey, name, WIRE_THICK)
-      drawWireArrow(p, sx, sy, ex, ey, name, seg.cx, seg.cy)
+      if not seg.tap then drawWireArrow(p, sx, sy, ex, ey, name, seg.cx, seg.cy) end
       if w.type == 'audio' then
         local fromD, toD, segLen = wireExits(seg)
         if fromD then
@@ -1224,7 +1237,7 @@ local function sourceSegments(p, wireViews, nodesById, segs)
   local idxOf, byConsumer, order = {}, {}, {}
   for i, w in ipairs(wireViews) do idxOf[w] = i end
   for _, w in ipairs(wireViews) do
-    if w.fromKind == 'source' then
+    if w.fromKind == 'source' and not w.bus then
       local g = byConsumer[w.to]
       if not g then g = {}; byConsumer[w.to] = g; util.add(order, w.to) end
       util.add(g, w)
@@ -1265,6 +1278,105 @@ local function sourceSegments(p, wireViews, nodesById, segs)
         }
       end
     end
+  end
+end
+
+-- Rank of bus `idx` among same-side busses on the node — sets its rail's
+-- distance from the body so stacked rails don't overlap.
+local function sameSideRank(busses, idx, side)
+  local rank = 0
+  for i = 1, idx - 1 do
+    if busses[i].side == side then rank = rank + 1 end
+  end
+  return rank
+end
+
+-- Bussed edges render as a rail (bar + comb taps + one arrowed trunk), not a star.
+-- see docs/wiringPage.md § Bus rail geometry
+local function busSegments(p, wireViews, nodesById, segs, busRails)
+  local idxOf, groups, order = {}, {}, {}
+  for i, w in ipairs(wireViews) do idxOf[w] = i end
+  for _, w in ipairs(wireViews) do
+    if w.bus then
+      local key = w.bus.nodeId .. '#' .. w.bus.busIdx
+      local g = groups[key]
+      if not g then
+        g = { nodeId = w.bus.nodeId, busIdx = w.bus.busIdx, edges = {} }
+        groups[key] = g; util.add(order, key)
+      end
+      util.add(g.edges, w)
+    end
+  end
+  for _, key in ipairs(order) do
+    local grp  = groups[key]
+    local node = nodesById[grp.nodeId]
+    local bus  = node and node.busses and node.busses[grp.busIdx]
+    if node and bus and SIDE_VEC[bus.side] then
+      local sv      = SIDE_VEC[bus.side]
+      local half    = (sv.nx ~= 0) and NODE_W / 2 or NODE_H / 2
+      local barDist = half + BUS_BASE + sameSideRank(node.busses, grp.busIdx, bus.side) * BUS_STACK_GAP
+      local bcx     = node.pos.x + sv.nx * barDist
+      local bcy     = node.pos.y + sv.ny * barDist
+
+      local sourceN = 0
+      for _, w in ipairs(grp.edges) do
+        local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
+        if not nodesById[farId] then sourceN = sourceN + 1 end
+      end
+
+      local si, tMin, tMax = 0, math.huge, -math.huge
+      for _, w in ipairs(grp.edges) do
+        local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
+        local far   = nodesById[farId]
+        local t, sx, sy, fhw, fhh
+        if far then
+          t      = (far.pos.x - bcx) * sv.ax + (far.pos.y - bcy) * sv.ay
+          sx, sy = far.pos.x, far.pos.y
+        else
+          t = (si - (sourceN - 1) / 2) * BUS_TAP_GAP
+          si = si + 1
+          local _, thw, thh = sourceTagLayout(p, w.fromLabel or 'source')
+          fhw, fhh = thw, thh
+          local out = BUS_TAP_LEN + ((sv.nx ~= 0) and thw or thh)
+          sx = bcx + sv.ax * t + sv.nx * out
+          sy = bcy + sv.ay * t + sv.ny * out
+        end
+        local lx, ly = bcx + sv.ax * t, bcy + sv.ay * t
+        segs[idxOf[w]] = {
+          w = w, tap = true,
+          sx = sx, sy = sy, ex = lx, ey = ly,
+          fromHW = fhw, fromHH = fhh,
+          toHW = 0, toHH = 0,
+        }
+        tMin, tMax = math.min(tMin, t), math.max(tMax, t)
+      end
+      if tMin > tMax then tMin, tMax = 0, 0 end
+
+      local nex, ney = node.pos.x + sv.nx * half, node.pos.y + sv.ny * half
+      local trunk
+      if bus.dir == 'in' then
+        trunk = { sx = bcx, sy = bcy, ex = nex, ey = ney }
+      else
+        trunk = { sx = nex, sy = ney, ex = bcx, ey = bcy }
+      end
+      util.add(busRails, {
+        bar = { x0 = bcx + sv.ax * (tMin - BUS_BAR_PAD), y0 = bcy + sv.ay * (tMin - BUS_BAR_PAD),
+                x1 = bcx + sv.ax * (tMax + BUS_BAR_PAD), y1 = bcy + sv.ay * (tMax + BUS_BAR_PAD) },
+        trunk = trunk,
+      })
+    end
+  end
+end
+
+-- Rail bar + the one arrowed trunk, drawn over the tap landings (the bar
+-- occludes them like a source tag's patch occludes its wire). v1 is audio-only.
+local function drawBusPass(p, busRails)
+  for _, r in ipairs(busRails) do
+    local name = 'wiring.port.audio'
+    p.line(r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1, name, BUS_BAR_THICK)
+    local t = r.trunk
+    p.line(t.sx, t.sy, t.ex, t.ey, name, WIRE_THICK)
+    drawWireArrow(p, t.sx, t.sy, t.ex, t.ey, name, (t.sx + t.ex) / 2, (t.sy + t.ey) / 2)
   end
 end
 
@@ -1381,6 +1493,8 @@ local function renderCanvas(w, h)
   local wireViewsList = wv:wireViews()
   local segs = wireSegments(wireViewsList, nodesById)
   sourceSegments(p, wireViewsList, nodesById, segs)
+  local busRails = {}
+  busSegments(p, wireViewsList, nodesById, segs, busRails)
   -- A live tag drag overrides its seg's source end so geometry below (and the
   -- stamped midpoint) follow the cursor; mouseup commits the pos.
   if tagDrag and segs[tagDrag.edgeIdx] then
@@ -1487,6 +1601,7 @@ local function renderCanvas(w, h)
       drawSourceTag(p, seg.sx, seg.sy, seg.w.fromLabel or 'source')
     end
   end
+  drawBusPass(p, busRails)
   for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
   drawDraftWire(p, wireDraft, nodesById, draftCx, draftCy)
   for _, nv in ipairs(nodeViews) do
@@ -1868,6 +1983,13 @@ local function renderCanvas(w, h)
       if ImGui.Selectable(ctx, 'Delete node') then
         wv:deleteNode(nodeMenu.nodeId)
         ImGui.CloseCurrentPopup(ctx)
+      end
+      local menuNode = nodesById[nodeMenu.nodeId]
+      for idx, bus in ipairs(menuNode and menuNode.busses or {}) do
+        if ImGui.Selectable(ctx, 'Remove ' .. (bus.dir == 'in' and 'input' or 'output') .. ' bus') then
+          wv:removeBus(nodeMenu.nodeId, idx)
+          ImGui.CloseCurrentPopup(ctx)
+        end
       end
       if not ImGui.IsWindowAppearing(ctx) then
         local wx, wy = ImGui.GetWindowPos(ctx)

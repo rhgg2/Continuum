@@ -43,6 +43,16 @@ This split mirrors `arrangeView` / `arrangePage` and `trackerView` /
 `trackerPage`: the page is the render + input surface; the view is
 the manager-facing state.
 
+## wireView shape
+
+`fromPort`/`toPort` are 1-based and always present. `fromPortName`/`toPortName`
+are nil when the port has been trimmed off the node since the edge was recorded.
+`fromOffset` is a custom-dragged source tag's position relative to its consumer
+node, so the tag rides node moves without a separate update. `bus` is set on
+audio edges where a bus on either endpoint claims the port; `bussedEnd` names
+which end is bussed (`'to'` for an in-bus on the destination node, `'from'` for
+an out-bus on the source node).
+
 ## wireView fromKind/fromLabel
 
 `fromKind` and `fromLabel` mirror the from-node's kind and label onto

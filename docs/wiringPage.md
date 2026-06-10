@@ -157,3 +157,41 @@ The canvas is a strict z-stack, and several effects depend on the order:
 Wire geometry (`segs`) is built once and shared by the draw pass and every
 hit-test, so highlight and label placement can never drift from the drawn
 line.
+
+## Bus rail geometry
+
+A bus is an explicit, user-authored decoration on a node (`node.busses`,
+port-scoped) that renders one port's many edges as a **rail** instead of a
+star: a bar on one side of the node, the edges meeting it as orthogonal comb
+taps, and the many taps collapsing to **one arrowed trunk** into the node. The
+many-to-one collapse at the trunk is the decongestion — N radial arrowed lines
+become N short taps plus one arrowed trunk. The design rationale (why explicit,
+why a bus and not a mixer) lives in `design/wiring-busses.md`.
+
+`wv:wireViews()` stamps each claimed edge with `bus = { nodeId, busIdx,
+bussedEnd }`; `busSegments` owns those edges (the normal `wireSegments` /
+`sourceSegments` passes skip them) and `drawBusPass` strokes the bar + trunk.
+
+Geometry, per bus (`SIDE_VEC` maps `side` to the outward normal `n` and the
+along-bar axis `a`; the bar is ⟂ the normal):
+
+- **Bar distance** from the body is `half + BUS_BASE + rank·BUS_STACK_GAP`,
+  where `rank` is the bus's position among same-side busses — so stacked rails
+  don't overlap. The bar's centre sits on the node's centre line projected out
+  along the normal.
+- **Each tap lands orthogonally.** A real far-end node lands at its *projection*
+  onto the bar (the wire from its position to the projection is purely along the
+  normal, hence ⟂ the bar). A **source** far-end has no body — each of its edges
+  is a positioned copy, so it stands off the bar by `BUS_TAP_LEN` (plus its tag
+  patch extent) at an evenly-spaced slot, and the existing source-tag pass draws
+  its label at that outer end. Tap segs are normal `segs` (so the per-tap fader,
+  RMB-delete, end-hit, and highlight all work unchanged) but flagged `tap` so
+  `drawWiresPass` suppresses their radial arrow — the trunk carries the one arrow.
+- **The bar spans its taps** (`min..max` of their along-axis coordinate, plus
+  `BUS_BAR_PAD`). Length was never stored, so add/remove grow and shrink it free.
+- **The trunk** runs from the bar centre to the node edge along the normal; its
+  arrow follows `dir` (into the node for an in-bus, out for an out-bus).
+
+v1 warts: dragging a bussed source tag is inert (the copy's slot is derived, not
+`fromOffset`); a node pair carrying both a bussed and a non-bussed wire gets a
+small slot-offset gap. Both are noted for the deferred reposition work.

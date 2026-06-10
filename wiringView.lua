@@ -303,7 +303,21 @@ function wv:nodeViews()
   return out
 end
 
---shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'fx'|'master', fromLabel, fromOffset={x,y}? } — ports 1-based, always present; names nil if the port was trimmed; fromOffset is a custom-dragged source tag's pos relative to its consumer (so it rides node moves)
+-- Bus claims indexed by the bussed end's port: an in-bus owns edges where its
+-- node is `to`, an out-bus where `from`. Audio only (v1). [dir][nodeId][port]=busIdx.
+local function busClaims(g)
+  local claim = { ['in'] = {}, out = {} }
+  for nodeId, node in pairs(g.nodes) do
+    for busIdx, bus in ipairs(node.busses or {}) do
+      local byNode = claim[bus.dir][nodeId]
+      if not byNode then byNode = {}; claim[bus.dir][nodeId] = byNode end
+      for _, port in ipairs(bus.ports) do byNode[port] = busIdx end
+    end
+  end
+  return claim
+end
+
+--shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'fx'|'master', fromLabel, fromOffset={x,y}?, bus={nodeId,busIdx,bussedEnd='to'|'from'}? } — see docs/wiringView.md § wireView shape
 -- see docs/wiringView.md § wireView fromKind/fromLabel
 --contract: returns the list of wireViews for every edge in the current user graph; order matches graph.edges
 function wv:wireViews()
@@ -314,6 +328,7 @@ function wv:wireViews()
     if not node then return nil end
     return audioPorts(node, dir)[idx]
   end
+  local claim = busClaims(g)
   local out = {}
   for _, e in ipairs(g.edges or {}) do
     local fromPort = e.fromPort or 1
@@ -321,6 +336,13 @@ function wv:wireViews()
     local fromNode = g.nodes[e.from]
     local fromOffset = fromNode and fromNode.kind == 'source' and fromNode.tagPos
                          and fromNode.tagPos[wm.srcTagKey(e)] or nil
+    local bus
+    if e.type == 'audio' then
+      local inIdx  = claim['in'][e.to] and claim['in'][e.to][toPort]
+      local outIdx = not inIdx and claim.out[e.from] and claim.out[e.from][fromPort]
+      if inIdx then bus = { nodeId = e.to, busIdx = inIdx, bussedEnd = 'to' }
+      elseif outIdx then bus = { nodeId = e.from, busIdx = outIdx, bussedEnd = 'from' } end
+    end
     util.add(out, {
       from         = e.from,
       to           = e.to,
@@ -333,6 +355,7 @@ function wv:wireViews()
       fromKind     = fromNode and fromNode.kind,
       fromLabel    = fromNode and nodeLabel(e.from, fromNode),
       fromOffset   = fromOffset,
+      bus          = bus,
     })
   end
   return out
