@@ -9,7 +9,8 @@
 Cross-cutting reference for the **cv page**: a node graph, parallel to
 wiring, whose subject is modulation rather than audio routing. Also
 carries the **simple layer** — direct parameter automation with no
-graph — which lands first and degenerates cleanly into cv. The
+graph — which landed first (phase 2) and degenerates cleanly into
+cv. The
 fourth page rung. Where wiring composes the audio/MIDI signal path, cv
 composes a **control-voltage graph** — sources of modulation flow
 through signal processors and land on parameters.
@@ -113,17 +114,27 @@ Two REAPER facts shape this:
 ## The simple layer: direct parameter automation
 
 cv's graph is overkill for "this column drives that cutoff". The
-simple layer covers **same-track, performance-bound** parameter
-automation with no graph, no routing, and no audio-rate CV — and it
-lands before any cv code exists.
+simple layer covers **performance-bound** parameter automation with
+no graph and no audio-rate CV — and it landed before any cv code
+exists. One deliberate widening over the original same-track sketch:
+targets are any FX in the source's **wiring cone**, so cross-track
+automation comes free and the palette draws no boundary at the track
+edge. Standing automation remains cv's.
 
 **Model.** Automation is authored as CC events inline in the
 performance take — same grid as the notes, so swing, copy/paste, and
 pooling come free, and the data is performance-bound by construction.
-A fixed utility JSFX at the head of the track's chain (the **cc
-feed**) consumes the designated lanes — strips them from the MIDI
-stream — and exposes each as a slider; each binding is an ordinary
-same-track plink from that slider to the target parameter.
+One utility JSFX (`Continuum CC`) carries the whole mechanism in two
+16-slot banks. The **filter** bank, on the authoring track, consumes
+a designated lane — strips it from the MIDI stream — and rebroadcasts
+the value on **bus 126** under a project-unique bus code (wiring
+allocates busses 0–125 and parks on 127, so 126 is automation's by
+fiat). The **listen** bank, on each target track, matches a bus code
+and exposes its value as a slider; each binding is an ordinary
+same-track plink from that slider to the target parameter. One
+instance sits at the head of any track that authors or hosts —
+same-track bindings use both banks of one node, cross-track ones
+propagate over a midi-only bus-126 send.
 
 **Why stripped, why not plink-from-MIDI.** Inline CC flows into the
 instrument and every MIDI receiver on the channel, and which lanes a
@@ -134,11 +145,11 @@ internal (14-bit pairs included). It also avoids the underdocumented
 `plink.midi_*` path — slider→param plink is the exact mechanism the
 cv sinks already bank on.
 
-**Degenerate cv.** The cc feed is cv's converter + adapter fused into
-one same-track FX, minus the audio-rate leg. Promoting a binding to
-the cv graph replaces "strip to slider" with "strip to CV channel";
-the authored data does not move. Standing and cross-track automation
-are out of scope here — they are cv's.
+**Degenerate cv.** The CC node is cv's converter + adapter fused into
+one FX, with bus-126 CC standing in for the audio-rate wire.
+Promoting a binding to the cv graph replaces "strip to bus" with
+"strip to CV channel"; the authored data does not move. Standing
+automation is out of scope here — it is cv's.
 
 **Binding shape** (cm take tier, sibling of `extraColumns`):
 
@@ -146,28 +157,45 @@ are out of scope here — they are cv's.
 paramAutomation = {
   [chan] = {
     [lane] = {
-      fxGuid = '{...}',  -- target FX; resolved to plink.effect index at apply
-      param  = number,   -- target parameter index
-      scale  = number,
-      offset = number,
-      label  = 'Cutoff', -- column header
+      busCode   = number,  -- project-unique code carried on bus 126
+      trackGuid = '{...}', -- target track (hosts the listen slot)
+      fxGuid    = '{...}', -- target FX; resolved to plink.effect index at apply
+      param     = number,  -- target parameter index
+      scale     = number,
+      offset    = number,
+      label     = 'Cutoff', -- column header
     },
   },
 }
 ```
 
-**Applier.** A small idempotent driver — no graph, no realizer: on
-take bind and on binding change, ensure the cc feed sits at chain
-head, assign feed sliders, resolve `fxGuid` → FX index, and write the
-plink config parms. When the shared realizer later grows
+Lanes allocate downward from 119 (120–127 are channel-mode messages),
+dodging bound lanes, user CC columns, and any event-bearing lane on
+the channel — across every take on the track, since the filter bank
+is per-track.
+
+**Applier** (`paramAutomation.lua`). A full-project idempotent
+reconcile — no graph, no realizer: gather every take's bindings,
+compute per-track desired specs (filter slots, listen slots, sends —
+a pure function), and skip tracks whose spec matches the mirror
+persisted at `P_EXT:ctm_paramAuto`. Applying a track ensures the CC
+node at chain head, writes the banks, points plinks by resolving FX
+GUIDs fresh (the spike's reorder finding), clears stale plinks the
+mirror linked that the spec no longer does, and reconciles the
+bus-126 sends. Wiring hides the CC node and bus-126 sends from its
+snapshot/diff and refuses user-added `ext_midi_bus` JSFX, so the two
+appliers never fight. When the shared realizer later grows
 `setParamLink`, this folds into the same op so one code path writes
 links.
 
-**Tracker view.** The gesture is parameter-first: an "automate
-parameter" command opens a picker over the track's FX chain
-parameters; the manager allocates an internal lane, adds a CC column
-(existing extraColumns machinery, unchanged), and writes the binding.
-The column header shows the parameter label, never the lane number.
+**Tracker view.** Parameter-first, via a tree palette on the grid's
+right edge: the source's reachable FX in flow order (the wiring
+facade's cone walk, generators sectioned first), each node expanding
+to its parameters. Nothing is greyed at the track boundary — a
+cross-track target binds exactly like a local one. Automate (or
+double-click) allocates a lane, adds a CC column (existing
+extraColumns machinery, unchanged), and writes the binding. The
+column header shows the parameter label, never the lane number.
 
 **Arrange view.** Nothing. Inline data moves, duplicates, and dies
 with the clip — performance-bound semantics fall out of the data
@@ -269,6 +297,12 @@ without breaking PDC. Not in the first build.
    No realizer dependency — lands before the wiring refactor and
    ships user value while the refactor is in flight.
 
+   **Landed (2026-06-10)** as described above, with the deltas the
+   build forced: one `Continuum CC` JSFX (filter + listen banks)
+   rather than a per-role feed, cross-track reach over bus 126, and
+   the cone-walk tree palette. Specs: `pa_compute_desired_spec`,
+   `pa_apply_spec`, `tv_param_bind_spec`, `wm_param_targets_spec`.
+
 3. **Wiring refactor toward the shared realizer.** Extract the realizer
    beneath the `targetTracks` seam; lift master/source/`ext_midi_bus`
    specifics into a wiring-only compiler; add `setParamLink` to the
@@ -357,9 +391,6 @@ destination track, carrying the `plink` source slider.
   (spike); judge zipper at the parameter by ear on slow sweeps.
   Internal lanes are free, so escalating to 14-bit MSB/LSB pairs is
   cheap if it's audible.
-- **Internal lane allocation** — designated lanes must dodge lanes the
-  user authors deliberately for external receivers (plain CC columns in
-  the same take); the binding map is the registry.
 - **Promote-to-CV mechanics** — the gesture that lifts a binding into a
   source→sink node pair on the cv page; data stays put, only the
   realization changes.
