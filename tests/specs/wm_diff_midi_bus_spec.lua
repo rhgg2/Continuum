@@ -38,7 +38,7 @@ local function mintFx(wm, ident, opts)
   opts = opts or {}
   local r = wm:instantiateFxOnScratch(ident)
   return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
-           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=0}} }
 end
 
 local function midiEdge(from, to)

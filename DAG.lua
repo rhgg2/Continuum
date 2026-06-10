@@ -5,7 +5,8 @@
 
 --invariant: M.validate is pure; derivations live on M.compile's ctx
 --invariant: REAPER tracks are always stereo; audio I/O is a count of stereo pairs, never channels
---invariant: every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
+--invariant: every user-graph node carries node.ports={audio={…},midi={ins,outs}} at construction
+--invariant: fx midi: JSFX ports come from midirecv/midisend scan; native fx get {1,1}.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --shape: userGraph = { nodes = {[id]=userNode}, edges = edge[] }  -- node ids are rm guids (read era)
 --shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true }
@@ -35,8 +36,10 @@ local CU_IDENT = 'JS:Continuum Utility'
 -- fans out to a CU cascade; see docs/DAG.md § per-consumer merge.
 local MERGE_WIDTH = 16
 
--- Per-track stream capacity: 64 audio pairs, 128 MIDI buses (REAPER ceilings).
-local CAPACITY = { audio = 64, midi = 128 }
+-- Per-track stream capacity: 64 audio pairs, 127 MIDI buses — REAPER's 128
+-- minus bus 127, reserved as the bracket parking bus (see docs/DAG.md § allocate).
+local CAPACITY = { audio = 64, midi = 127 }
+local PARK_BUS = 127
 
 -- Stable trackKey for the master-hosted class: the REAPER master carries no
 -- wiringTracks entry, so target and snapshot agree on this synthetic key.
@@ -1308,34 +1311,51 @@ local function allocateOnce(tracks, nodes)
     end
 
     ----- bracket post-pass — see docs/DAG.md § allocate
+    -- in-park: input→0 (from=-1 silences recv, bus-0 parks on PARK_BUS); out-park restores (retain=0), routes/swallows.
     local splicedFxOrder, bracketNodes = {}, nil
     for _, fxId in ipairs(entry.fxOrder or {}) do
       local node = nodes[fxId]
-      local inputBus = fxInputBus[fxId]
-      local needs = node and node.kind == 'fx'
+      local bracketable = entry.trackKind ~= 'scratch'
+        and node and node.kind == 'fx'
         and node.fxIdent and node.fxIdent:sub(1, 3) == 'JS:'
         and not node.busAware
-        and inputBus and inputBus ~= 0
-      if needs then
-        -- in-park routes N→0, parking bus-0 transients on output bus M; out-park swaps 0↔M.
-        -- Terminal consumers have no output, so M=N and both sides are the symmetric swap.
-        local outputBus = (hasMidiOut[fxId] and fxOutputBus[fxId]) or inputBus
-        local bIn, bOut = 'bIn:' .. fxId, 'bOut:' .. fxId
+      local emitIn, emitOut, inParams, outParams
+      if bracketable then
+        local midiPorts = node.ports and node.ports.midi
+        local canRecv = not midiPorts or (midiPorts.ins  or 0) > 0
+        local canSend = not midiPorts or (midiPorts.outs or 0) > 0
+        local inBus, outConn = fxInputBus[fxId], hasMidiOut[fxId]
+        local outBus = fxOutputBus[fxId] or 0
+        local moveIn   = inBus ~= nil and inBus ~= 0
+        local blockIn  = canRecv and inBus == nil
+        local moveOut  = outConn and outBus ~= 0
+        local blockOut = canSend and not outConn
+        -- Park bus-0 transit when the fx must not hear it, or when the out-park
+        -- would otherwise sweep foreign bus-0 traffic along with the emission.
+        local park = moveIn or blockIn or ((moveOut or blockOut) and inBus ~= 0)
+        emitIn, emitOut = park, park or moveOut or blockOut
+        inParams  = { mode = 'busRoute', from = moveIn and inBus or -1,
+                      to = PARK_BUS, retain = 1 }
+        outParams = { mode = 'busRoute', from = park and PARK_BUS or -1,
+                      to = outConn and outBus or -1, retain = 0 }
+      end
+      if emitIn then
         bracketNodes = bracketNodes or {}
-        bracketNodes[bIn]  = { kind = 'fx', fxIdent = CU_IDENT,
-                               params = { mode = 'busRoute', from = inputBus, to = outputBus },
-                               originNode = fxId, originSide = 'in' }
-        bracketNodes[bOut] = { kind = 'fx', fxIdent = CU_IDENT,
-                               params = { mode = 'busRoute', from = outputBus, to = outputBus },
-                               originNode = fxId, originSide = 'out' }
+        local bIn = 'bIn:' .. fxId
+        bracketNodes[bIn] = { kind = 'fx', fxIdent = CU_IDENT, params = inParams,
+                              originNode = fxId, originSide = 'in' }
         util.add(splicedFxOrder, bIn)
-        util.add(splicedFxOrder, fxId)
-        util.add(splicedFxOrder, bOut)
         -- Identity pair-1 pin maps so audio passes through the brackets.
-        state.pinMaps[bIn]  = { ins = { [1] = { 1 } }, outs = { [1] = { 1 } } }
+        state.pinMaps[bIn] = { ins = { [1] = { 1 } }, outs = { [1] = { 1 } } }
+      end
+      util.add(splicedFxOrder, fxId)
+      if emitOut then
+        bracketNodes = bracketNodes or {}
+        local bOut = 'bOut:' .. fxId
+        bracketNodes[bOut] = { kind = 'fx', fxIdent = CU_IDENT, params = outParams,
+                               originNode = fxId, originSide = 'out' }
+        util.add(splicedFxOrder, bOut)
         state.pinMaps[bOut] = { ins = { [1] = { 1 } }, outs = { [1] = { 1 } } }
-      else
-        util.add(splicedFxOrder, fxId)
       end
     end
     state.fxOrder      = bracketNodes and splicedFxOrder or nil

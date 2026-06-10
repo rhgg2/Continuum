@@ -41,7 +41,7 @@ return {
       wm:mutate(function(g)
         g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxId='{FX-1}',
-                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
+                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=0,outs=0}} }
         util.add(g.edges, { type='audio', from='s', to='f' })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)
@@ -61,7 +61,7 @@ return {
       wm:mutate(function(g)
         g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo',
-                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
+                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=0,outs=0}} }
         util.add(g.edges, { type='audio', from='s', to='f' })
       end)
       local target = wm:targetState()
@@ -79,7 +79,7 @@ return {
         g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxId='{FX-1}',
                          mergeGuids = { ['guid-A'] = '{CU-7}' },
-                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
+                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=0,outs=0}} }
         util.add(g.edges, { type='audio', from='s', to='f', ops={gain=0.5} })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)
@@ -369,7 +369,7 @@ return {
       wm:mutate(function(g)
         g.nodes['s'] = { kind='source', trackId='guid-A', pos={x=0,y=0}, ports={audio={ins=0,outs=1},midi={ins=0,outs=1}} }
         g.nodes['f'] = { kind='fx', fxIdent='JS:foo', fxId='{FX-1}',
-                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
+                         pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=0,outs=0}} }
         util.add(g.edges, { type='audio', from='s', to='f' })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)

@@ -135,8 +135,8 @@ Each `synthNode` is a CU bridge synthesised for one of three cases:
   write `opFxGuid` back after `TrackFX_AddByName`.
 - **Bus-route bracket** (`originNode` / `originSide` set): a CU inserted at the
   in- or out-side of a node to route MIDI buses around a non-bus-aware JSFX
-  (`from`->0, 0->`to`). See `docs/wiring.md § Merge and split` and the
-  *allocate* section below.
+  (`from`->0, 0->`to`; `-1` is "no bus", 127 the reserved parking bus). See
+  `docs/wiring.md § Merge and split` and the *allocate* section below.
 - **Per-consumer audio merge** (`originConsumer` / `originHost` / `inputEdges`
   set): one Merge CU per (consumer, track) pair; `inputEdges` maps each input
   pair back to its edge for live-gain pokes.
@@ -193,9 +193,17 @@ are distinct sends that coexist. This subsumes the old slot-boundary send case:
 arrives on.
 
 **MIDI is the same walk over bus indices**, with one REAPER wrinkle: a
-non-bus-aware JSFX on bus N≠0 is wrapped by `BusRoute` bracket CUs that swap
-N↔0 around it (the bracket post-pass), while VST/AU slots take chunk surgery on
-their trailer in/out bus bytes instead (see `docs/wiringManager.md § Per-FX MIDI
+non-bus-aware JSFX reads and writes bus 0 only. The bracket post-pass wraps it
+in `BusRoute` CUs: the in-park moves its input bus onto 0 — or silences 0 with
+`from=-1` when its MIDI-in is disconnected — while parking bus-0 transit on
+reserved bus 127; the out-park restores the parked transit (`retain=0` drains
+the park) and moves the FX's emission onto its output bus — or swallows it with
+`to=-1` when its MIDI-out is disconnected. Without the blockers a disconnected
+JSFX would hear, eat, or feed the phantom bus-0 stream the graph says it is not
+wired to. A JSFX whose source never touches `midirecv`/`midisend` needs no
+brackets at all — MIDI passes it untouched; that capability arrives on
+`ports.midi` from wm's source scan. VST/AU slots take chunk surgery on their
+trailer in/out bus bytes instead (see `docs/wiringManager.md § Per-FX MIDI
 routing`). The allocator surfaces `state.fxMidiBus[fxId] = { inBus, outBus }` for
 native FX; a bus-aware JSFX other than the first-party CU is refused at
 design-time, since the allocator can't reason about a third party's bus

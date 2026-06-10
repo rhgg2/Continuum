@@ -22,7 +22,7 @@ local function fx(id, opts)
                fxIdent   = 'JS:test', fxDisplay = 'FX',
                ports = { audio = { ins  = opts.ins  or 1,
                                    outs = opts.outs or 1 },
-                         midi  = { ins = 1, outs = 1 } } }
+                         midi  = { ins = 0, outs = 0 } } }
 end
 
 local function master(opts)

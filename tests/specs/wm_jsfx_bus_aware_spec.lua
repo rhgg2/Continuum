@@ -22,6 +22,11 @@ local function parser()
            .parseJSFXBusAware
 end
 
+local function traitsParser()
+  return util.instantiate('wiringManager', { cm = require('harness').mk().cm })
+           .parseJSFXMidiTraits
+end
+
 return {
   -- ---- Parser unit tests
   {
@@ -147,6 +152,56 @@ spl0 *= 1;
       local id, err = wm:addFxNode(0, 0, { name = 'NoFile', ident = 'JS:NoFile' })
       t.truthy(id, 'missing desc treated as non-bus-aware (accept)')
       t.eq(err, nil)
+    end,
+  },
+
+  -- ---- midi traits scan (midirecv/midisend → ports.midi)
+  {
+    name = 'traits: midirecv/midisend detection, comments stripped, nil assumes both',
+    run = function()
+      local p = traitsParser()
+      t.deepEq(p('desc:x\n@sample\nspl0 *= 1;\n'),
+               { busAware=false, recv=false, send=false })
+      t.deepEq(p('desc:x\n@block\nwhile (midirecv(o,a,b)) ( midisend(o,a,b); );\n'),
+               { busAware=false, recv=true, send=true })
+      t.deepEq(p('desc:x\n@block\n// midirecv(o,a,b)\nx = 1; // midisend too\n'),
+               { busAware=false, recv=false, send=false })
+      t.deepEq(p('desc:x\n@block\nmidisyx(o, ptr, len);\n'),
+               { busAware=false, recv=false, send=true })
+      t.deepEq(p('ext_midi_bus = 1\n@block\nmidirecv(o,a,b);\n'),
+               { busAware=true, recv=true, send=false })
+      t.deepEq(p(nil), { busAware=false, recv=true, send=true })
+    end,
+  },
+  {
+    name = 'addFxNode stamps ports.midi from the scan',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      seedJsfx(wm, {
+        ['JS:AudioOnly'] = 'desc:g\n@sample\nspl0 *= 1;\n',
+        ['JS:MidiFx']    = 'desc:m\n@block\nwhile (midirecv(o,a,b)) ( midisend(o,a,b); );\n',
+      })
+      reaper:setFxIO('JS:AudioOnly', { ins = 2, outs = 2 })
+      reaper:setFxIO('JS:MidiFx',    { ins = 2, outs = 2 })
+      local a = wm:addFxNode(0, 0,   { name = 'A', ident = 'JS:AudioOnly' })
+      local m = wm:addFxNode(0, 200, { name = 'M', ident = 'JS:MidiFx' })
+      t.deepEq(wm:graph().nodes[a].ports.midi, { ins = 0, outs = 0 })
+      t.deepEq(wm:graph().nodes[m].ports.midi, { ins = 1, outs = 1 })
+    end,
+  },
+  {
+    name = 'addFxNode: audio-only generator gets no auto source wiring',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      seedJsfx(wm, { ['JS:Noise'] = 'desc:n\n@sample\nspl0 = rand(1);\n' })
+      reaper:setFxIO('JS:Noise', { ins = 0, outs = 2 })
+      local id = wm:addFxNode(0, 0, { name = 'Noise', ident = 'JS:Noise' })
+      t.truthy(id)
+      local g = wm:graph()
+      t.deepEq(g.edges, {}, 'no auto midi edge for a deaf generator')
+      for _, n in pairs(g.nodes) do
+        t.truthy(n.kind ~= 'source', 'no auto source node for a deaf generator')
+      end
     end,
   },
 }

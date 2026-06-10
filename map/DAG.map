@@ -1,9 +1,10 @@
-@module DAG  src=DAG.lua  loc=1505  sha=555004b  mode=namespace
+@module DAG  src=DAG.lua  loc=1525  sha=f49c39b  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate is pure; derivations live on M.compile's ctx
   @invariant  REAPER tracks are always stereo; audio I/O is a count of stereo pairs, never channels
-  @invariant  every user-graph node carries node.ports = { audio={ins,outs,inNames?,outNames?}, midi={ins,outs} } stamped at construction — source={audio={0,1},midi={0,1}}, master={audio={1,0},midi={0,0}}, fx={audio=probeFxIO,midi={1,1}}. The fx midi={1,1} is the optimistic placeholder until probing can read it. No implicit shapes; M.validate keys off node.ports[edge.type] symmetrically per side.
+  @invariant  every user-graph node carries node.ports={audio={…},midi={ins,outs}} at construction
+  @invariant  fx midi: JSFX ports come from midirecv/midisend scan; native fx get {1,1}.
   @invariant  master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
   @invariant  fx nodes carry busAware; wm:addFxNode and M.validate refuse true
   @invariant  fxId is nil until materialised; stamped into the node after TrackFX_AddByName succeeds
@@ -28,40 +29,41 @@
   @shape  component = { nodes=id[] (sorted), reason=nil|'feedback'|'busAware' }
 
 # Imports
-  @const util = 'util'  @ 31
+  @const util = 'util'  @ 32
 
 # Module-level constants
-  @const CU_IDENT = 'JS:Continuum Utility'  @ 33
-  @const MERGE_WIDTH = 16  @ 36
-  @const CAPACITY = { audio = 64, midi = 128 }  @ 39
-  @const MASTER = '__master__'  @ 43
-  @const M = {}  @ 45
-  @const SPLIT_SEP = '#cap#'  @ 1402
+  @const CU_IDENT = 'JS:Continuum Utility'  @ 34
+  @const MERGE_WIDTH = 16  @ 37
+  @const CAPACITY = { audio = 64, midi = 127 }  @ 41
+  @const PARK_BUS = 127  @ 42
+  @const MASTER = '__master__'  @ 46
+  @const M = {}  @ 48
+  @const SPLIT_SEP = '#cap#'  @ 1422
 
 # Private functions
   -- validate
   -- classify
   -- compile context
-  @fn buildCtx(userGraph, derivedSplits)  @ 212
+  @fn buildCtx(userGraph, derivedSplits)  @ 215
       -- Lazy ctx factory; derivations memoise into closure-local `cache`.
       -- derivedSplits arrives already settled (from deriveMasterSplit); ctx just folds it into srcSet.
   -- realisation
-  @fn topoIntraTrack(members, conns)  @ 431
+  @fn topoIntraTrack(members, conns)  @ 434
       -- Kahn's over a track's chain members (fx + synth CU; source/master excluded).
       -- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
   -- master minimization
-  @fn deriveMasterSplit(userGraph)  @ 800
+  @fn deriveMasterSplit(userGraph)  @ 803
       -- master class = cone of master's largest dominator whose entry pulls <=1 audio
       -- pair per upstream track; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
   -- allocate
-  @fn allocStream(values, startCursor, N, compare, pinAdd, profile)  @ 913
+  @fn allocStream(values, startCursor, N, compare, pinAdd, profile)  @ 916
       -- Linear-scan allocator over one stream's value list (audio pair or MIDI bus).
       -- see docs/DAG.md § allocStream internals; profile[g] = live count at gap g (capacity crossing weight).
-  @fn audioValueCompare(a, c)  @ 967
+  @fn audioValueCompare(a, c)  @ 970
       -- Audio packs by pin shape (dir, port, fx) so co-defined values land
       -- deterministically; midi has no pins, so lastUse then insertion serial.
-  @fn midiValueCompare(a, c)  @ 976
-  @fn allocateOnce(tracks, nodes)  @ 985
+  @fn midiValueCompare(a, c)  @ 979
+  @fn allocateOnce(tracks, nodes)  @ 988
       -- One assignment pass over a fixed partition; returns allocatedTracks + per-track capacity meta.
       -- Per-track live-range allocation, one register file per stream (audio pairs b1, midi buses b0).
       @contract  outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
@@ -69,31 +71,31 @@
       · midi register file: bus 0 boundary; values are per-producer streams.
       · bracket post-pass — see docs/DAG.md § allocate
   -- capacity bisection — design/wiring-implicit-graph.md § Capacity
-  @fn bisect(trackKey, spec, g)  @ 1406
+  @fn bisect(trackKey, spec, g)  @ 1426
       -- Cut spec at gap g: fxOrder[1..g] keeps identity; [g+1..] becomes an emergent newTrack.
       -- Conns crossing the cut become a forward send; master feed / mainSend follow their producer.
-  @fn splitOverCap(tracks, meta)  @ 1456
+  @fn splitOverCap(tracks, meta)  @ 1476
       -- One bisection round: cut every over-ceiling track at its min-crossing gap; nil at fixpoint.
       -- Sends whose toNode moved downstream are re-pointed to the new segment's key.
 
 # Public API (M.*)
-  @api M.validate(userGraph)  @ 52
+  @api M.validate(userGraph)  @ 55
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api M.classify(userGraph, feedbackSeeds)  @ 161
+  @api M.classify(userGraph, feedbackSeeds)  @ 164
       -- Post-hoc component classifier over read's domain (design/wiring-implicit-graph.md
       -- § Quarantine): validate's successor on the graphs REAPER allows, not just authorable ones.
       @contract  groups non-master nodes into components; feedbackSeeds + busAware tag quarantined ones
-  @api M.compile(userGraph)  @ 905
+  @api M.compile(userGraph)  @ 908
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
-  @api M.allocate(tracks, nodes)  @ 1493
+  @api M.allocate(tracks, nodes)  @ 1513
       -- Capacity-resolving allocation: assign, bisect any over-ceiling class, re-assign
       -- until every track fits. The only entry point; allocateOnce is the inner pass.
 
 # Uses (outbound edges)
-  @use call    util.add  @ 183, 202, 253, 377, 440, 454, 459, 461, 465, 499, 519, 543, 588, 596, 616, 626, 636, 642, 643, 691, 704, 713, 732, 734, 832, 1049, 1053, 1063, 1066, 1096, 1104, 1113, 1142, 1145, 1166, 1193, 1200, 1224, 1232, 1239, 1258, 1261, 1266, 1331, 1332, 1333, 1338, 1353, 1409, 1410, 1417, 1418, 1421, 1425
-  @use call    util.assign  @ 83, 416, 505, 1375, 1376
-  @use call    util.bucket  @ 131, 223, 258, 727, 806, 807, 941, 945, 999, 1007
-  @use call    util.key  @ 120, 257, 395, 398, 483, 514, 707, 1090, 1138, 1352
-  @use call    util.keys  @ 315, 316, 1035, 1235
-  @use call    util.pick  @ 416
-  @use require util  @ 31
+  @use call    util.add  @ 186, 205, 256, 380, 443, 457, 462, 464, 468, 502, 522, 546, 591, 599, 619, 629, 639, 645, 646, 694, 707, 716, 735, 737, 835, 1052, 1056, 1066, 1069, 1099, 1107, 1116, 1145, 1148, 1169, 1196, 1203, 1227, 1235, 1242, 1261, 1264, 1269, 1347, 1351, 1357, 1373, 1429, 1430, 1437, 1438, 1441, 1445
+  @use call    util.assign  @ 86, 419, 508, 1395, 1396
+  @use call    util.bucket  @ 134, 226, 261, 730, 809, 810, 944, 948, 1002, 1010
+  @use call    util.key  @ 123, 260, 398, 401, 486, 517, 710, 1093, 1141, 1372
+  @use call    util.keys  @ 318, 319, 1038, 1238
+  @use call    util.pick  @ 419
+  @use require util  @ 32

@@ -5,6 +5,8 @@ local function mkWm(harness)
   local h  = harness.mk()
   local rm = util.instantiate('routingManager')
   local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
+  -- Test JSFX scan as audio-only so load/syncExternal re-reads stay bracket-free.
+  wm.readJSFXContent = function() return 'desc:plain\n@sample\nspl0 *= 1;\n' end
   wm:load()
   return h, wm, rm
 end
@@ -24,7 +26,7 @@ end
 local function mintFx(wm, ident)
   local r = wm:instantiateFxOnScratch(ident)
   return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
-           ports={audio={ins=1, outs=1}, midi={ins=1, outs=1}} }
+           ports={audio={ins=1, outs=1}, midi={ins=0, outs=0}} }
 end
 
 -- A self-driven authoring gesture: source → fx → master, materialised by live reconcile.

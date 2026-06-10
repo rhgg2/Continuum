@@ -36,7 +36,9 @@ return {
       local out = DAG.allocate(tracks, nodes)
       t.deepEq(out['guid-c'].fxMidiBus['fxC2'], { inBus = 1, outBus = 0 })
       t.eq(out['guid-c'].fxMidiBus['fxC1'], nil, 'JS fx excluded from fxMidiBus')
-      t.eq(out['guid-c'].bracketNodes, nil, 'VST is not bracketed')
+      local brackets = out['guid-c'].bracketNodes or {}
+      t.eq(brackets['bIn:fxC2'],  nil, 'VST is not bracketed')
+      t.eq(brackets['bOut:fxC2'], nil, 'VST is not bracketed')
     end,
   },
   {

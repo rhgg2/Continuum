@@ -6,7 +6,7 @@ local util = require('util')
 local CU_PARAMS = { 'mode', 'gain', 'from', 'nPairs',
   'gain1', 'gain2', 'gain3', 'gain4', 'gain5', 'gain6', 'gain7', 'gain8',
   'gain9', 'gain10', 'gain11', 'gain12', 'gain13', 'gain14', 'gain15', 'gain16',
-  'outBus', 'inMask0', 'inMask1', 'inMask2', 'inMask3', 'audioSum', 'to' }
+  'outBus', 'inMask0', 'inMask1', 'inMask2', 'inMask3', 'audioSum', 'to', 'retain' }
 
 local function mkWm(harness)
   local h  = harness.mk()
@@ -35,8 +35,12 @@ local function mintFx(wm, ident, opts)
   opts = opts or {}
   local r = wm:instantiateFxOnScratch(ident)
   return { kind='fx', fxIdent=ident, fxId=r.fxId, pos={x=0,y=0},
-           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=1, outs=1}} }
+           ports={audio={ins=opts.ins or 1, outs=opts.outs or 1},
+                  midi=opts.midi or {ins=1, outs=1}} }
 end
+
+-- The terminal consumer scans as recv-only (a synth: midirecv, no midisend).
+local CONSUMER_MIDI = { ins = 1, outs = 0 }
 
 local function midiEdge(from, to)
   return { type='midi', from=from, to=to }
@@ -82,16 +86,21 @@ return {
         g.nodes.sA   = source('guid-A')
         g.nodes.fxP1 = mintFx(wm, 'JS:p1')
         g.nodes.fxP2 = mintFx(wm, 'JS:p2')
-        g.nodes.fxC  = mintFx(wm, 'JS:c')
+        g.nodes.fxC  = mintFx(wm, 'JS:c', { midi = CONSUMER_MIDI })
         util.add(g.edges, midiEdge('sA',   'fxP1'))
         util.add(g.edges, midiEdge('sA',   'fxP2'))
         util.add(g.edges, midiEdge('fxP1', 'fxC'))
         util.add(g.edges, midiEdge('fxP2', 'fxC'))
       end)
       apply(wm)
-      -- Two intra producers, the Merge CU unioning them, then the consumer.
-      t.eq(h.reaper.TrackFX_GetCount(trackA), 4, 'fxP1 + fxP2 + Merge CU + fxC')
-      local cuSlot  = slotOf(h, trackA, 'JS:Continuum Utility')
+      -- Two intra producers (one out-parked off bus 0), the Merge CU, the consumer.
+      t.eq(h.reaper.TrackFX_GetCount(trackA), 5,
+           'fxP1 + out-park + fxP2 + Merge CU + fxC')
+      -- The merge CU is the one stamped on the consumer; out-parks share its ident.
+      local cuSlot
+      for s = 0, h.reaper.TrackFX_GetCount(trackA) - 1 do
+        if h.reaper.TrackFX_GetFXGUID(trackA, s) == mergeStamp(wm) then cuSlot = s end
+      end
       local fxCSlot = slotOf(h, trackA, 'JS:c')
       t.truthy(cuSlot and fxCSlot, 'CU and consumer present')
       t.truthy(cuSlot < fxCSlot, 'CU precedes the consumer')
@@ -118,7 +127,7 @@ return {
         g.nodes.sA   = source('guid-A')
         g.nodes.fxP1 = mintFx(wm, 'JS:p1')
         g.nodes.fxP2 = mintFx(wm, 'JS:p2')
-        g.nodes.fxC  = mintFx(wm, 'JS:c')
+        g.nodes.fxC  = mintFx(wm, 'JS:c', { midi = CONSUMER_MIDI })
         util.add(g.edges, midiEdge('sA',   'fxP1'))
         util.add(g.edges, midiEdge('sA',   'fxP2'))
         util.add(g.edges, midiEdge('fxP1', 'fxC'))
@@ -141,14 +150,15 @@ return {
         g.nodes.sA   = source('guid-A')
         g.nodes.fxP1 = mintFx(wm, 'JS:p1')
         g.nodes.fxP2 = mintFx(wm, 'JS:p2')
-        g.nodes.fxC  = mintFx(wm, 'JS:c')
+        g.nodes.fxC  = mintFx(wm, 'JS:c', { midi = CONSUMER_MIDI })
         util.add(g.edges, midiEdge('sA',   'fxP1'))
         util.add(g.edges, midiEdge('sA',   'fxP2'))
         util.add(g.edges, midiEdge('fxP1', 'fxC'))
         util.add(g.edges, midiEdge('fxP2', 'fxC'))
       end)
       apply(wm)
-      t.truthy(slotOf(h, trackA, 'JS:Continuum Utility'), 'Merge CU present after first apply')
+      local gCU = mergeStamp(wm)
+      t.truthy(gCU, 'Merge CU present after first apply')
       -- Drop fxP2's feed: fxC keeps a single feeder, so the union CU retracts.
       wm:mutate(function(g)
         local newEdges = {}
@@ -158,13 +168,11 @@ return {
         g.edges = newEdges
       end)
       apply(wm)
-      local cuTotal = 0
+      -- Bracket CUs may remain (producer out-parks); the merge instance must not.
       for s = 0, h.reaper.TrackFX_GetCount(trackA) - 1 do
-        if (select(2, h.reaper.TrackFX_GetFXName(trackA, s))) == 'JS:Continuum Utility' then
-          cuTotal = cuTotal + 1
-        end
+        t.eq(h.reaper.TrackFX_GetFXGUID(trackA, s) == gCU, false,
+             'merge CU instance gone after the feeder dropped')
       end
-      t.eq(cuTotal, 0, 'merge CU gone after the feeder dropped')
       t.truthy(slotOf(h, trackA, 'JS:c'), 'consumer fx still live')
       t.eq(mergeStamp(wm), nil, 'merge stamp cleared')
     end,

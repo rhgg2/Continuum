@@ -273,6 +273,73 @@ return {
     end,
   },
   {
+    -- Blocking brackets ({-1→127} / {127→-1, retain=0}) realise a disconnected JSFX
+    -- midi surface; read recovers no edge and restores the parked source stream.
+    name = 'read: blocking brackets silence a disconnected JSFX, parked stream crosses',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local bracket = function(id, params) return { id=id, ins=32, outs=32, ident=CU_IDENT,
+        params=params, pinMaps = { ins={[1]={1}}, outs={[1]={1}} } } end
+      local snap = {
+        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, sends={},
+          fx = {
+            bracket('bIn',  { mode=0, from=-1, to=127, retain=1 }),
+            { id='g-j', ident='JS:Loose', ins=1, outs=1 },
+            bracket('bOut', { mode=0, from=127, to=-1, retain=0 }),
+            { id='g-n', ident='VST:Synth', ins=1, outs=1,
+              midi = { inBus=0, outBus=0, inDisabled=false, outDisabled=true } },
+          } },
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(edgeSet(rg), { 'midi guid-a.-->g-n.-' },
+               'JSFX unwired; the native fx still hears the restored source stream')
+    end,
+  },
+  {
+    -- A JSFX that never touches midirecv/midisend must not adopt the bus-0 stream:
+    -- read scans the source instead of assuming every JSFX relays bus 0.
+    name = 'read: pure-audio JSFX leaves the bus-0 producer untouched',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      wm.readJSFXContent = function(_, ident)
+        if ident == 'JS:AudioOnly' then return 'desc:gain\n@sample\nspl0 *= 0.5;\n' end
+      end
+      local snap = {
+        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, sends={},
+          fx = {
+            { id='g-a', ident='JS:AudioOnly', ins=1, outs=1 },
+            { id='g-n', ident='VST:Synth', ins=1, outs=1,
+              midi = { inBus=0, outBus=0, inDisabled=false, outDisabled=true } },
+          } },
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(edgeSet(rg), { 'midi guid-a.-->g-n.-' },
+               'no phantom edges through the audio-only JSFX')
+    end,
+  },
+  {
+    name = 'read: recv-only JSFX consumes bus 0 — nothing downstream hears it',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      wm.readJSFXContent = function(_, ident)
+        if ident == 'JS:RecvOnly' then
+          return 'desc:eater\n@block\nwhile (midirecv(o, m1, m23)) ( 0; );\n'
+        end
+      end
+      local snap = {
+        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, sends={},
+          fx = {
+            { id='g-r', ident='JS:RecvOnly', ins=1, outs=1 },
+            { id='g-n', ident='VST:Synth', ins=1, outs=1,
+              midi = { inBus=0, outBus=0, inDisabled=false, outDisabled=true } },
+          } },
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(edgeSet(rg), { 'midi guid-a.-->g-r.-' },
+               'the recv-only JSFX is the bus-0 consumer; the native fx hears nothing')
+    end,
+  },
+  {
     -- A bus-aware JSFX (ext_midi_bus) escapes the allocator, corrupting its track-set's bus
     -- space; read groups the component and tags it busAware (design § Quarantine). Hand-built.
     name = 'read: a bus-aware fx quarantines its whole component',

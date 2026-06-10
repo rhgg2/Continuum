@@ -88,18 +88,39 @@ local function ensureCompiled()
   return compiledCache
 end
 
--- True iff JSFX desc declares ext_midi_bus=1 (the FX scans midi_bus itself,
--- escaping our allocator). Skips // comments; frontier prevents `=10` match.
-local function parseJSFXBusAware(content)
-  if not content then return false end
+-- JSFX midi traits: busAware iff ext_midi_bus=1, recv/send iff midirecv/midisend present
+-- (midisyx counts as send). Unreadable source → assume both recv and send.
+local function parseJSFXMidiTraits(content)
+  if not content then return { busAware = false, recv = true, send = true } end
+  local traits = { busAware = false, recv = false, send = false }
   for line in content:gmatch('[^\r\n]+') do
-    local stripped = line:match('^%s*(.-)%s*$') or ''
-    if stripped:sub(1, 2) ~= '//'
-       and stripped:match('^ext_midi_bus%s*=%s*1%f[%D]') then
-      return true
+    local code = line:gsub('//.*', '')
+    if code:match('^%s*ext_midi_bus%s*=%s*1%f[%D]') then traits.busAware = true end
+    if code:find('midirecv', 1, true) then traits.recv = true end
+    if code:find('midisend', 1, true) or code:find('midisyx', 1, true) then
+      traits.send = true
     end
   end
-  return false
+  return traits
+end
+local function parseJSFXBusAware(content)
+  return parseJSFXMidiTraits(content).busAware
+end
+
+-- One disk read per ident, memoised for the session (a JSFX's midi traits are static).
+local jsfxTraitsMemo = {}
+local function jsfxTraits(ident)
+  if not jsfxTraitsMemo[ident] then
+    jsfxTraitsMemo[ident] = parseJSFXMidiTraits(wm:readJSFXContent(ident))
+  end
+  return jsfxTraitsMemo[ident]
+end
+
+-- Native fx keep the optimistic {1,1}; a JSFX's real midi surface comes from the scan.
+local function fxMidiPorts(ident)
+  if not isJS(ident) then return { ins = 1, outs = 1 } end
+  local traits = jsfxTraits(ident)
+  return { ins = traits.recv and 1 or 0, outs = traits.send and 1 or 0 }
 end
 
 ----------- PUBLIC
@@ -264,12 +285,13 @@ function wm:readJSFXContent(ident)
 end
 
 -- Exposed for unit tests; production paths use `wm:isUserAddRefused` below.
-wm.parseJSFXBusAware = parseJSFXBusAware
+wm.parseJSFXBusAware   = parseJSFXBusAware
+wm.parseJSFXMidiTraits = parseJSFXMidiTraits
 
 --contract: refuses JSFX whose desc declares ext_midi_bus=1; nil on accept, structured err on refuse
 function wm:checkUserAddable(ident)
   if not (ident and ident:sub(1, 3) == 'JS:') then return nil end
-  if parseJSFXBusAware(self:readJSFXContent(ident)) then
+  if jsfxTraits(ident).busAware then
     return { code = 'ext_midi_bus_user_fx', ident = ident }
   end
 end
@@ -363,7 +385,9 @@ function wm:addFxNode(x, y, fx, opts)
   rm:transaction('wiring: add ' .. display, function()
     local io         = self:instantiateFxOnScratch(fx.ident)
     if not io.fxId then ok, err = false, { code = 'fx_instantiate_failed', ident = fx.ident }; return end
-    local autoSource = io.ins == 0 and not (opts and opts.autoSource == false)
+    local midiPorts  = fxMidiPorts(fx.ident)
+    local autoSource = io.ins == 0 and midiPorts.ins > 0
+                       and not (opts and opts.autoSource == false)
     local sourceGuid = autoSource and self:createSourceTrack{ name = display } or nil
     ok, err = self:mutate(function(g)
       newId = io.fxId
@@ -377,7 +401,7 @@ function wm:addFxNode(x, y, fx, opts)
         ports     = {
           audio = { ins      = io.ins,     outs     = io.outs,
                     inNames  = io.inNames, outNames = io.outNames },
-          midi  = { ins = 1, outs = 1 },
+          midi  = midiPorts,
         },
       }
       if sourceGuid then
@@ -488,7 +512,8 @@ local function readCuParams(params)
   if modeStr == 'busRoute' then
     return { mode = modeStr,
              from = math.floor(params.from + 0.5),
-             to   = math.floor(params.to + 0.5) }
+             to   = math.floor(params.to + 0.5),
+             retain = params.retain and math.floor(params.retain + 0.5) or 1 }
   end
   local nPairs = math.floor(params.nPairs + 0.5)
   local gains, inMask = {}, {}
@@ -521,18 +546,8 @@ local function flattenCuParams(params)
   return flat
 end
 
--- Bus-aware JSFX (ext_midi_bus=1) escapes the allocator; flag it so read quarantines its component.
--- One disk read per ident, memoised for the session (an ident's bus-awareness is static).
-local busAwareMemo = {}
-local function busAware(ident)
-  if busAwareMemo[ident] == nil then
-    busAwareMemo[ident] = parseJSFXBusAware(wm:readJSFXContent(ident)) or false
-  end
-  return busAwareMemo[ident]
-end
-
--- One rm fx record → snapshotFxEntry: CU bridges carry decoded params, JSFX a busAware flag, the
--- rest their midi routing; fxId is the identity the differ matches fxOrder by.
+-- One rm fx record → snapshotFxEntry: CU bridges carry decoded params, JSFX a busAware flag;
+-- native fx carry midi routing. fxId is the identity the differ matches fxOrder by.
 local function snapFx(fx)
   local entry = { id = fx.id, ident = fx.ident, name = fx.name, ins = fx.ins, outs = fx.outs }
   if fx.pinMaps and (next(fx.pinMaps.ins) or next(fx.pinMaps.outs)) then
@@ -542,7 +557,7 @@ local function snapFx(fx)
     local params = rm:params(fx.id)
     if params then entry.params = flattenCuParams(readCuParams(params)) end
   elseif isJS(fx.ident) then
-    if busAware(fx.ident) then entry.busAware = true end
+    if jsfxTraits(fx.ident).busAware then entry.busAware = true end
   else
     entry.midi = fx.midi
   end
@@ -775,20 +790,24 @@ local function readGraph(snap)
     live[outBus] = #unioned > 0 and unioned or nil
   end
 
-  -- BusRoute CU (Continuum Utility @block mode 0): from->0, 0->to, others pass; from!=to
-  -- retains `from`. Wrapped JSFX reads bus 0, so brackets are midi-transparent on read.
-  local function busRouteMidi(live, from, to)
+  -- BusRoute CU mode 0: from->0, 0->to; -1 is "no bus"; retain=0 moves rather than copies.
+  -- Wrapped JSFX reads bus 0, so brackets are midi-transparent on read.
+  local function busRouteMidi(live, cu)
+    local from, to = cu.from, cu.to
+    if from == 0 then return live end  -- degenerate: bus-0 events re-land on bus 0
     local out = {}
     for bus, list in pairs(live) do out[bus] = list end
-    out[0] = live[from]
-    if from == to then
-      out[to] = live[0]
-    else
-      out[from] = live[from]
-      local joined = {}
-      for _, r in ipairs(live[0] or {}) do util.add(joined, r) end
-      for _, r in ipairs(live[to] or {}) do util.add(joined, r) end
-      out[to] = #joined > 0 and joined or nil
+    out[0] = from >= 0 and live[from] or nil
+    if from > 0 and (cu.retain == 0 or from == to) then out[from] = nil end
+    if to >= 0 then
+      if to == from then
+        out[to] = live[0]
+      else
+        local joined = {}
+        for _, r in ipairs(live[0] or {}) do util.add(joined, r) end
+        for _, r in ipairs(live[to] or {}) do util.add(joined, r) end
+        out[to] = #joined > 0 and joined or nil
+      end
     end
     return out
   end
@@ -913,9 +932,9 @@ local function readGraph(snap)
       for port, prs in pairs(pinMaps.outs or {}) do
         for _, pair in ipairs(prs) do liveAudio[pair] = outProducers[port] or {} end
       end
-      -- MIDI: merge unions masked input buses onto outBus; busRoute swaps from/0/to.
+      -- MIDI: merge unions masked input buses onto outBus; busRoute remaps from/0/to.
       if cu.mode == 'merge' then mergeMidi(liveMidi, cu)
-      else liveMidi = busRouteMidi(liveMidi, cu.from, cu.to) end
+      else liveMidi = busRouteMidi(liveMidi, cu) end
     end
 
     -- Snapshot the track input (pre-fx) so a preFx source send taps the raw signal,
@@ -933,7 +952,7 @@ local function readGraph(snap)
         nodes[id] = { kind = 'fx', fxIdent = fxe.ident, fxId = id, busAware = fxe.busAware or nil,
                       fxDisplay = fxe.name and shortFxName(fxe.name) or nil,
                       ports = { audio = { ins = fxe.ins or 0, outs = fxe.outs or 0 },
-                                midi = { ins = 1, outs = 1 } } }
+                                midi = fxMidiPorts(fxe.ident) } }
         if isCyclic then feedbackSeeds[id] = true end
         local pinMaps = fxe.pinMaps or { ins = {}, outs = {} }
         for port, prs in pairs(pinMaps.ins or {}) do
@@ -941,11 +960,18 @@ local function readGraph(snap)
             for _, ref in ipairs(liveAudio[pair] or {}) do addAudioEdge(ref, id, port) end
           end
         end
-        -- MIDI: read inBus -> edges; an fx drives its outBus when midi-out is enabled,
-        -- else clears it (bus stops here). Plain JSFX has no stored midi -> bus 0, relays.
+        -- MIDI: native fx read stored routing; a JSFX's surface is the midirecv/midisend
+        -- scan — no recv: deaf (bus 0 passes), no send: drains bus 0 without re-emitting.
         local m = fxe.midi
         local inBus, outBus = m and m.inBus or 0, m and m.outBus or 0
-        if not (m and m.inDisabled) then
+        local hears  = m and not m.inDisabled
+        local drives = m and not m.outDisabled
+        if not m then
+          local traits = isJS(fxe.ident) and jsfxTraits(fxe.ident)
+                         or { recv = true, send = true }
+          hears, drives = traits.recv, traits.send
+        end
+        if hears then
           for _, ref in ipairs(liveMidi[inBus] or {}) do
             util.add(edges, { type = 'midi', from = ref.node, to = id })
           end
@@ -953,7 +979,8 @@ local function readGraph(snap)
         for port, prs in pairs(pinMaps.outs or {}) do
           for _, pair in ipairs(prs) do liveAudio[pair] = { { node = id, port = port } } end
         end
-        liveMidi[outBus] = not (m and m.outDisabled) and { { node = id } } or nil
+        if drives then liveMidi[outBus] = { { node = id } }
+        elseif hears or m then liveMidi[outBus] = nil end
       end
     end
 
