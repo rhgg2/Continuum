@@ -84,6 +84,7 @@ local BUS_TAP_LEN   = 34   -- visible length of a source copy's orthogonal tap o
 local BUS_TAP_GAP   = 22   -- spacing between source-copy taps along the bar
 local BUS_BAR_PAD   = 8    -- bar overhang past its outermost tap
 local BUS_BAR_THICK = 4    -- rail bar stroke width
+local BUS_BAR_HIT   = 10   -- perpendicular tolerance for dropping a rewire onto a bar
 -- side → outward normal (n) + along-bar axis (a); the bar is ⟂ the normal.
 local SIDE_VEC = {
   L = { nx = -1, ny = 0, ax = 0, ay = 1 },
@@ -1373,6 +1374,7 @@ local function busSegments(p, wireViews, nodesById, segs, busRails)
         bar = { x0 = bcx + sv.ax * lo, y0 = bcy + sv.ay * lo,
                 x1 = bcx + sv.ax * hi, y1 = bcy + sv.ay * hi },
         trunk = trunk,
+        node = node, dir = bus.dir, port = bus.ports[1],
       })
     end
   end
@@ -1456,6 +1458,19 @@ local function armBus(nodeId, dir, nv)
                  side = dir == 'in' and 'T' or 'B', byHover = true }
   else
     busOverlay = { nodeId = nodeId, dir = dir }
+  end
+end
+
+-- A bus bar is a fat drop target for its bussed port during a rewire: a draft
+-- whose grabbed end matches the bus dir (to→in, from→out) can land on the bar.
+local function busBarHit(busRails, draft, mx, my)
+  if draft.type == 'midi' then return nil end
+  local wantDir = (draft.cursorEnd == 'to') and 'in' or 'out'
+  for _, r in ipairs(busRails) do
+    if r.dir == wantDir and r.node and not draft.forbidden[r.node.id]
+       and pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= BUS_BAR_HIT then
+      return { nv = r.node, slot = { kind = 'audio', portIdx = r.port }, viaBar = r.bar }
+    end
   end
 end
 
@@ -1684,6 +1699,8 @@ local function renderCanvas(w, h)
   if wireDraft then
     targetHit      = dropTargetHit(nodeViews, draftCx, draftCy, wireDraft)
     draftSourceHit = draftSourceHoverHit(nodeViews, draftCx, draftCy)
+    -- A bar hit (fat target for the bussed port) wins over a node-port hit.
+    targetHit      = busBarHit(busRails, wireDraft, draftCx, draftCy) or targetHit
   elseif shiftHeld and not hoverFreeze then
     sourceHit = shiftHoverHit(nodeViews, lmx, lmy)
   end
@@ -1696,7 +1713,7 @@ local function renderCanvas(w, h)
   local overlays  = {}
   local frontIds  = {}
   local function add(pick)
-    if not pick or frontIds[pick.nv.id] then return end
+    if not pick or pick.viaBar or frontIds[pick.nv.id] then return end
     overlays[#overlays + 1] = pick
     frontIds[pick.nv.id] = true
   end
@@ -1731,6 +1748,10 @@ local function renderCanvas(w, h)
   -- After the node pass: nodes overpaint wires, so an in-pass highlight (and
   -- its AA spill onto the body corner) would be clipped.
   drawWireEndHighlight(p, segs, wireEndHover)
+  if targetHit and targetHit.viaBar then
+    local b = targetHit.viaBar
+    p.line(b.x0, b.y0, b.x1, b.y1, 'wiring.node.selected', BUS_BAR_THICK + 2)
+  end
 
   if fader then drawFader(p, fader) end
 

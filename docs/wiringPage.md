@@ -224,3 +224,15 @@ so `busSegments`/`drawBusPass` draw the real rail before commit. Release calls
 `wv:addBus` and the next frame renders it from the graph; the preview and
 committed frames are geometrically identical, so there's no flicker. Esc or a
 backdrop click (overlay only) cancels.
+
+### Bus bar as a rewire target
+
+A bus bar doubles as a fat drop target for its bussed port during a redraft.
+`busBarHit` matches the dragged end against the bar's direction — a `to`-end
+(seeking an in-port) lands on an **in**-bus, a `from`-end on an **out**-bus — so
+aiming anywhere along the bar is the same as hitting the bussed port's chip. The
+hit is synthesised as an ordinary `targetHit` (`slot = {kind='audio', portIdx}`)
+so `dropEligible` and the existing rewire/`addWire` commit path handle it
+unchanged; it just carries a `viaBar` marker so the overlay pass skips its
+(absent) port-row layout and the highlight strokes the bar instead. Cycle-blocked
+nodes (`draft.forbidden`) are excluded exactly as for a node-port drop.
