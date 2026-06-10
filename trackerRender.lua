@@ -470,18 +470,27 @@ local function vname(label)
   return cut and label:sub(1, cut - 1) or label
 end
 
--- Header rows needed: channel row + the tallest vertical param name.
+local function vnameSize() return math.floor(gui.fontSize.ui * 0.8) end
+
+-- Bottom gap under a vertical name, in rows: clear of the grid's top rule
+-- with a couple of px of breathing room.
+local function vnameGap() return 0.35 + 2 / gridY end
+
+-- Header rows: the tallest vertical name (rotated strip when painter has the
+-- LICE path, stacked glyphs otherwise). Tall names may poke into the Ch row.
 local function headerRows(cols)
-  local maxChars = 0
+  local maxPx = 0
   for _, col in ipairs(cols) do
     if col.type == 'cc' then
       local binding = tv:paramBinding(col.midiChan, col.cc)
       if binding then
-        maxChars = math.max(maxChars, utf8.len(vname(binding.label)) or 0)
+        local label = vname(binding.label)
+        local _, stripH = painter.measureRotated(ctx, label, vnameSize())
+        maxPx = math.max(maxPx, stripH or (utf8.len(label) or 0) * gui.fontSize.ui)
       end
     end
   end
-  return math.max(3, math.ceil(1.35 + maxChars * gui.fontSize.ui / gridY))
+  return math.max(3, math.ceil(vnameGap() + maxPx / gridY))
 end
 
 --contract: must run before draws reading chanX/chanW/chanOrder/totalWidth/gridHeight
@@ -673,7 +682,9 @@ local function drawTracker()
     if col.x then
       local xr = col.x + col.width - 1
       if vertical then
-        draw:textVertical(col.x, xr, -0.35, vertical, uiFont, gui.fontSize.ui, 'accent')
+        if not p.textUp((col.x + xr + 1) / 2, -vnameGap(), 'text', vertical, vnameSize()) then
+          draw:textVertical(col.x, xr, -vnameGap(), vertical, uiFont, gui.fontSize.ui, 'text')
+        end
       else
         draw:textCentred(col.x, xr, -2.1, col.label, 'text')
         if sub then

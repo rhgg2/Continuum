@@ -25,6 +25,73 @@ local ImGui = require 'imgui' '0.10'
 
 local M = {}
 
+----- Rotated text
+
+-- The drawlist API has no rotated text and no vertex access, so a rotated
+-- label is LICE-rasterised once into a white texture (alpha = coverage).
+local OVERSAMPLE = 2   -- rasterise at 2x, draw half-size: retina stays crisp
+
+local rotatedCache = {}   -- size .. ':' .. text -> {img, w, h} | false: LICE path unavailable
+
+local function rasteriseRotated(ctx, s, size)
+  local fontH = size * OVERSAMPLE
+  local bmpW, bmpH = (fontH + 2) * (utf8.len(s) or #s), fontH + 4
+  local bmp  = reaper.JS_LICE_CreateBitmap(true, bmpW, bmpH)
+  local gdi  = reaper.JS_GDI_CreateFont(fontH, 400, 0, false, false, false,
+    reaper.GetOS():find('Win') and 'Segoe UI' or 'Helvetica Neue')
+  local lice = reaper.JS_LICE_CreateFont()
+  reaper.JS_LICE_SetFontFromGDI(lice, gdi, '')
+  reaper.JS_LICE_SetFontColor(lice, 0xFF000000)
+  reaper.JS_LICE_SetFontBkColor(lice, 0xFFFFFFFF)
+  reaper.JS_LICE_Clear(bmp, 0xFFFFFFFF)
+  reaper.JS_LICE_DrawText(bmp, lice, s, #s, 0, 0, bmpW, bmpH)
+
+  -- Black on white → coverage off the green channel; the texture stays
+  -- white so the draw-time tint supplies the colour.
+  local coverage, texW = {}, 0
+  for y = 0, bmpH - 1 do
+    for x = 0, bmpW - 1 do
+      local cov = 255 - (math.floor(reaper.JS_LICE_GetPixel(bmp, x, y)) >> 8 & 0xFF)
+      if cov > 0 and x >= texW then texW = x + 1 end
+      coverage[y * bmpW + x] = cov
+    end
+  end
+  reaper.JS_LICE_DestroyFont(lice)
+  reaper.JS_GDI_DeleteObject(gdi)
+  reaper.JS_LICE_DestroyBitmap(bmp)
+  if texW == 0 then return false end
+
+  texW = math.min(bmpW, texW + 2)
+  local pixels = reaper.new_array(texW * bmpH)
+  for y = 0, bmpH - 1 do
+    for x = 0, texW - 1 do
+      pixels[y * texW + x + 1] = 0xFFFFFF00 + coverage[y * bmpW + x]
+    end
+  end
+  local img = ImGui.CreateImageFromSize(texW, bmpH)
+  ImGui.Image_SetPixels_Array(img, 0, 0, texW, bmpH, pixels)
+  ImGui.Attach(ctx, img)
+  return { img = img, w = texW, h = bmpH }
+end
+
+-- pcall doubles as the js_ReaScriptAPI presence check; a failure caches
+-- false so callers fall back for good.
+local function rotatedTex(ctx, s, size)
+  local key = size .. ':' .. s
+  if rotatedCache[key] == nil then
+    local ok, tex = pcall(rasteriseRotated, ctx, s, size)
+    rotatedCache[key] = ok and tex or false
+  end
+  return rotatedCache[key]
+end
+
+--contract: strip (w,h) in screen px for textUp at this size; nil when the LICE path is unavailable
+function M.measureRotated(ctx, s, size)
+  local tex = rotatedTex(ctx, s, size)
+  if not tex then return nil end
+  return tex.h / OVERSAMPLE, tex.w / OVERSAMPLE
+end
+
 --contract: sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
 function M.new(ctx, chrome, transform)
   -- ox/oy round to whole pixels so an integer logical coord lands on a pixel
@@ -151,6 +218,22 @@ function M.new(ctx, chrome, transform)
     local w, h = ImGui.CalcTextSize(ctx, s)
     ImGui.PopFont(ctx)
     return w, h
+  end
+
+  -- Rotated −π/2 (reads bottom-to-top, glyph tops left): the corner
+  -- permutation IS the rotation — the horizontal raster maps TL → bottom-left.
+  --contract: x is the strip's horizontal centre, yBottom its bottom edge; size is screen px
+  --contract: returns false (drawing nothing) when the LICE path is unavailable; callers fall back
+  function p.textUp(x, yBottom, name, s, size)
+    local tex = rotatedTex(ctx, s, size)
+    if not tex then return false end
+    local cx, by = toScreen(x, yBottom)
+    local sw, sh = tex.h / OVERSAMPLE, tex.w / OVERSAMPLE
+    local x0, yB = math.floor(cx - sw / 2), math.floor(by)
+    ImGui.DrawList_AddImageQuad(dl, tex.img,
+      x0, yB,   x0, yB - sh,   x0 + sw, yB - sh,   x0 + sw, yB,
+      0, 0, 1, 0, 1, 1, 0, 1, col(name))
+    return true
   end
 
   return p
