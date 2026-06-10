@@ -177,28 +177,45 @@ along-bar axis `a`; the bar is ⟂ the normal):
 
 - **Bar distance** from the body is `half + BUS_BASE + rank·BUS_STACK_GAP`,
   where `rank` is the bus's position among same-side busses — so stacked rails
-  don't overlap. The bar's centre sits on the node's centre line projected out
-  along the normal.
-- **Each tap lands orthogonally.** A real far-end node lands at its *projection*
-  onto the bar (the wire from its position to the projection is purely along the
-  normal, hence ⟂ the bar). A **source** far-end has no body — each of its edges
-  is a positioned copy, so it stands off the bar by `BUS_TAP_LEN` (plus its tag
-  patch extent) at an evenly-spaced slot, and the existing source-tag pass draws
-  its label at that outer end. Tap segs are ordinary `segs` — oriented from→to by
-  `bussedEnd` (in-bus lands the `to` end on the bar, out-bus the `from` end), so a
-  tap is a normal arrowed wire and its per-tap fader, RMB-delete, end-hit, and
-  redraft all read the right direction (out-bus taps point *away* from the bar).
+  don't overlap in distance. They are also shifted laterally by
+  `(rank − (count−1)/2)·BUS_TRUNK_GAP` along the bar axis, so the stacked trunks
+  enter the node at distinct points instead of all running down the centre line.
+- **Empty busses still render.** Iteration is driven by `node.busses` (across
+  every node), not by the claimed edges — so a bus with no wires yet draws as a
+  bare node-width bar plus its trunk, and the creation preview shows the rail
+  before the first wire lands.
+- **Each tap lands orthogonally.** Every tap lands at the *orthogonal projection*
+  of its far end onto the bar — projecting drops the along-axis component, so the
+  tooth is perpendicular wherever the far end sits. A real far-end node projects
+  from its body position; a **source** far-end has no body, so it stands off the
+  bar by `BUS_TAP_LEN` (plus its tag patch extent) at an evenly-spaced slot and
+  the source-tag pass draws its label there — *unless* it's been dragged, in
+  which case its custom (bussed-node-relative) `fromOffset` position is used and
+  projected, exactly like the star path, so a bussed source tag repositions like
+  any other. The live drag feeds that `fromOffset` as a transient *before* the
+  geometry pass — the same way a node drag feeds `pos` — so there is one geometry
+  path and the dragged and committed frames coincide (bar extends/shrinks, tooth
+  stays orthogonal), with no separate seg override. A node feeding several busses spreads its taps along each bar's axis
+  (`farSlot·BUS_TAP_GAP`) so they don't all leave its body at one point — the
+  along-axis shift keeps the projection orthogonal. Tap segs are ordinary `segs`
+  — oriented from→to by `bussedEnd` (in-bus lands the `to` end on the bar, out-bus
+  the `from` end), so a tap is a normal arrowed wire and its per-tap fader,
+  RMB-delete, end-hit, and redraft all read the right direction (out-bus taps
+  point *away* from the bar).
 - **The bar spans the node and its taps.** It runs from the trunk attach point
   (its centre, where the stem meets at `t=0`) out to the farthest tap, and is
   never shorter than the node's own width — `min..max` of the taps' along-axis
   coordinate unioned with ±half the node dimension, plus `BUS_BAR_PAD`. Length
   was never stored, so add/remove grow and shrink it free.
 - **The trunk** runs from the bar centre to the node edge along the normal; its
-  arrow follows `dir` (into the node for an in-bus, out for an out-bus).
+  arrow follows `dir` (into the node for an in-bus, out for an out-bus). When the
+  bussed port ≠ 1 its number is stamped once **on** the trunk near the node,
+  through the same `drawWireEndLabel` an ordinary wire uses (and sharing its
+  per-frame collision set), replacing the per-tap label every tap would otherwise
+  repeat — they all share the one bussed port.
 
-v1 warts: dragging a bussed source tag is inert (the copy's slot is derived, not
-`fromOffset`); a node pair carrying both a bussed and a non-bussed wire gets a
-small slot-offset gap. Both are noted for the deferred reposition work.
+v1 wart: a node pair carrying both a bussed and a non-bussed wire gets a small
+slot-offset gap, noted for the deferred reposition work.
 
 ### Bus creation
 

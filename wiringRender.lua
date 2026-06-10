@@ -80,6 +80,7 @@ local TAG_MAX_W = (NODE_W - 2 * LABEL_PAD) * WIRE_LABEL_SIZE / wireSize  -- node
 local SOURCE_TAG_PAD = 3  -- bg-patch padding around the source tag's glyphs (the patch occludes the wire behind them)
 local BUS_BASE      = 44   -- gap from node rect edge to the rail bar (first bus on a side)
 local BUS_STACK_GAP = 28   -- extra gap per additional same-side bus, so stacked rails don't overlap
+local BUS_TRUNK_GAP = 22   -- lateral shift per same-side bus, so stacked trunks don't enter at one point
 local BUS_TAP_LEN   = 34   -- visible length of a source copy's orthogonal tap off the bar
 local BUS_TAP_GAP   = 22   -- spacing between source-copy taps along the bar
 local BUS_BAR_PAD   = 8    -- bar overhang past its outermost tap
@@ -1032,10 +1033,10 @@ end
 -- opts.skipEdgeIdx skips the wire being redrafted (the draft line replaces it).
 -- The highlight draws separately after the node pass — nodes overpaint wires
 -- here, so an in-pass highlight would be invisible.
-local function drawWiresPass(p, segs, wireViews, opts)
+local function drawWiresPass(p, segs, wireViews, opts, placed)
   opts = opts or {}
   local skip = opts.skipEdgeIdx
-  local placedLabels = {}
+  local placedLabels = placed or {}
   for i = 1, #wireViews do
     local seg = segs[i]
     if seg and i ~= skip then
@@ -1050,12 +1051,14 @@ local function drawWiresPass(p, segs, wireViews, opts)
         if fromD then
           local stem = '##wire/' .. w.from .. ':' .. w.fromPort
                             .. '->' .. w.to   .. ':' .. w.toPort
-          if w.fromPort ~= 1 then
+          -- A bus tap's bussed end shares the bus port with every other tap, so its
+          -- number lives once on the trunk (drawBusPass), not repeated per tap.
+          if w.fromPort ~= 1 and not (w.bus and w.bus.bussedEnd == 'from') then
             drawWireEndLabel(p, sx, sy, ex, ey, fromD,
               w.fromPort, w.fromPortName, stem .. '/from', name,
               placedLabels)
           end
-          if w.toPort ~= 1 then
+          if w.toPort ~= 1 and not (w.bus and w.bus.bussedEnd == 'to') then
             drawWireEndLabel(p, ex, ey, sx, sy, segLen - toD,
               w.toPort, w.toPortName, stem .. '/to', name,
               placedLabels)
@@ -1284,111 +1287,150 @@ local function sourceSegments(p, wireViews, nodesById, segs)
   end
 end
 
--- Rank of bus `idx` among same-side busses on the node — sets its rail's
--- distance from the body so stacked rails don't overlap.
-local function sameSideRank(busses, idx, side)
-  local rank = 0
-  for i = 1, idx - 1 do
-    if busses[i].side == side then rank = rank + 1 end
-  end
-  return rank
-end
-
 -- Bussed edges render as a rail (bar + comb taps + one arrowed trunk), not a star.
 -- see docs/wiringPage.md § Bus rail geometry
-local function busSegments(p, wireViews, nodesById, segs, busRails)
-  local idxOf, groups, order = {}, {}, {}
+local function busSegments(p, wireViews, nodeViews, nodesById, segs, busRails)
+  local idxOf, groups = {}, {}
   for i, w in ipairs(wireViews) do idxOf[w] = i end
   for _, w in ipairs(wireViews) do
     if w.bus then
       local key = w.bus.nodeId .. '#' .. w.bus.busIdx
       local g = groups[key]
-      if not g then
-        g = { nodeId = w.bus.nodeId, busIdx = w.bus.busIdx, edges = {} }
-        groups[key] = g; util.add(order, key)
-      end
-      util.add(g.edges, w)
+      if not g then g = {}; groups[key] = g end
+      util.add(g, w)
     end
   end
-  for _, key in ipairs(order) do
-    local grp  = groups[key]
-    local node = nodesById[grp.nodeId]
-    local bus  = node and node.busses and node.busses[grp.busIdx]
-    if node and bus and SIDE_VEC[bus.side] then
-      local sv      = SIDE_VEC[bus.side]
-      local half    = (sv.nx ~= 0) and NODE_W / 2 or NODE_H / 2
-      local barDist = half + BUS_BASE + sameSideRank(node.busses, grp.busIdx, bus.side) * BUS_STACK_GAP
-      local bcx     = node.pos.x + sv.nx * barDist
-      local bcy     = node.pos.y + sv.ny * barDist
 
-      local sourceN = 0
-      for _, w in ipairs(grp.edges) do
+  -- A node feeding several busses spreads its taps along each bar's axis, so they
+  -- don't all leave its body at one point. farSlot[w] is the signed centred slot.
+  local farSlot = {}
+  do
+    local byFar = {}
+    for _, w in ipairs(wireViews) do
+      if w.bus then
         local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
-        if not nodesById[farId] then sourceN = sourceN + 1 end
-      end
-
-      local si, tMin, tMax = 0, math.huge, -math.huge
-      for _, w in ipairs(grp.edges) do
-        local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
-        local far   = nodesById[farId]
-        local t, sx, sy, fhw, fhh
-        if far then
-          t      = (far.pos.x - bcx) * sv.ax + (far.pos.y - bcy) * sv.ay
-          sx, sy = far.pos.x, far.pos.y
-        else
-          t = (si - (sourceN - 1) / 2) * BUS_TAP_GAP
-          si = si + 1
-          local _, thw, thh = sourceTagLayout(p, w.fromLabel or 'source')
-          fhw, fhh = thw, thh
-          local out = BUS_TAP_LEN + ((sv.nx ~= 0) and thw or thh)
-          sx = bcx + sv.ax * t + sv.nx * out
-          sy = bcy + sv.ay * t + sv.ny * out
+        if nodesById[farId] then
+          local g = byFar[farId]
+          if not g then g = {}; byFar[farId] = g end
+          util.add(g, w)
         end
-        local lx, ly = bcx + sv.ax * t, bcy + sv.ay * t
-        -- Bar end is a bare point (extent 0); the far end leaves extents nil so
-        -- wireExits trims it to the node body / tag box like a normal wire (not 0).
-        if w.bus.bussedEnd == 'to' then
-          segs[idxOf[w]] = { w = w, sx = sx, sy = sy, ex = lx, ey = ly,
-                             fromHW = fhw, fromHH = fhh, toHW = 0, toHH = 0 }
-        else
-          segs[idxOf[w]] = { w = w, sx = lx, sy = ly, ex = sx, ey = sy,
-                             fromHW = 0, fromHH = 0, toHW = fhw, toHH = fhh }
-        end
-        tMin, tMax = math.min(tMin, t), math.max(tMax, t)
       end
-      if tMin > tMax then tMin, tMax = 0, 0 end
+    end
+    for _, g in pairs(byFar) do
+      for i, w in ipairs(g) do farSlot[w] = (i - 1) - (#g - 1) / 2 end
+    end
+  end
 
-      local nex, ney = node.pos.x + sv.nx * half, node.pos.y + sv.ny * half
-      local trunk
-      if bus.dir == 'in' then
-        trunk = { sx = bcx, sy = bcy, ex = nex, ey = ney }
-      else
-        trunk = { sx = nex, sy = ney, ex = bcx, ey = bcy }
+  for _, node in ipairs(nodeViews) do
+    local busses = node.busses or {}
+    -- Rank each bus among same-side siblings (stack distance) and count per side
+    -- (centres the lateral offset so stacked trunks don't share an entry point).
+    local rankOf, sideCount = {}, {}
+    for i, bus in ipairs(busses) do
+      rankOf[i] = sideCount[bus.side] or 0
+      sideCount[bus.side] = rankOf[i] + 1
+    end
+
+    for busIdx, bus in ipairs(busses) do
+      local sv = SIDE_VEC[bus.side]
+      if sv then
+        local edges   = groups[node.id .. '#' .. busIdx] or {}
+        local half    = (sv.nx ~= 0) and NODE_W / 2 or NODE_H / 2
+        local rank    = rankOf[busIdx]
+        local lateral = (rank - (sideCount[bus.side] - 1) / 2) * BUS_TRUNK_GAP
+        local barDist = half + BUS_BASE + rank * BUS_STACK_GAP
+        local bcx     = node.pos.x + sv.nx * barDist + sv.ax * lateral
+        local bcy     = node.pos.y + sv.ny * barDist + sv.ay * lateral
+
+        local sourceN = 0
+        for _, w in ipairs(edges) do
+          local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
+          if not nodesById[farId] then sourceN = sourceN + 1 end
+        end
+
+        local si, tMin, tMax = 0, math.huge, -math.huge
+        for _, w in ipairs(edges) do
+          local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
+          local far   = nodesById[farId]
+          local sx, sy, fhw, fhh
+          if far then
+            local off = (farSlot[w] or 0) * BUS_TAP_GAP
+            sx = far.pos.x + sv.ax * off
+            sy = far.pos.y + sv.ay * off
+          else
+            local _, thw, thh = sourceTagLayout(p, w.fromLabel or 'source')
+            fhw, fhh = thw, thh
+            if w.fromOffset then
+              -- Custom tag pos is bussed-node-relative, like the star path's.
+              sx = node.pos.x + w.fromOffset.x
+              sy = node.pos.y + w.fromOffset.y
+            else
+              local t   = (si - (sourceN - 1) / 2) * BUS_TAP_GAP
+              si = si + 1
+              local out = BUS_TAP_LEN + ((sv.nx ~= 0) and thw or thh)
+              sx = bcx + sv.ax * t + sv.nx * out
+              sy = bcy + sv.ay * t + sv.ny * out
+            end
+          end
+          -- Land the tap at the tag's orthogonal projection onto the bar, so it
+          -- stays a perpendicular tooth wherever the (custom or slot) tag sits.
+          local t = (sx - bcx) * sv.ax + (sy - bcy) * sv.ay
+          local lx, ly = bcx + sv.ax * t, bcy + sv.ay * t
+          -- Bar end is a bare point (extent 0); the far end leaves extents nil so
+          -- wireExits trims it to the node body / tag box like a normal wire (not 0).
+          if w.bus.bussedEnd == 'to' then
+            segs[idxOf[w]] = { w = w, sx = sx, sy = sy, ex = lx, ey = ly,
+                               fromHW = fhw, fromHH = fhh, toHW = 0, toHH = 0 }
+          else
+            segs[idxOf[w]] = { w = w, sx = lx, sy = ly, ex = sx, ey = sy,
+                               fromHW = 0, fromHH = 0, toHW = fhw, toHH = fhh }
+          end
+          tMin, tMax = math.min(tMin, t), math.max(tMax, t)
+        end
+        if tMin > tMax then tMin, tMax = 0, 0 end
+
+        local nex = node.pos.x + sv.nx * half + sv.ax * lateral
+        local ney = node.pos.y + sv.ny * half + sv.ay * lateral
+        local trunk
+        if bus.dir == 'in' then
+          trunk = { sx = bcx, sy = bcy, ex = nex, ey = ney }
+        else
+          trunk = { sx = nex, sy = ney, ex = bcx, ey = bcy }
+        end
+        -- Bar always includes the trunk attach (t=0) and spans at least the node's
+        -- own width, then reaches out to the farthest tap. see docs § Bus rail geometry
+        local alongHalf = (sv.ax ~= 0) and NODE_W / 2 or NODE_H / 2
+        local lo = math.min(tMin, -alongHalf) - BUS_BAR_PAD
+        local hi = math.max(tMax,  alongHalf) + BUS_BAR_PAD
+        util.add(busRails, {
+          bar = { x0 = bcx + sv.ax * lo, y0 = bcy + sv.ay * lo,
+                  x1 = bcx + sv.ax * hi, y1 = bcy + sv.ay * hi },
+          trunk = trunk,
+          node = node, dir = bus.dir, port = bus.ports[1],
+        })
       end
-      -- Bar always includes the trunk attach (t=0) and spans at least the node's
-      -- own width, then reaches out to the farthest tap. see docs § Bus rail geometry
-      local alongHalf = (sv.ax ~= 0) and NODE_W / 2 or NODE_H / 2
-      local lo = math.min(tMin, -alongHalf) - BUS_BAR_PAD
-      local hi = math.max(tMax,  alongHalf) + BUS_BAR_PAD
-      util.add(busRails, {
-        bar = { x0 = bcx + sv.ax * lo, y0 = bcy + sv.ay * lo,
-                x1 = bcx + sv.ax * hi, y1 = bcy + sv.ay * hi },
-        trunk = trunk,
-        node = node, dir = bus.dir, port = bus.ports[1],
-      })
     end
   end
 end
 
 -- Rail bar + the one arrowed trunk, drawn over the tap landings (the bar
 -- occludes them like a source tag's patch occludes its wire). v1 is audio-only.
-local function drawBusPass(p, busRails)
+local function drawBusPass(p, busRails, placed)
   for _, r in ipairs(busRails) do
     local name = 'wiring.port.audio'
     p.line(r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1, name, BUS_BAR_THICK)
     local t = r.trunk
     p.line(t.sx, t.sy, t.ex, t.ey, name, WIRE_THICK)
     drawWireArrow(p, t.sx, t.sy, t.ex, t.ey, name, (t.sx + t.ex) / 2, (t.sy + t.ey) / 2)
+    -- Port number once on the trunk (shared collision set with drawWireEndLabel);
+    -- every tap shares this port and suppresses its own bussed-end label.
+    if r.port and r.port ~= 1 then
+      local audio = (r.dir == 'in') and r.node.ins.audio or r.node.outs.audio
+      local nodeX, nodeY = (r.dir == 'in') and t.ex or t.sx, (r.dir == 'in') and t.ey or t.sy
+      local barX,  barY  = (r.dir == 'in') and t.sx or t.ex, (r.dir == 'in') and t.sy or t.ey
+      drawWireEndLabel(p, nodeX, nodeY, barX, barY, 0, r.port,
+        audio and audio[r.port], '##bus/' .. r.node.id .. '/' .. r.dir, name, placed)
+    end
   end
 end
 
@@ -1617,17 +1659,20 @@ local function renderCanvas(w, h)
     busHandles = nv and busOverlayLayout(nv, busOverlay.dir) or nil
     if not busHandles then busOverlay = nil end
   end
+  -- Tag drag feeds a transient fromOffset (mirroring how node drag mutates pos),
+  -- so the one geometry pass below handles both star and bus tooth. mouseup commits.
+  if tagDrag then
+    local w = wireViewsList[tagDrag.edgeIdx]
+    local consumer = w and nodesById[w.to]
+    if consumer then
+      w.fromOffset = { x = tagDrag.sx0 + (lmx - tagDrag.mx0) - consumer.pos.x,
+                       y = tagDrag.sy0 + (lmy - tagDrag.my0) - consumer.pos.y }
+    end
+  end
   local segs = wireSegments(wireViewsList, nodesById)
   sourceSegments(p, wireViewsList, nodesById, segs)
   local busRails = {}
-  busSegments(p, wireViewsList, nodesById, segs, busRails)
-  -- A live tag drag overrides its seg's source end so geometry below (and the
-  -- stamped midpoint) follow the cursor; mouseup commits the pos.
-  if tagDrag and segs[tagDrag.edgeIdx] then
-    local seg = segs[tagDrag.edgeIdx]
-    seg.sx = tagDrag.sx0 + (lmx - tagDrag.mx0)
-    seg.sy = tagDrag.sy0 + (lmy - tagDrag.my0)
-  end
+  busSegments(p, wireViewsList, nodeViews, nodesById, segs, busRails)
   -- Stamp each seg's visible midpoint once: the arrow, fader, and RMB menu all
   -- anchor here, so a single source keeps draw and hit-test from drifting.
   for _, seg in pairs(segs) do seg.cx, seg.cy = wireMid(seg) end
@@ -1723,15 +1768,16 @@ local function renderCanvas(w, h)
   add(stickyHit)
 
   -- z-stack (docs/wiringPage.md): wires < source tags < sleeves < draft < nodes.
+  local placedLabels = {}
   drawWiresPass(p, segs, wireViewsList,
-    { skipEdgeIdx = wireDraft and wireDraft.edgeIdx })
+    { skipEdgeIdx = wireDraft and wireDraft.edgeIdx }, placedLabels)
   for i = 1, #wireViewsList do
     local seg = segs[i]
     if seg and seg.w.fromKind == 'source' then
       drawSourceTag(p, seg.sx, seg.sy, seg.w.fromLabel or 'source')
     end
   end
-  drawBusPass(p, busRails)
+  drawBusPass(p, busRails, placedLabels)
   for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
   drawDraftWire(p, wireDraft, nodesById, draftCx, draftCy)
   for _, nv in ipairs(nodeViews) do
