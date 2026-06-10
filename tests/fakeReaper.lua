@@ -102,6 +102,23 @@ function M.new()
     if type(entry) == 'table' and entry.fxType then return entry.fxType end
     return (fxIdentOf(entry) or ''):sub(1, 3) == 'JS:' and 'JS' or 'VST3'
   end
+  -- Per-fx stores keyed '<track>/<idx>/...' follow deletes like fxGuids:
+  -- drop the deleted idx, shift higher entries down.
+  local function shiftFxStore(store, track, idx)
+    local prefix = tostring(track) .. '/'
+    local out = {}
+    for k, v in pairs(store) do
+      local keep = k
+      if k:sub(1, #prefix) == prefix then
+        local i, rest = k:match('^(%d+)/(.*)$', #prefix + 1)
+        i = tonumber(i)
+        if i == idx then keep = nil
+        elseif i and i > idx then keep = prefix .. (i - 1) .. '/' .. rest end
+      end
+      if keep then out[keep] = v end
+    end
+    return out
+  end
   function r.TrackFX_GetCount(track)
     return #(state.fxByTrack[track] or {})
   end
@@ -127,6 +144,8 @@ function M.new()
       g[idx] = nil
       for k = idx + 1, maxK do g[k - 1] = g[k]; g[k] = nil end
     end
+    state.fxParams     = shiftFxStore(state.fxParams, track, idx)
+    state.fxNamedParms = shiftFxStore(state.fxNamedParms, track, idx)
     return true
   end
 
@@ -151,18 +170,14 @@ function M.new()
     local dstList = state.fxByTrack[dstTr]
     if not dstList then dstList = {}; state.fxByTrack[dstTr] = dstList end
     table.insert(dstList, dstIdx + 1, entry)
-    -- For same-track move, srcIdx and dstIdx live in the same list; the
-    -- table.remove above already shifted things, and the table.insert sits
-    -- the entry at dstIdx (1-based dstIdx+1), matching REAPER's contract
-    -- ("destIdx is the target index after the source has been removed").
-    if guid then
-      local dg = state.fxGuids[dstTr]
-      if not dg then dg = {}; state.fxGuids[dstTr] = dg end
-      local maxK = -1
-      for k in pairs(dg) do if k > maxK then maxK = k end end
-      for k = maxK, dstIdx, -1 do dg[k + 1] = dg[k]; dg[k] = nil end
-      dg[dstIdx] = guid
-    end
+    -- Insert always displaces guids at dstIdx and above — even when the moved
+    -- entry has no guid — else the guid map points at the wrong fx post-move.
+    local dg = state.fxGuids[dstTr]
+    if not dg then dg = {}; state.fxGuids[dstTr] = dg end
+    local maxK = -1
+    for k in pairs(dg) do if k > maxK then maxK = k end end
+    for k = maxK, dstIdx, -1 do dg[k + 1] = dg[k]; dg[k] = nil end
+    if guid then dg[dstIdx] = guid end
     return true
   end
   function r.TrackFX_GetIOSize(track, idx)
@@ -197,7 +212,11 @@ function M.new()
     -- Identity/name surface for rm's fx read. Table entries may carry .name
     -- (display) and .renamed (user instance rename); bare strings are ident only.
     if entry == nil then return false, '' end
-    if parm == 'fx_ident' then return true, fxIdentOf(entry) end
+    if parm == 'fx_ident' then
+      -- Real REAPER reports a JSFX's fx_ident as the bare Effects-relative path.
+      local ident = fxIdentOf(entry) or ''
+      return true, ident:sub(1, 3) == 'JS:' and ident:sub(4) or ident
+    end
     if parm == 'fx_type'  then return true, fxTypeOf(entry)  end
     if parm == 'fx_name' or parm == 'original_name' then
       local name = type(entry) == 'table' and entry.name
@@ -206,7 +225,18 @@ function M.new()
     if parm == 'renamed_name' then
       return true, (type(entry) == 'table' and entry.renamed) or ''
     end
+    local stored = state.fxNamedParms[tostring(track) .. '/' .. idx .. '/' .. parm]
+    if stored ~= nil then return true, stored end
     return false, ''
+  end
+  -- Write-through store for named config parms (the plink/mod surface).
+  -- Keyed by fx index like fxParams; deletes re-key via shiftFxStore, moves don't.
+  state.fxNamedParms = {}
+  function r.TrackFX_SetNamedConfigParm(track, idx, parm, value)
+    state.fxNamedParms[tostring(track) .. '/' .. idx .. '/' .. parm] = tostring(value)
+    state.calls[#state.calls + 1] = { fn = 'TrackFX_SetNamedConfigParm',
+      track = track, fxIdx = idx, parm = parm, value = value }
+    return true
   end
   state.fxParams = {}
   function r.TrackFX_SetParam(track, fxIdx, paramIdx, value)

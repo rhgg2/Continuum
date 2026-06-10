@@ -70,10 +70,11 @@ function harness.mk(opts)
   -- Only region-wired specs need the real group engine.
   local gm = opts.groups
          and util.instantiate('groupManager', { tm = tm, cm = cm }) or nil
-  local vm = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr, gm = gm })
+  local pa = util.instantiate('paramAutomation', { cm = cm })
+  local vm = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr, gm = gm, pa = pa })
   cmgr:push('tracker')
 
-  return { fm = mm, cm = cm, tm = tm, vm = vm, ec = vm:ec(), gm = gm,
+  return { fm = mm, cm = cm, tm = tm, vm = vm, ec = vm:ec(), gm = gm, pa = pa,
            clipboard = vm:clipboard(), cmgr = cmgr, reaper = fakeReaper }
 end
 

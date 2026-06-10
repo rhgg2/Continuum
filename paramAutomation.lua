@@ -200,6 +200,16 @@ local function reconcileAutoSends(track, dstGuids)
 end
 
 local function applyTrack(track, spec, mirror)
+  -- stale plinks first: targets the mirror linked that the new spec doesn't
+  local live = {}
+  for _, l in ipairs(spec and spec.listen or {}) do live[util.key(l.fxGuid, l.param)] = true end
+  for _, old in ipairs(mirror and mirror.listen or {}) do
+    if not live[util.key(old.fxGuid, old.param)] then
+      local fxIdx = fxIndexByGuid(track, old.fxGuid)
+      if fxIdx then clearPlink(track, fxIdx, old.param) end
+    end
+  end
+
   if not spec then
     local ccIdx = ccNodeIndex(track)
     if ccIdx then reaper.TrackFX_Delete(track, ccIdx) end
@@ -219,15 +229,6 @@ local function applyTrack(track, spec, mirror)
   end
   writeBanks(track, ccIdx, spec)
 
-  -- stale plinks first: targets the mirror linked that the new spec doesn't
-  local live = {}
-  for _, l in ipairs(spec.listen) do live[util.key(l.fxGuid, l.param)] = true end
-  for _, old in ipairs(mirror and mirror.listen or {}) do
-    if not live[util.key(old.fxGuid, old.param)] then
-      local fxIdx = fxIndexByGuid(track, old.fxGuid)
-      if fxIdx then clearPlink(track, fxIdx, old.param) end
-    end
-  end
   for s, l in ipairs(spec.listen) do
     if s > SLOTS then break end
     local fxIdx = fxIndexByGuid(track, l.fxGuid)

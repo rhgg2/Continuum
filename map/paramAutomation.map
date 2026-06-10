@@ -1,4 +1,4 @@
-@module paramAutomation  src=paramAutomation.lua  loc=358  sha=untracked  mode=chunk
+@module paramAutomation  src=paramAutomation.lua  loc=359  sha=b3d2ed5  mode=chunk
 @deps cm, facade
 
 # Invariants & contracts
@@ -43,36 +43,36 @@
       -- Encoding mirrors routingManager createSend/readSendChans (bits 14/22, +1-biased).
   @fn applyTrack(track, spec, mirror)  @ 202
   -- Allocation
-  @fn usedLanes(srcTrack, chan)  @ 246
+  @fn usedLanes(srcTrack, chan)  @ 247
       -- Authored lanes are track-unique across takes (the filter bank is shared per
       -- track): used = bound lanes, user cc columns, and event-bearing ccs on the
       -- channel, across every take on the track.
-  @fn allocLane(srcTrack, chan)  @ 265
-  @fn allocBusCode()  @ 272
+  @fn allocLane(srcTrack, chan)  @ 266
+  @fn allocBusCode()  @ 273
 
 # Public API (pa:*)
   @api pa.computeDesired(bindings)  @ 94
       -- Pure: bindings -> { [trackGuid] = trackSpec }. Pooled duplicates collapse
       -- via the seen-keys; slot order is sorted for a stable REAPER image.
-  @api pa:apply()  @ 288
+  @api pa:apply()  @ 289
       @contract  no-op (and no undo point) when every track's mirror already matches
-  @api pa:automate(chan, target)  @ 305
+  @api pa:automate(chan, target)  @ 306
       @contract  chan is the tracker's 1-based channel; returns the allocated cc lane, or nil + reason
-  @api pa:unautomate(chan, lane)  @ 324
-  @api pa:binding(chan, lane)  @ 333
-  @api pa:targets()  @ 339
+  @api pa:unautomate(chan, lane)  @ 325
+  @api pa:binding(chan, lane)  @ 334
+  @api pa:targets()  @ 340
       @contract  palette rows from the wiring facade's cone walk; {} without a take or wiring
-  @api pa:params(trackGuid, fxGuid)  @ 346
+  @api pa:params(trackGuid, fxGuid)  @ 347
 
 # Uses (outbound edges)
   @use call    cm.boundTake  @ 67
-  @use call    cm.get  @ 312, 325, 334
-  @use call    cm.readTakeKey  @ 76, 250, 252, 275
-  @use call    cm.set  @ 319, 329
-  @use call    facade.get  @ 341
-  @use call    util.atomic  @ 299
-  @use call    util.deepEq  @ 294
-  @use call    util.key  @ 101, 224, 226
+  @use call    cm.get  @ 313, 326, 335
+  @use call    cm.readTakeKey  @ 76, 251, 253, 276
+  @use call    cm.set  @ 320, 330
+  @use call    facade.get  @ 342
+  @use call    util.atomic  @ 300
+  @use call    util.deepEq  @ 295
+  @use call    util.key  @ 101, 205, 207
   @use call    util.print  @ 161
   @use call    util.serialise  @ 138
   @use require util  @ 16
