@@ -26,7 +26,7 @@ local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
 
-local tm, cm, cmgr, gm = (...).tm, (...).cm, (...).cmgr, (...).gm
+local tm, cm, cmgr, gm, pa = (...).tm, (...).cm, (...).cmgr, (...).gm, (...).pa
 
 local function print(...)
   return util.print(...)
@@ -2116,6 +2116,7 @@ function tv:hideExtraCol()
     if col.lane ~= #noteCols then return end
     want.notes = #noteCols - 1
   elseif col.type == 'cc' then
+    if pa:binding(chan, col.cc) then pa:unautomate(chan, col.cc) end
     if want.ccs then
       want.ccs[col.cc] = nil
       if not next(want.ccs) then want.ccs = nil end
@@ -2129,6 +2130,39 @@ function tv:hideExtraCol()
   end
   cm:set('take', 'extraColumns', next(extras) and extras)
   tv:rebuild()
+end
+
+----- Param automation (palette selection + pa pass-throughs)
+
+--shape: paletteParam = { trackGuid, fxGuid, param, label } — the palette's selected parameter
+local paletteParam = nil
+
+function tv:paletteParam()       return paletteParam end
+function tv:setPaletteParam(sel) paletteParam = sel end
+
+function tv:paramTargets()                return pa:targets() end
+function tv:listParams(trackGuid, fxGuid) return pa:params(trackGuid, fxGuid) end
+function tv:paramBinding(chan, lane)      return pa:binding(chan, lane) end
+
+--contract: binds the selected palette param at the cursor column's channel; adds its cc column
+function tv:automateParam()
+  local col = grid.cols[ec:col()]
+  if not (col and paletteParam) then return end
+  local lane = pa:automate(col.midiChan, paletteParam)
+  if not lane then return end
+  local extras = cm:get('extraColumns')
+  -- Absence-default mirrors tm:rebuild's, like addExtraCol: no entry means one note col.
+  local want = extras[col.midiChan] or { notes = 1 }
+  extras[col.midiChan] = want
+  want.ccs = want.ccs or {}
+  want.ccs[lane] = true
+  cm:set('take', 'extraColumns', extras)
+end
+
+--contract: drops the cursor cc column's binding; the column survives as a plain cc lane
+function tv:unautomateParam()
+  local col = grid.cols[ec:col()]
+  if col and col.type == 'cc' then pa:unautomate(col.midiChan, col.cc) end
 end
 
 function tv:showDelay()

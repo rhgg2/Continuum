@@ -18,8 +18,6 @@ about:
   in one instance. Everything is passed through: the automation bus is
   invisible to instruments, so nothing else needs stripping.
 
-ext_midi_bus = 1;
-
 in_pin:none
 out_pin:none
 
@@ -35,7 +33,8 @@ out_pin:none
 ?>
 
 @init
-autobus = 126; // 127 is wiring's parking bus; the wiring allocator hands out 0..125
+ext_midi_bus = 1; // header-zone code is never executed; bus support must be enabled here
+autobus = 126;    // 127 is wiring's parking bus; the wiring allocator hands out 0..125
 src = 0;     // mem[0..15]  : filter bank, authored codes
 dst = 16;    // mem[16..31] : filter bank, bus-address codes
 listen = 32; // mem[32..47] : listen bank, bus-address codes

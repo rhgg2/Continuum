@@ -631,7 +631,8 @@ local function drawTracker()
       laneByChan[col.midiChan] = n
       sub = tostring(n)
     elseif col.type == 'cc' then
-      sub = tostring(col.cc)
+      local binding = tv:paramBinding(col.midiChan, col.cc)
+      sub = binding and binding.label or tostring(col.cc)
     end
     if col.x then
       local xr = col.x + col.width - 1
@@ -839,6 +840,89 @@ local function drawTracker()
 
   -- Reserve content space so ImGui knows the drawable area
   ImGui.Dummy(ctx, (totalWidth + GUTTER) * gridX, (gridHeight + HEADER) * gridY)
+end
+
+----- Param palette
+
+-- Pane geometry, mirroring arrange/wiring's body split.
+local PALETTE_W  = 200
+local PANE_GAP   = 11   -- 1px vrule sits centred here; neither pane edge touches it
+local HEADER_PAD = 8
+local HEADER_GAP = 4
+
+local function paletteHeader()
+  local p       = painter.new(ctx, chrome, {})
+  local ox, oy  = ImGui.GetCursorScreenPos(ctx)
+  local paneW   = select(1, ImGui.GetContentRegionAvail(ctx))
+  local rowH    = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
+  local headerH = rowH + HEADER_PAD
+  local label   = 'parameters'
+  local tw      = p.measure(label)
+  p.text(ox + math.floor((paneW - tw) / 2), oy + HEADER_PAD, 'text', label)
+  p.line(ox, oy + headerH, ox + paneW, oy + headerH, 'text', 1)
+  ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
+end
+
+local function paletteActions()
+  local col   = tv.grid.cols[tv:ec():col()]
+  local bound = col and col.type == 'cc' and tv:paramBinding(col.midiChan, col.cc)
+  chrome.disabledIf(not tv:paletteParam(), function()
+    if ImGui.Button(ctx, 'automate##param') then tv:automateParam() end
+  end)
+  ImGui.SameLine(ctx, 0, 4)
+  chrome.disabledIf(not bound, function()
+    if ImGui.Button(ctx, 'remove##param') then tv:unautomateParam() end
+  end)
+end
+
+local function paletteTree()
+  local rows = tv:paramTargets()
+  if #rows == 0 then
+    ImGui.TextDisabled(ctx, '(no fx reachable)')
+    return
+  end
+  local sel, heading = tv:paletteParam(), nil
+  for _, row in ipairs(rows) do
+    local section = row.generator and 'generators' or 'fx'
+    if section ~= heading then
+      heading = section
+      ImGui.TextDisabled(ctx, heading)
+    end
+    if ImGui.TreeNode(ctx, row.name .. '##' .. row.fxGuid) then
+      for _, prm in ipairs(tv:listParams(row.trackGuid, row.fxGuid)) do
+        local isSel   = sel and sel.fxGuid == row.fxGuid and sel.param == prm.index
+        local clicked = ImGui.Selectable(ctx, prm.name .. '##p' .. prm.index, isSel)
+        local double  = ImGui.IsItemHovered(ctx) and ImGui.IsMouseDoubleClicked(ctx, 0)
+        if clicked or double then
+          tv:setPaletteParam{ trackGuid = row.trackGuid, fxGuid = row.fxGuid,
+                              param = prm.index, label = prm.name }
+        end
+        if double then tv:automateParam() end
+      end
+      ImGui.TreePop(ctx)
+    end
+  end
+end
+
+-- The 1px vrule + palette child, positioned from the body origin so the split
+-- matches arrange/wiring's even though the tracker grid isn't a child window.
+local function drawParamPalette(x, y, h)
+  local p     = painter.new(ctx, chrome, {})
+  local lineX = x + math.floor(PANE_GAP / 2)
+  p.line(lineX, y, lineX, y + h, 'text', 1)
+  ImGui.SetCursorScreenPos(ctx, x + PANE_GAP, y)
+  ImGui.PushFont(ctx, uiFont, gui.fontSize.ui)
+  if ImGui.BeginChild(ctx, '##paramPalette', PALETTE_W, h,
+                      ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
+    chrome.pushChromeStyles()
+    paletteHeader()
+    paletteActions()
+    ImGui.Separator(ctx)
+    paletteTree()
+    chrome.popChromeStyles()
+  end
+  ImGui.EndChild(ctx)
+  ImGui.PopFont(ctx)
 end
 
 local function drawStatusBar()
@@ -1446,13 +1530,17 @@ function renderer:renderBody(_, w, h, dispatch)
     ImGui.PopFont(ctx)
     return
   end
+  local ox, oy = ImGui.GetCursorScreenPos(ctx)
+  local gridW  = math.max(120, w - PALETTE_W - PANE_GAP)
   ImGui.PushFont(ctx, font, 15)
-  computeLayout(w, h)
+  computeLayout(gridW, h)
   drawLaneStrip()
   -- Lane-drag callbacks may rebuild grid.cols; re-layout for drawTracker.
-  computeLayout(w, h)
+  computeLayout(gridW, h)
   drawTracker()
   ImGui.PopFont(ctx)
+
+  drawParamPalette(ox + gridW, oy, h)
 
   handleMouse()
   local kr = dispatch and dispatch(self:focusState()) or { commandHeld = {} }
