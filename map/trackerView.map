@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2590  sha=54569bd  mode=chunk
+@module trackerView  src=trackerView.lua  loc=2595  sha=d59fd4c  mode=chunk
 @deps tm, cm, cmgr, gm, pa
 
 # Invariants & contracts
@@ -68,12 +68,12 @@
   @state dupeState = nil  @ 1735
   @state groupSrc, groupDupState  @ 1739
   @state paletteParam = nil  @ 2138
-  @state tracker = cmgr:scope('tracker')  @ 2232
-  @state rebuilding = false  @ 2295
-  @state groupBridge = {  @ 2455
-  @state GROUP_PASSTHROUGH = {  @ 2535
-  @state GROUP_KEEP = {}  @ 2544
-  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 2551
+  @state tracker = cmgr:scope('tracker')  @ 2237
+  @state rebuilding = false  @ 2300
+  @state groupBridge = {  @ 2460
+  @state GROUP_PASSTHROUGH = {  @ 2540
+  @state GROUP_KEEP = {}  @ 2549
+  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 2556
 
 # Private functions
   @fn print(...)  @ 31
@@ -217,15 +217,15 @@
   -- Columns
   -- Param automation (palette selection + pa pass-throughs)
   -- Group quick-verbs
-  @fn groupMark()  @ 2190
+  @fn groupMark()  @ 2195
       -- mark and copy share the one groupSrc lifetime; without this, mark ->
       -- groupPaste degrades to plain paste (groupPaste gates on groupSrc, not
       -- the active group).
-  @fn groupDuplicate()  @ 2200
+  @fn groupDuplicate()  @ 2205
       -- destination so the projection replaces rather than interleaves;
       -- tm:flush commits gm's staged adds (it only stages otherwise,
       -- colliding with the next edit).
-  @fn groupPaste()  @ 2215
+  @fn groupPaste()  @ 2220
       -- The pasted region [a.ppq, a.ppq+groupSrc.dur) must fit wholly inside
       -- the take. Out of bounds is a silent no-op, NOT a fallthrough to plain
       -- paste (that would paste non-group content the user didn't ask for);
@@ -335,92 +335,92 @@
   @api tv:automateParam()  @ 2148
       @contract  binds the selected palette param at the cursor column's channel; adds its cc column
   @api tv:unautomateParam()  @ 2163
-      @contract  drops the cursor cc column's binding; the column survives as a plain cc lane
-  @api tv:showDelay()  @ 2168
+      @contract  deletes the cursor cc column's events; column + binding then go via hideExtraCol
+  @api tv:showDelay()  @ 2173
   -- Command table
   -- Rebuild
-  @api tv:rebuild(takeChanged)  @ 2300
+  @api tv:rebuild(takeChanged)  @ 2305
       @contract  reentrancy-guarded; bails on no-take (page shows placeholder)
       @contract  takeChanged=true resets ec and re-reads resolution/length/timeSigs
       @contract  grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
-  @api tv:dropGrid()  @ 2422
+  @api tv:dropGrid()  @ 2427
       @contract  blank the grid so renderBody falls through to the "Select a MIDI item" placeholder. Counterpart to bindTake(nil)'s dormant seam, for when the take is destroyed rather than handed off.
   -- Lifecycle
   -- Factory load
   -- Group quick-verb lifetimes
-  @api tv:wireGroupLifetime()  @ 2565
+  @api tv:wireGroupLifetime()  @ 2570
       -- Snapshot the source on copy + install the clear-on-mutation sweep.
       -- Must run AFTER every tracker command (tv's, clipboard's, ec's AND
       -- trackerPage's page verbs) registers, so the sweep covers page commands
       -- too -- trackerPage calls this once post-registration. copy is plain:
       -- clipboard:copy ends with ec:selClear(), so a doAfter snapshot would
       -- see an empty selection; doBefore captures the live rect.
-  @api tv:endReselectCascades()  @ 2578
+  @api tv:endReselectCascades()  @ 2583
       -- Mouse re-selection ends both cursor-anchored cascades by hand (cmgr's keep-set
       -- sweep doesn't see the mouse, so the run tokens would outlive a fresh selection).
-  @api tv:endAllCascades()  @ 2583
+  @api tv:endAllCascades()  @ 2588
       -- A committed typed edit cancels every cascade and drops the groupPaste
       -- source, exactly as a non-keep cmgr command would -- editEvent is the
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).
 
 # Uses (outbound edges)
   @use call    cm.assign  @ 262, 314
-  @use call    cm.get  @ 90, 256, 261, 263, 312, 319, 325, 381, 406, 415, 416, 427, 428, 522, 525, 583, 590, 681, 1398, 1533, 1730, 2055, 2088, 2101, 2153, 2169, 2240, 2241, 2279, 2280, 2321, 2334, 2335, 2379
+  @use call    cm.get  @ 90, 256, 261, 263, 312, 319, 325, 381, 406, 415, 416, 427, 428, 522, 525, 583, 590, 681, 1398, 1533, 1730, 2055, 2088, 2101, 2153, 2174, 2245, 2246, 2284, 2285, 2326, 2339, 2340, 2384
   @use call    cm.getAt  @ 260, 370, 371, 388, 395
-  @use call    cm.set  @ 326, 353, 354, 372, 383, 390, 397, 408, 638, 1264, 1729, 2076, 2093, 2131, 2159, 2181, 2240, 2241, 2290
-  @use call    cmgr.doAfter  @ 2494, 2501
-  @use call    cmgr.doBefore  @ 2503, 2525, 2566, 2572, 2573
-  @use call    cmgr.invoke  @ 2225
+  @use call    cm.set  @ 326, 353, 354, 372, 383, 390, 397, 408, 638, 1264, 1729, 2076, 2093, 2131, 2159, 2186, 2245, 2246, 2295
+  @use call    cmgr.doAfter  @ 2499, 2506
+  @use call    cmgr.doBefore  @ 2508, 2530, 2571, 2577, 2578
+  @use call    cmgr.invoke  @ 2230
   @use call    cmgr.noteChars  @ 582
-  @use call    cmgr.prefixRational  @ 2252, 2259
-  @use call    cmgr.scope  @ 2232
-  @use call    gm.clearActive  @ 2572, 2585
-  @use call    gm.duplicateInto  @ 2205
+  @use call    cmgr.prefixRational  @ 2257, 2264
+  @use call    cmgr.scope  @ 2237
+  @use call    gm.clearActive  @ 2577, 2590
+  @use call    gm.duplicateInto  @ 2210
   @use call    gm.eachInstance  @ 1990, 2001, 2008, 2020
-  @use call    gm.groupRect  @ 2466
-  @use call    gm.localMode  @ 2285
-  @use call    gm.mark  @ 2192
+  @use call    gm.groupRect  @ 2471
+  @use call    gm.localMode  @ 2290
+  @use call    gm.mark  @ 2197
   @use call    gm.resizeGroup  @ 2043
-  @use call    gm.setLocalMode  @ 2285
-  @use call    gm.stamp  @ 2221
+  @use call    gm.setLocalMode  @ 2290
+  @use call    gm.stamp  @ 2226
   @use call    gm.stateOf  @ 2002
   @use call    pa.automate  @ 2151
   @use call    pa.binding  @ 2119, 2145
   @use call    pa.params  @ 2144
   @use call    pa.targets  @ 2143
-  @use call    pa.unautomate  @ 2119, 2165
+  @use call    pa.unautomate  @ 2119
   @use call    timing.delayToPPQ  @ 1178
   @use call    timing.logPerRow  @ 244
   @use call    timing.ppqToDelay  @ 1179
   @use call    tm.addEvent  @ 527, 684, 727, 791, 1711
   @use call    tm.assignEvent  @ 199, 278, 287, 301, 591, 625, 634, 661, 672, 677, 719, 771, 819, 838, 924, 1422, 1429, 1438, 1445, 1525, 1539, 1568
-  @use call    tm.channels  @ 2358
-  @use call    tm.currentTake  @ 2302
-  @use call    tm.deleteEvent  @ 600, 603, 809, 926, 1310, 1353, 1517, 1537, 1548, 1710, 1963
-  @use call    tm.flush  @ 556, 772, 792, 810, 820, 849, 870, 882, 953, 971, 1005, 1054, 1091, 1103, 1154, 1184, 1226, 1366, 1493, 1501, 1569, 1575, 1582, 1713, 2206, 2222, 2471
+  @use call    tm.channels  @ 2363
+  @use call    tm.currentTake  @ 2307
+  @use call    tm.deleteEvent  @ 600, 603, 809, 926, 1310, 1353, 1517, 1537, 1548, 1710, 1963, 2166
+  @use call    tm.flush  @ 556, 772, 792, 810, 820, 849, 870, 882, 953, 971, 1005, 1054, 1091, 1103, 1154, 1184, 1226, 1366, 1493, 1501, 1569, 1575, 1582, 1713, 2167, 2211, 2227, 2476
   @use call    tm.getChannel  @ 94, 115
   @use call    tm.interpolate  @ 897, 1834
-  @use call    tm.length  @ 335, 1882, 1887, 2218, 2314
+  @use call    tm.length  @ 335, 1882, 1887, 2223, 2319
   @use call    tm.name  @ 332, 1826
-  @use call    tm.playFrom  @ 2273, 2276
+  @use call    tm.playFrom  @ 2278, 2281
   @use call    tm.rescaleLength  @ 337
-  @use call    tm.resolution  @ 2313
+  @use call    tm.resolution  @ 2318
   @use call    tm.setLength  @ 339
   @use call    tm.setMutedChannels  @ 424
   @use call    tm.setName  @ 332
   @use call    tm.tileLength  @ 338
-  @use call    tm.timeSigs  @ 2315
-  @use call    tuning.findTemper  @ 2379
+  @use call    tm.timeSigs  @ 2320
+  @use call    tuning.findTemper  @ 2384
   @use call    tuning.snap  @ 586
   @use call    tuning.transposeStep  @ 1417
-  @use call    util.add  @ 137, 148, 224, 535, 759, 942, 1024, 1033, 1118, 1147, 1166, 1216, 1303, 1304, 1348, 1349, 1643, 1938, 2109, 2352, 2365, 2402
+  @use call    util.add  @ 137, 148, 224, 535, 759, 942, 1024, 1033, 1118, 1147, 1166, 1216, 1303, 1304, 1348, 1349, 1643, 1938, 2109, 2357, 2370, 2407
   @use call    util.assign  @ 721, 722
   @use call    util.atomic  @ 331, 734
   @use call    util.between  @ 219, 861, 1301, 1347, 1643, 1934, 1963
-  @use call    util.clamp  @ 318, 484, 489, 583, 624, 632, 654, 668, 702, 984, 1419, 1730, 2240, 2241
+  @use call    util.clamp  @ 318, 484, 489, 583, 624, 632, 654, 668, 702, 984, 1419, 1730, 2245, 2246
   @use call    util.clone  @ 1705
   @use call    util.gcd  @ 1242
-  @use call    util.instantiate  @ 2373, 2474, 2484
+  @use call    util.instantiate  @ 2378, 2479, 2489
   @use call    util.isNote  @ 81, 82, 135, 146, 198, 588, 616, 630, 643, 1028, 1084, 1138, 1143, 1146, 1177, 1213, 1286, 1477, 1487, 1647, 1697
   @use call    util.nudgedScalar  @ 1407, 1409
   @use call    util.oneOf  @ 700, 755, 778, 806, 816
@@ -431,9 +431,9 @@
   @use require timing  @ 26
   @use require tuning  @ 27
   @use require util  @ 25
-  @use sub     cm:configChanged  @ 2445
-  @use sub     tm:rebuild  @ 2437
-  @use sub     tm:takeSwapped  @ 2436
+  @use sub     cm:configChanged  @ 2450
+  @use sub     tm:rebuild  @ 2442
+  @use sub     tm:takeSwapped  @ 2441
 
 # REAPER API surface
   @reaper time_precise

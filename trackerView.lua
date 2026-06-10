@@ -2159,10 +2159,15 @@ function tv:automateParam()
   cm:set('take', 'extraColumns', extras)
 end
 
---contract: drops the cursor cc column's binding; the column survives as a plain cc lane
+--contract: deletes the cursor cc column's events; column + binding then go via hideExtraCol
 function tv:unautomateParam()
   local col = grid.cols[ec:col()]
-  if col and col.type == 'cc' then pa:unautomate(col.midiChan, col.cc) end
+  if not (col and col.type == 'cc') then return end
+  for _, evt in ipairs(col.events) do tm:deleteEvent(evt) end
+  tm:flush()
+  -- hideExtraCol re-reads the grid; rebuild so it sees the emptied lane.
+  tv:rebuild()
+  tv:hideExtraCol()
 end
 
 function tv:showDelay()

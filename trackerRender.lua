@@ -35,7 +35,7 @@ local function arrange() return facade.get('arrange') end
 ---------- PRIVATE
 
 local GUTTER      = 5    -- in grid chars: 3-char row num + spacer + region slot
-local HEADER      = 3    -- in grid rows
+local HEADER      = 3    -- in grid rows; computeLayout grows it to fit vertical param names
 
 local gridX       = nil
 local gridY       = nil
@@ -206,6 +206,17 @@ local function printer(ctx, gX, gY, x0, y0)
 
   function pt:textCentredSmall(x1, x2, y, txt, size, colour)
     p.text(centreX(x1, x2, txt, font, size), y, colour, txt, font, size)
+  end
+
+  -- A bound cc column's header: the param name one glyph per line, reading
+  -- down, bottom-anchored where the horizontal labels sit.
+  function pt:textVertical(x1, x2, yBottom, txt, font, size, colour)
+    local glyphs = {}
+    for char in txt:gmatch(utf8.charpattern) do glyphs[#glyphs + 1] = char end
+    for i, char in ipairs(glyphs) do
+      p.text(centreX(x1, x2, char, font, size),
+             yBottom - (#glyphs - i + 1) * size / gY, colour, char, font, size)
+    end
   end
 
   -- Small glyph centred in a single cell: the * tp drops by a note whose
@@ -450,6 +461,29 @@ local function drawTrackerToolbarBits()
   toolbar(wrapped)
 end
 
+-- Bound cc columns drop the 'CC' label for their param name written
+-- vertically; names trim to VNAME_MAX chars so the header stays sane.
+local VNAME_MAX = 14
+
+local function vname(label)
+  local cut = utf8.offset(label, VNAME_MAX + 1)
+  return cut and label:sub(1, cut - 1) or label
+end
+
+-- Header rows needed: channel row + the tallest vertical param name.
+local function headerRows(cols)
+  local maxChars = 0
+  for _, col in ipairs(cols) do
+    if col.type == 'cc' then
+      local binding = tv:paramBinding(col.midiChan, col.cc)
+      if binding then
+        maxChars = math.max(maxChars, utf8.len(vname(binding.label)) or 0)
+      end
+    end
+  end
+  return math.max(3, math.ceil(1.35 + maxChars * gui.fontSize.ui / gridY))
+end
+
 --contract: must run before draws reading chanX/chanW/chanOrder/totalWidth/gridHeight
 --contract: calls tv:setGridSize so tv scroll math sees the live viewport
 local function computeLayout(budgetW, budgetH)
@@ -463,6 +497,7 @@ local function computeLayout(budgetW, budgetH)
   end
 
   gridWidth  = math.max(1, math.floor(budgetW / gridX) - GUTTER)
+  HEADER     = headerRows(grid.cols)
   local laneRows = laneStripRows()
   gridHeight = math.max(1, math.floor(budgetH / gridY) - HEADER - 1 - laneRows)
   tv:setGridSize(gridWidth, gridHeight)
@@ -625,20 +660,25 @@ local function drawTracker()
   end
   local laneByChan = {}
   for _, col in ipairs(grid.cols) do
-    local sub
+    local sub, vertical
     if col.type == 'note' then
       local n = (laneByChan[col.midiChan] or 0) + 1
       laneByChan[col.midiChan] = n
       sub = tostring(n)
     elseif col.type == 'cc' then
       local binding = tv:paramBinding(col.midiChan, col.cc)
-      sub = binding and binding.label or tostring(col.cc)
+      if binding then vertical = vname(binding.label)
+      else sub = tostring(col.cc) end
     end
     if col.x then
       local xr = col.x + col.width - 1
-      draw:textCentred(col.x, xr, -2.1, col.label, 'text')
-      if sub then
-        draw:textCentredSmall(col.x, xr, -1.2, sub, 14, 'accent')
+      if vertical then
+        draw:textVertical(col.x, xr, -0.35, vertical, uiFont, gui.fontSize.ui, 'accent')
+      else
+        draw:textCentred(col.x, xr, -2.1, col.label, 'text')
+        if sub then
+          draw:textCentredSmall(col.x, xr, -1.2, sub, 14, 'accent')
+        end
       end
     end
   end
@@ -871,7 +911,18 @@ local function paletteActions()
   end)
   ImGui.SameLine(ctx, 0, 4)
   chrome.disabledIf(not bound, function()
-    if ImGui.Button(ctx, 'remove##param') then tv:unautomateParam() end
+    if ImGui.Button(ctx, 'remove##param') then
+      if #col.events > 0 then
+        modalHost:openConfirm{
+          title    = 'Remove automation',
+          prompt   = ('Column has %d event%s — delete them with it? (y/n)')
+                       :format(#col.events, #col.events == 1 and '' or 's'),
+          callback = function(yes) if yes then tv:unautomateParam() end end,
+        }
+      else
+        tv:unautomateParam()
+      end
+    end
   end)
 end
 
