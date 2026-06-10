@@ -184,11 +184,15 @@ along-bar axis `a`; the bar is ⟂ the normal):
   normal, hence ⟂ the bar). A **source** far-end has no body — each of its edges
   is a positioned copy, so it stands off the bar by `BUS_TAP_LEN` (plus its tag
   patch extent) at an evenly-spaced slot, and the existing source-tag pass draws
-  its label at that outer end. Tap segs are normal `segs` (so the per-tap fader,
-  RMB-delete, end-hit, and highlight all work unchanged) but flagged `tap` so
-  `drawWiresPass` suppresses their radial arrow — the trunk carries the one arrow.
-- **The bar spans its taps** (`min..max` of their along-axis coordinate, plus
-  `BUS_BAR_PAD`). Length was never stored, so add/remove grow and shrink it free.
+  its label at that outer end. Tap segs are ordinary `segs` — oriented from→to by
+  `bussedEnd` (in-bus lands the `to` end on the bar, out-bus the `from` end), so a
+  tap is a normal arrowed wire and its per-tap fader, RMB-delete, end-hit, and
+  redraft all read the right direction (out-bus taps point *away* from the bar).
+- **The bar spans the node and its taps.** It runs from the trunk attach point
+  (its centre, where the stem meets at `t=0`) out to the farthest tap, and is
+  never shorter than the node's own width — `min..max` of the taps' along-axis
+  coordinate unioned with ±half the node dimension, plus `BUS_BAR_PAD`. Length
+  was never stored, so add/remove grow and shrink it free.
 - **The trunk** runs from the bar centre to the node edge along the normal; its
   arrow follows `dir` (into the node for an in-bus, out for an out-bus).
 
@@ -206,6 +210,12 @@ direction as grab handles on a fixed face (in→top, out→bottom — the grab s
 stroke-only and inert. Pressing a free handle arms `busDraft`; the side is then
 the **quadrant of the cursor from the node centre**, recomputed each frame, so
 swinging around the node continuously re-sides the rail.
+
+A node with a **single free audio port** has nothing to pick, so `armBus` skips
+the overlay and arms a `byHover` `busDraft` directly: hovering around the node
+picks the side live (no grab), a click inside the node's vicinity (`busNear` — the
+node rect grown just past the first rail) commits, and a click on the backdrop
+cancels.
 
 The live comb preview reuses the Phase-2 render untouched: each frame a
 synthetic bus is appended to the transient `nodeView.busses` (a copy — the alias

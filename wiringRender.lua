@@ -107,7 +107,7 @@ local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
 local wireDraft = nil  -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? }
 local tagDrag   = nil  -- { edgeIdx, mx0, my0, sx0, sy0 } — dragging a source edge's tag to a custom canvas pos
 local busOverlay = nil  -- { nodeId, dir } — bus-creation port-selector overlay (node-menu launched)
-local busDraft   = nil  -- { nodeId, dir, port, side } — a grabbed port; drag picks the side
+local busDraft   = nil  -- { nodeId, dir, port, side, byHover? } — grabbed port; drag (or hover, if byHover) picks side
 local shiftWas  = false
 local pinned     = {}   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
 local listOpenId = nil  -- node whose spillover list is engaged (chevron-gated)
@@ -1043,7 +1043,7 @@ local function drawWiresPass(p, segs, wireViews, opts)
       local ex, ey = seg.ex, seg.ey
       local name = w.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
       p.line(sx, sy, ex, ey, name, WIRE_THICK)
-      if not seg.tap then drawWireArrow(p, sx, sy, ex, ey, name, seg.cx, seg.cy) end
+      drawWireArrow(p, sx, sy, ex, ey, name, seg.cx, seg.cy)
       if w.type == 'audio' then
         local fromD, toD, segLen = wireExits(seg)
         if fromD then
@@ -1344,12 +1344,15 @@ local function busSegments(p, wireViews, nodesById, segs, busRails)
           sy = bcy + sv.ay * t + sv.ny * out
         end
         local lx, ly = bcx + sv.ax * t, bcy + sv.ay * t
-        segs[idxOf[w]] = {
-          w = w, tap = true,
-          sx = sx, sy = sy, ex = lx, ey = ly,
-          fromHW = fhw, fromHH = fhh,
-          toHW = 0, toHH = 0,
-        }
+        -- Bar end is a bare point (extent 0); the far end leaves extents nil so
+        -- wireExits trims it to the node body / tag box like a normal wire (not 0).
+        if w.bus.bussedEnd == 'to' then
+          segs[idxOf[w]] = { w = w, sx = sx, sy = sy, ex = lx, ey = ly,
+                             fromHW = fhw, fromHH = fhh, toHW = 0, toHH = 0 }
+        else
+          segs[idxOf[w]] = { w = w, sx = lx, sy = ly, ex = sx, ey = sy,
+                             fromHW = 0, fromHH = 0, toHW = fhw, toHH = fhh }
+        end
         tMin, tMax = math.min(tMin, t), math.max(tMax, t)
       end
       if tMin > tMax then tMin, tMax = 0, 0 end
@@ -1361,9 +1364,14 @@ local function busSegments(p, wireViews, nodesById, segs, busRails)
       else
         trunk = { sx = nex, sy = ney, ex = bcx, ey = bcy }
       end
+      -- Bar always includes the trunk attach (t=0) and spans at least the node's
+      -- own width, then reaches out to the farthest tap. see docs § Bus rail geometry
+      local alongHalf = (sv.ax ~= 0) and NODE_W / 2 or NODE_H / 2
+      local lo = math.min(tMin, -alongHalf) - BUS_BAR_PAD
+      local hi = math.max(tMax,  alongHalf) + BUS_BAR_PAD
       util.add(busRails, {
-        bar = { x0 = bcx + sv.ax * (tMin - BUS_BAR_PAD), y0 = bcy + sv.ay * (tMin - BUS_BAR_PAD),
-                x1 = bcx + sv.ax * (tMax + BUS_BAR_PAD), y1 = bcy + sv.ay * (tMax + BUS_BAR_PAD) },
+        bar = { x0 = bcx + sv.ax * lo, y0 = bcy + sv.ay * lo,
+                x1 = bcx + sv.ax * hi, y1 = bcy + sv.ay * hi },
         trunk = trunk,
       })
     end
@@ -1427,6 +1435,28 @@ local function busSide(nv, mx, my)
   local dx, dy = mx - nv.pos.x, my - nv.pos.y
   if math.abs(dx) > math.abs(dy) then return dx < 0 and 'L' or 'R' end
   return dy < 0 and 'T' or 'B'
+end
+
+-- Commit zone for the hover-only single-port gesture: the node rect grown just
+-- past the first rail. A click inside commits the bus; outside (backdrop) cancels.
+local function busNear(nv, mx, my)
+  local b, m = nodeBox(nv), BUS_BASE + BUS_STACK_GAP
+  return mx >= b.x0 - m and mx <= b.x1 + m and my >= b.y0 - m and my <= b.y1 + m
+end
+
+-- Arm bus creation from the node menu: a lone free audio port skips the grab
+-- (hover picks the side, click commits / click-away cancels), else open the overlay.
+local function armBus(nodeId, dir, nv)
+  local handles = busOverlayLayout(nv, dir)
+  if not handles then return end
+  local free = {}
+  for _, h in ipairs(handles) do if not h.bussed then free[#free + 1] = h.port end end
+  if #handles == 1 and #free == 1 then
+    busDraft = { nodeId = nodeId, dir = dir, port = free[1],
+                 side = dir == 'in' and 'T' or 'B', byHover = true }
+  else
+    busOverlay = { nodeId = nodeId, dir = dir }
+  end
 end
 
 -- The source tag's grab box: cursor inside the bg-patch rect at its centre.
@@ -1835,10 +1865,17 @@ local function renderCanvas(w, h)
   -- Bus-creation gesture owns the mouse while live (node-menu launched). A
   -- grabbed port drafts; release commits at the quadrant side; backdrop cancels.
   if busDraft then
-    if not ImGui.IsMouseDown(ctx, 0) then
-      wv:addBus(busDraft.nodeId,
-        { dir = busDraft.dir, ports = { busDraft.port }, side = busDraft.side })
-      busDraft = nil
+    local draft, commit = busDraft, false
+    if draft.byHover then
+      if overCanvas and ImGui.IsMouseClicked(ctx, 0) then
+        local nv = nodesById[draft.nodeId]
+        commit, busDraft = nv and busNear(nv, lmx, lmy), nil  -- click away cancels
+      end
+    elseif not ImGui.IsMouseDown(ctx, 0) then
+      commit, busDraft = true, nil
+    end
+    if commit then
+      wv:addBus(draft.nodeId, { dir = draft.dir, ports = { draft.port }, side = draft.side })
     end
   elseif busOverlay and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
     local hit = busHandleHit(busHandles, lmx, lmy)
@@ -2095,11 +2132,11 @@ local function renderCanvas(w, h)
       end
       local menuNode = nodesById[nodeMenu.nodeId]
       if menuNode and #menuNode.ins.audio > 0 and ImGui.Selectable(ctx, 'Add input bus') then
-        busOverlay = { nodeId = nodeMenu.nodeId, dir = 'in' }
+        armBus(nodeMenu.nodeId, 'in', menuNode)
         ImGui.CloseCurrentPopup(ctx)
       end
       if menuNode and #menuNode.outs.audio > 0 and ImGui.Selectable(ctx, 'Add output bus') then
-        busOverlay = { nodeId = nodeMenu.nodeId, dir = 'out' }
+        armBus(nodeMenu.nodeId, 'out', menuNode)
         ImGui.CloseCurrentPopup(ctx)
       end
       for idx, bus in ipairs(menuNode and menuNode.busses or {}) do
