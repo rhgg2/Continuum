@@ -914,6 +914,20 @@ local function paletteHeader()
   ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
 end
 
+-- Remove the cursor's automation column; confirm first if it holds events.
+local function removeAutomation(col)
+  if #col.events > 0 then
+    modalHost:openConfirm{
+      title    = 'Remove automation',
+      prompt   = ('Column has %d event%s — delete them with it? (y/n)')
+                   :format(#col.events, #col.events == 1 and '' or 's'),
+      callback = function(yes) if yes then tv:unautomateParam() end end,
+    }
+  else
+    tv:unautomateParam()
+  end
+end
+
 local function paletteActions()
   local col   = tv.grid.cols[tv:ec():col()]
   local bound = col and col.type == 'cc' and tv:paramBinding(col.midiChan, col.cc)
@@ -922,23 +936,16 @@ local function paletteActions()
   end)
   ImGui.SameLine(ctx, 0, 4)
   chrome.disabledIf(not bound, function()
-    if ImGui.Button(ctx, 'remove##param') then
-      if #col.events > 0 then
-        modalHost:openConfirm{
-          title    = 'Remove automation',
-          prompt   = ('Column has %d event%s — delete them with it? (y/n)')
-                       :format(#col.events, #col.events == 1 and '' or 's'),
-          callback = function(yes) if yes then tv:unautomateParam() end end,
-        }
-      else
-        tv:unautomateParam()
-      end
-    end
+    if ImGui.Button(ctx, 'remove##param') then removeAutomation(col) end
   end)
 end
 
+-- Set by the Add-Column 'automation' option; focuses the find box next frame.
+local focusFilterReq = false
+
 local function paletteFilterBox()
   ImGui.SetNextItemWidth(ctx, -1)
+  if focusFilterReq then ImGui.SetKeyboardFocusHere(ctx); focusFilterReq = false end
   local changed, text = ImGui.InputTextWithHint(ctx, '##paramFilter', 'find', tv:paletteFilter())
   if changed then tv:setPaletteFilter(text) end
 end
@@ -1491,7 +1498,7 @@ local function resolveColType(s)
   local first = a:sub(1, 1)
   local canon = first == 'n' and 'note'
              or first == 'c' and 'cc'
-             or first == 'a' and 'at'
+             or first == 'a' and (a:sub(2, 2) == 't' and 'at' or 'automation')
              or first == 'd' and 'dly'
              or first == 'p' and (a:sub(2, 2) == 'c' and 'pc' or 'pb')
              or a
@@ -1499,9 +1506,10 @@ local function resolveColType(s)
 end
 
 local function addColumn()
-  openPrompt('Add Column', 'note, cc0-127, pb, at, pc, dly', function(typeStr)
+  openPrompt('Add Column', 'note, cc0-127, pb, at, pc, dly, auto', function(typeStr)
     local type, idStr = typeStr:lower():match('^(%a+)(%d*)$')
     if not type then return end
+    if type == 'automation' then focusFilterReq = true; return end
     local id = idStr ~= '' and tonumber(idStr) or nil
     if type == 'dly' then tv:showDelay()
     elseif util.oneOf('note cc pb at pc', type) then
@@ -1509,6 +1517,15 @@ local function addColumn()
       tv:addExtraCol(type, id)
     end
   end, resolveColType)
+end
+
+-- Ctrl-Left drops the cursor column: a bound automation (cc) column goes
+-- through the remove-automation flow; anything else just hides.
+local function removeOrHideCol()
+  local col   = tv.grid.cols[tv:ec():col()]
+  local bound = col and col.type == 'cc' and tv:paramBinding(col.midiChan, col.cc)
+  if bound then removeAutomation(col)
+  else tv:hideExtraCol() end
 end
 
 -- Forward-declared so the takeProperties command body, registered
@@ -1535,6 +1552,7 @@ tracker:registerAll{
   nextTake  = { function() arrange().gotoTake(1)   end, 'Next take' },
 
   addTypedCol = addColumn,
+  hideExtraCol = { removeOrHideCol, 'Hide / remove column' },
 
   quantize             = { scopedAction('quantize',               'quantize'),             'Quantize' },
   quantizeKeepRealised = { scopedAction('quantize keep realised', 'quantizeKeepRealised'), 'Quantize (keep realised)' },
