@@ -10,15 +10,13 @@ _G.reaper = fakeReaper
 
 -- configManager's global tier uses real io.open on ctm_cfg.txt, bypassing fakeReaper.
 -- Redirect those opens to a temp file so specs never clobber the real config.
-do
-  local realOpen = io.open
-  local stubPath = os.tmpname()
-  io.open = function(path, ...)
-    if type(path) == 'string' and path:find('ctm_cfg%.txt$') then
-      return realOpen(stubPath, ...)
-    end
-    return realOpen(path, ...)
+local realOpen      = io.open
+local globalCfgStub = os.tmpname()
+io.open = function(path, ...)
+  if type(path) == 'string' and path:find('ctm_cfg%.txt$') then
+    return realOpen(globalCfgStub, ...)
   end
+  return realOpen(path, ...)
 end
 
 require('fakeMidiManager')
@@ -40,9 +38,11 @@ require('tuning')
 function harness.mk(opts)
   opts = opts or {}
 
-  -- Fresh reaper state per scenario
+  -- Fresh reaper state per scenario; global-tier stub file likewise, or
+  -- one scenario's cm:set('global', …) leaks into the next.
   fakeReaper = require('fakeReaper').new()
   _G.reaper  = fakeReaper
+  realOpen(globalCfgStub, 'w'):close()
 
   local take = opts.take or 'take1'
   local item, track = take .. '/item', take .. '/track'

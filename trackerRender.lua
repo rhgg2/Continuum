@@ -937,30 +937,112 @@ local function paletteActions()
   end)
 end
 
+local function paletteFilterBox()
+  ImGui.SetNextItemWidth(ctx, -1)
+  local changed, text = ImGui.InputTextWithHint(ctx, '##paramFilter', 'find', tv:paletteFilter())
+  if changed then tv:setPaletteFilter(text) end
+end
+
+-- Ellipsis-fit to the palette's fixed width; no horizontal scroll exists.
+local function fitLabel(text, maxW)
+  if ImGui.CalcTextSize(ctx, text) <= maxW then return text end
+  local keep = #text
+  while keep > 1 and ImGui.CalcTextSize(ctx, text:sub(1, keep) .. '…') > maxW do
+    keep = keep - 1
+  end
+  -- don't cut mid utf-8 sequence
+  while keep > 1 and (text:byte(keep + 1) or 0) & 0xC0 == 0x80 do keep = keep - 1 end
+  return text:sub(1, keep) .. '…'
+end
+
+local function paramRow(trackGuid, fxGuid, prm, label)
+  local sel     = tv:paletteParam()
+  local isSel   = sel and sel.fxGuid == fxGuid and sel.param == prm.index
+  label = fitLabel(label, select(1, ImGui.GetContentRegionAvail(ctx)))
+  -- ###: ID from the guid alone — with ##, the truncated label is hashed
+  -- too, and scrollbar-driven width changes would mint a fresh ID per frame
+  local clicked = ImGui.Selectable(ctx, label .. '###p' .. fxGuid .. prm.index, isSel)
+  local double  = ImGui.IsItemHovered(ctx) and ImGui.IsMouseDoubleClicked(ctx, 0)
+  if clicked or double then
+    tv:setPaletteParam{ trackGuid = trackGuid, fxGuid = fxGuid,
+                        param = prm.index, label = prm.name }
+  end
+  if double then tv:automateParam() end
+end
+
+-- Only visible rows hit ImGui (500-param plugin = 500 Selectables/frame).
+-- One persistent clipper: ReaImGui treats per-frame CreateListClipper as a leak.
+local listClipper = nil
+local function clippedRows(count, drawRow)
+  if not (listClipper and ImGui.ValidatePtr(listClipper, 'ImGui_ListClipper*')) then
+    listClipper = ImGui.CreateListClipper(ctx)
+  end
+  ImGui.ListClipper_Begin(listClipper, count)
+  while ImGui.ListClipper_Step(listClipper) do
+    local first, last = ImGui.ListClipper_GetDisplayRange(listClipper)
+    for i = first + 1, last do drawRow(i) end
+  end
+end
+
+local function filteredParamRows(rows, needle)
+  local matches = {}
+  for _, row in ipairs(rows) do
+    for _, prm in ipairs(tv:listParams(row.trackGuid, row.fxGuid)) do
+      if (row.name .. ' ' .. prm.name):lower():find(needle, 1, true) then
+        matches[#matches + 1] = { row = row, prm = prm }
+      end
+    end
+  end
+  if #matches == 0 then
+    ImGui.TextDisabled(ctx, '(no match)')
+    return
+  end
+  clippedRows(#matches, function(i)
+    local m = matches[i]
+    -- param first: the fx name is the part that survives truncation worst
+    paramRow(m.row.trackGuid, m.row.fxGuid, m.prm, m.prm.name .. ' · ' .. m.row.name)
+  end)
+end
+
+local openFxReq = nil   -- fxGuid whose subtree the next frame force-opens (learn click)
+
 local function paletteTree()
   local rows = tv:paramTargets()
   if #rows == 0 then
     ImGui.TextDisabled(ctx, '(no fx reachable)')
     return
   end
-  local sel, heading = tv:paletteParam(), nil
+  local needle = tv:paletteFilter():lower()
+  if needle ~= '' then return filteredParamRows(rows, needle) end
+  local fpx  = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+  local btnW = ImGui.CalcTextSize(ctx, 'learn') + fpx * 2
+  local heading
   for _, row in ipairs(rows) do
     local section = row.generator and 'generators' or 'fx'
     if section ~= heading then
       heading = section
       ImGui.TextDisabled(ctx, heading)
     end
-    if ImGui.TreeNode(ctx, row.name .. '##' .. row.fxGuid) then
-      for _, prm in ipairs(tv:listParams(row.trackGuid, row.fxGuid)) do
-        local isSel   = sel and sel.fxGuid == row.fxGuid and sel.param == prm.index
-        local clicked = ImGui.Selectable(ctx, prm.name .. '##p' .. prm.index, isSel)
-        local double  = ImGui.IsItemHovered(ctx) and ImGui.IsMouseDoubleClicked(ctx, 0)
-        if clicked or double then
-          tv:setPaletteParam{ trackGuid = row.trackGuid, fxGuid = row.fxGuid,
-                              param = prm.index, label = prm.name }
-        end
-        if double then tv:automateParam() end
-      end
+    if openFxReq == row.fxGuid then
+      ImGui.SetNextItemOpen(ctx, true)
+      openFxReq = nil
+    end
+    local availW = select(1, ImGui.GetContentRegionAvail(ctx))
+    -- 28px ≈ tree arrow + spacing; keeps the label clear of the button.
+    -- ### throughout: label changes each frame (truncation, learn↔stop) → ##-hash alternates open state with scrollbar.
+    local open  = ImGui.TreeNode(ctx,
+      fitLabel(row.name, availW - btnW - 28) .. '###' .. row.fxGuid)
+    local armed = tv:learnFxGuid() == row.fxGuid
+    ImGui.SameLine(ctx, availW - btnW)
+    if ImGui.SmallButton(ctx, (armed and 'stop' or 'learn') .. '###L' .. row.fxGuid) then
+      tv:armLearn(row)
+      openFxReq = tv:learnFxGuid()
+    end
+    if open then
+      local params = tv:listParams(row.trackGuid, row.fxGuid)
+      clippedRows(#params, function(i)
+        paramRow(row.trackGuid, row.fxGuid, params[i], params[i].name)
+      end)
       ImGui.TreePop(ctx)
     end
   end
@@ -979,6 +1061,7 @@ local function drawParamPalette(x, y, h)
     chrome.pushChromeStyles()
     paletteHeader()
     paletteActions()
+    paletteFilterBox()
     ImGui.Separator(ctx)
     paletteTree()
     chrome.popChromeStyles()
@@ -1603,6 +1686,7 @@ function renderer:renderBody(_, w, h, dispatch)
   ImGui.PopFont(ctx)
 
   drawParamPalette(ox + gridW, oy, h)
+  tv:pollLearn(ImGui.IsWindowFocused(ctx, ImGui.FocusedFlags_AnyWindow))
 
   handleMouse()
   local kr = dispatch and dispatch(self:focusState()) or { commandHeld = {} }

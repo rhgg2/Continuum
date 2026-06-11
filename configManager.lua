@@ -93,6 +93,9 @@ local declarations = {
   -- Param-automation bindings, take tier: [chan][lane] = binding.
   -- See design/cv.md § simple layer for the binding shape.
   { 'paramAutomation', {}    },
+  -- Param-palette frecency, global tier. Decays per plugin-use (the
+  -- ident's n counter), not per day; see paramAutomation.lua.
+  { 'paramFrecency',   {}    },
   { 'noteDelay',       {}    },
   { 'slotEntries',     {}    },
   -- Mirror groups, persisted at the take tier. See docs/groupManager.md.

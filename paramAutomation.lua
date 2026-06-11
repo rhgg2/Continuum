@@ -12,6 +12,7 @@
 --invariant: authored (chan,lane) codes are track-unique across takes; bus codes project-unique
 --shape: binding = { busCode=int, trackGuid=str, fxGuid=str, param=int, scale=num, offset=num, label=str }
 --shape: trackSpec = { filter={ {src=code,dst=code},... }, listen={ {code,fxGuid,param,scale,offset},... }, sends={dstGuid,...} }
+--shape: paramFrecency (cm global) = { [fxIdent] = { n=int, params={ [name]={s=num,n0=int} } } }
 --contract: apply() is a full-project idempotent reconcile; mirror-matching tracks are untouched
 local util = require 'util'
 local cm, facade = (...).cm, (...).facade
@@ -40,6 +41,12 @@ local function fxIndexByGuid(track, guid)
   for i = 0, reaper.TrackFX_GetCount(track) - 1 do
     if reaper.TrackFX_GetFXGUID(track, i) == guid then return i end
   end
+end
+
+local function resolveFx(trackGuid, fxGuid)
+  local track = trackByGuid(trackGuid)
+  local fxIdx = track and fxIndexByGuid(track, fxGuid)
+  if fxIdx then return track, fxIdx end
 end
 
 -- fx_ident for a JSFX is the bare Effects-relative path (cf. routingManager fxIdentAt)
@@ -283,6 +290,36 @@ local function allocBusCode()
   end
 end
 
+----- Frecency + param cache
+
+-- Frecency decays per plugin-use, not per day: each bump advances the
+-- ident's counter and rebases the score, so an unused month costs nothing.
+local DECAY = 0.9
+
+local paramCache  = {}   -- [fxGuid] = { count, params, gen, sorted }
+local frecencyGen = 0    -- bumped on every frecency write; stales sorted caches
+
+local function fxIdentAt(track, fxIdx)
+  local _, ident = reaper.TrackFX_GetNamedConfigParm(track, fxIdx, 'fx_ident')
+  return ident ~= '' and ident or nil
+end
+
+--contract: pure, stable: decayed score desc, then param index; fxScores may be nil
+function pa.frecencyOrder(params, fxScores)
+  local sorted = { table.unpack(params) }
+  if not fxScores then return sorted end
+  local function score(prm)
+    local entry = fxScores.params[prm.name]
+    return entry and entry.s * DECAY ^ (fxScores.n - entry.n0) or 0
+  end
+  table.sort(sorted, function(a, b)
+    local sa, sb = score(a), score(b)
+    if sa ~= sb then return sa > sb end
+    return a.index < b.index
+  end)
+  return sorted
+end
+
 ----------- PUBLIC
 
 --contract: no-op (and no undo point) when every track's mirror already matches
@@ -344,16 +381,69 @@ function pa:targets()
   return wiring.paramTargets(srcTrack)
 end
 
+--contract: cached per fxGuid (param-count change invalidates); frecency-hot params first
 function pa:params(trackGuid, fxGuid)
-  local track = trackByGuid(trackGuid)
-  local fxIdx = track and fxIndexByGuid(track, fxGuid)
-  if not fxIdx then return {} end
-  local params = {}
-  for p = 0, reaper.TrackFX_GetNumParams(track, fxIdx) - 1 do
-    local _, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
-    params[#params + 1] = { index = p, name = name }
+  local track, fxIdx = resolveFx(trackGuid, fxGuid)
+  if not track then return {} end
+  local count  = reaper.TrackFX_GetNumParams(track, fxIdx)
+  local cached = paramCache[fxGuid]
+  if not (cached and cached.count == count) then
+    local params = {}
+    for p = 0, count - 1 do
+      local _, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
+      params[p + 1] = { index = p, name = name }
+    end
+    cached = { count = count, params = params }
+    paramCache[fxGuid] = cached
   end
-  return params
+  if cached.gen ~= frecencyGen then
+    cached.gen    = frecencyGen
+    cached.sorted = pa.frecencyOrder(cached.params,
+      cm:get('paramFrecency')[fxIdentAt(track, fxIdx)])
+  end
+  return cached.sorted
+end
+
+--contract: advances the ident's use counter; the param's score decays to it, then +1
+function pa:bumpFrecency(trackGuid, fxGuid, paramName)
+  local track, fxIdx = resolveFx(trackGuid, fxGuid)
+  local ident = track and fxIdentAt(track, fxIdx)
+  if not ident then return end
+  local all = cm:get('paramFrecency')
+  local fxScores = all[ident] or { n = 0, params = {} }
+  local n = fxScores.n + 1
+  local entry = fxScores.params[paramName]
+  fxScores.params[paramName] =
+    { s = (entry and entry.s * DECAY ^ (n - entry.n0) or 0) + 1, n0 = n }
+  fxScores.n = n
+  all[ident] = fxScores
+  cm:set('global', 'paramFrecency', all)
+  frecencyGen = frecencyGen + 1
+end
+
+--contract: floats the fx ui; true only when pa floated it — caller owns popping it down
+function pa:floatFx(trackGuid, fxGuid)
+  local track, fxIdx = resolveFx(trackGuid, fxGuid)
+  if not track or reaper.TrackFX_GetFloatingWindow(track, fxIdx) then return false end
+  reaper.TrackFX_Show(track, fxIdx, 3)
+  return true
+end
+
+function pa:unfloatFx(trackGuid, fxGuid)
+  local track, fxIdx = resolveFx(trackGuid, fxGuid)
+  if track then reaper.TrackFX_Show(track, fxIdx, 2) end
+end
+
+--contract: last-touched track-fx param as guids + name; nil for take/container/input fx
+function pa:lastTouched()
+  local ok, trackIdx, itemIdx, _, fxIdx, param = reaper.GetTouchedOrFocusedFX(0)
+  if not (ok and itemIdx == -1 and trackIdx >= 0 and fxIdx & 0x3000000 == 0) then return nil end
+  local track = reaper.GetTrack(0, trackIdx)
+  if not track then return nil end
+  local _, name = reaper.TrackFX_GetParamName(track, fxIdx, param)
+  return { trackGuid = reaper.GetTrackGUID(track),
+           fxGuid    = reaper.TrackFX_GetFXGUID(track, fxIdx),
+           param     = param, name = name }
 end
 
 return pa

@@ -2132,17 +2132,100 @@ function tv:hideExtraCol()
   tv:rebuild()
 end
 
------ Param automation (palette selection + pa pass-throughs)
+----- Param automation (palette selection, touch-learn + pa pass-throughs)
 
 --shape: paletteParam = { trackGuid, fxGuid, param, label } — the palette's selected parameter
-local paletteParam = nil
+local paletteParam  = nil
+local paletteFilter = ''
 
-function tv:paletteParam()       return paletteParam end
-function tv:setPaletteParam(sel) paletteParam = sel end
+-- Learn-touched params float above pa's frecency order until the bound
+-- take changes; validated lazily against cm:boundTake, no lifecycle hook.
+local hoist = { take = nil, byFx = {} }
 
-function tv:paramTargets()                return pa:targets() end
-function tv:listParams(trackGuid, fxGuid) return pa:params(trackGuid, fxGuid) end
-function tv:paramBinding(chan, lane)      return pa:binding(chan, lane) end
+--shape: learn = { trackGuid, fxGuid, floated, away, baseline } — armed touch-learn, or nil
+local learn = nil
+
+local function takeHoist()
+  if hoist.take ~= cm:boundTake() then hoist = { take = cm:boundTake(), byFx = {} } end
+  return hoist.byFx
+end
+
+local function hoistTouch(fxGuid, paramIndex)
+  local byFx  = takeHoist()
+  local order = byFx[fxGuid] or {}
+  byFx[fxGuid] = order
+  for i, idx in ipairs(order) do
+    if idx == paramIndex then table.remove(order, i); break end
+  end
+  table.insert(order, 1, paramIndex)
+end
+
+function tv:paletteParam()         return paletteParam end
+function tv:setPaletteParam(sel)   paletteParam = sel end
+function tv:paletteFilter()        return paletteFilter end
+function tv:setPaletteFilter(text) paletteFilter = text end
+
+function tv:paramTargets()           return pa:targets() end
+function tv:paramBinding(chan, lane) return pa:binding(chan, lane) end
+
+--contract: pa's frecency order with this take's learn-touched params on top, recent first
+function tv:listParams(trackGuid, fxGuid)
+  local params = pa:params(trackGuid, fxGuid)
+  local order = takeHoist()[fxGuid]
+  if not order or #order == 0 then return params end
+  local hoisted, out = {}, {}
+  for _, idx in ipairs(order) do hoisted[idx] = true end
+  for _, idx in ipairs(order) do
+    for _, prm in ipairs(params) do
+      if prm.index == idx then out[#out + 1] = prm; break end
+    end
+  end
+  for _, prm in ipairs(params) do
+    if not hoisted[prm.index] then out[#out + 1] = prm end
+  end
+  return out
+end
+
+----- Touch-learn
+
+--contract: arming floats the fx ui; the pre-arm touch is snapshotted so it can't select
+function tv:armLearn(row)
+  local rearm = learn and learn.fxGuid == row.fxGuid
+  tv:cancelLearn()
+  if rearm then return end
+  learn = { trackGuid = row.trackGuid, fxGuid = row.fxGuid,
+            floated  = pa:floatFx(row.trackGuid, row.fxGuid),
+            away     = false, baseline = pa:lastTouched() }
+end
+
+function tv:learnFxGuid() return learn and learn.fxGuid end
+
+--contract: pops the fx window down only when arming floated it
+function tv:cancelLearn()
+  if learn and learn.floated then pa:unfloatFx(learn.trackGuid, learn.fxGuid) end
+  learn = nil
+end
+
+--contract: focused = any ImGui window focused; cancel fires on regain after a loss
+--contract: a touch on the armed fx selects + hoists; frecency is bumped by automate only
+function tv:pollLearn(focused)
+  if not learn then return end
+  if not focused then
+    learn.away = true
+  elseif learn.away then
+    return tv:cancelLearn()
+  end
+  local touched = pa:lastTouched()
+  if not (touched and touched.fxGuid == learn.fxGuid) then return end
+  local base = learn.baseline
+  if base and base.fxGuid == touched.fxGuid and base.param == touched.param then return end
+  learn.baseline = nil
+  if paletteParam and paletteParam.fxGuid == touched.fxGuid
+                  and paletteParam.param  == touched.param then return end
+  paletteParam = { trackGuid = touched.trackGuid, fxGuid = touched.fxGuid,
+                   param = touched.param, label = touched.name }
+  hoistTouch(touched.fxGuid, touched.param)
+end
 
 --contract: binds the selected palette param at the cursor column's channel; adds its cc column
 function tv:automateParam()
@@ -2150,6 +2233,8 @@ function tv:automateParam()
   if not (col and paletteParam) then return end
   local lane = pa:automate(col.midiChan, paletteParam)
   if not lane then return end
+  pa:bumpFrecency(paletteParam.trackGuid, paletteParam.fxGuid, paletteParam.label)
+  tv:cancelLearn()
   local extras = cm:get('extraColumns')
   -- Absence-default mirrors tm:rebuild's, like addExtraCol: no entry means one note col.
   local want = extras[col.midiChan] or { notes = 1 }

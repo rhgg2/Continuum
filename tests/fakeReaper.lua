@@ -261,6 +261,10 @@ function M.new()
     if n == nil then return false, '' end
     return true, n
   end
+  function r.TrackFX_GetNumParams(track, fxIdx)
+    local names = state.fxParamNames[fxIdentOf(fxEntry(track, fxIdx))]
+    return names and #names or 0
+  end
 
   -- Track state chunk — minimal FXCHAIN round-trip used by the wm applier's
   -- per-FX MIDI routing surgery. Emits one <VST ...> block per non-JS fx
@@ -410,9 +414,29 @@ function M.new()
     return g
   end
 
+  -- Floating-window surface (pa:floatFx / unfloatFx). Show flags 3/2
+  -- float/unfloat; GetFloatingWindow returns a truthy token while up.
+  state.floatingFx = {}
   function r.TrackFX_Show(track, fxIdx, showFlag)
+    local key = tostring(track) .. '/' .. fxIdx
+    if showFlag == 3 then state.floatingFx[key] = true
+    elseif showFlag == 2 then state.floatingFx[key] = nil end
     state.calls[#state.calls + 1] =
       { fn = 'TrackFX_Show', track = track, fxIdx = fxIdx, showFlag = showFlag }
+  end
+  function r.TrackFX_GetFloatingWindow(track, fxIdx)
+    return state.floatingFx[tostring(track) .. '/' .. fxIdx] and 'HWND' or nil
+  end
+
+  -- Last-touched surface (pa:lastTouched). Tests seed state.lastTouched =
+  -- { track = <track>, fxIdx = n, param = p }; nil → query fails.
+  function r.GetTouchedOrFocusedFX(mode)
+    local lt = state.lastTouched
+    if mode ~= 0 or not lt then return false, -1, -1, -1, -1, -1 end
+    for i, tr in ipairs(state.projectTracks) do
+      if tr == lt.track then return true, i - 1, -1, -1, lt.fxIdx, lt.param end
+    end
+    return false, -1, -1, -1, -1, -1
   end
 
   -- Installed-FX enumeration (runtime-fixed set). Seed via r:setInstalledFx.
