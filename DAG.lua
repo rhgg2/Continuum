@@ -913,7 +913,7 @@ end
 
 -- Linear-scan allocator over one stream's value list (audio pair or MIDI bus).
 -- see docs/DAG.md § allocStream internals; profile[g] = live count at gap g (capacity crossing weight).
-local function allocStream(values, startCursor, N, compare, pinAdd, profile)
+local function allocStream(values, startCursor, N, compare, pinAdd, writeBack, profile)
   local cursor, free, live = startCursor, {}, 0
   local function claim()
     if free[1] then return table.remove(free, 1) end
@@ -940,7 +940,7 @@ local function allocStream(values, startCursor, N, compare, pinAdd, profile)
     end
     live = live + 1
     for _, p in ipairs(v.pins or {}) do pinAdd(p.fxId, p.dir, p.port, reg) end
-    for _, apply in ipairs(v.applies) do apply(reg) end
+    for _, w in ipairs(v.writes or {}) do writeBack(w, reg) end
     if v.lastUse <= N then util.bucket(releaseAt, v.lastUse, reg) end
   end
 
@@ -979,6 +979,18 @@ end
 local function midiValueCompare(a, c)
   if a.lastUse ~= c.lastUse then return a.lastUse < c.lastUse end
   return a.ord < c.ord
+end
+
+-- Keyed group with deterministic first-touch order; `init` is the fresh group.
+local function orderedGroup(groups, order, key, init)
+  local g = groups[key]
+  if not g then g = init; groups[key] = g; util.add(order, key) end
+  return g
+end
+
+-- Append fn stamping ord = insertion serial, the value-compare tiebreak.
+local function ordAppend(list)
+  return function(v) v.ord = #list + 1; util.add(list, v) end
 end
 
 -- One assignment pass over a fixed partition; returns allocatedTracks + per-track capacity meta.
@@ -1039,7 +1051,7 @@ local function allocateOnce(tracks, nodes)
   table.sort(trackKeys)
 
   for _, trackKey in ipairs(trackKeys) do
-    local entry, fxSet, slotMap = tracks[trackKey], fxSetOf[trackKey], slotOf[trackKey]
+    local entry, slotMap = tracks[trackKey], slotOf[trackKey]
     local state = alloc[trackKey]
     local N = #(entry.fxOrder or {})
 
@@ -1051,128 +1063,114 @@ local function allocateOnce(tracks, nodes)
       for _, existing in ipairs(list) do if existing == pair then return end end
       util.add(list, pair)
     end
-    -- Build the value list. ord = insertion serial for stable tiebreak.
-    local values, nextOrd = {}, 0
-    local function addValue(v) nextOrd = nextOrd + 1; v.ord = nextOrd; util.add(values, v) end
+    -- Uniform flow list: every connection through this track's channel space,
+    -- endpoints resolved against the chain once (slot present = chain member).
+    --shape: flow = { type, from?, fromPort?, fromSlot?, to?, toPort?, toSlot?, escape?='send'|'feed', sendIdx?, inc?=incoming entry }
+    local flows = {}
+    for _, ic in ipairs(entry.intraConns or {}) do
+      util.add(flows, { type = ic.type,
+        from = ic.from, fromPort = ic.fromPort, fromSlot = slotMap[ic.from],
+        to   = ic.to,   toPort   = ic.toPort,   toSlot   = slotMap[ic.to] })
+    end
+    for sendIdx, ow in ipairs(entry.outWires or {}) do
+      util.add(flows, { type = ow.type, escape = 'send', sendIdx = sendIdx,
+        from = ow.from, fromPort = ow.fromPort, fromSlot = slotMap[ow.from] })
+    end
+    local mf = entry.masterFeed
+    if entry.mainSend and mf then
+      util.add(flows, { type = 'audio', escape = 'feed',
+        from = mf.from, fromPort = mf.fromPort, fromSlot = slotMap[mf.from] })
+    end
+    for _, inc in ipairs(incoming[trackKey] or {}) do
+      util.add(flows, { type = inc.wire.type, inc = inc, to = inc.wire.toNode,
+        toPort = inc.wire.toPort, toSlot = slotMap[inc.wire.toNode] })
+    end
+
+    -- Audio assignment outcomes as data: each value's writes land here with its pair.
+    local function audioWriteBack(w, pair)
+      local chan = (pair - 1) * 2
+      if w.kind == 'sendSrc' then state.sends[w.sendIdx].srcChan = chan
+      elseif w.kind == 'sendDst' then alloc[w.track].sends[w.sendIdx].dstChan = chan
+      else alloc[w.track].mainSendOffs = chan end
+    end
+
+    local values = {}
+    local addValue = ordAppend(values)
 
     -- Pair-1 boundary register: source-from (input) and master-to (output)
     -- share pair 1 with non-overlapping lifetimes. See allocatedTracks shape.
-    do
-      local sfPins, sfLastUse = {}, 0
-      local mtPins, mtDef     = {}, math.huge
-      for _, ic in ipairs(entry.intraConns or {}) do
-        if ic.type == 'audio' then
-          if not fxSet[ic.from] and fxSet[ic.to] then
-            util.add(sfPins, { fxId = ic.to, dir = 'ins', port = ic.toPort })
-            if slotMap[ic.to] > sfLastUse then sfLastUse = slotMap[ic.to] end
-          elseif fxSet[ic.from] and not fxSet[ic.to] then
-            util.add(mtPins, { fxId = ic.from, dir = 'outs', port = ic.fromPort })
-            if slotMap[ic.from] < mtDef then mtDef = slotMap[ic.from] end
-          end
+    local sfPins, sfLastUse = {}, 0
+    local mtPins, mtDef     = {}, math.huge
+    local feedFlow
+    for _, f in ipairs(flows) do
+      if f.type == 'audio' then
+        if f.escape == 'feed' then feedFlow = f end
+        if not f.fromSlot and f.toSlot and not f.inc then
+          util.add(sfPins, { fxId = f.to, dir = 'ins', port = f.toPort })
+          sfLastUse = math.max(sfLastUse, f.toSlot)
+        elseif f.fromSlot and f.to and not f.toSlot then
+          util.add(mtPins, { fxId = f.from, dir = 'outs', port = f.fromPort })
+          mtDef = math.min(mtDef, f.fromSlot)
         end
       end
-      local mf            = entry.masterFeed
-      local fxMasterFeed  = entry.mainSend and mf and fxSet[mf.from]
-      local hasMasterTo   = #mtPins > 0
-      -- Raw source persists on pair 1 to end-of-chain only to feed the parent send
-      -- itself (no fx writer); source-out sends tap pre-FX, so they don't reserve it.
-      local srcToMaster   = entry.mainSend and not hasMasterTo and not fxMasterFeed
-      if srcToMaster then sfLastUse = N + 1 end
-      if #sfPins > 0 or srcToMaster then
-        addValue({ def = 0, lastUse = sfLastUse, pins = sfPins, assignReg = 1, applies = {} })
-      end
-      if hasMasterTo then
-        addValue({ def = mtDef, lastUse = N + 1, pins = mtPins, assignReg = 1, applies = {} })
-      end
+    end
+    -- Raw source persists on pair 1 to end-of-chain only to feed the parent send
+    -- itself (no fx writer); source-out sends tap pre-FX, so they don't reserve it.
+    local srcToMaster = entry.mainSend and #mtPins == 0 and not (feedFlow and feedFlow.fromSlot)
+    if srcToMaster then sfLastUse = N + 1 end
+    if #sfPins > 0 or srcToMaster then
+      addValue({ def = 0, lastUse = sfLastUse, pins = sfPins, assignReg = 1 })
+    end
+    if #mtPins > 0 then
+      addValue({ def = mtDef, lastUse = N + 1, pins = mtPins, assignReg = 1 })
     end
 
-    -- One value per fx audio output (fxId, fromPort): the producer writes one
-    -- pair, shared by every reader — intra consumers, sends, masterFeed.
+    -- One value per fx audio output (fxId, fromPort): one pair shared by every reader.
+    -- Boundary-origin sends keep srcChan=0 from pre-init; no value needed for them.
     local producerOuts, producerOrder = {}, {}
-    local function producerOut(fxId, fromPort)
-      local key = util.key(fxId, fromPort or 1)
-      local g = producerOuts[key]
-      if not g then
-        g = { def = slotMap[fxId], lastUse = slotMap[fxId], applies = {},
-              pins = { { fxId = fxId, dir = 'outs', port = fromPort } } }
-        producerOuts[key] = g
-        util.add(producerOrder, key)
-      end
-      return g
-    end
-
-    for _, ic in ipairs(entry.intraConns or {}) do
-      if ic.type == 'audio' and fxSet[ic.from] and fxSet[ic.to] then
-        local g = producerOut(ic.from, ic.fromPort)
-        util.add(g.pins, { fxId = ic.to, dir = 'ins', port = ic.toPort })
-        if slotMap[ic.to] > g.lastUse then g.lastUse = slotMap[ic.to] end
-      end
-    end
-    -- Source-out / midi sends keep srcChan=0 from pre-init; no value needed.
-    for sendIdx, ow in ipairs(entry.outWires or {}) do
-      if ow.type == 'audio' and fxSet[ow.from] then
-        local g = producerOut(ow.from, ow.fromPort)
-        g.lastUse = N + 1
-        util.add(g.applies, function(pair) state.sends[sendIdx].srcChan = (pair - 1) * 2 end)
+    for _, f in ipairs(flows) do
+      if f.type == 'audio' and f.fromSlot and (f.toSlot or f.escape) then
+        local g = orderedGroup(producerOuts, producerOrder, util.key(f.from, f.fromPort or 1),
+          { def = f.fromSlot, lastUse = f.fromSlot, writes = {},
+            pins = { { fxId = f.from, dir = 'outs', port = f.fromPort } } })
+        if f.toSlot then
+          util.add(g.pins, { fxId = f.to, dir = 'ins', port = f.toPort })
+          g.lastUse = math.max(g.lastUse, f.toSlot)
+        elseif f.escape == 'send' then
+          g.lastUse = N + 1
+          util.add(g.writes, { kind = 'sendSrc', sendIdx = f.sendIdx })
+        else
+          -- Parent send reads source pair 1 (NCH=2, no offset), so pin the master-feed
+          -- producer there; OFFS is written back when the master track allocates its pin.
+          g.lastUse, g.assignReg = N + 1, 1
+        end
       end
     end
-    -- Parent send reads source pair 1 (NCH=2, no offset), so pin the master-feed
-    -- producer there; OFFS is written back when the master track allocates its pin.
-    if entry.mainSend then
-      local mf = entry.masterFeed
-      if mf and fxSet[mf.from] then
-        local g = producerOut(mf.from, mf.fromPort)
-        g.lastUse, g.assignReg = N + 1, 1
-      end
-    end
-    for _, key in ipairs(producerOrder) do
-      local g = producerOuts[key]
-      addValue({ def = g.def, lastUse = g.lastUse, pins = g.pins,
-                 applies = g.applies, assignReg = g.assignReg })
-    end
+    for _, key in ipairs(producerOrder) do addValue(producerOuts[key]) end
 
     -- Stage-2 incoming audio sends: def=0 (parent send pre-fx), released at toNode's slot.
     -- Same-pin sends share one dest pair — REAPER sums at the pin; see docs/DAG.md § incoming-send coalescing.
-    if incoming[trackKey] then
-      local byPin, pinOrder = {}, {}
-      for _, inc in ipairs(incoming[trackKey]) do
-        local ow = inc.wire
-        if ow.type == 'audio' and fxSet[ow.toNode] then
-          local key = util.key(ow.toNode, ow.toPort or 1)
-          local g = byPin[key]
-          if not g then
-            g = { toNode = ow.toNode, toPort = ow.toPort, applies = {} }
-            byPin[key] = g; util.add(pinOrder, key)
-          end
-          local senderTrackKey, sendIdx = inc.senderTrackKey, inc.sendIdx
-          util.add(g.applies, inc.isMaster
-            and function(pair) alloc[senderTrackKey].mainSendOffs = (pair - 1) * 2 end
-            or  function(pair) alloc[senderTrackKey].sends[sendIdx].dstChan = (pair - 1) * 2 end)
-        end
-      end
-      for _, key in ipairs(pinOrder) do
-        local g = byPin[key]
-        addValue({
-          def = 0, lastUse = slotMap[g.toNode],
-          pins = { { fxId = g.toNode, dir = 'ins', port = g.toPort } },
-          applies = g.applies,
-        })
+    local byPin, pinOrder = {}, {}
+    for _, f in ipairs(flows) do
+      if f.type == 'audio' and f.inc and f.toSlot then
+        local g = orderedGroup(byPin, pinOrder, util.key(f.to, f.toPort or 1),
+          { def = 0, lastUse = f.toSlot, writes = {},
+            pins = { { fxId = f.to, dir = 'ins', port = f.toPort } } })
+        util.add(g.writes, f.inc.isMaster
+          and { kind = 'mainSendOffs', track = f.inc.senderTrackKey }
+          or  { kind = 'sendDst', track = f.inc.senderTrackKey, sendIdx = f.inc.sendIdx })
       end
     end
+    for _, key in ipairs(pinOrder) do addValue(byPin[key]) end
 
     local audioProfile = {}
-    state.cursor = allocStream(values, 1, N, audioValueCompare, pinAdd, audioProfile)
+    state.cursor = allocStream(values, 1, N, audioValueCompare, pinAdd, audioWriteBack, audioProfile)
 
     ----- midi register file: bus 0 boundary; values are per-producer streams.
 
-    local midiValues, nextMidiOrd = {}, 0
-    local function addMidiValue(v) nextMidiOrd = nextMidiOrd + 1; v.ord = nextMidiOrd; util.add(midiValues, v) end
-
     -- fxInputBus[consumerFxId] = bus the consumer's midi input arrived on; stamped by
-    -- source-midi / per-fx producer / stage-2 incoming as their values are assigned.
-    local fxInputBus = {}
-    local hasMidiOut = {}
-    local fxOutputBus = {}
+    -- source-midi / per-fx producer / stage-2 incoming writes as values are assigned.
+    local fxInputBus, fxOutputBus, hasMidiOut = {}, {}, {}
 
     -- Merge CU midi sink/source tracking: cuIn = union of feeder buses (→ inMask),
     -- cuOut = the CU's own output bus (→ outBus). Stamped alongside fxInputBus.
@@ -1188,96 +1186,73 @@ local function allocateOnce(tracks, nodes)
       end
     end
 
-    -- Source-midi producer pinned to the boundary (bus 0).
-    local sourceMidiLastUse, sourceMidiSends, sourceMidiConsumers = 0, {}, {}
-    for _, ic in ipairs(entry.intraConns or {}) do
-      if ic.type == 'midi' and not fxSet[ic.from] and fxSet[ic.to] then
-        if slotMap[ic.to] > sourceMidiLastUse then sourceMidiLastUse = slotMap[ic.to] end
-        util.add(sourceMidiConsumers, ic.to)
+    -- Midi assignment outcomes as data: each value's writes land here with its bus.
+    local function midiWriteBack(w, bus)
+      if w.kind == 'sendSrc' then state.sends[w.sendIdx].srcChan = bus
+      elseif w.kind == 'sendDst' then alloc[w.track].sends[w.sendIdx].dstChan = bus
+      elseif w.kind == 'busIn' then fxInputBus[w.fxId] = bus; noteCuIn(w.fxId, bus)
+      else -- busProducer: a non-bus-aware JSFX emits on one bus; every reader inherits it
+        fxOutputBus[w.fxId] = bus
+        if isMergeCU(w.fxId) then cuOut[w.fxId] = bus end
+        for _, c in ipairs(w.consumers) do fxInputBus[c] = bus; noteCuIn(c, bus) end
       end
-    end
-    -- Source-midi is always bus 0 — pre-stamp so per-fx values defined later inherit it.
-    for _, c in ipairs(sourceMidiConsumers) do fxInputBus[c] = 0; noteCuIn(c, 0) end
-    for sendIdx, ow in ipairs(entry.outWires or {}) do
-      if ow.type == 'midi' and not fxSet[ow.from] then
-        util.add(sourceMidiSends, function(bus) state.sends[sendIdx].srcChan = bus end)
-      end
-    end
-    if sourceMidiLastUse > 0 or #sourceMidiSends > 0 then
-      local lu = #sourceMidiSends > 0 and (N + 1) or sourceMidiLastUse
-      addMidiValue({ def = 0, lastUse = lu, assignReg = 0, applies = sourceMidiSends })
     end
 
-    -- Per-fx producer groups all wires off one fx's midi output: a
-    -- non-bus-aware JSFX emits on a single bus regardless of fan-out.
-    local fxMidiByProducer = {}
-    local function fxMidiProducer(fxId)
-      local p = fxMidiByProducer[fxId]
-      if not p then
-        p = { def = slotMap[fxId], lastUse = slotMap[fxId], applies = {}, consumers = {} }
-        fxMidiByProducer[fxId] = p
-      end
-      return p
-    end
-    for _, ic in ipairs(entry.intraConns or {}) do
-      if ic.type == 'midi' and fxSet[ic.from] then
-        hasMidiOut[ic.from] = true
-        local p = fxMidiProducer(ic.from)
-        if slotMap[ic.to] > p.lastUse then p.lastUse = slotMap[ic.to] end
-        util.add(p.consumers, ic.to)
-      end
-    end
-    for sendIdx, ow in ipairs(entry.outWires or {}) do
-      if ow.type == 'midi' and fxSet[ow.from] then
-        hasMidiOut[ow.from] = true
-        local p = fxMidiProducer(ow.from)
-        p.lastUse = N + 1
-        util.add(p.applies, function(bus) state.sends[sendIdx].srcChan = bus end)
-      end
-    end
-    local fxProducerIds = util.keys(fxMidiByProducer)
-    table.sort(fxProducerIds)
-    for _, fxId in ipairs(fxProducerIds) do
-      local p = fxMidiByProducer[fxId]
-      util.add(p.applies, function(bus)
-        fxOutputBus[fxId] = bus
-        if isMergeCU(fxId) then cuOut[fxId] = bus end
-        for _, c in ipairs(p.consumers) do fxInputBus[c] = bus; noteCuIn(c, bus) end
-      end)
-      addMidiValue({ def = p.def, lastUse = p.lastUse, applies = p.applies })
-    end
+    local midiValues = {}
+    local addMidiValue = ordAppend(midiValues)
 
-    -- Stage-2 incoming midi sends pinned at the receiver. Sends to one node coalesce
-    -- onto a single bus (REAPER merges midi on a bus); the receiving fx inherits it.
-    if incoming[trackKey] then
-      local byNode, nodeOrder = {}, {}
-      for _, inc in ipairs(incoming[trackKey]) do
-        local ow = inc.wire
-        if ow.type == 'midi' then
-          local toNode = ow.toNode
-          local g = byNode[toNode]
-          if not g then
-            g = { toNode = toNode, applies = {} }
-            byNode[toNode] = g; util.add(nodeOrder, toNode)
+    -- One fold over the midi flows: boundary source (pinned bus 0), per-fx
+    -- producers (one bus per output regardless of fan-out), incoming sends.
+    local sourceMidi = { lastUse = 0, writes = {} }
+    local producers, producerIds = {}, {}
+    local incByNode, incOrder = {}, {}
+    for _, f in ipairs(flows) do
+      if f.type == 'midi' then
+        if f.inc then
+          local g = orderedGroup(incByNode, incOrder, f.to, { toSlot = f.toSlot, writes = {} })
+          util.add(g.writes, { kind = 'sendDst', track = f.inc.senderTrackKey, sendIdx = f.inc.sendIdx })
+        elseif f.fromSlot then
+          hasMidiOut[f.from] = true
+          local g = orderedGroup(producers, producerIds, f.from,
+            { def = f.fromSlot, lastUse = f.fromSlot, writes = {}, consumers = {} })
+          if f.escape then
+            g.lastUse = N + 1
+            util.add(g.writes, { kind = 'sendSrc', sendIdx = f.sendIdx })
+          else
+            g.lastUse = math.max(g.lastUse, f.toSlot)
+            util.add(g.consumers, f.to)
           end
-          local senderTrackKey, sendIdx = inc.senderTrackKey, inc.sendIdx
-          util.add(g.applies, function(bus) alloc[senderTrackKey].sends[sendIdx].dstChan = bus end)
+        elseif f.escape then
+          util.add(sourceMidi.writes, { kind = 'sendSrc', sendIdx = f.sendIdx })
+        elseif f.toSlot then
+          -- Source-midi is always bus 0 — pre-stamp consumers so per-fx values
+          -- defined later inherit it.
+          sourceMidi.lastUse = math.max(sourceMidi.lastUse, f.toSlot)
+          fxInputBus[f.to] = 0; noteCuIn(f.to, 0)
         end
       end
-      for _, toNode in ipairs(nodeOrder) do
-        local g = byNode[toNode]
-        util.add(g.applies, function(bus)
-          if fxSet[toNode] then fxInputBus[toNode] = bus; noteCuIn(toNode, bus) end
-        end)
-        addMidiValue({
-          def = 0, lastUse = fxSet[toNode] and slotMap[toNode] or (N + 1),
-          applies = g.applies,
-        })
-      end
+    end
+    if sourceMidi.lastUse > 0 or #sourceMidi.writes > 0 then
+      addMidiValue({ def = 0, assignReg = 0, writes = sourceMidi.writes,
+                     lastUse = #sourceMidi.writes > 0 and (N + 1) or sourceMidi.lastUse })
+    end
+    table.sort(producerIds)
+    for _, fxId in ipairs(producerIds) do
+      local g = producers[fxId]
+      util.add(g.writes, { kind = 'busProducer', fxId = fxId, consumers = g.consumers })
+      g.consumers = nil
+      addMidiValue(g)
+    end
+    -- Stage-2 incoming midi sends pinned at the receiver. Sends to one node coalesce
+    -- onto a single bus (REAPER merges midi on a bus); the receiving fx inherits it.
+    for _, toNode in ipairs(incOrder) do
+      local g = incByNode[toNode]
+      if g.toSlot then util.add(g.writes, { kind = 'busIn', fxId = toNode }) end
+      addMidiValue({ def = 0, lastUse = g.toSlot or (N + 1), writes = g.writes })
     end
 
     local midiProfile = {}
-    local midiCursor = allocStream(midiValues, 0, N, midiValueCompare, nil, midiProfile)
+    local midiCursor = allocStream(midiValues, 0, N, midiValueCompare, nil, midiWriteBack, midiProfile)
 
     meta[trackKey] = { N = N,
       audioUsed = state.cursor - 1, midiUsed = midiCursor,

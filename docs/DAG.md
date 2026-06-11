@@ -228,13 +228,23 @@ sum multiple pairs; a MIDI bus cannot be multi-read.)
 
 ### allocStream internals
 
-`allocStream(values, startCursor, N, compare, pinAdd, profile?)` is the shared
-helper for both audio and MIDI allocation. Each value is `{ def, lastUse, pins?,
-applies, assignReg? }` where `def`/`lastUse` are fx-chain slots (0 = boundary,
-N+1 = past end). `assignReg` forces a specific register; `pins` entries flow to
-`pinAdd`; `applies` entries receive the assigned register. Returns the cursor's
-end. The optional `profile` records the live-register count across each gap — the
+`allocStream(values, startCursor, N, compare, pinAdd, writeBack, profile?)` is
+the shared helper for both audio and MIDI allocation. Each value is `{ def,
+lastUse, pins?, writes?, assignReg? }` where `def`/`lastUse` are fx-chain slots
+(0 = boundary, N+1 = past end). `assignReg` forces a specific register; `pins`
+entries flow to `pinAdd`; `writes` are tagged descriptors (send src/dst
+channel, `mainSendOffs`, MIDI bus stamps) handed to the per-stream `writeBack`
+with the assigned register — assignment outcomes ride as data, not closures, so
+a value declares everything its placement will touch. Returns the cursor's end.
+The optional `profile` records the live-register count across each gap — the
 crossing weight a capacity bisection would carry at that cut.
+
+Values are built from a per-track *flow* list: every connection through the
+track's channel space (intraConns, outWires, masterFeed, incoming sends),
+endpoints resolved against the chain once (a slot, or boundary when absent).
+Per-stream folds group flows into values — audio by producer `(fxId, port)` and
+receiver pin, MIDI by producer fx and receiver node — plus the pinned boundary
+registers (audio pair 1, MIDI bus 0).
 
 ## Capacity bisection — over-cap classes split across tracks
 
