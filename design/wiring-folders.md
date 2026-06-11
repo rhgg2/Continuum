@@ -15,13 +15,17 @@ N levels). A child's `B_MAINSEND` becomes a **parent send** landing on
 the parent track instead of master:
 
 - **Audio**: one contiguous landing block — src pinned to pair 1, dst
-  offset via `C_MAINSEND_OFFS`, width via `C_MAINSEND_NCH`. One stream
-  per child, full stop.
+  offset via `C_MAINSEND_OFFS`, width via `C_MAINSEND_NCH` (≥1 —
+  cannot be zeroed, verified 2026-06-12; the conduit always carries an
+  audio stream, there is no midi-only parent send). One stream per
+  child, full stop.
 - **MIDI**: all buses, identity-mapped (1→1, 2→2, …), **cannot be
   disabled** (verified empirically 2026-06-10). The parent send is
   atomic: take audio + all-bus midi, or take nothing.
 - Regular sends *to* a folder track are unrestricted (any pair, any
-  bus mapping) and coexist with parent sends.
+  bus mapping) and coexist with parent sends — including a child's own
+  explicit send to its parent (verified 2026-06-12), which rides
+  alongside the parent send. This is the conduit-overflow path.
 - There are **no sends to master** — for a foldered track, master is
   reachable only through its ancestor chain.
 
@@ -74,8 +78,8 @@ Per track, given the user tree:
 
 - Child of P, class egress includes an edge→P whose profile matches
   the conduit (see midi condition below) → that edge rides the parent
-  send; deterministic pick among parallel edges (tie-break required —
-  same flavour as the min-cut one); remaining edges explicit.
+  send (deterministic pick among parallel edges; tie-break resolved
+  below); remaining edges explicit.
 - Child of P, no matching edge→P → `B_MAINSEND=off`, all egress
   explicit. Membership and routing decouple — a folder child feeding
   elsewhere is a normal REAPER idiom.
@@ -102,6 +106,20 @@ top-level track, one explicit send in, mainSend on. That is the split
 shape `read` already discards as realisation, so it round-trips to
 the direct edge. Net: folders impose zero restrictions on expressible
 topology.
+
+> **Realisation note (2026-06-12).** The allocator is node-driven —
+> `classes()` (`DAG.lua:263`) partitions *nodes*, and a track exists
+> only if some node's class lands on it; nothing conjures a node-less
+> track (split markers merely relocate an existing node). So the relay
+> cannot simply "appear" — it needs a carrier node. The clean reuse is
+> `wiring-busses-v2.md`'s `kind='bus'` node: the relay is a **degenerate
+> 1→1 buss that must not fold** (a plain fold absorbs it onto the child,
+> turning its mainSend back into the child's *parent* send — exactly
+> wrong). Non-folding is the split-class invariant again (`DAG.lua:276`).
+> Sequencing: the relay rides the v2 bus node — defer it until v2 lands,
+> then add the non-folding-top-level pin. Until then `read`'s
+> transparency (§open questions, resolved) already round-trips a
+> hand-built relay, so nothing regresses.
 
 ## Bus domains
 
@@ -169,16 +187,47 @@ the domain. The one-fx-per-track floor argument carries over.
 
 ## Open questions / risks
 
-- **Zero-fx relay collapse**: read's split/merge collapse is
-  fx-oriented; verify a bare pass-through relay track reads as
-  invisible realisation, not a node.
-- **`C_MAINSEND_NCH=0`**: can the audio side of a parent send be
-  zeroed (midi-only conduit)? Would relax the midi condition's
-  converse case. Probe when step 3 needs it.
-- **Master-resident midi fx**: leaked buses reach master; family
-  uniqueness must extend to master's bus expectations when it hosts
-  midi fx.
-- **Tie-break** for parallel child→parent edges — must be
-  deterministic or churn returns.
-- **Explicit send child→own-parent**: assumed unrestricted in
-  REAPER; verify (needed by the conduit-overflow path).
+None open — all resolved 2026-06-12 (below). Remaining unknowns are
+implementation-time fixture work, not design gaps.
+
+### Resolved (2026-06-12)
+
+- **`C_MAINSEND_NCH=0`** — not possible; audio always rides. Folded
+  into §facts; the midi condition stands (no midi-only conduit).
+- **Explicit send child→own-parent** — unrestricted; folded into
+  §facts. The conduit-overflow path is sound.
+- **Zero-fx relay collapse** — confirmed invisible (`readGraph`
+  inspection, no probe). `walkTrack` (`wiringManager.lua:947`) mints a
+  node only for a track with *no* incoming sends (the source rule) or
+  one hosting an fx; incoming sends + empty fx list ⇒ no node, and the
+  tail forwards the upstream producer refs. So a relay (child
+  explicit-send in, mainSend on, zero fx) round-trips to a direct
+  child→master edge. This is the *same* `readGraph` transparency that
+  `wiring-busses-v2.md` §persistence deliberately **breaks** for
+  buss-flagged tracks — the two sit on opposite sides of one switch (the
+  rm-meta track flag), disjoint by flag, so neither disturbs the other.
+- **Master-resident midi fx** — dissolved by the existing model, not a
+  new constraint. The master node takes **no external midi**: it is
+  seeded `midi = { ins = 0, outs = 0 }` (`readGraph`, `DAG.lua:824`),
+  and the master send is audio-only for cross-cone midi
+  (`receivesCrossConeMidi`, `DAG.lua:884` — "a master-resident node is
+  reachable only via audio parent-send; cross-cone midi can't be
+  delivered there"). So family-leaked buses flowing up the ancestor
+  chain cannot enter master as a graph edge — the family domain stops at
+  the top-level parent and never extends to master. A master-resident
+  midi fx that wants family midi is the existing cross-cone case:
+  `receivesCrossConeMidi` evicts it to its own newTrack, fed by an
+  explicit controlled send outside any family domain. Folders inherit
+  the allocator's master-midi model unchanged; no global reservation.
+- **Tie-break for parallel child→parent edges** — mirror the master-min
+  cut (`masterDominators`, `DAG.lua:852`): a primary magnitude, exact
+  ties broken by a stable id. Here the eligible set is already narrow —
+  only an edge whose profile matches the atomic conduit (child
+  chain-end audio on pair 1; all-bus midi iff the child emits midi) can
+  ride the parent send. Among the eligible, pick the minimum by the
+  stable endpoint key `(toPort, fromPort)` — derived from node ports,
+  not allocation order, so it is churn-free across recompiles. The
+  remaining child→P edges realise as explicit sends. Genuinely
+  identical edges (same from/fromPort/to/toPort/type) are deduped
+  upstream; gain is a value, not identity (as `sendKey` already treats
+  it), so it never enters the tie-break.
