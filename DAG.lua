@@ -215,18 +215,24 @@ end
 local function buildCtx(userGraph, derivedSplits)
   local nodes = userGraph.nodes or {}
   local edges = userGraph.edges or {}
-  local cache = { srcSet = {} }
+  local cache = { srcSet = {}, hasSplit = {} }
   local ctx = { userGraph = userGraph }
 
-  -- Reverse adjacency: for each node id, the list of input-side node ids.
-  local function inbound()
-    if cache.inbound then return cache.inbound end
-    cache.inbound = {}
+  -- Forward/reverse adjacency over the edge union, built once per ctx: rev
+  -- feeds srcSet's walk, fwd the master-min cone walks (deriveMasterSplit).
+  function ctx:adjacency()
+    if cache.adjacency then return cache.adjacency end
+    local fwd, rev = {}, {}
     for _, edge in ipairs(edges) do
-      util.bucket(cache.inbound, edge.to, edge.from)
+      util.bucket(fwd, edge.from, edge.to)
+      util.bucket(rev, edge.to, edge.from)
     end
-    return cache.inbound
+    cache.adjacency = { fwd = fwd, rev = rev }
+    return cache.adjacency
   end
+
+  -- Reverse adjacency: for each node id, the list of input-side node ids.
+  local function inbound() return ctx:adjacency().rev end
 
   local function srcSet(id)
     if cache.srcSet[id] then return cache.srcSet[id] end
@@ -235,11 +241,15 @@ local function buildCtx(userGraph, derivedSplits)
     if node and node.kind == 'source' and node.trackId then
       set[node.trackId] = true
     end
-    -- A split marker makes the node its own source: the tag propagates
-    -- forward, evicting the node + its cone into their own class.
-    if node and (node.split or derivedSplits[id]) then set['split:' .. id] = true end
+    -- A split marker evicts the node + its cone into their own class.
+    -- hasSplit mirrors the spread so nothing has to parse the key back.
+    if node and (node.split or derivedSplits[id]) then
+      set['split:' .. id] = true
+      cache.hasSplit[id] = true
+    end
     for _, parent in ipairs(inbound()[id] or {}) do
       for guid in pairs(srcSet(parent)) do set[guid] = true end
+      if cache.hasSplit[parent] then cache.hasSplit[id] = true end
     end
     cache.srcSet[id] = set
     return set
@@ -251,15 +261,12 @@ local function buildCtx(userGraph, derivedSplits)
     if cache.classes then return cache.classes end
     cache.classes, cache.splitClasses = {}, {}
     for id in pairs(nodes) do
-      local guids, split = {}, false
-      for guid in pairs(srcSet(id)) do
-        util.add(guids, guid)
-        if guid:sub(1, 6) == 'split:' then split = true end
-      end
+      local guids = {}
+      for guid in pairs(srcSet(id)) do util.add(guids, guid) end
       table.sort(guids)
       local key = util.key(table.unpack(guids))
       util.bucket(cache.classes, key, id)
-      if split then cache.splitClasses[key] = true end
+      if cache.hasSplit[id] then cache.splitClasses[key] = true end
     end
     return cache.classes
   end
@@ -476,26 +483,22 @@ do
   -- source/master are the track-IO boundary; only chain members get an fxOrder.
   local function isChainMember(node) return node.kind ~= 'source' and node.kind ~= 'master' end
 
-  -- Partition gained edges: those a native send/main-volume can host (no CU)
-  -- from those needing one. Returns the host-marker set + parked native gains.
-  local function partitionGains(ctx)
-    local hostedNatively, sendGain, mainGain = {}, {}, {}
-    for edgeIdx, host in pairs(ctx:gainHost()) do
-      if host.kind == 'send' then
-        hostedNatively[edgeIdx] = true
-        sendGain[util.key(host.from, host.to)] = host.gain
-      elseif host.kind == 'mainSend' then
-        hostedNatively[edgeIdx] = true
-        mainGain[host.cls] = host.gain
-      end
+  -- Native gain hosts keyed for the routing pass: send volume by track pair,
+  -- main-send volume by class. CU-hosted gains ride their conns instead.
+  local function nativeGains(ctx)
+    local sendGain, mainGain = {}, {}
+    for _, host in pairs(ctx:gainHost()) do
+      if host.kind == 'send' then sendGain[util.key(host.from, host.to)] = host.gain
+      elseif host.kind == 'mainSend' then mainGain[host.cls] = host.gain end
     end
-    return hostedNatively, sendGain, mainGain
+    return sendGain, mainGain
   end
 
   -- Realise edges into conns + synth merge CUs; audio gain as metadata,
   -- MIDI passes through. See docs/DAG.md § per-consumer merge.
-  local function buildConns(ctx, hostedNatively)
+  local function buildConns(ctx)
     local nodes, edges = ctx.userGraph.nodes, ctx.userGraph.edges
+    local gainHost = ctx:gainHost()
     local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
     local function nodeTrackKey(id) return cuTrackKey[id] or ctx:trackKeyOf(id) end
     local function audioConn(from, fp, to, tp, gain)
@@ -528,7 +531,9 @@ do
       if edge.type == 'midi' then
         conn = { type = 'midi', from = edge.from, to = edge.to }
       else
-        local gain = (not hostedNatively[edgeIdx]) and edge.ops and edge.ops.gain or nil
+        -- A natively-hosted gain (send/main volume) stays off the conn.
+        local host = gainHost[edgeIdx]
+        local gain = host and host.kind == 'cu' and host.gain or nil
         conn = { type = 'audio', from = edge.from, fromPort = edge.fromPort or 1,
                  to = edge.to, toPort = edge.toPort or 1, gain = gain, edgeIdx = edgeIdx }
       end
@@ -788,8 +793,8 @@ do
   -- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
   --contract: realisation pass over a compile ctx; returns the targetTracks shape (not cached)
   function M.targetTracks(ctx)
-    local hostedNatively, sendGain, mainGain = partitionGains(ctx)
-    local conns, synthNodes, cuTrackKey, nodeTrackKey = buildConns(ctx, hostedNatively)
+    local sendGain, mainGain = nativeGains(ctx)
+    local conns, synthNodes, cuTrackKey, nodeTrackKey = buildConns(ctx)
     local routing = routeByTrack(conns, nodeTrackKey, sendGain)
     return assembleTracks(ctx:trackMembers(), ctx.userGraph.nodes,
                           routing, cuTrackKey, synthNodes, mainGain)
@@ -803,12 +808,8 @@ end
 local function deriveMasterSplit(userGraph)
   local nodes = userGraph.nodes or {}
   local edges = userGraph.edges or {}
-
-  local fwd, rev = {}, {}
-  for _, e in ipairs(edges) do
-    util.bucket(fwd, e.from, e.to)
-    util.bucket(rev, e.to, e.from)
-  end
+  local base = buildCtx(userGraph, {})
+  local fwd, rev = base:adjacency().fwd, base:adjacency().rev
 
   local function reach(start, adj, blocked)
     local seen, stack = { [start] = true }, { start }
@@ -822,12 +823,19 @@ local function deriveMasterSplit(userGraph)
     return seen
   end
 
+  -- Forward cones are walked repeatedly (dominators, capacity, the cut) — memoise.
+  local cones = {}
+  local function coneOf(id)
+    if not cones[id] then cones[id] = reach(id, fwd, nil) end
+    return cones[id]
+  end
+
   -- fx dominators of master (every source->master path crosses them), largest
   -- cone first. d dominates master iff, with d cut, no source still reaches it.
   local function masterDominators()
     local doms = {}
     for id, node in pairs(nodes) do
-      if id ~= 'master' and node.kind == 'fx' and reach(id, fwd, nil)['master'] then
+      if id ~= 'master' and node.kind == 'fx' and coneOf(id)['master'] then
         local back, dominates = reach('master', rev, { [id] = true }), true
         for up in pairs(back) do
           if nodes[up].kind == 'source' then dominates = false; break end
@@ -838,7 +846,7 @@ local function deriveMasterSplit(userGraph)
     local coneSize = {}
     for _, id in ipairs(doms) do
       local n = 0
-      for _ in pairs(reach(id, fwd, nil)) do n = n + 1 end
+      for _ in pairs(coneOf(id)) do n = n + 1 end
       coneSize[id] = n
     end
     table.sort(doms, function(a, b)
@@ -848,12 +856,10 @@ local function deriveMasterSplit(userGraph)
     return doms
   end
 
-  local base = buildCtx(userGraph, {})
-
   -- dom is the single entry of its cone, so it alone can pull >=2 audio pairs
   -- from one upstream track. see docs/DAG.md § Master-minimization
   local function pullsMultiPair(dom)
-    local cone = reach(dom, fwd, nil)
+    local cone = coneOf(dom)
     local portsByTrack = {}
     for _, e in ipairs(edges) do
       if e.type == 'audio' and e.to == dom and not cone[e.from] then
@@ -876,7 +882,7 @@ local function deriveMasterSplit(userGraph)
   -- A master-resident node is reachable only via audio parent-send; cross-cone midi can't be
   -- delivered there, so such a dom is ineligible as the cut and gets its own newTrack.
   local function receivesCrossConeMidi(dom)
-    local cone = reach(dom, fwd, nil)
+    local cone = coneOf(dom)
     for _, e in ipairs(edges) do
       if e.type == 'midi' and cone[e.to] and not cone[e.from] then return true end
     end
@@ -897,7 +903,7 @@ local function deriveMasterSplit(userGraph)
 
   -- Emit the cone marker only when the cone is strictly smaller than master's
   -- natural srcSet class — something needs evicting. One marker peels them all.
-  local cone = reach(cut, fwd, nil)
+  local cone = coneOf(cut)
   for id, cls in pairs(base:classOf()) do
     if cls == natural and not cone[id] then return { [cut] = true } end
   end
