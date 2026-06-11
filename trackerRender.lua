@@ -940,14 +940,20 @@ local function paletteActions()
   end)
 end
 
--- Set by the Add-Column 'automation' option; focuses the find box next frame.
-local focusFilterReq = false
+-- Palette focus tri-state: 'find' | 'tree' | nil (grid). Gates focusState
+-- and handleKeys. See docs/trackerRender.md § Param palette — keyboard focus.
+local paletteFocus = nil
+local focusFindReq = false   -- one-shot: focus the find box next draw
+local defocusReq   = false   -- one-shot: park focus on the sink, leaving the find box
+local releaseReq   = false   -- one-shot: drop paletteFocus to nil at the sink (Esc/Enter)
+local scrollReq    = false   -- one-shot: scroll the cursor row into view next draw
 
-local function paletteFilterBox()
+local function paletteFindBox()
   ImGui.SetNextItemWidth(ctx, -1)
-  if focusFilterReq then ImGui.SetKeyboardFocusHere(ctx); focusFilterReq = false end
+  if focusFindReq then ImGui.SetKeyboardFocusHere(ctx); focusFindReq, paletteFocus = false, 'find' end
   local changed, text = ImGui.InputTextWithHint(ctx, '##paramFilter', 'find', tv:paletteFilter())
   if changed then tv:setPaletteFilter(text) end
+  return ImGui.IsItemActive(ctx)
 end
 
 -- Ellipsis-fit to the palette's fixed width; no horizontal scroll exists.
@@ -962,95 +968,208 @@ local function fitLabel(text, maxW)
   return text:sub(1, keep) .. '…'
 end
 
-local function paramRow(trackGuid, fxGuid, prm, label)
-  local sel     = tv:paletteParam()
-  local isSel   = sel and sel.fxGuid == fxGuid and sel.param == prm.index
-  label = fitLabel(label, select(1, ImGui.GetContentRegionAvail(ctx)))
-  -- ###: ID from the guid alone — with ##, the truncated label is hashed
-  -- too, and scrollbar-driven width changes would mint a fresh ID per frame
-  local clicked = ImGui.Selectable(ctx, label .. '###p' .. fxGuid .. prm.index, isSel)
-  local double  = ImGui.IsItemHovered(ctx) and ImGui.IsMouseDoubleClicked(ctx, 0)
-  if clicked or double then
-    tv:setPaletteParam{ trackGuid = trackGuid, fxGuid = fxGuid,
-                        param = prm.index, label = prm.name }
-  end
-  if double then tv:automateParam() end
-end
+-- ▾ open / ▸ shut tree arrows; params indent under their fx.
+local ARROW_OPEN, ARROW_SHUT, PARAM_INDENT = '\xe2\x96\xbe', '\xe2\x96\xb8', 14
 
--- Only visible rows hit ImGui (500-param plugin = 500 Selectables/frame).
--- One persistent clipper: ReaImGui treats per-frame CreateListClipper as a leak.
-local listClipper = nil
-local function clippedRows(count, drawRow)
-  if not (listClipper and ImGui.ValidatePtr(listClipper, 'ImGui_ListClipper*')) then
-    listClipper = ImGui.CreateListClipper(ctx)
-  end
-  ImGui.ListClipper_Begin(listClipper, count)
-  while ImGui.ListClipper_Step(listClipper) do
-    local first, last = ImGui.ListClipper_GetDisplayRange(listClipper)
-    for i = first + 1, last do drawRow(i) end
-  end
-end
-
-local function filteredParamRows(rows, needle)
-  local matches = {}
+-- Ordered render plan: {kind='heading',text} | {kind='fx',row,open} | {kind='param',row,prm}.
+-- Non-empty needle prunes to matched subtrees, forced open — see docs/trackerRender.md § Filtering.
+local function buildPlan(rows, needle)
+  local plan, heading = {}, nil
   for _, row in ipairs(rows) do
-    for _, prm in ipairs(tv:listParams(row.trackGuid, row.fxGuid)) do
-      if (row.name .. ' ' .. prm.name):lower():find(needle, 1, true) then
-        matches[#matches + 1] = { row = row, prm = prm }
+    local section = row.generator and 'generators' or 'fx'
+    local shown, shownParams, open
+    if needle == '' then
+      open  = tv:paletteExpanded()[row.fxGuid] or false
+      shown = true
+      if open then shownParams = tv:listParams(row.trackGuid, row.fxGuid) end
+    else
+      shownParams = {}
+      for _, prm in ipairs(tv:listParams(row.trackGuid, row.fxGuid)) do
+        if (row.name .. ' ' .. prm.name):lower():find(needle, 1, true) then
+          shownParams[#shownParams + 1] = prm
+        end
+      end
+      shown, open = #shownParams > 0, true
+    end
+    if shown then
+      if section ~= heading then
+        heading = section
+        plan[#plan + 1] = { kind = 'heading', text = section }
+      end
+      plan[#plan + 1] = { kind = 'fx', row = row, open = open }
+      for _, prm in ipairs(open and shownParams or {}) do
+        plan[#plan + 1] = { kind = 'param', row = row, prm = prm }
       end
     end
   end
-  if #matches == 0 then
-    ImGui.TextDisabled(ctx, '(no match)')
-    return
-  end
-  clippedRows(#matches, function(i)
-    local m = matches[i]
-    -- param first: the fx name is the part that survives truncation worst
-    paramRow(m.row.trackGuid, m.row.fxGuid, m.prm, m.prm.name .. ' · ' .. m.row.name)
-  end)
+  return plan
 end
 
-local openFxReq = nil   -- fxGuid whose subtree the next frame force-opens (learn click)
+-- Navigable rows in display order; headings are skipped, and so are fx rows
+-- when filtering — the cursor then visits matched params only.
+local function navRows(plan, paramsOnly)
+  local nav = {}
+  for _, it in ipairs(plan) do
+    if it.kind == 'fx' and not paramsOnly then
+      nav[#nav + 1] = { fxGuid = it.row.fxGuid, param = nil, item = it, row = it.row }
+    elseif it.kind == 'param' then
+      nav[#nav + 1] = { fxGuid = it.row.fxGuid, param = it.prm.index, item = it,
+                        row = it.row, prm = it.prm }
+    end
+  end
+  return nav
+end
 
-local function paletteTree()
-  local rows = tv:paramTargets()
-  if #rows == 0 then
-    ImGui.TextDisabled(ctx, '(no fx reachable)')
+local function navIndex(nav, cur)
+  if not cur then return nil end
+  for i, e in ipairs(nav) do
+    if e.fxGuid == cur.fxGuid and e.param == cur.param then return i end
+  end
+end
+
+local function selectParam(e)
+  tv:setPaletteParam{ trackGuid = e.row.trackGuid, fxGuid = e.fxGuid,
+                      param = e.prm.index, label = e.prm.name }
+end
+
+-- Apply this frame's palette keys to cursor/expansion. Returns true when it
+-- changed the focus mode (Tab/Esc/Enter-automate) so the caller skips reconcile.
+local function handlePaletteKeys(nav)
+  local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
+  if press(ImGui.Key_Tab) then
+    if paletteFocus == 'find' then paletteFocus, defocusReq = 'tree', true
+    else paletteFocus, focusFindReq = 'find', true end
+    return true
+  end
+  if press(ImGui.Key_Escape) then
+    -- Defer the focus drop to the sink next frame: keep paletteFocus set
+    -- through this frame's focusState so the same Esc isn't dispatched.
+    tv:setPaletteFilter(''); defocusReq, releaseReq = true, true
+    return true
+  end
+  if #nav == 0 then return end
+
+  local idx = navIndex(nav, tv:paletteCursor())
+  if not idx then idx = 1; tv:setPaletteCursor{ fxGuid = nav[1].fxGuid, param = nav[1].param } end
+  -- Up/Down move, clamped — no wrap past the ends. Left/Right drive the tree
+  -- unless the find box is editing text. Any move scrolls the cursor in view.
+  local treeArrows = paletteFocus == 'tree' or tv:paletteFilter() == ''
+  local newIdx = idx
+  if press(ImGui.Key_DownArrow) then newIdx = math.min(idx + 1, #nav)
+  elseif press(ImGui.Key_UpArrow) then newIdx = math.max(idx - 1, 1)
+  elseif treeArrows and press(ImGui.Key_RightArrow) then
+    local e = nav[idx]
+    if e.param == nil and not e.item.open then tv:setFxExpanded(e.fxGuid, true)
+    else newIdx = math.min(idx + 1, #nav) end
+  elseif treeArrows and press(ImGui.Key_LeftArrow) then
+    local e = nav[idx]
+    if e.param == nil and e.item.open then tv:setFxExpanded(e.fxGuid, false)
+    elseif e.param ~= nil then
+      for j = idx - 1, 1, -1 do
+        if nav[j].param == nil then newIdx = j; break end
+      end
+    end
+  end
+
+  local cur = nav[newIdx]
+  if newIdx ~= idx then
+    scrollReq = true
+    tv:setPaletteCursor{ fxGuid = cur.fxGuid, param = cur.param }
+    if cur.param then selectParam(cur) end
+  end
+  if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_L) then
+    tv:armLearn(cur.row)   -- cur.row is the cursor's fx, whether on it or a child
+    if tv:learnFxGuid() then tv:setFxExpanded(cur.row.fxGuid, true) end
+  end
+  if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
+    if cur.param then
+      -- Deferred drop (see Esc) so the same Enter doesn't reach the grid.
+      selectParam(cur); tv:automateParam()
+      tv:setPaletteFilter(''); defocusReq, releaseReq = true, true
+      return true
+    end
+    tv:setFxExpanded(cur.fxGuid, not cur.item.open)
+  end
+end
+
+-- Selectable with hover/active highlight suppressed: only the cursor row shows
+-- the Col_Header fill (matches sampleRender's browser rows).
+local function paletteSelectable(label, onCur, flags)
+  local hi = onCur and ImGui.GetStyleColor(ctx, ImGui.Col_Header) or 0x00000000
+  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, hi)
+  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  hi)
+  local clicked = ImGui.Selectable(ctx, label, onCur, flags or 0)
+  ImGui.PopStyleColor(ctx, 2)
+  return clicked
+end
+
+-- On a keyboard move, scroll minimally so the just-submitted cursor row stays
+-- inside the view; a no-op for mouse moves (scrollReq unset).
+local function scrollFollow(onCur)
+  if not (scrollReq and onCur) then return end
+  scrollReq = false
+  local _, rowTop = ImGui.GetItemRectMin(ctx)
+  local _, rowBot = ImGui.GetItemRectMax(ctx)
+  local _, winTop = ImGui.GetWindowPos(ctx)
+  local winBot    = winTop + ImGui.GetWindowHeight(ctx)
+  local sY        = ImGui.GetScrollY(ctx)
+  if rowTop < winTop then ImGui.SetScrollY(ctx, sY - (winTop - rowTop))
+  elseif rowBot > winBot then ImGui.SetScrollY(ctx, sY + (rowBot - winBot)) end
+end
+
+local function drawTree(plan)
+  if #plan == 0 then
+    ImGui.TextDisabled(ctx, tv:paletteFilter() == '' and '(no fx reachable)' or '(no match)')
     return
   end
-  local needle = tv:paletteFilter():lower()
-  if needle ~= '' then return filteredParamRows(rows, needle) end
+  local cur  = tv:paletteCursor()
   local fpx  = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
   local btnW = ImGui.CalcTextSize(ctx, 'learn') + fpx * 2
-  local heading
-  for _, row in ipairs(rows) do
-    local section = row.generator and 'generators' or 'fx'
-    if section ~= heading then
-      heading = section
-      ImGui.TextDisabled(ctx, heading)
-    end
-    if openFxReq == row.fxGuid then
-      ImGui.SetNextItemOpen(ctx, true)
-      openFxReq = nil
-    end
-    local availW = select(1, ImGui.GetContentRegionAvail(ctx))
-    -- 28px ≈ tree arrow + spacing; keeps the label clear of the button.
-    -- ### throughout: label changes each frame (truncation, learn↔stop) → ##-hash alternates open state with scrollbar.
-    local open  = ImGui.TreeNode(ctx,
-      fitLabel(row.name, availW - btnW - 28) .. '###' .. row.fxGuid)
-    local armed = tv:learnFxGuid() == row.fxGuid
-    ImGui.SameLine(ctx, availW - btnW)
-    if ImGui.SmallButton(ctx, (armed and 'stop' or 'learn') .. '###L' .. row.fxGuid) then
-      tv:armLearn(row)
-      openFxReq = tv:learnFxGuid()
-    end
-    if open then
-      local params = tv:listParams(row.trackGuid, row.fxGuid)
-      clippedRows(#params, function(i)
-        paramRow(row.trackGuid, row.fxGuid, params[i], params[i].name)
-      end)
-      ImGui.TreePop(ctx)
+  local showLearn = tv:paletteFilter() == ''   -- learn is hidden while filtering
+  for _, it in ipairs(plan) do
+    if it.kind == 'heading' then
+      ImGui.TextDisabled(ctx, it.text)
+    elseif it.kind == 'fx' then
+      local row    = it.row
+      local onCur  = cur and cur.fxGuid == row.fxGuid and cur.param == nil
+      local availW  = select(1, ImGui.GetContentRegionAvail(ctx))
+      local reserve = showLearn and btnW + 28 or 8
+      local label   = (it.open and ARROW_OPEN or ARROW_SHUT) .. ' '
+                   .. fitLabel(row.name, availW - reserve)
+      -- AllowOverlap so the learn button drawn on top still takes its clicks.
+      local clicked = paletteSelectable(label .. '###fx' .. row.fxGuid, onCur,
+                                        ImGui.SelectableFlags_AllowOverlap)
+      scrollFollow(onCur)
+      if clicked then
+        tv:setPaletteCursor{ fxGuid = row.fxGuid, param = nil }
+        tv:setFxExpanded(row.fxGuid, not it.open)
+        paletteFocus = 'tree'
+      end
+      if showLearn then
+        local armed = tv:learnFxGuid() == row.fxGuid
+        ImGui.SameLine(ctx, availW - btnW)
+        if ImGui.SmallButton(ctx, (armed and 'stop' or 'learn') .. '###L' .. row.fxGuid) then
+          tv:armLearn(row)
+          if tv:learnFxGuid() then tv:setFxExpanded(row.fxGuid, true) end
+        end
+      end
+    else
+      local row   = it.row
+      local onCur = cur and cur.fxGuid == row.fxGuid and cur.param == it.prm.index
+      ImGui.Indent(ctx, PARAM_INDENT)
+      -- ### ID from the guid+index alone: truncation/width must not remint it.
+      local label   = fitLabel(it.prm.name, select(1, ImGui.GetContentRegionAvail(ctx)))
+      local clicked = paletteSelectable(label .. '###p' .. row.fxGuid .. it.prm.index, onCur)
+      scrollFollow(onCur)
+      local double  = ImGui.IsItemHovered(ctx) and ImGui.IsMouseDoubleClicked(ctx, 0)
+      if clicked or double then
+        tv:setPaletteCursor{ fxGuid = row.fxGuid, param = it.prm.index }
+        tv:setPaletteParam{ trackGuid = row.trackGuid, fxGuid = row.fxGuid,
+                            param = it.prm.index, label = it.prm.name }
+        paletteFocus = 'tree'
+      end
+      if double then tv:automateParam() end
+      ImGui.Unindent(ctx, PARAM_INDENT)
     end
   end
 end
@@ -1065,12 +1184,32 @@ local function drawParamPalette(x, y, h)
   ImGui.PushFont(ctx, uiFont, gui.fontSize.ui)
   if ImGui.BeginChild(ctx, '##paramPalette', PALETTE_W, h,
                       ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
+    local childFocused = ImGui.IsWindowFocused(ctx)
     chrome.pushChromeStyles()
     paletteHeader()
     paletteActions()
-    paletteFilterBox()
+    local findActive = paletteFindBox()
     ImGui.Separator(ctx)
-    paletteTree()
+
+    -- Focus sink: SetKeyboardFocusHere parks here to deactivate the find box
+    -- (Tab→tree, Esc/Enter→grid). Kept near the top so scroll never culls it.
+    local parking = defocusReq
+    if defocusReq then ImGui.SetKeyboardFocusHere(ctx); defocusReq = false end
+    if releaseReq then paletteFocus, releaseReq = nil, false end
+    ImGui.InvisibleButton(ctx, '##paletteSink', 1, 1)
+
+    local plan = buildPlan(tv:paramTargets(), tv:paletteFilter():lower())
+    local focusChanged = paletteFocus and handlePaletteKeys(navRows(plan, tv:paletteFilter() ~= ''))
+    drawTree(plan)
+
+    -- Reconcile paletteFocus with ImGui state: find box wins unless parking,
+    -- a pane click grabs tree focus, clicking elsewhere releases to the grid.
+    if not focusChanged then
+      local clicked = ImGui.IsWindowHovered(ctx) and ImGui.IsMouseClicked(ctx, 0)
+      if findActive and not parking then paletteFocus = 'find'
+      elseif clicked then paletteFocus = paletteFocus or 'tree'
+      elseif paletteFocus and not childFocused then paletteFocus = nil end
+    end
     chrome.popChromeStyles()
   end
   ImGui.EndChild(ctx)
@@ -1381,12 +1520,12 @@ local lastEditKey
 
 -- commandHeld gates note entry per key: a key bound to both a command and note
 -- entry (e.g. '.' = delete) fires the command; unrelated keys still enter.
---contract: no-op when modal open, picker active, or any ImGui item is active
+--contract: no-op when modal open, picker active, palette focused, or any ImGui item active
 --contract: every fresh press enters; only lastEditKey autorepeats
 --contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
 local function handleKeys(kr)
   if modalHost:isOpen() or chrome.pickerIsActive() then return end
-  if ImGui.IsAnyItemActive(ctx) then return end
+  if ImGui.IsAnyItemActive(ctx) or paletteFocus then return end
   local ec = tv:ec()
   local commandHeld = kr.commandHeld
 
@@ -1509,7 +1648,7 @@ local function addColumn()
   openPrompt('Add Column', 'note, cc0-127, pb, at, pc, dly, auto', function(typeStr)
     local type, idStr = typeStr:lower():match('^(%a+)(%d*)$')
     if not type then return end
-    if type == 'automation' then focusFilterReq = true; return end
+    if type == 'automation' then focusFindReq = true; return end
     local id = idStr ~= '' and tonumber(idStr) or nil
     if type == 'dly' then tv:showDelay()
     elseif util.oneOf('note cc pb at pc', type) then
@@ -1735,7 +1874,7 @@ function renderer:focusState()
   return {
     suppressKbd    = suppressKbd,
     pageSuppressed = pageSuppressed,
-    acceptCmds     = (not suppressKbd) and not ImGui.IsAnyItemActive(ctx),
+    acceptCmds     = (not suppressKbd) and not ImGui.IsAnyItemActive(ctx) and not paletteFocus,
   }
 end
 

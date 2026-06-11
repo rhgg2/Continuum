@@ -2137,6 +2137,10 @@ end
 --shape: paletteParam = { trackGuid, fxGuid, param, label } — the palette's selected parameter
 local paletteParam  = nil
 local paletteFilter = ''
+--shape: paletteExpanded = { [fxGuid] = true } — open fx subtrees in the palette tree
+local paletteExpanded = {}
+--shape: paletteCursor = { fxGuid, param } — palette tree cursor; param nil = the fx heading row
+local paletteCursor   = nil
 
 -- Learn-touched params float above pa's frecency order until the bound
 -- take changes; validated lazily against cm:boundTake, no lifecycle hook.
@@ -2164,6 +2168,10 @@ function tv:paletteParam()         return paletteParam end
 function tv:setPaletteParam(sel)   paletteParam = sel end
 function tv:paletteFilter()        return paletteFilter end
 function tv:setPaletteFilter(text) paletteFilter = text end
+function tv:paletteExpanded()         return paletteExpanded end
+function tv:setFxExpanded(fxGuid, on) paletteExpanded[fxGuid] = on or nil end
+function tv:paletteCursor()           return paletteCursor end
+function tv:setPaletteCursor(c)        paletteCursor = c end
 
 function tv:paramTargets()           return pa:targets() end
 function tv:paramBinding(chan, lane) return pa:binding(chan, lane) end
