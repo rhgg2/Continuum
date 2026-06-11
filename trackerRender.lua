@@ -35,7 +35,7 @@ local function arrange() return facade.get('arrange') end
 ---------- PRIVATE
 
 local GUTTER      = 5    -- in grid chars: 3-char row num + spacer + region slot
-local HEADER      = 3    -- in grid rows; computeLayout grows it to fit vertical param names
+local HEADER      = 3    -- header rows, fixed; vertical param names truncate to fit, never grow it
 
 local gridX       = nil
 local gridY       = nil
@@ -463,35 +463,42 @@ local function drawTrackerToolbarBits()
 end
 
 -- Bound cc columns drop the 'CC' label for their param name written
--- vertically; names trim to VNAME_MAX chars so the header stays sane.
+-- vertically; names trim to VNAME_MAX chars as a hard upper bound.
 local VNAME_MAX = 14
-
-local function vname(label)
-  local cut = utf8.offset(label, VNAME_MAX + 1)
-  return cut and label:sub(1, cut - 1) or label
-end
 
 local function vnameSize() return math.floor(gui.fontSize.ui * 0.8) end
 
 -- Bottom gap under a vertical name, in rows: clear of the grid's top rule
 -- with a couple of px of breathing room.
-local function vnameGap() return 0.35 + 2 / gridY end
+local function vnameGap() return 0.35 + 5 / gridY end
 
--- Header rows: the tallest vertical name (rotated strip when painter has the
--- LICE path, stacked glyphs otherwise). Tall names may poke into the Ch row.
-local function headerRows(cols)
-  local maxPx = 0
-  for _, col in ipairs(cols) do
-    if col.type == 'cc' then
-      local binding = tv:paramBinding(col.midiChan, col.cc)
-      if binding then
-        local label = vname(binding.label)
-        local _, stripH = painter.measureRotated(ctx, label, vnameSize())
-        maxPx = math.max(maxPx, stripH or (utf8.len(label) or 0) * gui.fontSize.ui)
-      end
-    end
+-- Rotated param name, trimmed to fit the fixed header. Binary search finds
+-- the longest prefix whose rotated strip fits, exact under variable-width fonts.
+local function vname(label)
+  local cut = utf8.offset(label, VNAME_MAX + 1)
+  label = cut and label:sub(1, cut - 1) or label
+
+  local len = utf8.len(label) or #label
+  if len == 0 then return label end
+  local budget = (HEADER - vnameGap()) * gridY
+
+  local function prefixFitting(n)
+    local c = utf8.offset(label, n + 1)
+    local s = c and label:sub(1, c - 1) or label
+    local _, stripH = painter.measureRotated(ctx, s, vnameSize())
+    return (stripH or n * gui.fontSize.ui) <= budget, s
   end
-  return math.max(3, math.ceil(vnameGap() + maxPx / gridY))
+
+  local full, whole = prefixFitting(len)
+  if full then return whole end
+
+  local lo, hi, best = 1, len, nil
+  while lo <= hi do
+    local mid = (lo + hi) // 2
+    local fits, s = prefixFitting(mid)
+    if fits then best, lo = s, mid + 1 else hi = mid - 1 end
+  end
+  return best or (select(2, prefixFitting(1)))
 end
 
 --contract: must run before draws reading chanX/chanW/chanOrder/totalWidth/gridHeight
@@ -507,7 +514,6 @@ local function computeLayout(budgetW, budgetH)
   end
 
   gridWidth  = math.max(1, math.floor(budgetW / gridX) - GUTTER)
-  HEADER     = headerRows(grid.cols)
   local laneRows = laneStripRows()
   gridHeight = math.max(1, math.floor(budgetH / gridY) - HEADER - 1 - laneRows)
   tv:setGridSize(gridWidth, gridHeight)
@@ -640,8 +646,8 @@ end
 
 --contract: assumes computeLayout ran this frame; reads chanX/W/Order, gridOriginX/Y
 -- Bottom header row for a note column: one ui-font label per part, centred
--- over that part's char span (PITCH/VEL/DLY/SAMP). Replaces the old lane number.
-local PART_LABEL = { pitch = 'PITCH', sample = 'SAMP', vel = 'VEL', delay = 'DLY' }
+-- over that part's char span (PITCH/VEL/DELAY/SAMP). Replaces the old lane number.
+local PART_LABEL = { pitch = 'PITCH', sample = 'SAMP', vel = 'VEL', delay = 'DELAY' }
 
 local function notePartHeaders(col)
   local headers, partAt, stopPos = {}, col.partAt, col.stopPos
