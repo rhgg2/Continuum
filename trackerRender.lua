@@ -204,8 +204,9 @@ local function printer(ctx, gX, gY, x0, y0)
     cellText(centreX(x1, x2, txt), y, txt, colour)
   end
 
-  function pt:textCentredSmall(x1, x2, y, txt, size, colour)
-    p.text(centreX(x1, x2, txt, font, size), y, colour, txt, font, size)
+  function pt:textCentredSmall(x1, x2, y, txt, size, colour, fnt)
+    fnt = fnt or font
+    p.text(centreX(x1, x2, txt, fnt, size), y, colour, txt, fnt, size)
   end
 
   -- A bound cc column's header: the param name one glyph per line, reading
@@ -638,6 +639,24 @@ local function drawLaneStrip()
 end
 
 --contract: assumes computeLayout ran this frame; reads chanX/W/Order, gridOriginX/Y
+-- Bottom header row for a note column: one ui-font label per part, centred
+-- over that part's char span (PITCH/VEL/DLY/SAMP). Replaces the old lane number.
+local PART_LABEL = { pitch = 'PITCH', sample = 'SAMP', vel = 'VEL', delay = 'DLY' }
+
+local function notePartHeaders(col)
+  local headers, partAt, stopPos = {}, col.partAt, col.stopPos
+  local s = 1
+  while s <= #partAt do
+    local name, e = partAt[s], s
+    while e < #partAt and partAt[e + 1] == name do e = e + 1 end
+    headers[#headers + 1] = {
+      x1 = col.x + stopPos[s], x2 = col.x + stopPos[e], label = PART_LABEL[name],
+    }
+    s = e + 1
+  end
+  return headers
+end
+
 local function drawTracker()
   local grid = tv.grid
   local ec = tv:ec()
@@ -658,37 +677,42 @@ local function drawTracker()
 
   -- Solo (amber) wins over mute (red): audibility semantic.
   draw:text(-GUTTER, -HEADER, 'Row', 'accent')
-  for chan = 1, 16 do
-    if chanX[chan] then
-      local key = tv:isChannelSoloed(chan) and 'solo'
-               or tv:isChannelMuted(chan)  and 'mute'
-               or 'accent'
-      draw:textCentred(chanX[chan], chanX[chan] + chanW[chan] - 1,
-                       -HEADER, 'Ch ' .. chan, key)
+  -- Channel banner centres over the note columns only — automation/cc
+  -- columns protrude past them and would pull the label off-centre.
+  local noteSpan = {}
+  for _, col in ipairs(grid.cols) do
+    if col.x and col.type == 'note' then
+      local span = noteSpan[col.midiChan]
+      if span then span.x2 = col.x + col.width - 1
+      else noteSpan[col.midiChan] = { x1 = col.x, x2 = col.x + col.width - 1 } end
     end
   end
-  local laneByChan = {}
-  for _, col in ipairs(grid.cols) do
-    local sub, vertical
-    if col.type == 'note' then
-      local n = (laneByChan[col.midiChan] or 0) + 1
-      laneByChan[col.midiChan] = n
-      sub = tostring(n)
-    elseif col.type == 'cc' then
-      local binding = tv:paramBinding(col.midiChan, col.cc)
-      if binding then vertical = vname(binding.label)
-      else sub = tostring(col.cc) end
+  for chan = 1, 16 do
+    local span = noteSpan[chan]
+    if span then
+      local key = tv:isChannelSoloed(chan) and 'solo'
+               or tv:isChannelMuted(chan)  and 'mute'
+               or 'tracker.chanHeader'
+      draw:textCentred(span.x1, span.x2, -HEADER, 'Ch ' .. chan, key)
     end
+  end
+  for _, col in ipairs(grid.cols) do
     if col.x then
       local xr = col.x + col.width - 1
-      if vertical then
+      local binding = col.type == 'cc' and tv:paramBinding(col.midiChan, col.cc)
+      if binding then
+        local vertical = vname(binding.label)
         if not p.textUp((col.x + xr + 1) / 2, -vnameGap(), 'text', vertical, vnameSize()) then
           draw:textVertical(col.x, xr, -vnameGap(), vertical, uiFont, gui.fontSize.ui, 'text')
         end
       else
         draw:textCentred(col.x, xr, -2.1, col.label, 'text')
-        if sub then
-          draw:textCentredSmall(col.x, xr, -1.2, sub, 14, 'accent')
+        if col.type == 'note' then
+          for _, h in ipairs(notePartHeaders(col)) do
+            draw:textCentredSmall(h.x1, h.x2, -1.2 + 2 / gridY, h.label, vnameSize(), 'tracker.partHeader', uiFont)
+          end
+        elseif col.type == 'cc' then
+          draw:textCentredSmall(col.x, xr, -1.2 + 2 / gridY, tostring(col.cc), vnameSize(), 'tracker.partHeader', uiFont)
         end
       end
     end

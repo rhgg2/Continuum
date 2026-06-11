@@ -188,6 +188,10 @@ local declarations = {
   { 'colour.mute',             'colour.negative'                  },
   { 'colour.solo',             'palette.mark'                     },
   { 'colour.separator',        {'palette.base.zone6',  0.3 }      },
+  -- Tracker grid headers: chanHeader rides the blue (alt) ramp; partHeader the
+  -- base ramp. Both zone4 so they sit a couple of steps darker than accent.
+  { 'colour.tracker.chanHeader', 'palette.alt.zone4'              },
+  { 'colour.tracker.partHeader', 'palette.base.zone4'             },
 --  { 'colour.tail',             {'palette.steel',      0.3}       },
   { 'colour.tail',             hex('#8caac8')                     },  -- one-off lighter steel
   { 'colour.tailBord',         {'colour.tail', 0.4}               },  -- blend for corner
