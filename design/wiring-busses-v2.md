@@ -238,11 +238,11 @@ existing node machinery.
 
 ## Implementation plan
 
-> **Progress (2026-06-12):** steps 1–4 landed (steps 1–3 in commit `25c8f25`
+> **Progress (2026-06-12):** steps 1–5 landed (steps 1–3 in commit `25c8f25`
 > under the first draft's model; their DONE notes below record the decisions,
 > which survive except where bracketed; the first draft's step 4 —
 > anchor/loneGain bookkeeping, folded re-injection, realization-by-degree
-> folds — is **superseded** by this revision). Suite green at 1393.
+> folds — is **superseded** by this revision). Suite green at 1398.
 
 1. **Allocator: fx-less summing track.** *(DONE — verified 2026-06-12.)*
    `assembleTracks` emits a spec for any non-master class unconditionally
@@ -283,14 +283,30 @@ existing node machinery.
    `dag_bus_spec.lua`, `wm_bus_read_spec.lua`, plus a live
    reconcile-stamp/read-back test in `wm_bus_node_spec.lua`.
 
-5. **View projection.** `nodeView` gains the bus kind (matrix); fans
-   project from records + claims (decide claim storage — recommend the bus
-   record, retiring `node.busses`, for stable identity across the
-   threshold). Drop the v1 `node.busses` projection path if storage moves.
+5. **View projection.** *(DONE — 2026-06-12, + the fan render pulled
+   forward from step 6 so the app stays coherent.)* Claim storage went to
+   the bus record as decided: `claim = {node, port, dir}` (one port, one
+   node — v1's multi-port `{dir,ports,side}` shape and `node.busses` are
+   gone everywhere: storage, stamp, projection). `wv:busViews()` is the
+   uniform bar list `{id, pos, orient, matrix?, claim?}`; `wireView.bus`
+   is `{busId, bussedEnd}`, stamped structurally for bus-node endpoints
+   (matrix) and via claims for fans, `to`-end precedence, matrix over
+   claim. nodeView: bus kind → category `'bus'`, label `'buss'`, `orient`
+   field. wm grew `addBusRecord`/`removeBusRecord`/`busRecords` (record
+   ops fire `wiringChanged` directly — no graph mutate); `wm:moveNodes`
+   routes record-only buss ids to record pos; `pruneBusClaims` in
+   `wm:mutate` GCs a record when its claimed node dies (v1 parity: the
+   buss died with its node). Render: `busSegments` anchors the bar at the
+   busView's own pos/orient (taps comb away from the claimed node, trunk
+   to the node edge); the v1 creation gesture commits a record via
+   `busDefaultPlacement` (side → pos + orient). Specs: `wv_bus_spec`
+   rewritten; record CRUD/id-space tests in `wm_bus_node_spec`; the two
+   v1 node-meta round-trip tests in `wm_read_spec` retired.
 
-6. **Render.** Generalize `busSegments`/`drawBusPass` to own-pos/orient
-   with input/output taps on opposite sides; draw the matrix bar in the
-   main node pass; reuse `busBarHit` for wire drops.
+6. **Render — matrix half.** The fan half landed with step 5. Remaining:
+   draw the matrix bar in the main node pass (category `'bus'` currently
+   has no draw path — unreachable in production until step 7), emit
+   matrix bars/taps in `busSegments`, and extend `busBarHit` to them.
 
 7. **Creation UI + threshold gestures.** "Buss" picker entry → record-only
    create (rework `wm:addBusNode`); wire-drop and edge-removal conversion
@@ -299,10 +315,11 @@ existing node machinery.
    deletion.
 
 8. **Retire the v1 overlay gesture.** `busOverlay`/`busDraft`/`armBus`/
-   `busOverlayLayout`/`drawBusOverlay`/`busNear`, the node-menu items, and
-   `wm:addBus`/`removeBus` + `wv:addBus`/`removeBus` *as creation surface* —
-   superseded by record-busses. **Keep** the claim derivation (`busClaims`)
-   and the rail geometry helpers; they are the fan implementation.
+   `busOverlayLayout`/`drawBusOverlay`/`busNear` and the node-menu items —
+   superseded by record-busses. (`wm:addBus`/`removeBus` + `wv:addBus`/
+   `removeBus` already fell in step 5 — the overlay now commits records.)
+   **Keep** the claim derivation (`busClaims`) and the rail geometry
+   helpers; they are the fan implementation.
 
 9. **Tests.** Threshold crossings both directions (gain composition,
    identity/pos survival, track demolition); fan round-trip via claims with

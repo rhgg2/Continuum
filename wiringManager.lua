@@ -156,7 +156,7 @@ function wm:edgeGain(idx)
   return (e.ops and e.ops.gain) or 1.0
 end
 
-local pruneSourceTags  -- defined below persistNodeMeta; GCs orphaned source-tag keys on routing mutates
+local pruneSourceTags, pruneBusClaims  -- defined below; GC orphaned decoration on routing mutates
 
 --contract: clone-validate-swap; DAG.validate failure returns false,err with no state change;
 --contract: on success swaps + fires wiringChanged{kind}; REAPER realises via reconcile
@@ -167,12 +167,15 @@ function wm:mutate(mutator, kind)
   local err = DAG.validate(draft)
   if err then return false, err end
   setGraph(draft)
-  if kind ~= 'move' and kind ~= 'bus' then pruneSourceTags(userGraph) end
+  if kind ~= 'move' and kind ~= 'bus' then
+    pruneSourceTags(userGraph)
+    pruneBusClaims(userGraph)
+  end
   fire('wiringChanged', { kind = kind or 'mutate' })
   return true
 end
 
--- Decoration (pos, busses) is not routing: persist to the rm meta store (fx GUID for fx-nodes,
+-- Decoration (pos, source tags) is not routing: persist to the rm meta store (fx GUID for fx-nodes,
 -- track GUID for source/master) — orthogonal to the differ, so a decoration-only change skips reconcile.
 local function persistNodeMeta(node, meta)
   if node.kind == 'fx' then
@@ -213,7 +216,7 @@ function pruneSourceTags(g)
   end
 end
 
---contract: writes node.pos per {[id]={x,y}} + persists to the rm meta store; missing ids skipped
+--contract: writes node pos / record-buss pos per {[id]={x,y}} + persists; unknown ids skipped
 function wm:moveNodes(moves)
   local ok, err = self:mutate(function(g)
     for id, p in pairs(moves) do
@@ -222,43 +225,24 @@ function wm:moveNodes(moves)
     end
   end, 'move')
   if not ok then return false, err end
-  for id in pairs(moves) do
+  for id, p in pairs(moves) do
     local node = userGraph.nodes[id]
     if node and node.kind == 'bus' then rm:assignMeta('bus', id, { pos = node.pos })
-    elseif node then persistNodeMeta(node, { pos = node.pos }) end
+    elseif node then persistNodeMeta(node, { pos = node.pos })
+    elseif rm:meta('bus', id) then rm:assignMeta('bus', id, { pos = { x = p.x, y = p.y } })
+    end
   end
   return true
 end
 
---shape: bus = { dir='in'|'out', ports={portIdx,…}, side='L'|'R'|'T'|'B' } — decoration on node.busses; in-bus claims edges where node is `to`, out-bus where `from`; audio (v1)
---contract: appends bus {dir,ports,side} to node.busses + persists; decoration only, no reconcile
-function wm:addBus(nodeId, bus)
-  local ok = self:mutate(function(g)
-    local node = g.nodes[nodeId]
-    if node then
-      node.busses = node.busses or {}
-      util.add(node.busses, bus)
+-- A fan buss's render surface is its claim (the bar projects off the claimed node),
+-- so the record dies with that node — mirroring v1, where busses lived on the node.
+function pruneBusClaims(g)
+  for busId, rec in pairs(rm:meta('bus')) do
+    if rec.claim and not g.nodes[rec.claim.node] and not g.nodes[busId] then
+      rm:assignMeta('bus', busId, nil)
     end
-  end, 'bus')
-  if not ok then return false end
-  local node = userGraph.nodes[nodeId]
-  if node then persistNodeMeta(node, { busses = node.busses }) end
-  return true
-end
-
---contract: removes node.busses[idx] + persists; empty list clears meta key (edges revert to star)
-function wm:removeBus(nodeId, idx)
-  local ok = self:mutate(function(g)
-    local node = g.nodes[nodeId]
-    if node and node.busses then
-      table.remove(node.busses, idx)
-      if #node.busses == 0 then node.busses = nil end
-    end
-  end, 'bus')
-  if not ok then return false end
-  local node = userGraph.nodes[nodeId]
-  if node then persistNodeMeta(node, { busses = node.busses or util.REMOVE }) end
-  return true
+  end
 end
 
 --contract: persists pos to node.tagPos[key] (consumer-relative); source tag decoration only
@@ -570,14 +554,16 @@ function wm:addSourceNode(opts)
   return newId
 end
 
--- Buss ids are synthetic and stable for the node's life: a matrix buss gains a
--- separate trackId on materialization, but this id never changes. Next free 'bus-N'.
+-- Buss ids are synthetic and stable for the buss's life: nodes and records share the
+-- 'bus-N' space, so a fresh id collides with neither carrier.
 local function nextBusId(g)
   local maxN = 0
-  for id in pairs(g.nodes) do
+  local function scan(id)
     local n = tostring(id):match('^bus%-(%d+)$')
     if n then maxN = math.max(maxN, tonumber(n)) end
   end
+  for id in pairs(g.nodes) do scan(id) end
+  for id in pairs(rm:meta('bus')) do scan(id) end
   return 'bus-' .. (maxN + 1)
 end
 
@@ -599,6 +585,33 @@ function wm:addBusNode(pos)
   end)
   if not ok then return nil, err end
   return newId
+end
+
+--shape: busRecord = { pos={x,y}, orient='V'|'H', claim?={node,port,dir='in'|'out'}, trackId? } — rm 'bus' store; claim iff fan, trackId iff matrix
+--contract: mints a record-only buss (fan/degenerate; no node); returns its id, or nil+err
+function wm:addBusRecord(rec)
+  ensureLoaded()
+  if rec.claim and not userGraph.nodes[rec.claim.node] then return nil, 'claimed node not in graph' end
+  local id = nextBusId(userGraph)
+  rm:assignMeta('bus', id, { pos = { x = rec.pos.x, y = rec.pos.y },
+                             orient = rec.orient or 'V',
+                             claim = rec.claim and util.deepClone(rec.claim) or nil })
+  fire('wiringChanged', { kind = 'bus' })
+  return id
+end
+
+--contract: drops a record-only buss; false for a node-backed (matrix) id — use wm:deleteBus
+function wm:removeBusRecord(id)
+  ensureLoaded()
+  if userGraph.nodes[id] then return false end
+  rm:assignMeta('bus', id, nil)
+  fire('wiringChanged', { kind = 'bus' })
+  return true
+end
+
+--contract: deep copy of the 'bus' meta store: { [busId] = busRecord }
+function wm:busRecords()
+  return util.deepClone(rm:meta('bus'))
 end
 
 -- True iff `graph` has any edge with type='midi' leaving `nodeId`.
@@ -1166,7 +1179,6 @@ local function stampDecoration(g, tracks, busMeta)
       elseif node.kind == 'master' then rec = masterId and trackRec[masterId]
       else                              rec = trackRec[id] end
       node.pos    = (rec and rec.pos) and { x = rec.pos.x, y = rec.pos.y } or { x = 0, y = 0 }
-      node.busses = rec and rec.busses and util.deepClone(rec.busses) or nil
       node.tagPos = rec and rec.tagPos and util.deepClone(rec.tagPos) or nil
     end
   end

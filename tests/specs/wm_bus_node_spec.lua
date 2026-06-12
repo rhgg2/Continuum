@@ -140,4 +140,29 @@ return {
       t.falsy(rm:meta('bus', bus).trackId, 'inert buss record cleared')
     end,
   },
+  {
+    name = 'record + node buss ids share the bus-N space',
+    run = function(harness)
+      local _, wm, rm = mkWm(harness)
+      seedSource(wm, 'guid-s')
+      local recId = wm:addBusRecord{ pos = { x = 0, y = 0 }, orient = 'V',
+                                     claim = { node = 'guid-s', port = 1, dir = 'out' } }
+      t.eq(recId, 'bus-1')
+      local nodeId = wm:addBusNode({ x = 10, y = 10 })
+      t.eq(nodeId, 'bus-2', 'node mint skips the record id')
+      t.falsy(wm:removeBusRecord(nodeId), 'node-backed id refuses record removal')
+      t.truthy(wm:removeBusRecord(recId))
+      t.eq(rm:meta('bus', recId), nil)
+    end,
+  },
+  {
+    name = 'addBusRecord refuses a claim on an absent node',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local id, err = wm:addBusRecord{ pos = { x = 0, y = 0 }, orient = 'V',
+                                       claim = { node = 'ghost', port = 1, dir = 'in' } }
+      t.falsy(id)
+      t.truthy(err)
+    end,
+  },
 }

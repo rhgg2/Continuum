@@ -78,9 +78,8 @@ local STUB_LEN  = 40    -- visible stub length: consumer rect edge to the tag pa
 local TAG_VIS_H = 0.62  -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
 local TAG_MAX_W = (NODE_W - 2 * LABEL_PAD) * WIRE_LABEL_SIZE / wireSize  -- node label width scaled by the font ratio: the tag is a shrunk node box
 local SOURCE_TAG_PAD = 3  -- bg-patch padding around the source tag's glyphs (the patch occludes the wire behind them)
-local BUS_BASE      = 44   -- gap from node rect edge to the rail bar (first bus on a side)
-local BUS_STACK_GAP = 28   -- extra gap per additional same-side bus, so stacked rails don't overlap
-local BUS_TRUNK_GAP = 22   -- lateral shift per same-side bus, so stacked trunks don't enter at one point
+local BUS_BASE      = 44   -- gap from node rect edge to a freshly-created bar (creation default)
+local BUS_STACK_GAP = 28   -- with BUS_BASE: busNear's commit-zone margin for the hover gesture
 local BUS_TAP_LEN   = 34   -- visible length of a source copy's orthogonal tap off the bar
 local BUS_TAP_GAP   = 22   -- spacing between source-copy taps along the bar
 local BUS_BAR_PAD   = 8    -- bar overhang past its outermost tap
@@ -92,6 +91,11 @@ local SIDE_VEC = {
   R = { nx =  1, ny = 0, ax = 0, ay = 1 },
   T = { nx =  0, ny = -1, ax = 1, ay = 0 },
   B = { nx =  0, ny =  1, ax = 1, ay = 0 },
+}
+-- orient → along-bar axis (a) + tap normal (n); fan taps comb on ±n away from the claim.
+local ORIENT_VEC = {
+  V = { ax = 0, ay = 1, nx = 1, ny = 0 },
+  H = { ax = 1, ay = 0, nx = 0, ny = 1 },
 }
 
 -- Palette pane geometry, mirroring arrangePage's body split.
@@ -1287,16 +1291,26 @@ local function sourceSegments(p, wireViews, nodesById, segs)
   end
 end
 
+-- Trunk endpoint on the claimed node's edge: where the bar-centre→node-centre
+-- ray exits the body rect (the node fill occludes any overshoot regardless).
+local function nodeEdgePoint(nv, fromX, fromY)
+  local dx, dy = fromX - nv.pos.x, fromY - nv.pos.y
+  local sc = math.huge
+  if dx ~= 0 then sc = (NODE_W / 2) / math.abs(dx) end
+  if dy ~= 0 then sc = math.min(sc, (NODE_H / 2) / math.abs(dy)) end
+  if sc == math.huge then sc = 0 end
+  return nv.pos.x + dx * sc, nv.pos.y + dy * sc
+end
+
 -- Bussed edges render as a rail (bar + comb taps + one arrowed trunk), not a star.
--- see docs/wiringPage.md § Bus rail geometry
-local function busSegments(p, wireViews, nodeViews, nodesById, segs, busRails)
+-- Bar at busView's own pos/orient; taps comb away from the claimed node. Fan only.
+local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
   local idxOf, groups = {}, {}
   for i, w in ipairs(wireViews) do idxOf[w] = i end
   for _, w in ipairs(wireViews) do
     if w.bus then
-      local key = w.bus.nodeId .. '#' .. w.bus.busIdx
-      local g = groups[key]
-      if not g then g = {}; groups[key] = g end
+      local g = groups[w.bus.busId]
+      if not g then g = {}; groups[w.bus.busId] = g end
       util.add(g, w)
     end
   end
@@ -1321,94 +1335,81 @@ local function busSegments(p, wireViews, nodeViews, nodesById, segs, busRails)
     end
   end
 
-  for _, node in ipairs(nodeViews) do
-    local busses = node.busses or {}
-    -- Rank each bus among same-side siblings (stack distance) and count per side
-    -- (centres the lateral offset so stacked trunks don't share an entry point).
-    local rankOf, sideCount = {}, {}
-    for i, bus in ipairs(busses) do
-      rankOf[i] = sideCount[bus.side] or 0
-      sideCount[bus.side] = rankOf[i] + 1
-    end
+  for _, bv in ipairs(busViews) do
+    local node = bv.claim and nodesById[bv.claim.node]
+    if node then
+      local ov = ORIENT_VEC[bv.orient] or ORIENT_VEC.V
+      local bcx, bcy = bv.pos.x, bv.pos.y
+      local away = (bcx - node.pos.x) * ov.nx + (bcy - node.pos.y) * ov.ny
+      local sgn  = away >= 0 and 1 or -1
+      local nxs, nys = ov.nx * sgn, ov.ny * sgn
+      local edges = groups[bv.id] or {}
 
-    for busIdx, bus in ipairs(busses) do
-      local sv = SIDE_VEC[bus.side]
-      if sv then
-        local edges   = groups[node.id .. '#' .. busIdx] or {}
-        local half    = (sv.nx ~= 0) and NODE_W / 2 or NODE_H / 2
-        local rank    = rankOf[busIdx]
-        local lateral = (rank - (sideCount[bus.side] - 1) / 2) * BUS_TRUNK_GAP
-        local barDist = half + BUS_BASE + rank * BUS_STACK_GAP
-        local bcx     = node.pos.x + sv.nx * barDist + sv.ax * lateral
-        local bcy     = node.pos.y + sv.ny * barDist + sv.ay * lateral
-
-        local sourceN = 0
-        for _, w in ipairs(edges) do
-          local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
-          if not nodesById[farId] then sourceN = sourceN + 1 end
-        end
-
-        local si, tMin, tMax = 0, math.huge, -math.huge
-        for _, w in ipairs(edges) do
-          local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
-          local far   = nodesById[farId]
-          local sx, sy, fhw, fhh
-          if far then
-            local off = (farSlot[w] or 0) * BUS_TAP_GAP
-            sx = far.pos.x + sv.ax * off
-            sy = far.pos.y + sv.ay * off
-          else
-            local _, thw, thh = sourceTagLayout(p, w.fromLabel or 'source')
-            fhw, fhh = thw, thh
-            if w.fromOffset then
-              -- Custom tag pos is bussed-node-relative, like the star path's.
-              sx = node.pos.x + w.fromOffset.x
-              sy = node.pos.y + w.fromOffset.y
-            else
-              local t   = (si - (sourceN - 1) / 2) * BUS_TAP_GAP
-              si = si + 1
-              local out = BUS_TAP_LEN + ((sv.nx ~= 0) and thw or thh)
-              sx = bcx + sv.ax * t + sv.nx * out
-              sy = bcy + sv.ay * t + sv.ny * out
-            end
-          end
-          -- Land the tap at the tag's orthogonal projection onto the bar, so it
-          -- stays a perpendicular tooth wherever the (custom or slot) tag sits.
-          local t = (sx - bcx) * sv.ax + (sy - bcy) * sv.ay
-          local lx, ly = bcx + sv.ax * t, bcy + sv.ay * t
-          -- Bar end is a bare point (extent 0); the far end leaves extents nil so
-          -- wireExits trims it to the node body / tag box like a normal wire (not 0).
-          if w.bus.bussedEnd == 'to' then
-            segs[idxOf[w]] = { w = w, sx = sx, sy = sy, ex = lx, ey = ly,
-                               fromHW = fhw, fromHH = fhh, toHW = 0, toHH = 0 }
-          else
-            segs[idxOf[w]] = { w = w, sx = lx, sy = ly, ex = sx, ey = sy,
-                               fromHW = 0, fromHH = 0, toHW = fhw, toHH = fhh }
-          end
-          tMin, tMax = math.min(tMin, t), math.max(tMax, t)
-        end
-        if tMin > tMax then tMin, tMax = 0, 0 end
-
-        local nex = node.pos.x + sv.nx * half + sv.ax * lateral
-        local ney = node.pos.y + sv.ny * half + sv.ay * lateral
-        local trunk
-        if bus.dir == 'in' then
-          trunk = { sx = bcx, sy = bcy, ex = nex, ey = ney }
-        else
-          trunk = { sx = nex, sy = ney, ex = bcx, ey = bcy }
-        end
-        -- Bar always includes the trunk attach (t=0) and spans at least the node's
-        -- own width, then reaches out to the farthest tap. see docs § Bus rail geometry
-        local alongHalf = (sv.ax ~= 0) and NODE_W / 2 or NODE_H / 2
-        local lo = math.min(tMin, -alongHalf) - BUS_BAR_PAD
-        local hi = math.max(tMax,  alongHalf) + BUS_BAR_PAD
-        util.add(busRails, {
-          bar = { x0 = bcx + sv.ax * lo, y0 = bcy + sv.ay * lo,
-                  x1 = bcx + sv.ax * hi, y1 = bcy + sv.ay * hi },
-          trunk = trunk,
-          node = node, dir = bus.dir, port = bus.ports[1],
-        })
+      local sourceN = 0
+      for _, w in ipairs(edges) do
+        local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
+        if not nodesById[farId] then sourceN = sourceN + 1 end
       end
+
+      local si, tMin, tMax = 0, math.huge, -math.huge
+      for _, w in ipairs(edges) do
+        local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
+        local far   = nodesById[farId]
+        local sx, sy, fhw, fhh
+        if far then
+          local off = (farSlot[w] or 0) * BUS_TAP_GAP
+          sx = far.pos.x + ov.ax * off
+          sy = far.pos.y + ov.ay * off
+        else
+          local _, thw, thh = sourceTagLayout(p, w.fromLabel or 'source')
+          fhw, fhh = thw, thh
+          if w.fromOffset then
+            -- Custom tag pos is claimed-node-relative, like the star path's.
+            sx = node.pos.x + w.fromOffset.x
+            sy = node.pos.y + w.fromOffset.y
+          else
+            local t   = (si - (sourceN - 1) / 2) * BUS_TAP_GAP
+            si = si + 1
+            local out = BUS_TAP_LEN + ((nxs ~= 0) and thw or thh)
+            sx = bcx + ov.ax * t + nxs * out
+            sy = bcy + ov.ay * t + nys * out
+          end
+        end
+        -- Land the tap at the tag's orthogonal projection onto the bar, so it
+        -- stays a perpendicular tooth wherever the (custom or slot) tag sits.
+        local t = (sx - bcx) * ov.ax + (sy - bcy) * ov.ay
+        local lx, ly = bcx + ov.ax * t, bcy + ov.ay * t
+        -- Bar end is a bare point (extent 0); the far end leaves extents nil so
+        -- wireExits trims it to the node body / tag box like a normal wire (not 0).
+        if w.bus.bussedEnd == 'to' then
+          segs[idxOf[w]] = { w = w, sx = sx, sy = sy, ex = lx, ey = ly,
+                             fromHW = fhw, fromHH = fhh, toHW = 0, toHH = 0 }
+        else
+          segs[idxOf[w]] = { w = w, sx = lx, sy = ly, ex = sx, ey = sy,
+                             fromHW = 0, fromHH = 0, toHW = fhw, toHH = fhh }
+        end
+        tMin, tMax = math.min(tMin, t), math.max(tMax, t)
+      end
+      if tMin > tMax then tMin, tMax = 0, 0 end
+
+      local nex, ney = nodeEdgePoint(node, bcx, bcy)
+      local trunk
+      if bv.claim.dir == 'in' then
+        trunk = { sx = bcx, sy = bcy, ex = nex, ey = ney }
+      else
+        trunk = { sx = nex, sy = ney, ex = bcx, ey = bcy }
+      end
+      -- Bar always includes the trunk attach (t=0) and spans at least a node's
+      -- breadth, then reaches out to the farthest tap. see docs § Bus rail geometry
+      local alongHalf = (ov.ax ~= 0) and NODE_W / 2 or NODE_H / 2
+      local lo = math.min(tMin, -alongHalf) - BUS_BAR_PAD
+      local hi = math.max(tMax,  alongHalf) + BUS_BAR_PAD
+      util.add(busRails, {
+        bar = { x0 = bcx + ov.ax * lo, y0 = bcy + ov.ay * lo,
+                x1 = bcx + ov.ax * hi, y1 = bcy + ov.ay * hi },
+        trunk = trunk,
+        busId = bv.id, node = node, dir = bv.claim.dir, port = bv.claim.port,
+      })
     end
   end
 end
@@ -1429,22 +1430,21 @@ local function drawBusPass(p, busRails, placed)
       local nodeX, nodeY = (r.dir == 'in') and t.ex or t.sx, (r.dir == 'in') and t.ey or t.sy
       local barX,  barY  = (r.dir == 'in') and t.sx or t.ex, (r.dir == 'in') and t.sy or t.ey
       drawWireEndLabel(p, nodeX, nodeY, barX, barY, 0, r.port,
-        audio and audio[r.port], '##bus/' .. r.node.id .. '/' .. r.dir, name, placed)
+        audio and audio[r.port], '##bus/' .. r.busId, name, placed)
     end
   end
 end
 
 -- Bus-creation overlay: audio ports for `dir` as grab handles (in→top, out→bottom).
 -- Already-bussed ports are flagged `bussed` (greyed + inert); side chosen later by drag.
-local function busOverlayLayout(nv, dir)
+local function busOverlayLayout(nv, dir, busViews)
   local audio = (dir == 'out') and nv.outs.audio or nv.ins.audio
   local n = #audio
   if n == 0 then return nil end
   local claimed = {}
-  for _, bus in ipairs(nv.busses or {}) do
-    if bus.dir == dir then
-      for _, port in ipairs(bus.ports) do claimed[port] = true end
-    end
+  for _, bv in ipairs(busViews) do
+    local c = bv.claim
+    if c and c.node == nv.id and c.dir == dir then claimed[c.port] = true end
   end
   local b   = nodeBox(nv)
   local top = dir == 'in'
@@ -1488,10 +1488,20 @@ local function busNear(nv, mx, my)
   return mx >= b.x0 - m and mx <= b.x1 + m and my >= b.y0 - m and my <= b.y1 + m
 end
 
+-- Creation default: the bar sits off the chosen side at the v1 rail distance; T/B
+-- sides lay it 'H', L/R 'V'. The record's pos is free — this is just the first drop.
+local function busDefaultPlacement(nv, side)
+  local sv   = SIDE_VEC[side]
+  local half = (sv.nx ~= 0) and NODE_W / 2 or NODE_H / 2
+  return { x = nv.pos.x + sv.nx * (half + BUS_BASE),
+           y = nv.pos.y + sv.ny * (half + BUS_BASE) },
+         (side == 'L' or side == 'R') and 'V' or 'H'
+end
+
 -- Arm bus creation from the node menu: a lone free audio port skips the grab
 -- (hover picks the side, click commits / click-away cancels), else open the overlay.
-local function armBus(nodeId, dir, nv)
-  local handles = busOverlayLayout(nv, dir)
+local function armBus(nodeId, dir, nv, busViews)
+  local handles = busOverlayLayout(nv, dir, busViews)
   if not handles then return end
   local free = {}
   for _, h in ipairs(handles) do if not h.bussed then free[#free + 1] = h.port end end
@@ -1627,18 +1637,18 @@ local function renderCanvas(w, h)
   -- segs is built once, shared by the draw pass and every hit-test so
   -- geometry can't drift. Draw order is in docs/wiringPage.md.
   local wireViewsList = wv:wireViews()
-  -- Live bus-creation preview: inject a synthetic bus so Phase-2 rail render draws
-  -- the in-flight comb; copy busses (alias→clone) before appending, then stamp wires.
+  local busViewsList  = wv:busViews()
+  -- Live bus-creation preview: inject a synthetic fan busView so the rail render
+  -- draws the in-flight bar + comb, then stamp the wires its claim would own.
   local busHandles
   if busDraft then
     local nv = nodesById[busDraft.nodeId]
     if nv then
       busDraft.side = busSide(nv, lmx, lmy)
-      local busses = {}
-      for i, b in ipairs(nv.busses or {}) do busses[i] = b end
-      local busIdx = #busses + 1
-      busses[busIdx] = { dir = busDraft.dir, ports = { busDraft.port }, side = busDraft.side }
-      nv.busses = busses
+      local pos, orient = busDefaultPlacement(nv, busDraft.side)
+      util.add(busViewsList, { id = '@busDraft', pos = pos, orient = orient,
+                               claim = { node = busDraft.nodeId, port = busDraft.port,
+                                         dir = busDraft.dir } })
       local toEnd = busDraft.dir == 'in'
       for _, wView in ipairs(wireViewsList) do
         if not wView.bus and wView.type == 'audio' then
@@ -1646,8 +1656,7 @@ local function renderCanvas(w, h)
           if toEnd then claims = wView.to == busDraft.nodeId and wView.toPort == busDraft.port
           else          claims = wView.from == busDraft.nodeId and wView.fromPort == busDraft.port end
           if claims then
-            wView.bus = { nodeId = busDraft.nodeId, busIdx = busIdx,
-                          bussedEnd = toEnd and 'to' or 'from' }
+            wView.bus = { busId = '@busDraft', bussedEnd = toEnd and 'to' or 'from' }
           end
         end
       end
@@ -1656,7 +1665,7 @@ local function renderCanvas(w, h)
     end
   elseif busOverlay then
     local nv = nodesById[busOverlay.nodeId]
-    busHandles = nv and busOverlayLayout(nv, busOverlay.dir) or nil
+    busHandles = nv and busOverlayLayout(nv, busOverlay.dir, busViewsList) or nil
     if not busHandles then busOverlay = nil end
   end
   -- Tag drag feeds a transient fromOffset (mirroring how node drag mutates pos),
@@ -1672,7 +1681,7 @@ local function renderCanvas(w, h)
   local segs = wireSegments(wireViewsList, nodesById)
   sourceSegments(p, wireViewsList, nodesById, segs)
   local busRails = {}
-  busSegments(p, wireViewsList, nodeViews, nodesById, segs, busRails)
+  busSegments(p, wireViewsList, busViewsList, nodesById, segs, busRails)
   -- Stamp each seg's visible midpoint once: the arrow, fader, and RMB menu all
   -- anchor here, so a single source keeps draw and hit-test from drifting.
   for _, seg in pairs(segs) do seg.cx, seg.cy = wireMid(seg) end
@@ -1942,7 +1951,12 @@ local function renderCanvas(w, h)
       commit, busDraft = true, nil
     end
     if commit then
-      wv:addBus(draft.nodeId, { dir = draft.dir, ports = { draft.port }, side = draft.side })
+      local nv = nodesById[draft.nodeId]
+      if nv then
+        local pos, orient = busDefaultPlacement(nv, draft.side)
+        wv:addBusRecord{ pos = pos, orient = orient,
+                         claim = { node = draft.nodeId, port = draft.port, dir = draft.dir } }
+      end
     end
   elseif busOverlay and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
     local hit = busHandleHit(busHandles, lmx, lmy)
@@ -2199,16 +2213,18 @@ local function renderCanvas(w, h)
       end
       local menuNode = nodesById[nodeMenu.nodeId]
       if menuNode and #menuNode.ins.audio > 0 and ImGui.Selectable(ctx, 'Add input bus') then
-        armBus(nodeMenu.nodeId, 'in', menuNode)
+        armBus(nodeMenu.nodeId, 'in', menuNode, busViewsList)
         ImGui.CloseCurrentPopup(ctx)
       end
       if menuNode and #menuNode.outs.audio > 0 and ImGui.Selectable(ctx, 'Add output bus') then
-        armBus(nodeMenu.nodeId, 'out', menuNode)
+        armBus(nodeMenu.nodeId, 'out', menuNode, busViewsList)
         ImGui.CloseCurrentPopup(ctx)
       end
-      for idx, bus in ipairs(menuNode and menuNode.busses or {}) do
-        if ImGui.Selectable(ctx, 'Remove ' .. (bus.dir == 'in' and 'input' or 'output') .. ' bus') then
-          wv:removeBus(nodeMenu.nodeId, idx)
+      for _, bvw in ipairs(busViewsList) do
+        local c = bvw.claim
+        if c and c.node == nodeMenu.nodeId
+           and ImGui.Selectable(ctx, 'Remove ' .. (c.dir == 'in' and 'input' or 'output') .. ' bus##' .. bvw.id) then
+          wv:removeBusRecord(bvw.id)
           ImGui.CloseCurrentPopup(ctx)
         end
       end

@@ -17,12 +17,13 @@ local selection   = {}  -- set keyed by nodeId → true; replace via setSelectio
 
 -- wv's structural projection of wm's compiled graph, pulled lazily after a
 -- structural change. Live gain stays out -- edgeGain reads wm uncloned.
-local viewGraph, viewReach, sourceLabels
+local viewGraph, viewReach, sourceLabels, busRecords
 
 local function ensureView()
   if not viewGraph then
-    viewGraph = wm:viewGraph()
-    viewReach = wm:reach()
+    viewGraph  = wm:viewGraph()
+    viewReach  = wm:reach()
+    busRecords = wm:busRecords()
     -- Resolve live source-track names once per structural pull; nodeLabel reads this
     -- map so per-frame projection never hits REAPER. Renames land on the next rebuild.
     sourceLabels = {}
@@ -52,6 +53,7 @@ end
 
 local function nodeLabel(id, node)
   if node.kind == 'master' then return 'master' end
+  if node.kind == 'bus'    then return 'buss' end
   if node.kind == 'fx'     then return node.fxDisplay or 'fx' end
   if node.kind == 'source' then
     return sourceLabels[id]
@@ -91,12 +93,11 @@ local function midiPorts(node, dir)
   return list
 end
 
--- Source nodes get their own category (kind-driven, so a track source reads
--- visually distinct from a synth generator). Other kinds fall out of port
--- shape: no outputs = master/sink; outputs but no audio in = generator;
--- audio in = effect. Drives the colour.wiring.node.<category> fill role.
+-- Kind-driven categories: buss→bar, source→source; other kinds from port shape
+-- (no outs→master, no audio-in→generator, audio-in→effect). Drives colour fill role.
 local function nodeCategory(kind, ins, outs)
   if kind == 'source'              then return 'source'    end
+  if kind == 'bus'                 then return 'bus'       end
   if #outs.audio + #outs.midi == 0 then return 'master'    end
   if #ins.audio == 0               then return 'generator' end
   return 'effect'
@@ -122,7 +123,7 @@ local function nodeView(id, node)
     activate = activation(node),
     ins      = ins,
     outs     = outs,
-    busses   = node.busses,
+    orient   = node.orient,
   }
 end
 
@@ -170,16 +171,16 @@ function wv:samplerTrack(nodeId)
   return wm:fxTrack(node.fxId)
 end
 
---contract: writes + persists node.pos for {[id]={x,y}} via wm:moveNodes; missing ids skipped
+--contract: node pos / record-buss pos for {[id]={x,y}} via wm:moveNodes; unknown ids skipped
 function wv:moveNodes(moves)
   return wm:moveNodes(moves)
 end
 
---contract: appends a bus {dir,ports,side} to the node + persists via wm:addBus; decoration only
-function wv:addBus(nodeId, bus) return wm:addBus(nodeId, bus) end
+--contract: pass-through to wm:addBusRecord {pos,orient,claim?}; mints record-only buss, returns id
+function wv:addBusRecord(rec) return wm:addBusRecord(rec) end
 
---contract: removes node.busses[idx] via wm:removeBus; edges revert to a star when the list empties
-function wv:removeBus(nodeId, idx) return wm:removeBus(nodeId, idx) end
+--contract: pass-through to wm:removeBusRecord; record-only busses only (wires revert to a star)
+function wv:removeBusRecord(id) return wm:removeBusRecord(id) end
 
 --contract: stashes wireView w's source-tag offset {x,y} (consumer-relative) via wm; decoration only
 function wv:setSourceTagPos(w, offset) return wm:setSourceTagPos(w.from, wm.srcTagKey(w), offset) end
@@ -294,7 +295,7 @@ end
 
 ----- Render-ready, viewport-independent
 
---shape: nodeView = { id, pos={x,y}, label, category='master'|'generator'|'effect', activate='sampler'|'fx'|nil, ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}}, busses={bus,…}? } — port lists carry names; counts = #list; activate is the double-click intent
+--shape: nodeView = { id, pos={x,y}, label, category='master'|'source'|'generator'|'effect'|'bus', activate='sampler'|'fx'|nil, ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}}, orient?='V'|'H' } — port lists carry names; counts = #list; activate is the double-click intent
 --contract: returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
 function wv:nodeViews()
   local g = ensureView()
@@ -303,21 +304,52 @@ function wv:nodeViews()
   return out
 end
 
--- Bus claims indexed by the bussed end's port: an in-bus owns edges where its
--- node is `to`, an out-bus where `from`. Audio only (v1). [dir][nodeId][port]=busIdx.
-local function busClaims(g)
+--shape: busView = { id, pos={x,y}, orient='V'|'H', matrix=true?, claim?={node,port,dir} } — matrix mirrors the bus node, claim iff fan
+--contract: one busView per buss record; matrix projects from the node, fan/degenerate from record
+function wv:busViews()
+  local g = ensureView()
+  local out = {}
+  for busId, rec in pairs(busRecords) do
+    local node = g.nodes[busId]
+    util.add(out, {
+      id     = busId,
+      pos    = node and { x = node.pos.x, y = node.pos.y } or { x = rec.pos.x, y = rec.pos.y },
+      orient = node and node.orient or rec.orient or 'V',
+      matrix = node and true or nil,
+      claim  = not node and rec.claim or nil,
+    })
+  end
+  return out
+end
+
+-- Fan claims indexed by the claimed port: a buss record's claim binds one port on one
+-- node, and that port's incident audio edges are the buss's wires. [dir][node][port]=busId.
+local function busClaims(recs)
   local claim = { ['in'] = {}, out = {} }
-  for nodeId, node in pairs(g.nodes) do
-    for busIdx, bus in ipairs(node.busses or {}) do
-      local byNode = claim[bus.dir][nodeId]
-      if not byNode then byNode = {}; claim[bus.dir][nodeId] = byNode end
-      for _, port in ipairs(bus.ports) do byNode[port] = busIdx end
+  for busId, rec in pairs(recs) do
+    local c = rec.claim
+    if c then
+      local byNode = claim[c.dir][c.node]
+      if not byNode then byNode = {}; claim[c.dir][c.node] = byNode end
+      byNode[c.port] = busId
     end
   end
   return claim
 end
 
---shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'fx'|'master', fromLabel, fromOffset={x,y}?, bus={nodeId,busIdx,bussedEnd='to'|'from'}? } — see docs/wiringView.md § wireView shape
+-- Edge → bus stamp. Matrix membership is structural (an endpoint is a bus node); fan
+-- membership is the claim on the endpoint's port. The `to` end wins, matrix over claim.
+local function busTag(e, fromNode, toNode, fromPort, toPort, claim)
+  if e.type ~= 'audio' then return nil end
+  if toNode and toNode.kind == 'bus' then return { busId = e.to, bussedEnd = 'to' } end
+  local inId = claim['in'][e.to] and claim['in'][e.to][toPort]
+  if inId then return { busId = inId, bussedEnd = 'to' } end
+  if fromNode and fromNode.kind == 'bus' then return { busId = e.from, bussedEnd = 'from' } end
+  local outId = claim.out[e.from] and claim.out[e.from][fromPort]
+  if outId then return { busId = outId, bussedEnd = 'from' } end
+end
+
+--shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'fx'|'master', fromLabel, fromOffset={x,y}?, bus={busId,bussedEnd='to'|'from'}? } — see docs/wiringView.md § wireView shape
 -- see docs/wiringView.md § wireView fromKind/fromLabel
 --contract: returns the list of wireViews for every edge in the current user graph; order matches graph.edges
 function wv:wireViews()
@@ -328,7 +360,7 @@ function wv:wireViews()
     if not node then return nil end
     return audioPorts(node, dir)[idx]
   end
-  local claim = busClaims(g)
+  local claim = busClaims(busRecords)
   local out = {}
   for _, e in ipairs(g.edges or {}) do
     local fromPort = e.fromPort or 1
@@ -336,13 +368,7 @@ function wv:wireViews()
     local fromNode = g.nodes[e.from]
     local fromOffset = fromNode and fromNode.kind == 'source' and fromNode.tagPos
                          and fromNode.tagPos[wm.srcTagKey(e)] or nil
-    local bus
-    if e.type == 'audio' then
-      local inIdx  = claim['in'][e.to] and claim['in'][e.to][toPort]
-      local outIdx = not inIdx and claim.out[e.from] and claim.out[e.from][fromPort]
-      if inIdx then bus = { nodeId = e.to, busIdx = inIdx, bussedEnd = 'to' }
-      elseif outIdx then bus = { nodeId = e.from, busIdx = outIdx, bussedEnd = 'from' } end
-    end
+    local bus = busTag(e, fromNode, g.nodes[e.to], fromPort, toPort, claim)
     util.add(out, {
       from         = e.from,
       to           = e.to,
@@ -381,7 +407,7 @@ end
 -- read repopulates via ensureView, so a signal without a render compiles nothing.
 --contract: drops the view cache; next read re-pulls from wm. Driven by wiringChanged.
 function wv:rebuild()
-  viewGraph, viewReach, sourceLabels = nil, nil, nil
+  viewGraph, viewReach, sourceLabels, busRecords = nil, nil, nil, nil
 end
 
 wm:subscribe('wiringChanged', function() wv:rebuild() end)
