@@ -1,13 +1,17 @@
-# wiring busses v2 — fan as pure UI; a routing node only at many-to-many
+# wiring busses v2 — one buss node at every degree; a buss track only at many-to-many
 
 > Design note + implementation plan. **Supersedes `design/wiring-busses.md`**
-> (v1: the buss as a node-anchored rail decoration) and **revises this doc's
-> own first draft**, which made the buss a free-standing routing object at
-> *every* degree and folded the fan cases back into direct sends via
-> absorption/`primary`. That mechanism was traced into the allocator and found
-> defective; its replacement (a compile-time splice) was designed and rejected
-> as needless weight (§ Rejected mechanisms). The surviving model is simpler
-> than either: **below many-to-many there is no buss in the graph at all.**
+> (v1: the buss as a node-anchored rail decoration). This doc has been through
+> three drafts: the first folded fan busses onto neighbour tracks via
+> absorption/`primary` (traced into the allocator, defective); the second
+> spliced them out at compile but was rejected for its claim-era bookkeeping;
+> the third dropped the node below many-to-many entirely, carrying fans first
+> as port-claims, then as explicit tap sets. The final model (2026-06-12)
+> returns to **a `kind='bus'` node at every degree** and un-rejects the
+> compile-time splice (§ Rejected mechanisms 2): with the record's taps
+> carrying the authored gains, the bookkeeping that killed it dissolves.
+> Below many-to-many there is no buss in *REAPER* at all; gestures are
+> degree-blind.
 > Read `design/wiring-busses.md` for the starburst problem that motivated
 > busses in the first place.
 
@@ -15,38 +19,43 @@
 
 A buss is a UI object: a freely-positioned bar with input taps combing one
 side and output taps the other, meaning *every input → every output*, each
-crossing scaled by the product of its two gains. Below the many-to-many
-threshold the outer product degenerates to one gain per wire, so the buss is
-**pure rendering**: the wires are ordinary direct edges, membership is the v1
-port-claim, and the graph contains no buss vertex. At **in ≥ 2 and out ≥ 2**
-the products become irreducible and the buss becomes structure: a real
-`kind='bus'` node that realizes as one fx-less summing track — N+M sends,
-which is what an engineer would build by hand. The governing principle is
-unchanged from the first draft: **REAPER must stay legible from its own UI**,
-and both realizations above are exactly what a human engineer would produce.
+crossing scaled by the product of its two gains. In the graph the buss is a
+`kind='bus'` node at **every** degree; every tap is a real edge carrying its
+own `ops.gain`. The degree decides only the *realization*: at **in ≥ 2 and
+out ≥ 2** the products are irreducible and the node's class realizes as one
+fx-less summing track — N+M sends, what an engineer would build by hand.
+Below that, compile splices the node out — each in×out crossing becomes a
+direct send at the product gain, what the same engineer would do without the
+track (the splice synthesizes structure exactly as the merge-CU pass does).
+No factor is ever recovered by division: the authored gains live on the bus
+edges, persisted in the record's taps, and realization only ever multiplies.
+The governing principle is unchanged: **REAPER must stay legible from its
+own UI** — both realizations are what a human engineer would produce.
 
-**Invariant: the buss node exists in the graph iff the buss is many-to-many.**
-The view's gestures maintain it — the wire-drop that reaches 2×2 mints the
-node and re-routes the claimed edges through it; the edit that drops below
-dissolves it back to direct edges. The manager and the DAG never choose a
-representation; each layer handles whichever object exists.
+**Invariant: the buss *track* exists iff the buss is many-to-many; the buss
+*node* exists at every degree.** Compile maintains it — the splice collapses
+sub-threshold busses, the class machinery conjures the track at 2×2 — and
+the track appears and disappears through the ordinary reconcile diff as the
+class does. Gestures never convert anything: wiring a buss is ordinary node
+wiring at any degree, and gain attribution never changes when a buss crosses
+the threshold.
 
 ## Realization by degree
 
 | buss shape | graph presence | realization | persistence |
 |---|---|---|---|
-| **fan-in** (N→1) | none — N direct edges into the sink port | N direct sends (existing machinery, untouched) | record (pos/orient) + v1 port-claim on the sink port |
-| **fan-out** (1→N) | none — N direct edges from the source port | N direct sends | record + port-claim on the source port |
-| **1→1** | none — one direct edge (a fan both ways) | one send | record + port-claim |
-| **matrix** (≥2 × ≥2) | `kind='bus'` node + its in/out edges | one fx-less summing track; N in-sends, M out-sends | record + `trackId` (flagged track) |
-| **degenerate** (0×n, n×0, unwired) | none | nothing | record only (pos/orient); dangling taps are view state, lost on reload by design |
+| **fan-in** (N→1) | `kind='bus'` node; N in-edges, 1 out-edge | spliced: N direct sends at `inGain×outGain` | record: pos/orient + taps (with gains); the sends realize the products |
+| **fan-out** (1→N) | node; 1 in-edge, N out-edges | spliced: N direct sends at products | record + taps |
+| **1→1** | node; one edge each side | spliced: one send | record + taps |
+| **matrix** (≥2 × ≥2) | the same node; N ins, M outs | one fx-less summing track; N in-sends, M out-sends | record + `trackId` (flagged track) |
+| **degenerate** (0×n, n×0, unwired) | node + its one-sided edges | nothing — inert | record + taps; no REAPER carrier |
 
-A fan has exactly N gains by construction (each direct edge carries its own
-`ops.gain`), so the first draft's gain-factoring wart — storing a `loneGain`
-and dividing it back out on read — **does not exist** in this model. Gains
-only ever split into in×out factors when the matrix node exists, and there
-the track structure carries them physically (in-send volumes × out-send
-volumes). The outer product is never computed anywhere.
+A fan carries N+1 gains — one per tap, both sides — and every crossing
+realizes at the in×out product. The lone side's single gain is therefore a
+**group fader** over the whole fan, for free, at every degree (the bar-level
+fader is just UI on top of it). Reading back never factors a product: the
+record's taps carry the authored gains, so the splice only ever multiplies —
+the first draft's divide-out wart stays dead.
 
 ## Rejected mechanisms (recorded so they are not re-attempted)
 
@@ -77,38 +86,62 @@ indexes for `gainRouting`/`pokeEdgeGain`. Audio-correct and it delivers the
 realization table verbatim — but it drags in `anchor`/`loneGain` record
 fields, a divide-out on read with exact-compare flap risk (`sendsEq`,
 `wiringManager.lua:1185`), and index translation through the live-poke path.
-All of it evaporates under "no node below threshold": there is nothing to
-splice.
+
+**Un-rejected in the final model (2026-06-12):** the warts were claim-era
+bookkeeping, not splice defects. With the node present at every degree and
+the record's taps carrying the authored gains, `anchor` is the node itself,
+`loneGain` is an ordinary edge gain, and no read ever divides a product back
+into factors. What survives is the provenance map — authored bus edge →
+realized send(s) — for `gainRouting`/`pokeEdgeGain`; a many-side tap maps
+1:1, a lone-side poke fans out to all its crossings' sends (the group
+fader).
+
+**3. Port-claim fan membership** (steps 3/5 as landed): membership as v1's
+port-claim — the bound port's incident edges *are* the buss's wires. Rejected
+2026-06-12 in step-7 review: a claim is port-wide by construction, so the
+moment a bar binds a port, every other edge that port has (or later gains)
+silently re-routes onto the bar (port-swallow), and per-wire add/remove is
+inexpressible. Replaced by explicit per-tap membership. The objection that
+killed the obvious fix — "edges have no stable identity to enlist" — was
+wrong: `(type, from:port, to:port)` is unique by the duplicate-edge rule and
+node ids are GUIDs, so value refs survive reloads. (Moot in the final model:
+membership is structural at every degree — the record's taps are a
+write-through mirror for persistence, not authored membership.)
 
 ## The model
 
 ```
-userNode  = { kind='bus', pos={x,y}, orient='V'|'H' }  -- exists iff matrix; id = stable 'bus-N'
+userNode  = { kind='bus', pos={x,y}, orient='V'|'H' }  -- at every degree; id = stable 'bus-N'
 edge      = ordinary audio edges to/from the bus node; every tap shares port 1
-busRecord = { id, pos, orient, trackId? }              -- rm meta store 'bus' (landed, step 3)
+busRecord = { id, pos, orient, ins={{node,port,gain},…}, outs={{node,port,gain},…}, trackId? }
 ```
 
-- **Matrix wires** are edges with `to = bussId` / `from = bussId`; per-wire
+- **Buss wires** are edges with `to = bussId` / `from = bussId`; per-wire
   gain is `edge.ops.gain` as everywhere. `ports.audio = {ins=1, outs=1}` —
   a port index on a summing object is meaningless, so all taps share port 1
   (and `M.validate` needs no bus-specific rule; landed, step 2).
-- **Fan membership** is the v1 port-claim: the bound port's incident edges
-  *are* the buss's wires (`busClaims`, `wiringView.lua:308`). The claim
-  implementation survives unchanged; only its rendering moves from a
-  node-anchored rail to a bar at the record's own `pos`. Where the claim
-  binding lives — the v1 `node.busses` meta, or a `claim={node,port,dir}`
-  field on the bus record — is a step-5 decision; the record is recommended,
-  so a buss keeps one identity (`bus-N`, pos, orient) across threshold
-  crossings and only `trackId` ⇄ `claim` swap.
+- **Membership is structural at every degree** — a tap is an edge incident
+  on the bus node, nothing else. Wiring a port elsewhere never enlists it
+  (no port-swallow; § Rejected 3), and fan-in / fan-out / 1→1 don't exist
+  as stored cases. The record's `ins`/`outs` are not authored membership but
+  a **write-through mirror** — `{node, port, gain}` per tap, refreshed on
+  every mutate like `pos` — because below the threshold the bus edges have
+  no per-edge REAPER carrier: the mirror is what mints them back on read.
+  A buss keeps one identity (`bus-N`, pos, orient) for life; `trackId` is
+  stamped and cleared as the track comes and goes.
 - **Orientation**: `'V'`/`'H'`; arbitrary angle deferred. **MIDI**: out of
   scope (bus has `midi={ins=0,outs=0}`; validate refuses midi edges).
 
 ### Invariants
 
-- A `kind='bus'` node in a canonical graph is many-to-many (audio in ≥ 2 and
-  out ≥ 2); the view's threshold gestures maintain this. Compile stays total
-  anyway: any *signal-bearing* bus node (≥1 in and ≥1 out) isolates into its
-  own class; dangling/unwired ones are inert and realize to nothing.
+- A `kind='bus'` node exists at every degree; compile splices it out below
+  2×2 (each in×out crossing → a direct conn at the product gain; one-sided
+  and unwired busses splice to nothing). Only ≥2×2 busses reach classing,
+  where the signal-bearing marker rule (landed, step 4) isolates them; the
+  empty-srcSet degenerate rule stays as a drift backstop.
+- The record's taps mirror the node's incident edges — write-through on
+  every mutate, GC'd when a tapped node dies. No shape invariant exists on
+  the tap counts; any degree is canonical.
 - A bus class **never absorbs and is never an absorption target** — the
   summing track stays fx-less even when an output fx has the bus as its sole
   audio parent. (Mirrors the existing "a split-tagged class never absorbs",
@@ -119,10 +152,18 @@ busRecord = { id, pos, orient, trackId? }              -- rm meta store 'bus' (l
 
 ## DAG: matrix isolation — the realization mechanism
 
-All inside `buildCtx`; no `M.compile` signature change (so `deriveMasterSplit`'s
-base ctx gets identical treatment for free).
+No `M.compile` signature change (so `deriveMasterSplit`'s base ctx gets
+identical treatment for free).
 
-- **srcSet**: a bus node unions its parents' sets like any node, and seeds a
+- **Splice (new, runs first):** before `buildCtx`, sub-threshold bus nodes
+  are spliced out of the working graph — each in×out edge pair becomes a
+  direct edge at `inGain×outGain`; one-sided busses contribute nothing. The
+  pass emits a provenance map (authored bus-edge index → realized edge
+  indexes) consumed by `gainRouting`/`pokeEdgeGain`: many-side pokes ride
+  1:1, lone-side pokes fan out to every crossing (or fall back to reconcile
+  if fan-out pokes prove fiddly). Everything below sees the spliced graph.
+- **srcSet** (reachable only by ≥2×2 busses after the splice): a bus node
+  unions its parents' sets like any node, and seeds a
   marker `'bus:'..id` iff it has ≥1 audio in *and* ≥1 audio out. The
   parent-union loop **skips `'bus:'`-prefixed keys**, so children inherit the
   real upstream sources through the bus but never the marker — the bus sits
@@ -178,34 +219,34 @@ existing feeder-group merge CU on the *consumer's* track.
   - Tolerated drift: an fx dropped onto the summing track in REAPER reads as
     a downstream fx node fed by the bus; the next reconcile moves it to its
     own track (the non-absorption guard) — self-healing toward canonical.
-- **Fan — the carrier is the direct edges themselves.** The claim derives
-  membership (v1, shipped, round-trips today); `pos`/`orient` from the
-  record. Nothing new on read.
-- **Degenerate — record only.** A dangling tap (an input wired before any
-  output exists) has no producer→consumer edge to persist; it is view state
-  and is lost on reload, by design.
+- **Sub-threshold — the carrier is the record + the spliced sends.** The
+  record's taps (`node`, `port`, `gain`) mint the bus node and its edges on
+  read; realized direct sends that match a tap pair are recognized as
+  crossings and consumed, not read as plain wires. Taps whose node:port
+  vanished are GC'd at the mutate chokepoint (the `pruneSourceTags`
+  pattern). Drift policy: below the threshold the record is authoritative —
+  a send volume edited REAPER-side under a crossing is overwritten at the
+  next reconcile; a plain send parallel to a crossing on the same port pair
+  is a tolerated read corner (attribution may shift between them).
+- **Degenerate — the record carries everything.** One-sided bus edges have
+  no REAPER carrier at all; they round-trip purely through the record's
+  taps, and survive reload.
 
-## Threshold crossings (view gestures)
+## Degree changes
 
-- **fan → matrix** (the wire-drop that reaches 2×2): one mutate mints the
-  node (id from the record), re-points the claimed edges' bussed end to the
-  bus (in-edges keep their gains; the former lone side becomes the single
-  `bus→C` / `P→bus` edge carrying its gain), and adds the new tap. The claim
-  is dropped; `trackId` arrives at the next reconcile.
-- **matrix → fan** (the edit dropping below 2×2): one mutate removes the
-  node and re-points edges direct, each crossing's gain becoming the
-  `inGain×outGain` product — N+M gains collapse to N, deliberately; audibly
-  identical, and the fader attribution change is inherent to the model. The
-  record drops `trackId` and regains the claim; the track is demolished by
-  the same reconcile (its class vanished).
-- The buss's id, pos, and orient survive both directions — a buss never
-  loses identity or placement at the threshold, and it does **not** snap back
-  to a node-anchored rail: fans render at their own pos too.
+There are no conversion mutations and no threshold gestures. Adding or
+removing a tap is ordinary edge wiring on the bus node — **one gesture, one
+wire**, at every degree; deleting a foreign node takes its taps with it and
+leaves the rest of the buss untouched; rewires are plain edge surgery.
 
-Note the dissolution direction can be triggered by mutations that originate
-outside the buss UI (e.g. deleting an fx that was the matrix's second input).
-The conversion logic must therefore live where mutations are issued (the
-view/page layer wrapping its mutates), not inside a render path.
+When an edit moves a buss across 2×2 — in either direction, from any source
+(buss UI, wire deletion, fx deletion) — nothing happens in the graph beyond
+that one edge. The next compile simply splices or stops splicing, the
+reconcile diff demolishes or conjures the summing track, and
+`stampBusTracks` clears or stamps `trackId`. Gain attribution never changes:
+the same N+M tap gains exist on both sides of the threshold; only their
+realization moves between product sends and physical track sends. The
+buss's id, pos, and orient are never touched by degree.
 
 ## Geometry & render
 
@@ -213,28 +254,29 @@ Identical render for every buss — a bar at the record's/node's own
 `pos`+`orient`, input taps combing one side, output taps the other,
 arrowheads for direction. Reuse the `SIDE_VEC` tap/trunk construction from
 v1's `busSegments`/`drawBusPass`; `busBarHit` makes the bar a fat wire-drop
-target. For fans the bar projects from the record + claimed wireViews (v1
-projection, repositioned); for the matrix it *is* the node's render — a node
-you cannot dive into, hit-tested for move/delete/wire-drop through the
-existing node machinery.
+target, either draft end, at any degree. The bar *is* the bus node's render
+everywhere (step 6's matrix render generalizes): every tap is a real edge,
+so wires, faders, and hit-tests apply uniformly; a tapless buss is a bare
+bar. A node you cannot dive into, hit-tested for move/delete/wire-drop
+through the existing node machinery.
 
 ## Creation & editing
 
 - **Create**: a synthetic "Buss" entry in the FX picker (`renderFxPicker`) —
-  canvas-RMB is already the "add here" path. Creation mints a **record only**
-  (no node until the threshold). *Caveat: `wm:addBusNode` as landed in step 3
-  mints an unwired node — under this model that node shouldn't exist; rework
-  to record-only when the creation UI lands (step 7). Harmless meanwhile:
-  nothing in production reaches it, and an unwired node compiles to nothing.*
-- **Wire**: ordinary wire-draft; dropping on the bar adds/re-points direct
-  edges + claim below the threshold, converts at it (§ Threshold crossings).
-- **Move**: writes record `pos` (`wm:moveNodes` already routes a buss there).
-- **Delete**: matrix → `wm:deleteBus` (landed); fan/unwired → drop the record
-  (+ claim).
-- **Per-wire affordances** (gain fader, RMB-delete) live on each tap as
-  today: every tap is a real edge — direct, or bus-incident — so the
-  existing fader/poke machinery works unchanged; matrix tap pokes ride
-  native send volumes (no index translation — nothing is spliced).
+  canvas-RMB is already the "add here" path. Creation is `wm:addBusNode`:
+  node + record, exactly as landed in step 3 (the record-only caveat is
+  repealed — the node is correct at every degree).
+- **Wire**: ordinary wire-draft; the bar is a fat drop target for either
+  end at any degree. No fuse, no mint.
+- **Move**: writes node pos + record `pos` (`wm:moveNodes`, landed).
+- **Delete**: `wm:deleteBus` at every degree — node, incident edges, record,
+  one Undo block. `wm:removeBusRecord` retires (no record-only busses
+  exist).
+- **Per-wire affordances** (gain fader, RMB-delete) live on each tap, which
+  is a real edge at every degree, so the existing fader/poke machinery
+  applies uniformly. Matrix pokes ride native send volumes; sub-threshold
+  pokes route through the splice provenance map — a lone-side poke is the
+  group fader (fans out to its crossings' sends, or reconciles).
 
 ## Implementation plan
 
@@ -243,6 +285,16 @@ existing node machinery.
 > which survive except where bracketed; the first draft's step 4 —
 > anchor/loneGain bookkeeping, folded re-injection, realization-by-degree
 > folds — is **superseded** by this revision). Suite green at 1398.
+>
+> Further revision during step-7 review (2026-06-12): fan membership moved
+> from the step-5 port-claim to per-tap sets on the record (§ Rejected 3),
+> and dangling taps became persisted record state.
+>
+> Final revision (2026-06-12, same review): the node returns at every degree
+> and the compile-time splice is un-rejected — the record's taps carry the
+> authored gains, so nothing is ever divided back out, and threshold
+> crossings stop existing as a concept (§ Degree changes). Step 5's claim
+> machinery is reworked and step 7 re-cut below.
 
 1. **Allocator: fx-less summing track.** *(DONE — verified 2026-06-12.)*
    `assembleTracks` emits a spec for any non-master class unconditionally
@@ -265,9 +317,9 @@ existing node machinery.
    mirror; `rm:meta(store[,id])` / `rm:assignMeta(store,id,meta)`.
    `wm:addBusNode(pos)`, `wm:moveNodes` routing buss pos to the store,
    `wm:deleteBus(id)`. Specs: `tests/specs/wm_bus_node_spec.lua`.
-   [Revision: `anchor`/`loneGain` are dead — fans need neither. The record
-   is `{id, pos, orient, trackId?}` (+ possibly `claim` from step 5).
-   `addBusNode` minting a node is a model violation to rework in step 7.]
+   [Revision: `anchor`/`loneGain` are dead. The record is
+   `{id, pos, orient, ins, outs, trackId?}`. `addBusNode` minting a node is
+   correct again in the final model — the step-7 caveat is repealed.]
 
 4. **DAG matrix isolation + read minting + trackId stamp.** *(DONE —
    2026-06-12.)* As specified, with one refinement: the marker rule alone
@@ -302,6 +354,8 @@ existing node machinery.
    `busDefaultPlacement` (side → pos + orient). Specs: `wv_bus_spec`
    rewritten; record CRUD/id-space tests in `wm_bus_node_spec`; the two
    v1 node-meta round-trip tests in `wm_read_spec` retired.
+   [Revision: the `claim` shape this step landed is superseded by per-tap
+   membership — reworked in step 7; the projection/render decisions survive.]
 
 6. **Render — matrix half.** *(DONE — 2026-06-12.)* The fan half landed
    with step 5. `busSegments` generalised: each busView anchors on its
@@ -315,23 +369,35 @@ existing node machinery.
    draft end on a matrix bar. No new specs — pure render, exercised at
    step 9 with the gestures.
 
-7. **Creation UI + threshold gestures.** "Buss" picker entry → record-only
-   create (rework `wm:addBusNode`); wire-drop and edge-removal conversion
-   mutations in both directions (§ Threshold crossings), including
-   dissolution triggered by non-buss gestures (fx deletion); record-buss
-   deletion.
+7. **Final-model rework: splice + record gains + creation UI.**
+   - *DAG*: the sub-threshold splice + provenance map; `gainRouting`/
+     `pokeEdgeGain` through the map (lone-side pokes fan out to their
+     crossings or fall back to reconcile).
+   - *wm*: claim machinery out (`claim` field, `pruneBusClaims`,
+     `addBusRecord`/`removeBusRecord`); record taps as the write-through
+     mirror `{node, port, gain}` + dead-node tap GC; read minting of
+     sub-threshold busses from taps, consuming their crossing sends.
+   - *wv/render*: `busClaims`/`busTag` → structural membership only;
+     `busSegments` uniform on the node render (bare bar for a tapless
+     buss); `busBarHit` either end at any degree; the armBus commit mints
+     the node and re-points the port's edges through it (audio-identical
+     under the splice) until step 8 retires the gesture.
+   - *UI*: "Buss" picker entry → `wm:addBusNode`; bar RMB → delete; node
+     menu routes bus nodes to `wm:deleteBus`.
 
 8. **Retire the v1 overlay gesture.** `busOverlay`/`busDraft`/`armBus`/
    `busOverlayLayout`/`drawBusOverlay`/`busNear` and the node-menu items —
    superseded by record-busses. (`wm:addBus`/`removeBus` + `wv:addBus`/
    `removeBus` already fell in step 5 — the overlay now commits records.)
-   **Keep** the claim derivation (`busClaims`) and the rail geometry
-   helpers; they are the fan implementation.
+   **Keep** the rail geometry helpers; they are the fan render. (`busClaims`
+   falls in step 7 with the claim model.)
 
-9. **Tests.** Threshold crossings both directions (gain composition,
-   identity/pos survival, track demolition); fan round-trip via claims with
-   free pos; matrix round-trip against the real allocator; the same-track
-   multi-tap gain case.
+9. **Tests.** Splice products + provenance pokes (incl. a lone-side
+   group-fader poke); degree changes across 2×2 both ways (track conjured/
+   demolished, gain attribution stable, identity/pos survival);
+   sub-threshold round-trip from record taps, one-sided busses included;
+   matrix round-trip against the real allocator; the same-track multi-tap
+   gain case.
 
 ## v1 docs to update on landing
 
@@ -348,9 +414,10 @@ existing node machinery.
 
 - Arbitrary-angle orientation (perpendicular-tap math generalizes).
 - MIDI busses.
-- Dangling-tap persistence (currently view state, lost on reload).
-- REAPER-side edit reconciliation/drift on claims beyond trusting the
-  derived port-claim (v1 already lives with this).
+- Bar-level group fader UI (the lone-side gain already scales every
+  crossing; this is only a bar affordance for it).
+- REAPER-side drift on sub-threshold crossings beyond record-authoritative
+  overwrite (parallel-send attribution corner included).
 - Live gain pokes for same-track multi-tap matrix wires (reconcile-driven
   until it matters).
 - The sophisticated restack/reposition affordances v1 deferred remain
