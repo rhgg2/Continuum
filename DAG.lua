@@ -9,7 +9,7 @@
 --invariant: fx midi: JSFX ports come from midirecv/midisend scan; native fx get {1,1}.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --shape: userGraph = { nodes = {[id]=userNode}, edges = edge[] }  -- node ids are rm guids (read era)
---shape: userNode = { kind='source'|'fx'|'master', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true }
+--shape: userNode = { kind='source'|'fx'|'master'|'bus', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true, orient?='V'|'H' }  -- bus: synthetic id, no source/fx; trackId stamped on matrix-materialization
 --invariant: fx nodes carry busAware; wm:addFxNode and M.validate refuse true
 --invariant: fxId is nil until materialised; stamped into the node after TrackFX_AddByName succeeds
 -- see docs/DAG.md § fxId as incarnation handle
@@ -480,8 +480,10 @@ local function topoIntraTrack(members, conns)
 end
 
 do
-  -- source/master are the track-IO boundary; only chain members get an fxOrder.
-  local function isChainMember(node) return node.kind ~= 'source' and node.kind ~= 'master' end
+  -- source/master bound track IO; a bus is a bare summing track — none host an fxOrder.
+  local function isChainMember(node)
+    return node.kind ~= 'source' and node.kind ~= 'master' and node.kind ~= 'bus'
+  end
 
   -- Native gain hosts keyed for the routing pass: send volume by track pair,
   -- main-send volume by class. CU-hosted gains ride their conns instead.

@@ -84,7 +84,7 @@ return {
     end,
   },
   {
-    name = 'resyncFxMeta restores projext from the scratch mirror after an undo',
+    name = 'resyncMeta restores projext from the scratch mirror after an undo',
     run = function()
       local reaper, rm = mkRm()
       local _, tid = seedTrack(reaper, 'Bus')
@@ -95,7 +95,7 @@ return {
       -- scratch chunk mirror does, so the value is still there.
       reaper.SetProjExtState(0, 'continuum_wiring', 'fxMeta', '')
       t.eq(rm:fx(fxId).split, nil, 'projext cleared → meta gone')
-      rm:resyncFxMeta()
+      rm:resyncMeta()
       t.eq(rm:fx(fxId).split, true, 'resync pulls the scratch mirror back into projext')
     end,
   },

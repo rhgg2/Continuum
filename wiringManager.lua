@@ -224,7 +224,8 @@ function wm:moveNodes(moves)
   if not ok then return false, err end
   for id in pairs(moves) do
     local node = userGraph.nodes[id]
-    if node then persistNodeMeta(node, { pos = node.pos }) end
+    if node and node.kind == 'bus' then rm:assignMeta('bus', id, { pos = node.pos })
+    elseif node then persistNodeMeta(node, { pos = node.pos }) end
   end
   return true
 end
@@ -521,6 +522,26 @@ function wm:deleteSource(nodeId, force)
   return true
 end
 
+--contract: deletes a buss node + incident edges and clears its decoration record, in one Undo block
+function wm:deleteBus(nodeId)
+  ensureLoaded()
+  local node = userGraph.nodes[nodeId]
+  if not node or node.kind ~= 'bus' then return false end
+  rm:transaction('wiring: delete buss', function()
+    self:mutate(function(g)
+      g.nodes[nodeId] = nil
+      local kept = {}
+      for _, e in ipairs(g.edges) do
+        if e.from ~= nodeId and e.to ~= nodeId then util.add(kept, e) end
+      end
+      g.edges = kept
+    end)
+    rm:assignMeta('bus', nodeId, nil)
+  end)
+  markState()
+  return true
+end
+
 --contract: creates source track + node at opts.pos in one Undo block; returns node id or nil+err
 function wm:addSourceNode(opts)
   ensureLoaded()
@@ -544,6 +565,37 @@ function wm:addSourceNode(opts)
       local node = userGraph.nodes[guid]
       persistNodeMeta(node, { pos = node.pos })
     end
+  end)
+  if not ok then return nil, err end
+  return newId
+end
+
+-- Buss ids are synthetic and stable for the node's life: a matrix buss gains a
+-- separate trackId on materialization, but this id never changes. Next free 'bus-N'.
+local function nextBusId(g)
+  local maxN = 0
+  for id in pairs(g.nodes) do
+    local n = tostring(id):match('^bus%-(%d+)$')
+    if n then maxN = math.max(maxN, tonumber(n)) end
+  end
+  return 'bus-' .. (maxN + 1)
+end
+
+--contract: mints a placed, unwired buss node + its decoration record; returns the new buss id
+function wm:addBusNode(pos)
+  ensureLoaded()
+  local newId, ok, err
+  rm:transaction('wiring: add buss', function()
+    ok, err = self:mutate(function(g)
+      newId = nextBusId(g)
+      g.nodes[newId] = {
+        kind   = 'bus',
+        pos    = { x = pos.x, y = pos.y },
+        orient = 'V',
+        ports  = { audio = { ins = 1, outs = 1 }, midi = { ins = 0, outs = 0 } },
+      }
+    end, 'bus')
+    if ok then rm:assignMeta('bus', newId, { pos = { x = pos.x, y = pos.y }, orient = 'V' }) end
   end)
   if not ok then return nil, err end
   return newId

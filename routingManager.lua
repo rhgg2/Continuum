@@ -10,7 +10,7 @@ local PROJ = 0
 
 local rm = {}
 local installedFxCache = nil  -- reaper's installed-FX set is fixed at runtime
-local lastFxMetaRaw   = nil  -- scratch fx-meta mirror last seen; rm:pollUndo resyncs only on change
+local metaSeen        = {}   -- store -> last scratch-mirror raw rm:pollUndo saw; resync only on change
 
 ----------- track resolution
 
@@ -496,10 +496,15 @@ local FX_NATIVE = {
 }
 
 local EXT_SECTION  = 'continuum_wiring'
-local FXMETA_KEY   = 'fxMeta'
 local SCRATCH_GUID = 'scratch'
 local META_PEXT    = 'P_EXT:ctm_meta'    -- per-track metadata blob
-local MIRROR_PEXT  = 'P_EXT:ctm_fxMeta'  -- scratch mirror of the fx-meta blob
+
+-- Each store is a {[id]=meta} projext blob mirrored to scratch so REAPER undo reverts it.
+-- Stores never share a blob; each consumer reads only the shape it expects.
+local META_STORES = {
+  fx  = { key = 'fxMeta',  mirror = 'P_EXT:ctm_fxMeta'  },
+  bus = { key = 'busMeta', mirror = 'P_EXT:ctm_busMeta' },
+}
 
 local function decodeBlob(raw)
   return (raw and raw ~= '') and util.unserialise(raw) or nil
@@ -518,20 +523,26 @@ local function writeTrackMeta(track, meta)
   reaper.GetSetMediaTrackInfo_String(track, META_PEXT, util.serialise(cur), true)
 end
 
-local function readFxMeta()
-  local _, raw = reaper.GetProjExtState(PROJ, EXT_SECTION, FXMETA_KEY)
+local function readMeta(store)
+  local _, raw = reaper.GetProjExtState(PROJ, EXT_SECTION, META_STORES[store].key)
   return decodeBlob(raw) or {}
 end
 
-local function writeFxMeta(guid, meta)
-  local blob = readFxMeta()
-  blob[guid] = blob[guid] or {}
-  util.assign(blob[guid], meta)
-  if not next(blob[guid]) then blob[guid] = nil end
+-- nil meta deletes the entry; otherwise patch-merge (util.REMOVE clears a field).
+local function writeMeta(store, id, meta)
+  local def  = META_STORES[store]
+  local blob = readMeta(store)
+  if meta == nil then
+    blob[id] = nil
+  else
+    blob[id] = blob[id] or {}
+    util.assign(blob[id], meta)
+    if not next(blob[id]) then blob[id] = nil end
+  end
   local raw = util.serialise(blob)
-  reaper.SetProjExtState(PROJ, EXT_SECTION, FXMETA_KEY, raw)
-  reaper.GetSetMediaTrackInfo_String(rm:scratchTrack(), MIRROR_PEXT, raw, true)
-  lastFxMetaRaw = raw
+  reaper.SetProjExtState(PROJ, EXT_SECTION, def.key, raw)
+  reaper.GetSetMediaTrackInfo_String(rm:scratchTrack(), def.mirror, raw, true)
+  metaSeen[store] = raw
 end
 
 ----------- read
@@ -676,7 +687,7 @@ function rm:tracks()
   end
   local master = reaper.GetMasterTrack(PROJ)
   if master then util.add(out, readTrack(master, true)) end
-  local meta = readFxMeta()
+  local meta = readMeta('fx')
   for _, tr in ipairs(out) do
     for _, fx in ipairs(tr.fx) do util.assign(fx, meta[fx.id]) end
   end
@@ -688,7 +699,7 @@ function rm:track(id)
   local track = locateTrack(id)
   if not track then return nil end
   local rec  = readTrack(track, track == reaper.GetMasterTrack(PROJ))
-  local meta = readFxMeta()
+  local meta = readMeta('fx')
   for _, fx in ipairs(rec.fx) do util.assign(fx, meta[fx.id]) end
   return rec
 end
@@ -741,23 +752,27 @@ function rm:scratchTrack()
   return self:reaperTrack(self:scratchId())
 end
 
---contract: pull the scratch P_EXT fx-meta mirror back into projext after a REAPER
---contract: undo/redo — projext doesn't reverse natively, the scratch chunk does
-function rm:resyncFxMeta()
+--contract: pull every meta store's scratch P_EXT mirror back into projext after a
+--contract: REAPER undo/redo — projext doesn't reverse natively, the scratch chunk does
+function rm:resyncMeta()
   local _, scratch = liveScratch()
   if not scratch then return end
-  local _, raw = reaper.GetSetMediaTrackInfo_String(scratch, MIRROR_PEXT, '', false)
-  reaper.SetProjExtState(PROJ, EXT_SECTION, FXMETA_KEY, raw)
+  for _, def in pairs(META_STORES) do
+    local _, raw = reaper.GetSetMediaTrackInfo_String(scratch, def.mirror, '', false)
+    reaper.SetProjExtState(PROJ, EXT_SECTION, def.key, raw)
+  end
 end
 
 --contract: per-frame heartbeat — ensures the scratch exists, and on a scratch-chunk
---contract: rewind (REAPER undo/redo) pulls the fx-meta mirror back into projext
+--contract: rewind (REAPER undo/redo) pulls the meta mirrors back into projext
 function rm:pollUndo()
   local scratch = self:scratchTrack()
-  local _, raw = reaper.GetSetMediaTrackInfo_String(scratch, MIRROR_PEXT, '', false)
-  if raw == lastFxMetaRaw then return end
-  self:resyncFxMeta()
-  lastFxMetaRaw = raw
+  local changed = false
+  for store, def in pairs(META_STORES) do
+    local _, raw = reaper.GetSetMediaTrackInfo_String(scratch, def.mirror, '', false)
+    if raw ~= metaSeen[store] then metaSeen[store] = raw; changed = true end
+  end
+  if changed then self:resyncMeta() end
 end
 
 function rm:addTrack(t)
@@ -811,7 +826,7 @@ function rm:addFx(trackId, t)
   end
   if t.params then writeParams(track, idx, t.params) end
   local meta = util.clone(t, FX_NATIVE)
-  if next(meta) then writeFxMeta(id, meta) end
+  if next(meta) then writeMeta('fx', id, meta) end
   return id
 end
 
@@ -832,7 +847,19 @@ function rm:assignFx(id, t)
   if t.pinMaps then writePinMaps(track, idx, t.pinMaps) end
   if t.midi    then writeMidiRouting(track, idx, t.midi) end
   local meta = util.clone(t, FX_NATIVE)
-  if next(meta) then writeFxMeta(id, meta) end
+  if next(meta) then writeMeta('fx', id, meta) end
+end
+
+--contract: read a named meta store ('fx'|'bus'): whole blob, or one entry when id given
+function rm:meta(store, id)
+  local blob = readMeta(store)
+  if id == nil then return blob end
+  return blob[id]
+end
+
+--contract: write a named meta store: nil deletes store[id], else patch-merge (util.REMOVE to clear)
+function rm:assignMeta(store, id, meta)
+  writeMeta(store, id, meta)
 end
 
 --contract: batch per-FX MIDI routing for one track in a single chunk Get+Set; writes={{id,midi},...}
@@ -870,7 +897,7 @@ function rm:fx(id)
     local _, chunk = reaper.GetTrackStateChunk(track, '', false)
     fx.midi = readMidiRouting(chunk, routingIdxOf(track, idx))
   end
-  util.assign(fx, readFxMeta()[id])
+  util.assign(fx, readMeta('fx')[id])
   return fx
 end
 
