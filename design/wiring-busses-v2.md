@@ -303,10 +303,17 @@ existing node machinery.
    rewritten; record CRUD/id-space tests in `wm_bus_node_spec`; the two
    v1 node-meta round-trip tests in `wm_read_spec` retired.
 
-6. **Render — matrix half.** The fan half landed with step 5. Remaining:
-   draw the matrix bar in the main node pass (category `'bus'` currently
-   has no draw path — unreachable in production until step 7), emit
-   matrix bars/taps in `busSegments`, and extend `busBarHit` to them.
+6. **Render — matrix half.** *(DONE — 2026-06-12.)* The fan half landed
+   with step 5. `busSegments` generalised: each busView anchors on its
+   claimed node (fan: trunk, comb side away from it) or the bus nodeView
+   itself (matrix: drag-live pos, no trunk, source tags comb the +normal
+   side); the per-edge tap construction is shared. Rails grew
+   `matrix`/`node=anchor`/`port=1`; `drawBusPass` skips matrix rails —
+   the new `drawBusBar` draws them in the main node pass as the node's
+   body (selection strokes a slab round the bar; a bus node with no
+   record/rail falls back to the rect render). `busBarHit` takes either
+   draft end on a matrix bar. No new specs — pure render, exercised at
+   step 9 with the gestures.
 
 7. **Creation UI + threshold gestures.** "Buss" picker entry → record-only
    create (rework `wm:addBusNode`); wire-drop and edge-removal conversion

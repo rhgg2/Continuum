@@ -1302,8 +1302,8 @@ local function nodeEdgePoint(nv, fromX, fromY)
   return nv.pos.x + dx * sc, nv.pos.y + dy * sc
 end
 
--- Bussed edges render as a rail (bar + comb taps + one arrowed trunk), not a star.
--- Bar at busView's own pos/orient; taps comb away from the claimed node. Fan only.
+-- Bussed edges render as a rail (bar + comb taps + for fans one arrowed trunk).
+-- Bar at busView's own pos/orient; a matrix bar doubles as the bus node's body.
 local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
   local idxOf, groups = {}, {}
   for i, w in ipairs(wireViews) do idxOf[w] = i end
@@ -1336,12 +1336,23 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
   end
 
   for _, bv in ipairs(busViews) do
-    local node = bv.claim and nodesById[bv.claim.node]
-    if node then
+    local claimNode = bv.claim and nodesById[bv.claim.node]
+    local busNode   = bv.matrix and nodesById[bv.id]
+    -- anchor = the consumer body custom source-tag offsets are relative to.
+    local anchor    = claimNode or busNode
+    if anchor then
       local ov = ORIENT_VEC[bv.orient] or ORIENT_VEC.V
-      local bcx, bcy = bv.pos.x, bv.pos.y
-      local away = (bcx - node.pos.x) * ov.nx + (bcy - node.pos.y) * ov.ny
-      local sgn  = away >= 0 and 1 or -1
+      -- A matrix bar centres on the live nodeView pos, so it follows an in-flight drag.
+      local bcx, bcy
+      if busNode then bcx, bcy = busNode.pos.x, busNode.pos.y
+      else            bcx, bcy = bv.pos.x, bv.pos.y end
+      -- Fan source tags comb away from the claimed node; a matrix bar has no
+      -- claimed side, so they take the +normal side.
+      local sgn = 1
+      if claimNode then
+        local away = (bcx - claimNode.pos.x) * ov.nx + (bcy - claimNode.pos.y) * ov.ny
+        sgn = away >= 0 and 1 or -1
+      end
       local nxs, nys = ov.nx * sgn, ov.ny * sgn
       local edges = groups[bv.id] or {}
 
@@ -1364,9 +1375,9 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
           local _, thw, thh = sourceTagLayout(p, w.fromLabel or 'source')
           fhw, fhh = thw, thh
           if w.fromOffset then
-            -- Custom tag pos is claimed-node-relative, like the star path's.
-            sx = node.pos.x + w.fromOffset.x
-            sy = node.pos.y + w.fromOffset.y
+            -- Custom tag pos is consumer-relative, like the star path's.
+            sx = anchor.pos.x + w.fromOffset.x
+            sy = anchor.pos.y + w.fromOffset.y
           else
             local t   = (si - (sourceN - 1) / 2) * BUS_TAP_GAP
             si = si + 1
@@ -1392,46 +1403,63 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
       end
       if tMin > tMax then tMin, tMax = 0, 0 end
 
-      local nex, ney = nodeEdgePoint(node, bcx, bcy)
       local trunk
-      if bv.claim.dir == 'in' then
-        trunk = { sx = bcx, sy = bcy, ex = nex, ey = ney }
-      else
-        trunk = { sx = nex, sy = ney, ex = bcx, ey = bcy }
+      if claimNode then
+        local nex, ney = nodeEdgePoint(claimNode, bcx, bcy)
+        if bv.claim.dir == 'in' then
+          trunk = { sx = bcx, sy = bcy, ex = nex, ey = ney }
+        else
+          trunk = { sx = nex, sy = ney, ex = bcx, ey = bcy }
+        end
       end
-      -- Bar always includes the trunk attach (t=0) and spans at least a node's
-      -- breadth, then reaches out to the farthest tap. see docs § Bus rail geometry
+      -- Bar always includes the trunk attach / bar centre (t=0) and spans at least
+      -- a node's breadth, then reaches to the farthest tap. see docs § Bus rail geometry
       local alongHalf = (ov.ax ~= 0) and NODE_W / 2 or NODE_H / 2
       local lo = math.min(tMin, -alongHalf) - BUS_BAR_PAD
       local hi = math.max(tMax,  alongHalf) + BUS_BAR_PAD
       util.add(busRails, {
         bar = { x0 = bcx + ov.ax * lo, y0 = bcy + ov.ay * lo,
                 x1 = bcx + ov.ax * hi, y1 = bcy + ov.ay * hi },
-        trunk = trunk,
-        busId = bv.id, node = node, dir = bv.claim.dir, port = bv.claim.port,
+        trunk = trunk, matrix = bv.matrix,
+        busId = bv.id, node = anchor,
+        dir = bv.claim and bv.claim.dir, port = bv.claim and bv.claim.port or 1,
       })
     end
   end
 end
 
--- Rail bar + the one arrowed trunk, drawn over the tap landings (the bar
--- occludes them like a source tag's patch occludes its wire). v1 is audio-only.
+-- Fan rails: bar + the one arrowed trunk, drawn over the tap landings (the bar
+-- occludes them like a source tag's patch). A matrix bar draws in the node pass.
 local function drawBusPass(p, busRails, placed)
   for _, r in ipairs(busRails) do
-    local name = 'wiring.port.audio'
-    p.line(r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1, name, BUS_BAR_THICK)
-    local t = r.trunk
-    p.line(t.sx, t.sy, t.ex, t.ey, name, WIRE_THICK)
-    drawWireArrow(p, t.sx, t.sy, t.ex, t.ey, name, (t.sx + t.ex) / 2, (t.sy + t.ey) / 2)
-    -- Port number once on the trunk (shared collision set with drawWireEndLabel);
-    -- every tap shares this port and suppresses its own bussed-end label.
-    if r.port and r.port ~= 1 then
-      local audio = (r.dir == 'in') and r.node.ins.audio or r.node.outs.audio
-      local nodeX, nodeY = (r.dir == 'in') and t.ex or t.sx, (r.dir == 'in') and t.ey or t.sy
-      local barX,  barY  = (r.dir == 'in') and t.sx or t.ex, (r.dir == 'in') and t.sy or t.ey
-      drawWireEndLabel(p, nodeX, nodeY, barX, barY, 0, r.port,
-        audio and audio[r.port], '##bus/' .. r.busId, name, placed)
+    if not r.matrix then
+      local name = 'wiring.port.audio'
+      p.line(r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1, name, BUS_BAR_THICK)
+      local t = r.trunk
+      p.line(t.sx, t.sy, t.ex, t.ey, name, WIRE_THICK)
+      drawWireArrow(p, t.sx, t.sy, t.ex, t.ey, name, (t.sx + t.ex) / 2, (t.sy + t.ey) / 2)
+      -- Port number once on the trunk (shared collision set with drawWireEndLabel);
+      -- every tap shares this port and suppresses its own bussed-end label.
+      if r.port and r.port ~= 1 then
+        local audio = (r.dir == 'in') and r.node.ins.audio or r.node.outs.audio
+        local nodeX, nodeY = (r.dir == 'in') and t.ex or t.sx, (r.dir == 'in') and t.ey or t.sy
+        local barX,  barY  = (r.dir == 'in') and t.sx or t.ex, (r.dir == 'in') and t.sy or t.ey
+        drawWireEndLabel(p, nodeX, nodeY, barX, barY, 0, r.port,
+          audio and audio[r.port], '##bus/' .. r.busId, name, placed)
+      end
     end
+  end
+end
+
+-- A matrix buss's node-pass body: the bar itself, geometry from busSegments'
+-- rail so bar and taps can't drift. Selection strokes a slab around the bar.
+local function drawBusBar(p, r, isSelected)
+  p.line(r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1, 'wiring.port.audio', BUS_BAR_THICK)
+  if isSelected then
+    local pad = BUS_BAR_THICK
+    p.stroke(rect(math.min(r.bar.x0, r.bar.x1) - pad, math.min(r.bar.y0, r.bar.y1) - pad,
+                  math.max(r.bar.x0, r.bar.x1) + pad, math.max(r.bar.y0, r.bar.y1) + pad),
+             'wiring.node.selected', SELECTED_STROKE, 0)
   end
 end
 
@@ -1513,13 +1541,13 @@ local function armBus(nodeId, dir, nv, busViews)
   end
 end
 
--- A bus bar is a fat drop target for its bussed port during a rewire: a draft
--- whose grabbed end matches the bus dir (to→in, from→out) can land on the bar.
+-- A bus bar is a fat drop target during a rewire: a fan bar takes a draft whose
+-- grabbed end matches its dir (to→in, from→out); a matrix bar takes either end.
 local function busBarHit(busRails, draft, mx, my)
   if draft.type == 'midi' then return nil end
   local wantDir = (draft.cursorEnd == 'to') and 'in' or 'out'
   for _, r in ipairs(busRails) do
-    if r.dir == wantDir and r.node and not draft.forbidden[r.node.id]
+    if (r.matrix or r.dir == wantDir) and r.node and not draft.forbidden[r.node.id]
        and pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= BUS_BAR_HIT then
       return { nv = r.node, slot = { kind = 'audio', portIdx = r.port }, viaBar = r.bar }
     end
@@ -1682,6 +1710,8 @@ local function renderCanvas(w, h)
   sourceSegments(p, wireViewsList, nodesById, segs)
   local busRails = {}
   busSegments(p, wireViewsList, busViewsList, nodesById, segs, busRails)
+  local matrixRails = {}
+  for _, r in ipairs(busRails) do if r.matrix then matrixRails[r.busId] = r end end
   -- Stamp each seg's visible midpoint once: the arrow, fader, and RMB menu all
   -- anchor here, so a single source keeps draw and hit-test from drifting.
   for _, seg in pairs(segs) do seg.cx, seg.cy = wireMid(seg) end
@@ -1790,7 +1820,9 @@ local function renderCanvas(w, h)
   for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
   drawDraftWire(p, wireDraft, nodesById, draftCx, draftCy)
   for _, nv in ipairs(nodeViews) do
-    drawNode(p, nv, selection[nv.id])
+    local rail = nv.category == 'bus' and matrixRails[nv.id]
+    if rail then drawBusBar(p, rail, selection[nv.id])
+    else         drawNode(p, nv, selection[nv.id]) end
   end
   if busHandles then drawBusOverlay(p, busHandles) end
 
