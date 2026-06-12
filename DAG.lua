@@ -20,6 +20,7 @@
 --invariant: a split-tagged class never absorbs
 --invariant: signal-bearing bus seeds 'bus:'..id; marker never spreads — bus sits alone in its class
 --invariant: bus classes absorb in neither direction; a dangling bus is inert (empty srcSet)
+--invariant: busses below 2x2 splice out at compile; crossings become direct edges at product gain
 --invariant: srcSet unions node.split with derived master-min split markers
 --shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxId?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }
 -- see docs/DAG.md § synthNode field roles
@@ -270,8 +271,8 @@ local function buildCtx(userGraph, derivedSplits)
       cache.hasSplit[id] = true
     end
     if node and node.kind == 'bus' then
-      -- A dangling bus stays inert (empty set); a live one seeds its marker, which
-      -- the union strips from children — bus alone in its class, sources pass through.
+      -- Only ≥2x2 busses survive the splice (empty-set = drift backstop); the marker
+      -- never spreads — bus alone in its class, sources pass through to children.
       if not busLive(id) then cache.srcSet[id] = set; return set end
       set['bus:' .. id] = true
       cache.hasBus[id] = true
@@ -955,9 +956,79 @@ local function deriveMasterSplit(userGraph)
   return {}
 end
 
+----- bus splice
+
+-- Sub-threshold busses (authored degree < 2×2) splice out before derivation;
+-- in×out pairs become direct edges at the product gain. See docs/DAG.md § bus splice.
+--shape: spliceProv = { parts = {[splicedIdx]=authoredIdx[]} }  -- a product edge lists every authored tap it folds
+local function spliceBusses(userGraph)
+  local nodes, edges = userGraph.nodes or {}, userGraph.edges or {}
+  local degree = {}
+  for id, node in pairs(nodes) do
+    if node.kind == 'bus' then degree[id] = { ins = 0, outs = 0 } end
+  end
+  for _, edge in ipairs(edges) do
+    if edge.type == 'audio' then
+      local toDeg, fromDeg = degree[edge.to], degree[edge.from]
+      if toDeg   then toDeg.ins    = toDeg.ins    + 1 end
+      if fromDeg then fromDeg.outs = fromDeg.outs + 1 end
+    end
+  end
+  local sub, subIds = {}, {}
+  for id, deg in pairs(degree) do
+    if deg.ins < 2 or deg.outs < 2 then sub[id] = true; util.add(subIds, id) end
+  end
+  if #subIds == 0 then return userGraph end
+  table.sort(subIds)  -- deterministic spliced-edge order
+
+  -- Work items carry the authored indexes folded into each edge; splicing a
+  -- bus crosses its in-items with its out-items (cycle-free per validate).
+  local work = {}
+  for idx, edge in ipairs(edges) do
+    work[idx] = { edge = edge, parts = { idx } }
+  end
+  for _, busId in ipairs(subIds) do
+    local ins, outs, rest = {}, {}, {}
+    for _, item in ipairs(work) do
+      if item.edge.to == busId then util.add(ins, item)
+      elseif item.edge.from == busId then util.add(outs, item)
+      else util.add(rest, item) end
+    end
+    for _, tapIn in ipairs(ins) do
+      for _, tapOut in ipairs(outs) do
+        local inGain  = tapIn.edge.ops  and tapIn.edge.ops.gain
+        local outGain = tapOut.edge.ops and tapOut.edge.ops.gain
+        local gain = (inGain or outGain) and (inGain or 1) * (outGain or 1) or nil
+        local parts = {}
+        for _, idx in ipairs(tapIn.parts)  do util.add(parts, idx) end
+        for _, idx in ipairs(tapOut.parts) do util.add(parts, idx) end
+        util.add(rest, { parts = parts, edge = {
+          type = 'audio', from = tapIn.edge.from, fromPort = tapIn.edge.fromPort,
+          to = tapOut.edge.to, toPort = tapOut.edge.toPort,
+          ops = gain and { gain = gain } or nil,
+        } })
+      end
+    end
+    work = rest
+  end
+
+  local keptNodes, splicedEdges, parts = {}, {}, {}
+  for id, node in pairs(nodes) do
+    if not sub[id] then keptNodes[id] = node end
+  end
+  for idx, item in ipairs(work) do
+    splicedEdges[idx], parts[idx] = item.edge, item.parts
+  end
+  return { nodes = keptNodes, edges = splicedEdges }, { parts = parts }
+end
+
 --contract: assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
+-- ctx.splice (spliceProv) is present iff sub-threshold busses were spliced out.
 function M.compile(userGraph)
-  return buildCtx(userGraph, deriveMasterSplit(userGraph))
+  local graph, splice = spliceBusses(userGraph)
+  local ctx = buildCtx(graph, deriveMasterSplit(graph))
+  ctx.splice = splice
+  return ctx
 end
 
 ----- allocate

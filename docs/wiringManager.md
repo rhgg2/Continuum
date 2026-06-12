@@ -238,6 +238,11 @@ no mutate/signal/undo block. `gainRouting` resolves the edge to a target;
   is full-replace).
 - **Send** (`send`): `rm:setSendGain(from, to, gain)`, the targeted send-`D_VOL`
   write reconcile's collection-replace can't serve per-frame.
+- **Spliced bus tap** (`product`): the tap rides one or more spliced crossings
+  (`ctx.splice.parts`); each crossing's host is poked at the product of its
+  taps' gains, the poked tap substituting the live drag value. A lone-side tap
+  fans out to every crossing — the group fader. A crossing that can't poke
+  makes the call return `false`, falling back to materialise-then-reconcile.
 
 Each returns `false` when nothing hosts the edge yet (no guid, dead track, or
 no matching send); the caller materialises before the next poke. `fastGainCommit`

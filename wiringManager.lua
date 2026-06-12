@@ -1585,9 +1585,28 @@ function wm:applyOps(ops, label)
   markState()  -- our own write; don't let syncExternal reread it
 end
 
+-- A spliced product edge maps back to its authored taps: each tap collects the
+-- crossings it participates in, so a lone-side poke fans out (the group fader).
+local function authoredRouting(routing, spliceParts)
+  local authored = {}
+  for splicedIdx, target in pairs(routing) do
+    local parts = spliceParts[splicedIdx]
+    if #parts == 1 then
+      authored[parts[1]] = target
+    else
+      for _, tapIdx in ipairs(parts) do
+        local entry = authored[tapIdx]
+        if not entry then entry = { kind = 'product', crossings = {} }; authored[tapIdx] = entry end
+        util.add(entry.crossings, { target = target, parts = parts })
+      end
+    end
+  end
+  return authored
+end
+
 -- Gain routing derived once per structural change from the cached ctx.
 -- Merge-CU entries carry consumerId/trackKey (not a guid); mergeGuids are stamped live by applyOps.
---shape: routing[edgeIdx] = {kind='mergeCU',consumerId,trackKey,slot} | {kind='mainSend',cls} | {kind='send',from,to}
+--shape: routing[edgeIdx] = {kind='mergeCU',consumerId,trackKey,slot} | {kind='mainSend',cls} | {kind='send',from,to} | {kind='product',crossings={{target,parts=int[]},…}}
 local function gainRouting()
   local cache = ensureCompiled()
   if cache.routing then return cache.routing end
@@ -1609,6 +1628,8 @@ local function gainRouting()
       end
     end
   end
+  -- ctx edge indexes are spliced-graph indexes; callers poke authored taps.
+  if ctx.splice then routing = authoredRouting(routing, ctx.splice.parts) end
   cache.routing = routing
   return routing
 end
@@ -1661,13 +1682,37 @@ local function setStateGain(target, gain)
   end
 end
 
+-- A crossing's realized volume: the product of its taps' gains, the poked tap
+-- riding the live drag value (its ops.gain is only written at commit).
+local function crossingGain(parts, pokedIdx, pokedGain)
+  local vol = 1
+  for _, idx in ipairs(parts) do
+    vol = vol * (idx == pokedIdx and pokedGain or wm:edgeGain(idx))
+  end
+  return vol
+end
+
 --contract: pokes the live gain for an edge via cached routing; no mutate/signal/undo.
 -- see docs/wiringManager.md § pokeEdgeGain routing
 function wm:pokeEdgeGain(edgeIdx, gain)
   local target = gainRouting()[edgeIdx]
-  local ok = target ~= nil and pokeGainTarget(target, gain) or false
-  if ok then markState(); setStateGain(target, gain) end
-  return ok
+  if not target then return false end
+  if target.kind ~= 'product' then
+    local ok = pokeGainTarget(target, gain)
+    if ok then markState(); setStateGain(target, gain) end
+    return ok
+  end
+  local allOk, any = true, false
+  for _, crossing in ipairs(target.crossings) do
+    local vol = crossingGain(crossing.parts, edgeIdx, gain)
+    if pokeGainTarget(crossing.target, vol) then
+      any = true; setStateGain(crossing.target, vol)
+    else
+      allOk = false
+    end
+  end
+  if any then markState() end
+  return allOk
 end
 
 --contract: in-place gain commit + scratch mirror, one Undo block, no wiringChanged/reconcile

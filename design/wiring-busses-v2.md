@@ -295,6 +295,11 @@ through the existing node machinery.
 > authored gains, so nothing is ever divided back out, and threshold
 > crossings stop existing as a concept (§ Degree changes). Step 5's claim
 > machinery is reworked and step 7 re-cut below.
+>
+> Step-7 progress (2026-06-13): the DAG half landed — sub-threshold splice +
+> provenance map in `M.compile`, `gainRouting`/`pokeEdgeGain` through the map
+> (lone-side group-fader pokes included). The wm record-tap rework, read
+> minting, and creation UI remain.
 
 1. **Allocator: fx-less summing track.** *(DONE — verified 2026-06-12.)*
    `assembleTracks` emits a spec for any non-master class unconditionally
@@ -422,3 +427,7 @@ through the existing node machinery.
   until it matters).
 - The sophisticated restack/reposition affordances v1 deferred remain
   deferred.
+- Chained sub-threshold busses: n→1→m through two bars splices to n×m
+  product sends — the starburst, authored by hand. A single n×m buss
+  expresses the same products with N+M taps; no mid-splice re-evaluation is
+  attempted, keeping each bar's realization local to its own authored degree.

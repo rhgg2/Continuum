@@ -1,6 +1,5 @@
--- Matrix-buss isolation (design/wiring-busses-v2.md § DAG): a signal-bearing
--- kind='bus' node sits alone in its class, absorbs in neither direction, and
--- realizes as one fx-less summing track with native per-tap gains.
+-- Matrix-buss isolation + sub-threshold splice (design/wiring-busses-v2.md § DAG):
+-- ≥2x2 bus is classed alone; anything below splices to direct edges at product gains.
 local t   = require('support')
 local DAG = require('DAG')
 
@@ -71,16 +70,22 @@ return {
     end,
   },
   {
-    name = 'bus class never absorbs into its single audio parent',
+    name = 'bus class never absorbs into its single audio parent class',
     run = function()
-      -- 1-in bus: absent the guard, one audio parent (g1) would auto-absorb it.
+      -- fa+fb co-track on g1, so the matrix bus has one audio parent class;
+      -- absent the guard it would auto-absorb onto g1's track.
       local ns = {}
       local k, v
       k, v = source('s1', 'g1'); ns[k] = v
+      k, v = fx('fa');           ns[k] = v
+      k, v = fx('fb');           ns[k] = v
       k, v = bus('bus-1');       ns[k] = v
       k, v = fx('f');            ns[k] = v
       local cx = DAG.compile(mk(ns, {
-        audio('s1', 'bus-1'), audio('bus-1', 'f'), audio('f', 'master'),
+        audio('s1', 'fa'), audio('s1', 'fb'),
+        audio('fa', 'bus-1'), audio('fb', 'bus-1'),
+        audio('bus-1', 'f'), audio('bus-1', 'master'),
+        audio('f', 'master'),
       }))
       local busCls = t.key('bus:bus-1', 'g1')
       t.eq(cx:classOf()['bus-1'], busCls)
@@ -158,7 +163,7 @@ return {
     end,
   },
   {
-    name = 'two taps from one track: each wire keeps its own gain on its own send',
+    name = 'two matrix taps from one track: each wire keeps its own gain on its own send',
     run = function()
       local ns = {}
       local k, v
@@ -166,12 +171,15 @@ return {
       k, v = fx('fa');           ns[k] = v
       k, v = fx('fb');           ns[k] = v
       k, v = bus('bus-1');       ns[k] = v
+      k, v = fx('f');            ns[k] = v
       local cx = DAG.compile(mk(ns, {
         audio('s1', 'fa'),
         audio('s1', 'fb'),
         audio('fa', 'bus-1', 0.5),
         audio('fb', 'bus-1', 0.25),
         audio('bus-1', 'master'),
+        audio('bus-1', 'f'),
+        audio('f', 'master'),
       }))
       local tracks = DAG.targetTracks(cx)
       local gains = {}
@@ -183,7 +191,7 @@ return {
     end,
   },
   {
-    name = 'degenerate busses are inert: no class, no track, no stray wires',
+    name = 'degenerate busses splice to nothing: no class, no track, no stray wires',
     run = function()
       local function degenerate(extra)
         local ns = {}
@@ -201,7 +209,7 @@ return {
         { 'out-only', audio('bus-1', 'f') },
       }) do
         local name, cx = case[1], degenerate(case[2])
-        t.eq(cx:classOf()['bus-1'], '', name .. ': inert class')
+        t.eq(cx:classOf()['bus-1'], nil, name .. ': spliced out of the working graph')
         for trackKey, entry in pairs(DAG.targetTracks(cx)) do
           t.falsy(trackKey:find('bus:', 1, true), name .. ': no bus track')
           for _, w in ipairs(entry.outWires) do
@@ -211,6 +219,106 @@ return {
             t.truthy(c.from ~= 'bus-1' and c.to ~= 'bus-1', name .. ': no bus intraConns')
           end
         end
+      end
+    end,
+  },
+  {
+    name = 'fan-in splices out: per-source direct sends at in×out product gains',
+    run = function()
+      local ns = {}
+      local k, v
+      k, v = source('s1', 'g1'); ns[k] = v
+      k, v = source('s2', 'g2'); ns[k] = v
+      k, v = source('s3', 'g3'); ns[k] = v
+      k, v = bus('bus-1');       ns[k] = v
+      k, v = fx('f');            ns[k] = v
+      -- s3 feeds master independently so f keeps its own track (no master fold)
+      local cx = DAG.compile(mk(ns, {
+        audio('s1', 'bus-1', 0.5),
+        audio('s2', 'bus-1'),
+        audio('bus-1', 'f', 0.75),
+        audio('f', 'master'),
+        audio('s3', 'master'),
+      }))
+      t.eq(cx:classOf()['bus-1'], nil, 'bus spliced out of the working graph')
+      local tracks = DAG.targetTracks(cx)
+      local fCls = cx:classOf()['f']
+      local w1, w2 = tracks['g1'].outWires[1], tracks['g2'].outWires[1]
+      t.eq(w1.to, fCls); t.eq(w1.toNode, 'f')
+      t.eq(w1.gain, 0.375, 's1 crossing at 0.5 × 0.75')
+      t.eq(w2.gain, 0.75,  'unset tap defaults to 1')
+      for trackKey in pairs(tracks) do
+        t.falsy(trackKey:find('bus:', 1, true), 'no summing track')
+      end
+    end,
+  },
+  {
+    name = 'fan-out splice: crossings carry composed gains + full provenance',
+    run = function()
+      local ns = {}
+      local k, v
+      k, v = source('s1', 'g1'); ns[k] = v
+      k, v = bus('bus-1');       ns[k] = v
+      k, v = fx('fa');           ns[k] = v
+      k, v = fx('fb');           ns[k] = v
+      -- authored: 1 s1→bus, 2 bus→fa, 3 bus→fb, 4 fa→master, 5 fb→master
+      local cx = DAG.compile(mk(ns, {
+        audio('s1', 'bus-1', 0.5),
+        audio('bus-1', 'fa', 0.75),
+        audio('bus-1', 'fb'),
+        audio('fa', 'master'),
+        audio('fb', 'master'),
+      }))
+      local crossings = {}
+      for idx, e in ipairs(cx.userGraph.edges) do
+        if e.from == 's1' then
+          crossings[e.to] = { gain = e.ops and e.ops.gain, parts = cx.splice.parts[idx] }
+        end
+        if e.from == 'fa' and e.to == 'master' then
+          t.eq(#cx.splice.parts[idx], 1, 'carried edge maps 1:1')
+          t.eq(cx.splice.parts[idx][1], 4)
+        end
+      end
+      t.eq(crossings.fa.gain, 0.375)
+      t.eq(crossings.fb.gain, 0.5)
+      t.eq(#crossings.fa.parts, 2)
+      t.eq(crossings.fa.parts[1], 1); t.eq(crossings.fa.parts[2], 2)
+      t.eq(crossings.fb.parts[1], 1); t.eq(crossings.fb.parts[2], 3)
+    end,
+  },
+  {
+    name = 'chained fans compose: n→1→m splices to n×m crossings with three-factor gains',
+    run = function()
+      local ns = {}
+      local k, v
+      k, v = source('s1', 'g1'); ns[k] = v
+      k, v = source('s2', 'g2'); ns[k] = v
+      k, v = bus('bus-1');       ns[k] = v
+      k, v = bus('bus-2');       ns[k] = v
+      k, v = fx('fa');           ns[k] = v
+      k, v = fx('fb');           ns[k] = v
+      local cx = DAG.compile(mk(ns, {
+        audio('s1', 'bus-1', 0.5),
+        audio('s2', 'bus-1'),
+        audio('bus-1', 'bus-2', 0.25),
+        audio('bus-2', 'fa', 0.5),
+        audio('bus-2', 'fb'),
+        audio('fa', 'master'),
+        audio('fb', 'master'),
+      }))
+      local got = {}
+      for idx, e in ipairs(cx.userGraph.edges) do
+        if e.from == 's1' or e.from == 's2' then
+          got[e.from .. '>' .. e.to] = { gain = e.ops and e.ops.gain,
+                                         nParts = #cx.splice.parts[idx] }
+        end
+      end
+      t.eq(got['s1>fa'].gain, 0.0625, '0.5 × 0.25 × 0.5')
+      t.eq(got['s1>fb'].gain, 0.125)
+      t.eq(got['s2>fa'].gain, 0.125)
+      t.eq(got['s2>fb'].gain, 0.25)
+      for key, crossing in pairs(got) do
+        t.eq(crossing.nParts, 3, key .. ': three authored taps')
       end
     end,
   },

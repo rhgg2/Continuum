@@ -15,6 +15,20 @@ hangs off `M.compile`'s lazy-caching `ctx`, computed once per compile
 and shared across passes. (Graph reachability now lives in `wiringView`
 — `ancestorsOf`/`descendantsOf` over `wm:reach`'s cached adjacency.)
 
+## bus splice — sub-threshold busses leave the working graph
+
+`M.compile` splices every bus below 2×2 (authored audio degree) out of
+the working graph before any derivation: each in×out tap pair becomes a
+direct edge whose gain is the product of its taps' gains, so fans
+realize as the plain sends an engineer would write and only matrix
+busses reach classing. `ctx.splice.parts` maps each working edge back to
+the authored taps it folds; `wm`'s `gainRouting` translates gain hosts
+through it so pokes land on authored tap indexes (a lone-side tap fans
+out to all its crossings — the group fader). The threshold reads
+authored degree only: chained fans compose products (n→1→m yields n×m
+sends) rather than re-evaluating mid-splice, which keeps each bar's
+realization local to its own taps and the splice order-free.
+
 ## gainHost — where a gained wire's volume lives
 
 A gain on an audio wire lives on the REAPER send that carries it (as
