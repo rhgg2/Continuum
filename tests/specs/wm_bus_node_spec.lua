@@ -100,4 +100,44 @@ return {
       t.truthy(ok, 'wired buss validates: ' .. tostring(err and err.code))
     end,
   },
+  {
+    name = 'live reconcile stamps record.trackId for a matrix buss; inert buss clears it',
+    run = function(harness)
+      local h, wm, rm = mkWm(harness)
+      local function seedTrack(guid)
+        local track = { __label = 'src-' .. guid }
+        table.insert(h.reaper._state.projectTracks, track)
+        h.reaper._state.trackGuids[track] = guid
+      end
+      seedTrack('guid-A'); seedTrack('guid-B')
+      wm:load()  -- read mints source nodes guid-A/guid-B from the live tracks
+      wm:enableLive()
+      local bus = wm:addBusNode({ x = 10, y = 20 })
+      t.falsy(rm:meta('bus', bus).trackId, 'unwired buss carries no track')
+      wm:mutate(function(g)
+        util.add(g.edges, { type = 'audio', from = 'guid-A', to = bus })
+        util.add(g.edges, { type = 'audio', from = 'guid-B', to = bus })
+        util.add(g.edges, { type = 'audio', from = bus, to = 'master' })
+      end)
+      local rec = rm:meta('bus', bus)
+      t.truthy(rec.trackId, 'matrix buss record carries its summing track guid')
+      t.eq(rec.orient, 'V', 'stamp patch-merged: rest of record intact')
+      -- read back from live routing: the flagged track mints the node under the
+      -- synthetic id, decoration from the bus store
+      local rg = wm:read()
+      t.eq(rg.nodes[bus].kind, 'bus')
+      t.eq(rg.nodes[bus].pos.x, 10)
+      t.eq(rg.nodes[bus].orient, 'V')
+      -- dropping the inputs leaves the buss inert; the reconcile that demolishes
+      -- the track also clears the stamp
+      wm:mutate(function(g)
+        local kept = {}
+        for _, e in ipairs(g.edges) do
+          if e.to ~= bus then util.add(kept, e) end
+        end
+        g.edges = kept
+      end)
+      t.falsy(rm:meta('bus', bus).trackId, 'inert buss record cleared')
+    end,
+  },
 }

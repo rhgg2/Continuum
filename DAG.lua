@@ -9,7 +9,7 @@
 --invariant: fx midi: JSFX ports come from midirecv/midisend scan; native fx get {1,1}.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --shape: userGraph = { nodes = {[id]=userNode}, edges = edge[] }  -- node ids are rm guids (read era)
---shape: userNode = { kind='source'|'fx'|'master'|'bus', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true, orient?='V'|'H' }  -- bus: synthetic id, no source/fx; trackId stamped on matrix-materialization
+--shape: userNode = { kind='source'|'fx'|'master'|'bus', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true, orient?='V'|'H' }  -- bus: synthetic id, no source/fx; its summing track's guid lives on the bus record, not the node
 --invariant: fx nodes carry busAware; wm:addFxNode and M.validate refuse true
 --invariant: fxId is nil until materialised; stamped into the node after TrackFX_AddByName succeeds
 -- see docs/DAG.md § fxId as incarnation handle
@@ -18,6 +18,8 @@
 -- see docs/DAG.md § CU bridge invariant
 --invariant: node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
 --invariant: a split-tagged class never absorbs
+--invariant: signal-bearing bus seeds 'bus:'..id; marker never spreads — bus sits alone in its class
+--invariant: bus classes absorb in neither direction; a dangling bus is inert (empty srcSet)
 --invariant: srcSet unions node.split with derived master-min split markers
 --shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxId?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }
 -- see docs/DAG.md § synthNode field roles
@@ -215,7 +217,7 @@ end
 local function buildCtx(userGraph, derivedSplits)
   local nodes = userGraph.nodes or {}
   local edges = userGraph.edges or {}
-  local cache = { srcSet = {}, hasSplit = {} }
+  local cache = { srcSet = {}, hasSplit = {}, hasBus = {} }
   local ctx = { userGraph = userGraph }
 
   -- Forward/reverse adjacency over the edge union, built once per ctx: rev
@@ -234,6 +236,26 @@ local function buildCtx(userGraph, derivedSplits)
   -- Reverse adjacency: for each node id, the list of input-side node ids.
   local function inbound() return ctx:adjacency().rev end
 
+  -- A bus routes signal only when both sides are wired; one pass over the edges.
+  local function busLive(id)
+    if not cache.busIO then
+      local io = {}
+      local function mark(busId, dir)
+        local node = nodes[busId]
+        if node and node.kind == 'bus' then
+          io[busId] = io[busId] or {}
+          io[busId][dir] = true
+        end
+      end
+      for _, edge in ipairs(edges) do
+        if edge.type == 'audio' then mark(edge.to, 'ins'); mark(edge.from, 'outs') end
+      end
+      cache.busIO = io
+    end
+    local io = cache.busIO[id]
+    return io and io.ins and io.outs
+  end
+
   local function srcSet(id)
     if cache.srcSet[id] then return cache.srcSet[id] end
     local set = {}
@@ -247,8 +269,17 @@ local function buildCtx(userGraph, derivedSplits)
       set['split:' .. id] = true
       cache.hasSplit[id] = true
     end
+    if node and node.kind == 'bus' then
+      -- A dangling bus stays inert (empty set); a live one seeds its marker, which
+      -- the union strips from children — bus alone in its class, sources pass through.
+      if not busLive(id) then cache.srcSet[id] = set; return set end
+      set['bus:' .. id] = true
+      cache.hasBus[id] = true
+    end
     for _, parent in ipairs(inbound()[id] or {}) do
-      for guid in pairs(srcSet(parent)) do set[guid] = true end
+      for guid in pairs(srcSet(parent)) do
+        if guid:sub(1, 4) ~= 'bus:' then set[guid] = true end
+      end
       if cache.hasSplit[parent] then cache.hasSplit[id] = true end
     end
     cache.srcSet[id] = set
@@ -259,7 +290,7 @@ local function buildCtx(userGraph, derivedSplits)
   -- ctx:classOf() and the track-keyed derivations below; never a public seam.
   local function classes()
     if cache.classes then return cache.classes end
-    cache.classes, cache.splitClasses = {}, {}
+    cache.classes, cache.splitClasses, cache.busClasses = {}, {}, {}
     for id in pairs(nodes) do
       local guids = {}
       for guid in pairs(srcSet(id)) do util.add(guids, guid) end
@@ -267,6 +298,7 @@ local function buildCtx(userGraph, derivedSplits)
       local key = util.key(table.unpack(guids))
       util.bucket(cache.classes, key, id)
       if cache.hasSplit[id] then cache.splitClasses[key] = true end
+      if cache.hasBus[id]   then cache.busClasses[key]   = true end
     end
     return cache.classes
   end
@@ -276,6 +308,13 @@ local function buildCtx(userGraph, derivedSplits)
   local function splitClasses()
     classes()
     return cache.splitClasses
+  end
+
+  -- Class keys hosting a bus node: absorption skips them in both directions,
+  -- so the buss keeps its own track and the summing track stays fx-less.
+  local function busClasses()
+    classes()
+    return cache.busClasses
   end
 
   function ctx:classOf()
@@ -329,10 +368,11 @@ local function buildCtx(userGraph, derivedSplits)
       return nil
     end
 
-    local splitClasses = splitClasses()
+    local splitClasses, busClasses = splitClasses(), busClasses()
     local direct = {}
     for cls, qEntry in pairs(q) do
-      direct[cls] = not splitClasses[cls] and directTrackKey(qEntry) or nil
+      local target = not (splitClasses[cls] or busClasses[cls]) and directTrackKey(qEntry) or nil
+      direct[cls] = target and not busClasses[target] and target or nil
     end
 
     local function chainEnd(cls, seen)
@@ -711,10 +751,13 @@ do
                                  toNode = conn.to, toPort = conn.toPort }
           end
         else
+          -- conn.gain survives to here only on bus-bound taps sharing a route key
+          -- (insoluble for gainHost); sends are per-srcChan, each with its own D_VOL.
           util.add(route.outWires, {
             from = conn.from, fromPort = conn.fromPort, to = toTrackKey,
             toNode = conn.to, toPort = conn.toPort, type = conn.type,
-            gain = conn.type == 'audio' and sendGain[util.key(fromTrackKey, toTrackKey)] or nil,
+            gain = conn.type == 'audio'
+                   and (sendGain[util.key(fromTrackKey, toTrackKey)] or conn.gain) or nil,
           })
         end
       elseif fromTrackKey == '' and toTrackKey == '' then

@@ -870,7 +870,12 @@ end
 -- Pass 3c: audio + CU collapse + gain + full midi-bus walk (fan-in, merge, brackets), then
 -- component classification (bus-aware + feedback quarantine). Node ids are rm ids. Pure.
 local MASTER_KEY = '__master__'
-local function readGraph(snap)
+local function readGraph(snap, busMeta)
+  -- trackId-flagged records key the matrix mint by the snapshot entry's guid.
+  local busByTrack = {}
+  for busId, rec in pairs(busMeta or {}) do
+    if rec.trackId then busByTrack[rec.trackId] = busId end
+  end
   local nodes = {
     master = { kind = 'master',
                ports = { audio = { ins = 1, outs = 0 }, midi = { ins = 0, outs = 0 } } },
@@ -1007,6 +1012,7 @@ local function readGraph(snap)
       util.add(liveMidi[bus], ref)
     end
 
+    local busId = entry.id and busByTrack[entry.id] or nil
     local inc = incoming[trackKey]
     if inc then
       for _, i in ipairs(inc) do
@@ -1017,7 +1023,7 @@ local function readGraph(snap)
           for _, ref in ipairs((tail.audio or {})[i.srcPair] or {}) do feed(i.dstPair, foldGain(ref, i.gain)) end
         end
       end
-    elseif entry.trackKind ~= 'master' and entry.trackKind ~= 'scratch' then
+    elseif not busId and entry.trackKind ~= 'master' and entry.trackKind ~= 'scratch' then
       -- No inputs => a source (scratch excepted: a known fx bin, walked as floating islands).
       -- Emits audio on pair 1 and midi on bus 0.
       local sid = entry.id
@@ -1026,6 +1032,19 @@ local function readGraph(snap)
       if isCyclic then feedbackSeeds[sid] = true end
       feed(1, { node = sid, port = 1 })
       feedMidi(0, { node = sid })
+    end
+
+    -- A flagged track realizes a buss: accumulated inputs become its in-edges, the
+    -- summed tail (pair 1) becomes the buss ref. MIDI does not pass through.
+    if busId then
+      nodes[busId] = { kind = 'bus',
+                       ports = { audio = { ins = 1, outs = 1 }, midi = { ins = 0, outs = 0 } } }
+      if isCyclic then feedbackSeeds[busId] = true end
+      for _, refs in pairs(liveAudio) do
+        for _, ref in ipairs(refs) do addAudioEdge(ref, busId, 1) end
+      end
+      liveAudio = { { { node = busId, port = 1 } } }
+      liveMidi  = {}
     end
 
     -- A merge/bracket CU mints no node: audio outputs carry upstream producers (gain-
@@ -1129,7 +1148,7 @@ wm.readGraph = readGraph  -- exposed for unit tests; wm:read drives it from the 
 
 -- Decoration is orthogonal to routing: positions live in the rm meta store, never the routing
 -- snapshot. Stamp them back after the pure read; absent meta (never-placed) defaults to origin.
-local function stampDecoration(g, tracks)
+local function stampDecoration(g, tracks, busMeta)
   local trackRec, fxRec = {}, {}
   for _, tr in ipairs(tracks) do
     trackRec[tr.id] = tr
@@ -1137,13 +1156,19 @@ local function stampDecoration(g, tracks)
   end
   local masterId = rm:masterId()
   for id, node in pairs(g.nodes) do
-    local rec
-    if     node.kind == 'fx'     then rec = fxRec[id]
-    elseif node.kind == 'master' then rec = masterId and trackRec[masterId]
-    else                              rec = trackRec[id] end
-    node.pos    = (rec and rec.pos) and { x = rec.pos.x, y = rec.pos.y } or { x = 0, y = 0 }
-    node.busses = rec and rec.busses and util.deepClone(rec.busses) or nil
-    node.tagPos = rec and rec.tagPos and util.deepClone(rec.tagPos) or nil
+    if node.kind == 'bus' then
+      local rec = busMeta and busMeta[id]
+      node.pos    = (rec and rec.pos) and { x = rec.pos.x, y = rec.pos.y } or { x = 0, y = 0 }
+      node.orient = rec and rec.orient or 'V'
+    else
+      local rec
+      if     node.kind == 'fx'     then rec = fxRec[id]
+      elseif node.kind == 'master' then rec = masterId and trackRec[masterId]
+      else                              rec = trackRec[id] end
+      node.pos    = (rec and rec.pos) and { x = rec.pos.x, y = rec.pos.y } or { x = 0, y = 0 }
+      node.busses = rec and rec.busses and util.deepClone(rec.busses) or nil
+      node.tagPos = rec and rec.tagPos and util.deepClone(rec.tagPos) or nil
+    end
   end
 end
 
@@ -1152,10 +1177,11 @@ end
 -- (3c: + component classification — bus-aware + feedback quarantine; decoration stamped from meta)
 function wm:read()
   rm:scratchId()  -- ensure scratch before listing, so the snapshot matches a fresh one
-  local tracks = rm:tracks()
-  local snap = self:snapshot(tracks)
-  local g = readGraph(snap)
-  stampDecoration(g, tracks)
+  local tracks  = rm:tracks()
+  local snap    = self:snapshot(tracks)
+  local busMeta = rm:meta('bus')
+  local g = readGraph(snap, busMeta)
+  stampDecoration(g, tracks, busMeta)
   return g, snap
 end
 
@@ -1675,6 +1701,20 @@ local function rememberApplied()
   return snap
 end
 
+-- A matrix buss record carries its summing track's guid: stamped once the track exists,
+-- cleared when its class loses one. Never on the node, so the id survives fan⇄matrix.
+local function stampBusTracks()
+  for busId, rec in pairs(rm:meta('bus')) do
+    local trackId
+    if userGraph.nodes[busId] then
+      trackId = newTrackIds[ensureCompiled().ctx:trackKeyOf(busId)]
+    end
+    if rec.trackId ~= trackId then
+      rm:assignMeta('bus', busId, { trackId = trackId or util.REMOVE })
+    end
+  end
+end
+
 --contract: one reconcile pass — diff targetState vs the actual side (the actualState model or a
 --contract: fresh snapshot), applyOps, then refresh the model for the next self-driven reconcile
 function wm:reconcile(label)
@@ -1682,6 +1722,7 @@ function wm:reconcile(label)
   local snap   = actualState or self:snapshot()
   local ops    = self:diff(target, snap)
   self:applyOps(ops, label or 'wiring: reconcile')
+  stampBusTracks()
   actualState  = rememberApplied()
 end
 
