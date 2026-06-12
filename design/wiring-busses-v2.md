@@ -187,6 +187,15 @@ work is decoupled from the realization decision.
 
 ## Implementation plan (ordered; resolve risk #1 first)
 
+> **Progress (2026-06-12):** steps 1–3 landed (commit `25c8f25`, suite green).
+> Step 1 verified-by-reading; the `isChainMember` exclusion shipped with step 2.
+> Steps 2–3 below carry **DONE** notes recording the decisions taken. Next:
+> **step 4** (read-side minting + realization-by-degree), which also carries the
+> deferred `anchor`/`trackId`/`loneGain` record fields and the matrix
+> non-absorption guard. Known gap until then: an *unwired* buss compiles to a
+> stray empty summing track in live mode — unreachable today (no creation UI yet,
+> step 7; step-3 specs run non-live).
+
 1. **Allocator: fx-less summing track (the primary risk).** Confirm in
    `DAG.lua` whether `targetTracks`/`allocateOnce` can emit a real `newTrack`
    for a non-master class with an empty `fxOrder`, or whether every emitted
@@ -219,11 +228,34 @@ work is decoupled from the realization decision.
    track GUID once matrix-materialized, or stays synthetic with trackId as a
    separate field — pick during the spike).
 
+   **DONE.** `kind='bus'` added to the `userNode` `--shape` (with `orient?`);
+   `isChainMember` (`DAG.lua`) excludes `bus`. `M.validate` needs **no** buss
+   rule: a buss carries `ports.audio={ins=1,outs=1}` (all taps share port 1 —
+   the matrix sums everything, so a port index is meaningless), which satisfies
+   every existing port/edge check. **Id scheme:** stable synthetic `bus-N`
+   (minted by `nextBusId`, max-scan of existing ids); `trackId` becomes a
+   **separate** field at matrix-materialization — the synthetic id never changes,
+   so it survives fold⇄matrix transitions.
+
 3. **Manager: buss record store + mutations.** A project-ext buss store keyed by
    buss id holding `{ id, pos, orient, anchor?, loneGain? }`. New API:
    `wm:addBusNode(pos)`, `wm:moveBus` (or fold into `moveNodes`),
    `wm:deleteNode` extended to clear the record. Maintain `anchor`⇄`trackId`
    bookkeeping on the mutate that crosses the fan↔matrix threshold.
+
+   **DONE (record reduced to `{id,pos,orient}` for now).** The store is **not** a
+   bespoke blob: `routingManager` now exposes a generic *named-store* mechanism —
+   `META_STORES = { fx=…, bus=… }`, each a flat `{[id]=meta}` projext blob with
+   its own scratch-chunk undo mirror; `rm:meta(store[,id])` / `rm:assignMeta(
+   store,id,meta)` (nil meta deletes). fx-meta is one instance, behaviour
+   unchanged; the buss store is a peer — **no shared bag, no two-level nesting,
+   each consumer sees only its own shape**. `pollUndo`/`resyncMeta` loop the
+   registry. New API: `wm:addBusNode(pos)` (mints id + node + record),
+   `wm:moveNodes` routes a buss's pos to the bus store, `wm:deleteBus(id)` (drops
+   node + incident edges + record, one Undo block). `anchor`/`trackId`/`loneGain`
+   and the fan↔matrix bookkeeping are **deferred to step 4** — they are
+   realization-coupled (degree-derived on read), so authoring them now would be
+   speculative. Specs: `tests/specs/wm_bus_node_spec.lua` (6 tests, non-live).
 
 4. **Read: mint buss nodes.** (a) A buss-flagged track mints a `kind='bus'`
    node and emits its in/out edges instead of being transparent. (b) Folded
