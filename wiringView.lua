@@ -179,6 +179,12 @@ end
 --contract: pass-through to wm:insertBus {pos,orient,node,port,dir}; mints + re-points; returns id
 function wv:insertBus(spec) return wm:insertBus(spec) end
 
+--contract: pass-through to wm:addBusNode; mints a placed, unwired buss at (x,y); returns id
+function wv:addBusNode(x, y) return wm:addBusNode({ x = x, y = y }) end
+
+--contract: pass-through to wm:deleteBus — node, incident edges, record, one Undo block
+function wv:deleteBus(nodeId) return wm:deleteBus(nodeId) end
+
 --contract: stashes wireView w's source-tag offset {x,y} (consumer-relative) via wm; decoration only
 function wv:setSourceTagPos(w, offset) return wm:setSourceTagPos(w.from, wm.srcTagKey(w), offset) end
 

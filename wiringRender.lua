@@ -122,7 +122,7 @@ local hoverFreeze = nil  -- { x, y } | nil — suppresses shift-hover until the 
 local sticky = nil  -- { nodeId, side } — pinned node's port row, kept visible post-click
 local fader = nil  -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, dragging?, wheelPending?, wheelIdleFrames? }
 local wireMenu = nil  -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
-local nodeMenu = nil  -- { nodeId, anchorX, anchorY } — set on RMB-on-body; cleared when BeginPopup returns false
+local nodeMenu = nil  -- { nodeId, anchorX, anchorY } — set on RMB on a node body or buss bar; cleared when BeginPopup returns false
 local paletteSource = nil  -- nodeId the palette del button acts on; cleared when the row vanishes
 local fxPicker = nil  -- { x, y, sx, sy, anchorSX?, anchorSY?, buf, cursor, items } — RMB/N-key add-FX popup; cleared when BeginPopup returns false
 
@@ -1556,6 +1556,15 @@ local function busBarHit(busRails, draft, mx, my)
   end
 end
 
+-- Any buss bar under the cursor — the RMB hit that opens the bar's delete menu.
+local function busBarAt(busRails, mx, my)
+  for _, r in ipairs(busRails) do
+    if pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= BUS_BAR_HIT then
+      return r
+    end
+  end
+end
+
 -- The source tag's grab box: cursor inside the bg-patch rect at its centre.
 local function sourceTagHit(p, segs, wireViews, mx, my)
   for i = 1, #wireViews do
@@ -2185,8 +2194,8 @@ local function renderCanvas(w, h)
     band = nil
   end
 
-  -- RMB precedence: triangle → per-wire menu; node body → node menu; empty
-  -- canvas → FX picker (same code path as the N-key shortcut).
+  -- RMB precedence: triangle → per-wire menu; node body / buss bar → node
+  -- menu; empty canvas → FX picker (same code path as the N-key shortcut).
   if not drag and not band and not wireDraft and not tagDrag
       and not busOverlay and not busDraft
       and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
@@ -2196,8 +2205,10 @@ local function renderCanvas(w, h)
       ImGui.OpenPopup(ctx, '##wiringWireMenu')
     else
       local bodyHit = nodeUnderMouse(nodeViews, lmx, lmy)
-      if bodyHit and not nodeMenu then
-        nodeMenu = { nodeId = bodyHit.id, anchorX = lmx, anchorY = lmy }
+      local barHit  = not bodyHit and busBarAt(busRails, lmx, lmy)
+      local menuId  = bodyHit and bodyHit.id or barHit and barHit.busId
+      if menuId and not nodeMenu then
+        nodeMenu = { nodeId = menuId, anchorX = lmx, anchorY = lmy }
         ImGui.OpenPopup(ctx, '##wiringNodeMenu')
       else
         openFxPicker(lmx, lmy, { x = mx, y = my })
@@ -2241,16 +2252,18 @@ local function renderCanvas(w, h)
     chrome.pushChromeWindow()
     ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('separator'))
     if ImGui.BeginPopup(ctx, '##wiringNodeMenu') then
-      if ImGui.Selectable(ctx, 'Delete node') then
-        wv:deleteNode(nodeMenu.nodeId)
+      local menuNode = nodesById[nodeMenu.nodeId]
+      local isBus = menuNode and menuNode.category == 'bus'
+      if ImGui.Selectable(ctx, isBus and 'Delete buss' or 'Delete node') then
+        if isBus then wv:deleteBus(nodeMenu.nodeId)
+        else          wv:deleteNode(nodeMenu.nodeId) end
         ImGui.CloseCurrentPopup(ctx)
       end
-      local menuNode = nodesById[nodeMenu.nodeId]
-      if menuNode and #menuNode.ins.audio > 0 and ImGui.Selectable(ctx, 'Add input bus') then
+      if menuNode and not isBus and #menuNode.ins.audio > 0 and ImGui.Selectable(ctx, 'Add input bus') then
         armBus(nodeMenu.nodeId, 'in', menuNode, wireViewsList)
         ImGui.CloseCurrentPopup(ctx)
       end
-      if menuNode and #menuNode.outs.audio > 0 and ImGui.Selectable(ctx, 'Add output bus') then
+      if menuNode and not isBus and #menuNode.outs.audio > 0 and ImGui.Selectable(ctx, 'Add output bus') then
         armBus(nodeMenu.nodeId, 'out', menuNode, wireViewsList)
         ImGui.CloseCurrentPopup(ctx)
       end
@@ -2494,10 +2507,13 @@ openFxPicker = function(x, y, anchor)
     x, y = mx - canvasOrigin.ox, my - canvasOrigin.oy
   end
   local sx, sy = sourcePosFor(x, y)
+  -- listInstalledFX is memoised below wv — copy before prepending the synthetic entry
+  local items = { { name = 'Buss', bus = true } }
+  for _, fx in ipairs(wv:listInstalledFX()) do util.add(items, fx) end
   fxPicker = {
     x = x, y = y, sx = sx, sy = sy,
     anchorSX = anchor and anchor.x, anchorSY = anchor and anchor.y,
-    buf = '', cursor = 1, items = wv:listInstalledFX(),
+    buf = '', cursor = 1, items = items,
   }
   ImGui.OpenPopup(ctx, '##wiringFxPicker')
 end
@@ -2508,8 +2524,12 @@ local function commitFx(pck, fx)
   ImGui.CloseCurrentPopup(ctx)
   fxPicker = nil
   reaper.defer(function()
-    wv:addFx(pck.x, pck.y, { name = fx.name, ident = fx.ident },
-             { sourcePos = { x = pck.sx, y = pck.sy } })
+    if fx.bus then
+      wv:addBusNode(pck.x, pck.y)
+    else
+      wv:addFx(pck.x, pck.y, { name = fx.name, ident = fx.ident },
+               { sourcePos = { x = pck.sx, y = pck.sy } })
+    end
   end)
 end
 

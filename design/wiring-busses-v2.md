@@ -306,8 +306,11 @@ through the existing node machinery.
 > trunk) behind the armBus commit. The wv claim plumbing fell with it —
 > tagging is structural-only, so every buss renders as a bar via the matrix
 > path for free; the busDraft preview keeps a synthetic claim-shaped busView
-> until step 8 retires the gesture. Remaining from step 7: the "Buss" picker
-> entry and bus delete routing (bar RMB / node menu → `wm:deleteBus`).
+> until step 8 retires the gesture. The UI half landed 2026-06-13, closing
+> step 7: a synthetic "Buss" entry in the FX picker (→ `wv:addBusNode`), and
+> delete routing — RMB on a bar or node body opens the node menu, which shows
+> "Delete buss" → `wm:deleteBus` for bus nodes (armBus entries suppressed
+> there).
 
 1. **Allocator: fx-less summing track.** *(DONE — verified 2026-06-12.)*
    `assembleTracks` emits a spec for any non-master class unconditionally
