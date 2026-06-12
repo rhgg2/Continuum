@@ -156,7 +156,7 @@ function wm:edgeGain(idx)
   return (e.ops and e.ops.gain) or 1.0
 end
 
-local pruneSourceTags, pruneBusClaims  -- defined below; GC orphaned decoration on routing mutates
+local pruneSourceTags, mirrorBusTaps  -- defined below; decoration GC + tap write-through on mutates
 
 --contract: clone-validate-swap; DAG.validate failure returns false,err with no state change;
 --contract: on success swaps + fires wiringChanged{kind}; REAPER realises via reconcile
@@ -167,9 +167,9 @@ function wm:mutate(mutator, kind)
   local err = DAG.validate(draft)
   if err then return false, err end
   setGraph(draft)
-  if kind ~= 'move' and kind ~= 'bus' then
-    pruneSourceTags(userGraph)
-    pruneBusClaims(userGraph)
+  if kind ~= 'move' then
+    if kind ~= 'bus' then pruneSourceTags(userGraph) end
+    mirrorBusTaps(userGraph)
   end
   fire('wiringChanged', { kind = kind or 'mutate' })
   return true
@@ -216,7 +216,7 @@ function pruneSourceTags(g)
   end
 end
 
---contract: writes node pos / record-buss pos per {[id]={x,y}} + persists; unknown ids skipped
+--contract: writes node pos per {[id]={x,y}} + persists busses to the bus store; unknown ids skipped
 function wm:moveNodes(moves)
   local ok, err = self:mutate(function(g)
     for id, p in pairs(moves) do
@@ -229,18 +229,31 @@ function wm:moveNodes(moves)
     local node = userGraph.nodes[id]
     if node and node.kind == 'bus' then rm:assignMeta('bus', id, { pos = node.pos })
     elseif node then persistNodeMeta(node, { pos = node.pos })
-    elseif rm:meta('bus', id) then rm:assignMeta('bus', id, { pos = { x = p.x, y = p.y } })
     end
   end
   return true
 end
 
--- A fan buss's render surface is its claim (the bar projects off the claimed node),
--- so the record dies with that node — mirroring v1, where busses lived on the node.
-function pruneBusClaims(g)
-  for busId, rec in pairs(rm:meta('bus')) do
-    if rec.claim and not g.nodes[rec.claim.node] and not g.nodes[busId] then
-      rm:assignMeta('bus', busId, nil)
+-- The record's taps are a write-through mirror of the bus node's incident audio edges —
+-- below 2×2 they are the persistence carrier that mints the edges back on read.
+function mirrorBusTaps(g)
+  local recs = rm:meta('bus')
+  local taps = {}
+  for busId in pairs(recs) do
+    if g.nodes[busId] then taps[busId] = { ins = {}, outs = {} } end
+  end
+  for _, e in ipairs(g.edges) do
+    if e.type == 'audio' then
+      local gain = e.ops and e.ops.gain
+      local intoBus, outOfBus = taps[e.to], taps[e.from]
+      if intoBus  then util.add(intoBus.ins,   { node = e.from, port = e.fromPort or 1, gain = gain }) end
+      if outOfBus then util.add(outOfBus.outs, { node = e.to,   port = e.toPort   or 1, gain = gain }) end
+    end
+  end
+  for busId, mirror in pairs(taps) do
+    local rec = recs[busId]
+    if not (util.deepEq(rec.ins, mirror.ins) and util.deepEq(rec.outs, mirror.outs)) then
+      rm:assignMeta('bus', busId, mirror)
     end
   end
 end
@@ -581,34 +594,55 @@ function wm:addBusNode(pos)
         ports  = { audio = { ins = 1, outs = 1 }, midi = { ins = 0, outs = 0 } },
       }
     end, 'bus')
-    if ok then rm:assignMeta('bus', newId, { pos = { x = pos.x, y = pos.y }, orient = 'V' }) end
+    if ok then rm:assignMeta('bus', newId, { pos = { x = pos.x, y = pos.y }, orient = 'V',
+                                             ins = {}, outs = {} }) end
   end)
   if not ok then return nil, err end
   return newId
 end
 
---shape: busRecord = { pos={x,y}, orient='V'|'H', claim?={node,port,dir='in'|'out'}, trackId? } — rm 'bus' store; claim iff fan, trackId iff matrix
---contract: mints a record-only buss (fan/degenerate; no node); returns its id, or nil+err
-function wm:addBusRecord(rec)
+--contract: mints a buss node mid-wire: re-points the (node,port,dir) edge ends through it +
+--contract: a unity trunk edge — audio-identical under the splice; returns id, or nil+err
+function wm:insertBus(spec)
   ensureLoaded()
-  if rec.claim and not userGraph.nodes[rec.claim.node] then return nil, 'claimed node not in graph' end
-  local id = nextBusId(userGraph)
-  rm:assignMeta('bus', id, { pos = { x = rec.pos.x, y = rec.pos.y },
-                             orient = rec.orient or 'V',
-                             claim = rec.claim and util.deepClone(rec.claim) or nil })
-  fire('wiringChanged', { kind = 'bus' })
-  return id
+  local newId = nextBusId(userGraph)
+  local ok, err
+  rm:transaction('wiring: add buss', function()
+    -- record first, so the mutate's tap mirror finds it
+    rm:assignMeta('bus', newId, { pos = { x = spec.pos.x, y = spec.pos.y },
+                                  orient = spec.orient or 'V' })
+    ok, err = self:mutate(function(g)
+      g.nodes[newId] = {
+        kind   = 'bus',
+        pos    = { x = spec.pos.x, y = spec.pos.y },
+        orient = spec.orient or 'V',
+        ports  = { audio = { ins = 1, outs = 1 }, midi = { ins = 0, outs = 0 } },
+      }
+      local atIn = spec.dir == 'in'
+      for _, e in ipairs(g.edges) do
+        if e.type == 'audio' then
+          if atIn and e.to == spec.node and (e.toPort or 1) == spec.port then
+            e.to, e.toPort = newId, 1
+          elseif not atIn and e.from == spec.node and (e.fromPort or 1) == spec.port then
+            e.from, e.fromPort = newId, 1
+          end
+        end
+      end
+      if atIn then
+        util.add(g.edges, { type = 'audio', from = newId, fromPort = 1,
+                            to = spec.node, toPort = spec.port })
+      else
+        util.add(g.edges, { type = 'audio', from = spec.node, fromPort = spec.port,
+                            to = newId, toPort = 1 })
+      end
+    end)
+    if not ok then rm:assignMeta('bus', newId, nil) end
+  end)
+  if not ok then return nil, err end
+  return newId
 end
 
---contract: drops a record-only buss; false for a node-backed (matrix) id — use wm:deleteBus
-function wm:removeBusRecord(id)
-  ensureLoaded()
-  if userGraph.nodes[id] then return false end
-  rm:assignMeta('bus', id, nil)
-  fire('wiringChanged', { kind = 'bus' })
-  return true
-end
-
+--shape: busRecord = { pos={x,y}, orient='V'|'H', ins={{node,port,gain?},…}, outs={…}, trackId? } — taps mirror the node's edges; trackId iff matrix
 --contract: deep copy of the 'bus' meta store: { [busId] = busRecord }
 function wm:busRecords()
   return util.deepClone(rm:meta('bus'))
@@ -1151,6 +1185,68 @@ local function readGraph(snap, busMeta)
 
   -- The master node is the master track's output (pair 1).
   for _, ref in ipairs((tails[MASTER_KEY].audio or {})[1] or {}) do addAudioEdge(ref, 'master', nil) end
+
+  -- Sub-threshold busses have no carrier track: the record's taps mint the node + its
+  -- edges, and each in×out crossing consumes the direct send the splice realized it as.
+  local mintIds = {}
+  for busId in pairs(busMeta or {}) do
+    if not nodes[busId] then util.add(mintIds, busId) end
+  end
+  if #mintIds > 0 then
+    table.sort(mintIds)  -- deterministic minted-edge order
+    local byKey = {}
+    for idx, e in ipairs(edges) do
+      if e.type == 'audio' then
+        util.bucket(byKey, util.key(e.from, e.fromPort or 1, e.to, e.toPort or 1), idx)
+      end
+    end
+    local minted = {}
+    for _, busId in ipairs(mintIds) do
+      minted[busId] = true
+      nodes[busId] = { kind = 'bus',
+                       ports = { audio = { ins = 1, outs = 1 }, midi = { ins = 0, outs = 0 } } }
+    end
+    -- Taps whose node vanished are skipped here and GC'd at the next mutate's mirror.
+    local function liveTaps(list)
+      local out = {}
+      for _, tap in ipairs(list or {}) do
+        if nodes[tap.node] then util.add(out, tap) end
+      end
+      return out
+    end
+    local consumed, busTaps = {}, {}
+    for _, busId in ipairs(mintIds) do
+      local rec = busMeta[busId]
+      local ins, outs = liveTaps(rec.ins), liveTaps(rec.outs)
+      busTaps[busId] = { ins = ins, outs = outs }
+      for _, tapIn in ipairs(ins) do
+        for _, tapOut in ipairs(outs) do
+          local pool = byKey[util.key(tapIn.node, tapIn.port or 1, tapOut.node, tapOut.port or 1)]
+          for _, idx in ipairs(pool or {}) do
+            if not consumed[idx] then consumed[idx] = true; break end
+          end
+        end
+      end
+    end
+    if next(consumed) then
+      local kept = {}
+      for idx, e in ipairs(edges) do
+        if not consumed[idx] then util.add(kept, e) end
+      end
+      edges = kept
+    end
+    for _, busId in ipairs(mintIds) do
+      for _, tap in ipairs(busTaps[busId].ins) do
+        addAudioEdge({ node = tap.node, port = tap.port, gain = tap.gain }, busId, 1)
+      end
+      for _, tap in ipairs(busTaps[busId].outs) do
+        -- an out-tap onto another minted buss is that buss's in-tap: minted once, there
+        if not minted[tap.node] then
+          addAudioEdge({ node = busId, port = 1, gain = tap.gain }, tap.node, tap.port)
+        end
+      end
+    end
+  end
 
   local graph = { nodes = nodes, edges = edges }
   graph.components = DAG.classify(graph, feedbackSeeds)
@@ -1723,6 +1819,7 @@ function wm:fastGainCommit(edgeIdx, gain)
   rm:transaction('wiring: edge gain', function()
     edge.ops = edge.ops or {}
     edge.ops.gain = gain
+    mirrorBusTaps(userGraph)
     self:pokeEdgeGain(edgeIdx, gain)
   end)
   markState()

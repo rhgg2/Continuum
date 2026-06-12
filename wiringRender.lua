@@ -1464,15 +1464,17 @@ local function drawBusBar(p, r, isSelected)
 end
 
 -- Bus-creation overlay: audio ports for `dir` as grab handles (in→top, out→bottom).
--- Already-bussed ports are flagged `bussed` (greyed + inert); side chosen later by drag.
-local function busOverlayLayout(nv, dir, busViews)
+-- Ports already on a bar (a bus on the far end of an incident wire) are greyed + inert.
+local function busOverlayLayout(nv, dir, wireViews)
   local audio = (dir == 'out') and nv.outs.audio or nv.ins.audio
   local n = #audio
   if n == 0 then return nil end
   local claimed = {}
-  for _, bv in ipairs(busViews) do
-    local c = bv.claim
-    if c and c.node == nv.id and c.dir == dir then claimed[c.port] = true end
+  for _, w in ipairs(wireViews) do
+    if w.bus then
+      if dir == 'in'  and w.to   == nv.id and w.bus.bussedEnd == 'from' then claimed[w.toPort]   = true end
+      if dir == 'out' and w.from == nv.id and w.bus.bussedEnd == 'to'   then claimed[w.fromPort] = true end
+    end
   end
   local b   = nodeBox(nv)
   local top = dir == 'in'
@@ -1528,8 +1530,8 @@ end
 
 -- Arm bus creation from the node menu: a lone free audio port skips the grab
 -- (hover picks the side, click commits / click-away cancels), else open the overlay.
-local function armBus(nodeId, dir, nv, busViews)
-  local handles = busOverlayLayout(nv, dir, busViews)
+local function armBus(nodeId, dir, nv, wireViews)
+  local handles = busOverlayLayout(nv, dir, wireViews)
   if not handles then return end
   local free = {}
   for _, h in ipairs(handles) do if not h.bussed then free[#free + 1] = h.port end end
@@ -1693,7 +1695,7 @@ local function renderCanvas(w, h)
     end
   elseif busOverlay then
     local nv = nodesById[busOverlay.nodeId]
-    busHandles = nv and busOverlayLayout(nv, busOverlay.dir, busViewsList) or nil
+    busHandles = nv and busOverlayLayout(nv, busOverlay.dir, wireViewsList) or nil
     if not busHandles then busOverlay = nil end
   end
   -- Tag drag feeds a transient fromOffset (mirroring how node drag mutates pos),
@@ -1986,8 +1988,8 @@ local function renderCanvas(w, h)
       local nv = nodesById[draft.nodeId]
       if nv then
         local pos, orient = busDefaultPlacement(nv, draft.side)
-        wv:addBusRecord{ pos = pos, orient = orient,
-                         claim = { node = draft.nodeId, port = draft.port, dir = draft.dir } }
+        wv:insertBus{ pos = pos, orient = orient,
+                      node = draft.nodeId, port = draft.port, dir = draft.dir }
       end
     end
   elseif busOverlay and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
@@ -2245,20 +2247,12 @@ local function renderCanvas(w, h)
       end
       local menuNode = nodesById[nodeMenu.nodeId]
       if menuNode and #menuNode.ins.audio > 0 and ImGui.Selectable(ctx, 'Add input bus') then
-        armBus(nodeMenu.nodeId, 'in', menuNode, busViewsList)
+        armBus(nodeMenu.nodeId, 'in', menuNode, wireViewsList)
         ImGui.CloseCurrentPopup(ctx)
       end
       if menuNode and #menuNode.outs.audio > 0 and ImGui.Selectable(ctx, 'Add output bus') then
-        armBus(nodeMenu.nodeId, 'out', menuNode, busViewsList)
+        armBus(nodeMenu.nodeId, 'out', menuNode, wireViewsList)
         ImGui.CloseCurrentPopup(ctx)
-      end
-      for _, bvw in ipairs(busViewsList) do
-        local c = bvw.claim
-        if c and c.node == nodeMenu.nodeId
-           and ImGui.Selectable(ctx, 'Remove ' .. (c.dir == 'in' and 'input' or 'output') .. ' bus##' .. bvw.id) then
-          wv:removeBusRecord(bvw.id)
-          ImGui.CloseCurrentPopup(ctx)
-        end
       end
       if not ImGui.IsWindowAppearing(ctx) then
         local wx, wy = ImGui.GetWindowPos(ctx)

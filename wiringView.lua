@@ -176,11 +176,8 @@ function wv:moveNodes(moves)
   return wm:moveNodes(moves)
 end
 
---contract: pass-through to wm:addBusRecord {pos,orient,claim?}; mints record-only buss, returns id
-function wv:addBusRecord(rec) return wm:addBusRecord(rec) end
-
---contract: pass-through to wm:removeBusRecord; record-only busses only (wires revert to a star)
-function wv:removeBusRecord(id) return wm:removeBusRecord(id) end
+--contract: pass-through to wm:insertBus {pos,orient,node,port,dir}; mints + re-points; returns id
+function wv:insertBus(spec) return wm:insertBus(spec) end
 
 --contract: stashes wireView w's source-tag offset {x,y} (consumer-relative) via wm; decoration only
 function wv:setSourceTagPos(w, offset) return wm:setSourceTagPos(w.from, wm.srcTagKey(w), offset) end
@@ -304,8 +301,8 @@ function wv:nodeViews()
   return out
 end
 
---shape: busView = { id, pos={x,y}, orient='V'|'H', matrix=true?, claim?={node,port,dir} } — matrix mirrors the bus node, claim iff fan
---contract: one busView per buss record; matrix projects from the node, fan/degenerate from record
+--shape: busView = { id, pos={x,y}, orient='V'|'H', matrix=true? } — projects the bus node; record pos as fallback
+--contract: one busView per buss record; pos/orient from the node when present, else the record
 function wv:busViews()
   local g = ensureView()
   local out = {}
@@ -316,37 +313,16 @@ function wv:busViews()
       pos    = node and { x = node.pos.x, y = node.pos.y } or { x = rec.pos.x, y = rec.pos.y },
       orient = node and node.orient or rec.orient or 'V',
       matrix = node and true or nil,
-      claim  = not node and rec.claim or nil,
     })
   end
   return out
 end
 
--- Fan claims indexed by the claimed port: a buss record's claim binds one port on one
--- node, and that port's incident audio edges are the buss's wires. [dir][node][port]=busId.
-local function busClaims(recs)
-  local claim = { ['in'] = {}, out = {} }
-  for busId, rec in pairs(recs) do
-    local c = rec.claim
-    if c then
-      local byNode = claim[c.dir][c.node]
-      if not byNode then byNode = {}; claim[c.dir][c.node] = byNode end
-      byNode[c.port] = busId
-    end
-  end
-  return claim
-end
-
--- Edge → bus stamp. Matrix membership is structural (an endpoint is a bus node); fan
--- membership is the claim on the endpoint's port. The `to` end wins, matrix over claim.
-local function busTag(e, fromNode, toNode, fromPort, toPort, claim)
+-- Edge → bus stamp: membership is structural — an endpoint on a bus node; `to` end wins.
+local function busTag(e, fromNode, toNode)
   if e.type ~= 'audio' then return nil end
   if toNode and toNode.kind == 'bus' then return { busId = e.to, bussedEnd = 'to' } end
-  local inId = claim['in'][e.to] and claim['in'][e.to][toPort]
-  if inId then return { busId = inId, bussedEnd = 'to' } end
   if fromNode and fromNode.kind == 'bus' then return { busId = e.from, bussedEnd = 'from' } end
-  local outId = claim.out[e.from] and claim.out[e.from][fromPort]
-  if outId then return { busId = outId, bussedEnd = 'from' } end
 end
 
 --shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'fx'|'master', fromLabel, fromOffset={x,y}?, bus={busId,bussedEnd='to'|'from'}? } — see docs/wiringView.md § wireView shape
@@ -360,7 +336,6 @@ function wv:wireViews()
     if not node then return nil end
     return audioPorts(node, dir)[idx]
   end
-  local claim = busClaims(busRecords)
   local out = {}
   for _, e in ipairs(g.edges or {}) do
     local fromPort = e.fromPort or 1
@@ -368,7 +343,7 @@ function wv:wireViews()
     local fromNode = g.nodes[e.from]
     local fromOffset = fromNode and fromNode.kind == 'source' and fromNode.tagPos
                          and fromNode.tagPos[wm.srcTagKey(e)] or nil
-    local bus = busTag(e, fromNode, g.nodes[e.to], fromPort, toPort, claim)
+    local bus = busTag(e, fromNode, g.nodes[e.to])
     util.add(out, {
       from         = e.from,
       to           = e.to,

@@ -1,5 +1,5 @@
--- read-side of wiring busses v2: a trackId-flagged track mints the kind='bus'
--- node back under its synthetic id (design/wiring-busses-v2.md § Persistence).
+-- read-side of wiring busses v2: trackId-flagged track mints the matrix buss; record taps mint
+-- sub-threshold busses, consuming crossing sends (design/wiring-busses-v2.md § Persistence).
 local t    = require('support')
 local util = require('util')
 
@@ -104,6 +104,63 @@ return {
       t.eq(rg.nodes['bus-1'].kind, 'bus', 'bus minted with no inputs')
       t.falsy(rg.nodes['guid-bus'], 'no source node minted for the flagged track')
       t.eq(#rg.edges, 0)
+    end,
+  },
+  {
+    name = 'sub-threshold round-trip: taps mint the buss and consume the crossing sends',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      seedSource(h, 'guid-A')
+      seedSource(h, 'guid-B')
+      wm:mutate(function(g)
+        g.nodes.sa = source('guid-A')
+        g.nodes.sb = source('guid-B')
+        g.nodes['bus-1'] = bus()
+        util.add(g.edges, { type='audio', from='sa', to='bus-1', ops={gain=0.5} })
+        util.add(g.edges, { type='audio', from='sb', to='bus-1' })
+        util.add(g.edges, { type='audio', from='bus-1', to='master', ops={gain=0.9} })
+      end)
+      local rg = wm.readGraph(wm:targetState(), { ['bus-1'] = {
+        ins  = { { node = 'guid-A', port = 1, gain = 0.5 }, { node = 'guid-B', port = 1 } },
+        outs = { { node = 'master', port = 1, gain = 0.9 } },
+      } })
+      t.eq(rg.nodes['bus-1'].kind, 'bus', 'buss minted from the record')
+      t.deepEq(edgeSet(rg), {
+        'audio bus-1.1->master.1 @0.9',
+        'audio guid-A.1->bus-1.1 @0.5',
+        'audio guid-B.1->bus-1.1',
+      })
+    end,
+  },
+  {
+    name = 'degenerate busses round-trip purely from the record',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local snap = {
+        ['__master__'] = { trackKind = 'master', fx = {} },
+        ['srcA'] = { trackKind = 'sourceTrack', id = 'guid-A', fx = {}, sends = {},
+                     mainSend = { on = false } },
+      }
+      local rg = wm.readGraph(snap, {
+        ['bus-1'] = { ins = { { node = 'guid-A', port = 1, gain = 0.5 },
+                              { node = 'guid-ghost', port = 1 } }, outs = {} },
+        ['bus-2'] = {},
+      })
+      t.eq(rg.nodes['bus-1'].kind, 'bus', 'one-sided buss minted')
+      t.eq(rg.nodes['bus-2'].kind, 'bus', 'tapless buss minted as a bare node')
+      t.deepEq(edgeSet(rg), { 'audio guid-A.1->bus-1.1 @0.5' }, 'dead tap skipped')
+    end,
+  },
+  {
+    name = 'a bus→bus tap mints one edge though both records mirror it',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local snap = { ['__master__'] = { trackKind = 'master', fx = {} } }
+      local rg = wm.readGraph(snap, {
+        ['bus-1'] = { outs = { { node = 'bus-2', port = 1 } } },
+        ['bus-2'] = { ins  = { { node = 'bus-1', port = 1 } } },
+      })
+      t.deepEq(edgeSet(rg), { 'audio bus-1.1->bus-2.1' })
     end,
   },
 }

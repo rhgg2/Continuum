@@ -19,49 +19,39 @@ local function mkAudioWire(wv)
   return a, b
 end
 
-local function inClaim(node)  return { node = node, port = 1, dir = 'in'  } end
-local function outClaim(node) return { node = node, port = 1, dir = 'out' } end
-
 return {
   {
-    name = 'wireViews: an in-claim on the consumer tags its incoming audio edge',
+    name = 'wireViews: insertBus at the consumer re-points the feed and tags both edges',
     run = function(harness)
       local _, wv = mkWv(harness)
       local _, b = mkAudioWire(wv)
-      local id = wv:addBusRecord{ pos = { x = 0, y = -80 }, orient = 'H', claim = inClaim(b) }
-      t.deepEq(wv:wireViews()[1].bus, { busId = id, bussedEnd = 'to' })
+      local id = wv:insertBus{ pos = { x = 0, y = -80 }, orient = 'H',
+                               node = b, port = 1, dir = 'in' }
+      local wires = wv:wireViews()
+      t.deepEq(wires[1].bus, { busId = id, bussedEnd = 'to' },   'feed re-pointed into the bar')
+      t.deepEq(wires[2].bus, { busId = id, bussedEnd = 'from' }, 'trunk out of the bar')
     end,
   },
   {
-    name = 'wireViews: an out-claim on the producer tags its outgoing edge from the `from` end',
+    name = 'wireViews: insertBus at the producer re-points the consumer wire from the bar',
     run = function(harness)
       local _, wv = mkWv(harness)
       local a = mkAudioWire(wv)
-      local id = wv:addBusRecord{ pos = { x = 0, y = 80 }, orient = 'H', claim = outClaim(a) }
-      t.deepEq(wv:wireViews()[1].bus, { busId = id, bussedEnd = 'from' })
+      local id = wv:insertBus{ pos = { x = 0, y = 80 }, orient = 'H',
+                               node = a, port = 1, dir = 'out' }
+      local wires = wv:wireViews()
+      t.deepEq(wires[1].bus, { busId = id, bussedEnd = 'from' }, 'consumer wire leaves the bar')
+      t.deepEq(wires[2].bus, { busId = id, bussedEnd = 'to' },   'trunk feeds the bar')
     end,
   },
   {
-    name = 'wireViews: the in-claim takes precedence when both ends are claimed',
+    name = 'wireViews: the `to` end wins when both endpoints are busses',
     run = function(harness)
-      local _, wv = mkWv(harness)
-      local a, b = mkAudioWire(wv)
-      wv:addBusRecord{ pos = { x = 0, y = 80 }, orient = 'H', claim = outClaim(a) }
-      local inId = wv:addBusRecord{ pos = { x = 0, y = -80 }, orient = 'H', claim = inClaim(b) }
-      local bus = wv:wireViews()[1].bus
-      t.eq(bus.bussedEnd, 'to', 'consumer in-claim wins over producer out-claim')
-      t.eq(bus.busId, inId)
-    end,
-  },
-  {
-    name = 'wireViews: a claim does not tag a midi edge (audio only)',
-    run = function(harness)
-      local _, wv = mkWv(harness)
-      local a = wv:addFx(0,   0, FX)
-      local b = wv:addFx(100, 0, FX)
-      wv:addWire{ type = 'midi', from = a, to = b }
-      wv:addBusRecord{ pos = { x = 0, y = -80 }, orient = 'H', claim = inClaim(b) }
-      t.falsy(wv:wireViews()[1].bus, 'midi edge left untagged')
+      local _, wv, wm = mkWv(harness)
+      local b1 = wm:addBusNode({ x = 0, y = 0 })
+      local b2 = wm:addBusNode({ x = 100, y = 0 })
+      wv:addWire{ type = 'audio', from = b1, to = b2 }
+      t.deepEq(wv:wireViews()[1].bus, { busId = b2, bussedEnd = 'to' })
     end,
   },
   {
@@ -86,14 +76,15 @@ return {
     end,
   },
   {
-    name = 'busViews: a fan record projects pos/orient/claim; no matrix flag',
+    name = 'busViews: an inserted buss projects from its node at every degree',
     run = function(harness)
       local _, wv = mkWv(harness)
       local _, b = mkAudioWire(wv)
-      local id = wv:addBusRecord{ pos = { x = 5, y = -70 }, orient = 'H', claim = inClaim(b) }
+      local id = wv:insertBus{ pos = { x = 5, y = -70 }, orient = 'H',
+                               node = b, port = 1, dir = 'in' }
       local bvs = wv:busViews()
       t.eq(#bvs, 1)
-      t.deepEq(bvs[1], { id = id, pos = { x = 5, y = -70 }, orient = 'H', claim = inClaim(b) })
+      t.deepEq(bvs[1], { id = id, pos = { x = 5, y = -70 }, orient = 'H', matrix = true })
     end,
   },
   {
@@ -114,22 +105,26 @@ return {
     end,
   },
   {
-    name = 'deleting the claimed node GCs the buss record and unsticks the wires',
+    name = 'deleting a tapped node drops its taps; the buss survives',
     run = function(harness)
       local _, wv, wm = mkWv(harness)
       local _, b = mkAudioWire(wv)
-      local id = wv:addBusRecord{ pos = { x = 0, y = -80 }, orient = 'H', claim = inClaim(b) }
+      local id = wv:insertBus{ pos = { x = 0, y = -80 }, orient = 'H',
+                               node = b, port = 1, dir = 'in' }
       wv:deleteNode(b)
-      t.falsy(wm:busRecords()[id], 'record died with its claimed node')
-      t.eq(#wv:busViews(), 0)
+      local rec = wm:busRecords()[id]
+      t.truthy(rec, 'buss outlives a tapped node')
+      t.deepEq(rec.outs, {}, 'its tap went with the node')
+      t.eq(#rec.ins, 1, 'far side untouched')
     end,
   },
   {
-    name = 'moveNodes routes a record-only buss to its record pos',
+    name = 'moveNodes persists an inserted buss pos through the record',
     run = function(harness)
       local _, wv, wm = mkWv(harness)
       local _, b = mkAudioWire(wv)
-      local id = wv:addBusRecord{ pos = { x = 0, y = -80 }, orient = 'H', claim = inClaim(b) }
+      local id = wv:insertBus{ pos = { x = 0, y = -80 }, orient = 'H',
+                               node = b, port = 1, dir = 'in' }
       wv:moveNodes({ [id] = { x = 33, y = 44 } })
       t.deepEq(wm:busRecords()[id].pos, { x = 33, y = 44 })
     end,

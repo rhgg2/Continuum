@@ -298,8 +298,16 @@ through the existing node machinery.
 >
 > Step-7 progress (2026-06-13): the DAG half landed — sub-threshold splice +
 > provenance map in `M.compile`, `gainRouting`/`pokeEdgeGain` through the map
-> (lone-side group-fader pokes included). The wm record-tap rework, read
-> minting, and creation UI remain.
+> (lone-side group-fader pokes included). The wm half landed the same day:
+> claim machinery out (`addBusRecord`/`removeBusRecord`/`pruneBusClaims`),
+> record taps as the write-through mirror (`mirrorBusTaps` at the mutate
+> chokepoint and in `fastGainCommit`), read minting of recordless busses with
+> crossing-send consumption, and `wm:insertBus` (mint + re-point + unity
+> trunk) behind the armBus commit. The wv claim plumbing fell with it —
+> tagging is structural-only, so every buss renders as a bar via the matrix
+> path for free; the busDraft preview keeps a synthetic claim-shaped busView
+> until step 8 retires the gesture. Remaining from step 7: the "Buss" picker
+> entry and bus delete routing (bar RMB / node menu → `wm:deleteBus`).
 
 1. **Allocator: fx-less summing track.** *(DONE — verified 2026-06-12.)*
    `assembleTracks` emits a spec for any non-master class unconditionally

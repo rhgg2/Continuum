@@ -157,6 +157,13 @@ return {
         g.edges = kept
       end)
       t.falsy(rm:meta('bus', bus).trackId, 'sub-threshold buss record cleared')
+      -- and the read mints it back from the record's taps, crossings consumed
+      local rg2 = wm:read()
+      t.eq(rg2.nodes[bus].kind, 'bus', 'sub-threshold buss minted from taps')
+      for _, e in ipairs(rg2.edges) do
+        t.truthy(e.to ~= 'master' or e.from == bus,
+                 'crossing sends read back as taps, not direct wires')
+      end
     end,
   },
   {
@@ -199,33 +206,65 @@ return {
       t.eq(bySrc['guid-B'], 0.5,  'unset tap defaults to 1')
       -- commit the lone gain: products mirrored, the next reconcile rewrites nothing
       t.truthy(wm:fastGainCommit(idxLone, 0.5))
+      t.eq(rm:meta('bus', bus).outs[1].gain, 0.5, 'tap mirror follows the gain commit')
       t.eq(#wm:diff(wm:targetState(), wm:snapshot()), 0,
            'committed products mirrored into the model')
     end,
   },
   {
-    name = 'record + node buss ids share the bus-N space',
+    name = 'insertBus re-points the port edges through a new buss + unity trunk',
     run = function(harness)
       local _, wm, rm = mkWm(harness)
       seedSource(wm, 'guid-s')
-      local recId = wm:addBusRecord{ pos = { x = 0, y = 0 }, orient = 'V',
-                                     claim = { node = 'guid-s', port = 1, dir = 'out' } }
-      t.eq(recId, 'bus-1')
-      local nodeId = wm:addBusNode({ x = 10, y = 10 })
-      t.eq(nodeId, 'bus-2', 'node mint skips the record id')
-      t.falsy(wm:removeBusRecord(nodeId), 'node-backed id refuses record removal')
-      t.truthy(wm:removeBusRecord(recId))
-      t.eq(rm:meta('bus', recId), nil)
+      seedSource(wm, 'guid-t')
+      wm:mutate(function(g)
+        g.nodes.f = { kind = 'fx', fxIdent = 'VST:F', pos = { x = 0, y = 0 },
+                      ports = { audio = { ins = 1, outs = 1 }, midi = { ins = 0, outs = 0 } } }
+        util.add(g.edges, { type = 'audio', from = 'guid-s', to = 'f', ops = { gain = 0.5 } })
+        util.add(g.edges, { type = 'audio', from = 'guid-t', to = 'f' })
+      end)
+      local bus = wm:insertBus{ pos = { x = 5, y = 6 }, orient = 'H',
+                                node = 'f', port = 1, dir = 'in' }
+      t.eq(bus, 'bus-1')
+      local g = wm:graph()
+      t.eq(g.nodes[bus].orient, 'H')
+      local intoBus, trunk = 0, nil
+      for _, e in ipairs(g.edges) do
+        if e.to == bus then intoBus = intoBus + 1 end
+        if e.from == bus then trunk = e end
+      end
+      t.eq(intoBus, 2, 'both feeds re-pointed onto the buss')
+      t.eq(trunk.to, 'f'); t.eq(trunk.toPort, 1)
+      t.falsy(trunk.ops, 'trunk is unity')
+      local rec = rm:meta('bus', bus)
+      t.deepEq(rec.outs, { { node = 'f', port = 1 } }, 'trunk mirrored as the out tap')
+      t.eq(#rec.ins, 2, 'feeds mirrored as in taps')
+      t.eq(rec.ins[1].gain, 0.5, 'tap gain rides the mirror')
     end,
   },
   {
-    name = 'addBusRecord refuses a claim on an absent node',
+    name = 'tap mirror: wiring writes through; a dead node GCs its tap',
     run = function(harness)
-      local _, wm = mkWm(harness)
-      local id, err = wm:addBusRecord{ pos = { x = 0, y = 0 }, orient = 'V',
-                                       claim = { node = 'ghost', port = 1, dir = 'in' } }
-      t.falsy(id)
-      t.truthy(err)
+      local _, wm, rm = mkWm(harness)
+      local bus = wm:addBusNode({ x = 0, y = 0 })
+      seedSource(wm, 'guid-s')
+      t.deepEq(rm:meta('bus', bus).ins, {}, 'fresh buss has empty taps')
+      wm:mutate(function(g)
+        util.add(g.edges, { type = 'audio', from = 'guid-s', to = bus, ops = { gain = 0.5 } })
+        util.add(g.edges, { type = 'audio', from = bus, to = 'master' })
+      end)
+      local rec = rm:meta('bus', bus)
+      t.deepEq(rec.ins,  { { node = 'guid-s', port = 1, gain = 0.5 } })
+      t.deepEq(rec.outs, { { node = 'master', port = 1 } })
+      wm:mutate(function(g)
+        g.nodes['guid-s'] = nil
+        local kept = {}
+        for _, e in ipairs(g.edges) do
+          if e.from ~= 'guid-s' then util.add(kept, e) end
+        end
+        g.edges = kept
+      end)
+      t.deepEq(rm:meta('bus', bus).ins, {}, 'tap died with its node')
     end,
   },
 }
