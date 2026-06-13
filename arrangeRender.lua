@@ -47,8 +47,18 @@ local openCreateModal
 --invariant: gutter press drives REAPER transport — release sets edit cursor, drag sets loop range.
 --invariant: double-click on empty space starts a create press; release opens create modal.
 local press = nil
-local WHEEL_ROWS   = 1   -- cursor rows moved per mouse-wheel notch
-local wheelAccum   = 0   -- fractional wheel carried between frames
+local WHEEL_STEP_ROWS   = 1   -- cursor rows moved per mouse-wheel notch
+local WHEEL_STEP_COLS   = 0.5   -- cursor cols moved per mouse-wheel notch
+local wheelAccumV  = 0   -- fractional vertical wheel carried between frames
+local wheelAccumH  = 0   -- fractional horizontal wheel carried between frames
+
+-- Accumulate a fractional wheel delta and drain whole notches off it.
+-- Returns the residual accumulator and the integer step to apply.
+local function drainWheel(accum, wheel, step)
+  accum = accum + wheel * step
+  local step = (accum >= 0 and math.floor or math.ceil)(accum)
+  return accum - step, step
+end
 
 ----- Style + draw helpers
 
@@ -150,16 +160,15 @@ local function handleGridMouse(nTracks)
      and inBody and inGutter then
     av:clearLoopRange()
   end
-  -- Wheel moves the cursor (a detached scroll would be snapped back by followViewport).
-  -- Fractional trackpad deltas accumulate; whole rows drain off.
-  local wheel = ImGui.GetMouseWheel(ctx)
-  if wheel ~= 0 and ImGui.IsWindowHovered(ctx) then
-    wheelAccum = wheelAccum + wheel * WHEEL_ROWS
-    local trunc = wheelAccum >= 0 and math.floor or math.ceil
-    local rows  = trunc(wheelAccum)
-    if rows ~= 0 then
-      wheelAccum = wheelAccum - rows
-      av:setCursor(av:cursorRow() - rows, av:cursorCol())
+  -- Wheel moves the cursor (detached scroll snaps back via followViewport).
+  -- Fractional trackpad deltas accumulate; whole notches drain off — vertical to rows, horizontal to columns.
+  local vWheel, hWheel = ImGui.GetMouseWheel(ctx)
+  if (vWheel ~= 0 or hWheel ~= 0) and ImGui.IsWindowHovered(ctx) then
+    local rows, cols
+    wheelAccumV, rows = drainWheel(wheelAccumV, vWheel, WHEEL_STEP_ROWS)
+    wheelAccumH, cols = drainWheel(wheelAccumH, hWheel, WHEEL_STEP_COLS)
+    if rows ~= 0 or cols ~= 0 then
+      av:setCursor(av:cursorRow() - rows, av:cursorCol() - cols)
     end
   end
   if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx) and inBody then
@@ -626,11 +635,13 @@ function ar:renderBody(_, w, h, dispatch)
   end
 
   local gridW = math.max(120, w - PALETTE_W - PANE_GAP)
-  -- WindowFlags_NoNav suppresses the blue nav rect that Tab/arrow
-  -- focus would otherwise draw around the whole grid child.
+  -- NoNav suppresses the blue nav rect from Tab/arrow focus; NoScroll*
+  -- stop the wheel nudging the child — we route the wheel to the cursor.
   if ImGui.BeginChild(ctx, '##arrangeGrid', gridW, h,
                       ImGui.ChildFlags_None,
-                      ImGui.WindowFlags_NoNav) then
+                      ImGui.WindowFlags_NoNav
+                      | ImGui.WindowFlags_NoScrollWithMouse
+                      | ImGui.WindowFlags_NoScrollbar) then
     local dragCand, loopCand, createCand = handleGridMouse(nTracks)
     renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   end
