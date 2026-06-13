@@ -1,4 +1,4 @@
-@module wiringRender  src=wiringRender.lua  loc=2712  sha=76f1f9c  mode=chunk
+@module wiringRender  src=wiringRender.lua  loc=2717  sha=22a786d  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, wv
 
 # Invariants & contracts
@@ -110,8 +110,8 @@
   @state openFxPicker, renderFxPicker  @ 139
   @state SELECTED_INFLATE = 0  @ 170   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 171
-  @state SOURCE_PAD = 24  @ 2611
-  @state wiring = cmgr:scope('wiring')  @ 2702
+  @state SOURCE_PAD = 24  @ 2615
+  @state wiring = cmgr:scope('wiring')  @ 2707
 
 # Private functions
   -- Drag / band state (page-local; ephemeral, never persisted)
@@ -327,116 +327,117 @@
       -- Node ids whose body rect (un-inflated — port bands aren't selectable)
       -- intersects the band. Empty set if nothing caught.
   @fn renderCanvas(w, h)  @ 1708
-  @fn pushBodyStyles()  @ 2443
-  @fn popBodyStyles()  @ 2446
+  @fn pushBodyStyles()  @ 2447
+  @fn popBodyStyles()  @ 2450
   -- Palette pane
-  @fn renderPaletteHeader()  @ 2452
+  @fn renderPaletteHeader()  @ 2456
       -- Hand-drawn header so its band matches the canvas's by construction: both panes
       -- share renderBody's `oy`, so the divider aligns across PANE_GAP without measuring.
-  @fn openAddSourceModal()  @ 2465
-  @fn deleteSourceGuarded(nodeId, label)  @ 2478
+  @fn openAddSourceModal()  @ 2469
+  @fn deleteSourceGuarded(nodeId, label)  @ 2482
       -- Delete tries unforced first; a take-bearing track comes back refused with a
       -- count, which opens a confirm that re-issues the delete with force.
-  @fn renderPaletteActions(focused)  @ 2489
-  @fn renderPaletteList(sources)  @ 2499
-  @fn renderPalette()  @ 2523
+  @fn renderPaletteActions(focused)  @ 2493
+  @fn renderPaletteList(sources)  @ 2503
+  @fn renderPalette()  @ 2527
   -- Wiring scope
-  @fn sourcePosFor(genX, genY)  @ 2612
-  @fn commitFx(pck, fx)  @ 2645
+  @fn sourcePosFor(genX, genY)  @ 2616
+  @fn commitFx(pck, fx)  @ 2650
       -- Defer the gesture so the picker's close paints before the live
       -- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
 
 # Public API (wr:*)
-  @api wr:renderToolbarBits(_)  @ 2545
-  @api wr:closeTransients()  @ 2548
+  @api wr:renderToolbarBits(_)  @ 2549
+  @api wr:closeTransients()  @ 2552
       @contract  clear ephemeral gesture/hover state; the controller calls this on unbind.
-  @api wr:renderBody(_, w, h, dispatch)  @ 2555
+  @api wr:renderBody(_, w, h, dispatch)  @ 2559
       @contract  body = wiring canvas | source palette; dispatch at end-of-body routes wiring-scope keys.
-  @api wr:renderStatusBar(_)  @ 2588
-  @api wr:focusState()  @ 2594
+  @api wr:renderStatusBar(_)  @ 2592
+  @api wr:focusState()  @ 2598
       @contract  acceptCmds=false if any picker active, any item active, or modal open at frame start.
 
 # Uses (outbound edges)
   @use call    chrome.checkbox  @ 2350
-  @use call    chrome.colour  @ 338, 936, 2347, 2375, 2418, 2444
-  @use call    chrome.disabledIf  @ 2492
-  @use call    chrome.pickerIsActive  @ 2596
-  @use call    chrome.popChromeStyles  @ 2540
-  @use call    chrome.popChromeWindow  @ 2366, 2404, 2426
-  @use call    chrome.pushChromeStyles  @ 2535
-  @use call    chrome.pushChromeWindow  @ 2346, 2374, 2417
+  @use call    chrome.colour  @ 338, 936, 2347, 2375, 2422, 2448
+  @use call    chrome.disabledIf  @ 2496
+  @use call    chrome.pickerIsActive  @ 2600
+  @use call    chrome.popChromeStyles  @ 2544
+  @use call    chrome.popChromeWindow  @ 2366, 2408, 2430
+  @use call    chrome.pushChromeStyles  @ 2539
+  @use call    chrome.pushChromeWindow  @ 2346, 2374, 2421
   @use call    cmgr.invoke  @ 2085
-  @use call    cmgr.scope  @ 2702
-  @use call    imgui.BeginChild  @ 2560, 2577, 2692
-  @use call    imgui.BeginPopup  @ 2348, 2376, 2419
+  @use call    cmgr.scope  @ 2707
+  @use call    imgui.BeginChild  @ 2564, 2581, 2697
+  @use call    imgui.BeginPopup  @ 2348, 2376, 2423
   @use call    imgui.BeginTooltip  @ 340, 938
-  @use call    imgui.Button  @ 2490, 2493
+  @use call    imgui.Button  @ 2494, 2497
   @use call    imgui.CalcTextSize  @ 215, 275, 279, 360, 364
-  @use call    imgui.CloseCurrentPopup  @ 2358, 2382, 2386, 2390, 2396, 2646, 2687
-  @use call    imgui.Dummy  @ 2440, 2462, 2574
-  @use call    imgui.EndChild  @ 2565, 2582, 2698
-  @use call    imgui.EndPopup  @ 2361, 2399, 2421
+  @use call    imgui.CloseCurrentPopup  @ 2358, 2382, 2386, 2390, 2394, 2400, 2651, 2692
+  @use call    imgui.Dummy  @ 2444, 2466, 2578
+  @use call    imgui.EndChild  @ 2569, 2586, 2703
+  @use call    imgui.EndPopup  @ 2361, 2403, 2425
   @use call    imgui.EndTooltip  @ 342, 940
-  @use call    imgui.GetContentRegionAvail  @ 2455
-  @use call    imgui.GetCursorScreenPos  @ 1712, 2454, 2570
+  @use call    imgui.GetContentRegionAvail  @ 2459
+  @use call    imgui.GetCursorScreenPos  @ 1712, 2458, 2574
   @use call    imgui.GetKeyMods  @ 1725
-  @use call    imgui.GetMousePos  @ 1720, 2628
+  @use call    imgui.GetMousePos  @ 1720, 2632
   @use call    imgui.GetMouseWheel  @ 2052
-  @use call    imgui.GetTextLineHeightWithSpacing  @ 2456
-  @use call    imgui.GetWindowPos  @ 2355, 2393
-  @use call    imgui.GetWindowSize  @ 2356, 2394
-  @use call    imgui.GetWindowViewport  @ 2414
-  @use call    imgui.InputText  @ 2662
+  @use call    imgui.GetTextLineHeightWithSpacing  @ 2460
+  @use call    imgui.GetWindowPos  @ 2355, 2397
+  @use call    imgui.GetWindowSize  @ 2356, 2398
+  @use call    imgui.GetWindowViewport  @ 2418
+  @use call    imgui.InputText  @ 2667
   @use call    imgui.InvisibleButton  @ 329, 932
-  @use call    imgui.IsAnyItemActive  @ 2600
-  @use call    imgui.IsItemActive  @ 2510
+  @use call    imgui.IsAnyItemActive  @ 2604
+  @use call    imgui.IsItemActive  @ 2514
   @use call    imgui.IsItemHovered  @ 334, 933
-  @use call    imgui.IsKeyPressed  @ 1981, 1984, 2664, 2665, 2679, 2680, 2686
+  @use call    imgui.IsKeyPressed  @ 1981, 1984, 2669, 2670, 2684, 2685, 2691
   @use call    imgui.IsMouseClicked  @ 1737, 1991, 2036, 2097, 2112, 2127, 2323
   @use call    imgui.IsMouseDoubleClicked  @ 2026, 2079
   @use call    imgui.IsMouseDown  @ 1848, 2101, 2241, 2284, 2294, 2301, 2309
-  @use call    imgui.IsMouseDragging  @ 2511
-  @use call    imgui.IsWindowAppearing  @ 2354, 2392, 2659, 2675
+  @use call    imgui.IsMouseDragging  @ 2515
+  @use call    imgui.IsWindowAppearing  @ 2354, 2396, 2664, 2680
   @use call    imgui.IsWindowHovered  @ 1724
-  @use call    imgui.OpenPopup  @ 2327, 2334, 2640
+  @use call    imgui.OpenPopup  @ 2327, 2334, 2645
   @use call    imgui.PopFont  @ 283, 367
-  @use call    imgui.PopStyleColor  @ 345, 943, 2365, 2403, 2425, 2446
+  @use call    imgui.PopStyleColor  @ 345, 943, 2365, 2407, 2429, 2450
   @use call    imgui.PopStyleVar  @ 344, 942
   @use call    imgui.PushFont  @ 273, 359
-  @use call    imgui.PushStyleColor  @ 338, 936, 2347, 2375, 2418, 2444
+  @use call    imgui.PushStyleColor  @ 338, 936, 2347, 2375, 2422, 2448
   @use call    imgui.PushStyleVar  @ 339, 937
-  @use call    imgui.SameLine  @ 2491, 2569, 2575
-  @use call    imgui.Selectable  @ 2379, 2384, 2388, 2505, 2695
-  @use call    imgui.Separator  @ 2538, 2666
-  @use call    imgui.SetCursorScreenPos  @ 328, 931, 2439
-  @use call    imgui.SetKeyboardFocusHere  @ 2659
-  @use call    imgui.SetNextItemWidth  @ 2660
-  @use call    imgui.SetNextWindowPos  @ 335, 934, 2345, 2373, 2411, 2415
-  @use call    imgui.Text  @ 341, 939, 2590
-  @use call    imgui.TextDisabled  @ 2501
-  @use call    imgui.Viewport_GetCenter  @ 2414
-  @use call    modalHost.wasOpenAtFrameStart  @ 2602
-  @use call    painter.new  @ 1715, 2453, 2572
-  @use call    util.add  @ 1227, 1262, 1263, 1324, 1339, 1441, 1743, 1780, 2527, 2634
+  @use call    imgui.SameLine  @ 2495, 2573, 2579
+  @use call    imgui.Selectable  @ 2379, 2384, 2388, 2392, 2509, 2700
+  @use call    imgui.Separator  @ 2542, 2671
+  @use call    imgui.SetCursorScreenPos  @ 328, 931, 2443
+  @use call    imgui.SetKeyboardFocusHere  @ 2664
+  @use call    imgui.SetNextItemWidth  @ 2665
+  @use call    imgui.SetNextWindowPos  @ 335, 934, 2345, 2373, 2415, 2419
+  @use call    imgui.Text  @ 341, 939, 2594
+  @use call    imgui.TextDisabled  @ 2505
+  @use call    imgui.Viewport_GetCenter  @ 2418
+  @use call    modalHost.wasOpenAtFrameStart  @ 2606
+  @use call    painter.new  @ 1715, 2457, 2576
+  @use call    util.add  @ 1227, 1262, 1263, 1324, 1339, 1441, 1743, 1780, 2531, 2639
   @use call    util.key  @ 783
-  @use call    wv.addBusNode  @ 2650
-  @use call    wv.addFx  @ 2652
-  @use call    wv.ancestorsOf  @ 2159, 2207, 2515
+  @use call    wv.addBusNode  @ 2655
+  @use call    wv.addFx  @ 2657
+  @use call    wv.ancestorsOf  @ 2159, 2207, 2519
   @use call    wv.busViews  @ 1771
   @use call    wv.deleteBus  @ 2380
   @use call    wv.deleteNode  @ 2381
-  @use call    wv.deleteSource  @ 2479, 2485
+  @use call    wv.deleteSource  @ 2483, 2489
   @use call    wv.descendantsOf  @ 2206
   @use call    wv.edgeGain  @ 1875, 1996, 2040
-  @use call    wv.listInstalledFX  @ 2634
-  @use call    wv.masterPos  @ 1266, 2613
+  @use call    wv.listInstalledFX  @ 2639
+  @use call    wv.masterPos  @ 1266, 2617
   @use call    wv.moveBus  @ 2298
   @use call    wv.moveNodes  @ 2306
-  @use call    wv.nodeViews  @ 1742, 2525
+  @use call    wv.nodeViews  @ 1742, 2529
   @use call    wv.openFxWindow  @ 2087
   @use call    wv.pokeEdgeGain  @ 1847, 2005, 2043, 2060
   @use call    wv.removeWireAt  @ 2271
   @use call    wv.rewireEdgeEnd  @ 2257
+  @use call    wv.rotateBus  @ 2385
   @use call    wv.samplerTrack  @ 2084
   @use call    wv.selection  @ 1752
   @use call    wv.setEdgeGain  @ 1850, 1879, 2006, 2030, 2044, 2061, 2068

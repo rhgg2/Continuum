@@ -184,8 +184,11 @@ end
 --contract: pass-through to wm:insertBus {pos,orient,node,port,dir}; mints + re-points; returns id
 function wv:insertBus(spec) return wm:insertBus(spec) end
 
---contract: pass-through to wm:addBusNode; mints a placed, unwired buss at (x,y); returns id
-function wv:addBusNode(x, y) return wm:addBusNode({ x = x, y = y }) end
+--contract: pass-through to wm:addBusNode; mints unwired buss at (x,y); orient defaults 'V'
+function wv:addBusNode(x, y, orient) return wm:addBusNode({ x = x, y = y }, orient) end
+
+--contract: pass-through to wm:rotateBus — flips the buss's V↔H orientation
+function wv:rotateBus(id) return wm:rotateBus(id) end
 
 --contract: pass-through to wm:deleteBus — node, incident edges, record, one Undo block
 function wv:deleteBus(nodeId) return wm:deleteBus(nodeId) end

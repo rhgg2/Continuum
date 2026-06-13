@@ -2381,6 +2381,10 @@ local function renderCanvas(w, h)
         else          wv:deleteNode(nodeMenu.nodeId) end
         ImGui.CloseCurrentPopup(ctx)
       end
+      if isBus and ImGui.Selectable(ctx, 'Rotate buss') then
+        wv:rotateBus(nodeMenu.nodeId)
+        ImGui.CloseCurrentPopup(ctx)
+      end
       if menuNode and not isBus and #menuNode.ins.audio > 0 and ImGui.Selectable(ctx, 'Add input bus') then
         armBus(nodeMenu.nodeId, 'in', menuNode, wireViewsList)
         ImGui.CloseCurrentPopup(ctx)
@@ -2630,7 +2634,8 @@ openFxPicker = function(x, y, anchor)
   end
   local sx, sy = sourcePosFor(x, y)
   -- listInstalledFX is memoised below wv — copy before prepending the synthetic entry
-  local items = { { name = 'Buss', bus = true } }
+  local items = { { name = 'Buss (vertical)',   bus = true, orient = 'V' },
+                  { name = 'Buss (horizontal)', bus = true, orient = 'H' } }
   for _, fx in ipairs(wv:listInstalledFX()) do util.add(items, fx) end
   fxPicker = {
     x = x, y = y, sx = sx, sy = sy,
@@ -2647,7 +2652,7 @@ local function commitFx(pck, fx)
   fxPicker = nil
   reaper.defer(function()
     if fx.bus then
-      wv:addBusNode(pck.x, pck.y)
+      wv:addBusNode(pck.x, pck.y, fx.orient)
     else
       wv:addFx(pck.x, pck.y, { name = fx.name, ident = fx.ident },
                { sourcePos = { x = pck.sx, y = pck.sy } })

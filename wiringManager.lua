@@ -591,9 +591,10 @@ local function nextBusId(g)
   return 'bus-' .. (maxN + 1)
 end
 
---contract: mints a placed, unwired buss node + its decoration record; returns the new buss id
-function wm:addBusNode(pos)
+--contract: mints a placed, unwired buss node + its decoration record; orient defaults 'V'
+function wm:addBusNode(pos, orient)
   ensureLoaded()
+  orient = orient or 'V'
   local newId, ok, err
   rm:transaction('wiring: add buss', function()
     ok, err = self:mutate(function(g)
@@ -601,15 +602,30 @@ function wm:addBusNode(pos)
       g.nodes[newId] = {
         kind   = 'bus',
         pos    = { x = pos.x, y = pos.y },
-        orient = 'V',
+        orient = orient,
         ports  = { audio = { ins = 1, outs = 1 }, midi = { ins = 0, outs = 0 } },
       }
     end, 'bus')
-    if ok then rm:assignMeta('bus', newId, { pos = { x = pos.x, y = pos.y }, orient = 'V',
+    if ok then rm:assignMeta('bus', newId, { pos = { x = pos.x, y = pos.y }, orient = orient,
                                              ins = {}, outs = {} }) end
   end)
   if not ok then return nil, err end
   return newId
+end
+
+--contract: flips a buss's orientation V↔H on node + decoration record; returns true or nil+err
+function wm:rotateBus(id)
+  local flipped
+  local ok, err = self:mutate(function(g)
+    local node = g.nodes[id]
+    if node and node.kind == 'bus' then
+      flipped = node.orient == 'H' and 'V' or 'H'
+      node.orient = flipped
+    end
+  end, 'move')
+  if not ok then return nil, err end
+  if flipped then rm:assignMeta('bus', id, { orient = flipped }) end
+  return true
 end
 
 --contract: mints a buss node mid-wire: re-points the (node,port,dir) edge ends through it +
