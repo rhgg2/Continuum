@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=968  sha=25c8f25  mode=chunk
+@module routingManager  src=routingManager.lua  loc=973  sha=a9e530d  mode=chunk
 
 # Invariants & contracts
   @invariant  id is a track/fx GUID string — opaque to callers, stable across reload
@@ -131,7 +131,7 @@
       -- JS/container fx, which has no routing trailer — writing midi to one is a no-op.
   @fn writeMidiRouting(track, fxIdx, midi)  @ 656
   @fn writeTrackFields(track, t)  @ 670
-  @fn liveScratch()  @ 749
+  @fn liveScratch()  @ 754
       -- The persisted scratch guid + live handle, or nil if none minted yet. Never mints.
 
 # Public API (rm:*)
@@ -145,49 +145,51 @@
       @contract  second return: { [id] = ident } over the same chain
   @api rm:reaperTrack(id)  @ 738
       @contract  raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone
-  @api rm:masterId()  @ 743
+  @api rm:fxTrack(id)  @ 743
+      @contract  live MediaTrack hosting fx id, resolved without reading its record/chunk; nil if gone
+  @api rm:masterId()  @ 748
       @contract  the master track's guid; resolves master without an rm:tracks() scan
-  @api rm:scratchId()  @ 758
+  @api rm:scratchId()  @ 763
       @contract  the scratch track's guid, minted on first use; persisted in projext.
       @contract  rm owns scratch — it parks orphan fx and carries the fx-meta undo mirror.
-  @api rm:scratchTrack()  @ 767
+  @api rm:scratchTrack()  @ 772
       @contract  raw scratch MediaTrack handle (for P_EXT writes); mints on first use
-  @api rm:resyncMeta()  @ 773
+  @api rm:resyncMeta()  @ 778
       @contract  pull every meta store's scratch P_EXT mirror back into projext after a
       @contract  REAPER undo/redo — projext doesn't reverse natively, the scratch chunk does
-  @api rm:pollUndo()  @ 784
+  @api rm:pollUndo()  @ 789
       @contract  per-frame heartbeat — ensures the scratch exists, and on a scratch-chunk
       @contract  rewind (REAPER undo/redo) pulls the meta mirrors back into projext
-  @api rm:addTrack(t)  @ 794
-  @api rm:assignTrack(id, t)  @ 816
-  @api rm:deleteTrack(id)  @ 824
-  @api rm:setSendGain(srcId, dstId, gain)  @ 831
+  @api rm:addTrack(t)  @ 799
+  @api rm:assignTrack(id, t)  @ 821
+  @api rm:deleteTrack(id)  @ 829
+  @api rm:setSendGain(srcId, dstId, gain)  @ 836
       @contract  targeted live D_VOL on the audio send srcId→dstId; false if no such send is live.
       @contract  the partial write assignTrack{sends} (full-replace) can't serve — for live gain pokes.
-  @api rm:addFx(trackId, t)  @ 844
-  @api rm:assignFx(id, t)  @ 860
-  @api rm:meta(store, id)  @ 881
+  @api rm:addFx(trackId, t)  @ 849
+  @api rm:assignFx(id, t)  @ 865
+  @api rm:meta(store, id)  @ 886
       @contract  read a named meta store ('fx'|'bus'): whole blob, or one entry when id given
-  @api rm:assignMeta(store, id, meta)  @ 888
+  @api rm:assignMeta(store, id, meta)  @ 893
       @contract  write a named meta store: nil deletes store[id], else patch-merge (util.REMOVE to clear)
-  @api rm:writeChainMidi(trackId, writes)  @ 893
+  @api rm:writeChainMidi(trackId, writes)  @ 898
       @contract  batch per-FX MIDI routing for one track in a single chunk Get+Set; writes={{id,midi},...}
-  @api rm:deleteFx(id)  @ 912
-  @api rm:fx(id)  @ 918
+  @api rm:deleteFx(id)  @ 917
+  @api rm:fx(id)  @ 923
       @contract  fx record by id (ports, names, pinMaps, midi, trackId); nil if gone. Params separate.
-  @api rm:params(id)  @ 933
+  @api rm:params(id)  @ 938
       @contract  live { [name] = value } param values for the fx by id; nil if gone.
       @contract  the mutable control-state counterpart to the structural rm:fx record.
-  @api rm:showFx(id)  @ 939
+  @api rm:showFx(id)  @ 944
       @contract  floats the fx window for id; false if the fx is no longer live
-  @api rm:installedFx()  @ 947
+  @api rm:installedFx()  @ 952
       @contract  enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
-  @api rm:transaction(label, fn)  @ 960
+  @api rm:transaction(label, fn)  @ 965
 
 # Uses (outbound edges)
-  @use call    util.add  @ 59, 362, 419, 471, 692, 694, 701, 704, 731, 953
-  @use call    util.assign  @ 522, 539, 577, 707, 719, 927
-  @use call    util.clone  @ 811, 820, 855, 876
+  @use call    util.add  @ 59, 362, 419, 471, 692, 694, 701, 704, 731, 958
+  @use call    util.assign  @ 522, 539, 577, 707, 719, 932
+  @use call    util.clone  @ 816, 825, 860, 881
   @use call    util.key  @ 426
   @use call    util.serialise  @ 523, 542
   @use call    util.unserialise  @ 510

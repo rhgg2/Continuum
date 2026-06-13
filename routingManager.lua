@@ -739,6 +739,11 @@ function rm:reaperTrack(id)
   return locateTrack(id)
 end
 
+--contract: live MediaTrack hosting fx id, resolved without reading its record/chunk; nil if gone
+function rm:fxTrack(id)
+  return (locateFx(id))
+end
+
 --contract: the master track's guid; resolves master without an rm:tracks() scan
 function rm:masterId()
   local master = reaper.GetMasterTrack(PROJ)

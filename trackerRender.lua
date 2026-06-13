@@ -1001,6 +1001,10 @@ end
 -- ▾ open / ▸ shut tree arrows; params indent under their fx.
 local ARROW_OPEN, ARROW_SHUT, PARAM_INDENT = '\xe2\x96\xbe', '\xe2\x96\xb8', 14
 
+-- Made on first draw + attached so it outlives the defer cycle. Per-frame
+-- creation trips ReaImGui's short-lived guard; module-load faults the test fake.
+local paramClipper = nil
+
 -- Ordered render plan: {kind='heading',text} | {kind='fx',row,open} | {kind='param',row,prm}.
 -- Non-empty needle prunes to matched subtrees, forced open — see docs/trackerRender.md § Filtering.
 local function buildPlan(rows, needle)
@@ -1147,6 +1151,64 @@ local function scrollFollow(onCur)
   elseif rowBot > winBot then ImGui.SetScrollY(ctx, sY + (rowBot - winBot)) end
 end
 
+local function drawTreeItem(it, cur, showLearn, btnW)
+  if it.kind == 'heading' then
+    ImGui.TextDisabled(ctx, it.text)
+  elseif it.kind == 'fx' then
+    local row    = it.row
+    local onCur  = cur and cur.fxGuid == row.fxGuid and cur.param == nil
+    local availW  = select(1, ImGui.GetContentRegionAvail(ctx))
+    local reserve = showLearn and btnW + 28 or 8
+    local label   = (it.open and ARROW_OPEN or ARROW_SHUT) .. ' '
+                 .. fitLabel(row.name, availW - reserve)
+    -- AllowOverlap so the learn button drawn on top still takes its clicks.
+    local clicked = paletteSelectable(label .. '###fx' .. row.fxGuid, onCur,
+                                      ImGui.SelectableFlags_AllowOverlap)
+    scrollFollow(onCur)
+    if clicked then
+      tv:setPaletteCursor{ fxGuid = row.fxGuid, param = nil }
+      tv:setFxExpanded(row.fxGuid, not it.open)
+      paletteFocus = 'tree'
+    end
+    if showLearn then
+      local armed = tv:learnFxGuid() == row.fxGuid
+      ImGui.SameLine(ctx, availW - btnW)
+      if ImGui.SmallButton(ctx, (armed and 'stop' or 'learn') .. '###L' .. row.fxGuid) then
+        tv:armLearn(row)
+        if tv:learnFxGuid() then tv:setFxExpanded(row.fxGuid, true) end
+      end
+    end
+  else
+    local row   = it.row
+    local onCur = cur and cur.fxGuid == row.fxGuid and cur.param == it.prm.index
+    ImGui.Indent(ctx, PARAM_INDENT)
+    -- ### ID from the guid+index alone: truncation/width must not remint it.
+    local label   = fitLabel(it.prm.name, select(1, ImGui.GetContentRegionAvail(ctx)))
+    local clicked = paletteSelectable(label .. '###p' .. row.fxGuid .. it.prm.index, onCur)
+    scrollFollow(onCur)
+    local double  = ImGui.IsItemHovered(ctx) and ImGui.IsMouseDoubleClicked(ctx, 0)
+    if clicked or double then
+      tv:setPaletteCursor{ fxGuid = row.fxGuid, param = it.prm.index }
+      tv:setPaletteParam{ trackGuid = row.trackGuid, fxGuid = row.fxGuid,
+                          param = it.prm.index, label = it.prm.name }
+      paletteFocus = 'tree'
+    end
+    if double then tv:automateParam() end
+    ImGui.Unindent(ctx, PARAM_INDENT)
+  end
+end
+
+-- Position of the cursor's row in the flat plan, so the clipper can force it
+-- in-range for scroll-follow even when it sits just outside the window.
+local function planIndexOfCursor(plan, cur)
+  if not cur then return nil end
+  for i, it in ipairs(plan) do
+    local matchFx    = it.kind == 'fx'    and cur.param == nil and it.row.fxGuid == cur.fxGuid
+    local matchParam = it.kind == 'param' and it.row.fxGuid == cur.fxGuid and it.prm.index == cur.param
+    if matchFx or matchParam then return i end
+  end
+end
+
 local function drawTree(plan)
   if #plan == 0 then
     ImGui.TextDisabled(ctx, tv:paletteFilter() == '' and '(no fx reachable)' or '(no match)')
@@ -1156,52 +1218,25 @@ local function drawTree(plan)
   local fpx  = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
   local btnW = ImGui.CalcTextSize(ctx, 'learn') + fpx * 2
   local showLearn = tv:paletteFilter() == ''   -- learn is hidden while filtering
-  for _, it in ipairs(plan) do
-    if it.kind == 'heading' then
-      ImGui.TextDisabled(ctx, it.text)
-    elseif it.kind == 'fx' then
-      local row    = it.row
-      local onCur  = cur and cur.fxGuid == row.fxGuid and cur.param == nil
-      local availW  = select(1, ImGui.GetContentRegionAvail(ctx))
-      local reserve = showLearn and btnW + 28 or 8
-      local label   = (it.open and ARROW_OPEN or ARROW_SHUT) .. ' '
-                   .. fitLabel(row.name, availW - reserve)
-      -- AllowOverlap so the learn button drawn on top still takes its clicks.
-      local clicked = paletteSelectable(label .. '###fx' .. row.fxGuid, onCur,
-                                        ImGui.SelectableFlags_AllowOverlap)
-      scrollFollow(onCur)
-      if clicked then
-        tv:setPaletteCursor{ fxGuid = row.fxGuid, param = nil }
-        tv:setFxExpanded(row.fxGuid, not it.open)
-        paletteFocus = 'tree'
-      end
-      if showLearn then
-        local armed = tv:learnFxGuid() == row.fxGuid
-        ImGui.SameLine(ctx, availW - btnW)
-        if ImGui.SmallButton(ctx, (armed and 'stop' or 'learn') .. '###L' .. row.fxGuid) then
-          tv:armLearn(row)
-          if tv:learnFxGuid() then tv:setFxExpanded(row.fxGuid, true) end
-        end
-      end
-    else
-      local row   = it.row
-      local onCur = cur and cur.fxGuid == row.fxGuid and cur.param == it.prm.index
-      ImGui.Indent(ctx, PARAM_INDENT)
-      -- ### ID from the guid+index alone: truncation/width must not remint it.
-      local label   = fitLabel(it.prm.name, select(1, ImGui.GetContentRegionAvail(ctx)))
-      local clicked = paletteSelectable(label .. '###p' .. row.fxGuid .. it.prm.index, onCur)
-      scrollFollow(onCur)
-      local double  = ImGui.IsItemHovered(ctx) and ImGui.IsMouseDoubleClicked(ctx, 0)
-      if clicked or double then
-        tv:setPaletteCursor{ fxGuid = row.fxGuid, param = it.prm.index }
-        tv:setPaletteParam{ trackGuid = row.trackGuid, fxGuid = row.fxGuid,
-                            param = it.prm.index, label = it.prm.name }
-        paletteFocus = 'tree'
-      end
-      if double then tv:automateParam() end
-      ImGui.Unindent(ctx, PARAM_INDENT)
+
+  -- Clip to the visible rows: a fx with hundreds of params must not draw (and
+  -- CalcTextSize) every row each frame.
+  if not paramClipper then
+    paramClipper = ImGui.CreateListClipper(ctx)
+    ImGui.Attach(ctx, paramClipper)
+  end
+  ImGui.ListClipper_Begin(paramClipper, #plan)
+  if scrollReq then
+    local ci = planIndexOfCursor(plan, cur)
+    if ci then ImGui.ListClipper_IncludeItemByIndex(paramClipper, ci - 1) end
+  end
+  while ImGui.ListClipper_Step(paramClipper) do
+    local first, last = ImGui.ListClipper_GetDisplayRange(paramClipper)
+    for i = first, last - 1 do
+      drawTreeItem(plan[i + 1], cur, showLearn, btnW)
     end
   end
+  ImGui.ListClipper_End(paramClipper)
 end
 
 -- The 1px vrule + palette child, positioned from the body origin so the split

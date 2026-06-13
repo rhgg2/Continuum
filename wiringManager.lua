@@ -357,9 +357,10 @@ function wm:trackNames()
 end
 
 --contract: raw MediaTrack hosting the fx instance guid, or nil if the guid isn't live.
+-- Resolve the host track directly via rm: reading the full fx record (rm:fx)
+-- cost ~100ms/plugin (chunk + pin reads) and ran every frame via paramTargets.
 function wm:fxTrack(fxId)
-  local rec = rm:fx(fxId)
-  return rec and rm:reaperTrack(rec.trackId) or nil
+  return rm:fxTrack(fxId)
 end
 
 --contract: floats the FX window for the instance guid; false if the guid is no longer live
