@@ -212,21 +212,49 @@ of correct folder `read` — a later cosmetic layer, not part of steps
 
 ## Plan (skeleton)
 
-1. **Stopgap — stop being wrong** (small, lands independently):
-   - rm reads `I_FOLDERDEPTH`; snapshot carries each track's parent
-     guid (or nil).
-   - `rm:addTrack` pins new tracks to top level (close any open
-     folder across the insertion point).
-   - `read` routes a foldered child's mainSend edge to its actual
-     parent; components containing parent-send edges **quarantine
-     with reason `'folder'`** (machinery exists; view says why).
-   - Result: wiring is honest-but-dark in foldered projects instead
-     of confidently wrong; emergent tracks stop being corruptible.
-2. **Model + read**: edges into track nodes (`DAG.validate`,
-   ports/shape); full read delta above; drop the `'folder'`
-   quarantine reason. Fixtures: foldered source, parent hosting fx,
-   parent-send + explicit-send parallel edges, nested folders,
-   child with mainSend off.
+> **Progress (2026-06-13).** Step 1's rm foundation landed (commit
+> `a9e530d`, suite green at 1406). By decision the **quarantine stopgap
+> was skipped** — going straight to the real read (step 2), accepting
+> that foldered projects won't recompile correctly until step 3 (the
+> seam below). Steps 2–4 not started; step 2's design is settled (below).
+
+1. **rm foundation** *(DONE — `a9e530d`)*: `readTrack` carries
+   `folderDepth`; `stampParents` walks project order stamping each
+   foldered track's `parent` guid (positional — set regardless of
+   whether the child parent-sends; the tree is structure, the edge is
+   `mainSend.on`); `rm:addTrack` pins emergent tracks top-level by
+   closing any open folder on the last real track (the corruption fix);
+   `parent` flows through `stateEntry` into snap entries.
+   Spec: `tests/specs/rm_folders_spec.lua`.
+   *(Skipped: the `'folder'` quarantine reason — step 2 does the real
+   read instead of going dark.)*
+2. **Model + read** *(design settled; not started)*. The model change
+   is **entirely in `readGraph`** — `M.validate` already permits an edge
+   into any node with `ins ≥ 1` (the generic port check, `DAG.lua:101`);
+   sources are unsinkable today only because read always mints them with
+   `ins = 0`. Concretely:
+   - A **folder parent is a `kind='source'` node with `audio.ins ≥ 1`**
+     (no new kind). Children's parent-sends become **audio edges into
+     it** (it's the pair-1-2 summing point); it emits its summing output
+     on pair 1 as today. `srcSet` then unions children (`DAG.lua:280`)
+     → its own composite class.
+   - **MIDI is not edges.** The parent send maps all buses n→n identity,
+     so `walkTrack` seeds a folder parent's `liveMidi` from each child's
+     tail at identity buses (liveness through the pipe); real midi edges
+     form where a child's bus-*n* producer meets a parent fx listening
+     on *n*. The folder source keeps `midi.ins = 0`. The "contiguous
+     allocation region" framing is the step-3/4 allocator's, not read's.
+   - `mainSend.on` mints to `entry.parent or MASTER_KEY` (`~:1033`);
+     `nonMasterOrder` lets `toParent` edges into the Kahn sort so parents
+     walk after children (`~:1051`); source-mint condition becomes
+     `(no incoming) OR folderParents[trackKey]` (`~:1100`).
+   - **Scope seam**: step 2 specs assert the **read graph shape only**
+     (foldered source, parent hosting fx, parent-send ∥ explicit-send,
+     nested folders, child with mainSend off, + a validate spec for an
+     edge into a source-with-`ins`). Roundtrip stays step 3 — until the
+     allocator pins a folder parent's composite class to its existing
+     track (and doesn't absorb a single-child folder), recompile is
+     wrong-but-expected.
 3. **Compile**: conduit rule + tie-break; midi condition; relay
    pattern for foldered→master; family bus domains in
    `DAG.allocate`. Roundtrip sweep (`wm_roundtrip_spec`) extended
