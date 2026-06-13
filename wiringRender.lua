@@ -83,6 +83,8 @@ local BUS_STACK_GAP = 28   -- with BUS_BASE: busNear's commit-zone margin for th
 local BUS_TAP_LEN   = 34   -- visible length of a source copy's orthogonal tap off the bar
 local BUS_TAP_GAP   = 22   -- spacing between source-copy taps along the bar
 local BUS_BAR_PAD   = 8    -- bar overhang past its outermost tap
+local BUS_BAR_MIN   = 30   -- shortest hand-sized bar (min gap kept from the fixed far end)
+local BUS_END_ZONE  = 28   -- within this of a bar end → drag that end; the middle third translates
 local BUS_BAR_THICK = 4    -- rail bar stroke width
 local BUS_BAR_HIT   = 10   -- perpendicular tolerance for dropping a rewire onto a bar
 -- side → outward normal (n) + along-bar axis (a); the bar is ⟂ the normal.
@@ -114,6 +116,7 @@ local wireDraft = nil  -- { type?, cursorEnd='to'|'from', keptId, keptPort?, kep
 local tagDrag   = nil  -- { edgeIdx, mx0, my0, sx0, sy0 } — dragging a source edge's tag to a custom canvas pos
 local busOverlay = nil  -- { nodeId, dir } — bus-creation port-selector overlay (node-menu launched)
 local busDraft   = nil  -- { nodeId, dir, port, side, byHover? } — grabbed port; drag (or hover, if byHover) picks side
+local busDrag    = nil  -- { busId, ov, posAxial, posPerp, extLo, extHi, nearIsHi, tap*, … } — live buss-bar move/resize
 local shiftWas  = false
 local pinned     = {}   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
 local listOpenId = nil  -- node whose spillover list is engaged (chevron-gated)
@@ -636,7 +639,10 @@ local function shiftHoverHit(nodeViews, mx, my)
   end
   return engagedHover(nodeViews, mx, my, {
     dir = 'out', keep = nil,
-    eligible = function(nv) return #nv.outs.audio > 0 or #nv.outs.midi > 0 end,
+    -- A buss sources out-wires from its bar (busBarSource), never the port row.
+    eligible = function(nv)
+      return nv.category ~= 'bus' and (#nv.outs.audio > 0 or #nv.outs.midi > 0)
+    end,
     refine = narrowOnMidi,
     onConsume = function(pick)
       if sticky and sticky.nodeId == pick.nv.id then sticky = nil end
@@ -673,6 +679,7 @@ local function draftSourceHoverHit(nodeViews, mx, my)
   if not wireDraft or wireDraft.edgeIdx then return nil end
   for _, nv in ipairs(nodeViews) do
     if nv.id == wireDraft.keptId then
+      if nv.category == 'bus' then return nil end  -- bar is its source handle
       local layout = layoutPortRow(nv, 'out', mx, my,
                                    wireDraft.type, wireDraft.keptSide)
       local inBand = inRect(mx, my, layout.hoverRect)
@@ -700,7 +707,9 @@ local function dropTargetHit(nodeViews, mx, my, draft)
   return engagedHover(nodeViews, mx, my, {
     dir = (draft.cursorEnd == 'to') and 'in' or 'out',
     keep = draft.type,
-    eligible = function(nv) return not draft.forbidden[nv.id] end,
+    -- A buss is a drop target via its bar (busBarHit), never the port row;
+    -- engaging here paints a phantom node-row highlight off to the bar's side.
+    eligible = function(nv) return nv.category ~= 'bus' and not draft.forbidden[nv.id] end,
   })
 end
 
@@ -1401,7 +1410,8 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
         end
         tMin, tMax = math.min(tMin, t), math.max(tMax, t)
       end
-      if tMin > tMax then tMin, tMax = 0, 0 end
+      local hasTaps = tMin <= tMax
+      if not hasTaps then tMin, tMax = 0, 0 end
 
       local trunk
       if claimNode then
@@ -1412,17 +1422,29 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
           trunk = { sx = nex, sy = ney, ex = bcx, ey = bcy }
         end
       end
-      -- Bar always includes the trunk attach / bar centre (t=0) and spans at least
-      -- a node's breadth, then reaches to the farthest tap. see docs § Bus rail geometry
-      local alongHalf = (ov.ax ~= 0) and NODE_W / 2 or NODE_H / 2
-      local lo = math.min(tMin, -alongHalf) - BUS_BAR_PAD
-      local hi = math.max(tMax,  alongHalf) + BUS_BAR_PAD
+      -- Bar span: bv.ext (axial offsets from pos) when set, else legacy auto-fit to node breadth;
+      -- either floored to cover the taps. see docs § Bus rail geometry
+      local lo, hi
+      if bv.ext then
+        lo, hi = bv.ext.lo, bv.ext.hi
+        if hasTaps then
+          lo = math.min(lo, tMin - BUS_BAR_PAD)
+          hi = math.max(hi, tMax + BUS_BAR_PAD)
+        end
+      else
+        local alongHalf = (ov.ax ~= 0) and NODE_W / 2 or NODE_H / 2
+        lo = math.min(tMin, -alongHalf) - BUS_BAR_PAD
+        hi = math.max(tMax,  alongHalf) + BUS_BAR_PAD
+      end
+      local cax = bcx * ov.ax + bcy * ov.ay
       util.add(busRails, {
         bar = { x0 = bcx + ov.ax * lo, y0 = bcy + ov.ay * lo,
                 x1 = bcx + ov.ax * hi, y1 = bcy + ov.ay * hi },
         trunk = trunk, matrix = bv.matrix,
         busId = bv.id, node = anchor,
         dir = bv.claim and bv.claim.dir, port = bv.claim and bv.claim.port or 1,
+        tapLo = hasTaps and (cax + tMin) or nil,
+        tapHi = hasTaps and (cax + tMax) or nil,
       })
     end
   end
@@ -1556,6 +1578,16 @@ local function busBarHit(busRails, draft, mx, my)
   end
 end
 
+-- Shift-hover source from a buss: the bar is the out-wire origin, the same fat
+-- target the drop side uses. Every tap shares port 1, so the draft kept-port is 1.
+local function busBarSource(busRails, mx, my)
+  for _, r in ipairs(busRails) do
+    if r.node and pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= BUS_BAR_HIT then
+      return { nv = r.node, slot = { kind = 'audio', portIdx = r.port }, viaBar = r.bar }
+    end
+  end
+end
+
 -- Any buss bar under the cursor — the RMB hit that opens the bar's delete menu.
 local function busBarAt(busRails, mx, my)
   for _, r in ipairs(busRails) do
@@ -1563,6 +1595,63 @@ local function busBarAt(busRails, mx, my)
       return r
     end
   end
+end
+
+-- Buss-bar move/resize: middle-third grab translates; near-end grab resizes that end (floored at its
+-- tap), handing off to the far end once the cursor crosses past it. Perp motion always slides.
+local function makeBusDrag(rail, mx, my)
+  local ov = ORIENT_VEC[rail.node.orient] or ORIENT_VEC.V
+  local px, py = rail.node.pos.x, rail.node.pos.y
+  local b0 = rail.bar.x0 * ov.ax + rail.bar.y0 * ov.ay
+  local b1 = rail.bar.x1 * ov.ax + rail.bar.y1 * ov.ay
+  local aLo, aHi = math.min(b0, b1), math.max(b0, b1)
+  local grabAxial = mx * ov.ax + my * ov.ay
+  local zone = math.min(BUS_END_ZONE, (aHi - aLo) / 3)
+  local mode, active = 'move', nil
+  if grabAxial >= aHi - zone then mode, active = 'resize', 'hi'
+  elseif grabAxial <= aLo + zone then mode, active = 'resize', 'lo' end
+  return {
+    busId = rail.busId, ov = ov, mode = mode, active = active,
+    posAxial = px * ov.ax + py * ov.ay, posPerp = px * ov.nx + py * ov.ny,
+    perp = px * ov.nx + py * ov.ny, grabPerp = mx * ov.nx + my * ov.ny,
+    aLo = aLo, aHi = aHi, aLo0 = aLo, aHi0 = aHi,
+    tapLo = rail.tapLo, tapHi = rail.tapHi, grabAxial = grabAxial,
+    mx0 = mx, my0 = my,
+  }
+end
+
+-- Advance the in-flight bar by this frame's cursor (mutates bd).
+local function busDragApply(bd, mx, my)
+  local ov = bd.ov
+  local qa = mx * ov.ax + my * ov.ay
+  bd.perp = bd.posPerp + (mx * ov.nx + my * ov.ny) - bd.grabPerp
+  if bd.mode == 'move' then
+    local d = qa - bd.grabAxial
+    bd.aLo, bd.aHi = bd.aLo0 + d, bd.aHi0 + d
+    return
+  end
+  -- Hand off to the far end only when the cursor crosses past it, so the moving
+  -- end can't trigger the switch on itself (that was the ratchet).
+  if bd.active == 'lo' and qa > bd.aHi then bd.active = 'hi'
+  elseif bd.active == 'hi' and qa < bd.aLo then bd.active = 'lo' end
+  if bd.active == 'lo' then
+    local v = math.min(qa, bd.aHi - BUS_BAR_MIN)
+    if bd.tapLo then v = math.min(v, bd.tapLo - BUS_BAR_PAD) end
+    bd.aLo = v
+  else
+    local v = math.max(qa, bd.aLo + BUS_BAR_MIN)
+    if bd.tapHi then v = math.max(v, bd.tapHi + BUS_BAR_PAD) end
+    bd.aHi = v
+  end
+end
+
+-- (pos.x, pos.y, ext.lo, ext.hi) from the bar's current absolute ends, re-based
+-- onto the fixed pos.axial so ext alone carries the change.
+local function busDragPos(bd)
+  local ov = bd.ov
+  return bd.posAxial * ov.ax + bd.perp * ov.nx,
+         bd.posAxial * ov.ay + bd.perp * ov.ny,
+         bd.aLo - bd.posAxial, bd.aHi - bd.posAxial
 end
 
 -- The source tag's grab box: cursor inside the bg-patch rect at its centre.
@@ -1582,7 +1671,7 @@ end
 -- rect) — used to start a drag. nil over empty canvas or a port band.
 local function nodeUnderMouse(nodeViews, mx, my)
   for _, nv in ipairs(nodeViews) do
-    if inRect(mx, my, nodeBox(nv)) then
+    if nv.category ~= 'bus' and inRect(mx, my, nodeBox(nv)) then
       return nv
     end
   end
@@ -1717,6 +1806,17 @@ local function renderCanvas(w, h)
                        y = tagDrag.sy0 + (lmy - tagDrag.my0) - consumer.pos.y }
     end
   end
+  -- Live buss-bar move feeds the in-flight pos + extent into the geometry pass
+  -- (mirroring tagDrag); mouseup commits via wv:moveBus.
+  if busDrag then
+    busDragApply(busDrag, lmx, lmy)
+    local x, y, lo, hi = busDragPos(busDrag)
+    local node = nodesById[busDrag.busId]
+    if node then node.pos.x, node.pos.y = x, y end
+    for _, bv in ipairs(busViewsList) do
+      if bv.id == busDrag.busId then bv.ext = { lo = lo, hi = hi } end
+    end
+  end
   local segs = wireSegments(wireViewsList, nodesById)
   sourceSegments(p, wireViewsList, nodesById, segs)
   local busRails = {}
@@ -1731,7 +1831,7 @@ local function renderCanvas(w, h)
   -- Suppressed during any active gesture so neither fires under a drag.
   local wireEndHover, tagHover
   if not drag and not band and not wireDraft and not shiftHeld and not tagDrag
-     and not busOverlay and not busDraft then
+     and not busOverlay and not busDraft and not busDrag then
     wireEndHover = wireEndHit(segs, lmx, lmy)
     tagHover     = sourceTagHit(p, segs, wireViewsList, lmx, lmy)
   end
@@ -1752,7 +1852,7 @@ local function renderCanvas(w, h)
   local arrowHitIdx
   if not drag and not band and not wireDraft and not shiftHeld
      and not tagDrag and not (fader and fader.dragging)
-     and not busOverlay and not busDraft then
+     and not busOverlay and not busDraft and not busDrag then
     arrowHitIdx = arrowMidHit(segs, lmx, lmy)
   end
   -- Fader visibility: drag overrides, triangle anchors, hitRect persists.
@@ -1797,7 +1897,8 @@ local function renderCanvas(w, h)
     -- A bar hit (fat target for the bussed port) wins over a node-port hit.
     targetHit      = busBarHit(busRails, wireDraft, draftCx, draftCy) or targetHit
   elseif shiftHeld and not hoverFreeze then
-    sourceHit = shiftHoverHit(nodeViews, lmx, lmy)
+    sourceHit = busBarSource(busRails, lmx, lmy)
+             or shiftHoverHit(nodeViews, lmx, lmy)
   end
   if shiftHeld then
     stickyHit = stickyHoverHit(nodeViews)
@@ -1848,6 +1949,10 @@ local function renderCanvas(w, h)
   drawWireEndHighlight(p, segs, wireEndHover)
   if targetHit and targetHit.viaBar then
     local b = targetHit.viaBar
+    p.line(b.x0, b.y0, b.x1, b.y1, 'wiring.node.selected', BUS_BAR_THICK + 2)
+  end
+  if sourceHit and sourceHit.viaBar then
+    local b = sourceHit.viaBar
     p.line(b.x0, b.y0, b.x1, b.y1, 'wiring.node.selected', BUS_BAR_THICK + 2)
   end
 
@@ -2015,7 +2120,7 @@ local function renderCanvas(w, h)
   -- Mousedown precedence (docs/wiringPage.md): shift-hover > wire-end >
   -- body-drag > band.
   if not faderConsumed and not dblConsumed and not drag and not band
-      and not wireDraft and not tagDrag and not busOverlay and not busDraft
+      and not wireDraft and not tagDrag and not busOverlay and not busDraft and not busDrag
       and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
     -- Any click closes the spillover. The pre-click sourceHit (list still open)
     -- drives dispatch here.
@@ -2044,7 +2149,7 @@ local function renderCanvas(w, h)
         local base = {
           cursorEnd  = 'to',
           keptId     = sourceHit.nv.id,
-          keptSide   = sourceHit.layout.side,
+          keptSide   = sourceHit.layout and sourceHit.layout.side,
           keptAnchor = keptAnchor,
           forbidden  = wv:ancestorsOf(sourceHit.nv.id),
           mx0 = lmx, my0 = lmy,
@@ -2108,8 +2213,13 @@ local function renderCanvas(w, h)
       local seg = segs[tagHover]
       tagDrag = { edgeIdx = tagHover, mx0 = lmx, my0 = lmy, sx0 = seg.sx, sy0 = seg.sy }
     else
+      -- A buss bar grabs into its own resize gesture (busDrag); a real node under
+      -- a bar still wins (nodeUnderMouse skips busses, so bodyHit is never one).
       local bodyHit = nodeUnderMouse(nodeViews, lmx, lmy)
-      if bodyHit then
+      local rail    = not bodyHit and busBarAt(busRails, lmx, lmy)
+      if rail then
+        busDrag = makeBusDrag(rail, lmx, lmy)
+      elseif bodyHit then
         local starts = {}
         if selection[bodyHit.id] then
           for _, nv in ipairs(nodeViews) do
@@ -2176,6 +2286,13 @@ local function renderCanvas(w, h)
         { x = seg.sx - consumer.pos.x, y = seg.sy - consumer.pos.y })
     end
     tagDrag = nil
+  elseif busDrag and not ImGui.IsMouseDown(ctx, 0) then
+    if math.abs(lmx - busDrag.mx0) >= CLICK_THRESH
+       or math.abs(lmy - busDrag.my0) >= CLICK_THRESH then
+      local x, y, lo, hi = busDragPos(busDrag)
+      wv:moveBus(busDrag.busId, { x = x, y = y }, { lo = lo, hi = hi })
+    end
+    busDrag = nil
   elseif drag and not ImGui.IsMouseDown(ctx, 0) then
     local dx, dy = lmx - drag.mx0, lmy - drag.my0
     if dx ~= 0 or dy ~= 0 then
@@ -2197,7 +2314,7 @@ local function renderCanvas(w, h)
   -- RMB precedence: triangle → per-wire menu; node body / buss bar → node
   -- menu; empty canvas → FX picker (same code path as the N-key shortcut).
   if not drag and not band and not wireDraft and not tagDrag
-      and not busOverlay and not busDraft
+      and not busOverlay and not busDraft and not busDrag
       and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
     if arrowHitIdx and not wireMenu and not fader then
       local seg = segs[arrowHitIdx]
@@ -2424,7 +2541,7 @@ function wr:renderToolbarBits(_) end
 
 --contract: clear ephemeral gesture/hover state; the controller calls this on unbind.
 function wr:closeTransients()
-  drag, band, wireDraft, tagDrag, shiftWas = nil, nil, nil, nil, false
+  drag, band, wireDraft, tagDrag, busDrag, shiftWas = nil, nil, nil, nil, nil, false
   listOpenId, sticky, engagedId, hoverFreeze = nil, nil, nil, nil
   fader, wireMenu = nil, nil
 end

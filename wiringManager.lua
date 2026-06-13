@@ -216,6 +216,17 @@ function pruneSourceTags(g)
   end
 end
 
+--contract: buss move/resize — writes the bus node pos + persists pos & axial ext to the bus store
+function wm:moveBus(id, pos, ext)
+  local ok, err = self:mutate(function(g)
+    local node = g.nodes[id]
+    if node then node.pos.x, node.pos.y = pos.x, pos.y end
+  end, 'move')
+  if not ok then return false, err end
+  rm:assignMeta('bus', id, { pos = { x = pos.x, y = pos.y }, ext = ext })
+  return true
+end
+
 --contract: writes node pos per {[id]={x,y}} + persists busses to the bus store; unknown ids skipped
 function wm:moveNodes(moves)
   local ok, err = self:mutate(function(g)
@@ -642,7 +653,7 @@ function wm:insertBus(spec)
   return newId
 end
 
---shape: busRecord = { pos={x,y}, orient='V'|'H', ins={{node,port,gain?},…}, outs={…}, trackId? } — taps mirror the node's edges; trackId iff matrix
+--shape: busRecord = { pos={x,y}, orient='V'|'H', ext={lo,hi}?, ins={{node,port,gain?},…}, outs={…}, trackId? } — ext = hand-sized bar span (axial offsets from pos); taps mirror the node's edges; trackId iff matrix
 --contract: deep copy of the 'bus' meta store: { [busId] = busRecord }
 function wm:busRecords()
   return util.deepClone(rm:meta('bus'))

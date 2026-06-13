@@ -176,6 +176,11 @@ function wv:moveNodes(moves)
   return wm:moveNodes(moves)
 end
 
+--contract: buss bar move/resize — writes node pos + record pos & axial ext via wm:moveBus
+function wv:moveBus(id, pos, ext)
+  return wm:moveBus(id, pos, ext)
+end
+
 --contract: pass-through to wm:insertBus {pos,orient,node,port,dir}; mints + re-points; returns id
 function wv:insertBus(spec) return wm:insertBus(spec) end
 
@@ -307,7 +312,7 @@ function wv:nodeViews()
   return out
 end
 
---shape: busView = { id, pos={x,y}, orient='V'|'H', matrix=true? } — projects the bus node; record pos as fallback
+--shape: busView = { id, pos={x,y}, orient='V'|'H', ext={lo,hi}?, matrix=true? } — projects the bus node; ext = hand-sized bar span (axial offsets from pos), nil = auto-fit; record pos as fallback
 --contract: one busView per buss record; pos/orient from the node when present, else the record
 function wv:busViews()
   local g = ensureView()
@@ -318,6 +323,7 @@ function wv:busViews()
       id     = busId,
       pos    = node and { x = node.pos.x, y = node.pos.y } or { x = rec.pos.x, y = rec.pos.y },
       orient = node and node.orient or rec.orient or 'V',
+      ext    = rec.ext,
       matrix = node and true or nil,
     })
   end
