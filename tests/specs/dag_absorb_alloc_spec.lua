@@ -90,7 +90,7 @@ return {
     end,
   },
   {
-    name = 'absorbed node feeds master: masterFeed on trackKey, non-primary parent sends in',
+    name = 'absorbed node feeds master: parentFeed on trackKey, non-primary parent sends in',
     run = function()
       -- s3 → master keeps master's class a strict superset of mix's, so mix
       -- stays newTrack-eligible and absorbs into guid-s1 rather than going
@@ -111,7 +111,7 @@ return {
       t.deepEq(out['guid-s1'].pinMaps.mix.outs, { [1] = {1} })
       t.eq(out['guid-s1'].mainSend,     true)
       t.eq(out['guid-s1'].mainSendOffs, 0)
-      t.eq(out['guid-s1'].masterFeed.from, 'mix')
+      t.eq(out['guid-s1'].parentFeed.from, 'mix')
       -- Non-primary audio parent still arrives as a send on pin 2.
       t.eq(out['guid-s2'].sends[1].to,      'guid-s1')
       t.eq(out['guid-s2'].sends[1].dstChan, 2)

@@ -18,9 +18,10 @@ local function seedSource(h, guid)
   return track
 end
 
-local function source(guid)
-  return { kind='source', trackId=guid, pos={x=0,y=0},
-           ports={audio={ins=0,outs=1}, midi={ins=0,outs=1}} }
+local function source(guid, opts)
+  opts = opts or {}
+  return { kind='source', trackId=guid, parent=opts.parent, pos={x=0,y=0},
+           ports={audio={ins=opts.ins or 0, outs=1}, midi={ins=0, outs=1}} }
 end
 
 local function fx(ident, opts)
@@ -83,7 +84,11 @@ local function roundtrip(harness, fixture)
   wm:mutate(fixture.build)          -- ...the same structure loaded into wm to compile
 
   local nfG = normalForm(authored)
-  local nfR = normalForm(wm.readGraph(wm:targetState()))
+  local target = wm:targetState()
+  -- The folder tree is REAPER-resident context (I_FOLDERDEPTH), not compile output; overlay it
+  -- onto the target so read interprets each child's B_MAINSEND as a parent send.
+  for childKey, parentGuid in pairs(fixture.tree or {}) do target[childKey].parent = parentGuid end
+  local nfR = normalForm(wm.readGraph(target))
   t.deepEq(nfR.kinds, nfG.kinds, fixture.name .. ': node identity')
   local onlyRead, onlyG = edgeDiff(nfR.edges, nfG.edges)
   t.deepEq(onlyRead, fixture.expectExtra   or {}, fixture.name .. ': phantom edges')
@@ -253,6 +258,91 @@ local corpus = {
       g.nodes.fd = fx('VST:D', { fxId='g-D' })
       util.add(g.edges, { type='midi', from='fa', to='fb' })
       util.add(g.edges, { type='midi', from='fc', to='fd' })
+    end,
+  },
+
+  ----- folder track parents (step 3a): conduit edge rides B_MAINSEND onto the parent.
+  {
+    name = 'folder: two children sum into parent -> master',
+    seed = function(h) seedSource(h,'guid-A'); seedSource(h,'guid-B'); seedSource(h,'guid-P') end,
+    tree = { ['guid-A']='guid-P', ['guid-B']='guid-P' },
+    build = function(g)
+      g.nodes.sa = source('guid-A', { parent='p' })
+      g.nodes.sb = source('guid-B', { parent='p' })
+      g.nodes.p  = source('guid-P', { ins=1 })
+      util.add(g.edges, { type='audio', from='sa', to='p' })
+      util.add(g.edges, { type='audio', from='sb', to='p' })
+      util.add(g.edges, { type='audio', from='p',  to='master' })
+    end,
+  },
+  {
+    name = 'folder: gained conduit edge rides the parent-send volume',
+    seed = function(h) seedSource(h,'guid-A'); seedSource(h,'guid-P') end,
+    tree = { ['guid-A']='guid-P' },
+    build = function(g)
+      g.nodes.sa = source('guid-A', { parent='p' })
+      g.nodes.p  = source('guid-P', { ins=1 })
+      util.add(g.edges, { type='audio', from='sa', to='p', ops={gain=0.5} })
+      util.add(g.edges, { type='audio', from='p',  to='master' })
+    end,
+  },
+  {
+    name = 'folder: parent hosting fx (source -> fx -> master)',
+    seed = function(h) seedSource(h,'guid-A'); seedSource(h,'guid-P') end,
+    tree = { ['guid-A']='guid-P' },
+    build = function(g)
+      g.nodes.sa = source('guid-A', { parent='p' })
+      g.nodes.p  = source('guid-P', { ins=1 })
+      g.nodes.eq = fx('VST:EQ', { fxId='g-eq' })
+      util.add(g.edges, { type='audio', from='sa', to='p' })
+      util.add(g.edges, { type='audio', from='p',  to='eq' })
+      util.add(g.edges, { type='audio', from='eq', to='master' })
+    end,
+  },
+  {
+    name = 'folder: conduit + explicit send to a sibling fx coexist',
+    seed = function(h) seedSource(h,'guid-A'); seedSource(h,'guid-B'); seedSource(h,'guid-P') end,
+    tree = { ['guid-A']='guid-P' },
+    build = function(g)
+      g.nodes.sa  = source('guid-A', { parent='p' })
+      g.nodes.sb  = source('guid-B')
+      g.nodes.p   = source('guid-P', { ins=1 })
+      g.nodes.mix = fx('VST:Mix', { fxId='g-mix', ins=2 })
+      util.add(g.edges, { type='audio', from='sa',  to='p' })
+      util.add(g.edges, { type='audio', from='sa',  to='mix', toPort=1 })
+      util.add(g.edges, { type='audio', from='sb',  to='mix', toPort=2 })
+      util.add(g.edges, { type='audio', from='mix', to='master' })
+      util.add(g.edges, { type='audio', from='p',   to='master' })
+    end,
+  },
+  {
+    name = 'folder: nested parents chain leaf -> inner -> outer -> master',
+    seed = function(h) seedSource(h,'guid-L'); seedSource(h,'guid-I'); seedSource(h,'guid-O') end,
+    tree = { ['guid-L']='guid-I', ['guid-I']='guid-O' },
+    build = function(g)
+      g.nodes.leaf  = source('guid-L', { parent='inner' })
+      g.nodes.inner = source('guid-I', { ins=1, parent='outer' })
+      g.nodes.outer = source('guid-O', { ins=1 })
+      util.add(g.edges, { type='audio', from='leaf',  to='inner' })
+      util.add(g.edges, { type='audio', from='inner', to='outer' })
+      util.add(g.edges, { type='audio', from='outer', to='master' })
+    end,
+  },
+  {
+    name = 'folder: child with mainSend off routes explicitly, not to its parent',
+    seed = function(h) seedSource(h,'guid-A'); seedSource(h,'guid-B'); seedSource(h,'guid-C'); seedSource(h,'guid-P') end,
+    tree = { ['guid-A']='guid-P', ['guid-B']='guid-P' },
+    build = function(g)
+      g.nodes.sa  = source('guid-A', { parent='p' })
+      g.nodes.sb  = source('guid-B', { parent='p' })
+      g.nodes.sc  = source('guid-C')
+      g.nodes.p   = source('guid-P', { ins=1 })
+      g.nodes.mix = fx('VST:Mix', { fxId='g-mix', ins=2 })
+      util.add(g.edges, { type='audio', from='sa',  to='p' })
+      util.add(g.edges, { type='audio', from='sb',  to='mix', toPort=1 })
+      util.add(g.edges, { type='audio', from='sc',  to='mix', toPort=2 })
+      util.add(g.edges, { type='audio', from='mix', to='master' })
+      util.add(g.edges, { type='audio', from='p',   to='master' })
     end,
   },
 }

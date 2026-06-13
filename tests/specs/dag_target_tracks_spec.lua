@@ -470,7 +470,7 @@ return {
     name = 'absorb: master-hosted class never absorbed even with single audio parent',
     run = function()
       -- master-hosted classes are exempt from absorption: A->master stays a parent
-      -- send (mainSend + masterFeed on guid-s1), never folded intra.
+      -- send (mainSend + parentFeed on guid-s1), never folded intra.
       local ns = {}
       local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
@@ -483,7 +483,7 @@ return {
       t.eq(tracks['__master__'], nil, 'FX-less master stays implicit')
       t.eq(tracks['guid-s1|guid-s2'], nil, 'master-hosted vacates merged key for sentinel')
       t.eq(tracks['guid-s1'].mainSend, true)
-      t.deepEq(tracks['guid-s1'].masterFeed, { from = 'A', fromPort = 1, toNode = 'master', toPort = 1 }, 'not absorbed: A->master is a parent send')
+      t.deepEq(tracks['guid-s1'].parentFeed, { from = 'A', fromPort = 1, toNode = 'master', toPort = 1, sink = '__master__' }, 'not absorbed: A->master is a parent send')
       t.eq(tracks['guid-s2'].mainSend, true, 'midi to master-hosted lifts parent send')
       t.deepEq(tracks['guid-s1'].fxOrder, { 'A' })
       t.deepEq(tracks['guid-s2'].outWires, {})
@@ -544,7 +544,7 @@ return {
     name = 'intraConns: source -> fx is the only intra wire; fx -> master is a parent send',
     run = function()
       -- master owns its own class, so f->master crosses to the REAPER master as a
-      -- parent send (mainSend + masterFeed), not an intra-trackKey anchor.
+      -- parent send (mainSend + parentFeed), not an intra-trackKey anchor.
       local ns = {}
       local k,  v  = source('s', 'guid-s'); ns[k]  = v
       local k2, v2 = fx('f');               ns[k2] = v2
@@ -556,7 +556,7 @@ return {
         { from = 's', fromPort = 1, to = 'f', toPort = 1, type = 'audio' },
       })
       t.eq(tracks['guid-s'].mainSend, true)
-      t.deepEq(tracks['guid-s'].masterFeed, { from = 'f', fromPort = 1, toNode = 'master', toPort = 1 })
+      t.deepEq(tracks['guid-s'].parentFeed, { from = 'f', fromPort = 1, toNode = 'master', toPort = 1, sink = '__master__' })
     end,
   },
 
@@ -625,14 +625,14 @@ return {
     end,
   },
 
-  -- masterFeed: pins (post-fold) audio producer feeding the parent send for
+  -- parentFeed: pins (post-fold) audio producer feeding the parent send for
   -- non-master hosts whose audio crosses into the master-hosted trackKey.
 
   {
-    name = 'masterFeed: cross-trackKey source-to-master stamps source on sender',
+    name = 'parentFeed: cross-trackKey source-to-master stamps source on sender',
     run = function()
       -- two-source fanin: mix lives in master-hosted trackKey; both sources contribute
-      -- audio that lifts to mainSend. Each sender's masterFeed names its source.
+      -- audio that lifts to mainSend. Each sender's parentFeed names its source.
       local ns = {}
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
@@ -642,16 +642,16 @@ return {
         { type = 'audio', from = 's2',  to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix', to = 'master' },
       }))
-      t.deepEq(tracks['guid-a'].masterFeed, { from = 's1', fromPort = 1, toNode = 'mix', toPort = 1 })
-      t.deepEq(tracks['guid-b'].masterFeed, { from = 's2', fromPort = 1, toNode = 'mix', toPort = 2 })
+      t.deepEq(tracks['guid-a'].parentFeed, { from = 's1', fromPort = 1, toNode = 'mix', toPort = 1, sink = '__master__' })
+      t.deepEq(tracks['guid-b'].parentFeed, { from = 's2', fromPort = 1, toNode = 'mix', toPort = 2, sink = '__master__' })
     end,
   },
 
   {
-    name = 'masterFeed: cross-trackKey fx-to-master names the fx producer (post-fold)',
+    name = 'parentFeed: cross-trackKey fx-to-master names the fx producer (post-fold)',
     run = function()
       -- fx_pre lives in s1's class; its output crosses into the master-hosted
-      -- trackKey (where mix lives). masterFeed on guid-a names fx_pre.
+      -- trackKey (where mix lives). parentFeed on guid-a names fx_pre.
       local ns = {}
       local k,  v  = source('s1', 'guid-a');  ns[k]  = v
       local k2, v2 = source('s2', 'guid-b');  ns[k2] = v2
@@ -663,13 +663,13 @@ return {
         { type = 'audio', from = 's2',     to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix',    to = 'master' },
       }))
-      t.deepEq(tracks['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1, toNode = 'mix', toPort = 1 })
-      t.deepEq(tracks['guid-b'].masterFeed, { from = 's2',     fromPort = 1, toNode = 'mix', toPort = 2 })
+      t.deepEq(tracks['guid-a'].parentFeed, { from = 'fx_pre', fromPort = 1, toNode = 'mix', toPort = 1, sink = '__master__' })
+      t.deepEq(tracks['guid-b'].parentFeed, { from = 's2',     fromPort = 1, toNode = 'mix', toPort = 2, sink = '__master__' })
     end,
   },
 
   {
-    name = 'masterFeed: folded gain CU on master-bound wire bypassed to real producer',
+    name = 'parentFeed: folded gain CU on master-bound wire bypassed to real producer',
     run = function()
       local ns = {}
       local k,  v  = source('s1', 'guid-a');  ns[k]  = v
@@ -682,16 +682,16 @@ return {
         { type = 'audio', from = 's2',     to = 'mix', toPort = 2 },
         { type = 'audio', from = 'mix',    to = 'master' },
       }))
-      t.deepEq(tracks['guid-a'].masterFeed, { from = 'fx_pre', fromPort = 1, toNode = 'mix', toPort = 1 })
+      t.deepEq(tracks['guid-a'].parentFeed, { from = 'fx_pre', fromPort = 1, toNode = 'mix', toPort = 1, sink = '__master__' })
       t.eq(tracks['guid-a'].mainSendGain, 0.5)
     end,
   },
 
 
   {
-    name = 'masterFeed: midi cross-trackKey to master-hosted does not set masterFeed',
+    name = 'parentFeed: midi cross-trackKey to master-hosted does not set parentFeed',
     run = function()
-      -- s2's midi wire to master lifts mainSend; masterFeed is audio-only.
+      -- s2's midi wire to master lifts mainSend; parentFeed is audio-only.
       local ns = {}
       local k,  v  = source('s1', 'guid-s1'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-s2'); ns[k2] = v2
@@ -702,7 +702,7 @@ return {
         { type = 'midi',  from = 's2', to = 'master' },
       }))
       t.eq(tracks['guid-s2'].mainSend, true)
-      t.eq(tracks['guid-s2'].masterFeed, nil, 'midi master wire stays bool-only')
+      t.eq(tracks['guid-s2'].parentFeed, nil, 'midi master wire stays bool-only')
     end,
   },
 
@@ -765,7 +765,7 @@ return {
     name = 'merge: two gained wires to master collapse to one audioSum CU (last-wins fix)',
     run = function()
       -- Master gets its own track (two source classes feed it), so trackKey guid-a's
-      -- two wires to master would last-wins on masterFeed without the merge.
+      -- two wires to master would last-wins on parentFeed without the merge.
       local ns = {}
       local k,  v  = source('s1', 'guid-a'); ns[k]  = v
       local k2, v2 = source('s2', 'guid-b'); ns[k2] = v2
@@ -791,7 +791,7 @@ return {
       t.eq(cu.originTrackKey,      'guid-a')
       t.deepEq(cu.inputEdges,  { 4, 5 })
       -- The parent send sees ONE producer (the CU), not two competing feeds.
-      t.eq(tracks['guid-a'].masterFeed.from, list[1].id, 'masterFeed points at the merge CU')
+      t.eq(tracks['guid-a'].parentFeed.from, list[1].id, 'parentFeed points at the merge CU')
     end,
   },
   {
@@ -828,7 +828,7 @@ return {
     name = 'merge: parent-send audio fan-in past 16 builds a sum-tree of CUs',
     run = function()
       -- 17 audio wires from one class to the master-hosted track exceed the 16-wide
-      -- bank; the matrix-less parent send sums them through a sum-tree to masterFeed.
+      -- bank; the matrix-less parent send sums them through a sum-tree to parentFeed.
       local ns = {}
       local k,  v  = source('s1', 'guid-a');            ns[k]  = v
       local k2, v2 = source('s2', 'guid-b');            ns[k2] = v2
@@ -853,7 +853,7 @@ return {
       end
       t.eq(#leaves, 2, 'two leaves carry the user edges')
       t.truthy(root, 'one internal root CU (no user edges)')
-      t.eq(tracks['guid-a'].masterFeed.from, root.id, 'masterFeed is the tree root')
+      t.eq(tracks['guid-a'].parentFeed.from, root.id, 'parentFeed is the tree root')
     end,
   },
   {

@@ -26,12 +26,12 @@
 -- see docs/DAG.md § synthNode field roles
 --shape: outWire = { from=id, fromPort?=int, to=trackKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
 --shape: intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
---shape: trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackId?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, masterFeed?={from=id, fromPort?=int, toNode=id, toPort?=int}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }
+--shape: trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackId?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, parentFeed?={from=id, fromPort?=int, toNode=id, toPort?=int, sink=trackKey}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }  -- parentFeed.sink is MASTER or the folder parent's trackKey
 --shape: targetTracks = { [trackKey] = trackSpec }
 -- see docs/DAG.md § targetTracks shape
 --shape: allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int, preFx?=true }; audio src/dstChan are (pair-1)*2, midi are bus 0..127; preFx marks a raw-source-origin (pre-FX) send
 --shape: allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
---shape: allocatedTracks = { [trackKey] = { trackKind=..., trackId?=..., fxOrder=..., mainSend=..., mainSendGain?=..., masterFeed?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
+--shape: allocatedTracks = { [trackKey] = { trackKind=..., trackId?=..., fxOrder=..., mainSend=..., mainSendGain?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
 local util = require('util')
 
 local CU_IDENT = 'JS:Continuum Utility'
@@ -291,7 +291,7 @@ local function buildCtx(userGraph, derivedSplits)
   -- ctx:classOf() and the track-keyed derivations below; never a public seam.
   local function classes()
     if cache.classes then return cache.classes end
-    cache.classes, cache.splitClasses, cache.busClasses = {}, {}, {}
+    cache.classes, cache.splitClasses, cache.busClasses, cache.sourceTrackId = {}, {}, {}, {}
     for id in pairs(nodes) do
       local guids = {}
       for guid in pairs(srcSet(id)) do util.add(guids, guid) end
@@ -300,6 +300,8 @@ local function buildCtx(userGraph, derivedSplits)
       util.bucket(cache.classes, key, id)
       if cache.hasSplit[id] then cache.splitClasses[key] = true end
       if cache.hasBus[id]   then cache.busClasses[key]   = true end
+      local n = nodes[id]
+      if n.kind == 'source' and n.trackId then cache.sourceTrackId[key] = n.trackId end
     end
     return cache.classes
   end
@@ -316,6 +318,13 @@ local function buildCtx(userGraph, derivedSplits)
   local function busClasses()
     classes()
     return cache.busClasses
+  end
+
+  -- {classKey -> trackId} for classes containing a source node (incl. folder parents).
+  -- Pinned to that source's REAPER track: never an absorbee; keys to guid even when srcSet is composite.
+  local function sourceTrackId()
+    classes()
+    return cache.sourceTrackId
   end
 
   function ctx:classOf()
@@ -369,10 +378,10 @@ local function buildCtx(userGraph, derivedSplits)
       return nil
     end
 
-    local splitClasses, busClasses = splitClasses(), busClasses()
+    local splitClasses, busClasses, srcTrack = splitClasses(), busClasses(), sourceTrackId()
     local direct = {}
     for cls, qEntry in pairs(q) do
-      local target = not (splitClasses[cls] or busClasses[cls]) and directTrackKey(qEntry) or nil
+      local target = not (splitClasses[cls] or busClasses[cls] or srcTrack[cls]) and directTrackKey(qEntry) or nil
       direct[cls] = target and not busClasses[target] and target or nil
     end
 
@@ -408,11 +417,15 @@ local function buildCtx(userGraph, derivedSplits)
     return result
   end
 
-  -- The master-hosted class keys to the MASTER sentinel: its track is fixed in
-  -- REAPER. Source classes never appear as absorbees (no audio parents).
+  -- MASTER for the master class; a source-bearing class pins to its source's guid (its own REAPER
+  -- track); else resolve through absorption so an absorbed class lands on its target's real trackKey. See docs/DAG.md § Folder parents.
   function ctx:classTrackKey(cls)
     if cls == self:masterTrackClass() then return MASTER end
-    return absorption()[cls] or cls
+    local pinned = sourceTrackId()[cls]
+    if pinned then return pinned end
+    local absorbed = absorption()[cls]
+    if absorbed then return self:classTrackKey(absorbed) end
+    return cls
   end
 
   -- Track key a node id lands on: its class, resolved through absorption.
@@ -432,17 +445,48 @@ local function buildCtx(userGraph, derivedSplits)
     return cache.trackMembers
   end
 
+  -- Per foldered-child track, the one egress edge that rides its parent send (REAPER has a single
+  -- B_MAINSEND per track). Returns { [edgeIdx] = sinkTrackKey }. See docs/DAG.md.
+  function ctx:conduit()
+    if cache.conduit then return cache.conduit end
+    cache.conduit = {}
+    local childParent = {}  -- child trackKey -> parent node id (the tree)
+    for id, n in pairs(nodes) do
+      if n.kind == 'source' and n.parent then childParent[self:trackKeyOf(id)] = n.parent end
+    end
+    local candidates = {}   -- child trackKey -> { {idx, edge}, ... }
+    for idx, edge in ipairs(edges) do
+      local parentNode = edge.type == 'audio' and nodes[edge.to]
+      if parentNode and parentNode.kind == 'source' and (parentNode.ports.audio.ins or 0) >= 1 then
+        local fromTrack = self:trackKeyOf(edge.from)
+        if childParent[fromTrack] == edge.to then util.bucket(candidates, fromTrack, { idx = idx, edge = edge }) end
+      end
+    end
+    -- Tie-break among parallels by the stable endpoint key, churn-free across recompiles.
+    for _, cand in pairs(candidates) do
+      table.sort(cand, function(a, b)
+        local ae, be = a.edge, b.edge
+        if (ae.toPort or 1)   ~= (be.toPort or 1)   then return (ae.toPort or 1)   < (be.toPort or 1)   end
+        if (ae.fromPort or 1) ~= (be.fromPort or 1) then return (ae.fromPort or 1) < (be.fromPort or 1) end
+        return ae.from < be.from
+      end)
+      cache.conduit[cand[1].idx] = self:trackKeyOf(cand[1].edge.to)
+    end
+    return cache.conduit
+  end
+
   -- Per gained edge, the volume host (native send/main vol, or kind 'cu');
   -- shared by targetTracks and wm:pokeEdgeGain. See docs/DAG.md § gainHost.
   function ctx:gainHost()
     if cache.gainHost then return cache.gainHost end
+    local conduit = self:conduit()
     -- The native host a gained edge could land on, with the count key that
     -- decides solubility; nil for untracked-source or same-track edges.
-    local function routeOf(edge)
+    local function routeOf(edge, edgeIdx)
       local from = self:trackKeyOf(edge.from)
       if not from or from == '' then return nil end
       local to = self:trackKeyOf(edge.to)
-      if to == MASTER then
+      if to == MASTER or conduit[edgeIdx] then  -- a parent send: gain lives on the track's main-send vol
         return { kind = 'mainSend', key = util.key('main', from), cls = from }
       end
       if to and to ~= '' and from ~= to then
@@ -453,9 +497,9 @@ local function buildCtx(userGraph, derivedSplits)
     -- A gain lands on a native host only when that host carries exactly one
     -- audio edge, so count every audio edge (gained or not) before deciding any.
     local count = {}
-    for _, edge in ipairs(edges) do
+    for edgeIdx, edge in ipairs(edges) do
       if edge.type == 'audio' then
-        local route = routeOf(edge)
+        local route = routeOf(edge, edgeIdx)
         if route then count[route.key] = (count[route.key] or 0) + 1 end
       end
     end
@@ -463,7 +507,7 @@ local function buildCtx(userGraph, derivedSplits)
     for edgeIdx, edge in ipairs(edges) do
       if edge.type == 'audio' and edge.ops and edge.ops.gain then
         local host  = { kind = 'cu', gain = edge.ops.gain }
-        local route = routeOf(edge)
+        local route = routeOf(edge, edgeIdx)
         if route and count[route.key] == 1 then util.assign(host, util.pick(route, 'kind cls from to')) end
         hosts[edgeIdx] = host
       end
@@ -542,6 +586,7 @@ do
   local function buildConns(ctx)
     local nodes, edges = ctx.userGraph.nodes, ctx.userGraph.edges
     local gainHost = ctx:gainHost()
+    local conduit  = ctx:conduit()
     local synthNodes, cuTrackKey, conns, cuN = {}, {}, {}, 0
     local function nodeTrackKey(id) return cuTrackKey[id] or ctx:trackKeyOf(id) end
     local function audioConn(from, fp, to, tp, gain)
@@ -587,6 +632,8 @@ do
           group = groupFor(fromTrackKey, 'master', true)  -- width-1 parent send: pre-sum per producer
         elseif conn.to == 'master' then
           group = groupFor(toTrackKey, 'master', true)    -- in-class master: serial parent send, sum fan-in to one pair
+        elseif conduit[edgeIdx] then
+          group = groupFor(fromTrackKey, conn.to, true)   -- folder conduit: child rides B_MAINSEND to its parent
         elseif nodes[conn.to] and nodes[conn.to].kind == 'fx' then
           group = groupFor(toTrackKey, conn.to, false)    -- fx consumer: merge at the consumer trackKey
         end
@@ -611,6 +658,10 @@ do
     for _, groupKey in ipairs(groupKeys) do
       local group = feederGroups[groupKey]
       sortFeeders(group.audio); sortFeeders(group.midi)
+      -- A parent send (to master or a folder parent) marks its summed output so routeByTrack
+      -- realises it as B_MAINSEND; in-class master (sink == own track) stays an intra conn.
+      local parentSink  = group.isParentSend and nodeTrackKey(group.consumer) or nil
+      local marksParent = parentSink ~= nil and parentSink ~= group.trackKey
       -- Audio: matrix sinks merge only when gained; parent sends sum on fan-in ≥2.
       -- MIDI: only same-track producers force a CU (cross-track sends coalesce a bus).
       local audioCU = group.isParentSend and #group.audio >= 2 or
@@ -644,7 +695,10 @@ do
 
       local firstAudioCu  -- carries the MIDI merge too, in the single-CU case
       if not audioCU then
-        for _, f in ipairs(group.audio) do util.add(conns, f) end
+        for _, f in ipairs(group.audio) do
+          if marksParent then f.parentSend = true; f.sink = parentSink end
+          util.add(conns, f)
+        end
       elseif not group.isParentSend then
         -- Matrix-fed: parallel chunk CUs, each ≤MERGE_WIDTH wide. Every
         -- chunk's outputs route to the consumer's pins, which sum the lot.
@@ -660,7 +714,7 @@ do
         end
       else
         -- Parent send (matrix-less): a sum-tree of audioSum CUs reduces fan-in
-        -- to one pair. Gains apply at leaves; the root feeds masterFeed.
+        -- to one pair. Gains apply at leaves; the root feeds parentFeed.
         local toPort = group.audio[1].toPort
         local level = {}
         for _, f in ipairs(group.audio) do
@@ -680,18 +734,24 @@ do
           level = nextLevel
         end
         audioConn(rootCu, 1, group.consumer, toPort)
+        if marksParent then conns[#conns].parentSend = true; conns[#conns].sink = parentSink end
         if mergeN == 1 then firstAudioCu = rootCu end  -- lone CU carries MIDI too
       end
 
       if not midiCU then
-        for _, f in ipairs(group.midi) do util.add(conns, f) end
+        for _, f in ipairs(group.midi) do
+          if marksParent then f.parentSend = true end
+          util.add(conns, f)
+        end
       else
         -- One N→1 collapse (no width cap — 128-bit mask). Rides the audio CU
         -- only when there's exactly one; a cascade gives MIDI its own CU.
         local cuId = mergeN == 1 and firstAudioCu
                      or mintMerge({ mode = 'merge', nPairs = 1, gains = { 1 }, audioSum = 0 }, nil)
         for _, f in ipairs(group.midi) do util.add(conns, { type = 'midi', from = f.from, to = cuId }) end
-        util.add(conns, { type = 'midi', from = cuId, to = group.consumer })
+        local midiOut = { type = 'midi', from = cuId, to = group.consumer }
+        if marksParent then midiOut.parentSend = true end
+        util.add(conns, midiOut)
       end
     end
 
@@ -738,19 +798,19 @@ do
       local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
       if fromTrackKey and fromTrackKey ~= '' and toTrackKey and toTrackKey ~= '' then
         local route = routeOf(fromTrackKey)
-        if fromTrackKey == toTrackKey then
+        if conn.parentSend then
+          route.mainSend = true
+          -- Audio fan-in arrives pre-merged (≥2 wires → one audioSum CU output), so
+          -- parentFeed carries a single producer; sink is master or the folder parent.
+          if conn.type == 'audio' then
+            route.parentFeed = { from = conn.from, fromPort = conn.fromPort,
+                                 toNode = conn.to, toPort = conn.toPort, sink = conn.sink }
+          end
+        elseif fromTrackKey == toTrackKey then
           util.add(route.intraConns, {
             from = conn.from, fromPort = conn.fromPort,
             to   = conn.to,   toPort   = conn.toPort, type = conn.type,
           })
-        elseif toTrackKey == MASTER then
-          route.mainSend = true
-          -- Audio master fan-in arrives pre-merged (≥2 wires → one audioSum CU
-          -- output), so masterFeed carries a single producer.
-          if conn.type == 'audio' then
-            route.masterFeed = { from = conn.from, fromPort = conn.fromPort,
-                                 toNode = conn.to, toPort = conn.toPort }
-          end
         else
           -- conn.gain survives to here only on bus-bound taps sharing a route key
           -- (insoluble for gainHost); sends are per-srcChan, each with its own D_VOL.
@@ -825,7 +885,7 @@ do
             trackKind = trackKind, trackId = trackId,
             fxOrder = topoIntraTrack(chain, route.intraConns),
             mainSend = route.mainSend, mainSendGain = mainGain[trackKey],
-            masterFeed = route.masterFeed,
+            parentFeed = route.parentFeed,
             outWires = route.outWires, intraConns = route.intraConns,
             synthNodes = synth,
           }
@@ -1117,7 +1177,7 @@ end
 
 -- One assignment pass over a fixed partition; returns allocatedTracks + per-track capacity meta.
 -- Per-track live-range allocation, one register file per stream (audio pairs b1, midi buses b0).
---contract: outWires/intraConns/masterFeed -> sends+pinMaps+nchan+mainSendOffs.
+--contract: outWires/intraConns/parentFeed -> sends+pinMaps+nchan+mainSendOffs.
 --contract: nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
 local function allocateOnce(tracks, nodes)
   nodes = nodes or {}
@@ -1139,16 +1199,16 @@ local function allocateOnce(tracks, nodes)
   -- Parent sends ride the same receiver-decides handshake as ordinary sends but
   -- write OFFS; allocate last so real inputs claim dest pairs first.
   for senderTrackKey, entry in pairs(tracks) do
-    local mf = entry.masterFeed
+    local mf = entry.parentFeed
     if entry.mainSend and mf then
-      util.bucket(incoming, MASTER, {
+      util.bucket(incoming, mf.sink, {
         wire = { toNode = mf.toNode, toPort = mf.toPort, type = 'audio' },
-        senderTrackKey = senderTrackKey, isMaster = true })
+        senderTrackKey = senderTrackKey, isParentSend = true })
     end
   end
   for _, list in pairs(incoming) do
     table.sort(list, function(a, b)
-      if a.isMaster ~= b.isMaster then return not a.isMaster end
+      if a.isParentSend ~= b.isParentSend then return not a.isParentSend end
       if a.senderTrackKey ~= b.senderTrackKey then return a.senderTrackKey < b.senderTrackKey end
       return (a.sendIdx or 0) < (b.sendIdx or 0)
     end)
@@ -1198,7 +1258,7 @@ local function allocateOnce(tracks, nodes)
       util.add(flows, { type = ow.type, escape = 'send', sendIdx = sendIdx,
         from = ow.from, fromPort = ow.fromPort, fromSlot = slotMap[ow.from] })
     end
-    local mf = entry.masterFeed
+    local mf = entry.parentFeed
     if entry.mainSend and mf then
       util.add(flows, { type = 'audio', escape = 'feed',
         from = mf.from, fromPort = mf.fromPort, fromSlot = slotMap[mf.from] })
@@ -1278,7 +1338,7 @@ local function allocateOnce(tracks, nodes)
         local g = orderedGroup(byPin, pinOrder, util.key(f.to, f.toPort or 1),
           { def = 0, lastUse = f.toSlot, writes = {},
             pins = { { fxId = f.to, dir = 'ins', port = f.toPort } } })
-        util.add(g.writes, f.inc.isMaster
+        util.add(g.writes, f.inc.isParentSend
           and { kind = 'mainSendOffs', track = f.inc.senderTrackKey }
           or  { kind = 'sendDst', track = f.inc.senderTrackKey, sendIdx = f.inc.sendIdx })
       end
@@ -1542,10 +1602,10 @@ local function bisect(trackKey, spec, g)
     util.add(downSet[ow.from] and downOut or upOut, ow)
   end
 
-  local mf = spec.masterFeed
-  local masterDown = mf ~= nil and downSet[mf.from] or false
-  local upMain  = (mf and not masterDown) or (not mf and spec.mainSend) or false
-  local downMain = masterDown
+  local mf = spec.parentFeed
+  local feedDown = mf ~= nil and downSet[mf.from] or false
+  local upMain  = (mf and not feedDown) or (not mf and spec.mainSend) or false
+  local downMain = feedDown
 
   local upSynth, downSynth
   for cuId, node in pairs(spec.synthNodes or {}) do
@@ -1556,13 +1616,13 @@ local function bisect(trackKey, spec, g)
   local upSpec = {
     trackKind = spec.trackKind, trackId = spec.trackId, fxOrder = upOrder,
     mainSend = upMain, mainSendGain = upMain and spec.mainSendGain or nil,
-    masterFeed = upMain and mf or nil,
+    parentFeed = upMain and mf or nil,
     outWires = upOut, intraConns = upIntra, synthNodes = upSynth,
   }
   local downSpec = {
     trackKind = 'newTrack', trackId = nil, fxOrder = downOrder,
     mainSend = downMain, mainSendGain = downMain and spec.mainSendGain or nil,
-    masterFeed = downMain and mf or nil,
+    parentFeed = downMain and mf or nil,
     outWires = downOut, intraConns = downIntra, synthNodes = downSynth,
   }
   return upSpec, downSpec, downKey, downSet

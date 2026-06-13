@@ -384,7 +384,7 @@ return {
     end,
   },
   {
-    name = 'mainSendOffs: mainSend=true with no masterFeed defaults to 0',
+    name = 'mainSendOffs: mainSend=true with no parentFeed defaults to 0',
     run = function()
       local tracks = {
         ['guid-a'] = {
@@ -398,12 +398,12 @@ return {
     end,
   },
   {
-    name = 'mainSendOffs: masterFeed from source (not in fxSet) stays at 0, no pin',
+    name = 'mainSendOffs: parentFeed from source (not in fxSet) stays at 0, no pin',
     run = function()
       local tracks = {
         ['guid-a'] = {
           trackKind='sourceTrack', trackId='guid-a', fxOrder={},
-          mainSend=true, masterFeed={from='s'},
+          mainSend=true, parentFeed={from='s', sink='__master__'},
           intraConns={}, outWires={},
         },
       }
@@ -413,12 +413,12 @@ return {
     end,
   },
   {
-    name = 'mainSendOffs: masterFeed reuses fx input pair in-place (offs=0)',
+    name = 'mainSendOffs: parentFeed reuses fx input pair in-place (offs=0)',
     run = function()
       local tracks = {
         ['guid-a'] = {
           trackKind='sourceTrack', trackId='guid-a', fxOrder={'fx1'},
-          mainSend=true, masterFeed={from='fx1'},
+          mainSend=true, parentFeed={from='fx1', sink='__master__'},
           intraConns={ {from='s', to='fx1', type='audio'} },
           outWires={},
         },
@@ -431,12 +431,12 @@ return {
     end,
   },
   {
-    name = 'mainSendOffs: chain ending in masterFeed collapses to one pair',
+    name = 'mainSendOffs: chain ending in parentFeed collapses to one pair',
     run = function()
       local tracks = {
         ['guid-a'] = {
           trackKind='sourceTrack', trackId='guid-a', fxOrder={'fx1','fx2','fx3'},
-          mainSend=true, masterFeed={from='fx3'},
+          mainSend=true, parentFeed={from='fx3', sink='__master__'},
           intraConns={
             {from='s',   to='fx1', type='audio'},
             {from='fx1', to='fx2', type='audio'},
@@ -452,12 +452,12 @@ return {
     end,
   },
   {
-    name = 'mainSendOffs: masterFeed shares its pair with the outgoing send (split-share)',
+    name = 'mainSendOffs: parentFeed shares its pair with the outgoing send (split-share)',
     run = function()
       local tracks = {
         ['guid-a'] = {
           trackKind='sourceTrack', trackId='guid-a', fxOrder={'fx1'},
-          mainSend=true, masterFeed={from='fx1'},
+          mainSend=true, parentFeed={from='fx1', sink='__master__'},
           intraConns={ {from='s', to='fx1', type='audio'} },
           outWires={ {from='fx1', to='guid-b', toNode='fx_b', type='audio'} },
         },
@@ -466,7 +466,7 @@ return {
       }
       local out = DAG.allocate(tracks)
       -- fx1's one output pair feeds both readers: send (srcChan=0) and
-      -- masterFeed (mainSendOffs=0) read it in place, no replica.
+      -- parentFeed (mainSendOffs=0) read it in place, no replica.
       t.deepEq(out['guid-a'].pinMaps.fx1.outs[1], {1})
       t.eq(out['guid-a'].sends[1].srcChan, 0)
       t.eq(out['guid-a'].mainSendOffs,     0)
@@ -531,7 +531,7 @@ return {
       local tracks = {
         ['guid-a'] = {
           trackKind='sourceTrack', trackId='guid-a', fxOrder={'fx1'},
-          mainSend=true, masterFeed={from='fx1', toNode='master', toPort=1},
+          mainSend=true, parentFeed={from='fx1', toNode='master', toPort=1, sink='__master__'},
           intraConns={ {from='s', to='fx1', type='audio'} },
           outWires={ {from='s', to='guid-b', toNode='fx_b', type='audio'} },
         },
@@ -574,12 +574,12 @@ return {
         },
         ['guid-a'] = {
           trackKind='sourceTrack', trackId='guid-a', fxOrder={},
-          mainSend=true, masterFeed={from='sa', toNode='comp', toPort=1},
+          mainSend=true, parentFeed={from='sa', toNode='comp', toPort=1, sink='__master__'},
           intraConns={}, outWires={},
         },
         ['guid-b'] = {
           trackKind='sourceTrack', trackId='guid-b', fxOrder={},
-          mainSend=true, masterFeed={from='sb', toNode='comp', toPort=2},
+          mainSend=true, parentFeed={from='sb', toNode='comp', toPort=2, sink='__master__'},
           intraConns={}, outWires={},
         },
       }

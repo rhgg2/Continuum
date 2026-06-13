@@ -156,7 +156,7 @@ return {
       end
       t.eq(toF.gain, 0.7)
       t.eq(tracks[busCls].mainSendGain, 0.9)
-      t.eq(tracks[busCls].masterFeed.from, 'bus-1', 'single master feed, straight from the bus')
+      t.eq(tracks[busCls].parentFeed.from, 'bus-1', 'single master feed, straight from the bus')
       for trackKey, entry in pairs(tracks) do
         t.falsy(entry.synthNodes and next(entry.synthNodes), trackKey .. ': no CU minted')
       end

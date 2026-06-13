@@ -220,7 +220,14 @@ of correct folder `read` — a later cosmetic layer, not part of steps
 > foldered child's `mainSend` into its parent, mints the parent as a
 > summing `source` node (`audio.ins=1`), and seeds parent `liveMidi` from
 > children through the pipe; suite green at 1413, spec
-> `tests/specs/wm_folders_read_spec.lua`. Steps 3–4 not started.
+> `tests/specs/wm_folders_read_spec.lua`. **Step 3a (audio conduit) now landed**
+> — `classTrackKey` pins a folder parent's composite class to its own track (and
+> bars source-bearing classes from absorbing, fixing the single-child case),
+> `ctx:conduit` selects the child edge that rides `B_MAINSEND`, and the master
+> parent-send machinery generalised to a `sink`-keyed `parentFeed` (`masterFeed`
+> renamed). read ∘ compile = id over six folder fixtures in `wm_roundtrip_spec`;
+> suite green at 1419. Step 3b (midi pipe + family bus domains) and step 4
+> (capacity) not started.
 
 1. **rm foundation** *(DONE — `a9e530d`)*: `readTrack` carries
    `folderDepth`; `stampParents` walks project order stamping each
@@ -259,11 +266,16 @@ of correct folder `read` — a later cosmetic layer, not part of steps
      allocator pins a folder parent's composite class to its existing
      track (and doesn't absorb a single-child folder), recompile is
      wrong-but-expected.
-3. **Compile**: conduit rule + tie-break; midi condition; relay
-   pattern for foldered→master; family bus domains in
-   `DAG.allocate`. Roundtrip sweep (`wm_roundtrip_spec`) extended
-   over the step-2 fixture set; adoption-no-op test (read a foldered
-   project, recompile, assert zero ops).
+3. **Compile**. Split 3a/3b.
+   - **3a (DONE)**: audio conduit rule + tie-break; folder-parent class
+     pinning (`classTrackKey` → source guid) + single-child absorb guard;
+     master parent-send machinery generalised to `sink`-keyed `parentFeed`.
+     Roundtrip sweep extended over the audio folder fixtures in
+     `wm_roundtrip_spec` (overlaying the REAPER-resident tree onto targetState).
+   - **3b**: midi conduit condition; family bus domains in `DAG.allocate` (the
+     parent fx's `inBus` must equal the child's `outBus` through the atomic
+     identity pipe); relay pattern for foldered→master (still deferred per the
+     realisation note); adoption-no-op test.
 4. **Capacity over domains**: family bus over-pressure → existing
    eviction; deterministic; fixture forcing >16 buses in one family.
 

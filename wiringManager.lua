@@ -1120,7 +1120,7 @@ local function readGraph(snap, busMeta)
       -- Folder parent: source node summing children's parent-sends; emits sum on pair 1.
       -- midi.ins/outs=0 — pipe-seeded liveMidi is the children's (see design/wiring-folders.md § Model + read).
       local sid = entry.id
-      nodes[sid] = { kind = 'source', trackId = entry.id,
+      nodes[sid] = { kind = 'source', trackId = entry.id, parent = entry.parent,
                      ports = { audio = { ins = 1, outs = 1 }, midi = { ins = 0, outs = 0 } } }
       if isCyclic then feedbackSeeds[sid] = true end
       for _, refs in pairs(liveAudio) do
@@ -1132,7 +1132,7 @@ local function readGraph(snap, busMeta)
       -- No inputs => a source (scratch excepted: a known fx bin, walked as floating islands).
       -- Emits audio on pair 1 and midi on bus 0.
       local sid = entry.id
-      nodes[sid] = { kind = 'source', trackId = entry.id,
+      nodes[sid] = { kind = 'source', trackId = entry.id, parent = entry.parent,
                      ports = { audio = { ins = 0, outs = 1 }, midi = { ins = 0, outs = 1 } } }
       if isCyclic then feedbackSeeds[sid] = true end
       feed(1, { node = sid, port = 1 })

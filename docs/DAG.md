@@ -50,25 +50,48 @@ shared by
 `wm:pokeEdgeGain` (which pokes the live value without a full
 recompile).
 
-## targetTracks shape — outWires, intraConns, masterFeed semantics
+## targetTracks shape — outWires, intraConns, parentFeed semantics
 
 `outWires` are sends that leave a track. Each carries `from`, `to`,
 `type`, and optionally `gain` (boundary gain) and `srcChan` /
 `dstChan` (assigned by `M.allocate`). `intraConns` are FX-to-FX
 connections within the same track: same fields but no channel
-assignment. `masterFeed` is the single outWire entry that feeds the
-master-hosted class; its `from` / `fromPort` identify the last node
-before the boundary, `toNode` / `toPort` the consumer pin it lands on.
-The parent send reads the source track's pair 1 (`C_MAINSEND_NCH = 2`,
-no source-side offset), so the allocator pins that producer to pair 1.
-`C_MAINSEND_OFFS` is the *receiver's* call: the master track allocates
-the consumer pin and writes the destination pair back onto the sender's
-`mainSendOffs`, exactly the handshake an ordinary send uses for
-`dstChan` — 0 for an FX-less master, non-zero when the pin sits on a
-higher pair (a compressor sidechain, say). Folded boundary gains carry
+assignment. `parentFeed` is the single producer that feeds the track's parent send
+(`B_MAINSEND`); its `from` / `fromPort` identify the last node before the
+boundary, `toNode` / `toPort` the consumer pin it lands on, and `sink` the
+track it lands on — the `MASTER` sentinel at top level, or a folder parent's
+trackKey (REAPER's one `B_MAINSEND` per track lands on master at top level, on
+the folder parent when foldered). The parent send reads the source track's pair
+1 (`C_MAINSEND_NCH = 2`, no source-side offset), so the allocator pins that
+producer to pair 1. `C_MAINSEND_OFFS` is the *receiver's* call: the sink track
+allocates the consumer pin and writes the destination pair back onto the
+sender's `mainSendOffs`, exactly the handshake an ordinary send uses for
+`dstChan` — 0 for an FX-less master or a folder parent (its pair-1 summing
+point), non-zero when a master-resident pin sits higher (a compressor sidechain,
+say). Folded boundary gains carry
 their value on `outWires.gain` / `mainSendGain`, not a CU.
 `M.allocate(targetTracks)` turns `outWires` into sends with per-tuple
 channel assignment.
+
+## Folder parents — compile (the conduit rule)
+
+A folder parent reads as a `kind='source'` node with `audio.ins ≥ 1` summing its
+children (`docs/wiringManager.md § createSourceTrack`). Compile is the inverse,
+and turns on two generalisations:
+
+- **Class pinning.** A folder parent's `srcSet` unions its children, so its class
+  key is composite. `ctx:classTrackKey` pins any source-bearing class to that
+  source's guid (not the composite key), so the parent keys to its own REAPER
+  track — the same guid `wm:snapshot` keys it by, so the differ sees zero ops on
+  adoption. The same fact (a source-bearing class is never an absorbee) stops a
+  single-child folder from absorbing onto its child.
+- **The conduit.** `ctx:conduit` picks, per foldered-child track, the one egress
+  edge that rides the child's `B_MAINSEND` onto its parent — REAPER has one
+  `B_MAINSEND` per track, so the rest of the child's egress stays explicit sends.
+  The folder tree (`node.parent`) is an input to compile, sourced from rm's
+  positional walk, never authored here. The chosen edge realises through the same
+  `mainSend` + `parentFeed` machinery as a master send, only with `sink` = the
+  parent's trackKey. (MIDI through the pipe + family bus domains are step 3b.)
 
 ## Split markers — a node as its own source
 
@@ -125,7 +148,7 @@ the marker lands on **master itself**. So `master` always owns a dedicated
 class, and `ctx:masterTrackClass` is total on the compiled ctx (it returns nil
 only on the marker-free base ctx, which is how `deriveMasterSplit` detects the
 case). That class is usually FX-less: the cone fx stay on the source track and
-feed the REAPER master through a parent send (`mainSend` + `masterFeed`), same
+feed the REAPER master through a parent send (`mainSend` + `parentFeed`), same
 as a multi-source fan-in. `targetTracks` emits a `__master__` track entry only
 when FX actually live on master, mirroring `wm:snapshot` — an FX-less master is
 implicit (the REAPER master always exists), keeping target and snapshot
@@ -264,7 +287,7 @@ The optional `profile` records the live-register count across each gap — the
 crossing weight a capacity bisection would carry at that cut.
 
 Values are built from a per-track *flow* list: every connection through the
-track's channel space (intraConns, outWires, masterFeed, incoming sends),
+track's channel space (intraConns, outWires, parentFeed, incoming sends),
 endpoints resolved against the chain once (a slot, or boundary when absent).
 Per-stream folds group flows into values — audio by producer `(fxId, port)` and
 receiver pin, MIDI by producer fx and receiver node — plus the pinned boundary
