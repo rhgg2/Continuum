@@ -841,19 +841,27 @@ local function wireMid(seg)
   return seg.sx + (seg.ex - seg.sx) * t, seg.sy + (seg.ey - seg.sy) * t
 end
 
-local function drawWireArrow(p, sx, sy, ex, ey, name, cx, cy)
+local function drawWireArrow(p, sx, sy, ex, ey, name, cx, cy, clampToEx)
   local dx, dy = ex - sx, ey - sy
   local len = math.sqrt(dx * dx + dy * dy)
   if len < WIRE_ARROW_LEN then return end
   local ux, uy = dx / len, dy / len
   local px, py = -uy, ux
-  -- Centroid (not tip) on the visible midpoint cx/cy, else the arrow reads
-  -- biased forward by L/6; +0.5 lands vertices on pixel centres for the fill rule.
-  local mx     = (cx or (sx + ex) / 2) + 0.5
-  local my     = (cy or (sy + ey) / 2) + 0.5
   local tipDist  = WIRE_ARROW_LEN * 2 / 3
   local baseDist = WIRE_ARROW_LEN / 3
   local halfW    = WIRE_ARROW_WID / 2
+  -- Centroid (not tip) on the visible midpoint cx/cy, else the arrow reads
+  -- biased forward by L/6.
+  local mx = cx or (sx + ex) / 2
+  local my = cy or (sy + ey) / 2
+  -- A bar end (extent 0) doesn't occlude the tip; pull the centroid back so the
+  -- tip rests on the bar rather than crossing it.
+  if clampToEx then
+    local toEx = (ex - mx) * ux + (ey - my) * uy
+    if tipDist > toEx then mx, my = mx - ux * (tipDist - toEx), my - uy * (tipDist - toEx) end
+  end
+  -- +0.5 lands vertices on pixel centres for the fill rule.
+  mx, my = mx + 0.5, my + 0.5
   local tipx, tipy = mx + ux * tipDist,  my + uy * tipDist
   local bx,   by   = mx - ux * baseDist, my - uy * baseDist
   local b1x = bx + px * halfW
@@ -881,6 +889,9 @@ local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idS
   local ux, uy = dx / len, dy / len
   local maxDist = len * 0.45
   local labelDist = math.min(maxDist, exitD + WIRE_LABEL_LEAD + proj)
+  -- maxDist keeps ends' labels apart, but on a short wire pulls the digit inside
+  -- the node body. Floor just past the face; collision loop still re-caps pairs.
+  if labelDist < exitD + proj then labelDist = math.min(exitD + proj, len - proj) end
   -- Smallest positive push along (ux,uy) that separates a candidate at
   -- (cx,cy) from existing rect e on one axis. math.huge if axis-aligned
   -- separation in that direction is impossible (wire parallel to axis).
@@ -1049,7 +1060,10 @@ local function drawWiresPass(p, segs, wireViews, opts, placed)
       local ex, ey = seg.ex, seg.ey
       local name = w.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
       p.line(sx, sy, ex, ey, name, WIRE_THICK)
-      drawWireArrow(p, sx, sy, ex, ey, name, seg.cx, seg.cy)
+      -- A bus tap lands its arrowed end on a bar (extent 0); clamp so the tip
+      -- rests on the bar instead of protruding past it.
+      local barTip = seg.toHW == 0 and seg.toHH == 0
+      drawWireArrow(p, sx, sy, ex, ey, name, seg.cx, seg.cy, barTip)
       if w.type == 'audio' then
         local fromD, toD, segLen = wireExits(seg)
         if fromD then
@@ -1867,12 +1881,18 @@ local function renderCanvas(w, h)
     end
   end
   drawBusPass(p, busRails, placedLabels)
+  -- Matrix bars render with the fan rails, behind every node: a buss bar is a
+  -- backdrop its consumers sit on, not a body that occludes them.
+  for _, nv in ipairs(nodeViews) do
+    local rail = nv.category == 'bus' and matrixRails[nv.id]
+    if rail then drawBusBar(p, rail, selection[nv.id]) end
+  end
   for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
   drawDraftWire(p, wireDraft, nodesById, draftCx, draftCy)
   for _, nv in ipairs(nodeViews) do
-    local rail = nv.category == 'bus' and matrixRails[nv.id]
-    if rail then drawBusBar(p, rail, selection[nv.id])
-    else         drawNode(p, nv, selection[nv.id]) end
+    if not (nv.category == 'bus' and matrixRails[nv.id]) then
+      drawNode(p, nv, selection[nv.id])
+    end
   end
 
   -- A palette drag carries a floating source tag at the cursor (on top of
