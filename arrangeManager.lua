@@ -15,6 +15,7 @@
 --invariant: arrangeColours allocates lowest-free across live takeIds; ensureColours prunes dead ids
 --invariant: placement stamps painter.hueNative(idx) on new takes iff I_CUSTOMCOLOR == 0
 --invariant: painter.hue and painter.hueNative share one hash; freshly-stamped takes match the grid
+--invariant: render reads serve one cached build; rebuilt on invalidate() or state-count change
 
 local util    = require 'util'
 local painter = require 'painter'
@@ -24,6 +25,12 @@ local cm, facade = (...).cm, (...).facade
 local am = {}
 
 local SLOT_MAX = 61    -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
+
+-- Arrange render state: one in-memory build serving every render read, rebuilt
+-- only on a project change. See docs/arrangeManager.md § state.
+local state, dirty, lastTick = nil, true, -1
+local ensureState                       -- assigned below buildTakeShape
+local function invalidate() dirty = true end
 
 ----- Helpers
 
@@ -126,6 +133,7 @@ local function relayoutTrack(track)
     if rendered < 0 then rendered = 0 end
     setItemQNRange(r.item, r.startQN, r.startQN + rendered)
   end
+  invalidate()
 end
 
 -- The effective natural length (post-OPEN-resolution) exposed via tracksTakes.
@@ -254,26 +262,7 @@ local function colOfTrack(track)
   end
 end
 
-function am:projectTracks()
-  local out = {}
-  for ti = 0, reaper.CountTracks(0) - 1 do
-    local track = reaper.GetTrack(0, ti)
-    if isVisibleTrack(track) then
-      local _, name = reaper.GetTrackName(track)
-      local dict = ensureSlots(track)
-      local slotCount = 0
-      for _ in pairs(dict) do slotCount = slotCount + 1 end
-      out[#out+1] = {
-        idx       = #out,
-        track     = track,
-        name      = name or '',
-        slotCount = slotCount,
-        takeCount = reaper.CountTrackMediaItems(track),
-      }
-    end
-  end
-  return out
-end
+function am:projectTracks() return ensureState().tracks end
 
 -- One take-shape row. Callers pass the per-track slot map and the project-wide colour map so the
 -- ensureSlots/ensureColours walks happen once per batch, not once per take.
@@ -294,48 +283,94 @@ local function buildTakeShape(take, item, trackIdx, startQN, lengthQN, slotForId
   }
 end
 
-function am:tracksTakes(trackIdx)
-  local track = visibleTrackOfCol(trackIdx)
-  if not track then return {} end
-  local _, slotForId = ensureSlots(track)
-  local colourForId  = ensureColours()
+----- Project state — one build, served until invalidated
+
+local function slotRowsFor(dict, colourForId, firstName)
   local out = {}
-  forEachActiveTake(track, function(take, item)
-    local startQN, lengthQN = itemQNRange(item)
-    out[#out+1] = buildTakeShape(take, item, trackIdx, startQN, lengthQN, slotForId, colourForId)
-  end)
+  for i = 0, SLOT_MAX do
+    local entry = dict[i]
+    if entry then
+      out[#out+1] = {
+        idx       = i,
+        kind      = entry.kind,
+        id        = entry.id,
+        colourIdx = colourForId[entry.id],
+        name      = firstName[entry.id] or '',
+      }
+    end
+  end
   return out
 end
 
---contract: render-loop batch — tracks handed in (no col->track scan), colour map built once,
---takes whose [start,start+len] miss [qnLo,qnHi] dropped before the costly shape fields.
-function am:visibleTakes(tracks, fromCol, toCol, qnLo, qnHi)
+-- One walk of the project, building every render read: track rows, per-column
+-- take-shapes, per-column slot rows. ensureColours once; ensureSlots once/track.
+local function buildState()
   local colourForId = ensureColours()
-  local out = {}
-  for col = fromCol, toCol do
-    local track = tracks[col + 1] and tracks[col + 1].track
-    if track then
-      local _, slotForId = ensureSlots(track)
+  local tracks, takesByCol, slotsByCol = {}, {}, {}
+  for ti = 0, reaper.CountTracks(0) - 1 do
+    local track = reaper.GetTrack(0, ti)
+    if isVisibleTrack(track) then
+      local col = #tracks
+      local dict, slotForId, firstName = ensureSlots(track)
+      local _, name = reaper.GetTrackName(track)
+      local slotCount = 0
+      for _ in pairs(dict) do slotCount = slotCount + 1 end
+      tracks[#tracks+1] = {
+        idx = col, track = track, name = name or '',
+        slotCount = slotCount,
+        takeCount = reaper.CountTrackMediaItems(track),
+      }
+      local takes = {}
       forEachActiveTake(track, function(take, item)
         local startQN, lengthQN = itemQNRange(item)
-        if startQN <= qnHi and startQN + lengthQN >= qnLo then
-          out[#out+1] = buildTakeShape(take, item, col, startQN, lengthQN, slotForId, colourForId)
-        end
+        takes[#takes+1] =
+          buildTakeShape(take, item, col, startQN, lengthQN, slotForId, colourForId)
       end)
+      takesByCol[col] = takes
+      slotsByCol[col] = slotRowsFor(dict, colourForId, firstName)
+    end
+  end
+  return { tracks = tracks, takesByCol = takesByCol, slotsByCol = slotsByCol }
+end
+
+-- Rebuild when our own edits flag dirty, or REAPER's state-count moves (external
+-- edit). Re-reading the count after the build absorbs the build's own ext writes.
+function ensureState()
+  local tick = reaper.GetProjectStateChangeCount(0)
+  if tick ~= lastTick then dirty, lastTick = true, tick end
+  if dirty then
+    state, dirty = buildState(), false
+    lastTick = reaper.GetProjectStateChangeCount(0)
+  end
+  return state
+end
+
+function am:tracksTakes(trackIdx)
+  return ensureState().takesByCol[trackIdx] or {}
+end
+
+--contract: in-memory filter over the cached take-shapes; cols fromCol..toCol meeting [qnLo,qnHi]
+function am:visibleTakes(fromCol, toCol, qnLo, qnHi)
+  local byCol = ensureState().takesByCol
+  local out = {}
+  for col = fromCol, toCol do
+    for _, tk in ipairs(byCol[col] or {}) do
+      if tk.startQN <= qnHi and tk.startQN + tk.lengthQN >= qnLo then
+        out[#out+1] = tk
+      end
     end
   end
   return out
 end
 
---contract: take-shape (from tracksTakes) wrapping reaperTake on any project track; nil if not found
+--contract: cached take-shape wrapping reaperTake on any project column; nil if not found
 function am:findTake(reaperTake)
   if not reaperTake then return end
-  for _, track in ipairs(am:projectTracks()) do
-    for _, take in ipairs(am:tracksTakes(track.idx)) do
-      if take.take == reaperTake then return take end
+  for _, takes in pairs(ensureState().takesByCol) do
+    for _, tk in ipairs(takes) do
+      if tk.take == reaperTake then return tk end
     end
   end
-  return nil
 end
 
 --contract: (col, qn) — selected item, else edit-cursor QN + selected track; col=0 if neither
@@ -404,25 +439,7 @@ function am:projectEndQN()
 end
 
 function am:trackSlots(trackIdx)
-  local track = visibleTrackOfCol(trackIdx)
-  if not track then return {} end
-  local dict, _, firstName = ensureSlots(track)
-  local colourForId        = ensureColours()
-
-  local out = {}
-  for i = 0, SLOT_MAX do
-    local entry = dict[i]
-    if entry then
-      out[#out+1] = {
-        idx       = i,
-        kind      = entry.kind,
-        id        = entry.id,
-        colourIdx = colourForId[entry.id],
-        name      = firstName[entry.id] or '',
-      }
-    end
-  end
-  return out
+  return ensureState().slotsByCol[trackIdx] or {}
 end
 
 function am:slotForTake(take)
@@ -456,6 +473,7 @@ function am:renameSlot(trackIdx, slotIdx, name)
       reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
     end
   end)
+  invalidate()
 end
 
 --contract: deletes every take on trackIdx with this slot's id; returns the removed count
@@ -473,7 +491,8 @@ function am:deleteSlot(trackIdx, slotIdx)
       removed = removed + 1
     end
   end
-  ensureSlots(track)    -- prune the now-orphaned dict entry inline so the palette doesn't briefly show a ghost row
+  ensureSlots(track)    -- prune the orphaned dict entry now; non-render readers see it gone at once
+  invalidate()
   return removed
 end
 

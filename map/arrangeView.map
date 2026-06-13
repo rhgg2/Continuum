@@ -1,4 +1,4 @@
-@module arrangeView  src=arrangeView.lua  loc=534  sha=accbcb5  mode=chunk
+@module arrangeView  src=arrangeView.lua  loc=534  sha=5241fdc  mode=chunk
 @deps cm, cmgr, facade, am
 
 # Invariants & contracts
@@ -112,7 +112,7 @@
   -- Project data — proxied from am so the page holds no am reference
   @api av:projectTracks()  @ 308
   @api av:tracksTakes(trackIdx)  @ 309
-  @api av:visibleTakes(tracks, fromCol, toCol, qnLo, qnHi)  @ 310
+  @api av:visibleTakes(fromCol, toCol, qnLo, qnHi)  @ 310
   @api av:trackSlots(trackIdx)  @ 313
   @api av:keyForSlot(slotIdx)  @ 314
   @api av:nextFreeSlot(trackIdx)  @ 315

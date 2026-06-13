@@ -194,6 +194,31 @@ A stored natural that is **≥ the source length** is demoted to
 would freeze the take at today's source length; demoting to OPEN lets
 future source growth widen the cap automatically.
 
+## State: one build, served until invalidated
+
+Every render read — `projectTracks`, `tracksTakes`, `visibleTakes`,
+`trackSlots`, `findTake` — is served from a single in-memory build,
+not re-derived per frame. The old per-frame walk hammered REAPER
+(ext-state reads, QN conversions, colour reads) dozens of times a
+frame; scrolling a large project lagged.
+
+`buildState` walks the project once — one `ensureColours`, one
+`ensureSlots` per track — producing track rows, per-column take-shapes,
+and per-column slot rows together. `ensureState` rebuilds only when the
+state is stale:
+
+- **Our own edits** flag it via `invalidate()`. Every structural
+  mutator funnels through `relayoutTrack`, so that one call covers
+  move/resize/delete/drop/duplicate; `renameSlot` and `deleteSlot`
+  (which skip relayout) call it directly.
+- **External edits** (a direct change in REAPER) are caught by polling
+  `GetProjectStateChangeCount`; a moved count forces a rebuild.
+
+The count is re-read *after* a build so the build's own ext-state
+writes (slot/colour allocation) don't trigger a needless rebuild next
+frame. Reads return the live cached tables — callers treat them as
+read-only.
+
 ## Surface
 
 Discovery: `am:projectTracks`, `am:tracksTakes`, `am:trackSlots`,

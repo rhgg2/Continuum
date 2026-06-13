@@ -307,8 +307,8 @@ function av:setMaxCol(n) maxCol = n and math.max(0, math.floor(n) - 1) or nil en
 
 function av:projectTracks()       return am:projectTracks() end
 function av:tracksTakes(trackIdx) return am:tracksTakes(trackIdx) end
-function av:visibleTakes(tracks, fromCol, toCol, qnLo, qnHi)
-  return am:visibleTakes(tracks, fromCol, toCol, qnLo, qnHi)
+function av:visibleTakes(fromCol, toCol, qnLo, qnHi)
+  return am:visibleTakes(fromCol, toCol, qnLo, qnHi)
 end
 function av:trackSlots(trackIdx)  return am:trackSlots(trackIdx) end
 function av:keyForSlot(slotIdx)   return am:keyForSlot(slotIdx) end

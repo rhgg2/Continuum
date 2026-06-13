@@ -30,6 +30,10 @@ function M.new()
   }
   r._state = state
 
+  -- Mirror REAPER: structural edits advance the state-change count; ext-state writes do not.
+  -- arrangeManager polls this to notice edits from another am instance or the DAW directly.
+  local function bump() state.projStateCount = state.projStateCount + 1 end
+
   -- Page-loading factories (samplePage/trackerPage/swingEditor/curveEditor)
   -- guard their chunks on this; without it, util.instantiate fires the
   -- "ReaImGui not installed" path on every call. Specs that need a real
@@ -72,7 +76,7 @@ function M.new()
 
   function r.GetSetMediaItemTakeInfo_String(take, key, value, setNew)
     if key == 'P_NAME' then
-      if setNew then state.takeName[take] = value; return true, value end
+      if setNew then state.takeName[take] = value; bump(); return true, value end
       return true, state.takeName[take] or ''
     end
     local k = tostring(take) .. '/' .. key
@@ -672,7 +676,7 @@ function M.new()
   function r.DeleteTrackMediaItem(track, item)
     local list = state.itemsByTrack[track] or {}
     for i, it in ipairs(list) do
-      if it == item then table.remove(list, i); return true end
+      if it == item then table.remove(list, i); bump(); return true end
     end
     return false
   end
@@ -689,6 +693,7 @@ function M.new()
     local item = { __item = #list + 1, track = track }
     list[#list+1] = item
     state.trackForItem[item] = track
+    bump()
     return item
   end
   function r.CreateNewMIDIItemInProj(track, qnStart, qnEnd, _qnIn)
@@ -726,6 +731,7 @@ function M.new()
     state.itemForTake[take] = item
     state.takeIsMidi[take]  = false
     state.takeName[take]    = ''
+    bump()
     return take
   end
   function r.PCM_Source_CreateFromFile(path)
@@ -735,16 +741,19 @@ function M.new()
   end
   function r.SetMediaItemTake_Source(take, src)
     state.takeSrc[take] = src
+    bump()
     return true
   end
   function r.SetMediaItemInfo_Value(item, parm, value)
     if parm == 'D_POSITION'        then state.itemPos[item]         = value
     elseif parm == 'D_LENGTH'      then state.itemLen[item]         = value
     elseif parm == 'I_CUSTOMCOLOR' then state.itemCustomColor[item] = value end
+    bump()
     return true
   end
   function r.SetMediaItemTakeInfo_Value(take, parm, value)
     if parm == 'I_CUSTOMCOLOR' then state.takeCustomColor[take] = value end
+    bump()
     return true
   end
   -- Round-trip POOLEDEVTS via the chunk. Only the guid is preserved;
@@ -916,6 +925,7 @@ function M.new()
   end
   function r.MIDI_SetAllEvts(take, evts)
     state.midiBlob[take] = evts
+    bump()
     return true
   end
 

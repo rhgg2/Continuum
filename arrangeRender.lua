@@ -306,7 +306,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   -- Settled takes; dragged take held back, painted last at candidate range.
   -- Duplicate keeps original here and adds the copy after.
   local qnLo, qnHi = av:rowToQN(sr), av:rowToQN(sr + visRows)
-  for _, tk in ipairs(av:visibleTakes(tracks, sc, lastCol, qnLo, qnHi)) do
+  for _, tk in ipairs(av:visibleTakes(sc, lastCol, qnLo, qnHi)) do
     local relocating = dragCand and not press.duplicate
                        and tk.item == press.take.item
     if not relocating then
