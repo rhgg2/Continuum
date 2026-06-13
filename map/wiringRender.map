@@ -1,4 +1,4 @@
-@module wiringRender  src=wiringRender.lua  loc=2717  sha=22a786d  mode=chunk
+@module wiringRender  src=wiringRender.lua  loc=2625  sha=176f3a0  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, wv
 
 # Invariants & contracts
@@ -73,380 +73,362 @@
   @state TAG_VIS_H = 0.62  @ 78   -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
   @state TAG_MAX_W = (NODE_W - 2 * LABEL_PAD) * WIRE_LABEL_SIZE / wireSize  @ 79   -- node label width scaled by the font ratio: the tag is a shrunk node box
   @state SOURCE_TAG_PAD = 3  @ 80   -- bg-patch padding around the source tag's glyphs (the patch occludes the wire behind them)
-  @state BUS_BASE = 44  @ 81   -- gap from node rect edge to a freshly-created bar (creation default)
-  @state BUS_STACK_GAP = 28  @ 82   -- with BUS_BASE: busNear's commit-zone margin for the hover gesture
-  @state BUS_TAP_LEN = 34  @ 83   -- visible length of a source copy's orthogonal tap off the bar
-  @state BUS_TAP_GAP = 22  @ 84   -- spacing between source-copy taps along the bar
-  @state BUS_BAR_PAD = 8  @ 85   -- bar overhang past its outermost tap
-  @state BUS_BAR_MIN = 30  @ 86   -- shortest hand-sized bar (min gap kept from the fixed far end)
-  @state BUS_END_ZONE = 28  @ 87   -- within this of a bar end → drag that end; the middle third translates
-  @state BUS_BAR_THICK = 4  @ 88   -- rail bar stroke width
-  @state BUS_BAR_HIT = 10  @ 89   -- perpendicular tolerance for dropping a rewire onto a bar
-  @state SIDE_VEC = {  @ 91
-  @state ORIENT_VEC = {  @ 98
-  @state PALETTE_W = 200  @ 104
-  @state PANE_GAP = 11  @ 105   -- 1px vrule sits centred here; neither pane edge touches it
-  @state HEADER_PAD = 8  @ 106   -- breathing room above the palette header text
-  @state HEADER_GAP = 4  @ 107   -- space between the header divider and the first row
-  @state drag = nil  @ 113   -- { mx0, my0, starts = { [id] = {x,y}, … } }
-  @state band = nil  @ 114   -- { mx0, my0 } — current corner is GetMousePos
-  @state wireDraft = nil  @ 115   -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? }
-  @state tagDrag = nil  @ 116   -- { edgeIdx, mx0, my0, sx0, sy0 } — dragging a source edge's tag to a custom canvas pos
-  @state busOverlay = nil  @ 117   -- { nodeId, dir } — bus-creation port-selector overlay (node-menu launched)
-  @state busDraft = nil  @ 118   -- { nodeId, dir, port, side, byHover? } — grabbed port; drag (or hover, if byHover) picks side
-  @state busDrag = nil  @ 119   -- { busId, ov, posAxial, posPerp, extLo, extHi, nearIsHi, tap*, … } — live buss-bar move/resize
-  @state shiftWas = false  @ 120
-  @state pinned = {}  @ 121   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
-  @state listOpenId = nil  @ 122   -- node whose spillover list is engaged (chevron-gated)
-  @state engagedId = nil  @ 123   -- node holding hover priority, probed before the per-node scan
-  @state hoverFreeze = nil  @ 124   -- { x, y } | nil — suppresses shift-hover until the cursor moves
-  @state sticky = nil  @ 125   -- { nodeId, side } — pinned node's port row, kept visible post-click
-  @state fader = nil  @ 126   -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, dragging?, wheelPending?, wheelIdleFrames? }
-  @state wireMenu = nil  @ 127   -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
-  @state nodeMenu = nil  @ 128   -- { nodeId, anchorX, anchorY } — set on RMB on a node body or buss bar; cleared when BeginPopup returns false
-  @state paletteSource = nil  @ 129   -- nodeId the palette del button acts on; cleared when the row vanishes
-  @state fxPicker = nil  @ 130   -- { x, y, sx, sy, anchorSX?, anchorSY?, buf, cursor, items } — RMB/N-key add-FX popup; cleared when BeginPopup returns false
-  @state canvasOrigin = { ox = 0, oy = 0 }  @ 135
-  @state openFxPicker, renderFxPicker  @ 139
-  @state SELECTED_INFLATE = 0  @ 170   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
-  @state SELECTED_STROKE = 2  @ 171
-  @state SOURCE_PAD = 24  @ 2615
-  @state wiring = cmgr:scope('wiring')  @ 2707
+  @state BUS_TAP_LEN = 34  @ 81   -- visible length of a source copy's orthogonal tap off the bar
+  @state BUS_TAP_GAP = 22  @ 82   -- spacing between source-copy taps along the bar
+  @state BUS_BAR_PAD = 8  @ 83   -- bar overhang past its outermost tap
+  @state BUS_BAR_MIN = 30  @ 84   -- shortest hand-sized bar (min gap kept from the fixed far end)
+  @state BUS_END_ZONE = 28  @ 85   -- within this of a bar end → drag that end; the middle third translates
+  @state BUS_BAR_THICK = 4  @ 86   -- rail bar stroke width
+  @state BUS_BAR_HIT = 10  @ 87   -- perpendicular tolerance for dropping a rewire onto a bar
+  @state ORIENT_VEC = {  @ 89
+  @state PALETTE_W = 200  @ 95
+  @state PANE_GAP = 11  @ 96   -- 1px vrule sits centred here; neither pane edge touches it
+  @state HEADER_PAD = 8  @ 97   -- breathing room above the palette header text
+  @state HEADER_GAP = 4  @ 98   -- space between the header divider and the first row
+  @state drag = nil  @ 104   -- { mx0, my0, starts = { [id] = {x,y}, … } }
+  @state band = nil  @ 105   -- { mx0, my0 } — current corner is GetMousePos
+  @state wireDraft = nil  @ 106   -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? }
+  @state tagDrag = nil  @ 107   -- { edgeIdx, mx0, my0, sx0, sy0 } — dragging a source edge's tag to a custom canvas pos
+  @state busDraft = nil  @ 108   -- { nodeId, dir, port, orient } — node-menu buss; bar glued to the cursor, a click drops it
+  @state busDrag = nil  @ 109   -- { busId, ov, posAxial, posPerp, extLo, extHi, nearIsHi, tap*, … } — live buss-bar move/resize
+  @state shiftWas = false  @ 110
+  @state pinned = {}  @ 111   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
+  @state listOpenId = nil  @ 112   -- node whose spillover list is engaged (chevron-gated)
+  @state engagedId = nil  @ 113   -- node holding hover priority, probed before the per-node scan
+  @state hoverFreeze = nil  @ 114   -- { x, y } | nil — suppresses shift-hover until the cursor moves
+  @state sticky = nil  @ 115   -- { nodeId, side } — pinned node's port row, kept visible post-click
+  @state fader = nil  @ 116   -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, dragging?, wheelPending?, wheelIdleFrames? }
+  @state wireMenu = nil  @ 117   -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
+  @state nodeMenu = nil  @ 118   -- { nodeId, anchorX, anchorY } — set on RMB on a node body or buss bar; cleared when BeginPopup returns false
+  @state paletteSource = nil  @ 119   -- nodeId the palette del button acts on; cleared when the row vanishes
+  @state fxPicker = nil  @ 120   -- { x, y, sx, sy, anchorSX?, anchorSY?, buf, cursor, items } — RMB/N-key add-FX popup; cleared when BeginPopup returns false
+  @state canvasOrigin = { ox = 0, oy = 0 }  @ 125
+  @state openFxPicker, renderFxPicker  @ 129
+  @state SELECTED_INFLATE = 0  @ 160   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
+  @state SELECTED_STROKE = 2  @ 161
+  @state SOURCE_PAD = 24  @ 2523
+  @state wiring = cmgr:scope('wiring')  @ 2615
 
 # Private functions
   -- Drag / band state (page-local; ephemeral, never persisted)
   -- Pixel geometry (page-owned)
-  @fn rect(x0, y0, x1, y1)  @ 145
+  @fn rect(x0, y0, x1, y1)  @ 135
       -- One axis-aligned rect struct shared by every hit test and fill, so the
       -- two can't drift; boxRect lifts an {x,y,w,h} slot/row into one.
-  @fn inRect(px, py, r)  @ 146
-  @fn boxRect(b, pad)  @ 149
-  @fn unionRect(acc, r)  @ 153
-  @fn nodeBox(nv)  @ 163
+  @fn inRect(px, py, r)  @ 136
+  @fn boxRect(b, pad)  @ 139
+  @fn unionRect(acc, r)  @ 143
+  @fn nodeBox(nv)  @ 153
       -- Node body as a canvas-local rect centred on pos. The painter adds the
       -- viewport origin at draw and hit-tests use the canvas-local mouse, so one
       -- struct serves both and they can't drift.
   -- Drawing
-  @fn strokeNodeRect(p, r, name)  @ 175
+  @fn strokeNodeRect(p, r, name)  @ 165
       -- Accent outline for a node body (selection / hover / error). SELECTED_INFLATE
       -- widens the rect so a >0 moat lets the popup bg bleed through the stroke.
-  @fn camelSplit(word)  @ 183
+  @fn camelSplit(word)  @ 173
       -- Split a word at CamelCase boundaries. Plugin names are ASCII in practice,
       -- so raw byte-class checks (no utf8) are sufficient.
-  @fn atomise(text)  @ 199
+  @fn atomise(text)  @ 189
       -- Tokenise into atoms with per-pair separators: seps[k] joins atoms[k..k+1]
       -- when they share a line. ' ' between words, '' between CamelCase pieces of
       -- one word, so a re-joined line has no space at the case boundary.
-  @fn wrapLabel(text, maxW, widthOf)  @ 214
+  @fn wrapLabel(text, maxW, widthOf)  @ 204
       @contract  with no widthOf supplied, the caller must have pushed the measuring font.
-  @fn drawNode(p, nv, isSelected)  @ 265
-  @fn drawKeyboardIcon(p, x, y)  @ 288
+  @fn drawNode(p, nv, isSelected)  @ 255
+  @fn drawKeyboardIcon(p, x, y)  @ 278
       -- Piano-keyboard icon (C, C#, D, D#, E): 3 outlined white keys, 2 filled
       -- black keys over the C-D and D-E gaps. Hard to read off the geometry alone.
-  @fn drawHandle(p, handle, side)  @ 305
+  @fn drawHandle(p, handle, side)  @ 295
       -- Spillover-list chevron, pointing the way the dropdown opens (down on the
       -- bottom face, up on top). Sized like a chip so it shares the row centreline.
-  @fn drawSlot(p, slot, idStem)  @ 318
+  @fn drawSlot(p, slot, idStem)  @ 308
       -- A port-row slot: audio square or keyboard icon, an InvisibleButton (padded
       -- so the hit area beats the visual), and a tooltip. The InvisibleButton
       -- advances the layout cursor; renderCanvas's trailing Dummy restores it.
-  @fn drawBodyOutline(p, nv)  @ 349
+  @fn drawBodyOutline(p, nv)  @ 339
   -- Wire-creation gesture helpers
-  @fn layoutList(audio, handle, side)  @ 357
+  @fn layoutList(audio, handle, side)  @ 347
       -- By-name dropdown anchored to the handle. Rows are tight-bound (no hit pad)
       -- so neighbours don't bleed; hitRect reaches LIST_GAP back so chevron→list has no dead zone.
-  @fn layoutPortRow(nv, dir, mx, my, keep, forceSide)  @ 390
+  @fn layoutPortRow(nv, dir, mx, my, keep, forceSide)  @ 380
       @contract  face = forceSide, else derived from my; keep hides the mismatched kind during target hover.
-  @fn slotHit(slots, mx, my)  @ 520
-  @fn rowHit(rows, mx, my)  @ 530
+  @fn slotHit(slots, mx, my)  @ 510
+  @fn rowHit(rows, mx, my)  @ 520
       -- Tight hit-test for list rows (no pad — rows are full-height boxes
       -- packed back-to-back, so padding would overlap into the neighbour).
-  @fn defaultSlot(nv, dir, keep)  @ 540
+  @fn defaultSlot(nv, dir, keep)  @ 530
       -- Default slot for body-only hover: audio port 1, else the keyboard. `keep`
       -- biases it for target hover — a midi draft defaults to the keyboard.
-  @fn onChevron(handle, mx, my)  @ 552
+  @fn onChevron(handle, mx, my)  @ 542
       -- Cursor over the chevron's visible bounds (no pad — popup gating is tight).
-  @fn pickHovered(nv, layout, mx, my, dir, keep)  @ 558
+  @fn pickHovered(nv, layout, mx, my, dir, keep)  @ 548
       -- Hover lookup over body + band only (list engagement is chevron-gated in
       -- engagedHover). A non-nil .list on the pick means "chevron hit, open the list".
-  @fn stillEngaged(layout, mx, my)  @ 573
-  @fn engagedHover(nodeViews, mx, my, cfg)  @ 583
+  @fn stillEngaged(layout, mx, my)  @ 563
+  @fn engagedHover(nodeViews, mx, my, cfg)  @ 573
       -- Engaged-priority hover scan shared by source-side (shift) and target-side
       -- (draft) drafting: the engaged node is probed before the forward scan so a
       -- neighbour's overlapping hoverRect can't steal an open popout mid-gesture.
-  @fn shiftHoverHit(nodeViews, mx, my)  @ 633
+  @fn shiftHoverHit(nodeViews, mx, my)  @ 623
       -- Source-side hover (shift, no draft). onConsume drops sticky when hover
       -- returns to the pinned node so the overlays don't double up; narrowOnMidi
       -- re-lays-out midi-only so the in-body keyboard stands alone.
-  @fn stickyHoverHit(nodeViews)  @ 655
+  @fn stickyHoverHit(nodeViews)  @ 645
       -- Port-row overlay for the sticky (pinned) node. Cursor-independent: uses the
       -- side stored at pin-time so it doesn't flip top/bottom as the cursor moves.
-  @fn findLayoutSlot(layout, slotKind, portIdx)  @ 667
-  @fn draftSourceHoverHit(nodeViews, mx, my)  @ 678
+  @fn findLayoutSlot(layout, slotKind, portIdx)  @ 657
+  @fn draftSourceHoverHit(nodeViews, mx, my)  @ 668
       -- Forward-draft only: keeps the source node's port row visible during the
       -- click-hold (else the popout flashes off when wireDraft is set, back at
       -- mouseup). Redrafts skip it; in the band gap the kept-slot highlight clears.
-  @fn dropTargetHit(nodeViews, mx, my, draft)  @ 706
+  @fn dropTargetHit(nodeViews, mx, my, draft)  @ 696
       -- Target-side hover (draft in flight). dir follows cursorEnd ('to' seeks
       -- in-ports on destinations, 'from' out-ports on sources); forbidden
       -- (cycle-blocked) nodes are ineligible, so they neither engage nor display.
-  @fn dropEligible(draft, target)  @ 718
+  @fn dropEligible(draft, target)  @ 708
       -- Commit-eligibility (mouseup only); also requires a concrete slot. The visual
       -- overlay is gated separately on forbidden-only, so the list still opens mid-hover.
-  @fn drawList(p, list, highlight)  @ 724
-  @fn drawPortRowBg(p, layout)  @ 741
+  @fn drawList(p, list, highlight)  @ 714
+  @fn drawPortRowBg(p, layout)  @ 731
       -- Pale rounded bg for the port-row overlay, overlapping the body's near edge
       -- so the body's near corners read as filled, not canvas. Drawn BEFORE the
       -- node so the body overpaints the overlap.
-  @fn drawPortRow(p, pick, idPrefix)  @ 749
+  @fn drawPortRow(p, pick, idPrefix)  @ 739
       -- Draws the handle and every slot, outlining the one matching pick.slot. Chips
       -- stay visible with the list open (it extends perpendicular) so the port→row map holds.
   -- Wire drawing
-  @fn wireGroups(wireViews)  @ 778
+  @fn wireGroups(wireViews)  @ 768
       -- Group wires by unordered pair. canonA/canonB fix the sorted pair direction
       -- so every wire in the group shares one perpendicular axis regardless of its
       -- own direction. (Within-group sort order is set below.)
-  @fn wireOffset(i, n)  @ 812
+  @fn wireOffset(i, n)  @ 802
       -- Perpendicular scalar for slot i (1-based) of n parallel wires:
       -- centred around 0 so a lone wire sits on the centre line.
-  @fn wireExits(seg)  @ 819
+  @fn wireExits(seg)  @ 809
       -- Distances along the (offset) segment where the visible part begins (exits
       -- the source rect) and ends (enters the target), plus length. Parallel-wire
       -- offsets make the two exits asymmetric. nil for sub-pixel segments.
-  @fn wireMid(seg)  @ 847
+  @fn wireMid(seg)  @ 837
       -- Centre of the visible span (between the two node exits), where the arrow,
       -- fader, and menu anchor. Asymmetric extents shift it off the geometric centre.
-  @fn drawWireArrow(p, sx, sy, ex, ey, name, cx, cy)  @ 854
-  @fn drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idStem, name, placed)  @ 879
+  @fn drawWireArrow(p, sx, sy, ex, ey, name, cx, cy)  @ 844
+  @fn drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idStem, name, placed)  @ 869
       -- Port-number label: a bg patch (occludes the wire behind the digit), pushed
       -- clear of labels already `placed` this frame and capped at len*0.45 so it
       -- can't collide with the other end's. Replaces the old per-group alternation.
-  @fn wireSegments(wireViews, nodesById)  @ 950
+  @fn wireSegments(wireViews, nodesById)  @ 940
       -- One canvas-local segment per wireView, keyed by index. offX/offY is the
       -- perpendicular displacement from the pair centre line, shared with wireExits
       -- so highlight + label geometry can't drift from the drawn line.
-  @fn endRegion(seg, side)  @ 987
+  @fn endRegion(seg, side)  @ 977
       -- End-region endpoints for one side of a wire (canvas-local): from the node-
       -- rect exit, WIRE_END_HIT px inward. Capped at 0.4*visible so a short wire's
       -- two ends don't overlap. nil for sub-pixel / fully-occluded wires.
-  @fn closestPointOnSegment(px, py, ax, ay, bx, by)  @ 1002
-  @fn pointToSegmentDist(px, py, ax, ay, bx, by)  @ 1011
-  @fn wireEndHit(segs, mx, my)  @ 1020
+  @fn closestPointOnSegment(px, py, ax, ay, bx, by)  @ 992
+  @fn pointToSegmentDist(px, py, ax, ay, bx, by)  @ 1001
+  @fn wireEndHit(segs, mx, my)  @ 1010
       -- Nearest end-region within WIRE_END_HIT_PERP of the cursor, or nil. Returns
       -- { edgeIdx, side, keptAnchor }: keptAnchor is the OTHER end's node-edge point
       -- (screen), where the redraft pins the wire while the cursor drives this end.
-  @fn drawWiresPass(p, segs, wireViews, opts, placed)  @ 1050
+  @fn drawWiresPass(p, segs, wireViews, opts, placed)  @ 1040
       -- opts.skipEdgeIdx skips the wire being redrafted (the draft line replaces it).
       -- The highlight draws separately after the node pass — nodes overpaint wires
       -- here, so an in-pass highlight would be invisible.
-  @fn drawWireEndHighlight(p, segs, hover)  @ 1086
-  @fn computeDraftEnd(draft, mx, my)  @ 1098
+  @fn drawWireEndHighlight(p, segs, hover)  @ 1076
+  @fn computeDraftEnd(draft, mx, my)  @ 1088
       -- Cursor-end position with the grab-offset decayed over WIRE_GRAB_DECAY px,
       -- ratcheting on furthest travel. See docs/wiringPage.md (the wire end leads
       -- the cursor) for why this point, not the cursor, drives hit-testing.
   -- Mid-wire fader (audio wires only)
-  @fn dbFromP(p)  @ 1111
+  @fn dbFromP(p)  @ 1101
       -- Industry-shaped fader law: finest resolution near unity, coarser low,
       -- hard floor below p=0.05. (p: 0=bottom, 1=top.)
-  @fn pFromDb(db)  @ 1119
-  @fn linToDb(lin)  @ 1127
-  @fn dbToLin(db)  @ 1128
-  @fn arrowMidHit(segs, mx, my)  @ 1130
-  @fn faderRectAt(ax, ay)  @ 1142
-  @fn pixelYToLin(my, stripY0)  @ 1147
-  @fn drawFader(p, f)  @ 1153
-  @fn drawDraftWire(p, draft, nodesById, cx, cy)  @ 1172
+  @fn pFromDb(db)  @ 1109
+  @fn linToDb(lin)  @ 1117
+  @fn dbToLin(db)  @ 1118
+  @fn arrowMidHit(segs, mx, my)  @ 1120
+  @fn faderRectAt(ax, ay)  @ 1132
+  @fn pixelYToLin(my, stripY0)  @ 1137
+  @fn drawFader(p, f)  @ 1143
+  @fn drawDraftWire(p, draft, nodesById, cx, cy)  @ 1162
       -- In-flight draft wire (draw order in docs/wiringPage.md). Kept end anchors at
       -- keptAnchor; for source edges (no body) keptAnchor is the only anchor.
-  @fn drawTagAt(p, cx, cy, label)  @ 1190
-  @fn sourceTagLayout(p, label)  @ 1198
+  @fn drawTagAt(p, cx, cy, label)  @ 1180
+  @fn sourceTagLayout(p, label)  @ 1188
       -- Wrapped label + patch half-extents at the wire-label font. One source of truth
       -- for draw, wire-trim, and grab-hit. TAG_VIS_H trims ascent/descent so the box hugs the glyphs.
-  @fn drawSourceTag(p, cx, cy, label)  @ 1211
+  @fn drawSourceTag(p, cx, cy, label)  @ 1201
       -- Track name at a source edge's source end; bg patch occludes the wire behind it.
-  @fn leastOccupiedDir(consumer, consumerId, wireViews, nodesById, mxp, myp)  @ 1224
+  @fn leastOccupiedDir(consumer, consumerId, wireViews, nodesById, mxp, myp)  @ 1214
       -- Unit direction toward the consumer-boundary sector least crowded by incident wires,
       -- so the default source-tag fan lands in open space. Away-from-master when nothing touches it.
-  @fn sourceSegments(p, wireViews, nodesById, segs)  @ 1256
+  @fn sourceSegments(p, wireViews, nodesById, segs)  @ 1246
       -- Source-origin edges have no body: synthesise their from-endpoint as a fanned stub
       -- off the consumer, into the least-occupied boundary sector, written as normal wires.
-  @fn nodeEdgePoint(nv, fromX, fromY)  @ 1306
+  @fn nodeEdgePoint(nv, fromX, fromY)  @ 1296
       -- Trunk endpoint on the claimed node's edge: where the bar-centre→node-centre
       -- ray exits the body rect (the node fill occludes any overshoot regardless).
-  @fn busSegments(p, wireViews, busViews, nodesById, segs, busRails)  @ 1317
+  @fn busSegments(p, wireViews, busViews, nodesById, segs, busRails)  @ 1307
       -- Bussed edges render as a rail (bar + comb taps + for fans one arrowed trunk).
       -- Bar at busView's own pos/orient; a matrix bar doubles as the bus node's body.
-  @fn drawBusPass(p, busRails, placed)  @ 1456
+  @fn drawBusPass(p, busRails, placed)  @ 1446
       -- Fan rails: bar + the one arrowed trunk, drawn over the tap landings (the bar
       -- occludes them like a source tag's patch). A matrix bar draws in the node pass.
-  @fn drawBusBar(p, r, isSelected)  @ 1479
+  @fn drawBusBar(p, r, isSelected)  @ 1469
       -- A matrix buss's node-pass body: the bar itself, geometry from busSegments'
       -- rail so bar and taps can't drift. Selection strokes a slab around the bar.
-  @fn busOverlayLayout(nv, dir, wireViews)  @ 1491
-      -- Bus-creation overlay: audio ports for `dir` as grab handles (in→top, out→bottom).
-      -- Ports already on a bar (a bus on the far end of an incident wire) are greyed + inert.
-  @fn busHandleHit(handles, mx, my)  @ 1516
-  @fn drawBusOverlay(p, handles)  @ 1523
-      -- Greyed (already-bussed) handles stroke-only so they read inert; free ones fill.
-  @fn busSide(nv, mx, my)  @ 1531
-      -- The draft bus's side = the quadrant of the cursor from the node centre.
-  @fn busNear(nv, mx, my)  @ 1539
-      -- Commit zone for the hover-only single-port gesture: the node rect grown just
-      -- past the first rail. A click inside commits the bus; outside (backdrop) cancels.
-  @fn busDefaultPlacement(nv, side)  @ 1546
-      -- Creation default: the bar sits off the chosen side at the v1 rail distance; T/B
-      -- sides lay it 'H', L/R 'V'. The record's pos is free — this is just the first drop.
-  @fn armBus(nodeId, dir, nv, wireViews)  @ 1556
-      -- Arm bus creation from the node menu: a lone free audio port skips the grab
-      -- (hover picks the side, click commits / click-away cancels), else open the overlay.
-  @fn busBarHit(busRails, draft, mx, my)  @ 1571
+  @fn bussablePorts(nv, dir, wireViews)  @ 1481
+      -- Audio ports in `dir` (in/out) that carry ≥1 wire and aren't already routed through a
+      -- buss — the ports the node menu offers to buss. Ascending port order.
+  @fn busBarHit(busRails, draft, mx, my)  @ 1502
       -- A bus bar is a fat drop target during a rewire: a fan bar takes a draft whose
       -- grabbed end matches its dir (to→in, from→out); a matrix bar takes either end.
-  @fn busBarSource(busRails, mx, my)  @ 1584
+  @fn busBarSource(busRails, mx, my)  @ 1515
       -- Shift-hover source from a buss: the bar is the out-wire origin, the same fat
       -- target the drop side uses. Every tap shares port 1, so the draft kept-port is 1.
-  @fn busBarAt(busRails, mx, my)  @ 1595
+  @fn busBarAt(busRails, mx, my)  @ 1526
       -- Any buss bar under the cursor — the RMB hit that opens the bar's delete menu.
-  @fn makeBusDrag(rail, mx, my)  @ 1605
+  @fn makeBusDrag(rail, mx, my)  @ 1536
       -- Buss-bar move/resize: middle-third grab translates; near-end grab resizes that end (floored at its
       -- tap), handing off to the far end once the cursor crosses past it. Perp motion always slides.
-  @fn busDragApply(bd, mx, my)  @ 1627
+  @fn busDragApply(bd, mx, my)  @ 1558
       -- Advance the in-flight bar by this frame's cursor (mutates bd).
-  @fn busDragPos(bd)  @ 1653
+  @fn busDragPos(bd)  @ 1584
       -- (pos.x, pos.y, ext.lo, ext.hi) from the bar's current absolute ends, re-based
       -- onto the fixed pos.axial so ext alone carries the change.
-  @fn sourceTagHit(p, segs, wireViews, mx, my)  @ 1661
+  @fn sourceTagHit(p, segs, wireViews, mx, my)  @ 1592
       -- The source tag's grab box: cursor inside the bg-patch rect at its centre.
-  @fn nodeUnderMouse(nodeViews, mx, my)  @ 1675
+  @fn nodeUnderMouse(nodeViews, mx, my)  @ 1606
       -- Node under the mouse by un-inflated body rect (not the inflated port-reveal
       -- rect) — used to start a drag. nil over empty canvas or a port band.
-  @fn nodeAtPoint(nodeViews, px, py)  @ 1685
+  @fn nodeAtPoint(nodeViews, px, py)  @ 1616
       -- nodeUnderMouse keyed to an arbitrary screen point (the decayed draft
       -- wire end, typically) rather than the live cursor.
-  @fn nodesInBand(nodeViews, bx0, by0, bx1, by1)  @ 1695
+  @fn nodesInBand(nodeViews, bx0, by0, bx1, by1)  @ 1626
       -- Node ids whose body rect (un-inflated — port bands aren't selectable)
       -- intersects the band. Empty set if nothing caught.
-  @fn renderCanvas(w, h)  @ 1708
-  @fn pushBodyStyles()  @ 2447
-  @fn popBodyStyles()  @ 2450
+  @fn renderCanvas(w, h)  @ 1639
+  @fn pushBodyStyles()  @ 2355
+  @fn popBodyStyles()  @ 2358
   -- Palette pane
-  @fn renderPaletteHeader()  @ 2456
+  @fn renderPaletteHeader()  @ 2364
       -- Hand-drawn header so its band matches the canvas's by construction: both panes
       -- share renderBody's `oy`, so the divider aligns across PANE_GAP without measuring.
-  @fn openAddSourceModal()  @ 2469
-  @fn deleteSourceGuarded(nodeId, label)  @ 2482
+  @fn openAddSourceModal()  @ 2377
+  @fn deleteSourceGuarded(nodeId, label)  @ 2390
       -- Delete tries unforced first; a take-bearing track comes back refused with a
       -- count, which opens a confirm that re-issues the delete with force.
-  @fn renderPaletteActions(focused)  @ 2493
-  @fn renderPaletteList(sources)  @ 2503
-  @fn renderPalette()  @ 2527
+  @fn renderPaletteActions(focused)  @ 2401
+  @fn renderPaletteList(sources)  @ 2411
+  @fn renderPalette()  @ 2435
   -- Wiring scope
-  @fn sourcePosFor(genX, genY)  @ 2616
-  @fn commitFx(pck, fx)  @ 2650
+  @fn sourcePosFor(genX, genY)  @ 2524
+  @fn commitFx(pck, fx)  @ 2558
       -- Defer the gesture so the picker's close paints before the live
       -- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
 
 # Public API (wr:*)
-  @api wr:renderToolbarBits(_)  @ 2549
-  @api wr:closeTransients()  @ 2552
+  @api wr:renderToolbarBits(_)  @ 2457
+  @api wr:closeTransients()  @ 2460
       @contract  clear ephemeral gesture/hover state; the controller calls this on unbind.
-  @api wr:renderBody(_, w, h, dispatch)  @ 2559
+  @api wr:renderBody(_, w, h, dispatch)  @ 2467
       @contract  body = wiring canvas | source palette; dispatch at end-of-body routes wiring-scope keys.
-  @api wr:renderStatusBar(_)  @ 2592
-  @api wr:focusState()  @ 2598
+  @api wr:renderStatusBar(_)  @ 2500
+  @api wr:focusState()  @ 2506
       @contract  acceptCmds=false if any picker active, any item active, or modal open at frame start.
 
 # Uses (outbound edges)
-  @use call    chrome.checkbox  @ 2350
-  @use call    chrome.colour  @ 338, 936, 2347, 2375, 2422, 2448
-  @use call    chrome.disabledIf  @ 2496
-  @use call    chrome.pickerIsActive  @ 2600
-  @use call    chrome.popChromeStyles  @ 2544
-  @use call    chrome.popChromeWindow  @ 2366, 2408, 2430
-  @use call    chrome.pushChromeStyles  @ 2539
-  @use call    chrome.pushChromeWindow  @ 2346, 2374, 2421
-  @use call    cmgr.invoke  @ 2085
-  @use call    cmgr.scope  @ 2707
-  @use call    imgui.BeginChild  @ 2564, 2581, 2697
-  @use call    imgui.BeginPopup  @ 2348, 2376, 2423
-  @use call    imgui.BeginTooltip  @ 340, 938
-  @use call    imgui.Button  @ 2494, 2497
-  @use call    imgui.CalcTextSize  @ 215, 275, 279, 360, 364
-  @use call    imgui.CloseCurrentPopup  @ 2358, 2382, 2386, 2390, 2394, 2400, 2651, 2692
-  @use call    imgui.Dummy  @ 2444, 2466, 2578
-  @use call    imgui.EndChild  @ 2569, 2586, 2703
-  @use call    imgui.EndPopup  @ 2361, 2403, 2425
-  @use call    imgui.EndTooltip  @ 342, 940
-  @use call    imgui.GetContentRegionAvail  @ 2459
-  @use call    imgui.GetCursorScreenPos  @ 1712, 2458, 2574
-  @use call    imgui.GetKeyMods  @ 1725
-  @use call    imgui.GetMousePos  @ 1720, 2632
-  @use call    imgui.GetMouseWheel  @ 2052
-  @use call    imgui.GetTextLineHeightWithSpacing  @ 2460
-  @use call    imgui.GetWindowPos  @ 2355, 2397
-  @use call    imgui.GetWindowSize  @ 2356, 2398
-  @use call    imgui.GetWindowViewport  @ 2418
-  @use call    imgui.InputText  @ 2667
-  @use call    imgui.InvisibleButton  @ 329, 932
-  @use call    imgui.IsAnyItemActive  @ 2604
-  @use call    imgui.IsItemActive  @ 2514
-  @use call    imgui.IsItemHovered  @ 334, 933
-  @use call    imgui.IsKeyPressed  @ 1981, 1984, 2669, 2670, 2684, 2685, 2691
-  @use call    imgui.IsMouseClicked  @ 1737, 1991, 2036, 2097, 2112, 2127, 2323
-  @use call    imgui.IsMouseDoubleClicked  @ 2026, 2079
-  @use call    imgui.IsMouseDown  @ 1848, 2101, 2241, 2284, 2294, 2301, 2309
-  @use call    imgui.IsMouseDragging  @ 2515
-  @use call    imgui.IsWindowAppearing  @ 2354, 2396, 2664, 2680
-  @use call    imgui.IsWindowHovered  @ 1724
-  @use call    imgui.OpenPopup  @ 2327, 2334, 2645
-  @use call    imgui.PopFont  @ 283, 367
-  @use call    imgui.PopStyleColor  @ 345, 943, 2365, 2407, 2429, 2450
-  @use call    imgui.PopStyleVar  @ 344, 942
-  @use call    imgui.PushFont  @ 273, 359
-  @use call    imgui.PushStyleColor  @ 338, 936, 2347, 2375, 2422, 2448
-  @use call    imgui.PushStyleVar  @ 339, 937
-  @use call    imgui.SameLine  @ 2495, 2573, 2579
-  @use call    imgui.Selectable  @ 2379, 2384, 2388, 2392, 2509, 2700
-  @use call    imgui.Separator  @ 2542, 2671
-  @use call    imgui.SetCursorScreenPos  @ 328, 931, 2443
-  @use call    imgui.SetKeyboardFocusHere  @ 2664
-  @use call    imgui.SetNextItemWidth  @ 2665
-  @use call    imgui.SetNextWindowPos  @ 335, 934, 2345, 2373, 2415, 2419
-  @use call    imgui.Text  @ 341, 939, 2594
-  @use call    imgui.TextDisabled  @ 2505
-  @use call    imgui.Viewport_GetCenter  @ 2418
-  @use call    modalHost.wasOpenAtFrameStart  @ 2606
-  @use call    painter.new  @ 1715, 2457, 2576
-  @use call    util.add  @ 1227, 1262, 1263, 1324, 1339, 1441, 1743, 1780, 2531, 2639
-  @use call    util.key  @ 783
-  @use call    wv.addBusNode  @ 2655
-  @use call    wv.addFx  @ 2657
-  @use call    wv.ancestorsOf  @ 2159, 2207, 2519
-  @use call    wv.busViews  @ 1771
-  @use call    wv.deleteBus  @ 2380
-  @use call    wv.deleteNode  @ 2381
-  @use call    wv.deleteSource  @ 2483, 2489
-  @use call    wv.descendantsOf  @ 2206
-  @use call    wv.edgeGain  @ 1875, 1996, 2040
-  @use call    wv.listInstalledFX  @ 2639
-  @use call    wv.masterPos  @ 1266, 2617
-  @use call    wv.moveBus  @ 2298
-  @use call    wv.moveNodes  @ 2306
-  @use call    wv.nodeViews  @ 1742, 2529
-  @use call    wv.openFxWindow  @ 2087
-  @use call    wv.pokeEdgeGain  @ 1847, 2005, 2043, 2060
-  @use call    wv.removeWireAt  @ 2271
-  @use call    wv.rewireEdgeEnd  @ 2257
-  @use call    wv.rotateBus  @ 2385
-  @use call    wv.samplerTrack  @ 2084
-  @use call    wv.selection  @ 1752
-  @use call    wv.setEdgeGain  @ 1850, 1879, 2006, 2030, 2044, 2061, 2068
-  @use call    wv.setEdgePrimary  @ 2351
-  @use call    wv.setHover  @ 1976
-  @use call    wv.setSelection  @ 2313
-  @use call    wv.setSourceTagPos  @ 2290
-  @use call    wv.wireViews  @ 1770
-  @use call    wv.wiredPorts  @ 428
+  @use call    chrome.checkbox  @ 2253
+  @use call    chrome.colour  @ 328, 926, 2250, 2278, 2330, 2356
+  @use call    chrome.disabledIf  @ 2404
+  @use call    chrome.pickerIsActive  @ 2508
+  @use call    chrome.popChromeStyles  @ 2452
+  @use call    chrome.popChromeWindow  @ 2269, 2316, 2338
+  @use call    chrome.pushChromeStyles  @ 2447
+  @use call    chrome.pushChromeWindow  @ 2249, 2277, 2329
+  @use call    cmgr.invoke  @ 2008
+  @use call    cmgr.scope  @ 2615
+  @use call    imgui.BeginChild  @ 2472, 2489, 2605
+  @use call    imgui.BeginPopup  @ 2251, 2279, 2331
+  @use call    imgui.BeginTooltip  @ 330, 928
+  @use call    imgui.Button  @ 2402, 2405
+  @use call    imgui.CalcTextSize  @ 205, 265, 269, 350, 354
+  @use call    imgui.CloseCurrentPopup  @ 2261, 2285, 2289, 2298, 2308, 2559, 2600
+  @use call    imgui.Dummy  @ 2352, 2374, 2486
+  @use call    imgui.EndChild  @ 2477, 2494, 2611
+  @use call    imgui.EndPopup  @ 2264, 2311, 2333
+  @use call    imgui.EndTooltip  @ 332, 930
+  @use call    imgui.GetContentRegionAvail  @ 2367
+  @use call    imgui.GetCursorScreenPos  @ 1643, 2366, 2482
+  @use call    imgui.GetKeyMods  @ 1656
+  @use call    imgui.GetMousePos  @ 1651, 2540
+  @use call    imgui.GetMouseWheel  @ 1975
+  @use call    imgui.GetTextLineHeightWithSpacing  @ 2368
+  @use call    imgui.GetWindowPos  @ 2258, 2305
+  @use call    imgui.GetWindowSize  @ 2259, 2306
+  @use call    imgui.GetWindowViewport  @ 2326
+  @use call    imgui.InputText  @ 2575
+  @use call    imgui.InvisibleButton  @ 319, 922
+  @use call    imgui.IsAnyItemActive  @ 2512
+  @use call    imgui.IsItemActive  @ 2422
+  @use call    imgui.IsItemHovered  @ 324, 923
+  @use call    imgui.IsKeyPressed  @ 1904, 1907, 2577, 2578, 2592, 2593, 2599
+  @use call    imgui.IsMouseClicked  @ 1668, 1914, 1959, 2017, 2030, 2226
+  @use call    imgui.IsMouseDoubleClicked  @ 1949, 2002
+  @use call    imgui.IsMouseDown  @ 1772, 2144, 2187, 2197, 2204, 2212
+  @use call    imgui.IsMouseDragging  @ 2423
+  @use call    imgui.IsWindowAppearing  @ 2257, 2304, 2572, 2588
+  @use call    imgui.IsWindowHovered  @ 1655
+  @use call    imgui.OpenPopup  @ 2230, 2237, 2553
+  @use call    imgui.PopFont  @ 273, 357
+  @use call    imgui.PopStyleColor  @ 335, 933, 2268, 2315, 2337, 2358
+  @use call    imgui.PopStyleVar  @ 334, 932
+  @use call    imgui.PushFont  @ 263, 349
+  @use call    imgui.PushStyleColor  @ 328, 926, 2250, 2278, 2330, 2356
+  @use call    imgui.PushStyleVar  @ 329, 927
+  @use call    imgui.SameLine  @ 2403, 2481, 2487
+  @use call    imgui.Selectable  @ 2282, 2287, 2296, 2417, 2608
+  @use call    imgui.Separator  @ 2450, 2579
+  @use call    imgui.SetCursorScreenPos  @ 318, 921, 2351
+  @use call    imgui.SetKeyboardFocusHere  @ 2572
+  @use call    imgui.SetNextItemWidth  @ 2573
+  @use call    imgui.SetNextWindowPos  @ 325, 924, 2248, 2276, 2323, 2327
+  @use call    imgui.Text  @ 331, 929, 2502
+  @use call    imgui.TextDisabled  @ 2413
+  @use call    imgui.Viewport_GetCenter  @ 2326
+  @use call    modalHost.wasOpenAtFrameStart  @ 2514
+  @use call    painter.new  @ 1646, 2365, 2484
+  @use call    util.add  @ 1217, 1252, 1253, 1314, 1329, 1431, 1495, 1674, 1708, 2439, 2547
+  @use call    util.key  @ 773
+  @use call    wv.addBusNode  @ 2563
+  @use call    wv.addFx  @ 2565
+  @use call    wv.ancestorsOf  @ 2062, 2110, 2427
+  @use call    wv.busViews  @ 1702
+  @use call    wv.deleteBus  @ 2283
+  @use call    wv.deleteNode  @ 2284
+  @use call    wv.deleteSource  @ 2391, 2397
+  @use call    wv.descendantsOf  @ 2109
+  @use call    wv.edgeGain  @ 1799, 1919, 1963
+  @use call    wv.listInstalledFX  @ 2547
+  @use call    wv.masterPos  @ 1256, 2525
+  @use call    wv.moveBus  @ 2201
+  @use call    wv.moveNodes  @ 2209
+  @use call    wv.nodeViews  @ 1673, 2437
+  @use call    wv.openFxWindow  @ 2010
+  @use call    wv.pokeEdgeGain  @ 1771, 1928, 1966, 1983
+  @use call    wv.removeWireAt  @ 2174
+  @use call    wv.rewireEdgeEnd  @ 2160
+  @use call    wv.rotateBus  @ 2288
+  @use call    wv.samplerTrack  @ 2007
+  @use call    wv.selection  @ 1683
+  @use call    wv.setEdgeGain  @ 1774, 1803, 1929, 1953, 1967, 1984, 1991
+  @use call    wv.setEdgePrimary  @ 2254
+  @use call    wv.setHover  @ 1899
+  @use call    wv.setSelection  @ 2216
+  @use call    wv.setSourceTagPos  @ 2193
+  @use call    wv.wireViews  @ 1701
+  @use call    wv.wiredPorts  @ 418
   @use require imgui  @ 16
   @use require painter  @ 17
   @use require util  @ 10

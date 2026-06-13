@@ -78,8 +78,6 @@ local STUB_LEN  = 40    -- visible stub length: consumer rect edge to the tag pa
 local TAG_VIS_H = 0.62  -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
 local TAG_MAX_W = (NODE_W - 2 * LABEL_PAD) * WIRE_LABEL_SIZE / wireSize  -- node label width scaled by the font ratio: the tag is a shrunk node box
 local SOURCE_TAG_PAD = 3  -- bg-patch padding around the source tag's glyphs (the patch occludes the wire behind them)
-local BUS_BASE      = 44   -- gap from node rect edge to a freshly-created bar (creation default)
-local BUS_STACK_GAP = 28   -- with BUS_BASE: busNear's commit-zone margin for the hover gesture
 local BUS_TAP_LEN   = 34   -- visible length of a source copy's orthogonal tap off the bar
 local BUS_TAP_GAP   = 22   -- spacing between source-copy taps along the bar
 local BUS_BAR_PAD   = 8    -- bar overhang past its outermost tap
@@ -87,13 +85,6 @@ local BUS_BAR_MIN   = 30   -- shortest hand-sized bar (min gap kept from the fix
 local BUS_END_ZONE  = 28   -- within this of a bar end → drag that end; the middle third translates
 local BUS_BAR_THICK = 4    -- rail bar stroke width
 local BUS_BAR_HIT   = 10   -- perpendicular tolerance for dropping a rewire onto a bar
--- side → outward normal (n) + along-bar axis (a); the bar is ⟂ the normal.
-local SIDE_VEC = {
-  L = { nx = -1, ny = 0, ax = 0, ay = 1 },
-  R = { nx =  1, ny = 0, ax = 0, ay = 1 },
-  T = { nx =  0, ny = -1, ax = 1, ay = 0 },
-  B = { nx =  0, ny =  1, ax = 1, ay = 0 },
-}
 -- orient → along-bar axis (a) + tap normal (n); fan taps comb on ±n away from the claim.
 local ORIENT_VEC = {
   V = { ax = 0, ay = 1, nx = 1, ny = 0 },
@@ -114,8 +105,7 @@ local drag      = nil  -- { mx0, my0, starts = { [id] = {x,y}, … } }
 local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
 local wireDraft = nil  -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? }
 local tagDrag   = nil  -- { edgeIdx, mx0, my0, sx0, sy0 } — dragging a source edge's tag to a custom canvas pos
-local busOverlay = nil  -- { nodeId, dir } — bus-creation port-selector overlay (node-menu launched)
-local busDraft   = nil  -- { nodeId, dir, port, side, byHover? } — grabbed port; drag (or hover, if byHover) picks side
+local busDraft   = nil  -- { nodeId, dir, port, orient } — node-menu buss; bar glued to the cursor, a click drops it
 local busDrag    = nil  -- { busId, ov, posAxial, posPerp, extLo, extHi, nearIsHi, tap*, … } — live buss-bar move/resize
 local shiftWas  = false
 local pinned     = {}   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
@@ -1486,84 +1476,25 @@ local function drawBusBar(p, r, isSelected)
   end
 end
 
--- Bus-creation overlay: audio ports for `dir` as grab handles (in→top, out→bottom).
--- Ports already on a bar (a bus on the far end of an incident wire) are greyed + inert.
-local function busOverlayLayout(nv, dir, wireViews)
-  local audio = (dir == 'out') and nv.outs.audio or nv.ins.audio
-  local n = #audio
-  if n == 0 then return nil end
-  local claimed = {}
+-- Audio ports in `dir` (in/out) that carry ≥1 wire and aren't already routed through a
+-- buss — the ports the node menu offers to buss. Ascending port order.
+local function bussablePorts(nv, dir, wireViews)
+  local wired, bussed = {}, {}
   for _, w in ipairs(wireViews) do
-    if w.bus then
-      if dir == 'in'  and w.to   == nv.id and w.bus.bussedEnd == 'from' then claimed[w.toPort]   = true end
-      if dir == 'out' and w.from == nv.id and w.bus.bussedEnd == 'to'   then claimed[w.fromPort] = true end
+    if w.type == 'audio' then
+      if dir == 'in' and w.to == nv.id then
+        wired[w.toPort] = true
+        if w.bus and w.bus.bussedEnd == 'from' then bussed[w.toPort] = true end
+      elseif dir == 'out' and w.from == nv.id then
+        wired[w.fromPort] = true
+        if w.bus and w.bus.bussedEnd == 'to' then bussed[w.fromPort] = true end
+      end
     end
   end
-  local b   = nodeBox(nv)
-  local top = dir == 'in'
-  local y   = top and (b.y0 - PORT_BAND_OFFSET - PORT_SIZE) or (b.y1 + PORT_BAND_OFFSET)
-  local rowW   = n * PORT_SIZE + (n - 1) * PORT_GAP
-  local startX = math.floor((b.x0 + b.x1 - rowW) / 2)
-  local handles = {}
-  for i = 1, n do
-    handles[i] = { port = i, bussed = claimed[i] or false,
-                   x = startX + (i - 1) * (PORT_SIZE + PORT_GAP), y = y,
-                   w = PORT_SIZE, h = PORT_SIZE }
-  end
-  return handles
-end
-
-local function busHandleHit(handles, mx, my)
-  for _, hnd in ipairs(handles or {}) do
-    if inRect(mx, my, boxRect(hnd)) then return hnd end
-  end
-end
-
--- Greyed (already-bussed) handles stroke-only so they read inert; free ones fill.
-local function drawBusOverlay(p, handles)
-  for _, hnd in ipairs(handles) do
-    if hnd.bussed then p.stroke(boxRect(hnd), 'wiring.port.audio', 1, 0)
-    else               p.fill(boxRect(hnd), 'wiring.port.audio') end
-  end
-end
-
--- The draft bus's side = the quadrant of the cursor from the node centre.
-local function busSide(nv, mx, my)
-  local dx, dy = mx - nv.pos.x, my - nv.pos.y
-  if math.abs(dx) > math.abs(dy) then return dx < 0 and 'L' or 'R' end
-  return dy < 0 and 'T' or 'B'
-end
-
--- Commit zone for the hover-only single-port gesture: the node rect grown just
--- past the first rail. A click inside commits the bus; outside (backdrop) cancels.
-local function busNear(nv, mx, my)
-  local b, m = nodeBox(nv), BUS_BASE + BUS_STACK_GAP
-  return mx >= b.x0 - m and mx <= b.x1 + m and my >= b.y0 - m and my <= b.y1 + m
-end
-
--- Creation default: the bar sits off the chosen side at the v1 rail distance; T/B
--- sides lay it 'H', L/R 'V'. The record's pos is free — this is just the first drop.
-local function busDefaultPlacement(nv, side)
-  local sv   = SIDE_VEC[side]
-  local half = (sv.nx ~= 0) and NODE_W / 2 or NODE_H / 2
-  return { x = nv.pos.x + sv.nx * (half + BUS_BASE),
-           y = nv.pos.y + sv.ny * (half + BUS_BASE) },
-         (side == 'L' or side == 'R') and 'V' or 'H'
-end
-
--- Arm bus creation from the node menu: a lone free audio port skips the grab
--- (hover picks the side, click commits / click-away cancels), else open the overlay.
-local function armBus(nodeId, dir, nv, wireViews)
-  local handles = busOverlayLayout(nv, dir, wireViews)
-  if not handles then return end
-  local free = {}
-  for _, h in ipairs(handles) do if not h.bussed then free[#free + 1] = h.port end end
-  if #handles == 1 and #free == 1 then
-    busDraft = { nodeId = nodeId, dir = dir, port = free[1],
-                 side = dir == 'in' and 'T' or 'B', byHover = true }
-  else
-    busOverlay = { nodeId = nodeId, dir = dir }
-  end
+  local ports = {}
+  for port in pairs(wired) do if not bussed[port] then util.add(ports, port) end end
+  table.sort(ports)
+  return ports
 end
 
 -- A bus bar is a fat drop target during a rewire: a fan bar takes a draft whose
@@ -1769,15 +1700,12 @@ local function renderCanvas(w, h)
   -- geometry can't drift. Draw order is in docs/wiringPage.md.
   local wireViewsList = wv:wireViews()
   local busViewsList  = wv:busViews()
-  -- Live bus-creation preview: inject a synthetic fan busView so the rail render
-  -- draws the in-flight bar + comb, then stamp the wires its claim would own.
-  local busHandles
+  -- Live bus-creation preview: the bar is glued to the cursor; inject a synthetic fan
+  -- busView so the rail render draws it, then stamp the wires its claim would own.
   if busDraft then
     local nv = nodesById[busDraft.nodeId]
     if nv then
-      busDraft.side = busSide(nv, lmx, lmy)
-      local pos, orient = busDefaultPlacement(nv, busDraft.side)
-      util.add(busViewsList, { id = '@busDraft', pos = pos, orient = orient,
+      util.add(busViewsList, { id = '@busDraft', pos = { x = lmx, y = lmy }, orient = busDraft.orient,
                                claim = { node = busDraft.nodeId, port = busDraft.port,
                                          dir = busDraft.dir } })
       local toEnd = busDraft.dir == 'in'
@@ -1794,10 +1722,6 @@ local function renderCanvas(w, h)
     else
       busDraft = nil
     end
-  elseif busOverlay then
-    local nv = nodesById[busOverlay.nodeId]
-    busHandles = nv and busOverlayLayout(nv, busOverlay.dir, wireViewsList) or nil
-    if not busHandles then busOverlay = nil end
   end
   -- Tag drag feeds a transient fromOffset (mirroring how node drag mutates pos),
   -- so the one geometry pass below handles both star and bus tooth. mouseup commits.
@@ -1834,7 +1758,7 @@ local function renderCanvas(w, h)
   -- Suppressed during any active gesture so neither fires under a drag.
   local wireEndHover, tagHover
   if not drag and not band and not wireDraft and not shiftHeld and not tagDrag
-     and not busOverlay and not busDraft and not busDrag then
+     and not busDraft and not busDrag then
     wireEndHover = wireEndHit(segs, lmx, lmy)
     tagHover     = sourceTagHit(p, segs, wireViewsList, lmx, lmy)
   end
@@ -1855,7 +1779,7 @@ local function renderCanvas(w, h)
   local arrowHitIdx
   if not drag and not band and not wireDraft and not shiftHeld
      and not tagDrag and not (fader and fader.dragging)
-     and not busOverlay and not busDraft and not busDrag then
+     and not busDraft and not busDrag then
     arrowHitIdx = arrowMidHit(segs, lmx, lmy)
   end
   -- Fader visibility: drag overrides, triangle anchors, hitRect persists.
@@ -1939,7 +1863,6 @@ local function renderCanvas(w, h)
     if rail then drawBusBar(p, rail, selection[nv.id])
     else         drawNode(p, nv, selection[nv.id]) end
   end
-  if busHandles then drawBusOverlay(p, busHandles) end
 
   -- A palette drag carries a floating source tag at the cursor (on top of
   -- nodes) — it commits to a stub on drop. The wire-type is undecided here.
@@ -1981,8 +1904,8 @@ local function renderCanvas(w, h)
   if wireDraft and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     wireDraft = nil
   end
-  if (busOverlay or busDraft) and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-    busOverlay, busDraft = nil, nil
+  if busDraft and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+    busDraft = nil
   end
 
   -- LMB on the triangle opens at the current value, warps the OS cursor to
@@ -2075,7 +1998,7 @@ local function renderCanvas(w, h)
   -- its FX window. dblConsumed blocks this press from starting a drag.
   local dblConsumed = false
   if not shiftHeld and not wireDraft and not fader and overCanvas
-     and not busOverlay and not busDraft
+     and not busDraft
      and ImGui.IsMouseDoubleClicked(ctx, 0) then
     local hit = nodeUnderMouse(nodeViews, lmx, lmy)
     if hit then
@@ -2089,41 +2012,21 @@ local function renderCanvas(w, h)
     end
   end
 
-  -- Bus-creation gesture owns the mouse while live (node-menu launched). A
-  -- grabbed port drafts; release commits at the quadrant side; backdrop cancels.
-  if busDraft then
-    local draft, commit = busDraft, false
-    if draft.byHover then
-      if overCanvas and ImGui.IsMouseClicked(ctx, 0) then
-        local nv = nodesById[draft.nodeId]
-        commit, busDraft = nv and busNear(nv, lmx, lmy), nil  -- click away cancels
-      end
-    elseif not ImGui.IsMouseDown(ctx, 0) then
-      commit, busDraft = true, nil
-    end
-    if commit then
-      local nv = nodesById[draft.nodeId]
-      if nv then
-        local pos, orient = busDefaultPlacement(nv, draft.side)
-        wv:insertBus{ pos = pos, orient = orient,
-                      node = draft.nodeId, port = draft.port, dir = draft.dir }
-      end
-    end
-  elseif busOverlay and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
-    local hit = busHandleHit(busHandles, lmx, lmy)
-    if hit and not hit.bussed then
-      busDraft = { nodeId = busOverlay.nodeId, dir = busOverlay.dir,
-                   port = hit.port, side = busOverlay.dir == 'in' and 'T' or 'B' }
-      busOverlay = nil
-    elseif not hit then
-      busOverlay = nil
+  -- Bus-creation gesture (node-menu launched): the bar is glued to the cursor; a
+  -- left click drops it where the cursor sits and re-points the port's wires through it.
+  if busDraft and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
+    local draft = busDraft
+    busDraft = nil
+    if nodesById[draft.nodeId] then
+      wv:insertBus{ pos = { x = lmx, y = lmy }, orient = draft.orient,
+                    node = draft.nodeId, port = draft.port, dir = draft.dir }
     end
   end
 
   -- Mousedown precedence (docs/wiringPage.md): shift-hover > wire-end >
   -- body-drag > band.
   if not faderConsumed and not dblConsumed and not drag and not band
-      and not wireDraft and not tagDrag and not busOverlay and not busDraft and not busDrag
+      and not wireDraft and not tagDrag and not busDraft and not busDrag
       and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
     -- Any click closes the spillover. The pre-click sourceHit (list still open)
     -- drives dispatch here.
@@ -2319,7 +2222,7 @@ local function renderCanvas(w, h)
   -- RMB precedence: triangle → per-wire menu; node body / buss bar → node
   -- menu; empty canvas → FX picker (same code path as the N-key shortcut).
   if not drag and not band and not wireDraft and not tagDrag
-      and not busOverlay and not busDraft and not busDrag
+      and not busDraft and not busDrag
       and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
     if arrowHitIdx and not wireMenu and not fader then
       local seg = segs[arrowHitIdx]
@@ -2385,13 +2288,18 @@ local function renderCanvas(w, h)
         wv:rotateBus(nodeMenu.nodeId)
         ImGui.CloseCurrentPopup(ctx)
       end
-      if menuNode and not isBus and #menuNode.ins.audio > 0 and ImGui.Selectable(ctx, 'Add input bus') then
-        armBus(nodeMenu.nodeId, 'in', menuNode, wireViewsList)
-        ImGui.CloseCurrentPopup(ctx)
-      end
-      if menuNode and not isBus and #menuNode.outs.audio > 0 and ImGui.Selectable(ctx, 'Add output bus') then
-        armBus(nodeMenu.nodeId, 'out', menuNode, wireViewsList)
-        ImGui.CloseCurrentPopup(ctx)
+      if menuNode and not isBus then
+        for _, dir in ipairs({ 'in', 'out' }) do
+          for _, port in ipairs(bussablePorts(menuNode, dir, wireViewsList)) do
+            local label = 'Buss ' .. dir .. ' ' .. port
+            for _, o in ipairs({ { 'H', 'horizontal' }, { 'V', 'vertical' } }) do
+              if ImGui.Selectable(ctx, label .. ' (' .. o[2] .. ')') then
+                busDraft = { nodeId = nodeMenu.nodeId, dir = dir, port = port, orient = o[1] }
+                ImGui.CloseCurrentPopup(ctx)
+              end
+            end
+          end
+        end
       end
       if not ImGui.IsWindowAppearing(ctx) then
         local wx, wy = ImGui.GetWindowPos(ctx)
