@@ -216,7 +216,11 @@ of correct folder `read` — a later cosmetic layer, not part of steps
 > `a9e530d`, suite green at 1406). By decision the **quarantine stopgap
 > was skipped** — going straight to the real read (step 2), accepting
 > that foldered projects won't recompile correctly until step 3 (the
-> seam below). Steps 2–4 not started; step 2's design is settled (below).
+> seam below). **Step 2 (model + read) now landed** — `readGraph` routes a
+> foldered child's `mainSend` into its parent, mints the parent as a
+> summing `source` node (`audio.ins=1`), and seeds parent `liveMidi` from
+> children through the pipe; suite green at 1413, spec
+> `tests/specs/wm_folders_read_spec.lua`. Steps 3–4 not started.
 
 1. **rm foundation** *(DONE — `a9e530d`)*: `readTrack` carries
    `folderDepth`; `stampParents` walks project order stamping each
@@ -228,7 +232,7 @@ of correct folder `read` — a later cosmetic layer, not part of steps
    Spec: `tests/specs/rm_folders_spec.lua`.
    *(Skipped: the `'folder'` quarantine reason — step 2 does the real
    read instead of going dark.)*
-2. **Model + read** *(design settled; not started)*. The model change
+2. **Model + read** *(DONE — suite green at 1413)*. The model change
    is **entirely in `readGraph`** — `M.validate` already permits an edge
    into any node with `ins ≥ 1` (the generic port check, `DAG.lua:101`);
    sources are unsinkable today only because read always mints them with

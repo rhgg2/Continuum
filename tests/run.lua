@@ -153,6 +153,7 @@ local specs = {
   'wm_undo_spec',
   'wm_fx_locations_spec',
   'wm_read_spec',
+  'wm_folders_read_spec',
   'wm_bus_read_spec',
   'wm_roundtrip_spec',
   'wm_reconcile_cache_spec',

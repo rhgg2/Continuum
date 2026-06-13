@@ -945,6 +945,7 @@ end
 -- Pass 3c: audio + CU collapse + gain + full midi-bus walk (fan-in, merge, brackets), then
 -- component classification (bus-aware + feedback quarantine). Node ids are rm ids. Pure.
 local MASTER_KEY = '__master__'
+--invariant: folder parent reads as a source node summing children; pipe midi is liveness not edges
 local function readGraph(snap, busMeta)
   -- trackId-flagged records key the matrix mint by the snapshot entry's guid.
   local busByTrack = {}
@@ -1012,9 +1013,9 @@ local function readGraph(snap, busMeta)
     return out
   end
 
-  -- Incoming routing per track: explicit audio sends + the parent send. REAPER
-  -- pins the parent send to channels 1-2, so its source is always pair 1.
-  local incoming = {}
+  -- Incoming routing per track: explicit audio sends + the parent send (channels 1-2 => pair 1).
+  -- A foldered child main-sends into its parent (folderSinks), not master; send is atomic — audio + all-bus midi.
+  local incoming, folderSinks = {}, {}
   local function addIncoming(toKey, inc)
     incoming[toKey] = incoming[toKey] or {}
     util.add(incoming[toKey], inc)
@@ -1032,9 +1033,16 @@ local function readGraph(snap, busMeta)
       end
     end
     if entry.mainSend and entry.mainSend.on then
-      addIncoming(MASTER_KEY, { from = fromKey, toMaster = true, srcPair = 1,
-                                dstPair = (entry.mainSend.tgtOffset or 0) // 2 + 1,
-                                gain = entry.mainSend.gain })
+      if entry.parent then
+        folderSinks[entry.parent] = true
+        addIncoming(entry.parent, { from = fromKey, parentSend = true, srcPair = 1,
+                                    dstPair = (entry.mainSend.tgtOffset or 0) // 2 + 1,
+                                    gain = entry.mainSend.gain })
+      else
+        addIncoming(MASTER_KEY, { from = fromKey, toMaster = true, srcPair = 1,
+                                  dstPair = (entry.mainSend.tgtOffset or 0) // 2 + 1,
+                                  gain = entry.mainSend.gain })
+      end
     end
   end
 
@@ -1096,9 +1104,30 @@ local function readGraph(snap, busMeta)
           for _, ref in ipairs((tail.midi or {})[i.srcBus] or {}) do feedMidi(i.dstBus, ref) end
         else
           for _, ref in ipairs((tail.audio or {})[i.srcPair] or {}) do feed(i.dstPair, foldGain(ref, i.gain)) end
+          if i.parentSend then
+            -- The parent send is atomic: all-bus midi rides the pipe identity-mapped, so a
+            -- parent fx listening on bus n meets the child's bus-n producer directly.
+            for bus, refs in pairs(tail.midi or {}) do
+              for _, ref in ipairs(refs) do feedMidi(bus, ref) end
+            end
+          end
         end
       end
-    elseif not busId and entry.trackKind ~= 'master' and entry.trackKind ~= 'scratch' then
+    end
+
+    if folderSinks[trackKey] then
+      -- Folder parent: source node summing children's parent-sends; emits sum on pair 1.
+      -- midi.ins/outs=0 — pipe-seeded liveMidi is the children's (see design/wiring-folders.md § Model + read).
+      local sid = entry.id
+      nodes[sid] = { kind = 'source', trackId = entry.id,
+                     ports = { audio = { ins = 1, outs = 1 }, midi = { ins = 0, outs = 0 } } }
+      if isCyclic then feedbackSeeds[sid] = true end
+      for _, refs in pairs(liveAudio) do
+        for _, ref in ipairs(refs) do addAudioEdge(ref, sid, 1) end
+      end
+      liveAudio = {}
+      feed(1, { node = sid, port = 1 })
+    elseif not inc and not busId and entry.trackKind ~= 'master' and entry.trackKind ~= 'scratch' then
       -- No inputs => a source (scratch excepted: a known fx bin, walked as floating islands).
       -- Emits audio on pair 1 and midi on bus 0.
       local sid = entry.id
