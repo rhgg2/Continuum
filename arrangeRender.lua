@@ -100,25 +100,32 @@ local function floorTo(v, step) return math.floor(v / step) * step end
 -- Shared (col,row)→screen transform for mouse pass and paint pass: both call gridGeom at the
 -- same layout-cursor position, so hit-test and draw resolve through one mapping.
 local function gridGeom(nTracks)
-  local paneLeft, oy = ImGui.GetCursorScreenPos(ctx)
-  local ox        = paneLeft + LOOP_PAD
-  local _, availH = ImGui.GetContentRegionAvail(ctx)
-  local rowH      = math.ceil(math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx)))
-  local headerH   = rowH + HEADER_PAD
-  local bodyTop   = oy + headerH + HEADER_GAP
-  local visRows   = math.max(1, math.floor((oy + availH - bodyTop) / rowH))
-  local sr        = (select(1, av:scroll())) or 0
+  local paneLeft, oy   = ImGui.GetCursorScreenPos(ctx)
+  local ox             = paneLeft + LOOP_PAD
+  local availW, availH = ImGui.GetContentRegionAvail(ctx)
+  local rowH           = math.ceil(math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx)))
+  local headerH        = rowH + HEADER_PAD
+  local bodyTop        = oy + headerH + HEADER_GAP
+  local visRows        = math.max(1, math.floor((oy + availH - bodyTop) / rowH))
+  local sr, sc         = av:scroll()
+  sr, sc               = sr or 0, sc or 0
+  local bandLeft       = ox + QN_W + GUTTER_PAD   -- fixed: left edge of the scrolling column band
+  local paneR          = paneLeft + availW
+  local visCols        = math.max(1, math.floor((paneR - bandLeft) / TRACK_W))
   local pg = painter.new(ctx, chrome, {
-    ox = ox + QN_W + GUTTER_PAD, oy = bodyTop - sr * rowH,
+    ox = bandLeft - sc * TRACK_W, oy = bodyTop - sr * rowH,
     sx = TRACK_W, sy = rowH, snap = true,
   })
   return {
     pg = pg, paneLeft = paneLeft, ox = ox, oy = oy, availH = availH,
     rowH = rowH, headerH = headerH, bodyTop = bodyTop,
     bodyBot = bodyTop + visRows * rowH, visRows = visRows, sr = sr,
-    gutterR = pg.ox,                      -- column-0 left edge (snapped)
-    gridR   = pg.ox + nTracks * TRACK_W,  -- right edge of the last column
-    gridW   = QN_W + GUTTER_PAD + TRACK_W * nTracks,  -- footprint from ox (Dummy)
+    sc = sc, visCols = visCols,
+    lastCol = math.min(nTracks - 1, sc + visCols),
+    gutterR = pg.ox + sc * TRACK_W,                        -- fixed gutter right / band left edge
+    paneR   = paneR,
+    gridR   = math.min(pg.ox + nTracks * TRACK_W, paneR),  -- visible right edge of the band
+    gridW   = paneR - paneLeft,                            -- visible footprint (Dummy)
   }
 end
 
@@ -128,7 +135,7 @@ local function handleGridMouse(nTracks)
   local g  = gridGeom(nTracks)
   local pg = g.pg
 
-  av:setGridSize(g.visRows, nTracks)
+  av:setGridSize(g.visRows, g.visCols)
   av:setMaxCol(nTracks)
 
   local mx, my     = ImGui.GetMousePos(ctx)
@@ -220,6 +227,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   local ps = painter.new(ctx, chrome, {})   -- screen space: gutter, header, full-width rules
   local sr, rowH, visRows = g.sr, g.rowH, g.visRows
   local ox, oy, gridR = g.ox, g.oy, g.gridR
+  local sc, lastCol   = g.sc, g.lastCol
 
   local function rect(x0, y0, x1, y1) return { x0 = x0, y0 = y0, x1 = x1, y1 = y1 } end
   -- Snapped screen edges of a column / row, read off the shared grid transform.
@@ -246,7 +254,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
 
   -- Verticals via grid painter; horizontals and bottom border are screen-space (span the gutter).
   -- Topmost/leftmost outer borders omitted so the header reads as open space.
-  for c = 0, nTracks do
+  for c = sc, lastCol + 1 do
     pg.line(c, sr, c, sr + visRows, 'separator', 1)
   end
   ps.line(ox, rowYs(sr + visRows), gridR, rowYs(sr + visRows), 'separator', 1)
@@ -288,7 +296,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
 
   -- Settled takes; dragged take is held back and painted last at its candidate range.
   -- Duplicate keeps original here and adds the copy after.
-  for c = 0, nTracks - 1 do
+  for c = sc, lastCol do
     for _, tk in ipairs(av:tracksTakes(c)) do
       local relocating = dragCand and not press.duplicate
                          and tk.item == press.take.item
@@ -320,7 +328,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   local CARET_BLINK = 0.75   -- seconds per on/off half-cycle
   local caretOn = (reaper.time_precise() % (2 * CARET_BLINK)) < CARET_BLINK
   if curRow >= sr and curRow < sr + visRows
-     and curCol >= 0 and curCol < nTracks then
+     and curCol >= sc and curCol <= lastCol then
     local cx0, cx1 = colX(curCol), colX(curCol + 1)
     local cy    = rowYs(curRow)
     local serif = 2
@@ -381,7 +389,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   local TRI_BASE, TRI_H = 7, 7
   local function gutterTri(qn, fill)
     local y    = rowYs(av:qnToRow(qn))
-    local apex = pg.ox - 2
+    local apex = g.gutterR - 2
     local base = apex - TRI_H
     local half = TRI_BASE / 2
     ps.tri(apex, y, base, y - half, base, y + half, fill)
@@ -401,7 +409,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   -- Header track names at the bottom of the header band (HEADER_PAD reads as space above).
   -- Clipped at cell edges so long names ellipsise rather than spill.
   local headerTextY = oy + HEADER_PAD
-  for c = 0, nTracks - 1 do
+  for c = sc, lastCol do
     local tr   = tracks[c + 1]
     local name = (tr and tr.name and tr.name ~= '')
                  and tr.name or string.format('Track %d', c + 1)
