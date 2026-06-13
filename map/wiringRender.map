@@ -1,4 +1,4 @@
-@module wiringRender  src=wiringRender.lua  loc=2656  sha=81f04b4  mode=chunk
+@module wiringRender  src=wiringRender.lua  loc=2656  sha=999a45b  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, wv
 
 # Invariants & contracts

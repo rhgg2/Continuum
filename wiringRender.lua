@@ -590,12 +590,12 @@ local function engagedHover(nodeViews, mx, my, cfg)
     end
     return pick
   end
-  -- No eligibility re-check on the engaged node: consume only sets engagedId
-  -- on an eligible node and neither predicate flips mid-gesture (out-port
-  -- counts static, draft.forbidden fixed at creation), so it stays eligible.
+  -- shift and draft gestures share engagedId but differ in eligibility,
+  -- so re-check: a node engaged for shift must not surface as draft's forbidden source.
   if engagedId then
     for _, nv in ipairs(nodeViews) do
       if nv.id == engagedId then
+        if cfg.eligible and not cfg.eligible(nv) then break end
         local layout = layoutPortRow(nv, dir, mx, my, keep)
         if listOpenId == nv.id and stillEngaged(layout, mx, my) then
           return consume{ nv = nv, layout = layout, list = layout.list,
