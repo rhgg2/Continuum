@@ -6,7 +6,6 @@
   - arpeggio
 - CC smoothing
 - 14bit CCs
-- move to command based key/mouse interactions
 - keyboard mapping editor
 - multiselect / copy / paste in ap
 - wave previews in ap
@@ -15,7 +14,6 @@
   to master
 - MIDI PDC alignment at a merge — verify pdc_midi=1 if MIDI-vs-audio
   skew shows up. 
-- basic automation palette in trackerView
   
 
 1. Quarantine UX (Open questions) — a darkened component still needs

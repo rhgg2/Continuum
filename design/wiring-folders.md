@@ -107,19 +107,34 @@ shape `read` already discards as realisation, so it round-trips to
 the direct edge. Net: folders impose zero restrictions on expressible
 topology.
 
-> **Realisation note (2026-06-12).** The allocator is node-driven —
-> `classes()` (`DAG.lua:263`) partitions *nodes*, and a track exists
-> only if some node's class lands on it; nothing conjures a node-less
-> track (split markers merely relocate an existing node). So the relay
-> cannot simply "appear" — it needs a carrier node. The clean reuse is
-> `wiring-busses-v2.md`'s `kind='bus'` node: the relay is a **degenerate
-> 1→1 buss that must not fold** (a plain fold absorbs it onto the child,
-> turning its mainSend back into the child's *parent* send — exactly
-> wrong). Non-folding is the split-class invariant again (`DAG.lua:276`).
-> Sequencing: the relay rides the v2 bus node — defer it until v2 lands,
-> then add the non-folding-top-level pin. Until then `read`'s
-> transparency (§open questions, resolved) already round-trips a
-> hand-built relay, so nothing regresses.
+> **Realisation note (updated 2026-06-13; busses now landed).** The
+> allocator is node-driven — `classes()` (`DAG.lua:263`) partitions
+> *nodes*, and a track exists only if some node's class lands on it;
+> nothing conjures a node-less track (split markers merely relocate an
+> existing node). So the relay cannot simply "appear" — it needs a
+> carrier node. An earlier draft reused `wiring-busses-v2.md`'s
+> `kind='bus'` node for this; **the landed buss model rules it out on
+> two counts**:
+> - *Splice.* Sub-2×2 busses no longer fold onto a neighbour — they are
+>   spliced out of the working graph (`docs/DAG.md § bus splice`). A 1→1
+>   relay buss therefore splices to a single direct child→master edge —
+>   which for a foldered child is the very edge that is inexpressible
+>   (mainSend lands on the parent). The carrier evaporates.
+> - *Transparency.* A bus node is buss-flagged, and buss-flagging
+>   deliberately **breaks** the `readGraph` transparency the relay's
+>   round-trip depends on (§resolved, zero-fx relay collapse). A relay
+>   realised as a buss would read back as an unauthored 1→1 buss, not as
+>   the direct child→master edge — failing `read(compile(g)) = g`.
+>
+> So the relay carrier is **not** a bus node. What stands today: `read`
+> already round-trips a *hand-built* relay — an unflagged top-level
+> pass-through track (child explicit-send in, mainSend on, zero fx) — to
+> the direct edge, via that same transparency (§resolved). The open part
+> is compile *minting* one automatically: it needs a transparent-on-read
+> carrier node (node-driven track creation without the buss flag), which
+> the landed model does not yet provide. Deferred with the compile step;
+> until then a hand-built relay is the escape hatch and nothing
+> regresses.
 
 ## Bus domains
 
@@ -159,6 +174,41 @@ the domain. The one-fx-per-track floor argument carries over.
   track node that consumes.
 - Topo order (`nonMasterOrder` / the Kahn walk) must include
   parent-send edges so parents walk after children.
+
+## Folder display (view-only, deferred)
+
+Once `read` models parents correctly, a folder with many children draws
+as a **starburst** — N parent-send edges converging on one node rect —
+the exact clutter the buss bar was built to dissolve
+(`design/archive/wiring-busses.md`). So a qualifying folder parent
+projects onto the buss **bar** geometry: children comb the input side,
+out-taps the other.
+
+Pure view projection (`wv:busViews()` / nodeView emitting a bar shape
+for the folder node) over the existing page render
+(`busSegments`/`drawBusBar`). Touches neither graph nor DAG; sits on top
+of correct folder `read` — a later cosmetic layer, not part of steps
+1–4.
+
+- **The bar is the folder's pair-1-2 input summing point**, uniform
+  across fx-presence. The parent send pins every child to pair 1
+  (`C_MAINSEND_NCH=2`), so all children land on 1-2; whatever reads 1-2
+  taps out — the fx-chain head when the folder hosts fx, the onward
+  send(s) when it doesn't. fx render as ordinary downstream nodes fed by
+  an out-tap, so a processing folder needs no special case. This is the
+  buss model's own "an fx on the summing track reads as a downstream fx
+  node fed by the bus" (`docs/wiringManager.md § Busses`) — but where a
+  *buss* self-heals it away (busses must be fx-less), a folder keeps it
+  (folders are allowed fx).
+- **Distinct skin, not a buss.** A buss is user-made, free-placed,
+  deletable, fx-less; a folder is TCP-owned, named, carries mute/solo,
+  and gets no membership affordance here. Same geometry, different
+  render — folder name on the bar, folder colour/glyph, no
+  delete-from-wiring — so the two stay tellable-apart. Legibility from
+  REAPER's own UI is the standing rule.
+- **Gate: multi-child.** One- or two-child folders draw as node rects —
+  no starburst to fix, the bar earns nothing. *Open: automatic on child
+  count, or a per-folder toggle?*
 
 ## Plan (skeleton)
 
