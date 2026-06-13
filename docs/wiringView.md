@@ -48,10 +48,11 @@ the manager-facing state.
 `fromPort`/`toPort` are 1-based and always present. `fromPortName`/`toPortName`
 are nil when the port has been trimmed off the node since the edge was recorded.
 `fromOffset` is a custom-dragged source tag's position relative to its consumer
-node, so the tag rides node moves without a separate update. `bus` is set on
-audio edges that belong to a buss — the edge's endpoint is a bus node (matrix),
-or a buss record's claim binds the endpoint's port (fan); `bussedEnd` names the
-bussed end (`'to'` for the consumer side, `'from'` for the producer side).
+node, so the tag rides node moves without a separate update. `bus` is set on an
+audio edge incident on a `kind='bus'` node — membership is purely structural,
+with no separate claim or membership list. `bussedEnd` names which end sits on
+the bus (`'to'` for the consumer side, `'from'` for the producer; the `to` end
+wins when both).
 
 ## wireView fromKind/fromLabel
 

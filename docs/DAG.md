@@ -29,6 +29,16 @@ authored degree only: chained fans compose products (n→1→m yields n×m
 sends) rather than re-evaluating mid-splice, which keeps each bar's
 realization local to its own taps and the splice order-free.
 
+At and above 2×2 the buss survives the splice and isolates into its own class.
+Its `srcSet` seeds a `'bus:'..id` marker iff it has ≥1 audio in *and* ≥1 audio
+out; unlike `'split:'`, the parent-union skips `'bus:'` keys, so children inherit
+the real upstream sources *through* the buss but never the marker — the buss sits
+alone in its class and realises as one fx-less summing track (N in-sends, M
+out-sends). A bus class never absorbs and is never an absorption target, so the
+summing track stays fx-less even when a sole-output fx has the buss as its only
+audio parent. A buss with audio on only one side (or none) contributes an empty
+`srcSet`, so all three degenerate shapes are inert.
+
 ## gainHost — where a gained wire's volume lives
 
 A gain on an audio wire lives on the REAPER send that carries it (as

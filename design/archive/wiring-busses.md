@@ -1,5 +1,10 @@
 # wiring busses — explicit rails for high-fan ports
 
+> **Status: superseded & archived.** The v1 node-anchored rail model was replaced
+> by the buss-node model in `wiring-busses-v2.md` (also archived); the living
+> reference is `docs/wiringPage.md § Buss bars`. Kept for the starburst problem
+> statement that motivated busses.
+>
 > Design note, pre-build. A *bus* renders a port's many edges as a bar with a
 > comb of taps and one arrowed trunk, instead of a star of radial wires. It is
 > an explicit, user-authored decoration on a node — never auto-detected, never

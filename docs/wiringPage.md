@@ -158,98 +158,72 @@ Wire geometry (`segs`) is built once and shared by the draw pass and every
 hit-test, so highlight and label placement can never drift from the drawn
 line.
 
-## Bus rail geometry
+## Buss bars
 
-A bus is an explicit, user-authored decoration on a node (`node.busses`,
-port-scoped) that renders one port's many edges as a **rail** instead of a
-star: a bar on one side of the node, the edges meeting it as orthogonal comb
-taps, and the many taps collapsing to **one arrowed trunk** into the node. The
-many-to-one collapse at the trunk is the decongestion — N radial arrowed lines
-become N short taps plus one arrowed trunk. The design rationale (why explicit,
-why a bus and not a mixer) lives in `design/wiring-busses.md`.
+A buss is a `kind='bus'` node at every degree — a free-floating **bar** that sums
+every input tap into every output tap, each crossing scaled by the product of its
+two gains. The renderer draws the bar, combs its taps, and owns every buss
+gesture; it never sees the realisation (spliced sends below 2×2, an fx-less
+summing track at matrix — `docs/wiringManager.md § Busses`, `docs/DAG.md § bus
+splice`). To the renderer a buss is just a node whose body is a bar. The model's
+rationale and rejected alternatives are archived in
+`design/archive/wiring-busses-v2.md`.
 
-`wv:wireViews()` stamps each claimed edge with `bus = { nodeId, busIdx,
-bussedEnd }`; `busSegments` owns those edges (the normal `wireSegments` /
-`sourceSegments` passes skip them) and `drawBusPass` strokes the bar + trunk.
+`wv:busViews()` yields one `busView {id, pos, orient, ext?, matrix?}` per buss;
+`busSegments` turns each into a **rail** (`bar` + per-tap `segs`) shared by the
+draw pass and every hit-test, so the bar and its taps can't drift. Membership is
+structural — `wv:wireViews()` stamps `bus = {busId, bussedEnd}` on any audio edge
+whose endpoint is the bus node (`to` end wins); `busSegments` owns those edges
+and the normal wire passes skip them.
 
-Geometry, per bus (`SIDE_VEC` maps `side` to the outward normal `n` and the
-along-bar axis `a`; the bar is ⟂ the normal):
+Geometry (`ORIENT_VEC` maps `orient` V/H to the bar normal `n` and along-bar axis
+`a`):
 
-- **Bar distance** from the body is `half + BUS_BASE + rank·BUS_STACK_GAP`,
-  where `rank` is the bus's position among same-side busses — so stacked rails
-  don't overlap in distance. They are also shifted laterally by
-  `(rank − (count−1)/2)·BUS_TRUNK_GAP` along the bar axis, so the stacked trunks
-  enter the node at distinct points instead of all running down the centre line.
-- **Empty busses still render.** Iteration is driven by `node.busses` (across
-  every node), not by the claimed edges — so a bus with no wires yet draws as a
-  bare node-width bar plus its trunk, and the creation preview shows the rail
-  before the first wire lands.
-- **Each tap lands orthogonally.** Every tap lands at the *orthogonal projection*
-  of its far end onto the bar — projecting drops the along-axis component, so the
-  tooth is perpendicular wherever the far end sits. A real far-end node projects
-  from its body position; a **source** far-end has no body, so it stands off the
-  bar by `BUS_TAP_LEN` (plus its tag patch extent) at an evenly-spaced slot and
-  the source-tag pass draws its label there — *unless* it's been dragged, in
-  which case its custom (bussed-node-relative) `fromOffset` position is used and
-  projected, exactly like the star path, so a bussed source tag repositions like
-  any other. The live drag feeds that `fromOffset` as a transient *before* the
-  geometry pass — the same way a node drag feeds `pos` — so there is one geometry
-  path and the dragged and committed frames coincide (bar extends/shrinks, tooth
-  stays orthogonal), with no separate seg override. A node feeding several busses spreads its taps along each bar's axis
-  (`farSlot·BUS_TAP_GAP`) so they don't all leave its body at one point — the
-  along-axis shift keeps the projection orthogonal. Tap segs are ordinary `segs`
-  — oriented from→to by `bussedEnd` (in-bus lands the `to` end on the bar, out-bus
-  the `from` end), so a tap is a normal arrowed wire and its per-tap fader,
-  RMB-delete, end-hit, and redraft all read the right direction (out-bus taps
-  point *away* from the bar).
-- **The bar spans the node and its taps.** It runs from the trunk attach point
-  (its centre, where the stem meets at `t=0`) out to the farthest tap, and is
-  never shorter than the node's own width — `min..max` of the taps' along-axis
-  coordinate unioned with ±half the node dimension, plus `BUS_BAR_PAD`. Length
-  was never stored, so add/remove grow and shrink it free.
-- **The trunk** runs from the bar centre to the node edge along the normal; its
-  arrow follows `dir` (into the node for an in-bus, out for an out-bus). When the
-  bussed port ≠ 1 its number is stamped once **on** the trunk near the node,
-  through the same `drawWireEndLabel` an ordinary wire uses (and sharing its
-  per-frame collision set), replacing the per-tap label every tap would otherwise
-  repeat — they all share the one bussed port.
+- **Free bar at the buss's own pos.** Unlike v1's node-anchored rail, the bar
+  sits at the busView's `pos`/`orient`; input taps comb one side, output taps the
+  other, each an ordinary arrowed `seg` so per-tap fader / RMB-delete / end-hit /
+  redraft read the right direction. Every tap shares port 1 (a port index on a
+  summing node is meaningless).
+- **Span: auto-fit or hand-sized.** With no `ext` the bar spans its taps
+  (`tapLo..tapHi`) unioned with a minimum, so add/remove grow and shrink it free.
+  A resize drag stamps `ext={lo,hi}` (axial offsets from `pos`) and the bar holds
+  that hand-sized span.
+- **Taps spread per exit side.** Several taps from one far node spread along the
+  bar axis (`farSlot`, keyed by far node + orient + exit side) so they don't all
+  leave its body at one point.
+- **Committed vs preview.** A committed buss has a live graph node, so its bar
+  draws in the **node pass** (`drawBusBar`) as the node's body — selection
+  strokes a slab round it. The dedicated `drawBusPass` draws only the live
+  creation preview, which has no node and carries a trunk to the node being
+  bussed.
 
-v1 wart: a node pair carrying both a bussed and a non-bussed wire gets a small
-slot-offset gap, noted for the deferred reposition work.
+### Buss gestures
 
-### Bus creation
+Creation has three entries, all landing the same `kind='bus'` node:
 
-The *Add input/output bus* node-menu items arm `busOverlay = {nodeId, dir}` — a
-modal port-selector that, while live, owns the mouse (the normal mousedown
-precedence chain is gated off). It draws the node's audio ports for that
-direction as grab handles on a fixed face (in→top, out→bottom — the grab spot,
-*not* the eventual side); ports already on a same-direction bus render
-stroke-only and inert. Pressing a free handle arms `busDraft`; the side is then
-the **quadrant of the cursor from the node centre**, recomputed each frame, so
-swinging around the node continuously re-sides the rail.
+- **Picker** — a synthetic *Buss* entry in the add-FX picker drops an unwired bar
+  at the cursor (`wv:addBusNode`).
+- **Node menu, per port** — for each audio port carrying an un-bussed wire
+  (`bussablePorts`), a *Buss in/out N (horizontal|vertical)* entry arms
+  `busDraft {nodeId, dir, port, orient}`. The bar is then glued to the cursor and
+  a canvas click drops it (`wv:insertBus` — mint the node and re-point that
+  port's edges through it, audio-identical under the splice); Esc cancels. While
+  armed, a synthetic claim-shaped busView is injected and the wires it would own
+  get their `.bus` stamped, so `drawBusPass` draws the real rail and re-routed
+  taps — with a trunk to the bussed node — before the click commits.
+- **Mid-wire** — `wv:insertBus` is the node-menu commit path above.
 
-A node with a **single free audio port** has nothing to pick, so `armBus` skips
-the overlay and arms a `byHover` `busDraft` directly: hovering around the node
-picks the side live (no grab), a click inside the node's vicinity (`busNear` — the
-node rect grown just past the first rail) commits, and a click on the backdrop
-cancels.
+A bar is also a **fat rewire target** (`busBarHit`): a redraft whose grabbed end
+matches the bar's direction (a matrix bar takes either end) drops onto it as an
+ordinary `targetHit {slot={kind='audio', portIdx}}` carrying a `viaBar` marker,
+so the existing rewire/`addWire` path handles it unchanged and the highlight
+strokes the bar. Shift-hover over a bar (`busBarSource`) starts a drag-out wire
+from the grab point.
 
-The live comb preview reuses the Phase-2 render untouched: each frame a
-synthetic bus is appended to the transient `nodeView.busses` (a copy — the alias
-points at the cached clone) and the wires it would claim get their `.bus` stamped,
-so `busSegments`/`drawBusPass` draw the real rail before commit. Release calls
-`wv:addBus` and the next frame renders it from the graph; the preview and
-committed frames are geometrically identical, so there's no flicker. Esc or a
-backdrop click (overlay only) cancels.
-
-### Bus bar as a rewire target
-
-A bus bar doubles as a fat drop target for its bussed port during a redraft.
-`busBarHit` matches the dragged end against the bar's direction — a `to`-end
-(seeking an in-port) lands on an **in**-bus, a `from`-end on an **out**-bus — so
-aiming anywhere along the bar is the same as hitting the bussed port's chip. The
-hit is synthesised as an ordinary `targetHit` (`slot = {kind='audio', portIdx}`)
-so `dropEligible` and the existing rewire/`addWire` commit path handle it
-unchanged; it just carries a `viaBar` marker so the overlay pass skips its
-(absent) port-row layout and the highlight strokes the bar instead. Cycle-blocked
-nodes (`draft.forbidden`) are excluded exactly as for a node-port drop.
+**Move / resize** is one drag (`makeBusDrag`/`busDragApply`): a middle-third grab
+translates the whole bar; a near-end grab resizes that end (floored at its
+outermost tap, handing off to the far end if the cursor crosses past it), and
+perpendicular motion always slides. Release writes `pos` + `ext` via
+`wv:moveBus`. **RMB** on a bar or bus-node body opens the node menu — *Delete
+buss* (`wv:deleteBus`: node, incident edges, record, one Undo) and *Rotate buss*
+(`wv:rotateBus`: flips V↔H).

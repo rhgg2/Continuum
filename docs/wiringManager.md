@@ -258,6 +258,39 @@ is stamped onto the consumer node so reconciles are idempotent, and the CU
 retracts when the fan-in drops back to a single feeder. Cross-track MIDI sends
 instead coalesce onto one dest bus with no CU (see `docs/DAG.md § MIDI`).
 
+## Busses
+
+A buss is a `kind='bus'` node at every degree (`wm:addBusNode`, or `wm:insertBus`
+to splice one onto an existing port's wires); its decoration —
+`{pos, orient, ext?, ins, outs, trackId?}` — rides the rm `'bus'` meta store
+(`wm:busRecords`), keyed by the synthetic `bus-N` id (`nextBusId`). The node
+carries `ports.audio={ins=1,outs=1}`, so every tap shares port 1 and `M.validate`
+needs no buss rule. How a buss *realises* — spliced to direct sends below 2×2, an
+fx-less summing track at matrix — is `docs/DAG.md § bus splice`; this section is
+its persistence and round-trip.
+
+**Taps are a write-through mirror.** `record.ins`/`outs` are not authored
+membership — membership is structural (a tap is an audio edge incident on the bus
+node). `mirrorBusTaps` rewrites each record's `{node, port, gain}` tap lists from
+the node's incident edges at the mutate chokepoint (and on a fast gain commit),
+so they track the graph; a tap whose node has died is dropped. The mirror is what
+mints the buss back on read, since below the threshold its edges have no per-edge
+REAPER carrier.
+
+**Read minting.** `readGraph(snap, busMeta)` reconstructs busses two ways. A
+**matrix** buss is carried by its summing track: the record's `trackId` (stamped
+by `stampBusTracks` after each reconcile's `applyOps`, cleared when the class
+loses its track) matches a track guid and the node is minted from it. A
+**sub-threshold** buss has no carrier track, so its record taps mint the node and
+its edges directly, and each in×out crossing consumes the one direct send the
+splice realised it as (matched by `(node,port)` pair) so the crossing isn't also
+read as a plain wire.
+
+Gain pokes route through the splice provenance map — see the `product` entry
+under *the live gain poke*: a matrix tap pokes its native send volume, a
+sub-threshold tap pokes its crossings at the product gain, and a lone-side tap
+fans out to every crossing (the group fader).
+
 ## The addressing map
 
 wm and rm speak different names for a track. rm hands out an opaque `id`;

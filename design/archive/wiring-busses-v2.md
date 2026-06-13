@@ -1,5 +1,11 @@
 # wiring busses v2 — one buss node at every degree; a buss track only at many-to-many
 
+> **Status: landed & archived (2026-06-13).** Shipped across commits through
+> `7c52afe`; suite green at 1404. The living reference is
+> `docs/wiringManager.md § Busses`, `docs/DAG.md § bus splice`, and
+> `docs/wiringPage.md § Buss bars`. Kept for the rejected-mechanisms record
+> and the rationale below.
+>
 > Design note + implementation plan. **Supersedes `design/wiring-busses.md`**
 > (v1: the buss as a node-anchored rail decoration). This doc has been through
 > three drafts: the first folded fan busses onto neighbour tracks via
