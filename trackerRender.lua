@@ -1579,8 +1579,8 @@ end
 
 ----- Modal-driven commands
 
-local function openPrompt(title, prompt, callback, resolve)
-  modalHost:openPrompt{ title = title, prompt = prompt, callback = callback, resolve = resolve }
+local function openPrompt(title, prompt, callback, resolve, onChord)
+  modalHost:openPrompt{ title = title, prompt = prompt, callback = callback, resolve = resolve, onChord = onChord }
 end
 
 local function openConfirm(title, callback, prompt)
@@ -1667,7 +1667,7 @@ local function resolveColType(s)
   local first = a:sub(1, 1)
   local canon = first == 'n' and 'note'
              or first == 'c' and 'cc'
-             or first == 'a' and (a:sub(2, 2) == 't' and 'at' or 'automation')
+             or first == 'a' and 'at'
              or first == 'd' and 'dly'
              or first == 'p' and (a:sub(2, 2) == 'c' and 'pc' or 'pb')
              or a
@@ -1675,7 +1675,13 @@ local function resolveColType(s)
 end
 
 local function addColumn()
-  openPrompt('Add Column', 'note, cc0-127, pb, at, pc, dly, auto', function(typeStr)
+  -- A second Ctrl-→ (the chord that opened this prompt) dives straight to the
+  -- automation palette — 'a' no longer seeds it, so 'a' is free for 'at'.
+  local function chordToAutomation()
+    if ImGui.GetKeyMods(ctx) == ImGui.Mod_Ctrl
+    and ImGui.IsKeyPressed(ctx, ImGui.Key_RightArrow, false) then return 'automation' end
+  end
+  openPrompt('Add Column', 'note, cc0-127, pb, at, pc, dly — Ctrl-→ for automation', function(typeStr)
     local type, idStr = typeStr:lower():match('^(%a+)(%d*)$')
     if not type then return end
     if type == 'automation' then focusFindReq = true; return end
@@ -1685,7 +1691,7 @@ local function addColumn()
       if type == 'cc' and (not id or id < 0 or id > 127) then return end
       tv:addExtraCol(type, id)
     end
-  end, resolveColType)
+  end, resolveColType, chordToAutomation)
 end
 
 -- Ctrl-Left drops the cursor column: a bound automation (cc) column goes

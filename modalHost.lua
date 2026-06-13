@@ -33,6 +33,7 @@ function mh:openPrompt(args)
     prompt   = args.prompt,
     callback = args.callback,
     resolve  = args.resolve,
+    onChord  = args.onChord,
     buf      = args.buf or '',
   }
 end
@@ -101,8 +102,15 @@ mh:registerKind('confirm', function(s, close)
 end)
 
 mh:registerKind('prompt', function(s, close)
-  if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
+  local appearing = ImGui.IsWindowAppearing(ctx)
+  if appearing then ImGui.SetKeyboardFocusHere(ctx) end
   ImGui.Text(ctx, s.prompt)
+  -- Skip the chord on the appearing frame: the keypress that opened this
+  -- prompt is still live that frame and would resolve it instantly.
+  if s.onChord and not appearing then
+    local resolved = s.onChord()
+    if resolved ~= nil then close(true, resolved); return end
+  end
   if s.resolve then
     -- Live preview: no EnterReturnsTrue (buf would lag a keystroke). Read
     -- each frame, resolve for preview, detect Enter manually.

@@ -1,4 +1,4 @@
-@module modalHost  src=modalHost.lua  loc=132  sha=6362c91  mode=chunk
+@module modalHost  src=modalHost.lua  loc=140  sha=6362c91  mode=chunk
 @deps ctx, chrome
 
 # Invariants & contracts
@@ -26,28 +26,28 @@
   @api mh:registerKind(kind, render)  @ 22
   @api mh:open(s)  @ 24
   @api mh:openPrompt(args)  @ 29
-  @api mh:openConfirm(args)  @ 40
-  @api mh:isOpen()  @ 49
-  @api mh:wasOpenAtFrameStart()  @ 50
-  @api mh:tick()  @ 52
-  @api mh:draw()  @ 54
+  @api mh:openConfirm(args)  @ 41
+  @api mh:isOpen()  @ 50
+  @api mh:wasOpenAtFrameStart()  @ 51
+  @api mh:tick()  @ 53
+  @api mh:draw()  @ 55
 
 # Uses (outbound edges)
-  @use call    chrome.popChromeWindow  @ 89
-  @use call    chrome.pushChromeWindow  @ 64
-  @use call    imgui.BeginPopupModal  @ 66
-  @use call    imgui.CloseCurrentPopup  @ 73
-  @use call    imgui.EndPopup  @ 85
-  @use call    imgui.GetWindowViewport  @ 61
-  @use call    imgui.InputText  @ 109, 120
-  @use call    imgui.IsKeyPressed  @ 96, 98, 113, 114, 116, 124
-  @use call    imgui.IsPopupOpen  @ 58
-  @use call    imgui.IsWindowAppearing  @ 104
-  @use call    imgui.OpenPopup  @ 26, 59
-  @use call    imgui.SetKeyboardFocusHere  @ 104
-  @use call    imgui.SetNextWindowPos  @ 62
-  @use call    imgui.Text  @ 95, 105, 112
-  @use call    imgui.Viewport_GetCenter  @ 61
+  @use call    chrome.popChromeWindow  @ 90
+  @use call    chrome.pushChromeWindow  @ 65
+  @use call    imgui.BeginPopupModal  @ 67
+  @use call    imgui.CloseCurrentPopup  @ 74
+  @use call    imgui.EndPopup  @ 86
+  @use call    imgui.GetWindowViewport  @ 62
+  @use call    imgui.InputText  @ 117, 128
+  @use call    imgui.IsKeyPressed  @ 97, 99, 121, 122, 124, 132
+  @use call    imgui.IsPopupOpen  @ 59
+  @use call    imgui.IsWindowAppearing  @ 105
+  @use call    imgui.OpenPopup  @ 26, 60
+  @use call    imgui.SetKeyboardFocusHere  @ 106
+  @use call    imgui.SetNextWindowPos  @ 63
+  @use call    imgui.Text  @ 96, 107, 120
+  @use call    imgui.Viewport_GetCenter  @ 62
   @use require imgui  @ 7
 
 # REAPER API surface
