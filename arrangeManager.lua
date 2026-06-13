@@ -275,30 +275,55 @@ function am:projectTracks()
   return out
 end
 
+-- One take-shape row. Callers pass the per-track slot map and the project-wide colour map so the
+-- ensureSlots/ensureColours walks happen once per batch, not once per take.
+local function buildTakeShape(take, item, trackIdx, startQN, lengthQN, slotForId, colourForId)
+  local id = takeIdOf(take)
+  return {
+    item         = item,
+    take         = take,
+    trackIdx     = trackIdx,
+    startQN      = startQN,
+    lengthQN     = lengthQN,
+    naturalLenQN = effectiveNaturalLenQN(take, item),
+    kind         = takeKind(take),
+    slotIdx      = id and slotForId[id]   or nil,
+    colourIdx    = id and colourForId[id] or nil,
+    nativeColour = reaper.GetDisplayedMediaItemColor2(item, take) or 0,
+    name         = reaper.GetTakeName(take) or '',
+  }
+end
+
 function am:tracksTakes(trackIdx)
   local track = visibleTrackOfCol(trackIdx)
   if not track then return {} end
   local _, slotForId = ensureSlots(track)
   local colourForId  = ensureColours()
-
   local out = {}
   forEachActiveTake(track, function(take, item)
     local startQN, lengthQN = itemQNRange(item)
-    local id = takeIdOf(take)
-    out[#out+1] = {
-      item           = item,
-      take           = take,
-      trackIdx       = trackIdx,
-      startQN        = startQN,
-      lengthQN       = lengthQN,
-      naturalLenQN   = effectiveNaturalLenQN(take, item),
-      kind           = takeKind(take),
-      slotIdx        = id and slotForId[id]   or nil,
-      colourIdx      = id and colourForId[id] or nil,
-      nativeColour   = reaper.GetDisplayedMediaItemColor2(item, take) or 0,
-      name           = reaper.GetTakeName(take) or '',
-    }
+    out[#out+1] = buildTakeShape(take, item, trackIdx, startQN, lengthQN, slotForId, colourForId)
   end)
+  return out
+end
+
+--contract: render-loop batch — tracks handed in (no col->track scan), colour map built once,
+--takes whose [start,start+len] miss [qnLo,qnHi] dropped before the costly shape fields.
+function am:visibleTakes(tracks, fromCol, toCol, qnLo, qnHi)
+  local colourForId = ensureColours()
+  local out = {}
+  for col = fromCol, toCol do
+    local track = tracks[col + 1] and tracks[col + 1].track
+    if track then
+      local _, slotForId = ensureSlots(track)
+      forEachActiveTake(track, function(take, item)
+        local startQN, lengthQN = itemQNRange(item)
+        if startQN <= qnHi and startQN + lengthQN >= qnLo then
+          out[#out+1] = buildTakeShape(take, item, col, startQN, lengthQN, slotForId, colourForId)
+        end
+      end)
+    end
+  end
   return out
 end
 

@@ -294,15 +294,14 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     end
   end
 
-  -- Settled takes; dragged take is held back and painted last at its candidate range.
+  -- Settled takes; dragged take held back, painted last at candidate range.
   -- Duplicate keeps original here and adds the copy after.
-  for c = sc, lastCol do
-    for _, tk in ipairs(av:tracksTakes(c)) do
-      local relocating = dragCand and not press.duplicate
-                         and tk.item == press.take.item
-      if not relocating then
-        drawTakeRect(tk, tk.startQN, tk.lengthQN, tk.take == focusHandle)
-      end
+  local qnLo, qnHi = av:rowToQN(sr), av:rowToQN(sr + visRows)
+  for _, tk in ipairs(av:visibleTakes(tracks, sc, lastCol, qnLo, qnHi)) do
+    local relocating = dragCand and not press.duplicate
+                       and tk.item == press.take.item
+    if not relocating then
+      drawTakeRect(tk, tk.startQN, tk.lengthQN, tk.take == focusHandle)
     end
   end
   if dragCand then

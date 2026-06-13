@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=712  sha=faad93e  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=737  sha=bd5b907  mode=chunk
 @deps cm, facade
 
 # Invariants & contracts
@@ -60,92 +60,98 @@
       -- see docs/arrangeManager.md § trackIdx
   @fn visibleTrackOfCol(col)  @ 233
   @fn colOfTrack(track)  @ 245
+  @fn buildTakeShape(take, item, trackIdx, startQN, lengthQN, slotForId, colourForId)  @ 280
+      -- One take-shape row. Callers pass the per-track slot map and the project-wide colour map so the
+      -- ensureSlots/ensureColours walks happen once per batch, not once per take.
   -- Transport — project edit cursor, loop range, play head, project end
   -- Slot mutation
   -- Placement
-  @fn chunkSetPool(chunk, guid)  @ 457
-  @fn harvestPoolGuid(item)  @ 465
-  @fn setTakeName(take, name)  @ 471
-  @fn copyMidiEvents(srcTake, dstTake)  @ 477
-  @fn placeAudio(track, filePath, qnPos, lengthQN)  @ 482
-  @fn cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)  @ 496
+  @fn chunkSetPool(chunk, guid)  @ 482
+  @fn harvestPoolGuid(item)  @ 490
+  @fn setTakeName(take, name)  @ 496
+  @fn copyMidiEvents(srcTake, dstTake)  @ 502
+  @fn placeAudio(track, filePath, qnPos, lengthQN)  @ 507
+  @fn cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)  @ 521
       -- See docs/arrangeManager.md § Subsequent drops for why chunk-clone over POOLEDEVTS swap.
       @contract  MIDI clone of srcItem at qnPos; rePool=true mints a fresh pool; nil if REAPER refuses.
-  @fn siblingInstance(track, id)  @ 547
+  @fn siblingInstance(track, id)  @ 572
       -- First instance matching id: item (chunk source for MIDI clone),
       -- length, name. Dictates what a fresh drop inherits.
-  @fn destBelow(take)  @ 602
+  @fn destBelow(take)  @ 627
       -- Destination for the *-Below trio: natural end (not rendered), so a truncated upstream still
       -- drops past its downstream neighbour; relayout handles the symmetric truncation.
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 686
+  @fn projectMidiTakes()  @ 711
 
 # Public API (am:*)
   @api am:projectTracks()  @ 257
-  @api am:tracksTakes(trackIdx)  @ 278
-  @api am:findTake(reaperTake)  @ 306
+  @api am:tracksTakes(trackIdx)  @ 297
+  @api am:visibleTakes(tracks, fromCol, toCol, qnLo, qnHi)  @ 312
+      -- takes whose [start,start+len] miss [qnLo,qnHi] dropped before the costly shape fields.
+      @contract  render-loop batch — tracks handed in (no col->track scan), colour map built once,
+  @api am:findTake(reaperTake)  @ 331
       @contract  take-shape (from tracksTakes) wrapping reaperTake on any project track; nil if not found
-  @api am:initialCursor()  @ 317
+  @api am:initialCursor()  @ 342
       @contract  (col, qn) — selected item, else edit-cursor QN + selected track; col=0 if neither
-  @api am:editCursorQN()  @ 330
-  @api am:setEditCursorQN(qn)  @ 336
+  @api am:editCursorQN()  @ 355
+  @api am:setEditCursorQN(qn)  @ 361
       -- seekplay=true: gutter clicks (and arrangePlayFromCursor's seek) drag
       -- the playhead with them when the transport is running.
-  @api am:loopRangeQN()  @ 341
+  @api am:loopRangeQN()  @ 366
       @contract  (loQN, hiQN) of the project loop range; nil when no loop is set (start == end).
-  @api am:setLoopRangeQN(loQN, hiQN)  @ 347
-  @api am:clearLoopRange()  @ 352
-  @api am:playFromQN(qn)  @ 357
+  @api am:setLoopRangeQN(loQN, hiQN)  @ 372
+  @api am:clearLoopRange()  @ 377
+  @api am:playFromQN(qn)  @ 382
       @contract  seeks the edit cursor to qn (transport follows if playing); starts playback iff stopped.
-  @api am:playPositionQN()  @ 363
+  @api am:playPositionQN()  @ 388
       @contract  QN of the play head; nil when the transport is not playing.
-  @api am:projectEndQN()  @ 369
+  @api am:projectEndQN()  @ 394
       @contract  largest item-end QN across all tracks; 0 when the project has no items
-  @api am:trackSlots(trackIdx)  @ 381
-  @api am:slotForTake(take)  @ 403
-  @api am:keyForSlot(slotIdx)  @ 411
-  @api am:nextFreeSlot(trackIdx)  @ 416
+  @api am:trackSlots(trackIdx)  @ 406
+  @api am:slotForTake(take)  @ 428
+  @api am:keyForSlot(slotIdx)  @ 436
+  @api am:nextFreeSlot(trackIdx)  @ 441
       @contract  lowest-free slot index on trackIdx; nil if track full or missing.
-  @api am:renameSlot(trackIdx, slotIdx, name)  @ 424
-  @api am:deleteSlot(trackIdx, slotIdx)  @ 437
+  @api am:renameSlot(trackIdx, slotIdx, name)  @ 449
+  @api am:deleteSlot(trackIdx, slotIdx)  @ 462
       @contract  deletes every take on trackIdx with this slot's id; returns the removed count
-  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 524
+  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 549
       @contract  (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track/free slot
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 560
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 585
       @contract  instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
-  @api am:duplicateTake(take, qnPos)  @ 582
+  @api am:duplicateTake(take, qnPos)  @ 607
       @contract  clones take at qnPos on its own track, original untouched; nil if track/id missing
-  @api am:duplicateBelow(take)  @ 605
+  @api am:duplicateBelow(take)  @ 630
       @contract  pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:duplicateUnpooledBelow(take)  @ 613
+  @api am:duplicateUnpooledBelow(take)  @ 638
       @contract  unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:newTakeBelow(take)  @ 627
+  @api am:newTakeBelow(take)  @ 652
       @contract  empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 638
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 663
       @contract  true iff no take on trackIdx (≠ exceptItem) starts exactly at startQN (shared spans OK)
-  @api am:moveTake(take, deltaQN)  @ 648
+  @api am:moveTake(take, deltaQN)  @ 673
       @contract  shifts start by deltaQN, relayouts (natural kept); true iff start clear, else no-op
-  @api am:resizeTake(take, newNaturalQN)  @ 661
+  @api am:resizeTake(take, newNaturalQN)  @ 686
       @contract  writes the take's natural length; relayout caps it. See docs § Natural length.
-  @api am:takeSourceLengthQN(take)  @ 668
+  @api am:takeSourceLengthQN(take)  @ 693
       @contract  source length in QN at the take's position; 0 if source missing.
-  @api am:deleteTake(take)  @ 677
-  @api am:takesUsing(name)  @ 698
+  @api am:deleteTake(take)  @ 702
+  @api am:takesUsing(name)  @ 723
       @contract  reads each take's persisted usedSwings via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 708
+  @api am:reswingAll(name)  @ 733
       @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 
 # Uses (outbound edges)
   @use call    cm.getAt  @ 177
-  @use call    cm.readTakeKey  @ 97, 701
+  @use call    cm.readTakeKey  @ 97, 726
   @use call    cm.readTrackKey  @ 64
   @use call    cm.set  @ 178
   @use call    cm.writeTakeKey  @ 102, 103
   @use call    cm.writeTrackKey  @ 68
-  @use call    facade.get  @ 229, 709
+  @use call    facade.get  @ 229, 734
   @use call    painter.hueNative  @ 213
-  @use call    util.toBase62  @ 412
+  @use call    util.toBase62  @ 437
   @use require painter  @ 20
   @use require util  @ 19
 
