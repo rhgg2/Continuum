@@ -222,14 +222,13 @@ local declarations = {
   { 'colour.laneAnchorActive', 'colour.negative'                  },
   { 'colour.laneEnvelope',     'colour.accent'                    },
 
-  -- Wiring page node tints + port marker colours. Category drives the
-  -- node fill: source = REAPER track (kind-driven, distinct from generator),
-  -- master = sink (no outputs), generator = outputs but no audio in,
-  -- effect = has audio in. Port colours distinguish audio vs MIDI.
+  -- Wiring page node tints + port marker colours. Category drives node fill; folder = summing
+  -- parent (audio.ins>=1 source). Port colours distinguish audio vs MIDI.
   { 'colour.wiring.node.source',    'palette.positive' },
   { 'colour.wiring.node.master',    'palette.base.zone6' },
   { 'colour.wiring.node.generator', 'palette.alt.zone5'  },
   { 'colour.wiring.node.effect',    'palette.alt2'       },
+  { 'colour.wiring.node.folder',    'palette.caution'    },  -- summing folder parent; reused later for the folder bar
   { 'colour.wiring.node.selected',  'palette.mark'       },  -- outline stroke for selected nodes / rubber-band
   { 'colour.wiring.port.audio',     'palette.base.zone2' },
   { 'colour.wiring.port.midi',      'palette.alt.zone5'  },

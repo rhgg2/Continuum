@@ -172,6 +172,7 @@ local specs = {
   'wv_activate_spec',
   'wv_edge_gain_spec',
   'wv_bus_spec',
+  'wv_folder_spec',
   'wp_smoke_spec',
   'painter_spec',
   'curveEditor_spec',

@@ -54,11 +54,26 @@ with no separate claim or membership list. `bussedEnd` names which end sits on
 the bus (`'to'` for the consumer side, `'from'` for the producer; the `to` end
 wins when both).
 
+## source bodies
+
+A `kind='source'` node renders one of two ways. A **pure origin** (no audio
+input, `audio.ins=0`) is *bodiless*: it has no node rect, and each of its
+out-wires draws as a tag near its consumer (`category`/`fromKind` `'source'`).
+A **folder parent** — a source that sums its children (`audio.ins>=1`, minted
+by `readGraph`'s folderSinks branch) — is *bodied* like any other node
+(`category`/`fromKind` `'folder'`): it needs a rect for its incoming child
+wires to land on. `sourceCategory` is the single discriminant, consumed by
+both `nodeView.category` and `wireView.fromKind`. The folder-bar display
+(`design/wiring-folders.md` § Folder display) will later project the
+`'folder'` category onto bar geometry; until then it draws as a plain rect.
+
 ## wireView fromKind/fromLabel
 
 `fromKind` and `fromLabel` mirror the from-node's kind and label onto
 the wireView so the page can render source-origin edges as stubs
-without needing to hold or look up the full source nodeView. Port
-names are sourced identically to nodeView's port lists; a name is nil
-if the referenced port has been trimmed off the node since the edge
-was recorded.
+without needing to hold or look up the full source nodeView. `fromKind`
+is `'source'` only for a bodiless origin; a folder parent reports
+`'folder'` so the page draws its out-wire as a normal wire (see § source
+bodies). Port names are sourced identically to nodeView's port lists; a
+name is nil if the referenced port has been trimmed off the node since
+the edge was recorded.

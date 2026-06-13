@@ -93,10 +93,15 @@ local function midiPorts(node, dir)
   return list
 end
 
--- Kind-driven categories: buss→bar, source→source; other kinds from port shape
--- (no outs→master, no audio-in→generator, audio-in→effect). Drives colour fill role.
+-- Bodiless when pure origin (audio.ins=0): out-wires become tags near consumers, no rect.
+-- Folder parent (audio.ins>=1) is bodied so child wires can land. See docs/wiringView.md § source bodies.
+local function sourceCategory(node)
+  return (node.ports.audio.ins or 0) == 0 and 'source' or 'folder'
+end
+
+-- Kind-driven categories: buss→bar, source→source/folder (sourceCategory), other kinds from
+-- port shape (no outs→master, no audio-in→generator, audio-in→effect). Drives colour fill role.
 local function nodeCategory(kind, ins, outs)
-  if kind == 'source'              then return 'source'    end
   if kind == 'bus'                 then return 'bus'       end
   if #outs.audio + #outs.midi == 0 then return 'master'    end
   if #ins.audio == 0               then return 'generator' end
@@ -119,7 +124,8 @@ local function nodeView(id, node)
     id       = id,
     pos      = { x = node.pos.x, y = node.pos.y },
     label    = nodeLabel(id, node),
-    category = nodeCategory(node.kind, ins, outs),
+    category = node.kind == 'source' and sourceCategory(node)
+                 or nodeCategory(node.kind, ins, outs),
     activate = activation(node),
     ins      = ins,
     outs     = outs,
@@ -306,7 +312,7 @@ end
 
 ----- Render-ready, viewport-independent
 
---shape: nodeView = { id, pos={x,y}, label, category='master'|'source'|'generator'|'effect'|'bus', activate='sampler'|'fx'|nil, ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}}, orient?='V'|'H' } — port lists carry names; counts = #list; activate is the double-click intent
+--shape: nodeView = { id, pos={x,y}, label, category='master'|'source'|'folder'|'generator'|'effect'|'bus', activate='sampler'|'fx'|nil, ins={audio={name,…},midi={name,…}}, outs={audio={…},midi={…}}, orient?='V'|'H' } — port lists carry names; counts = #list; activate is the double-click intent
 --contract: returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
 function wv:nodeViews()
   local g = ensureView()
@@ -340,7 +346,7 @@ local function busTag(e, fromNode, toNode)
   if fromNode and fromNode.kind == 'bus' then return { busId = e.from, bussedEnd = 'from' } end
 end
 
---shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'fx'|'master', fromLabel, fromOffset={x,y}?, bus={busId,bussedEnd='to'|'from'}? } — see docs/wiringView.md § wireView shape
+--shape: wireView = { from, to, type='audio'|'midi', fromPort, toPort, fromPortName, toPortName, primary, fromKind='source'|'folder'|'fx'|'master', fromLabel, fromOffset={x,y}?, bus={busId,bussedEnd='to'|'from'}? } — see docs/wiringView.md § wireView shape
 -- see docs/wiringView.md § wireView fromKind/fromLabel
 --contract: returns the list of wireViews for every edge in the current user graph; order matches graph.edges
 function wv:wireViews()
@@ -356,7 +362,11 @@ function wv:wireViews()
     local fromPort = e.fromPort or 1
     local toPort   = e.toPort   or 1
     local fromNode = g.nodes[e.from]
-    local fromOffset = fromNode and fromNode.kind == 'source' and fromNode.tagPos
+    -- Only a bodiless origin source carries a tag; a folder parent (sourceCategory 'folder')
+    -- is bodied, so its out-wire is a normal wire with no source-tag offset.
+    local fromIsOrigin = fromNode and fromNode.kind == 'source'
+                           and sourceCategory(fromNode) == 'source'
+    local fromOffset = fromIsOrigin and fromNode.tagPos
                          and fromNode.tagPos[wm.srcTagKey(e)] or nil
     local bus = busTag(e, fromNode, g.nodes[e.to])
     util.add(out, {
@@ -368,7 +378,8 @@ function wv:wireViews()
       fromPortName = portName(e.from, 'out', e.type, fromPort),
       toPortName   = portName(e.to,   'in',  e.type, toPort),
       primary      = e.primary or nil,
-      fromKind     = fromNode and fromNode.kind,
+      fromKind     = fromNode and (fromNode.kind == 'source'
+                       and sourceCategory(fromNode) or fromNode.kind),
       fromLabel    = fromNode and nodeLabel(e.from, fromNode),
       fromOffset   = fromOffset,
       bus          = bus,
