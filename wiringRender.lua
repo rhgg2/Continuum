@@ -1315,22 +1315,33 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
     end
   end
 
-  -- A node feeding several busses spreads its taps along each bar's axis, so they
-  -- don't all leave its body at one point. farSlot[w] is the signed centred slot.
+  -- Taps from the same node spread along the bar axis so they don't all leave at one point.
+  -- Key: (far node + bar orient + exit side) — opposite-face wires never collide. farSlot[w] = centred slot.
   local farSlot = {}
   do
-    local byFar = {}
+    local busById = {}
+    for _, bv in ipairs(busViews) do busById[bv.id] = bv end
+
+    local byExit = {}
     for _, w in ipairs(wireViews) do
       if w.bus then
         local farId = (w.bus.bussedEnd == 'to') and w.from or w.to
-        if nodesById[farId] then
-          local g = byFar[farId]
-          if not g then g = {}; byFar[farId] = g end
+        local far   = nodesById[farId]
+        local bv    = busById[w.bus.busId]
+        if far and bv then
+          local ov = ORIENT_VEC[bv.orient] or ORIENT_VEC.V
+          local busNode = bv.matrix and nodesById[bv.id]
+          local bcx = busNode and busNode.pos.x or bv.pos.x
+          local bcy = busNode and busNode.pos.y or bv.pos.y
+          local side = ((bcx - far.pos.x) * ov.nx + (bcy - far.pos.y) * ov.ny) >= 0 and 1 or -1
+          local key = farId .. '|' .. bv.orient .. '|' .. side
+          local g = byExit[key]
+          if not g then g = {}; byExit[key] = g end
           util.add(g, w)
         end
       end
     end
-    for _, g in pairs(byFar) do
+    for _, g in pairs(byExit) do
       for i, w in ipairs(g) do farSlot[w] = (i - 1) - (#g - 1) / 2 end
     end
   end
