@@ -566,7 +566,8 @@ local function readTrack(track, isMaster)
   local rec = {
     id       = reaper.GetTrackGUID(track),
     name     = trackName(track),
-    number   = reaper.GetMediaTrackInfo_Value(track, 'IP_TRACKNUMBER'),
+    number     = reaper.GetMediaTrackInfo_Value(track, 'IP_TRACKNUMBER'),
+    folderDepth = reaper.GetMediaTrackInfo_Value(track, 'I_FOLDERDEPTH'),
     isMaster = isMaster or nil,
     nchan    = reaper.GetMediaTrackInfo_Value(track, 'I_NCHAN'),
     mainSend = readMainSend(track),
@@ -575,6 +576,20 @@ local function readTrack(track, isMaster)
   }
   util.assign(rec, readTrackMeta(track))
   return rec
+end
+
+-- Folder membership is positional (I_FOLDERDEPTH: 1 opens, <0 closes |n|): walk
+-- tracks in order, each foldered track's parent is the open-folder stack top.
+local function stampParents(records)
+  local stack = {}
+  for _, rec in ipairs(records) do
+    if not rec.isMaster then
+      rec.parent = stack[#stack]
+      local depth = rec.folderDepth or 0
+      if depth == 1 then stack[#stack + 1] = rec.id
+      elseif depth < 0 then for _ = 1, -depth do stack[#stack] = nil end end
+    end
+  end
 end
 
 ----------- write
@@ -691,6 +706,7 @@ function rm:tracks()
   for _, tr in ipairs(out) do
     for _, fx in ipairs(tr.fx) do util.assign(fx, meta[fx.id]) end
   end
+  stampParents(out)
   return out
 end
 
@@ -778,6 +794,17 @@ end
 function rm:addTrack(t)
   t = t or {}
   local idx = reaper.CountTracks(PROJ)
+  -- Pin emergent tracks top-level: if the project ends inside an open folder, an
+  -- appended track would become a child and its mainSend retarget to the parent.
+  local openDepth = 0
+  for i = 0, idx - 1 do
+    openDepth = openDepth + reaper.GetMediaTrackInfo_Value(reaper.GetTrack(PROJ, i), 'I_FOLDERDEPTH')
+  end
+  if openDepth > 0 then
+    local last = reaper.GetTrack(PROJ, idx - 1)
+    reaper.SetMediaTrackInfo_Value(last, 'I_FOLDERDEPTH',
+      reaper.GetMediaTrackInfo_Value(last, 'I_FOLDERDEPTH') - openDepth)
+  end
   reaper.InsertTrackAtIndex(idx, t.defaults or false)
   local track = reaper.GetTrack(PROJ, idx)
   writeTrackFields(track, t)

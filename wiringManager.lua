@@ -788,6 +788,7 @@ local function stateEntry(rec, trackKey, kind, keyByGuid)
   return {
     trackKind = kind,
     id        = rec.id,
+    parent    = rec.parent,
     nchan     = rec.nchan,
     mainSend  = isScratch and { on = false } or rec.mainSend,
     fx        = snapFxList(rec.fx),

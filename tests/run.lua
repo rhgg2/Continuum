@@ -158,6 +158,7 @@ local specs = {
   'wm_reconcile_cache_spec',
   'wm_param_targets_spec',
   'rm_tracks_spec',
+  'rm_folders_spec',
   'rm_fx_read_spec',
   'rm_fx_write_spec',
   'rm_pinmaps_spec',
