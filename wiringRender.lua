@@ -999,16 +999,17 @@ local function endRegion(seg, side)
   return x0, y0, x0 - ux * L, y0 - uy * L
 end
 
-local function pointToSegmentDist(px, py, ax, ay, bx, by)
+local function closestPointOnSegment(px, py, ax, ay, bx, by)
   local dx, dy = bx - ax, by - ay
   local len2 = dx * dx + dy * dy
-  if len2 < 1e-6 then
-    local ex, ey = px - ax, py - ay
-    return math.sqrt(ex * ex + ey * ey)
-  end
+  if len2 < 1e-6 then return ax, ay end
   local t = ((px - ax) * dx + (py - ay) * dy) / len2
   if t < 0 then t = 0 elseif t > 1 then t = 1 end
-  local cx, cy = ax + t * dx, ay + t * dy
+  return ax + t * dx, ay + t * dy
+end
+
+local function pointToSegmentDist(px, py, ax, ay, bx, by)
+  local cx, cy = closestPointOnSegment(px, py, ax, ay, bx, by)
   local ex, ey = px - cx, py - cy
   return math.sqrt(ex * ex + ey * ey)
 end
@@ -1583,7 +1584,9 @@ end
 local function busBarSource(busRails, mx, my)
   for _, r in ipairs(busRails) do
     if r.node and pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= BUS_BAR_HIT then
-      return { nv = r.node, slot = { kind = 'audio', portIdx = r.port }, viaBar = r.bar }
+      local ax, ay = closestPointOnSegment(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1)
+      return { nv = r.node, slot = { kind = 'audio', portIdx = r.port }, viaBar = r.bar,
+               anchor = { x = ax, y = ay } }
     end
   end
 end
@@ -2140,11 +2143,13 @@ local function renderCanvas(w, h)
                                        sourceHit.layout.side)
           slot = findLayoutSlot(relaid, 'audio', slot.portIdx) or slot
         end
-        -- defaultSlot (body-default port 1) has no screen rect; leave
-        -- keptAnchor nil so the draft falls back to the node centre.
+        -- defaultSlot has no screen rect → keptAnchor nil → draft falls back to node centre.
+        -- Buss source has no chip; its bar grab point is carried as anchor instead.
         local keptAnchor
         if slot.x then
           keptAnchor = { x = slot.x + slot.w / 2, y = slot.y + slot.h / 2 }
+        elseif sourceHit.anchor then
+          keptAnchor = sourceHit.anchor
         end
         local base = {
           cursorEnd  = 'to',
