@@ -34,6 +34,7 @@ local lastStateCount = nil -- REAPER project state count at our last write; sync
 local newTrackIds = {}    -- { trackKey → id }; newTrack addressing, refreshed by snapshot/applyOps
 local actualState = nil   -- in-memory model of REAPER's actual side (the diff's "actual"); local writes
                           -- keep it truthful, external writes nil it. see docs § actual-state model
+local pinCorrection = nil -- { [guid]=pinMaps } awaiting a post-grow re-assert; one coalesced reaper.defer
 local refreshStateTrack   -- assigned below; used by createSourceTrack/instantiateFxOnScratch (defined late)
 
 local SCRATCH_KEY = '__scratch__'  -- scratch's logical trackKey; its guid is rm-owned
@@ -65,6 +66,34 @@ end
 -- own edit. The actualState model stays truthful via each write site, not by dropping it here.
 local function markState()
   if reaper.GetProjectStateChangeCount then lastStateCount = reaper.GetProjectStateChangeCount(0) end
+end
+
+-- REAPER's pin-grow bug (filed against 7.74) re-stamps a same-cycle pin write; set
+-- PIN_GROW_FIXED_VERSION to the build that fixes it to retire the workaround below.
+local PIN_GROW_FIXED_VERSION = nil  -- maj*1000+min of the fix; nil = unfixed, guard always holds
+
+local function affectedByPinGrowBug()
+  if not PIN_GROW_FIXED_VERSION then return true end
+  local version = reaper.GetAppVersion and reaper.GetAppVersion() or ''
+  local maj, min = version:match('^(%d+)%.(%d+)')
+  if not maj then return true end
+  return tonumber(maj) * 1000 + tonumber(min) < PIN_GROW_FIXED_VERSION
+end
+
+-- The pin-grow bug re-stamps any pin written in the same defer cycle; we let it stand one cycle,
+-- then re-assert the intended maps off-transaction. See docs/wiringManager.md § Pin re-assert after grow.
+local function schedulePinCorrection(byGuid)
+  local arm = pinCorrection == nil
+  pinCorrection = pinCorrection or {}
+  for guid, pm in pairs(byGuid) do pinCorrection[guid] = pm end
+  if arm then
+    reaper.defer(function()
+      local pending = pinCorrection
+      pinCorrection = nil
+      for guid, pm in pairs(pending) do rm:rewritePins(guid, pm) end
+      markState()
+    end)
+  end
 end
 
 ----- compiled-graph cache: one clone+compile per structural change, pulled by wv
@@ -1682,6 +1711,7 @@ end
 --contract: stamps them inline without firing wiringChanged; params/midi/pinMaps write through rm
 function wm:applyOps(ops, label)
   ensureLoaded()
+  local grewKeys, pinFxByKey = {}, {}
   rm:transaction(label or 'wiring: apply', function()
     -- newTrack addressing carries over from the preceding snapshot/apply (newTrackIds); no re-read.
     -- An external mutation would bump the state count → syncExternal reloads → newTrackIds refreshes.
@@ -1729,13 +1759,16 @@ function wm:applyOps(ops, label)
       elseif op.op == 'setNchan' then
         local id = resolveId(op.trackKind, op.trackId, op.trackKey)
         if id then rm:assignTrack(id, { nchan = op.value }) end
+        grewKeys[op.trackKey] = true
       elseif op.op == 'setPinMaps' then
         -- setFXChain has stamped+pruned the graph, so op.fx is the live owned set.
         -- Full-replace: a port absent from an entry's map is disconnected.
         for _, e in ipairs(op.fx) do
           local guid = e.id or originGuid(e.origin)
           if guid then
-            rm:assignFx(guid, { pinMaps = e.pinMaps or { ins = {}, outs = {} } })
+            local pinMaps = e.pinMaps or { ins = {}, outs = {} }
+            rm:assignFx(guid, { pinMaps = pinMaps })
+            util.bucket(pinFxByKey, op.trackKey, { guid = guid, pinMaps = pinMaps })
           end
         end
       elseif op.op == 'setFXChain' then
@@ -1770,6 +1803,14 @@ function wm:applyOps(ops, label)
     newTrackIds = wiringTracks
   end)
   markState()  -- our own write; don't let syncExternal reread it
+
+  -- A track that both grew and had pins written this pass has its newly-exposed pins OR-corrupted;
+  -- re-assert their intended maps next cycle, when the grow's identity-OR has been dropped.
+  local correction = {}
+  for trackKey in pairs(grewKeys) do
+    for _, gp in ipairs(pinFxByKey[trackKey] or {}) do correction[gp.guid] = gp.pinMaps end
+  end
+  if next(correction) and affectedByPinGrowBug() then schedulePinCorrection(correction) end
 end
 
 -- A spliced product edge maps back to its authored taps: each tap collects the

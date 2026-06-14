@@ -458,3 +458,28 @@ by the applier. Each has an `op` field and additional keys depending on kind:
 - **`setMainSend`** — carries `mainSend` bool, plus `offs` (C_MAINSEND_OFFS)
   and `nch=2` (C_MAINSEND_NCH) when `mainSend=true`.
 - **`setSends`** — carries `sends` (array of `snapshotSend`).
+
+## Pin re-assert after grow
+
+REAPER 7.74 has a bug (filed with Cockos): it silently corrupts a pin map when a
+track's `I_NCHAN` grows in the same defer cycle as a `TrackFX_SetPinMappings`
+write to a newly-exposed pin. The grow arms a deferred identity-OR for the exposed
+channel, the same-cycle write commits it, and the intended map is lost under the
+channel's diagonal bit. The override is persistent (survives save/load) and
+FX-agnostic — it hits producer crossings as readily as merge-CU sums, so making any
+one FX's map diagonal can't cure it.
+
+The arming only bites a *same-cycle* write. A write to the pin in a *later* cycle,
+after the OR has been dropped at the cycle boundary, lands clean. So `applyOps`
+leaves the reconcile transaction untouched (correct undo, correct ops) and, when a
+track both grew and had pins written this pass, schedules one off-transaction
+`reaper.defer` (`schedulePinCorrection` → `rm:rewritePins`) that re-asserts exactly
+those maps. The corruption stands for a single ~33 ms tick during which nothing
+snapshots it, then self-heals; the re-assert is not undo-gated, so undo reverts the
+real edit and the correction silently re-runs on the next reconcile if needed.
+
+The workaround is version-guarded by `affectedByPinGrowBug`, keyed to
+`PIN_GROW_FIXED_VERSION`. That constant is `nil` while the bug is unfixed, so the
+guard holds on every current build; set it to the `maj*1000+min` of the REAPER
+release that fixes the bug and the workaround retires itself once that build is the
+floor.

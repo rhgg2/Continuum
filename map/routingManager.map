@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=998  sha=313f012  mode=chunk
+@module routingManager  src=routingManager.lua  loc=1005  sha=ba10ef8  mode=chunk
 
 # Invariants & contracts
   @invariant  id is a track/fx GUID string — opaque to callers, stable across reload
@@ -173,27 +173,30 @@
       @contract  the partial write assignTrack{sends} (full-replace) can't serve — for live gain pokes.
   @api rm:addFx(trackId, t)  @ 874
   @api rm:assignFx(id, t)  @ 890
-  @api rm:meta(store, id)  @ 911
+  @api rm:rewritePins(id, pinMaps)  @ 912
+      -- Undo-free pin re-assert (no transaction, no meta): repairs the identity-OR a same-cycle
+      -- I_NCHAN grow stamps onto a just-written pin. See docs/wiringManager.md § Pin re-assert after grow.
+  @api rm:meta(store, id)  @ 918
       @contract  read a named meta store ('fx'|'bus'): whole blob, or one entry when id given
-  @api rm:assignMeta(store, id, meta)  @ 918
+  @api rm:assignMeta(store, id, meta)  @ 925
       @contract  write a named meta store: nil deletes store[id], else patch-merge (util.REMOVE to clear)
-  @api rm:writeChainMidi(trackId, writes)  @ 923
+  @api rm:writeChainMidi(trackId, writes)  @ 930
       @contract  batch per-FX MIDI routing for one track in a single chunk Get+Set; writes={{id,midi},...}
-  @api rm:deleteFx(id)  @ 942
-  @api rm:fx(id)  @ 948
+  @api rm:deleteFx(id)  @ 949
+  @api rm:fx(id)  @ 955
       @contract  fx record by id (ports, names, pinMaps, midi, trackId); nil if gone. Params separate.
-  @api rm:params(id)  @ 963
+  @api rm:params(id)  @ 970
       @contract  live { [name] = value } param values for the fx by id; nil if gone.
       @contract  the mutable control-state counterpart to the structural rm:fx record.
-  @api rm:showFx(id)  @ 969
+  @api rm:showFx(id)  @ 976
       @contract  floats the fx window for id; false if the fx is no longer live
-  @api rm:installedFx()  @ 977
+  @api rm:installedFx()  @ 984
       @contract  enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
-  @api rm:transaction(label, fn)  @ 990
+  @api rm:transaction(label, fn)  @ 997
 
 # Uses (outbound edges)
-  @use call    util.add  @ 67, 375, 432, 484, 717, 719, 726, 729, 756, 983
-  @use call    util.assign  @ 536, 553, 602, 732, 744, 957
+  @use call    util.add  @ 67, 375, 432, 484, 717, 719, 726, 729, 756, 990
+  @use call    util.assign  @ 536, 553, 602, 732, 744, 964
   @use call    util.clone  @ 841, 850, 885, 906
   @use call    util.key  @ 439
   @use call    util.serialise  @ 537, 556

@@ -907,6 +907,13 @@ function rm:assignFx(id, t)
   if next(meta) then writeMeta('fx', id, meta) end
 end
 
+-- Undo-free pin re-assert (no transaction, no meta): repairs the identity-OR a same-cycle
+-- I_NCHAN grow stamps onto a just-written pin. See docs/wiringManager.md § Pin re-assert after grow.
+function rm:rewritePins(id, pinMaps)
+  local track, idx = locateFx(id)
+  if track then writePinMaps(track, idx, pinMaps) end
+end
+
 --contract: read a named meta store ('fx'|'bus'): whole blob, or one entry when id given
 function rm:meta(store, id)
   local blob = readMeta(store)

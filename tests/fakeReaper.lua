@@ -27,6 +27,7 @@ function M.new()
     console      = {},
     messages     = {},
     gmem         = {},
+    deferred     = {},
   }
   r._state = state
 
@@ -55,6 +56,12 @@ function M.new()
   function r.GetProjectStateChangeCount(_proj)
     return state.projStateCount
   end
+
+  -- Shim for production's reaper.defer: queue callbacks; specs drain state.deferred to run a cycle.
+  function r.defer(fn) state.deferred[#state.deferred + 1] = fn end
+
+  -- Shim: production version-guards the pin-grow-bug workaround on this.
+  function r.GetAppVersion() return state.appVersion or '7.74/test' end
 
   function r.GetProjectPath(_proj)
     return state.projectPath or ''
