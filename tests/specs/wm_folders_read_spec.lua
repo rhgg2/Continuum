@@ -135,6 +135,28 @@ return {
     end,
   },
   {
+    -- Wire-before-take: a parent fx reads bus 0 but the parent has no take yet and no midi child.
+    -- Must still emit bus 0 so the authored sid->fx edge survives compile (gated on consumer, not just source).
+    name = 'folder: a parent fx reading bus 0 wires from the node even with no take',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local p = parent()  -- no hasMidiTake, no midi child
+      p.fx = { { id='g-arp', ident='VST:Arp', ins=0, outs=1,
+                 midi={ inBus=0, outBus=0, inDisabled=false, outDisabled=true },
+                 pinMaps={ ins={}, outs={ [1]={1} } } } }
+      local snap = {
+        ['guid-A'] = withId(child('guid-P'), 'guid-A'),  -- audio-only child: makes guid-P a folderSink
+        ['guid-P'] = withId(p, 'guid-P'),
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(edgeSet(rg), {
+        'audio g-arp.1->master.-',
+        'audio guid-A.1->guid-P.1',
+        'midi guid-P.-->g-arp.-',
+      })
+    end,
+  },
+  {
     -- Conduit overflow: a child's parent-send and an explicit audio send to a sibling track
     -- coexist. Membership and routing decouple — both edges survive.
     name = 'folder: parent-send and an explicit send to a sibling coexist',

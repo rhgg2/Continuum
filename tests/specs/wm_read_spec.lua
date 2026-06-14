@@ -61,6 +61,26 @@ end
 
 return {
   {
+    -- Wire-before-take (bare source): an on-track fx reads bus 0 but the source has no midi take.
+    -- Must still emit bus 0 so the authored source->fx edge survives compile (gated on consumer, not just take).
+    name = 'read: a source fx reading bus 0 wires from the source even with no take',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local snap = {
+        ['guid-A'] = { id='guid-A', trackKind='sourceTrack', nchan=2,
+                       mainSend={ on=true, tgtOffset=0 }, sends={},
+                       fx = { { id='g-arp', ident='VST:Arp', ins=0, outs=1,
+                                midi={ inBus=0, outBus=0, inDisabled=false, outDisabled=true },
+                                pinMaps={ ins={}, outs={ [1]={1} } } } } },
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(edgeSet(rg), {
+        'audio g-arp.1->master.-',
+        'midi guid-A.-->g-arp.-',
+      })
+    end,
+  },
+  {
     -- Synth has ins=0 so source feeds it MIDI only; outDisabled breaks the chain so f2 gets none.
     -- Clean round-trip: read(compile(g)) == g.
     name = 'read: generator chain s -(midi)-> synth -(audio)-> f2 -> master',
