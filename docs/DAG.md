@@ -77,7 +77,7 @@ channel assignment.
 
 A folder parent reads as a `kind='source'` node with `audio.ins ≥ 1` summing its
 children (`docs/wiringManager.md § createSourceTrack`). Compile is the inverse,
-and turns on two generalisations:
+and turns on three generalisations:
 
 - **Class pinning.** A folder parent's `srcSet` unions its children, so its class
   key is composite. `ctx:classTrackKey` pins any source-bearing class to that
@@ -91,7 +91,21 @@ and turns on two generalisations:
   The folder tree (`node.parent`) is an input to compile, sourced from rm's
   positional walk, never authored here. The chosen edge realises through the same
   `mainSend` + `parentFeed` machinery as a master send, only with `sink` = the
-  parent's trackKey. (MIDI through the pipe + family bus domains are step 3b.)
+  parent's trackKey.
+- **The midi pipe.** The atomic `B_MAINSEND` also carries all-bus MIDI
+  identity-mapped (n→n), un-gateable. A child midi edge into its parent (or a
+  parent-resident fx) must NOT become an explicit send — it would collide with
+  the pipe — so `buildConns` diverts it, recording a `pipeMidi` crossing
+  `{from, consumer}` on the child entry (`M.targetTracks` attaches it). A folder
+  **family** (a top-level parent + all transitive parent-send descendants) is
+  therefore ONE midi bus domain, and `allocate` runs **one `allocStream` per
+  family**: a pinned **bus-0 aggregate** collects merges (consumer is the parent
+  source node — the native folder merge, no CU), while **distinct** crossings
+  (consumer is a parent fx) fold into live-range values whose `lastUse` reaches
+  the consuming slot, each taking a family-unique bus ≥1 (floored off bus 0 by
+  `minReg`, so read never mis-merges a distinct stream into the parent node). A
+  singleton family reproduces the old per-track allocation exactly. (Family-level
+  capacity bisection is step 4.)
 
 ## Split markers — a node as its own source
 

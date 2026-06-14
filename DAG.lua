@@ -1113,9 +1113,12 @@ end
 -- see docs/DAG.md § allocStream internals; profile[g] = live count at gap g (capacity crossing weight).
 local function allocStream(values, startCursor, N, compare, pinAdd, writeBack, profile)
   local cursor, free, live = startCursor, {}, 0
-  local function claim()
-    if free[1] then return table.remove(free, 1) end
-    local r = cursor; cursor = r + 1; return r
+  -- minReg floors a claim above bus 0: a distinct pipe crossing must never sit on the family's
+  -- bus-0 aggregate even when the take has just freed it, or read would mis-merge it (see foldMember).
+  local function claim(minReg)
+    minReg = minReg or 0
+    for i = 1, #free do if free[i] >= minReg then return table.remove(free, i) end end
+    local r = cursor >= minReg and cursor or minReg; cursor = r + 1; return r
   end
   -- Sorted-ascending insert so claim() always returns the lowest free register.
   local function release(reg)
@@ -1134,7 +1137,7 @@ local function allocStream(values, startCursor, N, compare, pinAdd, writeBack, p
       if reg >= cursor then cursor = reg + 1 end
       for i, r in ipairs(free) do if r == reg then table.remove(free, i); break end end
     else
-      reg = claim()
+      reg = claim(v.minReg)
     end
     live = live + 1
     for _, p in ipairs(v.pins or {}) do pinAdd(p.fxId, p.dir, p.port, reg) end
@@ -1497,6 +1500,7 @@ local function allocateOnce(tracks, nodes)
           local g = orderedGroup(producers, producerIds, cross.from,
             { def = off + pt.slotMap[cross.from], lastUse = off + pt.slotMap[cross.from],
               track = tk, writes = {}, consumers = {} })
+          g.minReg = 1  -- a distinct crossing is never the bus-0 aggregate
           if ctk then g.lastUse = math.max(g.lastUse, offset[ctk] + perTrack[ctk].slotMap[cross.consumer]) end
           util.add(g.consumers, cross.consumer)
         end

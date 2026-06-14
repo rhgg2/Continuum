@@ -212,12 +212,12 @@ of correct folder `read` — a later cosmetic layer, not part of steps
 
 ## Plan (skeleton)
 
-> **Progress (2026-06-14) — PICK-UP POINT.** Steps 1, 2, 3a landed. Step 3b's
-> first cut (`familyMidi`, commit `f088dc9`) was **ROLLED BACK** — HEAD reset to
-> `2845f62`; `familyMidi`/`pipeMidi` gone, 3a's audio conduit (`ctx:conduit`)
-> retained. It was a per-track bolt-on (two bus allocators fighting over bus 0);
-> the rebuild is family-domain allocation. 3b is now split into a **read-model
-> change (LANDED)** and the **allocator (NEXT, designed not coded)**.
+> **Progress (2026-06-14).** Steps 1, 2, 3a, **3b all landed** — folder MIDI
+> rides the family bus domain. 3b's first cut (`familyMidi`, `f088dc9`) was rolled
+> back as a per-track bolt-on (two bus allocators fighting over bus 0) and rebuilt
+> as family-domain allocation: a **read-model change** (`21a78b7`) + the
+> **allocator** (`8518249`, read-bug fix `958b81b`, + bus-0 leak guard), suite
+> green at 1430. Only family capacity bisection (step 4) remains.
 >
 > **Read model — LANDED (`21a78b7`; bus-split corrected 2026-06-14, suite green
 > at 1423).** The folder parent reads MIDI as a **bus-0/bus-N split**:
@@ -242,37 +242,51 @@ of correct folder `read` — a later cosmetic layer, not part of steps
 >   is consumed). Specs: `wm_folders_read_spec` (bus-0 aggregate, bus-N direct, own-take),
 >   `wm_read_spec`, `wm_roundtrip_spec`.
 >
-> **Allocator — NEXT, designed not coded.** Approach **(A) merged stream**: a
-> folder family (parent-send-connected set) is ONE bus domain. Lay child chains →
-> pipe → parent chain into a **single `allocStream`** (children before parents;
-> the pipe modeled as a live-range so family-uniqueness falls out — a crossing
-> producer's `lastUse` extends to the consuming parent slot, internal child buses
-> get reused). Audio stays per-track (it sums). Bus 0 is the top parent's own
-> take; every conduit child out-parks its tail off bus 0 — **`from=-1, to=N`**
-> (relocate to a family-unique bus a parent consumer reads) or **`from=-1, to=-1`**
-> (dump, when nothing at the parent reads it). Reuses the existing busRoute CU
-> (bracket post-pass, `DAG.lua:1470`); read collapses via `busRouteMidi`. Capacity
-> bisection (`splitOverCap`, `DAG.lua:1633`) becomes family-level (step 4).
+> **Allocator — LANDED (`8518249`; roundtrip + read-bug fix `958b81b`, suite
+> green at 1429).** A folder **family** — a top-level parent + all transitive
+> parent-send descendants — is ONE midi bus domain (the identity pipe is n→n,
+> no remap point). Two parts:
+> - **Compile diversion (`buildConns`).** A foldered child's midi edge to its
+>   parent / a parent-resident fx is NOT an explicit send (it would collide with
+>   the un-gateable pipe). It is diverted, recording a `pipeMidi` crossing
+>   `{from, consumer}` on the child track; `targetTracks` attaches `pipeMidi` to
+>   the child entry.
+> - **The family lift (`allocateOnce`).** Audio allocates per-track as before;
+>   then a family-wide midi pass: members deepest-first, each member's slots
+>   block-offset into family coordinates (stride `N+2`), all fed to **one
+>   `allocStream` per family**. A single **bus-0 `sourceMidi` aggregate** (pinned,
+>   placed first) collects every **merge** (a crossing whose consumer is the
+>   parent *source node* — the native folder adoption no-op, no CU); each
+>   **distinct** crossing (consumer is a parent *fx*) folds into a producer value
+>   whose `lastUse` reaches the consuming slot, so family-uniqueness falls out of
+>   the live-range allocator and the stream takes a bus ≥1. A merge co-resident
+>   with a distinct stream forces the distinct one off bus 0. A **singleton
+>   (non-folder) family reproduces the old per-track allocation exactly** (zero
+>   regression).
 >
-> **MANDATE for next session:** study `allocateOnce` (`DAG.lua:1182`),
-> `allocStream` (`1098`), the per-track midi value build (`1351-1437`), bracket
-> post-pass (`1470`), `splitOverCap`/`M.allocate` (`1633`/`1670`) — then **design
-> the family-merge pass and PRESENT it before coding.** The `familyMidi` mistake
-> was patching before understanding.
+> Specs: `dag_folder_midi_spec` (compile diversion + alloc, both fates),
+> `wm_roundtrip_spec` (folder-midi `read∘compile=id`, both fates). The roundtrip
+> caught a **read bug** (`958b81b`): a heard-but-mute parent fx drained its
+> default `outBus` instead of the bus it consumed, wiping a co-resident bus-0
+> aggregate whenever a bus-≥1 consumer was walked first. (The original design's
+> out-park busRoute CUs proved unnecessary — a single live-range `allocStream`
+> with a pinned bus-0 aggregate makes both the merge-vs-relocate decision and
+> family uniqueness fall out structurally.)
 >
-> **Open design nuance (carry forward):** native REAPER *merges* a child's bus-0
-> take into the parent's bus 0 with no CU — that IS the adoption no-op, so
-> out-park is **not** a universal "every child off bus 0." Streams that should
-> merge (children feeding the parent's aggregate) ride bus 0 natively; out-park
-> relocates only streams that must stay *distinct* (a child feeding a specific
-> parent fx on its own bus) or *suppressed* (audio rides the send, midi cut). The
-> merged-stream allocator must decide share-vs-relocate from the consumer
-> structure — that is the core of the design task.
+> **Bus-0 leak guard — LANDED.** A distinct pipe crossing is floored off bus 0
+> (`minReg=1` in `allocStream`) so it never reclaims the aggregate's bus when the
+> take frees it mid-family — else read would mis-merge the stream into the parent
+> node. (This replaced the originally-envisaged corrective "nudge an illegitimate
+> bus-0 occupant": the single placed-first `sourceMidi` means a *sid* is never
+> blocked, so prevention at claim-time is the clean local fit.) Spec:
+> `dag_folder_midi_spec` § 'never reclaims a just-freed bus 0'.
+>
+> **Still deferred:** **family-level capacity bisection** (step 4).
 >
 > **Doc debt:** the step-2 historical text in § "Model + read" below keeps its
-> pre-3b wording (parenthetical-corrected). `docs/wiringManager.md` is rewritten
-> to the bus-0/bus-N split; `docs/DAG.md § Folder parents` still defers the
-> compile/allocator MIDI side to step 3b.
+> pre-3b wording (parenthetical-corrected). `docs/wiringManager.md` and
+> `docs/DAG.md § Folder parents` carry the landed bus-0/bus-N split and the
+> family allocator.
 
 1. **rm foundation** *(DONE — `a9e530d`)*: `readTrack` carries
    `folderDepth`; `stampParents` walks project order stamping each
@@ -322,17 +336,15 @@ of correct folder `read` — a later cosmetic layer, not part of steps
      master parent-send machinery generalised to `sink`-keyed `parentFeed`.
      Roundtrip sweep extended over the audio folder fixtures in
      `wm_roundtrip_spec` (overlaying the REAPER-resident tree onto targetState).
-   - **3b** — split into **read model (DONE, `21a78b7` + bus-split fix)** and
-     **allocator (NEXT)**; see § Plan Progress for the full pick-up. Read model:
-     folder parent accepts midi edges (`midi.ins=1`); **bus-0** child midi
-     aggregates into the node (`child→sid→fx`), **buses ≥1** pass through to a
-     **direct `child→fx`** edge; parent emits its own take on bus 0 gated on
-     `hasMidiTake`.
-     Allocator (designed, not coded): family = one bus domain, a single
-     `allocStream` over child chains → pipe → parent chain; bus 0 = parent take;
-     out-park CUs (`from=-1, to=N` relocate / `to=-1` dump) at conduit child tails;
-     relay pattern for foldered→master still deferred per the realisation note;
-     adoption-no-op test (native bus-0 merge stays a no-op).
+   - **3b (DONE)** — read model (`21a78b7` + bus-split fix) + allocator
+     (`8518249`, read-bug fix `958b81b`); see § Plan Progress. Read model: folder
+     parent accepts midi edges (`midi.ins=1`); **bus-0** child midi aggregates
+     into the node (`child→sid→fx`), **buses ≥1** pass through to a **direct
+     `child→fx`** edge; parent emits its own take on bus 0 gated on `hasMidiTake`.
+     Allocator: family = one bus domain, **one `allocStream` per family**; a
+     pinned bus-0 aggregate carries merges, distinct crossings take family-unique
+     buses ≥1 by live-range; singleton families unchanged. Deferred: bus-0 nudge,
+     family capacity bisection (step 4).
 4. **Capacity over domains**: family bus over-pressure → existing
    eviction; deterministic; fixture forcing >16 buses in one family.
 

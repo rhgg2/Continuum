@@ -148,4 +148,30 @@ return {
       t.truthy(emit >= 1, 'merge holding bus 0 forces the distinct stream off the aggregate')
     end,
   },
+  {
+    -- Bus-0 leak guard: take releases bus 0 at gen's slot, so without minReg=1 gen reclaims it
+    -- and read mis-merges the distinct stream. A distinct crossing must never sit on bus 0.
+    name = 'folder alloc: a distinct crossing never reclaims a just-freed bus 0',
+    run = function()
+      local g = { nextId = 1, nodes = {
+        sa   = source('guid-A', { parent = 'p' }),
+        gen  = fx({ ident = 'VST:Gen' }),
+        p    = source('guid-P', { ins = 1, midiIns = 1 }),
+        cons = fx({ ident = 'VST:Cons' }),
+        master = master(),
+      }, edges = {
+        { type = 'audio', from = 'sa',   to = 'gen'    },
+        { type = 'midi',  from = 'sa',   to = 'gen'    },  -- take feeds gen, then releases bus 0
+        { type = 'audio', from = 'gen',  to = 'p'      },  -- conduit
+        { type = 'midi',  from = 'gen',  to = 'cons'   },  -- distinct crossing through the pipe
+        { type = 'audio', from = 'p',    to = 'cons'   },
+        { type = 'audio', from = 'cons', to = 'master' },
+      } }
+      local out = allocOf(g)
+      local emit = out['guid-A'].fxMidiBus.gen.outBus
+      local read = out['guid-P'].fxMidiBus.cons.inBus
+      t.eq(emit, read, 'child emits on the same bus the parent reads')
+      t.truthy(emit >= 1, 'the distinct crossing stays off bus 0 (no spurious merge on read)')
+    end,
+  },
 }
