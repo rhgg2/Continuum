@@ -229,6 +229,24 @@ return {
     end,
   },
   {
+    -- Wire-before-take across a send: a take-less source midi-sends to a bus-0 reader on another
+    -- track. The send taps bus 0, so bus0Consumed must fire or the edge drops (no refs to carry).
+    name = 'read: a take-less source midi-sending to a bus-0 reader still wires the edge',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local snap = {
+        ['guid-A'] = { trackKind='sourceTrack', id='guid-A', nchan=2, mainSend={on=false},
+                       fx={}, sends={ { to='guid-C', kind='midi', srcChan=0, dstChan=0, pos='preFader' } } },
+        ['guid-C'] = { trackKind='newTrack', id='guid-C', nchan=2, mainSend={on=false}, sends={},
+          fx = { { id='g-m', ident='VST:M', ins=0, outs=1, midi={ inBus=0, outBus=0, outDisabled=true } } } },
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(edgeSet(rg), {
+        'midi guid-A.-->g-m.-',
+      })
+    end,
+  },
+  {
     -- Same-track MIDI fan-in: a merge CU unions producer buses 1,2 onto bus 3; collapse
     -- splices it out so read recovers A->C and B->C. Hand-built (compile won't force it).
     name = 'read: same-track merge CU unions two midi producer buses',

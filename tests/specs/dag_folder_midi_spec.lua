@@ -174,4 +174,27 @@ return {
       t.truthy(emit >= 1, 'the distinct crossing stays off bus 0 (no spurious merge on read)')
     end,
   },
+  {
+    -- Every fx producer on a pipe-riding member is floored off bus 0 — not just diverted crossings.
+    -- Here `gen` midi-sends off-track (plain send, not a crossing); still must not sit on bus 0.
+    name = 'folder alloc: a child generator sending off-track is floored off the pipe bus 0',
+    run = function()
+      local g = { nextId = 1, nodes = {
+        sa   = source('guid-A', { parent = 'p' }),
+        gen  = fx({ ident = 'VST:Gen' }),
+        p    = source('guid-P', { ins = 1 }),
+        cons = fx({ ident = 'VST:Cons' }),
+        master = master(),
+      }, edges = {
+        { type = 'audio', from = 'sa',   to = 'gen'    },
+        { type = 'audio', from = 'gen',  to = 'p'      },  -- conduit: A rides B_MAINSEND to P
+        { type = 'midi',  from = 'gen',  to = 'cons'   },  -- plain cross-track send to a sibling fx
+        { type = 'audio', from = 'cons', to = 'master' },
+        { type = 'audio', from = 'p',    to = 'master' },
+      } }
+      local out = allocOf(g)
+      t.truthy(out['guid-A'].fxMidiBus.gen.outBus >= 1,
+        'the generator stays off bus 0 so it cannot phantom-merge into the parent via the pipe')
+    end,
+  },
 }

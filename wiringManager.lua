@@ -1015,9 +1015,9 @@ local function readGraph(snap, busMeta)
     return out
   end
 
-  -- A folder parent emits bus 0 not only when it has a source (take / child merge) but also when an
-  -- on-track fx consumes bus 0 — else an authored sid->fx midi edge silently drops through compile.
-  local function chainHearsBus0(entry)
+  -- True when something consumes bus 0 (on-track fx or midi send) so a sid->fx edge wired before
+  -- the take still round-trips. Parent-sends excluded — see docs/wiringManager.md § bus0Consumed.
+  local function bus0Consumed(entry)
     for _, fxe in ipairs(entry.fx or {}) do
       if fxe.ident ~= CU_IDENT then
         local m = fxe.midi
@@ -1026,6 +1026,9 @@ local function readGraph(snap, busMeta)
         if not m then hears = (isJS(fxe.ident) and jsfxTraits(fxe.ident) or { recv = true }).recv end
         if hears and inBus == 0 then return true end
       end
+    end
+    for _, s in ipairs(entry.sends or {}) do
+      if s.kind == 'midi' and (s.srcChan or 0) == 0 then return true end
     end
     return false
   end
@@ -1155,7 +1158,7 @@ local function readGraph(snap, busMeta)
           for _, ref in ipairs(refs) do feedMidi(bus, ref) end
         end
       end
-      if entry.hasMidiTake or childMidi[0] or chainHearsBus0(entry) then feedMidi(0, { node = sid }) end
+      if entry.hasMidiTake or childMidi[0] or bus0Consumed(entry) then feedMidi(0, { node = sid }) end
     elseif not inc and not busId and entry.trackKind ~= 'master' and entry.trackKind ~= 'scratch' then
       -- No inputs => a source (scratch excepted: a known fx bin, walked as floating islands).
       -- Emits audio on pair 1; midi on bus 0 with a take OR an on-track bus-0 consumer (wire-before-take).
@@ -1164,7 +1167,7 @@ local function readGraph(snap, busMeta)
                      ports = { audio = { ins = 0, outs = 1 }, midi = { ins = 0, outs = 1 } } }
       if isCyclic then feedbackSeeds[sid] = true end
       feed(1, { node = sid, port = 1 })
-      if entry.hasMidiTake or chainHearsBus0(entry) then feedMidi(0, { node = sid }) end
+      if entry.hasMidiTake or bus0Consumed(entry) then feedMidi(0, { node = sid }) end
     end
 
     -- A flagged track realizes a buss: accumulated inputs become its in-edges, the

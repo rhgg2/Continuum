@@ -1458,6 +1458,9 @@ local function allocateOnce(tracks, nodes)
     local function foldMember(tk)
       local pt = perTrack[tk]
       local off = offset[tk]
+      -- A conduit child's bus 0 rides the pipe up and read merges every arrival into the parent, so
+      -- every fx producer on a pipe-riding member is floored off bus 0. See docs/DAG.md § Folder parents.
+      local ridesPipe = parentOf[tk] ~= nil
       local function fam(slot) return slot and (off + slot) or nil end
       for _, f in ipairs(pt.flows) do
         if f.type == 'midi' then
@@ -1469,6 +1472,7 @@ local function allocateOnce(tracks, nodes)
             midiCtx[tk].hasMidiOut[f.from] = true
             local g = orderedGroup(producers, producerIds, f.from,
               { def = fromSlot, lastUse = fromSlot, track = tk, writes = {}, consumers = {} })
+            if ridesPipe then g.minReg = 1 end
             if f.escape then
               g.lastUse = familyN + 1
               util.add(g.writes, { kind = 'sendSrc', track = tk, sendIdx = f.sendIdx })
@@ -1500,7 +1504,7 @@ local function allocateOnce(tracks, nodes)
           local g = orderedGroup(producers, producerIds, cross.from,
             { def = off + pt.slotMap[cross.from], lastUse = off + pt.slotMap[cross.from],
               track = tk, writes = {}, consumers = {} })
-          g.minReg = 1  -- a distinct crossing is never the bus-0 aggregate
+          if ridesPipe then g.minReg = 1 end
           if ctk then g.lastUse = math.max(g.lastUse, offset[ctk] + perTrack[ctk].slotMap[cross.consumer]) end
           util.add(g.consumers, cross.consumer)
         end

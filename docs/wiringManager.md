@@ -216,6 +216,18 @@ own take — the native folder merge; **buses ≥1** stay distinct, so a parent
 Membership is positional (`stampParents`), an
 input to read, never authored here. See `design/wiring-folders.md`.
 
+**When a source emits bus 0** (`bus0Consumed`): a source or folder parent
+puts its node on bus 0 when there is *something to emit* — a midi take
+(`hasMidiTake`) or, for a folder, a child merged on bus 0 — **or** when
+something *consumes* bus 0: an on-track fx reading it, or an explicit midi
+send tapping it. The consumer arm is what lets a `sid→fx` midi edge be wired
+before the take exists and still round-trip through compile, on-track or
+across a send. The **parent-send is deliberately not** a consumer here: a
+folder parent aggregates *every* bus-0 arrival, so keying a take-less child's
+emission off its parent-send would phantom-merge every childless child. The
+folder merge is therefore the one place `hasMidiTake` is irreducible — no
+consumer-side signal can stand in for "is there a take to send up."
+
 ## diff op ordering
 
 `wm:diff` emits ops in a fixed order so the applier can apply them

@@ -273,13 +273,15 @@ of correct folder `read` — a later cosmetic layer, not part of steps
 > with a pinned bus-0 aggregate makes both the merge-vs-relocate decision and
 > family uniqueness fall out structurally.)
 >
-> **Bus-0 leak guard — LANDED.** A distinct pipe crossing is floored off bus 0
-> (`minReg=1` in `allocStream`) so it never reclaims the aggregate's bus when the
-> take frees it mid-family — else read would mis-merge the stream into the parent
-> node. (This replaced the originally-envisaged corrective "nudge an illegitimate
-> bus-0 occupant": the single placed-first `sourceMidi` means a *sid* is never
-> blocked, so prevention at claim-time is the clean local fit.) Spec:
-> `dag_folder_midi_spec` § 'never reclaims a just-freed bus 0'.
+> **Bus-0 leak guard — LANDED.** A conduit child's bus 0 rides the pipe up and
+> read merges *every* bus-0 arrival into the parent node, so **every fx producer
+> on a pipe-riding member is floored off bus 0** (`minReg=1` in `allocStream`) —
+> diverted crossings AND a generator that merely sends off-track — leaving bus 0
+> to the take aggregate. (This replaced the originally-envisaged corrective "nudge
+> an illegitimate bus-0 occupant": the single placed-first `sourceMidi` means a
+> *sid* is never blocked, so prevention at claim-time is the clean local fit.)
+> Specs: `dag_folder_midi_spec` § 'never reclaims a just-freed bus 0',
+> § 'sending off-track is floored off the pipe bus 0'.
 >
 > **Still deferred:** **family-level capacity bisection** (step 4).
 >

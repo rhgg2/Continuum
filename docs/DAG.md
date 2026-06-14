@@ -102,10 +102,13 @@ and turns on three generalisations:
   family**: a pinned **bus-0 aggregate** collects merges (consumer is the parent
   source node — the native folder merge, no CU), while **distinct** crossings
   (consumer is a parent fx) fold into live-range values whose `lastUse` reaches
-  the consuming slot, each taking a family-unique bus ≥1 (floored off bus 0 by
-  `minReg`, so read never mis-merges a distinct stream into the parent node). A
-  singleton family reproduces the old per-track allocation exactly. (Family-level
-  capacity bisection is step 4.)
+  the consuming slot, each taking a family-unique bus ≥1. Because a conduit
+  child's bus 0 rides the pipe up and read merges *every* bus-0 arrival into the
+  parent node, **every fx producer on a pipe-riding member is floored off bus 0**
+  (`minReg`) — not just diverted crossings, but also a generator that merely
+  sends off-track — leaving bus 0 to the take aggregate alone. A singleton family
+  reproduces the old per-track allocation exactly. (Family-level capacity
+  bisection is step 4.)
 
 ## Split markers — a node as its own source
 
