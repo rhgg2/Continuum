@@ -105,6 +105,37 @@ end
 
 ----- corpus — compile-driven, in-image graphs only
 
+-- Folder family of n single-fx children, each with a distinct crossing gen_i->cons_i on the parent chain.
+-- Past 126 buses `allocate` evicts children to top-level (crossings→explicit sends); read must recover the graph. See design/archive/wiring-folders.md § Bus domains (step 4).
+local function folderCapacityFixture(n, evicts)
+  local tree = {}
+  for i = 1, n do tree['guid-A' .. i] = 'guid-P' end
+  return {
+    name = ('%d-child family%s'):format(n, evicts and ' overflows; eviction is read-invisible' or ' round-trips'),
+    seed = function(h)
+      seedSource(h, 'guid-P')
+      for i = 1, n do seedSource(h, 'guid-A' .. i) end
+    end,
+    tree = tree,
+    build = function(g)
+      g.nodes.p = source('guid-P', { ins = 1 })
+      local prev = 'p'
+      for i = 1, n do
+        local sa, gen, cons = 'sa' .. i, 'gen' .. i, 'cons' .. i
+        g.nodes[sa]   = source('guid-A' .. i, { parent = 'p' })
+        g.nodes[gen]  = fx('VST:Gen' .. i,  { fxId = 'g-gen' .. i })
+        g.nodes[cons] = fx('VST:Cons' .. i, { fxId = 'g-cons' .. i })
+        util.add(g.edges, { type = 'audio', from = sa,   to = gen })   -- audio-only child: no take,
+        util.add(g.edges, { type = 'audio', from = gen,  to = 'p' })   -- so nothing rides bus 0
+        util.add(g.edges, { type = 'midi',  from = gen,  to = cons })  -- distinct crossing (bus >= 1)
+        util.add(g.edges, { type = 'audio', from = prev, to = cons })
+        prev = cons
+      end
+      util.add(g.edges, { type = 'audio', from = prev, to = 'master' })
+    end,
+  }
+end
+
 local corpus = {
   {
     name = 'generator chain s -midi-> syn -audio-> f2 -> master',
@@ -396,6 +427,9 @@ local corpus = {
     end,
   },
 }
+
+corpus[#corpus + 1] = folderCapacityFixture(3, false)
+corpus[#corpus + 1] = folderCapacityFixture(127, true)
 
 local tests = {}
 for _, fixture in ipairs(corpus) do

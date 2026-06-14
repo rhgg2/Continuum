@@ -1,5 +1,5 @@
 -- routingManager folder structure: positional parent stamping + emergent-track
--- top-level pin. See design/wiring-folders.md § read delta / § plan step 1.
+-- top-level pin. See design/archive/wiring-folders.md § read delta / § plan step 1.
 local t       = require('support')
 local harness = require('harness')
 local util    = require('util')

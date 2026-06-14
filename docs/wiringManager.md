@@ -214,7 +214,7 @@ into the parent node (`child→sid`, `midi.ins=1`), which re-emits it with its
 own take — the native folder merge; **buses ≥1** stay distinct, so a parent
 (or ancestor) fx meets each child's bus-*n* producer as a **direct** edge.
 Membership is positional (`stampParents`), an
-input to read, never authored here. See `design/wiring-folders.md`.
+input to read, never authored here. See `design/archive/wiring-folders.md`.
 
 **When a source emits bus 0** (`bus0Consumed`): a source or folder parent
 puts its node on bus 0 when there is *something to emit* — a midi take

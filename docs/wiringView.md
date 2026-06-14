@@ -64,7 +64,7 @@ by `readGraph`'s folderSinks branch) — is *bodied* like any other node
 (`category`/`fromKind` `'folder'`): it needs a rect for its incoming child
 wires to land on. `sourceCategory` is the single discriminant, consumed by
 both `nodeView.category` and `wireView.fromKind`. The folder-bar display
-(`design/wiring-folders.md` § Folder display) will later project the
+(`design/archive/wiring-folders.md` § Folder display) will later project the
 `'folder'` category onto bar geometry; until then it draws as a plain rect.
 
 ## wireView fromKind/fromLabel

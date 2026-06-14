@@ -26,7 +26,10 @@
 -- see docs/DAG.md § synthNode field roles
 --shape: outWire = { from=id, fromPort?=int, to=trackKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
 --shape: intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
---shape: trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackId?=string, fxOrder=id[], mainSend=bool, mainSendGain?=number, parentFeed?={from=id, fromPort?=int, toNode=id, toPort?=int, sink=trackKey}, synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[] }  -- parentFeed.sink is MASTER or the folder parent's trackKey
+--shape: trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackId?=string, fxOrder=id[], mainSend=bool,
+--shape:   mainSendGain?=number, parentFeed?={from=id, fromPort?=int, toNode=id, toPort?=int, sink=trackKey},
+--shape:   synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[],
+--shape:   pipeMidi?={{from=id, consumer=id},...} }  -- parentFeed.sink is MASTER or folder parent trackKey; pipeMidi = un-gateable crossings
 --shape: targetTracks = { [trackKey] = trackSpec }
 -- see docs/DAG.md § targetTracks shape
 --shape: allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int, preFx?=true }; audio src/dstChan are (pair-1)*2, midi are bus 0..127; preFx marks a raw-source-origin (pre-FX) send
@@ -1371,10 +1374,8 @@ local function allocateOnce(tracks, nodes)
     perTrack[trackKey] = { entry = entry, state = state, slotMap = slotMap, N = N, flows = flows }
   end
 
-  ----- midi register file (family-wide): the folder identity pipe (n->n, un-gateable) makes a
-  -- parent-send-connected track set ONE bus domain. Bus 0 is the merged take aggregate; distinct
-  -- child->parent-fx streams allocate family-unique. A singleton family reproduces the per-track
-  -- allocation exactly. See design/wiring-folders.md § Bus domains.
+  ----- midi register file (family-wide): the folder pipe makes a parent-send-connected set ONE bus domain.
+  -- Bus 0 = merged take aggregate; distinct crossings allocate family-unique. See design/archive/wiring-folders.md § Bus domains.
 
   -- A foldered child names its parent via parentFeed.sink (a folder conduit, never master).
   local parentOf = {}
@@ -1523,12 +1524,14 @@ local function allocateOnce(tracks, nodes)
       g.consumers = nil
       addMidiValue(g)
     end
-    -- Stage-2 incoming midi sends pinned at the receiver. Sends to one node coalesce
-    -- onto a single bus (REAPER merges midi on a bus); the receiving fx inherits it.
+    -- Stage-2 incoming midi sends pinned at the receiver; one node → one bus (REAPER merges on a bus).
+    -- In a folder family an incoming send is floored off bus 0 — bus-0 arrival reads back as a phantom native merge.
+    local floorIncoming = #members > 1
     for _, toNode in ipairs(incOrder) do
       local g = incByNode[toNode]
       if g.toSlot then util.add(g.writes, { kind = 'busIn', track = trackOfFx[toNode], fxId = toNode }) end
-      addMidiValue({ def = 0, lastUse = g.toSlot or (familyN + 1), writes = g.writes })
+      addMidiValue({ def = 0, lastUse = g.toSlot or (familyN + 1),
+                     minReg = floorIncoming and 1 or nil, writes = g.writes })
     end
 
     local midiProfile = {}
@@ -1536,6 +1539,8 @@ local function allocateOnce(tracks, nodes)
     for _, tk in ipairs(members) do
       meta[tk].midiUsed = midiCursor
       meta[tk].midiProfile = midiProfile
+      meta[tk].midiOffset = offset[tk]
+      meta[tk].familyRoot = root
     end
   end
 
@@ -1734,30 +1739,154 @@ local function bisect(trackKey, spec, g)
   return upSpec, downSpec, downKey, downSet
 end
 
--- One bisection round: cut every over-ceiling track at its min-crossing gap; nil at fixpoint.
--- Sends whose toNode moved downstream are re-pointed to the new segment's key.
-local function splitOverCap(tracks, meta)
-  local cuts = {}
+-- Re-express a folder parent-send as an explicit audio send (leaves the family bus domain).
+-- Only folder feeds (sink ~= MASTER) pass here; master sends never convert.
+local function toExplicitFeed(spec)
+  local pf = spec.parentFeed
+  util.add(spec.outWires, { from = pf.from, fromPort = pf.fromPort, to = pf.sink,
+                            toNode = pf.toNode, toPort = pf.toPort, type = 'audio',
+                            gain = spec.mainSendGain })
+  spec.parentFeed, spec.mainSend, spec.mainSendGain = nil, false, nil
+end
+
+local function isFolderFeed(spec)
+  return spec.parentFeed ~= nil and spec.parentFeed.sink ~= MASTER
+end
+
+local function hasMergeCrossing(spec, nodes)
+  for _, cross in ipairs(spec.pipeMidi or {}) do
+    local n = nodes[cross.consumer]
+    if n and n.kind == 'source' then return true end
+  end
+  return false
+end
+
+-- Convert a pipe crossing to an explicit midi send when its producer leaves the family.
+-- Bus-0 merges (consumer = parent source node) cannot be reproduced as explicit sends; reaching one here asserts.
+local function convertCrossing(spec, cross, nodes, trackOfFx)
+  assert(nodes[cross.consumer] and nodes[cross.consumer].kind == 'fx',
+    'family eviction cannot move a bus-0 merge crossing off the pipe')
+  util.add(spec.outWires, { from = cross.from, to = trackOfFx[cross.consumer],
+                            toNode = cross.consumer, type = 'midi' })
+end
+
+-- Like bisect, but the down segment leaves the family: its folder feed and pipe crossings
+-- go explicit; the pipe-keeping child retains piped crossings. See design/archive/wiring-folders.md § Bus domains.
+local function bisectOutOfFamily(trackKey, spec, g, nodes, trackOfFx)
+  local up, down, downKey, downSet = bisect(trackKey, spec, g)
+  if isFolderFeed(down) then toExplicitFeed(down) end
+  local upKeepsPipe = up.mainSend and isFolderFeed(up)
+  local upPipe
+  for _, cross in ipairs(spec.pipeMidi or {}) do
+    if downSet[cross.from] then convertCrossing(down, cross, nodes, trackOfFx)
+    elseif upKeepsPipe then upPipe = upPipe or {}; util.add(upPipe, cross)
+    else convertCrossing(up, cross, nodes, trackOfFx) end
+  end
+  up.pipeMidi = upPipe
+  return up, down, downKey, downSet
+end
+
+-- Pull a leaf member out of its family without splitting: folder feed and crossings go
+-- explicit. Used when members are too short to bisect internally.
+local function evictMember(spec, nodes, trackOfFx)
+  local out = util.assign({}, spec)
+  out.outWires = {}
+  for _, ow in ipairs(spec.outWires or {}) do util.add(out.outWires, ow) end
+  if isFolderFeed(out) then toExplicitFeed(out) end
+  out.pipeMidi = nil
+  for _, cross in ipairs(spec.pipeMidi or {}) do convertCrossing(out, cross, nodes, trackOfFx) end
+  return out
+end
+
+local function minCrossingGap(profile, lo, hi)
+  local bestGap, bestLive
+  for gap = lo, hi do
+    if not bestLive or profile[gap] < bestLive then bestGap, bestLive = gap, profile[gap] end
+  end
+  return bestGap
+end
+
+-- A leaf member (nothing parent-sends to it) that is graph-safe to evict whole (no bus-0
+-- merge crossing). Deterministic by key.
+local function pickEvictableLeaf(members, tracks, nodes)
+  local isParent = {}
+  for _, tk in ipairs(members) do
+    local e = tracks[tk]
+    if e.mainSend and e.parentFeed then isParent[e.parentFeed.sink] = true end
+  end
+  local pick
+  for _, tk in ipairs(members) do
+    if not isParent[tk] and not hasMergeCrossing(tracks[tk], nodes)
+       and (not pick or tk < pick) then pick = tk end
+  end
+  return pick
+end
+
+-- One bisection round. Audio over-cap cuts per track; MIDI over-cap is per FAMILY (folder pipe = ONE
+-- bus domain) — at most one eviction per family per round, skipped when an audio cut is pending. nil at fixpoint.
+local function splitOverCap(tracks, meta, nodes)
+  local trackOfFx, slotOfFx = {}, {}
+  for tk, e in pairs(tracks) do
+    for slot, id in ipairs(e.fxOrder or {}) do trackOfFx[id] = tk; slotOfFx[id] = slot end
+  end
+
+  local cuts, evictions = {}, {}
   for trackKey, m in pairs(meta) do
-    local profile
-    if m.audioUsed > CAPACITY.audio then profile = m.audioProfile
-    elseif m.midiUsed > CAPACITY.midi then profile = m.midiProfile end
-    if profile and m.N >= 2 then
-      local bestGap, bestLive
-      for gap = 1, m.N - 1 do
-        if not bestLive or profile[gap] < bestLive then bestGap, bestLive = gap, profile[gap] end
-      end
-      cuts[trackKey] = bestGap
+    if m.audioUsed > CAPACITY.audio and m.N >= 2 then
+      cuts[trackKey] = { gap = minCrossingGap(m.audioProfile, 1, m.N - 1) }
     end
   end
-  if not next(cuts) then return nil end
+
+  local families = {}
+  for tk, m in pairs(meta) do util.bucket(families, m.familyRoot, tk) end
+  for _, members in pairs(families) do
+    local shared = meta[members[1]]
+    local audioCutPending = false
+    for _, tk in ipairs(members) do if cuts[tk] then audioCutPending = true end end
+    if shared.midiUsed > CAPACITY.midi and not audioCutPending then
+      -- A pipe consumer fx must never leave its family — its crossings are still piped to the old parent track.
+      -- Floor the cut past the last consumer slot; eviction always falls on the producer side.
+      local lastConsumer = {}
+      for _, tk in ipairs(members) do
+        for _, cross in ipairs(tracks[tk].pipeMidi or {}) do
+          local ctk, slot = trackOfFx[cross.consumer], slotOfFx[cross.consumer]
+          if ctk and slot then lastConsumer[ctk] = math.max(lastConsumer[ctk] or 0, slot) end
+        end
+      end
+      local bestGap, bestLive, bestMember
+      for _, tk in ipairs(members) do
+        local mt = meta[tk]
+        for g = (lastConsumer[tk] or 0) + 1, mt.N - 1 do
+          local fg = mt.midiOffset + g
+          if not bestLive or shared.midiProfile[fg] < bestLive then
+            bestGap, bestLive, bestMember = g, shared.midiProfile[fg], tk
+          end
+        end
+      end
+      if bestMember then cuts[bestMember] = { gap = bestGap, outOfFamily = true }
+      else
+        local leaf = pickEvictableLeaf(members, tracks, nodes)
+        assert(leaf, 'family over MIDI capacity but no graph-safe eviction available')
+        evictions[leaf] = true
+      end
+    end
+  end
+  if not next(cuts) and not next(evictions) then return nil end
 
   local out, downByKey = {}, {}
   for trackKey, spec in pairs(tracks) do
-    if cuts[trackKey] then
-      local upSpec, downSpec, downKey, downSet = bisect(trackKey, spec, cuts[trackKey])
-      out[trackKey], out[downKey] = upSpec, downSpec
+    local cut = cuts[trackKey]
+    if cut then
+      local up, down, downKey, downSet
+      if cut.outOfFamily then
+        up, down, downKey, downSet = bisectOutOfFamily(trackKey, spec, cut.gap, nodes, trackOfFx)
+      else
+        up, down, downKey, downSet = bisect(trackKey, spec, cut.gap)
+      end
+      out[trackKey], out[downKey] = up, down
       downByKey[trackKey] = { key = downKey, set = downSet }
+    elseif evictions[trackKey] then
+      out[trackKey] = evictMember(spec, nodes, trackOfFx)
     else
       out[trackKey] = spec
     end
@@ -1771,16 +1900,16 @@ local function splitOverCap(tracks, meta)
   return out
 end
 
--- Capacity-resolving allocation: assign, bisect any over-ceiling class, re-assign
--- until every track fits. The only entry point; allocateOnce is the inner pass.
+-- Capacity-resolving allocation: assign, bisect any over-ceiling class/family, re-assign
+-- until everything fits. The only entry point; allocateOnce is the inner pass.
 function M.allocate(tracks, nodes)
   nodes = nodes or {}
   local out, meta = allocateOnce(tracks, nodes)
-  local split = splitOverCap(tracks, meta)
+  local split = splitOverCap(tracks, meta, nodes)
   while split do
     tracks = split
     out, meta = allocateOnce(tracks, nodes)
-    split = splitOverCap(tracks, meta)
+    split = splitOverCap(tracks, meta, nodes)
   end
   return out
 end

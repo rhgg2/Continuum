@@ -1,9 +1,8 @@
 local t   = require('support')
 local DAG = require('DAG')
 
--- Folder-parent MIDI conduit (compile side): a foldered child sending audio + midi to
--- its parent rides B_MAINSEND atomically. The midi must NOT become a second explicit
--- send (it would collide with the un-gateable identity pipe). See design/wiring-folders.md § 3b.
+-- Folder-parent MIDI conduit (compile side): a child's midi rides B_MAINSEND atomically and must NOT
+-- become a second explicit send (collides with the un-gateable identity pipe). See design/archive/wiring-folders.md § 3b.
 
 local function source(guid, opts)
   opts = opts or {}

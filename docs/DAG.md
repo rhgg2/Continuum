@@ -107,8 +107,8 @@ and turns on three generalisations:
   parent node, **every fx producer on a pipe-riding member is floored off bus 0**
   (`minReg`) — not just diverted crossings, but also a generator that merely
   sends off-track — leaving bus 0 to the take aggregate alone. A singleton family
-  reproduces the old per-track allocation exactly. (Family-level capacity
-  bisection is step 4.)
+  reproduces the old per-track allocation exactly. When a family's distinct crossings
+  exceed 126 buses it is bisected *as a family* — see § Capacity bisection.
 
 ## Split markers — a node as its own source
 
@@ -319,6 +319,16 @@ returns each track's high-water (`audioUsed`/`midiUsed`) plus the per-gap live
 profile; `splitOverCap` bisects every over-cap track at its minimum-crossing gap;
 re-allocate; repeat to a fixpoint. (`M.allocate` is the only entry point;
 `allocateOnce` is the inner single pass.)
+
+**Folders bisect per family.** A folder family is one MIDI bus domain, so midi over-pressure is
+resolved per family, not per track: `splitOverCap` groups members by `familyRoot` and, when the
+shared `midiUsed` exceeds the ceiling, evicts a segment *out of the family* to a top-level track —
+its parent-send and any distinct crossing it carries become explicit sends (`bisectOutOfFamily` for
+a deep child, `evictMember` for a single-fx leaf), re-allocated at the receiver outside the domain.
+Two invariants keep `read∘compile=id`: a pipe consumer fx is never relocated out of its family (the
+cut is floored past the member's last consumer slot, so the parent's consumer chain is never cut),
+and an incoming midi send into a folder family is floored off bus 0 (a bus-0 arrival would read back
+as a phantom native merge). Only distinct (bus≥1) crossings convert; a bus-0 take merge stays piped.
 
 The cut is a *topological* one: `fxOrder` is already a topo order, so a gap-cut is
 a forward cut. The upstream segment keeps the track's identity, the downstream

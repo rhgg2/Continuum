@@ -154,10 +154,11 @@ bus. Leaked buses still flow upward through ancestors —
 flowing-and-unheard, the state the allocator already engineers
 within a single track.
 
-Capacity: 16 buses span the family. Over-pressure uses the existing
-valve — evict fx to top-level emergent tracks, where the boundary
-crossing is an explicit send with controlled bus mapping, outside
-the domain. The one-fx-per-track floor argument carries over.
+Capacity: the family shares REAPER's 126 usable MIDI buses as one
+domain (`CAPACITY.midi`). Over-pressure uses the existing valve — evict
+fx to top-level emergent tracks, where the boundary crossing is an
+explicit send with controlled bus mapping, outside the domain. The
+one-fx-per-track floor argument carries over.
 
 ## Read delta
 
@@ -217,7 +218,7 @@ of correct folder `read` — a later cosmetic layer, not part of steps
 > back as a per-track bolt-on (two bus allocators fighting over bus 0) and rebuilt
 > as family-domain allocation: a **read-model change** (`21a78b7`) + the
 > **allocator** (`8518249`, read-bug fix `958b81b`, + bus-0 leak guard), suite
-> green at 1430. Only family capacity bisection (step 4) remains.
+> green at 1430. Step 4 (family capacity bisection) now landed too — see below. All four steps complete.
 >
 > **Read model — LANDED (`21a78b7`; bus-split corrected 2026-06-14, suite green
 > at 1423).** The folder parent reads MIDI as a **bus-0/bus-N split**:
@@ -283,7 +284,19 @@ of correct folder `read` — a later cosmetic layer, not part of steps
 > Specs: `dag_folder_midi_spec` § 'never reclaims a just-freed bus 0',
 > § 'sending off-track is floored off the pipe bus 0'.
 >
-> **Still deferred:** **family-level capacity bisection** (step 4).
+> **Family capacity bisection — LANDED (suite green at 1441).** A folder family is one MIDI bus
+> domain, so over-pressure is resolved per *family*, not per track: `splitOverCap` groups members by
+> `familyRoot`, and when the shared `midiUsed > CAPACITY.midi` (126) it evicts a segment **out of the
+> family** to a top-level track — its folder parent-send and any distinct pipe crossing it carries
+> become **explicit sends** (`bisectOutOfFamily` cuts a deep child's chain; `evictMember` pulls a
+> single-fx leaf whole), re-allocated at the receiver outside the domain. Two guardrails keep
+> `read∘compile=id`: (1) a **pipe consumer fx is never relocated** out of its family — the cut is
+> floored past the member's last consumer slot, so the parent's consumer chain is never cut and
+> eviction always falls on the producer side; (2) an **incoming midi send into a folder family is
+> floored off bus 0** (`minReg`), since a bus-0 arrival reads back as a phantom native merge. Only
+> distinct (bus≥1) crossings ever convert — a bus-0 take merge stays piped (asserts otherwise).
+> Specs: `dag_folder_capacity_spec` (both eviction shapes + determinism), `wm_roundtrip_spec`
+> (127-child overflow round-trips exactly, with a 3-child no-overflow control).
 >
 > **Doc debt:** the step-2 historical text in § "Model + read" below keeps its
 > pre-3b wording (parenthetical-corrected). `docs/wiringManager.md` and
@@ -347,8 +360,13 @@ of correct folder `read` — a later cosmetic layer, not part of steps
      pinned bus-0 aggregate carries merges, distinct crossings take family-unique
      buses ≥1 by live-range; singleton families unchanged. Deferred: bus-0 nudge,
      family capacity bisection (step 4).
-4. **Capacity over domains**: family bus over-pressure → existing
-   eviction; deterministic; fixture forcing >16 buses in one family.
+4. **Capacity over domains** *(DONE — suite green at 1441)*: family midi over-pressure
+   (shared `midiUsed > CAPACITY.midi`, 126) evicts a segment out of the family to a top-level
+   track — `bisectOutOfFamily` (deep child) / `evictMember` (single-fx leaf); folder feed +
+   distinct crossings become explicit sends, re-allocated outside the domain. Two guardrails
+   preserve the roundtrip: a pipe consumer fx is never relocated (cut floored past the last
+   consumer slot); an incoming send into a folder family is floored off bus 0. Specs:
+   `dag_folder_capacity_spec`, `wm_roundtrip_spec` (127-child overflow).
 
 ## Open questions / risks
 

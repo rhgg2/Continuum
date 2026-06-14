@@ -1,5 +1,5 @@
 -- read : folder track parents. Child midi takes wire into the parent node; parent emits bus 0
--- from its own take. See design/wiring-folders.md § Model + read.
+-- from its own take. See design/archive/wiring-folders.md § Model + read.
 local t    = require('support')
 local util = require('util')
 local DAG  = require('DAG')
