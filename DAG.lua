@@ -614,6 +614,13 @@ do
       end
       return group
     end
+    -- A foldered child's midi into its parent (or a parent-resident fx) rides the same atomic
+    -- B_MAINSEND as its audio conduit edge — never a second explicit send. Recorded per child for
+    -- the family allocator; consumer kind (source = merge to bus 0, fx = distinct) read there.
+    local pipeParent, pipeMidi = {}, {}
+    for edgeIdx, parentTrackKey in pairs(conduit) do
+      pipeParent[nodeTrackKey(edges[edgeIdx].from)] = parentTrackKey
+    end
     for edgeIdx, edge in ipairs(edges) do
       local conn
       if edge.type == 'midi' then
@@ -626,8 +633,11 @@ do
                  to = edge.to, toPort = edge.toPort or 1, gain = gain, edgeIdx = edgeIdx }
       end
       local fromTrackKey, toTrackKey = nodeTrackKey(conn.from), nodeTrackKey(conn.to)
-      local group
-      if fromTrackKey ~= '' and toTrackKey ~= '' then
+      local group, divert
+      if conn.type == 'midi' and toTrackKey ~= '' and pipeParent[fromTrackKey] == toTrackKey then
+        divert = true                                   -- rides the pipe; never an explicit send
+        util.bucket(pipeMidi, fromTrackKey, { from = conn.from, consumer = conn.to })
+      elseif fromTrackKey ~= '' and toTrackKey ~= '' then
         if toTrackKey == MASTER and fromTrackKey ~= MASTER then
           group = groupFor(fromTrackKey, 'master', true)  -- width-1 parent send: pre-sum per producer
         elseif conn.to == 'master' then
@@ -638,7 +648,9 @@ do
           group = groupFor(toTrackKey, conn.to, false)    -- fx consumer: merge at the consumer trackKey
         end
       end
-      if group then util.add(group[conn.type], conn) else util.add(kept, conn) end
+      if divert then -- pipe traffic: no conn, recorded above
+      elseif group then util.add(group[conn.type], conn)
+      else util.add(kept, conn) end
     end
     conns = kept
 
@@ -755,7 +767,7 @@ do
       end
     end
 
-    return conns, synthNodes, cuTrackKey, nodeTrackKey
+    return conns, synthNodes, cuTrackKey, nodeTrackKey, pipeMidi
   end
 
   -- Deterministic wire ordering shared by every assembled track; optional ports
@@ -900,10 +912,14 @@ do
   --contract: realisation pass over a compile ctx; returns the targetTracks shape (not cached)
   function M.targetTracks(ctx)
     local sendGain, mainGain = nativeGains(ctx)
-    local conns, synthNodes, cuTrackKey, nodeTrackKey = buildConns(ctx)
+    local conns, synthNodes, cuTrackKey, nodeTrackKey, pipeMidi = buildConns(ctx)
     local routing = routeByTrack(conns, nodeTrackKey, sendGain)
-    return assembleTracks(ctx:trackMembers(), ctx.userGraph.nodes,
-                          routing, cuTrackKey, synthNodes, mainGain)
+    local tracks = assembleTracks(ctx:trackMembers(), ctx.userGraph.nodes,
+                                  routing, cuTrackKey, synthNodes, mainGain)
+    for trackKey, crossings in pairs(pipeMidi) do
+      if tracks[trackKey] then tracks[trackKey].pipeMidi = crossings end
+    end
+    return tracks
   end
 end
 
@@ -1228,7 +1244,7 @@ local function allocateOnce(tracks, nodes)
     alloc[trackKey] = { pinMaps = {}, sends = sends, mainSendOffs = entry.mainSend and 0 or nil }
   end
 
-  local meta = {}
+  local meta, perTrack = {}, {}
   local trackKeys = util.keys(tracks)
   table.sort(trackKeys)
 
@@ -1348,80 +1364,154 @@ local function allocateOnce(tracks, nodes)
     local audioProfile = {}
     state.cursor = allocStream(values, 1, N, audioValueCompare, pinAdd, audioWriteBack, audioProfile)
 
-    ----- midi register file: bus 0 boundary; values are per-producer streams.
+    meta[trackKey] = { N = N, audioUsed = state.cursor - 1, audioProfile = audioProfile }
+    perTrack[trackKey] = { entry = entry, state = state, slotMap = slotMap, N = N, flows = flows }
+  end
 
-    -- fxInputBus[consumerFxId] = bus the consumer's midi input arrived on; stamped by
-    -- source-midi / per-fx producer / stage-2 incoming writes as values are assigned.
-    local fxInputBus, fxOutputBus, hasMidiOut = {}, {}, {}
+  ----- midi register file (family-wide): the folder identity pipe (n->n, un-gateable) makes a
+  -- parent-send-connected track set ONE bus domain. Bus 0 is the merged take aggregate; distinct
+  -- child->parent-fx streams allocate family-unique. A singleton family reproduces the per-track
+  -- allocation exactly. See design/wiring-folders.md § Bus domains.
 
-    -- Merge CU midi sink/source tracking: cuIn = union of feeder buses (→ inMask),
-    -- cuOut = the CU's own output bus (→ outBus). Stamped alongside fxInputBus.
-    local cuIn, cuOut = {}, {}
-    local function isMergeCU(id)
-      local sn = entry.synthNodes and entry.synthNodes[id]
-      return sn ~= nil and sn.params.mode == 'merge'
+  -- A foldered child names its parent via parentFeed.sink (a folder conduit, never master).
+  local parentOf = {}
+  for tk, e in pairs(tracks) do
+    local mf = e.parentFeed
+    if e.mainSend and mf and mf.sink and mf.sink ~= MASTER and tracks[mf.sink] then
+      parentOf[tk] = mf.sink
     end
-    local function noteCuIn(consumer, bus)
-      if isMergeCU(consumer) then
-        local m = cuIn[consumer]; if not m then m = {}; cuIn[consumer] = m end
-        m[bus] = true
-      end
-    end
+  end
+  local rootOf = {}
+  local function familyRoot(tk)
+    if not rootOf[tk] then rootOf[tk] = parentOf[tk] and familyRoot(parentOf[tk]) or tk end
+    return rootOf[tk]
+  end
+  local function familyDepth(tk)
+    local d, p = 0, tk
+    while parentOf[p] do d, p = d + 1, parentOf[p] end
+    return d
+  end
+  local families, familyOrder = {}, {}
+  for _, tk in ipairs(trackKeys) do util.add(orderedGroup(families, familyOrder, familyRoot(tk), {}), tk) end
 
-    -- Midi assignment outcomes as data: each value's writes land here with its bus.
+  -- fx -> owning track, for cross-track crossing write-back.
+  local trackOfFx = {}
+  for tk, e in pairs(tracks) do
+    for _, id in ipairs(e.fxOrder or {}) do trackOfFx[id] = tk end
+  end
+
+  local midiCtx = {}  -- [tk] = { fxInputBus, fxOutputBus, hasMidiOut, cuIn, cuOut }
+  for _, tk in ipairs(trackKeys) do
+    midiCtx[tk] = { fxInputBus = {}, fxOutputBus = {}, hasMidiOut = {}, cuIn = {}, cuOut = {} }
+  end
+  local function isMergeCU(tk, id)
+    local sn = tracks[tk].synthNodes and tracks[tk].synthNodes[id]
+    return sn ~= nil and sn.params.mode == 'merge'
+  end
+  local function noteCuIn(tk, consumer, bus)
+    if isMergeCU(tk, consumer) then
+      local m = midiCtx[tk].cuIn[consumer]
+      if not m then m = {}; midiCtx[tk].cuIn[consumer] = m end
+      m[bus] = true
+    end
+  end
+
+  for _, root in ipairs(familyOrder) do
+    local members = families[root]
+    table.sort(members, function(a, b)
+      local da, db = familyDepth(a), familyDepth(b)
+      if da ~= db then return da > db end   -- deepest (children) first: a producer precedes its consumer
+      return a < b
+    end)
+    -- Each member owns a contiguous slot block [offset .. offset+N+1]: offset+0 the boundary/take
+    -- slot, offset+N+1 the escape sentinel (lastUse past the family end == never released).
+    local offset, blockEnd = {}, 0
+    for _, tk in ipairs(members) do offset[tk] = blockEnd; blockEnd = blockEnd + perTrack[tk].N + 2 end
+    local familyN = blockEnd
+
+    -- Family-wide write-back: each value carries its owning trackKey; a crossing consumer resolves its own.
     local function midiWriteBack(w, bus)
-      if w.kind == 'sendSrc' then state.sends[w.sendIdx].srcChan = bus
+      if w.kind == 'sendSrc' then alloc[w.track].sends[w.sendIdx].srcChan = bus
       elseif w.kind == 'sendDst' then alloc[w.track].sends[w.sendIdx].dstChan = bus
-      elseif w.kind == 'busIn' then fxInputBus[w.fxId] = bus; noteCuIn(w.fxId, bus)
+      elseif w.kind == 'busIn' then
+        midiCtx[w.track].fxInputBus[w.fxId] = bus; noteCuIn(w.track, w.fxId, bus)
       else -- busProducer: a non-bus-aware JSFX emits on one bus; every reader inherits it
-        fxOutputBus[w.fxId] = bus
-        if isMergeCU(w.fxId) then cuOut[w.fxId] = bus end
-        for _, c in ipairs(w.consumers) do fxInputBus[c] = bus; noteCuIn(c, bus) end
+        midiCtx[w.track].fxOutputBus[w.fxId] = bus
+        if isMergeCU(w.track, w.fxId) then midiCtx[w.track].cuOut[w.fxId] = bus end
+        for _, c in ipairs(w.consumers) do
+          local ctk = trackOfFx[c] or w.track
+          midiCtx[ctk].fxInputBus[c] = bus; noteCuIn(ctk, c, bus)
+        end
       end
     end
 
     local midiValues = {}
     local addMidiValue = ordAppend(midiValues)
-
-    -- One fold over the midi flows: boundary source (pinned bus 0), per-fx
-    -- producers (one bus per output regardless of fan-out), incoming sends.
-    local sourceMidi = { lastUse = 0, writes = {} }
+    -- Bus 0 is the family-wide take aggregate (every member's source-take merges here natively).
+    local sourceMidi = { def = 0, assignReg = 0, lastUse = 0, writes = {} }
     local producers, producerIds = {}, {}
     local incByNode, incOrder = {}, {}
-    for _, f in ipairs(flows) do
-      if f.type == 'midi' then
-        if f.inc then
-          local g = orderedGroup(incByNode, incOrder, f.to, { toSlot = f.toSlot, writes = {} })
-          util.add(g.writes, { kind = 'sendDst', track = f.inc.senderTrackKey, sendIdx = f.inc.sendIdx })
-        elseif f.fromSlot then
-          hasMidiOut[f.from] = true
-          local g = orderedGroup(producers, producerIds, f.from,
-            { def = f.fromSlot, lastUse = f.fromSlot, writes = {}, consumers = {} })
-          if f.escape then
-            g.lastUse = N + 1
-            util.add(g.writes, { kind = 'sendSrc', sendIdx = f.sendIdx })
-          else
-            g.lastUse = math.max(g.lastUse, f.toSlot)
-            util.add(g.consumers, f.to)
+
+    local function foldMember(tk)
+      local pt = perTrack[tk]
+      local off = offset[tk]
+      local function fam(slot) return slot and (off + slot) or nil end
+      for _, f in ipairs(pt.flows) do
+        if f.type == 'midi' then
+          local fromSlot, toSlot = fam(f.fromSlot), fam(f.toSlot)
+          if f.inc then
+            local g = orderedGroup(incByNode, incOrder, f.to, { toSlot = toSlot, writes = {} })
+            util.add(g.writes, { kind = 'sendDst', track = f.inc.senderTrackKey, sendIdx = f.inc.sendIdx })
+          elseif fromSlot then
+            midiCtx[tk].hasMidiOut[f.from] = true
+            local g = orderedGroup(producers, producerIds, f.from,
+              { def = fromSlot, lastUse = fromSlot, track = tk, writes = {}, consumers = {} })
+            if f.escape then
+              g.lastUse = familyN + 1
+              util.add(g.writes, { kind = 'sendSrc', track = tk, sendIdx = f.sendIdx })
+            else
+              g.lastUse = math.max(g.lastUse, toSlot)
+              util.add(g.consumers, f.to)
+            end
+          elseif f.escape then
+            util.add(sourceMidi.writes, { kind = 'sendSrc', track = tk, sendIdx = f.sendIdx })
+          elseif toSlot then
+            -- Source-midi is always bus 0 — pre-stamp consumers so per-fx values inherit it.
+            sourceMidi.lastUse = math.max(sourceMidi.lastUse, toSlot)
+            midiCtx[tk].fxInputBus[f.to] = 0; noteCuIn(tk, f.to, 0)
           end
-        elseif f.escape then
-          util.add(sourceMidi.writes, { kind = 'sendSrc', sendIdx = f.sendIdx })
-        elseif f.toSlot then
-          -- Source-midi is always bus 0 — pre-stamp consumers so per-fx values
-          -- defined later inherit it.
-          sourceMidi.lastUse = math.max(sourceMidi.lastUse, f.toSlot)
-          fxInputBus[f.to] = 0; noteCuIn(f.to, 0)
+        end
+      end
+      -- Pipe crossings (the un-gateable identity send). A merge crossing (consumer is the parent
+      -- source node) rides bus 0 natively and only holds the aggregate alive into the parent so a
+      -- distinct stream cannot reuse bus 0. A distinct crossing folds into its producer's value with
+      -- lastUse reaching the consuming parent fx — family-unique by the live-range packing.
+      for _, cross in ipairs(pt.entry.pipeMidi or {}) do
+        local consumerNode = nodes[cross.consumer]
+        if consumerNode and consumerNode.kind == 'source' then
+          local pk = cross.consumer
+          if offset[pk] then sourceMidi.lastUse = math.max(sourceMidi.lastUse, offset[pk] + perTrack[pk].N + 1) end
+        else
+          local ctk = trackOfFx[cross.consumer]
+          midiCtx[tk].hasMidiOut[cross.from] = true
+          local g = orderedGroup(producers, producerIds, cross.from,
+            { def = off + pt.slotMap[cross.from], lastUse = off + pt.slotMap[cross.from],
+              track = tk, writes = {}, consumers = {} })
+          if ctk then g.lastUse = math.max(g.lastUse, offset[ctk] + perTrack[ctk].slotMap[cross.consumer]) end
+          util.add(g.consumers, cross.consumer)
         end
       end
     end
+    for _, tk in ipairs(members) do foldMember(tk) end
+
     if sourceMidi.lastUse > 0 or #sourceMidi.writes > 0 then
-      addMidiValue({ def = 0, assignReg = 0, writes = sourceMidi.writes,
-                     lastUse = #sourceMidi.writes > 0 and (N + 1) or sourceMidi.lastUse })
+      if #sourceMidi.writes > 0 then sourceMidi.lastUse = familyN + 1 end
+      addMidiValue(sourceMidi)
     end
     table.sort(producerIds)
     for _, fxId in ipairs(producerIds) do
       local g = producers[fxId]
-      util.add(g.writes, { kind = 'busProducer', fxId = fxId, consumers = g.consumers })
+      util.add(g.writes, { kind = 'busProducer', track = g.track, fxId = fxId, consumers = g.consumers })
       g.consumers = nil
       addMidiValue(g)
     end
@@ -1429,23 +1519,31 @@ local function allocateOnce(tracks, nodes)
     -- onto a single bus (REAPER merges midi on a bus); the receiving fx inherits it.
     for _, toNode in ipairs(incOrder) do
       local g = incByNode[toNode]
-      if g.toSlot then util.add(g.writes, { kind = 'busIn', fxId = toNode }) end
-      addMidiValue({ def = 0, lastUse = g.toSlot or (N + 1), writes = g.writes })
+      if g.toSlot then util.add(g.writes, { kind = 'busIn', track = trackOfFx[toNode], fxId = toNode }) end
+      addMidiValue({ def = 0, lastUse = g.toSlot or (familyN + 1), writes = g.writes })
     end
 
     local midiProfile = {}
-    local midiCursor = allocStream(midiValues, 0, N, midiValueCompare, nil, midiWriteBack, midiProfile)
+    local midiCursor = allocStream(midiValues, 0, familyN, midiValueCompare, nil, midiWriteBack, midiProfile)
+    for _, tk in ipairs(members) do
+      meta[tk].midiUsed = midiCursor
+      meta[tk].midiProfile = midiProfile
+    end
+  end
 
-    meta[trackKey] = { N = N,
-      audioUsed = state.cursor - 1, midiUsed = midiCursor,
-      audioProfile = audioProfile, midiProfile = midiProfile }
+  ----- per-track midi post-pass: merge-CU params, native-fx bus surface, JSFX bracket splice.
+  for _, trackKey in ipairs(trackKeys) do
+    local entry = tracks[trackKey]
+    local state = perTrack[trackKey].state
+    local mc = midiCtx[trackKey]
+    local fxInputBus, fxOutputBus, hasMidiOut = mc.fxInputBus, mc.fxOutputBus, mc.hasMidiOut
 
     -- Merge CU midi params: inMask = union of feeder buses, outBus = its output bus.
     state.cuMidi = {}
     for _, fxId in ipairs(entry.fxOrder or {}) do
-      if isMergeCU(fxId) then
+      if isMergeCU(trackKey, fxId) then
         local lanes = { 0, 0, 0, 0 }
-        for bus in pairs(cuIn[fxId] or {}) do
+        for bus in pairs(mc.cuIn[fxId] or {}) do
           -- Tolerate a transient over-128 bus: an overflowing class may push past lane 4 before
           -- bisection resolves it; this pass is discarded. The final allocation never exceeds 128.
           if bus < 128 then
@@ -1453,7 +1551,7 @@ local function allocateOnce(tracks, nodes)
             lanes[lane] = lanes[lane] | (1 << (bus & 31))
           end
         end
-        state.cuMidi[fxId] = { inMask = lanes, outBus = cuOut[fxId] or 0 }
+        state.cuMidi[fxId] = { inMask = lanes, outBus = mc.cuOut[fxId] or 0 }
       end
     end
 
