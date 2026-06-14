@@ -49,6 +49,19 @@ return {
     end,
   },
   {
+    name = 'a high pair (channels 64-127, second mapping bank) round-trips',
+    run = function()
+      local reaper, rm = mkRm()
+      seedTrack(reaper, 'Synth', { { ident = 'a' } })  -- default IO 2/2 = 1 port
+      local id = rm:tracks()[1].fx[1].id
+
+      rm:assignFx(id, { pinMaps = { ins = { [1] = { 40 } } } })  -- pair 40 = chans 78/79
+
+      local pm = rm:tracks()[1].fx[1].pinMaps
+      t.deepEq(pm.ins, { [1] = { 40 } }, 'upper-bank pair round-trips through read/write')
+    end,
+  },
+  {
     name = 'assignFx{pinMaps} is a full replace: omitted ports become disconnected',
     run = function()
       local reaper, rm = mkRm()

@@ -47,16 +47,25 @@ end
 -- Pair P occupies channels 2(P-1)/2(P-1)+1. A port owns two pins (left/right bit
 -- masks); a pair is connected when its bit is set across both pins.
 
--- Adjacent set bits collapse to one pair; lLo|hLo merges the port's two pins.
+-- Channels 0-127 span two 64-bit mapping banks: pin `p` covers 0-63, `p + BANK2` covers 64-127.
+-- Each Get/Set call yields one bank as lo (0-31) + hi (32-63). 128 = DAG.lua § CAPACITY.
+local BANK2 = 0x1000000
+
+-- Adjacent set bits collapse to one pair; the two pins of a port are OR'd together.
 local function decodePairList(track, fxIdx, isoutput, port)
   local lowPin = 2 * (port - 1)
-  local mask   = reaper.TrackFX_GetPinMappings(track, fxIdx, isoutput, lowPin)
-               | reaper.TrackFX_GetPinMappings(track, fxIdx, isoutput, lowPin + 1)
   local pairs, lastPair = {}, nil
-  for bit = 0, 31 do
-    if ((mask >> bit) & 1) == 1 then
-      local pair = (bit >> 1) + 1
-      if pair ~= lastPair then util.add(pairs, pair); lastPair = pair end
+  for bankIdx = 0, 1 do
+    local pinBase = lowPin + bankIdx * BANK2
+    local lo0, hi0 = reaper.TrackFX_GetPinMappings(track, fxIdx, isoutput, pinBase)
+    local lo1, hi1 = reaper.TrackFX_GetPinMappings(track, fxIdx, isoutput, pinBase + 1)
+    local mask     = (lo0 | lo1) | ((hi0 | hi1) << 32)  -- 5.4 >> is logical: top bit safe
+    local chanBase = bankIdx * 64
+    for bit = 0, 63 do
+      if ((mask >> bit) & 1) == 1 then
+        local pair = ((chanBase + bit) >> 1) + 1
+        if pair ~= lastPair then util.add(pairs, pair); lastPair = pair end
+      end
     end
   end
   return pairs
@@ -95,12 +104,13 @@ local function portNames(track, fxIdx, dir, pinCount)
   return out
 end
 
-local function pinMaskFor(pairList, pinOffset)
-  local lo, hi = 0, 0
+-- lo/hi for one bank: channels outside this bank's 64-wide window contribute nothing.
+local function pinMaskFor(pairList, pinOffset, bankIdx)
+  local chanBase, lo, hi = bankIdx * 64, 0, 0
   for _, pair in ipairs(pairList) do
-    local bit = 2 * (pair - 1) + pinOffset
-    if bit < 32 then lo = lo | (1 << bit)
-    else             hi = hi | (1 << (bit - 32))
+    local bit = 2 * (pair - 1) + pinOffset - chanBase
+    if     bit >= 0  and bit < 32 then lo = lo | (1 << bit)
+    elseif bit >= 32 and bit < 64 then hi = hi | (1 << (bit - 32))
     end
   end
   return lo, hi
@@ -114,8 +124,11 @@ local function writePinMaps(track, fxIdx, pm)
     for port = 1, math.floor(pinCount / 2) do
       local pairList = byPort[port] or {}
       for pinOffset = 0, 1 do
-        reaper.TrackFX_SetPinMappings(track, fxIdx, isoutput,
-                                      2 * (port - 1) + pinOffset, pinMaskFor(pairList, pinOffset))
+        local pin = 2 * (port - 1) + pinOffset
+        for bankIdx = 0, 1 do
+          reaper.TrackFX_SetPinMappings(track, fxIdx, isoutput,
+                                        pin + bankIdx * BANK2, pinMaskFor(pairList, pinOffset, bankIdx))
+        end
       end
     end
   end
