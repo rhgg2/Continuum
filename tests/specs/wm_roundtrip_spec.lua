@@ -21,7 +21,7 @@ end
 local function source(guid, opts)
   opts = opts or {}
   return { kind='source', trackId=guid, parent=opts.parent, pos={x=0,y=0},
-           ports={audio={ins=opts.ins or 0, outs=1}, midi={ins=0, outs=1}} }
+           ports={audio={ins=opts.ins or 0, outs=1}, midi={ins=opts.midiIns or 0, outs=1}} }
 end
 
 local function fx(ident, opts)
@@ -36,9 +36,8 @@ end
 -- node key -> rm id: the vertex map read realises (source=trackId, fx=fxId, sink='master').
 local function rmId(id, n) return n.fxId or n.trackId or id end
 
--- Audio-semantic normal form: rm-id-keyed, bus/track/position dropped, ports defaulted to
--- read's conventions (audio fromPort 1, toPort 1 except into master, midi edges portless).
--- { kinds = {rmid->kind}, edges = sorted string[] }.
+-- Audio-semantic normal form: rm-id-keyed, bus/track/position dropped, ports defaulted to read's
+-- conventions (audio fromPort 1, toPort 1 except into master, midi portless). {kinds, edges[]}
 local function normalForm(g)
   local key, kinds = { master = 'master' }, { master = 'master' }
   for id, n in pairs(g.nodes) do
@@ -180,9 +179,8 @@ local corpus = {
     end,
   },
   {
-    -- Audio+midi from one source into one fx: parallel stream edges round-trip clean. A single
-    -- source keeps everything on its own track (inline + parent-send to master), so the midi
-    -- survives — the master-resident drop does NOT fire on a single-source topology.
+    -- Audio+midi from one source into one fx: parallel edges round-trip clean. Single-source topology
+    -- keeps midi on-track, so the master-resident drop does NOT fire.
     name = 'audio+midi source -> fx -> master (parallel stream edges)',
     seed = function(h) seedSource(h, 'guid-A') end,
     build = function(g)
@@ -352,6 +350,49 @@ local corpus = {
       util.add(g.edges, { type='audio', from='sc',  to='mix', toPort=2 })
       util.add(g.edges, { type='audio', from='mix', to='master' })
       util.add(g.edges, { type='audio', from='p',   to='master' })
+    end,
+  },
+
+  ----- folder track parents (step 3b): the family is one midi bus domain (the pipe is n->n).
+  {
+    -- Merge fate: the child's take rides the pipe onto the parent's bus-0 aggregate; the parent's
+    -- own fx hears it. Two midi hops survive the round-trip: child -> parent node -> parent fx.
+    name = 'folder midi: child take merges into parent bus 0, parent fx reads it',
+    seed = function(h) seedSource(h,'guid-A'); seedSource(h,'guid-P') end,
+    tree = { ['guid-A']='guid-P' },
+    build = function(g)
+      g.nodes.sa  = source('guid-A', { parent='p' })
+      g.nodes.p   = source('guid-P', { ins=1, midiIns=1 })
+      g.nodes.syn = fx('VST:Syn', { fxId='g-syn' })
+      util.add(g.edges, { type='audio', from='sa',  to='p' })    -- conduit
+      util.add(g.edges, { type='midi',  from='sa',  to='p' })    -- merge -> parent bus 0
+      util.add(g.edges, { type='midi',  from='p',   to='syn' })  -- parent fx hears the aggregate
+      util.add(g.edges, { type='audio', from='p',   to='syn' })
+      util.add(g.edges, { type='audio', from='syn', to='master' })
+    end,
+  },
+  {
+    -- Both fates at one parent: child take merges onto bus 0 (heard by `mix`), on-track generator
+    -- threads a distinct stream to `cons` on bus >=1 — read recovers both wires.
+    name = 'folder midi: merge on bus 0 and a distinct stream on bus >=1 coexist',
+    seed = function(h) seedSource(h,'guid-A'); seedSource(h,'guid-P') end,
+    tree = { ['guid-A']='guid-P' },
+    build = function(g)
+      g.nodes.sa   = source('guid-A', { parent='p' })
+      g.nodes.gen  = fx('VST:Gen',  { fxId='g-gen' })
+      g.nodes.p    = source('guid-P', { ins=1, midiIns=1 })
+      g.nodes.cons = fx('VST:Cons', { fxId='g-cons' })
+      g.nodes.mix  = fx('VST:Mix',  { fxId='g-mix' })
+      util.add(g.edges, { type='audio', from='sa',   to='gen' })
+      util.add(g.edges, { type='midi',  from='sa',   to='gen' })
+      util.add(g.edges, { type='audio', from='gen',  to='p' })     -- conduit
+      util.add(g.edges, { type='midi',  from='sa',   to='p' })     -- merge -> bus 0
+      util.add(g.edges, { type='midi',  from='gen',  to='cons' })  -- distinct -> bus >= 1
+      util.add(g.edges, { type='midi',  from='p',    to='mix' })   -- parent reads the aggregate
+      util.add(g.edges, { type='audio', from='p',    to='cons' })
+      util.add(g.edges, { type='audio', from='p',    to='mix' })
+      util.add(g.edges, { type='audio', from='cons', to='master' })
+      util.add(g.edges, { type='audio', from='mix',  to='master' })
     end,
   },
 }

@@ -1218,7 +1218,7 @@ local function readGraph(snap, busMeta)
           end
         end
         -- MIDI: native fx read stored routing; a JSFX's surface is the midirecv/midisend
-        -- scan — no recv: deaf (bus 0 passes), no send: drains bus 0 without re-emitting.
+        -- scan — no recv: deaf (its input bus passes), no send: drains the bus it heard.
         local m = fxe.midi
         local inBus, outBus = m and m.inBus or 0, m and m.outBus or 0
         local hears  = m and not m.inDisabled
@@ -1236,8 +1236,10 @@ local function readGraph(snap, busMeta)
         for port, prs in pairs(pinMaps.outs or {}) do
           for _, pair in ipairs(prs) do liveAudio[pair] = { { node = id, port = port } } end
         end
+        -- A heard-but-mute fx drains the bus it consumed (inBus) — never its outBus, which is a
+        -- meaningless default when output is disabled; clearing that would wipe a co-resident stream.
         if drives then liveMidi[outBus] = { { node = id } }
-        elseif hears or m then liveMidi[outBus] = nil end
+        elseif hears then liveMidi[inBus] = nil end
       end
     end
 
