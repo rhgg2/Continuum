@@ -488,6 +488,7 @@ end
 local TRACK_NATIVE = {
   id = true, name = true, isMaster = true, nchan = true,
   mainSend = true, fx = true, sends = true, hidden = true, defaults = true,
+  hasMidiTake = true,
 }
 local FX_NATIVE = {
   id = true, ident = true, name = true, ins = true, outs = true,
@@ -562,6 +563,16 @@ local function readMainSend(track)
   }
 end
 
+-- A track's own active MIDI take decides whether its source node emits on bus 0: a folder
+-- parent or bare source with no midi take produces nothing there (the out stays wirable).
+local function trackHasMidiTake(track)
+  for i = 0, reaper.CountTrackMediaItems(track) - 1 do
+    local take = reaper.GetActiveTake(reaper.GetTrackMediaItem(track, i))
+    if take and reaper.TakeIsMIDI(take) then return true end
+  end
+  return false
+end
+
 local function readTrack(track, isMaster)
   local rec = {
     id       = reaper.GetTrackGUID(track),
@@ -573,6 +584,7 @@ local function readTrack(track, isMaster)
     mainSend = readMainSend(track),
     fx       = readFxChain(track),
     sends    = readSends(track),
+    hasMidiTake = trackHasMidiTake(track),
   }
   util.assign(rec, readTrackMeta(track))
   return rec

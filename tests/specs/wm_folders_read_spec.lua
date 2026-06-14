@@ -1,7 +1,5 @@
--- read : folder track parents. A foldered child's mainSend lands on its parent (the pair-1
--- summing point), not master; the parent reads as a source node with audio.ins>=1 that sums
--- its children, and the atomic parent send carries all-bus midi as liveness through the pipe.
--- See design/wiring-folders.md § Model + read.
+-- read : folder track parents. Child midi takes wire into the parent node; parent emits bus 0
+-- from its own take. See design/wiring-folders.md § Model + read.
 local t    = require('support')
 local util = require('util')
 local DAG  = require('DAG')
@@ -93,27 +91,47 @@ return {
     end,
   },
   {
-    -- The parent send is atomic: the child's bus-0 midi rides the pipe and meets the
-    -- parent's synth (a generator listening on bus 0) as a direct edge, alongside the
-    -- audio summing edge into the parent node. midi is liveness, not an edge to the parent.
-    name = 'folder: parent-send carries midi through the pipe to a parent fx',
+    -- Child tail midi wires into the parent node; the parent re-emits on bus 0 to its generator.
+    -- Two hops: child -> parent -> fx. The child needs a midi take to emit.
+    name = 'folder: a child tail midi wires into the parent node, then the parent fx',
     run = function(harness)
       local _, wm = mkWm(harness)
       local p = parent()
       p.fx = { { id='g-syn', ident='VST:Syn', ins=0, outs=1,
                  midi={ inBus=0, outBus=0, inDisabled=false, outDisabled=true },
                  pinMaps={ ins={}, outs={ [1]={1} } } } }
-      local snap = {
-        ['guid-A'] = withId(child('guid-P'), 'guid-A'),
-        ['guid-P'] = withId(p, 'guid-P'),
-      }
+      local a = withId(child('guid-P'), 'guid-A'); a.hasMidiTake = true
+      local snap = { ['guid-A'] = a, ['guid-P'] = withId(p, 'guid-P') }
       local rg = wm.readGraph(snap)
       t.deepEq(edgeSet(rg), {
         'audio g-syn.1->master.-',
         'audio guid-A.1->guid-P.1',
-        'midi guid-A.-->g-syn.-',
+        'midi guid-A.-->guid-P.-',
+        'midi guid-P.-->g-syn.-',
       })
-      t.eq(rg.nodes['guid-P'].ports.midi.ins, 0, 'the pipe is liveness; the parent takes no midi edge')
+      t.eq(rg.nodes['guid-P'].ports.midi.ins, 1, 'the child tail midi is a wire into the parent node')
+    end,
+  },
+  {
+    -- The parent's own midi take: with no midi child, the parent still emits bus 0 from its take,
+    -- which its on-track generator reads. An audio-only child sums in but contributes no midi.
+    name = 'folder: the parent own midi take emits on bus 0 and feeds a parent fx',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local p = parent(); p.hasMidiTake = true
+      p.fx = { { id='g-arp', ident='VST:Arp', ins=0, outs=1,
+                 midi={ inBus=0, outBus=0, inDisabled=false, outDisabled=true },
+                 pinMaps={ ins={}, outs={ [1]={1} } } } }
+      local snap = {
+        ['guid-A'] = withId(child('guid-P'), 'guid-A'),  -- audio-only child: no midi take
+        ['guid-P'] = withId(p, 'guid-P'),
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(edgeSet(rg), {
+        'audio g-arp.1->master.-',
+        'audio guid-A.1->guid-P.1',
+        'midi guid-P.-->g-arp.-',
+      })
     end,
   },
   {
@@ -205,6 +223,64 @@ return {
         },
       }
       t.falsy(DAG.validate(g), 'edge into a source-with-ins validates')
+    end,
+  },
+  {
+    -- A non-zero child bus is a distinct stream: it passes through the pipe identity-mapped and
+    -- wires DIRECT to the parent fx that reads bus 1 -- not funneled through the parent node.
+    name = 'folder: a child bus-1 producer wires direct to the parent fx reading bus 1',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local a = child('guid-P')  -- a pure-midi generator emitting on bus 1 (no take)
+      a.fx = { { id='g-gen', ident='VST:Gen', ins=0, outs=0,
+                 midi={ inBus=0, outBus=1, inDisabled=true, outDisabled=false },
+                 pinMaps={ ins={}, outs={} } } }
+      local p = parent()  -- a parent fx reading bus 1
+      p.fx = { { id='g-arp', ident='VST:Arp', ins=1, outs=1,
+                 midi={ inBus=1, outBus=0, inDisabled=false, outDisabled=true },
+                 pinMaps={ ins={ [1]={1} }, outs={ [1]={1} } } } }
+      local snap = { ['guid-A'] = withId(a, 'guid-A'), ['guid-P'] = withId(p, 'guid-P') }
+      local rg = wm.readGraph(snap)
+      t.deepEq(edgeSet(rg), {
+        'audio g-arp.1->master.-',
+        'audio guid-A.1->guid-P.1',
+        'audio guid-P.1->g-arp.1',
+        'midi g-gen.-->g-arp.-',
+      })
+    end,
+  },
+  {
+    -- Bus 0 and bus >=1 split at one parent: the take child aggregates into the node (two hops to
+    -- the bus-0 fx), while the bus-1 child threads through direct to the bus-1 fx.
+    name = 'folder: bus-0 take aggregates via the node, bus-1 stream wires direct',
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local a = withId(child('guid-P'), 'guid-A'); a.hasMidiTake = true  -- bus-0 take
+      local b = child('guid-P')  -- bus-1 generator
+      b.fx = { { id='g-gen', ident='VST:Gen', ins=0, outs=0,
+                 midi={ inBus=0, outBus=1, inDisabled=true, outDisabled=false },
+                 pinMaps={ ins={}, outs={} } } }
+      local p = parent()  -- two pure-midi consumers: one on bus 0, one on bus 1
+      p.fx = { { id='g-mix', ident='VST:Mix', ins=0, outs=0,
+                 midi={ inBus=0, outBus=0, inDisabled=false, outDisabled=true },
+                 pinMaps={ ins={}, outs={} } },
+               { id='g-fx', ident='VST:Fx', ins=0, outs=0,
+                 midi={ inBus=1, outBus=0, inDisabled=false, outDisabled=true },
+                 pinMaps={ ins={}, outs={} } } }
+      local snap = {
+        ['guid-A'] = a,
+        ['guid-B'] = withId(b, 'guid-B'),
+        ['guid-P'] = withId(p, 'guid-P'),
+      }
+      local rg = wm.readGraph(snap)
+      t.deepEq(edgeSet(rg), {
+        'audio guid-A.1->guid-P.1',
+        'audio guid-B.1->guid-P.1',
+        'audio guid-P.1->master.-',
+        'midi g-gen.-->g-fx.-',
+        'midi guid-A.-->guid-P.-',
+        'midi guid-P.-->g-mix.-',
+      })
     end,
   },
 }

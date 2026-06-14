@@ -10,7 +10,7 @@
 --shape: snapshotSend = { to=trackKey, kind='audio'|'midi', gain?=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }
 --shape: snapshotFxOrigin = {kind='bracketIn'|'bracketOut',id=string}|{kind='merge',consumer=string,trackKey=trackKey}  -- CU bridges only; node fx carry their fxId as id
 --shape: snapshotFxEntry = { id?=string, ident=string, name?=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,inDisabled=bool,outDisabled=bool}, pinMaps?=snapshotPinMap, busAware?=bool }  -- ins/outs are audio pair counts, for read; name feeds fxDisplay
---shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, nchan?=int, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + trackKey overlay (full chain, no ownership filter). see docs/wiringManager.md § wiringSnapshot.
+--shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, parent?=guid, nchan?=int, hasMidiTake?=bool, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + trackKey overlay (full chain, no ownership filter). see docs/wiringManager.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'moveFxAcrossTracks', ... }
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
 --invariant: authoring via wm:mutate — validate+swap+fire; REAPER realises via reconcile.
@@ -791,6 +791,7 @@ local function stateEntry(rec, trackKey, kind, keyByGuid)
     id        = rec.id,
     parent    = rec.parent,
     nchan     = rec.nchan,
+    hasMidiTake = rec.hasMidiTake,
     mainSend  = isScratch and { on = false } or rec.mainSend,
     fx        = snapFxList(rec.fx),
     sends     = isScratch and {} or ownedSends(rec.sends, keyByGuid),
@@ -946,7 +947,7 @@ end
 -- Pass 3c: audio + CU collapse + gain + full midi-bus walk (fan-in, merge, brackets), then
 -- component classification (bus-aware + feedback quarantine). Node ids are rm ids. Pure.
 local MASTER_KEY = '__master__'
---invariant: folder parent reads as a source node summing children; pipe midi is liveness not edges
+--invariant: folder parent reads as a source summing children; child midi takes wire into the parent
 local function readGraph(snap, busMeta)
   -- trackId-flagged records key the matrix mint by the snapshot entry's guid.
   local busByTrack = {}
@@ -1117,26 +1118,38 @@ local function readGraph(snap, busMeta)
     end
 
     if folderSinks[trackKey] then
-      -- Folder parent: source node summing children's parent-sends; emits sum on pair 1.
-      -- midi.ins/outs=0 — pipe-seeded liveMidi is the children's (see design/wiring-folders.md § Model + read).
+      -- Folder parent: audio sums onto pair 1; midi splits by bus (see the bus-0/bus-N comment below).
       local sid = entry.id
       nodes[sid] = { kind = 'source', trackId = entry.id, parent = entry.parent,
-                     ports = { audio = { ins = 1, outs = 1 }, midi = { ins = 0, outs = 0 } } }
+                     ports = { audio = { ins = 1, outs = 1 }, midi = { ins = 1, outs = 1 } } }
       if isCyclic then feedbackSeeds[sid] = true end
       for _, refs in pairs(liveAudio) do
         for _, ref in ipairs(refs) do addAudioEdge(ref, sid, 1) end
       end
       liveAudio = {}
       feed(1, { node = sid, port = 1 })
+      -- Bus 0 aggregates into the node (the take merge, re-emitted on bus 0); buses >=1 are distinct
+      -- streams passed through identity-mapped — a parent/ancestor fx edges direct, unread buses none.
+      local childMidi = liveMidi
+      liveMidi = {}
+      for _, ref in ipairs(childMidi[0] or {}) do
+        util.add(edges, { type = 'midi', from = ref.node, to = sid })
+      end
+      for bus, refs in pairs(childMidi) do
+        if bus ~= 0 then
+          for _, ref in ipairs(refs) do feedMidi(bus, ref) end
+        end
+      end
+      if entry.hasMidiTake or childMidi[0] then feedMidi(0, { node = sid }) end
     elseif not inc and not busId and entry.trackKind ~= 'master' and entry.trackKind ~= 'scratch' then
       -- No inputs => a source (scratch excepted: a known fx bin, walked as floating islands).
-      -- Emits audio on pair 1 and midi on bus 0.
+      -- Emits audio on pair 1; midi on bus 0 only with a midi take (the out stays wirable).
       local sid = entry.id
       nodes[sid] = { kind = 'source', trackId = entry.id, parent = entry.parent,
                      ports = { audio = { ins = 0, outs = 1 }, midi = { ins = 0, outs = 1 } } }
       if isCyclic then feedbackSeeds[sid] = true end
       feed(1, { node = sid, port = 1 })
-      feedMidi(0, { node = sid })
+      if entry.hasMidiTake then feedMidi(0, { node = sid }) end
     end
 
     -- A flagged track realizes a buss: accumulated inputs become its in-edges, the

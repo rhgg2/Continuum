@@ -209,9 +209,11 @@ A **folder parent** (a foldered child main-sends into it) also reads as a
 `source` node, but with `audio.ins≥1`: the children's parent-sends become
 audio edges into it (it is the pair-1 summing point) and it emits the sum
 on pair 1. The all-bus MIDI the parent send also carries rides into the
-parent's `liveMidi` identity-mapped — so a parent fx meets each child's
-bus-*n* producer as a direct edge, with no edge to the parent node itself
-(which keeps `midi.ins=0`). Membership is positional (`stampParents`), an
+parent's `liveMidi` identity-mapped, and splits by bus: **bus 0** aggregates
+into the parent node (`child→sid`, `midi.ins=1`), which re-emits it with its
+own take — the native folder merge; **buses ≥1** stay distinct, so a parent
+(or ancestor) fx meets each child's bus-*n* producer as a **direct** edge.
+Membership is positional (`stampParents`), an
 input to read, never authored here. See `design/wiring-folders.md`.
 
 ## diff op ordering

@@ -75,7 +75,9 @@ return {
         util.add(g.edges, { type='audio', from='syn', to='f2' })
         util.add(g.edges, { type='audio', from='f2',  to='master' })
       end)
-      local rg = wm.readGraph(wm:targetState())
+      -- A midi source's take is REAPER-resident; targetState doesn't author it, so overlay it.
+      local target = wm:targetState(); target['guid-A'].hasMidiTake = true
+      local rg = wm.readGraph(target)
       t.deepEq(nodeKinds(rg),
                { master='master', ['guid-A']='source', ['g-syn']='fx', ['g-f2']='fx' })
       t.deepEq(edgeSet(rg), {
@@ -190,9 +192,9 @@ return {
       local _, wm = mkWm(harness)
       local midiSend = function() return { to='guid-C', kind='midi', srcChan=0, dstChan=0, pos='preFader' } end
       local snap = {
-        ['guid-A'] = { trackKind='sourceTrack', id='guid-A', nchan=2, mainSend={on=false},
+        ['guid-A'] = { trackKind='sourceTrack', id='guid-A', nchan=2, mainSend={on=false}, hasMidiTake=true,
                        fx={}, sends={ midiSend() } },
-        ['guid-B'] = { trackKind='sourceTrack', id='guid-B', nchan=2, mainSend={on=false},
+        ['guid-B'] = { trackKind='sourceTrack', id='guid-B', nchan=2, mainSend={on=false}, hasMidiTake=true,
                        fx={}, sends={ midiSend() } },
         ['guid-C'] = { trackKind='newTrack', id='guid-C', nchan=2, mainSend={on=false}, sends={},
           fx = { { id='g-m', ident='VST:M', ins=0, outs=1, midi={ inBus=0, outBus=0, outDisabled=true } } } },
@@ -216,7 +218,7 @@ return {
       local snap = {
         ['guid-A'] = {
           trackKind = 'sourceTrack', id = 'guid-A', nchan = 8,
-          mainSend = { on = false }, sends = {},
+          mainSend = { on = false }, hasMidiTake = true, sends = {},
           fx = {
             { id='g-A', ident='VST:A', ins=1, outs=1, midi={ inBus=0, outBus=1, outDisabled=false } },
             { id='g-B', ident='VST:B', ins=1, outs=1, midi={ inBus=0, outBus=2, outDisabled=false } },
@@ -250,9 +252,9 @@ return {
       bIn.id,  bIn.params  = 'bIn',  { mode=0, from=1, to=1 }
       bOut.id, bOut.params = 'bOut', { mode=0, from=1, to=1 }
       local snap = {
-        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, fx={},
+        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, hasMidiTake=true, fx={},
                        sends={ { to='guid-c', kind='midi', srcChan=0, dstChan=0, pos='preFader' } } },
-        ['guid-b'] = { trackKind='sourceTrack', id='guid-b', nchan=2, mainSend={on=false}, fx={},
+        ['guid-b'] = { trackKind='sourceTrack', id='guid-b', nchan=2, mainSend={on=false}, hasMidiTake=true, fx={},
                        sends={ { to='guid-c', kind='midi', srcChan=0, dstChan=1, pos='preFader' } } },
         ['guid-c'] = { trackKind='newTrack', id='guid-c', nchan=2, mainSend={on=false}, sends={},
           fx = {
@@ -281,7 +283,7 @@ return {
       local bracket = function(id, params) return { id=id, ins=32, outs=32, ident=CU_IDENT,
         params=params, pinMaps = { ins={[1]={1}}, outs={[1]={1}} } } end
       local snap = {
-        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, sends={},
+        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, hasMidiTake=true, sends={},
           fx = {
             bracket('bIn',  { mode=0, from=-1, to=127, retain=1 }),
             { id='g-j', ident='JS:Loose', ins=1, outs=1 },
@@ -305,7 +307,7 @@ return {
         if ident == 'JS:AudioOnly' then return 'desc:gain\n@sample\nspl0 *= 0.5;\n' end
       end
       local snap = {
-        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, sends={},
+        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, hasMidiTake=true, sends={},
           fx = {
             { id='g-a', ident='JS:AudioOnly', ins=1, outs=1 },
             { id='g-n', ident='VST:Synth', ins=1, outs=1,
@@ -327,7 +329,7 @@ return {
         end
       end
       local snap = {
-        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, sends={},
+        ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, hasMidiTake=true, sends={},
           fx = {
             { id='g-r', ident='JS:RecvOnly', ins=1, outs=1 },
             { id='g-n', ident='VST:Synth', ins=1, outs=1,
@@ -346,7 +348,7 @@ return {
     run = function(harness)
       local _, wm = mkWm(harness)
       local snap = {
-        ['guid-A'] = { trackKind='sourceTrack', id='guid-A', nchan=2, mainSend={on=false}, sends={},
+        ['guid-A'] = { trackKind='sourceTrack', id='guid-A', nchan=2, mainSend={on=false}, hasMidiTake=true, sends={},
           fx = {
             { id='g-f', ident='JS:Plain',    ins=1, outs=1 },
             { id='g-b', ident='JS:BusAware', ins=1, outs=1, busAware=true },

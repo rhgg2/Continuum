@@ -88,6 +88,15 @@ local function roundtrip(harness, fixture)
   -- The folder tree is REAPER-resident context (I_FOLDERDEPTH), not compile output; overlay it
   -- onto the target so read interprets each child's B_MAINSEND as a parent send.
   for childKey, parentGuid in pairs(fixture.tree or {}) do target[childKey].parent = parentGuid end
+  -- A source's midi take is REAPER-resident too: in these graphs a source has a take iff its midi
+  -- is consumed, so overlay hasMidiTake wherever the authored graph emits source midi.
+  local emitsMidi = {}
+  for _, e in ipairs(authored.edges) do if e.type == 'midi' then emitsMidi[e.from] = true end end
+  for id, n in pairs(authored.nodes) do
+    if n.kind == 'source' and emitsMidi[id] and target[rmId(id, n)] then
+      target[rmId(id, n)].hasMidiTake = true
+    end
+  end
   local nfR = normalForm(wm.readGraph(target))
   t.deepEq(nfR.kinds, nfG.kinds, fixture.name .. ': node identity')
   local onlyRead, onlyG = edgeDiff(nfR.edges, nfG.edges)

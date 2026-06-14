@@ -212,22 +212,67 @@ of correct folder `read` — a later cosmetic layer, not part of steps
 
 ## Plan (skeleton)
 
-> **Progress (2026-06-13).** Step 1's rm foundation landed (commit
-> `a9e530d`, suite green at 1406). By decision the **quarantine stopgap
-> was skipped** — going straight to the real read (step 2), accepting
-> that foldered projects won't recompile correctly until step 3 (the
-> seam below). **Step 2 (model + read) now landed** — `readGraph` routes a
-> foldered child's `mainSend` into its parent, mints the parent as a
-> summing `source` node (`audio.ins=1`), and seeds parent `liveMidi` from
-> children through the pipe; suite green at 1413, spec
-> `tests/specs/wm_folders_read_spec.lua`. **Step 3a (audio conduit) now landed**
-> — `classTrackKey` pins a folder parent's composite class to its own track (and
-> bars source-bearing classes from absorbing, fixing the single-child case),
-> `ctx:conduit` selects the child edge that rides `B_MAINSEND`, and the master
-> parent-send machinery generalised to a `sink`-keyed `parentFeed` (`masterFeed`
-> renamed). read ∘ compile = id over six folder fixtures in `wm_roundtrip_spec`;
-> suite green at 1419. Step 3b (midi pipe + family bus domains) and step 4
-> (capacity) not started.
+> **Progress (2026-06-14) — PICK-UP POINT.** Steps 1, 2, 3a landed. Step 3b's
+> first cut (`familyMidi`, commit `f088dc9`) was **ROLLED BACK** — HEAD reset to
+> `2845f62`; `familyMidi`/`pipeMidi` gone, 3a's audio conduit (`ctx:conduit`)
+> retained. It was a per-track bolt-on (two bus allocators fighting over bus 0);
+> the rebuild is family-domain allocation. 3b is now split into a **read-model
+> change (LANDED)** and the **allocator (NEXT, designed not coded)**.
+>
+> **Read model — LANDED (`21a78b7`; bus-split corrected 2026-06-14, suite green
+> at 1423).** The folder parent reads MIDI as a **bus-0/bus-N split**:
+> - Parent reads as `kind='source'` with **`midi={ins=1, outs=1}`** (was 0,0):
+>   it accepts midi edges and emits.
+> - Each conduit child's **tail** midi (`childMidi` = the child's `liveMidi`
+>   *after its fx chain*, carried identity-mapped up the atomic send) splits by
+>   bus. **Bus 0** is the take aggregate: each bus-0 producer wires into the
+>   parent **node** (`child→sid`), which re-emits bus 0 with its own take — two
+>   hops, the native folder merge, mirroring audio summing onto pair 1. **Buses
+>   ≥1** are distinct streams: they pass through identity-mapped, so a parent (or
+>   further ancestor) fx forms a **direct `child→fx`** edge; an unread bus carries
+>   no edge. *(The first cut funneled every bus through `sid`, collapsing distinct
+>   child→parent-fx routing; the specs only exercised bus 0, so it stayed green.)*
+> - The parent emits **its own take on bus 0**, gated on
+>   `hasMidiTake OR a child merged on bus 0` — no phantom on a media-less folder.
+> - **Ports stay wirable** (`outs=1` always); only *emission* (`feedMidi`) waits
+>   on a take, so you can wire the midi-out before authoring the take.
+> - **`hasMidiTake`** — new REAPER-resident snapshot field; `rm` reads the active
+>   take via `TakeIsMIDI`. Also retires the bare-source audio-only bus-0 phantom.
+>   Roundtrip overlays it like the folder tree (a source has a take iff its midi
+>   is consumed). Specs: `wm_folders_read_spec` (bus-0 aggregate, bus-N direct, own-take),
+>   `wm_read_spec`, `wm_roundtrip_spec`.
+>
+> **Allocator — NEXT, designed not coded.** Approach **(A) merged stream**: a
+> folder family (parent-send-connected set) is ONE bus domain. Lay child chains →
+> pipe → parent chain into a **single `allocStream`** (children before parents;
+> the pipe modeled as a live-range so family-uniqueness falls out — a crossing
+> producer's `lastUse` extends to the consuming parent slot, internal child buses
+> get reused). Audio stays per-track (it sums). Bus 0 is the top parent's own
+> take; every conduit child out-parks its tail off bus 0 — **`from=-1, to=N`**
+> (relocate to a family-unique bus a parent consumer reads) or **`from=-1, to=-1`**
+> (dump, when nothing at the parent reads it). Reuses the existing busRoute CU
+> (bracket post-pass, `DAG.lua:1470`); read collapses via `busRouteMidi`. Capacity
+> bisection (`splitOverCap`, `DAG.lua:1633`) becomes family-level (step 4).
+>
+> **MANDATE for next session:** study `allocateOnce` (`DAG.lua:1182`),
+> `allocStream` (`1098`), the per-track midi value build (`1351-1437`), bracket
+> post-pass (`1470`), `splitOverCap`/`M.allocate` (`1633`/`1670`) — then **design
+> the family-merge pass and PRESENT it before coding.** The `familyMidi` mistake
+> was patching before understanding.
+>
+> **Open design nuance (carry forward):** native REAPER *merges* a child's bus-0
+> take into the parent's bus 0 with no CU — that IS the adoption no-op, so
+> out-park is **not** a universal "every child off bus 0." Streams that should
+> merge (children feeding the parent's aggregate) ride bus 0 natively; out-park
+> relocates only streams that must stay *distinct* (a child feeding a specific
+> parent fx on its own bus) or *suppressed* (audio rides the send, midi cut). The
+> merged-stream allocator must decide share-vs-relocate from the consumer
+> structure — that is the core of the design task.
+>
+> **Doc debt:** the step-2 historical text in § "Model + read" below keeps its
+> pre-3b wording (parenthetical-corrected). `docs/wiringManager.md` is rewritten
+> to the bus-0/bus-N split; `docs/DAG.md § Folder parents` still defers the
+> compile/allocator MIDI side to step 3b.
 
 1. **rm foundation** *(DONE — `a9e530d`)*: `readTrack` carries
    `folderDepth`; `stampParents` walks project order stamping each
@@ -249,7 +294,12 @@ of correct folder `read` — a later cosmetic layer, not part of steps
      it** (it's the pair-1-2 summing point); it emits its summing output
      on pair 1 as today. `srcSet` then unions children (`DAG.lua:280`)
      → its own composite class.
-   - **MIDI is not edges.** The parent send maps all buses n→n identity,
+   - **MIDI is not edges.** *(Refined by 3b's read model: **bus 0** aggregates
+     into the parent node as an edge (`midi.ins=1`); **buses ≥1** stay liveness
+     exactly as described below — passing through to a direct `child→fx` edge. The
+     first 3b cut wrongly funneled buses ≥1 through the node too; corrected
+     2026-06-14. See § Plan Progress. Step-2 text kept below for history.)*
+     The parent send maps all buses n→n identity,
      so `walkTrack` seeds a folder parent's `liveMidi` from each child's
      tail at identity buses (liveness through the pipe); real midi edges
      form where a child's bus-*n* producer meets a parent fx listening
@@ -272,10 +322,17 @@ of correct folder `read` — a later cosmetic layer, not part of steps
      master parent-send machinery generalised to `sink`-keyed `parentFeed`.
      Roundtrip sweep extended over the audio folder fixtures in
      `wm_roundtrip_spec` (overlaying the REAPER-resident tree onto targetState).
-   - **3b**: midi conduit condition; family bus domains in `DAG.allocate` (the
-     parent fx's `inBus` must equal the child's `outBus` through the atomic
-     identity pipe); relay pattern for foldered→master (still deferred per the
-     realisation note); adoption-no-op test.
+   - **3b** — split into **read model (DONE, `21a78b7` + bus-split fix)** and
+     **allocator (NEXT)**; see § Plan Progress for the full pick-up. Read model:
+     folder parent accepts midi edges (`midi.ins=1`); **bus-0** child midi
+     aggregates into the node (`child→sid→fx`), **buses ≥1** pass through to a
+     **direct `child→fx`** edge; parent emits its own take on bus 0 gated on
+     `hasMidiTake`.
+     Allocator (designed, not coded): family = one bus domain, a single
+     `allocStream` over child chains → pipe → parent chain; bus 0 = parent take;
+     out-park CUs (`from=-1, to=N` relocate / `to=-1` dump) at conduit child tails;
+     relay pattern for foldered→master still deferred per the realisation note;
+     adoption-no-op test (native bus-0 merge stays a no-op).
 4. **Capacity over domains**: family bus over-pressure → existing
    eviction; deterministic; fixture forcing >16 buses in one family.
 

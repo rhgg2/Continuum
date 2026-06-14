@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=973  sha=a9e530d  mode=chunk
+@module routingManager  src=routingManager.lua  loc=985  sha=b9f54c5  mode=chunk
 
 # Invariants & contracts
   @invariant  id is a track/fx GUID string — opaque to callers, stable across reload
@@ -23,12 +23,12 @@
   @state POS_TO_SENDMODE = { postFader = 0, preFx = 1, preFader = 3 }  @ 374
   @state AUTO_BUS = 126  @ 378
   @state TRACK_NATIVE = {  @ 488
-  @state FX_NATIVE = {  @ 492
-  @state EXT_SECTION = 'continuum_wiring'  @ 498
-  @state SCRATCH_GUID = 'scratch'  @ 499
-  @state META_PEXT = 'P_EXT:ctm_meta'  @ 500
-  @state META_STORES = {  @ 504
-  @state paramIdxByIdent = {}  @ 609
+  @state FX_NATIVE = {  @ 493
+  @state EXT_SECTION = 'continuum_wiring'  @ 499
+  @state SCRATCH_GUID = 'scratch'  @ 500
+  @state META_PEXT = 'P_EXT:ctm_meta'  @ 501
+  @state META_STORES = {  @ 505
+  @state paramIdxByIdent = {}  @ 621
 
 # Private functions
   -- track resolution
@@ -104,95 +104,98 @@
       -- Full-replace: drop/create by sendKey identity, then a separate gain pass
       -- because REAPER indices shift under deletion and gains move with the key.
   -- metadata
-  @fn decodeBlob(raw)  @ 509
-  @fn readTrackMeta(track)  @ 513
-  @fn writeTrackMeta(track, meta)  @ 520
+  @fn decodeBlob(raw)  @ 510
+  @fn readTrackMeta(track)  @ 514
+  @fn writeTrackMeta(track, meta)  @ 521
       -- Patch-merge so a partial write (just pos) never wipes a sibling (split);
       -- util.REMOVE clears a field.
-  @fn readMeta(store)  @ 526
-  @fn writeMeta(store, id, meta)  @ 532
+  @fn readMeta(store)  @ 527
+  @fn writeMeta(store, id, meta)  @ 533
       -- nil meta deletes the entry; otherwise patch-merge (util.REMOVE clears a field).
   -- read
-  @fn trackName(track)  @ 550
-  @fn readMainSend(track)  @ 555
-  @fn readTrack(track, isMaster)  @ 565
-  @fn stampParents(records)  @ 583
+  @fn trackName(track)  @ 551
+  @fn readMainSend(track)  @ 556
+  @fn trackHasMidiTake(track)  @ 568
+      -- A track's own active MIDI take decides whether its source node emits on bus 0: a folder
+      -- parent or bare source with no midi take produces nothing there (the out stays wirable).
+  @fn readTrack(track, isMaster)  @ 576
+  @fn stampParents(records)  @ 595
       -- Folder membership is positional (I_FOLDERDEPTH: 1 opens, <0 closes |n|): walk
       -- tracks in order, each foldered track's parent is the open-folder stack top.
   -- write
-  @fn writeMainSend(track, ms)  @ 597
-  @fn paramsByName(track, fxIdx)  @ 611
-  @fn writeParams(track, fxIdx, params)  @ 627
+  @fn writeMainSend(track, ms)  @ 609
+  @fn paramsByName(track, fxIdx)  @ 623
+  @fn writeParams(track, fxIdx, params)  @ 639
       @contract  params keyed by display name; an unknown name raises
-  @fn readParams(track, fxIdx)  @ 637
+  @fn readParams(track, fxIdx)  @ 649
       -- Live { [name] = value } for every named param — the read counterpart to writeParams.
-  @fn routingIdxOf(track, fxIdx)  @ 647
+  @fn routingIdxOf(track, fxIdx)  @ 659
       -- Absolute fx index → chunk routing index (routing-bearing blocks only); nil for a
       -- JS/container fx, which has no routing trailer — writing midi to one is a no-op.
-  @fn writeMidiRouting(track, fxIdx, midi)  @ 656
-  @fn writeTrackFields(track, t)  @ 670
-  @fn liveScratch()  @ 754
+  @fn writeMidiRouting(track, fxIdx, midi)  @ 668
+  @fn writeTrackFields(track, t)  @ 682
+  @fn liveScratch()  @ 766
       -- The persisted scratch guid + live handle, or nil if none minted yet. Never mints.
 
 # Public API (rm:*)
-  @api rm:trackLabels()  @ 684
+  @api rm:trackLabels()  @ 696
       @contract  lightweight {id, name, number, isMaster} per project track + master; no fx/sends/chunk reads.
-  @api rm:tracks()  @ 698
-  @api rm:track(id)  @ 714
+  @api rm:tracks()  @ 710
+  @api rm:track(id)  @ 726
       @contract  full record for one track by id (single-track rm:tracks()); nil if the id is gone
-  @api rm:fxIds(id)  @ 725
+  @api rm:fxIds(id)  @ 737
       @contract  ordered live fx ids for a track via TrackFX — no chunk read; nil if the id is gone
       @contract  second return: { [id] = ident } over the same chain
-  @api rm:reaperTrack(id)  @ 738
+  @api rm:reaperTrack(id)  @ 750
       @contract  raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone
-  @api rm:fxTrack(id)  @ 743
+  @api rm:fxTrack(id)  @ 755
       @contract  live MediaTrack hosting fx id, resolved without reading its record/chunk; nil if gone
-  @api rm:masterId()  @ 748
+  @api rm:masterId()  @ 760
       @contract  the master track's guid; resolves master without an rm:tracks() scan
-  @api rm:scratchId()  @ 763
+  @api rm:scratchId()  @ 775
       @contract  the scratch track's guid, minted on first use; persisted in projext.
       @contract  rm owns scratch — it parks orphan fx and carries the fx-meta undo mirror.
-  @api rm:scratchTrack()  @ 772
+  @api rm:scratchTrack()  @ 784
       @contract  raw scratch MediaTrack handle (for P_EXT writes); mints on first use
-  @api rm:resyncMeta()  @ 778
+  @api rm:resyncMeta()  @ 790
       @contract  pull every meta store's scratch P_EXT mirror back into projext after a
       @contract  REAPER undo/redo — projext doesn't reverse natively, the scratch chunk does
-  @api rm:pollUndo()  @ 789
+  @api rm:pollUndo()  @ 801
       @contract  per-frame heartbeat — ensures the scratch exists, and on a scratch-chunk
       @contract  rewind (REAPER undo/redo) pulls the meta mirrors back into projext
-  @api rm:addTrack(t)  @ 799
-  @api rm:assignTrack(id, t)  @ 821
-  @api rm:deleteTrack(id)  @ 829
-  @api rm:setSendGain(srcId, dstId, gain)  @ 836
+  @api rm:addTrack(t)  @ 811
+  @api rm:assignTrack(id, t)  @ 833
+  @api rm:deleteTrack(id)  @ 841
+  @api rm:setSendGain(srcId, dstId, gain)  @ 848
       @contract  targeted live D_VOL on the audio send srcId→dstId; false if no such send is live.
       @contract  the partial write assignTrack{sends} (full-replace) can't serve — for live gain pokes.
-  @api rm:addFx(trackId, t)  @ 849
-  @api rm:assignFx(id, t)  @ 865
-  @api rm:meta(store, id)  @ 886
+  @api rm:addFx(trackId, t)  @ 861
+  @api rm:assignFx(id, t)  @ 877
+  @api rm:meta(store, id)  @ 898
       @contract  read a named meta store ('fx'|'bus'): whole blob, or one entry when id given
-  @api rm:assignMeta(store, id, meta)  @ 893
+  @api rm:assignMeta(store, id, meta)  @ 905
       @contract  write a named meta store: nil deletes store[id], else patch-merge (util.REMOVE to clear)
-  @api rm:writeChainMidi(trackId, writes)  @ 898
+  @api rm:writeChainMidi(trackId, writes)  @ 910
       @contract  batch per-FX MIDI routing for one track in a single chunk Get+Set; writes={{id,midi},...}
-  @api rm:deleteFx(id)  @ 917
-  @api rm:fx(id)  @ 923
+  @api rm:deleteFx(id)  @ 929
+  @api rm:fx(id)  @ 935
       @contract  fx record by id (ports, names, pinMaps, midi, trackId); nil if gone. Params separate.
-  @api rm:params(id)  @ 938
+  @api rm:params(id)  @ 950
       @contract  live { [name] = value } param values for the fx by id; nil if gone.
       @contract  the mutable control-state counterpart to the structural rm:fx record.
-  @api rm:showFx(id)  @ 944
+  @api rm:showFx(id)  @ 956
       @contract  floats the fx window for id; false if the fx is no longer live
-  @api rm:installedFx()  @ 952
+  @api rm:installedFx()  @ 964
       @contract  enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
-  @api rm:transaction(label, fn)  @ 965
+  @api rm:transaction(label, fn)  @ 977
 
 # Uses (outbound edges)
-  @use call    util.add  @ 59, 362, 419, 471, 692, 694, 701, 704, 731, 958
-  @use call    util.assign  @ 522, 539, 577, 707, 719, 932
-  @use call    util.clone  @ 816, 825, 860, 881
+  @use call    util.add  @ 59, 362, 419, 471, 704, 706, 713, 716, 743, 970
+  @use call    util.assign  @ 523, 540, 589, 719, 731, 944
+  @use call    util.clone  @ 828, 837, 872, 893
   @use call    util.key  @ 426
-  @use call    util.serialise  @ 523, 542
-  @use call    util.unserialise  @ 510
+  @use call    util.serialise  @ 524, 543
+  @use call    util.unserialise  @ 511
   @use require util  @ 7
 
 # REAPER API surface
@@ -211,6 +214,10 @@
   @reaper GetProjExtState
   @reaper SetProjExtState
   @reaper GetMediaTrackInfo_Value
+  @reaper CountTrackMediaItems
+  @reaper GetActiveTake
+  @reaper GetTrackMediaItem
+  @reaper TakeIsMIDI
   @reaper SetMediaTrackInfo_Value
   @reaper SetTrackStateChunk
   @reaper InsertTrackAtIndex
