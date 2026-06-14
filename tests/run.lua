@@ -103,6 +103,7 @@ local specs = {
   'pa_compute_desired_spec',
   'pa_apply_spec',
   'pa_frecency_spec',
+  'pa_crosstrack_spec',
   'tv_param_bind_spec',
   'tv_param_learn_spec',
   'vm_reswing_lane_stability_spec',

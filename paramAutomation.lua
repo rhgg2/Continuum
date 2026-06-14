@@ -31,6 +31,10 @@ local pa = {}
 ----- REAPER lookups
 
 local function trackByGuid(guid)
+  -- Master is absent from the project-track list but hosts cone fx (bus comp on
+  -- the mix) — matched first, mirroring routingManager's locateTrack.
+  local master = reaper.GetMasterTrack(0)
+  if master and reaper.GetTrackGUID(master) == guid then return master end
   for i = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, i)
     if reaper.GetTrackGUID(track) == guid then return track end
