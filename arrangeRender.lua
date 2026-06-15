@@ -113,26 +113,31 @@ local function takeWindowSec(take, startQN, lengthQN)
   return startOffs, drawnSec * (rate ~= 0 and rate or 1)
 end
 
--- PCM_Source_GetPeaks lays the buffer out as a maxes block then a mins block,
--- channels interleaved per column; reduce to per-column signed hi/lo.
+-- PCM_Source_GetPeaks: maxes block then mins block, channels interleaved per column;
+-- reduce to per-column signed hi/lo. Loops sample ONE source period; others map the window.
 --contract: nil for an unreadable source; entry with hi=nil while peaks still build
-local function peaksFor(take, startQN, lengthQN, cols)
+local function peaksFor(take, startQN, lengthQN, pxPerSec, loop)
   local src = reaper.GetMediaItemTake_Source(take)
   if not src then return nil end
-  local startSec, winSec = takeWindowSec(take, startQN, lengthQN)
+  local startOffs, winSec = takeWindowSec(take, startQN, lengthQN)
   if winSec <= 0 then return nil end
+  local srcSec = reaper.GetMediaSourceLength(src)
+  local wrap   = loop and srcSec > 0 and winSec > srcSec + 1e-6
+  local spanStart = wrap and 0 or startOffs
+  local spanSec   = wrap and srcSec or winSec
+  local cols = math.max(16, math.min(4096, math.floor(spanSec * pxPerSec + 0.5)))
 
   -- Take pointer is stable+unique, so two takes sharing a source don't collide.
   -- The take under an active resize churns its entry each frame; others stay cached.
   local key = tostring(take)
+  local sig = string.format('%.4f:%.4f:%d:%s', spanStart, spanSec, cols, tostring(wrap))
   local hit = peakCache[key]
-  if hit and (hit.cols ~= cols or hit.startSec ~= startSec or hit.winSec ~= winSec) then
-    hit, peakCache[key] = nil, nil
-  end
+  if hit and hit.sig ~= sig then hit, peakCache[key] = nil, nil end
   if hit and hit.hi then return hit end
 
   if not hit then
-    hit = { cols = cols, startSec = startSec, winSec = winSec,
+    hit = { sig = sig, cols = cols, winSec = winSec, srcSec = srcSec,
+            startOffs = startOffs, wrap = wrap,
             building = reaper.PCM_Source_BuildPeaks(src, 0) ~= 0 }
     peakCache[key] = hit
   end
@@ -147,7 +152,7 @@ local function peaksFor(take, startQN, lengthQN, cols)
 
   local nch = math.max(1, reaper.GetMediaSourceNumChannels(src))
   local buf = reaper.new_array(cols * nch * 2); buf.clear()
-  reaper.PCM_Source_GetPeaks(src, cols / winSec, startSec, nch, cols, 0, buf)
+  reaper.PCM_Source_GetPeaks(src, cols / spanSec, spanStart, nch, cols, 0, buf)
   local minBase, hi, lo = cols * nch, {}, {}
   for i = 0, cols - 1 do
     local h = buf[i * nch + 1] or 0
@@ -350,17 +355,26 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   local function drawWaveform(tk, startQN, lengthQN, rx0, rx1, yTop, yBot, fullTop, fullBot)
     local fullH = fullBot - fullTop
     if fullH < 2 then return end
-    local cols = math.max(16, math.min(4096, math.floor(fullH + 0.5)))
-    local cx   = (rx0 + rx1) * 0.5
-    local hw   = (rx1 - rx0) * 0.5 - 3
+    local _, winSec = takeWindowSec(tk.take, startQN, lengthQN)
+    if winSec <= 0 then return end
+    local pxPerSec = fullH / winSec
+    local cx = (rx0 + rx1) * 0.5
+    local hw = (rx1 - rx0) * 0.5 - 3
     if hw < 1 then return end
-    local pk = peaksFor(tk.take, startQN, lengthQN, cols)
+    -- Tile only a genuine loop; a non-loop run past the source shows silence.
+    local loop = reaper.GetMediaItemInfo_Value(tk.item, 'B_LOOPSRC') ~= 0
+    local pk = peaksFor(tk.take, startQN, lengthQN, pxPerSec, loop)
     if not pk or not pk.hi then
       ps.line(cx, yTop, cx, yBot, 'arrange.waveform', 1)
       return
     end
+    -- A looped take wraps source-time over one period (offset-phased); otherwise
+    -- the drawn window maps straight across the sampled span.
     for y = math.floor(yTop), math.floor(yBot) do
-      local i   = math.min(cols, math.max(1, math.floor((y - fullTop) / fullH * cols) + 1))
+      local t = (y - fullTop) / pxPerSec
+      local frac = pk.wrap and ((pk.startOffs + t) % pk.srcSec) / pk.srcSec
+                            or  t / pk.winSec
+      local i   = math.min(pk.cols, math.max(1, math.floor(frac * pk.cols) + 1))
       local hiX = cx + (pk.hi[i] or 0) * hw
       local loX = cx + (pk.lo[i] or 0) * hw
       if hiX - loX < 1 then hiX = loX + 1 end

@@ -121,13 +121,24 @@ local function relayoutTrack(track)
   table.sort(rows, function(a, b) return a.startQN < b.startQN end)
 
   for i, r in ipairs(rows) do
-    local src     = sourceLenQN(r.take, r.item)
     local natural = naturalLenOf(r.take)
-    if natural ~= util.OPEN and natural >= src then
-      setNaturalLenOf(r.take, util.OPEN)
-      natural = util.OPEN
+    local effective
+    if takeKind(r.take) == 'audio' then
+      -- Audio length is the user's trim/loop, never the source: capture once
+      -- so truncation is non-destructive and a freed neighbour lets it re-grow.
+      if natural == util.OPEN then
+        natural = (select(2, itemQNRange(r.item)))
+        setNaturalLenOf(r.take, natural)
+      end
+      effective = natural
+    else
+      local src = sourceLenQN(r.take, r.item)
+      if natural ~= util.OPEN and natural >= src then
+        setNaturalLenOf(r.take, util.OPEN)
+        natural = util.OPEN
+      end
+      effective = natural == util.OPEN and src or math.min(natural, src)
     end
-    local effective = natural == util.OPEN and src or math.min(natural, src)
     local nextStart = rows[i+1] and rows[i+1].startQN or math.huge
     local rendered  = math.min(effective, nextStart - r.startQN)
     if rendered < 0 then rendered = 0 end
@@ -139,7 +150,11 @@ end
 -- The effective natural length (post-OPEN-resolution) exposed via tracksTakes.
 local function effectiveNaturalLenQN(take, item)
   local natural = naturalLenOf(take)
-  local src     = sourceLenQN(take, item)
+  if takeKind(take) == 'audio' then
+    if natural == util.OPEN then return (select(2, itemQNRange(item))) end
+    return natural
+  end
+  local src = sourceLenQN(take, item)
   if natural == util.OPEN then return src end
   return math.min(natural, src)
 end

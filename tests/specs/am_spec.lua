@@ -447,6 +447,39 @@ return {
            'OPEN persists as a missing key, not a stored math.huge')
     end,
   },
+  {
+    name = 'audio take longer than its source keeps its length across a move',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'audio', pos = 0, len = 8, srcLen = 4,
+                      srcFile = 'loop.wav' } } },
+      })
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.naturalLenQN, 8, 'natural = item length, not the 4-QN source')
+      am:moveTake(tk, 2)
+      local moved = am:tracksTakes(0)[1]
+      t.eq(moved.startQN,  2, 'moved to row 2')
+      t.eq(moved.lengthQN, 8, 'still 8 QN after relayout — no snap to source')
+      t.eq(h.cm:readTakeKey(moved.take, 'arrangeNaturalLenQN'), 8,
+           'length captured as the stored natural')
+    end,
+  },
+  {
+    name = 'trimmed audio take keeps its trim across a move (no balloon to source)',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'audio', pos = 0, len = 4, srcLen = 10,
+                      srcFile = 'long.wav' } } },
+      })
+      t.eq(am:tracksTakes(0)[1].naturalLenQN, 4, 'natural = the 4-QN trim, not the 10-QN source')
+      am:moveTake(am:tracksTakes(0)[1], 2)
+      local moved = am:tracksTakes(0)[1]
+      t.eq(moved.startQN,  2, 'moved to row 2')
+      t.eq(moved.lengthQN, 4, 'still 4 QN — does not balloon to the source length')
+    end,
+  },
 
   {
     name = 'moveTake shifts start; refused on start-collision; returns ok flag',
