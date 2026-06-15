@@ -2,7 +2,7 @@
 
 --invariant: render + input only — holds av only, never am; all queries/mutations go through av.
 --invariant: key bindings here; command bodies in av; coord pushes the scope on activation.
---shape: body = grid pane (variable width) | PALETTE_W palette; palette shows slots for the track under av:cursorCol().
+--shape: body = grid pane (variable width) | fixed-width palette (chrome.palettePane); palette shows slots for the track under av:cursorCol().
 
 local util = require 'util'
 
@@ -25,10 +25,6 @@ local uiSize   = gui and gui.fontSize and gui.fontSize.ui or 12
 
 local ar = {}
 
-local PALETTE_W = 200
--- Gap between grid and palette panes; the 1px vrule sits in the
--- middle of the gap so neither pane edge touches the line.
-local PANE_GAP  = 11
 local QN_W, TRACK_W = 32, 72
 -- Empty band between gutter numbers (right-aligned at QN_W) and the first
 -- gridline; wide enough to host the edit-cursor / play-head triangles.
@@ -89,8 +85,8 @@ local function slotFill(colourIdx, focused)
   local pair = colourCache[colourIdx]
   if not pair then
     pair = {
-      painter.hue(colourIdx, 0.04, 0.79, SLOT_FILL_ALPHA),
-      painter.hue(colourIdx, 0.06,  0.84, SLOT_FILL_ALPHA),
+      painter.hue(colourIdx, 0.08, 0.77, SLOT_FILL_ALPHA),
+      painter.hue(colourIdx, 0.1,  0.84, SLOT_FILL_ALPHA),
     }
     colourCache[colourIdx] = pair
   end
@@ -188,8 +184,8 @@ end
 
 ----- Grid pane
 
--- HEADER_PAD: breathing room above header text; HEADER_GAP: space between divider and row 0.
--- Both panes share these so the dividers line up across PANE_GAP.
+-- Grid header geometry; must match chrome's palette-header HEADER_PAD/HEADER_GAP
+-- so the grid and palette dividers line up across PANE_GAP.
 local HEADER_PAD = 8
 local HEADER_GAP = 4
 
@@ -598,23 +594,11 @@ local function focusedSlotEntry(slots, slotIdx)
   return nil
 end
 
--- Hand-drawn so the header height and divider position match the grid's by construction —
--- both panes share the renderBody `oy`, so the divider aligns across PANE_GAP without measurement.
-local function renderPaletteHeader(focusedTrack)
-  local trackLabel = focusedTrack
+local function paletteTrackLabel(focusedTrack)
+  return focusedTrack
     and (focusedTrack.name ~= '' and focusedTrack.name
          or string.format('Track %d', focusedTrack.idx + 1))
     or '(no track)'
-  local p        = painter.new(ctx, chrome, {})
-  local ox, oy   = ImGui.GetCursorScreenPos(ctx)
-  local paneW    = (select(1, ImGui.GetContentRegionAvail(ctx)))
-  local rowH     = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
-  local headerH  = rowH + HEADER_PAD
-  local tw       = p.measure(trackLabel)
-  local lx       = ox + math.floor((paneW - tw) / 2)
-  p.text(lx, oy + HEADER_PAD, 'text', trackLabel)
-  p.line(ox, oy + headerH, ox + paneW, oy + headerH, 'text', 1)
-  ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
 end
 
 local function openRenameModal(trackIdx, slotIdx, currentName)
@@ -743,20 +727,12 @@ local function renderPaletteList(slots)
   ImGui.EndTable(ctx)
 end
 
-local function renderPalette(tracks)
-  -- tracks is 1-based; cursorCol is 0-based track index.
-  local focusedTrack = tracks[av:cursorCol() + 1]
-  local slots        = focusedTrack and av:trackSlots(focusedTrack.idx) or {}
-  local focusedSlot  = focusedSlotEntry(slots, av:paletteSlot())
-
-  -- Push chrome styles here so buttons get toolbar colours; body styles already in effect
-  -- from the renderBody-level push.
-  chrome.pushChromeStyles()
-  renderPaletteHeader(focusedTrack)
+local function renderPaletteBody(focusedTrack)
+  local slots       = focusedTrack and av:trackSlots(focusedTrack.idx) or {}
+  local focusedSlot = focusedSlotEntry(slots, av:paletteSlot())
   renderPaletteActions(focusedTrack, focusedSlot)
   ImGui.Separator(ctx)
   renderPaletteList(slots)
-  chrome.popChromeStyles()
 end
 
 ----------- PUBLIC
@@ -815,7 +791,8 @@ function ar:renderBody(_, w, h, dispatch)
     return
   end
 
-  local gridW = math.max(120, w - PALETTE_W - PANE_GAP)
+  local ox, oy = ImGui.GetCursorScreenPos(ctx)
+  local gridW  = chrome.gridWidth(w)
   -- NoNav suppresses the blue nav rect from Tab/arrow focus; NoScroll*
   -- stop the wheel nudging the child — we route the wheel to the cursor.
   if ImGui.BeginChild(ctx, '##arrangeGrid', gridW, h,
@@ -828,22 +805,12 @@ function ar:renderBody(_, w, h, dispatch)
   end
   ImGui.EndChild(ctx)
 
-  -- 1px vertical rule centred in PANE_GAP so neither pane edge touches it.
-  -- Uses 'text' colour (darkest parchment shade) to tie it to the body palette.
-  ImGui.SameLine(ctx, 0, 0)
-  local sx, sy = ImGui.GetCursorScreenPos(ctx)
-  local lineX  = sx + math.floor(PANE_GAP / 2)
-  local p      = painter.new(ctx, chrome, {})
-  p.line(lineX, sy, lineX, sy + h, 'text', 1)
-  ImGui.Dummy(ctx, PANE_GAP, h)
-  ImGui.SameLine(ctx, 0, 0)
-
-  if ImGui.BeginChild(ctx, '##arrangePalette', PALETTE_W, h,
-                      ImGui.ChildFlags_None,
-                      ImGui.WindowFlags_NoNav) then
-    renderPalette(tracks)
-  end
-  ImGui.EndChild(ctx)
+  local focusedTrack = tracks[av:cursorCol() + 1]
+  chrome.palettePane{
+    x = ox + gridW, y = oy, h = h,
+    label = paletteTrackLabel(focusedTrack),
+    draw  = function() renderPaletteBody(focusedTrack) end,
+  }
 
   popBodyStyles()
   if dispatch then dispatch(self:focusState()) end

@@ -2,9 +2,11 @@
 
 --shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
+--shape: palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
-local ImGui = require 'imgui' '0.10'
+local ImGui   = require 'imgui' '0.10'
+local painter = require 'painter'
 
 local cm, ctx       = (...).cm, (...).ctx
 local uiFontBold    = (...).uiFontBold
@@ -43,6 +45,9 @@ local function colour(name)
   end
   return cache[name]
 end
+
+-- painter binds colour names through chrome; it touches only colour().
+local paintBinder = { colour = colour }
 
 local function pushChromeStyles()
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameBorderSize, 1)
@@ -321,6 +326,49 @@ local function drawPicker(d)
   ImGui.EndPopup(ctx)
 end
 
+----- Palette pane (shared right-hand pane: arrange / wiring / tracker / sampler)
+
+-- Pane geometry. HEADER_PAD/HEADER_GAP also size a flanking grid header (see
+-- arrangeRender) so the grid and palette dividers line up across PANE_GAP.
+local PALETTE_W, PANE_GAP    = 200, 11
+local HEADER_PAD, HEADER_GAP = 8, 4
+
+--contract: width of the main pane left of the palette; floors at 120.
+local function gridWidth(w) return math.max(120, w - PALETTE_W - PANE_GAP) end
+
+-- Hand-drawn header: centred label + 1px divider at headerH; shares HEADER_PAD/HEADER_GAP
+-- with the flanking grid header so the two dividers align across PANE_GAP without measuring.
+local function paletteHeader(label)
+  local p       = painter.new(ctx, paintBinder, {})
+  local ox, oy  = ImGui.GetCursorScreenPos(ctx)
+  local paneW   = select(1, ImGui.GetContentRegionAvail(ctx))
+  local rowH    = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
+  local headerH = rowH + HEADER_PAD
+  local tw      = p.measure(label)
+  p.text(ox + math.floor((paneW - tw) / 2), oy + HEADER_PAD, 'text', label)
+  p.segment(ox, oy + headerH, ox + paneW, oy + headerH, 'text', 1)
+  ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
+end
+
+--contract: x/y/h are body-window screen coords at the gap's left edge; draw paints the body.
+local function palettePane(spec)
+  -- vrule on the BODY draw list — it sits in the gap, outside the child.
+  local p     = painter.new(ctx, paintBinder, {})
+  local lineX = spec.x + math.floor(PANE_GAP / 2)
+  p.segment(lineX, spec.y, lineX, spec.y + spec.h, 'text', 1)
+
+  ImGui.SetCursorScreenPos(ctx, spec.x + PANE_GAP, spec.y)
+  if ImGui.BeginChild(ctx, '##palettePane', PALETTE_W, spec.h,
+                      ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
+    local childFocused = ImGui.IsWindowFocused(ctx)
+    pushChromeStyles()
+    paletteHeader(spec.label)
+    spec.draw(childFocused)
+    popChromeStyles()
+  end
+  ImGui.EndChild(ctx)
+end
+
 return {
   colour             = colour,
   pushChromeStyles   = pushChromeStyles,
@@ -338,5 +386,7 @@ return {
   pickerIsActive     = pickerIsActive,
   resetPickerActive  = resetPickerActive,
   requestPickerOpen  = requestPickerOpen,
+  gridWidth          = gridWidth,
+  palettePane        = palettePane,
 }
 

@@ -91,11 +91,6 @@ local ORIENT_VEC = {
   H = { ax = 1, ay = 0, nx = 0, ny = 1 },
 }
 
--- Palette pane geometry, mirroring arrangePage's body split.
-local PALETTE_W  = 200
-local PANE_GAP   = 11   -- 1px vrule sits centred here; neither pane edge touches it
-local HEADER_PAD = 8    -- breathing room above the palette header text
-local HEADER_GAP = 4    -- space between the header divider and the first row
 
 ----- Drag / band state (page-local; ephemeral, never persisted)
 -- The gesture state machine — mousedown precedence, what each table
@@ -2392,19 +2387,6 @@ local function popBodyStyles() ImGui.PopStyleColor(ctx, 1) end
 
 -- Hand-drawn header so its band matches the canvas's by construction: both panes
 -- share renderBody's `oy`, so the divider aligns across PANE_GAP without measuring.
-local function renderPaletteHeader()
-  local p       = painter.new(ctx, chrome, {})
-  local ox, oy  = ImGui.GetCursorScreenPos(ctx)
-  local paneW   = (select(1, ImGui.GetContentRegionAvail(ctx)))
-  local rowH    = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
-  local headerH = rowH + HEADER_PAD
-  local label   = 'sources'
-  local tw      = p.measure(label)
-  p.text(ox + math.floor((paneW - tw) / 2), oy + HEADER_PAD, 'text', label)
-  p.line(ox, oy + headerH, ox + paneW, oy + headerH, 'text', 1)
-  ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
-end
-
 local function openAddSourceModal()
   modalHost:openPrompt{
     title    = 'New source',
@@ -2463,7 +2445,7 @@ local function renderPaletteList(sources)
   end
 end
 
-local function renderPalette()
+local function renderPaletteBody()
   local sources, focused = {}, nil
   for _, nv in ipairs(wv:nodeViews()) do
     if nv.category == 'source' then
@@ -2474,13 +2456,9 @@ local function renderPalette()
   -- Stale focus (row deleted, or never set) greys out del.
   if not focused then paletteSource = nil end
 
-  -- Buttons want toolbar colours; body styles are already pushed at renderBody level.
-  chrome.pushChromeStyles()
-  renderPaletteHeader()
   renderPaletteActions(focused)
   ImGui.Separator(ctx)
   renderPaletteList(sources)
-  chrome.popChromeStyles()
 end
 
 ----------- PUBLIC
@@ -2499,7 +2477,8 @@ function wr:renderBody(_, w, h, dispatch)
   if not ctx then return end
   pushBodyStyles()
 
-  local canvasW = math.max(120, w - PALETTE_W - PANE_GAP)
+  local ox, oy  = ImGui.GetCursorScreenPos(ctx)
+  local canvasW = chrome.gridWidth(w)
   if ImGui.BeginChild(ctx, '##wiringCanvas', canvasW, h,
                       ImGui.ChildFlags_None,
                       ImGui.WindowFlags_NoNav) then
@@ -2507,22 +2486,11 @@ function wr:renderBody(_, w, h, dispatch)
   end
   ImGui.EndChild(ctx)
 
-  -- 1px vrule centred in PANE_GAP so neither pane edge touches it; 'text' ties it
-  -- to the body palette, matching arrangePage.
-  ImGui.SameLine(ctx, 0, 0)
-  local sx, sy = ImGui.GetCursorScreenPos(ctx)
-  local lineX  = sx + math.floor(PANE_GAP / 2)
-  local p      = painter.new(ctx, chrome, {})
-  p.line(lineX, sy, lineX, sy + h, 'text', 1)
-  ImGui.Dummy(ctx, PANE_GAP, h)
-  ImGui.SameLine(ctx, 0, 0)
-
-  if ImGui.BeginChild(ctx, '##wiringPalette', PALETTE_W, h,
-                      ImGui.ChildFlags_None,
-                      ImGui.WindowFlags_NoNav) then
-    renderPalette()
-  end
-  ImGui.EndChild(ctx)
+  chrome.palettePane{
+    x = ox + canvasW, y = oy, h = h,
+    label = 'sources',
+    draw  = renderPaletteBody,
+  }
 
   popBodyStyles()
   if dispatch then dispatch(self:focusState()) end
