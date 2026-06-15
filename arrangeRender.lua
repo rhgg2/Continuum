@@ -776,6 +776,19 @@ local toolbarSegments = {
       if changed then av:setFollowPlay(on) end
     end,
   },
+  {
+    id = 'beatsPerRow',
+    render = function()
+      ImGui.AlignTextToFramePadding(ctx)
+      chrome.headingLabel('BPR')
+      ImGui.SameLine(ctx, 0, 8)
+      local textW = ImGui.CalcTextSize(ctx, '64')
+      local btnW  = ImGui.GetFrameHeight(ctx)
+      ImGui.SetNextItemWidth(ctx, textW + btnW * 2 + 16)
+      local changed, n = ImGui.InputDouble(ctx, '##bpr', av:beatPerRow(), 1, 4, '%g')
+      if changed then av:setBeatPerRow(n) end
+    end,
+  },
 }
 
 function ar:renderToolbarBits(_)
@@ -866,6 +879,16 @@ arrange:registerAll {
     openCreateModal(av:cursorCol(), av:rowToQN(av:cursorRow()))
   end,
   toggleFollowPlay = function() av:setFollowPlay(not av:followsPlay()) end,
+  arrangeSetBeatPerRow = function()
+    modalHost:openPrompt{
+      title    = 'Beats per row',
+      prompt   = '0.25 – 64',
+      buf      = tostring(av:beatPerRow()),
+      callback = function(buf)
+        local n = tonumber(buf); if n then av:setBeatPerRow(n) end
+      end,
+    }
+  end,
 }
 
 -- Cursor-nav and take-edit commands reuse the tracker scope's keys but not its names:
@@ -895,6 +918,9 @@ local binds = {
   arrangePlayFromCursor         = { ImGui.Key_F6 },
   toggleFollowPlay              = { { ImGui.Key_F, ImGui.Mod_Super } },
   arrangeClearLoop              = { ImGui.Key_Escape },
+  arrangeZoomIn                 = { { ImGui.Key_Equal, ImGui.Mod_Super } },
+  arrangeZoomOut                = { { ImGui.Key_Minus, ImGui.Mod_Super } },
+  arrangeSetBeatPerRow          = { { ImGui.Key_Z,     ImGui.Mod_Super } },
 }
 
 -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →

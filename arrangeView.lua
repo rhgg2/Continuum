@@ -330,8 +330,16 @@ function av:setPaletteSlot(idx)
   paletteSlot = idx and math.max(0, math.min(61, math.floor(idx))) or nil
 end
 
-function av:beatPerRow()     return cm:get('arrangeBeatPerRow') end
-function av:setBeatPerRow(v) cm:set('project', 'arrangeBeatPerRow', math.max(1/4, v)) end
+function av:beatPerRow() return cm:get('arrangeBeatPerRow') end
+--contract: clamps to [1/4, 64]; rescales cursorRow to hold its QN, so zoom anchors on the cursor.
+function av:setBeatPerRow(v)
+  v = util.clamp(v, 1/4, 64)
+  local old = cm:get('arrangeBeatPerRow')
+  if v == old then return end
+  cursorRow = math.floor(cursorRow * old / v + 0.5)
+  cm:set('project', 'arrangeBeatPerRow', v)
+  followViewport()
+end
 function av:qnToRow(qn)  return qn / self:beatPerRow() end
 function av:rowToQN(row) return row * self:beatPerRow() end
 
@@ -561,6 +569,8 @@ arrange:registerAll {
   arrangeSetLoopEnd             = { setLoopEndHere,                 'Set loop end at cursor' },
   arrangePlayFromCursor         = { playFromCursor,                 'Play from cursor' },
   arrangeClearLoop              = { clearLoop,                      'Clear loop range' },
+  arrangeZoomIn                 = { function() av:setBeatPerRow(av:beatPerRow() / 2) end, 'Zoom in (halve beats/row)'  },
+  arrangeZoomOut                = { function() av:setBeatPerRow(av:beatPerRow() * 2) end, 'Zoom out (double beats/row)' },
 }
 
 -- arrangeAdvanceBy is project-wide and distinct from tracker's take-tier

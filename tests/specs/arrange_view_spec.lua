@@ -153,6 +153,22 @@ return {
   },
 
   {
+    name = 'setBeatPerRow holds the cursor QN (zoom anchors on cursor) and clamps max',
+    run = function(harness)
+      local _, av = mkAv(harness)
+      av:setCursor(8, 0)               -- QN 32 at the default 4 beats/row
+      av:setBeatPerRow(8)
+      t.eq(av:cursorRow(), 4, 'row halved so the cursor QN stays 32')
+      t.eq(av:rowToQN(av:cursorRow()), 32)
+      av:setBeatPerRow(2)
+      t.eq(av:cursorRow(), 16, 'row scaled up; QN still 32')
+      t.eq(av:rowToQN(av:cursorRow()), 32)
+      av:setBeatPerRow(128)
+      t.eq(av:beatPerRow(), 64, 'clamped to maximum 64')
+    end,
+  },
+
+  {
     name = 'paletteSlot defaults nil; setter clamps to 0..61; nil clears',
     run = function(harness)
       local _, av = mkAv(harness)
