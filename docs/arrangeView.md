@@ -32,9 +32,9 @@ and every mutation it triggers go through av.
 This is the layered rule, not a preference. A page reaching past av
 into am could mutate project state without av's cursor and focus
 bookkeeping ever seeing it. Routing everything through av keeps one
-module answerable for the page — focus adoption, the focus self-heal,
-the row-box snap policy all live in the same place as the mutations
-they constrain.
+module answerable for the page — action-target resolution, the focus
+self-heal, the row-box snap policy all live in the same place as the
+mutations they constrain.
 
 It costs av its REAPER independence. An earlier design kept am out so
 av could be tested without a fake project behind it. That trade no
@@ -54,22 +54,24 @@ moved or resized under it still resolves correctly.
 
 Cursor and focus are separate pointers, and that is deliberate. The
 cursor is the keyboard caret — drawn as a horizontal I-beam on the top
-edge of the cursor row; focus is a take. Cursor nav never changes
-focus: the caret moves on its own, the previously focused take keeps
-its focus indicator. Each kb mutation (`nudgeFocused`,
-`resizeFocused`, `deleteFocused`, `diveFocused`) opens with
-`adoptCursor`, which reselects the take under the cursor — an empty
-cell clears focus and the mutation no-ops. Mouse press on a take
-focuses it directly; the focus indicator survives until the next kb
-mutation reselects.
+edge of the cursor row; focus is the selected take. Cursor nav never
+changes focus: the caret moves on its own, the selected take keeps its
+indicator.
 
-The earlier model adopted focus on every keyboard landing, so a take
-"stayed picked" once the cursor crossed it even if nav carried on past.
-This made park-and-mutate convenient but meant the cursor was lying
-about which take the next command would hit. The caret rendering and
-the adopt-on-mutate rule are the same shift: cursor position is a
-line, not a cell — what it picks is decided at command time, not at
-landing time.
+Selection is decoupled from action. An edit command (`nudgeFocused`,
+`resizeFocused`, `deleteFocused`, `diveFocused`, the duplicates)
+resolves its target through `actionTarget`: the selected take if one is
+held, otherwise the take under the cursor — acted on without becoming
+selected. With nothing selected and the cursor parked off-screen (only
+a wheel-pan can strand it there), there is no target and the command
+no-ops. A mouse press on a take selects it; a press on empty space
+clears the selection. Boot lands the cursor on REAPER's selected item
+but selects nothing (`seedCursor`).
+
+The caret rendering and this fallback are the same idea: cursor
+position is a line, not a cell. With nothing selected, what a command
+picks is decided at command time from where the caret sits — and only
+when the caret is actually on screen.
 
 ## Viewport follow
 

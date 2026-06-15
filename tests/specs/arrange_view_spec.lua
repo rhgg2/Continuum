@@ -200,6 +200,69 @@ return {
   },
 
   {
+    name = 'no selection + on-screen cursor: edit acts on the cursor take, leaves it unselected',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local av = util.instantiate('arrangeView', { cm = h.cm, cmgr = h.cmgr, am = am })
+      h.cmgr:push('arrange')
+      av:setGridSize(8, 4)          -- a measured viewport, so cursorOnScreen is meaningful
+      av:setCursor(0, 0)            -- park the caret on the take; nothing selected
+      h.cmgr:invoke('arrangeNudgeForward')
+      local am2 = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(am2:tracksTakes(0)[1].startQN, 1, 'nudge acted on the take under the cursor')
+      t.eq(av:focus(), nil, 'the take was acted on without becoming the selection')
+    end,
+  },
+
+  {
+    name = 'no selection + off-screen cursor: an edit is a no-op',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local av = util.instantiate('arrangeView', { cm = h.cm, cmgr = h.cmgr, am = am })
+      h.cmgr:push('arrange')
+      av:setGridSize(8, 4)
+      av:setCursor(0, 0)
+      av:scrollBy(20, 0)            -- a wheel-pan strands the caret above the band
+      h.cmgr:invoke('arrangeDeleteTake')
+      local am2 = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      t.eq(#am2:tracksTakes(0), 1, 'cursor off-screen, nothing selected — delete no-ops')
+    end,
+  },
+
+  {
+    name = 'a held selection wins over the cursor take',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true, pos = 4, len = 1, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local av = util.instantiate('arrangeView', { cm = h.cm, cmgr = h.cmgr, am = am })
+      h.cmgr:push('arrange')
+      local takes = av:tracksTakes(0)
+      av:setFocus(takes[1].take)    -- select the take at row 0
+      av:setGridSize(8, 4)
+      av:setCursor(4, 0)            -- park the caret on the take at row 4
+      h.cmgr:invoke('arrangeDeleteTake')
+      local remain = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      t.eq(#remain, 1, 'exactly one take deleted')
+      t.eq(remain[1].startQN, 4, 'the selection was deleted, not the cursor take')
+    end,
+  },
+
+  {
     name = 'qnToRow / rowToQN are inverses through beatPerRow',
     run = function(harness)
       local _, av = mkAv(harness)

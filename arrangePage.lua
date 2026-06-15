@@ -34,7 +34,7 @@ local ap = {}
 function ap:bind() end
 function ap:unbind() end
 
---contract: seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
+--contract: seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
 function ap:seedCursorFromReaper() av:seedCursor() end
 
 ----- Arrange service surface — av passthroughs; newTakeBelow opens a modal in the renderer

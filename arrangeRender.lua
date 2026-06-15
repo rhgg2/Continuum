@@ -489,8 +489,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local serif = 2
     local caret = caretOn and 'arrange.cursorOn' or 'arrange.cursorOff'
     ps.segment(cx0, cy,         cx1, cy,         caret)
-    ps.segment(cx0, cy - serif, cx0, cy + serif, caret)
-    ps.segment(cx1, cy - serif, cx1, cy + serif, caret)
+    ps.segment(cx0, cy - serif, cx0, cy + serif+1, caret)
+    ps.segment(cx1, cy - serif, cx1, cy + serif+1, caret)
   end
 
   -- Loop region: stroked `[` down the gutter left edge, 'tail' colour, no fill.

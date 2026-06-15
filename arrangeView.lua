@@ -97,11 +97,21 @@ local function focusedTake()
   return take
 end
 
--- Reselect the take under the cursor as focus — the kb-mutation entry
--- gesture. An empty cell clears focus, so the mutation no-ops.
-local function adoptCursor()
-  local under = takeAtCursor()
-  focus = under and under.take or nil
+-- Wheel-pan moves the viewport without the caret; gridRows/gridCols 0
+-- (first frame) means no measured band yet, so the caret counts as on-screen.
+local function cursorOnScreen()
+  if gridRows == 0 or gridCols == 0 then return true end
+  return cursorRow >= scrollRow and cursorRow < scrollRow + gridRows
+     and cursorCol >= scrollCol and cursorCol < scrollCol + gridCols
+end
+
+-- Edit target: selection if held, else cursor take without selecting it.
+-- Nil (no-op) when nothing is selected and the cursor is off-screen.
+local function actionTarget()
+  local selected = focusedTake()
+  if selected then return selected end
+  if not cursorOnScreen() then return nil end
+  return takeAtCursor()
 end
 
 --invariant: cursor-nav steps whole rows/cols; only negative coords clamp. See docs/arrangeView.md.
@@ -157,12 +167,12 @@ local function navFromQN()
   return cur and cur.startQN or av:rowToQN(cursorRow)
 end
 
------ Take edits — move / resize / delete / dive the focused take
+----- Take edits — move / resize / delete / dive the action target
+--invariant: edit cmds target via actionTarget; unselected + off-screen cursor = no-op.
 
 --invariant: nudge steps one row; blocked only when dest start == another take start on the track.
 local function nudgeFocused(direction)
-  adoptCursor()
-  local take = focusedTake()
+  local take = actionTarget()
   if not take then return end
   if am:moveTake(take, direction * av:beatPerRow()) then
     moveCursorBy(direction, 0)
@@ -171,8 +181,7 @@ end
 
 --invariant: resize writes natural length (±1 bpr, floored 1 bpr). See docs/arrangeView.md § Resize.
 local function resizeFocused(direction)
-  adoptCursor()
-  local take = focusedTake()
+  local take = actionTarget()
   if not take then return end
   local bpr       = av:beatPerRow()
   local newNatural = math.max(bpr, take.lengthQN + direction * bpr)
@@ -186,29 +195,25 @@ local function resizeFocused(direction)
 end
 
 local function deleteFocused()
-  adoptCursor()
-  local take = focusedTake()
+  local take = actionTarget()
   if take then am:deleteTake(take) end
 end
 
 --invariant: arrangeDive is MIDI-only; audio/nil focus silently no-ops; dives via switchPage.
 local function diveFocused()
-  adoptCursor()
-  local take = focusedTake()
+  local take = actionTarget()
   if take and take.kind == 'midi' then cmgr:invoke('switchPage', 'tracker') end
 end
 
 --invariant: arrangeTakeProperties is MIDI-only; routes the item through the tracker façade.
 local function focusedTakeProperties()
-  adoptCursor()
-  local take = focusedTake()
+  local take = actionTarget()
   if take and take.kind == 'midi' then tracker().openTakeProperties(take.item) end
 end
 
 --invariant: duplicateBelow: pooled clone at natural end; focus+cursor advance to copy. MIDI-only.
 local function duplicateFocusedBelow()
-  adoptCursor()
-  local take = focusedTake()
+  local take = actionTarget()
   if not take then return end
   local newTake = am:duplicateBelow(take)
   if newTake then
@@ -218,8 +223,7 @@ local function duplicateFocusedBelow()
 end
 
 local function duplicateUnpooledFocusedBelow()
-  adoptCursor()
-  local take = focusedTake()
+  local take = actionTarget()
   if not take then return end
   local newTake = am:duplicateUnpooledBelow(take)
   if newTake then
@@ -534,11 +538,11 @@ end
 
 ----- Boot + reveal — the page interface delegates here
 
---contract: seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
+--contract: seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
 function av:seedCursor()
   local trackIdx, qn = am:initialCursor()
   self:setCursor(self:qnToRow(qn), trackIdx)
-  adoptCursor()
+  focus = nil
 end
 
 ----------- COMMANDS
