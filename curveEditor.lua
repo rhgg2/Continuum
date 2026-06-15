@@ -66,7 +66,7 @@ function self:frame(a)
   if drag   and drag.id   ~= a.dragId then drag   = nil end
 
   if vMin <= 0 and 0 <= vMax then
-    pt.line(tMin, 0, tMax, 0, cols.axis, 1)
+    pt.segment(tMin, 0, tMax, 0, cols.axis, 1)
   end
 
   -- the clip is the lane plus a 4px screen gutter; map that screen rect back

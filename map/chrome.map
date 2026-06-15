@@ -1,4 +1,4 @@
-@module chrome  src=chrome.lua  loc=392  sha=d71cae5  mode=chunk
+@module chrome  src=chrome.lua  loc=397  sha=428404c  mode=chunk
 @deps cm, ctx, uiFontBold, uiSize
 
 # Shapes
@@ -71,14 +71,14 @@
   @fn paletteHeader(label)  @ 341
       -- Hand-drawn header: centred label + 1px divider at headerH; shares HEADER_PAD/HEADER_GAP
       -- with the flanking grid header so the two dividers align across PANE_GAP without measuring.
-  @fn palettePane(spec)  @ 354
+  @fn palettePane(spec)  @ 359
       @contract  x/y/h are body-window screen coords at the gap's left edge; draw paints the body.
 
 # Uses (outbound edges)
   @use call    cm.get  @ 27, 197
   @use call    cm.getAt  @ 196
   @use call    imgui.AlignTextToFramePadding  @ 135, 230
-  @use call    imgui.BeginChild  @ 361
+  @use call    imgui.BeginChild  @ 366
   @use call    imgui.BeginDisabled  @ 105
   @use call    imgui.BeginGroup  @ 162
   @use call    imgui.BeginPopup  @ 270
@@ -89,24 +89,25 @@
   @use call    imgui.ColorConvertDouble4ToU32  @ 44, 133
   @use call    imgui.ColorConvertU32ToDouble4  @ 132
   @use call    imgui.DrawList_AddLine  @ 97
-  @use call    imgui.Dummy  @ 99, 350
-  @use call    imgui.EndChild  @ 369
+  @use call    imgui.Dummy  @ 99, 355
+  @use call    imgui.EndChild  @ 374
   @use call    imgui.EndDisabled  @ 107
   @use call    imgui.EndGroup  @ 164
   @use call    imgui.EndPopup  @ 326
-  @use call    imgui.GetContentRegionAvail  @ 148, 344
+  @use call    imgui.GetContentRegionAvail  @ 148, 346
   @use call    imgui.GetCursorPosY  @ 115, 123
   @use call    imgui.GetCursorScreenPos  @ 95, 147, 343
   @use call    imgui.GetFrameHeight  @ 96
   @use call    imgui.GetItemRectMax  @ 166, 256
   @use call    imgui.GetItemRectMin  @ 165, 255
-  @use call    imgui.GetStyleVar  @ 243
-  @use call    imgui.GetTextLineHeightWithSpacing  @ 345
+  @use call    imgui.GetScrollMaxY  @ 347
+  @use call    imgui.GetStyleVar  @ 243, 348
+  @use call    imgui.GetTextLineHeightWithSpacing  @ 350
   @use call    imgui.GetWindowDrawList  @ 97
   @use call    imgui.InputText  @ 279
   @use call    imgui.IsKeyPressed  @ 281, 282, 301, 303, 310
   @use call    imgui.IsWindowAppearing  @ 273, 295
-  @use call    imgui.IsWindowFocused  @ 363
+  @use call    imgui.IsWindowFocused  @ 368
   @use call    imgui.OpenPopup  @ 263
   @use call    imgui.PopStyleColor  @ 70, 87, 137
   @use call    imgui.PopStyleVar  @ 71, 88, 117, 125, 252
@@ -117,12 +118,12 @@
   @use call    imgui.Selectable  @ 321
   @use call    imgui.Separator  @ 283, 319
   @use call    imgui.SetCursorPosY  @ 115, 123
-  @use call    imgui.SetCursorScreenPos  @ 360
+  @use call    imgui.SetCursorScreenPos  @ 365
   @use call    imgui.SetKeyboardFocusHere  @ 273
   @use call    imgui.SetNextItemWidth  @ 274
   @use call    imgui.SetNextWindowPos  @ 266
   @use call    imgui.Text  @ 136, 231
-  @use call    painter.new  @ 342, 356
+  @use call    painter.new  @ 342, 361
   @use require imgui  @ 8
   @use require painter  @ 9
   @use sub     cm:configChanged  @ 16

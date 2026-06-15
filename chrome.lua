@@ -341,13 +341,18 @@ local function gridWidth(w) return math.max(120, w - PALETTE_W - PANE_GAP) end
 local function paletteHeader(label)
   local p       = painter.new(ctx, paintBinder, {})
   local ox, oy  = ImGui.GetCursorScreenPos(ctx)
-  local paneW   = select(1, ImGui.GetContentRegionAvail(ctx))
+  -- Centre against the FULL pane width: GetContentRegionAvail shrinks by the
+  -- scrollbar when the list overflows, which would drift the heading left.
+  local avail   = select(1, ImGui.GetContentRegionAvail(ctx))
+  local sbw     = ImGui.GetScrollMaxY(ctx) > 0
+                  and select(1, ImGui.GetStyleVar(ctx, ImGui.StyleVar_ScrollbarSize)) or 0
+  local paneW   = avail + sbw
   local rowH    = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
   local headerH = rowH + HEADER_PAD
   local tw      = p.measure(label)
   p.text(ox + math.floor((paneW - tw) / 2), oy + HEADER_PAD, 'text', label)
   p.segment(ox, oy + headerH, ox + paneW, oy + headerH, 'text', 1)
-  ImGui.Dummy(ctx, paneW, headerH + HEADER_GAP)
+  ImGui.Dummy(ctx, avail, headerH + HEADER_GAP)
 end
 
 --contract: x/y/h are body-window screen coords at the gap's left edge; draw paints the body.

@@ -229,12 +229,12 @@ local function printer(ctx, gX, gY, x0, y0)
   end
 
   function pt:vLine(x, y1, y2, colour)
-    p.line(x + 0.5, y1, x + 0.5, y2 + 1, colour)
+    p.segment(x, y1, x, y2 + 1, colour)
   end
 
   function pt:hLine(x1, x2, y, colour, yOff)
     local ly = y + (yOff or 0)
-    p.line(x1, ly, x2 + 1, ly, colour)
+    p.segment(x1, ly, x2 + 1, ly, colour)
   end
 
   function pt:box(x1, x2, y1, y2, colour)
@@ -634,6 +634,7 @@ local function drawLaneStrip()
   local cx, cy = ImGui.GetCursorScreenPos(ctx)
   local rows = cm:get('laneStrip.rows') or 0
   ImGui.SetCursorScreenPos(ctx, px - 2, yTop)
+  chrome.pushChromeStyles()
   if ImGui.SmallButton(ctx, '-##laneRows') then
     cm:set('global', 'laneStrip.rows', math.max(LANE_ROW_MIN, rows - 1))
   end
@@ -641,6 +642,7 @@ local function drawLaneStrip()
   if ImGui.SmallButton(ctx, '+##laneRows') then
     cm:set('global', 'laneStrip.rows', math.min(LANE_ROW_MAX, rows + 1))
   end
+  chrome.popChromeStyles()
   ImGui.SetCursorScreenPos(ctx, cx, cy)
 end
 
