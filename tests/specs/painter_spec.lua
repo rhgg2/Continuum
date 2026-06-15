@@ -31,7 +31,7 @@ fakeImGui.CalcTextSize = function(_, s)
   calls[#calls + 1] = { fn = 'CalcTextSize', args = { s } }
   return #s * 7, 13
 end
--- Pure colour maths for painter.hue: HSV passthrough packed into one int, so a
+-- Pure colour maths for painter.hue: RGB packed into one int, so a
 -- test can prove hue mints a distinct token per index without a real ImGui.
 fakeImGui.ColorConvertHSVtoRGB    = function(h, s, v)    return h, s, v end
 fakeImGui.ColorConvertDouble4ToU32 = function(r, g, b, a) return r * 1e6 + g * 1e3 + b + a end

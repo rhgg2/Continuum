@@ -1,4 +1,4 @@
-@module painter  src=painter.lua  loc=281  sha=10aa088  mode=namespace
+@module painter  src=painter.lua  loc=311  sha=a874413  mode=namespace
 
 # Invariants & contracts
   @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.
@@ -13,6 +13,7 @@
   @const M = {}  @ 26
   @const OVERSAMPLE = 2  @ 32   -- rasterise at 2x, draw half-size: retina stays crisp
   @const rotatedCache = {}  @ 34   -- size .. ':' .. text -> {img, w, h} | false: LICE path unavailable
+  @const GOLDEN = 0.6180339887498949  @ 266
 
 # Private functions
   -- Rotated text
@@ -20,47 +21,47 @@
   @fn rotatedTex(ctx, s, size)  @ 79
       -- pcall doubles as the js_ReaScriptAPI presence check; a failure caches
       -- false so callers fall back for good.
-  @fn hsvToRgb(h, s, v)  @ 244
-      -- HSV→RGB in pure Lua so hue and hueNative share one (r,g,b) source —
-      -- the ImGui pack and the REAPER native pack must agree per idx.
-  @fn hueRGB(idx, sat, val)  @ 259
+  @fn gamma(x)  @ 268
+  @fn oklchToRgb(light, chroma, hueTurns)  @ 275
+  @fn hueRGB(idx, chroma, light)  @ 291
+      -- Golden-ratio rotation throws adjacent indices to opposite sides of the
+      -- wheel; light/chroma are held constant so the set stays perceptually even.
 
 # Public API (M.*)
   @api M.measureRotated(ctx, s, size)  @ 89
       @contract  strip (w,h) in screen px for textUp at this size; nil when the LICE path is unavailable
   @api M.new(ctx, chrome, transform)  @ 96
       @contract  sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
-  @api M.hue(idx, sat, val, alpha)  @ 267
-      -- The idx-th visually-distinct hue: golden-ratio rotation throws adjacent
-      -- indices to opposite sides of the wheel. sat/val/alpha tone it.
+  @api M.hue(idx, chroma, light, alpha)  @ 297
+      -- The idx-th perceptually-even hue. chroma/light/alpha tone it.
       @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
-  @api M.hueNative(idx)  @ 273
-      @contract  REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; (sat,val) match the grid fill hue.
+  @api M.hueNative(idx)  @ 303
+      @contract  REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; chroma/light match grid fill hue.
 
 # Uses (outbound edges)
   @use call    imgui.Attach  @ 73
-  @use call    imgui.CalcTextSize  @ 216, 218
-  @use call    imgui.ColorConvertDouble4ToU32  @ 269
+  @use call    imgui.CalcTextSize  @ 238, 240
+  @use call    imgui.ColorConvertDouble4ToU32  @ 299
   @use call    imgui.CreateImageFromSize  @ 71
-  @use call    imgui.DrawList_AddCircleFilled  @ 168
-  @use call    imgui.DrawList_AddImageQuad  @ 233
-  @use call    imgui.DrawList_AddLine  @ 155
-  @use call    imgui.DrawList_AddPolyline  @ 179
+  @use call    imgui.DrawList_AddCircleFilled  @ 190
+  @use call    imgui.DrawList_AddImageQuad  @ 255
+  @use call    imgui.DrawList_AddLine  @ 177
+  @use call    imgui.DrawList_AddPolyline  @ 201
   @use call    imgui.DrawList_AddRect  @ 138
-  @use call    imgui.DrawList_AddRectFilled  @ 132
-  @use call    imgui.DrawList_AddText  @ 148
-  @use call    imgui.DrawList_AddTextEx  @ 146
-  @use call    imgui.DrawList_AddTriangleFilled  @ 162
-  @use call    imgui.DrawList_PathArcTo  @ 205
-  @use call    imgui.DrawList_PathClear  @ 195
-  @use call    imgui.DrawList_PathLineTo  @ 199
-  @use call    imgui.DrawList_PathStroke  @ 209
-  @use call    imgui.DrawList_PopClipRect  @ 190
-  @use call    imgui.DrawList_PushClipRect  @ 187
+  @use call    imgui.DrawList_AddRectFilled  @ 132, 147, 148, 149, 150, 160
+  @use call    imgui.DrawList_AddText  @ 170
+  @use call    imgui.DrawList_AddTextEx  @ 168
+  @use call    imgui.DrawList_AddTriangleFilled  @ 184
+  @use call    imgui.DrawList_PathArcTo  @ 227
+  @use call    imgui.DrawList_PathClear  @ 217
+  @use call    imgui.DrawList_PathLineTo  @ 221
+  @use call    imgui.DrawList_PathStroke  @ 231
+  @use call    imgui.DrawList_PopClipRect  @ 212
+  @use call    imgui.DrawList_PushClipRect  @ 209
   @use call    imgui.GetWindowDrawList  @ 102
   @use call    imgui.Image_SetPixels_Array  @ 72
-  @use call    imgui.PopFont  @ 219
-  @use call    imgui.PushFont  @ 217
+  @use call    imgui.PopFont  @ 241
+  @use call    imgui.PushFont  @ 239
   @use require imgui  @ 24
 
 # REAPER API surface

@@ -80,7 +80,7 @@ end
 
 -- Per-takeId fill pair { fill, focusFill } off colourIdx; focus brightens to read
 -- without losing hue. Borders are a uniform neutral, drawn by renderGrid.
-local SLOT_FILL_ALPHA = 0.85
+local SLOT_FILL_ALPHA = 1
 local colourCache = {}
 local function slotFill(colourIdx, focused)
   if colourIdx == nil then
@@ -89,8 +89,8 @@ local function slotFill(colourIdx, focused)
   local pair = colourCache[colourIdx]
   if not pair then
     pair = {
-      painter.hue(colourIdx, 0.55, 0.78, SLOT_FILL_ALPHA),
-      painter.hue(colourIdx, 0.30, 0.97, SLOT_FILL_ALPHA),
+      painter.hue(colourIdx, 0.04, 0.79, SLOT_FILL_ALPHA),
+      painter.hue(colourIdx, 0.06,  0.84, SLOT_FILL_ALPHA),
     }
     colourCache[colourIdx] = pair
   end
@@ -355,12 +355,12 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   -- Verticals via grid painter; horizontals and bottom border are screen-space (span the gutter).
   -- Topmost/leftmost outer borders omitted so the header reads as open space.
   for c = sc, lastCol + 1 do
-    pg.line(c, sr, c, sr + visRows, 'separator', 1)
+    pg.segment(c, sr, c, sr + visRows, 'separator')
   end
-  ps.line(ox, rowYs(sr + visRows), gridR, rowYs(sr + visRows), 'separator', 1)
+  ps.segment(ox, rowYs(sr + visRows), gridR, rowYs(sr + visRows), 'separator')
   for r = 1, visRows - 1 do
     local y = rowYs(sr + r)
-    ps.line(ox, y, gridR, y, 'separator', 1)
+    ps.segment(ox, y, gridR, y, 'separator')
   end
 
   -- Take rects: snapped corners so adjacent borders coincide; ±1px insets are screen-space.
@@ -441,7 +441,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     elseif tk.kind == 'midi' then
       drawNotes(tk, rx0, rx1, ry0 + 1, ry1)
     end
-    ps.stroke(rect(rx0, ry0, rx1 + 1, ry1 + 1), border, 1)
+    ps.border(rect(rx0, ry0, rx1 + 1, ry1 + 1), border)
     if tk.name and tk.name ~= '' then
       nameDraws[#nameDraws + 1] = {
         name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
@@ -478,7 +478,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
       local gy0 = rowYs(math.max(startRow, sr))
       local gy1 = rowYs(math.min(endRow, sr + visRows))
       ps.fill(rect(gx0 + 1, gy0 + 1, gx1, gy1), 'arrange.ghostFill')
-      ps.stroke(rect(gx0, gy0, gx1 + 1, gy1 + 1), 'arrange.ghostBorder', 1)
+      ps.border(rect(gx0, gy0, gx1 + 1, gy1 + 1), 'arrange.ghostBorder')
     end
   end
 
@@ -492,9 +492,9 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local cy    = rowYs(curRow)
     local serif = 2
     local caret = caretOn and 'arrange.cursorOn' or 'arrange.cursorOff'
-    ps.line(cx0, cy,         cx1, cy,         caret, 0.5)
-    ps.line(cx0, cy - serif, cx0, cy + serif, caret, 0.5)
-    ps.line(cx1,     cy - serif, cx1,     cy + serif, caret, 0.5)
+    ps.segment(cx0, cy,         cx1, cy,         caret)
+    ps.segment(cx0, cy - serif, cx0, cy + serif, caret)
+    ps.segment(cx1, cy - serif, cx1, cy + serif, caret)
   end
 
   -- Loop region: stroked `[` down the gutter left edge, 'tail' colour, no fill.
@@ -562,7 +562,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   for r = 0, visRows - 1 do
     local label = rowLabel(sr + r)
     local tw    = ps.measure(label)
-    ps.text(ox + QN_W - tw - 4, rowYs(sr + r) + 1, 'text', label)
+    ps.text(ox + QN_W - tw - 4, rowYs(sr + r) + 2, 'text', label)
   end
 
   -- Header track names at the bottom of the header band (HEADER_PAD reads as space above).

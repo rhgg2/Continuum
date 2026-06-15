@@ -1,4 +1,4 @@
-@module arrangeRender  src=arrangeRender.lua  loc=941  sha=4798ff1  mode=chunk
+@module arrangeRender  src=arrangeRender.lua  loc=941  sha=c61f82c  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, av
 
 # Invariants & contracts
@@ -36,7 +36,7 @@
   @state WHEEL_STEP_COLS = 0.5  @ 51   -- viewport cols panned per mouse-wheel notch
   @state wheelAccumV = 0  @ 52   -- fractional vertical wheel carried between frames
   @state wheelAccumH = 0  @ 53   -- fractional horizontal wheel carried between frames
-  @state SLOT_FILL_ALPHA = 0.85  @ 83
+  @state SLOT_FILL_ALPHA = 1  @ 83
   @state colourCache = {}  @ 84
   @state peakCache = {}  @ 104
   @state midiInkCache = {}  @ 176

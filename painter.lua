@@ -138,6 +138,28 @@ function M.new(ctx, chrome, transform)
     ImGui.DrawList_AddRect(dl, x0, y0, x1, y1, col(name), rounding or 0, 0, thick or 1)
   end
 
+  -- Pixel-crisp 1px border: four filled strips, not AddRect — AA fringe softens
+  -- a 1px stroke into a ~2px blur. Rect is the outer bound; caller snaps corners.
+  function p.border(r, name)
+    local x0, y0 = toScreen(r.x0, r.y0)
+    local x1, y1 = toScreen(r.x1, r.y1)
+    local c = col(name)
+    ImGui.DrawList_AddRectFilled(dl, x0,     y0,     x1,     y0 + 1, c)  -- top
+    ImGui.DrawList_AddRectFilled(dl, x0,     y1 - 1, x1,     y1,     c)  -- bottom
+    ImGui.DrawList_AddRectFilled(dl, x0,     y0,     x0 + 1, y1,     c)  -- left
+    ImGui.DrawList_AddRectFilled(dl, x1 - 1, y0,     x1,     y1,     c)  -- right
+  end
+
+  -- Crisp axis-aligned line: a filled strip, not AddLine (AA fringe blurs it).
+  -- Horizontal when y0==y1, vertical when x0==x1; thick grows down/right.
+  function p.segment(x0, y0, x1, y1, name, thick)
+    local ax, ay = toScreen(x0, y0)
+    local bx, by = toScreen(x1, y1)
+    thick = thick or 1
+    if ay == by then by = ay + thick else bx = ax + thick end
+    ImGui.DrawList_AddRectFilled(dl, ax, ay, bx, by, col(name))
+  end
+
   -- A given font draws via AddTextEx (font passed to the draw call, no stack
   -- push); nil font draws in the current font.
   function p.text(x, y, name, s, font, size)
@@ -239,39 +261,47 @@ function M.new(ctx, chrome, transform)
   return p
 end
 
--- HSV→RGB in pure Lua so hue and hueNative share one (r,g,b) source —
--- the ImGui pack and the REAPER native pack must agree per idx.
-local function hsvToRgb(h, s, v)
-  local i = math.floor(h * 6)
-  local f = h * 6 - i
-  local p = v * (1 - s)
-  local q = v * (1 - f * s)
-  local t = v * (1 - (1 - f) * s)
-  i = i % 6
-  if i == 0 then return v, t, p end
-  if i == 1 then return q, v, p end
-  if i == 2 then return p, v, t end
-  if i == 3 then return p, q, v end
-  if i == 4 then return t, p, v end
-  return v, p, q
+-- OkLCH→sRGB so hue/hueNative share one (r,g,b) source; ImGui+REAPER packs agree.
+-- Perceptually uniform space holds every slot at one lightness; hues read as a set.
+local GOLDEN = 0.6180339887498949
+
+local function gamma(x)               -- linear sRGB → encoded, clipped to gamut
+  if x <= 0         then return 0 end
+  if x >= 1         then return 1 end
+  if x <= 0.0031308 then return 12.92 * x end
+  return 1.055 * x ^ (1 / 2.4) - 0.055
 end
 
-local function hueRGB(idx, sat, val)
-  local h = ((idx + 1) * 0.6180339887498949) % 1.0
-  return hsvToRgb(h, sat, val)
+local function oklchToRgb(light, chroma, hueTurns)
+  local h    = hueTurns * 2 * math.pi
+  local a, b = chroma * math.cos(h), chroma * math.sin(h)
+
+  local l_ = light + 0.3963377774 * a + 0.2158037573 * b
+  local m_ = light - 0.1055613458 * a - 0.0638541728 * b
+  local s_ = light - 0.0894841775 * a - 1.2914855480 * b
+  local l, m, s = l_ * l_ * l_, m_ * m_ * m_, s_ * s_ * s_
+
+  return gamma( 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+         gamma(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+         gamma(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)
+end
+
+-- Golden-ratio rotation throws adjacent indices to opposite sides of the
+-- wheel; light/chroma are held constant so the set stays perceptually even.
+local function hueRGB(idx, chroma, light)
+  return oklchToRgb(light, chroma, ((idx + 1) * GOLDEN) % 1.0)
 end
 
 --contract: returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
--- The idx-th visually-distinct hue: golden-ratio rotation throws adjacent
--- indices to opposite sides of the wheel. sat/val/alpha tone it.
-function M.hue(idx, sat, val, alpha)
-  local r, g, b = hueRGB(idx, sat, val)
+-- The idx-th perceptually-even hue. chroma/light/alpha tone it.
+function M.hue(idx, chroma, light, alpha)
+  local r, g, b = hueRGB(idx, chroma, light)
   return { u32 = ImGui.ColorConvertDouble4ToU32(r, g, b, alpha) }
 end
 
---contract: REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; (sat,val) match the grid fill hue.
+--contract: REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; chroma/light match grid fill hue.
 function M.hueNative(idx)
-  local r, g, b = hueRGB(idx, 0.55, 0.78)
+  local r, g, b = hueRGB(idx, 0.125, 0.72)
   return reaper.ColorToNative(
     math.floor(r * 255 + 0.5),
     math.floor(g * 255 + 0.5),
