@@ -279,10 +279,31 @@ end
 
 function am:projectTracks() return ensureState().tracks end
 
--- One take-shape row. Callers pass the per-track slot map and the project-wide colour map so the
--- ensureSlots/ensureColours walks happen once per batch, not once per take.
+-- Per-note channel/pitch: QN offsets from item start so shapes survive moves; chanMask = used-channel set.
+--reaper: MIDI_CountEvts, MIDI_GetNote, MIDI_GetProjQNFromPPQPos
+local function midiNotesOf(take, startQN)
+  local _, noteCount = reaper.MIDI_CountEvts(take)
+  local notes, chanMask = {}, 0
+  for i = 0, noteCount - 1 do
+    local ok, _, _, startPpq, endPpq, chan, pitch = reaper.MIDI_GetNote(take, i)
+    if ok then
+      notes[#notes + 1] = {
+        offS  = reaper.MIDI_GetProjQNFromPPQPos(take, startPpq) - startQN,
+        offE  = reaper.MIDI_GetProjQNFromPPQPos(take, endPpq) - startQN,
+        chan  = chan,
+        pitch = pitch,
+      }
+      chanMask = chanMask | (1 << chan)
+    end
+  end
+  return notes, chanMask
+end
+
 local function buildTakeShape(take, item, trackIdx, startQN, lengthQN, slotForId, colourForId)
-  local id = takeIdOf(take)
+  local id   = takeIdOf(take)
+  local kind = takeKind(take)
+  local notes, chanMask
+  if kind == 'midi' then notes, chanMask = midiNotesOf(take, startQN) end
   return {
     item         = item,
     take         = take,
@@ -290,7 +311,9 @@ local function buildTakeShape(take, item, trackIdx, startQN, lengthQN, slotForId
     startQN      = startQN,
     lengthQN     = lengthQN,
     naturalLenQN = effectiveNaturalLenQN(take, item),
-    kind         = takeKind(take),
+    kind         = kind,
+    notes        = notes,
+    chanMask     = chanMask,
     slotIdx      = id and slotForId[id]   or nil,
     colourIdx    = id and colourForId[id] or nil,
     nativeColour = reaper.GetDisplayedMediaItemColor2(item, take) or 0,
@@ -317,11 +340,26 @@ local function slotRowsFor(dict, colourForId, firstName)
   return out
 end
 
+-- Union of channels used by a column's MIDI takes → {lo, hi}; nil if none. Shared
+-- across the column so the preview's voice columns align across its takes.
+local function chanRangeOf(takes)
+  local mask = 0
+  for _, tk in ipairs(takes) do
+    if tk.chanMask then mask = mask | tk.chanMask end
+  end
+  if mask == 0 then return nil end
+  local lo, hi
+  for ch = 0, 15 do
+    if mask & (1 << ch) ~= 0 then lo = lo or ch; hi = ch end
+  end
+  return { lo = lo, hi = hi }
+end
+
 -- One walk of the project, building every render read: track rows, per-column
 -- take-shapes, per-column slot rows. ensureColours once; ensureSlots once/track.
 local function buildState()
   local colourForId = ensureColours()
-  local tracks, takesByCol, slotsByCol = {}, {}, {}
+  local tracks, takesByCol, slotsByCol, chanByCol = {}, {}, {}, {}
   for ti = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, ti)
     if isVisibleTrack(track) then
@@ -342,10 +380,11 @@ local function buildState()
           buildTakeShape(take, item, col, startQN, lengthQN, slotForId, colourForId)
       end)
       takesByCol[col] = takes
+      chanByCol[col]  = chanRangeOf(takes)
       slotsByCol[col] = slotRowsFor(dict, colourForId, firstName)
     end
   end
-  return { tracks = tracks, takesByCol = takesByCol, slotsByCol = slotsByCol }
+  return { tracks = tracks, takesByCol = takesByCol, slotsByCol = slotsByCol, chanByCol = chanByCol }
 end
 
 -- Rebuild when our own edits flag dirty, or REAPER's state-count moves (external
@@ -362,6 +401,10 @@ end
 
 function am:tracksTakes(trackIdx)
   return ensureState().takesByCol[trackIdx] or {}
+end
+
+function am:columnChanRange(trackIdx)
+  return ensureState().chanByCol[trackIdx]
 end
 
 --contract: in-memory filter over the cached take-shapes; cols fromCol..toCol meeting [qnLo,qnHi]

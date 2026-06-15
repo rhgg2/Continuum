@@ -169,6 +169,23 @@ local function peaksFor(take, startQN, lengthQN, pxPerSec, loop)
   return hit
 end
 
+----- MIDI note previews (channel→X, time→Y, pitch→lightness)
+
+-- Notes ride am's project-state cache (tk.notes) — no cache here.
+-- Pitch→lightness: value climbs with register, semi-transparent so the slot colour reads through.
+local midiInkCache = {}
+local function midiInk(pitch)
+  local cached = midiInkCache[pitch]
+  if cached then return cached end
+  local r, g, b, a = ImGui.ColorConvertU32ToDouble4(chrome.colour('arrange.midiNote'))
+  local h, s = ImGui.ColorConvertRGBtoHSV(r, g, b)
+  local norm = math.min(1, math.max(0, (pitch - 24) / 84))   -- C1..C8 across the ramp
+  local rr, gg, bb = ImGui.ColorConvertHSVtoRGB(h, s, 0.35 + norm * 0.6)
+  cached = { u32 = ImGui.ColorConvertDouble4ToU32(rr, gg, bb, a) }
+  midiInkCache[pitch] = cached
+  return cached
+end
+
 ----- Grid pane
 
 -- HEADER_PAD: breathing room above header text; HEADER_GAP: space between divider and row 0.
@@ -382,6 +399,28 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     end
   end
 
+  -- Vertical note bars: channel→X (0..15 absolute), QN→Y. Onset cap marks attacks in legato runs.
+  -- yTop/yBot clamp to the visible band so notes past the drawn length don't bleed below.
+  local function drawNotes(tk, rx0, rx1, yTop, yBot)
+    local notes = tk.notes
+    if not notes or #notes == 0 then return end
+    local x0, x1 = rx0 + 3, rx1 - 3
+    if x1 - x0 < 1 then return end
+    for _, nt in ipairs(notes) do
+      local onsetY = rowYs(av:qnToRow(tk.startQN + nt.offS))
+      local y1     = rowYs(av:qnToRow(tk.startQN + nt.offE))
+      if y1 >= yTop and onsetY <= yBot then
+        local y0 = onsetY < yTop and yTop or onsetY
+        if y1 > yBot then y1 = yBot end
+        if y1 - y0 < 1 then y1 = y0 + 1 end
+        local x   = x0 + nt.chan / 15 * (x1 - x0)
+        local ink = midiInk(nt.pitch)
+        ps.line(x, y0, x, y1, ink, 2)
+        if onsetY >= yTop then ps.line(x - 2, onsetY, x + 2, onsetY, ink, 1) end
+      end
+    end
+  end
+
   -- Fill + 1px border; name queued for final pass. Focus = slot focus colours, not thicker border.
   -- blocked paints border red: drag candidate overlaps another take.
   local function drawTakeRect(tk, startQN, lengthQN, focused, blocked)
@@ -397,6 +436,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     if tk.kind == 'audio' then
       drawWaveform(tk, startQN, lengthQN, rx0, rx1, ry0 + 1, ry1,
                    rowYs(startRow), rowYs(endRow))
+    elseif tk.kind == 'midi' then
+      drawNotes(tk, rx0, rx1, ry0 + 1, ry1)
     end
     ps.stroke(rect(rx0, ry0, rx1 + 1, ry1 + 1), border, 1)
     if tk.name and tk.name ~= '' then

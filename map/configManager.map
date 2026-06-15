@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=719  sha=2c5605a  mode=chunk
+@module configManager  src=configManager.lua  loc=720  sha=dc0fe2f  mode=chunk
 
 # Invariants & contracts
   @invariant  cm is the sole source of truth for valid keys; in-code reads/writes raise on unknown keys, persistence-loaded unknowns are silently pruned
@@ -23,105 +23,105 @@
 
 # Private state
   @state declarations = {  @ 26
-  @state declared, defaults = {}, {}  @ 274
-  @state CONFIG_PREFIX = 'ctm_'  @ 289
-  @state SCRIPT_PATH = debug.getinfo(1,'S').source:match[[^@?(.*[\/])[^\/]-$]]  @ 290
-  @state CONFIG_GLOBAL_PATH = SCRIPT_PATH .. 'ctm_cfg.txt'  @ 291
-  @state take = nil  @ 293
-  @state track = nil  @ 294
-  @state fire  @ 295   -- installed below, once cm exists
-  @state lastStateCount = -1  @ 305
-  @state lastTakeRaw = ''  @ 306
-  @state lastTrackRaw = ''  @ 307
-  @state cache = {  @ 309
-  @state levels = { 'global', 'project', 'track', 'take', 'transient' }  @ 317
-  @state levelSet = {}  @ 319
-  @state loaders = {  @ 401
-  @state savers = {  @ 409
-  @state cm = {}  @ 479
+  @state declared, defaults = {}, {}  @ 275
+  @state CONFIG_PREFIX = 'ctm_'  @ 290
+  @state SCRIPT_PATH = debug.getinfo(1,'S').source:match[[^@?(.*[\/])[^\/]-$]]  @ 291
+  @state CONFIG_GLOBAL_PATH = SCRIPT_PATH .. 'ctm_cfg.txt'  @ 292
+  @state take = nil  @ 294
+  @state track = nil  @ 295
+  @state fire  @ 296   -- installed below, once cm exists
+  @state lastStateCount = -1  @ 306
+  @state lastTakeRaw = ''  @ 307
+  @state lastTrackRaw = ''  @ 308
+  @state cache = {  @ 310
+  @state levels = { 'global', 'project', 'track', 'take', 'transient' }  @ 318
+  @state levelSet = {}  @ 320
+  @state loaders = {  @ 402
+  @state savers = {  @ 410
+  @state cm = {}  @ 480
 
 # Private functions
   @fn print(...)  @ 14
   @fn hex(s, alpha)  @ 18
-  @fn copy(v)  @ 280
+  @fn copy(v)  @ 281
   -- PRIVATE DATA
   -- STORAGE BACKENDS
-  @fn pruneUnknown(tbl)  @ 325
+  @fn pruneUnknown(tbl)  @ 326
       -- Tolerant on load: stale keys from a rename shouldn't error.
-  @fn parse(text)  @ 333
+  @fn parse(text)  @ 334
       @contract  parse failures (bad text or non-table result) fall through to {}; never raises
-  @fn loadGlobal()  @ 340
-  @fn saveGlobal(tbl)  @ 348
-  @fn loadProject()  @ 358
-  @fn saveProject(tbl)  @ 363
-  @fn loadTrack()  @ 367
-  @fn saveTrack(tbl)  @ 374
-  @fn loadTake()  @ 384
-  @fn saveTake(tbl)  @ 390
-  @fn readTakeRaw()  @ 417
-  @fn readTrackRaw()  @ 424
-  @fn snapshotBaseline()  @ 433
+  @fn loadGlobal()  @ 341
+  @fn saveGlobal(tbl)  @ 349
+  @fn loadProject()  @ 359
+  @fn saveProject(tbl)  @ 364
+  @fn loadTrack()  @ 368
+  @fn saveTrack(tbl)  @ 375
+  @fn loadTake()  @ 385
+  @fn saveTake(tbl)  @ 391
+  @fn readTakeRaw()  @ 418
+  @fn readTrackRaw()  @ 425
+  @fn snapshotBaseline()  @ 434
       -- Called after every context-changing path so pollUndo's next compare
       -- is against the just-bound state, not whatever the previous take held.
   -- CACHE MANAGEMENT
-  @fn refreshCache()  @ 442
-  @fn ensureCache()  @ 448
-  @fn mergedTable()  @ 453
+  @fn refreshCache()  @ 443
+  @fn ensureCache()  @ 449
+  @fn mergedTable()  @ 454
       @contract  starts from schema defaults, then overlays each level's cache in `levels` order so later (more-specific) tiers win
-  @fn checkLevel(level)  @ 465
-  @fn checkKey(key)  @ 471
+  @fn checkLevel(level)  @ 466
+  @fn checkKey(key)  @ 472
   -- PUBLIC INTERFACE
   -- Reading
-  @fn mergedKey(key)  @ 563
+  @fn mergedKey(key)  @ 564
       -- Per-subkey union of a single key's tables across defaults→tiers,
       -- most-specific tier wins on name collision. Non-table contributions
       -- (including a scalar default) are skipped, so the result is always
       -- a table.
 
 # Public API (cm:*)
-  @api cm:setContext(newTake)  @ 484
+  @api cm:setContext(newTake)  @ 485
       @contract  setContext(nil) clears both take and track; setContext(take) derives track via GetMediaItemTrack
       @contract  refreshes all four persisted caches (transient resets to {}) and fires configChanged with empty payload
-  @api cm:clearTake()  @ 501
-  @api cm:boundTake()  @ 510
+  @api cm:clearTake()  @ 502
+  @api cm:boundTake()  @ 511
       @contract  bound take pointer; nil when context is cleared (take/track tiers resolve off empty)
-  @api cm:setTrack(newTrack)  @ 512
-  @api cm:pollUndo()  @ 524
-  @api cm:get(key, opts)  @ 580
+  @api cm:setTrack(newTrack)  @ 513
+  @api cm:pollUndo()  @ 525
+  @api cm:get(key, opts)  @ 581
       @contract  returns deep copy of merged value (defaults overlaid by all five tiers); raises on unknown key
       @contract  opts.mergeTiers=true switches to per-subkey union across defaults+tiers (most-specific wins on collision) — only meaningful for table-valued keys
-  @api cm:getAt(level, key)  @ 587
+  @api cm:getAt(level, key)  @ 588
       @contract  reads single tier only (no merge, no defaults); key omitted returns whole-cache deep clone; raises on unknown level/key
-  @api cm:readTrackRaw(otherTrack)  @ 599
+  @api cm:readTrackRaw(otherTrack)  @ 600
       @contract  returns the raw cm-P_EXT blob string on otherTrack (or nil/empty if unset). Stable byte-for-byte across reads — callers can compare against a previously-captured raw to detect external rewrites (REAPER undo/redo), where re-serialising a parsed copy would diverge due to Lua pairs ordering.
-  @api cm:readTrackKey(otherTrack, key)  @ 607
+  @api cm:readTrackKey(otherTrack, key)  @ 608
       @contract  bypasses cache and active context; reads otherTrack's P_EXT directly without firing configChanged or disturbing the bound track's cache
-  @api cm:writeTrackKey(otherTrack, key, value)  @ 618
+  @api cm:writeTrackKey(otherTrack, key, value)  @ 619
       @contract  bypasses cache and active context; updates a single key on otherTrack's P_EXT (read-modify-write the parsed table). Fires targeted configChanged with .track set so subscribers of the bound track can ignore foreign-track edits.
-  @api cm:readTakeKey(otherTake, key)  @ 635
+  @api cm:readTakeKey(otherTake, key)  @ 636
       @contract  bypasses cache and active context; reads otherTake's P_EXT directly without firing configChanged or disturbing the bound take's cache
-  @api cm:writeTakeKey(otherTake, key, value)  @ 646
+  @api cm:writeTakeKey(otherTake, key, value)  @ 647
       @contract  bypasses cache and active context; updates a single key on otherTake's P_EXT (read-modify-write). util.REMOVE clears. No signal fired — read/write helpers are silent seams for foreign-take state.
-  @api cm:getLevel(key)  @ 660
+  @api cm:getLevel(key)  @ 661
       @contract  walks tiers most-specific to least, returning the first level whose cache defines the key (matches merge resolution); nil if no tier sets it
   -- Writing
-  @api cm:set(level, key, value)  @ 675
+  @api cm:set(level, key, value)  @ 676
       @contract  deep-copies value into the target tier's cache, persists that tier, fires targeted configChanged
-  @api cm:remove(level, key)  @ 688
+  @api cm:remove(level, key)  @ 689
       @contract  removes key from the named tier only; no-op (and no signal) if that tier's cache is unloaded
-  @api cm:assign(level, updates)  @ 702
+  @api cm:assign(level, updates)  @ 703
       @contract  validates every key in updates before any write (all-or-nothing); util.REMOVE sentinel deletes that key; fires keyless configChanged
 
 # Signals emitted (via util.installHooks)
   @emits configChanged   -- configChangedPayload.bulk
 
 # Uses (outbound edges)
-  @use call    util.add  @ 259, 260, 269, 270, 271
-  @use call    util.assign  @ 459
-  @use call    util.deepClone  @ 281, 595
-  @use call    util.installHooks  @ 480
+  @use call    util.add  @ 260, 261, 270, 271, 272
+  @use call    util.assign  @ 460
+  @use call    util.deepClone  @ 282, 596
+  @use call    util.installHooks  @ 481
   @use call    util.print  @ 15
-  @use call    util.serialise  @ 354, 364, 379, 397, 627, 655
+  @use call    util.serialise  @ 355, 365, 380, 398, 628, 656
   @use require util  @ 12
 
 # REAPER API surface
