@@ -27,6 +27,12 @@ local gridRows, gridCols   = 0, 0
 local maxCol      = nil
 local paletteSlot = nil
 local focus       = nil
+-- Play-head follow: suspended by a manual wheel-pan, re-armed on the next
+-- play-start or transport seek. lastPlayRow drives the seek-discontinuity test.
+local followSuspended = false
+local lastPlayRow     = nil
+local FOLLOW_TOP_LEAD    = 1  -- head lands this many rows below the top after a flip
+local FOLLOW_BOTTOM_LEAD = 1  -- flip once the head reaches this many rows from the bottom
 
 local DRAG_EDGE_PX = 5    -- end-edge grab band for a resize hit-test
 local PAGE_ROWS    = 16   -- PageUp / PageDown cursor step
@@ -283,10 +289,37 @@ end
 --contract: wheel-driven viewport pan, independent of the cursor; cursor stays put.
 --contract: scroll-right stops once the last column is fully visible (maxCol - gridCols + 1).
 function av:scrollBy(dRow, dCol)
+  followSuspended = true   -- a manual pan suspends play-follow until stop/seek
   scrollRow = math.max(0, scrollRow + dRow)
   local c = math.max(0, scrollCol + dCol)
   if maxCol then c = math.min(c, math.max(0, maxCol - gridCols + 1)) end
   scrollCol = c
+end
+
+function av:followsPlay()     return cm:get('arrangeFollowPlay') end
+function av:setFollowPlay(on)  cm:set('global', 'arrangeFollowPlay', not not on) end
+
+--contract: no-op unless follow is on and transport runs; boundary-scrolls play head into view.
+--contract: a manual scrollBy suspends follow until the next play-start or a transport seek.
+function av:followPlay()
+  if not cm:get('arrangeFollowPlay') then return end
+  local qn = am:playPositionQN()
+  if not qn then
+    lastPlayRow, followSuspended = nil, false   -- stopped: re-arm for the next play
+    return
+  end
+  local playRow = math.floor(self:qnToRow(qn))
+  local started = lastPlayRow == nil
+  local seeked  = lastPlayRow and gridRows > 0
+                  and (playRow < lastPlayRow or playRow >= lastPlayRow + gridRows)
+  if started or seeked then followSuspended = false end
+  lastPlayRow = playRow
+  if followSuspended or gridRows == 0 then return end
+  local bandTop = scrollRow + FOLLOW_TOP_LEAD
+  local bandBot = scrollRow + gridRows - 1 - FOLLOW_BOTTOM_LEAD
+  if playRow < bandTop or playRow > bandBot then
+    scrollRow = math.max(0, playRow - FOLLOW_TOP_LEAD)
+  end
 end
 
 --contract: stores an opaque take handle or nil; av resolves it via am at edit-command time.

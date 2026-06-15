@@ -260,6 +260,8 @@ local function handleGridMouse(nTracks)
       av:scrollBy(-rows, -cols)
     end
   end
+  -- After the wheel pan so a manual scroll this frame suspends follow before it runs.
+  av:followPlay()
   if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx) and inBody then
     if inGutter then
       press = { qn = myQN, gutter = true, moved = false }
@@ -763,7 +765,24 @@ end
 -- gesture shares the createSlot modal that lives with the rest of the renderer.
 function ar:newTakeBelow() arrangeNewTakeBelow() end
 
-function ar:renderToolbarBits(_) end
+local toolbar  -- lazy: chrome may be nil at construction in tests
+
+--shape: ToolbarSegment = { id, render = fn() }
+local toolbarSegments = {
+  {
+    id = 'followPlay',
+    render = function()
+      local changed, on = chrome.checkbox('Follow play', av:followsPlay())
+      if changed then av:setFollowPlay(on) end
+    end,
+  },
+}
+
+function ar:renderToolbarBits(_)
+  chrome.resetPickerActive()
+  toolbar = toolbar or chrome.makeToolbar()
+  toolbar(toolbarSegments)
+end
 
 --invariant: grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.
 --contract: pushes parchment body palette (coord popped chrome before); palette tables need it.
@@ -846,6 +865,7 @@ arrange:registerAll {
   createSlot = function()
     openCreateModal(av:cursorCol(), av:rowToQN(av:cursorRow()))
   end,
+  toggleFollowPlay = function() av:setFollowPlay(not av:followsPlay()) end,
 }
 
 -- Cursor-nav and take-edit commands reuse the tracker scope's keys but not its names:
@@ -873,6 +893,7 @@ local binds = {
   arrangeSetLoopStart           = { { ImGui.Key_B, ImGui.Mod_Ctrl } },
   arrangeSetLoopEnd             = { { ImGui.Key_E, ImGui.Mod_Ctrl } },
   arrangePlayFromCursor         = { ImGui.Key_F6 },
+  toggleFollowPlay              = { { ImGui.Key_F, ImGui.Mod_Super } },
   arrangeClearLoop              = { ImGui.Key_Escape },
 }
 

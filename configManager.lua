@@ -110,6 +110,9 @@ local declarations = {
   -- Only the density preference earns a persisted slot. Typical values
   -- 4, 8, 16 beats per row (one bar to four bars per row in 4/4).
   { 'arrangeBeatPerRow', 4 },
+  -- Arrange viewport follows the play head while the transport runs
+  -- (boundary-scroll). Toolbar checkbox / Super+F; global tier.
+  { 'arrangeFollowPlay', false },
   -- Arrange-take natural length in QN: the ceiling the item regrows
   -- toward when neighbours move out of the way. Persisted per-take via
   -- writeTakeKey (P_EXT). Default (nil at storage) reads as util.OPEN —
