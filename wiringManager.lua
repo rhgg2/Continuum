@@ -399,7 +399,11 @@ end
 
 --contract: fx rows in sourceTrack's cone, flow order: midi-cone (generator=true) first, then audio
 --contract: row = { fxGuid, name, trackGuid, generator? }; {} when sourceTrack isn't a graph node
+--contract: a never-read graph realises once here (live mode) so fx resolve before the cone walk
 function wm:paramTargets(sourceTrack)
+  -- Cold graph: viewGraph's lazy read reconstructs intent but never hosts the fx into REAPER,
+  -- so fxTrack would miss every node. Reconcile once to realise it before the walk.
+  if liveLabel and not userGraph then self:reconcile('wiring: reconcile (palette)') end
   local sourceId = sourceTrack and reaper.GetTrackGUID(sourceTrack)
   local g = self:viewGraph()
   if not (sourceId and g.nodes[sourceId]) then return {} end
