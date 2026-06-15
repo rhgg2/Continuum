@@ -1,4 +1,4 @@
-@module arrangeRender  src=arrangeRender.lua  loc=908  sha=1d2bf54  mode=chunk
+@module arrangeRender  src=arrangeRender.lua  loc=908  sha=428404c  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, av
 
 # Invariants & contracts

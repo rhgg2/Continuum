@@ -1,4 +1,4 @@
-@module sampleRender  src=sampleRender.lua  loc=629  sha=77d117a  mode=chunk
+@module sampleRender  src=sampleRender.lua  loc=630  sha=4fdd89b  mode=chunk
 @deps cm, cmgr, chrome, gui, sv
 
 # Invariants & contracts
@@ -39,10 +39,10 @@
   @state durCache = {}  @ 35
   @state drag = { handle = nil, slot = nil, startF = nil, endF = nil }  @ 36
   @state pip = { slot = nil, justTriggered = false,  @ 39
-  @state toolbar  @ 380   -- lazy: chrome may be nil at construction in tests
-  @state toolbarSegments = {  @ 383
-  @state sr = {}  @ 435
-  @state sampler = cmgr:scope('sample')  @ 587
+  @state toolbar  @ 381   -- lazy: chrome may be nil at construction in tests
+  @state toolbarSegments = {  @ 384
+  @state sr = {}  @ 436
+  @state sampler = cmgr:scope('sample')  @ 588
       @invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])
 
 # Private functions
@@ -73,106 +73,105 @@
       @contract  early-returns when the focused slot is empty or the source can't be read; otherwise every code path through here calls sm:setTrim before frame end if the user changed start/end
       @contract  drag handle is held in `drag` across frames keyed by slot — switching to a different slot mid-drag implicitly drops the drag (liveDrag check fails)
       @contract  trim invariants enforced at write: 0 <= start <= end-1 and start+1 <= end <= frames-2 (last 2 frames reserved)
-  @fn boundTrackName()  @ 425
+  @fn boundTrackName()  @ 426
       -- Bound sampler track's name, for the slots-palette header + status bar.
 
 # Public API (sr:*)
-  @api sr:renderToolbarBits(_)  @ 437
-  @api sr:renderBody(_, w, h, dispatch)  @ 448
-  @api sr:renderStatusBar(_)  @ 559
-  @api sr:closeTransients()  @ 569
+  @api sr:renderToolbarBits(_)  @ 438
+  @api sr:renderBody(_, w, h, dispatch)  @ 449
+  @api sr:renderStatusBar(_)  @ 560
+  @api sr:closeTransients()  @ 570
       @contract  clear ephemeral preview/rename/drag state; the controller calls this on unbind
-  @api sr:focusState()  @ 576
+  @api sr:focusState()  @ 577
       @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
 
 # Uses (outbound edges)
-  @use call    chrome.checkbox  @ 410, 417
-  @use call    chrome.colour  @ 454
-  @use call    chrome.disabledIf  @ 459, 472, 502, 506, 510
-  @use call    chrome.gridWidth  @ 457
-  @use call    chrome.makeToolbar  @ 439
-  @use call    chrome.pickerIsActive  @ 578
-  @use call    chrome.popChromeStyles  @ 556
-  @use call    chrome.pushChromeStyles  @ 453
-  @use call    chrome.resetPickerActive  @ 438
-  @use call    cm.get  @ 53, 214, 224, 225, 287, 288, 411, 418, 499, 500, 547, 561, 562, 604, 608, 612, 614
-  @use call    cm.set  @ 271, 413, 419, 605, 609
-  @use call    cmgr.scope  @ 587
-  @use call    fs.basename  @ 476
+  @use call    chrome.checkbox  @ 411, 418
+  @use call    chrome.colour  @ 455
+  @use call    chrome.disabledIf  @ 460, 473, 503, 507, 511
+  @use call    chrome.gridWidth  @ 458
+  @use call    chrome.makeToolbar  @ 440
+  @use call    chrome.pickerIsActive  @ 579
+  @use call    chrome.popChromeStyles  @ 557
+  @use call    chrome.pushChromeStyles  @ 454
+  @use call    chrome.resetPickerActive  @ 439
+  @use call    cm.get  @ 53, 214, 224, 225, 287, 288, 412, 419, 500, 501, 548, 562, 563, 605, 609, 613, 615
+  @use call    cm.set  @ 271, 414, 420, 606, 610
+  @use call    cmgr.scope  @ 588
+  @use call    fs.basename  @ 477
   @use call    fs.join  @ 134, 169, 172
   @use call    fs.listAudioFiles  @ 171
   @use call    fs.listDirs  @ 133, 167
-  @use call    fs.parent  @ 154, 471
-  @use call    imgui.BeginChild  @ 469, 486, 496, 520
+  @use call    fs.parent  @ 154, 472
+  @use call    imgui.BeginChild  @ 470, 487, 497, 521
   @use call    imgui.BeginTable  @ 227
-  @use call    imgui.Button  @ 377, 503, 507, 511, 514
+  @use call    imgui.Button  @ 378, 504, 508, 512, 515
   @use call    imgui.CalcTextSize  @ 235
-  @use call    imgui.DrawList_AddLine  @ 334, 339, 340
   @use call    imgui.DrawList_AddQuadFilled  @ 328
-  @use call    imgui.DrawList_AddRectFilled  @ 313, 338
-  @use call    imgui.EndChild  @ 480, 492, 516, 525
+  @use call    imgui.DrawList_AddRectFilled  @ 313, 335, 339, 340, 341
+  @use call    imgui.EndChild  @ 481, 493, 517, 526
   @use call    imgui.EndTable  @ 278
-  @use call    imgui.GetContentRegionAvail  @ 236, 497, 522
+  @use call    imgui.GetContentRegionAvail  @ 236, 498, 523
   @use call    imgui.GetCursorPosX  @ 237
-  @use call    imgui.GetCursorScreenPos  @ 306, 456
+  @use call    imgui.GetCursorScreenPos  @ 306, 457
   @use call    imgui.GetKeyMods  @ 191, 195
-  @use call    imgui.GetMousePos  @ 343
+  @use call    imgui.GetMousePos  @ 344
   @use call    imgui.GetStyleColor  @ 203, 240
   @use call    imgui.GetWindowDrawList  @ 310
-  @use call    imgui.InputInt  @ 366, 372
+  @use call    imgui.InputInt  @ 367, 373
   @use call    imgui.InputText  @ 247
   @use call    imgui.InvisibleButton  @ 307
-  @use call    imgui.IsAnyItemActive  @ 581
+  @use call    imgui.IsAnyItemActive  @ 582
   @use call    imgui.IsItemActive  @ 250, 308
   @use call    imgui.IsItemClicked  @ 136
   @use call    imgui.IsItemHovered  @ 139, 308
   @use call    imgui.IsKeyPressed  @ 190, 194, 254
-  @use call    imgui.IsMouseClicked  @ 548
+  @use call    imgui.IsMouseClicked  @ 549
   @use call    imgui.IsMouseDoubleClicked  @ 139, 211, 273
-  @use call    imgui.IsWindowFocused  @ 489
-  @use call    imgui.PopStyleColor  @ 208, 276, 555
-  @use call    imgui.PushStyleColor  @ 204, 205, 241, 242, 454
-  @use call    imgui.SameLine  @ 370, 376, 416, 475, 482, 495
+  @use call    imgui.IsWindowFocused  @ 490
+  @use call    imgui.PopStyleColor  @ 208, 276, 556
+  @use call    imgui.PushStyleColor  @ 204, 205, 241, 242, 455
+  @use call    imgui.SameLine  @ 371, 377, 417, 476, 483, 496
   @use call    imgui.Selectable  @ 206, 269
-  @use call    imgui.Separator  @ 477
+  @use call    imgui.Separator  @ 478
   @use call    imgui.SetCursorPosX  @ 237
-  @use call    imgui.SetCursorScreenPos  @ 519
+  @use call    imgui.SetCursorScreenPos  @ 520
   @use call    imgui.SetKeyboardFocusHere  @ 245
-  @use call    imgui.SetMouseCursor  @ 361, 554
-  @use call    imgui.SetNextItemWidth  @ 246, 365, 371
+  @use call    imgui.SetMouseCursor  @ 362, 555
+  @use call    imgui.SetNextItemWidth  @ 246, 366, 372
   @use call    imgui.SetScrollHereY  @ 218
-  @use call    imgui.SmallButton  @ 473
+  @use call    imgui.SmallButton  @ 474
   @use call    imgui.TableNextRow  @ 232
   @use call    imgui.TableSetColumnIndex  @ 233, 239
   @use call    imgui.TableSetupColumn  @ 228, 229
-  @use call    imgui.Text  @ 564
-  @use call    imgui.TextDisabled  @ 238, 291, 298, 476
+  @use call    imgui.Text  @ 565
+  @use call    imgui.TextDisabled  @ 238, 291, 298, 477
   @use call    imgui.TreeNode  @ 135
   @use call    imgui.TreePop  @ 144
-  @use call    painter.new  @ 531
-  @use call    sv.auditionCurrent  @ 511
-  @use call    sv.auditionPath  @ 215, 596
-  @use call    sv.auditionSlot  @ 273, 377
-  @use call    sv.browseRoot  @ 151, 449
-  @use call    sv.canAuditionCurrent  @ 510
-  @use call    sv.clearCurrentSlot  @ 507
-  @use call    sv.getBrowserPath  @ 58, 178, 200, 546, 592
-  @use call    sv.getCurrentFolder  @ 152, 450
-  @use call    sv.getSelectedFile  @ 498, 596
-  @use call    sv.getTrack  @ 54, 388, 426
-  @use call    sv.isBrowserFolder  @ 591, 600
-  @use call    sv.isLive  @ 451
-  @use call    sv.listTracks  @ 387, 427
-  @use call    sv.loadSelectedIntoCurrent  @ 503, 601
-  @use call    sv.setBrowseRoot  @ 140, 473
+  @use call    painter.new  @ 532
+  @use call    sv.auditionCurrent  @ 512
+  @use call    sv.auditionPath  @ 215, 597
+  @use call    sv.auditionSlot  @ 273, 378
+  @use call    sv.browseRoot  @ 151, 450
+  @use call    sv.canAuditionCurrent  @ 511
+  @use call    sv.clearCurrentSlot  @ 508
+  @use call    sv.getBrowserPath  @ 58, 178, 200, 547, 593
+  @use call    sv.getCurrentFolder  @ 152, 451
+  @use call    sv.getSelectedFile  @ 499, 597
+  @use call    sv.getTrack  @ 54, 389, 427
+  @use call    sv.isBrowserFolder  @ 592, 601
+  @use call    sv.isLive  @ 452
+  @use call    sv.listTracks  @ 388, 428
+  @use call    sv.loadSelectedIntoCurrent  @ 504, 602
+  @use call    sv.setBrowseRoot  @ 140, 474
   @use call    sv.setBrowserItem  @ 156, 185, 193, 197, 210
-  @use call    sv.setCurrentFolder  @ 137, 157, 213, 594
+  @use call    sv.setCurrentFolder  @ 137, 157, 213, 595
   @use call    sv.setName  @ 252
   @use call    sv.setSlotFocus  @ 272
-  @use call    sv.setTrack  @ 403
-  @use call    sv.setTrim  @ 357, 368, 374
+  @use call    sv.setTrack  @ 404
+  @use call    sv.setTrim  @ 358, 369, 375
   @use call    sv.stageInto  @ 55
-  @use call    sv.stopAudition  @ 514
+  @use call    sv.stopAudition  @ 515
   @use call    sv.syncSlot  @ 45
   @use require fs  @ 13
   @use require imgui  @ 19

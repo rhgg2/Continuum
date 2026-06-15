@@ -331,13 +331,14 @@ local function drawStrip(stripW, stripH)
       pYT, pYB = yT, yB
     end
   else
-    ImGui.DrawList_AddLine(dl, x0, mid, x0 + stripW, mid, 0x808080FF, 1)
+    -- Filled strips, not AddLine: a 1px line blurs into ~2px under AA.
+    ImGui.DrawList_AddRectFilled(dl, x0, mid, x0 + stripW, mid + 1, 0x808080FF)
   end
   local function frameToX(fr) return x0 + (fr / frames) * stripW end
   local sx, ex = frameToX(startF), frameToX(endF)
   ImGui.DrawList_AddRectFilled(dl, sx, y0, ex, y0 + canvasH, 0x4080FF22)
-  ImGui.DrawList_AddLine(dl, sx, y0, sx, y0 + canvasH, 0x40FF80FF, 2)
-  ImGui.DrawList_AddLine(dl, ex, y0, ex, y0 + canvasH, 0xFF8040FF, 2)
+  ImGui.DrawList_AddRectFilled(dl, sx - 1, y0, sx + 1, y0 + canvasH, 0x40FF80FF)
+  ImGui.DrawList_AddRectFilled(dl, ex - 1, y0, ex + 1, y0 + canvasH, 0xFF8040FF)
 
   if active then
     local mx, _ = ImGui.GetMousePos(ctx)

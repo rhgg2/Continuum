@@ -380,7 +380,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local loop = reaper.GetMediaItemInfo_Value(tk.item, 'B_LOOPSRC') ~= 0
     local pk = peaksFor(tk.take, startQN, lengthQN, pxPerSec, loop)
     if not pk or not pk.hi then
-      ps.line(cx, yTop, cx, yBot, 'arrange.waveform', 1)
+      ps.segment(cx, yTop, cx, yBot, 'arrange.waveform')
       return
     end
     -- A looped take wraps source-time over one period (offset-phased); otherwise
@@ -393,7 +393,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
       local hiX = cx + (pk.hi[i] or 0) * hw
       local loX = cx + (pk.lo[i] or 0) * hw
       if hiX - loX < 1 then hiX = loX + 1 end
-      ps.line(loX, y, hiX, y, 'arrange.waveform', 1)
+      ps.segment(loX, y, hiX, y, 'arrange.waveform')
     end
   end
 
@@ -413,8 +413,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
         if y1 - y0 < 1 then y1 = y0 + 1 end
         local x   = x0 + nt.chan / 15 * (x1 - x0)
         local ink = midiInk(nt.pitch)
-        ps.line(x, y0, x, y1, ink, 2)
-        if onsetY >= yTop then ps.line(x - 2, onsetY, x + 2, onsetY, ink, 1) end
+        ps.segment(x - 1, y0, x - 1, y1, ink, 2)
+        if onsetY >= yTop then ps.segment(x - 2, onsetY, x + 2, onsetY, ink) end
       end
     end
   end
