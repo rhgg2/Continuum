@@ -177,6 +177,7 @@ local declarations = {
   { 'colour.arrange.ghostBorder',      {0.45, 0.42, 0.30, 0.90}  },  -- create-preview border
   { 'colour.arrange.orphanFill',       {0.50, 0.50, 0.50, 0.35}  },  -- slot-less item, neutral grey
   { 'colour.arrange.orphanFocusFill',  {0.85, 0.85, 0.85, 0.55}  },
+  { 'colour.arrange.waveform',         {0.13, 0.13, 0.16, 0.62}  },  -- audio preview ink over the slot fill
   { 'colour.rowNormal',        {'palette.base.zone8',  0   }      },
   { 'colour.rowBeat',          {'palette.base.zone7',  0.4 }      },
   { 'colour.rowBarStart',      {'palette.base.zone6',  0.4 }      },

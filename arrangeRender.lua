@@ -97,6 +97,73 @@ local function slotFill(colourIdx, focused)
   return focused and pair[2] or pair[1]
 end
 
+----- Audio waveform previews (native REAPER peaks)
+
+-- Per-take peak cache; invalidated on zoom change. hi=nil while async build
+-- is in progress; caller draws a flat centre line. Never destroy the source.
+local peakCache = {}
+
+-- Window keyed to drawn length (not D_LENGTH) so scale stays fixed on resize:
+-- head anchored, tail reveals/hides like a trim.
+local function takeWindowSec(take, startQN, lengthQN)
+  local startOffs = reaper.GetMediaItemTakeInfo_Value(take, 'D_STARTOFFS')
+  local rate      = reaper.GetMediaItemTakeInfo_Value(take, 'D_PLAYRATE')
+  local drawnSec  = reaper.TimeMap2_QNToTime(0, startQN + lengthQN)
+                  - reaper.TimeMap2_QNToTime(0, startQN)
+  return startOffs, drawnSec * (rate ~= 0 and rate or 1)
+end
+
+-- PCM_Source_GetPeaks lays the buffer out as a maxes block then a mins block,
+-- channels interleaved per column; reduce to per-column signed hi/lo.
+--contract: nil for an unreadable source; entry with hi=nil while peaks still build
+local function peaksFor(take, startQN, lengthQN, cols)
+  local src = reaper.GetMediaItemTake_Source(take)
+  if not src then return nil end
+  local startSec, winSec = takeWindowSec(take, startQN, lengthQN)
+  if winSec <= 0 then return nil end
+
+  -- Take pointer is stable+unique, so two takes sharing a source don't collide.
+  -- The take under an active resize churns its entry each frame; others stay cached.
+  local key = tostring(take)
+  local hit = peakCache[key]
+  if hit and (hit.cols ~= cols or hit.startSec ~= startSec or hit.winSec ~= winSec) then
+    hit, peakCache[key] = nil, nil
+  end
+  if hit and hit.hi then return hit end
+
+  if not hit then
+    hit = { cols = cols, startSec = startSec, winSec = winSec,
+            building = reaper.PCM_Source_BuildPeaks(src, 0) ~= 0 }
+    peakCache[key] = hit
+  end
+  if hit.building then
+    if reaper.PCM_Source_BuildPeaks(src, 1) == 0 then
+      reaper.PCM_Source_BuildPeaks(src, 2)
+      hit.building = false
+    else
+      return hit
+    end
+  end
+
+  local nch = math.max(1, reaper.GetMediaSourceNumChannels(src))
+  local buf = reaper.new_array(cols * nch * 2); buf.clear()
+  reaper.PCM_Source_GetPeaks(src, cols / winSec, startSec, nch, cols, 0, buf)
+  local minBase, hi, lo = cols * nch, {}, {}
+  for i = 0, cols - 1 do
+    local h = buf[i * nch + 1] or 0
+    local l = buf[minBase + i * nch + 1] or 0
+    for c = 1, nch - 1 do
+      local mx = buf[i * nch + c + 1] or 0
+      local mn = buf[minBase + i * nch + c + 1] or 0
+      if mx > h then h = mx end
+      if mn < l then l = mn end
+    end
+    hi[i + 1], lo[i + 1] = h, l
+  end
+  hit.hi, hit.lo = hi, lo
+  return hit
+end
+
 ----- Grid pane
 
 -- HEADER_PAD: breathing room above header text; HEADER_GAP: space between divider and row 0.
@@ -278,6 +345,29 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
   local nameDraws = {}
   local truncDraws = {}   -- ellipsis decoration for items truncated below natural
 
+  -- Vertical waveform: time→Y, amplitude→X (centred). ≥1px span per pixel so
+  -- near-silence draws a line. fullTop/fullBot = full take edges (may be off-screen).
+  local function drawWaveform(tk, startQN, lengthQN, rx0, rx1, yTop, yBot, fullTop, fullBot)
+    local fullH = fullBot - fullTop
+    if fullH < 2 then return end
+    local cols = math.max(16, math.min(4096, math.floor(fullH + 0.5)))
+    local cx   = (rx0 + rx1) * 0.5
+    local hw   = (rx1 - rx0) * 0.5 - 3
+    if hw < 1 then return end
+    local pk = peaksFor(tk.take, startQN, lengthQN, cols)
+    if not pk or not pk.hi then
+      ps.line(cx, yTop, cx, yBot, 'arrange.waveform', 1)
+      return
+    end
+    for y = math.floor(yTop), math.floor(yBot) do
+      local i   = math.min(cols, math.max(1, math.floor((y - fullTop) / fullH * cols) + 1))
+      local hiX = cx + (pk.hi[i] or 0) * hw
+      local loX = cx + (pk.lo[i] or 0) * hw
+      if hiX - loX < 1 then hiX = loX + 1 end
+      ps.line(loX, y, hiX, y, 'arrange.waveform', 1)
+    end
+  end
+
   -- Fill + 1px border; name queued for final pass. Focus = slot focus colours, not thicker border.
   -- blocked paints border red: drag candidate overlaps another take.
   local function drawTakeRect(tk, startQN, lengthQN, focused, blocked)
@@ -290,6 +380,10 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local fill   = slotFill(tk.colourIdx, focused)
     local border = blocked and 'arrange.blockedBorder' or 'arrange.itemBorder'
     ps.fill(rect(rx0 + 1, ry0 + 1, rx1, ry1), fill)
+    if tk.kind == 'audio' then
+      drawWaveform(tk, startQN, lengthQN, rx0, rx1, ry0 + 1, ry1,
+                   rowYs(startRow), rowYs(endRow))
+    end
     ps.stroke(rect(rx0, ry0, rx1 + 1, ry1 + 1), border, 1)
     if tk.name and tk.name ~= '' then
       nameDraws[#nameDraws + 1] = {

@@ -12,6 +12,7 @@
 - wm - midi channel filter
 - wm - master multi-outs / deal with restriction on single audio feed
   to master
+- wm - send from folder child track direct to master
 - MIDI PDC alignment at a merge — verify pdc_midi=1 if MIDI-vs-audio
   skew shows up. 
   
