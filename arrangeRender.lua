@@ -47,8 +47,8 @@ local openCreateModal
 --invariant: gutter press drives REAPER transport — release sets edit cursor, drag sets loop range.
 --invariant: double-click on empty space starts a create press; release opens create modal.
 local press = nil
-local WHEEL_STEP_ROWS   = 1   -- cursor rows moved per mouse-wheel notch
-local WHEEL_STEP_COLS   = 0.5   -- cursor cols moved per mouse-wheel notch
+local WHEEL_STEP_ROWS   = 1   -- viewport rows panned per mouse-wheel notch
+local WHEEL_STEP_COLS   = 0.5   -- viewport cols panned per mouse-wheel notch
 local wheelAccumV  = 0   -- fractional vertical wheel carried between frames
 local wheelAccumH  = 0   -- fractional horizontal wheel carried between frames
 
@@ -249,7 +249,7 @@ local function handleGridMouse(nTracks)
      and inBody and inGutter then
     av:clearLoopRange()
   end
-  -- Wheel moves the cursor (detached scroll snaps back via followViewport).
+  -- Wheel pans the viewport; the cursor stays put (cursor-nav re-follows it).
   -- Fractional trackpad deltas accumulate; whole notches drain off — vertical to rows, horizontal to columns.
   local vWheel, hWheel = ImGui.GetMouseWheel(ctx)
   if (vWheel ~= 0 or hWheel ~= 0) and ImGui.IsWindowHovered(ctx) then
@@ -257,7 +257,7 @@ local function handleGridMouse(nTracks)
     wheelAccumV, rows = drainWheel(wheelAccumV, vWheel, WHEEL_STEP_ROWS)
     wheelAccumH, cols = drainWheel(wheelAccumH, hWheel, WHEEL_STEP_COLS)
     if rows ~= 0 or cols ~= 0 then
-      av:setCursor(av:cursorRow() - rows, av:cursorCol() - cols)
+      av:scrollBy(-rows, -cols)
     end
   end
   if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx) and inBody then

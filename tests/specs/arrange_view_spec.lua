@@ -88,6 +88,58 @@ return {
   },
 
   {
+    name = 'scrollBy pans the viewport without moving the cursor',
+    run = function(harness)
+      local _, av = mkAv(harness)
+      av:setGridSize(10, 4)
+      av:scrollBy(5, 2)
+      local sr, sc = av:scroll()
+      t.eq(sr, 5); t.eq(sc, 2)
+      t.eq(av:cursorRow(), 0, 'cursor untouched by the wheel')
+      t.eq(av:cursorCol(), 0)
+    end,
+  },
+
+  {
+    name = 'scrollBy clamps to >= 0 and cursor-nav re-follows the cursor',
+    run = function(harness)
+      local _, av = mkAv(harness)
+      av:setGridSize(10, 4)
+      av:scrollBy(-3, -3)
+      local sr, sc = av:scroll()
+      t.eq(sr, 0, 'row scroll floored at 0'); t.eq(sc, 0)
+      av:scrollBy(20, 0)
+      av:setCursor(2, 0)                 -- a deliberate cursor move pulls the viewport back
+      sr = av:scroll()
+      t.eq(sr, 2, 'cursor-nav re-follows, snapping scroll back onto the cursor')
+    end,
+  },
+
+  {
+    name = 'scroll-right stops once the last column is fully visible',
+    run = function(harness)
+      local _, av = mkAv(harness)
+      av:setGridSize(10, 4)              -- 4 columns visible
+      av:setMaxCol(10)                   -- 10 tracks → last index 9
+      av:scrollBy(0, 50)
+      local _, sc = av:scroll()
+      t.eq(sc, 6, 'maxCol(9) - gridCols(4) + 1 = 6; col 9 sits fully at the right edge')
+    end,
+  },
+
+  {
+    name = 'a same-dims setGridSize after a wheel-scroll leaves scroll alone',
+    run = function(harness)
+      local _, av = mkAv(harness)
+      av:setGridSize(10, 4)
+      av:scrollBy(8, 0)
+      av:setGridSize(10, 4)              -- per-frame push with unchanged dims
+      local sr = av:scroll()
+      t.eq(sr, 8, 'detached scroll survives the steady-state grid-size push')
+    end,
+  },
+
+  {
     name = 'beatPerRow defaults to cm value; setter clamps minimum',
     run = function(harness)
       local h, av = mkAv(harness)

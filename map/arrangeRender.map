@@ -1,4 +1,4 @@
-@module arrangeRender  src=arrangeRender.lua  loc=894  sha=098b66f  mode=chunk
+@module arrangeRender  src=arrangeRender.lua  loc=894  sha=ac419ac  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, av
 
 # Invariants & contracts
@@ -31,8 +31,8 @@
       @invariant  drag relocates via am:startIsClear; cursor moves only on clean (no-drag) release.
       @invariant  gutter press drives REAPER transport — release sets edit cursor, drag sets loop range.
       @invariant  double-click on empty space starts a create press; release opens create modal.
-  @state WHEEL_STEP_ROWS = 1  @ 50   -- cursor rows moved per mouse-wheel notch
-  @state WHEEL_STEP_COLS = 0.5  @ 51   -- cursor cols moved per mouse-wheel notch
+  @state WHEEL_STEP_ROWS = 1  @ 50   -- viewport rows panned per mouse-wheel notch
+  @state WHEEL_STEP_COLS = 0.5  @ 51   -- viewport cols panned per mouse-wheel notch
   @state wheelAccumV = 0  @ 52   -- fractional vertical wheel carried between frames
   @state wheelAccumH = 0  @ 53   -- fractional horizontal wheel carried between frames
   @state SLOT_FILL_ALPHA = 0.85  @ 83
@@ -117,8 +117,8 @@
   @use call    av.createCandidate  @ 298
   @use call    av.createSlot  @ 649
   @use call    av.createTakeBelow  @ 666
-  @use call    av.cursorCol  @ 260, 335, 746, 824, 847
-  @use call    av.cursorRow  @ 260, 335, 824, 847
+  @use call    av.cursorCol  @ 335, 746, 824, 847
+  @use call    av.cursorRow  @ 335, 824, 847
   @use call    av.deleteSlot  @ 634
   @use call    av.dragCandidate  @ 294
   @use call    av.editCursorQN  @ 556
@@ -136,7 +136,8 @@
   @use call    av.renameSlot  @ 623
   @use call    av.rowToQN  @ 78, 243, 344, 457, 847
   @use call    av.scroll  @ 209
-  @use call    av.setCursor  @ 260, 313
+  @use call    av.scrollBy  @ 260
+  @use call    av.setCursor  @ 313
   @use call    av.setEditCursorQN  @ 311
   @use call    av.setFocus  @ 282, 314
   @use call    av.setGridSize  @ 237, 780

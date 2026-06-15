@@ -280,6 +280,15 @@ function av:setCursor(row, col)
   followViewport()
 end
 
+--contract: wheel-driven viewport pan, independent of the cursor; cursor stays put.
+--contract: scroll-right stops once the last column is fully visible (maxCol - gridCols + 1).
+function av:scrollBy(dRow, dCol)
+  scrollRow = math.max(0, scrollRow + dRow)
+  local c = math.max(0, scrollCol + dCol)
+  if maxCol then c = math.min(c, math.max(0, maxCol - gridCols + 1)) end
+  scrollCol = c
+end
+
 --contract: stores an opaque take handle or nil; av resolves it via am at edit-command time.
 function av:setFocus(handle) focus = handle end
 
@@ -293,11 +302,13 @@ function av:setBeatPerRow(v) cm:set('project', 'arrangeBeatPerRow', math.max(1/4
 function av:qnToRow(qn)  return qn / self:beatPerRow() end
 function av:rowToQN(row) return row * self:beatPerRow() end
 
---contract: page hands over visible cell counts each frame so followViewport has live bounds.
+--contract: page hands over visible cell counts each frame; follows cursor only on resize.
 function av:setGridSize(rows, cols)
-  gridRows = math.max(0, math.floor(rows))
-  gridCols = math.max(0, math.floor(cols))
-  followViewport()
+  local r, c = math.max(0, math.floor(rows)), math.max(0, math.floor(cols))
+  if r ~= gridRows or c ~= gridCols then
+    gridRows, gridCols = r, c
+    followViewport()
+  end
 end
 
 --contract: page pushes live track count each frame; setCursor clamps cursorCol to it.
