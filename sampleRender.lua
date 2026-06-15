@@ -362,15 +362,20 @@ local function drawStrip(stripW, stripH)
   if hovered then ImGui.SetMouseCursor(ctx, ImGui.MouseCursor_ResizeEW) end
 
   local previewW = 70
-  local iw       = math.max(60, (stripW - previewW - 24) * 0.5)
+  local iw       = 80
+
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, 'Start'); ImGui.SameLine(ctx)
   ImGui.SetNextItemWidth(ctx, iw)
-  local sChanged, ns = ImGui.InputInt(ctx, 'Start##trimStart', startF, 0, 0)
+  local sChanged, ns = ImGui.InputInt(ctx, '##trimStart', startF, 0, 0)
   if sChanged then
     sv:setTrim(slot, math.max(0, math.min(endF - 1, ns)), endF)
   end
   ImGui.SameLine(ctx)
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, 'End'); ImGui.SameLine(ctx)
   ImGui.SetNextItemWidth(ctx, iw)
-  local eChanged, ne = ImGui.InputInt(ctx, 'End##trimEnd', endF, 0, 0)
+  local eChanged, ne = ImGui.InputInt(ctx, '##trimEnd', endF, 0, 0)
   if eChanged then
     sv:setTrim(slot, startF, math.max(startF + 1, math.min(frames - 2, ne)))
   end
@@ -443,7 +448,8 @@ end
 
 --contract: left=chrome.gridWidth(w): browser row over a strip, both width gridW
 --contract: slots fill chrome.palettePane (full height) on the right
---contract: 1px painter dividers (tree|files, browser|strip); strip bottom-pad clears the status bar
+--contract: 1px painter dividers: tree|files, files|buttons, browser|strip
+--contract: verticals stop GAP/2 short of the horizontal rule; strip bottom-pad clears status bar
 --contract: whole body is wrapped in chrome.disabledIf(not isLive) — when the bound track has no live sampler FX the entire interactive surface is greyed and inert
 --contract: pip auto-revert is checked at end of body: justTriggered=true edge consumes the trigger frame, after which any browser/slot-focus change or stray mouse click reverts
 function sr:renderBody(_, w, h, dispatch)
@@ -458,7 +464,7 @@ function sr:renderBody(_, w, h, dispatch)
   local gridW  = chrome.gridWidth(w)
 
   chrome.disabledIf(not isLive, function()
-  local GAP, PAD = 16, 2   -- inter-pane padding; small bottom pad clears the status bar
+  local GAP, PAD = 16, -2   -- inter-pane padding; small bottom pad clears the status bar
   local stripBudget = math.min(140, math.floor(h * 0.4))
   local topH   = h - stripBudget
   local stripH = stripBudget - GAP - PAD
@@ -525,12 +531,16 @@ function sr:renderBody(_, w, h, dispatch)
   end
   ImGui.EndChild(ctx)
 
-  -- 1px dividers on the body draw list, centred in the gaps the children
-  -- leave open: tree|files (vertical) and browser|strip (horizontal, to gridW).
+  -- 1px dividers centred in the gaps: tree|files and files|buttons (vertical,
+  -- stop GAP/2 short of the horizontal rule); browser|strip (horizontal, to gridW).
   local half   = math.floor(GAP / 2)
-  local vx, hy = ox + treeW + half, oy + topH + half
+  local hy     = oy + topH + half
+  local vBot   = hy - half
+  local vTree  = ox + treeW + half
+  local vFiles = ox + treeW + GAP + filesW + half
   local p = painter.new(ctx, chrome, {})
-  p.segment(vx, oy, vx, hy, 'text', 1)
+  p.segment(vTree,  oy, vTree,  vBot, 'text', 1)
+  p.segment(vFiles, oy, vFiles, vBot, 'text', 1)
   p.segment(ox, hy, ox + gridW, hy, 'text', 1)
 
   -- Right pane: slots in the shared palette (full height, over the strip)
