@@ -541,7 +541,7 @@ local function drawLaneStrip()
   local y0        = py
   local w         = totalWidth * gridX
   local h         = laneRows  * gridY
-  local drawList  = ImGui.GetWindowDrawList(ctx)
+  local p         = painter.new(ctx, chrome, {})
   local scrollRow = select(1, tv:scroll())
   local numRows   = tv.grid.numRows or 0
   -- rowSpan = rows actually rendered (matches grid below).
@@ -553,16 +553,14 @@ local function drawLaneStrip()
   local yBot = y0 + h - pad
 
   if w > 0 then
-    local barCol, beatCol, dividerCol =
-      chrome.colour('rowBarStart'), chrome.colour('rowBeat'), chrome.colour('laneRowDivider')
     for row = scrollRow, scrollRow + rowSpan - 1 do
-      local x = math.floor(rowToX(row)) + 0.5
+      local x = math.floor(rowToX(row))
       local isBar, isBeat = tv:rowBeatInfo(row)
       if isBar or isBeat then
-        local x2 = math.floor(rowToX(row + 1)) + 0.5
-        ImGui.DrawList_AddRectFilled(drawList, x, yTop, x2, yBot, isBar and barCol or beatCol)
+        local x2 = math.floor(rowToX(row + 1))
+        p.fill({ x0 = x, y0 = yTop, x1 = x2, y1 = yBot }, isBar and 'rowBarStart' or 'rowBeat')
       end
-      ImGui.DrawList_AddLine(drawList, x, yTop, x, yBot, dividerCol, 1)
+      p.segment(x, yTop, x, yBot, 'laneRowDivider')
     end
   end
 
@@ -626,7 +624,7 @@ local function drawLaneStrip()
   end
 
   if w > 0 then
-    ImGui.DrawList_AddRect(drawList, x0, yTop, x0 + w, yBot, chrome.colour('rowBeat'), 0, 0, 1)
+    p.stroke({ x0 = x0, y0 = yTop, x1 = x0 + w, y1 = yBot }, 'rowBeat', 1)
   end
 
   ImGui.Dummy(ctx, (totalWidth + GUTTER) * gridX, h)

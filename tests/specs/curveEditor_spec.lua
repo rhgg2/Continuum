@@ -35,7 +35,7 @@ local fakeImGui = setmetatable({}, {
   __index = function(tbl, k) n = n + 1; rawset(tbl, k, n); return n end,
 })
 for _, name in ipairs{
-  'DrawList_AddLine', 'DrawList_AddPolyline', 'DrawList_AddCircleFilled',
+  'DrawList_AddLine', 'DrawList_AddRectFilled', 'DrawList_AddPolyline', 'DrawList_AddCircleFilled',
   'DrawList_PushClipRect', 'DrawList_PopClipRect',
 } do fakeImGui[name] = record(name) end
 fakeImGui.GetWindowDrawList     = function(_) return 'DL' end
@@ -123,9 +123,9 @@ return {
       local consumed = frame(ed, { hovered = false })
       t.eq(consumed, false, 'an idle frame returns false')
 
-      local axis = recsOf('DrawList_AddLine')
-      t.deepEq(axis[1].args, { 'DL', 100, 150, 300, 150, 'laneAxis', 1 },
-        'axis spans x0..x0+w at the val=0 row, by name')
+      local axis = recsOf('DrawList_AddRectFilled')
+      t.deepEq(axis[1].args, { 'DL', 100, 150, 300, 151, 'laneAxis' },
+        'axis spans x0..x0+w at the val=0 row, 1px filled strip, by name')
 
       local clip = recsOf('DrawList_PushClipRect')
       t.deepEq(clip[1].args, { 'DL', 96, 46, 304, 154, true },
