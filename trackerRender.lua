@@ -967,20 +967,8 @@ local function paletteFindBox()
   return ImGui.IsItemActive(ctx)
 end
 
--- Ellipsis-fit to the palette's fixed width; no horizontal scroll exists.
-local function fitLabel(text, maxW)
-  if ImGui.CalcTextSize(ctx, text) <= maxW then return text end
-  local keep = #text
-  while keep > 1 and ImGui.CalcTextSize(ctx, text:sub(1, keep) .. '…') > maxW do
-    keep = keep - 1
-  end
-  -- don't cut mid utf-8 sequence
-  while keep > 1 and (text:byte(keep + 1) or 0) & 0xC0 == 0x80 do keep = keep - 1 end
-  return text:sub(1, keep) .. '…'
-end
-
--- ▾ open / ▸ shut tree arrows; params indent under their fx.
-local ARROW_OPEN, ARROW_SHUT, PARAM_INDENT = '\xe2\x96\xbe', '\xe2\x96\xb8', 14
+-- params indent under their fx.
+local PARAM_INDENT = 14
 
 -- Made on first draw + attached so it outlives the defer cycle. Per-frame
 -- creation trips ReaImGui's short-lived guard; module-load faults the test fake.
@@ -1107,17 +1095,6 @@ local function handlePaletteKeys(nav)
   end
 end
 
--- Selectable with hover/active highlight suppressed: only the cursor row shows
--- the Col_Header fill (matches sampleRender's browser rows).
-local function paletteSelectable(label, onCur, flags)
-  local hi = onCur and ImGui.GetStyleColor(ctx, ImGui.Col_Header) or 0x00000000
-  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, hi)
-  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  hi)
-  local clicked = ImGui.Selectable(ctx, label, onCur, flags or 0)
-  ImGui.PopStyleColor(ctx, 2)
-  return clicked
-end
-
 -- On a keyboard move, scroll minimally so the just-submitted cursor row stays
 -- inside the view; a no-op for mouse moves (scrollReq unset).
 local function scrollFollow(onCur)
@@ -1140,10 +1117,10 @@ local function drawTreeItem(it, cur, showLearn, btnW)
     local onCur  = cur and cur.fxGuid == row.fxGuid and cur.param == nil
     local availW  = select(1, ImGui.GetContentRegionAvail(ctx))
     local reserve = showLearn and btnW + 28 or 8
-    local label   = (it.open and ARROW_OPEN or ARROW_SHUT) .. ' '
-                 .. fitLabel(row.name, availW - reserve)
+    local label   = chrome.treeArrow(it.open, true)
+                 .. chrome.fitLabel(row.name, availW - reserve)
     -- AllowOverlap so the learn button drawn on top still takes its clicks.
-    local clicked = paletteSelectable(label .. '###fx' .. row.fxGuid, onCur,
+    local clicked = chrome.rowSelectable(label .. '###fx' .. row.fxGuid, onCur,
                                       ImGui.SelectableFlags_AllowOverlap)
     scrollFollow(onCur)
     if clicked then
@@ -1164,8 +1141,8 @@ local function drawTreeItem(it, cur, showLearn, btnW)
     local onCur = cur and cur.fxGuid == row.fxGuid and cur.param == it.prm.index
     ImGui.Indent(ctx, PARAM_INDENT)
     -- ### ID from the guid+index alone: truncation/width must not remint it.
-    local label   = fitLabel(it.prm.name, select(1, ImGui.GetContentRegionAvail(ctx)))
-    local clicked = paletteSelectable(label .. '###p' .. row.fxGuid .. it.prm.index, onCur)
+    local label   = chrome.fitLabel(it.prm.name, select(1, ImGui.GetContentRegionAvail(ctx)))
+    local clicked = chrome.rowSelectable(label .. '###p' .. row.fxGuid .. it.prm.index, onCur)
     scrollFollow(onCur)
     local double  = ImGui.IsItemHovered(ctx) and ImGui.IsMouseDoubleClicked(ctx, 0)
     if clicked or double then

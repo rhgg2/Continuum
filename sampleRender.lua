@@ -133,20 +133,26 @@ local function peakFor(abs, cols)
   return hit
 end
 
---contract: recursive walk; only descends into open TreeNodes — listDirs is not called for collapsed branches
+local TREE_INDENT = 12
+--contract: recursive walk; descends expanded subtrees; listDirs on all nodes to find leaf folders
+--contract: click selects + toggles expansion; double-click rebrowses root; childless = no arrow
 local function drawTree(path)
+  local cur    = sv:getCurrentFolder()
+  local availW = select(1, ImGui.GetContentRegionAvail(ctx))
   for _, sub in ipairs(fs.listDirs(path)) do
     local subPath = fs.join(path, sub)
-    local open = ImGui.TreeNode(ctx, sub)
-    if ImGui.IsItemClicked(ctx) then
+    local hasKids = #fs.listDirs(subPath) > 0
+    local open    = hasKids and sv:isFolderExpanded(subPath)
+    local label   = chrome.treeArrow(open, hasKids) .. chrome.fitLabel(sub, availW - 16)
+    if chrome.rowSelectable(label .. '###tree' .. subPath, cur == subPath) then
       sv:setCurrentFolder(subPath)
-    end
-    if ImGui.IsItemHovered(ctx) and ImGui.IsMouseDoubleClicked(ctx, 0) then
-      sv:setBrowseRoot(subPath)
+      if hasKids then sv:setFolderExpanded(subPath, not open) end
+      if ImGui.IsMouseDoubleClicked(ctx, 0) then sv:setBrowseRoot(subPath) end
     end
     if open then
+      ImGui.Indent(ctx, TREE_INDENT)
       drawTree(subPath)
-      ImGui.TreePop(ctx)
+      ImGui.Unindent(ctx, TREE_INDENT)
     end
   end
 end
@@ -167,10 +173,10 @@ end
 local function drawFiles(folder, root)
   local items = {}
   if folder ~= root then
-    items[#items+1] = { isFolder = true, name = '▸ ..', path = UP }
+    items[#items+1] = { isFolder = true, name = '../', path = UP }
   end
   for _, sub in ipairs(fs.listDirs(folder)) do
-    items[#items+1] = { isFolder = true,  name = '▸ ' .. sub,
+    items[#items+1] = { isFolder = true,  name = sub .. '/',
                         path = fs.join(folder, sub) }
   end
   for _, file in ipairs(fs.listAudioFiles(folder)) do
@@ -205,12 +211,8 @@ local function drawFiles(folder, root)
   sel = sv:getBrowserPath()
   for _, item in ipairs(items) do
     local isSelected = item.path == sel
-    local selCol = isSelected and ImGui.GetStyleColor(ctx, ImGui.Col_Header) or 0x00000000
-    ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, selCol)
-    ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  selCol)
-    local clicked = ImGui.Selectable(ctx, item.name, isSelected,
-                                     ImGui.SelectableFlags_AllowDoubleClick)
-    ImGui.PopStyleColor(ctx, 2)
+    local clicked = chrome.rowSelectable(item.name, isSelected,
+                                         ImGui.SelectableFlags_AllowDoubleClick)
     if clicked then
       sv:setBrowserItem(item.path, item.isFolder)
       if ImGui.IsMouseDoubleClicked(ctx, 0) then
@@ -432,7 +434,7 @@ local toolbarSegments = {
   },
 }
 
--- Bound sampler track's name, for the slots-palette header + status bar.
+-- Bound sampler track's name, for the status bar.
 local function boundTrackName()
   local cur = sv:getTrack()
   for _, e in ipairs(sv:listTracks()) do
@@ -483,7 +485,7 @@ function sr:renderBody(_, w, h, dispatch)
   -- Left pane: tree under a header matching the files/palette panes
   if ImGui.BeginChild(ctx, '##sampleTree', treeW, topH,
                       ImGui.ChildFlags_None) then
-    chrome.paletteHeader(fs.basename(root))
+    chrome.paletteHeader('tree')
     local parent = fs.parent(root)
     chrome.disabledIf(parent == '', function()
       if ImGui.Button(ctx, '↑##treeUp') then sv:setBrowseRoot(parent) end
@@ -499,7 +501,7 @@ function sr:renderBody(_, w, h, dispatch)
   if ImGui.BeginChild(ctx, '##sampleFiles', filesW, topH,
                       ImGui.ChildFlags_None,
                       ImGui.WindowFlags_NoNav) then
-    chrome.paletteHeader(fs.basename(folder))
+    chrome.paletteHeader('files')
     chrome.disabledIf(not hasFile, function()
       if ImGui.Button(ctx, '>##load') then sv:loadSelectedIntoCurrent() end
       ImGui.SameLine(ctx, 0, 4)
@@ -534,7 +536,7 @@ function sr:renderBody(_, w, h, dispatch)
   -- Right pane: slots in the shared palette (full height, over the strip)
   chrome.palettePane{
     x = ox + gridW, y = oy, h = h,
-    label = boundTrackName(),
+    label = 'slots',
     draw  = function()
       chrome.disabledIf(not hasEntry, function()
         if ImGui.Button(ctx, 'clear##slot') then sv:clearCurrentSlot() end

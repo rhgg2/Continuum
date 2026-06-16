@@ -19,6 +19,8 @@ local selectedFile    = nil
 local browserPath     = nil
 local browserIsFolder = false
 local previewSource   = nil
+--shape: expanded = { [folderPath]=true } -- open subtrees in the left folder tree (transient)
+local expanded        = {}
 
 --contract: idempotent rebind: always re-primes cm.track tier so cache survives a prior cm:setContext(nil) (e.g. tm:bindTake(nil) on page switch)
 function sv:setTrack(t)
@@ -41,6 +43,8 @@ function sv:setBrowseRoot(path)
   if cm then cm:set('global', 'sampleBrowserRoot', path) end
   currentFolder = nil
 end
+function sv:isFolderExpanded(p)        return expanded[p] == true end
+function sv:setFolderExpanded(p, open) expanded[p] = open or nil  end
 function sv:getBrowserPath()        return browserPath     end
 function sv:isBrowserFolder()       return browserIsFolder end
 --contract: folder selection clears selectedFile and leaves previewSource untouched; file selection sets both selectedFile and previewSource='file'

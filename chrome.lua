@@ -1,6 +1,7 @@
 -- See docs/chrome.md for the model.
 
 --shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+--shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeArrow(open,hasChildren)->prefix }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
 --shape: palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
@@ -374,6 +375,37 @@ local function palettePane(spec)
   ImGui.EndChild(ctx)
 end
 
+-- Ellipsis-fit to a fixed pane width; no horizontal scroll exists.
+local function fitLabel(text, maxW)
+  if ImGui.CalcTextSize(ctx, text) <= maxW then return text end
+  local keep = #text
+  while keep > 1 and ImGui.CalcTextSize(ctx, text:sub(1, keep) .. '…') > maxW do
+    keep = keep - 1
+  end
+  -- don't cut mid utf-8 sequence
+  while keep > 1 and (text:byte(keep + 1) or 0) & 0xC0 == 0x80 do keep = keep - 1 end
+  return text:sub(1, keep) .. '…'
+end
+
+-- Selectable with hover/active highlight suppressed: only the selected row shows
+-- the Col_Header fill. Shared by the tracker palette and the sampler browser/tree.
+local function rowSelectable(label, selected, flags)
+  local hi = selected and ImGui.GetStyleColor(ctx, ImGui.Col_Header) or 0x00000000
+  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, hi)
+  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  hi)
+  local clicked = ImGui.Selectable(ctx, label, selected, flags or 0)
+  ImGui.PopStyleColor(ctx, 2)
+  return clicked
+end
+
+-- ▾ open / ▸ shut tree arrows; a childless node leads with blank cells so its
+-- label still aligns under expandable siblings.
+local TREE_OPEN, TREE_SHUT = '\xe2\x96\xbe ', '\xe2\x96\xb8 '
+local function treeArrow(open, hasChildren)
+  if not hasChildren then return '  ' end
+  return open and TREE_OPEN or TREE_SHUT
+end
+
 return {
   colour             = colour,
   pushChromeStyles   = pushChromeStyles,
@@ -394,5 +426,8 @@ return {
   gridWidth          = gridWidth,
   paletteHeader      = paletteHeader,
   palettePane        = palettePane,
+  fitLabel           = fitLabel,
+  rowSelectable      = rowSelectable,
+  treeArrow          = treeArrow,
 }
 
