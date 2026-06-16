@@ -479,6 +479,97 @@ function util.unserialise(input)
   return result
 end
 
+----- Lua-literal disk format (human-editable; read by load(), never P_EXT)
+-- WHY two formats coexist: see design/persistence.md § Disk format.
+
+local LUA_KEYWORDS = {}
+for word in ('and break do else elseif end false for function goto if in '
+          .. 'local nil not or repeat return then true until while'):gmatch('%S+') do
+  LUA_KEYWORDS[word] = true
+end
+
+local function bareKey(k)
+  return type(k) == 'string' and k:match('^[%a_][%w_]*$') and not LUA_KEYWORDS[k]
+end
+
+-- inf/nan are not bare Lua, but their arithmetic forms are and need no env.
+local function luaNumber(n)
+  if n ~= n          then return '0/0'  end
+  if n ==  math.huge then return '1/0'  end
+  if n == -math.huge then return '-1/0' end
+  return tostring(n)
+end
+
+-- Inline note so a hand-editor recognises the arithmetic non-finite forms.
+local function nonFiniteNote(v)
+  if type(v) ~= 'number' or (v == v and v > -math.huge and v < math.huge) then return '' end
+  if v ~= v then return '  -- nan' end
+  return v > 0 and '  -- inf (util.OPEN)' or '  -- -inf'
+end
+
+local prettyEmit  -- forward decl (mutual recursion with emitTable)
+
+local function emitTable(tbl, indent, seen)
+  if seen[tbl] then error('cycle detected during prettySerialise') end
+  seen[tbl] = true
+
+  local arrLen = 0
+  while tbl[arrLen + 1] ~= nil do arrLen = arrLen + 1 end
+  local keyed = {}
+  for k in pairs(tbl) do
+    local inArray = type(k) == 'number' and k == math.floor(k) and k >= 1 and k <= arrLen
+    if not inArray then keyed[#keyed+1] = k end
+  end
+  table.sort(keyed, function(a, b) return tostring(a) < tostring(b) end)
+
+  if arrLen == 0 and #keyed == 0 then seen[tbl] = nil; return '{}' end
+
+  local nested = #keyed > 0
+  for i = 1, arrLen do if type(tbl[i]) == 'table' then nested = true end end
+
+  if not nested then  -- scalar-only sequence prints inline
+    local parts = {}
+    for i = 1, arrLen do parts[i] = prettyEmit(tbl[i], indent, seen) end
+    seen[tbl] = nil
+    return '{ ' .. table.concat(parts, ', ') .. ' }'
+  end
+
+  local pad, lines = string.rep('  ', indent + 1), {}
+  for i = 1, arrLen do
+    lines[#lines+1] = pad .. prettyEmit(tbl[i], indent + 1, seen) .. ',' .. nonFiniteNote(tbl[i])
+  end
+  for _, k in ipairs(keyed) do
+    local keyStr = bareKey(k) and k or '[' .. prettyEmit(k, indent + 1, seen) .. ']'
+    local v = tbl[k]
+    lines[#lines+1] = pad .. keyStr .. ' = ' .. prettyEmit(v, indent + 1, seen) .. ',' .. nonFiniteNote(v)
+  end
+  seen[tbl] = nil
+  return '{\n' .. table.concat(lines, '\n') .. '\n' .. string.rep('  ', indent) .. '}'
+end
+
+function prettyEmit(value, indent, seen)
+  local t = type(value)
+  if t == 'number'  then return luaNumber(value) end
+  if t == 'boolean' then return tostring(value) end
+  if t == 'string'  then return string.format('%q', value) end
+  if t == 'table'   then return emitTable(value, indent, seen) end
+  error('prettySerialise: unsupported type ' .. t)
+end
+
+--contract: emits a `return <literal>` chunk for load(); non-finite → 1/0 -1/0 0/0; cycles raise
+function util.prettySerialise(value)
+  return 'return ' .. prettyEmit(value, 0, {}) .. '\n'
+end
+
+--contract: sandboxed load() of the disk literal (text-only, empty env); ok→value, fail→nil,err
+function util.prettyUnserialise(text)
+  local chunk, loadErr = load(text, '@ctm_disk', 't', {})
+  if not chunk then return nil, loadErr end
+  local ok, value = pcall(chunk)
+  if not ok then return nil, value end
+  return value
+end
+
 --contract: executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
 util._stubs = {}
 function util.instantiate(name, deps)

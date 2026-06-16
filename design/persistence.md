@@ -61,14 +61,14 @@ Split `configManager` into **two faces over one engine**:
   `(handle, pextKey) → baseline-raw` entries.
 - **`configManager`** (kept) — schema, defaults, five-tier merge, the
   global disk file. A face on the engine.
-- **`documentStore`** (new) — open, per-key, single-scope storage on the
+- **`dataStore`** (new) — open, per-key, single-scope storage on the
   same engine. The other face.
 
 Both faces register their blobs with the engine's watcher, so undo
 survival is written **once**. `routingManager` and `paramAutomation`'s
 bespoke mirrors fold onto the same engine later (see Staging).
 
-## documentStore
+## dataStore
 
 Scopes: **global / project / track / take**. No merge across them.
 
@@ -80,7 +80,7 @@ ds:getAt(handle, name)         -- replaces cm:readTakeKey / readTrackKey
 ds:setAt(handle, name, value)  -- replaces cm:writeTakeKey / writeTrackKey
 ```
 
-**Registry, not open schema.** `documentStore` keeps a small
+**Registry, not open schema.** `dataStore` keeps a small
 `{ name → scope }` table — its own registry, the document-data keys
 pulled out of `configManager`'s `declarations`. Typos still raise; the
 "unknowns raise" safety is preserved, just owned by the right module.
@@ -114,7 +114,7 @@ universal rule.
 
 ### Keys to migrate
 
-Out of `configManager.declarations`, into the `documentStore` registry:
+Out of `configManager.declarations`, into the `dataStore` registry:
 
 | key | scope | what it is |
 |---|---|---|
@@ -134,7 +134,7 @@ Out of `configManager.declarations`, into the `documentStore` registry:
 
 `paramFrecency` is the one app-global straggler — cross-project, machine-
 maintained, not a setting and not document content. The global scope on
-`documentStore` is its home, so `configManager` is left holding *only*
+`dataStore` is its home, so `configManager` is left holding *only*
 user-facing config.
 
 Call sites to update: `groupManager`, `sampleManager`, `arrangeManager`,
@@ -200,16 +200,19 @@ empty-marker hack.
 
 Three workstreams. (1) is independent and lands first.
 
-1. **util** — `prettySerialise` (Lua-literal emitter) + a sandboxed
-   `load`-based reader for disk. Compact `serialise` / `unserialise`
-   untouched. Pinned with a round-trip spec:
-   `unserialise(serialise(x)) == x` *and* `read(prettySerialise(x)) == x`
-   over a fixture covering scalars, nested tables, float arrays,
-   edge-whitespace strings, and inf/nan.
+1. **util** — ✅ **done.** `util.prettySerialise` (Lua-literal emitter)
+   + `util.prettyUnserialise` (sandboxed `load`, text-only, empty env,
+   returns `nil, err` on failure so the store can refuse to overwrite).
+   Compact `serialise` / `unserialise` untouched. Pinned by
+   `tests/specs/util_pretty_serialise_spec.lua` —
+   `prettyUnserialise(prettySerialise(x)) == x` over scalars, nested
+   tables, float arrays, edge-whitespace / control strings, dotted and
+   keyword keys, sparse integer keys, and inf/nan; the compact
+   round-trip stays pinned by `util_serialise_spec.lua`.
 2. **pextStore** — extract the storage + context + undo engine from
    `configManager`, no behaviour change, pinned with a spec. It owns both
    disk backends (Lua-literal) and the P_EXT/projext backends (compact).
-3. **documentStore** — per-key blobs over the engine, the registry above,
+3. **dataStore** — per-key blobs over the engine, the registry above,
    the call-site migration. No migration code: pre-beta, persisted shapes
    change freely (see memory `no-legacy-data`).
 
@@ -217,16 +220,36 @@ Later, optional: fold `routingManager`'s meta mirrors and
 `paramAutomation`'s track mirror onto the engine — collapsing three
 undo implementations into one.
 
-## Open
+## Decisions settled
 
-- **Module name.** Once it holds an app-global cache too, `documentStore`
-  is slightly off. `dataStore` / `stateStore` cover the global case more
-  honestly. Undecided.
-- **Context ownership.** Plan puts bound take/track + the watcher in
-  `pextStore` (single source of truth), with both faces refreshing on the
-  engine's context/undo events. The lighter-but-messier fork — keep
-  context in `configManager`, have `documentStore` borrow `cm:boundTake()`
-  — is rejected here but noted.
-- **`dataChanged` payload shape.** Mirror `configChanged`'s targeted /
-  bulk / reload variants, or a flatter `{scope, name}`? Decide when
-  wiring the subscribers.
+- **Module name → `dataStore`.** The storage layer already says "data"
+  everywhere it commits to disk or P_EXT — `ctm_data.*`, projext
+  `continuum_data`, `ctm_data.txt`, the `dataChanged` signal. Naming the
+  module to match makes all of those fall out by consistency, and "data"
+  honestly spans both document content and the `paramFrecency` global
+  cache — the one resident where "document" is plain wrong. `ds:` survives
+  as the receiver abbreviation. (`stateStore` is vaguer; `dataStore`
+  mis-describes that global straggler.)
+
+- **Context ownership → `pextStore`.** Bound take/track + the watcher
+  baseline live in the engine, single source of truth. Today
+  `setContext`/`pollUndo` already co-own `take`/`track` and
+  `lastTakeRaw`/`lastTrackRaw`; both faces need that same context. Were
+  `configManager` to keep it, `dataStore` would depend *laterally* on the
+  other face — the two faces must both depend *down* on the engine, never
+  sideways. The lighter `cm:boundTake()`-borrow fork stays rejected.
+
+- **`dataChanged` payload → flat `{scope, name}`, one fire per changed
+  key.** Do *not* mirror `configChanged`'s targeted/bulk/reload trio.
+  Today `pollUndo` fires a blanket `reload {}` precisely because it diffs
+  the whole take/track blob and cannot name the moved key — the per-key
+  baseline is the redesign's whole point and *removes* that limitation, so
+  importing a reload variant would re-inflict the wound we're healing.
+  `ds:set`/`ds:remove` fire one `{scope, name}`; the watcher fires one per
+  diverged key on an undo tick. No `bulk` variant — the API surface is all
+  single-key (get/set/remove/getAt/setAt), so a batch is just N fires.
+  Context rebind is a *separate* signal, not a payload mode: `pextStore`
+  emits `contextChanged {}` on setContext/clearTake/setTrack, and both
+  faces drop-and-reload their scope caches. Wholesale (`contextChanged`)
+  and surgical (`dataChanged`) stay distinct so no subscriber has to
+  special-case an empty payload.

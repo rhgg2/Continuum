@@ -24,6 +24,7 @@ local specs = {
   'util_bucket_spec',
   'util_install_hooks_spec',
   'util_serialise_spec',
+  'util_pretty_serialise_spec',
   'mm_signal_flow_spec',
   'mm_cc_metadata_spec',
   'mm_ppql_roundtrip_spec',
