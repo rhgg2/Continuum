@@ -163,6 +163,8 @@ local declarations = {
   { 'colour.shadowed',         'colour.inactive'                  },
   { 'colour.cursor',           'palette.alt.zone2'                },
   { 'colour.cursorText',       'palette.alt.zone8'                },
+  { 'colour.band.fill',        {0.55, 0.70, 0.95, 0.22}           },  -- marquee/lasso fill (shared)
+  { 'colour.band.border',      {0.45, 0.60, 0.90, 0.85}           },  -- marquee/lasso border (shared)
   -- Arrange page: cursor caret, blocked-drag outline, transport rules,
   -- double-click-drag ghost, and orphan (slot-less item) fills. The 62
   -- generated slot hues stay computed (golden-ratio rotation); these are the
@@ -178,8 +180,6 @@ local declarations = {
   { 'colour.arrange.cursorTriBorder',  'palette.base.zone6'      },  -- shared border for both gutter triangles
   { 'colour.arrange.ghostFill',        {0.95, 0.93, 0.80, 0.35}  },  -- create-preview fill
   { 'colour.arrange.ghostBorder',      {0.45, 0.42, 0.30, 0.90}  },  -- create-preview border
-  { 'colour.arrange.lassoFill',        {0.55, 0.70, 0.95, 0.22}  },  -- lasso rubber-band fill
-  { 'colour.arrange.lassoBorder',      {0.45, 0.60, 0.90, 0.85}  },  -- lasso rubber-band border
   { 'colour.arrange.orphanFill',       {0.50, 0.50, 0.50, 0.35}  },  -- slot-less item, neutral grey
   { 'colour.arrange.orphanFocusFill',  {0.85, 0.85, 0.85, 0.55}  },
   { 'colour.arrange.waveform',         {0.13, 0.13, 0.16, 0.62}  },  -- audio preview ink over the slot fill

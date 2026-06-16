@@ -2369,7 +2369,8 @@ local function renderCanvas(w, h)
     local bx0, by0, bx1, by1 = band.mx0, band.my0, lmx, lmy
     if bx0 > bx1 then bx0, bx1 = bx1, bx0 end
     if by0 > by1 then by0, by1 = by1, by0 end
-    p.stroke(rect(bx0, by0, bx1, by1), 'wiring.node.selected', 1, 0)
+    p.fill(rect(bx0, by0, bx1, by1), 'band.fill')
+    p.border(rect(bx0, by0, bx1, by1), 'band.border')
   end
 
   -- Port InvisibleButtons moved the layout cursor; rewind so the sizing Dummy

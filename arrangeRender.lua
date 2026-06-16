@@ -491,8 +491,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
     local ly1 = rowYs(math.min(av:qnToRow(lassoCand.qnHi), sr + visRows))
     if lx1 > lx0 and ly1 > ly0 then
       ps.pushClip(rect(g.paneLeft, oy, g.paneR, oy + g.availH), false)
-      ps.fill(rect(lx0, ly0, lx1, ly1), 'arrange.lassoFill')
-      ps.border(rect(lx0, ly0, lx1, ly1), 'arrange.lassoBorder')
+      ps.fill(rect(lx0, ly0, lx1, ly1), 'band.fill')
+      ps.border(rect(lx0, ly0, lx1, ly1), 'band.border')
       ps.popClip()
     end
   end
