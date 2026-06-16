@@ -92,6 +92,11 @@ local function peakFor(abs, cols)
     local lenSec = reaper.GetMediaSourceLength(src)
     local fsRate = reaper.GetMediaSourceSampleRate(src)
     local nch    = reaper.GetMediaSourceNumChannels(src)
+    -- A missing/undecodable file yields a non-nil placeholder source with 0
+    -- channels/length; treat it as unreadable rather than feeding new_array(0).
+    if nch < 1 or lenSec <= 0 or fsRate <= 0 then
+      reaper.PCM_Source_Destroy(src); peakCache[abs] = false; return nil
+    end
     hit = { src = src, cols = cols, fs = fsRate, nch = nch,
             frames = math.floor(lenSec * fsRate + 0.5), lenSec = lenSec,
             building = reaper.PCM_Source_BuildPeaks(src, 0) ~= 0 }
