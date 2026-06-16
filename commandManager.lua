@@ -354,35 +354,73 @@ local function buildKeyNames(ImGui)
   return t
 end
 
--- On macOS, ReaImGui's MacOSXBehaviors maps the \xe2\x8c\x98 key to Mod_Ctrl and
--- the physical \xe2\x8c\x83 to Mod_Super, so the labels invert vs. Windows/Linux.
-local modLabels
-local function buildModLabels()   -- parallel to the `order` list in keyLabel
+-- Shift-only bindings show the produced glyph (! @ { } | : etc.) rather than "Shift+base".
+-- - and = are omitted so they keep their "Shift+-" / "Shift+=" form.
+local shiftGlyph
+local function buildShiftGlyphs(ImGui)
+  local t = {}
+  local digits = { [0] = ')', '!', '@', '#', '$', '%', '^', '&', '*', '(' }
+  for i = 0, 9 do t[ImGui.Key_0 + i] = digits[i] end
+  t[ImGui.Key_LeftBracket]  = '{'
+  t[ImGui.Key_RightBracket] = '}'
+  t[ImGui.Key_Backslash]    = '|'
+  t[ImGui.Key_Semicolon]    = ':'
+  t[ImGui.Key_Apostrophe]   = '"'
+  t[ImGui.Key_Comma]        = '<'
+  t[ImGui.Key_Period]       = '>'
+  t[ImGui.Key_Slash]        = '?'
+  t[ImGui.Key_GraveAccent]  = '~'
+  return t
+end
+
+-- macOS inverts Mod_Ctrl/Mod_Super (ReaImGui MacOSXBehaviors): Mod_Ctrl is ⌘,
+-- Mod_Super is ⌃. Mac shows glyphs in canonical ⌃⌥⇧⌘ order, joined tight (⇧⌘K).
+local modOrder, modSep
+local function buildModOrder(ImGui)
   local os = reaper.GetOS()
-  if os:find('OSX') or os:find('mac') then return { 'Cmd', 'Alt', 'Shift', 'Ctrl' } end
-  return { 'Ctrl', 'Alt', 'Shift', os:find('Win') and 'Win' or 'Super' }
+  if os:find('OSX') or os:find('mac') then
+    return {
+      { ImGui.Mod_Super, '\xe2\x8c\x83' },  -- ⌃ Control
+      { ImGui.Mod_Alt,   '\xe2\x8c\xa5' },  -- ⌥ Option
+      { ImGui.Mod_Shift, '\xe2\x87\xa7' },  -- ⇧ Shift
+      { ImGui.Mod_Ctrl,  '\xe2\x8c\x98' },  -- ⌘ Command
+    }, ''
+  end
+  return {
+    { ImGui.Mod_Ctrl,  'Ctrl' },
+    { ImGui.Mod_Alt,   'Alt' },
+    { ImGui.Mod_Shift, 'Shift' },
+    { ImGui.Mod_Super, os:find('Win') and 'Win' or 'Super' },
+  }, '+'
 end
 
 function mgr:keyLabel(spec, ImGui)
-  keyNames  = keyNames  or buildKeyNames(ImGui)
-  modLabels = modLabels or buildModLabels()
+  keyNames   = keyNames   or buildKeyNames(ImGui)
+  shiftGlyph = shiftGlyph or buildShiftGlyphs(ImGui)
+  if not modOrder then modOrder, modSep = buildModOrder(ImGui) end
   local key, mods = self:keySpec(spec, ImGui)
-  local order = { ImGui.Mod_Ctrl, ImGui.Mod_Alt, ImGui.Mod_Shift, ImGui.Mod_Super }
+  if mods == ImGui.Mod_Shift and shiftGlyph[key] then return shiftGlyph[key] end
   local parts = {}
-  for i, m in ipairs(order) do
-    if (mods & m) ~= 0 then parts[#parts + 1] = modLabels[i] end
+  for _, m in ipairs(modOrder) do
+    if (mods & m[1]) ~= 0 then parts[#parts + 1] = m[2] end
   end
   parts[#parts + 1] = keyNames[key] or '?'
-  return table.concat(parts, '+')
+  return table.concat(parts, modSep)
 end
 
---contract: all bound keyspecs for the reachable command joined by ' / ', or nil if unbound on the current stack
-function mgr:keyLabels(name, ImGui)
+--contract: list of human labels, one per bound keyspec of the reachable command, or nil if unbound
+function mgr:keyLabelList(name, ImGui)
   local specs = self:keysFor(name)
   if not specs then return nil end
   local out = {}
   for _, spec in ipairs(specs) do out[#out + 1] = self:keyLabel(spec, ImGui) end
-  return table.concat(out, ' / ')
+  return out
+end
+
+--contract: keyLabelList joined by ' / ', or nil if unbound on the current stack
+function mgr:keyLabels(name, ImGui)
+  local list = self:keyLabelList(name, ImGui)
+  return list and table.concat(list, ' / ')
 end
 
 return mgr

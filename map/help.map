@@ -1,4 +1,4 @@
-@module help  src=help.lua  loc=224  sha=4bd97f3  mode=chunk
+@module help  src=help.lua  loc=264  sha=540add0  mode=chunk
 @deps ctx, chrome, cmgr
 
 # Shapes
@@ -19,22 +19,28 @@
   @state DIM_COL = 0x00000099  @ 20
   @state EM_DASH = '\xe2\x80\x94'  @ 21
   @state help = {}  @ 23
-  @state dismissKeyList  @ 124
+  @state CHIP_PADX, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 4, 3, 4, 0.9, 0xcc  @ 56
+  @state SEP = '/'  @ 57
+  @state dismissKeyList  @ 163
 
 # Private functions
   -- DRAW
   @fn rectFor(key)  @ 48
-  @fn groupRows(g)  @ 54
-  @fn boxSize(g, rows, keyW)  @ 64
-  @fn drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)  @ 74
-  @fn placePins(dl, pins, theme, wx, ww, boxes)  @ 89
+  @fn withAlpha(rgba, a)  @ 58
+  @fn chipWidth(s, lineH)  @ 60
+  @fn clusterWidth(keys)  @ 64
+  @fn drawCluster(dl, keys, x, ty, lineH, capBg, capLine, keyCol, sepCol)  @ 74
+  @fn groupRows(g)  @ 90
+  @fn boxSize(g, rows, keyW)  @ 100
+  @fn drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)  @ 110
+  @fn placePins(dl, pins, theme, wx, ww, boxes)  @ 128
       -- Pin callouts sit just under their toolbar segment. Overlapping neighbours are
       -- slid to minimise total displacement — isotonic regression. See docs/help.md.
-  @fn buildDismissKeys()  @ 125
-  @fn anyKeyPressed()  @ 143
+  @fn buildDismissKeys()  @ 164
+  @fn anyKeyPressed()  @ 182
       -- Char queue catches punctuation/layout-specific keys; the explicit list covers
       -- the non-printables (and alphanumerics, since the macOS char queue drops some).
-  @fn clickedOutside(boxes)  @ 152
+  @fn clickedOutside(boxes)  @ 191
 
 # Public API (help:*)
   @api help:registerPage(name, groups)  @ 27
@@ -47,22 +53,22 @@
   @api help:beginFrame()  @ 38
   @api help:wasOpenAtFrameStart()  @ 39
   @api help:anchor(key, x, y, w, h)  @ 41
-  @api help:draw()  @ 162
+  @api help:draw()  @ 201
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 173, 174, 175, 176, 177
+  @use call    chrome.colour  @ 212, 213, 214, 215, 216, 217
   @use call    chrome.toolbarRects  @ 50
-  @use call    cmgr.keyLabels  @ 57
-  @use call    imgui.CalcTextSize  @ 59, 67, 68
-  @use call    imgui.DrawList_AddRect  @ 76
-  @use call    imgui.DrawList_AddRectFilled  @ 75, 170
-  @use call    imgui.DrawList_AddText  @ 78, 81, 82
-  @use call    imgui.GetForegroundDrawList  @ 167
-  @use call    imgui.GetInputQueueCharacter  @ 144
-  @use call    imgui.GetMousePos  @ 155
-  @use call    imgui.GetTextLineHeight  @ 65
-  @use call    imgui.GetWindowPos  @ 168
-  @use call    imgui.GetWindowSize  @ 169
-  @use call    imgui.IsKeyPressed  @ 147
-  @use call    imgui.IsMouseClicked  @ 153, 154
+  @use call    cmgr.keyLabelList  @ 93
+  @use call    imgui.CalcTextSize  @ 61, 66, 75, 84, 103, 104
+  @use call    imgui.DrawList_AddRect  @ 83, 112
+  @use call    imgui.DrawList_AddRectFilled  @ 82, 111, 209
+  @use call    imgui.DrawList_AddText  @ 78, 85, 117, 121
+  @use call    imgui.GetForegroundDrawList  @ 206
+  @use call    imgui.GetInputQueueCharacter  @ 183
+  @use call    imgui.GetMousePos  @ 194
+  @use call    imgui.GetTextLineHeight  @ 65, 101
+  @use call    imgui.GetWindowPos  @ 207
+  @use call    imgui.GetWindowSize  @ 208
+  @use call    imgui.IsKeyPressed  @ 186
+  @use call    imgui.IsMouseClicked  @ 192, 193
   @use require imgui  @ 7

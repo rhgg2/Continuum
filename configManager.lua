@@ -218,6 +218,14 @@ local declarations = {
   { 'colour.toolbar.popupBg',      'palette.base.zone10'           },
   { 'colour.statusBar.bg',         'palette.alt.zone5'            },
   { 'colour.statusBar.text',       'palette.alt.zone9'            },
+  -- F1 cheat-sheet overlay (help.lua): blue panel; chips + description ride the
+  -- base ramp so the dark shortcut glyphs read on light keycaps.
+  { 'colour.help.box',    'colour.statusBar.bg' },
+  { 'colour.help.border', 'colour.text'         },
+  { 'colour.help.title',  'colour.text'         },
+  { 'colour.help.key',    'colour.text'         },  -- shortcut glyphs + the '/' separator
+  { 'colour.help.desc',   'palette.base.zone9'  },  -- command description
+  { 'colour.help.chip',   'palette.base.zone8'  },  -- keycap fill (alpha at draw)
   -- Pre-blended `0.5*pale + 0.5*bg`; a literal alias would render translucent over a different parent.
   { 'colour.editor.bg',            hex('#e9e7df')                 },
   { 'laneStrip.rows',      4    },

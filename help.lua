@@ -51,12 +51,48 @@ local function rectFor(key)
   return anchors[key]
 end
 
+-- Each shortcut gets its own keycap chip ('/'-separated for multi-binding cmds);
+-- chip width is floored relative to height so a lone glyph (, . `) reads as a key.
+local CHIP_PADX, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 4, 3, 4, 0.9, 0xcc
+local SEP = '/'
+local function withAlpha(rgba, a) return (rgba & 0xFFFFFF00) | a end
+
+local function chipWidth(s, lineH)
+  return math.max((ImGui.CalcTextSize(ctx, s)) + CHIP_PADX * 2, lineH * CHIP_MIN_RATIO)
+end
+
+local function clusterWidth(keys)
+  local lineH = ImGui.GetTextLineHeight(ctx)
+  local sepW, w = ImGui.CalcTextSize(ctx, SEP), 0
+  for i, s in ipairs(keys) do
+    if i > 1 then w = w + SEP_GAP * 2 + sepW end
+    w = w + chipWidth(s, lineH)
+  end
+  return w
+end
+
+local function drawCluster(dl, keys, x, ty, lineH, capBg, capLine, keyCol, sepCol)
+  local sepW, cur = ImGui.CalcTextSize(ctx, SEP), x
+  for i, s in ipairs(keys) do
+    if i > 1 then
+      ImGui.DrawList_AddText(dl, cur + SEP_GAP, ty, sepCol, SEP)
+      cur = cur + SEP_GAP * 2 + sepW
+    end
+    local cw = chipWidth(s, lineH)
+    ImGui.DrawList_AddRectFilled(dl, cur, ty, cur + cw, ty + lineH, capBg, CHIP_R)
+    ImGui.DrawList_AddRect(dl, cur, ty, cur + cw, ty + lineH, capLine, CHIP_R)
+    local tw = ImGui.CalcTextSize(ctx, s)
+    ImGui.DrawList_AddText(dl, cur + (cw - tw) / 2, ty, keyCol, s)
+    cur = cur + cw
+  end
+end
+
 local function groupRows(g)
   local rows, keyW = {}, 0
   for _, it in ipairs(g.items) do
-    local key = cmgr:keyLabels(it.cmd, ImGui) or EM_DASH
-    rows[#rows + 1] = { key = key, label = it.label }
-    keyW = math.max(keyW, (ImGui.CalcTextSize(ctx, key)))
+    local keys = cmgr:keyLabelList(it.cmd, ImGui) or { EM_DASH }
+    rows[#rows + 1] = { keys = keys, label = it.label }
+    keyW = math.max(keyW, clusterWidth(keys))
   end
   return rows, keyW
 end
@@ -74,11 +110,14 @@ end
 local function drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)
   ImGui.DrawList_AddRectFilled(dl, x, y, x + w, y + h, theme.bg, 4)
   ImGui.DrawList_AddRect(dl, x, y, x + w, y + h, theme.border, 4)
+  local capBg   = withAlpha(theme.chip, CHIP_ALPHA)
+  local capLine = withAlpha(theme.border, 0x66)
+  local sepCol  = theme.key
   local ty = y + PAD
   ImGui.DrawList_AddText(dl, x + PAD, ty, theme.title, g.title)
   ty = ty + lineH + ROW_GAP
   for _, row in ipairs(rows) do
-    ImGui.DrawList_AddText(dl, x + PAD, ty, theme.key, row.key)
+    drawCluster(dl, row.keys, x + PAD, ty, lineH, capBg, capLine, theme.key, sepCol)
     ImGui.DrawList_AddText(dl, x + PAD + keyW + KEY_GAP, ty, theme.label, row.label)
     ty = ty + lineH + ROW_GAP
   end
@@ -170,11 +209,12 @@ function help:draw()
   ImGui.DrawList_AddRectFilled(dl, wx, wy, wx + ww, wy + wh, DIM_COL)
 
   local theme = {
-    bg     = chrome.colour('statusBar.bg'),
-    border = chrome.colour('text'),
-    title  = chrome.colour('text'),
-    key    = chrome.colour('text'),
-    label  = chrome.colour('statusBar.text'),
+    bg     = chrome.colour('help.box'),
+    border = chrome.colour('help.border'),
+    title  = chrome.colour('help.title'),
+    key    = chrome.colour('help.key'),
+    label  = chrome.colour('help.desc'),
+    chip   = chrome.colour('help.chip'),
   }
 
   -- boxes: every drawn rect, for the off-box click test below.

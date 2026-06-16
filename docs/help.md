@@ -33,6 +33,14 @@ from the actual keymap. A page's manifest carries only the *grouping*
 and the human labels (`help:registerPage(name, groups)`), co-located with
 the render module that owns both the layout and the bindings.
 
+Each bound shortcut renders in its own keycap chip (`cmgr:keyLabelList`
+feeds them, one chord per chip); a command with several bindings shows
+several chips, `/`-separated. The chip frames the glyph so a lone-key
+binding like `,` `.` or `` ` `` still reads as a key rather than a stray
+mark. Overlay colours are config roles (`colour.help.*`): a blue panel, with
+description text and chip fills on the base ramp so the dark shortcut glyphs
+and the `/` separator read against light keycaps.
+
 Groups are `place = 'pin'` (a callout pinned beneath a toolbar segment)
 or `place = 'flow'` (the grid cheat-sheet, filling the body rect row-major
 — left to right, wrapping down a row at the rect's right edge).
