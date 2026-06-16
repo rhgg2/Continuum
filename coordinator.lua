@@ -20,6 +20,12 @@ local uiSize        = gui.fontSize.ui
 local chrome = util.instantiate('chrome',
   { cm = cm, ctx = ctx, uiFontBold = gui.uiFontBold, uiSize = uiSize })
 local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
+local help      = util.instantiate('help', { ctx = ctx, chrome = chrome, cmgr = cmgr })
+
+-- F1 toggles the keybinding cheat-sheet (root scope, so every page picks it
+-- up). Held off while a modal owns input — the overlay would cover the dialog.
+cmgr:register('toggleHelp', function() if not modalHost:isOpen() then help:toggle() end end)
+cmgr:bind('toggleHelp', { ImGui.Key_F1 })
 
 -- see docs/coordinator.md § Façade registry
 local facades = {}
@@ -27,7 +33,7 @@ local facade  = {
   publish = function(name, iface) facades[name] = iface end,
   get     = function(name) return facades[name] or error('no facade: ' .. name) end,
 }
-local STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, facade = facade }
+local STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, help = help, facade = facade }
 
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 
@@ -139,7 +145,14 @@ local function drawSwitcher()
   pageButton('S', 'sample')
 end
 
-local function dispatch(state) return dispatchKeys(state, cmgr, ctx) end
+local function dispatch(state)
+  -- While the cheat-sheet is up, page bindings go inert; only root commands
+  -- (transport, page switch, F1 to dismiss) stay live.
+  if help:isOpen() then
+    state = { suppressKbd = false, pageSuppressed = true, acceptCmds = true }
+  end
+  return dispatchKeys(state, cmgr, ctx)
+end
 
 ----- External commands (REAPER-keymap bridge)
 
@@ -160,6 +173,7 @@ local function frame()
   cm:pollUndo()
   pollExternalCommands()
   tick()
+  help:beginFrame()
   local page = pages[active]
 
   ImGui.PushFont(ctx, uiFont, uiSize)
@@ -235,6 +249,7 @@ local function frame()
     ImGui.PopStyleColor(ctx, 2)
   end
 
+  if visible then help:draw() end
   if visible then modalHost:draw() end
 
   ImGui.End(ctx)
@@ -267,6 +282,7 @@ function coord:setActive(name)
     cmgr:pop(active)
   end
   active = name
+  help:setPage(name)
   cmgr:push(name)
   if name ~= 'tracker' then pages[name]:bind() end
   return true

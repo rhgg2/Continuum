@@ -61,9 +61,10 @@ local fakeFacade = {
 local function newTrackerPage(cm, ds, cmgr, chrome, gui)
   fakeModalHost:reset()
   resetArrange()
+  local help = util.instantiate('help', { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr })
   return util.instantiate('trackerPage',
     { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui,
-      modalHost = fakeModalHost, facade = fakeFacade })
+      modalHost = fakeModalHost, help = help, facade = fakeFacade })
 end
 
 return {

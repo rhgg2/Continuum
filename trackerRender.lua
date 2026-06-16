@@ -19,8 +19,8 @@ local ImGui = require 'imgui' '0.10'
 
 --contract: trackerPage (the controller) owns the stack + take lifecycle and drives this renderer
 --contract: the renderer holds only tv (injected); it never reaches mm/tm/gm
-local cm, cmgr, chrome, gui, modalHost, facade, tv =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).tv
+local cm, cmgr, chrome, gui, modalHost, facade, tv, help =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).tv, (...).help
 
 local function print(...)
   return util.print(...)
@@ -1344,6 +1344,120 @@ for i = 0, 9 do
   cmgr:scope('tracker'):bind('advBy' .. i, { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} })
 end
 
+----- F1 help manifest — toolbar callouts pinned to their segments, plus a
+----- flowed panel of grid/global bindings packed over the grid body.
+
+help:registerPage('tracker', {
+  { anchor = 'toolbar.track', place = 'pin', title = 'Track', items = {
+    { cmd = 'prevTrack', label = 'Previous track' },
+    { cmd = 'nextTrack', label = 'Next track' },
+  }},
+  { anchor = 'toolbar.take', place = 'pin', title = 'Take', items = {
+    { cmd = 'prevTake', label = 'Previous take' },
+    { cmd = 'nextTake', label = 'Next take' },
+    { cmd = 'newTakeBelow', label = 'New take below' },
+    { cmd = 'duplicateUnpooledBelow', label = 'Duplicate (unpooled) below' },
+    { cmd = 'takeProperties', label = 'Take properties' },
+  }},
+  { anchor = 'toolbar.rowsPerBeat', place = 'pin', title = 'Rows / beat', items = {
+    { cmd = 'doubleRPB', label = 'Double' },
+    { cmd = 'halveRPB', label = 'Halve' },
+    { cmd = 'setRPB', label = 'Set\xe2\x80\xa6' },
+  }},
+  { anchor = 'toolbar.tuning', place = 'pin', title = 'Tuning', items = {
+    { cmd = 'openTemperPicker', label = 'Pick temperament' },
+  }},
+  { anchor = 'toolbar.swing', place = 'pin', title = 'Swing', items = {
+    { cmd = 'openSwingPicker', label = 'Pick swing' },
+    { cmd = 'openSwingEditor', label = 'Edit swing' },
+  }},
+
+  { anchor = 'body.grid', place = 'flow', title = 'Move', items = {
+    { cmd = 'cursorUp', label = 'Up' },
+    { cmd = 'cursorDown', label = 'Down' },
+    { cmd = 'cursorLeft', label = 'Left' },
+    { cmd = 'cursorRight', label = 'Right' },
+    { cmd = 'colLeft', label = 'Column left' },
+    { cmd = 'colRight', label = 'Column right' },
+    { cmd = 'channelLeft', label = 'Channel left' },
+    { cmd = 'channelRight', label = 'Channel right' },
+    { cmd = 'goTop', label = 'Top' },
+    { cmd = 'goBottom', label = 'Bottom' },
+    { cmd = 'pageUp', label = 'Page up' },
+    { cmd = 'pageDown', label = 'Page down' },
+  }},
+  { anchor = 'body.grid', place = 'flow', title = 'Edit', items = {
+    { cmd = 'noteOff', label = 'Note off' },
+    { cmd = 'delete', label = 'Delete cell' },
+    { cmd = 'deleteSel', label = 'Delete selection' },
+    { cmd = 'interpolate', label = 'Interpolate' },
+    { cmd = 'nudgeBack', label = 'Nudge back' },
+    { cmd = 'nudgeForward', label = 'Nudge forward' },
+    { cmd = 'eventShiftLeft', label = 'Shift event left' },
+    { cmd = 'eventShiftRight', label = 'Shift event right' },
+    { cmd = 'shrinkNote', label = 'Shrink note' },
+    { cmd = 'growNote', label = 'Grow note' },
+    { cmd = 'nudgeCoarseUp', label = 'Nudge coarse +' },
+    { cmd = 'nudgeCoarseDown', label = 'Nudge coarse -' },
+    { cmd = 'nudgeFineUp', label = 'Nudge fine +' },
+    { cmd = 'nudgeFineDown', label = 'Nudge fine -' },
+    { cmd = 'scaleHalf', label = 'Scale \xc3\x97\xc2\xbd' },
+    { cmd = 'scaleDouble', label = 'Scale \xc3\x972' },
+  }},
+  { anchor = 'body.grid', place = 'flow', title = 'Select & clipboard', items = {
+    { cmd = 'selectUp', label = 'Extend up' },
+    { cmd = 'selectDown', label = 'Extend down' },
+    { cmd = 'selectLeft', label = 'Extend left' },
+    { cmd = 'selectRight', label = 'Extend right' },
+    { cmd = 'selectClear', label = 'Clear selection' },
+    { cmd = 'cut', label = 'Cut' },
+    { cmd = 'copy', label = 'Copy' },
+    { cmd = 'paste', label = 'Paste' },
+    { cmd = 'duplicateDown', label = 'Duplicate down' },
+    { cmd = 'cycleBlock', label = 'Cycle block' },
+    { cmd = 'cycleVBlock', label = 'Cycle vert block' },
+    { cmd = 'swapBlockEnds', label = 'Swap block ends' },
+  }},
+  { anchor = 'body.grid', place = 'flow', title = 'Columns & rows', items = {
+    { cmd = 'addTypedCol', label = 'Add column' },
+    { cmd = 'hideExtraCol', label = 'Hide / remove column' },
+    { cmd = 'insertRowCol', label = 'Insert row' },
+    { cmd = 'deleteRowCol', label = 'Delete row' },
+  }},
+  { anchor = 'body.grid', place = 'flow', title = 'Groups & region', items = {
+    { cmd = 'groupMark', label = 'Mark group' },
+    { cmd = 'groupDuplicate', label = 'Duplicate group' },
+    { cmd = 'groupPaste', label = 'Paste group' },
+    { cmd = 'groupLocalToggle', label = 'Toggle local' },
+    { cmd = 'groupInstPrev', label = 'Prev instance' },
+    { cmd = 'groupInstNext', label = 'Next instance' },
+    { cmd = 'regionEnter', label = 'Region mode' },
+  }},
+  { anchor = 'body.grid', place = 'flow', title = 'Input & transport', items = {
+    { cmd = 'inputOctaveUp', label = 'Octave +' },
+    { cmd = 'inputOctaveDown', label = 'Octave -' },
+    { cmd = 'inputSampleUp', label = 'Sample +' },
+    { cmd = 'inputSampleDown', label = 'Sample -' },
+    { cmd = 'quantize', label = 'Quantize' },
+    { cmd = 'quantizeKeepRealised', label = 'Quantize (keep realised)' },
+    { cmd = 'matchGridToCursor', label = 'Match grid to cursor' },
+    { cmd = 'playFromTop', label = 'Play from top' },
+    { cmd = 'playFromCursor', label = 'Play from cursor' },
+  }},
+  { anchor = 'body.grid', place = 'flow', title = 'Global', items = {
+    { cmd = 'playPause', label = 'Play / pause' },
+    { cmd = 'stop', label = 'Stop' },
+    { cmd = 'undo', label = 'Undo' },
+    { cmd = 'redo', label = 'Redo' },
+    { cmd = 'togglePage', label = 'Switch page' },
+    { cmd = 'returnToArrange', label = 'Back to arrange' },
+    { cmd = 'beginPrefix', label = 'Numeric prefix' },
+    { cmd = 'toggleFxWindows', label = 'Toggle FX windows' },
+    { cmd = 'toggleHelp', label = 'This help' },
+    { cmd = 'quit', label = 'Quit' },
+  }},
+})
+
 -- Screen point -> (fractional column, integer row) through the grid painter's
 -- inverse, so a click resolves against the exact transform the draw pass used.
 local function cellAt(mouseX, mouseY)
@@ -1862,6 +1976,7 @@ function renderer:renderBody(_, w, h, dispatch)
   computeLayout(gridW, h)
   drawTracker()
   ImGui.PopFont(ctx)
+  help:anchor('body.grid', ox, oy, gridW, h)
 
   drawParamPalette(ox + gridW, oy, h)
   tv:pollLearn(ImGui.IsWindowFocused(ctx, ImGui.FocusedFlags_AnyWindow))

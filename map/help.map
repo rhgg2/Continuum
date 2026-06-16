@@ -1,0 +1,54 @@
+@module help  src=help.lua  loc=136  sha=untracked  mode=chunk
+@deps ctx, chrome, cmgr
+
+# Shapes
+  @shape  helpGroup = { anchor, title, place='pin'|'flow', items=[{cmd,label}] }
+
+# Imports
+  @require ImGui = 'imgui'  @ 12
+      @invariant  anchors are frame-scoped — cleared each frame, repopulated by render code only while open
+      @contract  'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
+
+# Private state
+  @state pages = {}  @ 18   -- pageName → groups
+  @state anchors = {}  @ 19   -- key → { x, y, w, h }
+  @state current = nil  @ 20
+  @state open = false  @ 21
+  @state PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8  @ 23
+  @state DIM_COL = 0x000000C0  @ 24
+  @state EM_DASH = '\xe2\x80\x94'  @ 25
+  @state help = {}  @ 27
+
+# Private functions
+  -- DRAW
+  @fn rectFor(key)  @ 51
+  @fn groupRows(g)  @ 57
+  @fn boxSize(g, rows, keyW)  @ 67
+  @fn drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)  @ 77
+
+# Public API (help:*)
+  @api help:registerPage(name, groups)  @ 31
+  @api help:setPage(name)  @ 32
+  @api help:isOpen()  @ 33
+  @api help:close()  @ 34
+  @api help:toggle()  @ 38
+      -- Won't open on a page that declared no manifest, so F1 there is inert
+      -- rather than dimming the screen with nothing to show.
+  @api help:beginFrame()  @ 42
+  @api help:anchor(key, x, y, w, h)  @ 44
+  @api help:draw()  @ 90
+
+# Uses (outbound edges)
+  @use call    chrome.colour  @ 102, 103, 104, 105, 106
+  @use call    chrome.toolbarRects  @ 53
+  @use call    cmgr.keyLabels  @ 60
+  @use call    imgui.CalcTextSize  @ 62, 70, 71
+  @use call    imgui.DrawList_AddRect  @ 79
+  @use call    imgui.DrawList_AddRectFilled  @ 78, 99
+  @use call    imgui.DrawList_AddText  @ 81, 84, 85
+  @use call    imgui.GetForegroundDrawList  @ 96
+  @use call    imgui.GetTextLineHeight  @ 68
+  @use call    imgui.GetWindowPos  @ 97
+  @use call    imgui.GetWindowSize  @ 98
+  @use call    imgui.IsKeyPressed  @ 92
+  @use require imgui  @ 12

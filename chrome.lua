@@ -142,9 +142,14 @@ end
 -- Wraps each segment in BeginGroup/EndGroup so GetItemRectMin/Max measures the whole
 -- segment. Caches last-frame width per id; if (lastEnd + sep + cached) overflows the
 -- row, the leading SameLine is skipped and ImGui wraps. One-frame slop on size change.
+-- Per-segment screen rects, refreshed each frame the toolbar draws; read by
+-- the help overlay via chrome.toolbarRects(). One page draws per frame, so a
+-- single shared table is correct.
+local lastToolbarRects = {}
 local function makeToolbar()
   local widths = {}
   return function(segments)
+    for k in pairs(lastToolbarRects) do lastToolbarRects[k] = nil end
     local startX = ImGui.GetCursorScreenPos(ctx)
     local availW = ImGui.GetContentRegionAvail(ctx)
     local rightX = startX + availW
@@ -163,9 +168,10 @@ local function makeToolbar()
         ImGui.BeginGroup(ctx)
         seg.render()
         ImGui.EndGroup(ctx)
-        local minX = ImGui.GetItemRectMin(ctx)
-        local maxX = ImGui.GetItemRectMax(ctx)
+        local minX, minY = ImGui.GetItemRectMin(ctx)
+        local maxX, maxY = ImGui.GetItemRectMax(ctx)
         widths[seg.id] = maxX - minX
+        lastToolbarRects[seg.id] = { x = minX, y = minY, w = maxX - minX, h = maxY - minY }
         lastEndX, first = maxX, false
       end
     end
@@ -418,6 +424,7 @@ return {
   radio              = radio,
   headingLabel       = headingLabel,
   makeToolbar        = makeToolbar,
+  toolbarRects       = function() return lastToolbarRects end,
   drawPicker         = drawPicker,
   libPicker          = libPicker,
   pickerIsActive     = pickerIsActive,

@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=322  sha=1a1393f  mode=chunk
+@module commandManager  src=commandManager.lua  loc=388  sha=1a1393f  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -29,6 +29,8 @@
   @state global = newScope()  @ 117
   @state prefixBuf, pendingPrefix = nil, nil  @ 181
   @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 182
+  @state keyNames  @ 327
+  @state modLabels  @ 359
 
 # Private functions
   -- Stack reachability
@@ -44,6 +46,10 @@
   -- Dispatch
   -- Keymap lookup
   @fn resolveKeys(name)  @ 275
+  -- Note layout
+  -- Key labels (human-readable bindings, for the help overlay)
+  @fn buildKeyNames(ImGui)  @ 328
+  @fn buildModLabels()  @ 360
 
 # Public API (mgr:*)
   @api mgr:register(name, fn, undoDesc)  @ 129
@@ -83,12 +89,17 @@
       @contract  returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk
   @api mgr:keySpec(spec, ImGui)  @ 307
       -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
-  -- Note layout
   @api mgr:noteChars(char)  @ 318
       -- Re-read noteLayout on each call so a config change takes effect
       -- without rebuilding vm.
+  @api mgr:keyLabel(spec, ImGui)  @ 366
+  @api mgr:keyLabels(name, ImGui)  @ 380
+      @contract  all bound keyspecs for the reachable command joined by ' / ', or nil if unbound on the current stack
 
 # Uses (outbound edges)
   @use call    cm.get  @ 319
   @use call    util.atomic  @ 90
   @use require util  @ 14
+
+# REAPER API surface
+  @reaper GetOS

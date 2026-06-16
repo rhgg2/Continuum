@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=312  sha=72da7bd  mode=chunk
+@module coordinator  src=coordinator.lua  loc=328  sha=840964c  mode=chunk
 @deps cm, ds, cmgr, gui
 
 # Invariants & contracts
@@ -21,24 +21,25 @@
 # Constructed sub-instances
   @construct chrome    = util.instantiate('chrome')  @ 20
   @construct modalHost = util.instantiate('modalHost')  @ 22
+  @construct help      = util.instantiate('help')  @ 23
 
 # Private state
   @state ctx, uiFont = gui.ctx, gui.uiFont  @ 17
   @state uiSize = gui.fontSize.ui  @ 18
-  @state facades = {}  @ 25
-  @state facade = {  @ 26
-  @state STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = g...  @ 30
-  @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 32
-  @state pages, active = {}, nil  @ 34
-  @state quitting = false  @ 35
-  @state errHandler = nil  @ 36
-  @state externalCommands = {}  @ 148   -- list of { extKey, command }
-  @state coord = {}  @ 252
+  @state facades = {}  @ 31
+  @state facade = {  @ 32
+  @state STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = g...  @ 36
+  @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 38
+  @state pages, active = {}, nil  @ 40
+  @state quitting = false  @ 41
+  @state errHandler = nil  @ 42
+  @state externalCommands = {}  @ 161   -- list of { extKey, command }
+  @state coord = {}  @ 267
       @contract  register instantiates page; first registered becomes active; returns page handle
 
 # Private functions
   -- Keyboard router
-  @fn isDigitMods(mods)  @ 49
+  @fn isDigitMods(mods)  @ 55
       -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns
       -- 'consumed' if a prefix-accumulating key fired this frame; nil otherwise
       -- (so the normal keychain walk proceeds). The prefix is NOT finished here
@@ -48,81 +49,90 @@
       -- chord open while typing a count is a natural reach, and any Ctrl-N or
       -- Super-N command binding is overridden for the duration of prefix mode.
       -- Shift/Alt still disqualify (Shift-digit emits a different char).
-  @fn handlePrefixCapture(cmgr, ctx)  @ 53
-  @fn dispatchKeys(state, cmgr, ctx)  @ 75
+  @fn handlePrefixCapture(cmgr, ctx)  @ 59
+  @fn dispatchKeys(state, cmgr, ctx)  @ 81
   -- Coordinator
-  @fn tick()  @ 113
+  @fn tick()  @ 119
       @contract  tick() runs once per frame before the page draws; no selection bus here
-  @fn drawSwitcher()  @ 122
-  @fn dispatch(state)  @ 142
+  @fn drawSwitcher()  @ 128
+  @fn dispatch(state)  @ 148
   -- External commands (REAPER-keymap bridge)
-  @fn pollExternalCommands()  @ 150
-  @fn frame()  @ 159
+  @fn pollExternalCommands()  @ 163
+  @fn frame()  @ 172
 
 # Public API (coord:*)
-  @api coord:register(name, moduleName, extra)  @ 254
-  @api coord:setActive(name)  @ 263
+  @api coord:register(name, moduleName, extra)  @ 269
+  @api coord:setActive(name)  @ 278
       @contract  setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming
       @contract  tracker self-binds from the cursor in renderBody; activation binds nothing for it
-  @api coord:returnToArrange()  @ 276
+  @api coord:returnToArrange()  @ 292
       @contract  tracker back to arrange; no reveal (cursor never left). No-op if arrange unregistered.
-  @api coord:getFacade(name)  @ 282
+  @api coord:getFacade(name)  @ 298
       @contract  resolve a published page facade by name; the contents are owned by the publishing page
-  @api coord:togglePage()  @ 286
+  @api coord:togglePage()  @ 302
       -- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
       -- are skipped; with ≥1 track every page activates.
-  @api coord:reloadAfterExternalMutation()  @ 297
+  @api coord:reloadAfterExternalMutation()  @ 313
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:onExternalCommand(extKey, command)  @ 304
+  @api coord:onExternalCommand(extKey, command)  @ 320
       @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands
-  @api coord:quit()  @ 308
-  @api coord:run(handler)  @ 310
+  @api coord:quit()  @ 324
+  @api coord:run(handler)  @ 326
       @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 126, 166, 167, 168, 169, 170, 187, 225, 226
-  @use call    chrome.popChromeStyles  @ 200
-  @use call    chrome.pushChromeStyles  @ 192
-  @use call    chrome.verticalSeparator  @ 196
-  @use call    cm.pollUndo  @ 160
-  @use call    cmgr.appendPrefix  @ 58, 62
-  @use call    cmgr.cancelPrefix  @ 65
-  @use call    cmgr.finishPrefix  @ 96
-  @use call    cmgr.invoke  @ 98, 129, 154
-  @use call    cmgr.isPrefixActive  @ 54, 95
-  @use call    cmgr.keySpec  @ 88
-  @use call    cmgr.keychain  @ 84
-  @use call    cmgr.pop  @ 267
-  @use call    cmgr.push  @ 270
-  @use call    cmgr.rootKeymap  @ 84
-  @use call    imgui.Begin  @ 173
-  @use call    imgui.BeginChild  @ 189, 228
-  @use call    imgui.Button  @ 128
-  @use call    imgui.End  @ 240
-  @use call    imgui.EndChild  @ 202, 233
-  @use call    imgui.GetContentRegionAvail  @ 210
-  @use call    imgui.GetCursorPosY  @ 209, 215
-  @use call    imgui.GetFrameHeightWithSpacing  @ 211
-  @use call    imgui.GetKeyMods  @ 55, 92
-  @use call    imgui.Indent  @ 214
-  @use call    imgui.IsKeyDown  @ 89
-  @use call    imgui.IsKeyPressed  @ 57, 61, 64, 92
-  @use call    imgui.PopFont  @ 243
-  @use call    imgui.PopStyleColor  @ 131, 204, 235, 242
-  @use call    imgui.PopStyleVar  @ 179, 199, 203, 234
-  @use call    imgui.PushFont  @ 165
-  @use call    imgui.PushStyleColor  @ 126, 166, 167, 168, 169, 170, 187, 225, 226
-  @use call    imgui.PushStyleVar  @ 172, 188, 193, 227
-  @use call    imgui.SameLine  @ 134, 136, 138, 195, 197
-  @use call    imgui.SetCursorPosY  @ 215, 224
-  @use call    imgui.SetScrollX  @ 183
-  @use call    imgui.SetScrollY  @ 183
-  @use call    imgui.Unindent  @ 220
-  @use call    modalHost.draw  @ 238
-  @use call    modalHost.tick  @ 114
-  @use call    util.assign  @ 255
-  @use call    util.instantiate  @ 20, 22, 255
+  @use call    chrome.colour  @ 132, 180, 181, 182, 183, 184, 201, 239, 240
+  @use call    chrome.popChromeStyles  @ 214
+  @use call    chrome.pushChromeStyles  @ 206
+  @use call    chrome.verticalSeparator  @ 210
+  @use call    cm.pollUndo  @ 173
+  @use call    cmgr.appendPrefix  @ 64, 68
+  @use call    cmgr.bind  @ 28
+  @use call    cmgr.cancelPrefix  @ 71
+  @use call    cmgr.finishPrefix  @ 102
+  @use call    cmgr.invoke  @ 104, 135, 167
+  @use call    cmgr.isPrefixActive  @ 60, 101
+  @use call    cmgr.keySpec  @ 94
+  @use call    cmgr.keychain  @ 90
+  @use call    cmgr.pop  @ 282
+  @use call    cmgr.push  @ 286
+  @use call    cmgr.register  @ 27
+  @use call    cmgr.rootKeymap  @ 90
+  @use call    help.beginFrame  @ 176
+  @use call    help.draw  @ 252
+  @use call    help.isOpen  @ 151
+  @use call    help.setPage  @ 285
+  @use call    help.toggle  @ 27
+  @use call    imgui.Begin  @ 187
+  @use call    imgui.BeginChild  @ 203, 242
+  @use call    imgui.Button  @ 134
+  @use call    imgui.End  @ 255
+  @use call    imgui.EndChild  @ 216, 247
+  @use call    imgui.GetContentRegionAvail  @ 224
+  @use call    imgui.GetCursorPosY  @ 223, 229
+  @use call    imgui.GetFrameHeightWithSpacing  @ 225
+  @use call    imgui.GetKeyMods  @ 61, 98
+  @use call    imgui.Indent  @ 228
+  @use call    imgui.IsKeyDown  @ 95
+  @use call    imgui.IsKeyPressed  @ 63, 67, 70, 98
+  @use call    imgui.PopFont  @ 258
+  @use call    imgui.PopStyleColor  @ 137, 218, 249, 257
+  @use call    imgui.PopStyleVar  @ 193, 213, 217, 248
+  @use call    imgui.PushFont  @ 179
+  @use call    imgui.PushStyleColor  @ 132, 180, 181, 182, 183, 184, 201, 239, 240
+  @use call    imgui.PushStyleVar  @ 186, 202, 207, 241
+  @use call    imgui.SameLine  @ 140, 142, 144, 209, 211
+  @use call    imgui.SetCursorPosY  @ 229, 238
+  @use call    imgui.SetScrollX  @ 197
+  @use call    imgui.SetScrollY  @ 197
+  @use call    imgui.Unindent  @ 234
+  @use call    modalHost.draw  @ 253
+  @use call    modalHost.isOpen  @ 27
+  @use call    modalHost.tick  @ 120
+  @use call    util.assign  @ 270
+  @use call    util.instantiate  @ 20, 22, 23, 270
   @use require chrome  @ 20
+  @use require help  @ 23
   @use require imgui  @ 14
   @use require modalHost  @ 22
   @use require util  @ 7

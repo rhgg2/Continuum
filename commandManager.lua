@@ -319,4 +319,70 @@ function mgr:noteChars(char)
   return chars[cm:get('noteLayout')][char]
 end
 
+----- Key labels (human-readable bindings, for the help overlay)
+--
+-- ImGui injected (same reason as keySpec): cmgr stays free of REAPER
+-- imports at load. The reverse LUT is built lazily on first call.
+
+local keyNames
+local function buildKeyNames(ImGui)
+  local t = {}
+  for i = 0, 25 do t[ImGui.Key_A + i] = string.char(65 + i) end
+  for i = 0, 9  do t[ImGui.Key_0 + i] = tostring(i)      end
+  for i = 1, 12 do t[ImGui['Key_F' .. i]] = 'F' .. i      end
+  t[ImGui.Key_UpArrow],   t[ImGui.Key_DownArrow]  = '\xe2\x86\x91', '\xe2\x86\x93'
+  t[ImGui.Key_LeftArrow], t[ImGui.Key_RightArrow] = '\xe2\x86\x90', '\xe2\x86\x92'
+  t[ImGui.Key_Enter],     t[ImGui.Key_KeypadEnter] = 'Enter', 'Enter'
+  t[ImGui.Key_Escape]    = 'Esc'
+  t[ImGui.Key_Tab]       = 'Tab'
+  t[ImGui.Key_Space]     = 'Space'
+  t[ImGui.Key_Backspace] = 'Bksp'
+  t[ImGui.Key_Delete]    = 'Del'
+  t[ImGui.Key_Home],   t[ImGui.Key_End]      = 'Home', 'End'
+  t[ImGui.Key_PageUp], t[ImGui.Key_PageDown] = 'PgUp', 'PgDn'
+  t[ImGui.Key_Slash]        = '/'
+  t[ImGui.Key_Minus]        = '-'
+  t[ImGui.Key_Equal]        = '='
+  t[ImGui.Key_Comma]        = ','
+  t[ImGui.Key_Period]       = '.'
+  t[ImGui.Key_LeftBracket]  = '['
+  t[ImGui.Key_RightBracket] = ']'
+  t[ImGui.Key_GraveAccent]  = '`'
+  t[ImGui.Key_Apostrophe]   = "'"
+  t[ImGui.Key_Semicolon]    = ';'
+  t[ImGui.Key_Backslash]    = '\\'
+  return t
+end
+
+-- On macOS, ReaImGui's MacOSXBehaviors maps the \xe2\x8c\x98 key to Mod_Ctrl and
+-- the physical \xe2\x8c\x83 to Mod_Super, so the labels invert vs. Windows/Linux.
+local modLabels
+local function buildModLabels()   -- parallel to the `order` list in keyLabel
+  local os = reaper.GetOS()
+  if os:find('OSX') or os:find('mac') then return { 'Cmd', 'Alt', 'Shift', 'Ctrl' } end
+  return { 'Ctrl', 'Alt', 'Shift', os:find('Win') and 'Win' or 'Super' }
+end
+
+function mgr:keyLabel(spec, ImGui)
+  keyNames  = keyNames  or buildKeyNames(ImGui)
+  modLabels = modLabels or buildModLabels()
+  local key, mods = self:keySpec(spec, ImGui)
+  local order = { ImGui.Mod_Ctrl, ImGui.Mod_Alt, ImGui.Mod_Shift, ImGui.Mod_Super }
+  local parts = {}
+  for i, m in ipairs(order) do
+    if (mods & m) ~= 0 then parts[#parts + 1] = modLabels[i] end
+  end
+  parts[#parts + 1] = keyNames[key] or '?'
+  return table.concat(parts, '+')
+end
+
+--contract: all bound keyspecs for the reachable command joined by ' / ', or nil if unbound on the current stack
+function mgr:keyLabels(name, ImGui)
+  local specs = self:keysFor(name)
+  if not specs then return nil end
+  local out = {}
+  for _, spec in ipairs(specs) do out[#out + 1] = self:keyLabel(spec, ImGui) end
+  return table.concat(out, ' / ')
+end
+
 return mgr
