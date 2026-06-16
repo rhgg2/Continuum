@@ -263,30 +263,28 @@ local function handleGridMouse(nTracks)
       press = { qn = myQN, gutter = true, moved = false }
     else
       local col = math.floor(mcol)
-      if col >= 0 and col < nTracks then
-        local row = math.min(g.sr + g.visRows - 1, math.floor(mrow))
-        local take, mode = av:hitTake(col, myQN, bpr / g.rowH)
-        if not take and ImGui.IsMouseDoubleClicked(ctx, 0) then
-          press = { qn = floorTo(myQN, bpr), col = col,
-                    create = true, moved = false }
-        else
-          press = {
-            qn = myQN, row = row, col = col,
-            take = take, mode = mode, moved = false,
-            duplicate = mode == 'move'
-                        and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
-          }
-          -- Focus the take on press, so a drag visibly carries it.
-          if take then av:setFocus(take.take) end
-        end
+      local row = math.min(g.sr + g.visRows - 1, math.floor(mrow))
+      local take, mode
+      if col >= 0 and col < nTracks then take, mode = av:hitTake(col, myQN, bpr / g.rowH) end
+      if take then
+        press = {
+          qn = myQN, row = row, col = col,
+          take = take, mode = mode, moved = false,
+          duplicate = mode == 'move'
+                      and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
+        }
+        av:setFocus(take.take)   -- focus on press, so a drag visibly carries it
+      elseif col >= 0 and col < nTracks and ImGui.IsMouseDoubleClicked(ctx, 0) then
+        press = { qn = floorTo(myQN, bpr), col = col, create = true, moved = false }
+      else
+        -- Empty grid (incl. dead space right of the last column): a drag lassos;
+        -- a plain click moves the cursor and clears the selection on release.
+        press = { qn = myQN, row = row, col = col, mcol = mcol, moved = false }
       end
     end
   end
   if not press then return nil, nil, nil end
-  if (press.take or press.gutter or press.create)
-     and ImGui.IsMouseDragging(ctx, 0) then
-    press.moved = true
-  end
+  if ImGui.IsMouseDragging(ctx, 0) then press.moved = true end
 
   local dragCand = (press.moved and press.take)
                    and av:dragCandidate(press, myQN, snapped) or nil
@@ -294,12 +292,17 @@ local function handleGridMouse(nTracks)
                    and av:gutterLoopCand(press, myQN, snapped) or nil
   local createCand = (press.moved and press.create)
                      and av:createCandidate(press, myQN, snapped) or nil
+  local lassoCand = (press.moved and not press.take
+                     and not press.gutter and not press.create)
+                    and av:lassoCandidate(press, mcol, myQN) or nil
 
   if ImGui.IsMouseReleased(ctx, 0) then
     if dragCand then
       if dragCand.fits then av:commitDrag(press, dragCand) end
     elseif loopCand then
       av:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
+    elseif lassoCand then
+      av:setSelection(lassoCand.takes)
     elseif press.create then
       -- Sweep prefills the length in beats; bare double-click uses the default.
       local beats = createCand and createCand.lengthQN or nil
@@ -312,12 +315,12 @@ local function handleGridMouse(nTracks)
       if not press.take then av:setFocus(nil) end
     end
     press = nil
-    return nil, nil, nil
+    return nil, nil, nil, nil
   end
-  return dragCand, loopCand, createCand
+  return dragCand, loopCand, createCand, lassoCand
 end
 
-local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
+local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lassoCand)
   local g  = gridGeom(nTracks)
   local pg = g.pg
   local ps = painter.new(ctx, chrome, {})   -- screen space: gutter, header, full-width rules
@@ -361,7 +364,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
 
   -- Take rects: snapped corners so adjacent borders coincide; ±1px insets are screen-space.
   -- Three passes (fills → cursor fill → names) so names stay crisp over the cursor tint.
-  local focusHandle = av:focus()
+  local selected = av:selectionSet()
   local nameDraws = {}
   local truncDraws = {}   -- ellipsis decoration for items truncated below natural
 
@@ -457,7 +460,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
     local relocating = dragCand and not press.duplicate
                        and tk.item == press.take.item
     if not relocating then
-      drawTakeRect(tk, tk.startQN, tk.lengthQN, tk.take == focusHandle)
+      drawTakeRect(tk, tk.startQN, tk.lengthQN,
+                   selected[tk.take] or (lassoCand and lassoCand.set[tk.take]) or false)
     end
   end
   if dragCand then
@@ -475,6 +479,21 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
       local gy1 = rowYs(math.min(endRow, sr + visRows))
       ps.fill(rect(gx0 + 1, gy0 + 1, gx1, gy1), 'arrange.ghostFill')
       ps.border(rect(gx0, gy0, gx1 + 1, gy1 + 1), 'arrange.ghostBorder')
+    end
+  end
+
+  -- Lasso rubber band: free rect anchored at the press and drag points, not
+  -- grid-snapped; clip widened to paneR so it can reach the dead space.
+  if lassoCand then
+    local lx0 = colX(math.max(lassoCand.colLo, sc))
+    local lx1 = math.min(colX(lassoCand.colHi), g.paneR)
+    local ly0 = rowYs(math.max(av:qnToRow(lassoCand.qnLo), sr))
+    local ly1 = rowYs(math.min(av:qnToRow(lassoCand.qnHi), sr + visRows))
+    if lx1 > lx0 and ly1 > ly0 then
+      ps.pushClip(rect(g.paneLeft, oy, g.paneR, oy + g.availH), false)
+      ps.fill(rect(lx0, ly0, lx1, ly1), 'arrange.lassoFill')
+      ps.border(rect(lx0, ly0, lx1, ly1), 'arrange.lassoBorder')
+      ps.popClip()
     end
   end
 
@@ -800,8 +819,8 @@ function ar:renderBody(_, w, h, dispatch)
                       ImGui.WindowFlags_NoNav
                       | ImGui.WindowFlags_NoScrollWithMouse
                       | ImGui.WindowFlags_NoScrollbar) then
-    local dragCand, loopCand, createCand = handleGridMouse(nTracks)
-    renderGrid(tracks, nTracks, dragCand, loopCand, createCand)
+    local dragCand, loopCand, createCand, lassoCand = handleGridMouse(nTracks)
+    renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lassoCand)
   end
   ImGui.EndChild(ctx)
 
@@ -885,6 +904,7 @@ local binds = {
   arrangePlayFromCursor         = { ImGui.Key_F6 },
   toggleFollowPlay              = { { ImGui.Key_F, ImGui.Mod_Super } },
   arrangeClearLoop              = { ImGui.Key_Escape },
+  arrangeClearSelection         = { { ImGui.Key_G, ImGui.Mod_Ctrl } },
   arrangeZoomIn                 = { { ImGui.Key_Equal, ImGui.Mod_Super } },
   arrangeZoomOut                = { { ImGui.Key_Minus, ImGui.Mod_Super } },
   arrangeSetBeatPerRow          = { { ImGui.Key_Z,     ImGui.Mod_Super } },

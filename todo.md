@@ -7,7 +7,6 @@
 - CC smoothing
 - 14bit CCs
 - keyboard mapping editor
-- multiselect / copy / paste in ap
 - wm - midi channel filter
 - wm - master multi-outs / deal with restriction on single audio feed
   to master

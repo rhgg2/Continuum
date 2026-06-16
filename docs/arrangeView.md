@@ -30,11 +30,11 @@ av builds `arrangeManager` and is the only module that touches it.
 and every mutation it triggers go through av.
 
 This is the layered rule, not a preference. A page reaching past av
-into am could mutate project state without av's cursor and focus
+into am could mutate project state without av's cursor and selection
 bookkeeping ever seeing it. Routing everything through av keeps one
-module answerable for the page — action-target resolution, the focus
-self-heal, the row-box snap policy all live in the same place as the
-mutations they constrain.
+module answerable for the page — action-target resolution, the
+selection self-heal, the row-box snap policy all live in the same place
+as the mutations they constrain.
 
 It costs av its REAPER independence. An earlier design kept am out so
 av could be tested without a fake project behind it. That trade no
@@ -43,32 +43,51 @@ defined against project takes — there is nothing left to test in
 isolation from them. The arrange specs build av over the same fake
 REAPER the page specs already rely on.
 
-## Focus: stored and resolved here
+## Selection: a set, stored and resolved here
 
-`focus` is the REAPER take handle the edit commands act on — per-session
-view state beside the cursor. av stores it opaquely and resolves it on
-demand: `focusedTake` turns the handle into a live take-shape through
-`am:findTake`, and clears focus when the take is gone (deleted here or
-in REAPER). Storing a handle rather than a grid position means a take
-moved or resized under it still resolves correctly.
+The selection is a per-session set of REAPER take handles the edit
+commands act on — view state beside the cursor. av stores the handles
+opaquely and resolves them on demand: `selectedTakes` turns each handle
+into a live take-shape through `am:findTake` and prunes any whose take
+is gone (deleted here or in REAPER). Storing handles rather than grid
+positions means takes moved or resized under the selection still
+resolve correctly. `setFocus`/`focus` are single-element conveniences
+over the same set, for the mouse path and the duplicate commands.
 
-Cursor and focus are separate pointers, and that is deliberate. The
+Cursor and selection are separate pointers, and that is deliberate. The
 cursor is the keyboard caret — drawn as a horizontal I-beam on the top
-edge of the cursor row; focus is the selected take. Cursor nav never
-changes focus: the caret moves on its own, the selected take keeps its
-indicator.
+edge of the cursor row; the selection is a set of highlighted takes.
+Cursor nav never changes the selection: the caret moves on its own, the
+selected takes keep their indicator.
 
-Selection is decoupled from action. An edit command (`nudgeFocused`,
-`resizeFocused`, `deleteFocused`, `diveFocused`, the duplicates)
-resolves its target through `actionTarget`: the selected take if one is
-held, otherwise the take under the cursor — acted on without becoming
+Selection is decoupled from action. An edit command resolves its
+targets through `actionTargets`: the whole selection if one is held,
+otherwise the single take under the cursor — acted on without becoming
 selected. With nothing selected and the cursor parked off-screen (only
 a wheel-pan can strand it there), there is no target and the command
-no-ops. A mouse press on a take selects it; a press on empty space
-clears the selection. Boot lands the cursor on REAPER's selected item
-but selects nothing (`seedCursor`).
+no-ops. Boot lands the cursor on REAPER's selected item but selects
+nothing (`seedCursor`).
 
-The caret rendering and this fallback are the same idea: cursor
+Single-take commands — dive, take-properties, duplicate-below — go
+through `singleTarget` and no-op unless exactly one take is targeted:
+you can't dive into five takes, and a duplicate has one copy to advance
+onto. Group commands — nudge, resize, delete — act on every target in
+one undo block. Nudge is all-or-nothing: it pre-checks the whole group
+against `am:moveTake`'s occupied-start rule and refuses the move if any
+member is blocked, then applies the moves in travel order so a
+contiguous block never collides with an unmoved member.
+
+### Lasso
+
+A left-drag from empty grid space — including the dead space to the
+right of the last track column — sweeps a rubber-band rectangle;
+`lassoCandidate` returns every take whose span intersects it, and the
+release replaces the selection with that set. A plain click (no drag)
+on empty space moves the cursor and clears the selection; a click on a
+take selects just that one. Lasso replaces rather than extends — Ctrl+G
+clears.
+
+The caret rendering and the cursor fallback are the same idea: cursor
 position is a line, not a cell. With nothing selected, what a command
 picks is decided at command time from where the caret sits — and only
 when the caret is actually on screen.

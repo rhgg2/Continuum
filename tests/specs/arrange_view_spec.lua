@@ -12,6 +12,33 @@ local function mkAv(harness)
   return h, av
 end
 
+-- Build an av over a fake project. items: list of {track, name, pos, len?}.
+-- Tracks are created in first-seen order; beatPerRow is 1 (1 row = 1 QN).
+local function mkArrange(harness, items)
+  local h = harness.mk()
+  h.cm:set('project', 'arrangeBeatPerRow', 1)
+  local order, seen = {}, {}
+  for _, item in ipairs(items) do
+    if not seen[item.track] then
+      seen[item.track] = true; order[#order + 1] = item.track
+      h.reaper:setTrackName(item.track, item.track)
+    end
+  end
+  for _, item in ipairs(items) do
+    h.reaper:addItem(item.track, { take = item.track .. '/' .. item.name,
+      isMidi = true, pos = item.pos, len = item.len or 1,
+      poolGuid = '{' .. item.track .. item.name .. '}' })
+  end
+  h.reaper:setProjectTracks(order)
+  local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+  local av = util.instantiate('arrangeView', { cm = h.cm, cmgr = h.cmgr, am = am })
+  return h, av, am
+end
+
+local function takeAt(list, startQN)
+  for _, take in ipairs(list) do if take.startQN == startQN then return take end end
+end
+
 return {
   {
     name = 'cursor defaults to (0,0); setCursor clamps negatives and floors',
@@ -259,6 +286,116 @@ return {
       local remain = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
       t.eq(#remain, 1, 'exactly one take deleted')
       t.eq(remain[1].startQN, 4, 'the selection was deleted, not the cursor take')
+    end,
+  },
+
+  {
+    name = 'lasso selects every take whose span intersects the swept rect',
+    run = function(harness)
+      local _, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0, len = 2 },   -- QN 0..2
+        { track = 'tr2', name = 'b', pos = 1, len = 2 },   -- QN 1..3
+        { track = 'tr1', name = 'c', pos = 8, len = 2 },   -- QN 8..10, below the band
+      })
+      av:setGridSize(16, 4)
+      local a = takeAt(av:tracksTakes(0), 0)
+      local c = takeAt(av:tracksTakes(0), 8)
+      local b = takeAt(av:tracksTakes(1), 1)
+      local cand = av:lassoCandidate({ mcol = 0, qn = 0 }, 1.5, 4)   -- cols 0..1.5, QN 0..4
+      t.eq(#cand.takes, 2, 'two takes swept')
+      t.eq(cand.set[a.take], true, 'tr1 take in band selected')
+      t.eq(cand.set[b.take], true, 'tr2 take in band selected')
+      t.eq(cand.set[c.take], nil,  'take below the band not selected')
+    end,
+  },
+
+  {
+    name = 'a multi-selection deletes every selected take in one pass',
+    run = function(harness)
+      local h, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+        { track = 'tr1', name = 'b', pos = 4 },
+      })
+      h.cmgr:push('arrange')
+      av:setGridSize(8, 4)
+      local takes = av:tracksTakes(0)
+      av:setSelection{ takes[1].take, takes[2].take }
+      h.cmgr:invoke('arrangeDeleteTake')
+      local remain = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      t.eq(#remain, 0, 'both selected takes gone')
+      t.eq(next(av:selectionSet()), nil, 'selection cleared after delete')
+    end,
+  },
+
+  {
+    name = 'nudge refuses entirely when any selected take is blocked',
+    run = function(harness)
+      local h, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },   -- selected
+        { track = 'tr1', name = 'b', pos = 1 },   -- selected
+        { track = 'tr1', name = 'c', pos = 2 },   -- blocker, not selected
+      })
+      h.cmgr:push('arrange')
+      av:setGridSize(8, 4)
+      local takes = av:tracksTakes(0)
+      av:setSelection{ takeAt(takes, 0).take, takeAt(takes, 1).take }
+      h.cmgr:invoke('arrangeNudgeForward')   -- b would land on c@2 → refuse the lot
+      local now = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      t.eq(#now, 3, 'all three still present')
+      t.eq(takeAt(now, 0) ~= nil, true, 'a stayed at 0')
+      t.eq(takeAt(now, 1) ~= nil, true, 'b stayed at 1')
+      t.eq(takeAt(now, 2) ~= nil, true, 'c stayed at 2')
+    end,
+  },
+
+  {
+    name = 'nudge slides a contiguous selected block without self-collision',
+    run = function(harness)
+      local h, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+        { track = 'tr1', name = 'b', pos = 1 },
+      })
+      h.cmgr:push('arrange')
+      av:setGridSize(8, 4)
+      local takes = av:tracksTakes(0)
+      av:setSelection{ takeAt(takes, 0).take, takeAt(takes, 1).take }
+      h.cmgr:invoke('arrangeNudgeForward')   -- a→1, b→2; ordering must keep a off b
+      local now = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      t.eq(#now, 2, 'both takes survive')
+      t.eq(takeAt(now, 1) ~= nil, true, 'first take moved to row 1')
+      t.eq(takeAt(now, 2) ~= nil, true, 'second take moved to row 2')
+    end,
+  },
+
+  {
+    name = 'a single-target command no-ops on a multi-selection',
+    run = function(harness)
+      local h, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+        { track = 'tr1', name = 'b', pos = 4 },
+      })
+      h.cmgr:push('arrange')
+      av:setGridSize(8, 4)
+      local takes = av:tracksTakes(0)
+      av:setSelection{ takes[1].take, takes[2].take }
+      h.cmgr:invoke('arrangeDuplicateBelow')
+      local now = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      t.eq(#now, 2, 'no copy made while two takes are selected')
+    end,
+  },
+
+  {
+    name = 'arrangeClearSelection empties the selection',
+    run = function(harness)
+      local h, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+      })
+      h.cmgr:push('arrange')
+      av:setGridSize(8, 4)
+      av:setSelection{ av:tracksTakes(0)[1].take }
+      t.eq(next(av:selectionSet()) ~= nil, true, 'selection populated')
+      h.cmgr:invoke('arrangeClearSelection')
+      t.eq(next(av:selectionSet()), nil, 'cleared')
     end,
   },
 

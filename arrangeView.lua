@@ -1,14 +1,14 @@
 -- See docs/arrangeView.md for the model.
 -- @noindex
 
---invariant: av owns arrange-page state — cursor, scroll, focus, paletteSlot; arrangePage renders.
+--invariant: av owns arrange-page state — cursor, scroll, selection, paletteSlot; page renders.
 --invariant: page builds am and injects it; av owns the ref — all mutations route through av.
 --invariant: av speaks no ImGui — modifiers arrive as plain booleans; av works in QN/rows only.
 --invariant: cursor/scroll are in-memory module-locals; only beatPerRow persists via cm.
 --invariant: cursorRow is integer rows; cursorCol is 0-based track index. qn = row * beatPerRow.
 --invariant: gridRows/gridCols set by the page each frame; followViewport runs on every cursor move.
 --invariant: av registers arrange-scope command bodies; page owns key bindings and createSlot.
---invariant: focus is a per-session module-local (REAPER take handle). See docs/arrangeView.md.
+--invariant: selection is a per-session set of take handles; setFocus/focus are single-element.
 --invariant: paletteSlot is per-session (0..61 or nil) — palette rename/delete; not cursorCol.
 
 local util = require 'util'
@@ -26,7 +26,7 @@ local gridRows, gridCols   = 0, 0
 -- frame. Nil means unbounded (initial frame before the page has drawn).
 local maxCol      = nil
 local paletteSlot = nil
-local focus       = nil
+local selection   = {}   -- ordered set of opaque take handles (the selection)
 -- Play-head follow: suspended by a manual wheel-pan, re-armed on the next
 -- play-start or transport seek. lastPlayRow drives the seek-discontinuity test.
 local followSuspended = false
@@ -88,13 +88,24 @@ local function advanceCursorPastNewTake(rawTake)
   av:setCursor(cursorRow + rows, cursorCol)
 end
 
--- The stored focus handle resolved to a live take-shape. Self-heals: a
--- handle whose take is gone (deleted here or in REAPER) clears focus.
-local function focusedTake()
-  if not focus then return nil end
-  local take = am:findTake(focus)
-  if not take then focus = nil end
-  return take
+-- Live takes for the selected handles, in selection order. Self-heals:
+-- handles whose take is gone (deleted here or in REAPER) are pruned.
+local function selectedTakes()
+  local live, kept = {}, {}
+  for _, handle in ipairs(selection) do
+    local take = am:findTake(handle)
+    if take then live[#live + 1] = take; kept[#kept + 1] = handle end
+  end
+  selection = kept
+  return live
+end
+
+local function setSelection(handles)
+  local kept = {}
+  for _, handle in ipairs(handles or {}) do
+    if handle then kept[#kept + 1] = handle end
+  end
+  selection = kept
 end
 
 -- Wheel-pan moves the viewport without the caret; gridRows/gridCols 0
@@ -105,13 +116,19 @@ local function cursorOnScreen()
      and cursorCol >= scrollCol and cursorCol < scrollCol + gridCols
 end
 
--- Edit target: selection if held, else cursor take without selecting it.
--- Nil (no-op) when nothing is selected and the cursor is off-screen.
-local function actionTarget()
-  local selected = focusedTake()
-  if selected then return selected end
-  if not cursorOnScreen() then return nil end
-  return takeAtCursor()
+-- Edit targets: the selection if held, else the cursor take (unselected)
+-- when on-screen. Empty (no-op) when nothing's held and the cursor is off.
+local function actionTargets()
+  local selected = selectedTakes()
+  if #selected > 0 then return selected end
+  if not cursorOnScreen() then return {} end
+  local take = takeAtCursor()
+  return take and { take } or {}
+end
+
+local function singleTarget()
+  local takes = actionTargets()
+  return #takes == 1 and takes[1] or nil
 end
 
 --invariant: cursor-nav steps whole rows/cols; only negative coords clamp. See docs/arrangeView.md.
@@ -167,53 +184,87 @@ local function navFromQN()
   return cur and cur.startQN or av:rowToQN(cursorRow)
 end
 
------ Take edits — move / resize / delete / dive the action target
---invariant: edit cmds target via actionTarget; unselected + off-screen cursor = no-op.
+----- Take edits — move / resize / delete / dive the action targets
+--invariant: edit cmds target via actionTargets; off-screen + nothing selected = no-op.
 
---invariant: nudge steps one row; blocked only when dest start == another take start on the track.
-local function nudgeFocused(direction)
-  local take = actionTarget()
-  if not take then return end
-  if am:moveTake(take, direction * av:beatPerRow()) then
-    moveCursorBy(direction, 0)
+-- Pre-check the group at its destination: refuse the whole nudge if any
+-- selected take would land on an occupied start (mirrors am:moveTake's rule).
+local function selectionCanNudge(takes, deltaQN)
+  local mine = {}
+  for _, take in ipairs(takes) do mine[take.item] = true end
+  for _, take in ipairs(takes) do
+    local destQN = take.startQN + deltaQN
+    if destQN < 0 then return false end
+    for _, other in ipairs(am:tracksTakes(take.trackIdx)) do
+      if not mine[other.item] and math.abs(other.startQN - destQN) < 1e-6 then
+        return false
+      end
+    end
   end
+  return true
+end
+
+--invariant: nudge steps one row, all-or-nothing; refused if any selected dest start is occupied.
+local function nudgeSelected(direction)
+  local takes = actionTargets()
+  if #takes == 0 then return end
+  local deltaQN = direction * av:beatPerRow()
+  if not selectionCanNudge(takes, deltaQN) then return end
+  -- Move in travel order so a contiguous block never collides with an
+  -- unmoved member: forward → highest start first, back → lowest first.
+  table.sort(takes, function(lhs, rhs)
+    if direction > 0 then return lhs.startQN > rhs.startQN end
+    return lhs.startQN < rhs.startQN
+  end)
+  util.atomic('Nudge takes', function()
+    for _, take in ipairs(takes) do am:moveTake(take, deltaQN) end
+  end)()
+  if #takes == 1 then moveCursorBy(direction, 0) end
 end
 
 --invariant: resize writes natural length (±1 bpr, floored 1 bpr). See docs/arrangeView.md § Resize.
-local function resizeFocused(direction)
-  local take = actionTarget()
-  if not take then return end
-  local bpr       = av:beatPerRow()
-  local newNatural = math.max(bpr, take.lengthQN + direction * bpr)
-  am:resizeTake(take, newNatural)
-  -- A shrink that ate the row the cursor sat on pulls the cursor
-  -- back to the take's new last row; otherwise the cursor stays put.
-  if direction < 0 then
-    local endRow = (take.startQN + newNatural) / bpr
+local function resizeSelected(direction)
+  local takes = actionTargets()
+  if #takes == 0 then return end
+  local bpr = av:beatPerRow()
+  util.atomic('Resize takes', function()
+    for _, take in ipairs(takes) do
+      am:resizeTake(take, math.max(bpr, take.lengthQN + direction * bpr))
+    end
+  end)()
+  -- A single shrink that ate the cursor's row pulls the cursor back a row;
+  -- multi-selection edits leave the cursor where it is.
+  if #takes == 1 and direction < 0 then
+    local take   = takes[1]
+    local endRow = (take.startQN + math.max(bpr, take.lengthQN + direction * bpr)) / bpr
     if cursorRow >= endRow then moveCursorBy(-1, 0) end
   end
 end
 
-local function deleteFocused()
-  local take = actionTarget()
-  if take then am:deleteTake(take) end
+local function deleteSelected()
+  local takes = actionTargets()
+  if #takes == 0 then return end
+  util.atomic('Delete takes', function()
+    for _, take in ipairs(takes) do am:deleteTake(take) end
+  end)()
+  setSelection {}
 end
 
---invariant: arrangeDive is MIDI-only; audio/nil focus silently no-ops; dives via switchPage.
-local function diveFocused()
-  local take = actionTarget()
+--invariant: arrangeDive is MIDI-only + single-target; multi-selection / audio / none no-op.
+local function diveSelected()
+  local take = singleTarget()
   if take and take.kind == 'midi' then cmgr:invoke('switchPage', 'tracker') end
 end
 
---invariant: arrangeTakeProperties is MIDI-only; routes the item through the tracker façade.
-local function focusedTakeProperties()
-  local take = actionTarget()
+--invariant: arrangeTakeProperties is MIDI-only + single-target; routes via the tracker façade.
+local function selectedTakeProperties()
+  local take = singleTarget()
   if take and take.kind == 'midi' then tracker().openTakeProperties(take.item) end
 end
 
---invariant: duplicateBelow: pooled clone at natural end; focus+cursor advance to copy. MIDI-only.
-local function duplicateFocusedBelow()
-  local take = actionTarget()
+--invariant: duplicateBelow: single-target clone at natural end; focus+cursor advance. MIDI-only.
+local function duplicateSelectedBelow()
+  local take = singleTarget()
   if not take then return end
   local newTake = am:duplicateBelow(take)
   if newTake then
@@ -222,8 +273,8 @@ local function duplicateFocusedBelow()
   end
 end
 
-local function duplicateUnpooledFocusedBelow()
-  local take = actionTarget()
+local function duplicateUnpooledSelectedBelow()
+  local take = singleTarget()
   if not take then return end
   local newTake = am:duplicateUnpooledBelow(take)
   if newTake then
@@ -242,8 +293,8 @@ local function dropAt(slotIdx)
   end
 end
 
-local function deleteFocusedAndAdvance()
-  deleteFocused()
+local function deleteSelectedAndAdvance()
+  deleteSelected()
   moveCursorBy(cm:get('arrangeAdvanceBy'), 0)
 end
 
@@ -278,7 +329,7 @@ local function clearLoop() am:clearLoopRange() end
 function av:cursorRow()   return cursorRow end
 function av:cursorCol()   return cursorCol end
 function av:scroll()      return scrollRow, scrollCol end
-function av:focus()       return focus end
+function av:focus()       return selection[1] end
 function av:paletteSlot() return paletteSlot end
 
 --contract: clamps negative coords to 0; clamps cursorCol to maxCol if set; no row upper bound.
@@ -326,8 +377,19 @@ function av:followPlay()
   end
 end
 
---contract: stores an opaque take handle or nil; av resolves it via am at edit-command time.
-function av:setFocus(handle) focus = handle end
+--contract: setFocus(h) makes {h} the selection (nil clears); focus() returns the first handle.
+function av:setFocus(handle) setSelection(handle and { handle } or {}) end
+
+--contract: selectionSet() = {[handle]=true} of live selected takes, for the renderer's highlight.
+function av:selectionSet()
+  local set = {}
+  for _, take in ipairs(selectedTakes()) do set[take.take] = true end
+  return set
+end
+
+--contract: setSelection replaces the selection with the handle list (nils filtered); [] clears.
+function av:setSelection(handles) setSelection(handles) end
+function av:clearSelection()      setSelection {} end
 
 --contract: setPaletteSlot(nil) clears; numeric values clamp into 0..61 (the base62 slot range).
 function av:setPaletteSlot(idx)
@@ -496,6 +558,25 @@ function av:createCandidate(press, mouseQN, snapped)
   return { startQN = press.qn, lengthQN = math.max(bpr, endQN - press.qn) }
 end
 
+--contract: takes intersecting the free press/drag rect (colFrac x QN); returns bounds + handles.
+function av:lassoCandidate(press, mcol, mqn)
+  local colLo, colHi = math.min(press.mcol, mcol), math.max(press.mcol, mcol)
+  local qnLo,  qnHi  = math.min(press.qn,   mqn),  math.max(press.qn,   mqn)
+  local takes, set = {}, {}
+  for trackIdx = math.max(0, math.floor(colLo)), math.floor(colHi) do
+    if trackIdx < colHi and trackIdx + 1 > colLo then
+      for _, take in ipairs(am:tracksTakes(trackIdx)) do
+        if take.startQN < qnHi and take.startQN + take.lengthQN > qnLo then
+          takes[#takes + 1] = take.take
+          set[take.take]    = true
+        end
+      end
+    end
+  end
+  return { colLo = colLo, colHi = colHi, qnLo = qnLo, qnHi = qnHi,
+           takes = takes, set = set }
+end
+
 --contract: move/resize preserves focus; dup shifts focus to new copy. Resize writes natural length.
 function av:commitDrag(press, cand)
   local label = press.mode == 'resizeEnd' and 'Resize take'
@@ -507,7 +588,7 @@ function av:commitDrag(press, cand)
       am:resizeTake(take, cand.lengthQN)
     elseif press.duplicate then
       local copy = am:duplicateTake(take, cand.startQN)
-      if copy then focus = copy end   -- am hands back a bare take handle
+      if copy then setSelection { copy } end   -- am hands back a bare take handle
     else
       am:moveTake(take, cand.startQN - take.startQN)
     end
@@ -542,7 +623,7 @@ end
 function av:seedCursor()
   local trackIdx, qn = am:initialCursor()
   self:setCursor(self:qnToRow(qn), trackIdx)
-  focus = nil
+  setSelection {}
 end
 
 ----------- COMMANDS
@@ -559,16 +640,17 @@ arrange:registerAll {
   arrangePageDown     = function() moveCursorBy( PAGE_ROWS, 0) end,
   arrangeHome         = function() av:setCursor(0, cursorCol) end,
   arrangeEnd          = function() av:setCursor(av:qnToRow(am:projectEndQN()), cursorCol) end,
-  arrangeNudgeBack    = { function() nudgeFocused(-1) end, 'Nudge take back'    },
-  arrangeNudgeForward = { function() nudgeFocused( 1) end, 'Nudge take forward' },
-  arrangeShrinkTake   = { function() resizeFocused(-1) end, 'Shrink take' },
-  arrangeGrowTake     = { function() resizeFocused( 1) end, 'Grow take'   },
-  arrangeDeleteTake             = { deleteFocused,                  'Delete take' },
-  arrangeDeleteAdvance          = { deleteFocusedAndAdvance,        'Delete take and advance' },
-  arrangeDive                   = diveFocused,
-  arrangeTakeProperties         = focusedTakeProperties,
-  arrangeDuplicateBelow         = { duplicateFocusedBelow,          'Duplicate pooled take' },
-  arrangeDuplicateUnpooledBelow = { duplicateUnpooledFocusedBelow,  'Duplicate take' },
+  arrangeNudgeBack    = { function() nudgeSelected(-1) end, 'Nudge take back'    },
+  arrangeNudgeForward = { function() nudgeSelected( 1) end, 'Nudge take forward' },
+  arrangeShrinkTake   = { function() resizeSelected(-1) end, 'Shrink take' },
+  arrangeGrowTake     = { function() resizeSelected( 1) end, 'Grow take'   },
+  arrangeDeleteTake             = { deleteSelected,                 'Delete take' },
+  arrangeDeleteAdvance          = { deleteSelectedAndAdvance,       'Delete take and advance' },
+  arrangeDive                   = diveSelected,
+  arrangeTakeProperties         = selectedTakeProperties,
+  arrangeDuplicateBelow         = { duplicateSelectedBelow,         'Duplicate pooled take' },
+  arrangeDuplicateUnpooledBelow = { duplicateUnpooledSelectedBelow, 'Duplicate take' },
+  arrangeClearSelection         = { function() setSelection {} end, 'Clear selection' },
   arrangeSetLoopStart           = { setLoopStartHere,               'Set loop start at cursor' },
   arrangeSetLoopEnd             = { setLoopEndHere,                 'Set loop end at cursor' },
   arrangePlayFromCursor         = { playFromCursor,                 'Play from cursor' },
