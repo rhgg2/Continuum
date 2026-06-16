@@ -34,15 +34,36 @@ and the human labels (`help:registerPage(name, groups)`), co-located with
 the render module that owns both the layout and the bindings.
 
 Groups are `place = 'pin'` (a callout pinned beneath a toolbar segment)
-or `place = 'flow'` (packed into columns inside the body rect — the grid
-cheat-sheet).
+or `place = 'flow'` (the grid cheat-sheet, filling the body rect row-major
+— left to right, wrapping down a row at the rect's right edge).
+
+Pins would collide where a callout is wider than its toolbar segment's
+spacing. Rather than cascade them downward (crude — it displaces a box far
+to dodge a small overlap), `placePins` slides them left/right into the
+non-overlapping arrangement that *minimises total displacement* from each
+box's wanted x. That's isotonic regression: subtracting each box's
+cumulative width turns "no overlap, left-to-right" into "the reduced
+positions must be non-decreasing", which pool-adjacent-violators solves
+optimally in one pass. A single rigid shift then nudges the whole run
+on-screen if an end pokes past the window edge.
 
 ## Input while open
 
 F1 is a root-scope command, reachable on every page, so it toggles the
-overlay regardless of which page-scoped bindings are live. While open,
-the coordinator forces root-only dispatch: page bindings go inert, but
-transport, page-switch, and F1-to-dismiss keep working. Esc also closes,
-handled inside `help:draw`. The overlay won't open over a modal dialog
-(it would cover its own buttons), and won't open on a page that declared
-no manifest.
+overlay regardless of which page-scoped bindings are live. While open the
+overlay is dismiss-on-interaction: **any** key, or a mouse-down off the
+callout boxes, closes it — and that gesture is *swallowed*, never reaching
+the page underneath.
+
+Swallowing spans three input surfaces that fire independently: the
+coordinator suppresses command dispatch (`acceptCmds = false`), and the
+tracker page skips its grid `handleMouse` and its note-entry `handleKeys`
+(which read the key stream directly, bypassing dispatch) while
+`help:wasOpenAtFrameStart()`. Dismissal is gated on the open-at-frame-start
+flag so the F1 press that opens the sheet isn't also read as the keypress
+that closes it. Toolbar and param-palette ImGui widgets behind the overlay
+are *not* blocked — true modality there would need a popup window; the dim
+plus the swallowed grid/keyboard is the deliberate trade.
+
+The overlay won't open over a modal dialog (it would cover its own
+buttons), and won't open on a page that declared no manifest.

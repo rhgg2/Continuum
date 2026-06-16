@@ -1,58 +1,68 @@
-@module help  src=help.lua  loc=162  sha=4aa1900  mode=chunk
+@module help  src=help.lua  loc=224  sha=4bd97f3  mode=chunk
 @deps ctx, chrome, cmgr
 
 # Shapes
   @shape  helpGroup = { anchor, title, place='pin'|'flow', items=[{cmd,label}] }
 
 # Imports
-  @require ImGui = 'imgui'  @ 12
+  @require ImGui = 'imgui'  @ 7
       @invariant  anchors are frame-scoped — cleared each frame, repopulated by render code only while open
       @contract  'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
 
 # Private state
-  @state pages = {}  @ 18   -- pageName → groups
-  @state anchors = {}  @ 19   -- key → { x, y, w, h }
-  @state current = nil  @ 20
-  @state open = false  @ 21
-  @state PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8  @ 23
-  @state DIM_COL = 0x00000099  @ 24
-  @state EM_DASH = '\xe2\x80\x94'  @ 25
-  @state help = {}  @ 27
+  @state pages = {}  @ 13   -- pageName → groups
+  @state anchors = {}  @ 14   -- key → { x, y, w, h }
+  @state current = nil  @ 15
+  @state open = false  @ 16
+  @state openAtStart = false  @ 17   -- open as of frame start; gates dismissal + page input swallow
+  @state PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8  @ 19
+  @state DIM_COL = 0x00000099  @ 20
+  @state EM_DASH = '\xe2\x80\x94'  @ 21
+  @state help = {}  @ 23
+  @state dismissKeyList  @ 124
 
 # Private functions
   -- DRAW
-  @fn rectFor(key)  @ 51
-  @fn groupRows(g)  @ 57
-  @fn boxSize(g, rows, keyW)  @ 67
-  @fn drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)  @ 77
-  @fn intersects(a, x, y, w, h)  @ 90
-  @fn avoid(x, y, w, h, placed)  @ 96
-      -- Slide a box straight down past any already-placed box it would cover, so
-      -- adjacent toolbar callouts cascade instead of stacking on top of each other.
+  @fn rectFor(key)  @ 48
+  @fn groupRows(g)  @ 54
+  @fn boxSize(g, rows, keyW)  @ 64
+  @fn drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)  @ 74
+  @fn placePins(dl, pins, theme, wx, ww, boxes)  @ 89
+      -- Pin callouts sit just under their toolbar segment. Overlapping neighbours are
+      -- slid to minimise total displacement — isotonic regression. See docs/help.md.
+  @fn buildDismissKeys()  @ 125
+  @fn anyKeyPressed()  @ 143
+      -- Char queue catches punctuation/layout-specific keys; the explicit list covers
+      -- the non-printables (and alphanumerics, since the macOS char queue drops some).
+  @fn clickedOutside(boxes)  @ 152
 
 # Public API (help:*)
-  @api help:registerPage(name, groups)  @ 31
-  @api help:setPage(name)  @ 32
-  @api help:isOpen()  @ 33
-  @api help:close()  @ 34
-  @api help:toggle()  @ 38
+  @api help:registerPage(name, groups)  @ 27
+  @api help:setPage(name)  @ 28
+  @api help:isOpen()  @ 29
+  @api help:close()  @ 30
+  @api help:toggle()  @ 34
       -- Won't open on a page that declared no manifest, so F1 there is inert
       -- rather than dimming the screen with nothing to show.
-  @api help:beginFrame()  @ 42
-  @api help:anchor(key, x, y, w, h)  @ 44
-  @api help:draw()  @ 107
+  @api help:beginFrame()  @ 38
+  @api help:wasOpenAtFrameStart()  @ 39
+  @api help:anchor(key, x, y, w, h)  @ 41
+  @api help:draw()  @ 162
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 119, 120, 121, 122, 123
-  @use call    chrome.toolbarRects  @ 53
-  @use call    cmgr.keyLabels  @ 60
-  @use call    imgui.CalcTextSize  @ 62, 70, 71
-  @use call    imgui.DrawList_AddRect  @ 79
-  @use call    imgui.DrawList_AddRectFilled  @ 78, 116
-  @use call    imgui.DrawList_AddText  @ 81, 84, 85
-  @use call    imgui.GetForegroundDrawList  @ 113
-  @use call    imgui.GetTextLineHeight  @ 68
-  @use call    imgui.GetWindowPos  @ 114
-  @use call    imgui.GetWindowSize  @ 115
-  @use call    imgui.IsKeyPressed  @ 109
-  @use require imgui  @ 12
+  @use call    chrome.colour  @ 173, 174, 175, 176, 177
+  @use call    chrome.toolbarRects  @ 50
+  @use call    cmgr.keyLabels  @ 57
+  @use call    imgui.CalcTextSize  @ 59, 67, 68
+  @use call    imgui.DrawList_AddRect  @ 76
+  @use call    imgui.DrawList_AddRectFilled  @ 75, 170
+  @use call    imgui.DrawList_AddText  @ 78, 81, 82
+  @use call    imgui.GetForegroundDrawList  @ 167
+  @use call    imgui.GetInputQueueCharacter  @ 144
+  @use call    imgui.GetMousePos  @ 155
+  @use call    imgui.GetTextLineHeight  @ 65
+  @use call    imgui.GetWindowPos  @ 168
+  @use call    imgui.GetWindowSize  @ 169
+  @use call    imgui.IsKeyPressed  @ 147
+  @use call    imgui.IsMouseClicked  @ 153, 154
+  @use require imgui  @ 7

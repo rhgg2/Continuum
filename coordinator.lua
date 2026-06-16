@@ -146,10 +146,10 @@ local function drawSwitcher()
 end
 
 local function dispatch(state)
-  -- While the cheat-sheet is up, page bindings go inert; only root commands
-  -- (transport, page switch, F1 to dismiss) stay live.
+  -- While the cheat-sheet is up, all dispatch is suppressed; help:draw closes
+  -- on any key or an off-box click, swallowing the gesture.
   if help:isOpen() then
-    state = { suppressKbd = false, pageSuppressed = true, acceptCmds = true }
+    state = { suppressKbd = true, pageSuppressed = true, acceptCmds = false }
   end
   return dispatchKeys(state, cmgr, ctx)
 end
