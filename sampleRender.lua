@@ -133,21 +133,41 @@ local function peakFor(abs, cols)
   return hit
 end
 
-local TREE_INDENT = 12
+local TREE_INDENT, ARROW_GUTTER = 12, 14
+local CHIP_OPEN, CHIP_SHUT = '\xe2\x96\xbe', '\xe2\x96\xb8'   -- ▾ / ▸
 --contract: recursive walk; descends expanded subtrees; listDirs on all nodes to find leaf folders
---contract: click selects + toggles expansion; double-click rebrowses root; childless = no arrow
+--contract: chip (left gutter) toggles expansion; body click selects, double-click rebrowses root
+--contract: open/shut chip in a fixed left gutter; leaf and parent labels share one text column
 local function drawTree(path)
   local cur    = sv:getCurrentFolder()
   local availW = select(1, ImGui.GetContentRegionAvail(ctx))
+  local dl     = ImGui.GetWindowDrawList(ctx)
+  local rowH   = ImGui.GetTextLineHeight(ctx)
   for _, sub in ipairs(fs.listDirs(path)) do
     local subPath = fs.join(path, sub)
     local hasKids = #fs.listDirs(subPath) > 0
     local open    = hasKids and sv:isFolderExpanded(subPath)
-    local label   = chrome.treeArrow(open, hasKids) .. chrome.fitLabel(sub, availW - 16)
-    if chrome.rowSelectable(label .. '###tree' .. subPath, cur == subPath) then
-      sv:setCurrentFolder(subPath)
-      if hasKids then sv:setFolderExpanded(subPath, not open) end
-      if ImGui.IsMouseDoubleClicked(ctx, 0) then sv:setBrowseRoot(subPath) end
+
+    local x, y    = ImGui.GetCursorScreenPos(ctx)
+    local chipHit = ImGui.InvisibleButton(ctx, '##chip' .. subPath, ARROW_GUTTER, rowH)
+    if hasKids then
+      ImGui.DrawList_AddText(dl, x + 2, y, chrome.colour('text'),
+                             open and CHIP_OPEN or CHIP_SHUT)
+    end
+    ImGui.SameLine(ctx, 0, 0)
+    local label   = chrome.fitLabel(sub, availW - ARROW_GUTTER - 8) .. '###tree' .. subPath
+    local clicked = chrome.rowSelectable(label, cur == subPath,
+                                         ImGui.SelectableFlags_AllowDoubleClick)
+
+    if hasKids and chipHit then
+      sv:setFolderExpanded(subPath, not open)
+    elseif clicked then
+      if ImGui.IsMouseDoubleClicked(ctx, 0) then
+        sv:setBrowseRoot(subPath)
+      else
+        sv:setCurrentFolder(subPath)
+        if hasKids then sv:setFolderExpanded(subPath, not open) end
+      end
     end
     if open then
       ImGui.Indent(ctx, TREE_INDENT)
