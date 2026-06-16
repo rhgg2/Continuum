@@ -78,3 +78,30 @@ plus the swallowed grid/keyboard is the deliberate trade.
 
 The overlay won't open over a modal dialog (it would cover its own
 buttons), and won't open on a page that declared no manifest.
+
+## Editing bindings
+
+Clicking a binding in the open overlay turns it into an editor. The first
+click *focuses* a command's row — only one at a time, to keep visual noise
+down — revealing a ✕ tag over each keycap's top-right corner and a `+` tag
+just past the row. From there: ✕ removes that binding, `+` captures a new
+chord to append, and
+clicking a keycap body re-captures it (replace). Clicking another row's
+keycap just moves the focus, so rebinding several commands costs one click
+each rather than a focus/exit dance.
+
+Capture reads the next non-modifier key plus the live modifier mask
+(`ImGui.GetKeyMods`) and turns it into a `cmgr` keyspec. Esc cancels
+capture (leaving the row focused); Esc again leaves edit mode. While a row
+is focused or capturing, the dismiss-on-key path is suspended — otherwise
+the very keys being captured would close the sheet.
+
+Edits go straight through `cmgr:rebind`, which writes the live keymap and
+persists the change as hand-editable tokens; `bindingSite(cmd)` picks the
+scope to write (the reachable scope that binds it, else its gate scope). A
+captured chord that would clobber a reachable command (`commandAtKey`) is
+dropped for now — the conflict / clobber / reassign flow lands next.
+
+Edit state persists across frames while the sheet stays open, but resets
+whenever the overlay closes or the page changes, so reopening always starts
+in plain view mode.

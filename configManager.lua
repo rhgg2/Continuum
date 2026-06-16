@@ -228,6 +228,10 @@ local declarations = {
   { 'colour.help.key',    'colour.text'         },  -- shortcut glyphs + the '/' separator
   { 'colour.help.desc',   'palette.base.zone9'  },  -- command description
   { 'colour.help.chip',   'palette.base.zone8'  },  -- keycap fill (alpha at draw)
+  { 'colour.help.remove', 'palette.alert'       },  -- ✕ remove-binding glyph (red)
+  { 'colour.help.add',    'palette.positive'    },  -- + add-binding glyph (green)
+  { 'colour.help.tag',       'palette.base.zone9'  },  -- edit-tag box fill (one zone above chips, full alpha)
+  { 'colour.help.tagBorder', 'colour.help.border'  },  -- edit-tag 1px crisp border
   -- Pre-blended `0.5*pale + 0.5*bg`; a literal alias would render translucent over a different parent.
   { 'colour.editor.bg',            hex('#e9e7df')                 },
   { 'laneStrip.rows',      4    },

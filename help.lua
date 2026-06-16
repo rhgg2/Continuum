@@ -3,6 +3,7 @@
 
 --shape: helpGroup = { anchor, title, place='pin'|'flow', items=[{cmd,label}] }
 --invariant: anchors are frame-scoped — cleared each frame, repopulated by render code only while open
+--invariant: edit state (editing/capturing) resets whenever the overlay closes or the page changes
 --contract: 'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
 local ImGui = require 'imgui' '0.10'
 local util  = require 'util'
@@ -22,19 +23,25 @@ local PIN_GAP, WIN_MARGIN, BOX_R = 4, 2, 4   -- pin drop below segment; window-e
 local DIM_COL = 0x00000077
 local EM_DASH = '\xe2\x80\x94'
 
+-- Edit-mode state: `editing` = cmd whose row shows ✕/+; `capturing` (only while
+-- editing) awaits a chord. `hits` is the per-frame click map. See docs/help.md § Editing.
+local editing, capturing, hits = nil, nil, nil
+local function resetEdit() editing, capturing = nil, nil end
+
 local help = {}
 
 ----------- PUBLIC
 
 function help:registerPage(name, groups) pages[name] = groups end
-function help:setPage(name)              current = name end
+function help:setPage(name)              current = name; resetEdit() end
 function help:isOpen()                   return open end
-function help:close()                    open = false end
+function help:close()                    open = false; resetEdit() end
 
 -- Won't open on a page that declared no manifest, so F1 there is inert
 -- rather than dimming the screen with nothing to show.
 function help:toggle()
   open = (not open) and pages[current] ~= nil or false
+  if not open then resetEdit() end
 end
 
 function help:beginFrame() anchors, openAtStart = {}, open end
@@ -60,11 +67,16 @@ end
 -- symbol glyphs are floored to a square (so , . ` read as keys), word labels stay natural.
 local CHIP_PADX_INNER, CHIP_PADX_OUTER, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 0, 2, 3, 4, 0.9, 0xcc
 local SEP = '/'
+local CAPTURE_GLYPH = '\xe2\x80\xa6'   -- … (chip cue while capturing a replacement)
+local TAG_SYM, TAG_PAD, ADD_GAP = 7, 1, 9   -- tag symbol px (odd -> centred +); moat inside the 1px border; gap before + tag
 local function withAlpha(rgba, a) return (rgba & 0xFFFFFF00) | a end
+
+-- Side of a square edit-tag box: the symbol plus a 2px moat and the 1px border.
+local function tagSide() return TAG_SYM + (TAG_PAD + 1) * 2 end
 
 -- Lay out a shortcut's chips ('/'-separated, one per binding) into geometry for
 -- drawCluster: total width + each chip's {w, cells}; word runs share one cell, symbols one each.
-local function layoutCluster(keys)
+local function layoutCluster(keys, withAdd)
   local sepW, chips, total = ImGui.CalcTextSize(ctx, SEP), {}, 0
   for index, chord in ipairs(keys) do
     local cells, chipW, run = {}, CHIP_PADX_OUTER * 2, nil
@@ -86,25 +98,80 @@ local function layoutCluster(keys)
     util.add(chips, { w = chipW, cells = cells })
     total = total + chipW + (index > 1 and SEP_GAP * 2 + sepW or 0)
   end
+  if withAdd then total = total + ADD_GAP + tagSide() end   -- room for the trailing + tag
   return { width = total, chips = chips }
 end
 
-local function drawCluster(cluster, x, y)
+-- Pixel-crisp 1px border (painter.border's 4-strip technique) on the foreground
+-- drawlist the overlay uses: painter binds to the window drawlist, behind the dim.
+local function crispBorder(x0, y0, x1, y1, colour)
+  ImGui.DrawList_AddRectFilled(dl, x0,     y0,     x1,     y0 + 1, colour)
+  ImGui.DrawList_AddRectFilled(dl, x0,     y1 - 1, x1,     y1,     colour)
+  ImGui.DrawList_AddRectFilled(dl, x0,     y0,     x0 + 1, y1,     colour)
+  ImGui.DrawList_AddRectFilled(dl, x1 - 1, y0,     x1,     y1,     colour)
+end
+
+-- Square edit tag at (cx, cy): fill + 1px border, symbol in a 2px moat (+ as
+-- 1px strips, x as diagonal). `captureHere` highlights; `hit` rect filled here.
+local function drawTag(cx, cy, symbol, ink, captureHere, hit)
+  local side   = tagSide()
+  local x0, y0 = math.floor(cx - side / 2 + 0.5), math.floor(cy - side / 2 + 0.5)
+  local x1, y1 = x0 + side, y0 + side
+  ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, theme.tag)
+  crispBorder(x0, y0, x1, y1, captureHere and theme.title or theme.tagBorder)
+  local colour = captureHere and theme.title or ink
+  -- Symbol pixel box: side TAG_SYM, equal inset (1px border + moat) on every edge.
+  local inset    = TAG_PAD + 1
+  local sx0, sy0 = x0 + inset, y0 + inset
+  local sx1, sy1 = sx0 + TAG_SYM, sy0 + TAG_SYM
+  if symbol == 'x' then                              -- inclusive endpoints stay inside the box
+    ImGui.DrawList_AddLine(dl, sx0, sy0, sx1 - 1, sy1 - 1, colour, 1)
+    ImGui.DrawList_AddLine(dl, sx0, sy1 - 1, sx1 - 1, sy0, colour, 1)
+  else                                               -- 1px strips through the centre pixel (TAG_SYM odd)
+    local midX, midY = sx0 + (TAG_SYM - 1) // 2, sy0 + (TAG_SYM - 1) // 2
+    ImGui.DrawList_AddRectFilled(dl, midX, sy0, midX + 1, sy1, colour)
+    ImGui.DrawList_AddRectFilled(dl, sx0, midY, sx1, midY + 1, colour)
+  end
+  hit.x, hit.y, hit.w, hit.h = x0, y0, side, side
+  util.add(hits, hit)
+end
+
+-- Records a click hit per chip; in edit mode also draws the ✕ corner tags and the
+-- trailing + tag, each with its own hit. See docs/help.md § Editing.
+local function drawCluster(cluster, x, y, cmd, specs)
   local sepW, cursorX = ImGui.CalcTextSize(ctx, SEP), x
+  local isEditing = cmd == editing
+  local isCapture = capturing ~= nil and capturing.cmd == cmd
   for index, chip in ipairs(cluster.chips) do
     if index > 1 then
       ImGui.DrawList_AddText(dl, cursorX + SEP_GAP, y, theme.key, SEP)
       cursorX = cursorX + SEP_GAP * 2 + sepW
     end
-    ImGui.DrawList_AddRectFilled(dl, cursorX, y, cursorX + chip.w, y + lineH, capBg, CHIP_R)
-    ImGui.DrawList_AddRect(dl, cursorX, y, cursorX + chip.w, y + lineH, capLine, CHIP_R)
-    local glyphX = cursorX + CHIP_PADX_OUTER
-    for _, cell in ipairs(chip.cells) do
-      local textW = ImGui.CalcTextSize(ctx, cell.text)
-      ImGui.DrawList_AddText(dl, glyphX + (cell.w - textW) / 2, y, theme.key, cell.text)
-      glyphX = glyphX + cell.w
+    local spec = specs[index]
+    local x2   = cursorX + chip.w
+    local captureHere = isCapture and spec ~= nil and spec == capturing.replace
+    ImGui.DrawList_AddRectFilled(dl, cursorX, y, x2, y + lineH, capBg, CHIP_R)
+    ImGui.DrawList_AddRect(dl, cursorX, y, x2, y + lineH, captureHere and theme.title or capLine, CHIP_R)
+    if captureHere then
+      local glyphW = ImGui.CalcTextSize(ctx, CAPTURE_GLYPH)
+      ImGui.DrawList_AddText(dl, cursorX + (chip.w - glyphW) / 2, y, theme.title, CAPTURE_GLYPH)
+    else
+      local glyphX = cursorX + CHIP_PADX_OUTER
+      for _, cell in ipairs(chip.cells) do
+        local textW = ImGui.CalcTextSize(ctx, cell.text)
+        ImGui.DrawList_AddText(dl, glyphX + (cell.w - textW) / 2, y, theme.key, cell.text)
+        glyphX = glyphX + cell.w
+      end
     end
-    cursorX = cursorX + chip.w
+    util.add(hits, { x = cursorX, y = y, w = chip.w, h = lineH, kind = 'chip', cmd = cmd, spec = spec })
+    if isEditing and spec ~= nil then
+      drawTag(x2, y, 'x', theme.remove, false, { kind = 'remove', cmd = cmd, spec = spec })
+    end
+    cursorX = x2
+  end
+  if isEditing then
+    drawTag(cursorX + ADD_GAP + tagSide() / 2, y + lineH / 2, '+', theme.add,
+            isCapture and capturing.replace == nil, { kind = 'add', cmd = cmd })
   end
 end
 
@@ -113,8 +180,11 @@ end
 local function layoutBox(group)
   local rows, keyW, labelW = {}, 0, 0
   for _, item in ipairs(group.items) do
-    local cluster = layoutCluster(cmgr:keyLabelList(item.cmd, ImGui) or { EM_DASH })
-    util.add(rows, { cluster = cluster, label = item.label })
+    local editingRow = item.cmd == editing
+    local labels  = cmgr:keyLabelList(item.cmd, ImGui)
+    local cluster = layoutCluster(labels or (editingRow and {} or { EM_DASH }), editingRow)
+    util.add(rows, { cluster = cluster, label = item.label,
+                     cmd = item.cmd, specs = cmgr:keysFor(item.cmd) or {} })
     keyW   = math.max(keyW, cluster.width)
     labelW = math.max(labelW, (ImGui.CalcTextSize(ctx, item.label)))
   end
@@ -131,7 +201,7 @@ local function drawBox(box, x, y)
   ImGui.DrawList_AddText(dl, x + PAD, rowY, theme.title, box.title)
   rowY = rowY + lineH + ROW_GAP
   for _, row in ipairs(box.rows) do
-    drawCluster(row.cluster, x + PAD, rowY)
+    drawCluster(row.cluster, x + PAD, rowY, row.cmd, row.specs)
     ImGui.DrawList_AddText(dl, x + PAD + box.keyW + KEY_GAP, rowY, theme.label, row.label)
     rowY = rowY + lineH + ROW_GAP
   end
@@ -206,8 +276,9 @@ local function buildDismissKeys()
     ImGui.Key_Backspace, ImGui.Key_Delete, ImGui.Key_Space, ImGui.Key_Insert,
     ImGui.Key_UpArrow, ImGui.Key_DownArrow, ImGui.Key_LeftArrow, ImGui.Key_RightArrow,
     ImGui.Key_Home, ImGui.Key_End, ImGui.Key_PageUp, ImGui.Key_PageDown,
-    ImGui.Key_Minus, ImGui.Key_KeypadSubtract, ImGui.Key_Comma, ImGui.Key_Period,
-    ImGui.Key_Semicolon, ImGui.Key_Apostrophe, ImGui.Key_Slash,
+    ImGui.Key_Minus, ImGui.Key_KeypadSubtract, ImGui.Key_Equal, ImGui.Key_Comma,
+    ImGui.Key_Period, ImGui.Key_Semicolon, ImGui.Key_Apostrophe, ImGui.Key_Slash,
+    ImGui.Key_LeftBracket, ImGui.Key_RightBracket, ImGui.Key_GraveAccent, ImGui.Key_Backslash,
   } do util.add(keys, key) end
   return keys
 end
@@ -223,15 +294,82 @@ local function anyKeyPressed()
   return false
 end
 
-local function clickedOutside()
-  if not (ImGui.IsMouseClicked(ctx, 0) or ImGui.IsMouseClicked(ctx, 1)
-          or ImGui.IsMouseClicked(ctx, 2)) then return false end
-  local mouseX, mouseY = ImGui.GetMousePos(ctx)
+local function insideAnyBox(mouseX, mouseY)
   for _, box in ipairs(boxes) do
     if mouseX >= box.x and mouseX <= box.x + box.w
-       and mouseY >= box.y and mouseY <= box.y + box.h then return false end
+       and mouseY >= box.y and mouseY <= box.y + box.h then return true end
   end
-  return true
+  return false
+end
+
+----------- EDIT MODE
+
+-- A pressed non-modifier key plus the live modifier mask, as a cmgr keyspec.
+local function buildSpec(key, mods)
+  if mods == ImGui.Mod_None then return key end
+  local spec = { key }
+  for _, mod in ipairs{ ImGui.Mod_Ctrl, ImGui.Mod_Shift, ImGui.Mod_Alt, ImGui.Mod_Super } do
+    if (mods & mod) ~= 0 then spec[#spec + 1] = mod end
+  end
+  return spec
+end
+
+-- Rewrites cmd's bindings: drop `drop` (a spec ref, or nil), append `add` (or nil).
+local function rebindWithout(cmd, drop, add)
+  local specs = {}
+  for _, spec in ipairs(cmgr:keysFor(cmd) or {}) do
+    if spec ~= drop then specs[#specs + 1] = spec end
+  end
+  if add then specs[#specs + 1] = add end
+  cmgr:rebind(cmgr:bindingSite(cmd), cmd, specs, ImGui)
+end
+
+-- A captured chord that collides with a reachable command is dropped for now;
+-- step 3 swaps this branch for the warn / clobber / reassign prompt.
+local function commitCapture(spec)
+  local cmd = capturing.cmd
+  if not cmgr:commandAtKey(spec, cmd, ImGui) then
+    rebindWithout(cmd, capturing.replace, spec)
+  end
+  capturing = nil
+end
+
+local function pollCapture()
+  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then capturing = nil; return end
+  dismissKeyList = dismissKeyList or buildDismissKeys()
+  local mods = ImGui.GetKeyMods(ctx)
+  for _, key in ipairs(dismissKeyList) do
+    if key ~= ImGui.Key_Escape and ImGui.IsKeyPressed(ctx, key) then
+      commitCapture(buildSpec(key, mods))
+      return
+    end
+  end
+end
+
+-- ✕ sits atop its chip, so a remove hit wins over the chip hit it overlaps.
+local function hitAt(mouseX, mouseY)
+  local rank, best = { remove = 3, add = 2, chip = 1 }, nil
+  for _, hit in ipairs(hits) do
+    if mouseX >= hit.x and mouseX <= hit.x + hit.w
+       and mouseY >= hit.y and mouseY <= hit.y + hit.h
+       and (not best or rank[hit.kind] > rank[best.kind]) then best = hit end
+  end
+  return best
+end
+
+local function handleClicks()
+  if not (ImGui.IsMouseClicked(ctx, 0) or ImGui.IsMouseClicked(ctx, 1)
+          or ImGui.IsMouseClicked(ctx, 2)) then return end
+  local mouseX, mouseY = ImGui.GetMousePos(ctx)
+  local hit = hitAt(mouseX, mouseY)
+  if hit then
+    if     hit.kind == 'remove' then rebindWithout(hit.cmd, hit.spec)
+    elseif hit.kind == 'add'    then editing, capturing = hit.cmd, { cmd = hit.cmd }
+    elseif editing == hit.cmd   then capturing = { cmd = hit.cmd, replace = hit.spec }
+    else                             editing = hit.cmd end
+  elseif not insideAnyBox(mouseX, mouseY) then
+    open = false; resetEdit()
+  end
 end
 
 function help:draw()
@@ -252,10 +390,15 @@ function help:draw()
     key    = chrome.colour('help.key'),
     label  = chrome.colour('help.desc'),
     chip   = chrome.colour('help.chip'),
+    remove = chrome.colour('help.remove'),
+    add    = chrome.colour('help.add'),
+    tag       = chrome.colour('help.tag'),
+    tagBorder = chrome.colour('help.tagBorder'),
   }
   capBg   = withAlpha(theme.chip, CHIP_ALPHA)
   capLine = withAlpha(theme.border, 0x66)
   boxes   = {}   -- every drawn rect, for the off-box click test below
+  hits    = {}   -- per-frame click map (chips, ✕, +); rebuilt by drawCluster
 
   -- One pass lays out every visible group's box; pins then place collision-avoided
   -- under their segment, flow boxes wrap within their grid rect.
@@ -274,9 +417,16 @@ function help:draw()
   placePins(pins, winX, winW)
   placeFlow(flows)
 
-  -- Dismiss on any key or off-box click; gesture is swallowed (coordinator + page both
-  -- gate on wasOpenAtFrameStart). Gated so the opening F1 doesn't instantly dismiss.
-  if openAtStart and (anyKeyPressed() or clickedOutside()) then open = false end
+  -- Edit mode owns the keyboard (capture chords, Esc steps out); outside it, any
+  -- key / off-box click dismisses. Gated on openAtStart. See docs/help.md § Editing.
+  if capturing then
+    pollCapture()
+  elseif editing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+    editing = nil
+  else
+    handleClicks()
+    if openAtStart and not editing and anyKeyPressed() then open = false end
+  end
 end
 
 return help

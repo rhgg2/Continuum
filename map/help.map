@@ -1,4 +1,4 @@
-@module help  src=help.lua  loc=431  sha=7ffd090  mode=chunk
+@module help  src=help.lua  loc=432  sha=7ffd090  mode=chunk
 @deps ctx, chrome, cmgr
 
 # Shapes
@@ -27,8 +27,8 @@
   @state CHIP_PADX_INNER, CHIP_PADX_OUTER, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 0, 2, 3, 4, 0.9, 0xcc  @ 68
   @state SEP = '/'  @ 69
   @state CAPTURE_GLYPH = '\xe2\x80\xa6'  @ 70
-  @state TAG_SYM, TAG_PAD, ADD_GAP = 6, 1, 4  @ 71   -- edit-tag symbol size; 2px moat inside the border; gap before the + tag
-  @state dismissKeyList  @ 267
+  @state TAG_SYM, TAG_PAD, ADD_GAP = 7, 1, 9  @ 71   -- tag symbol px (odd -> centred +); moat inside the 1px border; gap before + tag
+  @state dismissKeyList  @ 268
 
 # Private functions
   @fn resetEdit()  @ 29
@@ -43,40 +43,39 @@
   @fn crispBorder(x0, y0, x1, y1, colour)  @ 107
       -- Pixel-crisp 1px border (painter.border's 4-strip technique) on the foreground
       -- drawlist the overlay uses: painter binds to the window drawlist, behind the dim.
-  @fn drawTag(cx, cy, symbol, ink, captureHere, hit)  @ 117
-      -- A square edit tag centred on (cx, cy): zone-higher fill, crisp 1px border, and
-      -- the symbol inside a 2px moat: + as crisp 1px strips, x as an anti-aliased
-      -- diagonal. `captureHere` swaps to the highlight; `hit`'s rect is filled in here.
-  @fn drawCluster(cluster, x, y, cmd, specs)  @ 140
+  @fn drawTag(cx, cy, symbol, ink, captureHere, hit)  @ 116
+      -- Square edit tag at (cx, cy): fill + 1px border, symbol in a 2px moat (+ as
+      -- 1px strips, x as diagonal). `captureHere` highlights; `hit` rect filled here.
+  @fn drawCluster(cluster, x, y, cmd, specs)  @ 141
       -- Records a click hit per chip; in edit mode also draws the ✕ corner tags and the
       -- trailing + tag, each with its own hit. See docs/help.md § Editing.
-  @fn layoutBox(group)  @ 179
+  @fn layoutBox(group)  @ 180
       -- A group's box geometry in one pass: rows (each with a laid-out cluster) plus the
       -- box w/h, sized to the wider of the title vs the shortcut column + widest label.
-  @fn drawBox(box, x, y)  @ 196
-  @fn placePins(pins, winX, winW)  @ 211
+  @fn drawBox(box, x, y)  @ 197
+  @fn placePins(pins, winX, winW)  @ 212
       -- Pin callouts sit just under their toolbar segment. Overlapping neighbours are
       -- slid to minimise total displacement — isotonic regression. See docs/help.md.
-  @fn placeFlow(flows)  @ 248
+  @fn placeFlow(flows)  @ 249
       -- Flow groups fill their grid rect row-major: left to right, wrapping down a row
       -- at the rect's right edge. Each anchor rect carries its own cursor.
-  @fn buildDismissKeys()  @ 268
-  @fn anyKeyPressed()  @ 287
+  @fn buildDismissKeys()  @ 269
+  @fn anyKeyPressed()  @ 288
       -- Char queue catches punctuation/layout-specific keys; the explicit list covers
       -- the non-printables (and alphanumerics, since the macOS char queue drops some).
-  @fn insideAnyBox(mouseX, mouseY)  @ 296
+  @fn insideAnyBox(mouseX, mouseY)  @ 297
   -- EDIT MODE
-  @fn buildSpec(key, mods)  @ 307
+  @fn buildSpec(key, mods)  @ 308
       -- A pressed non-modifier key plus the live modifier mask, as a cmgr keyspec.
-  @fn rebindWithout(cmd, drop, add)  @ 317
+  @fn rebindWithout(cmd, drop, add)  @ 318
       -- Rewrites cmd's bindings: drop `drop` (a spec ref, or nil), append `add` (or nil).
-  @fn commitCapture(spec)  @ 328
+  @fn commitCapture(spec)  @ 329
       -- A captured chord that collides with a reachable command is dropped for now;
       -- step 3 swaps this branch for the warn / clobber / reassign prompt.
-  @fn pollCapture()  @ 336
-  @fn hitAt(mouseX, mouseY)  @ 349
+  @fn pollCapture()  @ 337
+  @fn hitAt(mouseX, mouseY)  @ 350
       -- ✕ sits atop its chip, so a remove hit wins over the chip hit it overlaps.
-  @fn handleClicks()  @ 359
+  @fn handleClicks()  @ 360
 
 # Public API (help:*)
   @api help:registerPage(name, groups)  @ 35
@@ -89,30 +88,30 @@
   @api help:beginFrame()  @ 47
   @api help:wasOpenAtFrameStart()  @ 48
   @api help:anchor(key, x, y, w, h)  @ 50
-  @api help:draw()  @ 374
+  @api help:draw()  @ 375
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 386, 387, 388, 389, 390, 391, 392, 393, 394, 395
+  @use call    chrome.colour  @ 387, 388, 389, 390, 391, 392, 393, 394, 395, 396
   @use call    chrome.toolbarRects  @ 62
-  @use call    cmgr.bindingSite  @ 323
-  @use call    cmgr.commandAtKey  @ 330
-  @use call    cmgr.keyLabelList  @ 183
-  @use call    cmgr.keysFor  @ 186, 319
-  @use call    cmgr.rebind  @ 323
-  @use call    imgui.CalcTextSize  @ 80, 84, 141, 155, 160, 188, 190
-  @use call    imgui.DrawList_AddLine  @ 127, 128
-  @use call    imgui.DrawList_AddRect  @ 153, 198
-  @use call    imgui.DrawList_AddRectFilled  @ 108, 109, 110, 111, 121, 131, 132, 152, 197, 383
-  @use call    imgui.DrawList_AddText  @ 146, 156, 161, 200, 204
-  @use call    imgui.GetForegroundDrawList  @ 379
-  @use call    imgui.GetInputQueueCharacter  @ 288
-  @use call    imgui.GetKeyMods  @ 339
-  @use call    imgui.GetMousePos  @ 362
-  @use call    imgui.GetTextLineHeight  @ 380
-  @use call    imgui.GetWindowPos  @ 381
-  @use call    imgui.GetWindowSize  @ 382
-  @use call    imgui.IsKeyPressed  @ 291, 337, 341, 423
-  @use call    imgui.IsMouseClicked  @ 360, 361
-  @use call    util.add  @ 85, 98, 135, 165, 185, 220, 242, 261, 270, 281, 410, 412
+  @use call    cmgr.bindingSite  @ 324
+  @use call    cmgr.commandAtKey  @ 331
+  @use call    cmgr.keyLabelList  @ 184
+  @use call    cmgr.keysFor  @ 187, 320
+  @use call    cmgr.rebind  @ 324
+  @use call    imgui.CalcTextSize  @ 80, 84, 142, 156, 161, 189, 191
+  @use call    imgui.DrawList_AddLine  @ 128, 129
+  @use call    imgui.DrawList_AddRect  @ 154, 199
+  @use call    imgui.DrawList_AddRectFilled  @ 108, 109, 110, 111, 120, 132, 133, 153, 198, 384
+  @use call    imgui.DrawList_AddText  @ 147, 157, 162, 201, 205
+  @use call    imgui.GetForegroundDrawList  @ 380
+  @use call    imgui.GetInputQueueCharacter  @ 289
+  @use call    imgui.GetKeyMods  @ 340
+  @use call    imgui.GetMousePos  @ 363
+  @use call    imgui.GetTextLineHeight  @ 381
+  @use call    imgui.GetWindowPos  @ 382
+  @use call    imgui.GetWindowSize  @ 383
+  @use call    imgui.IsKeyPressed  @ 292, 338, 342, 424
+  @use call    imgui.IsMouseClicked  @ 361, 362
+  @use call    util.add  @ 85, 98, 136, 166, 186, 221, 243, 262, 271, 282, 411, 413
   @use require imgui  @ 8
   @use require util  @ 9
