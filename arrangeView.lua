@@ -187,11 +187,11 @@ end
 ----- Take edits — move / resize / delete / dive the action targets
 --invariant: edit cmds target via actionTargets; off-screen + nothing selected = no-op.
 
--- Pre-check the group at its destination: refuse the whole nudge if any
--- selected take would land on an occupied start (mirrors am:moveTake's rule).
-local function selectionCanNudge(takes, deltaQN)
+-- Pre-check group at deltaQN: every destination start must be clear.
+-- excludeMembers=true for a move (they vacate); false for a duplicate.
+local function groupFits(takes, deltaQN, excludeMembers)
   local mine = {}
-  for _, take in ipairs(takes) do mine[take.item] = true end
+  if excludeMembers then for _, take in ipairs(takes) do mine[take.item] = true end end
   for _, take in ipairs(takes) do
     local destQN = take.startQN + deltaQN
     if destQN < 0 then return false end
@@ -204,21 +204,23 @@ local function selectionCanNudge(takes, deltaQN)
   return true
 end
 
+-- Apply a uniform shift in travel order so a contiguous block never collides
+-- with an as-yet-unmoved member: forward → highest start first, back → lowest.
+local function moveTakesBy(takes, deltaQN)
+  table.sort(takes, function(lhs, rhs)
+    if deltaQN > 0 then return lhs.startQN > rhs.startQN end
+    return lhs.startQN < rhs.startQN
+  end)
+  for _, take in ipairs(takes) do am:moveTake(take, deltaQN) end
+end
+
 --invariant: nudge steps one row, all-or-nothing; refused if any selected dest start is occupied.
 local function nudgeSelected(direction)
   local takes = actionTargets()
   if #takes == 0 then return end
   local deltaQN = direction * av:beatPerRow()
-  if not selectionCanNudge(takes, deltaQN) then return end
-  -- Move in travel order so a contiguous block never collides with an
-  -- unmoved member: forward → highest start first, back → lowest first.
-  table.sort(takes, function(lhs, rhs)
-    if direction > 0 then return lhs.startQN > rhs.startQN end
-    return lhs.startQN < rhs.startQN
-  end)
-  util.atomic('Nudge takes', function()
-    for _, take in ipairs(takes) do am:moveTake(take, deltaQN) end
-  end)()
+  if not groupFits(takes, deltaQN, true) then return end
+  util.atomic('Nudge takes', function() moveTakesBy(takes, deltaQN) end)()
   if #takes == 1 then moveCursorBy(direction, 0) end
 end
 
@@ -380,6 +382,12 @@ end
 --contract: setFocus(h) makes {h} the selection (nil clears); focus() returns the first handle.
 function av:setFocus(handle) setSelection(handle and { handle } or {}) end
 
+--contract: isSelected(handle) → true iff that handle is currently selected (no liveness check).
+function av:isSelected(handle)
+  for _, held in ipairs(selection) do if held == handle then return true end end
+  return false
+end
+
 --contract: selectionSet() = {[handle]=true} of live selected takes, for the renderer's highlight.
 function av:selectionSet()
   local set = {}
@@ -516,10 +524,30 @@ function av:hitTake(trackIdx, qn, qnPerPx)
   return nil
 end
 
---contract: returns { startQN, lengthQN, fits }; moved edge snaps to a row box unless snapped=false.
---contract: fits false iff another take starts at startQN; exceptItem excludes the dragged take.
+-- Group drag: one deltaQN from the grabbed take's snapped destination, applied
+-- to every member. fits excludes members on move (they vacate), not on dup.
+local function groupDragCandidate(press, mouseQN, snapped)
+  local takes   = selectedTakes()
+  local bpr     = av:beatPerRow()
+  local deltaQN = mouseQN - press.qn
+  if snapped then deltaQN = roundTo(press.take.startQN + deltaQN, bpr) - press.take.startQN end
+  local minStart = math.huge
+  for _, take in ipairs(takes) do minStart = math.min(minStart, take.startQN) end
+  deltaQN = math.max(deltaQN, -minStart)   -- clamp so the earliest member stays ≥ 0
+  local ghosts = {}
+  for _, take in ipairs(takes) do
+    ghosts[#ghosts + 1] =
+      { take = take, startQN = take.startQN + deltaQN, lengthQN = take.naturalLenQN }
+  end
+  return { ghosts = ghosts, deltaQN = deltaQN,
+           fits = groupFits(takes, deltaQN, not press.duplicate) }
+end
+
+--contract: returns { ghosts={{take,startQN,lengthQN},…}, fits }; one ghost per selected member.
+--contract: fits false iff any ghost's destination start is occupied.
 --contract: move/dup ghost = naturalLenQN; resize ghost grows/shrinks from current rendered length.
 function av:dragCandidate(press, mouseQN, snapped)
+  if press.group then return groupDragCandidate(press, mouseQN, snapped) end
   local take = press.take
   local bpr  = self:beatPerRow()
   local startQN, lengthQN = take.startQN, take.lengthQN
@@ -535,8 +563,8 @@ function av:dragCandidate(press, mouseQN, snapped)
   end
   local exceptItem = press.duplicate and nil or take.item
   return {
-    startQN = startQN, lengthQN = lengthQN,
-    fits = am:startIsClear(take.trackIdx, startQN, exceptItem),
+    ghosts = { { take = take, startQN = startQN, lengthQN = lengthQN } },
+    fits   = am:startIsClear(take.trackIdx, startQN, exceptItem),
   }
 end
 
@@ -577,20 +605,40 @@ function av:lassoCandidate(press, mcol, mqn)
            takes = takes, set = set }
 end
 
---contract: move/resize preserves focus; dup shifts focus to new copy. Resize writes natural length.
+-- Commit a group drag: move all members by deltaQN (travel-ordered) or
+-- duplicate each at its shifted start and reselect the copies.
+local function commitGroupDrag(press, cand)
+  local takes = selectedTakes()
+  if press.duplicate then
+    util.atomic('Duplicate takes', function()
+      local copies = {}
+      for _, take in ipairs(takes) do
+        local copy = am:duplicateTake(take, take.startQN + cand.deltaQN)
+        if copy then copies[#copies + 1] = copy end
+      end
+      setSelection(copies)
+    end)()
+  else
+    util.atomic('Move takes', function() moveTakesBy(takes, cand.deltaQN) end)()
+  end
+end
+
+--contract: group drag moves/dups the whole selection; single drag keeps focus, dup reselects copy.
 function av:commitDrag(press, cand)
+  if press.group then return commitGroupDrag(press, cand) end
+  local take  = press.take
+  local ghost = cand.ghosts[1]
   local label = press.mode == 'resizeEnd' and 'Resize take'
              or press.duplicate          and 'Duplicate take'
              or                              'Move take'
   util.atomic(label, function()
-    local take = press.take
     if press.mode == 'resizeEnd' then
-      am:resizeTake(take, cand.lengthQN)
+      am:resizeTake(take, ghost.lengthQN)
     elseif press.duplicate then
-      local copy = am:duplicateTake(take, cand.startQN)
+      local copy = am:duplicateTake(take, ghost.startQN)
       if copy then setSelection { copy } end   -- am hands back a bare take handle
     else
-      am:moveTake(take, cand.startQN - take.startQN)
+      am:moveTake(take, ghost.startQN - take.startQN)
     end
   end)()
 end

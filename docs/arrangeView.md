@@ -87,6 +87,14 @@ on empty space moves the cursor and clears the selection; a click on a
 take selects just that one. Lasso replaces rather than extends — Ctrl+G
 clears.
 
+Grabbing any *selected* take with the mouse drags the whole selection as
+a rigid block — one uniform time-shift, each take staying on its own
+track, snapped by the grabbed take. Alt-drag duplicates the block instead
+and reselects the copies. Grabbing an *unselected* take first collapses
+the selection to it, so it's an ordinary single-take drag. A move refuses
+if any member's destination start is occupied; a duplicate's copies must
+also clear the originals that stay behind.
+
 The caret rendering and the cursor fallback are the same idea: cursor
 position is a line, not a cell. With nothing selected, what a command
 picks is decided at command time from where the caret sits — and only
@@ -148,6 +156,14 @@ candidate `startQN`. Under the natural-length model the only forbidden
 configuration is two takes sharing a start. `exceptItem` excludes the
 dragged take itself (or nothing on `press.duplicate`, where the
 original stays put).
+
+`dragCandidate` returns a `ghosts` list — one entry for a single drag,
+one per member for a group drag — each `{ take, startQN, lengthQN }`,
+plus a single whole-group `fits`. The renderer holds back every moving
+take and repaints the ghosts at the candidate range; a duplicate leaves
+the originals in place and paints the copies on top. A group's `fits`
+runs the same destination-start check across all members at one
+`deltaQN`, excluding the members only on a move.
 
 ## Palette nav: forward-first, land-empty
 

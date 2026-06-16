@@ -400,6 +400,65 @@ return {
   },
 
   {
+    name = 'group drag slides the whole selection by one delta',
+    run = function(harness)
+      local h, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+        { track = 'tr1', name = 'b', pos = 2 },
+      })
+      av:setGridSize(8, 4)
+      local takes = av:tracksTakes(0)
+      av:setSelection{ takeAt(takes, 0).take, takeAt(takes, 2).take }
+      local press = { qn = 0, take = takeAt(takes, 0), mode = 'move', group = true }
+      local cand  = av:dragCandidate(press, 2, true)   -- grab a@0, drag to QN 2 → delta +2
+      t.eq(cand.fits, true, 'the block fits at the destination')
+      av:commitDrag(press, cand)
+      local now = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      t.eq(takeAt(now, 2) ~= nil, true, 'a slid to 2')
+      t.eq(takeAt(now, 4) ~= nil, true, 'b slid to 4')
+    end,
+  },
+
+  {
+    name = 'group drag refuses when a member would hit an outside take',
+    run = function(harness)
+      local _, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },   -- selected
+        { track = 'tr1', name = 'b', pos = 1 },   -- selected
+        { track = 'tr1', name = 'c', pos = 3 },   -- blocker, not selected
+      })
+      av:setGridSize(8, 4)
+      local takes = av:tracksTakes(0)
+      av:setSelection{ takeAt(takes, 0).take, takeAt(takes, 1).take }
+      local press = { qn = 0, take = takeAt(takes, 0), mode = 'move', group = true }
+      local cand  = av:dragCandidate(press, 2, true)   -- delta +2 → b@1 lands on c@3
+      t.eq(cand.fits, false, 'a member collides, so the block is blocked')
+    end,
+  },
+
+  {
+    name = 'group drag with Alt duplicates the block and reselects the copies',
+    run = function(harness)
+      local h, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+        { track = 'tr1', name = 'b', pos = 1 },
+      })
+      av:setGridSize(8, 4)
+      local takes = av:tracksTakes(0)
+      av:setSelection{ takeAt(takes, 0).take, takeAt(takes, 1).take }
+      local press = { qn = 0, take = takeAt(takes, 0), mode = 'move', group = true, duplicate = true }
+      local cand  = av:dragCandidate(press, 4, true)   -- delta +4
+      t.eq(cand.fits, true, 'copies clear the originals that stay behind')
+      av:commitDrag(press, cand)
+      local now = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      t.eq(#now, 4, 'two copies were added')
+      t.eq(takeAt(now, 4) ~= nil and takeAt(now, 5) ~= nil, true, 'copies at 4 and 5')
+      local n = 0; for _ in pairs(av:selectionSet()) do n = n + 1 end
+      t.eq(n, 2, 'the selection now holds the two copies')
+    end,
+  },
+
+  {
     name = 'qnToRow / rowToQN are inverses through beatPerRow',
     run = function(harness)
       local _, av = mkAv(harness)

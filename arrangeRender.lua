@@ -267,13 +267,16 @@ local function handleGridMouse(nTracks)
       local take, mode
       if col >= 0 and col < nTracks then take, mode = av:hitTake(col, myQN, bpr / g.rowH) end
       if take then
+        -- Grabbing a take that's already selected drags the whole selection as a
+        -- block; grabbing an unselected one collapses focus to it (single drag).
+        local group = mode == 'move' and av:isSelected(take.take)
         press = {
           qn = myQN, row = row, col = col,
-          take = take, mode = mode, moved = false,
+          take = take, mode = mode, moved = false, group = group,
           duplicate = mode == 'move'
                       and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
         }
-        av:setFocus(take.take)   -- focus on press, so a drag visibly carries it
+        if not group then av:setFocus(take.take) end
       elseif col >= 0 and col < nTracks and ImGui.IsMouseDoubleClicked(ctx, 0) then
         press = { qn = floorTo(myQN, bpr), col = col, create = true, moved = false }
       else
@@ -312,7 +315,8 @@ local function handleGridMouse(nTracks)
       av:setEditCursorQN(snapped and floorTo(press.qn, bpr) or press.qn)
     else
       av:setCursor(press.row, press.col)
-      if not press.take then av:setFocus(nil) end
+      -- A plain click collapses the selection to the clicked take, or clears on empty space.
+      av:setFocus(press.take and press.take.take)
     end
     press = nil
     return nil, nil, nil, nil
@@ -453,20 +457,23 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
     end
   end
 
-  -- Settled takes; dragged take held back, painted last at candidate range.
-  -- Duplicate keeps original here and adds the copy after.
+  -- Settled takes; takes being moved are held back, painted last at the candidate
+  -- range. Duplicate keeps originals here and adds the copies after.
+  local moving = {}
+  if dragCand and not press.duplicate then
+    for _, gh in ipairs(dragCand.ghosts) do moving[gh.take.item] = true end
+  end
   local qnLo, qnHi = av:rowToQN(sr), av:rowToQN(sr + visRows)
   for _, tk in ipairs(av:visibleTakes(sc, lastCol, qnLo, qnHi)) do
-    local relocating = dragCand and not press.duplicate
-                       and tk.item == press.take.item
-    if not relocating then
+    if not moving[tk.item] then
       drawTakeRect(tk, tk.startQN, tk.lengthQN,
                    selected[tk.take] or (lassoCand and lassoCand.set[tk.take]) or false)
     end
   end
   if dragCand then
-    drawTakeRect(press.take, dragCand.startQN, dragCand.lengthQN,
-                 true, not dragCand.fits)
+    for _, gh in ipairs(dragCand.ghosts) do
+      drawTakeRect(gh.take, gh.startQN, gh.lengthQN, true, not dragCand.fits)
+    end
   end
 
   -- Ghost preview of the take the in-flight double-click-drag will create.
