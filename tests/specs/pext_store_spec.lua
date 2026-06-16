@@ -12,11 +12,26 @@ local TRACK = 'pk_track'
 local SLOT  = 'ctm_config'
 local takeExtKey = TAKE .. '/P_EXT:' .. SLOT
 
+-- pextStore resolves the global file under reaper.GetResourcePath(); point that
+-- at a temp dir so the global-scope tests touch a throwaway, not the real config.
+local RESOURCE_DIR = (os.getenv('TMPDIR') or '/tmp'):gsub('/+$', '')
+local GLOBAL_PATH  = RESOURCE_DIR .. '/continuum-config.lua'
+
+local function readFile(path)
+  local f = io.open(path, 'r'); if not f then return nil end
+  local content = f:read('*a'); f:close(); return content
+end
+
+local function writeFile(path, content)
+  local f = assert(io.open(path, 'w')); f:write(content); f:close()
+end
+
 local function freshPs()
   local r = fakeReaper.new()
   _G.reaper = r
   r:bindTake(TAKE, TAKE .. '/item', TRACK)
   r._state.projectTracks[#r._state.projectTracks + 1] = TRACK
+  r._state.resourcePath = RESOURCE_DIR
   local ps = util.instantiate('pextStore')
   ps:setTake(TAKE)
   return ps, r
@@ -162,6 +177,30 @@ return {
 
       t.eq(calls, 1,     'the group callback fires exactly once')
       t.eq(lastCount, 2, 'both blobs reported in the one fire')
+    end,
+  },
+  {
+    name = 'global persists as a hand-editable Lua literal and round-trips',
+    run = function()
+      local ps = freshPs()
+      ps:assign('global', 'config', { pbRange = 2, noteLayout = 'colemak' })
+      local onDisk = readFile(GLOBAL_PATH)
+      t.truthy(onDisk and onDisk:match('^return'), 'disk blob is a load()-able Lua literal')
+      t.deepEq(ps:get('global', 'config'), { pbRange = 2, noteLayout = 'colemak' },
+        'round-trips back through prettyUnserialise')
+      os.remove(GLOBAL_PATH)
+    end,
+  },
+  {
+    name = 'a corrupt global file is read as nil and never clobbered',
+    run = function()
+      local ps = freshPs()
+      writeFile(GLOBAL_PATH, 'return {{{ not lua')
+      t.eq(ps:get('global', 'config'), nil, 'unparseable file decodes to nil')
+      ps:assign('global', 'config', { pbRange = 9 })
+      t.eq(readFile(GLOBAL_PATH), 'return {{{ not lua',
+        'the locked file is left intact, not overwritten')
+      os.remove(GLOBAL_PATH)
     end,
   },
 }

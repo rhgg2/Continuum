@@ -443,12 +443,6 @@ function cm:getAt(level, key)
   return util.deepClone(tbl)
 end
 
---contract: returns raw P_EXT blob for otherTrack; stable byte-for-byte so callers can diff vs saved
-function cm:readTrackRaw(otherTrack)
-  if not otherTrack then return nil end
-  return ps:getRawAt(otherTrack, 'track', 'ctm_config')
-end
-
 --contract: bypasses cache/context; reads otherTrack P_EXT without firing configChanged
 function cm:readTrackKey(otherTrack, key)
   checkKey(key)
@@ -486,19 +480,6 @@ function cm:writeTakeKey(otherTake, key, value)
   else                         parsed[key] = copy(value) end
   ps:assignAt(otherTake, 'take', 'ctm_config', parsed)
   if otherTake == ps:boundTake() then cache.take = loaders.take() end
-end
-
---contract: walks tiers most-specific→least; returns first level whose cache has the key, else nil
-function cm:getLevel(key)
-  checkKey(key)
-  ensureCache()
-  for i = #levels, 1, -1 do
-    local level = levels[i]
-    if cache[level] and cache[level][key] ~= nil then
-      return level
-    end
-  end
-  return
 end
 
 ----- Writing

@@ -8,12 +8,12 @@ local harness = {}
 local fakeReaper = require('fakeReaper').new()
 _G.reaper = fakeReaper
 
--- configManager's global tier uses real io.open on ctm_cfg.txt, bypassing fakeReaper.
+-- configManager's global tier uses real io.open on continuum-config.lua, bypassing fakeReaper.
 -- Redirect those opens to a temp file so specs never clobber the real config.
 local realOpen      = io.open
 local globalCfgStub = os.tmpname()
 io.open = function(path, ...)
-  if type(path) == 'string' and path:find('ctm_cfg%.txt$') then
+  if type(path) == 'string' and path:find('continuum%-config%.lua$') then
     return realOpen(globalCfgStub, ...)
   end
   return realOpen(path, ...)

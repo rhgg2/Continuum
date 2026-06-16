@@ -142,10 +142,12 @@ Call sites to update: `groupManager`, `sampleManager`, `arrangeManager`,
 
 ## Disk format — Lua, read by `load()`
 
-The two disk-backed stores — `ctm_cfg.txt` (config global) and the new
-`ctm_data.txt` (document global) — must be hand-editable. The compact
-`{k=v}` wire format is not. So the disk format is a **Lua table literal**,
-and the "parser" is `load()` — no hand-rolled parser at all.
+The two disk-backed stores — `continuum-config.lua` (config global) and the
+new `continuum-data.lua` (document global), both in REAPER's resource dir —
+must be hand-editable. The compact `{k=v}` wire format is not. So the disk
+format is a **Lua table literal**, and the "parser" is `load()` — no
+hand-rolled parser at all. The `.lua` extension is honest: each file *is* a
+`return { … }` chunk.
 
 ```lua
 return {
@@ -209,16 +211,16 @@ Three workstreams. (1) is independent and lands first.
    tables, float arrays, edge-whitespace / control strings, dotted and
    keyword keys, sparse integer keys, and inf/nan; the compact
    round-trip stays pinned by `util_serialise_spec.lua`.
-2. **pextStore** — 🟡 **extraction done; disk-format switch pending.** The
-   storage + context + undo engine is now `pextStore.lua`; `configManager`
-   is a schema face over it (a `{ ps }` dep), registering its take/track
-   tier blobs with the engine's watcher group. Behaviour-preserving (every
-   config / undo / slot / group spec stays green) and pinned in isolation
-   by `tests/specs/pext_store_spec.lua`. Storage API is `get` / `assign`
-   (+ `At` variants) with scope as a parameter; the context-setter is
-   `setTake`. **Commit B (pending):** switch the global disk backend to the
-   Lua-literal format + a refuse-to-overwrite guard; until then every scope
-   still rides the compact wire format.
+2. **pextStore** — ✅ **done.** The storage + context + undo engine is now
+   `pextStore.lua`; `configManager` is a schema face over it (a `{ ps }`
+   dep), registering its take/track tier blobs with the engine's watcher
+   group. Behaviour-preserving (every config / undo / slot / group spec
+   stays green) and pinned in isolation by `tests/specs/pext_store_spec.lua`.
+   Storage API is `get` / `assign` (+ `At` variants) with scope as a
+   parameter; the context-setter is `setTake`. The global disk file moved to
+   `<resource-dir>/continuum-config.lua` in the Lua-literal format (read by
+   `load()`) with a refuse-to-overwrite guard on an unparseable hand-edit;
+   the P_EXT / projext scopes stay on the compact wire format.
 3. **dataStore** — per-key blobs over the engine, the registry above,
    the call-site migration. No migration code: pre-beta, persisted shapes
    change freely (see memory `no-legacy-data`).

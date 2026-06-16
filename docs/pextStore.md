@@ -53,8 +53,12 @@ as an external diff — matching the old `take, lastTakeRaw = nil, ''`.
 ## Formats
 
 The engine picks the serialisation format by backend, not by caller: the
-global disk file is the human-editable Lua-literal format, every P_EXT /
-projext blob is the compact wire format. The two never interoperate, so
-neither constrains the other — see `design/persistence.md` § Disk format.
-(Stage 2 Commit A ships with every scope still on the compact format;
-Commit B switches the disk backend.)
+global disk file (`continuum-config.lua`, in REAPER's resource dir) is the
+human-editable Lua-literal format, read by `load()`; every P_EXT / projext
+blob is the compact wire format. The two never interoperate, so neither
+constrains the other — see `design/persistence.md` § Disk format.
+
+A global file the sandboxed `load()` can't parse reads as `nil` and **locks
+writes** (`globalLocked`): the engine prints the parse error and refuses to
+overwrite, so a hand-edit typo can't cost the user their config. The lock
+clears the moment the file reads clean (or empty) again.

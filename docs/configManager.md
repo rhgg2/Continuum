@@ -72,7 +72,7 @@ reloads (e.g. `trackerView`'s match-grid-to-cursor frame override). On
 
 | level     | backend                                            |
 |-----------|----------------------------------------------------|
-| global    | Lua file at `<script-dir>/ctm_cfg.txt`             |
+| global    | Lua literal at `<resource-dir>/continuum-config.lua` |
 | project   | `SetProjExtState(0, 'rdm', 'config', …)`           |
 | track     | track `P_EXT:ctm_config`                           |
 | take      | take `P_EXT:ctm_config`                            |

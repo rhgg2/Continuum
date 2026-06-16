@@ -14,8 +14,16 @@ end
 ----------- PRIVATE STATE
 
 local PROJEXT_SECTION = 'rdm'
-local SCRIPT_PATH = debug.getinfo(1,'S').source:match[[^@?(.*[\/])[^\/]-$]]
-local GLOBAL_PATH = SCRIPT_PATH .. 'ctm_cfg.txt'
+
+-- Global config lives in REAPER's resource dir (stable per-user), not beside
+-- the script. Resolved lazily so module load never needs a live reaper.
+local function globalPath()
+  return reaper.GetResourcePath() .. '/continuum-config.lua'
+end
+
+-- Set when the global disk file fails to parse: a hand-edit typo must not be
+-- clobbered by the next save, so writes to it are refused until it reads clean.
+local globalLocked = false
 
 local take, track = nil, nil
 
@@ -48,7 +56,7 @@ local function readRaw(scope, slot, handle)
     return (ok and v) or ''
   end
   if scope == 'global' then
-    local f = io.open(GLOBAL_PATH, 'r')
+    local f = io.open(globalPath(), 'r')
     if not f then return '' end
     local content = f:read('*a')
     f:close()
@@ -65,8 +73,12 @@ local function writeRaw(scope, slot, raw, handle)
   elseif scope == 'project' then
     reaper.SetProjExtState(0, PROJEXT_SECTION, slot, raw)
   elseif scope == 'global' then
-    local f = io.open(GLOBAL_PATH, 'w')
-    if not f then print('Error! Could not write ' .. GLOBAL_PATH); return end
+    if globalLocked then
+      print('Error! Refusing to overwrite unreadable ' .. globalPath() .. '; fix or delete it.')
+      return
+    end
+    local f = io.open(globalPath(), 'w')
+    if not f then print('Error! Could not write ' .. globalPath()); return end
     f:write(raw)
     f:close()
   else
@@ -74,16 +86,30 @@ local function writeRaw(scope, slot, raw, handle)
   end
 end
 
--- Stage 2 stores every scope in the compact wire format. Commit B switches
--- the global disk backend to the hand-editable Lua-literal format.
-local function decode(raw)
-  if not raw or raw == '' then return nil end
+-- Format by backend: global -> hand-editable Lua literal, P_EXT/projext ->
+-- compact wire. A bad global parse locks writes. See docs/pextStore.md § Formats.
+local function decode(scope, raw)
+  if not raw or raw == '' then
+    if scope == 'global' then globalLocked = false end
+    return nil
+  end
+  if scope == 'global' then
+    local value, err = util.prettyUnserialise(raw)
+    if err then
+      globalLocked = true
+      print('Error! ' .. globalPath() .. ' is unreadable: ' .. tostring(err)
+            .. ' -- refusing to overwrite. Fix or delete it.')
+      return nil
+    end
+    globalLocked = false
+    return value
+  end
   local ok, value = pcall(util.unserialise, raw)
-  if ok then return value end
-  return nil
+  return ok and value or nil
 end
 
-local function encode(value)
+local function encode(scope, value)
+  if scope == 'global' then return util.prettySerialise(value) end
   return util.serialise(value)
 end
 
@@ -157,15 +183,12 @@ function ps:boundTrack() return track end
 ----- Storage
 
 --contract: returns the decoded value at (scope, slot) under bound context; nil if absent or undecodable
-function ps:get(scope, slot)           return decode(readRaw(scope, slot))         end
-function ps:getAt(handle, scope, slot) return decode(readRaw(scope, slot, handle)) end
-
--- Reads the undecoded blob — for callers that diff bytes against a saved copy.
-function ps:getRawAt(handle, scope, slot) return readRaw(scope, slot, handle) end
+function ps:get(scope, slot)           return decode(scope, readRaw(scope, slot))         end
+function ps:getAt(handle, scope, slot) return decode(scope, readRaw(scope, slot, handle)) end
 
 --contract: serialises value into (scope, slot) under bound context; refreshes the watcher baseline if watched
 function ps:assign(scope, slot, value)
-  local raw = encode(value)
+  local raw = encode(scope, value)
   writeRaw(scope, slot, raw)
   local key = scope .. '/' .. slot
   if baseline[key] ~= nil then baseline[key] = raw end
@@ -173,7 +196,7 @@ end
 
 -- Foreign-handle write: bypasses bound context and never touches the baseline.
 function ps:assignAt(handle, scope, slot, value)
-  writeRaw(scope, slot, encode(value), handle)
+  writeRaw(scope, slot, encode(scope, value), handle)
 end
 
 ----- Watcher
