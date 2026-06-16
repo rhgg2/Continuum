@@ -165,22 +165,10 @@ local function peaksFor(take, startQN, lengthQN, pxPerSec, loop)
   return hit
 end
 
------ MIDI note previews (channel→X, time→Y, pitch→lightness)
+----- MIDI note previews (channel→X, time→Y; note-on caps darker than bodies)
 
--- Notes ride am's project-state cache (tk.notes) — no cache here.
--- Pitch→lightness: value climbs with register, semi-transparent so the slot colour reads through.
-local midiInkCache = {}
-local function midiInk(pitch)
-  local cached = midiInkCache[pitch]
-  if cached then return cached end
-  local r, g, b, a = ImGui.ColorConvertU32ToDouble4(chrome.colour('arrange.midiNote'))
-  local h, s = ImGui.ColorConvertRGBtoHSV(r, g, b)
-  local norm = math.min(1, math.max(0, (pitch - 24) / 84))   -- C1..C8 across the ramp
-  local rr, gg, bb = ImGui.ColorConvertHSVtoRGB(h, s, 0.35 + norm * 0.6)
-  cached = { u32 = ImGui.ColorConvertDouble4ToU32(rr, gg, bb, a) }
-  midiInkCache[pitch] = cached
-  return cached
-end
+-- Notes ride am's project-state cache (tk.notes) — no cache here. Two fixed zone
+-- shades: note-on caps a zone below the bodies so attacks read against the sustain.
 
 ----- Grid pane
 
@@ -427,9 +415,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
         if y1 > yBot then y1 = yBot end
         if y1 - y0 < 1 then y1 = y0 + 1 end
         local x   = x0 + nt.chan / 15 * (x1 - x0)
-        local ink = midiInk(nt.pitch)
-        ps.segment(x - 1, y0, x - 1, y1, ink, 2)
-        if onsetY >= yTop then ps.segment(x - 2, onsetY, x + 2, onsetY, ink) end
+        ps.segment(x - 1, y0, x - 1, y1, 'arrange.midiNoteBody', 2)
+        if onsetY >= yTop then ps.segment(x - 2, onsetY, x + 2, onsetY, 'arrange.midiNoteOn') end
       end
     end
   end

@@ -1,11 +1,11 @@
 -- See docs/configManager.md for the model.
 
---invariant: cm is the sole source of truth for valid keys; in-code reads/writes raise on unknown keys, persistence-loaded unknowns are silently pruned
---invariant: cm owns its cache tables: every read deep-clones on the way out, every write deep-clones on the way in (callers never alias cm state)
---invariant: 5-tier merge order: global → project → track → take → transient; most-specific cache holding the key wins, falling through to schema defaults
+--invariant: sole truth for valid keys; in-code access raises on unknowns, loaded unknowns pruned
+--invariant: owns cache: reads deep-clone out, writes deep-clone in; callers never alias cm state
+--invariant: 5-tier merge: global→project→track→take→transient; most-specific wins, else defaults
 --invariant: transient tier never persists (saver is a no-op) and resets to {} on every refreshCache
---invariant: declarations is an ordered array-of-pairs so declared-but-nil keys (e.g. sampleBrowserRoot) coexist with non-nil defaults without ambiguity
---invariant: track and take tiers require the corresponding REAPER context; without it their loaders return {} and savers print an error
+--invariant: declarations is ordered array-of-pairs; nil-default keys coexist with non-nil defaults
+--invariant: track/take tiers require REAPER context; without it loaders return {}, savers error
 --shape: configChangedPayload.targeted = { key = string, level = string, track? = MediaTrack }   -- set / remove; track set only by writeTrackKey for foreign-track writes
 --shape: configChangedPayload.bulk     = { level = string }                  -- assign (keyless)
 --shape: configChangedPayload.reload   = {}                                  -- setContext / clearTake / setTrack
@@ -42,21 +42,12 @@ local declarations = {
 
   -- string choice
   { 'noteLayout',      'colemak' },
-  -- Slot keys: take-tier so each take can carry its own swing/temper
-  -- without rewriting siblings. Defaults are explicit no-op sentinels,
-  -- not nil. '12EDO' resolves via tuning.presets; 'identity' resolves
-  -- via the swings library. The sentinel blocks the bind-time seed --
-  -- an explicit "Off" pick must stick across rebinds.
+  -- Slot keys: take-tier so each take carries its own swing/temper without rewriting siblings.
+  -- Sentinel defaults ('12EDO'/'identity') block the bind-time seed — an explicit pick sticks across rebinds.
   { 'temper',          '12EDO'    },
   { 'swing',           'identity' },
-  -- Project-tier seeds for first-encounter takes. Pickers mirror the
-  -- chosen value into 'last*Used' at project tier; tp:bind copies the
-  -- seed into the take tier on bind when the take has no value of its
-  -- own (created in REAPER outside Continuum, or pre-existing). Pickers
-  -- used to mirror 'swing'/'temper' themselves at project tier as the
-  -- cross-take seed, but SetProjExtState lives outside REAPER's undo,
-  -- so a Ctrl-Z over a pick left the project mirror at the new value
-  -- while the lower tier was rewound -- picker desync.
+  -- Project-tier seeds for first-encounter takes: tp:bind copies last*Used into the take on first bind.
+  -- Uses a proxy key (not swing/temper directly) because SetProjExtState survives Ctrl-Z, causing desync.
   { 'lastSwingUsed',   'identity' },
   { 'lastTemperUsed',  '12EDO'    },
 
@@ -68,11 +59,8 @@ local declarations = {
 
   -- table-valued
   { 'colSwing',        {}    },
-  -- The swings default is the system preset library: built-in
-  -- compositions visible in every project until either the global
-  -- tier (user-saved presets) or the project tier (project-local
-  -- swings) overlays them per-name. Read with mergeTiers=true to
-  -- get the union.
+  -- Default is the system preset library; global (user-saved) and project (local) tiers overlay per-name.
+  -- Read with mergeTiers=true to get the union.
   { 'swings',          {
       ['identity']   = {},
       ['classic-55'] = { factors = { { atom = 'classic', shift = 0.05, period = 1 } } },
@@ -100,23 +88,17 @@ local declarations = {
   { 'slotEntries',     {}    },
   -- Mirror groups, persisted at the take tier. See docs/groupManager.md.
   { 'groups',    {}    },
-  -- Arrange-page slot palette, per track. Indexed 0..61; entry shape
-  -- { kind = 'midi'|'audio', id = <pool-guid-or-source-path> }. See
-  -- docs/arrangeManager.md.
+  -- Arrange-page slot palette, per track. Indexed 0..61; entry { kind='midi'|'audio', id=<guid-or-path> }.
+  -- See docs/arrangeManager.md.
   { 'arrangeSlots', {} },
-  -- Arrange-page grid density. Row/col addressing mirrors the tracker
-  -- view; cursor and scroll live in arrangeView module-locals (in-memory,
-  -- not persisted) the same way trackerView and editCursor handle them.
-  -- Only the density preference earns a persisted slot. Typical values
-  -- 4, 8, 16 beats per row (one bar to four bars per row in 4/4).
+  -- Arrange-page grid density preference (persisted). Cursor/scroll stay in arrangeView module-locals.
+  -- Typical values: 4, 8, 16 beats per row (one to four bars per row in 4/4).
   { 'arrangeBeatPerRow', 4 },
   -- Arrange viewport follows the play head while the transport runs
   -- (boundary-scroll). Toolbar checkbox / Super+F; global tier.
   { 'arrangeFollowPlay', false },
-  -- Arrange-take natural length in QN: the ceiling the item regrows
-  -- toward when neighbours move out of the way. Persisted per-take via
-  -- writeTakeKey (P_EXT). Default (nil at storage) reads as util.OPEN —
-  -- the source's length is the effective cap. See docs/arrangeManager.md.
+  -- Arrange-take natural length (QN): ceiling the item regrows toward when freed. Persisted per-take.
+  -- Default nil reads as util.OPEN (source length is the cap). See docs/arrangeManager.md.
   { 'arrangeNaturalLenQN', nil },
   -- Arrange palette colour, project-wide, { [takeId] = colourIdx }.
   -- See docs/arrangeManager.md.
@@ -165,11 +147,8 @@ local declarations = {
   { 'colour.cursorText',       'palette.alt.zone8'                },
   { 'colour.band.fill',        {0.55, 0.70, 0.95, 0.22}           },  -- marquee/lasso fill (shared)
   { 'colour.band.border',      {0.45, 0.60, 0.90, 0.85}           },  -- marquee/lasso border (shared)
-  -- Arrange page: cursor caret, blocked-drag outline, transport rules,
-  -- double-click-drag ghost, and orphan (slot-less item) fills. The 62
-  -- generated slot hues stay computed (golden-ratio rotation); these are the
-  -- fixed colours, named so they live in the palette like every other chrome
-  -- colour rather than as inline ints.
+  -- Arrange-page fixed colours: cursor, blocked-drag, ghost, and orphan fills. The 62 slot hues stay
+  -- computed (golden-ratio rotation) and are not declared here.
   { 'colour.arrange.cursorOn',     'palette.base.zone2'      },
   { 'colour.arrange.cursorOff',     'palette.base.zone6'    },
   { 'colour.arrange.itemBorder',       'palette.base.zone5'      },  -- solid neutral box outline (one zone below cursorOff)
@@ -183,7 +162,8 @@ local declarations = {
   { 'colour.arrange.orphanFill',       {0.50, 0.50, 0.50, 0.35}  },  -- slot-less item, neutral grey
   { 'colour.arrange.orphanFocusFill',  {0.85, 0.85, 0.85, 0.55}  },
   { 'colour.arrange.waveform',         {0.13, 0.13, 0.16, 0.62}  },  -- audio preview ink over the slot fill
-  { 'colour.arrange.midiNote',         {0.30, 0.34, 0.42, 0.78}  },  -- midi note ink; pitch ramps its lightness (arrangeRender)
+  { 'colour.arrange.midiNoteOn',       'palette.base.zone3'      },  -- note-on cap: low-zone primary (arrangeRender)
+  { 'colour.arrange.midiNoteBody',     'palette.base.zone4'      },  -- note body: one zone higher
   { 'colour.rowNormal',        {'palette.base.zone8',  0   }      },
   { 'colour.rowBeat',          {'palette.base.zone7',  0.4 }      },
   { 'colour.rowBarStart',      {'palette.base.zone6',  0.4 }      },
@@ -215,9 +195,8 @@ local declarations = {
   { 'palette.region.6', hex('#4ea99c') },
   { 'palette.region.7', hex('#6ba35a') },
   { 'palette.region.8', hex('#a39342') },
-  -- Mirror-region state palette. tint = wash behind a synced/diverged
-  -- cell; fade = the same hue dimmed for a non-focused (inactive)
-  -- group; outline = the active group's border. Conflicted is loud.
+  -- Mirror-region state palette. tint = cell wash; fade = inactive-group dim; outline = active border.
+  -- Conflicted is loud.
   { 'palette.mirror.synced',     hex('#4ea99c') },  -- calm teal
   { 'palette.mirror.overridden', hex('#d2a52a') },  -- amber: locally diverged, coherent
   { 'palette.mirror.conflicted', hex('#d83a3a') },  -- alarming red
@@ -266,9 +245,7 @@ for i = 1, 8 do
   util.add(declarations, { 'colour.region.' .. i .. '.outline', base })
 end
 
--- overridden is a per-cell deviation overlay painted over the group
--- hue, so it carries a heavier alpha than a plain membership wash to
--- read clearly against it.
+-- overridden is a deviation overlay over the group hue; heavier alpha so it reads against the wash.
 for _, st in ipairs{ 'synced', 'overridden', 'conflicted', 'local' } do
   local base  = 'palette.mirror.' .. st
   local alpha = st == 'overridden' and 0.55 or 0.22
@@ -288,8 +265,8 @@ local function copy(v)
   return v
 end
 
---contract: caches are lazy: first getter call triggers refreshCache; setContext/setTrack refresh eagerly
---contract: no take context means track context is also dropped (track derived from take in setContext)
+--contract: caches lazy: first getter triggers refreshCache; setContext/setTrack refresh eagerly
+--contract: no take context drops track too (track derived from take in setContext)
 ---------- PRIVATE DATA
 
 local CONFIG_PREFIX = 'ctm_'
@@ -300,14 +277,8 @@ local take      = nil
 local track     = nil
 local fire  -- installed below, once cm exists
 
--- External-mutation watcher. REAPER undo / redo (and any third-party
--- script) can rewrite the take + track P_EXT strings without telling
--- us, so cm's cache would stay stale until the next setContext.
--- pollUndo() compares the project state count once a frame; on a tick
--- it re-reads the bound take + track P_EXT and refreshes if either
--- differs from what we last wrote. Project + global tiers live outside
--- REAPER's undo system (SetProjExtState / disk file) and stay
--- unreversed -- a known gap, not a bug.
+-- External-mutation watcher: REAPER undo/redo rewrites take+track P_EXT without notifying us.
+-- pollUndo() catches this by comparing the project state count once per frame and re-reading on a tick.
 local lastStateCount = -1
 local lastTakeRaw    = ''
 local lastTrackRaw   = ''
@@ -394,11 +365,8 @@ local function loadTake()
 end
 
 local function saveTake(tbl)
-  -- No bound take: the dormant seam after bindTake(nil). Take-tier
-  -- config is wholly derived state (usedSwings/extraColumns/groups,
-  -- recomputed on the next take-changed rebuild); a real lost user
-  -- edit is impossible since editing requires a bound take. So a
-  -- no-take take-tier write is always benign -- drop it silently.
+  -- No bound take: take-tier config is derived state (recomputed on next rebuild), so a write here
+  -- can't lose real user edits — drop silently.
   if not take then return end
   lastTakeRaw = util.serialise(tbl)
   reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_config', lastTakeRaw, true)
@@ -455,7 +423,7 @@ local function ensureCache()
   if not cache.global then refreshCache() end
 end
 
---contract: starts from schema defaults, then overlays each level's cache in `levels` order so later (more-specific) tiers win
+--contract: overlays levels[] in order onto schema defaults; later (more-specific) tiers win
 local function mergedTable()
   ensureCache()
   local merged = {}
@@ -485,8 +453,8 @@ end
 local cm = {}
 fire = util.installHooks(cm)
 
---contract: setContext(nil) clears both take and track; setContext(take) derives track via GetMediaItemTrack
---contract: refreshes all four persisted caches (transient resets to {}) and fires configChanged with empty payload
+--contract: setContext(nil) clears take+track; setContext(take) derives track via GetMediaItemTrack
+--contract: refreshes all persisted caches (transient resets to {}) and fires configChanged {}
 function cm:setContext(newTake)
   take = newTake
   track = nil
@@ -523,8 +491,8 @@ function cm:setTrack(newTrack)
   fire('configChanged', {})
 end
 
---invariant: poll REAPER's project state count once per frame; on a tick, re-read the bound take + track P_EXT strings and refresh the cache + fire reload if either differs from what cm last wrote. Catches REAPER undo / redo, which rewinds P_EXT without notifying us. Project + global tiers live outside REAPER's undo and stay unreversed.
---contract: no-op when reaper.GetProjectStateChangeCount is absent (test harness without state-count fake); cheap poll otherwise -- one int compare per frame, two string reads + compares only on a state-count tick
+--invariant: polls project state count per frame; on tick re-reads P_EXT, refreshes if changed
+--contract: no-op without GetProjectStateChangeCount (test harness); one int compare per frame
 --contract: dead take/track ptrs are dropped before any P_EXT read; tick() drives propagation
 --emits: configChanged -- configChangedPayload.reload (only when an external diff is observed)
 function cm:pollUndo()
@@ -562,10 +530,8 @@ end
 
 ----- Reading
 
--- Per-subkey union of a single key's tables across defaults→tiers,
--- most-specific tier wins on name collision. Non-table contributions
--- (including a scalar default) are skipped, so the result is always
--- a table.
+-- Per-subkey union of a single key's tables across defaults→tiers; most-specific tier wins.
+-- Non-table contributions are skipped, so the result is always a table.
 local function mergedKey(key)
   ensureCache()
   local out = {}
@@ -581,15 +547,15 @@ local function mergedKey(key)
   return out
 end
 
---contract: returns deep copy of merged value (defaults overlaid by all five tiers); raises on unknown key
---contract: opts.mergeTiers=true switches to per-subkey union across defaults+tiers (most-specific wins on collision) — only meaningful for table-valued keys
+--contract: returns deep-copy of merged value (defaults + all tiers); raises on unknown key
+--contract: opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only
 function cm:get(key, opts)
   checkKey(key)
   if opts and opts.mergeTiers then return copy(mergedKey(key)) end
   return copy(mergedTable()[key])
 end
 
---contract: reads single tier only (no merge, no defaults); key omitted returns whole-cache deep clone; raises on unknown level/key
+--contract: reads single tier only (no merge, no defaults); key nil → whole-cache clone
 function cm:getAt(level, key)
   checkLevel(level)
   ensureCache()
@@ -601,7 +567,7 @@ function cm:getAt(level, key)
   return util.deepClone(tbl)
 end
 
---contract: returns the raw cm-P_EXT blob string on otherTrack (or nil/empty if unset). Stable byte-for-byte across reads — callers can compare against a previously-captured raw to detect external rewrites (REAPER undo/redo), where re-serialising a parsed copy would diverge due to Lua pairs ordering.
+--contract: returns raw P_EXT blob for otherTrack; stable byte-for-byte so callers can diff vs saved
 function cm:readTrackRaw(otherTrack)
   if not otherTrack then return nil end
   local _, raw = reaper.GetSetMediaTrackInfo_String(
@@ -609,7 +575,7 @@ function cm:readTrackRaw(otherTrack)
   return raw
 end
 
---contract: bypasses cache and active context; reads otherTrack's P_EXT directly without firing configChanged or disturbing the bound track's cache
+--contract: bypasses cache/context; reads otherTrack P_EXT without firing configChanged
 function cm:readTrackKey(otherTrack, key)
   checkKey(key)
   if not otherTrack then return nil end
@@ -620,7 +586,7 @@ function cm:readTrackKey(otherTrack, key)
   return copy(parsed[key])
 end
 
---contract: bypasses cache and active context; updates a single key on otherTrack's P_EXT (read-modify-write the parsed table). Fires targeted configChanged with .track set so subscribers of the bound track can ignore foreign-track edits.
+--contract: bypasses cache/context; RMW otherTrack P_EXT; fires targeted configChanged
 function cm:writeTrackKey(otherTrack, key, value)
   checkKey(key)
   if not otherTrack then return end
@@ -637,7 +603,7 @@ function cm:writeTrackKey(otherTrack, key, value)
   fire('configChanged', { key = key, level = 'track', track = otherTrack })
 end
 
---contract: bypasses cache and active context; reads otherTake's P_EXT directly without firing configChanged or disturbing the bound take's cache
+--contract: bypasses cache/context; reads otherTake P_EXT without firing configChanged
 function cm:readTakeKey(otherTake, key)
   checkKey(key)
   if not otherTake then return nil end
@@ -648,7 +614,7 @@ function cm:readTakeKey(otherTake, key)
   return copy(parsed[key])
 end
 
---contract: bypasses cache and active context; updates a single key on otherTake's P_EXT (read-modify-write). util.REMOVE clears. No signal fired — read/write helpers are silent seams for foreign-take state.
+--contract: bypasses cache/context; RMW otherTake P_EXT; util.REMOVE clears; no signal
 function cm:writeTakeKey(otherTake, key, value)
   checkKey(key)
   if not otherTake then return end
@@ -662,7 +628,7 @@ function cm:writeTakeKey(otherTake, key, value)
   if otherTake == take then cache.take = loaders.take() end
 end
 
---contract: walks tiers most-specific to least, returning the first level whose cache defines the key (matches merge resolution); nil if no tier sets it
+--contract: walks tiers most-specific→least; returns first level whose cache has the key, else nil
 function cm:getLevel(key)
   checkKey(key)
   ensureCache()
@@ -677,7 +643,7 @@ end
 
 ----- Writing
 
---contract: deep-copies value into the target tier's cache, persists that tier, fires targeted configChanged
+--contract: deep-copies value into tier cache, persists, fires targeted configChanged
 function cm:set(level, key, value)
   checkLevel(level)
   checkKey(key)
@@ -690,7 +656,7 @@ function cm:set(level, key, value)
   fire('configChanged', { key = key, level = level })
 end
 
---contract: removes key from the named tier only; no-op (and no signal) if that tier's cache is unloaded
+--contract: removes key from named tier; no-op (no signal) if that tier's cache is unloaded
 function cm:remove(level, key)
   checkLevel(level)
   checkKey(key)
@@ -704,7 +670,7 @@ function cm:remove(level, key)
   end
 end
 
---contract: validates every key in updates before any write (all-or-nothing); util.REMOVE sentinel deletes that key; fires keyless configChanged
+--contract: validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal
 function cm:assign(level, updates)
   if type(updates) ~= 'table' then return end
   checkLevel(level)
