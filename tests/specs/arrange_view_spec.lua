@@ -400,6 +400,41 @@ return {
   },
 
   {
+    name = 'addToSelection unions handles without duplicating a present one',
+    run = function(harness)
+      local _, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+        { track = 'tr1', name = 'b', pos = 1 },
+        { track = 'tr1', name = 'c', pos = 2 },
+      })
+      local takes = av:tracksTakes(0)
+      av:setSelection{ takeAt(takes, 0).take }
+      av:addToSelection{ takeAt(takes, 1).take, takeAt(takes, 0).take }   -- b new, a already in
+      local set, n = av:selectionSet(), 0
+      for _ in pairs(set) do n = n + 1 end
+      t.eq(n, 2, 'a and b selected, a not doubled')
+      t.eq(set[takeAt(takes, 1).take], true, 'b added')
+    end,
+  },
+
+  {
+    name = 'toggleSelected adds an absent handle and removes a present one',
+    run = function(harness)
+      local _, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+        { track = 'tr1', name = 'b', pos = 1 },
+      })
+      local takes = av:tracksTakes(0)
+      av:setSelection{ takeAt(takes, 0).take }
+      av:toggleSelected(takeAt(takes, 1).take)   -- add b
+      t.eq(av:isSelected(takeAt(takes, 1).take), true, 'b added')
+      av:toggleSelected(takeAt(takes, 0).take)   -- remove a
+      t.eq(av:isSelected(takeAt(takes, 0).take), false, 'a removed')
+      t.eq(av:isSelected(takeAt(takes, 1).take), true, 'b remains')
+    end,
+  },
+
+  {
     name = 'group drag slides the whole selection by one delta',
     run = function(harness)
       local h, av = mkArrange(harness, {

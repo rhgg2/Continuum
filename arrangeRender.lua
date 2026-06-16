@@ -266,23 +266,25 @@ local function handleGridMouse(nTracks)
       local row = math.min(g.sr + g.visRows - 1, math.floor(mrow))
       local take, mode
       if col >= 0 and col < nTracks then take, mode = av:hitTake(col, myQN, bpr / g.rowH) end
+      local mods      = ImGui.GetKeyMods(ctx)
+      local additive  = mods & ImGui.Mod_Shift ~= 0   -- Shift: extend the selection
+      local duplicate = mods & ImGui.Mod_Ctrl  ~= 0   -- Ctrl: a drag duplicates
       if take then
-        -- Grabbing a take that's already selected drags the whole selection as a
-        -- block; grabbing an unselected one collapses focus to it (single drag).
+        -- Selected take → drag the whole block; unselected → collapse focus to it.
+        -- Shift defers selection to release (toggle), so don't focus now.
         local group = mode == 'move' and av:isSelected(take.take)
         press = {
           qn = myQN, row = row, col = col,
-          take = take, mode = mode, moved = false, group = group,
-          duplicate = mode == 'move'
-                      and (ImGui.GetKeyMods(ctx) & ImGui.Mod_Alt ~= 0),
+          take = take, mode = mode, moved = false, group = group, add = additive,
+          duplicate = mode == 'move' and duplicate,
         }
-        if not group then av:setFocus(take.take) end
+        if not group and not additive then av:setFocus(take.take) end
       elseif col >= 0 and col < nTracks and ImGui.IsMouseDoubleClicked(ctx, 0) then
         press = { qn = floorTo(myQN, bpr), col = col, create = true, moved = false }
       else
         -- Empty grid (incl. dead space right of the last column): a drag lassos;
-        -- a plain click moves the cursor and clears the selection on release.
-        press = { qn = myQN, row = row, col = col, mcol = mcol, moved = false }
+        -- a plain click moves the cursor and clears the selection (Shift keeps it).
+        press = { qn = myQN, row = row, col = col, mcol = mcol, moved = false, add = additive }
       end
     end
   end
@@ -305,7 +307,8 @@ local function handleGridMouse(nTracks)
     elseif loopCand then
       av:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
     elseif lassoCand then
-      av:setSelection(lassoCand.takes)
+      if press.add then av:addToSelection(lassoCand.takes)
+      else av:setSelection(lassoCand.takes) end
     elseif press.create then
       -- Sweep prefills the length in beats; bare double-click uses the default.
       local beats = createCand and createCand.lengthQN or nil
@@ -315,8 +318,13 @@ local function handleGridMouse(nTracks)
       av:setEditCursorQN(snapped and floorTo(press.qn, bpr) or press.qn)
     else
       av:setCursor(press.row, press.col)
-      -- A plain click collapses the selection to the clicked take, or clears on empty space.
-      av:setFocus(press.take and press.take.take)
+      if press.add then
+        -- Shift+click toggles the clicked take; on empty space it keeps the selection.
+        if press.take then av:toggleSelected(press.take.take) end
+      else
+        -- A plain click collapses the selection to the clicked take, or clears on empty space.
+        av:setFocus(press.take and press.take.take)
+      end
     end
     press = nil
     return nil, nil, nil, nil

@@ -84,12 +84,19 @@ right of the last track column — sweeps a rubber-band rectangle;
 `lassoCandidate` returns every take whose span intersects it, and the
 release replaces the selection with that set. A plain click (no drag)
 on empty space moves the cursor and clears the selection; a click on a
-take selects just that one. Lasso replaces rather than extends — Ctrl+G
-clears.
+take selects just that one. Holding Shift makes a gesture additive: a
+Shift+click on a take toggles its membership, a Shift+lasso unions the
+swept takes into the selection, and a Shift+click on empty space keeps
+the selection (only the cursor moves). Without Shift, lasso and click
+both replace — Ctrl+G clears.
+
+Shift keeps its positioning role on a *drag*: dragging a take with Shift
+held frees it from the row grid. The additive meaning applies only to
+clicks and lassos, which don't snap, so the two never collide.
 
 Grabbing any *selected* take with the mouse drags the whole selection as
 a rigid block — one uniform time-shift, each take staying on its own
-track, snapped by the grabbed take. Alt-drag duplicates the block instead
+track, snapped by the grabbed take. Ctrl-drag duplicates the block instead
 and reselects the copies. Grabbing an *unselected* take first collapses
 the selection to it, so it's an ordinary single-take drag. A move refuses
 if any member's destination start is occupied; a duplicate's copies must

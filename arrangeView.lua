@@ -108,6 +108,10 @@ local function setSelection(handles)
   selection = kept
 end
 
+local function selectionIndex(handle)
+  for i, held in ipairs(selection) do if held == handle then return i end end
+end
+
 -- Wheel-pan moves the viewport without the caret; gridRows/gridCols 0
 -- (first frame) means no measured band yet, so the caret counts as on-screen.
 local function cursorOnScreen()
@@ -383,9 +387,19 @@ end
 function av:setFocus(handle) setSelection(handle and { handle } or {}) end
 
 --contract: isSelected(handle) → true iff that handle is currently selected (no liveness check).
-function av:isSelected(handle)
-  for _, held in ipairs(selection) do if held == handle then return true end end
-  return false
+function av:isSelected(handle) return selectionIndex(handle) ~= nil end
+
+--contract: addToSelection unions handles in (already-present and nil handles skipped).
+function av:addToSelection(handles)
+  for _, handle in ipairs(handles or {}) do
+    if handle and not selectionIndex(handle) then selection[#selection + 1] = handle end
+  end
+end
+
+--contract: toggleSelected adds the handle if absent, removes it if present.
+function av:toggleSelected(handle)
+  local i = selectionIndex(handle)
+  if i then table.remove(selection, i) else selection[#selection + 1] = handle end
 end
 
 --contract: selectionSet() = {[handle]=true} of live selected takes, for the renderer's highlight.
