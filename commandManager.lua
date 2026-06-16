@@ -76,8 +76,8 @@ end
 ----- Scope
 
 --shape: scope = { keymap={}, modal=false?, passthrough={[name]=true}?, registered={[name]=true} }
-local function newScope()
-  local s = { keymap = {}, registered = {} }
+local function newScope(name)
+  local s = { keymap = {}, registered = {}, name = name }
 
   -- Module-side register installs a gated entry: invoke fires the fn
   -- only when the scope is reachable. Bookkeeping in `registered` lets
@@ -114,7 +114,7 @@ end
 -- with no gate (always reachable). mgr.keymap aliases global.keymap so
 -- root-level binds land on the bottom-of-stack keymap.
 
-local global = newScope()
+local global = newScope('global')
 mgr.scopes.global = global
 mgr.stack[1]      = global
 mgr.keymap        = global.keymap
@@ -230,7 +230,7 @@ end
 function mgr:scope(name)
   local s = self.scopes[name]
   if not s then
-    s = newScope()
+    s = newScope(name)
     self.scopes[name] = s
   end
   return s
@@ -431,6 +431,131 @@ end
 function mgr:keyLabels(name, ImGui)
   local list = self:keyLabelList(name, ImGui)
   return list and table.concat(list, ' / ')
+end
+
+----- Binding tokens (stable ASCII; the on-disk / hand-edit form)
+-- OS-independent ASCII ("Ctrl+Z"); mods in Ctrl+Shift+Alt+Super order, no macOS glyph inversion.
+
+local keyTokens, modTokenList, tokenKeys, modByName
+
+local function buildKeyTokens(ImGui)
+  local t = {}
+  for i = 0, 25 do t[ImGui.Key_A + i]       = string.char(65 + i) end
+  for i = 0, 9  do t[ImGui.Key_0 + i]       = tostring(i)         end
+  for i = 0, 9  do t[ImGui.Key_Keypad0 + i] = 'Keypad' .. i       end
+  for i = 1, 12 do t[ImGui['Key_F' .. i]]   = 'F' .. i            end
+  t[ImGui.Key_Space]        = 'Space'
+  t[ImGui.Key_Enter]        = 'Enter'
+  t[ImGui.Key_KeypadEnter]  = 'KeypadEnter'
+  t[ImGui.Key_Escape]       = 'Escape'
+  t[ImGui.Key_Tab]          = 'Tab'
+  t[ImGui.Key_Backspace]    = 'Backspace'
+  t[ImGui.Key_Delete]       = 'Delete'
+  t[ImGui.Key_Insert]       = 'Insert'
+  t[ImGui.Key_Home]         = 'Home'
+  t[ImGui.Key_End]          = 'End'
+  t[ImGui.Key_PageUp]       = 'PageUp'
+  t[ImGui.Key_PageDown]     = 'PageDown'
+  t[ImGui.Key_UpArrow]      = 'Up'
+  t[ImGui.Key_DownArrow]    = 'Down'
+  t[ImGui.Key_LeftArrow]    = 'Left'
+  t[ImGui.Key_RightArrow]   = 'Right'
+  t[ImGui.Key_Comma]        = 'Comma'
+  t[ImGui.Key_Period]       = 'Period'
+  t[ImGui.Key_Slash]        = 'Slash'
+  t[ImGui.Key_Semicolon]    = 'Semicolon'
+  t[ImGui.Key_Apostrophe]   = 'Apostrophe'
+  t[ImGui.Key_Minus]        = 'Minus'
+  t[ImGui.Key_Equal]        = 'Equal'
+  t[ImGui.Key_LeftBracket]  = 'LeftBracket'
+  t[ImGui.Key_RightBracket] = 'RightBracket'
+  t[ImGui.Key_GraveAccent]  = 'Grave'
+  t[ImGui.Key_Backslash]    = 'Backslash'
+  t[ImGui.Key_KeypadSubtract] = 'KeypadSubtract'
+  return t
+end
+
+local function buildModTokens(ImGui)
+  return {
+    { ImGui.Mod_Ctrl,  'Ctrl'  },
+    { ImGui.Mod_Shift, 'Shift' },
+    { ImGui.Mod_Alt,   'Alt'   },
+    { ImGui.Mod_Super, 'Super' },
+  }
+end
+
+local function ensureTokenTables(ImGui)
+  if keyTokens then return end
+  keyTokens, modTokenList = buildKeyTokens(ImGui), buildModTokens(ImGui)
+  tokenKeys, modByName = {}, {}
+  for code, name in pairs(keyTokens)  do tokenKeys[name] = code end
+  for _, entry in ipairs(modTokenList) do modByName[entry[2]] = entry[1] end
+end
+
+--contract: spec -> stable ASCII token ("Ctrl+Z"); nil if the key has no token name
+function mgr:tokenForSpec(spec, ImGui)
+  ensureTokenTables(ImGui)
+  local key, mods = self:keySpec(spec, ImGui)
+  local name = keyTokens[key]
+  if not name then return nil end
+  local parts = {}
+  for _, entry in ipairs(modTokenList) do
+    if (mods & entry[1]) ~= 0 then parts[#parts + 1] = entry[2] end
+  end
+  parts[#parts + 1] = name
+  return table.concat(parts, '+')
+end
+
+--contract: token -> keyspec (bare key | {key, mod...}); (nil, err) on an unknown key/modifier
+function mgr:specForToken(token, ImGui)
+  ensureTokenTables(ImGui)
+  local parts = {}
+  for part in token:gmatch('[^+]+') do parts[#parts + 1] = part end
+  if #parts == 0 then return nil, 'empty token' end
+  local key = tokenKeys[parts[#parts]]
+  if not key then return nil, 'unknown key "' .. parts[#parts] .. '"' end
+  if #parts == 1 then return key end
+  local spec = { key }
+  for i = 1, #parts - 1 do
+    local mod = modByName[parts[i]]
+    if not mod then return nil, 'unknown modifier "' .. parts[i] .. '"' end
+    spec[#spec + 1] = mod
+  end
+  return spec
+end
+
+----- Binding overrides (persisted, hand-editable)
+-- keyBindings[scopeName][cmd]={token,...} overlays code defaults; rebind writes live+persisted.
+
+--contract: a malformed token is warned and skipped; the command keeps its other (good) bindings
+function mgr:loadOverrides(ImGui)
+  for scopeName, cmds in pairs(cm:get('keyBindings')) do
+    local scope = self.scopes[scopeName]
+    if scope then
+      for name, tokens in pairs(cmds) do
+        local specs = {}
+        for _, token in ipairs(tokens) do
+          local spec, err = self:specForToken(token, ImGui)
+          if spec then specs[#specs + 1] = spec
+          else util.print('keyBindings ' .. scopeName .. '.' .. name .. ': ' .. err .. ' - skipped') end
+        end
+        scope.keymap[name] = specs
+      end
+    end
+  end
+end
+
+--contract: overwrites the scope's binding for name and persists it as tokens (global tier)
+function mgr:rebind(scopeName, name, specs, ImGui)
+  local scope = self.scopes[scopeName]
+  if not scope then return end
+  scope.keymap[name] = specs
+  local overrides = cm:get('keyBindings')
+  overrides[scopeName] = overrides[scopeName] or {}
+  local tokens = {}
+  for _, spec in ipairs(specs) do tokens[#tokens + 1] = self:tokenForSpec(spec, ImGui) end
+  overrides[scopeName][name] = tokens
+  cm:set('global', 'keyBindings', overrides)
 end
 
 return mgr

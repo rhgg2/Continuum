@@ -89,6 +89,10 @@ local declarations = {
   -- (boundary-scroll). Toolbar checkbox / Super+F; global tier.
   { 'arrangeFollowPlay', false },
 
+  -- User keybinding overrides, global tier. keyBindings[scopeName][cmd] = { token, ... };
+  -- overlays code-default keymaps at startup. Tokens are hand-editable ("Ctrl+Z"). See commandManager.
+  { 'keyBindings',     {} },
+
   -- Palette atoms — role-named swatches the colour editor edits; base/alt are
   -- tonal ramps (zoneN at lightness N/10, ends pure black/white).
   { 'palette.base.zone0',  hex('#000000') },  -- base: warm neutral (paper / ink)

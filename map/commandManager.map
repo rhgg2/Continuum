@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=436  sha=5054124  mode=chunk
+@module commandManager  src=commandManager.lua  loc=561  sha=e390434  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -26,18 +26,19 @@
   @state layouts = {  @ 16
   @state chars = {}  @ 35
   @state mgr = {  @ 49
-  @state global = newScope()  @ 117
+  @state global = newScope('global')  @ 117
   @state prefixBuf, pendingPrefix = nil, nil  @ 181
   @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 182
   @state keyNames  @ 329
   @state shiftGlyph  @ 369
   @state modOrder, modSep  @ 388
+  @state keyTokens, modTokenList, tokenKeys, modByName  @ 439
 
 # Private functions
   -- Stack reachability
   @fn isReachable(scope, name)  @ 63
   -- Scope
-  @fn newScope()  @ 79
+  @fn newScope(name)  @ 79
   -- Bottom of the stack
   -- Manager-level surface
   -- Universal-argument prefix
@@ -52,6 +53,10 @@
   @fn buildKeyNames(ImGui)  @ 330
   @fn buildShiftGlyphs(ImGui)  @ 370
   @fn buildModOrder(ImGui)  @ 389
+  -- Binding tokens (stable ASCII; the on-disk / hand-edit form)
+  @fn buildKeyTokens(ImGui)  @ 441
+  @fn buildModTokens(ImGui)  @ 478
+  @fn ensureTokenTables(ImGui)  @ 487
 
 # Public API (mgr:*)
   @api mgr:register(name, fn, undoDesc)  @ 129
@@ -99,10 +104,21 @@
       @contract  list of human labels, one per bound keyspec of the reachable command, or nil if unbound
   @api mgr:keyLabels(name, ImGui)  @ 431
       @contract  keyLabelList joined by ' / ', or nil if unbound on the current stack
+  @api mgr:tokenForSpec(spec, ImGui)  @ 496
+      @contract  spec -> stable ASCII token ("Ctrl+Z"); nil if the key has no token name
+  @api mgr:specForToken(token, ImGui)  @ 510
+      @contract  token -> keyspec (bare key | {key, mod...}); (nil, err) on an unknown key/modifier
+  -- Binding overrides (persisted, hand-editable)
+  @api mgr:loadOverrides(ImGui)  @ 531
+      @contract  a malformed token is warned and skipped; the command keeps its other (good) bindings
+  @api mgr:rebind(scopeName, name, specs, ImGui)  @ 549
+      @contract  overwrites the scope's binding for name and persists it as tokens (global tier)
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 319
+  @use call    cm.get  @ 319, 532, 553
+  @use call    cm.set  @ 558
   @use call    util.atomic  @ 90
+  @use call    util.print  @ 540
   @use require util  @ 14
 
 # REAPER API surface

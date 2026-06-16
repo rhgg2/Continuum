@@ -187,6 +187,9 @@ local function Main()
   trackerScope:registerAll{ returnToArrange = function() coord:returnToArrange() end }
   trackerScope:bindAll{ returnToArrange = { ImGui.Key_Enter, ImGui.Key_KeypadEnter } }
 
+  -- Overlay persisted user rebindings on top of the code defaults above.
+  cmgr:loadOverrides(ImGui)
+
   coord:run(err_handler)
 end
 

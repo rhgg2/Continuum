@@ -18,6 +18,7 @@ local specs = {
   'fake_reaper_sends_spec',
   'command_manager_spec',
   'cmgr_stack_spec',
+  'cmgr_overrides_spec',
   'config_schema_spec',
   'cm_poll_undo_spec',
   'pext_store_spec',
