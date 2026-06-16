@@ -1,4 +1,4 @@
-@module util  src=util.lua  loc=492  sha=8bc2e05  mode=namespace
+@module util  src=util.lua  loc=583  sha=a0856a6  mode=namespace
 
 # Invariants & contracts
   @invariant  util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. It is math.huge, so arithmetic on an open tail just works (inf + finite = inf, inf > finite = true) — callers no longer special-case the sentinel except to communicate intent. util.serialise/unserialise round-trip the non-finite floats via explicit inf/-inf/nan literals so the on-disk form is stable. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL.
@@ -9,11 +9,20 @@
       @invariant  util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
   @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 267
   @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 286
+  @const LUA_KEYWORDS = {}  @ 485
+  @const prettyEmit  @ 510   -- forward decl (mutual recursion with emitTable)
 
 # Private functions
   @fn print(...)  @ 15
   @fn escape_string(s)  @ 164
   @fn parseValue()  @ 465
+  -- Lua-literal disk format (human-editable; read by load(), never P_EXT)
+  @fn bareKey(k)  @ 491
+  @fn luaNumber(n)  @ 496
+      -- inf/nan are not bare Lua, but their arithmetic forms are and need no env.
+  @fn nonFiniteNote(v)  @ 504
+      -- Inline note so a hand-editor recognises the arithmetic non-finite forms.
+  @fn emitTable(tbl, indent, seen)  @ 512
 
 # Public API (util.*)
   @api util.print(...)  @ 7
@@ -64,7 +73,11 @@
       @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
   @api util.unserialise(input)  @ 365
       @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
-  @api util.instantiate(name, deps)  @ 484
+  @api util.prettySerialise(value)  @ 560
+      @contract  emits a `return <literal>` chunk for load(); non-finite → 1/0 -1/0 0/0; cycles raise
+  @api util.prettyUnserialise(text)  @ 565
+      @contract  sandboxed load() of the disk literal (text-only, empty env); ok→value, fail→nil,err
+  @api util.instantiate(name, deps)  @ 575
       @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
 
 # REAPER API surface

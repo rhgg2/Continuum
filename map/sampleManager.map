@@ -1,4 +1,4 @@
-@module sampleManager  src=sampleManager.lua  loc=444  sha=fa87f15  mode=chunk
+@module sampleManager  src=sampleManager.lua  loc=444  sha=1278d64  mode=chunk
 @deps fileOps, cm, ds
 
 # Invariants & contracts

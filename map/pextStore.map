@@ -1,0 +1,91 @@
+@module pextStore  src=pextStore.lua  loc=239  sha=bd5520e  mode=chunk
+
+# Invariants & contracts
+  @invariant  single source of bound take/track context, shared by every face; setTake derives track from the take's item
+  @invariant  watcher baselines refresh on bound writes (assign) and context changes; foreign assignAt leaves them stale
+  @invariant  a stale take/track ptr is dropped (handle→nil, its baselines→'') before any read on a poll tick
+  @contract  get/assign (de)serialise by scope; no schema prune — each face owns its own key registry
+  @reaper  take/track P_EXT via GetSetMedia{ItemTake,Track}Info_String; project via Get/SetProjExtState; global via io
+
+# Imports
+  @require util = 'util'  @ 8
+
+# Private state
+  @state PROJEXT_SECTION = 'rdm'  @ 16
+  @state globalLocked = {}  @ 26
+  @state take, track = nil, nil  @ 28
+  @state lastStateCount = -1  @ 32
+  @state baseline = {}  @ 33   -- [scope/slot] = last-seen raw string (watched blobs only)
+  @state watchGroups = {}  @ 34   -- { { blobs = { { scope, slot }, ... }, onDiverge = fn }, ... }
+  @state ps = {}  @ 155
+  @state fire = util.installHooks(ps)  @ 156
+
+# Private functions
+  @fn print(...)  @ 10
+  -- PRIVATE STATE
+  @fn globalPath(slot)  @ 20
+      -- Global blobs are disk files in the resource dir, one per slot: 'config' ->
+      -- continuum-config.lua, 'data' -> continuum-data.lua. Lazy so load needs no reaper.
+  -- RAW BACKEND I/O
+  @fn takeRaw(handle, slot)  @ 38
+  @fn trackRaw(handle, slot)  @ 44
+  @fn readRaw(scope, slot, handle)  @ 51
+      -- handle overrides the bound context (foreign-handle reads); scope picks the backend.
+  @fn writeRaw(scope, slot, raw, handle)  @ 68
+  @fn decode(scope, slot, raw)  @ 91
+      -- Format by backend: global -> hand-editable Lua literal, P_EXT/projext ->
+      -- compact wire. A bad global parse locks writes. See docs/pextStore.md § Formats.
+  @fn encode(scope, value)  @ 111
+  -- WATCHER
+  @fn blobKey(blob)  @ 118
+  @fn snapshotBaseline()  @ 120
+  @fn zeroBaselines(scope)  @ 132
+      -- A dropped handle's watched blobs read as '' on the next poll; zeroing their
+      -- baselines to match keeps that drop from registering as an external diff.
+  @fn dropStale()  @ 140
+
+# Public API (ps:*)
+  -- PUBLIC INTERFACE
+  -- Context
+  @api ps:setTake(newTake)  @ 162
+      @contract  setTake(nil) clears take+track; setTake(take) derives track via GetMediaItemTrack; resnapshots baselines
+  @api ps:clearTake()  @ 173
+  @api ps:setTrack(newTrack)  @ 179
+  @api ps:boundTake()  @ 185
+  @api ps:boundTrack()  @ 186
+  -- Storage
+  @api ps:get(scope, slot)  @ 191
+      @contract  returns the decoded value at (scope, slot) under bound context; nil if absent or undecodable
+  @api ps:getAt(handle, scope, slot)  @ 192
+  @api ps:assign(scope, slot, value)  @ 195
+      @contract  writes value at (scope, slot); util.REMOVE clears; refreshes watcher baseline if watched
+  @api ps:assignAt(handle, scope, slot, value)  @ 203
+      -- Foreign-handle write: bypasses bound context and never touches the baseline.
+  -- Watcher
+  @api ps:watch(blobs, onDiverge)  @ 210
+      @contract  blobs = { { scope, slot }, ... }; onDiverge(divergedBlobs) fires once per poll tick that diverges
+  @api ps:pollUndo()  @ 219
+      @invariant  polls project state count per frame; on tick re-reads watched blobs, fires diverged groups once each
+      @contract  no-op without GetProjectStateChangeCount (test harness); one int compare per frame otherwise
+
+# Signals emitted (via util.installHooks)
+  @emits contextChanged   -- {} on every context change so faces drop+reload their scope caches
+
+# Uses (outbound edges)
+  @use call    util.installHooks  @ 156
+  @use call    util.prettySerialise  @ 112
+  @use call    util.prettyUnserialise  @ 97
+  @use call    util.print  @ 11
+  @use call    util.serialise  @ 113
+  @use require util  @ 8
+
+# REAPER API surface
+  @reaper GetResourcePath
+  @reaper GetSetMediaItemTakeInfo_String
+  @reaper GetSetMediaTrackInfo_String
+  @reaper GetProjExtState
+  @reaper SetProjExtState
+  @reaper GetProjectStateChangeCount
+  @reaper ValidatePtr2
+  @reaper GetMediaItemTake_Item
+  @reaper GetMediaItemTrack

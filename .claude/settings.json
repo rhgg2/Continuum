@@ -13,12 +13,12 @@
         ]
       },
       {
-        "matcher": "mcp__patches__apply_patches",
+        "matcher": "mcp__patches__apply_patches|mcp__patches__retry_patches",
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/apply-patches-map-regen.sh\"",
-            "statusMessage": "Regenerating .map files..."
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/patches-map-regen.sh\"",
+            "statusMessage": "Regenerating stale .map files..."
           }
         ]
       }
