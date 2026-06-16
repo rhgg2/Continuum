@@ -5,6 +5,7 @@
 --invariant: anchors are frame-scoped — cleared each frame, repopulated by render code only while open
 --contract: 'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
 local ImGui = require 'imgui' '0.10'
+local util  = require 'util'
 
 local ctx    = (...).ctx
 local chrome = (...).chrome
@@ -52,13 +53,35 @@ local function rectFor(key)
 end
 
 -- Each shortcut gets its own keycap chip ('/'-separated for multi-binding cmds);
--- chip width is floored relative to height so a lone glyph (, . `) reads as a key.
-local CHIP_PADX, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 4, 3, 4, 0.9, 0xcc
+-- symbol glyphs are floored to a square (so , . ` read as keys), word labels stay natural.
+local CHIP_PADX_INNER, CHIP_PADX_OUTER, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 0, 2, 3, 4, 0.9, 0xcc
 local SEP = '/'
 local function withAlpha(rgba, a) return (rgba & 0xFFFFFF00) | a end
 
+-- Cells for one chip: each symbol glyph floored to a square cell, but a run of
+-- word characters (Tab, PgUp, F12) shares one natural-width cell — no per-letter gaps.
+local function glyphCells(s, lineH)
+  local cells, run = {}, nil
+  local function cell(text)
+    util.add(cells, { g = text, w = math.max((ImGui.CalcTextSize(ctx, text)) + CHIP_PADX_INNER, lineH * CHIP_MIN_RATIO) })
+  end
+  for _, c in utf8.codes(s) do
+    local g = utf8.char(c)
+    if #g == 1 and g:match('%w') then
+      run = (run or '') .. g
+    else
+      if run then cell(run); run = nil end
+      cell(g)
+    end
+  end
+  if run then cell(run) end
+  return cells
+end
+
 local function chipWidth(s, lineH)
-  return math.max((ImGui.CalcTextSize(ctx, s)) + CHIP_PADX * 2, lineH * CHIP_MIN_RATIO)
+  local w = 0
+  for _, cell in ipairs(glyphCells(s, lineH)) do w = w + cell.w end
+  return w
 end
 
 local function clusterWidth(keys)
@@ -78,11 +101,17 @@ local function drawCluster(dl, keys, x, ty, lineH, capBg, capLine, keyCol, sepCo
       ImGui.DrawList_AddText(dl, cur + SEP_GAP, ty, sepCol, SEP)
       cur = cur + SEP_GAP * 2 + sepW
     end
-    local cw = chipWidth(s, lineH)
+    local cells = glyphCells(s, lineH)
+    local cw = CHIP_PADX_OUTER * 2
+    for _, cell in ipairs(cells) do cw = cw + cell.w end
     ImGui.DrawList_AddRectFilled(dl, cur, ty, cur + cw, ty + lineH, capBg, CHIP_R)
     ImGui.DrawList_AddRect(dl, cur, ty, cur + cw, ty + lineH, capLine, CHIP_R)
-    local tw = ImGui.CalcTextSize(ctx, s)
-    ImGui.DrawList_AddText(dl, cur + (cw - tw) / 2, ty, keyCol, s)
+    local gx = cur + CHIP_PADX_OUTER
+    for _, cell in ipairs(cells) do
+      local tw = ImGui.CalcTextSize(ctx, cell.g)
+      ImGui.DrawList_AddText(dl, gx + (cell.w - tw) / 2, ty, keyCol, cell.g)
+      gx = gx + cell.w
+    end
     cur = cur + cw
   end
 end

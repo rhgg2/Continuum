@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=426  sha=9e0bf26  mode=chunk
+@module commandManager  src=commandManager.lua  loc=436  sha=5054124  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -29,9 +29,9 @@
   @state global = newScope()  @ 117
   @state prefixBuf, pendingPrefix = nil, nil  @ 181
   @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 182
-  @state keyNames  @ 327
-  @state shiftGlyph  @ 359
-  @state modOrder, modSep  @ 378
+  @state keyNames  @ 329
+  @state shiftGlyph  @ 369
+  @state modOrder, modSep  @ 388
 
 # Private functions
   -- Stack reachability
@@ -49,9 +49,9 @@
   @fn resolveKeys(name)  @ 275
   -- Note layout
   -- Key labels (human-readable bindings, for the help overlay)
-  @fn buildKeyNames(ImGui)  @ 328
-  @fn buildShiftGlyphs(ImGui)  @ 360
-  @fn buildModOrder(ImGui)  @ 379
+  @fn buildKeyNames(ImGui)  @ 330
+  @fn buildShiftGlyphs(ImGui)  @ 370
+  @fn buildModOrder(ImGui)  @ 389
 
 # Public API (mgr:*)
   @api mgr:register(name, fn, undoDesc)  @ 129
@@ -94,10 +94,10 @@
   @api mgr:noteChars(char)  @ 318
       -- Re-read noteLayout on each call so a config change takes effect
       -- without rebuilding vm.
-  @api mgr:keyLabel(spec, ImGui)  @ 397
-  @api mgr:keyLabelList(name, ImGui)  @ 412
+  @api mgr:keyLabel(spec, ImGui)  @ 407
+  @api mgr:keyLabelList(name, ImGui)  @ 422
       @contract  list of human labels, one per bound keyspec of the reachable command, or nil if unbound
-  @api mgr:keyLabels(name, ImGui)  @ 421
+  @api mgr:keyLabels(name, ImGui)  @ 431
       @contract  keyLabelList joined by ' / ', or nil if unbound on the current stack
 
 # Uses (outbound edges)

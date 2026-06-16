@@ -324,6 +324,8 @@ end
 -- ImGui injected (same reason as keySpec): cmgr stays free of REAPER
 -- imports at load. The reverse LUT is built lazily on first call.
 
+-- macOS shows the non-printables its UI font covers as keycap glyphs (⏎ ⎋ ⌫ ⌦ …);
+-- Tab/PgUp/PgDn lack glyphs there, so they keep words like Windows/Linux. See buildModOrder.
 local keyNames
 local function buildKeyNames(ImGui)
   local t = {}
@@ -351,6 +353,14 @@ local function buildKeyNames(ImGui)
   t[ImGui.Key_Apostrophe]   = "'"
   t[ImGui.Key_Semicolon]    = ';'
   t[ImGui.Key_Backslash]    = '\\'
+  local os = reaper.GetOS()
+  if os:find('OSX') or os:find('mac') then
+    t[ImGui.Key_Enter], t[ImGui.Key_KeypadEnter] = '\xe2\x8f\x8e', '\xe2\x8f\x8e'  -- ⏎
+    t[ImGui.Key_Escape]    = '\xe2\x8e\x8b'  -- ⎋
+    t[ImGui.Key_Backspace] = '\xe2\x8c\xab'  -- ⌫
+    t[ImGui.Key_Delete]    = '\xe2\x8c\xa6'  -- ⌦
+    t[ImGui.Key_Home], t[ImGui.Key_End] = '\xe2\x86\x96', '\xe2\x86\x98'  -- ↖ ↘
+  end
   return t
 end
 

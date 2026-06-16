@@ -37,7 +37,10 @@ Each bound shortcut renders in its own keycap chip (`cmgr:keyLabelList`
 feeds them, one chord per chip); a command with several bindings shows
 several chips, `/`-separated. The chip frames the glyph so a lone-key
 binding like `,` `.` or `` ` `` still reads as a key rather than a stray
-mark. Overlay colours are config roles (`colour.help.*`): a blue panel, with
+mark; the square min is per symbol glyph (a narrow glyph in a chord reads as a
+key too), while a run of word characters (Tab, F12) keeps its natural width.
+Non-printable keys render as their macOS keycap glyphs (Return, Esc, Delete, …)
+where the UI font has them — Tab/PgUp/PgDn and all of Windows/Linux stay words. Overlay colours are config roles (`colour.help.*`): a blue panel, with
 description text and chip fills on the base ramp so the dark shortcut glyphs
 and the `/` separator read against light keycaps.
 
