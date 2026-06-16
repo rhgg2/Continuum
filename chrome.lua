@@ -392,6 +392,7 @@ return {
   resetPickerActive  = resetPickerActive,
   requestPickerOpen  = requestPickerOpen,
   gridWidth          = gridWidth,
+  paletteHeader      = paletteHeader,
   palettePane        = palettePane,
 }
 

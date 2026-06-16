@@ -448,7 +448,7 @@ end
 
 --contract: left=chrome.gridWidth(w): browser row over a strip, both width gridW
 --contract: slots fill chrome.palettePane (full height) on the right
---contract: 1px painter dividers: tree|files, files|buttons, browser|strip
+--contract: 1px painter dividers: tree|files, browser|strip
 --contract: verticals stop GAP/2 short of the horizontal rule; strip bottom-pad clears status bar
 --contract: whole body is wrapped in chrome.disabledIf(not isLive) — when the bound track has no live sampler FX the entire interactive surface is greyed and inert
 --contract: pip auto-revert is checked at end of body: justTriggered=true edge consumes the trigger frame, after which any browser/slot-focus change or stray mouse click reverts
@@ -469,18 +469,20 @@ function sr:renderBody(_, w, h, dispatch)
   local topH   = h - stripBudget
   local stripH = stripBudget - GAP - PAD
   local treeW  = math.max(220, gridW * 0.25)
-  local btnW   = 58
-  local filesW = math.max(80, gridW - treeW - btnW - 2 * GAP)
+  local filesW = math.max(80, gridW - treeW - GAP)
 
-  -- Left pane: tree with Up button header
+  local hasFile  = sv:getSelectedFile() ~= nil
+  local entries  = cm:get('slotEntries') or {}
+  local hasEntry = entries[cm:get('currentSample')] ~= nil
+
+  -- Left pane: tree under a header matching the files/palette panes
   if ImGui.BeginChild(ctx, '##sampleTree', treeW, topH,
                       ImGui.ChildFlags_None) then
+    chrome.paletteHeader(fs.basename(root))
     local parent = fs.parent(root)
     chrome.disabledIf(parent == '', function()
-      if ImGui.SmallButton(ctx, '↑##treeUp') then sv:setBrowseRoot(parent) end
+      if ImGui.Button(ctx, '↑##treeUp') then sv:setBrowseRoot(parent) end
     end)
-    ImGui.SameLine(ctx, 0, 6)
-    ImGui.TextDisabled(ctx, fs.basename(root))
     ImGui.Separator(ctx)
     drawTree(root)
   end
@@ -488,37 +490,20 @@ function sr:renderBody(_, w, h, dispatch)
 
   ImGui.SameLine(ctx, 0, GAP)
 
-  -- Middle pane: folders + files
-  local filesFocused = false
+  -- Middle pane: folders + files, headed by load (>) + preview play/stop
   if ImGui.BeginChild(ctx, '##sampleFiles', filesW, topH,
                       ImGui.ChildFlags_None,
                       ImGui.WindowFlags_NoNav) then
-    filesFocused = ImGui.IsWindowFocused(ctx)
-    drawFiles(folder, root)
-  end
-  ImGui.EndChild(ctx)
-
-  -- Narrow column: action buttons
-  ImGui.SameLine(ctx, 0, GAP)
-  if ImGui.BeginChild(ctx, '##loadBtnCol', btnW, topH, ImGui.ChildFlags_None) then
-    local bw, _    = ImGui.GetContentRegionAvail(ctx)
-    local hasFile  = sv:getSelectedFile() ~= nil
-    local entries  = cm:get('slotEntries') or {}
-    local hasEntry = entries[cm:get('currentSample')] ~= nil
-
+    chrome.paletteHeader(fs.basename(folder))
     chrome.disabledIf(not hasFile, function()
-      if ImGui.Button(ctx, '>##load',  bw, 0) then sv:loadSelectedIntoCurrent() end
+      if ImGui.Button(ctx, '>##load') then sv:loadSelectedIntoCurrent() end
+      ImGui.SameLine(ctx, 0, 4)
+      if ImGui.Button(ctx, 'play##file') then sv:auditionPath(sv:getSelectedFile()) end
     end)
-
-    chrome.disabledIf(not hasEntry, function()
-      if ImGui.Button(ctx, 'Clear##slot', bw, 0) then sv:clearCurrentSlot() end
-    end)
-
-    chrome.disabledIf(not sv:canAuditionCurrent(), function()
-      if ImGui.Button(ctx, 'Play##slot',  bw, 0) then sv:auditionCurrent() end
-    end)
-
-    if ImGui.Button(ctx, 'Stop##slot',  bw, 0) then sv:stopAudition() end
+    ImGui.SameLine(ctx, 0, 4)
+    if ImGui.Button(ctx, 'stop##file') then sv:stopAudition() end
+    ImGui.Separator(ctx)
+    drawFiles(folder, root)
   end
   ImGui.EndChild(ctx)
 
@@ -531,23 +516,31 @@ function sr:renderBody(_, w, h, dispatch)
   end
   ImGui.EndChild(ctx)
 
-  -- 1px dividers centred in the gaps: tree|files and files|buttons (vertical,
-  -- stop GAP/2 short of the horizontal rule); browser|strip (horizontal, to gridW).
+  -- 1px dividers centred in the gaps: tree|files (vertical, stops GAP/2 short
+  -- of the horizontal rule); browser|strip (horizontal, to gridW).
   local half   = math.floor(GAP / 2)
   local hy     = oy + topH + half
   local vBot   = hy - half
   local vTree  = ox + treeW + half
-  local vFiles = ox + treeW + GAP + filesW + half
   local p = painter.new(ctx, chrome, {})
-  p.segment(vTree,  oy, vTree,  vBot, 'text', 1)
-  p.segment(vFiles, oy, vFiles, vBot, 'text', 1)
+  p.segment(vTree, oy, vTree, vBot, 'text', 1)
   p.segment(ox, hy, ox + gridW, hy, 'text', 1)
 
   -- Right pane: slots in the shared palette (full height, over the strip)
   chrome.palettePane{
     x = ox + gridW, y = oy, h = h,
     label = boundTrackName(),
-    draw  = function() drawSlots() end,
+    draw  = function()
+      chrome.disabledIf(not hasEntry, function()
+        if ImGui.Button(ctx, 'clear##slot') then sv:clearCurrentSlot() end
+        ImGui.SameLine(ctx, 0, 4)
+        if ImGui.Button(ctx, 'play##slot') then sv:auditionSlot(cm:get('currentSample')) end
+      end)
+      ImGui.SameLine(ctx, 0, 4)
+      if ImGui.Button(ctx, 'stop##slot') then sv:stopAudition() end
+      ImGui.Separator(ctx)
+      drawSlots()
+    end,
   }
   end)   -- /chrome.disabledIf(not isLive)
 
