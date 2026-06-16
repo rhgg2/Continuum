@@ -1,4 +1,4 @@
-@module help  src=help.lua  loc=292  sha=5054124  mode=chunk
+@module help  src=help.lua  loc=292  sha=e390434  mode=chunk
 @deps ctx, chrome, cmgr
 
 # Shapes
@@ -8,70 +8,74 @@
   @require ImGui = 'imgui'  @ 7
       @invariant  anchors are frame-scoped — cleared each frame, repopulated by render code only while open
       @contract  'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
+  @require util = 'util'  @ 8
 
 # Private state
-  @state pages = {}  @ 13   -- pageName → groups
-  @state anchors = {}  @ 14   -- key → { x, y, w, h }
-  @state current = nil  @ 15
-  @state open = false  @ 16
-  @state openAtStart = false  @ 17   -- open as of frame start; gates dismissal + page input swallow
-  @state PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8  @ 19
-  @state DIM_COL = 0x00000099  @ 20
-  @state EM_DASH = '\xe2\x80\x94'  @ 21
-  @state help = {}  @ 23
-  @state CHIP_PADX, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 4, 3, 4, 0.8, 0xcc  @ 56
-  @state SEP = '/'  @ 57
-  @state dismissKeyList  @ 191
+  @state pages = {}  @ 14   -- pageName → groups
+  @state anchors = {}  @ 15   -- key → { x, y, w, h }
+  @state current = nil  @ 16
+  @state open = false  @ 17
+  @state openAtStart = false  @ 18   -- open as of frame start; gates dismissal + page input swallow
+  @state PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8  @ 20
+  @state DIM_COL = 0x00000077  @ 21
+  @state EM_DASH = '\xe2\x80\x94'  @ 22
+  @state help = {}  @ 24
+  @state dl, lineH, theme, capBg, capLine, boxes  @ 50
+  @state CHIP_PADX_INNER, CHIP_PADX_OUTER, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 0, 2, 3, 4, 0.9, 0xcc  @ 60
+  @state SEP = '/'  @ 61
+  @state dismissKeyList  @ 190
 
 # Private functions
   -- DRAW
-  @fn rectFor(key)  @ 48
-  @fn withAlpha(rgba, a)  @ 58
-  @fn glyphCells(s, lineH)  @ 62
+  @fn rectFor(key)  @ 52
+  @fn withAlpha(rgba, a)  @ 62
+  @fn glyphCells(s)  @ 66
       -- Cells for one chip: each symbol glyph floored to a square cell, but a run of
       -- word characters (Tab, PgUp, F12) shares one natural-width cell — no per-letter gaps.
-  @fn chipWidth(s, lineH)  @ 80
-  @fn clusterWidth(keys)  @ 86
-  @fn drawCluster(dl, keys, x, ty, lineH, capBg, capLine, keyCol, sepCol)  @ 96
-  @fn groupRows(g)  @ 118
-  @fn boxSize(g, rows, keyW)  @ 128
-  @fn drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)  @ 138
-  @fn placePins(dl, pins, theme, wx, ww, boxes)  @ 156
+  @fn chipWidth(s)  @ 84
+  @fn clusterWidth(keys)  @ 90
+  @fn drawCluster(keys, x, ty)  @ 99
+  @fn groupRows(g)  @ 121
+  @fn boxSize(g, rows, keyW)  @ 131
+  @fn drawBox(g, rows, keyW, x, y, w, h)  @ 140
+  @fn placePins(pins, wx, ww)  @ 155
       -- Pin callouts sit just under their toolbar segment. Overlapping neighbours are
       -- slid to minimise total displacement — isotonic regression. See docs/help.md.
-  @fn buildDismissKeys()  @ 192
-  @fn anyKeyPressed()  @ 210
+  @fn buildDismissKeys()  @ 191
+  @fn anyKeyPressed()  @ 209
       -- Char queue catches punctuation/layout-specific keys; the explicit list covers
       -- the non-printables (and alphanumerics, since the macOS char queue drops some).
-  @fn clickedOutside(boxes)  @ 219
+  @fn clickedOutside()  @ 218
 
 # Public API (help:*)
-  @api help:registerPage(name, groups)  @ 27
-  @api help:setPage(name)  @ 28
-  @api help:isOpen()  @ 29
-  @api help:close()  @ 30
-  @api help:toggle()  @ 34
+  @api help:registerPage(name, groups)  @ 28
+  @api help:setPage(name)  @ 29
+  @api help:isOpen()  @ 30
+  @api help:close()  @ 31
+  @api help:toggle()  @ 35
       -- Won't open on a page that declared no manifest, so F1 there is inert
       -- rather than dimming the screen with nothing to show.
-  @api help:beginFrame()  @ 38
-  @api help:wasOpenAtFrameStart()  @ 39
-  @api help:anchor(key, x, y, w, h)  @ 41
-  @api help:draw()  @ 229
+  @api help:beginFrame()  @ 39
+  @api help:wasOpenAtFrameStart()  @ 40
+  @api help:anchor(key, x, y, w, h)  @ 42
+  @api help:draw()  @ 228
 
 # Uses (outbound edges)
   @use call    chrome.colour  @ 240, 241, 242, 243, 244, 245
-  @use call    chrome.toolbarRects  @ 50
-  @use call    cmgr.keyLabelList  @ 121
-  @use call    imgui.CalcTextSize  @ 65, 88, 97, 110, 131, 132
-  @use call    imgui.DrawList_AddRect  @ 107, 140
-  @use call    imgui.DrawList_AddRectFilled  @ 106, 139, 237
-  @use call    imgui.DrawList_AddText  @ 100, 111, 145, 149
-  @use call    imgui.GetForegroundDrawList  @ 234
-  @use call    imgui.GetInputQueueCharacter  @ 211
-  @use call    imgui.GetMousePos  @ 222
-  @use call    imgui.GetTextLineHeight  @ 87, 129
+  @use call    chrome.toolbarRects  @ 54
+  @use call    cmgr.keyLabelList  @ 124
+  @use call    imgui.CalcTextSize  @ 69, 91, 100, 113, 133, 134
+  @use call    imgui.DrawList_AddRect  @ 110, 142
+  @use call    imgui.DrawList_AddRectFilled  @ 109, 141, 237
+  @use call    imgui.DrawList_AddText  @ 103, 114, 144, 148
+  @use call    imgui.GetForegroundDrawList  @ 233
+  @use call    imgui.GetInputQueueCharacter  @ 210
+  @use call    imgui.GetMousePos  @ 221
+  @use call    imgui.GetTextLineHeight  @ 234
   @use call    imgui.GetWindowPos  @ 235
   @use call    imgui.GetWindowSize  @ 236
-  @use call    imgui.IsKeyPressed  @ 214
-  @use call    imgui.IsMouseClicked  @ 220, 221
+  @use call    imgui.IsKeyPressed  @ 213
+  @use call    imgui.IsMouseClicked  @ 219, 220
+  @use call    util.add  @ 69
   @use require imgui  @ 7
+  @use require util  @ 8

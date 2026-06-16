@@ -18,7 +18,7 @@ local open    = false
 local openAtStart = false   -- open as of frame start; gates dismissal + page input swallow
 
 local PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8
-local DIM_COL = 0x00000099
+local DIM_COL = 0x00000077
 local EM_DASH = '\xe2\x80\x94'
 
 local help = {}
@@ -46,6 +46,9 @@ end
 
 ----------- DRAW
 
+-- Per-frame draw state: set at the top of help:draw, read by the helpers below.
+local dl, lineH, theme, capBg, capLine, boxes
+
 local function rectFor(key)
   local toolbarId = key:match('^toolbar%.(.+)$')
   if toolbarId then return chrome.toolbarRects()[toolbarId] end
@@ -60,7 +63,7 @@ local function withAlpha(rgba, a) return (rgba & 0xFFFFFF00) | a end
 
 -- Cells for one chip: each symbol glyph floored to a square cell, but a run of
 -- word characters (Tab, PgUp, F12) shares one natural-width cell — no per-letter gaps.
-local function glyphCells(s, lineH)
+local function glyphCells(s)
   local cells, run = {}, nil
   local function cell(text)
     util.add(cells, { g = text, w = math.max((ImGui.CalcTextSize(ctx, text)) + CHIP_PADX_INNER, lineH * CHIP_MIN_RATIO) })
@@ -78,30 +81,29 @@ local function glyphCells(s, lineH)
   return cells
 end
 
-local function chipWidth(s, lineH)
+local function chipWidth(s)
   local w = 0
-  for _, cell in ipairs(glyphCells(s, lineH)) do w = w + cell.w end
+  for _, cell in ipairs(glyphCells(s)) do w = w + cell.w end
   return w
 end
 
 local function clusterWidth(keys)
-  local lineH = ImGui.GetTextLineHeight(ctx)
   local sepW, w = ImGui.CalcTextSize(ctx, SEP), 0
   for i, s in ipairs(keys) do
     if i > 1 then w = w + SEP_GAP * 2 + sepW end
-    w = w + chipWidth(s, lineH)
+    w = w + chipWidth(s)
   end
   return w
 end
 
-local function drawCluster(dl, keys, x, ty, lineH, capBg, capLine, keyCol, sepCol)
+local function drawCluster(keys, x, ty)
   local sepW, cur = ImGui.CalcTextSize(ctx, SEP), x
   for i, s in ipairs(keys) do
     if i > 1 then
-      ImGui.DrawList_AddText(dl, cur + SEP_GAP, ty, sepCol, SEP)
+      ImGui.DrawList_AddText(dl, cur + SEP_GAP, ty, theme.key, SEP)
       cur = cur + SEP_GAP * 2 + sepW
     end
-    local cells = glyphCells(s, lineH)
+    local cells = glyphCells(s)
     local cw = CHIP_PADX_OUTER * 2
     for _, cell in ipairs(cells) do cw = cw + cell.w end
     ImGui.DrawList_AddRectFilled(dl, cur, ty, cur + cw, ty + lineH, capBg, CHIP_R)
@@ -109,7 +111,7 @@ local function drawCluster(dl, keys, x, ty, lineH, capBg, capLine, keyCol, sepCo
     local gx = cur + CHIP_PADX_OUTER
     for _, cell in ipairs(cells) do
       local tw = ImGui.CalcTextSize(ctx, cell.g)
-      ImGui.DrawList_AddText(dl, gx + (cell.w - tw) / 2, ty, keyCol, cell.g)
+      ImGui.DrawList_AddText(dl, gx + (cell.w - tw) / 2, ty, theme.key, cell.g)
       gx = gx + cell.w
     end
     cur = cur + cw
@@ -127,26 +129,22 @@ local function groupRows(g)
 end
 
 local function boxSize(g, rows, keyW)
-  local lineH = ImGui.GetTextLineHeight(ctx)
   local labelW = 0
   for _, row in ipairs(rows) do labelW = math.max(labelW, (ImGui.CalcTextSize(ctx, row.label))) end
   local titleW = ImGui.CalcTextSize(ctx, g.title)
   local w = math.max(titleW, keyW + KEY_GAP + labelW) + PAD * 2
   local h = PAD * 2 + lineH * (#rows + 1) + ROW_GAP * #rows
-  return w, h, lineH
+  return w, h
 end
 
-local function drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)
+local function drawBox(g, rows, keyW, x, y, w, h)
   ImGui.DrawList_AddRectFilled(dl, x, y, x + w, y + h, theme.bg, 4)
   ImGui.DrawList_AddRect(dl, x, y, x + w, y + h, theme.border, 4)
-  local capBg   = withAlpha(theme.chip, CHIP_ALPHA)
-  local capLine = withAlpha(theme.border, 0x66)
-  local sepCol  = theme.key
   local ty = y + PAD
   ImGui.DrawList_AddText(dl, x + PAD, ty, theme.title, g.title)
   ty = ty + lineH + ROW_GAP
   for _, row in ipairs(rows) do
-    drawCluster(dl, row.keys, x + PAD, ty, lineH, capBg, capLine, theme.key, sepCol)
+    drawCluster(row.keys, x + PAD, ty)
     ImGui.DrawList_AddText(dl, x + PAD + keyW + KEY_GAP, ty, theme.label, row.label)
     ty = ty + lineH + ROW_GAP
   end
@@ -154,7 +152,7 @@ end
 
 -- Pin callouts sit just under their toolbar segment. Overlapping neighbours are
 -- slid to minimise total displacement — isotonic regression. See docs/help.md.
-local function placePins(dl, pins, theme, wx, ww, boxes)
+local function placePins(pins, wx, ww)
   if #pins == 0 then return end
   table.sort(pins, function(a, b) return a.px < b.px end)
 
@@ -184,7 +182,7 @@ local function placePins(dl, pins, theme, wx, ww, boxes)
 
   for idx, p in ipairs(pins) do
     local x = xs[idx] + shift
-    drawBox(dl, p.g, p.rows, p.keyW, x, p.y, p.w, p.h, p.lineH, theme)
+    drawBox(p.g, p.rows, p.keyW, x, p.y, p.w, p.h)
     boxes[#boxes + 1] = { x = x, y = p.y, w = p.w, h = p.h }
   end
 end
@@ -217,7 +215,7 @@ local function anyKeyPressed()
   return false
 end
 
-local function clickedOutside(boxes)
+local function clickedOutside()
   if not (ImGui.IsMouseClicked(ctx, 0) or ImGui.IsMouseClicked(ctx, 1)
           or ImGui.IsMouseClicked(ctx, 2)) then return false end
   local mx, my = ImGui.GetMousePos(ctx)
@@ -232,12 +230,13 @@ function help:draw()
   local groups = current and pages[current]
   if not groups then return end
 
-  local dl = ImGui.GetForegroundDrawList(ctx)
+  dl    = ImGui.GetForegroundDrawList(ctx)
+  lineH = ImGui.GetTextLineHeight(ctx)
   local wx, wy = ImGui.GetWindowPos(ctx)
   local ww, wh = ImGui.GetWindowSize(ctx)
   ImGui.DrawList_AddRectFilled(dl, wx, wy, wx + ww, wy + wh, DIM_COL)
 
-  local theme = {
+  theme = {
     bg     = chrome.colour('help.box'),
     border = chrome.colour('help.border'),
     title  = chrome.colour('help.title'),
@@ -245,9 +244,9 @@ function help:draw()
     label  = chrome.colour('help.desc'),
     chip   = chrome.colour('help.chip'),
   }
-
-  -- boxes: every drawn rect, for the off-box click test below.
-  local boxes = {}
+  capBg   = withAlpha(theme.chip, CHIP_ALPHA)
+  capLine = withAlpha(theme.border, 0x66)
+  boxes   = {}   -- every drawn rect, for the off-box click test below
 
   local pins = {}
   for _, g in ipairs(groups) do
@@ -255,13 +254,13 @@ function help:draw()
       local r = rectFor(g.anchor)
       if r then
         local rows, keyW = groupRows(g)
-        local w, h, lineH = boxSize(g, rows, keyW)
+        local w, h = boxSize(g, rows, keyW)
         pins[#pins + 1] = { g = g, rows = rows, keyW = keyW,
-                            w = w, h = h, lineH = lineH, px = r.x, y = r.y + r.h + 4 }
+                            w = w, h = h, px = r.x, y = r.y + r.h + 4 }
       end
     end
   end
-  placePins(dl, pins, theme, wx, ww, boxes)
+  placePins(pins, wx, ww)
 
   -- Flow groups fill the grid rect row-major: left to right, wrapping down a
   -- row at the rect's right edge.
@@ -271,13 +270,13 @@ function help:draw()
       local r = rectFor(g.anchor)
       if r then
         local rows, keyW = groupRows(g)
-        local w, h, lineH = boxSize(g, rows, keyW)
+        local w, h = boxSize(g, rows, keyW)
         local fc = flow[g.anchor]
         if not fc then fc = { x = r.x + BOX_GAP, y = r.y + BOX_GAP, rowH = 0 }; flow[g.anchor] = fc end
         if fc.x + w > r.x + r.w and fc.x > r.x + BOX_GAP then
           fc.x, fc.y, fc.rowH = r.x + BOX_GAP, fc.y + fc.rowH + BOX_GAP, 0
         end
-        drawBox(dl, g, rows, keyW, fc.x, fc.y, w, h, lineH, theme)
+        drawBox(g, rows, keyW, fc.x, fc.y, w, h)
         boxes[#boxes + 1] = { x = fc.x, y = fc.y, w = w, h = h }
         fc.x = fc.x + w + BOX_GAP
         fc.rowH = math.max(fc.rowH, h)
@@ -287,7 +286,7 @@ function help:draw()
 
   -- Dismiss on any key or off-box click; gesture is swallowed (coordinator + page both
   -- gate on wasOpenAtFrameStart). Gated so the opening F1 doesn't instantly dismiss.
-  if openAtStart and (anyKeyPressed() or clickedOutside(boxes)) then open = false end
+  if openAtStart and (anyKeyPressed() or clickedOutside()) then open = false end
 end
 
 return help
