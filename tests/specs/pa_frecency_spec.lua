@@ -62,7 +62,7 @@ return {
       h.pa:bumpFrecency('{DST}', '{FX-synth}', 'Res')
       h.pa:bumpFrecency('{DST}', '{FX-synth}', 'Res')
 
-      local f = h.cm:get('paramFrecency')['VST3:Synth']
+      local f = h.ds:get('paramFrecency')['VST3:Synth']
       t.eq(f.n, 2, 'two uses on the ident')
       t.eq(f.params.Res.n0, 2)
       t.truthy(math.abs(f.params.Res.s - 1.9) < 1e-9, 'decayed 1×0.9 then +1')

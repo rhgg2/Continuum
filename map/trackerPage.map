@@ -1,5 +1,5 @@
-@module trackerPage  src=trackerPage.lua  loc=115  sha=b3d2ed5  mode=chunk
-@deps cm, ds, cmgr, chrome, gui, modalHost, facade
+@module trackerPage  src=trackerPage.lua  loc=115  sha=840964c  mode=chunk
+@deps cm, ds, cmgr, chrome, gui, modalHost, facade, help
 
 # Imports
   @require util = 'util'  @ 11

@@ -6,7 +6,7 @@ local util = require('util')
 
 local function mkAv(harness)
   local h  = harness.mk()
-  local am = util.instantiate('arrangeManager', { cm = h.cm })
+  local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds })
   local av = util.instantiate('arrangeView',
     { cm = h.cm, cmgr = h.cmgr, am = am })
   return h, av
@@ -30,7 +30,7 @@ local function mkArrange(harness, items)
       poolGuid = '{' .. item.track .. item.name .. '}' })
   end
   h.reaper:setProjectTracks(order)
-  local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+  local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
   local av = util.instantiate('arrangeView', { cm = h.cm, cmgr = h.cmgr, am = am })
   return h, av, am
 end
@@ -234,13 +234,13 @@ return {
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local av = util.instantiate('arrangeView', { cm = h.cm, cmgr = h.cmgr, am = am })
       h.cmgr:push('arrange')
       av:setGridSize(8, 4)          -- a measured viewport, so cursorOnScreen is meaningful
       av:setCursor(0, 0)            -- park the caret on the take; nothing selected
       h.cmgr:invoke('arrangeNudgeForward')
-      local am2 = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am2 = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am2:tracksTakes(0)[1].startQN, 1, 'nudge acted on the take under the cursor')
       t.eq(av:focus(), nil, 'the take was acted on without becoming the selection')
     end,
@@ -254,14 +254,14 @@ return {
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local av = util.instantiate('arrangeView', { cm = h.cm, cmgr = h.cmgr, am = am })
       h.cmgr:push('arrange')
       av:setGridSize(8, 4)
       av:setCursor(0, 0)
       av:scrollBy(20, 0)            -- a wheel-pan strands the caret above the band
       h.cmgr:invoke('arrangeDeleteTake')
-      local am2 = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am2 = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(#am2:tracksTakes(0), 1, 'cursor off-screen, nothing selected — delete no-ops')
     end,
   },
@@ -275,7 +275,7 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true, pos = 4, len = 1, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local av = util.instantiate('arrangeView', { cm = h.cm, cmgr = h.cmgr, am = am })
       h.cmgr:push('arrange')
       local takes = av:tracksTakes(0)
@@ -283,7 +283,7 @@ return {
       av:setGridSize(8, 4)
       av:setCursor(4, 0)            -- park the caret on the take at row 4
       h.cmgr:invoke('arrangeDeleteTake')
-      local remain = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      local remain = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm }):tracksTakes(0)
       t.eq(#remain, 1, 'exactly one take deleted')
       t.eq(remain[1].startQN, 4, 'the selection was deleted, not the cursor take')
     end,
@@ -321,7 +321,7 @@ return {
       local takes = av:tracksTakes(0)
       av:setSelection{ takes[1].take, takes[2].take }
       h.cmgr:invoke('arrangeDeleteTake')
-      local remain = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      local remain = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm }):tracksTakes(0)
       t.eq(#remain, 0, 'both selected takes gone')
       t.eq(next(av:selectionSet()), nil, 'selection cleared after delete')
     end,
@@ -340,7 +340,7 @@ return {
       local takes = av:tracksTakes(0)
       av:setSelection{ takeAt(takes, 0).take, takeAt(takes, 1).take }
       h.cmgr:invoke('arrangeNudgeForward')   -- b would land on c@2 → refuse the lot
-      local now = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      local now = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm }):tracksTakes(0)
       t.eq(#now, 3, 'all three still present')
       t.eq(takeAt(now, 0) ~= nil, true, 'a stayed at 0')
       t.eq(takeAt(now, 1) ~= nil, true, 'b stayed at 1')
@@ -360,7 +360,7 @@ return {
       local takes = av:tracksTakes(0)
       av:setSelection{ takeAt(takes, 0).take, takeAt(takes, 1).take }
       h.cmgr:invoke('arrangeNudgeForward')   -- a→1, b→2; ordering must keep a off b
-      local now = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      local now = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm }):tracksTakes(0)
       t.eq(#now, 2, 'both takes survive')
       t.eq(takeAt(now, 1) ~= nil, true, 'first take moved to row 1')
       t.eq(takeAt(now, 2) ~= nil, true, 'second take moved to row 2')
@@ -379,7 +379,7 @@ return {
       local takes = av:tracksTakes(0)
       av:setSelection{ takes[1].take, takes[2].take }
       h.cmgr:invoke('arrangeDuplicateBelow')
-      local now = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      local now = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm }):tracksTakes(0)
       t.eq(#now, 2, 'no copy made while two takes are selected')
     end,
   },
@@ -448,7 +448,7 @@ return {
       local cand  = av:dragCandidate(press, 2, true)   -- grab a@0, drag to QN 2 → delta +2
       t.eq(cand.fits, true, 'the block fits at the destination')
       av:commitDrag(press, cand)
-      local now = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      local now = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm }):tracksTakes(0)
       t.eq(takeAt(now, 2) ~= nil, true, 'a slid to 2')
       t.eq(takeAt(now, 4) ~= nil, true, 'b slid to 4')
     end,
@@ -485,7 +485,7 @@ return {
       local cand  = av:dragCandidate(press, 4, true)   -- delta +4
       t.eq(cand.fits, true, 'copies clear the originals that stay behind')
       av:commitDrag(press, cand)
-      local now = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm }):tracksTakes(0)
+      local now = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm }):tracksTakes(0)
       t.eq(#now, 4, 'two copies were added')
       t.eq(takeAt(now, 4) ~= nil and takeAt(now, 5) ~= nil, true, 'copies at 4 and 5')
       local n = 0; for _ in pairs(av:selectionSet()) do n = n + 1 end

@@ -33,10 +33,8 @@ require('timing')
 require('tuning')
 
 
--- Build a fresh scenario. Keys:
---   seed      : seed payload for the fake mm (notes, ccs, resolution, length, timeSigs)
---   config    : { [level] = { key = value, ... } } written via cm:assign
---   take      : override the opaque take token (default 'take1')
+-- Build a fresh scenario. Keys: seed (fake mm payload), config ({level={k=v}} via cm:assign),
+-- data ({k=v} via ds:assign, bound context), take (opaque token, default 'take1').
 function harness.mk(opts)
   opts = opts or {}
 
@@ -65,6 +63,9 @@ function harness.mk(opts)
   if opts.config then
     for level, tbl in pairs(opts.config) do cm:assign(level, tbl) end
   end
+  if opts.data then
+    for name, value in pairs(opts.data) do ds:assign(name, value) end
+  end
 
   if opts.seed then mm:seed(opts.seed) end
 
@@ -75,7 +76,7 @@ function harness.mk(opts)
   -- Only region-wired specs need the real group engine.
   local gm = opts.groups
          and util.instantiate('groupManager', { tm = tm, ds = ds }) or nil
-  local pa = util.instantiate('paramAutomation', { cm = cm })
+  local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds })
   local vm = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr, gm = gm, pa = pa })
   cmgr:push('tracker')
 

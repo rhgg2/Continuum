@@ -80,10 +80,8 @@ return {
           ccs = { { ppq = 0,   chan = 1, evType = 'cc', cc = 110, val = 64 },
                   { ppq = 240, chan = 1, evType = 'cc', cc = 110, val = 80 } },
         },
-        config = { take = {
-          extraColumns    = { [1] = { notes = 1, ccs = { [110] = true } } },
-          paramAutomation = { [1] = { [110] = BINDING } },
-        } },
+        config = { take = { extraColumns = { [1] = { notes = 1, ccs = { [110] = true } } } } },
+        data   = { paramAutomation = { [1] = { [110] = BINDING } } },
       }
       h.vm:setGridSize(80, 40)
       local idx = ccColIndex(h, 110)
@@ -103,10 +101,8 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { NOTE } },
-        config = { take = {
-          extraColumns    = { [1] = { notes = 1, ccs = { [110] = true } } },
-          paramAutomation = { [1] = { [110] = BINDING } },
-        } },
+        config = { take = { extraColumns = { [1] = { notes = 1, ccs = { [110] = true } } } } },
+        data   = { paramAutomation = { [1] = { [110] = BINDING } } },
       }
       h.vm:setGridSize(80, 40)
       local idx = ccColIndex(h, 110)

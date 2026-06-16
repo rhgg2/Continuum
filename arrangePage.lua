@@ -15,12 +15,12 @@ if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
 end
 
-local cm, cmgr, chrome, gui, modalHost, facade =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
+local cm, ds, cmgr, chrome, gui, modalHost, facade =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
 
 -- am stays local to this chunk; only av leaves, handed to the renderer, so the
 -- renderer can't reach am — every project query and mutation flows through av.
-local am = util.instantiate('arrangeManager', { cm = cm, facade = facade })
+local am = util.instantiate('arrangeManager', { cm = cm, ds = ds, facade = facade })
 local av = util.instantiate('arrangeView',    { cm = cm, cmgr = cmgr, facade = facade, am = am })
 local ar = util.instantiate('arrangeRender',  { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, av = av })
 

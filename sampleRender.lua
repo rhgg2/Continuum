@@ -6,8 +6,8 @@
 --invariant: strip coordinates are audio sample-frames (0..frames-1); pixel x is derived only at draw via frameToX, and InputInt round-trips frames directly
 --invariant: peakCache/durCache are file-path-keyed and survive across frames; peakCache entries are dropped whenever the requested column count changes (window resize) so a strip never reuses peaks computed at a foreign width
 --invariant: browser keyboard shortcuts (browserUp/Preview/Assign, slotNext/Prev) are dispatched only when the sample-scope is active in cmgr; the middle pane disables ImGui nav so its own arrow handling produces a single focus rectangle
---invariant: preview-in-place leaves cm:slotEntries untouched while the JSFX slot is staged
---invariant: sv:syncSlot pushes cm's truth back on revert
+--invariant: preview-in-place leaves ds:slotEntries untouched while the JSFX slot is staged
+--invariant: sv:syncSlot pushes ds's truth back on revert
 --invariant: drag.handle is set on the first active frame (closest of start/end to the mouse wins) and held until the button releases — the choice does not switch mid-drag
 --contract: samplePage (the controller) owns the stack (sm/sv) and hands this renderer sv only
 local fs = require 'fs'
@@ -19,7 +19,7 @@ package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 
-local cm, cmgr, chrome, gui, sv = (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).sv
+local cm, ds, cmgr, chrome, gui, sv = (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).sv
 
 local N_SLOTS = 64
 
@@ -248,7 +248,7 @@ end
 
 --contract: iterates all N_SLOTS rows whether populated or not (empty rows render as '(empty)'); single-click sets currentSample and slotFocus, double-click also auditions
 local function drawSlots()
-  local entries = cm:get('slotEntries') or {}
+  local entries = ds:get('slotEntries') or {}
   local current = cm:get('currentSample')
   local pp      = reaper.GetProjectPath(0)
   if not ImGui.BeginTable(ctx, '##slotsT', 2) then return end
@@ -312,7 +312,7 @@ end
 --contract: trim invariants enforced at write: 0 <= start <= end-1 and start+1 <= end <= frames-2 (last 2 frames reserved)
 local function drawStrip(stripW, stripH)
   local slot     = cm:get('currentSample')
-  local entries  = cm:get('slotEntries') or {}
+  local entries  = ds:get('slotEntries') or {}
   local entry    = entries[slot]
   if not entry or not entry.path then
     ImGui.TextDisabled(ctx, '(no sample loaded in slot ' .. tostring(slot) .. ')')
@@ -499,7 +499,7 @@ function sr:renderBody(_, w, h, dispatch)
   local filesW = math.max(80, gridW - treeW - GAP)
 
   local hasFile  = sv:getSelectedFile() ~= nil
-  local entries  = cm:get('slotEntries') or {}
+  local entries  = ds:get('slotEntries') or {}
   local hasEntry = entries[cm:get('currentSample')] ~= nil
 
   -- Left pane: tree under a header matching the files/palette panes
@@ -590,7 +590,7 @@ end
 function sr:renderStatusBar(_)
   local name = boundTrackName()
   local slot = cm:get('currentSample')
-  local entry = (cm:get('slotEntries') or {})[slot]
+  local entry = (ds:get('slotEntries') or {})[slot]
   local slotName = entry and entry.name
   ImGui.Text(ctx, string.format('Track: %s | Slot: %02X%s',
     name, slot, slotName and (' ' .. slotName) or ''))
@@ -642,7 +642,7 @@ sampler:registerAll {
   slotRename = function()
     local idx = cm:get('currentSample')
     if not idx then return end
-    local entries = cm:get('slotEntries') or {}
+    local entries = ds:get('slotEntries') or {}
     local entry   = entries[idx]
     rename = { slot = idx, buf = (entry and entry.name) or '', justOpened = true }
   end,

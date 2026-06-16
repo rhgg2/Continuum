@@ -29,8 +29,8 @@ local function fakeSm()
   return sm, rec
 end
 
-local function newSampleView(cm, sm)
-  return util.instantiate('sampleView', { cm = cm, sm = sm })
+local function newSampleView(cm, ds, sm)
+  return util.instantiate('sampleView', { cm = cm, ds = ds, sm = sm })
 end
 
 return {
@@ -74,7 +74,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       local sm, rec = fakeSm()
-      local sv = newSampleView(h.cm, sm)
+      local sv = newSampleView(h.cm, h.ds, sm)
       t.eq(sv:loadSelectedIntoCurrent(), false, "returns false")
       t.eq(#rec.assign, 0, "sm:assign not invoked")
     end,
@@ -84,7 +84,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       local sm, rec = fakeSm()
-      local sv = newSampleView(h.cm, sm)
+      local sv = newSampleView(h.cm, h.ds, sm)
       h.cm:set('transient', 'currentSample', 5)
       sv:setSelectedFile('/x.wav')
       t.eq(sv:loadSelectedIntoCurrent(), true, "returns true")
@@ -98,7 +98,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       local sm, rec = fakeSm(); rec.assignResult = false
-      local sv = newSampleView(h.cm, sm)
+      local sv = newSampleView(h.cm, h.ds, sm)
       sv:setSelectedFile('/x.wav')
       t.eq(sv:loadSelectedIntoCurrent(), false, "false propagates from sm:assign")
     end,
@@ -108,7 +108,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       local sm, rec = fakeSm()
-      local sv = newSampleView(h.cm, sm)
+      local sv = newSampleView(h.cm, h.ds, sm)
       t.eq(sv:auditionPath(nil), false, "returns false")
       t.eq(#rec.previewPath, 0, "sm:previewPath not invoked")
     end,
@@ -118,7 +118,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       local sm, rec = fakeSm()
-      local sv = newSampleView(h.cm, sm)
+      local sv = newSampleView(h.cm, h.ds, sm)
       sv:setTrack('t1')
       t.eq(sv:auditionPath('/kick.wav'), true, "returns true")
       t.eq(#rec.previewPath, 1, "sm:previewPath called once")
@@ -130,7 +130,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.cm:set('transient', 'currentSample', 5)
-      local sv = newSampleView(h.cm, fakeSm())
+      local sv = newSampleView(h.cm, h.ds, fakeSm())
       local trackB = 'trackB'
       h.reaper._state.trackExt[trackB .. '/P_EXT:ctm_config'] =
         util.serialise({ pbRange = 9 })
@@ -146,7 +146,7 @@ return {
     name = "setTrack with cm and same track still rehydrates cm and clears transient",
     run = function(harness)
       local h = harness.mk()
-      local sv = newSampleView(h.cm, fakeSm())
+      local sv = newSampleView(h.cm, h.ds, fakeSm())
       sv:setTrack('trackA')
       h.cm:set('transient', 'currentSample', 7)
       sv:setTrack('trackA')
@@ -161,7 +161,7 @@ return {
       local sm, rec = fakeSm()
       rec.tracks = { { track = 't1', name = 'Drums' },
                      { track = 't2', name = 'Synth' } }
-      local sv = newSampleView(h.cm, sm)
+      local sv = newSampleView(h.cm, h.ds, sm)
       local got = sv:listTracks()
       t.eq(rec.listTracksCalls, 1, 'sm:listTracks invoked once')
       t.eq(#got,   2,         'two tracks returned')
@@ -174,8 +174,8 @@ return {
       local h = harness.mk()
       h.cm:set('global', 'advanceOnLoad', true)
       h.cm:set('transient', 'currentSample', 5)
-      h.cm:set('track', 'slotEntries', { [6] = { path = 'x' } })
-      local sv = newSampleView(h.cm, fakeSm())
+      h.ds:assign('slotEntries', { [6] = { path = 'x' } })
+      local sv = newSampleView(h.cm, h.ds, fakeSm())
       sv:setSelectedFile('/y.wav')
       sv:loadSelectedIntoCurrent()
       t.eq(h.cm:get('currentSample'), 7, 'skipped occupied slot 6, advanced to 7')
@@ -187,7 +187,7 @@ return {
       local h = harness.mk()
       h.cm:set('global', 'advanceOnLoad', false)
       h.cm:set('transient', 'currentSample', 5)
-      local sv = newSampleView(h.cm, fakeSm())
+      local sv = newSampleView(h.cm, h.ds, fakeSm())
       sv:setSelectedFile('/y.wav')
       sv:loadSelectedIntoCurrent()
       t.eq(h.cm:get('currentSample'), 5, 'stayed on the slot we loaded into')
@@ -198,7 +198,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       local sm, rec = fakeSm()
-      local sv = newSampleView(h.cm, sm)
+      local sv = newSampleView(h.cm, h.ds, sm)
       sv:setTrack('t1')
       sv:auditionSlot(7)
       t.eq(#rec.previewSlot, 1, "sm:previewSlot called once")

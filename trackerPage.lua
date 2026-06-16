@@ -14,8 +14,8 @@ if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
 end
 
-local cm, ds, cmgr, chrome, gui, modalHost, facade =
-  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
+local cm, ds, cmgr, chrome, gui, modalHost, facade, help =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).help
 
 local function arrange() return facade.get('arrange') end
 
@@ -24,12 +24,12 @@ local function arrange() return facade.get('arrange') end
 local mm = util.instantiate('midiManager',    { take = nil })
 local tm = util.instantiate('trackerManager', { mm = mm, cm = cm })
 local gm = util.instantiate('groupManager',   { tm = tm, ds = ds })
-local pa = util.instantiate('paramAutomation', { cm = cm, facade = facade })
+local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = facade })
 local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, cmgr = cmgr, gm = gm, pa = pa })
 
 local tr = util.instantiate('trackerRender',
-  { tv = tv, cm = cm, cmgr = cmgr, chrome = chrome,
-    gui = gui, modalHost = modalHost, facade = facade })
+  { tv = tv, cm = cm, ds = ds, cmgr = cmgr, chrome = chrome,
+    gui = gui, modalHost = modalHost, help = help, facade = facade })
 
 local tp = {}
 local lastHash = nil   -- bound take's last-seen MIDI hash; external-mutation watcher baseline

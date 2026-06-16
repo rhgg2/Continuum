@@ -1,9 +1,9 @@
-@module sampleManager  src=sampleManager.lua  loc=444  sha=d30f817  mode=chunk
-@deps fileOps
+@module sampleManager  src=sampleManager.lua  loc=444  sha=fa87f15  mode=chunk
+@deps fileOps, cm, ds
 
 # Invariants & contracts
-  @invariant  cm is the sole authority for slot state ({path, start, end, name}); JSFX is a pure consumer
-  @invariant  cm holds project-relative paths; sm composes absolute via currentPrefix at every push so JSFX needs no prefix
+  @invariant  ds is sole authority for slot state ({path,start,end,name}); JSFX is a pure consumer
+  @invariant  ds holds project-relative paths; sm prepends currentPrefix so JSFX needs no prefix
   @invariant  gmem layout mirrors Continuum_Sampler.jsfx; SLOT_BASE/BOOT_BASE constants must stay in lockstep with the JSFX side
   @invariant  per-instance bundled mailbox at SLOT_BASE+id*SLOT_STRIDE; preview retains its own legacy magic-gated mailbox at PREVIEW_BASE
   @invariant  at most one slot drained per track per tick — keeps last-write-wins consolidation simple
@@ -12,7 +12,7 @@
   @invariant  JSFX user-string slot cap is 1023; PATH_MAX (1019) + SLOT_STRIDE bookkeeping must not push slot string writes past that ceiling
 
 # Shapes
-  @shape  slotEntry      = { path=string?, name=string?, start=number, ['end']=number }   -- cm-stored, path is project-relative
+  @shape  slotEntry      = { path=string?, name=string?, start=number, ['end']=number }   -- ds-stored, path is project-relative
   @shape  pendingEntry   = { slot=number, op=0|1, path=string?, name=string?, start=number?, ['end']=number? }  -- mailbox queue entry; op=1 is clear
   @shape  trackState     = { fxGuid=string?, instanceId=number?, lastBootToken=number, slotSeq=number, pending={byOrder={int,...}, bySlot={[slot]=pendingEntry}} }
   @shape  mailboxHeader  = [seq, seq_ack, slot, op, start, end, pathLen, nameLen, <pathBytes...>, <nameBytes...>]   -- gmem words at SLOT_BASE+id*SLOT_STRIDE
@@ -52,8 +52,8 @@
   @fn absFor(rel)  @ 88
   @fn ensureTrackState(track)  @ 93
   @fn relForSrc(srcBase, hash)  @ 104
-  @fn setEntry(cm, idx, fields)  @ 112
-  @fn clearEntry(cm, idx)  @ 119
+  @fn setEntry(idx, fields)  @ 112
+  @fn clearEntry(idx)  @ 119
   @fn pushSlot(state, slot, opts)  @ 127
       @contract  pushSlot merges into the existing pendingEntry for slot; op=1 (clear) wipes path/name/start/end; op=0 only overrides explicitly-passed fields
       @contract  byOrder records first-seen slot only (no duplicate enqueue); merges into the existing bySlot entry to preserve drain ordering
@@ -65,20 +65,20 @@
 # Public API (sm:*)
   @api sm:isLive(track)  @ 184
   @api sm:getInstanceId(track)  @ 188
-  @api sm:rehydrateTrack(track, cm)  @ 201
-  @api sm:syncSlot(track, slot, cm)  @ 217
-  @api sm:tick(cm)  @ 235
+  @api sm:rehydrateTrack(track)  @ 201
+  @api sm:syncSlot(track, slot)  @ 217
+  @api sm:tick()  @ 235
       @contract  tick is the only caller of gmem_attach for the bundled mailbox path; coordinator must invoke per frame
       @contract  tick reaps trackStates entries for tracks whose sampler FX has been removed (else closed-over state leaks)
       @contract  first-sight FX-GUID binding does NOT reset state (lastBootToken=0 still triggers rehydrate via the boot-token branch)
   -- cm-authoritative slot operations
-  @api sm:assign(track, idx, srcPath, cm)  @ 269
+  @api sm:assign(track, idx, srcPath)  @ 269
       @contract  assign hashes srcPath, copies into projectPath/Continuum/<stem>-<hash>.<ext> if missing, writes cm rel path, queues mailbox push; returns false if hash or copy fails
   @api sm:loadSlot(track, slot, relPath)  @ 292
-  @api sm:clearSlot(track, slot, cm)  @ 299
-  @api sm:setTrim(track, slot, startFrames, endFrames, cm)  @ 306
+  @api sm:clearSlot(track, slot)  @ 299
+  @api sm:setTrim(track, slot, startFrames, endFrames)  @ 306
       @contract  setTrim sends start/end without path/name; pathLen=0/nameLen=0 in the wire payload means "leave alone" on the JSFX side
-  @api sm:setName(track, slot, name, cm)  @ 314
+  @api sm:setName(track, slot, name)  @ 314
   @api sm:stageInto(track, idx, srcPath)  @ 320
   -- Preview + prefix
   @api sm:setPrefix(prefix)  @ 334
@@ -91,18 +91,23 @@
       @contract  previewPath uses the dedicated PREVIEW_SLOT_IDX (=N_SAMPLES) so the JSFX side knows to load from the inline path bytes rather than a slot
   -- Track surface
   @api sm:listTracks()  @ 378
-  @api sm:probeMode(take, cm)  @ 394
+  @api sm:probeMode(take)  @ 394
       @contract  probeMode flips cm.trackerMode (transient tier) based on whether the take's track has the sampler FX
       @contract  probeMode forces I_PERFFLAGS bit 1 (anticipative FX off) on sampler tracks for tighter timing
-  @api sm:migrate(projectPath, oldProjectPath, cm)  @ 412
-      @contract  migrate iterates every sampler track via cm:readTrackKey so non-bound tracks migrate too
-      @contract  cm rel paths are preserved across migrate; only file bytes move
+  @api sm:migrate(projectPath, oldProjectPath)  @ 412
+      @contract  migrate iterates every sampler track via ds:getAt so non-bound tracks migrate too
+      @contract  ds rel paths are preserved across migrate; only file bytes move
       @contract  migrate is a no-op if oldProjectPath is missing or unchanged
-  @api sm:watchPath(cm)  @ 433
+  @api sm:watchPath()  @ 433
       @contract  watchPath setPrefixes, migrates, writes cm.lastProjectPath on GetProjectPath change
       @contract  cm.lastProjectPath persists at project-tier so close-during-save is caught next open
 
 # Uses (outbound edges)
+  @use call    cm.get  @ 397, 436
+  @use call    cm.set  @ 398, 440
+  @use call    ds.assign  @ 116, 122, 285
+  @use call    ds.get  @ 113, 120, 219, 281
+  @use call    ds.getAt  @ 203, 416
   @use call    fileOps.copy  @ 276, 327
   @use call    fileOps.exists  @ 276, 327
   @use call    fileOps.hash  @ 271, 322

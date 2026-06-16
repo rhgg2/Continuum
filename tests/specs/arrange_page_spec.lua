@@ -41,12 +41,12 @@ local fakeFacade = {
     return {}
   end,
 }
-local function newArrangePage(cm, cmgr, chrome, gui)
+local function newArrangePage(cm, ds, cmgr, chrome, gui)
   captured.nav, captured.props, captured.facades = nil, nil, {}
   fakeModalHost.last = nil
   cmgr:registerAll{ switchPage = function(_, name) captured.nav = name end }
   return util.instantiate('arrangePage',
-    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui,
+    { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui,
       modalHost = fakeModalHost, facade = fakeFacade })
 end
 
@@ -55,11 +55,11 @@ return {
     name = 'bind / unbind are no-ops — arrange page never re-keys cm',
     run = function(harness)
       local h  = harness.mk()
-      local _  = newArrangePage(h.cm, h.cmgr, nil, {})
+      local _  = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       local calls = 0
       h.cm.setTrack   = function() calls = calls + 1 end
       h.cm.setContext = function() calls = calls + 1 end
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:bind(); ap:bind('ignored'); ap:unbind()
       t.eq(calls, 0, 'no cm re-key from bind/unbind')
     end,
@@ -69,7 +69,7 @@ return {
     name = 'focusState before any render returns both bits false',
     run = function(harness)
       local h  = harness.mk()
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       local fs = ap:focusState()
       t.eq(fs.suppressKbd, false, 'no suppression without a context')
       t.eq(fs.acceptCmds,  false, 'no acceptance without a context')
@@ -80,7 +80,7 @@ return {
     name = 'arrange-scope is registered at module load (cursorRight invokable)',
     run = function(harness)
       local h = harness.mk()
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local _ = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       h.cmgr:push('arrange')
       local ok = pcall(function() h.cmgr:invoke('cursorRight') end)
       t.eq(ok, true, 'cursorRight is bound under the arrange scope')
@@ -93,7 +93,7 @@ return {
       local h = harness.mk()
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local _ = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       h.cmgr:push('arrange')
       for _, name in ipairs{ 'drop0', 'drop9', 'dropa', 'dropz', 'dropA', 'dropZ' } do
         local ok = pcall(function() h.cmgr:invoke(name) end)
@@ -112,9 +112,9 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 10, len = 3, srcLen = 3, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       h.cmgr:push('arrange')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       am:tracksTakes(0)               -- materialise {p1} into a slot
       h.cmgr:invoke('drop0')          -- drops at row 0
       -- ap doesn't surface the cursor; observe the advance via a second
@@ -135,7 +135,7 @@ return {
       local h = harness.mk()
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local _ = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeAdvanceBy5')
       t.eq(h.cm:get('arrangeAdvanceBy'), 5, 'arrangeAdvanceBy5 set arrangeAdvanceBy=5')
@@ -153,14 +153,14 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       -- First Super-D clones, selects the copy, advances 2 rows.
       -- Second Super-D acts on that selection and clones it again.
       h.cmgr:invoke('arrangeDuplicateBelow')
       h.cmgr:invoke('arrangeDuplicateBelow')
-      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local takes = am:tracksTakes(0)
       t.eq(#takes, 3, 'second duplicate fired — cursor stayed on a take')
       t.eq(takes[3].startQN, 4, 'second clone at row 4 (natural end of clone-1)')
@@ -179,9 +179,9 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 10, len = 3, srcLen = 3, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local _ = newArrangePage(h.cm, h.cmgr, nil, {})
+      local _ = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       h.cmgr:push('arrange')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       am:tracksTakes(0)            -- materialise {p1} into a slot, as a render frame would
       h.cmgr:invoke('drop0')
       local dropped
@@ -202,11 +202,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeForward')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].startQN, 1, 'take advanced one row')
     end,
   },
@@ -220,11 +220,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 3, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeForward')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].startQN, 1,
            'a multi-row take is not blocked by overlapping its own destination row')
     end,
@@ -241,11 +241,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 8, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeGrowTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].lengthQN, 3, 'take grew one row')
     end,
   },
@@ -259,11 +259,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeGrowTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].lengthQN, 2, 'grow past source length is a no-op')
     end,
   },
@@ -277,11 +277,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 3, srcLen = 2, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeShrinkTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].lengthQN, 2, 'shrink still works even when current length already exceeds source')
     end,
   },
@@ -295,11 +295,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDeleteTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(#am:tracksTakes(0), 0, 'no takes left')
     end,
   },
@@ -315,11 +315,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 1, len = 1, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeForward')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].startQN, 0, 'blocked take stays put')
     end,
   },
@@ -333,11 +333,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeBack')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].startQN, 0, 'cannot nudge below 0')
     end,
   },
@@ -353,11 +353,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 2, len = 1, srcLen = 1, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeGrowTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local t1 = am:tracksTakes(0)[1]
       t.eq(t1.lengthQN,    2, 'rendered stuck at the next-take start')
       t.eq(t1.naturalLenQN, 3, 'natural grew — will regrow if t2 moves')
@@ -379,11 +379,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 1.5, len = 0.3, srcLen = 0.3, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeForward')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].startQN, 1, 'steps forward by one row')
     end,
   },
@@ -402,11 +402,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 3.6, len = 0.3, srcLen = 0.3, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeNudgeForward')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local t1 = am:tracksTakes(0)[1]
       t.eq(t1.startQN, 1, 'tall take moves forward')
       t.eq(t1.lengthQN, 2.6, 'rendered length capped by next-take start')
@@ -427,11 +427,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 2.7, len = 0.2, srcLen = 0.2, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeGrowTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local t1 = am:tracksTakes(0)[1]
       t.eq(t1.naturalLenQN, 2.5, 'natural length grew by one row')
       t.eq(t1.lengthQN, 2.5, 'rendered still fits below the neighbour\'s start')
@@ -447,7 +447,7 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
@@ -464,7 +464,7 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/a1', isMidi = false,
                                 pos = 0, len = 1, srcFile = '/snd/a.wav' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
@@ -479,7 +479,7 @@ return {
       h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
@@ -498,13 +498,13 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 2, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeCursorDown')
       h.cmgr:invoke('arrangeCursorDown')
       h.cmgr:invoke('arrangeDeleteTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(#am:tracksTakes(0), 0, 'cursor reached the take; delete acted on it')
     end,
   },
@@ -518,7 +518,7 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()      -- cursor on t1; nothing selected
       h.cmgr:push('arrange')
       -- Row 1 is the take's bottom-edge row (still counts as on it);
@@ -526,7 +526,7 @@ return {
       h.cmgr:invoke('arrangeCursorDown')
       h.cmgr:invoke('arrangeCursorDown')
       h.cmgr:invoke('arrangeDeleteTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(#am:tracksTakes(0), 1, 'cursor on empty space, nothing selected — delete no-ops')
     end,
   },
@@ -540,14 +540,14 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       -- Two rows down clears the take's bottom edge into empty space.
       h.cmgr:invoke('arrangeCursorDown')
       h.cmgr:invoke('arrangeCursorDown')
       h.cmgr:invoke('arrangeNudgeForward')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].startQN, 0, 'no take under the cursor — nudge no-ops')
     end,
   },
@@ -562,11 +562,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 5, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDeleteTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(#am:tracksTakes(0), 1, 'delete over empty space leaves the take alone')
     end,
   },
@@ -582,13 +582,13 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 4, len = 1, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()      -- cursor lands on t1
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDeleteTake')
       local ok = pcall(function() h.cmgr:invoke('arrangeDeleteTake') end)
       t.eq(ok, true, 'a second delete over the empty cell does not error')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(#am:tracksTakes(0), 1, 't2 untouched — cursor on the now-empty cell')
     end,
   },
@@ -606,7 +606,7 @@ return {
                                               pos = 5, len = 1, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1', 'tr2' }
       h.reaper.SetMediaItemSelected(item2, true)
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
@@ -624,7 +624,7 @@ return {
                                 pos = 7, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
       h.reaper:setCursor(7)
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
@@ -646,7 +646,7 @@ return {
       local item = h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                              pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeTakeProperties')
@@ -663,7 +663,7 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/a1', isMidi = false,
                                 pos = 0, len = 1, srcFile = '/snd/a.wav' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeTakeProperties')
@@ -680,11 +680,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDuplicateBelow')
-      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2, 'pooled clone added below')
       t.eq(takes[2].startQN, 2, 'clone starts at the source take\'s natural end')
@@ -704,11 +704,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
                                 pos = 2, len = 1, srcLen = 1, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDuplicateBelow')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(#am:tracksTakes(0), 2, 'no clone added — destination collided')
     end,
   },
@@ -722,11 +722,11 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDuplicateUnpooledBelow')
-      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2, 'fresh clone added below')
       t.eq(takes[2].startQN, 2, 'clone starts at the source take\'s natural end')
@@ -745,14 +745,14 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       captured.facades.arrange.newTakeBelow()
       local s = fakeModalHost.last
       t.truthy(s,             'createSlot modal opened')
       t.eq(s.beatsBuf, '4',   'default 4 beats')
       s.callback('Verse', '3')
-      local am    = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2,                'sibling minted on commit')
       t.eq(takes[2].startQN, 2,      'sibling at the source take\'s natural end')
@@ -771,7 +771,7 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:addItem('tr2', { take = 'tr2/t1', isMidi = true, pos = 3, len = 1, poolGuid = '{p2}' })
       h.reaper:setProjectTracks{ 'tr1', 'tr2' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       captured.facades.arrange.gotoTrack(1)
       t.eq(captured.facades.arrange.currentTrackIdx(), 1, 'cursor moved to track 2')
@@ -791,7 +791,7 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
       h.reaper:addItem('tr3', { take = 'tr3/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p3}' })
       h.reaper:setProjectTracks{ 'tr1', 'tr2', 'tr3' }
-      local ap = newArrangePage(h.cm, h.cmgr, nil, {})
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       captured.facades.arrange.gotoTrack(1)
       t.eq(captured.facades.arrange.currentTrackIdx(), 1, 'landed on the empty middle track, not skipped to track 3')

@@ -15,17 +15,17 @@ if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
 end
 
-local cm, cmgr, chrome, gui, facade =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).facade
+local cm, ds, cmgr, chrome, gui, facade =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).facade
 
 local function arrange() return facade.get('arrange') end
 
 -- sm/sv stay local to this chunk; only sv leaves, handed to the renderer, so the
 -- renderer can't reach sm — every slot query and mutation flows through sv.
-local sm = util.instantiate('sampleManager', { fileOps = fs.fileOps })
-local sv = util.instantiate('sampleView',    { cm = cm, sm = sm })
+local sm = util.instantiate('sampleManager', { fileOps = fs.fileOps, cm = cm, ds = ds })
+local sv = util.instantiate('sampleView',    { cm = cm, ds = ds, sm = sm })
 local sr = util.instantiate('sampleRender',
-  { sv = sv, cm = cm, cmgr = cmgr, chrome = chrome, gui = gui })
+  { sv = sv, cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui })
 
 local sp = {}
 
@@ -59,9 +59,9 @@ function sp:unbind() sr:closeTransients() end
 --contract: tick runs every frame; watchPath + sm:tick always; probeMode skipped if no current take
 function sp:tick()
   local take = arrange().currentTake()
-  if take then sm:probeMode(take, cm) end
-  sm:watchPath(cm)
-  sm:tick(cm)
+  if take then sm:probeMode(take) end
+  sm:watchPath()
+  sm:tick()
 end
 
 facade.publish('sample', { setTrack = function(track) sp:setTrack(track) end })

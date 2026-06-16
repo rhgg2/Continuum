@@ -3,15 +3,15 @@
 
 --invariant: project-wide singleton; reads REAPER items + cm directly, owns no take state of its own
 --invariant: trackIdx is a visible-column index, not a REAPER slot (see docs/arrangeManager.md)
---invariant: slot palette in cm at track tier under key 'arrangeSlots'; writes via cm:writeTrackKey
+--invariant: slot palette in ds at track scope under key 'arrangeSlots'; writes via ds:assignAt
 --invariant: slot indices 0..61, base62-keyed (util.toBase62); lowest-free, gaps allowed
 --invariant: every grouped take is a slot; all four discovery reads route through ensureSlots
 --invariant: createAndDropMidi alone mints a slot; all else inherits or drops into an existing one
 --invariant: takeId is the source-identity chokepoint; takes with no derivable id are skipped
 --invariant: reswingAll is sequenceManager folded in; bind loop lives behind the 'tracker' facade
---invariant: natural length in cm 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
+--invariant: natural length in ds 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
 --invariant: a stored natural ≥ source demotes to util.OPEN; see docs § Natural length
---invariant: 'arrangeColours' (project tier) maps takeId → colourIdx project-wide
+--invariant: 'arrangeColours' (project scope) maps takeId → colourIdx project-wide
 --invariant: arrangeColours allocates lowest-free across live takeIds; ensureColours prunes dead ids
 --invariant: placement stamps painter.hueNative(idx) on new takes iff I_CUSTOMCOLOR == 0
 --invariant: painter.hue and painter.hueNative share one hash; freshly-stamped takes match the grid
@@ -20,7 +20,7 @@
 local util    = require 'util'
 local painter = require 'painter'
 
-local cm, facade = (...).cm, (...).facade
+local cm, ds, facade = (...).cm, (...).ds, (...).facade
 
 local am = {}
 
@@ -68,11 +68,11 @@ end
 
 local function readSlots(track)
   if not track then return {} end
-  return cm:readTrackKey(track, 'arrangeSlots') or {}
+  return ds:getAt(track, 'arrangeSlots') or {}
 end
 
 local function writeSlots(track, dict)
-  cm:writeTrackKey(track, 'arrangeSlots', dict)
+  ds:assignAt(track, 'arrangeSlots', dict)
 end
 
 local function nextFreeSlot(dict)
@@ -101,13 +101,13 @@ local function sourceLenQN(take, item)
 end
 
 local function naturalLenOf(take)
-  local stored = cm:readTakeKey(take, 'arrangeNaturalLenQN')
+  local stored = ds:getAt(take, 'arrangeNaturalLenQN')
   return stored or util.OPEN
 end
 
 local function setNaturalLenOf(take, v)
-  if v == util.OPEN then cm:writeTakeKey(take, 'arrangeNaturalLenQN', util.REMOVE)
-  else                   cm:writeTakeKey(take, 'arrangeNaturalLenQN', v) end
+  if v == util.OPEN then ds:assignAt(take, 'arrangeNaturalLenQN', util.REMOVE)
+  else                   ds:assignAt(take, 'arrangeNaturalLenQN', v) end
 end
 
 --contract: re-derives each D_LENGTH walking startQN order; idempotent. See docs § Natural length
@@ -197,8 +197,8 @@ end
 
 ----- Colour palette (project-wide, keyed by takeId)
 
-local function readColours()   return cm:getAt('project', 'arrangeColours') or {} end
-local function writeColours(d) cm:set('project', 'arrangeColours', d) end
+local function readColours()   return ds:get('arrangeColours') or {} end
+local function writeColours(d) ds:assign('arrangeColours', d) end
 
 --contract: walks all tracks; prunes dead, allocates lowest-free for new ids. Returns id→idx.
 local function ensureColours()

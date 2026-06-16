@@ -1,5 +1,5 @@
-@module arrangePage  src=arrangePage.lua  loc=65  sha=accbcb5  mode=chunk
-@deps cm, cmgr, chrome, gui, modalHost, facade
+@module arrangePage  src=arrangePage.lua  loc=65  sha=59ca128  mode=chunk
+@deps cm, ds, cmgr, chrome, gui, modalHost, facade
 
 # Imports
   @require util = 'util'  @ 12
@@ -21,7 +21,7 @@
       @contract  bind takes no take — arrange is project-wide; coord may call with nil or a take.
   @api ap:unbind()  @ 35
   @api ap:seedCursorFromReaper()  @ 38
-      @contract  seeds cursor/focus from am:initialCursor (first selected take, else edit cursor).
+      @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
   -- Arrange service surface — av passthroughs; newTakeBelow opens a modal in the renderer
   -- Page interface — render delegates to the renderer
   @api ap:renderToolbarBits(ctx)  @ 60

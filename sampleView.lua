@@ -4,13 +4,13 @@
 --invariant: sv keys against a REAPER track (not a take); cm is rebound only via sv:setTrack
 --invariant: sv emits no signals — passive state holder polled by the renderer each frame
 --invariant: sv never speaks REAPER, gmem, or ImGui directly; all side-effects route through sm
---invariant: browserPath/selectedFile/previewSource are transient locals; nothing in sv is persisted (cm owns persistence)
+--invariant: browserPath/selectedFile/previewSource are transient locals; nothing in sv is persisted
 --invariant: selectedFile mirrors browserPath only when the highlighted item is a file (folders null it)
 --invariant: previewSource gates auditionCurrent dispatch: 'file' → path branch, 'slot' → currentSample branch
 --invariant: slot index space is 0..63 (advanceOnLoad scan upper bound)
 --shape: browserState = { track, currentFolder, browserPath, browserIsFolder, selectedFile, previewSource = 'file'|'slot'|nil }
 --shape: trackEntry = { track, name }   -- sm:listTracks() element
-local cm, sm = (...).cm, (...).sm
+local cm, ds, sm = (...).cm, (...).ds, (...).sm
 
 local sv = {}
 local track           = nil
@@ -78,9 +78,9 @@ function sv:getSelectedFile()       return selectedFile   end
 function sv:loadSelectedIntoCurrent()
   if not selectedFile then return false end
   local slot = cm and cm:get('currentSample')
-  if not sm:assign(track, slot, selectedFile, cm) then return false end
+  if not sm:assign(track, slot, selectedFile) then return false end
   if cm and cm:get('advanceOnLoad') then
-    local entries = cm:get('slotEntries')
+    local entries = ds:get('slotEntries') or {}
     for idx = slot + 1, 63 do
       if not entries[idx] then
         cm:set('transient', 'currentSample', idx)
@@ -107,7 +107,7 @@ end
 --contract: no-op when cm is unbound
 function sv:clearCurrentSlot()
   if not cm then return end
-  sm:clearSlot(track, cm:get('currentSample'), cm)
+  sm:clearSlot(track, cm:get('currentSample'))
 end
 
 function sv:stopAudition()
@@ -122,11 +122,11 @@ function sv:isLive()
 end
 
 function sv:setTrim(slot, startFrames, endFrames)
-  sm:setTrim(track, slot, startFrames, endFrames, cm)
+  sm:setTrim(track, slot, startFrames, endFrames)
 end
 
 function sv:setName(slot, name)
-  sm:setName(track, slot, name, cm)
+  sm:setName(track, slot, name)
 end
 
 --contract: stages srcPath into the slot's JSFX mailbox without touching cm; false on failure
@@ -136,7 +136,7 @@ end
 
 --contract: takes a track arg; PIP revert restores track captured at trigger, not sv's current one
 function sv:syncSlot(stagedTrack, slot)
-  sm:syncSlot(stagedTrack, slot, cm)
+  sm:syncSlot(stagedTrack, slot)
 end
 
 return sv

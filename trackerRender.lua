@@ -19,8 +19,8 @@ local ImGui = require 'imgui' '0.10'
 
 --contract: trackerPage (the controller) owns the stack + take lifecycle and drives this renderer
 --contract: the renderer holds only tv (injected); it never reaches mm/tm/gm
-local cm, cmgr, chrome, gui, modalHost, facade, tv, help =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).tv, (...).help
+local cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).tv, (...).help
 
 local function print(...)
   return util.print(...)
@@ -291,7 +291,7 @@ local SWING_PRESET_EXCLUDE = { identity = true }
 -- No "Off" row — every slot is real.
 local function drawSampleDropdown()
   local cur     = cm:get('currentSample')
-  local entries = cm:get('slotEntries') or {}
+  local entries = ds:get('slotEntries') or {}
   local curName = entries[cur] and entries[cur].name
   local indices = {}
   for idx, e in pairs(entries) do
@@ -1244,7 +1244,7 @@ local function drawStatusBar()
   local sampleSuffix = ''
   if cm:get('trackerMode') then
     local slot  = cm:get('currentSample')
-    local entry = (cm:get('slotEntries') or {})[slot]
+    local entry = (ds:get('slotEntries') or {})[slot]
     local name  = entry and entry.name
     sampleSuffix = string.format(' | Sample: %02X', slot)
                 .. (name and (' ' .. name) or '')

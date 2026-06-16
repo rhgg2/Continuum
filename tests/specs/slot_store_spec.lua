@@ -1,15 +1,12 @@
--- Pin tests for slot persistence and the cm-authoritative bundled
--- mailbox protocol on sampleManager. cm is real; fileOps is a
--- call-recording stub so we can verify side-effects without disk I/O.
--- gmem calls are captured by fakeReaper. Tracks are opaque tokens; the
--- harness puts the sampler FX on each so getInstanceId resolves cleanly.
+-- Pin tests for slot persistence and the ds-authoritative bundled mailbox protocol on sampleManager.
+-- ds is real; fileOps is a call-recording stub; gmem via fakeReaper; tracks are opaque tokens.
 
 local t = require('support')
 local fs = require('fs')
 local util = require('util')
 
-local function newSampleManager(fileOps)
-  return util.instantiate('sampleManager', { fileOps = fileOps })
+local function newSampleManager(fileOps, cm, ds)
+  return util.instantiate('sampleManager', { fileOps = fileOps, cm = cm, ds = ds })
 end
 
 local MAGIC        = 1717658484  -- 'CTML' as 32-bit ASCII; mirrors sampleManager
@@ -91,42 +88,42 @@ end
 
 return {
   {
-    name = 'slotEntries default is an empty table per call',
+    name = 'reads deep-clone out; a mutated slotEntries read does not pollute ds',
     run = function(harness)
       local h = harness.mk()
-      local a = h.cm:get('slotEntries')
-      a[0] = { path = 'leak' }
-      local b = h.cm:get('slotEntries')
-      t.eq(b[0], nil, 'mutation of returned table does not pollute cm')
+      h.ds:assign('slotEntries', { [0] = { path = 'seed' } })
+      local a = h.ds:get('slotEntries')
+      a[0].path = 'leak'
+      t.eq(h.ds:get('slotEntries')[0].path, 'seed', 'mutation of returned table does not pollute ds')
     end,
   },
   {
     name = 'slotEntries round-trips through track ext-state',
     run = function(harness)
       local h = harness.mk()
-      h.cm:set('track', 'slotEntries', { [3] = { path = 'Continuum/k.wav' } })
-      local cm2 = util.instantiate('configManager', { ps = util.instantiate('pextStore') })
-      cm2:setContext('take1')
-      t.eq(cm2:get('slotEntries')[3].path, 'Continuum/k.wav', 'rehydrated from track P_EXT')
+      h.ds:assign('slotEntries', { [3] = { path = 'Continuum/k.wav' } })
+      local ps2 = util.instantiate('pextStore'); ps2:setTake('take1')
+      local ds2 = util.instantiate('dataStore', { ps = ps2 })
+      t.eq(ds2:get('slotEntries')[3].path, 'Continuum/k.wav', 'rehydrated from track P_EXT')
     end,
   },
   {
-    name = 'cm:readTrackKey reads track-tier without changing context',
+    name = 'ds:getAt reads a track scope without changing context',
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
       bindSamplerTrack(h, 't2')
       h.reaper:setProjectTracks({ 't1', 't2' })
       h.cm:setTrack('t2')
-      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/two.wav' } })
+      h.ds:assign('slotEntries', { [0] = { path = 'Continuum/two.wav' } })
       h.cm:setTrack('t1')
-      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/one.wav' } })
+      h.ds:assign('slotEntries', { [0] = { path = 'Continuum/one.wav' } })
 
-      local fromOne = h.cm:readTrackKey('t1', 'slotEntries')
-      local fromTwo = h.cm:readTrackKey('t2', 'slotEntries')
+      local fromOne = h.ds:getAt('t1', 'slotEntries')
+      local fromTwo = h.ds:getAt('t2', 'slotEntries')
       t.eq(fromOne[0].path, 'Continuum/one.wav', 't1 read direct')
       t.eq(fromTwo[0].path, 'Continuum/two.wav', 't2 read direct')
-      t.eq(h.cm:get('slotEntries')[0].path, 'Continuum/one.wav',
+      t.eq((h.ds:get('slotEntries') or {})[0].path, 'Continuum/one.wav',
            'cm context (t1) untouched after foreign reads')
     end,
   },
@@ -135,7 +132,7 @@ return {
     run = function(harness)
       local h  = harness.mk()
       bindSamplerTrack(h, 't1')
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       local id = sm:getInstanceId('t1')
       t.eq(id, 0, 'first sampler track gets id 0')
       local _, persisted = h.reaper.GetSetMediaTrackInfo_String('t1',
@@ -156,7 +153,7 @@ return {
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
       h.reaper.GetSetMediaTrackInfo_String('t1', 'P_EXT:samplerInstanceId', '7', true)
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       t.eq(sm:getInstanceId('t1'), 7, 'returns persisted id')
     end,
   },
@@ -168,7 +165,7 @@ return {
       h.reaper:setTrackFX('t2', { 'Continuum Sampler' })
       h.reaper:setProjectTracks({ 't1', 't2' })
       h.reaper.GetSetMediaTrackInfo_String('t1', 'P_EXT:samplerInstanceId', '0', true)
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       t.eq(sm:getInstanceId('t2'), 1, 'next-free id around taken=0')
     end,
   },
@@ -179,7 +176,7 @@ return {
       bindSamplerTrack(h, 't1')
       h.reaper:setTrackFX('t2', { 'SomeOther' })
       h.reaper:setProjectTracks({ 't1', 't2' })
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       t.truthy(sm:isLive('t1'),  't1 has the sampler FX')
       t.falsy (sm:isLive('t2'),  't2 lacks the sampler FX')
       t.eq    (sm:getInstanceId('t2'), nil, 'no FX → no id')
@@ -192,11 +189,11 @@ return {
       bindSamplerTrack(h, 't1')
       h.reaper:clearGmem()
       local ops = mkOps()
-      local sm  = newSampleManager(ops)
+      local sm  = newSampleManager(ops, h.cm, h.ds)
       sm:setPrefix('/proj')
       h.reaper:setProjectPath('/proj')
 
-      local ok = sm:assign('t1', 5, '/disk/kick.wav', h.cm)
+      local ok = sm:assign('t1', 5, '/disk/kick.wav')
       t.truthy(ok, 'returns true on success')
 
       t.eq(#ops.mkdirs, 1, 'one mkdir')
@@ -206,13 +203,13 @@ return {
       t.truthy(ops.copies[1][2]:match('^/proj/Continuum/kick%-%x+%.wav$'),
         'copy dst is /proj/Continuum/kick-<hash>.wav, got ' .. ops.copies[1][2])
 
-      local entry = h.cm:get('slotEntries')[5]
+      local entry = (h.ds:get('slotEntries') or {})[5]
       t.truthy(entry, 'cm has slot 5')
       t.truthy(entry.path:match('^Continuum/kick%-%x+%.wav$'),
         'cm path is project-relative, got ' .. tostring(entry.path))
       t.eq(entry.name, 'kick.wav', 'cm name seeded from src basename')
 
-      sm:tick(h.cm)   -- one drain pop emits the queued slot
+      sm:tick()   -- one drain pop emits the queued slot
       local mb = readMailbox(h, 0)
       t.eq(mb.seq,    1, 'first drain bumped seq to 1')
       t.eq(mb.slot,   5, 'slot index in payload')
@@ -232,12 +229,12 @@ return {
       h.reaper:clearGmem()
       local ops = mkOps()
       ops.copyResult = false
-      local sm = newSampleManager(ops)
+      local sm = newSampleManager(ops, h.cm, h.ds)
       sm:setPrefix('/proj')
 
-      t.eq(sm:assign('t1', 2, '/disk/missing.wav', h.cm), false, 'returns false')
-      t.eq(h.cm:get('slotEntries')[2], nil, 'no cm entry written')
-      sm:tick(h.cm)
+      t.eq(sm:assign('t1', 2, '/disk/missing.wav'), false, 'returns false')
+      t.eq((h.ds:get('slotEntries') or {})[2], nil, 'no cm entry written')
+      sm:tick()
       t.eq(readMailbox(h, 0).seq, 0, 'mailbox not bumped')
     end,
   },
@@ -246,13 +243,13 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries',
+      h.ds:assign('slotEntries',
         { [4] = { path = 'Continuum/old.wav', shStart = 100 } })
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
-      sm:assign('t1', 4, '/disk/new.wav', h.cm)
-      local entry = h.cm:get('slotEntries')[4]
+      sm:assign('t1', 4, '/disk/new.wav')
+      local entry = (h.ds:get('slotEntries') or {})[4]
       t.eq(entry.shStart, 100, 'shStart survived re-assign')
       t.truthy(entry.path:match('^Continuum/new%-'), 'path was overwritten')
     end,
@@ -262,15 +259,15 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries',
+      h.ds:assign('slotEntries',
         { [4] = { path    = 'Continuum/old.wav',
                   start   = 1000, ['end'] = 5000,
                   shStart = 100 } })
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
-      sm:assign('t1', 4, '/disk/new.wav', h.cm)
-      local entry = h.cm:get('slotEntries')[4]
+      sm:assign('t1', 4, '/disk/new.wav')
+      local entry = (h.ds:get('slotEntries') or {})[4]
       t.eq(entry.start,   nil, 'start cleared')
       t.eq(entry['end'],  nil, 'end cleared')
       t.eq(entry.shStart, 100, 'unrelated field preserved')
@@ -283,7 +280,7 @@ return {
       bindSamplerTrack(h, 't1')
       h.reaper:clearGmem()
       local ops = mkOps()
-      local sm  = newSampleManager(ops)
+      local sm  = newSampleManager(ops, h.cm, h.ds)
       sm:setPrefix('/proj')
       h.reaper:setProjectPath('/proj')
 
@@ -291,9 +288,9 @@ return {
       t.truthy(rel and rel:match('^Continuum/snare%-%x+%.wav$'),
         'returned rel path, got ' .. tostring(rel))
       t.eq(#ops.copies, 1, 'one copy issued')
-      t.eq(h.cm:get('slotEntries')[7], nil, 'cm slotEntries untouched')
+      t.eq((h.ds:get('slotEntries') or {})[7], nil, 'cm slotEntries untouched')
 
-      sm:tick(h.cm)
+      sm:tick()
       local mb = readMailbox(h, 0)
       t.eq(mb.seq,  1, 'mailbox seq bumped')
       t.eq(mb.slot, 7, 'slot index in payload')
@@ -309,10 +306,10 @@ return {
       h.reaper:clearGmem()
       local ops = mkOps()
       ops.copyResult = false
-      local sm = newSampleManager(ops)
+      local sm = newSampleManager(ops, h.cm, h.ds)
       sm:setPrefix('/proj')
       t.eq(sm:stageInto('t1', 2, '/disk/x.wav'), nil, 'returned nil')
-      sm:tick(h.cm)
+      sm:tick()
       t.eq(readMailbox(h, 0).seq, 0, 'mailbox not bumped')
     end,
   },
@@ -321,14 +318,14 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries', { [3] = { path = 'Continuum/k.wav', name = 'k' } })
+      h.ds:assign('slotEntries', { [3] = { path = 'Continuum/k.wav', name = 'k' } })
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
-      t.eq(sm:clearSlot('t1', 3, h.cm), true, 'returns true')
-      t.eq(h.cm:get('slotEntries')[3], nil, 'cm entry removed')
-      sm:tick(h.cm)
+      t.eq(sm:clearSlot('t1', 3), true, 'returns true')
+      t.eq((h.ds:get('slotEntries') or {})[3], nil, 'cm entry removed')
+      sm:tick()
       local mb = readMailbox(h, 0)
       t.eq(mb.seq,  1, 'mailbox seq bumped')
       t.eq(mb.slot, 3, 'slot at [+2]')
@@ -341,7 +338,7 @@ return {
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       t.eq(sm:previewSlot('t1', 9, 1), true)
       t.eq(h.reaper.gmem_read(PREVIEW_BASE),     MAGIC)
       t.eq(h.reaper.gmem_read(PREVIEW_BASE + 1), 0, 'target_id at [+1]')
@@ -354,18 +351,18 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries', { [4] = { path = 'Continuum/k.wav' } })
+      h.ds:assign('slotEntries', { [4] = { path = 'Continuum/k.wav' } })
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
-      t.eq(sm:setTrim('t1', 4, 100, 200, h.cm), true)
-      local entry = h.cm:get('slotEntries')[4]
+      t.eq(sm:setTrim('t1', 4, 100, 200), true)
+      local entry = (h.ds:get('slotEntries') or {})[4]
       t.eq(entry.start,  100,                'start written to cm')
       t.eq(entry['end'], 200,                'end written to cm')
       t.eq(entry.path,   'Continuum/k.wav',  'path preserved')
 
-      sm:tick(h.cm)
+      sm:tick()
       local mb = readMailbox(h, 0)
       t.eq(mb.seq,     1,   'seq bumped')
       t.eq(mb.slot,    4,   'slot in payload')
@@ -379,17 +376,17 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries', { [2] = { path = 'Continuum/snare.wav' } })
+      h.ds:assign('slotEntries', { [2] = { path = 'Continuum/snare.wav' } })
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
-      sm:setName('t1', 2, 'Snare top', h.cm)
-      local entry = h.cm:get('slotEntries')[2]
+      sm:setName('t1', 2, 'Snare top')
+      local entry = (h.ds:get('slotEntries') or {})[2]
       t.eq(entry.name, 'Snare top',           'name written')
       t.eq(entry.path, 'Continuum/snare.wav', 'path preserved')
 
-      sm:tick(h.cm)
+      sm:tick()
       local mb = readMailbox(h, 0)
       t.eq(mb.seq,     1, 'seq bumped')
       t.eq(mb.pathLen, 0, 'no path in payload')
@@ -402,30 +399,30 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries', {
+      h.ds:assign('slotEntries', {
         [0] = { path = 'Continuum/a.wav', name = 'a' },
         [3] = { path = 'Continuum/b.wav', name = 'b' },
       })
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
       plantBootToken(h, 0, 12345)
-      sm:tick(h.cm)
+      sm:tick()
       local mb = readMailbox(h, 0)
       t.eq(mb.seq,  1, 'first drain after rehydrate')
       t.eq(mb.slot, 0, 'slot 0 first by byOrder')
       t.eq(mb.path, '/proj/Continuum/a.wav', 'abs path emitted')
 
       ackMailbox(h, 0)
-      sm:tick(h.cm)
+      sm:tick()
       mb = readMailbox(h, 0)
       t.eq(mb.seq,  2, 'second drain')
       t.eq(mb.slot, 3, 'slot 3 next')
       t.eq(mb.path, '/proj/Continuum/b.wav', 'abs path emitted')
 
       ackMailbox(h, 0)
-      sm:tick(h.cm)
+      sm:tick()
       t.eq(readMailbox(h, 0).seq, 2, 'no further drains; queue empty')
     end,
   },
@@ -437,10 +434,10 @@ return {
       bindSamplerTrack(h, 't2')
       h.reaper:setProjectTracks({ 't1', 't2' })
       h.cm:setTrack('t2')
-      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/two.wav', name = 'two' } })
+      h.ds:assign('slotEntries', { [0] = { path = 'Continuum/two.wav', name = 'two' } })
       h.cm:setTrack('t1')   -- bound to t1, but t2 is the one we're rehydrating
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
       -- t2 takes instance id 1 (t1 takes 0 first via bindSamplerTrack order)
@@ -448,7 +445,7 @@ return {
       h.reaper.GetSetMediaTrackInfo_String('t2', 'P_EXT:samplerInstanceId', '1', true)
       plantBootToken(h, 1, 7777)
 
-      sm:tick(h.cm)
+      sm:tick()
       local mb = readMailbox(h, 1)
       t.eq(mb.seq,  1,   't2 mailbox bumped')
       t.eq(mb.slot, 0,   't2 slot 0')
@@ -460,20 +457,20 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/a.wav' } })
+      h.ds:assign('slotEntries', { [0] = { path = 'Continuum/a.wav' } })
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
       plantBootToken(h, 0, 1)
-      sm:tick(h.cm); ackMailbox(h, 0)
+      sm:tick(); ackMailbox(h, 0)
       t.eq(readMailbox(h, 0).seq, 1, 'first rehydrate consumed')
 
-      sm:tick(h.cm); ackMailbox(h, 0)
+      sm:tick(); ackMailbox(h, 0)
       t.eq(readMailbox(h, 0).seq, 1, 'no rehydrate on stable token')
 
       plantBootToken(h, 0, 2)   -- fresh-mem detected
-      sm:tick(h.cm); ackMailbox(h, 0)
+      sm:tick(); ackMailbox(h, 0)
       t.eq(readMailbox(h, 0).seq, 2, 'rehydrate refired on token change')
     end,
   },
@@ -482,22 +479,22 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1', 'guid-old')
-      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/a.wav' } })
+      h.ds:assign('slotEntries', { [0] = { path = 'Continuum/a.wav' } })
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
       plantBootToken(h, 0, 100)
-      sm:tick(h.cm); ackMailbox(h, 0)
+      sm:tick(); ackMailbox(h, 0)
       t.eq(readMailbox(h, 0).path, '/proj/Continuum/a.wav',
            'first rehydrate emitted slot 0')
 
       -- Mutate cm so the second push is observably different. GUID change
       -- forces a reset of state.lastBootToken to 0 — so the still-nonzero
       -- token reads as new and rehydrate fires again.
-      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/b.wav' } })
+      h.ds:assign('slotEntries', { [0] = { path = 'Continuum/b.wav' } })
       h.reaper:setFxGuid('t1', 'guid-new')
-      sm:tick(h.cm); ackMailbox(h, 0)
+      sm:tick(); ackMailbox(h, 0)
       t.eq(readMailbox(h, 0).path, '/proj/Continuum/b.wav',
            'rehydrate refired with cm\'s new content after GUID change')
     end,
@@ -507,15 +504,15 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries', {
+      h.ds:assign('slotEntries', {
         [3] = { path = 'Continuum/k.wav', name = 'k', start = 50, ['end'] = 99 },
       })
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
-      sm:syncSlot('t1', 3, h.cm)
-      sm:tick(h.cm)
+      sm:syncSlot('t1', 3)
+      sm:tick()
       local mb = readMailbox(h, 0)
       t.eq(mb.slot,   3,                       'slot 3')
       t.eq(mb.op,     0,                       'op=0 (set)')
@@ -530,11 +527,11 @@ return {
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
-      sm:syncSlot('t1', 5, h.cm)
-      sm:tick(h.cm)
+      sm:syncSlot('t1', 5)
+      sm:tick()
       local mb = readMailbox(h, 0)
       t.eq(mb.slot, 5, 'slot 5')
       t.eq(mb.op,   1, 'op=1 (clear)')
@@ -546,18 +543,18 @@ return {
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
-      sm:setName('t1', 0, 'a', h.cm)
-      sm:setName('t1', 1, 'b', h.cm)
-      sm:setName('t1', 2, 'c', h.cm)
+      sm:setName('t1', 0, 'a')
+      sm:setName('t1', 1, 'b')
+      sm:setName('t1', 2, 'c')
 
-      sm:tick(h.cm); local seq1 = readMailbox(h, 0).seq
+      sm:tick(); local seq1 = readMailbox(h, 0).seq
       ackMailbox(h, 0)
-      sm:tick(h.cm); local seq2 = readMailbox(h, 0).seq
+      sm:tick(); local seq2 = readMailbox(h, 0).seq
       ackMailbox(h, 0)
-      sm:tick(h.cm); local seq3 = readMailbox(h, 0).seq
+      sm:tick(); local seq3 = readMailbox(h, 0).seq
       t.eq(seq1, 1, 'first drain bumps to 1')
       t.eq(seq2, 2, 'second drain bumps to 2')
       t.eq(seq3, 3, 'third drain bumps to 3 — one slot per tick')
@@ -569,18 +566,18 @@ return {
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
       sm:setPrefix('/proj')
 
-      sm:setName('t1', 0, 'a', h.cm)
-      sm:setName('t1', 1, 'b', h.cm)
+      sm:setName('t1', 0, 'a')
+      sm:setName('t1', 1, 'b')
 
-      sm:tick(h.cm)
+      sm:tick()
       t.eq(readMailbox(h, 0).seq, 1, 'first drain')
-      sm:tick(h.cm)
+      sm:tick()
       t.eq(readMailbox(h, 0).seq, 1, 'second drain blocked: seq != ack')
       ackMailbox(h, 0)
-      sm:tick(h.cm)
+      sm:tick()
       t.eq(readMailbox(h, 0).seq, 2, 'second drain proceeds after ack')
     end,
   },
@@ -590,17 +587,17 @@ return {
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
       h.reaper:clearGmem()
-      local sm = newSampleManager(mkOps())
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
 
       sm:setPrefix('/old')
       sm:loadSlot('t1', 0, 'Continuum/x.wav')
-      sm:tick(h.cm)
+      sm:tick()
       t.eq(readMailbox(h, 0).path, '/old/Continuum/x.wav', 'composed against /old')
 
       ackMailbox(h, 0)
       sm:setPrefix('/new')
       sm:loadSlot('t1', 1, 'Continuum/y.wav')
-      sm:tick(h.cm)
+      sm:tick()
       t.eq(readMailbox(h, 0).path, '/new/Continuum/y.wav', 'composed against /new')
     end,
   },
@@ -609,19 +606,19 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries', {
+      h.ds:assign('slotEntries', {
         [0] = { path = 'Continuum/k.wav' },
         [1] = { path = 'Continuum/s.wav' },
       })
       local ops = mkOps()
-      local moved = newSampleManager(ops):migrate('/new', '/old', h.cm)
+      local moved = newSampleManager(ops, h.cm, h.ds):migrate('/new', '/old')
       t.eq(moved, true, 'migrate reports work was done')
       t.eq(#ops.moves, 2, 'one move per entry')
       local seen = {}
       for _, m in ipairs(ops.moves) do seen[m[1]] = m[2] end
       t.eq(seen['/old/Continuum/k.wav'], '/new/Continuum/k.wav', 'slot 0 moved')
       t.eq(seen['/old/Continuum/s.wav'], '/new/Continuum/s.wav', 'slot 1 moved')
-      t.eq(h.cm:get('slotEntries')[0].path, 'Continuum/k.wav',
+      t.eq((h.ds:get('slotEntries') or {})[0].path, 'Continuum/k.wav',
            'cm path unchanged (still relative)')
     end,
   },
@@ -630,11 +627,11 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/k.wav' } })
+      h.ds:assign('slotEntries', { [0] = { path = 'Continuum/k.wav' } })
       local ops = mkOps()
-      local sm  = newSampleManager(ops)
+      local sm  = newSampleManager(ops, h.cm, h.ds)
       t.eq(sm:migrate('/proj', nil,    h.cm), false, 'nil oldPath = no-op')
-      t.eq(sm:migrate('/proj', '/proj', h.cm), false, 'same path = no-op')
+      t.eq(sm:migrate('/proj', '/proj'), false, 'same path = no-op')
       t.eq(#ops.moves, 0, 'no moves issued')
     end,
   },
@@ -646,11 +643,11 @@ return {
       h.reaper:setTrackFX('t2', { 'Continuum Sampler' })
       h.reaper:setProjectTracks({ 't1', 't2' })
       h.cm:setTrack('t1')
-      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/a.wav' } })
+      h.ds:assign('slotEntries', { [0] = { path = 'Continuum/a.wav' } })
       h.cm:setTrack('t2')
-      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/b.wav' } })
+      h.ds:assign('slotEntries', { [0] = { path = 'Continuum/b.wav' } })
       local ops = mkOps()
-      local moved = newSampleManager(ops):migrate('/new', '/old', h.cm)
+      local moved = newSampleManager(ops, h.cm, h.ds):migrate('/new', '/old')
       t.eq(moved, true, 'work happened')
       t.eq(#ops.moves, 2, 'one move per sampler track')
       local seen = {}
@@ -664,17 +661,17 @@ return {
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')
-      h.cm:set('track', 'slotEntries', { [0] = { path = 'Continuum/k.wav' } })
+      h.ds:assign('slotEntries', { [0] = { path = 'Continuum/k.wav' } })
       h.reaper:setProjectPath('/old')
       local ops = mkOps()
-      local sm  = newSampleManager(ops)
+      local sm  = newSampleManager(ops, h.cm, h.ds)
 
-      sm:watchPath(h.cm)
+      sm:watchPath()
       t.eq(h.cm:get('lastProjectPath'), '/old', 'breadcrumb stored on first run')
       t.eq(#ops.moves, 0, 'no prior breadcrumb → no migrate')
 
       h.reaper:setProjectPath('/new')
-      sm:watchPath(h.cm)
+      sm:watchPath()
       t.eq(h.cm:get('lastProjectPath'), '/new', 'breadcrumb updated')
       t.eq(#ops.moves, 1, 'migrate fired on project-path change')
       t.eq(ops.moves[1][1], '/old/Continuum/k.wav', 'src is old root')

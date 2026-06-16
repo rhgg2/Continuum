@@ -1,18 +1,18 @@
-@module arrangeManager  src=arrangeManager.lua  loc=814  sha=098b66f  mode=chunk
-@deps cm, facade
+@module arrangeManager  src=arrangeManager.lua  loc=814  sha=ac419ac  mode=chunk
+@deps cm, ds, facade
 
 # Invariants & contracts
   @invariant  project-wide singleton; reads REAPER items + cm directly, owns no take state of its own
   @invariant  trackIdx is a visible-column index, not a REAPER slot (see docs/arrangeManager.md)
-  @invariant  slot palette in cm at track tier under key 'arrangeSlots'; writes via cm:writeTrackKey
+  @invariant  slot palette in ds at track scope under key 'arrangeSlots'; writes via ds:assignAt
   @invariant  slot indices 0..61, base62-keyed (util.toBase62); lowest-free, gaps allowed
   @invariant  every grouped take is a slot; all four discovery reads route through ensureSlots
   @invariant  createAndDropMidi alone mints a slot; all else inherits or drops into an existing one
   @invariant  takeId is the source-identity chokepoint; takes with no derivable id are skipped
   @invariant  reswingAll is sequenceManager folded in; bind loop lives behind the 'tracker' facade
-  @invariant  natural length in cm 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
+  @invariant  natural length in ds 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
   @invariant  a stored natural ≥ source demotes to util.OPEN; see docs § Natural length
-  @invariant  'arrangeColours' (project tier) maps takeId → colourIdx project-wide
+  @invariant  'arrangeColours' (project scope) maps takeId → colourIdx project-wide
   @invariant  arrangeColours allocates lowest-free across live takeIds; ensureColours prunes dead ids
   @invariant  placement stamps painter.hueNative(idx) on new takes iff I_CUSTOMCOLOR == 0
   @invariant  painter.hue and painter.hueNative share one hash; freshly-stamped takes match the grid
@@ -156,12 +156,11 @@
       @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 
 # Uses (outbound edges)
-  @use call    cm.getAt  @ 200
-  @use call    cm.readTakeKey  @ 104, 803
-  @use call    cm.readTrackKey  @ 71
-  @use call    cm.set  @ 201
-  @use call    cm.writeTakeKey  @ 109, 110
-  @use call    cm.writeTrackKey  @ 75
+  @use call    cm.readTakeKey  @ 803
+  @use call    ds.assign  @ 201
+  @use call    ds.assignAt  @ 75, 109, 110
+  @use call    ds.get  @ 200
+  @use call    ds.getAt  @ 71, 104
   @use call    facade.get  @ 252, 811
   @use call    painter.hueNative  @ 236
   @use call    util.toBase62  @ 512

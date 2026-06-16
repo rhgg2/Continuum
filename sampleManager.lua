@@ -1,15 +1,15 @@
 -- See docs/sampleManager.md for the model.
 -- @noindex
 
---invariant: cm is the sole authority for slot state ({path, start, end, name}); JSFX is a pure consumer
---invariant: cm holds project-relative paths; sm composes absolute via currentPrefix at every push so JSFX needs no prefix
+--invariant: ds is sole authority for slot state ({path,start,end,name}); JSFX is a pure consumer
+--invariant: ds holds project-relative paths; sm prepends currentPrefix so JSFX needs no prefix
 --invariant: gmem layout mirrors Continuum_Sampler.jsfx; SLOT_BASE/BOOT_BASE constants must stay in lockstep with the JSFX side
 --invariant: per-instance bundled mailbox at SLOT_BASE+id*SLOT_STRIDE; preview retains its own legacy magic-gated mailbox at PREVIEW_BASE
 --invariant: at most one slot drained per track per tick — keeps last-write-wins consolidation simple
 --invariant: instance ids are persisted via track P_EXT (PEXT_KEY) and mirrored into JSFX slider2 every getInstanceId call
 --invariant: boot-token watcher (BOOT_BASE+id) detects fresh JSFX mem[] (project reload, recompile) and triggers full rehydrate
 --invariant: JSFX user-string slot cap is 1023; PATH_MAX (1019) + SLOT_STRIDE bookkeeping must not push slot string writes past that ceiling
---shape: slotEntry      = { path=string?, name=string?, start=number, ['end']=number }   -- cm-stored, path is project-relative
+--shape: slotEntry      = { path=string?, name=string?, start=number, ['end']=number }   -- ds-stored, path is project-relative
 --shape: pendingEntry   = { slot=number, op=0|1, path=string?, name=string?, start=number?, ['end']=number? }  -- mailbox queue entry; op=1 is clear
 --shape: trackState     = { fxGuid=string?, instanceId=number?, lastBootToken=number, slotSeq=number, pending={byOrder={int,...}, bySlot={[slot]=pendingEntry}} }
 --shape: mailboxHeader  = [seq, seq_ack, slot, op, start, end, pathLen, nameLen, <pathBytes...>, <nameBytes...>]   -- gmem words at SLOT_BASE+id*SLOT_STRIDE
@@ -78,7 +78,7 @@ local function nextFreeId(taken)
   return nil
 end
 
-local fileOps = (...).fileOps
+local fileOps, cm, ds = (...).fileOps, (...).cm, (...).ds
 
 local sm = {}
 
@@ -109,17 +109,17 @@ local function relForSrc(srcBase, hash)
     or  'Continuum/' .. stem .. '-' .. hash
 end
 
-local function setEntry(cm, idx, fields)
-  local entries = cm:get('slotEntries')
+local function setEntry(idx, fields)
+  local entries = ds:get('slotEntries') or {}
   entries[idx] = entries[idx] or {}
   for k, v in pairs(fields) do entries[idx][k] = v end
-  cm:set('track', 'slotEntries', entries)
+  ds:assign('slotEntries', entries)
 end
 
-local function clearEntry(cm, idx)
-  local entries = cm:get('slotEntries')
+local function clearEntry(idx)
+  local entries = ds:get('slotEntries') or {}
   entries[idx] = nil
-  cm:set('track', 'slotEntries', entries)
+  ds:assign('slotEntries', entries)
 end
 
 --contract: pushSlot merges into the existing pendingEntry for slot; op=1 (clear) wipes path/name/start/end; op=0 only overrides explicitly-passed fields
@@ -198,9 +198,9 @@ function sm:getInstanceId(track)
   return id
 end
 
-function sm:rehydrateTrack(track, cm)
+function sm:rehydrateTrack(track)
   local state   = ensureTrackState(track)
-  local entries = cm:readTrackKey(track, 'slotEntries') or {}
+  local entries = ds:getAt(track, 'slotEntries') or {}
   for slot = 0, N_SAMPLES - 1 do
     local e = entries[slot]
     if e and e.path then
@@ -214,9 +214,9 @@ function sm:rehydrateTrack(track, cm)
   end
 end
 
-function sm:syncSlot(track, slot, cm)
+function sm:syncSlot(track, slot)
   local state = ensureTrackState(track)
-  local e     = (cm:get('slotEntries') or {})[slot]
+  local e     = (ds:get('slotEntries') or {})[slot]
   if not e or not e.path then
     pushSlot(state, slot, { op = 1 })
   else
@@ -232,7 +232,7 @@ end
 --contract: tick is the only caller of gmem_attach for the bundled mailbox path; coordinator must invoke per frame
 --contract: tick reaps trackStates entries for tracks whose sampler FX has been removed (else closed-over state leaks)
 --contract: first-sight FX-GUID binding does NOT reset state (lastBootToken=0 still triggers rehydrate via the boot-token branch)
-function sm:tick(cm)
+function sm:tick()
   reaper.gmem_attach(GMEM_NS)
   for i = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, i)
@@ -253,7 +253,7 @@ function sm:tick(cm)
         local token = reaper.gmem_read(BOOT_BASE + state.instanceId)
         if token ~= 0 and token ~= state.lastBootToken then
           state.lastBootToken = token
-          self:rehydrateTrack(track, cm)
+          self:rehydrateTrack(track)
         end
         drain(state)
       end
@@ -266,7 +266,7 @@ end
 ----- cm-authoritative slot operations
 
 --contract: assign hashes srcPath, copies into projectPath/Continuum/<stem>-<hash>.<ext> if missing, writes cm rel path, queues mailbox push; returns false if hash or copy fails
-function sm:assign(track, idx, srcPath, cm)
+function sm:assign(track, idx, srcPath)
   local projectPath = reaper.GetProjectPath(0)
   local hash = fileOps.hash(srcPath)
   if not hash then return false end
@@ -278,11 +278,11 @@ function sm:assign(track, idx, srcPath, cm)
   -- A fresh sample replaces the slot's source — trim from the previous
   -- sample no longer applies. Clear start/end (other fields, e.g.
   -- shStart, are unrelated and survive).
-  local entries = cm:get('slotEntries')
+  local entries = ds:get('slotEntries') or {}
   entries[idx] = entries[idx] or {}
   entries[idx].path,  entries[idx].name   = rel, name
   entries[idx].start, entries[idx]['end'] = nil, nil
-  cm:set('track', 'slotEntries', entries)
+  ds:assign('slotEntries', entries)
   pushSlot(ensureTrackState(track), idx, {
     path = absFor(rel), name = name, start = 0, ['end'] = 0,
   })
@@ -296,23 +296,23 @@ function sm:loadSlot(track, slot, relPath)
   return true
 end
 
-function sm:clearSlot(track, slot, cm)
-  clearEntry(cm, slot)
+function sm:clearSlot(track, slot)
+  clearEntry(slot)
   pushSlot(ensureTrackState(track), slot, { op = 1 })
   return true
 end
 
 --contract: setTrim sends start/end without path/name; pathLen=0/nameLen=0 in the wire payload means "leave alone" on the JSFX side
-function sm:setTrim(track, slot, startFrames, endFrames, cm)
-  setEntry(cm, slot, { start = startFrames, ['end'] = endFrames })
+function sm:setTrim(track, slot, startFrames, endFrames)
+  setEntry(slot, { start = startFrames, ['end'] = endFrames })
   pushSlot(ensureTrackState(track), slot, {
     start = startFrames, ['end'] = endFrames,
   })
   return true
 end
 
-function sm:setName(track, slot, name, cm)
-  setEntry(cm, slot, { name = name })
+function sm:setName(track, slot, name)
+  setEntry(slot, { name = name })
   pushSlot(ensureTrackState(track), slot, { name = name })
   return true
 end
@@ -391,7 +391,7 @@ end
 
 --contract: probeMode flips cm.trackerMode (transient tier) based on whether the take's track has the sampler FX
 --contract: probeMode forces I_PERFFLAGS bit 1 (anticipative FX off) on sampler tracks for tighter timing
-function sm:probeMode(take, cm)
+function sm:probeMode(take)
   local track = reaper.GetMediaItemTake_Track(take)
   local detected = findSamplerFx(track) ~= nil
   if cm:get('trackerMode') ~= detected then
@@ -406,14 +406,14 @@ function sm:probeMode(take, cm)
   end
 end
 
---contract: migrate iterates every sampler track via cm:readTrackKey so non-bound tracks migrate too
---contract: cm rel paths are preserved across migrate; only file bytes move
+--contract: migrate iterates every sampler track via ds:getAt so non-bound tracks migrate too
+--contract: ds rel paths are preserved across migrate; only file bytes move
 --contract: migrate is a no-op if oldProjectPath is missing or unchanged
-function sm:migrate(projectPath, oldProjectPath, cm)
+function sm:migrate(projectPath, oldProjectPath)
   if not oldProjectPath or oldProjectPath == projectPath then return false end
   local anyMoved = false
   for _, entry in ipairs(self:listTracks()) do
-    local entries = cm:readTrackKey(entry.track, 'slotEntries') or {}
+    local entries = ds:getAt(entry.track, 'slotEntries') or {}
     for _, e in pairs(entries) do
       if e.path then
         local oldAbs = oldProjectPath .. '/' .. e.path
@@ -430,13 +430,13 @@ end
 
 --contract: watchPath setPrefixes, migrates, writes cm.lastProjectPath on GetProjectPath change
 --contract: cm.lastProjectPath persists at project-tier so close-during-save is caught next open
-function sm:watchPath(cm)
+function sm:watchPath()
   local pp = reaper.GetProjectPath(0)
   if not pp or pp == '' then return end
   local last = cm:get('lastProjectPath')
   if last == pp then return end
   self:setPrefix(pp)
-  if last then self:migrate(pp, last, cm) end
+  if last then self:migrate(pp, last) end
   cm:set('project', 'lastProjectPath', pp)
 end
 

@@ -5,7 +5,7 @@ local util = require('util')
 
 local function mkAm(harness, opts)
   local h = harness.mk(opts)
-  local am = util.instantiate('arrangeManager', { cm = h.cm, tm = h.tm })
+  local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
   return h, am
 end
 
@@ -443,7 +443,7 @@ return {
       tk = am:tracksTakes(0)[1]
       t.eq(tk.lengthQN,     4, 'rendered capped at source')
       t.eq(tk.naturalLenQN, 4, 'natural demoted to OPEN — effective = source')
-      t.eq(h.cm:readTakeKey(tk.take, 'arrangeNaturalLenQN'), nil,
+      t.eq(h.ds:getAt(tk.take, 'arrangeNaturalLenQN'), nil,
            'OPEN persists as a missing key, not a stored math.huge')
     end,
   },
@@ -461,7 +461,7 @@ return {
       local moved = am:tracksTakes(0)[1]
       t.eq(moved.startQN,  2, 'moved to row 2')
       t.eq(moved.lengthQN, 8, 'still 8 QN after relayout — no snap to source')
-      t.eq(h.cm:readTakeKey(moved.take, 'arrangeNaturalLenQN'), 8,
+      t.eq(h.ds:getAt(moved.take, 'arrangeNaturalLenQN'), 8,
            'length captured as the stored natural')
     end,
   },

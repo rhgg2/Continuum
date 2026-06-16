@@ -81,29 +81,13 @@ local declarations = {
   { 'mutedChannels',   {}    },
   { 'soloedChannels',  {}    },
   { 'extraColumns',    {}    },
-  -- Param-automation bindings, take tier: [chan][lane] = binding.
-  -- See design/cv.md § simple layer for the binding shape.
-  { 'paramAutomation', {}    },
-  -- Param-palette frecency, global tier. Decays per plugin-use (the
-  -- ident's n counter), not per day; see paramAutomation.lua.
-  { 'paramFrecency',   {}    },
   { 'noteDelay',       {}    },
-  { 'slotEntries',     {}    },
-  -- Arrange-page slot palette, per track. Indexed 0..61; entry { kind='midi'|'audio', id=<guid-or-path> }.
-  -- See docs/arrangeManager.md.
-  { 'arrangeSlots', {} },
   -- Arrange-page grid density preference (persisted). Cursor/scroll stay in arrangeView module-locals.
   -- Typical values: 4, 8, 16 beats per row (one to four bars per row in 4/4).
   { 'arrangeBeatPerRow', 4 },
   -- Arrange viewport follows the play head while the transport runs
   -- (boundary-scroll). Toolbar checkbox / Super+F; global tier.
   { 'arrangeFollowPlay', false },
-  -- Arrange-take natural length (QN): ceiling the item regrows toward when freed. Persisted per-take.
-  -- Default nil reads as util.OPEN (source length is the cap). See docs/arrangeManager.md.
-  { 'arrangeNaturalLenQN', nil },
-  -- Arrange palette colour, project-wide, { [takeId] = colourIdx }.
-  -- See docs/arrangeManager.md.
-  { 'arrangeColours', {} },
 
   -- Palette atoms — role-named swatches the colour editor edits; base/alt are
   -- tonal ramps (zoneN at lightness N/10, ends pure black/white).

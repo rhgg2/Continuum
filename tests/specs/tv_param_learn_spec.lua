@@ -80,7 +80,7 @@ return {
         order[#order + 1] = prm.name
       end
       t.deepEq(order, { 'Res', 'Gain', 'Cutoff' }, 'hoisted to top')
-      t.falsy(next(h.cm:get('paramFrecency')), 'touch does not write frecency')
+      t.falsy(next(h.ds:get('paramFrecency') or {}), 'touch does not write frecency')
     end,
   },
 
@@ -110,7 +110,7 @@ return {
       h.vm:automateParam()
       t.truthy(h.vm:paramBinding(1, 119), 'bound at the top lane')
       t.falsy(h.vm:learnFxGuid(), 'learn cancelled')
-      t.eq(h.cm:get('paramFrecency')['VST3:Synth'].n, 1, 'one bump')
+      t.eq(h.ds:get('paramFrecency')['VST3:Synth'].n, 1, 'one bump')
     end,
   },
 

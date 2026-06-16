@@ -1,21 +1,14 @@
 -- paramAutomation.lua
---
--- The simple automation layer's applier (design/cv.md § simple layer).
--- Bindings live at the cm take tier; this module realises them into
--- REAPER: a 'Continuum CC' JSFX pinned at each involved track's chain
--- head (filter bank strips authored CCs onto the automation bus at the
--- origin; listen bank turns bus CCs into plink-source sliders), bus
--- sends fanning the automation bus out to bound tracks, and plinks
--- from value sliders to target params.
+-- Simple automation applier (design/cv.md § simple layer); bindings at ds take scope, realised via JSFX + bus sends + plinks.
 
 --invariant: automation bus is 126 — 127 is wiring's parking bus, wiring allocates 0..125
 --invariant: authored (chan,lane) codes are track-unique across takes; bus codes project-unique
 --shape: binding = { busCode=int, trackGuid=str, fxGuid=str, param=int, scale=num, offset=num, label=str }
 --shape: trackSpec = { filter={ {src=code,dst=code},... }, listen={ {code,fxGuid,param,scale,offset},... }, sends={dstGuid,...} }
---shape: paramFrecency (cm global) = { [fxIdent] = { n=int, params={ [name]={s=num,n0=int} } } }
+--shape: paramFrecency (ds global) = { [fxIdent] = { n=int, params={ [name]={s=num,n0=int} } } }
 --contract: apply() is a full-project idempotent reconcile; mirror-matching tracks are untouched
 local util = require 'util'
-local cm, facade = (...).cm, (...).facade
+local cm, ds, facade = (...).cm, (...).ds, (...).facade
 
 local AUTO_BUS  = 126
 local CC_IDENT  = 'JS:Continuum CC'
@@ -84,7 +77,7 @@ end
 local function gatherBindings()
   local bindings = {}
   eachTake(function(take)
-    local cfg = cm:readTakeKey(take, 'paramAutomation')
+    local cfg = ds:getAt(take, 'paramAutomation')
     if not cfg or not next(cfg) then return end
     local srcGuid = reaper.GetTrackGUID(reaper.GetMediaItemTake_Track(take))
     for chan, lanes in pairs(cfg) do
@@ -259,7 +252,7 @@ local function usedLanes(srcTrack, chan)
   local used = {}
   eachTake(function(take)
     if reaper.GetMediaItemTake_Track(take) ~= srcTrack then return end
-    local cfg = cm:readTakeKey(take, 'paramAutomation') or {}
+    local cfg = ds:getAt(take, 'paramAutomation') or {}
     for lane in pairs(cfg[chan] or {}) do used[lane] = true end
     local extras = cm:readTakeKey(take, 'extraColumns') or {}
     for cc in pairs((extras[chan] or {}).ccs or {}) do used[cc] = true end
@@ -284,7 +277,7 @@ end
 local function allocBusCode()
   local used = {}
   eachTake(function(take)
-    local cfg = cm:readTakeKey(take, 'paramAutomation') or {}
+    local cfg = ds:getAt(take, 'paramAutomation') or {}
     for _, lanes in pairs(cfg) do
       for _, b in pairs(lanes) do used[b.busCode] = true end
     end
@@ -351,29 +344,29 @@ function pa:automate(chan, target)
   if not lane then return nil, 'no free cc lane on channel ' .. chan end
   local busCode = allocBusCode()
   if not busCode then return nil, 'automation bus full' end
-  local cfg = cm:get('paramAutomation')
+  local cfg = ds:get('paramAutomation') or {}
   cfg[chan] = cfg[chan] or {}
   cfg[chan][lane] = {
     busCode = busCode,
     trackGuid = target.trackGuid, fxGuid = target.fxGuid, param = target.param,
     scale = 1, offset = 0, label = target.label,
   }
-  cm:set('take', 'paramAutomation', cfg)
+  ds:assign('paramAutomation', cfg)
   self:apply()
   return lane
 end
 
 function pa:unautomate(chan, lane)
-  local cfg = cm:get('paramAutomation')
+  local cfg = ds:get('paramAutomation') or {}
   if not (cfg[chan] and cfg[chan][lane]) then return end
   cfg[chan][lane] = nil
   if not next(cfg[chan]) then cfg[chan] = nil end
-  cm:set('take', 'paramAutomation', cfg)
+  ds:assign('paramAutomation', cfg)
   self:apply()
 end
 
 function pa:binding(chan, lane)
-  local cfg = cm:get('paramAutomation')
+  local cfg = ds:get('paramAutomation') or {}
   return cfg[chan] and cfg[chan][lane]
 end
 
@@ -403,7 +396,7 @@ function pa:params(trackGuid, fxGuid)
   if cached.gen ~= frecencyGen then
     cached.gen    = frecencyGen
     cached.sorted = pa.frecencyOrder(cached.params,
-      cm:get('paramFrecency')[fxIdentAt(track, fxIdx)])
+      (ds:get('paramFrecency') or {})[fxIdentAt(track, fxIdx)])
   end
   return cached.sorted
 end
@@ -413,7 +406,7 @@ function pa:bumpFrecency(trackGuid, fxGuid, paramName)
   local track, fxIdx = resolveFx(trackGuid, fxGuid)
   local ident = track and fxIdentAt(track, fxIdx)
   if not ident then return end
-  local all = cm:get('paramFrecency')
+  local all = ds:get('paramFrecency') or {}
   local fxScores = all[ident] or { n = 0, params = {} }
   local n = fxScores.n + 1
   local entry = fxScores.params[paramName]
@@ -421,7 +414,7 @@ function pa:bumpFrecency(trackGuid, fxGuid, paramName)
     { s = (entry and entry.s * DECAY ^ (n - entry.n0) or 0) + 1, n0 = n }
   fxScores.n = n
   all[ident] = fxScores
-  cm:set('global', 'paramFrecency', all)
+  ds:assign('paramFrecency', all)
   frecencyGen = frecencyGen + 1
 end
 
