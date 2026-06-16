@@ -1,5 +1,5 @@
--- Pin the swing/temper slot-write contract: swing is the take's document-data
--- map; defaultSwing/lastTemperUsed are the config seeds tv:seedSharedSlots copies in.
+-- Pin the swing/temper slot-write contract: swing is the take's document-data map
+-- (defaultSwing is the config seed); temper is a view-only multi-tier config key.
 
 local t = require('support')
 local tuning = require('tuning')
@@ -8,38 +8,35 @@ local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } }
 local classic67 = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } }
 
 return {
-  ----------------------------------------------------------------
-  -- temper: take tier + lastTemperUsed seed
-  ----------------------------------------------------------------
+  ----- temper: one view-only key written across take, track and project
   {
-    name = 'setTemperSlot writes take tier and lastTemperUsed seed',
+    name = 'setTemperSlot writes the pick to take, track and project tiers',
     run = function(harness)
       local h = harness.mk{
         config = { project = { tempers = { ['19EDO'] = tuning.presets['19EDO'] } } },
       }
       h.vm:setTemperSlot('19EDO')
-      t.eq(h.cm:getAt('take',    'temper'),         '19EDO', 'take holds the selection')
-      t.eq(h.cm:getAt('project', 'lastTemperUsed'), '19EDO', 'project seeds fresh takes')
-      t.eq(h.cm:getAt('project', 'temper'),         nil,     'no project-tier mirror of the slot itself')
-      t.eq(h.cm:getAt('track',   'temper'),         nil,     'no track-tier mirror either -- per-take')
+      t.eq(h.cm:getAt('take',    'temper'), '19EDO', 'take freezes this take\'s pick')
+      t.eq(h.cm:getAt('track',   'temper'), '19EDO', 'track carries the rolling default')
+      t.eq(h.cm:getAt('project', 'temper'), '19EDO', 'project carries the rolling default')
     end,
   },
   {
-    name = 'setTemperSlot(nil) writes the 12EDO sentinel at take and seed',
+    name = 'setTemperSlot(nil) writes the 12EDO sentinel across the tiers',
     run = function(harness)
       local h = harness.mk{ config = { take = { temper = '19EDO' } } }
       h.vm:setTemperSlot(nil)
-      t.eq(h.cm:getAt('take',    'temper'),         '12EDO', 'take -> 12EDO sentinel')
-      t.eq(h.cm:getAt('project', 'lastTemperUsed'), '12EDO', 'seed records the Off choice')
+      t.eq(h.cm:getAt('take',    'temper'), '12EDO', 'take -> 12EDO sentinel')
+      t.eq(h.cm:getAt('project', 'temper'), '12EDO', 'project -> 12EDO sentinel')
     end,
   },
   {
-    name = 'setTemperSlot("") writes the 12EDO sentinel at take and seed',
+    name = 'setTemperSlot("") writes the 12EDO sentinel across the tiers',
     run = function(harness)
       local h = harness.mk{ config = { take = { temper = '19EDO' } } }
       h.vm:setTemperSlot('')
-      t.eq(h.cm:getAt('take',    'temper'),         '12EDO', 'take -> 12EDO')
-      t.eq(h.cm:getAt('project', 'lastTemperUsed'), '12EDO', 'seed -> 12EDO')
+      t.eq(h.cm:getAt('take',  'temper'), '12EDO', 'take -> 12EDO')
+      t.eq(h.cm:getAt('track', 'temper'), '12EDO', 'track -> 12EDO')
     end,
   },
 
@@ -111,31 +108,27 @@ return {
   },
 
   ----------------------------------------------------------------
-  -- Bind-time seed: tv:seedSharedSlots copies defaultSwing/lastTemperUsed into a fresh take
+  -- Bind-time seed: tv:seedSharedSlots copies defaultSwing into a fresh take's swing map
   {
-    name = 'seedSharedSlots copies defaultSwing/lastTemperUsed into a fresh take',
+    name = 'seedSharedSlots copies defaultSwing into a fresh take\'s swing map',
     run = function(harness)
       local h = harness.mk{
-        config = { project = { defaultSwing = { global = 'c58' }, lastTemperUsed = '19EDO',
-                               swings = { c58 = classic58 },
-                               tempers = { ['19EDO'] = tuning.presets['19EDO'] } } },
+        config = { project = { defaultSwing = { global = 'c58' },
+                               swings = { c58 = classic58 } } },
       }
       h.vm:seedSharedSlots()
-      t.eq(h.ds:get('swing').global,     'c58',   'swing seeded onto the take map')
-      t.eq(h.cm:getAt('take', 'temper'), '19EDO', 'temper seeded onto take')
+      t.eq(h.ds:get('swing').global, 'c58', 'swing seeded onto the take map')
     end,
   },
   {
-    name = 'seedSharedSlots does not overwrite a take that already has swing/temper',
+    name = 'seedSharedSlots does not overwrite a take that already has a swing map',
     run = function(harness)
       local h = harness.mk{
-        config = { take    = { temper = 'prior-temper' },
-                   project = { defaultSwing = { global = 'c58' }, lastTemperUsed = '19EDO' } },
+        config = { project = { defaultSwing = { global = 'c58' } } },
         data   = { swing = { global = 'prior-swing' } },
       }
       h.vm:seedSharedSlots()
-      t.eq(h.ds:get('swing').global,     'prior-swing',  'prior swing preserved')
-      t.eq(h.cm:getAt('take', 'temper'), 'prior-temper', 'prior temper preserved')
+      t.eq(h.ds:get('swing').global, 'prior-swing', 'prior swing preserved')
     end,
   },
   {
@@ -143,9 +136,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.vm:seedSharedSlots()
-      t.eq(h.ds:get('swing'),            nil, 'no spurious swing map written')
-      t.eq(h.cm:getAt('take', 'temper'), nil, 'no spurious temper write')
-      t.eq(h.cm:get('temper'), '12EDO', 'schema default still surfaces')
+      t.eq(h.ds:get('swing'), nil, 'no spurious swing map written')
     end,
   },
 }

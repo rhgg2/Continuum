@@ -45,12 +45,9 @@ local declarations = {
 
   -- string choice
   { 'noteLayout',      'colemak' },
-  -- temper is take-tier so each take carries its own without rewriting siblings;
-  -- '12EDO' sentinel blocks the bind-time seed so an explicit pick sticks. (swing is now document data.)
+  -- temper is a view-only lens (never realised). A pick writes all three tiers: the
+  -- take freezes that take's choice, track/project carry the default for unpicked takes.
   { 'temper',          '12EDO'    },
-  -- Project-tier seed for first-encounter takes: tv:seedSharedSlots copies it into the
-  -- take on first bind. Proxy key (not temper) since SetProjExtState survives Ctrl-Z.
-  { 'lastTemperUsed',  '12EDO'    },
 
   -- null-defaulted (declared, no initial value)
   { 'sampleBrowserRoot', nil },

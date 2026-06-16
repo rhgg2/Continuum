@@ -373,19 +373,16 @@ end
 
 function tv:setTemperSlot(name)
   if name == nil or name == '' then name = '12EDO' end
-  cm:set('take',    'temper',         name)
-  cm:set('project', 'lastTemperUsed', name)
+  cm:set('take',    'temper', name)
+  cm:set('track',   'temper', name)
+  cm:set('project', 'temper', name)
 end
 
---contract: seed a fresh take's swing/temper from their seed tiers on bind; no-op once set
+--contract: seed a fresh take's swing map from its seed tier on bind; no-op once set
 function tv:seedSharedSlots()
   if ds:get('swing') == nil then
     local seed = cm:getAt('track', 'defaultSwing') or cm:getAt('project', 'defaultSwing')
     if seed then ds:assign('swing', seed) end
-  end
-  if cm:getAt('take', 'temper') == nil then
-    local seed = cm:getAt('project', 'lastTemperUsed')
-    if seed ~= nil then cm:set('take', 'temper', seed) end
   end
 end
 
