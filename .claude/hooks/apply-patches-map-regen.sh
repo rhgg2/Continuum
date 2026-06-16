@@ -13,7 +13,7 @@ INPUT=$(cat)
 DRY=$(printf '%s' "$INPUT" | jq -r '.tool_input.dry_run // false')
 [ "$DRY" = "true" ] && exit 0
 
-PROJECT_ROOT="/Users/rgarner/Documents/Code/Readium"
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$PROJECT_ROOT" 2>/dev/null || exit 0
 
 # Gather every path from edits[] and creates[]. Deletes are skipped — source
