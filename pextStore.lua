@@ -15,15 +15,15 @@ end
 
 local PROJEXT_SECTION = 'rdm'
 
--- Global config lives in REAPER's resource dir (stable per-user), not beside
--- the script. Resolved lazily so module load never needs a live reaper.
-local function globalPath()
-  return reaper.GetResourcePath() .. '/continuum-config.lua'
+-- Global blobs are disk files in the resource dir, one per slot: 'config' ->
+-- continuum-config.lua, 'data' -> continuum-data.lua. Lazy so load needs no reaper.
+local function globalPath(slot)
+  return reaper.GetResourcePath() .. '/continuum-' .. slot .. '.lua'
 end
 
--- Set when the global disk file fails to parse: a hand-edit typo must not be
--- clobbered by the next save, so writes to it are refused until it reads clean.
-local globalLocked = false
+-- Per-slot lock: a global file that fails to parse must not be clobbered by the
+-- next save, so writes to it are refused until it reads clean. Keyed by slot.
+local globalLocked = {}
 
 local take, track = nil, nil
 
@@ -56,7 +56,7 @@ local function readRaw(scope, slot, handle)
     return (ok and v) or ''
   end
   if scope == 'global' then
-    local f = io.open(globalPath(), 'r')
+    local f = io.open(globalPath(slot), 'r')
     if not f then return '' end
     local content = f:read('*a')
     f:close()
@@ -73,12 +73,12 @@ local function writeRaw(scope, slot, raw, handle)
   elseif scope == 'project' then
     reaper.SetProjExtState(0, PROJEXT_SECTION, slot, raw)
   elseif scope == 'global' then
-    if globalLocked then
-      print('Error! Refusing to overwrite unreadable ' .. globalPath() .. '; fix or delete it.')
+    if globalLocked[slot] then
+      print('Error! Refusing to overwrite unreadable ' .. globalPath(slot) .. '; fix or delete it.')
       return
     end
-    local f = io.open(globalPath(), 'w')
-    if not f then print('Error! Could not write ' .. globalPath()); return end
+    local f = io.open(globalPath(slot), 'w')
+    if not f then print('Error! Could not write ' .. globalPath(slot)); return end
     f:write(raw)
     f:close()
   else
@@ -88,20 +88,20 @@ end
 
 -- Format by backend: global -> hand-editable Lua literal, P_EXT/projext ->
 -- compact wire. A bad global parse locks writes. See docs/pextStore.md § Formats.
-local function decode(scope, raw)
+local function decode(scope, slot, raw)
   if not raw or raw == '' then
-    if scope == 'global' then globalLocked = false end
+    if scope == 'global' then globalLocked[slot] = nil end
     return nil
   end
   if scope == 'global' then
     local value, err = util.prettyUnserialise(raw)
     if err then
-      globalLocked = true
-      print('Error! ' .. globalPath() .. ' is unreadable: ' .. tostring(err)
+      globalLocked[slot] = true
+      print('Error! ' .. globalPath(slot) .. ' is unreadable: ' .. tostring(err)
             .. ' -- refusing to overwrite. Fix or delete it.')
       return nil
     end
-    globalLocked = false
+    globalLocked[slot] = nil
     return value
   end
   local ok, value = pcall(util.unserialise, raw)
@@ -153,10 +153,12 @@ end
 ----------- PUBLIC INTERFACE
 
 local ps = {}
+local fire = util.installHooks(ps)
 
 ----- Context
 
 --contract: setTake(nil) clears take+track; setTake(take) derives track via GetMediaItemTrack; resnapshots baselines
+--emits: contextChanged -- {} on every context change so faces drop+reload their scope caches
 function ps:setTake(newTake)
   take = newTake
   track = nil
@@ -165,16 +167,19 @@ function ps:setTake(newTake)
     if item then track = reaper.GetMediaItemTrack(item) end
   end
   snapshotBaseline()
+  fire('contextChanged', {})
 end
 
 function ps:clearTake()
   take = nil
   snapshotBaseline()
+  fire('contextChanged', {})
 end
 
 function ps:setTrack(newTrack)
   track = newTrack
   snapshotBaseline()
+  fire('contextChanged', {})
 end
 
 function ps:boundTake()  return take  end
@@ -183,12 +188,12 @@ function ps:boundTrack() return track end
 ----- Storage
 
 --contract: returns the decoded value at (scope, slot) under bound context; nil if absent or undecodable
-function ps:get(scope, slot)           return decode(scope, readRaw(scope, slot))         end
-function ps:getAt(handle, scope, slot) return decode(scope, readRaw(scope, slot, handle)) end
+function ps:get(scope, slot)           return decode(scope, slot, readRaw(scope, slot))         end
+function ps:getAt(handle, scope, slot) return decode(scope, slot, readRaw(scope, slot, handle)) end
 
---contract: serialises value into (scope, slot) under bound context; refreshes the watcher baseline if watched
+--contract: writes value at (scope, slot); util.REMOVE clears; refreshes watcher baseline if watched
 function ps:assign(scope, slot, value)
-  local raw = encode(scope, value)
+  local raw = value == util.REMOVE and '' or encode(scope, value)
   writeRaw(scope, slot, raw)
   local key = scope .. '/' .. slot
   if baseline[key] ~= nil then baseline[key] = raw end
@@ -196,7 +201,7 @@ end
 
 -- Foreign-handle write: bypasses bound context and never touches the baseline.
 function ps:assignAt(handle, scope, slot, value)
-  writeRaw(scope, slot, encode(scope, value), handle)
+  writeRaw(scope, slot, value == util.REMOVE and '' or encode(scope, value), handle)
 end
 
 ----- Watcher

@@ -127,7 +127,7 @@ Out of `configManager.declarations`, into the `dataStore` registry:
 | `noteDelay` | take | per-lane delay |
 | `usedSwings` | take | swings used in this take (derived) |
 | `extraColumns` | take | per-take display columns |
-| `colSwing` | take | per-column swing |
+| `colSwing` | _deferred_ | per-column swing — see Swing note below |
 | `mutedChannels` | take | mix state |
 | `soloedChannels` | take | mix state |
 | `paramFrecency` | **global** | param-palette usage cache |
@@ -136,6 +136,16 @@ Out of `configManager.declarations`, into the `dataStore` registry:
 maintained, not a setting and not document content. The global scope on
 `dataStore` is its home, so `configManager` is left holding *only*
 user-facing config.
+
+**Swing — data vs seed (deferred).** Swing wears two hats: the *assignment*
+(which swing a take or column uses) is document data, but "the most recently
+chosen swing seeds the default for new takes" is config. `swing` / `temper`
+and their `last*Used` project seeds already stay in `configManager` (they ride
+the tier merge). `colSwing` is the open question: today it is read merged but
+written track-only, so whether a per-take override should exist — making it a
+merge participant, hence config — is unsettled. `colSwing` therefore stays out
+of the initial `dataStore` registry and is resolved in the swing-focused step,
+not mechanically moved.
 
 Call sites to update: `groupManager`, `sampleManager`, `arrangeManager`,
 `paramAutomation`.
@@ -221,12 +231,20 @@ Three workstreams. (1) is independent and lands first.
    `<resource-dir>/continuum-config.lua` in the Lua-literal format (read by
    `load()`) with a refuse-to-overwrite guard on an unparseable hand-edit;
    the P_EXT / projext scopes stay on the compact wire format.
-3. **dataStore** — per-key blobs over the engine, the registry above,
-   the call-site migration. No migration code: pre-beta, persisted shapes
-   change freely (see memory `no-legacy-data`).
+3. **dataStore** — 🔨 **in progress.** Per-key blobs over the engine, the
+   registry above, the call-site migration. No migration code: pre-beta,
+   persisted shapes change freely (see memory `no-legacy-data`). The face API
+   is name-only (`ds:get(name)`, `ds:assign(name, v)`, `ds:delete`, plus `At`
+   variants) — scope comes from the registry, not a caller argument;
+   `util.REMOVE` clears; the global scope is a single slot-addressed disk file
+   `continuum-data.lua`. Landing as commit A (engine `contextChanged` +
+   `dataStore` module, isolation-specced) then B–E (wire in, migrate keys by
+   cohort, drop dead `cm` seams, docs).
 
-Later, optional: fold `routingManager`'s meta mirrors and
-`paramAutomation`'s track mirror onto the engine — collapsing three
+Later, optional: (a) move `configManager` onto `pextStore`'s `contextChanged`
+signal too, so both faces reload via the one mechanism — today only `dataStore`
+subscribes, while `cm` still reloads inline; (b) fold `routingManager`'s meta
+mirrors and `paramAutomation`'s track mirror onto the engine — collapsing three
 undo implementations into one.
 
 ## Decisions settled
