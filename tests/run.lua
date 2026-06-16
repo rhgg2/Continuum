@@ -20,6 +20,7 @@ local specs = {
   'cmgr_stack_spec',
   'config_schema_spec',
   'cm_poll_undo_spec',
+  'pext_store_spec',
   'util_edit_primitives_spec',
   'util_bucket_spec',
   'util_install_hooks_spec',

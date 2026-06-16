@@ -11,6 +11,9 @@
 --shape: configChangedPayload.reload   = {}                                  -- setContext / clearTake / setTrack
 local util = require 'util'
 
+local deps = ...
+local ps   = assert(deps and deps.ps, 'configManager requires a pextStore dep { ps = ... }')
+
 local function print(...)
   return util.print(...)
 end
@@ -269,19 +272,9 @@ end
 --contract: no take context drops track too (track derived from take in setContext)
 ---------- PRIVATE DATA
 
-local CONFIG_PREFIX = 'ctm_'
-local SCRIPT_PATH = debug.getinfo(1,'S').source:match[[^@?(.*[\/])[^\/]-$]]
-local CONFIG_GLOBAL_PATH = SCRIPT_PATH .. 'ctm_cfg.txt'
-
-local take      = nil
-local track     = nil
+-- Storage, bound context, and the undo watcher all live in pextStore now;
+-- cm is the schema face that prunes, merges tiers, and validates keys.
 local fire  -- installed below, once cm exists
-
--- External-mutation watcher: REAPER undo/redo rewrites take+track P_EXT without notifying us.
--- pollUndo() catches this by comparing the project state count once per frame and re-reading on a tick.
-local lastStateCount = -1
-local lastTakeRaw    = ''
-local lastTrackRaw   = ''
 
 local cache = {
   global    = nil,
@@ -306,110 +299,30 @@ local function pruneUnknown(tbl)
   return tbl
 end
 
---contract: parse failures (bad text or non-table result) fall through to {}; never raises
-local function parse(text)
-  if not text or text == '' then return {} end
-  local ok, result = pcall(util.unserialise, text)
-  if ok and type(result) == 'table' then return pruneUnknown(result) end
-  return {}
-end
+local function asTable(v) return type(v) == 'table' and v or {} end
 
-local function loadGlobal()
-  local f = io.open(CONFIG_GLOBAL_PATH, 'r')
-  if not f then return {} end
-  local content = f:read('*a')
-  f:close()
-  return parse(content)
-end
-
-local function saveGlobal(tbl)
-  local f = io.open(CONFIG_GLOBAL_PATH, 'w')
-  if not f then
-    print('Error! Could not write global config to ' .. CONFIG_GLOBAL_PATH)
-    return
-  end
-  f:write(util.serialise(tbl))
-  f:close()
-end
-
-local function loadProject()
-  local ok, val = reaper.GetProjExtState(0, 'rdm', 'config')
-  return ok and parse(val)
-end
-
-local function saveProject(tbl)
-  reaper.SetProjExtState(0, 'rdm', 'config', util.serialise(tbl))
-end
-
-local function loadTrack()
-  if not track then return {} end
-  local ok, val = reaper.GetSetMediaTrackInfo_String(
-    track, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
-  return ok and parse(val)
-end
-
-local function saveTrack(tbl)
-  if not track then
-    print('Error! No track context for config storage')
-    return
-  end
-  lastTrackRaw = util.serialise(tbl)
-  reaper.GetSetMediaTrackInfo_String(
-    track, 'P_EXT:' .. CONFIG_PREFIX .. 'config', lastTrackRaw, true)
-end
-
-local function loadTake()
-  if not take then return {} end
-  local ok, val = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_config', '', false)
-  return ok and parse(val)
-end
-
-local function saveTake(tbl)
-  -- No bound take: take-tier config is derived state (recomputed on next rebuild), so a write here
-  -- can't lose real user edits — drop silently.
-  if not take then return end
-  lastTakeRaw = util.serialise(tbl)
-  reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_config', lastTakeRaw, true)
-end
-
+-- Each tier is a pextStore blob (take/track→'ctm_config', project→'config', global→disk).
+-- Engine decodes; cm prunes unknown keys so a renamed key in a stale file can't raise.
 local loaders = {
-  global    = loadGlobal,
-  project   = loadProject,
-  track     = loadTrack,
-  take      = loadTake,
+  global    = function() return pruneUnknown(asTable(ps:get('global',  'config'))) end,
+  project   = function() return pruneUnknown(asTable(ps:get('project', 'config'))) end,
+  track     = function() return pruneUnknown(asTable(ps:get('track',   'ctm_config'))) end,
+  take      = function() return pruneUnknown(asTable(ps:get('take',    'ctm_config'))) end,
   transient = function() return {} end,
 }
 
 local savers = {
-  global    = saveGlobal,
-  project   = saveProject,
-  track     = saveTrack,
-  take      = saveTake,
+  global    = function(tbl) ps:assign('global',  'config', tbl) end,
+  project   = function(tbl) ps:assign('project', 'config', tbl) end,
+  track     = function(tbl)
+    if not ps:boundTrack() then print('Error! No track context for config storage'); return end
+    ps:assign('track', 'ctm_config', tbl)
+  end,
+  -- No bound take: take-tier config is derived state (recomputed on next rebuild), so a write
+  -- here can't lose real user edits — drop silently.
+  take      = function(tbl) if ps:boundTake() then ps:assign('take', 'ctm_config', tbl) end end,
   transient = function() end,
 }
-
-local function readTakeRaw()
-  if not take then return '' end
-  local _, val = reaper.GetSetMediaItemTakeInfo_String(
-    take, 'P_EXT:ctm_config', '', false)
-  return val or ''
-end
-
-local function readTrackRaw()
-  if not track then return '' end
-  local _, val = reaper.GetSetMediaTrackInfo_String(
-    track, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
-  return val or ''
-end
-
--- Called after every context-changing path so pollUndo's next compare
--- is against the just-bound state, not whatever the previous take held.
-local function snapshotBaseline()
-  lastStateCount = reaper.GetProjectStateChangeCount
-                   and reaper.GetProjectStateChangeCount(0) or -1
-  lastTakeRaw    = readTakeRaw()
-  lastTrackRaw   = readTrackRaw()
-end
 
 ---------- CACHE MANAGEMENT
 
@@ -453,80 +366,43 @@ end
 local cm = {}
 fire = util.installHooks(cm)
 
+-- cm's two P_EXT tiers as one watcher group: the engine fires this callback
+-- once per undo tick that rewinds either blob, and we reload the diverged tiers.
+ps:watch({ { scope = 'take', slot = 'ctm_config' }, { scope = 'track', slot = 'ctm_config' } },
+  function(diverged)
+    for _, blob in ipairs(diverged) do cache[blob.scope] = loaders[blob.scope]() end
+    --emits: configChanged -- configChangedPayload.reload (external diff observed)
+    fire('configChanged', {})
+  end)
+
 --contract: setContext(nil) clears take+track; setContext(take) derives track via GetMediaItemTrack
 --contract: refreshes all persisted caches (transient resets to {}) and fires configChanged {}
 function cm:setContext(newTake)
-  take = newTake
-  track = nil
-
-  if take then
-    local item = reaper.GetMediaItemTake_Item(take)
-    if item then
-      track = reaper.GetMediaItemTrack(item)
-    end
-  end
-
+  ps:setTake(newTake)
   refreshCache()
-  snapshotBaseline()
   --emits: configChanged -- configChangedPayload.reload
   fire('configChanged', {})
 end
 
 function cm:clearTake()
-  take = nil
+  ps:clearTake()
   cache.take = {}
-  snapshotBaseline()
   --emits: configChanged -- configChangedPayload.reload
   fire('configChanged', {})
 end
 
 --contract: bound take pointer; nil when context is cleared (take/track tiers resolve off empty)
-function cm:boundTake() return take end
+function cm:boundTake() return ps:boundTake() end
 
 function cm:setTrack(newTrack)
-  track = newTrack
+  ps:setTrack(newTrack)
   cache.track = loaders.track()
-  snapshotBaseline()
   --emits: configChanged -- configChangedPayload.reload
   fire('configChanged', {})
 end
 
---invariant: polls project state count per frame; on tick re-reads P_EXT, refreshes if changed
---contract: no-op without GetProjectStateChangeCount (test harness); one int compare per frame
---contract: dead take/track ptrs are dropped before any P_EXT read; tick() drives propagation
---emits: configChanged -- configChangedPayload.reload (only when an external diff is observed)
-function cm:pollUndo()
-  if not reaper.GetProjectStateChangeCount then return end
-  local count = reaper.GetProjectStateChangeCount(0)
-  if count == lastStateCount then return end
-  lastStateCount = count
-  if take and reaper.ValidatePtr2
-     and not reaper.ValidatePtr2(0, take, 'MediaItem_Take*') then
-    take, lastTakeRaw = nil, ''
-  end
-  if track and reaper.ValidatePtr2
-     and not reaper.ValidatePtr2(0, track, 'MediaTrack*') then
-    track, lastTrackRaw = nil, ''
-  end
-  local changed = false
-  if take then
-    local raw = readTakeRaw()
-    if raw ~= lastTakeRaw then
-      lastTakeRaw = raw
-      cache.take  = loaders.take() or {}
-      changed = true
-    end
-  end
-  if track then
-    local raw = readTrackRaw()
-    if raw ~= lastTrackRaw then
-      lastTrackRaw = raw
-      cache.track  = loaders.track() or {}
-      changed = true
-    end
-  end
-  if changed then fire('configChanged', {}) end
-end
+--contract: delegates to the engine watcher; cm's watch group reloads tiers and fires configChanged
+function cm:pollUndo() ps:pollUndo() end
 
 ----- Reading
 
@@ -570,35 +446,26 @@ end
 --contract: returns raw P_EXT blob for otherTrack; stable byte-for-byte so callers can diff vs saved
 function cm:readTrackRaw(otherTrack)
   if not otherTrack then return nil end
-  local _, raw = reaper.GetSetMediaTrackInfo_String(
-    otherTrack, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
-  return raw
+  return ps:getRawAt(otherTrack, 'track', 'ctm_config')
 end
 
 --contract: bypasses cache/context; reads otherTrack P_EXT without firing configChanged
 function cm:readTrackKey(otherTrack, key)
   checkKey(key)
   if not otherTrack then return nil end
-  local ok, val = reaper.GetSetMediaTrackInfo_String(
-    otherTrack, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
-  if not ok or not val or val == '' then return nil end
-  local parsed = parse(val)
-  return copy(parsed[key])
+  return copy(asTable(ps:getAt(otherTrack, 'track', 'ctm_config'))[key])
 end
 
 --contract: bypasses cache/context; RMW otherTrack P_EXT; fires targeted configChanged
 function cm:writeTrackKey(otherTrack, key, value)
   checkKey(key)
   if not otherTrack then return end
-  local ok, val = reaper.GetSetMediaTrackInfo_String(
-    otherTrack, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
-  local parsed = (ok and val and val ~= '') and parse(val) or {}
+  local parsed = pruneUnknown(asTable(ps:getAt(otherTrack, 'track', 'ctm_config')))
   if value == util.REMOVE then parsed[key] = nil
   else                         parsed[key] = copy(value) end
-  reaper.GetSetMediaTrackInfo_String(
-    otherTrack, 'P_EXT:' .. CONFIG_PREFIX .. 'config', util.serialise(parsed), true)
+  ps:assignAt(otherTrack, 'track', 'ctm_config', parsed)
   -- If the foreign track happens to be the bound one, refresh its cache so the next get sees the write.
-  if otherTrack == track then cache.track = loaders.track() end
+  if otherTrack == ps:boundTrack() then cache.track = loaders.track() end
   --emits: configChanged -- configChangedPayload.targeted (with .track for cross-track writes)
   fire('configChanged', { key = key, level = 'track', track = otherTrack })
 end
@@ -607,25 +474,18 @@ end
 function cm:readTakeKey(otherTake, key)
   checkKey(key)
   if not otherTake then return nil end
-  local ok, val = reaper.GetSetMediaItemTakeInfo_String(
-    otherTake, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
-  if not ok or not val or val == '' then return nil end
-  local parsed = parse(val)
-  return copy(parsed[key])
+  return copy(asTable(ps:getAt(otherTake, 'take', 'ctm_config'))[key])
 end
 
 --contract: bypasses cache/context; RMW otherTake P_EXT; util.REMOVE clears; no signal
 function cm:writeTakeKey(otherTake, key, value)
   checkKey(key)
   if not otherTake then return end
-  local ok, val = reaper.GetSetMediaItemTakeInfo_String(
-    otherTake, 'P_EXT:' .. CONFIG_PREFIX .. 'config', '', false)
-  local parsed = (ok and val and val ~= '') and parse(val) or {}
+  local parsed = pruneUnknown(asTable(ps:getAt(otherTake, 'take', 'ctm_config')))
   if value == util.REMOVE then parsed[key] = nil
   else                         parsed[key] = copy(value) end
-  reaper.GetSetMediaItemTakeInfo_String(
-    otherTake, 'P_EXT:' .. CONFIG_PREFIX .. 'config', util.serialise(parsed), true)
-  if otherTake == take then cache.take = loaders.take() end
+  ps:assignAt(otherTake, 'take', 'ctm_config', parsed)
+  if otherTake == ps:boundTake() then cache.take = loaders.take() end
 end
 
 --contract: walks tiers most-specific→least; returns first level whose cache has the key, else nil

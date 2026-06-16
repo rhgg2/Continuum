@@ -209,9 +209,16 @@ Three workstreams. (1) is independent and lands first.
    tables, float arrays, edge-whitespace / control strings, dotted and
    keyword keys, sparse integer keys, and inf/nan; the compact
    round-trip stays pinned by `util_serialise_spec.lua`.
-2. **pextStore** — extract the storage + context + undo engine from
-   `configManager`, no behaviour change, pinned with a spec. It owns both
-   disk backends (Lua-literal) and the P_EXT/projext backends (compact).
+2. **pextStore** — 🟡 **extraction done; disk-format switch pending.** The
+   storage + context + undo engine is now `pextStore.lua`; `configManager`
+   is a schema face over it (a `{ ps }` dep), registering its take/track
+   tier blobs with the engine's watcher group. Behaviour-preserving (every
+   config / undo / slot / group spec stays green) and pinned in isolation
+   by `tests/specs/pext_store_spec.lua`. Storage API is `get` / `assign`
+   (+ `At` variants) with scope as a parameter; the context-setter is
+   `setTake`. **Commit B (pending):** switch the global disk backend to the
+   Lua-literal format + a refuse-to-overwrite guard; until then every scope
+   still rides the compact wire format.
 3. **dataStore** — per-key blobs over the engine, the registry above,
    the call-site migration. No migration code: pre-beta, persisted shapes
    change freely (see memory `no-legacy-data`).

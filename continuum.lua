@@ -77,7 +77,8 @@ end
 --contract: each page owns its cross-page state, exposed through the facade registry coord wires
 local function Main()
   local gui   = createImGui()
-  local cm    = util.instantiate('configManager')
+  local ps    = util.instantiate('pextStore')
+  local cm    = util.instantiate('configManager', { ps = ps })
   local cmgr  = util.instantiate('commandManager', { cm = cm })
   local coord = util.instantiate('coordinator', { cm = cm, cmgr = cmgr, gui = gui })
 

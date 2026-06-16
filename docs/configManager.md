@@ -78,9 +78,11 @@ reloads (e.g. `trackerView`'s match-grid-to-cursor frame override). On
 | take      | take `P_EXT:ctm_config`                            |
 | transient | none — in-memory only, reset to `{}` on reload     |
 
-The four persisted backends use `util.serialise` / `util.unserialise`
-(the shared escaped format). Parse failures fall through to an empty
-table.
+The four persisted backends are `pextStore` blobs, addressed `(scope,
+slot)` — take/track keyed `ctm_config`, project keyed `config`, global
+the disk file. The engine (de)serialises and runs the undo watcher; cm
+stays the schema face that prunes unknown keys on load and merges tiers.
+See `docs/pextStore.md`.
 
 ## Context
 

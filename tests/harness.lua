@@ -55,7 +55,8 @@ function harness.mk(opts)
     timeSigs   = opts.seed and opts.seed.timeSigs,
   })
 
-  local cm = util.instantiate('configManager')
+  local ps = util.instantiate('pextStore')
+  local cm = util.instantiate('configManager', { ps = ps })
   cm:setContext(take)
   if opts.config then
     for level, tbl in pairs(opts.config) do cm:assign(level, tbl) end

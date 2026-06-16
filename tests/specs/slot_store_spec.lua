@@ -105,7 +105,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.cm:set('track', 'slotEntries', { [3] = { path = 'Continuum/k.wav' } })
-      local cm2 = util.instantiate('configManager')
+      local cm2 = util.instantiate('configManager', { ps = util.instantiate('pextStore') })
       cm2:setContext('take1')
       t.eq(cm2:get('slotEntries')[3].path, 'Continuum/k.wav', 'rehydrated from track P_EXT')
     end,
