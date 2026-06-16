@@ -41,7 +41,7 @@ local SWING_ERR     = 0xff6060ff
 local SWING_MARK    = 0x000000b0
 local SWING_SOFT_QN = 0.15
 
-local tv, cm, chrome, ctx, facade = (...).tv, (...).cm, (...).chrome, (...).ctx, (...).facade
+local tv, cm, ds, chrome, ctx, facade = (...).tv, (...).cm, (...).ds, (...).chrome, (...).ctx, (...).facade
 
 local function arrange() return facade.get('arrange') end
 
@@ -376,10 +376,11 @@ end
 -- as no-slot (matches open()'s bail); at the channel tier nil means
 -- 'no override, fall through to take'.
 local function resolvedSlots()
-  local takeName = cm:get('swing')
+  local sw       = ds:get('swing') or {}
+  local takeName = sw.global
   if takeName == 'identity' then takeName = nil end
   local anchor   = tv:cursorAnchor()
-  local chanName = anchor and cm:get('colSwing')[anchor.chan] or nil
+  local chanName = anchor and sw[anchor.chan] or nil
   return takeName, chanName
 end
 

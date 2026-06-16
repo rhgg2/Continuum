@@ -436,8 +436,9 @@ return {
         },
         config = {
           project = { swings = { c58 = c58 } },
-          take    = { swing = 'c58', rowPerBeat = 4 },
+          take    = { rowPerBeat = 4 },
         },
+        data = { swing = { global = 'c58' } },
       }
       h.vm:setGridSize(80, 40)
       local col = h.vm.grid.cols[1]

@@ -22,10 +22,10 @@ local function arrange() return facade.get('arrange') end
 -- mm/tm/gm stay local to this chunk; only tv leaves, handed to the renderer.
 -- coord drives the take lifecycle on tm directly; tv owns only its own view-state seams.
 local mm = util.instantiate('midiManager',    { take = nil })
-local tm = util.instantiate('trackerManager', { mm = mm, cm = cm })
+local tm = util.instantiate('trackerManager', { mm = mm, cm = cm, ds = ds })
 local gm = util.instantiate('groupManager',   { tm = tm, ds = ds })
 local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = facade })
-local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, cmgr = cmgr, gm = gm, pa = pa })
+local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa })
 
 local tr = util.instantiate('trackerRender',
   { tv = tv, cm = cm, ds = ds, cmgr = cmgr, chrome = chrome,

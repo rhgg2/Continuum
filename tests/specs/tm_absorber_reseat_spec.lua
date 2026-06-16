@@ -73,17 +73,15 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
       }
       -- Sanity: the rule left both at 139 under c58.
       t.eq(fakeIn(h.fm:dump()).ppq, 139, 'absorber starts at host raw under c58')
 
-      -- Drop swing to identity. cm.swing change fires configChanged on
-      -- the 'swing' key, which marks all channels stale and triggers the
-      -- rebuild — the rule reseats raw from ppqL under the new (identity)
-      -- snapshot.
-      h.cm:remove('take', 'swing')
+      -- Drop swing to identity: the ds swing edit fires dataChanged, marking
+      -- all channels stale and reseating raw from ppqL under identity.
+      h.ds:delete('swing')
 
       local dump = h.fm:dump()
       local note = dump.notes[1]

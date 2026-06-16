@@ -1,14 +1,5 @@
--- Unified onset+tail pass at tm:rebuild. Same-pitch raw ordering
--- wins: a user-authored delay that pulls a logical-later note BEFORE
--- its logical predecessor in realised time is respected -- the walk
--- treats whoever lands first in raw as the predecessor and retro-clips
--- the other's tail. The clamp only fires on actual collision (raws
--- within 1 tick); ppqL breaks the tie -- the logical-later note
--- yields. Authored `delay` survives untouched; mm.ppq carries the
--- final raw; tv derives `delayC` from (mm.ppq - swing(ppqL)).
---
--- Pins the prod path: cm:set('take','swing','c58') drives the
--- configCallback → markSwingStale → rebuild chain.
+-- Unified onset+tail pass at tm:rebuild. Pins the prod path:
+-- ds:assign('swing', {global='c58'}) drives dataChanged → markSwingStale → rebuild.
 
 local t       = require('support')
 local util    = require('util')
@@ -41,7 +32,7 @@ return {
         },
       }
 
-      h.cm:set('take', 'swing', 'c58')
+      h.ds:assign('swing', { global = 'c58' })
 
       local A, B
       for _, x in ipairs(h.fm:dump().notes) do
@@ -80,7 +71,7 @@ return {
         },
       }
 
-      h.cm:set('take', 'swing', 'c58')
+      h.ds:assign('swing', { global = 'c58' })
 
       local A, B
       for _, x in ipairs(h.fm:dump().notes) do

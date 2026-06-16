@@ -26,7 +26,7 @@ local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
 
-local tm, cm, cmgr, gm, pa = (...).tm, (...).cm, (...).cmgr, (...).gm, (...).pa
+local tm, cm, ds, cmgr, gm, pa = (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa
 
 local function print(...)
   return util.print(...)
@@ -341,46 +341,52 @@ tv.applyTakeProperties = util.atomic('Take properties', function(self, props)
   end
 end)
 
--- Slot selections (temper, swing) live at the take tier; the project
--- tier holds a sibling 'last*Used' seed that tv:seedSharedSlots copies
--- into the take tier on first bind of a take with no value of its own.
--- Sentinel ('identity' / '12EDO') over cm:remove because nil at the
--- take tier would fall through to schema defaults rather than blocking
--- the next bind-time seed -- we want an explicit "Off" to stick.
-local SHARED_SLOTS = { { 'swing', 'lastSwingUsed' }, { 'temper', 'lastTemperUsed' } }
-
-local function pickShared(key, seedKey, value)
-  cm:set('take',    key,     value)
-  cm:set('project', seedKey, value)
+-- swing is take document data: one map { global=name, [chan]=name }. defaultSwing
+-- mirrors that shape across config tiers as a pure seed (copied in on bind, never realised).
+local function setTakeSwing(slot, value)
+  local map = ds:get('swing') or {}
+  map[slot] = value
+  ds:assign('swing', map)
 end
 
+local function setDefaultSwing(tier, slot, value)
+  local map = cm:getAt(tier, 'defaultSwing') or {}
+  map[slot] = value
+  cm:set(tier, 'defaultSwing', map)
+end
+
+-- Take-wide swing: the take map's 'global' slot + project & track seed.
 function tv:setSwingSlot(name)
   if name == nil or name == '' then name = 'identity' end
-  pickShared('swing', 'lastSwingUsed', name)
+  setTakeSwing('global', name)
+  setDefaultSwing('project', 'global', name)
+  setDefaultSwing('track',   'global', name)
 end
+
+-- Per-channel swing: the take map's channel slot + track seed only
+-- (the project tier carries 'global' alone, never per-channel).
+function tv:setColSwingSlot(chan, name)
+  local value = (name ~= '' and name) or nil
+  setTakeSwing(chan, value)
+  setDefaultSwing('track', chan, value)
+end
+
 function tv:setTemperSlot(name)
   if name == nil or name == '' then name = '12EDO' end
-  pickShared('temper', 'lastTemperUsed', name)
+  cm:set('take',    'temper',         name)
+  cm:set('project', 'lastTemperUsed', name)
 end
 
---contract: on bind, copy project-tier 'last*Used' into take tier for any shared slot the take lacks. No-op when the seed itself is unset (no user pick yet) so fresh projects do not dirty every visited take.
+--contract: seed a fresh take's swing/temper from their seed tiers on bind; no-op once set
 function tv:seedSharedSlots()
-  for _, pair in ipairs(SHARED_SLOTS) do
-    local key, seedKey = pair[1], pair[2]
-    if cm:getAt('take', key) == nil then
-      local seed = cm:getAt('project', seedKey)
-      if seed ~= nil then cm:set('take', key, seed) end
-    end
+  if ds:get('swing') == nil then
+    local seed = cm:getAt('track', 'defaultSwing') or cm:getAt('project', 'defaultSwing')
+    if seed then ds:assign('swing', seed) end
   end
-end
-
--- colSwing is a per-channel map; cross-track bleed via project would
--- mean track A's per-channel pattern surfaces on a fresh track B until
--- B overrides every entry. Keep it track-scoped.
-function tv:setColSwingSlot(chan, name)
-  local map = cm:get('colSwing')
-  map[chan] = (name ~= '' and name) or nil
-  cm:set('track', 'colSwing', map)
+  if cm:getAt('take', 'temper') == nil then
+    local seed = cm:getAt('project', 'lastTemperUsed')
+    if seed ~= nil then cm:set('take', 'temper', seed) end
+  end
 end
 
 function tv:setSwingComposite(name, composite)

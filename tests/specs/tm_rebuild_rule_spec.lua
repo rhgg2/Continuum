@@ -100,8 +100,8 @@ return {
         }},
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
       }
       local n = noteByPitch(h.fm:dump(), 60)
       t.eq(n.ppq,  139, 'raw unchanged under matching swing')
@@ -122,8 +122,8 @@ return {
         }},
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
       }
       -- Mark stale, then nudge raw out of band. fm:modify fires reload →
       -- tm:rebuild, which sees stale=true and reseats raw from ppqL=120.
@@ -161,8 +161,8 @@ return {
         }},
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
       }
       h.tm:markSwingStale(1)
       h.fm:modify(function()
@@ -190,8 +190,8 @@ return {
         }},
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
       }
       h.tm:markSwingStale(nil)
       h.fm:modify(function()
@@ -271,7 +271,7 @@ return {
         }},
         config = { project = { swings = { ['c58'] = classic58 } } },
       }
-      h.cm:set('take', 'swing', 'c58')
+      h.ds:assign('swing', { global = 'c58' })
       local dump = h.fm:dump()
       local n1 = noteByPitch(dump, 60)
       local n5 = noteByPitch(dump, 64)
@@ -297,7 +297,7 @@ return {
         }},
         config = { project = { swings = { ['c67'] = classic67 } } },
       }
-      h.cm:set('take', 'colSwing', { [2] = 'c67' })
+      h.ds:assign('swing', { [2] = 'c67' })
       local dump = h.fm:dump()
       t.eq(noteByPitch(dump, 60).ppq, 120, 'chan 1 unmoved (no swing applies)')
       t.eq(noteByPitch(dump, 64).ppq, 161, 'chan 2 reseated under c67')
@@ -317,8 +317,8 @@ return {
         }},
         config = {
           project = { swings = { ['mySwing'] = classic58 } },
-          take    = { swing = 'mySwing' },
         },
+        data = { swing = { global = 'mySwing' } },
       }
       t.eq(noteByPitch(h.fm:dump(), 60).ppq, 139, 'pre: c58 body, raw=139')
 
@@ -344,13 +344,13 @@ return {
         }},
         config = {
           project = { swings = { ['c58'] = classic58, ['c67'] = classic67 } },
-          take    = { colSwing = { [1] = 'c58' } },
         },
+        data = { swing = { [1] = 'c58' } },
       }
       t.eq(noteByPitch(h.fm:dump(), 60).ppq, 139, 'pre: chan 1 under c58')
       t.eq(noteByPitch(h.fm:dump(), 64).ppq, 120, 'pre: chan 2 at identity')
 
-      h.cm:set('take', 'colSwing', { [1] = 'c67' })
+      h.ds:assign('swing', { [1] = 'c67' })
       local dump = h.fm:dump()
       t.eq(noteByPitch(dump, 60).ppq, 161, 'chan 1 reseated under c67')
       t.eq(noteByPitch(dump, 64).ppq, 120, 'chan 2 still identity')
@@ -372,8 +372,8 @@ return {
         }},
         config = {
           project = { swings = { ['c58'] = classic58, ['c67'] = classic67 } },
-          take    = { colSwing = { [1] = 'c58', [2] = 'c58' } },
         },
+        data = { swing = { [1] = 'c58', [2] = 'c58' } },
       }
       local marked = {}
       local orig = h.tm.markSwingStale
@@ -381,7 +381,7 @@ return {
         marked[chan or 'all'] = (marked[chan or 'all'] or 0) + 1
         return orig(self, chan)
       end
-      h.cm:set('take', 'colSwing', { [1] = 'c67', [2] = 'c58' })
+      h.ds:assign('swing', { [1] = 'c67', [2] = 'c58' })
       t.eq(marked[1],     1,   'chan 1 marked (its colSwing changed)')
       t.eq(marked[2],     nil, 'chan 2 NOT marked (its colSwing unchanged)')
       t.eq(marked['all'], nil, 'no global mark')
@@ -398,8 +398,8 @@ return {
         }},
         config = {
           project = { swings = { ['a'] = classic58, ['b'] = classic67 } },
-          take    = { colSwing = { [1] = 'a' } },
         },
+        data = { swing = { [1] = 'a' } },
       }
       local marked = {}
       local orig = h.tm.markSwingStale
@@ -422,8 +422,8 @@ return {
         seed = {},
         config = {
           project = { swings = { ['g'] = classic58 } },
-          take    = { swing = 'g' },
         },
+        data = { swing = { global = 'g' } },
       }
       local marked = {}
       local orig = h.tm.markSwingStale
@@ -453,7 +453,7 @@ return {
         if chan == nil then sawNil = true end
         return orig(self, chan)
       end
-      h.cm:set('take', 'swing', 'c58')
+      h.ds:assign('swing', { global = 'c58' })
       t.eq(count, 1, 'exactly one mark call')
       t.truthy(sawNil, 'mark called with nil (all-16)')
     end,
@@ -466,8 +466,8 @@ return {
         seed = {},
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { colSwing = { [1] = 'c58' } },
         },
+        data = { swing = { [1] = 'c58' } },
       }
       local count = 0
       local orig = h.tm.markSwingStale
@@ -475,7 +475,7 @@ return {
         count = count + 1
         return orig(self, chan)
       end
-      h.cm:set('take', 'colSwing', { [1] = 'c58' })
+      h.ds:assign('swing', { [1] = 'c58' })
       t.eq(count, 0, 'no-diff write fires no marks')
     end,
   },
@@ -496,8 +496,8 @@ return {
         }},
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
       }
       local _, seedN = h.fm:notes()()
       h.fm:modify(function() h.fm:assign(seedN.token, { ppq = 100 }) end)

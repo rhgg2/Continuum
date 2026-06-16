@@ -370,7 +370,7 @@ return {
   -- Reswing (folded from sequenceManager)
   --------------------------------------------------------------------
   {
-    name = 'takesUsing reads usedSwings off each take via cm:readTakeKey',
+    name = 'takesUsing scans each take swing map (ds) for the named swing',
     run = function(harness)
       local h, am = mkAm(harness)
       -- Use the harness's bound take; arrange one project track that
@@ -380,7 +380,7 @@ return {
         take = boundTake, isMidi = true, pos = 0, len = 1, poolGuid = '{harn}',
       })
       h.reaper:setProjectTracks{ 'tr1' }
-      h.cm:set('take', 'usedSwings', { ['my-swing'] = true })
+      h.ds:assign('swing', { global = 'my-swing' })
 
       local hits = am:takesUsing('my-swing')
       t.eq(#hits, 1)

@@ -27,8 +27,8 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
       }
       -- 240 ppq/QN, period 1 QN = 240 ppq. Boundaries are fixed.
       t.eq(h.tm:fromLogical(1, 0),   0,   'origin fixed')
@@ -45,8 +45,8 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
       }
       -- fromLogical(1,120) = 139.2; +0.6 = 139.8 → 140 rounded.
       t.eq(h.tm:fromLogical(1, 120, 0.6), 140,
@@ -60,8 +60,8 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['c67'] = classic67 } },
-          take    = { colSwing = { [2] = 'c67' } },
         },
+        data = { swing = { [2] = 'c67' } },
       }
       t.eq(h.tm:fromLogical(1, 120), 120, 'chan 1 unswung')
       -- 0.67 · 240 = 160.8 → 161 rounded.
@@ -75,8 +75,8 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['c58'] = classic58, ['c67'] = classic67 } },
-          take    = { swing = 'c58', colSwing = { [1] = 'c67' } },
         },
+        data = { swing = { global = 'c58', [1] = 'c67' } },
       }
       -- Compose by hand using the factor build tm uses, so the ordering
       -- pin doesn't depend on the closed form of the active atom.
@@ -100,9 +100,8 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          -- Slot name not in the lib.
-          take    = { swing = 'mysterious' },
         },
+        data = { swing = { global = 'mysterious' } },  -- name not in the lib
       }
       t.eq(h.tm:fromLogical(1, 120), 120, 'unknown slot name passes through')
     end,
@@ -114,21 +113,21 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['identity'] = {} } },
-          take    = { swing = 'identity' },
         },
+        data = { swing = { global = 'identity' } },
       }
       t.eq(h.tm:fromLogical(1, 120), 120, 'empty composite is identity')
     end,
   },
 
   {
-    name = 'cache invalidates across configChanged for swing',
+    name = 'cache invalidates across a swing edit',
     run = function(harness)
       local h = harness.mk{
         config = { project = { swings = { ['c58'] = classic58 } } },
       }
       t.eq(h.tm:fromLogical(1, 120), 120, 'no swing yet')
-      h.cm:set('take', 'swing', 'c58')
+      h.ds:assign('swing', { global = 'c58' })
       t.eq(h.tm:fromLogical(1, 120), 139, 'swing took effect after rebuild')
     end,
   },

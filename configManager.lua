@@ -45,13 +45,11 @@ local declarations = {
 
   -- string choice
   { 'noteLayout',      'colemak' },
-  -- Slot keys: take-tier so each take carries its own swing/temper without rewriting siblings.
-  -- Sentinel defaults ('12EDO'/'identity') block the bind-time seed — an explicit pick sticks across rebinds.
+  -- temper is take-tier so each take carries its own without rewriting siblings;
+  -- '12EDO' sentinel blocks the bind-time seed so an explicit pick sticks. (swing is now document data.)
   { 'temper',          '12EDO'    },
-  { 'swing',           'identity' },
-  -- Project-tier seeds for first-encounter takes: tp:bind copies last*Used into the take on first bind.
-  -- Uses a proxy key (not swing/temper directly) because SetProjExtState survives Ctrl-Z, causing desync.
-  { 'lastSwingUsed',   'identity' },
+  -- Project-tier seed for first-encounter takes: tv:seedSharedSlots copies it into the
+  -- take on first bind. Proxy key (not temper) since SetProjExtState survives Ctrl-Z.
   { 'lastTemperUsed',  '12EDO'    },
 
   -- null-defaulted (declared, no initial value)
@@ -61,7 +59,8 @@ local declarations = {
   { 'lastProjectPath',   nil },
 
   -- table-valued
-  { 'colSwing',        {}    },
+  -- defaultSwing: seed for a take's swing map on first bind; never read at realisation.
+  { 'defaultSwing',    { global = 'identity' } },
   -- Default is the system preset library; global (user-saved) and project (local) tiers overlay per-name.
   -- Read with mergeTiers=true to get the union.
   { 'swings',          {
@@ -76,7 +75,6 @@ local declarations = {
       ['delay-15']   = { factors = { { atom = 'id', shift = -1/16, period = 1 } } },
       ['delay-30']   = { factors = { { atom = 'id', shift = -1/8,  period = 1 } } },
     } },
-  { 'usedSwings',      {}    },
   { 'tempers',         {}    },
   { 'mutedChannels',   {}    },
   { 'soloedChannels',  {}    },

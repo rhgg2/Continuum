@@ -16,8 +16,8 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
       }
       h.tm:addEvent({ evType = 'note',
         ppq = 120, endppq = 240,
@@ -39,8 +39,8 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
       }
       -- delay in milli-QN: 125 mQN @ 240 ppq/QN = 30 ppq nudge on note-on.
       h.tm:addEvent({ evType = 'note',
@@ -63,8 +63,8 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
         seed = { notes = {
           { ppq = 0, endppq = 60, ppqL = 0, endppqL = 60,
             chan = 1, pitch = 60, vel = 100 },
@@ -86,8 +86,8 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
         },
+        data = { swing = { global = 'c58' } },
         seed = { notes = {
           -- ppqL=120 under c58 → expected raw 139 after first rebuild.
           { ppq = 139, endppq = 240, ppqL = 120, endppqL = 240,

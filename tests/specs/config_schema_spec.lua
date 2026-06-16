@@ -35,7 +35,7 @@ return {
       local said = {}
       local realPrint = _G.print
       _G.print = function(...) said[#said + 1] = table.concat({ ... }, ' ') end
-      local ok = pcall(function() h.cm:set('take', 'usedSwings', { a = true }) end)
+      local ok = pcall(function() h.cm:set('take', 'mutedChannels', { a = true }) end)
       _G.print = realPrint
       t.truthy(ok, 'no-take take-tier write must not raise')
       for _, line in ipairs(said) do

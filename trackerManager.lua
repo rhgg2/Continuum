@@ -35,7 +35,7 @@ local function print(...)
   return util.print(...)
 end
 
-local mm, cm = (...).mm, (...).cm
+local mm, cm, ds = (...).mm, (...).cm, (...).ds
 
 local tm = {}
 local fire = util.installHooks(tm)
@@ -687,9 +687,10 @@ local clearSwing do
           if timing.isIdentity(composite) or length <= 0 then return nil end
           return timing.resolveComposite(composite, length, ppqPerQN)
         end
-        global = resolve(cm:get('swing'))
-        for chan, name in pairs(cm:get('colSwing') or {}) do
-          column[chan] = resolve(name)
+        local sw = ds:get('swing') or {}
+        global = resolve(sw.global)
+        for chan, name in pairs(sw) do
+          if chan ~= 'global' then column[chan] = resolve(name) end
         end
       end
       swing = {
@@ -1585,25 +1586,6 @@ do
       end
     end
 
-    -- Project the take's used swing names into take-tier cm so seqMgr can
-    -- discover affected takes via cm:readTakeKey. String entries only —
-    -- anonymous composites are frozen at authoring. No-op when no take is
-    -- bound: usedSwings is take-scoped and global tiers can still resolve
-    -- a non-empty `swing` here (e.g. samplePage's setTrack-induced rebuild).
-    if mm:take() then
-      local used = {}
-      local g = cm:get('swing')
-      if type(g) == 'string' and g ~= 'identity' then used[g] = true end
-      for _, v in pairs(cm:get('colSwing') or {}) do
-        if type(v) == 'string' and v ~= 'identity' then used[v] = true end
-      end
-      local prev = cm:get('usedSwings') or {}
-      local same = true
-      for k in pairs(used) do if not prev[k] then same = false; break end end
-      if same then for k in pairs(prev) do if not used[k] then same = false; break end end end
-      if not same then cm:set('take', 'usedSwings', used) end
-    end
-
     reload()
     rebuilding = false
 
@@ -1617,27 +1599,25 @@ end
 ----- Lifecycle
 
 do
-  --invariant: usedSwings is rebuild output, not input
-  --contract: usedSwings is suppressed to avoid a redundant follow-up rebuild from cm:set
-  local tvOnlyKeys = { mutedChannels = true, soloedChannels = true, usedSwings = true }
+  --invariant: tvOnlyKeys skip the configChanged rebuild (defaultSwing seed, muted/soloed)
+  local tvOnlyKeys = { mutedChannels = true, soloedChannels = true, defaultSwing = true }
 
-  --invariant: configChanged 'swing' → all 16 channels
-  --invariant: configChanged 'colSwing' → channels with diff vs prevColSwing
+  --invariant: dataChanged 'swing' → global change marks all 16, else only the diffed channels
   --invariant: configChanged 'swings' → channels resolving to names with diff body vs prevSwings
   --invariant: prev*-caches refresh after each event and on bindTake
   -- Merged-tier read: a save at any tier (project, global) lands in the
   -- same merged view, so diff captures real change to the composite a
   -- channel will resolve to.
   local function readSwings() return cm:get('swings', { mergeTiers = true }) end
-  local prevSwings   = util.deepClone(readSwings())
-  local prevColSwing = util.deepClone(cm:get('colSwing') or {})
+  local prevSwings = util.deepClone(readSwings())
+  local prevSwing  = util.deepClone(ds:get('swing') or {})
 
   local function snapshotSwingState()
-    prevSwings   = util.deepClone(readSwings())
-    prevColSwing = util.deepClone(cm:get('colSwing') or {})
+    prevSwings = util.deepClone(readSwings())
+    prevSwing  = util.deepClone(ds:get('swing') or {})
   end
 
-  local function colSwingDiffChannels(prev, cur)
+  local function swingChannelDiff(prev, cur)
     prev, cur = prev or {}, cur or {}
     local affected = {}
     for chan = 1, 16 do
@@ -1658,17 +1638,17 @@ do
     return names
   end
 
-  -- Global swing shadows colSwing: a hit on the global name affects all 16.
+  -- Global swing shadows the per-channel slots: a hit on the global name affects all 16.
   local function channelsResolvingTo(names)
     local affected = {}
     if not next(names) then return affected end
-    if names[cm:get('swing')] then
+    local sw = ds:get('swing') or {}
+    if names[sw.global] then
       for chan = 1, 16 do affected[chan] = true end
       return affected
     end
-    local cs = cm:get('colSwing') or {}
     for chan = 1, 16 do
-      if names[cs[chan]] then affected[chan] = true end
+      if names[sw[chan]] then affected[chan] = true end
     end
     return affected
   end
@@ -1691,14 +1671,7 @@ do
   cm:subscribe('configChanged', function(change)
     if bindingTake or not cm:boundTake() then return end
     local key = change.key
-    if key == 'swing' then
-      tm:markSwingStale(nil)
-    elseif key == 'colSwing' then
-      for chan in pairs(colSwingDiffChannels(prevColSwing, cm:get('colSwing'))) do
-        tm:markSwingStale(chan)
-      end
-      prevColSwing = util.deepClone(cm:get('colSwing') or {})
-    elseif key == 'swings' then
+    if key == 'swings' then
       local curSwings = readSwings()
       for chan in pairs(channelsResolvingTo(changedSwingNames(prevSwings, curSwings))) do
         tm:markSwingStale(chan)
@@ -1706,6 +1679,21 @@ do
       prevSwings = util.deepClone(curSwings)
     end
     if not tvOnlyKeys[key] then tm:rebuild(false) end
+  end)
+
+  -- swing is document data now: edits and undo rewinds arrive as dataChanged. Diff
+  -- the take's swing map -- 'global' marks all 16, else just the channels that moved.
+  ds:subscribe('dataChanged', function(change)
+    if change.name ~= 'swing' then return end
+    if bindingTake or not cm:boundTake() then return end
+    local cur = ds:get('swing') or {}
+    if cur.global ~= prevSwing.global then
+      tm:markSwingStale(nil)
+    else
+      for chan in pairs(swingChannelDiff(prevSwing, cur)) do tm:markSwingStale(chan) end
+    end
+    prevSwing = util.deepClone(cur)
+    tm:rebuild(false)
   end)
 
   --contract: atomic take swap: cm:setContext runs silently; mm:load fires the coherent rebuild

@@ -31,10 +31,11 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58', rowPerBeat = 4 },
+          take    = { rowPerBeat = 4 },
         },
+        data = { swing = { global = 'c58' } },
       }
-      h.cm:remove('take', 'swing')
+      h.ds:delete('swing')
       h.vm:setGridSize(80, 40)
 
       local cc = findCC(h.fm:dump(), 'cc', 2)
@@ -55,8 +56,9 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58', rowPerBeat = 4 },
+          take    = { rowPerBeat = 4 },
         },
+        data = { swing = { global = 'c58' } },
       }
       h.vm:setGridSize(80, 40)
       h.tm:markSwingStale(nil); h.tm:rebuild(false)
@@ -79,8 +81,9 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58, ['c67'] = classic67 } },
-          take    = { swing = 'c67', rowPerBeat = 4 },
+          take    = { rowPerBeat = 4 },
         },
+        data = { swing = { global = 'c67' } },
       }
       h.vm:setGridSize(80, 40)
       h.tm:markSwingStale(nil); h.tm:rebuild(false)
@@ -96,8 +99,9 @@ return {
       local h = harness.mk{
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58', rowPerBeat = 8 },
+          take    = { rowPerBeat = 8 },
         },
+        data = { swing = { global = 'c58' } },
       }
       h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 3, cc = 7, val = 100 })
       h.tm:flush()
@@ -117,8 +121,9 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58', rowPerBeat = 8 },
+          take    = { rowPerBeat = 8 },
         },
+        data = { swing = { global = 'c58' } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -163,10 +168,11 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58', rowPerBeat = 4 },
+          take    = { rowPerBeat = 4 },
         },
+        data = { swing = { global = 'c58' } },
       }
-      h.cm:remove('take', 'swing')
+      h.ds:delete('swing')
       h.vm:setGridSize(80, 40)
       h.tm:markSwingStale(nil); h.tm:rebuild(false)
 
@@ -206,7 +212,7 @@ return {
           take    = { rowPerBeat = 4 },
         },
       }
-      h.cm:set('take', 'swing', 'c58')
+      h.ds:assign('swing', { global = 'c58' })
       h.vm:setGridSize(80, 40)
 
       local Bafter
@@ -231,8 +237,9 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58', rowPerBeat = 4 },
+          take    = { rowPerBeat = 4 },
         },
+        data = { swing = { global = 'c58' } },
       }
       local ch  = h.tm:getChannel(1)
       local col = ch.columns.ccs[11]

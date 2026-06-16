@@ -279,8 +279,8 @@ return {
         },
         config = {
           project = { swings = { ['x'] = extreme } },
-          take    = { swing = 'x' },
         },
+        data = { swing = { global = 'x' } },
       }
       local col = h.vm.grid.cols[1]
       t.truthy(col.cells[5],     'note placed on row 5')
@@ -315,7 +315,7 @@ return {
           take    = { rowPerBeat = 4 },
         },
       }
-      h.cm:set('take', 'swing', 'c58')
+      h.ds:assign('swing', { global = 'c58' })
       local col = h.vm.grid.cols[1]
       for _, r in ipairs{ 0, 1, 2, 4 } do
         t.truthy(col.cells[r],     'row ' .. r .. ' cell present')
@@ -336,8 +336,9 @@ return {
         },
         config = {
           project = { swings = { c58 = c58 } },
-          take    = { swing = 'c58', rowPerBeat = 4, currentOctave = 4 },
+          take    = { rowPerBeat = 4, currentOctave = 4 },
         },
+        data = { swing = { global = 'c58' } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -369,8 +370,9 @@ return {
         },
         config = {
           project = { swings = { c58 = c58 } },
-          take    = { swing = 'c58', rowPerBeat = 4, currentOctave = 4 },
+          take    = { rowPerBeat = 4, currentOctave = 4 },
         },
+        data = { swing = { global = 'c58' } },
       }
       h.vm:setGridSize(80, 40)
 

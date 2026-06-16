@@ -21,7 +21,7 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic } },
-          take    = { swing = nil, rowPerBeat = 4 },
+          take    = { rowPerBeat = 4 },
         },
       }
       h.vm:setGridSize(80, 40)

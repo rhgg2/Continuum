@@ -17,12 +17,11 @@ local function print(...) return util.print(...) end
 ----------- REGISTRY
 
 -- name -> scope (each key's actual write tier in the pre-split configManager).
--- colSwing is deferred to the swing data/seed separation -- see design/persistence.md.
 local registry = {
   groups              = 'take',
   paramAutomation     = 'take',
   noteDelay           = 'take',
-  usedSwings          = 'take',
+  swing               = 'take',
   extraColumns        = 'take',
   arrangeNaturalLenQN = 'take',
   mutedChannels       = 'take',

@@ -23,8 +23,7 @@ local harness = require('harness')
 local C55 = { config = {
   project = { swings = { ['c55'] = {
     factors = { { atom = 'classic', shift = 0.05, period = 1 } } } } },
-  take    = { swing = 'c55' },
-}, groups = true }
+}, data = { swing = { global = 'c55' } }, groups = true }
 
 -- resolution 240, rpb 4, denom 4 -> logPerRow 60; period 1 QN = 240.
 local LPR = 60
@@ -38,6 +37,7 @@ end
 local function seededHarness(notes)
   return harness.mk{
     config = C55.config,
+    data   = C55.data,
     groups = true,
     seed   = { length = 7680, resolution = 240, notes = notes },
   }

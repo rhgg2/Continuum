@@ -69,7 +69,7 @@ function harness.mk(opts)
 
   if opts.seed then mm:seed(opts.seed) end
 
-  local tm = util.instantiate('trackerManager', { mm = mm, cm = cm })
+  local tm = util.instantiate('trackerManager', { mm = mm, cm = cm, ds = ds })
   local cmgr = util.instantiate('commandManager', { cm = cm })
   -- gm is opt-in: it subscribes to tm flush signals, so wiring it
   -- unconditionally would perturb every tm-unit spec's flush pipeline.
@@ -77,7 +77,7 @@ function harness.mk(opts)
   local gm = opts.groups
          and util.instantiate('groupManager', { tm = tm, ds = ds }) or nil
   local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds })
-  local vm = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr, gm = gm, pa = pa })
+  local vm = util.instantiate('trackerView', { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa })
   cmgr:push('tracker')
 
   return { fm = mm, cm = cm, ds = ds, tm = tm, vm = vm, ec = vm:ec(), gm = gm, pa = pa,

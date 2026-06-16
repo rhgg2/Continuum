@@ -796,12 +796,16 @@ local function projectMidiTakes()
   return takes
 end
 
---contract: reads each take's persisted usedSwings via cm:readTakeKey; no mm/cm context disturbance
+--contract: scans each take's swing map (ds) for the named swing; no mm/cm context disturbance
 function am:takesUsing(name)
   local hits = {}
   for _, take in ipairs(projectMidiTakes()) do
-    local used = cm:readTakeKey(take, 'usedSwings')
-    if used and used[name] then hits[#hits+1] = take end
+    local sw = ds:getAt(take, 'swing')
+    if sw then
+      for _, used in pairs(sw) do
+        if used == name then hits[#hits + 1] = take; break end
+      end
+    end
   end
   return hits
 end

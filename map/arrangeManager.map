@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=814  sha=ac419ac  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=818  sha=1278d64  mode=chunk
 @deps cm, ds, facade
 
 # Invariants & contracts
@@ -151,17 +151,16 @@
       @contract  source length in QN at the take's position; 0 if source missing.
   @api am:deleteTake(take)  @ 779
   @api am:takesUsing(name)  @ 800
-      @contract  reads each take's persisted usedSwings via cm:readTakeKey; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 810
+      @contract  scans each take's swing map (ds) for the named swing; no mm/cm context disturbance
+  @api am:reswingAll(name)  @ 814
       @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 
 # Uses (outbound edges)
-  @use call    cm.readTakeKey  @ 803
   @use call    ds.assign  @ 201
   @use call    ds.assignAt  @ 75, 109, 110
   @use call    ds.get  @ 200
-  @use call    ds.getAt  @ 71, 104
-  @use call    facade.get  @ 252, 811
+  @use call    ds.getAt  @ 71, 104, 803
+  @use call    facade.get  @ 252, 815
   @use call    painter.hueNative  @ 236
   @use call    util.toBase62  @ 512
   @use require painter  @ 21

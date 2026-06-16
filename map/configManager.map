@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=526  sha=5054124  mode=chunk
+@module configManager  src=configManager.lua  loc=524  sha=884c6a9  mode=chunk
 @deps ps
 
 # Invariants & contracts
@@ -22,86 +22,86 @@
 # Private state
   @state ps = assert(deps and deps.ps, 'configManager requires a pextSt...  @ 15
   @state declarations = {  @ 29
-  @state declared, defaults = {}, {}  @ 254
-  @state fire  @ 271   -- installed below, once cm exists
-  @state cache = {  @ 273
-  @state levels = { 'global', 'project', 'track', 'take', 'transient' }  @ 281
-  @state levelSet = {}  @ 283
-  @state loaders = {  @ 300
-  @state savers = {  @ 308
-  @state cm = {}  @ 360
+  @state declared, defaults = {}, {}  @ 252
+  @state fire  @ 269   -- installed below, once cm exists
+  @state cache = {  @ 271
+  @state levels = { 'global', 'project', 'track', 'take', 'transient' }  @ 279
+  @state levelSet = {}  @ 281
+  @state loaders = {  @ 298
+  @state savers = {  @ 306
+  @state cm = {}  @ 358
 
 # Private functions
   @fn print(...)  @ 17
   @fn hex(s, alpha)  @ 21
-  @fn copy(v)  @ 260
+  @fn copy(v)  @ 258
   -- PRIVATE DATA
   -- STORAGE BACKENDS
-  @fn pruneUnknown(tbl)  @ 289
+  @fn pruneUnknown(tbl)  @ 287
       -- Tolerant on load: stale keys from a rename shouldn't error.
-  @fn asTable(v)  @ 296
+  @fn asTable(v)  @ 294
   -- CACHE MANAGEMENT
-  @fn refreshCache()  @ 323
-  @fn ensureCache()  @ 329
-  @fn mergedTable()  @ 334
+  @fn refreshCache()  @ 321
+  @fn ensureCache()  @ 327
+  @fn mergedTable()  @ 332
       @contract  overlays levels[] in order onto schema defaults; later (more-specific) tiers win
-  @fn checkLevel(level)  @ 346
-  @fn checkKey(key)  @ 352
+  @fn checkLevel(level)  @ 344
+  @fn checkKey(key)  @ 350
   -- PUBLIC INTERFACE
   -- Reading
-  @fn mergedKey(key)  @ 405
+  @fn mergedKey(key)  @ 403
       -- Per-subkey union of a single key's tables across defaults→tiers; most-specific tier wins.
       -- Non-table contributions are skipped, so the result is always a table.
 
 # Public API (cm:*)
-  @api cm:setContext(newTake)  @ 374
+  @api cm:setContext(newTake)  @ 372
       @contract  setContext(nil) clears take+track; setContext(take) derives track via GetMediaItemTrack
       @contract  refreshes all persisted caches (transient resets to {}) and fires configChanged {}
-  @api cm:clearTake()  @ 381
-  @api cm:boundTake()  @ 389
+  @api cm:clearTake()  @ 379
+  @api cm:boundTake()  @ 387
       @contract  bound take pointer; nil when context is cleared (take/track tiers resolve off empty)
-  @api cm:setTrack(newTrack)  @ 391
-  @api cm:pollUndo()  @ 399
+  @api cm:setTrack(newTrack)  @ 389
+  @api cm:pollUndo()  @ 397
       @contract  delegates to the engine watcher; cm's watch group reloads tiers and fires configChanged
-  @api cm:get(key, opts)  @ 422
+  @api cm:get(key, opts)  @ 420
       @contract  returns deep-copy of merged value (defaults + all tiers); raises on unknown key
       @contract  opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only
-  @api cm:getAt(level, key)  @ 429
+  @api cm:getAt(level, key)  @ 427
       @contract  reads single tier only (no merge, no defaults); key nil → whole-cache clone
-  @api cm:readTrackKey(otherTrack, key)  @ 441
+  @api cm:readTrackKey(otherTrack, key)  @ 439
       @contract  bypasses cache/context; reads otherTrack P_EXT without firing configChanged
-  @api cm:writeTrackKey(otherTrack, key, value)  @ 448
+  @api cm:writeTrackKey(otherTrack, key, value)  @ 446
       @contract  bypasses cache/context; RMW otherTrack P_EXT; fires targeted configChanged
-  @api cm:readTakeKey(otherTake, key)  @ 462
+  @api cm:readTakeKey(otherTake, key)  @ 460
       @contract  bypasses cache/context; reads otherTake P_EXT without firing configChanged
-  @api cm:writeTakeKey(otherTake, key, value)  @ 469
+  @api cm:writeTakeKey(otherTake, key, value)  @ 467
       @contract  bypasses cache/context; RMW otherTake P_EXT; util.REMOVE clears; no signal
   -- Writing
-  @api cm:set(level, key, value)  @ 482
+  @api cm:set(level, key, value)  @ 480
       @contract  deep-copies value into tier cache, persists, fires targeted configChanged
-  @api cm:remove(level, key)  @ 495
+  @api cm:remove(level, key)  @ 493
       @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded
-  @api cm:assign(level, updates)  @ 509
+  @api cm:assign(level, updates)  @ 507
       @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal
 
 # Signals emitted (via util.installHooks)
   @emits configChanged   -- configChangedPayload.bulk
 
 # Uses (outbound edges)
-  @use call    ps.assign  @ 309, 310, 313, 317
-  @use call    ps.assignAt  @ 454, 475
-  @use call    ps.boundTake  @ 317, 389, 476
-  @use call    ps.boundTrack  @ 312, 456
-  @use call    ps.clearTake  @ 382
-  @use call    ps.get  @ 301, 302, 303, 304
-  @use call    ps.getAt  @ 444, 451, 465, 472
-  @use call    ps.pollUndo  @ 399
-  @use call    ps.setTake  @ 375
-  @use call    ps.setTrack  @ 392
-  @use call    ps.watch  @ 365
-  @use call    util.add  @ 241, 242, 249, 250, 251
-  @use call    util.assign  @ 340
-  @use call    util.deepClone  @ 261, 437
-  @use call    util.installHooks  @ 361
+  @use call    ps.assign  @ 307, 308, 311, 315
+  @use call    ps.assignAt  @ 452, 473
+  @use call    ps.boundTake  @ 315, 387, 474
+  @use call    ps.boundTrack  @ 310, 454
+  @use call    ps.clearTake  @ 380
+  @use call    ps.get  @ 299, 300, 301, 302
+  @use call    ps.getAt  @ 442, 449, 463, 470
+  @use call    ps.pollUndo  @ 397
+  @use call    ps.setTake  @ 373
+  @use call    ps.setTrack  @ 390
+  @use call    ps.watch  @ 363
+  @use call    util.add  @ 239, 240, 247, 248, 249
+  @use call    util.assign  @ 338
+  @use call    util.deepClone  @ 259, 435
+  @use call    util.installHooks  @ 359
   @use call    util.print  @ 18
   @use require util  @ 12

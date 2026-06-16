@@ -125,9 +125,8 @@ Out of `configManager.declarations`, into the `dataStore` registry:
 | `arrangeColours` | project | take → colour map |
 | `paramAutomation` | take | CV bindings |
 | `noteDelay` | take | per-lane delay |
-| `usedSwings` | take | swings used in this take (derived) |
+| `swing` | take | swing map `{ global, [chan] }` — see Swing note below |
 | `extraColumns` | take | per-take display columns |
-| `colSwing` | _deferred_ | per-column swing — see Swing note below |
 | `mutedChannels` | take | mix state |
 | `soloedChannels` | take | mix state |
 | `paramFrecency` | **global** | param-palette usage cache |
@@ -137,15 +136,29 @@ maintained, not a setting and not document content. The global scope on
 `dataStore` is its home, so `configManager` is left holding *only*
 user-facing config.
 
-**Swing — data vs seed (deferred).** Swing wears two hats: the *assignment*
-(which swing a take or column uses) is document data, but "the most recently
-chosen swing seeds the default for new takes" is config. `swing` / `temper`
-and their `last*Used` project seeds already stay in `configManager` (they ride
-the tier merge). `colSwing` is the open question: today it is read merged but
-written track-only, so whether a per-take override should exist — making it a
-merge participant, hence config — is unsettled. `colSwing` therefore stays out
-of the initial `dataStore` registry and is resolved in the swing-focused step,
-not mechanically moved.
+**Swing — data vs seed (settled).** Swing wears two hats: the *assignment*
+(which swing a take or its channels use) is document data; "the most recently
+chosen swing seeds the default for new takes" is config. Resolution:
+
+- **`swing`** is one take-scoped `dataStore` key — a map `{ global = name,
+  [chan] = name }` that absorbs both the old `swing` and the old per-channel
+  `colSwing`. `'global'` is the take-wide swing; integer keys are per-channel.
+- **`usedSwings`** is deleted: it was a cached restatement of "swing + colSwing",
+  now just the set of values in the `swing` map. `arrangeManager:takesUsing`
+  reads each take's map directly.
+- **`defaultSwing`** (renamed from `lastSwingUsed`) stays in `configManager`,
+  mirroring `swing`'s shape across global/project/track tiers. It is a **pure
+  seed**: `tv:seedSharedSlots` copies it into a fresh take's `swing` once, and
+  it is *never* read at realisation — so editing it cannot retroactively
+  re-swing existing takes. A take-wide pick writes it at project + track; a
+  per-channel pick writes it at track only (project carries `global` alone).
+- **`temper`** keeps the old config pattern (`temper` take-tier + `lastTemperUsed`
+  project seed); it has no per-channel dimension. `swings` (the recipe library)
+  stays config — a genuine multi-tier merge.
+
+The trigger for re-realisation moved with the key: a `swing` edit now arrives as
+`dataStore`'s `dataChanged`, not `configChanged`. `trackerManager` diffs the map
+(global change → all 16 channels, else the channels that moved) and rebuilds.
 
 Call sites to update: `groupManager`, `sampleManager`, `arrangeManager`,
 `paramAutomation`.

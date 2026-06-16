@@ -22,14 +22,14 @@ local harness = require('harness')
 local C55 = { config = {
   project = { swings = { ['c55'] = {
     factors = { { atom = 'classic', shift = 0.05, period = 1 } } } } },
-  take    = { swing = 'c55' },
-} }
+}, data = { swing = { global = 'c55' } } }
 
 local function probe() return harness.mk(C55).tm end
 
 local function seeded(notes)
   return harness.mk{
     config = C55.config,
+    data   = C55.data,
     seed   = { length = 7680, resolution = 240, notes = notes },
   }
 end

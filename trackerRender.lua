@@ -70,7 +70,7 @@ end
 local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
 local dragging    = false   -- tracker-grid selection drag: click → held → release
 local swingEditor = util.instantiate('swingEditor',
-  { tv = tv, cm = cm, chrome = chrome, ctx = ctx, facade = facade })
+  { tv = tv, cm = cm, ds = ds, chrome = chrome, ctx = ctx, facade = facade })
 local curveEd      = util.instantiate('curveEditor', { ctx = ctx, chrome = chrome })
 local laneConsumed = false
 local toolbar                              -- lazy: chrome may be nil at construction in tests
@@ -401,10 +401,10 @@ local toolbarSegments = {
       chrome.headingLabel('Swing')
       ImGui.SameLine(ctx, 0, 8)
       do
-        local cur = cm:get('swing')
+        local cur = (ds:get('swing') or {}).global
         chrome.drawPicker {
           kind        = 'swing', heading = 'Take',
-          buttonLabel = cur == 'identity' and 'Off' or cur,
+          buttonLabel = (not cur or cur == 'identity') and 'Off' or cur,
           width       = 120,
           items       = chrome.libPicker('swings', cur, SWING_PRESET_EXCLUDE),
           onPick      = pickSwing,
@@ -415,7 +415,7 @@ local toolbarSegments = {
       local chan      = cursorCol and cursorCol.midiChan
       ImGui.SameLine(ctx, 0, 8)
       chrome.disabledIf(not chan, function()
-        local cur = chan and cm:get('colSwing')[chan] or nil
+        local cur = chan and (ds:get('swing') or {})[chan] or nil
         chrome.drawPicker {
           kind        = 'colSwing', heading = 'Ch',
           buttonLabel = cur or 'Off',

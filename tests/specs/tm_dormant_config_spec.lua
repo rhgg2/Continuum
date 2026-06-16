@@ -22,10 +22,8 @@ return {
     name = 'dormant tracker (bindTake nil) ignores configChanged churn',
     run = function(harness)
       local h = harness.mk{
-        config = {
-          project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58' },
-        },
+        config = { project = { swings = { ['c58'] = classic58 } } },
+        data   = { swing = { global = 'c58' } },
       }
       local rebuilds = countRebuilds(h.tm)
 
@@ -34,7 +32,7 @@ return {
 
       -- probeMode-style write to the shared cm while the tracker is dormant.
       h.cm:set('transient', 'trackerMode', true)
-      h.cm:set('take', 'swing', 'identity')
+      h.ds:assign('swing', { global = 'identity' })
       t.eq(rebuilds(), 0, 'dormant tracker ignores configChanged')
     end,
   },
@@ -56,7 +54,7 @@ return {
   },
 
   {
-    name = 'bound tracker still rebuilds on configChanged',
+    name = 'bound tracker still rebuilds on a swing edit',
     run = function(harness)
       local h = harness.mk{
         config = { project = { swings = { ['c58'] = classic58 } } },
@@ -65,8 +63,8 @@ return {
 
       -- cm has a bound take (harness binds on construct); the gate must not
       -- over-suppress a real edit on the bound take.
-      h.cm:set('take', 'swing', 'c58')
-      t.truthy(rebuilds() >= 1, 'bound tracker rebuilds on configChanged')
+      h.ds:assign('swing', { global = 'c58' })
+      t.truthy(rebuilds() >= 1, 'bound tracker rebuilds on a swing edit')
     end,
   },
 }

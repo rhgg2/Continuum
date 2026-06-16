@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=2028  sha=1278d64  mode=chunk
+@module trackerRender  src=trackerRender.lua  loc=2028  sha=540add0  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help
 
 # Invariants & contracts
@@ -231,7 +231,7 @@
   @use call    chrome.resetPickerActive  @ 1939
   @use call    chrome.rowSelectable  @ 1123, 1145
   @use call    chrome.treeArrow  @ 1120
-  @use call    cm.get  @ 249, 250, 277, 293, 368, 388, 393, 404, 418, 431, 439, 588, 633, 1241, 1242, 1243, 1245, 1246, 1704, 1899
+  @use call    cm.get  @ 249, 250, 277, 293, 368, 388, 393, 431, 439, 588, 633, 1241, 1242, 1243, 1245, 1246, 1704, 1899
   @use call    cm.set  @ 316, 440, 637, 641
   @use call    cmgr.doAfter  @ 1845
   @use call    cmgr.invoke  @ 1620, 1627
@@ -239,7 +239,7 @@
   @use call    cmgr.keySpec  @ 1712
   @use call    cmgr.keysFor  @ 1718, 1719
   @use call    cmgr.scope  @ 1268, 1344, 1815, 1853
-  @use call    ds.get  @ 294, 1247
+  @use call    ds.get  @ 294, 404, 418, 1247
   @use call    facade.get  @ 33
   @use call    groups.outlineKey  @ 801
   @use call    groups.regionKey  @ 773

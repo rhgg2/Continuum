@@ -41,8 +41,9 @@ return {
         },
         config = {
           project = { swings = { ['c58'] = classic58 } },
-          take    = { swing = 'c58', rowPerBeat = 4 },
+          take    = { rowPerBeat = 4 },
         },
+        data = { swing = { global = 'c58' } },
       }
       h.vm:setGridSize(80, 40)
       h.tm:markSwingStale(nil); h.tm:rebuild(false)

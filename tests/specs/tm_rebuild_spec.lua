@@ -355,7 +355,7 @@ return {
 
       -- A foreign-track config write fires configChanged through tm's real
       -- subscriber. A dormant (dead-take) tracker must not rebuild.
-      h.cm:writeTrackKey('take1/track', 'colSwing', {})
+      h.cm:writeTrackKey('take1/track', 'defaultSwing', {})
 
       t.eq(#h.tm:getChannel(1).columns.notes[1].events, 1,
         'last frame retained, no crash on dead-take rebuild')
