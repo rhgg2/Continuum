@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=561  sha=e390434  mode=chunk
+@module commandManager  src=commandManager.lua  loc=589  sha=884c6a9  mode=chunk
 @deps cm
 
 # Invariants & contracts
@@ -29,10 +29,10 @@
   @state global = newScope('global')  @ 117
   @state prefixBuf, pendingPrefix = nil, nil  @ 181
   @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 182
-  @state keyNames  @ 329
-  @state shiftGlyph  @ 369
-  @state modOrder, modSep  @ 388
-  @state keyTokens, modTokenList, tokenKeys, modByName  @ 439
+  @state keyNames  @ 357
+  @state shiftGlyph  @ 397
+  @state modOrder, modSep  @ 416
+  @state keyTokens, modTokenList, tokenKeys, modByName  @ 467
 
 # Private functions
   -- Stack reachability
@@ -48,15 +48,16 @@
   -- Dispatch
   -- Keymap lookup
   @fn resolveKeys(name)  @ 275
+  -- Binding-edit queries (scope-aware)
   -- Note layout
   -- Key labels (human-readable bindings, for the help overlay)
-  @fn buildKeyNames(ImGui)  @ 330
-  @fn buildShiftGlyphs(ImGui)  @ 370
-  @fn buildModOrder(ImGui)  @ 389
+  @fn buildKeyNames(ImGui)  @ 358
+  @fn buildShiftGlyphs(ImGui)  @ 398
+  @fn buildModOrder(ImGui)  @ 417
   -- Binding tokens (stable ASCII; the on-disk / hand-edit form)
-  @fn buildKeyTokens(ImGui)  @ 441
-  @fn buildModTokens(ImGui)  @ 478
-  @fn ensureTokenTables(ImGui)  @ 487
+  @fn buildKeyTokens(ImGui)  @ 469
+  @fn buildModTokens(ImGui)  @ 506
+  @fn ensureTokenTables(ImGui)  @ 515
 
 # Public API (mgr:*)
   @api mgr:register(name, fn, undoDesc)  @ 129
@@ -96,29 +97,33 @@
       @contract  returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk
   @api mgr:keySpec(spec, ImGui)  @ 307
       -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
-  @api mgr:noteChars(char)  @ 318
+  @api mgr:commandAtKey(spec, exceptName, ImGui)  @ 318
+      @contract  reachable command for spec's key (keychain top-down); skips exceptName; nil if free
+  @api mgr:bindingSite(name)  @ 333
+      @contract  scope to edit name's binding in: scope currently binding it, else its gate scope
+  @api mgr:noteChars(char)  @ 346
       -- Re-read noteLayout on each call so a config change takes effect
       -- without rebuilding vm.
-  @api mgr:keyLabel(spec, ImGui)  @ 407
-  @api mgr:keyLabelList(name, ImGui)  @ 422
+  @api mgr:keyLabel(spec, ImGui)  @ 435
+  @api mgr:keyLabelList(name, ImGui)  @ 450
       @contract  list of human labels, one per bound keyspec of the reachable command, or nil if unbound
-  @api mgr:keyLabels(name, ImGui)  @ 431
+  @api mgr:keyLabels(name, ImGui)  @ 459
       @contract  keyLabelList joined by ' / ', or nil if unbound on the current stack
-  @api mgr:tokenForSpec(spec, ImGui)  @ 496
+  @api mgr:tokenForSpec(spec, ImGui)  @ 524
       @contract  spec -> stable ASCII token ("Ctrl+Z"); nil if the key has no token name
-  @api mgr:specForToken(token, ImGui)  @ 510
+  @api mgr:specForToken(token, ImGui)  @ 538
       @contract  token -> keyspec (bare key | {key, mod...}); (nil, err) on an unknown key/modifier
   -- Binding overrides (persisted, hand-editable)
-  @api mgr:loadOverrides(ImGui)  @ 531
+  @api mgr:loadOverrides(ImGui)  @ 559
       @contract  a malformed token is warned and skipped; the command keeps its other (good) bindings
-  @api mgr:rebind(scopeName, name, specs, ImGui)  @ 549
+  @api mgr:rebind(scopeName, name, specs, ImGui)  @ 577
       @contract  overwrites the scope's binding for name and persists it as tokens (global tier)
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 319, 532, 553
-  @use call    cm.set  @ 558
+  @use call    cm.get  @ 347, 560, 581
+  @use call    cm.set  @ 586
   @use call    util.atomic  @ 90
-  @use call    util.print  @ 540
+  @use call    util.print  @ 568
   @use require util  @ 14
 
 # REAPER API surface

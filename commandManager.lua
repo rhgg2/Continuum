@@ -311,6 +311,34 @@ function mgr:keySpec(spec, ImGui)
   return spec[1], mods
 end
 
+----- Binding-edit queries (scope-aware)
+-- see docs/commandManager.md § Binding-edit queries
+
+--contract: reachable command for spec's key (keychain top-down); skips exceptName; nil if free
+function mgr:commandAtKey(spec, exceptName, ImGui)
+  local key, mods = self:keySpec(spec, ImGui)
+  for _, keymap in ipairs(self:keychain()) do
+    for name, entry in pairs(keymap) do
+      if name ~= exceptName then
+        for _, bound in ipairs(entry) do
+          local boundKey, boundMods = self:keySpec(bound, ImGui)
+          if boundKey == key and boundMods == mods then return name end
+        end
+      end
+    end
+  end
+end
+
+--contract: scope to edit name's binding in: scope currently binding it, else its gate scope
+function mgr:bindingSite(name)
+  for i = #self.stack, 1, -1 do
+    local scope = self.stack[i]
+    if scope.keymap[name] then return scope.name end
+    if scope.modal and not (scope.passthrough and scope.passthrough[name]) then break end
+  end
+  return (self.gates[name] or global).name
+end
+
 ----- Note layout
 
 -- Re-read noteLayout on each call so a config change takes effect

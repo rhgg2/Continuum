@@ -155,6 +155,14 @@ derivation lives next to the declaration so the two stay in sync; edit
 layout (`cm:get('noteLayout')`). The layout is re-read on every call so
 a config change takes effect without rebuilding vm.
 
+## Binding-edit queries
+
+`commandAtKey(spec, exceptName, ImGui)` answers "what reachable command
+would this chord clobber?" — used by the help overlay before a rebind.
+`bindingSite(name)` answers "which scope do I edit this command's binding
+in?" Both walk the same stack reachability that `invoke`/`keychain` use,
+so a hidden lower binding is neither a conflict nor an edit site.
+
 ## Conventions
 
 - **Command names are flat strings.** `advBy0` … `advBy9` are generated

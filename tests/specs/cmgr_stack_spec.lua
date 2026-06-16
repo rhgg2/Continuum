@@ -5,6 +5,8 @@ local util = require('util')
 
 local function newCmgr() return util.instantiate('commandManager', { cm = nil }) end
 
+local fakeImGui = { Mod_None = 0, Mod_Ctrl = 4, Mod_Shift = 8 }
+
 local function newModalScope(mgr, passthrough)
   local s = mgr:scope('region')
   s.modal       = true
@@ -116,6 +118,62 @@ return {
       t.eq(k2[2].cursorUp[1],     1,     'tracker filtered: cursorUp survives')
       t.eq(k2[2].paste,           nil,   'tracker filtered: paste stripped')
       t.eq(k2[3].quit,            nil,   'global filtered: quit stripped')
+    end,
+  },
+
+  {
+    name = 'commandAtKey: bare + chord match, mods distinguish, skips exceptName, nil when free',
+    run = function()
+      local mgr = newCmgr()
+      mgr:bind('quit', { 100 })
+      mgr:scope('tracker'):bindAll{ cursorUp = { 1 }, paste = { { 2, fakeImGui.Mod_Ctrl } } }
+      mgr:push('tracker')
+
+      t.eq(mgr:commandAtKey(1, nil, fakeImGui),                       'cursorUp', 'bare key match')
+      t.eq(mgr:commandAtKey({ 2, fakeImGui.Mod_Ctrl }, nil, fakeImGui), 'paste',  'chord match')
+      t.eq(mgr:commandAtKey(100, nil, fakeImGui),                     'quit',     'reaches global')
+      t.eq(mgr:commandAtKey(1, 'cursorUp', fakeImGui),               nil,        'skips the edited command')
+      t.eq(mgr:commandAtKey(2, nil, fakeImGui),                      nil,        'bare 2 != Ctrl+2: free')
+      t.eq(mgr:commandAtKey(999, nil, fakeImGui),                    nil,        'unbound chord: free')
+    end,
+  },
+
+  {
+    name = 'commandAtKey: top-down shadowing — top scope wins on a shared key',
+    run = function()
+      local mgr = newCmgr()
+      mgr:bind('globalThing', { 5 })
+      mgr:scope('tracker'):bind('trackerThing', { 5 })
+      mgr:push('tracker')
+      t.eq(mgr:commandAtKey(5, nil, fakeImGui), 'trackerThing', 'top scope shadows global')
+    end,
+  },
+
+  {
+    name = 'commandAtKey: modal-without-passthrough hides a lower binding from conflict',
+    run = function()
+      local mgr = newCmgr()
+      mgr:scope('tracker'):bind('paste', { 2 })
+      mgr:push('tracker')
+      newModalScope(mgr, {})
+      mgr:push('region')
+      t.eq(mgr:commandAtKey(2, nil, fakeImGui), nil, 'modal blocks the lower binding')
+    end,
+  },
+
+  {
+    name = 'bindingSite: bound scope when reachable; gate scope when unbound; global for root',
+    run = function()
+      local mgr = newCmgr()
+      mgr:register('quit', function() end)
+      mgr:scope('tracker'):register('paste', function() end)
+      mgr:scope('tracker'):bind('paste', { 2 })
+      mgr:scope('tracker'):register('cursorUp', function() end)   -- registered, never bound
+      mgr:push('tracker')
+
+      t.eq(mgr:bindingSite('paste'),    'tracker', 'edit the scope that binds it')
+      t.eq(mgr:bindingSite('cursorUp'), 'tracker', 'unbound: edit the gate scope')
+      t.eq(mgr:bindingSite('quit'),     'global',  'root command edits global')
     end,
   },
 
