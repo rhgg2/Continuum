@@ -876,4 +876,29 @@ return {
       t.deepEq(byConsumer.fx_b.params.gains, { 0.7 })
     end,
   },
+  {
+    name = 'midi absorption: consumer of a lone source-direct parent co-hosts, no new track',
+    run = function()
+      -- A→C, B→D, C→D (all midi). D's class {a,b} absorbs onto source B (source-direct B→D):
+      -- D joins guid-b, C→D stays the lone send, {a,b} spawns no track of its own.
+      local ns = {}
+      local k,  v  = source('A', 'guid-a'); ns[k]  = v
+      local k2, v2 = source('B', 'guid-b'); ns[k2] = v2
+      local k3, v3 = fx('C');               ns[k3] = v3
+      local k4, v4 = fx('D');               ns[k4] = v4
+      local tracks = tracksOf(mk(ns, {
+        { type = 'midi', from = 'A', to = 'C' },
+        { type = 'midi', from = 'B', to = 'D' },
+        { type = 'midi', from = 'C', to = 'D' },
+      }))
+      t.deepEq(tracks['guid-a'].fxOrder, { 'C' })
+      -- D co-hosts on guid-b, behind the merge CU that sums the incoming C→D send.
+      local order = tracks['guid-b'].fxOrder
+      t.eq(order[#order], 'D')
+      t.eq(tracks[t.key('guid-a', 'guid-b')], nil)  -- {a,b} spawns no track
+      local ws = tracks['guid-a'].outWires
+      t.eq(#ws, 1); t.eq(ws[1].from, 'C'); t.eq(ws[1].to, 'guid-b'); t.eq(ws[1].type, 'midi')
+      t.deepEq(tracks['guid-b'].outWires, {})
+    end,
+  },
 }

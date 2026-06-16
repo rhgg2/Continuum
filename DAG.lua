@@ -20,6 +20,7 @@
 --invariant: a split-tagged class never absorbs
 --invariant: signal-bearing bus seeds 'bus:'..id; marker never spreads — bus sits alone in its class
 --invariant: bus classes absorb in neither direction; a dangling bus is inert (empty srcSet)
+--invariant: a class with no audio parents and a lone source-direct midi parent absorbs onto it
 --invariant: busses below 2x2 splice out at compile; crossings become direct edges at product gain
 --invariant: srcSet unions node.split with derived master-min split markers
 --shape: synthNode = { kind='fx', fxIdent=CU_IDENT, fxId?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }
@@ -345,7 +346,7 @@ local function buildCtx(userGraph, derivedSplits)
     for cls in pairs(classes()) do
       cache.quotient[cls] = { audioParents = {}, midiParents = {},
                               audioChildren = {}, midiChildren = {},
-                              primaryAudioParents = {} }
+                              primaryAudioParents = {}, midiSourceParents = {} }
     end
     local classOf = ctx:classOf()
     for _, edge in ipairs(edges) do
@@ -359,6 +360,7 @@ local function buildCtx(userGraph, derivedSplits)
           fromQ.audioChildren[toCls] = true
         else
           toQ.midiParents[fromCls] = true
+          if nodes[edge.from].kind == 'source' then toQ.midiSourceParents[fromCls] = true end
           fromQ.midiChildren[toCls] = true
         end
       end
@@ -370,14 +372,18 @@ local function buildCtx(userGraph, derivedSplits)
     if cache.absorption then return cache.absorption end
     local q = quotient()
 
-    -- Direct (one-hop) track for cls under the absorption rule. Returns
-    -- nil if cls has no eligible track: zero audio parents, ambiguous
-    -- primaries, or multiple non-primary audio parents.
+    -- Direct (one-hop) track under the absorption rule. Audio summing picks the host when audio
+    -- parents exist; a pure-midi class falls through: a lone source-direct parent wins, else nil.
     local function directTrackKey(qEntry)
       local audioParents   = util.keys(qEntry.audioParents)
       local primaryParents = util.keys(qEntry.primaryAudioParents)
       if #primaryParents == 1 then return primaryParents[1] end
       if #primaryParents == 0 and #audioParents == 1 then return audioParents[1] end
+      if #audioParents > 0 then return nil end
+      local midiParents       = util.keys(qEntry.midiParents)
+      local midiSourceParents = util.keys(qEntry.midiSourceParents)
+      if #midiSourceParents == 1 then return midiSourceParents[1] end
+      if #midiParents == 1 then return midiParents[1] end
       return nil
     end
 

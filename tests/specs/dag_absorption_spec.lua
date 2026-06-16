@@ -163,4 +163,43 @@ return {
       t.eq(classTrackKey(g, t.key('guid-s', 'guid-t')), t.key('guid-s', 'guid-t'))
     end,
   },
+  {
+    name = 'lone source-direct midi parent hosts its consumer',
+    run = function()
+      -- A→C, B→D, C→D (all midi). D's class {a,b}: {b} is source-direct, {a} via fx C.
+      -- Source-direct parent wins: D absorbs onto B's track; C→D stays the lone send.
+      local ns = {}
+      local k,  v  = source('A', 'guid-a'); ns[k]  = v
+      local k2, v2 = source('B', 'guid-b'); ns[k2] = v2
+      local k3, v3 = fx('C');               ns[k3] = v3
+      local k4, v4 = fx('D');               ns[k4] = v4
+      local g = mk(ns, {
+        { type = 'midi', from = 'A', to = 'C' },
+        { type = 'midi', from = 'B', to = 'D' },
+        { type = 'midi', from = 'C', to = 'D' },
+      })
+      t.eq(classTrackKey(g, 'guid-a'),                  'guid-a')
+      t.eq(classTrackKey(g, t.key('guid-a', 'guid-b')), 'guid-b')
+    end,
+  },
+  {
+    name = 'two fx midi parents, none source-direct: hosts itself',
+    run = function()
+      -- A→C, B→E, C→D, E→D (all midi). D's parents are both fx classes, so
+      -- no source-direct tiebreak — D keeps its own track.
+      local ns = {}
+      local k,  v  = source('A', 'guid-a'); ns[k]  = v
+      local k2, v2 = source('B', 'guid-b'); ns[k2] = v2
+      local k3, v3 = fx('C');               ns[k3] = v3
+      local k4, v4 = fx('E');               ns[k4] = v4
+      local k5, v5 = fx('D');               ns[k5] = v5
+      local g = mk(ns, {
+        { type = 'midi', from = 'A', to = 'C' },
+        { type = 'midi', from = 'B', to = 'E' },
+        { type = 'midi', from = 'C', to = 'D' },
+        { type = 'midi', from = 'E', to = 'D' },
+      })
+      t.eq(classTrackKey(g, t.key('guid-a', 'guid-b')), t.key('guid-a', 'guid-b'))
+    end,
+  },
 }

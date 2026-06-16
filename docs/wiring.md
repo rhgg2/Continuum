@@ -148,6 +148,24 @@ per-wire — right-click "mark as primary" forces absorption along that
 wire's parent class. Discoverability lives in the wire menu; no
 preemptive graph marker is needed.
 
+MIDI absorbs too, but only where audio summing leaves the host
+unconstrained: a class with **no** audio parents and a single
+*source-direct* MIDI parent — a wire leaving a source node, not an
+intermediate FX — absorbs onto that source's track. So a source feeding
+the one instrument that also merges other streams hosts the instrument
+rather than spawning a parallel track. The source-direct test is the
+derived equivalent of "mark as primary", needing no stored flag because
+`node.kind == 'source'` is structural. Two source-direct parents, or
+none, leave the consumer on its own track — the same "no tiebreak"
+stance as the audio case.
+
+Soundness needs no per-edge-type special-casing: absorption only ever
+hosts a class on one of its *parents*, whose srcSet is a strict subset
+(A' ⊊ A), so the host's pure signal is always available at the top of
+the chain and the extra sources land as sends. That holds whether the
+hosting wire is audio or MIDI, which is why the rule extends without a
+guard.
+
 The hosting mechanism is REAPER's receive: a track sums its own signal
 with incoming sends at the top of its chain — or at a specific FX-slot
 boundary via the send's pre/post-FX placement. So "primary passes
