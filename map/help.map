@@ -1,4 +1,4 @@
-@module help  src=help.lua  loc=136  sha=untracked  mode=chunk
+@module help  src=help.lua  loc=162  sha=4aa1900  mode=chunk
 @deps ctx, chrome, cmgr
 
 # Shapes
@@ -15,7 +15,7 @@
   @state current = nil  @ 20
   @state open = false  @ 21
   @state PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8  @ 23
-  @state DIM_COL = 0x000000C0  @ 24
+  @state DIM_COL = 0x00000099  @ 24
   @state EM_DASH = '\xe2\x80\x94'  @ 25
   @state help = {}  @ 27
 
@@ -25,6 +25,10 @@
   @fn groupRows(g)  @ 57
   @fn boxSize(g, rows, keyW)  @ 67
   @fn drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)  @ 77
+  @fn intersects(a, x, y, w, h)  @ 90
+  @fn avoid(x, y, w, h, placed)  @ 96
+      -- Slide a box straight down past any already-placed box it would cover, so
+      -- adjacent toolbar callouts cascade instead of stacking on top of each other.
 
 # Public API (help:*)
   @api help:registerPage(name, groups)  @ 31
@@ -36,19 +40,19 @@
       -- rather than dimming the screen with nothing to show.
   @api help:beginFrame()  @ 42
   @api help:anchor(key, x, y, w, h)  @ 44
-  @api help:draw()  @ 90
+  @api help:draw()  @ 107
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 102, 103, 104, 105, 106
+  @use call    chrome.colour  @ 119, 120, 121, 122, 123
   @use call    chrome.toolbarRects  @ 53
   @use call    cmgr.keyLabels  @ 60
   @use call    imgui.CalcTextSize  @ 62, 70, 71
   @use call    imgui.DrawList_AddRect  @ 79
-  @use call    imgui.DrawList_AddRectFilled  @ 78, 99
+  @use call    imgui.DrawList_AddRectFilled  @ 78, 116
   @use call    imgui.DrawList_AddText  @ 81, 84, 85
-  @use call    imgui.GetForegroundDrawList  @ 96
+  @use call    imgui.GetForegroundDrawList  @ 113
   @use call    imgui.GetTextLineHeight  @ 68
-  @use call    imgui.GetWindowPos  @ 97
-  @use call    imgui.GetWindowSize  @ 98
-  @use call    imgui.IsKeyPressed  @ 92
+  @use call    imgui.GetWindowPos  @ 114
+  @use call    imgui.GetWindowSize  @ 115
+  @use call    imgui.IsKeyPressed  @ 109
   @use require imgui  @ 12

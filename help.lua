@@ -21,7 +21,7 @@ local current = nil
 local open    = false
 
 local PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8
-local DIM_COL = 0x000000C0
+local DIM_COL = 0x00000099
 local EM_DASH = '\xe2\x80\x94'
 
 local help = {}
@@ -87,6 +87,23 @@ local function drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)
   end
 end
 
+local function intersects(a, x, y, w, h)
+  return x < a.x + a.w and x + w > a.x and y < a.y + a.h and y + h > a.y
+end
+
+-- Slide a box straight down past any already-placed box it would cover, so
+-- adjacent toolbar callouts cascade instead of stacking on top of each other.
+local function avoid(x, y, w, h, placed)
+  local moved = true
+  while moved do
+    moved = false
+    for _, a in ipairs(placed) do
+      if intersects(a, x, y, w, h) then y, moved = a.y + a.h + BOX_GAP, true end
+    end
+  end
+  return y
+end
+
 function help:draw()
   if not open then return end
   if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then open = false; return end
@@ -108,29 +125,38 @@ function help:draw()
 
   -- Flow groups pack into columns within their anchor rect; a per-anchor
   -- cursor stacks boxes downward, wrapping to a new column on overflow.
-  local flow = {}   -- anchorKey → { x, y, colW }
-  for _, g in ipairs(groups) do
+  local flow   = {}   -- anchorKey → { x, y, colW }
+  local placed = {}   -- every box drawn so far, for collision avoidance
+
+  -- Pins (pinPass=true) place first so the body's flow boxes can dodge any
+  -- callout that hangs down into the grid rect.
+  local function place(g, pinPass)
     local r = rectFor(g.anchor)
-    if r then
-      local rows, keyW = groupRows(g)
-      local w, h, lineH = boxSize(g, rows, keyW)
-      if g.place == 'flow' then
-        local fc = flow[g.anchor]
-        if not fc then fc = { x = r.x + BOX_GAP, y = r.y + BOX_GAP, colW = 0 }; flow[g.anchor] = fc end
-        if fc.y + h > r.y + r.h and fc.y > r.y + BOX_GAP then
-          fc.x, fc.y, fc.colW = fc.x + fc.colW + BOX_GAP, r.y + BOX_GAP, 0
-        end
-        drawBox(dl, g, rows, keyW, fc.x, fc.y, w, h, lineH, theme)
-        fc.colW = math.max(fc.colW, w)
-        fc.y = fc.y + h + BOX_GAP
-      else
-        local x = math.min(r.x, wx + ww - w - 2)
-        local y = r.y + r.h + 4
-        if y + h > wy + wh then y = r.y - h - 4 end
-        drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)
+    if not r or (g.place ~= 'flow') ~= pinPass then return end
+    local rows, keyW = groupRows(g)
+    local w, h, lineH = boxSize(g, rows, keyW)
+    if pinPass then
+      local x = math.min(r.x, wx + ww - w - 2)
+      local y = r.y + r.h + 4
+      if y + h > wy + wh then y = r.y - h - 4 end
+      y = avoid(x, y, w, h, placed)
+      drawBox(dl, g, rows, keyW, x, y, w, h, lineH, theme)
+      placed[#placed + 1] = { x = x, y = y, w = w, h = h }
+    else
+      local fc = flow[g.anchor]
+      if not fc then fc = { x = r.x + BOX_GAP, y = r.y + BOX_GAP, colW = 0 }; flow[g.anchor] = fc end
+      if fc.y + h > r.y + r.h and fc.y > r.y + BOX_GAP then
+        fc.x, fc.y, fc.colW = fc.x + fc.colW + BOX_GAP, r.y + BOX_GAP, 0
       end
+      local y = avoid(fc.x, fc.y, w, h, placed)
+      drawBox(dl, g, rows, keyW, fc.x, y, w, h, lineH, theme)
+      placed[#placed + 1] = { x = fc.x, y = y, w = w, h = h }
+      fc.colW = math.max(fc.colW, w)
+      fc.y = y + h + BOX_GAP
     end
   end
+  for _, g in ipairs(groups) do place(g, true)  end
+  for _, g in ipairs(groups) do place(g, false) end
 end
 
 return help
