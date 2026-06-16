@@ -8,13 +8,15 @@ local harness = {}
 local fakeReaper = require('fakeReaper').new()
 _G.reaper = fakeReaper
 
--- configManager's global tier uses real io.open on continuum-config.lua, bypassing fakeReaper.
--- Redirect those opens to a temp file so specs never clobber the real config.
-local realOpen      = io.open
-local globalCfgStub = os.tmpname()
+-- configManager + dataStore global tiers do real io.open on continuum-config.lua /
+-- continuum-data.lua; redirect to temp files so specs never clobber the real ones.
+local realOpen       = io.open
+local globalCfgStub  = os.tmpname()
+local globalDataStub = os.tmpname()
 io.open = function(path, ...)
-  if type(path) == 'string' and path:find('continuum%-config%.lua$') then
-    return realOpen(globalCfgStub, ...)
+  if type(path) == 'string' then
+    if path:find('continuum%-config%.lua$') then return realOpen(globalCfgStub, ...)  end
+    if path:find('continuum%-data%.lua$')   then return realOpen(globalDataStub, ...) end
   end
   return realOpen(path, ...)
 end
@@ -43,6 +45,7 @@ function harness.mk(opts)
   fakeReaper = require('fakeReaper').new()
   _G.reaper  = fakeReaper
   realOpen(globalCfgStub, 'w'):close()
+  realOpen(globalDataStub, 'w'):close()
 
   local take = opts.take or 'take1'
   local item, track = take .. '/item', take .. '/track'
@@ -57,6 +60,7 @@ function harness.mk(opts)
 
   local ps = util.instantiate('pextStore')
   local cm = util.instantiate('configManager', { ps = ps })
+  local ds = util.instantiate('dataStore', { ps = ps })
   cm:setContext(take)
   if opts.config then
     for level, tbl in pairs(opts.config) do cm:assign(level, tbl) end
@@ -70,12 +74,12 @@ function harness.mk(opts)
   -- unconditionally would perturb every tm-unit spec's flush pipeline.
   -- Only region-wired specs need the real group engine.
   local gm = opts.groups
-         and util.instantiate('groupManager', { tm = tm, cm = cm }) or nil
+         and util.instantiate('groupManager', { tm = tm, ds = ds }) or nil
   local pa = util.instantiate('paramAutomation', { cm = cm })
   local vm = util.instantiate('trackerView', { tm = tm, cm = cm, cmgr = cmgr, gm = gm, pa = pa })
   cmgr:push('tracker')
 
-  return { fm = mm, cm = cm, tm = tm, vm = vm, ec = vm:ec(), gm = gm, pa = pa,
+  return { fm = mm, cm = cm, ds = ds, tm = tm, vm = vm, ec = vm:ec(), gm = gm, pa = pa,
            clipboard = vm:clipboard(), cmgr = cmgr, reaper = fakeReaper }
 end
 

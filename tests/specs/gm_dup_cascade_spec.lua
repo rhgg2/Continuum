@@ -81,7 +81,7 @@ end
 local function mk()
   local tm     = fakeTm()
   local cm     = fakeCm()
-  local gm   = util.instantiate('groupManager', { tm = tm, cm = cm })
+  local gm   = util.instantiate('groupManager', { tm = tm, ds = t.fakeDs() })
   local cmgr   = util.instantiate('commandManager', { cm = cm })
   local groupOf = wire(gm, cmgr)
   return gm, cmgr, groupOf

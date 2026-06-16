@@ -58,11 +58,11 @@ local fakeFacade = {
   get = function(name) if name == 'arrange' then return fakeArrange end return {} end,
 }
 
-local function newTrackerPage(cm, cmgr, chrome, gui)
+local function newTrackerPage(cm, ds, cmgr, chrome, gui)
   fakeModalHost:reset()
   resetArrange()
   return util.instantiate('trackerPage',
-    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui,
+    { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui,
       modalHost = fakeModalHost, facade = fakeFacade })
 end
 
@@ -71,7 +71,7 @@ return {
     name = "bind(take) drives cm:setContext via the page's own tm:bindTake",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
       local got = {}
       h.cm.setContext = function(_, take) got[#got+1] = take end
       tp:bind('take99')
@@ -82,7 +82,7 @@ return {
     name = "unbind() drives cm:setContext(nil) via the page's own tm:bindTake",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
       local calls, lastTake = 0, 'sentinel'
       h.cm.setContext = function(_, take) calls = calls + 1; lastTake = take end
       tp:unbind()
@@ -94,7 +94,7 @@ return {
     name = "focusState before any render returns both bits false",
     run = function(harness)
       local h  = harness.mk()
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
       local fs = tp:focusState()
       t.eq(fs.suppressKbd, false, "no suppression without a context")
       t.eq(fs.acceptCmds,  false, "no acceptance without a context")
@@ -110,7 +110,7 @@ return {
       h.reaper:setProjectTracks{ 'tr1' }
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
       fakeArrange.currentTake = function() return 'tr1/t1' end
       tp:bindFromCursor()
       t.eq(tp:currentTake(), 'tr1/t1', 'bound to the cursor take on change')
@@ -124,7 +124,7 @@ return {
     name = 'newTakeBelow + duplicateUnpooledBelow delegate to the arrange facade',
     run = function(harness)
       local h = harness.mk()
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
       h.cmgr:push('tracker')
       h.cmgr:invoke('newTakeBelow')
       t.truthy(fakeArrange.calls.newTakeBelow, 'newTakeBelow routed to arrange')
@@ -137,7 +137,7 @@ return {
     name = 'prev/next track + take delegate to arrange cursor nav',
     run = function(harness)
       local h = harness.mk()
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
       h.cmgr:push('tracker')
       h.cmgr:invoke('nextTrack'); t.eq(fakeArrange.calls.gotoTrack,  1, 'nextTrack -> gotoTrack(1)')
       h.cmgr:invoke('prevTrack'); t.eq(fakeArrange.calls.gotoTrack, -1, 'prevTrack -> gotoTrack(-1)')
@@ -153,7 +153,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       local fakeChrome = { colour = function() return 0 end }
-      local tp = newTrackerPage(h.cm, h.cmgr, fakeChrome, { fontSize = { ui = 13 } })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, fakeChrome, { fontSize = { ui = 13 } })
       local origText, shown = rawget(fakeImGui, 'Text')
       fakeImGui.Text = function(_, s) shown = s end
 
@@ -176,7 +176,7 @@ return {
       h.reaper:setProjectTracks{ 'tr1' }
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
-      local tp = newTrackerPage(h.cm, h.cmgr, nil, {})
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
       fakeArrange.currentTake = function() return 'tr1/t1' end
       tp:bindFromCursor()                   -- initial bind to the cursor take
       tp:unbind()                           -- switch away: page goes dormant

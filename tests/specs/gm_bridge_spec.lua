@@ -30,7 +30,7 @@ return {
       t.eq(#events, 1, 'one event in the rect')
       t.truthy(events[1].chan, 'tv col event carries chan')
 
-      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
+      local gm = util.instantiate('groupManager', { tm = h.tm, ds = h.ds })
       local gid  = gm:mark(events, rect)
       t.truthy(gid, 'mark returned a group id')
     end,
@@ -53,7 +53,7 @@ return {
       local anchor = h.vm:cursorAnchor()
       t.truthy(anchor and anchor.chan, 'cursor anchor carries chan')
 
-      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
+      local gm = util.instantiate('groupManager', { tm = h.tm, ds = h.ds })
       local gid, iid = gm:stamp(events, rect, anchor)
       t.truthy(gid and iid, 'stamp seeded a group and an instance')
     end,

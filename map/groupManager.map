@@ -1,11 +1,11 @@
-@module groupManager  src=groupManager.lua  loc=928  sha=dabb224  mode=chunk
-@deps tm, cm
+@module groupManager  src=groupManager.lua  loc=927  sha=7644a58  mode=chunk
+@deps tm, ds
 
 # Invariants & contracts
   @contract  seeds a new group from clipboard-sourced concrete `events` and a
   @contract  the caller (clipboard) has already bounds-checked the target
   @contract  explicit-group duplicate, used by the groupDuplicate
-  @contract  rehydrate on cm reload-shape (REAPER undo); cm:set carries a key and is ignored
+  @contract  rehydrate on a groups invalidate (undo rewind); own assign echoes lack it, ignored
 
 # Shapes
   @shape  group = { rect, events = { [vuid]=groupEvt }, nextVuid, instances = { [instId]=instance } }
@@ -20,10 +20,10 @@
   @require groupsCore = 'groups'  @ 11
 
 # Private state
-  @state tm, cm = deps.tm, deps.cm  @ 14
+  @state tm, ds = deps.tm, deps.ds  @ 14
   @state DERIVED = {  @ 26
   @state gm = {}  @ 32
-  @state blob = cm:get('groups') or {}  @ 36
+  @state blob = ds:get('groups') or {}  @ 36
   @state groups = blob.groups or {}  @ 37
   @state localMode = false  @ 38
   @state propagating = false  @ 39
@@ -172,12 +172,12 @@
       -- mutable state; rect/anchor are by reference (render reads, never
       -- mutates).
   -- INSTANCE / GROUP LIFECYCLE
-  @api gm:deleteInstance(groupId, instId)  @ 801
+  @api gm:deleteInstance(groupId, instId)  @ 800
       -- Stage a tm delete for every projected concrete of one instance, drop
       -- the instance, and -- if it was the group's last -- drop the group,
       -- clearing the active pointer if it named it. Unknown id -> nil, reason.
       @contract  (groupId, instId) -> true | nil,reason; stages tm deletes for the instance's concretes, last instance drops the group + clears active. Unknown id -> nil,reason.
-  @api gm:moveInstance(groupId, instId, anchor)  @ 832
+  @api gm:moveInstance(groupId, instId, anchor)  @ 831
       -- Re-anchor an instance. The group frame is anchor-invariant, so a pure
       -- move is zero group-frame drift and reproject (drift-driven) cannot see
       -- it: re-place every projected concrete through the group->instance dual
@@ -186,7 +186,7 @@
       -- a collision with another group or a sibling -- the moving instance
       -- itself excluded so it cannot self-collide.
       @contract  (groupId, instId, anchor) -> true | nil,reason. Precondition: caller has cleared the destination cells -- gm only re-places its own concretes, never clears foreign ones (as gm:newInstance, take/region bounds are the caller's). gm validates channel range + cross-group/sibling disjointness only.
-  @api gm:resizeGroup(groupId, instId, edits)  @ 872
+  @api gm:resizeGroup(groupId, instId, edits)  @ 871
       -- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
       -- re-origins (Model A: every anchor += startDelta, every group event
       -- ppq -= startDelta) so realised positions hold while the boundary
@@ -201,23 +201,23 @@
       @contract  (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true | nil,reason. gm validates cross-group AND same-group sibling disjointness + non-vanishing region only; take bounds are the caller's, deferred as in gm:newInstance (gm holds no take authority -- takeLen is advisory). Leaving members orphan (concrete kept, unmanaged); gained fold in at the actor anchor.
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 36, 254
-  @use call    cm.set  @ 246
+  @use call    ds.assign  @ 246
+  @use call    ds.get  @ 36, 254
   @use call    groups.deriveAssign  @ 354, 636
-  @use call    groups.inRect  @ 375, 903
+  @use call    groups.inRect  @ 375, 902
   @use call    groups.project  @ 264, 481, 552, 579
   @use call    groups.reconcile  @ 592
   @use call    groups.resolve  @ 363
   @use call    groups.streamId  @ 318
   @use call    tm.addEvent  @ 484, 606
-  @use call    tm.assignEvent  @ 611, 850
+  @use call    tm.assignEvent  @ 611, 849
   @use call    tm.byUuid  @ 267, 782
-  @use call    tm.deleteEvent  @ 617, 809
+  @use call    tm.deleteEvent  @ 617, 808
   @use call    util.assign  @ 640, 726
-  @use call    util.clone  @ 270, 452, 486, 609, 614, 689, 722, 920
+  @use call    util.clone  @ 270, 452, 486, 609, 614, 689, 722, 919
   @use require groups  @ 11
   @use require util  @ 10
-  @use sub     cm:configChanged  @ 790
+  @use sub     ds:dataChanged  @ 790
   @use sub     tm:postflush  @ 759
   @use sub     tm:preflush  @ 734
   @use sub     tm:rebuild  @ 776

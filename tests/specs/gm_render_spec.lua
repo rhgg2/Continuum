@@ -23,15 +23,8 @@ local function fakeTm()
   return tm
 end
 
-local function fakeCm()
-  local s = {}
-  return { get = function(_, k) return s[k] end,
-           set = function(_, _l, k, v) s[k] = v end,
-           subscribe = function() end }
-end
-
 local function mk()
-  return util.instantiate('groupManager', { tm = fakeTm(), cm = fakeCm() })
+  return util.instantiate('groupManager', { tm = fakeTm(), ds = t.fakeDs() })
 end
 
 local function note(ppq, lane)

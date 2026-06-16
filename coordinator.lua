@@ -13,7 +13,7 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
-local cm, cmgr, gui = (...).cm, (...).cmgr, (...).gui
+local cm, ds, cmgr, gui = (...).cm, (...).ds, (...).cmgr, (...).gui
 local ctx, uiFont   = gui.ctx, gui.uiFont
 local uiSize        = gui.fontSize.ui
 
@@ -27,7 +27,7 @@ local facade  = {
   publish = function(name, iface) facades[name] = iface end,
   get     = function(name) return facades[name] or error('no facade: ' .. name) end,
 }
-local STD = { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, facade = facade }
+local STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, facade = facade }
 
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 

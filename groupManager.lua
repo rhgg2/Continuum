@@ -11,7 +11,7 @@ local util   = require 'util'
 local groupsCore = require 'groups'
 
 local deps   = ...
-local tm, cm = deps.tm, deps.cm
+local tm, ds = deps.tm, deps.ds
 
 -- copyScalars carries the event's full payload across the frame, MINUS
 -- these. mm round-trips arbitrary per-event metadata; an allowlist here
@@ -33,7 +33,7 @@ local gm = {}
 
 ----- State
 
-local blob        = cm:get('groups') or {}
+local blob        = ds:get('groups') or {}
 local groups      = blob.groups or {}
 local localMode   = false
 local propagating = false
@@ -243,7 +243,7 @@ local function persist()
     end
     uuids[groupId] = gi
   end
-  cm:set('take', 'groups', { groups = groups, uuids = uuids })
+  ds:assign('groups', { groups = groups, uuids = uuids })
 end
 
 -- Construction-time cm read runs before any take binds, so it is empty;
@@ -251,7 +251,7 @@ end
 -- restored groups are inert and nextGroupId stays 1, clobbering the
 -- persisted group on the next markGroup.
 local function rehydrate()
-  local b = cm:get('groups') or {}
+  local b = ds:get('groups') or {}
   groups      = b.groups or {}
   proj        = {}
   locByUuid   = {}
@@ -786,10 +786,9 @@ tm:subscribe('rebuild', function(takeChanged)
   end
 end)
 
---contract: rehydrate on cm reload-shape (REAPER undo); cm:set carries a key and is ignored
-cm:subscribe('configChanged', function(change)
-  if change.key then return end
-  rehydrate()
+--contract: rehydrate on a groups invalidate (undo rewind); own assign echoes lack it, ignored
+ds:subscribe('dataChanged', function(change)
+  if change.name == 'groups' and change.invalidate then rehydrate() end
 end)
 
 ----------- INSTANCE / GROUP LIFECYCLE

@@ -25,13 +25,6 @@ local function fakeTm()
   return tm, staged
 end
 
-local function fakeCm()
-  local store = {}
-  return { get = function(_, k) return store[k] end,
-           set = function(_, _l, k, v) store[k] = v end,
-           subscribe = function() end }
-end
-
 -- rect over a single note stream at chan offset 0; dur a multiple of lpr.
 local function rect(ppq, dur)
   return { ppq = ppq, dur = dur, chanLo = 1,
@@ -43,7 +36,7 @@ local LPR = 10
 local function mk(opts)
   opts = opts or {}
   local tm = fakeTm()
-  local gm = util.instantiate('groupManager', { tm = tm, cm = fakeCm() })
+  local gm = util.instantiate('groupManager', { tm = tm, ds = t.fakeDs() })
 
   local cols = { { type = 'note', midiChan = 1, lane = 1 },
                  { type = 'note', midiChan = 1, lane = 2 } }

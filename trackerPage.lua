@@ -14,8 +14,8 @@ if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
 end
 
-local cm, cmgr, chrome, gui, modalHost, facade =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
+local cm, ds, cmgr, chrome, gui, modalHost, facade =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
 
 local function arrange() return facade.get('arrange') end
 
@@ -23,7 +23,7 @@ local function arrange() return facade.get('arrange') end
 -- coord drives the take lifecycle on tm directly; tv owns only its own view-state seams.
 local mm = util.instantiate('midiManager',    { take = nil })
 local tm = util.instantiate('trackerManager', { mm = mm, cm = cm })
-local gm = util.instantiate('groupManager',   { tm = tm, cm = cm })
+local gm = util.instantiate('groupManager',   { tm = tm, ds = ds })
 local pa = util.instantiate('paramAutomation', { cm = cm, facade = facade })
 local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, cmgr = cmgr, gm = gm, pa = pa })
 

@@ -5,7 +5,7 @@
 --invariant: owns its cache: reads deep-clone out, writes deep-clone in; callers never alias ds state
 --invariant: take/track caches drop on pextStore contextChanged and reload lazily; project/global are context-free
 --contract: take/track scopes are per-key P_EXT blobs (ctm_data.<name>); global is one disk file (continuum-data.lua)
---emits: dataChanged -- { scope, name } on assign/delete and once per diverged key on an undo tick
+--emits: dataChanged -- { scope, name } on assign/delete; adds invalidate=true on each rewound key
 --reaper: none directly; storage + undo watcher are delegated to pextStore
 local util = require 'util'
 
@@ -122,8 +122,8 @@ ps:watch(watched, function(diverged)
   for _, blob in ipairs(diverged) do
     ensureScope(blob.scope)
     cache[blob.scope][blob.name] = ps:get(blob.scope, blob.slot)
-    --emits: dataChanged -- one { scope, name } per blob an undo tick rewound
-    fire('dataChanged', { scope = blob.scope, name = blob.name })
+    --emits: dataChanged -- { scope, name, invalidate=true } per blob an undo tick rewound
+    fire('dataChanged', { scope = blob.scope, name = blob.name, invalidate = true })
   end
 end)
 

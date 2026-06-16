@@ -29,18 +29,9 @@ local function fakeTm()
   return tm, staged, hooks
 end
 
-local function fakeCm()
-  local store = {}
-  return {
-    get = function(_, k) return store[k] end,
-    set = function(_, _lvl, k, v) store[k] = v end,
-    subscribe = function() end,
-  }
-end
-
-local function mk(cm)
+local function mk()
   local tm, staged, hooks = fakeTm()
-  local gm = util.instantiate('groupManager', { tm = tm, cm = cm or fakeCm() })
+  local gm = util.instantiate('groupManager', { tm = tm, ds = t.fakeDs() })
   return gm, tm, staged, hooks
 end
 

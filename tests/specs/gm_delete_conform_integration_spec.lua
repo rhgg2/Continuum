@@ -53,7 +53,7 @@ return {
             chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
         } },
       }
-      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
+      local gm = util.instantiate('groupManager', { tm = h.tm, ds = h.ds })
 
       local evA, evB = h.tm:byUuid(1), h.tm:byUuid(2)
       for _, e in ipairs{ evA, evB } do e.chan = 1; e.lane = e.lane or 1 end

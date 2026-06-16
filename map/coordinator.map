@@ -1,5 +1,5 @@
-@module coordinator  src=coordinator.lua  loc=312  sha=5c46ec5  mode=chunk
-@deps cm, cmgr, gui
+@module coordinator  src=coordinator.lua  loc=312  sha=72da7bd  mode=chunk
+@deps cm, ds, cmgr, gui
 
 # Invariants & contracts
   @invariant  owns the active tracker take; polls REAPER's selection each frame while tracker page is active (sticky on no-item or non-MIDI)
@@ -27,7 +27,7 @@
   @state uiSize = gui.fontSize.ui  @ 18
   @state facades = {}  @ 25
   @state facade = {  @ 26
-  @state STD = { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modal...  @ 30
+  @state STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = g...  @ 30
   @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 32
   @state pages, active = {}, nil  @ 34
   @state quitting = false  @ 35

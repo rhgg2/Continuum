@@ -29,25 +29,6 @@ local function fakeTm(uuidMap)
   return tm, staged, hooks
 end
 
-local function fakeCm()
-  local store, listeners = {}, {}
-  return {
-    get = function(_, k) return store[k] end,
-    set = function(_, _lvl, k, v)
-      store[k] = v
-      for fn in pairs(listeners.configChanged or {}) do fn{ key = k, level = _lvl } end
-    end,
-    subscribe = function(_, sig, fn)
-      listeners[sig] = listeners[sig] or {}
-      listeners[sig][fn] = true
-    end,
-    _rewind = function(blob)
-      store.groups = blob
-      for fn in pairs(listeners.configChanged or {}) do fn{} end
-    end,
-  }
-end
-
 local nextUuid = 0
 local function note(ppq, chan, lane, extra)
   nextUuid = nextUuid + 1
@@ -67,12 +48,12 @@ end
 -- explicit "inf" literal, so an open lane tail survives the reload as a
 -- number, not a string. The group frame still uses nil-dur to express
 -- "open" (no ceiling), independent of how endppqL is persisted.
-local function serialisingCm()
+local function serialisingDs()
   local store = {}
   return {
-    get = function(_, k) return store[k] end,
-    set = function(_, _lvl, k, v)
-      store[k] = util.unserialise(util.serialise(v))
+    get = function(_, name) return store[name] end,
+    assign = function(_, name, v)
+      store[name] = util.unserialise(util.serialise(v))
     end,
     subscribe = function() end,
   }
@@ -82,12 +63,12 @@ return {
   {
     name = 'an open last-in-lane group note survives the serialised reload',
     run = function()
-      local cm = serialisingCm()
+      local ds = serialisingDs()
 
       -- Session 1: stamp a group + sibling, then a global create whose
       -- group event lands last-in-lane (open tail -> math.huge dur).
       local tmA, stagedA = fakeTm()
-      local A   = util.instantiate('groupManager', { tm = tmA, cm = cm })
+      local A   = util.instantiate('groupManager', { tm = tmA, ds = ds })
       local src = note(0, 1, 1)
       local gid = A:markGroup({ src }, rect(0, 1))
       A:newInstance(gid, { ppq = 960, chan = 1 })
@@ -102,7 +83,7 @@ return {
       -- Session 2: fresh gm sharing the (serialised) cm. Without the
       -- finite-dur normalisation rehydrate raises in mirror.project.
       local tmB = fakeTm(uuidMap)
-      local B   = util.instantiate('groupManager', { tm = tmB, cm = cm })
+      local B   = util.instantiate('groupManager', { tm = tmB, ds = ds })
       tmB:fireRebuild(true)
 
       t.eq(#B:eachInstance(), 2, 'group + its mirrored instance rehydrated')
@@ -112,11 +93,11 @@ return {
   {
     name = 'a persisted group rehydrates on the take-changed rebuild',
     run = function()
-      local cm = fakeCm()
+      local ds = t.fakeDs()
 
       -- Session 1: stamp a group + one mirrored instance, commit (persists).
       local tmA, stagedA = fakeTm()
-      local A   = util.instantiate('groupManager', { tm = tmA, cm = cm })
+      local A   = util.instantiate('groupManager', { tm = tmA, ds = ds })
       local src = note(0, 1, 1, { pitch = 60 })
       local gid = A:markGroup({ src }, rect(0, 1))
       A:newInstance(gid, { ppq = 960, chan = 1 })
@@ -127,7 +108,7 @@ return {
       -- Session 2: a fresh gm sharing cm; its tm resolves the durable
       -- uuids mm would have re-minted on the reloaded take.
       local tmB, stagedB = fakeTm({ [src.uuid] = src, [addEvt.uuid] = addEvt })
-      local B = util.instantiate('groupManager', { tm = tmB, cm = cm })
+      local B = util.instantiate('groupManager', { tm = tmB, ds = ds })
 
       tmB:fireRebuild(true)
 
@@ -154,20 +135,20 @@ return {
     end,
   },
   {
-    name = 'REAPER undo: cm reload-shape rehydrates gm from the rewound blob',
+    name = 'REAPER undo: a ds invalidate rehydrates gm from the rewound blob',
     run = function()
-      -- Ctrl-Z path: cm:pollUndo fires configChanged{} (no key); gm must
-      -- re-read or its `groups` dict still shows pre-undo geometry.
-      local cm = fakeCm()
+      -- Ctrl-Z path: ds fires dataChanged invalidate=true; gm must re-read
+      -- or its `groups` dict still shows pre-undo geometry.
+      local ds = t.fakeDs()
       local tmA = fakeTm()
-      local A   = util.instantiate('groupManager', { tm = tmA, cm = cm })
+      local A   = util.instantiate('groupManager', { tm = tmA, ds = ds })
       local src = note(0, 1, 1)
       local gid = A:markGroup({ src }, rect(0, 1))
       A:newInstance(gid, { ppq = 960, chan = 1 })
       tmA:flush()
       t.eq(#A:eachInstance(), 2, 'baseline: group + its mirrored instance')
 
-      cm._rewind(nil)
+      ds._rewind('groups', nil)
 
       t.eq(#A:eachInstance(), 0, 'gm rehydrated from rewound cm: no instances')
       t.eq(A:stateOf(src.uuid), nil, 'origin reverse-lookup cleared')

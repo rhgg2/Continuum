@@ -39,16 +39,9 @@ local function fakeTm()
   return tm, staged
 end
 
-local function fakeCm()
-  local store = {}
-  return { get = function(_, k) return store[k] end,
-           set = function(_, _l, k, v) store[k] = v end,
-           subscribe = function() end }
-end
-
 local function mk()
   local tm, staged = fakeTm()
-  return util.instantiate('groupManager', { tm = tm, cm = fakeCm() }), tm, staged
+  return util.instantiate('groupManager', { tm = tm, ds = t.fakeDs() }), tm, staged
 end
 
 local nextUuid = 0
@@ -132,7 +125,7 @@ return {
     name = 'instance 1 clips its overrun to instance 2 (real tm, no lane-2 bump)',
     run = function(harness)
       local h = harness.mk{ seed = { length = 1500, notes = {} } }
-      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
+      local gm = util.instantiate('groupManager', { tm = h.tm, ds = h.ds })
 
       local rect = { ppq = 0, dur = 960, chanLo = 1,
                      streams = { [0] = { ['note:1'] = true } } }

@@ -143,7 +143,7 @@ return {
       r._state.takeExt[TAKE .. '/P_EXT:ctm_data.groups'] = util.serialise({ a = 2 })
       bump(r)
       ps:pollUndo()
-      t.deepEq(seen, { scope = 'take', name = 'groups' }, 'watcher named the diverged key')
+      t.deepEq(seen, { scope = 'take', name = 'groups', invalidate = true }, 'watcher named the diverged key')
       t.deepEq(ds:get('groups'), { a = 2 }, 'cache reloaded to the rewound value')
     end,
   },

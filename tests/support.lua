@@ -154,4 +154,25 @@ do
   end
 end
 
+-- Minimal dataStore fake for gm specs: get/assign/subscribe over a flat store.
+-- _rewind simulates a REAPER undo rewinding a blob (fires dataChanged invalidate=true).
+function M.fakeDs()
+  local store, listeners = {}, {}
+  return {
+    get       = function(_, name) return store[name] end,
+    assign    = function(_, name, v)
+      store[name] = v
+      for fn in pairs(listeners.dataChanged or {}) do fn{ name = name } end
+    end,
+    subscribe = function(_, sig, fn)
+      listeners[sig] = listeners[sig] or {}
+      listeners[sig][fn] = true
+    end,
+    _rewind   = function(name, blob)
+      store[name] = blob
+      for fn in pairs(listeners.dataChanged or {}) do fn{ name = name, invalidate = true } end
+    end,
+  }
+end
+
 return M

@@ -24,13 +24,6 @@ local function fakeTm()
   return tm, staged
 end
 
-local function fakeCm()
-  local store = {}
-  return { get = function(_, k) return store[k] end,
-           set = function(_, _l, k, v) store[k] = v end,
-           subscribe = function() end }
-end
-
 local function rect() return { ppq = 0, dur = 960, chanLo = 1,
   streams = { [0] = { ['note:1'] = true } } } end
 
@@ -39,8 +32,8 @@ return {
     name = 'a duplicated note carries rpb and arbitrary metadata; derived keys do not leak',
     run = function()
       local tm, staged = fakeTm()
-      local cm = fakeCm()
-      local gm = util.instantiate('groupManager', { tm = tm, cm = cm })
+      local ds = t.fakeDs()
+      local gm = util.instantiate('groupManager', { tm = tm, ds = ds })
 
       local seed = { evType = 'note', chan = 1, lane = 1, ppq = 0,
                      endppq = 240, endppqL = 240, pitch = 60, vel = 100,

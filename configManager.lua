@@ -89,8 +89,6 @@ local declarations = {
   { 'paramFrecency',   {}    },
   { 'noteDelay',       {}    },
   { 'slotEntries',     {}    },
-  -- Mirror groups, persisted at the take tier. See docs/groupManager.md.
-  { 'groups',    {}    },
   -- Arrange-page slot palette, per track. Indexed 0..61; entry { kind='midi'|'audio', id=<guid-or-path> }.
   -- See docs/arrangeManager.md.
   { 'arrangeSlots', {} },

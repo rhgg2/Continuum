@@ -31,7 +31,7 @@ return {
           { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 },
         } },
       }
-      local gm = util.instantiate('groupManager', { tm = h.tm, cm = h.cm })
+      local gm = util.instantiate('groupManager', { tm = h.tm, ds = h.ds })
 
       local ci = noteCol(h, 1)
       h.ec:setSelection{ row1 = 0, row2 = 0, col1 = ci, col2 = ci,

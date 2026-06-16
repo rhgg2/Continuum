@@ -86,7 +86,7 @@ local function mk()
   local tm, staged = fakeTm()
   local cm   = fakeCm()
   local ctl  = { sel = true }   -- a live selection by default
-  local gm = util.instantiate('groupManager', { tm = tm, cm = cm })
+  local gm = util.instantiate('groupManager', { tm = tm, ds = t.fakeDs() })
   local cmgr = util.instantiate('commandManager', { cm = cm })
   local fell = wire(gm, cmgr, tm, ctl)
   return gm, cmgr, staged, fell, ctl
