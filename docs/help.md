@@ -98,9 +98,19 @@ the very keys being captured would close the sheet.
 
 Edits go straight through `cmgr:rebind`, which writes the live keymap and
 persists the change as hand-editable tokens; `bindingSite(cmd)` picks the
-scope to write (the reachable scope that binds it, else its gate scope). A
-captured chord that would clobber a reachable command (`commandAtKey`) is
-dropped for now — the conflict / clobber / reassign flow lands next.
+scope to write (the reachable scope that binds it, else its gate scope).
+
+A captured chord that would clobber a reachable command (`commandAtKey`
+finds the *victim*) raises a centred modal instead of binding silently:
+"«chord» is «victim» / Reassign to «cmd»?" with Cancel and Reassign (Esc
+cancels, Enter reassigns). Reassign strips the chord from the victim, gives
+it to the command being edited, then drops the victim straight into a
+*recovery capture* — "«victim» lost «chord» — press a new chord" — so the
+displaced command can immediately reclaim a key (Esc leaves it unbound).
+The recovery chord runs back through the same commit path, so if it in turn
+clobbers a third command the warn prompt simply re-opens; the flow recurses
+until a capture lands free or is cancelled. While a conflict prompt is up it
+is modal: off-button clicks are swallowed, never dismissing the sheet.
 
 Edit state persists across frames while the sheet stays open, but resets
 whenever the overlay closes or the page changes, so reopening always starts

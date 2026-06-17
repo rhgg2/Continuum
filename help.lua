@@ -3,7 +3,7 @@
 
 --shape: helpGroup = { anchor, title, place='pin'|'flow', items=[{cmd,label}] }
 --invariant: anchors are frame-scoped — cleared each frame, repopulated by render code only while open
---invariant: edit state (editing/capturing) resets whenever the overlay closes or the page changes
+--invariant: edit state (editing/capturing/conflict) resets on overlay close or page change
 --contract: 'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
 local ImGui = require 'imgui' '0.10'
 local util  = require 'util'
@@ -23,10 +23,10 @@ local PIN_GAP, WIN_MARGIN, BOX_R = 4, 2, 4   -- pin drop below segment; window-e
 local DIM_COL = 0x00000077
 local EM_DASH = '\xe2\x80\x94'
 
--- Edit-mode state: `editing` = cmd whose row shows ✕/+; `capturing` (only while
--- editing) awaits a chord. `hits` is the per-frame click map. See docs/help.md § Editing.
-local editing, capturing, hits = nil, nil, nil
-local function resetEdit() editing, capturing = nil, nil end
+-- Edit-mode state: `editing` = cmd whose row shows ✕/+; `capturing` awaits a chord;
+-- `conflict` = active collision prompt; `hits`/`conflictHits` per-frame click maps. See docs/help.md § Editing.
+local editing, capturing, conflict, hits, conflictHits = nil, nil, nil, nil, nil
+local function resetEdit() editing, capturing, conflict = nil, nil, nil end
 
 local help = {}
 
@@ -165,7 +165,7 @@ local function drawCluster(cluster, x, y, cmd, specs)
     end
     util.add(hits, { x = cursorX, y = y, w = chip.w, h = lineH, kind = 'chip', cmd = cmd, spec = spec })
     if isEditing and spec ~= nil then
-      drawTag(x2, y, 'x', theme.remove, false, { kind = 'remove', cmd = cmd, spec = spec })
+      drawTag(x2+2, y, 'x', theme.remove, false, { kind = 'remove', cmd = cmd, spec = spec })
     end
     cursorX = x2
   end
@@ -204,6 +204,68 @@ local function drawBox(box, x, y)
     drawCluster(row.cluster, x + PAD, rowY, row.cmd, row.specs)
     ImGui.DrawList_AddText(dl, x + PAD + box.keyW + KEY_GAP, rowY, theme.label, row.label)
     rowY = rowY + lineH + ROW_GAP
+  end
+end
+
+-- A command's human label from the current page's manifest, else its raw name (a
+-- victim may live on another scope/page, where no manifest label is to hand).
+local function cmdLabel(cmd)
+  for _, group in ipairs(current and pages[current] or {}) do
+    for _, item in ipairs(group.items) do
+      if item.cmd == cmd then return item.label end
+    end
+  end
+  return cmd
+end
+
+local PROMPT_PAD, BTN_PADX, BTN_GAP, LINE_GAP = 10, 10, 8, 4
+
+-- Centred modal for a chord collision. Warn phase offers Cancel/Reassign; recover
+-- phase narrates the victim's loss while pollCapture claims a new chord for it.
+local function drawConflict(winX, winY, winW, winH)
+  conflictHits = {}
+  local chord = cmgr:keyLabel(conflict.spec, ImGui)
+  local warn  = conflict.phase == 'warn'
+  local line1, line2, buttons
+  if warn then
+    line1   = chord .. '  is  ' .. cmdLabel(conflict.victim)
+    line2   = 'Reassign to ' .. cmdLabel(conflict.cmd) .. '?'
+    buttons = { { kind = 'cancel', text = 'Cancel' }, { kind = 'reassign', text = 'Reassign' } }
+  else
+    line1   = cmdLabel(conflict.victim) .. '  lost  ' .. chord
+    line2   = 'Press a new chord  ' .. EM_DASH .. '  Esc leaves it unbound'
+    buttons = {}
+  end
+
+  local w1, w2 = ImGui.CalcTextSize(ctx, line1), ImGui.CalcTextSize(ctx, line2)
+  local btnH, btnW, totalBtnW = lineH + 6, {}, 0
+  for i, button in ipairs(buttons) do
+    btnW[i]   = ImGui.CalcTextSize(ctx, button.text) + BTN_PADX * 2
+    totalBtnW = totalBtnW + btnW[i] + (i > 1 and BTN_GAP or 0)
+  end
+  local boxW = math.max(w1, w2, totalBtnW) + PROMPT_PAD * 2
+  local boxH = PROMPT_PAD + lineH + LINE_GAP + lineH
+             + (#buttons > 0 and PROMPT_PAD + btnH or 0) + PROMPT_PAD
+  local x0   = math.floor(winX + (winW - boxW) / 2)
+  local y0   = math.floor(winY + (winH - boxH) / 2)
+  local x1, y1 = x0 + boxW, y0 + boxH
+
+  ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, theme.bg, BOX_R)
+  ImGui.DrawList_AddRect(dl, x0, y0, x1, y1, theme.border, BOX_R)
+  local rowY = y0 + PROMPT_PAD
+  ImGui.DrawList_AddText(dl, x0 + (boxW - w1) / 2, rowY, theme.title, line1)
+  rowY = rowY + lineH + LINE_GAP
+  ImGui.DrawList_AddText(dl, x0 + (boxW - w2) / 2, rowY, theme.label, line2)
+
+  local btnY, bx = y1 - PROMPT_PAD - btnH, x0 + math.floor((boxW - totalBtnW) / 2)
+  for i, button in ipairs(buttons) do
+    local bw = btnW[i]
+    ImGui.DrawList_AddRectFilled(dl, bx, btnY, bx + bw, btnY + btnH, capBg, CHIP_R)
+    ImGui.DrawList_AddRect(dl, bx, btnY, bx + bw, btnY + btnH, capLine, CHIP_R)
+    local tw = ImGui.CalcTextSize(ctx, button.text)
+    ImGui.DrawList_AddText(dl, bx + (bw - tw) / 2, btnY + 3, theme.title, button.text)
+    util.add(conflictHits, { x = bx, y = btnY, w = bw, h = btnH, kind = button.kind })
+    bx = bx + bw + BTN_GAP
   end
 end
 
@@ -324,18 +386,44 @@ local function rebindWithout(cmd, drop, add)
   cmgr:rebind(cmgr:bindingSite(cmd), cmd, specs, ImGui)
 end
 
--- A captured chord that collides with a reachable command is dropped for now;
--- step 3 swaps this branch for the warn / clobber / reassign prompt.
-local function commitCapture(spec)
-  local cmd = capturing.cmd
-  if not cmgr:commandAtKey(spec, cmd, ImGui) then
-    rebindWithout(cmd, capturing.replace, spec)
+-- Drops every binding of cmd whose chord matches spec, then rebinds. The victim's
+-- stored ref isn't the captured one, so match by resolved key+mods, not identity.
+local function dropChord(cmd, spec)
+  local key, mods = cmgr:keySpec(spec, ImGui)
+  local kept = {}
+  for _, bound in ipairs(cmgr:keysFor(cmd) or {}) do
+    local boundKey, boundMods = cmgr:keySpec(bound, ImGui)
+    if not (boundKey == key and boundMods == mods) then kept[#kept + 1] = bound end
   end
+  cmgr:rebind(cmgr:bindingSite(cmd), cmd, kept, ImGui)
+end
+
+-- A captured chord that collides with a reachable command opens the warn prompt;
+-- a free chord binds straight away. See docs/help.md § Editing.
+local function commitCapture(spec)
+  local cmd, replace = capturing.cmd, capturing.replace
   capturing = nil
+  local victim = cmgr:commandAtKey(spec, cmd, ImGui)
+  if victim then
+    conflict = { phase = 'warn', cmd = cmd, victim = victim, spec = spec, replace = replace }
+  else
+    rebindWithout(cmd, replace, spec)
+    editing, conflict = cmd, nil
+  end
+end
+
+-- Reassign: strip the chord from the victim, give it to cmd, then drop the victim
+-- into a recovery capture so it can claim a new chord (Esc leaves it unbound).
+local function reassign()
+  local cmd, victim, spec, replace = conflict.cmd, conflict.victim, conflict.spec, conflict.replace
+  dropChord(victim, spec)
+  rebindWithout(cmd, replace, spec)
+  editing, capturing = victim, { cmd = victim }
+  conflict = { phase = 'recover', victim = victim, spec = spec }
 end
 
 local function pollCapture()
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then capturing = nil; return end
+  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then capturing, conflict = nil, nil; return end
   dismissKeyList = dismissKeyList or buildDismissKeys()
   local mods = ImGui.GetKeyMods(ctx)
   for _, key in ipairs(dismissKeyList) do
@@ -355,6 +443,25 @@ local function hitAt(mouseX, mouseY)
        and (not best or rank[hit.kind] > rank[best.kind]) then best = hit end
   end
   return best
+end
+
+-- Warn-phase input: Esc/Cancel abandons untouched, Enter or the Reassign button
+-- commits. Off-button clicks are swallowed (modal), never dismissing the sheet.
+local function handleConflict()
+  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then conflict = nil; return end
+  local accept = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+              or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
+  if not accept and ImGui.IsMouseClicked(ctx, 0) then
+    local mouseX, mouseY = ImGui.GetMousePos(ctx)
+    for _, hit in ipairs(conflictHits) do
+      if mouseX >= hit.x and mouseX <= hit.x + hit.w
+         and mouseY >= hit.y and mouseY <= hit.y + hit.h then
+        if hit.kind == 'cancel' then conflict = nil; return end
+        accept = true
+      end
+    end
+  end
+  if accept then reassign() end
 end
 
 local function handleClicks()
@@ -416,10 +523,13 @@ function help:draw()
   end
   placePins(pins, winX, winW)
   placeFlow(flows)
+  if conflict then drawConflict(winX, winY, winW, winH) end
 
-  -- Edit mode owns the keyboard (capture chords, Esc steps out); outside it, any
-  -- key / off-box click dismisses. Gated on openAtStart. See docs/help.md § Editing.
-  if capturing then
+  -- A conflict prompt is modal; else edit mode owns the keyboard (capture chords, Esc
+  -- steps out); else any key / off-box click dismisses. See docs/help.md § Editing.
+  if conflict and conflict.phase == 'warn' then
+    handleConflict()
+  elseif capturing then
     pollCapture()
   elseif editing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     editing = nil

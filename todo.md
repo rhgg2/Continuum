@@ -6,7 +6,6 @@
   - arpeggio
 - CC smoothing
 - 14bit CCs
-- keyboard mapping editor
 - wm - midi channel filter
 - wm - master multi-outs / deal with restriction on single audio feed
   to master
