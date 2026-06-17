@@ -9,7 +9,8 @@
 --shape: configChangedPayload.targeted = { key = string, level = string }   -- set / remove
 --shape: configChangedPayload.bulk     = { level = string }                  -- assign (keyless)
 --shape: configChangedPayload.reload   = {}                                  -- setContext / clearTake / setTrack
-local util = require 'util'
+local util   = require 'util'
+local tuning = require 'tuning'
 
 local deps = ...
 local ps   = assert(deps and deps.ps, 'configManager requires a pextStore dep { ps = ... }')
@@ -72,7 +73,8 @@ local declarations = {
       ['delay-15']   = { factors = { { atom = 'id', shift = -1/16, period = 1 } } },
       ['delay-30']   = { factors = { { atom = 'id', shift = -1/8,  period = 1 } } },
     } },
-  { 'tempers',         {}    },
+  -- Built-in temper catalogue (EDO presets); the personal global library seeds from it.
+  { 'tempers',         util.deepClone(tuning.presets) },
   -- Arrange-page grid density preference (persisted). Cursor/scroll stay in arrangeView module-locals.
   -- Typical values: 4, 8, 16 beats per row (one to four bars per row in 4/4).
   { 'arrangeBeatPerRow', 4 },
@@ -430,6 +432,17 @@ function cm:getAt(level, key)
     return copy(tbl[key])
   end
   return util.deepClone(tbl)
+end
+
+--contract: seeds global tier for key from its default catalogue when empty; excluded names omitted
+function cm:seedGlobalFromDefault(key, exclude)
+  checkKey(key)
+  ensureCache()
+  if next(cm:getAt('global', key) or {}) ~= nil then return end
+  local seed = copy(defaults[key]) or {}
+  if exclude then for name in pairs(exclude) do seed[name] = nil end end
+  if next(seed) == nil then return end
+  cm:set('global', key, seed)
 end
 
 ----- Writing

@@ -355,9 +355,23 @@ local function setDefaultSwing(tier, slot, value)
   cm:set(tier, 'defaultSwing', map)
 end
 
+-- Picking a library swing copies its composite into the project tier if absent,
+-- so the project is self-contained. See docs/swingEditor.md § Library tiers.
+local function localizeSwing(name)
+  if not name or name == '' or name == 'identity' then return end
+  local proj = cm:getAt('project', 'swings') or {}
+  if proj[name] ~= nil then return end
+  local composite = cm:get('swings', { mergeTiers = true })[name]
+  if composite ~= nil then
+    proj[name] = composite
+    cm:set('project', 'swings', proj)
+  end
+end
+
 -- Take-wide swing: the take map's 'global' slot + project & track seed.
 function tv:setSwingSlot(name)
   if name == nil or name == '' then name = 'identity' end
+  localizeSwing(name)
   setTakeSwing('global', name)
   setDefaultSwing('project', 'global', name)
   setDefaultSwing('track',   'global', name)
@@ -367,6 +381,7 @@ end
 -- (the project tier carries 'global' alone, never per-channel).
 function tv:setColSwingSlot(chan, name)
   local value = (name ~= '' and name) or nil
+  if value then localizeSwing(value) end
   setTakeSwing(chan, value)
   setDefaultSwing('track', chan, value)
 end
@@ -375,13 +390,6 @@ function tv:setTemperSlot(name)
   if name == nil or name == '' then name = '12EDO' end
   cm:set('take',    'temper', name)
   cm:set('track',   'temper', name)
-  cm:set('project', 'temper', name)
-end
-
--- Project-tier only: the editor page is context-free (no bound take/track),
--- so it activates a temper project-wide rather than per-take.
-function tv:setProjectTemper(name)
-  if name == nil or name == '' then name = '12EDO' end
   cm:set('project', 'temper', name)
 end
 

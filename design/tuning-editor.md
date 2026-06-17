@@ -133,6 +133,23 @@ Tracker facade (`trackerPage.lua`) now also publishes: `timeSig`,
 
 ## Phase 2 — tuning content pane (next)
 
+### Landed (2026-06-17): library seeding & project self-containment
+
+- Built-in catalogues are the cm **defaults** (`swings`; `tempers` is now
+  `util.deepClone(tuning.presets)`). `cm:seedGlobalFromDefault(key, exclude)`
+  lazily materialises the personal **global** library from the catalogue
+  (minus the synthetic floor) the first time the library is read — the editor
+  palette (`globalSwings`/`globalTempers`) or a picker (`chrome.libPicker`).
+  No startup seed, no flag.
+- **Copy-on-assign**: `tv:setSwingSlot`/`setColSwingSlot` localize a picked
+  swing into the project tier (`localizeSwing`); `pickTemper` now guards on the
+  project tier. Projects are self-contained; realisation never leans on
+  global/defaults. See `docs/swingEditor.md` § Library tiers.
+- The two picker builders collapsed into `chrome.libPicker` (trackerRender's
+  local `libPickerItems` is gone). Temper's transitional "Seed preset:" buttons
+  removed; `setTemper`/`setProjectTemper` dropped from the tracker facade — the
+  editor edits the library, assignment stays on the tracker.
+
 1. **Cents/period/name editor** in `temperEditor.lua`: add/remove/edit
    step cents, period, name; optional per-step names.
 2. **Option-B display change** in `tuning.lua` (names optional):

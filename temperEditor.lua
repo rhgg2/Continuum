@@ -13,29 +13,22 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
-local PRESET_ORDER = { '12EDO', '19EDO', '31EDO', '53EDO' }
-
-local cm, chrome, ctx, facade = (...).cm, (...).chrome, (...).ctx, (...).facade
-local function tracker() return facade.get('tracker') end
+local cm, chrome, ctx = (...).cm, (...).chrome, (...).ctx
 
 local selected = nil   -- name being viewed; nil follows the active slot
 local selTier  = nil   -- tier of the current selection ('project' | 'global')
 
 local function viewedName() return selected or cm:get('temper') end
 
--- Seed a preset into the project library if absent, then make it the project
--- temper. Both writes are project-tier: the editor page is context-free, with
--- no bound take/track to carry take/track-tier slots.
-local function seedAndUse(name)
-  if not cm:get('tempers')[name] then
-    tracker().setTemper(name, tuning.presets[name])
-  end
-  tracker().setProjectTemper(name)
-  selected, selTier = name, 'project'
-end
+local SYNTHETIC = { ['12EDO'] = true }
 
 local function projectTempers() return cm:getAt('project', 'tempers') or {} end
-local function globalTempers()  return cm:getAt('global',  'tempers') or {} end
+-- Reading the global library lazily seeds it from the EDO catalogue (minus the
+-- synthetic 12EDO floor) the first time. Mirrors swingEditor's globalSwings.
+local function globalTempers()
+  cm:seedGlobalFromDefault('tempers', SYNTHETIC)
+  return cm:getAt('global', 'tempers') or {}
+end
 
 -- A name's editable home: project copy if present, else global (covers the
 -- synthetic '12EDO' floor too).
@@ -81,8 +74,6 @@ local function deleteSel(tier, name)
   end
 end
 
-local SYNTHETIC = { ['12EDO'] = true }
-
 local function buildDescriptor()
   local globalNames = sortedNames(globalTempers())
   if not globalTempers()['12EDO'] then table.insert(globalNames, 1, '12EDO') end
@@ -108,16 +99,6 @@ local function draw(w, h)
   chrome.pushChromeStyles()
   ImGui.PushStyleColor(ctx, ImGui.Col_Separator, chrome.colour('toolbar.buttonBorder'))
   if ImGui.BeginChild(ctx, '##temperEditor', w, h) then
-    ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 10, 3)
-    ImGui.AlignTextToFramePadding(ctx)
-    ImGui.Text(ctx, 'Seed preset:')
-    for _, name in ipairs(PRESET_ORDER) do
-      ImGui.SameLine(ctx, 0, 6)
-      if ImGui.Button(ctx, name) then seedAndUse(name) end
-    end
-    ImGui.PopStyleVar(ctx, 1)
-    ImGui.Separator(ctx)
-
     local name   = viewedName()
     local temper = name and tuning.findTemper(name, cm:get('tempers'))
     if not temper then

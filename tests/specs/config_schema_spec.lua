@@ -404,6 +404,40 @@ return {
     end,
   },
 
+  -- seedGlobalFromDefault: lazily materialise the global library from the
+  -- catalogue the first time it is read; synthetic floor (identity/12EDO) excluded.
+  {
+    name = 'cm:seedGlobalFromDefault seeds the global library from the catalogue when empty',
+    run = function(harness)
+      local h = harness.mk()
+      t.eq(next(h.cm:getAt('global', 'swings') or {}), nil, 'global swings starts empty')
+      h.cm:seedGlobalFromDefault('swings', { identity = true })
+      local g = h.cm:getAt('global', 'swings')
+      t.truthy(g['classic-58'], 'a catalogue preset is now a global entry')
+      t.eq(g['identity'], nil,  'the synthetic floor is excluded from the seed')
+    end,
+  },
+  {
+    name = 'cm:seedGlobalFromDefault is a no-op once the global library exists',
+    run = function(harness)
+      local h = harness.mk{ config = { global = { swings = { mine = { factors = {} } } } } }
+      h.cm:seedGlobalFromDefault('swings', { identity = true })
+      local g = h.cm:getAt('global', 'swings')
+      t.eq(g['classic-58'], nil, 'catalogue not injected over a populated library')
+      t.truthy(g['mine'],        'the existing entry survives untouched')
+    end,
+  },
+  {
+    name = 'cm:seedGlobalFromDefault seeds tempers from the EDO catalogue',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:seedGlobalFromDefault('tempers', { ['12EDO'] = true })
+      local g = h.cm:getAt('global', 'tempers')
+      t.truthy(g['19EDO'], 'an EDO preset is now a global temper')
+      t.eq(g['12EDO'], nil, 'the synthetic floor is excluded')
+    end,
+  },
+
   {
     name = 'cm fires changes with their level on the broadcast',
     run = function(harness)

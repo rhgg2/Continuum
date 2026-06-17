@@ -350,8 +350,15 @@ end
 
 ----- Tier-aware library writes
 
+local SYNTHETIC = { identity = true }
+
 local function projectSwings() return cm:getAt('project', 'swings') or {} end
-local function globalSwings()  return cm:getAt('global',  'swings') or {} end
+-- Reading the global library lazily seeds it from the catalogue (minus the
+-- synthetic floor) the first time. See docs/swingEditor.md § Library tiers.
+local function globalSwings()
+  cm:seedGlobalFromDefault('swings', SYNTHETIC)
+  return cm:getAt('global', 'swings') or {}
+end
 
 -- A name's editable home: the project copy if one exists, else global (which
 -- also covers the synthetic 'identity' floor and unseeded default presets).
@@ -412,8 +419,6 @@ local function resolvedSlots()
   local chanName = anchor and sw[anchor.chan] or nil
   return takeName, chanName
 end
-
-local SYNTHETIC = { identity = true }
 
 local function sortedNames(tbl)
   local out = {}

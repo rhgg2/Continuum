@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=656  sha=5568994  mode=chunk
+@module swingEditor  src=swingEditor.lua  loc=661  sha=dcf4a1d  mode=chunk
 @deps cm, ds, chrome, ctx, facade
 
 # Invariants & contracts
@@ -29,8 +29,8 @@
   @state SWING_MARK = 0x000000b0  @ 41
   @state SWING_SOFT_QN = 0.15  @ 42
   @state state = nil  @ 49
-  @state SYNTHETIC = { identity = true }  @ 416
-  @state self = {}  @ 630
+  @state SYNTHETIC = { identity = true }  @ 353
+  @state self = {}  @ 635
 
 # Private functions
   @fn arrange()  @ 46
@@ -73,120 +73,123 @@
   @fn moveFactor(i, dir)  @ 241
   @fn drawFactorRow(i, f, availW)  @ 251
   -- Tier-aware library writes
-  @fn projectSwings()  @ 353
-  @fn globalSwings()  @ 354
-  @fn homeTier(name)  @ 358
+  @fn projectSwings()  @ 355
+  @fn globalSwings()  @ 358
+      -- Reading the global library lazily seeds it from the catalogue (minus the
+      -- synthetic floor) the first time. See docs/swingEditor.md § Library tiers.
+  @fn homeTier(name)  @ 365
       -- A name's editable home: the project copy if one exists, else global (which
       -- also covers the synthetic 'identity' floor and unseeded default presets).
-  @fn switchTo(name, tier)  @ 365
+  @fn switchTo(name, tier)  @ 372
       -- Switch the edited swing without closing the editor. Re-captures the
       -- snapshot so Reset/dirty-check stay coherent; tier defaults to the home tier.
-  @fn deleteFromTier(level, name)  @ 371
-  @fn promote(name)  @ 379
+  @fn deleteFromTier(level, name)  @ 378
+  @fn promote(name)  @ 386
       @contract  promote copies the composite to global; the project copy survives, still shadowing it
-  @fn demote(name)  @ 387
+  @fn demote(name)  @ 394
       -- Fork a global entry down into the project tier and edit that copy.
-  @fn deleteSel(tier, name)  @ 397
+  @fn deleteSel(tier, name)  @ 404
       -- Delete from the row's tier; fall back to a surviving shadow in the other
       -- tier if any, else clear the selection.
-  @fn resolvedSlots()  @ 407
+  @fn resolvedSlots()  @ 414
       -- Resolved take and channel slots for the open-default and the
       -- library-row shortcut buttons. 'identity' at the take tier is treated
       -- as no-slot (matches open()'s bail); at the channel tier nil means
       -- 'no override, fall through to take'.
-  @fn sortedNames(tbl)  @ 418
-  @fn activeEntries()  @ 427
+  @fn sortedNames(tbl)  @ 423
+  @fn activeEntries()  @ 432
       -- In-force entries for the Active folder: the take's swing plus the cursor
       -- channel's override (the phase-1 Take/Chan shortcuts, now navigation rows).
-  @fn inUseNames()  @ 437
+  @fn inUseNames()  @ 442
       -- Project entries a take references can't be deleted (it would orphan the
       -- reference); the shell greys Delete for these.
-  @fn buildDescriptor()  @ 445
-  @fn drawCreateModal()  @ 467
+  @fn buildDescriptor()  @ 450
+  @fn drawCreateModal()  @ 472
       -- '+ New' modal. Lives at draw() top-level so the popup isn't bound to a
       -- child window's lifetime; the editor body greys out behind it via the
       -- disabled wrap in drawEditBody.
-  @fn drawEditBody(composite, n)  @ 522
-  @fn draw(w, h)  @ 611
+  @fn drawEditBody(composite, n)  @ 527
+  @fn draw(w, h)  @ 616
       -- Body-region draw inside a child window; chrome palette (editor.bg + toolbar colours)
       -- takes the tracker grid's place (Col_ChildBg instead of Col_WindowBg).
 
 # Public API (self:*)
   -- Public
-  @api self:open(name)  @ 634
+  @api self:open(name)  @ 639
       @contract  open(name?) selects entry; default prefers chan override → take swing → nil.
       @contract  when already open, re-selects resolved target; snapshot captured at selection time.
-  @api self:render(w, h)  @ 646
-  @api self:libraryDescriptor()  @ 648
-  @api self:close()  @ 650
-  @api self:isOpen()  @ 652
-  @api self:modalActive()  @ 653
+  @api self:render(w, h)  @ 651
+  @api self:libraryDescriptor()  @ 653
+  @api self:close()  @ 655
+  @api self:isOpen()  @ 657
+  @api self:modalActive()  @ 658
 
 # Uses (outbound edges)
-  @use call    chrome.checkbox  @ 566
-  @use call    chrome.colour  @ 140, 147, 618
-  @use call    chrome.disabledIf  @ 275, 534, 577
-  @use call    chrome.popChromeStyles  @ 625
-  @use call    chrome.popChromeWindow  @ 519
-  @use call    chrome.pushChromeStyles  @ 617
-  @use call    chrome.pushChromeWindow  @ 475
-  @use call    chrome.verticalSeparator  @ 542, 563, 572
-  @use call    cm.get  @ 178, 499, 641
-  @use call    cm.getAt  @ 176, 353, 354
-  @use call    cm.set  @ 375, 383, 391
-  @use call    ds.get  @ 408
+  @use call    chrome.checkbox  @ 571
+  @use call    chrome.colour  @ 140, 147, 623
+  @use call    chrome.disabledIf  @ 275, 539, 582
+  @use call    chrome.popChromeStyles  @ 630
+  @use call    chrome.popChromeWindow  @ 524
+  @use call    chrome.pushChromeStyles  @ 622
+  @use call    chrome.pushChromeWindow  @ 480
+  @use call    chrome.verticalSeparator  @ 547, 568, 577
+  @use call    cm.get  @ 178, 504, 646
+  @use call    cm.getAt  @ 176, 355, 360
+  @use call    cm.seedGlobalFromDefault  @ 359
+  @use call    cm.set  @ 382, 390, 398
+  @use call    ds.get  @ 415
   @use call    facade.get  @ 46, 47
-  @use call    imgui.AlignTextToFramePadding  @ 254, 290, 320, 478, 545, 574
+  @use call    imgui.AlignTextToFramePadding  @ 254, 290, 320, 483, 550, 579
   @use call    imgui.ArrowButton  @ 338, 340
-  @use call    imgui.BeginChild  @ 619
-  @use call    imgui.BeginDisabled  @ 526
-  @use call    imgui.BeginPopup  @ 553
-  @use call    imgui.BeginPopupModal  @ 476
-  @use call    imgui.Button  @ 342, 494, 496, 535, 549, 604
-  @use call    imgui.CloseCurrentPopup  @ 477
+  @use call    imgui.BeginChild  @ 624
+  @use call    imgui.BeginDisabled  @ 531
+  @use call    imgui.BeginPopup  @ 558
+  @use call    imgui.BeginPopupModal  @ 481
+  @use call    imgui.Button  @ 342, 499, 501, 540, 554, 609
+  @use call    imgui.CloseCurrentPopup  @ 482
   @use call    imgui.Combo  @ 261, 302
   @use call    imgui.DrawList_AddCircleFilled  @ 169
   @use call    imgui.DrawList_AddLine  @ 150
   @use call    imgui.DrawList_AddRectFilled  @ 140
   @use call    imgui.Dummy  @ 172
-  @use call    imgui.EndChild  @ 623
-  @use call    imgui.EndDisabled  @ 606
-  @use call    imgui.EndPopup  @ 517, 559
-  @use call    imgui.GetContentRegionAvail  @ 593
+  @use call    imgui.EndChild  @ 628
+  @use call    imgui.EndDisabled  @ 611
+  @use call    imgui.EndPopup  @ 522, 564
+  @use call    imgui.GetContentRegionAvail  @ 598
   @use call    imgui.GetCursorScreenPos  @ 107
-  @use call    imgui.GetItemRectMax  @ 551
-  @use call    imgui.GetItemRectMin  @ 550
+  @use call    imgui.GetItemRectMax  @ 556
+  @use call    imgui.GetItemRectMin  @ 555
   @use call    imgui.GetWindowDrawList  @ 108
-  @use call    imgui.GetWindowViewport  @ 473
-  @use call    imgui.InputText  @ 489
-  @use call    imgui.IsItemDeactivatedAfterEdit  @ 270, 286, 314, 335, 588
-  @use call    imgui.IsKeyPressed  @ 496
-  @use call    imgui.IsPopupOpen  @ 470
-  @use call    imgui.IsWindowAppearing  @ 481
-  @use call    imgui.OpenPopup  @ 471, 549
-  @use call    imgui.PopID  @ 348, 491
-  @use call    imgui.PopStyleColor  @ 624
-  @use call    imgui.PopStyleVar  @ 591
-  @use call    imgui.PushID  @ 252, 488
-  @use call    imgui.PushStyleColor  @ 618
-  @use call    imgui.PushStyleVar  @ 531
-  @use call    imgui.SameLine  @ 256, 272, 289, 292, 319, 322, 337, 339, 341, 480, 493, 495, 541, 543, 547, 562, 564, 571, 573, 576
-  @use call    imgui.Selectable  @ 555
-  @use call    imgui.Separator  @ 592, 598
-  @use call    imgui.SetKeyboardFocusHere  @ 482
-  @use call    imgui.SetNextItemWidth  @ 260, 276, 293, 323, 485, 580
-  @use call    imgui.SetNextWindowPos  @ 474, 552
-  @use call    imgui.SliderDouble  @ 278, 326, 581
-  @use call    imgui.Text  @ 255, 291, 321, 479, 546, 575
-  @use call    imgui.TextColored  @ 515
-  @use call    imgui.Viewport_GetCenter  @ 473
+  @use call    imgui.GetWindowViewport  @ 478
+  @use call    imgui.InputText  @ 494
+  @use call    imgui.IsItemDeactivatedAfterEdit  @ 270, 286, 314, 335, 593
+  @use call    imgui.IsKeyPressed  @ 501
+  @use call    imgui.IsPopupOpen  @ 475
+  @use call    imgui.IsWindowAppearing  @ 486
+  @use call    imgui.OpenPopup  @ 476, 554
+  @use call    imgui.PopID  @ 348, 496
+  @use call    imgui.PopStyleColor  @ 629
+  @use call    imgui.PopStyleVar  @ 596
+  @use call    imgui.PushID  @ 252, 493
+  @use call    imgui.PushStyleColor  @ 623
+  @use call    imgui.PushStyleVar  @ 536
+  @use call    imgui.SameLine  @ 256, 272, 289, 292, 319, 322, 337, 339, 341, 485, 498, 500, 546, 548, 552, 567, 569, 576, 578, 581
+  @use call    imgui.Selectable  @ 560
+  @use call    imgui.Separator  @ 597, 603
+  @use call    imgui.SetKeyboardFocusHere  @ 487
+  @use call    imgui.SetNextItemWidth  @ 260, 276, 293, 323, 490, 585
+  @use call    imgui.SetNextWindowPos  @ 479, 557
+  @use call    imgui.SliderDouble  @ 278, 326, 586
+  @use call    imgui.Text  @ 255, 291, 321, 484, 551, 580
+  @use call    imgui.TextColored  @ 520
+  @use call    imgui.Viewport_GetCenter  @ 478
   @use call    timing.applyFactors  @ 163
   @use call    timing.atomTilePeriod  @ 90, 295, 345
-  @use call    timing.compositePeriodQN  @ 578, 595
-  @use call    timing.periodQN  @ 66, 188, 199, 307, 325, 579
+  @use call    timing.compositePeriodQN  @ 583, 600
+  @use call    timing.periodQN  @ 66, 188, 199, 307, 325, 584
   @use call    timing.resolveFactors  @ 104
   @use call    util.assign  @ 224
-  @use call    util.deepClone  @ 216, 382, 390, 536
+  @use call    util.deepClone  @ 216, 389, 397, 541
   @use call    util.round  @ 110, 125
   @use require imgui  @ 21
   @use require timing  @ 15

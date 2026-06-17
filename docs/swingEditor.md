@@ -69,3 +69,23 @@ lie.
 Three dot sizes — bar/midBar > beat > offbeat — let the meter read
 at a glance. `midBar` is treated as a beat for shading but as a bar
 for dot sizing; the asymmetry is deliberate.
+
+## Library tiers & seeding
+
+Swings resolve across three cm tiers, plus a synthetic floor:
+
+- **defaults** — the built-in preset catalogue (`classic-*`, `delay-*`)
+  and `identity`, the unstored, undeletable floor (a bare `{}` ≡ no swing).
+- **global** — the user's personal library. Lazily seeded from the
+  catalogue (minus `identity`) the first time it is *read* — by the
+  editor's tree palette or a tracker picker (`cm:seedGlobalFromDefault`).
+  No startup seeding, no flag; an empty global library is the only signal.
+- **project** — every swing the project actually references. A project
+  is self-contained: realisation resolves names here (plus the identity
+  floor) and never leans on the global library or the catalogue.
+
+Project self-containment is held by **copy-on-assign**: picking a swing
+for a take or channel (`setSwingSlot` / `setColSwingSlot` → `localizeSwing`)
+copies its composite into the project tier if absent, before writing the
+name into the take map. `identity` is never localized. `temperEditor`
+mirrors this for tempers (`pickTemper`, with `12EDO` as the floor).

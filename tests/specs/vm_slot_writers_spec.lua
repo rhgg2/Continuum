@@ -55,6 +55,32 @@ return {
     end,
   },
   {
+    name = 'setSwingSlot localizes a catalogue preset into the project library',
+    run = function(harness)
+      local h = harness.mk()   -- classic-58 lives in the catalogue, not in project
+      t.eq((h.cm:getAt('project', 'swings') or {})['classic-58'], nil, 'absent from project to start')
+      h.vm:setSwingSlot('classic-58')
+      local composite = h.cm:getAt('project', 'swings')['classic-58']
+      t.truthy(composite and composite.factors, 'the resolved composite is copied into project')
+    end,
+  },
+  {
+    name = 'setSwingSlot(nil) never localizes the identity floor',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setSwingSlot(nil)
+      t.eq((h.cm:getAt('project', 'swings') or {})['identity'], nil, 'identity stays synthetic')
+    end,
+  },
+  {
+    name = 'setColSwingSlot localizes a catalogue preset into the project library',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setColSwingSlot(3, 'classic-58')
+      t.truthy(h.cm:getAt('project', 'swings')['classic-58'], 'channel pick localizes too')
+    end,
+  },
+  {
     name = 'setSwingSlot(nil) writes the identity sentinel into the take map and seed',
     run = function(harness)
       local h = harness.mk{ data = { swing = { global = 'c58' } } }

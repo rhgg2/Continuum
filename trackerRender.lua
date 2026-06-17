@@ -248,32 +248,11 @@ local function laneStripRows()
   return cm:get('laneStrip.rows') or 0
 end
 
--- Off=group 1, saved lib=group 2, unseeded preset (+ prefix)=group 3.
-local function libPickerItems(current, lib, presets, excludePresets)
-  local items = { { label = 'Off', key = nil, group = 1, current = current == nil } }
-  local libNames = {}
-  for k in pairs(lib) do libNames[#libNames + 1] = k end
-  table.sort(libNames)
-  for _, name in ipairs(libNames) do
-    items[#items + 1] = { label = name, key = name, group = 2, current = current == name }
-  end
-  local presetNames = {}
-  for k in pairs(presets) do
-    if not (excludePresets and excludePresets[k]) and not lib[k] then
-      presetNames[#presetNames + 1] = k
-    end
-  end
-  table.sort(presetNames)
-  for _, name in ipairs(presetNames) do
-    items[#items + 1] = { label = '+ ' .. name, key = name, group = 3, current = false }
-  end
-  return items
-end
-
--- Seed lib if absent before committing to slot.
+-- Localize the picked temper into the project library if absent, so the project
+-- carries every temper it references (mirrors swing's setSwingSlot).
 local pickTemper = util.atomic('Set temper', function(name)
-  if name and not cm:get('tempers')[name] then
-    tv:setTemper(name, tuning.presets[name])
+  if name and not (cm:getAt('project', 'tempers') or {})[name] then
+    tv:setTemper(name, tuning.findTemper(name, cm:get('tempers')))
   end
   tv:setTemperSlot(name)
 end)
@@ -283,7 +262,9 @@ local pickColSwing = util.atomic('Set column swing', function(chan, name) tv:set
 
 -- 'identity' is the explicit no-swing sentinel (schema default); shown as
 -- "Off" in the button, hidden from the picker rows.
-local SWING_PRESET_EXCLUDE = { identity = true }
+local SWING_PRESET_EXCLUDE  = { identity = true }
+-- 12EDO is the temper floor: shown by name as the active default, hidden from the +preset rows.
+local TEMPER_PRESET_EXCLUDE = { ['12EDO'] = true }
 
 -- Hex stays visible when unassigned so `<`/`>` advertise their step.
 -- No "Off" row — every slot is real.
@@ -388,11 +369,11 @@ local toolbarSegments = {
         kind        = 'temper',
         buttonLabel = cur or 'Off',
         width       = 120,
-        items       = libPickerItems(cur, cm:get('tempers'), tuning.presets),
+        items       = chrome.libPicker('tempers', cur, TEMPER_PRESET_EXCLUDE),
         onPick      = pickTemper,
       }
       ImGui.SameLine(ctx, 0, 6)
-      if ImGui.Button(ctx, '\xe2\x9c\x8e##editTemper') then cmgr:invoke('editTuning') end
+      if ImGui.Button(ctx, 'edit##editTemper') then cmgr:invoke('editTuning') end
     end,
   },
   {
@@ -425,7 +406,7 @@ local toolbarSegments = {
         }
       end)
       ImGui.SameLine(ctx, 0, 8)
-      if ImGui.Button(ctx, '\xe2\x9c\x8e##editSwing') then cmgr:invoke('editSwing') end
+      if ImGui.Button(ctx, 'edit##editSwing') then cmgr:invoke('editSwing') end
     end,
   },
   {

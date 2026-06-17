@@ -1,5 +1,5 @@
-@module temperEditor  src=temperEditor.lua  loc=150  sha=f3c817d  mode=chunk
-@deps cm, chrome, ctx, facade
+@module temperEditor  src=temperEditor.lua  loc=131  sha=5568994  mode=chunk
+@deps cm, chrome, ctx
 
 # Imports
   @require util = 'util'  @ 7
@@ -7,60 +7,51 @@
   @require ImGui = 'imgui'  @ 14
 
 # Private state
-  @state PRESET_ORDER = { '12EDO', '19EDO', '31EDO', '53EDO' }  @ 16
-  @state selected = nil  @ 21   -- name being viewed; nil follows the active slot
-  @state selTier = nil  @ 22   -- tier of the current selection ('project' | 'global')
-  @state SYNTHETIC = { ['12EDO'] = true }  @ 84
-  @state self = {}  @ 145
+  @state selected = nil  @ 18   -- name being viewed; nil follows the active slot
+  @state selTier = nil  @ 19   -- tier of the current selection ('project' | 'global')
+  @state SYNTHETIC = { ['12EDO'] = true }  @ 23
+  @state self = {}  @ 126
 
 # Private functions
-  @fn tracker()  @ 19
-  @fn viewedName()  @ 24
-  @fn seedAndUse(name)  @ 29
-      -- Seed a preset into the project library if absent, then make it the project
-      -- temper. Both writes are project-tier: the editor page is context-free, with
-      -- no bound take/track to carry take/track-tier slots.
-  @fn projectTempers()  @ 37
-  @fn globalTempers()  @ 38
-  @fn homeTier(name)  @ 42
+  @fn viewedName()  @ 21
+  @fn projectTempers()  @ 25
+  @fn globalTempers()  @ 28
+      -- Reading the global library lazily seeds it from the EDO catalogue (minus the
+      -- synthetic 12EDO floor) the first time. Mirrors swingEditor's globalSwings.
+  @fn homeTier(name)  @ 35
       -- A name's editable home: project copy if present, else global (covers the
       -- synthetic '12EDO' floor too).
-  @fn sortedNames(tbl)  @ 47
-  @fn temperFor(name)  @ 54
-  @fn promote(name)  @ 56
-  @fn demote(name)  @ 63
-  @fn deleteSel(tier, name)  @ 71
-  @fn buildDescriptor()  @ 86
-  @fn draw(w, h)  @ 107
+  @fn sortedNames(tbl)  @ 40
+  @fn temperFor(name)  @ 47
+  @fn promote(name)  @ 49
+  @fn demote(name)  @ 56
+  @fn deleteSel(tier, name)  @ 64
+  @fn buildDescriptor()  @ 77
+  @fn draw(w, h)  @ 98
 
 # Public API (self:*)
   -- Public
-  @api self:select(name)  @ 146
-  @api self:render(w, h)  @ 147
-  @api self:libraryDescriptor()  @ 148
-  @api self:modalActive()  @ 149
+  @api self:select(name)  @ 127
+  @api self:render(w, h)  @ 128
+  @api self:libraryDescriptor()  @ 129
+  @api self:modalActive()  @ 130
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 109
-  @use call    chrome.popChromeStyles  @ 141
-  @use call    chrome.pushChromeStyles  @ 108
-  @use call    cm.get  @ 24, 30, 54, 90, 122
-  @use call    cm.getAt  @ 37, 38
-  @use call    cm.set  @ 60, 67, 75
-  @use call    facade.get  @ 19
-  @use call    imgui.AlignTextToFramePadding  @ 112
-  @use call    imgui.BeginChild  @ 110, 129
-  @use call    imgui.Button  @ 116
-  @use call    imgui.EndChild  @ 136, 139
-  @use call    imgui.PopStyleColor  @ 140
-  @use call    imgui.PopStyleVar  @ 118
-  @use call    imgui.PushStyleColor  @ 109
-  @use call    imgui.PushStyleVar  @ 111
-  @use call    imgui.SameLine  @ 115
-  @use call    imgui.Separator  @ 119, 128
-  @use call    imgui.Text  @ 113, 124, 126, 132
-  @use call    tuning.findTemper  @ 54, 122
-  @use call    util.deepClone  @ 59, 66
+  @use call    chrome.colour  @ 100
+  @use call    chrome.popChromeStyles  @ 122
+  @use call    chrome.pushChromeStyles  @ 99
+  @use call    cm.get  @ 21, 47, 81, 103
+  @use call    cm.getAt  @ 25, 30
+  @use call    cm.seedGlobalFromDefault  @ 29
+  @use call    cm.set  @ 53, 60, 68
+  @use call    imgui.BeginChild  @ 101, 110
+  @use call    imgui.EndChild  @ 117, 120
+  @use call    imgui.PopStyleColor  @ 121
+  @use call    imgui.PushStyleColor  @ 100
+  @use call    imgui.Separator  @ 109
+  @use call    imgui.Text  @ 105, 107, 113
+  @use call    tuning.findTemper  @ 47, 103
+  @use call    util.deepClone  @ 52, 59
   @use require imgui  @ 14
   @use require tuning  @ 8
   @use require util  @ 7
