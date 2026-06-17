@@ -69,8 +69,6 @@ end
 
 local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
 local dragging    = false   -- tracker-grid selection drag: click → held → release
-local swingEditor = util.instantiate('swingEditor',
-  { tv = tv, cm = cm, ds = ds, chrome = chrome, ctx = ctx, facade = facade })
 local curveEd      = util.instantiate('curveEditor', { ctx = ctx, chrome = chrome })
 local laneConsumed = false
 local toolbar                              -- lazy: chrome may be nil at construction in tests
@@ -393,6 +391,8 @@ local toolbarSegments = {
         items       = libPickerItems(cur, cm:get('tempers'), tuning.presets),
         onPick      = pickTemper,
       }
+      ImGui.SameLine(ctx, 0, 6)
+      if ImGui.Button(ctx, '\xe2\x9c\x8e##editTemper') then cmgr:invoke('editTuning') end
     end,
   },
   {
@@ -424,6 +424,8 @@ local toolbarSegments = {
           onPick      = function(name) pickColSwing(chan, name) end,
         }
       end)
+      ImGui.SameLine(ctx, 0, 8)
+      if ImGui.Button(ctx, '\xe2\x9c\x8e##editSwing') then cmgr:invoke('editSwing') end
     end,
   },
   {
@@ -442,24 +444,9 @@ local toolbarSegments = {
   },
 }
 
--- While the swing editor is open, the tracker body is replaced and
--- only swing-related toolbar segments stay live (the picker is how
--- the user switches what they're editing). Other segments grey out.
 local function drawTrackerToolbarBits()
   toolbar = toolbar or chrome.makeToolbar()
-  if not swingEditor:isOpen() then return toolbar(toolbarSegments) end
-  local wrapped = {}
-  for i, seg in ipairs(toolbarSegments) do
-    if seg.id == 'swing' then
-      wrapped[i] = seg
-    else
-      wrapped[i] = {
-        id = seg.id, visible = seg.visible,
-        render = function() chrome.disabledIf(true, seg.render) end,
-      }
-    end
-  end
-  toolbar(wrapped)
+  toolbar(toolbarSegments)
 end
 
 -- Bound cc columns drop the 'CC' label for their param name written
@@ -1336,7 +1323,6 @@ cmgr:scope('tracker'):bindAll{
   playFromCursor         = { ImGui.Key_F7 },
   openTemperPicker       = { {ImGui.Key_T, ImGui.Mod_Super} },
   openSwingPicker        = { {ImGui.Key_S, ImGui.Mod_Super} },
-  openSwingEditor        = { {ImGui.Key_E, ImGui.Mod_Super} },
   quantize               = { {ImGui.Key_K, ImGui.Mod_Ctrl} },
   quantizeKeepRealised   = { {ImGui.Key_K, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
 }
@@ -1364,10 +1350,11 @@ help:registerPage('tracker', {
   }},
   { anchor = 'toolbar.tuning', place = 'pin', title = 'Tuning', items = {
     { cmd = 'openTemperPicker', label = 'Pick tuning' },
+    { cmd = 'editTuning', label = 'Edit tuning' },
   }},
   { anchor = 'toolbar.swing', place = 'pin', title = 'Swing', items = {
     { cmd = 'openSwingPicker', label = 'Pick swing' },
-    { cmd = 'openSwingEditor', label = 'Edit swing' },
+    { cmd = 'editSwing', label = 'Edit swing' },
   }},
   { anchor = 'toolbar.sample', place = 'pin', title = 'Sample', items = {
     { cmd = 'inputSampleUp', label = 'Sample +' },
@@ -1836,8 +1823,6 @@ tracker:registerAll{
   quantize             = { scopedAction('quantize',               'quantize'),             'Quantize' },
   quantizeKeepRealised = { scopedAction('quantize keep realised', 'quantizeKeepRealised'), 'Quantize (keep realised)' },
 
-  openSwingEditor = function() swingEditor:open() end,
-
   openTemperPicker = function() chrome.requestPickerOpen('temper') end,
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
 }
@@ -1944,22 +1929,6 @@ end
 --invariant: lane-strip drag callbacks may flush tv.grid.cols and clear col.x
 --contract: second pass repopulates layout for drawTracker
 function renderer:renderBody(_, w, h, dispatch)
-  -- Swing editor commandeers the body region. The editor draws in
-  -- chrome/UI register, not the tracker monospace — push uiFont
-  -- explicitly so it doesn't inherit the (yet-to-be-pushed) tracker
-  -- font. Toolbar stays drawn above with non-swing segments greyed;
-  -- dispatcher is gated via focusState so tracker bindings don't
-  -- fire underneath.
-  if swingEditor:isOpen() then
-    -- Dispatch BEFORE render so focusState reads the modal-active flag
-    -- while it's still set; render is what clears it on Enter/Cancel.
-    -- Same ordering as the main path: dispatch → drawModal.
-    if dispatch then dispatch(self:focusState()) end
-    ImGui.PushFont(ctx, uiFont, gui.fontSize.ui)
-    swingEditor:render(w, h)
-    ImGui.PopFont(ctx)
-    return
-  end
   -- No bound take ⇒ empty grid. Body pushes no Col_Text, so push uiFont +
   -- grid text colour explicitly; still dispatch so global keys fire.
   if #tv.grid.cols == 0 then
@@ -1998,31 +1967,18 @@ function renderer:renderStatusBar(_)
   drawStatusBar()
 end
 
--- suppressKbd: a popup or modal owns input — dispatcher does nothing.
--- pageSuppressed: a body-region editor (swing, tuning) commandeers the
---   page — dispatcher walks root bindings only, so playPause/quit/undo
---   still fire while page-scoped commands stay quiet.
--- acceptCmds:  the page is visible and nothing inside it is currently
---   consuming a keystroke. We deliberately don't gate on which child
---   window holds focus: a toolbar click leaves the chrome focused
---   transiently, but bound commands should still fire. Anything that
---   genuinely needs the keys (a focused InputText, an active slider,
---   a held button) shows up as IsAnyItemActive.
+-- suppressKbd: modal/picker owns input. pageSuppressed: unused (swing/temper on own page).
+-- acceptCmds: page visible and no item active (toolbar focus is transient; see IsAnyItemActive).
 --shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
 function renderer:focusState()
   if not ctx then return { suppressKbd = false, pageSuppressed = false, acceptCmds = false } end
-  local suppressKbd    = modalHost:isOpen() or chrome.pickerIsActive() or swingEditor:modalActive()
-  local pageSuppressed = swingEditor:isOpen()
+  local suppressKbd = modalHost:isOpen() or chrome.pickerIsActive()
   return {
     suppressKbd    = suppressKbd,
-    pageSuppressed = pageSuppressed,
+    pageSuppressed = false,
     acceptCmds     = (not suppressKbd) and not ImGui.IsAnyItemActive(ctx) and not paletteFocus,
   }
 end
-
--- The controller closes these take-scoped editors on unbind/dropTake; they
--- live render-side but their lifetime follows the bound take.
-function renderer:closeTransients() swingEditor:close() end
 
 return renderer
 

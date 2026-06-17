@@ -58,10 +58,10 @@ function tp:bind(t)
     pa:apply()
   end
 end
-function tp:unbind() tr:closeTransients(); tm:bindTake(nil); wasDormant = true end
+function tp:unbind() tm:bindTake(nil); wasDormant = true end
 
 --contract: if take is destroyed, detach tm and blank the grid. Distinct from unbind.
-function tp:dropTake() tr:closeTransients(); tm:detach(); tv:dropGrid() end
+function tp:dropTake() tm:detach(); tv:dropGrid() end
 
 --contract: for coord's external-mutation watcher; re-reads the bound take, no swap
 function tp:reloadFromReaper() tm:reloadFromReaper() end
@@ -97,6 +97,12 @@ facade.publish('tracker', {
     end
     if tm:currentTake() ~= origTake then tm:bindTake(origTake) end
   end,
+  -- Take-context + tier-spanning slot writes for the off-stack editor page.
+  timeSig           = function()        return tv:timeSig()      end,
+  cursorAnchor      = function()        return tv:cursorAnchor() end,
+  setSwingComposite = function(name, c) tv:setSwingComposite(name, c) end,
+  setTemper         = function(name, t) tv:setTemper(name, t)         end,
+  setProjectTemper  = function(name)    tv:setProjectTemper(name)     end,
 })
 
 ----- Page interface — render delegates to the renderer; the watcher brackets the frame

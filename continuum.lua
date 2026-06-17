@@ -89,6 +89,7 @@ local function Main()
   local ap = coord:register('arrange', 'arrangePage')
   coord:register('tracker', 'trackerPage')
   coord:register('sample',  'samplePage')
+  coord:register('editor',  'editorPage')
   wp:enableLive()
   ap:seedCursorFromReaper()
 
@@ -155,6 +156,10 @@ local function Main()
     switchToWiring  = function() coord:setActive('wiring')  end,
     switchToTracker = function() coord:setActive('tracker') end,
     switchToSample  = function() coord:setActive('sample')  end,
+    switchToEditor  = function() coord:setActive('editor')  end,
+    editTuning      = function() coord:getFacade('editor').edit('temper'); coord:setActive('editor') end,
+    editSwing       = function() coord:getFacade('editor').edit('swing');  coord:setActive('editor') end,
+    closeEditor     = function() coord:setActive(coord:previousPage() or 'tracker') end,
     diveToSampler   = function(_, track) coord:getFacade('sample').setTrack(track); coord:setActive('sample') end,
     togglePage      = function() coord:togglePage()         end,
     quit            = function() coord:quit()               end,
@@ -171,6 +176,8 @@ local function Main()
     switchToWiring  = { ImGui.Key_F3 },
     switchToTracker = { ImGui.Key_F4 },
     switchToSample  = { ImGui.Key_F9 },
+    switchToEditor  = { ImGui.Key_F10 },
+    editSwing       = { {ImGui.Key_E, ImGui.Mod_Super} },
     quit            = { {ImGui.Key_Q, ImGui.Mod_Ctrl} },
     beginPrefix     = { {ImGui.Key_U, ImGui.Mod_Super} },
     toggleFxWindows = { ImGui.Key_F11 },

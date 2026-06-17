@@ -378,6 +378,13 @@ function tv:setTemperSlot(name)
   cm:set('project', 'temper', name)
 end
 
+-- Project-tier only: the editor page is context-free (no bound take/track),
+-- so it activates a temper project-wide rather than per-take.
+function tv:setProjectTemper(name)
+  if name == nil or name == '' then name = '12EDO' end
+  cm:set('project', 'temper', name)
+end
+
 --contract: seed a fresh take's swing map from its seed tier on bind; no-op once set
 function tv:seedSharedSlots()
   if ds:get('swing') == nil then

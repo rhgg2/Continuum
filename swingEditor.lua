@@ -2,8 +2,8 @@
 -- @noindex
 
 --invariant: editor owns no swing data; composite resolves via cm:get('swings', {mergeTiers=true})[name] (defaults ∪ global ∪ project) and is read fresh each frame via swingRead
---invariant: all writes route through swingWrite (idempotent → tv:setSwingComposite); commit() drives cross-take reswing on widget release
---invariant: state == nil iff editor is closed; open() is a no-op when already open; Esc / close-button clears state
+--invariant: all writes go through swingWrite (idempotent); commit() triggers cross-take reswing
+--invariant: state == nil iff closed; open(name?) re-selects when open; close() is page-driven
 --invariant: snapshot is captured at open() (and on swing-switch via the library picker) and never mutated; Reset writes a deepClone of it
 --invariant: shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
 --invariant: on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
@@ -41,9 +41,10 @@ local SWING_ERR     = 0xff6060ff
 local SWING_MARK    = 0x000000b0
 local SWING_SOFT_QN = 0.15
 
-local tv, cm, ds, chrome, ctx, facade = (...).tv, (...).cm, (...).ds, (...).chrome, (...).ctx, (...).facade
+local cm, ds, chrome, ctx, facade = (...).cm, (...).ds, (...).chrome, (...).ctx, (...).facade
 
 local function arrange() return facade.get('arrange') end
+local function tracker() return facade.get('tracker') end
 
 local state = nil
 
@@ -53,7 +54,8 @@ local function commit()
 end
 
 local function meterQN()
-  local num, denom = tv:timeSig()
+  local num, denom = tracker().timeSig()
+  num, denom = num or 4, denom or 4
   local beat = 4 / denom
   return beat, num * beat
 end
@@ -200,10 +202,10 @@ local function compositesEqual(a, b)
   return true
 end
 
---contract: sole write path; idempotent on equal composites; the active-take refresh happens via tv:setSwingComposite's configChanged broadcast (granular per-channel stale-mark + tm:rebuild)
+--contract: sole write path; idempotent on equal composites; refresh via setSwingComposite
 local function swingWrite(composite)
   if compositesEqual(swingRead() or {}, composite) then return end
-  tv:setSwingComposite(state.name, composite)
+  tracker().setSwingComposite(state.name, composite)
 end
 
 -- Editable clone with a guaranteed factors[] array, so write paths can
@@ -379,7 +381,7 @@ local function resolvedSlots()
   local sw       = ds:get('swing') or {}
   local takeName = sw.global
   if takeName == 'identity' then takeName = nil end
-  local anchor   = tv:cursorAnchor()
+  local anchor   = tracker().cursorAnchor()
   local chanName = anchor and sw[anchor.chan] or nil
   return takeName, chanName
 end
@@ -508,8 +510,7 @@ local function drawCreateModal()
         state.create.gen     = state.create.gen + 1
         state.create.refocus = true
       else
-        tv:setSwingComposite(name, {})
-        tv:setSwingSlot(name)
+        tracker().setSwingComposite(name, {})
         switchTo(name)
         dismiss()
       end
@@ -609,20 +610,10 @@ local function drawEditBody(composite, n)
   if not state.name then ImGui.EndDisabled(ctx) end
 end
 
--- Body-region draw. Caller (trackerPage) hands us its body rect via
--- renderBody; we run inside a child window so the chrome palette
--- (editor.bg + toolbar button/text colours + separator tint) takes
--- the place of the tracker grid's background. Mirrors the styling
--- that pushChromeWindow gave the editor in its old floating-window
--- form, swapping Col_WindowBg for Col_ChildBg.
-local function draw(w, h)
+-- Body-region draw inside a child window; chrome palette (editor.bg + toolbar colours)
+-- takes the tracker grid's place (Col_ChildBg instead of Col_WindowBg).
+local function draw(w, h, onClose)
   if not state then return end
-
-  -- Escape closes the editor, but only when no modal is open — otherwise
-  -- the modal's Cancel never gets to consume it.
-  if not state.create and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-    state = nil; return
-  end
 
   local composite = (state.name and swingRead()) or {}
   local n = #readFactors(composite)
@@ -630,8 +621,7 @@ local function draw(w, h)
   chrome.pushChromeStyles()
   ImGui.PushStyleColor(ctx, ImGui.Col_Separator, chrome.colour('toolbar.buttonBorder'))
   if ImGui.BeginChild(ctx, '##swingEditor', w, h) then
-    local function close() state = nil end
-    drawLibraryRow(close, w)
+    drawLibraryRow(onClose, w)
     if state then
       ImGui.Separator(ctx)
       drawEditBody(composite, n)
@@ -647,24 +637,24 @@ end
 
 local self = {}
 
---contract: no-op when already open. Default selection prefers the cursor
---           channel's swing override, falls back to the take's swing, and
---           is nil when neither resolves (body greys out; user can '+' or
---           use the Take/Chan shortcut buttons). snapshot is the current cm
---           composite at open time, used for Reset and dirty-check.
-function self:open()
-  if state then return end
+--contract: open(name?) selects entry; default prefers chan override → take swing → nil.
+--contract: when already open, re-selects resolved target; snapshot captured at selection time.
+function self:open(name)
   local takeName, chanName = resolvedSlots()
-  local name = chanName or takeName
-  local lib  = cm:get('swings', { mergeTiers = true })
+  local target = name or chanName or takeName
+  if state then
+    if target then switchTo(target) end
+    return
+  end
+  local lib = cm:get('swings', { mergeTiers = true })
   state = {
-    name     = name,
-    snapshot = name and lib[name] or nil,
+    name     = target,
+    snapshot = target and lib[target] or nil,
     rpb      = 4,
   }
 end
 
-function self:render(w, h) draw(w, h) end
+function self:render(w, h, onClose) draw(w, h, onClose) end
 
 function self:close() state = nil end
 

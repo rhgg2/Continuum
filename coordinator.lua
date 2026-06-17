@@ -37,7 +37,7 @@ local STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, modalHo
 
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 
-local pages, active = {}, nil
+local pages, active, previous = {}, nil, nil
 local quitting      = false
 local errHandler    = nil
 
@@ -143,6 +143,8 @@ local function drawSwitcher()
   pageButton('T', 'tracker')
   ImGui.SameLine(ctx, 0, 4)
   pageButton('S', 'sample')
+  ImGui.SameLine(ctx, 0, 4)
+  pageButton('E', 'editor')
 end
 
 local function dispatch(state)
@@ -277,6 +279,7 @@ end
 --contract: tracker self-binds from the cursor in renderBody; activation binds nothing for it
 function coord:setActive(name)
   if active == name then return true end
+  previous = active
   if active and pages[active] then
     pages[active]:unbind()
     cmgr:pop(active)
@@ -296,6 +299,9 @@ end
 
 --contract: resolve a published page facade by name; the contents are owned by the publishing page
 function coord:getFacade(name) return facade.get(name) end
+
+--contract: the page active immediately before the current one; closeEditor returns here
+function coord:previousPage() return previous end
 
 -- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
 -- are skipped; with ≥1 track every page activates.

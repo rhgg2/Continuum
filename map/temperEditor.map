@@ -1,0 +1,53 @@
+@module temperEditor  src=temperEditor.lua  loc=78  sha=untracked  mode=chunk
+@deps cm, chrome, ctx, facade
+
+# Imports
+  @require util = 'util'  @ 7
+  @require tuning = 'tuning'  @ 8
+  @require ImGui = 'imgui'  @ 14
+
+# Private state
+  @state PRESET_ORDER = { '12EDO', '19EDO', '31EDO', '53EDO' }  @ 16
+  @state selected = nil  @ 21   -- name being viewed; nil follows the active slot
+  @state self = {}  @ 74
+
+# Private functions
+  @fn tracker()  @ 19
+  @fn viewedName()  @ 23
+  @fn seedAndUse(name)  @ 28
+      -- Seed a preset into the project library if absent, then make it the project
+      -- temper. Both writes are project-tier: the editor page is context-free, with
+      -- no bound take/track to carry take/track-tier slots.
+  @fn draw(w, h)  @ 36
+
+# Public API (self:*)
+  -- Public
+  @api self:select(name)  @ 75
+  @api self:render(w, h, _onClose)  @ 76
+  @api self:modalActive()  @ 77
+
+# Uses (outbound edges)
+  @use call    chrome.colour  @ 38
+  @use call    chrome.popChromeStyles  @ 70
+  @use call    chrome.pushChromeStyles  @ 37
+  @use call    cm.get  @ 23, 29, 51
+  @use call    facade.get  @ 19
+  @use call    imgui.AlignTextToFramePadding  @ 41
+  @use call    imgui.BeginChild  @ 39, 58
+  @use call    imgui.Button  @ 45
+  @use call    imgui.EndChild  @ 65, 68
+  @use call    imgui.PopStyleColor  @ 69
+  @use call    imgui.PopStyleVar  @ 47
+  @use call    imgui.PushStyleColor  @ 38
+  @use call    imgui.PushStyleVar  @ 40
+  @use call    imgui.SameLine  @ 44
+  @use call    imgui.Separator  @ 48, 57
+  @use call    imgui.Text  @ 42, 53, 55, 61
+  @use call    tuning.findTemper  @ 51
+  @use require imgui  @ 14
+  @use require tuning  @ 8
+  @use require util  @ 7
+
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB
