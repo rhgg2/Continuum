@@ -35,7 +35,7 @@ return {
       t.eq(b.label, 'Cutoff')
       t.eq(b.param, 3)
       t.eq(b.busCode, 0)
-      t.truthy(h.cm:get('extraColumns')[1].ccs[119], 'cc column requested')
+      t.truthy(h.ds:get('extraColumns')[1].ccs[119], 'cc column requested')
       h.vm:rebuild()
       t.truthy(ccColIndex(h, 119), 'cc column materialised')
 
@@ -53,7 +53,7 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { NOTE } },
-        config = { take = { extraColumns = { [1] = { notes = 1, ccs = { [118] = true } } } } },
+        data = { extraColumns = { [1] = { notes = 1, ccs = { [118] = true } } } },
       }
       local r = h.reaper
       r._state.projectItems = { { takes = { 'take1' } } }
@@ -80,8 +80,8 @@ return {
           ccs = { { ppq = 0,   chan = 1, evType = 'cc', cc = 110, val = 64 },
                   { ppq = 240, chan = 1, evType = 'cc', cc = 110, val = 80 } },
         },
-        config = { take = { extraColumns = { [1] = { notes = 1, ccs = { [110] = true } } } } },
-        data   = { paramAutomation = { [1] = { [110] = BINDING } } },
+        data   = { extraColumns = { [1] = { notes = 1, ccs = { [110] = true } } },
+                   paramAutomation = { [1] = { [110] = BINDING } } },
       }
       h.vm:setGridSize(80, 40)
       local idx = ccColIndex(h, 110)
@@ -92,7 +92,7 @@ return {
 
       t.falsy(h.vm:paramBinding(1, 110), 'binding gone')
       t.falsy(ccColIndex(h, 110), 'column gone')
-      t.falsy((h.cm:get('extraColumns')[1] or {}).ccs, 'extraColumns entry cleaned')
+      t.falsy((h.ds:get('extraColumns')[1] or {}).ccs, 'extraColumns entry cleaned')
     end,
   },
 
@@ -101,8 +101,8 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { NOTE } },
-        config = { take = { extraColumns = { [1] = { notes = 1, ccs = { [110] = true } } } } },
-        data   = { paramAutomation = { [1] = { [110] = BINDING } } },
+        data   = { extraColumns = { [1] = { notes = 1, ccs = { [110] = true } } },
+                   paramAutomation = { [1] = { [110] = BINDING } } },
       }
       h.vm:setGridSize(80, 40)
       local idx = ccColIndex(h, 110)

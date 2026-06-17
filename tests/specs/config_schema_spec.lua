@@ -35,7 +35,7 @@ return {
       local said = {}
       local realPrint = _G.print
       _G.print = function(...) said[#said + 1] = table.concat({ ... }, ' ') end
-      local ok = pcall(function() h.cm:set('take', 'mutedChannels', { a = true }) end)
+      local ok = pcall(function() h.cm:set('take', 'tempers', { a = true }) end)
       _G.print = realPrint
       t.truthy(ok, 'no-take take-tier write must not raise')
       for _, line in ipairs(said) do
@@ -152,12 +152,12 @@ return {
     name = 'cm:get returns a deep copy — caller mutation does not leak',
     run = function(harness)
       local h = harness.mk{
-        config = { take = { extraColumns = { [1] = { notes = 2 } } } },
+        config = { take = { tempers = { [1] = { notes = 2 } } } },
       }
-      local a = h.cm:get('extraColumns')
+      local a = h.cm:get('tempers')
       a[1].notes = 999
       a[5] = { notes = 7 }
-      local b = h.cm:get('extraColumns')
+      local b = h.cm:get('tempers')
       t.eq(b[1].notes, 2,   'inner field is independent across get calls')
       t.eq(b[5], nil,       'outer key added by caller does not appear in cm')
     end,
@@ -166,9 +166,9 @@ return {
     name = 'cm:get of a default table returns a fresh table each call',
     run = function(harness)
       local h = harness.mk()
-      local a = h.cm:get('extraColumns')
+      local a = h.cm:get('tempers')
       a[3] = { notes = 1 }
-      local b = h.cm:get('extraColumns')
+      local b = h.cm:get('tempers')
       t.eq(b[3], nil, 'mutation of one get return does not pollute the default')
     end,
   },
@@ -177,10 +177,10 @@ return {
     run = function(harness)
       local h = harness.mk()
       local outer = { [1] = { notes = 3 } }
-      h.cm:set('take', 'extraColumns', outer)
+      h.cm:set('take', 'tempers', outer)
       outer[1].notes = 999
       outer[7] = { notes = 1 }
-      local stored = h.cm:get('extraColumns')
+      local stored = h.cm:get('tempers')
       t.eq(stored[1].notes, 3, 'cm kept its own copy; post-set mutation by caller did not leak')
       t.eq(stored[7], nil,     'post-set addition by caller did not leak')
     end,

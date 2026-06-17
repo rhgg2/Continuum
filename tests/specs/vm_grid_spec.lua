@@ -241,11 +241,11 @@ return {
         seed = {
           notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       local col = h.vm.grid.cols[1]
       t.eq(col.type, 'note')
-      t.truthy(col.showDelay, 'showDelay flag derived from cfg.noteDelay')
+      t.truthy(col.showDelay, 'showDelay flag derived from ds.noteDelay')
       t.deepEq(col.stopPos, { 0, 2, 4, 5, 7, 8, 9 })
       t.deepEq(col.partAt,  { 'pitch', 'pitch', 'vel', 'vel', 'delay', 'delay', 'delay' })
       t.eq(col.width, 10)

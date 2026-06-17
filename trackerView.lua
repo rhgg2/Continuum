@@ -406,17 +406,17 @@ local pushMute do
   local effectiveMuted = {}
 
   local function toggleChannelFlag(key, chan)
-    local s = cm:get(key)
+    local s = ds:get(key) or {}
     s[chan] = (not s[chan]) or nil
-    cm:set('take', key, s)
+    ds:assign(key, s)
   end
 
   --contract: effective mute = persistent-mute ∪ solo-implied mute
   --invariant: any solo: non-soloed forced muted, soloed forced audible (DAW solo-wins)
-  --invariant: both sets persist in cm so reload's tm:lastMuteSet matches the wire
+  --invariant: both sets persist in ds so reload's tm:lastMuteSet matches the wire
   function pushMute()
-    local m = cm:get('mutedChannels')
-    local s = cm:get('soloedChannels')
+    local m = ds:get('mutedChannels') or {}
+    local s = ds:get('soloedChannels') or {}
     if next(s) then
       for c = 1, 16 do
         if s[c] then m[c] = nil
@@ -427,8 +427,8 @@ local pushMute do
     if tm then tm:setMutedChannels(effectiveMuted) end
   end
 
-  function tv:isChannelMuted(chan)            return cm:get('mutedChannels')[chan]  == true end
-  function tv:isChannelSoloed(chan)           return cm:get('soloedChannels')[chan] == true end
+  function tv:isChannelMuted(chan)            return (ds:get('mutedChannels') or {})[chan]  == true end
+  function tv:isChannelSoloed(chan)           return (ds:get('soloedChannels') or {})[chan] == true end
   function tv:isChannelEffectivelyMuted(chan) return effectiveMuted[chan] == true end
   function tv:toggleChannelMute(chan)         toggleChannelFlag('mutedChannels',  chan) end
   function tv:toggleChannelSolo(chan)         toggleChannelFlag('soloedChannels', chan) end
@@ -2055,7 +2055,7 @@ end
 ----- Columns
 
 function tv:addExtraCol(type, cc)
-  local extras = cm:get('extraColumns')
+  local extras = ds:get('extraColumns') or {}
   local seen = {}
   for col in ec:eachSelectedCol() do
     local chan = col.midiChan
@@ -2076,7 +2076,7 @@ function tv:addExtraCol(type, cc)
       end
     end
   end
-  cm:set('take', 'extraColumns', extras)
+  ds:assign('extraColumns', extras)
 end
 
 function tv:hideExtraCol()
@@ -2088,12 +2088,12 @@ function tv:hideExtraCol()
   -- only goes on a subsequent hide.
   if col.type == 'note' then
     local lane = col.lane
-    local nd = cm:get('noteDelay')
+    local nd = ds:get('noteDelay') or {}
     local chanMap = nd[chan]
     if chanMap and chanMap[lane] then
       chanMap[lane] = nil
       nd[chan] = next(chanMap) and chanMap
-      cm:set('take', 'noteDelay', next(nd) and nd)
+      ds:assign('noteDelay', next(nd) and nd or util.REMOVE)
       tv:rebuild()
       return
     end
@@ -2101,7 +2101,7 @@ function tv:hideExtraCol()
 
   if #col.events > 0 then return end
 
-  local extras = cm:get('extraColumns')
+  local extras = ds:get('extraColumns') or {}
   local want   = extras[chan] or { notes = 0 }
   extras[chan] = want
 
@@ -2131,7 +2131,7 @@ function tv:hideExtraCol()
   if want.notes == 0 and not (want.pc or want.pb or want.at or want.ccs) then
     extras[chan] = nil
   end
-  cm:set('take', 'extraColumns', next(extras) and extras)
+  ds:assign('extraColumns', next(extras) and extras or util.REMOVE)
   tv:rebuild()
 end
 
@@ -2246,13 +2246,13 @@ function tv:automateParam()
   if not lane then return end
   pa:bumpFrecency(paletteParam.trackGuid, paletteParam.fxGuid, paletteParam.label)
   tv:cancelLearn()
-  local extras = cm:get('extraColumns')
+  local extras = ds:get('extraColumns') or {}
   -- Absence-default mirrors tm:rebuild's, like addExtraCol: no entry means one note col.
   local want = extras[col.midiChan] or { notes = 1 }
   extras[col.midiChan] = want
   want.ccs = want.ccs or {}
   want.ccs[lane] = true
-  cm:set('take', 'extraColumns', extras)
+  ds:assign('extraColumns', extras)
 end
 
 --contract: deletes the cursor cc column's events; column + binding then go via hideExtraCol
@@ -2267,7 +2267,7 @@ function tv:unautomateParam()
 end
 
 function tv:showDelay()
-  local nd = cm:get('noteDelay')
+  local nd = ds:get('noteDelay') or {}
   local changed = false
   for col in ec:eachSelectedCol() do
     if col.type == 'note' then
@@ -2279,7 +2279,7 @@ function tv:showDelay()
       end
     end
   end
-  if changed then cm:set('take', 'noteDelay', nd) end
+  if changed then ds:assign('noteDelay', nd) end
 end
 
 
@@ -2431,7 +2431,7 @@ function tv:rebuild(takeChanged)
     grid.chanLastCol  = {}
     grid.lane1Col     = {}
 
-    local noteDelayCfg = cm:get('noteDelay')
+    local noteDelayCfg = ds:get('noteDelay') or {}
     local trackerMode  = cm:get('trackerMode')
 
     local function addGridCol(chan, type, key, events)
@@ -2544,7 +2544,11 @@ do
   --invariant: releaseTransientFrame's cm:assign fires configChanged → tm:rebuild → tv:rebuild
   cm:subscribe('configChanged', function(change)
     if isFrameChange(change) and releaseTransientFrame() then return end
-    if muteKeys[change.key] then pushMute(); return end
+  end)
+
+  -- Mute/solo are document data now: their dataChanged drives pushMute, no rebuild.
+  ds:subscribe('dataChanged', function(change)
+    if muteKeys[change.name] then pushMute() end
   end)
 end
 

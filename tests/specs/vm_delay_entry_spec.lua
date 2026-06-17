@@ -21,7 +21,7 @@ return {
               detune = 0, delay = 0 },
           },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -49,7 +49,7 @@ return {
               detune = 0, delay = 0 },
           },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -78,7 +78,7 @@ return {
               detune = 0, delay = 0 },
           },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -108,7 +108,7 @@ return {
               detune = 0, delay = 600 },
           },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -139,11 +139,9 @@ return {
               detune = 0, delay = 600, lane = 2 },
           },
         },
-        config = {
-          take = {
-            noteDelay   = { [1] = { [1] = true, [2] = true } },
-            extraColumns = { [1] = { notes = 2 } },
-          },
+        data = {
+          noteDelay    = { [1] = { [1] = true, [2] = true } },
+          extraColumns = { [1] = { notes = 2 } },
         },
       }
       h.vm:setGridSize(80, 40)
@@ -183,7 +181,7 @@ return {
               detune = 0, delay = -100 },
           },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -216,7 +214,7 @@ return {
               detune = 0, delay = 0 },
           },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -249,7 +247,7 @@ return {
               detune = 0, delay = -100 },
           },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -290,7 +288,7 @@ return {
               detune = 0, delay = 0   },
           },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
 

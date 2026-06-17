@@ -1120,7 +1120,7 @@ do
 
     -- 4) Reconcile extras.
     do
-      local extras = cm:get('extraColumns')
+      local extras = ds:get('extraColumns') or {}
       local grew   = false
       for i = 1, 16 do
         local c    = channels[i].columns
@@ -1139,7 +1139,7 @@ do
           c.ccs[ccNum] = c.ccs[ccNum] or { cc = ccNum, events = {} }
         end
       end
-      if grew and mm:take() then cm:set('take', 'extraColumns', extras) end
+      if grew and mm:take() then ds:assign('extraColumns', extras) end
     end
 
     -- 4.7) Two-frame rebuild rule. See docs/timing.md §"Rebuild rule".
@@ -1321,7 +1321,7 @@ do
     -- Reads pbs directly from mm; the um cache (chans, byToken) is
     -- rebuilt at the end-of-rebuild reload().
     do
-      local extras = cm:get('extraColumns')
+      local extras = ds:get('extraColumns') or {}
 
       local function detuneAt(events, P)
         local n = util.seek(events, 'at-or-before', P)
@@ -1599,8 +1599,8 @@ end
 ----- Lifecycle
 
 do
-  --invariant: tvOnlyKeys skip the configChanged rebuild (defaultSwing seed, muted/soloed)
-  local tvOnlyKeys = { mutedChannels = true, soloedChannels = true, defaultSwing = true }
+  --invariant: tvOnlyKeys skip the configChanged rebuild; defaultSwing is the sole remaining cm key
+  local tvOnlyKeys = { defaultSwing = true }
 
   --invariant: dataChanged 'swing' → global change marks all 16, else only the diffed channels
   --invariant: configChanged 'swings' → channels resolving to names with diff body vs prevSwings
@@ -1681,19 +1681,22 @@ do
     if not tvOnlyKeys[key] then tm:rebuild(false) end
   end)
 
-  -- swing is document data now: edits and undo rewinds arrive as dataChanged. Diff
-  -- the take's swing map -- 'global' marks all 16, else just the channels that moved.
+  -- swing/extraColumns/noteDelay are document data: edits + undo rewinds arrive as
+  -- dataChanged. swing diffs its map; the column-layout keys force a full rebuild.
   ds:subscribe('dataChanged', function(change)
-    if change.name ~= 'swing' then return end
     if bindingTake or not cm:boundTake() then return end
-    local cur = ds:get('swing') or {}
-    if cur.global ~= prevSwing.global then
-      tm:markSwingStale(nil)
-    else
-      for chan in pairs(swingChannelDiff(prevSwing, cur)) do tm:markSwingStale(chan) end
+    if change.name == 'swing' then
+      local cur = ds:get('swing') or {}
+      if cur.global ~= prevSwing.global then
+        tm:markSwingStale(nil)
+      else
+        for chan in pairs(swingChannelDiff(prevSwing, cur)) do tm:markSwingStale(chan) end
+      end
+      prevSwing = util.deepClone(cur)
+      tm:rebuild(false)
+    elseif change.name == 'extraColumns' or change.name == 'noteDelay' then
+      tm:rebuild(false)
     end
-    prevSwing = util.deepClone(cur)
-    tm:rebuild(false)
   end)
 
   --contract: atomic take swap: cm:setContext runs silently; mm:load fires the coherent rebuild

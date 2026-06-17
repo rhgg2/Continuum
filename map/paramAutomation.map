@@ -1,4 +1,4 @@
-@module paramAutomation  src=paramAutomation.lua  loc=446  sha=8d87c30  mode=chunk
+@module paramAutomation  src=paramAutomation.lua  loc=446  sha=1278d64  mode=chunk
 @deps cm, ds, facade
 
 # Invariants & contracts
@@ -83,10 +83,9 @@
 
 # Uses (outbound edges)
   @use call    cm.boundTake  @ 71
-  @use call    cm.readTakeKey  @ 257
   @use call    ds.assign  @ 354, 364, 417
   @use call    ds.get  @ 347, 360, 369, 399, 409
-  @use call    ds.getAt  @ 80, 255, 280
+  @use call    ds.getAt  @ 80, 255, 257, 280
   @use call    facade.get  @ 376
   @use call    util.atomic  @ 334
   @use call    util.deepEq  @ 329

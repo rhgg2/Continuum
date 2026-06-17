@@ -73,10 +73,6 @@ local declarations = {
       ['delay-30']   = { factors = { { atom = 'id', shift = -1/8,  period = 1 } } },
     } },
   { 'tempers',         {}    },
-  { 'mutedChannels',   {}    },
-  { 'soloedChannels',  {}    },
-  { 'extraColumns',    {}    },
-  { 'noteDelay',       {}    },
   -- Arrange-page grid density preference (persisted). Cursor/scroll stay in arrangeView module-locals.
   -- Typical values: 4, 8, 16 beats per row (one to four bars per row in 4/4).
   { 'arrangeBeatPerRow', 4 },

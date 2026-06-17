@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2690  sha=d415ad4  mode=chunk
+@module trackerView  src=trackerView.lua  loc=2694  sha=6ee3ad1  mode=chunk
 @deps tm, cm, ds, cmgr, gm, pa
 
 # Invariants & contracts
@@ -77,10 +77,10 @@
   @state learn = nil  @ 2153
   @state tracker = cmgr:scope('tracker')  @ 2333
   @state rebuilding = false  @ 2395
-  @state groupBridge = {  @ 2555
-  @state GROUP_PASSTHROUGH = {  @ 2635
-  @state GROUP_KEEP = {}  @ 2644
-  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 2651
+  @state groupBridge = {  @ 2559
+  @state GROUP_PASSTHROUGH = {  @ 2639
+  @state GROUP_KEEP = {}  @ 2648
+  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 2655
 
 # Private functions
   @fn print(...)  @ 31
@@ -150,7 +150,7 @@
   @fn pushMute()  @ 417
       @contract  effective mute = persistent-mute ∪ solo-implied mute
       @invariant  any solo: non-soloed forced muted, soloed forced audible (DAW solo-wins)
-      @invariant  both sets persist in cm so reload's tm:lastMuteSet matches the wire
+      @invariant  both sets persist in ds so reload's tm:lastMuteSet matches the wire
   -- Audition
   @fn killAudition()  @ 444
   @fn audition(pitch, vel, chan)  @ 450
@@ -376,17 +376,17 @@
   -- Lifecycle
   -- Factory load
   -- Group quick-verb lifetimes
-  @api tv:wireGroupLifetime()  @ 2665
+  @api tv:wireGroupLifetime()  @ 2669
       -- Snapshot the source on copy + install the clear-on-mutation sweep.
       -- Must run AFTER every tracker command (tv's, clipboard's, ec's AND
       -- trackerPage's page verbs) registers, so the sweep covers page commands
       -- too -- trackerPage calls this once post-registration. copy is plain:
       -- clipboard:copy ends with ec:selClear(), so a doAfter snapshot would
       -- see an empty selection; doBefore captures the live rect.
-  @api tv:endReselectCascades()  @ 2678
+  @api tv:endReselectCascades()  @ 2682
       -- Mouse re-selection ends both cursor-anchored cascades by hand (cmgr's keep-set
       -- sweep doesn't see the mouse, so the run tokens would outlive a fresh selection).
-  @api tv:endAllCascades()  @ 2683
+  @api tv:endAllCascades()  @ 2687
       -- A committed typed edit cancels every cascade and drops the groupPaste
       -- source, exactly as a non-keep cmgr command would -- editEvent is the
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).
@@ -394,21 +394,21 @@
 # Uses (outbound edges)
   @use call    cm.assign  @ 262, 314
   @use call    cm.boundTake  @ 2156
-  @use call    cm.get  @ 90, 256, 261, 263, 312, 319, 325, 409, 418, 419, 430, 431, 525, 528, 586, 593, 684, 1401, 1536, 1733, 2058, 2091, 2104, 2249, 2270, 2341, 2342, 2379, 2380, 2421, 2434, 2435, 2479
+  @use call    cm.get  @ 90, 256, 261, 263, 312, 319, 325, 525, 528, 586, 593, 684, 1401, 1536, 1733, 2341, 2342, 2379, 2380, 2421, 2435, 2479
   @use call    cm.getAt  @ 260, 353, 384, 391, 398
-  @use call    cm.set  @ 326, 355, 376, 377, 378, 393, 400, 411, 641, 1267, 1732, 2079, 2096, 2134, 2255, 2282, 2341, 2342, 2390
-  @use call    cmgr.doAfter  @ 2594, 2601
-  @use call    cmgr.doBefore  @ 2603, 2625, 2666, 2672, 2673
+  @use call    cm.set  @ 326, 355, 376, 377, 378, 393, 400, 641, 1267, 1732, 2341, 2342, 2390
+  @use call    cmgr.doAfter  @ 2598, 2605
+  @use call    cmgr.doBefore  @ 2607, 2629, 2670, 2676, 2677
   @use call    cmgr.invoke  @ 2326
   @use call    cmgr.noteChars  @ 585
   @use call    cmgr.prefixRational  @ 2353, 2360
   @use call    cmgr.scope  @ 2333
-  @use call    ds.assign  @ 349, 385
-  @use call    ds.get  @ 347, 383
-  @use call    gm.clearActive  @ 2672, 2685
+  @use call    ds.assign  @ 349, 385, 411, 2079, 2096, 2134, 2255, 2282
+  @use call    ds.get  @ 347, 383, 409, 418, 419, 430, 431, 2058, 2091, 2104, 2249, 2270, 2434
+  @use call    gm.clearActive  @ 2676, 2689
   @use call    gm.duplicateInto  @ 2306
   @use call    gm.eachInstance  @ 1993, 2004, 2011, 2023
-  @use call    gm.groupRect  @ 2566
+  @use call    gm.groupRect  @ 2570
   @use call    gm.localMode  @ 2385
   @use call    gm.mark  @ 2293
   @use call    gm.resizeGroup  @ 2046
@@ -432,7 +432,7 @@
   @use call    tm.channels  @ 2458
   @use call    tm.currentTake  @ 2402
   @use call    tm.deleteEvent  @ 603, 606, 812, 929, 1313, 1356, 1520, 1540, 1551, 1713, 1966, 2262
-  @use call    tm.flush  @ 559, 775, 795, 813, 823, 852, 873, 885, 956, 974, 1008, 1057, 1094, 1106, 1157, 1187, 1229, 1369, 1496, 1504, 1572, 1578, 1585, 1716, 2263, 2307, 2323, 2571
+  @use call    tm.flush  @ 559, 775, 795, 813, 823, 852, 873, 885, 956, 974, 1008, 1057, 1094, 1106, 1157, 1187, 1229, 1369, 1496, 1504, 1572, 1578, 1585, 1716, 2263, 2307, 2323, 2575
   @use call    tm.getChannel  @ 94, 115
   @use call    tm.interpolate  @ 900, 1837
   @use call    tm.length  @ 335, 1885, 1890, 2319, 2414
@@ -455,7 +455,7 @@
   @use call    util.clamp  @ 318, 487, 492, 586, 627, 635, 657, 671, 705, 987, 1422, 1733, 2341, 2342
   @use call    util.clone  @ 1708
   @use call    util.gcd  @ 1245
-  @use call    util.instantiate  @ 2473, 2574, 2584
+  @use call    util.instantiate  @ 2473, 2578, 2588
   @use call    util.isNote  @ 81, 82, 135, 146, 198, 591, 619, 633, 646, 1031, 1087, 1141, 1146, 1149, 1180, 1216, 1289, 1480, 1490, 1650, 1700
   @use call    util.nudgedScalar  @ 1410, 1412
   @use call    util.oneOf  @ 703, 758, 781, 809, 819
@@ -467,6 +467,7 @@
   @use require tuning  @ 27
   @use require util  @ 25
   @use sub     cm:configChanged  @ 2545
+  @use sub     ds:dataChanged  @ 2550
   @use sub     tm:rebuild  @ 2537
   @use sub     tm:takeSwapped  @ 2536
 

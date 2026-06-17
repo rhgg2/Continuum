@@ -20,7 +20,7 @@ return {
               detune = 0, delay = 0, lane = 1 },
           },
         },
-        config = { take = { extraColumns = { [1] = { notes = 2 } } } },
+        data = { extraColumns = { [1] = { notes = 2 } } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -32,7 +32,7 @@ return {
       h.ec:setPos(0, 2, 1)
       h.vm:hideExtraCol()
 
-      local extras = h.cm:get('extraColumns')
+      local extras = h.ds:get('extraColumns')
       t.eq(extras[1] and extras[1].notes, 1,
            'extraColumns notes count dropped from 2 to 1')
 
@@ -59,7 +59,7 @@ return {
               detune = 0, delay = 0, lane = 2 },
           },
         },
-        config = { take = { extraColumns = { [1] = { notes = 2 } } } },
+        data = { extraColumns = { [1] = { notes = 2 } } },
       }
       h.vm:setGridSize(80, 40)
 
@@ -70,7 +70,7 @@ return {
       h.ec:setPos(0, 1, 1)
       h.vm:hideExtraCol()
 
-      local extras = h.cm:get('extraColumns')
+      local extras = h.ds:get('extraColumns')
       t.eq(extras[1] and extras[1].notes, 2,
            'extraColumns unchanged — interior hide refused')
 

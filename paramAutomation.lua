@@ -254,7 +254,7 @@ local function usedLanes(srcTrack, chan)
     if reaper.GetMediaItemTake_Track(take) ~= srcTrack then return end
     local cfg = ds:getAt(take, 'paramAutomation') or {}
     for lane in pairs(cfg[chan] or {}) do used[lane] = true end
-    local extras = cm:readTakeKey(take, 'extraColumns') or {}
+    local extras = ds:getAt(take, 'extraColumns') or {}
     for cc in pairs((extras[chan] or {}).ccs or {}) do used[cc] = true end
     if reaper.TakeIsMIDI(take) then
       local _, _, ccCount = reaper.MIDI_CountEvts(take)

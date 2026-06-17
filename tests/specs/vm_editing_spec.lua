@@ -23,7 +23,7 @@ return {
               detune = 0, delay = 500 },
           },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
       -- Col 1 is chan-1 lane-1 note col with delay enabled (7 stops,
@@ -493,7 +493,7 @@ return {
               detune = 0, delay = 0 },
           },
         },
-        config = { take = { noteDelay = { [1] = { [1] = true } } } },
+        data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(1, 1, 5)

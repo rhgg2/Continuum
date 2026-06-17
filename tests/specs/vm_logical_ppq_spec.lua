@@ -111,7 +111,8 @@ return {
               rpb = 4 },
           },
         },
-        config = { take = { rowPerBeat = 4, noteDelay = { [1] = { [1] = true } } } },
+        config = { take = { rowPerBeat = 4 } },
+        data   = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
 

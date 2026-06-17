@@ -9,7 +9,7 @@ local util = require('util')
 -- Shared seed: a single chan-1 note at row 4 (ppq 240 with resolution=240,
 -- 4 rpb → 60 ppq/row), endppq at row 6. Used wherever a spec pokes the
 -- cursor onto a delay/vel/pitch stop of an existing note.
-local function mkNoteHarness(harness, noteOverrides, takeCfg)
+local function mkNoteHarness(harness, noteOverrides, takeData)
   local note = {
     ppq = 240, endppq = 360, chan = 1, pitch = 60, vel = 100,
     detune = 0, delay = 0,
@@ -17,7 +17,7 @@ local function mkNoteHarness(harness, noteOverrides, takeCfg)
   for k, v in pairs(noteOverrides or {}) do note[k] = v end
   local h = harness.mk{
     seed   = { notes = { note } },
-    config = { take = takeCfg or {} },
+    data = takeData or {},
   }
   h.vm:setGridSize(80, 40)
   return h
@@ -851,7 +851,7 @@ return {
       h.ec:setSelection{ row1=0, row2=0, col1=1, col2=2, part1='pitch', part2='pitch' }  -- chans 1..2
 
       h.vm:showDelay()
-      local nd = h.cm:get('noteDelay')
+      local nd = h.ds:get('noteDelay')
 
       t.truthy(nd[1] and nd[1][1], 'delay enabled on chan 1 lane 1')
       t.truthy(nd[2] and nd[2][1], 'delay enabled on chan 2 lane 1')
