@@ -74,18 +74,18 @@ and `slotForTake` returns nil for it. Cross-session stability of
 MIDI ids is accepted as REAPER's responsibility: the pool GUID is
 persisted in the project file, so reload preserves slot identity.
 
-## Why writes go through `cm:writeTrackKey`
+## Why writes go through `ds:assignAt`
 
-The arrange page edits every track's palette, but the current cm
-context is whatever the tracker page bound (typically a single
-focused take, whose track is one of the project's). Routing slot
-writes through the existing `cm:set('track', ...)` would either
-require setting cm's context to each track in turn (firing reload
-churn on every subscriber) or accidentally write to the wrong tier.
-`cm:writeTrackKey` is the symmetric counterpart of `readTrackKey`:
-it bypasses the cache, writes P_EXT directly, and fires a targeted
-`configChanged` carrying an explicit `track` field so subscribers
-that care only about the bound track can ignore it.
+The arrange page edits every track's palette, but the bound context
+is whatever the tracker page set (typically one focused take, whose
+track is just one of the project's). Routing slot writes through the
+bound-context `ds:assign` would either require rebinding context to
+each track in turn (firing reload churn on every subscriber) or write
+to the wrong track. `ds:assignAt(track, 'arrangeSlots', …)` is the
+foreign-handle write — it bypasses the bound context and writes that
+track's P_EXT directly — and `ds:getAt` is its read counterpart. (Slot
+palettes are document data, so they live on `dataStore`, not cm — see
+`docs/dataStore.md`.)
 
 ## Reswing folded from sequenceManager
 

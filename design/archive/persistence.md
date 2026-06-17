@@ -244,15 +244,17 @@ Three workstreams. (1) is independent and lands first.
    `<resource-dir>/continuum-config.lua` in the Lua-literal format (read by
    `load()`) with a refuse-to-overwrite guard on an unparseable hand-edit;
    the P_EXT / projext scopes stay on the compact wire format.
-3. **dataStore** — 🔨 **in progress.** Per-key blobs over the engine, the
+3. **dataStore** — ✅ **done.** Per-key blobs over the engine, the
    registry above, the call-site migration. No migration code: pre-beta,
    persisted shapes change freely (see memory `no-legacy-data`). The face API
    is name-only (`ds:get(name)`, `ds:assign(name, v)`, `ds:delete`, plus `At`
    variants) — scope comes from the registry, not a caller argument;
    `util.REMOVE` clears; the global scope is a single slot-addressed disk file
-   `continuum-data.lua`. Landing as commit A (engine `contextChanged` +
+   `continuum-data.lua`. Landed as commit A (engine `contextChanged` +
    `dataStore` module, isolation-specced) then B–E (wire in, migrate keys by
-   cohort, drop dead `cm` seams, docs).
+   cohort, drop dead `cm` seams, docs). E removed the four foreign-handle
+   `cm` bypass methods (`read`/`write` × `Take`/`Track`Key), now fully
+   replaced by `ds:getAt`/`ds:assignAt`.
 
 Later, optional: (a) move `configManager` onto `pextStore`'s `contextChanged`
 signal too, so both faces reload via the one mechanism — today only `dataStore`

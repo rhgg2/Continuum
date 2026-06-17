@@ -7,7 +7,7 @@ context, and runs the watcher that catches undo/redo.
 
 It exists to be written **once** and shared by two faces: `configManager`
 (schema, tier merge) today, and `dataStore` (per-key document storage)
-next. See `design/persistence.md` for the split and its motivation.
+next. See `design/archive/persistence.md` for the split and its motivation.
 
 ## Why a shared engine
 
@@ -41,10 +41,10 @@ Baselines are the last-seen raw bytes per watched blob. A **bound** write
 our own write for an external edit. A **foreign** write (`assignAt`) does
 not — it targets an arbitrary handle, off the bound context, and leaves
 the baseline untouched. That asymmetry is inherited verbatim from the
-pre-extraction `configManager` (`writeTakeKey`/`writeTrackKey` never
-touched `lastTakeRaw`/`lastTrackRaw`); a write to the *bound* handle
-through the foreign path therefore still shows up as a divergence on the
-next poll, exactly as it did before.
+pre-extraction `configManager` (its foreign-handle writes never touched
+`lastTakeRaw`/`lastTrackRaw`); a write to the *bound* handle through the
+foreign path therefore still shows up as a divergence on the next poll,
+exactly as it did before.
 
 Dropping a stale handle zeroes its watched blobs' baselines to `''`, so
 the post-drop read (which returns `''` for a nil handle) doesn't register
@@ -56,7 +56,7 @@ The engine picks the serialisation format by backend, not by caller: the
 global disk file (`continuum-config.lua`, in REAPER's resource dir) is the
 human-editable Lua-literal format, read by `load()`; every P_EXT / projext
 blob is the compact wire format. The two never interoperate, so neither
-constrains the other — see `design/persistence.md` § Disk format.
+constrains the other — see `design/archive/persistence.md` § Disk format.
 
 A global file the sandboxed `load()` can't parse reads as `nil` and **locks
 writes** (`globalLocked`): the engine prints the parse error and refuses to

@@ -6,7 +6,7 @@
 --invariant: transient tier never persists (saver is a no-op) and resets to {} on every refreshCache
 --invariant: declarations is ordered array-of-pairs; nil-default keys coexist with non-nil defaults
 --invariant: track/take tiers require REAPER context; without it loaders return {}, savers error
---shape: configChangedPayload.targeted = { key = string, level = string, track? = MediaTrack }   -- set / remove; track set only by writeTrackKey for foreign-track writes
+--shape: configChangedPayload.targeted = { key = string, level = string }   -- set / remove
 --shape: configChangedPayload.bulk     = { level = string }                  -- assign (keyless)
 --shape: configChangedPayload.reload   = {}                                  -- setContext / clearTake / setTrack
 local util = require 'util'
@@ -430,45 +430,6 @@ function cm:getAt(level, key)
     return copy(tbl[key])
   end
   return util.deepClone(tbl)
-end
-
---contract: bypasses cache/context; reads otherTrack P_EXT without firing configChanged
-function cm:readTrackKey(otherTrack, key)
-  checkKey(key)
-  if not otherTrack then return nil end
-  return copy(asTable(ps:getAt(otherTrack, 'track', 'ctm_config'))[key])
-end
-
---contract: bypasses cache/context; RMW otherTrack P_EXT; fires targeted configChanged
-function cm:writeTrackKey(otherTrack, key, value)
-  checkKey(key)
-  if not otherTrack then return end
-  local parsed = pruneUnknown(asTable(ps:getAt(otherTrack, 'track', 'ctm_config')))
-  if value == util.REMOVE then parsed[key] = nil
-  else                         parsed[key] = copy(value) end
-  ps:assignAt(otherTrack, 'track', 'ctm_config', parsed)
-  -- If the foreign track happens to be the bound one, refresh its cache so the next get sees the write.
-  if otherTrack == ps:boundTrack() then cache.track = loaders.track() end
-  --emits: configChanged -- configChangedPayload.targeted (with .track for cross-track writes)
-  fire('configChanged', { key = key, level = 'track', track = otherTrack })
-end
-
---contract: bypasses cache/context; reads otherTake P_EXT without firing configChanged
-function cm:readTakeKey(otherTake, key)
-  checkKey(key)
-  if not otherTake then return nil end
-  return copy(asTable(ps:getAt(otherTake, 'take', 'ctm_config'))[key])
-end
-
---contract: bypasses cache/context; RMW otherTake P_EXT; util.REMOVE clears; no signal
-function cm:writeTakeKey(otherTake, key, value)
-  checkKey(key)
-  if not otherTake then return end
-  local parsed = pruneUnknown(asTable(ps:getAt(otherTake, 'take', 'ctm_config')))
-  if value == util.REMOVE then parsed[key] = nil
-  else                         parsed[key] = copy(value) end
-  ps:assignAt(otherTake, 'take', 'ctm_config', parsed)
-  if otherTake == ps:boundTake() then cache.take = loaders.take() end
 end
 
 ----- Writing

@@ -427,7 +427,7 @@ return {
     end,
   },
   {
-    name = 'tick rehydrates a non-active track via cm:readTrackKey',
+    name = 'tick rehydrates a non-active track via ds:getAt',
     run = function(harness)
       local h = harness.mk()
       bindSamplerTrack(h, 't1')

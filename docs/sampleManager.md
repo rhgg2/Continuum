@@ -134,17 +134,17 @@ first tick must survive into the drain. Treating "no prior guid" as
 
 ## Multi-track rehydrate
 
-Rehydrate must work for sampler tracks that aren't cm's currently-
+Rehydrate must work for sampler tracks that aren't the currently-
 bound one — every Continuum window watches every sampler instance.
-`cm:readTrackKey(otherTrack, 'slotEntries')` reads any track's P_EXT
-directly without rebinding cm; `rehydrateTrack` uses it to walk
+`ds:getAt(otherTrack, 'slotEntries')` reads any track's P_EXT
+directly without rebinding context; `rehydrateTrack` uses it to walk
 non-active tracks.
 
 ## Save migration
 
 The project's media folder is the global REAPER media folder
 pre-save and project-local post-save. When the resolved path
-changes, slot files have to follow. `watchPath(cm)` diffs the live
+changes, slot files have to follow. `watchPath()` diffs the live
 `GetProjectPath(0)` against `cm.lastProjectPath` (a project-tier
 breadcrumb) and, on a mismatch, sets the prefix, runs `migrate`,
 and writes the new path back. Because the breadcrumb lives in
@@ -152,10 +152,10 @@ project-tier cm, it serialises into the .RPP — so a save that
 happens while Continuum is closed is still caught the next time
 the project is opened with Continuum running.
 
-`migrate(newPath, oldPath, cm)` walks every sampler track via
-`cm:readTrackKey('slotEntries')` and moves each entry's bytes
-from old root to new. cm `path` strings stay relative so no cm
-rewrite is needed. If `oldPath` is nil or equals `newPath`, migrate
+`migrate(projectPath, oldProjectPath)` walks every sampler track via
+`ds:getAt(track, 'slotEntries')` and moves each entry's bytes
+from old root to new. ds `path` strings stay relative so no slot
+rewrite is needed. If `oldProjectPath` is nil or equals `projectPath`, migrate
 is a no-op. Migrate runs independently of rehydrate — they target
 different boundaries (project-path change vs. fresh-mem detection).
 

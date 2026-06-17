@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=521  sha=6ee3ad1  mode=chunk
+@module configManager  src=configManager.lua  loc=482  sha=a86b164  mode=chunk
 @deps ps
 
 # Invariants & contracts
@@ -12,7 +12,7 @@
   @contract  no take context drops track too (track derived from take in setContext)
 
 # Shapes
-  @shape  configChangedPayload.targeted = { key = string, level = string, track? = MediaTrack }   -- set / remove; track set only by writeTrackKey for foreign-track writes
+  @shape  configChangedPayload.targeted = { key = string, level = string }   -- set / remove
   @shape  configChangedPayload.bulk     = { level = string }                  -- assign (keyless)
   @shape  configChangedPayload.reload   = {}                                  -- setContext / clearTake / setTrack
 
@@ -68,20 +68,12 @@
       @contract  opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only
   @api cm:getAt(level, key)  @ 424
       @contract  reads single tier only (no merge, no defaults); key nil → whole-cache clone
-  @api cm:readTrackKey(otherTrack, key)  @ 436
-      @contract  bypasses cache/context; reads otherTrack P_EXT without firing configChanged
-  @api cm:writeTrackKey(otherTrack, key, value)  @ 443
-      @contract  bypasses cache/context; RMW otherTrack P_EXT; fires targeted configChanged
-  @api cm:readTakeKey(otherTake, key)  @ 457
-      @contract  bypasses cache/context; reads otherTake P_EXT without firing configChanged
-  @api cm:writeTakeKey(otherTake, key, value)  @ 464
-      @contract  bypasses cache/context; RMW otherTake P_EXT; util.REMOVE clears; no signal
   -- Writing
-  @api cm:set(level, key, value)  @ 477
+  @api cm:set(level, key, value)  @ 438
       @contract  deep-copies value into tier cache, persists, fires targeted configChanged
-  @api cm:remove(level, key)  @ 490
+  @api cm:remove(level, key)  @ 451
       @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded
-  @api cm:assign(level, updates)  @ 504
+  @api cm:assign(level, updates)  @ 465
       @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal
 
 # Signals emitted (via util.installHooks)
@@ -89,12 +81,10 @@
 
 # Uses (outbound edges)
   @use call    ps.assign  @ 304, 305, 308, 312
-  @use call    ps.assignAt  @ 449, 470
-  @use call    ps.boundTake  @ 312, 384, 471
-  @use call    ps.boundTrack  @ 307, 451
+  @use call    ps.boundTake  @ 312, 384
+  @use call    ps.boundTrack  @ 307
   @use call    ps.clearTake  @ 377
   @use call    ps.get  @ 296, 297, 298, 299
-  @use call    ps.getAt  @ 439, 446, 460, 467
   @use call    ps.pollUndo  @ 394
   @use call    ps.setTake  @ 370
   @use call    ps.setTrack  @ 387

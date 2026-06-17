@@ -480,7 +480,7 @@ function util.unserialise(input)
 end
 
 ----- Lua-literal disk format (human-editable; read by load(), never P_EXT)
--- WHY two formats coexist: see design/persistence.md § Disk format.
+-- WHY two formats coexist: see design/archive/persistence.md § Disk format.
 
 local LUA_KEYWORDS = {}
 for word in ('and break do else elseif end false for function goto if in '

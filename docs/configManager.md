@@ -4,6 +4,12 @@ Five-tier config store. Reads merge all tiers (most-specific wins); writes
 target a single tier. cm is the sole source of truth for valid keys and
 owns every table it hands out.
 
+Structural **document data** — keys that live at one scope as content
+rather than settings — moved out to `dataStore`; cm now holds only
+user-facing config, and the foreign-handle bypass reads/writes
+(`readTakeKey`/`writeTrackKey` &c.) moved to `ds:getAt`/`ds:assignAt`. See
+`docs/dataStore.md` and `design/archive/persistence.md`.
+
 ## Schema
 
 The valid set of keys is declared inline as `declarations`, an ordered
