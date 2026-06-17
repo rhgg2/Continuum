@@ -147,9 +147,9 @@ local function drawSwingStrip(p, factors, ownPeriodQN, geom)
   end
 
   local cx     = x0 + w / 2
-  local rBig   = math.max(2, gy * 0.24)
-  local rMid   = math.max(2, gy * 0.22)
-  local rSmall = math.max(2, gy * 0.20)
+  local rBig   = math.max(2, gy * 0.20)
+  local rMid   = math.max(2, gy * 0.18)
+  local rSmall = math.max(2, gy * 0.16)
   for i = 0, geom.rows - 1 do
     local p0   = i * geom.dQN
     local y    = y0 + (timing.applyFactors(factors, p0) / geom.heightQN) * geom.H
@@ -180,9 +180,14 @@ local function drawSwingBand(composite, factors)
   local geom   = { gx = gx, gy = gy, y = y0 + gy, rows = rows, dQN = dQN,
                    heightQN = heightQN, H = rows * gy, classify = classify }
 
+  -- Separators draw in the ui font: the grid font (Source Code Pro) lacks the
+  -- ∘ ring operator, so it would render blank in the grid register.
   local function glyph(x, s)
+    ImGui.PushFont(ctx, gui.uiFont, gui.fontSize.ui)
     local tw, th = ImGui.CalcTextSize(ctx, s)
-    p.text(x + (GLYPH_BOX - tw) / 2, geom.y + (geom.H - th) / 2, 'text', s)
+    ImGui.PopFont(ctx)
+    p.text(x + (GLYPH_BOX - tw) / 2, geom.y + (geom.H - th) / 2, 'text', s,
+           gui.uiFont, gui.fontSize.ui)
     return x + GLYPH_BOX
   end
 
@@ -486,6 +491,12 @@ local function inUseNames()
   return used
 end
 
+-- Revert the edited composite to the open()/switch snapshot, then reswing.
+local function resetToSnapshot()
+  swingWrite(util.deepClone(state.snapshot) or {})
+  commit()
+end
+
 local function buildDescriptor()
   local globalNames = sortedNames(globalSwings())
   if not globalSwings().identity then table.insert(globalNames, 1, 'identity') end
@@ -502,6 +513,8 @@ local function buildDescriptor()
     onPromote   = promote,
     onDemote    = demote,
     onDelete    = deleteSel,
+    dirty       = state.name ~= nil and not compositesEqual(swingRead() or {}, state.snapshot),
+    onReset     = resetToSnapshot,
   }
 end
 
@@ -563,29 +576,9 @@ local function drawCreateModal()
   chrome.popChromeWindow()
 end
 
-local function drawEditBody(composite, n)
-  -- Greyed-out when no slot is selected: still rendered so the chrome
-  -- (factor strip, grid, tools row) stays in place rather than blinking
-  -- out and shrinking the body region.
-  if not state.name then ImGui.BeginDisabled(ctx) end
-  -- Tools row: Reset / Rows-per-qn / Wild / Composite-phase
-  -- (10, 3) FramePadding, vertical separators between groups, compact
-  -- checkbox, manual ▾ on the rpb picker. Padding push is scoped to
-  -- the row; the factor strip below uses the inherited padding.
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 10, 3)
-
-  local dirty = not compositesEqual(composite, state.snapshot)
-  chrome.disabledIf(not dirty, function()
-    if ImGui.Button(ctx, 'Reset') then
-      swingWrite(util.deepClone(state.snapshot) or {})
-      commit()
-    end
-  end)
-
-  ImGui.SameLine(ctx, 0, 12)
-  chrome.verticalSeparator()
-  ImGui.SameLine(ctx, 0, 12)
-
+-- Toolbar tools: Rows-per-qn / Wild / Composite-phase, drawn in the page toolbar
+-- band (ui font + FramePadding already set). Vertical separators per group.
+local function drawToolsRow(composite, n)
   ImGui.AlignTextToFramePadding(ctx)
   ImGui.Text(ctx, 'Rows/qn:')
   ImGui.SameLine(ctx, 0, 6)
@@ -631,9 +624,12 @@ local function drawEditBody(composite, n)
     end
     if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
   end)
+end
 
-  ImGui.PopStyleVar(ctx, 1)
-  ImGui.Separator(ctx)
+local function drawEditBody(composite)
+  -- Greyed-out when no slot is selected: still rendered so the chrome
+  -- (preview band, factor rows) stays in place and the body doesn't shrink.
+  if not state.name then ImGui.BeginDisabled(ctx) end
   local factors = readFactors(composite)
   drawSwingBand(composite, factors)
   ImGui.Separator(ctx)
@@ -653,12 +649,11 @@ local function draw(w, h)
   if not state then return end
 
   local composite = (state.name and swingRead()) or {}
-  local n = #readFactors(composite)
 
   chrome.pushChromeStyles()
   ImGui.PushStyleColor(ctx, ImGui.Col_Separator, chrome.colour('toolbar.buttonBorder'))
   if ImGui.BeginChild(ctx, '##swingEditor', w, h) then
-    drawEditBody(composite, n)
+    drawEditBody(composite)
     drawCreateModal()
   end
   ImGui.EndChild(ctx)
@@ -685,6 +680,17 @@ function self:open(name)
 end
 
 function self:render(w, h) draw(w, h) end
+
+-- Tools row (Reset / Rows-per-qn / Wild / Composite-phase) drawn into the page
+-- toolbar band by editorRender. Greys out with no slot selected, like the body.
+function self:renderToolbar()
+  if not state then return end
+  local composite = (state.name and swingRead()) or {}
+  local n = #readFactors(composite)
+  if not state.name then ImGui.BeginDisabled(ctx) end
+  drawToolsRow(composite, n)
+  if not state.name then ImGui.EndDisabled(ctx) end
+end
 
 function self:libraryDescriptor() return buildDescriptor() end
 

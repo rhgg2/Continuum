@@ -19,13 +19,16 @@ local swingEditor, temperEditor, cmgr, chrome, gui, modalHost =
 local ctx, uiFont, uiSize = gui.ctx, gui.uiFont, gui.fontSize.ui
 
 local pane = 'swing'   -- 'swing' | 'temper'
+-- True only when entered via a tracker drop-in (editSwing/editTuning).
+-- Gates Close button, page-level Esc, and status hint; cleared on unbind.
+local droppedIn = false
 local function activePane() return pane == 'temper' and temperEditor or swingEditor end
 
 local function onClose() cmgr:invoke('closeEditor') end
 
 ----- Library tree palette (Active / Project / Global tiers; one per pane)
 
---shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onDelete(tier,name) }
+--shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onReset?(), onDelete(tier,name) }
 
 -- Folder a row sits under scopes the action bar. Active is a nav lens —
 -- rows resolve to a real tier on select, so sel.tier is 'project'|'global'.
@@ -47,6 +50,14 @@ local function libraryActions(spec)
     --  end)
   end
   ImGui.SameLine(ctx, 0, 4)
+  -- reset reverts the selected entry's unsaved edits; only panes that supply
+  -- onReset (swing) show it, greyed until the composite differs from snapshot.
+  if spec.onReset then
+    chrome.disabledIf(not spec.dirty, function()
+      if ImGui.Button(ctx, 'reset') then spec.onReset() end
+    end)
+    ImGui.SameLine(ctx, 0, 4)
+  end
   chrome.disabledIf(not (sel.tier == 'project' or sel.tier == 'global') or undeletable, function()
     if ImGui.Button(ctx, 'del') then spec.onDelete(sel.tier, sel.name) end   -- × : delete
   end)
@@ -108,12 +119,17 @@ local er = {}
 -- Fast path: set the pane + selection; the editTuning/editSwing commands
 -- (which hold coord) switch the page. Mirrors samplePage's diveToSampler.
 function er:edit(lib, name)
+  droppedIn = true
   if lib == 'temper' then
     pane = 'temper'; temperEditor:select(name)
   else
     pane = 'swing';  swingEditor:open(name)
   end
 end
+
+-- Page unbind (leaving the editor) ends the drop-in: the next entry must
+-- re-earn the Close affordance by coming through edit() again.
+function er:unbind() droppedIn = false end
 
 function er:renderToolbarBits(_)
   local function paneButton(label, id)
@@ -125,10 +141,21 @@ function er:renderToolbarBits(_)
   paneButton('Swing',  'swing')
   ImGui.SameLine(ctx, 0, 4)
   paneButton('Temper', 'temper')
-  ImGui.SameLine(ctx, 0, 12)
-  chrome.verticalSeparator()
-  ImGui.SameLine(ctx, 0, 12)
-  if ImGui.Button(ctx, 'Close (Esc)') then onClose() end
+
+  local p = activePane()
+  if p.renderToolbar then
+    ImGui.SameLine(ctx, 0, 12)
+    chrome.verticalSeparator()
+    ImGui.SameLine(ctx, 0, 12)
+    p:renderToolbar()
+  end
+
+  if droppedIn then
+    ImGui.SameLine(ctx, 0, 12)
+    chrome.verticalSeparator()
+    ImGui.SameLine(ctx, 0, 12)
+    if ImGui.Button(ctx, 'Close (Esc)') then onClose() end
+  end
 end
 
 function er:renderBody(_, w, h, dispatch)
@@ -138,7 +165,7 @@ function er:renderBody(_, w, h, dispatch)
   local p = activePane()
   -- Page-level Esc returns to the previous page; guarded so an active
   -- InputText/slider keeps Esc to cancel itself, and a sub-modal owns it.
-  if not p:modalActive() and not ImGui.IsAnyItemActive(ctx)
+  if droppedIn and not p:modalActive() and not ImGui.IsAnyItemActive(ctx)
      and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     onClose(); return
   end
@@ -158,7 +185,8 @@ function er:renderBody(_, w, h, dispatch)
 end
 
 function er:renderStatusBar(_)
-  ImGui.Text(ctx, ('Editor — %s · Esc returns'):format(pane == 'temper' and 'Temper' or 'Swing'))
+  local tail = droppedIn and ' · Esc returns' or ''
+  ImGui.Text(ctx, ('Editor — %s%s'):format(pane == 'temper' and 'Temper' or 'Swing', tail))
 end
 
 --shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }

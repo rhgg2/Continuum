@@ -34,7 +34,7 @@ facade.publish('editor', {
 
 ----- Page lifecycle — no take binding; pane state persists across visits
 function ep:bind()   end
-function ep:unbind() end
+function ep:unbind() er:unbind() end
 
 ----- Page interface — render delegates to the renderer
 function ep:renderToolbarBits(ctx)          return er:renderToolbarBits(ctx) end

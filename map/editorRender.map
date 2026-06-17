@@ -1,4 +1,4 @@
-@module editorRender  src=editorRender.lua  loc=175  sha=c6e4030  mode=chunk
+@module editorRender  src=editorRender.lua  loc=203  sha=dcf4a1d  mode=chunk
 @deps swingEditor, temperEditor, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -6,7 +6,7 @@
   @contract  body editor — focusState always page-suppresses (root globals stay live, page bindings off)
 
 # Shapes
-  @shape  libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onDelete(tier,name) }
+  @shape  libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onReset?(), onDelete(tier,name) }
   @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
 
 # Imports
@@ -15,62 +15,66 @@
 # Private state
   @state ctx, uiFont, uiSize = gui.ctx, gui.uiFont, gui.fontSize.ui  @ 19
   @state pane = 'swing'  @ 21
-  @state ROW_INDENT = 14  @ 64   -- children sit under their folder, as tracker params do
-  @state treeOpen = { active = true, project = true, global = true }  @ 65
-  @state er = {}  @ 104
+  @state droppedIn = false  @ 24
+  @state ROW_INDENT = 14  @ 75   -- children sit under their folder, as tracker params do
+  @state treeOpen = { active = true, project = true, global = true }  @ 76
+  @state er = {}  @ 115
 
 # Private functions
-  @fn activePane()  @ 22
-  @fn onClose()  @ 24
+  @fn activePane()  @ 25
+  @fn onClose()  @ 27
   -- Library tree palette (Active / Project / Global tiers; one per pane)
-  @fn libraryActions(spec)  @ 32
+  @fn libraryActions(spec)  @ 35
       -- Folder a row sits under scopes the action bar. Active is a nav lens —
       -- rows resolve to a real tier on select, so sel.tier is 'project'|'global'.
-  @fn libraryRow(spec, tier, name, label)  @ 57
+  @fn libraryRow(spec, tier, name, label)  @ 68
       -- PushID(tier) scopes the row's ImGui id: a promoted entry appears in both
       -- Project and Global with the same label, which would otherwise collide.
-  @fn libraryFolder(key, title, drawChildren)  @ 69
+  @fn libraryFolder(key, title, drawChildren)  @ 80
       -- Collapsible folder node: arrow + title as a selectable row; clicking it
       -- toggles whether its children draw. Mirrors the tracker param tree.
-  @fn libraryTree(spec)  @ 79
+  @fn libraryTree(spec)  @ 90
 
 # Public API (er:*)
-  @api er:edit(lib, name)  @ 110
+  @api er:edit(lib, name)  @ 121
       -- Fast path: set the pane + selection; the editTuning/editSwing commands
       -- (which hold coord) switch the page. Mirrors samplePage's diveToSampler.
-  @api er:renderToolbarBits(_)  @ 118
-  @api er:renderBody(_, w, h, dispatch)  @ 134
-  @api er:renderStatusBar(_)  @ 160
-  @api er:focusState()  @ 165
+  @api er:unbind()  @ 132
+      -- Page unbind (leaving the editor) ends the drop-in: the next entry must
+      -- re-earn the Close affordance by coming through edit() again.
+  @api er:renderToolbarBits(_)  @ 134
+  @api er:renderBody(_, w, h, dispatch)  @ 161
+  @api er:renderStatusBar(_)  @ 187
+  @api er:focusState()  @ 193
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 121
-  @use call    chrome.disabledIf  @ 50
-  @use call    chrome.gridWidth  @ 150
-  @use call    chrome.pickerIsActive  @ 167
-  @use call    chrome.rowSelectable  @ 60, 70
-  @use call    chrome.treeArrow  @ 70
-  @use call    chrome.verticalSeparator  @ 129
-  @use call    cmgr.invoke  @ 24
-  @use call    imgui.Button  @ 36, 40, 46, 51, 122, 131
-  @use call    imgui.GetCursorScreenPos  @ 149
-  @use call    imgui.Indent  @ 74
-  @use call    imgui.IsAnyItemActive  @ 141, 171
-  @use call    imgui.IsKeyPressed  @ 142
-  @use call    imgui.PopFont  @ 153
-  @use call    imgui.PopID  @ 61
-  @use call    imgui.PopStyleColor  @ 123
-  @use call    imgui.PushFont  @ 151
-  @use call    imgui.PushID  @ 58
-  @use call    imgui.PushStyleColor  @ 121
-  @use call    imgui.SameLine  @ 37, 43, 49, 126, 128, 130
-  @use call    imgui.Separator  @ 84
-  @use call    imgui.Text  @ 161
-  @use call    imgui.Unindent  @ 76
-  @use call    modalHost.isOpen  @ 167
-  @use call    swingEditor.isOpen  @ 145
-  @use call    swingEditor.open  @ 114, 145
-  @use call    temperEditor.select  @ 112
+  @use call    chrome.colour  @ 137
+  @use call    chrome.disabledIf  @ 56, 61
+  @use call    chrome.gridWidth  @ 177
+  @use call    chrome.pickerIsActive  @ 195
+  @use call    chrome.rowSelectable  @ 71, 81
+  @use call    chrome.treeArrow  @ 81
+  @use call    chrome.verticalSeparator  @ 148, 155
+  @use call    cmgr.invoke  @ 27
+  @use call    imgui.Button  @ 39, 43, 49, 57, 62, 138, 157
+  @use call    imgui.GetCursorScreenPos  @ 176
+  @use call    imgui.Indent  @ 85
+  @use call    imgui.IsAnyItemActive  @ 168, 199
+  @use call    imgui.IsKeyPressed  @ 169
+  @use call    imgui.PopFont  @ 180
+  @use call    imgui.PopID  @ 72
+  @use call    imgui.PopStyleColor  @ 139
+  @use call    imgui.PushFont  @ 178
+  @use call    imgui.PushID  @ 69
+  @use call    imgui.PushStyleColor  @ 137
+  @use call    imgui.SameLine  @ 40, 46, 52, 59, 142, 147, 149, 154, 156
+  @use call    imgui.Separator  @ 95
+  @use call    imgui.Text  @ 189
+  @use call    imgui.Unindent  @ 87
+  @use call    modalHost.isOpen  @ 195
+  @use call    swingEditor.isOpen  @ 172
+  @use call    swingEditor.open  @ 126, 172
+  @use call    temperEditor.select  @ 124
   @use require imgui  @ 15
 
 # REAPER API surface

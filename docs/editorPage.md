@@ -52,16 +52,33 @@ the target, then switch.
 
 `closeEditor` returns to `coord:previousPage()` (falling back to
 tracker) — the page that was active when the editor opened, so the
-workbench feels like a modal layer over wherever you were. The `Close
-(Esc)` toolbar button and a page-level Esc both invoke it.
+workbench feels like a modal layer over wherever you were.
+
+The `Close (Esc)` toolbar button — and the page-level Esc that mirrors
+it — exist **only on a tracker drop-in**. Arriving via `editSwing` /
+`editTuning` sets a `droppedIn` flag (cleared on `unbind`); entering
+standalone through F10 or the `E` page button leaves it clear, so the
+editor reads as a first-class page with no dangling "close to where?"
+affordance. The flag also gates the status-bar `· Esc returns` hint.
+
+## The toolbar
+
+Three zones, left to right: the **Swing / Temper** pane selector, the
+**active pane's own tools**, and — on a drop-in — **Close (Esc)**. The
+pane tools come from an optional `pane:renderToolbar()` hook: the swing
+pane surfaces Rows/qn · Wild · Phase φ there, so they sit in the
+chrome band at the pane buttons' height instead of floating above the
+body at their own padding. A pane without the hook (temper, today)
+contributes nothing between the selector and Close.
 
 ## Esc is guarded
 
-Page-level Esc closes the page, but only when nothing nearer wants it:
-not while a pane sub-modal (the New-swing popup) is open, and not while
-an ImGui item is active — so Esc still cancels an InputText edit or a
-slider drag before it ever closes the page. The check sits in
-`renderBody`, before the panes draw.
+Page-level Esc closes the page, but only on a tracker drop-in
+(`droppedIn`) and only when nothing nearer wants it: not while a pane
+sub-modal (the New-swing popup) is open, and not while an ImGui item is
+active — so Esc still cancels an InputText edit or a slider drag before
+it ever closes the page. The check sits in `renderBody`, before the
+panes draw.
 
 ## focusState: page bindings off, root globals live
 
@@ -97,11 +114,13 @@ Three folders, each a collapsible node:
 - **Global** — the personal library, lazily seeded from the built-in
   catalogue on first read.
 
-The action bar (`add` / `dup global` / `dup project` / `del`) is scoped
-by the selected row's folder: promote shows only for a project
+The action bar (`add` / `dup global` / `dup project` / `reset` / `del`)
+is scoped by the selected row's folder: promote shows only for a project
 selection, demote only for a global one, and delete greys for a
 synthetic floor entry or one a take still references (deleting it would
-orphan the reference).
+orphan the reference). `reset` reverts the selected entry's unsaved
+edits to the snapshot; it appears only for panes that expose `onReset`
+(swing), greyed until the composite actually differs.
 
 ## What's deferred
 
