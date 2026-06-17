@@ -1,4 +1,4 @@
-@module chrome  src=chrome.lua  loc=496  sha=9e0bf26  mode=chunk
+@module chrome  src=chrome.lua  loc=497  sha=a473dad  mode=chunk
 @deps cm, ctx, uiFontBold, uiSize
 
 # Shapes
@@ -6,7 +6,7 @@
   @shape  chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeArrow(open,hasChildren)->prefix }
   @shape  pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
   @shape  palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
-  @shape  libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, sel={tier,name}, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onDelete(tier,name) }
+  @shape  libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onDelete(tier,name) }
   @shape  toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
 
 # Imports
@@ -84,9 +84,9 @@
   @fn libraryActions(spec)  @ 420
       -- Folder a row sits under scopes the action bar. Active is a nav lens —
       -- rows resolve to a real tier on select, so sel.tier is 'project'|'global'.
-  @fn libraryRow(spec, tier, name, label, synthetic)  @ 438
-  @fn libraryFolder(title)  @ 444
-  @fn libraryTree(spec)  @ 449
+  @fn libraryRow(spec, tier, name, label, synthetic)  @ 439
+  @fn libraryFolder(title)  @ 445
+  @fn libraryTree(spec)  @ 450
 
 # Uses (outbound edges)
   @use call    cm.get  @ 29, 205
@@ -96,7 +96,7 @@
   @use call    imgui.BeginDisabled  @ 107
   @use call    imgui.BeginGroup  @ 169
   @use call    imgui.BeginPopup  @ 278
-  @use call    imgui.Button  @ 258, 259, 423, 426, 430, 434
+  @use call    imgui.Button  @ 258, 259, 424, 427, 431, 435
   @use call    imgui.CalcTextSize  @ 250, 387, 389
   @use call    imgui.Checkbox  @ 118
   @use call    imgui.CloseCurrentPopup  @ 319, 322
@@ -129,16 +129,16 @@
   @use call    imgui.PushStyleColor  @ 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 68, 80, 81, 82, 83, 84, 85, 136, 401, 402
   @use call    imgui.PushStyleVar  @ 55, 79, 116, 124, 256
   @use call    imgui.RadioButton  @ 126
-  @use call    imgui.SameLine  @ 164, 166, 240, 424, 428, 432
+  @use call    imgui.SameLine  @ 164, 166, 240, 425, 429, 433
   @use call    imgui.Selectable  @ 329, 403
-  @use call    imgui.Separator  @ 291, 327, 445
+  @use call    imgui.Separator  @ 291, 327, 446
   @use call    imgui.SetCursorPosY  @ 117, 125
   @use call    imgui.SetCursorScreenPos  @ 373
   @use call    imgui.SetKeyboardFocusHere  @ 281
   @use call    imgui.SetNextItemWidth  @ 282
   @use call    imgui.SetNextWindowPos  @ 274
   @use call    imgui.Text  @ 138, 239
-  @use call    imgui.TextDisabled  @ 446
+  @use call    imgui.TextDisabled  @ 447
   @use call    painter.new  @ 350, 369
   @use require imgui  @ 10
   @use require painter  @ 11

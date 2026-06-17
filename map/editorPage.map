@@ -1,4 +1,4 @@
-@module editorPage  src=editorPage.lua  loc=99  sha=untracked  mode=chunk
+@module editorPage  src=editorPage.lua  loc=108  sha=f3c817d  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade
 
 # Shapes
@@ -29,25 +29,28 @@
   @api ep:unbind()  @ 49
   @api ep:renderToolbarBits(_)  @ 51
   @api ep:renderBody(_, w, h, dispatch)  @ 67
-  @api ep:renderStatusBar(_)  @ 84
-  @api ep:focusState()  @ 89
+  @api ep:renderStatusBar(_)  @ 93
+  @api ep:focusState()  @ 98
 
 # Uses (outbound edges)
   @use call    chrome.colour  @ 54
-  @use call    chrome.pickerIsActive  @ 91
+  @use call    chrome.gridWidth  @ 83
+  @use call    chrome.libraryTree  @ 90
+  @use call    chrome.pickerIsActive  @ 100
   @use call    chrome.verticalSeparator  @ 62
   @use call    cmgr.invoke  @ 31
   @use call    facade.publish  @ 37
   @use call    imgui.Button  @ 55, 64
-  @use call    imgui.IsAnyItemActive  @ 74, 95
+  @use call    imgui.GetCursorScreenPos  @ 82
+  @use call    imgui.IsAnyItemActive  @ 74, 104
   @use call    imgui.IsKeyPressed  @ 75
-  @use call    imgui.PopFont  @ 81
+  @use call    imgui.PopFont  @ 86
   @use call    imgui.PopStyleColor  @ 56
-  @use call    imgui.PushFont  @ 79
+  @use call    imgui.PushFont  @ 84
   @use call    imgui.PushStyleColor  @ 54
   @use call    imgui.SameLine  @ 59, 61, 63
-  @use call    imgui.Text  @ 85
-  @use call    modalHost.isOpen  @ 91
+  @use call    imgui.Text  @ 94
+  @use call    modalHost.isOpen  @ 100
   @use call    swingEditor.isOpen  @ 78
   @use call    swingEditor.open  @ 42, 78
   @use call    temperEditor.select  @ 40

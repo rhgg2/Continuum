@@ -19,6 +19,7 @@ local cm, chrome, ctx, facade = (...).cm, (...).chrome, (...).ctx, (...).facade
 local function tracker() return facade.get('tracker') end
 
 local selected = nil   -- name being viewed; nil follows the active slot
+local selTier  = nil   -- tier of the current selection ('project' | 'global')
 
 local function viewedName() return selected or cm:get('temper') end
 
@@ -30,7 +31,77 @@ local function seedAndUse(name)
     tracker().setTemper(name, tuning.presets[name])
   end
   tracker().setProjectTemper(name)
-  selected = name
+  selected, selTier = name, 'project'
+end
+
+local function projectTempers() return cm:getAt('project', 'tempers') or {} end
+local function globalTempers()  return cm:getAt('global',  'tempers') or {} end
+
+-- A name's editable home: project copy if present, else global (covers the
+-- synthetic '12EDO' floor too).
+local function homeTier(name)
+  if name and projectTempers()[name] ~= nil then return 'project' end
+  return 'global'
+end
+
+local function sortedNames(tbl)
+  local out = {}
+  for k in pairs(tbl) do out[#out + 1] = k end
+  table.sort(out)
+  return out
+end
+
+local function temperFor(name) return tuning.findTemper(name, cm:get('tempers')) end
+
+local function promote(name)
+  if not name then return end
+  local g = globalTempers()
+  g[name] = util.deepClone(temperFor(name))
+  cm:set('global', 'tempers', g)
+end
+
+local function demote(name)
+  if not name then return end
+  local p = projectTempers()
+  p[name] = util.deepClone(globalTempers()[name])
+  cm:set('project', 'tempers', p)
+  selected, selTier = name, 'project'
+end
+
+local function deleteSel(tier, name)
+  local lib = tier == 'global' and globalTempers() or projectTempers()
+  if lib[name] ~= nil then
+    lib[name] = nil
+    cm:set(tier, 'tempers', lib)
+  end
+  if projectTempers()[name] or globalTempers()[name] then
+    selected, selTier = name, homeTier(name)
+  else
+    selected, selTier = nil, nil
+  end
+end
+
+local SYNTHETIC = { ['12EDO'] = true }
+
+local function buildDescriptor()
+  local globalNames = sortedNames(globalTempers())
+  if not globalTempers()['12EDO'] then table.insert(globalNames, 1, '12EDO') end
+  local active = {}
+  local cur    = cm:get('temper')
+  if cur then active[1] = { col = 'take', name = cur } end
+  return {
+    label     = 'Temper',
+    active    = active,
+    project   = sortedNames(projectTempers()),
+    global    = globalNames,
+    synthetic = SYNTHETIC,
+    sel       = { tier = selTier, name = selected },
+    onSelect  = function(tier, name) selected, selTier = name, (tier ~= 'active' and tier or homeTier(name)) end,
+    onNew     = function() end,   -- cents authoring lands in phase 2
+    onPromote = promote,
+    onDemote  = demote,
+    onDelete  = deleteSel,
+  }
 end
 
 local function draw(w, h)
@@ -72,7 +143,8 @@ end
 
 ----- Public
 local self = {}
-function self:select(name)         selected = name end
-function self:render(w, h, _onClose) draw(w, h) end
-function self:modalActive()        return false end
+function self:select(name) selected, selTier = name, name and homeTier(name) or nil end
+function self:render(w, h)  draw(w, h) end
+function self:libraryDescriptor() return buildDescriptor() end
+function self:modalActive() return false end
 return self

@@ -4,7 +4,7 @@
 --shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeArrow(open,hasChildren)->prefix }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
 --shape: palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
---shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, sel={tier,name}, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onDelete(tier,name) }
+--shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onDelete(tier,name) }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
 local ImGui   = require 'imgui' '0.10'
@@ -418,8 +418,9 @@ end
 -- Folder a row sits under scopes the action bar. Active is a nav lens —
 -- rows resolve to a real tier on select, so sel.tier is 'project'|'global'.
 local function libraryActions(spec)
-  local sel       = spec.sel or {}
-  local synthetic = sel.name and spec.synthetic and spec.synthetic[sel.name]
+  local sel         = spec.sel or {}
+  local synthetic   = sel.name and spec.synthetic and spec.synthetic[sel.name]
+  local undeletable = synthetic or (sel.name and spec.undeletable and spec.undeletable[sel.name])
   if ImGui.Button(ctx, '+') then spec.onNew() end
   ImGui.SameLine(ctx, 0, 4)
   disabledIf(sel.tier ~= 'project', function()
@@ -430,7 +431,7 @@ local function libraryActions(spec)
     if ImGui.Button(ctx, '\xe2\x86\x93P') then spec.onDemote(sel.name) end   -- ↓P : demote
   end)
   ImGui.SameLine(ctx, 0, 4)
-  disabledIf(not (sel.tier == 'project' or sel.tier == 'global') or synthetic, function()
+  disabledIf(not (sel.tier == 'project' or sel.tier == 'global') or undeletable, function()
     if ImGui.Button(ctx, '\xc3\x97') then spec.onDelete(sel.tier, sel.name) end   -- × : delete
   end)
 end

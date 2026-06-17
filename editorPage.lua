@@ -76,9 +76,18 @@ function ep:renderBody(_, w, h, dispatch)
     onClose(); return
   end
   if pane == 'swing' and not swingEditor:isOpen() then swingEditor:open() end
+
+  -- Body splits into the content pane (variable width) and the fixed-width
+  -- library tree palette, mirroring arrange/sampler.
+  local ox, oy = ImGui.GetCursorScreenPos(ctx)
+  local gridW  = chrome.gridWidth(w)
   ImGui.PushFont(ctx, uiFont, uiSize)
-  p:render(w, h, onClose)
+  p:render(gridW, h)
   ImGui.PopFont(ctx)
+
+  local desc = p:libraryDescriptor()
+  desc.x, desc.y, desc.h = ox + gridW, oy, h
+  chrome.libraryTree(desc)
 end
 
 function ep:renderStatusBar(_)

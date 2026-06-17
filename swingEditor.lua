@@ -1,15 +1,15 @@
 -- See docs/swingEditor.md for the model.
 -- @noindex
 
---invariant: editor owns no swing data; composite resolves via cm:get('swings', {mergeTiers=true})[name] (defaults ∪ global ∪ project) and is read fresh each frame via swingRead
+--invariant: editor stores no swing data; swingRead = tier copy of state.name, else merged floor
 --invariant: all writes go through swingWrite (idempotent); commit() triggers cross-take reswing
 --invariant: state == nil iff closed; open(name?) re-selects when open; close() is page-driven
---invariant: snapshot is captured at open() (and on swing-switch via the library picker) and never mutated; Reset writes a deepClone of it
+--invariant: snapshot captured at open() and palette-switch; never mutated; Reset writes a deepClone
 --invariant: shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
 --invariant: on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
 --invariant: slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider
 --invariant: atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
---shape: state = { name, snapshot, rpb, wild, create? = { buf, err?, gen?, refocus? } }  -- composite is NOT cached here; create is the New-swing modal substate (gen bumps to re-seed the InputText after we clear buf on error)
+--shape: state = { name, tier, snapshot, rpb, wild, create? = { buf, err?, gen?, refocus? } }  -- composite is NOT cached here; create is the New-swing modal substate (gen bumps to re-seed the InputText after we clear buf on error)
 --shape: PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
 local util   = require 'util'
 local timing = require 'timing'
@@ -173,7 +173,9 @@ local function drawSwingGrid(composite, periodQN, rpb, w, h, shadeMeter)
 end
 
 local function swingRead()
-  return cm:get('swings', { mergeTiers = true })[state.name]
+  local tierLib = state.tier and cm:getAt(state.tier, 'swings') or {}
+  if tierLib[state.name] ~= nil then return tierLib[state.name] end
+  return cm:get('swings', { mergeTiers = true })[state.name]   -- synthetic / default floor
 end
 
 -- Tolerant accessor: bare {} and {factors={}} both mean identity. Read-only;
@@ -205,7 +207,7 @@ end
 --contract: sole write path; idempotent on equal composites; refresh via setSwingComposite
 local function swingWrite(composite)
   if compositesEqual(swingRead() or {}, composite) then return end
-  tracker().setSwingComposite(state.name, composite)
+  tracker().setSwingComposite(state.name, composite, state.tier)
 end
 
 -- Editable clone with a guaranteed factors[] array, so write paths can
@@ -351,12 +353,19 @@ end
 local function projectSwings() return cm:getAt('project', 'swings') or {} end
 local function globalSwings()  return cm:getAt('global',  'swings') or {} end
 
---contract: copies the currently-edited composite into the global tier (defaults are immutable; project copy survives untouched, still shadowing it)
-local function saveGlobal(name)
-  if not name then return end
-  local g = globalSwings()
-  g[name] = util.deepClone(swingRead())
-  cm:set('global', 'swings', g)
+-- A name's editable home: the project copy if one exists, else global (which
+-- also covers the synthetic 'identity' floor and unseeded default presets).
+local function homeTier(name)
+  if name and projectSwings()[name] ~= nil then return 'project' end
+  return 'global'
+end
+
+-- Switch the edited swing without closing the editor. Re-captures the
+-- snapshot so Reset/dirty-check stay coherent; tier defaults to the home tier.
+local function switchTo(name, tier)
+  state.name     = name
+  state.tier     = name and (tier or homeTier(name)) or nil
+  state.snapshot = name and swingRead() or nil
 end
 
 local function deleteFromTier(level, name)
@@ -366,11 +375,29 @@ local function deleteFromTier(level, name)
   cm:set(level, 'swings', key)
 end
 
--- Switch the edited swing without closing the editor. Re-captures the
--- snapshot so Reset/dirty-check stay coherent.
-local function switchTo(name)
-  state.name     = name
-  state.snapshot = name and swingRead() or nil
+--contract: promote copies the composite to global; the project copy survives, still shadowing it
+local function promote(name)
+  if not name then return end
+  local g = globalSwings()
+  g[name] = util.deepClone(swingRead())
+  cm:set('global', 'swings', g)
+end
+
+-- Fork a global entry down into the project tier and edit that copy.
+local function demote(name)
+  if not name then return end
+  local p = projectSwings()
+  p[name] = util.deepClone(globalSwings()[name])
+  cm:set('project', 'swings', p)
+  switchTo(name, 'project')
+end
+
+-- Delete from the row's tier; fall back to a surviving shadow in the other
+-- tier if any, else clear the selection.
+local function deleteSel(tier, name)
+  deleteFromTier(tier, name)
+  if projectSwings()[name] or globalSwings()[name] then switchTo(name)
+  else switchTo(nil) end
 end
 
 -- Resolved take and channel slots for the open-default and the
@@ -386,84 +413,52 @@ local function resolvedSlots()
   return takeName, chanName
 end
 
--- Library row sits above the edit/create body. Picker + name input flow
--- coexist: the picker offers existing swings (including the implicit
--- "Off" → enter create mode); +New is just an alias for picking Off and
--- focusing the name field.
-local function drawLibraryRow(closeOnClick, rowW)
-  local cur          = state.name
-  local inProject    = cur and projectSwings()[cur] ~= nil
-  local inGlobal     = cur and globalSwings()[cur]  ~= nil
-  local hasGlobalCopy = inGlobal
+local SYNTHETIC = { identity = true }
 
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 10, 3)
-  chrome.drawPicker {
-    kind        = 'swingLib',
-    heading     = 'Swing',
-    buttonLabel = cur or 'Off',
-    minWidth    = 160,
-    items       = chrome.libPicker('swings', cur, { id = true }),
-    onPick      = switchTo,
-  }
+local function sortedNames(tbl)
+  local out = {}
+  for k in pairs(tbl) do out[#out + 1] = k end
+  table.sort(out)
+  return out
+end
 
-  ImGui.SameLine(ctx, 0, 12)
-
-  -- Shortcut buttons to edit the take's swing and the cursor channel's
-  -- swing override. The name is visible on the button so the user sees
-  -- what they'll get; em-dash means the slot is unset (button disabled).
+-- In-force entries for the Active folder: the take's swing plus the cursor
+-- channel's override (the phase-1 Take/Chan shortcuts, now navigation rows).
+local function activeEntries()
   local takeName, chanName = resolvedSlots()
-  local function slotButton(label, name)
-    ImGui.SameLine(ctx, 0, 8)
-    chrome.disabledIf(not name or name == cur, function()
-      if ImGui.Button(ctx, label) then
-        switchTo(name)
-      end
-    end)
+  local out = {}
+  if takeName then out[#out + 1] = { col = 'take', name = takeName } end
+  if chanName then out[#out + 1] = { col = 'chan', name = chanName } end
+  return out
+end
+
+-- Project entries a take references can't be deleted (it would orphan the
+-- reference); the shell greys Delete for these.
+local function inUseNames()
+  local used = {}
+  for name in pairs(projectSwings()) do
+    if #arrange().takesUsing(name) > 0 then used[name] = true end
   end
-  slotButton('Take', takeName)
-  slotButton('Chan',   chanName)
-  ImGui.SameLine(ctx, 0, 8)
-  if ImGui.Button(ctx, '+') then state.create = { buf = '' } end
+  return used
+end
 
-  ImGui.SameLine(ctx, 0, 12)
-  chrome.verticalSeparator()
-  ImGui.SameLine(ctx, 0, 12)
-
-  -- Save globally: only meaningful if there's a project-tier copy to
-  -- promote. Default-only entries can't be saved as "global" because
-  -- they already are (in spirit) — a re-save just clones the default
-  -- into the cache, which is pointless until edited.
-  chrome.disabledIf(not inProject, function()
-    if ImGui.Button(ctx, 'Save global') then saveGlobal(cur) end
-  end)
-
-  ImGui.SameLine(ctx, 0, 8)
-  local usage = (cur and inProject) and arrange().takesUsing(cur) or {}
-  chrome.disabledIf(not inProject or #usage > 0, function()
-    if ImGui.Button(ctx, 'Delete proj') then
-      deleteFromTier('project', cur)
-      switchTo(hasGlobalCopy and cur or nil)
-    end
-  end)
-
-  ImGui.SameLine(ctx, 0, 8)
-  chrome.disabledIf(not inGlobal, function()
-    if ImGui.Button(ctx, 'Delete global') then
-      deleteFromTier('global', cur)
-      if not inProject then switchTo(nil) end
-    end
-  end)
-
-  -- Close button at the far right of the row. SetCursorPosX is
-  -- measured from the child's left edge; rowW is the child's full
-  -- width (no GetWindowContentRegionMax in ReaImGui).
-  ImGui.SameLine(ctx)
-  local closeLabel = 'Close (Esc)'
-  local tw  = ImGui.CalcTextSize(ctx, closeLabel)
-  local fpx = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
-  ImGui.SetCursorPosX(ctx, rowW - (tw + fpx * 2) - 4)
-  if ImGui.Button(ctx, closeLabel) then closeOnClick() end
-  ImGui.PopStyleVar(ctx, 1)
+local function buildDescriptor()
+  local globalNames = sortedNames(globalSwings())
+  if not globalSwings().identity then table.insert(globalNames, 1, 'identity') end
+  return {
+    label       = 'Swing',
+    active      = activeEntries(),
+    project     = sortedNames(projectSwings()),
+    global      = globalNames,
+    synthetic   = SYNTHETIC,
+    undeletable = inUseNames(),
+    sel         = { tier = state.tier, name = state.name },
+    onSelect    = function(tier, name) switchTo(name, tier ~= 'active' and tier or nil) end,
+    onNew       = function() state.create = { buf = '' } end,
+    onPromote   = promote,
+    onDemote    = demote,
+    onDelete    = deleteSel,
+  }
 end
 
 -- '+ New' modal. Lives at draw() top-level so the popup isn't bound to a
@@ -612,7 +607,7 @@ end
 
 -- Body-region draw inside a child window; chrome palette (editor.bg + toolbar colours)
 -- takes the tracker grid's place (Col_ChildBg instead of Col_WindowBg).
-local function draw(w, h, onClose)
+local function draw(w, h)
   if not state then return end
 
   local composite = (state.name and swingRead()) or {}
@@ -621,12 +616,8 @@ local function draw(w, h, onClose)
   chrome.pushChromeStyles()
   ImGui.PushStyleColor(ctx, ImGui.Col_Separator, chrome.colour('toolbar.buttonBorder'))
   if ImGui.BeginChild(ctx, '##swingEditor', w, h) then
-    drawLibraryRow(onClose, w)
-    if state then
-      ImGui.Separator(ctx)
-      drawEditBody(composite, n)
-      drawCreateModal()
-    end
+    drawEditBody(composite, n)
+    drawCreateModal()
   end
   ImGui.EndChild(ctx)
   ImGui.PopStyleColor(ctx, 1)
@@ -647,14 +638,13 @@ function self:open(name)
     return
   end
   local lib = cm:get('swings', { mergeTiers = true })
-  state = {
-    name     = target,
-    snapshot = target and lib[target] or nil,
-    rpb      = 4,
-  }
+  state = { rpb = 4 }
+  switchTo(target)
 end
 
-function self:render(w, h, onClose) draw(w, h, onClose) end
+function self:render(w, h) draw(w, h) end
+
+function self:libraryDescriptor() return buildDescriptor() end
 
 function self:close() state = nil end
 
