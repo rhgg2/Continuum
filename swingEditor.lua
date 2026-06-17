@@ -427,13 +427,20 @@ local function sortedNames(tbl)
   return out
 end
 
--- In-force entries for the Active folder: the take's swing plus the cursor
--- channel's override (the phase-1 Take/Chan shortcuts, now navigation rows).
+-- In-force entries for the Active folder: take swing + every channel
+-- override, read straight from ds (no cursor) so all columns show.
 local function activeEntries()
-  local takeName, chanName = resolvedSlots()
+  local sw  = ds:get('swing') or {}
   local out = {}
+  local takeName = sw.global
+  if takeName == 'identity' then takeName = nil end
   if takeName then out[#out + 1] = { col = 'take', name = takeName } end
-  if chanName then out[#out + 1] = { col = 'chan', name = chanName } end
+  local chans = {}
+  for chan in pairs(sw) do if chan ~= 'global' then chans[#chans + 1] = chan end end
+  table.sort(chans)
+  for _, chan in ipairs(chans) do
+    out[#out + 1] = { col = 'ch' .. chan, name = sw[chan] }
+  end
   return out
 end
 

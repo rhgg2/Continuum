@@ -177,7 +177,6 @@ local function Main()
     switchToTracker = { ImGui.Key_F4 },
     switchToSample  = { ImGui.Key_F9 },
     switchToEditor  = { ImGui.Key_F10 },
-    editSwing       = { {ImGui.Key_E, ImGui.Mod_Super} },
     quit            = { {ImGui.Key_Q, ImGui.Mod_Ctrl} },
     beginPrefix     = { {ImGui.Key_U, ImGui.Mod_Super} },
     toggleFxWindows = { ImGui.Key_F11 },

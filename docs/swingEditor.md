@@ -1,9 +1,10 @@
 # swingEditor
 
-A floating window for editing a swing composite — a list of factors,
-each with an atom (id / classic / pocket / lilt / shuffle / tilt), a
-shift in QN, and a period. Owned by trackerPage; opened by the
-`openSwingEditor` command, drawn each frame by `tp:renderFloating`.
+A pane on the library workbench (see `docs/editorPage.md`) for editing
+a swing composite — a list of factors, each with an atom (id / classic
+/ pocket / lilt / shuffle / tilt), a shift in QN, and a period. Owned
+by editorPage; opened via the `editSwing` command or the tracker's
+swing `edit` button, drawn by editorRender.
 
 ## State authority
 
