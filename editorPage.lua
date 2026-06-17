@@ -14,7 +14,7 @@ local cm, ds, cmgr, chrome, gui, modalHost, facade =
 local ctx = gui.ctx
 
 local swingEditor  = util.instantiate('swingEditor',
-  { cm = cm, ds = ds, chrome = chrome, ctx = ctx, facade = facade })
+  { cm = cm, ds = ds, chrome = chrome, ctx = ctx, gui = gui, facade = facade })
 local temperEditor = util.instantiate('temperEditor',
   { cm = cm, chrome = chrome, ctx = ctx, facade = facade })
 

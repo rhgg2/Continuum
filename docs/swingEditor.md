@@ -54,22 +54,32 @@ repeat than their user-period. Surfacing tile-QN in the dropdown
 matches what the user perceives. `periodOverPPC` divides on write
 to keep storage in user-period.
 
-## Grid model
+## Preview band
 
-The preview strip shows one period of swing. Cells are unswung
-subdivisions (`rpb` per QN); dots land at the swung image of each
-subdivision. Cells provide the rhythmic frame; dots show where the
-swing actually puts the onsets — the visual contrast is the point.
+The preview is a row of **vertical strips**, each styled like the
+tracker grid (same char-cell metrics, bar/beat row fills, 1px non-AA
+dividers on the offbeat rows). Time runs top-to-bottom. Each
+subdivision's blob is migrated down to its realised onset, so the blob
+visibly slides off its grid row by the swing amount — the grid is the
+unswung frame, the blob is where the note actually plays.
 
-`shadeMeter` paints bar/beat backgrounds. The composite preview uses
-it (the composite period is rounded up to a whole number of bars so
-the meter actually means something); per-factor previews leave it
-off because their period rarely aligns to bars and the shading would
-lie.
+Layout reads as composition: the composite strip on the left, then —
+when there is more than one factor — `=` and the factor strips in
+compositional order `fn ∘ … ∘ f1`. `f1` is applied first
+(`applyFactors` walks the array forward), so it sits rightmost, nearest
+the source.
 
-Three dot sizes — bar/midBar > beat > offbeat — let the meter read
-at a glance. `midBar` is treated as a beat for shading but as a bar
-for dot sizing; the asymmetry is deliberate.
+Every strip shares one height: the smallest whole number of bars that
+covers the *composite's* natural period (`compositePeriodQN`, rounded
+up so the meter shading means something). Because that rounds past the
+period, the tail rows repeat — blobs past a strip's **own** natural
+period draw in the `ghost` colour (the interpolated-note colour), so
+each strip shows its own repeat point within the shared frame.
+
+Three dot sizes — bar/midBar > beat > offbeat — let the meter read at a
+glance. `midBar` (the bar midpoint when it lands on a beat — true in
+4/4, 6/8; false in 3/4) shades as a beat but sizes as a bar; the
+asymmetry is deliberate.
 
 ## Library tiers & seeding
 

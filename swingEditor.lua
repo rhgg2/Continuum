@@ -11,8 +11,9 @@
 --invariant: atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
 --shape: state = { name, tier, snapshot, rpb, wild, create? = { buf, err?, gen?, refocus? } }  -- composite is NOT cached here; create is the New-swing modal substate (gen bumps to re-seed the InputText after we clear buf on error)
 --shape: PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
-local util   = require 'util'
-local timing = require 'timing'
+local util    = require 'util'
+local timing  = require 'timing'
+local painter = require 'painter'
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
@@ -29,19 +30,18 @@ local RPB_CHOICES   = { 1, 2, 3, 4, 6, 8, 12, 16 }
 -- Period presets in qn (the model's native unit), so the whole editor
 -- row is qn-consistent: shift in qn → period in qn → annotation in qn.
 local PERIOD_PRESETS = {
-  { label = '1/4 qn', period = {1, 4} },  -- 16th
-  { label = '1/3 qn', period = {1, 3} },  -- 8th triplet
-  { label = '1/2 qn', period = {1, 2} },  -- 8th
-  { label = '1 qn',   period = 1       }, -- quarter
-  { label = '2 qn',   period = 2       }, -- half
-  { label = '4 qn',   period = 4       }, -- whole
+  { label = '1/4', period = {1, 4} },  -- 16th
+  { label = '1/3', period = {1, 3} },  -- 8th triplet
+  { label = '1/2', period = {1, 2} },  -- 8th
+  { label = '1',   period = 1       }, -- quarter
+  { label = '2',   period = 2       }, -- half
+  { label = '4',   period = 4       }, -- whole
 }
 
 local SWING_ERR     = 0xff6060ff
-local SWING_MARK    = 0x000000b0
 local SWING_SOFT_QN = 0.15
 
-local cm, ds, chrome, ctx, facade = (...).cm, (...).ds, (...).chrome, (...).ctx, (...).facade
+local cm, ds, chrome, ctx, gui, facade = (...).cm, (...).ds, (...).chrome, (...).ctx, (...).gui, (...).facade
 
 local function arrange() return facade.get('arrange') end
 local function tracker() return facade.get('tracker') end
@@ -103,73 +103,107 @@ end
 -- normalised QN units rather than the take's PPQ resolution.
 local function materialise(composite) return timing.resolveFactors(composite, 1) end
 
-local function drawSwingGrid(composite, periodQN, rpb, w, h, shadeMeter)
-  local x0, y0    = ImGui.GetCursorScreenPos(ctx)
-  local dl        = ImGui.GetWindowDrawList(ctx)
+local STRIP_COLS = 6    -- strip width in tracker char-columns
+local GLYPH_BOX  = 36   -- px reserved for each =/∘ separator between strips
+
+-- Char-cell metrics matching the tracker grid (odd = crisp 1px lines).
+-- Caller must have the grid font pushed so 'W' measures the mono cell.
+local function gridMetrics()
+  local charW, charH = ImGui.CalcTextSize(ctx, 'W')
+  return 2 * math.ceil(charW / 2) - 1, 2 * math.ceil(charH / 2) - 1
+end
+
+-- Meter classifier: returns classify(qn) → 'bar'|'midBar'|'beat'|nil, plus beat and qpb.
+-- midBar = bar midpoint landing on a beat (4/4, 6/8 yes; 3/4 no); shades as beat, sizes as bar.
+local function meterClassifier()
   local beat, qpb = meterQN()
-  local N         = math.max(2, util.round(periodQN * rpb))
-  local cellW     = w / N
-
-  -- Half-pad top and bottom so bar/beat shading and dividers sit in an
-  -- inner band; dots can extend past the band edge for emphasis. Same
-  -- structural idea as drawLaneStrip (height-2 lane preview look).
-  local pad  = math.max(2, h * 0.15)
-  local yTop = y0 + pad
-  local yBot = y0 + h - pad
-
-  -- Classify a tick at qn position p into 'bar' (downbeat),
-  -- 'midBar' (the bar's midpoint when it lands on a beat — true in
-  -- 4/4, 6/8; false in 3/4, 2/2), 'beat' (any other beat), or nil
-  -- (offbeat). Shading treats midBar as a beat; dot sizing promotes
-  -- it to bar tier.
-  local function isInt(x)   return math.abs(x - util.round(x)) < 1e-9 end
-  local midIsBeat           = shadeMeter and isInt((qpb/2) / beat)
+  local function isInt(x) return math.abs(x - util.round(x)) < 1e-9 end
+  local midIsBeat = isInt((qpb / 2) / beat)
   local function classify(p)
     if not isInt(p / beat) then return nil end
     if isInt(p / qpb) then return 'bar' end
-    if midIsBeat and isInt((p - qpb/2) / qpb) then return 'midBar' end
+    if midIsBeat and isInt((p - qpb / 2) / qpb) then return 'midBar' end
     return 'beat'
   end
+  return classify, beat, qpb
+end
 
-  if shadeMeter then
-    local SHADE = { bar = 'rowBarStart', midBar = 'rowBeat', beat = 'rowBeat' }
-    for i = 0, N - 1 do
-      local key = SHADE[classify((i / N) * periodQN)]
-      if key then
-        local cx = x0 + i * cellW
-        ImGui.DrawList_AddRectFilled(dl, cx, yTop, cx + cellW, yBot, chrome.colour(key))
-      end
+-- Vertical strip: tracker-grid rows (bar/beat fills, offbeat 1px dividers), blobs at realised time.
+-- Blobs past ownPeriodQN draw in ghost colour; geom is shared so all strips align row-for-row.
+local function drawSwingStrip(p, factors, ownPeriodQN, geom)
+  local x0, y0, gx, gy = geom.x, geom.y, geom.gx, geom.gy
+  local w = STRIP_COLS * gx
+
+  for i = 0, geom.rows - 1 do
+    local yT   = y0 + i * gy
+    local tier = geom.classify(i * geom.dQN)
+    if tier == 'bar' then
+      p.fill({ x0 = x0, y0 = yT, x1 = x0 + w, y1 = yT + gy }, 'rowBarStart')
+    elseif tier then
+      p.fill({ x0 = x0, y0 = yT, x1 = x0 + w, y1 = yT + gy }, 'rowBeat')
+    else
+      p.segment(x0, yT, x0 + w, yT, 'laneRowDivider')
     end
   end
 
-  -- 1px vertical dividers at every cell boundary, palette pale enough to
-  -- sit behind the dots — same role the main lane strip uses.
-  local divider = chrome.colour('laneRowDivider')
-  for i = 0, N do
-    local gx = x0 + (i / N) * w
-    ImGui.DrawList_AddLine(dl, gx, yTop, gx, yBot, divider, 1)
-  end
-
-  -- Filled dots at the swung image of each unswung tick. Three sizes
-  -- so the meter reads at a glance: bar/mid-bar > beat > offbeat.
-  -- Atom preview (no shadeMeter) takes the middle size throughout.
-  local factors = materialise(composite)
-  local rBig    = math.max(2, h * 0.18)
-  local rMid    = math.max(2, h * 0.14)
-  local rSmall  = math.max(2, h * 0.10)
-  local cy      = y0 + h / 2
-  for i = 0, N - 1 do
-    local p  = (i / N) * periodQN
-    local pS = timing.applyFactors(factors, p)
-    local sx = x0 + (pS / periodQN) * w
-    local tier = shadeMeter and classify(p) or 'beat'
+  local cx     = x0 + w / 2
+  local rBig   = math.max(2, gy * 0.24)
+  local rMid   = math.max(2, gy * 0.22)
+  local rSmall = math.max(2, gy * 0.20)
+  for i = 0, geom.rows - 1 do
+    local p0   = i * geom.dQN
+    local y    = y0 + (timing.applyFactors(factors, p0) / geom.heightQN) * geom.H
+    local tier = geom.classify(p0)
     local r    = (tier == 'bar' or tier == 'midBar') and rBig
-              or  tier == 'beat'                     and rMid
-              or  rSmall
-    ImGui.DrawList_AddCircleFilled(dl, sx, cy, r, SWING_MARK)
+              or  tier == 'beat' and rMid or rSmall
+    p.circle(cx, y, r, (p0 >= ownPeriodQN - 1e-9) and 'ghost' or 'text')
+  end
+end
+
+-- Preview band: composite strip left, then (when compound) '=' and factor strips fn∘…∘f1 rightward.
+-- f1 applied first so sits rightmost; height = whole bars over composite's period, shared by all strips.
+local function drawSwingBand(composite, factors)
+  -- Measure + draw in the tracker's grid font so strips match it exactly.
+  ImGui.PushFont(ctx, gui.font, gui.fontSize.grid)
+  local gx, gy              = gridMetrics()
+  local classify, beat, qpb = meterClassifier()
+  local periodQN            = timing.compositePeriodQN(composite)
+  local nBars               = math.max(1, math.ceil(periodQN / qpb - 1e-9))
+  local heightQN            = nBars * qpb
+  local dQN                 = beat / state.rpb
+  local rows                = math.max(1, util.round(heightQN / dQN))
+  local stripW              = STRIP_COLS * gx
+
+  local x0, y0 = ImGui.GetCursorScreenPos(ctx)
+  local p      = painter.new(ctx, chrome, {})
+  -- One grid row of blank padding above and below the strip content.
+  local geom   = { gx = gx, gy = gy, y = y0 + gy, rows = rows, dQN = dQN,
+                   heightQN = heightQN, H = rows * gy, classify = classify }
+
+  local function glyph(x, s)
+    local tw, th = ImGui.CalcTextSize(ctx, s)
+    p.text(x + (GLYPH_BOX - tw) / 2, geom.y + (geom.H - th) / 2, 'text', s)
+    return x + GLYPH_BOX
   end
 
-  ImGui.Dummy(ctx, w, h)
+  local x = x0
+  geom.x = x
+  drawSwingStrip(p, materialise(composite), periodQN, geom)
+  x = x + stripW
+
+  if #factors > 1 then
+    x = glyph(x, '=')
+    for i = #factors, 1, -1 do
+      geom.x = x
+      local one = { factors = { factors[i] } }
+      drawSwingStrip(p, materialise(one), timing.compositePeriodQN(one), geom)
+      x = x + stripW
+      if i > 1 then x = glyph(x, '\xe2\x88\x98') end
+    end
+  end
+
+  ImGui.PopFont(ctx)
+  ImGui.Dummy(ctx, x - x0, geom.H + 2 * gy)
 end
 
 local function swingRead()
@@ -248,7 +282,7 @@ local function moveFactor(i, dir)
   swingWrite(c)
 end
 
-local function drawFactorRow(i, f, availW)
+local function drawFactorRow(i, f)
   ImGui.PushID(ctx, i)
 
   ImGui.AlignTextToFramePadding(ctx)
@@ -290,7 +324,7 @@ local function drawFactorRow(i, f, availW)
   ImGui.AlignTextToFramePadding(ctx)
   ImGui.Text(ctx, 'per')
   ImGui.SameLine(ctx)
-  ImGui.SetNextItemWidth(ctx, 90)
+  ImGui.SetNextItemWidth(ctx, 50)
   local ppC    = timing.atomMeta[f.atom].pulsesPerCycle
   local tileQN = timing.atomTilePeriod(f)
   local pIdx   = periodPresetIndex(tileQN)
@@ -316,8 +350,10 @@ local function drawFactorRow(i, f, availW)
   -- Per-factor phase: slides this factor's fixed-point lattice. Range is
   -- [0, T); writes wrap on overflow so dragging never lands outside the
   -- canonical interval.
-  ImGui.SameLine(ctx)
+  ImGui.SameLine(ctx, 0, 6)
   ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, 'qn')
+  ImGui.SameLine(ctx, 0, 12)
   ImGui.Text(ctx, '\xcf\x86')                       -- φ
   ImGui.SameLine(ctx)
   ImGui.SetNextItemWidth(ctx, 100)
@@ -340,10 +376,6 @@ local function drawFactorRow(i, f, availW)
   if ImGui.ArrowButton(ctx, '##dn', ImGui.Dir_Down) then moveFactor(i,  1) end
   ImGui.SameLine(ctx)
   if ImGui.Button(ctx, 'x')                         then removeFactor(i)  end
-
-  local _, qpb  = meterQN()
-  local nBars   = math.max(1, math.ceil(timing.atomTilePeriod(f) / qpb - 1e-9))
-  drawSwingGrid({ factors = { f } }, nBars * qpb, state.rpb, availW, 28, true)
 
   ImGui.PopID(ctx)
 end
@@ -602,15 +634,12 @@ local function drawEditBody(composite, n)
 
   ImGui.PopStyleVar(ctx, 1)
   ImGui.Separator(ctx)
-  local availW = ImGui.GetContentRegionAvail(ctx)
-  local _, qpb = meterQN()
-  local lcmQN  = timing.compositePeriodQN(composite)
-  local nBars  = math.max(1, math.ceil(lcmQN / qpb - 1e-9))
-  drawSwingGrid(composite, nBars * qpb, state.rpb, availW, 32, true)
+  local factors = readFactors(composite)
+  drawSwingBand(composite, factors)
   ImGui.Separator(ctx)
 
-  for i, f in ipairs(readFactors(composite)) do
-    drawFactorRow(i, f, availW)
+  for i, f in ipairs(factors) do
+    drawFactorRow(i, f)
   end
 
   if ImGui.Button(ctx, '+ add factor') then addFactor() end
