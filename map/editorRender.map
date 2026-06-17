@@ -1,0 +1,68 @@
+@module editorRender  src=editorRender.lua  loc=154  sha=untracked  mode=chunk
+@deps swingEditor, temperEditor, cmgr, chrome, gui, modalHost
+
+# Invariants & contracts
+  @contract  render-only; owns pane-selection UI state; reaches the swing/temper panes, never cm/ds
+  @contract  body editor — focusState always page-suppresses (root globals stay live, page bindings off)
+
+# Shapes
+  @shape  libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onDelete(tier,name) }
+  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
+
+# Imports
+  @require ImGui = 'imgui'  @ 15
+
+# Private state
+  @state ctx, uiFont, uiSize = gui.ctx, gui.uiFont, gui.fontSize.ui  @ 19
+  @state pane = 'swing'  @ 21
+  @state er = {}  @ 83
+
+# Private functions
+  @fn activePane()  @ 22
+  @fn onClose()  @ 24
+  -- Library tree palette (Active / Project / Global tiers; one per pane)
+  @fn libraryActions(spec)  @ 32
+      -- Folder a row sits under scopes the action bar. Active is a nav lens —
+      -- rows resolve to a real tier on select, so sel.tier is 'project'|'global'.
+  @fn libraryRow(spec, tier, name, label, synthetic)  @ 51
+  @fn libraryFolder(title)  @ 57
+  @fn libraryTree(spec)  @ 62
+
+# Public API (er:*)
+  @api er:edit(lib, name)  @ 89
+      -- Fast path: set the pane + selection; the editTuning/editSwing commands
+      -- (which hold coord) switch the page. Mirrors samplePage's diveToSampler.
+  @api er:renderToolbarBits(_)  @ 97
+  @api er:renderBody(_, w, h, dispatch)  @ 113
+  @api er:renderStatusBar(_)  @ 139
+  @api er:focusState()  @ 144
+
+# Uses (outbound edges)
+  @use call    chrome.colour  @ 100
+  @use call    chrome.disabledIf  @ 38, 42, 46
+  @use call    chrome.gridWidth  @ 129
+  @use call    chrome.pickerIsActive  @ 146
+  @use call    chrome.rowSelectable  @ 54
+  @use call    chrome.verticalSeparator  @ 108
+  @use call    cmgr.invoke  @ 24
+  @use call    imgui.Button  @ 36, 39, 43, 47, 101, 110
+  @use call    imgui.GetCursorScreenPos  @ 128
+  @use call    imgui.IsAnyItemActive  @ 120, 150
+  @use call    imgui.IsKeyPressed  @ 121
+  @use call    imgui.PopFont  @ 132
+  @use call    imgui.PopStyleColor  @ 102
+  @use call    imgui.PushFont  @ 130
+  @use call    imgui.PushStyleColor  @ 100
+  @use call    imgui.SameLine  @ 37, 41, 45, 105, 107, 109
+  @use call    imgui.Separator  @ 58
+  @use call    imgui.Text  @ 140
+  @use call    imgui.TextDisabled  @ 59
+  @use call    modalHost.isOpen  @ 146
+  @use call    swingEditor.isOpen  @ 124
+  @use call    swingEditor.open  @ 93, 124
+  @use call    temperEditor.select  @ 91
+  @use require imgui  @ 15
+
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB

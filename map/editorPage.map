@@ -1,64 +1,42 @@
-@module editorPage  src=editorPage.lua  loc=108  sha=f3c817d  mode=chunk
+@module editorPage  src=editorPage.lua  loc=45  sha=5568994  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade
 
-# Shapes
-  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
-
 # Imports
-  @require util = 'util'  @ 10
-      @contract  hosts swing + temper panes; pane state persists across visits; close returns to coord's previous page (via the closeEditor command)
-      @contract  body editor — focusState always page-suppresses (root globals stay live, page bindings off)
-  @require ImGui = 'imgui'  @ 16
+  @require util = 'util'  @ 6
+      @contract  constructs swing/temper panes + renderer; publishes the 'editor' facade
+      @contract  render delegates to editorRender; close returns to coord's previous page
 
 # Constructed sub-instances
-  @construct swingEditor  = util.instantiate('swingEditor')  @ 22
-  @construct temperEditor = util.instantiate('temperEditor')  @ 24
+  @construct swingEditor  = util.instantiate('swingEditor')  @ 16
+  @construct temperEditor = util.instantiate('temperEditor')  @ 18
+  @construct er           = util.instantiate('editorRender')  @ 21
 
 # Private state
-  @state ctx, uiFont, uiSize = gui.ctx, gui.uiFont, gui.fontSize.ui  @ 20
-  @state pane = 'swing'  @ 27
-  @state ep = {}  @ 30
-
-# Private functions
-  @fn activePane()  @ 28
-  @fn onClose()  @ 31
+  @state ctx = gui.ctx  @ 14
+  @state ep = {}  @ 25
 
 # Public API (ep:*)
   -- Page lifecycle — no take binding; pane state persists across visits
-  @api ep:bind()  @ 48
-  @api ep:unbind()  @ 49
-  @api ep:renderToolbarBits(_)  @ 51
-  @api ep:renderBody(_, w, h, dispatch)  @ 67
-  @api ep:renderStatusBar(_)  @ 93
-  @api ep:focusState()  @ 98
+  @api ep:bind()  @ 36
+  @api ep:unbind()  @ 37
+  -- Page interface — render delegates to the renderer
+  @api ep:renderToolbarBits(ctx)  @ 40
+  @api ep:renderBody(ctx, w, h, dispatch)  @ 41
+  @api ep:renderStatusBar(ctx)  @ 42
+  @api ep:focusState()  @ 43
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 54
-  @use call    chrome.gridWidth  @ 83
-  @use call    chrome.libraryTree  @ 90
-  @use call    chrome.pickerIsActive  @ 100
-  @use call    chrome.verticalSeparator  @ 62
-  @use call    cmgr.invoke  @ 31
-  @use call    facade.publish  @ 37
-  @use call    imgui.Button  @ 55, 64
-  @use call    imgui.GetCursorScreenPos  @ 82
-  @use call    imgui.IsAnyItemActive  @ 74, 104
-  @use call    imgui.IsKeyPressed  @ 75
-  @use call    imgui.PopFont  @ 86
-  @use call    imgui.PopStyleColor  @ 56
-  @use call    imgui.PushFont  @ 84
-  @use call    imgui.PushStyleColor  @ 54
-  @use call    imgui.SameLine  @ 59, 61, 63
-  @use call    imgui.Text  @ 94
-  @use call    modalHost.isOpen  @ 100
-  @use call    swingEditor.isOpen  @ 78
-  @use call    swingEditor.open  @ 42, 78
-  @use call    temperEditor.select  @ 40
-  @use call    util.instantiate  @ 22, 24
-  @use require imgui  @ 16
-  @use require swingEditor  @ 22
-  @use require temperEditor  @ 24
-  @use require util  @ 10
+  @use call    editorRender.edit  @ 32
+  @use call    editorRender.focusState  @ 43
+  @use call    editorRender.renderBody  @ 41
+  @use call    editorRender.renderStatusBar  @ 42
+  @use call    editorRender.renderToolbarBits  @ 40
+  @use call    facade.publish  @ 31
+  @use call    util.instantiate  @ 16, 18, 21
+  @use require editorRender  @ 21
+  @use require swingEditor  @ 16
+  @use require temperEditor  @ 18
+  @use require util  @ 6
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
