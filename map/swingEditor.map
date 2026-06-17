@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=655  sha=f3c817d  mode=chunk
+@module swingEditor  src=swingEditor.lua  loc=656  sha=5568994  mode=chunk
 @deps cm, ds, chrome, ctx, facade
 
 # Invariants & contracts
@@ -30,7 +30,7 @@
   @state SWING_SOFT_QN = 0.15  @ 42
   @state state = nil  @ 49
   @state SYNTHETIC = { identity = true }  @ 416
-  @state self = {}  @ 629
+  @state self = {}  @ 630
 
 # Private functions
   @fn arrange()  @ 46
@@ -106,87 +106,87 @@
       -- '+ New' modal. Lives at draw() top-level so the popup isn't bound to a
       -- child window's lifetime; the editor body greys out behind it via the
       -- disabled wrap in drawEditBody.
-  @fn drawEditBody(composite, n)  @ 521
-  @fn draw(w, h)  @ 610
+  @fn drawEditBody(composite, n)  @ 522
+  @fn draw(w, h)  @ 611
       -- Body-region draw inside a child window; chrome palette (editor.bg + toolbar colours)
       -- takes the tracker grid's place (Col_ChildBg instead of Col_WindowBg).
 
 # Public API (self:*)
   -- Public
-  @api self:open(name)  @ 633
+  @api self:open(name)  @ 634
       @contract  open(name?) selects entry; default prefers chan override → take swing → nil.
       @contract  when already open, re-selects resolved target; snapshot captured at selection time.
-  @api self:render(w, h)  @ 645
-  @api self:libraryDescriptor()  @ 647
-  @api self:close()  @ 649
-  @api self:isOpen()  @ 651
-  @api self:modalActive()  @ 652
+  @api self:render(w, h)  @ 646
+  @api self:libraryDescriptor()  @ 648
+  @api self:close()  @ 650
+  @api self:isOpen()  @ 652
+  @api self:modalActive()  @ 653
 
 # Uses (outbound edges)
-  @use call    chrome.checkbox  @ 565
-  @use call    chrome.colour  @ 140, 147, 617
-  @use call    chrome.disabledIf  @ 275, 533, 576
-  @use call    chrome.popChromeStyles  @ 624
-  @use call    chrome.popChromeWindow  @ 518
-  @use call    chrome.pushChromeStyles  @ 616
+  @use call    chrome.checkbox  @ 566
+  @use call    chrome.colour  @ 140, 147, 618
+  @use call    chrome.disabledIf  @ 275, 534, 577
+  @use call    chrome.popChromeStyles  @ 625
+  @use call    chrome.popChromeWindow  @ 519
+  @use call    chrome.pushChromeStyles  @ 617
   @use call    chrome.pushChromeWindow  @ 475
-  @use call    chrome.verticalSeparator  @ 541, 562, 571
-  @use call    cm.get  @ 178, 499, 640
+  @use call    chrome.verticalSeparator  @ 542, 563, 572
+  @use call    cm.get  @ 178, 499, 641
   @use call    cm.getAt  @ 176, 353, 354
   @use call    cm.set  @ 375, 383, 391
   @use call    ds.get  @ 408
   @use call    facade.get  @ 46, 47
-  @use call    imgui.AlignTextToFramePadding  @ 254, 290, 320, 478, 544, 573
+  @use call    imgui.AlignTextToFramePadding  @ 254, 290, 320, 478, 545, 574
   @use call    imgui.ArrowButton  @ 338, 340
-  @use call    imgui.BeginChild  @ 618
-  @use call    imgui.BeginDisabled  @ 525
-  @use call    imgui.BeginPopup  @ 552
+  @use call    imgui.BeginChild  @ 619
+  @use call    imgui.BeginDisabled  @ 526
+  @use call    imgui.BeginPopup  @ 553
   @use call    imgui.BeginPopupModal  @ 476
-  @use call    imgui.Button  @ 342, 494, 496, 534, 548, 603
+  @use call    imgui.Button  @ 342, 494, 496, 535, 549, 604
   @use call    imgui.CloseCurrentPopup  @ 477
   @use call    imgui.Combo  @ 261, 302
   @use call    imgui.DrawList_AddCircleFilled  @ 169
   @use call    imgui.DrawList_AddLine  @ 150
   @use call    imgui.DrawList_AddRectFilled  @ 140
   @use call    imgui.Dummy  @ 172
-  @use call    imgui.EndChild  @ 622
-  @use call    imgui.EndDisabled  @ 605
-  @use call    imgui.EndPopup  @ 516, 558
-  @use call    imgui.GetContentRegionAvail  @ 592
+  @use call    imgui.EndChild  @ 623
+  @use call    imgui.EndDisabled  @ 606
+  @use call    imgui.EndPopup  @ 517, 559
+  @use call    imgui.GetContentRegionAvail  @ 593
   @use call    imgui.GetCursorScreenPos  @ 107
-  @use call    imgui.GetItemRectMax  @ 550
-  @use call    imgui.GetItemRectMin  @ 549
+  @use call    imgui.GetItemRectMax  @ 551
+  @use call    imgui.GetItemRectMin  @ 550
   @use call    imgui.GetWindowDrawList  @ 108
   @use call    imgui.GetWindowViewport  @ 473
   @use call    imgui.InputText  @ 489
-  @use call    imgui.IsItemDeactivatedAfterEdit  @ 270, 286, 314, 335, 587
+  @use call    imgui.IsItemDeactivatedAfterEdit  @ 270, 286, 314, 335, 588
   @use call    imgui.IsKeyPressed  @ 496
   @use call    imgui.IsPopupOpen  @ 470
   @use call    imgui.IsWindowAppearing  @ 481
-  @use call    imgui.OpenPopup  @ 471, 548
+  @use call    imgui.OpenPopup  @ 471, 549
   @use call    imgui.PopID  @ 348, 491
-  @use call    imgui.PopStyleColor  @ 623
-  @use call    imgui.PopStyleVar  @ 590
+  @use call    imgui.PopStyleColor  @ 624
+  @use call    imgui.PopStyleVar  @ 591
   @use call    imgui.PushID  @ 252, 488
-  @use call    imgui.PushStyleColor  @ 617
-  @use call    imgui.PushStyleVar  @ 530
-  @use call    imgui.SameLine  @ 256, 272, 289, 292, 319, 322, 337, 339, 341, 480, 493, 495, 540, 542, 546, 561, 563, 570, 572, 575
-  @use call    imgui.Selectable  @ 554
-  @use call    imgui.Separator  @ 591, 597
+  @use call    imgui.PushStyleColor  @ 618
+  @use call    imgui.PushStyleVar  @ 531
+  @use call    imgui.SameLine  @ 256, 272, 289, 292, 319, 322, 337, 339, 341, 480, 493, 495, 541, 543, 547, 562, 564, 571, 573, 576
+  @use call    imgui.Selectable  @ 555
+  @use call    imgui.Separator  @ 592, 598
   @use call    imgui.SetKeyboardFocusHere  @ 482
-  @use call    imgui.SetNextItemWidth  @ 260, 276, 293, 323, 485, 579
-  @use call    imgui.SetNextWindowPos  @ 474, 551
-  @use call    imgui.SliderDouble  @ 278, 326, 580
-  @use call    imgui.Text  @ 255, 291, 321, 479, 545, 574
-  @use call    imgui.TextColored  @ 514
+  @use call    imgui.SetNextItemWidth  @ 260, 276, 293, 323, 485, 580
+  @use call    imgui.SetNextWindowPos  @ 474, 552
+  @use call    imgui.SliderDouble  @ 278, 326, 581
+  @use call    imgui.Text  @ 255, 291, 321, 479, 546, 575
+  @use call    imgui.TextColored  @ 515
   @use call    imgui.Viewport_GetCenter  @ 473
   @use call    timing.applyFactors  @ 163
   @use call    timing.atomTilePeriod  @ 90, 295, 345
-  @use call    timing.compositePeriodQN  @ 577, 594
-  @use call    timing.periodQN  @ 66, 188, 199, 307, 325, 578
+  @use call    timing.compositePeriodQN  @ 578, 595
+  @use call    timing.periodQN  @ 66, 188, 199, 307, 325, 579
   @use call    timing.resolveFactors  @ 104
   @use call    util.assign  @ 224
-  @use call    util.deepClone  @ 216, 382, 390, 535
+  @use call    util.deepClone  @ 216, 382, 390, 536
   @use call    util.round  @ 110, 125
   @use require imgui  @ 21
   @use require timing  @ 15

@@ -446,7 +446,7 @@ local function buildDescriptor()
   local globalNames = sortedNames(globalSwings())
   if not globalSwings().identity then table.insert(globalNames, 1, 'identity') end
   return {
-    label       = 'Swing',
+    label       = 'swing',
     active      = activeEntries(),
     project     = sortedNames(projectSwings()),
     global      = globalNames,
@@ -454,7 +454,7 @@ local function buildDescriptor()
     undeletable = inUseNames(),
     sel         = { tier = state.tier, name = state.name },
     onSelect    = function(tier, name) switchTo(name, tier ~= 'active' and tier or nil) end,
-    onNew       = function() state.create = { buf = '' } end,
+    onNew       = function() state.create = { buf = '', tier = state.tier or 'project' } end,
     onPromote   = promote,
     onDemote    = demote,
     onDelete    = deleteSel,
@@ -505,8 +505,9 @@ local function drawCreateModal()
         state.create.gen     = state.create.gen + 1
         state.create.refocus = true
       else
-        tracker().setSwingComposite(name, {})
-        switchTo(name)
+        local tier = state.create.tier
+        tracker().setSwingComposite(name, {}, tier)
+        switchTo(name, tier)
         dismiss()
       end
     elseif cancel then dismiss() end

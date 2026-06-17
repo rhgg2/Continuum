@@ -1,4 +1,4 @@
-@module editorRender  src=editorRender.lua  loc=154  sha=untracked  mode=chunk
+@module editorRender  src=editorRender.lua  loc=175  sha=c6e4030  mode=chunk
 @deps swingEditor, temperEditor, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -15,7 +15,9 @@
 # Private state
   @state ctx, uiFont, uiSize = gui.ctx, gui.uiFont, gui.fontSize.ui  @ 19
   @state pane = 'swing'  @ 21
-  @state er = {}  @ 83
+  @state ROW_INDENT = 14  @ 64   -- children sit under their folder, as tracker params do
+  @state treeOpen = { active = true, project = true, global = true }  @ 65
+  @state er = {}  @ 104
 
 # Private functions
   @fn activePane()  @ 22
@@ -24,43 +26,51 @@
   @fn libraryActions(spec)  @ 32
       -- Folder a row sits under scopes the action bar. Active is a nav lens —
       -- rows resolve to a real tier on select, so sel.tier is 'project'|'global'.
-  @fn libraryRow(spec, tier, name, label, synthetic)  @ 51
-  @fn libraryFolder(title)  @ 57
-  @fn libraryTree(spec)  @ 62
+  @fn libraryRow(spec, tier, name, label)  @ 57
+      -- PushID(tier) scopes the row's ImGui id: a promoted entry appears in both
+      -- Project and Global with the same label, which would otherwise collide.
+  @fn libraryFolder(key, title, drawChildren)  @ 69
+      -- Collapsible folder node: arrow + title as a selectable row; clicking it
+      -- toggles whether its children draw. Mirrors the tracker param tree.
+  @fn libraryTree(spec)  @ 79
 
 # Public API (er:*)
-  @api er:edit(lib, name)  @ 89
+  @api er:edit(lib, name)  @ 110
       -- Fast path: set the pane + selection; the editTuning/editSwing commands
       -- (which hold coord) switch the page. Mirrors samplePage's diveToSampler.
-  @api er:renderToolbarBits(_)  @ 97
-  @api er:renderBody(_, w, h, dispatch)  @ 113
-  @api er:renderStatusBar(_)  @ 139
-  @api er:focusState()  @ 144
+  @api er:renderToolbarBits(_)  @ 118
+  @api er:renderBody(_, w, h, dispatch)  @ 134
+  @api er:renderStatusBar(_)  @ 160
+  @api er:focusState()  @ 165
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 100
-  @use call    chrome.disabledIf  @ 38, 42, 46
-  @use call    chrome.gridWidth  @ 129
-  @use call    chrome.pickerIsActive  @ 146
-  @use call    chrome.rowSelectable  @ 54
-  @use call    chrome.verticalSeparator  @ 108
+  @use call    chrome.colour  @ 121
+  @use call    chrome.disabledIf  @ 50
+  @use call    chrome.gridWidth  @ 150
+  @use call    chrome.pickerIsActive  @ 167
+  @use call    chrome.rowSelectable  @ 60, 70
+  @use call    chrome.treeArrow  @ 70
+  @use call    chrome.verticalSeparator  @ 129
   @use call    cmgr.invoke  @ 24
-  @use call    imgui.Button  @ 36, 39, 43, 47, 101, 110
-  @use call    imgui.GetCursorScreenPos  @ 128
-  @use call    imgui.IsAnyItemActive  @ 120, 150
-  @use call    imgui.IsKeyPressed  @ 121
-  @use call    imgui.PopFont  @ 132
-  @use call    imgui.PopStyleColor  @ 102
-  @use call    imgui.PushFont  @ 130
-  @use call    imgui.PushStyleColor  @ 100
-  @use call    imgui.SameLine  @ 37, 41, 45, 105, 107, 109
-  @use call    imgui.Separator  @ 58
-  @use call    imgui.Text  @ 140
-  @use call    imgui.TextDisabled  @ 59
-  @use call    modalHost.isOpen  @ 146
-  @use call    swingEditor.isOpen  @ 124
-  @use call    swingEditor.open  @ 93, 124
-  @use call    temperEditor.select  @ 91
+  @use call    imgui.Button  @ 36, 40, 46, 51, 122, 131
+  @use call    imgui.GetCursorScreenPos  @ 149
+  @use call    imgui.Indent  @ 74
+  @use call    imgui.IsAnyItemActive  @ 141, 171
+  @use call    imgui.IsKeyPressed  @ 142
+  @use call    imgui.PopFont  @ 153
+  @use call    imgui.PopID  @ 61
+  @use call    imgui.PopStyleColor  @ 123
+  @use call    imgui.PushFont  @ 151
+  @use call    imgui.PushID  @ 58
+  @use call    imgui.PushStyleColor  @ 121
+  @use call    imgui.SameLine  @ 37, 43, 49, 126, 128, 130
+  @use call    imgui.Separator  @ 84
+  @use call    imgui.Text  @ 161
+  @use call    imgui.Unindent  @ 76
+  @use call    modalHost.isOpen  @ 167
+  @use call    swingEditor.isOpen  @ 145
+  @use call    swingEditor.open  @ 114, 145
+  @use call    temperEditor.select  @ 112
   @use require imgui  @ 15
 
 # REAPER API surface
