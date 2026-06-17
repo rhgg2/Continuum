@@ -100,8 +100,8 @@ facade.publish('tracker', {
   -- Take-context + tier-spanning slot writes for the off-stack editor page.
   timeSig           = function()        return tv:timeSig()      end,
   cursorAnchor      = function()        return tv:cursorAnchor() end,
-  setSwingComposite = function(name, c) tv:setSwingComposite(name, c) end,
-  setTemper         = function(name, t) tv:setTemper(name, t)         end,
+  setSwingComposite = function(name, c, tier) tv:setSwingComposite(name, c, tier) end,
+  setTemper         = function(name, t, tier) tv:setTemper(name, t, tier)         end,
   setProjectTemper  = function(name)    tv:setProjectTemper(name)     end,
 })
 

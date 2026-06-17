@@ -4,6 +4,7 @@
 --shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeArrow(open,hasChildren)->prefix }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
 --shape: palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
+--shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, sel={tier,name}, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onDelete(tier,name) }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
 local ImGui   = require 'imgui' '0.10'
@@ -412,6 +413,60 @@ local function treeArrow(open, hasChildren)
   return open and TREE_OPEN or TREE_SHUT
 end
 
+----- Library tree (shared editor-page palette: swing + temper libraries)
+
+-- Folder a row sits under scopes the action bar. Active is a nav lens —
+-- rows resolve to a real tier on select, so sel.tier is 'project'|'global'.
+local function libraryActions(spec)
+  local sel       = spec.sel or {}
+  local synthetic = sel.name and spec.synthetic and spec.synthetic[sel.name]
+  if ImGui.Button(ctx, '+') then spec.onNew() end
+  ImGui.SameLine(ctx, 0, 4)
+  disabledIf(sel.tier ~= 'project', function()
+    if ImGui.Button(ctx, '\xe2\x86\x91G') then spec.onPromote(sel.name) end   -- ↑G : promote
+  end)
+  ImGui.SameLine(ctx, 0, 4)
+  disabledIf(sel.tier ~= 'global' or synthetic, function()
+    if ImGui.Button(ctx, '\xe2\x86\x93P') then spec.onDemote(sel.name) end   -- ↓P : demote
+  end)
+  ImGui.SameLine(ctx, 0, 4)
+  disabledIf(not (sel.tier == 'project' or sel.tier == 'global') or synthetic, function()
+    if ImGui.Button(ctx, '\xc3\x97') then spec.onDelete(sel.tier, sel.name) end   -- × : delete
+  end)
+end
+
+local function libraryRow(spec, tier, name, label, synthetic)
+  local selected = spec.sel and spec.sel.tier == tier and spec.sel.name == name
+  if synthetic then label = label .. ' \xe2\x97\xa6' end   -- ◦ : undeletable floor
+  if rowSelectable('  ' .. label, selected) then spec.onSelect(tier, name) end
+end
+
+local function libraryFolder(title)
+  ImGui.Separator(ctx)
+  ImGui.TextDisabled(ctx, title)
+end
+
+local function libraryTree(spec)
+  palettePane{
+    x = spec.x, y = spec.y, h = spec.h, label = spec.label,
+    draw = function()
+      libraryActions(spec)
+      libraryFolder('Active')
+      for _, a in ipairs(spec.active or {}) do
+        libraryRow(spec, 'active', a.name, a.col .. '  ' .. a.name, false)
+      end
+      libraryFolder('Project')
+      for _, name in ipairs(spec.project or {}) do
+        libraryRow(spec, 'project', name, name, false)
+      end
+      libraryFolder('Global')
+      for _, name in ipairs(spec.global or {}) do
+        libraryRow(spec, 'global', name, name, spec.synthetic and spec.synthetic[name])
+      end
+    end,
+  }
+end
+
 return {
   colour             = colour,
   pushChromeStyles   = pushChromeStyles,
@@ -436,5 +491,6 @@ return {
   fitLabel           = fitLabel,
   rowSelectable      = rowSelectable,
   treeArrow          = treeArrow,
+  libraryTree        = libraryTree,
 }
 

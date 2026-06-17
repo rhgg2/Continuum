@@ -393,18 +393,20 @@ function tv:seedSharedSlots()
   end
 end
 
-function tv:setSwingComposite(name, composite)
+function tv:setSwingComposite(name, composite, tier)
   if not name or name == '' then return end
-  local lib = cm:getAt('project', 'swings') or {}
+  tier = tier or 'project'
+  local lib = cm:getAt(tier, 'swings') or {}
   lib[name] = composite
-  cm:set('project', 'swings', lib)
+  cm:set(tier, 'swings', lib)
 end
 
-function tv:setTemper(name, temper)
+function tv:setTemper(name, temper, tier)
   if not name or name == '' then return end
-  local lib = cm:getAt('project', 'tempers') or {}
+  tier = tier or 'project'
+  local lib = cm:getAt(tier, 'tempers') or {}
   lib[name] = temper
-  cm:set('project', 'tempers', lib)
+  cm:set(tier, 'tempers', lib)
 end
 
 ----- Mute / solo
