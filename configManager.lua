@@ -212,6 +212,8 @@ local declarations = {
   { 'colour.toolbar.buttonActive', 'palette.base.zone8',           },
   { 'colour.toolbar.buttonBorder', {'palette.base.zone6', 0.35 }    },
   { 'colour.toolbar.checkMark',    'palette.base.zone2'            },
+  { 'colour.toolbar.sliderGrab',       'palette.base.zone6' },  -- slider handle on the chromed track
+  { 'colour.toolbar.sliderGrabActive', 'palette.base.zone2' },  -- handle while dragging
   { 'colour.toolbar.popupBg',      'palette.base.zone10'           },
   { 'colour.statusBar.bg',         'palette.alt.zone5'            },
   { 'colour.statusBar.text',       'palette.alt.zone9'            },

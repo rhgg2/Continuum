@@ -60,6 +60,8 @@ local function pushChromeStyles()
   ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgHovered, colour('toolbar.buttonHover'))
   ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgActive,  colour('toolbar.buttonActive'))
   ImGui.PushStyleColor(ctx, ImGui.Col_CheckMark,      colour('toolbar.checkMark'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_SliderGrab,       colour('toolbar.sliderGrab'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_SliderGrabActive, colour('toolbar.sliderGrabActive'))
   ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg,        colour('toolbar.popupBg'))
   ImGui.PushStyleColor(ctx, ImGui.Col_Border,         colour('toolbar.buttonBorder'))
   -- Col_InputTextCursor has its own slot; default is invisible against
@@ -68,7 +70,7 @@ local function pushChromeStyles()
 end
 
 local function popChromeStyles()
-  ImGui.PopStyleColor(ctx, 11)
+  ImGui.PopStyleColor(ctx, 13)
   ImGui.PopStyleVar(ctx, 1)
 end
 
