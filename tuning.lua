@@ -138,11 +138,15 @@ function M.scalaToTemper(pitchLines, name)
   for _, tok in ipairs(pitchLines) do
     if not M.scalaPitch(tok) then return nil, ('unparseable pitch: %q'):format(tok) end
   end
+  -- Sort ascending so the widest interval is the period and cents stay
+  -- monotonic regardless of paste order (a well-formed .scl is already sorted).
+  local sorted = { table.unpack(pitchLines) }
+  table.sort(sorted, function(a, b) return M.scalaPitch(a) < M.scalaPitch(b) end)
   local pitches = { '1/1' }
-  for i = 1, #pitchLines - 1 do pitches[#pitches + 1] = pitchLines[i] end
+  for i = 1, #sorted - 1 do pitches[#pitches + 1] = sorted[i] end
   return M.derive{
     name         = name,
-    periodPitch  = pitchLines[#pitchLines],
+    periodPitch  = sorted[#sorted],
     pitches      = pitches,
     stepNames    = {},
     periodAsStep = true,

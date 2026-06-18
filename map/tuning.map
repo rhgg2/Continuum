@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=221  sha=46b2797  mode=namespace
+@module tuning  src=tuning.lua  loc=225  sha=6a055f9  mode=namespace
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
@@ -25,7 +25,7 @@
   -- Scala import
   -- Coordinate conversions
   -- Display
-  @fn octaveLabel(o)  @ 209
+  @fn octaveLabel(o)  @ 213
       -- Octave -1 renders as "M" so the cell width stays fixed.
 
 # Public API (M.*)
@@ -44,13 +44,13 @@
   @api M.scalaToTemper(pitchLines, name)  @ 136
       -- Bridge Scala's convention (unison implicit, period last) to Continuum's
       -- (step 1 = 1/1, period separate): prepend unison, split off final as period.
-  @api M.midiToStep(temper, midi, detune)  @ 156
+  @api M.midiToStep(temper, midi, detune)  @ 160
       @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
       @contract  returned octave is MIDI-relative (C-1 → -1)
-  @api M.stepToMidi(temper, step, octave)  @ 178
+  @api M.stepToMidi(temper, step, octave)  @ 182
       @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
-  @api M.snap(temper, midi, detune)  @ 196
-  @api M.transposeStep(temper, midi, detune, n)  @ 201
+  @api M.snap(temper, midi, detune)  @ 200
+  @api M.transposeStep(temper, midi, detune, n)  @ 205
       @contract  moves by n scale steps under temper, carrying the octave; n may be negative
-  @api M.stepToText(temper, step, octave)  @ 214
+  @api M.stepToText(temper, step, octave)  @ 218
       @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.

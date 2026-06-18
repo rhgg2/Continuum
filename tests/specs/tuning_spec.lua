@@ -153,6 +153,19 @@ return {
   },
 
   {
+    name = 'scalaToTemper sorts unordered pitches ascending; widest becomes the period',
+    run = function()
+      local s = tuning.scalaToTemper({ '3/2', '4/3', '5/4', '6/5', '7/6', '8/7' }, 'super')
+      t.eq(s.periodPitch, '3/2', '3/2 (702c) is the widest interval -> period')
+      t.eq(s.pitches[1], '1/1', 'unison prepended')
+      t.eq(s.pitches[2], '8/7', 'smallest interval is the first body step')
+      for i = 2, #s.cents do
+        t.truthy(s.cents[i] > s.cents[i - 1], 'cents stay ascending')
+      end
+    end,
+  },
+
+  {
     name = 'scalaToTemper rejects an unparseable token',
     run = function()
       local s, err = tuning.scalaToTemper({ '9/8', 'oops', '2/1' }, 'x')
