@@ -58,11 +58,15 @@ local function pushChromeStyles()
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, fpx - 1, fpy - 1)
   ImGui.PushStyleColor(ctx, ImGui.Col_Text,           colour('toolbar.text'))
   ImGui.PushStyleColor(ctx, ImGui.Col_Button,         colour('toolbar.button'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered,  colour('toolbar.buttonHover'))
+  -- Hover holds the resting fill for buttons and frame bgs; active toggle buttons
+  -- re-flatten at each site, while a button press still darkens via ButtonActive.
+  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered,  colour('toolbar.button'))
   ImGui.PushStyleColor(ctx, ImGui.Col_ButtonActive,   colour('toolbar.buttonActive'))
   ImGui.PushStyleColor(ctx, ImGui.Col_FrameBg,        colour('toolbar.button'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgHovered, colour('toolbar.buttonHover'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgActive,  colour('toolbar.buttonActive'))
+  -- Frame bg flat on hover AND press — slider tracks/inputs never highlight;
+  -- a slider's only feedback is the grab (Col_SliderGrab / SliderGrabActive).
+  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgHovered, colour('toolbar.button'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgActive,  colour('toolbar.button'))
   ImGui.PushStyleColor(ctx, ImGui.Col_CheckMark,      colour('toolbar.checkMark'))
   ImGui.PushStyleColor(ctx, ImGui.Col_SliderGrab,       colour('toolbar.sliderGrab'))
   ImGui.PushStyleColor(ctx, ImGui.Col_SliderGrabActive, colour('toolbar.sliderGrabActive'))
@@ -71,10 +75,18 @@ local function pushChromeStyles()
   -- Col_InputTextCursor has its own slot; default is invisible against
   -- chrome-styled frame backgrounds, so InputText shows focused but caretless.
   ImGui.PushStyleColor(ctx, ImGui.Col_InputTextCursor, colour('toolbar.text'))
+  -- ImGui's stock Col_TextSelectedBg is a bright blue that clashes with the
+  -- parchment chrome; ride the cool-blue alt ramp instead.
+  ImGui.PushStyleColor(ctx, ImGui.Col_TextSelectedBg, colour('toolbar.textSelection'))
+  -- Selectable / list-row highlight (Col_Header family) also defaults to stock
+  -- blue; ride the same alt ramp so every chrome selection reads as one blue.
+  ImGui.PushStyleColor(ctx, ImGui.Col_Header,        colour('toolbar.selectedRow'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, colour('toolbar.selectedRow'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  colour('toolbar.selectedRow'))
 end
 
 local function popChromeStyles()
-  ImGui.PopStyleColor(ctx, 13)
+  ImGui.PopStyleColor(ctx, 17)
   ImGui.PopStyleVar(ctx, 2)
 end
 

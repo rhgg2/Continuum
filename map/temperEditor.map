@@ -1,4 +1,4 @@
-@module temperEditor  src=temperEditor.lua  loc=392  sha=46b2797  mode=chunk
+@module temperEditor  src=temperEditor.lua  loc=392  sha=876d7d9  mode=chunk
 @deps cm, chrome, ctx, gui
 
 # Imports
@@ -7,7 +7,7 @@
   @require ImGui = 'imgui'  @ 10
 
 # Private state
-  @state CENT = '\xc2\xa2'  @ 14
+  @state CENT = 'cents'  @ 14
   @state TEMPER_ERR = 0xff6060ff  @ 15
   @state SYNTHETIC = { ['12EDO'] = true }  @ 16
   @state selected = nil  @ 18   -- explicitly-selected entry; nil follows the active slot

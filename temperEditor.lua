@@ -280,9 +280,9 @@ local function drawStepTable(temper)
   -- Zero vertical cell padding so rows abut with no gap, like the tracker grid.
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_CellPadding, 0, 1)
   if ImGui.BeginTable(ctx, '##temperSteps', 4, ImGui.TableFlags_ScrollY, 0, availY) then
-    ImGui.TableSetupColumn(ctx, 'step',  ImGui.TableColumnFlags_WidthFixed, STEP_W)
-    ImGui.TableSetupColumn(ctx, 'cents', ImGui.TableColumnFlags_WidthFixed, CENTS_W)
-    ImGui.TableSetupColumn(ctx, 'name',  ImGui.TableColumnFlags_WidthFixed, NAME_W)
+    ImGui.TableSetupColumn(ctx, 'Step',  ImGui.TableColumnFlags_WidthFixed, STEP_W)
+    ImGui.TableSetupColumn(ctx, 'Cents', ImGui.TableColumnFlags_WidthFixed, CENTS_W)
+    ImGui.TableSetupColumn(ctx, 'Name',  ImGui.TableColumnFlags_WidthFixed, NAME_W)
     ImGui.TableSetupColumn(ctx, '',      ImGui.TableColumnFlags_WidthFixed, DEL_W)
     drawColumnLabels()
 

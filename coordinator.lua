@@ -134,12 +134,14 @@ local function drawSwitcher()
   local function pageButton(label, name)
     local isActive = active == name
     if isActive then
-      ImGui.PushStyleColor(ctx, ImGui.Col_Button, chrome.colour('toolbar.buttonActive'))
+      -- Match hover to the active fill so a selected button stays put on hover.
+      ImGui.PushStyleColor(ctx, ImGui.Col_Button,        chrome.colour('toolbar.buttonActive'))
+      ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered, chrome.colour('toolbar.buttonActive'))
     end
     if ImGui.Button(ctx, label) and not isActive then
       cmgr:invoke('switchPage', name)
     end
-    if isActive then ImGui.PopStyleColor(ctx, 1) end
+    if isActive then ImGui.PopStyleColor(ctx, 2) end
   end
   pageButton('A', 'arrange')
   ImGui.SameLine(ctx, 0, 4)

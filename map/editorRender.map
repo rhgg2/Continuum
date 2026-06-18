@@ -1,4 +1,4 @@
-@module editorRender  src=editorRender.lua  loc=206  sha=9623b2b  mode=chunk
+@module editorRender  src=editorRender.lua  loc=209  sha=9623b2b  mode=chunk
 @deps swingEditor, temperEditor, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -44,37 +44,37 @@
   @api er:unbind()  @ 132
       -- Page unbind (leaving the editor) ends the drop-in: the next entry must
       -- re-earn the Close affordance by coming through edit() again.
-  @api er:toolbarSegments()  @ 162
-  @api er:renderBody(_, w, h, dispatch)  @ 164
-  @api er:renderStatusBar(_)  @ 190
-  @api er:focusState()  @ 196
+  @api er:toolbarSegments()  @ 165
+  @api er:renderBody(_, w, h, dispatch)  @ 167
+  @api er:renderStatusBar(_)  @ 193
+  @api er:focusState()  @ 199
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 141
+  @use call    chrome.colour  @ 142, 143
   @use call    chrome.disabledIf  @ 56, 61
-  @use call    chrome.gridWidth  @ 180
-  @use call    chrome.pickerIsActive  @ 198
+  @use call    chrome.gridWidth  @ 183
+  @use call    chrome.pickerIsActive  @ 201
   @use call    chrome.rowSelectable  @ 71, 81
   @use call    chrome.treeArrow  @ 81
   @use call    cmgr.invoke  @ 27
-  @use call    imgui.Button  @ 39, 43, 49, 57, 62, 142, 158
-  @use call    imgui.GetCursorScreenPos  @ 179
+  @use call    imgui.Button  @ 39, 43, 49, 57, 62, 145, 161
+  @use call    imgui.GetCursorScreenPos  @ 182
   @use call    imgui.Indent  @ 85
-  @use call    imgui.IsAnyItemActive  @ 171, 202
-  @use call    imgui.IsKeyPressed  @ 172
-  @use call    imgui.PopFont  @ 183
+  @use call    imgui.IsAnyItemActive  @ 174, 205
+  @use call    imgui.IsKeyPressed  @ 175
+  @use call    imgui.PopFont  @ 186
   @use call    imgui.PopID  @ 72
-  @use call    imgui.PopStyleColor  @ 143
-  @use call    imgui.PushFont  @ 181
+  @use call    imgui.PopStyleColor  @ 146
+  @use call    imgui.PushFont  @ 184
   @use call    imgui.PushID  @ 69
-  @use call    imgui.PushStyleColor  @ 141
-  @use call    imgui.SameLine  @ 40, 46, 52, 59, 146
+  @use call    imgui.PushStyleColor  @ 142, 143
+  @use call    imgui.SameLine  @ 40, 46, 52, 59, 149
   @use call    imgui.Separator  @ 95
-  @use call    imgui.Text  @ 192
+  @use call    imgui.Text  @ 195
   @use call    imgui.Unindent  @ 87
-  @use call    modalHost.isOpen  @ 198
-  @use call    swingEditor.isOpen  @ 175
-  @use call    swingEditor.open  @ 126, 175
+  @use call    modalHost.isOpen  @ 201
+  @use call    swingEditor.isOpen  @ 178
+  @use call    swingEditor.open  @ 126, 178
   @use call    temperEditor.select  @ 124
   @use require imgui  @ 15
 

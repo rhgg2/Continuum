@@ -29,28 +29,27 @@ end
 
 local declarations = {
   -- numeric
-  { 'pbRange',         2     },
-  { 'rowPerBeat',      4     },
-  { 'overlapOffset',   1/16  },
-  { 'defaultVelocity', 100   },
-  { 'currentOctave',   2     },
-  { 'currentSample',   0     },
-  { 'advanceBy',       1     },
+  { 'pbRange',          2     },
+  { 'rowPerBeat',       4     },
+  { 'overlapOffset',    1/16  },
+  { 'defaultVelocity',  100   },
+  { 'currentOctave',    4     },
+  { 'currentSample',    0     },
+  { 'advanceBy',        1     },
   { 'arrangeAdvanceBy', 1     },
+  { 'arrangeBeatPerRow', 4    },
 
   -- boolean
-  { 'polyAftertouch',  true  },
-  { 'trackerMode',     false },
-  { 'previewInPlace',  false },
-  { 'advanceOnLoad',   true  },
+  { 'polyAftertouch',   true  },
+  { 'trackerMode',      false },
+  { 'previewInPlace',   false },
+  { 'advanceOnLoad',    true  },
+  { 'arrangeFollowPlay', false },
 
   -- string choice
-  { 'noteLayout',      'colemak' },
-  -- temper is a view-only lens (never realised). A pick writes all three tiers: the
-  -- take freezes that take's choice, track/project carry the default for unpicked takes.
-  { 'temper',          '12EDO'    },
+  { 'noteLayout',       'colemak' },
+  { 'temper',           '12EDO'    },
 
-  -- null-defaulted (declared, no initial value)
   { 'sampleBrowserRoot', nil },
   -- Project-tier breadcrumb so sampler save-migration survives a
   -- save that happens while Continuum is closed. See docs/sampleManager.md.
@@ -67,20 +66,9 @@ local declarations = {
       ['classic-58'] = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } },
       ['classic-62'] = { factors = { { atom = 'classic', shift = 0.12, period = 1 } } },
       ['classic-67'] = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } },
-      -- Identity-shift = pure delay.
-      ['delay+15']   = { factors = { { atom = 'id', shift =  1/16, period = 1 } } },
-      ['delay+30']   = { factors = { { atom = 'id', shift =  1/8,  period = 1 } } },
-      ['delay-15']   = { factors = { { atom = 'id', shift = -1/16, period = 1 } } },
-      ['delay-30']   = { factors = { { atom = 'id', shift = -1/8,  period = 1 } } },
     } },
   -- Built-in temper catalogue (EDO presets); the personal global library seeds from it.
   { 'tempers',         util.deepClone(tuning.presets) },
-  -- Arrange-page grid density preference (persisted). Cursor/scroll stay in arrangeView module-locals.
-  -- Typical values: 4, 8, 16 beats per row (one to four bars per row in 4/4).
-  { 'arrangeBeatPerRow', 4 },
-  -- Arrange viewport follows the play head while the transport runs
-  -- (boundary-scroll). Toolbar checkbox / Super+F; global tier.
-  { 'arrangeFollowPlay', false },
 
   -- User keybinding overrides, global tier. keyBindings[scopeName][cmd] = { token, ... };
   -- overlays code-default keymaps at startup. Tokens are hand-editable ("Ctrl+Z"). See commandManager.
@@ -88,7 +76,7 @@ local declarations = {
 
   -- Palette atoms — role-named swatches the colour editor edits; base/alt are
   -- tonal ramps (zoneN at lightness N/10, ends pure black/white).
-  { 'palette.base.zone0',  hex('#000000') },  -- base: warm neutral (paper / ink)
+  { 'palette.base.zone0',  hex('#000000') },  -- base: warm neutral
   { 'palette.base.zone1',  hex('#1e1e15') },
   { 'palette.base.zone2',  hex('#3c3b2a') },
   { 'palette.base.zone3',  hex('#575542') },
@@ -98,8 +86,8 @@ local declarations = {
   { 'palette.base.zone7',  hex('#bebba7') },
   { 'palette.base.zone8',  hex('#d5d1c3') },
   { 'palette.base.zone9',  hex('#eae8e1') },
-  { 'palette.base.zone10', hex('#ffffff') },
-  { 'palette.alt.zone0',   hex('#000000') },  -- alt: cool blue (cursor / chrome / wiring)
+  { 'palette.base.zone10', hex('#faf8f1') },
+  { 'palette.alt.zone0',   hex('#000000') },  -- alt: cool blue
   { 'palette.alt.zone1',   hex('#15171e') },
   { 'palette.alt.zone2',   hex('#2a2e3c') },
   { 'palette.alt.zone3',   hex('#414758') },
@@ -111,8 +99,8 @@ local declarations = {
   { 'palette.alt.zone9',   hex('#e2e4e9') },
   { 'palette.alt.zone10',  hex('#ffffff') },
   -- single-swatch roles
-  { 'palette.alt2',     hex('#e89282') },  -- warm pink (wiring effect node)
-  { 'palette.mark',     hex('#dcb432') },  -- amber attention marker (solo, selected node)
+  { 'palette.alt2',     hex('#e89282') },  -- warm pink
+  { 'palette.mark',     hex('#dcb432') },  -- amber
   { 'palette.alert',    hex('#da3021') },
   { 'palette.caution',  hex('#d25a23') },
   { 'palette.positive', hex('#568a40') },
@@ -129,8 +117,6 @@ local declarations = {
   { 'colour.cursorText',       'palette.alt.zone8'                },
   { 'colour.band.fill',        {0.55, 0.70, 0.95, 0.22}           },  -- marquee/lasso fill (shared)
   { 'colour.band.border',      {0.45, 0.60, 0.90, 0.85}           },  -- marquee/lasso border (shared)
-  -- Arrange-page fixed colours: cursor, blocked-drag, ghost, and orphan fills. The 62 slot hues stay
-  -- computed (golden-ratio rotation) and are not declared here.
   { 'colour.arrange.cursorOn',     'palette.base.zone2'      },
   { 'colour.arrange.cursorOff',     'palette.base.zone6'    },
   { 'colour.arrange.itemBorder',       'palette.base.zone5'      },  -- solid neutral box outline (one zone below cursorOff)
@@ -157,8 +143,6 @@ local declarations = {
   { 'colour.mute',             'colour.negative'                  },
   { 'colour.solo',             'palette.mark'                     },
   { 'colour.separator',        {'palette.base.zone6',  0.3 }      },
-  -- Tracker grid headers: chanHeader rides the blue (alt) ramp; partHeader the
-  -- base ramp. Both zone4 so they sit a couple of steps darker than accent.
   { 'colour.tracker.chanHeader', 'palette.alt.zone4'              },
   { 'colour.tracker.partHeader', 'palette.base.zone4'             },
 --  { 'colour.tail',             {'palette.steel',      0.3}       },
@@ -177,8 +161,6 @@ local declarations = {
   { 'palette.region.6', hex('#4ea99c') },
   { 'palette.region.7', hex('#6ba35a') },
   { 'palette.region.8', hex('#a39342') },
-  -- Mirror-region state palette. tint = cell wash; fade = inactive-group dim; outline = active border.
-  -- Conflicted is loud.
   { 'palette.mirror.synced',     hex('#4ea99c') },  -- calm teal
   { 'palette.mirror.overridden', hex('#d2a52a') },  -- amber: locally diverged, coherent
   { 'palette.mirror.conflicted', hex('#d83a3a') },  -- alarming red
@@ -208,13 +190,14 @@ local declarations = {
   { 'colour.toolbar.bg',           'palette.base.zone9'            },
   { 'colour.toolbar.text',         'palette.base.zone2'            },
   { 'colour.toolbar.button',       'palette.base.zone10',          },
-  { 'colour.toolbar.buttonHover',  'palette.base.zone9'            },
   { 'colour.toolbar.buttonActive', 'palette.base.zone8',           },
   { 'colour.toolbar.buttonBorder', {'palette.base.zone6', 0.35 }    },
   { 'colour.toolbar.checkMark',    'palette.base.zone2'            },
-  { 'colour.toolbar.sliderGrab',       'palette.base.zone6' },  -- slider handle on the chromed track
-  { 'colour.toolbar.sliderGrabActive', 'palette.base.zone2' },  -- handle while dragging
+  { 'colour.toolbar.sliderGrab',       'palette.base.zone7' },  -- slider handle on the chromed track
+  { 'colour.toolbar.sliderGrabActive', 'palette.base.zone6' },  -- handle while dragging
   { 'colour.toolbar.popupBg',      'palette.base.zone10'           },
+  { 'colour.toolbar.textSelection', {'palette.alt.zone6',0.3}     },  -- text-selection highlight (Col_TextSelectedBg)
+  { 'colour.toolbar.selectedRow',   {'palette.alt.zone6',0.3}     },  -- Selectable/list-row highlight (Col_Header family)
   { 'colour.statusBar.bg',         'palette.alt.zone5'            },
   { 'colour.statusBar.text',       'palette.alt.zone9'            },
   -- F1 cheat-sheet overlay (help.lua): blue panel; chips + description ride the

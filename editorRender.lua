@@ -138,9 +138,12 @@ local toolbarSegments = {
     render = function()
       local function paneButton(label, id)
         local isActive = pane == id
-        if isActive then ImGui.PushStyleColor(ctx, ImGui.Col_Button, chrome.colour('toolbar.buttonActive')) end
+        if isActive then
+          ImGui.PushStyleColor(ctx, ImGui.Col_Button,        chrome.colour('toolbar.buttonActive'))
+          ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered, chrome.colour('toolbar.buttonActive'))
+        end
         if ImGui.Button(ctx, label) and not isActive then pane = id end
-        if isActive then ImGui.PopStyleColor(ctx, 1) end
+        if isActive then ImGui.PopStyleColor(ctx, 2) end
       end
       paneButton('Swing',  'swing')
       ImGui.SameLine(ctx, 0, 4)

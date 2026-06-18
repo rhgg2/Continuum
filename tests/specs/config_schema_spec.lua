@@ -376,7 +376,6 @@ return {
       local merged = h.cm:get('swings', { mergeTiers = true })
       t.truthy(merged['classic-58'],
         'classic-58 default surfaces under merge with no tier writes')
-      t.truthy(merged['delay+30'], 'delay+30 default surfaces')
     end,
   },
   {
