@@ -2482,7 +2482,9 @@ function wr:renderBody(_, w, h, dispatch)
   local canvasW = chrome.gridWidth(w)
   if ImGui.BeginChild(ctx, '##wiringCanvas', canvasW, h,
                       ImGui.ChildFlags_None,
-                      ImGui.WindowFlags_NoNav) then
+                      ImGui.WindowFlags_NoNav
+                      | ImGui.WindowFlags_NoScrollbar
+                      | ImGui.WindowFlags_NoScrollWithMouse) then
     renderCanvas(canvasW, h)
   end
   ImGui.EndChild(ctx)

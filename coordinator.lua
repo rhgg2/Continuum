@@ -40,6 +40,9 @@ local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 
 local pages, active, previous = {}, nil, nil
 local lastToolbarActive = nil   -- last page measured; a switch re-pins the band height
+local bootSettled   = false  -- latched once boot transients (fonts, window width) settle
+local bootFrames    = 0
+local lastAvailW    = nil
 local quitting      = false
 local errHandler    = nil
 
@@ -204,7 +207,16 @@ local function frame()
   -- the visible region for the duration of the drag.
   if visible then ImGui.SetScrollY(ctx, 0); ImGui.SetScrollX(ctx, 0) end
 
-  if visible and page then
+  -- Boot warm-up: hold content a few frames until ReaImGui builds the font
+  -- atlas and the window width settles, then latch (never re-gates on resize).
+  if visible and not bootSettled then
+    bootFrames = bootFrames + 1
+    local availW = ImGui.GetContentRegionAvail(ctx)
+    if bootFrames >= 4 and availW == lastAvailW then bootSettled = true end
+    lastAvailW = availW
+  end
+
+  if visible and page and bootSettled then
     -- Toolbar band. The row wraps to a 2nd line at narrow widths and the child
     -- auto-resizes to fit. See docs/coordinator.md § Toolbar band height.
     local function drawToolbarRow()
