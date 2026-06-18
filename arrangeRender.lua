@@ -762,8 +762,6 @@ end
 -- gesture shares the createSlot modal that lives with the rest of the renderer.
 function ar:newTakeBelow() arrangeNewTakeBelow() end
 
-local toolbar  -- lazy: chrome may be nil at construction in tests
-
 --shape: ToolbarSegment = { id, render = fn() }
 local toolbarSegments = {
   {
@@ -788,11 +786,7 @@ local toolbarSegments = {
   },
 }
 
-function ar:renderToolbarBits(_)
-  chrome.resetPickerActive()
-  toolbar = toolbar or chrome.makeToolbar()
-  toolbar(toolbarSegments)
-end
+function ar:toolbarSegments() return toolbarSegments end
 
 --invariant: grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.
 --contract: pushes parchment body palette (coord popped chrome before); palette tables need it.

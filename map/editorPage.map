@@ -1,4 +1,4 @@
-@module editorPage  src=editorPage.lua  loc=45  sha=bac58c7  mode=chunk
+@module editorPage  src=editorPage.lua  loc=45  sha=52bbd00  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -20,7 +20,7 @@
   @api ep:bind()  @ 36
   @api ep:unbind()  @ 37
   -- Page interface — render delegates to the renderer
-  @api ep:renderToolbarBits(ctx)  @ 40
+  @api ep:toolbarSegments()  @ 40
   @api ep:renderBody(ctx, w, h, dispatch)  @ 41
   @api ep:renderStatusBar(ctx)  @ 42
   @api ep:focusState()  @ 43
@@ -30,7 +30,7 @@
   @use call    editorRender.focusState  @ 43
   @use call    editorRender.renderBody  @ 41
   @use call    editorRender.renderStatusBar  @ 42
-  @use call    editorRender.renderToolbarBits  @ 40
+  @use call    editorRender.toolbarSegments  @ 40
   @use call    editorRender.unbind  @ 37
   @use call    facade.publish  @ 31
   @use call    util.instantiate  @ 16, 18, 21

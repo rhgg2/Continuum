@@ -34,7 +34,7 @@
   @api sp:tick()  @ 60
       @contract  tick runs every frame; watchPath + sm:tick always; probeMode skipped if no current take
   -- Page interface — render delegates to the renderer
-  @api sp:renderToolbarBits(ctx)  @ 70
+  @api sp:toolbarSegments()  @ 70
   @api sp:renderBody(ctx, w, h, dispatch)  @ 71
   @api sp:renderStatusBar(ctx)  @ 72
   @api sp:focusState()  @ 73
@@ -49,7 +49,7 @@
   @use call    sampleRender.focusState  @ 73
   @use call    sampleRender.renderBody  @ 71
   @use call    sampleRender.renderStatusBar  @ 72
-  @use call    sampleRender.renderToolbarBits  @ 70
+  @use call    sampleRender.toolbarSegments  @ 70
   @use call    sampleView.getTrack  @ 40
   @use call    sampleView.listTracks  @ 42, 54
   @use call    sampleView.setTrack  @ 45, 50

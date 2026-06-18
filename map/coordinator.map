@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=334  sha=540add0  mode=chunk
+@module coordinator  src=coordinator.lua  loc=370  sha=2e3e09b  mode=chunk
 @deps cm, ds, cmgr, gui
 
 # Invariants & contracts
@@ -12,7 +12,7 @@
 
 # Shapes
   @shape  dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds only keys that are command-bound AND down
-  @shape  page = { renderToolbarBits(ctx), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind() }
+  @shape  page = { toolbarSegments(), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind() }
 
 # Imports
   @require util = 'util'  @ 7
@@ -20,26 +20,29 @@
 
 # Constructed sub-instances
   @construct chrome    = util.instantiate('chrome')  @ 20
-  @construct modalHost = util.instantiate('modalHost')  @ 22
-  @construct help      = util.instantiate('help')  @ 23
+  @construct modalHost = util.instantiate('modalHost')  @ 23
+  @construct help      = util.instantiate('help')  @ 24
 
 # Private state
   @state ctx, uiFont = gui.ctx, gui.uiFont  @ 17
   @state uiSize = gui.fontSize.ui  @ 18
-  @state facades = {}  @ 31
-  @state facade = {  @ 32
-  @state STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = g...  @ 36
-  @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 38
-  @state pages, active, previous = {}, nil, nil  @ 40
-  @state quitting = false  @ 41
-  @state errHandler = nil  @ 42
-  @state externalCommands = {}  @ 163   -- list of { extKey, command }
-  @state coord = {}  @ 269
+  @state toolbar = chrome.makeToolbar()  @ 22   -- one shared toolbar; renders the active page's row
+  @state facades = {}  @ 32
+  @state facade = {  @ 33
+  @state STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = g...  @ 37
+  @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 39
+  @state pages, active, previous = {}, nil, nil  @ 41
+  @state lastToolbarActive = nil  @ 42   -- last page measured; a switch re-pins the band height
+  @state quitting = false  @ 43
+  @state errHandler = nil  @ 44
+  @state switcherSeg = { id = 'switcher', render = drawSwitcher }  @ 154
+  @state externalCommands = {}  @ 169   -- list of { extKey, command }
+  @state coord = {}  @ 304
       @contract  register instantiates page; first registered becomes active; returns page handle
 
 # Private functions
   -- Keyboard router
-  @fn isDigitMods(mods)  @ 55
+  @fn isDigitMods(mods)  @ 57
       -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns
       -- 'consumed' if a prefix-accumulating key fired this frame; nil otherwise
       -- (so the normal keychain walk proceeds). The prefix is NOT finished here
@@ -49,94 +52,100 @@
       -- chord open while typing a count is a natural reach, and any Ctrl-N or
       -- Super-N command binding is overridden for the duration of prefix mode.
       -- Shift/Alt still disqualify (Shift-digit emits a different char).
-  @fn handlePrefixCapture(cmgr, ctx)  @ 59
-  @fn dispatchKeys(state, cmgr, ctx)  @ 81
+  @fn handlePrefixCapture(cmgr, ctx)  @ 61
+  @fn dispatchKeys(state, cmgr, ctx)  @ 83
   -- Coordinator
-  @fn tick()  @ 119
+  @fn tick()  @ 121
       @contract  tick() runs once per frame before the page draws; no selection bus here
-  @fn drawSwitcher()  @ 128
-  @fn dispatch(state)  @ 150
+  @fn drawSwitcher()  @ 130
+  @fn dispatch(state)  @ 156
   -- External commands (REAPER-keymap bridge)
-  @fn pollExternalCommands()  @ 165
-  @fn frame()  @ 174
+  @fn pollExternalCommands()  @ 171
+  @fn frame()  @ 180
 
 # Public API (coord:*)
-  @api coord:register(name, moduleName, extra)  @ 271
-  @api coord:setActive(name)  @ 280
+  @api coord:register(name, moduleName, extra)  @ 306
+  @api coord:setActive(name)  @ 315
       @contract  setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming
-      @contract  tracker self-binds from the cursor in renderBody; activation binds nothing for it
-  @api coord:returnToArrange()  @ 295
+      @contract  tracker's no-arg bind follows the arrange cursor; renderBody keeps it current each frame
+  @api coord:returnToArrange()  @ 331
       @contract  tracker back to arrange; no reveal (cursor never left). No-op if arrange unregistered.
-  @api coord:getFacade(name)  @ 301
+  @api coord:getFacade(name)  @ 337
       @contract  resolve a published page facade by name; the contents are owned by the publishing page
-  @api coord:previousPage()  @ 304
+  @api coord:previousPage()  @ 340
       @contract  the page active immediately before the current one; closeEditor returns here
-  @api coord:togglePage()  @ 308
+  @api coord:togglePage()  @ 344
       -- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
       -- are skipped; with ≥1 track every page activates.
-  @api coord:reloadAfterExternalMutation()  @ 319
+  @api coord:reloadAfterExternalMutation()  @ 355
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:onExternalCommand(extKey, command)  @ 326
+  @api coord:onExternalCommand(extKey, command)  @ 362
       @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands
-  @api coord:quit()  @ 330
-  @api coord:run(handler)  @ 332
+  @api coord:quit()  @ 366
+  @api coord:run(handler)  @ 368
       @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 132, 182, 183, 184, 185, 186, 203, 241, 242
-  @use call    chrome.popChromeStyles  @ 216
-  @use call    chrome.pushChromeStyles  @ 208
-  @use call    chrome.verticalSeparator  @ 212
-  @use call    cm.pollUndo  @ 175
-  @use call    cmgr.appendPrefix  @ 64, 68
-  @use call    cmgr.bind  @ 28
-  @use call    cmgr.cancelPrefix  @ 71
-  @use call    cmgr.finishPrefix  @ 102
-  @use call    cmgr.invoke  @ 104, 135, 169
-  @use call    cmgr.isPrefixActive  @ 60, 101
-  @use call    cmgr.keySpec  @ 94
-  @use call    cmgr.keychain  @ 90
-  @use call    cmgr.pop  @ 285
-  @use call    cmgr.push  @ 289
-  @use call    cmgr.register  @ 27
-  @use call    cmgr.rootKeymap  @ 90
-  @use call    help.beginFrame  @ 178
-  @use call    help.draw  @ 254
-  @use call    help.isOpen  @ 153
-  @use call    help.setPage  @ 288
-  @use call    help.toggle  @ 27
-  @use call    imgui.Begin  @ 189
-  @use call    imgui.BeginChild  @ 205, 244
-  @use call    imgui.Button  @ 134
-  @use call    imgui.End  @ 257
-  @use call    imgui.EndChild  @ 218, 249
-  @use call    imgui.GetContentRegionAvail  @ 226
-  @use call    imgui.GetCursorPosY  @ 225, 231
-  @use call    imgui.GetFrameHeightWithSpacing  @ 227
-  @use call    imgui.GetKeyMods  @ 61, 98
-  @use call    imgui.Indent  @ 230
-  @use call    imgui.IsKeyDown  @ 95
-  @use call    imgui.IsKeyPressed  @ 63, 67, 70, 98
-  @use call    imgui.PopFont  @ 260
-  @use call    imgui.PopStyleColor  @ 137, 220, 251, 259
-  @use call    imgui.PopStyleVar  @ 195, 215, 219, 250
-  @use call    imgui.PushFont  @ 181
-  @use call    imgui.PushStyleColor  @ 132, 182, 183, 184, 185, 186, 203, 241, 242
-  @use call    imgui.PushStyleVar  @ 188, 204, 209, 243
-  @use call    imgui.SameLine  @ 140, 142, 144, 146, 211, 213
-  @use call    imgui.SetCursorPosY  @ 231, 240
-  @use call    imgui.SetScrollX  @ 199
-  @use call    imgui.SetScrollY  @ 199
-  @use call    imgui.Unindent  @ 236
-  @use call    modalHost.draw  @ 255
-  @use call    modalHost.isOpen  @ 27
-  @use call    modalHost.tick  @ 120
-  @use call    util.assign  @ 272
-  @use call    util.instantiate  @ 20, 22, 23, 272
+  @use call    chrome.colour  @ 134, 188, 189, 190, 191, 192, 245, 276, 277
+  @use call    chrome.makeToolbar  @ 22
+  @use call    chrome.popChromeStyles  @ 217
+  @use call    chrome.pushChromeStyles  @ 211
+  @use call    chrome.resetPickerActive  @ 244
+  @use call    chrome.resetToolbar  @ 320
+  @use call    chrome.toolbarRects  @ 234
+  @use call    cm.pollUndo  @ 181
+  @use call    cmgr.appendPrefix  @ 66, 70
+  @use call    cmgr.bind  @ 29
+  @use call    cmgr.cancelPrefix  @ 73
+  @use call    cmgr.finishPrefix  @ 104
+  @use call    cmgr.invoke  @ 106, 137, 175
+  @use call    cmgr.isPrefixActive  @ 62, 103
+  @use call    cmgr.keySpec  @ 96
+  @use call    cmgr.keychain  @ 92
+  @use call    cmgr.pop  @ 321
+  @use call    cmgr.push  @ 325
+  @use call    cmgr.register  @ 28
+  @use call    cmgr.rootKeymap  @ 92
+  @use call    help.beginFrame  @ 184
+  @use call    help.draw  @ 289
+  @use call    help.isOpen  @ 159
+  @use call    help.setPage  @ 324
+  @use call    help.toggle  @ 28
+  @use call    imgui.Begin  @ 195
+  @use call    imgui.BeginChild  @ 228, 248, 279
+  @use call    imgui.Button  @ 136
+  @use call    imgui.End  @ 292
+  @use call    imgui.EndChild  @ 239, 253, 284
+  @use call    imgui.GetContentRegionAvail  @ 261
+  @use call    imgui.GetCursorPosY  @ 260, 266
+  @use call    imgui.GetCursorScreenPos  @ 225, 231
+  @use call    imgui.GetFrameHeightWithSpacing  @ 262
+  @use call    imgui.GetKeyMods  @ 63, 100
+  @use call    imgui.Indent  @ 265
+  @use call    imgui.IsKeyDown  @ 97
+  @use call    imgui.IsKeyPressed  @ 65, 69, 72, 100
+  @use call    imgui.PopFont  @ 295
+  @use call    imgui.PopStyleColor  @ 139, 255, 286, 294
+  @use call    imgui.PopStyleVar  @ 201, 216, 240, 254, 285
+  @use call    imgui.PushFont  @ 187
+  @use call    imgui.PushStyleColor  @ 134, 188, 189, 190, 191, 192, 245, 276, 277
+  @use call    imgui.PushStyleVar  @ 194, 212, 226, 227, 246, 278
+  @use call    imgui.SameLine  @ 142, 144, 146, 148
+  @use call    imgui.SetCursorPosY  @ 266, 275
+  @use call    imgui.SetCursorScreenPos  @ 241
+  @use call    imgui.SetNextWindowContentSize  @ 247
+  @use call    imgui.SetScrollX  @ 205
+  @use call    imgui.SetScrollY  @ 205
+  @use call    imgui.Unindent  @ 271
+  @use call    modalHost.draw  @ 290
+  @use call    modalHost.isOpen  @ 28
+  @use call    modalHost.tick  @ 122
+  @use call    util.assign  @ 307
+  @use call    util.instantiate  @ 20, 23, 24, 307
   @use require chrome  @ 20
-  @use require help  @ 23
+  @use require help  @ 24
   @use require imgui  @ 14
-  @use require modalHost  @ 22
+  @use require modalHost  @ 23
   @use require util  @ 7
 
 # REAPER API surface

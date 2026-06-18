@@ -23,7 +23,7 @@ local function fakePage()
   function p:bind(...)           p.calls[#p.calls + 1] = { 'bind', ... } end
   function p:unbind()            p.calls[#p.calls + 1] = { 'unbind' } end
   function p:revealTake(take)    p.calls[#p.calls + 1] = { 'revealTake', take } end
-  function p:renderToolbarBits() end
+  function p:toolbarSegments() return {} end
   function p:renderBody()        end
   function p:renderStatusBar()   end
   function p:reloadFromReaper()  end
@@ -49,7 +49,7 @@ end
 
 return {
   {
-    name = 'setActive swaps scope, unbinds the outgoing page, and never binds the tracker',
+    name = 'setActive swaps scope, unbinds the outgoing page, and binds the incoming tracker from the cursor',
     run = function(harness)
       local h = harness.mk()
       local tracker, arrange = fakePage(), fakePage()
@@ -59,7 +59,8 @@ return {
       coord:setActive('tracker')
 
       t.eq(lastCall(arrange)[1], 'unbind', 'outgoing arrange page unbound')
-      t.eq(#tracker.calls, 0, 'tracker binds itself from the cursor — coord never binds it')
+      t.eq(lastCall(tracker)[1], 'bind', 'incoming tracker bound on activation')
+      t.eq(lastCall(tracker)[2], nil, 'no-arg bind = follow the arrange cursor')
     end,
   },
 

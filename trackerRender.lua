@@ -71,7 +71,6 @@ local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
 local dragging    = false   -- tracker-grid selection drag: click → held → release
 local curveEd      = util.instantiate('curveEditor', { ctx = ctx, chrome = chrome })
 local laneConsumed = false
-local toolbar                              -- lazy: chrome may be nil at construction in tests
 
 -- Group quick-verb state and lifetime moved to trackerView (this page is
 -- pure render/UI). The 'region' overlay keymap and the
@@ -424,11 +423,6 @@ local toolbarSegments = {
     end,
   },
 }
-
-local function drawTrackerToolbarBits()
-  toolbar = toolbar or chrome.makeToolbar()
-  toolbar(toolbarSegments)
-end
 
 -- Bound cc columns drop the 'CC' label for their param name written
 -- vertically; names trim to VNAME_MAX chars as a hard upper bound.
@@ -1901,10 +1895,7 @@ end
 
 ----- Page interface (rendering only; trackerPage drives lifecycle and the dispatch)
 
-function renderer:renderToolbarBits(_)
-  chrome.resetPickerActive()
-  drawTrackerToolbarBits()
-end
+function renderer:toolbarSegments() return toolbarSegments end
 
 --contract: calls computeLayout twice
 --invariant: lane-strip drag callbacks may flush tv.grid.cols and clear col.x

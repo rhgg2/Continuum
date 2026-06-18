@@ -141,16 +141,49 @@ local function headingLabel(text)
 end
 
 --shape: toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
--- Wraps each segment in BeginGroup/EndGroup so GetItemRectMin/Max measures the whole
--- segment. Caches last-frame width per id; if (lastEnd + sep + cached) overflows the
--- row, the leading SameLine is skipped and ImGui wraps. One-frame slop on size change.
--- Per-segment screen rects, refreshed each frame the toolbar draws; read by
--- the help overlay via chrome.toolbarRects(). One page draws per frame, so a
--- single shared table is correct.
+-- see docs/chrome.md § Toolbar layout
 local lastToolbarRects = {}
+--invariant: one page draws per frame; cleared at next toolbar() start — no cross-page collision.
+local toolbarWidths = {}
+local resetPending  = false
+-- Deferred: the switcher lives in the toolbar, so setActive fires mid-render — clearing
+-- now would unwrap this frame's later segments. Clear at the next toolbar() start instead.
+local function resetToolbar() resetPending = true end
 local function makeToolbar()
-  local widths = {}
+  -- Hidden Alpha-0 pass to pre-populate widths when the cache is cold (post-reset).
+  -- Without it the cold row lays out flat and AutoResizeY jumps the body one frame later.
+  local function measureWidths(segments)
+    local x, y = ImGui.GetCursorScreenPos(ctx)
+    ImGui.PushStyleVar(ctx, ImGui.StyleVar_Alpha, 0)
+    local first = true
+    for _, seg in ipairs(segments) do
+      if not seg.visible or seg.visible() then
+        if not first then ImGui.SameLine(ctx) end
+        ImGui.BeginGroup(ctx)
+        seg.render()
+        ImGui.EndGroup(ctx)
+        local minX = ImGui.GetItemRectMin(ctx)
+        local maxX = ImGui.GetItemRectMax(ctx)
+        toolbarWidths[seg.id] = maxX - minX
+        first = false
+      end
+    end
+    ImGui.PopStyleVar(ctx, 1)
+    ImGui.SetCursorScreenPos(ctx, x, y)
+  end
+  -- Cold = a visible segment we have no width for yet (fresh page, or post-reset).
+  local function anyUncached(segments)
+    for _, seg in ipairs(segments) do
+      if (not seg.visible or seg.visible()) and not toolbarWidths[seg.id] then return true end
+    end
+    return false
+  end
   return function(segments)
+    if resetPending then
+      for k in pairs(toolbarWidths) do toolbarWidths[k] = nil end
+      resetPending = false
+    end
+    if anyUncached(segments) then measureWidths(segments) end
     for k in pairs(lastToolbarRects) do lastToolbarRects[k] = nil end
     local startX = ImGui.GetCursorScreenPos(ctx)
     local availW = ImGui.GetContentRegionAvail(ctx)
@@ -158,7 +191,7 @@ local function makeToolbar()
     local lastEndX, first = startX, true
     for _, seg in ipairs(segments) do
       if not seg.visible or seg.visible() then
-        local cachedW = widths[seg.id] or 0
+        local cachedW = toolbarWidths[seg.id] or 0
         if not first then
           local sepW = 12 + 1 + 12
           if lastEndX + sepW + cachedW <= rightX then
@@ -172,7 +205,7 @@ local function makeToolbar()
         ImGui.EndGroup(ctx)
         local minX, minY = ImGui.GetItemRectMin(ctx)
         local maxX, maxY = ImGui.GetItemRectMax(ctx)
-        widths[seg.id] = maxX - minX
+        toolbarWidths[seg.id] = maxX - minX
         lastToolbarRects[seg.id] = { x = minX, y = minY, w = maxX - minX, h = maxY - minY }
         lastEndX, first = maxX, false
       end
@@ -427,6 +460,7 @@ return {
   radio              = radio,
   headingLabel       = headingLabel,
   makeToolbar        = makeToolbar,
+  resetToolbar       = resetToolbar,
   toolbarRects       = function() return lastToolbarRects end,
   drawPicker         = drawPicker,
   libPicker          = libPicker,

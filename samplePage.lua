@@ -67,7 +67,7 @@ end
 facade.publish('sample', { setTrack = function(track) sp:setTrack(track) end })
 
 ----- Page interface — render delegates to the renderer
-function sp:renderToolbarBits(ctx)          return sr:renderToolbarBits(ctx) end
+function sp:toolbarSegments()               return sr:toolbarSegments() end
 function sp:renderBody(ctx, w, h, dispatch) return sr:renderBody(ctx, w, h, dispatch) end
 function sp:renderStatusBar(ctx)            return sr:renderStatusBar(ctx) end
 function sp:focusState()                    return sr:focusState() end

@@ -19,6 +19,7 @@ local uiSize        = gui.fontSize.ui
 
 local chrome = util.instantiate('chrome',
   { cm = cm, ctx = ctx, uiFontBold = gui.uiFontBold, uiSize = uiSize })
+local toolbar = chrome.makeToolbar()   -- one shared toolbar; renders the active page's row
 local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 local help      = util.instantiate('help', { ctx = ctx, chrome = chrome, cmgr = cmgr })
 
@@ -38,6 +39,7 @@ local STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, modalHo
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 
 local pages, active, previous = {}, nil, nil
+local lastToolbarActive = nil   -- last page measured; a switch re-pins the band height
 local quitting      = false
 local errHandler    = nil
 
@@ -147,6 +149,10 @@ local function drawSwitcher()
   pageButton('E', 'editor')
 end
 
+-- The switcher is the row's first toolbar segment, so the whole row wraps and
+-- measures as one chrome.toolbar list (every page records at least this rect).
+local switcherSeg = { id = 'switcher', render = drawSwitcher }
+
 local function dispatch(state)
   -- While the cheat-sheet is up, all dispatch is suppressed; help:draw closes
   -- on any key or an off-box click, swallowing the gesture.
@@ -199,21 +205,50 @@ local function frame()
   if visible then ImGui.SetScrollY(ctx, 0); ImGui.SetScrollX(ctx, 0) end
 
   if visible and page then
-    -- Toolbar band
+    -- Toolbar band. The row wraps to a 2nd line at narrow widths and the child
+    -- auto-resizes to fit. See docs/coordinator.md § Toolbar band height.
+    local function drawToolbarRow()
+      chrome.pushChromeStyles()
+      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 10, 3)
+      local segs = { switcherSeg }
+      for _, s in ipairs(page:toolbarSegments()) do segs[#segs + 1] = s end
+      toolbar(segs)
+      ImGui.PopStyleVar(ctx, 1)
+      chrome.popChromeStyles()
+    end
+
+    -- On a page switch, pre-measure the wrapped height (hidden child) and pin the
+    -- band so it lands frame-1. Switch-only — see docs/coordinator.md § Toolbar band height.
+    local pinH
+    if active ~= lastToolbarActive then
+      lastToolbarActive = active
+      local sx, sy = ImGui.GetCursorScreenPos(ctx)
+      ImGui.PushStyleVar(ctx, ImGui.StyleVar_Alpha, 0)
+      ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, CHROME_PAD_X, CHROME_PAD_Y)
+      if ImGui.BeginChild(ctx, '##toolbarMeasure', 0, 0,
+                          ImGui.ChildFlags_AutoResizeY | ImGui.ChildFlags_AlwaysUseWindowPadding,
+                          ImGui.WindowFlags_NoScrollbar | ImGui.WindowFlags_NoNav) then
+        local _, topY = ImGui.GetCursorScreenPos(ctx)
+        drawToolbarRow()
+        local bottomY = topY
+        for _, r in pairs(chrome.toolbarRects()) do
+          if r.y + r.h > bottomY then bottomY = r.y + r.h end
+        end
+        pinH = bottomY - topY
+      end
+      ImGui.EndChild(ctx)
+      ImGui.PopStyleVar(ctx, 2)
+      ImGui.SetCursorScreenPos(ctx, sx, sy)
+    end
+
+    chrome.resetPickerActive()
     ImGui.PushStyleColor(ctx, ImGui.Col_ChildBg, chrome.colour('toolbar.bg'))
     ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, CHROME_PAD_X, CHROME_PAD_Y)
+    if pinH and pinH > 0 then ImGui.SetNextWindowContentSize(ctx, 0, pinH) end
     if ImGui.BeginChild(ctx, '##toolbar', 0, 0,
                         ImGui.ChildFlags_AutoResizeY | ImGui.ChildFlags_AlwaysUseWindowPadding,
                         ImGui.WindowFlags_NoScrollbar | ImGui.WindowFlags_NoNav) then
-      chrome.pushChromeStyles()
-      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 10, 3)
-      drawSwitcher()
-      ImGui.SameLine(ctx, 0, 12)
-      chrome.verticalSeparator()
-      ImGui.SameLine(ctx, 0, 12)
-      page:renderToolbarBits(ctx)
-      ImGui.PopStyleVar(ctx, 1)
-      chrome.popChromeStyles()
+      drawToolbarRow()
     end
     ImGui.EndChild(ctx)
     ImGui.PopStyleVar(ctx)
@@ -264,7 +299,7 @@ end
 
 ---------- PUBLIC
 
---shape: page = { renderToolbarBits(ctx), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind() }
+--shape: page = { toolbarSegments(), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind() }
 --contract: register instantiates page; first registered becomes active; returns page handle
 local coord = {}
 
@@ -276,18 +311,19 @@ function coord:register(name, moduleName, extra)
 end
 
 --contract: setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming
---contract: tracker self-binds from the cursor in renderBody; activation binds nothing for it
+--contract: tracker's no-arg bind follows the arrange cursor; renderBody keeps it current each frame
 function coord:setActive(name)
   if active == name then return true end
   previous = active
   if active and pages[active] then
     pages[active]:unbind()
+    chrome.resetToolbar()
     cmgr:pop(active)
   end
   active = name
   help:setPage(name)
   cmgr:push(name)
-  if name ~= 'tracker' then pages[name]:bind() end
+  pages[name]:bind()
   return true
 end
 

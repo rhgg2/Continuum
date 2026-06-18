@@ -54,7 +54,7 @@ function wp:tick() rm:pollUndo() end
 function wp:syncExternal() wv:syncExternal() end
 
 ----- Page interface — render delegates to the renderer
-function wp:renderToolbarBits(ctx)          return wr:renderToolbarBits(ctx) end
+function wp:toolbarSegments()               return wr:toolbarSegments() end
 function wp:renderBody(ctx, w, h, dispatch) return wr:renderBody(ctx, w, h, dispatch) end
 function wp:renderStatusBar(ctx)            return wr:renderStatusBar(ctx) end
 function wp:focusState()                    return wr:focusState() end

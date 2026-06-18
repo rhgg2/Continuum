@@ -410,8 +410,6 @@ local function drawStrip(stripW, stripH)
   if ImGui.Button(ctx, 'Preview##strip', previewW, 0) then sv:auditionSlot(slot) end
 end
 
-local toolbar  -- lazy: chrome may be nil at construction in tests
-
 --shape: ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
 local toolbarSegments = {
   {
@@ -467,11 +465,7 @@ end
 
 local sr = {}
 
-function sr:renderToolbarBits(_)
-  chrome.resetPickerActive()
-  toolbar = toolbar or chrome.makeToolbar()
-  toolbar(toolbarSegments)
-end
+function sr:toolbarSegments() return toolbarSegments end
 
 --contract: left=chrome.gridWidth(w): browser row over a strip, both width gridW
 --contract: slots fill chrome.palettePane (full height) on the right

@@ -324,7 +324,7 @@
       -- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
 
 # Public API (wr:*)
-  @api wr:renderToolbarBits(_)  @ 2467
+  @api wr:toolbarSegments()  @ 2467
   @api wr:closeTransients()  @ 2470
       @contract  clear ephemeral gesture/hover state; the controller calls this on unbind.
   @api wr:renderBody(_, w, h, dispatch)  @ 2477

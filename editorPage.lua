@@ -37,7 +37,7 @@ function ep:bind()   end
 function ep:unbind() er:unbind() end
 
 ----- Page interface — render delegates to the renderer
-function ep:renderToolbarBits(ctx)          return er:renderToolbarBits(ctx) end
+function ep:toolbarSegments()               return er:toolbarSegments() end
 function ep:renderBody(ctx, w, h, dispatch) return er:renderBody(ctx, w, h, dispatch) end
 function ep:renderStatusBar(ctx)            return er:renderStatusBar(ctx) end
 function ep:focusState()                    return er:focusState() end

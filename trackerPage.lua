@@ -50,13 +50,12 @@ end
 
 function tp:currentTake() return tm:currentTake() end
 
---contract: bind/unbind drive the take on tm; bind also seeds tv's take-tier slots
+--contract: with a take, bind it on tm and seed tv; no arg = activation, bind from the cursor
 function tp:bind(t)
+  if not t then return self:bindFromCursor() end
   tm:bindTake(t)
-  if t then
-    tv:seedSharedSlots()
-    pa:apply()
-  end
+  tv:seedSharedSlots()
+  pa:apply()
 end
 function tp:unbind() tm:bindTake(nil); wasDormant = true end
 
@@ -105,7 +104,7 @@ facade.publish('tracker', {
 
 ----- Page interface — render delegates to the renderer; the watcher brackets the frame
 
-function tp:renderToolbarBits(ctx) return tr:renderToolbarBits(ctx) end
+function tp:toolbarSegments() return tr:toolbarSegments() end
 function tp:renderStatusBar(ctx)   return tr:renderStatusBar(ctx) end
 function tp:focusState()           return tr:focusState() end
 

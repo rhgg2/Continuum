@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=65  sha=59ca128  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=65  sha=1278d64  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -24,7 +24,7 @@
       @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
   -- Arrange service surface — av passthroughs; newTakeBelow opens a modal in the renderer
   -- Page interface — render delegates to the renderer
-  @api ap:renderToolbarBits(ctx)  @ 60
+  @api ap:toolbarSegments()  @ 60
   @api ap:renderBody(_, w, h, dispatch)  @ 61
   @api ap:renderStatusBar(ctx)  @ 62
   @api ap:focusState()  @ 63
@@ -34,7 +34,7 @@
   @use call    arrangeRender.newTakeBelow  @ 53
   @use call    arrangeRender.renderBody  @ 61
   @use call    arrangeRender.renderStatusBar  @ 62
-  @use call    arrangeRender.renderToolbarBits  @ 60
+  @use call    arrangeRender.toolbarSegments  @ 60
   @use call    arrangeView.currentSlotIdx  @ 44
   @use call    arrangeView.currentTake  @ 42
   @use call    arrangeView.currentTrackHasTakes  @ 45

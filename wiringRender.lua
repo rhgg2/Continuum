@@ -2464,7 +2464,7 @@ end
 
 ----------- PUBLIC
 
-function wr:renderToolbarBits(_) end
+function wr:toolbarSegments() return {} end
 
 --contract: clear ephemeral gesture/hover state; the controller calls this on unbind.
 function wr:closeTransients()

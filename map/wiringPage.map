@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=62  sha=72da7bd  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=62  sha=4b9be95  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -28,7 +28,7 @@
   @api wp:syncExternal()  @ 54
       @contract  reread the graph when REAPER routing changed under us; active page only (coord-gated)
   -- Page interface — render delegates to the renderer
-  @api wp:renderToolbarBits(ctx)  @ 57
+  @api wp:toolbarSegments()  @ 57
   @api wp:renderBody(ctx, w, h, dispatch)  @ 58
   @api wp:renderStatusBar(ctx)  @ 59
   @api wp:focusState()  @ 60
@@ -43,7 +43,7 @@
   @use call    wiringRender.focusState  @ 60
   @use call    wiringRender.renderBody  @ 58
   @use call    wiringRender.renderStatusBar  @ 59
-  @use call    wiringRender.renderToolbarBits  @ 57
+  @use call    wiringRender.toolbarSegments  @ 57
   @use call    wiringView.enableLive  @ 48
   @use call    wiringView.syncExternal  @ 54
   @use require routingManager  @ 23
