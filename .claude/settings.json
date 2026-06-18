@@ -1,18 +1,6 @@
 {
   "outputStyle": "Limpid",
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write|mcp__patches__apply_patches|mcp__patches__retry_patches",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/precedent-gate.sh\"",
-            "statusMessage": "Checking precedent citation..."
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
@@ -31,16 +19,6 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/patches-map-regen.sh\"",
             "statusMessage": "Regenerating stale .map files..."
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|mcp__patches__apply_patches|mcp__patches__retry_patches",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/precedent-consume.sh\"",
-            "statusMessage": "Consuming precedent citation..."
           }
         ]
       }

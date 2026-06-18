@@ -9,9 +9,9 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
-local cm, chrome, ctx = (...).cm, (...).chrome, (...).ctx
+local cm, chrome, ctx, gui = (...).cm, (...).chrome, (...).ctx, (...).gui
 
-local CENT       = '\xc2\xa2'
+local CENT       = 'cents'
 local TEMPER_ERR = 0xff6060ff
 local SYNTHETIC  = { ['12EDO'] = true }
 
@@ -183,7 +183,7 @@ local function buildDescriptor()
   local cur    = cm:get('temper')
   if cur then active[1] = { col = 'take', name = cur } end
   return {
-    label     = 'Temper',
+    label     = 'tuning',
     active    = active,
     project   = sortedNames(projectTempers()),
     global    = globalNames,
@@ -201,53 +201,104 @@ end
 
 ----- Draw
 
+-- Fixed column widths so #, cents and name line up row-to-row.
+local STEP_W, CENTS_W, NAME_W, DEL_W = 30, 72, 48, 44
+local COL_LABELS = { 'step', 'cents', 'name', '' }
+
 local function drawHeader(temper)
   ImGui.AlignTextToFramePadding(ctx)
-  ImGui.Text(ctx, temper.name)
-  ImGui.SameLine(ctx, 0, 16)
-  ImGui.AlignTextToFramePadding(ctx)
-  ImGui.Text(ctx, 'Period')
+  ImGui.Text(ctx, 'Period:')
   ImGui.SameLine(ctx)
-  ImGui.SetNextItemWidth(ctx, 90)
+  ImGui.SetNextItemWidth(ctx, 72)
   local rv, p = ImGui.InputDouble(ctx, '##period', temper.period, 0, 0, '%.2f')
   if rv then setPeriod(p) end
   ImGui.SameLine(ctx)
   ImGui.AlignTextToFramePadding(ctx)
-  ImGui.Text(ctx, ('%s   %d steps'):format(CENT, #temper.cents))
+  ImGui.Text(ctx, CENT)
+end
+
+-- The grid name box and ui-font cells round to different frame heights at one
+-- nominal size; measure the grid box and pad ui widgets up so the row is flush.
+local function pushUiPadToGrid()
+  ImGui.PushFont(ctx, gui.font, gui.fontSize.ui)
+  local gridH = ImGui.GetFrameHeight(ctx)
+  ImGui.PopFont(ctx)
+  local padX, padY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, padX,
+    padY + (gridH - ImGui.GetFrameHeight(ctx)) / 2)
+end
+
+local function drawStepRow(temper, i)
+  ImGui.TableNextRow(ctx)
+  ImGui.PushID(ctx, i)
+
+  ImGui.TableNextColumn(ctx)
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, tostring(i))
+
+  ImGui.TableNextColumn(ctx)
+  ImGui.SetNextItemWidth(ctx, -1)
+  pushUiPadToGrid()
+  if i == 1 then ImGui.BeginDisabled(ctx) end   -- the unison is pinned at 0
+  local rvC, c = ImGui.InputDouble(ctx, '##c', temper.cents[i], 0, 0, '%.2f')
+  if rvC then setStepCents(i, c) end
+  if ImGui.IsItemDeactivatedAfterEdit(ctx) then commitSteps() end
+  if i == 1 then ImGui.EndDisabled(ctx) end
+  ImGui.PopStyleVar(ctx)
+
+  -- Names are pitch labels: render in the grid font at the ui size so the field
+  -- reads as the note on the tracker grid; ui-font cells pad up to match it.
+  ImGui.TableNextColumn(ctx)
+  ImGui.SetNextItemWidth(ctx, -1)
+  ImGui.PushFont(ctx, gui.font, gui.fontSize.ui)
+  local rvN, nm = ImGui.InputText(ctx, '##n', temper.stepNames[i] or '')
+  ImGui.PopFont(ctx)
+  if rvN then setStepName(i, nm) end
+
+  ImGui.TableNextColumn(ctx)
+  if i > 1 then
+    pushUiPadToGrid()
+    if ImGui.Button(ctx, 'del') then removeStep(i) end
+    ImGui.PopStyleVar(ctx)
+  end
+
+  ImGui.PopID(ctx)
+end
+
+-- Plain dimmed labels rather than TableHeadersRow, whose filled background
+-- clashes with the flat chrome.
+local function drawColumnLabels()
+  ImGui.TableNextRow(ctx)
+  for _, label in ipairs(COL_LABELS) do
+    ImGui.TableNextColumn(ctx)
+    ImGui.TextDisabled(ctx, label)
+  end
 end
 
 local function drawStepTable(temper)
-  if ImGui.BeginChild(ctx, '##temperSteps', 0, -ImGui.GetFrameHeightWithSpacing(ctx)) then
-    for i = 1, #temper.cents do
-      ImGui.PushID(ctx, i)
-      ImGui.AlignTextToFramePadding(ctx)
-      ImGui.Text(ctx, ('%3d'):format(i))
+  local _, availY = ImGui.GetContentRegionAvail(ctx)
+  -- Zero vertical cell padding so rows abut with no gap, like the tracker grid.
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_CellPadding, 0, 1)
+  if ImGui.BeginTable(ctx, '##temperSteps', 4, ImGui.TableFlags_ScrollY, 0, availY) then
+    ImGui.TableSetupColumn(ctx, 'step',  ImGui.TableColumnFlags_WidthFixed, STEP_W)
+    ImGui.TableSetupColumn(ctx, 'cents', ImGui.TableColumnFlags_WidthFixed, CENTS_W)
+    ImGui.TableSetupColumn(ctx, 'name',  ImGui.TableColumnFlags_WidthFixed, NAME_W)
+    ImGui.TableSetupColumn(ctx, '',      ImGui.TableColumnFlags_WidthFixed, DEL_W)
+    drawColumnLabels()
 
-      ImGui.SameLine(ctx)
-      ImGui.SetNextItemWidth(ctx, 90)
-      if i == 1 then ImGui.BeginDisabled(ctx) end   -- the unison is pinned at 0
-      local rvC, c = ImGui.InputDouble(ctx, '##c', temper.cents[i], 0, 0, '%.2f')
-      if rvC then setStepCents(i, c) end
-      if ImGui.IsItemDeactivatedAfterEdit(ctx) then commitSteps() end
-      if i == 1 then ImGui.EndDisabled(ctx) end
+    for i = 1, #temper.cents do drawStepRow(temper, i) end
 
-      ImGui.SameLine(ctx)
-      ImGui.AlignTextToFramePadding(ctx)
-      ImGui.Text(ctx, CENT)
-      ImGui.SameLine(ctx, 0, 12)
-      ImGui.SetNextItemWidth(ctx, 70)
-      local rvN, nm = ImGui.InputText(ctx, '##n', temper.stepNames[i] or '')
-      if rvN then setStepName(i, nm) end
+    -- Add lands in the next table row, aligned under the cents column.
+    ImGui.TableNextRow(ctx)
+    ImGui.TableNextColumn(ctx)
+    ImGui.TableNextColumn(ctx)
+    pushUiPadToGrid()
+    if ImGui.Button(ctx, 'add row') then addStep() end
+    ImGui.PopStyleVar(ctx)
 
-      if i > 1 then
-        ImGui.SameLine(ctx)
-        if ImGui.Button(ctx, 'del') then removeStep(i) end
-      end
-      ImGui.PopID(ctx)
-    end
+    ImGui.EndTable(ctx)
   end
-  ImGui.EndChild(ctx)
-  if ImGui.Button(ctx, '+ add step') then addStep() end
+  ImGui.PopStyleVar(ctx)
 end
 
 -- '+ New' modal, copied from swingEditor's pattern: lives at draw top-level so

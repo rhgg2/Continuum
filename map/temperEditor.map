@@ -1,5 +1,5 @@
-@module temperEditor  src=temperEditor.lua  loc=341  sha=11dccac  mode=chunk
-@deps cm, chrome, ctx
+@module temperEditor  src=temperEditor.lua  loc=392  sha=46b2797  mode=chunk
+@deps cm, chrome, ctx, gui
 
 # Imports
   @require util = 'util'  @ 3
@@ -14,7 +14,9 @@
   @state selTier = nil  @ 19   -- tier of the selection ('project' | 'global')
   @state snapshot = nil  @ 20   -- selection-time copy, for dirty-check + Reset
   @state create = nil  @ 21   -- { buf, err?, gen?, refocus? } — New-temper modal substate
-  @state self = {}  @ 336
+  @state STEP_W, CENTS_W, NAME_W, DEL_W = 30, 72, 48, 44  @ 205
+  @state COL_LABELS = { 'step', 'cents', 'name', '' }  @ 206
+  @state self = {}  @ 387
 
 # Private functions
   @fn viewedName()  @ 23
@@ -58,62 +60,79 @@
   @fn deleteSel(tier, name)  @ 166
   @fn buildDescriptor()  @ 179
   -- Draw
-  @fn drawHeader(temper)  @ 204
-  @fn drawStepTable(temper)  @ 219
-  @fn drawCreateModal()  @ 255
+  @fn drawHeader(temper)  @ 208
+  @fn pushUiPadToGrid()  @ 222
+      -- The grid name box and ui-font cells round to different frame heights at one
+      -- nominal size; measure the grid box and pad ui widgets up so the row is flush.
+  @fn drawStepRow(temper, i)  @ 231
+  @fn drawColumnLabels()  @ 270
+      -- Plain dimmed labels rather than TableHeadersRow, whose filled background
+      -- clashes with the flat chrome.
+  @fn drawStepTable(temper)  @ 278
+  @fn drawCreateModal()  @ 306
       -- '+ New' modal, copied from swingEditor's pattern: lives at draw top-level so
       -- the popup isn't bound to the child window's lifetime.
-  @fn draw(w, h)  @ 309
+  @fn draw(w, h)  @ 360
 
 # Public API (self:*)
   -- Public
-  @api self:select(name)  @ 337
-  @api self:render(w, h)  @ 338
-  @api self:libraryDescriptor()  @ 339
-  @api self:modalActive()  @ 340
+  @api self:select(name)  @ 388
+  @api self:render(w, h)  @ 389
+  @api self:libraryDescriptor()  @ 390
+  @api self:modalActive()  @ 391
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 312
-  @use call    chrome.popChromeStyles  @ 332
-  @use call    chrome.popChromeWindow  @ 306
-  @use call    chrome.pushChromeStyles  @ 310
-  @use call    chrome.pushChromeWindow  @ 263
-  @use call    cm.get  @ 23, 47, 183, 285
+  @use call    chrome.colour  @ 363
+  @use call    chrome.popChromeStyles  @ 383
+  @use call    chrome.popChromeWindow  @ 357
+  @use call    chrome.pushChromeStyles  @ 361
+  @use call    chrome.pushChromeWindow  @ 314
+  @use call    cm.get  @ 23, 47, 183, 336
   @use call    cm.getAt  @ 25, 30, 52, 84
   @use call    cm.seedGlobalFromDefault  @ 29
-  @use call    cm.set  @ 86, 155, 162, 170, 296
-  @use call    imgui.AlignTextToFramePadding  @ 205, 208, 215, 223, 235, 266
-  @use call    imgui.BeginChild  @ 220, 313
-  @use call    imgui.BeginDisabled  @ 228, 321
-  @use call    imgui.BeginPopupModal  @ 264
-  @use call    imgui.Button  @ 244, 250, 280, 282
-  @use call    imgui.CloseCurrentPopup  @ 265
-  @use call    imgui.EndChild  @ 249, 329
-  @use call    imgui.EndDisabled  @ 232, 325
-  @use call    imgui.EndPopup  @ 304
-  @use call    imgui.GetFrameHeightWithSpacing  @ 220
-  @use call    imgui.GetWindowViewport  @ 261
-  @use call    imgui.InputDouble  @ 212, 229
-  @use call    imgui.InputText  @ 239, 275
-  @use call    imgui.IsItemDeactivatedAfterEdit  @ 231
-  @use call    imgui.IsKeyPressed  @ 282
-  @use call    imgui.IsPopupOpen  @ 258
-  @use call    imgui.IsWindowAppearing  @ 269
-  @use call    imgui.OpenPopup  @ 259
-  @use call    imgui.PopID  @ 246, 277
-  @use call    imgui.PopStyleColor  @ 330
-  @use call    imgui.PopStyleVar  @ 331
-  @use call    imgui.PushID  @ 222, 274
-  @use call    imgui.PushStyleColor  @ 312
-  @use call    imgui.PushStyleVar  @ 311
-  @use call    imgui.SameLine  @ 207, 210, 214, 226, 234, 237, 243, 268, 279, 281
-  @use call    imgui.Separator  @ 323
-  @use call    imgui.SetKeyboardFocusHere  @ 270
-  @use call    imgui.SetNextItemWidth  @ 211, 227, 238, 273
-  @use call    imgui.SetNextWindowPos  @ 262
-  @use call    imgui.Text  @ 206, 209, 216, 224, 236, 267, 317
-  @use call    imgui.TextColored  @ 302
-  @use call    imgui.Viewport_GetCenter  @ 261
+  @use call    cm.set  @ 86, 155, 162, 170, 347
+  @use call    imgui.AlignTextToFramePadding  @ 209, 216, 236, 317
+  @use call    imgui.BeginChild  @ 364
+  @use call    imgui.BeginDisabled  @ 242, 372
+  @use call    imgui.BeginPopupModal  @ 315
+  @use call    imgui.BeginTable  @ 282
+  @use call    imgui.Button  @ 261, 296, 331, 333
+  @use call    imgui.CloseCurrentPopup  @ 316
+  @use call    imgui.EndChild  @ 380
+  @use call    imgui.EndDisabled  @ 246, 376
+  @use call    imgui.EndPopup  @ 355
+  @use call    imgui.EndTable  @ 299
+  @use call    imgui.GetContentRegionAvail  @ 279
+  @use call    imgui.GetFrameHeight  @ 224, 228
+  @use call    imgui.GetStyleVar  @ 226
+  @use call    imgui.GetWindowViewport  @ 312
+  @use call    imgui.InputDouble  @ 213, 243
+  @use call    imgui.InputText  @ 254, 326
+  @use call    imgui.IsItemDeactivatedAfterEdit  @ 245
+  @use call    imgui.IsKeyPressed  @ 333
+  @use call    imgui.IsPopupOpen  @ 309
+  @use call    imgui.IsWindowAppearing  @ 320
+  @use call    imgui.OpenPopup  @ 310
+  @use call    imgui.PopFont  @ 225, 255
+  @use call    imgui.PopID  @ 265, 328
+  @use call    imgui.PopStyleColor  @ 381
+  @use call    imgui.PopStyleVar  @ 247, 262, 297, 301, 382
+  @use call    imgui.PushFont  @ 223, 253
+  @use call    imgui.PushID  @ 233, 325
+  @use call    imgui.PushStyleColor  @ 363
+  @use call    imgui.PushStyleVar  @ 227, 281, 362
+  @use call    imgui.SameLine  @ 211, 215, 319, 330, 332
+  @use call    imgui.Separator  @ 374
+  @use call    imgui.SetKeyboardFocusHere  @ 321
+  @use call    imgui.SetNextItemWidth  @ 212, 240, 252, 324
+  @use call    imgui.SetNextWindowPos  @ 313
+  @use call    imgui.TableNextColumn  @ 235, 239, 251, 258, 273, 293, 294
+  @use call    imgui.TableNextRow  @ 232, 271, 292
+  @use call    imgui.TableSetupColumn  @ 283, 284, 285, 286
+  @use call    imgui.Text  @ 210, 217, 237, 318, 368
+  @use call    imgui.TextColored  @ 353
+  @use call    imgui.TextDisabled  @ 274
+  @use call    imgui.Viewport_GetCenter  @ 312
   @use call    tuning.derive  @ 83
   @use call    tuning.findTemper  @ 47
   @use call    util.deepClone  @ 60, 94, 146, 154, 161
