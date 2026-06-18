@@ -160,17 +160,44 @@ temperament is `C`. Octave labels follow the ASCII-MIDI convention
 
 ```
 temper = {
-  name       = '31EDO',
-  period     = 1200,                -- cents per octave (always 1200 for EDO)
-  cents      = { 0, 39, 77, ... },  -- ascending, length = step count
-  stepNames  = { 'C-', 'C↑', ... }, -- one per step ('' = nameless, displays as degree)
-  octaveStep = <index>,             -- derived; see below
-  cellWidth  = <chars>,             -- derived; tracker pitch-cell width
+  name        = '31EDO',
+  pitches     = { '0\31', '1\31', ... }, -- source tokens, ascending; one per step
+  periodPitch = '2/1',                   -- source token for the period (equave)
+  stepNames   = { 'C-', 'C↑', ... },     -- one per step ('' = nameless → degree)
+  periodAsStep = false,                  -- display: show the period as a trailing row?
+  cents       = { 0, 39, 77, ... },      -- DERIVED from pitches by tuning.derive
+  period      = 1200,                    -- DERIVED from periodPitch
+  octaveStep  = <index>,                 -- derived; see below
+  cellWidth   = <chars>,                 -- derived; tracker pitch-cell width
 }
 ```
 
-`edo(n, names)` builds an equal-division-of-octave temperament by
-rounding `i * 1200 / n` at each step.
+### Intensional source: pitch tokens
+
+`pitches`/`periodPitch` are the editable truth; `cents`/`period` are a
+derived cache that `tuning.derive` recompiles on every edit. The
+realisation layer reads only the derived `cents[]` — it never sees a
+token. A **pitch token** is one line of the Scala pitch grammar:
+
+| token | meaning |
+|---|---|
+| `9/8`, `2` | ratio (bare integer = `n/1`) |
+| `204.0` | cents (a decimal point present) |
+| `7\31` | 7 steps of 31-EDO (`n*1200/m`) |
+
+`tuning.scalaPitch(token)` compiles one token to cents (or `nil` if it
+doesn't parse). `edo(n, names)` emits `n\m` tokens rather than rounded
+cents, so the EDO presets are editable as intensional steps (their cents
+are now the exact `n*1200/m`, not the historic rounded integers).
+
+### Scala import
+
+`parseScalaPitches` (lenient: one token per non-comment line) and
+`parseScalaFile` (strict `.scl`: description, count, then pitches) both
+feed `scalaToTemper`, which bridges the two conventions: Scala omits the
+unison and lists the period last, so it prepends `1/1` and splits the
+final pitch off into `periodPitch`. Imports default to
+`periodAsStep = true` so they read top-to-bottom like the source file.
 
 ### The `octaveStep` derivation
 

@@ -28,7 +28,7 @@ local function onClose() cmgr:invoke('closeEditor') end
 
 ----- Library tree palette (Active / Project / Global tiers; one per pane)
 
---shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onPromote(name), onDemote(name), onReset?(), onDelete(tier,name) }
+--shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPromote(name), onDemote(name), onReset?(), onDelete(tier,name) }
 
 -- Folder a row sits under scopes the action bar. Active is a nav lens —
 -- rows resolve to a real tier on select, so sel.tier is 'project'|'global'.
@@ -37,6 +37,10 @@ local function libraryActions(spec)
   local synthetic   = sel.name and spec.synthetic and spec.synthetic[sel.name]
   local undeletable = synthetic or (sel.name and spec.undeletable and spec.undeletable[sel.name])
   if ImGui.Button(ctx, 'add') then spec.onNew() end
+  if spec.onImport then
+    ImGui.SameLine(ctx, 0, 4)
+    if ImGui.Button(ctx, 'import') then spec.onImport() end
+  end
   ImGui.SameLine(ctx, 0, 4)
   if sel.tier == 'project' then
 --  chrome.disabledIf(sel.tier ~= 'project', function()
@@ -91,7 +95,7 @@ local function libraryTree(spec)
   chrome.palettePane{
     x = spec.x, y = spec.y, h = spec.h, label = spec.label,
     draw = function()
-      libraryActions(spec)
+      chrome.row(function() libraryActions(spec) end)
       ImGui.Separator(ctx)
       libraryFolder('active', 'Active', function()
         for _, a in ipairs(spec.active or {}) do

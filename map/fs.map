@@ -1,4 +1,4 @@
-@module fs  src=fs.lua  loc=116  sha=fa4a61d  mode=namespace
+@module fs  src=fs.lua  loc=121  sha=fa4a61d  mode=namespace
 
 # Shapes
   @shape  fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }
@@ -11,7 +11,7 @@
 
 # Private functions
   @fn ciLess(a, b)  @ 34
-  @fn copyFile(src, dst)  @ 90
+  @fn copyFile(src, dst)  @ 95
       -- 64KB chunks so big samples don't allocate a Lua string the size of the file.
 
 # Public API (fs.*)
@@ -24,9 +24,10 @@
   @api fs.listDirs(path)  @ 37
       @contract  hides dotfile-prefixed entries (.git, .DS_Store, etc.)
   @api fs.exists(path)  @ 49
-  @api fs.hashFile(path)  @ 56
+  @api fs.readText(path)  @ 55
+  @api fs.hashFile(path)  @ 61
       @contract  FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md
-  @api fs.listAudioFiles(path)  @ 77
+  @api fs.listAudioFiles(path)  @ 82
 
 # REAPER API surface
   @reaper EnumerateSubdirectories

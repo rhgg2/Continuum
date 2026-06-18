@@ -52,6 +52,11 @@ function fs.exists(path)
   return false
 end
 
+function fs.readText(path)
+  local f = io.open(path, 'r'); if not f then return nil end
+  local s = f:read('*a'); f:close(); return s
+end
+
 --contract: FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md
 function fs.hashFile(path)
   local f = io.open(path, 'rb')

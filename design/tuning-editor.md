@@ -5,9 +5,12 @@ Workshop (sevish.com/scaleworkshop). Scope grew into a shared
 **project-tier library workbench page** hosting both the tuning (temper)
 editor and the existing swing editor.
 
-Status: **phase 1 committed; phase-2 tuning content pane + Option-B +
-variable-width pitch cell landed (uncommitted), suite green (1527/0).**
-Remaining in phase 2: Scala `.scl` import. Phase 3 not started.
+Status: **phase 2 complete (uncommitted): intensional pitch-token backend
++ Scala `.scl` import + multipaste paste box, suite green (1534/0).** The
+temper backend is now intensional (`pitches`/`periodPitch` source tokens,
+`cents`/`period` derived); presets emit `n\m` tokens; a per-temper
+`periodAsStep` toggle picks separate-box vs trailing-row period display.
+Phase 3 (compilers) not started.
 
 What phase 2 added: `tuning.derive` stamps `octaveStep` + a new `cellWidth`
 (widest label, incl. octave char); `stepToText` falls back to `degree-octave`

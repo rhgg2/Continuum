@@ -6,7 +6,7 @@
 --invariant: detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
 --invariant: cents[1] is the unison (0); nameless step displays as degree-octave via M.stepToText
 --invariant: octave parameters are MIDI-relative (C4 → 4), not period-index
---shape: Temper = {name=string, period=cents, cents=number[ascending], stepNames=string[], octaveStep=int, cellWidth=int}
+--shape: Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, cents=number[derived], period=cents[derived], octaveStep=int, cellWidth=int}
 local M = {}
 
 ----- Temperament presets
@@ -33,8 +33,28 @@ local function computeCellWidth(stepNames, n)
   return widest + 1
 end
 
---contract: stamps octaveStep + cellWidth from cents/stepNames on every edit. Pure; returns temper.
+--contract: Scala pitch token → cents, or nil. n/d ratio, bare int, cents (has '.'), n\m EDO step.
+function M.scalaPitch(token)
+  token = token:match('^%s*(.-)%s*$')
+  local n, m = token:match('^(%d+)\\(%d+)$')
+  if n then return tonumber(n) * 1200 / tonumber(m) end
+  if token:find('%.') then return tonumber(token) end
+  local a, b = token:match('^(%d+)/(%d+)$')
+  if a then return 1200 * math.log(tonumber(a) / tonumber(b), 2) end
+  if token:match('^%d+$') then return 1200 * math.log(tonumber(token), 2) end
+  return nil
+end
+
+--contract: pitches→cents, periodPitch→period; stamps octaveStep + cellWidth. Pure; returns temper.
 function M.derive(temper)
+  if temper.pitches then
+    local cents = {}
+    for i, tok in ipairs(temper.pitches) do cents[i] = M.scalaPitch(tok) or 0 end
+    temper.cents = cents
+  end
+  if temper.periodPitch then
+    temper.period = M.scalaPitch(temper.periodPitch) or temper.period
+  end
   local n = #temper.cents
   temper.octaveStep = computeOctaveStep(temper.stepNames or {}, n)
   temper.cellWidth  = computeCellWidth(temper.stepNames or {}, n)
@@ -42,13 +62,13 @@ function M.derive(temper)
 end
 
 local function edo(n, names)
-  local cents = {}
-  for i = 1, n do cents[i] = math.floor((i - 1) * 1200 / n + 0.5) end
+  local pitches = {}
+  for i = 1, n do pitches[i] = (i - 1) .. '\\' .. n end
   return M.derive{
-    name      = n .. 'EDO',
-    period    = 1200,
-    cents     = cents,
-    stepNames = names,
+    name        = n .. 'EDO',
+    periodPitch = '2/1',
+    pitches     = pitches,
+    stepNames   = names,
   }
 end
 
@@ -78,6 +98,55 @@ M.presets = {
 function M.findTemper(name, userLib)
   if not name then return nil end
   return (userLib and userLib[name]) or M.presets[name]
+end
+
+----- Scala import
+
+-- Lenient: every non-blank, non-'!' line is a pitch token. Drives paste + the
+-- import Create button (which re-parses the box after any manual edits).
+function M.parseScalaPitches(text)
+  local lines = {}
+  for line in (text .. '\n'):gmatch('(.-)\n') do
+    local s = line:match('^%s*(.-)%s*$')
+    if s ~= '' and s:sub(1, 1) ~= '!' then lines[#lines + 1] = s end
+  end
+  return lines
+end
+
+-- Strict .scl: drop '!' comment lines, then [description, count, pitch x count].
+-- Returns pitch tokens + description (suggested name) for the Scala load path.
+function M.parseScalaFile(text)
+  local lines = {}
+  for line in (text .. '\n'):gmatch('(.-)\n') do
+    if not line:match('^%s*!') then lines[#lines + 1] = line end
+  end
+  local description = (lines[1] or ''):match('^%s*(.-)%s*$')
+  local count       = tonumber((lines[2] or ''):match('%d+'))
+  local pitches     = {}
+  for i = 3, #lines do
+    local s = lines[i]:match('^%s*(.-)%s*$')
+    if s ~= '' then pitches[#pitches + 1] = s end
+    if count and #pitches >= count then break end
+  end
+  return pitches, description
+end
+
+-- Bridge Scala's convention (unison implicit, period last) to Continuum's
+-- (step 1 = 1/1, period separate): prepend unison, split off final as period.
+function M.scalaToTemper(pitchLines, name)
+  if #pitchLines == 0 then return nil, 'no pitches' end
+  for _, tok in ipairs(pitchLines) do
+    if not M.scalaPitch(tok) then return nil, ('unparseable pitch: %q'):format(tok) end
+  end
+  local pitches = { '1/1' }
+  for i = 1, #pitchLines - 1 do pitches[#pitches + 1] = pitchLines[i] end
+  return M.derive{
+    name         = name,
+    periodPitch  = pitchLines[#pitchLines],
+    pitches      = pitches,
+    stepNames    = {},
+    periodAsStep = true,
+  }
 end
 
 ----- Coordinate conversions

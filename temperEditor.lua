@@ -2,6 +2,7 @@
 -- @noindex
 local util   = require 'util'
 local tuning = require 'tuning'
+local fs     = require 'fs'
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
@@ -11,7 +12,6 @@ local ImGui = require 'imgui' '0.10'
 
 local cm, chrome, ctx, gui = (...).cm, (...).chrome, (...).ctx, (...).gui
 
-local CENT       = 'cents'
 local TEMPER_ERR = 0xff6060ff
 local SYNTHETIC  = { ['12EDO'] = true }
 
@@ -19,6 +19,8 @@ local selected = nil   -- explicitly-selected entry; nil follows the active slot
 local selTier  = nil   -- tier of the selection ('project' | 'global')
 local snapshot = nil   -- selection-time copy, for dirty-check + Reset
 local create   = nil   -- { buf, err?, gen?, refocus? } — New-temper modal substate
+local importState = nil -- { buf, name?, err? } — Import modal substate
+local editing  = nil   -- { key, buf } in-flight pitch token; commits on deactivate
 
 local function viewedName() return selected or cm:get('temper') end
 
@@ -62,16 +64,16 @@ end
 
 ----- Authoring writes
 
--- Sort the (cents, name) pairs ascending by cents so tuning.lua's ordered
--- assumptions hold; the unison stays at the front at 0.
+-- Sort the (pitch, name) pairs ascending by compiled cents so tuning.lua's
+-- ordered assumptions hold; the unison (1/1 = 0) stays at the front.
 local function sortSteps(temper)
   local rows = {}
-  for i, c in ipairs(temper.cents) do
-    rows[i] = { c = c, nm = temper.stepNames[i] or '' }
+  for i, tok in ipairs(temper.pitches) do
+    rows[i] = { tok = tok, nm = temper.stepNames[i] or '', c = tuning.scalaPitch(tok) or 0 }
   end
   table.sort(rows, function(a, b) return a.c < b.c end)
   for i, row in ipairs(rows) do
-    temper.cents[i]     = row.c
+    temper.pitches[i]   = row.tok
     temper.stepNames[i] = row.nm
   end
 end
@@ -86,26 +88,23 @@ local function temperWrite(temper, normalize)
   cm:set(selTier, 'tempers', lib)
 end
 
--- Editable clone with stepNames densified to #cents ('' for unnamed) so sort
--- and table.remove stay array operations.
+-- Editable clone with pitches/stepNames densified to a common length ('' for
+-- unnamed) so sort and table.remove stay array operations.
 local function cloneForEdit()
   local t = editedTemper()
   if not t then return nil end
   t = util.deepClone(t)
+  t.pitches   = t.pitches or {}
   t.stepNames = t.stepNames or {}
-  for i = 1, #t.cents do t.stepNames[i] = t.stepNames[i] or '' end
+  for i = 1, #t.pitches do t.stepNames[i] = t.stepNames[i] or '' end
   return t
 end
 
-local function setStepCents(i, c)
+-- Re-sort on commit so the edited step lands in pitch order; derive recompiles
+-- cents from the token.
+local function setStepPitch(i, tok)
   local t = cloneForEdit(); if not t then return end
-  t.cents[i] = c
-  temperWrite(t, false)
-end
-
--- On field-commit: re-sort so the edited step lands in pitch order.
-local function commitSteps()
-  local t = cloneForEdit(); if not t then return end
+  t.pitches[i] = tok
   temperWrite(t, true)
 end
 
@@ -115,23 +114,29 @@ local function setStepName(i, nm)
   temperWrite(t, false)
 end
 
-local function setPeriod(p)
+local function setPeriodPitch(tok)
   local t = cloneForEdit(); if not t then return end
-  t.period = p
+  t.periodPitch = tok
+  temperWrite(t, false)
+end
+
+local function setPeriodAsStep(on)
+  local t = cloneForEdit(); if not t then return end
+  t.periodAsStep = on
   temperWrite(t, false)
 end
 
 local function addStep()
   local t = cloneForEdit(); if not t then return end
   local maxC = t.cents[#t.cents] or 0
-  t.cents[#t.cents + 1]     = math.min(maxC + 100, t.period)
-  t.stepNames[#t.cents]     = ''
+  t.pitches[#t.pitches + 1] = string.format('%.2f', math.min(maxC + 100, t.period))
+  t.stepNames[#t.pitches]   = ''
   temperWrite(t, true)
 end
 
 local function removeStep(i)
-  local t = cloneForEdit(); if not t or i == 1 or #t.cents <= 1 then return end
-  table.remove(t.cents, i)
+  local t = cloneForEdit(); if not t or i == 1 or #t.pitches <= 1 then return end
+  table.remove(t.pitches, i)
   table.remove(t.stepNames, i)
   temperWrite(t, false)
 end
@@ -191,6 +196,7 @@ local function buildDescriptor()
     sel       = { tier = selTier, name = selected },
     onSelect  = function(tier, name) selectTemper(name, tier ~= 'active' and tier or nil) end,
     onNew     = function() create = { buf = '' } end,
+    onImport  = function() importState = { buf = '', name = '' } end,
     onPromote = promote,
     onDemote  = demote,
     onDelete  = deleteSel,
@@ -203,18 +209,33 @@ end
 
 -- Fixed column widths so #, cents and name line up row-to-row.
 local STEP_W, CENTS_W, NAME_W, DEL_W = 30, 72, 48, 44
-local COL_LABELS = { 'step', 'cents', 'name', '' }
+local COL_LABELS = { 'step', 'pitch', 'name', '' }
 
+-- Pitch-token text box: shows `current` until focused; commits via commit(tok) on
+-- deactivate only when the token parses — invalid input reverts next frame.
+local function tokenBox(idStr, key, current, commit)
+  local shown = (editing and editing.key == key) and editing.buf or current
+  local rv, buf = ImGui.InputText(ctx, idStr, shown)
+  if rv then editing = { key = key, buf = buf } end
+  if ImGui.IsItemDeactivatedAfterEdit(ctx) and editing and editing.key == key then
+    if tuning.scalaPitch(editing.buf) then commit(editing.buf) end
+    editing = nil
+  end
+end
+
+-- Period sits in its own box, unless periodAsStep moves it to the table's last
+-- row; the checkbox toggles that per-temper display preference.
 local function drawHeader(temper)
   ImGui.AlignTextToFramePadding(ctx)
-  ImGui.Text(ctx, 'Period:')
-  ImGui.SameLine(ctx)
-  ImGui.SetNextItemWidth(ctx, 72)
-  local rv, p = ImGui.InputDouble(ctx, '##period', temper.period, 0, 0, '%.2f')
-  if rv then setPeriod(p) end
-  ImGui.SameLine(ctx)
-  ImGui.AlignTextToFramePadding(ctx)
-  ImGui.Text(ctx, CENT)
+  if not temper.periodAsStep then
+    ImGui.Text(ctx, 'Period:')
+    ImGui.SameLine(ctx)
+    ImGui.SetNextItemWidth(ctx, 72)
+    tokenBox('##period', 'period', temper.periodPitch or '2/1', setPeriodPitch)
+    ImGui.SameLine(ctx)
+  end
+  local rv, on = chrome.checkbox('period as last step', temper.periodAsStep or false)
+  if rv then setPeriodAsStep(on) end
 end
 
 -- The grid name box and ui-font cells round to different frame heights at one
@@ -239,10 +260,8 @@ local function drawStepRow(temper, i)
   ImGui.TableNextColumn(ctx)
   ImGui.SetNextItemWidth(ctx, -1)
   pushUiPadToGrid()
-  if i == 1 then ImGui.BeginDisabled(ctx) end   -- the unison is pinned at 0
-  local rvC, c = ImGui.InputDouble(ctx, '##c', temper.cents[i], 0, 0, '%.2f')
-  if rvC then setStepCents(i, c) end
-  if ImGui.IsItemDeactivatedAfterEdit(ctx) then commitSteps() end
+  if i == 1 then ImGui.BeginDisabled(ctx) end   -- the unison is pinned at 1/1
+  tokenBox('##c', i, temper.pitches[i], function(tok) setStepPitch(i, tok) end)
   if i == 1 then ImGui.EndDisabled(ctx) end
   ImGui.PopStyleVar(ctx)
 
@@ -278,7 +297,7 @@ end
 local function drawStepTable(temper)
   local _, availY = ImGui.GetContentRegionAvail(ctx)
   -- Zero vertical cell padding so rows abut with no gap, like the tracker grid.
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_CellPadding, 1, 2)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_CellPadding, 0, 1)
   if ImGui.BeginTable(ctx, '##temperSteps', 4, ImGui.TableFlags_ScrollY, 0, availY) then
     ImGui.TableSetupColumn(ctx, 'Step',  ImGui.TableColumnFlags_WidthFixed, STEP_W)
     ImGui.TableSetupColumn(ctx, 'Cents', ImGui.TableColumnFlags_WidthFixed, CENTS_W)
@@ -286,9 +305,25 @@ local function drawStepTable(temper)
     ImGui.TableSetupColumn(ctx, '',      ImGui.TableColumnFlags_WidthFixed, DEL_W)
     drawColumnLabels()
 
-    for i = 1, #temper.cents do drawStepRow(temper, i) end
+    for i = 1, #temper.pitches do drawStepRow(temper, i) end
 
-    -- Add lands in the next table row, aligned under the cents column.
+    -- periodAsStep: the period shows as a trailing row (still backed by
+    -- periodPitch, not a step) so the scale reads top-to-bottom like a Scala file.
+    if temper.periodAsStep then
+      ImGui.TableNextRow(ctx)
+      ImGui.PushID(ctx, 'period')
+      ImGui.TableNextColumn(ctx)
+      ImGui.AlignTextToFramePadding(ctx)
+      ImGui.TextDisabled(ctx, 'P')
+      ImGui.TableNextColumn(ctx)
+      ImGui.SetNextItemWidth(ctx, -1)
+      pushUiPadToGrid()
+      tokenBox('##period', 'period', temper.periodPitch or '2/1', setPeriodPitch)
+      ImGui.PopStyleVar(ctx)
+      ImGui.PopID(ctx)
+    end
+
+    -- Add lands in the next table row, aligned under the pitch column.
     ImGui.TableNextRow(ctx)
     ImGui.TableNextColumn(ctx)
     ImGui.TableNextColumn(ctx)
@@ -343,7 +378,7 @@ local function drawCreateModal()
         create.refocus = true
       else
         local p = projectTempers()
-        p[name] = tuning.derive{ name = name, period = 1200, cents = { 0 }, stepNames = {} }
+        p[name] = tuning.derive{ name = name, periodPitch = '2/1', pitches = { '1/1' }, stepNames = {} }
         cm:set('project', 'tempers', p)
         selectTemper(name, 'project')
         dismiss()
@@ -357,10 +392,74 @@ local function drawCreateModal()
   chrome.popChromeWindow()
 end
 
+-- Import: paste a Scala pitch list (or load a .scl, which strips its headers
+-- into the box first), name it, Create. Lives at draw top-level like the New modal.
+local function drawImportModal()
+  if not importState then return end
+  if not ImGui.IsPopupOpen(ctx, 'Import tuning') then
+    ImGui.OpenPopup(ctx, 'Import tuning')
+  end
+  local cx, cy = ImGui.Viewport_GetCenter(ImGui.GetWindowViewport(ctx))
+  ImGui.SetNextWindowPos(ctx, cx, cy, ImGui.Cond_Appearing, 0.5, 0.5)
+  chrome.pushChromeWindow()
+  if ImGui.BeginPopupModal(ctx, 'Import tuning', true, ImGui.WindowFlags_AlwaysAutoResize) then
+    local function dismiss() importState = nil; ImGui.CloseCurrentPopup(ctx) end
+    ImGui.AlignTextToFramePadding(ctx)
+    ImGui.Text(ctx, 'Name:')
+    ImGui.SameLine(ctx)
+    ImGui.SetNextItemWidth(ctx, 200)
+    local rvN, nm = ImGui.InputText(ctx, '##importname', importState.name or '')
+    if rvN then importState.name = nm end
+    ImGui.SameLine(ctx)
+    if ImGui.Button(ctx, 'Load .scl…') then
+      local ok, path = reaper.GetUserFileNameForRead('', 'Import Scala scale', '.scl')
+      if ok then
+        local text = fs.readText(path)
+        if text then
+          local pitches, desc = tuning.parseScalaFile(text)
+          importState.buf = table.concat(pitches, '\n')
+          if (importState.name or '') == '' then
+            importState.name = (desc ~= '' and desc) or fs.basename(path)
+          end
+        end
+      end
+    end
+    ImGui.TextDisabled(ctx, 'Scala pitches, one per line (e.g. 9/8 or 204.0):')
+    local rvB, buf = ImGui.InputTextMultiline(ctx, '##importbuf', importState.buf or '', 320, 200)
+    if rvB then importState.buf = buf end
+    local confirm = ImGui.Button(ctx, 'Create')
+    ImGui.SameLine(ctx)
+    local cancel  = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
+    if confirm then
+      local name = (importState.name or ''):match('^%s*(.-)%s*$')
+      local lib  = cm:get('tempers', { mergeTiers = true })
+      if name == '' then
+        importState.err = 'Name required.'
+      elseif lib[name] then
+        importState.err = 'Name already in use.'
+      else
+        local temper, perr = tuning.scalaToTemper(tuning.parseScalaPitches(importState.buf or ''), name)
+        if not temper then
+          importState.err = perr
+        else
+          local p = projectTempers()
+          p[name] = temper
+          cm:set('project', 'tempers', p)
+          selectTemper(name, 'project')
+          dismiss()
+        end
+      end
+    elseif cancel then dismiss() end
+    if importState and importState.err then
+      ImGui.TextColored(ctx, TEMPER_ERR, importState.err)
+    end
+    ImGui.EndPopup(ctx)
+  end
+  chrome.popChromeWindow()
+end
+
 local function draw(w, h)
   chrome.pushChromeStyles()
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
-  ImGui.PushStyleColor(ctx, ImGui.Col_Separator, chrome.colour('toolbar.buttonBorder'))
   if ImGui.BeginChild(ctx, '##temperEditor', w, h) then
     chrome.paletteHeader('steps')
     local temper   = editedTemper() or temperFor(viewedName())
@@ -368,19 +467,22 @@ local function draw(w, h)
     if not temper then
       ImGui.Text(ctx, 'No temperament selected.')
     else
-      -- Greyed when not editable (a merge-floor or the active slot with no tier
-      -- copy); still drawn so the chrome doesn't shift. Dup to edit.
+      -- Greyed when not editable (merge-floor or active slot with no tier copy);
+      -- divider lives outside BeginDisabled so it stays ungreyed (matches palette).
       if not editable then ImGui.BeginDisabled(ctx) end
-      drawHeader(temper)
+      chrome.row(function() drawHeader(temper) end)
+      if not editable then ImGui.EndDisabled(ctx) end
       ImGui.Separator(ctx)
+      if not editable then ImGui.BeginDisabled(ctx) end
+      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
       drawStepTable(temper)
+      ImGui.PopStyleVar(ctx, 1)
       if not editable then ImGui.EndDisabled(ctx) end
     end
     drawCreateModal()
+    drawImportModal()
   end
   ImGui.EndChild(ctx)
-  ImGui.PopStyleColor(ctx, 1)
-  ImGui.PopStyleVar(ctx, 1)
   chrome.popChromeStyles()
 end
 
@@ -389,5 +491,5 @@ local self = {}
 function self:select(name)        selectTemper(name) end
 function self:render(w, h)        draw(w, h) end
 function self:libraryDescriptor() return buildDescriptor() end
-function self:modalActive()       return create ~= nil end
+function self:modalActive()       return create ~= nil or importState ~= nil end
 return self
