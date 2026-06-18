@@ -430,7 +430,7 @@ local HEADER_PAD, HEADER_GAP = 8, 4
 local function gridWidth(w) return math.max(120, w - PALETTE_W - PANE_GAP) end
 
 -- Hand-drawn header: centred label + 1px divider at headerH; shares HEADER_PAD/HEADER_GAP
--- with the flanking grid header so the two dividers align across PANE_GAP without measuring.
+-- with the flanking grid header so dividers align across PANE_GAP. Returns divider screen-y.
 local function paletteHeader(label)
   local p       = painter.new(ctx, paintBinder, {})
   local ox, oy  = ImGui.GetCursorScreenPos(ctx)
@@ -446,6 +446,7 @@ local function paletteHeader(label)
   p.text(ox + math.floor((paneW - tw) / 2), oy + HEADER_PAD, 'text', label)
   p.segment(ox, oy + headerH, ox + paneW, oy + headerH, 'text', 1)
   ImGui.Dummy(ctx, avail, headerH + HEADER_GAP)
+  return oy + headerH
 end
 
 --contract: x/y/h are body-window screen coords at the gap's left edge; draw paints the body.

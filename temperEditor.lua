@@ -278,7 +278,7 @@ end
 local function drawStepTable(temper)
   local _, availY = ImGui.GetContentRegionAvail(ctx)
   -- Zero vertical cell padding so rows abut with no gap, like the tracker grid.
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_CellPadding, 0, 1)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_CellPadding, 1, 2)
   if ImGui.BeginTable(ctx, '##temperSteps', 4, ImGui.TableFlags_ScrollY, 0, availY) then
     ImGui.TableSetupColumn(ctx, 'Step',  ImGui.TableColumnFlags_WidthFixed, STEP_W)
     ImGui.TableSetupColumn(ctx, 'Cents', ImGui.TableColumnFlags_WidthFixed, CENTS_W)
@@ -306,13 +306,13 @@ end
 local function drawCreateModal()
   if not create then return end
   create.gen = create.gen or 0
-  if not ImGui.IsPopupOpen(ctx, 'New temperament') then
-    ImGui.OpenPopup(ctx, 'New temperament')
+  if not ImGui.IsPopupOpen(ctx, 'New tuning') then
+    ImGui.OpenPopup(ctx, 'New tuning')
   end
   local cx, cy = ImGui.Viewport_GetCenter(ImGui.GetWindowViewport(ctx))
   ImGui.SetNextWindowPos(ctx, cx, cy, ImGui.Cond_Appearing, 0.5, 0.5)
   chrome.pushChromeWindow()
-  if ImGui.BeginPopupModal(ctx, 'New temperament', true, ImGui.WindowFlags_AlwaysAutoResize) then
+  if ImGui.BeginPopupModal(ctx, 'New tuning', true, ImGui.WindowFlags_AlwaysAutoResize) then
     local function dismiss() create = nil; ImGui.CloseCurrentPopup(ctx) end
     ImGui.AlignTextToFramePadding(ctx)
     ImGui.Text(ctx, 'Name:')
@@ -362,6 +362,7 @@ local function draw(w, h)
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
   ImGui.PushStyleColor(ctx, ImGui.Col_Separator, chrome.colour('toolbar.buttonBorder'))
   if ImGui.BeginChild(ctx, '##temperEditor', w, h) then
+    chrome.paletteHeader('steps')
     local temper   = editedTemper() or temperFor(viewedName())
     local editable = editedTemper() ~= nil
     if not temper then

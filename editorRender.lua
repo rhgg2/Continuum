@@ -147,7 +147,7 @@ local toolbarSegments = {
       end
       paneButton('Swing',  'swing')
       ImGui.SameLine(ctx, 0, 4)
-      paneButton('Temper', 'temper')
+      paneButton('Tuning', 'temper')
     end,
   },
   {

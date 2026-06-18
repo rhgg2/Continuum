@@ -81,6 +81,19 @@ glance. `midBar` (the bar midpoint when it lands on a beat — true in
 4/4, 6/8; false in 3/4) shades as a beat but sizes as a bar; the
 asymmetry is deliberate.
 
+The band sits below a `preview` palette header (`chrome.paletteHeader`,
+run in the plain chrome style state so its divider aligns with the
+library palette's across the pane gap): strips centred horizontally,
+top-aligned, each framed by a 1px `swing.previewBorder`. Below it a
+matching `factors` header sits over the rows; its divider doubles as a
+draggable splitter (relative drag, anchored at grab) that sets
+`state.previewH`, trading height with the factor list. Both headers and
+the band stay live even with no swing selected — only the factor rows
+grey out.
+`state.previewH` re-fits to the band's content on open and on a rows/qn
+change (capped to keep the factor list visible); a manual drag
+overrides until rows/qn changes again.
+
 ## Library tiers & seeding
 
 Swings resolve across three cm tiers, plus a synthetic floor:

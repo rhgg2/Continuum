@@ -104,6 +104,8 @@ local function materialise(composite) return timing.resolveFactors(composite, 1)
 
 local STRIP_COLS = 6    -- strip width in tracker char-columns
 local GLYPH_BOX  = 36   -- px reserved for each =/∘ separator between strips
+local DIVIDER_GRAB    = 7    -- px hit-height of the draggable preview/factor splitter
+local MIN_FACTOR_AREA = 80   -- px kept below the splitter for the factor list
 
 -- Char-cell metrics matching the tracker grid (odd = crisp 1px lines).
 -- Caller must have the grid font pushed so 'W' measures the mono cell.
@@ -157,12 +159,13 @@ local function drawSwingStrip(p, factors, ownPeriodQN, geom)
               or  tier == 'beat' and rMid or rSmall
     p.circle(cx, y, r, (p0 >= ownPeriodQN - 1e-9) and 'ghost' or 'text')
   end
+
+  p.border({ x0 = x0, y0 = y0, x1 = x0 + w, y1 = y0 + geom.H }, 'swing.previewBorder')
 end
 
--- Preview band: composite strip left, then (when compound) '=' and factor strips fn∘…∘f1 rightward.
--- f1 applied first so sits rightmost; height = whole bars over composite's period, shared by all strips.
-local function drawSwingBand(composite, factors)
-  -- Measure + draw in the tracker's grid font so strips match it exactly.
+-- Grid-font metrics + total band width for the preview strips. Pure measure;
+-- pushes the grid font only to size the mono cell, then derives the layout.
+local function bandLayout(composite, factors)
   ImGui.PushFont(ctx, gui.font, gui.fontSize.grid)
   local gx, gy              = gridMetrics()
   local classify, beat, qpb = meterClassifier()
@@ -172,12 +175,30 @@ local function drawSwingBand(composite, factors)
   local dQN                 = beat / state.rpb
   local rows                = math.max(1, util.round(heightQN / dQN))
   local stripW              = STRIP_COLS * gx
+  ImGui.PopFont(ctx)
 
-  local x0, y0 = ImGui.GetCursorScreenPos(ctx)
-  local p      = painter.new(ctx, chrome, {})
-  -- One grid row of blank padding above and below the strip content.
-  local geom   = { gx = gx, gy = gy, y = y0 + gy, rows = rows, dQN = dQN,
-                   heightQN = heightQN, H = rows * gy, classify = classify }
+  local n     = #factors
+  local bandW = stripW
+  if n > 1 then bandW = bandW + GLYPH_BOX + n * stripW + (n - 1) * GLYPH_BOX end
+
+  return { gx = gx, gy = gy, classify = classify, periodQN = periodQN,
+           heightQN = heightQN, dQN = dQN, rows = rows, stripW = stripW,
+           bandW = bandW, H = rows * gy, contentH = rows * gy + 2 * gy }
+end
+
+-- Preview band: composite strip left, then (when compound) '=' + factor strips fn∘…∘f1 right.
+-- f1 applied first so sits rightmost; strips centred horizontally, top-aligned, clipped to region.
+local function drawBandInto(layout, composite, factors, region)
+  ImGui.PushFont(ctx, gui.font, gui.fontSize.grid)
+  local p     = painter.new(ctx, chrome, {})
+  local bandX = region.x + math.floor((region.w - layout.bandW) / 2)
+  p.pushClip({ x0 = region.x, y0 = region.y,
+               x1 = region.x + region.w, y1 = region.y + region.h })
+
+  -- One grid row of blank padding above the strip content.
+  local geom = { gx = layout.gx, gy = layout.gy, y = region.y + layout.gy,
+                 rows = layout.rows, dQN = layout.dQN, heightQN = layout.heightQN,
+                 H = layout.H, classify = layout.classify }
 
   -- Separators draw in the ui font: the grid font (Source Code Pro) lacks the
   -- ∘ ring operator, so it would render blank in the grid register.
@@ -190,10 +211,10 @@ local function drawSwingBand(composite, factors)
     return x + GLYPH_BOX
   end
 
-  local x = x0
+  local x = bandX
   geom.x = x
-  drawSwingStrip(p, materialise(composite), periodQN, geom)
-  x = x + stripW
+  drawSwingStrip(p, materialise(composite), layout.periodQN, geom)
+  x = x + layout.stripW
 
   if #factors > 1 then
     x = glyph(x, '=')
@@ -201,13 +222,13 @@ local function drawSwingBand(composite, factors)
       geom.x = x
       local one = { factors = { factors[i] } }
       drawSwingStrip(p, materialise(one), timing.compositePeriodQN(one), geom)
-      x = x + stripW
+      x = x + layout.stripW
       if i > 1 then x = glyph(x, '\xe2\x88\x98') end
     end
   end
 
+  p.popClip()
   ImGui.PopFont(ctx)
-  ImGui.Dummy(ctx, x - x0, geom.H + 2 * gy)
 end
 
 local function swingRead()
@@ -286,11 +307,16 @@ local function moveFactor(i, dir)
   swingWrite(c)
 end
 
-local function drawFactorRow(i, f)
+local function drawFactorRow(i, f, numColW, n)
   ImGui.PushID(ctx, i)
 
+  -- Right-align the index in a fixed-width column so the dropdowns line up
+  -- whether the factor count is single- or double-digit.
   ImGui.AlignTextToFramePadding(ctx)
-  ImGui.Text(ctx, string.format('%d.', i))
+  local label  = string.format('%d.', i)
+  local startX = ImGui.GetCursorPosX(ctx)
+  ImGui.SetCursorPosX(ctx, startX + numColW - ImGui.CalcTextSize(ctx, label))
+  ImGui.Text(ctx, label)
   ImGui.SameLine(ctx)
 
   local pickedAtom = chrome.dropdown('atom', f.atom, SWING_ATOMS)
@@ -369,9 +395,13 @@ local function drawFactorRow(i, f)
   if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
 
   ImGui.SameLine(ctx)
-  if ImGui.ArrowButton(ctx, '##up', ImGui.Dir_Up)   then moveFactor(i, -1) end
+  chrome.disabledIf(i == 1, function()
+    if ImGui.Button(ctx, '\xe2\x86\x91##up') then moveFactor(i, -1) end   -- ↑ raise
+  end)
   ImGui.SameLine(ctx)
-  if ImGui.ArrowButton(ctx, '##dn', ImGui.Dir_Down) then moveFactor(i,  1) end
+  chrome.disabledIf(i == n, function()
+    if ImGui.Button(ctx, '\xe2\x86\x93##dn') then moveFactor(i,  1) end   -- ↓ lower
+  end)
   ImGui.SameLine(ctx)
   if ImGui.Button(ctx, 'del')                       then removeFactor(i)  end
 
@@ -611,19 +641,53 @@ local function drawToolsRow(composite, n)
 end
 
 local function drawEditBody(composite)
-  -- Greyed-out when no slot is selected: still rendered so the chrome
-  -- (preview band, factor rows) stays in place and the body doesn't shrink.
-  if not state.name then ImGui.BeginDisabled(ctx) end
   local factors = readFactors(composite)
-  drawSwingBand(composite, factors)
-  ImGui.Separator(ctx)
 
-  for i, f in ipairs(factors) do
-    drawFactorRow(i, f)
+  -- Header, band and splitter stay live regardless of selection; factor editor greys out when
+  -- no swing is selected. Header runs in plain chrome state so divider aligns across pane gap.
+  chrome.paletteHeader('preview')
+
+  local layout = bandLayout(composite, factors)
+  local availW, bodyAvailH = ImGui.GetContentRegionAvail(ctx)
+  local minH   = layout.gy * 3
+  local maxH   = math.max(minH, bodyAvailH - MIN_FACTOR_AREA)
+
+  -- Fit preview to content on open and on rows/qn change (capped to keep MIN_FACTOR_AREA);
+  -- a manual splitter drag overrides until rows/qn changes again.
+  if state.previewRpb ~= state.rpb then
+    state.previewRpb = state.rpb
+    state.previewH   = math.min(maxH, math.max(minH, layout.contentH))
   end
 
-  if ImGui.Button(ctx, '+ add factor') then addFactor() end
+  local px, py = ImGui.GetCursorScreenPos(ctx)
+  local region = { x = px, y = py, w = availW, h = state.previewH }
 
+  drawBandInto(layout, composite, factors, region)
+  ImGui.Dummy(ctx, region.w, region.h)
+
+  -- 'factors' header; divider doubles as splitter. Drag is relative (anchored at grab)
+  -- so the rule stays under the cursor rather than jumping by the header height.
+  local ruleY = chrome.paletteHeader('factors')
+  local afterX, afterY = ImGui.GetCursorScreenPos(ctx)
+  ImGui.SetCursorScreenPos(ctx, afterX, ruleY - math.floor(DIVIDER_GRAB / 2))
+  ImGui.InvisibleButton(ctx, '##previewSplit', availW, DIVIDER_GRAB)
+  local hovered, active = ImGui.IsItemHovered(ctx), ImGui.IsItemActive(ctx)
+  if active then
+    local _, my = ImGui.GetMousePos(ctx)
+    state.splitDrag = state.splitDrag or { y0 = my, h0 = state.previewH }
+    state.previewH  = math.max(minH, math.min(maxH, state.splitDrag.h0 + (my - state.splitDrag.y0)))
+  else
+    state.splitDrag = nil
+  end
+  if hovered or active then ImGui.SetMouseCursor(ctx, ImGui.MouseCursor_ResizeNS) end
+  ImGui.SetCursorScreenPos(ctx, afterX, afterY)
+
+  if not state.name then ImGui.BeginDisabled(ctx) end
+  local numColW = ImGui.CalcTextSize(ctx, string.format('%d.', #factors))
+  for i, f in ipairs(factors) do
+    drawFactorRow(i, f, numColW, #factors)
+  end
+  if ImGui.Button(ctx, '+ add factor') then addFactor() end
   if not state.name then ImGui.EndDisabled(ctx) end
 end
 
@@ -635,19 +699,11 @@ local function draw(w, h)
   local composite = (state.name and swingRead()) or {}
 
   chrome.pushChromeStyles()
-  -- Leaner frames, but the trimmed height goes back into ItemSpacing so factor
-  -- rows keep their pitch (frame height and row pitch are otherwise coupled).
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
-  local spx, spy = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_ItemSpacing, spx, spy + 2)
-  ImGui.PushStyleColor(ctx, ImGui.Col_Separator, chrome.colour('toolbar.buttonBorder'))
   if ImGui.BeginChild(ctx, '##swingEditor', w, h) then
     drawEditBody(composite)
     drawCreateModal()
   end
   ImGui.EndChild(ctx)
-  ImGui.PopStyleColor(ctx, 1)
-  ImGui.PopStyleVar(ctx, 2)
   chrome.popChromeStyles()
 end
 

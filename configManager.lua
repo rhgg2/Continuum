@@ -135,6 +135,7 @@ local declarations = {
   { 'colour.rowNormal',        {'palette.base.zone8',  0   }      },
   { 'colour.rowBeat',          {'palette.base.zone7',  0.4 }      },
   { 'colour.rowBarStart',      {'palette.base.zone6',  0.4 }      },
+  { 'colour.swing.previewBorder', 'palette.base.zone5'            },  -- swing editor preview-pane frame
   { 'colour.editCursor',       hex('#ffff00')                     },  -- one-off yellow
   { 'colour.selection',        {'palette.base.zone10', 0.5 }      },
   { 'colour.scrollHandle',     'colour.text'                      },
