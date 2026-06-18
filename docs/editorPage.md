@@ -124,13 +124,18 @@ edits to the snapshot; it appears only for panes that expose `onReset`
 
 ## What's deferred
 
-Shipped: the page skeleton and pane split, the swing editor, the
+Shipped: the page skeleton and pane split, the swing editor, the temper
+content pane (cents / period / per-step-name authoring; `+New` seeds an
+empty project temper), the Option-B nameless-step display and derived
+`cellWidth` in `tuning.lua` (the tracker pitch cell widens to fit), the
 three-tier library tree with lazy global seeding and copy-on-assign
 localisation, the Active/Project/Global navigation, and the
 entry/exit/Esc plumbing.
 
-Still ahead: the temper content pane (cents / period / per-step-name
-authoring; temper `+New` lights up there), the Option-B nameless-step
-display in `tuning.lua`, and Scala `.scl` import. If swing and temper
-CRUD prove to genuinely overlap once temper authoring lands, the
-library shell is the natural thing to extract.
+The library shell did not need extracting: `editorRender`'s tree + action
+bar are already descriptor-driven, and only the content panes differ.
+
+Still ahead: Scala `.scl` import (parse comment/count/pitches; ratios →
+cents, cents pass through; `cents = {0} ∪ scl[1..n-1]`, `period = scl[n]`,
+empty `stepNames`). `.kbm` deferred. Temper-rename in the pane (the name
+is a library key; today it's set only at `+New`) is also unbuilt.

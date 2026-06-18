@@ -4,29 +4,51 @@
 --invariant: pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
 --invariant: intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain
 --invariant: detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
---invariant: first step of every temper is C; octaveStep derivation depends on this
+--invariant: cents[1] is the unison (0); nameless step displays as degree-octave via M.stepToText
 --invariant: octave parameters are MIDI-relative (C4 → 4), not period-index
---shape: Temper = {name=string, period=cents, cents=number[ascending], stepNames=string[], octaveStep=int}
+--shape: Temper = {name=string, period=cents, cents=number[ascending], stepNames=string[], octaveStep=int, cellWidth=int}
 local M = {}
 
 ----- Temperament presets
 
-local function computeOctaveStep(stepNames)
-  for i = #stepNames, 1, -1 do
-    if stepNames[i]:sub(1, 1) ~= 'C' then return i + 1 end
+-- octaveStep: first step whose label reads as the next octave's C. Scans from
+-- the end for the last non-C name; nameless scale → bump at period (n+1).
+local function computeOctaveStep(stepNames, n)
+  for i = n, 1, -1 do
+    local nm = stepNames[i]
+    if nm and nm ~= '' and nm:sub(1, 1) ~= 'C' then return i + 1 end
   end
-  return 1
+  return n + 1
+end
+
+-- cellWidth: widest step label width (named: utf8 len; nameless: digits+dash).
+-- Tracker pitch cell sizes to this so long names and >9-step scales fit.
+local function computeCellWidth(stepNames, n)
+  local widest = 0
+  for i = 1, n do
+    local nm   = stepNames[i]
+    local base = (nm and nm ~= '') and utf8.len(nm) or (#tostring(i) + 1)
+    if base > widest then widest = base end
+  end
+  return widest + 1
+end
+
+--contract: stamps octaveStep + cellWidth from cents/stepNames on every edit. Pure; returns temper.
+function M.derive(temper)
+  local n = #temper.cents
+  temper.octaveStep = computeOctaveStep(temper.stepNames or {}, n)
+  temper.cellWidth  = computeCellWidth(temper.stepNames or {}, n)
+  return temper
 end
 
 local function edo(n, names)
   local cents = {}
   for i = 1, n do cents[i] = math.floor((i - 1) * 1200 / n + 0.5) end
-  return {
-    name       = n .. 'EDO',
-    period     = 1200,
-    cents      = cents,
-    stepNames  = names,
-    octaveStep = computeOctaveStep(names),
+  return M.derive{
+    name      = n .. 'EDO',
+    period    = 1200,
+    cents     = cents,
+    stepNames = names,
   }
 end
 
@@ -119,10 +141,12 @@ local function octaveLabel(o)
   return o == -1 and 'M' or tostring(o)
 end
 
---contract: bumps displayed octave by 1 when step >= temper.octaveStep (C-variant tail belongs to next octave by label convention)
+--contract: name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.
 function M.stepToText(temper, step, octave)
   if step >= temper.octaveStep then octave = octave + 1 end
-  return temper.stepNames[step] .. octaveLabel(octave)
+  local name = temper.stepNames and temper.stepNames[step]
+  if name and name ~= '' then return name .. octaveLabel(octave) end
+  return step .. '-' .. octaveLabel(octave)
 end
 
 return M

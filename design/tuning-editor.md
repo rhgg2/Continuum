@@ -5,9 +5,18 @@ Workshop (sevish.com/scaleworkshop). Scope grew into a shared
 **project-tier library workbench page** hosting both the tuning (temper)
 editor and the existing swing editor.
 
-Status as of commit `f3c817d` ("editor: add project-tier swing/temper
-workbench page"): **phase 1 done, committed, suite green (1514/0).**
-Phases 2–3 not started.
+Status: **phase 1 committed; phase-2 tuning content pane + Option-B +
+variable-width pitch cell landed (uncommitted), suite green (1527/0).**
+Remaining in phase 2: Scala `.scl` import. Phase 3 not started.
+
+What phase 2 added: `tuning.derive` stamps `octaveStep` + a new `cellWidth`
+(widest label, incl. octave char); `stepToText` falls back to `degree-octave`
+for blank names (Option B); the tracker pitch column sizes to `cellWidth`
+(editCursor `decorateCol(col, pitchWidth)`, trackerRender reads `tv:cellWidth()`);
+`temperEditor` is now a full authoring pane (cents/period/per-step-name,
+`+New`, snapshot/Reset/dirty) mirroring `swingEditor`. The nameless-cell
+decision (resolved with the user): keep the `-` separator, **widen** per
+temper rather than cramming into 3 chars.
 
 ---
 

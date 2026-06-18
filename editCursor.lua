@@ -712,11 +712,9 @@ end
 ----- Decoration
 
 do
-  -- Part primitives: char `width` and `stops` (cursor offsets within the
-  -- part). pitch's middle char ('-' between letter and octave) is
-  -- skipped — width 3, only 2 stops.
+  -- Part primitives: char `width` and `stops` (cursor offsets within the part).
+  -- pitch is built per-column in decorateCol (width = active cellWidth, stops {0, width-1}).
   local PARTS = {
-    pitch  = { width = 3, stops = {0, 2}    },   -- C-4
     sample = { width = 2, stops = {0, 1}    },   -- 7F (tracker mode)
     vel    = { width = 2, stops = {0, 1}    },   -- 30
     delay  = { width = 3, stops = {0, 1, 2} },   -- 040
@@ -739,16 +737,18 @@ do
     end
   end
 
-  --contract: derives col's part fields from type/showDelay/trackerMode
+  --contract: derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
   --invariant: ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
-  function ec:decorateCol(col)
+  function ec:decorateCol(col, pitchWidth)
     local parts = partsFor(col.type, col.showDelay, col.trackerMode)
     col.parts = parts
+    pitchWidth = pitchWidth or 3
+    local pitch = { width = pitchWidth, stops = { 0, pitchWidth - 1 } }
 
     local stopPos, partAt, partStart = {}, {}, {}
     local x = 0
     for _, name in ipairs(parts) do
-      local p = PARTS[name]
+      local p = name == 'pitch' and pitch or PARTS[name]
       local first = #stopPos + 1
       for _, off in ipairs(p.stops) do
         util.add(stopPos,   x + off)

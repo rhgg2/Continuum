@@ -1845,6 +1845,7 @@ function tv:clipboard() return clipboard end
 function tv:rowPerBar()      return rowPerBar end
 function tv:takeName()       return tm:name() end
 function tv:activeTemper()   return ctx:activeTemper() end
+function tv:cellWidth()      local t = ctx:activeTemper(); return t and t.cellWidth or 3 end
 function tv:noteProjection(evt) return ctx:noteProjection(evt) end
 function tv:rowBeatInfo(row) return ctx:rowBeatInfo(row) end
 function tv:barBeatSub(row) return ctx:barBeatSub(row) end
@@ -2450,6 +2451,8 @@ function tv:rebuild(takeChanged)
 
     local noteDelayCfg = ds:get('noteDelay') or {}
     local trackerMode  = cm:get('trackerMode')
+    local temper       = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
+    local pitchWidth   = temper and temper.cellWidth or 3
 
     local function addGridCol(chan, type, key, events)
       local showDelay = type == 'note' and (noteDelayCfg[chan] or {})[key] or false
@@ -2465,7 +2468,7 @@ function tv:rebuild(takeChanged)
         midiChan    = chan,
         cells       = {},
       }
-      ec:decorateCol(gridCol)   -- stamps parts/stopPos/partAt/partStart/width
+      ec:decorateCol(gridCol, pitchWidth)   -- stamps parts/stopPos/partAt/partStart/width
       util.add(grid.cols, gridCol)
       grid.chanFirstCol[chan] = grid.chanFirstCol[chan] or #grid.cols
       grid.chanLastCol[chan]  = #grid.cols
@@ -2493,7 +2496,7 @@ function tv:rebuild(takeChanged)
       rowPerBeat = rpb,
       ppqPerRow  = ppqPerRow,
       timeSigs   = timeSigs,
-      temper     = tuning.findTemper(cm:get('temper'), cm:get('tempers')),
+      temper     = temper,
     })
 
     for ci, gridCol in ipairs(grid.cols) do

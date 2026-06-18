@@ -1,37 +1,44 @@
-@module tuning  src=tuning.lua  loc=128  sha=24be50a  mode=namespace
+@module tuning  src=tuning.lua  loc=152  sha=24be50a  mode=namespace
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
   @invariant  intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain
   @invariant  detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
-  @invariant  first step of every temper is C; octaveStep derivation depends on this
+  @invariant  cents[1] is the unison (0); nameless step displays as degree-octave via M.stepToText
   @invariant  octave parameters are MIDI-relative (C4 → 4), not period-index
 
 # Shapes
-  @shape  Temper = {name=string, period=cents, cents=number[ascending], stepNames=string[], octaveStep=int}
+  @shape  Temper = {name=string, period=cents, cents=number[ascending], stepNames=string[], octaveStep=int, cellWidth=int}
 
 # Module-level constants
   @const M = {}  @ 10
 
 # Private functions
   -- Temperament presets
-  @fn computeOctaveStep(stepNames)  @ 14
-  @fn edo(n, names)  @ 21
+  @fn computeOctaveStep(stepNames, n)  @ 16
+      -- octaveStep: first step whose label reads as the next octave's C. Scans from
+      -- the end for the last non-C name; nameless scale → bump at period (n+1).
+  @fn computeCellWidth(stepNames, n)  @ 26
+      -- cellWidth: widest step label width (named: utf8 len; nameless: digits+dash).
+      -- Tracker pitch cell sizes to this so long names and >9-step scales fit.
+  @fn edo(n, names)  @ 44
   -- Coordinate conversions
   -- Display
-  @fn octaveLabel(o)  @ 118
+  @fn octaveLabel(o)  @ 140
       -- Octave -1 renders as "M" so the cell width stays fixed.
 
 # Public API (M.*)
-  @api M.findTemper(name, userLib)  @ 56
+  @api M.derive(temper)  @ 37
+      @contract  stamps octaveStep + cellWidth from cents/stepNames on every edit. Pure; returns temper.
+  @api M.findTemper(name, userLib)  @ 78
       @contract  looks up name in userLib first, then falls back to built-in M.presets; returns nil only if name is missing or unknown to both. Lets the '12EDO' sentinel resolve even when userLib is empty.
-  @api M.midiToStep(temper, midi, detune)  @ 65
+  @api M.midiToStep(temper, midi, detune)  @ 87
       @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
       @contract  returned octave is MIDI-relative (C-1 → -1)
-  @api M.stepToMidi(temper, step, octave)  @ 87
+  @api M.stepToMidi(temper, step, octave)  @ 109
       @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
-  @api M.snap(temper, midi, detune)  @ 105
-  @api M.transposeStep(temper, midi, detune, n)  @ 110
+  @api M.snap(temper, midi, detune)  @ 127
+  @api M.transposeStep(temper, midi, detune, n)  @ 132
       @contract  moves by n scale steps under temper, carrying the octave; n may be negative
-  @api M.stepToText(temper, step, octave)  @ 123
-      @contract  bumps displayed octave by 1 when step >= temper.octaveStep (C-variant tail belongs to next octave by label convention)
+  @api M.stepToText(temper, step, octave)  @ 145
+      @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.

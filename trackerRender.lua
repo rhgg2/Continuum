@@ -89,9 +89,11 @@ local function renderNote(evt, col, row)
 
   local showDelay  = col and col.showDelay
   local showSample = col and col.trackerMode
+  local cellWidth  = tv:cellWidth()
+  local blank      = string.rep('·', cellWidth)   -- cellWidth dots = empty pitch field
 
   if not evt then
-    local s = '···' .. (showSample and ' ··' or '') .. ' ··'
+    local s = blank .. (showSample and ' ··' or '') .. ' ··'
     if showDelay then s = s .. ' ···' end
     return s
   end
@@ -99,18 +101,22 @@ local function renderNote(evt, col, row)
   local label
   if evt.type ~= 'pa' then
     label = select(1, tv:noteProjection(evt)) or noteName(evt.pitch)
+    -- Right-align short labels so the octave lands at the cell's last column
+    -- (the second cursor stop), matching decorateCol's {0, cellWidth-1}.
+    local pad = cellWidth - utf8.len(label)
+    if pad > 0 then label = string.rep(' ', pad) .. label end
   end
   local isPA      = evt.type == 'pa'
-  local noteTxt   = isPA and '···' or label
+  local noteTxt   = isPA and blank or label
   local velTxt    = evt.vel and string.format('%02X', evt.vel) or '··'
   local sampleTxt = showSample and (' ' .. (isPA and '··' or string.format('%02X', evt.sample or 0))) or ''
   local text      = noteTxt .. sampleTxt .. ' ' .. velTxt
 
-  -- Sample digits sit at fixed positions 5,6 (after 'C-4 '). Shadowed
-  -- and negative-delay overrides occupy disjoint ranges, so they coexist.
+  -- Sample digits at cellWidth+2, +3 (after note label + trailing space).
+  -- Shadowed and negative-delay overrides occupy disjoint ranges.
   local overrides
   if showSample and evt.sampleShadowed then
-    overrides = { [5] = 'shadowed', [6] = 'shadowed' }
+    overrides = { [cellWidth + 2] = 'shadowed', [cellWidth + 3] = 'shadowed' }
   end
 
   -- delayC is the realised-frame delay; divergence (delay ~= delayC) means
@@ -125,7 +131,7 @@ local function renderNote(evt, col, row)
     end
     text = text .. ' ' .. string.format('%03d', math.abs(d))
     if d < 0 then
-      local n = #text
+      local n = utf8.len(text)   -- display columns, not bytes (note label may be multibyte)
       overrides = overrides or {}
       overrides[n-2], overrides[n-1], overrides[n] = 'negative', 'negative', 'negative'
     end
@@ -159,12 +165,10 @@ local function renderCell(evt, col, row)
   if fn then return fn(evt, col, row) end
 end
 
--- Offset (in grid cells) of the gap that sits just before the 3 delay
--- digits in a note cell. The * marker is dropped here. Layout: pitch(3)
--- + optional sample(3) + ' ' + vel(2). The next char is the separator
--- space-before-delay -- our marker slot.
-local function delayMarkerOffset(col)
-  return 3 + (col.trackerMode and 3 or 0) + 1 + 2
+-- Offset of the gap before the 3 delay digits in a note cell (* marker slot).
+-- Layout: pitch(W) + optional sample(3) + ' ' + vel(2); W = active cellWidth.
+local function delayMarkerOffset(col, cellWidth)
+  return cellWidth + (col.trackerMode and 3 or 0) + 1 + 2
 end
 
 ----- Drawing
@@ -792,6 +796,7 @@ local function drawTracker()
     end
   end
 
+  local cellWidth = tv:cellWidth()
   for y = 0, gridHeight - 1 do
     local row = scrollRow + y
     if row >= numRows then break end
@@ -823,7 +828,7 @@ local function drawTracker()
           cx = cx + 1
         end
         if divergent and col.showDelay then
-          draw:smallGlyph(col.x + delayMarkerOffset(col), y, '*', 9, textCol)
+          draw:smallGlyph(col.x + delayMarkerOffset(col, cellWidth), y, '*', 9, textCol)
         end
       end
     end
@@ -833,7 +838,7 @@ local function drawTracker()
     for _, col in ipairs(grid.cols) do
       if col.x and col.type == 'note' and col.cells then
         local x0 = gridOriginX + col.x * gridX
-        local x1 = x0 + 3 * gridX
+        local x1 = x0 + cellWidth * gridX
         local cx = (x0 + x1) / 2
         local halfW = (x1 - x0) / 2 - 1
         for y = 0, gridHeight - 1 do

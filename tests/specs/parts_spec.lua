@@ -19,13 +19,13 @@ end
 
 -- Decorate a col through ec; ec needs deps but only `grid` is touched by
 -- decorateCol. Pass an empty grid.
-local function decorate(col)
+local function decorate(col, pitchWidth)
   local ec = util.instantiate('editCursor', {
     grid = { cols = {}, numRows = 1 },
     cm = { get = function() return 0 end },
     rowPerBar = function() return 4 end,
   })
-  ec:decorateCol(col)
+  ec:decorateCol(col, pitchWidth)
   return col
 end
 
@@ -48,6 +48,16 @@ return {
       t.deepEq(c.parts,   {'pitch', 'vel', 'delay'},     'parts')
       t.deepEq(c.stopPos, {0, 2, 4, 5, 7, 8, 9},         'stopPos')
       t.eq    (c.width,   10,                            'width')
+    end,
+  },
+
+  {
+    name = 'note pitch width follows the active temper: width 4 → stopPos {0,3,5,6}, width 7',
+    run = function()
+      local c = decorate(mkCol('note', false), 4)
+      t.deepEq(c.parts,   {'pitch', 'vel'}, 'parts')
+      t.deepEq(c.stopPos, {0, 3, 5, 6},     'stopPos: pitch {0,3} then vel {5,6}')
+      t.eq    (c.width,   7,                'width')
     end,
   },
 

@@ -84,6 +84,7 @@ local specs = {
   'vm_grid_spec',
   'vm_editing_spec',
   'view_context_spec',
+  'tuning_spec',
   'parts_spec',
   'vm_tracker_mode_spec',
   'sample_view_spec',

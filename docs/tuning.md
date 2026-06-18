@@ -163,8 +163,9 @@ temper = {
   name       = '31EDO',
   period     = 1200,                -- cents per octave (always 1200 for EDO)
   cents      = { 0, 39, 77, ... },  -- ascending, length = step count
-  stepNames  = { 'C-', 'C↑', ... }, -- one per step
+  stepNames  = { 'C-', 'C↑', ... }, -- one per step ('' = nameless, displays as degree)
   octaveStep = <index>,             -- derived; see below
+  cellWidth  = <chars>,             -- derived; tracker pitch-cell width
 }
 ```
 
@@ -181,7 +182,9 @@ name is enharmonically the *next* C (e.g. `C↓` in 31EDO, `C↓` in
 applies. It is auto-derived by scanning `stepNames` from the end and
 finding the last non-C name — every step past it is a C-variant that
 reads as the next octave. Derivation lives next to the temperament
-table so the two stay in sync.
+table so the two stay in sync. A nameless scale has no C-tail, so the
+bump sits at the period (`octaveStep = #cents + 1`, never reached by a
+real step).
 
 `stepToText` adds 1 to the displayed octave when `step >= octaveStep`.
 
@@ -199,11 +202,18 @@ table so the two stay in sync.
 ## Display
 
 ```
-M / 0 / 1 / 2 ...                -- octave labels
+C-4 / 7-4 / 12-M               -- pitch-cell labels
 ```
 
-Octave -1 renders as `"M"` so the cell width stays fixed at 3 chars
-(e.g. `C-M` for MIDI 0 vs `C-4` for MIDI 60).
+A step renders as its name plus the octave (`C-4`). A **nameless step** —
+one whose `stepNames` entry is blank — falls back to its degree with a
+dash separator (`7-4`), reusing the named cell's shape. Octave -1 renders
+as `"M"` (so `C-M` for MIDI 0 vs `C-4` for MIDI 60).
+
+`cellWidth` is the derived char width of the widest label (longest name,
+or a 2-digit degree, plus the octave char). The tracker sizes the pitch
+column to it, so long names and >9-step nameless scales stay aligned;
+12-EDO and the other presets derive 3 — the historic fixed width.
 
 ## Slot registry
 
@@ -226,7 +236,9 @@ Mirrors the swing model in `docs/timing.md`:
 - **All `tuning.lua` functions are pure.** Pass the temper; no
   module-level current temper. vm/tm read `cm:get('temper')` and
   forward it.
-- **First step is always C.** Temper construction assumes this when
-  deriving `octaveStep`.
+- **Step naming is optional.** A named step displays as name+octave; a
+  blank name falls back to its degree (Option B). `octaveStep` and
+  `cellWidth` derive from the names — `tuning.derive` restamps both on
+  every cents/name edit.
 - **Detune is cents** throughout (never raw 14-bit). Conversion to
   raw pb happens only inside tm's flush boundary.

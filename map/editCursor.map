@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=767  sha=0678a54  mode=chunk
+@module editCursor  src=editCursor.lua  loc=767  sha=803aee0  mode=chunk
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -17,7 +17,7 @@
   @invariant  sel.part1/part2 are part names, or '*' sentinel under hBlock=2/3
   @invariant  clip.single.type ∈ {'note', '7bit', 'pb'}
   @contract  idempotent; seeds nav cursor from caret instance, else active group's first
-  @contract  derives col's part fields from type/showDelay/trackerMode
+  @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
   @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
 
 # Shapes
@@ -159,6 +159,6 @@
   @use call    groupBridge.instanceSelection  @ 620
   @use call    groupBridge.paintStream  @ 614
   @use call    groupBridge.selectionAsRect  @ 528
-  @use call    util.add  @ 731, 732, 733, 754, 755, 756
+  @use call    util.add  @ 729, 730, 731, 754, 755, 756
   @use call    util.clamp  @ 56, 57, 58, 453, 454, 455, 577, 593
   @use require util  @ 25

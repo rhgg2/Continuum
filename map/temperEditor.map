@@ -1,19 +1,23 @@
-@module temperEditor  src=temperEditor.lua  loc=131  sha=5568994  mode=chunk
+@module temperEditor  src=temperEditor.lua  loc=341  sha=11dccac  mode=chunk
 @deps cm, chrome, ctx
 
 # Imports
-  @require util = 'util'  @ 7
-  @require tuning = 'tuning'  @ 8
-  @require ImGui = 'imgui'  @ 14
+  @require util = 'util'  @ 3
+  @require tuning = 'tuning'  @ 4
+  @require ImGui = 'imgui'  @ 10
 
 # Private state
-  @state selected = nil  @ 18   -- name being viewed; nil follows the active slot
-  @state selTier = nil  @ 19   -- tier of the current selection ('project' | 'global')
-  @state SYNTHETIC = { ['12EDO'] = true }  @ 23
-  @state self = {}  @ 126
+  @state CENT = '\xc2\xa2'  @ 14
+  @state TEMPER_ERR = 0xff6060ff  @ 15
+  @state SYNTHETIC = { ['12EDO'] = true }  @ 16
+  @state selected = nil  @ 18   -- explicitly-selected entry; nil follows the active slot
+  @state selTier = nil  @ 19   -- tier of the selection ('project' | 'global')
+  @state snapshot = nil  @ 20   -- selection-time copy, for dirty-check + Reset
+  @state create = nil  @ 21   -- { buf, err?, gen?, refocus? } — New-temper modal substate
+  @state self = {}  @ 336
 
 # Private functions
-  @fn viewedName()  @ 21
+  @fn viewedName()  @ 23
   @fn projectTempers()  @ 25
   @fn globalTempers()  @ 28
       -- Reading the global library lazily seeds it from the EDO catalogue (minus the
@@ -23,38 +27,100 @@
       -- synthetic '12EDO' floor too).
   @fn sortedNames(tbl)  @ 40
   @fn temperFor(name)  @ 47
-  @fn promote(name)  @ 49
-  @fn demote(name)  @ 56
-  @fn deleteSel(tier, name)  @ 64
-  @fn buildDescriptor()  @ 77
-  @fn draw(w, h)  @ 98
+  @fn editedTemper()  @ 51
+      -- The selected entry's own tier copy. nil when nothing is selected or the
+      -- selection is a merge-floor with no tier copy — editing needs a dup first.
+  @fn selectTemper(name, tier)  @ 57
+      -- Select without closing the pane; recapture the snapshot so dirty / Reset stay
+      -- coherent. tier defaults to the home tier.
+  -- Authoring writes
+  @fn sortSteps(temper)  @ 67
+      -- Sort the (cents, name) pairs ascending by cents so tuning.lua's ordered
+      -- assumptions hold; the unison stays at the front at 0.
+  @fn temperWrite(temper, normalize)  @ 81
+      -- Sole write path. normalize sorts the steps (after a cents edit crosses a
+      -- neighbour); tuning.derive restamps octaveStep + cellWidth either way.
+  @fn cloneForEdit()  @ 91
+      -- Editable clone with stepNames densified to #cents ('' for unnamed) so sort
+      -- and table.remove stay array operations.
+  @fn setStepCents(i, c)  @ 100
+  @fn commitSteps()  @ 107
+      -- On field-commit: re-sort so the edited step lands in pitch order.
+  @fn setStepName(i, nm)  @ 112
+  @fn setPeriod(p)  @ 118
+  @fn addStep()  @ 124
+  @fn removeStep(i)  @ 132
+  @fn dirty()  @ 139
+  @fn resetToSnapshot()  @ 144
+  -- Tier-aware library writes
+  @fn promote(name)  @ 151
+  @fn demote(name)  @ 158
+  @fn deleteSel(tier, name)  @ 166
+  @fn buildDescriptor()  @ 179
+  -- Draw
+  @fn drawHeader(temper)  @ 204
+  @fn drawStepTable(temper)  @ 219
+  @fn drawCreateModal()  @ 255
+      -- '+ New' modal, copied from swingEditor's pattern: lives at draw top-level so
+      -- the popup isn't bound to the child window's lifetime.
+  @fn draw(w, h)  @ 309
 
 # Public API (self:*)
   -- Public
-  @api self:select(name)  @ 127
-  @api self:render(w, h)  @ 128
-  @api self:libraryDescriptor()  @ 129
-  @api self:modalActive()  @ 130
+  @api self:select(name)  @ 337
+  @api self:render(w, h)  @ 338
+  @api self:libraryDescriptor()  @ 339
+  @api self:modalActive()  @ 340
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 100
-  @use call    chrome.popChromeStyles  @ 122
-  @use call    chrome.pushChromeStyles  @ 99
-  @use call    cm.get  @ 21, 47, 81, 103
-  @use call    cm.getAt  @ 25, 30
+  @use call    chrome.colour  @ 312
+  @use call    chrome.popChromeStyles  @ 332
+  @use call    chrome.popChromeWindow  @ 306
+  @use call    chrome.pushChromeStyles  @ 310
+  @use call    chrome.pushChromeWindow  @ 263
+  @use call    cm.get  @ 23, 47, 183, 285
+  @use call    cm.getAt  @ 25, 30, 52, 84
   @use call    cm.seedGlobalFromDefault  @ 29
-  @use call    cm.set  @ 53, 60, 68
-  @use call    imgui.BeginChild  @ 101, 110
-  @use call    imgui.EndChild  @ 117, 120
-  @use call    imgui.PopStyleColor  @ 121
-  @use call    imgui.PushStyleColor  @ 100
-  @use call    imgui.Separator  @ 109
-  @use call    imgui.Text  @ 105, 107, 113
-  @use call    tuning.findTemper  @ 47, 103
-  @use call    util.deepClone  @ 52, 59
-  @use require imgui  @ 14
-  @use require tuning  @ 8
-  @use require util  @ 7
+  @use call    cm.set  @ 86, 155, 162, 170, 296
+  @use call    imgui.AlignTextToFramePadding  @ 205, 208, 215, 223, 235, 266
+  @use call    imgui.BeginChild  @ 220, 313
+  @use call    imgui.BeginDisabled  @ 228, 321
+  @use call    imgui.BeginPopupModal  @ 264
+  @use call    imgui.Button  @ 244, 250, 280, 282
+  @use call    imgui.CloseCurrentPopup  @ 265
+  @use call    imgui.EndChild  @ 249, 329
+  @use call    imgui.EndDisabled  @ 232, 325
+  @use call    imgui.EndPopup  @ 304
+  @use call    imgui.GetFrameHeightWithSpacing  @ 220
+  @use call    imgui.GetWindowViewport  @ 261
+  @use call    imgui.InputDouble  @ 212, 229
+  @use call    imgui.InputText  @ 239, 275
+  @use call    imgui.IsItemDeactivatedAfterEdit  @ 231
+  @use call    imgui.IsKeyPressed  @ 282
+  @use call    imgui.IsPopupOpen  @ 258
+  @use call    imgui.IsWindowAppearing  @ 269
+  @use call    imgui.OpenPopup  @ 259
+  @use call    imgui.PopID  @ 246, 277
+  @use call    imgui.PopStyleColor  @ 330
+  @use call    imgui.PopStyleVar  @ 331
+  @use call    imgui.PushID  @ 222, 274
+  @use call    imgui.PushStyleColor  @ 312
+  @use call    imgui.PushStyleVar  @ 311
+  @use call    imgui.SameLine  @ 207, 210, 214, 226, 234, 237, 243, 268, 279, 281
+  @use call    imgui.Separator  @ 323
+  @use call    imgui.SetKeyboardFocusHere  @ 270
+  @use call    imgui.SetNextItemWidth  @ 211, 227, 238, 273
+  @use call    imgui.SetNextWindowPos  @ 262
+  @use call    imgui.Text  @ 206, 209, 216, 224, 236, 267, 317
+  @use call    imgui.TextColored  @ 302
+  @use call    imgui.Viewport_GetCenter  @ 261
+  @use call    tuning.derive  @ 83
+  @use call    tuning.findTemper  @ 47
+  @use call    util.deepClone  @ 60, 94, 146, 154, 161
+  @use call    util.deepEq  @ 141
+  @use require imgui  @ 10
+  @use require tuning  @ 4
+  @use require util  @ 3
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
