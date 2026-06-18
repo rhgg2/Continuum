@@ -2,3 +2,4 @@
 /tests/.DS_Store
 .DS_Store
 /.claude/mcp/patches/__pycache__/
+/.claude/precedent.json
