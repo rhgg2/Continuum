@@ -221,7 +221,7 @@ local function frame()
     -- auto-resizes to fit. See docs/coordinator.md § Toolbar band height.
     local function drawToolbarRow()
       chrome.pushChromeStyles()
-      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 10, 3)
+      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
       local segs = { switcherSeg }
       for _, s in ipairs(page:toolbarSegments()) do segs[#segs + 1] = s end
       toolbar(segs)
@@ -229,9 +229,8 @@ local function frame()
       chrome.popChromeStyles()
     end
 
-    -- On a page switch, pre-measure the wrapped height (hidden child) and pin the
-    -- band so it lands frame-1. Switch-only — see docs/coordinator.md § Toolbar band height.
-    local pinH
+    -- Uniform band height: lineCount × standard row height, identical on every page.
+    -- Hidden pass on switch warms widths + line count so frame-1 pins correctly.
     if active ~= lastToolbarActive then
       lastToolbarActive = active
       local sx, sy = ImGui.GetCursorScreenPos(ctx)
@@ -240,23 +239,24 @@ local function frame()
       if ImGui.BeginChild(ctx, '##toolbarMeasure', 0, 0,
                           ImGui.ChildFlags_AutoResizeY | ImGui.ChildFlags_AlwaysUseWindowPadding,
                           ImGui.WindowFlags_NoScrollbar | ImGui.WindowFlags_NoNav) then
-        local _, topY = ImGui.GetCursorScreenPos(ctx)
         drawToolbarRow()
-        local bottomY = topY
-        for _, r in pairs(chrome.toolbarRects()) do
-          if r.y + r.h > bottomY then bottomY = r.y + r.h end
-        end
-        pinH = bottomY - topY
       end
       ImGui.EndChild(ctx)
       ImGui.PopStyleVar(ctx, 2)
       ImGui.SetCursorScreenPos(ctx, sx, sy)
     end
 
+    ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
+    local rowH = ImGui.GetFrameHeight(ctx)
+    ImGui.PopStyleVar(ctx, 1)
+    local _, spacingY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
+    local lines       = chrome.toolbarLineCount()
+    local bandH       = lines * rowH + (lines - 1) * spacingY
+
     chrome.resetPickerActive()
     ImGui.PushStyleColor(ctx, ImGui.Col_ChildBg, chrome.colour('toolbar.bg'))
     ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, CHROME_PAD_X, CHROME_PAD_Y)
-    if pinH and pinH > 0 then ImGui.SetNextWindowContentSize(ctx, 0, pinH) end
+    ImGui.SetNextWindowContentSize(ctx, 0, bandH)
     if ImGui.BeginChild(ctx, '##toolbar', 0, 0,
                         ImGui.ChildFlags_AutoResizeY | ImGui.ChildFlags_AlwaysUseWindowPadding,
                         ImGui.WindowFlags_NoScrollbar | ImGui.WindowFlags_NoNav) then

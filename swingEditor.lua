@@ -23,7 +23,6 @@ local ImGui = require 'imgui' '0.10'
 
 local SWING_ATOMS   = { 'id',
                         'classic', 'pocket', 'lilt', 'shuffle', 'tilt' }
-local SWING_ATOMS_Z = table.concat(SWING_ATOMS, '\0') .. '\0\0'
 
 local RPB_CHOICES   = { 1, 2, 3, 4, 6, 8, 12, 16 }
 
@@ -294,19 +293,16 @@ local function drawFactorRow(i, f)
   ImGui.Text(ctx, string.format('%d.', i))
   ImGui.SameLine(ctx)
 
-  local atomIdx = 0
-  for k, a in ipairs(SWING_ATOMS) do if a == f.atom then atomIdx = k - 1; break end end
-  ImGui.SetNextItemWidth(ctx, 90)
-  local rv, newIdx = ImGui.Combo(ctx, '##atom', atomIdx, SWING_ATOMS_Z)
-  if rv then
-    local newAtom  = SWING_ATOMS[newIdx + 1]
-    local lo, hi   = shiftCap({ atom = newAtom, period = f.period }, state.wild)
-    local shift    = f.shift or 0
+  local pickedAtom = chrome.dropdown('atom', f.atom, SWING_ATOMS)
+  if pickedAtom then
+    local newAtom = SWING_ATOMS[pickedAtom]
+    local lo, hi  = shiftCap({ atom = newAtom, period = f.period }, state.wild)
+    local shift   = f.shift or 0
     if     shift < lo then shift = lo * 0.999
     elseif shift > hi then shift = hi * 0.999 end
     patchFactor(i, { atom = newAtom, shift = shift })
+    commit()
   end
-  if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
 
   ImGui.SameLine(ctx)
   local lo, hi = shiftCap(f, state.wild)
@@ -329,28 +325,25 @@ local function drawFactorRow(i, f)
   ImGui.AlignTextToFramePadding(ctx)
   ImGui.Text(ctx, 'per')
   ImGui.SameLine(ctx)
-  ImGui.SetNextItemWidth(ctx, 50)
   local ppC    = timing.atomMeta[f.atom].pulsesPerCycle
   local tileQN = timing.atomTilePeriod(f)
   local pIdx   = periodPresetIndex(tileQN)
   local items = {}
   for _, p in ipairs(PERIOD_PRESETS) do items[#items+1] = p.label end
   if pIdx == 0 then items[#items+1] = periodLabel(tileQN) end
-  local itemsZ = table.concat(items, '\0') .. '\0\0'
-  local curIdx = pIdx > 0 and (pIdx - 1) or #PERIOD_PRESETS
-  local rvP, newPIdx = ImGui.Combo(ctx, '##per', curIdx, itemsZ)
-  if rvP and newPIdx + 1 <= #PERIOD_PRESETS then
+  local pickedPer = chrome.dropdown('per', periodLabel(tileQN), items)
+  if pickedPer and pickedPer <= #PERIOD_PRESETS then
     -- Scale shift in QN by the period ratio so the resolved s = shift/tileQN
     -- is invariant — slope and feel survive the period change.
-    local newPeriod = periodOverPPC(PERIOD_PRESETS[newPIdx + 1].period, ppC)
+    local newPeriod = periodOverPPC(PERIOD_PRESETS[pickedPer].period, ppC)
     local scale     = timing.periodQN(newPeriod) / timing.periodQN(f.period)
     local shift     = (f.shift or 0) * scale
     local lo, hi    = shiftCap({ atom = f.atom, period = newPeriod }, state.wild)
     if     shift < lo then shift = lo * 0.999
     elseif shift > hi then shift = hi * 0.999 end
     patchFactor(i, { period = newPeriod, shift = shift })
+    commit()
   end
-  if ImGui.IsItemDeactivatedAfterEdit(ctx) then commit() end
 
   -- Per-factor phase: slides this factor's fixed-point lattice. Range is
   -- [0, T); writes wrap on overflow so dragging never lands outside the
@@ -380,7 +373,7 @@ local function drawFactorRow(i, f)
   ImGui.SameLine(ctx)
   if ImGui.ArrowButton(ctx, '##dn', ImGui.Dir_Down) then moveFactor(i,  1) end
   ImGui.SameLine(ctx)
-  if ImGui.Button(ctx, 'x')                         then removeFactor(i)  end
+  if ImGui.Button(ctx, 'del')                       then removeFactor(i)  end
 
   ImGui.PopID(ctx)
 end
@@ -582,19 +575,10 @@ local function drawToolsRow(composite, n)
   ImGui.AlignTextToFramePadding(ctx)
   ImGui.Text(ctx, 'Rows/qn:')
   ImGui.SameLine(ctx, 0, 6)
-  local rpbBtn = tostring(state.rpb) .. ' \xe2\x96\xbe##rpb'
-  if ImGui.Button(ctx, rpbBtn) then ImGui.OpenPopup(ctx, '##rpb_popup') end
-  local btnX = ImGui.GetItemRectMin(ctx)
-  local _, btnY = ImGui.GetItemRectMax(ctx)
-  ImGui.SetNextWindowPos(ctx, btnX, btnY, ImGui.Cond_Appearing)
-  if ImGui.BeginPopup(ctx, '##rpb_popup', ImGui.WindowFlags_NoNav) then
-    for _, v in ipairs(RPB_CHOICES) do
-      if ImGui.Selectable(ctx, tostring(v), v == state.rpb) then
-        state.rpb = v
-      end
-    end
-    ImGui.EndPopup(ctx)
-  end
+  local rpbItems = {}
+  for _, v in ipairs(RPB_CHOICES) do rpbItems[#rpbItems+1] = tostring(v) end
+  local pickedRpb = chrome.dropdown('rpb', tostring(state.rpb), rpbItems)
+  if pickedRpb then state.rpb = RPB_CHOICES[pickedRpb] end
 
   ImGui.SameLine(ctx, 0, 12)
   chrome.verticalSeparator()
@@ -651,6 +635,11 @@ local function draw(w, h)
   local composite = (state.name and swingRead()) or {}
 
   chrome.pushChromeStyles()
+  -- Leaner frames, but the trimmed height goes back into ItemSpacing so factor
+  -- rows keep their pitch (frame height and row pitch are otherwise coupled).
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
+  local spx, spy = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_ItemSpacing, spx, spy + 2)
   ImGui.PushStyleColor(ctx, ImGui.Col_Separator, chrome.colour('toolbar.buttonBorder'))
   if ImGui.BeginChild(ctx, '##swingEditor', w, h) then
     drawEditBody(composite)
@@ -658,6 +647,7 @@ local function draw(w, h)
   end
   ImGui.EndChild(ctx)
   ImGui.PopStyleColor(ctx, 1)
+  ImGui.PopStyleVar(ctx, 2)
   chrome.popChromeStyles()
 end
 

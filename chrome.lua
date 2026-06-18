@@ -51,7 +51,11 @@ end
 local paintBinder = { colour = colour }
 
 local function pushChromeStyles()
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameBorderSize, 1)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameBorderSize, 0)
+  -- With the border gone the fill bleeds into the 1px ring it used to occupy;
+  -- trim a px per axis so framed widgets keep their old footprint.
+  local fpx, fpy = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, fpx - 1, fpy - 1)
   ImGui.PushStyleColor(ctx, ImGui.Col_Text,           colour('toolbar.text'))
   ImGui.PushStyleColor(ctx, ImGui.Col_Button,         colour('toolbar.button'))
   ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered,  colour('toolbar.buttonHover'))
@@ -71,7 +75,7 @@ end
 
 local function popChromeStyles()
   ImGui.PopStyleColor(ctx, 13)
-  ImGui.PopStyleVar(ctx, 1)
+  ImGui.PopStyleVar(ctx, 2)
 end
 
 -- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed the grid through.
@@ -129,6 +133,36 @@ local function radio(label, active)
   return pressed
 end
 
+-- House-style dropdown: button + popup of `items`. Width fits the widest entry
+-- so columns stay aligned across rows. Returns the picked 1-based index, else nil.
+local DROP_ARROW = ' \xe2\x96\xbe'   -- ' ▾'
+local function dropdown(id, current, items)
+  local widest = 0
+  for _, it in ipairs(items) do
+    local tw = ImGui.CalcTextSize(ctx, it .. DROP_ARROW)
+    if tw > widest then widest = tw end
+  end
+  local padX = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+  local btnW = widest + padX * 2
+  if ImGui.Button(ctx, current .. DROP_ARROW .. '##' .. id, btnW) then
+    ImGui.OpenPopup(ctx, id .. '_popup')
+  end
+  local x = ImGui.GetItemRectMin(ctx)
+  local _, y = ImGui.GetItemRectMax(ctx)
+  ImGui.SetNextWindowPos(ctx, x, y, ImGui.Cond_Appearing)
+  ImGui.SetNextWindowSize(ctx, btnW, 0)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_PopupBorderSize, 0)   -- flat menu, no outline
+  local picked
+  if ImGui.BeginPopup(ctx, id .. '_popup', ImGui.WindowFlags_NoNav) then
+    for idx, it in ipairs(items) do
+      if ImGui.Selectable(ctx, it, it == current) then picked = idx end
+    end
+    ImGui.EndPopup(ctx)
+  end
+  ImGui.PopStyleVar(ctx, 1)
+  return picked
+end
+
 -- Section label for toolbar segments: bold + uppercase + dimmed so it
 -- reads as a heading and not a control. Caller follows with SameLine.
 local function headingLabel(text)
@@ -145,6 +179,7 @@ end
 local lastToolbarRects = {}
 --invariant: one page draws per frame; cleared at next toolbar() start — no cross-page collision.
 local toolbarWidths = {}
+local toolbarLines  = 1   -- wrapped-row count from the last toolbar() draw
 local resetPending  = false
 -- Deferred: the switcher lives in the toolbar, so setActive fires mid-render — clearing
 -- now would unwrap this frame's later segments. Clear at the next toolbar() start instead.
@@ -188,7 +223,7 @@ local function makeToolbar()
     local startX = ImGui.GetCursorScreenPos(ctx)
     local availW = ImGui.GetContentRegionAvail(ctx)
     local rightX = startX + availW
-    local lastEndX, first = startX, true
+    local lastEndX, first, lines = startX, true, 1
     for _, seg in ipairs(segments) do
       if not seg.visible or seg.visible() then
         local cachedW = toolbarWidths[seg.id] or 0
@@ -198,6 +233,8 @@ local function makeToolbar()
             ImGui.SameLine(ctx, 0, 12)
             verticalSeparator()
             ImGui.SameLine(ctx, 0, 12)
+          else
+            lines = lines + 1   -- segment wrapped to a new row
           end
         end
         ImGui.BeginGroup(ctx)
@@ -210,6 +247,7 @@ local function makeToolbar()
         lastEndX, first = maxX, false
       end
     end
+    toolbarLines = lines
   end
 end
 
@@ -458,10 +496,12 @@ return {
   disabledIf         = disabledIf,
   checkbox           = checkbox,
   radio              = radio,
+  dropdown           = dropdown,
   headingLabel       = headingLabel,
   makeToolbar        = makeToolbar,
   resetToolbar       = resetToolbar,
   toolbarRects       = function() return lastToolbarRects end,
+  toolbarLineCount   = function() return toolbarLines end,
   drawPicker         = drawPicker,
   libPicker          = libPicker,
   pickerIsActive     = pickerIsActive,

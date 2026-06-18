@@ -1,4 +1,4 @@
-@module editorRender  src=editorRender.lua  loc=206  sha=52bbd00  mode=chunk
+@module editorRender  src=editorRender.lua  loc=206  sha=9623b2b  mode=chunk
 @deps swingEditor, temperEditor, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts

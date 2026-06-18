@@ -478,13 +478,15 @@ function sr:renderBody(_, w, h, dispatch)
   local folder = sv:getCurrentFolder() or root
   local isLive = sv:isLive()
 
-  chrome.pushChromeStyles()
   ImGui.PushStyleColor(ctx, ImGui.Col_ChildBg, chrome.colour('bg'))
 
   local ox, oy = ImGui.GetCursorScreenPos(ctx)
   local gridW  = chrome.gridWidth(w)
 
   chrome.disabledIf(not isLive, function()
+  -- Chrome brackets the left content only; the slots palette styles itself
+  -- (palettePane pushes its own chrome) so it must not nest inside this scope.
+  chrome.pushChromeStyles()
   local GAP, PAD = 16, -2   -- inter-pane padding; small bottom pad clears the status bar
   local stripBudget = math.min(140, math.floor(h * 0.4))
   local topH   = h - stripBudget
@@ -547,6 +549,8 @@ function sr:renderBody(_, w, h, dispatch)
   p.segment(vTree, oy, vTree, vBot, 'text', 1)
   p.segment(ox, hy, ox + gridW, hy, 'text', 1)
 
+  chrome.popChromeStyles()
+
   -- Right pane: slots in the shared palette (full height, over the strip)
   chrome.palettePane{
     x = ox + gridW, y = oy, h = h,
@@ -578,7 +582,6 @@ function sr:renderBody(_, w, h, dispatch)
   if dispatch then dispatch(self:focusState()) end
   ImGui.SetMouseCursor(ctx, ImGui.MouseCursor_Arrow)
   ImGui.PopStyleColor(ctx, 1)
-  chrome.popChromeStyles()
 end
 
 function sr:renderStatusBar(_)

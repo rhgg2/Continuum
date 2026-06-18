@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=382  sha=9623b2b  mode=chunk
+@module coordinator  src=coordinator.lua  loc=382  sha=fa0e8b6  mode=chunk
 @deps cm, ds, cmgr, gui
 
 # Invariants & contracts
@@ -95,7 +95,7 @@
   @use call    chrome.pushChromeStyles  @ 223
   @use call    chrome.resetPickerActive  @ 256
   @use call    chrome.resetToolbar  @ 332
-  @use call    chrome.toolbarRects  @ 246
+  @use call    chrome.toolbarLineCount  @ 253
   @use call    cm.pollUndo  @ 184
   @use call    cmgr.appendPrefix  @ 69, 73
   @use call    cmgr.bind  @ 29
@@ -115,27 +115,29 @@
   @use call    help.setPage  @ 336
   @use call    help.toggle  @ 28
   @use call    imgui.Begin  @ 198
-  @use call    imgui.BeginChild  @ 240, 260, 291
+  @use call    imgui.BeginChild  @ 239, 260, 291
   @use call    imgui.Button  @ 139
   @use call    imgui.End  @ 304
-  @use call    imgui.EndChild  @ 251, 265, 296
+  @use call    imgui.EndChild  @ 244, 265, 296
   @use call    imgui.GetContentRegionAvail  @ 214, 273
   @use call    imgui.GetCursorPosY  @ 272, 278
-  @use call    imgui.GetCursorScreenPos  @ 237, 243
+  @use call    imgui.GetCursorScreenPos  @ 236
+  @use call    imgui.GetFrameHeight  @ 250
   @use call    imgui.GetFrameHeightWithSpacing  @ 274
   @use call    imgui.GetKeyMods  @ 66, 103
+  @use call    imgui.GetStyleVar  @ 252
   @use call    imgui.Indent  @ 277
   @use call    imgui.IsKeyDown  @ 100
   @use call    imgui.IsKeyPressed  @ 68, 72, 75, 103
   @use call    imgui.PopFont  @ 307
   @use call    imgui.PopStyleColor  @ 142, 267, 298, 306
-  @use call    imgui.PopStyleVar  @ 204, 228, 252, 266, 297
+  @use call    imgui.PopStyleVar  @ 204, 228, 245, 251, 266, 297
   @use call    imgui.PushFont  @ 190
   @use call    imgui.PushStyleColor  @ 137, 191, 192, 193, 194, 195, 257, 288, 289
-  @use call    imgui.PushStyleVar  @ 197, 224, 238, 239, 258, 290
+  @use call    imgui.PushStyleVar  @ 197, 224, 237, 238, 249, 258, 290
   @use call    imgui.SameLine  @ 145, 147, 149, 151
   @use call    imgui.SetCursorPosY  @ 278, 287
-  @use call    imgui.SetCursorScreenPos  @ 253
+  @use call    imgui.SetCursorScreenPos  @ 246
   @use call    imgui.SetNextWindowContentSize  @ 259
   @use call    imgui.SetScrollX  @ 208
   @use call    imgui.SetScrollY  @ 208

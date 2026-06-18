@@ -1,4 +1,4 @@
-@module chrome  src=chrome.lua  loc=477  sha=2e3e09b  mode=chunk
+@module chrome  src=chrome.lua  loc=517  sha=9623b2b  mode=chunk
 @deps cm, ctx, uiFontBold, uiSize
 
 # Shapes
@@ -17,49 +17,52 @@
 # Private state
   @state cache = {}  @ 16
   @state paintBinder = { colour = colour }  @ 51
-  @state lastToolbarRects = {}  @ 145
-  @state toolbarWidths = {}  @ 147
+  @state DROP_ARROW = ' \xe2\x96\xbe'  @ 138
+  @state lastToolbarRects = {}  @ 179
+  @state toolbarWidths = {}  @ 181
       @invariant  one page draws per frame; cleared at next toolbar() start — no cross-page collision.
-  @state resetPending = false  @ 148
-  @state pickerFilter, pickerCursor = {}, {}  @ 220
-  @state pickerOpenReq = nil  @ 221   -- kind name; consumed by next drawPicker(kind)
-  @state pickerActive = false  @ 222   -- frame-scoped: any picker popup live this frame
-  @state PALETTE_W, PANE_GAP = 200, 11  @ 376
-  @state HEADER_PAD, HEADER_GAP = 8, 4  @ 377
-  @state TREE_OPEN, TREE_SHUT = '\xe2\x96\xbe ', '\xe2\x96\xb8 '  @ 445
+  @state toolbarLines = 1  @ 182   -- wrapped-row count from the last toolbar() draw
+  @state resetPending = false  @ 183
+  @state pickerFilter, pickerCursor = {}, {}  @ 258
+  @state pickerOpenReq = nil  @ 259   -- kind name; consumed by next drawPicker(kind)
+  @state pickerActive = false  @ 260   -- frame-scoped: any picker popup live this frame
+  @state PALETTE_W, PANE_GAP = 200, 11  @ 414
+  @state HEADER_PAD, HEADER_GAP = 8, 4  @ 415
+  @state TREE_OPEN, TREE_SHUT = '\xe2\x96\xbe ', '\xe2\x96\xb8 '  @ 483
 
 # Private functions
   @fn resolve(key)  @ 20
       @contract  walks colour aliases (see docs/configManager.md) to a terminal atom; outermost alpha override wins; cycles raise with the resolved chain
   @fn colour(name)  @ 41
   @fn pushChromeStyles()  @ 53
-  @fn popChromeStyles()  @ 72
-  @fn pushChromeWindow()  @ 78
+  @fn popChromeStyles()  @ 76
+  @fn pushChromeWindow()  @ 82
       -- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed the grid through.
-  @fn popChromeWindow()  @ 89
-  @fn verticalSeparator()  @ 97
+  @fn popChromeWindow()  @ 93
+  @fn verticalSeparator()  @ 101
       -- reaper-imgui has no Separator(Vertical); draw a 1px vertical line
       -- via the window draw list and reserve a Dummy slot so SameLine works.
-  @fn disabledIf(cond, fn)  @ 107
+  @fn disabledIf(cond, fn)  @ 111
       -- RAII wrapper for ImGui.BeginDisabled / EndDisabled: dropping the
       -- bracket-match removes a class of mismatched-pop bugs on early return.
-  @fn checkbox(label, value)  @ 116
+  @fn checkbox(label, value)  @ 120
       -- Compact checkbox / radio for toolbar contexts: zero FramePadding
       -- shrinks the box to its glyph; the +3 cursorY nudge re-aligns the
       -- small box with framed siblings on the same row.
-  @fn radio(label, active)  @ 124
-  @fn headingLabel(text)  @ 134
+  @fn radio(label, active)  @ 128
+  @fn dropdown(id, current, items)  @ 139
+  @fn headingLabel(text)  @ 168
       -- Section label for toolbar segments: bold + uppercase + dimmed so it
       -- reads as a heading and not a control. Caller follows with SameLine.
-  @fn resetToolbar()  @ 151
+  @fn resetToolbar()  @ 186
       -- Deferred: the switcher lives in the toolbar, so setActive fires mid-render — clearing
       -- now would unwrap this frame's later segments. Clear at the next toolbar() start instead.
-  @fn makeToolbar()  @ 152
+  @fn makeToolbar()  @ 187
   -- Picker (typeahead popup, shared across pages)
-  @fn requestPickerOpen(kind)  @ 224
-  @fn pickerIsActive()  @ 225
-  @fn resetPickerActive()  @ 226
-  @fn libPicker(key, current, excludeOthers)  @ 236
+  @fn requestPickerOpen(kind)  @ 262
+  @fn pickerIsActive()  @ 263
+  @fn resetPickerActive()  @ 264
+  @fn libPicker(key, current, excludeOthers)  @ 274
       -- Build the picker-item list for a library-shaped cm key (e.g. 'swings',
       -- 'tempers'). Three groups, in order:
       --   1. Off    — nil key.
@@ -68,76 +71,77 @@
       --      `+` prefix, marking "available but not yet localized to project".
       -- excludeOthers is a set of names to filter out of group 3 only — used
       -- to hide `id` from the swing picker (already covered by Off).
-  @fn drawPicker(d)  @ 266
+  @fn drawPicker(d)  @ 304
       -- Generic typeahead picker. Enter picks the highlighted match; group
       -- separators show only when filter is empty.
   -- Palette pane (shared right-hand pane: arrange / wiring / tracker / sampler)
-  @fn gridWidth(w)  @ 380
+  @fn gridWidth(w)  @ 418
       @contract  width of the main pane left of the palette; floors at 120.
-  @fn paletteHeader(label)  @ 384
+  @fn paletteHeader(label)  @ 422
       -- Hand-drawn header: centred label + 1px divider at headerH; shares HEADER_PAD/HEADER_GAP
       -- with the flanking grid header so the two dividers align across PANE_GAP without measuring.
-  @fn palettePane(spec)  @ 402
+  @fn palettePane(spec)  @ 440
       @contract  x/y/h are body-window screen coords at the gap's left edge; draw paints the body.
-  @fn fitLabel(text, maxW)  @ 421
+  @fn fitLabel(text, maxW)  @ 459
       -- Ellipsis-fit to a fixed pane width; no horizontal scroll exists.
-  @fn rowSelectable(label, selected, flags)  @ 434
+  @fn rowSelectable(label, selected, flags)  @ 472
       -- Selectable with hover/active highlight suppressed: only the selected row shows
       -- the Col_Header fill. Shared by the tracker palette and the sampler browser/tree.
-  @fn treeArrow(open, hasChildren)  @ 446
+  @fn treeArrow(open, hasChildren)  @ 484
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 28, 240
-  @use call    cm.getAt  @ 239
-  @use call    cm.seedGlobalFromDefault  @ 238
-  @use call    imgui.AlignTextToFramePadding  @ 138, 273
-  @use call    imgui.BeginChild  @ 409
-  @use call    imgui.BeginDisabled  @ 108
-  @use call    imgui.BeginGroup  @ 162, 203
-  @use call    imgui.BeginPopup  @ 313
-  @use call    imgui.Button  @ 293, 294
-  @use call    imgui.CalcTextSize  @ 285, 422, 424
-  @use call    imgui.Checkbox  @ 119
-  @use call    imgui.CloseCurrentPopup  @ 354, 357
-  @use call    imgui.ColorConvertDouble4ToU32  @ 45, 136
-  @use call    imgui.ColorConvertU32ToDouble4  @ 135
-  @use call    imgui.DrawList_AddLine  @ 100
-  @use call    imgui.Dummy  @ 102, 398
-  @use call    imgui.EndChild  @ 417
-  @use call    imgui.EndDisabled  @ 110
-  @use call    imgui.EndGroup  @ 164, 205
-  @use call    imgui.EndPopup  @ 369
-  @use call    imgui.GetContentRegionAvail  @ 189, 389
-  @use call    imgui.GetCursorPosY  @ 118, 126
-  @use call    imgui.GetCursorScreenPos  @ 98, 156, 188, 386
-  @use call    imgui.GetFrameHeight  @ 99
-  @use call    imgui.GetItemRectMax  @ 166, 207, 299
-  @use call    imgui.GetItemRectMin  @ 165, 206, 298
-  @use call    imgui.GetScrollMaxY  @ 390
-  @use call    imgui.GetStyleColor  @ 435
-  @use call    imgui.GetStyleVar  @ 286, 391
-  @use call    imgui.GetTextLineHeightWithSpacing  @ 393
-  @use call    imgui.GetWindowDrawList  @ 100
-  @use call    imgui.InputText  @ 322
-  @use call    imgui.IsKeyPressed  @ 324, 325, 344, 346, 353
-  @use call    imgui.IsWindowAppearing  @ 316, 338
-  @use call    imgui.IsWindowFocused  @ 411
-  @use call    imgui.OpenPopup  @ 306
-  @use call    imgui.PopStyleColor  @ 73, 90, 140, 439
-  @use call    imgui.PopStyleVar  @ 74, 91, 120, 128, 171, 295
-  @use call    imgui.PushStyleColor  @ 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 69, 81, 82, 83, 84, 85, 86, 137, 436, 437
-  @use call    imgui.PushStyleVar  @ 54, 80, 117, 125, 157, 291
-  @use call    imgui.RadioButton  @ 127
-  @use call    imgui.SameLine  @ 161, 198, 200, 275
-  @use call    imgui.Selectable  @ 364, 438
-  @use call    imgui.Separator  @ 326, 362
-  @use call    imgui.SetCursorPosY  @ 118, 126
-  @use call    imgui.SetCursorScreenPos  @ 172, 408
-  @use call    imgui.SetKeyboardFocusHere  @ 316
-  @use call    imgui.SetNextItemWidth  @ 317
-  @use call    imgui.SetNextWindowPos  @ 309
-  @use call    imgui.Text  @ 139, 274
-  @use call    painter.new  @ 385, 404
+  @use call    cm.get  @ 28, 278
+  @use call    cm.getAt  @ 277
+  @use call    cm.seedGlobalFromDefault  @ 276
+  @use call    imgui.AlignTextToFramePadding  @ 172, 311
+  @use call    imgui.BeginChild  @ 447
+  @use call    imgui.BeginDisabled  @ 112
+  @use call    imgui.BeginGroup  @ 197, 240
+  @use call    imgui.BeginPopup  @ 156, 351
+  @use call    imgui.Button  @ 147, 331, 332
+  @use call    imgui.CalcTextSize  @ 142, 323, 460, 462
+  @use call    imgui.Checkbox  @ 123
+  @use call    imgui.CloseCurrentPopup  @ 392, 395
+  @use call    imgui.ColorConvertDouble4ToU32  @ 45, 170
+  @use call    imgui.ColorConvertU32ToDouble4  @ 169
+  @use call    imgui.DrawList_AddLine  @ 104
+  @use call    imgui.Dummy  @ 106, 436
+  @use call    imgui.EndChild  @ 455
+  @use call    imgui.EndDisabled  @ 114
+  @use call    imgui.EndGroup  @ 199, 242
+  @use call    imgui.EndPopup  @ 160, 407
+  @use call    imgui.GetContentRegionAvail  @ 224, 427
+  @use call    imgui.GetCursorPosY  @ 122, 130
+  @use call    imgui.GetCursorScreenPos  @ 102, 191, 223, 424
+  @use call    imgui.GetFrameHeight  @ 103
+  @use call    imgui.GetItemRectMax  @ 151, 201, 244, 337
+  @use call    imgui.GetItemRectMin  @ 150, 200, 243, 336
+  @use call    imgui.GetScrollMaxY  @ 428
+  @use call    imgui.GetStyleColor  @ 473
+  @use call    imgui.GetStyleVar  @ 57, 145, 324, 429
+  @use call    imgui.GetTextLineHeightWithSpacing  @ 431
+  @use call    imgui.GetWindowDrawList  @ 104
+  @use call    imgui.InputText  @ 360
+  @use call    imgui.IsKeyPressed  @ 362, 363, 382, 384, 391
+  @use call    imgui.IsWindowAppearing  @ 354, 376
+  @use call    imgui.IsWindowFocused  @ 449
+  @use call    imgui.OpenPopup  @ 148, 344
+  @use call    imgui.PopStyleColor  @ 77, 94, 174, 477
+  @use call    imgui.PopStyleVar  @ 78, 95, 124, 132, 162, 206, 333
+  @use call    imgui.PushStyleColor  @ 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 73, 85, 86, 87, 88, 89, 90, 171, 474, 475
+  @use call    imgui.PushStyleVar  @ 54, 58, 84, 121, 129, 154, 192, 329
+  @use call    imgui.RadioButton  @ 131
+  @use call    imgui.SameLine  @ 196, 233, 235, 313
+  @use call    imgui.Selectable  @ 158, 402, 476
+  @use call    imgui.Separator  @ 364, 400
+  @use call    imgui.SetCursorPosY  @ 122, 130
+  @use call    imgui.SetCursorScreenPos  @ 207, 446
+  @use call    imgui.SetKeyboardFocusHere  @ 354
+  @use call    imgui.SetNextItemWidth  @ 355
+  @use call    imgui.SetNextWindowPos  @ 152, 347
+  @use call    imgui.SetNextWindowSize  @ 153
+  @use call    imgui.Text  @ 173, 312
+  @use call    painter.new  @ 423, 442
   @use require imgui  @ 9
   @use require painter  @ 10
   @use sub     cm:configChanged  @ 17

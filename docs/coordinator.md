@@ -20,39 +20,39 @@ Errors in the defer loop propagate to the same `xpcall` frame in `continuum.lua`
 
 ## Toolbar band height
 
-The toolbar row (page switcher + the active page's bits) wraps to a
-second line when the window is too narrow to hold it on one row. The
-band is a child with `ChildFlags_AutoResizeY` so it grows to fit.
-Auto-resizing windows decide their size at `BeginChild` from the
-*previous* frame's content, so on the frame the wrapped row-count
-changes — a page switch, or a resize crossing the wrap threshold — the
-band is still the old height: it clips the new second row and holds the
-body up, then catches up one frame later, so the body visibly jumps.
+The toolbar row (page switcher + the active page's segments) wraps to a
+second line when the window is too narrow to hold it on one row.
 
-To land everything in place on the first frame, the coordinator
-pre-measures. On a page switch it renders the row once into a hidden
-(`Alpha 0`) throwaway child at the same inner width, reads the
-wrapped content height from the segment rects `chrome.toolbar` recorded,
-restores the cursor, and pins the visible child to that height with
-`SetNextWindowContentSize`. Warm frames skip the measure and let
-`AutoResizeY` carry the unchanged height. The hidden child has its own
-ImGui ID scope, so the doubled widgets never collide with the real ones.
-The whole row — the page switcher plus the active page's segments — is
-one `chrome.toolbar` segment list, so chrome records a rect per segment.
-The pinned height is the lowest segment-rect bottom minus the content
-top. The switcher is always the first segment, so even a page with no
-toolbar bits of its own (wiring) records a rect, and the band shrinks
-(tracker → wiring) as well as grows.
+The band height is pinned to `lineCount × canonicalRowHeight`, not left
+to content-fit `AutoResizeY`. Content fitting made the height vary per
+page: a row mixes framed widgets (`FrameHeight`) with `chrome.checkbox`/
+`radio`, which run at zero `FramePadding` plus a +3px nudge — a different
+height — so the tallest widget, and the band with it, shifted with each
+page's widget mix. The canonical row is the standard toolbar frame height
+(page-independent), so every line is exactly one frame tall and the band
+reads identical across pages; wrapping still grows it by whole rows.
+`chrome.toolbar` counts the wrapped lines during layout and exposes the
+count.
+
+The line count is read from the *previous* frame's draw, so on the frame
+the wrapped row-count changes — a page switch, or a resize crossing the
+wrap threshold — it would be stale for one frame, clipping the new row and
+jumping the body. On a page switch the coordinator pre-measures: it renders
+the row once into a hidden (`Alpha 0`) throwaway child at the same inner
+width, which warms the segment widths and refreshes the line count, then
+restores the cursor. The hidden child has its own ImGui ID scope, so the
+doubled widgets never collide with the real ones. The switcher is always
+the first segment, so even a page with no toolbar bits of its own (wiring)
+lays out and stays the same height as the rest.
 
 Width changes deliberately skip the pre-measure. Re-rendering the page's
 segments a second time re-executes any that open a popup (`drawPicker`
 with an open list), beginning that popup twice in one frame — which
 corrupts the window stack and asserts at the next `EndChild`. A resize
-fires the measure branch every frame and would hit this; a page switch
-first closes any open picker (focus loss), so its second render is
-side-effect-free. On a width change the row still wraps correctly against
-the current width, so only the band height trails one frame, which
-`AutoResizeY` absorbs.
+fires every frame and would hit this; a page switch first closes any open
+picker (focus loss), so its second render is side-effect-free. On a width
+change the row still wraps correctly against the current width, so only
+the line count trails one frame.
 
 ## Façade registry
 
