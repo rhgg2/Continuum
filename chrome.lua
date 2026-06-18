@@ -1,6 +1,6 @@
 -- See docs/chrome.md for the model.
 
---shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+--shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
 --shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeArrow(open,hasChildren)->prefix }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
 --shape: palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
@@ -126,23 +126,34 @@ local function disabledIf(cond, fn)
   if cond then ImGui.EndDisabled(ctx) end
 end
 
--- Compact checkbox / radio for toolbar contexts: zero FramePadding
--- shrinks the box to its glyph; the +3 cursorY nudge re-aligns the
--- small box with framed siblings on the same row.
-local function checkbox(label, value)
+-- Fixed-height row: run `fn`, then snap the cursor to exactly `h` below the row's
+-- top so subsequent rows land at a deterministic Y regardless of widget heights.
+local function row(h, fn)
+  if type(h) == 'function' then h, fn = nil, h end
+  local gapY   = select(2, ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing))
+  h = h or (ImGui.GetFrameHeight(ctx) + gapY)
+  local x, top = ImGui.GetCursorPosX(ctx), ImGui.GetCursorPosY(ctx)
+  fn()
+  ImGui.SetCursorPos(ctx, x, top + h)
+end
+
+-- Compact (zero-padding) control — checkbox / radio — vertically centered in the
+-- ambient framed-row height; measured from GetFrameHeight, not a fixed nudge.
+local function compactControl(draw)
+  local frameH = ImGui.GetFrameHeight(ctx)
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 0, 0)
-  ImGui.SetCursorPosY(ctx, ImGui.GetCursorPosY(ctx) + 3)
-  local changed, v = ImGui.Checkbox(ctx, label, value)
+  ImGui.SetCursorPosY(ctx, ImGui.GetCursorPosY(ctx) + (frameH - ImGui.GetFrameHeight(ctx)) / 2)
+  local a, b = draw()
   ImGui.PopStyleVar(ctx, 1)
-  return changed, v
+  return a, b
+end
+
+local function checkbox(label, value)
+  return compactControl(function() return ImGui.Checkbox(ctx, label, value) end)
 end
 
 local function radio(label, active)
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 0, 0)
-  ImGui.SetCursorPosY(ctx, ImGui.GetCursorPosY(ctx) + 3)
-  local pressed = ImGui.RadioButton(ctx, label, active)
-  ImGui.PopStyleVar(ctx, 1)
-  return pressed
+  return compactControl(function() return ImGui.RadioButton(ctx, label, active) end)
 end
 
 -- House-style dropdown: button + popup of `items`. Width fits the widest entry
@@ -507,6 +518,7 @@ return {
   popChromeWindow    = popChromeWindow,
   verticalSeparator  = verticalSeparator,
   disabledIf         = disabledIf,
+  row                = row,
   checkbox           = checkbox,
   radio              = radio,
   dropdown           = dropdown,
