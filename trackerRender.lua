@@ -100,11 +100,17 @@ local function renderNote(evt, col, row)
 
   local label
   if evt.type ~= 'pa' then
-    label = select(1, tv:noteProjection(evt)) or noteName(evt.pitch)
-    -- Right-align short labels so the octave lands at the cell's last column
-    -- (the second cursor stop), matching decorateCol's {0, cellWidth-1}.
-    local pad = cellWidth - utf8.len(label)
-    if pad > 0 then label = string.rep(' ', pad) .. label end
+    local note, octave = tv:noteProjection(evt)
+    if note then
+      -- Note left, octave right, slack between: the two pitch cursor stops sit at
+      -- the cell edges {0, cellWidth-1}. See docs/tuning.md § Display.
+      local slack = cellWidth - utf8.len(note) - utf8.len(octave)
+      label = note .. string.rep(' ', math.max(slack, 0)) .. octave
+    else
+      label = noteName(evt.pitch)
+      local pad = cellWidth - utf8.len(label)
+      if pad > 0 then label = string.rep(' ', pad) .. label end
+    end
   end
   local isPA      = evt.type == 'pa'
   local noteTxt   = isPA and blank or label
@@ -842,7 +848,7 @@ local function drawTracker()
           if row >= numRows then break end
           local evt = col.cells[row]
           if evt and evt.pitch then
-            local _, gap, halfGap = tv:noteProjection(evt)
+            local _, _, gap, halfGap = tv:noteProjection(evt)
             if gap and gap ~= 0 and halfGap > 0 then
               local yTop = gridOriginY + y * gridY + 1
               local offset = util.clamp(gap / halfGap, -1, 1) * halfW

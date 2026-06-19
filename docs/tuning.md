@@ -254,6 +254,14 @@ one whose `stepNames` entry is blank — falls back to its degree with a
 dash separator (`7-4`), reusing the named cell's shape. Octave -1 renders
 as `"M"` (so `C-M` for MIDI 0 vs `C-4` for MIDI 60).
 
+In the tracker cell the note sits at the **left** edge and the octave at
+the **right** edge, with slack between them (`tuning.stepToParts` exposes
+the two parts). So note names and octaves each fall into a fixed column
+across rows, and the two pitch cursor stops — at cell columns `0` and
+`cellWidth-1` — land on real glyphs rather than on padding. This matters
+most when octave labels vary in width (a sub-octave period mixing
+single- and double-digit octaves).
+
 `cellWidth` is the derived char width of the widest label: the longest
 name (or a 2-digit degree) plus the **octave field**. The octave field is
 one char for octave-or-larger periods — their displayed octave never leaves

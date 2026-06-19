@@ -1,4 +1,4 @@
-@module viewContext  src=viewContext.lua  loc=117  sha=08180f7  mode=chunk
+@module viewContext  src=viewContext.lua  loc=117  sha=27ad399  mode=chunk
 @deps length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
 
 # Shapes
@@ -38,7 +38,7 @@
 # Uses (outbound edges)
   @use call    tuning.midiToStep  @ 31
   @use call    tuning.stepToMidi  @ 33
-  @use call    tuning.stepToText  @ 32
+  @use call    tuning.stepToParts  @ 32
   @use call    util.round  @ 63
   @use require tuning  @ 8
   @use require util  @ 7

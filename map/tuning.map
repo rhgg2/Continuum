@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=319  sha=9f5eb6a  mode=namespace
+@module tuning  src=tuning.lua  loc=325  sha=acd05b7  mode=namespace
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
@@ -74,5 +74,7 @@
   @api M.transposeStep(temper, midi, detune, n)  @ 304
       @contract  moves by n scale steps under temper, carrying the octave; n may be negative
   -- Display
-  @api M.stepToText(temper, step, octave)  @ 312
+  @api M.stepToParts(temper, step, octave)  @ 312
+      @contract  returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep
+  @api M.stepToText(temper, step, octave)  @ 320
       @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.

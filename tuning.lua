@@ -308,12 +308,18 @@ end
 
 ----- Display
 
---contract: name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.
-function M.stepToText(temper, step, octave)
+--contract: returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep
+function M.stepToParts(temper, step, octave)
   if step >= temper.octaveStep then octave = octave + 1 end
   local name = temper.stepNames and temper.stepNames[step]
-  if name and name ~= '' then return name .. octaveLabel(octave) end
-  return step .. '-' .. octaveLabel(octave)
+  local note = (name and name ~= '') and name or (step .. '-')
+  return note, octaveLabel(octave)
+end
+
+--contract: name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.
+function M.stepToText(temper, step, octave)
+  local note, octaveStr = M.stepToParts(temper, step, octave)
+  return note .. octaveStr
 end
 
 return M

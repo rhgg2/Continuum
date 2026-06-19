@@ -227,8 +227,8 @@ return {
     name = 'noteProjection under 12EDO: pitch 60 maps to C-4 with zero gap',
     run = function()
       local ctx = mkCtx{ temper = tuning.presets['12EDO'] }
-      local label, gap, halfGap = ctx:noteProjection({ pitch = 60 })
-      t.eq(label, 'C-4')
+      local note, octave, gap, halfGap = ctx:noteProjection({ pitch = 60 })
+      t.eq(note .. octave, 'C-4')
       t.eq(gap, 0)
       t.eq(halfGap, 50)   -- half of 100¢ between adjacent 12EDO steps
     end,
@@ -238,9 +238,9 @@ return {
     name = 'noteProjection signed gap: positive detune yields positive gap (sharp)',
     run = function()
       local ctx = mkCtx{ temper = tuning.presets['12EDO'] }
-      local _, gap = ctx:noteProjection({ pitch = 60, detune = 20 })
+      local _, _, gap = ctx:noteProjection({ pitch = 60, detune = 20 })
       t.truthy(gap > 0, 'sharp detune ⇒ positive gap, got ' .. tostring(gap))
-      local _, gapDown = ctx:noteProjection({ pitch = 60, detune = -20 })
+      local _, _, gapDown = ctx:noteProjection({ pitch = 60, detune = -20 })
       t.truthy(gapDown < 0, 'flat detune ⇒ negative gap, got ' .. tostring(gapDown))
     end,
   },
@@ -253,9 +253,9 @@ return {
       local temper = tuning.presets['19EDO']
       local pitch, detune = tuning.stepToMidi(temper, 4, 4)
       local ctx = mkCtx{ temper = temper }
-      local _, gapDust = ctx:noteProjection({ pitch = pitch, detune = detune + 1e-9 })
+      local _, _, gapDust = ctx:noteProjection({ pitch = pitch, detune = detune + 1e-9 })
       t.eq(gapDust, 0, 'sub-epsilon offset clamps to on-temper')
-      local _, gapReal = ctx:noteProjection({ pitch = pitch, detune = detune + 5 })
+      local _, _, gapReal = ctx:noteProjection({ pitch = pitch, detune = detune + 5 })
       t.truthy(math.abs(gapReal) > 1, 'a real bend still registers off-temper, got ' .. tostring(gapReal))
     end,
   },
@@ -265,7 +265,7 @@ return {
     run = function()
       local temper = tuning.presets['19EDO']
       local ctx = mkCtx{ temper = temper }
-      local _, _, halfGap = ctx:noteProjection({ pitch = 60 })   -- midi 60 ⇒ step 1
+      local _, _, _, halfGap = ctx:noteProjection({ pitch = 60 })   -- midi 60 ⇒ step 1
       -- Step 1 is symmetric: neighbours at -(period - steps[n]) and +steps[2].
       local n        = #temper.cents
       local period   = temper.period

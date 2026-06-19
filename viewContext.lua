@@ -29,7 +29,7 @@ function ctx:noteProjection(evt)
   if not (temper and evt and evt.pitch) then return end
   local detune    = evt.detune or 0
   local step, oct = tuning.midiToStep(temper, evt.pitch, detune)
-  local label     = tuning.stepToText(temper, step, oct)
+  local note, octave = tuning.stepToParts(temper, step, oct)
   local tm_, td_  = tuning.stepToMidi(temper, step, oct)
   local gap       = (evt.pitch * 100 + detune) - (tm_ * 100 + td_)
   -- A snapped note's gap is serialisation float dust, not a bend; clear it
@@ -41,7 +41,7 @@ function ctx:noteProjection(evt)
   local right   = step == n and steps[1] + period or steps[step + 1]
   local halfGap = math.min(steps[step] - left, right - steps[step]) / 2
 
-  return label, gap, halfGap
+  return note, octave, gap, halfGap
 end
 
 ----- Timing
