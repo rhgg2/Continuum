@@ -641,8 +641,19 @@ do
           if d < 0 or d > 9 then return end
           oct = d
         end
-        local pitch = util.clamp((oct + 1) * 12 + evt.pitch % 12, 0, 127)
-        tm:assignEvent(evt, { pitch = pitch })
+        -- Octave column edits the period-cycle octave: keep the step,
+        -- re-derive, reject if it clamps out of MIDI range (|detune|>½ st).
+        local temper = ctx:activeTemper()
+        local pitch, detune
+        if temper then
+          local step = tuning.midiToStep(temper, evt.pitch, evt.detune)
+          local bump = step >= temper.octaveStep and 1 or 0
+          pitch, detune = tuning.stepToMidi(temper, step, oct - bump)
+          if math.abs(detune) > 50 then return end
+        else
+          pitch, detune = util.clamp((oct + 1) * 12 + evt.pitch % 12, 0, 127), evt.detune
+        end
+        tm:assignEvent(evt, { pitch = pitch, detune = detune })
         return commit(pitch, evt.vel)
 
       -- sample: 2 hex nibbles, 0..127.
