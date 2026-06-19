@@ -5,21 +5,25 @@ Workshop (sevish.com/scaleworkshop). Scope grew into a shared
 **project-tier library workbench page** hosting both the tuning (temper)
 editor and the existing swing editor.
 
-Status: **phase 2 complete (uncommitted): intensional pitch-token backend
-+ Scala `.scl` import + multipaste paste box, suite green (1534/0).** The
-temper backend is now intensional (`pitches`/`periodPitch` source tokens,
-`cents`/`period` derived); presets emit `n\m` tokens; a per-temper
-`periodAsStep` toggle picks separate-box vs trailing-row period display.
-Phase 3 (compilers) not started.
+Status: **phases 1–2 complete and committed; the phase-3 token
+compilers landed too. Live UI verified in REAPER.** What remains of
+phase 3 is the *bulk* generators — MOS and harmonic-series — that emit a
+whole scale at once. Everything else in the original plan is in:
 
-What phase 2 added: `tuning.derive` stamps `octaveStep` + a new `cellWidth`
-(widest label, incl. octave char); `stepToText` falls back to `degree-octave`
-for blank names (Option B); the tracker pitch column sizes to `cellWidth`
-(editCursor `decorateCol(col, pitchWidth)`, trackerRender reads `tv:cellWidth()`);
-`temperEditor` is now a full authoring pane (cents/period/per-step-name,
-`+New`, snapshot/Reset/dirty) mirroring `swingEditor`. The nameless-cell
-decision (resolved with the user): keep the `-` separator, **widen** per
-temper rather than cramming into 3 chars.
+- Intensional temper backend (`pitches`/`periodPitch` source tokens,
+  `cents`/`period` derived), EDO presets emitted as `i\n` tokens, a
+  per-temper `periodAsStep` toggle (separate-box vs trailing-row period).
+- Scala `.scl` import (strict-file + lenient-paste parsers) and a paste
+  box; ascending sort so cents stay monotonic.
+- Variable-width pitch cells: `tuning.derive` stamps `cellWidth`; the
+  tracker pitch column sizes to it (`tv:cellWidth()`); nameless cells
+  fall back to `degree-octave` (Option B).
+- `temperEditor` is a full authoring pane (cents/period/per-step name,
+  add/remove, snapshot/Reset/dirty) mirroring `swingEditor`.
+- **Step 4 done**: the shared library shell is extracted —
+  `editorRender.lua` owns the tree palette; both panes feed it a
+  `libraryDescriptor()`.
+- `docs/editorPage.md` is written.
 
 ---
 
@@ -28,17 +32,43 @@ temper rather than cramming into 3 chars.
 Read `docs/tuning.md` for the full model. Key facts:
 
 - `tuning.lua` is a **pure** coordinate module. A temperament ("temper"
-  in code) is:
+  in code) is now **intensional** — source tokens, derived geometry:
   ```
-  temper = { name, period=1200, cents={0,...}, stepNames={...}, octaveStep }
+  temper = {
+    name,
+    pitches      = { '1/1', '9/8', ... },   -- source tokens (Scala grammar)
+    periodPitch  = '2/1',                    -- source token for the period
+    stepNames    = { ... } | {},             -- optional, per step (Option B)
+    periodAsStep = bool,                     -- display: trailing row vs own box
+    -- derived by tuning.derive:
+    cents        = { 0, ... },               -- pitches → cents
+    period       = 1200,                     -- periodPitch → cents
+    octaveStep, cellWidth,
+  }
   ```
-  `cents[]` ascending, one `stepNames[]` per step, `octaveStep` derived.
-  Built-in presets: 12/19/31/53-EDO via `edo(n, names)`.
-- **Library**: `cfg.tempers` (project tier); the active temper is the
-  `temper` slot (take/track/project tiers), referenced by name.
-  `findTemper(name, userLib)` resolves userLib then built-in presets.
+  `tuning.derive(temper)` compiles `pitches`→`cents`, `periodPitch`→
+  `period`, and stamps `octaveStep` + `cellWidth`. Pure; returns the
+  temper. `cents[]` ascending, one `stepNames[]` per step (or empty).
+- **`tuning.scalaPitch(token)`** is the per-token compiler (Scala
+  grammar): `n/d` ratio, bare integer (harmonic `n/1`), `.`-decimal
+  cents, `n\m` (step of an EDO), `n\m<equave>` (step of an equal
+  division of an arbitrary equave; equave is itself a token, default
+  `2/1`). Returns cents or nil. **This is where phase-3's "JI ratios"
+  and "`n\edo` steps" live** — anywhere a pitch token is accepted.
+- Built-in presets: 12/19/31/53-EDO, built by `edo(n, names)` which
+  emits `i\n` tokens through `derive`.
+- **Library**: tempers live in two tiers — `cfg.tempers` at **project**
+  and a personal **global** library lazily seeded from the EDO
+  catalogue (`cm:seedGlobalFromDefault('tempers', {['12EDO']=true})`,
+  minus the synthetic floor). The active temper is the `temper` slot
+  (take/track/project tiers), referenced by name. `findTemper(name,
+  userLib)` resolves userLib then built-in presets.
+- **Copy-on-assign**: picking a temper localizes it into the project
+  tier; projects are self-contained, realisation never leans on
+  global/defaults.
 - Swing is the structural twin: library `cfg.swings`, slots by name,
-  seeded from presets, has a picker. Differs only in the content pane.
+  same two-tier + lazy-seed + localize story. Differs only in the
+  content pane.
 - **Intent/realisation split**: detune is per-note intent (cents); pb is
   channel-wide realisation. The view never touches pb. This is *below*
   anything the editor does — untouched by all phases.
@@ -47,65 +77,88 @@ Read `docs/tuning.md` for the full model. Key facts:
 
 ## Decisions locked (with the user)
 
-1. **Naming for arbitrary scales → option B.** Step names become
-   *optional*; display falls back to degree/cents when a scale has no
-   letter spelling. (Scale Workshop scales are intervals with no note
-   names / no "C".) Confined to the display layer.
-2. **Scala `.scl` import — early** (phase 2). `.kbm` deferred.
-3. **Compilers (JI ratios, `n\edo` steps, MOS/harmonic) — "day two"**
-   (phase 3).
-4. **One page, switcher letter "E"**, hosting both editors behind a
-   toolbar pane-selector (Swing | Temper).
+1. **Naming for arbitrary scales → option B.** Step names are
+   *optional*; display falls back to degree/octave when a scale has no
+   letter spelling. Confined to the display layer.
+2. **Scala `.scl` import — early** (phase 2, done). `.kbm` deferred.
+3. **Compilers — token-level done, bulk generators "day two."** Ratio /
+   harmonic / `n\edo` / arbitrary-equave compile per-token via
+   `scalaPitch`. MOS and harmonic-series *bulk generators* remain.
+4. **One page, switcher letter "E"**, both editors behind a toolbar
+   pane-selector (Swing | Tuning).
 5. **Fast path: yes** — pickers/keys jump to the editor on the entry in
-   force; close returns to the previous page.
+   force (drop-in); close returns to the previous page.
 6. **F10 = global switch to editor page.**
-7. **The editor edits project-tier swings and tempers only.** It is a
-   context-free library workbench. Per-take / per-channel assignment
-   stays on the tracker (the toolbar pickers, which hold take context).
-
-### Refinements made during phase 1 (deviations from the first plan)
-
-- **No generic "shared library shell" yet.** The swing editor already
-  carries its own tier-aware library row (Save global, Delete
-  proj/global, Take/Chan shortcuts, +New). Genericizing now would be
-  speculative (only one real instance). Extract a shared shell in
-  phase 2 once the tuning editor's real CRUD needs are visible.
-- **Pane selection lives in the toolbar**, not a left rail.
+7. **The editor edits project- and global-tier swings and tempers
+   only.** It is a context-free library workbench. Per-take / per-channel
+   assignment stays on the tracker (the toolbar pickers, which hold take
+   context).
+8. **Nameless-step cell display → widen, don't cram.** Keep the `-`
+   separator; per-temper `cellWidth` widens the tracker pitch column to
+   the widest label rather than squeezing into 3 chars.
 
 ---
 
-## Architecture (phase 1, as built)
+## Architecture (as built)
 
-The page mirrors the arrangePage pattern (controller / facade /
-delegated render), but the heavy rendering lives in the two self-
-contained content panes.
+The page mirrors the arrangePage pattern (controller / render split),
+with the heavy authoring living in two self-contained content panes that
+share one library-tree palette.
 
 | file | role |
 |---|---|
-| `editorPage.lua` (new) | coord-driven controller. Owns `pane` state + the two panes, publishes the `editor` facade (`edit(lib, name)`), toolbar pane-selector, body dispatch + Esc-to-close, focusState. |
-| `temperEditor.lua` (new) | tuning pane. **Phase 1 = read-only**: seeds EDO presets into `cfg.tempers` + sets project temper; shows the active temper's steps (index · name · cents). |
-| `swingEditor.lua` (migrated) | from take-scoped tracker overlay → editor pane. `tv` dependency replaced by the **tracker facade**. |
+| `editorPage.lua` | Coord-driven **controller**. Instantiates the swing/temper panes + the renderer; publishes the `editor` facade (`edit(lib, name)`). Page lifecycle (`bind`/`unbind`) and every render hook delegate straight to `editorRender`. No take binding — pane state persists across visits. |
+| `editorRender.lua` | **Render-only.** Owns pane-selection UI state (`'swing' \| 'temper'`) and the `droppedIn` flag; draws the toolbar pane-selector, the body split (content pane + library tree), and the status bar. Reaches the two panes only — never `cm`/`ds`. Houses the shared `libraryTree` (see below). |
+| `temperEditor.lua` | Tuning content pane. Full authoring: header (name/period/`periodAsStep`), step table (per-step cents + optional name, add/remove), New + Import modals, snapshot/Reset/dirty. Reads `cm` directly for the library tiers. |
+| `swingEditor.lua` | Swing content pane (migrated from the take-scoped tracker overlay). Same library-tier story; `tv` dependency replaced by the tracker **facade**. |
 
-### The facade seam (crux of the migration)
+### The shared library shell (step 4)
+
+Both panes expose `libraryDescriptor()` → a `libraryTreeSpec`; the
+renderer's `libraryTree(spec)` draws it. One palette, two panes.
+
+```
+libraryTreeSpec = {
+  x, y, h, label,
+  active    = {{col, name}},      -- Active <col>: <name>, with a 'select' jump
+  project   = { name, ... },      -- Project folder leaves
+  global    = { name, ... },      -- Global folder leaves
+  synthetic = { [name]=true },    -- merge-floor entries (e.g. 12EDO); undeletable
+  undeletable = { [name]=true },
+  sel       = { tier, name },     -- folder (name=nil) scopes add/import; leaf arms dup/del
+  dirty?    = bool,               -- gates Reset (swing only)
+  onSelect(tier, name), onNew(), onImport?(), onPromote(name),
+  onDemote(name), onReset?(), onDelete(tier, name),
+}
+```
+
+Action bar: `add` / `import?` / `dup global` (promote) / `dup project`
+(demote) / `reset?` / `del`. `onImport`/`onReset` are optional — the
+temper pane supplies `import`, the swing pane supplies `reset`; the tree
+shows a button only when its callback is present.
+
+### The facade seam (crux of the original migration)
 
 The editor page is **off the tracker stack** and **context-free** (no
-bound take ⇒ `cm` has no take/track context — `tp:unbind →
-tm:bindTake(nil) → cm:setContext(nil)`).
+bound take). Take-context **reads** route through the tracker `facade`
+(`facade`-injected); writes are project/global-tier library writes only.
+The earlier transitional `setTemper`/`setProjectTemper` facade methods
+are gone — the editor edits the library, assignment stays on the tracker.
 
-- Take-context **reads** route through the tracker facade:
-  `tracker().timeSig()`, `tracker().cursorAnchor()` (both tolerate
-  nil — swing pane defaults 4/4 / no highlight).
-- **Writes are project-tier only** (context-free): library writes
-  (`setSwingComposite`, `setTemper`) and the project-tier active temper
-  (`setProjectTemper` — new `tv` method, project-only sibling of
-  `setTemperSlot`).
-- **Removed**: `setSwingSlot`/`setTemperSlot` from the editor surface
-  (they write take/track tiers → error off-tracker). Swing `+New` no
-  longer auto-assigns to the take; it creates the library entry and
-  opens it for editing.
+### Lifecycle / keys
 
-Tracker facade (`trackerPage.lua`) now also publishes: `timeSig`,
-`cursorAnchor`, `setSwingComposite`, `setTemper`, `setProjectTemper`.
+- `editor.edit(lib, name)` (facade) → `er:edit`: sets pane + selection
+  and flips `droppedIn`. The `editTuning`/`editSwing` commands (which
+  hold coord) then switch the page. Mirrors samplePage's
+  `diveToSampler`.
+- `droppedIn` (drop-in from a tracker picker) gates the `Close (Esc)`
+  button, page-level Esc, and the status hint; cleared on `unbind`.
+- Page-level Esc returns to the previous page, guarded by
+  `not modalHost:isOpen()` and `not IsAnyItemActive` so an active
+  InputText/slider or sub-modal keeps Esc for itself.
+- `focusState`: `pageSuppressed = true` always (root globals live, page
+  bindings off); `suppressKbd` when a modal or picker is active;
+  `acceptCmds = not suppressKbd and not IsAnyItemActive`.
 
 ### Coordinator / wiring
 
@@ -113,93 +166,66 @@ Tracker facade (`trackerPage.lua`) now also publishes: `timeSig`,
   `coord:previousPage()` getter.
 - `continuum.lua`: registers `editor` page; root commands
   `switchToEditor` (F10), `editTuning`, `editSwing` (Super+E),
-  `closeEditor` (→ `coord:setActive(previousPage or 'tracker')`).
-- `trackerRender.lua`: removed the swing body-overlay hosting
-  (instantiation, render-takeover, `pageSuppressed`, `closeTransients`,
-  the toolbar-greying branch). Added `✎` edit buttons to the
-  tuning/swing toolbar pickers → `cmgr:invoke('editTuning'|'editSwing')`.
-  Command palette entries repointed (`editTuning`/`editSwing`).
-- `trackerPage.lua`: dropped `closeTransients` calls.
+  `closeEditor` (→ previous page or tracker).
+- `trackerRender.lua`: `✎` edit buttons on the tuning/swing toolbar
+  pickers → `cmgr:invoke('editTuning'|'editSwing')`.
 
-### Lifecycle / keys
+### New / Import (modalHost)
 
-- `editorPage:edit(lib, name)` sets the pane + selection; the command
-  then `coord:setActive('editor')` (mirrors `diveToSampler`).
-- Esc / Close → `closeEditor` command → previous page. Esc guarded by
-  `not IsAnyItemActive` + `not pane:modalActive()`.
-- focusState: `pageSuppressed = true` (root globals live, page bindings
-  off); `acceptCmds = not suppressKbd and not IsAnyItemActive`.
+Both temper modals are hosted by `modalHost` (kinds `temperNew`,
+`temperImport`), routed there in commit `35e7e9d`:
+
+- **New** — name + empty scale, opens it for editing.
+- **Import** — a paste box (lenient `parseScalaPitches`) plus a "load
+  `.scl`" button (`GetUserFileNameForRead` → strict `parseScalaFile`,
+  description becomes the suggested name). The Create button re-parses
+  the box through `scalaToTemper` after any manual edits.
+
+`scalaToTemper` bridges Scala's convention (unison implicit, period
+last) to Continuum's (step 1 = `1/1`, period separate): prepend `1/1`,
+sort ascending, split the widest interval off as `periodPitch`, set
+`periodAsStep = true` so the scale reads top-to-bottom like the file.
 
 ---
 
 ## What is NOT done / known gaps
 
-- **Live UI unverified.** Only specs + `luac -p` checked; no REAPER run.
-  Worth a manual pass: E button, F10, ✎ buttons, Esc-return, swing edit
-  round-trip, temper preset seeding.
-- Temper pane is read-only (no cents authoring yet).
-- `docs/editorPage.md` referenced in the header but not written.
-- No generic shared library shell (deferred — see above).
+- **MOS / harmonic-series bulk generators** — the only real remainder of
+  phase 3 (see below). Per-token ratio/EDO/equave compiling already
+  works everywhere a token is typed.
+- `.kbm` keyboard-mapping import — deferred.
+- No compiler-specific UI beyond free-token entry + Scala import. MOS /
+  harmonic generators will each need a small parameter form.
 
 ---
 
-## Phase 2 — tuning content pane (next)
+## Phase 3 — bulk generators ("day two")
 
-### Landed (2026-06-17): library seeding & project self-containment
+The token compilers are done; what's left are front-ends that emit a
+*whole* `pitches` list from a few parameters, then hand off to `derive`:
 
-- Built-in catalogues are the cm **defaults** (`swings`; `tempers` is now
-  `util.deepClone(tuning.presets)`). `cm:seedGlobalFromDefault(key, exclude)`
-  lazily materialises the personal **global** library from the catalogue
-  (minus the synthetic floor) the first time the library is read — the editor
-  palette (`globalSwings`/`globalTempers`) or a picker (`chrome.libPicker`).
-  No startup seed, no flag.
-- **Copy-on-assign**: `tv:setSwingSlot`/`setColSwingSlot` localize a picked
-  swing into the project tier (`localizeSwing`); `pickTemper` now guards on the
-  project tier. Projects are self-contained; realisation never leans on
-  global/defaults. See `docs/swingEditor.md` § Library tiers.
-- The two picker builders collapsed into `chrome.libPicker` (trackerRender's
-  local `libPickerItems` is gone). Temper's transitional "Seed preset:" buttons
-  removed; `setTemper`/`setProjectTemper` dropped from the tracker facade — the
-  editor edits the library, assignment stays on the tracker.
+1. **MOS (moment of symmetry)** — from a generator interval, a period,
+   and a size, produce the MOS scale (the stack of the generator reduced
+   into the period, kept only at sizes where the scale is well-formed —
+   two step sizes). Parameters: generator token, period token, count (or
+   a "next MOS size" stepper).
+2. **Harmonic / subharmonic series** — a contiguous segment of the
+   harmonic series (e.g. harmonics 8…16) as the scale; the integers
+   already compile via `scalaPitch` (`n` → `n/1`), so this is mostly a
+   "emit `lo..hi` as tokens" generator with a root choice.
 
-1. **Cents/period/name editor** in `temperEditor.lua`: add/remove/edit
-   step cents, period, name; optional per-step names.
-2. **Option-B display change** in `tuning.lua` (names optional):
-   - `computeOctaveStep`: no names ⇒ no C-tail relabel ⇒ octave bumps at
-     the period (return `#cents + 1`).
-   - `stepToText`: name present ⇒ today's behaviour; absent ⇒
-     degree-based label.
-   - Add `tuning.lua` specs for the nameless path. `tm_tuning_spec`'s
-     I1–I5 are realisation-layer invariants — untouched.
-3. **Scala `.scl` import**: parse comment/count/pitches; ratios →
-   `1200*log2(n/d)`, cents pass through. Map to Continuum as
-   `cents = {0} ∪ scl[1..n-1]`, `period = scl[n]`, `stepNames = {}`.
-   `.kbm` deferred.
-4. **Extract the shared library shell** if swing + temper CRUD now
-   genuinely overlaps (the "third instance" test).
-
-### Open sub-decision for phase 2 (bring mockups)
-
-**Nameless-step cell display.** Tracker pitch cells are fixed 3-char
-(`C-4`). A nameless scale degree has no letter spelling. Options:
-degree-only, 2-char degree + 1-char octave, or widen the pitch cell when
-the active temper is nameless. Needs a visual call — present ASCII
-mockups via AskUserQuestion.
-
----
-
-## Phase 3 — compilers ("day two")
-
-JI ratios (`3/2` → cents), `n\edo` steps, then MOS / harmonic-series
-generators — all front-ends that emit a cents list into the temper.
+Both are pure functions emitting token lists; they slot in beside
+`scalaToTemper` and reuse the same `derive` + library-write path. A
+generator dropdown in the New/Import modal family is the natural home.
 
 ---
 
 ## Resume checklist (cold start)
 
-1. Read this file + `docs/tuning.md`.
+1. Read this file + `docs/tuning.md` + `docs/editorPage.md`.
 2. `mcp__readium_docs__map_query` over `tuning`, `temperEditor`,
-   `editorPage`, `swingEditor` for current shapes.
-3. Confirm phase-2 scope + the nameless-cell display decision before
-   coding (touches `tuning.lua` + tracker cell renderer = >2 files →
-   plan first).
+   `editorRender`, `editorPage`, `swingEditor` for current shapes
+   (`api`/`fn`/`shape` kinds).
+3. The remaining work is the **bulk generators** (MOS, harmonic). They
+   touch `tuning.lua` (new pure generators) + `temperEditor.lua` (a
+   parameter form) — >2 files plus a new UI surface, so plan first.
