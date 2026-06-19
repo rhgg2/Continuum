@@ -87,9 +87,15 @@ local function renderNote(evt, col, row)
     return NOTE_NAMES[(pitch % 12) + 1] .. octChar
   end
 
-  local showDelay  = col and col.showDelay
-  local showSample = col and col.trackerMode
-  local cellWidth  = tv:cellWidth()
+  local function rightAlign(s, w)
+    local pad = w - utf8.len(s)
+    return pad > 0 and string.rep(' ', pad) .. s or s
+  end
+
+  local showDelay   = col and col.showDelay
+  local showSample  = col and col.trackerMode
+  local cellWidth   = tv:cellWidth()
+  local octaveWidth = tv:octaveWidth()
   local blank      = string.rep('·', cellWidth)   -- cellWidth dots = empty pitch field
 
   if not evt then
@@ -102,14 +108,11 @@ local function renderNote(evt, col, row)
   if evt.type ~= 'pa' then
     local note, octave = tv:noteProjection(evt)
     if note then
-      -- Note left, octave right, slack between: the two pitch cursor stops sit at
-      -- the cell edges {0, cellWidth-1}. See docs/tuning.md § Display.
-      local slack = cellWidth - utf8.len(note) - utf8.len(octave)
-      label = note .. string.rep(' ', math.max(slack, 0)) .. octave
+      -- Both parts right-aligned in their own fields (note field = cellWidth -
+      -- octaveWidth) so the separator and octave units keep fixed columns.
+      label = rightAlign(note, cellWidth - octaveWidth) .. rightAlign(octave, octaveWidth)
     else
-      label = noteName(evt.pitch)
-      local pad = cellWidth - utf8.len(label)
-      if pad > 0 then label = string.rep(' ', pad) .. label end
+      label = rightAlign(noteName(evt.pitch), cellWidth)
     end
   end
   local isPA      = evt.type == 'pa'

@@ -16,6 +16,7 @@ return {
     run = function()
       local twelve = tuning.presets['12EDO']
       t.eq(twelve.cellWidth, 3, '12EDO cellWidth')
+      t.eq(twelve.octaveWidth, 1, '12EDO octave field is one char (range -1..9)')
       t.eq(twelve.octaveStep, 13, '12EDO has no C-tail, so it never bumps')
 
       local thirtyOne = tuning.presets['31EDO']
@@ -64,6 +65,7 @@ return {
       local s = tuning.derive{ name = 'half', period = 600,
                                cents = { 0, 300 }, stepNames = {} }
       t.eq(s.cellWidth, 4, '1-digit degree + dash + 2-digit octave')
+      t.eq(s.octaveWidth, 2, 'octave field widens to two chars')
       t.eq(tuning.stepToText(s, 1, 20), '1-20', 'two-digit octave renders in full')
     end,
   },

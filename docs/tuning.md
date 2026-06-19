@@ -168,6 +168,7 @@ temper = {
   cents       = { 0, 39, 77, ... },      -- DERIVED from pitches by tuning.derive
   period      = 1200,                    -- DERIVED from periodPitch
   octaveStep  = <index>,                 -- derived; see below
+  octaveWidth = <chars>,                 -- derived; octave-field width within the cell
   cellWidth   = <chars>,                 -- derived; tracker pitch-cell width
 }
 ```
@@ -254,13 +255,15 @@ one whose `stepNames` entry is blank — falls back to its degree with a
 dash separator (`7-4`), reusing the named cell's shape. Octave -1 renders
 as `"M"` (so `C-M` for MIDI 0 vs `C-4` for MIDI 60).
 
-In the tracker cell the note sits at the **left** edge and the octave at
-the **right** edge, with slack between them (`tuning.stepToParts` exposes
-the two parts). So note names and octaves each fall into a fixed column
-across rows, and the two pitch cursor stops — at cell columns `0` and
-`cellWidth-1` — land on real glyphs rather than on padding. This matters
-most when octave labels vary in width (a sub-octave period mixing
-single- and double-digit octaves).
+In the tracker cell the note and octave are each **right-aligned within
+their own field** — the note in the left `cellWidth - octaveWidth` columns,
+the octave in the right `octaveWidth` columns (`tuning.stepToParts` exposes
+the two parts). So the separator and the octave's units digit each keep a
+fixed column across rows, even when octave labels vary in width (a sub-
+octave period mixing single- and double-digit octaves). The octave cursor
+stop (cell column `cellWidth-1`) lands on the units digit; the note-entry
+stop (column `0`) is a keyboard affordance, so it may sit on left padding
+for a short label without harm.
 
 `cellWidth` is the derived char width of the widest label: the longest
 name (or a 2-digit degree) plus the **octave field**. The octave field is

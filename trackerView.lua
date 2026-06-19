@@ -1860,6 +1860,7 @@ function tv:rowPerBar()      return rowPerBar end
 function tv:takeName()       return tm:name() end
 function tv:activeTemper()   return ctx:activeTemper() end
 function tv:cellWidth()      local t = ctx:activeTemper(); return t and t.cellWidth or 3 end
+function tv:octaveWidth()    local t = ctx:activeTemper(); return t and t.octaveWidth or 1 end
 function tv:noteProjection(evt) return ctx:noteProjection(evt) end
 function tv:rowBeatInfo(row) return ctx:rowBeatInfo(row) end
 function tv:barBeatSub(row) return ctx:barBeatSub(row) end

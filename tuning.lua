@@ -6,7 +6,7 @@
 --invariant: detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
 --invariant: cents[1] is the unison (0); nameless step displays as degree-octave via M.stepToText
 --invariant: octave parameters are MIDI-relative (C4 → 4), not period-index
---shape: Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, cents=number[derived], period=cents[derived], octaveStep=int, cellWidth=int}
+--shape: Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, cents=number[derived], period=cents[derived], octaveStep=int, octaveWidth=int, cellWidth=int}
 local M = {}
 
 ----- Temperament presets
@@ -27,8 +27,13 @@ local function octaveLabel(o)
   return o == -1 and 'M' or tostring(o)
 end
 
--- cellWidth: widest step label + the octave field. Sub-octave periods pack >10
--- cycles into the MIDI range, widening the octave past one char -- see docs/tuning.md.
+-- octaveFieldWidth: char width of the octave field, fixed by the top of the
+-- natural [0,12700]¢ range (floor at -1 ⇒ "M"). See docs/tuning.md § Display.
+local function octaveFieldWidth(temper)
+  return #octaveLabel(math.floor(12700 / temper.period) - 1)
+end
+
+-- cellWidth: widest step label + the octave field; see docs/tuning.md § Display.
 local function computeCellWidth(temper)
   local stepNames, n = temper.stepNames or {}, #temper.cents
   local widest = 0
@@ -37,9 +42,7 @@ local function computeCellWidth(temper)
     local base = (nm and nm ~= '') and utf8.len(nm) or (#tostring(i) + 1)
     if base > widest then widest = base end
   end
-  -- Octave width is set by the top of the natural [0,12700]¢ range; the floor is
-  -- -1 ("M"). Nudge / octave-entry keep notes inside this range, so nothing spills.
-  return widest + #octaveLabel(math.floor(12700 / temper.period) - 1)
+  return widest + octaveFieldWidth(temper)
 end
 
 --contract: token → cents or nil: n/d, int, '.'=cents, n\m, n\m<equave> step (equave dflt 2/1).
@@ -74,8 +77,9 @@ function M.derive(temper)
     temper.period = M.scalaPitch(temper.periodPitch) or temper.period
   end
   local n = #temper.cents
-  temper.octaveStep = computeOctaveStep(temper.stepNames or {}, n)
-  temper.cellWidth  = computeCellWidth(temper)
+  temper.octaveStep  = computeOctaveStep(temper.stepNames or {}, n)
+  temper.octaveWidth = octaveFieldWidth(temper)
+  temper.cellWidth   = computeCellWidth(temper)
   return temper
 end
 
