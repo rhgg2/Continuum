@@ -52,6 +52,7 @@ local paintBinder = { colour = colour }
 
 local function pushChromeStyles()
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameBorderSize, 0)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameRounding, 1)
   -- With the border gone the fill bleeds into the 1px ring it used to occupy;
   -- trim a px per axis so framed widgets keep their old footprint.
   local fpx, fpy = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
@@ -87,7 +88,7 @@ end
 
 local function popChromeStyles()
   ImGui.PopStyleColor(ctx, 17)
-  ImGui.PopStyleVar(ctx, 2)
+  ImGui.PopStyleVar(ctx, 3)
 end
 
 -- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed the grid through.

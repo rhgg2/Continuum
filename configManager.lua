@@ -38,13 +38,14 @@ local declarations = {
   { 'advanceBy',        1     },
   { 'arrangeAdvanceBy', 1     },
   { 'arrangeBeatPerRow', 4    },
-
+  { 'laneStrip.rows',      4    },
   -- boolean
   { 'polyAftertouch',   true  },
   { 'trackerMode',      false },
   { 'previewInPlace',   false },
   { 'advanceOnLoad',    true  },
   { 'arrangeFollowPlay', false },
+  { 'laneStrip.visible',   true },
 
   -- string choice
   { 'noteLayout',       'colemak' },
@@ -104,6 +105,19 @@ local declarations = {
   { 'palette.alert',    hex('#da3021') },
   { 'palette.caution',  hex('#d25a23') },
   { 'palette.positive', hex('#568a40') },
+  -- Region palette: 8 muted hues. tint = pale wash; outline = full-sat border on the active region.
+  { 'palette.region.1', hex('#d2a52a') },
+  { 'palette.region.2', hex('#d27158') },
+  { 'palette.region.3', hex('#c25c8c') },
+  { 'palette.region.4', hex('#8a6bb1') },
+  { 'palette.region.5', hex('#5489c2') },
+  { 'palette.region.6', hex('#4ea99c') },
+  { 'palette.region.7', hex('#6ba35a') },
+  { 'palette.region.8', hex('#a39342') },
+  { 'palette.mirror.synced',     hex('#4ea99c') },  -- calm teal
+  { 'palette.mirror.overridden', hex('#d2a52a') },  -- amber: locally diverged, coherent
+  { 'palette.mirror.conflicted', hex('#d83a3a') },  -- alarming red
+  { 'palette.mirror.local',      hex('#8a6bb1') },  -- violet: instance-only stream
 
   -- Grid roles
   { 'colour.bg',               'palette.base.zone8'               },
@@ -153,19 +167,6 @@ local declarations = {
   { 'colour.ghostNegative',    hex('#da8278', 0.9)                },  -- one-off faded red
   { 'colour.alias',            {'palette.alt.zone5',   0.22}      },  -- materialised-alias cell tint
   { 'colour.aliasFocus',       {'palette.alt.zone5',   0.40}      },  -- transient family-highlight tint (alias-nav cursor)
-  -- Region palette: 8 muted hues. tint = pale wash; outline = full-sat border on the active region.
-  { 'palette.region.1', hex('#d2a52a') },
-  { 'palette.region.2', hex('#d27158') },
-  { 'palette.region.3', hex('#c25c8c') },
-  { 'palette.region.4', hex('#8a6bb1') },
-  { 'palette.region.5', hex('#5489c2') },
-  { 'palette.region.6', hex('#4ea99c') },
-  { 'palette.region.7', hex('#6ba35a') },
-  { 'palette.region.8', hex('#a39342') },
-  { 'palette.mirror.synced',     hex('#4ea99c') },  -- calm teal
-  { 'palette.mirror.overridden', hex('#d2a52a') },  -- amber: locally diverged, coherent
-  { 'palette.mirror.conflicted', hex('#d83a3a') },  -- alarming red
-  { 'palette.mirror.local',      hex('#8a6bb1') },  -- violet: instance-only stream
   -- Lane strip (CC/PB/AT envelope visualiser above the tracker grid).
   { 'colour.laneAxis',         {'palette.base.zone5',  0.6 }      },
   { 'colour.laneRowDivider',   {'palette.base.zone5',  0.15}      },
@@ -197,8 +198,8 @@ local declarations = {
   { 'colour.toolbar.sliderGrab',       'palette.base.zone7' },  -- slider handle on the chromed track
   { 'colour.toolbar.sliderGrabActive', 'palette.base.zone6' },  -- handle while dragging
   { 'colour.toolbar.popupBg',      'palette.base.zone10'           },
-  { 'colour.toolbar.textSelection', {'palette.alt.zone6',0.3}     },  -- text-selection highlight (Col_TextSelectedBg)
-  { 'colour.toolbar.selectedRow',   {'palette.alt.zone6',0.3}     },  -- Selectable/list-row highlight (Col_Header family)
+  { 'colour.toolbar.textSelection', 'palette.alt.zone8'     },  -- text-selection highlight (Col_TextSelectedBg)
+  { 'colour.toolbar.selectedRow',   'palette.alt.zone8'     },  -- Selectable/list-row highlight (Col_Header family)
   { 'colour.statusBar.bg',         'palette.alt.zone5'            },
   { 'colour.statusBar.text',       'palette.alt.zone9'            },
   { 'colour.modal.titleBg',        'palette.alt.zone6'            },  -- modalHost title bar: lift off editor.bg
@@ -216,8 +217,6 @@ local declarations = {
   { 'colour.help.tagBorder', 'colour.help.border'  },  -- edit-tag 1px crisp border
   -- Pre-blended `0.5*pale + 0.5*bg`; a literal alias would render translucent over a different parent.
   { 'colour.editor.bg',            hex('#e9e7df')                 },
-  { 'laneStrip.rows',      4    },
-  { 'laneStrip.visible',   true },
 }
 
 for i = 1, 8 do

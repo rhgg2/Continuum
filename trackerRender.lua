@@ -354,11 +354,7 @@ local toolbarSegments = {
       local textW = ImGui.CalcTextSize(ctx, '32')
       local btnW  = ImGui.GetFrameHeight(ctx)
       ImGui.SetNextItemWidth(ctx, textW + btnW * 2 + 16)
-      -- Spinner FramePadding shrinks at 9→10 so the buttons don't
-      -- crowd the two-digit field.
-      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, rowPerBeat > 9 and 5 or 8, 3)
       local changed, n = ImGui.InputInt(ctx, '##rpb', rowPerBeat, 1, 4)
-      ImGui.PopStyleVar(ctx, 1)
       if changed then tv:setRowPerBeat(util.clamp(n, 1, 32)) end
     end,
   },

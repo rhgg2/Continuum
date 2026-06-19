@@ -2423,8 +2423,13 @@ local function renderPaletteActions(focused)
 end
 
 local function renderPaletteList(sources)
+  -- Indent rows by FramePadding.x so a bare Selectable's flush-left label
+  -- aligns with the add/del buttons' text above it.
+  local padX = select(1, ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding))
+  ImGui.Indent(ctx, padX)
   if #sources == 0 then
     ImGui.TextDisabled(ctx, '(no sources)')
+    ImGui.Unindent(ctx, padX)
     return
   end
   for _, src in ipairs(sources) do
@@ -2444,6 +2449,7 @@ local function renderPaletteList(sources)
       }
     end
   end
+  ImGui.Unindent(ctx, padX)
 end
 
 local function renderPaletteBody()
