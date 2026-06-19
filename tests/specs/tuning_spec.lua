@@ -88,6 +88,10 @@ return {
       t.eq(tuning.scalaPitch('204.0'), 204.0, 'decimal point ⇒ cents')
       t.eq(tuning.scalaPitch('2'), 1200, 'bare integer ⇒ ratio n/1')
       t.eq(tuning.scalaPitch('7\\31'), 7 * 1200 / 31, 'n\\m ⇒ n*1200/m')
+      t.eq(tuning.scalaPitch('3\\8<3/2>'), 3 * tuning.scalaPitch('3/2') / 8,
+        'n\\m<equave> ⇒ equal divisions of the equave')
+      t.eq(tuning.scalaPitch('12\\12<2/1>'), 1200, 'explicit octave equave = plain n\\m')
+      t.eq(tuning.scalaPitch('1\\2<oops>'), nil, 'unparseable equave ⇒ nil')
       t.eq(tuning.scalaPitch(' 9/8 '), tuning.scalaPitch('9/8'), 'trims whitespace')
       t.eq(tuning.scalaPitch('junk'), nil)
     end,

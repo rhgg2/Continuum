@@ -33,11 +33,20 @@ local function computeCellWidth(stepNames, n)
   return widest + 1
 end
 
---contract: Scala pitch token → cents, or nil. n/d ratio, bare int, cents (has '.'), n\m EDO step.
+--contract: token → cents or nil: n/d, int, '.'=cents, n\m, n\m<equave> step (equave dflt 2/1).
 function M.scalaPitch(token)
   token = token:match('^%s*(.-)%s*$')
-  local n, m = token:match('^(%d+)\\(%d+)$')
-  if n then return tonumber(n) * 1200 / tonumber(m) end
+  -- n\m<equave>: n of m equal divisions of equave (default the octave 2/1).
+  local steps, div, equave = token:match('^(%d+)\\(%d+)<(.-)>$')
+  if not steps then steps, div = token:match('^(%d+)\\(%d+)$') end
+  if steps then
+    local span = 1200
+    if equave then
+      span = M.scalaPitch(equave)
+      if not span then return nil end
+    end
+    return tonumber(steps) * span / tonumber(div)
+  end
   if token:find('%.') then return tonumber(token) end
   local a, b = token:match('^(%d+)/(%d+)$')
   if a then return 1200 * math.log(tonumber(a) / tonumber(b), 2) end

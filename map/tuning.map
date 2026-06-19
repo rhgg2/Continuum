@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=225  sha=6a055f9  mode=namespace
+@module tuning  src=tuning.lua  loc=234  sha=89fce51  mode=namespace
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
@@ -21,36 +21,36 @@
   @fn computeCellWidth(stepNames, n)  @ 26
       -- cellWidth: widest step label width (named: utf8 len; nameless: digits+dash).
       -- Tracker pitch cell sizes to this so long names and >9-step scales fit.
-  @fn edo(n, names)  @ 64
+  @fn edo(n, names)  @ 73
   -- Scala import
   -- Coordinate conversions
   -- Display
-  @fn octaveLabel(o)  @ 213
+  @fn octaveLabel(o)  @ 222
       -- Octave -1 renders as "M" so the cell width stays fixed.
 
 # Public API (M.*)
   @api M.scalaPitch(token)  @ 37
-      @contract  Scala pitch token → cents, or nil. n/d ratio, bare int, cents (has '.'), n\m EDO step.
-  @api M.derive(temper)  @ 49
+      @contract  token → cents or nil: n/d, int, '.'=cents, n\m, n\m<equave> step (equave dflt 2/1).
+  @api M.derive(temper)  @ 58
       @contract  pitches→cents, periodPitch→period; stamps octaveStep + cellWidth. Pure; returns temper.
-  @api M.findTemper(name, userLib)  @ 98
+  @api M.findTemper(name, userLib)  @ 107
       @contract  looks up name in userLib first, then falls back to built-in M.presets; returns nil only if name is missing or unknown to both. Lets the '12EDO' sentinel resolve even when userLib is empty.
-  @api M.parseScalaPitches(text)  @ 107
+  @api M.parseScalaPitches(text)  @ 116
       -- Lenient: every non-blank, non-'!' line is a pitch token. Drives paste + the
       -- import Create button (which re-parses the box after any manual edits).
-  @api M.parseScalaFile(text)  @ 118
+  @api M.parseScalaFile(text)  @ 127
       -- Strict .scl: drop '!' comment lines, then [description, count, pitch x count].
       -- Returns pitch tokens + description (suggested name) for the Scala load path.
-  @api M.scalaToTemper(pitchLines, name)  @ 136
+  @api M.scalaToTemper(pitchLines, name)  @ 145
       -- Bridge Scala's convention (unison implicit, period last) to Continuum's
       -- (step 1 = 1/1, period separate): prepend unison, split off final as period.
-  @api M.midiToStep(temper, midi, detune)  @ 160
+  @api M.midiToStep(temper, midi, detune)  @ 169
       @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
       @contract  returned octave is MIDI-relative (C-1 → -1)
-  @api M.stepToMidi(temper, step, octave)  @ 182
+  @api M.stepToMidi(temper, step, octave)  @ 191
       @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
-  @api M.snap(temper, midi, detune)  @ 200
-  @api M.transposeStep(temper, midi, detune, n)  @ 205
+  @api M.snap(temper, midi, detune)  @ 209
+  @api M.transposeStep(temper, midi, detune, n)  @ 214
       @contract  moves by n scale steps under temper, carrying the octave; n may be negative
-  @api M.stepToText(temper, step, octave)  @ 218
+  @api M.stepToText(temper, step, octave)  @ 227
       @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.
