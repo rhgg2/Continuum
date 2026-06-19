@@ -428,14 +428,15 @@ function sm:migrate(projectPath, oldProjectPath)
   return anyMoved
 end
 
---contract: watchPath setPrefixes, migrates, writes cm.lastProjectPath on GetProjectPath change
+--contract: watchPath calls setPrefix every call (idempotent)
+--contract: migrate + cm.lastProjectPath write only on GetProjectPath change
 --contract: cm.lastProjectPath persists at project-tier so close-during-save is caught next open
 function sm:watchPath()
   local pp = reaper.GetProjectPath(0)
   if not pp or pp == '' then return end
+  self:setPrefix(pp)
   local last = cm:get('lastProjectPath')
   if last == pp then return end
-  self:setPrefix(pp)
   if last then self:migrate(pp, last) end
   cm:set('project', 'lastProjectPath', pp)
 end

@@ -183,6 +183,27 @@ return {
     end,
   },
   {
+    name = 'watchPath sets the prefix on reopen even when the breadcrumb already matches',
+    run = function(harness)
+      local h = harness.mk()
+      bindSamplerTrack(h, 't1')
+      h.reaper:clearGmem()
+      h.reaper:setProjectPath('/proj')
+      -- Reopen: breadcrumb already matches, so watchPath's change-branch is a no-op.
+      -- Prefix must still be set or slot paths reach JSFX relative and load_sample_from_file silently fails.
+      h.cm:set('project', 'lastProjectPath', '/proj')
+
+      local sm = newSampleManager(mkOps(), h.cm, h.ds)
+      sm:watchPath()
+      sm:assign('t1', 5, '/disk/kick.wav')
+      sm:tick()
+
+      local mb = readMailbox(h, 0)
+      t.truthy(mb.path:match('^/proj/Continuum/kick%-%x+%.wav$'),
+        'slot path reaches JSFX absolute despite an unchanged project path, got ' .. mb.path)
+    end,
+  },
+  {
     name = 'assign copies, writes cm rel path, queues abs in mailbox after tick',
     run = function(harness)
       local h = harness.mk()

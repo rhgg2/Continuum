@@ -1,4 +1,4 @@
-@module sampleManager  src=sampleManager.lua  loc=444  sha=1278d64  mode=chunk
+@module sampleManager  src=sampleManager.lua  loc=445  sha=1278d64  mode=chunk
 @deps fileOps, cm, ds
 
 # Invariants & contracts
@@ -98,13 +98,14 @@
       @contract  migrate iterates every sampler track via ds:getAt so non-bound tracks migrate too
       @contract  ds rel paths are preserved across migrate; only file bytes move
       @contract  migrate is a no-op if oldProjectPath is missing or unchanged
-  @api sm:watchPath()  @ 433
-      @contract  watchPath setPrefixes, migrates, writes cm.lastProjectPath on GetProjectPath change
+  @api sm:watchPath()  @ 434
+      @contract  watchPath calls setPrefix every call (idempotent)
+      @contract  migrate + cm.lastProjectPath write only on GetProjectPath change
       @contract  cm.lastProjectPath persists at project-tier so close-during-save is caught next open
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 397, 436
-  @use call    cm.set  @ 398, 440
+  @use call    cm.get  @ 397, 438
+  @use call    cm.set  @ 398, 441
   @use call    ds.assign  @ 116, 122, 285
   @use call    ds.get  @ 113, 120, 219, 281
   @use call    ds.getAt  @ 203, 416
