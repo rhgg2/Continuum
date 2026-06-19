@@ -72,33 +72,23 @@ end
 local function libraryRow(spec, tier, name, label)
   ImGui.PushID(ctx, tier)
   local selected = spec.sel and spec.sel.tier == tier and spec.sel.name == name
-  if chrome.rowSelectable(label, selected) then spec.onSelect(tier, name) end
+  local r = chrome.treeRow{ id = name, label = label, depth = 1,
+                            hasChildren = false, selected = selected }
+  if r.selected then spec.onSelect(tier, name) end
   ImGui.PopID(ctx)
 end
 
-local ROW_INDENT, ARROW_GUTTER = 14, 14   -- children sit under their folder, as tracker params do
-local CHIP_OPEN, CHIP_SHUT = '\xe2\x96\xbe', '\xe2\x96\xb8'   -- ▾ / ▸
 local treeOpen = { project = true, global = true }
 
--- Disclosure chip (left gutter) toggles the folder; the title row selects the
--- tier (name=nil) so add/import scope to it. Mirrors the sampler tree.
+-- Disclosure chip toggles the folder; the title row selects the tier (name=nil)
+-- so add/import scope to it, and now also toggles. Mirrors the sampler tree.
 local function libraryFolder(spec, tier, title, drawChildren)
-  local x, y    = ImGui.GetCursorScreenPos(ctx)
-  local chipHit = ImGui.InvisibleButton(ctx, '##chip' .. tier, ARROW_GUTTER,
-                                        ImGui.GetTextLineHeight(ctx))
-  ImGui.DrawList_AddText(ImGui.GetWindowDrawList(ctx), x + 2, y, chrome.colour('text'),
-                         treeOpen[tier] and CHIP_OPEN or CHIP_SHUT)
-  ImGui.SameLine(ctx, 0, 0)
   local selected = spec.sel and spec.sel.tier == tier and spec.sel.name == nil
-  if chipHit then
-    treeOpen[tier] = not treeOpen[tier]
-  elseif chrome.rowSelectable(title, selected) then
-    spec.onSelect(tier, nil)
-  end
-  if not treeOpen[tier] then return end
-  ImGui.Indent(ctx, ROW_INDENT)
-  drawChildren()
-  ImGui.Unindent(ctx, ROW_INDENT)
+  local r = chrome.treeRow{ id = tier, label = title, hasChildren = true,
+                            open = treeOpen[tier], selected = selected }
+  if r.toggled  then treeOpen[tier] = not treeOpen[tier] end
+  if r.selected then spec.onSelect(tier, nil) end
+  if treeOpen[tier] then drawChildren() end
 end
 
 local function libraryTree(spec)

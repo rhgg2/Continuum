@@ -1,9 +1,9 @@
-@module chrome  src=chrome.lua  loc=599  sha=18faabd  mode=chunk
+@module chrome  src=chrome.lua  loc=629  sha=835f191  mode=chunk
 @deps cm, ctx, uiFontBold, uiSize
 
 # Shapes
   @shape  chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
-  @shape  chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeArrow(open,hasChildren)->prefix, numberStepper(id,value,opts)->changed,value }
+  @shape  chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
   @shape  pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
   @shape  palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
   @shape  toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
@@ -29,7 +29,8 @@
   @state pickerActive = false  @ 339   -- frame-scoped: any picker popup live this frame
   @state PALETTE_W, PANE_GAP = 200, 11  @ 493
   @state HEADER_PAD, HEADER_GAP = 8, 4  @ 494
-  @state TREE_OPEN, TREE_SHUT = '\xe2\x96\xbe ', '\xe2\x96\xb8 '  @ 563
+  @state TREE_INDENT, ARROW_GUTTER = 12, 14  @ 563
+  @state CHIP_OPEN, CHIP_SHUT = '\xe2\x96\xbe', '\xe2\x96\xb8'  @ 564
 
 # Private functions
   @fn resolve(key)  @ 20
@@ -92,7 +93,11 @@
   @fn rowSelectable(label, selected, flags)  @ 552
       -- Selectable with hover/active highlight suppressed: only the selected row shows
       -- the Col_Header fill. Shared by the tracker palette and the sampler browser/tree.
-  @fn treeArrow(open, hasChildren)  @ 564
+  @fn treeRow(opts)  @ 570
+      -- One tree row, sampler-tree style: a draw-list chip in a fixed gutter (never
+      -- highlighted), then a selectable label; the row owns its nesting indent.
+      @contract  chip toggles; body click selects and toggles a parent; allowDouble suppresses both
+      @contract  childless rows show blank gutter so labels align; depth × TREE_INDENT owned here
 
 # Uses (outbound edges)
   @use call    cm.get  @ 28, 357
@@ -111,28 +116,33 @@
   @use call    imgui.ColorConvertU32ToDouble4  @ 248
   @use call    imgui.DrawList_AddLine  @ 117
   @use call    imgui.DrawList_AddRectFilled  @ 202, 203
+  @use call    imgui.DrawList_AddText  @ 579
   @use call    imgui.Dummy  @ 119, 515
   @use call    imgui.EndChild  @ 535
   @use call    imgui.EndDisabled  @ 127
   @use call    imgui.EndGroup  @ 278, 321
   @use call    imgui.EndPopup  @ 239, 486
   @use call    imgui.GetColor  @ 201
-  @use call    imgui.GetContentRegionAvail  @ 303, 506
+  @use call    imgui.GetContentRegionAvail  @ 303, 506, 574
   @use call    imgui.GetCursorPosX  @ 136
   @use call    imgui.GetCursorPosY  @ 136, 146
-  @use call    imgui.GetCursorScreenPos  @ 115, 270, 302, 503
+  @use call    imgui.GetCursorScreenPos  @ 115, 270, 302, 503, 576
   @use call    imgui.GetFrameHeight  @ 116, 135, 144, 146, 167
   @use call    imgui.GetItemRectMax  @ 199, 230, 280, 323, 416
   @use call    imgui.GetItemRectMin  @ 198, 229, 279, 322, 415
   @use call    imgui.GetScrollMaxY  @ 507
   @use call    imgui.GetStyleColor  @ 553
   @use call    imgui.GetStyleVar  @ 58, 134, 168, 169, 224, 403, 508
+  @use call    imgui.GetTextLineHeight  @ 575
   @use call    imgui.GetTextLineHeightWithSpacing  @ 510
-  @use call    imgui.GetWindowDrawList  @ 117, 201
+  @use call    imgui.GetWindowDrawList  @ 117, 201, 579
+  @use call    imgui.Indent  @ 572
   @use call    imgui.InputDouble  @ 186
   @use call    imgui.InputInt  @ 187
   @use call    imgui.InputText  @ 439
+  @use call    imgui.InvisibleButton  @ 577
   @use call    imgui.IsKeyPressed  @ 441, 442, 461, 463, 470
+  @use call    imgui.IsMouseDoubleClicked  @ 588
   @use call    imgui.IsWindowAppearing  @ 433, 455
   @use call    imgui.IsWindowFocused  @ 529
   @use call    imgui.OpenPopup  @ 227, 423
@@ -143,7 +153,7 @@
   @use call    imgui.PushStyleColor  @ 60, 61, 64, 65, 66, 69, 70, 71, 72, 73, 74, 75, 78, 81, 84, 85, 86, 98, 99, 100, 101, 102, 103, 250, 554, 555
   @use call    imgui.PushStyleVar  @ 54, 55, 59, 97, 145, 183, 194, 233, 271, 408
   @use call    imgui.RadioButton  @ 157
-  @use call    imgui.SameLine  @ 195, 275, 312, 314, 392
+  @use call    imgui.SameLine  @ 195, 275, 312, 314, 392, 582
   @use call    imgui.Selectable  @ 237, 481, 556
   @use call    imgui.Separator  @ 443, 479
   @use call    imgui.SetCursorPos  @ 138
@@ -154,6 +164,7 @@
   @use call    imgui.SetNextWindowPos  @ 231, 426
   @use call    imgui.SetNextWindowSize  @ 232
   @use call    imgui.Text  @ 252, 391
+  @use call    imgui.Unindent  @ 591
   @use call    painter.new  @ 502, 522
   @use require imgui  @ 9
   @use require painter  @ 10

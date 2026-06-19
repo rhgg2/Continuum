@@ -1,7 +1,7 @@
 -- See docs/chrome.md for the model.
 
 --shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
---shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeArrow(open,hasChildren)->prefix, numberStepper(id,value,opts)->changed,value }
+--shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
 --shape: palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
@@ -558,12 +558,42 @@ local function rowSelectable(label, selected, flags)
   return clicked
 end
 
--- ▾ open / ▸ shut tree arrows; a childless node leads with blank cells so its
--- label still aligns under expandable siblings.
-local TREE_OPEN, TREE_SHUT = '\xe2\x96\xbe ', '\xe2\x96\xb8 '
-local function treeArrow(open, hasChildren)
-  if not hasChildren then return '  ' end
-  return open and TREE_OPEN or TREE_SHUT
+-- Gutter + nesting metrics shared by every tree (sampler folders, fx palette,
+-- swing/tuning library). Owned here so no caller can drift them out of step.
+local TREE_INDENT, ARROW_GUTTER = 12, 14
+local CHIP_OPEN, CHIP_SHUT = '\xe2\x96\xbe', '\xe2\x96\xb8'   -- ▾ / ▸
+
+-- One tree row, sampler-tree style: a draw-list chip in a fixed gutter (never
+-- highlighted), then a selectable label; the row owns its nesting indent.
+--contract: chip toggles; body click selects and toggles a parent; allowDouble suppresses both
+--contract: childless rows show blank gutter so labels align; depth × TREE_INDENT owned here
+local function treeRow(opts)
+  local depth = opts.depth or 0
+  if depth > 0 then ImGui.Indent(ctx, depth * TREE_INDENT) end
+
+  local availW  = select(1, ImGui.GetContentRegionAvail(ctx))
+  local rowH    = ImGui.GetTextLineHeight(ctx)
+  local x, y    = ImGui.GetCursorScreenPos(ctx)
+  local chipHit = ImGui.InvisibleButton(ctx, '##chip' .. opts.id, ARROW_GUTTER, rowH)
+  if opts.hasChildren then
+    ImGui.DrawList_AddText(ImGui.GetWindowDrawList(ctx), x + 2, y, colour('text'),
+                           opts.open and CHIP_OPEN or CHIP_SHUT)
+  end
+  ImGui.SameLine(ctx, 0, 0)
+
+  local flags = opts.flags or 0
+  if opts.allowDouble then flags = flags | ImGui.SelectableFlags_AllowDoubleClick end
+  local label   = fitLabel(opts.label, availW - ARROW_GUTTER - (opts.reserve or 8))
+  local clicked = rowSelectable(label .. '###tr' .. opts.id, opts.selected, flags)
+  local double  = clicked and opts.allowDouble and ImGui.IsMouseDoubleClicked(ctx, 0) or false
+  local bodySel = clicked and not double
+
+  if depth > 0 then ImGui.Unindent(ctx, depth * TREE_INDENT) end
+  return {
+    toggled       = opts.hasChildren and (chipHit or bodySel) or false,
+    selected      = bodySel,
+    doubleClicked = double,
+  }
 end
 
 return {
@@ -594,6 +624,6 @@ return {
   palettePane        = palettePane,
   fitLabel           = fitLabel,
   rowSelectable      = rowSelectable,
-  treeArrow          = treeArrow,
+  treeRow            = treeRow,
 }
 

@@ -935,8 +935,6 @@ local function paletteFindBox()
   return ImGui.IsItemActive(ctx)
 end
 
--- params indent under their fx.
-local PARAM_INDENT = 14
 
 -- Made on first draw + attached so it outlives the defer cycle. Per-frame
 -- creation trips ReaImGui's short-lived guard; module-load faults the test fake.
@@ -1081,21 +1079,20 @@ local function drawTreeItem(it, cur, showLearn, btnW)
   if it.kind == 'heading' then
     ImGui.TextDisabled(ctx, it.text)
   elseif it.kind == 'fx' then
-    local row    = it.row
-    local onCur  = cur and cur.fxGuid == row.fxGuid and cur.param == nil
+    local row     = it.row
+    local onCur   = cur and cur.fxGuid == row.fxGuid and cur.param == nil
     local availW  = select(1, ImGui.GetContentRegionAvail(ctx))
     local reserve = showLearn and btnW + 28 or 8
-    local label   = chrome.treeArrow(it.open, true)
-                 .. chrome.fitLabel(row.name, availW - reserve)
     -- AllowOverlap so the learn button drawn on top still takes its clicks.
-    local clicked = chrome.rowSelectable(label .. '###fx' .. row.fxGuid, onCur,
-                                      ImGui.SelectableFlags_AllowOverlap)
+    local r = chrome.treeRow{ id = 'fx' .. row.fxGuid, label = row.name,
+                              hasChildren = true, open = it.open, selected = onCur,
+                              reserve = reserve, flags = ImGui.SelectableFlags_AllowOverlap }
     scrollFollow(onCur)
-    if clicked then
+    if r.selected then
       tv:setPaletteCursor{ fxGuid = row.fxGuid, param = nil }
-      tv:setFxExpanded(row.fxGuid, not it.open)
       paletteFocus = 'tree'
     end
+    if r.toggled then tv:setFxExpanded(row.fxGuid, not it.open) end
     if showLearn then
       local armed = tv:learnFxGuid() == row.fxGuid
       ImGui.SameLine(ctx, availW - btnW)
@@ -1107,20 +1104,18 @@ local function drawTreeItem(it, cur, showLearn, btnW)
   else
     local row   = it.row
     local onCur = cur and cur.fxGuid == row.fxGuid and cur.param == it.prm.index
-    ImGui.Indent(ctx, PARAM_INDENT)
-    -- ### ID from the guid+index alone: truncation/width must not remint it.
-    local label   = chrome.fitLabel(it.prm.name, select(1, ImGui.GetContentRegionAvail(ctx)))
-    local clicked = chrome.rowSelectable(label .. '###p' .. row.fxGuid .. it.prm.index, onCur)
+    -- id from guid+index alone: truncation/width must not remint it.
+    local r = chrome.treeRow{ id = 'p' .. row.fxGuid .. it.prm.index, label = it.prm.name,
+                              depth = 1, hasChildren = false, selected = onCur,
+                              allowDouble = true }
     scrollFollow(onCur)
-    local double  = ImGui.IsItemHovered(ctx) and ImGui.IsMouseDoubleClicked(ctx, 0)
-    if clicked or double then
+    if r.selected or r.doubleClicked then
       tv:setPaletteCursor{ fxGuid = row.fxGuid, param = it.prm.index }
       tv:setPaletteParam{ trackGuid = row.trackGuid, fxGuid = row.fxGuid,
                           param = it.prm.index, label = it.prm.name }
       paletteFocus = 'tree'
     end
-    if double then tv:automateParam() end
-    ImGui.Unindent(ctx, PARAM_INDENT)
+    if r.doubleClicked then tv:automateParam() end
   end
 end
 

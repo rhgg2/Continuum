@@ -133,47 +133,23 @@ local function peakFor(abs, cols)
   return hit
 end
 
-local TREE_INDENT, ARROW_GUTTER = 12, 14
-local CHIP_OPEN, CHIP_SHUT = '\xe2\x96\xbe', '\xe2\x96\xb8'   -- ▾ / ▸
 --contract: recursive walk; descends expanded subtrees; listDirs on all nodes to find leaf folders
---contract: chip (left gutter) toggles expansion; body click selects, double-click rebrowses root
---contract: open/shut chip in a fixed left gutter; leaf and parent labels share one text column
-local function drawTree(path)
-  local cur    = sv:getCurrentFolder()
-  local availW = select(1, ImGui.GetContentRegionAvail(ctx))
-  local dl     = ImGui.GetWindowDrawList(ctx)
-  local rowH   = ImGui.GetTextLineHeight(ctx)
+--contract: chip toggles expansion; body click selects, double-click rebrowses root (chrome.treeRow)
+local function drawTree(path, depth)
+  local cur = sv:getCurrentFolder()
   for _, sub in ipairs(fs.listDirs(path)) do
     local subPath = fs.join(path, sub)
     local hasKids = #fs.listDirs(subPath) > 0
     local open    = hasKids and sv:isFolderExpanded(subPath)
 
-    local x, y    = ImGui.GetCursorScreenPos(ctx)
-    local chipHit = ImGui.InvisibleButton(ctx, '##chip' .. subPath, ARROW_GUTTER, rowH)
-    if hasKids then
-      ImGui.DrawList_AddText(dl, x + 2, y, chrome.colour('text'),
-                             open and CHIP_OPEN or CHIP_SHUT)
-    end
-    ImGui.SameLine(ctx, 0, 0)
-    local label   = chrome.fitLabel(sub, availW - ARROW_GUTTER - 8) .. '###tree' .. subPath
-    local clicked = chrome.rowSelectable(label, cur == subPath,
-                                         ImGui.SelectableFlags_AllowDoubleClick)
+    local r = chrome.treeRow{ id = subPath, label = sub, depth = depth,
+                              hasChildren = hasKids, open = open,
+                              selected = cur == subPath, allowDouble = true }
+    if r.doubleClicked then sv:setBrowseRoot(subPath)
+    elseif r.selected   then sv:setCurrentFolder(subPath) end
+    if r.toggled then sv:setFolderExpanded(subPath, not open) end
 
-    if hasKids and chipHit then
-      sv:setFolderExpanded(subPath, not open)
-    elseif clicked then
-      if ImGui.IsMouseDoubleClicked(ctx, 0) then
-        sv:setBrowseRoot(subPath)
-      else
-        sv:setCurrentFolder(subPath)
-        if hasKids then sv:setFolderExpanded(subPath, not open) end
-      end
-    end
-    if open then
-      ImGui.Indent(ctx, TREE_INDENT)
-      drawTree(subPath)
-      ImGui.Unindent(ctx, TREE_INDENT)
-    end
+    if open then drawTree(subPath, depth + 1) end
   end
 end
 
@@ -507,7 +483,7 @@ function sr:renderBody(_, w, h, dispatch)
       if ImGui.Button(ctx, '↑##treeUp') then sv:setBrowseRoot(parent) end
     end)
     ImGui.Separator(ctx)
-    drawTree(root)
+    drawTree(root, 0)
   end
   ImGui.EndChild(ctx)
 
