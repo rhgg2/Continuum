@@ -458,15 +458,26 @@ local audition, killAudition do
   local auditionTime     = 0    -- reaper.time_precise() when note was sent
   local AUDITION_TIMEOUT = 0.8  -- seconds
 
+  -- Detune→live pitch-bend on the audition channel; mirrors tm's centsToRaw
+  -- slope so the preview bends like the seated note (synth range = pbRange).
+  local function sendBend(chan, cents)
+    local lim  = cm:get('pbRange') * 100
+    local raw  = util.clamp(util.round((cents or 0) * 8192 / lim), -8192, 8191)
+    local wire = raw + 8192
+    reaper.StuffMIDIMessage(0, 0xE0 | chan, wire & 0x7F, (wire >> 7) & 0x7F)
+  end
+
   function killAudition()
     if not auditionNote then return end
     reaper.StuffMIDIMessage(0, 0x80 | auditionNote.chan, auditionNote.pitch, 0)
+    sendBend(auditionNote.chan, 0)
     auditionNote = nil
   end
 
-  function audition(pitch, vel, chan)
+  function audition(pitch, vel, chan, detune)
     killAudition()
     local midiChan = (chan or 1) - 1
+    sendBend(midiChan, detune)
     reaper.StuffMIDIMessage(0, 0x90 | midiChan, pitch, vel or 100)
     auditionNote = { chan = midiChan, pitch = pitch }
     auditionTime = reaper.time_precise()
@@ -568,7 +579,7 @@ do
     local logPerRowNow   = logPerRowFor(rpbNow)
     local cursorppq      = ec:row() * logPerRowNow
 
-    local function commit(auditionPitch, auditionVel)
+    local function commit(auditionPitch, auditionVel, auditionDetune)
       -- The one mutation that bypasses cmgr (trackerPage's char drain
       -- calls editEvent direct), so the keep-set doBefore sweeps never
       -- see it: end every cascade by hand.
@@ -576,7 +587,7 @@ do
       tm:flush()
       ec:advance()
       killAudition()
-      if auditionPitch then audition(auditionPitch, auditionVel or 100, col.midiChan) end
+      if auditionPitch then audition(auditionPitch, auditionVel or 100, col.midiChan, auditionDetune) end
     end
 
     local function snap(update)
@@ -609,7 +620,7 @@ do
           local upd = { pitch = pitch, detune = detune }
           if cm:get('trackerMode') then upd.sample = cm:get('currentSample') end
           tm:assignEvent(evt, snap(upd))
-          return commit(pitch, evt.vel)
+          return commit(pitch, evt.vel, detune)
         end
 
         -- PA cell → wipe host's PA tail, then fall through
@@ -630,7 +641,7 @@ do
           chan = col.midiChan, rpb = rpbNow,
         }
         placeNewNote(col, new)
-        return commit(pitch, new.vel)
+        return commit(pitch, new.vel, detune)
 
       elseif part == 'pitch' then  -- octave digit
         if not util.isNote(evt) then return end
@@ -654,7 +665,7 @@ do
           pitch, detune = util.clamp((oct + 1) * 12 + evt.pitch % 12, 0, 127), evt.detune
         end
         tm:assignEvent(evt, { pitch = pitch, detune = detune })
-        return commit(pitch, evt.vel)
+        return commit(pitch, evt.vel, detune)
 
       -- sample: 2 hex nibbles, 0..127.
       elseif part == 'sample' then
