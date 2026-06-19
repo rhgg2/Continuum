@@ -57,6 +57,18 @@ return {
   },
 
   {
+    name = 'sub-octave period widens the octave field for 2-digit octaves',
+    run = function()
+      -- period 600¢ packs ~21 cycles into [0,12700], so octave labels reach
+      -- two digits; the octave field grows even though the degree is 1-digit.
+      local s = tuning.derive{ name = 'half', period = 600,
+                               cents = { 0, 300 }, stepNames = {} }
+      t.eq(s.cellWidth, 4, '1-digit degree + dash + 2-digit octave')
+      t.eq(tuning.stepToText(s, 1, 20), '1-20', 'two-digit octave renders in full')
+    end,
+  },
+
+  {
     name = 'derive recomputes width when names are dropped',
     run = function()
       local s = tuning.derive{ name = 'x', period = 1200,

@@ -226,6 +226,23 @@ real step).
   overflow into detune. A very-low step does not silently disappear; it
   returns `(0, <large negative detune>)`.
 
+### Addressable range
+
+The temperament hangs from a single anchor: cents 0 ≡ MIDI 0 (`C-1`).
+Everything grows upward from there by the fixed slope 100¢ = 1 semitone,
+so a note is *addressable* only while its cents sit in `[0, 12700]` — from
+the anchor to MIDI 127. The pitchbend window (`pbRange`) can bend the
+*sound* a little past either end, but the note's own `(pitch, octave)`
+cannot: below the anchor you have crossed cents 0; above 127 the MIDI note
+clamps.
+
+Editing operations enforce this, so the range — and the `cellWidth` octave
+budget derived from it — stays exact. A seated note's detune is always in
+`[-50, 50]` (it is `cents − round(cents/100)·100`); only a clamp-fold past
+the anchor or the ceiling pushes `|detune|` beyond 50. So both the octave-
+column entry and the pitch **nudge** reject any result with `|detune| > 50`
+— the note stays put rather than drifting onto an unrealisable pitch.
+
 ## Display
 
 ```
@@ -237,10 +254,16 @@ one whose `stepNames` entry is blank — falls back to its degree with a
 dash separator (`7-4`), reusing the named cell's shape. Octave -1 renders
 as `"M"` (so `C-M` for MIDI 0 vs `C-4` for MIDI 60).
 
-`cellWidth` is the derived char width of the widest label (longest name,
-or a 2-digit degree, plus the octave char). The tracker sizes the pitch
-column to it, so long names and >9-step nameless scales stay aligned;
-12-EDO and the other presets derive 3 — the historic fixed width.
+`cellWidth` is the derived char width of the widest label: the longest
+name (or a 2-digit degree) plus the **octave field**. The octave field is
+one char for octave-or-larger periods — their displayed octave never leaves
+`-1..9` (`"M".."9"`) — but a **sub-octave period** packs more than ten
+period-cycles into the MIDI range, so its octave labels reach two digits
+and the field grows to match. 12-EDO and the other octave-period presets
+derive 3, the historic fixed width; only sub-octave scales widen. The
+budget comes from the top of the natural `[0, 12700]`¢ range (floor
+anchored at `-1`), which holds because edits keep notes in range — see
+*Addressable range*.
 
 ## Slot registry
 

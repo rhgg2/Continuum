@@ -1446,6 +1446,9 @@ local nudge do
     local pitch, detune
     if temper then
       pitch, detune = tuning.transposeStep(temper, note.pitch, note.detune, delta)
+      -- A clamp-fold past the cents-0 anchor or MIDI ceiling leaves |detune|>50;
+      -- a seated note never does. Reject -- keep notes in the addressable range.
+      if math.abs(detune) > 50 then return end
     else
       pitch, detune = util.clamp(note.pitch + delta, 0, 127), note.detune
     end

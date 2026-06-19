@@ -21,16 +21,25 @@ local function computeOctaveStep(stepNames, n)
   return n + 1
 end
 
--- cellWidth: widest step label width (named: utf8 len; nameless: digits+dash).
--- Tracker pitch cell sizes to this so long names and >9-step scales fit.
-local function computeCellWidth(stepNames, n)
+-- Octave -1 renders as "M" so the bottom (the cents-0 anchor) stays one char,
+-- matching MIDI's C-1. See docs/tuning.md § Addressable range.
+local function octaveLabel(o)
+  return o == -1 and 'M' or tostring(o)
+end
+
+-- cellWidth: widest step label + the octave field. Sub-octave periods pack >10
+-- cycles into the MIDI range, widening the octave past one char -- see docs/tuning.md.
+local function computeCellWidth(temper)
+  local stepNames, n = temper.stepNames or {}, #temper.cents
   local widest = 0
   for i = 1, n do
     local nm   = stepNames[i]
     local base = (nm and nm ~= '') and utf8.len(nm) or (#tostring(i) + 1)
     if base > widest then widest = base end
   end
-  return widest + 1
+  -- Octave width is set by the top of the natural [0,12700]¢ range; the floor is
+  -- -1 ("M"). Nudge / octave-entry keep notes inside this range, so nothing spills.
+  return widest + #octaveLabel(math.floor(12700 / temper.period) - 1)
 end
 
 --contract: token → cents or nil: n/d, int, '.'=cents, n\m, n\m<equave> step (equave dflt 2/1).
@@ -66,7 +75,7 @@ function M.derive(temper)
   end
   local n = #temper.cents
   temper.octaveStep = computeOctaveStep(temper.stepNames or {}, n)
-  temper.cellWidth  = computeCellWidth(temper.stepNames or {}, n)
+  temper.cellWidth  = computeCellWidth(temper)
   return temper
 end
 
@@ -298,11 +307,6 @@ function M.transposeStep(temper, midi, detune, n)
 end
 
 ----- Display
-
--- Octave -1 renders as "M" so the cell width stays fixed.
-local function octaveLabel(o)
-  return o == -1 and 'M' or tostring(o)
-end
 
 --contract: name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.
 function M.stepToText(temper, step, octave)

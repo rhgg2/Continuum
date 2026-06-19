@@ -102,4 +102,35 @@ return {
       t.eq(after.detune, detune0, 'detune unchanged by the rejected octave')
     end,
   },
+
+  {
+    name = 'pitch nudge keeps a note in the addressable range (refuses past the ceiling)',
+    run = function(harness)
+      local h = mk(harness)
+      local col = lane1(h)
+      local letterStop = (pitchStops(col))
+
+      h.ec:setPos(0, 1, letterStop)
+      h.vm:editEvent(col, nil, letterStop, string.byte('z'), false)
+      local placed = lane1(h).cells[0].pitch
+
+      -- Climb with coarse pitch nudges; the cursor stays on the note's row so
+      -- each nudge transposes it in place. It saturates near MIDI 127.
+      h.ec:setPos(0, 1, letterStop)
+      for _ = 1, 40 do h.cmgr:invoke('nudgeCoarseUp') end
+
+      local note = lane1(h).cells[0]
+      t.truthy(note.pitch > placed, 'the note climbed')
+      t.truthy(note.pitch <= 127, 'pitch within MIDI range')
+      t.truthy(math.abs(note.detune) <= 50,
+        'parked on a seated step, not a clamp-fold: ' .. tostring(note.detune))
+
+      -- One more nudge at the ceiling is a verified no-op.
+      local p0, d0 = note.pitch, note.detune
+      h.cmgr:invoke('nudgeCoarseUp')
+      note = lane1(h).cells[0]
+      t.eq(note.pitch,  p0, 'ceiling nudge is a no-op (pitch)')
+      t.eq(note.detune, d0, 'ceiling nudge is a no-op (detune)')
+    end,
+  },
 }
