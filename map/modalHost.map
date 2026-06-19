@@ -1,4 +1,4 @@
-@module modalHost  src=modalHost.lua  loc=140  sha=6362c91  mode=chunk
+@module modalHost  src=modalHost.lua  loc=151  sha=e667aa2  mode=chunk
 @deps ctx, chrome
 
 # Invariants & contracts
@@ -33,20 +33,26 @@
   @api mh:draw()  @ 55
 
 # Uses (outbound edges)
-  @use call    chrome.popChromeWindow  @ 90
+  @use call    chrome.colour  @ 67
+  @use call    chrome.popChromeWindow  @ 101
   @use call    chrome.pushChromeWindow  @ 65
-  @use call    imgui.BeginPopupModal  @ 67
-  @use call    imgui.CloseCurrentPopup  @ 74
-  @use call    imgui.EndPopup  @ 86
+  @use call    imgui.BeginPopupModal  @ 74
+  @use call    imgui.CloseCurrentPopup  @ 83
+  @use call    imgui.EndPopup  @ 95
+  @use call    imgui.GetStyleVar  @ 71
   @use call    imgui.GetWindowViewport  @ 62
-  @use call    imgui.InputText  @ 117, 128
-  @use call    imgui.IsKeyPressed  @ 97, 99, 121, 122, 124, 132
+  @use call    imgui.InputText  @ 128, 139
+  @use call    imgui.IsKeyPressed  @ 108, 110, 132, 133, 135, 143
   @use call    imgui.IsPopupOpen  @ 59
-  @use call    imgui.IsWindowAppearing  @ 105
+  @use call    imgui.IsWindowAppearing  @ 116
   @use call    imgui.OpenPopup  @ 26, 60
-  @use call    imgui.SetKeyboardFocusHere  @ 106
+  @use call    imgui.PopStyleColor  @ 100
+  @use call    imgui.PopStyleVar  @ 75, 99
+  @use call    imgui.PushStyleColor  @ 67
+  @use call    imgui.PushStyleVar  @ 68, 72
+  @use call    imgui.SetKeyboardFocusHere  @ 117
   @use call    imgui.SetNextWindowPos  @ 63
-  @use call    imgui.Text  @ 96, 107, 120
+  @use call    imgui.Text  @ 107, 118, 131
   @use call    imgui.Viewport_GetCenter  @ 62
   @use require imgui  @ 7
 

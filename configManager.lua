@@ -87,16 +87,16 @@ local declarations = {
   { 'palette.base.zone8',  hex('#d5d1c3') },
   { 'palette.base.zone9',  hex('#eae8e1') },
   { 'palette.base.zone10', hex('#faf8f1') },
-  { 'palette.alt.zone0',   hex('#000000') },  -- alt: cool blue
-  { 'palette.alt.zone1',   hex('#15171e') },
-  { 'palette.alt.zone2',   hex('#2a2e3c') },
-  { 'palette.alt.zone3',   hex('#414758') },
-  { 'palette.alt.zone4',   hex('#596173') },
-  { 'palette.alt.zone5',   hex('#637e9c') },
-  { 'palette.alt.zone6',   hex('#888faa') },
-  { 'palette.alt.zone7',   hex('#a5a8c0') },
-  { 'palette.alt.zone8',   hex('#c3c3d5') },
-  { 'palette.alt.zone9',   hex('#e2e4e9') },
+  { 'palette.alt.zone0',   hex('#000000') },  -- alt: cool blue, OKLCh hue 251° (zone5-anchored), chroma peaks mid
+  { 'palette.alt.zone1',   hex('#0b1826') },
+  { 'palette.alt.zone2',   hex('#1d3045') },
+  { 'palette.alt.zone3',   hex('#324963') },
+  { 'palette.alt.zone4',   hex('#496380') },
+  { 'palette.alt.zone5',   hex('#647e9b') },
+  { 'palette.alt.zone6',   hex('#7a93ae') },
+  { 'palette.alt.zone7',   hex('#97acc4') },
+  { 'palette.alt.zone8',   hex('#b7c7d8') },
+  { 'palette.alt.zone9',   hex('#dee5ee') },
   { 'palette.alt.zone10',  hex('#ffffff') },
   -- single-swatch roles
   { 'palette.alt2',     hex('#e89282') },  -- warm pink
@@ -201,6 +201,7 @@ local declarations = {
   { 'colour.toolbar.selectedRow',   {'palette.alt.zone6',0.3}     },  -- Selectable/list-row highlight (Col_Header family)
   { 'colour.statusBar.bg',         'palette.alt.zone5'            },
   { 'colour.statusBar.text',       'palette.alt.zone9'            },
+  { 'colour.modal.titleBg',        'palette.alt.zone6'            },  -- modalHost title bar: lift off editor.bg
   -- F1 cheat-sheet overlay (help.lua): blue panel; chips + description ride the
   -- base ramp so the dark shortcut glyphs read on light keycaps.
   { 'colour.help.box',    'colour.statusBar.bg' },
