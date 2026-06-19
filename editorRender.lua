@@ -30,8 +30,8 @@ local function onClose() cmgr:invoke('closeEditor') end
 
 --shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPromote(name), onDemote(name), onReset?(), onDelete(tier,name) }
 
--- Folder a row sits under scopes the action bar. Active is a nav lens —
--- rows resolve to a real tier on select, so sel.tier is 'project'|'global'.
+-- sel.tier scopes the action bar: a folder selection (name=nil) scopes add/import,
+-- a leaf arms dup/del. Active's 'select' button resolves an entry to its home tier.
 local function libraryActions(spec)
   local sel         = spec.sel or {}
   local synthetic   = sel.name and spec.synthetic and spec.synthetic[sel.name]
@@ -42,13 +42,13 @@ local function libraryActions(spec)
     if ImGui.Button(ctx, 'import') then spec.onImport() end
   end
   ImGui.SameLine(ctx, 0, 4)
-  if sel.tier == 'project' then
+  if sel.tier == 'project' and sel.name then
 --  chrome.disabledIf(sel.tier ~= 'project', function()
     if ImGui.Button(ctx, 'dup global') then spec.onPromote(sel.name) end   -- ↑G : promote
     --  end)
   end
   ImGui.SameLine(ctx, 0, 4)
-  if sel.tier == 'global' and not synthetic then
+  if sel.tier == 'global' and sel.name and not synthetic then
 --  chrome.disabledIf(sel.tier ~= 'global' or synthetic, function()
     if ImGui.Button(ctx, 'dup project') then spec.onDemote(sel.name) end   -- ↓P : demote
     --  end)
@@ -62,7 +62,7 @@ local function libraryActions(spec)
     end)
     ImGui.SameLine(ctx, 0, 4)
   end
-  chrome.disabledIf(not (sel.tier == 'project' or sel.tier == 'global') or undeletable, function()
+  chrome.disabledIf(not sel.name or not (sel.tier == 'project' or sel.tier == 'global') or undeletable, function()
     if ImGui.Button(ctx, 'del') then spec.onDelete(sel.tier, sel.name) end   -- × : delete
   end)
 end
@@ -76,16 +76,26 @@ local function libraryRow(spec, tier, name, label)
   ImGui.PopID(ctx)
 end
 
-local ROW_INDENT = 14   -- children sit under their folder, as tracker params do
-local treeOpen   = { active = true, project = true, global = true }
+local ROW_INDENT, ARROW_GUTTER = 14, 14   -- children sit under their folder, as tracker params do
+local CHIP_OPEN, CHIP_SHUT = '\xe2\x96\xbe', '\xe2\x96\xb8'   -- ▾ / ▸
+local treeOpen = { project = true, global = true }
 
--- Collapsible folder node: arrow + title as a selectable row; clicking it
--- toggles whether its children draw. Mirrors the tracker param tree.
-local function libraryFolder(key, title, drawChildren)
-  if chrome.rowSelectable(chrome.treeArrow(treeOpen[key], true) .. title, false) then
-    treeOpen[key] = not treeOpen[key]
+-- Disclosure chip (left gutter) toggles the folder; the title row selects the
+-- tier (name=nil) so add/import scope to it. Mirrors the sampler tree.
+local function libraryFolder(spec, tier, title, drawChildren)
+  local x, y    = ImGui.GetCursorScreenPos(ctx)
+  local chipHit = ImGui.InvisibleButton(ctx, '##chip' .. tier, ARROW_GUTTER,
+                                        ImGui.GetTextLineHeight(ctx))
+  ImGui.DrawList_AddText(ImGui.GetWindowDrawList(ctx), x + 2, y, chrome.colour('text'),
+                         treeOpen[tier] and CHIP_OPEN or CHIP_SHUT)
+  ImGui.SameLine(ctx, 0, 0)
+  local selected = spec.sel and spec.sel.tier == tier and spec.sel.name == nil
+  if chipHit then
+    treeOpen[tier] = not treeOpen[tier]
+  elseif chrome.rowSelectable(title, selected) then
+    spec.onSelect(tier, nil)
   end
-  if not treeOpen[key] then return end
+  if not treeOpen[tier] then return end
   ImGui.Indent(ctx, ROW_INDENT)
   drawChildren()
   ImGui.Unindent(ctx, ROW_INDENT)
@@ -97,17 +107,20 @@ local function libraryTree(spec)
     draw = function()
       chrome.row(function() libraryActions(spec) end)
       ImGui.Separator(ctx)
-      libraryFolder('active', 'Active', function()
-        for _, a in ipairs(spec.active or {}) do
-          libraryRow(spec, 'active', a.name, a.col .. '  ' .. a.name)
-        end
-      end)
-      libraryFolder('project', 'Project', function()
+      for _, a in ipairs(spec.active or {}) do
+        ImGui.PushID(ctx, a.col)
+        ImGui.AlignTextToFramePadding(ctx)
+        ImGui.TextDisabled(ctx, ('Active %s: %s'):format(a.col, a.name))
+        ImGui.SameLine(ctx)
+        if ImGui.SmallButton(ctx, 'select') then spec.onSelect(nil, a.name) end   -- jump to its home tier
+        ImGui.PopID(ctx)
+      end
+      libraryFolder(spec, 'project', 'Project', function()
         for _, name in ipairs(spec.project or {}) do
           libraryRow(spec, 'project', name, name)
         end
       end)
-      libraryFolder('global', 'Global', function()
+      libraryFolder(spec, 'global', 'Global', function()
         for _, name in ipairs(spec.global or {}) do
           libraryRow(spec, 'global', name, name)
         end
@@ -175,7 +188,7 @@ function er:renderBody(_, w, h, dispatch)
   local p = activePane()
   -- Page-level Esc returns to the previous page; guarded so an active
   -- InputText/slider keeps Esc to cancel itself, and a sub-modal owns it.
-  if droppedIn and not p:modalActive() and not ImGui.IsAnyItemActive(ctx)
+  if droppedIn and not modalHost:isOpen() and not ImGui.IsAnyItemActive(ctx)
      and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     onClose(); return
   end
@@ -202,7 +215,7 @@ end
 --shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
 function er:focusState()
   if not ctx then return { suppressKbd = false, pageSuppressed = false, acceptCmds = false } end
-  local suppressKbd = modalHost:isOpen() or chrome.pickerIsActive() or activePane():modalActive()
+  local suppressKbd = modalHost:isOpen() or chrome.pickerIsActive()
   return {
     suppressKbd    = suppressKbd,
     pageSuppressed = true,

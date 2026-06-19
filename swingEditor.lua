@@ -9,7 +9,7 @@
 --invariant: on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
 --invariant: slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider
 --invariant: atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
---shape: state = { name, tier, snapshot, rpb, wild, create? = { buf, err?, gen?, refocus? } }  -- composite is NOT cached here; create is the New-swing modal substate (gen bumps to re-seed the InputText after we clear buf on error)
+--shape: state = { name, tier, snapshot, rpb, wild }  -- composite is NOT cached here
 --shape: PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
 local util    = require 'util'
 local timing  = require 'timing'
@@ -40,7 +40,8 @@ local PERIOD_PRESETS = {
 local SWING_ERR     = 0xff6060ff
 local SWING_SOFT_QN = 0.15
 
-local cm, ds, chrome, ctx, gui, facade = (...).cm, (...).ds, (...).chrome, (...).ctx, (...).gui, (...).facade
+local cm, ds, chrome, ctx, gui, facade, modalHost =
+  (...).cm, (...).ds, (...).chrome, (...).ctx, (...).gui, (...).facade, (...).modalHost
 
 local function arrange() return facade.get('arrange') end
 local function tracker() return facade.get('tracker') end
@@ -431,7 +432,7 @@ end
 -- snapshot so Reset/dirty-check stay coherent; tier defaults to the home tier.
 local function switchTo(name, tier)
   state.name     = name
-  state.tier     = name and (tier or homeTier(name)) or nil
+  state.tier     = tier or (name and homeTier(name)) or nil
   state.snapshot = name and swingRead() or nil
 end
 
@@ -520,6 +521,8 @@ local function resetToSnapshot()
   commit()
 end
 
+local openNewModal   -- forward decl; defined with its modalHost kind below
+
 local function buildDescriptor()
   local globalNames = sortedNames(globalSwings())
   if not globalSwings().identity then table.insert(globalNames, 1, 'identity') end
@@ -531,8 +534,8 @@ local function buildDescriptor()
     synthetic   = SYNTHETIC,
     undeletable = inUseNames(),
     sel         = { tier = state.tier, name = state.name },
-    onSelect    = function(tier, name) switchTo(name, tier ~= 'active' and tier or nil) end,
-    onNew       = function() state.create = { buf = '', tier = state.tier or 'project' } end,
+    onSelect    = function(tier, name) switchTo(name, tier) end,
+    onNew       = openNewModal,
     onPromote   = promote,
     onDemote    = demote,
     onDelete    = deleteSel,
@@ -541,63 +544,48 @@ local function buildDescriptor()
   }
 end
 
--- '+ New' modal. Lives at draw() top-level so the popup isn't bound to a
--- child window's lifetime; the editor body greys out behind it via the
--- disabled wrap in drawEditBody.
-local function drawCreateModal()
-  if not state.create then return end
-  state.create.gen = state.create.gen or 0
-  if not ImGui.IsPopupOpen(ctx, 'New swing') then
-    ImGui.OpenPopup(ctx, 'New swing')
-  end
-  local cx, cy = ImGui.Viewport_GetCenter(ImGui.GetWindowViewport(ctx))
-  ImGui.SetNextWindowPos(ctx, cx, cy, ImGui.Cond_Appearing, 0.5, 0.5)
-  chrome.pushChromeWindow()
-  if ImGui.BeginPopupModal(ctx, 'New swing', true, ImGui.WindowFlags_AlwaysAutoResize) then
-    local function dismiss() state.create = nil; ImGui.CloseCurrentPopup(ctx) end
-    ImGui.AlignTextToFramePadding(ctx)
-    ImGui.Text(ctx, 'Name:')
-    ImGui.SameLine(ctx)
-    if ImGui.IsWindowAppearing(ctx) or state.create.refocus then
-      ImGui.SetKeyboardFocusHere(ctx)
-      state.create.refocus = nil
-    end
-    ImGui.SetNextItemWidth(ctx, 240)
-    -- PushID(gen) forces the InputText to re-init from buf after we
-    -- clear it on error; without it the widget keeps its own cached buffer.
-    ImGui.PushID(ctx, state.create.gen)
-    local rv, buf = ImGui.InputText(ctx, '##newname', state.create.buf,
-      ImGui.InputTextFlags_EnterReturnsTrue)
-    ImGui.PopID(ctx)
-    state.create.buf = buf
-    ImGui.SameLine(ctx)
-    local confirm = rv or ImGui.Button(ctx, 'Create')
-    ImGui.SameLine(ctx)
-    local cancel  = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
-    if confirm then
-      local name = buf and buf:match('^%s*(.-)%s*$')
-      local lib  = cm:get('swings', { mergeTiers = true })
-      if not name or name == '' then
-        state.create.err = 'Name required.'
-      elseif lib[name] then
-        state.create.err     = 'Name already in use.'
-        state.create.buf     = ''
-        state.create.gen     = state.create.gen + 1
-        state.create.refocus = true
-      else
-        local tier = state.create.tier
-        tracker().setSwingComposite(name, {}, tier)
-        switchTo(name, tier)
-        dismiss()
-      end
-    elseif cancel then dismiss() end
-    if state.create and state.create.err then
-      ImGui.TextColored(ctx, SWING_ERR, state.create.err)
-    end
-    ImGui.EndPopup(ctx)
-  end
-  chrome.popChromeWindow()
+-- New-swing modal, hosted by modalHost (kind registered below). Opener captures
+-- the target tier; the render keeps the popup open on a name clash.
+openNewModal = function()
+  local tier = state.tier or 'project'
+  modalHost:open{
+    kind = 'swingNew', title = 'New swing', buf = '',
+    callback = function(name)
+      tracker().setSwingComposite(name, {}, tier)
+      switchTo(name, tier)
+    end,
+  }
 end
+
+modalHost:registerKind('swingNew', function(s, close)
+  if ImGui.IsWindowAppearing(ctx) or s.refocus then
+    ImGui.SetKeyboardFocusHere(ctx); s.refocus = nil
+  end
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, 'Name:')
+  ImGui.SameLine(ctx)
+  ImGui.SetNextItemWidth(ctx, 240)
+  s.gen = s.gen or 0
+  ImGui.PushID(ctx, s.gen)
+  local rv, buf = ImGui.InputText(ctx, '##newname', s.buf, ImGui.InputTextFlags_EnterReturnsTrue)
+  ImGui.PopID(ctx)
+  s.buf = buf
+  ImGui.SameLine(ctx)
+  local confirm = rv or ImGui.Button(ctx, 'Create')
+  ImGui.SameLine(ctx)
+  local cancel  = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
+  if confirm then
+    local name = (buf or ''):match('^%s*(.-)%s*$')
+    if name == '' then
+      s.err = 'Name required.'
+    elseif cm:get('swings', { mergeTiers = true })[name] then
+      s.err = 'Name already in use.'; s.buf = ''; s.gen = s.gen + 1; s.refocus = true
+    else
+      close(true, name)
+    end
+  elseif cancel then close(false) end
+  if s.err then ImGui.TextColored(ctx, SWING_ERR, s.err) end
+end)
 
 -- Toolbar tools: Rows-per-qn / Wild / Composite-phase, drawn in the page toolbar
 -- band (ui font + FramePadding already set). Vertical separators per group.
@@ -701,7 +689,6 @@ local function draw(w, h)
   chrome.pushChromeStyles()
   if ImGui.BeginChild(ctx, '##swingEditor', w, h) then
     drawEditBody(composite)
-    drawCreateModal()
   end
   ImGui.EndChild(ctx)
   chrome.popChromeStyles()
@@ -742,8 +729,7 @@ function self:libraryDescriptor() return buildDescriptor() end
 
 function self:close() state = nil end
 
-function self:isOpen()      return state ~= nil end
-function self:modalActive() return state ~= nil and state.create ~= nil end
+function self:isOpen() return state ~= nil end
 
 return self
 

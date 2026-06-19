@@ -10,7 +10,7 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
-local cm, chrome, ctx, gui = (...).cm, (...).chrome, (...).ctx, (...).gui
+local cm, chrome, ctx, gui, modalHost = (...).cm, (...).chrome, (...).ctx, (...).gui, (...).modalHost
 
 local TEMPER_ERR = 0xff6060ff
 local SYNTHETIC  = { ['12EDO'] = true }
@@ -18,8 +18,7 @@ local SYNTHETIC  = { ['12EDO'] = true }
 local selected = nil   -- explicitly-selected entry; nil follows the active slot
 local selTier  = nil   -- tier of the selection ('project' | 'global')
 local snapshot = nil   -- selection-time copy, for dirty-check + Reset
-local create   = nil   -- { buf, err?, gen?, refocus? } — New-temper modal substate
-local importState = nil -- { buf, name?, err? } — Import modal substate
+local openNewModal, openImportModal   -- New/Import modals, hosted by modalHost (defined below)
 local editing  = nil   -- { key, buf } in-flight pitch token; commits on deactivate
 
 local function viewedName() return selected or cm:get('temper') end
@@ -58,7 +57,7 @@ end
 -- coherent. tier defaults to the home tier.
 local function selectTemper(name, tier)
   selected = name
-  selTier  = name and (tier or homeTier(name)) or nil
+  selTier  = tier or (name and homeTier(name)) or nil
   snapshot = name and util.deepClone(editedTemper() or temperFor(name)) or nil
 end
 
@@ -194,9 +193,9 @@ local function buildDescriptor()
     global    = globalNames,
     synthetic = SYNTHETIC,
     sel       = { tier = selTier, name = selected },
-    onSelect  = function(tier, name) selectTemper(name, tier ~= 'active' and tier or nil) end,
-    onNew     = function() create = { buf = '' } end,
-    onImport  = function() importState = { buf = '', name = '' } end,
+    onSelect  = function(tier, name) selectTemper(name, tier) end,
+    onNew     = openNewModal,
+    onImport  = openImportModal,
     onPromote = promote,
     onDemote  = demote,
     onDelete  = deleteSel,
@@ -336,127 +335,103 @@ local function drawStepTable(temper)
   ImGui.PopStyleVar(ctx)
 end
 
--- '+ New' modal, copied from swingEditor's pattern: lives at draw top-level so
--- the popup isn't bound to the child window's lifetime.
-local function drawCreateModal()
-  if not create then return end
-  create.gen = create.gen or 0
-  if not ImGui.IsPopupOpen(ctx, 'New tuning') then
-    ImGui.OpenPopup(ctx, 'New tuning')
-  end
-  local cx, cy = ImGui.Viewport_GetCenter(ImGui.GetWindowViewport(ctx))
-  ImGui.SetNextWindowPos(ctx, cx, cy, ImGui.Cond_Appearing, 0.5, 0.5)
-  chrome.pushChromeWindow()
-  if ImGui.BeginPopupModal(ctx, 'New tuning', true, ImGui.WindowFlags_AlwaysAutoResize) then
-    local function dismiss() create = nil; ImGui.CloseCurrentPopup(ctx) end
-    ImGui.AlignTextToFramePadding(ctx)
-    ImGui.Text(ctx, 'Name:')
-    ImGui.SameLine(ctx)
-    if ImGui.IsWindowAppearing(ctx) or create.refocus then
-      ImGui.SetKeyboardFocusHere(ctx)
-      create.refocus = nil
-    end
-    ImGui.SetNextItemWidth(ctx, 240)
-    ImGui.PushID(ctx, create.gen)
-    local rv, buf = ImGui.InputText(ctx, '##newtemper', create.buf,
-      ImGui.InputTextFlags_EnterReturnsTrue)
-    ImGui.PopID(ctx)
-    create.buf = buf
-    ImGui.SameLine(ctx)
-    local confirm = rv or ImGui.Button(ctx, 'Create')
-    ImGui.SameLine(ctx)
-    local cancel  = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
-    if confirm then
-      local name = buf and buf:match('^%s*(.-)%s*$')
-      local lib  = cm:get('tempers', { mergeTiers = true })
-      if not name or name == '' then
-        create.err = 'Name required.'
-      elseif lib[name] then
-        create.err     = 'Name already in use.'
-        create.buf     = ''
-        create.gen     = create.gen + 1
-        create.refocus = true
-      else
-        local p = projectTempers()
-        p[name] = tuning.derive{ name = name, periodPitch = '2/1', pitches = { '1/1' }, stepNames = {} }
-        cm:set('project', 'tempers', p)
-        selectTemper(name, 'project')
-        dismiss()
-      end
-    elseif cancel then dismiss() end
-    if create and create.err then
-      ImGui.TextColored(ctx, TEMPER_ERR, create.err)
-    end
-    ImGui.EndPopup(ctx)
-  end
-  chrome.popChromeWindow()
+-- New + Import modals, hosted by modalHost (kinds registered below). The opener
+-- captures the target tier; the render keeps the popup open on a name clash.
+openNewModal = function()
+  local tier = selTier or 'project'
+  modalHost:open{
+    kind = 'temperNew', title = 'New tuning', buf = '',
+    callback = function(name)
+      local p = tier == 'global' and globalTempers() or projectTempers()
+      p[name] = tuning.derive{ name = name, periodPitch = '2/1', pitches = { '1/1' }, stepNames = {} }
+      cm:set(tier, 'tempers', p)
+      selectTemper(name, tier)
+    end,
+  }
 end
 
--- Import: paste a Scala pitch list (or load a .scl, which strips its headers
--- into the box first), name it, Create. Lives at draw top-level like the New modal.
-local function drawImportModal()
-  if not importState then return end
-  if not ImGui.IsPopupOpen(ctx, 'Import tuning') then
-    ImGui.OpenPopup(ctx, 'Import tuning')
-  end
-  local cx, cy = ImGui.Viewport_GetCenter(ImGui.GetWindowViewport(ctx))
-  ImGui.SetNextWindowPos(ctx, cx, cy, ImGui.Cond_Appearing, 0.5, 0.5)
-  chrome.pushChromeWindow()
-  if ImGui.BeginPopupModal(ctx, 'Import tuning', true, ImGui.WindowFlags_AlwaysAutoResize) then
-    local function dismiss() importState = nil; ImGui.CloseCurrentPopup(ctx) end
-    ImGui.AlignTextToFramePadding(ctx)
-    ImGui.Text(ctx, 'Name:')
-    ImGui.SameLine(ctx)
-    ImGui.SetNextItemWidth(ctx, 200)
-    local rvN, nm = ImGui.InputText(ctx, '##importname', importState.name or '')
-    if rvN then importState.name = nm end
-    ImGui.SameLine(ctx)
-    if ImGui.Button(ctx, 'Load .scl…') then
-      local ok, path = reaper.GetUserFileNameForRead('', 'Import Scala scale', '.scl')
-      if ok then
-        local text = fs.readText(path)
-        if text then
-          local pitches, desc = tuning.parseScalaFile(text)
-          importState.buf = table.concat(pitches, '\n')
-          if (importState.name or '') == '' then
-            importState.name = (desc ~= '' and desc) or fs.basename(path)
-          end
-        end
-      end
-    end
-    ImGui.TextDisabled(ctx, 'Scala pitches, one per line (e.g. 9/8 or 204.0):')
-    local rvB, buf = ImGui.InputTextMultiline(ctx, '##importbuf', importState.buf or '', 320, 200)
-    if rvB then importState.buf = buf end
-    local confirm = ImGui.Button(ctx, 'Create')
-    ImGui.SameLine(ctx)
-    local cancel  = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
-    if confirm then
-      local name = (importState.name or ''):match('^%s*(.-)%s*$')
-      local lib  = cm:get('tempers', { mergeTiers = true })
-      if name == '' then
-        importState.err = 'Name required.'
-      elseif lib[name] then
-        importState.err = 'Name already in use.'
-      else
-        local temper, perr = tuning.scalaToTemper(tuning.parseScalaPitches(importState.buf or ''), name)
-        if not temper then
-          importState.err = perr
-        else
-          local p = projectTempers()
-          p[name] = temper
-          cm:set('project', 'tempers', p)
-          selectTemper(name, 'project')
-          dismiss()
-        end
-      end
-    elseif cancel then dismiss() end
-    if importState and importState.err then
-      ImGui.TextColored(ctx, TEMPER_ERR, importState.err)
-    end
-    ImGui.EndPopup(ctx)
-  end
-  chrome.popChromeWindow()
+openImportModal = function()
+  local tier = selTier or 'project'
+  modalHost:open{
+    kind = 'temperImport', title = 'Import tuning', buf = '', name = '',
+    callback = function(name, temper)
+      local p = tier == 'global' and globalTempers() or projectTempers()
+      p[name] = temper
+      cm:set(tier, 'tempers', p)
+      selectTemper(name, tier)
+    end,
+  }
 end
+
+modalHost:registerKind('temperNew', function(s, close)
+  if ImGui.IsWindowAppearing(ctx) or s.refocus then
+    ImGui.SetKeyboardFocusHere(ctx); s.refocus = nil
+  end
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, 'Name:')
+  ImGui.SameLine(ctx)
+  ImGui.SetNextItemWidth(ctx, 240)
+  s.gen = s.gen or 0
+  ImGui.PushID(ctx, s.gen)
+  local rv, buf = ImGui.InputText(ctx, '##newtemper', s.buf, ImGui.InputTextFlags_EnterReturnsTrue)
+  ImGui.PopID(ctx)
+  s.buf = buf
+  ImGui.SameLine(ctx)
+  local confirm = rv or ImGui.Button(ctx, 'Create')
+  ImGui.SameLine(ctx)
+  local cancel  = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
+  if confirm then
+    local name = (buf or ''):match('^%s*(.-)%s*$')
+    if name == '' then
+      s.err = 'Name required.'
+    elseif cm:get('tempers', { mergeTiers = true })[name] then
+      s.err = 'Name already in use.'; s.buf = ''; s.gen = s.gen + 1; s.refocus = true
+    else
+      close(true, name)
+    end
+  elseif cancel then close(false) end
+  if s.err then ImGui.TextColored(ctx, TEMPER_ERR, s.err) end
+end)
+
+modalHost:registerKind('temperImport', function(s, close)
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, 'Name:')
+  ImGui.SameLine(ctx)
+  ImGui.SetNextItemWidth(ctx, 200)
+  local rvN, nm = ImGui.InputText(ctx, '##importname', s.name or '')
+  if rvN then s.name = nm end
+  ImGui.SameLine(ctx)
+  if ImGui.Button(ctx, 'Load .scl…') then
+    local ok, path = reaper.GetUserFileNameForRead('', 'Import Scala scale', '.scl')
+    if ok then
+      local text = fs.readText(path)
+      if text then
+        local pitches, desc = tuning.parseScalaFile(text)
+        s.buf = table.concat(pitches, '\n')
+        if (s.name or '') == '' then s.name = (desc ~= '' and desc) or fs.basename(path) end
+      end
+    end
+  end
+  ImGui.TextDisabled(ctx, 'Scala pitches, one per line (e.g. 9/8 or 204.0):')
+  local rvB, buf = ImGui.InputTextMultiline(ctx, '##importbuf', s.buf or '', 320, 200)
+  if rvB then s.buf = buf end
+  local confirm = ImGui.Button(ctx, 'Create')
+  ImGui.SameLine(ctx)
+  local cancel  = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
+  if confirm then
+    local name = (s.name or ''):match('^%s*(.-)%s*$')
+    if name == '' then
+      s.err = 'Name required.'
+    elseif cm:get('tempers', { mergeTiers = true })[name] then
+      s.err = 'Name already in use.'
+    else
+      local temper, perr = tuning.scalaToTemper(tuning.parseScalaPitches(s.buf or ''), name)
+      if not temper then s.err = perr
+      else close(true, name, temper) end
+    end
+  elseif cancel then close(false) end
+  if s.err then ImGui.TextColored(ctx, TEMPER_ERR, s.err) end
+end)
 
 local function draw(w, h)
   chrome.pushChromeStyles()
@@ -479,8 +454,6 @@ local function draw(w, h)
       ImGui.PopStyleVar(ctx, 1)
       if not editable then ImGui.EndDisabled(ctx) end
     end
-    drawCreateModal()
-    drawImportModal()
   end
   ImGui.EndChild(ctx)
   chrome.popChromeStyles()
@@ -491,5 +464,4 @@ local self = {}
 function self:select(name)        selectTemper(name) end
 function self:render(w, h)        draw(w, h) end
 function self:libraryDescriptor() return buildDescriptor() end
-function self:modalActive()       return create ~= nil or importState ~= nil end
 return self

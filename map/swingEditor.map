@@ -1,5 +1,5 @@
-@module swingEditor  src=swingEditor.lua  loc=749  sha=eedc19c  mode=chunk
-@deps cm, ds, chrome, ctx, gui, facade
+@module swingEditor  src=swingEditor.lua  loc=735  sha=5e2a76a  mode=chunk
+@deps cm, ds, chrome, ctx, gui, facade, modalHost
 
 # Invariants & contracts
   @invariant  editor stores no swing data; swingRead = tier copy of state.name, else merged floor
@@ -12,7 +12,7 @@
   @invariant  atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
 
 # Shapes
-  @shape  state = { name, tier, snapshot, rpb, wild, create? = { buf, err?, gen?, refocus? } }  -- composite is NOT cached here; create is the New-swing modal substate (gen bumps to re-seed the InputText after we clear buf on error)
+  @shape  state = { name, tier, snapshot, rpb, wild }  -- composite is NOT cached here
   @shape  PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
 
 # Imports
@@ -27,193 +27,180 @@
   @state PERIOD_PRESETS = {  @ 31
   @state SWING_ERR = 0xff6060ff  @ 40
   @state SWING_SOFT_QN = 0.15  @ 41
-  @state state = nil  @ 48
-  @state STRIP_COLS = 6  @ 105   -- strip width in tracker char-columns
-  @state GLYPH_BOX = 36  @ 106   -- px reserved for each =/∘ separator between strips
-  @state DIVIDER_GRAB = 7  @ 107   -- px hit-height of the draggable preview/factor splitter
-  @state MIN_FACTOR_AREA = 80  @ 108   -- px kept below the splitter for the factor list
-  @state SYNTHETIC = { identity = true }  @ 413
-  @state self = {}  @ 712
+  @state state = nil  @ 49
+  @state STRIP_COLS = 6  @ 106   -- strip width in tracker char-columns
+  @state GLYPH_BOX = 36  @ 107   -- px reserved for each =/∘ separator between strips
+  @state DIVIDER_GRAB = 7  @ 108   -- px hit-height of the draggable preview/factor splitter
+  @state MIN_FACTOR_AREA = 80  @ 109   -- px kept below the splitter for the factor list
+  @state SYNTHETIC = { identity = true }  @ 414
+  @state openNewModal  @ 524   -- forward decl; defined with its modalHost kind below
+  @state self = {}  @ 699
 
 # Private functions
-  @fn arrange()  @ 45
-  @fn tracker()  @ 46
-  @fn commit()  @ 51
+  @fn arrange()  @ 46
+  @fn tracker()  @ 47
+  @fn commit()  @ 52
       -- Fired on widget release so the project-wide pass runs once per gesture, not per frame.
-  @fn meterQN()  @ 55
-  @fn periodPresetIndex(tileQN)  @ 63
+  @fn meterQN()  @ 56
+  @fn periodPresetIndex(tileQN)  @ 64
       @contract  returns 0 (not nil) when tileQN matches no preset; callers append a synthetic label in that case
-  @fn periodLabel(tileQN)  @ 70
-  @fn periodOverPPC(period, ppC)  @ 78
+  @fn periodLabel(tileQN)  @ 71
+  @fn periodOverPPC(period, ppC)  @ 79
       -- Preset .period is already a tidy rational; halving it for ppC=2 keeps
       -- it tidy ({n,d} → {n,2d}; integer → {n,2}).
-  @fn shiftCap(factor, wild)  @ 88
+  @fn shiftCap(factor, wild)  @ 89
       -- id has range = ∞ (slope is always 1; the K-bound never bites). Cap at
       -- one tile per side so Wild gives a finite slider; the boundary clip
       -- absorbs any overhang at the take edges. shuffle and tilt are
       -- asymmetric (positive and negative shifts hit different K-bound walls).
-  @fn materialise(composite)  @ 103
+  @fn materialise(composite)  @ 104
       -- QN-space preview uses ppqPerQN=1 so the editor draws against
       -- normalised QN units rather than the take's PPQ resolution.
-  @fn gridMetrics()  @ 112
+  @fn gridMetrics()  @ 113
       -- Char-cell metrics matching the tracker grid (odd = crisp 1px lines).
       -- Caller must have the grid font pushed so 'W' measures the mono cell.
-  @fn meterClassifier()  @ 119
+  @fn meterClassifier()  @ 120
       -- Meter classifier: returns classify(qn) → 'bar'|'midBar'|'beat'|nil, plus beat and qpb.
       -- midBar = bar midpoint landing on a beat (4/4, 6/8 yes; 3/4 no); shades as beat, sizes as bar.
-  @fn drawSwingStrip(p, factors, ownPeriodQN, geom)  @ 134
+  @fn drawSwingStrip(p, factors, ownPeriodQN, geom)  @ 135
       -- Vertical strip: tracker-grid rows (bar/beat fills, offbeat 1px dividers), blobs at realised time.
       -- Blobs past ownPeriodQN draw in ghost colour; geom is shared so all strips align row-for-row.
-  @fn bandLayout(composite, factors)  @ 168
+  @fn bandLayout(composite, factors)  @ 169
       -- Grid-font metrics + total band width for the preview strips. Pure measure;
       -- pushes the grid font only to size the mono cell, then derives the layout.
-  @fn drawBandInto(layout, composite, factors, region)  @ 191
+  @fn drawBandInto(layout, composite, factors, region)  @ 192
       -- Preview band: composite strip left, then (when compound) '=' + factor strips fn∘…∘f1 right.
       -- f1 applied first so sits rightmost; strips centred horizontally, top-aligned, clipped to region.
-  @fn swingRead()  @ 234
-  @fn readFactors(composite)  @ 242
+  @fn swingRead()  @ 235
+  @fn readFactors(composite)  @ 243
       -- Tolerant accessor: bare {} and {factors={}} both mean identity. Read-only;
       -- write paths deepClone, then mutate factors[].
-  @fn phaseQN(p)  @ 247
+  @fn phaseQN(p)  @ 248
       -- QN value of an optional period-shaped slot (scalar, {n,d}, or nil).
-  @fn compositesEqual(a, b)  @ 250
+  @fn compositesEqual(a, b)  @ 251
       @contract  compares composite phase, per-factor phase, period, atom and shift — phase fields normalise to QN before comparing, so {1,2} and {2,4} count equal
-  @fn swingWrite(composite)  @ 267
+  @fn swingWrite(composite)  @ 268
       @contract  sole write path; idempotent on equal composites; refresh via setSwingComposite
-  @fn cloneForEdit()  @ 274
+  @fn cloneForEdit()  @ 275
       -- Editable clone with a guaranteed factors[] array, so write paths can
       -- index it without re-checking. Phase is preserved as-is.
-  @fn patchFactor(i, patch)  @ 280
-  @fn addFactor()  @ 288
+  @fn patchFactor(i, patch)  @ 281
+  @fn addFactor()  @ 289
       @contract  default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited
-  @fn removeFactor(i)  @ 294
-  @fn moveFactor(i, dir)  @ 300
-  @fn drawFactorRow(i, f, numColW, n)  @ 310
+  @fn removeFactor(i)  @ 295
+  @fn moveFactor(i, dir)  @ 301
+  @fn drawFactorRow(i, f, numColW, n)  @ 311
   -- Tier-aware library writes
-  @fn projectSwings()  @ 415
-  @fn globalSwings()  @ 418
+  @fn projectSwings()  @ 416
+  @fn globalSwings()  @ 419
       -- Reading the global library lazily seeds it from the catalogue (minus the
       -- synthetic floor) the first time. See docs/swingEditor.md § Library tiers.
-  @fn homeTier(name)  @ 425
+  @fn homeTier(name)  @ 426
       -- A name's editable home: the project copy if one exists, else global (which
       -- also covers the synthetic 'identity' floor and unseeded default presets).
-  @fn switchTo(name, tier)  @ 432
+  @fn switchTo(name, tier)  @ 433
       -- Switch the edited swing without closing the editor. Re-captures the
       -- snapshot so Reset/dirty-check stay coherent; tier defaults to the home tier.
-  @fn deleteFromTier(level, name)  @ 438
-  @fn promote(name)  @ 446
+  @fn deleteFromTier(level, name)  @ 439
+  @fn promote(name)  @ 447
       @contract  promote copies the composite to global; the project copy survives, still shadowing it
-  @fn demote(name)  @ 454
+  @fn demote(name)  @ 455
       -- Fork a global entry down into the project tier and edit that copy.
-  @fn deleteSel(tier, name)  @ 464
+  @fn deleteSel(tier, name)  @ 465
       -- Delete from the row's tier; fall back to a surviving shadow in the other
       -- tier if any, else clear the selection.
-  @fn resolvedSlots()  @ 474
+  @fn resolvedSlots()  @ 475
       -- Resolved take and channel slots for the open-default and the
       -- library-row shortcut buttons. 'identity' at the take tier is treated
       -- as no-slot (matches open()'s bail); at the channel tier nil means
       -- 'no override, fall through to take'.
-  @fn sortedNames(tbl)  @ 483
-  @fn activeEntries()  @ 492
+  @fn sortedNames(tbl)  @ 484
+  @fn activeEntries()  @ 493
       -- In-force entries for the Active folder: take swing + every channel
       -- override, read straight from ds (no cursor) so all columns show.
-  @fn inUseNames()  @ 509
+  @fn inUseNames()  @ 510
       -- Project entries a take references can't be deleted (it would orphan the
       -- reference); the shell greys Delete for these.
-  @fn resetToSnapshot()  @ 518
+  @fn resetToSnapshot()  @ 519
       -- Revert the edited composite to the open()/switch snapshot, then reswing.
-  @fn buildDescriptor()  @ 523
-  @fn drawCreateModal()  @ 547
-      -- '+ New' modal. Lives at draw() top-level so the popup isn't bound to a
-      -- child window's lifetime; the editor body greys out behind it via the
-      -- disabled wrap in drawEditBody.
-  @fn drawToolsRow(composite, n)  @ 604
+  @fn buildDescriptor()  @ 526
+  @fn drawToolsRow(composite, n)  @ 592
       -- Toolbar tools: Rows-per-qn / Wild / Composite-phase, drawn in the page toolbar
       -- band (ui font + FramePadding already set). Vertical separators per group.
-  @fn drawEditBody(composite)  @ 643
-  @fn draw(w, h)  @ 696
+  @fn drawEditBody(composite)  @ 631
+  @fn draw(w, h)  @ 684
       -- Body-region draw inside a child window; chrome palette (editor.bg + toolbar colours)
       -- takes the tracker grid's place (Col_ChildBg instead of Col_WindowBg).
 
 # Public API (self:*)
   -- Public
-  @api self:open(name)  @ 716
+  @api self:open(name)  @ 703
       @contract  open(name?) selects entry; default prefers chan override → take swing → nil.
       @contract  when already open, re-selects resolved target; snapshot captured at selection time.
-  @api self:render(w, h)  @ 728
-  @api self:renderToolbar()  @ 732
+  @api self:render(w, h)  @ 715
+  @api self:renderToolbar()  @ 719
       -- Tools row (Reset / Rows-per-qn / Wild / Composite-phase) drawn into the page
       -- toolbar band by editorRender. Greys out with no slot selected, like the body.
-  @api self:libraryDescriptor()  @ 741
-  @api self:close()  @ 743
-  @api self:isOpen()  @ 745
-  @api self:modalActive()  @ 746
+  @api self:libraryDescriptor()  @ 728
+  @api self:close()  @ 730
+  @api self:isOpen()  @ 732
 
 # Uses (outbound edges)
-  @use call    chrome.checkbox  @ 617
-  @use call    chrome.disabledIf  @ 336, 398, 402, 628
-  @use call    chrome.dropdown  @ 322, 360, 610
-  @use call    chrome.paletteHeader  @ 648, 670
-  @use call    chrome.popChromeStyles  @ 707
-  @use call    chrome.popChromeWindow  @ 599
-  @use call    chrome.pushChromeStyles  @ 701
-  @use call    chrome.pushChromeWindow  @ 555
-  @use call    chrome.verticalSeparator  @ 614, 623
-  @use call    cm.get  @ 237, 579, 723
-  @use call    cm.getAt  @ 235, 415, 420
-  @use call    cm.seedGlobalFromDefault  @ 419
-  @use call    cm.set  @ 442, 450, 458
-  @use call    ds.get  @ 475, 493
-  @use call    facade.get  @ 45, 46
-  @use call    imgui.AlignTextToFramePadding  @ 315, 351, 378, 558, 605, 625
-  @use call    imgui.BeginChild  @ 702
-  @use call    imgui.BeginDisabled  @ 685, 736
-  @use call    imgui.BeginPopupModal  @ 556
-  @use call    imgui.Button  @ 399, 403, 406, 574, 576, 690
-  @use call    imgui.CalcTextSize  @ 113, 207, 318, 686
-  @use call    imgui.CloseCurrentPopup  @ 557
-  @use call    imgui.Dummy  @ 666
-  @use call    imgui.EndChild  @ 706
-  @use call    imgui.EndDisabled  @ 691, 738
-  @use call    imgui.EndPopup  @ 597
-  @use call    imgui.GetContentRegionAvail  @ 651
-  @use call    imgui.GetCursorPosX  @ 317
-  @use call    imgui.GetCursorScreenPos  @ 662, 671
-  @use call    imgui.GetMousePos  @ 676
-  @use call    imgui.GetWindowViewport  @ 553
-  @use call    imgui.InputText  @ 569
-  @use call    imgui.InvisibleButton  @ 673
-  @use call    imgui.IsItemActive  @ 674
-  @use call    imgui.IsItemDeactivatedAfterEdit  @ 347, 395, 639
-  @use call    imgui.IsItemHovered  @ 674
+  @use call    chrome.checkbox  @ 605
+  @use call    chrome.disabledIf  @ 337, 399, 403, 616
+  @use call    chrome.dropdown  @ 323, 361, 598
+  @use call    chrome.paletteHeader  @ 636, 658
+  @use call    chrome.popChromeStyles  @ 694
+  @use call    chrome.pushChromeStyles  @ 689
+  @use call    chrome.verticalSeparator  @ 602, 611
+  @use call    cm.get  @ 238, 581, 710
+  @use call    cm.getAt  @ 236, 416, 421
+  @use call    cm.seedGlobalFromDefault  @ 420
+  @use call    cm.set  @ 443, 451, 459
+  @use call    ds.get  @ 476, 494
+  @use call    facade.get  @ 46, 47
+  @use call    imgui.AlignTextToFramePadding  @ 316, 352, 379, 564, 593, 613
+  @use call    imgui.BeginChild  @ 690
+  @use call    imgui.BeginDisabled  @ 673, 723
+  @use call    imgui.Button  @ 400, 404, 407, 574, 576, 678
+  @use call    imgui.CalcTextSize  @ 114, 208, 319, 674
+  @use call    imgui.Dummy  @ 654
+  @use call    imgui.EndChild  @ 693
+  @use call    imgui.EndDisabled  @ 679, 725
+  @use call    imgui.GetContentRegionAvail  @ 639
+  @use call    imgui.GetCursorPosX  @ 318
+  @use call    imgui.GetCursorScreenPos  @ 650, 659
+  @use call    imgui.GetMousePos  @ 664
+  @use call    imgui.InputText  @ 570
+  @use call    imgui.InvisibleButton  @ 661
+  @use call    imgui.IsItemActive  @ 662
+  @use call    imgui.IsItemDeactivatedAfterEdit  @ 348, 396, 627
+  @use call    imgui.IsItemHovered  @ 662
   @use call    imgui.IsKeyPressed  @ 576
-  @use call    imgui.IsPopupOpen  @ 550
   @use call    imgui.IsWindowAppearing  @ 561
-  @use call    imgui.OpenPopup  @ 551
-  @use call    imgui.PopFont  @ 178, 208, 231
-  @use call    imgui.PopID  @ 408, 571
-  @use call    imgui.PushFont  @ 169, 192, 206
-  @use call    imgui.PushID  @ 311, 568
-  @use call    imgui.SameLine  @ 320, 333, 350, 353, 377, 380, 382, 397, 401, 405, 560, 573, 575, 607, 613, 615, 622, 624, 627
-  @use call    imgui.SetCursorPosX  @ 318
-  @use call    imgui.SetCursorScreenPos  @ 672, 683
+  @use call    imgui.PopFont  @ 179, 209, 232
+  @use call    imgui.PopID  @ 409, 571
+  @use call    imgui.PushFont  @ 170, 193, 207
+  @use call    imgui.PushID  @ 312, 569
+  @use call    imgui.SameLine  @ 321, 334, 351, 354, 378, 381, 383, 398, 402, 406, 566, 573, 575, 595, 601, 603, 610, 612, 615
+  @use call    imgui.SetCursorPosX  @ 319
+  @use call    imgui.SetCursorScreenPos  @ 660, 671
   @use call    imgui.SetKeyboardFocusHere  @ 562
-  @use call    imgui.SetMouseCursor  @ 682
-  @use call    imgui.SetNextItemWidth  @ 337, 383, 565, 631
-  @use call    imgui.SetNextWindowPos  @ 554
-  @use call    imgui.SliderDouble  @ 339, 386, 632
-  @use call    imgui.Text  @ 319, 352, 379, 381, 559, 606, 626
-  @use call    imgui.TextColored  @ 595
-  @use call    imgui.Viewport_GetCenter  @ 553
-  @use call    painter.new  @ 193
-  @use call    timing.applyFactors  @ 156
-  @use call    timing.atomTilePeriod  @ 89, 355
-  @use call    timing.compositePeriodQN  @ 172, 224, 629
-  @use call    timing.periodQN  @ 65, 247, 258, 365, 385, 630
-  @use call    timing.resolveFactors  @ 103
-  @use call    util.assign  @ 283
-  @use call    util.deepClone  @ 275, 449, 457, 519
-  @use call    util.round  @ 121, 176
+  @use call    imgui.SetMouseCursor  @ 670
+  @use call    imgui.SetNextItemWidth  @ 338, 384, 567, 619
+  @use call    imgui.SliderDouble  @ 340, 387, 620
+  @use call    imgui.Text  @ 320, 353, 380, 382, 565, 594, 614
+  @use call    imgui.TextColored  @ 587
+  @use call    modalHost.registerKind  @ 560
+  @use call    painter.new  @ 194
+  @use call    timing.applyFactors  @ 157
+  @use call    timing.atomTilePeriod  @ 90, 356
+  @use call    timing.compositePeriodQN  @ 173, 225, 617
+  @use call    timing.periodQN  @ 66, 248, 259, 366, 386, 618
+  @use call    timing.resolveFactors  @ 104
+  @use call    util.assign  @ 284
+  @use call    util.deepClone  @ 276, 450, 458, 520
+  @use call    util.round  @ 122, 177
   @use require imgui  @ 22
   @use require painter  @ 16
   @use require timing  @ 15
