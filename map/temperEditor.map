@@ -1,4 +1,4 @@
-@module temperEditor  src=temperEditor.lua  loc=694  sha=9f5eb6a  mode=chunk
+@module temperEditor  src=temperEditor.lua  loc=748  sha=0191115  mode=chunk
 @deps cm, chrome, ctx, gui, modalHost
 
 # Imports
@@ -19,176 +19,184 @@
   @state MIN_GEN_AREA = 175  @ 25   -- px kept below the splitter for the generators pane
   @state MIN_TOP_AREA = 88  @ 26   -- px kept above it for the step table
   @state genState = {  @ 30
-  @state STEP_W, CENTS_W, NAME_W, DEL_W = 30, 72, 48, 44  @ 238
-  @state COL_LABELS = { 'step', 'pitch', 'name', '' }  @ 239
-  @state GEN_KINDS = {  @ 466
-  @state GEN_LABEL_W = 90  @ 497
-  @state self = {}  @ 690
+  @state STEP_W, CENTS_W, NAME_W, DEL_W = 30, 72, 48, 44  @ 239
+  @state COL_LABELS = { 'step', 'pitch', 'name', '' }  @ 240
+  @state GEN_KINDS = {  @ 467
+  @state GEN_LABEL_W = 90  @ 499
+  @state self = {}  @ 744
 
 # Private functions
-  @fn viewedName()  @ 41
-  @fn projectTempers()  @ 43
-  @fn globalTempers()  @ 46
+  @fn viewedName()  @ 42
+  @fn projectTempers()  @ 44
+  @fn globalTempers()  @ 47
       -- Reading the global library lazily seeds it from the EDO catalogue (minus the
       -- synthetic 12EDO floor) the first time. Mirrors swingEditor's globalSwings.
-  @fn homeTier(name)  @ 53
+  @fn homeTier(name)  @ 54
       -- A name's editable home: project copy if present, else global (covers the
       -- synthetic '12EDO' floor too).
-  @fn sortedNames(tbl)  @ 58
-  @fn temperFor(name)  @ 65
-  @fn editedTemper()  @ 69
+  @fn sortedNames(tbl)  @ 59
+  @fn temperFor(name)  @ 66
+  @fn editedTemper()  @ 70
       -- The selected entry's own tier copy. nil when nothing is selected or the
       -- selection is a merge-floor with no tier copy — editing needs a dup first.
-  @fn selectTemper(name, tier)  @ 75
+  @fn selectTemper(name, tier)  @ 76
       -- Select without closing the pane; recapture the snapshot so dirty / Reset stay
       -- coherent. tier defaults to the home tier.
   -- Authoring writes
-  @fn sortSteps(temper)  @ 85
+  @fn sortSteps(temper)  @ 86
       -- Sort the (pitch, name) pairs ascending by compiled cents so tuning.lua's
       -- ordered assumptions hold; the unison (1/1 = 0) stays at the front.
-  @fn temperWrite(temper, normalize)  @ 99
+  @fn temperWrite(temper, normalize)  @ 100
       -- Sole write path. normalize sorts the steps (after a cents edit crosses a
       -- neighbour); tuning.derive restamps octaveStep + cellWidth either way.
-  @fn cloneForEdit()  @ 109
+  @fn cloneForEdit()  @ 110
       -- Editable clone with pitches/stepNames densified to a common length ('' for
       -- unnamed) so sort and table.remove stay array operations.
-  @fn setStepPitch(i, tok)  @ 121
+  @fn setStepPitch(i, tok)  @ 122
       -- Re-sort on commit so the edited step lands in pitch order; derive recompiles
       -- cents from the token.
-  @fn setStepName(i, nm)  @ 127
-  @fn setPeriodPitch(tok)  @ 133
-  @fn setPeriodAsStep(on)  @ 139
-  @fn addStep()  @ 145
-  @fn removeStep(i)  @ 153
-  @fn dirty()  @ 160
-  @fn resetToSnapshot()  @ 165
-  @fn generateInto(gen)  @ 172
+  @fn setStepName(i, nm)  @ 128
+  @fn setPeriodPitch(tok)  @ 134
+  @fn setPeriodAsStep(on)  @ 140
+  @fn addStep()  @ 146
+  @fn removeStep(i)  @ 154
+  @fn dirty()  @ 161
+  @fn resetToSnapshot()  @ 166
+  @fn generateInto(gen)  @ 173
       -- Replace the selected temper's scale wholesale from a generator result
       -- ({pitches, periodPitch, periodAsStep}); names clear, tokens arrive ascending.
   -- Tier-aware library writes
-  @fn promote(name)  @ 183
-  @fn demote(name)  @ 190
-  @fn deleteSel(tier, name)  @ 198
-  @fn buildDescriptor()  @ 211
+  @fn promote(name)  @ 184
+  @fn demote(name)  @ 191
+  @fn deleteSel(tier, name)  @ 199
+  @fn buildDescriptor()  @ 212
   -- Draw
-  @fn tokenBox(idStr, key, current, commit)  @ 243
+  @fn tokenBox(idStr, key, current, commit)  @ 244
       -- Pitch-token text box: shows `current` until focused; commits via commit(tok) on
       -- deactivate only when the token parses — invalid input reverts next frame.
-  @fn drawHeader(temper)  @ 255
+  @fn drawHeader(temper)  @ 256
       -- Period sits in its own box, unless periodAsStep moves it to the table's last
       -- row; the checkbox toggles that per-temper display preference.
-  @fn pushUiPadToGrid()  @ 270
+  @fn pushUiPadToGrid()  @ 271
       -- The grid name box and ui-font cells round to different frame heights at one
       -- nominal size; measure the grid box and pad ui widgets up so the row is flush.
-  @fn drawStepRow(temper, i)  @ 279
-  @fn drawColumnLabels()  @ 316
+  @fn drawStepRow(temper, i)  @ 280
+  @fn drawColumnLabels()  @ 317
       -- Plain dimmed labels rather than TableHeadersRow, whose filled background
       -- clashes with the flat chrome.
-  @fn drawStepTable(temper)  @ 324
+  @fn drawStepTable(temper)  @ 325
   -- Generators pane
-  @fn pillButton(label, active)  @ 476
+  @fn pillButton(label, active)  @ 478
       -- Pane-selector pill. Pushes the editor-zone button colours (one zone below the
       -- toolbar's, since editor.bg is darker); active stays recessed/lit.
-  @fn genKindSelector()  @ 485
-  @fn genDesc()  @ 492
-  @fn labeledInput(label, w, value)  @ 498
-  @fn reseedEqual(e, n)  @ 504
-  @fn drawEqualFields()  @ 511
-  @fn drawSeriesFields(p, lowLabel, highLabel)  @ 538
-  @fn drawChordFields()  @ 545
-  @fn drawCpsFields()  @ 553
-  @fn buildGen()  @ 565
+  @fn genKindSelector()  @ 487
+  @fn genDesc()  @ 494
+  @fn labeledInput(label, w, value)  @ 500
+  @fn reseedEqual(e, n)  @ 506
+  @fn drawEqualFields()  @ 513
+  @fn drawSeriesFields(p, lowLabel, highLabel)  @ 540
+  @fn drawChordFields()  @ 547
+  @fn drawCpsFields()  @ 555
+  @fn stepMos(r, dir)  @ 567
+      -- Step Size: jump to the prev/next moment-of-symmetry count when snapMos (and
+      -- tokens are valid), else move by 1. Clamps Bright into the new range.
+  @fn drawRank2Fields()  @ 577
+  @fn buildGen()  @ 609
       -- Build (and validate) a generator result for the active kind. Re-run each
       -- frame to drive the Generate button's enabled state + the error hint.
-  @fn drawGenerators()  @ 604
+  @fn drawGenerators()  @ 657
   -- Draw body
-  @fn drawStepsTop()  @ 630
+  @fn drawStepsTop()  @ 684
       -- Top region: the active temper's header + step table, greyed when the
       -- selection has no editable tier copy (merge-floor or active slot).
-  @fn drawEditBody(availW, bodyAvailH)  @ 650
+  @fn drawEditBody(availW, bodyAvailH)  @ 704
       -- Step table (topH) over the generators pane; draggable divider doubles as
       -- the 'generators' header, mirrors swingEditor's preview/factor splitter.
-  @fn draw(w, h)  @ 678
+  @fn draw(w, h)  @ 732
 
 # Public API (self:*)
   -- Public
-  @api self:select(name)  @ 691
-  @api self:render(w, h)  @ 692
-  @api self:libraryDescriptor()  @ 693
+  @api self:select(name)  @ 745
+  @api self:render(w, h)  @ 746
+  @api self:libraryDescriptor()  @ 747
 
 # Uses (outbound edges)
-  @use call    chrome.checkbox  @ 264, 549
-  @use call    chrome.colour  @ 477
-  @use call    chrome.disabledIf  @ 619
-  @use call    chrome.paletteHeader  @ 660, 681
-  @use call    chrome.popChromeStyles  @ 686
-  @use call    chrome.pushChromeStyles  @ 679
-  @use call    chrome.row  @ 607, 638
-  @use call    cm.get  @ 41, 65, 215, 415, 453
-  @use call    cm.getAt  @ 43, 48, 70, 102
-  @use call    cm.seedGlobalFromDefault  @ 47
-  @use call    cm.set  @ 104, 187, 194, 202, 375, 388
-  @use call    fs.basename  @ 439
-  @use call    fs.readText  @ 435
-  @use call    imgui.AlignTextToFramePadding  @ 256, 284, 343, 398, 425, 499
-  @use call    imgui.BeginChild  @ 655, 680
-  @use call    imgui.BeginDisabled  @ 290, 606, 637, 641
-  @use call    imgui.BeginTable  @ 328
-  @use call    imgui.Button  @ 307, 358, 408, 410, 432, 446, 448, 480, 620
-  @use call    imgui.EndChild  @ 658, 685
-  @use call    imgui.EndDisabled  @ 292, 622, 639, 645
-  @use call    imgui.EndTable  @ 361
-  @use call    imgui.GetContentRegionAvail  @ 325, 682
-  @use call    imgui.GetCursorScreenPos  @ 661
-  @use call    imgui.GetFrameHeight  @ 272, 276
-  @use call    imgui.GetMousePos  @ 666
-  @use call    imgui.GetStyleVar  @ 274
-  @use call    imgui.InputText  @ 245, 300, 404, 429, 501
-  @use call    imgui.InputTextMultiline  @ 444
-  @use call    imgui.InvisibleButton  @ 663
-  @use call    imgui.IsItemActive  @ 664
-  @use call    imgui.IsItemDeactivatedAfterEdit  @ 247, 515
-  @use call    imgui.IsItemHovered  @ 664
-  @use call    imgui.IsKeyPressed  @ 410, 448
-  @use call    imgui.IsWindowAppearing  @ 395
-  @use call    imgui.PopFont  @ 273, 301
-  @use call    imgui.PopID  @ 311, 350, 405
-  @use call    imgui.PopStyleColor  @ 481
-  @use call    imgui.PopStyleVar  @ 293, 308, 349, 359, 363, 644
-  @use call    imgui.PushFont  @ 271, 299
-  @use call    imgui.PushID  @ 281, 341, 403
-  @use call    imgui.PushStyleColor  @ 478, 479
-  @use call    imgui.PushStyleVar  @ 275, 327, 642
-  @use call    imgui.SameLine  @ 259, 262, 400, 407, 409, 427, 431, 447, 487, 499, 623
-  @use call    imgui.Separator  @ 608, 640
-  @use call    imgui.SetCursorScreenPos  @ 662, 673
-  @use call    imgui.SetKeyboardFocusHere  @ 396
-  @use call    imgui.SetMouseCursor  @ 672
-  @use call    imgui.SetNextItemWidth  @ 260, 288, 298, 346, 401, 428, 500
-  @use call    imgui.Spacing  @ 610, 618
-  @use call    imgui.TableNextColumn  @ 283, 287, 297, 304, 319, 342, 345, 355, 356
-  @use call    imgui.TableNextRow  @ 280, 317, 340, 354
-  @use call    imgui.TableSetupColumn  @ 329, 330, 331, 332
-  @use call    imgui.Text  @ 258, 285, 399, 426, 499, 634
-  @use call    imgui.TextColored  @ 421, 461, 623
-  @use call    imgui.TextDisabled  @ 320, 344, 443, 609
-  @use call    modalHost.registerKind  @ 394, 424
-  @use call    tuning.degreesToSpec  @ 506, 507, 528, 534
-  @use call    tuning.derive  @ 101
-  @use call    tuning.edoDegrees  @ 527, 533, 568
-  @use call    tuning.findTemper  @ 65
-  @use call    tuning.genCPS  @ 597
-  @use call    tuning.genChord  @ 601
-  @use call    tuning.genEqual  @ 571
-  @use call    tuning.genHarmonics  @ 578
-  @use call    tuning.genSubharmonics  @ 578
-  @use call    tuning.parseChord  @ 599
-  @use call    tuning.parseScalaFile  @ 437
-  @use call    tuning.parseScalaPitches  @ 456
-  @use call    tuning.scalaPitch  @ 88, 248, 570
-  @use call    tuning.scalaToTemper  @ 456
-  @use call    util.deepClone  @ 78, 112, 167, 186, 193
-  @use call    util.deepEq  @ 162
+  @use call    chrome.checkbox  @ 265, 551, 594
+  @use call    chrome.colour  @ 479
+  @use call    chrome.disabledIf  @ 673
+  @use call    chrome.paletteHeader  @ 714, 735
+  @use call    chrome.popChromeStyles  @ 740
+  @use call    chrome.pushChromeStyles  @ 733
+  @use call    chrome.row  @ 660, 692
+  @use call    cm.get  @ 42, 66, 216, 416, 454
+  @use call    cm.getAt  @ 44, 49, 71, 103
+  @use call    cm.seedGlobalFromDefault  @ 48
+  @use call    cm.set  @ 105, 188, 195, 203, 376, 389
+  @use call    fs.basename  @ 440
+  @use call    fs.readText  @ 436
+  @use call    imgui.AlignTextToFramePadding  @ 257, 285, 344, 399, 426, 501
+  @use call    imgui.BeginChild  @ 709, 734
+  @use call    imgui.BeginDisabled  @ 291, 659, 691, 695
+  @use call    imgui.BeginTable  @ 329
+  @use call    imgui.Button  @ 308, 359, 409, 411, 433, 447, 449, 482, 674
+  @use call    imgui.EndChild  @ 712, 739
+  @use call    imgui.EndDisabled  @ 293, 676, 693, 699
+  @use call    imgui.EndTable  @ 362
+  @use call    imgui.GetContentRegionAvail  @ 326, 736
+  @use call    imgui.GetCursorScreenPos  @ 715
+  @use call    imgui.GetFrameHeight  @ 273, 277
+  @use call    imgui.GetMousePos  @ 720
+  @use call    imgui.GetStyleVar  @ 275
+  @use call    imgui.InputText  @ 246, 301, 405, 430, 503
+  @use call    imgui.InputTextMultiline  @ 445
+  @use call    imgui.InvisibleButton  @ 717
+  @use call    imgui.IsItemActive  @ 718
+  @use call    imgui.IsItemDeactivatedAfterEdit  @ 248, 517
+  @use call    imgui.IsItemHovered  @ 718
+  @use call    imgui.IsKeyPressed  @ 411, 449
+  @use call    imgui.IsWindowAppearing  @ 396
+  @use call    imgui.PopFont  @ 274, 302
+  @use call    imgui.PopID  @ 312, 351, 406
+  @use call    imgui.PopStyleColor  @ 483
+  @use call    imgui.PopStyleVar  @ 294, 309, 350, 360, 364, 698
+  @use call    imgui.PushFont  @ 272, 300
+  @use call    imgui.PushID  @ 282, 342, 404
+  @use call    imgui.PushStyleColor  @ 480, 481
+  @use call    imgui.PushStyleVar  @ 276, 328, 696
+  @use call    imgui.SameLine  @ 260, 263, 401, 408, 410, 428, 432, 448, 489, 501, 589, 591, 593, 597, 677
+  @use call    imgui.Separator  @ 661, 694
+  @use call    imgui.SetCursorScreenPos  @ 716, 727
+  @use call    imgui.SetKeyboardFocusHere  @ 397
+  @use call    imgui.SetMouseCursor  @ 726
+  @use call    imgui.SetNextItemWidth  @ 261, 289, 299, 347, 402, 429, 502
+  @use call    imgui.SmallButton  @ 590, 592
+  @use call    imgui.Spacing  @ 663, 672
+  @use call    imgui.TableNextColumn  @ 284, 288, 298, 305, 320, 343, 346, 356, 357
+  @use call    imgui.TableNextRow  @ 281, 318, 341, 355
+  @use call    imgui.TableSetupColumn  @ 330, 331, 332, 333
+  @use call    imgui.Text  @ 259, 286, 400, 427, 501, 688
+  @use call    imgui.TextColored  @ 422, 462, 677
+  @use call    imgui.TextDisabled  @ 321, 345, 444, 599, 662
+  @use call    modalHost.registerKind  @ 395, 425
+  @use call    tuning.degreesToSpec  @ 508, 509, 530, 536
+  @use call    tuning.derive  @ 102
+  @use call    tuning.edoDegrees  @ 529, 535, 612
+  @use call    tuning.findTemper  @ 66
+  @use call    tuning.genCPS  @ 641
+  @use call    tuning.genChord  @ 654
+  @use call    tuning.genEqual  @ 615
+  @use call    tuning.genHarmonics  @ 622
+  @use call    tuning.genRank2  @ 650
+  @use call    tuning.genSubharmonics  @ 622
+  @use call    tuning.mosInfo  @ 598
+  @use call    tuning.nextMosSize  @ 570
+  @use call    tuning.parseChord  @ 652
+  @use call    tuning.parseScalaFile  @ 438
+  @use call    tuning.parseScalaPitches  @ 457
+  @use call    tuning.scalaPitch  @ 89, 249, 569, 586, 614, 644, 645
+  @use call    tuning.scalaToTemper  @ 457
+  @use call    util.deepClone  @ 79, 113, 168, 187, 194
+  @use call    util.deepEq  @ 163
   @use require fs  @ 5
   @use require imgui  @ 11
   @use require tuning  @ 4

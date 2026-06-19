@@ -36,6 +36,7 @@ local genState = {
   subharm = { lo = '4', hi = '8' },
   chord   = { members = '4:5:6:7', invert = false },
   cps     = { factors = '1 3 5 7', count = '2', equave = '2/1' },
+  rank2   = { generator = '3/2', period = '2/1', size = '7', up = '5', snapMos = true },
 }
 
 local function viewedName() return selected or cm:get('temper') end
@@ -469,6 +470,7 @@ local GEN_KINDS = {
   { id = 'subharm', label = 'Subharmonics', desc = 'Generate subharmonic series segment' },
   { id = 'chord',   label = 'Chord',        desc = 'Generate scale from a chord' },
   { id = 'cps',     label = 'CPS',          desc = 'Generate combination product set' },
+  { id = 'rank2',   label = 'Rank-2 / MOS', desc = 'Stack a generator into a period' },
 }
 
 -- Pane-selector pill. Pushes the editor-zone button colours (one zone below the
@@ -560,6 +562,48 @@ local function drawCpsFields()
   if rvE then c.equave = e end
 end
 
+-- Step Size: jump to the prev/next moment-of-symmetry count when snapMos (and
+-- tokens are valid), else move by 1. Clamps Bright into the new range.
+local function stepMos(r, dir)
+  local size = tonumber(r.size)
+  local snap = r.snapMos and tuning.scalaPitch(r.generator) and tuning.scalaPitch(r.period)
+  local n = snap and tuning.nextMosSize(r.generator, r.period, size, dir) or (size + dir)
+  if not n or n < 2 then return end
+  r.size = tostring(n)
+  local up = tonumber(r.up)
+  if up and up > n - 1 then r.up = tostring(n - 1) end
+end
+
+local function drawRank2Fields()
+  local r = genState.rank2
+  local rvG, g = labeledInput('Generator', 80, r.generator)
+  if rvG then r.generator = g end
+  local rvP, p = labeledInput('Period', 80, r.period)
+  if rvP then r.period = p end
+
+  local rvS, s = labeledInput('Size', 56, r.size)
+  if rvS then r.size = s end
+  local tokensOk = tuning.scalaPitch(r.generator) and tuning.scalaPitch(r.period)
+  local size = tonumber(r.size)
+  if size and size == math.floor(size) and size >= 2 then
+    ImGui.SameLine(ctx, 0, 6)
+    if ImGui.SmallButton(ctx, '-##mos') then stepMos(r, -1) end
+    ImGui.SameLine(ctx, 0, 2)
+    if ImGui.SmallButton(ctx, '+##mos') then stepMos(r, 1) end
+    ImGui.SameLine(ctx, 0, 8)
+    local rvSnap, snap = chrome.checkbox('snap MOS', r.snapMos)
+    if rvSnap then r.snapMos = snap end
+    if tokensOk then   -- mosInfo calls scalaPitch; only meaningful with valid tokens
+      ImGui.SameLine(ctx, 0, 8)
+      local info = tuning.mosInfo(r.generator, r.period, size)
+      ImGui.TextDisabled(ctx, info.isMos and (info.large .. 'L ' .. info.small .. 's') or 'not MOS')
+    end
+  end
+
+  local rvU, u = labeledInput('Bright', 56, r.up)
+  if rvU then r.up = u end
+end
+
 -- Build (and validate) a generator result for the active kind. Re-run each
 -- frame to drive the Generate button's enabled state + the error hint.
 local function buildGen()
@@ -595,6 +639,15 @@ local function buildGen()
       return nil, 'equave must be a ratio'
     end
     return tuning.genCPS(factors, k, g.cps.equave)
+  elseif g.kind == 'rank2' then
+    local r = g.rank2
+    if not tuning.scalaPitch(r.generator) then return nil, 'bad generator' end
+    if not tuning.scalaPitch(r.period) then return nil, 'bad period' end
+    local size = tonumber(r.size)
+    if not (size and size == math.floor(size) and size >= 2) then return nil, 'size >= 2' end
+    local up = tonumber(r.up)
+    if not (up and up == math.floor(up) and up >= 0 and up <= size - 1) then return nil, 'bright in [0, size-1]' end
+    return tuning.genRank2(r.generator, r.period, size, up)
   end
   local members, cerr = tuning.parseChord(g.chord.members)
   if not members then return nil, cerr end
@@ -612,6 +665,7 @@ local function drawGenerators()
   elseif genState.kind == 'harm' then drawSeriesFields(genState.harm, 'Lowest', 'Highest')
   elseif genState.kind == 'subharm' then drawSeriesFields(genState.subharm, 'Lowest', 'Highest')
   elseif genState.kind == 'cps' then drawCpsFields()
+  elseif genState.kind == 'rank2' then drawRank2Fields()
   else drawChordFields() end
 
   local gen, err = buildGen()
