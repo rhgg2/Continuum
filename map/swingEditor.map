@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=735  sha=5e2a76a  mode=chunk
+@module swingEditor  src=swingEditor.lua  loc=751  sha=35e7e9d  mode=chunk
 @deps cm, ds, chrome, ctx, gui, facade, modalHost
 
 # Invariants & contracts
@@ -34,7 +34,7 @@
   @state MIN_FACTOR_AREA = 80  @ 109   -- px kept below the splitter for the factor list
   @state SYNTHETIC = { identity = true }  @ 414
   @state openNewModal  @ 524   -- forward decl; defined with its modalHost kind below
-  @state self = {}  @ 699
+  @state self = {}  @ 715
 
 # Private functions
   @fn arrange()  @ 46
@@ -124,79 +124,84 @@
   @fn resetToSnapshot()  @ 519
       -- Revert the edited composite to the open()/switch snapshot, then reswing.
   @fn buildDescriptor()  @ 526
-  @fn drawToolsRow(composite, n)  @ 592
+  @fn nearestRpb(v)  @ 592
+      -- Rows/qn is a fixed ladder of valid divisions; the stepper walks adjacent rungs
+      -- and snaps a typed value to the nearest. See RPB_CHOICES.
+  @fn stepRpb(v, dir)  @ 600
+  @fn drawToolsRow(composite, n)  @ 609
       -- Toolbar tools: Rows-per-qn / Wild / Composite-phase, drawn in the page toolbar
       -- band (ui font + FramePadding already set). Vertical separators per group.
-  @fn drawEditBody(composite)  @ 631
-  @fn draw(w, h)  @ 684
+  @fn drawEditBody(composite)  @ 647
+  @fn draw(w, h)  @ 700
       -- Body-region draw inside a child window; chrome palette (editor.bg + toolbar colours)
       -- takes the tracker grid's place (Col_ChildBg instead of Col_WindowBg).
 
 # Public API (self:*)
   -- Public
-  @api self:open(name)  @ 703
+  @api self:open(name)  @ 719
       @contract  open(name?) selects entry; default prefers chan override → take swing → nil.
       @contract  when already open, re-selects resolved target; snapshot captured at selection time.
-  @api self:render(w, h)  @ 715
-  @api self:renderToolbar()  @ 719
+  @api self:render(w, h)  @ 731
+  @api self:renderToolbar()  @ 735
       -- Tools row (Reset / Rows-per-qn / Wild / Composite-phase) drawn into the page
       -- toolbar band by editorRender. Greys out with no slot selected, like the body.
-  @api self:libraryDescriptor()  @ 728
-  @api self:close()  @ 730
-  @api self:isOpen()  @ 732
+  @api self:libraryDescriptor()  @ 744
+  @api self:close()  @ 746
+  @api self:isOpen()  @ 748
 
 # Uses (outbound edges)
-  @use call    chrome.checkbox  @ 605
-  @use call    chrome.disabledIf  @ 337, 399, 403, 616
-  @use call    chrome.dropdown  @ 323, 361, 598
-  @use call    chrome.paletteHeader  @ 636, 658
-  @use call    chrome.popChromeStyles  @ 694
-  @use call    chrome.pushChromeStyles  @ 689
-  @use call    chrome.verticalSeparator  @ 602, 611
-  @use call    cm.get  @ 238, 581, 710
+  @use call    chrome.checkbox  @ 621
+  @use call    chrome.disabledIf  @ 337, 399, 403, 632
+  @use call    chrome.dropdown  @ 323, 361
+  @use call    chrome.numberStepper  @ 613
+  @use call    chrome.paletteHeader  @ 652, 674
+  @use call    chrome.popChromeStyles  @ 710
+  @use call    chrome.pushChromeStyles  @ 705
+  @use call    chrome.verticalSeparator  @ 618, 627
+  @use call    cm.get  @ 238, 581, 726
   @use call    cm.getAt  @ 236, 416, 421
   @use call    cm.seedGlobalFromDefault  @ 420
   @use call    cm.set  @ 443, 451, 459
   @use call    ds.get  @ 476, 494
   @use call    facade.get  @ 46, 47
-  @use call    imgui.AlignTextToFramePadding  @ 316, 352, 379, 564, 593, 613
-  @use call    imgui.BeginChild  @ 690
-  @use call    imgui.BeginDisabled  @ 673, 723
-  @use call    imgui.Button  @ 400, 404, 407, 574, 576, 678
-  @use call    imgui.CalcTextSize  @ 114, 208, 319, 674
-  @use call    imgui.Dummy  @ 654
-  @use call    imgui.EndChild  @ 693
-  @use call    imgui.EndDisabled  @ 679, 725
-  @use call    imgui.GetContentRegionAvail  @ 639
+  @use call    imgui.AlignTextToFramePadding  @ 316, 352, 379, 564, 610, 629
+  @use call    imgui.BeginChild  @ 706
+  @use call    imgui.BeginDisabled  @ 689, 739
+  @use call    imgui.Button  @ 400, 404, 407, 574, 576, 694
+  @use call    imgui.CalcTextSize  @ 114, 208, 319, 690
+  @use call    imgui.Dummy  @ 670
+  @use call    imgui.EndChild  @ 709
+  @use call    imgui.EndDisabled  @ 695, 741
+  @use call    imgui.GetContentRegionAvail  @ 655
   @use call    imgui.GetCursorPosX  @ 318
-  @use call    imgui.GetCursorScreenPos  @ 650, 659
-  @use call    imgui.GetMousePos  @ 664
+  @use call    imgui.GetCursorScreenPos  @ 666, 675
+  @use call    imgui.GetMousePos  @ 680
   @use call    imgui.InputText  @ 570
-  @use call    imgui.InvisibleButton  @ 661
-  @use call    imgui.IsItemActive  @ 662
-  @use call    imgui.IsItemDeactivatedAfterEdit  @ 348, 396, 627
-  @use call    imgui.IsItemHovered  @ 662
+  @use call    imgui.InvisibleButton  @ 677
+  @use call    imgui.IsItemActive  @ 678
+  @use call    imgui.IsItemDeactivatedAfterEdit  @ 348, 396, 643
+  @use call    imgui.IsItemHovered  @ 678
   @use call    imgui.IsKeyPressed  @ 576
   @use call    imgui.IsWindowAppearing  @ 561
   @use call    imgui.PopFont  @ 179, 209, 232
   @use call    imgui.PopID  @ 409, 571
   @use call    imgui.PushFont  @ 170, 193, 207
   @use call    imgui.PushID  @ 312, 569
-  @use call    imgui.SameLine  @ 321, 334, 351, 354, 378, 381, 383, 398, 402, 406, 566, 573, 575, 595, 601, 603, 610, 612, 615
+  @use call    imgui.SameLine  @ 321, 334, 351, 354, 378, 381, 383, 398, 402, 406, 566, 573, 575, 612, 617, 619, 626, 628, 631
   @use call    imgui.SetCursorPosX  @ 319
-  @use call    imgui.SetCursorScreenPos  @ 660, 671
+  @use call    imgui.SetCursorScreenPos  @ 676, 687
   @use call    imgui.SetKeyboardFocusHere  @ 562
-  @use call    imgui.SetMouseCursor  @ 670
-  @use call    imgui.SetNextItemWidth  @ 338, 384, 567, 619
-  @use call    imgui.SliderDouble  @ 340, 387, 620
-  @use call    imgui.Text  @ 320, 353, 380, 382, 565, 594, 614
+  @use call    imgui.SetMouseCursor  @ 686
+  @use call    imgui.SetNextItemWidth  @ 338, 384, 567, 635
+  @use call    imgui.SliderDouble  @ 340, 387, 636
+  @use call    imgui.Text  @ 320, 353, 380, 382, 565, 611, 630
   @use call    imgui.TextColored  @ 587
   @use call    modalHost.registerKind  @ 560
   @use call    painter.new  @ 194
   @use call    timing.applyFactors  @ 157
   @use call    timing.atomTilePeriod  @ 90, 356
-  @use call    timing.compositePeriodQN  @ 173, 225, 617
-  @use call    timing.periodQN  @ 66, 248, 259, 366, 386, 618
+  @use call    timing.compositePeriodQN  @ 173, 225, 633
+  @use call    timing.periodQN  @ 66, 248, 259, 366, 386, 634
   @use call    timing.resolveFactors  @ 104
   @use call    util.assign  @ 284
   @use call    util.deepClone  @ 276, 450, 458, 520

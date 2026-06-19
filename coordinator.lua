@@ -223,7 +223,7 @@ local function frame()
     -- auto-resizes to fit. See docs/coordinator.md § Toolbar band height.
     local function drawToolbarRow()
       chrome.pushChromeStyles()
-      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
+      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 6, 2)
       local segs = { switcherSeg }
       for _, s in ipairs(page:toolbarSegments()) do segs[#segs + 1] = s end
       toolbar(segs)

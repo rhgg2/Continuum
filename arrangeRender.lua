@@ -777,10 +777,8 @@ local toolbarSegments = {
       ImGui.AlignTextToFramePadding(ctx)
       chrome.headingLabel('BPR')
       ImGui.SameLine(ctx, 0, 8)
-      local textW = ImGui.CalcTextSize(ctx, '64')
-      local btnW  = ImGui.GetFrameHeight(ctx)
-      ImGui.SetNextItemWidth(ctx, textW + btnW * 2 + 16)
-      local changed, n = ImGui.InputDouble(ctx, '##bpr', av:beatPerRow(), 1, 4, '%g')
+      local changed, n = chrome.numberStepper('bpr', av:beatPerRow(),
+        { min = 1/4, max = 64, format = '%g', digits = 4, align = 'center' })
       if changed then av:setBeatPerRow(n) end
     end,
   },

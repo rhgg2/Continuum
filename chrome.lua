@@ -1,7 +1,7 @@
 -- See docs/chrome.md for the model.
 
 --shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
---shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeArrow(open,hasChildren)->prefix }
+--shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeArrow(open,hasChildren)->prefix, numberStepper(id,value,opts)->changed,value }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
 --shape: palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
@@ -155,6 +155,61 @@ end
 
 local function radio(label, active)
   return compactControl(function() return ImGui.RadioButton(ctx, label, active) end)
+end
+
+-- InputInt/-Double flanked by hold-repeat -/+ buttons; -/+ drawn as rects not glyphs. See docs/chrome.md § numberStepper.
+--   opts = { min?, max?, step?=1, onStep?=fn(value,dir)->value, width?, digits?=2, format?, align? }
+local BOX_PAD = 3
+local function numberStepper(id, value, opts)
+  opts = opts or {}
+  local digits = opts.digits or 2
+  local fmt    = opts.format
+  local btnSz  = ImGui.GetFrameHeight(ctx)
+  local innerX = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemInnerSpacing)
+  local _, fpy = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+
+  local function clamp(v)
+    if opts.min and v < opts.min then return opts.min end
+    if opts.max and v > opts.max then return opts.max end
+    return v
+  end
+
+  local boxW  = opts.width or (ImGui.CalcTextSize(ctx, string.rep('0', digits)) + 8)
+  local inset = BOX_PAD
+  if opts.align == 'center' then
+    local shown = fmt and string.format(fmt, value) or tostring(value)
+    inset = math.max(BOX_PAD, math.floor((boxW - ImGui.CalcTextSize(ctx, shown)) / 2))
+  end
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, inset, fpy)
+  ImGui.SetNextItemWidth(ctx, boxW)
+  local changed, n
+  if fmt then changed, n = ImGui.InputDouble(ctx, '##' .. id, value, 0, 0, fmt)
+  else        changed, n = ImGui.InputInt(ctx, '##' .. id, value, 0, 0) end
+  ImGui.PopStyleVar(ctx, 1)
+  if changed then n = clamp(n) end
+
+  ImGui.PushItemFlag(ctx, ImGui.ItemFlags_ButtonRepeat, true)
+  local arm = math.max(2, math.floor(btnSz * 0.18))   -- -/+ arm reach; bar = 2*arm+1 px (odd), 1px thick
+  local function stepBtn(dir, isPlus)
+    ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, btnSz / 2, fpy)
+    ImGui.SameLine(ctx, 0, innerX)
+    local pressed = ImGui.Button(ctx, '##' .. id .. dir, btnSz, btnSz)
+    ImGui.PopStyleVar(ctx, 1)
+    local x0, y0 = ImGui.GetItemRectMin(ctx)
+    local x1, y1 = ImGui.GetItemRectMax(ctx)
+    local cx, cy = math.floor((x0 + x1) / 2), math.floor((y0 + y1) / 2)
+    local col, dl = ImGui.GetColor(ctx, ImGui.Col_Text), ImGui.GetWindowDrawList(ctx)
+    ImGui.DrawList_AddRectFilled(dl, cx - arm, cy, cx + arm + 1, cy + 1, col)
+    if isPlus then ImGui.DrawList_AddRectFilled(dl, cx, cy - arm, cx + 1, cy + arm + 1, col) end
+    if pressed then
+      n = opts.onStep and opts.onStep(value, dir) or clamp(value + dir * (opts.step or 1))
+      changed = true
+    end
+  end
+  stepBtn(-1, false)
+  stepBtn(1, true)
+  ImGui.PopItemFlag(ctx)
+  return changed, n
 end
 
 -- House-style dropdown: button + popup of `items`. Width fits the widest entry
@@ -522,6 +577,7 @@ return {
   row                = row,
   checkbox           = checkbox,
   radio              = radio,
+  numberStepper      = numberStepper,
   dropdown           = dropdown,
   headingLabel       = headingLabel,
   makeToolbar        = makeToolbar,

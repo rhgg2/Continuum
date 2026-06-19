@@ -587,16 +587,32 @@ modalHost:registerKind('swingNew', function(s, close)
   if s.err then ImGui.TextColored(ctx, SWING_ERR, s.err) end
 end)
 
+-- Rows/qn is a fixed ladder of valid divisions; the stepper walks adjacent rungs
+-- and snaps a typed value to the nearest. See RPB_CHOICES.
+local function nearestRpb(v)
+  local best, bestD = RPB_CHOICES[1], math.huge
+  for _, c in ipairs(RPB_CHOICES) do
+    local d = math.abs(c - v)
+    if d < bestD then best, bestD = c, d end
+  end
+  return best
+end
+local function stepRpb(v, dir)
+  for i, c in ipairs(RPB_CHOICES) do
+    if c == v then return RPB_CHOICES[math.max(1, math.min(#RPB_CHOICES, i + dir))] end
+  end
+  return nearestRpb(v)
+end
+
 -- Toolbar tools: Rows-per-qn / Wild / Composite-phase, drawn in the page toolbar
 -- band (ui font + FramePadding already set). Vertical separators per group.
 local function drawToolsRow(composite, n)
   ImGui.AlignTextToFramePadding(ctx)
   ImGui.Text(ctx, 'Rows/qn:')
   ImGui.SameLine(ctx, 0, 6)
-  local rpbItems = {}
-  for _, v in ipairs(RPB_CHOICES) do rpbItems[#rpbItems+1] = tostring(v) end
-  local pickedRpb = chrome.dropdown('rpb', tostring(state.rpb), rpbItems)
-  if pickedRpb then state.rpb = RPB_CHOICES[pickedRpb] end
+  local changed, rpb = chrome.numberStepper('rpb', state.rpb,
+    { min = RPB_CHOICES[1], max = RPB_CHOICES[#RPB_CHOICES], onStep = stepRpb, align = 'center' })
+  if changed then state.rpb = nearestRpb(rpb) end
 
   ImGui.SameLine(ctx, 0, 12)
   chrome.verticalSeparator()

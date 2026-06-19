@@ -356,15 +356,11 @@ local toolbarSegments = {
   {
     id = 'rowsPerBeat',
     render = function()
-      local rowPerBeat = cm:get('rowPerBeat')
       ImGui.AlignTextToFramePadding(ctx)
       chrome.headingLabel('RPB')
       ImGui.SameLine(ctx, 0, 8)
-      local textW = ImGui.CalcTextSize(ctx, '32')
-      local btnW  = ImGui.GetFrameHeight(ctx)
-      ImGui.SetNextItemWidth(ctx, textW + btnW * 2 + 16)
-      local changed, n = ImGui.InputInt(ctx, '##rpb', rowPerBeat, 1, 4)
-      if changed then tv:setRowPerBeat(util.clamp(n, 1, 32)) end
+      local changed, n = chrome.numberStepper('rpb', cm:get('rowPerBeat'), { min = 1, max = 32, align = 'center' })
+      if changed then tv:setRowPerBeat(n) end
     end,
   },
   {

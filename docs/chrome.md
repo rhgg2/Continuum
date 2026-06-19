@@ -33,6 +33,16 @@ jumps the body down on the following frame. Per-segment screen rects are refresh
 each frame into `lastToolbarRects` and read by the help overlay via
 `chrome.toolbarRects()`.
 
+## numberStepper
+
+`numberStepper(id, value, opts)` is an InputInt (or InputDouble when `format` is set) with native step buttons suppressed, flanked by two frame-height-square -/+ buttons that hold-repeat via `ImGui.ItemFlags_ButtonRepeat`. It owns its own frame padding so it renders consistently under any ambient padding (e.g. the toolbar's wide 9 px): a fixed `BOX_PAD` inset for the box, and a `btnSz/2` inset that auto-sizes each button to exactly `btnSz` square.
+
+The -/+ symbols are drawn as crisp axis-aligned filled rects on the window draw list, not font glyphs, so they sit dead-centre rather than riding the glyph baseline offset.
+
+`align = 'center'` fakes text centring by computing `(boxW - textW) / 2` and using that as the left FramePadding inset, since InputText always left-aligns.
+
+`onStep` overrides the default `±step` arithmetic, receiving `(currentValue, dir)` and returning the new value — used e.g. by the swing editor's `stepRpb` to walk a fixed ladder of valid row divisions.
+
 ## Picker
 
 The generic typeahead picker (`drawPicker`) is shared across pages to avoid duplicating the popup/filter/keyboard logic. Each picker is identified by a `kind` string; filter text and cursor position are stored per kind so switching pages and back restores state. The `pickerActive` flag is frame-scoped: pages check it before consuming Enter so the picker's own Enter handler wins.

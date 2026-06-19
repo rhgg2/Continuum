@@ -581,23 +581,22 @@ local function drawRank2Fields()
   local rvP, p = labeledInput('Period', 80, r.period)
   if rvP then r.period = p end
 
-  local rvS, s = labeledInput('Size', 56, r.size)
-  if rvS then r.size = s end
-  local tokensOk = tuning.scalaPitch(r.generator) and tuning.scalaPitch(r.period)
+  ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, 'Size'); ImGui.SameLine(ctx, GEN_LABEL_W)
+  local rvS, n = chrome.numberStepper('mos', tonumber(r.size) or 2, {
+    min = 2, width = 56,
+    onStep = function(_, dir) stepMos(r, dir); return tonumber(r.size) end,
+  })
+  if rvS then r.size = tostring(n) end
+
+  ImGui.SameLine(ctx, 0, 8)
+  local rvSnap, snap = chrome.checkbox('snap MOS', r.snapMos)
+  if rvSnap then r.snapMos = snap end
+
   local size = tonumber(r.size)
-  if size and size == math.floor(size) and size >= 2 then
-    ImGui.SameLine(ctx, 0, 6)
-    if ImGui.SmallButton(ctx, '-##mos') then stepMos(r, -1) end
-    ImGui.SameLine(ctx, 0, 2)
-    if ImGui.SmallButton(ctx, '+##mos') then stepMos(r, 1) end
+  if tuning.scalaPitch(r.generator) and tuning.scalaPitch(r.period) and size and size >= 2 then
     ImGui.SameLine(ctx, 0, 8)
-    local rvSnap, snap = chrome.checkbox('snap MOS', r.snapMos)
-    if rvSnap then r.snapMos = snap end
-    if tokensOk then   -- mosInfo calls scalaPitch; only meaningful with valid tokens
-      ImGui.SameLine(ctx, 0, 8)
-      local info = tuning.mosInfo(r.generator, r.period, size)
-      ImGui.TextDisabled(ctx, info.isMos and (info.large .. 'L ' .. info.small .. 's') or 'not MOS')
-    end
+    local info = tuning.mosInfo(r.generator, r.period, size)
+    ImGui.TextDisabled(ctx, info.isMos and (info.large .. 'L ' .. info.small .. 's') or 'not MOS')
   end
 
   local rvU, u = labeledInput('Bright', 56, r.up)
