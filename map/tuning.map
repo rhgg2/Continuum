@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=370  sha=375c89e  mode=namespace
+@module tuning  src=tuning.lua  loc=457  sha=0191115  mode=namespace
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
@@ -12,6 +12,7 @@
 
 # Module-level constants
   @const M = {}  @ 10
+  @const RATIO_CAP = 1 << 40  @ 314
 
 # Private functions
   -- Temperament presets
@@ -32,6 +33,13 @@
   @fn gcd(a, b)  @ 259
   @fn combinations(n, k)  @ 262
       -- Every k-subset of 1..n as a list of 1-based index lists.
+  @fn reduceCents(c, period)  @ 301
+      -- Reduce a cents value into [0, period).
+  @fn asRatio(token)  @ 305
+  @fn stackRatio(gn, gd, pn, pd, k)  @ 315
+  @fn stepSpectrum(g, p, n)  @ 330
+      -- Adjacent step sizes (incl. the wrap step) of an n-note chain of `g`
+      -- reduced into `p`: {cents, count} per distinct size, large first.
 
 # Public API (M.*)
   @api M.scalaPitch(token)  @ 49
@@ -72,17 +80,24 @@
   @api M.genCPS(factors, k, equave)  @ 274
       -- Combination product set: every k-subset's product, rooted on the smallest
       -- product (so 1/1 is always present) and reduced into the equave; ascending.
+  @api M.genRank2(generator, period, size, up)  @ 348
+      -- Rank-2 scale: stack the generator `up` above and `size-1-up` below 1/1,
+      -- reduce into period, sort. up = mode. Exact ratios if inputs rational, else cents.
+  @api M.mosInfo(generator, period, n)  @ 370
+      @contract  {isMos, large, small} for an n-note chain; large/small are L/s step counts when isMos
+  @api M.nextMosSize(generator, period, fromN, dir)  @ 377
+      @contract  next MOS size (two step sizes) from fromN, stepping dir (+/-1); nil past the cap
   -- Coordinate conversions
-  @api M.midiToStep(temper, midi, detune)  @ 304
+  @api M.midiToStep(temper, midi, detune)  @ 391
       @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
       @contract  returned octave is MIDI-relative (C-1 → -1)
-  @api M.stepToMidi(temper, step, octave)  @ 326
+  @api M.stepToMidi(temper, step, octave)  @ 413
       @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
-  @api M.snap(temper, midi, detune)  @ 344
-  @api M.transposeStep(temper, midi, detune, n)  @ 349
+  @api M.snap(temper, midi, detune)  @ 431
+  @api M.transposeStep(temper, midi, detune, n)  @ 436
       @contract  moves by n scale steps under temper, carrying the octave; n may be negative
   -- Display
-  @api M.stepToParts(temper, step, octave)  @ 357
+  @api M.stepToParts(temper, step, octave)  @ 444
       @contract  returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep
-  @api M.stepToText(temper, step, octave)  @ 365
+  @api M.stepToText(temper, step, octave)  @ 452
       @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.

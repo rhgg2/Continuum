@@ -297,6 +297,93 @@ function M.genCPS(factors, k, equave)
   return { pitches = tokens, periodPitch = equave, periodAsStep = true }
 end
 
+-- Reduce a cents value into [0, period).
+local function reduceCents(c, period)
+  return c - period * math.floor(c / period)
+end
+
+local function asRatio(token)
+  local n, d = token:match('^(%d+)/(%d+)$')
+  if n then return tonumber(n), tonumber(d) end
+  if token:match('^%d+$') then return tonumber(token), 1 end
+  return nil
+end
+
+-- gn/gd stacked k times (k may be negative), reduced into the period pn/pd
+-- as a lowest-terms ratio. nil if exact integers would overflow (~2^40).
+local RATIO_CAP = 1 << 40
+local function stackRatio(gn, gd, pn, pd, k)
+  local num, den = 1, 1
+  local mn, md = (k >= 0) and gn or gd, (k >= 0) and gd or gn
+  for _ = 1, math.abs(k) do
+    num, den = num * mn, den * md
+    if num > RATIO_CAP or den > RATIO_CAP then return nil end
+  end
+  while num * pd >= den * pn do num, den = num * pd, den * pn end
+  while num < den do num, den = num * pn, den * pd end
+  local g = gcd(num, den)
+  return num // g, den // g
+end
+
+-- Adjacent step sizes (incl. the wrap step) of an n-note chain of `g`
+-- reduced into `p`: {cents, count} per distinct size, large first.
+local function stepSpectrum(g, p, n)
+  local pts = {}
+  for k = 0, n - 1 do pts[#pts + 1] = reduceCents(k * g, p) end
+  table.sort(pts)
+  local sizes = {}
+  for i = 1, n do
+    local step = ((i < n) and pts[i + 1] or p) - pts[i]
+    local slot
+    for _, s in ipairs(sizes) do if math.abs(s.cents - step) < 1e-6 then slot = s; break end end
+    if slot then slot.count = slot.count + 1
+    else sizes[#sizes + 1] = { cents = step, count = 1 } end
+  end
+  table.sort(sizes, function(a, b) return a.cents > b.cents end)
+  return sizes
+end
+
+-- Rank-2 scale: stack the generator `up` above and `size-1-up` below 1/1,
+-- reduce into period, sort. up = mode. Exact ratios if inputs rational, else cents.
+function M.genRank2(generator, period, size, up)
+  period = period or '2/1'
+  local down = size - 1 - up
+  local gn, gd = asRatio(generator)
+  local pn, pd = asRatio(period)
+  local g, p = M.scalaPitch(generator), M.scalaPitch(period)
+  local entries = {}
+  for k = -down, up do
+    local num, den
+    if gn and pn then num, den = stackRatio(gn, gd, pn, pd, k) end
+    local cents = num and 1200 * math.log(num / den, 2) or reduceCents(k * g, p)
+    local token = num and (num .. '/' .. den)
+                  or ((cents < 1e-6) and '1/1' or string.format('%.4f', cents))
+    entries[#entries + 1] = { cents = cents, token = token }
+  end
+  table.sort(entries, function(a, b) return a.cents < b.cents end)
+  local pitches = {}
+  for i, e in ipairs(entries) do pitches[i] = e.token end
+  return { pitches = pitches, periodPitch = period, periodAsStep = true }
+end
+
+--contract: {isMos, large, small} for an n-note chain; large/small are L/s step counts when isMos
+function M.mosInfo(generator, period, n)
+  local spec = stepSpectrum(M.scalaPitch(generator), M.scalaPitch(period or '2/1'), n)
+  if #spec ~= 2 then return { isMos = false } end
+  return { isMos = true, large = spec[1].count, small = spec[2].count }
+end
+
+--contract: next MOS size (two step sizes) from fromN, stepping dir (+/-1); nil past the cap
+function M.nextMosSize(generator, period, fromN, dir)
+  local g, p = M.scalaPitch(generator), M.scalaPitch(period or '2/1')
+  local n = fromN + dir
+  while n >= 2 and n <= 400 do
+    if #stepSpectrum(g, p, n) == 2 then return n end
+    n = n + dir
+  end
+  return nil
+end
+
 ----- Coordinate conversions
 
 --contract: detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)

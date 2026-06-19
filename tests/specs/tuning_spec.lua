@@ -274,4 +274,48 @@ return {
       t.eq(#hex.pitches, 6, 'C(4,2) = 6 notes, rooted so 1/1 is present')
     end,
   },
+
+  {
+    name = 'genRank2: pure-fifth size 7 / up 5 is Pythagorean major, 1/1 first',
+    run = function()
+      local s = tuning.genRank2('3/2', '2/1', 7, 5)
+      t.eq(table.concat(s.pitches, ' '), '1/1 9/8 81/64 4/3 3/2 27/16 243/128')
+      t.eq(s.periodPitch, '2/1')
+      t.truthy(s.periodAsStep)
+    end,
+  },
+
+  {
+    name = 'genRank2: size 4 / up 2 matches the Scale Workshop worked example',
+    run = function()
+      local s = tuning.genRank2('3/2', '2/1', 4, 2)
+      t.eq(table.concat(s.pitches, ' '), '1/1 9/8 4/3 3/2')
+      t.eq(s.periodPitch, '2/1')
+    end,
+  },
+
+  {
+    name = 'genRank2: irrational (EDO-step) generator emits cents tokens',
+    run = function()
+      local s = tuning.genRank2('7\\12', '2/1', 3, 2)
+      t.eq(s.pitches[1], '1/1')
+      for i = 2, #s.pitches do t.truthy(s.pitches[i]:find('%.'), 'cents token ' .. i) end
+    end,
+  },
+
+  {
+    name = 'nextMosSize / mosInfo: pure-fifth ladder 2->3->5->7->12; 7 is 5L 2s',
+    run = function()
+      t.eq(tuning.nextMosSize('3/2', '2/1', 2, 1), 3)
+      t.eq(tuning.nextMosSize('3/2', '2/1', 3, 1), 5)
+      t.eq(tuning.nextMosSize('3/2', '2/1', 5, 1), 7)
+      t.eq(tuning.nextMosSize('3/2', '2/1', 7, 1), 12)
+      t.eq(tuning.nextMosSize('3/2', '2/1', 7, -1), 5)
+      local d = tuning.mosInfo('3/2', '2/1', 7)
+      t.truthy(d.isMos, '7 notes is a MOS')
+      t.eq(d.large, 5, 'five large steps')
+      t.eq(d.small, 2, 'two small steps')
+      t.eq(tuning.mosInfo('3/2', '2/1', 6).isMos, false, '6 notes is not a MOS')
+    end,
+  },
 }
