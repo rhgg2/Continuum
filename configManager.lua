@@ -217,6 +217,10 @@ local declarations = {
   { 'colour.help.tagBorder', 'colour.help.border'  },  -- edit-tag 1px crisp border
   -- Pre-blended `0.5*pale + 0.5*bg`; a literal alias would render translucent over a different parent.
   { 'colour.editor.bg',            hex('#e9e7df')                 },
+  -- Pane-selector pills on the editor body: editor.bg sits a zone below toolbar.bg,
+  -- so shift button + active one zone down to keep the raised/recessed contrast.
+  { 'colour.editor.button',        'palette.base.zone9'           },
+  { 'colour.editor.buttonActive',  'palette.base.zone7'           },
 }
 
 for i = 1, 8 do

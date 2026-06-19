@@ -21,6 +21,22 @@ local snapshot = nil   -- selection-time copy, for dirty-check + Reset
 local openNewModal, openImportModal   -- New/Import modals, hosted by modalHost (defined below)
 local editing  = nil   -- { key, buf } in-flight pitch token; commits on deactivate
 
+local DIVIDER_GRAB = 7     -- px hit-height of the steps / generators splitter
+local MIN_GEN_AREA = 175   -- px kept below the splitter for the generators pane
+local MIN_TOP_AREA = 88    -- px kept above it for the step table
+
+-- Generators pane state. equal keeps relative + absolute degree specs mirrored:
+-- editing either updates the other and the divisions readout, live.
+local genState = {
+  topH = nil, splitDrag = nil, kind = 'equal',
+  equal   = { divisions = '12', interval = '2/1',
+              relative = '1 1 1 1 1 1 1 1 1 1 1 1',
+              absolute = '1 2 3 4 5 6 7 8 9 10 11 12' },
+  harm    = { lo = '4', hi = '8' },
+  subharm = { lo = '4', hi = '8' },
+  chord   = { members = '4:5:6:7', invert = false },
+}
+
 local function viewedName() return selected or cm:get('temper') end
 
 local function projectTempers() return cm:getAt('project', 'tempers') or {} end
@@ -148,6 +164,17 @@ end
 local function resetToSnapshot()
   if not (selected and snapshot) then return end
   temperWrite(util.deepClone(snapshot), false)
+end
+
+-- Replace the selected temper's scale wholesale from a generator result
+-- ({pitches, periodPitch, periodAsStep}); names clear, tokens arrive ascending.
+local function generateInto(gen)
+  local t = cloneForEdit(); if not t then return end
+  t.pitches      = { table.unpack(gen.pitches) }
+  t.periodPitch  = gen.periodPitch
+  t.periodAsStep = gen.periodAsStep
+  t.stepNames    = {}
+  temperWrite(t, true)
 end
 
 ----- Tier-aware library writes
@@ -433,27 +460,189 @@ modalHost:registerKind('temperImport', function(s, close)
   if s.err then ImGui.TextColored(ctx, TEMPER_ERR, s.err) end
 end)
 
+----- Generators pane
+
+local GEN_KINDS = {
+  { id = 'equal',   label = 'Equal' },
+  { id = 'harm',    label = 'Harmonics' },
+  { id = 'subharm', label = 'Subharmonics' },
+  { id = 'chord',   label = 'Chord' },
+}
+
+-- Pane-selector pill. Pushes the editor-zone button colours (one zone below the
+-- toolbar's, since editor.bg is darker); active stays recessed/lit.
+local function pillButton(label, active)
+  local fill = chrome.colour(active and 'editor.buttonActive' or 'editor.button')
+  ImGui.PushStyleColor(ctx, ImGui.Col_Button,        fill)
+  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered, fill)
+  local hit = ImGui.Button(ctx, label)
+  ImGui.PopStyleColor(ctx, 2)
+  return hit
+end
+
+local function genKindSelector()
+  for i, k in ipairs(GEN_KINDS) do
+    if i > 1 then ImGui.SameLine(ctx, 0, 4) end
+    if pillButton(k.label, genState.kind == k.id) then genState.kind = k.id end
+  end
+end
+
+local function labeledInput(label, w, value)
+  ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, label); ImGui.SameLine(ctx)
+  ImGui.SetNextItemWidth(ctx, w)
+  return ImGui.InputText(ctx, '##' .. label, value)
+end
+
+local function reseedEqual(e, n)
+  local degs = {}; for i = 1, n do degs[i] = i end
+  e.relative  = tuning.degreesToSpec(degs, 'relative')
+  e.absolute  = tuning.degreesToSpec(degs, 'absolute')
+  e.divisions = tostring(n)
+end
+
+local function drawEqualFields()
+  local e = genState.equal
+  local rvD, dbuf = labeledInput('Divisions', 56, e.divisions)
+  if rvD then e.divisions = dbuf end
+  if ImGui.IsItemDeactivatedAfterEdit(ctx) then
+    local n = tonumber(e.divisions)
+    if n and n >= 1 then reseedEqual(e, math.floor(n)) end
+  end
+  ImGui.SameLine(ctx)
+  local rvI, ibuf = labeledInput('of', 56, e.interval)
+  if rvI then e.interval = ibuf end
+
+  -- Relative and absolute mirror each other: a valid edit to one rewrites the
+  -- other (and divisions = largest degree); the typed field is left untouched.
+  local rvR, rbuf = labeledInput('Relative', 180, e.relative)
+  if rvR then
+    e.relative = rbuf
+    local degs = tuning.edoDegrees(e.relative, 'relative')
+    if degs then e.absolute = tuning.degreesToSpec(degs, 'absolute'); e.divisions = tostring(degs[#degs]) end
+  end
+  local rvA, abuf = labeledInput('Absolute', 180, e.absolute)
+  if rvA then
+    e.absolute = abuf
+    local degs = tuning.edoDegrees(e.absolute, 'absolute')
+    if degs then e.relative = tuning.degreesToSpec(degs, 'relative'); e.divisions = tostring(degs[#degs]) end
+  end
+end
+
+local function drawSeriesFields(p, lowLabel, highLabel)
+  local rvL, lo = labeledInput(lowLabel, 56, p.lo)
+  if rvL then p.lo = lo end
+  ImGui.SameLine(ctx)
+  local rvH, hi = labeledInput(highLabel, 56, p.hi)
+  if rvH then p.hi = hi end
+end
+
+local function drawChordFields()
+  local c = genState.chord
+  local rvM, m = labeledInput('Chord', 160, c.members)
+  if rvM then c.members = m end
+  local rvI, on = chrome.checkbox('invert', c.invert)
+  if rvI then c.invert = on end
+end
+
+-- Build (and validate) a generator result for the active kind. Re-run each
+-- frame to drive the Generate button's enabled state + the error hint.
+local function buildGen()
+  local g = genState
+  if g.kind == 'equal' then
+    local degs = tuning.edoDegrees(g.equal.absolute, 'absolute')
+    if not degs then return nil, 'enter degrees' end
+    if g.equal.interval ~= '' and not tuning.scalaPitch(g.equal.interval) then return nil, 'bad interval' end
+    return tuning.genEqual(degs, g.equal.interval)
+  elseif g.kind == 'harm' or g.kind == 'subharm' then
+    local p = g[g.kind]
+    local lo, hi = tonumber(p.lo), tonumber(p.hi)
+    if not (lo and hi and lo == math.floor(lo) and hi == math.floor(hi) and lo >= 1 and hi > lo) then
+      return nil, 'need 1 <= low < high'
+    end
+    return g.kind == 'harm' and tuning.genHarmonics(lo, hi) or tuning.genSubharmonics(lo, hi)
+  end
+  local members, cerr = tuning.parseChord(g.chord.members)
+  if not members then return nil, cerr end
+  return tuning.genChord(members, g.chord.invert)
+end
+
+local function drawGenerators()
+  local editable = editedTemper() ~= nil
+  if not editable then ImGui.BeginDisabled(ctx) end
+  genKindSelector()
+  ImGui.Spacing(ctx)
+  if genState.kind == 'equal' then drawEqualFields()
+  elseif genState.kind == 'harm' then drawSeriesFields(genState.harm, 'Lowest harmonic', 'Highest harmonic')
+  elseif genState.kind == 'subharm' then drawSeriesFields(genState.subharm, 'Lowest subharmonic', 'Highest subharmonic')
+  else drawChordFields() end
+
+  local gen, err = buildGen()
+  ImGui.Spacing(ctx)
+  chrome.disabledIf(not gen, function()
+    if ImGui.Button(ctx, 'Generate') then generateInto(gen) end
+  end)
+  if not editable then ImGui.EndDisabled(ctx) end
+  if editable and err then ImGui.SameLine(ctx); ImGui.TextColored(ctx, TEMPER_ERR, err) end
+end
+
+----- Draw body
+
+-- Top region: the active temper's header + step table, greyed when the
+-- selection has no editable tier copy (merge-floor or active slot).
+local function drawStepsTop()
+  local temper   = editedTemper() or temperFor(viewedName())
+  local editable = editedTemper() ~= nil
+  if not temper then
+    ImGui.Text(ctx, 'No temperament selected.')
+    return
+  end
+  if not editable then ImGui.BeginDisabled(ctx) end
+  chrome.row(function() drawHeader(temper) end)
+  if not editable then ImGui.EndDisabled(ctx) end
+  ImGui.Separator(ctx)
+  if not editable then ImGui.BeginDisabled(ctx) end
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
+  drawStepTable(temper)
+  ImGui.PopStyleVar(ctx, 1)
+  if not editable then ImGui.EndDisabled(ctx) end
+end
+
+-- Step table (topH) over the generators pane; draggable divider doubles as
+-- the 'generators' header, mirrors swingEditor's preview/factor splitter.
+local function drawEditBody(availW, bodyAvailH)
+  local minTop = MIN_TOP_AREA
+  local maxTop = math.max(minTop, bodyAvailH - MIN_GEN_AREA)
+  genState.topH = math.max(minTop, math.min(maxTop, genState.topH or math.floor(bodyAvailH * 0.6)))
+
+  if ImGui.BeginChild(ctx, '##temperTop', availW, genState.topH) then
+    drawStepsTop()
+  end
+  ImGui.EndChild(ctx)
+
+  local ruleY = chrome.paletteHeader('generators')
+  local afterX, afterY = ImGui.GetCursorScreenPos(ctx)
+  ImGui.SetCursorScreenPos(ctx, afterX, ruleY - math.floor(DIVIDER_GRAB / 2))
+  ImGui.InvisibleButton(ctx, '##genSplit', availW, DIVIDER_GRAB)
+  local hovered, active = ImGui.IsItemHovered(ctx), ImGui.IsItemActive(ctx)
+  if active then
+    local _, my = ImGui.GetMousePos(ctx)
+    genState.splitDrag = genState.splitDrag or { y0 = my, h0 = genState.topH }
+    genState.topH = math.max(minTop, math.min(maxTop, genState.splitDrag.h0 + (my - genState.splitDrag.y0)))
+  else
+    genState.splitDrag = nil
+  end
+  if hovered or active then ImGui.SetMouseCursor(ctx, ImGui.MouseCursor_ResizeNS) end
+  ImGui.SetCursorScreenPos(ctx, afterX, afterY)
+
+  drawGenerators()
+end
+
 local function draw(w, h)
   chrome.pushChromeStyles()
   if ImGui.BeginChild(ctx, '##temperEditor', w, h) then
     chrome.paletteHeader('steps')
-    local temper   = editedTemper() or temperFor(viewedName())
-    local editable = editedTemper() ~= nil
-    if not temper then
-      ImGui.Text(ctx, 'No temperament selected.')
-    else
-      -- Greyed when not editable (merge-floor or active slot with no tier copy);
-      -- divider lives outside BeginDisabled so it stays ungreyed (matches palette).
-      if not editable then ImGui.BeginDisabled(ctx) end
-      chrome.row(function() drawHeader(temper) end)
-      if not editable then ImGui.EndDisabled(ctx) end
-      ImGui.Separator(ctx)
-      if not editable then ImGui.BeginDisabled(ctx) end
-      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
-      drawStepTable(temper)
-      ImGui.PopStyleVar(ctx, 1)
-      if not editable then ImGui.EndDisabled(ctx) end
-    end
+    local availW, bodyAvailH = ImGui.GetContentRegionAvail(ctx)
+    drawEditBody(availW, bodyAvailH)
   end
   ImGui.EndChild(ctx)
   chrome.popChromeStyles()

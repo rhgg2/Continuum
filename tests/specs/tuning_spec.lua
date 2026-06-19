@@ -177,4 +177,77 @@ return {
       t.eq(type(err), 'string')
     end,
   },
+
+  {
+    name = 'genEqual: full EDO and a diatonic subset, base implicit, period last',
+    run = function()
+      local full = tuning.genEqual(tuning.edoDegrees('1 1 1 1 1 1 1 1 1 1 1 1', 'relative'))
+      t.eq(full.pitches[1], '0\\12', 'base 1/1 is the implicit degree 0')
+      t.eq(full.pitches[12], '11\\12', 'twelve body steps, 0..11')
+      t.eq(full.periodPitch, '12\\12', 'largest degree is the period')
+      t.truthy(full.periodAsStep, 'EDO scales read with the equave as trailing row')
+
+      local major = tuning.genEqual(tuning.edoDegrees('2 2 1 2 2 2 1', 'relative'))
+      t.eq(#major.pitches, 7, 'base + 6 body degrees')
+      t.eq(major.pitches[2], '2\\12')
+      t.eq(major.periodPitch, '12\\12')
+    end,
+  },
+
+  {
+    name = 'edoDegrees: relative cumulates, absolute sorts; non-octave equave suffixes',
+    run = function()
+      t.eq(table.concat(tuning.edoDegrees('2 2 1', 'relative'), ' '), '2 4 5')
+      t.eq(table.concat(tuning.edoDegrees('5 2 4', 'absolute'), ' '), '2 4 5', 'absolute sorts')
+      t.eq(tuning.edoDegrees('0 1', 'relative'), nil, 'non-positive token rejected')
+
+      local bp = tuning.genEqual(tuning.edoDegrees('1 1 1', 'relative'), '3/1')
+      t.eq(bp.periodPitch, '3\\3<3/1>', 'interval ~= 2/1 carries the equave suffix')
+    end,
+  },
+
+  {
+    name = 'degreesToSpec round-trips edoDegrees in both modes',
+    run = function()
+      t.eq(tuning.degreesToSpec({ 2, 4, 5, 7, 9, 11, 12 }, 'relative'), '2 2 1 2 2 2 1')
+      t.eq(tuning.degreesToSpec({ 2, 4, 5, 7, 9, 11, 12 }, 'absolute'), '2 4 5 7 9 11 12')
+    end,
+  },
+
+  {
+    name = 'genHarmonics / genSubharmonics: rooted on the low harmonic, top is period',
+    run = function()
+      local h = tuning.genHarmonics(4, 8)
+      t.eq(table.concat(h.pitches, ' '), '4/4 5/4 6/4 7/4')
+      t.eq(h.periodPitch, '8/4')
+
+      local s = tuning.genSubharmonics(4, 8)
+      t.eq(table.concat(s.pitches, ' '), '8/8 8/7 8/6 8/5', 'utonal, ascending')
+      t.eq(s.periodPitch, '8/4')
+    end,
+  },
+
+  {
+    name = 'genChord: otonal vs inverted, last member is the period',
+    run = function()
+      local members = tuning.parseChord('4:5:6')
+      t.eq(table.concat(members, ' '), '4 5 6')
+
+      local oto = tuning.genChord(members, false)
+      t.eq(table.concat(oto.pitches, ' '), '4/4 5/4', 'major triad: 1/1, 5/4')
+      t.eq(oto.periodPitch, '6/4')
+
+      local inv = tuning.genChord(members, true)
+      t.eq(table.concat(inv.pitches, ' '), '6/6 6/5', 'minor triad: 1/1, 6/5')
+      t.eq(inv.periodPitch, '6/4')
+    end,
+  },
+
+  {
+    name = 'parseChord rejects fewer than two notes or non-integers',
+    run = function()
+      t.eq((tuning.parseChord('4')), nil, 'one note is not a chord')
+      t.eq((tuning.parseChord('4:5/2')), nil, 'ratios are not chord members')
+    end,
+  },
 }

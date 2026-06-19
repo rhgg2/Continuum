@@ -162,6 +162,87 @@ function M.scalaToTemper(pitchLines, name)
   }
 end
 
+----- Generators
+
+-- Equal-division subset spec -> ascending degrees; largest is the period.
+-- 'relative': cumulative step counts. 'absolute': sorted+deduped. nil on bad token.
+function M.edoDegrees(spec, mode)
+  local nums = {}
+  for tok in spec:gmatch('%S+') do
+    local n = tonumber(tok)
+    if not n or n ~= math.floor(n) or n < 1 then return nil end
+    nums[#nums + 1] = n
+  end
+  if #nums == 0 then return nil end
+  if mode == 'relative' then
+    local degs, acc = {}, 0
+    for _, step in ipairs(nums) do acc = acc + step; degs[#degs + 1] = acc end
+    return degs
+  end
+  table.sort(nums)
+  local degs = {}
+  for _, d in ipairs(nums) do if degs[#degs] ~= d then degs[#degs + 1] = d end end
+  return degs
+end
+
+-- Inverse of edoDegrees: render a degree list back as a spec string in `mode`.
+-- Lets a mode switch convert the in-flight pattern rather than reset it.
+function M.degreesToSpec(degrees, mode)
+  if mode == 'absolute' then return table.concat(degrees, ' ') end
+  local steps, prev = {}, 0
+  for _, d in ipairs(degrees) do steps[#steps + 1] = d - prev; prev = d end
+  return table.concat(steps, ' ')
+end
+
+-- N-equal-divisions of `interval` subset to `degrees`; tokens are intensional
+-- (d\D<equave>, suffix omitted for octave). Base 0 implicit; last degree = period.
+function M.genEqual(degrees, interval)
+  local D      = degrees[#degrees]
+  local suffix = (interval and interval ~= '' and interval ~= '2/1') and ('<' .. interval .. '>') or ''
+  local pitches = { '0\\' .. D .. suffix }
+  for i = 1, #degrees - 1 do pitches[i + 1] = degrees[i] .. '\\' .. D .. suffix end
+  return { pitches = pitches, periodPitch = D .. '\\' .. D .. suffix, periodAsStep = true }
+end
+
+-- Harmonic-series segment lo..hi: ratios m/lo rooted on the low harmonic, the
+-- top (hi/lo) the period.
+function M.genHarmonics(lo, hi)
+  local pitches = {}
+  for m = lo, hi - 1 do pitches[#pitches + 1] = m .. '/' .. lo end
+  return { pitches = pitches, periodPitch = hi .. '/' .. lo, periodAsStep = true }
+end
+
+-- Subharmonic (utonal) segment lo..hi: ratios hi/m ascending, top the period.
+function M.genSubharmonics(lo, hi)
+  local pitches = {}
+  for m = hi, lo + 1, -1 do pitches[#pitches + 1] = hi .. '/' .. m end
+  return { pitches = pitches, periodPitch = hi .. '/' .. lo, periodAsStep = true }
+end
+
+-- Colon/space-separated extended ratio (e.g. '4:5:6:7') -> positive integers,
+-- at least two. nil + message otherwise.
+function M.parseChord(spec)
+  local members = {}
+  for tok in spec:gmatch('[^%s:]+') do
+    local n = tonumber(tok)
+    if not n or n ~= math.floor(n) or n < 1 then return nil, 'chord needs whole numbers' end
+    members[#members + 1] = n
+  end
+  if #members < 2 then return nil, 'chord needs at least two notes' end
+  return members
+end
+
+-- Enumerate a chord as a scale rooted on its first note. otonal: ci/c1.
+-- inverted (utonal): ck/c(k+1-i). The last member is the period either way.
+function M.genChord(members, invert)
+  local k, c1, ck = #members, members[1], members[#members]
+  local pitches = {}
+  for i = 1, k - 1 do
+    pitches[i] = invert and (ck .. '/' .. members[k + 1 - i]) or (members[i] .. '/' .. c1)
+  end
+  return { pitches = pitches, periodPitch = ck .. '/' .. c1, periodAsStep = true }
+end
+
 ----- Coordinate conversions
 
 --contract: detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
