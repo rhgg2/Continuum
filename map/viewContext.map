@@ -1,4 +1,4 @@
-@module viewContext  src=viewContext.lua  loc=110  sha=08180f7  mode=chunk
+@module viewContext  src=viewContext.lua  loc=117  sha=08180f7  mode=chunk
 @deps length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
 
 # Shapes
@@ -18,26 +18,27 @@
   @state timeSigs = args.timeSigs  @ 16
   @state temper = args.temper  @ 17
   @state ctx = {}  @ 18
-  @state PPQ_GRID_EPS = 0.5  @ 64
+  @state ON_TEMPER_EPS = 1e-6  @ 26
+  @state PPQ_GRID_EPS = 0.5  @ 71
 
 # Public API (ctx:*)
   -- Temperament
   @api ctx:activeTemper()  @ 22
-  @api ctx:noteProjection(evt)  @ 24
+  @api ctx:noteProjection(evt)  @ 28
   -- Timing
-  @api ctx:ppqToRow(ppqI, chan)  @ 43
+  @api ctx:ppqToRow(ppqI, chan)  @ 50
       @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Exact inverse of rowToPPQ. Returns float; integer rows are float fixpoints. The chan argument is unused at this layer (kept for the call-site signature).
-  @api ctx:rowToPPQ(row, chan)  @ 50
+  @api ctx:rowToPPQ(row, chan)  @ 57
       @contract  identity row math: row × ppqPerRow, clamped at length. Returns float; no rounding. On-grid is a tolerance question — see ctx:isOnGrid.
-  @api ctx:snapRow(ppqI, chan)  @ 56
-  @api ctx:ppqPerRow()  @ 58
-  @api ctx:isOnGrid(ppqI, chan)  @ 67
+  @api ctx:snapRow(ppqI, chan)  @ 63
+  @api ctx:ppqPerRow()  @ 65
+  @api ctx:isOnGrid(ppqI, chan)  @ 74
       @contract  true iff ppqI lies within PPQ_GRID_EPS ppq of the nearest row's ppq under this ctx. The sole owner of the on-grid threshold; callers must not re-implement it from rowToPPQ.
 
 # Uses (outbound edges)
-  @use call    tuning.midiToStep  @ 27
-  @use call    tuning.stepToMidi  @ 29
-  @use call    tuning.stepToText  @ 28
-  @use call    util.round  @ 56
+  @use call    tuning.midiToStep  @ 31
+  @use call    tuning.stepToMidi  @ 33
+  @use call    tuning.stepToText  @ 32
+  @use call    util.round  @ 63
   @use require tuning  @ 8
   @use require util  @ 7

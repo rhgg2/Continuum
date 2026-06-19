@@ -246,6 +246,21 @@ return {
   },
 
   {
+    name = 'noteProjection: sub-epsilon detune offset reads on-temper (gap clamped)',
+    run = function()
+      -- Pin the tolerance contract: sub-epsilon offset must read on-temper.
+      -- see docs/viewContext.md § ON_TEMPER_EPS
+      local temper = tuning.presets['19EDO']
+      local pitch, detune = tuning.stepToMidi(temper, 4, 4)
+      local ctx = mkCtx{ temper = temper }
+      local _, gapDust = ctx:noteProjection({ pitch = pitch, detune = detune + 1e-9 })
+      t.eq(gapDust, 0, 'sub-epsilon offset clamps to on-temper')
+      local _, gapReal = ctx:noteProjection({ pitch = pitch, detune = detune + 5 })
+      t.truthy(math.abs(gapReal) > 1, 'a real bend still registers off-temper, got ' .. tostring(gapReal))
+    end,
+  },
+
+  {
     name = 'noteProjection halfGap is half the cents-distance to the nearest neighbour',
     run = function()
       local temper = tuning.presets['19EDO']

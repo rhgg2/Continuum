@@ -21,6 +21,10 @@ local ctx        = {}
 
 function ctx:activeTemper() return temper end
 
+-- Tolerance for "on the temper"; gap below this is %.14g serialisation dust.
+-- see docs/viewContext.md § ON_TEMPER_EPS
+local ON_TEMPER_EPS = 1e-6
+
 function ctx:noteProjection(evt)
   if not (temper and evt and evt.pitch) then return end
   local detune    = evt.detune or 0
@@ -28,6 +32,9 @@ function ctx:noteProjection(evt)
   local label     = tuning.stepToText(temper, step, oct)
   local tm_, td_  = tuning.stepToMidi(temper, step, oct)
   local gap       = (evt.pitch * 100 + detune) - (tm_ * 100 + td_)
+  -- A snapped note's gap is serialisation float dust, not a bend; clear it
+  -- or the deviation tick (drawn iff gap ~= 0) paints every note off-temper.
+  if math.abs(gap) < ON_TEMPER_EPS then gap = 0 end
 
   local steps, n, period = temper.cents, #temper.cents, temper.period
   local left    = step == 1 and steps[n] - period or steps[step - 1]
