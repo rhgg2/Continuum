@@ -256,6 +256,47 @@ function M.genChord(members, invert)
   return { pitches = pitches, periodPitch = ck .. '/' .. c1, periodAsStep = true }
 end
 
+local function gcd(a, b) while b ~= 0 do a, b = b, a % b end return a end
+
+-- Every k-subset of 1..n as a list of 1-based index lists.
+local function combinations(n, k)
+  local out, idx = {}, {}
+  local function rec(start, depth)
+    if depth > k then out[#out + 1] = { table.unpack(idx) }; return end
+    for i = start, n do idx[depth] = i; rec(i + 1, depth + 1) end
+  end
+  rec(1, 1)
+  return out
+end
+
+-- Combination product set: every k-subset's product, rooted on the smallest
+-- product (so 1/1 is always present) and reduced into the equave; ascending.
+function M.genCPS(factors, k, equave)
+  equave = equave or '2/1'
+  local ea, eb = equave:match('^(%d+)/(%d+)$')
+  if not ea then ea, eb = equave:match('^(%d+)$'), '1' end
+  ea, eb = tonumber(ea), tonumber(eb)
+  local products = {}
+  for _, subset in ipairs(combinations(#factors, k)) do
+    local p = 1
+    for _, i in ipairs(subset) do p = p * factors[i] end
+    products[#products + 1] = p
+  end
+  local root = products[1]
+  for _, p in ipairs(products) do if p < root then root = p end end
+  local tokens = {}
+  for j, p in ipairs(products) do
+    local num, den = p, root
+    while num * eb >= den * ea do num, den = num * eb, den * ea end
+    while num < den do num, den = num * ea, den * eb end
+    local g = gcd(num, den)
+    num, den = num // g, den // g
+    tokens[j] = num .. '/' .. den
+  end
+  table.sort(tokens, function(x, y) return M.scalaPitch(x) < M.scalaPitch(y) end)
+  return { pitches = tokens, periodPitch = equave, periodAsStep = true }
+end
+
 ----- Coordinate conversions
 
 --contract: detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)

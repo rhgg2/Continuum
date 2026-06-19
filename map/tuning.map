@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=329  sha=fdb66b0  mode=namespace
+@module tuning  src=tuning.lua  loc=370  sha=375c89e  mode=namespace
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
@@ -27,6 +27,11 @@
   @fn computeCellWidth(temper)  @ 37
       -- cellWidth: widest step label + the octave field; see docs/tuning.md § Display.
   @fn edo(n, names)  @ 86
+  -- Scala import
+  -- Generators
+  @fn gcd(a, b)  @ 259
+  @fn combinations(n, k)  @ 262
+      -- Every k-subset of 1..n as a list of 1-based index lists.
 
 # Public API (M.*)
   @api M.scalaPitch(token)  @ 49
@@ -35,7 +40,6 @@
       @contract  pitches→cents, periodPitch→period; stamps octaveStep + cellWidth. Pure; returns temper.
   @api M.findTemper(name, userLib)  @ 120
       @contract  looks up name in userLib first, then falls back to built-in M.presets; returns nil only if name is missing or unknown to both. Lets the '12EDO' sentinel resolve even when userLib is empty.
-  -- Scala import
   @api M.parseScalaPitches(text)  @ 129
       -- Lenient: every non-blank, non-'!' line is a pitch token. Drives paste + the
       -- import Create button (which re-parses the box after any manual edits).
@@ -45,7 +49,6 @@
   @api M.scalaToTemper(pitchLines, name)  @ 158
       -- Bridge Scala's convention (unison implicit, period last) to Continuum's
       -- (step 1 = 1/1, period separate): prepend unison, split off final as period.
-  -- Generators
   @api M.edoDegrees(spec, mode)  @ 182
       -- Equal-division subset spec -> ascending degrees; largest is the period.
       -- 'relative': cumulative step counts. 'absolute': sorted+deduped. nil on bad token.
@@ -66,17 +69,20 @@
   @api M.genChord(members, invert)  @ 250
       -- Enumerate a chord as a scale rooted on its first note. otonal: ci/c1.
       -- inverted (utonal): ck/c(k+1-i). The last member is the period either way.
+  @api M.genCPS(factors, k, equave)  @ 274
+      -- Combination product set: every k-subset's product, rooted on the smallest
+      -- product (so 1/1 is always present) and reduced into the equave; ascending.
   -- Coordinate conversions
-  @api M.midiToStep(temper, midi, detune)  @ 263
+  @api M.midiToStep(temper, midi, detune)  @ 304
       @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
       @contract  returned octave is MIDI-relative (C-1 → -1)
-  @api M.stepToMidi(temper, step, octave)  @ 285
+  @api M.stepToMidi(temper, step, octave)  @ 326
       @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
-  @api M.snap(temper, midi, detune)  @ 303
-  @api M.transposeStep(temper, midi, detune, n)  @ 308
+  @api M.snap(temper, midi, detune)  @ 344
+  @api M.transposeStep(temper, midi, detune, n)  @ 349
       @contract  moves by n scale steps under temper, carrying the octave; n may be negative
   -- Display
-  @api M.stepToParts(temper, step, octave)  @ 316
+  @api M.stepToParts(temper, step, octave)  @ 357
       @contract  returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep
-  @api M.stepToText(temper, step, octave)  @ 324
+  @api M.stepToText(temper, step, octave)  @ 365
       @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.

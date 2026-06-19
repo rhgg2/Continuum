@@ -5,10 +5,11 @@ Workshop (sevish.com/scaleworkshop). Scope grew into a shared
 **project-tier library workbench page** hosting both the tuning (temper)
 editor and the existing swing editor.
 
-Status: **phases 1–2 complete and committed; the phase-3 token
-compilers landed too. Live UI verified in REAPER.** What remains of
-phase 3 is the *bulk* generators — MOS and harmonic-series — that emit a
-whole scale at once. Everything else in the original plan is in:
+Status: **phases 1–3 complete and committed. Live UI verified in
+REAPER.** The generators pane shipped (`9f5eb6a`, CPS added since) with
+Equal / Harmonics / Subharmonics / Chord / CPS bulk generators behind a
+kind-selector subhead; only the **MOS** generator remains of the
+original phase-3 plan. Everything else is in:
 
 - Intensional temper backend (`pitches`/`periodPitch` source tokens,
   `cents`/`period` derived), EDO presets emitted as `i\n` tokens, a
@@ -24,6 +25,11 @@ whole scale at once. Everything else in the original plan is in:
   `editorRender.lua` owns the tree palette; both panes feed it a
   `libraryDescriptor()`.
 - `docs/editorPage.md` is written.
+- **Generators pane** (`temperEditor`): a kind-selector subhead + a
+  per-kind description line + a shared-label-column parameter form,
+  feeding `derive` via `generateInto`. Pure emitters live beside
+  `scalaToTemper` in `tuning.lua`: `genEqual`, `genHarmonics`,
+  `genSubharmonics`, `genChord`, `genCPS`.
 
 ---
 
@@ -190,33 +196,32 @@ sort ascending, split the widest interval off as `periodPitch`, set
 
 ## What is NOT done / known gaps
 
-- **MOS / harmonic-series bulk generators** — the only real remainder of
-  phase 3 (see below). Per-token ratio/EDO/equave compiling already
-  works everywhere a token is typed.
+- **MOS (moment-of-symmetry) generator** — the lone remainder of phase 3
+  (see below). Every other generator kind shipped.
 - `.kbm` keyboard-mapping import — deferred.
-- No compiler-specific UI beyond free-token entry + Scala import. MOS /
-  harmonic generators will each need a small parameter form.
 
 ---
 
-## Phase 3 — bulk generators ("day two")
+## Phase 3 — bulk generators
 
-The token compilers are done; what's left are front-ends that emit a
-*whole* `pitches` list from a few parameters, then hand off to `derive`:
+The generators pane hosts these as a kind-selector subhead, each a pure
+emitter in `tuning.lua` that returns `{pitches, periodPitch,
+periodAsStep}` and hands off to `derive` via `generateInto`:
 
-1. **MOS (moment of symmetry)** — from a generator interval, a period,
-   and a size, produce the MOS scale (the stack of the generator reduced
-   into the period, kept only at sizes where the scale is well-formed —
-   two step sizes). Parameters: generator token, period token, count (or
-   a "next MOS size" stepper).
-2. **Harmonic / subharmonic series** — a contiguous segment of the
-   harmonic series (e.g. harmonics 8…16) as the scale; the integers
-   already compile via `scalaPitch` (`n` → `n/1`), so this is mostly a
-   "emit `lo..hi` as tokens" generator with a root choice.
+- **Equal** — `genEqual` over `edoDegrees` (an EDO and its subsets;
+  relative/absolute degree specs mirror live).
+- **Harmonics / Subharmonics** — `genHarmonics` / `genSubharmonics`, a
+  contiguous (sub)harmonic-series segment.
+- **Chord** — `genChord`, otonal/utonal enumeration of an extended ratio.
+- **CPS** — `genCPS`, a combination product set: every k-subset's
+  product, rooted on the smallest product (so 1/1 is always present) and
+  reduced into the equave. Hexany = `{1,3,5,7}` choose 2 (matches Scale
+  Workshop).
 
-Both are pure functions emitting token lists; they slot in beside
-`scalaToTemper` and reuse the same `derive` + library-write path. A
-generator dropdown in the New/Import modal family is the natural home.
+**Still open — MOS (moment of symmetry):** stack a generator interval
+into the period, kept at sizes where the scale is well-formed (two step
+sizes). Parameters: generator token, period token, size (or a "next MOS
+size" stepper). The one piece of the original plan not yet built.
 
 ---
 
@@ -226,6 +231,6 @@ generator dropdown in the New/Import modal family is the natural home.
 2. `mcp__readium_docs__map_query` over `tuning`, `temperEditor`,
    `editorRender`, `editorPage`, `swingEditor` for current shapes
    (`api`/`fn`/`shape` kinds).
-3. The remaining work is the **bulk generators** (MOS, harmonic). They
-   touch `tuning.lua` (new pure generators) + `temperEditor.lua` (a
-   parameter form) — >2 files plus a new UI surface, so plan first.
+3. The remaining work is the **MOS generator**. It touches `tuning.lua`
+   (a pure `genMOS` + well-formedness helper) + `temperEditor.lua` (a
+   parameter form with a "next MOS size" stepper) — plan first.

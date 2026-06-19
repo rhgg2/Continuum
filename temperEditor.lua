@@ -35,6 +35,7 @@ local genState = {
   harm    = { lo = '4', hi = '8' },
   subharm = { lo = '4', hi = '8' },
   chord   = { members = '4:5:6:7', invert = false },
+  cps     = { factors = '1 3 5 7', count = '2', equave = '2/1' },
 }
 
 local function viewedName() return selected or cm:get('temper') end
@@ -463,10 +464,11 @@ end)
 ----- Generators pane
 
 local GEN_KINDS = {
-  { id = 'equal',   label = 'Equal' },
-  { id = 'harm',    label = 'Harmonics' },
-  { id = 'subharm', label = 'Subharmonics' },
-  { id = 'chord',   label = 'Chord' },
+  { id = 'equal',   label = 'Equal',        desc = 'Generate equal temperament' },
+  { id = 'harm',    label = 'Harmonics',    desc = 'Generate harmonic series segment' },
+  { id = 'subharm', label = 'Subharmonics', desc = 'Generate subharmonic series segment' },
+  { id = 'chord',   label = 'Chord',        desc = 'Generate scale from a chord' },
+  { id = 'cps',     label = 'CPS',          desc = 'Generate combination product set' },
 }
 
 -- Pane-selector pill. Pushes the editor-zone button colours (one zone below the
@@ -487,8 +489,14 @@ local function genKindSelector()
   end
 end
 
+local function genDesc()
+  for _, k in ipairs(GEN_KINDS) do if k.id == genState.kind then return k.desc end end
+end
+
+-- Shared label column so every generator field's box starts at the same x.
+local GEN_LABEL_W = 90
 local function labeledInput(label, w, value)
-  ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, label); ImGui.SameLine(ctx)
+  ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, label); ImGui.SameLine(ctx, GEN_LABEL_W)
   ImGui.SetNextItemWidth(ctx, w)
   return ImGui.InputText(ctx, '##' .. label, value)
 end
@@ -508,8 +516,7 @@ local function drawEqualFields()
     local n = tonumber(e.divisions)
     if n and n >= 1 then reseedEqual(e, math.floor(n)) end
   end
-  ImGui.SameLine(ctx)
-  local rvI, ibuf = labeledInput('of', 56, e.interval)
+  local rvI, ibuf = labeledInput('Equave', 56, e.interval)
   if rvI then e.interval = ibuf end
 
   -- Relative and absolute mirror each other: a valid edit to one rewrites the
@@ -531,17 +538,26 @@ end
 local function drawSeriesFields(p, lowLabel, highLabel)
   local rvL, lo = labeledInput(lowLabel, 56, p.lo)
   if rvL then p.lo = lo end
-  ImGui.SameLine(ctx)
   local rvH, hi = labeledInput(highLabel, 56, p.hi)
   if rvH then p.hi = hi end
 end
 
 local function drawChordFields()
   local c = genState.chord
-  local rvM, m = labeledInput('Chord', 160, c.members)
+  local rvM, m = labeledInput('Ratios', 160, c.members)
   if rvM then c.members = m end
   local rvI, on = chrome.checkbox('invert', c.invert)
   if rvI then c.invert = on end
+end
+
+local function drawCpsFields()
+  local c = genState.cps
+  local rvF, f = labeledInput('Factors', 160, c.factors)
+  if rvF then c.factors = f end
+  local rvN, n = labeledInput('Count', 56, c.count)
+  if rvN then c.count = n end
+  local rvE, e = labeledInput('Equave', 56, c.equave)
+  if rvE then c.equave = e end
 end
 
 -- Build (and validate) a generator result for the active kind. Re-run each
@@ -560,6 +576,25 @@ local function buildGen()
       return nil, 'need 1 <= low < high'
     end
     return g.kind == 'harm' and tuning.genHarmonics(lo, hi) or tuning.genSubharmonics(lo, hi)
+  elseif g.kind == 'cps' then
+    local factors = {}
+    for tok in g.cps.factors:gmatch('%S+') do
+      local n = tonumber(tok)
+      if not (n and n == math.floor(n) and n >= 1) then return nil, 'factors: whole numbers' end
+      factors[#factors + 1] = n
+    end
+    if #factors < 2 then return nil, 'need at least two factors' end
+    local k = tonumber(g.cps.count)
+    if not (k and k == math.floor(k) and k >= 1 and k <= #factors) then return nil, '1 <= count <= factors' end
+    local ea, eb = g.cps.equave:match('^(%d+)/(%d+)$')
+    if ea then
+      if tonumber(ea) <= tonumber(eb) then return nil, 'equave must exceed 1/1' end
+    elseif g.cps.equave:match('^%d+$') then
+      if tonumber(g.cps.equave) < 2 then return nil, 'equave must exceed 1/1' end
+    else
+      return nil, 'equave must be a ratio'
+    end
+    return tuning.genCPS(factors, k, g.cps.equave)
   end
   local members, cerr = tuning.parseChord(g.chord.members)
   if not members then return nil, cerr end
@@ -569,11 +604,14 @@ end
 local function drawGenerators()
   local editable = editedTemper() ~= nil
   if not editable then ImGui.BeginDisabled(ctx) end
-  genKindSelector()
+  chrome.row(genKindSelector)
+  ImGui.Separator(ctx)
+  ImGui.TextDisabled(ctx, genDesc())
   ImGui.Spacing(ctx)
   if genState.kind == 'equal' then drawEqualFields()
-  elseif genState.kind == 'harm' then drawSeriesFields(genState.harm, 'Lowest harmonic', 'Highest harmonic')
-  elseif genState.kind == 'subharm' then drawSeriesFields(genState.subharm, 'Lowest subharmonic', 'Highest subharmonic')
+  elseif genState.kind == 'harm' then drawSeriesFields(genState.harm, 'Lowest', 'Highest')
+  elseif genState.kind == 'subharm' then drawSeriesFields(genState.subharm, 'Lowest', 'Highest')
+  elseif genState.kind == 'cps' then drawCpsFields()
   else drawChordFields() end
 
   local gen, err = buildGen()

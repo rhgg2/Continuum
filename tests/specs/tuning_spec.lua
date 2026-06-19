@@ -264,4 +264,14 @@ return {
       t.eq((tuning.parseChord('4:5/2')), nil, 'ratios are not chord members')
     end,
   },
+
+  {
+    name = 'genCPS: hexany rooted on the smallest product, 1/1 first, ascending',
+    run = function()
+      local hex = tuning.genCPS({ 1, 3, 5, 7 }, 2, '2/1')
+      t.eq(table.concat(hex.pitches, ' '), '1/1 7/6 5/4 35/24 5/3 7/4')
+      t.eq(hex.periodPitch, '2/1')
+      t.eq(#hex.pitches, 6, 'C(4,2) = 6 notes, rooted so 1/1 is present')
+    end,
+  },
 }
