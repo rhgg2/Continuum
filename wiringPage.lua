@@ -32,6 +32,7 @@ local wr = util.instantiate('wiringRender',
 facade.publish('wiring', {
   isWiringOwnedTrack = function(track) return wm:isWiringOwnedTrack(track) end,
   paramTargets       = function(sourceTrack) return wm:paramTargets(sourceTrack) end,
+  samplerReachable   = function(track) return wm:samplerReachable(track) end,
 })
 
 local wp = {}

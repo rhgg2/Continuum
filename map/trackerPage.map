@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=118  sha=11dccac  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=129  sha=9623b2b  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, help
 
 # Imports
@@ -8,70 +8,74 @@
       @contract  render hooks delegate to trackerRender; lifecycle (bind/unbind/dropTake/reload) is native here
 
 # Constructed sub-instances
-  @construct mm = util.instantiate('midiManager')  @ 24
-  @construct tm = util.instantiate('trackerManager')  @ 25
-  @construct gm = util.instantiate('groupManager')  @ 26
-  @construct pa = util.instantiate('paramAutomation')  @ 27
-  @construct tv = util.instantiate('trackerView')  @ 28
-  @construct tr = util.instantiate('trackerRender')  @ 30
+  @construct mm = util.instantiate('midiManager')  @ 31
+  @construct tm = util.instantiate('trackerManager')  @ 32
+  @construct gm = util.instantiate('groupManager')  @ 33
+  @construct pa = util.instantiate('paramAutomation')  @ 34
+  @construct tv = util.instantiate('trackerView')  @ 35
+  @construct tr = util.instantiate('trackerRender')  @ 37
 
 # Private state
-  @state tp = {}  @ 34
-  @state lastHash = nil  @ 35   -- bound take's last-seen MIDI hash; external-mutation watcher baseline
-  @state wasDormant = false  @ 38
+  @state tp = {}  @ 41
+  @state lastHash = nil  @ 42   -- bound take's last-seen MIDI hash; external-mutation watcher baseline
+  @state wasDormant = false  @ 45
 
 # Private functions
   @fn arrange()  @ 20
-  @fn takeHash()  @ 41
+  @fn samplerMode(take)  @ 24
+      -- trackerMode is wiring-derived per bind, not a per-frame probe — follows the bound
+      -- take, not the arrange cursor. See docs/trackerManager.md § PC synthesis under trackerMode.
+  @fn takeHash()  @ 48
       @reaper  MIDI_GetHash on the bound take — the external-mutation watcher baseline
 
 # Public API (tp:*)
   -- Take lifecycle (take ops on tm, view-state on tv)
-  @api tp:currentTake()  @ 51
-  @api tp:bind(t)  @ 54
+  @api tp:currentTake()  @ 58
+  @api tp:bind(t)  @ 61
       @contract  with a take, bind it on tm and seed tv; no arg = activation, bind from the cursor
-  @api tp:unbind()  @ 60
-  @api tp:dropTake()  @ 63
+  @api tp:unbind()  @ 67
+  @api tp:dropTake()  @ 70
       @contract  if take is destroyed, detach tm and blank the grid. Distinct from unbind.
-  @api tp:reloadFromReaper()  @ 66
+  @api tp:reloadFromReaper()  @ 73
       @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
-  @api tp:bindFromCursor()  @ 69
+  @api tp:bindFromCursor()  @ 76
       @contract  rebind to the cursor take on change, then hash-diff for external edits. See docs/trackerPage.md § Bind from the cursor.
   -- Page interface — render delegates to the renderer; the watcher brackets the frame
-  @api tp:toolbarSegments()  @ 107
-  @api tp:renderStatusBar(ctx)  @ 108
-  @api tp:focusState()  @ 109
-  @api tp:renderBody(ctx, w, h, dispatch)  @ 112
+  @api tp:toolbarSegments()  @ 118
+  @api tp:renderStatusBar(ctx)  @ 119
+  @api tp:focusState()  @ 120
+  @api tp:renderBody(ctx, w, h, dispatch)  @ 123
       @contract  follow the cursor, draw, then snapshot the take hash as next frame's watcher baseline
 
 # Uses (outbound edges)
-  @use call    facade.get  @ 20
-  @use call    facade.publish  @ 83
-  @use call    paramAutomation.apply  @ 58
-  @use call    trackerManager.bindTake  @ 56, 60, 95, 97
-  @use call    trackerManager.currentTake  @ 42, 51, 71, 93, 97
-  @use call    trackerManager.detach  @ 63
-  @use call    trackerManager.reloadFromReaper  @ 66, 77
-  @use call    trackerRender.focusState  @ 109
-  @use call    trackerRender.renderBody  @ 114
-  @use call    trackerRender.renderStatusBar  @ 108
-  @use call    trackerRender.toolbarSegments  @ 107
-  @use call    trackerView.cursorAnchor  @ 101
-  @use call    trackerView.dropGrid  @ 63
-  @use call    trackerView.seedSharedSlots  @ 57
-  @use call    trackerView.setSwingComposite  @ 102
-  @use call    trackerView.timeSig  @ 100
-  @use call    util.instantiate  @ 24, 25, 26, 27, 28, 30
-  @use require groupManager  @ 26
-  @use require midiManager  @ 24
-  @use require paramAutomation  @ 27
-  @use require trackerManager  @ 25
-  @use require trackerRender  @ 30
-  @use require trackerView  @ 28
+  @use call    facade.get  @ 20, 26
+  @use call    facade.publish  @ 90
+  @use call    paramAutomation.apply  @ 65
+  @use call    trackerManager.bindTake  @ 63, 67, 103, 107
+  @use call    trackerManager.currentTake  @ 49, 58, 78, 100, 106
+  @use call    trackerManager.detach  @ 70
+  @use call    trackerManager.reloadFromReaper  @ 73, 84
+  @use call    trackerRender.focusState  @ 120
+  @use call    trackerRender.renderBody  @ 125
+  @use call    trackerRender.renderStatusBar  @ 119
+  @use call    trackerRender.toolbarSegments  @ 118
+  @use call    trackerView.cursorAnchor  @ 112
+  @use call    trackerView.dropGrid  @ 70
+  @use call    trackerView.seedSharedSlots  @ 64
+  @use call    trackerView.setSwingComposite  @ 113
+  @use call    trackerView.timeSig  @ 111
+  @use call    util.instantiate  @ 31, 32, 33, 34, 35, 37
+  @use require groupManager  @ 33
+  @use require midiManager  @ 31
+  @use require paramAutomation  @ 34
+  @use require trackerManager  @ 32
+  @use require trackerRender  @ 37
+  @use require trackerView  @ 35
   @use require util  @ 11
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
+  @reaper GetMediaItemTake_Track
   @reaper MIDI_GetHash
   @reaper GetActiveTake

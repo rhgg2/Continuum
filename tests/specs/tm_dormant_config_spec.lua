@@ -1,11 +1,5 @@
--- A dormant tracker (after bindTake(nil)) must ignore the shared cm's
--- configChanged churn. The shared cm is written every frame regardless of
--- the active page -- samplePage's probeMode flips `trackerMode` (transient)
--- against the arrange cursor take. When the tracker has yielded the page,
--- cm.take is nil but mm still holds the last take (the dormant seam), so a
--- rebuild driven off that churn would resolve swing/trackerMode against
--- empty take/track tiers -- the "forgets swing / PC field acts sampler"
--- bug. The gate: tm rebuilds on configChanged only while cm has a bound take.
+-- A dormant tracker must ignore shared cm's configChanged churn (any page can write it).
+-- See docs/trackerManager.md § Dormant seam for the invariant this pins.
 
 local t = require('support')
 

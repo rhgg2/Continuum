@@ -111,9 +111,7 @@ end
 -- see docs/wiringView.md § Double-click intent
 local function activation(node)
   if node.kind ~= 'fx' or not node.fxId then return nil end
-  if node.fxDisplay and node.fxDisplay:find('Continuum Sampler', 1, true) then
-    return 'sampler'
-  end
+  if wm:isSamplerNode(node) then return 'sampler' end
   return 'fx'
 end
 

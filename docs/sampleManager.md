@@ -171,8 +171,11 @@ the bundled mailbox.
 take selection. It calls `sm:watchPath(cm)` — which sets the
 prefix on a project-path change — before `sm:tick(cm)`, so the
 first mailbox push after a fresh project load already composes
-against the right `currentPrefix`. `probeMode` is the only
-take-dependent piece and is skipped when no take is bound.
+against the right `currentPrefix`. `sm:tick` also forces anticipative
+FX off on each sampler track the first time it is seen (and when its
+FX GUID changes) — once per track, not every frame. Whether a take is
+in tracker mode is no longer probed here: it is `wm:samplerReachable`,
+derived by the tracker on bind.
 
 ## Preview
 

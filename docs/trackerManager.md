@@ -274,7 +274,7 @@ Then `um = createUpdateManager()` and tm fires the `'rebuild'` signal
 
 When the tracker page is not active, `bindTake(nil)` clears cm's take context
 while mm still holds the last take. The shared cm fires `configChanged` every
-frame regardless of which page is active (e.g. samplePage probeMode). A rebuild
+frame regardless of which page is active (e.g. samplePage's per-frame tick). A rebuild
 fired in this state would resolve swing/trackerMode off empty take tiers, causing
 a mm/cm mismatch. The `configChanged` subscriber therefore returns early if
 `cm:boundTake()` is nil; the next real `bindTake` call fires a coherent rebuild.
@@ -283,7 +283,16 @@ a mm/cm mismatch. The `configChanged` subscriber therefore returns early if
 
 `note.sample` is per-note authoring intent (which sample the note
 plays); the PC stream is the realisation MIDI synths consume. tm owns
-the reconciliation. Synthesis runs in two places:
+the reconciliation.
+
+`trackerMode` itself is wiring-derived, not a per-frame probe: on each
+`bindTake` the page asks `wm:samplerReachable(take.track)` — does the
+take's MIDI cone reach a Continuum Sampler — and seeds the transient
+tier inside the bind's suppression window. So the mode tracks the
+*bound* take, never lagging on the arrange cursor mid-navigation (the
+bug that leaked synthetic PCs onto a non-tracker take's note-ons).
+
+Synthesis runs in two places:
 
 - **Rebuild step 4½** does the full sweep: re-derives every channel's
   PC stream from current note state and writes the delta to mm.

@@ -53,9 +53,14 @@ local function resetArrange()
   fakeArrange.pickTrack = function(i) fakeArrange.calls.pickTrack = i end
   fakeArrange.pickTake  = function(i) fakeArrange.calls.pickTake  = i end
 end
+local fakeWiring = { samplerReachable = function() return false end }
 local fakeFacade = {
   publish = function() end,
-  get = function(name) if name == 'arrange' then return fakeArrange end return {} end,
+  get = function(name)
+    if name == 'arrange' then return fakeArrange end
+    if name == 'wiring'  then return fakeWiring  end
+    return {}
+  end,
 }
 
 local function newTrackerPage(cm, ds, cmgr, chrome, gui)

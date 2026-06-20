@@ -1,4 +1,4 @@
-@module sampleManager  src=sampleManager.lua  loc=445  sha=1278d64  mode=chunk
+@module sampleManager  src=sampleManager.lua  loc=439  sha=93c0f56  mode=chunk
 @deps fileOps, cm, ds
 
 # Invariants & contracts
@@ -36,96 +36,95 @@
   @state PREVIEW_SLOT_IDX = N_SAMPLES  @ 35
   @state SLIDER_INSTANCE_ID = 1  @ 36   -- slider2 in JSFX = param index 1 (0-based)
   @state PEXT_KEY = 'P_EXT:samplerInstanceId'  @ 37
-  @state sm = {}  @ 83
-  @state trackStates = {}  @ 85
-  @state currentPrefix = nil  @ 86
+  @state sm = {}  @ 92
+  @state trackStates = {}  @ 94
+  @state currentPrefix = nil  @ 95
 
 # Private functions
   @fn writePath(base, path)  @ 40
       @contract  writePath emits NUL-terminated bytes; caller must ensure base+#path is within the addressable string region
   @fn findSamplerFx(track)  @ 45
-  @fn readInstanceId(track)  @ 54
+  @fn forceAnticipativeFxOff(track)  @ 55
+      -- Force anticipative FX off (I_PERFFLAGS bit 1): sampler must not render ahead
+      -- of the play cursor. Applied once per track; re-applied when its FX GUID changes.
+  @fn readInstanceId(track)  @ 63
       @contract  readInstanceId validates the P_EXT value into [0, MAX_INSTANCES); returns nil for missing/out-of-range/non-numeric
-  @fn gatherTakenIds(skipTrack)  @ 62
+  @fn gatherTakenIds(skipTrack)  @ 71
       @contract  gatherTakenIds skips skipTrack so a re-assignment of the same track doesn't see its own id as taken
-  @fn nextFreeId(taken)  @ 74
-  @fn absFor(rel)  @ 88
-  @fn ensureTrackState(track)  @ 93
-  @fn relForSrc(srcBase, hash)  @ 104
-  @fn setEntry(idx, fields)  @ 112
-  @fn clearEntry(idx)  @ 119
-  @fn pushSlot(state, slot, opts)  @ 127
+  @fn nextFreeId(taken)  @ 83
+  @fn absFor(rel)  @ 97
+  @fn ensureTrackState(track)  @ 102
+  @fn relForSrc(srcBase, hash)  @ 113
+  @fn setEntry(idx, fields)  @ 121
+  @fn clearEntry(idx)  @ 128
+  @fn pushSlot(state, slot, opts)  @ 136
       @contract  pushSlot merges into the existing pendingEntry for slot; op=1 (clear) wipes path/name/start/end; op=0 only overrides explicitly-passed fields
       @contract  byOrder records first-seen slot only (no duplicate enqueue); merges into the existing bySlot entry to preserve drain ordering
-  @fn drain(state)  @ 152
+  @fn drain(state)  @ 161
       @contract  drain writes header words in order [slot, op, start, end, pathLen, nameLen, body...] then bumps seq last so JSFX only fires once the body is in
       @contract  drain gates on seq == seq_ack at addr/addr+1 — JSFX must have consumed the prior write before the next one can land
       @contract  drain is no-op while instanceId is nil (track lacks the FX) or queue is empty
 
 # Public API (sm:*)
-  @api sm:isLive(track)  @ 184
-  @api sm:getInstanceId(track)  @ 188
-  @api sm:rehydrateTrack(track)  @ 201
-  @api sm:syncSlot(track, slot)  @ 217
-  @api sm:tick()  @ 235
+  @api sm:isLive(track)  @ 193
+  @api sm:getInstanceId(track)  @ 197
+  @api sm:rehydrateTrack(track)  @ 210
+  @api sm:syncSlot(track, slot)  @ 226
+  @api sm:tick()  @ 244
       @contract  tick is the only caller of gmem_attach for the bundled mailbox path; coordinator must invoke per frame
       @contract  tick reaps trackStates entries for tracks whose sampler FX has been removed (else closed-over state leaks)
       @contract  first-sight FX-GUID binding does NOT reset state (lastBootToken=0 still triggers rehydrate via the boot-token branch)
   -- cm-authoritative slot operations
-  @api sm:assign(track, idx, srcPath)  @ 269
+  @api sm:assign(track, idx, srcPath)  @ 280
       @contract  assign hashes srcPath, copies into projectPath/Continuum/<stem>-<hash>.<ext> if missing, writes cm rel path, queues mailbox push; returns false if hash or copy fails
-  @api sm:loadSlot(track, slot, relPath)  @ 292
-  @api sm:clearSlot(track, slot)  @ 299
-  @api sm:setTrim(track, slot, startFrames, endFrames)  @ 306
+  @api sm:loadSlot(track, slot, relPath)  @ 303
+  @api sm:clearSlot(track, slot)  @ 310
+  @api sm:setTrim(track, slot, startFrames, endFrames)  @ 317
       @contract  setTrim sends start/end without path/name; pathLen=0/nameLen=0 in the wire payload means "leave alone" on the JSFX side
-  @api sm:setName(track, slot, name)  @ 314
-  @api sm:stageInto(track, idx, srcPath)  @ 320
+  @api sm:setName(track, slot, name)  @ 325
+  @api sm:stageInto(track, idx, srcPath)  @ 331
   -- Preview + prefix
-  @api sm:setPrefix(prefix)  @ 334
-  @api sm:previewSlot(track, slot, bounds)  @ 341
+  @api sm:setPrefix(prefix)  @ 345
+  @api sm:previewSlot(track, slot, bounds)  @ 352
       @contract  preview writes are silently dropped if the magic word at PREVIEW_BASE is non-zero (JSFX hasn't consumed the prior preview command)
       @contract  preview header order: payload words first, magic last — JSFX dispatches on the MAGIC write
-  @api sm:stopPreview(track)  @ 353
+  @api sm:stopPreview(track)  @ 364
       @contract  stopPreview encodes "stop" as slot=-1 in the same preview mailbox; same magic-gate as previewSlot
-  @api sm:previewPath(track, path)  @ 364
+  @api sm:previewPath(track, path)  @ 375
       @contract  previewPath uses the dedicated PREVIEW_SLOT_IDX (=N_SAMPLES) so the JSFX side knows to load from the inline path bytes rather than a slot
   -- Track surface
-  @api sm:listTracks()  @ 378
-  @api sm:probeMode(take)  @ 394
-      @contract  probeMode flips cm.trackerMode (transient tier) based on whether the take's track has the sampler FX
-      @contract  probeMode forces I_PERFFLAGS bit 1 (anticipative FX off) on sampler tracks for tighter timing
-  @api sm:migrate(projectPath, oldProjectPath)  @ 412
+  @api sm:listTracks()  @ 389
+  @api sm:migrate(projectPath, oldProjectPath)  @ 406
       @contract  migrate iterates every sampler track via ds:getAt so non-bound tracks migrate too
       @contract  ds rel paths are preserved across migrate; only file bytes move
       @contract  migrate is a no-op if oldProjectPath is missing or unchanged
-  @api sm:watchPath()  @ 434
+  @api sm:watchPath()  @ 428
       @contract  watchPath calls setPrefix every call (idempotent)
       @contract  migrate + cm.lastProjectPath write only on GetProjectPath change
       @contract  cm.lastProjectPath persists at project-tier so close-during-save is caught next open
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 397, 438
-  @use call    cm.set  @ 398, 441
-  @use call    ds.assign  @ 116, 122, 285
-  @use call    ds.get  @ 113, 120, 219, 281
-  @use call    ds.getAt  @ 203, 416
-  @use call    fileOps.copy  @ 276, 327
-  @use call    fileOps.exists  @ 276, 327
-  @use call    fileOps.hash  @ 271, 322
-  @use call    fileOps.mkdir  @ 275, 326, 422
-  @use call    fileOps.move  @ 423
-  @use call    fs.basename  @ 273, 277, 324
+  @use call    cm.get  @ 432
+  @use call    cm.set  @ 435
+  @use call    ds.assign  @ 125, 131, 296
+  @use call    ds.get  @ 122, 129, 228, 292
+  @use call    ds.getAt  @ 212, 410
+  @use call    fileOps.copy  @ 287, 338
+  @use call    fileOps.exists  @ 287, 338
+  @use call    fileOps.hash  @ 282, 333
+  @use call    fileOps.mkdir  @ 286, 337, 416
+  @use call    fileOps.move  @ 417
+  @use call    fs.basename  @ 284, 288, 335
   @use require fs  @ 17
   @use require util  @ 16
 
 # REAPER API surface
   @reaper gmem_write, gmem_read, gmem_attach
   @reaper TrackFX_GetCount, TrackFX_GetFXName, TrackFX_SetParam, TrackFX_GetFXGUID
+  @reaper GetMediaTrackInfo_Value
+  @reaper SetMediaTrackInfo_Value
   @reaper GetSetMediaTrackInfo_String
   @reaper CountTracks
   @reaper GetTrack
   @reaper GetProjectPath
   @reaper GetTrackName
-  @reaper GetMediaItemTake_Track
-  @reaper GetMediaTrackInfo_Value
-  @reaper SetMediaTrackInfo_Value

@@ -397,6 +397,36 @@ function wm:showFxWindow(fxId)
   return rm:showFx(fxId)
 end
 
+-- A graph node is the Continuum Sampler by its fx display name; the wiring
+-- graph is the authority on which takes reach one (legacy: a per-track FX scan).
+function wm:isSamplerNode(node)
+  return node ~= nil and node.kind == 'fx' and node.fxDisplay ~= nil
+     and node.fxDisplay:find('Continuum Sampler', 1, true) ~= nil
+end
+
+--contract: true iff track's source node reaches a Continuum Sampler via midi cone; false off-graph
+function wm:samplerReachable(track)
+  local sourceId = track and reaper.GetTrackGUID(track)
+  local g = self:viewGraph()
+  if not (sourceId and g.nodes[sourceId]) then return false end
+
+  local midiForward = {}
+  for _, e in ipairs(g.edges) do
+    if e.type == 'midi' then util.bucket(midiForward, e.from, e.to) end
+  end
+
+  local seen, queue, i = { [sourceId] = true }, { sourceId }, 1
+  while queue[i] do
+    local id = queue[i]
+    if self:isSamplerNode(g.nodes[id]) then return true end
+    for _, to in ipairs(midiForward[id] or {}) do
+      if not seen[to] then seen[to] = true; util.add(queue, to) end
+    end
+    i = i + 1
+  end
+  return false
+end
+
 --contract: fx rows in sourceTrack's cone, flow order: midi-cone (generator=true) first, then audio
 --contract: row = { fxGuid, name, trackGuid, generator? }; {} when sourceTrack isn't a graph node
 --contract: a never-read graph realises once here (live mode) so fx resolve before the cone walk

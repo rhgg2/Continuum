@@ -50,6 +50,15 @@ local function findSamplerFx(track)
   return nil
 end
 
+-- Force anticipative FX off (I_PERFFLAGS bit 1): sampler must not render ahead
+-- of the play cursor. Applied once per track; re-applied when its FX GUID changes.
+local function forceAnticipativeFxOff(track)
+  local pf = reaper.GetMediaTrackInfo_Value(track, 'I_PERFFLAGS')
+  if (pf & 2) == 0 then
+    reaper.SetMediaTrackInfo_Value(track, 'I_PERFFLAGS', pf | 2)
+  end
+end
+
 --contract: readInstanceId validates the P_EXT value into [0, MAX_INSTANCES); returns nil for missing/out-of-range/non-numeric
 local function readInstanceId(track)
   local _, val = reaper.GetSetMediaTrackInfo_String(track, PEXT_KEY, '', false)
@@ -242,11 +251,13 @@ function sm:tick()
       local guid  = reaper.TrackFX_GetFXGUID(track, fxIdx)
       if state.fxGuid == nil then
         state.fxGuid = guid     -- first sight: bind, don't reset
+        forceAnticipativeFxOff(track)
       elseif state.fxGuid ~= guid then
         state.fxGuid        = guid
         state.lastBootToken = 0
         state.slotSeq       = 0
         state.pending       = { byOrder = {}, bySlot = {} }
+        forceAnticipativeFxOff(track)
       end
       state.instanceId = self:getInstanceId(track)
       if state.instanceId then
@@ -387,23 +398,6 @@ function sm:listTracks()
     end
   end
   return out
-end
-
---contract: probeMode flips cm.trackerMode (transient tier) based on whether the take's track has the sampler FX
---contract: probeMode forces I_PERFFLAGS bit 1 (anticipative FX off) on sampler tracks for tighter timing
-function sm:probeMode(take)
-  local track = reaper.GetMediaItemTake_Track(take)
-  local detected = findSamplerFx(track) ~= nil
-  if cm:get('trackerMode') ~= detected then
-    cm:set('transient', 'trackerMode', detected)
-  end
-  if detected then
-    self:getInstanceId(track)
-    local pf = reaper.GetMediaTrackInfo_Value(track, 'I_PERFFLAGS')
-    if (pf & 2) == 0 then
-      reaper.SetMediaTrackInfo_Value(track, 'I_PERFFLAGS', pf | 2)
-    end
-  end
 end
 
 --contract: migrate iterates every sampler track via ds:getAt so non-bound tracks migrate too

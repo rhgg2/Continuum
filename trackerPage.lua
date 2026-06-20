@@ -19,6 +19,13 @@ local cm, ds, cmgr, chrome, gui, modalHost, facade, help =
 
 local function arrange() return facade.get('arrange') end
 
+-- trackerMode is wiring-derived per bind, not a per-frame probe — follows the bound
+-- take, not the arrange cursor. See docs/trackerManager.md § PC synthesis under trackerMode.
+local function samplerMode(take)
+  local track = take and reaper.GetMediaItemTake_Track(take)
+  return (track and facade.get('wiring').samplerReachable(track)) or false
+end
+
 -- mm/tm/gm stay local to this chunk; only tv leaves, handed to the renderer.
 -- coord drives the take lifecycle on tm directly; tv owns only its own view-state seams.
 local mm = util.instantiate('midiManager',    { take = nil })
@@ -53,7 +60,7 @@ function tp:currentTake() return tm:currentTake() end
 --contract: with a take, bind it on tm and seed tv; no arg = activation, bind from the cursor
 function tp:bind(t)
   if not t then return self:bindFromCursor() end
-  tm:bindTake(t)
+  tm:bindTake(t, { trackerMode = samplerMode(t) })
   tv:seedSharedSlots()
   pa:apply()
 end
@@ -92,9 +99,13 @@ facade.publish('tracker', {
   reswingTakes = function(takes)
     local origTake = tm:currentTake()
     for _, take in ipairs(takes) do
-      if take ~= origTake then tm:bindTake(take, { markSwingStale = true }) end
+      if take ~= origTake then
+        tm:bindTake(take, { markSwingStale = true, trackerMode = samplerMode(take) })
+      end
     end
-    if tm:currentTake() ~= origTake then tm:bindTake(origTake) end
+    if tm:currentTake() ~= origTake then
+      tm:bindTake(origTake, { trackerMode = samplerMode(origTake) })
+    end
   end,
   -- Take-context + tier-spanning slot writes for the off-stack editor page.
   timeSig           = function()        return tv:timeSig()      end,

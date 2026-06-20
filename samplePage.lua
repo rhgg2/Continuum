@@ -6,7 +6,7 @@
 -- only sv and never reaches sm.
 
 --contract: builds the substack (sm/sv local, only sv leaves); lifecycle drives sm/sv directly
---contract: owns its active track: the renderer's picker sets sv; probe take comes from the arrange facade in tick
+--contract: owns its active track: the renderer's picker sets sv
 --contract: render hooks delegate to sampleRender
 local fs   = require 'fs'
 local util = require 'util'
@@ -17,8 +17,6 @@ end
 
 local cm, ds, cmgr, chrome, gui, facade =
   (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).facade
-
-local function arrange() return facade.get('arrange') end
 
 -- sm/sv stay local to this chunk; only sv leaves, handed to the renderer, so the
 -- renderer can't reach sm — every slot query and mutation flows through sv.
@@ -56,10 +54,8 @@ function sp:listTracks() return sv:listTracks() end
 --contract: unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
 function sp:unbind() sr:closeTransients() end
 
---contract: tick runs every frame; watchPath + sm:tick always; probeMode skipped if no current take
+--contract: tick runs every frame regardless of active page; watchPath then sm:tick
 function sp:tick()
-  local take = arrange().currentTake()
-  if take then sm:probeMode(take) end
   sm:watchPath()
   sm:tick()
 end

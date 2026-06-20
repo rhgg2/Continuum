@@ -168,6 +168,7 @@ local specs = {
   'wm_roundtrip_spec',
   'wm_reconcile_cache_spec',
   'wm_param_targets_spec',
+  'wm_sampler_reachable_spec',
   'rm_tracks_spec',
   'rm_folders_spec',
   'rm_fx_read_spec',

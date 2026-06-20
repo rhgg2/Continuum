@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1733  sha=d415ad4  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1735  sha=a86b164  mode=chunk
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -71,6 +71,7 @@
   @invariant  configChanged 'swings' → channels resolving to names with diff body vs prevSwings
   @invariant  prev*-caches refresh after each event and on bindTake
   @contract  atomic take swap: cm:setContext runs silently; mm:load fires the coherent rebuild
+  @contract  opts.trackerMode (wiring-derived) seeds trackerMode under the same suppression window
   @contract  opts.markSwingStale=true rebuilds raw from ppqL under new (cm, mm) (seqMgr:reswingAll)
   @contract  bindTake(nil) is the dormant seam (e.g. samplePage)
   @invariant  bindTake(nil): cm clears under suppression; mm:load(nil) no-op; tm/tv keep last frame
@@ -190,7 +191,8 @@
 # Uses (outbound edges)
   @use call    cm.boundTake  @ 1672, 1687
   @use call    cm.get  @ 65, 70, 493, 684, 925, 1180, 1507, 1611
-  @use call    cm.setContext  @ 1708, 1720
+  @use call    cm.set  @ 1710
+  @use call    cm.setContext  @ 1709, 1722
   @use call    ds.assign  @ 1142
   @use call    ds.get  @ 690, 1123, 1324, 1613, 1617, 1645, 1689
   @use call    mm.add  @ 595, 876, 1486, 1524
@@ -200,18 +202,18 @@
   @use call    mm.events  @ 617, 855
   @use call    mm.interpolate  @ 671
   @use call    mm.length  @ 666, 683, 748, 774, 842
-  @use call    mm.load  @ 1713
+  @use call    mm.load  @ 1715
   @use call    mm.modify  @ 581, 871, 1012, 1115, 1202, 1479, 1522
   @use call    mm.name  @ 668
   @use call    mm.notes  @ 1054
-  @use call    mm.reload  @ 1729
+  @use call    mm.reload  @ 1731
   @use call    mm.resolution  @ 74, 667, 683, 762, 776, 822, 857, 925, 1552
   @use call    mm.setLength  @ 762, 776, 822, 857
   @use call    mm.setName  @ 669
-  @use call    mm.take  @ 661, 663, 885, 886, 1006, 1142, 1725
+  @use call    mm.take  @ 661, 663, 885, 886, 1006, 1142, 1727
   @use call    mm.timeSigs  @ 670
   @use call    mm.tokenOf  @ 1066, 1089, 1094, 1101, 1204, 1205, 1351, 1499, 1529
-  @use call    mm.unload  @ 1722
+  @use call    mm.unload  @ 1724
   @use call    timing.delayToPPQ  @ 74
   @use call    timing.eval  @ 700, 701
   @use call    timing.invert  @ 706, 708
