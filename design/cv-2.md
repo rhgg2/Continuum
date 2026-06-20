@@ -97,6 +97,14 @@ The reverse — emitting modulation *as* CC — is likewise no special kind
 wired like any MIDI producer. On the cheap path the modulation already *is*
 a MIDI wire, so there is nothing to convert.
 
+> **Carve-out — note-scoped generators are not these FX.** note-macros'
+> retrig/vibrato run in **Lua at flush**, baking sparse CC into the take,
+> precisely so they survive loop/seek and offline render — the live-DSP
+> generator-as-FX was considered and *rejected* there
+> (`design/note-macros.md` §*Why the delta is its own stream*). cv-2
+> generators are graph-level and live; note generators are note-scoped and
+> baked. Same word, two scopes — don't realise a note vibrato as a cv-2 LFO.
+
 ### Authored automation: the column stays inline
 
 Performance-bound authored modulation stays **inline CC in the note
@@ -235,6 +243,17 @@ it gets **re-founded**, not extended:
 Pre-beta, no legacy data — this is a re-founding, not a compat layer. The
 column's inline-CC-in-the-note-take *data* is unchanged; only its binding
 and realization move into the graph.
+
+**The add bank (from note-macros).** note-macros adds a third bank to
+`Continuum CC` — a sum verb, `out = base + delta`, the additive merge
+`plink` cannot express (single-source-per-param). Built there now as a
+self-contained sum kernel keyed by src/dst sliders, it lifts under this
+re-founding into a synthesised **sum node** at the targetPlan/allocate
+boundary, like the merge CU and the filter node. **R5 (plink-via-MIDI,
+listen-bank retirement) is owned here, not by note-macros** — note-macros
+defers it so its add bank lands beside the untouched listen bank, and this
+phase-2 re-founding absorbs it (R5 is a strictly weaker version of the
+same dissolution).
 
 ## Spike results (from `cv.md`, still valid)
 

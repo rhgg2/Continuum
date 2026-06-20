@@ -259,11 +259,18 @@ removes the only reason the node has params at all. Verify: exact
 `plink.midi_*` config parms, and that the source spec covers the
 automation bus.
 
-Relation to cv (`design/cv.md`): the node is a **MIDI-stream stage on
-the instrument's own track**, not a node in the cv graph. It shares
-the doctrine (JSFX realises what REAPER does badly; no native
-envelopes), not the topology. The add bank is a capability cv's
-`ccSink` flirts with — watch for convergence, don't force it.
+Relation to cv (`design/cv-2.md`, which supersedes `cv.md`): the node
+is a **MIDI-stream stage on the instrument's own track** today, sharing
+cv's doctrine (JSFX realises what REAPER does badly; no native
+envelopes), not its topology. The convergence is now **resolved**, not
+just watched: build the add bank as a **self-contained sum kernel**
+(base + delta, keyed by src/dst sliders) and cv-2 lifts it verbatim
+into a synthesised **sum node** — the additive merge `plink` cannot
+express (single-source-per-param). **R5 defers to cv-2:** its phase-2
+re-founding dissolves the listen bank and value sliders, so do not
+migrate plink under note-macros — land the add bank *beside* the
+untouched listen bank. The `paramAutomation` glue that places and
+configures the node is interim; the sum kernel is permanent.
 
 ## Invariants
 
@@ -375,7 +382,9 @@ instances. In leverage order:
   address instead of linking through the node's value sliders;
   `computeDesired`'s listen slots become plink specs; the listen bank
   and value sliders go. Justified on its own; unblocks the single-node
-  packaging above.
+  packaging above. **Deferred to cv-2** (`design/cv-2.md` §*What
+  changes vs the landed simple layer*), which re-founds this exact path
+  — do not build under note-macros.
 - **R6 — JSFX pinning helper.** The node's pin-at-chain-head +
   idempotent mirror is `paramAutomation`'s `ccNodeIndex`/`applyTrack`
   idiom (which already notes a dedup with `routingManager.fxIdentAt`).
