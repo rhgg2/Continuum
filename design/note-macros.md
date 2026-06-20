@@ -530,15 +530,24 @@ generator.
 
 ## Open questions
 
-- **Shape interpolation, verified early.** Two facts the design leans
-  on: shaped take ccs reach the chain as an interpolated stream at
-  sufficient density, and shapes interpolate coherently on 14-bit
-  msb/lsb pairs. Both checkable in an afternoon; fallback is dense
-  square breakpoints from the generator.
-- **Delta-code allocation.** Pairs for pitch targets, singles for cc
-  targets, drawn from pa's project-unique code space — how many
-  concurrent (channel × target) codes, and whether the add bank's 16
-  slots need to grow.
+- **Shape interpolation — settled, green** (`tests/spikes/spike_shape_interp.lua`,
+  2026-06-21). REAPER recognises an `n`/`n+32` CC pair as one 14-bit
+  value and interpolates *that*, synthesising the LSB itself — it does
+  not interpolate the two lanes independently. So a few **MSB-shaped**
+  sparse breakpoints (LSB square) deliver smooth **full-resolution**
+  14-bit downstream (~15.6 ms grain, monotonic, no wrap glitch); the
+  generator never densifies. The dense-square fallback is unused. The
+  wire stays sparse *and* full-res — the best case the design hoped for.
+- **Delta-code allocation — banded, not flat.** The 14-bit pairing only
+  exists for MIDI **CC 0–31** (MSB) paired with **CC 32–63** (LSB): a
+  pitch/14-bit target must allocate MSB `n` with **`0 ≤ n < 32`**, LSB
+  `n+32`, or REAPER won't interpolate the pair. So pitch targets draw
+  from **32 pairs per channel** (steering clear of controllers the
+  instrument reads — bank select CC0/32, mod wheel CC1/33, …), *not*
+  pa's flat `chan*128+cc` busCode space; 7-bit cc targets stay flat.
+  Per-channel banding (deltas already ride per-channel, lane-1 doctrine)
+  is the budget. Open: collision-avoidance policy, and whether the add
+  bank's 16 slots need to grow.
 - **Trill cents: structural detune vs delta stream.** Structural is
   correct-by-existing-machinery but seats absorbers at trill rate;
   both ride the same wire now, so decide after watching it run.

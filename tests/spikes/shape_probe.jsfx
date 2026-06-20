@@ -1,0 +1,74 @@
+desc:Continuum shape probe
+tags: utility continuum spike
+version: 0.01
+author: Continuum
+license: MIT
+about:
+  design/note-macros.md shape-interpolation spike. Reads a designated
+  14-bit MSB/LSB CC pair off bus 0, reconstructs the value, emits it as
+  pitch bend (audible glide), and meters delivery density + 14-bit
+  reconstruction coherence. The source CC pair is swallowed; everything
+  else passes through. lsbcode = -1 puts it in 7-bit (msb-only) mode.
+
+  Coherence is recorded on finalized distinct-time points, never per raw
+  event: MSB and LSB co-located at one sample offset settle to the final
+  value before any audio, so they must not register as a transient. A
+  glitch only counts when the lanes update at *different* times (the
+  interpolated case), which is exactly what variant A exposes.
+
+  Meters reset in @init, which refires on loop/seek - play once, no loop.
+
+slider1:msbcode=-1<-1,2047,1>msb code (chan*128+cc)
+slider2:lsbcode=-1<-1,2047,1>lsb code (-1 = 7-bit, msb only)
+slider3:emitpb=1<0,1,1>emit pitch bend from value
+slider4:count=0<0,1000000,1>count (read)
+slider5:maxgap=0<0,100000,0.001>max gap ms (read)
+slider6:maxstep=0<0,16384,1>max step (read)
+slider7:reversals=0<0,1000000,1>reversals (read)
+slider8:peakval=0<0,16384,1>peak value (read)
+
+@init
+count = 0; maxgap = 0; maxstep = 0; reversals = 0; peakval = 0;
+curtime = -1; curval = 0; lastrecv = 0; lastrectime = -1; dir = 0;
+clk = 0; msb = 0; lsb = 0;
+
+@block
+blockstart = clk;
+while (midirecv(ofs, m1, m2, m3)) (
+  status = m1 & 0xF0;
+  ch = m1 & 0x0F;
+  code = ch * 128 + m2;
+  ismsb = status == 0xB0 && code == msbcode;
+  islsb = status == 0xB0 && lsbcode >= 0 && code == lsbcode;
+  (ismsb || islsb) ? (
+    ismsb ? msb = m3 : lsb = m3;
+    val = lsbcode >= 0 ? msb * 128 + lsb : msb;
+    t = blockstart + ofs;
+    (curtime >= 0 && t != curtime) ? (
+      lastrectime >= 0 ? (
+        gap = (curtime - lastrectime) * 1000 / srate;
+        gap > maxgap ? maxgap = gap;
+        step = abs(curval - lastrecv);
+        step > maxstep ? maxstep = step;
+        nd = curval > lastrecv ? 1 : (curval < lastrecv ? -1 : dir);
+        (dir != 0 && nd != 0 && nd != dir) ? reversals += 1;
+        dir = nd;
+      );
+      lastrecv = curval; lastrectime = curtime; count += 1;
+      curtime = t; curval = val;
+    ) : (
+      curtime < 0 ? (curtime = t; curval = val;) : (curval = val);
+    );
+    val > peakval ? peakval = val;
+    emitpb ? (
+      pb = lsbcode >= 0 ? val : val * 128;
+      midisend(ofs, 0xE0 | ch, pb & 127, (pb >> 7) & 127);
+    );
+  ) : (
+    midisend(ofs, m1, m2, m3);
+  );
+);
+clk = blockstart + samplesblock;
+slider4 = count; slider5 = maxgap; slider6 = maxstep;
+slider7 = reversals; slider8 = peakval;
+sliderchange(248);
