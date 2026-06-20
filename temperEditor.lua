@@ -64,6 +64,13 @@ end
 
 local function temperFor(name) return tuning.findTemper(name, cm:get('tempers')) end
 
+-- The take's effective tuning as a library name. 12EDO is the neutral floor
+-- (swing's 'identity' analogue): nil so a drop-in keeps the prior selection.
+local function activeTemper()
+  local name = cm:get('temper')
+  return name ~= '12EDO' and name or nil
+end
+
 -- The selected entry's own tier copy. nil when nothing is selected or the
 -- selection is a merge-floor with no tier copy — editing needs a dup first.
 local function editedTemper()
@@ -740,7 +747,12 @@ end
 
 ----- Public
 local self = {}
-function self:select(name)        selectTemper(name) end
+--contract: open(name?) selects entry; default is active tuning, 12EDO treated as nil.
+function self:open(name)
+  local target = name or activeTemper()
+  if target then selectTemper(target) end
+end
+function self:hasSelection()      return selected ~= nil end
 function self:render(w, h)        draw(w, h) end
 function self:libraryDescriptor() return buildDescriptor() end
 return self

@@ -128,7 +128,7 @@ local er = {}
 function er:edit(lib, name)
   droppedIn = true
   if lib == 'temper' then
-    pane = 'temper'; temperEditor:select(name)
+    pane = 'temper'; temperEditor:open(name)
   else
     pane = 'swing';  swingEditor:open(name)
   end
@@ -182,7 +182,8 @@ function er:renderBody(_, w, h, dispatch)
      and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     onClose(); return
   end
-  if pane == 'swing' and not swingEditor:isOpen() then swingEditor:open() end
+  if pane == 'swing'  and not swingEditor:isOpen()        then swingEditor:open()  end
+  if pane == 'temper' and not temperEditor:hasSelection() then temperEditor:open() end
 
   -- Body splits into the content pane (variable width) and the fixed-width
   -- library tree palette, mirroring arrange/sampler.

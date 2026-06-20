@@ -1,4 +1,4 @@
-@module editorRender  src=editorRender.lua  loc=216  sha=35e7e9d  mode=chunk
+@module editorRender  src=editorRender.lua  loc=217  sha=761e277  mode=chunk
 @deps swingEditor, temperEditor, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -45,36 +45,37 @@
       -- re-earn the Close affordance by coming through edit() again.
   @api er:toolbarSegments()  @ 172
   @api er:renderBody(_, w, h, dispatch)  @ 174
-  @api er:renderStatusBar(_)  @ 200
-  @api er:focusState()  @ 206
+  @api er:renderStatusBar(_)  @ 201
+  @api er:focusState()  @ 207
 
 # Uses (outbound edges)
   @use call    chrome.colour  @ 149, 150
   @use call    chrome.disabledIf  @ 60, 65
-  @use call    chrome.gridWidth  @ 190
-  @use call    chrome.pickerIsActive  @ 208
+  @use call    chrome.gridWidth  @ 191
+  @use call    chrome.pickerIsActive  @ 209
   @use call    chrome.row  @ 98
   @use call    cmgr.invoke  @ 27
   @use call    imgui.AlignTextToFramePadding  @ 102
   @use call    imgui.Button  @ 39, 42, 47, 53, 61, 66, 152, 168
-  @use call    imgui.GetCursorScreenPos  @ 189
-  @use call    imgui.IsAnyItemActive  @ 181, 212
+  @use call    imgui.GetCursorScreenPos  @ 190
+  @use call    imgui.IsAnyItemActive  @ 181, 213
   @use call    imgui.IsKeyPressed  @ 182
-  @use call    imgui.PopFont  @ 193
+  @use call    imgui.PopFont  @ 194
   @use call    imgui.PopID  @ 78, 106
   @use call    imgui.PopStyleColor  @ 153
-  @use call    imgui.PushFont  @ 191
+  @use call    imgui.PushFont  @ 192
   @use call    imgui.PushID  @ 73, 101
   @use call    imgui.PushStyleColor  @ 149, 150
   @use call    imgui.SameLine  @ 41, 44, 50, 56, 63, 104, 156
   @use call    imgui.Separator  @ 99
   @use call    imgui.SmallButton  @ 105
-  @use call    imgui.Text  @ 202
+  @use call    imgui.Text  @ 203
   @use call    imgui.TextDisabled  @ 103
-  @use call    modalHost.isOpen  @ 181, 208
+  @use call    modalHost.isOpen  @ 181, 209
   @use call    swingEditor.isOpen  @ 185
   @use call    swingEditor.open  @ 133, 185
-  @use call    temperEditor.select  @ 131
+  @use call    temperEditor.hasSelection  @ 186
+  @use call    temperEditor.open  @ 131, 186
   @use require imgui  @ 15
 
 # REAPER API surface
