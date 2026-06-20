@@ -26,25 +26,38 @@ Enforcement is split:
   state are silently pruned on load, so a renamed key in a stale project
   file doesn't error.
 
-Colour keys are flat and dotted (`colour.bg`, `colour.rowBeat`, …) rather
-than nested. This preserves per-colour override semantics across levels —
-a track setting `colour.cursor` doesn't wipe the project's other colours.
+## Colour
 
-The colour keyspace is split by purpose. **Atoms** under `palette.*`
-(parchment, used by the tracker grid) and `chrome.*` (neutral, used by
-toolbar/popups/modals) are the only place RGB values live. **Roles**
-under `colour.*` name the *function* a colour plays and resolve to an
-atom — or to another role — by full cm key. One-off colours that earn
-no good function name live inline at the role.
+**Atoms** are the only RGB values, all under `palette.*`: two tonal ramps
+(`base` parchment, `alt` blue, `zone0..zone10`) plus nine flat accents —
+the eight solarized hues (`yellow … green`) and a `salmon` regularised to
+`alt.zone6`'s chroma+lightness. Nothing else holds an `{r,g,b,a}`.
 
-A role entry takes one of three forms (resolved by trackerPage's
-`resolveColour`):
+**Roles** under `colour.*` name the *function* a colour plays and resolve
+to an atom — or to another role. Roles are namespaced by audience:
+`colour.global.*` (shared), one bucket per page (`colour.tracker.*`,
+`colour.sampler.*`, `colour.wiring.*`, `colour.arrange.*`), and
+`colour.chrome.*` (toolbar/statusbar/modal/help/editor). Keys stay flat
+and dotted so per-key override semantics survive across tiers — a track
+setting `colour.tracker.cursor` doesn't wipe the project's other colours.
 
-| Form              | Meaning                                       |
-|-------------------|-----------------------------------------------|
-| `{r,g,b,a}`       | atom — terminal RGBA                          |
-| `'fullKey'`       | pure alias — recursive `cm:get`, alpha inherited |
-| `{'fullKey', a}`  | alias with alpha override (outermost wins)   |
+A role value is `'ref'` or `{'ref', alpha}` (outermost alpha wins). A
+`ref` is a palette atom or another role's full key. A bare ref — no
+`colour.`/`palette.` prefix — is atom shorthand: `'green'` expands to
+`palette.green`, `'base.zone8'` to `palette.base.zone8`. configManager
+expands and validates at load; a role holding a raw `{r,g,b,a}` raises.
+
+**Page scoping is enforced, not conventional.** A page role may resolve
+only through `palette.*`, `colour.global.*`, or its own page — a
+cross-page ref raises at declaration load. The call layer enforces the
+same: `chrome.colour(name, scope)` binds a bare name to the painter's
+page first, then global; `painter.new(ctx, chrome, transform, page)`
+carries that page so call sites pass bare names (`'cursor'`, `'rowBeat'`)
+and can't reach another page's roles. Direct `chrome.colour` callers
+default `scope` to `chrome`. A name already carrying a namespace
+(`'wiring.tooltip.bg'`) passes through verbatim. Resolution walks aliases
+in chrome's `resolve`; the golden-section slot hues are the one sanctioned
+exception (minted as opaque tokens by `painter.hue`, no name).
 
 ## Ownership
 

@@ -20,7 +20,6 @@ local openAtStart = false   -- open as of frame start; gates dismissal + page in
 
 local PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8
 local PIN_GAP, WIN_MARGIN, BOX_R = 4, 2, 4   -- pin drop below segment; window-edge inset; box corner radius
-local DIM_COL = 0x00000077
 local EM_DASH = '\xe2\x80\x94'
 
 -- Edit-mode state: `editing` = cmd whose row shows ✕/+; `capturing` awaits a chord;
@@ -488,7 +487,7 @@ function help:draw()
   lineH = ImGui.GetTextLineHeight(ctx)
   local winX, winY = ImGui.GetWindowPos(ctx)
   local winW, winH = ImGui.GetWindowSize(ctx)
-  ImGui.DrawList_AddRectFilled(dl, winX, winY, winX + winW, winY + winH, DIM_COL)
+  ImGui.DrawList_AddRectFilled(dl, winX, winY, winX + winW, winY + winH, chrome.colour('help.dim'))
 
   theme = {
     bg     = chrome.colour('help.box'),

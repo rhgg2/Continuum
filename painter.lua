@@ -93,7 +93,7 @@ function M.measureRotated(ctx, s, size)
 end
 
 --contract: sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
-function M.new(ctx, chrome, transform)
+function M.new(ctx, chrome, transform, page)
   -- ox/oy round to whole pixels so an integer logical coord lands on a pixel
   -- boundary; sx/sy pass through (a page may scale by a fractional zoom).
   local ox, oy = math.floor((transform.ox or 0) + 0.5), math.floor((transform.oy or 0) + 0.5)
@@ -121,8 +121,8 @@ function M.new(ctx, chrome, transform)
   -- rejected on purpose — it's the one way to smuggle an unnamed colour past
   -- the palette, the very discipline this binder exists to keep.
   local function col(c)
-    if type(c) == 'string' then return colour(c) end
-    if type(c) == 'table'  then return c.u32      end
+    if type(c) == 'string' then return colour(c, page) end
+    if type(c) == 'table'  then return c.u32          end
     error('painter: colour must be a name or a painter token, not a raw int')
   end
 

@@ -1,4 +1,4 @@
-@module painter  src=painter.lua  loc=311  sha=a874413  mode=namespace
+@module painter  src=painter.lua  loc=311  sha=1d2bf54  mode=namespace
 
 # Invariants & contracts
   @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.
@@ -30,7 +30,7 @@
 # Public API (M.*)
   @api M.measureRotated(ctx, s, size)  @ 89
       @contract  strip (w,h) in screen px for textUp at this size; nil when the LICE path is unavailable
-  @api M.new(ctx, chrome, transform)  @ 96
+  @api M.new(ctx, chrome, transform, page)  @ 96
       @contract  sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
   @api M.hue(idx, chroma, light, alpha)  @ 297
       -- The idx-th perceptually-even hue. chroma/light/alpha tone it.

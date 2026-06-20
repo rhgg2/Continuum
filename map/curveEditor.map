@@ -1,5 +1,5 @@
-@module curveEditor  src=curveEditor.lua  loc=329  sha=097428b  mode=chunk
-@deps ctx, chrome
+@module curveEditor  src=curveEditor.lua  loc=329  sha=4fdd89b  mode=chunk
+@deps ctx, chrome, page
 
 # Invariants & contracts
   @invariant  anchors never cross; t is clamped strictly between immediate neighbours before any onMove/onMoveFree fire

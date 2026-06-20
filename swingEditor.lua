@@ -37,7 +37,6 @@ local PERIOD_PRESETS = {
   { label = '4',   period = 4       }, -- whole
 }
 
-local SWING_ERR     = 0xff6060ff
 local SWING_SOFT_QN = 0.15
 
 local cm, ds, chrome, ctx, gui, facade, modalHost =
@@ -191,7 +190,7 @@ end
 -- f1 applied first so sits rightmost; strips centred horizontally, top-aligned, clipped to region.
 local function drawBandInto(layout, composite, factors, region)
   ImGui.PushFont(ctx, gui.font, gui.fontSize.grid)
-  local p     = painter.new(ctx, chrome, {})
+  local p     = painter.new(ctx, chrome, {}, 'tracker')
   local bandX = region.x + math.floor((region.w - layout.bandW) / 2)
   p.pushClip({ x0 = region.x, y0 = region.y,
                x1 = region.x + region.w, y1 = region.y + region.h })
@@ -584,7 +583,7 @@ modalHost:registerKind('swingNew', function(s, close)
       close(true, name)
     end
   elseif cancel then close(false) end
-  if s.err then ImGui.TextColored(ctx, SWING_ERR, s.err) end
+  if s.err then ImGui.TextColored(ctx, chrome.colour('error'), s.err) end
 end)
 
 -- Rows/qn is a fixed ladder of valid divisions; the stepper walks adjacent rungs

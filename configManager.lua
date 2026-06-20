@@ -99,143 +99,172 @@ local declarations = {
   { 'palette.alt.zone8',   hex('#b7c7d8') },
   { 'palette.alt.zone9',   hex('#dee5ee') },
   { 'palette.alt.zone10',  hex('#ffffff') },
-  -- single-swatch roles
-  { 'palette.alt2',     hex('#e89282') },  -- warm pink
-  { 'palette.mark',     hex('#dcb432') },  -- amber
-  { 'palette.alert',    hex('#da3021') },
-  { 'palette.caution',  hex('#d25a23') },
-  { 'palette.positive', hex('#568a40') },
-  -- Region palette: 8 muted hues. tint = pale wash; outline = full-sat border on the active region.
-  { 'palette.region.1', hex('#d2a52a') },
-  { 'palette.region.2', hex('#d27158') },
-  { 'palette.region.3', hex('#c25c8c') },
-  { 'palette.region.4', hex('#8a6bb1') },
-  { 'palette.region.5', hex('#5489c2') },
-  { 'palette.region.6', hex('#4ea99c') },
-  { 'palette.region.7', hex('#6ba35a') },
-  { 'palette.region.8', hex('#a39342') },
-  { 'palette.mirror.synced',     hex('#4ea99c') },  -- calm teal
-  { 'palette.mirror.overridden', hex('#d2a52a') },  -- amber: locally diverged, coherent
-  { 'palette.mirror.conflicted', hex('#d83a3a') },  -- alarming red
-  { 'palette.mirror.local',      hex('#8a6bb1') },  -- violet: instance-only stream
+  -- Accents — the eight solarized hues plus a salmon regularised to alt.zone6
+  -- (zone6's chroma+lightness at the old warm-pink hue). Only chromatic atoms.
+  { 'palette.yellow',  hex('#b58900') },
+  { 'palette.orange',  hex('#cb4b16') },
+  { 'palette.red',     hex('#dc322f') },
+  { 'palette.magenta', hex('#d33682') },
+  { 'palette.violet',  hex('#6c71c4') },
+  { 'palette.blue',    hex('#268bd2') },
+  { 'palette.cyan',    hex('#2aa198') },
+  { 'palette.green',   hex('#859900') },
+  { 'palette.salmon',  hex('#ac867e') },
 
-  -- Grid roles
-  { 'colour.bg',               'palette.base.zone8'               },
-  { 'colour.text',             'palette.base.zone2'               },
-  { 'colour.offGrid',          'palette.positive'                 },
-  { 'colour.overflow',         'palette.caution'                  },
-  { 'colour.negative',         'palette.alert'                    },
-  { 'colour.inactive',         'palette.base.zone5'               },
-  { 'colour.shadowed',         'colour.inactive'                  },
-  { 'colour.cursor',           'palette.alt.zone2'                },
-  { 'colour.cursorText',       'palette.alt.zone8'                },
-  { 'colour.band.fill',        {0.55, 0.70, 0.95, 0.22}           },  -- marquee/lasso fill (shared)
-  { 'colour.band.border',      {0.45, 0.60, 0.90, 0.85}           },  -- marquee/lasso border (shared)
-  { 'colour.arrange.cursorOn',     'palette.base.zone2'      },
-  { 'colour.arrange.cursorOff',     'palette.base.zone6'    },
-  { 'colour.arrange.itemBorder',       'palette.base.zone5'      },  -- solid neutral box outline (one zone below cursorOff)
-  { 'colour.arrange.phrase',           {'colour.rowBeat', 1.0}   },  -- bar tint at full alpha
-  { 'colour.arrange.blockedBorder',    {0.80, 0.16, 0.16, 0.95}  },  -- drag would overlap a neighbour
-  { 'colour.arrange.editCursor',       'palette.base.zone2'      },  -- edit-cursor triangle fill
-  { 'colour.arrange.playHead',         'palette.alt.zone5'       },  -- play-head triangle fill
-  { 'colour.arrange.cursorTriBorder',  'palette.base.zone6'      },  -- shared border for both gutter triangles
-  { 'colour.arrange.ghostFill',        {0.95, 0.93, 0.80, 0.35}  },  -- create-preview fill
-  { 'colour.arrange.ghostBorder',      {0.45, 0.42, 0.30, 0.90}  },  -- create-preview border
-  { 'colour.arrange.orphanFill',       {0.50, 0.50, 0.50, 0.35}  },  -- slot-less item, neutral grey
-  { 'colour.arrange.orphanFocusFill',  {0.85, 0.85, 0.85, 0.55}  },
-  { 'colour.arrange.waveform',         {0.13, 0.13, 0.16, 0.62}  },  -- audio preview ink over the slot fill
-  { 'colour.arrange.midiNoteOn',       'palette.base.zone3'      },  -- note-on cap: low-zone primary (arrangeRender)
-  { 'colour.arrange.midiNoteBody',     'palette.base.zone4'      },  -- note body: one zone higher
-  { 'colour.rowNormal',        {'palette.base.zone8',  0   }      },
-  { 'colour.rowBeat',          {'palette.base.zone7',  0.4 }      },
-  { 'colour.rowBarStart',      {'palette.base.zone6',  0.4 }      },
-  { 'colour.swing.previewBorder', 'palette.base.zone5'            },  -- swing editor preview-pane frame
-  { 'colour.editCursor',       hex('#ffff00')                     },  -- one-off yellow
-  { 'colour.selection',        {'palette.base.zone10', 0.5 }      },
-  { 'colour.scrollHandle',     'colour.text'                      },
-  { 'colour.scrollBg',         'colour.bg'                        },
-  { 'colour.accent',           'palette.base.zone6'               },
-  { 'colour.mute',             'colour.negative'                  },
-  { 'colour.solo',             'palette.mark'                     },
-  { 'colour.separator',        {'palette.base.zone6',  0.3 }      },
-  { 'colour.tracker.chanHeader', 'palette.alt.zone4'              },
-  { 'colour.tracker.partHeader', 'palette.base.zone4'             },
---  { 'colour.tail',             {'palette.steel',      0.3}       },
-  { 'colour.tail',             hex('#8caac8')                     },  -- one-off lighter steel
-  { 'colour.tailBord',         {'colour.tail', 0.4}               },  -- blend for corner
-  { 'colour.ghost',            {'palette.alt.zone5',   0.9 }      },
-  { 'colour.ghostNegative',    hex('#da8278', 0.9)                },  -- one-off faded red
-  { 'colour.alias',            {'palette.alt.zone5',   0.22}      },  -- materialised-alias cell tint
-  { 'colour.aliasFocus',       {'palette.alt.zone5',   0.40}      },  -- transient family-highlight tint (alias-nav cursor)
+  ----- global (shared across pages)
+  { 'colour.global.bg',          'base.zone8'        },
+  { 'colour.global.text',        'base.zone2'        },
+  { 'colour.global.rowBeat',     {'base.zone7', 0.4} },
+  { 'colour.global.tail',        'alt.zone7'         },  -- loop bracket / corner (was one-off steel)
+  { 'colour.global.tailBord',    {'colour.global.tail', 0.4} },  -- blend for corner
+  { 'colour.global.separator',   {'base.zone6', 0.3} },
+  { 'colour.global.band.fill',   {'blue', 0.22}      },  -- marquee/lasso fill
+  { 'colour.global.band.border', {'blue', 0.85}      },  -- marquee/lasso border
+  { 'colour.global.error',       'red'               },  -- inline validation-error text (swing/temper editors)
+
+  ----- tracker
+  { 'colour.tracker.offGrid',     'green'      },
+  { 'colour.tracker.overflow',    'orange'     },
+  { 'colour.tracker.negative',    'red'        },
+  { 'colour.tracker.inactive',    'base.zone5' },
+  { 'colour.tracker.shadowed',    'colour.tracker.inactive' },
+  { 'colour.tracker.cursor',      'alt.zone2'  },
+  { 'colour.tracker.cursorText',  'alt.zone8'  },
+  { 'colour.tracker.rowBarStart', {'base.zone6', 0.4} },
+  { 'colour.tracker.selection',   {'base.zone10', 0.5} },
+  { 'colour.tracker.accent',      'base.zone6' },
+  { 'colour.tracker.mute',        'colour.tracker.negative' },
+  { 'colour.tracker.solo',        'yellow'     },
+  { 'colour.tracker.chanHeader',  'alt.zone4'  },
+  { 'colour.tracker.partHeader',  'base.zone4' },
+  { 'colour.tracker.ghost',         {'alt.zone5', 0.9} },
+  { 'colour.tracker.ghostNegative', {'salmon',    0.9} },  -- faded warm ghost for negative delay
+  { 'colour.tracker.swing.previewBorder', 'base.zone5' },  -- swing editor preview-pane frame
   -- Lane strip (CC/PB/AT envelope visualiser above the tracker grid).
-  { 'colour.laneAxis',         {'palette.base.zone5',  0.6 }      },
-  { 'colour.laneRowDivider',   {'palette.base.zone5',  0.15}      },
-  { 'colour.laneAnchor',       'colour.text'                      },
-  { 'colour.laneAnchorActive', 'colour.negative'                  },
-  { 'colour.laneEnvelope',     'colour.accent'                    },
+  { 'colour.tracker.laneAxis',         {'base.zone5', 0.6 } },
+  { 'colour.tracker.laneRowDivider',   {'base.zone5', 0.15} },
+  { 'colour.tracker.laneAnchor',       'colour.global.text'      },
+  { 'colour.tracker.laneAnchorActive', 'colour.tracker.negative' },
+  { 'colour.tracker.laneEnvelope',     'colour.tracker.accent'   },
+
+  ----- arrange
+  { 'colour.arrange.cursorOn',         'base.zone2'           },
+  { 'colour.arrange.cursorOff',        'base.zone6'           },
+  { 'colour.arrange.itemBorder',       'base.zone5'           },  -- solid neutral box outline (one zone below cursorOff)
+  { 'colour.arrange.phrase',           {'colour.global.rowBeat', 1.0} },  -- bar tint at full alpha
+  { 'colour.arrange.blockedBorder',    {'red', 0.95}          },  -- drag would overlap a neighbour
+  { 'colour.arrange.editCursor',       'base.zone2'           },  -- edit-cursor triangle fill
+  { 'colour.arrange.playHead',         'alt.zone5'            },  -- play-head triangle fill
+  { 'colour.arrange.cursorTriBorder',  'base.zone6'           },  -- shared border for both gutter triangles
+  { 'colour.arrange.ghostFill',        {'base.zone9', 0.35}   },  -- create-preview fill
+  { 'colour.arrange.ghostBorder',      {'base.zone3', 0.90}   },  -- create-preview border
+  { 'colour.arrange.orphanFill',       {'base.zone5', 0.35}   },  -- slot-less item, neutral
+  { 'colour.arrange.orphanFocusFill',  {'base.zone8', 0.55}   },
+  { 'colour.arrange.waveform',         {'base.zone2', 0.62}   },  -- audio preview ink over the slot fill
+  { 'colour.arrange.midiNoteOn',       'base.zone3'           },  -- note-on cap: low-zone primary (arrangeRender)
+  { 'colour.arrange.midiNoteBody',     'base.zone4'           },  -- note body: one zone higher
+
+  ----- sampler (waveform strip in the sample browser)
+  { 'colour.sampler.waveBg',   'base.zone1'   },  -- strip background
+  { 'colour.sampler.wave',     'base.zone8'   },  -- peak envelope fill
+  { 'colour.sampler.waveMid',  'base.zone5'   },  -- silence centre line
+  { 'colour.sampler.selFill',  {'blue', 0.13} },  -- selection range wash
+  { 'colour.sampler.selStart', 'green'        },  -- selection start marker
+  { 'colour.sampler.selEnd',   'orange'       },  -- selection end marker
 
   -- Wiring page node tints + port marker colours. Category drives node fill; folder = summing
   -- parent (audio.ins>=1 source). Port colours distinguish audio vs MIDI.
-  { 'colour.wiring.node.source',    'palette.positive' },
-  { 'colour.wiring.node.master',    'palette.base.zone6' },
-  { 'colour.wiring.node.generator', 'palette.alt.zone5'  },
-  { 'colour.wiring.node.effect',    'palette.alt2'       },
-  { 'colour.wiring.node.folder',    'palette.caution'    },  -- summing folder parent; reused later for the folder bar
-  { 'colour.wiring.node.selected',  'palette.mark'       },  -- outline stroke for selected nodes / rubber-band
-  { 'colour.wiring.port.audio',     'palette.base.zone2' },
-  { 'colour.wiring.port.midi',      'palette.alt.zone5'  },
-  { 'colour.wiring.source.label',   'palette.base.zone6' },  -- de-emphasised track-name on a source stub (neutral, not bold)
-  { 'colour.wiring.tooltip.bg',     'palette.base.zone9' },  -- matches toolbar; body's dark text reads against it
+  { 'colour.wiring.node.source',    'green'      },
+  { 'colour.wiring.node.master',    'base.zone7' },
+  { 'colour.wiring.node.generator', 'alt.zone6'  },
+  { 'colour.wiring.node.effect',    'salmon'     },
+  { 'colour.wiring.node.folder',    'orange'     },  -- summing folder parent; reused later for the folder bar
+  { 'colour.wiring.node.selected',  'yellow'     },  -- outline stroke for selected nodes / rubber-band
+  { 'colour.wiring.port.audio',     'base.zone2' },
+  { 'colour.wiring.port.midi',      'alt.zone5'  },
+  { 'colour.wiring.source.label',   'base.zone6' },  -- de-emphasised track-name on a source stub (neutral, not bold)
+  { 'colour.wiring.tooltip.bg',     'base.zone9' },  -- matches toolbar; body's dark text reads against it
 
   -- Chrome roles — toolbar (top band) and statusBar (bottom band).
   -- Toolbar rides the parchment (base) ramp; statusBar the blue (alt) ramp.
-  { 'colour.toolbar.bg',           'palette.base.zone9'            },
-  { 'colour.toolbar.text',         'palette.base.zone2'            },
-  { 'colour.toolbar.button',       'palette.base.zone10',          },
-  { 'colour.toolbar.buttonActive', 'palette.base.zone8',           },
-  { 'colour.toolbar.buttonBorder', {'palette.base.zone6', 0.35 }    },
-  { 'colour.toolbar.checkMark',    'palette.base.zone2'            },
-  { 'colour.toolbar.sliderGrab',       'palette.base.zone7' },  -- slider handle on the chromed track
-  { 'colour.toolbar.sliderGrabActive', 'palette.base.zone6' },  -- handle while dragging
-  { 'colour.toolbar.popupBg',      'palette.base.zone10'           },
-  { 'colour.toolbar.textSelection', 'palette.alt.zone8'     },  -- text-selection highlight (Col_TextSelectedBg)
-  { 'colour.toolbar.selectedRow',   'palette.alt.zone8'     },  -- Selectable/list-row highlight (Col_Header family)
-  { 'colour.statusBar.bg',         'palette.alt.zone5'            },
-  { 'colour.statusBar.text',       'palette.alt.zone9'            },
-  { 'colour.modal.titleBg',        'palette.alt.zone6'            },  -- modalHost title bar: lift off editor.bg
+  { 'colour.chrome.toolbar.bg',           'base.zone9'         },
+  { 'colour.chrome.toolbar.text',         'base.zone2'         },
+  { 'colour.chrome.toolbar.button',       'base.zone10'        },
+  { 'colour.chrome.toolbar.buttonActive', 'base.zone8'         },
+  { 'colour.chrome.toolbar.buttonBorder', {'base.zone6', 0.35} },
+  { 'colour.chrome.toolbar.checkMark',    'base.zone2'         },
+  { 'colour.chrome.toolbar.sliderGrab',       'base.zone7'     },  -- slider handle on the chromed track
+  { 'colour.chrome.toolbar.sliderGrabActive', 'base.zone6'     },  -- handle while dragging
+  { 'colour.chrome.toolbar.popupBg',      'base.zone10'        },
+  { 'colour.chrome.toolbar.textSelection', 'alt.zone8'         },  -- text-selection highlight (Col_TextSelectedBg)
+  { 'colour.chrome.toolbar.selectedRow',   'alt.zone8'         },  -- Selectable/list-row highlight (Col_Header family)
+  { 'colour.chrome.statusBar.bg',         'alt.zone5'          },
+  { 'colour.chrome.statusBar.text',       'alt.zone9'          },
+  { 'colour.chrome.modal.titleBg',        'alt.zone6'          },  -- modalHost title bar: lift off editor.bg
   -- F1 cheat-sheet overlay (help.lua): blue panel; chips + description ride the
   -- base ramp so the dark shortcut glyphs read on light keycaps.
-  { 'colour.help.box',    'colour.statusBar.bg' },
-  { 'colour.help.border', 'colour.text'         },
-  { 'colour.help.title',  'colour.text'         },
-  { 'colour.help.key',    'colour.text'         },  -- shortcut glyphs + the '/' separator
-  { 'colour.help.desc',   'palette.base.zone9'  },  -- command description
-  { 'colour.help.chip',   'palette.base.zone8'  },  -- keycap fill (alpha at draw)
-  { 'colour.help.remove', 'palette.alert'       },  -- ✕ remove-binding glyph (red)
-  { 'colour.help.add',    'palette.positive'    },  -- + add-binding glyph (green)
-  { 'colour.help.tag',       'palette.base.zone9'  },  -- edit-tag box fill (one zone above chips, full alpha)
-  { 'colour.help.tagBorder', 'colour.help.border'  },  -- edit-tag 1px crisp border
-  -- Pre-blended `0.5*pale + 0.5*bg`; a literal alias would render translucent over a different parent.
-  { 'colour.editor.bg',            hex('#e9e7df')                 },
-  -- Pane-selector pills on the editor body: editor.bg sits a zone below toolbar.bg,
-  -- so shift button + active one zone down to keep the raised/recessed contrast.
-  { 'colour.editor.button',        'palette.base.zone9'           },
-  { 'colour.editor.buttonActive',  'palette.base.zone7'           },
+  { 'colour.chrome.help.box',    'colour.chrome.statusBar.bg' },
+  { 'colour.chrome.help.border', 'colour.global.text'         },
+  { 'colour.chrome.help.title',  'colour.global.text'         },
+  { 'colour.chrome.help.key',    'colour.global.text'         },  -- shortcut glyphs + the '/' separator
+  { 'colour.chrome.help.desc',   'base.zone9'                 },  -- command description
+  { 'colour.chrome.help.chip',   'base.zone8'                 },  -- keycap fill (alpha at draw)
+  { 'colour.chrome.help.remove', 'red'                        },  -- ✕ remove-binding glyph (red)
+  { 'colour.chrome.help.add',    'green'                      },  -- + add-binding glyph (green)
+  { 'colour.chrome.help.dim',    {'base.zone0', 0.47}         },  -- scrim behind the cheat-sheet overlay
+  { 'colour.chrome.help.tag',       'base.zone9'                 },  -- edit-tag box fill (one zone above chips, full alpha)
+  { 'colour.chrome.help.tagBorder', 'colour.chrome.help.border' },  -- edit-tag 1px crisp border
+  { 'colour.chrome.editor.bg',            'base.zone9' },  -- editor body (snapped from #e9e7df)
+  -- Pane-selector pills on the editor body: editor.button a zone below toolbar.button.
+  { 'colour.chrome.editor.button',        'base.zone9' },
+  { 'colour.chrome.editor.buttonActive',  'base.zone7' },
+  { 'colour.chrome.scrollHandle', 'colour.global.text' },
+  { 'colour.chrome.scrollBg',     'colour.global.bg'   },
 }
 
-for i = 1, 8 do
-  local base = 'palette.region.' .. i
-  util.add(declarations, { 'colour.region.' .. i .. '.tint',    { base, 0.22 } })
-  util.add(declarations, { 'colour.region.' .. i .. '.outline', base })
+-- region.N reuse the eight accents (red last; the old 8th hue was olive).
+local ACCENTS = { 'yellow', 'orange', 'magenta', 'violet', 'blue', 'cyan', 'green', 'red' }
+for i, hue in ipairs(ACCENTS) do
+  util.add(declarations, { 'colour.tracker.region.' .. i .. '.tint',    { hue, 0.22 } })
+  util.add(declarations, { 'colour.tracker.region.' .. i .. '.outline', hue })
 end
 
 -- overridden is a deviation overlay over the group hue; heavier alpha so it reads against the wash.
+local MIRROR = { synced = 'cyan', overridden = 'yellow', conflicted = 'red', ['local'] = 'violet' }
 for _, st in ipairs{ 'synced', 'overridden', 'conflicted', 'local' } do
-  local base  = 'palette.mirror.' .. st
+  local hue   = MIRROR[st]
   local alpha = st == 'overridden' and 0.55 or 0.22
-  util.add(declarations, { 'colour.mirror.' .. st .. '.tint',    { base, alpha } })
-  util.add(declarations, { 'colour.mirror.' .. st .. '.fade',    { base, 0.08 } })
-  util.add(declarations, { 'colour.mirror.' .. st .. '.outline', base })
+  util.add(declarations, { 'colour.tracker.mirror.' .. st .. '.tint',    { hue, alpha } })
+  util.add(declarations, { 'colour.tracker.mirror.' .. st .. '.outline', hue })
+end
+
+-- Colour contract (see docs/configManager.md § Colour): colour.* roles are refs, not bare
+-- RGBA. Bare refs get 'palette.' prepended; page roles resolve via palette.*/global.*/own.
+local COLOUR_NS = { global = true, tracker = true, sampler = true,
+                    wiring = true, arrange = true, chrome = true }
+local function expandRef(ref)
+  if ref:match('^colour%.') or ref:match('^palette%.') then return ref end
+  return 'palette.' .. ref
+end
+for _, pair in ipairs(declarations) do
+  local key, val = pair[1], pair[2]
+  local ns = key:match('^colour%.(%a+)%.')
+  if ns then
+    assert(COLOUR_NS[ns], 'colour role in unknown namespace: ' .. key)
+    if type(val) == 'string' then
+      pair[2] = expandRef(val)
+    elseif type(val) == 'table' and type(val[1]) == 'string' then
+      val[1] = expandRef(val[1])
+    else
+      error('colour role must reference an atom or role, not a literal: ' .. key)
+    end
+    local ref   = type(pair[2]) == 'string' and pair[2] or pair[2][1]
+    local refNs = ref:match('^colour%.(%a+)%.')
+    if refNs then
+      assert(refNs == ns or refNs == 'global',
+        ('colour role %s references foreign page %s'):format(key, ref))
+    end
+  end
 end
 
 local declared, defaults = {}, {}
@@ -403,6 +432,9 @@ local function mergedKey(key)
   end
   return out
 end
+
+--contract: non-raising existence test against the schema; true iff key is declared
+function cm:isDeclared(key) return declared[key] == true end
 
 --contract: returns deep-copy of merged value (defaults + all tiers); raises on unknown key
 --contract: opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only

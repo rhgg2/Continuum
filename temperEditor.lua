@@ -12,7 +12,6 @@ local ImGui = require 'imgui' '0.10'
 
 local cm, chrome, ctx, gui, modalHost = (...).cm, (...).chrome, (...).ctx, (...).gui, (...).modalHost
 
-local TEMPER_ERR = 0xff6060ff
 local SYNTHETIC  = { ['12EDO'] = true }
 
 local selected = nil   -- explicitly-selected entry; nil follows the active slot
@@ -419,7 +418,7 @@ modalHost:registerKind('temperNew', function(s, close)
       close(true, name)
     end
   elseif cancel then close(false) end
-  if s.err then ImGui.TextColored(ctx, TEMPER_ERR, s.err) end
+  if s.err then ImGui.TextColored(ctx, chrome.colour('error'), s.err) end
 end)
 
 modalHost:registerKind('temperImport', function(s, close)
@@ -459,7 +458,7 @@ modalHost:registerKind('temperImport', function(s, close)
       else close(true, name, temper) end
     end
   elseif cancel then close(false) end
-  if s.err then ImGui.TextColored(ctx, TEMPER_ERR, s.err) end
+  if s.err then ImGui.TextColored(ctx, chrome.colour('error'), s.err) end
 end)
 
 ----- Generators pane
@@ -673,7 +672,7 @@ local function drawGenerators()
     if ImGui.Button(ctx, 'Generate') then generateInto(gen) end
   end)
   if not editable then ImGui.EndDisabled(ctx) end
-  if editable and err then ImGui.SameLine(ctx); ImGui.TextColored(ctx, TEMPER_ERR, err) end
+  if editable and err then ImGui.SameLine(ctx); ImGui.TextColored(ctx, chrome.colour('error'), err) end
 end
 
 ----- Draw body

@@ -19,7 +19,7 @@ package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui   = require 'imgui' '0.10'
 local painter = require 'painter'
 
-local ctx, chrome = (...).ctx, (...).chrome
+local ctx, chrome, page = (...).ctx, (...).chrome, (...).page
 
 local HIT_PX     = 6
 local HIT_PX2    = HIT_PX * HIT_PX
@@ -55,7 +55,7 @@ function self:frame(a)
     oy = yBot + vMin * (valSpan / (vMax - vMin)),
     sx = w / (tMax - tMin),
     sy = -valSpan / (vMax - vMin),
-  })
+  }, page)
   -- Single-axis projections off the one transform (x ignores v, y ignores t)
   -- so they can't drift from pt.toScreen / pt.fromScreen.
   local function tToX(tt) local x = pt.toScreen(tt, 0); return x end

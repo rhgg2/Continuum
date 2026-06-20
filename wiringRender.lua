@@ -1663,7 +1663,7 @@ local function renderCanvas(w, h)
   local sx, sy = ImGui.GetCursorScreenPos(ctx)
   local ox, oy = sx + math.floor(w / 2), sy + math.floor(h / 2)
   canvasOrigin.ox, canvasOrigin.oy = ox, oy
-  local p = painter.new(ctx, chrome, { ox = ox, oy = oy })
+  local p = painter.new(ctx, chrome, { ox = ox, oy = oy }, 'wiring')
   local vx0, vy0 = p.fromScreen(sx, sy)
   local vx1, vy1 = p.fromScreen(sx + w, sy + h)
   p.fill(rect(vx0, vy0, vx1, vy1), 'bg')

@@ -69,7 +69,7 @@ end
 
 local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
 local dragging    = false   -- tracker-grid selection drag: click → held → release
-local curveEd      = util.instantiate('curveEditor', { ctx = ctx, chrome = chrome })
+local curveEd      = util.instantiate('curveEditor', { ctx = ctx, chrome = chrome, page = 'tracker' })
 local laneConsumed = false
 
 -- Group quick-verb state and lifetime moved to trackerView (this page is
@@ -188,7 +188,7 @@ end
 -- the fractional cases (centred text, the inset cursor box) crisp, the way the
 -- old per-call math.floor did. text is monospace by cell, not by glyph advance.
 local function printer(ctx, gX, gY, x0, y0)
-  local p  = painter.new(ctx, chrome, { ox = x0, oy = y0, sx = gX, sy = gY, snap = true })
+  local p  = painter.new(ctx, chrome, { ox = x0, oy = y0, sx = gX, sy = gY, snap = true }, 'tracker')
   local pt = {}
 
   -- One glyph per cell: advance by a whole cell so the grid stays aligned
@@ -508,7 +508,7 @@ local function drawLaneStrip()
   local y0        = py
   local w         = totalWidth * gridX
   local h         = laneRows  * gridY
-  local p         = painter.new(ctx, chrome, {})
+  local p         = painter.new(ctx, chrome, {}, 'tracker')
   local scrollRow = select(1, tv:scroll())
   local numRows   = tv.grid.numRows or 0
   -- rowSpan = rows actually rendered (matches grid below).
@@ -646,7 +646,7 @@ local function drawTracker()
   -- Screen-space painter (identity transform) for draws sized in pixels, not
   -- cells: the tail bracket's arc radius and the temperament rule's tick. Colour
   -- by name like any painter; positions pass straight through unconverted.
-  local screenPainter = painter.new(ctx, chrome, {})
+  local screenPainter = painter.new(ctx, chrome, {}, 'tracker')
 
   -- Solo (amber) wins over mute (red): audibility semantic.
   draw:text(-GUTTER, -HEADER, 'Row', 'accent')

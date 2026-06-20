@@ -198,7 +198,7 @@ local function gridGeom(nTracks)
   local pg = painter.new(ctx, chrome, {
     ox = bandLeft - sc * TRACK_W, oy = bodyTop - sr * rowH,
     sx = TRACK_W, sy = rowH, snap = true,
-  })
+  }, 'arrange')
   return {
     pg = pg, paneLeft = paneLeft, ox = ox, oy = oy, availH = availH,
     rowH = rowH, headerH = headerH, bodyTop = bodyTop,
@@ -323,7 +323,7 @@ end
 local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lassoCand)
   local g  = gridGeom(nTracks)
   local pg = g.pg
-  local ps = painter.new(ctx, chrome, {})   -- screen space: gutter, header, full-width rules
+  local ps = painter.new(ctx, chrome, {}, 'arrange')   -- screen space: gutter, header, full-width rules
   local sr, rowH, visRows = g.sr, g.rowH, g.visRows
   local ox, oy, gridR = g.ox, g.oy, g.gridR
   local sc, lastCol   = g.sc, g.lastCol

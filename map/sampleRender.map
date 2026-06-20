@@ -1,4 +1,4 @@
-@module sampleRender  src=sampleRender.lua  loc=633  sha=eedc19c  mode=chunk
+@module sampleRender  src=sampleRender.lua  loc=633  sha=761e277  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, sv
 
 # Invariants & contracts
@@ -88,7 +88,7 @@
 
 # Uses (outbound edges)
   @use call    chrome.checkbox  @ 417, 424
-  @use call    chrome.colour  @ 457
+  @use call    chrome.colour  @ 316, 333, 338, 342, 343, 344, 457
   @use call    chrome.disabledIf  @ 462, 482, 497, 535
   @use call    chrome.gridWidth  @ 460
   @use call    chrome.paletteHeader  @ 480, 496

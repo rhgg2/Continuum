@@ -1,4 +1,4 @@
-@module help  src=help.lua  loc=542  sha=5e44f0d  mode=chunk
+@module help  src=help.lua  loc=541  sha=40367fe  mode=chunk
 @deps ctx, chrome, cmgr
 
 # Shapes
@@ -19,117 +19,116 @@
   @state openAtStart = false  @ 19   -- open as of frame start; gates dismissal + page input swallow
   @state PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8  @ 21
   @state PIN_GAP, WIN_MARGIN, BOX_R = 4, 2, 4  @ 22   -- pin drop below segment; window-edge inset; box corner radius
-  @state DIM_COL = 0x00000077  @ 23
-  @state EM_DASH = '\xe2\x80\x94'  @ 24
-  @state editing, capturing, conflict, hits, conflictHits = nil, nil, nil, nil, nil  @ 28
-  @state help = {}  @ 31
-  @state dl, lineH, theme, capBg, capLine, boxes  @ 58
-  @state CHIP_PADX_INNER, CHIP_PADX_OUTER, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 0, 2, 3, 4, 0.9, 0xcc  @ 68
-  @state SEP = '/'  @ 69
-  @state CAPTURE_GLYPH = '\xe2\x80\xa6'  @ 70
-  @state TAG_SYM, TAG_PAD, ADD_GAP = 7, 1, 9  @ 71   -- tag symbol px (odd -> centred +); moat inside the 1px border; gap before + tag
-  @state PROMPT_PAD, BTN_PADX, BTN_GAP, LINE_GAP = 10, 10, 8, 4  @ 221
-  @state dismissKeyList  @ 330
+  @state EM_DASH = '\xe2\x80\x94'  @ 23
+  @state editing, capturing, conflict, hits, conflictHits = nil, nil, nil, nil, nil  @ 27
+  @state help = {}  @ 30
+  @state dl, lineH, theme, capBg, capLine, boxes  @ 57
+  @state CHIP_PADX_INNER, CHIP_PADX_OUTER, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 0, 2, 3, 4, 0.9, 0xcc  @ 67
+  @state SEP = '/'  @ 68
+  @state CAPTURE_GLYPH = '\xe2\x80\xa6'  @ 69
+  @state TAG_SYM, TAG_PAD, ADD_GAP = 7, 1, 9  @ 70   -- tag symbol px (odd -> centred +); moat inside the 1px border; gap before + tag
+  @state PROMPT_PAD, BTN_PADX, BTN_GAP, LINE_GAP = 10, 10, 8, 4  @ 220
+  @state dismissKeyList  @ 329
 
 # Private functions
-  @fn resetEdit()  @ 29
+  @fn resetEdit()  @ 28
   -- DRAW
-  @fn rectFor(key)  @ 60
-  @fn withAlpha(rgba, a)  @ 72
-  @fn tagSide()  @ 75
+  @fn rectFor(key)  @ 59
+  @fn withAlpha(rgba, a)  @ 71
+  @fn tagSide()  @ 74
       -- Side of a square edit-tag box: the symbol plus a 2px moat and the 1px border.
-  @fn layoutCluster(keys, withAdd)  @ 79
+  @fn layoutCluster(keys, withAdd)  @ 78
       -- Lay out a shortcut's chips ('/'-separated, one per binding) into geometry for
       -- drawCluster: total width + each chip's {w, cells}; word runs share one cell, symbols one each.
-  @fn crispBorder(x0, y0, x1, y1, colour)  @ 107
+  @fn crispBorder(x0, y0, x1, y1, colour)  @ 106
       -- Pixel-crisp 1px border (painter.border's 4-strip technique) on the foreground
       -- drawlist the overlay uses: painter binds to the window drawlist, behind the dim.
-  @fn drawTag(cx, cy, symbol, ink, captureHere, hit)  @ 116
+  @fn drawTag(cx, cy, symbol, ink, captureHere, hit)  @ 115
       -- Square edit tag at (cx, cy): fill + 1px border, symbol in a 2px moat (+ as
       -- 1px strips, x as diagonal). `captureHere` highlights; `hit` rect filled here.
-  @fn drawCluster(cluster, x, y, cmd, specs)  @ 141
+  @fn drawCluster(cluster, x, y, cmd, specs)  @ 140
       -- Records a click hit per chip; in edit mode also draws the ✕ corner tags and the
       -- trailing + tag, each with its own hit. See docs/help.md § Editing.
-  @fn layoutBox(group)  @ 180
+  @fn layoutBox(group)  @ 179
       -- A group's box geometry in one pass: rows (each with a laid-out cluster) plus the
       -- box w/h, sized to the wider of the title vs the shortcut column + widest label.
-  @fn drawBox(box, x, y)  @ 197
-  @fn cmdLabel(cmd)  @ 212
+  @fn drawBox(box, x, y)  @ 196
+  @fn cmdLabel(cmd)  @ 211
       -- A command's human label from the current page's manifest, else its raw name (a
       -- victim may live on another scope/page, where no manifest label is to hand).
-  @fn drawConflict(winX, winY, winW, winH)  @ 225
+  @fn drawConflict(winX, winY, winW, winH)  @ 224
       -- Centred modal for a chord collision. Warn phase offers Cancel/Reassign; recover
       -- phase narrates the victim's loss while pollCapture claims a new chord for it.
-  @fn placePins(pins, winX, winW)  @ 274
+  @fn placePins(pins, winX, winW)  @ 273
       -- Pin callouts sit just under their toolbar segment. Overlapping neighbours are
       -- slid to minimise total displacement — isotonic regression. See docs/help.md.
-  @fn placeFlow(flows)  @ 311
+  @fn placeFlow(flows)  @ 310
       -- Flow groups fill their grid rect row-major: left to right, wrapping down a row
       -- at the rect's right edge. Each anchor rect carries its own cursor.
-  @fn buildDismissKeys()  @ 331
-  @fn anyKeyPressed()  @ 350
+  @fn buildDismissKeys()  @ 330
+  @fn anyKeyPressed()  @ 349
       -- Char queue catches punctuation/layout-specific keys; the explicit list covers
       -- the non-printables (and alphanumerics, since the macOS char queue drops some).
-  @fn insideAnyBox(mouseX, mouseY)  @ 359
+  @fn insideAnyBox(mouseX, mouseY)  @ 358
   -- EDIT MODE
-  @fn buildSpec(key, mods)  @ 370
+  @fn buildSpec(key, mods)  @ 369
       -- A pressed non-modifier key plus the live modifier mask, as a cmgr keyspec.
-  @fn rebindWithout(cmd, drop, add)  @ 380
+  @fn rebindWithout(cmd, drop, add)  @ 379
       -- Rewrites cmd's bindings: drop `drop` (a spec ref, or nil), append `add` (or nil).
-  @fn dropChord(cmd, spec)  @ 391
+  @fn dropChord(cmd, spec)  @ 390
       -- Drops every binding of cmd whose chord matches spec, then rebinds. The victim's
       -- stored ref isn't the captured one, so match by resolved key+mods, not identity.
-  @fn commitCapture(spec)  @ 403
+  @fn commitCapture(spec)  @ 402
       -- A captured chord that collides with a reachable command opens the warn prompt;
       -- a free chord binds straight away. See docs/help.md § Editing.
-  @fn reassign()  @ 417
+  @fn reassign()  @ 416
       -- Reassign: strip the chord from the victim, give it to cmd, then drop the victim
       -- into a recovery capture so it can claim a new chord (Esc leaves it unbound).
-  @fn pollCapture()  @ 425
-  @fn hitAt(mouseX, mouseY)  @ 438
+  @fn pollCapture()  @ 424
+  @fn hitAt(mouseX, mouseY)  @ 437
       -- ✕ sits atop its chip, so a remove hit wins over the chip hit it overlaps.
-  @fn handleConflict()  @ 450
+  @fn handleConflict()  @ 449
       -- Warn-phase input: Esc/Cancel abandons untouched, Enter or the Reassign button
       -- commits. Off-button clicks are swallowed (modal), never dismissing the sheet.
-  @fn handleClicks()  @ 467
+  @fn handleClicks()  @ 466
 
 # Public API (help:*)
-  @api help:registerPage(name, groups)  @ 35
-  @api help:setPage(name)  @ 36
-  @api help:isOpen()  @ 37
-  @api help:close()  @ 38
-  @api help:toggle()  @ 42
+  @api help:registerPage(name, groups)  @ 34
+  @api help:setPage(name)  @ 35
+  @api help:isOpen()  @ 36
+  @api help:close()  @ 37
+  @api help:toggle()  @ 41
       -- Won't open on a page that declared no manifest, so F1 there is inert
       -- rather than dimming the screen with nothing to show.
-  @api help:beginFrame()  @ 47
-  @api help:wasOpenAtFrameStart()  @ 48
-  @api help:anchor(key, x, y, w, h)  @ 50
-  @api help:draw()  @ 482
+  @api help:beginFrame()  @ 46
+  @api help:wasOpenAtFrameStart()  @ 47
+  @api help:anchor(key, x, y, w, h)  @ 49
+  @api help:draw()  @ 481
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 494, 495, 496, 497, 498, 499, 500, 501, 502, 503
-  @use call    chrome.toolbarRects  @ 62
-  @use call    cmgr.bindingSite  @ 386, 398
-  @use call    cmgr.commandAtKey  @ 406
-  @use call    cmgr.keyLabel  @ 227
-  @use call    cmgr.keyLabelList  @ 184
-  @use call    cmgr.keySpec  @ 392, 395
-  @use call    cmgr.keysFor  @ 187, 382, 394
-  @use call    cmgr.rebind  @ 386, 398
-  @use call    imgui.CalcTextSize  @ 80, 84, 142, 156, 161, 189, 191, 240, 243, 265
-  @use call    imgui.DrawList_AddLine  @ 128, 129
-  @use call    imgui.DrawList_AddRect  @ 154, 199, 254, 264
-  @use call    imgui.DrawList_AddRectFilled  @ 108, 109, 110, 111, 120, 132, 133, 153, 198, 253, 263, 491
-  @use call    imgui.DrawList_AddText  @ 147, 157, 162, 201, 205, 256, 258, 266
-  @use call    imgui.GetForegroundDrawList  @ 487
-  @use call    imgui.GetInputQueueCharacter  @ 351
-  @use call    imgui.GetKeyMods  @ 428
-  @use call    imgui.GetMousePos  @ 455, 470
-  @use call    imgui.GetTextLineHeight  @ 488
-  @use call    imgui.GetWindowPos  @ 489
-  @use call    imgui.GetWindowSize  @ 490
-  @use call    imgui.IsKeyPressed  @ 354, 426, 430, 451, 452, 453, 534
-  @use call    imgui.IsMouseClicked  @ 454, 468, 469
-  @use call    util.add  @ 85, 98, 136, 166, 186, 267, 283, 305, 324, 333, 344, 518, 520
+  @use call    chrome.colour  @ 490, 493, 494, 495, 496, 497, 498, 499, 500, 501, 502
+  @use call    chrome.toolbarRects  @ 61
+  @use call    cmgr.bindingSite  @ 385, 397
+  @use call    cmgr.commandAtKey  @ 405
+  @use call    cmgr.keyLabel  @ 226
+  @use call    cmgr.keyLabelList  @ 183
+  @use call    cmgr.keySpec  @ 391, 394
+  @use call    cmgr.keysFor  @ 186, 381, 393
+  @use call    cmgr.rebind  @ 385, 397
+  @use call    imgui.CalcTextSize  @ 79, 83, 141, 155, 160, 188, 190, 239, 242, 264
+  @use call    imgui.DrawList_AddLine  @ 127, 128
+  @use call    imgui.DrawList_AddRect  @ 153, 198, 253, 263
+  @use call    imgui.DrawList_AddRectFilled  @ 107, 108, 109, 110, 119, 131, 132, 152, 197, 252, 262, 490
+  @use call    imgui.DrawList_AddText  @ 146, 156, 161, 200, 204, 255, 257, 265
+  @use call    imgui.GetForegroundDrawList  @ 486
+  @use call    imgui.GetInputQueueCharacter  @ 350
+  @use call    imgui.GetKeyMods  @ 427
+  @use call    imgui.GetMousePos  @ 454, 469
+  @use call    imgui.GetTextLineHeight  @ 487
+  @use call    imgui.GetWindowPos  @ 488
+  @use call    imgui.GetWindowSize  @ 489
+  @use call    imgui.IsKeyPressed  @ 353, 425, 429, 450, 451, 452, 533
+  @use call    imgui.IsMouseClicked  @ 453, 467, 468
+  @use call    util.add  @ 84, 97, 135, 165, 185, 266, 282, 304, 323, 332, 343, 517, 519
   @use require imgui  @ 8
   @use require util  @ 9

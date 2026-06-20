@@ -1,6 +1,6 @@
 -- See docs/chrome.md for the model.
 
---shape: chrome = { colour(name)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+--shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind)}
 --shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
 --shape: palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
@@ -38,13 +38,24 @@ local function resolve(key)
   end
 end
 
-local function colour(name)
-  name = name or 'text'
-  if not cache[name] then
-    local r, g, b, a = resolve('colour.' .. name)
-    cache[name] = ImGui.ColorConvertDouble4ToU32(r, g, b, a)
+-- Namespaces a colour name to a full cm key, then caches by that key.
+-- Bare names bind to the caller's page if that role exists, else global.
+local NS = { global = true, tracker = true, sampler = true,
+             wiring = true, arrange = true, chrome = true }
+local function scopedKey(name, scope)
+  if NS[name:match('^(%a+)%.') or ''] then return 'colour.' .. name end
+  local own = 'colour.' .. scope .. '.' .. name
+  if cm:isDeclared(own) then return own end
+  return 'colour.global.' .. name
+end
+
+local function colour(name, scope)
+  local key = scopedKey(name or 'text', scope or 'chrome')
+  if not cache[key] then
+    local r, g, b, a = resolve(key)
+    cache[key] = ImGui.ColorConvertDouble4ToU32(r, g, b, a)
   end
-  return cache[name]
+  return cache[key]
 end
 
 -- painter binds colour names through chrome; it touches only colour().

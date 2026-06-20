@@ -313,7 +313,7 @@ local function drawStrip(stripW, stripH)
   local dl   = ImGui.GetWindowDrawList(ctx)
   local mid  = y0 + canvasH * 0.5
   local hh   = canvasH * 0.45
-  ImGui.DrawList_AddRectFilled(dl, x0, y0, x0 + stripW, y0 + canvasH, 0x1A1A1AFF)
+  ImGui.DrawList_AddRectFilled(dl, x0, y0, x0 + stripW, y0 + canvasH, chrome.colour('sampler.waveBg'))
   if pk.hi then
     -- Quad-fill between adjacent columns: a per-column vertical bar
     -- leaves diagonal gaps when hi/lo step between neighbours; filling
@@ -330,18 +330,18 @@ local function drawStrip(stripW, stripH)
       if yB - yT < 1 then yB = yT + 1 end
       ImGui.DrawList_AddQuadFilled(dl, x - cw, pYT, x, yT,
                                        x, yB,       x - cw, pYB,
-                                       0xC8C8C8FF)
+                                       chrome.colour('sampler.wave'))
       pYT, pYB = yT, yB
     end
   else
     -- Filled strips, not AddLine: a 1px line blurs into ~2px under AA.
-    ImGui.DrawList_AddRectFilled(dl, x0, mid, x0 + stripW, mid + 1, 0x808080FF)
+    ImGui.DrawList_AddRectFilled(dl, x0, mid, x0 + stripW, mid + 1, chrome.colour('sampler.waveMid'))
   end
   local function frameToX(fr) return x0 + (fr / frames) * stripW end
   local sx, ex = frameToX(startF), frameToX(endF)
-  ImGui.DrawList_AddRectFilled(dl, sx, y0, ex, y0 + canvasH, 0x4080FF22)
-  ImGui.DrawList_AddRectFilled(dl, sx - 1, y0, sx + 1, y0 + canvasH, 0x40FF80FF)
-  ImGui.DrawList_AddRectFilled(dl, ex - 1, y0, ex + 1, y0 + canvasH, 0xFF8040FF)
+  ImGui.DrawList_AddRectFilled(dl, sx, y0, ex, y0 + canvasH, chrome.colour('sampler.selFill'))
+  ImGui.DrawList_AddRectFilled(dl, sx - 1, y0, sx + 1, y0 + canvasH, chrome.colour('sampler.selStart'))
+  ImGui.DrawList_AddRectFilled(dl, ex - 1, y0, ex + 1, y0 + canvasH, chrome.colour('sampler.selEnd'))
 
   if active then
     local mx, _ = ImGui.GetMousePos(ctx)
@@ -521,7 +521,7 @@ function sr:renderBody(_, w, h, dispatch)
   local hy     = oy + topH + half
   local vBot   = hy - half
   local vTree  = ox + treeW + half
-  local p = painter.new(ctx, chrome, {})
+  local p = painter.new(ctx, chrome, {}, 'sampler')
   p.segment(vTree, oy, vTree, vBot, 'text', 1)
   p.segment(ox, hy, ox + gridW, hy, 'text', 1)
 
