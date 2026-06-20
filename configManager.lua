@@ -99,8 +99,8 @@ local declarations = {
   { 'palette.alt.zone8',   hex('#b7c7d8') },
   { 'palette.alt.zone9',   hex('#dee5ee') },
   { 'palette.alt.zone10',  hex('#ffffff') },
-  -- Accents — the eight solarized hues plus a salmon regularised to alt.zone6
-  -- (zone6's chroma+lightness at the old warm-pink hue). Only chromatic atoms.
+  -- Accents — the eight solarized hues plus a salmon (warm-pink hue, lifted
+  -- off neutral in both lightness and chroma). Only chromatic atoms.
   { 'palette.yellow',  hex('#b58900') },
   { 'palette.orange',  hex('#cb4b16') },
   { 'palette.red',     hex('#dc322f') },
@@ -109,7 +109,7 @@ local declarations = {
   { 'palette.blue',    hex('#268bd2') },
   { 'palette.cyan',    hex('#2aa198') },
   { 'palette.green',   hex('#859900') },
-  { 'palette.salmon',  hex('#ac867e') },
+  { 'palette.salmon',  hex('#c78a7d') },
 
   ----- global (shared across pages)
   { 'colour.global.bg',          'base.zone8'        },
