@@ -286,7 +286,12 @@ return {
 
       h.vm:applyTakeProperties{ name = h.fm:name(), beats = 32, mode = 'tile' }
 
-      local ccs = h.fm:dump().ccs
+      -- Drop the first-note pb anchor (hidden fake at ppq 0); this test
+      -- is about authored cc/pb copies, not tuning.
+      local ccs = {}
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if not c.fake then ccs[#ccs + 1] = c end
+      end
       table.sort(ccs, function(a, b) return a.ppq < b.ppq end)
       t.eq(#ccs, 6, 'three originals + three copies')
 

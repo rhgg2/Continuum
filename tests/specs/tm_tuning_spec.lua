@@ -93,6 +93,42 @@ return {
   },
 
   {
+    -- Regression (I2a): a zero-detune note ahead of detuned content must
+    -- pin the channel at its onset, else playback inherits the synth's prior bend.
+    name = 'first lane-1 note anchors a pb-active channel even at detune 0',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note',
+        ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+        detune = 0, delay = 0, lane = 1,
+      })
+      h.tm:addEvent({ evType = 'note',
+        ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100,
+        detune = 25, delay = 0, lane = 1,
+      })
+      h.tm:flush()
+
+      local at0 = pbsAt(h.fm:dump(), 0)
+      t.eq(#at0, 1, 'anchor pb seated at the zero-detune first note')
+      t.eq(at0[1].val, 0, 'anchor holds pb centre (raw 0)')
+      t.eq(at0[1].fake, true, 'anchor is a fake')
+    end,
+  },
+
+  {
+    name = 'a pristine all-zero channel seats no anchor',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note',
+        ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+        detune = 0, delay = 0, lane = 1,
+      })
+      h.tm:flush()
+      t.eq(#pbsAt(h.fm:dump(), 0), 0, 'no anchor on a channel with no pb activity')
+    end,
+  },
+
+  {
     name = 'two notes with different detunes produce stepwise pbs between them',
     run = function(harness)
       local h = harness.mk()
@@ -427,10 +463,14 @@ return {
         return out
       end
 
+      -- A (detune 0) is the channel's first note, so it anchors with a
+      -- pb=0; B seats the +10 jump; C inherits B's carry, no pb.
       local pbs = pbsByppq()
-      t.eq(#pbs, 1, "baseline: only B seats a fake pb (C masked by B's carry)")
-      t.eq(pbs[1].ppq, 240)
-      t.eq(pbs[1].val, cents2raw(10))
+      t.eq(#pbs, 2, 'baseline: A anchors the channel, B seats the jump')
+      t.eq(pbs[1].ppq, 0,   'anchor at A')
+      t.eq(pbs[1].val, 0,   'anchor holds pb centre')
+      t.eq(pbs[2].ppq, 240)
+      t.eq(pbs[2].val, cents2raw(10))
 
       -- Move B past C. B sits at ppq=600 now; C's prior is A (detune 0).
       local B = h.tm:getChannel(1).columns.notes[1].events[2]
@@ -438,10 +478,11 @@ return {
       h.tm:flush()
 
       pbs = pbsByppq()
-      t.eq(#pbs, 1, "one fake pb — at C's seat, absorbing the now-exposed jump")
-      t.eq(pbs[1].ppq, 480, "absorber sits at C, not at B (B's carry already matches B)")
-      t.eq(pbs[1].val, cents2raw(10), 'C absorbs +10 from carry 0')
-      t.eq(pbs[1].fake, true)
+      t.eq(#pbs, 2, "anchor at A plus one fake at C's now-exposed jump")
+      t.eq(pbs[1].ppq, 0,   'anchor still at A')
+      t.eq(pbs[2].ppq, 480, "absorber sits at C, not at B (B's carry already matches B)")
+      t.eq(pbs[2].val, cents2raw(10), 'C absorbs +10 from carry 0')
+      t.eq(pbs[2].fake, true)
     end,
   },
 

@@ -6,7 +6,7 @@
 --invariant: only lane-1 notes drive detune realisation
 --invariant: pb.val is cents inside um; raw↔cents only at load/flush (rawToCents/centsToRaw)
 --invariant: cents window = cm:get('pbRange') * 100 per side
---invariant: fake pbs are absorbers seated at lane-1 onsets to absorb detune jumps
+--invariant: fake pbs absorb lane-1 detune jumps; the first onset also anchors a pb-active channel
 --invariant: pb.fake is the sole absorber marker (persisted as cc metadata via mm sidecar)
 --invariant: pa stores aftertouch value in mm cc.vel; cc-routing fields stripped on projection
 --invariant: loc values valid only within one rebuild-to-flush window
@@ -1306,20 +1306,7 @@ do
     end
 
     -- 4.9) Absorber reconciliation + pb wire/column resynthesis.
-    -- Runs after step 4.8 finalised lane-1 raw ppqs (same-pitch onset
-    -- clamps, delay/clamp combinations that reorder hosts) and step 6
-    -- placed externals. From the final realised lane-1 sequence we
-    --   * back-derive cents for any pb missing it (foreign-MIDI / first
-    --     load): cents = rawToCents(wire) − detune at pb's seat.
-    --   * cover every detune-jump seat: a real pb at that ppq counts;
-    --     otherwise reuse an existing fake if any (in-place first,
-    --     else move), else create a new fake (cents=0).
-    --   * drop fakes whose seat is no longer needed.
-    --   * write wire raw = centsToRaw(cents + carrying lane-1 detune).
-    --   * project the pb column from the final set, with val=cents
-    --     (the authored value tv displays) and hidden=fake.
-    -- Reads pbs directly from mm; the um cache (chans, byToken) is
-    -- rebuilt at the end-of-rebuild reload().
+    -- see docs/tuning.md § Absorber reconciliation
     do
       local extras = ds:get('extraColumns') or {}
 
@@ -1374,6 +1361,23 @@ do
             hostPpqL[n.ppq] = n.ppqL
           end
           prev = d
+        end
+
+        -- Anchor a pb-active channel at its first lane-1 onset (I2a):
+        -- without it, playback inherits the synth's unknown prior bend.
+        local first = lane1Events[1]
+        if first and not needed[first.ppq] then
+          local hasReal, anchored = false, false
+          for _, pb in ipairs(pbs) do
+            if not pb.fake then
+              hasReal = true
+              if pb.ppq <= first.ppq then anchored = true break end
+            end
+          end
+          if (next(needed) ~= nil or hasReal) and not anchored then
+            needed[first.ppq]  = true
+            hostPpqL[first.ppq] = first.ppqL
+          end
         end
 
         -- Back-derive cents for any pb missing it; foreign-MIDI / pre-

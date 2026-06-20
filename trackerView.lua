@@ -1465,7 +1465,7 @@ local nudge do
     end
     if pitch == note.pitch and detune == note.detune then return end
     tm:assignEvent(note, { pitch = pitch, detune = detune })
-    if audible then audition(pitch, note.vel, col.midiChan) end
+    if audible then audition(pitch, note.vel, col.midiChan, detune) end
   end
 
   local function nudgeVel(note, dir, coarse, p)

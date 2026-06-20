@@ -126,8 +126,15 @@ hold for every channel `c` and every ppq `P`, after every mutation:
   onset at-or-before P.
 - **I2 — Absorber, both directions.** At every lane-1 note seat S:
   - `detune(c, S) ≠ detuneBefore(c, S)` ⇒ ∃ pb at S (real or fake).
-  - `detune(c, S) = detuneBefore(c, S)` ⇒ no **fake** pb at S.
+  - `detune(c, S) = detuneBefore(c, S)` ⇒ no **fake** pb at S —
+    except the channel's first lane-1 onset (see I2a).
     Real pbs are user-authored and never deleted by reconciliation.
+- **I2a — First-note anchor.** On a channel whose pb stream is ever
+  non-trivial (some detune jump, or a real pb), the first lane-1 onset
+  carries a pb (real or fake) even when its detune equals the implicit
+  0 baseline. Without it the take has no pb before that note and
+  playback inherits the synth's unknown prior bend. A pristine all-zero
+  channel with no pb needs no anchor.
 - **I3 — Lane-1 monopoly.** Adding, editing, or deleting a
   lane-≥2 note never seats, removes, or moves any pb. Higher-lane
   detune is dead data for realisation; it persists as metadata so
@@ -288,6 +295,28 @@ Mirrors the swing model in `docs/timing.md`:
 - `findTemper(name, userLib)` resolves only within the userLib. A
   missing name or missing lib returns nil; callers treat nil as
   "no temperament".
+
+## Absorber reconciliation
+
+Step 4.9 of `trackerManager` runs after step 4.8 finalises lane-1 raw
+ppqs (same-pitch onset clamps, delay/clamp combinations that reorder
+hosts) and after step 6 places externals. From the final realised
+lane-1 sequence it:
+
+- Back-derives cents for any pb missing it (foreign-MIDI / first load):
+  `cents = rawToCents(wire) − detune` at the pb's seat.
+- Covers every detune-jump seat: a real pb at that ppq counts;
+  otherwise reuse an existing fake if any (in-place first, else move),
+  else create a new fake (`cents=0`).
+- Anchors a pb-active channel at its first lane-1 onset (even detune 0)
+  unless a real pb already pins it at-or-before (I2a).
+- Drops fakes whose seat is no longer needed.
+- Writes wire raw = `centsToRaw(cents + carrying lane-1 detune)`.
+- Projects the pb column from the final set, with `val=cents` (the
+  authored value tv displays) and `hidden=fake`.
+
+Reads pbs directly from mm; the um cache (`chans`, `byToken`) is
+rebuilt at the end-of-rebuild `reload()`.
 
 ## Conventions
 

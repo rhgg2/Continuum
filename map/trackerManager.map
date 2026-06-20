@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1735  sha=a86b164  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1739  sha=c7fee67  mode=chunk
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -8,7 +8,7 @@
   @invariant  only lane-1 notes drive detune realisation
   @invariant  pb.val is cents inside um; raw↔cents only at load/flush (rawToCents/centsToRaw)
   @invariant  cents window = cm:get('pbRange') * 100 per side
-  @invariant  fake pbs are absorbers seated at lane-1 onsets to absorb detune jumps
+  @invariant  fake pbs absorb lane-1 detune jumps; the first onset also anchors a pb-active channel
   @invariant  pb.fake is the sole absorber marker (persisted as cc metadata via mm sidecar)
   @invariant  pa stores aftertouch value in mm cc.vel; cc-routing fields stripped on projection
   @invariant  loc values valid only within one rebuild-to-flush window
@@ -189,60 +189,60 @@
   @emits rebuild   -- takeChanged:boolean
 
 # Uses (outbound edges)
-  @use call    cm.boundTake  @ 1672, 1687
-  @use call    cm.get  @ 65, 70, 493, 684, 925, 1180, 1507, 1611
-  @use call    cm.set  @ 1710
-  @use call    cm.setContext  @ 1709, 1722
+  @use call    cm.boundTake  @ 1676, 1691
+  @use call    cm.get  @ 65, 70, 493, 684, 925, 1180, 1511, 1615
+  @use call    cm.set  @ 1714
+  @use call    cm.setContext  @ 1713, 1726
   @use call    ds.assign  @ 1142
-  @use call    ds.get  @ 690, 1123, 1324, 1613, 1617, 1645, 1689
-  @use call    mm.add  @ 595, 876, 1486, 1524
-  @use call    mm.assign  @ 583, 1014, 1116, 1204, 1481
-  @use call    mm.ccs  @ 1084, 1349, 1495, 1527
-  @use call    mm.delete  @ 591, 1480, 1523
+  @use call    ds.get  @ 690, 1123, 1311, 1617, 1621, 1649, 1693
+  @use call    mm.add  @ 595, 876, 1490, 1528
+  @use call    mm.assign  @ 583, 1014, 1116, 1204, 1485
+  @use call    mm.ccs  @ 1084, 1336, 1499, 1531
+  @use call    mm.delete  @ 591, 1484, 1527
   @use call    mm.events  @ 617, 855
   @use call    mm.interpolate  @ 671
   @use call    mm.length  @ 666, 683, 748, 774, 842
-  @use call    mm.load  @ 1715
-  @use call    mm.modify  @ 581, 871, 1012, 1115, 1202, 1479, 1522
+  @use call    mm.load  @ 1719
+  @use call    mm.modify  @ 581, 871, 1012, 1115, 1202, 1483, 1526
   @use call    mm.name  @ 668
   @use call    mm.notes  @ 1054
-  @use call    mm.reload  @ 1731
-  @use call    mm.resolution  @ 74, 667, 683, 762, 776, 822, 857, 925, 1552
+  @use call    mm.reload  @ 1735
+  @use call    mm.resolution  @ 74, 667, 683, 762, 776, 822, 857, 925, 1556
   @use call    mm.setLength  @ 762, 776, 822, 857
   @use call    mm.setName  @ 669
-  @use call    mm.take  @ 661, 663, 885, 886, 1006, 1142, 1727
+  @use call    mm.take  @ 661, 663, 885, 886, 1006, 1142, 1731
   @use call    mm.timeSigs  @ 670
-  @use call    mm.tokenOf  @ 1066, 1089, 1094, 1101, 1204, 1205, 1351, 1499, 1529
-  @use call    mm.unload  @ 1724
+  @use call    mm.tokenOf  @ 1066, 1089, 1094, 1101, 1204, 1205, 1338, 1503, 1533
+  @use call    mm.unload  @ 1728
   @use call    timing.delayToPPQ  @ 74
   @use call    timing.eval  @ 700, 701
   @use call    timing.invert  @ 706, 708
   @use call    timing.isIdentity  @ 687
-  @use call    timing.ppqToDelay  @ 1561
+  @use call    timing.ppqToDelay  @ 1565
   @use call    timing.resolveComposite  @ 688
-  @use call    util.add  @ 124, 132, 181, 185, 187, 209, 222, 247, 332, 339, 532, 534, 539, 547, 626, 631, 753, 755, 806, 850, 918, 1055, 1056, 1067, 1089, 1094, 1110, 1160, 1199, 1200, 1239, 1266, 1295, 1338, 1397, 1421, 1425, 1426, 1432, 1458, 1468, 1499, 1513, 1517, 1518, 1529
+  @use call    util.add  @ 124, 132, 181, 185, 187, 209, 222, 247, 332, 339, 532, 534, 539, 547, 626, 631, 753, 755, 806, 850, 918, 1055, 1056, 1067, 1089, 1094, 1110, 1160, 1199, 1200, 1239, 1266, 1295, 1325, 1401, 1425, 1429, 1430, 1436, 1462, 1472, 1503, 1517, 1521, 1522, 1533
   @use call    util.assign  @ 194, 557, 992, 1197
-  @use call    util.bucket  @ 114, 515, 518, 1240, 1241, 1352
+  @use call    util.bucket  @ 114, 515, 518, 1240, 1241, 1339
   @use call    util.clamp  @ 66
-  @use call    util.clone  @ 849, 875, 900, 990, 1065, 1196, 1484
-  @use call    util.deepClone  @ 1612, 1613, 1616, 1617, 1679, 1695
-  @use call    util.deepEq  @ 1633
+  @use call    util.clone  @ 849, 875, 900, 990, 1065, 1196, 1488
+  @use call    util.deepClone  @ 1616, 1617, 1620, 1621, 1683, 1699
+  @use call    util.deepEq  @ 1637
   @use call    util.installHooks  @ 41
   @use call    util.key  @ 515, 518
   @use call    util.pick  @ 624
   @use call    util.print  @ 35
-  @use call    util.round  @ 66, 71, 717, 793, 800, 1293, 1561
-  @use call    util.seek  @ 158, 1327
-  @use forward mm:notesDeduped  @ 1661
-  @use forward mm:takeSwapped  @ 1663
-  @use forward mm:uuidsReassigned  @ 1662
+  @use call    util.round  @ 66, 71, 717, 793, 800, 1293, 1565
+  @use call    util.seek  @ 158, 1314
+  @use forward mm:notesDeduped  @ 1665
+  @use forward mm:takeSwapped  @ 1667
+  @use forward mm:uuidsReassigned  @ 1666
   @use require timing  @ 31
   @use require tuning  @ 32
   @use require util  @ 30
-  @use sub     cm:configChanged  @ 1671
-  @use sub     ds:dataChanged  @ 1686
-  @use sub     mm:reload  @ 1665
-  @use sub     mm:takeSwapped  @ 1664
+  @use sub     cm:configChanged  @ 1675
+  @use sub     ds:dataChanged  @ 1690
+  @use sub     mm:reload  @ 1669
+  @use sub     mm:takeSwapped  @ 1668
 
 # REAPER API surface
   @reaper GetCursorPosition

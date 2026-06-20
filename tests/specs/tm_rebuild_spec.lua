@@ -285,7 +285,13 @@ return {
       t.eq(ccEvt.tag,  42,     'cc tag rides through projection')
 
       t.truthy(ch.columns.pb, 'pb column surfaces')
-      local pbEvt = ch.columns.pb.events[1]
+      -- The first-note anchor adds a hidden pb=0 at ppq 0; the authored
+      -- pb is the visible one.
+      local pbEvt
+      for _, e in ipairs(ch.columns.pb.events) do
+        if not e.hidden then pbEvt = e end
+      end
+      t.truthy(pbEvt, 'authored pb projected')
       t.eq(pbEvt.mood, 'green', 'pb custom field rides through projection')
       t.eq(pbEvt.tag,  7,       'pb tag rides through projection')
 
