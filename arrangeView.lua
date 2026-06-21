@@ -426,6 +426,7 @@ function av:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   return am:mintParkedTake(trackIdx, name, lengthQN, srcTake)
 end
 function av:isParkedTake(take) return am:isParkedTake(take) end
+function av:ownerTrack(take)   return am:ownerTrack(take) end
 function av:editCursorQN()        return am:editCursorQN() end
 function av:playPositionQN()      return am:playPositionQN() end
 function av:loopRangeQN()         return am:loopRangeQN() end

@@ -53,6 +53,7 @@ local function resetArrange()
   fakeArrange.keyForSlot  = function() return '' end
   fakeArrange.nextFreeSlot   = function() return 7 end
   fakeArrange.isParkedTake   = function() return false end
+  fakeArrange.ownerTrack     = function(take) return take end
   fakeArrange.mintParkedTake = function(trackIdx, name, beats, src)
     fakeArrange.calls.mint = { trackIdx = trackIdx, name = name, beats = beats, src = src }
     return 7                                       -- the new parked slot

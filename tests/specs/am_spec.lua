@@ -124,17 +124,20 @@ return {
   -- Identity resolution
   --------------------------------------------------------------------
   {
-    name = 'slotForTake resolves slot from take pool guid',
+    name = 'ownerTrack resolves a parked take to its logical track, not scratch',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
-        { items = { { kind = 'midi', poolGuid = '{p1}' },
-                    { kind = 'midi', poolGuid = '{p2}' } } },
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
       })
-      local takes = am:tracksTakes(0)
-      t.truthy(am:slotForTake(takes[1].take))
-      t.truthy(am:slotForTake(takes[2].take))
-      t.eq(am:slotForTake(takes[1].take) ~= am:slotForTake(takes[2].take), true)
+      local live   = am:tracksTakes(0)[1].take
+      local slot   = am:mintParkedTake(0, 'fresh', 4)
+      local parked = am:takeForSlot(0, slot)
+      local logical = h.reaper.GetMediaItemTake_Track(live)
+      local _, scratchTrack = scratch.peek()
+      t.eq(am:ownerTrack(live),   logical, 'a live take owns via its host track')
+      t.eq(am:ownerTrack(parked), logical, 'a parked take owns its logical track')
+      t.eq(am:ownerTrack(parked) ~= scratchTrack, true, 'owner is not the scratch host')
     end,
   },
 
@@ -226,10 +229,8 @@ return {
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, { { items = {} } })
-      local slot, t1 = am:createAndDropMidi(0, 0, 1, 'lead')
-      local t2 = am:dropInstance(0, slot, 4, 1)
-      t.eq(am:slotForTake(t1), slot, 'original take pools to its slot')
-      t.eq(am:slotForTake(t2), slot, 'second pools to same slot via shared POOLEDEVTS')
+      local slot = am:createAndDropMidi(0, 0, 1, 'lead')
+      am:dropInstance(0, slot, 4, 1)
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2)
       for _, tk in ipairs(takes) do
@@ -254,8 +255,7 @@ return {
       local h, am = mkAm(harness)
       seedTracks(h, { { items = {} } })
       local slot  = am:createAndDropMidi(0, 0, 2, 'lead')
-      local clone = am:duplicateTake(am:tracksTakes(0)[1], 6)
-      t.eq(am:slotForTake(clone), slot, 'clone pools to the source take\'s slot')
+      am:duplicateTake(am:tracksTakes(0)[1], 6)
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2, 'original survives, clone added')
       local cloneShape
@@ -263,6 +263,7 @@ return {
         if tk.startQN == 6 then cloneShape = tk end
       end
       t.eq(cloneShape ~= nil, true, 'clone placed at qnPos 6')
+      t.eq(cloneShape.slotIdx, slot, 'clone pools to the source take\'s slot')
       t.eq(cloneShape.lengthQN, 2, 'clone copies the source length')
     end,
   },
@@ -575,7 +576,7 @@ return {
       t.eq(#am:tracksTakes(0), 0, 'parked: nothing live')
       local back = am:dropInstance(0, slot, 8)
       t.truthy(back, 'a fresh instance drops from the parked keeper')
-      t.eq(am:slotForTake(back), slot, 'it pools to the same slot')
+      t.eq(am:tracksTakes(0)[1].slotIdx, slot, 'it pools to the same slot')
       local _, blob = h.reaper.MIDI_GetAllEvts(back, '')
       t.eq(blob, 'EVTS-BLOB', 'events came from the parked sibling')
     end,
@@ -998,12 +999,12 @@ return {
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, { { items = {} } })
-      local _, take = am:createAndDropMidi(0, 0, 1, 'lead')
+      local slot, take = am:createAndDropMidi(0, 0, 1, 'lead')
       -- Simulate a user recolouring the take in REAPER after creation.
       h.reaper.SetMediaItemTakeInfo_Value(take, 'I_CUSTOMCOLOR', 0xDEADBE | 0x1000000)
       -- A dropInstance triggers ensureColours + stampForTake for the new
       -- instance only; the override take must be left alone.
-      am:dropInstance(0, am:slotForTake(take), 4, 1)
+      am:dropInstance(0, slot, 4, 1)
       t.eq(h.reaper.GetMediaItemTakeInfo_Value(take, 'I_CUSTOMCOLOR'), 0xDEADBE | 0x1000000,
            'override survives -- stampColour only writes when current value is 0')
     end,

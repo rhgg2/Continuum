@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=142  sha=e69cb6f  mode=chunk
+@module trackerPage  src=trackerPage.lua  loc=142  sha=a5d6834  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, help
 
 # Imports
@@ -81,6 +81,5 @@
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
-  @reaper GetMediaItemTake_Track
   @reaper MIDI_GetHash
   @reaper GetActiveTake

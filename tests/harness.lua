@@ -77,7 +77,14 @@ function harness.mk(opts)
   -- Only region-wired specs need the real group engine.
   local gm = opts.groups
          and util.instantiate('groupManager', { tm = tm, ds = ds }) or nil
-  local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds })
+  -- pa resolves a take's source track via arrange.ownerTrack; these specs use
+  -- only live takes, where the owner is the take's host track.
+  local paFacade = { get = function(name)
+    if name == 'arrange' then
+      return { ownerTrack = function(take) return reaper.GetMediaItemTake_Track(take) end }
+    end
+  end }
+  local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = paFacade })
   local vm = util.instantiate('trackerView', { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa })
   cmgr:push('tracker')
 

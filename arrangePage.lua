@@ -51,6 +51,7 @@ facade.publish('arrange', {
     return av:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   end,
   isParkedTake    = function(take) return av:isParkedTake(take) end,
+  ownerTrack      = function(take) return av:ownerTrack(take) end,
   reswingAll             = function(name) av:reswingAll(name) end,
   takesUsing             = function(name) return av:takesUsing(name) end,
 })

@@ -22,7 +22,7 @@ local function arrange() return facade.get('arrange') end
 -- trackerMode is wiring-derived per bind, not a per-frame probe — follows the bound
 -- take, not the arrange cursor. See docs/trackerManager.md § PC synthesis under trackerMode.
 local function samplerMode(take)
-  local track = take and reaper.GetMediaItemTake_Track(take)
+  local track = take and arrange().ownerTrack(take)
   return (track and facade.get('wiring').samplerReachable(track)) or false
 end
 

@@ -539,12 +539,22 @@ function am:trackSlots(trackIdx)
   return ensureState().slotsByCol[trackIdx] or {}
 end
 
-function am:slotForTake(take)
-  local track = reaper.GetMediaItemTake_Track(take)
-  local id    = takeIdOf(take)
-  if not track or not id then return end
-  local _, slotForId = ensureSlots(track)
-  return slotForId[id]
+--contract: logical track owning take's slot — host track unless parked, then a slot-owner scan
+function am:ownerTrack(take)
+  if not take then return end
+  local host = reaper.GetMediaItemTake_Track(take)
+  if not am:isParkedTake(take) then return host end
+  local id = takeIdOf(take)
+  if not id then return host end
+  for _, tr in ipairs(am:projectTracks()) do
+    local track = visibleTrackOfCol(tr.idx)
+    if track then
+      for _, entry in pairs(readSlots(track)) do
+        if entry.id == id then return track end
+      end
+    end
+  end
+  return host
 end
 
 function am:keyForSlot(slotIdx)

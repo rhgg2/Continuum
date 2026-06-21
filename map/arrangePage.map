@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=64  sha=88fcec6  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=65  sha=a5d6834  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -24,27 +24,28 @@
       @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
   -- Arrange service surface — av passthroughs
   -- Page interface — render delegates to the renderer
-  @api ap:toolbarSegments()  @ 59
-  @api ap:renderBody(_, w, h, dispatch)  @ 60
-  @api ap:renderStatusBar(ctx)  @ 61
-  @api ap:focusState()  @ 62
+  @api ap:toolbarSegments()  @ 60
+  @api ap:renderBody(_, w, h, dispatch)  @ 61
+  @api ap:renderStatusBar(ctx)  @ 62
+  @api ap:focusState()  @ 63
 
 # Uses (outbound edges)
-  @use call    arrangeRender.focusState  @ 62
-  @use call    arrangeRender.renderBody  @ 60
-  @use call    arrangeRender.renderStatusBar  @ 61
-  @use call    arrangeRender.toolbarSegments  @ 59
+  @use call    arrangeRender.focusState  @ 63
+  @use call    arrangeRender.renderBody  @ 61
+  @use call    arrangeRender.renderStatusBar  @ 62
+  @use call    arrangeRender.toolbarSegments  @ 60
   @use call    arrangeView.cursorCol  @ 42
   @use call    arrangeView.isParkedTake  @ 53
   @use call    arrangeView.keyForSlot  @ 48
   @use call    arrangeView.midiSlots  @ 44
   @use call    arrangeView.mintParkedTake  @ 51
   @use call    arrangeView.nextFreeSlot  @ 49
+  @use call    arrangeView.ownerTrack  @ 54
   @use call    arrangeView.projectTracks  @ 43
-  @use call    arrangeView.reswingAll  @ 54
+  @use call    arrangeView.reswingAll  @ 55
   @use call    arrangeView.seedCursor  @ 38
   @use call    arrangeView.takeForSlot  @ 45
-  @use call    arrangeView.takesUsing  @ 55
+  @use call    arrangeView.takesUsing  @ 56
   @use call    arrangeView.trackHandle  @ 47
   @use call    arrangeView.trackIdxForGuid  @ 46
   @use call    facade.publish  @ 41

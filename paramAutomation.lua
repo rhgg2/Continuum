@@ -10,6 +10,11 @@
 local util = require 'util'
 local cm, ds, facade = (...).cm, (...).ds, (...).facade
 
+-- Source-track resolution is logical, not physical: a parked take hosts on the
+-- scratch track, but its automation belongs to the track owning its slot.
+local function arrange() return facade and facade.get('arrange') end
+local function ownerTrack(take) return take and arrange().ownerTrack(take) end
+
 local AUTO_BUS  = 126
 local CC_IDENT  = 'JS:Continuum CC'
 local SLOTS     = 16
@@ -68,8 +73,7 @@ local function eachTake(visit)
 end
 
 local function boundTrack()
-  local take = cm:boundTake()
-  return take and reaper.GetMediaItemTake_Track(take)
+  return ownerTrack(cm:boundTake())
 end
 
 ----- Gather + desired specs
@@ -79,7 +83,7 @@ local function gatherBindings()
   eachTake(function(take)
     local cfg = ds:getAt(take, 'paramAutomation')
     if not cfg or not next(cfg) then return end
-    local srcGuid = reaper.GetTrackGUID(reaper.GetMediaItemTake_Track(take))
+    local srcGuid = reaper.GetTrackGUID(ownerTrack(take))
     for chan, lanes in pairs(cfg) do
       for lane, b in pairs(lanes) do
         bindings[#bindings + 1] = {
@@ -251,7 +255,7 @@ end
 local function usedLanes(srcTrack, chan)
   local used = {}
   eachTake(function(take)
-    if reaper.GetMediaItemTake_Track(take) ~= srcTrack then return end
+    if ownerTrack(take) ~= srcTrack then return end
     local cfg = ds:getAt(take, 'paramAutomation') or {}
     for lane in pairs(cfg[chan] or {}) do used[lane] = true end
     local extras = ds:getAt(take, 'extraColumns') or {}
