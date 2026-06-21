@@ -2,7 +2,7 @@
 --invariant: channels are 1..16 internally; +1 applied on read from REAPER, -1 on write
 --invariant: loc is 1-indexed REAPER event-order; not stable across reloads
 --invariant: mm holds realisation frame; delay baked into note-on ppq (docs/timing.md)
---invariant: mm holds raw pb; cents/detune + fake-pb absorber live in tm (docs/tuning.md)
+--invariant: mm holds raw pb; cents/detune + absorber pb live in tm (docs/tuning.md)
 --invariant: muted is true-or-absent; false coerces to nil at write; pass false to clear
 --invariant: per-event metadata: util:serialise to take ext-data, unserialised on read
 local util = require 'util'

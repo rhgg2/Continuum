@@ -273,6 +273,22 @@ and `reconcile` deletes the now-absent vuid and adds the new one. The
 acting instance is the on-ov-local path's job and is skipped here, so
 the two mechanisms never double-handle a slot.
 
+## DERIVED opt-out
+
+`copyScalars` carries the full event payload across the group/instance
+frame boundary, minus the keys in `DERIVED`. The list is opt-out, not
+opt-in: an allowlist would silently drop every unlisted key (the
+rpb-drop bug). Three categories of denied key:
+
+- **positional/identity** — the four duals (`ppq`/`ppqL`, `endppq`/`endppqL`)
+  translate explicitly between frames; copying them raw would
+  double-write or leak realised time.
+- **regenerated** — `tm` re-derives these every rebuild; they must
+  never persist into the shared group template.
+- **absorber synth** — `derived`/`hidden` pbs are re-seated from note
+  onsets each rebuild; carrying them into the group frame would corrupt
+  the template with ephemeral realisation state.
+
 ## `conflicted` is not UI-reachable
 
 `groups.project`'s slot-dedup marks the loser at a colliding

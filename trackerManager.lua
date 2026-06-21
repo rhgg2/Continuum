@@ -6,8 +6,8 @@
 --invariant: only lane-1 notes drive detune realisation
 --invariant: pb.val is cents inside um; raw↔cents only at load/flush (rawToCents/centsToRaw)
 --invariant: cents window = cm:get('pbRange') * 100 per side
---invariant: fake pbs absorb lane-1 detune jumps; the first onset also anchors a pb-active channel
---invariant: pb.fake is the sole absorber marker (persisted as cc metadata via mm sidecar)
+--invariant: absorber pbs absorb lane-1 detune jumps; first onset anchors a pb-active channel
+--invariant: pb.derived=='absorber' is the absorber marker, persisted as cc metadata via mm sidecar
 --invariant: pa stores aftertouch value in mm cc.vel; cc-routing fields stripped on projection
 --invariant: loc values valid only within one rebuild-to-flush window
 --invariant: um's notesByLoc/ccsByLoc rebuild fresh each rebuild
@@ -99,8 +99,8 @@ local function forEachEvent(fn)
 end
 
 
---contract: synthesised PCs carry fake=true; ppqL inherited from winning host-note record
---contract: an existing fake PC matching (ppq, val) is kept, preserving mm-side loc
+--contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
+--contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
 --contract: returns (toRemove, toAdd) for the caller to persist
 --contract: if record.key set, marks key.sampleShadowed=true on records lost to lane priority
 --invariant: shadow marking is rebuild-only; flush callers omit key (rebuild reclones lane events)
@@ -118,11 +118,11 @@ local function reconcilePCsForChan(chan, records)
     table.sort(g, function(a, b) return a.lane < b.lane end)
     local w = g[1]
     local have = byPpq[ppq]
-    if have and have.fake and have.val == w.sample then
+    if have and have.derived and have.val == w.sample then
       kept[have] = true
     else
       util.add(toAdd, { ppq = ppq, ppqL = w.ppqL, val = w.sample,
-                        evType = 'pc', chan = chan, fake = true })
+                        evType = 'pc', chan = chan, derived = 'pc' })
     end
     for i = 2, #g do
       if g[i].key then g[i].key.sampleShadowed = true end
@@ -621,7 +621,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
         -- cents (sidecar) is the authored logical value; nil for foreign-
         -- MIDI or pre-cents pbs -- back-derived in rebuild step 4.9
         -- once the final lane-1 layout is settled.
-        evt = util.pick(e, 'ppq ppqL chan shape tension fake frame cents',
+        evt = util.pick(e, 'ppq ppqL chan shape tension derived frame cents',
                         { val = rawToCents(e.val), token = tok, evType = 'pb' })
         util.add(chans[evt.chan].pbs, evt)
       else
@@ -1082,7 +1082,7 @@ do
     do
       local ccUpdates = {}
       for _, cc in mm:ccs() do
-        if not cc.fake then
+        if not cc.derived then
           if staleSwing[cc.chan] and cc.ppqL ~= nil then
             local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
             if newPpq ~= cc.ppq then
@@ -1152,7 +1152,7 @@ do
     do
       local toAssign = {}
       forEachEvent(function(_, evt, chan, isNote, _, lane)
-        if not isNote or evt.fake then return end
+        if not isNote or evt.derived then return end
         if staleSwing[chan] then
           local newPpq = tm:fromLogical(chan, evt.ppqL, delayToPPQ(evt.delay or 0))
           if newPpq ~= evt.ppq then
@@ -1369,7 +1369,7 @@ do
         if first and not needed[first.ppq] then
           local hasReal, anchored = false, false
           for _, pb in ipairs(pbs) do
-            if not pb.fake then
+            if not pb.derived then
               hasReal = true
               if pb.ppq <= first.ppq then anchored = true break end
             end
@@ -1396,43 +1396,43 @@ do
         -- Match existing pbs to needed seats. Real pbs cover their seat.
         -- Fakes: consume any already at a needed seat in place, move
         -- remaining fakes to fill the rest, delete leftovers.
-        local realAt, availFakes = {}, {}
+        local realAt, availAbsorbers = {}, {}
         for _, pb in ipairs(pbs) do
-          if pb.fake then util.add(availFakes, pb)
-          else            realAt[pb.ppq] = pb end
+          if pb.derived then util.add(availAbsorbers, pb)
+          else realAt[pb.ppq] = pb end
         end
 
         local restampPpqL = {}  -- pb -> newPpqL (existing fake at needed seat with stale ppqL)
-        for i = #availFakes, 1, -1 do
-          local f = availFakes[i]
+        for i = #availAbsorbers, 1, -1 do
+          local f = availAbsorbers[i]
           if needed[f.ppq] and not realAt[f.ppq] then
             if f.ppqL ~= hostPpqL[f.ppq] then
               restampPpqL[f] = hostPpqL[f.ppq]
               f.ppqL = hostPpqL[f.ppq]   -- mirror into the clone so step 5 / column projection sees it
             end
             needed[f.ppq] = nil
-            table.remove(availFakes, i)
+            table.remove(availAbsorbers, i)
           end
         end
 
         local moved = {}  -- pb -> newPpq
         for ppq in pairs(needed) do
           if not realAt[ppq] then
-            local f = table.remove(availFakes)
+            local f = table.remove(availAbsorbers)
             if f then
               moved[f] = ppq
               f.ppq, f.cents, f.ppqL = ppq, 0, hostPpqL[ppq]
               util.add(pbs, f)
             else
               local fresh = { chan = chan, ppq = ppq, cents = 0,
-                              ppqL = hostPpqL[ppq], fake = true, evType = 'pb' }
+                              ppqL = hostPpqL[ppq], derived = 'absorber', evType = 'pb' }
               util.add(pbs, fresh)
               util.add(pbAdds, { evt = fresh })
             end
           end
         end
 
-        for _, f in ipairs(availFakes) do
+        for _, f in ipairs(availAbsorbers) do
           util.add(pbDeletes, { token = f.origTok })
           for i, p in ipairs(pbs) do
             if p == f then table.remove(pbs, i); break end
@@ -1467,7 +1467,7 @@ do
         -- Column projection.
         local anyVisible, pbColEvents = false, {}
         for _, pb in ipairs(pbs) do
-          local hidden = pb.fake and (pb.shape == nil or pb.shape == 'step')
+          local hidden = pb.derived and (pb.shape == nil or pb.shape == 'step')
           anyVisible = anyVisible or not hidden
           util.add(pbColEvents, projectCC(pb, pb.origTok, {
             val    = pb.cents,

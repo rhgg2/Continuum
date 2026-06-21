@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1739  sha=c7fee67  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1739  sha=4f3252c  mode=chunk
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -8,8 +8,8 @@
   @invariant  only lane-1 notes drive detune realisation
   @invariant  pb.val is cents inside um; raw↔cents only at load/flush (rawToCents/centsToRaw)
   @invariant  cents window = cm:get('pbRange') * 100 per side
-  @invariant  fake pbs absorb lane-1 detune jumps; the first onset also anchors a pb-active channel
-  @invariant  pb.fake is the sole absorber marker (persisted as cc metadata via mm sidecar)
+  @invariant  absorber pbs absorb lane-1 detune jumps; first onset anchors a pb-active channel
+  @invariant  pb.derived=='absorber' is the absorber marker, persisted as cc metadata via mm sidecar
   @invariant  pa stores aftertouch value in mm cc.vel; cc-routing fields stripped on projection
   @invariant  loc values valid only within one rebuild-to-flush window
   @invariant  um's notesByLoc/ccsByLoc rebuild fresh each rebuild
@@ -20,8 +20,8 @@
   @invariant  pbEventCol optional: delay, shape, tension
   @invariant  pbEventCol is the col projection; um cache holds raw cents in val
   @invariant  paEventCol mixes into note column events
-  @contract  synthesised PCs carry fake=true; ppqL inherited from winning host-note record
-  @contract  an existing fake PC matching (ppq, val) is kept, preserving mm-side loc
+  @contract  synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
+  @contract  an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
   @contract  returns (toRemove, toAdd) for the caller to persist
   @contract  if record.key set, marks key.sampleShadowed=true on records lost to lane priority
   @invariant  shadow marking is rebuild-only; flush callers omit key (rebuild reclones lane events)

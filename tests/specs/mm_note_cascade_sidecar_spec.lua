@@ -42,8 +42,8 @@ return {
         mm:add{ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 64, vel = 100, detune = -21 }
         mm:add{ evType = 'note', ppq = 480, endppq = 720, chan = 1, pitch = 62, vel = 100, detune = -11 }
         mm:add{ evType = 'note', ppq = 720, endppq = 960, chan = 1, pitch = 64, vel = 100, detune = -21 }
-        mm:add{ evType = 'pb',   ppq =   0, chan = 1, val = -50, fake = true }
-        mm:add{ evType = 'pb',   ppq = 240, chan = 1, val = -90, fake = true }
+        mm:add{ evType = 'pb',   ppq =   0, chan = 1, val = -50, derived = 'absorber' }
+        mm:add{ evType = 'pb',   ppq = 240, chan = 1, val = -90, derived = 'absorber' }
       end)
 
       local noteTok, pbTok = {}, {}

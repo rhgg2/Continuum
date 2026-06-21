@@ -44,7 +44,7 @@ return {
       local pbs = pbsAt(dump, 0)
       t.eq(#pbs, 1, 'exactly one pb seated at ppq=0')
       t.eq(pbs[1].val, cents2raw(50), 'pb carries raw equivalent of detune')
-      t.eq(pbs[1].fake, true, 'pb tagged as fake')
+      t.eq(pbs[1].derived, 'absorber', 'pb tagged as fake')
     end,
   },
 
@@ -111,7 +111,7 @@ return {
       local at0 = pbsAt(h.fm:dump(), 0)
       t.eq(#at0, 1, 'anchor pb seated at the zero-detune first note')
       t.eq(at0[1].val, 0, 'anchor holds pb centre (raw 0)')
-      t.eq(at0[1].fake, true, 'anchor is a fake')
+      t.eq(at0[1].derived, 'absorber', 'anchor is a fake')
     end,
   },
 
@@ -150,8 +150,8 @@ return {
       t.eq(#at240, 1, 'pb at ppq=240')
       t.eq(at0[1].val,   cents2raw(25),  'first seat carries +25 cents raw')
       t.eq(at240[1].val, cents2raw(-30), 'second seat carries -30 cents raw')
-      t.eq(at0[1].fake,   true)
-      t.eq(at240[1].fake, true)
+      t.eq(at0[1].derived, 'absorber')
+      t.eq(at240[1].derived, 'absorber')
     end,
   },
 
@@ -198,13 +198,13 @@ return {
       end
       t.eq(#pbs, 2, 'still exactly two pbs after the move')
       for _, p in ipairs(pbs) do
-        t.eq(p.fake, true, 'pb stays fake — no spurious real pb seated')
+        t.eq(p.derived, 'absorber', 'pb stays fake — no spurious real pb seated')
       end
     end,
   },
 
   {
-    name = 'pb.fake survives a rebuild (persisted as cc metadata)',
+    name = 'pb.derived survives a rebuild (persisted as cc metadata)',
     run = function(harness)
       local h = harness.mk()
       h.tm:addEvent({ evType = 'note',
@@ -216,7 +216,7 @@ return {
       -- Confirm the seated pb has metadata (uuid) and fake=true after flush.
       local pbs = pbsAt(h.fm:dump(), 0)
       t.eq(#pbs, 1, 'pb seated')
-      t.eq(pbs[1].fake, true, 'fake flag persisted on cc')
+      t.eq(pbs[1].derived, 'absorber', 'fake flag persisted on cc')
       t.truthy(pbs[1].uuid, 'cc has a uuid (metadata sidecar allocated)')
 
       -- A rebuild reads from mm and must reconstruct the in-memory fake flag.
@@ -266,7 +266,7 @@ return {
       local dump = h.fm:dump()
       local pbs = pbsAt(dump, 0)
       t.eq(#pbs, 1, 'still a single pb at the seat')
-      t.falsy(pbs[1].fake, 'existing real pb stays real')
+      t.falsy(pbs[1].derived, 'existing real pb stays real')
 
       -- Logical pb (raw - detune) should read as the originally-authored 100
       -- plus the delta introduced by the new note's detune above prior (0).
@@ -482,7 +482,7 @@ return {
       t.eq(pbs[1].ppq, 0,   'anchor still at A')
       t.eq(pbs[2].ppq, 480, "absorber sits at C, not at B (B's carry already matches B)")
       t.eq(pbs[2].val, cents2raw(10), 'C absorbs +10 from carry 0')
-      t.eq(pbs[2].fake, true)
+      t.eq(pbs[2].derived, 'absorber')
     end,
   },
 
@@ -590,7 +590,7 @@ return {
       for _, c in ipairs(h.fm:dump().ccs) do
         if c.evType == 'pb' then pb = c end
       end
-      t.eq(pb.fake, true, 'absorber still flagged fake')
+      t.eq(pb.derived, 'absorber', 'absorber still flagged fake')
       t.eq(pb.val, cents2raw(50), 'absorber value unchanged')
     end,
   },
@@ -627,7 +627,7 @@ return {
 
       local after = pbs()
       t.eq(#after, 1, 'still exactly one pb after delay nudge')
-      t.eq(after[1].fake, true, 'still fake')
+      t.eq(after[1].derived, 'absorber', 'still fake')
       t.eq(after[1].val, cents2raw(50), 'value unchanged')
 
       local newNoteP
@@ -698,7 +698,7 @@ return {
           if c.evType == 'pb' and c.ppq == 0 then return c end
         end
       end
-      t.falsy(realPbAtZero().fake, 'baseline: real pb stays real with detune=0')
+      t.falsy(realPbAtZero().derived, 'baseline: real pb stays real with detune=0')
 
       local note = h.tm:getChannel(1).columns.notes[1].events[1]
       h.tm:assignEvent(note, { detune = 20 })
@@ -706,7 +706,7 @@ return {
 
       local pb = realPbAtZero()
       t.truthy(pb, 'pb still present at seat')
-      t.falsy(pb.fake, 'detune update on the host did not demote pb to fake')
+      t.falsy(pb.derived, 'detune update on the host did not demote pb to fake')
       -- Logical preserved: was 40, still 40. Raw advanced by detune delta
       -- (0 → 20) so raw is now 60c, logical = 60 - 20 = 40.
       t.eq(pb.val, cents2raw(60), 'raw advanced by detune delta to preserve logical')
@@ -738,7 +738,7 @@ return {
         local out = {}
         for _, c in ipairs(h.fm:dump().ccs) do
           if c.evType == 'pb' then
-            out[#out + 1] = { ppq = c.ppq, val = c.val, fake = c.fake or false }
+            out[#out + 1] = { ppq = c.ppq, val = c.val, derived = c.derived or false }
           end
         end
         table.sort(out, function(a, b) return a.ppq < b.ppq end)
@@ -754,7 +754,7 @@ return {
       for i, p in ipairs(before) do
         t.eq(after[i].ppq,  p.ppq,  'pb '..i..' ppq unchanged')
         t.eq(after[i].val,  p.val,  'pb '..i..' val unchanged')
-        t.eq(after[i].fake, p.fake, 'pb '..i..' fake-flag unchanged')
+        t.eq(after[i].derived, p.derived, 'pb '..i..' fake-flag unchanged')
       end
     end,
   },
@@ -835,8 +835,8 @@ return {
       t.eq(pbs[2].ppq, 241, 'second absorber tracks B at clamp-displaced 241')
       t.eq(pbs[1].val, cents2raw(30),  'A absorber +30 cents')
       t.eq(pbs[2].val, cents2raw(-30), 'B absorber -30 cents (no carry-over)')
-      t.eq(pbs[1].fake, true)
-      t.eq(pbs[2].fake, true)
+      t.eq(pbs[1].derived, 'absorber')
+      t.eq(pbs[2].derived, 'absorber')
     end,
   },
 
@@ -895,7 +895,7 @@ return {
       }
       local function realPb()
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.evType == 'pb' and not c.fake then return c end
+          if c.evType == 'pb' and not c.derived then return c end
         end
       end
       local pb = realPb()

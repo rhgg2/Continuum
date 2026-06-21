@@ -13,20 +13,12 @@ local groupsCore = require 'groups'
 local deps   = ...
 local tm, ds = deps.tm, deps.ds
 
--- copyScalars carries the event's full payload across the frame, MINUS
--- these. mm round-trips arbitrary per-event metadata; an allowlist here
--- would silently eat every key it didn't enumerate (the rpb-drop bug).
--- So it is opt-OUT. Three reasons a key is denied:
---   positional/identity -- the four duals translate these explicitly
---     between the logical group frame and the realised instance frame;
---     copying them raw would double-write or leak realised time;
---   regenerated -- tm re-derives every rebuild, must never persist into
---     the shared group template;
---   absorber synth -- fake/hidden pbs are re-seated from note onsets.
+-- DERIVED is opt-out: an allowlist would silently drop every unlisted key (the rpb-drop bug).
+-- see docs/groupManager.md § DERIVED opt-out
 local DERIVED = {
   evType=true, chan=true, chanDelta=true, lane=true, key=true, cc=true,
   ppq=true, ppqL=true, endppq=true, endppqL=true, dur=true,
-  loc=true, sampleShadowed=true, fake=true, hidden=true, uuid=true,
+  loc=true, sampleShadowed=true, derived=true, hidden=true, uuid=true,
 }
 
 local gm = {}

@@ -38,7 +38,7 @@ return {
       local seed = { evType = 'note', chan = 1, lane = 1, ppq = 0,
                      endppq = 240, endppqL = 240, pitch = 60, vel = 100,
                      rpb = 8, foo = 'bar',
-                     loc = 99, sampleShadowed = true, fake = true }
+                     loc = 99, sampleShadowed = true, derived = 'absorber' }
 
       local gid = gm:markGroup({ seed }, rect())
       t.truthy(gid, 'group seeded')
@@ -55,7 +55,7 @@ return {
       t.eq(copy.loc, nil, 'loc (rebuild-regenerated) did not leak')
       t.eq(copy.sampleShadowed, nil,
            'sampleShadowed (rebuild-only) did not leak')
-      t.eq(copy.fake, nil, 'fake (absorber synth) did not leak')
+      t.eq(copy.derived, nil, 'fake (absorber synth) did not leak')
     end,
   },
 }

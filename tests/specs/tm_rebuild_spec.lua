@@ -110,7 +110,7 @@ return {
               detune = 50, delay = 0 },
           },
           ccs = {
-            { ppq = 0, chan = 1, evType = 'pb', val = rawFor50, fake = true },
+            { ppq = 0, chan = 1, evType = 'pb', val = rawFor50, derived = 'absorber' },
           },
         },
       }
@@ -138,7 +138,7 @@ return {
               detune = 50, delay = 500, ppqL = 0, endppqL = 240 },
           },
           ccs = {
-            { ppq = 120, chan = 1, evType = 'pb', val = rawFor50, fake = true },
+            { ppq = 120, chan = 1, evType = 'pb', val = rawFor50, derived = 'absorber' },
             -- A visible pb later on so the pb column surfaces at all.
             { ppq = 480, chan = 1, evType = 'pb', val = 0 },
           },

@@ -1315,9 +1315,9 @@ do
 end
 
 local insertRow, deleteRow, insertRowCol, deleteRowCol do
-  -- Fake pbs are tm-managed absorbers tied to note seats — row ops
-  -- shift only real events and leave fake pbs to tm's reconcile.
-  local function notFake(e) return not e.fake end
+  -- Absorber pbs are tm-managed, tied to note seats — row ops shift
+  -- only real events and leave derived pbs to tm's reconcile.
+  local function notDerived(e) return not e.derived end
 
   -- An open authored tail stays open across the shift; a finite ceiling
   -- shifts with the note, UNCLAMPED — endppq is authored intent, not a
@@ -1340,7 +1340,7 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     local dLogical = numRows * logPerRow
 
     local plans, deletes = {}, {}
-    for e in util.between(col.events, C, length, notFake) do
+    for e in util.between(col.events, C, length, notDerived) do
       local p = shiftPlan(col, e, dLogical)
       if p.newppq >= length then util.add(deletes, e)
       else                       util.add(plans, p) end
@@ -1386,7 +1386,7 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     end
 
     local plans, deletes = {}, {}
-    for e in util.between(col.events, C, length, notFake) do
+    for e in util.between(col.events, C, length, notDerived) do
       if e.ppq < D then util.add(deletes, e)
       else              util.add(plans, shiftPlan(col, e, -dLogical)) end
     end

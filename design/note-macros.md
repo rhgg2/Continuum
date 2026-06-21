@@ -343,16 +343,19 @@ tagged existing events, write the delta with identity carry-forward —
 implemented twice with different vocabularies. Macros make it four
 instances. In leverage order:
 
-- **R1 — one derived marker.** `fake=true` means "derived, regenerable
-  from intent" in two unrelated mechanisms (≈22 sites in tm, 3 in
-  mm/tv/render); macro slices would add `genHost` and every
-  note/cc-metadata predicate becomes `fake or genHost`. Replace both
-  with one provenance field — `derived = 'absorber' | 'pc' |
-  <hostUuid>` — giving one predicate for column routing, lane-alloc
-  exemption, the CC-walk skip, hidden computation, and reconcile
-  gathering. Delta-stream ccs stay outside it by design — their
-  address is their provenance. Pre-beta: persisted-shape change is
-  free.
+- **R1 — one derived marker. ✓ Landed (`e703510`).** `fake=true` meant
+  "derived, regenerable from intent" in two unrelated mechanisms; macro
+  slices would have added `genHost` and forced every predicate to
+  `fake or genHost`. Replaced both with one provenance field —
+  `derived = 'absorber' | 'pc' | <hostUuid>` — now the single predicate
+  for column routing, lane-alloc exemption, the CC-walk skip, hidden
+  computation, and reconcile gathering; every read is a truthiness test,
+  the two writes carry the tag. Delta-stream ccs stay outside it by
+  design — their address is their provenance. The `<hostUuid>` value is
+  reserved; slices fill it. No migration (pre-beta): persisted `fake`
+  metadata is ignored and self-cleans, since absorbers/PCs re-derive
+  each rebuild. Swept the vocabulary too — `availFakes`→`availAbsorbers`,
+  `notFake`→`notDerived`, gm's `copyScalars` opt-out key renamed.
 - **R2 — the reconcile skeleton.** `reconcilePCsForChan`
   (keep-on-match / add / remove-unkept, loc carry-forward) and the
   absorber pass's fake-matching middle (reuse-in-place / move /

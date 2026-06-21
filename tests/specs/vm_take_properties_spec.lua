@@ -260,13 +260,8 @@ return {
 
   {
     name = 'tile preserves cc number, pb shape, and arbitrary metadata on copies',
-    -- Pins the bug fix: the column projection drops cc.cc, pb metadata,
-    -- and anything beyond a hardcoded field list. Tile must walk mm
-    -- directly so copies are bit-for-bit replicas modulo the ppq shift.
-    -- (The pb.fake flag is reconciled by tm:rebuild step 4.9 against
-    -- lane-1 detune jumps, so orphan fakes don't survive; the
-    -- arbitrary-field property is tested here via a real pb's shape
-    -- field. Fake-pb persistence has its own coverage in tm_tuning_spec.)
+    -- Pins the bug: column projection dropped cc.cc and pb metadata. Tile must walk mm
+    -- directly for bit-for-bit copies. Fake-pb coverage lives in tm_tuning_spec.
     run = function(harness)
       local h = harness.mk{ seed = {
         notes = {
@@ -290,7 +285,7 @@ return {
       -- is about authored cc/pb copies, not tuning.
       local ccs = {}
       for _, c in ipairs(h.fm:dump().ccs) do
-        if not c.fake then ccs[#ccs + 1] = c end
+        if not c.derived then ccs[#ccs + 1] = c end
       end
       table.sort(ccs, function(a, b) return a.ppq < b.ppq end)
       t.eq(#ccs, 6, 'three originals + three copies')
