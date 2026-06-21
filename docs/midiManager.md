@@ -16,6 +16,41 @@ writing an empty string to their extension slot — REAPER treats this as
 deletion. UUIDs are monotonic integers, base-36 encoded; the namespace is
 unified across notes and ccs.
 
+### Metadata I/O — internal vs external reload
+
+`load` reaches REAPER's ext-data twice: `loadMetadata` reads every
+`ctm_<uuid>` up front, `saveMetadata` re-writes every one at the end
+(plus a stale-key sweep). Both are O(all uuids) in REAPER calls — and
+`mm:modify` triggers a full reload on **every** edit, so with a few
+hundred notes this dominated keystroke latency.
+
+The round-trip is redundant on a *self-inflicted* reload — one driven by
+`mm:modify`, identified by `lock` still being held when `load` runs:
+- The writes are redundant because `add`/`assign` already self-persist
+  each touched uuid via `saveMetadatum`, and `delete` now wipes its own
+  `ctm_<uuid>` + keys entry inline (`deleteMetadatum`). Ext-data stays
+  current incrementally, so the wholesale `saveMetadata` adds nothing.
+- The read is redundant because the in-memory events still carry that
+  same metadata; `snapshotMetadata` reconstructs the `uuid → fields`
+  table from them (before the table clear) instead of re-reading.
+
+So internal reloads skip both. External loads — take swap, undo, the
+watcher, initial bind — keep the full `loadMetadata` + `saveMetadata`,
+which is where dedup/reconcile and orphan compaction must run; that path
+is byte-for-byte unchanged.
+
+### Index re-read elision
+
+After the first read pass, `load` would re-read every note, cc and sysex
+a second time to refresh `idx`/`uuidIdx`. That pass exists only because
+two in-load steps mutate the take and re-sort it — note dedup and the
+sidecar-reconcile flush — shifting every event's REAPER index out from
+under the first read. When neither fires (`takeDirty` stays false) the
+take is identical to when `load` began, the first-pass indices still
+hold, and the whole re-read is skipped. Self-inflicted reloads are always
+clean, so this elides the second `MIDI_GetNote` sweep on every keystroke;
+foreign-MIDI / undo loads that need fixups still pay it.
+
 ### Notes — notation-event carrier
 
 Every note carries a UUID stored as a REAPER **notation event**

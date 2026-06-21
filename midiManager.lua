@@ -229,6 +229,23 @@ local function saveMetadatum(uuid)
   end
 end
 
+-- Wipe one uuid's ext-data + keys entry inline, so internal reloads can skip the
+-- wholesale saveMetadata() keys-reconcile. See docs/midiManager.md § Metadata I/O.
+local function deleteMetadatum(uuid)
+  if not (take and uuid) then return end
+  local uuidTxt = util.toBase36(uuid)
+  reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_' .. uuidTxt, '', true)
+
+  local ok, keysText = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', '', false)
+  if ok and keysText and keysText ~= '' then
+    local kept = {}
+    for k in keysText:gmatch('[^,]+') do
+      if k ~= uuidTxt then kept[#kept + 1] = k end
+    end
+    reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', table.concat(kept, ','), true)
+  end
+end
+
 local function saveMetadata()
   if not take then return end
 
@@ -251,6 +268,21 @@ local function saveMetadata()
   end
 
   reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', table.concat(keyList, ','), true)
+end
+
+-- In-memory equivalent of loadMetadata() (per uuid, the non-structural fields):
+-- lets an internal reload reuse live metadata. See docs/midiManager.md § Metadata I/O.
+local function snapshotMetadata()
+  local tbl = {}
+  for uuid, evt in pairs(eventsByUuid) do
+    local strip = (evt.evType == 'note') and noteEventFields or ccEventFields
+    local meta = {}
+    for k, v in pairs(evt) do
+      if not strip[k] then meta[k] = v end
+    end
+    tbl[uuid] = meta
+  end
+  return tbl
 end
 
 ----- Utils
@@ -283,18 +315,26 @@ local fire = util.installHooks(mm)
 
 ----- Load
 
+--contract: internal reload (lock held) reuses live metadata; skips ext-data read + write
+--contract: external load (take swap, undo, watcher, init) does full loadMetadata + saveMetadata
 function mm:load(newTake)
   if not newTake then return end
 
   local takeSwapped = take ~= newTake
   if takeSwapped then take = newTake end
 
+  -- lock is held only by modify() at reload time → this is a self-inflicted reload.
+  -- Snapshot the live metadata before the clear so we can skip the ext-data round-trip.
+  local internal = lock
+  local carried  = internal and snapshotMetadata() or nil
+
   notes, ccs, eventsByUuid, tokenIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
   local ccSidecars, noteSidecars = {}, {}
   local sidecarRewrites, sidecarInserts, sidecarDeletes, ccDeletes = {}, {}, {}, {}
   local noteDedupEvents, ccDedupEvents, reassignEvents, reconcileEvents = {}, {}, {}, {}
+  local takeDirty = false  -- set when an in-load step re-sorts the take (see final read pass)
 
-  local metadata = loadMetadata()
+  local metadata = carried or loadMetadata()
   for uuid in pairs(metadata) do if uuid > maxUUID then maxUUID = uuid end end
 
   ----- Helper functions
@@ -343,6 +383,7 @@ function mm:load(newTake)
       end
     end
     if #noteDeletes > 0 then
+      takeDirty = true
       table.sort(noteDeletes)
       reaper.MIDI_DisableSort(take)
       for i = #noteDeletes, 1, -1 do reaper.MIDI_DeleteNote(take, noteDeletes[i]) end
@@ -575,6 +616,7 @@ function mm:load(newTake)
   ----- inserts last (their idxs aren't tracked — final read will pick them up).
   local hasFlush = #sidecarRewrites + #ccDeletes + #sidecarDeletes + #sidecarInserts > 0
   if hasFlush then
+    takeDirty = true
     reaper.MIDI_DisableSort(take)
     for _, r in ipairs(sidecarRewrites) do
       reaper.MIDI_SetTextSysexEvt(take, r.idx, nil, nil, r.ppq, r.type, r.body, true)
@@ -599,7 +641,7 @@ function mm:load(newTake)
   for i, n in ipairs(notes) do n.loc = i end
   for i, c in ipairs(ccs)   do c.loc = i end
 
-  ----- Final read pass: refresh idx / uuidIdx from current REAPER state.
+  ----- Rebuild in-memory indices: notesKeyed / tokenIdx / eventsByUuid + metadata join
   notesKeyed = {}
   local ccsKeyed = {}
   for _, n in ipairs(notes) do
@@ -616,36 +658,41 @@ function mm:load(newTake)
     end
   end
 
-  _, noteCount, ccCount, textCount = reaper.MIDI_CountEvts(take)
-  for i = 0, noteCount-1 do
-    local ok, _, _, ppq, _, chan, pitch = reaper.MIDI_GetNote(take, i)
-    if ok then
-      local evt = { ppq = ppq, chan = chan + 1, pitch = pitch }
-      local n = notesKeyed[noteKey(evt)]
-      if n then n.idx = i end
+  -- idx/uuidIdx re-read: only needed when load re-sorted the take (dedup / sidecar
+  -- reconcile). On a clean reload the first-pass indices still hold. See docs § Index re-read elision.
+  if takeDirty then
+    _, noteCount, ccCount, textCount = reaper.MIDI_CountEvts(take)
+    for i = 0, noteCount-1 do
+      local ok, _, _, ppq, _, chan, pitch = reaper.MIDI_GetNote(take, i)
+      if ok then
+        local evt = { ppq = ppq, chan = chan + 1, pitch = pitch }
+        local n = notesKeyed[noteKey(evt)]
+        if n then n.idx = i end
+      end
     end
-  end
-  for i = 0, ccCount-1 do
-    local ok, _, _, ppq, chanmsg, chan, msg2 = reaper.MIDI_GetCC(take, i)
-    if ok then
-      local evType = chanMsgEvTypes[chanmsg] or ('chanmsg_'..chanmsg)
-      local evt = { ppq = ppq, chan = chan + 1, evType = evType }
-      if evType == 'cc' then evt.cc = msg2 end
-      if evType == 'pa' then evt.pitch = msg2 end
-      local c = ccsKeyed[ccPPQKey(evt)]
-      if c then c.idx = i end
+    for i = 0, ccCount-1 do
+      local ok, _, _, ppq, chanmsg, chan, msg2 = reaper.MIDI_GetCC(take, i)
+      if ok then
+        local evType = chanMsgEvTypes[chanmsg] or ('chanmsg_'..chanmsg)
+        local evt = { ppq = ppq, chan = chan + 1, evType = evType }
+        if evType == 'cc' then evt.cc = msg2 end
+        if evType == 'pa' then evt.pitch = msg2 end
+        local c = ccsKeyed[ccPPQKey(evt)]
+        if c then c.idx = i end
+      end
     end
-  end
-  for i = 0, textCount-1 do
-    local ok, _, _, _, eventtype, msg = reaper.MIDI_GetTextSysexEvt(take, i)
-    local sc = ok and (eventtype == 15  and noteSidecarDecode(msg)
-                    or eventtype == -1 and ccSidecarDecode(msg))
-    local evt = sc and eventsByUuid[sc.uuid]
-    if evt then evt.uuidIdx = i end
+    for i = 0, textCount-1 do
+      local ok, _, _, _, eventtype, msg = reaper.MIDI_GetTextSysexEvt(take, i)
+      local sc = ok and (eventtype == 15  and noteSidecarDecode(msg)
+                      or eventtype == -1 and ccSidecarDecode(msg))
+      local evt = sc and eventsByUuid[sc.uuid]
+      if evt then evt.uuidIdx = i end
+    end
   end
 
   ----- Persist + signals
-  saveMetadata()
+  -- Internal reloads skip this — ext-data is kept current incrementally. See docs § Metadata I/O.
+  if not internal then saveMetadata() end
 
   --contract: load fires signals in order: takeSwapped, notesDeduped, uuidsReassigned
   --contract: then: ccsDeduped, ccsReconciled, reload
@@ -687,7 +734,6 @@ end
 
 function mm:modify(fn)
   if not liveTake() then return end
-
   lock = true
   reaper.MIDI_DisableSort(take)
   local ok, err = pcall(fn)
@@ -1016,6 +1062,7 @@ end
 --contract: cc/pb sidecar is removed here by content-addressed scan on text events
 --contract: per-array idx is shifted down so later deletes in this modify see correct slots
 --invariant: uuidIdx is NOT tracked across deletes — post-modify read pass re-resolves
+--contract: wipes the event's ctm_<uuid> ext-data + keys entry inline (internal reload skips save)
 function mm:delete(token)
   if not (take and checkLock()) then return end
   local evt = tokenIdx[token]
@@ -1027,11 +1074,12 @@ function mm:delete(token)
   if evt.evType == 'note' then
     notes[evt.loc] = nil
     eventsByUuid[evt.uuid] = nil
+    deleteMetadatum(evt.uuid)
     reaper.MIDI_DeleteNote(take, idx)
     shiftDown(notes, 'idx', idx)
   else
     ccs[evt.loc] = nil
-    if evt.uuid then eventsByUuid[evt.uuid] = nil end
+    if evt.uuid then eventsByUuid[evt.uuid] = nil; deleteMetadatum(evt.uuid) end
     reaper.MIDI_DeleteCC(take, idx)
     shiftDown(ccs, 'idx', idx)
     deleteSidecarByUuid(evt.uuid)

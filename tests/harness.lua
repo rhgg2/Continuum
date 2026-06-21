@@ -54,6 +54,7 @@ function harness.mk(opts)
     resolution = opts.seed and opts.seed.resolution or 240,
     length     = opts.seed and opts.seed.length     or 3840,
     timeSigs   = opts.seed and opts.seed.timeSigs,
+    floatPpq   = opts.floatPpq,
   })
 
   local ps = util.instantiate('pextStore')

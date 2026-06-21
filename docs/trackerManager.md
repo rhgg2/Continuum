@@ -262,6 +262,11 @@ Steps:
    into the tail walk — so the host's realised tail truncates to fxNote 2
    and fxNotes clip each other with no bespoke truncation — and into PC
    synthesis, carrying the host's `sample`. See `design/note-macros.md`.
+   After reconcile, `fxLive` (the post-expansion derived set the tail walk
+   and PC synthesis consume) is rebuilt by re-scanning `mm:notes()` for fresh
+   tokens — but only when reconcile actually churned the take. On a no-churn
+   rebuild the derived set is untouched, so `fxExisting` (gathered at step 0)
+   already lists it with current tokens, and the full re-scan is skipped.
 4½. **PC synthesis (trackerMode only).** For each channel, group lane
    events (still in realised frame here, so `realised(n) = n.ppq`
    directly) by realised ppq. Leftmost lane wins: its sample becomes

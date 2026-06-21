@@ -167,6 +167,12 @@ function newMidiManager(opts)
   local function cloneOut(evt)
     if not evt then return nil end
     local c = cloneShallow(evt, INTERNALS)
+    -- Mirror REAPER, which returns ppq as a float from MIDI_GetNote/GetCC.
+    -- Opt-in: storing ints verbatim let the int/float fxKey churn pass vacuously.
+    if opts.floatPpq then
+      if c.ppq    then c.ppq    = c.ppq    + 0.0 end
+      if c.endppq then c.endppq = c.endppq + 0.0 end
+    end
     c.token = tokenOf(evt)
     return c
   end

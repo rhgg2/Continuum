@@ -94,6 +94,32 @@ return {
     end,
   },
 
+  ----- G4-float — int/float fxKey churn guard (canon)
+  -- REAPER returns note ppq as a float; predicted fxNote ppq is a Lua integer.
+  -- Without canon() in fxKey the two stringify differently, so every rebuild
+  -- sees the whole fxNote set as changed and re-mints it. floatPpq makes the
+  -- fake mm mirror REAPER so this round trip actually exercises the skew.
+
+  {
+    name = 'G4-float: float-ppq reads do not churn fxNotes (fxKey canon)',
+    run = function(harness)
+      local h = harness.mk{ floatPpq = true }
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1, fx = retrig16 })
+      h.tm:flush()
+
+      local host = hostNote(h.fm:dump())
+      t.truthy(host, 'host note carries fx')
+      t.eq(#fxNotesOf(h.fm:dump(), host.uuid), 3, 'retrig expands to 3 fxNotes')
+
+      local before = notesView(h.fm:dump())
+      h.tm:rebuild()
+      h.tm:flush()
+      local after = notesView(h.fm:dump())
+      t.deepEq(after, before, 'no churn across the round trip under float-ppq reads')
+    end,
+  },
+
   ----- G1 — provenance
 
   {

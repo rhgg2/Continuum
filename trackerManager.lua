@@ -139,9 +139,15 @@ end
 
 -- Identity is geometry: (host, ppq, pitch, vel, detune, sample). endppq is
 -- owned by the tail walk, never matched. Twin of reconcilePCsForChan.
+-- Predicted ppq is a Lua integer; REAPER's MIDI_GetNote returns a float, and
+-- util.key stringifies -- canonicalise or 3072 vs 3072.0 churns every fxNote each rebuild.
+local function canon(x)
+  if type(x) == 'number' then return math.tointeger(x) or x end
+  return x
+end
 local function fxKey(spec)
-  return util.key(spec.derived, spec.ppq, spec.pitch, spec.vel,
-                  spec.detune or 0, spec.sample or 0)
+  return util.key(canon(spec.derived), canon(spec.ppq), canon(spec.pitch),
+                  canon(spec.vel), canon(spec.detune or 0), canon(spec.sample or 0))
 end
 
 local function reconcileFx(predicted, existing)
@@ -150,7 +156,9 @@ local function reconcileFx(predicted, existing)
   local toRemove, toAdd = {}, {}
   for _, spec in ipairs(predicted) do
     local e = have[fxKey(spec)]
-    if e then kept[e] = true else util.add(toAdd, spec) end
+    if e then kept[e] = true else
+      util.add(toAdd, spec)
+    end
   end
   for _, e in ipairs(existing) do
     if not kept[e] then util.add(toRemove, e) end
@@ -762,7 +770,7 @@ end
 function tm:deleteEvent(evt)         deleteEvent(evt)         end
 function tm:addEvent(evt)            addEvent(evt)            end
 function tm:assignEvent(evt, update) assignEvent(evt, update) end
-function tm:flush()                           flush()                        end
+function tm:flush() flush() end
 
 ----- Length
 
@@ -1201,6 +1209,7 @@ do
     -- against fxExisting, commit. fxLive feeds the tail walk + PC synthesis. see design/note-macros.md § Pipeline placement
     do
       local res = mm:resolution()
+      local churned = false
       for chan = 1, 16 do
         local predicted = {}
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
@@ -1234,6 +1243,7 @@ do
 
         local toRemove, toAdd = reconcileFx(predicted, fxExisting[chan])
         if #toRemove > 0 or #toAdd > 0 then
+          churned = true
           mm:modify(function()
             for _, e    in ipairs(toRemove) do mm:delete(e.token) end
             for _, spec in ipairs(toAdd)    do mm:add(spec)       end
@@ -1241,14 +1251,21 @@ do
         end
       end
 
-      -- Re-read post-commit so fxLive carries fresh tokens for the tail
-      -- walk's applyAssigns (mirrors PC's mm:ccs() refresh).
-      for _, n in mm:notes() do
-        if n.derived then
-          local ce = util.clone(n)
-          ce.token = mm:tokenOf(n)
-          util.add(fxLive[n.chan], { evt = ce, lane = n.lane or 1 })
+      -- fxLive (tail walk + PC consume it) clones its evts because the walk
+      -- mutates them; on a no-churn rebuild fxExisting already lists the derived
+      -- set with current tokens, so skip the mm:notes() re-scan. see docs/trackerManager.md § Rebuild
+      local fxSource = {}
+      if churned then
+        for _, n in mm:notes() do if n.derived then util.add(fxSource, n) end end
+      else
+        for chan = 1, 16 do
+          for _, n in ipairs(fxExisting[chan]) do util.add(fxSource, n) end
         end
+      end
+      for _, n in ipairs(fxSource) do
+        local ce = util.clone(n)
+        ce.token = n.token
+        util.add(fxLive[n.chan], { evt = ce, lane = n.lane or 1 })
       end
     end
 
