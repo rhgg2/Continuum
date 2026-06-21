@@ -26,7 +26,10 @@ local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
 
-local tm, cm, ds, cmgr, gm, pa = (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa
+local tm, cm, ds, cmgr, gm, pa, facade =
+  (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa, (...).facade
+
+local function arrange() return facade.get('arrange') end
 
 local function print(...)
   return util.print(...)
@@ -54,6 +57,89 @@ local grid = {
 
 local tv = {}
 tv.grid = grid  -- live handle for rm; mutated in place on rebuild
+
+----- Selection — the tracker's own (track, slot), held in cm, decoupled from the arrange cursor.
+-- Writers mutate cm only; trackerPage's bindFromSelection binds. See docs/trackerPage.md § Selection.
+
+-- Nearest extant slot to `desired` in the ascending midiSlots list: the exact
+-- slot, else the lowest above it, else the highest below it. nil ⇒ no slots.
+local function recoverSlot(slots, desired)
+  if not slots[1] then return nil end
+  if desired == nil then return slots[1].idx end
+  local below
+  for _, slot in ipairs(slots) do
+    if slot.idx == desired then return desired end
+    if slot.idx >  desired then return slot.idx end
+    below = slot.idx
+  end
+  return below
+end
+
+local function selectedTrackIdx()
+  local guid = cm:getAt('project', 'trackerTrack')
+  return guid and arrange().trackIdxForGuid(guid) or nil
+end
+
+local function effectiveSlot(trackIdx)
+  return recoverSlot(arrange().midiSlots(trackIdx), cm:getAt('track', 'trackerSlot'))
+end
+
+function tv:currentTrackIdx() return selectedTrackIdx() end
+function tv:currentSlotIdx()
+  local trackIdx = selectedTrackIdx()
+  return trackIdx and effectiveSlot(trackIdx) or nil
+end
+
+-- Resolve the stored (track, slot) to a live take. A vanished slot walks to the
+-- nearest extant one and writes through, so storage tracks what's displayed.
+function tv:resolveSelectionTake()
+  local trackIdx = selectedTrackIdx()
+  if not trackIdx then return nil end
+  local stored    = cm:getAt('track', 'trackerSlot')
+  local effective = recoverSlot(arrange().midiSlots(trackIdx), stored)
+  if effective == nil then return nil end
+  if effective ~= stored then cm:set('track', 'trackerSlot', effective) end
+  return arrange().takeForSlot(trackIdx, effective)
+end
+
+--contract: point at a track by GUID; optSlot pins a slot, else restore its last-viewed slot
+function tv:selectTrack(guid, optSlot)
+  local trackIdx = arrange().trackIdxForGuid(guid)
+  if not trackIdx then return end
+  cm:set('project', 'trackerTrack', guid)
+  cm:setTrack(arrange().trackHandle(trackIdx))     -- track-tier read/write targets this track
+  local desired   = optSlot or cm:getAt('track', 'trackerSlot')
+  local effective = recoverSlot(arrange().midiSlots(trackIdx), desired)
+  if effective ~= nil then cm:set('track', 'trackerSlot', effective) end
+end
+
+--contract: pin a slot on the current track
+function tv:selectSlot(slotIdx) cm:set('track', 'trackerSlot', slotIdx) end
+
+--contract: step ±1 over all tracks (may land on an empty one); restores its last slot
+function tv:gotoTrack(dir)
+  local cur    = selectedTrackIdx()
+  local target = cur and arrange().tracks()[cur + 1 + dir]
+  if target then self:selectTrack(target.guid) end
+end
+
+--contract: step ±1 slot on the current track, from the effective slot
+function tv:gotoTake(dir)
+  local trackIdx = selectedTrackIdx()
+  if not trackIdx then return end
+  local slots = arrange().midiSlots(trackIdx)
+  local cur   = effectiveSlot(trackIdx)
+  local pos
+  for i, slot in ipairs(slots) do if slot.idx == cur then pos = i end end
+  local target = pos and slots[pos + dir]
+  if target then self:selectSlot(target.idx) end
+end
+
+function tv:pickTrack(trackIdx)
+  local tr = arrange().tracks()[trackIdx + 1]
+  if tr then self:selectTrack(tr.guid) end
+end
+function tv:pickTake(slotIdx) self:selectSlot(slotIdx) end
 
 local ec, clipboard, ctx
 

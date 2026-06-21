@@ -34,24 +34,25 @@ local fakeModalHost = {
   reset               = function(self) self.last = nil end,
 }
 
--- The tracker reaches arrange data through this facade. fakeArrange records
--- the nav/CRUD delegations and serves a settable currentTake for bindFromCursor.
+-- tv resolves its (track, slot) selection to a take via this facade.
+-- The fake models a settable track/slot world; new-take/dup still route to arrange.
 local fakeArrange = {}
 local function resetArrange()
-  fakeArrange.calls = {}
-  fakeArrange.currentTake     = function() return nil end
+  fakeArrange.calls      = {}
+  fakeArrange.tracksList = { { idx = 0, guid = '{g0}', name = 'tr1' } }
+  fakeArrange.slotsByIdx = { [0] = { { idx = 0, name = '', kind = 'midi' } } }
+  fakeArrange.takeByKey  = {}                      -- ['idx:slot'] = take handle
+  fakeArrange.tracks          = function() return fakeArrange.tracksList end
   fakeArrange.currentTrackIdx = function() return 0 end
-  fakeArrange.currentSlotIdx  = function() return nil end
-  fakeArrange.tracks          = function() return {} end
-  fakeArrange.midiSlots       = function() return {} end
-  fakeArrange.keyForSlot      = function() return '' end
-  fakeArrange.currentTrackHasTakes = function() return false end
+  fakeArrange.trackIdxForGuid = function(g)
+    for _, tr in ipairs(fakeArrange.tracksList) do if tr.guid == g then return tr.idx end end
+  end
+  fakeArrange.trackHandle = function(idx) return fakeArrange.tracksList[idx + 1].name end
+  fakeArrange.midiSlots   = function(idx) return fakeArrange.slotsByIdx[idx] or {} end
+  fakeArrange.takeForSlot = function(idx, slot) return fakeArrange.takeByKey[idx .. ':' .. slot] end
+  fakeArrange.keyForSlot  = function() return '' end
   fakeArrange.newTakeBelow           = function() fakeArrange.calls.newTakeBelow = true end
   fakeArrange.duplicateUnpooledBelow = function() fakeArrange.calls.dup          = true end
-  fakeArrange.gotoTrack = function(d) fakeArrange.calls.gotoTrack = d end
-  fakeArrange.gotoTake  = function(d) fakeArrange.calls.gotoTake  = d end
-  fakeArrange.pickTrack = function(i) fakeArrange.calls.pickTrack = i end
-  fakeArrange.pickTake  = function(i) fakeArrange.calls.pickTake  = i end
 end
 local fakeWiring = { samplerReachable = function() return false end }
 local fakeFacade = {
@@ -107,22 +108,22 @@ return {
     end,
   },
 
-  -- In Model B the tracker no longer owns am: the bound take follows the arrange cursor, and
-  -- newTakeBelow / dup / nav all delegate to the arrange facade (minting pinned in arrange_page_spec).
+  -- The tracker owns its (track, slot) selection in cm (decoupled from the arrange cursor); nav
+  -- writes that selection via tv. newTakeBelow / dup still delegate to arrange (minting pinned there).
   {
-    name = 'bindFromCursor binds tm to the arrange cursor take and drops on nil',
+    name = 'bindFromSelection binds tm to the resolved selection take, drops when the track has no slots',
     run = function(harness)
       local h = harness.mk()
       h.reaper:setProjectTracks{ 'tr1' }
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
-      fakeArrange.currentTake = function() return 'tr1/t1' end
-      tp:bindFromCursor()
-      t.eq(tp:currentTake(), 'tr1/t1', 'bound to the cursor take on change')
-      fakeArrange.currentTake = function() return nil end
-      tp:bindFromCursor()
-      t.eq(tp:currentTake(), nil, 'dropped when the cursor has no take')
+      fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+      tp:bindFromSelection()                       -- seeds track 0 / slot 0 from the cursor
+      t.eq(tp:currentTake(), 'tr1/t1', 'bound to the resolved selection take')
+      fakeArrange.slotsByIdx[0] = {}               -- the slot vanished, none left
+      tp:bindFromSelection()
+      t.eq(tp:currentTake(), nil, 'dropped when the track has no slots')
     end,
   },
 
@@ -140,55 +141,66 @@ return {
   },
 
   {
-    name = 'prev/next track + take delegate to arrange cursor nav',
+    name = 'prev/next track + take drive the tv selection, not the arrange cursor',
     run = function(harness)
       local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1', 'tr2' }
       local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.tracksList = {
+        { idx = 0, guid = '{g0}', name = 'tr1' },
+        { idx = 1, guid = '{g1}', name = 'tr2' },
+      }
+      fakeArrange.slotsByIdx = {
+        [0] = { { idx = 0, kind = 'midi' }, { idx = 1, kind = 'midi' } },
+        [1] = { { idx = 0, kind = 'midi' } },
+      }
       h.cmgr:push('tracker')
-      h.cmgr:invoke('nextTrack'); t.eq(fakeArrange.calls.gotoTrack,  1, 'nextTrack -> gotoTrack(1)')
-      h.cmgr:invoke('prevTrack'); t.eq(fakeArrange.calls.gotoTrack, -1, 'prevTrack -> gotoTrack(-1)')
-      h.cmgr:invoke('nextTake');  t.eq(fakeArrange.calls.gotoTake,   1, 'nextTake -> gotoTake(1)')
-      h.cmgr:invoke('prevTake');  t.eq(fakeArrange.calls.gotoTake,  -1, 'prevTake -> gotoTake(-1)')
+      tp:bindFromSelection()                 -- seed the selection on track 0
+      h.cmgr:invoke('nextTrack')
+      t.eq(h.cm:getAt('project', 'trackerTrack'), '{g1}', 'nextTrack moved the selection to track 2')
+      h.cmgr:invoke('prevTrack')
+      t.eq(h.cm:getAt('project', 'trackerTrack'), '{g0}', 'prevTrack moved it back to track 1')
+      h.cmgr:invoke('nextTake')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 1, 'nextTake stepped to the next slot')
+      h.cmgr:invoke('prevTake')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 0, 'prevTake stepped back')
     end,
   },
 
-  -- The empty grid pushes uiFont and draws one ImGui.Text — capture it to pin
-  -- which of the two empty messages the cursor situation picks.
+  -- The empty grid pushes uiFont and draws one ImGui.Text — capture it. With
+  -- slot-recovery there is one empty state only: the track has no MIDI slots.
   {
-    name = 'empty grid picks its message from whether the track has takes',
+    name = 'empty grid shows the single no-takes message',
     run = function(harness)
       local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
       local fakeChrome = { colour = function() return 0 end }
       local tp = newTrackerPage(h.cm, h.ds, h.cmgr, fakeChrome, { fontSize = { ui = 13 } })
+      fakeArrange.slotsByIdx[0] = {}        -- the track has no slots
       local origText, shown = rawget(fakeImGui, 'Text')
       fakeImGui.Text = function(_, s) shown = s end
 
-      fakeArrange.currentTrackHasTakes = function() return false end
       tp:renderBody(nil, 100, 100, nil)
-      t.eq(shown, 'No MIDI takes on this track.', 'no takes on the track')
-
-      fakeArrange.currentTrackHasTakes = function() return true end
-      tp:renderBody(nil, 100, 100, nil)
-      t.eq(shown, 'No take at the cursor.', 'takes exist, none under the cursor')
+      t.eq(shown, 'No MIDI takes on this track.', 'single empty-grid message')
 
       fakeImGui.Text = origText
     end,
   },
 
   {
-    name = 'bindFromCursor re-keys cm on return from dormancy even when the take is unchanged',
+    name = 'bindFromSelection re-keys cm on return from dormancy even when the take is unchanged',
     run = function(harness)
       local h = harness.mk()
       h.reaper:setProjectTracks{ 'tr1' }
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 1, poolGuid = '{p1}' })
       local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
-      fakeArrange.currentTake = function() return 'tr1/t1' end
-      tp:bindFromCursor()                   -- initial bind to the cursor take
+      fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+      tp:bindFromSelection()                -- initial bind to the selection take
       tp:unbind()                           -- switch away: page goes dormant
       local got = {}
       h.cm.setContext = function(_, take) got[#got+1] = take end
-      tp:bindFromCursor()                   -- return: cursor take unchanged
+      tp:bindFromSelection()                -- return: selection unchanged
       t.eq(got[#got], 'tr1/t1', 're-asserts cm context despite the unchanged take')
     end,
   },

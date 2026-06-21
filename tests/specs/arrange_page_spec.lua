@@ -33,7 +33,10 @@ local fakeFacade = {
   publish = function(name, iface) captured.facades[name] = iface end,
   get = function(name)
     if name == 'tracker' then
-      return { openTakeProperties = function(item) captured.props = item end }
+      return {
+        openTakeProperties = function(item) captured.props = item end,
+        diveTo = function(guid, slotIdx) captured.dive = { guid = guid, slot = slotIdx } end,
+      }
     end
     if name == 'wiring' then
       return { isWiringOwnedTrack = function() return false end }
@@ -42,7 +45,7 @@ local fakeFacade = {
   end,
 }
 local function newArrangePage(cm, ds, cmgr, chrome, gui)
-  captured.nav, captured.props, captured.facades = nil, nil, {}
+  captured.nav, captured.props, captured.dive, captured.facades = nil, nil, nil, {}
   fakeModalHost.last = nil
   cmgr:registerAll{ switchPage = function(_, name) captured.nav = name end }
   return util.instantiate('arrangePage',
@@ -452,11 +455,13 @@ return {
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
       t.eq(captured.nav, 'tracker', 'dive switched to the tracker page')
+      t.truthy(captured.dive and captured.dive.guid, 'dive handed the tracker the cursor track')
+      t.eq(captured.dive.slot, 0, 'and the slot of the MIDI take under the cursor')
     end,
   },
 
   {
-    name = 'arrangeDive is a no-op when the cursor take is audio',
+    name = 'arrangeDive over an audio take still switches and restores (no take pinned)',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -468,12 +473,13 @@ return {
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(captured.nav, nil, 'audio take does not dive')
+      t.eq(captured.nav, 'tracker', 'dive over an audio take still switches and sets the track')
+      t.eq(captured.dive.slot, nil, 'no MIDI take under the cursor — take left unchanged (restore)')
     end,
   },
 
   {
-    name = 'arrangeDive is a no-op when the cursor is over empty space',
+    name = 'arrangeDive over empty space switches and restores',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -483,7 +489,8 @@ return {
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDive')
-      t.eq(captured.nav, nil, 'empty grid, nothing under the cursor — dive is a no-op')
+      t.eq(captured.nav, 'tracker', 'empty cursor still switches and sets the track')
+      t.eq(captured.dive.slot, nil, 'nothing under the cursor — take left unchanged (restore)')
     end,
   },
 
@@ -735,9 +742,9 @@ return {
     end,
   },
 
-  -- The arrange facade now owns the tracker's old new-take-below / nav flows.
+  -- The arrange facade owns the new-take-below flow (modal + mint).
   {
-    name = 'newTakeBelow facade mints a sibling at the natural end and lands the cursor on it',
+    name = 'newTakeBelow facade mints a sibling at the natural end',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -757,46 +764,6 @@ return {
       t.eq(#takes, 2,                'sibling minted on commit')
       t.eq(takes[2].startQN, 2,      'sibling at the source take\'s natural end')
       t.eq(takes[2].naturalLenQN, 3, 'honours the user\'s 3 beats')
-      t.eq(captured.facades.arrange.currentTake(), takes[2].take, 'cursor landed on the new take')
-    end,
-  },
-
-  {
-    name = 'gotoTrack steps to the nearest take on the adjacent track, moving the cursor',
-    run = function(harness)
-      local h = harness.mk()
-      h.cm:set('project', 'arrangeBeatPerRow', 1)
-      h.reaper:setTrackName('tr1', 'Track 1')
-      h.reaper:setTrackName('tr2', 'Track 2')
-      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
-      h.reaper:addItem('tr2', { take = 'tr2/t1', isMidi = true, pos = 3, len = 1, poolGuid = '{p2}' })
-      h.reaper:setProjectTracks{ 'tr1', 'tr2' }
-      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
-      ap:seedCursorFromReaper()
-      captured.facades.arrange.gotoTrack(1)
-      t.eq(captured.facades.arrange.currentTrackIdx(), 1, 'cursor moved to track 2')
-      t.eq(captured.facades.arrange.currentTake(), 'tr2/t1', 'landed on the nearest take')
-      t.eq(captured.facades.arrange.currentTrackHasTakes(), true, 'track 2 reports its take')
-    end,
-  },
-
-  {
-    name = 'gotoTrack no longer skips an empty track — lands on it with no take',
-    run = function(harness)
-      local h = harness.mk()
-      h.cm:set('project', 'arrangeBeatPerRow', 1)
-      h.reaper:setTrackName('tr1', 'Track 1')
-      h.reaper:setTrackName('tr2', 'Track 2')
-      h.reaper:setTrackName('tr3', 'Track 3')
-      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
-      h.reaper:addItem('tr3', { take = 'tr3/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p3}' })
-      h.reaper:setProjectTracks{ 'tr1', 'tr2', 'tr3' }
-      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
-      ap:seedCursorFromReaper()
-      captured.facades.arrange.gotoTrack(1)
-      t.eq(captured.facades.arrange.currentTrackIdx(), 1, 'landed on the empty middle track, not skipped to track 3')
-      t.eq(captured.facades.arrange.currentTake(), nil, 'empty track has no take under the cursor')
-      t.eq(captured.facades.arrange.currentTrackHasTakes(), false, 'empty track reports no takes')
     end,
   },
 }

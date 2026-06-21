@@ -140,52 +140,13 @@ local function moveCursorBy(dRow, dCol)
   av:setCursor(cursorRow + dRow, cursorCol + dCol)
 end
 
------ Palette navigation — cursor-stepping across tracks/takes
--- Cursor take is source of truth; nav resolves an instance, moves onto its start row. See docs/arrangeView.md § Palette navigation.
-
-local function midiInstances(trackIdx, slotIdx)
-  local out = {}
-  for _, take in ipairs(am:tracksTakes(trackIdx)) do
-    if take.kind == 'midi' and (not slotIdx or take.slotIdx == slotIdx) then
-      out[#out + 1] = take
-    end
-  end
-  return out
-end
-
+-- MIDI slots on a track — for the tracker's pickers/nav via the arrange facade.
 local function midiSlots(trackIdx)
   local out = {}
   for _, slot in ipairs(am:trackSlots(trackIdx)) do
     if slot.kind == 'midi' then out[#out + 1] = slot end
   end
   return out
-end
-
--- dir +1: nearest instance at/after fromQN; dir -1: nearest at/before.
-local function nearest(instances, fromQN, dir)
-  local best
-  for _, take in ipairs(instances) do
-    local inDir  = (dir > 0 and take.startQN >= fromQN) or (dir < 0 and take.startQN <= fromQN)
-    local closer = not best or (dir > 0 and take.startQN < best.startQN)
-                            or (dir < 0 and take.startQN > best.startQN)
-    if inDir and closer then best = take end
-  end
-  return best
-end
-
--- Prefer the travel direction; fall back to the opposite when nothing lies ahead.
-local function resolveInstance(instances, fromQN, dir)
-  return nearest(instances, fromQN, dir) or nearest(instances, fromQN, -dir)
-end
-
-local function gotoInstance(inst)
-  if inst then av:setCursor(av:qnToRow(inst.startQN), inst.trackIdx) end
-end
-
--- QN the nav steps from: the cursor take's start, else the bare cursor row.
-local function navFromQN()
-  local cur = takeAtCursor()
-  return cur and cur.startQN or av:rowToQN(cursorRow)
 end
 
 ----- Take edits — move / resize / delete / dive the action targets
@@ -256,10 +217,14 @@ local function deleteSelected()
   setSelection {}
 end
 
---invariant: arrangeDive is MIDI-only + single-target; multi-selection / audio / none no-op.
+--invariant: dive follows the grid cursor: track ← cursor; take ← cursor or else restore
 local function diveSelected()
-  local take = singleTarget()
-  if take and take.kind == 'midi' then cmgr:invoke('switchPage', 'tracker') end
+  local tr = am:projectTracks()[cursorCol + 1]
+  if not tr then return end
+  local cur     = takeAtCursor()
+  local slotIdx = cur and cur.kind == 'midi' and cur.slotIdx or nil
+  tracker().diveTo(tr.guid, slotIdx)
+  cmgr:invoke('switchPage', 'tracker')
 end
 
 --invariant: arrangeTakeProperties is MIDI-only + single-target; routes via the tracker façade.
@@ -452,6 +417,9 @@ function av:visibleTakes(fromCol, toCol, qnLo, qnHi)
   return am:visibleTakes(fromCol, toCol, qnLo, qnHi)
 end
 function av:trackSlots(trackIdx)  return am:trackSlots(trackIdx) end
+function av:takeForSlot(trackIdx, slotIdx) return am:takeForSlot(trackIdx, slotIdx) end
+function av:trackIdxForGuid(guid) return am:trackIdxForGuid(guid) end
+function av:trackHandle(trackIdx) return am:trackHandle(trackIdx) end
 function av:keyForSlot(slotIdx)   return am:keyForSlot(slotIdx) end
 function av:nextFreeSlot(trackIdx) return am:nextFreeSlot(trackIdx) end
 function av:editCursorQN()        return am:editCursorQN() end
@@ -460,47 +428,7 @@ function av:loopRangeQN()         return am:loopRangeQN() end
 function av:takesUsing(name)      return am:takesUsing(name) end
 function av:reswingAll(name)      return am:reswingAll(name) end
 
------ Palette navigation — façade-backed cursor stepping
-
-function av:currentTake()      local t = takeAtCursor(); return t and t.take    or nil end
-function av:currentSlotIdx()   local t = takeAtCursor(); return t and t.slotIdx or nil end
-function av:currentTrackHasTakes() return #midiInstances(cursorCol) > 0 end
 function av:midiSlots(trackIdx) return midiSlots(trackIdx) end
-
---contract: step ±1 track (no skip; may land empty), forward-first resolve onto a take by QN.
-function av:gotoTrack(dir)
-  self:setMaxCol(#am:projectTracks())
-  local track = am:projectTracks()[cursorCol + 1 + dir]
-  if not track then return end
-  local instances = midiInstances(track.idx)
-  if #instances > 0 then
-    gotoInstance(resolveInstance(instances, navFromQN(), 1))
-  else
-    self:setCursor(cursorRow, track.idx)
-  end
-end
-
---contract: step ±1 slot on the current track; no-op without a cursor take or its slot.
-function av:gotoTake(dir)
-  local cur = takeAtCursor(); if not cur or not cur.slotIdx then return end
-  local slots = midiSlots(cursorCol)
-  local curIdx
-  for i, slot in ipairs(slots) do if slot.idx == cur.slotIdx then curIdx = i end end
-  local target = curIdx and slots[curIdx + dir]
-  if target then gotoInstance(resolveInstance(midiInstances(cursorCol, target.idx), cur.startQN, dir)) end
-end
-
---contract: jump to a track, forward-first resolve from the cursor QN.
-function av:pickTrack(trackIdx)
-  self:setMaxCol(#am:projectTracks())
-  gotoInstance(resolveInstance(midiInstances(trackIdx), navFromQN(), 1))
-end
-
---contract: jump to a slot on the current track, forward-first resolve.
-function av:pickTake(slotIdx)
-  local cur = takeAtCursor(); if not cur then return end
-  gotoInstance(resolveInstance(midiInstances(cursorCol, slotIdx), cur.startQN, 1))
-end
 
 --contract: dest for a new take below the cursor take; nil if no cursor take or start unclear.
 function av:newTakeBelowParams()

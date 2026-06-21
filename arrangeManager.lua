@@ -405,7 +405,7 @@ local function buildState()
       local slotCount = 0
       for _ in pairs(dict) do slotCount = slotCount + 1 end
       tracks[#tracks+1] = {
-        idx = col, track = track, name = name or '',
+        idx = col, track = track, guid = reaper.GetTrackGUID(track), name = name or '',
         slotCount = slotCount,
         takeCount = reaper.CountTrackMediaItems(track),
       }
@@ -695,6 +695,26 @@ local function siblingInstance(track, id)
   return sibItem,
          select(2, itemQNRange(sibItem)),
          reaper.GetTakeName(reaper.GetActiveTake(sibItem)) or ''
+end
+
+--contract: live-or-parked MIDI take for slot slotIdx on trackIdx; nil if no track/slot/instance
+function am:takeForSlot(trackIdx, slotIdx)
+  local track = visibleTrackOfCol(trackIdx)
+  if not track or not slotIdx then return end
+  local entry = readSlots(track)[slotIdx]
+  if not entry or entry.kind ~= 'midi' or not entry.id then return end
+  local sibItem = siblingInstance(track, entry.id)
+  return sibItem and reaper.GetActiveTake(sibItem)
+end
+
+function am:trackHandle(trackIdx) return visibleTrackOfCol(trackIdx) end
+
+--contract: visible-column index of the track carrying this GUID; nil if it is gone
+function am:trackIdxForGuid(guid)
+  if not guid then return end
+  for _, tr in ipairs(am:projectTracks()) do
+    if tr.guid == guid then return tr.idx end
+  end
 end
 
 --contract: instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)

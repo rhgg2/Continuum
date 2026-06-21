@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=384  sha=3039308  mode=chunk
+@module coordinator  src=coordinator.lua  loc=384  sha=835f191  mode=chunk
 @deps cm, ds, cmgr, gui
 
 # Invariants & contracts
@@ -70,7 +70,7 @@
   @api coord:register(name, moduleName, extra)  @ 320
   @api coord:setActive(name)  @ 329
       @contract  setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming
-      @contract  tracker's no-arg bind follows the arrange cursor; renderBody keeps it current each frame
+      @contract  tracker's no-arg bind resolves its stored selection; renderBody keeps it current
   @api coord:returnToArrange()  @ 345
       @contract  tracker back to arrange; no reveal (cursor never left). No-op if arrange unregistered.
   @api coord:getFacade(name)  @ 351

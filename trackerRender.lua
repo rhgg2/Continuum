@@ -28,8 +28,8 @@ end
 
 local painter = require 'painter'
 
--- The renderer reads arrange (the empty-grid message, nav commands) through
--- this facade; the controller owns the cursor-follow + bind. See docs/trackerPage.md.
+-- The renderer reads project data (tracks/slots) through the arrange facade;
+-- the tracker's selection nav goes straight to tv. See docs/trackerPage.md.
 local function arrange() return facade.get('arrange') end
 
 ---------- PRIVATE
@@ -322,7 +322,7 @@ local toolbarSegments = {
     render = function()
       chrome.headingLabel('Track')
       ImGui.SameLine(ctx, 0, 8)
-      local curIdx = arrange().currentTrackIdx()
+      local curIdx = tv:currentTrackIdx()
       local items, curName = {}, nil
       for _, tr in ipairs(arrange().tracks()) do
         local isCur = tr.idx == curIdx
@@ -335,7 +335,7 @@ local toolbarSegments = {
       chrome.drawPicker {
         kind        = 'track',
         buttonLabel = (curName and curName ~= '' and curName) or ('Track ' .. (curIdx + 1)),
-        width       = 160, items = items, onPick = function(idx) arrange().pickTrack(idx) end,
+        width       = 160, items = items, onPick = function(idx) tv:pickTrack(idx) end,
       }
     end,
   },
@@ -344,8 +344,8 @@ local toolbarSegments = {
     render = function()
       chrome.headingLabel('Take')
       ImGui.SameLine(ctx, 0, 8)
-      local trackIdx = arrange().currentTrackIdx()
-      local curSlot  = arrange().currentSlotIdx()
+      local trackIdx = tv:currentTrackIdx()
+      local curSlot  = tv:currentSlotIdx()
       local items, curName = {}, nil
       for _, slot in ipairs(arrange().midiSlots(trackIdx)) do
         local name = slot.name ~= '' and slot.name or arrange().keyForSlot(slot.idx)
@@ -355,7 +355,7 @@ local toolbarSegments = {
       chrome.drawPicker {
         kind        = 'take',
         buttonLabel = curName or '\xe2\x80\x94',
-        width       = 160, items = items, onPick = function(idx) arrange().pickTake(idx) end,
+        width       = 160, items = items, onPick = function(idx) tv:pickTake(idx) end,
       }
     end,
   },
@@ -1848,10 +1848,10 @@ tracker:registerAll{
   newTakeBelow           = function() arrange().newTakeBelow() end,
   duplicateUnpooledBelow = { function() arrange().duplicateUnpooledBelow() end, 'Duplicate take (unpooled) below' },
 
-  prevTrack = { function() arrange().gotoTrack(-1) end, 'Previous track' },
-  nextTrack = { function() arrange().gotoTrack(1)  end, 'Next track' },
-  prevTake  = { function() arrange().gotoTake(-1)  end, 'Previous take' },
-  nextTake  = { function() arrange().gotoTake(1)   end, 'Next take' },
+  prevTrack = { function() tv:gotoTrack(-1) end, 'Previous track' },
+  nextTrack = { function() tv:gotoTrack(1)  end, 'Next track' },
+  prevTake  = { function() tv:gotoTake(-1)  end, 'Previous take' },
+  nextTake  = { function() tv:gotoTake(1)   end, 'Next take' },
 
   addTypedCol = addColumn,
   hideExtraCol = { removeOrHideCol, 'Hide / remove column' },
@@ -1970,8 +1970,7 @@ function renderer:renderBody(_, w, h, dispatch)
     if dispatch then dispatch(self:focusState()) end
     ImGui.PushFont(ctx, uiFont, gui.fontSize.ui)
     ImGui.PushStyleColor(ctx, ImGui.Col_Text, chrome.colour('text'))
-    ImGui.Text(ctx, arrange().currentTrackHasTakes()
-      and 'No take at the cursor.' or 'No MIDI takes on this track.')
+    ImGui.Text(ctx, 'No MIDI takes on this track.')
     ImGui.PopStyleColor(ctx)
     ImGui.PopFont(ctx)
     return

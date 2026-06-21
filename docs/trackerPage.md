@@ -398,36 +398,54 @@ are derived on the first frame and held.
 - **Dots are `inactive` at the character level**, no matter what
   colour the renderer asked for on the rest of the cell.
 
-## Bind from the cursor
+## Selection
 
-The arrange cursor is the single source of truth for which take the
-tracker edits (see docs/pageFacade.md for the migration). `renderBody`
-opens by calling `bindFromCursor`: it reads `arrange():currentTake()` and,
-on change, rebinds the stack (`bind`/`dropTake`); when unchanged it
-hash-diffs the bound take for external edits. There is no REAPER selection
-and no `coord`-owned `currentTake` — moving the cursor on either page
-changes what the tracker shows, next frame.
+The tracker owns which take it edits, decoupled from the arrange cursor.
+The selection is two cm keys:
 
-Navigation (Track/Take pickers, `Alt`+arrows, new-below, dup-below) all
-delegate to the arrange façade, which moves the cursor; the rebind falls
-out of `bindFromCursor`. The nav algorithm itself lives in `av` (see
-docs/arrangeView.md § Palette nav).
+- `trackerTrack` (**project** tier) — the current track's GUID.
+- `trackerSlot` (**track** tier, so per-track by construction) — that
+  track's last-viewed slot index.
 
-### Empty grid: two states, never auto-seek
+`tv` holds the selection logic (it reads arrange's project structure
+through the facade, like `pa` does for wiring); `trackerPage` only binds.
+The writers — `tv:selectTrack`, `selectSlot`, `gotoTrack`, `gotoTake`,
+`pickTrack`, `pickTake` — mutate cm and never touch the arrange cursor; the
+renderer calls them straight on `tv`.
 
-No bound take ⇒ `tv.grid.cols` is empty ⇒ the grid is replaced by a
-message, chosen from the cursor's track:
+`renderBody` opens with `bindFromSelection`: `tv:resolveSelectionTake()`
+resolves `(trackerTrack, trackerSlot)` to a live take; on change the page
+rebinds (`bind`/`dropTake`), else it hash-diffs the bound take for external
+edits. A writer's take-swap lags one frame (it mutates cm; the next
+`bindFromSelection` binds) — except dive, which switches pages and so
+triggers `bind()` on the same activation. When `trackerTrack` is unset
+(fresh project) `bindFromSelection` seeds it once from the arrange cursor.
 
-| Cursor situation | Message |
-|---|---|
-| Track has zero MIDI takes | `No MIDI takes on this track.` |
-| Track has takes, none under the row | `No take at the cursor.` |
+### Dive
 
-Forward-first nav never produces the middle state on a non-empty track; it
-arises only from free arrange-grid cursor movement onto a gap, or from a
-**disappearance** — the bound take deleted under you. On a disappearance
-the cursor stays put and the grid goes empty; the tracker **never**
-relocates the edit target in reaction, since silently jumping onto a
-neighbour risks editing the wrong take unnoticed. Relocation happens only
-through explicit navigation. This is free: it is the natural consequence
-of `currentTake = takeAtCursor` returning nil.
+Arrange's dive is the one cross-page entry: the `tracker` facade's `diveTo`
+→ `tv:selectTrack(guid, slotIdx)`. It sets the track to the grid-cursor
+track; if a MIDI take sits under the cursor it pins that slot, otherwise it
+restores the track's last-viewed slot. Arrange's own edit cursor is left
+untouched.
+
+### Slot recovery and the per-track memory
+
+A stored slot can vanish (deleted under us). `resolveSelectionTake`
+recovers: walk the track's extant MIDI slots forward (lowest slot above the
+stored one), then back (highest below), and **write the recovered slot
+through** so storage tracks the display. A slot whose only instance is
+parked on the scratch track is still a slot and still editable
+(`takeForSlot` resolves live-or-parked), so recovery and the empty test
+both key off *slots*, not live instances.
+
+Changing track always restores that track's last-viewed slot — that is the
+per-track memory, and the same path as dive's "no take under the cursor"
+fallback.
+
+### Empty grid: one state
+
+No resolvable take ⇒ `tv.grid.cols` is empty ⇒ the grid is replaced by
+`No MIDI takes on this track.` With recovery this is the only empty state:
+a track with at least one slot always resolves to a take, so the old
+"No take at the cursor." state can no longer arise.

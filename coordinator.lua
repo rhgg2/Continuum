@@ -325,7 +325,7 @@ function coord:register(name, moduleName, extra)
 end
 
 --contract: setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming
---contract: tracker's no-arg bind follows the arrange cursor; renderBody keeps it current each frame
+--contract: tracker's no-arg bind resolves its stored selection; renderBody keeps it current
 function coord:setActive(name)
   if active == name then return true end
   previous = active

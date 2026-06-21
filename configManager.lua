@@ -56,6 +56,11 @@ local declarations = {
   -- save that happens while Continuum is closed. See docs/sampleManager.md.
   { 'lastProjectPath',   nil },
 
+  -- Tracker selection, decoupled from the arrange cursor: the current track
+  -- (project tier) and that track's last-viewed slot (track tier = per-track).
+  { 'trackerTrack',      nil },   -- track GUID
+  { 'trackerSlot',       nil },   -- slotIdx
+
   -- table-valued
   -- defaultSwing: seed for a take's swing map on first bind; never read at realisation.
   { 'defaultSwing',    { global = 'identity' } },

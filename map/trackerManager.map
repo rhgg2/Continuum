@@ -55,10 +55,10 @@
   @contract  snapshots ops before mm:modify; mm-callback re-entry can't re-emit in-flight ops
   @contract  cached per-(cm, mm) pair; invalidated at rebuild head.
   @contract  true iff note fits col: no over-threshold overlap, coincident onset always refuses
-  @invariant  overlap threshold: same-pitch 0, cross-pitch overlapOffset lenient; dominated-by≥2 refuses
+  @invariant  overlap threshold: same-pitch 0, cross-pitch lenient; dominated-by≥2 refuses
   @contract  consulted only for unstamped raw notes; stamped notes never reach it
   @contract  stamped notes (ppqL ~= nil) take their authored lane verbatim
-  @invariant  step 4.8's unified raw walk clips their tails so they can't overlap; lane extends if missing
+  @invariant  step 4.8 raw walk clips tails so they can't overlap; lane extends if missing
   @contract  pick a lane for an external (unstamped) note via accept → sibling → push bump
   @invariant  called by step 6 AFTER internals' raw tails settle, so accept sees realised state
   @contract  reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'

@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=65  sha=1278d64  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=61  sha=9623b2b  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -24,32 +24,28 @@
       @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
   -- Arrange service surface — av passthroughs; newTakeBelow opens a modal in the renderer
   -- Page interface — render delegates to the renderer
-  @api ap:toolbarSegments()  @ 60
-  @api ap:renderBody(_, w, h, dispatch)  @ 61
-  @api ap:renderStatusBar(ctx)  @ 62
-  @api ap:focusState()  @ 63
+  @api ap:toolbarSegments()  @ 56
+  @api ap:renderBody(_, w, h, dispatch)  @ 57
+  @api ap:renderStatusBar(ctx)  @ 58
+  @api ap:focusState()  @ 59
 
 # Uses (outbound edges)
-  @use call    arrangeRender.focusState  @ 63
-  @use call    arrangeRender.newTakeBelow  @ 53
-  @use call    arrangeRender.renderBody  @ 61
-  @use call    arrangeRender.renderStatusBar  @ 62
-  @use call    arrangeRender.toolbarSegments  @ 60
-  @use call    arrangeView.currentSlotIdx  @ 44
-  @use call    arrangeView.currentTake  @ 42
-  @use call    arrangeView.currentTrackHasTakes  @ 45
-  @use call    arrangeView.cursorCol  @ 43
-  @use call    arrangeView.duplicateUnpooledFocusedBelow  @ 54
-  @use call    arrangeView.gotoTake  @ 50
-  @use call    arrangeView.gotoTrack  @ 49
+  @use call    arrangeRender.focusState  @ 59
+  @use call    arrangeRender.newTakeBelow  @ 49
+  @use call    arrangeRender.renderBody  @ 57
+  @use call    arrangeRender.renderStatusBar  @ 58
+  @use call    arrangeRender.toolbarSegments  @ 56
+  @use call    arrangeView.cursorCol  @ 42
+  @use call    arrangeView.duplicateUnpooledFocusedBelow  @ 50
   @use call    arrangeView.keyForSlot  @ 48
-  @use call    arrangeView.midiSlots  @ 47
-  @use call    arrangeView.pickTake  @ 52
-  @use call    arrangeView.pickTrack  @ 51
-  @use call    arrangeView.projectTracks  @ 46
-  @use call    arrangeView.reswingAll  @ 55
+  @use call    arrangeView.midiSlots  @ 44
+  @use call    arrangeView.projectTracks  @ 43
+  @use call    arrangeView.reswingAll  @ 51
   @use call    arrangeView.seedCursor  @ 38
-  @use call    arrangeView.takesUsing  @ 56
+  @use call    arrangeView.takeForSlot  @ 45
+  @use call    arrangeView.takesUsing  @ 52
+  @use call    arrangeView.trackHandle  @ 47
+  @use call    arrangeView.trackIdxForGuid  @ 46
   @use call    facade.publish  @ 41
   @use call    util.instantiate  @ 23, 24, 25
   @use require arrangeManager  @ 23

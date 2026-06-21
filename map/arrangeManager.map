@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=866  sha=d415ad4  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=886  sha=ee68876  mode=chunk
 @deps cm, ds, facade
 
 # Invariants & contracts
@@ -98,12 +98,12 @@
   @fn siblingInstance(track, id)  @ 690
       -- First instance matching id: item, length, name — what a fresh drop inherits.
       -- Falls back to the parked keeper so drops from emptied slots re-materialise.
-  @fn destBelow(take)  @ 743
+  @fn destBelow(take)  @ 763
       -- Destination for the *-Below trio: natural end (not rendered), so a truncated upstream still
       -- drops past its downstream neighbour; relayout handles the symmetric truncation.
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 834
+  @fn projectMidiTakes()  @ 854
 
 # Public API (am:*)
   @api am:projectTracks()  @ 315
@@ -139,41 +139,46 @@
       @contract  forever-deletes the slot: every live instance + the parked keeper; returns live count
   @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 667
       @contract  (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track/free slot
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 701
+  @api am:takeForSlot(trackIdx, slotIdx)  @ 701
+      @contract  live-or-parked MIDI take for slot slotIdx on trackIdx; nil if no track/slot/instance
+  @api am:trackHandle(trackIdx)  @ 710
+  @api am:trackIdxForGuid(guid)  @ 713
+      @contract  visible-column index of the track carrying this GUID; nil if it is gone
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 721
       @contract  instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
-  @api am:duplicateTake(take, qnPos)  @ 723
+  @api am:duplicateTake(take, qnPos)  @ 743
       @contract  clones take at qnPos on its own track, original untouched; nil if track/id missing
-  @api am:duplicateBelow(take)  @ 746
+  @api am:duplicateBelow(take)  @ 766
       @contract  pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:duplicateUnpooledBelow(take)  @ 754
+  @api am:duplicateUnpooledBelow(take)  @ 774
       @contract  unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:newTakeBelow(take)  @ 768
+  @api am:newTakeBelow(take)  @ 788
       @contract  empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 779
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 799
       @contract  true iff no take on trackIdx (≠ exceptItem) starts exactly at startQN (shared spans OK)
-  @api am:moveTake(take, deltaQN)  @ 789
+  @api am:moveTake(take, deltaQN)  @ 809
       @contract  shifts start by deltaQN, relayouts (natural kept); true iff start clear, else no-op
-  @api am:resizeTake(take, newNaturalQN)  @ 802
+  @api am:resizeTake(take, newNaturalQN)  @ 822
       @contract  writes the take's natural length; relayout caps it. See docs § Natural length.
-  @api am:takeSourceLengthQN(take)  @ 809
+  @api am:takeSourceLengthQN(take)  @ 829
       @contract  source length in QN at the take's position; 0 if source missing.
-  @api am:deleteTake(take)  @ 820
+  @api am:deleteTake(take)  @ 840
       -- Deleting a slot's last live instance parks it on the scratch track (keeping
       -- the pool + slot alive) rather than GC-ing it. See docs § Parking.
-  @api am:takesUsing(name)  @ 848
+  @api am:takesUsing(name)  @ 868
       @contract  scans each take's swing map (ds) for the named swing; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 862
+  @api am:reswingAll(name)  @ 882
       @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 
 # Uses (outbound edges)
   @use call    ds.assign  @ 234
   @use call    ds.assignAt  @ 77, 135, 136
   @use call    ds.get  @ 233
-  @use call    ds.getAt  @ 73, 130, 851
-  @use call    facade.get  @ 287, 863
+  @use call    ds.getAt  @ 73, 130, 871
+  @use call    facade.get  @ 287, 883
   @use call    painter.hueNative  @ 269
   @use call    scratch.peek  @ 103, 285, 592
-  @use call    scratch.track  @ 825
+  @use call    scratch.track  @ 845
   @use call    util.toBase62  @ 551
   @use require painter  @ 22
   @use require scratch  @ 23
@@ -199,6 +204,7 @@
   @reaper MIDI_CountEvts, MIDI_GetNote, MIDI_GetProjQNFromPPQPos, MIDI_GetAllEvts, MIDI_SetAllEvts
   @reaper GetDisplayedMediaItemColor2
   @reaper GetTrackName
+  @reaper GetTrackGUID
   @reaper GetProjectStateChangeCount
   @reaper GetSelectedMediaItem
   @reaper GetCursorPositionEx

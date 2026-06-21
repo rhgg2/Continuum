@@ -39,17 +39,13 @@ function ap:seedCursorFromReaper() av:seedCursor() end
 
 ----- Arrange service surface — av passthroughs; newTakeBelow opens a modal in the renderer
 facade.publish('arrange', {
-  currentTake     = function()        return av:currentTake()     end,
   currentTrackIdx = function()        return av:cursorCol()       end,
-  currentSlotIdx  = function()        return av:currentSlotIdx()  end,
-  currentTrackHasTakes = function()   return av:currentTrackHasTakes() end,
   tracks          = function()        return av:projectTracks()   end,
   midiSlots       = function(trackIdx) return av:midiSlots(trackIdx) end,
+  takeForSlot     = function(trackIdx, slotIdx) return av:takeForSlot(trackIdx, slotIdx) end,
+  trackIdxForGuid = function(guid)     return av:trackIdxForGuid(guid) end,
+  trackHandle     = function(trackIdx) return av:trackHandle(trackIdx) end,
   keyForSlot      = function(slotIdx)  return av:keyForSlot(slotIdx) end,
-  gotoTrack       = function(dir)      av:gotoTrack(dir) end,
-  gotoTake        = function(dir)      av:gotoTake(dir)  end,
-  pickTrack       = function(trackIdx) av:pickTrack(trackIdx) end,
-  pickTake        = function(slotIdx)  av:pickTake(slotIdx)   end,
   newTakeBelow           = function() ar:newTakeBelow() end,
   duplicateUnpooledBelow = function() av:duplicateUnpooledFocusedBelow() end,
   reswingAll             = function(name) av:reswingAll(name) end,

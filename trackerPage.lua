@@ -32,7 +32,7 @@ local mm = util.instantiate('midiManager',    { take = nil })
 local tm = util.instantiate('trackerManager', { mm = mm, cm = cm, ds = ds })
 local gm = util.instantiate('groupManager',   { tm = tm, ds = ds })
 local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = facade })
-local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa })
+local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa, facade = facade })
 
 local tr = util.instantiate('trackerRender',
   { tv = tv, cm = cm, ds = ds, cmgr = cmgr, chrome = chrome,
@@ -57,9 +57,9 @@ end
 
 function tp:currentTake() return tm:currentTake() end
 
---contract: with a take, bind it on tm and seed tv; no arg = activation, bind from the cursor
+--contract: with a take, bind it on tm and seed tv; no arg = activation, resolve the selection
 function tp:bind(t)
-  if not t then return self:bindFromCursor() end
+  if not t then return self:bindFromSelection() end
   tm:bindTake(t, { trackerMode = samplerMode(t) })
   tv:seedSharedSlots()
   pa:apply()
@@ -72,22 +72,34 @@ function tp:dropTake() tm:detach(); tv:dropGrid() end
 --contract: for coord's external-mutation watcher; re-reads the bound take, no swap
 function tp:reloadFromReaper() tm:reloadFromReaper() end
 
---contract: rebind to the cursor take on change, then hash-diff for external edits. See docs/trackerPage.md § Bind from the cursor.
-function tp:bindFromCursor()
-  local cur = arrange().currentTake()
-  if wasDormant or cur ~= tm:currentTake() then
+----- Selection — the tracker owns (track, slot) in cm; tv holds the nav + resolve,
+-- the page binds. See docs/trackerPage.md § Selection.
+
+--contract: rebind to the selection take on change. See docs/trackerPage.md § Selection
+function tp:bindFromSelection()
+  if cm:getAt('project', 'trackerTrack') == nil then
+    local idx = arrange().currentTrackIdx()        -- one-time seed from the arrange cursor
+    local tr  = idx and arrange().tracks()[idx + 1]
+    if tr then tv:selectTrack(tr.guid) end
+  end
+  local target = tv:resolveSelectionTake()
+  if wasDormant or target ~= tm:currentTake() then
     wasDormant = false
-    if cur then self:bind(cur) else self:dropTake() end
+    if target then self:bind(target) else self:dropTake() end
     lastHash = nil
-  elseif cur and lastHash then
+  elseif target and lastHash then
     local h = takeHash()
     if h and h ~= lastHash then tm:reloadFromReaper() end
   end
 end
 
--- Arrange opens take properties without diving: bind to it (so tv reads its
--- model), then open the modal. The cursor drives the bind back, so no restore.
+-- Dive is the one cross-page entry: arrange sets the tracker's selection; the
+-- pickers/Alt-arrows go straight to tv. bindFromSelection binds next frame.
 facade.publish('tracker', {
+  diveTo = function(guid, slotIdx) tv:selectTrack(guid, slotIdx) end,
+
+  -- Arrange opens take properties without diving: bind to it (so tv reads its
+  -- model), then open the modal. bindFromSelection drives the bind back, so no restore.
   openTakeProperties = function(item)
     local take = item and reaper.GetActiveTake(item)
     if not take then return end
@@ -119,9 +131,9 @@ function tp:toolbarSegments() return tr:toolbarSegments() end
 function tp:renderStatusBar(ctx)   return tr:renderStatusBar(ctx) end
 function tp:focusState()           return tr:focusState() end
 
---contract: follow the cursor, draw, then snapshot the take hash as next frame's watcher baseline
+--contract: resolve selection, draw, then snapshot the take hash as next frame's watcher baseline
 function tp:renderBody(ctx, w, h, dispatch)
-  self:bindFromCursor()
+  self:bindFromSelection()
   tr:renderBody(ctx, w, h, dispatch)
   lastHash = takeHash()
 end
