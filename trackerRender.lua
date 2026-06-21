@@ -180,6 +180,12 @@ local function delayMarkerOffset(col, cellWidth)
   return cellWidth + (col.trackerMode and 3 or 0) + 1 + 2
 end
 
+-- The fx badge sits in the pre-vel separator slot -- one column inboard of
+-- the delay-marker slot, so the two markers never collide.
+local function fxMarkerOffset(col, cellWidth)
+  return cellWidth + (col.trackerMode and 3 or 0)
+end
+
 ----- Drawing
 
 -- A cell adapter over the shared painter: methods speak grid CELLS (integer
@@ -831,6 +837,9 @@ local function drawTracker()
         if divergent and col.showDelay then
           draw:smallGlyph(col.x + delayMarkerOffset(col, cellWidth), y, '*', 9, textCol)
         end
+        if evt and evt.fx and evt.fx[1] and col.type == 'note' and not muted then
+          draw:smallGlyph(col.x + fxMarkerOffset(col, cellWidth), y, '~', 9, 'accent')
+        end
       end
     end
   end
@@ -1301,6 +1310,7 @@ cmgr:scope('tracker'):bindAll{
   openSwingPicker        = { {ImGui.Key_S, ImGui.Mod_Super} },
   quantize               = { {ImGui.Key_K, ImGui.Mod_Ctrl} },
   quantizeKeepRealised   = { {ImGui.Key_K, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
+  editNoteFx             = { {ImGui.Key_X, ImGui.Mod_Super} },
 }
 for i = 0, 9 do
   cmgr:scope('tracker'):bind('advBy' .. i, { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} })
@@ -1369,6 +1379,7 @@ help:registerPage('tracker', {
     { cmd = 'scaleDouble', label = 'Scale \xc3\x972' },
     { cmd = 'quantize', label = 'Quantize' },
     { cmd = 'quantizeKeepRealised', label = 'Quantize (keep realised)' },
+    { cmd = 'editNoteFx', label = 'Edit note FX' },
   }},
   { anchor = 'body.grid', place = 'flow', title = 'Selection', items = {
     { cmd = 'selectUp', label = 'Select up' },
@@ -1775,6 +1786,55 @@ end
 local renderer = {}
 
 
+----- Note FX editor (retrig)
+
+-- Super-X live-writes note.fx so the grid previews each adjust; Esc
+-- restores the open-snapshot. Keys + rationale: design/note-macros.md § UI.
+local DEFAULT_RETRIG = { kind = 'retrig', period = { 1, 4 }, ramp = 0 }
+
+local function openRetrigEditor()
+  local note = tv:cursorNote()
+  if not note then return end
+  local snapshot = note.fx and util.deepClone(note.fx) or nil
+  if not (note.fx and note.fx[1]) then
+    tv:setNoteFx(note.uuid, { util.deepClone(DEFAULT_RETRIG) })
+  end
+  modalHost:open{
+    kind  = 'retrigEdit', title = 'Retrig',
+    uuid  = note.uuid, snapshot = snapshot,
+    flags = ImGui.WindowFlags_NoNavInputs,
+  }
+end
+
+modalHost:registerKind('retrigEdit', function(s, close)
+  local fx    = tv:noteFx(s.uuid)
+  local entry = fx and fx[1]
+  if not entry then close(false); return end
+  local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
+  local mods  = ImGui.GetKeyMods(ctx)
+
+  ImGui.Text(ctx, ('retrig    period %d/%d    ramp %+d')
+                  :format(entry.period[1], entry.period[2], entry.ramp or 0))
+  ImGui.TextDisabled(ctx, '\xe2\x86\x91\xe2\x86\x93 period    +/- ramp    Del clear')
+
+  if press(ImGui.Key_Escape) then
+    tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false)
+  elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
+    close(false)
+  elseif press(ImGui.Key_Delete) or press(ImGui.Key_Backspace) then
+    tv:setNoteFx(s.uuid, util.REMOVE); close(false)
+  elseif press(ImGui.Key_UpArrow)   then tv:bumpRetrig(s.uuid, 'period', -1)
+  elseif press(ImGui.Key_DownArrow) then tv:bumpRetrig(s.uuid, 'period',  1)
+  else
+    local plus, minus = press(ImGui.Key_Equal), press(ImGui.Key_Minus)
+    if plus or minus then
+      local step = (mods & ImGui.Mod_Ctrl) ~= 0 and 10
+                or (mods & ImGui.Mod_Shift) ~= 0 and 1 or 0
+      if step ~= 0 then tv:bumpRetrig(s.uuid, 'ramp', (plus and 1 or -1) * step) end
+    end
+  end
+end)
+
 local tracker = cmgr:scope('tracker')
 
 tracker:registerAll{
@@ -1801,6 +1861,8 @@ tracker:registerAll{
 
   openTemperPicker = function() chrome.requestPickerOpen('temper') end,
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
+
+  editNoteFx = { openRetrigEditor, 'Edit note FX (retrig)' },
 }
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },

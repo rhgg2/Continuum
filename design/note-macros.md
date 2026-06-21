@@ -9,7 +9,7 @@
 > realisation the note's own events don't contain. This note fixes the
 > v1 model: the host contract and intent shape, the two output categories sharing one
 > realisation mechanism, the derived-event lifecycle, and the proving
-> pair (retrig + vibrato). Retrig's UI is specified (§ UI); later
+> pair (retrig + vibrato). Retrig's UI has landed (§ UI); later
 > kinds reuse the chassis. Supersedes an earlier
 > revision that realised continuous output as sysex packets interpreted
 > by a dedicated JSFX — rejected below, § *Why the delta is its own
@@ -343,14 +343,18 @@ is proven.
 non-empty, drawn by the same `smallGlyph` machinery as the delay `*`
 marker (`trackerRender.lua`). Pure display — no column, no cursor part.
 
-**Editor — `Super-X` on the focused note.** Opens a modal popup
-anchored at the note under the cursor; a no-op only on a non-note cell.
-It borrows two existing idioms so nothing new has to be learned: tr's
-param-palette *keyboard-focus model* (Tab/arrows move between fields,
-Esc cancels with snapshot-restore à la `swingEditor`, Enter commits)
-and the grid's *nudge vocabulary* (`+`/`-` adjust the focused field,
-Shift = coarse). Commit writes `note.fx` through the ordinary
-note-metadata path.
+**Editor — `Super-X` on the focused note.** Opens a small modal (a
+`modalHost` kind), a no-op on a non-note cell. There is no field focus:
+both fields are always live with distinct chords. **Up/Down** step the
+period ladder; **Shift `±`** / **Ctrl `±`** ramp velocity fine / coarse
+— the grid's own nudge-modifier idiom (`nudgeFine`/`nudgeCoarse`). The
+editor **live-writes** `note.fx` and flushes on every adjust, so the
+grid previews the expansion (host tail truncates, badge appears) à la
+`swingEditor`; **Esc** restores the open-snapshot, **Enter** keeps,
+**Del** clears (`util.REMOVE` through `assignEvent`). The editing logic
+lives on the view (`tv:cursorNote`/`setNoteFx`/`bumpRetrig`), addressing
+the host by durable uuid; the render is thin key→`tv` dispatch. Centre-
+anchored for v1 (the `modalHost` default), not anchored at the cell.
 
 v1 exposes a **single retrig entry** per note. The list is real in the
 model; the multi-entry stack UI waits (open question below). `Super-X`
@@ -363,7 +367,7 @@ the popup removes the entry (`util.REMOVE` through `assignEvent`, never
 |---|---|---|---|
 | kind | `retrig` | — (fixed in v1) | — |
 | `period` | QN fraction `1/4` | Up/Down cycle the ladder ½·⅓·¼·⅙·⅛ QN | from the ladder |
-| `ramp` | signed `-12` | `+`/`-`, Shift = coarse | signed; vel clamps 1..127 per fxNote |
+| `ramp` | signed `-12` | Shift `±` fine, Ctrl `±` coarse | signed; vel clamps 1..127 per fxNote |
 
 ## v1 scope — the proving pair
 
@@ -371,8 +375,9 @@ the popup removes the entry (`util.REMOVE` through `assignEvent`, never
 `generators.lua` (pure module), the rebuild expansion step
 (`reconcileFx`, mirroring `reconcilePCsForChan`), and `tm_macro_spec`
 pinning G1–G4 plus tail-clamp, velocity-ramp, and PC interplay. The
-retrig **UI** — badge + `Super-X` editor (§ UI) — is the current build
-target: the model is proven headless, the surface is not yet built.
+retrig **UI** — badge + `Super-X` editor (§ UI) — **has landed**
+(`vm_retrig_ui_spec` pins the `cursorNote`/`setNoteFx`/`bumpRetrig`
+path; the popup's key dispatch is verified in REAPER).
 Flush-time reconcile (`dirtyFxHosts`) and the R2/R4 refactors are
 deferred fast-follows — correctness rides the rebuild path, which every
 flush triggers. **Vibrato is next:** cents→raw conversion, shaped-pair

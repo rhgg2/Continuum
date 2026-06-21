@@ -1547,6 +1547,58 @@ local nudge do
   end
 end
 
+----- Note FX (macros)
+
+-- The popup live-writes the sole retrig entry through here by durable uuid.
+-- PERIOD_LADDER is the editor's duration vocabulary; bumpRetrig steps it.
+local PERIOD_LADDER = { { 1, 2 }, { 1, 3 }, { 1, 4 }, { 1, 6 }, { 1, 8 } }
+
+local function ladderIndex(period)
+  for i, p in ipairs(PERIOD_LADDER) do
+    if p[1] == period[1] and p[2] == period[2] then return i end
+  end
+  return 3
+end
+
+-- The note under the caret, or nil on a non-note / empty cell. The fx
+-- editor command gates on this (Super-X is a no-op off a note).
+function tv:cursorNote()
+  local col = grid.cols[ec:col()]
+  if not col or col.type ~= 'note' then return nil end
+  local evt = col.cells and col.cells[ec:row()]
+  return (evt and util.isNote(evt)) and evt or nil
+end
+
+function tv:noteFx(uuid)
+  local note = tm:byUuid(uuid)
+  return note and note.fx or nil
+end
+
+-- Write or clear (util.REMOVE) a note's fx list, then flush so the rebuild
+-- re-derives its fxNotes. uuid, not the event, is the durable handle.
+function tv:setNoteFx(uuid, fxOrRemove)
+  local note = tm:byUuid(uuid)
+  if not note then return end
+  tm:assignEvent(note, { fx = fxOrRemove })
+  tm:flush()
+end
+
+-- Edit the sole retrig entry. field 'period' steps the ladder by `amount`
+-- (-1 coarser, +1 finer); field 'ramp' adds `amount` to the velocity ramp.
+function tv:bumpRetrig(uuid, field, amount)
+  local fx    = self:noteFx(uuid)
+  local entry = fx and fx[1]
+  if not entry then return end
+  local updated = util.clone(entry)
+  if field == 'period' then
+    local i = util.clamp(ladderIndex(entry.period) + amount, 1, #PERIOD_LADDER)
+    updated.period = { PERIOD_LADDER[i][1], PERIOD_LADDER[i][2] }
+  else
+    updated.ramp = (entry.ramp or 0) + amount
+  end
+  self:setNoteFx(uuid, { updated })
+end
+
 ----- Deletion
 
 local deleteEvent, deleteSelection do
