@@ -279,6 +279,15 @@ Steps:
 Then `um = createUpdateManager()` and tm fires the `'rebuild'` signal
 (no payload).
 
+The universal tail pass (step 4.8) resolves each note's realised
+note-off against its same-lane and same-pitch successors. The "strict
+next" — first group member with a strictly greater ppq, chord-mates at
+equal ppq skipped — is precomputed once per ppq-sorted group in a
+back-to-front pass, then looked up per note. It used to be rescanned
+linearly per note: a retrig host expands to a long run of same-pitch
+fxNotes, so that scan made the walk O(k²) inside the group and dominated
+rebuild on macro-heavy takes.
+
 ### Dormant guard
 
 When the tracker page is not active, `bindTake(nil)` clears cm's take context

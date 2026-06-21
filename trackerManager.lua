@@ -1363,20 +1363,28 @@ do
         end
         sortAll()
 
-        -- Strict-next lookup: skip chord-mates at the same ppq.
-        local function strictNext(group, n)
-          for _, x in ipairs(group) do
-            if x.evt.ppq > n.evt.ppq then return x end
+        -- Strict-next per note: first group member with a greater ppq,
+        -- chord-mates skipped. Precomputed O(n); see docs/trackerManager.md § Rebuild.
+        local function strictNextMap(groups)
+          local nextOf = {}
+          for _, g in pairs(groups) do
+            for i = #g - 1, 1, -1 do
+              nextOf[g[i]] = g[i + 1].evt.ppq > g[i].evt.ppq
+                             and g[i + 1] or nextOf[g[i + 1]]
+            end
           end
+          return nextOf
         end
+        local laneNextOf  = strictNextMap(byLane)
+        local pitchNextOf = strictNextMap(byPitch)
 
         for _, n in ipairs(notes) do
           local e         = n.evt
           local ceiling   = e.endppqL == util.OPEN and math.huge
                             or e.endppqL and tm:fromLogical(chan, e.endppqL)
                             or math.huge
-          local laneNext  = strictNext(byLane[n.lane], n)
-          local pitchNext = strictNext(byPitch[e.pitch], n)
+          local laneNext  = laneNextOf[n]
+          local pitchNext = pitchNextOf[n]
           local laneClip  = laneNext
             and tm:fromLogical(chan, laneNext.evt.ppqL) + (e.overlap or 0)
             or math.huge
