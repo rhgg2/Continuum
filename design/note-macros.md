@@ -9,7 +9,8 @@
 > realisation the note's own events don't contain. This note fixes the
 > v1 model: the host contract and intent shape, the two output categories sharing one
 > realisation mechanism, the derived-event lifecycle, and the proving
-> pair (retrig + vibrato). UI is sketched only. Supersedes an earlier
+> pair (retrig + vibrato). Retrig's UI is specified (§ UI); later
+> kinds reuse the chassis. Supersedes an earlier
 > revision that realised continuous output as sysex packets interpreted
 > by a dedicated JSFX — rejected below, § *Why the delta is its own
 > stream*.
@@ -312,7 +313,8 @@ Mirrors PC synthesis end to end:
   groups must include the freshly staged fxNotes; (c) **before** PC
   synthesis, so fxNotes enter PC records carrying the host's `sample`
   — which moves PC synthesis (currently 4½) after expansion. Per
-  channel: records = lane-1 notes carrying `fx`; run generators;
+  channel: records = `fx`-carrying notes (structural hosts on any lane,
+  pitch-targeted deltas lane-1); run generators;
   predict fxNotes + delta streams; diff with carry-forward so steady
   state writes nothing. The delta diff is **stream-level**: a
   channel's stream at one code is a pure function of its fx-carrying
@@ -324,19 +326,53 @@ Mirrors PC synthesis end to end:
   dirties it; so does a pbRange/temper change. Same pure helper as the
   rebuild sweep.
 
-## UI (sketch only)
+## UI — retrig editor
 
-v1: a per-note `fx` badge in the note cell and a palette-style editor
-on the focused note (the param-palette focus model from tr is the
-obvious chassis). A full FX-column rendering — `R16`-style codes in a
-dedicated column — is deferred until the model is proven.
+Macros surface through two affordances on the note under the cursor.
+Structural kinds (retrig) host on **any lane**: the expansion walks
+every note column (`trackerManager.lua`, rebuild step 4.6) and the
+downstream tail walk and PC priority are lane-blind. Only the
+**pitch-targeted continuous kinds** (vibrato, slide) are lane-1 only —
+pb is channel-wide, so a higher-lane entry is inert there, dead like
+higher-lane detune; the editor flags such an entry rather than silently
+storing it. A full FX-column rendering — `R16`-style codes in a
+dedicated column — is the someday-richer view, deferred until the model
+is proven.
+
+**Badge.** A single-glyph mark in the note cell when `note.fx` is
+non-empty, drawn by the same `smallGlyph` machinery as the delay `*`
+marker (`trackerRender.lua`). Pure display — no column, no cursor part.
+
+**Editor — `Super-X` on the focused note.** Opens a modal popup
+anchored at the note under the cursor; a no-op only on a non-note cell.
+It borrows two existing idioms so nothing new has to be learned: tr's
+param-palette *keyboard-focus model* (Tab/arrows move between fields,
+Esc cancels with snapshot-restore à la `swingEditor`, Enter commits)
+and the grid's *nudge vocabulary* (`+`/`-` adjust the focused field,
+Shift = coarse). Commit writes `note.fx` through the ordinary
+note-metadata path.
+
+v1 exposes a **single retrig entry** per note. The list is real in the
+model; the multi-entry stack UI waits (open question below). `Super-X`
+on a note with no `fx` seeds a default
+`{kind='retrig', period={1,4}, ramp=0}` and opens on it; a clear key in
+the popup removes the entry (`util.REMOVE` through `assignEvent`, never
+`nil`).
+
+| field | shown | adjust | range |
+|---|---|---|---|
+| kind | `retrig` | — (fixed in v1) | — |
+| `period` | QN fraction `1/4` | Up/Down cycle the ladder ½·⅓·¼·⅙·⅛ QN | from the ladder |
+| `ramp` | signed `-12` | `+`/`-`, Shift = coarse | signed; vel clamps 1..127 per fxNote |
 
 ## v1 scope — the proving pair
 
 `retrig` + `vibrato`, one per category. **`retrig` ✓ landed:**
 `generators.lua` (pure module), the rebuild expansion step
 (`reconcileFx`, mirroring `reconcilePCsForChan`), and `tm_macro_spec`
-pinning G1–G4 plus tail-clamp, velocity-ramp, and PC interplay.
+pinning G1–G4 plus tail-clamp, velocity-ramp, and PC interplay. The
+retrig **UI** — badge + `Super-X` editor (§ UI) — is the current build
+target: the model is proven headless, the surface is not yet built.
 Flush-time reconcile (`dirtyFxHosts`) and the R2/R4 refactors are
 deferred fast-follows — correctness rides the rebuild path, which every
 flush triggers. **Vibrato is next:** cents→raw conversion, shaped-pair
@@ -492,6 +528,9 @@ The 4.9 absorber pass gathers lane-1 notes from
 columns, so that walk **cannot see them**. v1 rule making this safe:
 fxNotes carry `detune = host.detune` verbatim, so no fxNote seat is a
 detune jump and no absorber is needed. Assert the inheritance.
+Higher-lane fxNotes are irrelevant here: detune realises lane-1 only,
+so a higher-lane host's detune — and its fxNotes' — is already dead and
+seats no absorber.
 Trill (per-fxNote detune) requires the 4.9 gather to union derived
 lane-1 fxNotes first — that's the gating work item for trill, not the
 generator.
@@ -565,8 +604,10 @@ generator.
 - **Trill cents: structural detune vs delta stream.** Structural is
   correct-by-existing-machinery but seats absorbers at trill rate;
   both ride the same wire now, so decide after watching it run.
-- **Gen stack UI.** The model supports a list; v1 UI may expose a
-  single entry per note.
+- **Gen stack UI.** Settled for v1: a single retrig entry per note
+  (§ UI). The model carries a list; the multi-entry stack UI — and the
+  R16 fx-column that would show it densely — waits on the model proving
+  out across more kinds.
 - **Bake-on-export.** Address rewrite + merge of delta streams into
   their target lanes for plain-MIDI export; densification cost paid
   only there.

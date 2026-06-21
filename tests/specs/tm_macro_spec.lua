@@ -1,14 +1,5 @@
--- Note macros, v1 proving pair (structural half: retrig). A note's
--- `fx` list carries per-note generative intent; the rebuild expands a
--- `retrig` fx into derived `fxNote`s — ordinary realised notes tagged
--- `derived = <hostUuid>`, routed out of columns, tail-clamped by the
--- universal walk. Pins G1-G4 (see design/note-macros.md § Invariants).
---
--- G4 is written first and on purpose: flush -> rebuild -> flush must be
--- byte-identical under a non-identity swing AND nonzero delay. It is the
--- frame/rounding tripwire — a second rounding site or a float ppq in the
--- prediction shows up here as steady-state churn before any other surface
--- exists.
+-- Note macros, v1: retrig (structural). Pins G1-G4 (see design/note-macros.md § Invariants).
+-- G4 runs under swing+delay first — the frame/rounding tripwire for steady-state churn.
 
 local t = require('support')
 
@@ -27,9 +18,7 @@ local function pcsOnChan(dump, chan)
   return out
 end
 
--- Identity swing, zero delay: realised == logical, so geometry is
--- readable. (G4 deliberately runs under swing + delay; the rest don't
--- need to.)
+-- Identity swing, zero delay: realised == logical. (G4 runs under swing+delay; the rest don't.)
 local function addPlainHost(h, over)
   local note = { evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                  vel = 100, detune = 0, delay = 0, lane = 1, fx = retrig16 }
@@ -134,6 +123,29 @@ return {
       h.tm:flush()
 
       t.eq(#fxNotesOf(h.fm:dump(), host.uuid), 0, 'no fxNote survives fx removal')
+    end,
+  },
+
+  ----- Lane independence — structural hosts are not gated to lane 1
+
+  {
+    name = 'a higher-lane note hosts retrig (structural expansion is lane-blind)',
+    run = function(harness)
+      local h = harness.mk()
+      -- lane 1 plain, lane 2 carries the retrig: the host walk must not gate to lane 1.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1 })
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67,
+                      vel = 100, detune = 0, delay = 0, lane = 2, fx = retrig16 })
+      h.tm:flush()
+      local dump = h.fm:dump()
+      local host = hostNote(dump)
+      t.eq(host.lane, 2, 'host sits on lane 2')
+      local fns = fxNotesOf(dump, host.uuid)
+      t.eq(#fns, 3, 'lane-2 host expands like a lane-1 host')
+      for _, fn in ipairs(fns) do
+        t.eq(fn.lane, 2, 'fxNotes inherit the host lane, not lane 1')
+      end
     end,
   },
 

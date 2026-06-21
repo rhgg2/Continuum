@@ -943,7 +943,7 @@ do
   end
 
   --contract: true iff note fits col: no over-threshold overlap, coincident onset always refuses
-  --invariant: overlap threshold: same-pitch 0, cross-pitch overlapOffset lenient; dominated-by≥2 refuses
+  --invariant: overlap threshold: same-pitch 0, cross-pitch lenient; dominated-by≥2 refuses
   --contract: consulted only for unstamped raw notes; stamped notes never reach it
   local function noteColumnAccepts(col, note)
     local lenient = cm:get('overlapOffset') * mm:resolution()
@@ -965,7 +965,7 @@ do
   end
 
   --contract: stamped notes (ppqL ~= nil) take their authored lane verbatim
-  --invariant: step 4.8's unified raw walk clips their tails so they can't overlap; lane extends if missing
+  --invariant: step 4.8 raw walk clips tails so they can't overlap; lane extends if missing
   local function pickStampedLane(channel, note)
     local notes = channel.columns.notes
     while #notes < note.lane do pushNoteCol(channel) end
@@ -1197,34 +1197,35 @@ do
       staleSwing = {}
     end
 
-    -- 4.6) Macro expansion: expand fx-carrying lane-1 notes, reconcile against
-    -- fxExisting, commit. fxLive feeds the tail walk + PC synthesis. see design/note-macros.md § Pipeline placement
+    -- 4.6) Macro expansion: expand fx-carrying notes on every lane, reconcile
+    -- against fxExisting, commit. fxLive feeds the tail walk + PC synthesis. see design/note-macros.md § Pipeline placement
     do
       local res = mm:resolution()
       for chan = 1, 16 do
-        local lane1 = channels[chan].columns.notes[1]
         local predicted = {}
-        for _, host in ipairs(lane1 and lane1.events or {}) do
-          if host.fx and host.type ~= 'pa' then
-            local endL = host.endppqL
-            if endL == nil or endL == util.OPEN then
-              endL = tm:toLogical(chan, tm:length())
-            end
-            local d = delayToPPQ(host.delay or 0)
-            for _, params in ipairs(host.fx) do
-              local gen = generators[params.kind]
-              if gen then
-                local out = gen({ window = { host.ppqL, endL }, events = { host },
-                                  id = host.uuid, chan = chan }, params, { resolution = res })
-                for _, fn in ipairs(out.notes) do
-                  util.add(predicted, {
-                    evType = 'note', chan = chan, lane = 1, derived = host.uuid,
-                    pitch = fn.pitch, vel = fn.vel, detune = fn.detune or 0,
-                    delay = host.delay or 0, sample = host.sample,
-                    ppqL = fn.ppqL, endppqL = fn.endppqL,
-                    ppq    = tm:fromLogical(chan, fn.ppqL,    d),
-                    endppq = tm:fromLogical(chan, fn.endppqL, d),
-                  })
+        for laneIdx, col in ipairs(channels[chan].columns.notes) do
+          for _, host in ipairs(col.events) do
+            if host.fx and host.type ~= 'pa' then
+              local endL = host.endppqL
+              if endL == nil or endL == util.OPEN then
+                endL = tm:toLogical(chan, tm:length())
+              end
+              local d = delayToPPQ(host.delay or 0)
+              for _, params in ipairs(host.fx) do
+                local gen = generators[params.kind]
+                if gen then
+                  local out = gen({ window = { host.ppqL, endL }, events = { host },
+                                    id = host.uuid, chan = chan }, params, { resolution = res })
+                  for _, fn in ipairs(out.notes) do
+                    util.add(predicted, {
+                      evType = 'note', chan = chan, lane = laneIdx, derived = host.uuid,
+                      pitch = fn.pitch, vel = fn.vel, detune = fn.detune or 0,
+                      delay = host.delay or 0, sample = host.sample,
+                      ppqL = fn.ppqL, endppqL = fn.endppqL,
+                      ppq    = tm:fromLogical(chan, fn.ppqL,    d),
+                      endppq = tm:fromLogical(chan, fn.endppqL, d),
+                    })
+                  end
                 end
               end
             end
