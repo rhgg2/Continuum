@@ -41,7 +41,7 @@ return {
       -- identity from the destination column, REAPER bookkeeping mustn't
       -- ride. If any of these leak into the clip, paste will overwrite
       -- destination identity with stale source values.
-      for _, k in ipairs{'ppq','endppq','ppqL','endppqL','chan','frame','lane','loc','idx','uuid','uuidIdx'} do
+      for _, k in ipairs{'ppq','endppq','ppqL','endppqL','chan','frame','lane','loc','idx','uuid','uuidIdx','token'} do
         t.eq(e[k], nil, k .. ' not carried in clip event')
       end
     end,
@@ -160,6 +160,49 @@ return {
       h.tm:flush()
 
       t.eq(pastedAt(0).endppq, 240, 'blocker gone -> regrows to the full pasted intent')
+    end,
+  },
+
+  -- 2d. Regression: mm tokens are content-keyed by (chan,pitch,ppq); a leaked
+  -- token on paste routes mm:assign to the source seat, relocating the original host.
+  {
+    name = 'copy/paste a retrig host leaves the original host intact',
+    run = function(harness)
+      local retrig = { { kind = 'retrig', period = { 1, 4 }, ramp = -12 } }
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1, fx = retrig })
+      h.tm:flush()
+      h.vm:setGridSize(80, 80)
+
+      local function host0()
+        for _, n in ipairs(h.fm:dump().notes) do
+          if n.ppq == 0 and n.fx then return n end
+        end
+      end
+      local function fxNoteCount(uuid)
+        local c = 0
+        for _, n in ipairs(h.fm:dump().notes) do if n.derived == uuid then c = c + 1 end end
+        return c
+      end
+
+      local origUuid = host0().uuid
+      t.eq(fxNoteCount(origUuid), 3, 'host spawns 3 fxNotes before the copy')
+
+      -- Copy the host, paste one row down -- onto its own fxNote grid, the
+      -- same-pitch collision that exposed the leaked token.
+      h.ec:setPos(0, 1, 1)
+      h.ec:extendTo(h.ec:pos())
+      local clip = h.clipboard:collect()
+      t.eq(clip.events[1].token, nil, 'token stripped from the clip event')
+
+      h.ec:setPos(1, 1, 1)
+      h.clipboard:pasteClip(clip)
+
+      local orig = host0()
+      t.truthy(orig, 'original host still sits at ppq 0 with fx')
+      t.eq(orig.uuid, origUuid, 'original host keeps its identity (not relocated)')
+      t.eq(fxNoteCount(origUuid), 3, 'original host keeps its 3 fxNotes')
     end,
   },
 
