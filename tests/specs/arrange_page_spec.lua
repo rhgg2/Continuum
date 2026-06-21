@@ -742,28 +742,4 @@ return {
     end,
   },
 
-  -- The arrange facade owns the new-take-below flow (modal + mint).
-  {
-    name = 'newTakeBelow facade mints a sibling at the natural end',
-    run = function(harness)
-      local h = harness.mk()
-      h.cm:set('project', 'arrangeBeatPerRow', 1)
-      h.reaper:setTrackName('tr1', 'Track 1')
-      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
-      h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
-      ap:seedCursorFromReaper()
-      captured.facades.arrange.newTakeBelow()
-      local s = fakeModalHost.last
-      t.truthy(s,             'createSlot modal opened')
-      t.eq(s.beatsBuf, '4',   'default 4 beats')
-      s.callback('Verse', '3')
-      local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
-      local takes = am:tracksTakes(0)
-      t.eq(#takes, 2,                'sibling minted on commit')
-      t.eq(takes[2].startQN, 2,      'sibling at the source take\'s natural end')
-      t.eq(takes[2].naturalLenQN, 3, 'honours the user\'s 3 beats')
-    end,
-  },
 }

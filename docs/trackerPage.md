@@ -443,6 +443,17 @@ Changing track always restores that track's last-viewed slot — that is the
 per-track memory, and the same path as dive's "no take under the cursor"
 fallback.
 
+### New take and unpooled duplicate
+
+`newTakeBelow` and `duplicateUnpooledBelow` place nothing on the arrange
+grid. Each mints a new slot whose only instance is parked on the scratch
+track (`am:mintParkedTake`) and selects it (`tv:selectSlot`), so the
+tracker switches straight to a blank — or cloned — take with no
+arrange-cursor move. New-take keeps the name+length modal (the name
+defaults to the next-free slot's zero-padded index); the unpooled
+duplicate clones the currently-bound take. Arrange's own create/duplicate
+commands still place visible instances.
+
 ### Empty grid: one state
 
 No resolvable take ⇒ `tv.grid.cols` is empty ⇒ the grid is replaced by

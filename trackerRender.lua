@@ -1421,8 +1421,8 @@ help:registerPage('tracker', {
     { cmd = 'stop', label = 'Stop' },
   }},
   { anchor = 'body.grid', place = 'flow', title = 'Take management', items = {
-    { cmd = 'newTakeBelow', label = 'New take below' },
-    { cmd = 'duplicateUnpooledBelow', label = 'Duplicate (unpooled) below' },
+    { cmd = 'newTakeBelow', label = 'New take' },
+    { cmd = 'duplicateUnpooledBelow', label = 'Duplicate (unpooled)' },
     { cmd = 'takeProperties', label = 'Take properties' },
   }},
   { anchor = 'body.grid', place = 'flow', title = 'Global', items = {
@@ -1835,6 +1835,43 @@ modalHost:registerKind('retrigEdit', function(s, close)
   end
 end)
 
+-- New take from the tracker: name + length modal, mint a parked slot, select it.
+-- Mirrors arrange's createSlot modal; the slot is parked on scratch, not grid-placed.
+local NEW_TAKE_DEFAULT_BEATS = 4
+local function openNewTakeModal()
+  local trackIdx = tv:currentTrackIdx(); if not trackIdx then return end
+  local slot = arrange().nextFreeSlot(trackIdx)
+  modalHost:open{
+    kind     = 'newTake',
+    title    = 'New take',
+    nameBuf  = slot and string.format('%02d', slot) or '',
+    beatsBuf = tostring(NEW_TAKE_DEFAULT_BEATS),
+    callback = util.atomic('New take', function(nameBuf, beatsBuf)
+      local b = math.max(1e-3, tonumber(beatsBuf) or NEW_TAKE_DEFAULT_BEATS)
+      tv:newParkedTake(nameBuf, b)
+    end),
+  }
+end
+
+modalHost:registerKind('newTake', function(s, close)
+  local appearing = ImGui.IsWindowAppearing(ctx)
+  ImGui.Text(ctx, 'Name')
+  local rvN, nb = ImGui.InputText(ctx, '##newTakeName', s.nameBuf)
+  if rvN then s.nameBuf = nb end
+  ImGui.Text(ctx, 'Length (beats)')
+  if appearing then ImGui.SetKeyboardFocusHere(ctx) end
+  local rvB, bb = ImGui.InputText(ctx, '##newTakeBeats', s.beatsBuf)
+  if rvB then s.beatsBuf = bb end
+  local ok = ImGui.Button(ctx, 'OK')
+              or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+                                  or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
+  ImGui.SameLine(ctx)
+  local cancel = ImGui.Button(ctx, 'Cancel')
+              or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
+  if ok then close(true, s.nameBuf, s.beatsBuf)
+  elseif cancel then close(false) end
+end)
+
 local tracker = cmgr:scope('tracker')
 
 tracker:registerAll{
@@ -1845,8 +1882,8 @@ tracker:registerAll{
   end,
 
   takeProperties         = { function() renderer:openTakeProperties{} end, 'Take properties' },
-  newTakeBelow           = function() arrange().newTakeBelow() end,
-  duplicateUnpooledBelow = { function() arrange().duplicateUnpooledBelow() end, 'Duplicate take (unpooled) below' },
+  newTakeBelow           = { openNewTakeModal, 'New take' },
+  duplicateUnpooledBelow = { function() tv:duplicateBoundUnpooled() end, 'Duplicate take (unpooled)' },
 
   prevTrack = { function() tv:gotoTrack(-1) end, 'Previous track' },
   nextTrack = { function() tv:gotoTrack(1)  end, 'Next track' },

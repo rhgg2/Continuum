@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=61  sha=9623b2b  mode=chunk
+@module arrangePage  src=arrangePage.lua  loc=60  sha=e69cb6f  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -22,28 +22,27 @@
   @api ap:unbind()  @ 35
   @api ap:seedCursorFromReaper()  @ 38
       @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
-  -- Arrange service surface — av passthroughs; newTakeBelow opens a modal in the renderer
+  -- Arrange service surface — av passthroughs
   -- Page interface — render delegates to the renderer
-  @api ap:toolbarSegments()  @ 56
-  @api ap:renderBody(_, w, h, dispatch)  @ 57
-  @api ap:renderStatusBar(ctx)  @ 58
-  @api ap:focusState()  @ 59
+  @api ap:toolbarSegments()  @ 55
+  @api ap:renderBody(_, w, h, dispatch)  @ 56
+  @api ap:renderStatusBar(ctx)  @ 57
+  @api ap:focusState()  @ 58
 
 # Uses (outbound edges)
-  @use call    arrangeRender.focusState  @ 59
-  @use call    arrangeRender.newTakeBelow  @ 49
-  @use call    arrangeRender.renderBody  @ 57
-  @use call    arrangeRender.renderStatusBar  @ 58
-  @use call    arrangeRender.toolbarSegments  @ 56
+  @use call    arrangeRender.focusState  @ 58
+  @use call    arrangeRender.renderBody  @ 56
+  @use call    arrangeRender.renderStatusBar  @ 57
+  @use call    arrangeRender.toolbarSegments  @ 55
   @use call    arrangeView.cursorCol  @ 42
-  @use call    arrangeView.duplicateUnpooledFocusedBelow  @ 50
   @use call    arrangeView.keyForSlot  @ 48
   @use call    arrangeView.midiSlots  @ 44
+  @use call    arrangeView.nextFreeSlot  @ 49
   @use call    arrangeView.projectTracks  @ 43
-  @use call    arrangeView.reswingAll  @ 51
+  @use call    arrangeView.reswingAll  @ 50
   @use call    arrangeView.seedCursor  @ 38
   @use call    arrangeView.takeForSlot  @ 45
-  @use call    arrangeView.takesUsing  @ 52
+  @use call    arrangeView.takesUsing  @ 51
   @use call    arrangeView.trackHandle  @ 47
   @use call    arrangeView.trackIdxForGuid  @ 46
   @use call    facade.publish  @ 41

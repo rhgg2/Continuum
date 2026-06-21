@@ -35,7 +35,7 @@ local fakeModalHost = {
 }
 
 -- tv resolves its (track, slot) selection to a take via this facade.
--- The fake models a settable track/slot world; new-take/dup still route to arrange.
+-- The fake models a settable track/slot world; new-take/dup mint a parked slot via mintParkedTake.
 local fakeArrange = {}
 local function resetArrange()
   fakeArrange.calls      = {}
@@ -51,8 +51,11 @@ local function resetArrange()
   fakeArrange.midiSlots   = function(idx) return fakeArrange.slotsByIdx[idx] or {} end
   fakeArrange.takeForSlot = function(idx, slot) return fakeArrange.takeByKey[idx .. ':' .. slot] end
   fakeArrange.keyForSlot  = function() return '' end
-  fakeArrange.newTakeBelow           = function() fakeArrange.calls.newTakeBelow = true end
-  fakeArrange.duplicateUnpooledBelow = function() fakeArrange.calls.dup          = true end
+  fakeArrange.nextFreeSlot   = function() return 7 end
+  fakeArrange.mintParkedTake = function(trackIdx, name, beats, src)
+    fakeArrange.calls.mint = { trackIdx = trackIdx, name = name, beats = beats, src = src }
+    return 7                                       -- the new parked slot
+  end
 end
 local fakeWiring = { samplerReachable = function() return false end }
 local fakeFacade = {
@@ -109,7 +112,7 @@ return {
   },
 
   -- The tracker owns its (track, slot) selection in cm (decoupled from the arrange cursor); nav
-  -- writes that selection via tv. newTakeBelow / dup still delegate to arrange (minting pinned there).
+  -- writes that selection via tv. newTakeBelow / dup mint a slot parked on scratch and select it.
   {
     name = 'bindFromSelection binds tm to the resolved selection take, drops when the track has no slots',
     run = function(harness)
@@ -128,15 +131,26 @@ return {
   },
 
   {
-    name = 'newTakeBelow + duplicateUnpooledBelow delegate to the arrange facade',
+    name = 'newTakeBelow + duplicateUnpooledBelow mint a parked slot on scratch and select it',
     run = function(harness)
       local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
       local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+      tp:bindFromSelection()                       -- seed track 0 / slot 0, bind the take
       h.cmgr:push('tracker')
-      h.cmgr:invoke('newTakeBelow')
-      t.truthy(fakeArrange.calls.newTakeBelow, 'newTakeBelow routed to arrange')
-      h.cmgr:invoke('duplicateUnpooledBelow')
-      t.truthy(fakeArrange.calls.dup, 'duplicateUnpooledBelow routed to arrange')
+
+      h.cmgr:invoke('newTakeBelow')                -- opens the name+length modal
+      fakeModalHost.last.callback('07', '4')       -- commit the modal
+      t.eq(fakeArrange.calls.mint.name, '07', 'minted with the modal name')
+      t.eq(fakeArrange.calls.mint.src,  nil,  'new take has no clone source')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new parked slot')
+
+      h.cmgr:invoke('duplicateUnpooledBelow')      -- clones the bound take
+      t.eq(fakeArrange.calls.mint.src, 'tr1/t1', 'dup passed the bound take as clone source')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new parked slot')
     end,
   },
 

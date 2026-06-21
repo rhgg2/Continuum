@@ -141,6 +141,21 @@ function tv:pickTrack(trackIdx)
 end
 function tv:pickTake(slotIdx) self:selectSlot(slotIdx) end
 
+--contract: mint an empty take parked on scratch on the current track, then select it
+function tv:newParkedTake(name, beats)
+  local trackIdx = selectedTrackIdx(); if not trackIdx then return end
+  local slot = arrange().mintParkedTake(trackIdx, name, beats)
+  if slot then self:selectSlot(slot) end
+end
+
+--contract: clone the bound take (unpooled) into a fresh slot parked on scratch, then select it
+function tv:duplicateBoundUnpooled()
+  local trackIdx = selectedTrackIdx(); if not trackIdx then return end
+  local src = tm:currentTake(); if not src then return end
+  local slot = arrange().mintParkedTake(trackIdx, '', nil, src)
+  if slot then self:selectSlot(slot) end
+end
+
 local ec, clipboard, ctx
 
 ---------- SHARED HELPERS

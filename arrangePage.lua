@@ -37,7 +37,7 @@ function ap:unbind() end
 --contract: seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
 function ap:seedCursorFromReaper() av:seedCursor() end
 
------ Arrange service surface — av passthroughs; newTakeBelow opens a modal in the renderer
+----- Arrange service surface — av passthroughs
 facade.publish('arrange', {
   currentTrackIdx = function()        return av:cursorCol()       end,
   tracks          = function()        return av:projectTracks()   end,
@@ -46,8 +46,7 @@ facade.publish('arrange', {
   trackIdxForGuid = function(guid)     return av:trackIdxForGuid(guid) end,
   trackHandle     = function(trackIdx) return av:trackHandle(trackIdx) end,
   keyForSlot      = function(slotIdx)  return av:keyForSlot(slotIdx) end,
-  newTakeBelow           = function() ar:newTakeBelow() end,
-  duplicateUnpooledBelow = function() av:duplicateUnpooledFocusedBelow() end,
+  nextFreeSlot    = function(trackIdx) return av:nextFreeSlot(trackIdx) end,
   reswingAll             = function(name) av:reswingAll(name) end,
   takesUsing             = function(name) return av:takesUsing(name) end,
 })

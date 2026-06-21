@@ -7,7 +7,7 @@
 --invariant: slot indices 0..61, base62-keyed (util.toBase62); lowest-free, gaps allowed
 --invariant: a slot survives while its id is live on the track or parked; reads via ensureSlots
 --invariant: deleteTake parks a slot's last instance; deleteSlot alone forever-deletes
---invariant: createAndDropMidi alone mints a slot; all else inherits or drops into an existing one
+--invariant: createAndDropMidi + mintParkedTake mint slots; everything else reuses an existing one
 --invariant: takeId is the source-identity chokepoint; takes with no derivable id are skipped
 --invariant: reswingAll is sequenceManager folded in; bind loop lives behind the 'tracker' facade
 --invariant: natural length in ds 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
@@ -791,6 +791,34 @@ function am:newTakeBelow(take)
   if not am:startIsClear(take.trackIdx, destQN) then return end
   local _, newTake = am:createAndDropMidi(take.trackIdx, destQN, take.naturalLenQN, '')
   return newTake
+end
+
+--contract: mints a slot on trackIdx parked on scratch; returns slotIdx (nil if no track/free slot)
+-- srcTake → clone its events + natural length into a fresh unpooled pool; else an empty take of lengthQN.
+function am:mintParkedTake(trackIdx, name, lengthQN, srcTake)
+  local track   = visibleTrackOfCol(trackIdx)
+  local dict    = track and readSlots(track)
+  local slotIdx = dict and nextFreeSlot(dict)
+  if not slotIdx then return end
+
+  local len = lengthQN
+  if srcTake then
+    len = effectiveNaturalLenQN(srcTake, reaper.GetMediaItemTake_Item(srcTake))
+  end
+  local item = reaper.CreateNewMIDIItemInProj(scratch.track(), 0, len, true)
+  local take = item and reaper.GetActiveTake(item)
+  local guid = take and harvestPoolGuid(item)
+  if not guid then return end
+  if srcTake then
+    copyMidiEvents(srcTake, take)
+    if name == '' then name = reaper.GetTakeName(srcTake) or '' end
+  end
+
+  dict[slotIdx] = { kind = 'midi', id = guid }
+  writeSlots(track, dict)
+  setTakeName(take, name)
+  stampForTake(take)
+  return slotIdx
 end
 
 ----- Per-take edits

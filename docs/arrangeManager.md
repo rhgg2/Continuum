@@ -64,6 +64,13 @@ fresh pooled instance straight off the park. A slot with neither a live
 nor a parked instance is the genuine forever-gone case, reached only
 through `deleteSlot`.
 
+`am:mintParkedTake` reaches the same end-state forward: it mints a fresh
+slot whose sole instance is born on the scratch track, never grid-placed.
+The tracker's new-take and unpooled-duplicate gestures use it to add a
+slot the user edits in place and drops onto the grid later. A new MIDI
+item already carries its own pool, so the clone is unpooled by
+construction.
+
 ### Renaming and name drift
 
 No slot-name field is stored. The displayed name is whatever the

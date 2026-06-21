@@ -430,21 +430,6 @@ function av:reswingAll(name)      return am:reswingAll(name) end
 
 function av:midiSlots(trackIdx) return midiSlots(trackIdx) end
 
---contract: dest for a new take below the cursor take; nil if no cursor take or start unclear.
-function av:newTakeBelowParams()
-  local cur = takeAtCursor(); if not cur then return nil end
-  local destQN = cur.startQN + cur.naturalLenQN
-  if not am:startIsClear(cur.trackIdx, destQN) then return nil end
-  return { trackIdx = cur.trackIdx, destQN = destQN }
-end
-
---contract: mint a MIDI take at (trackIdx,destQN) and land the cursor on it; nil if am refused.
-function av:createTakeBelow(trackIdx, destQN, beats, name)
-  local _, newTake = am:createAndDropMidi(trackIdx, destQN, beats, name)
-  if newTake then self:setCursor(self:qnToRow(destQN), trackIdx) end
-  return newTake
-end
-
 ----- Transport — gutter mouse drives the REAPER edit cursor / loop range
 
 function av:setEditCursorQN(qn)    am:setEditCursorQN(qn) end

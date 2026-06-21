@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=886  sha=ee68876  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=914  sha=e69cb6f  mode=chunk
 @deps cm, ds, facade
 
 # Invariants & contracts
@@ -8,7 +8,7 @@
   @invariant  slot indices 0..61, base62-keyed (util.toBase62); lowest-free, gaps allowed
   @invariant  a slot survives while its id is live on the track or parked; reads via ensureSlots
   @invariant  deleteTake parks a slot's last instance; deleteSlot alone forever-deletes
-  @invariant  createAndDropMidi alone mints a slot; all else inherits or drops into an existing one
+  @invariant  createAndDropMidi + mintParkedTake mint slots; everything else reuses an existing one
   @invariant  takeId is the source-identity chokepoint; takes with no derivable id are skipped
   @invariant  reswingAll is sequenceManager folded in; bind loop lives behind the 'tracker' facade
   @invariant  natural length in ds 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
@@ -103,7 +103,7 @@
       -- drops past its downstream neighbour; relayout handles the symmetric truncation.
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 854
+  @fn projectMidiTakes()  @ 882
 
 # Public API (am:*)
   @api am:projectTracks()  @ 315
@@ -154,31 +154,34 @@
       @contract  unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
   @api am:newTakeBelow(take)  @ 788
       @contract  empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 799
+  @api am:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 798
+      -- srcTake → clone its events + natural length into a fresh unpooled pool; else an empty take of lengthQN.
+      @contract  mints a slot on trackIdx parked on scratch; returns slotIdx (nil if no track/free slot)
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 827
       @contract  true iff no take on trackIdx (≠ exceptItem) starts exactly at startQN (shared spans OK)
-  @api am:moveTake(take, deltaQN)  @ 809
+  @api am:moveTake(take, deltaQN)  @ 837
       @contract  shifts start by deltaQN, relayouts (natural kept); true iff start clear, else no-op
-  @api am:resizeTake(take, newNaturalQN)  @ 822
+  @api am:resizeTake(take, newNaturalQN)  @ 850
       @contract  writes the take's natural length; relayout caps it. See docs § Natural length.
-  @api am:takeSourceLengthQN(take)  @ 829
+  @api am:takeSourceLengthQN(take)  @ 857
       @contract  source length in QN at the take's position; 0 if source missing.
-  @api am:deleteTake(take)  @ 840
+  @api am:deleteTake(take)  @ 868
       -- Deleting a slot's last live instance parks it on the scratch track (keeping
       -- the pool + slot alive) rather than GC-ing it. See docs § Parking.
-  @api am:takesUsing(name)  @ 868
+  @api am:takesUsing(name)  @ 896
       @contract  scans each take's swing map (ds) for the named swing; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 882
+  @api am:reswingAll(name)  @ 910
       @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 
 # Uses (outbound edges)
   @use call    ds.assign  @ 234
   @use call    ds.assignAt  @ 77, 135, 136
   @use call    ds.get  @ 233
-  @use call    ds.getAt  @ 73, 130, 871
-  @use call    facade.get  @ 287, 883
+  @use call    ds.getAt  @ 73, 130, 899
+  @use call    facade.get  @ 287, 911
   @use call    painter.hueNative  @ 269
   @use call    scratch.peek  @ 103, 285, 592
-  @use call    scratch.track  @ 845
+  @use call    scratch.track  @ 808, 873
   @use call    util.toBase62  @ 551
   @use require painter  @ 22
   @use require scratch  @ 23

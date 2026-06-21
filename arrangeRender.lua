@@ -658,23 +658,6 @@ function openCreateModal(trackIdx, qnPos, beats)
   }
 end
 
--- The tracker's "new take below" gesture, owned here so it shares the
--- createSlot modal; the cursor lands on the new take and the tracker rebinds.
-local NEW_TAKE_DEFAULT_BEATS = 4
-local function arrangeNewTakeBelow()
-  local params = av:newTakeBelowParams(); if not params then return end
-  modalHost:open{
-    kind     = 'createSlot',
-    title    = 'New take',
-    nameBuf  = '',
-    beatsBuf = tostring(NEW_TAKE_DEFAULT_BEATS),
-    callback = util.atomic('Create take', function(nameBuf, beatsBuf)
-      local b = math.max(1e-3, tonumber(beatsBuf) or NEW_TAKE_DEFAULT_BEATS)
-      av:createTakeBelow(params.trackIdx, params.destQN, b, nameBuf)
-    end),
-  }
-end
-
 -- Two-field create modal: name + length-in-beats. OK/Cancel keys are
 -- gated on not-appearing so the Cmd+Enter that opened it doesn't self-dismiss.
 modalHost:registerKind('createSlot', function(s, close)
@@ -757,10 +740,6 @@ local function renderPaletteBody(focusedTrack)
 end
 
 ----------- PUBLIC
-
--- The controller's 'arrange' facade routes its newTakeBelow entry here so the
--- gesture shares the createSlot modal that lives with the rest of the renderer.
-function ar:newTakeBelow() arrangeNewTakeBelow() end
 
 --shape: ToolbarSegment = { id, render = fn() }
 local toolbarSegments = {
