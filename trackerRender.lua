@@ -1692,16 +1692,18 @@ modalHost:registerKind('takeProps', function(s, close)
   if     pressedAny(cmgr:keysFor('doubleRPB')) then scaleBy(2)
   elseif pressedAny(cmgr:keysFor('halveRPB'))  then scaleBy(0.5) end
 
+  -- Appearing frame: Enter is still IsKeyPressed=true — gate OK/Cancel
+  -- below so a binding like Super+Shift+Enter doesn't self-dismiss.
+  local appearing = ImGui.IsWindowAppearing(ctx)
+
   ImGui.Text(ctx, 'Item name')
+  -- Duplicate paths open with focusName so the clone is named first.
+  if appearing and s.focusName then ImGui.SetKeyboardFocusHere(ctx) end
   local rvN, name = ImGui.InputText(ctx, '##takeprops_name', s.nameBuf)
   if rvN then s.nameBuf = name end
 
   ImGui.Text(ctx, 'Length (beats)')
-  -- Appearing frame: the same Enter that opened the popup is still
-  -- IsKeyPressed=true this frame. Gate OK/Cancel below so a binding
-  -- like Super+Shift+Enter doesn't immediately self-dismiss the modal.
-  local appearing = ImGui.IsWindowAppearing(ctx)
-  if appearing or s.refocusBeats then
+  if (appearing and not s.focusName) or s.refocusBeats then
     ImGui.SetKeyboardFocusHere(ctx)
     s.refocusBeats = nil
   end
@@ -1908,8 +1910,7 @@ local fxEdit do
 end
 
 -- New take from the tracker: name + length modal, mint a parked slot, select it.
--- Mirrors arrange's createSlot modal; the slot is parked on scratch, not grid-placed.
-local NEW_TAKE_DEFAULT_BEATS = 4
+-- Length seeds from / persists to the project-tier newTakeBeats config.
 local function openNewTakeModal()
   local trackIdx = tv:currentTrackIdx(); if not trackIdx then return end
   local slot = arrange().nextFreeSlot(trackIdx)
@@ -1917,9 +1918,10 @@ local function openNewTakeModal()
     kind     = 'newTake',
     title    = 'New take',
     nameBuf  = slot and string.format('%02d', slot) or '',
-    beatsBuf = tostring(NEW_TAKE_DEFAULT_BEATS),
+    beatsBuf = tostring(cm:get('newTakeBeats')),
     callback = util.atomic('New take', function(nameBuf, beatsBuf)
-      local b = math.max(1e-3, tonumber(beatsBuf) or NEW_TAKE_DEFAULT_BEATS)
+      local b = math.max(1e-3, tonumber(beatsBuf) or cm:get('newTakeBeats'))
+      cm:set('project', 'newTakeBeats', b)
       tv:newParkedTake(nameBuf, b)
     end),
   }
@@ -1928,10 +1930,10 @@ end
 modalHost:registerKind('newTake', function(s, close)
   local appearing = ImGui.IsWindowAppearing(ctx)
   ImGui.Text(ctx, 'Name')
+  if appearing then ImGui.SetKeyboardFocusHere(ctx) end
   local rvN, nb = ImGui.InputText(ctx, '##newTakeName', s.nameBuf)
   if rvN then s.nameBuf = nb end
   ImGui.Text(ctx, 'Length (beats)')
-  if appearing then ImGui.SetKeyboardFocusHere(ctx) end
   local rvB, bb = ImGui.InputText(ctx, '##newTakeBeats', s.beatsBuf)
   if rvB then s.beatsBuf = bb end
   local ok = ImGui.Button(ctx, 'OK')
@@ -1944,6 +1946,12 @@ modalHost:registerKind('newTake', function(s, close)
   elseif cancel then close(false) end
 end)
 
+-- Mint the clone, open take-properties focused on name. No rebind: slot selection re-binds
+-- to the clone before any commit lands, so the seed and commit both target the clone.
+local function duplicateUnpooledTake()
+  if tv:duplicateBoundUnpooled() then renderer:openTakeProperties{ focusName = true } end
+end
+
 local tracker = cmgr:scope('tracker')
 
 tracker:registerAll{
@@ -1955,7 +1963,7 @@ tracker:registerAll{
 
   takeProperties         = { function() renderer:openTakeProperties{} end, 'Take properties' },
   newTakeBelow           = { openNewTakeModal, 'New take' },
-  duplicateUnpooledBelow = { function() tv:duplicateBoundUnpooled() end, 'Duplicate take (unpooled)' },
+  duplicateUnpooledBelow = { duplicateUnpooledTake, 'Duplicate take (unpooled)' },
 
   prevTrack = { function() tv:gotoTrack(-1) end, 'Previous track' },
   nextTrack = { function() tv:gotoTrack(1)  end, 'Next track' },
@@ -2043,6 +2051,7 @@ function renderer:openTakeProperties(args)
     beatsBuf = ('%g'):format(origBeats),
     beatsGen = 0,
     mode     = 'resize',
+    focusName = args.focusName,
     callback = function(name, beats, mode)
       if not beats or beats <= 0 then return end
       pendingOnClose = false  -- transfer ownership to the apply chain

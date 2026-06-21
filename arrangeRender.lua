@@ -642,17 +642,18 @@ local function openDeleteModal(trackIdx, slot)
   }
 end
 
--- Default length 8 beats (two bars in 4/4) — musical-sized, not a stub.
-local CREATE_DEFAULT_BEATS = 8
+-- Length seeds from a drag-sweep when given, else the project-tier newTakeBeats
+-- config; the committed length persists back to it.
 function openCreateModal(trackIdx, qnPos, beats)
   local slotIdx = av:nextFreeSlot(trackIdx)
   modalHost:open{
     kind     = 'createSlot',
     title    = 'New take',
     nameBuf  = slotIdx and string.format('%02d', slotIdx) or '',
-    beatsBuf = tostring(beats or CREATE_DEFAULT_BEATS),
+    beatsBuf = tostring(beats or cm:get('newTakeBeats')),
     callback = util.atomic('Create take', function(nameBuf, beatsBuf)
-      local b = math.max(1e-3, tonumber(beatsBuf) or CREATE_DEFAULT_BEATS)
+      local b = math.max(1e-3, tonumber(beatsBuf) or cm:get('newTakeBeats'))
+      cm:set('project', 'newTakeBeats', b)
       av:createSlot(trackIdx, qnPos, b, nameBuf)
     end),
   }
@@ -663,10 +664,10 @@ end
 modalHost:registerKind('createSlot', function(s, close)
   local appearing = ImGui.IsWindowAppearing(ctx)
   ImGui.Text(ctx, 'Name')
+  if appearing then ImGui.SetKeyboardFocusHere(ctx) end
   local rvN, nb = ImGui.InputText(ctx, '##createName', s.nameBuf)
   if rvN then s.nameBuf = nb end
   ImGui.Text(ctx, 'Length (beats)')
-  if appearing then ImGui.SetKeyboardFocusHere(ctx) end
   local rvB, bb = ImGui.InputText(ctx, '##createBeats', s.beatsBuf)
   if rvB then s.beatsBuf = bb end
   local ok = ImGui.Button(ctx, 'OK')

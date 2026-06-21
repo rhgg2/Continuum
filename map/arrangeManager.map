@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=914  sha=e69cb6f  mode=chunk
+@module arrangeManager  src=arrangeManager.lua  loc=922  sha=88fcec6  mode=chunk
 @deps cm, ds, facade
 
 # Invariants & contracts
@@ -98,12 +98,12 @@
   @fn siblingInstance(track, id)  @ 690
       -- First instance matching id: item, length, name — what a fresh drop inherits.
       -- Falls back to the parked keeper so drops from emptied slots re-materialise.
-  @fn destBelow(take)  @ 763
+  @fn destBelow(take)  @ 770
       -- Destination for the *-Below trio: natural end (not rendered), so a truncated upstream still
       -- drops past its downstream neighbour; relayout handles the symmetric truncation.
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 882
+  @fn projectMidiTakes()  @ 890
 
 # Public API (am:*)
   @api am:projectTracks()  @ 315
@@ -142,46 +142,48 @@
   @api am:takeForSlot(trackIdx, slotIdx)  @ 701
       @contract  live-or-parked MIDI take for slot slotIdx on trackIdx; nil if no track/slot/instance
   @api am:trackHandle(trackIdx)  @ 710
-  @api am:trackIdxForGuid(guid)  @ 713
+  @api am:isParkedTake(take)  @ 713
+      @contract  true iff take's host is the scratch track (its slot's only instance is parked)
+  @api am:trackIdxForGuid(guid)  @ 720
       @contract  visible-column index of the track carrying this GUID; nil if it is gone
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 721
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 728
       @contract  instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
-  @api am:duplicateTake(take, qnPos)  @ 743
+  @api am:duplicateTake(take, qnPos)  @ 750
       @contract  clones take at qnPos on its own track, original untouched; nil if track/id missing
-  @api am:duplicateBelow(take)  @ 766
+  @api am:duplicateBelow(take)  @ 773
       @contract  pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:duplicateUnpooledBelow(take)  @ 774
+  @api am:duplicateUnpooledBelow(take)  @ 781
       @contract  unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:newTakeBelow(take)  @ 788
+  @api am:newTakeBelow(take)  @ 795
       @contract  empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
-  @api am:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 798
+  @api am:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 805
       -- srcTake → clone its events + natural length into a fresh unpooled pool; else an empty take of lengthQN.
       @contract  mints a slot on trackIdx parked on scratch; returns slotIdx (nil if no track/free slot)
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 827
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 835
       @contract  true iff no take on trackIdx (≠ exceptItem) starts exactly at startQN (shared spans OK)
-  @api am:moveTake(take, deltaQN)  @ 837
+  @api am:moveTake(take, deltaQN)  @ 845
       @contract  shifts start by deltaQN, relayouts (natural kept); true iff start clear, else no-op
-  @api am:resizeTake(take, newNaturalQN)  @ 850
+  @api am:resizeTake(take, newNaturalQN)  @ 858
       @contract  writes the take's natural length; relayout caps it. See docs § Natural length.
-  @api am:takeSourceLengthQN(take)  @ 857
+  @api am:takeSourceLengthQN(take)  @ 865
       @contract  source length in QN at the take's position; 0 if source missing.
-  @api am:deleteTake(take)  @ 868
+  @api am:deleteTake(take)  @ 876
       -- Deleting a slot's last live instance parks it on the scratch track (keeping
       -- the pool + slot alive) rather than GC-ing it. See docs § Parking.
-  @api am:takesUsing(name)  @ 896
+  @api am:takesUsing(name)  @ 904
       @contract  scans each take's swing map (ds) for the named swing; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 910
+  @api am:reswingAll(name)  @ 918
       @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 
 # Uses (outbound edges)
   @use call    ds.assign  @ 234
   @use call    ds.assignAt  @ 77, 135, 136
   @use call    ds.get  @ 233
-  @use call    ds.getAt  @ 73, 130, 899
-  @use call    facade.get  @ 287, 911
+  @use call    ds.getAt  @ 73, 130, 907
+  @use call    facade.get  @ 287, 919
   @use call    painter.hueNative  @ 269
-  @use call    scratch.peek  @ 103, 285, 592
-  @use call    scratch.track  @ 808, 873
+  @use call    scratch.peek  @ 103, 285, 592, 715
+  @use call    scratch.track  @ 815, 881
   @use call    util.toBase62  @ 551
   @use require painter  @ 22
   @use require scratch  @ 23

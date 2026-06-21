@@ -251,7 +251,7 @@ local function duplicateUnpooledSelectedBelow()
   if newTake then
     av:setFocus(newTake)
     advanceCursorPastNewTake(newTake)
-    tracker().openTakeProperties(reaper.GetMediaItemTake_Item(newTake))
+    tracker().openTakeProperties(reaper.GetMediaItemTake_Item(newTake), { focusName = true })
   end
 end
 
@@ -422,6 +422,10 @@ function av:trackIdxForGuid(guid) return am:trackIdxForGuid(guid) end
 function av:trackHandle(trackIdx) return am:trackHandle(trackIdx) end
 function av:keyForSlot(slotIdx)   return am:keyForSlot(slotIdx) end
 function av:nextFreeSlot(trackIdx) return am:nextFreeSlot(trackIdx) end
+function av:mintParkedTake(trackIdx, name, lengthQN, srcTake)
+  return am:mintParkedTake(trackIdx, name, lengthQN, srcTake)
+end
+function av:isParkedTake(take) return am:isParkedTake(take) end
 function av:editCursorQN()        return am:editCursorQN() end
 function av:playPositionQN()      return am:playPositionQN() end
 function av:loopRangeQN()         return am:loopRangeQN() end

@@ -102,6 +102,16 @@ function tv:resolveSelectionTake()
   return arrange().takeForSlot(trackIdx, effective)
 end
 
+--contract: parked take hosts on scratch; re-point track tier at the selection's track so
+-- per-track reads (swing seed, trackerSlot) stay coherent. See docs § Selection.
+function tv:retargetTrackTier()
+  local take = tm:currentTake()
+  if not (take and arrange().isParkedTake(take)) then return end
+  local trackIdx = selectedTrackIdx(); if not trackIdx then return end
+  local track = arrange().trackHandle(trackIdx)
+  if track then cm:setTrack(track) end
+end
+
 --contract: point at a track by GUID; optSlot pins a slot, else restore its last-viewed slot
 function tv:selectTrack(guid, optSlot)
   local trackIdx = arrange().trackIdxForGuid(guid)
@@ -148,12 +158,14 @@ function tv:newParkedTake(name, beats)
   if slot then self:selectSlot(slot) end
 end
 
---contract: clone the bound take (unpooled) into a fresh slot parked on scratch, then select it
+--contract: clone the bound take (unpooled) into a fresh parked slot, select it, return slotIdx
 function tv:duplicateBoundUnpooled()
   local trackIdx = selectedTrackIdx(); if not trackIdx then return end
   local src = tm:currentTake(); if not src then return end
   local slot = arrange().mintParkedTake(trackIdx, '', nil, src)
-  if slot then self:selectSlot(slot) end
+  if not slot then return end
+  self:selectSlot(slot)
+  return slot
 end
 
 local ec, clipboard, ctx

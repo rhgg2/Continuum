@@ -709,6 +709,13 @@ end
 
 function am:trackHandle(trackIdx) return visibleTrackOfCol(trackIdx) end
 
+--contract: true iff take's host is the scratch track (its slot's only instance is parked)
+function am:isParkedTake(take)
+  if not take then return false end
+  local _, scratchTrack = scratch.peek()
+  return scratchTrack ~= nil and reaper.GetMediaItemTake_Track(take) == scratchTrack
+end
+
 --contract: visible-column index of the track carrying this GUID; nil if it is gone
 function am:trackIdxForGuid(guid)
   if not guid then return end
@@ -818,6 +825,7 @@ function am:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   writeSlots(track, dict)
   setTakeName(take, name)
   stampForTake(take)
+  invalidate()                  -- the slot palette cache must see the new parked slot at once
   return slotIdx
 end
 

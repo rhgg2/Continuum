@@ -52,6 +52,7 @@ local function resetArrange()
   fakeArrange.takeForSlot = function(idx, slot) return fakeArrange.takeByKey[idx .. ':' .. slot] end
   fakeArrange.keyForSlot  = function() return '' end
   fakeArrange.nextFreeSlot   = function() return 7 end
+  fakeArrange.isParkedTake   = function() return false end
   fakeArrange.mintParkedTake = function(trackIdx, name, beats, src)
     fakeArrange.calls.mint = { trackIdx = trackIdx, name = name, beats = beats, src = src }
     return 7                                       -- the new parked slot
@@ -148,9 +149,10 @@ return {
       t.eq(fakeArrange.calls.mint.src,  nil,  'new take has no clone source')
       t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new parked slot')
 
-      h.cmgr:invoke('duplicateUnpooledBelow')      -- clones the bound take
+      h.cmgr:invoke('duplicateUnpooledBelow')      -- clones the bound take, opens take-properties
       t.eq(fakeArrange.calls.mint.src, 'tr1/t1', 'dup passed the bound take as clone source')
       t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new parked slot')
+      t.eq(fakeModalHost.last.focusName, true, 'dup opens take-properties focused on the name field')
     end,
   },
 

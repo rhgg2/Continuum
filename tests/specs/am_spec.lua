@@ -598,6 +598,24 @@ return {
     end,
   },
 
+  {
+    name = 'mintParkedTake shows the new slot at once; isParkedTake flags scratch-hosted takes',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'lead' } } },
+      })
+      local live = am:tracksTakes(0)[1].take
+      local slot = am:mintParkedTake(0, 'fresh', 4)
+      t.truthy(slot, 'a parked slot was minted')
+      t.eq(#am:trackSlots(0), 2, 'the new slot is visible immediately — cache invalidated on mint')
+      local parked = am:takeForSlot(0, slot)
+      t.truthy(parked, 'the parked take resolves through its slot')
+      t.eq(am:isParkedTake(parked), true, 'minted take hosts on scratch — parked')
+      t.eq(am:isParkedTake(live),   false, 'a live grid take is not parked')
+    end,
+  },
+
   --------------------------------------------------------------------
   -- Boot cursor
   --------------------------------------------------------------------

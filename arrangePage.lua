@@ -47,6 +47,10 @@ facade.publish('arrange', {
   trackHandle     = function(trackIdx) return av:trackHandle(trackIdx) end,
   keyForSlot      = function(slotIdx)  return av:keyForSlot(slotIdx) end,
   nextFreeSlot    = function(trackIdx) return av:nextFreeSlot(trackIdx) end,
+  mintParkedTake  = function(trackIdx, name, lengthQN, srcTake)
+    return av:mintParkedTake(trackIdx, name, lengthQN, srcTake)
+  end,
+  isParkedTake    = function(take) return av:isParkedTake(take) end,
   reswingAll             = function(name) av:reswingAll(name) end,
   takesUsing             = function(name) return av:takesUsing(name) end,
 })

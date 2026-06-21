@@ -38,6 +38,8 @@ local declarations = {
   { 'advanceBy',        1     },
   { 'arrangeAdvanceBy', 1     },
   { 'arrangeBeatPerRow', 4    },
+  -- New-take dialog length (beats); persisted at project tier, shared by tracker + arrange.
+  { 'newTakeBeats',      4    },
   { 'laneStrip.rows',      4    },
   -- boolean
   { 'polyAftertouch',   true  },

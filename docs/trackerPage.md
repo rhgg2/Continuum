@@ -454,6 +454,15 @@ defaults to the next-free slot's zero-padded index); the unpooled
 duplicate clones the currently-bound take. Arrange's own create/duplicate
 commands still place visible instances.
 
+Because the minted take's only instance lives on the scratch track, binding
+it would key cm's **track** tier to scratch — desyncing every per-track read.
+The sharpest symptom is `trackerSlot` itself: read under the scratch tier it
+resolves to nothing, so `resolveSelectionTake` recovers to the old slot and
+the selection flips back every frame. `tp:bind` calls `tv:retargetTrackTier`
+right after `tm:bindTake`: for a parked take (`am:isParkedTake`) it re-points
+the track tier at the selection's track, before `seedSharedSlots` and the
+rest read per-track config.
+
 ### Empty grid: one state
 
 No resolvable take ⇒ `tv.grid.cols` is empty ⇒ the grid is replaced by

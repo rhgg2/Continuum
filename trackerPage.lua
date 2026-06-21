@@ -61,6 +61,7 @@ function tp:currentTake() return tm:currentTake() end
 function tp:bind(t)
   if not t then return self:bindFromSelection() end
   tm:bindTake(t, { trackerMode = samplerMode(t) })
+  tv:retargetTrackTier()   -- parked takes host on scratch; re-key the track tier before track-tier reads
   tv:seedSharedSlots()
   pa:apply()
 end
@@ -100,11 +101,11 @@ facade.publish('tracker', {
 
   -- Arrange opens take properties without diving: bind to it (so tv reads its
   -- model), then open the modal. bindFromSelection drives the bind back, so no restore.
-  openTakeProperties = function(item)
+  openTakeProperties = function(item, opts)
     local take = item and reaper.GetActiveTake(item)
     if not take then return end
     if take ~= tp:currentTake() then tp:bind(take) end
-    tr:openTakeProperties{}
+    tr:openTakeProperties{ focusName = opts and opts.focusName }
   end,
   -- Swing edits: bind each affected take through tm (markSwingStale) to re-realise, restore after.
   -- am owns the walk; tm owns the bind.
