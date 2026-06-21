@@ -5,7 +5,8 @@
 --invariant: trackIdx is a visible-column index, not a REAPER slot (see docs/arrangeManager.md)
 --invariant: slot palette in ds at track scope under key 'arrangeSlots'; writes via ds:assignAt
 --invariant: slot indices 0..61, base62-keyed (util.toBase62); lowest-free, gaps allowed
---invariant: every grouped take is a slot; all four discovery reads route through ensureSlots
+--invariant: a slot survives while its id is live on the track or parked; reads via ensureSlots
+--invariant: deleteTake parks a slot's last instance; deleteSlot alone forever-deletes
 --invariant: createAndDropMidi alone mints a slot; all else inherits or drops into an existing one
 --invariant: takeId is the source-identity chokepoint; takes with no derivable id are skipped
 --invariant: reswingAll is sequenceManager folded in; bind loop lives behind the 'tracker' facade
@@ -19,6 +20,7 @@
 
 local util    = require 'util'
 local painter = require 'painter'
+local scratch = require 'scratch'
 
 local cm, ds, facade = (...).cm, (...).ds, (...).facade
 
@@ -81,12 +83,36 @@ local function nextFreeSlot(dict)
   end
 end
 
+-- fn returning a non-nil value aborts the walk; that value (and a second)
+-- is forwarded as forEachActiveTake's return, so callers can early-exit.
 local function forEachActiveTake(track, fn)
   for ii = 0, reaper.CountTrackMediaItems(track) - 1 do
     local item = reaper.GetTrackMediaItem(track, ii)
     local take = item and reaper.GetActiveTake(item)
-    if take then fn(take, item, ii) end
+    if take then
+      local a, b = fn(take, item, ii)
+      if a ~= nil then return a, b end
+    end
   end
+end
+
+-- A slot with no live instance keeps its source alive as one muted item
+-- parked on the scratch track. See docs/arrangeManager.md § Parking.
+local function parkedItemFor(id)
+  if not id then return end
+  local _, scratchTrack = scratch.peek()
+  if not scratchTrack then return end
+  return forEachActiveTake(scratchTrack, function(take, item)
+    if takeIdOf(take) == id then return item, take end
+  end)
+end
+
+local function isLastInstanceOnTrack(track, id, exceptItem)
+  local others = 0
+  forEachActiveTake(track, function(take, item)
+    if item ~= exceptItem and takeIdOf(take) == id then others = others + 1 end
+  end)
+  return others == 0
 end
 
 ----- Natural length
@@ -159,7 +185,7 @@ local function effectiveNaturalLenQN(take, item)
   return math.min(natural, src)
 end
 
---contract: idempotent within a frame; returns (dict, slotForId, firstName) so callers don't re-walk
+--contract: idempotent within a frame; returns (dict, slotForId, firstName, liveIds)
 local function ensureSlots(track)
   local dict = readSlots(track)
   local idOrder, liveIds, firstName, kindForId = {}, {}, {}, {}
@@ -174,12 +200,19 @@ local function ensureSlots(track)
 
   local slotForId, dirty = {}, false
   for slotIdx, entry in pairs(dict) do
+    local keep = false
     if entry.id and liveIds[entry.id] then
       slotForId[entry.id] = slotIdx
-    else
-      dict[slotIdx] = nil
-      dirty = true
+      keep = true
+    elseif entry.id then
+      local _, parkedTake = parkedItemFor(entry.id)
+      if parkedTake then            -- last instance parked: the slot outlives the take
+        slotForId[entry.id] = slotIdx
+        firstName[entry.id] = firstName[entry.id] or reaper.GetTakeName(parkedTake) or ''
+        keep = true
+      end
     end
+    if not keep then dict[slotIdx] = nil; dirty = true end
   end
   for _, id in ipairs(idOrder) do
     if not slotForId[id] then
@@ -192,7 +225,7 @@ local function ensureSlots(track)
     end
   end
   if dirty then writeSlots(track, dict) end
-  return dict, slotForId, firstName
+  return dict, slotForId, firstName, liveIds
 end
 
 ----- Colour palette (project-wide, keyed by takeId)
@@ -246,9 +279,11 @@ end
 
 ----- Discovery
 
--- Wiring owns hidden tracks arrange must skip (scratch FX-park + spawned newTrack hosts).
--- see docs/arrangeManager.md § trackIdx
+-- Arrange skips the scratch track (its own park, consulted directly) and the
+-- wiring-owned newTrack hosts. see docs/arrangeManager.md § trackIdx
 local function isVisibleTrack(track)
+  local _, scratchTrack = scratch.peek()
+  if scratchTrack and track == scratchTrack then return false end
   local wiring = facade and facade.get('wiring')
   return not (wiring and wiring.isWiringOwnedTrack(track))
 end
@@ -323,7 +358,7 @@ end
 
 ----- Project state — one build, served until invalidated
 
-local function slotRowsFor(dict, colourForId, firstName)
+local function slotRowsFor(dict, colourForId, firstName, liveIds)
   local out = {}
   for i = 0, SLOT_MAX do
     local entry = dict[i]
@@ -334,6 +369,7 @@ local function slotRowsFor(dict, colourForId, firstName)
         id        = entry.id,
         colourIdx = colourForId[entry.id],
         name      = firstName[entry.id] or '',
+        parked    = not liveIds[entry.id],
       }
     end
   end
@@ -364,7 +400,7 @@ local function buildState()
     local track = reaper.GetTrack(0, ti)
     if isVisibleTrack(track) then
       local col = #tracks
-      local dict, slotForId, firstName = ensureSlots(track)
+      local dict, slotForId, firstName, liveIds = ensureSlots(track)
       local _, name = reaper.GetTrackName(track)
       local slotCount = 0
       for _ in pairs(dict) do slotCount = slotCount + 1 end
@@ -381,7 +417,7 @@ local function buildState()
       end)
       takesByCol[col] = takes
       chanByCol[col]  = chanRangeOf(takes)
-      slotsByCol[col] = slotRowsFor(dict, colourForId, firstName)
+      slotsByCol[col] = slotRowsFor(dict, colourForId, firstName, liveIds)
     end
   end
   return { tracks = tracks, takesByCol = takesByCol, slotsByCol = slotsByCol, chanByCol = chanByCol }
@@ -487,11 +523,14 @@ end
 function am:projectEndQN()
   local endQN = 0
   for ti = 0, reaper.CountTracks(0) - 1 do
-    forEachActiveTake(reaper.GetTrack(0, ti), function(_, item)
-      local startQN, lengthQN = itemQNRange(item)
-      local e = startQN + lengthQN
-      if e > endQN then endQN = e end
-    end)
+    local track = reaper.GetTrack(0, ti)
+    if isVisibleTrack(track) then
+      forEachActiveTake(track, function(_, item)
+        local startQN, lengthQN = itemQNRange(item)
+        local e = startQN + lengthQN
+        if e > endQN then endQN = e end
+      end)
+    end
   end
   return endQN
 end
@@ -534,7 +573,7 @@ function am:renameSlot(trackIdx, slotIdx, name)
   invalidate()
 end
 
---contract: deletes every take on trackIdx with this slot's id; returns the removed count
+--contract: forever-deletes the slot: every live instance + the parked keeper; returns live count
 function am:deleteSlot(trackIdx, slotIdx)
   local track = visibleTrackOfCol(trackIdx)
   if not track then return 0 end
@@ -549,6 +588,8 @@ function am:deleteSlot(trackIdx, slotIdx)
       removed = removed + 1
     end
   end
+  local parked = parkedItemFor(entry.id)
+  if parked then reaper.DeleteTrackMediaItem(select(2, scratch.peek()), parked) end
   ensureSlots(track)    -- prune the orphaned dict entry now; non-render readers see it gone at once
   invalidate()
   return removed
@@ -644,18 +685,16 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   return slotIdx, take
 end
 
--- First instance matching id: item (chunk source for MIDI clone),
--- length, name. Dictates what a fresh drop inherits.
+-- First instance matching id: item, length, name — what a fresh drop inherits.
+-- Falls back to the parked keeper so drops from emptied slots re-materialise.
 local function siblingInstance(track, id)
-  local sibItem, sibLen, sibName
-  forEachActiveTake(track, function(take, item)
-    if not sibItem and takeIdOf(take) == id then
-      sibItem = item
-      sibLen  = select(2, itemQNRange(item))
-      sibName = reaper.GetTakeName(take) or ''
-    end
-  end)
-  return sibItem, sibLen, sibName
+  local sibItem = forEachActiveTake(track, function(take, item)
+    if takeIdOf(take) == id then return item end
+  end) or parkedItemFor(id)
+  if not sibItem then return end
+  return sibItem,
+         select(2, itemQNRange(sibItem)),
+         reaper.GetTakeName(reaper.GetActiveTake(sibItem)) or ''
 end
 
 --contract: instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
@@ -776,10 +815,17 @@ function am:takeSourceLengthQN(take)
   return reaper.TimeMap2_timeToQN(0, posSec + len) - reaper.TimeMap2_timeToQN(0, posSec)
 end
 
+-- Deleting a slot's last live instance parks it on the scratch track (keeping
+-- the pool + slot alive) rather than GC-ing it. See docs § Parking.
 function am:deleteTake(take)
   local track = visibleTrackOfCol(take.trackIdx)
   if not track then return end
-  reaper.DeleteTrackMediaItem(track, take.item)
+  local id = takeIdOf(take.take)
+  if id and isLastInstanceOnTrack(track, id, take.item) and not parkedItemFor(id) then
+    reaper.MoveMediaItemToTrack(take.item, scratch.track())
+  else
+    reaper.DeleteTrackMediaItem(track, take.item)
+  end
   relayoutTrack(track)
 end
 
@@ -789,9 +835,11 @@ local function projectMidiTakes()
   local takes = {}
   for ti = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, ti)
-    forEachActiveTake(track, function(take)
-      if reaper.TakeIsMIDI(take) then takes[#takes+1] = take end
-    end)
+    if isVisibleTrack(track) then
+      forEachActiveTake(track, function(take)
+        if reaper.TakeIsMIDI(take) then takes[#takes+1] = take end
+      end)
+    end
   end
   return takes
 end

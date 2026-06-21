@@ -687,6 +687,21 @@ function M.new()
     end
     return false
   end
+  function r.MoveMediaItemToTrack(item, dest)
+    local from = state.trackForItem[item]
+    local list = from and state.itemsByTrack[from]
+    if list then
+      for i, it in ipairs(list) do
+        if it == item then table.remove(list, i); break end
+      end
+    end
+    local destList = state.itemsByTrack[dest]
+    if not destList then destList = {}; state.itemsByTrack[dest] = destList end
+    destList[#destList+1] = item
+    state.trackForItem[item] = dest
+    bump()
+    return true
+  end
   local guidN = 0
   function r.genGuid(_s) guidN = guidN + 1; return '{guid-' .. guidN .. '}' end
 

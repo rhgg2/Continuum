@@ -2,6 +2,7 @@
 
 local t = require('support')
 local util = require('util')
+local scratch = require('scratch')
 
 local function mkAm(harness, opts)
   local h = harness.mk(opts)
@@ -523,6 +524,77 @@ return {
       local takes = am:tracksTakes(0)
       t.eq(#takes, 1, 'one take left after delete')
       t.eq(takes[1].startQN, 4, 'the surviving take is the other one')
+    end,
+  },
+
+  -- Slot parking lifecycle (a slot outlives its last live instance)
+  --------------------------------------------------------------------
+  {
+    name = 'deleteTake parks a slot\'s last instance; the slot survives, greyed',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', poolGuid = '{p1}', takeName = 'lead' } } },
+      })
+      am:deleteTake(am:tracksTakes(0)[1])
+      t.eq(#am:tracksTakes(0), 0, 'no live take left on the track')
+      local slots = am:trackSlots(0)
+      t.eq(#slots, 1, 'the slot survives with no live instance')
+      t.eq(slots[1].id, '{p1}')
+      t.eq(slots[1].name, 'lead', 'name taken from the parked keeper')
+      t.eq(slots[1].parked, true, 'slot flagged parked for greying')
+      local _, scratchTrack = scratch.peek()
+      t.truthy(scratchTrack, 'a scratch track was minted to hold the park')
+      t.eq(h.reaper.CountTrackMediaItems(scratchTrack), 1, 'the item is parked on it')
+    end,
+  },
+
+  {
+    name = 'deleteTake of a non-last instance deletes outright (no park)',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, poolGuid = '{p1}' } } },
+      })
+      am:deleteTake(am:tracksTakes(0)[1])
+      t.eq(#am:tracksTakes(0), 1, 'the sibling instance remains live')
+      t.eq(am:trackSlots(0)[1].parked, false, 'slot still has a live instance')
+      t.eq(scratch.peek(), nil, 'nothing parked — no scratch track minted')
+    end,
+  },
+
+  {
+    name = 're-dropping from a parked slot re-materialises off the keeper',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local slot, take = am:createAndDropMidi(0, 0, 2, 'lead')
+      h.reaper.MIDI_SetAllEvts(take, 'EVTS-BLOB')
+      am:deleteTake(am:tracksTakes(0)[1])           -- park the only instance
+      t.eq(#am:tracksTakes(0), 0, 'parked: nothing live')
+      local back = am:dropInstance(0, slot, 8)
+      t.truthy(back, 'a fresh instance drops from the parked keeper')
+      t.eq(am:slotForTake(back), slot, 'it pools to the same slot')
+      local _, blob = h.reaper.MIDI_GetAllEvts(back, '')
+      t.eq(blob, 'EVTS-BLOB', 'events came from the parked sibling')
+    end,
+  },
+
+  {
+    name = 'deleteSlot forever-deletes: live instances and the parked keeper',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', poolGuid = '{p1}', takeName = 'lead' } } },
+      })
+      local slot = am:trackSlots(0)[1].idx
+      am:deleteTake(am:tracksTakes(0)[1])           -- park it (slot survives)
+      t.eq(#am:trackSlots(0), 1, 'slot parked, still present')
+      am:deleteSlot(0, slot)
+      t.eq(#am:trackSlots(0), 0, 'slot is gone for good')
+      local _, scratchTrack = scratch.peek()
+      t.eq(h.reaper.CountTrackMediaItems(scratchTrack), 0, 'the parked keeper was purged')
     end,
   },
 

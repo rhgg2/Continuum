@@ -637,7 +637,7 @@ local function openDeleteModal(trackIdx, slot)
                               or string.format('(slot %d)', slot.idx)
   modalHost:openConfirm{
     title    = 'Delete slot',
-    prompt   = string.format('Delete slot %s "%s"?\nRemoves every instance on the track. (y/n)', key, name),
+    prompt   = string.format('Delete slot %s "%s"?\nRemoves every instance and discards the parked copy. (y/n)', key, name),
     callback = util.atomic('Delete slot', function(yes) if yes then av:deleteSlot(trackIdx, slot.idx) end end),
   }
 end

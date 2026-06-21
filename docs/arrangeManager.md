@@ -9,42 +9,60 @@ at the track tier under `arrangeSlots`.
 
 Every public `trackIdx` (and the `trackIdx` field on take-shapes) is
 the 0-based column index into `am:projectTracks()`, not the raw
-REAPER track slot. Wiring-owned tracks are filtered out — the
-scratch FX-park and the spawned `newTrack` FX hosts — via the wiring
-facade's `isWiringOwnedTrack` (wm owns the id→track bridge: scratch
-by its rm guid, newTracks by membership in cm `wiringTracks`). `am`
-translates column → REAPER track at the boundary via
-`visibleTrackOfCol`.
+REAPER track slot. Hidden tracks are filtered out: the shared scratch
+track (consulted directly via `scratch.peek`, since `am` parks emptied
+slots there itself) and the wiring-owned `newTrack` FX hosts (via the
+wiring facade's `isWiringOwnedTrack`). `am` translates column → REAPER
+track at the boundary via `visibleTrackOfCol`.
 
 The two indices diverge as soon as REAPER's own "insert new track"
 fires — the new track lands at the absolute end of the project,
 past the hidden wiring tracks. Holding the conversion inside `am`
 keeps the arrange page from ever needing to know the difference.
 
-## Every grouped take is a slot
+## A slot outlives its takes
 
 The palette is not a curated set sitting alongside the project items.
-It is the project items, grouped by source identity. A slot has no
-existence apart from at least one take on the grid carrying its id;
-the last take to leave takes the slot with it. The biconditional in
-one direction: minting a slot means dropping an item. In the other:
-deleting the last instance prunes the slot.
+It is the project items, grouped by source identity — but a slot is no
+longer pruned the instant its last take leaves the grid. Deleting a
+slot's **last live instance** parks that item, muted, on the shared
+scratch track (`scratch.lua`); the pool and the palette slot stay alive
+until an instance is dropped back or the slot is deleted. (Slot rows
+carry a `parked` flag for liveness, but the palette does not grey them.)
+The one true forever-delete is `deleteSlot`, which removes every live
+instance *and* the parked keeper.
 
 The persistence in `arrangeSlots` is an **index-to-id stability map**.
 Without it, two reads of the same project could allocate `{p1}` to
 slot 0 in frame N and slot 1 in frame N+1 — base62 hotkeys would shift
 under the user's fingers. The dict pins indices across reads and
-across sessions; the live takes drive what gets pinned.
+across sessions; live-or-parked takes drive what stays pinned.
 
 `ensureSlots(track)` is the single chokepoint. It walks live takes,
-allocates the lowest-free slot for any id not yet in the dict,
-prunes dict entries whose id has no live take, writes back if
-anything changed, and returns the freshened `(dict, slotForId,
-firstName)` so callers don't repeat the walk. It is idempotent — a
-second call in the same frame performs no writes. Every public read
-(`projectTracks`, `tracksTakes`, `trackSlots`, `slotForTake`) routes
-through it, so the four reads always agree on which slot owns which
-id.
+allocates the lowest-free slot for any id not yet in the dict, keeps a
+dict entry whose id has a live take **or** a parked keeper (taking the
+keeper's name when no live take remains), prunes the rest, and returns
+the freshened `(dict, slotForId, firstName, liveIds)` so callers don't
+repeat the walk. It is idempotent — a second call in the same frame
+performs no writes. Every public read (`projectTracks`, `tracksTakes`,
+`trackSlots`, `slotForTake`) routes through it, so the reads always
+agree on which slot owns which id.
+
+### Parking
+
+`am:deleteTake` checks whether the item it is about to remove is the
+last live instance of its id on the track. If so — and nothing is parked
+for that id yet — it `MoveMediaItemToTrack`s the item onto the scratch
+track instead of deleting it. The track is hidden and muted, so the
+parked item neither sounds nor shows; REAPER keeps the MIDI pool alive
+because an item still references it. At most one item is parked per id
+(the dedup guard), so re-drop/delete cycles never accumulate copies.
+
+Re-dropping from an emptied slot works because `siblingInstance` falls
+back to the parked keeper as the chunk source, so `dropInstance` clones a
+fresh pooled instance straight off the park. A slot with neither a live
+nor a parked instance is the genuine forever-gone case, reached only
+through `deleteSlot`.
 
 ### Renaming and name drift
 
@@ -131,7 +149,7 @@ This is a deliberate retreat from an earlier two-step lazy-id design.
 That design carried a `slot.id == nil` state for slots that hadn't
 been dropped yet, and every consumer of the slot dict had to guard
 against it. The current model collapses the state: a slot exists only
-when at least one instance exists, so id is always populated.
+once an instance has existed (live or parked), so id is always populated.
 
 ## Subsequent drops: chunk-clone an existing sibling
 
@@ -152,9 +170,10 @@ share the same `cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)`
 helper; `rePool=true` rewrites `POOLEDEVTS` to the fresh guid before
 the chunk write, then explicitly copies events into the new pool.
 
-MIDI drops therefore require a live sibling. If a slot somehow
-survives in cm without any live instance — only possible between a
-delete and the next `ensureSlots` — `dropInstance` returns nil.
+MIDI drops resolve their chunk source through `siblingInstance`, which
+prefers a live instance on the track and falls back to the slot's parked
+keeper. A drop returns nil only when neither exists — a slot with no live
+and no parked instance, which `ensureSlots` would already have pruned.
 
 ## Audio drops are not pooled
 
@@ -224,8 +243,9 @@ read-only.
 Discovery: `am:projectTracks`, `am:tracksTakes`, `am:trackSlots`,
 `am:slotForTake`, `am:keyForSlot`.
 
-Slot mutation: `am:renameSlot`, `am:deleteSlot` (removes every
-instance of the slot's source on the track, returns the count).
+Slot mutation: `am:renameSlot`, `am:deleteSlot` (forever-deletes the
+slot — every live instance plus the parked keeper — and returns the
+live count).
 
 Placement: `am:createAndDropMidi(trackIdx, qnPos, lengthQN, name) ->
 (slotIdx, take)`, `am:dropInstance(trackIdx, slotIdx, qnPos,
