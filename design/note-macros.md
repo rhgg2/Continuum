@@ -188,9 +188,16 @@ next-lane-1-note lookup (for `slide.target = 'next'`).
   notes out of column-building (as absorbers are routed out of the pb
   column): no lane allocation, no tracker-visible events.
 - **Host is fxNote 1.** The host note keeps its uuid, lane identity,
-  and PA binding; its realised note-off truncates to the first fxNote
-  boundary while `endppqL` keeps the authored ceiling — the existing
-  `endppq ≠ endppqC` divergence surface, no new mechanism.
+  and PA binding; in the *take* its realised note-off truncates to the
+  first fxNote boundary while `endppqL` keeps the authored ceiling. The
+  *view* is restored to the pre-fx tail after the tail walk (rebuild
+  step 4.8), so the editor sees the authored note, not the realised
+  stub — the fx clamp lives in mm only. The generator window is the
+  host's **effective** logical interval (the host contract's `window`),
+  clamped against foreign same-pitch onsets: a same-pitch note authored
+  inside the host bounds the retrig, and is never clobbered by a
+  regenerated fxNote (the flush dedup keeps authored intent over a
+  derived seat).
 - **Ephemeral identity** (alias precedent). fxNotes are regenerated
   freely; mm mints fresh uuids; external edits to an fxNote are
   generator-owned territory and are overwritten at the next reconcile.

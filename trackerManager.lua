@@ -551,16 +551,20 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       end
 
       local clips, kills = {}, {}
+      -- Coincident-onset dedup: authored intent beats a regenerable fxNote;
+      -- else keep the longest ceiling (fresh OPEN raw = 1-tick, would lose).
+      local function supersedes(a, b)
+        local aDerived, bDerived = a.derived ~= nil, b.derived ~= nil
+        if aDerived ~= bDerived then return bDerived end
+        return (a.endppqL or a.endppq) > (b.endppqL or b.endppq)
+      end
       for _, group in pairs(byKey) do
-        -- Coincident-onset dedup: keep the longest, drop the rest
-        -- (mm's note-dedup rule). Outcome-deterministic — equal-length
-        -- duplicates are geometrically identical.
         local longestAt = {}
         for _, n in ipairs(group) do
           local kept = longestAt[n.ppq]
           if not kept then
             longestAt[n.ppq] = n
-          elseif n.endppq > kept.endppq then
+          elseif supersedes(n, kept) then
             longestAt[n.ppq] = n; util.add(kills, kept)
           else
             util.add(kills, n)
@@ -1059,6 +1063,9 @@ do
     -- fxLive: post-expansion set unioned into the tail walk and PC synthesis.
     local fxExisting, fxLive = {}, {}
     for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {} end
+    -- host event -> pre-fx realised tail, stashed at 4.6, restored onto the
+    -- column event after the 4.8 tail walk so the view sees the authored note.
+    local fxHostEnd = {}
 
     -- 0) Partition mm events into internal (stamped + raw consistent
     -- with ppqL: model-governed) and external (foreign-MIDI, or
@@ -1209,16 +1216,31 @@ do
     -- against fxExisting, commit. fxLive feeds the tail walk + PC synthesis. see design/note-macros.md § Pipeline placement
     do
       local res = mm:resolution()
+      local takeLen = tm:length()
       local churned = false
       for chan = 1, 16 do
+        -- Foreign same-pitch onsets bound each host's effective fx window;
+        -- see design/note-macros.md § host contract (effective interval).
+        local foreignOnsets = {}
+        local function addForeign(n)
+          if not n.derived and n.type ~= 'pa' then util.bucket(foreignOnsets, n.pitch, n.ppq) end
+        end
+        for _, col in ipairs(channels[chan].columns.notes) do
+          for _, n in ipairs(col.events) do addForeign(n) end
+        end
+        for _, n in ipairs(external) do if n.chan == chan then addForeign(n) end end
+        for _, list in pairs(foreignOnsets) do table.sort(list) end
+
         local predicted = {}
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, host in ipairs(col.events) do
             if host.fx and host.type ~= 'pa' then
-              local endL = host.endppqL
-              if endL == nil or endL == util.OPEN then
-                endL = tm:toLogical(chan, tm:length())
+              local endL = (host.endppqL == nil or host.endppqL == util.OPEN)
+                           and tm:toLogical(chan, takeLen) or host.endppqL
+              for _, p in ipairs(foreignOnsets[host.pitch] or {}) do
+                if p > host.ppq then endL = math.min(endL, tm:toLogical(chan, p)); break end
               end
+              fxHostEnd[host] = tm:fromLogical(chan, endL)
               local d = delayToPPQ(host.delay or 0)
               for _, params in ipairs(host.fx) do
                 local gen = generators[params.kind]
@@ -1421,6 +1443,10 @@ do
       -- keyed token until ppq differs).
       applyAssigns(clamps)
       applyAssigns(clips)
+
+      -- Restore pre-fx tail onto column events so the view sees the authored
+      -- note; mm is untouched, so the take and G4 round-trip are unaffected.
+      for host, rawEnd in pairs(fxHostEnd) do host.endppq = rawEnd end
     end
 
     -- 4.9) Absorber reconciliation + pb wire/column resynthesis.

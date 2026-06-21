@@ -2,6 +2,7 @@
 -- G4 runs under swing+delay first — the frame/rounding tripwire for steady-state churn.
 
 local t = require('support')
+local util = require('util')
 
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 
@@ -240,6 +241,47 @@ return {
       t.deepEq(pcsOnChan(h.fm:dump(), 1),
         { { ppq = 0, val = 5 }, { ppq = 60, val = 5 }, { ppq = 120, val = 5 }, { ppq = 180, val = 5 } },
         'host + 3 fxNotes each emit a PC carrying sample 5')
+    end,
+  },
+
+  ----- Effective window — a same-pitch note bounds the host, and survives
+
+  {
+    name = 'a same-pitch note inside a retrig truncates the window and is not clobbered',
+    run = function(harness)
+      local h = harness.mk()
+      addPlainHost(h)
+      t.eq(#fxNotesOf(h.fm:dump(), hostNote(h.fm:dump()).uuid), 3, 'baseline 3 fxNotes')
+
+      -- Same-pitch note at 120 bounds the host window to [0,120]; the
+      -- regenerable fxNote must not clobber authored intent.
+      h.tm:addEvent({ evType = 'note', ppq = 120, endppq = util.OPEN, chan = 1,
+                      pitch = 60, vel = 90, detune = 0, delay = 0, lane = 1 })
+      h.tm:flush()
+
+      local dump = h.fm:dump()
+      local host = hostNote(dump)
+      local authored
+      for _, n in ipairs(dump.notes) do
+        if n.pitch == 60 and n.ppq == 120 and not n.derived then authored = n end
+      end
+      t.truthy(authored, 'authored same-pitch note survives the retrig')
+      local fns = fxNotesOf(dump, host.uuid)
+      t.eq(#fns, 1, 'window bounded to [0,120]: only the fxNote at 60 remains')
+      t.eq(fns[1].ppq, 60, 'surviving fxNote sits at 60')
+    end,
+  },
+
+  ----- View sees the pre-fx host (no spurious give-way cue)
+
+  {
+    name = 'retrig host column event shows the authored length, not the fxNote-2 clamp',
+    run = function(harness)
+      local h = harness.mk()
+      addPlainHost(h)
+      local hostCol = h.tm:getChannel(1).columns.notes[1].events[1]
+      t.eq(hostCol.endppqC, 240, 'view sees the full authored tail')
+      t.eq(hostCol.endppqL, 240, 'authored ceiling intact')
     end,
   },
 
