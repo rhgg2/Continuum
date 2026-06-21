@@ -1,7 +1,5 @@
--- UI wiring for the retrig editor (design/note-macros.md § UI). The popup's
--- key dispatch is thin glue verified in REAPER (cf. tracker_page_spec's
--- render deferral); here we pin the real editing path it drives:
--- cursorNote -> setNoteFx / bumpRetrig -> rebuild expansion.
+-- UI wiring for the retrig editor; key dispatch is thin REAPER glue (cf.
+-- tracker_page_spec). Pins the real editing path: cursorNote -> setNoteFx / setFxField.
 
 local t    = require('support')
 local util = require('util')
@@ -61,27 +59,27 @@ return {
   },
 
   {
-    name = 'bumpRetrig period steps the ladder; finer period adds fxNotes',
+    name = 'setFxField writes period; finer period adds fxNotes',
     run = function(harness)
       local h = harness.mk()
       addHost(h, { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } })
       h.vm:setGridSize(80, 40)
       local uuid = hostUuid(h)
       t.eq(fxNoteCount(h, uuid), 3, 'baseline 1/4')
-      h.vm:bumpRetrig(uuid, 'period', 1)            -- 1/4 -> 1/6, finer
-      t.eq(h.vm:noteFx(uuid)[1].period[2], 6, 'period stepped to 1/6')
+      h.vm:setFxField(uuid, 1, 'period', { 1, 6 })   -- finer
+      t.eq(h.vm:noteFx(uuid)[1].period[2], 6, 'period written to 1/6')
       t.eq(fxNoteCount(h, uuid), 5, 'finer period derives more fxNotes')
     end,
   },
 
   {
-    name = 'bumpRetrig ramp shifts fxNote velocities',
+    name = 'setFxField writes ramp; fxNote velocities shift',
     run = function(harness)
       local h = harness.mk()
       addHost(h, { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } })
       h.vm:setGridSize(80, 40)
       local uuid = hostUuid(h)
-      h.vm:bumpRetrig(uuid, 'ramp', -10)
+      h.vm:setFxField(uuid, 1, 'ramp', -10)
       t.eq(h.vm:noteFx(uuid)[1].ramp, -10, 'ramp updated on the entry')
       -- fxNote 2 (i=1) gets vel + 1*ramp = 100 - 10 = 90; later ones lower.
       local top = 0
@@ -89,6 +87,21 @@ return {
         if n.derived == uuid and n.vel > top then top = n.vel end
       end
       t.eq(top, 90, 'first fxNote velocity ramped by -10')
+    end,
+  },
+
+  {
+    name = 'setFxField rewrites one entry, leaving siblings intact',
+    run = function(harness)
+      local h = harness.mk()
+      addHost(h, { { kind = 'retrig', period = { 1, 4 }, ramp = 0 },
+                   { kind = 'retrig', period = { 1, 4 }, ramp = -5 } })
+      h.vm:setGridSize(80, 40)
+      local uuid = hostUuid(h)
+      h.vm:setFxField(uuid, 2, 'ramp', 7)
+      local fx = h.vm:noteFx(uuid)
+      t.eq(fx[1].ramp, 0, 'entry 1 untouched')
+      t.eq(fx[2].ramp, 7, 'entry 2 rewritten')
     end,
   },
 }

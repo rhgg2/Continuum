@@ -344,17 +344,22 @@ non-empty, drawn by the same `smallGlyph` machinery as the delay `*`
 marker (`trackerRender.lua`). Pure display — no column, no cursor part.
 
 **Editor — `Super-X` on the focused note.** Opens a small modal (a
-`modalHost` kind), a no-op on a non-note cell. There is no field focus:
-both fields are always live with distinct chords. **Up/Down** step the
-period ladder; **Shift `±`** / **Ctrl `±`** ramp velocity fine / coarse
-— the grid's own nudge-modifier idiom (`nudgeFine`/`nudgeCoarse`). The
-editor **live-writes** `note.fx` and flushes on every adjust, so the
-grid previews the expansion (host tail truncates, badge appears) à la
-`swingEditor`; **Esc** restores the open-snapshot, **Enter** keeps,
-**Del** clears (`util.REMOVE` through `assignEvent`). The editing logic
-lives on the view (`tv:cursorNote`/`setNoteFx`/`bumpRetrig`), addressing
-the host by durable uuid; the render is thin key→`tv` dispatch. Centre-
-anchored for v1 (the `modalHost` default), not anchored at the cell.
+`modalHost` kind), a no-op on a non-note cell. Fields stack one per row,
+each fully mouse-editable (period a dropdown, ramp a `numberStepper`),
+modelled on `temperEditor`'s generators panel; `Clear`/`Cancel`/`Done`
+buttons mirror the key actions. The field set per kind is **pure data**
+(`FX_FIELDS` in `trackerRender.lua`): a `choice` widget (**Up/Down** step
+the list) or an `int` widget (**Left/Right** adjust by the base step,
+**Ctrl** for coarse — the grid's `nudgeCoarse` idiom). Keys fire only
+with no widget focused (`IsAnyItemActive`), so typing in a field doesn't
+double-act. The editor **live-writes** `note.fx` and flushes on every
+adjust, so the grid previews the expansion (host tail truncates, badge
+appears) à la `swingEditor`; **Esc**/`Cancel` restore the open-snapshot,
+**Enter**/`Done` keep, **Del**/`Clear` clear (`util.REMOVE` through
+`assignEvent`). The editing logic lives on the view —
+`tv:cursorNote`/`setNoteFx`/`setFxField`, one generic writer for every
+kind — addressed by durable uuid; the render walks the descriptor.
+Centre-anchored for v1 (the `modalHost` default), not anchored at the cell.
 
 v1 exposes a **single retrig entry** per note. The list is real in the
 model; the multi-entry stack UI waits (open question below). `Super-X`

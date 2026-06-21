@@ -1788,52 +1788,124 @@ local renderer = {}
 
 ----- Note FX editor (retrig)
 
--- Super-X live-writes note.fx so the grid previews each adjust; Esc
--- restores the open-snapshot. Keys + rationale: design/note-macros.md § UI.
+-- Note-FX editor: per-kind field set is pure data (FX_FIELDS), so a new fx
+-- type ships a generator + one entry. Keys/why: design/note-macros.md § UI.
 local DEFAULT_RETRIG = { kind = 'retrig', period = { 1, 4 }, ramp = 0 }
 
-local function openRetrigEditor()
-  local note = tv:cursorNote()
-  if not note then return end
-  local snapshot = note.fx and util.deepClone(note.fx) or nil
-  if not (note.fx and note.fx[1]) then
-    tv:setNoteFx(note.uuid, { util.deepClone(DEFAULT_RETRIG) })
+-- widget 'choice': options = {{l=label, v=value}, ...}; Up/Down step the list.
+-- widget 'int': a numberStepper; Left/Right adjust by `base`, Ctrl by `coarse`.
+local FX_FIELDS = {
+  retrig = {
+    { field = 'period', label = 'Period', widget = 'choice', keys = 'updown',
+      options = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
+                  { l = '1/4', v = { 1, 4 } }, { l = '1/6', v = { 1, 6 } },
+                  { l = '1/8', v = { 1, 8 } } } },
+    { field = 'ramp', label = 'Ramp', widget = 'int', keys = 'leftright',
+      base = 1, coarse = 10, min = -127, max = 127 },
+  },
+}
+
+local fxEdit do
+  local LABEL_W = 64
+  local ARROWS  = { updown = '\xe2\x86\x91\xe2\x86\x93', leftright = '\xe2\x86\x90\xe2\x86\x92' }
+
+  local function valueEq(a, b)
+    if type(a) == 'table' then return type(b) == 'table' and a[1] == b[1] and a[2] == b[2] end
+    return a == b
   end
-  modalHost:open{
-    kind  = 'retrigEdit', title = 'Retrig',
-    uuid  = note.uuid, snapshot = snapshot,
-    flags = ImGui.WindowFlags_NoNavInputs,
-  }
-end
+  local function choiceIndex(fd, value)
+    for i, o in ipairs(fd.options) do if valueEq(o.v, value) then return i end end
+    return 1
+  end
+  local function choiceLabels(fd)
+    local out = {}; for i, o in ipairs(fd.options) do out[i] = o.l end; return out
+  end
+  local function legend(fields)
+    local parts = {}
+    for _, fd in ipairs(fields) do
+      parts[#parts + 1] = ARROWS[fd.keys] .. ' ' .. fd.label:lower()
+                          .. (fd.coarse and ' (\xe2\x8c\x83 coarse)' or '')
+    end
+    parts[#parts + 1] = 'Del clear'
+    return table.concat(parts, '    ')
+  end
 
-modalHost:registerKind('retrigEdit', function(s, close)
-  local fx    = tv:noteFx(s.uuid)
-  local entry = fx and fx[1]
-  if not entry then close(false); return end
-  local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
-  local mods  = ImGui.GetKeyMods(ctx)
-
-  ImGui.Text(ctx, ('retrig    period %d/%d    ramp %+d')
-                  :format(entry.period[1], entry.period[2], entry.ramp or 0))
-  ImGui.TextDisabled(ctx, '\xe2\x86\x91\xe2\x86\x93 period    +/- ramp    Del clear')
-
-  if press(ImGui.Key_Escape) then
-    tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false)
-  elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-    close(false)
-  elseif press(ImGui.Key_Delete) or press(ImGui.Key_Backspace) then
-    tv:setNoteFx(s.uuid, util.REMOVE); close(false)
-  elseif press(ImGui.Key_UpArrow)   then tv:bumpRetrig(s.uuid, 'period', -1)
-  elseif press(ImGui.Key_DownArrow) then tv:bumpRetrig(s.uuid, 'period',  1)
-  else
-    local plus, minus = press(ImGui.Key_Equal), press(ImGui.Key_Minus)
-    if plus or minus then
-      local step = (mods & ImGui.Mod_Ctrl) ~= 0 and 10
-                or (mods & ImGui.Mod_Shift) ~= 0 and 1 or 0
-      if step ~= 0 then tv:bumpRetrig(s.uuid, 'ramp', (plus and 1 or -1) * step) end
+  local function drawField(uuid, index, fd, value)
+    ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, fd.label)
+    ImGui.SameLine(ctx, LABEL_W)
+    if fd.widget == 'choice' then
+      local pick = chrome.dropdown('fx_' .. fd.field,
+                     fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
+      if pick then tv:setFxField(uuid, index, fd.field, fd.options[pick].v) end
+    else
+      local rv, n = chrome.numberStepper('fx_' .. fd.field, value or 0,
+                      { width = 70, min = fd.min, max = fd.max })
+      if rv then tv:setFxField(uuid, index, fd.field, n) end
     end
   end
-end)
+
+  local function handleKey(uuid, index, fd, value, press, mods)
+    if fd.keys == 'updown' then
+      local up, down = press(ImGui.Key_UpArrow), press(ImGui.Key_DownArrow)
+      if up or down then
+        local i = util.clamp(choiceIndex(fd, value) + (down and 1 or -1), 1, #fd.options)
+        tv:setFxField(uuid, index, fd.field, fd.options[i].v)
+      end
+    else
+      local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
+      if left or right then
+        local step = (mods & ImGui.Mod_Ctrl) ~= 0 and fd.coarse or fd.base
+        local n = util.clamp((value or 0) + (right and 1 or -1) * step, fd.min, fd.max)
+        tv:setFxField(uuid, index, fd.field, n)
+      end
+    end
+  end
+
+  modalHost:registerKind('fxEdit', function(s, close)
+    local fx     = tv:noteFx(s.uuid)
+    local entry  = fx and fx[s.index]
+    local fields = entry and FX_FIELDS[entry.kind]
+    if not fields then close(false); return end
+
+    ImGui.TextDisabled(ctx, legend(fields))
+    ImGui.Spacing(ctx)
+    for _, fd in ipairs(fields) do drawField(s.uuid, s.index, fd, entry[fd.field]) end
+
+    ImGui.Spacing(ctx)
+    if ImGui.Button(ctx, 'Clear')  then tv:setNoteFx(s.uuid, util.REMOVE);               close(false); return end
+    ImGui.SameLine(ctx)
+    if ImGui.Button(ctx, 'Cancel') then tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false); return end
+    ImGui.SameLine(ctx)
+    if ImGui.Button(ctx, 'Done')   then close(false); return end
+
+    if ImGui.IsAnyItemActive(ctx) then return end   -- a focused widget owns the keys
+    local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
+    local mods  = ImGui.GetKeyMods(ctx)
+    if press(ImGui.Key_Escape) then
+      tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false)
+    elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
+      close(false)
+    elseif press(ImGui.Key_Delete) or press(ImGui.Key_Backspace) then
+      tv:setNoteFx(s.uuid, util.REMOVE); close(false)
+    else
+      for _, fd in ipairs(fields) do handleKey(s.uuid, s.index, fd, entry[fd.field], press, mods) end
+    end
+  end)
+
+  function fxEdit()
+    local note = tv:cursorNote()
+    if not note then return end
+    local snapshot = note.fx and util.deepClone(note.fx) or nil
+    if not (note.fx and note.fx[1]) then
+      tv:setNoteFx(note.uuid, { util.deepClone(DEFAULT_RETRIG) })
+    end
+    modalHost:open{
+      kind = 'fxEdit', title = 'Note FX',
+      uuid = note.uuid, index = 1, snapshot = snapshot,
+      flags = ImGui.WindowFlags_NoNavInputs,
+    }
+  end
+end
 
 -- New take from the tracker: name + length modal, mint a parked slot, select it.
 -- Mirrors arrange's createSlot modal; the slot is parked on scratch, not grid-placed.
@@ -1899,7 +1971,7 @@ tracker:registerAll{
   openTemperPicker = function() chrome.requestPickerOpen('temper') end,
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
 
-  editNoteFx = { openRetrigEditor, 'Edit note FX (retrig)' },
+  editNoteFx = { fxEdit, 'Edit note FX' },
 }
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
