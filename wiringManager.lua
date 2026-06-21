@@ -15,13 +15,14 @@
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
 --invariant: authoring via wm:mutate — validate+swap+fire; REAPER realises via reconcile.
 --invariant: master is graph.nodes['master']; readGraph seeds it; DAG.validate enforces singleton.
---invariant: scratch is rm-owned (rm:scratchId/Track); wm parks fx there
+--invariant: scratch is owned by scratch.lua (scratch.id/track); wm parks fx there
 --invariant: a newTrack carries its trackKey in its metadata; snapshot recovers addressing
 --invariant: scratch hosts FX with no compile-graph track — disconnected or lowered-parked
 
 local util = require 'util'
 local DAG  = require 'DAG'
 local fs   = require 'fs'
+local scratch = require 'scratch'
 
 local rm = (...).rm
 
@@ -339,26 +340,21 @@ end
 --contract: AddByName on scratch + keep; returns {fxId, ins, outs, inNames, outNames}
 --contract: unknown ident → fxId=nil, ins=outs=0, empty name lists
 function wm:instantiateFxOnScratch(ident)
-  local fxId = rm:addFx(rm:scratchId(), { ident = ident })
+  local fxId = rm:addFx(scratch.id(), { ident = ident })
   if not fxId then return { fxId = nil, ins = 0, outs = 0, inNames = {}, outNames = {} } end
   markState()
   -- minted on scratch out of band; splice the scratch entry back so the model stays truthful and the
   -- next reconcile's diff relocates the instance onto its real track.
-  refreshStateTrack(rm:scratchId(), SCRATCH_KEY, 'scratch')
+  refreshStateTrack(scratch.id(), SCRATCH_KEY, 'scratch')
   local rec = rm:fx(fxId)
   return { fxId = fxId, ins = rec.ins, outs = rec.outs,
            inNames = rec.inNames, outNames = rec.outNames }
 end
 
---contract: the scratch track id (rm-owned, ensured on first use)
-function wm:scratchId()
-  return rm:scratchId()
-end
-
---contract: true iff `track` is the live scratch track
+--contract: true iff `track` is the live scratch track (never mints — peek only)
 function wm:isScratchTrack(track)
-  local id = self:scratchId()
-  return id ~= nil and rm:reaperTrack(id) == track
+  local _, scratchTrack = scratch.peek()
+  return scratchTrack ~= nil and scratchTrack == track
 end
 
 --contract: true iff `track` is wiring-owned (scratch/spawned newTrack); arrange hides these
@@ -886,10 +882,10 @@ function wm:snapshot(tracks)
   -- No ensureLoaded: read() calls snapshot, recursion guard.
 
   -- (id → trackKey/trackKind). newTracks carry their own trackKey on meta (recovered in the
-  -- pre-pass below); scratch is rm-owned; sources are inferred structurally — design § What read does.
+  -- pre-pass below); scratch is scratch-owned; sources are inferred structurally — design § What read does.
   local keyByGuid, kindByKey = {}, {}
-  local scratch = rm:scratchId()
-  keyByGuid[scratch], kindByKey[SCRATCH_KEY] = SCRATCH_KEY, 'scratch'
+  local scratchGuid = scratch.id()
+  keyByGuid[scratchGuid], kindByKey[SCRATCH_KEY] = SCRATCH_KEY, 'scratch'
 
   local trackList = tracks or rm:tracks()
   -- Pre-pass: assign trackKeys before building entries so send dsts resolve regardless of order.
@@ -997,7 +993,7 @@ function wm:targetState()
   local cx = DAG.compile(userGraph)
   local nodes = userGraph.nodes
   local tracks = DAG.allocate(DAG.targetTracks(cx), nodes)
-  local scratchGuid = rm:scratchId()
+  local scratchGuid = scratch.id()
   local out = {}
   for trackKey, entry in pairs(tracks) do
     out[trackKey] = projectEntry(entry, nodes, scratchGuid)
@@ -1438,7 +1434,7 @@ end
 --contract: second return is the wiringSnapshot it consumed — callers seed the actual-state model
 -- (3c: + component classification — bus-aware + feedback quarantine; decoration stamped from meta)
 function wm:read()
-  rm:scratchId()  -- ensure scratch before listing, so the snapshot matches a fresh one
+  scratch.id()  -- ensure scratch before listing, so the snapshot matches a fresh one
   local tracks  = rm:tracks()
   local snap    = self:snapshot(tracks)
   local busMeta = rm:meta('bus')
@@ -1897,9 +1893,9 @@ local function gainRouting()
 end
 
 -- trackKey → opaque id for the live-poke path: a source is self-keyed, newTracks resolve
--- through the in-memory addressing map (refreshed by snapshot/applyOps), scratch + master via rm.
+-- through the in-memory addressing map (refreshed by snapshot/applyOps), scratch via scratch.lua, master via rm.
 local function idForKey(trackKey)
-  if trackKey == SCRATCH_KEY  then return rm:scratchId() end
+  if trackKey == SCRATCH_KEY  then return scratch.id() end
   if trackKey == '__master__' then return rm:masterId() end
   return newTrackIds[trackKey] or trackKey
 end

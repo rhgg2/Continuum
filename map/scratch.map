@@ -1,0 +1,40 @@
+@module scratch  src=scratch.lua  loc=72  sha=untracked  mode=namespace
+
+# Invariants & contracts
+  @invariant  identity is the projext guid (continuum_wiring/scratch), not module state — instances interchangeable
+  @invariant  the track is always hidden + muted; re-located by guid each call (REAPER handles go stale)
+  @contract  id()/track() mint on first use; peek() never mints
+
+# Module-level constants
+  @const PROJ = 0  @ 8
+  @const EXT_SECTION = 'continuum_wiring'  @ 9
+  @const GUID_KEY = 'scratch'  @ 10
+  @const scratch = {}  @ 12
+
+# Private functions
+  -- mint + locate
+  @fn locate(guid)  @ 17
+      -- By guid over project tracks (the scratch is never master).
+  @fn mint()  @ 27
+      -- Append top-level: if the project ends inside an open folder, an appended
+      -- track joins it and retargets its mainSend to the parent. Copied from
+      -- rm:addTrack (not called) to keep this module dependency-free; see docs.
+
+# Public API (scratch.*)
+  @api scratch.peek()  @ 52
+      @contract  persisted guid + live handle, or nil if none minted yet. Never mints.
+  @api scratch.id()  @ 60
+      @contract  the scratch track's guid, minted (hidden + muted) on first use; persisted in projext.
+  @api scratch.track()  @ 66
+      @contract  the scratch track handle; mints on first use.
+
+# REAPER API surface
+  @reaper CountTracks
+  @reaper GetTrack
+  @reaper GetTrackGUID
+  @reaper GetMediaTrackInfo_Value
+  @reaper SetMediaTrackInfo_Value
+  @reaper InsertTrackAtIndex
+  @reaper GetSetMediaTrackInfo_String
+  @reaper SetProjExtState
+  @reaper GetProjExtState

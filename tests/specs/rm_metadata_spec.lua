@@ -4,6 +4,7 @@
 local t       = require('support')
 local harness = require('harness')
 local util    = require('util')
+local scratch = require('scratch')
 
 local function mkRm()
   local h = harness.mk()
@@ -100,18 +101,6 @@ return {
     end,
   },
   {
-    name = 'scratchId mints once and persists; scratchTrack is its handle',
-    run = function()
-      local reaper, rm = mkRm()
-      local before = reaper.CountTracks(0)
-      local g1 = rm:scratchId()
-      local g2 = rm:scratchId()
-      t.eq(g1, g2, 'second scratchId returns the same guid')
-      t.eq(reaper.CountTracks(0), before + 1, 'exactly one scratch track minted')
-      t.eq(reaper.GetTrackGUID(rm:scratchTrack()), g1, 'scratchTrack is the handle for that guid')
-    end,
-  },
-  {
     name = 'pollUndo is the scratch heartbeat: mints once, idempotent',
     run = function()
       local reaper, rm = mkRm()
@@ -133,7 +122,7 @@ return {
 
       -- REAPER undo rewinds the scratch chunk to the pre-removal state; projext
       -- (which does not reverse) stays empty until the heartbeat pulls it back.
-      reaper.GetSetMediaTrackInfo_String(rm:scratchTrack(), 'P_EXT:ctm_fxMeta',
+      reaper.GetSetMediaTrackInfo_String(scratch.track(), 'P_EXT:ctm_fxMeta',
         util.serialise({ [fxId] = { split = true } }), true)
       rm:pollUndo()
       t.eq(rm:fx(fxId).split, true, 'mirror diverged → resync restored projext')

@@ -111,12 +111,12 @@ per-record-kind native-key set. The two kinds store differently:
 
 Writes patch-merge (a partial write never wipes a sibling; `util.REMOVE`
 clears a field), and an all-native write touches no extstate at all — the
-reconcile hot path stays clean. rm owns the scratch track itself
-(`scratchId` mints it lazily, guid persisted in projext): it both carries
-the fx-meta mirror and parks orphan fx. `rm:pollUndo` (driven each frame by
-`wp:tick`) is the heartbeat that mints the scratch and, on a scratch-chunk
-rewind, resyncs the fx-meta mirror back into projext — gated by a watermark
-so steady-state frames touch no extstate.
+reconcile hot path stays clean. The scratch track is owned by `scratch.lua`
+(`scratch.id` mints it lazily — hidden + muted — guid persisted in projext);
+rm is one tenant, mirroring fx-meta onto its `P_EXT`. `rm:pollUndo` (driven
+each frame by `wp:tick`) is the heartbeat that ensures the scratch exists
+and, on a scratch-chunk rewind, resyncs the fx-meta mirror back into projext
+— gated by a watermark so steady-state frames touch no extstate.
 
 ## Relationship to wiringManager
 
