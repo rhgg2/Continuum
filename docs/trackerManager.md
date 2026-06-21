@@ -253,6 +253,15 @@ Steps:
    allocation exceeded it; pad empty note lanes; materialise
    user-opened singletons/ccs that carry no events. Writes back via
    `cm:set` if the high-water mark grew.
+4.6. **Macro expansion.** Each lane-1 note carrying `fx` runs its
+   generator (`generators.<kind>`, a pure module); the derived `fxNote`s
+   reconcile against the set parsed out at step 0 — `reconcileFx`: keep
+   geometry-identical, add new, drop stale, mirroring `reconcilePCsForChan`
+   at the note level. fxNotes carry `derived = <hostUuid>` and route out
+   of columns (invisible to vm, the absorber pass, render), but union
+   into the tail walk — so the host's realised tail truncates to fxNote 2
+   and fxNotes clip each other with no bespoke truncation — and into PC
+   synthesis, carrying the host's `sample`. See `design/note-macros.md`.
 4½. **PC synthesis (trackerMode only).** For each channel, group lane
    events (still in realised frame here, so `realised(n) = n.ppq`
    directly) by realised ppq. Leftmost lane wins: its sample becomes

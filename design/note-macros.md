@@ -1,6 +1,10 @@
 # note macros — generative modulation on notes
 
-> Design note, pre-build. A *macro* is per-note generative intent —
+> Design note. **Retrig — the structural half of the v1 proving pair —
+> has landed** (`generators.lua` + the rebuild expansion step +
+> `tm_macro_spec`); vibrato, the continuous half, is next.
+>
+> A *macro* is per-note generative intent —
 > retrig, trill, arp, vibrato, slide — expanded mechanically into
 > realisation the note's own events don't contain. This note fixes the
 > v1 model: the host contract and intent shape, the two output categories sharing one
@@ -42,7 +46,7 @@ rule, the derived-event lifecycle now gets named and shared.
 A macro's continuous output is a **delta over the authored base**, not
 a replacement stream. This buys:
 
-- **Stacking with no policy.** Sums commute; `note.gen` is a list and
+- **Stacking with no policy.** Sums commute; `note.fx` is a list and
   the apparatus never arbitrates vibrato-vs-slide conflicts.
 - **Orthogonality.** The user's pb/cc curve stays their property;
   editing it under an active macro keeps the macro riding the new
@@ -65,7 +69,7 @@ way — as derived take events under one lifecycle:
 | **structural** | retrig, trill, arp | new note events | derived notes baked into the take |
 | **continuous** | vibrato, slide, cc-tremolo | additive delta signals | shaped cc events at reserved **delta codes**, summed into the target by the Continuum node, in DSP |
 
-Structural slices *want* to be ordinary take notes: they participate
+Structural fxNotes *want* to be ordinary take notes: they participate
 in voice clamping, PA binding, PC synthesis, and render-to-MIDI.
 Continuous deltas are ordinary take ccs at addresses the user never
 sees — routed out of columns at parse, summed below the synth.
@@ -108,7 +112,7 @@ One field on the note, persisted through the existing note-metadata
 path (notes already carry uuid'd ext-data — persistence is free):
 
 ```lua
-note.gen = {
+note.fx = {
   { kind = 'retrig',  period = {1,4}, ramp = -12 },
   { kind = 'vibrato', period = {1,2}, depth = 30, onset = 1 },
 }
@@ -120,7 +124,7 @@ consistent with swing factors. Per-kind params, v1 vocabulary:
 
 | kind | params | notes |
 |---|---|---|
-| `retrig` | `period`, `ramp` (vel Δ/slice) | slices fill the note's logical interval |
+| `retrig` | `period`, `ramp` (vel Δ/fxNote) | fxNotes fill the note's logical interval |
 | `trill` | `period`, `step` (signed **scale steps**) | alternation resolved through the temper → (pitch, detune) pairs |
 | `arp` | `period`, `steps = {0, ...}` (scale steps) | broken chord off the single host note — a generalised trill, **not** a chord arpeggiator (that needs a region host, § *The host contract*) |
 | `vibrato` | `period`, `depth` (cents), `onset` (QN ramp-in) | lane-1 only (pb is channel-wide, same doctrine as detune I3) |
@@ -136,7 +140,7 @@ and dirty-tracking, and channel context:
 host = {
   window = { startppqL, endppqL },  -- effective logical interval, never OPEN
   events = { note, ... },           -- inputs; v1: exactly the host note
-  id     = <uuid>,                  -- provenance key (genHost) + dirty key
+  id     = <uuid>,                  -- provenance key (derived) + dirty key
   chan   = <chan>,
 }
 ```
@@ -147,17 +151,17 @@ signature is fixed against the contract now because two wanted kinds
 don't fit N=1: a true chord arpeggiator consumes several notes (N≥2),
 and free-running generators — a fill, an LFO on a cc lane with no
 note — consume none (N=0). Both are **region hosts**: something
-region-shaped carrying `gen` plus a window, supplying its covered
+region-shaped carrying `fx` plus a window, supplying its covered
 notes as input. A gm group is the obvious candidate substrate — a
 group is already a persisted, anchored window over member events, and
-group-hosted `gen` would make every instance arp identically for free
+group-hosted `fx` would make every instance arp identically for free
 — but gm-backed vs a lighter standalone region is decided when region
 hosts land, not now. Nothing downstream cares about N: the derived
 lifecycle, delta streams, and reconcile are host-count-blind.
 
 ## Generators
 
-A closed table of pure functions — the lifecycle is generic, the
+A pure module (`generators.lua`) — the lifecycle is generic, the
 generator set is not (a user-facing generative language is explicitly
 out of scope; nothing below precludes growing one later):
 
@@ -170,7 +174,7 @@ generators[kind](host, params, ctx) → {
 
 Generators speak **logical frame and intent units** (ppqL, cents,
 scale steps, signed controller units) and know nothing of swing, raw
-pb, or REAPER. The existing realise stack converts: slices swing like
+pb, or REAPER. The existing realise stack converts: fxNotes swing like
 any authored note and inherit the host's delay; delta breakpoints map
 cents → raw pb units via the resolved pbRange at flush — the same
 boundary where detune realises. `ctx` carries the temper and a
@@ -178,23 +182,23 @@ next-lane-1-note lookup (for `slide.target = 'next'`).
 
 ## Structural realisation — derived notes
 
-- **Provenance.** Each slice carries `genHost = <host uuid>` as note
-  metadata. The rebuild parse routes genHost notes out of
-  column-building (as absorbers are routed out of the pb column): no
-  lane allocation, no tracker-visible events.
-- **Host is slice 1.** The host note keeps its uuid, lane identity,
-  and PA binding; its realised note-off truncates to the first slice
+- **Provenance.** Each fxNote carries `derived = <hostUuid>` (R1's
+  provenance field) as note metadata. The rebuild parse routes derived
+  notes out of column-building (as absorbers are routed out of the pb
+  column): no lane allocation, no tracker-visible events.
+- **Host is fxNote 1.** The host note keeps its uuid, lane identity,
+  and PA binding; its realised note-off truncates to the first fxNote
   boundary while `endppqL` keeps the authored ceiling — the existing
   `endppq ≠ endppqC` divergence surface, no new mechanism.
-- **Ephemeral identity** (alias precedent). Slices are regenerated
-  freely; mm mints fresh uuids; external edits to a slice are
+- **Ephemeral identity** (alias precedent). fxNotes are regenerated
+  freely; mm mints fresh uuids; external edits to an fxNote are
   generator-owned territory and are overwritten at the next reconcile.
-- **Realised-space citizenship.** Slices are ordinary realised notes:
+- **Realised-space citizenship.** fxNotes are ordinary realised notes:
   the universal tail walk clamps them, and under trackerMode they
   enter PC-synthesis records carrying the host's `sample` (steady
   state writes no extra PCs — the program is already in force).
-- **Trill detune.** Microtonal alternation lands as per-slice `detune`
-  on lane-1 slices; the existing absorber machinery realises it. If
+- **Trill detune.** Microtonal alternation lands as per-fxNote `detune`
+  on lane-1 fxNotes; the existing absorber machinery realises it. If
   absorber churn at trill rates proves ugly, the cents component can
   migrate to the delta stream (open question below) — same mechanism
   either way now.
@@ -278,12 +282,12 @@ The wire invariants I1–I5 (`docs/tuning.md`) hold on the authored
 events **verbatim** — delta codes live outside the user's namespace
 and sum strictly below it. New, mechanism-independent:
 
-- **G1 — Provenance.** Every derived note resolves via `genHost` to a
-  live host whose `gen` contains a structural kind; every event at a
-  delta code matches the prediction for its channel's gen-carrying
+- **G1 — Provenance.** Every derived note resolves via `derived` to a
+  live host whose `fx` contains a structural kind; every event at a
+  delta code matches the prediction for its channel's fx-carrying
   lane-1 notes. Both directions of both.
-- **G2 — Both directions** (absorber-style). `gen` present ⇒ derived
-  events match the generator's prediction after reconcile; `gen`
+- **G2 — Both directions** (absorber-style). `fx` present ⇒ derived
+  events match the generator's prediction after reconcile; `fx`
   removed ⇒ no derived event survives the next reconcile.
 - **G3 — Ownership.** Derived events are generator-owned: external
   edits to them are overwritten, never attributed to base intent.
@@ -297,43 +301,48 @@ and sum strictly below it. New, mechanism-independent:
 
 Mirrors PC synthesis end to end:
 
-- **Parse:** genHost notes route to a side list; delta-code ccs route
+- **Parse:** derived notes route to a side list; delta-code ccs route
   out by address. Neither reaches columns or lane allocation.
 - **Rebuild — the expansion slot is constrained, not free.** Three
   ordering constraints pin it: (a) **after** the swing-reconcile rule
   (step 4.7), so hosts touched by external edits have final ppqL/raw
   before prediction; (b) **before** the universal tail walk (4.8), so
-  the tail walk clamps host raw to slice 2's onset and slice-to-slice
+  the tail walk clamps host raw to fxNote 2's onset and fxNote-to-fxNote
   overlaps for free — note 4.8 walks in-memory note sets, so its pitch
-  groups must include the freshly staged slices; (c) **before** PC
-  synthesis, so slices enter PC records carrying the host's `sample`
+  groups must include the freshly staged fxNotes; (c) **before** PC
+  synthesis, so fxNotes enter PC records carrying the host's `sample`
   — which moves PC synthesis (currently 4½) after expansion. Per
-  channel: records = lane-1 notes carrying `gen`; run generators;
-  predict slices + delta streams; diff with carry-forward so steady
+  channel: records = lane-1 notes carrying `fx`; run generators;
+  predict fxNotes + delta streams; diff with carry-forward so steady
   state writes nothing. The delta diff is **stream-level**: a
-  channel's stream at one code is a pure function of its gen-carrying
+  channel's stream at one code is a pure function of its fx-carrying
   notes — predict the whole stream, diff wholesale against the events
   at that code.
-- **Flush-time reconcile** gated on a `dirtyGenHosts` set — any
-  mutation to a host's `gen`, ppq/delay, pitch/detune, vel, or length
+- **Flush-time reconcile** — *not yet built; v1 rides the rebuild path,
+  which every flush triggers* — gated on a `dirtyFxHosts` set: any
+  mutation to a host's `fx`, ppq/delay, pitch/detune, vel, or length
   dirties it; so does a pbRange/temper change. Same pure helper as the
   rebuild sweep.
 
 ## UI (sketch only)
 
-v1: a per-note `gen` badge in the note cell and a palette-style editor
+v1: a per-note `fx` badge in the note cell and a palette-style editor
 on the focused note (the param-palette focus model from tr is the
 obvious chassis). A full FX-column rendering — `R16`-style codes in a
 dedicated column — is deferred until the model is proven.
 
 ## v1 scope — the proving pair
 
-`retrig` + `vibrato`, one per category, each exercising its entire
-lifecycle: intent persistence, generator, reconcile both directions,
-G1–G5 pinned in specs; tail-clamp and PC interplay for retrig;
-cents→raw conversion, shaped-pair emission, parse routing by code, and
-the add bank for vibrato. Remaining kinds are table entries
-afterwards. The plink migration (R5) is sequenced independently.
+`retrig` + `vibrato`, one per category. **`retrig` ✓ landed:**
+`generators.lua` (pure module), the rebuild expansion step
+(`reconcileFx`, mirroring `reconcilePCsForChan`), and `tm_macro_spec`
+pinning G1–G4 plus tail-clamp, velocity-ramp, and PC interplay.
+Flush-time reconcile (`dirtyFxHosts`) and the R2/R4 refactors are
+deferred fast-follows — correctness rides the rebuild path, which every
+flush triggers. **Vibrato is next:** cents→raw conversion, shaped-pair
+emission, parse routing by code, and the add bank — pinning G5.
+Remaining kinds are table entries afterwards. The plink migration (R5)
+is sequenced independently.
 
 ## Refactor map — what unifies
 
@@ -345,14 +354,14 @@ instances. In leverage order:
 
 - **R1 — one derived marker. ✓ Landed (`e703510`).** `fake=true` meant
   "derived, regenerable from intent" in two unrelated mechanisms; macro
-  slices would have added `genHost` and forced every predicate to
-  `fake or genHost`. Replaced both with one provenance field —
+  fxNotes would have needed a second marker, forcing every predicate
+  to `fake or <it>`. Replaced both with one provenance field —
   `derived = 'absorber' | 'pc' | <hostUuid>` — now the single predicate
   for column routing, lane-alloc exemption, the CC-walk skip, hidden
   computation, and reconcile gathering; every read is a truthiness test,
   the two writes carry the tag. Delta-stream ccs stay outside it by
   design — their address is their provenance. The `<hostUuid>` value is
-  reserved; slices fill it. No migration (pre-beta): persisted `fake`
+  reserved; fxNotes fill it. No migration (pre-beta): persisted `fake`
   metadata is ignored and self-cleans, since absorbers/PCs re-derive
   each rebuild. Swept the vocabulary too — `availFakes`→`availAbsorbers`,
   `notFake`→`notDerived`, gm's `copyScalars` opt-out key renamed.
@@ -362,7 +371,9 @@ instances. In leverage order:
   create / delete-leftovers) are one algorithm at two levels of
   richness. Extract `reconcileDerived{existing, desired, key, make}`
   *when writing the macro reconcile* — the four-instance moment is
-  when the shape is provable. The absorber pass's other duties (cents
+  when the shape is provable. **`reconcileFx` (note-shaped) has now
+  landed** beside `reconcilePCsForChan`, so the skeleton is provable and
+  the extraction is the next refactor. The absorber pass's other duties (cents
   back-derivation, wire-raw recompute, column projection) are not
   reconcile-shaped and stay put. gm's `reproject`/`reconcile` is a
   *third live* instance of the skeleton (predict desired from group +
@@ -374,8 +385,8 @@ instances. In leverage order:
   hand-rolled in flush's voice-legality scan and in `reconcilePcs`;
   macro flush-reconcile is the third occurrence — extract then.
 - **R4 — flush-time mechanism registry.** `flush()` hard-codes the PC
-  pass behind `dirtyPcChans`; macros add `dirtyGenHosts`. Ordering is
-  load-bearing — slice reconcile must precede PC reconcile (slices
+  pass behind `dirtyPcChans`; macros add `dirtyFxHosts`. Ordering is
+  load-bearing — fxNote reconcile must precede PC reconcile (fxNotes
   carry the host's `sample` and enter PC records) — so this is an
   ordered `{dirtySet, reconcile}` list in tm, **not** a preflush
   subscription (hook order is registration order; gm already rides
@@ -395,7 +406,7 @@ instances. In leverage order:
   with routingManager stands on its own merits.
 - **R7 — aliases and groups convergence.** The alias substrate
   (docs'd, not landed) shares the lifecycle: spec on host, ephemeral
-  derived identity, regenerate per rebuild — `note.gen` is
+  derived identity, regenerate per rebuild — `note.fx` is
   `root.children` in miniature. And gm decomposes the same way:
   `groups.project` is already a pure function from spec + anchor to
   desired events — a generator with `group.events` + overrides as
@@ -421,7 +432,7 @@ instances. In leverage order:
   later ride the same rails; don't fork the vocabulary.
 
 Non-refactors, recorded so nobody hunts for them: `projectCC`'s
-rule-based strip already passes unknown metadata through (`gen`
+rule-based strip already passes unknown metadata through (`fx`
 reaches columns unchanged), and the absorber pass's cents/raw
 machinery is untouched by design — vibrato sums at the node precisely
 so it never enters that domain.
@@ -436,14 +447,14 @@ before writing anything.
 
 ### Frames and rounding
 
-- Generators emit **ppqL only**, never raw — slices and delta
+- Generators emit **ppqL only**, never raw — fxNotes and delta
   breakpoints alike. Realisation is
   `round(snapshot.fromLogical(ppqL)) + delayToPPQ(delay)` — the exact
   expression the rebuild rule uses, rounded at the same point. A
   second rounding site (or float ppq in predictions) makes steady
   state diff non-empty and G4 fails as permanent churn.
-- Slices inherit the host's `delay` verbatim — the whole figure
-  nudges as one. Slice 1 *is* the host; generate slices 2..N.
+- fxNotes inherit the host's `delay` verbatim — the whole figure
+  nudges as one. fxNote 1 *is* the host; generate fxNotes 2..N.
 - Inside rebuild, before tidyCol, `evt.ppq` is **realised**; the
   reconcile's "existing" events read pre-tidy. Never compare logical
   predictions against realised existing (or vice versa) — convert
@@ -451,7 +462,7 @@ before writing anything.
 - `endppqL == util.OPEN` is a sentinel, not a number. `host.window`
   carries the *effective* logical end (tail-clamped `endppqC` mapped
   back via `toLogical`); no arithmetic on OPEN.
-- Clamp slice velocity to 1..127 after ramping.
+- Clamp fxNote velocity to 1..127 after ramping.
 - cents→raw for delta breakpoints converts once, at flush, against
   the resolved pbRange — never inside the generator, never in the
   node.
@@ -465,39 +476,39 @@ before writing anything.
   absorber pass's `origTok` discipline). Delta-stream ccs have no
   uuid by design; the stream-level diff deletes and writes by token
   within one staged batch.
-- Clearing `gen` or the `derived` marker is `util.REMOVE` through
+- Clearing `fx` or the `derived` marker is `util.REMOVE` through
   `assignEvent`, never `= false` / `= nil`.
 - Flush-side reconcile runs *inside* `flush()` before the op snapshot
   (model: `reconcilePcs`); it stages via the lowlevel helpers and
   never re-enters `tm:flush`.
-- Host truncation to slice 2's onset is the **existing** universal
+- Host truncation to fxNote 2's onset is the **existing** universal
   tail walk doing its job. Write no bespoke truncation; if you find
   yourself shortening the host's raw note-off by hand, stop.
 
 ### Absorber interaction (v1 guard)
 
 The 4.9 absorber pass gathers lane-1 notes from
-`channels[*].columns.notes[1]` — derived slices are routed out of
+`channels[*].columns.notes[1]` — derived fxNotes are routed out of
 columns, so that walk **cannot see them**. v1 rule making this safe:
-slices carry `detune = host.detune` verbatim, so no slice seat is a
+fxNotes carry `detune = host.detune` verbatim, so no fxNote seat is a
 detune jump and no absorber is needed. Assert the inheritance.
-Trill (per-slice detune) requires the 4.9 gather to union derived
-lane-1 slices first — that's the gating work item for trill, not the
+Trill (per-fxNote detune) requires the 4.9 gather to union derived
+lane-1 fxNotes first — that's the gating work item for trill, not the
 generator.
 
 ### Group interaction (gm)
 
 - **Derived events are invisible to gm.** `classifyCreate` adopts any
   fresh event inside a region footprint by rect containment alone —
-  a staged slice under a group's footprint would be adopted into the
+  a staged fxNote under a group's footprint would be adopted into the
   group and mirrored to siblings. Every gm classify/adopt path skips
   events carrying the R1 `derived` marker, the same routing-out the
   parse does for columns.
-- **`gen` crosses the group frame for free.** `copyScalars` is
+- **`fx` crosses the group frame for free.** `copyScalars` is
   opt-out (every field except `DERIVED`), so a trill on a grouped
   note already propagates to siblings like detune. Assert it, don't
   re-plumb it; sibling regeneration is the ordinary path — reproject
-  restamping a sibling's `gen` dirties that host via `dirtyGenHosts`.
+  restamping a sibling's `fx` dirties that host via `dirtyFxHosts`.
 
 ### Add bank (JSFX)
 

@@ -30,6 +30,7 @@
 local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
+local generators = require 'generators'
 
 local function print(...)
   return util.print(...)
@@ -130,6 +131,29 @@ local function reconcilePCsForChan(chan, records)
   end
   for _, have in ipairs(existing) do
     if not kept[have] then util.add(toRemove, have) end
+  end
+  return toRemove, toAdd
+end
+
+----- fxNote reconciliation (the PC-synthesis skeleton, note-shaped)
+
+-- Identity is geometry: (host, ppq, pitch, vel, detune, sample). endppq is
+-- owned by the tail walk, never matched. Twin of reconcilePCsForChan.
+local function fxKey(spec)
+  return util.key(spec.derived, spec.ppq, spec.pitch, spec.vel,
+                  spec.detune or 0, spec.sample or 0)
+end
+
+local function reconcileFx(predicted, existing)
+  local have, kept = {}, {}
+  for _, e in ipairs(existing) do have[fxKey(e)] = e end
+  local toRemove, toAdd = {}, {}
+  for _, spec in ipairs(predicted) do
+    local e = have[fxKey(spec)]
+    if e then kept[e] = true else util.add(toAdd, spec) end
+  end
+  for _, e in ipairs(existing) do
+    if not kept[e] then util.add(toRemove, e) end
   end
   return toRemove, toAdd
 end
@@ -1023,6 +1047,11 @@ do
       channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
     end
 
+    -- fxExisting: derived notes parsed at step 0, reconciled at 4.6.
+    -- fxLive: post-expansion set unioned into the tail walk and PC synthesis.
+    local fxExisting, fxLive = {}, {}
+    for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {} end
+
     -- 0) Partition mm events into internal (stamped + raw consistent
     -- with ppqL: model-governed) and external (foreign-MIDI, or
     -- external raw edit on a stamped record). Internals are fully-
@@ -1052,7 +1081,10 @@ do
 
     local internal, external = {}, {}
     for _, note in mm:notes() do
-      if rawDivergesFromLogical(note) then util.add(external, note)
+      if note.derived then
+        note.token = mm:tokenOf(note)
+        util.add(fxExisting[note.chan], note)
+      elseif rawDivergesFromLogical(note) then util.add(external, note)
       else util.add(internal, note)
       end
     end
@@ -1165,6 +1197,60 @@ do
       staleSwing = {}
     end
 
+    -- 4.6) Macro expansion: expand fx-carrying lane-1 notes, reconcile against
+    -- fxExisting, commit. fxLive feeds the tail walk + PC synthesis. see design/note-macros.md § Pipeline placement
+    do
+      local res = mm:resolution()
+      for chan = 1, 16 do
+        local lane1 = channels[chan].columns.notes[1]
+        local predicted = {}
+        for _, host in ipairs(lane1 and lane1.events or {}) do
+          if host.fx and host.type ~= 'pa' then
+            local endL = host.endppqL
+            if endL == nil or endL == util.OPEN then
+              endL = tm:toLogical(chan, tm:length())
+            end
+            local d = delayToPPQ(host.delay or 0)
+            for _, params in ipairs(host.fx) do
+              local gen = generators[params.kind]
+              if gen then
+                local out = gen({ window = { host.ppqL, endL }, events = { host },
+                                  id = host.uuid, chan = chan }, params, { resolution = res })
+                for _, fn in ipairs(out.notes) do
+                  util.add(predicted, {
+                    evType = 'note', chan = chan, lane = 1, derived = host.uuid,
+                    pitch = fn.pitch, vel = fn.vel, detune = fn.detune or 0,
+                    delay = host.delay or 0, sample = host.sample,
+                    ppqL = fn.ppqL, endppqL = fn.endppqL,
+                    ppq    = tm:fromLogical(chan, fn.ppqL,    d),
+                    endppq = tm:fromLogical(chan, fn.endppqL, d),
+                  })
+                end
+              end
+            end
+          end
+        end
+
+        local toRemove, toAdd = reconcileFx(predicted, fxExisting[chan])
+        if #toRemove > 0 or #toAdd > 0 then
+          mm:modify(function()
+            for _, e    in ipairs(toRemove) do mm:delete(e.token) end
+            for _, spec in ipairs(toAdd)    do mm:add(spec)       end
+          end)
+        end
+      end
+
+      -- Re-read post-commit so fxLive carries fresh tokens for the tail
+      -- walk's applyAssigns (mirrors PC's mm:ccs() refresh).
+      for _, n in mm:notes() do
+        if n.derived then
+          local ce = util.clone(n)
+          ce.token = mm:tokenOf(n)
+          util.add(fxLive[n.chan], { evt = ce, lane = n.lane or 1 })
+        end
+      end
+    end
+
     -- 6) Reintroduce externals. Per external (raw-ppq order): pack a
     -- lane against the now-settled internals plus any earlier externals
     -- already placed (noteColumnAccepts sees realised tails); stamp
@@ -1241,6 +1327,12 @@ do
               util.bucket(byPitch, evt.pitch, n)
             end
           end
+        end
+        for _, w in ipairs(fxLive[chan]) do
+          local fn = { evt = w.evt, lane = w.lane }
+          util.add(notes, fn)
+          util.bucket(byLane,  w.lane,      fn)
+          util.bucket(byPitch, w.evt.pitch, fn)
         end
         if #notes == 0 then goto nextChan end
 
@@ -1516,6 +1608,10 @@ do
           for _, n in ipairs(lane.events) do
             util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = L, sample = n.sample or 0, key = n })
           end
+        end
+        for _, w in ipairs(fxLive[chan]) do
+          local n = w.evt
+          util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
         end
         local rems, adds_ = reconcilePCsForChan(chan, records)
         for _, r in ipairs(rems)  do util.add(toDelete, r.token) end
