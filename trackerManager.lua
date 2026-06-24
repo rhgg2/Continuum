@@ -1219,17 +1219,24 @@ do
       local takeLen = tm:length()
       local churned = false
       for chan = 1, 16 do
-        -- Foreign same-pitch onsets bound each host's effective fx window;
-        -- see design/note-macros.md § host contract (effective interval).
-        local foreignOnsets = {}
-        local function addForeign(n)
-          if not n.derived and n.type ~= 'pa' then util.bucket(foreignOnsets, n.pitch, n.ppq) end
+        -- Window ends at the first same-pitch or same-lane onset after the host
+        -- (monophonic column; see design/note-macros.md § host contract).
+        local foreignOnsets, laneOnsets = {}, {}
+        local function addOnset(n, lane)
+          if n.derived or n.type == 'pa' then return end
+          util.bucket(foreignOnsets, n.pitch, n.ppq)
+          if lane then util.bucket(laneOnsets, lane, n.ppq) end
         end
-        for _, col in ipairs(channels[chan].columns.notes) do
-          for _, n in ipairs(col.events) do addForeign(n) end
+        for laneIdx, col in ipairs(channels[chan].columns.notes) do
+          for _, n in ipairs(col.events) do addOnset(n, laneIdx) end
         end
-        for _, n in ipairs(external) do if n.chan == chan then addForeign(n) end end
+        for _, n in ipairs(external) do if n.chan == chan then addOnset(n) end end
         for _, list in pairs(foreignOnsets) do table.sort(list) end
+        for _, list in pairs(laneOnsets)    do table.sort(list) end
+
+        local function firstAfter(list, ppq)
+          for _, p in ipairs(list or {}) do if p > ppq then return p end end
+        end
 
         local predicted = {}
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
@@ -1237,9 +1244,9 @@ do
             if host.fx and host.type ~= 'pa' then
               local endL = (host.endppqL == nil or host.endppqL == util.OPEN)
                            and tm:toLogical(chan, takeLen) or host.endppqL
-              for _, p in ipairs(foreignOnsets[host.pitch] or {}) do
-                if p > host.ppq then endL = math.min(endL, tm:toLogical(chan, p)); break end
-              end
+              local bound = math.min(firstAfter(foreignOnsets[host.pitch], host.ppq) or math.huge,
+                                     firstAfter(laneOnsets[laneIdx],       host.ppq) or math.huge)
+              if bound ~= math.huge then endL = math.min(endL, tm:toLogical(chan, bound)) end
               fxHostEnd[host] = tm:fromLogical(chan, endL)
               local d = delayToPPQ(host.delay or 0)
               for _, params in ipairs(host.fx) do

@@ -630,3 +630,39 @@ generator.
   only there.
 - **`plink.midi_*` parms.** Exact config-parm names and automation-bus
   addressing for R5; gates the listen-bank retirement, not v1.
+- **Window bounding duplicates the tail walk — known bodge.** Step 4.6
+  computes each host's effective window by hand (`firstAfter` over
+  same-pitch *and* same-lane onsets) — the same "first onset after"
+  decision the 4.8 tail walk makes for tails. It can't simply reuse the
+  walk: the bound decides note *existence* (how many fxNotes the
+  generator emits) while the walk decides note *length*, and the walk
+  never deletes — so fxNotes past a foreign onset would survive as
+  audible re-triggers if generated and only tail-clipped. The interim
+  hand-roll is correct (a tracker column is monophonic, so any later
+  same-lane note cuts the retrig, matching how the walk clips a plain
+  host) but it forks the logic. **Target architecture:** walk the real
+  notes only → read each host's clipped extent as its generator window →
+  generate fxNotes inside it → an isolated fx-walk (no foreign note ever
+  interleaves, since the window stops at the first one) → splice, with
+  host→fxNote-2 the only host clip. Removes the fork and makes the walk
+  a reusable unit. Deferred: the payoff is cashed when the second host
+  kind exists; at N=1 it costs a pipeline reorder against ~6 lines.
+- **Replace vs augment, and the no-host endpoint.** The host note wears
+  three hats — intent carrier (`note.fx`), identity anchor (uuid →
+  `derived` provenance, PA binding), and **output note 1** (the audible
+  first hit). The entire `fxHostEnd` view-restore dance (§ Structural
+  realisation) exists *only* for the third hat: the host is at once
+  intent and output, so its realised tail must clip to fxNote-2 *and* be
+  restored for the view. A **replace** model splits that hat off —
+  carrier holds intent + identity, emits no audible note, *all* hits are
+  derived — which is strictly cleaner (carrier shows at authored length
+  natively, no restore) and is the natural endpoint of the **no-host /
+  region** generalisation: output is *always* purely derived, the
+  carrier is *always* intent + identity only, and note-vs-region-vs-group
+  stops mattering downstream. The reason augment exists today is **not**
+  note-count — it is **PA binding**: the host's PA rides fxNote 1
+  (itself). Under replace the carrier is silent and PA must bind to the
+  window, or to a regenerated-each-rebuild first hit — the same wrinkle
+  region hosts hit. So sequence it: replace/no-host becomes attractive
+  exactly when region hosts land, and **PA binding is the gating design
+  decision**, not the splice mechanics above.

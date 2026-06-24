@@ -272,6 +272,31 @@ return {
     end,
   },
 
+  ----- Effective window — a same-lane note of any pitch bounds the host
+
+  {
+    name = 'a same-lane note inside a retrig truncates the window and the host tail',
+    run = function(harness)
+      local h = harness.mk()
+      addPlainHost(h)
+      t.eq(#fxNotesOf(h.fm:dump(), hostNote(h.fm:dump()).uuid), 3, 'baseline 3 fxNotes')
+
+      -- Same-lane note at 100 (different pitch): monophonic column cuts the
+      -- retrig window, so no fxNote should appear at or after 100.
+      h.tm:addEvent({ evType = 'note', ppq = 100, endppq = util.OPEN, chan = 1,
+                      pitch = 64, vel = 90, detune = 0, delay = 0, lane = 1 })
+      h.tm:flush()
+
+      local dump = h.fm:dump()
+      local fns = fxNotesOf(dump, hostNote(dump).uuid)
+      t.eq(#fns, 1, 'window bounded to [0,100]: only the fxNote at 60 remains')
+      t.eq(fns[1].ppq, 60, 'surviving fxNote sits at 60')
+
+      local hostCol = h.tm:getChannel(1).columns.notes[1].events[1]
+      t.eq(hostCol.endppqC, 100, 'host view tail clipped to the new note at 100')
+    end,
+  },
+
   ----- View sees the pre-fx host (no spurious give-way cue)
 
   {
