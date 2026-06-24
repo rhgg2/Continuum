@@ -54,6 +54,7 @@ local specs = {
   'tm_rescale_conform_spec',
   'tm_pc_synthesis_spec',
   'tm_macro_spec',
+  'tm_vibrato_spec',
   'tm_dormant_config_spec',
   'groups_core_spec',
   'gm_propagate_spec',

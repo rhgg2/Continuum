@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=42  sha=untracked  mode=namespace
+@module generators  src=generators.lua  loc=66  sha=165be50  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
@@ -18,3 +18,6 @@
   @api M.retrig(host, params, ctx)  @ 22
       @contract  retrig fills the host window with evenly-spaced same-pitch fxNotes 2..N (host is fxNote 1)
       @contract  velocity ramps params.ramp per fxNote, clamped 1..127; detune inherited from the host verbatim
+  @api M.vibrato(host, params, ctx)  @ 48
+      @contract  vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
+      @contract  ramp-in linear over onset QN; 16 breakpoints/cycle, linear-shaped

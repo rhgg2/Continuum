@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1285  sha=f5e5fd9  mode=chunk
+@module midiManager  src=midiManager.lua  loc=1287  sha=d952985  mode=chunk
 @deps take
 
 # Invariants & contracts
@@ -107,38 +107,38 @@
       · Persist + signals
   -- Load
   -- Locking
-  @fn checkLock()  @ 745
+  @fn checkLock()  @ 747
       @contract  writes (add*, delete*, structural assign*) must run inside mm:modify(fn)
       @contract  modify disables sort, runs fn under lock, re-sorts, then reload→callbacks
   -- Notes
-  @fn cloneOut(evt)  @ 763
-  @fn assignNote(loc, t)  @ 785
+  @fn cloneOut(evt)  @ 765
+  @fn assignNote(loc, t)  @ 787
       @contract  assignNote: lockless write when t touches no structural field
       @invariant  assignNote structural fields = {ppq, endppq, pitch, vel, chan, muted}
-  @fn addNote(t)  @ 826
+  @fn addNote(t)  @ 828
       @contract  addNote always allocates a uuid + inserts a notation event (unlike addCC)
   -- CCs
-  @fn reconstruct(tbl)  @ 876
-  @fn assignCC(loc, t)  @ 900
+  @fn reconstruct(tbl)  @ 878
+  @fn assignCC(loc, t)  @ 902
       @contract  assignCC: lockless iff t touches no structural field and the cc has a uuid
       @contract  first metadata stamp on a plain cc needs lock — inserts a sidecar sysex
-  @fn pushCC(t)  @ 974
+  @fn pushCC(t)  @ 976
       -- Insert one ordinary CC: wire event + record + idx + token. No metadata
       -- (the lazy-sidecar path lives in addCC); the wideCC split reuses this.
-  @fn addCC(t)  @ 997
+  @fn addCC(t)  @ 999
       @contract  addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
       @contract  a wideCC-registered code splits to an MSB(shaped)/LSB(step) wire pair
   -- Unified token-keyed surface
-  @fn shiftDown(tbl, field, threshold)  @ 1081
+  @fn shiftDown(tbl, field, threshold)  @ 1083
       -- Mirror REAPER's idx-shift-down after a delete: decrement evt[field] on every
       -- event in tbl whose field > threshold. Guarded by `v and` so uuidIdx (absent
       -- on plain ccs) is safely skipped.
-  @fn deleteSidecarByUuid(uuid)  @ 1091
+  @fn deleteSidecarByUuid(uuid)  @ 1093
       -- Sidecars (notation type 15, cc/pb type -1) share one TextSysexEvt index
       -- space; a cached uuidIdx desyncs across a mixed multi-delete in one modify
       -- (MIDI_DeleteNote cascades its notation event). Match by content instead.
   -- Take data
-  @fn setEot(buf, targetPpq)  @ 1207
+  @fn setEot(buf, targetPpq)  @ 1209
       -- Rewrite the trailing EOT meta event so it sits exactly at targetPpq.
       -- Handles both shrink (offset reduces) and grow (offset increases).
       -- Assumes events past targetPpq are already deleted upstream on shrink
@@ -148,49 +148,49 @@
   @api mm:load(newTake)  @ 335
       @contract  internal reload (lock held) reuses live metadata; skips ext-data read + write
       @contract  external load (take swap, undo, watcher, init) does full loadMetadata + saveMetadata
-  @api mm:reload()  @ 729
-  @api mm:unload()  @ 735
+  @api mm:reload()  @ 731
+  @api mm:unload()  @ 737
       @contract  clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
-  @api mm:modify(fn)  @ 750
-  @api mm:notes()  @ 774
-  @api mm:wideCC(chan, cc, on)  @ 860
+  @api mm:modify(fn)  @ 752
+  @api mm:notes()  @ 776
+  @api mm:wideCC(chan, cc, on)  @ 862
       @contract  marks (chan, cc) a 14-bit MSB whose low 7 bits ride cc+32; transient, not persisted
       @contract  writes split to MSB(shaped)/LSB(step) pair; reads coalesce to fixed-point val 0..127.99
       @invariant  code is the only signal -- wire pair is not self-describing (design/note-macros.md)
-  @api mm:ccs()  @ 864
-  @api mm:tokenOf(evt)  @ 1043
+  @api mm:ccs()  @ 866
+  @api mm:tokenOf(evt)  @ 1045
       @contract  token stable across reload while identity fields don't change
       @invariant  token identity fields = evType, chan, ppq, and pitch|cc as relevant
       @contract  mutating an identity field retires the old token and issues a new one
-  @api mm:byToken(token)  @ 1051
+  @api mm:byToken(token)  @ 1053
       @contract  returns (loc, evt-clone, kind) for the token, or nil if absent
       @contract  works on every event (including plain ccs with no uuid)
       @invariant  byToken's evt-clone carries .token equal to the input
-  @api mm:add(t)  @ 1061
+  @api mm:add(t)  @ 1063
       @contract  t.evType='note' routes to addNote; anything else to addCC
       @contract  returns the new token, or nil if t is malformed; inherits inner lock req
-  @api mm:assign(token, t)  @ 1070
+  @api mm:assign(token, t)  @ 1072
       @contract  dispatches on the resolved event's evType
       @contract  returns the event's token, == input iff no identity field changed (caller re-keys)
       @contract  inherits the inner method's metadata-only lockless carve-out
-  @api mm:delete(token)  @ 1111
-  @api mm:events()  @ 1146
+  @api mm:delete(token)  @ 1113
+  @api mm:events()  @ 1148
       @contract  yields (token, evt-clone) over all live events, notes then ccs
       @invariant  events()'s clone carries .token; loc is intentionally absent
-  @api mm:take()  @ 1166
-  @api mm:interpolate(A, B, ppq)  @ 1171
+  @api mm:take()  @ 1168
+  @api mm:interpolate(A, B, ppq)  @ 1173
       -- REAPER convention: shape on A governs the curve from A to next.
-  @api mm:resolution()  @ 1179
-  @api mm:length()  @ 1185
+  @api mm:resolution()  @ 1181
+  @api mm:length()  @ 1187
       -- Source length. setLength positions the source's EOT explicitly to keep this in sync.
-  @api mm:name()  @ 1192
-  @api mm:setName(name)  @ 1198
-  @api mm:setLength(qn)  @ 1229
+  @api mm:name()  @ 1194
+  @api mm:setName(name)  @ 1200
+  @api mm:setLength(qn)  @ 1231
       -- MIDI_SetItemExtents only resizes the item; on grow it leaves source EOT short,
       -- on shrink it leaves source EOT stale. Reposition the source EOT first so the
       -- source is the right size, then bring the item to match.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1243
+  @api mm:timeSigs()  @ 1245
 
 # Signals emitted (via util.installHooks)
   @emits takeSwapped   -- nil; only when load received a different take
@@ -201,16 +201,16 @@
   @emits reload   -- nil; every load, including after modify()
 
 # Uses (outbound edges)
-  @use call    util.add  @ 271, 369, 384, 386, 393, 395, 426, 434, 437, 457, 462, 464, 480, 492, 496, 503, 528, 529, 606, 612, 613, 623, 846, 989, 1131, 1276
-  @use call    util.assign  @ 434, 437, 530, 665, 672, 792, 808, 914, 933, 939
-  @use call    util.bucket  @ 451, 517, 518
+  @use call    util.add  @ 271, 371, 386, 388, 395, 397, 428, 436, 439, 459, 464, 466, 482, 494, 498, 505, 530, 531, 608, 614, 615, 625, 848, 991, 1133, 1278
+  @use call    util.assign  @ 436, 439, 532, 667, 674, 794, 810, 916, 935, 941
+  @use call    util.bucket  @ 453, 519, 520
   @use call    util.clamp  @ 69, 95
-  @use call    util.clone  @ 491, 512, 765, 836, 933, 978
-  @use call    util.compact  @ 653, 654, 655
+  @use call    util.clone  @ 493, 514, 767, 838, 935, 980
+  @use call    util.compact  @ 655, 656, 657
   @use call    util.fromBase36  @ 148, 203
   @use call    util.installHooks  @ 329
-  @use call    util.key  @ 49, 50, 51, 52, 356, 358, 359, 360
-  @use call    util.pick  @ 393, 462, 496, 503, 530, 606
+  @use call    util.key  @ 49, 50, 51, 52, 358, 360, 361, 362
+  @use call    util.pick  @ 395, 464, 498, 505, 532, 608
   @use call    util.print  @ 23
   @use call    util.round  @ 67
   @use call    util.serialise  @ 237

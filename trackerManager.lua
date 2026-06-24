@@ -72,6 +72,10 @@ local function rawToCents(raw)
   return util.round(raw / 8192 * lim)
 end
 
+-- Toy fixed carrier for continuous (vibrato) deltas; msb cc, lsb cc+32.
+-- Proper per-channel banded alloc: design/note-macros.md § Delta-code allocation.
+local DELTA_MSB = 20
+
 local function delayToPPQ(d) return timing.delayToPPQ(d, mm:resolution()) end
 
 local function forEachEvent(fn)
@@ -157,6 +161,26 @@ local function reconcileFx(predicted, existing)
   for _, spec in ipairs(predicted) do
     local e = have[fxKey(spec)]
     if e then kept[e] = true else
+      util.add(toAdd, spec)
+    end
+  end
+  for _, e in ipairs(existing) do
+    if not kept[e] then util.add(toRemove, e) end
+  end
+  return toRemove, toAdd
+end
+
+----- delta-stream (carrier) reconciliation
+-- Pure fn of lane-1 hosts; match by ppq, rewrite drifted val/shape, drop unpredicted.
+local function reconcileCarrier(existing, predicted)
+  local byPpq = {}
+  for _, e in ipairs(existing) do byPpq[e.ppq] = e end
+  local toRemove, toAdd, kept = {}, {}, {}
+  for _, spec in ipairs(predicted) do
+    local have = byPpq[spec.ppq]
+    if have and have.val == spec.val and have.shape == spec.shape then
+      kept[have] = true
+    else
       util.add(toAdd, spec)
     end
   end
@@ -1061,8 +1085,8 @@ do
 
     -- fxExisting: derived notes parsed at step 0, reconciled at 4.6.
     -- fxLive: post-expansion set unioned into the tail walk and PC synthesis.
-    local fxExisting, fxLive = {}, {}
-    for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {} end
+    local fxExisting, fxLive, carrierExisting = {}, {}, {}
+    for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {}; carrierExisting[i] = {} end
     -- host event -> pre-fx realised tail, stashed at 4.6, restored onto the
     -- column event after the 4.8 tail walk so the view sees the authored note.
     local fxHostEnd = {}
@@ -1103,6 +1127,15 @@ do
       else util.add(internal, note)
       end
     end
+    -- Register the fixed continuous carrier (cc = DELTA_MSB) as 14-bit so the
+    -- CC walk coalesces its pair and routes it out. see design/note-macros.md § Continuous realisation
+    for _, list in ipairs({ internal, external }) do
+      for _, note in ipairs(list) do
+        for _, params in ipairs(note.fx or {}) do
+          if generators.continuous[params.kind] then mm:wideCC(note.chan, DELTA_MSB, true) end
+        end
+      end
+    end
     -- 2) Allocate note columns for internals (stamped path). Clone rather
     -- than alias: step 5 overwrites column evt.ppq with logical while mm
     -- retains raw.
@@ -1129,6 +1162,13 @@ do
     do
       local ccUpdates = {}
       for _, cc in mm:ccs() do
+        if cc.evType == 'cc' and cc.cc == DELTA_MSB then
+          -- Carrier: generator-owned, no metadata; routed out by address,
+          -- reconciled stream-level at 4.6. see design/note-macros.md § Continuous realisation
+          util.add(carrierExisting[cc.chan],
+            { ppq = cc.ppq, val = cc.val, shape = cc.shape, token = mm:tokenOf(cc) })
+          goto continue
+        end
         if not cc.derived then
           if staleSwing[cc.chan] and cc.ppqL ~= nil then
             local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
@@ -1156,6 +1196,7 @@ do
           end
           util.add(col.events, projectCC(cc, tok))
         end
+        ::continue::
       end
 
       if #ccUpdates > 0 then
@@ -1239,6 +1280,7 @@ do
         end
 
         local predicted = {}
+        local predictedDelta, lastDeltaPpq = {}, nil
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, host in ipairs(col.events) do
             if host.fx and host.type ~= 'pa' then
@@ -1264,6 +1306,20 @@ do
                       endppq = tm:fromLogical(chan, fn.endppqL, d),
                     })
                   end
+                  -- Continuous deltas -> carrier ccs: cents -> 14-bit pb units
+                  -- (signed ~8192), fixed-point for wideCC. Lane-1 only (pb channel-wide).
+                  if laneIdx == 1 then
+                    for _, bp in ipairs(out.delta) do
+                      local ppq = tm:fromLogical(chan, bp.ppqL, d)
+                      if ppq ~= lastDeltaPpq then
+                        lastDeltaPpq = ppq
+                        util.add(predictedDelta, {
+                          evType = 'cc', chan = chan, cc = DELTA_MSB, ppq = ppq,
+                          val = (8192 + centsToRaw(bp.val)) / 128, shape = bp.shape,
+                        })
+                      end
+                    end
+                  end
                 end
               end
             end
@@ -1276,6 +1332,14 @@ do
           mm:modify(function()
             for _, e    in ipairs(toRemove) do mm:delete(e.token) end
             for _, spec in ipairs(toAdd)    do mm:add(spec)       end
+          end)
+        end
+
+        local cRemove, cAdd = reconcileCarrier(carrierExisting[chan], predictedDelta)
+        if #cRemove > 0 or #cAdd > 0 then
+          mm:modify(function()
+            for _, e in ipairs(cRemove) do mm:delete(e.token) end
+            for _, s in ipairs(cAdd)    do mm:add(s)          end
           end)
         end
       end

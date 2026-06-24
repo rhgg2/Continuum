@@ -1,0 +1,144 @@
+-- Note macros, v1: vibrato (continuous). Toy carrier fixed at cc=20.
+-- Pins carrier emission (cents -> 14-bit pb units), G4 round-trip, G2 both
+-- directions, regeneration under pbRange, lane-1-only, and routing-out.
+-- see design/note-macros.md § Continuous realisation
+
+local t    = require('support')
+local util = require('util')
+
+local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
+local DELTA_MSB = 20
+
+-- depth 30c, period 1/4 QN: at res 240 one cycle = 60 ticks; 16 breakpoints/
+-- cycle => peak (sin=1) at ppqL 15, trough at 45, zero crossing at 0.
+local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
+
+local function centsToRaw(cents, pbRange)
+  return util.round(cents * 8192 / ((pbRange or 2) * 100))
+end
+local function carrierVal(cents, pbRange) return (8192 + centsToRaw(cents, pbRange)) / 128 end
+
+local function carriersOf(dump, chan)
+  local out = {}
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'cc' and c.cc == DELTA_MSB and c.chan == chan then
+      out[#out + 1] = { ppq = c.ppq, val = c.val, shape = c.shape }
+    end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return out
+end
+
+local function carrierAt(dump, chan, ppq)
+  for _, c in ipairs(carriersOf(dump, chan)) do if c.ppq == ppq then return c end end
+end
+
+local function addVibHost(h, over)
+  local note = { evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                 vel = 100, detune = 0, delay = 0, lane = 1, fx = vib30 }
+  for k, v in pairs(over or {}) do note[k] = v end
+  h.tm:addEvent(note)
+  h.tm:flush()
+end
+
+return {
+
+  ----- Emission: cents -> 14-bit pb units, carried as fixed-point
+
+  {
+    name = 'vibrato emits carrier ccs at cc=20 carrying 14-bit pb units (cents -> fixed-point)',
+    run = function(harness)
+      local h = harness.mk()
+      addVibHost(h)
+      local dump = h.fm:dump()
+      local cs   = carriersOf(dump, 1)
+      t.truthy(#cs >= 8, 'a multi-breakpoint carrier stream is emitted')
+      for _, c in ipairs(cs) do t.eq(c.shape, 'linear', 'msb breakpoints are linear-shaped') end
+      t.eq(carrierAt(dump, 1, 0).val,  carrierVal(0),   'zero crossing -> 8192/128')
+      t.eq(carrierAt(dump, 1, 15).val, carrierVal(30),  'peak  -> +depth cents in pb units')
+      t.eq(carrierAt(dump, 1, 45).val, carrierVal(-30), 'trough -> -depth cents in pb units')
+    end,
+  },
+
+  ----- G4 — round-trip stability (FIRST: frame/rounding tripwire)
+
+  {
+    name = 'G4: vibrato carrier stream is byte-identical across flush -> rebuild -> flush (swing + delay)',
+    run = function(harness)
+      local h = harness.mk{
+        config = { project = { swings = { ['c58'] = classic58 } } },
+        data   = { swing = { global = 'c58' } },
+      }
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 500, lane = 1, fx = vib30 })
+      h.tm:flush()
+
+      local before = carriersOf(h.fm:dump(), 1)
+      t.truthy(#before > 0, 'carriers present (non-vacuous)')
+      h.tm:rebuild()
+      h.tm:flush()
+      local after = carriersOf(h.fm:dump(), 1)
+      t.deepEq(after, before, 'no carrier churn across the round trip')
+    end,
+  },
+
+  ----- G2 — both directions
+
+  {
+    name = 'G2: fx present yields carriers; fx removed leaves none after reconcile',
+    run = function(harness)
+      local h = harness.mk()
+      addVibHost(h)
+      t.truthy(#carriersOf(h.fm:dump(), 1) > 0, 'carriers present with fx')
+
+      local hostEvt = h.tm:getChannel(1).columns.notes[1].events[1]
+      h.tm:assignEvent(hostEvt, { fx = util.REMOVE })
+      h.tm:flush()
+      t.eq(#carriersOf(h.fm:dump(), 1), 0, 'no carrier survives fx removal')
+    end,
+  },
+
+  ----- Regeneration — the single cents->raw site re-runs under config change
+
+  {
+    name = 'regeneration: a pbRange change rescales carrier values (cents -> raw at flush)',
+    run = function(harness)
+      local h = harness.mk()
+      addVibHost(h)
+      t.eq(carrierAt(h.fm:dump(), 1, 15).val, carrierVal(30, 2), 'peak under pbRange 2')
+
+      h.cm:assign('transient', { pbRange = 4 })
+      h.tm:rebuild()
+      t.eq(carrierAt(h.fm:dump(), 1, 15).val, carrierVal(30, 4),
+        'wider pb range -> smaller raw delta for the same cents')
+    end,
+  },
+
+  ----- Lane-1 only — pb is channel-wide
+
+  {
+    name = 'vibrato on a higher lane emits no carrier (pb is channel-wide)',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1 })
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67,
+                      vel = 100, detune = 0, delay = 0, lane = 2, fx = vib30 })
+      h.tm:flush()
+      t.eq(#carriersOf(h.fm:dump(), 1), 0, 'lane-2 vibrato is inert: no carrier')
+    end,
+  },
+
+  ----- Parse routing — the carrier never surfaces as a user cc lane
+
+  {
+    name = 'carrier code is routed out of cc columns (never a visible cc lane)',
+    run = function(harness)
+      local h = harness.mk()
+      addVibHost(h)
+      local ccCols = h.tm:getChannel(1).columns.ccs
+      t.falsy(ccCols[DELTA_MSB], 'no cc-20 column built from carrier events')
+    end,
+  },
+
+}

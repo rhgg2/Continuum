@@ -319,6 +319,10 @@ function newMidiManager(opts)
     return tokenOf(evt)
   end
 
+  -- 14-bit registration is a wire concern; the fake stores each cc as one
+  -- fractional-valued event, so there's no pair to split. No-op for parity.
+  function mm:wideCC(chan, cc, on) end
+
   function mm:byToken(token)
     local evt = tokenIdx[token]
     if not evt then return nil end

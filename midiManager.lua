@@ -336,7 +336,9 @@ function mm:load(newTake)
   if not newTake then return end
 
   local takeSwapped = take ~= newTake
-  if takeSwapped then take = newTake end
+  -- wideCC registration is per-take config (tm re-asserts it each rebuild from
+  -- the take's hosts); a swapped-in take must not inherit the old one's codes.
+  if takeSwapped then take = newTake; wideMsb = {} end
 
   -- lock is held only by modify() at reload time → this is a self-inflicted reload.
   -- Snapshot the live metadata before the clear so we can skip the ext-data round-trip.

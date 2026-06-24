@@ -152,4 +152,21 @@ return {
       t.eq(#wireCCs(rp, take), 0, 'both MSB and LSB gone')
     end,
   },
+
+  {
+    name = 'wideCC registration clears on take swap (per-take, not inherited)',
+    run = function()
+      local takeA, rp = freshTake('take-A')
+      rp:bindTake('take-B', 'take-B/item', 'take-B/track')
+      local mm = realMM(takeA)
+      mm:wideCC(1, 20, true)
+
+      -- Swap to a different take; cc20 there is a plain 7-bit code, not a carrier.
+      mm:load('take-B')
+      mm:modify(function()
+        mm:add{ evType = 'cc', chan = 1, cc = 20, ppq = 240, val = 64 }
+      end)
+      t.eq(#wireCCs(rp, 'take-B'), 1, 'no LSB companion: registration did not survive the swap')
+    end,
+  },
 }

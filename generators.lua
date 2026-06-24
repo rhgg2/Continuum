@@ -39,4 +39,28 @@ function M.retrig(host, params, ctx)
   return { notes = notes, delta = {} }
 end
 
+-- Kinds whose realisation is a continuous delta stream (carrier ccs), not
+-- structural notes. Drives the rebuild seam's carrier registration.
+M.continuous = { vibrato = true }
+
+--contract: vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
+--contract: ramp-in linear over onset QN; 16 breakpoints/cycle, linear-shaped
+function M.vibrato(host, params, ctx)
+  local startL, endL = host.window[1], host.window[2]
+  local period = periodTicks(params.period, ctx.resolution)   -- ticks per cycle
+  local depth  = params.depth or 0
+  local onset  = (params.onset or 0) * ctx.resolution          -- ramp-in, ticks
+  local step   = period / 16
+  local delta  = {}
+  local i = 0
+  while startL + i * step < endL do
+    local at    = startL + i * step
+    local phase = (at - startL) / period * 2 * math.pi
+    local gain  = onset > 0 and math.min(1, (at - startL) / onset) or 1
+    delta[#delta + 1] = { ppqL = at, val = gain * depth * math.sin(phase), shape = 'linear' }
+    i = i + 1
+  end
+  return { notes = {}, delta = delta }
+end
+
 return M
