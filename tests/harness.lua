@@ -84,11 +84,12 @@ function harness.mk(opts)
       return { ownerTrack = function(take) return reaper.GetMediaItemTake_Track(take) end }
     end
   end }
-  local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = paFacade })
+  local ccm = util.instantiate('ccManager')
+  local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = paFacade, ccm = ccm })
   local vm = util.instantiate('trackerView', { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa })
   cmgr:push('tracker')
 
-  return { fm = mm, cm = cm, ds = ds, tm = tm, vm = vm, ec = vm:ec(), gm = gm, pa = pa,
+  return { fm = mm, cm = cm, ds = ds, tm = tm, vm = vm, ec = vm:ec(), gm = gm, pa = pa, ccm = ccm,
            clipboard = vm:clipboard(), cmgr = cmgr, reaper = fakeReaper }
 end
 

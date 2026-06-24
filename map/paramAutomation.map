@@ -1,5 +1,5 @@
-@module paramAutomation  src=paramAutomation.lua  loc=450  sha=a86b164  mode=chunk
-@deps cm, ds, facade
+@module paramAutomation  src=paramAutomation.lua  loc=432  sha=732c659  mode=chunk
+@deps cm, ds, facade, ccm
 
 # Invariants & contracts
   @invariant  automation bus is 126 — 127 is wiring's parking bus, wiring allocates 0..125
@@ -16,15 +16,14 @@
 
 # Private state
   @state AUTO_BUS = 126  @ 18
-  @state CC_IDENT = 'JS:Continuum CC'  @ 19
-  @state SLOTS = 16  @ 20
-  @state META_PEXT = 'P_EXT:ctm_paramAuto'  @ 21
-  @state TOP_LANE = 119  @ 22   -- 120..127 are channel-mode messages
-  @state P_VALUE, P_SRC, P_DST, P_LISTEN = 0, 16, 32, 48  @ 25
-  @state pa = {}  @ 27
-  @state DECAY = 0.9  @ 298
-  @state paramCache = {}  @ 300   -- [fxGuid] = { count, params, gen, sorted }
-  @state frecencyGen = 0  @ 301   -- bumped on every frecency write; stales sorted caches
+  @state SLOTS = 16  @ 19
+  @state META_PEXT = 'P_EXT:ctm_paramAuto'  @ 20
+  @state TOP_LANE = 119  @ 21   -- 120..127 are channel-mode messages
+  @state P_VALUE, P_SRC, P_DST, P_LISTEN = 0, 16, 32, 48  @ 24
+  @state pa = {}  @ 26
+  @state DECAY = 0.9  @ 280
+  @state paramCache = {}  @ 282   -- [fxGuid] = { count, params, gen, sorted }
+  @state frecencyGen = 0  @ 283   -- bumped on every frecency write; stales sorted caches
 
 # Private functions
   @fn arrange()  @ 15
@@ -32,70 +31,70 @@
       -- scratch track, but its automation belongs to the track owning its slot.
   @fn ownerTrack(take)  @ 16
   -- REAPER lookups
-  @fn trackByGuid(guid)  @ 31
-  @fn fxIndexByGuid(track, guid)  @ 42
-  @fn resolveFx(trackGuid, fxGuid)  @ 48
-  @fn ccNodeIndex(track)  @ 55
-      -- fx_ident for a JSFX is the bare Effects-relative path (cf. routingManager fxIdentAt)
-  @fn eachTake(visit)  @ 65
-  @fn boundTrack()  @ 75
+  @fn trackByGuid(guid)  @ 30
+  @fn fxIndexByGuid(track, guid)  @ 41
+  @fn resolveFx(trackGuid, fxGuid)  @ 47
+  @fn eachTake(visit)  @ 53
+  @fn boundTrack()  @ 63
   -- Gather + desired specs
-  @fn gatherBindings()  @ 81
+  @fn gatherBindings()  @ 69
   -- Apply
-  @fn readMirror(track)  @ 138
-  @fn writeMirror(track, spec)  @ 145
-  @fn setPlink(track, fxIdx, param, ccIdx, slot, scale, offset)  @ 149
-  @fn clearPlink(track, fxIdx, param)  @ 161
-  @fn writeBanks(track, ccIdx, spec)  @ 167
-  @fn reconcileAutoSends(track, dstGuids)  @ 181
+  @fn readMirror(track)  @ 126
+  @fn writeMirror(track, spec)  @ 133
+  @fn setPlink(track, fxIdx, param, ccIdx, slot, scale, offset)  @ 137
+  @fn clearPlink(track, fxIdx, param)  @ 149
+  @fn writeBanks(track, ccIdx, spec)  @ 155
+  @fn reconcileAutoSends(track, dstGuids)  @ 169
       -- Ours by signature: midi-only send whose src bus is the automation bus.
       -- Encoding mirrors routingManager createSend/readSendChans (bits 14/22, +1-biased).
-  @fn applyTrack(track, spec, mirror)  @ 210
+  @fn applyTrack(track, spec, mirror)  @ 198
   -- Allocation
-  @fn usedLanes(srcTrack, chan)  @ 255
+  @fn usedLanes(srcTrack, chan)  @ 237
       -- Authored lanes are track-unique across takes (the filter bank is shared per
       -- track): used = bound lanes, user cc columns, and event-bearing ccs on the
       -- channel, across every take on the track.
-  @fn allocLane(srcTrack, chan)  @ 274
-  @fn allocBusCode()  @ 281
+  @fn allocLane(srcTrack, chan)  @ 256
+  @fn allocBusCode()  @ 263
   -- Frecency + param cache
-  @fn fxIdentAt(track, fxIdx)  @ 303
+  @fn fxIdentAt(track, fxIdx)  @ 285
 
 # Public API (pa:*)
-  @api pa.computeDesired(bindings)  @ 102
+  @api pa.computeDesired(bindings)  @ 90
       -- Pure: bindings -> { [trackGuid] = trackSpec }. Pooled duplicates collapse
       -- via the seen-keys; slot order is sorted for a stable REAPER image.
-  @api pa.frecencyOrder(params, fxScores)  @ 309
+  @api pa.frecencyOrder(params, fxScores)  @ 291
       @contract  pure, stable: decayed score desc, then param index; fxScores may be nil
-  @api pa:apply()  @ 327
+  @api pa:apply()  @ 309
       @contract  no-op (and no undo point) when every track's mirror already matches
-  @api pa:automate(chan, target)  @ 344
+  @api pa:automate(chan, target)  @ 326
       @contract  chan is the tracker's 1-based channel; returns the allocated cc lane, or nil + reason
-  @api pa:unautomate(chan, lane)  @ 363
-  @api pa:binding(chan, lane)  @ 372
-  @api pa:targets()  @ 378
+  @api pa:unautomate(chan, lane)  @ 345
+  @api pa:binding(chan, lane)  @ 354
+  @api pa:targets()  @ 360
       @contract  palette rows from the wiring facade's cone walk; {} without a take or wiring
-  @api pa:params(trackGuid, fxGuid)  @ 386
+  @api pa:params(trackGuid, fxGuid)  @ 368
       @contract  cached per fxGuid (param-count change invalidates); frecency-hot params first
-  @api pa:bumpFrecency(trackGuid, fxGuid, paramName)  @ 409
+  @api pa:bumpFrecency(trackGuid, fxGuid, paramName)  @ 391
       @contract  advances the ident's use counter; the param's score decays to it, then +1
-  @api pa:floatFx(trackGuid, fxGuid)  @ 426
+  @api pa:floatFx(trackGuid, fxGuid)  @ 408
       @contract  floats the fx ui; true only when pa floated it — caller owns popping it down
-  @api pa:unfloatFx(trackGuid, fxGuid)  @ 433
-  @api pa:lastTouched()  @ 439
+  @api pa:unfloatFx(trackGuid, fxGuid)  @ 415
+  @api pa:lastTouched()  @ 421
       @contract  last-touched track-fx param as guids + name; nil for take/container/input fx
 
 # Uses (outbound edges)
-  @use call    cm.boundTake  @ 76
-  @use call    ds.assign  @ 358, 368, 421
-  @use call    ds.get  @ 351, 364, 373, 403, 413
-  @use call    ds.getAt  @ 84, 259, 261, 284
-  @use call    facade.get  @ 15, 380
-  @use call    util.atomic  @ 338
-  @use call    util.deepEq  @ 333
-  @use call    util.key  @ 109, 213, 215
-  @use call    util.print  @ 169
-  @use call    util.serialise  @ 146
+  @use call    ccm.claim  @ 219
+  @use call    ccm.release  @ 212
+  @use call    cm.boundTake  @ 64
+  @use call    ds.assign  @ 340, 350, 403
+  @use call    ds.get  @ 333, 346, 355, 385, 395
+  @use call    ds.getAt  @ 72, 241, 243, 266
+  @use call    facade.get  @ 15, 362
+  @use call    util.atomic  @ 320
+  @use call    util.deepEq  @ 315
+  @use call    util.key  @ 97, 201, 203
+  @use call    util.print  @ 157
+  @use call    util.serialise  @ 134
   @use require util  @ 10
 
 # REAPER API surface
@@ -103,7 +102,7 @@
   @reaper GetTrackGUID
   @reaper CountTracks
   @reaper GetTrack
-  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetNamedConfigParm, TrackFX_SetNamedConfigParm, TrackFX_SetParam, TrackFX_Delete, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_GetNumParams, TrackFX_GetParamName, TrackFX_GetFloatingWindow, TrackFX_Show
+  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_SetNamedConfigParm, TrackFX_SetParam, TrackFX_GetNamedConfigParm, TrackFX_GetNumParams, TrackFX_GetParamName, TrackFX_GetFloatingWindow, TrackFX_Show
   @reaper CountMediaItems
   @reaper GetMediaItem
   @reaper CountTakes

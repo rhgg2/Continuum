@@ -1,0 +1,28 @@
+@module ccManager  src=ccManager.lua  loc=52  sha=untracked  mode=chunk
+
+# Invariants & contracts
+  @invariant  the node exists iff a producer claims it; release reaps it when the last claim drops
+  @contract  claim pins the node at index 0, records the producer's claim, returns 0
+  @contract  release drops the claim; returns the surviving node index, or nil if it reaped/absent
+  @reaper  TrackFX_AddByName/CopyToTrack/Delete; node = fx_type JS with fx_ident 'Continuum CC'
+
+# Shapes
+  @shape  claims = { [producer:str] = { [trackGuid:str] = MediaTrack } }
+
+# Private state
+  @state CC_ADDNAME = 'JS:Continuum CC'  @ 10
+  @state CC_IDENT = 'Continuum CC'  @ 11
+  @state ccm = {}  @ 13
+  @state claims = {}  @ 14   -- producer -> { guid -> track }
+
+# Private functions
+  @fn nodeIndex(track)  @ 17
+      -- fx_ident for a JSFX is the bare Effects-relative path (cf. routingManager fxIdentAt)
+
+# Public API (ccm:*)
+  @api ccm:claim(producer, track)  @ 27
+  @api ccm:release(producer, track)  @ 42
+
+# REAPER API surface
+  @reaper TrackFX_GetCount, TrackFX_GetNamedConfigParm, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete
+  @reaper GetTrackGUID

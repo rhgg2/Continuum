@@ -31,7 +31,8 @@ end
 local mm = util.instantiate('midiManager',    { take = nil })
 local tm = util.instantiate('trackerManager', { mm = mm, cm = cm, ds = ds })
 local gm = util.instantiate('groupManager',   { tm = tm, ds = ds })
-local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = facade })
+local ccm = util.instantiate('ccManager')
+local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = facade, ccm = ccm })
 local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa, facade = facade })
 
 local tr = util.instantiate('trackerRender',

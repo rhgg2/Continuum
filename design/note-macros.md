@@ -296,8 +296,11 @@ into a synthesised **sum node** — the additive merge `plink` cannot
 express (single-source-per-param). **R5 defers to cv-2:** its phase-2
 re-founding dissolves the listen bank and value sliders, so do not
 migrate plink under note-macros — land the add bank *beside* the
-untouched listen bank. The `paramAutomation` glue that places and
-configures the node is interim; the sum kernel is permanent.
+untouched listen bank. Node placement and lifecycle now live in
+**`ccManager`** (`ccm`) — a neutral owner `paramAutomation` and the add
+producer share: the node exists iff a producer claims it, and `ccm`
+reaps it when the last claim drops. That owner is interim glue cv-2
+promotes to its applier's node handle; the sum kernel is permanent.
 
 ## Invariants
 

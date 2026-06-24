@@ -8,7 +8,7 @@
 --shape: paramFrecency (ds global) = { [fxIdent] = { n=int, params={ [name]={s=num,n0=int} } } }
 --contract: apply() is a full-project idempotent reconcile; mirror-matching tracks are untouched
 local util = require 'util'
-local cm, ds, facade = (...).cm, (...).ds, (...).facade
+local cm, ds, facade, ccm = (...).cm, (...).ds, (...).facade, (...).ccm
 
 -- Source-track resolution is logical, not physical: a parked take hosts on the
 -- scratch track, but its automation belongs to the track owning its slot.
@@ -16,7 +16,6 @@ local function arrange() return facade and facade.get('arrange') end
 local function ownerTrack(take) return take and arrange().ownerTrack(take) end
 
 local AUTO_BUS  = 126
-local CC_IDENT  = 'JS:Continuum CC'
 local SLOTS     = 16
 local META_PEXT = 'P_EXT:ctm_paramAuto'
 local TOP_LANE  = 119   -- 120..127 are channel-mode messages
@@ -49,17 +48,6 @@ local function resolveFx(trackGuid, fxGuid)
   local track = trackByGuid(trackGuid)
   local fxIdx = track and fxIndexByGuid(track, fxGuid)
   if fxIdx then return track, fxIdx end
-end
-
--- fx_ident for a JSFX is the bare Effects-relative path (cf. routingManager fxIdentAt)
-local function ccNodeIndex(track)
-  for i = 0, reaper.TrackFX_GetCount(track) - 1 do
-    local _, fxType = reaper.TrackFX_GetNamedConfigParm(track, i, 'fx_type')
-    if fxType == 'JS' then
-      local _, ident = reaper.TrackFX_GetNamedConfigParm(track, i, 'fx_ident')
-      if ident == 'Continuum CC' then return i end
-    end
-  end
 end
 
 local function eachTake(visit)
@@ -219,22 +207,16 @@ local function applyTrack(track, spec, mirror)
   end
 
   if not spec then
-    local ccIdx = ccNodeIndex(track)
-    if ccIdx then reaper.TrackFX_Delete(track, ccIdx) end
+    -- ccm reaps the node only when no producer still claims it; if the add bank
+    -- holds it, release hands back the surviving index so we clear just our range.
+    local ccIdx = ccm:release('pa', track)
+    if ccIdx then writeBanks(track, ccIdx, { filter = {}, listen = {} }) end
     reconcileAutoSends(track, {})
     writeMirror(track, nil)
     return
   end
 
-  local ccIdx = ccNodeIndex(track)
-  if not ccIdx then
-    ccIdx = reaper.TrackFX_AddByName(track, CC_IDENT, false, -1)
-    if ccIdx < 0 then error('paramAutomation: Continuum CC.jsfx not found in Effects') end
-  end
-  if ccIdx ~= 0 then
-    reaper.TrackFX_CopyToTrack(track, ccIdx, track, 0, true)
-    ccIdx = 0
-  end
+  local ccIdx = ccm:claim('pa', track)
   writeBanks(track, ccIdx, spec)
 
   for s, l in ipairs(spec.listen) do

@@ -100,4 +100,25 @@ return {
     end,
   },
 
+  {
+    name = 'co-resident add bank keeps the node alive when pa unbinds',
+    run = function(harness)
+      local h, r, src, dst = mkScenario(harness)
+      local lane = h.pa:automate(1, TARGET)
+
+      -- stand in for the add producer: it claims dst's node and writes an add-bank
+      -- slot (param 64 = asrc slot 0). pa unbinding must not reap it.
+      h.ccm:claim('macro', dst)
+      r.TrackFX_SetParam(dst, 0, 64, 5)
+
+      h.pa:unautomate(1, lane)
+
+      t.eq(#r._state.fxByTrack[dst], 2, 'node survives — the add producer still claims it')
+      t.eq(namedParm(r, dst, 0, 'fx_ident'), 'Continuum CC', 'CC node still at the head')
+      t.eq(r.TrackFX_GetParam(dst, 0, P_LISTEN), -1, 'pa cleared its own listen range')
+      t.eq(r.TrackFX_GetParam(dst, 0, 64), 5, 'add-bank slot survived')
+      t.eq(#r._state.fxByTrack[src], 0, 'source node reaped — only pa claimed it')
+    end,
+  },
+
 }
