@@ -187,7 +187,7 @@ return {
       for _, c in ipairs(h.fm:dump().ccs) do
         if c.evType == 'cc' and c.cc == DELTA_MSB then n = n + 1 end
       end
-      t.truthy(n >= 8, 'the view path realises vibrato as a carrier stream')
+      t.truthy(n >= 4, 'the view path realises vibrato as a sparse carrier stream (extrema + anchors)')
     end,
   },
 

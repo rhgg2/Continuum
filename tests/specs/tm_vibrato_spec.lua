@@ -9,8 +9,8 @@ local util = require('util')
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 local DELTA_MSB = 20
 
--- depth 30c, period 1/4 QN: at res 240 one cycle = 60 ticks; 16 breakpoints/
--- cycle => peak (sin=1) at ppqL 15, trough at 45, zero crossing at 0.
+-- depth 30c, period 1/4 QN: at res 240 one cycle = 60 ticks; breakpoints at
+-- sine extrema => peak at ppqL 15, trough at 45; stream anchored 0 at both ends.
 local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
 
 local function centsToRaw(cents, pbRange)
@@ -53,10 +53,37 @@ return {
       local dump = h.fm:dump()
       local cs   = carriersOf(dump, 1)
       t.truthy(#cs >= 8, 'a multi-breakpoint carrier stream is emitted')
-      for _, c in ipairs(cs) do t.eq(c.shape, 'linear', 'msb breakpoints are linear-shaped') end
+      for _, c in ipairs(cs) do t.eq(c.shape, 'slow', 'breakpoints are slow-shaped (half-cosine bridge)') end
       t.eq(carrierAt(dump, 1, 0).val,  carrierVal(0),   'zero crossing -> 8192/128')
       t.eq(carrierAt(dump, 1, 15).val, carrierVal(30),  'peak  -> +depth cents in pb units')
       t.eq(carrierAt(dump, 1, 45).val, carrierVal(-30), 'trough -> -depth cents in pb units')
+    end,
+  },
+
+  ----- Window end re-centres the channel-wide carrier (no residual bend)
+
+  {
+    name = 'vibrato carrier returns to centre at the window end (no residual channel bend)',
+    run = function(harness)
+      local h = harness.mk()
+      addVibHost(h)
+      local cs   = carriersOf(h.fm:dump(), 1)
+      local last = cs[#cs]
+      t.eq(last.ppq, 240, 'terminal breakpoint sits at the host window end')
+      t.eq(last.val, carrierVal(0), 'terminal value is centre -- delta 0, carrier re-centred')
+    end,
+  },
+
+  ----- Take start re-centres the carrier (CC chase is safe across loop/seek)
+
+  {
+    name = 'carrier is anchored to centre at take start (chase-safe before the first host)',
+    run = function(harness)
+      local h = harness.mk()
+      addVibHost(h, { ppq = 120, endppq = 240 })
+      local first = carriersOf(h.fm:dump(), 1)[1]
+      t.eq(first.ppq, 0, 'a centre anchor precedes the host window at take start')
+      t.eq(first.val, carrierVal(0), 'take-start anchor is centre (delta 0)')
     end,
   },
 

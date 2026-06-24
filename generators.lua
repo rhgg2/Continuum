@@ -44,22 +44,27 @@ end
 M.continuous = { vibrato = true }
 
 --contract: vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
---contract: ramp-in linear over onset QN; 16 breakpoints/cycle, linear-shaped
+--contract: breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
+--contract: carrier returns to 0 (centre) at window end -- no residual bend on the channel
 function M.vibrato(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local period = periodTicks(params.period, ctx.resolution)   -- ticks per cycle
   local depth  = params.depth or 0
   local onset  = (params.onset or 0) * ctx.resolution          -- ramp-in, ticks
-  local step   = period / 16
-  local delta  = {}
-  local i = 0
-  while startL + i * step < endL do
-    local at    = startL + i * step
-    local phase = (at - startL) / period * 2 * math.pi
-    local gain  = onset > 0 and math.min(1, (at - startL) / onset) or 1
-    delta[#delta + 1] = { ppqL = at, val = gain * depth * math.sin(phase), shape = 'linear' }
-    i = i + 1
+
+  -- Extrema-only breakpoints; 'slow' bridges each pair as a half-cosine.
+  -- Anchored at 0 both ends; the terminal 0 re-centres the channel carrier.
+  local delta = { { ppqL = startL, val = 0, shape = 'slow' } }
+  local k  = 0
+  local at = startL + period / 4
+  while at < endL do
+    local gain = onset > 0 and math.min(1, (at - startL) / onset) or 1
+    local sign = k % 2 == 0 and 1 or -1
+    delta[#delta + 1] = { ppqL = at, val = sign * gain * depth, shape = 'slow' }
+    k  = k + 1
+    at = startL + period / 4 + k * period / 2
   end
+  delta[#delta + 1] = { ppqL = endL, val = 0, shape = 'slow' }
   return { notes = {}, delta = delta }
 end
 

@@ -1335,6 +1335,13 @@ do
           end)
         end
 
+        -- Anchor carrier to 0 at take start; CC chase re-establishes centre
+        -- on any loop/seek before the first host. see design/note-macros.md § Continuous realisation
+        if #predictedDelta > 0 and predictedDelta[1].ppq ~= 0 then
+          util.add(predictedDelta, { evType = 'cc', chan = chan, cc = DELTA_MSB,
+                                     ppq = 0, val = (8192 + centsToRaw(0)) / 128, shape = 'slow' })
+        end
+
         local cRemove, cAdd = reconcileCarrier(carrierExisting[chan], predictedDelta)
         if #cRemove > 0 or #cAdd > 0 then
           mm:modify(function()

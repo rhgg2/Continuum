@@ -251,11 +251,22 @@ next-lane-1-note lookup (for `slide.target = 'next'`).
   non-macro traffic is value-identical.
 - **Smoothness.** REAPER interpolates shaped cc events into a dense
   stream before the chain sees them, so the wire stays sparse
-  (breakpoints at curve extrema, bezier/linear shapes) while the node
-  sums the interpolated streams. If interpolation density or
-  shape-on-14-bit-pair coherence disappoints (verify early), the
-  generator densifies to square breakpoints — a generator-side knob,
-  no mechanism change.
+  (breakpoints at curve extrema) while the node sums the interpolated
+  streams. If interpolation density or shape-on-14-bit-pair coherence
+  disappoints (verify early), the generator densifies to square
+  breakpoints — a generator-side knob, no mechanism change.
+- **Bounded carrier.** The channel carrier is pinned to centre wherever
+  a held value would otherwise bend an unrelated note. *Per host:* the
+  stream is anchored 0 at both window ends, so a vibrato leaves no
+  residual offset on notes after it. *Per channel:* a centre anchor at
+  **take start** (ppq 0), because REAPER's CC chase re-sends the last
+  value at-or-before the play/loop/seek point — without it, a loop that
+  cuts a vibrato mid-cycle (or a host that starts partway through the
+  take) carries a stale offset back across every note before the first
+  host. The two together make the carrier chase-correct from any
+  position. Vibrato seats two breakpoints per cycle — the sine's extrema
+  — bridged by REAPER's `slow` (slow start/end), a half-cosine that
+  reads back as a smooth sine; the dense-linear toy is retired.
 - **Regeneration.** Delta events carry raw units, so a pbRange or
   temper change regenerates them via the ordinary configChanged →
   rebuild path — the same trigger that re-realises detune.
