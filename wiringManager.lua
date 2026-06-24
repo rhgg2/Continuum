@@ -1570,7 +1570,10 @@ function wm:diff(target, snap)
     local sOffs = (sOn and sm.tgtOffset) or 0
     local tNch  = (tOn and tm.nchan) or 0
     local sNch  = (sOn and sm.nchan) or 0
-    if (fresh and (tOn or tGain ~= 1.0))
+    -- A freshly minted newTrack inherits REAPER's master-send-ON default; a sink
+    -- (mainSend.on=false) must assert it OFF or its inbound sends double-route to master.
+    local sinkFreshTrack = fresh and t_.trackKind == 'newTrack' and not tOn
+    if (fresh and (tOn or tGain ~= 1.0)) or sinkFreshTrack
        or (not fresh and (tOn ~= sOn or tGain ~= sGain
                                      or tOffs ~= sOffs or tNch ~= sNch)) then
       util.add(ops, { op = 'setMainSend', trackKey = trackKey,

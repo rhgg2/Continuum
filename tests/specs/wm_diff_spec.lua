@@ -205,6 +205,22 @@ return {
     end,
   },
   {
+    name = "diff: fresh newTrack with mainSend off emits setMainSend(false) — REAPER mints master-send ON",
+    run = function(harness)
+      local _, wm = mkWm(harness)
+      local target = {
+        ['guid-A|guid-B'] = {
+          trackKind='newTrack', id=nil,
+          fx = { { id=nil, ident='JS:sink' } },
+          mainSend = {on=false}, sends = {},
+        },
+      }
+      local ops = byOp(wm:diff(target, {}))
+      t.eq(#ops.setMainSend, 1, 'a sink newTrack must clear REAPER default master-send')
+      t.eq(ops.setMainSend[1].value, false)
+    end,
+  },
+  {
     name = "diff: target-only sourceTrack trackKey emits no createTrack and no ext-state op (trackKey ≡ id)",
     run = function(harness)
       local _, wm = mkWm(harness)
