@@ -2,8 +2,10 @@
 
 > Design note. **Retrig (structural) and vibrato's Lua slice (continuous)
 > — the v1 proving pair — have both landed** (`tm_macro_spec`,
-> `tm_vibrato_spec`). Remaining for vibrato: the audible add bank and the
-> proper carrier allocation (§ v1 scope).
+> `tm_vibrato_spec`), and the node's **add bank** — the audible sum — is
+> now written (`Continuum CC.jsfx`, REAPER-verify pending). Remaining for
+> vibrato: wiring the add bank from take hosts, and the proper carrier
+> allocation (§ v1 scope).
 >
 > A *macro* is per-note generative intent —
 > retrig, trill, arp, vibrato, slide — expanded mechanically into
@@ -411,9 +413,16 @@ flush triggers. **Vibrato's Lua slice has now landed** (`tm_vibrato_spec`):
 routing of the carrier code out of columns — all on mm's `wideCC` 14-bit
 primitive (`mm_wide_cc_spec`), which owns the split/pair so the seam and
 generator deal in one fixed-point value. The carrier is a **toy fixed
-`cc=20`**; what remains — pinning **G5** — is the proper per-channel
-banded/relocatable allocation (§ Delta-code allocation) and the node's
-**add bank** (the audible sum; deferred, REAPER-verified).
+`cc=20`**. The node's **add bank** — the audible sum (`base + (carrier −
+centre)`, carrier swallowed) — is now **written** in `Continuum CC.jsfx`
+as a self-contained sum kernel: a third bank beside filter/listen, `adst`
+encoding a cc code or `2048+chan` pitchbend, summed and clamped once at
+emission (REAPER-verify pending). It is **not yet wired** to take hosts —
+the node-config writer is single-owner but its home is unsettled (not
+paramAutomation, whose concern is param↔automation binding). What remains
+to pin **G5**: that REAPER verification, the add-bank config writer, and
+the proper per-channel banded/relocatable allocation (§ Delta-code
+allocation).
 Remaining kinds are table entries afterwards. The plink migration (R5)
 is sequenced independently.
 
