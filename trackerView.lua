@@ -22,9 +22,10 @@
 --shape: plan = { col, e, [newppq], [newEndppq], [newDelay] }
 --invariant: plan is consumed by writePlans / conformOverlaps
 
-local util    = require 'util'
-local timing  = require 'timing'
-local tuning  = require 'tuning'
+local util       = require 'util'
+local timing     = require 'timing'
+local tuning     = require 'tuning'
+local generators = require 'generators'
 
 local tm, cm, ds, cmgr, gm, pa, facade =
   (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa, (...).facade
@@ -1686,6 +1687,7 @@ function tv:setNoteFx(uuid, fxOrRemove)
   if not note then return end
   tm:assignEvent(note, { fx = fxOrRemove })
   tm:flush()
+  pa:apply()   -- spawn/reap the CC node when a carrier first appears or last leaves the track
 end
 
 -- Set one field of fx entry `index`, preserving sibling entries, then flush.
@@ -1697,6 +1699,26 @@ function tv:setFxField(uuid, index, field, value)
   for i, entry in ipairs(fx) do list[i] = (i == index) and util.clone(entry) or entry end
   list[index][field] = value
   self:setNoteFx(uuid, list)
+end
+
+-- Toggle a macro kind on/off, preserving the other category's entry; render owns defaults.
+-- Emptying the list clears fx entirely (util.REMOVE), never an empty list.
+function tv:setFxKindActive(uuid, entry, active)
+  local fx = self:noteFx(uuid)
+  local list = {}
+  if fx then
+    for _, e in ipairs(fx) do if e.kind ~= entry.kind then list[#list + 1] = e end end
+  end
+  if active then list[#list + 1] = util.deepClone(entry) end
+  self:setNoteFx(uuid, (#list > 0) and list or util.REMOVE)
+end
+
+-- Continuous kind on a non-lane-1 host is inert: pb is channel-wide, bending it
+-- would violate detune doctrine. Editor flags it; see design/note-macros.md § UI.
+function tv:fxKindInert(uuid, kind)
+  if not generators.continuous[kind] then return false end
+  local note = tm:byUuid(uuid)
+  return note ~= nil and (note.lane or 1) ~= 1
 end
 
 ----- Deletion

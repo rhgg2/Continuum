@@ -123,7 +123,7 @@ local specs = {
   'vm_conform_overlap_spec',
   'vm_take_properties_spec',
   'vm_scale_spec',
-  'vm_retrig_ui_spec',
+  'vm_fx_ui_spec',
   'tracker_page_spec',
   'sample_page_spec',
   'am_spec',

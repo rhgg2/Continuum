@@ -353,7 +353,7 @@ Mirrors PC synthesis end to end:
   dirties it; so does a pbRange/temper change. Same pure helper as the
   rebuild sweep.
 
-## UI — retrig editor
+## UI — note-FX editor
 
 Macros surface through two affordances on the note under the cursor.
 Structural kinds (retrig) host on **any lane**: the expansion walks
@@ -371,35 +371,48 @@ non-empty, drawn by the same `smallGlyph` machinery as the delay `*`
 marker (`trackerRender.lua`). Pure display — no column, no cursor part.
 
 **Editor — `Super-X` on the focused note.** Opens a small modal (a
-`modalHost` kind), a no-op on a non-note cell. Fields stack one per row,
-each fully mouse-editable (period a dropdown, ramp a `numberStepper`),
-modelled on `temperEditor`'s generators panel; `Clear`/`Cancel`/`Done`
-buttons mirror the key actions. The field set per kind is **pure data**
-(`FX_FIELDS` in `trackerRender.lua`): a `choice` widget (**Up/Down** step
-the list) or an `int` widget (**Left/Right** adjust by the base step,
-**Ctrl** for coarse — the grid's `nudgeCoarse` idiom). Keys fire only
-with no widget focused (`IsAnyItemActive`), so typing in a field doesn't
-double-act. The editor **live-writes** `note.fx` and flushes on every
-adjust, so the grid previews the expansion (host tail truncates, badge
-appears) à la `swingEditor`; **Esc**/`Cancel` restore the open-snapshot,
-**Enter**/`Done` keep, **Del**/`Clear` clear (`util.REMOVE` through
+`modalHost` kind), a no-op on a non-note cell. The body is **two toggleable
+sections, one per macro kind** (Retrig, Vibrato — B's one-per-category model,
+below): a checkbox header plus, when on, its fields one per row, modelled on
+`temperEditor`'s generators panel; `Clear`/`Cancel`/`Done` buttons mirror the
+key actions. The field set per kind is **pure data** (`FX_FIELDS` in
+`trackerRender.lua`): a `choice` widget (a dropdown) or an `int` widget (a
+`numberStepper`) — a new kind ships a generator + one descriptor entry. A
+**row cursor** drives the keyboard: **Up/Down** pick a row, **Left/Right**
+adjust it (choice steps the list; int by the base step, **Ctrl** for coarse —
+the grid's `nudgeCoarse` idiom), and on a header **Left/Right** toggle the
+section. Keys fire only with no widget focused (`IsAnyItemActive`), so typing
+in a field doesn't double-act. A **pitch-targeted continuous** kind on a
+non-lane-1 host is **flagged inert** in the modal (its carrier would bend the
+whole channel) yet still stored as dead data, like higher-lane detune. The
+editor **live-writes** `note.fx` and flushes on every adjust, so the grid
+previews the expansion (host tail truncates, badge appears) à la `swingEditor`;
+**Esc**/`Cancel` restore the open-snapshot, **Enter**/`Done` keep, **Del**
+removes the focused section, **Clear** clears all `fx` (`util.REMOVE` through
 `assignEvent`). The editing logic lives on the view —
-`tv:cursorNote`/`setNoteFx`/`setFxField`, one generic writer for every
-kind — addressed by durable uuid; the render walks the descriptor.
-Centre-anchored for v1 (the `modalHost` default), not anchored at the cell.
+`tv:cursorNote`/`setNoteFx`/`setFxKindActive`/`setFxField`/`fxKindInert`, one
+generic writer for every kind — addressed by durable uuid; the render walks the
+descriptor. Centre-anchored for v1 (the `modalHost` default), not anchored at
+the cell.
 
-v1 exposes a **single retrig entry** per note. The list is real in the
-model; the multi-entry stack UI waits (open question below). `Super-X`
-on a note with no `fx` seeds a default
-`{kind='retrig', period={1,4}, ramp=0}` and opens on it; a clear key in
-the popup removes the entry (`util.REMOVE` through `assignEvent`, never
-`nil`).
+v1 authors **one entry per category** — at most one structural macro and one
+continuous macro per note (B). The two never conflict (structural derives
+fxNotes, continuous a delta stream; sums commute), so the editor bounds the
+real list to two toggleable sections rather than a free multi-entry stack
+(deferred, open question below). With one kind per category today,
+section-per-kind *is* one-per-category; a category grows an in-section kind
+selector when it gains a second kind (trill/arp, slide). `Super-X` opens on the
+note's current `fx` — both sections reflecting it, off for a fresh note — and
+the user toggles a section on to author it. Removing the last entry clears `fx`
+(`util.REMOVE` through `assignEvent`, never `nil` / empty list).
 
-| field | shown | adjust | range |
-|---|---|---|---|
-| kind | `retrig` | — (fixed in v1) | — |
-| `period` | QN fraction `1/4` | Up/Down cycle the ladder ½·⅓·¼·⅙·⅛ QN | from the ladder |
-| `ramp` | signed `-12` | Shift `±` fine, Ctrl `±` coarse | signed; vel clamps 1..127 per fxNote |
+| section | field | shown | adjust | range |
+|---|---|---|---|---|
+| Retrig | `period` | QN fraction `1/4` | ←→ cycle the ladder ½·⅓·¼·⅙·⅛ QN | from the ladder |
+| Retrig | `ramp` | signed `-12` | ←→ base ±1, Ctrl ±10 | signed; vel clamps 1..127 per fxNote |
+| Vibrato | `period` | QN fraction `1/2` | ←→ cycle the ladder | from the ladder |
+| Vibrato | `depth` | cents `30` | ←→ base ±1, Ctrl ±10 | 0..200 cents |
+| Vibrato | `onset` | QN `1` | ←→ base ±1, Ctrl ±4 | 0..16 QN ramp-in |
 
 ## v1 scope — the proving pair
 
@@ -407,9 +420,10 @@ the popup removes the entry (`util.REMOVE` through `assignEvent`, never
 `generators.lua` (pure module), the rebuild expansion step
 (`reconcileFx`, mirroring `reconcilePCsForChan`), and `tm_macro_spec`
 pinning G1–G4 plus tail-clamp, velocity-ramp, and PC interplay. The
-retrig **UI** — badge + `Super-X` editor (§ UI) — **has landed**
-(`vm_retrig_ui_spec` pins the `cursorNote`/`setNoteFx`/`bumpRetrig`
-path; the popup's key dispatch is verified in REAPER).
+retrig **UI** — badge + `Super-X` editor (§ UI) — **has landed**, and the
+**vibrato authoring UI** now rides the same editor (`vm_fx_ui_spec` pins the
+`cursorNote`/`setNoteFx`/`setFxKindActive`/`setFxField`/`fxKindInert` path; the
+modal's row-cursor key dispatch is verified in REAPER).
 Flush-time reconcile (`dirtyFxHosts`) and the R2/R4 refactors are
 deferred fast-follows — correctness rides the rebuild path, which every
 flush triggers. **Vibrato's Lua slice has now landed** (`tm_vibrato_spec`):
@@ -426,7 +440,12 @@ emission (REAPER-verify pending). It is now **wired**: `paramAutomation`'s
 apply reconcile gathers each track's baked carriers (cc = `DELTA_MSB`) and
 writes the add bank beside filter/listen on the same `ccm`-owned node — a
 fourth bank on pa's sweep, not a second producer, so the node lives iff
-filter ∪ listen ∪ add is non-empty. What remains to pin **G5**: the REAPER
+filter ∪ listen ∪ add is non-empty. The reconcile fires from the editor
+(`tv:setNoteFx`, the fx-authoring funnel) and on bind — the bank keys on the
+carrier *set*, not its positions or values (those ride the stream), so only a
+carrier's first appearance / last removal on a track need it; an off-editor
+note-delete leaves a harmless empty slot that self-heals on the next bind.
+What remains to pin **G5**: the REAPER
 verification and the proper per-channel banded/relocatable allocation
 (§ Delta-code allocation).
 Remaining kinds are table entries afterwards. The plink migration (R5)
@@ -682,10 +701,11 @@ generator.
 - **Trill cents: structural detune vs delta stream.** Structural is
   correct-by-existing-machinery but seats absorbers at trill rate;
   both ride the same wire now, so decide after watching it run.
-- **Gen stack UI.** Settled for v1: a single retrig entry per note
-  (§ UI). The model carries a list; the multi-entry stack UI — and the
-  R16 fx-column that would show it densely — waits on the model proving
-  out across more kinds.
+- **Gen stack UI.** v1 authors **one entry per category** — one structural +
+  one continuous, two toggleable sections (§ UI, B). The model carries an
+  unbounded list; the **free multi-entry stack** UI — repeated kinds, reorder,
+  and the R16 fx-column that would show it densely — still waits, now on demand
+  rather than on the model (two kinds, one per category, have proven it out).
 - **Bake-on-export.** Address rewrite + merge of delta streams into
   their target lanes for plain-MIDI export; densification cost paid
   only there.

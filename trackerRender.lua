@@ -1788,28 +1788,39 @@ end
 local renderer = {}
 
 
------ Note FX editor (retrig)
+----- Note FX editor (retrig + vibrato)
 
--- Note-FX editor: per-kind field set is pure data (FX_FIELDS), so a new fx
--- type ships a generator + one entry. Keys/why: design/note-macros.md § UI.
-local DEFAULT_RETRIG = { kind = 'retrig', period = { 1, 4 }, ramp = 0 }
+-- Two toggleable sections (one per kind); FX_FIELDS is pure data so a new kind ships a
+-- generator + one entry. Cursor: Up/Down pick a row, Left/Right adjust. see design/note-macros.md § UI.
+local FX_KINDS    = { 'retrig', 'vibrato' }
+local KIND_LABELS = { retrig = 'Retrig', vibrato = 'Vibrato' }
+local FX_DEFAULTS = {
+  retrig  = { kind = 'retrig',  period = { 1, 4 }, ramp  = 0 },
+  vibrato = { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 },
+}
 
--- widget 'choice': options = {{l=label, v=value}, ...}; Up/Down step the list.
+-- Shared QN-fraction period ladder; both kinds tempo-sync the same way.
+local PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
+                  { l = '1/4', v = { 1, 4 } }, { l = '1/6', v = { 1, 6 } },
+                  { l = '1/8', v = { 1, 8 } } }
+
+-- widget 'choice': options = {{l,v},...}; Left/Right step the list.
 -- widget 'int': a numberStepper; Left/Right adjust by `base`, Ctrl by `coarse`.
 local FX_FIELDS = {
   retrig = {
-    { field = 'period', label = 'Period', widget = 'choice', keys = 'updown',
-      options = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
-                  { l = '1/4', v = { 1, 4 } }, { l = '1/6', v = { 1, 6 } },
-                  { l = '1/8', v = { 1, 8 } } } },
-    { field = 'ramp', label = 'Ramp', widget = 'int', keys = 'leftright',
-      base = 1, coarse = 10, min = -127, max = 127 },
+    { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+    { field = 'ramp',   label = 'Ramp',   widget = 'int', base = 1, coarse = 10, min = -127, max = 127 },
+  },
+  vibrato = {
+    { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+    { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10, min = 0, max = 200 },  -- cents
+    { field = 'onset',  label = 'Onset',  widget = 'int', base = 1, coarse = 4,  min = 0, max = 16 },   -- QN ramp-in
   },
 }
 
 local fxEdit do
-  local LABEL_W = 64
-  local ARROWS  = { updown = '\xe2\x86\x91\xe2\x86\x93', leftright = '\xe2\x86\x90\xe2\x86\x92' }
+  local MARK_W, LABEL_W = 16, 64
+  local LEGEND = '\xe2\x86\x91\xe2\x86\x93 field    \xe2\x86\x90\xe2\x86\x92 adjust    Del remove    Enter done'
 
   local function valueEq(a, b)
     if type(a) == 'table' then return type(b) == 'table' and a[1] == b[1] and a[2] == b[2] end
@@ -1822,56 +1833,79 @@ local fxEdit do
   local function choiceLabels(fd)
     local out = {}; for i, o in ipairs(fd.options) do out[i] = o.l end; return out
   end
-  local function legend(fields)
-    local parts = {}
-    for _, fd in ipairs(fields) do
-      parts[#parts + 1] = ARROWS[fd.keys] .. ' ' .. fd.label:lower()
-                          .. (fd.coarse and ' (\xe2\x8c\x83 coarse)' or '')
+
+  -- One row per section header, plus one per field of an active section, in
+  -- FX_KINDS order. A header's index is nil when its section is off.
+  local function buildRows(fx)
+    local rows = {}
+    for _, kind in ipairs(FX_KINDS) do
+      local idx
+      for i, e in ipairs(fx) do if e.kind == kind then idx = i; break end end
+      rows[#rows + 1] = { kind = kind, header = true, index = idx }
+      if idx then
+        for _, fd in ipairs(FX_FIELDS[kind]) do
+          rows[#rows + 1] = { kind = kind, fd = fd, index = idx, entry = fx[idx] }
+        end
+      end
     end
-    parts[#parts + 1] = 'Del clear'
-    return table.concat(parts, '    ')
+    return rows
   end
 
-  local function drawField(uuid, index, fd, value)
+  local function mark(focused)
+    ImGui.AlignTextToFramePadding(ctx)
+    ImGui.Text(ctx, focused and '\xe2\x96\xb8' or ' ')   -- ▸ on the cursor row
+    ImGui.SameLine(ctx, MARK_W)
+  end
+
+  local function drawRow(uuid, rw, focused)
+    mark(focused)
+    if rw.header then
+      local changed, on = chrome.checkbox(KIND_LABELS[rw.kind] .. '##fxk_' .. rw.kind, rw.index ~= nil)
+      if changed then tv:setFxKindActive(uuid, FX_DEFAULTS[rw.kind], on) end
+      if rw.index and tv:fxKindInert(uuid, rw.kind) then
+        ImGui.SameLine(ctx)
+        ImGui.TextColored(ctx, chrome.colour('error'), 'lane-1 only \xe2\x80\x94 inert here')
+      end
+      return
+    end
+    local fd, value = rw.fd, rw.entry[rw.fd.field]
     ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, fd.label)
-    ImGui.SameLine(ctx, LABEL_W)
+    ImGui.SameLine(ctx, MARK_W + LABEL_W)
     if fd.widget == 'choice' then
-      local pick = chrome.dropdown('fx_' .. fd.field,
+      local pick = chrome.dropdown('fx_' .. rw.kind .. '_' .. fd.field,
                      fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
-      if pick then tv:setFxField(uuid, index, fd.field, fd.options[pick].v) end
+      if pick then tv:setFxField(uuid, rw.index, fd.field, fd.options[pick].v) end
     else
-      local rv, n = chrome.numberStepper('fx_' .. fd.field, value or 0,
+      local rv, n = chrome.numberStepper('fx_' .. rw.kind .. '_' .. fd.field, value or 0,
                       { width = 70, min = fd.min, max = fd.max })
-      if rv then tv:setFxField(uuid, index, fd.field, n) end
+      if rv then tv:setFxField(uuid, rw.index, fd.field, n) end
     end
   end
 
-  local function handleKey(uuid, index, fd, value, press, mods)
-    if fd.keys == 'updown' then
-      local up, down = press(ImGui.Key_UpArrow), press(ImGui.Key_DownArrow)
-      if up or down then
-        local i = util.clamp(choiceIndex(fd, value) + (down and 1 or -1), 1, #fd.options)
-        tv:setFxField(uuid, index, fd.field, fd.options[i].v)
-      end
+  local function adjustRow(uuid, rw, right, mods)
+    if rw.header then
+      tv:setFxKindActive(uuid, FX_DEFAULTS[rw.kind], right)
+      return
+    end
+    local fd, value = rw.fd, rw.entry[rw.fd.field]
+    if fd.widget == 'choice' then
+      local i = util.clamp(choiceIndex(fd, value) + (right and 1 or -1), 1, #fd.options)
+      tv:setFxField(uuid, rw.index, fd.field, fd.options[i].v)
     else
-      local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
-      if left or right then
-        local step = (mods & ImGui.Mod_Ctrl) ~= 0 and fd.coarse or fd.base
-        local n = util.clamp((value or 0) + (right and 1 or -1) * step, fd.min, fd.max)
-        tv:setFxField(uuid, index, fd.field, n)
-      end
+      local step = (mods & ImGui.Mod_Ctrl) ~= 0 and fd.coarse or fd.base
+      local n = util.clamp((value or 0) + (right and 1 or -1) * step, fd.min, fd.max)
+      tv:setFxField(uuid, rw.index, fd.field, n)
     end
   end
 
   modalHost:registerKind('fxEdit', function(s, close)
-    local fx     = tv:noteFx(s.uuid)
-    local entry  = fx and fx[s.index]
-    local fields = entry and FX_FIELDS[entry.kind]
-    if not fields then close(false); return end
+    local fx   = tv:noteFx(s.uuid) or {}
+    local rows = buildRows(fx)
+    s.field    = util.clamp(s.field or 1, 1, #rows)
 
-    ImGui.TextDisabled(ctx, legend(fields))
+    ImGui.TextDisabled(ctx, LEGEND)
     ImGui.Spacing(ctx)
-    for _, fd in ipairs(fields) do drawField(s.uuid, s.index, fd, entry[fd.field]) end
+    for i, rw in ipairs(rows) do drawRow(s.uuid, rw, i == s.field) end
 
     ImGui.Spacing(ctx)
     if ImGui.Button(ctx, 'Clear')  then tv:setNoteFx(s.uuid, util.REMOVE);               close(false); return end
@@ -1882,28 +1916,27 @@ local fxEdit do
 
     if ImGui.IsAnyItemActive(ctx) then return end   -- a focused widget owns the keys
     local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
-    local mods  = ImGui.GetKeyMods(ctx)
     if press(ImGui.Key_Escape) then
       tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false)
     elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
       close(false)
+    elseif press(ImGui.Key_DownArrow) then s.field = util.clamp(s.field + 1, 1, #rows)
+    elseif press(ImGui.Key_UpArrow)   then s.field = util.clamp(s.field - 1, 1, #rows)
     elseif press(ImGui.Key_Delete) or press(ImGui.Key_Backspace) then
-      tv:setNoteFx(s.uuid, util.REMOVE); close(false)
+      tv:setFxKindActive(s.uuid, FX_DEFAULTS[rows[s.field].kind], false)
     else
-      for _, fd in ipairs(fields) do handleKey(s.uuid, s.index, fd, entry[fd.field], press, mods) end
+      local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
+      if left or right then adjustRow(s.uuid, rows[s.field], right, ImGui.GetKeyMods(ctx)) end
     end
   end)
 
   function fxEdit()
     local note = tv:cursorNote()
     if not note then return end
-    local snapshot = note.fx and util.deepClone(note.fx) or nil
-    if not (note.fx and note.fx[1]) then
-      tv:setNoteFx(note.uuid, { util.deepClone(DEFAULT_RETRIG) })
-    end
     modalHost:open{
       kind = 'fxEdit', title = 'Note FX',
-      uuid = note.uuid, index = 1, snapshot = snapshot,
+      uuid = note.uuid, field = 1,
+      snapshot = note.fx and util.deepClone(note.fx) or nil,
       flags = ImGui.WindowFlags_NoNavInputs,
     }
   end
