@@ -8,6 +8,7 @@ local t = require('support')
 
 local AUTO_BUS = 126
 local P_SRC, P_DST, P_LISTEN = 16, 32, 48
+local P_ASRC, P_ADST = 64, 80
 
 -- Two live tracks: the bound take's own (src) and a target (dst) hosting
 -- a synth. projectItems carries the bound take so pa's project-wide
@@ -101,23 +102,44 @@ return {
   },
 
   {
-    name = 'co-resident add bank keeps the node alive when pa unbinds',
+    name = 'a baked vibrato carrier configures the add bank, surviving pa unbind',
+    run = function(harness)
+      local h, r, src = mkScenario(harness)
+      -- A continuous-macro carrier baked into the take: cc=DELTA_MSB(20) on wire
+      -- channel 0. pa reads it from take MIDI exactly as it reads authored CCs.
+      r._state.takeIsMidi['take1'] = true
+      r.MIDI_InsertCC('take1', false, false, 0, 0xB0, 0, 20, 64)
+
+      local lane = h.pa:automate(1, TARGET)   -- filter on src, listen on dst
+
+      t.eq(namedParm(r, src, 0, 'fx_ident'), 'Continuum CC', 'CC node on the source')
+      t.eq(r.TrackFX_GetParam(src, 0, P_SRC),  119,  'filter slot present')
+      t.eq(r.TrackFX_GetParam(src, 0, P_ASRC), 20,   'add asrc = chan0*128 + DELTA_MSB')
+      t.eq(r.TrackFX_GetParam(src, 0, P_ADST), 2048, 'add adst = 2048 + chan0 (pb)')
+      t.eq(r.TrackFX_GetParam(src, 0, P_ASRC + 1), -1, 'one carrier — slot 1 empty')
+
+      h.pa:unautomate(1, lane)
+      t.eq(#r._state.fxByTrack[src], 1, 'node survives — the add bank still needs it')
+      t.eq(namedParm(r, src, 0, 'fx_ident'), 'Continuum CC', 'CC node still at the head')
+      t.eq(r.TrackFX_GetParam(src, 0, P_SRC),  -1, 'filter range cleared')
+      t.eq(r.TrackFX_GetParam(src, 0, P_ASRC), 20, 'add bank retained')
+    end,
+  },
+
+  {
+    name = 'ccm: a co-resident claimant keeps the node alive when pa unbinds',
     run = function(harness)
       local h, r, src, dst = mkScenario(harness)
       local lane = h.pa:automate(1, TARGET)
 
-      -- stand in for the add producer: it claims dst's node and writes an add-bank
-      -- slot (param 64 = asrc slot 0). pa unbinding must not reap it.
+      -- A second claimant (e.g. cv-2's applier) holds dst's node. pa unbinding
+      -- clears pa's banks but must not reap a node another producer still claims.
       h.ccm:claim('macro', dst)
-      r.TrackFX_SetParam(dst, 0, 64, 5)
-
       h.pa:unautomate(1, lane)
 
-      t.eq(#r._state.fxByTrack[dst], 2, 'node survives — the add producer still claims it')
+      t.eq(#r._state.fxByTrack[dst], 2, 'node survives — still claimed')
       t.eq(namedParm(r, dst, 0, 'fx_ident'), 'Continuum CC', 'CC node still at the head')
-      t.eq(r.TrackFX_GetParam(dst, 0, P_LISTEN), -1, 'pa cleared its own listen range')
-      t.eq(r.TrackFX_GetParam(dst, 0, 64), 5, 'add-bank slot survived')
-      t.eq(#r._state.fxByTrack[src], 0, 'source node reaped — only pa claimed it')
+      t.eq(#r._state.fxByTrack[src], 0, 'source node reaped — pa was its only claim')
     end,
   },
 

@@ -3,9 +3,9 @@
 > Design note. **Retrig (structural) and vibrato's Lua slice (continuous)
 > — the v1 proving pair — have both landed** (`tm_macro_spec`,
 > `tm_vibrato_spec`), and the node's **add bank** — the audible sum — is
-> now written (`Continuum CC.jsfx`, REAPER-verify pending). Remaining for
-> vibrato: wiring the add bank from take hosts, and the proper carrier
-> allocation (§ v1 scope).
+> now written (`Continuum CC.jsfx`, REAPER-verify pending) and **wired** from
+> `paramAutomation`. Remaining for vibrato: that REAPER verification and the
+> proper carrier allocation (§ v1 scope).
 >
 > A *macro* is per-note generative intent —
 > retrig, trill, arp, vibrato, slide — expanded mechanically into
@@ -297,10 +297,12 @@ express (single-source-per-param). **R5 defers to cv-2:** its phase-2
 re-founding dissolves the listen bank and value sliders, so do not
 migrate plink under note-macros — land the add bank *beside* the
 untouched listen bank. Node placement and lifecycle now live in
-**`ccManager`** (`ccm`) — a neutral owner `paramAutomation` and the add
-producer share: the node exists iff a producer claims it, and `ccm`
-reaps it when the last claim drops. That owner is interim glue cv-2
-promotes to its applier's node handle; the sum kernel is permanent.
+**`ccManager`** (`ccm`) — a neutral owner the node's producers claim: it
+exists iff a producer claims it, and `ccm` reaps it when the last claim
+drops. `paramAutomation` is the sole producer today (it writes all three
+banks); the registry stays multi-claim for cv-2's applier. That owner is
+interim glue cv-2 promotes to its applier's node handle; the sum kernel is
+permanent.
 
 ## Invariants
 
@@ -420,12 +422,13 @@ generator deal in one fixed-point value. The carrier is a **toy fixed
 centre)`, carrier swallowed) — is now **written** in `Continuum CC.jsfx`
 as a self-contained sum kernel: a third bank beside filter/listen, `adst`
 encoding a cc code or `2048+chan` pitchbend, summed and clamped once at
-emission (REAPER-verify pending). It is **not yet wired** to take hosts —
-the node-config writer is single-owner but its home is unsettled (not
-paramAutomation, whose concern is param↔automation binding). What remains
-to pin **G5**: that REAPER verification, the add-bank config writer, and
-the proper per-channel banded/relocatable allocation (§ Delta-code
-allocation).
+emission (REAPER-verify pending). It is now **wired**: `paramAutomation`'s
+apply reconcile gathers each track's baked carriers (cc = `DELTA_MSB`) and
+writes the add bank beside filter/listen on the same `ccm`-owned node — a
+fourth bank on pa's sweep, not a second producer, so the node lives iff
+filter ∪ listen ∪ add is non-empty. What remains to pin **G5**: the REAPER
+verification and the proper per-channel banded/relocatable allocation
+(§ Delta-code allocation).
 Remaining kinds are table entries afterwards. The plink migration (R5)
 is sequenced independently.
 

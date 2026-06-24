@@ -20,8 +20,14 @@ local SLOTS     = 16
 local META_PEXT = 'P_EXT:ctm_paramAuto'
 local TOP_LANE  = 119   -- 120..127 are channel-mode messages
 
--- Continuum CC.jsfx param banks: value sliders, then src/dst/listen codes.
+-- Continuum CC.jsfx param banks: value sliders, then src/dst/listen codes,
+-- then the add bank (asrc/adst) for continuous note-macro carriers.
 local P_VALUE, P_SRC, P_DST, P_LISTEN = 0, 16, 32, 48
+local P_ASRC, P_ADST = 64, 80
+
+-- Continuous-macro carrier code; must match trackerManager DELTA_MSB (toy fixed).
+-- Proper per-channel alloc: design/note-macros.md § Delta-code allocation.
+local DELTA_MSB = 20
 
 local pa = {}
 
@@ -85,12 +91,31 @@ local function gatherBindings()
   return bindings
 end
 
+-- Baked continuous-macro carriers (cc = DELTA_MSB) by track: the add bank's
+-- intent, read from realisation so it aggregates every take on the track.
+local function gatherCarriers()
+  local byTrack = {}
+  eachTake(function(take)
+    if not reaper.TakeIsMIDI(take) then return end
+    local guid = reaper.GetTrackGUID(ownerTrack(take))
+    local _, _, ccCount = reaper.MIDI_CountEvts(take)
+    for i = 0, ccCount - 1 do
+      local _, _, _, _, chanmsg, evChan, msg2 = reaper.MIDI_GetCC(take, i)
+      if chanmsg == 0xB0 and msg2 == DELTA_MSB then
+        byTrack[guid] = byTrack[guid] or {}
+        byTrack[guid][evChan] = true
+      end
+    end
+  end)
+  return byTrack
+end
+
 -- Pure: bindings -> { [trackGuid] = trackSpec }. Pooled duplicates collapse
 -- via the seen-keys; slot order is sorted for a stable REAPER image.
-function pa.computeDesired(bindings)
+function pa.computeDesired(bindings, carriers)
   local specs, seen = {}, {}
   local function spec(guid)
-    specs[guid] = specs[guid] or { filter = {}, listen = {}, sends = {} }
+    specs[guid] = specs[guid] or { filter = {}, listen = {}, sends = {}, add = {} }
     return specs[guid]
   end
   local function once(...)
@@ -112,6 +137,16 @@ function pa.computeDesired(bindings)
     if b.srcTrackGuid ~= b.trackGuid and once('s', b.srcTrackGuid, b.trackGuid) then
       table.insert(spec(b.srcTrackGuid).sends, b.trackGuid)
     end
+  end
+  -- Carriers join as the add bank: asrc = carrier MSB code, adst = pb-on-channel
+  -- (2048+chan). The sum rides the same node beside filter/listen.
+  for guid, chans in pairs(carriers or {}) do
+    local list = {}
+    for evChan in pairs(chans) do
+      list[#list + 1] = { asrc = evChan * 128 + DELTA_MSB, adst = 2048 + evChan }
+    end
+    table.sort(list, function(a, b) return a.asrc < b.asrc end)
+    spec(guid).add = list
   end
   for _, s in pairs(specs) do
     table.sort(s.filter, function(a, b) return a.src < b.src end)
@@ -153,14 +188,16 @@ local function clearPlink(track, fxIdx, param)
 end
 
 local function writeBanks(track, ccIdx, spec)
-  if #spec.filter > SLOTS or #spec.listen > SLOTS then
+  if #spec.filter > SLOTS or #spec.listen > SLOTS or #spec.add > SLOTS then
     util.print('paramAutomation: more than ' .. SLOTS .. ' slots on one track; extras dropped')
   end
   for s = 0, SLOTS - 1 do
-    local f, l = spec.filter[s + 1], spec.listen[s + 1]
+    local f, l, a = spec.filter[s + 1], spec.listen[s + 1], spec.add[s + 1]
     reaper.TrackFX_SetParam(track, ccIdx, P_SRC + s,    f and f.src  or -1)
     reaper.TrackFX_SetParam(track, ccIdx, P_DST + s,    f and f.dst  or -1)
     reaper.TrackFX_SetParam(track, ccIdx, P_LISTEN + s, l and l.code or -1)
+    reaper.TrackFX_SetParam(track, ccIdx, P_ASRC + s,   a and a.asrc or -1)
+    reaper.TrackFX_SetParam(track, ccIdx, P_ADST + s,   a and a.adst or -1)
   end
 end
 
@@ -210,7 +247,7 @@ local function applyTrack(track, spec, mirror)
     -- ccm reaps the node only when no producer still claims it; if the add bank
     -- holds it, release hands back the surviving index so we clear just our range.
     local ccIdx = ccm:release('pa', track)
-    if ccIdx then writeBanks(track, ccIdx, { filter = {}, listen = {} }) end
+    if ccIdx then writeBanks(track, ccIdx, { filter = {}, listen = {}, add = {} }) end
     reconcileAutoSends(track, {})
     writeMirror(track, nil)
     return
@@ -307,7 +344,7 @@ end
 
 --contract: no-op (and no undo point) when every track's mirror already matches
 function pa:apply()
-  local specs = pa.computeDesired(gatherBindings())
+  local specs = pa.computeDesired(gatherBindings(), gatherCarriers())
   local dirty = {}
   for i = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, i)

@@ -238,7 +238,13 @@ it gets **re-founded**, not extended:
   `paramAutomation` cm store;
 - the `Continuum CC` listen bank becomes the **adapter realization** of a
   param pin (MIDI mode); the filter bank becomes a **filter node**;
-- bus 126 becomes the cheap **MIDI-wire realization** of a param pin.
+- bus 126 becomes the cheap **MIDI-wire realization** of a param pin;
+- the per-track node's **lifecycle owner** — `ccManager` (`ccm`), whose
+  claims registry ref-counts producers so the node lives iff one claims it —
+  **dissolves with the store**: once the node is on-graph a wire to it *is*
+  the claim, and wm's standing invariant — *delete an FX only when its owning
+  node leaves the graph* (`wiringManager.lua:7`) — reaps it for free. `ccm`
+  is **deleted, not folded**; its claim/release body is code wm already runs.
 
 Pre-beta, no legacy data — this is a re-founding, not a compat layer. The
 column's inline-CC-in-the-note-take *data* is unchanged; only its binding
