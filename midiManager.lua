@@ -37,6 +37,7 @@ local notes      = {}
 local ccs        = {}
 local eventsByUuid      = {}
 local tokenIdx   = {}
+local wideMsb    = {}   -- (chan*128+cc) -> true: code is a 14-bit MSB; LSB rides cc+32
 local maxUUID    = 0
 local lock       = false
 
@@ -53,6 +54,20 @@ end
 
 --contract: INTERNALS fields (idx, uuidIdx) stripped from clones returned to callers
 local INTERNALS = { idx = true, uuidIdx = true }
+
+-- 14-bit CC carriers: MSB code n, fixed-point value 0..127.99.., low 7 bits ride n+32.
+-- See design/note-macros.md § Continuous realisation.
+local function wideKey(chan, cc) return chan * 128 + cc end
+local function isWideMsb(c) return c.evType == 'cc' and c.cc and wideMsb[wideKey(c.chan, c.cc)] end
+local function isWideLsb(c)
+  return c.evType == 'cc' and c.cc and c.cc >= 32 and wideMsb[wideKey(c.chan, c.cc - 32)]
+end
+local function splitWide(val)
+  local msb = math.floor(val)
+  local lsb = util.round((val - msb) * 128)
+  if lsb >= 128 then msb, lsb = msb + 1, 0 end
+  return util.clamp(msb, 0, 127), lsb
+end
 
 --invariant: shapeNames is derived from shapeLUT so the two directions can't drift
 local shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['fast-end'] = 4, bezier = 5 }
@@ -749,6 +764,10 @@ local function cloneOut(evt)
   if not evt then return nil end
   local c = util.clone(evt, INTERNALS)
   c.token = tokenOf(evt)
+  if isWideMsb(evt) then
+    local lsb = tokenIdx[tokenOf{ evType = 'cc', chan = evt.chan, cc = evt.cc + 32, ppq = evt.ppq }]
+    c.val = evt.val + (lsb and lsb.val or 0) / 128
+  end
   return c
 end
 
@@ -835,12 +854,22 @@ end
 
 ----- CCs
 
+--contract: marks (chan, cc) a 14-bit MSB whose low 7 bits ride cc+32; transient, not persisted
+--contract: writes split to MSB(shaped)/LSB(step) pair; reads coalesce to fixed-point val 0..127.99
+--invariant: code is the only signal -- wire pair is not self-describing (design/note-macros.md)
+function mm:wideCC(chan, cc, on)
+  wideMsb[wideKey(chan, cc)] = on or nil
+end
+
 function mm:ccs()
   local i = 0
   return function()
-    i = i + 1
-    local msg = ccs[i]
-    if msg then return i, cloneOut(msg) end
+    while true do
+      i = i + 1
+      local msg = ccs[i]
+      if not msg then return end
+      if not isWideLsb(msg) then return i, cloneOut(msg) end
+    end
   end
 end
 
@@ -940,26 +969,11 @@ local function assignCC(loc, t)
   if msg.uuid then saveMetadatum(msg.uuid) end
 end
 
---contract: addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
-local function addCC(t)
-  if not (take and checkLock()) then return end
-
-  if t.evType == nil then t.evType = 'cc' end
-
-  local valueField = (t.evType == 'pa') and 'vel' or 'val'
-  if t.ppq == nil or t.chan == nil or t[valueField] == nil then
-    print('Error! Underspecified new cc event')
-    return
-  end
-
-  local chanmsg = chanMsgLUT[t.evType]
-  if not chanmsg then
-    print('Error! Unspecified message type')
-    return
-  end
+-- Insert one ordinary CC: wire event + record + idx + token. No metadata
+-- (the lazy-sidecar path lives in addCC); the wideCC split reuses this.
+local function pushCC(t)
   local msg2, msg3 = reconstruct(t)
-
-  reaper.MIDI_InsertCC(take, false, t.muted or false, t.ppq, chanmsg, t.chan - 1, msg2, msg3)
+  reaper.MIDI_InsertCC(take, false, t.muted or false, t.ppq, chanMsgLUT[t.evType], t.chan - 1, msg2, msg3)
 
   local msg = util.clone(t)
   if not msg.muted then msg.muted = nil end
@@ -975,6 +989,37 @@ local function addCC(t)
   util.add(ccs, msg)
   msg.loc = #ccs
   tokenIdx[tokenOf(msg)] = msg
+  return msg
+end
+
+--contract: addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
+--contract: a wideCC-registered code splits to an MSB(shaped)/LSB(step) wire pair
+local function addCC(t)
+  if not (take and checkLock()) then return end
+
+  if t.evType == nil then t.evType = 'cc' end
+
+  local valueField = (t.evType == 'pa') and 'vel' or 'val'
+  if t.ppq == nil or t.chan == nil or t[valueField] == nil then
+    print('Error! Underspecified new cc event')
+    return
+  end
+
+  if not chanMsgLUT[t.evType] then
+    print('Error! Unspecified message type')
+    return
+  end
+
+  if isWideMsb(t) then
+    local msb, lsb = splitWide(t.val)
+    pushCC{ evType = 'cc', chan = t.chan, cc = t.cc,      ppq = t.ppq, val = msb,
+            shape = t.shape, tension = t.tension, muted = t.muted }
+    pushCC{ evType = 'cc', chan = t.chan, cc = t.cc + 32, ppq = t.ppq, val = lsb,
+            shape = 'step', muted = t.muted }
+    return #ccs
+  end
+
+  local msg = pushCC(t)
 
   local hasMetadata = false
   for k in pairs(t) do
@@ -1068,21 +1113,31 @@ function mm:delete(token)
   local evt = tokenIdx[token]
   if not evt then return end
 
-  tokenIdx[token] = nil
-  local idx = evt.idx
-
   if evt.evType == 'note' then
+    tokenIdx[token] = nil
     notes[evt.loc] = nil
     eventsByUuid[evt.uuid] = nil
     deleteMetadatum(evt.uuid)
-    reaper.MIDI_DeleteNote(take, idx)
-    shiftDown(notes, 'idx', idx)
-  else
-    ccs[evt.loc] = nil
-    if evt.uuid then eventsByUuid[evt.uuid] = nil; deleteMetadatum(evt.uuid) end
-    reaper.MIDI_DeleteCC(take, idx)
-    shiftDown(ccs, 'idx', idx)
-    deleteSidecarByUuid(evt.uuid)
+    reaper.MIDI_DeleteNote(take, evt.idx)
+    shiftDown(notes, 'idx', evt.idx)
+    return
+  end
+
+  -- A wideCC MSB drags its LSB shadow (code+32). Delete the higher wire
+  -- idx first so the lower idx stays valid across shiftDown.
+  local recs = { evt }
+  if isWideMsb(evt) then
+    local lsb = tokenIdx[tokenOf{ evType = 'cc', chan = evt.chan, cc = evt.cc + 32, ppq = evt.ppq }]
+    if lsb then util.add(recs, lsb) end
+  end
+  table.sort(recs, function(a, b) return a.idx > b.idx end)
+  for _, rec in ipairs(recs) do
+    tokenIdx[tokenOf(rec)] = nil
+    ccs[rec.loc] = nil
+    if rec.uuid then eventsByUuid[rec.uuid] = nil; deleteMetadatum(rec.uuid) end
+    reaper.MIDI_DeleteCC(take, rec.idx)
+    shiftDown(ccs, 'idx', rec.idx)
+    deleteSidecarByUuid(rec.uuid)
   end
 end
 
@@ -1094,9 +1149,14 @@ function mm:events()
     while true do
       i = i + 1
       local e = src[i]
-      if e then return tokenOf(e), cloneOut(e) end
-      if src == ccs then return end
-      src, i = ccs, 0
+      if not e then
+        if src == ccs then return end
+        src, i = ccs, 0
+      elseif src == ccs and isWideLsb(e) then
+        -- LSB shadow: hidden behind its MSB
+      else
+        return tokenOf(e), cloneOut(e)
+      end
     end
   end
 end

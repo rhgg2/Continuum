@@ -38,6 +38,7 @@ local specs = {
   'mm_note_cascade_sidecar_spec',
   'mm_token_spec',
   'mm_unified_spec',
+  'mm_wide_cc_spec',
   'mm_take_validity_spec',
   'sidecar_reconcile_spec',
   'tm_rebuild_spec',

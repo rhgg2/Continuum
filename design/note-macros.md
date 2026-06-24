@@ -221,6 +221,18 @@ next-lane-1-note lookup (for `slide.target = 'next'`).
   project-unique code space paramAutomation already allocates
   `busCode`s from. The take's MIDI already flows through the track
   chain — no bus plumbing, no sends, no lane allocation.
+- **The wire split is an mm primitive (`wideCC`).** The msb/lsb pairing
+  is a wire concern, so it lives in mm, not the rebuild seam:
+  `mm:wideCC(chan, cc, on)` marks a code a 14-bit MSB; mm splits every
+  write to an MSB-shaped/LSB-step pair and coalesces every read back to
+  one **fixed-point** value (`MSB + LSB/128`, exact in IEEE double — the
+  denominator is a power of two — so the round-trip never rounds and G4
+  holds). Generator, seam, and stream diff all deal in that single
+  value; the byte pair never surfaces above mm, and a lone MSB upgrades
+  (LSB 0). The registration is transient and is the only signal — a CC
+  pair is not self-describing on the wire (unlike pb's status byte), so
+  mm must be told which codes are wide; plain CCs stay one message,
+  integer value. Pinned by `mm_wide_cc_spec`.
 - **No metadata.** Unlike absorbers, delta events carry no uuid, no
   sidecar, no marker — **the code is the provenance**. Parse routes
   reserved-code events out of column-building by address; the wire
@@ -392,8 +404,12 @@ retrig **UI** — badge + `Super-X` editor (§ UI) — **has landed**
 path; the popup's key dispatch is verified in REAPER).
 Flush-time reconcile (`dirtyFxHosts`) and the R2/R4 refactors are
 deferred fast-follows — correctness rides the rebuild path, which every
-flush triggers. **Vibrato is next:** cents→raw conversion, shaped-pair
-emission, parse routing by code, and the add bank — pinning G5.
+flush triggers. **Vibrato is next.** The continuous **wire primitive** —
+mm's `wideCC` 14-bit split/pair, value carried as fixed-point
+(§ Continuous realisation) — **has landed** (`mm_wide_cc_spec`); the
+shaped-pair emission is now mm's job, not the seam's. Remaining: cents→raw
+conversion, the vibrato generator, parse routing by code, and the add
+bank — pinning G5.
 Remaining kinds are table entries afterwards. The plink migration (R5)
 is sequenced independently.
 
@@ -608,16 +624,42 @@ generator.
   14-bit downstream (~15.6 ms grain, monotonic, no wrap glitch); the
   generator never densifies. The dense-square fallback is unused. The
   wire stays sparse *and* full-res — the best case the design hoped for.
-- **Delta-code allocation — banded, not flat.** The 14-bit pairing only
-  exists for MIDI **CC 0–31** (MSB) paired with **CC 32–63** (LSB): a
-  pitch/14-bit target must allocate MSB `n` with **`0 ≤ n < 32`**, LSB
-  `n+32`, or REAPER won't interpolate the pair. So pitch targets draw
-  from **32 pairs per channel** (steering clear of controllers the
-  instrument reads — bank select CC0/32, mod wheel CC1/33, …), *not*
-  pa's flat `chan*128+cc` busCode space; 7-bit cc targets stay flat.
-  Per-channel banding (deltas already ride per-channel, lane-1 doctrine)
-  is the budget. Open: collision-avoidance policy, and whether the add
-  bank's 16 slots need to grow.
+- **Delta-code allocation — banded, dynamic, relocatable.** The 14-bit
+  pairing only exists for MIDI **CC 0–31** (MSB) paired with **CC 32–63**
+  (LSB): a pitch/14-bit target must allocate MSB `n` with **`0 ≤ n < 32`**,
+  LSB `n+32`, or REAPER won't interpolate the pair. So pitch targets draw
+  from **32 pairs per channel**, *not* pa's flat `chan*128+cc` busCode
+  space; 7-bit cc targets stay flat. Per-channel banding (deltas already
+  ride per-channel, lane-1 doctrine) is the budget. The carrier code is an
+  internal allocation, **not a contract** — nothing persists it (the code
+  is provenance, but the code itself is free to move), and the carrier is
+  **swallowed at the node** before the instrument, so it never collides
+  with what the instrument *reads*. The only collision is **parse-time,
+  against the user's authored CC namespace**: a carrier on an address the
+  user authors would hijack those events (routed out by address, summed,
+  swallowed) — invisible in the editor *and* absent at the instrument. So
+  collision is **non-blocking, not a reserved band**: reallocate to a free
+  pair and rewrite the add bank's src slider (the apply reconcile's job);
+  the stream re-emits at the new code for free, since it regenerates each
+  rebuild from raw units (old code predicts an empty stream, new code the
+  full one). Two constraints on the allocator: (1) **deterministic** w.r.t.
+  the occupied namespace, or G4's flush→rebuild→flush picks a different
+  carrier and the round-trip breaks — a pure function of which addresses
+  are taken (the first free codes in priority order), never a stateful
+  counter; (2) **ordered least-likely-authored first** — draw the
+  undefined / general-purpose codes (CC20–31, CC3, CC9, CC14–15) before
+  reaching for the conventional ones (mod CC1, volume CC7, expression CC11,
+  pan CC10, bank CC0). **(2) dissolves churn-vs-stickiness, not just trades
+  it off:** the churn worry was an artifact of *numeric* lowest-free, which
+  clusters carriers in the heavily-authored low band so authoring there
+  constantly bumps them. Unlikely-first parks carriers in the cold band, so
+  the event that triggers relocation — the user authoring a carrier's slot
+  — is rare-to-never; the cause is removed, not damped. The fixed priority
+  order is still a pure function of the occupied set, so G4 holds with **no
+  sticky state** — a collision that does land relocates one carrier
+  deterministically, and cascade across carriers is only possible at
+  densities v1's one-carrier-per-channel never reaches. Open: only whether
+  the add bank's 16 slots need to grow.
 - **Trill cents: structural detune vs delta stream.** Structural is
   correct-by-existing-machinery but seats absorbers at trill rate;
   both ride the same wire now, so decide after watching it run.
