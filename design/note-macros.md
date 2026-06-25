@@ -134,7 +134,7 @@ consistent with swing factors. Per-kind params, v1 vocabulary:
 | `trill` | `period`, `step` (signed **scale steps**) | alternation resolved through the temper → (pitch, detune) pairs |
 | `arp` | `period`, `steps = {0, ...}` (scale steps) | broken chord off the single host note — a generalised trill, **not** a chord arpeggiator (that needs a region host, § *The host contract*) |
 | `vibrato` | `period`, `depth` (cents), `onset` (QN ramp-in) | channel-wide pb gesture, hostable on any lane (overlaps sum at the node) |
-| `slide` | `over` (QN), `target = 'next'` \| cents | `'next'` resolved at flush against the next lane-1 (melody) note |
+| `slide` | `over` (QN), `target` = `Next` \| `Fixed` (`cents` demand) | `Next` resolves the next lane-1 (melody) note; `Fixed` bends by `cents`, authored as host-relative temper steps |
 
 ## The host contract
 
@@ -454,8 +454,11 @@ sections, one per macro kind** (Retrig, Vibrato, Slide — one section per kind,
 below): a checkbox header plus, when on, its fields one per row, modelled on
 `temperEditor`'s generators panel; `Clear`/`Cancel`/`Done` buttons mirror the
 key actions. The field set per kind is **pure data** (`FX_FIELDS` in
-`trackerRender.lua`): a `choice` widget (a dropdown) or an `int` widget (a
-`numberStepper`) — a new kind ships a generator + one descriptor entry. A
+`trackerRender.lua`): a `choice` widget (a dropdown), an `int` widget (a
+`numberStepper`), or a `stepInterval` widget (a `cents` demand edited as
+host-relative temper steps) — a new kind ships a generator + one descriptor
+entry. A field may carry a `when` predicate so its row appears only when
+relevant (slide's `cents` shows only under `target = Fixed`). A
 **row cursor** drives the keyboard: **Up/Down** pick a row, **Left/Right**
 adjust it (choice steps the list; int by the base step, **Ctrl** for coarse —
 the grid's `nudgeCoarse` idiom), and on a header **Left/Right** toggle the
@@ -490,6 +493,8 @@ and the user toggles a section on to author it. Removing the last entry clears
 | Vibrato | `depth` | cents `30` | ←→ base ±1, Ctrl ±10 | 0..200 cents |
 | Vibrato | `onset` | QN `1` | ←→ base ±1, Ctrl ±4 | 0..16 QN ramp-in |
 | Slide | `over` | QN fraction `1/2` | ←→ cycle the ladder | from the ladder |
+| Slide | `target` | `Next` / `Fixed` | ←→ toggle | — |
+| Slide | `cents` | signed step count from host (`2`, `-3`) | ←→ ±1 step, Ctrl ±1 period | cents stored; snapped to nearest step; shown only when `Fixed` |
 
 ## v1 scope — the proving pair
 
@@ -501,8 +506,10 @@ retrig **UI** — badge + `Super-X` editor (§ UI) — **has landed**, and the
 **vibrato authoring UI** now rides the same editor (`vm_fx_ui_spec` pins the
 `cursorNote`/`setNoteFx`/`setFxKindActive`/`setFxField` path; the
 modal's row-cursor key dispatch is verified in REAPER). **Slide rides it too**
-as a third independent section — `over` on the shared QN-fraction ladder,
-`target = 'next'` only in v1.
+as a third independent section — `over` on the shared QN-fraction ladder, and
+`target` chooses `Next` (glide to the next lane-1 note) or `Fixed`: a `cents`
+demand stored temper-agnostically, authored as host-relative temper steps via
+the `stepInterval` widget.
 Flush-time reconcile (`dirtyFxHosts`) and the R2/R4 refactors are
 deferred fast-follows — correctness rides the rebuild path, which every
 flush triggers. **Vibrato's Lua slice has now landed** (`tm_vibrato_spec`):

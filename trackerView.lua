@@ -1682,6 +1682,10 @@ function tv:noteFx(uuid)
   return note and note.fx or nil
 end
 
+-- The host note behind a uuid; the stepInterval editor reads its pitch/detune to
+-- convert a slide's cents demand to/from temper steps.
+function tv:noteByUuid(uuid) return tm:byUuid(uuid) end
+
 -- Write or clear (util.REMOVE) a note's fx list, then flush so the rebuild
 -- re-derives its fxNotes. uuid, not the event, is the durable handle.
 function tv:setNoteFx(uuid, fxOrRemove)

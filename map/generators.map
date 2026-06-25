@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=130  sha=06aac2a  mode=namespace
+@module generators  src=generators.lua  loc=130  sha=b2966fd  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
@@ -31,5 +31,5 @@
       @contract  carrier returns to 0 (centre) at window end -- no residual bend on the channel
   @api M.slide(host, params, ctx)  @ 99
       @contract  slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
-      @contract  target 'next' = interval to next lane-1 note; numeric = fixed cents; pbRangeCents clamps
+      @contract  target 'next' = interval to next lane-1 note; 'fixed' = params.cents; pb-range clamps
       @contract  no next note or unison target -> empty delta (carrier untouched)

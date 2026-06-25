@@ -94,7 +94,7 @@ local function interval(a, b)
 end
 
 --contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
---contract: target 'next' = interval to next lane-1 note; numeric = fixed cents; pbRangeCents clamps
+--contract: target 'next' = interval to next lane-1 note; 'fixed' = params.cents; pb-range clamps
 --contract: no next note or unison target -> empty delta (carrier untouched)
 function M.slide(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
@@ -105,7 +105,7 @@ function M.slide(host, params, ctx)
     if not nxt then return { notes = {}, delta = {} } end
     target = interval(h, nxt)
   else
-    target = params.target or 0
+    target = params.cents or 0
   end
   local maxBend = ctx.pbRangeCents
   if maxBend then target = math.max(-maxBend, math.min(maxBend, target)) end

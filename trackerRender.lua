@@ -1805,8 +1805,10 @@ local PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
                   { l = '1/4', v = { 1, 4 } }, { l = '1/6', v = { 1, 6 } },
                   { l = '1/8', v = { 1, 8 } } }
 
--- widget 'choice': options = {{l,v},...}; Left/Right step the list.
--- widget 'int': a numberStepper; Left/Right adjust by `base`, Ctrl by `coarse`.
+local SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }
+
+-- widgets: 'choice' (dropdown, Left/Right steps the list); 'int' (numberStepper,
+-- Left/Right ±base, Ctrl ±coarse); 'stepInterval' (cents stored, edited as temper steps).
 local FX_FIELDS = {
   retrig = {
     { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
@@ -1817,9 +1819,12 @@ local FX_FIELDS = {
     { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10, min = 0, max = 200 },  -- cents
     { field = 'onset',  label = 'Onset',  widget = 'int', base = 1, coarse = 4,  min = 0, max = 16 },   -- QN ramp-in
   },
-  -- target = 'next' (glide to the next lane-1 note) is the v1 fixed default; not surfaced.
   slide = {
-    { field = 'over', label = 'Glide', widget = 'choice', options = PERIODS },
+    { field = 'over',   label = 'Glide',    widget = 'choice', options = PERIODS },
+    { field = 'target', label = 'To',       widget = 'choice', options = SLIDE_TARGETS },
+    -- cents demand, edited as host-relative temper steps; shown only for a fixed slide.
+    { field = 'cents',  label = 'Interval', widget = 'stepInterval',
+      when = function(e) return e.target == 'fixed' end },
   },
 }
 
@@ -1839,6 +1844,23 @@ local fxEdit do
     local out = {}; for i, o in ipairs(fd.options) do out[i] = o.l end; return out
   end
 
+  -- stepInterval: stored value is signed cents (a host-relative pitch demand);
+  -- shown/stepped as temper steps, anchored at the host. see design/note-macros.md § UI
+  local function slideTemper() return tv:activeTemper() or tuning.findTemper('12EDO') end
+  local function hostPitch(uuid)
+    local n = tv:noteByUuid(uuid)
+    return (n and n.pitch) or 60, (n and n.detune) or 0
+  end
+  local function centsToSteps(temper, midi, detune, cents)
+    local hStep, hOct = tuning.midiToStep(temper, midi, detune)
+    local tStep, tOct = tuning.midiToStep(temper, 0, midi * 100 + detune + (cents or 0))
+    return (tOct - hOct) * #temper.cents + (tStep - hStep)
+  end
+  local function stepsToCents(temper, midi, detune, n)
+    local tMidi, tDetune = tuning.transposeStep(temper, midi, detune, n)
+    return (tMidi - midi) * 100 + (tDetune - detune)
+  end
+
   -- One row per section header, plus one per field of an active section, in
   -- FX_KINDS order. A header's index is nil when its section is off.
   local function buildRows(fx)
@@ -1849,7 +1871,9 @@ local fxEdit do
       rows[#rows + 1] = { kind = kind, header = true, index = idx }
       if idx then
         for _, fd in ipairs(FX_FIELDS[kind]) do
-          rows[#rows + 1] = { kind = kind, fd = fd, index = idx, entry = fx[idx] }
+          if not fd.when or fd.when(fx[idx]) then
+            rows[#rows + 1] = { kind = kind, fd = fd, index = idx, entry = fx[idx] }
+          end
         end
       end
     end
@@ -1876,6 +1900,14 @@ local fxEdit do
       local pick = chrome.dropdown('fx_' .. rw.kind .. '_' .. fd.field,
                      fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
       if pick then tv:setFxField(uuid, rw.index, fd.field, fd.options[pick].v) end
+    elseif fd.widget == 'stepInterval' then
+      local temper = slideTemper()
+      local midi, detune = hostPitch(uuid)
+      local per = #temper.cents
+      local rv, n = chrome.numberStepper('fx_' .. rw.kind .. '_' .. fd.field,
+                      centsToSteps(temper, midi, detune, value),
+                      { width = 70, min = -2 * per, max = 2 * per })
+      if rv then tv:setFxField(uuid, rw.index, fd.field, stepsToCents(temper, midi, detune, n)) end
     else
       local rv, n = chrome.numberStepper('fx_' .. rw.kind .. '_' .. fd.field, value or 0,
                       { width = 70, min = fd.min, max = fd.max })
@@ -1892,6 +1924,13 @@ local fxEdit do
     if fd.widget == 'choice' then
       local i = util.clamp(choiceIndex(fd, value) + (right and 1 or -1), 1, #fd.options)
       tv:setFxField(uuid, rw.index, fd.field, fd.options[i].v)
+    elseif fd.widget == 'stepInterval' then
+      local temper = slideTemper()
+      local midi, detune = hostPitch(uuid)
+      local steps = centsToSteps(temper, midi, detune, value)
+      local delta = (mods & ImGui.Mod_Ctrl) ~= 0 and #temper.cents or 1
+      tv:setFxField(uuid, rw.index, fd.field,
+                    stepsToCents(temper, midi, detune, steps + (right and 1 or -1) * delta))
     else
       local step = (mods & ImGui.Mod_Ctrl) ~= 0 and fd.coarse or fd.base
       local n = util.clamp((value or 0) + (right and 1 or -1) * step, fd.min, fd.max)

@@ -156,6 +156,25 @@ return {
   },
 
   {
+    name = "slide target='fixed' bends by its cents demand; 'next' needs a following note",
+    run = function(harness)
+      local h = harness.mk()
+      addHost(h, { { kind = 'slide', over = { 1, 2 }, target = 'fixed', cents = 200 } }, 1)
+      local uuid = hostUuid(h)
+      local function carrierCount()
+        local n = 0
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'cc' and c.cc == DELTA_MSB then n = n + 1 end
+        end
+        return n
+      end
+      t.truthy(carrierCount() >= 3, 'a fixed slide bakes a carrier with no next-note lookup')
+      h.vm:setFxField(uuid, 1, 'target', 'next')
+      t.eq(carrierCount(), 0, "target='next' with no following note yields no carrier")
+    end,
+  },
+
+  {
     name = 'setFxField writes vibrato depth and onset',
     run = function(harness)
       local h = harness.mk()

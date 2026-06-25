@@ -107,9 +107,9 @@ return {
   },
 
   {
-    name = 'slide with a numeric target is a fixed-cents bend (no next-note lookup)',
+    name = "slide.target='fixed' is a fixed-cents bend (cents demand, no next-note lookup)",
     run = function()
-      local out = generators.slide(slideHost(), { kind = 'slide', over = { 1, 2 }, target = 150 },
+      local out = generators.slide(slideHost(), { kind = 'slide', over = { 1, 2 }, target = 'fixed', cents = 150 },
                                    slideCtx(nil))
       t.eq(out.delta[3].val, 150, 'fixed cents ignores the next-note resolution')
     end,
