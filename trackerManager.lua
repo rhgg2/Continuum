@@ -48,8 +48,7 @@ local lastMuteSet = {}
 --invariant: staleSwing[chan]=true: resolved swing changed; rebuild rederives raw, clears
 local staleSwing  = {}
 -- ppq tolerance for "raw agrees with its logical projection"; absorbs
--- fromLogical rounding slop. Shared by the tail pass (stale-frame
--- detection) and the rebuild rule (onset disagreement).
+-- fromLogical rounding slop, shared by the tail pass and rebuild rule.
 local EPS         = 1
 --invariant: swingSnap caches the (cm, mm)-derived swing transforms; nil
 --  means "needs rebuild". Invalidated at the head of every tm:rebuild —
@@ -155,12 +154,8 @@ end
 
 ----- fxNote reconciliation (the PC-synthesis skeleton, note-shaped)
 
--- Identity is geometry: (host, ppq, endppqL, pitch, vel, detune, sample).
--- endppqL is the generator's logical extent (the tile end) -- a kept note with
--- a stale endppqL caps the tail walk at the old ceiling, so it IS matched.
--- (Realised endppq is tail-walk-owned and stays out.) Twin of reconcilePCsForChan.
--- Predicted ppq is a Lua integer; REAPER's MIDI_GetNote returns a float, and
--- util.key stringifies -- canonicalise or 3072 vs 3072.0 churns every fxNote each rebuild.
+-- Identity is geometry: (host, ppq, endppqL, pitch, vel, detune, sample); stale endppqL still
+-- matches (tail-walk-owned realised end stays out). Predicted ppq is integer; REAPER returns float.
 local function canon(x)
   if type(x) == 'number' then return math.tointeger(x) or x end
   return x
@@ -201,10 +196,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   ----- Accessors
 
-  -- Prevailing lane-1 detune at-or-before ppq. Used by flush to derive
-  -- a pb's wire-raw from its authored cents (raw = cents + detune at
-  -- seat). The full absorber reconciliation lives in tm:rebuild step
-  -- 4.9; um just stages.
+  -- Prevailing lane-1 detune at-or-before ppq; flush derives wire-raw = cents + detuneAt(seat).
+  -- Full absorber reconciliation is rebuild step 4.9; um just stages the best-effort value.
   local function detuneAt(chan, P)
     local n = util.seek(chans[chan].notes, 'at-or-before', P)
     return (n and n.detune) or 0
@@ -243,10 +236,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   local function assignLowlevel(evt, update)
     local oldChan = evt.chan
     util.assign(evt, update)
-    -- Keep the per-chan index coherent. chan change migrates the entry;
-    -- ppq change resorts (util.seek callers depend on ascending ppq;
-    -- rebuild's stale-swing pass updates events in original-order, not
-    -- new-raw-order, so a resort is needed after).
+    -- Keep per-chan index coherent: chan change migrates the entry; ppq change resorts.
+    -- util.seek needs ascending order; stale-swing pass walks original order, not new-raw.
     local function listOf(c)
       if evt.evType == 'note' and evt.lane == 1 then return chans[c].notes end
       if evt.evType == 'pb' then return chans[c].pbs end
@@ -308,11 +299,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   ----- High-level ops
 
-  -- um is a stager. Pb authoring writes cents (the logical authored
-  -- value); the wire raw is derived at flush (cents + detune at seat).
-  -- All absorber seating, removal, and reseating happens in tm:rebuild
-  -- step 4.9 from the final note layout — so a clamp or delay change
-  -- that moves a lane-1 onset takes its absorber along automatically.
+  -- um is a stager: pb authoring writes cents; wire raw is derived at flush (cents + detuneAt seat).
+  -- Absorber seating/reseating happens in rebuild step 4.9 from the final note layout.
 
   local function dirtyPc(chan) dirtyPcChans[chan] = true end
 
@@ -356,9 +344,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   local function assignNote(n, update)
     if update.lane then print('um: not allowed to change lane of notes'); return end
 
-    -- update.ppq covers both direct ppq edits and delay edits
-    -- (realiseNoteUpdate maps delay→ppq before we get here). endppq
-    -- alone doesn't move the realised onset, so it doesn't dirty.
+    -- update.ppq covers direct ppq edits and delay edits (realiseNoteUpdate maps delay→ppq).
+    -- endppq alone doesn't move the realised onset, so it doesn't dirty.
     if update.sample ~= nil or update.ppq ~= nil then dirtyPc(n.chan) end
     if update.chan and update.chan ~= n.chan then dirtyPc(n.chan); dirtyPc(update.chan) end
 
@@ -406,8 +393,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   ----- Public interface
 
   -- The live column event for a uuid, valid until the next rebuild.
-  -- uuid is mm's durable identity; token is internal and re-keyed, so
-  -- cross-rebuild handles (gm) resolve through this, never the token.
+  -- uuid is durable; token is re-keyed each rebuild, so cross-rebuild handles use uuid.
   function tm:byUuid(uuid) return byUuid[uuid] end
 
   function deleteEvent(evtOrToken)
@@ -417,10 +403,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     else                        deleteLowlevel(evt) end
   end
 
-  -- endppq arrives logical and is the authored ceiling. util.OPEN stamps
-  -- an open ceiling + a provisional raw note-off (the tail pass derives
-  -- the real one); a finite value stamps the logical ceiling and derives
-  -- raw. rec.ppq must already be raw (the OPEN branch uses rec.ppq + 1).
+  -- endppq arrives as authored logical ceiling. OPEN stamps open ceiling + provisional raw note-off
+  -- (ppq+1; tail pass derives the real one); finite value stamps logical ceiling and derives raw.
   local function stampEndppq(rec, chan)
     if rec.endppq == util.OPEN then
       rec.endppqL, rec.endppq = util.OPEN, rec.ppq + 1
@@ -456,16 +440,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     else
       update.ppq = evt.ppq + (dNew - dOld)
     end
-    -- Authored delay / endppq are intent; raw is realisation. A delay
-    -- that pushes raw onset below 0 (or past a same-pitch predecessor
-    -- — step 4.8 handles that) floors at 0; a tail past the take edge
-    -- clips at takeLen. Step 4.8 and flush both re-apply these against
-    -- the post-walk geometry; clamping here keeps the staged raw value
-    -- bounded the moment it lands in mm, so interim readers don't see
-    -- out-of-range raw. Divergence surfaces as delay ~= delayC and
-    -- endppq ~= endppqC; tp paints a * next to the delay digits, and
-    -- the realised tail is what the renderer draws (endppqC, not
-    -- endppq), so no separate endppq cue is needed.
+    -- Clamp staged raw onset ≥ 0 and tail ≤ takeLen so interim mm readers see bounded values.
+    -- see docs/trackerManager.md § Staged-update bounds
     if update.ppq < 0 then update.ppq = 0 end
     if update.endppq ~= nil then
       stampEndppq(update, evt.chan)
@@ -547,18 +523,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
     if #adds == 0 and #assigns == 0 and #deletes == 0 then return end
 
-    -- Same-(chan,pitch) MIDI legality enforced once here as a SINGLE
-    -- scan over every note that will exist post-flush — committed
-    -- (byToken, all lanes) and staged adds alike. Not a per-self peer
-    -- walk: two notes can collide without either being the edited one,
-    -- and repeated per-self truncation damages peers a later same-flush
-    -- op would resolve. Run after preflush (propagated peers staged)
-    -- and before the snapshot (clamps/deletes ride this flush). This is
-    -- only the staging pre-clip so PA/detune resize routing sees
-    -- coherent geometry inside this mm:modify; the authoritative raw
-    -- tail is re-derived by the rebuild tail pass that follows. raw
-    -- endppq is realisation; endppqL is intent and is never written
-    -- here — deleting a blocker regrows the raw tail up to it.
+    -- Single scan over all post-flush notes for same-(chan,pitch) MIDI legality (staging pre-clip).
+    -- see docs/trackerManager.md § Pre-clip collision scan
     do
       local takeLen = tm:length()
       local byKey   = {}
@@ -617,11 +583,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
     adds, assigns, deletes = {}, {}, {}
 
-    -- pb wire conversion: um stores authored cents in pb.cents; mm wire
-    -- carries raw 14-bit. Compute raw = cents + prevailing lane-1 detune
-    -- at seat, clamped via centsToRaw. The rebuild absorber pass refines
-    -- this (and seats/removes fakes) using the post-walk note layout;
-    -- this is the best-effort wire value for the interim.
+    -- pb wire conversion at flush: raw = centsToRaw(cents + detuneAt(seat)).
+    -- Rebuild step 4.9 refines with the post-walk layout; this is best-effort for the interim.
     for _, e in ipairs(flushAssigns) do
       if e.evt.evType == 'pb' and e.update.cents ~= nil then
         e.update.val = centsToRaw(e.update.cents + detuneAt(e.evt.chan, e.evt.ppq))
@@ -659,9 +622,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
   ----- Init / reload: (re)load local cache from mm.
 
-  -- Also clears staging buffers: a rebuild must not carry un-flushed ops
-  -- across (their tokens may be stale for newly-added events), matching the
-  -- prior "fresh um per rebuild" semantics now that the um itself persists.
+  -- Also clears staging buffers: rebuild must not carry un-flushed ops across
+  -- (tokens may be stale for newly-added events; matches prior "fresh um per rebuild").
   function reload()
     adds, assigns, deletes = {}, {}, {}
     dirtyPcChans           = {}
@@ -672,10 +634,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     for tok, e in mm:events() do
       local evt
       if e.evType == 'pb' then
-        -- val is the wire raw cents (raw 14-bit → cents for um's frame).
-        -- cents (sidecar) is the authored logical value; nil for foreign-
-        -- MIDI or pre-cents pbs -- back-derived in rebuild step 4.9
-        -- once the final lane-1 layout is settled.
+        -- val is raw 14-bit converted to cents (um's frame). cents sidecar is authored logical value;
+        -- nil for foreign-MIDI/pre-cents pbs — back-derived in rebuild step 4.9 from lane-1 layout.
         evt = util.pick(e, 'ppq ppqL chan shape tension derived frame cents',
                         { val = rawToCents(e.val), token = tok, evType = 'pb' })
         util.add(chans[evt.chan].pbs, evt)
@@ -817,13 +777,8 @@ function tm:setLength(newPpq)
   if newPpq ~= oldPpq then mm:setLength(newPpq / mm:resolution()) end
 end
 
--- Stretch the take to `newPpq` by linearly remapping the logical
--- frame: each event on logical row r ends up on row f·r where
--- f = newPpq/oldPpq. ppqL stamps scale by f; raw ppqs are
--- rederived through swing — so under non-identity swing raw
--- ppqs are not linearly scaled (rows are preserved instead, which
--- keeps reswing well-defined). Note delays scale by f. Frame stamps
--- (rpb, swing slot names) are untouched. No events are deleted.
+-- Stretch take to newPpq: logical rows scale by f=newPpq/oldPpq, raw rederived through swing.
+-- see docs/trackerManager.md § Length operations
 function tm:rescaleLength(newPpq)
   if not mm then return end
   local oldPpq = mm:length() or 0
@@ -833,10 +788,8 @@ function tm:rescaleLength(newPpq)
   end
   local f = newPpq / oldPpq
 
-  -- τ acts on logical positions; raw ppqs rederive through the current swing snapshot.
-  -- Events without ppqL fall back to τ on raw ppq (identical under identity swing).
-  -- slopeAt scales note delays so realised stretch tracks logical stretch locally.
-  -- Two passes (gather, then mutate) so all reads are stable.
+  -- τ maps logical ppqL; events without ppqL fall back to raw (identical under identity swing).
+  -- slopeAt scales delays for local realised stretch. Two passes so all reads are stable.
   local function applyTimeMap(tau, slopeAt)
     local plans = {}
     forEachEvent(function(_, evt, chan, isNote)
@@ -877,21 +830,8 @@ function tm:rescaleLength(newPpq)
   mm:setLength(newPpq / mm:resolution())
 end
 
--- Loop the existing pattern to fill `newPpq`. The events in [0, oldPpq)
--- are replicated at offsets k·oldPpq for k = 1 .. ceil(newPpq/oldPpq)-1.
--- Copies whose shifted ppq lands at-or-past newPpq are dropped; note
--- endppqs that extend past newPpq are clamped. Originals are untouched.
--- Shrinks fall through to setLength.
---
--- Walks mm-level events directly rather than column-projected ones:
--- the projection strips fields a verbatim replica needs (cc number,
--- pb fake flag, custom user metadata). For pbs this means the copied
--- stream recreates the source's pitch trajectory exactly — including
--- whatever carry it inherits from the end of the prior tile.
---
--- Because oldPpq sits on a swing-period boundary (take length aligns
--- to QN), shifting by k·oldPpq is identical in logical and realised
--- frames; one delta serves both ppq and ppqL paths.
+-- Loop [0, oldPpq) at offsets k·oldPpq to fill newPpq; shrinks fall through to setLength.
+-- see docs/trackerManager.md § Length operations
 function tm:tileLength(newPpq)
   if not mm then return end
   local oldPpq = mm:length() or 0
@@ -1086,24 +1026,8 @@ do
     -- column event after the 4.8 tail walk so the view sees the authored note.
     local fxHostEnd = {}
 
-    -- 0) Partition mm events into internal (stamped + raw consistent
-    -- with ppqL: model-governed) and external (foreign-MIDI, or
-    -- external raw edit on a stamped record). Internals are fully-
-    -- schema'd by construction; the main rebuild flows them branchlessly.
-    -- Externals re-enter at step 6: notes get a fresh lane pack and
-    -- ppqL/endppqL stamp; CCs get ppqL stamped in line here (no lane,
-    -- no tail, single-field recache).
-    --
-    -- A stamped note whose raw disagrees with fromLogical(ppqL, delay)
-    -- under non-staleSwing has been externally edited (Ctrl-Z, foreign
-    -- script): raw is truth, the cached ppqL/endppqL are stale. Route
-    -- to external so step 6 re-stamps from raw.
-    --
-    -- Exception: realiseNoteUpdate floors raw at 0 when authored delay
-    -- pushes the realised onset negative. ppqL/delay are still the
-    -- intent; the divergence is intentional and surfaces as delayC
-    -- (which tp paints with a * next to the delay digits). Recognise
-    -- the clamp shape (raw == 0, fromLogical < 0) and stay internal.
+    -- 0) Partition mm events into internal (stamped + raw = fromLogical(ppqL)) and external.
+    -- see docs/trackerManager.md § Rebuild: step 0 — internal/external partition
     local function rawDivergesFromLogical(evt)
       if evt.ppqL == nil      then return true  end
       if staleSwing[evt.chan] then return false end
@@ -1133,9 +1057,8 @@ do
         mm:wideCC(chan, c.code, true)
       end
     end
-    -- 2) Allocate note columns for internals (stamped path). Clone rather
-    -- than alias: step 5 overwrites column evt.ppq with logical while mm
-    -- retains raw.
+    -- 2) Allocate note columns for internals (stamped path). Clone rather than alias:
+    -- step 5 overwrites column evt.ppq with logical while mm retains raw.
     for _, note in ipairs(internal) do
       local channel = channels[note.chan]
       local col, lane = pickStampedLane(channel, note)
@@ -1144,18 +1067,8 @@ do
       util.add(col.events, ce)
     end
 
-    -- 3) Single CC walk. Reconciles each non-fake CC's (raw, ppqL) under
-    -- the current swing, then projects non-pb CCs into columns:
-    --   - staleSwing[chan]: ppqL is truth, reseat raw = fromLogical(ppqL).
-    --   - else, raw diverges from ppqL: external edit on raw; restamp
-    --     ppqL = toLogical(raw).
-    -- Reconcile updates are mutated into the live cc record so the
-    -- subsequent column-event clone sees up-to-date values; mm:assign
-    -- propagates them at the end of the walk. Fakes are parasitic: fake
-    -- pbs are reconciled by step 4.9 (whole absorber pass against the
-    -- post-walk lane-1 layout); fake PCs reconciled fresh by step 4.5.
-    -- Pb column projection is deferred to step 4.9 so it sees the final
-    -- reconciled fakes and the recomputed raw vals.
+    -- 3) Single CC walk. Reconciles (raw, ppqL) under current swing; projects non-pb CCs.
+    -- see docs/trackerManager.md § Rebuild: step 3 — CC walk
     do
       local ccUpdates = {}
       for _, cc in mm:ccs() do
@@ -1227,13 +1140,8 @@ do
       if grew and mm:take() then ds:assign('extraColumns', extras) end
     end
 
-    -- 4.7) Two-frame rebuild rule. See docs/timing.md §"Rebuild rule".
-    -- staleSwing reseat on notes only: rederive raw from ppqL under the
-    -- channel's new swing. Non-fake CCs are reconciled by step 3; fakes
-    -- (pb absorbers, synthesised PCs) are reconciled by step 4.9 and
-    -- step 4.5 respectively against the post-walk layout. raw endppq is
-    -- owned by step 4.8's tail-realisation pass, never reseated from
-    -- endppqL here.
+    -- 4.7) Two-frame rebuild rule. See docs/timing.md §"Rebuild rule". staleSwing reseats
+    -- notes only; CCs by step 3/4.5/4.9; raw endppq owned by step 4.8, never reseated here.
     do
       local toAssign = {}
       forEachEvent(function(_, evt, chan, isNote, _, lane)
@@ -1435,9 +1343,8 @@ do
         ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
       end
 
-      -- fxLive (tail walk + PC consume it) clones its evts because the walk
-      -- mutates them; on a no-churn rebuild fxExisting already lists the derived
-      -- set with current tokens, so skip the mm:notes() re-scan. see docs/trackerManager.md § Rebuild
+      -- fxLive clones evts (walk mutates them). No-churn: fxExisting lists derived set with current
+      -- tokens so mm:notes() re-scan is skipped. see docs/trackerManager.md § Rebuild
       local fxSource = {}
       if churned then
         for _, n in mm:notes() do if n.derived then util.add(fxSource, n) end end
@@ -1453,16 +1360,8 @@ do
       end
     end
 
-    -- 6) Reintroduce externals. Per external (raw-ppq order): pack a
-    -- lane against the now-settled internals plus any earlier externals
-    -- already placed (noteColumnAccepts sees realised tails); stamp
-    -- ppqL/endppqL from raw, backfill any missing metadata (foreign-
-    -- MIDI lacks all; stale-stamped notes come in with authored detune/
-    -- delay intact -- preserved here). The column event is inserted
-    -- in lockstep so the next external's pack sees this one, and tagged
-    -- evt.external = true so step 4.8 treats it as a blocker (its onset
-    -- shows up as 'next' for internals) but never writes to its tail or
-    -- clamps its onset.
+    -- 6) Reintroduce externals: pack lane, stamp ppqL/endppqL from raw, backfill metadata.
+    -- see docs/trackerManager.md § Rebuild: step 6 — externals
     if #external > 0 then
       table.sort(external, function(a, b) return a.ppq < b.ppq end)
       local trackerMode = cm:get('trackerMode')
@@ -1495,26 +1394,8 @@ do
       end)
     end
 
-    -- 4.8) Unified tail/onset walk on internals. Externals (tagged
-    -- evt.external by step 6) participate as BLOCKERS only -- their
-    -- onsets show up as "next" lookups so internals' tails clip against
-    -- them -- but the walk never writes to them.
-    --
-    --   tail target = max(onset+1, min(
-    --     authored ceiling = fromLogical(endppqL); math.huge for util.OPEN,
-    --     same-lane next intent = fromLogical(nextSameLane.ppqL) + overlap,
-    --     same-pitch next raw   = nextSamePitch.ppq,
-    --     take length))
-    --
-    -- Same-lane uses INTENT (logical) so authored music geometry wins
-    -- over realisation delays. Same-pitch uses RAW because MIDI physics
-    -- is realised. "Next" is strict-greater on raw ppq -- a chord-mate
-    -- at the same onset is not "following".
-    --
-    -- Collision (current raw <= prev same-pitch raw, raw order with ppqL
-    -- tie-break) clamps the successor to prev+1. Authored swap survives:
-    -- when raw order differs from logical order, whoever lands first in
-    -- raw becomes the realised predecessor.
+    -- 4.8) Unified tail/onset walk on internals. Externals are BLOCKERS only (never written).
+    -- see docs/trackerManager.md § Rebuild: step 4.8 — tail walk
     do
       local takeLen = tm:length()
       local clamps, clips = {}, {}
@@ -1549,9 +1430,8 @@ do
         end
         sortAll()
 
-        -- Same-pitch onset clamp. Retro-clip of the predecessor's tail
-        -- is subsumed by the tail pass below (the clamped successor's
-        -- onset shows up as same-pitch next).
+        -- Same-pitch onset clamp. Retro-clip of predecessor's tail is subsumed by the tail
+        -- pass below (the clamped successor's onset shows up as same-pitch next).
         local lastByPitch = {}
         for _, n in ipairs(notes) do
           local e, prev = n.evt, lastByPitch[n.evt.pitch]
@@ -1600,9 +1480,8 @@ do
         end
         ::nextChan::
       end
-      -- Clamps first: reindex separates colliding tokens before clip
-      -- assigns dereference them (same-pitch notes can share a content-
-      -- keyed token until ppq differs).
+      -- Clamps first: reindex separates colliding tokens before clip assigns dereference them
+      -- (same-pitch notes share a content-keyed token until ppq differs).
       applyAssigns(clamps)
       applyAssigns(clips)
 
@@ -1662,9 +1541,8 @@ do
         lane1ByChan[chan] = list
       end
 
-      -- mm uses content-keyed tokens, so any pb whose ppq we touch
-      -- needs its pre-mutation token captured up front. Each pb here
-      -- is a mm:ccs() clone with origTok set once.
+      -- mm uses content-keyed tokens: any pb whose ppq we touch needs its pre-mutation token
+      -- captured up front. Each pb here is a mm:ccs() clone with origTok set once.
       local pbsByChan = {}
       for _, cc in mm:ccs() do
         if cc.evType == 'pb' then
@@ -1680,11 +1558,8 @@ do
         local pbs         = pbsByChan[chan] or {}
         table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
 
-        -- Needed seats: every lane-1 onset where detune ≠ predecessor.
-        -- hostPpqL captures the lane-1 ppqL at each needed seat so a
-        -- fake placed (or moved) there carries its host's logical
-        -- position into the pb column (step 5's logical projection
-        -- and the tv-facing pb display rely on ppqL, not raw).
+        -- Needed seats: every lane-1 onset where detune ≠ predecessor. hostPpqL captures
+        -- lane-1 ppqL so a fake placed there carries the host's logical position (step 5, tv).
         local needed, hostPpqL = {}, {}
         local prev = 0
         for _, n in ipairs(lane1Events) do
@@ -1713,11 +1588,8 @@ do
           end
         end
 
-        -- Back-derive cents for any pb missing it; foreign-MIDI / pre-
-        -- cents-sidecar pbs carry only raw on the wire, so the authored
-        -- value is recovered once here against the current lane-1
-        -- layout. Marked so the consolidated assign below always
-        -- carries cents to the sidecar (raw alone may stay unchanged).
+        -- Back-derive cents for any pb missing it (foreign-MIDI/pre-cents pbs carry raw only).
+        -- Marked so the consolidated assign below always carries cents to the sidecar.
         local persistCents = {}
         for _, pb in ipairs(pbs) do
           if pb.cents == nil then
@@ -1726,9 +1598,8 @@ do
           end
         end
 
-        -- Match existing pbs to needed seats. Real pbs cover their seat.
-        -- Fakes: consume any already at a needed seat in place, move
-        -- remaining fakes to fill the rest, delete leftovers.
+        -- Match existing pbs to needed seats. Real pbs cover their seat; fakes: consume any
+        -- already at a needed seat, move remaining fakes to fill the rest, delete leftovers.
         local realAt, availAbsorbers = {}, {}
         for _, pb in ipairs(pbs) do
           if pb.derived then util.add(availAbsorbers, pb)
@@ -1774,9 +1645,8 @@ do
 
         table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
 
-        -- Consolidated assign: one entry per existing pb where ANY of
-        -- (ppq moved, ppqL restamped, raw changed, cents back-derived)
-        -- needs to land.
+        -- Consolidated assign: one entry per existing pb where any of
+        -- (ppq moved, ppqL restamped, raw changed, cents back-derived) needs to land.
         for _, pb in ipairs(pbs) do
           if pb.origTok then
             local d      = detuneAt(lane1Events, pb.ppq)
@@ -1826,9 +1696,8 @@ do
       end
     end
 
-    -- 6.5) PA dispatch. Runs after step 6 so foreign-MIDI PAs can locate
-    -- their host note (now in channels[]). PAs do not own a lane in the
-    -- model -- they ride a same-pitch note's column.
+    -- 6.5) PA dispatch. Runs after step 6 so foreign-MIDI PAs can locate their host note.
+    -- PAs do not own a lane — they ride a same-pitch note's column.
     for _, cc in mm:ccs() do
       if cc.evType == 'pa' then
         local noteCol = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
@@ -1838,9 +1707,8 @@ do
       end
     end
 
-    -- 4.5) PC synthesis (trackerMode only). Runs after step 6 so it sees
-    -- externals too: a foreign-MIDI note in trackerMode inherits sample
-    -- from the prevailing PC and is reflected in the synthesised set.
+    -- 4.5) PC synthesis (trackerMode only). Runs after step 6 so it sees externals:
+    -- a foreign-MIDI note inherits sample from the prevailing PC.
     if cm:get('trackerMode') then
       local toDelete, toAdd = {}, {}
       for chan = 1, 16 do
@@ -1873,30 +1741,15 @@ do
       end
     end
 
-    -- 5) Project to logical. The tv surface is logical-only: both the
-    -- onset and the tail leave here in the authoring frame, raw stays
-    -- private to tm/mm.
-    --
-    -- evt.ppq and evt.endppq leave here as floats: the logical frame
-    -- is float by design, and the on-grid predicate (ctx:isOnGrid) is
-    -- the sole owner of the row-membership tolerance. Rounding here
-    -- would silently widen that tolerance to 1 ppq.
-    --
-    -- evt.endppq is the AUTHORED logical ceiling, unclipped: endppqL,
-    -- or util.OPEN for a deliberately-unbounded tail. The tail pass
-    -- already folded every blocker into mm's raw endppq; inverting it
-    -- gives evt.endppqC, the CLIPPED logical ceiling — render-only
-    -- (the tp tail build is the sole consumer). An uncached note (no
-    -- endppqL) has no authored stamp, so its authored ceiling is the
-    -- realised one.
+    -- 5) Project to logical. tv surface is logical-only; ppq/endppq leave here as floats.
+    -- see docs/trackerManager.md § Rebuild: step 5 — project to logical
     do
       local res = mm:resolution()
       local function projectToLogical(col, chan)
         for _, evt in ipairs(col.events) do
           if evt.ppqL ~= nil then
-            -- delayC: realised-frame delay equivalent. Differs from
-            -- authored delay when the unified walk clamped raw against
-            -- a same-pitch predecessor; renderer cues the give-way.
+            -- delayC: realised-frame delay equivalent. Differs from authored delay when
+            -- the unified walk clamped raw against a same-pitch predecessor; renderer cues the give-way.
             if evt.delay ~= nil then
               local baseline = tm:fromLogical(chan, evt.ppqL)
               evt.delayC = util.round(timing.ppqToDelay(evt.ppq - baseline, res))
@@ -1946,9 +1799,8 @@ do
   --invariant: dataChanged 'swing' → global change marks all 16, else only the diffed channels
   --invariant: configChanged 'swings' → channels resolving to names with diff body vs prevSwings
   --invariant: prev*-caches refresh after each event and on bindTake
-  -- Merged-tier read: a save at any tier (project, global) lands in the
-  -- same merged view, so diff captures real change to the composite a
-  -- channel will resolve to.
+  -- Merged-tier read: a save at any tier lands in the same merged view, so diff
+  -- captures real change to the composite a channel will resolve to.
   local function readSwings() return cm:get('swings', { mergeTiers = true }) end
   local prevSwings = util.deepClone(readSwings())
   local prevSwing  = util.deepClone(ds:get('swing') or {})

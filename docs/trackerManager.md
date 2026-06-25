@@ -420,3 +420,140 @@ tm-local commitments worth recording here:
 - **Location lifetime.** `loc` values are valid only within a single
   rebuild-to-flush window; um's `notesByLoc` / `ccsByLoc` are rebuilt
   fresh each rebuild.
+
+## Staged-update bounds
+
+When `realiseNoteUpdate` stages a delay or endppq change, the raw onset
+and raw tail are clamped immediately (`onset ≥ 0`, `tail ≤ takeLen`).
+This is NOT the authoritative clip — step 4.8 re-applies the full
+same-pitch and take-edge constraints against the final post-walk geometry,
+and flush re-applies on every write. Clamping here keeps the staged raw
+value in range so interim mm readers (before the next rebuild) never see
+out-of-range values. Divergence surfaces as `delay ~= delayC` (tp paints
+`*` next to the delay digits) and `endppq ~= endppqC`; the renderer draws
+`endppqC`, so no separate endppq cue is needed.
+
+## Pre-clip collision scan
+
+Run inside `mm:modify`'s preflush, after `preflush` (propagated peers
+already staged) and before the snapshot (clamps/deletes ride this flush).
+Scans ALL post-flush notes — `byToken` all lanes plus staged adds — for
+same-`(chan, pitch)` MIDI legality in one pass.
+
+Not a per-self peer walk: two notes can collide without either being the
+edited one, and repeated per-self truncation damages peers a later
+same-flush op would resolve.
+
+This is the staging pre-clip only; the authoritative raw tail is
+re-derived by rebuild step 4.8. `endppqL` (intent) is never written here
+— deleting a blocker lets the raw tail regrow to it.
+
+## Length operations
+
+### rescaleLength(newPpq)
+
+Stretches the take by linearly remapping the logical frame. Each event on
+logical row `r` ends up at row `f·r` where `f = newPpq/oldPpq`. `ppqL`
+stamps scale by `f`; raw ppqs are rederived through swing, so under
+non-identity swing raw ppqs are NOT linearly scaled — rows are preserved,
+which keeps reswing well-defined. Note delays scale by `f`. Frame stamps
+(`rpb`, swing slot names) are untouched. No events are deleted.
+
+### tileLength(newPpq)
+
+Loops `[0, oldPpq)` at offsets `k·oldPpq` for `k = 1 .. ceil(newPpq/oldPpq)-1`.
+Copies whose shifted ppq lands at-or-past `newPpq` are dropped; note
+`endppq`s extending past `newPpq` are clamped. Originals untouched.
+Shrinks fall through to `setLength`.
+
+Walks mm-level events directly rather than column-projected ones because
+projection strips fields a verbatim replica needs (cc number, pb fake
+flag, user metadata). Since `oldPpq` sits on a swing-period boundary
+(take length aligns to QN), shifting by `k·oldPpq` is identical in
+logical and realised frames — one delta serves both `ppq` and `ppqL`
+paths.
+
+## Rebuild: step 0 — internal/external partition
+
+Internal events are stamped (`ppqL ~= nil`) AND have raw ppq consistent
+with `fromLogical(ppqL, delay)`. The main rebuild flows them branchlessly.
+External events are foreign-MIDI (no `ppqL`) or externally-edited stamped
+records (Ctrl-Z, foreign script made raw diverge from `fromLogical`).
+They re-enter at step 6: notes get a fresh lane pack and
+`ppqL`/`endppqL` stamp; CCs get `ppqL` stamped in-line in step 3.
+
+**Exception for `realiseNoteUpdate`'s floor:** when authored delay pushes
+the realised onset negative, raw is clamped to 0 while `ppqL`/`delay`
+retain the intent. This divergence is intentional and surfaces as
+`delayC` (tp paints `*`). Recognise the clamp shape
+(`raw == 0 AND fromLogical(ppqL, delay) < 0`) and stay internal.
+
+## Rebuild: step 3 — CC walk
+
+Reconciles each non-fake CC's `(raw, ppqL)` under the current swing, then
+projects non-pb CCs into columns:
+
+- `staleSwing[chan]`: ppqL is truth; reseat `raw = fromLogical(ppqL)`.
+- Otherwise, if raw diverges from ppqL: external raw edit; restamp
+  `ppqL = toLogical(raw)`.
+
+Reconcile updates are mutated into the live cc record so the subsequent
+column-event clone sees up-to-date values; `mm:assign` propagates them at
+the end of the walk.
+
+Fakes are handled separately: fake pbs by step 4.9 (whole absorber pass
+against post-walk lane-1 layout); fake PCs by step 4.5. Pb column
+projection is deferred to step 4.9 so it sees the final reconciled fakes
+and recomputed raw vals.
+
+## Rebuild: step 6 — externals
+
+Per external in raw-ppq order: pack a lane against the now-settled
+internals plus any earlier externals already placed (`noteColumnAccepts`
+sees realised tails); stamp `ppqL`/`endppqL` from raw; backfill missing
+metadata (foreign-MIDI lacks all; stale-stamped notes arrive with authored
+detune/delay intact). Column event inserted in lockstep so each subsequent
+external's pack sees prior ones. Tagged `evt.external = true` so step 4.8
+treats it as a BLOCKER — its onset shows up as 'next' for internals — but
+the walk never writes to its tail or clamps its onset.
+
+## Rebuild: step 4.8 — tail walk
+
+Tail target for each internal note:
+
+```
+max(onset + 1, min(
+  fromLogical(endppqL),                       -- authored ceiling; math.huge for util.OPEN
+  fromLogical(nextSameLane.ppqL) + overlap,   -- same-lane next (INTENT)
+  nextSamePitch.ppq,                          -- same-pitch next (RAW)
+  takeLen))
+```
+
+Same-lane uses INTENT (`ppqL`) so authored music geometry wins over
+realisation delays. Same-pitch uses RAW because MIDI physics is realised.
+"Next" is strict-greater on raw ppq — a chord-mate at the same onset is
+not following.
+
+Collision (current raw `<=` prev same-pitch raw, raw-order with ppqL
+tie-break): the successor is clamped to `prev.ppq + 1`. Authored swap
+survives: when raw order differs from logical order, whoever lands first
+in raw becomes the realised predecessor.
+
+Externals (tagged `evt.external` by step 6) participate as BLOCKERS only
+— their onsets appear as 'next' lookups so internal tails clip against
+them — but the walk never writes to them.
+
+## Rebuild: step 5 — project to logical
+
+tv surface is logical-only: both onset and tail leave here in the
+authoring frame; raw stays private to tm/mm. `evt.ppq` and `evt.endppq`
+are floats — the logical frame is float by design, and the on-grid
+predicate (`ctx:isOnGrid`) is the sole owner of row-membership tolerance.
+Rounding here would silently widen that tolerance to 1 ppq.
+
+`evt.endppq` is the AUTHORED logical ceiling (`endppqL` or `util.OPEN`
+for a deliberately-unbounded tail). The tail pass already folded every
+blocker into mm's raw endppq; inverting gives `evt.endppqC`, the CLIPPED
+logical ceiling — render-only, sole consumer is the tp tail build. An
+uncached note (no `endppqL`) has no authored stamp, so its authored
+ceiling equals the realised one.
