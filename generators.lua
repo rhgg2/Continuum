@@ -6,7 +6,8 @@
 -- @noindex
 
 --invariant: pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
---invariant: host = { window={startppqL,endppqL}, events={note,...}, id=uuid, chan }; ctx carries resolution (+ temper later)
+--invariant: host = { window={startppqL,endppqL}, events={note,...}, id=uuid, chan }
+--invariant: ctx binds resolution, pbRangeCents, nextLane1Note(host) -- flush-time
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
 
@@ -41,7 +42,7 @@ end
 
 -- Kinds whose realisation is a continuous delta stream (carrier ccs), not
 -- structural notes. Drives the rebuild seam's carrier registration.
-M.continuous = { vibrato = true }
+M.continuous = { vibrato = true, slide = true }
 
 -- 14-bit carrier priority: MSB n, LSB n+32 (REAPER interpolates only that pair).
 -- Unlikely-authored first; conventional last. see design/note-macros.md § Delta-code allocation
@@ -83,6 +84,46 @@ function M.vibrato(host, params, ctx)
     at = startL + period / 4 + k * period / 2
   end
   delta[#delta + 1] = { ppqL = endL, val = 0, shape = 'slow' }
+  return { notes = {}, delta = delta }
+end
+
+-- Cents between two notes' realised pitches. The microtonal offset already rides
+-- in detune, so this is pure note arithmetic -- no temper needed.
+local function interval(a, b)
+  return (b.pitch - a.pitch) * 100 + ((b.detune or 0) - (a.detune or 0))
+end
+
+--contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
+--contract: target 'next' = interval to next lane-1 note; numeric = fixed cents; pbRangeCents clamps
+--contract: no next note or unison target -> empty delta (carrier untouched)
+function M.slide(host, params, ctx)
+  local startL, endL = host.window[1], host.window[2]
+  local h = host.events[1]
+  local target
+  if params.target == 'next' then
+    local nxt = ctx.nextLane1Note and ctx.nextLane1Note(h)
+    if not nxt then return { notes = {}, delta = {} } end
+    target = interval(h, nxt)
+  else
+    target = params.target or 0
+  end
+  local maxBend = ctx.pbRangeCents
+  if maxBend then target = math.max(-maxBend, math.min(maxBend, target)) end
+  if target == 0 then return { notes = {}, delta = {} } end
+
+  -- snap keeps the arrival (target) and the handoff (0) on distinct wire ppqs --
+  -- the carrier reconcile keys on (cc, ppq). see design/note-macros.md § Continuous realisation
+  local snap   = math.max(1, ctx.resolution / 16)
+  local over   = periodTicks(params.over, ctx.resolution)
+  local arrive = math.max(startL, endL - snap)
+  local glideStart = math.max(startL, arrive - over)
+
+  local delta = {}
+  local function bp(ppqL, val, shape) delta[#delta + 1] = { ppqL = ppqL, val = val, shape = shape } end
+  bp(startL, 0, glideStart > startL and 'square' or 'slow')   -- hold true pitch until the slur
+  if glideStart > startL then bp(glideStart, 0, 'slow') end   -- slur begins (half-cosine ease)
+  bp(arrive, target, 'square')                                -- arrived; hold to the handoff
+  bp(endL, 0, 'square')                                       -- re-centre: next note sounds true
   return { notes = {}, delta = delta }
 end
 

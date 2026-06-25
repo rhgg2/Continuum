@@ -1,27 +1,35 @@
-@module generators  src=generators.lua  loc=89  sha=78a6497  mode=namespace
+@module generators  src=generators.lua  loc=130  sha=d73fd96  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
-  @invariant  host = { window={startppqL,endppqL}, events={note,...}, id=uuid, chan }; ctx carries resolution (+ temper later)
+  @invariant  host = { window={startppqL,endppqL}, events={note,...}, id=uuid, chan }
+  @invariant  ctx binds resolution, pbRangeCents, nextLane1Note(host) -- flush-time
   @invariant  periods are QN per the periodQN convention -- scalar or {num,den}
 
 # Shapes
   @shape  result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
 
 # Module-level constants
-  @const M = {}  @ 13
-  @const CARRIER_PRIORITY = {  @ 48
+  @const M = {}  @ 14
+  @const CARRIER_PRIORITY = {  @ 49
 
 # Private functions
-  @fn periodTicks(period, resolution)  @ 15
+  @fn periodTicks(period, resolution)  @ 16
+  @fn interval(a, b)  @ 92
+      -- Cents between two notes' realised pitches. The microtonal offset already rides
+      -- in detune, so this is pure note arithmetic -- no temper needed.
 
 # Public API (M.*)
-  @api M.retrig(host, params, ctx)  @ 22
+  @api M.retrig(host, params, ctx)  @ 23
       @contract  retrig fills the host window with evenly-spaced same-pitch fxNotes 2..N (host is fxNote 1)
       @contract  velocity ramps params.ramp per fxNote, clamped 1..127; detune inherited from the host verbatim
-  @api M.allocateCarrier(occupied)  @ 58
+  @api M.allocateCarrier(occupied)  @ 59
       @contract  first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated
-  @api M.vibrato(host, params, ctx)  @ 67
+  @api M.vibrato(host, params, ctx)  @ 68
       @contract  vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
       @contract  breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
       @contract  carrier returns to 0 (centre) at window end -- no residual bend on the channel
+  @api M.slide(host, params, ctx)  @ 99
+      @contract  slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
+      @contract  target 'next' = interval to next lane-1 note; numeric = fixed cents; pbRangeCents clamps
+      @contract  no next note or unison target -> empty delta (carrier untouched)

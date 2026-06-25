@@ -1283,16 +1283,18 @@ do
     -- against fxExisting, commit. fxLive feeds the tail walk + PC synthesis. see design/note-macros.md § Pipeline placement
     do
       local res = mm:resolution()
+      local pbRangeCents = cm:get('pbRange') * 100   -- slide clamps its target to what pb can reach
       local takeLen = tm:length()
       local churned = false
       for chan = 1, 16 do
         -- Window ends at the first same-pitch or same-lane onset after the host
         -- (monophonic column; see design/note-macros.md § host contract).
-        local foreignOnsets, laneOnsets = {}, {}
+        local foreignOnsets, laneOnsets, lane1ByPpq = {}, {}, {}
         local function addOnset(n, lane)
           if n.derived or n.type == 'pa' then return end
           util.bucket(foreignOnsets, n.pitch, n.ppq)
           if lane then util.bucket(laneOnsets, lane, n.ppq) end
+          if lane == 1 then lane1ByPpq[n.ppq] = n end
         end
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, n in ipairs(col.events) do addOnset(n, laneIdx) end
@@ -1304,6 +1306,13 @@ do
         local function firstAfter(list, ppq)
           for _, p in ipairs(list or {}) do if p > ppq then return p end end
         end
+        -- slide.target='next': the next lane-1 note after the host (logical frame).
+        local function nextLane1Note(host)
+          local p = firstAfter(laneOnsets[1], host.ppq)
+          return p and lane1ByPpq[p]
+        end
+        local chanCtx = { resolution = res, pbRangeCents = pbRangeCents,
+                          nextLane1Note = nextLane1Note }
 
         local predicted = {}
         local predictedDelta, lastDeltaPpq = {}, nil
@@ -1321,7 +1330,7 @@ do
                 local gen = generators[params.kind]
                 if gen then
                   local out = gen({ window = { host.ppqL, endL }, events = { host },
-                                    id = host.uuid, chan = chan }, params, { resolution = res })
+                                    id = host.uuid, chan = chan }, params, chanCtx)
                   for _, fn in ipairs(out.notes) do
                     util.add(predicted, {
                       evType = 'note', chan = chan, lane = laneIdx, derived = host.uuid,

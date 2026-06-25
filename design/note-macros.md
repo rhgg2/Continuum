@@ -210,26 +210,28 @@ The target is near because the v1 kinds are two skeletons, not five:
   periodic (sine, extrema), slide one-shot (ramp, endpoints). Same spine,
   different `cents(t)`.
 
-The discipline that grows ctx into the stdlib: **the primitives that
-need ctx are exactly the interesting ones.** Pure arithmetic — vel ramp,
-index math — needs no environment; the moment a generator resolves a
-scale step, queries the temper, or finds a neighbour it reaches into
-ctx. So lift those as **named reusable operations**, never one-off
-inline reaches:
+The discipline that grows ctx into the stdlib: **ctx binds what the
+generator can't compute itself — and only that.** Pure arithmetic — the
+vel ramp, the index math, the cents *interval* between two notes — needs
+no environment and stays in the module. The moment a generator must
+resolve a scale step (the temper), find a neighbour, or honour a config
+bound, it reaches into ctx. So lift *those* as named bindings, never
+one-off inline reaches:
 
-- `step(basePitch, scaleSteps) → (pitch, detune)` — temper arithmetic;
-  trill and arp share it.
-- `interval(noteA, noteB) → cents` — temper arithmetic; slide's `'next'`
-  *is* `interval(host, ctx.nextLane1Note)`.
-- `nextLane1Note` — the neighbour lookup ctx already carries.
+- `nextLane1Note(host)` — the neighbour lookup; slide's `'next'` is
+  `interval(host, ctx.nextLane1Note(host))`. **Landed.**
+- `pbRangeCents` — the pb ceiling slide clamps its target to. **Landed.**
+- `step(basePitch, scaleSteps) → (pitch, detune)` — temper arithmetic,
+  the one genuinely temper-bound op; trill and arp will share it.
 
-`step` and `interval` are siblings, so the first ctx *module* is
-temper-ops, drawn on by three kinds at once — designing it well is
-designing three kinds' DSL vocabulary in one move. **Written in this
-light, a new kind is declarative on arrival:** slide that resolves
-`'next'` through `ctx.interval` and returns a pure `cents(t)` envelope
-has a body that is already composition + arithmetic, so it folds into
-the config form for free instead of being retrofitted.
+`interval(a, b) = Δpitch·100 + Δdetune` is the instructive non-example:
+it *looks* temper-bound but isn't — the microtonal offset already rides
+in each note's detune and the instrument hears the literal MIDI pitch,
+so the realised interval is pure note arithmetic. It lives as a module
+helper, not a ctx op. **Written in this light, a new kind is declarative
+on arrival:** slide composes `interval` (pure) over `ctx.nextLane1Note`
+(bound) and returns a `cents(t)` envelope, so it folds into the config
+form for free rather than being retrofitted.
 
 The codebase is half here already: `FX_FIELDS` makes the per-kind
 **descriptor** pure data (a new kind ships a generator + one descriptor
