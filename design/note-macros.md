@@ -449,8 +449,8 @@ non-empty, drawn by the same `smallGlyph` machinery as the delay `*`
 marker (`trackerRender.lua`). Pure display — no column, no cursor part.
 
 **Editor — `Super-X` on the focused note.** Opens a small modal (a
-`modalHost` kind), a no-op on a non-note cell. The body is **two toggleable
-sections, one per macro kind** (Retrig, Vibrato — B's one-per-category model,
+`modalHost` kind), a no-op on a non-note cell. The body is **toggleable
+sections, one per macro kind** (Retrig, Vibrato, Slide — one section per kind,
 below): a checkbox header plus, when on, its fields one per row, modelled on
 `temperEditor`'s generators panel; `Clear`/`Cancel`/`Done` buttons mirror the
 key actions. The field set per kind is **pure data** (`FX_FIELDS` in
@@ -471,17 +471,16 @@ generic writer for every kind — addressed by durable uuid; the render walks th
 descriptor. Centre-anchored for v1 (the `modalHost` default), not anchored at
 the cell.
 
-v1 authors **one entry per category** — at most one structural macro and one
-continuous macro per note (B). Nothing in the model requires this: structural
-derives fxNotes, continuous carriers interval-colour and sum, so any number
-coexist (two vibratos, vibrato + slide, cross-lane overlaps — all sum at the
-node). The one-per-category bound is a v1 **UI** simplification — two toggleable
-sections rather than a free multi-entry stack (deferred, open question below). With one kind per category today,
-section-per-kind *is* one-per-category; a category grows an in-section kind
-selector when it gains a second kind (trill/arp, slide). `Super-X` opens on the
-note's current `fx` — both sections reflecting it, off for a fresh note — and
-the user toggles a section on to author it. Removing the last entry clears `fx`
-(`util.REMOVE` through `assignEvent`, never `nil` / empty list).
+v1 surfaces **one toggleable section per kind** (Retrig, Vibrato, Slide) —
+independent checkboxes, not a category XOR. Continuous kinds coexist: vibrato +
+slide on one note both bake carriers that interval-colour and sum at the node
+(two vibratos, cross-lane overlaps — all sum), so nothing arbitrates between
+them. The remaining v1 **UI** simplification is **one section per kind** — no
+repeated-kind multi-entry stack (two retrigs), reorder, or the R16 fx-column
+that would show it densely (deferred, open question below). `Super-X` opens on
+the note's current `fx` — every section reflecting it, off for a fresh note —
+and the user toggles a section on to author it. Removing the last entry clears
+`fx` (`util.REMOVE` through `assignEvent`, never `nil` / empty list).
 
 | section | field | shown | adjust | range |
 |---|---|---|---|---|
@@ -490,6 +489,7 @@ the user toggles a section on to author it. Removing the last entry clears `fx`
 | Vibrato | `period` | QN fraction `1/2` | ←→ cycle the ladder | from the ladder |
 | Vibrato | `depth` | cents `30` | ←→ base ±1, Ctrl ±10 | 0..200 cents |
 | Vibrato | `onset` | QN `1` | ←→ base ±1, Ctrl ±4 | 0..16 QN ramp-in |
+| Slide | `over` | QN fraction `1/2` | ←→ cycle the ladder | from the ladder |
 
 ## v1 scope — the proving pair
 
@@ -500,7 +500,9 @@ pinning G1–G4 plus tail-clamp, velocity-ramp, and PC interplay. The
 retrig **UI** — badge + `Super-X` editor (§ UI) — **has landed**, and the
 **vibrato authoring UI** now rides the same editor (`vm_fx_ui_spec` pins the
 `cursorNote`/`setNoteFx`/`setFxKindActive`/`setFxField` path; the
-modal's row-cursor key dispatch is verified in REAPER).
+modal's row-cursor key dispatch is verified in REAPER). **Slide rides it too**
+as a third independent section — `over` on the shared QN-fraction ladder,
+`target = 'next'` only in v1.
 Flush-time reconcile (`dirtyFxHosts`) and the R2/R4 refactors are
 deferred fast-follows — correctness rides the rebuild path, which every
 flush triggers. **Vibrato's Lua slice has now landed** (`tm_vibrato_spec`):
@@ -784,11 +786,11 @@ generator.
 - **Trill cents: structural detune vs delta stream.** Structural is
   correct-by-existing-machinery but seats absorbers at trill rate;
   both ride the same wire now, so decide after watching it run.
-- **Gen stack UI.** v1 authors **one entry per category** — one structural +
-  one continuous, two toggleable sections (§ UI, B). The model carries an
-  unbounded list; the **free multi-entry stack** UI — repeated kinds, reorder,
-  and the R16 fx-column that would show it densely — still waits, now on demand
-  rather than on the model (two kinds, one per category, have proven it out).
+- **Gen stack UI.** v1 surfaces **one toggleable section per kind** — Retrig,
+  Vibrato, Slide, independent checkboxes (§ UI). The model carries an unbounded
+  list; the **free multi-entry stack** UI — repeated kinds, reorder, and the
+  R16 fx-column that would show it densely — still waits, now on demand rather
+  than on the model (three kinds, continuous coexisting, have proven it out).
 - **Bake-on-export.** Address rewrite + merge of delta streams into
   their target lanes for plain-MIDI export; densification cost paid
   only there.

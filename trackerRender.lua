@@ -1788,15 +1788,16 @@ end
 local renderer = {}
 
 
------ Note FX editor (retrig + vibrato)
+----- Note FX editor (retrig + vibrato + slide)
 
--- Two toggleable sections (one per kind); FX_FIELDS is pure data so a new kind ships a
+-- Three toggleable sections (one per kind); FX_FIELDS is pure data so a new kind ships a
 -- generator + one entry. Cursor: Up/Down pick a row, Left/Right adjust. see design/note-macros.md § UI.
-local FX_KINDS    = { 'retrig', 'vibrato' }
-local KIND_LABELS = { retrig = 'Retrig', vibrato = 'Vibrato' }
+local FX_KINDS    = { 'retrig', 'vibrato', 'slide' }
+local KIND_LABELS = { retrig = 'Retrig', vibrato = 'Vibrato', slide = 'Slide' }
 local FX_DEFAULTS = {
   retrig  = { kind = 'retrig',  period = { 1, 4 }, ramp  = 0 },
   vibrato = { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 },
+  slide   = { kind = 'slide',   over   = { 1, 2 }, target = 'next' },
 }
 
 -- Shared QN-fraction period ladder; both kinds tempo-sync the same way.
@@ -1815,6 +1816,10 @@ local FX_FIELDS = {
     { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
     { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10, min = 0, max = 200 },  -- cents
     { field = 'onset',  label = 'Onset',  widget = 'int', base = 1, coarse = 4,  min = 0, max = 16 },   -- QN ramp-in
+  },
+  -- target = 'next' (glide to the next lane-1 note) is the v1 fixed default; not surfaced.
+  slide = {
+    { field = 'over', label = 'Glide', widget = 'choice', options = PERIODS },
   },
 }
 

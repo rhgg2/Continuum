@@ -1,7 +1,5 @@
--- UI wiring for the note-FX editor (retrig + vibrato); key dispatch is thin
--- REAPER glue (cf. tracker_page_spec). Pins the real editing path: cursorNote
--- -> setNoteFx / setFxKindActive / setFxField, plus the lane-1 inert flag for
--- pitch-targeted continuous kinds.
+-- UI wiring for the note-FX editor (retrig + vibrato + slide). Pins cursorNote ->
+-- setNoteFx / setFxKindActive / setFxField. Continuous kinds coexist -- both sum at the node.
 
 local t    = require('support')
 local util = require('util')
@@ -139,6 +137,21 @@ return {
       t.eq(fx[1].kind, 'vibrato', 'the survivor is vibrato')
       h.vm:setFxKindActive(uuid, { kind = 'vibrato' }, false)
       t.falsy(h.vm:noteFx(uuid), 'emptying clears fx entirely (no empty list)')
+    end,
+  },
+
+  {
+    name = 'setFxKindActive seeds slide alongside vibrato (continuous kinds coexist)',
+    run = function(harness)
+      local h = harness.mk()
+      addHost(h, { { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 } })
+      local uuid = hostUuid(h)
+      h.vm:setFxKindActive(uuid, { kind = 'slide', over = { 1, 2 }, target = 'next' }, true)
+      local k = byKind(h.vm:noteFx(uuid))
+      t.truthy(k.vibrato and k.slide, 'vibrato and slide co-resident -- both sum at the node')
+      t.eq(k.slide.target, 'next', 'slide seeded with target=next')
+      h.vm:setFxField(uuid, 2, 'over', { 1, 4 })
+      t.eq(h.vm:noteFx(uuid)[2].over[2], 4, 'over cycled via the generic field writer')
     end,
   },
 
