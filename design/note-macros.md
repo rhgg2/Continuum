@@ -1,11 +1,12 @@
 # note macros — generative modulation on notes
 
-> Design note. **Retrig (structural) and vibrato's Lua slice (continuous)
-> — the v1 proving pair — have both landed** (`tm_macro_spec`,
-> `tm_vibrato_spec`), and the node's **add bank** — the audible sum — is
-> now written (`Continuum CC.jsfx`, REAPER-verify pending) and **wired** from
-> `paramAutomation`. Remaining for vibrato: that REAPER verification and the
-> proper carrier allocation (§ v1 scope).
+> Design note. **The v1 proving pair — retrig (structural) and vibrato
+> (continuous) — is complete.** Both Lua slices landed (`tm_macro_spec`,
+> `tm_vibrato_spec`); the node's **add bank** — the audible sum — is
+> written (`Continuum CC.jsfx`), **wired** from `paramAutomation`, and
+> **REAPER-verified** (sum audible and smooth, carrier swallowed before
+> the instrument); the carrier allocator is per-channel, banded, and
+> relocatable (§ v1 scope, § Delta-code allocation).
 >
 > A *macro* is per-note generative intent —
 > retrig, trill, arp, vibrato, slide — expanded mechanically into
@@ -447,7 +448,7 @@ generator deal in one fixed-point value. The carrier is a **toy fixed
 centre)`, carrier swallowed) — is now **written** in `Continuum CC.jsfx`
 as a self-contained sum kernel: a third bank beside filter/listen, `adst`
 encoding a cc code or `2048+chan` pitchbend, summed and clamped once at
-emission (REAPER-verify pending). It is now **wired**: `paramAutomation`'s
+emission (**REAPER-verified**). It is now **wired**: `paramAutomation`'s
 apply reconcile gathers each track's baked carriers (cc = `DELTA_MSB`) and
 writes the add bank beside filter/listen on the same `ccm`-owned node — a
 fourth bank on pa's sweep, not a second producer, so the node lives iff
@@ -456,11 +457,11 @@ filter ∪ listen ∪ add is non-empty. The reconcile fires from the editor
 carrier *set*, not its positions or values (those ride the stream), so only a
 carrier's first appearance / last removal on a track need it; an off-editor
 note-delete leaves a harmless empty slot that self-heals on the next bind.
-What remains to pin **G5**: the REAPER
-verification and the proper per-channel banded/relocatable allocation
-(§ Delta-code allocation).
-Remaining kinds are table entries afterwards. The plink migration (R5)
-is sequenced independently.
+**G5 is pinned:** the carrier allocator is per-channel, banded, and
+relocatable (§ Delta-code allocation), and the node's sum is
+REAPER-verified — audible, smooth, carrier swallowed. **Vibrato v1 is
+complete.** Remaining kinds are table entries afterwards. The plink
+migration (R5) is sequenced independently.
 
 ## Refactor map — what unifies
 
@@ -483,22 +484,24 @@ instances. In leverage order:
   metadata is ignored and self-cleans, since absorbers/PCs re-derive
   each rebuild. Swept the vocabulary too — `availFakes`→`availAbsorbers`,
   `notFake`→`notDerived`, gm's `copyScalars` opt-out key renamed.
-- **R2 — the reconcile skeleton.** `reconcilePCsForChan`
-  (keep-on-match / add / remove-unkept, loc carry-forward) and the
-  absorber pass's fake-matching middle (reuse-in-place / move /
-  create / delete-leftovers) are one algorithm at two levels of
-  richness. Extract `reconcileDerived{existing, desired, key, make}`
-  *when writing the macro reconcile* — the four-instance moment is
-  when the shape is provable. **`reconcileFx` (note-shaped) has now
-  landed** beside `reconcilePCsForChan`, so the skeleton is provable and
-  the extraction is the next refactor. The absorber pass's other duties (cents
-  back-derivation, wire-raw recompute, column projection) are not
-  reconcile-shaped and stay put. gm's `reproject`/`reconcile` is a
-  *third live* instance of the skeleton (predict desired from group +
-  overrides, diff against shadow, emit add/set/del) — it does not
-  migrate now (bidirectional, override shadowing — the richest
-  instance), but it belongs in the audit so the vocabulary doesn't
-  fork.
+- **R2 — the reconcile skeleton. ✓ Landed (`reconcileDerived`).**
+  `reconcilePCsForChan`, `reconcileFx`, and `reconcileCarrier` were one
+  body — index existing by `key`, keep-on-match, add the rest, remove the
+  unkept, return `(toRemove, toAdd)` — written three times. Extracted to
+  `reconcileDerived{existing, predicted, key, match?, make?}` in
+  `trackerManager.lua`: Fx and Carrier collapse to the call; PC keeps its
+  grouping / lane-winner / shadow-mark pre-pass and shares the diff tail.
+  `match(have, spec)` (not in the original sketch) earns its place on PC,
+  whose keep-condition reads an existing-only field (`have.derived`) that
+  no key on the predicted spec can carry. **Excluded by the audit:** the
+  absorber pass's fake-matching middle is a richer *fungible-move* variant
+  — leftover absorbers are repositioned in place to preserve mm
+  content-tokens, which keep/add/remove can't express without churning the
+  wire — so its non-reconcile duties (cents back-derivation, wire-raw
+  recompute, column projection) and the move logic stay inline. gm's
+  `reproject`/`reconcile` stays its own `add`/`set`/`del`-by-vuid skeleton
+  (bidirectional, override-shadowed). Both audited so the vocabulary
+  doesn't fork.
 - **R3 — `forEachEffectiveNote`.** "Committed notes ∪ staged adds" is
   hand-rolled in flush's voice-legality scan and in `reconcilePcs`;
   macro flush-reconcile is the third occurrence — extract then.
@@ -673,7 +676,9 @@ generator.
   14-bit downstream (~15.6 ms grain, monotonic, no wrap glitch); the
   generator never densifies. The dense-square fallback is unused. The
   wire stays sparse *and* full-res — the best case the design hoped for.
-- **Delta-code allocation — banded, dynamic, relocatable.** The 14-bit
+- **Delta-code allocation — banded, dynamic, relocatable — landed**
+  (`generators.allocateCarrier`; `generators_spec`, `tm_vibrato_spec`
+  relocation). The 14-bit
   pairing only exists for MIDI **CC 0–31** (MSB) paired with **CC 32–63**
   (LSB): a pitch/14-bit target must allocate MSB `n` with **`0 ≤ n < 32`**,
   LSB `n+32`, or REAPER won't interpolate the pair. So pitch targets draw

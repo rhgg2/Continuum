@@ -100,6 +100,29 @@ local function forEachEvent(fn)
 end
 
 
+----- derived-event reconcile skeleton (R2)
+-- Index existing by `key`, keep-on-match, add the rest, remove unkept. The absorber pass (4.9) is a richer fungible-move variant, inline.
+--contract: returns (toRemove, toAdd); existing events unmatched by any spec are removed
+local function reconcileDerived(a)
+  local index, kept = {}, {}
+  for _, e in ipairs(a.existing) do index[a.key(e)] = e end
+  local toRemove, toAdd = {}, {}
+  for _, spec in ipairs(a.predicted) do
+    local have = index[a.key(spec)]
+    if have and (not a.match or a.match(have, spec)) then
+      kept[have] = true
+    else
+      util.add(toAdd, a.make and a.make(spec) or spec)
+    end
+  end
+  for _, e in ipairs(a.existing) do
+    if not kept[e] then util.add(toRemove, e) end
+  end
+  return toRemove, toAdd
+end
+
+----- PC synthesis reconciliation (grouping + lane-winner pre-pass, then the skeleton)
+
 --contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
 --contract: returns (toRemove, toAdd) for the caller to persist
@@ -109,30 +132,25 @@ end
 local function reconcilePCsForChan(chan, records)
   local existing = (channels[chan].columns.pc and channels[chan].columns.pc.events) or {}
 
-  local byPpq  = {}
   local groups = {}
-  for _, e in ipairs(existing) do byPpq[e.ppq] = e end
   for _, r in ipairs(records) do util.bucket(groups, r.ppq, r) end
 
-  local toRemove, toAdd, kept = {}, {}, {}
-  for ppq, g in pairs(groups) do
+  local winners = {}
+  for _, g in pairs(groups) do
     table.sort(g, function(a, b) return a.lane < b.lane end)
-    local w = g[1]
-    local have = byPpq[ppq]
-    if have and have.derived and have.val == w.sample then
-      kept[have] = true
-    else
-      util.add(toAdd, { ppq = ppq, ppqL = w.ppqL, val = w.sample,
-                        evType = 'pc', chan = chan, derived = 'pc' })
-    end
+    util.add(winners, g[1])
     for i = 2, #g do
       if g[i].key then g[i].key.sampleShadowed = true end
     end
   end
-  for _, have in ipairs(existing) do
-    if not kept[have] then util.add(toRemove, have) end
-  end
-  return toRemove, toAdd
+
+  return reconcileDerived{
+    existing = existing, predicted = winners,
+    key   = function(x) return x.ppq end,
+    match = function(have, w) return have.derived and have.val == w.sample end,
+    make  = function(w) return { ppq = w.ppq, ppqL = w.ppqL, val = w.sample,
+                                 evType = 'pc', chan = chan, derived = 'pc' } end,
+  }
 end
 
 ----- fxNote reconciliation (the PC-synthesis skeleton, note-shaped)
@@ -150,43 +168,18 @@ local function fxKey(spec)
                   canon(spec.vel), canon(spec.detune or 0), canon(spec.sample or 0))
 end
 
-local function reconcileFx(predicted, existing)
-  local have, kept = {}, {}
-  for _, e in ipairs(existing) do have[fxKey(e)] = e end
-  local toRemove, toAdd = {}, {}
-  for _, spec in ipairs(predicted) do
-    local e = have[fxKey(spec)]
-    if e then kept[e] = true else
-      util.add(toAdd, spec)
-    end
-  end
-  for _, e in ipairs(existing) do
-    if not kept[e] then util.add(toRemove, e) end
-  end
-  return toRemove, toAdd
+local function reconcileFx(existing, predicted)
+  return reconcileDerived{ existing = existing, predicted = predicted, key = fxKey }
 end
 
 ----- delta-stream (carrier) reconciliation
 -- Pure fn of lane-1 hosts; match by (cc, ppq); relocated carrier reaps old code, writes new. see design/note-macros.md § Delta-code allocation
 local function reconcileCarrier(existing, predicted)
-  local byKey = {}
-  for _, e in ipairs(existing) do
-    byKey[e.cc] = byKey[e.cc] or {}
-    byKey[e.cc][e.ppq] = e
-  end
-  local toRemove, toAdd, kept = {}, {}, {}
-  for _, spec in ipairs(predicted) do
-    local have = byKey[spec.cc] and byKey[spec.cc][spec.ppq]
-    if have and have.val == spec.val and have.shape == spec.shape then
-      kept[have] = true
-    else
-      util.add(toAdd, spec)
-    end
-  end
-  for _, e in ipairs(existing) do
-    if not kept[e] then util.add(toRemove, e) end
-  end
-  return toRemove, toAdd
+  return reconcileDerived{
+    existing = existing, predicted = predicted,
+    key   = function(x) return util.key(x.cc, x.ppq) end,
+    match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
+  }
 end
 
 ---------- UPDATE MANAGER
@@ -1359,7 +1352,7 @@ do
           end
         end
 
-        local toRemove, toAdd = reconcileFx(predicted, fxExisting[chan])
+        local toRemove, toAdd = reconcileFx(fxExisting[chan], predicted)
         if #toRemove > 0 or #toAdd > 0 then
           churned = true
           mm:modify(function()
