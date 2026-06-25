@@ -185,6 +185,64 @@ cents → raw pb units via the resolved pbRange at flush — the same
 boundary where detune realises. `ctx` carries the temper and a
 next-lane-1-note lookup (for `slide.target = 'next'`).
 
+## Generators as config — ctx is the binding environment
+
+The contract above is already a pure `(host, params, ctx) → {notes,
+delta}`. The direction — *in due course, not v1* — is for the generator
+**set** to become config rather than hand-written Lua: a kind is data,
+not a function. The route there is not a separate interpreter project
+but a discipline on **ctx**, which is not "useful lookups" but the
+**evaluation environment** the generator body composes against. When a
+body is nothing but arithmetic and *named ctx operations*, it is already
+data, and serialising it is the only step left. The DSL is the limit of
+good ctx design, not a rewrite.
+
+The target is near because the v1 kinds are two skeletons, not five:
+
+- **Structural (retrig, trill, arp) is one skeleton:** tile the window
+  at `period`, emit one note per tile, with `{pitch, vel, detune}` as
+  expressions in the tile index `i`. The kinds differ *only* in those
+  expressions — retrig ramps vel (`host.vel + i·ramp`), trill alternates
+  pitch (`step(host.pitch, i odd ? step : 0)`), arp cycles it
+  (`step(host.pitch, steps[i mod #steps])`).
+- **Continuous (vibrato, slide) is one skeleton:** a `cents(t)` envelope
+  over the window, sampled at the breakpoints its shape needs — vibrato
+  periodic (sine, extrema), slide one-shot (ramp, endpoints). Same spine,
+  different `cents(t)`.
+
+The discipline that grows ctx into the stdlib: **the primitives that
+need ctx are exactly the interesting ones.** Pure arithmetic — vel ramp,
+index math — needs no environment; the moment a generator resolves a
+scale step, queries the temper, or finds a neighbour it reaches into
+ctx. So lift those as **named reusable operations**, never one-off
+inline reaches:
+
+- `step(basePitch, scaleSteps) → (pitch, detune)` — temper arithmetic;
+  trill and arp share it.
+- `interval(noteA, noteB) → cents` — temper arithmetic; slide's `'next'`
+  *is* `interval(host, ctx.nextLane1Note)`.
+- `nextLane1Note` — the neighbour lookup ctx already carries.
+
+`step` and `interval` are siblings, so the first ctx *module* is
+temper-ops, drawn on by three kinds at once — designing it well is
+designing three kinds' DSL vocabulary in one move. **Written in this
+light, a new kind is declarative on arrival:** slide that resolves
+`'next'` through `ctx.interval` and returns a pure `cents(t)` envelope
+has a body that is already composition + arithmetic, so it folds into
+the config form for free instead of being retrofitted.
+
+The codebase is half here already: `FX_FIELDS` makes the per-kind
+**descriptor** pure data (a new kind ships a generator + one descriptor
+entry). Today descriptor = data, generator = code; this extends the
+symmetry to behaviour.
+
+Scope guard. **Build no interpreter now** — the move costs ~nothing if
+new kinds are merely shaped as composition and ctx accretes as named
+ops, which buys the option without speculative abstraction. And keep the
+reading straight: an **internal authoring DSL** (kinds defined as config)
+is compatible with the out-of-scope **user-facing generative language**
+— it is the substrate such a thing would later sit on, not that thing.
+
 ## Structural realisation — derived notes
 
 - **Provenance.** Each fxNote carries `derived = <hostUuid>` (R1's
