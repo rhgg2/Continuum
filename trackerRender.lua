@@ -1862,10 +1862,6 @@ local fxEdit do
     if rw.header then
       local changed, on = chrome.checkbox(KIND_LABELS[rw.kind] .. '##fxk_' .. rw.kind, rw.index ~= nil)
       if changed then tv:setFxKindActive(uuid, FX_DEFAULTS[rw.kind], on) end
-      if rw.index and tv:fxKindInert(uuid, rw.kind) then
-        ImGui.SameLine(ctx)
-        ImGui.TextColored(ctx, chrome.colour('error'), 'lane-1 only \xe2\x80\x94 inert here')
-      end
       return
     end
     local fd, value = rw.fd, rw.entry[rw.fd.field]

@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=130  sha=d73fd96  mode=namespace
+@module generators  src=generators.lua  loc=130  sha=06aac2a  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }

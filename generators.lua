@@ -40,9 +40,9 @@ function M.retrig(host, params, ctx)
   return { notes = notes, delta = {} }
 end
 
--- Kinds whose realisation is a continuous delta stream (carrier ccs), not
--- structural notes. Drives the rebuild seam's carrier registration.
-M.continuous = { vibrato = true, slide = true }
+-- Kinds whose realisation is a continuous delta stream (carrier ccs), not structural notes.
+-- Value = wire target ('pb' or cc number); truthy = "is continuous". Drives carrier allocation.
+M.continuous = { vibrato = 'pb', slide = 'pb' }
 
 -- 14-bit carrier priority: MSB n, LSB n+32 (REAPER interpolates only that pair).
 -- Unlikely-authored first; conventional last. see design/note-macros.md § Delta-code allocation

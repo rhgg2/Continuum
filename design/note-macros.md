@@ -5,8 +5,9 @@
 > `tm_vibrato_spec`); the node's **add bank** — the audible sum — is
 > written (`Continuum CC.jsfx`), **wired** from `paramAutomation`, and
 > **REAPER-verified** (sum audible and smooth, carrier swallowed before
-> the instrument); the carrier allocator is per-channel, banded, and
-> relocatable (§ v1 scope, § Delta-code allocation).
+> the instrument); the carrier allocator interval-colours per target —
+> overlapping gestures get distinct codes the node sums, disjoint ones
+> share — banded and relocatable (§ v1 scope, § Delta-code allocation).
 >
 > A *macro* is per-note generative intent —
 > retrig, trill, arp, vibrato, slide — expanded mechanically into
@@ -132,8 +133,8 @@ consistent with swing factors. Per-kind params, v1 vocabulary:
 | `retrig` | `period`, `ramp` (vel Δ/fxNote) | fxNotes fill the note's logical interval |
 | `trill` | `period`, `step` (signed **scale steps**) | alternation resolved through the temper → (pitch, detune) pairs |
 | `arp` | `period`, `steps = {0, ...}` (scale steps) | broken chord off the single host note — a generalised trill, **not** a chord arpeggiator (that needs a region host, § *The host contract*) |
-| `vibrato` | `period`, `depth` (cents), `onset` (QN ramp-in) | lane-1 only (pb is channel-wide, same doctrine as detune I3) |
-| `slide` | `over` (QN), `target = 'next'` \| cents | `'next'` resolved at flush against the next lane-1 note |
+| `vibrato` | `period`, `depth` (cents), `onset` (QN ramp-in) | channel-wide pb gesture, hostable on any lane (overlaps sum at the node) |
+| `slide` | `over` (QN), `target = 'next'` \| cents | `'next'` resolved at flush against the next lane-1 (melody) note |
 
 ## The host contract
 
@@ -305,11 +306,12 @@ is compatible with the out-of-scope **user-facing generative language**
   never needed.
 - **The add bank.** The Continuum node grows a third bank in the
   existing src/dst slider vocabulary: src = delta code, dst = target
-  (pb-on-chan or cc code), verb = *sum*. Per target: `out = latest
-  base + latest delta`, emitted on change of either, clamped at
-  emission only (14-bit pb / 0..127 cc). Delta-code events are
-  swallowed; base events pass as the sum; delta defaults to 0, so
-  non-macro traffic is value-identical.
+  (pb-on-chan or cc code), verb = *sum*. Per target it sums **every**
+  carrier sharing that dst: `out = base + Σ(carrier − centre)`,
+  emitted on change of any, clamped at emission only (14-bit pb /
+  0..127 cc) — so vibrato + slide bend one channel additively.
+  Delta-code events are swallowed; base events pass as the sum; absent
+  carriers sit at centre (delta 0), so non-macro traffic is value-identical.
 - **Smoothness.** REAPER interpolates shaped cc events into a dense
   stream before the chain sees them, so the wire stays sparse
   (breakpoints at curve extrema) while the node sums the interpolated
@@ -319,8 +321,8 @@ is compatible with the out-of-scope **user-facing generative language**
 - **Bounded carrier.** The channel carrier is pinned to centre wherever
   a held value would otherwise bend an unrelated note. *Per host:* the
   stream is anchored 0 at both window ends, so a vibrato leaves no
-  residual offset on notes after it. *Per channel:* a centre anchor at
-  **take start** (ppq 0), because REAPER's CC chase re-sends the last
+  residual offset on notes after it. *Per carrier:* a centre anchor at
+  **take start** (ppq 0) on each code, because REAPER's CC chase re-sends the last
   value at-or-before the play/loop/seek point — without it, a loop that
   cuts a vibrato mid-cycle (or a host that starts partway through the
   take) carries a stale offset back across every note before the first
@@ -331,10 +333,15 @@ is compatible with the out-of-scope **user-facing generative language**
 - **Regeneration.** Delta events carry raw units, so a pbRange or
   temper change regenerates them via the ordinary configChanged →
   rebuild path — the same trigger that re-realises detune.
-- **Lane-1 only** for pitch-targeted kinds, mirroring detune doctrine:
-  pb is channel-wide, so a higher-lane vibrato would bend the whole
-  channel. Persisted intent on higher lanes stays dead data, exactly
-  like higher-lane detune.
+- **Lane-blind, coloured by overlap.** A continuous gesture is
+  channel-wide, not note-tied (unlike detune, which *is* a note's
+  pitch) — so it hosts on any lane; the host note supplies only the
+  window. Carriers are interval-coloured **per target**: instances that
+  overlap in time get distinct codes (the node sums them — compound
+  modulation), disjoint instances share the coldest code (one stream,
+  concatenated). A code carries one target, so reuse stays within a
+  target partition. The common case — one gesture, or several disjoint
+  ones on a lane — needs a single code per channel, as before.
 
 ## Packaging — one stream-transform node
 
@@ -428,13 +435,12 @@ Mirrors PC synthesis end to end:
 ## UI — note-FX editor
 
 Macros surface through two affordances on the note under the cursor.
-Structural kinds (retrig) host on **any lane**: the expansion walks
-every note column (`trackerManager.lua`, rebuild step 4.6) and the
-downstream tail walk and PC priority are lane-blind. Only the
-**pitch-targeted continuous kinds** (vibrato, slide) are lane-1 only —
-pb is channel-wide, so a higher-lane entry is inert there, dead like
-higher-lane detune; the editor flags such an entry rather than silently
-storing it. A full FX-column rendering — `R16`-style codes in a
+All kinds host on **any lane**: structural expansion walks every note
+column (`trackerManager.lua`, rebuild step 4.6) with a lane-blind tail
+walk and PC priority, and continuous kinds are channel-wide gestures the
+host note merely windows — a higher-lane vibrato bends the channel just
+as a lane-1 one does, and overlapping gestures sum (§ Continuous
+realisation). A full FX-column rendering — `R16`-style codes in a
 dedicated column — is the someday-richer view, deferred until the model
 is proven.
 
@@ -454,24 +460,23 @@ key actions. The field set per kind is **pure data** (`FX_FIELDS` in
 adjust it (choice steps the list; int by the base step, **Ctrl** for coarse —
 the grid's `nudgeCoarse` idiom), and on a header **Left/Right** toggle the
 section. Keys fire only with no widget focused (`IsAnyItemActive`), so typing
-in a field doesn't double-act. A **pitch-targeted continuous** kind on a
-non-lane-1 host is **flagged inert** in the modal (its carrier would bend the
-whole channel) yet still stored as dead data, like higher-lane detune. The
+in a field doesn't double-act. The
 editor **live-writes** `note.fx` and flushes on every adjust, so the grid
 previews the expansion (host tail truncates, badge appears) à la `swingEditor`;
 **Esc**/`Cancel` restore the open-snapshot, **Enter**/`Done` keep, **Del**
 removes the focused section, **Clear** clears all `fx` (`util.REMOVE` through
 `assignEvent`). The editing logic lives on the view —
-`tv:cursorNote`/`setNoteFx`/`setFxKindActive`/`setFxField`/`fxKindInert`, one
+`tv:cursorNote`/`setNoteFx`/`setFxKindActive`/`setFxField`, one
 generic writer for every kind — addressed by durable uuid; the render walks the
 descriptor. Centre-anchored for v1 (the `modalHost` default), not anchored at
 the cell.
 
 v1 authors **one entry per category** — at most one structural macro and one
-continuous macro per note (B). The two never conflict (structural derives
-fxNotes, continuous a delta stream; sums commute), so the editor bounds the
-real list to two toggleable sections rather than a free multi-entry stack
-(deferred, open question below). With one kind per category today,
+continuous macro per note (B). Nothing in the model requires this: structural
+derives fxNotes, continuous carriers interval-colour and sum, so any number
+coexist (two vibratos, vibrato + slide, cross-lane overlaps — all sum at the
+node). The one-per-category bound is a v1 **UI** simplification — two toggleable
+sections rather than a free multi-entry stack (deferred, open question below). With one kind per category today,
 section-per-kind *is* one-per-category; a category grows an in-section kind
 selector when it gains a second kind (trill/arp, slide). `Super-X` opens on the
 note's current `fx` — both sections reflecting it, off for a fresh note — and
@@ -494,7 +499,7 @@ the user toggles a section on to author it. Removing the last entry clears `fx`
 pinning G1–G4 plus tail-clamp, velocity-ramp, and PC interplay. The
 retrig **UI** — badge + `Super-X` editor (§ UI) — **has landed**, and the
 **vibrato authoring UI** now rides the same editor (`vm_fx_ui_spec` pins the
-`cursorNote`/`setNoteFx`/`setFxKindActive`/`setFxField`/`fxKindInert` path; the
+`cursorNote`/`setNoteFx`/`setFxKindActive`/`setFxField` path; the
 modal's row-cursor key dispatch is verified in REAPER).
 Flush-time reconcile (`dirtyFxHosts`) and the R2/R4 refactors are
 deferred fast-follows — correctness rides the rebuild path, which every
@@ -504,10 +509,11 @@ flush triggers. **Vibrato's Lua slice has now landed** (`tm_vibrato_spec`):
 routing of the carrier code out of columns — all on mm's `wideCC` 14-bit
 primitive (`mm_wide_cc_spec`), which owns the split/pair so the seam and
 generator deal in one fixed-point value. The carrier is a **toy fixed
-`cc=20`**. The node's **add bank** — the audible sum (`base + (carrier −
-centre)`, carrier swallowed) — is now **written** in `Continuum CC.jsfx`
-as a self-contained sum kernel: a third bank beside filter/listen, `adst`
-encoding a cc code or `2048+chan` pitchbend, summed and clamped once at
+`cc=20`**. The node's **add bank** — the audible sum (`base + Σ(carrier
+− centre)` over every carrier sharing the target, carriers swallowed) —
+is now **written** in `Continuum CC.jsfx` as a self-contained sum kernel:
+a third bank beside filter/listen, `adst` encoding a cc code or
+`2048+chan` pitchbend, grouped by target, summed and clamped once at
 emission (**REAPER-verified**). It is now **wired**: `paramAutomation`'s
 apply reconcile gathers each track's baked carriers (cc = `DELTA_MSB`) and
 writes the add bank beside filter/listen on the same `ccm`-owned node — a
@@ -517,9 +523,10 @@ filter ∪ listen ∪ add is non-empty. The reconcile fires from the editor
 carrier *set*, not its positions or values (those ride the stream), so only a
 carrier's first appearance / last removal on a track need it; an off-editor
 note-delete leaves a harmless empty slot that self-heals on the next bind.
-**G5 is pinned:** the carrier allocator is per-channel, banded, and
-relocatable (§ Delta-code allocation), and the node's sum is
-REAPER-verified — audible, smooth, carrier swallowed. **Vibrato v1 is
+**G5 is pinned:** the carrier allocator interval-colours per target —
+overlapping gestures distinct, disjoint shared — banded and relocatable
+(§ Delta-code allocation), and the node's sum is REAPER-verified —
+audible, smooth, carriers swallowed. **Vibrato v1 is
 complete.** Remaining kinds are table entries afterwards. The plink
 migration (R5) is sequenced independently.
 

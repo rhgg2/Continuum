@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=2014  sha=029796d  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=2029  sha=06aac2a  mode=chunk
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -206,63 +206,63 @@
   @emits rebuild   -- takeChanged:boolean
 
 # Uses (outbound edges)
-  @use call    cm.boundTake  @ 1951, 1966
-  @use call    cm.get  @ 66, 71, 541, 736, 977, 1286, 1433, 1782, 1890
-  @use call    cm.set  @ 1989
-  @use call    cm.setContext  @ 1988, 2001
-  @use call    ds.assign  @ 1256, 1400
-  @use call    ds.get  @ 742, 1124, 1142, 1237, 1582, 1892, 1896, 1924, 1968
-  @use call    generators.allocateCarrier  @ 1158
-  @use call    mm.add  @ 647, 928, 1369, 1384, 1761, 1803
-  @use call    mm.assign  @ 635, 1066, 1230, 1457, 1756
-  @use call    mm.ccs  @ 1136, 1190, 1607, 1770, 1806
-  @use call    mm.delete  @ 643, 1368, 1383, 1755, 1802
+  @use call    cm.boundTake  @ 1966, 1981
+  @use call    cm.get  @ 66, 71, 541, 736, 977, 1254, 1448, 1797, 1905
+  @use call    cm.set  @ 2004
+  @use call    cm.setContext  @ 2003, 2016
+  @use call    ds.assign  @ 1224, 1415
+  @use call    ds.get  @ 742, 1124, 1205, 1256, 1597, 1907, 1911, 1939, 1983
+  @use call    generators.allocateCarrier  @ 1360
+  @use call    mm.add  @ 647, 928, 1330, 1400, 1776, 1818
+  @use call    mm.assign  @ 635, 1066, 1198, 1472, 1771
+  @use call    mm.ccs  @ 1158, 1622, 1785, 1821
+  @use call    mm.delete  @ 643, 1329, 1399, 1770, 1817
   @use call    mm.events  @ 669, 907
   @use call    mm.interpolate  @ 723
   @use call    mm.length  @ 718, 735, 800, 826, 894
-  @use call    mm.load  @ 1994
-  @use call    mm.modify  @ 633, 923, 1064, 1229, 1367, 1382, 1455, 1754, 1801
+  @use call    mm.load  @ 2009
+  @use call    mm.modify  @ 633, 923, 1064, 1197, 1328, 1398, 1470, 1769, 1816
   @use call    mm.name  @ 720
-  @use call    mm.notes  @ 1114, 1408
-  @use call    mm.reload  @ 2010
-  @use call    mm.resolution  @ 75, 719, 735, 814, 828, 874, 909, 977, 1285, 1831
+  @use call    mm.notes  @ 1114, 1423
+  @use call    mm.reload  @ 2025
+  @use call    mm.resolution  @ 75, 719, 735, 814, 828, 874, 909, 977, 1253, 1846
   @use call    mm.setLength  @ 814, 828, 874, 909
   @use call    mm.setName  @ 721
-  @use call    mm.take  @ 713, 715, 937, 938, 1058, 1256, 1399, 2006
+  @use call    mm.take  @ 713, 715, 937, 938, 1058, 1224, 1414, 2021
   @use call    mm.timeSigs  @ 722
-  @use call    mm.tokenOf  @ 1116, 1172, 1195, 1202, 1207, 1214, 1457, 1458, 1609, 1774, 1808
-  @use call    mm.unload  @ 2003
-  @use call    mm.wideCC  @ 1162, 1393
+  @use call    mm.tokenOf  @ 1116, 1140, 1163, 1170, 1175, 1182, 1472, 1473, 1624, 1789, 1823
+  @use call    mm.unload  @ 2018
+  @use call    mm.wideCC  @ 1130, 1363, 1411
   @use call    timing.delayToPPQ  @ 75
   @use call    timing.eval  @ 752, 753
   @use call    timing.invert  @ 758, 760
   @use call    timing.isIdentity  @ 739
-  @use call    timing.ppqToDelay  @ 1840
+  @use call    timing.ppqToDelay  @ 1855
   @use call    timing.resolveComposite  @ 740
-  @use call    util.add  @ 115, 119, 141, 229, 233, 235, 257, 270, 295, 380, 387, 584, 586, 591, 599, 678, 683, 805, 807, 858, 902, 970, 1117, 1118, 1119, 1173, 1194, 1202, 1207, 1223, 1274, 1335, 1351, 1376, 1408, 1411, 1417, 1452, 1453, 1492, 1500, 1525, 1562, 1596, 1672, 1696, 1700, 1701, 1707, 1733, 1743, 1774, 1788, 1793, 1796, 1797, 1808
-  @use call    util.assign  @ 242, 609, 1044, 1450
-  @use call    util.bucket  @ 136, 563, 566, 1295, 1296, 1493, 1494, 1501, 1502, 1610
+  @use call    util.add  @ 115, 119, 141, 229, 233, 235, 257, 270, 295, 380, 387, 584, 586, 591, 599, 678, 683, 805, 807, 858, 902, 970, 1117, 1118, 1119, 1141, 1162, 1170, 1175, 1191, 1242, 1305, 1316, 1364, 1374, 1391, 1423, 1426, 1432, 1467, 1468, 1507, 1515, 1540, 1577, 1611, 1687, 1711, 1715, 1716, 1722, 1748, 1758, 1789, 1803, 1808, 1811, 1812, 1823
+  @use call    util.assign  @ 242, 609, 1044, 1465
+  @use call    util.bucket  @ 136, 563, 566, 1264, 1265, 1340, 1508, 1509, 1516, 1517, 1625
   @use call    util.clamp  @ 67
-  @use call    util.clone  @ 901, 927, 952, 1042, 1171, 1415, 1449, 1759
-  @use call    util.deepClone  @ 1891, 1892, 1895, 1896, 1958, 1974
-  @use call    util.deepEq  @ 1912
+  @use call    util.clone  @ 901, 927, 952, 1042, 1139, 1430, 1464, 1774
+  @use call    util.deepClone  @ 1906, 1907, 1910, 1911, 1973, 1989
+  @use call    util.deepEq  @ 1414, 1927
   @use call    util.installHooks  @ 42
   @use call    util.key  @ 167, 180, 563, 566
   @use call    util.pick  @ 676
   @use call    util.print  @ 36
-  @use call    util.round  @ 67, 72, 769, 845, 852, 1560, 1840
-  @use call    util.seek  @ 206, 1585
-  @use forward mm:notesDeduped  @ 1940
-  @use forward mm:takeSwapped  @ 1942
-  @use forward mm:uuidsReassigned  @ 1941
+  @use call    util.round  @ 67, 72, 769, 845, 852, 1575, 1855
+  @use call    util.seek  @ 206, 1600
+  @use forward mm:notesDeduped  @ 1955
+  @use forward mm:takeSwapped  @ 1957
+  @use forward mm:uuidsReassigned  @ 1956
   @use require generators  @ 33
   @use require timing  @ 31
   @use require tuning  @ 32
   @use require util  @ 30
-  @use sub     cm:configChanged  @ 1950
-  @use sub     ds:dataChanged  @ 1965
-  @use sub     mm:reload  @ 1944
-  @use sub     mm:takeSwapped  @ 1943
+  @use sub     cm:configChanged  @ 1965
+  @use sub     ds:dataChanged  @ 1980
+  @use sub     mm:reload  @ 1959
+  @use sub     mm:takeSwapped  @ 1958
 
 # REAPER API surface
   @reaper GetCursorPosition

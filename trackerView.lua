@@ -25,7 +25,6 @@
 local util       = require 'util'
 local timing     = require 'timing'
 local tuning     = require 'tuning'
-local generators = require 'generators'
 
 local tm, cm, ds, cmgr, gm, pa, facade =
   (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa, (...).facade
@@ -1715,14 +1714,6 @@ function tv:setFxKindActive(uuid, entry, active)
   end
   if active then list[#list + 1] = util.deepClone(entry) end
   self:setNoteFx(uuid, (#list > 0) and list or util.REMOVE)
-end
-
--- Continuous kind on a non-lane-1 host is inert: pb is channel-wide, bending it
--- would violate detune doctrine. Editor flags it; see design/note-macros.md § UI.
-function tv:fxKindInert(uuid, kind)
-  if not generators.continuous[kind] then return false end
-  local note = tm:byUuid(uuid)
-  return note ~= nil and (note.lane or 1) ~= 1
 end
 
 ----- Deletion

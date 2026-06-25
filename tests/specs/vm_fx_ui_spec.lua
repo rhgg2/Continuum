@@ -157,26 +157,6 @@ return {
   },
 
   {
-    name = 'fxKindInert flags a pitch-targeted continuous kind off lane 1',
-    run = function(harness)
-      local h = harness.mk()
-      addHost(h, nil, 1)
-      local u1 = hostUuid(h)
-      t.falsy(h.vm:fxKindInert(u1, 'vibrato'), 'vibrato on lane 1 is live')
-      t.falsy(h.vm:fxKindInert(u1, 'retrig'),  'retrig is lane-blind')
-      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 64,
-                     vel = 100, detune = 0, delay = 0, lane = 2 }
-      h.tm:flush()
-      local u2
-      for _, n in ipairs(h.fm:dump().notes) do
-        if not n.derived and n.uuid ~= u1 then u2 = n.uuid end
-      end
-      t.truthy(h.vm:fxKindInert(u2, 'vibrato'), 'vibrato off lane 1 is inert')
-      t.falsy(h.vm:fxKindInert(u2, 'retrig'),  'retrig hosts on any lane')
-    end,
-  },
-
-  {
     name = 'a vibrato entry on a lane-1 host bakes a carrier stream',
     run = function(harness)
       local h = harness.mk()

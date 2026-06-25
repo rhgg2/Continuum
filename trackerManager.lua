@@ -1119,47 +1119,15 @@ do
       else util.add(internal, note)
       end
     end
-    -- Per-channel carrier: cold MSB code, stable across rebuilds (ds.fxCarrier),
-    -- relocated when a column lands on it. carrierRoute = old∪new; stale code is reaped. see design/note-macros.md § Delta-code allocation
-    local prevCarrier = ds:get('fxCarrier') or {}
-    local carrierMsbOf, carrierRoute, newFxCarrier = {}, {}, {}
-    do
-      local needsCarrier = {}
-      for _, list in ipairs({ internal, external }) do
-        for _, note in ipairs(list) do
-          for _, params in ipairs(note.fx or {}) do
-            if generators.continuous[params.kind] then needsCarrier[note.chan] = true end
-          end
-        end
-      end
-      local wireCodes = {}
-      for _, cc in mm:ccs() do
-        if cc.cc then
-          wireCodes[cc.chan] = wireCodes[cc.chan] or {}
-          wireCodes[cc.chan][cc.cc] = true
-        end
-      end
-      local extras = ds:get('extraColumns') or {}
-      local touched = {}
-      for chan in pairs(needsCarrier) do touched[chan] = true end
-      for chan in pairs(prevCarrier)  do touched[chan] = true end
-      for chan in pairs(touched) do
-        local old = prevCarrier[chan]
-        carrierRoute[chan] = {}
-        if old then carrierRoute[chan][old] = true end
-        if needsCarrier[chan] then
-          -- occupied: authored columns (incl. empty -> early relocation signal)
-          -- plus every wire cc code, minus the carrier's own 14-bit pair.
-          local occupied = {}
-          for c in pairs((extras[chan] or {}).ccs or {}) do occupied[c] = true end
-          for c in pairs(wireCodes[chan] or {}) do
-            if c ~= old and c ~= (old and old + 32) then occupied[c] = true end
-          end
-          local code = (old and not occupied[old]) and old or generators.allocateCarrier(occupied)
-          carrierMsbOf[chan] = code
-          carrierRoute[chan][code] = true
-        end
-        for c in pairs(carrierRoute[chan]) do mm:wideCC(chan, c, true) end
+    -- Carrier codes from the prior rebuild: route existing events out of cc columns
+    -- (step 3 reads carrierRoute); new codes allocated in 4.6 once windows are known. see design/note-macros.md § Delta-code allocation
+    local prevCarrier = ds:get('fxCarrier') or {}   -- chan -> { {code, target}, ... }
+    local carrierRoute, newFxCarrier = {}, {}
+    for chan, carriers in pairs(prevCarrier) do
+      carrierRoute[chan] = {}
+      for _, c in ipairs(carriers) do
+        carrierRoute[chan][c.code] = true
+        mm:wideCC(chan, c.code, true)
       end
     end
     -- 2) Allocate note columns for internals (stamped path). Clone rather
@@ -1285,6 +1253,7 @@ do
       local res = mm:resolution()
       local pbRangeCents = cm:get('pbRange') * 100   -- slide clamps its target to what pb can reach
       local takeLen = tm:length()
+      local extras  = ds:get('extraColumns') or {}   -- authored columns block carrier codes
       local churned = false
       for chan = 1, 16 do
         -- Window ends at the first same-pitch or same-lane onset after the host
@@ -1314,8 +1283,9 @@ do
         local chanCtx = { resolution = res, pbRangeCents = pbRangeCents,
                           nextLane1Note = nextLane1Note }
 
-        local predicted = {}
-        local predictedDelta, lastDeltaPpq = {}, nil
+        -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
+        -- stash with their window for colouring (channel-wide, not note-tied). see design/note-macros.md § Continuous realisation
+        local predicted, pending = {}, {}
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, host in ipairs(col.events) do
             if host.fx and host.type ~= 'pa' then
@@ -1341,19 +1311,10 @@ do
                       endppq = tm:fromLogical(chan, fn.endppqL, d),
                     })
                   end
-                  -- Continuous deltas -> carrier ccs: cents -> 14-bit pb units
-                  -- (signed ~8192), fixed-point for wideCC. Lane-1 only (pb channel-wide).
-                  if laneIdx == 1 then
-                    for _, bp in ipairs(out.delta) do
-                      local ppq = tm:fromLogical(chan, bp.ppqL, d)
-                      if ppq ~= lastDeltaPpq then
-                        lastDeltaPpq = ppq
-                        util.add(predictedDelta, {
-                          evType = 'cc', chan = chan, cc = carrierMsbOf[chan], ppq = ppq,
-                          val = (8192 + centsToRaw(bp.val)) / 128, shape = bp.shape,
-                        })
-                      end
-                    end
+                  local target = generators.continuous[params.kind]
+                  if target and #out.delta > 0 then
+                    util.add(pending, { startL = host.ppqL, endL = endL,
+                                        target = target, delta = out.delta, d = d })
                   end
                 end
               end
@@ -1370,11 +1331,66 @@ do
           end)
         end
 
-        -- Anchor carrier to 0 at take start; CC chase re-establishes centre
+        -- Pass B: per target, interval-colour stashed instances -- overlapping carriers get
+        -- distinct codes (node sums by target), disjoint share the coldest. see design/note-macros.md § Delta-code allocation
+        local occupied = {}
+        for code in pairs(channels[chan].columns.ccs or {}) do occupied[code] = true end
+        for code in pairs((extras[chan] or {}).ccs or {})   do occupied[code] = true end
+        local byTarget = {}
+        for _, inst in ipairs(pending) do util.bucket(byTarget, inst.target, inst) end
+        local targets = {}
+        for target in pairs(byTarget) do targets[#targets + 1] = target end
+        table.sort(targets)
+
+        local predictedDelta, lastDeltaPpq, newCarriers = {}, {}, {}
+        for _, target in ipairs(targets) do
+          local insts = byTarget[target]
+          table.sort(insts, function(a, b)
+            if a.startL ~= b.startL then return a.startL < b.startL end
+            return a.endL < b.endL
+          end)
+          local colourEnd, colourCode = {}, {}
+          for _, inst in ipairs(insts) do
+            local colour
+            for ci = 1, #colourEnd do
+              if colourEnd[ci] <= inst.startL then colour = ci; break end
+            end
+            if not colour then
+              colour = #colourEnd + 1
+              local code = generators.allocateCarrier(occupied)
+              colourCode[colour] = code
+              occupied[code], occupied[code + 32] = true, true
+              mm:wideCC(chan, code, true)
+              util.add(newCarriers, { code = code, target = target })
+            end
+            colourEnd[colour] = inst.endL
+            -- dedup per code: a disjoint sharer's start can land on the prior window's
+            -- re-centre ppq (both centre, so identical) -- keep the first.
+            local code = colourCode[colour]
+            for _, bp in ipairs(inst.delta) do
+              local ppq = tm:fromLogical(chan, bp.ppqL, inst.d)
+              if ppq ~= lastDeltaPpq[code] then
+                lastDeltaPpq[code] = ppq
+                util.add(predictedDelta, {
+                  evType = 'cc', chan = chan, cc = code, ppq = ppq,
+                  val = (8192 + centsToRaw(bp.val)) / 128, shape = bp.shape,
+                })
+              end
+            end
+          end
+        end
+
+        -- Anchor each carrier to 0 at take start; CC chase re-establishes centre
         -- on any loop/seek before the first host. see design/note-macros.md § Continuous realisation
-        if #predictedDelta > 0 and predictedDelta[1].ppq ~= 0 then
-          util.add(predictedDelta, { evType = 'cc', chan = chan, cc = carrierMsbOf[chan],
-                                     ppq = 0, val = (8192 + centsToRaw(0)) / 128, shape = 'slow' })
+        local earliest = {}
+        for _, e in ipairs(predictedDelta) do
+          if not earliest[e.cc] or e.ppq < earliest[e.cc] then earliest[e.cc] = e.ppq end
+        end
+        for code, first in pairs(earliest) do
+          if first ~= 0 then
+            util.add(predictedDelta, { evType = 'cc', chan = chan, cc = code,
+                                       ppq = 0, val = (8192 + centsToRaw(0)) / 128, shape = 'slow' })
+          end
         end
 
         local cRemove, cAdd = reconcileCarrier(carrierExisting[chan], predictedDelta)
@@ -1384,19 +1400,18 @@ do
             for _, s in ipairs(cAdd)    do mm:add(s)          end
           end)
         end
-        if #predictedDelta > 0 then newFxCarrier[chan] = carrierMsbOf[chan] end
+        if #newCarriers > 0 then newFxCarrier[chan] = newCarriers end
       end
 
       -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank. see design/note-macros.md § Delta-code allocation
       for chan in pairs(carrierRoute) do
-        for c in pairs(carrierRoute[chan]) do
-          if c ~= newFxCarrier[chan] then mm:wideCC(chan, c, false) end
+        local live = {}
+        for _, c in ipairs(newFxCarrier[chan] or {}) do live[c.code] = true end
+        for code in pairs(carrierRoute[chan]) do
+          if not live[code] then mm:wideCC(chan, code, false) end
         end
       end
-      local carrierChanged = false
-      for chan, code in pairs(newFxCarrier) do if prevCarrier[chan] ~= code then carrierChanged = true end end
-      for chan in pairs(prevCarrier) do if newFxCarrier[chan] == nil then carrierChanged = true end end
-      if carrierChanged and mm:take() then
+      if not util.deepEq(prevCarrier, newFxCarrier) and mm:take() then
         ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
       end
 

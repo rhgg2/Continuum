@@ -153,10 +153,10 @@ return {
     end,
   },
 
-  ----- Lane-1 only — pb is channel-wide
+  ----- Any lane — a continuous gesture bends the channel pb regardless of host lane
 
   {
-    name = 'vibrato on a higher lane emits no carrier (pb is channel-wide)',
+    name = 'vibrato on a higher lane emits a carrier (channel-wide gesture, lane-blind)',
     run = function(harness)
       local h = harness.mk()
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
@@ -164,7 +164,7 @@ return {
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67,
                       vel = 100, detune = 0, delay = 0, lane = 2, fx = vib30 })
       h.tm:flush()
-      t.eq(#carriersOf(h.fm:dump(), 1), 0, 'lane-2 vibrato is inert: no carrier')
+      t.truthy(#carriersOf(h.fm:dump(), 1) > 0, 'a higher-lane vibrato still bends the channel pb')
     end,
   },
 

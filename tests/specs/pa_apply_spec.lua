@@ -107,7 +107,7 @@ return {
       local h, r, src = mkScenario(harness)
       -- Carrier on ch 1 (1-indexed): tm writes ds.fxCarrier; pa reads it into the
       -- add bank. asrc = (chan-1)*128 + code = 20, adst = 2048 + (chan-1) = 2048.
-      h.ds:assign('fxCarrier', { [1] = 20 })
+      h.ds:assign('fxCarrier', { [1] = { { code = 20, target = 'pb' } } })
 
       local lane = h.pa:automate(1, TARGET)   -- filter on src, listen on dst
 
@@ -122,6 +122,23 @@ return {
       t.eq(namedParm(r, src, 0, 'fx_ident'), 'Continuum CC', 'CC node still at the head')
       t.eq(r.TrackFX_GetParam(src, 0, P_SRC),  -1, 'filter range cleared')
       t.eq(r.TrackFX_GetParam(src, 0, P_ASRC), 20, 'add bank retained')
+    end,
+  },
+
+  {
+    name = 'two carriers on one channel write two add rows summing into the same pb target',
+    run = function(harness)
+      local h, r, src = mkScenario(harness)
+      -- vibrato + slide both bend ch-1 pitch: distinct asrc, shared adst -> the node sums.
+      h.ds:assign('fxCarrier', { [1] = { { code = 20, target = 'pb' }, { code = 21, target = 'pb' } } })
+
+      h.pa:automate(1, TARGET)
+
+      t.eq(r.TrackFX_GetParam(src, 0, P_ASRC),     20,   'slot 0 asrc = lower carrier code')
+      t.eq(r.TrackFX_GetParam(src, 0, P_ADST),     2048, 'slot 0 adst = ch-1 pb')
+      t.eq(r.TrackFX_GetParam(src, 0, P_ASRC + 1), 21,   'slot 1 asrc = higher carrier code')
+      t.eq(r.TrackFX_GetParam(src, 0, P_ADST + 1), 2048, 'slot 1 adst = same pb (summed at the node)')
+      t.eq(r.TrackFX_GetParam(src, 0, P_ASRC + 2), -1,   'two carriers — slot 2 empty')
     end,
   },
 

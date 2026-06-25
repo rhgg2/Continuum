@@ -28,6 +28,15 @@ local function carrierAt(dump, chan, ppq)
   for _, c in ipairs(carriersOf(dump, chan)) do if c.ppq == ppq then return c end end
 end
 
+-- Carriers at an arbitrary code (carriersOf is pinned to the default 20).
+local function codeCarriers(dump, chan, code)
+  local out = {}
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'cc' and c.cc == code and c.chan == chan then out[#out + 1] = c end
+  end
+  return out
+end
+
 -- A slide host (pitch 60, lane 1) gliding into a following lane-1 note. The host
 -- window ends at that next note's onset (240), so snap 15 -> arrival at ppq 225.
 local function addSlidePair(h, nextPitch, nextDetune)
@@ -132,6 +141,53 @@ return {
       local h = harness.mk()
       addSlidePair(h, 61)
       t.falsy(h.tm:getChannel(1).columns.ccs[DELTA_MSB], 'no cc-20 column built from carrier events')
+    end,
+  },
+
+  ----- Coexistence — overlapping carriers split, disjoint carriers share (per-target colouring)
+
+  {
+    name = 'vibrato and slide on one host take distinct carriers (overlap -> summed at the node)',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 },
+                             { kind = 'slide', over = { 1, 2 }, target = 'next' } } })
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 61, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })
+      h.tm:flush()
+
+      local cf = h.ds:get('fxCarrier')[1]
+      t.eq(#cf, 2, 'two overlapping carriers -> two codes')
+      t.truthy(cf[1].code ~= cf[2].code, 'distinct codes the node sums into pb')
+      t.eq(cf[1].target, 'pb', 'first carrier targets pitchbend')
+      t.eq(cf[2].target, 'pb', 'second carrier targets pitchbend')
+      t.truthy(#codeCarriers(h.fm:dump(), 1, cf[1].code) > 0, 'first carrier stream present')
+      t.truthy(#codeCarriers(h.fm:dump(), 1, cf[2].code) > 0, 'second carrier stream present')
+    end,
+  },
+
+  {
+    name = 'disjoint vibrato then slide on lane 1 share one carrier code (colour reuse)',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } } })
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'slide', over = { 1, 2 }, target = 'next' } } })
+      h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 720, chan = 1, pitch = 64, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })
+      h.tm:flush()
+
+      local cf = h.ds:get('fxCarrier')[1]
+      t.eq(#cf, 1, 'non-overlapping carriers reuse one code')
+      local ppqs = {}
+      for _, c in ipairs(codeCarriers(h.fm:dump(), 1, cf[1].code)) do ppqs[c.ppq] = true end
+      t.truthy(ppqs[15],  'vibrato extremum rides the shared code')
+      t.truthy(ppqs[465], 'slide arrival rides the same code')
     end,
   },
 

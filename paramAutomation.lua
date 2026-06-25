@@ -87,16 +87,21 @@ local function gatherBindings()
   return bindings
 end
 
--- Continuous-macro carriers by track, from ds.fxCarrier (chan->MSB, 1-indexed).
--- tm owns allocation; pa follows into the add bank's src. Aggregated across takes. design/note-macros.md § Delta-code allocation
+-- Continuous-macro carriers by track, from ds.fxCarrier; flattened to {chan, code, target}.
+-- tm owns allocation; pa follows into the add bank src. see design/note-macros.md § Delta-code allocation
 local function gatherCarriers()
   local byTrack = {}
   eachTake(function(take)
     local carriers = ds:getAt(take, 'fxCarrier')
     if not carriers or not next(carriers) then return end
     local guid = reaper.GetTrackGUID(ownerTrack(take))
-    byTrack[guid] = byTrack[guid] or {}
-    for chan, code in pairs(carriers) do byTrack[guid][chan] = code end
+    local list = byTrack[guid] or {}
+    for chan, chanCarriers in pairs(carriers) do
+      for _, c in ipairs(chanCarriers) do
+        list[#list + 1] = { chan = chan, code = c.code, target = c.target }
+      end
+    end
+    byTrack[guid] = list
   end)
   return byTrack
 end
@@ -129,13 +134,14 @@ function pa.computeDesired(bindings, carriers)
       table.insert(spec(b.srcTrackGuid).sends, b.trackGuid)
     end
   end
-  -- Carriers join as the add bank: asrc = (chan-1)*128+code, adst = 2048+(chan-1).
-  -- chan 1-indexed; wire/JSFX 0-indexed. Sum rides beside filter/listen.
-  for guid, chans in pairs(carriers or {}) do
+  -- Carriers join the add bank: asrc=(chan-1)*128+code; adst=2048+(chan-1) for pb else
+  -- (chan-1)*128+cc (chan 1-indexed, wire 0-indexed). Shared target sums at node.
+  for guid, trackCarriers in pairs(carriers or {}) do
     local list = {}
-    for chan, code in pairs(chans) do
-      local wireChan = chan - 1
-      list[#list + 1] = { asrc = wireChan * 128 + code, adst = 2048 + wireChan }
+    for _, c in ipairs(trackCarriers) do
+      local wireChan = c.chan - 1
+      local adst = c.target == 'pb' and (2048 + wireChan) or (wireChan * 128 + c.target)
+      list[#list + 1] = { asrc = wireChan * 128 + c.code, adst = adst }
     end
     table.sort(list, function(a, b) return a.asrc < b.asrc end)
     spec(guid).add = list
