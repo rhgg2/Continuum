@@ -23,6 +23,7 @@ local registry = {
   noteDelay           = 'take',
   swing               = 'take',
   extraColumns        = 'take',
+  fxCarrier           = 'take',
   arrangeNaturalLenQN = 'take',
   mutedChannels       = 'take',
   soloedChannels      = 'take',

@@ -43,6 +43,24 @@ end
 -- structural notes. Drives the rebuild seam's carrier registration.
 M.continuous = { vibrato = true }
 
+-- 14-bit carrier priority: MSB n, LSB n+32 (REAPER interpolates only that pair).
+-- Unlikely-authored first; conventional last. see design/note-macros.md § Delta-code allocation
+local CARRIER_PRIORITY = {
+  20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,  -- undefined / general (coldest)
+  3, 9, 14, 15,                                     -- other undefined
+  16, 17, 18, 19,                                   -- general purpose
+  12, 13, 6,                                        -- effect control, data entry
+  2, 4, 5, 8,                                        -- breath, foot, portamento, balance
+  1, 11, 10, 7, 0,                                  -- conventional (last)
+}
+
+--contract: first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated
+function M.allocateCarrier(occupied)
+  for _, n in ipairs(CARRIER_PRIORITY) do
+    if not occupied[n] and not occupied[n + 32] then return n end
+  end
+end
+
 --contract: vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
 --contract: breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
 --contract: carrier returns to 0 (centre) at window end -- no residual bend on the channel

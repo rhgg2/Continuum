@@ -25,10 +25,6 @@ local TOP_LANE  = 119   -- 120..127 are channel-mode messages
 local P_VALUE, P_SRC, P_DST, P_LISTEN = 0, 16, 32, 48
 local P_ASRC, P_ADST = 64, 80
 
--- Continuous-macro carrier code; must match trackerManager DELTA_MSB (toy fixed).
--- Proper per-channel alloc: design/note-macros.md § Delta-code allocation.
-local DELTA_MSB = 20
-
 local pa = {}
 
 ----- REAPER lookups
@@ -91,21 +87,16 @@ local function gatherBindings()
   return bindings
 end
 
--- Baked continuous-macro carriers (cc = DELTA_MSB) by track: the add bank's
--- intent, read from realisation so it aggregates every take on the track.
+-- Continuous-macro carriers by track, from ds.fxCarrier (chan->MSB, 1-indexed).
+-- tm owns allocation; pa follows into the add bank's src. Aggregated across takes. design/note-macros.md § Delta-code allocation
 local function gatherCarriers()
   local byTrack = {}
   eachTake(function(take)
-    if not reaper.TakeIsMIDI(take) then return end
+    local carriers = ds:getAt(take, 'fxCarrier')
+    if not carriers or not next(carriers) then return end
     local guid = reaper.GetTrackGUID(ownerTrack(take))
-    local _, _, ccCount = reaper.MIDI_CountEvts(take)
-    for i = 0, ccCount - 1 do
-      local _, _, _, _, chanmsg, evChan, msg2 = reaper.MIDI_GetCC(take, i)
-      if chanmsg == 0xB0 and msg2 == DELTA_MSB then
-        byTrack[guid] = byTrack[guid] or {}
-        byTrack[guid][evChan] = true
-      end
-    end
+    byTrack[guid] = byTrack[guid] or {}
+    for chan, code in pairs(carriers) do byTrack[guid][chan] = code end
   end)
   return byTrack
 end
@@ -138,12 +129,13 @@ function pa.computeDesired(bindings, carriers)
       table.insert(spec(b.srcTrackGuid).sends, b.trackGuid)
     end
   end
-  -- Carriers join as the add bank: asrc = carrier MSB code, adst = pb-on-channel
-  -- (2048+chan). The sum rides the same node beside filter/listen.
+  -- Carriers join as the add bank: asrc = (chan-1)*128+code, adst = 2048+(chan-1).
+  -- chan 1-indexed; wire/JSFX 0-indexed. Sum rides beside filter/listen.
   for guid, chans in pairs(carriers or {}) do
     local list = {}
-    for evChan in pairs(chans) do
-      list[#list + 1] = { asrc = evChan * 128 + DELTA_MSB, adst = 2048 + evChan }
+    for chan, code in pairs(chans) do
+      local wireChan = chan - 1
+      list[#list + 1] = { asrc = wireChan * 128 + code, adst = 2048 + wireChan }
     end
     table.sort(list, function(a, b) return a.asrc < b.asrc end)
     spec(guid).add = list

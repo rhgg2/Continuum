@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=71  sha=3fd9828  mode=namespace
+@module generators  src=generators.lua  loc=89  sha=78a6497  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
@@ -10,6 +10,7 @@
 
 # Module-level constants
   @const M = {}  @ 13
+  @const CARRIER_PRIORITY = {  @ 48
 
 # Private functions
   @fn periodTicks(period, resolution)  @ 15
@@ -18,7 +19,9 @@
   @api M.retrig(host, params, ctx)  @ 22
       @contract  retrig fills the host window with evenly-spaced same-pitch fxNotes 2..N (host is fxNote 1)
       @contract  velocity ramps params.ramp per fxNote, clamped 1..127; detune inherited from the host verbatim
-  @api M.vibrato(host, params, ctx)  @ 49
+  @api M.allocateCarrier(occupied)  @ 58
+      @contract  first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated
+  @api M.vibrato(host, params, ctx)  @ 67
       @contract  vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
       @contract  breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
       @contract  carrier returns to 0 (centre) at window end -- no residual bend on the channel

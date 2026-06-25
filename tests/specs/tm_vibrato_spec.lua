@@ -33,6 +33,18 @@ local function carrierAt(dump, chan, ppq)
   for _, c in ipairs(carriersOf(dump, chan)) do if c.ppq == ppq then return c end end
 end
 
+-- Carriers at an arbitrary cc code (carriersOf is pinned to the default 20).
+local function codeCarriers(dump, chan, code)
+  local out = {}
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'cc' and c.cc == code and c.chan == chan then
+      out[#out + 1] = { ppq = c.ppq, val = c.val, shape = c.shape }
+    end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return out
+end
+
 local function addVibHost(h, over)
   local note = { evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                  vel = 100, detune = 0, delay = 0, lane = 1, fx = vib30 }
@@ -165,6 +177,29 @@ return {
       addVibHost(h)
       local ccCols = h.tm:getChannel(1).columns.ccs
       t.falsy(ccCols[DELTA_MSB], 'no cc-20 column built from carrier events')
+    end,
+  },
+
+  ----- Relocation -- a cc column on the carrier code shifts it to the next free pair
+
+  {
+    name = 'relocation: a cc column authored on the carrier code shifts the carrier off it',
+    run = function(harness)
+      local h = harness.mk()
+      addVibHost(h)
+      t.truthy(#carriersOf(h.fm:dump(), 1) > 0, 'carrier parks at the coldest code (20)')
+
+      -- Author an (empty) cc-20 column: the relocation signal, ahead of any event.
+      h.ds:assign('extraColumns', { [1] = { notes = 1, ccs = { [20] = true } } })
+      h.tm:rebuild()
+
+      t.eq(#codeCarriers(h.fm:dump(), 1, 20), 0, 'carrier vacated the now-authored code 20')
+      local at21 = codeCarriers(h.fm:dump(), 1, 21)
+      t.truthy(#at21 > 0, 'carrier relocated to the next free pair (21)')
+
+      -- G4 still holds at the relocated code.
+      h.tm:rebuild(); h.tm:flush()
+      t.deepEq(codeCarriers(h.fm:dump(), 1, 21), at21, 'relocated carrier is stable across the round trip')
     end,
   },
 

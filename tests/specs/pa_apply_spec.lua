@@ -105,17 +105,16 @@ return {
     name = 'a baked vibrato carrier configures the add bank, surviving pa unbind',
     run = function(harness)
       local h, r, src = mkScenario(harness)
-      -- A continuous-macro carrier baked into the take: cc=DELTA_MSB(20) on wire
-      -- channel 0. pa reads it from take MIDI exactly as it reads authored CCs.
-      r._state.takeIsMidi['take1'] = true
-      r.MIDI_InsertCC('take1', false, false, 0, 0xB0, 0, 20, 64)
+      -- Carrier on ch 1 (1-indexed): tm writes ds.fxCarrier; pa reads it into the
+      -- add bank. asrc = (chan-1)*128 + code = 20, adst = 2048 + (chan-1) = 2048.
+      h.ds:assign('fxCarrier', { [1] = 20 })
 
       local lane = h.pa:automate(1, TARGET)   -- filter on src, listen on dst
 
       t.eq(namedParm(r, src, 0, 'fx_ident'), 'Continuum CC', 'CC node on the source')
       t.eq(r.TrackFX_GetParam(src, 0, P_SRC),  119,  'filter slot present')
-      t.eq(r.TrackFX_GetParam(src, 0, P_ASRC), 20,   'add asrc = chan0*128 + DELTA_MSB')
-      t.eq(r.TrackFX_GetParam(src, 0, P_ADST), 2048, 'add adst = 2048 + chan0 (pb)')
+      t.eq(r.TrackFX_GetParam(src, 0, P_ASRC), 20,   'add asrc = (chan-1)*128 + code')
+      t.eq(r.TrackFX_GetParam(src, 0, P_ADST), 2048, 'add adst = 2048 + (chan-1) (pb)')
       t.eq(r.TrackFX_GetParam(src, 0, P_ASRC + 1), -1, 'one carrier — slot 1 empty')
 
       h.pa:unautomate(1, lane)

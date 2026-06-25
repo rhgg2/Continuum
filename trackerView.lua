@@ -2299,6 +2299,9 @@ function tv:addExtraCol(type, cc)
     end
   end
   ds:assign('extraColumns', extras)
+  -- A cc column at a carrier's code relocates it on the ensuing rebuild; re-run
+  -- pa so the add-bank src follows the move. see design/note-macros.md § Delta-code allocation
+  if type == 'cc' then pa:apply() end
 end
 
 function tv:hideExtraCol()

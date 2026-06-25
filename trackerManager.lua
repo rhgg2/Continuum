@@ -72,10 +72,6 @@ local function rawToCents(raw)
   return util.round(raw / 8192 * lim)
 end
 
--- Toy fixed carrier for continuous (vibrato) deltas; msb cc, lsb cc+32.
--- Proper per-channel banded alloc: design/note-macros.md § Delta-code allocation.
-local DELTA_MSB = 20
-
 local function delayToPPQ(d) return timing.delayToPPQ(d, mm:resolution()) end
 
 local function forEachEvent(fn)
@@ -171,13 +167,16 @@ local function reconcileFx(predicted, existing)
 end
 
 ----- delta-stream (carrier) reconciliation
--- Pure fn of lane-1 hosts; match by ppq, rewrite drifted val/shape, drop unpredicted.
+-- Pure fn of lane-1 hosts; match by (cc, ppq); relocated carrier reaps old code, writes new. see design/note-macros.md § Delta-code allocation
 local function reconcileCarrier(existing, predicted)
-  local byPpq = {}
-  for _, e in ipairs(existing) do byPpq[e.ppq] = e end
+  local byKey = {}
+  for _, e in ipairs(existing) do
+    byKey[e.cc] = byKey[e.cc] or {}
+    byKey[e.cc][e.ppq] = e
+  end
   local toRemove, toAdd, kept = {}, {}, {}
   for _, spec in ipairs(predicted) do
-    local have = byPpq[spec.ppq]
+    local have = byKey[spec.cc] and byKey[spec.cc][spec.ppq]
     if have and have.val == spec.val and have.shape == spec.shape then
       kept[have] = true
     else
@@ -1127,13 +1126,47 @@ do
       else util.add(internal, note)
       end
     end
-    -- Register the fixed continuous carrier (cc = DELTA_MSB) as 14-bit so the
-    -- CC walk coalesces its pair and routes it out. see design/note-macros.md § Continuous realisation
-    for _, list in ipairs({ internal, external }) do
-      for _, note in ipairs(list) do
-        for _, params in ipairs(note.fx or {}) do
-          if generators.continuous[params.kind] then mm:wideCC(note.chan, DELTA_MSB, true) end
+    -- Per-channel carrier: cold MSB code, stable across rebuilds (ds.fxCarrier),
+    -- relocated when a column lands on it. carrierRoute = old∪new; stale code is reaped. see design/note-macros.md § Delta-code allocation
+    local prevCarrier = ds:get('fxCarrier') or {}
+    local carrierMsbOf, carrierRoute, newFxCarrier = {}, {}, {}
+    do
+      local needsCarrier = {}
+      for _, list in ipairs({ internal, external }) do
+        for _, note in ipairs(list) do
+          for _, params in ipairs(note.fx or {}) do
+            if generators.continuous[params.kind] then needsCarrier[note.chan] = true end
+          end
         end
+      end
+      local wireCodes = {}
+      for _, cc in mm:ccs() do
+        if cc.cc then
+          wireCodes[cc.chan] = wireCodes[cc.chan] or {}
+          wireCodes[cc.chan][cc.cc] = true
+        end
+      end
+      local extras = ds:get('extraColumns') or {}
+      local touched = {}
+      for chan in pairs(needsCarrier) do touched[chan] = true end
+      for chan in pairs(prevCarrier)  do touched[chan] = true end
+      for chan in pairs(touched) do
+        local old = prevCarrier[chan]
+        carrierRoute[chan] = {}
+        if old then carrierRoute[chan][old] = true end
+        if needsCarrier[chan] then
+          -- occupied: authored columns (incl. empty -> early relocation signal)
+          -- plus every wire cc code, minus the carrier's own 14-bit pair.
+          local occupied = {}
+          for c in pairs((extras[chan] or {}).ccs or {}) do occupied[c] = true end
+          for c in pairs(wireCodes[chan] or {}) do
+            if c ~= old and c ~= (old and old + 32) then occupied[c] = true end
+          end
+          local code = (old and not occupied[old]) and old or generators.allocateCarrier(occupied)
+          carrierMsbOf[chan] = code
+          carrierRoute[chan][code] = true
+        end
+        for c in pairs(carrierRoute[chan]) do mm:wideCC(chan, c, true) end
       end
     end
     -- 2) Allocate note columns for internals (stamped path). Clone rather
@@ -1162,11 +1195,11 @@ do
     do
       local ccUpdates = {}
       for _, cc in mm:ccs() do
-        if cc.evType == 'cc' and cc.cc == DELTA_MSB then
-          -- Carrier: generator-owned, no metadata; routed out by address,
-          -- reconciled stream-level at 4.6. see design/note-macros.md § Continuous realisation
+        if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
+          -- Carrier: generator-owned, no metadata; routed out by allocated code,
+          -- reconciled stream-level at 4.6. see design/note-macros.md § Delta-code allocation
           util.add(carrierExisting[cc.chan],
-            { ppq = cc.ppq, val = cc.val, shape = cc.shape, token = mm:tokenOf(cc) })
+            { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
           goto continue
         end
         if not cc.derived then
@@ -1314,7 +1347,7 @@ do
                       if ppq ~= lastDeltaPpq then
                         lastDeltaPpq = ppq
                         util.add(predictedDelta, {
-                          evType = 'cc', chan = chan, cc = DELTA_MSB, ppq = ppq,
+                          evType = 'cc', chan = chan, cc = carrierMsbOf[chan], ppq = ppq,
                           val = (8192 + centsToRaw(bp.val)) / 128, shape = bp.shape,
                         })
                       end
@@ -1338,7 +1371,7 @@ do
         -- Anchor carrier to 0 at take start; CC chase re-establishes centre
         -- on any loop/seek before the first host. see design/note-macros.md § Continuous realisation
         if #predictedDelta > 0 and predictedDelta[1].ppq ~= 0 then
-          util.add(predictedDelta, { evType = 'cc', chan = chan, cc = DELTA_MSB,
+          util.add(predictedDelta, { evType = 'cc', chan = chan, cc = carrierMsbOf[chan],
                                      ppq = 0, val = (8192 + centsToRaw(0)) / 128, shape = 'slow' })
         end
 
@@ -1349,6 +1382,20 @@ do
             for _, s in ipairs(cAdd)    do mm:add(s)          end
           end)
         end
+        if #predictedDelta > 0 then newFxCarrier[chan] = carrierMsbOf[chan] end
+      end
+
+      -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank. see design/note-macros.md § Delta-code allocation
+      for chan in pairs(carrierRoute) do
+        for c in pairs(carrierRoute[chan]) do
+          if c ~= newFxCarrier[chan] then mm:wideCC(chan, c, false) end
+        end
+      end
+      local carrierChanged = false
+      for chan, code in pairs(newFxCarrier) do if prevCarrier[chan] ~= code then carrierChanged = true end end
+      for chan in pairs(prevCarrier) do if newFxCarrier[chan] == nil then carrierChanged = true end end
+      if carrierChanged and mm:take() then
+        ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
       end
 
       -- fxLive (tail walk + PC consume it) clones its evts because the walk
